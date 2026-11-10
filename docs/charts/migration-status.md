@@ -66,6 +66,58 @@ contractual evidence — a fresh clone does not carry them.)
   paths answer 200 from inside the pods, the backend's mandatory-GPU
   boot gate passes against the public endpoint, and a French chat
   streams end-to-end with citations.
+- **The Playwright suite found a real edge defect — `/api-docs.json` never
+  reached the backend (chart 0.2.171)** — the suite's swagger spec failed
+  on the cluster with a JSON parse error on `<!doctype html>`: the edge
+  answered the OpenAPI document with the SPA's index.html. **Gateway
+  API's `PathPrefix` matches on PATH ELEMENTS**, so `/api-docs` covers
+  `/api-docs` and `/api-docs/...` but NOT `/api-docs.json` — a different
+  element; the chart's rules (Exact `/api-docs` + PathPrefix
+  `/api-docs/`) matched neither, and the request fell through to the SPA
+  catch-all. The nginx in the Compose deployment routes it by a **RAW
+  prefix** (`location /api-docs`), which is why the Compose venue never
+  showed the gap: the two edges do not express a prefix the same way.
+  Proven live on the 1.37 cluster before and after — the edge answered
+  `content-type: text/html` while the backend answered the same path
+  with `application/json`; after the `Exact /api-docs.json` rule the
+  edge answers the OpenAPI document. The guard is **mutation-tested
+  twice**: removing the rule goes red, and so does replacing `Exact`
+  with `PathPrefix` — the second mutation is the defect class itself,
+  the one a value-only assertion would have missed.
+- **The whole Playwright suite ran against the 1.37 cluster (242 specs)** —
+  the run needed the venue the Phase 0 procedure prescribes, and the
+  two pieces that are NOT in the chart are: the **knowledge hierarchy**
+  (a fresh stack's `serviceCategories`/`services` are empty, so a
+  QuickHelp option that names a category is refused and the header
+  keeps its `Just Chat` fallback — seeded from the committed export, 13
+  categories + 53 services, exactly as `docs/e2e-tests/00-clean-start.md`
+  §0.9 describes) and the **realm fixtures**
+  (`tests/e2e/provision-e2e-fixtures.js`, three users). The origin is
+  `https://genieai.local:4443` served through a **relay to the edge's
+  nodePort** (30356), not a `kubectl port-forward`: every forwarded
+  connection negotiates a SPDY stream through the API server, and under
+  the suite's own churn that negotiation times out mid-run.
+  The failures that remained are classified, none of them a chart
+  defect:
+  - the **OKF tier is dark** on this venue (`okf.enabled: false`), so the
+    12 `okf/` specs have no surface to assert against — a venue
+    configuration, not a failure;
+  - the **external IdP** (`epic1/d7a`, `d7b`) and the **second realm**
+    (`epic2/i1`) specs need the Phase D and Phase I prerequisites — the
+    live realm carries NO identity provider and no `genie2` realm;
+  - the **chat specs** read `store.state.conversation.messages`, a path
+    the CSR refactor (`f1d82e2461`, in main) **deleted** — the store now
+    holds `conversations[openId].messages`; the helper's `page.evaluate`
+    throws `Cannot read properties of undefined (reading 'filter')`. The
+    chat itself WORKS on the cluster (the chatqna answers 200 with a
+    grounded answer and the citations of the ingested file) — the spec
+    reads a Vuex path that no longer exists;
+  - the specs that hardcode `https://localhost` (`epic1/a2`, `epic3/l1`,
+    `l2`, `l3`) fail with `ERR_CONNECTION_REFUSED` — they address the
+    Compose origin by literal;
+  - the **Pending filter** (`documents/search`) failed against a document
+    the run itself uploaded in an earlier spec — a leftover-state
+    collision, not a filter defect.
 - **The CI gates live in `scripts/ci/`** — the eleven gate scripts the
   pipeline invokes moved out of the flat `scripts/` (operator and
   dev-node tools stay); every reference swept and the gates proven

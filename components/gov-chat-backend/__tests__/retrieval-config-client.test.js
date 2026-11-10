@@ -617,6 +617,17 @@ describe('retrieval-config-client (Story 1.1)', () => {
     expect(client.isPostureUnknown(garbled)).toBe(true);
     expect(garbled._bff_expires_at).toBe(nowMs + client._internals.LKG_MAX_AGE_MS);
 
+    // The warn carries the same degrade facts the unreachable warn does, so
+    // an operator triaging a garbled-body incident reads the degrade from
+    // the log instead of inferring it from the served payload.
+    const { logger } = require('../shared-lib');
+    const malformedWarn = logger.warn.mock.calls.find(
+      ([msg]) => msg === 'RetrievalConfigClient.malformed_config_response'
+    );
+    expect(malformedWarn).toBeDefined();
+    expect(malformedWarn[1].last_known_good).toBe(true);
+    expect(malformedWarn[1].last_known_good_age_ms).toEqual(expect.any(Number));
+
     // The consultation is horizon-bounded like the outage path: past the
     // 5-minute trust horizon the last-known-good is dropped and the garbled
     // body degrades to the plain legacy default.

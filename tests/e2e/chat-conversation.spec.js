@@ -560,15 +560,26 @@ test.describe('Conversation — surface invariants', () => {
     // mounted instance is the one the click reaches.
     await page.locator('[data-test-id^="nav-icon-btn-settings"]').locator('visible=true').first().click();
     expect(await page.locator('[role="dialog"]').count(), 'navigation is never blocked').toBe(0);
+    // Wait for the Settings navigation to commit before going on: the
+    // steps below depend on which page the app is on, not on a click
+    // that may still be in flight.
+    await page.waitForURL('**/settings', { timeout: 15000 });
     // Release the stream while the chat view is unmounted: the store
     // must keep consuming it.
     releaseStream();
     await page.waitForResponse((r) => r.url().includes('/queries/stream') && r.status() === 200, { timeout: 15000 });
-    // Back through the router (history back is an in-app navigation, not
-    // a reload): the conversation is intact and the answer completed in
-    // the background — the wait below holds until the released stream's
-    // frame has been consumed and rendered.
-    await page.goBack();
+    // Return the way the user returns: through the app's own navigation
+    // (the navbar brand link), NOT through the browser's history back.
+    // The history stack still carries the login flow's cross-document
+    // /callback entry, so a history back can land on it — a full document
+    // reload the spec does not control, and the conversation then comes
+    // back only as fresh as the last persisted payload (#1734). The
+    // contract under test is the app's: leaving the chat view and coming
+    // back inside the app keeps the conversation and the answer completes
+    // in the background — the wait below holds until the released
+    // stream's frame has been consumed and rendered.
+    await page.locator('[data-test-id="nav-brand-name"]').click();
+    await page.waitForURL('**/dashboard', { timeout: 15000 });
     await page.waitForSelector(BOT_BUBBLE, { timeout: 30000 });
     await expect(page.locator('[data-testid="chat-message-user"]').last()).toContainText('What is GENIE.AI?');
     await expect(page.locator(BOT_BUBBLE).last()).toContainText(

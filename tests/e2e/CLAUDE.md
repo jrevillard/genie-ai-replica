@@ -100,9 +100,15 @@ paper over a flake, fix the test. Current timeouts and base URL: read the config
 
 ```bash
 # from the repository root (playwright resolves from the root node_modules)
-npm install && npx playwright install chromium
+npm ci && node tests/e2e/run/install-browsers.js
 BASE_URL=https://localhost npx playwright test tests/e2e/<area>/ --project=chromium
 ```
+
+`install-browsers.js` reconciles the checkout and the browser tree with the
+`@playwright/test` the lockfile pins — the Chromium build the suite drives is
+named by that version, and a tree carrying another one fails every spec at
+launch. `npm install` alone leaves the checkout free to drift from the
+lockfile; `npm ci` does not.
 
 `BASE_URL` points at the stack's edge; it defaults to `https://localhost`.
 The specs log in through the browser (`loginViaUI`) — the realm refuses

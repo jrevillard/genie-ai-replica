@@ -101,9 +101,15 @@ as twelve product bugs (#1779).
 
 No revision number is written in the repository: it is derived from the
 installed Playwright, so a lockfile bump needs no second number to change.
-The command is idempotent, and it is what a pod's provisioning calls so a
-recreated machine lands on the right build instead of the one its image
-baked.
+The command is idempotent.
+
+**Where the provisioning calls it.** The reconciler lives in the repository
+— that is the half that must survive a lockfile bump. The pod's own
+provisioning script (on the pod's persistent disk, outside this repository)
+calls it, so a pod recreation restores the right build instead of the one the
+image baked. The script itself is not versioned here: the pod's disk is the
+thing that carries it, and the revision it derives is always the one the
+checked-out lockfile pins.
 
 ### Venue address
 

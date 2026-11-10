@@ -3980,6 +3980,21 @@ describe('the test:e2e name exclusion stays root-only (#1674)', () => {
     }
     expect(offenders).toEqual([]);
   });
+
+  test('the root package defines exactly the two Playwright test:e2e* scripts', () => {
+    // The matcher's exclusion covers the whole test:e2e* name family, and
+    // the scan above skips the root package by construction — so a new
+    // ROOT-level test:e2e:* script (a jest-based `test:e2e:smoke`, say)
+    // would ride the exclusion while not being Playwright. The root's
+    // test:e2e* set is pinned: the exclusion's justification stays
+    // exactly these two definitions.
+    const scripts = JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf-8')).scripts || {};
+    expect(
+      Object.keys(scripts)
+        .filter((name) => /^test:e2e/.test(name))
+        .sort()
+    ).toEqual(['test:e2e', 'test:e2e:list']);
+  });
 });
 describe('every integration suite gates itself on ARANGO_TEST_URL', () => {
   // The test:backend-arango anti-skip gate counts numPassedTests across

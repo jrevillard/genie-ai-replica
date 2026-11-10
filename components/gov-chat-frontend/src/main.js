@@ -19,7 +19,6 @@ import store from './store'; // Import the Vuex store
 import FileDialogSafe from './fileDialogSafe'; // Import our custom directive
 
 import VueApexCharts from 'vue3-apexcharts';
-import ApexCharts from 'apexcharts';
 // Import theme CSS files
 import './theme-components.css';
 import './styles/genie-visual-effects.css';
@@ -91,37 +90,6 @@ app.use(i18n);
 app.use(store); // Register the Vuex store
 app.use(FileDialogSafe); // Register our custom directive
 app.use(VueApexCharts);
-
-// Global ApexCharts defaults — use DS tokens, disable built-in noData placeholder
-window.ApexCharts = window.ApexCharts || {};
-ApexCharts.defaults = {
-  theme: { mode: 'light', palette: 'palette1' },
-  chart: {
-    foreColor: 'var(--fg)',
-    background: 'transparent',
-    fontFamily: 'var(--font-body)',
-    toolbar: { show: false },
-    animations: { enabled: false },
-    noData: {
-      text: '',
-      align: 'center',
-      verticalAlign: 'middle',
-      style: { fontSize: '14px' }
-    }
-  },
-  tooltip: { theme: 'dark' },
-  grid: { borderColor: 'var(--border)', strokeDashArray: 0 },
-  xaxis: {
-    axisBorder: { color: 'var(--border)' },
-    axisTicks: { color: 'var(--border)' },
-    labels: { style: { colors: 'var(--fg)' } }
-  },
-  yaxis: {
-    axisBorder: { color: 'var(--border)' },
-    labels: { style: { colors: 'var(--fg)' } }
-  },
-  legend: { labels: { colors: 'var(--fg)' } }
-};
 
 // Create a global method for changing locale
 app.config.globalProperties.$setLocale = function (locale) {

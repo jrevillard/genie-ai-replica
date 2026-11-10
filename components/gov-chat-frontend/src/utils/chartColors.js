@@ -351,22 +351,25 @@ function buildSatisfactionScale(statuses = {}, { dimmed = false, compute = domCo
 }
 
 /**
- * The gauge's four value bands (poor/low/medium/high): the satisfaction scale,
- * projected to the gauge's four ranges by picking [0, 1, 2, 4] — the
- * danger→warning mix INCLUDED (review F2: [0,2,3,4] painted 'low' pure
- * warning, one stop ahead of the scale the heatmap shows). A band the scale
+ * The four satisfaction BANDS shared by the gauge (its value bands) and the
+ * heatmap (its colorScale ranges): the satisfaction scale projected onto the
+ * four real boundaries (0-70 / 70-80 / 80-90 / 90-100) by picking [0, 2, 3, 4]
+ * — poor=danger, average=warning, good=warning→success mix, excellent=success.
+ * That pick IS the pre-T1 surface's own semantics (its hardcoded scales
+ * painted 70-80 flat warning-orange and 80-90 green); review round 1's
+ * [0,1,2,4] realignment was corrected in round 2 against that reference — it
+ * had repainted the good band warning-orange in both themes. A band the scale
  * could not produce degrades to its nearest raw status token (review F4); an
  * unresolvable set yields [] (ApexCharts' default palette) rather than empty
- * colors. The heatmap consumes buildSatisfactionScale directly — it renders
- * all five stops with its own pick semantics.
+ * colors.
  */
-function buildSatisfactionBands(statusColors = {}, { compute = domCompute } = {}) {
-  const scale = buildSatisfactionScale(statusColors, { compute });
+function buildSatisfactionBands(statusColors = {}, { dimmed = false, compute = domCompute } = {}) {
+  const scale = buildSatisfactionScale(statusColors, { dimmed, compute });
   const st = statusColors || {};
   return [
     scale[0] || st.danger || '',
-    scale[1] || st.warning || st.danger || '',
-    scale[2] || st.warning || '',
+    scale[2] || st.warning || st.danger || '',
+    scale[3] || st.warning || st.success || st.danger || '',
     scale[4] || st.success || ''
   ].filter(Boolean);
 }

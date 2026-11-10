@@ -106,7 +106,7 @@ describe('SatisfactionGauge value bands (admin-ux T1 review F2/F4)', () => {
   });
 
   it('builds the bands through the shared builder from its resolved status colors', async () => {
-    // The band PICK contract ([0,1,2,4] of the scale, with token fallbacks)
+    // The band PICK contract ([0,2,3,4] of the scale, with token fallbacks)
     // lives in the builder and is pinned in utils/chartColors.test.js; the
     // component pins its half: delegate with the resolved theme's statusColors.
     const bands = ['rgb(201, 8, 28)', 'rgb(220, 60, 50)', 'rgb(245, 158, 11)', 'rgb(34, 197, 94)'];

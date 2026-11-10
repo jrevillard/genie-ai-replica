@@ -513,6 +513,11 @@ export default {
         return;
       }
 
+      // Resolved concrete color, not 'var(--fg)': presentation attributes
+      // cannot carry var() (the mechanism this PR documents) — the old literal
+      // var() writes were dead, covered only by the injected stylesheet.
+      const textColor = this.getResolvedTheme().textColor;
+
       setTimeout(() => {
         try {
           const textElements = chartElement.querySelectorAll(
@@ -520,10 +525,10 @@ export default {
           );
 
           textElements.forEach((el) => {
-            el.setAttribute('fill', 'var(--fg)');
+            el.setAttribute('fill', textColor);
             const tspans = el.querySelectorAll('tspan');
             tspans.forEach((tspan) => {
-              tspan.setAttribute('fill', 'var(--fg)');
+              tspan.setAttribute('fill', textColor);
             });
           });
         } catch {

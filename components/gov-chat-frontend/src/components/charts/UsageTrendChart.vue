@@ -15,7 +15,7 @@
 import * as d3 from 'd3';
 import analyticsService from '../../services/analyticsService';
 import { useChartTheme } from '../../composables/useChartTheme';
-import { fade, shiftLightness } from '../../utils/chartColors';
+import { shiftLightness } from '../../utils/chartColors';
 import DsSpinner from '../ds/Spinner.vue';
 import DsStateDisplay from '../ds/StateDisplay.vue';
 
@@ -317,16 +317,22 @@ export default {
 
       // Data series colors — derived from the brand ramp (T1: was a private
       // hardcoded 5-color palette that matched no theme and no deployment flavour).
-      // Bars ride the first ramp entry, the line the second; gradients are
+      // Bars ride the first ramp entry, the line the THIRD: entries 0 and 1 are
+      // adjacent in hue (both blue on most flavours — entry 1 is the
+      // info-infused step), and a two-series chart needs hue separation; the
+      // old palette was green/blue for the same reason. Gradients are
       // lightness steps so the pair keeps its depth.
       const barBase = theme.chartColors[0] || theme.accentColor;
-      const lineBase = theme.chartColors[1] || theme.brandColor || theme.accentColor;
+      const lineBase = theme.chartColors[2] || theme.brandColor || theme.accentColor;
       const colors = {
         barStart: shiftLightness(barBase, 0.08),
         barEnd: shiftLightness(barBase, -0.08),
         lineStart: lineBase,
         lineEnd: shiftLightness(lineBase, -0.08),
-        area: fade(lineBase, 65)
+        // Opaque on purpose: the gradient's stop-opacity (0.7/0.1) is the one
+        // alpha knob — fade() here multiplied it twice and the area washed
+        // out ~35% vs the pre-T1 chart (review round 2).
+        area: lineBase
       };
 
       // UI colors — adapt to theme

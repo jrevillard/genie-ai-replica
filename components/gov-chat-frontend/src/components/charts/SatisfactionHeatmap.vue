@@ -3,7 +3,7 @@
   <div class="heatmap-wrapper">
     <div ref="chart" class="chart-container">
       <apexchart
-        v-if="!loading && !error && chartOptions"
+        v-if="!loading && !error && !noData && chartOptions"
         type="heatmap"
         height="580"
         :options="chartOptions"
@@ -25,7 +25,7 @@
 <script>
 import analyticsService from '../../services/analyticsService';
 import { useChartTheme } from '../../composables/useChartTheme';
-import { buildSatisfactionScale } from '../../utils/chartColors';
+import { buildSatisfactionBands } from '../../utils/chartColors';
 import { periodLabel as translatePeriodLabel } from '../../utils/satisfactionPeriods.js';
 import DsSpinner from '../ds/Spinner.vue';
 import DsStateDisplay from '../ds/StateDisplay.vue';
@@ -251,7 +251,7 @@ export default {
           this.updateChart();
         }
       } catch {
-        this.error = this.translate('analytics.error.loading', 'Failed to load satisfaction data.');
+        this.error = this.translate('analytics.errors.loading', 'Failed to load satisfaction data.');
         this.chartData = [];
         this.updateChart();
       } finally {
@@ -316,16 +316,17 @@ export default {
         const goodText = this.translate('analytics.ratings.good', 'Good');
         const excellentText = this.translate('analytics.ratings.excellent', 'Excellent');
 
-        // T1: the scale derives from the deployment's own status tokens
-        // (was two hardcoded 4-stop hex scales). Dark mode steps lightness down.
-        const scale = buildSatisfactionScale(theme.statusColors, { dimmed: theme.isDarkMode });
-        const pick = (i, fallback) => scale[i] || fallback;
+        // T1: the scale derives from the deployment's own status tokens (was
+        // two hardcoded 4-stop hex scales). Dark mode steps lightness down.
+        // The shared band builder owns the [0,2,3,4] pick and the per-band
+        // token fallbacks — the same projection the gauge paints.
+        const bands = buildSatisfactionBands(theme.statusColors, { dimmed: theme.isDarkMode });
         return {
           ranges: [
-            { from: 0, to: 69.99, color: pick(0, theme.statusColors.danger), name: poorText },
-            { from: 70, to: 79.99, color: pick(1, theme.statusColors.warning), name: averageText },
-            { from: 80, to: 89.99, color: pick(2, theme.statusColors.warning), name: goodText },
-            { from: 90, to: 100, color: pick(4, theme.statusColors.success), name: excellentText }
+            { from: 0, to: 69.99, color: bands[0], name: poorText },
+            { from: 70, to: 79.99, color: bands[1], name: averageText },
+            { from: 80, to: 89.99, color: bands[2], name: goodText },
+            { from: 90, to: 100, color: bands[3], name: excellentText }
           ]
         };
       };

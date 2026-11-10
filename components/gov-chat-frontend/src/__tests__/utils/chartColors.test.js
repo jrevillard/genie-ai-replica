@@ -230,15 +230,17 @@ describe('chartColors — buildSatisfactionBands (the gauge projection, review F
   const STATUSES = { success: 'rgb(20, 160, 90)', warning: 'rgb(230, 170, 20)', danger: 'rgb(220, 60, 50)' };
   const failing = () => SENTINEL; // mixes resolve through the pure lerp fallback
 
-  test('projects the scale to [0, 1, 2, 4] — the danger→warning mix included', () => {
-    // The gauge's poor→excellent edges must read the same ordering the heatmap
-    // paints: the old [0,2,3,4] pick painted 'low' pure warning, one stop ahead.
+  test('projects the scale to [0, 2, 3, 4] — the pre-T1 surface semantics', () => {
+    // poor=danger, average=warning, good=warning→success mix, excellent=success:
+    // the hardcoded pre-T1 scales painted 70-80 flat warning-orange and 80-90
+    // green, and this pick restores exactly that on both charts. (Round 1's
+    // [0,1,2,4] misread the reference and repainted the good band orange.)
     const bands = buildSatisfactionBands(STATUSES, { compute: failing });
     expect(bands).toEqual([
       'rgb(220, 60, 50)', // poor — danger
-      'rgb(225, 115, 35)', // low — danger→warning mix (the lerp fallback)
-      'rgb(230, 170, 20)', // medium — warning
-      'rgb(20, 160, 90)' // high — success
+      'rgb(230, 170, 20)', // average — warning
+      'rgb(125, 165, 55)', // good — warning→success mix (the lerp fallback)
+      'rgb(20, 160, 90)' // excellent — success
     ]);
   });
 
@@ -248,7 +250,8 @@ describe('chartColors — buildSatisfactionBands (the gauge projection, review F
     // unresolvable set yields [] (ApexCharts' default palette).
     expect(buildSatisfactionBands({ danger: 'rgb(1, 2, 3)' }, { compute: failing })).toEqual([
       'rgb(1, 2, 3)', // poor → danger
-      'rgb(1, 2, 3)' // low → warning missing → danger; medium/high unresolvable → filtered
+      'rgb(1, 2, 3)', // average → warning missing → danger
+      'rgb(1, 2, 3)' // good → warning/success missing → danger
     ]);
     expect(buildSatisfactionBands({}, { compute: failing })).toEqual([]);
   });

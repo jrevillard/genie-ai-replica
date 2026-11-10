@@ -1,5 +1,10 @@
 const { defineConfig } = require('@playwright/test');
 require('dotenv').config();
+// The venue's edge, the ONE definition (tests/e2e/helpers/base-url.js):
+// the config's own default would be a second copy of the fact, and no
+// mechanism keeps the two equal. The module is dependency-free and
+// credential-free, so the config may require it.
+const { BASE_URL } = require('./tests/e2e/helpers/base-url');
 
 module.exports = defineConfig({
   testDir: './tests/e2e',
@@ -22,7 +27,7 @@ module.exports = defineConfig({
     ['junit', { outputFile: 'reports/playwright-report.xml' }],
   ],
   use: {
-    baseURL: process.env.BASE_URL || 'https://localhost',
+    baseURL: BASE_URL,
     ignoreHTTPSErrors: true,
     bypassCSP: true,
     actionTimeout: 15000,

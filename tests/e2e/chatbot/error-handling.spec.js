@@ -44,15 +44,9 @@ test.describe('RAG error handling', () => {
   });
 
   test('displays error message when backend returns error', async () => {
-    // The backend answers the stream with a server error. The helper's
-    // fulfilment carries the CORS header a cross-origin reader needs —
-    // without it the browser drops the mocked answer and the app renders
-    // a transport failure instead of the injected status.
-    await mockStreamError(page, {
-      status: 503,
-      error: 'SERVICE_UNAVAILABLE',
-      message: 'RAG pipeline is temporarily unavailable',
-    });
+    // The backend answers the stream with a server error; only the
+    // status matters here, the body is the helper's default.
+    await mockStreamError(page, { status: 503 });
 
     await sendMessage(page, 'First attempt will fail');
 

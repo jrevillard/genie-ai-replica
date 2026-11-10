@@ -19,24 +19,36 @@ const E2E_ROOT = path.join(ROOT, 'tests/e2e');
 // string — the scan target moves with the definition.
 const STREAM_ROUTE_SOURCE = path.join(E2E_ROOT, 'helpers/chatbot.js');
 
+// Read once per gate run: the drift this gate exists for lands between
+// commits, never mid-run, so a within-run snapshot cannot hide it.
+const STREAM_ROUTE_SOURCE_CONTENT = fs.readFileSync(STREAM_ROUTE_SOURCE, 'utf8');
+
 const streamPathFromSource = () => {
-  const source = fs.readFileSync(STREAM_ROUTE_SOURCE, 'utf8');
   // Anchored to line start: a commented-out copy of the declaration must
   // not become the scan target — the gate would then watch a stale
   // endpoint while green, the exact drift it exists to catch.
-  const match = source.match(/^const STREAM_PATH = '([^']+)';/m);
+  const match = STREAM_ROUTE_SOURCE_CONTENT.match(/^const STREAM_PATH = '([^']+)';/m);
   return match ? match[1] : null;
 };
 
-// Every .js file under the given root, node_modules excluded — the
-// installed dependency tree is not a spec, and a copy of the endpoint
-// string inside a dependency is not a drift this gate is for.
-const e2eFiles = (root) =>
-  fs
-    .readdirSync(root, { recursive: true })
-    .filter((f) => f.endsWith('.js'))
-    .filter((f) => !f.split(path.sep).includes('node_modules'))
-    .map((f) => path.join(root, f));
+// Every .js file under the given root. Depth-first, pruning node_modules
+// at the directory level — readdirSync's recursive mode cannot prune,
+// and the dependency tree under tests/e2e holds hundreds of .js files
+// the gate must not enumerate: a copy of the endpoint inside a
+// dependency is not a drift this gate is for.
+const e2eFiles = (root) => {
+  const out = [];
+  const walk = (dir) => {
+    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+      if (entry.name === 'node_modules') continue;
+      const full = path.join(dir, entry.name);
+      if (entry.isDirectory()) walk(full);
+      else if (entry.name.endsWith('.js')) out.push(full);
+    }
+  };
+  walk(root);
+  return out;
+};
 
 const filesCarrying = (root, needle) => {
   // The one exemption is the file that DEFINES the endpoint —

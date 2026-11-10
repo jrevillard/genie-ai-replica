@@ -30,12 +30,6 @@
  *   usually delivers the close events before an in-flight route call
  *   rejects, so by then the state half is often already true too; a
  *   crashed browser fails the spec on its other awaits either way.
- *   The race also reaches the handler in a second shape: a route
- *   callback's error is raised in the server and crosses the pipeline as
- *   {message, stack, name}, so the client rebuilds it as a plain Error
- *   with the class lost and the NAME kept — that is why the check reads
- *   the name, and why `route.fetch()`'s "Request context disposed."
- *   arrives with the name TargetClosedError and is recognised.
  *
  * Only their conjunction is the named race. The error check reads the
  * constructor name and the message (the message form is the same

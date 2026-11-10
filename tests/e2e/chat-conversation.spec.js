@@ -4,7 +4,7 @@
 // and each one carries a mutation check recorded beside it.
 const { test, expect } = require('@playwright/test');
 const { openWelcomeScreen, contrastRatio } = require('./helpers/welcome');
-const { mockChatStream, sseBody, ackFeedback, BOT_BUBBLE, NAV_STATUS, STREAM_ROUTE, STREAM_PATH } = require('./helpers/chatbot');
+const { mockChatStream, sseBody, sseFulfill, ackFeedback, BOT_BUBBLE, NAV_STATUS, STREAM_ROUTE, STREAM_PATH } = require('./helpers/chatbot');
 const { runPostOnlyRouteHandler, runRouteHandler } = require('./helpers/route');
 const { QUICK_HELP_ITEM } = require('./helpers/layout');
 
@@ -545,15 +545,7 @@ test.describe('Conversation — surface invariants', () => {
       STREAM_ROUTE,
       runPostOnlyRouteHandler(page, async (route) => {
         await streamReleased;
-        await route.fulfill({
-          status: 200,
-          contentType: 'text/event-stream',
-          // The CORS header a cross-origin reader needs — the same rule
-          // mockChatStream obeys; without it the browser drops the
-          // answer and the app reads a transport failure (#1587).
-          headers: { 'access-control-allow-origin': '*' },
-          body
-        });
+        await sseFulfill(route, body);
       })
     );
     await page.locator('[data-testid="welcome-composer"] textarea').fill('What is GENIE.AI?');

@@ -56,7 +56,7 @@
 const { test, expect } = require('@playwright/test');
 const { openWelcomeScreen } = require('../helpers/welcome');
 const { runRouteHandler } = require('../helpers/route');
-const { STREAM_ROUTE } = require('../helpers/chatbot');
+const { STREAM_ROUTE, sseFulfill } = require('../helpers/chatbot');
 
 // The live hierarchy this spec serves. The category 'Civil Registry' exists and
 // names itself in ENGLISH; 'Taxes & Revenue' does not exist at all.
@@ -250,7 +250,10 @@ async function watchQueries(page) {
     STREAM_ROUTE,
     runRouteHandler(page, async (route) => {
       streamed = true;
-      await route.fulfill({ status: 200, contentType: 'text/event-stream', body: '' });
+      // The body stays empty on purpose: the watcher only records that a
+      // query went out, and a done frame would complete the turn and
+      // change what the spec observes.
+      await sseFulfill(route, '');
     })
   );
   return () => streamed;

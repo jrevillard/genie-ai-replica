@@ -266,6 +266,24 @@ function sseBody(chunks, metadata) {
   return [...frames, '', `data: ${JSON.stringify({ type: 'done', queryId: 'mock-query-1' })}`, ''].join('\n');
 }
 
+// The CORS header a cross-origin reader needs to read ANY mocked
+// answer: without it the browser drops the fulfilment and the app reads
+// a transport failure instead of the mocked bytes (#1587). One
+// definition — every fulfilment of a mocked answer uses it.
+const CORS_HEADERS = { 'access-control-allow-origin': '*' };
+
+/**
+ * The SSE envelope every mocked stream answer shares: 200, the event
+ * stream content type, the CORS header. `mockChatStream`, the
+ * held-release test in chat-conversation.spec.js and the query watcher
+ * in chatbot/quick-help-scope.spec.js hand the same envelope different
+ * bodies; stating it once is what keeps a wire-contract change a
+ * one-file edit.
+ */
+function sseFulfill(route, body, { status = 200 } = {}) {
+  return route.fulfill({ status, contentType: 'text/event-stream', headers: CORS_HEADERS, body });
+}
+
 /**
  * Mock the chat answer stream. `chunks` arrive as chunk frames; `metadata`,
  * when given, rides a metadata frame before the done frame. The interception
@@ -279,15 +297,7 @@ async function mockChatStream(page, chunks, metadata) {
   await page.route(
     STREAM_ROUTE,
     runPostOnlyRouteHandler(page, async (route) => {
-      await route.fulfill({
-        status: 200,
-        contentType: 'text/event-stream',
-        // The browser drops a cross-origin answer that carries no CORS
-        // header, so the app reads a transport failure instead of the
-        // mocked frames (#1587).
-        headers: { 'access-control-allow-origin': '*' },
-        body
-      });
+      await sseFulfill(route, body);
     })
   );
 }
@@ -299,15 +309,12 @@ async function mockChatStream(page, chunks, metadata) {
  * cross-origin reader needs.
  */
 async function mockStreamError(page, { status = 503, error = 'SERVICE_UNAVAILABLE', message = 'RAG pipeline is temporarily unavailable' } = {}) {
+  // Registration-invariant like the SSE body: build the wire bytes once.
+  const body = JSON.stringify({ error, message });
   await page.route(
     STREAM_ROUTE,
     runPostOnlyRouteHandler(page, async (route) => {
-      await route.fulfill({
-        status,
-        contentType: 'application/json',
-        headers: { 'access-control-allow-origin': '*' },
-        body: JSON.stringify({ error, message })
-      });
+      await route.fulfill({ status, contentType: 'application/json', headers: CORS_HEADERS, body });
     })
   );
 }
@@ -333,6 +340,7 @@ module.exports = {
   waitForBotResponse,
   waitForBotMessage,
   sseBody,
+  sseFulfill,
   mockChatStream,
   mockStreamError,
   ackFeedback,

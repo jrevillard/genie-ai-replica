@@ -135,7 +135,7 @@ test.describe('the concept-document ceiling in the concept editor', () => {
   // (#1742), and the reason is the venue's own profile — read from the
   // runtime config the frontend itself reads — not a guess.
   test.beforeEach(async () => {
-    test.skip(!(await okfEnabled()), okfParkedReason());
+    test.skip(!(await okfEnabled()), await okfParkedReason());
   });
 
   test("the advisory carries the SERVER's ceiling", async ({ page }) => {

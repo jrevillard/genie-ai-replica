@@ -8,106 +8,114 @@
  * pass quietly. The profile answers "does this venue have it?"; the skip
  * reason answers "why not?".
  *
- * Two rules, both from the suite's own conventions (tests/e2e/CLAUDE.md):
- *
- *  - A probe that cannot READ the venue fails LOUDLY. An unreadable venue is
- *    not an absent surface — a skip built on a failed probe is exactly the
- *    silent fallback the suite forbids.
- *  - A probe result is cached per process, so a file's specs ask once. A
- *    FAILED probe is not cached: the next file must read the failure in its
- *    own name, not inherit a cached error.
- *
  * The OKF knob is read from the deployment's OWN runtime config
  * (`/runtime/config.js` → `window.APP_CONFIG.okfEnabled`), not from an env
  * var of the runner: the flag that decides whether the OKF surfaces render
- * is the one the frontend itself reads.
+ * is the one the frontend itself reads — and the rule this probe applies is
+ * the FRONTEND's rule, arm for arm
+ * (`components/gov-chat-frontend/src/utils/okfFlag.js`):
+ *
+ *   - no runtime config at all → ENABLED (the dev-build arm: the app
+ *     renders the surfaces);
+ *   - a config that carries `okfEnabled: '1'` → ENABLED (strict equality —
+ *     a numeric 1 is a different writer and must not enable the Studio);
+ *   - ANY other value, and a config with no `okfEnabled` key at all →
+ *     DISABLED (fail closed: a typo must never silently enable the Studio).
+ *
+ * A probe that cannot READ the venue fails LOUDLY — an unreadable venue is
+ * not an absent surface, and a skip built on a failed probe is exactly the
+ * silent fallback the suite forbids. A probe result is cached per process;
+ * a FAILED probe is not cached, so the next file reads the failure in its
+ * own name instead of inheriting a cached error.
+ *
+ * The transport is the shared one (`helpers/auth.js`), read through the
+ * module object so a unit spec can swap it — the pattern the sibling
+ * helper specs use.
  */
-const https = require('https');
+const auth = require('./auth');
 const { BASE_URL } = require('./chatbot');
-const { request, getAdminToken } = require('./auth');
 
 const RUNTIME_CONFIG_PATH = '/runtime/config.js';
-
-/** Raw GET against the venue edge. The venue serves a self-signed certificate. */
-function getVenueText(path) {
-  return new Promise((resolve, reject) => {
-    const url = new URL(path, BASE_URL);
-    const req = https.request(
-      {
-        hostname: url.hostname,
-        port: url.port || 443,
-        path: url.pathname + url.search,
-        method: 'GET',
-        rejectUnauthorized: false,
-        timeout: 30000,
-        agent: false,
-      },
-      (res) => {
-        let body = '';
-        res.on('data', (chunk) => {
-          body += chunk;
-        });
-        res.on('end', () => resolve({ status: res.statusCode, body }));
-      }
-    );
-    req.on('error', reject);
-    req.on('timeout', () => req.destroy(new Error(`Request timed out after 30000ms: GET ${path}`)));
-    req.end();
-  });
-}
 
 let okfCache = null;
 const realmCache = new Map();
 const identityProviderCache = new Map();
 
 /**
- * Is the OKF pillar deployed on this venue?
- * @returns {Promise<boolean>} true when the frontend is configured to render
- *   the OKF surfaces, false when the pillar is parked.
+ * Is the OKF pillar deployed on this venue, and what did the venue say?
+ * @returns {Promise<{enabled: boolean, value: string}>} the verdict and the
+ *   value the runtime config carries ('1', '0', an unrecognized value, or
+ *   the empty string when the config carries no key at all)
  */
-async function okfEnabled() {
+async function okfProfile() {
   if (okfCache !== null) return okfCache;
-  const res = await getVenueText(RUNTIME_CONFIG_PATH);
+  const res = await auth.request('GET', RUNTIME_CONFIG_PATH, { raw: true });
+  if (res.status === 404) {
+    // No runtime config at all: the frontend's dev-build arm — the
+    // surfaces render, so the specs run.
+    okfCache = { enabled: true, value: '' };
+    return okfCache;
+  }
   if (res.status !== 200) {
     throw new Error(
       `the venue runtime config answered HTTP ${res.status} — the venue profile is UNKNOWN, ` +
         `which is not the same as "the OKF pillar is parked"`
     );
   }
-  // The frontend reads the flag strictly (=== '1' in
-  // components/gov-chat-frontend/src/utils/okfFlag.js): anything else is off.
-  const match = /okfEnabled:\s*["']?([^"'\s,}]+)/.exec(res.body);
-  if (!match) {
-    throw new Error(
-      'the venue runtime config carries no okfEnabled knob — the venue profile is UNKNOWN, ' +
-        'which is not the same as "the OKF pillar is parked"'
-    );
+  // The frontend compares the STRING it read: `cfg.okfEnabled === '1'`.
+  // A config written by another writer — a bare `1`, a `true` — is not that
+  // string, and the frontend reads it as parked. The probe therefore has to
+  // tell a quoted string from a bare token, or it would enable the Studio
+  // where the product keeps it dark.
+  const match = /okfEnabled:\s*("([^"]*)"|'([^']*)'|([^"'\s,}]+))/.exec(res.data || '');
+  let enabled = false;
+  let value = '';
+  if (match) {
+    const quoted = match[2] !== undefined ? match[2] : match[3] !== undefined ? match[3] : null;
+    if (quoted === null) {
+      // A bare token: a different writer than the entrypoint's '1'.
+      value = `${match[4]} (unquoted — the frontend reads it as parked)`;
+    } else {
+      value = quoted;
+      enabled = quoted === '1';
+    }
   }
-  okfCache = match[1] === '1';
+  okfCache = { enabled, value };
   return okfCache;
+}
+
+/**
+ * Is the OKF pillar deployed on this venue?
+ * @returns {Promise<boolean>} true when the frontend would render the OKF
+ *   surfaces
+ */
+async function okfEnabled() {
+  return (await okfProfile()).enabled;
 }
 
 /**
  * The skip reason for a spec that drives an OKF surface on a venue whose
  * OKF pillar is parked. It names the profile the venue exposes, so the run
  * output says WHY the spec did not run.
- * @returns {string} the reason
+ * @returns {Promise<string>} the reason
  */
-function okfParkedReason() {
+async function okfParkedReason() {
+  const { value } = await okfProfile();
+  const what = value ? `okfEnabled=${value}` : 'the runtime config carries no okfEnabled knob';
   return (
-    `venue profile: the OKF pillar is parked (okfEnabled=0 in ${BASE_URL}${RUNTIME_CONFIG_PATH}) — ` +
-    'this spec drives an OKF surface, which a core-profile deployment does not render'
+    `venue profile: the OKF pillar is parked (${what} in ${BASE_URL}${RUNTIME_CONFIG_PATH}) — ` +
+    'this spec drives an OKF surface, which a core-profile deployment does not render, ' +
+    'and that surface is therefore NOT exercised by this run'
   );
 }
 
 /**
- * The venue's master-realm admin token. Minted per call: an admin token is
- * short-lived, and a cached one would expire in the middle of a long run —
- * turning a profile read into a 401 nobody can explain.
+ * The venue's master-realm admin token — the one the runner supplies
+ * (`ADMIN_TOKEN`) or the one minted from the admin password.
  * @returns {Promise<string>} the token
  */
 async function adminToken() {
-  return getAdminToken();
+  return auth.getAdminToken();
 }
 
 /**
@@ -117,7 +125,7 @@ async function adminToken() {
  */
 async function realmExists(realm) {
   if (realmCache.has(realm)) return realmCache.get(realm);
-  const res = await request('GET', `/auth/admin/realms/${encodeURIComponent(realm)}`, {
+  const res = await auth.request('GET', `/auth/admin/realms/${encodeURIComponent(realm)}`, {
     headers: { Authorization: `Bearer ${await adminToken()}` },
   });
   if (res.status === 404) {
@@ -142,7 +150,8 @@ function missingRealmReason(realm) {
   return (
     `venue profile: the venue exposes no realm "${realm}" (Phase 0 step 0.6 — ` +
     `KEYCLOAK_ADDITIONAL_REALMS=${realm} — was not provisioned here) — this spec drives a ` +
-    'multi-realm surface, which a single-realm deployment does not answer'
+    'multi-realm surface, which a single-realm deployment does not answer, and that surface ' +
+    'is therefore NOT exercised by this run'
   );
 }
 
@@ -153,9 +162,11 @@ function missingRealmReason(realm) {
  */
 async function hasIdentityProvider(realm) {
   if (identityProviderCache.has(realm)) return identityProviderCache.get(realm);
-  const res = await request('GET', `/auth/admin/realms/${encodeURIComponent(realm)}/identity-provider/instances`, {
-    headers: { Authorization: `Bearer ${await adminToken()}` },
-  });
+  const res = await auth.request(
+    'GET',
+    `/auth/admin/realms/${encodeURIComponent(realm)}/identity-provider/instances`,
+    { headers: { Authorization: `Bearer ${await adminToken()}` } }
+  );
   if (res.status !== 200) {
     throw new Error(
       `the venue answered HTTP ${res.status} for the identity providers of realm "${realm}" — ` +
@@ -177,12 +188,14 @@ function missingIdentityProviderReason(realm) {
   return (
     `venue profile: the realm "${realm}" carries no identity provider (Phase D steps 1-5 of ` +
     'docs/e2e-tests/epic1-keycloak-foundation.md were not run on this venue) — this spec drives ' +
-    'the external-IdP login surface, which a deployment without a broker does not render'
+    'the external-IdP login surface, which a deployment without a broker does not render, and ' +
+    'that surface is therefore NOT exercised by this run'
   );
 }
 
 module.exports = {
   okfEnabled,
+  okfProfile,
   okfParkedReason,
   realmExists,
   missingRealmReason,

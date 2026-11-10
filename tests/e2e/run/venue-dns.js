@@ -22,9 +22,15 @@
  * Inert unless E2E_VENUE_IP is set.
  */
 const dns = require('dns');
+const net = require('net');
 const { venueMapping } = require('../helpers/venue-launch-args');
 
 const mapping = venueMapping();
+
+/** The address family the mapped address actually belongs to. */
+function familyOf(address) {
+  return net.isIP(address) === 6 ? 6 : 4;
+}
 
 if (mapping) {
   const { host, ip } = mapping;
@@ -45,7 +51,7 @@ if (mapping) {
     } else {
       opts = opts || {};
     }
-    const family = opts.family === 6 ? 6 : 4;
+    const family = familyOf(ip);
     if (opts.all) return done(null, [{ address: ip, family }]);
     return done(null, ip, family);
   };
@@ -53,15 +59,19 @@ if (mapping) {
   dns.promises.lookup = async function promiseLookupWithVenueMapping(hostname, options) {
     if (hostname !== host) return originalPromiseLookup.call(dns.promises, hostname, options);
     const opts = options || {};
-    const family = opts.family === 6 ? 6 : 4;
+    const family = familyOf(ip);
     if (opts.all) return [{ address: ip, family }];
     return { address: ip, family };
   };
 
   dns.resolve4 = function resolve4WithVenueMapping(hostname, options, callback) {
     if (hostname !== host) return originalResolve4.apply(this, arguments);
+    const opts = typeof options === 'function' ? {} : options || {};
     const done = typeof options === 'function' ? options : callback;
-    process.nextTick(done, null, [ip]);
+    // `resolve4(name, {ttl: true})` answers with [{address, ttl}] — a bare
+    // string is the wrong shape for that caller.
+    const answer = opts.ttl ? [{ address: ip, ttl: 0 }] : [ip];
+    process.nextTick(done, null, answer);
   };
 
   dns.resolve6 = function resolve6WithVenueMapping(hostname, options, callback) {

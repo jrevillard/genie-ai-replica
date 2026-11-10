@@ -44,6 +44,13 @@ function request(method, path, options = {}) {
           resolve({ status: res.statusCode, data: null, headers: res.headers });
           return;
         }
+        // A raw read: the caller wants the body AS TEXT (the runtime
+        // config is JavaScript, not JSON). The JSON parser below must not
+        // reject it.
+        if (options.raw) {
+          resolve({ status: res.statusCode, data: body, headers: res.headers });
+          return;
+        }
         try {
           resolve({ status: res.statusCode, data: JSON.parse(body), headers: res.headers });
         } catch {
@@ -87,6 +94,15 @@ function request(method, path, options = {}) {
  * @returns {Promise<string>} Access token string
  */
 async function getAdminToken(adminPassword) {
+  // ADMIN_TOKEN is the runner's alternative to the password (the run
+  // script and the provisioning script both accept it). Honouring it here
+  // keeps every caller on the same credential: a runner that supplies only
+  // a token would otherwise fail every admin-API call with "the password
+  // env var is required".
+  const token = process.env.ADMIN_TOKEN;
+  if (!adminPassword && !process.env.KEYCLOAK_ADMIN_PASSWORD && token) {
+    return token;
+  }
   const password = adminPassword || process.env.KEYCLOAK_ADMIN_PASSWORD;
   if (!password) {
     throw new Error('KEYCLOAK_ADMIN_PASSWORD env var is required');

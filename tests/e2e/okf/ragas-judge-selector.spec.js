@@ -41,7 +41,7 @@ test.describe('the RAGAS model selection is in the UI', () => {
   // appears (#1742). The reason is the venue's own profile, read from the
   // runtime config the frontend itself reads.
   test.beforeEach(async () => {
-    test.skip(!(await okfEnabled()), okfParkedReason());
+    test.skip(!(await okfEnabled()), await okfParkedReason());
   });
 
   let adminToken;

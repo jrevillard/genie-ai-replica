@@ -72,7 +72,7 @@ test.describe('the OKF artifacts view', () => {
   // the reason is the venue's own profile — read from the runtime config
   // the frontend itself reads — not a guess.
   test.beforeEach(async () => {
-    test.skip(!(await okfEnabled()), okfParkedReason());
+    test.skip(!(await okfEnabled()), await okfParkedReason());
   });
 
   /**

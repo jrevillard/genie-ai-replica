@@ -16,8 +16,13 @@
  *     failures and their logs, labelled `status::backlog` — the label is set
  *     ONCE, at creation, and never moved afterwards (see
  *     .claude/rules/ISSUE-LABELS.md). A file that already has an open issue
- *     with the same title gets a COMMENT instead of a second issue, so a
- *     suite that stays red does not flood the tracker.
+ *     tracking it gets a COMMENT instead of a second issue, so a suite that
+ *     stays red does not flood the tracker.
+ *
+ * The filing loop NEVER dies of its own bookkeeping: one tracker error must
+ * not leave the remaining failures unreported (that is the silence this path
+ * exists to end). The errors are collected and the script exits non-zero at
+ * the end, naming what could not be filed.
  *
  * Usage:
  *   node tests/e2e/run/file-failure-issues.js [--file-issues]
@@ -27,8 +32,11 @@ const path = require('path');
 const { execFileSync } = require('child_process');
 
 const REPO_ROOT = path.resolve(__dirname, '..', '..', '..');
-const REPORT_PATH = path.join(REPO_ROOT, 'reports', 'playwright-report.xml');
-const JSON_REPORT_PATH = path.join(REPO_ROOT, 'reports', 'playwright-report.json');
+// The report the run read: the runner moves the fresh report to a
+// per-run name before handing it over, so a later `playwright test --list`
+// (or any other invocation) in the same checkout cannot replace the
+// evidence this path files from.
+const DEFAULT_REPORT_PATH = path.join(REPO_ROOT, 'reports', 'playwright-report.json');
 
 const GITLAB_HOST = process.env.GITLAB_HOST || 'opensource.unicc.org';
 const GITLAB_PROJECT_ID = process.env.GITLAB_PROJECT_ID || '90';
@@ -47,35 +55,45 @@ function fail(message) {
   process.exit(1);
 }
 
-function readReport() {
-  if (!fs.existsSync(JSON_REPORT_PATH)) {
+function readReport(reportPath) {
+  if (!fs.existsSync(reportPath)) {
     fail(
-      `no JSON report at ${JSON_REPORT_PATH} — the run must write one (playwright.config.js ` +
+      `no JSON report at ${reportPath} — the run must write one (playwright.config.js ` +
         'declares the json reporter) before its outcome can be read'
     );
   }
   let report;
   try {
-    report = JSON.parse(fs.readFileSync(JSON_REPORT_PATH, 'utf-8'));
+    report = JSON.parse(fs.readFileSync(reportPath, 'utf-8'));
   } catch (e) {
-    fail(`the JSON report at ${JSON_REPORT_PATH} is not readable as JSON: ${e.message}`);
+    fail(`the JSON report at ${reportPath} is not readable as JSON: ${e.message}`);
   }
   if (!report || !Array.isArray(report.suites)) {
-    fail(`the JSON report at ${JSON_REPORT_PATH} carries no suites — it is not a Playwright report`);
+    fail(`the JSON report at ${reportPath} carries no suites — it is not a Playwright report`);
   }
   return report;
 }
 
-/** Every test in the report, with the file it belongs to. */
-function collectTests(suites, inheritedFile, out = []) {
+/**
+ * Every test in the report, with the file it belongs to and the FULL title
+ * path (the describe blocks plus the test title). The report carries the
+ * test title alone; two tests with the same title in different describes
+ * would otherwise be indistinguishable in the run output and in a filed
+ * issue.
+ */
+function collectTests(suites, inheritedFile, describePath = [], out = []) {
   for (const suite of suites || []) {
     const file = suite.file || inheritedFile;
+    // The file-level suite carries the spec file's own path as its title;
+    // that is not a describe block, and repeating it would read as one.
+    const isFileSuite = suite.title && /\.(?:spec|test)\.[cm]?[jt]sx?$/.test(suite.title);
+    const titlePath = suite.title && !isFileSuite ? [...describePath, suite.title] : describePath;
     for (const spec of suite.specs || []) {
       for (const test of spec.tests || []) {
-        out.push({ file: repoPath(file), title: spec.title, test });
+        out.push({ file: repoPath(file), title: [...titlePath, spec.title].join(' › '), test });
       }
     }
-    collectTests(suite.suites, file, out);
+    collectTests(suite.suites, file, titlePath, out);
   }
   return out;
 }
@@ -141,6 +159,20 @@ function fetchOpenIssues() {
 }
 
 /**
+ * Does this text mention the spec file's path, as a WHOLE path?
+ *
+ * A raw substring match would let one path swallow another: the path
+ * `tests/e2e/theme-runtime-config.spec.js` appears verbatim inside
+ * `tests/e2e/helpers/tests/e2e/theme-runtime-config.spec.js`, and the
+ * outer file's issue would then swallow the inner file's failure. The
+ * match therefore requires a path boundary on both sides.
+ */
+function mentionsPath(text, file) {
+  const escaped = file.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return new RegExp(`(^|[^A-Za-z0-9_./-])${escaped}($|[^A-Za-z0-9_.-])`).test(text);
+}
+
+/**
  * The open issue that already tracks this spec file, or null.
  *
  * An issue that already tracks the failure must NOT be duplicated: the run
@@ -151,11 +183,25 @@ function fetchOpenIssues() {
  */
 function findTrackedIssue(file, openIssues) {
   const matches = openIssues.filter((issue) =>
-    `${issue.title}\n${issue.description || ''}`.includes(file)
+    mentionsPath(`${issue.title}\n${issue.description || ''}`, file)
   );
   if (matches.length === 0) return null;
-  const dedicated = matches.find((issue) => issue.title.includes(file));
+  const dedicated = matches.find((issue) => mentionsPath(issue.title, file));
   return dedicated || matches[0];
+}
+
+/**
+ * The command that reproduces the run, as the run itself was launched: the
+ * address the runner resolved the venue NAME to included, or the command is
+ * a DNS failure waiting to happen.
+ */
+function reproduceCommand(venue) {
+  const parts = [`BASE_URL=${venue}`];
+  if (process.env.E2E_VENUE_IP) {
+    parts.push(`E2E_VENUE_HOST=${process.env.E2E_VENUE_HOST || '(the BASE_URL host)'}`);
+    parts.push(`E2E_VENUE_IP=${process.env.E2E_VENUE_IP}`);
+  }
+  return `${parts.join(' ')} tests/e2e/run/run-local-e2e.sh`;
 }
 
 /**
@@ -166,6 +212,12 @@ function issueBody(file, failures, venue, runStamp) {
     'Filed by the local e2e run (`tests/e2e/run/run-local-e2e.sh`).',
     '',
     `- venue: \`${venue}\``,
+    ...(process.env.E2E_VENUE_IP
+      ? [
+          `- the runner resolved the venue name to \`${process.env.E2E_VENUE_HOST || '(the BASE_URL host)'}\` ` +
+            `= \`${process.env.E2E_VENUE_IP}\``,
+        ]
+      : []),
     `- run: ${runStamp}`,
     `- spec file: \`${file}\``,
     `- failing tests: ${failures.length}`,
@@ -183,11 +235,11 @@ function issueBody(file, failures, venue, runStamp) {
     '## Reproduce',
     '',
     '```bash',
-    `BASE_URL=${venue} tests/e2e/run/run-local-e2e.sh`,
+    reproduceCommand(venue),
     '```',
     '',
-    'The full log of the run is in the JSON report (`reports/playwright-report.json`) and the',
-    `JUnit report (\`${path.relative(REPO_ROOT, REPORT_PATH)}\`).`,
+    'The failure output is in this issue; the run also writes a JSON and a JUnit report',
+    'under `reports/` on the machine that ran it.',
   ].join('\n');
 }
 
@@ -209,49 +261,50 @@ function commentBody(files, venue, runStamp) {
 
 function createIssue(file, failures, venue, runStamp) {
   const title = `test(e2e): ${file} is red on the local run`;
-  try {
-    const created = JSON.parse(
-      glab([
-        '-X',
-        'POST',
-        `projects/${GITLAB_PROJECT_ID}/issues`,
-        '-f',
-        `title=${title}`,
-        '-f',
-        `description=${issueBody(file, failures, venue, runStamp)}`,
-        '-f',
-        `labels=${LABELS.join(',')}`,
-      ])
-    );
-    process.stdout.write(`  #${created.iid} (created) ${title}\n`);
-    return created.iid;
-  } catch (e) {
-    fail(`the issue for ${file} could not be filed: ${e.message}`);
-  }
-}
-
-function commentOnIssue(issue, files, venue, runStamp) {
-  try {
+  const created = JSON.parse(
     glab([
       '-X',
       'POST',
-      `projects/${GITLAB_PROJECT_ID}/issues/${issue.iid}/notes`,
+      `projects/${GITLAB_PROJECT_ID}/issues`,
       '-f',
-      `body=${commentBody(files, venue, runStamp)}`,
-    ]);
-  } catch (e) {
-    fail(`the comment on issue #${issue.iid} could not be posted: ${e.message}`);
-  }
+      `title=${title}`,
+      '-f',
+      `description=${issueBody(file, failures, venue, runStamp)}`,
+      '-f',
+      `labels=${LABELS.join(',')}`,
+    ])
+  );
+  process.stdout.write(`  #${created.iid} (created) ${title}\n`);
+  return created.iid;
+}
+
+function commentOnIssue(issue, files, venue, runStamp) {
+  glab([
+    '-X',
+    'POST',
+    `projects/${GITLAB_PROJECT_ID}/issues/${issue.iid}/notes`,
+    '-f',
+    `body=${commentBody(files, venue, runStamp)}`,
+  ]);
   process.stdout.write(`  #${issue.iid} (commented) ${issue.title}\n`);
 }
 
 function main() {
   const fileIssues = process.argv.includes('--file-issues');
-  const report = readReport();
+  const reportFlag = process.argv.indexOf('--report');
+  const reportPath =
+    reportFlag === -1 ? DEFAULT_REPORT_PATH : path.resolve(process.argv[reportFlag + 1] || '');
+  const report = readReport(reportPath);
   const venue = process.env.BASE_URL || 'https://localhost';
   const runStamp = report.stats && report.stats.startTime ? report.stats.startTime : new Date().toISOString();
 
   const tests = collectTests(report.suites);
+  // A run that executed NOTHING is not a green run — it is a run that did
+  // not happen. The suite's own rule: a green must never mean "nothing ran".
+  if (tests.length === 0) {
+    fail('the run executed no test — a green that means "nothing ran" is not a result');
+  }
+
   // The report's status vocabulary is expected | unexpected | flaky | skipped:
   // a test that passed is 'expected', and ONLY 'unexpected' is a failure.
   // Reading anything that is not 'passed' as a failure files an issue for
@@ -259,12 +312,6 @@ function main() {
   // files mean something.
   const skipped = tests.filter((entry) => entry.test.status === 'skipped');
   const failed = tests.filter((entry) => entry.test.status === 'unexpected');
-
-  // A run that executed NOTHING is not a green run — it is a run that did
-  // not happen. The suite's own rule: a green must never mean "nothing ran".
-  if (tests.length === 0) {
-    fail('the run executed no test — a green that means "nothing ran" is not a result');
-  }
 
   const stats = report.stats || {};
   process.stdout.write(`\ne2e run: ${venue} (${runStamp})\n`);
@@ -310,18 +357,42 @@ function main() {
   // file. A file nobody tracks yet gets its own issue.
   const openIssues = fetchOpenIssues();
   const byIssue = new Map();
+  const errors = [];
   for (const [file, failures] of byFile) {
     const tracked = findTrackedIssue(file, openIssues);
-    if (!tracked) {
-      createIssue(file, failures, venue, runStamp);
-      continue;
+    try {
+      if (!tracked) {
+        createIssue(file, failures, venue, runStamp);
+        continue;
+      }
+      const entry = byIssue.get(tracked.iid) || { issue: tracked, files: [] };
+      entry.files.push({ file, failures });
+      byIssue.set(tracked.iid, entry);
+    } catch (e) {
+      // One tracker error must not swallow the remaining failures.
+      errors.push(`${file}: ${e.message.split('\n')[0]}`);
+      process.stdout.write(`  ! ${file} could not be filed: ${e.message.split('\n')[0]}\n`);
     }
-    const entry = byIssue.get(tracked.iid) || { issue: tracked, files: [] };
-    entry.files.push({ file, failures });
-    byIssue.set(tracked.iid, entry);
   }
   for (const { issue, files } of byIssue.values()) {
-    commentOnIssue(issue, files, venue, runStamp);
+    try {
+      commentOnIssue(issue, files, venue, runStamp);
+    } catch (e) {
+      for (const entry of files) {
+        errors.push(`${entry.file}: ${e.message.split('\n')[0]}`);
+      }
+      process.stdout.write(`  ! #${issue.iid} could not be commented: ${e.message.split('\n')[0]}\n`);
+    }
+  }
+
+  if (errors.length > 0) {
+    process.stderr.write(
+      `\nfile-failure-issues: ${errors.length} failing file(s) could NOT be filed — ` +
+        'the run is red and the tracker does not know it yet:\n' +
+        errors.map((line) => `  - ${line}`).join('\n') +
+        '\n'
+    );
+    process.exit(1);
   }
 }
 

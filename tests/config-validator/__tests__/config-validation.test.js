@@ -2747,6 +2747,7 @@ describe('e2e merge-train changes filters (#1264)', () => {
       'tests/e2e/helpers/auth.spec.js',
       'tests/e2e/helpers/keycloak-admin.spec.js',
       'tests/e2e/helpers/route.spec.js',
+      'tests/e2e/helpers/venue-profile.spec.js',
       'tests/e2e/theme-runtime-config.spec.js'
     ]);
   });
@@ -3393,25 +3394,40 @@ describe('the local e2e run defines the executed set (#1736)', () => {
     specFiles = fs
       .readdirSync(path.join(ROOT, TESTS_E2E_ROOT), { recursive: true })
       .map((f) => `${TESTS_E2E_ROOT}/${f.split(path.sep).join('/')}`)
+      // Playwright excludes **/node_modules/** from its discovery, so the
+      // inventory excludes it too: counting a vendored spec as "executed"
+      // would over-claim what the runner runs.
+      .filter((f) => !f.includes('/node_modules/'))
       .filter((f) => EXECUTED_SPEC_RE.test(f));
   });
 
-  test('the run executes the whole tests/e2e/ tree', () => {
-    expect(executedGlobs).toEqual(['tests/e2e/**/*']);
-  });
-
-  test('no spec under tests/e2e/ is left out of the run', () => {
+  // The assertion is about the SET the invocation selects, not about the
+  // spelling of the invocation: `tests/e2e/` and `tests/e2e` select the
+  // same files, and a guard that breaks on the spelling sends the author
+  // hunting for an executed-set change that does not exist.
+  test('the run executes every spec under tests/e2e/ — the whole tree', () => {
     const notExecuted = specFiles.filter((f) => scanTargets([f], executedGlobs).length === 0);
     expect(notExecuted).toEqual([]);
   });
 
-  test('the run provisions the venue fixtures before the suite', () => {
-    expect(runScript).toContain('tests/e2e/provision-e2e-fixtures.js');
+  test('the run provisions the venue fixtures BEFORE the suite', () => {
+    // The ORDER is the contract: a suite that runs before the fixtures
+    // exist logs in as nobody and fails every spec.
+    const provisioning = runScript.indexOf('tests/e2e/provision-e2e-fixtures.js');
+    const suite = runScript.indexOf('npx playwright test');
+    expect(provisioning).toBeGreaterThan(-1);
+    expect(suite).toBeGreaterThan(-1);
+    expect(provisioning).toBeLessThan(suite);
   });
 
   test('the failure path files a status::backlog issue', () => {
     const failurePath = fs.readFileSync(FAILURE_PATH, 'utf-8');
-    expect(failurePath).toContain('status::backlog');
+    // The label set the path files with — PARSED, not grepped: the string
+    // also appears in the module's comment, and a guard that a comment
+    // satisfies does not guard anything.
+    const labels = failurePath.match(/const LABELS = \[([^\]]*)\]/);
+    expect(labels).not.toBeNull();
+    expect(labels[1]).toContain("'status::backlog'");
   });
 });
 

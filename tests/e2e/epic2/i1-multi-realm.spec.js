@@ -66,6 +66,11 @@ test.describe.serial('Phase I: Multi-Realm Configuration', () => {
     // stack — past the 60s project timeout the hook otherwise runs under.
     test.setTimeout(SESSION_MINT_TIMEOUT_MS);
 
+    // The second realm is absent: the tests skipped, there is nothing to
+    // clean up, and the admin calls below would hit a realm that does not
+    // exist.
+    if (!(await realmExists(TEST_REALM))) return;
+
     // Cleanup: delete test user only (realm lifecycle is managed by Phase 0).
     // A failed delete fails the suite and names the leftover: the account
     // stays in genie2 until the next run's createUser (409-tolerant) reuses it.

@@ -38,6 +38,30 @@ NAMESPACE="${E2E_NAMESPACE:-genieai}"
 echo "=== local e2e run ==="
 echo "venue: $BASE_URL"
 
+# --- the serial slot ----------------------------------------------------------
+# The shared stack is ONE stack: two runs at once would reset the venue
+# fixtures' passwords under each other's logins, and two runs in the same
+# checkout would race for the same report file. TWO locks keep the booking
+# honest: one per checkout (the report path) and one per venue (the shared
+# stack). The second run REFUSES rather than collides.
+CHECKOUT_LOCK="${E2E_RUN_LOCK:-$REPO_ROOT/.e2e-run.lock}"
+VENUE_KEY="$(printf '%s' "$BASE_URL" | md5sum | cut -c1-12)"
+VENUE_LOCK="${E2E_VENUE_LOCK:-/tmp/genieai-e2e-$VENUE_KEY.lock}"
+
+exec 9>"$CHECKOUT_LOCK"
+if ! flock -n 9; then
+  echo "ERROR: another local e2e run is using this checkout (lock: $CHECKOUT_LOCK)." >&2
+  echo "       One checkout, one run at a time - wait for it to end." >&2
+  exit 3
+fi
+exec 8>"$VENUE_LOCK"
+if ! flock -n 8; then
+  echo "ERROR: another local e2e run holds this venue (lock: $VENUE_LOCK)." >&2
+  echo "       One shared stack, one run at a time - wait for it to end." >&2
+  exit 3
+fi
+echo "slot: acquired (checkout $CHECKOUT_LOCK, venue $VENUE_LOCK)"
+
 # --- the Keycloak admin credentials -----------------------------------------
 # The fixture provisioning and the venue-profile probes both need the
 # master-realm admin. Prefer what the caller supplied; otherwise read the
@@ -89,21 +113,43 @@ PLAYWRIGHT_STATUS=$?
 set -e
 
 # --- the outcome, and the failure path ---------------------------------------
+# The report moves to a per-run name before it is read: any later
+# Playwright invocation in this checkout (`--list`, a single spec) writes
+# the fixed path again, and the failure path must file from the report of
+# THIS run.
+RUN_REPORT="reports/playwright-report-run-$(date -u +%Y%m%dT%H%M%SZ).json"
+if [ -f reports/playwright-report.json ]; then
+  mv reports/playwright-report.json "$RUN_REPORT"
+  echo "report: $RUN_REPORT"
+else
+  RUN_REPORT=""
+  echo "report: none written by the suite" >&2
+fi
+
 FILE_FLAG="--file-issues"
 if [ "${E2E_FILE_ISSUES:-1}" = "0" ]; then
   FILE_FLAG=""
 fi
 set +e
-node tests/e2e/run/file-failure-issues.js ${FILE_FLAG}
+if [ -n "$RUN_REPORT" ]; then
+  node tests/e2e/run/file-failure-issues.js --report "$RUN_REPORT" ${FILE_FLAG}
+else
+  node tests/e2e/run/file-failure-issues.js ${FILE_FLAG}
+fi
 REPORT_STATUS=$?
 set -e
 
-if [ "$PLAYWRIGHT_STATUS" -ne 0 ]; then
+if [ "$PLAYWRIGHT_STATUS" -ne 0 ] && [ "$REPORT_STATUS" -ne 0 ]; then
+  echo
+  echo "the run is RED (playwright exit $PLAYWRIGHT_STATUS) AND the failure path failed (exit $REPORT_STATUS)"
+  echo "- the failures are NOT in the tracker; the run's outcome is not trustworthy"
+  exit "$REPORT_STATUS"
+elif [ "$PLAYWRIGHT_STATUS" -ne 0 ]; then
   echo
   echo "the run is RED (playwright exit $PLAYWRIGHT_STATUS)"
 elif [ "$REPORT_STATUS" -ne 0 ]; then
   echo
-  echo "the suite is green but the failure path failed (exit $REPORT_STATUS) — the run's outcome is not trustworthy"
+  echo "the suite is green but the failure path failed (exit $REPORT_STATUS) - the run's outcome is not trustworthy"
   exit "$REPORT_STATUS"
 fi
 

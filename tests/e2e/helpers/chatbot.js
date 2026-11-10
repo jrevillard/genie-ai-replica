@@ -280,7 +280,7 @@ const CORS_HEADERS = { 'access-control-allow-origin': '*' };
  * bodies; stating it once is what keeps a wire-contract change a
  * one-file edit.
  */
-function sseFulfill(route, body, { status = 200 } = {}) {
+function sseFulfill(route, body) {
   return route.fulfill({ status, contentType: 'text/event-stream', headers: CORS_HEADERS, body });
 }
 

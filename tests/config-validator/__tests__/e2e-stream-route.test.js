@@ -69,10 +69,7 @@ describe('the e2e suite intercepts the stream endpoint through the shared consta
     const tree = fs.mkdtempSync(path.join(os.tmpdir(), 'stream-route-gate-'));
     try {
       fs.mkdirSync(path.join(tree, 'helpers'), { recursive: true });
-      fs.writeFileSync(
-        path.join(tree, 'helpers', 'chatbot.js'),
-        `const STREAM_PATH = '${endpoint}';\n`
-      );
+      fs.writeFileSync(path.join(tree, 'helpers', 'chatbot.js'), `const STREAM_PATH = '${endpoint}';\n`);
       fs.writeFileSync(path.join(tree, 'spec.js'), `await page.route('**${endpoint}**', () => {});\n`);
       fs.writeFileSync(path.join(tree, 'clean.js'), 'await page.goto(BASE_URL);\n');
       const strays = filesCarrying(tree, endpoint).map((f) => path.basename(f));

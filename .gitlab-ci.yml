@@ -3287,10 +3287,9 @@ lint:site-scripts:
 # .lint_component: it runs shared/lib's pinned prettier over scripts/, not
 # the component's own lint/format scripts. The job's changes list carries
 # shared/lib's lock: a Prettier re-pin there must re-check these files even
-# when they did not change themselves. The bare scripts/*.js entry sits
-# next to scripts/**/*.js on purpose: ** matches zero or more directories,
-# and the explicit top-level entry keeps the coverage true even if that
-# semantics ever narrows.
+# when they did not change themselves. The `**` patterns match zero or
+# more directories — top-level scripts included — the same trust every
+# component job places on its components/<name>/**/* trigger.
 lint:root-scripts:
   extends: .lint_node
   before_script:
@@ -3300,7 +3299,6 @@ lint:root-scripts:
   rules:
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
       changes:
-        - "scripts/*.js"
         - "scripts/**/*.js"
         - "scripts/**/*.cjs"
         - "components/shared/lib/package-lock.json"

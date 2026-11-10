@@ -610,6 +610,19 @@ function extractCiShellBlocks(content) {
   // key the job defines itself; GitLab's `extends` concatenates the base
   // script before the job's own and lets the job override before_script
   // and after_script.
+  // The job -> extended bases mapping is returned alongside the blocks:
+  // a structural guard (which jobs extend which template) must read the
+  // SAME derivation the shell re-materialization used, or the guard and
+  // the sweep can silently disagree about what extends what.
+  const extendsMap = new Map(); // job owner -> [base names]
+  for (const site of mergeSites) {
+    if (site.kind !== 'extends') {
+      continue;
+    }
+    const bases = extendsMap.get(site.jobOwner) || [];
+    bases.push(site.baseOwner);
+    extendsMap.set(site.jobOwner, bases);
+  }
   if (mergeSites.length > 0) {
     const inherited = new Map(); // job owner -> inherited blocks
     const droppedSources = new Set(); // templates/bases that never run alone
@@ -653,7 +666,7 @@ function extractCiShellBlocks(content) {
     blocks.length = 0;
     blocks.push(...assembled.filter((b) => !droppedSources.has(b.owner)));
   }
-  return { blocks, errors };
+  return { blocks, errors, extendsMap };
 }
 
 module.exports = { extractCiShellBlocks };

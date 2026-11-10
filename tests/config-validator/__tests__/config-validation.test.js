@@ -1,6 +1,7 @@
 const path = require('path');
 const fs = require('fs');
 const os = require('os');
+const { execSync } = require('child_process');
 const { parseEnvTemplate, getRequiredSecrets } = require('../validators/parse-env');
 const { findUnwiredDocumented, findDuplicatedDocumented } = require('../validators/unwired-documented');
 const { parseAnsibleEnvVars } = require('../validators/parse-ansible');
@@ -3722,14 +3723,18 @@ describe('the jest worker-memory cap contract (#1419)', () => {
   // quoted-# line invokes jest today, and a quote-aware lexer would
   // exceed this heuristic guard.
   const STRIP_COMMENTS = /(^|\s)#.*$/gm;
+  // The shell commands of one block text: comments stripped, line
+  // continuations joined, chained commands split. THE one normalization
+  // pipeline — the matcher sweep and the #1676 accounting both read
+  // commands through it, so a change to the command grammar lands in
+  // both or neither.
+  const splitCommands = (text) =>
+    text.replace(STRIP_COMMENTS, '$1').replace(JOIN_CONTINUATIONS, ' ').split(COMMAND_SPLIT);
   // The jest commands of the given shell blocks — the same matcher, split,
   // and flag check the real CI file goes through below.
   const invocationsOf = (blocks) =>
     blocks.flatMap((b) =>
-      b.text
-        .replace(STRIP_COMMENTS, '$1')
-        .replace(JOIN_CONTINUATIONS, ' ')
-        .split(COMMAND_SPLIT)
+      splitCommands(b.text)
         .filter((cmd) => JEST_INVOCATION.test(cmd))
         .map((cmd) => ({ owner: b.owner, key: b.key, cmd }))
     );
@@ -3847,8 +3852,7 @@ describe('the jest worker-memory cap contract (#1419)', () => {
   // fails the accounting below.
   const isJestReportReader = (cmd) => cmd.startsWith('node -e') && cmd.includes('reports/jest-integration');
   // Every command of the given shell blocks — no JEST_INVOCATION filter.
-  const commandsOf = (blocks) =>
-    blocks.flatMap((b) => b.text.replace(STRIP_COMMENTS, '$1').replace(JOIN_CONTINUATIONS, ' ').split(COMMAND_SPLIT));
+  const commandsOf = (blocks) => blocks.flatMap((b) => splitCommands(b.text));
 
   test('every test-runner-looking CI command is matched or pinned (#1676)', () => {
     const looking = commandsOf(ciBlocks()).filter((cmd) => TEST_RUNNER_LOOKING.test(cmd));
@@ -3880,66 +3884,19 @@ describe('the jest worker-memory cap contract (#1419)', () => {
 // leaving the template, must fail this suite and force a conscious
 // decision rather than re-introducing a hand-copied (or uncapped) line.
 describe('the capped-jest template structure (#1670)', () => {
-  // The job -> extends mapping of the CI file, line-parsed like the
-  // shell extractor parses scripts: a column-0 key is the job, an
-  // `extends:` key at the job body's own indent carries either an inline
-  // value or a list of base names.
-  const gitlabCiExtends = () => {
+  // The job -> extends mapping comes from the SAME parser the shell gate
+  // uses: extractCiShellBlocks resolves extends while re-materializing
+  // inherited scripts, so the pin and the textual sweep can never
+  // disagree about what extends what.
+  const ciExtendsMap = () => {
     const content = fs.readFileSync(path.join(ROOT, '.gitlab-ci.yml'), 'utf-8');
-    const lines = content.split('\n');
-    const extendsMap = new Map();
-    let owner = null;
-    let jobIndent = null;
-    let i = 0;
-    while (i < lines.length) {
-      const line = lines[i];
-      // The extractor's own top-key shape (anchors included): a key
-      // carrying an anchor token (`job: &anchor`) is still a job, and its
-      // extends must be attributed to IT, not to the previous owner.
-      const topKey = line.match(/^([^\s#][^#]*):\s*(?:&(\S+)\s*)?(?:#.*)?$/);
-      if (topKey) {
-        owner = topKey[1].trim();
-        jobIndent = null;
-        i += 1;
-        continue;
-      }
-      if (jobIndent === null && line.trim() && !line.trimStart().startsWith('#')) {
-        jobIndent = line.match(/^ */)[0].length;
-      }
-      const extendsLine = line.match(/^(\s*)extends:\s*(.*)$/);
-      if (extendsLine && jobIndent !== null && extendsLine[1].length === jobIndent) {
-        const targets = [];
-        const inline = extendsLine[2].trim().replace(/^\[/, '').replace(/\]$/, '');
-        if (inline) {
-          for (const t of inline.split(',')) {
-            const name = t.trim().replace(/^['"]|['"]$/g, '');
-            if (name) {
-              targets.push(name);
-            }
-          }
-          i += 1;
-        } else {
-          let j = i + 1;
-          while (j < lines.length) {
-            const item = lines[j].match(/^(\s*)-\s*(.+)$/);
-            if (!item || item[1].length <= jobIndent) {
-              break;
-            }
-            targets.push(item[2].trim().replace(/^['"]|['"]$/g, ''));
-            j += 1;
-          }
-          i = j;
-        }
-        extendsMap.set(owner, targets);
-        continue;
-      }
-      i += 1;
-    }
+    const { extendsMap, errors } = extractCiShellBlocks(content);
+    expect(errors).toEqual([]);
     return extendsMap;
   };
 
   test('exactly the four product-component jobs extend the capped template', () => {
-    const users = [...gitlabCiExtends().entries()]
+    const users = [...ciExtendsMap().entries()]
       .filter(([, bases]) => bases.includes('.test_capped_jest'))
       .map(([job]) => job)
       .sort();
@@ -3950,7 +3907,7 @@ describe('the capped-jest template structure (#1670)', () => {
     // The cap rides the same base (image, stage, NODE_ENV, artifact
     // defaults) as every other test job — a template that silently leaves
     // .test_node is a fork of the base, not an extension of it.
-    expect(gitlabCiExtends().get('.test_capped_jest')).toContain('.test_node');
+    expect(ciExtendsMap().get('.test_capped_jest')).toContain('.test_node');
   });
 });
 
@@ -3964,23 +3921,25 @@ describe('the capped-jest template structure (#1670)', () => {
 // exclusion to be revisited instead of letting it drift.
 describe('the test:e2e name exclusion stays root-only (#1674)', () => {
   test('no component-level package.json defines a test:e2e* script', () => {
+    // Every TRACKED package.json below the root: git ls-files sees the
+    // repository the pipeline sees (node_modules and gitignored trees
+    // never appear), and the leading `**/` keeps the ROOT package.json
+    // itself out — its Playwright definitions are exactly what justifies
+    // the matcher's name exclusion.
+    const tracked = execSync('git ls-files -- "**/package.json"', { cwd: ROOT, encoding: 'utf-8' })
+      .split('\n')
+      .filter(Boolean);
+    // The guard must SEE the class it protects; a silent-empty pass would
+    // mean the enumeration broke, not that the packages are compliant.
+    expect(tracked.length).toBeGreaterThanOrEqual(8);
     const offenders = [];
-    for (const parent of ['components', 'tests', 'api-gateway-solution']) {
-      for (const entry of fs.readdirSync(path.join(ROOT, parent), { withFileTypes: true })) {
-        if (!entry.isDirectory()) {
-          continue;
-        }
-        const pkgPath = path.join(ROOT, parent, entry.name, 'package.json');
-        if (!fs.existsSync(pkgPath)) {
-          continue;
-        }
-        const scripts = JSON.parse(fs.readFileSync(pkgPath, 'utf-8')).scripts || {};
-        offenders.push(
-          ...Object.keys(scripts)
-            .filter((name) => /^test:e2e/.test(name))
-            .map((name) => `${parent}/${entry.name}: ${name}`)
-        );
-      }
+    for (const rel of tracked) {
+      const scripts = JSON.parse(fs.readFileSync(path.join(ROOT, rel), 'utf-8')).scripts || {};
+      offenders.push(
+        ...Object.keys(scripts)
+          .filter((name) => /^test:e2e/.test(name))
+          .map((name) => `${rel}: ${name}`)
+      );
     }
     expect(offenders).toEqual([]);
   });

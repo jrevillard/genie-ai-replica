@@ -120,9 +120,10 @@ const trackedFiles = () => {
 };
 
 // The repository's own .gitignore layers (the root file and the nested ones —
-// they are committed content) must be what matches: a machine-local rule
-// (core.excludesFile, .git/info/exclude) outranks them and must not decide
-// the test, so the `-v` output is filtered on the rule's source file.
+// they are committed content) must be what matches: only a repo-layer match
+// counts as the repo's answer, so a machine-local rule (core.excludesFile,
+// .git/info/exclude) that matches a path on its own reports under its own
+// source and is filtered out of the `-v` output.
 const REPO_GITIGNORE = /(^|\/)\.gitignore$/;
 const ignoredByRepoRules = (paths) => {
   let out;
@@ -226,6 +227,8 @@ describe('stray copy artifacts (#516)', () => {
     // The known, deferred gap (#1730): a marker on a directory component does
     // not match any glob, so the job only fires on the default branch. Pinned
     // here so the gap stays loud instead of silently widening.
-    expect(gitlabGlobMatches(SHAPES[1].glob, EXTRA_COPIES[1])).toBe(false);
+    const macOS = SHAPES.find((shape) => shape.marker === ' copy');
+    const dirCopy = EXTRA_COPIES.find((p) => p.includes('/'));
+    expect(gitlabGlobMatches(macOS.glob, dirCopy)).toBe(false);
   });
 });

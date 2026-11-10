@@ -210,6 +210,8 @@ export default {
     close: 'Dasboodoo dade',
     edit: 'A dada',
     manage: 'Kanton',
+    retry: 'A ka songo dan',
+    measuring: 'A ka sotti...',
     systemUptime: 'Sistemoo baara-waatoo',
     avgResponseTime: 'Jaabi-waatoo teema',
     errorRate: 'Filiya-kilaa',
@@ -259,7 +261,14 @@ export default {
       cpu: 'CPU baara-coko',
       memory: 'Memori baara-coko',
       storage: 'Maradaa baara-coko',
-      network: 'Netwookoo kandaa'
+      network: 'Netwookoo kandaa',
+      unavailable: 'Risoosi baara-coko mang benta to saaying-saaying'
+    },
+    health: {
+      unavailable: 'Sistemoo Kendeya coko mang benta to saaying-saaying'
+    },
+    dbStats: {
+      unavailable: 'Detabeesi kijeraalu mang benta to saaying-saaying'
     },
     databaseManagement: 'Detabeesi Lataramoo',
     databaseSize: 'Detabeesi warayaa',
@@ -331,7 +340,8 @@ export default {
       },
       runSecurityScan: {
         success: 'Kantari ñiningo benta',
-        loading: 'A ka kantari ñiningo ke...'
+        loading: 'A ka kantari ñiningo ke...',
+        refreshFailed: 'Filiya benta, koma kijeraalu fiti mang ben'
       },
       cancel: 'A bula',
       save: 'Yailamawol mara'
@@ -385,11 +395,13 @@ export default {
       },
       logSearch: {
         noResultsFound: 'Log te min benta i la ñiningo to',
+        searchFailed: 'Logolu ñiningo mang ben',
         resultsFound: "Log suw {'{'}count{'}'} jeta",
         degraded: 'Showing partial results due to VictoriaLogs outage. Some recent log entries may be missing.'
       }
     },
     security: {
+      loadingMetrics: 'Kantari kijeraalu cheet benta…',
       title: 'Kantari Kumpaboo',
       securityScan: 'Kantari Ñiningo',
       runningSecurityScan: 'A ka ñiningo ke...',
@@ -439,7 +451,8 @@ export default {
       lineNumbers: 'Layini contol',
       showLess: 'A dooya ka yitandi',
       showMore: 'Kuraal bee yitandi',
-      lastScanJustNow: 'Saaying-saaying'
+      lastScanJustNow: 'Saaying-saaying',
+      unavailable: 'Kantari kijeraalu mang benta to saaying-saaying'
     },
     hierarchy: {
       title: 'Longo Jukutol Lataramoo (tu Angaleeto - ka farikung/tradiksion dila)',

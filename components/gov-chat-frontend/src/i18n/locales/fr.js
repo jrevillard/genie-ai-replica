@@ -210,6 +210,8 @@ export default {
     close: 'Fermer le tableau de bord',
     edit: 'Modifier',
     manage: 'Gérer',
+    retry: 'Réessayer',
+    measuring: 'Mesure en cours…',
     systemUptime: 'Temps de fonctionnement du système',
     avgResponseTime: 'Temps de réponse moyen',
     errorRate: "Taux d'erreur",
@@ -259,7 +261,14 @@ export default {
       cpu: 'Utilisation CPU',
       memory: 'Utilisation mémoire',
       storage: 'Utilisation stockage',
-      network: 'Bande passante réseau'
+      network: 'Bande passante réseau',
+      unavailable: "L'utilisation des ressources est indisponible pour le moment."
+    },
+    health: {
+      unavailable: "L'état du système est indisponible pour le moment."
+    },
+    dbStats: {
+      unavailable: 'Les statistiques de la base de données sont indisponibles pour le moment.'
     },
     databaseManagement: 'Gestion de la base de données',
     databaseSize: 'Taille de la base de données',
@@ -331,7 +340,8 @@ export default {
       },
       runSecurityScan: {
         success: 'Analyse de sécurité terminée avec succès',
-        loading: "Exécution de l'analyse de sécurité..."
+        loading: "Exécution de l'analyse de sécurité...",
+        refreshFailed: "L'analyse est terminée, mais l'actualisation des résultats a échoué"
       },
       cancel: 'Annuler',
       save: 'Enregistrer les modifications'
@@ -385,12 +395,14 @@ export default {
       },
       logSearch: {
         noResultsFound: 'Aucun journal ne correspond à vos critères de recherche',
+        searchFailed: 'La recherche de journaux a échoué',
         resultsFound: "{'{'}count{'}'} entrées de journal trouvées",
         degraded:
           "Affichage de résultats partiels en raison d'une panne de VictoriaLogs. Certaines entrées de journal récentes peuvent être manquantes."
       }
     },
     security: {
+      loadingMetrics: 'Chargement des données de sécurité…',
       title: 'Surveillance de la sécurité',
       securityScan: 'Analyse de sécurité',
       runningSecurityScan: 'Analyse en cours...',
@@ -442,7 +454,8 @@ export default {
       lineNumbers: 'Numéros de ligne',
       showLess: 'Afficher moins',
       showMore: 'Afficher tous les problèmes',
-      lastScanJustNow: "À l'instant"
+      lastScanJustNow: "À l'instant",
+      unavailable: 'Les données de sécurité sont indisponibles pour le moment.'
     },
     hierarchy: {
       title: 'Gestion de la hiérarchie des connaissances (note : toujours en anglais - ajouter les traductions)',

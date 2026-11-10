@@ -3,7 +3,7 @@
   <div class="heatmap-wrapper">
     <div ref="chart" class="chart-container">
       <apexchart
-        v-if="!loading && !error && chartOptions"
+        v-if="!loading && !error && !noData && chartOptions"
         type="heatmap"
         height="580"
         :options="chartOptions"
@@ -14,12 +14,18 @@
       <span>{{ translate('analytics.status.loading', 'Loading...') }}</span>
     </DsSpinner>
     <DsStateDisplay v-if="error" type="error" :message="error" />
+    <DsStateDisplay
+      v-else-if="noData"
+      type="empty"
+      :message="translate('analytics.status.noData', 'No data available')"
+    />
   </div>
 </template>
 
 <script>
 import analyticsService from '../../services/analyticsService';
 import { useChartTheme } from '../../composables/useChartTheme';
+import { buildSatisfactionBands } from '../../utils/chartColors';
 import { periodLabel as translatePeriodLabel } from '../../utils/satisfactionPeriods.js';
 import DsSpinner from '../ds/Spinner.vue';
 import DsStateDisplay from '../ds/StateDisplay.vue';
@@ -53,14 +59,19 @@ export default {
     }
   },
   setup() {
-    const { theme, getCssVarStrings } = useChartTheme({ listenToSystem: true });
-    return { theme, getCssVarStrings };
+    const { theme, getResolvedTheme } = useChartTheme({ listenToSystem: true });
+    return { theme, getResolvedTheme };
   },
   data() {
     return {
       chartData: [],
       loading: false,
+      // error = fetch failures ONLY; noData = an empty dataset (an EMPTY state).
+      // Two fields, one meaning each: updateChart runs after a failed fetch too,
+      // and a single overloaded field let the empty branch overwrite the
+      // failure message into a benign "No data available" (simplify review).
       error: null,
+      noData: false,
       chartOptions: null,
       isMobile: false
     };
@@ -226,6 +237,7 @@ export default {
       }
       this.loading = true;
       this.error = null;
+      this.noData = false;
 
       try {
         const locale = this.isI18nReady ? this.$i18n.locale : 'en';
@@ -239,7 +251,7 @@ export default {
           this.updateChart();
         }
       } catch {
-        this.error = this.translate('analytics.error.loading', 'Failed to load satisfaction data.');
+        this.error = this.translate('analytics.errors.loading', 'Failed to load satisfaction data.');
         this.chartData = [];
         this.updateChart();
       } finally {
@@ -253,7 +265,7 @@ export default {
     },
 
     enforceColorScheme() {
-      const theme = this.getCssVarStrings();
+      const theme = this.getResolvedTheme();
       const textColor = theme.textColor;
       setTimeout(() => {
         const chartContainer = this.$refs.chart;
@@ -283,11 +295,17 @@ export default {
 
     updateChart() {
       if (!this.chartData || this.chartData.length === 0) {
-        this.error = this.translate('analytics.status.noData', 'No data available');
+        // T1: an empty dataset is an EMPTY state, not an error — the siblings
+        // (UsageTrend/TopQueries) already render their no-data as type=empty.
+        // This never touches this.error: a failed fetch lands here with empty
+        // data, and the template shows the error branch first, so a failure
+        // stays a failure instead of being overwritten into "No data available".
+        this.noData = true;
         return;
       }
+      this.noData = false;
 
-      const theme = this.getCssVarStrings();
+      const theme = this.getResolvedTheme();
       const textColor = theme.textColor;
       const backgroundColor = theme.backgroundColor;
       const borderColor = theme.borderColor;
@@ -298,25 +316,19 @@ export default {
         const goodText = this.translate('analytics.ratings.good', 'Good');
         const excellentText = this.translate('analytics.ratings.excellent', 'Excellent');
 
-        if (theme.isDarkMode) {
-          return {
-            ranges: [
-              { from: 0, to: 69.99, color: '#7D3030', name: poorText },
-              { from: 70, to: 79.99, color: '#A36624', name: averageText },
-              { from: 80, to: 89.99, color: '#3D7242', name: goodText },
-              { from: 90, to: 100, color: '#1A9350', name: excellentText }
-            ]
-          };
-        } else {
-          return {
-            ranges: [
-              { from: 0, to: 69.99, color: '#EF4444', name: poorText },
-              { from: 70, to: 79.99, color: '#F59E0B', name: averageText },
-              { from: 80, to: 89.99, color: '#84CC16', name: goodText },
-              { from: 90, to: 100, color: '#22C55E', name: excellentText }
-            ]
-          };
-        }
+        // T1: the scale derives from the deployment's own status tokens (was
+        // two hardcoded 4-stop hex scales). Dark mode steps lightness down.
+        // The shared band builder owns the [0,2,3,4] pick and the per-band
+        // token fallbacks — the same projection the gauge paints.
+        const bands = buildSatisfactionBands(theme.statusColors, { dimmed: theme.isDarkMode });
+        return {
+          ranges: [
+            { from: 0, to: 69.99, color: bands[0], name: poorText },
+            { from: 70, to: 79.99, color: bands[1], name: averageText },
+            { from: 80, to: 89.99, color: bands[2], name: goodText },
+            { from: 90, to: 100, color: bands[3], name: excellentText }
+          ]
+        };
       };
 
       this.chartOptions = {
@@ -481,24 +493,10 @@ export default {
   }
 }
 
-:deep([data-theme='dark']) .apexcharts-title-text,
-:deep([data-theme='dark']) .apexcharts-subtitle-text {
-  fill: var(--fg) !important;
-}
-
-:deep([data-theme='dark']) .apexcharts-yaxis-label text,
-:deep([data-theme='dark']) .apexcharts-xaxis-label text {
-  fill: var(--fg) !important;
-}
-
-:deep([data-theme='dark']) .apexcharts-legend-text {
-  color: var(--fg) !important;
-}
-
-:deep([data-theme='dark']) text,
-:deep([data-theme='dark']) tspan {
-  fill: var(--fg) !important;
-}
+/* T1: the old `:deep([data-theme='dark'])` overrides were DELETED — a leading
+ * [data-theme] inside :deep() can never match (html/body carry the attribute,
+ * not a node inside this component), so the block was dead; the global
+ * charts-apex-overrides.css already owns these selectors. */
 
 :deep(.apexcharts-tooltip, .apexcharts-tooltip *) {
   background-color: transparent !important;

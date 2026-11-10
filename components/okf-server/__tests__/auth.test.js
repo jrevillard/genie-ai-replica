@@ -7,6 +7,11 @@ jest.mock('../shared-lib/keycloak-auth-service', () => ({
   verifyToken: jest.fn()
 }));
 const keycloakAuthService = require('../shared-lib/keycloak-auth-service');
+// The logger is mocked so the tests can pin the outage's WARN-vs-ERROR split.
+jest.mock('../shared-lib/logger', () => ({
+  logger: { info: jest.fn(), warn: jest.fn(), error: jest.fn(), debug: jest.fn() }
+}));
+const { logger } = require('../shared-lib/logger');
 
 function mockRes() {
   const res = {};
@@ -24,7 +29,11 @@ describe('auth middleware (authenticate)', () => {
     const next = jest.fn();
     await authenticate(req, res, next);
     expect(res.status).toHaveBeenCalledWith(401);
-    expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ error: 'TOKEN_INVALID' }));
+    expect(res.json).toHaveBeenCalledWith({
+      error: 'TOKEN_INVALID',
+      message: 'Missing Authorization header',
+      details: {}
+    });
     expect(next).not.toHaveBeenCalled();
     expect(keycloakAuthService.verifyToken).not.toHaveBeenCalled();
   });
@@ -35,6 +44,11 @@ describe('auth middleware (authenticate)', () => {
     const next = jest.fn();
     await authenticate(req, res, next);
     expect(res.status).toHaveBeenCalledWith(401);
+    expect(res.json).toHaveBeenCalledWith({
+      error: 'TOKEN_INVALID',
+      message: 'Malformed Authorization header',
+      details: {}
+    });
     expect(next).not.toHaveBeenCalled();
     expect(keycloakAuthService.verifyToken).not.toHaveBeenCalled();
   });
@@ -57,15 +71,79 @@ describe('auth middleware (authenticate)', () => {
     const next = jest.fn();
     await authenticate(req, res, next);
     expect(res.status).toHaveBeenCalledWith(401);
-    expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ error: 'TOKEN_INVALID' }));
+    expect(res.json).toHaveBeenCalledWith({
+      error: 'TOKEN_INVALID',
+      message: 'Token verification failed',
+      details: {}
+    });
+    expect(next).not.toHaveBeenCalled();
+    // A genuine verification failure IS error-level (the outage's warn-level
+    // carve-out covers only AUTH_SERVICE_UNAVAILABLE), and the operator detail
+    // stays in the log — it must never be dropped, that is the only place it
+    // survives.
+    expect(logger.error).toHaveBeenCalledWith(
+      'OKF auth error',
+      expect.objectContaining({ path: '/api/okf', error: 'signature invalid' })
+    );
+  });
+
+  test('a falsy verified payload: the same fixed 401 body shape', async () => {
+    // verifyToken resolving to nothing is the same contract as a thrown
+    // verification failure: 401 TOKEN_INVALID, fixed message, doc-repo shape.
+    keycloakAuthService.verifyToken.mockResolvedValue(null);
+    const req = { headers: { authorization: 'Bearer some-token' }, path: '/api/okf' };
+    const res = mockRes();
+    const next = jest.fn();
+    await authenticate(req, res, next);
+    expect(res.status).toHaveBeenCalledWith(401);
+    expect(res.json).toHaveBeenCalledWith({
+      error: 'TOKEN_INVALID',
+      message: 'Token verification failed',
+      details: {}
+    });
     expect(next).not.toHaveBeenCalled();
   });
 
-  test('maps AUTH_SERVICE_UNAVAILABLE to a fixed body — the init detail stays in the log, not the response', async () => {
+  test("the verifier's internal text never reaches the client (a fixed 401 body)", async () => {
+    // The verification error carries operator detail (issuer mismatch, JWKS
+    // key id, decoding detail). It belongs in the log, not in a body an
+    // unauthenticated caller can read.
+    keycloakAuthService.verifyToken.mockRejectedValue(
+      new Error('token verification failed: unknown issuer "http://keycloak.internal/realms/genie"')
+    );
+    const req = { headers: { authorization: 'Bearer some-token' }, path: '/api/okf' };
+    const res = mockRes();
+    await authenticate(req, res, jest.fn());
+    expect(res.status).toHaveBeenCalledWith(401);
+    expect(res.json).toHaveBeenCalledWith({
+      error: 'TOKEN_INVALID',
+      message: 'Token verification failed',
+      details: {}
+    });
+  });
+
+  test('TOKEN_EXPIRED: 401 with the expiry code (the session expired — the token was not forged)', async () => {
+    // The code carries the distinction the document-repository middleware and
+    // the web app both rely on; the message stays fixed (no internals).
+    keycloakAuthService.verifyToken.mockRejectedValue(
+      Object.assign(new Error('Token has expired'), { code: 'TOKEN_EXPIRED', name: 'TokenVerificationError' })
+    );
+    const req = { headers: { authorization: 'Bearer some-token' }, path: '/api/okf' };
+    const res = mockRes();
+    const next = jest.fn();
+    await authenticate(req, res, next);
+    expect(res.status).toHaveBeenCalledWith(401);
+    expect(res.json).toHaveBeenCalledWith({ error: 'TOKEN_EXPIRED', message: 'Token has expired', details: {} });
+    expect(next).not.toHaveBeenCalled();
+  });
+
+  test('maps AUTH_SERVICE_UNAVAILABLE to 503 — an outage is not a bad token', async () => {
     // The verifier's init-failure message carries operator detail (discovery
     // hostname, HTTP status, the pin-mismatch remedy). The middleware logs it
     // whole and sends a fixed body — an unauthenticated caller must not be
-    // able to read internal topology out of a rejected request.
+    // able to read internal topology out of a rejected request. The STATUS is
+    // the doc-repo contract (503): a 401 would tell the client its session
+    // had died and send it to the login page during an infrastructure outage.
     keycloakAuthService.verifyToken.mockRejectedValue(
       Object.assign(
         new Error(
@@ -78,12 +156,28 @@ describe('auth middleware (authenticate)', () => {
     const res = mockRes();
     const next = jest.fn();
     await authenticate(req, res, next);
-    expect(res.status).toHaveBeenCalledWith(401);
+    expect(res.status).toHaveBeenCalledWith(503);
     expect(res.json).toHaveBeenCalledWith({
       error: 'AUTH_SERVICE_UNAVAILABLE',
-      message: 'Authentication service unavailable'
+      message: 'Authentication service unavailable',
+      details: {}
     });
     expect(next).not.toHaveBeenCalled();
+    // WARN, not ERROR: an outage must not flood the error stream with
+    // per-request entries and bury genuine 401 root causes. The operator
+    // detail stays in the log — it is the only place it survives, and it is
+    // what names the discovery hostname, the cause and the remedy. The
+    // assertion pins THAT detail, not the shared verifier's fixed prefix:
+    // a log that carried only "auth is temporarily unavailable" would leave
+    // the operator without a hostname.
+    expect(logger.warn).toHaveBeenCalledWith(
+      'OKF auth service unavailable',
+      expect.objectContaining({
+        path: '/api/okf',
+        error: expect.stringContaining('ENOTFOUND keycloak')
+      })
+    );
+    expect(logger.error).not.toHaveBeenCalled();
   });
 });
 

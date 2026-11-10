@@ -693,15 +693,39 @@ class QueryService {
       // The SERVER's engaged flag is the gate — read, never re-derived.
       const engaged = config?.engaged === true;
       const warnings = Array.isArray(config?.warnings) ? config.warnings : [];
+      // The single discriminant for "this answer was composed locally because
+      // the deployment's posture could not be read" — read once, used by the
+      // warning below and by the okf_only branch's genuine-zero-serving gate.
+      const postureUnknown = retrievalConfigClient.isPostureUnknown(config);
       logger.info('QueryService.fanout_config_resolved', {
         queryId,
         correlationId,
         mode,
         engaged,
+        source: config?.source,
         serving_graph_count: config?.serving_graph_count,
         serving_graphs: Array.isArray(config?.serving_graphs) ? config.serving_graphs.length : 0,
         warnings: warnings.length
       });
+      if (postureUnknown) {
+        // ONE emission site for the whole "the deployment's posture could not
+        // be read" fact (#1687): an unreachable upstream or a garbled body —
+        // whatever mode the local fallback carries. The warning code is the
+        // same; `source` and `mode` in the payload say which fallback is
+        // being served and why, so a dashboard cannot read the outage as
+        // "the deployment serves zero graphs" or "the deployment runs
+        // legacy/hybrid", and can tell a transport outage from a broken
+        // upstream payload. The by-design defaults (OKF parked, a caller
+        // without okf scopes) never reach this: their legacy answer IS the
+        // correct posture.
+        logger.warn('QueryService.fanout_warning', {
+          queryId,
+          correlationId,
+          fanout: { warning: 'posture_unknown', mode, engaged },
+          source: config?.source,
+          synthesis_reason: config?.synthesis_reason
+        });
+      }
 
       // Per-call authz — only when the server engaged the fan-out (the carrier
       // is empty regardless when engaged is false).
@@ -747,6 +771,10 @@ class QueryService {
           context.sticky_graph_names = stickyClean;
           logger.info('QueryService.sticky_carrier_attached', { queryId, correlationId, sticky: stickyClean });
         }
+        // A REAL hybrid zero-serving response needs no warning (normal
+        // free-form-only operation, per the okf-server's own engagement
+        // comment); a degraded hybrid posture is covered by the single
+        // posture_unknown emission above.
       } else if (mode === 'okf_only') {
         // okf_only LITERALLY means OKF only — the legacy free-form corpus is
         // NEVER queried, regardless of engaged (resolved Open Question,
@@ -759,9 +787,12 @@ class QueryService {
           context.sticky_graph_names = stickyClean;
           logger.info('QueryService.sticky_carrier_attached', { queryId, correlationId, sticky: stickyClean });
         }
-        if (!engaged) {
+        if (!engaged && !postureUnknown) {
           // Structured telemetry for the admin dashboard (NOT surfaced to the
-          // user chat).
+          // user chat): a REAL okf_only zero-serving response (the upstream
+          // answered: the deployment genuinely serves zero graphs). A locally
+          // synthesized composition already warned as posture_unknown above —
+          // this branch must not double-warn it.
           logger.warn('QueryService.fanout_warning', {
             queryId,
             correlationId,
@@ -771,7 +802,8 @@ class QueryService {
         }
       } else {
         // legacy (or an unknown mode) — add NOTHING; the payload stays
-        // byte-identical to pre-1.1.
+        // byte-identical to pre-1.1. The unreadable-posture warning is the
+        // single emission above.
         logger.info('QueryService.fanout_carrier_empty_legacy', { queryId, correlationId, mode, engaged });
       }
       return opeaPayload;

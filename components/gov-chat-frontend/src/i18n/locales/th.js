@@ -210,6 +210,8 @@ export default {
     close: 'ปิดแดชบอร์ด',
     edit: 'แก้ไข',
     manage: 'จัดการ',
+    retry: 'ลองอีกครั้ง',
+    measuring: 'กำลังวัด…',
     systemUptime: 'เวลาทำงานของระบบ',
     avgResponseTime: 'เวลาตอบสนองเฉลี่ย',
     errorRate: 'อัตราข้อผิดพลาด',
@@ -259,7 +261,14 @@ export default {
       cpu: 'การใช้งาน CPU',
       memory: 'การใช้งานหน่วยความจำ',
       storage: 'การใช้งานพื้นที่เก็บข้อมูล',
-      network: 'แบนด์วิดธ์เครือข่าย'
+      network: 'แบนด์วิดธ์เครือข่าย',
+      unavailable: 'การใช้ทรัพยากรไม่พร้อมใช้งานในขณะนี้'
+    },
+    health: {
+      unavailable: 'สถานะระบบไม่พร้อมใช้งานในขณะนี้'
+    },
+    dbStats: {
+      unavailable: 'สถิติฐานข้อมูลไม่พร้อมใช้งานในขณะนี้'
     },
     databaseManagement: 'การจัดการฐานข้อมูล',
     databaseSize: 'ขนาดฐานข้อมูล',
@@ -331,7 +340,8 @@ export default {
       },
       runSecurityScan: {
         success: 'สแกนความปลอดภัยเสร็จสิ้นสำเร็จ',
-        loading: 'กำลังรันสแกนความปลอดภัย...'
+        loading: 'กำลังรันสแกนความปลอดภัย...',
+        refreshFailed: 'สแกนเสร็จสิ้น แต่รีเฟรชผลลัพธ์ไม่สำเร็จ'
       },
       cancel: 'ยกเลิก',
       save: 'บันทึกการเปลี่ยนแปลง'
@@ -385,11 +395,13 @@ export default {
       },
       logSearch: {
         noResultsFound: 'ไม่มีบันทึกที่ตรงกับเกณฑ์การค้นหาของคุณ',
+        searchFailed: 'การค้นหา log ล้มเหลว',
         resultsFound: "พบ {'{'}count{'}'} รายการบันทึก",
         degraded: 'Showing partial results due to VictoriaLogs outage. Some recent log entries may be missing.'
       }
     },
     security: {
+      loadingMetrics: 'กำลังโหลดข้อมูลความปลอดภัย…',
       title: 'การตรวจสอบความปลอดภัย',
       securityScan: 'สแกนความปลอดภัย',
       runningSecurityScan: 'กำลังรันสแกน...',
@@ -440,7 +452,8 @@ export default {
       lineNumbers: 'หมายเลขบรรทัด',
       showLess: 'แสดงน้อยลง',
       showMore: 'แสดงปัญหาทั้งหมด',
-      lastScanJustNow: 'เมื่อสักครู่'
+      lastScanJustNow: 'เมื่อสักครู่',
+      unavailable: 'ข้อมูลความปลอดภัยไม่พร้อมใช้งานในขณะนี้'
     },
     hierarchy: {
       title: 'การจัดการลำดับชั้นความรู้ (หมายเหตุ: ภาษาอังกฤษเสมอ - เพิ่มการแปล)',

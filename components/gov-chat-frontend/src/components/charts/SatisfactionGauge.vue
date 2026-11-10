@@ -71,6 +71,7 @@
 import { nextTick } from 'vue';
 import analyticsService from '../../services/analyticsService';
 import { useChartTheme } from '../../composables/useChartTheme';
+import { buildSatisfactionBands } from '../../utils/chartColors';
 import { SATISFACTION_PERIOD_KEYS, periodLabel as translatePeriodLabel } from '../../utils/satisfactionPeriods.js';
 import DsSpinner from '../ds/Spinner.vue';
 import DsStateDisplay from '../ds/StateDisplay.vue';
@@ -123,8 +124,8 @@ export default {
     }
   },
   setup() {
-    const { theme, getCssVarStrings } = useChartTheme();
-    return { theme, getCssVarStrings };
+    const { theme, getResolvedTheme } = useChartTheme();
+    return { theme, getResolvedTheme };
   },
   data() {
     return {
@@ -346,13 +347,15 @@ export default {
     },
 
     /**
-     * Get gauge color based on value
+     * The gauge's four value bands (poor/low/medium/high), built by the shared
+     * band builder so the poor→excellent contract lives in ONE place, next to
+     * the scale it projects. A METHOD, deliberately not a computed: the values
+     * come from getComputedStyle (non-reactive), so a computed would cache the
+     * first evaluation and go stale across theme switches. Pass an
+     * already-resolved theme to avoid a second resolution (initChart does).
      */
-    getGaugeColor(value) {
-      if (value >= 90) return '#22C55E'; // Green - matches var(--success)
-      if (value >= 80) return '#84CC16'; // Light green
-      if (value >= 70) return '#F59E0B'; // Orange - matches var(--warning)
-      return '#EF4444'; // Red - matches var(--danger)
+    getGaugeBandColors(resolvedTheme) {
+      return buildSatisfactionBands((resolvedTheme || this.getResolvedTheme()).statusColors);
     },
 
     /**
@@ -363,28 +366,29 @@ export default {
         return;
       }
 
-      const isDarkMode = this.theme === 'dark';
-
-      const textColor = this.getCssVarStrings().textColor;
+      const resolved = this.getResolvedTheme();
+      const { textColor, mutedColor, borderColor, accentColor, isDarkMode } = resolved;
       const backgroundColor = 'transparent';
-      const trackColor = isDarkMode ? 'var(--muted)' : 'var(--border)';
+      // Review F3: this was 'var(--muted)'/'var(--border)' — reference strings
+      // ApexCharts drops at the presentation attribute (the stylesheet override
+      // papered over it). Resolve the same tokens through the bridge; dark mode
+      // reads the payload's isDarkMode like the heatmap does, not a local
+      // re-derivation of the theme string.
+      const trackColor = isDarkMode ? mutedColor : borderColor;
 
+      const bands = this.getGaugeBandColors(resolved);
       const getGradientColors = (value) => {
-        const colors = {
-          poor: '#EF4444', // var(--danger)
-          low: '#F59E0B', // var(--warning)
-          medium: '#84CC16',
-          high: '#22C55E' // var(--success)
-        };
-
-        if (value < 60) return [colors.poor, colors.poor];
-        if (value < 70) return [colors.poor, colors.low];
-        if (value < 80) return [colors.low, colors.medium];
-        if (value < 90) return [colors.medium, colors.high];
-        return [colors.high, colors.high];
+        if (value < 60) return [bands[0], bands[0]];
+        if (value < 70) return [bands[0], bands[1]];
+        if (value < 80) return [bands[1], bands[2]];
+        if (value < 90) return [bands[2], bands[3]];
+        return [bands[3], bands[3]];
       };
 
-      const gradientColors = getGradientColors(this.actualSatisfactionValue);
+      // With fewer than four resolved bands the indexes would read undefined —
+      // fall back to the resolved accent instead of feeding ApexCharts nothing.
+      const gradientColors =
+        bands.length === 4 ? getGradientColors(this.actualSatisfactionValue) : [accentColor, accentColor];
 
       this.chartOptions = {
         chart: {
@@ -509,6 +513,11 @@ export default {
         return;
       }
 
+      // Resolved concrete color, not 'var(--fg)': presentation attributes
+      // cannot carry var() (the mechanism this PR documents) — the old literal
+      // var() writes were dead, covered only by the injected stylesheet.
+      const textColor = this.getResolvedTheme().textColor;
+
       setTimeout(() => {
         try {
           const textElements = chartElement.querySelectorAll(
@@ -516,10 +525,10 @@ export default {
           );
 
           textElements.forEach((el) => {
-            el.setAttribute('fill', 'var(--fg)');
+            el.setAttribute('fill', textColor);
             const tspans = el.querySelectorAll('tspan');
             tspans.forEach((tspan) => {
-              tspan.setAttribute('fill', 'var(--fg)');
+              tspan.setAttribute('fill', textColor);
             });
           });
         } catch {

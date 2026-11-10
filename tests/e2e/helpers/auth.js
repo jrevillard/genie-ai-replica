@@ -1,6 +1,7 @@
 const https = require('https');
 const { chromium } = require('@playwright/test');
 const { loginViaUI, TEST_USER, BASE_URL } = require('./chatbot');
+const { venueLaunchArgs } = require('./venue-launch-args');
 
 /**
  * Make an HTTPS request ignoring self-signed certificate errors.
@@ -43,6 +44,13 @@ function request(method, path, options = {}) {
           resolve({ status: res.statusCode, data: null, headers: res.headers });
           return;
         }
+        // A raw read: the caller wants the body AS TEXT (the runtime
+        // config is JavaScript, not JSON). The JSON parser below must not
+        // reject it.
+        if (options.raw) {
+          resolve({ status: res.statusCode, data: body, headers: res.headers });
+          return;
+        }
         try {
           resolve({ status: res.statusCode, data: JSON.parse(body), headers: res.headers });
         } catch {
@@ -82,10 +90,22 @@ function request(method, path, options = {}) {
 /**
  * Get a Keycloak admin token from the master realm.
  * Uses admin-cli client with password grant.
- * @param {string} [adminPassword] - Keycloak admin password (defaults to env KEYCLOAK_ADMIN_PASSWORD)
+ * @param {string} [adminPassword] - Keycloak admin password (defaults to
+ *   env KEYCLOAK_ADMIN_PASSWORD; the env ADMIN_TOKEN wins over the
+ *   environment's password, an explicit argument wins over both)
  * @returns {Promise<string>} Access token string
  */
 async function getAdminToken(adminPassword) {
+  // ADMIN_TOKEN is the runner's alternative to the password, and it WINS
+  // over the environment's password (an explicit argument still wins over
+  // both) - the same precedence the provisioning script uses. One
+  // precedence everywhere matters: the fixtures would be provisioned with
+  // one credential while the venue-profile probes minted another, and the
+  // probes would answer 401.
+  const token = process.env.ADMIN_TOKEN;
+  if (!adminPassword && token) {
+    return token;
+  }
   const password = adminPassword || process.env.KEYCLOAK_ADMIN_PASSWORD;
   if (!password) {
     throw new Error('KEYCLOAK_ADMIN_PASSWORD env var is required');
@@ -216,7 +236,11 @@ async function getSessionTokenViaUI({ browser, user } = {}) {
   let ownBrowser = null;
   let context = null;
   try {
-    ownBrowser = browser ? null : await chromium.launch();
+    // The throwaway browser carries the venue mapping (empty unless
+    // E2E_VENUE_IP is set): Chromium resolves hostnames with its own stack,
+    // so a browser launched without it cannot open a venue whose name the
+    // runner cannot resolve.
+    ownBrowser = browser ? null : await chromium.launch({ args: venueLaunchArgs() });
     context = await (browser || ownBrowser).newContext({ ignoreHTTPSErrors: true });
     const page = await context.newPage();
     await loginViaUI(page, user || TEST_USER);

@@ -235,3 +235,6 @@ smoke-*.xlsx
 
 # scratch dir used for prettier hunk checks; never committed
 .fmtcheck/
+
+# The local e2e run checkout lock (tests/e2e/run/run-local-e2e.sh)
+.e2e-run.lock

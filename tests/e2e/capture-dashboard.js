@@ -21,6 +21,7 @@ const path = require('path');
 const { chromium } = require('playwright');
 const { loginViaUI } = require('./helpers/chatbot');
 const { waitForBannerSettled } = require('./helpers/welcome');
+const { venueLaunchArgs } = require('./helpers/venue-launch-args');
 
 const OUT_DIR = path.join(__dirname, '..', '..', 'artifacts', 'living-intelligence');
 // Four viewports: 1775×886 is the reference and 1920×960 is what the user
@@ -242,7 +243,10 @@ const audit = () => {
 
 (async () => {
   fs.mkdirSync(OUT_DIR, { recursive: true });
-  const browser = await chromium.launch();
+  // The venue mapping reaches the browser too: Chromium resolves hostnames
+  // with its own stack, so a capture against a venue the runner cannot
+  // resolve would produce nothing at all.
+  const browser = await chromium.launch({ args: venueLaunchArgs() });
   const results = {};
 
   for (const viewport of VIEWPORTS) {

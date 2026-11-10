@@ -1,0 +1,44 @@
+// Copyright (C) 2026 International Telecommunication Union (ITU)
+// SPDX-License-Identifier: Apache-2.0
+/**
+ * Where the venue edge is, for a runner that cannot resolve its name.
+ *
+ * The shared k8s stack advertises its edge under a name the cluster DNS does
+ * not serve (`genieai-forge.local`). A runner without that name in its
+ * resolver needs it mapped to an address, and the mapping has to reach BOTH
+ * resolvers: Node (`dns.lookup`) for the API helpers, and Chromium
+ * (`--host-resolver-rules`) for the browser. With only the Node half, the
+ * API helpers answer and the browser cannot open the app — the suite then
+ * fails on the login redirect instead of on the thing it tests.
+ *
+ * The mapping is opt-in: `E2E_VENUE_IP` turns it on, and `E2E_VENUE_HOST`
+ * names the host to map (it defaults to the `BASE_URL` host). Unset, this
+ * module is inert and the suite behaves exactly as before.
+ */
+const VENUE_IP_ENV = 'E2E_VENUE_IP';
+const VENUE_HOST_ENV = 'E2E_VENUE_HOST';
+
+/**
+ * The venue mapping in force, or null when the runner resolves the venue
+ * name itself.
+ * @returns {{host: string, ip: string}|null} the mapping
+ */
+function venueMapping() {
+  const ip = process.env[VENUE_IP_ENV];
+  if (!ip) return null;
+  const host =
+    process.env[VENUE_HOST_ENV] ||
+    new URL(process.env.BASE_URL || 'https://localhost').hostname;
+  return { host, ip };
+}
+
+/**
+ * The Chromium arguments that carry the venue mapping into the browser.
+ * @returns {string[]} the arguments (empty when no mapping is in force)
+ */
+function venueLaunchArgs() {
+  const mapping = venueMapping();
+  return mapping ? [`--host-resolver-rules=MAP ${mapping.host} ${mapping.ip}`] : [];
+}
+
+module.exports = { venueMapping, venueLaunchArgs, VENUE_IP_ENV, VENUE_HOST_ENV };

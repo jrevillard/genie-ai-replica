@@ -32,7 +32,9 @@ const REALM = 'genie';
 const ADMIN_ROLE = 'admin';
 
 (async () => {
-  const adminToken = process.env.ADMIN_TOKEN || (await getAdminToken());
+  // getAdminToken carries the ADMIN_TOKEN-over-password precedence for
+  // every caller; stating it here again would let the two copies drift.
+  const adminToken = await getAdminToken();
   // Sequential: the fixtures live in the same realm, and a failure must
   // not leave one half-provisioned behind a process exit.
   for (const fixture of E2E_FIXTURES) {

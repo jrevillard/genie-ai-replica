@@ -46,7 +46,8 @@ const SHAPES = [
       'genie-ai-overlay/chatqna/Dockerfile-chatqna_genie-ai - Copy',
       'genie-ai-overlay/chatqna/Dockerfile-chatqna_genie-ai - Copy (2)',
       'components/gov-chat-frontend/src/main.js - Copy.js',
-      'genie-ai-overlay/chatqna/Dockerfile-chatqna_genie-ai - Copy (3).tar.gz'
+      'genie-ai-overlay/chatqna/Dockerfile-chatqna_genie-ai - Copy (3).tar.gz',
+      'genie-ai-overlay/chatqna/Dockerfile-chatqna_genie-ai - Copy 2.txt'
     ]
   },
   {

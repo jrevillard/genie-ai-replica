@@ -24,6 +24,13 @@ logger = CustomLogger("genie-ai_prepare_doc_util")
 # severity path, so an unwired logger reaches VictoriaLogs as Unspecified).
 setup_trace_logging("genie-ai_prepare_doc_util")
 setup_json_logging("genie-ai_prepare_doc_util")
+# The vendored comps utils module (imported just above for the standard
+# loader) logs through its own CustomLogger("prepare_doc_util") — its
+# conversion progress and fetch-failure records after the build patch that
+# routed its prints there (issue #1662). Unwired, those records would reach
+# VictoriaLogs in the bracket format with severity Unspecified.
+setup_trace_logging("prepare_doc_util")
+setup_json_logging("prepare_doc_util")
 
 # Remote docling-serve endpoint (when set, document processing is delegated to remote GPU node)
 DOCLING_ENDPOINT = os.getenv("DOCLING_ENDPOINT", "")
@@ -180,7 +187,6 @@ DOCLING_SUPPORTED_EXTENSIONS = (".pdf", ".docx", ".pptx", ".xlsx", ".html", ".tx
 
 
 async def docling_document_loader(doc_path):
-    # Support for PDF, DOCX, PPTX, XLSX, HTML, Markdown, and Text
     if doc_path.endswith(DOCLING_SUPPORTED_EXTENSIONS):
         return await load_with_docling(doc_path)
     else:

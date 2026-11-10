@@ -30,20 +30,26 @@ own dataprep code; this patch does the same for the vendored half.
 THE FIX
 -------
 Each of the 15 calls becomes ``logger.<level>(...)`` on the module's
-existing ``CustomLogger("prepare_doc_util")`` (utils.py:50). The arguments
-are carried over verbatim — the printf-style calls
-(``print("fail to fetch %s, caused by %s", url, e)``) were ALREADY wrong
-under ``print()`` (extra positional args are joined with spaces, the
-placeholders never substituted) and become correct lazy-format logging
-calls for free. Levels follow the message semantics: progress -> info,
-fetch/download/write failures -> warning, raw debug dumps -> debug. The one
-exception to verbatim args: ``print("response", response)`` has no
-placeholder for its second argument, which logging would reject at format
-time, so it becomes ``logger.debug("response %s", response)``.
+existing ``CustomLogger("prepare_doc_util")`` (utils.py:50). Levels follow
+the message semantics: progress -> info, fetch/download/write failures ->
+warning, raw debug dumps -> info (the comps CustomLogger pins its logger at
+INFO with propagate=False, so a debug call would never emit — see
+comps/cores/mega/logger.py).
 
-The module is imported in-process by the dataprep service, so the logger is
-the wired one (the repo's ``genieai_dataprep_utils.py`` calls
-``setup_trace_logging``/``setup_json_logging`` on the same script name).
+ARGS ARE PRE-FORMATTED, NOT CARRIED OVER. The comps CustomLogger methods are
+``functools.partial(self.log_message, level)`` with
+``log_message(self, log_level, msg)`` — no ``*args`` — so a printf-style
+call (``logger.warning("fail to fetch %s", url)``) would raise TypeError at
+call time. The multi-argument print sites are therefore rewritten to
+f-strings that format at the call site (under ``print()`` those extra
+positional args were space-joined and the placeholders never substituted,
+so the messages were broken before the patch too).
+
+WIRING. The repo's ``genieai_dataprep_utils.py`` wires the logger name
+"prepare_doc_util" into the trace + JSON envelope (setup_trace_logging /
+setup_json_logging) — without that, these records would reach VictoriaLogs
+in the OPEA bracket format with severity Unspecified, the same admin-logs
+defect this patch exists to remove.
 
 THREE OUTCOMES, NEVER A SILENT NO-OP
 ------------------------------------
@@ -65,7 +71,12 @@ DEFAULT_TARGET = Path("/app/comps/dataprep/src/utils.py")
 # (print-call arguments between `print(` and `)`, level, replacement
 # arguments or None to keep verbatim). Content-matched so indentation is
 # captured and reapplied, and reflow-tolerant the same way
-# unstructured_html_pi_patch.py is.
+# unstructured_html_pi_patch.py is. Multi-argument sites carry an f-string
+# replacement: the comps CustomLogger's log_message(self, log_level, msg)
+# takes no extra args (see the docstring), and under print() those extra
+# positional args were space-joined with the placeholders never substituted.
+# The two raw dumps log at info: the CustomLogger pins its logger at INFO,
+# so debug would never emit.
 SITES = [
     (r'f"{name} started ..."', "info", None),
     (r"""f'{"  " * Timer.level}{self.name} took {timeit.default_timer() - self.start} sec'""", "info", None),
@@ -73,17 +84,19 @@ SITES = [
     (r'"Converted doc file to docx file."', "info", None),
     (r'"Converting ppt file to pptx file..."', "info", None),
     (r'"Converted ppt file to pptx file."', "info", None),
-    (r'"fail to fetch %s, response status code: %s", url, response.status_code', "warning", None),
-    (r'"fail to fetch %s, caused by %s", url, e', "warning", None),
-    (r'"current depth %s...", depth', "info", None),
-    (r'"download %s into %s...", url, file_name', "info", None),
-    (r'"fail to download %s, caused by %s", url, e', "warning", None),
+    (
+        r'"fail to fetch %s, response status code: %s", url, response.status_code',
+        "warning",
+        r'f"fail to fetch {url}, response status code: {response.status_code}"',
+    ),
+    (r'"fail to fetch %s, caused by %s", url, e', "warning", r'f"fail to fetch {url}, caused by {e}"'),
+    (r'"current depth %s...", depth', "info", r'f"current depth {depth}..."'),
+    (r'"download %s into %s...", url, file_name', "info", r'f"download {url} into {file_name}..."'),
+    (r'"fail to download %s, caused by %s", url, e', "warning", r'f"fail to download {url}, caused by {e}"'),
     (r'"The given link/str {} cannot be parsed.".format(link)', "warning", None),
-    # print() joins extra positional args with spaces; logging formats them,
-    # so the message needs the placeholder print never substituted.
-    (r'"response", response', "debug", r'"response %s", response'),
+    (r'"response", response', "info", r'f"response {response}"'),
     (r'f"Write file failed. Exception: {e}"', "warning", None),
-    (r'f"except patterns: {except_patterns}"', "debug", None),
+    (r'f"except patterns: {except_patterns}"', "info", None),
 ]
 
 # Any bare print call left in the file — the guard for upstream lines the
@@ -115,6 +128,16 @@ def apply_patch(path: Path) -> str:
         raise SystemExit(f"ASSERT-ON-PATCH GUARD FAILED: {path} does not exist")
 
     text = _read(path)
+    # The rewrite targets the module's `logger` name. An upstream rename of
+    # the CustomLogger assignment (utils.py:50) would still let every site
+    # match and compile — and NameError on the first .doc upload at runtime.
+    # Anchor the rewrite on the assignment being present.
+    if not re.search(r"^[ \t]*logger\s*=", text, re.MULTILINE):
+        raise SystemExit(
+            f"ASSERT-ON-PATCH GUARD FAILED: no `logger = ...` assignment found in {path} — the rewrite "
+            f"targets the module's CustomLogger instance; upstream renamed it. Re-derive the site table "
+            f"and update genie-ai-overlay/OVERRIDES.yaml."
+        )
     patched_call_counts = 0
     for args, level, override in SITES:
         effective_args = override if override is not None else args

@@ -185,14 +185,18 @@ def test_loader_logflag_parses_the_documented_boolean(env_value, expected):
 
 
 @pytest.mark.parametrize(
-    ("module_path", "logger_name"),
+    ("module_path", "logger_names"),
     [
-        (UTILS_PATH, "genie-ai_prepare_doc_util"),
-        (DATAPREP_DIR / "genieai_dataprep_loader.py", "genie_dataprep_loader"),
+        # The utils module wires BOTH names: its own service logger and the
+        # vendored comps utils logger ("prepare_doc_util") the build patch
+        # routes the upstream prints onto (issue #1662) — unwired, those
+        # records would reach VictoriaLogs as severity Unspecified.
+        (UTILS_PATH, ["genie-ai_prepare_doc_util", "prepare_doc_util"]),
+        (DATAPREP_DIR / "genieai_dataprep_loader.py", ["genie_dataprep_loader"]),
     ],
     ids=["utils", "loader"],
 )
-def test_service_loggers_are_wired_into_the_json_envelope(module_path, logger_name):
+def test_service_loggers_are_wired_into_the_json_envelope(module_path, logger_names):
     """The dataprep loggers are registered with the trace + JSON wiring like every service logger.
 
     An unwired logger emits the OPEA bracket format, which the collector's
@@ -202,7 +206,7 @@ def test_service_loggers_are_wired_into_the_json_envelope(module_path, logger_na
     assumes the trace filter is already in place, so trace-before-json is
     part of the contract.
     """
-    spec = importlib.util.spec_from_file_location(f"wiring_under_test_{logger_name}", module_path)
+    spec = importlib.util.spec_from_file_location(f"wiring_under_test_{logger_names[0]}", module_path)
     module = importlib.util.module_from_spec(spec)
     wiring = MagicMock()
 
@@ -214,6 +218,7 @@ def test_service_loggers_are_wired_into_the_json_envelope(module_path, logger_na
         spec.loader.exec_module(module)
 
     assert wiring.mock_calls == [
-        call.setup_trace_logging(logger_name),
-        call.setup_json_logging(logger_name),
+        wiring_call
+        for name in logger_names
+        for wiring_call in (call.setup_trace_logging(name), call.setup_json_logging(name))
     ]

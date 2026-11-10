@@ -7,6 +7,11 @@ jest.mock('../shared-lib/keycloak-auth-service', () => ({
   verifyToken: jest.fn()
 }));
 const keycloakAuthService = require('../shared-lib/keycloak-auth-service');
+// The logger is mocked so the tests can pin the outage's WARN-vs-ERROR split.
+jest.mock('../shared-lib/logger', () => ({
+  logger: { info: jest.fn(), warn: jest.fn(), error: jest.fn(), debug: jest.fn() }
+}));
+const { logger } = require('../shared-lib/logger');
 
 function mockRes() {
   const res = {};
@@ -24,7 +29,11 @@ describe('auth middleware (authenticate)', () => {
     const next = jest.fn();
     await authenticate(req, res, next);
     expect(res.status).toHaveBeenCalledWith(401);
-    expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ error: 'TOKEN_INVALID' }));
+    expect(res.json).toHaveBeenCalledWith({
+      error: 'TOKEN_INVALID',
+      message: 'Missing Authorization header',
+      details: {}
+    });
     expect(next).not.toHaveBeenCalled();
     expect(keycloakAuthService.verifyToken).not.toHaveBeenCalled();
   });
@@ -35,6 +44,11 @@ describe('auth middleware (authenticate)', () => {
     const next = jest.fn();
     await authenticate(req, res, next);
     expect(res.status).toHaveBeenCalledWith(401);
+    expect(res.json).toHaveBeenCalledWith({
+      error: 'TOKEN_INVALID',
+      message: 'Malformed Authorization header',
+      details: {}
+    });
     expect(next).not.toHaveBeenCalled();
     expect(keycloakAuthService.verifyToken).not.toHaveBeenCalled();
   });
@@ -59,6 +73,9 @@ describe('auth middleware (authenticate)', () => {
     expect(res.status).toHaveBeenCalledWith(401);
     expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ error: 'TOKEN_INVALID' }));
     expect(next).not.toHaveBeenCalled();
+    // A genuine verification failure IS error-level (the outage's warn-level
+    // carve-out covers only AUTH_SERVICE_UNAVAILABLE).
+    expect(logger.error).toHaveBeenCalledWith('OKF auth error', expect.objectContaining({ path: '/api/okf' }));
   });
 
   test('a falsy verified payload: the same fixed 401 body shape', async () => {
@@ -137,6 +154,13 @@ describe('auth middleware (authenticate)', () => {
       details: {}
     });
     expect(next).not.toHaveBeenCalled();
+    // WARN, not ERROR: an outage must not flood the error stream with
+    // per-request entries and bury genuine 401 root causes.
+    expect(logger.warn).toHaveBeenCalledWith(
+      'OKF auth service unavailable',
+      expect.objectContaining({ path: '/api/okf' })
+    );
+    expect(logger.error).not.toHaveBeenCalled();
   });
 });
 

@@ -232,7 +232,12 @@ describe('QueryService fan-out carrier (Story 1.1 — I/O Matrix)', () => {
     expect(logger.warn).toHaveBeenCalledWith(
       'QueryService.fanout_warning',
       expect.objectContaining({
-        fanout: { warning: 'posture_unknown', mode: 'legacy', engaged: false }
+        fanout: { warning: 'posture_unknown', mode: 'legacy', engaged: false },
+        // The ambiguous case by design: the fail-closed default shares its
+        // source label and mode with the by-design defaults — the REASON is
+        // what lets a dashboard separate an outage from a parked stack.
+        source: 'bff-fail-closed-default',
+        synthesis_reason: 'upstream_unreachable'
       })
     );
   });

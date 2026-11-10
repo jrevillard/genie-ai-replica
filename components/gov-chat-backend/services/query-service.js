@@ -723,6 +723,7 @@ class QueryService {
           correlationId,
           fanout: { warning: 'posture_unknown', mode, engaged },
           source: config?.source,
+          synthesis_reason: config?.synthesis_reason,
           server_warnings: warnings
         });
       }

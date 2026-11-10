@@ -397,6 +397,10 @@ function extractCiShellBlocks(content) {
   let owner = null;
   let jobIndent = null; // the body indent of the current top-level mapping
   const mergeSites = []; // inherited script sources, resolved after the scan
+  // Keys explicitly cancelled with an empty value (`script: []`): defined
+  // for the owning job, producing no shell. Inheritance must treat them
+  // as present-and-empty, not absent.
+  const canceledKeys = new Map(); // job owner -> Set of keys
   let i = 0;
   while (i < lines.length) {
     const line = lines[i];
@@ -560,8 +564,15 @@ function extractCiShellBlocks(content) {
       }
       i += 1;
     } else if (EMPTY_FLOW_SEQ_RE.test(rest) || EMPTY_FLOW_MAP_RE.test(rest)) {
-      // `script: []` / `before_script: []` — a legal no-op (the documented
-      // idiom to cancel an inherited default): no shell, nothing to check.
+      // `script: []` / `before_script: []` — a legal no-op producing no
+      // shell to check, but the KEY is defined: GitLab runs no script at
+      // all for this job, cancelling any inherited one. Recorded so the
+      // inheritance resolution does not credit a base's script to a job
+      // that explicitly cancelled it.
+      if (!canceledKeys.has(owner)) {
+        canceledKeys.set(owner, new Set());
+      }
+      canceledKeys.get(owner).add(key);
       if (itemName) {
         anchors.set(itemName, { kind: 'none' });
       }
@@ -641,6 +652,9 @@ function extractCiShellBlocks(content) {
       bases.push(sourceOwner);
       extendsMap.set(site.jobOwner, bases);
       const ownKeys = new Set(blocks.filter((b) => b.owner === site.jobOwner).map((b) => b.key));
+      for (const key of canceledKeys.get(site.jobOwner) || []) {
+        ownKeys.add(key);
+      }
       const copies = inherited.get(site.jobOwner) || [];
       for (const sb of blocks.filter((b) => b.owner === sourceOwner)) {
         const include = !ownKeys.has(sb.key);

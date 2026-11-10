@@ -404,6 +404,16 @@ describe('ci shell gate: extraction', () => {
     expect(blocks.map((b) => b.text)).toEqual(['echo base']);
   });
 
+  test('a job that cancels its script with an empty list runs nothing', () => {
+    // `script: []` is the documented idiom to cancel an inherited
+    // default: the key is defined-and-empty, so the base's script must
+    // NOT be credited to the job (GitLab runs no script at all).
+    const content = ['.base:', '  script:', '    - echo base', 'job:', '  extends: .base', '  script: []'].join('\n');
+    const { blocks, errors } = extractCiShellBlocks(content);
+    expect(errors).toEqual([]);
+    expect(blocks).toHaveLength(0);
+  });
+
   test('a global variables block is data, never shell', () => {
     const content = ['variables:', '  script: "echo global"', '', 'job:', '  script:', '    - echo real'].join('\n');
     const { blocks, errors } = extractCiShellBlocks(content);

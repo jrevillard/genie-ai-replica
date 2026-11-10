@@ -185,6 +185,10 @@ workflow:
     prefix: npm-dl
   paths:
     - .npm/
+  # Tarballs are valid regardless of the job's outcome — a lane that
+  # fails after its npm ci is exactly the one whose downloads must not
+  # be thrown away (the default on_success would).
+  when: always
 
 .node_base:
   # node:22-alpine: Node 20 reached EOL (2026-04-30) and a stale cached

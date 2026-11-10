@@ -130,19 +130,26 @@ test('completes full external IdP brokered login flow', async ({ browser }) => {
       // so the restore PUT can 404 — and apiContext returns a response on
       // non-2xx instead of throwing, so the status is checked explicitly.
       // It will be fully restored by keycloak-config-cli on next deploy.
+      // No throw here even when the restore fails: a ThrowStatement inside
+      // a finally block supersedes the flow's own pending result, so the
+      // restore verdict is recorded and raised after the block instead.
+      let restoreStatus = null;
       try {
         const restoreRes = await apiContext.put(
           'https://localhost/auth/admin/realms/genie/authentication/required-actions/VERIFY_EMAIL',
           { headers: authHeaders, data: { enabled: true }, ignoreHTTPSErrors: true },
         );
         if (!restoreRes.ok()) {
-          throw new Error(`HTTP ${restoreRes.status()}`);
+          restoreStatus = `HTTP ${restoreRes.status()}`;
         }
       } catch (restoreError) {
+        restoreStatus = restoreError.message;
+      }
+      if (restoreStatus !== null) {
         restoreFailure =
           `VERIFY_EMAIL restore failed — the genie realm keeps VERIFY_EMAIL disabled ` +
           `(brokered logins skip email verification) until keycloak-config-cli ` +
-          `re-runs on the next deploy. Restore error: ${restoreError.message}`;
+          `re-runs on the next deploy. Restore error: ${restoreStatus}`;
       }
     }
 
@@ -178,6 +185,7 @@ test('completes full external IdP brokered login flow', async ({ browser }) => {
         `  Page body (first 500 chars): ${errorBody}\n` +
         (restoreFailure ? `  ${restoreFailure}\n` : '') +
         `  Hint: Run Phase D Steps 1-5 in docs/e2e-tests/epic1-keycloak-foundation.md first`,
+      { cause: error },
     );
   }
 });

@@ -286,19 +286,6 @@ test.describe('config / composer identity', () => {
     // the raw attribute reads below.
     await expect(composerRoot).toHaveAttribute('style', /--composer-tint:/i);
 
-    // Fetch the served config inside the page (same-origin) to compare
-    // against the running DOM, so a stale cached config doesn't pass.
-    const cfg = await page.evaluate(async () => {
-      const r = await fetch('/config/genie-ai-config.json');
-      return r.json();
-    });
-    const jc = cfg.features.chat.quickHelp.buttons.find((b) => b.id === 'just-chat');
-    const expected = {
-      bg: jc.styles.backgroundColor,
-      outline: jc.styles.outlineColor,
-      title: jc.title.en // base config carries a localised map; English serves as a fallback
-    };
-
     // The leading mark is the reference's sparkles (a four-pointed star
     // with two smaller ones), not the entry's chat bubble: the reference
     // draws that mark at the head of the welcome bar.

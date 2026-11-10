@@ -62,26 +62,13 @@ test('clears legacy localStorage items after logout', async ({ browser }) => {
     `Expected 'auth_token' to be set in localStorage before logout, got: ${tokenBefore}`,
   ).toBeTruthy();
 
-  // Step 5: Intercept logout redirect to check localStorage BEFORE navigation
-  // The logout action clears localStorage synchronously before signoutRedirect
-  // We capture the state by listening for beforeunload
-  let localStorageAfterLogout = null;
-  page.on('request', (request) => {
-    const url = request.url();
-    if (url.includes('/protocol/openid-connect/logout') || url.includes('/protocol/openid-connect/auth')) {
-      // localStorage was already cleared by the Vuex action at this point
-      // We can't read it cross-origin, so we verify via page.evaluate before redirect
-    }
-  });
-
-  // Step 6: Click the logout button
+  // Step 5: Click the logout button
   const logoutButton = page.getByRole('button', { name: 'Log out' });
   await expect(logoutButton, 'Logout button should be visible').toBeVisible({ timeout: 10000 });
 
-  // Evaluate localStorage right before clicking (synchronous cleanup happens in the click handler)
   await logoutButton.click();
 
-  // Step 7: Wait for navigation to complete (redirect to Keycloak or back to app)
+  // Step 6: Wait for navigation to complete (redirect to Keycloak or back to app)
   await page.waitForURL(
     (url) => {
       const urlStr = url.toString();
@@ -93,7 +80,7 @@ test('clears legacy localStorage items after logout', async ({ browser }) => {
     { timeout: 30000 },
   );
 
-  // Step 8: Navigate back to app origin and check localStorage
+  // Step 7: Navigate back to app origin and check localStorage
   // Use about:blank to reset, then navigate to app origin
   await page.goto('about:blank');
   await page.goto('https://localhost/', { waitUntil: 'commit', timeout: 15000 });

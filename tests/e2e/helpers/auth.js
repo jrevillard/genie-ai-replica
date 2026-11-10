@@ -244,7 +244,7 @@ function parseJwtClaims(token) {
     const payload = Buffer.from(parts[1], 'base64url').toString('utf8');
     return JSON.parse(payload);
   } catch (e) {
-    throw new Error(`Invalid JWT payload: ${e.message}`);
+    throw new Error(`Invalid JWT payload: ${e.message}`, { cause: e });
   }
 }
 

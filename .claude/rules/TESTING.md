@@ -39,6 +39,9 @@ cd components/okf-server && npm ci
 # Config validator
 cd tests/config-validator && npm ci
 
+# E2E suite (ESLint only — the Playwright runtime itself resolves from the root node_modules)
+cd tests/e2e && npm ci
+
 # OPEA overlay (Python venv recommended — uv per project convention)
 cd genie-ai-overlay && uv venv .venv && source .venv/bin/activate && uv pip install -e .[test]
 

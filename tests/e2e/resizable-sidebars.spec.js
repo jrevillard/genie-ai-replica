@@ -225,6 +225,13 @@ test.describe('Resizable sidebars behind one handle', () => {
     // Focusable, and the chevron inside it is a real button — two
     // focusable things, so a keyboard user reaches both gestures
     // without hunting.
+    //
+    // The whole strip is one drag surface, chevron included — there is
+    // no region of it that refuses a drag, which is the defect a probe
+    // hitting the centre used to find. And both the strip and the
+    // chevron say so with the cursor: `pointer` on the chevron would
+    // promise a click and deny the drag, on the one element the user
+    // can actually see.
     for (const [stripSel, buttonSel] of [
       [LEFT_HANDLE, LEFT_HANDLE_BUTTON],
       [RIGHT_HANDLE, RIGHT_HANDLE_BUTTON]
@@ -234,6 +241,23 @@ test.describe('Resizable sidebars behind one handle', () => {
       await expect(strip).toHaveAttribute('tabindex', '0');
       await expect(strip).toHaveAttribute('aria-valuenow', /\d+/);
       await expect(page.locator(buttonSel)).toHaveJSProperty('tagName', 'BUTTON');
+
+      const cursors = await page.evaluate(({ stripSel: s, buttonSel: bs }) => {
+        const strip = document.querySelector(s);
+        const button = document.querySelector(bs);
+        return {
+          strip: getComputedStyle(strip).cursor,
+          button: getComputedStyle(button).cursor,
+          stripTouch: getComputedStyle(strip).touchAction,
+          buttonTouch: getComputedStyle(button).touchAction
+        };
+      }, { stripSel, buttonSel });
+      expect(cursors.strip, `${stripSel}: the strip must advertise the drag`).toBe('col-resize');
+      expect(cursors.button, `${buttonSel}: the chevron must advertise the drag too, not a click`).toBe('col-resize');
+      // Without `touch-action: none` the browser claims a touch drag
+      // as a scroll and `pointermove` never arrives.
+      expect(cursors.stripTouch, `${stripSel}: touch drag must not be stolen by scroll`).toBe('none');
+      expect(cursors.buttonTouch, `${buttonSel}: touch drag must not be stolen by scroll`).toBe('none');
     }
 
     // And it is actually hittable — an occluded control passes every
@@ -261,33 +285,6 @@ test.describe('Resizable sidebars behind one handle', () => {
       );
     }
 
-    // The whole strip is one drag surface, chevron included — there is
-    // no region of it that refuses a drag, which is the defect a probe
-    // hitting the centre used to find. And both the strip and the
-    // chevron say so with the cursor: `pointer` on the chevron would
-    // promise a click and deny the drag, on the one element the user
-    // can actually see.
-    for (const [stripSel, buttonSel] of [
-      [LEFT_HANDLE, LEFT_HANDLE_BUTTON],
-      [RIGHT_HANDLE, RIGHT_HANDLE_BUTTON]
-    ]) {
-      const cursors = await page.evaluate(({ stripSel: s, buttonSel: bs }) => {
-        const strip = document.querySelector(s);
-        const button = document.querySelector(bs);
-        return {
-          strip: getComputedStyle(strip).cursor,
-          button: getComputedStyle(button).cursor,
-          stripTouch: getComputedStyle(strip).touchAction,
-          buttonTouch: getComputedStyle(button).touchAction
-        };
-      }, { stripSel, buttonSel });
-      expect(cursors.strip, `${stripSel}: the strip must advertise the drag`).toBe('col-resize');
-      expect(cursors.button, `${buttonSel}: the chevron must advertise the drag too, not a click`).toBe('col-resize');
-      // Without `touch-action: none` the browser claims a touch drag
-      // as a scroll and `pointermove` never arrives.
-      expect(cursors.stripTouch).toBe('none');
-      expect(cursors.buttonTouch).toBe('none');
-    }
   });
 
   test('the three controls name their own side', async ({ page }) => {

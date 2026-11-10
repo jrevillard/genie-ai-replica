@@ -30,6 +30,9 @@
  *   usually delivers the close events before an in-flight route call
  *   rejects, so by then the state half is often already true too; a
  *   crashed browser fails the spec on its other awaits either way.
+ *   The same race has a second spelling — `route.fetch()` reports an
+ *   in-flight request whose context went away as "Request context
+ *   disposed" — and it is recognised as the race it is.
  *
  * Only their conjunction is the named race. The error check reads the
  * constructor name and the message (the message form is the same
@@ -69,11 +72,20 @@ function isTargetGone(page) {
  * True when the error is Playwright's target-closed error — the shape
  * both of its client-side close event and of the protocol answer a dead
  * target produces.
+ *
+ * The same teardown race has a second spelling: `route.fetch()` reports
+ * a request that was still in flight when the context went away as
+ * "Request context disposed" — not the target-closed wording, but the
+ * same event (the request context is disposed with the browser
+ * context). Without it, a handler that fetches through the route leaks
+ * a teardown error into the NEXT test, which then fails on a failure it
+ * did not cause.
  */
 function isTargetClosedError(error) {
   if (!error) return false;
   if (error.constructor && error.constructor.name === 'TargetClosedError') return true;
-  return typeof error.message === 'string' && /has been closed/i.test(error.message);
+  if (typeof error.message !== 'string') return false;
+  return /has been closed/i.test(error.message) || /context disposed/i.test(error.message);
 }
 
 /**

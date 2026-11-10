@@ -87,6 +87,31 @@ test.describe('runRouteHandler', () => {
     ).resolves.toBeUndefined();
   });
 
+  test('tolerates the request-context-disposed error when the context closed — the race, second spelling', async () => {
+    // `route.fetch()` reports a request that was still in flight when the
+    // context went away with its own wording, not the target-closed one.
+    // It is the same race: the request context is disposed with the
+    // browser context. Without it, the handler leaks a teardown error
+    // into the NEXT test, which then fails on a failure it did not cause.
+    const { page } = pageState({ contextClosed: true });
+    await expect(
+      runOnce(page, async () => {
+        throw new Error('route.fetch: Request context disposed.');
+      })
+    ).resolves.toBeUndefined();
+  });
+
+  test('rethrows a mock defect that carries the disposed wording — the target is alive', async () => {
+    // The same two halves, on the second spelling: the wording alone is
+    // not the verdict. A defect on a live target must surface.
+    const { page } = pageState();
+    await expect(
+      runOnce(page, async () => {
+        throw new Error('route.fulfill: Request context disposed.');
+      })
+    ).rejects.toThrow('route.fulfill: Request context disposed.');
+  });
+
   test('rethrows a mock defect with its own message — the target is alive', async () => {
     const { page } = pageState();
     await expect(

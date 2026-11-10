@@ -3876,16 +3876,19 @@ describe('the jest worker-memory cap contract (#1419)', () => {
       'yarn run test',
       'pnpm test',
       'pnpm run test',
-      'npm run test',
       './node_modules/.bin/jest --coverage'
     ]) {
       expect(TEST_RUNNER_LOOKING.test(cmd)).toBe(true);
-      // `npm run test` (bare) is IN the matcher's vocabulary — only the
-      // genuinely foreign spellings must be unmatched.
-      if (cmd !== 'npm run test') {
-        expect(JEST_INVOCATION.test(cmd)).toBe(false);
-      }
+      expect(JEST_INVOCATION.test(cmd)).toBe(false);
     }
+  });
+
+  test('the bare long-form npm spelling is both looking and matched (#1676)', () => {
+    // `npm run test` (bare) is in the matcher's own vocabulary — the pin
+    // keeps that true deliberately: dropping the matcher's bare-run
+    // alternative would otherwise pass every suite silently.
+    expect(TEST_RUNNER_LOOKING.test('npm run test')).toBe(true);
+    expect(JEST_INVOCATION.test('npm run test')).toBe(true);
   });
 });
 

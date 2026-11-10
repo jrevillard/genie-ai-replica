@@ -60,7 +60,7 @@ death passed through (a signal, an OOM).
 | Requirement | Note |
 |---|---|
 | `npm install` at the repository root | Playwright resolves from the root `node_modules` |
-| `npx playwright install chromium` | the suite drives a real browser — the build must match the installed `@playwright/test`, and `PLAYWRIGHT_BROWSERS_PATH` must point at it when it lives outside the default cache |
+| `node tests/e2e/run/install-browsers.js` | reconciles the checkout and the browser tree with the pinned `@playwright/test` — the build the suite drives must be the one the lockfile pins, and `PLAYWRIGHT_BROWSERS_PATH` must point at it when it lives outside the default cache (see *The browser tree* below) |
 | the browser's shared libraries on `LD_LIBRARY_PATH` | a bare container image has no libatk/libgbm |
 | the Inter fonts on `XDG_DATA_HOME` | the pixel-measurement specs measure rendered text |
 | a reachable venue | `BASE_URL` points at the stack's edge |
@@ -76,6 +76,34 @@ anything, and stops the run with the named cause. Without it, a runner
 whose Chromium build does not match the installed `@playwright/test` turns
 220 of 242 tests into the same launch error, and the failure path files an
 issue per spec file for one missing binary.
+
+The pre-flight also **reports the runner it used** — the `@playwright/test`
+version on disk and the Chromium revision that version names — so a result
+can be read against the browser that produced it.
+
+### The browser tree
+
+The suite drives one Chromium build, and the `@playwright/test` the
+repository pins names it: the version's own `browsers.json` carries the
+revision. A tree carrying another revision fails **every** spec at launch,
+before one assertion runs — the runner looks broken and the product looks
+faulty. On 2026-11-10 exactly that happened: one missing binary was filed
+as twelve product bugs (#1779).
+
+`node tests/e2e/run/install-browsers.js` reconciles both sides, in order:
+
+1. the **checkout** matches the lockfile — `npm ci` when the installed
+   `@playwright/test` is not the pinned one (a checkout's `node_modules` can
+   disagree with `package-lock.json` while `node_modules/.package-lock.json`
+   claims otherwise);
+2. the **browser tree** carries the revision the installed Playwright names
+   — installed by that Playwright's own installer.
+
+No revision number is written in the repository: it is derived from the
+installed Playwright, so a lockfile bump needs no second number to change.
+The command is idempotent, and it is what a pod's provisioning calls so a
+recreated machine lands on the right build instead of the one its image
+baked.
 
 ### Venue address
 

@@ -87,23 +87,28 @@ test.describe('runRouteHandler', () => {
     ).resolves.toBeUndefined();
   });
 
-  test('tolerates the request-context-disposed error when the context closed — the race, second spelling', async () => {
-    // `route.fetch()` reports a request that was still in flight when the
-    // context went away with its own wording, not the target-closed one.
-    // It is the same race: the request context is disposed with the
-    // browser context. Without it, the handler leaks a teardown error
-    // into the NEXT test, which then fails on a failure it did not cause.
+  test('tolerates the pipeline form of the race — the name survives, the class does not', async () => {
+    // A route callback's error is raised in the server and crosses the
+    // pipeline as {message, stack, name}: the client rebuilds it as a
+    // plain Error with the class lost and the NAME kept. This is the
+    // shape `route.fetch()`'s "Request context disposed." actually
+    // arrives in — a constructor-name check alone misses it, and the
+    // teardown error then leaks into the NEXT test, which fails on a
+    // failure it did not cause.
     const { page } = pageState({ contextClosed: true });
     await expect(
       runOnce(page, async () => {
-        throw new Error('route.fetch: Request context disposed.');
+        const pipelineError = new Error('route.fetch: Request context disposed.');
+        pipelineError.name = 'TargetClosedError';
+        throw pipelineError;
       })
     ).resolves.toBeUndefined();
   });
 
   test('rethrows a mock defect that carries the disposed wording — the target is alive', async () => {
-    // The same two halves, on the second spelling: the wording alone is
-    // not the verdict. A defect on a live target must surface.
+    // The same two halves, on the pipeline wording: the wording alone is
+    // not the verdict. A defect on a live target must surface, whatever
+    // its text says.
     const { page } = pageState();
     await expect(
       runOnce(page, async () => {

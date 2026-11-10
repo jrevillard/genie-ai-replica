@@ -24,13 +24,15 @@ const MESSAGE_ROW = '[data-testid^="chat-message-"]';
 const BOT_BUBBLE = '[data-testid="chat-message-bot"] [data-testid="message-bubble-bot"]';
 const NAV_STATUS = '[data-testid="nav-status"]';
 
-// The stream endpoint's route pattern, stated ONCE. The app calls
-// `/queries/stream` under the API base; a copy of this glob in each
-// spec is a copy that can drift away from the endpoint the app calls
-// (#1271) — and a drifted interception silently lets the request
-// reach the real network, so the spec then asserts against a live
-// backend. Exported here so every spec intercepts the same endpoint.
-const STREAM_ROUTE = '**/queries/stream**';
+// The stream endpoint, stated ONCE: the path under the API base is the
+// endpoint; the route pattern is its interception glob. A copy of either
+// in a spec is a copy that can drift away from what the app calls
+// (#1271) — a drifted interception silently lets the request reach the
+// real network, so the spec then asserts against a live backend, and a
+// drifted predicate never matches at all. Both are exported: STREAM_ROUTE
+// for page.route, STREAM_PATH for URL predicates.
+const STREAM_PATH = '/queries/stream';
+const STREAM_ROUTE = `**${STREAM_PATH}**`;
 
 // The wait from the submit click to the dashboard: the identity provider
 // deciding to issue a code, then the app exchanging it. On an idle stack the
@@ -344,5 +346,6 @@ module.exports = {
   MESSAGE_ROW,
   BOT_BUBBLE,
   NAV_STATUS,
+  STREAM_PATH,
   STREAM_ROUTE
 };

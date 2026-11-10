@@ -4,7 +4,7 @@
 // and each one carries a mutation check recorded beside it.
 const { test, expect } = require('@playwright/test');
 const { openWelcomeScreen, contrastRatio } = require('./helpers/welcome');
-const { mockChatStream, sseBody, ackFeedback, BOT_BUBBLE, NAV_STATUS, STREAM_ROUTE } = require('./helpers/chatbot');
+const { mockChatStream, sseBody, ackFeedback, BOT_BUBBLE, NAV_STATUS, STREAM_ROUTE, STREAM_PATH } = require('./helpers/chatbot');
 const { runPostOnlyRouteHandler, runRouteHandler } = require('./helpers/route');
 const { QUICK_HELP_ITEM } = require('./helpers/layout');
 
@@ -548,6 +548,10 @@ test.describe('Conversation — surface invariants', () => {
         await route.fulfill({
           status: 200,
           contentType: 'text/event-stream',
+          // The CORS header a cross-origin reader needs — the same rule
+          // mockChatStream obeys; without it the browser drops the
+          // answer and the app reads a transport failure (#1587).
+          headers: { 'access-control-allow-origin': '*' },
           body
         });
       })
@@ -567,7 +571,7 @@ test.describe('Conversation — surface invariants', () => {
     // Release the stream while the chat view is unmounted: the store
     // must keep consuming it.
     releaseStream();
-    await page.waitForResponse((r) => r.url().includes('/queries/stream') && r.status() === 200, { timeout: 15000 });
+    await page.waitForResponse((r) => r.url().includes(STREAM_PATH) && r.status() === 200, { timeout: 15000 });
     // Return the way the user returns: through the app's own navigation
     // (the navbar brand link), NOT through the browser's history back.
     // The history stack still carries the login flow's cross-document

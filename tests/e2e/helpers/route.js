@@ -30,9 +30,12 @@
  *   usually delivers the close events before an in-flight route call
  *   rejects, so by then the state half is often already true too; a
  *   crashed browser fails the spec on its other awaits either way.
- *   The same race has a second spelling — `route.fetch()` reports an
- *   in-flight request whose context went away as "Request context
- *   disposed" — and it is recognised as the race it is.
+ *   The race also reaches the handler in a second shape: a route
+ *   callback's error is raised in the server and crosses the pipeline as
+ *   {message, stack, name}, so the client rebuilds it as a plain Error
+ *   with the class lost and the NAME kept — that is why the check reads
+ *   the name, and why `route.fetch()`'s "Request context disposed."
+ *   arrives with the name TargetClosedError and is recognised.
  *
  * Only their conjunction is the named race. The error check reads the
  * constructor name and the message (the message form is the same
@@ -73,19 +76,21 @@ function isTargetGone(page) {
  * both of its client-side close event and of the protocol answer a dead
  * target produces.
  *
- * The same teardown race has a second spelling: `route.fetch()` reports
- * a request that was still in flight when the context went away as
- * "Request context disposed" — not the target-closed wording, but the
- * same event (the request context is disposed with the browser
- * context). Without it, a handler that fetches through the route leaks
- * a teardown error into the NEXT test, which then fails on a failure it
- * did not cause.
+ * The check reads the NAME, not only the constructor: an in-process
+ * throw carries the class, but a route callback's error is raised in the
+ * server and crosses the pipeline as {message, stack, name}, so the
+ * client rebuilds it as a plain Error with the class lost and the name
+ * kept (`route.fetch()`'s "Request context disposed." arrives with the
+ * name TargetClosedError). This is Playwright's own discrimination —
+ * its `isTargetClosedError` accepts the instance or the name — and the
+ * message form stays for the wording a client-side close event has
+ * always carried.
  */
 function isTargetClosedError(error) {
   if (!error) return false;
+  if (error.name === 'TargetClosedError') return true;
   if (error.constructor && error.constructor.name === 'TargetClosedError') return true;
-  if (typeof error.message !== 'string') return false;
-  return /has been closed/i.test(error.message) || /context disposed/i.test(error.message);
+  return typeof error.message === 'string' && /has been closed/i.test(error.message);
 }
 
 /**

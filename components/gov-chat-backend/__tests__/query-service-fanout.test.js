@@ -81,6 +81,13 @@ function makeQueryData(overrides = {}) {
 
 const BEARER = { authorization: 'Bearer test-token' };
 
+// The one warning channel for an unknown posture. Counting the emissions
+// pins the "ONE emission site" invariant: a duplicated warning would double
+// the dashboard's degraded-query count.
+function fanoutWarnings() {
+  return logger.warn.mock.calls.filter(([message]) => message === 'QueryService.fanout_warning');
+}
+
 let queryService;
 
 beforeEach(() => {
@@ -211,6 +218,7 @@ describe('QueryService fan-out carrier (Story 1.1 — I/O Matrix)', () => {
         fanout: { warning: 'okf_only_zero_serving', mode: 'okf_only', engaged: false }
       })
     );
+    expect(fanoutWarnings()).toHaveLength(1);
   });
 
   it('LEGACY_DEGRADED: a locally synthesized legacy posture is reported as an UNKNOWN posture, not as a legacy deployment', async () => {
@@ -240,6 +248,7 @@ describe('QueryService fan-out carrier (Story 1.1 — I/O Matrix)', () => {
         synthesis_reason: 'upstream_unreachable'
       })
     );
+    expect(fanoutWarnings()).toHaveLength(1);
   });
 
   it('MALFORMED_UPSTREAM: a garbled upstream body is distinguishable from an outage by the synthesis reason', async () => {
@@ -266,6 +275,7 @@ describe('QueryService fan-out carrier (Story 1.1 — I/O Matrix)', () => {
         synthesis_reason: 'malformed_response'
       })
     );
+    expect(fanoutWarnings()).toHaveLength(1);
   });
 
   it('LEGACY_BY_DESIGN: a parked OKF stack and a scope-less caller stay WARNING-FREE (their legacy answer is the correct posture)', async () => {
@@ -329,6 +339,7 @@ describe('QueryService fan-out carrier (Story 1.1 — I/O Matrix)', () => {
         synthesis_reason: 'upstream_unreachable'
       })
     );
+    expect(fanoutWarnings()).toHaveLength(1);
   });
 
   it('OKF_ONLY_DEGRADED: a locally synthesized composition is NOT reported as "the deployment serves zero graphs"', async () => {
@@ -361,6 +372,7 @@ describe('QueryService fan-out carrier (Story 1.1 — I/O Matrix)', () => {
       'QueryService.fanout_warning',
       expect.objectContaining({ fanout: expect.objectContaining({ warning: 'okf_only_zero_serving' }) })
     );
+    expect(fanoutWarnings()).toHaveLength(1);
     // The resolved line carries the source label — the honest provenance.
     expect(logger.info).toHaveBeenCalledWith(
       'QueryService.fanout_config_resolved',

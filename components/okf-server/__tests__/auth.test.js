@@ -166,12 +166,15 @@ describe('auth middleware (authenticate)', () => {
     // WARN, not ERROR: an outage must not flood the error stream with
     // per-request entries and bury genuine 401 root causes. The operator
     // detail stays in the log — it is the only place it survives, and it is
-    // what names the discovery hostname and the remedy.
+    // what names the discovery hostname, the cause and the remedy. The
+    // assertion pins THAT detail, not the shared verifier's fixed prefix:
+    // a log that carried only "auth is temporarily unavailable" would leave
+    // the operator without a hostname.
     expect(logger.warn).toHaveBeenCalledWith(
       'OKF auth service unavailable',
       expect.objectContaining({
         path: '/api/okf',
-        error: expect.stringContaining('Authentication service is temporarily unavailable')
+        error: expect.stringContaining('ENOTFOUND keycloak')
       })
     );
     expect(logger.error).not.toHaveBeenCalled();

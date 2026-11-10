@@ -40,7 +40,12 @@ cd "$REPO_ROOT"
 # reads belongs to it. Point BASE_URL anywhere else and the run asks for
 # credentials instead of guessing.
 DEFAULT_VENUE="https://genieai-forge.local:4443"
-BASE_URL="${BASE_URL:-$DEFAULT_VENUE}"
+# The venue address is NORMALIZED once, here: https://x:4443, https://x:4443/
+# and https://x:4443// are the same venue. One spelling for the whole run,
+# so the credential auto-read below, the venue lock and the browser's
+# baseURL all agree on WHICH venue they are on — a trailing slash used to
+# make the auto-read miss the default venue and take three venue locks.
+BASE_URL="$(printf '%s' "${BASE_URL:-$DEFAULT_VENUE}" | sed 's#/*$##')"
 export BASE_URL
 NAMESPACE="${E2E_NAMESPACE:-genieai}"
 
@@ -68,9 +73,9 @@ for tool in flock md5sum; do
   fi
 done
 CHECKOUT_LOCK="${E2E_RUN_LOCK:-$REPO_ROOT/.e2e-run.lock}"
-# The venue key is the NORMALIZED address: https://x:4443, https://x:4443/ and
-# https://x:4443// are the same venue and must not take three locks.
-VENUE_KEY="$(printf '%s' "$BASE_URL" | sed 's#/*$##' | md5sum | cut -c1-12)"
+# The venue key is the NORMALIZED address (normalized above): one venue, one
+# lock.
+VENUE_KEY="$(printf '%s' "$BASE_URL" | md5sum | cut -c1-12)"
 VENUE_LOCK="${E2E_VENUE_LOCK:-/tmp/genieai-e2e-$VENUE_KEY.lock}"
 
 exec 9>"$CHECKOUT_LOCK"

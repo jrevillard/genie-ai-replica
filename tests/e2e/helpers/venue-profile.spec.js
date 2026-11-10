@@ -36,8 +36,8 @@ function fakeTransport(answers) {
   // The realm probes authenticate with an admin token; the fake transport
   // answers the API calls, so the mint is faked with it.
   auth.getAdminToken = async () => 'fake-admin-token';
-  auth.request = (method, path) => {
-    calls.push(`${method} ${path}`);
+  auth.request = (method, path, options) => {
+    calls.push({ method, path, options });
     const answer = answers.shift();
     if (!answer) return Promise.reject(new Error(`fake transport: no answer for ${method} ${path}`));
     if (answer.throws) return Promise.reject(answer.throws);
@@ -147,6 +147,17 @@ test.describe('the OKF probe reads the venue like the frontend reads it', () => 
     expect(await profile.okfEnabled()).toBe(true);
     expect(await profile.okfEnabled()).toBe(true);
     expect(calls.length).toBe(1);
+  });
+
+  test('the runtime config is read RAW — it is a script, not JSON', async () => {
+    // The transport's `raw: true` is what makes the body arrive as TEXT:
+    // the runtime config is a JavaScript file the probe EVALUATES. The
+    // fake answers with the body either way, so only the flag tells a
+    // dropped `raw` apart from the real transport's parsed body.
+    const calls = fakeTransport([{ status: 200, data: 'window.APP_CONFIG = {\n  okfEnabled: "1",\n};\n' }]);
+    const profile = freshProfile();
+    expect(await profile.okfEnabled()).toBe(true);
+    expect(calls[0].options).toEqual({ raw: true });
   });
 });
 

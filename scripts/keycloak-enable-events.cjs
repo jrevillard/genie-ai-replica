@@ -32,7 +32,12 @@ const b = (o) => Buffer.from(JSON.stringify(o)).toString('base64');
   const tokRes = await fetch(`${AUTH}/realms/master/protocol/openid-connect/token`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: new URLSearchParams({ client_id: 'admin-cli', username: 'admin', password: PW, grant_type: 'password' }).toString()
+    body: new URLSearchParams({
+      client_id: 'admin-cli',
+      username: 'admin',
+      password: PW,
+      grant_type: 'password'
+    }).toString()
   });
   const tok = await tokRes.json();
   if (!tok.access_token) {

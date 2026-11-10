@@ -101,7 +101,12 @@ async function cleanup() {
 (async () => {
   const tok = j(
     await req('POST', `${AUTH_BASE}/realms/master/protocol/openid-connect/token`, {
-      form: { client_id: 'admin-cli', username: env.KEYCLOAK_ADMIN || 'admin', password: ADMIN_PW, grant_type: 'password' }
+      form: {
+        client_id: 'admin-cli',
+        username: env.KEYCLOAK_ADMIN || 'admin',
+        password: ADMIN_PW,
+        grant_type: 'password'
+      }
     })
   );
   if (!tok.access_token) throw new Error('admin token failed');
@@ -120,7 +125,9 @@ async function cleanup() {
   });
   if (mk.status !== 201) throw new Error(`user create ${mk.status}`);
   USER_ID = j(
-    await req('GET', `${AUTH_BASE}/admin/realms/${REALM}/users?username=${SMOKE_USER}&exact=true`, { token: ADMIN_TOKEN })
+    await req('GET', `${AUTH_BASE}/admin/realms/${REALM}/users?username=${SMOKE_USER}&exact=true`, {
+      token: ADMIN_TOKEN
+    })
   )[0].id;
   const role = j(await req('GET', `${AUTH_BASE}/admin/realms/${REALM}/roles/tools-admin`, { token: ADMIN_TOKEN }));
   await req('POST', `${AUTH_BASE}/admin/realms/${REALM}/users/${USER_ID}/role-mappings/realm`, {
@@ -161,7 +168,9 @@ async function cleanup() {
     `    positives=${suite.payload.positive.length} llm_neg=${suite.payload.negative.filter((n) => n.source === 'llm').length} forbidden_neg=${suite.payload.negative.filter((n) => n.source === 'forbidden').length} keywords=${suite.payload.keywords.length} generator=${suite.payload.generator}`
   );
   console.log(`    sample+: ${JSON.stringify(suite.payload.positive[0])}`);
-  console.log(`    sample-: ${JSON.stringify(suite.payload.negative.find((n) => n.source === 'llm') || suite.payload.negative[0])}`);
+  console.log(
+    `    sample-: ${JSON.stringify(suite.payload.negative.find((n) => n.source === 'llm') || suite.payload.negative[0])}`
+  );
 
   // [3] CURATOR ADD
   const add = await req('POST', `${API_BASE}/api/okf/repos/${REPO_ID}/routing-testsuite/${suite.suite_key}/queries`, {
@@ -169,7 +178,9 @@ async function cleanup() {
     json: { queries: [{ query: 'maize futures commodity pricing outlook', kind: 'negative', reason: 'curator probe' }] }
   });
   const added = j(add);
-  console.log(`[3] curator add: HTTP ${add.status} manual_count=${added.payload ? added.payload.negative.filter((n) => n.source === 'manual').length : 'n/a'}`);
+  console.log(
+    `[3] curator add: HTTP ${add.status} manual_count=${added.payload ? added.payload.negative.filter((n) => n.source === 'manual').length : 'n/a'}`
+  );
 
   // [4] RUN (LLM embed per query — the remote TEI)
   console.log('[4] run: executing...');
@@ -189,10 +200,14 @@ async function cleanup() {
   }
 
   // [5] LIST
-  const list = await req('GET', `${API_BASE}/api/okf/repos/${REPO_ID}/routing-testsuite/runs?limit=5&kind=all`, { token: T });
+  const list = await req('GET', `${API_BASE}/api/okf/repos/${REPO_ID}/routing-testsuite/runs?limit=5&kind=all`, {
+    token: T
+  });
   const runs = j(list);
   console.log(`[5] list: HTTP ${list.status} rows=${runs.runs ? runs.runs.length : 'n/a'}`);
-  if (runs.runs) for (const r of runs.runs) console.log(`    ${r.kind} ${r._key} pass_rate=${r.summary ? r.summary.pass_rate : '—'}`);
+  if (runs.runs)
+    for (const r of runs.runs)
+      console.log(`    ${r.kind} ${r._key} pass_rate=${r.summary ? r.summary.pass_rate : '—'}`);
 
   await cleanup();
   console.log('SMOKE COMPLETE');

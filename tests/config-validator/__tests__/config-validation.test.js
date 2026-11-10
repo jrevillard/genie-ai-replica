@@ -3682,8 +3682,9 @@ describe('the jest worker-memory cap contract (#1419)', () => {
   // (test:e2e:<suffix>) follow that exclusion, while dash-suffixed and
   // any other unknown variant over-triggers and forces a conscious
   // decision rather than silently escaping the class. The exclusion
-  // assumes only the root package defines Playwright test:e2e* scripts
-  // (#1674 tracks the pin for that assumption).
+  // assumes only the root package defines Playwright test:e2e* scripts —
+  // pinned by the #1674 test below, so a component-level definition fails
+  // this suite and forces the exclusion to be revisited.
   const JEST_INVOCATION = /(^|\s)(npm test\b|npx jest\b|npm run test:(?!e2e(?![-\w]))\w+|npm run test(?![:\w]))/;
   // Shell line continuations (`\` + newline) join after comments are
   // stripped (bash ends a comment at the newline), so one continued
@@ -3830,9 +3831,157 @@ describe('the jest worker-memory cap contract (#1419)', () => {
       violationsFor('npm test -- --maxWorkers=2% --workerIdleMemoryLimit=500MB --coverage').map((v) => v.cmd)
     ).toEqual(['npm test -- --maxWorkers=2% --workerIdleMemoryLimit=500MB --coverage']);
   });
+
+  // #1676: the matcher's vocabulary above is the npm/npx house spelling.
+  // Any OTHER command that looks like a test runner — mentions jest, or is
+  // an npm test / npm run test* spelling — must either match the vocabulary
+  // or belong to the pinned non-invocation list: an exotic spelling
+  // (`npm exec -- jest`, `yarn jest`, `./node_modules/.bin/jest`) then fails
+  // this suite and forces the matcher (or a reasoned exemption) to grow,
+  // instead of running uncapped with a fully green contract suite.
+  const TEST_RUNNER_LOOKING = /\bjest\b|(^|\s)npm (test\b|run test[:\w])/;
+  // A command that merely READS a jest-produced report is not an
+  // invocation: it runs node, not jest. The predicate is pinned to the
+  // report reader of test:backend-arango — a new jest-touching node -e
+  // command matches TEST_RUNNER_LOOKING but not this predicate, so it
+  // fails the accounting below.
+  const isJestReportReader = (cmd) => cmd.startsWith('node -e') && cmd.includes('reports/jest-integration');
+  // Every command of the given shell blocks — no JEST_INVOCATION filter.
+  const commandsOf = (blocks) =>
+    blocks.flatMap((b) => b.text.replace(STRIP_COMMENTS, '$1').replace(JOIN_CONTINUATIONS, ' ').split(COMMAND_SPLIT));
+
+  test('every test-runner-looking CI command is matched or pinned (#1676)', () => {
+    const looking = commandsOf(ciBlocks()).filter((cmd) => TEST_RUNNER_LOOKING.test(cmd));
+    // The guard must SEE the class it protects: the five capped invocations
+    // all look like test runners.
+    expect(looking.length).toBeGreaterThanOrEqual(5);
+    // Nothing outside the matcher's vocabulary except the pinned reader.
+    expect(looking.filter((cmd) => !JEST_INVOCATION.test(cmd) && !isJestReportReader(cmd))).toEqual([]);
+    // The pin is not vacuous: exactly the report reader of
+    // test:backend-arango rides the exemption today.
+    expect(looking.filter((cmd) => isJestReportReader(cmd))).toHaveLength(1);
+  });
+
+  test('an exotic runner spelling is looking-but-unmatched (#1676)', () => {
+    for (const cmd of ['npm exec -- jest', 'yarn jest --silent', './node_modules/.bin/jest --coverage']) {
+      expect(TEST_RUNNER_LOOKING.test(cmd)).toBe(true);
+      expect(JEST_INVOCATION.test(cmd)).toBe(false);
+    }
+  });
 });
 
-// --- The ArangoDB integration directory's self-skip gate ---
+// --- The capped-jest template structure (#1670) ---
+// The worker-memory cap is enforced STRUCTURALLY by the .test_capped_jest
+// template: the capped script line lives there once, and every
+// product-component jest job inherits it. The textual sweep above still
+// sees the line (the shell extractor re-materializes an extended base's
+// script inside each extending job), but the template-usage pin is what
+// makes the template load-bearing: a fifth jest job, or one of the four
+// leaving the template, must fail this suite and force a conscious
+// decision rather than re-introducing a hand-copied (or uncapped) line.
+describe('the capped-jest template structure (#1670)', () => {
+  // The job -> extends mapping of the CI file, line-parsed like the
+  // shell extractor parses scripts: a column-0 key is the job, an
+  // `extends:` key at the job body's own indent carries either an inline
+  // value or a list of base names.
+  const gitlabCiExtends = () => {
+    const content = fs.readFileSync(path.join(ROOT, '.gitlab-ci.yml'), 'utf-8');
+    const lines = content.split('\n');
+    const extendsMap = new Map();
+    let owner = null;
+    let jobIndent = null;
+    let i = 0;
+    while (i < lines.length) {
+      const line = lines[i];
+      const topKey = line.match(/^([^\s#][^#]*):\s*(?:#.*)?$/);
+      if (topKey) {
+        owner = topKey[1].trim();
+        jobIndent = null;
+        i += 1;
+        continue;
+      }
+      if (jobIndent === null && line.trim() && !line.trimStart().startsWith('#')) {
+        jobIndent = line.match(/^ */)[0].length;
+      }
+      const extendsLine = line.match(/^(\s*)extends:\s*(.*)$/);
+      if (extendsLine && jobIndent !== null && extendsLine[1].length === jobIndent) {
+        const targets = [];
+        const inline = extendsLine[2].trim().replace(/^\[/, '').replace(/\]$/, '');
+        if (inline) {
+          for (const t of inline.split(',')) {
+            const name = t.trim().replace(/^['"]|['"]$/g, '');
+            if (name) {
+              targets.push(name);
+            }
+          }
+          i += 1;
+        } else {
+          let j = i + 1;
+          while (j < lines.length) {
+            const item = lines[j].match(/^(\s*)-\s*(.+)$/);
+            if (!item || item[1].length <= jobIndent) {
+              break;
+            }
+            targets.push(item[2].trim().replace(/^['"]|['"]$/g, ''));
+            j += 1;
+          }
+          i = j;
+        }
+        extendsMap.set(owner, targets);
+        continue;
+      }
+      i += 1;
+    }
+    return extendsMap;
+  };
+
+  test('exactly the four product-component jobs extend the capped template', () => {
+    const users = [...gitlabCiExtends().entries()]
+      .filter(([, bases]) => bases.includes('.test_capped_jest'))
+      .map(([job]) => job)
+      .sort();
+    expect(users).toEqual(['test:backend', 'test:doc-repo', 'test:frontend', 'test:okf-server']);
+  });
+
+  test('the capped template is a test-node job', () => {
+    // The cap rides the same base (image, stage, NODE_ENV, artifact
+    // defaults) as every other test job — a template that silently leaves
+    // .test_node is a fork of the base, not an extension of it.
+    expect(gitlabCiExtends().get('.test_capped_jest')).toContain('.test_node');
+  });
+});
+
+// --- The test:e2e name exclusion stays root-only (#1674) ---
+// The JEST_INVOCATION matcher above excludes the names test:e2e and
+// test:e2e:list by NAME, in every package — justified today by the root
+// package.json defining them as Playwright. That justification can
+// silently rot: a COMPONENT later defining a jest-based test:e2e* script
+// would make the exclusion hide a real uncapped jest run. This pin fails
+// the suite the moment a component-level definition appears, forcing the
+// exclusion to be revisited instead of letting it drift.
+describe('the test:e2e name exclusion stays root-only (#1674)', () => {
+  test('no component-level package.json defines a test:e2e* script', () => {
+    const offenders = [];
+    for (const parent of ['components', 'tests', 'api-gateway-solution']) {
+      for (const entry of fs.readdirSync(path.join(ROOT, parent), { withFileTypes: true })) {
+        if (!entry.isDirectory()) {
+          continue;
+        }
+        const pkgPath = path.join(ROOT, parent, entry.name, 'package.json');
+        if (!fs.existsSync(pkgPath)) {
+          continue;
+        }
+        const scripts = JSON.parse(fs.readFileSync(pkgPath, 'utf-8')).scripts || {};
+        offenders.push(
+          ...Object.keys(scripts)
+            .filter((name) => /^test:e2e/.test(name))
+            .map((name) => `${parent}/${entry.name}: ${name}`)
+        );
+      }
+    }
+    expect(offenders).toEqual([]);
+  });
+});
 describe('every integration suite gates itself on ARANGO_TEST_URL', () => {
   // The test:backend-arango anti-skip gate counts numPassedTests across
   // the whole integration directory: it proves an ArangoDB-backed test

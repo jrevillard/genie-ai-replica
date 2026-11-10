@@ -90,15 +90,18 @@ function request(method, path, options = {}) {
 /**
  * Get a Keycloak admin token from the master realm.
  * Uses admin-cli client with password grant.
- * @param {string} [adminPassword] - Keycloak admin password (defaults to env KEYCLOAK_ADMIN_PASSWORD)
+ * @param {string} [adminPassword] - Keycloak admin password (defaults to
+ *   env KEYCLOAK_ADMIN_PASSWORD; the env ADMIN_TOKEN wins over the
+ *   environment's password, an explicit argument wins over both)
  * @returns {Promise<string>} Access token string
  */
 async function getAdminToken(adminPassword) {
   // ADMIN_TOKEN is the runner's alternative to the password, and it WINS
-  // when both are present - the same precedence the provisioning script
-  // uses. One precedence everywhere matters: the fixtures would be
-  // provisioned with one credential while the venue-profile probes minted
-  // another, and the probes would answer 401.
+  // over the environment's password (an explicit argument still wins over
+  // both) - the same precedence the provisioning script uses. One
+  // precedence everywhere matters: the fixtures would be provisioned with
+  // one credential while the venue-profile probes minted another, and the
+  // probes would answer 401.
   const token = process.env.ADMIN_TOKEN;
   if (!adminPassword && token) {
     return token;

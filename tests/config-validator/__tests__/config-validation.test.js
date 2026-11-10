@@ -3375,6 +3375,7 @@ describe('the local e2e run defines the executed set (#1736)', () => {
   let runScript;
   let executedGlobs;
   let specFiles;
+  let invocationFlags;
 
   beforeAll(() => {
     runScript = fs.readFileSync(RUN_SCRIPT, 'utf-8');
@@ -3382,16 +3383,12 @@ describe('the local e2e run defines the executed set (#1736)', () => {
     // Exactly one invocation: a second one would execute a set this guard
     // does not pin.
     expect(invocations.length).toBe(1);
-    // No FILTER flags beyond the project: `--grep`, `--shard` or a filter
-    // of any other kind would shrink the executed set without the path
-    // derivation noticing it.
-    for (const invocation of invocations) {
-      const flags = invocation
+    invocationFlags = invocations.map((invocation) =>
+      invocation
         .replace(/^npx playwright test /, '')
         .split(/\s+/)
-        .filter((arg) => arg.startsWith('-'));
-      expect(flags.filter((flag) => !flag.startsWith('--project='))).toEqual([]);
-    }
+        .filter((arg) => arg.startsWith('-'))
+    );
     let targets = invocations.flatMap((line) =>
       line
         .replace(/^npx playwright test /, '')
@@ -3409,6 +3406,16 @@ describe('the local e2e run defines the executed set (#1736)', () => {
       // would over-claim what the runner runs.
       .filter((f) => !f.includes('/node_modules/'))
       .filter((f) => EXECUTED_SPEC_RE.test(f));
+  });
+
+  // Any flag other than the project selector would shrink the executed set
+  // without the path derivation noticing it (--grep, --shard, a reporter
+  // that drops results). Its own test, so a violation names itself instead
+  // of failing the whole describe.
+  test('the invocation carries no flag that filters the executed set', () => {
+    for (const flags of invocationFlags) {
+      expect(flags.filter((flag) => !flag.startsWith('--project='))).toEqual([]);
+    }
   });
 
   // The assertion is about the SET the invocation selects, not about the

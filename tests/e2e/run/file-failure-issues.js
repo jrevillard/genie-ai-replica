@@ -181,7 +181,7 @@ function mentionsPath(text, file) {
     if (token === file) return true;
     if (!token.endsWith(`/${file}`)) return false;
     const prefix = token.slice(0, token.length - file.length - 1);
-    return !prefix.includes(`${TESTS_E2E_ROOT}/`);
+    return !(prefix === TESTS_E2E_ROOT || prefix.includes(`${TESTS_E2E_ROOT}/`));
   });
 }
 
@@ -275,8 +275,9 @@ function commentBody(files, venue, runStamp) {
 }
 
 /**
- * Why the tracker refused. The glab error's first line is the command that
- * failed; the tracker's own message is on the next one.
+ * Why the tracker refused. The tracker's own message is the first line of
+ * the glab process's stderr; the command that failed is in the error's
+ * message and is not useful to a reader.
  */
 function trackerReason(error) {
   const stderr = (error.stderr || '').trim();
@@ -318,11 +319,11 @@ function commentOnIssue(issue, files, venue, runStamp) {
 function main() {
   const fileIssues = process.argv.includes('--file-issues');
   const reportFlag = process.argv.indexOf('--report');
-  if (reportFlag !== -1 && !process.argv[reportFlag + 1]) {
+  const reportValue = reportFlag === -1 ? null : process.argv[reportFlag + 1];
+  if (reportFlag !== -1 && (!reportValue || reportValue.startsWith('-'))) {
     fail('--report needs the path of the report to read');
   }
-  const reportPath =
-    reportFlag === -1 ? DEFAULT_REPORT_PATH : path.resolve(process.argv[reportFlag + 1]);
+  const reportPath = reportValue ? path.resolve(reportValue) : DEFAULT_REPORT_PATH;
   const report = readReport(reportPath);
   const venue = process.env.BASE_URL || 'https://localhost';
   const runStamp = report.stats && report.stats.startTime ? report.stats.startTime : new Date().toISOString();
@@ -425,4 +426,10 @@ function main() {
   }
 }
 
-main();
+if (require.main === module) {
+  main();
+}
+
+// Exposed for the unit spec: the dedupe rule and the refusal wording are
+// behaviour, and behaviour is tested, not trusted.
+module.exports = { mentionsPath, trackerReason };

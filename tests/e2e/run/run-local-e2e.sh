@@ -51,14 +51,17 @@ echo "venue: $BASE_URL"
 for tool in flock md5sum; do
   if ! command -v "$tool" >/dev/null 2>&1; then
     echo "ERROR: '$tool' is not installed - the run's serial-slot locks cannot be taken." >&2
-    echo "       Install it (util-linux provides flock) and run again." >&2
+    case "$tool" in
+      flock) echo "       Install it (util-linux provides flock) and run again." >&2 ;;
+      md5sum) echo "       Install it (coreutils provides md5sum; absent on stock macOS) and run again." >&2 ;;
+    esac
     exit 2
   fi
 done
 CHECKOUT_LOCK="${E2E_RUN_LOCK:-$REPO_ROOT/.e2e-run.lock}"
-# The venue key is the NORMALIZED address: https://x:4443 and https://x:4443/
-# are the same venue and must not take two locks.
-VENUE_KEY="$(printf '%s' "${BASE_URL%/}" | md5sum | cut -c1-12)"
+# The venue key is the NORMALIZED address: https://x:4443, https://x:4443/ and
+# https://x:4443// are the same venue and must not take three locks.
+VENUE_KEY="$(printf '%s' "$(printf '%s' "$BASE_URL" | sed 's#/*$##')" | md5sum | cut -c1-12)"
 VENUE_LOCK="${E2E_VENUE_LOCK:-/tmp/genieai-e2e-$VENUE_KEY.lock}"
 
 exec 9>"$CHECKOUT_LOCK"
@@ -119,6 +122,11 @@ echo "provisioning the venue fixtures"
 node tests/e2e/provision-e2e-fixtures.js
 
 # --- the suite ---------------------------------------------------------------
+# The fixed report path is cleared FIRST: it holds whatever the last
+# Playwright invocation in this checkout wrote, and a suite that dies before
+# its reporter writes must not leave that stale file to be filed as THIS
+# run's outcome.
+rm -f reports/playwright-report.json
 echo "running the whole tests/e2e/ tree"
 set +e
 npx playwright test tests/e2e/ --project=chromium
@@ -139,7 +147,8 @@ else
   # invocation in this checkout wrote (a developer's single spec, a --list
   # run) - filing from it would file ANOTHER run's failures, and a run that
   # never wrote a report is a broken run, not a green one.
-  echo "ERROR: the suite wrote no report - this run's outcome cannot be read, and nothing is filed." >&2
+  echo "ERROR: the suite wrote no report (playwright exit $PLAYWRIGHT_STATUS) -" >&2
+  echo "       this run's outcome cannot be read, and nothing is filed." >&2
   exit 4
 fi
 

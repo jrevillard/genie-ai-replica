@@ -89,6 +89,27 @@ test.describe('the OKF probe reads the venue like the frontend reads it', () => 
     expect(await profile.okfEnabled()).toBe(false);
   });
 
+  test('a comment naming the knob before the assignment is not the assignment', async () => {
+    // The probe reads the ASSIGNMENT: a config whose header comment shows
+    // the enabled value must not enable the Studio.
+    fakeTransport([
+      {
+        status: 200,
+        data: '// okfEnabled: "1" turns the Studio on\nwindow.APP_CONFIG = {\n  okfEnabled: "0",\n};\n',
+      },
+    ]);
+    const profile = freshProfile();
+    expect(await profile.okfEnabled()).toBe(false);
+  });
+
+  test('a foreign key that merely contains the name is not the knob', async () => {
+    fakeTransport([
+      { status: 200, data: 'window.APP_CONFIG = {\n  notOkfEnabled: "1",\n  okfEnabled: "0",\n};\n' },
+    ]);
+    const profile = freshProfile();
+    expect(await profile.okfEnabled()).toBe(false);
+  });
+
   test('the skip reason names the value the venue carries', async () => {
     fakeTransport([{ status: 200, data: 'window.APP_CONFIG = {\n  okfEnabled: "0",\n};\n' }]);
     const profile = freshProfile();

@@ -48,6 +48,12 @@ machines off the same stack.
 
 ### Prerequisites
 
+Exit codes of the runner: `0` the suite passed and the failure path read its
+report; `1` the suite is red (or the failure path could not file); `2` the
+runner is missing a tool or the admin credentials; `3` another run holds the
+slot (the checkout or the venue lock); `4` the suite wrote no report — a
+broken run, nothing is filed.
+
 | Requirement | Note |
 |---|---|
 | `npm install` at the repository root | Playwright resolves from the root `node_modules` |
@@ -140,7 +146,11 @@ A red run must not stay a silent red (#1736). The run ends with
 To only report, without filing: `E2E_FILE_ISSUES=0 tests/e2e/run/run-local-e2e.sh`.
 To file a past run's failures by hand, read the run's own report (the runner
 renames it — the fixed path holds whatever ran last):
-`node tests/e2e/run/file-failure-issues.js --report reports/playwright-report-run-<stamp>.json --file-issues`.
+
+```bash
+ls reports/playwright-report-run-*.json
+node tests/e2e/run/file-failure-issues.js --report reports/playwright-report-run-<stamp>.json --file-issues
+```
 
 A run that wrote **no** report is a broken run: the runner stops there and
 files nothing rather than reading the fixed path, which would be another

@@ -6,12 +6,12 @@ description: |
   per-cluster Kustomize overlays (overlays/<cluster>/<env>/) in the
   genie-ai-deploy repo.
 type: application
-version: 0.2.170
+version: 0.2.171
 # `appVersion` mirrors the chart version deliberately: it tracks the chart
 # layout, not the GENIE.AI product release (the two versions on independent
 # axes; deployed image tags are governed by values, not by appVersion).
 # Never "latest" — OCI registries reject it for immutable promotion.
-appVersion: 0.2.170
+appVersion: 0.2.171
 # The Kubernetes versions the chart is validated on: CI renders and
 # dry-runs against 1.33 (kind) and the laptop cluster runs 1.37 (Calico,
 # policies enforced). Helm refuses an install outside the range, with

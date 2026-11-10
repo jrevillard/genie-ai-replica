@@ -1,7 +1,7 @@
 // Copyright (C) 2026 International Telecommunication Union (ITU)
 // SPDX-License-Identifier: Apache-2.0
 const { test, expect } = require('@playwright/test');
-const { mentionsPath, trackerReason } = require('./file-failure-issues');
+const { findTrackedIssue, mentionsPath, trackerReason } = require('./file-failure-issues');
 
 const FILE = 'tests/e2e/theme-runtime-config.spec.js';
 
@@ -41,6 +41,34 @@ test.describe('the dedupe reads a spec path as a PATH TOKEN', () => {
 
   test('an unrelated path does not match', () => {
     expect(mentionsPath('components/gov-chat-frontend/src/App.vue', FILE)).toBe(false);
+  });
+});
+
+test.describe('a match must be DEDICATED to the spec file', () => {
+  test('the dedicated issue whose title carries the path matches', () => {
+    const issue = { title: `test(e2e): ${FILE} is red`, description: '' };
+    expect(findTrackedIssue(FILE, [issue])).toBe(issue);
+  });
+
+  test("the script's own marker in the description matches", () => {
+    const issue = { title: 'local e2e run failures', description: `- spec file: \`${FILE}\`` };
+    expect(findTrackedIssue(FILE, [issue])).toBe(issue);
+  });
+
+  test('an umbrella that only LISTS the path does not absorb the failure', () => {
+    // The wave issue that touched a dozen spec files names them in its
+    // description. Absorbing their failures would leave a red file with no
+    // issue of its own — the tracker noise this path exists to end.
+    const umbrella = {
+      title: '13 spec files hardcode https://localhost',
+      description: `The wave touched ${FILE} and twelve other files.`,
+    };
+    expect(findTrackedIssue(FILE, [umbrella])).toBe(null);
+  });
+
+  test("another file's marker does not match", () => {
+    const issue = { title: 'local e2e run failures', description: '- spec file: `tests/e2e/other.spec.js`' };
+    expect(findTrackedIssue(FILE, [issue])).toBe(null);
   });
 });
 

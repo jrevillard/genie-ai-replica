@@ -158,8 +158,8 @@ function glab(args) {
  * of its own bookkeeping (it would leave the failures unfiled, which is the
  * silence this path exists to end). The issue LIST is a plain paginated
  * read, and the matching happens locally: an issue that already tracks a
- * spec file mentions the file's repository path in its title or in its
- * description.
+ * spec file carries the file's repository path in its title, or the
+ * script's own "- spec file: `path`" marker in its description.
  *
  * A failed READ is fatal (unlike a failed write): without the open-issue
  * list every failing file would get a NEW issue, and a flood is exactly
@@ -210,17 +210,27 @@ function mentionsPath(text, file) {
  *
  * An issue that already tracks the failure must NOT be duplicated: the run
  * comments on it instead, and a spec file nobody tracks yet gets its own
- * issue. The file's own dedicated issue (the one this script files, whose
- * title carries the path) wins over an umbrella that merely mentions the
- * file.
+ * issue.
+ *
+ * A match must be DEDICATED to the file, and there are exactly two places
+ * where the script writes such a dedication:
+ *
+ * - the TITLE carries the path — the dedicated issue this script files;
+ * - the DESCRIPTION carries the marker this script writes
+ *   ("- spec file: `path`") — the same dedicated issue.
+ *
+ * A path that appears in a description WITHOUT the marker is NOT a match:
+ * an umbrella issue that LISTS several spec paths (a wave that touched a
+ * dozen of them) would otherwise absorb every one of their failures, and
+ * the failure would never get an issue of its own — the tracker would show
+ * the file as red with nothing pointing at it.
  */
 function findTrackedIssue(file, openIssues) {
-  const matches = openIssues.filter((issue) =>
-    mentionsPath(`${issue.title}\n${issue.description || ''}`, file)
+  const marker = `- spec file: \`${file}\``;
+  const matches = openIssues.filter(
+    (issue) => mentionsPath(issue.title, file) || (issue.description || '').includes(marker)
   );
-  if (matches.length === 0) return null;
-  const dedicated = matches.find((issue) => mentionsPath(issue.title, file));
-  return dedicated || matches[0];
+  return matches[0] || null;
 }
 
 /**
@@ -494,4 +504,4 @@ if (require.main === module) {
 
 // Exposed for the unit spec: the dedupe rule and the refusal wording are
 // behaviour, and behaviour is tested, not trusted.
-module.exports = { mentionsPath, trackerReason };
+module.exports = { findTrackedIssue, mentionsPath, trackerReason };

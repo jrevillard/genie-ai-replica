@@ -22,7 +22,8 @@
 // REJECTED at ingest — never chunked, never enqueued, persisted with
 // index_status='rejected' + the issues. The mint gate refuses while any concept
 // is non-indexed.
-// WP-B (b0b28dc): the named gharial graph (OKF_{repo}) is registered;
+// WP-B (b0b28dc): the named gharial graph (OKF_<slug>_v<N> — the product's
+// single naming authority, graph-lifecycle-service) is registered;
 // is_index: true on the meta + ENTITY row for the index.md root.
 // WP-C (this commit): concepts are NEVER doc-repo files docs — content-only
 // chunking. Only the bundle zip is a files doc. The worker POSTs concepts
@@ -52,26 +53,38 @@
 //   7. The 6.1 authz matrix holds (scoped read-only, default-deny, admin).
 //   8. SAD-PATH ZIP ingest: POST kenya-bundle.zip → 202 with total=6/parsed=6/
 //      rejected=1 (bad_concept, WP-A)/ enqueued=5; 6 meta rows — 5
-//      parsed+graph-stamped + 1 rejected with 2 issues; PII clean on the 5
-//      conforming; ZERO per-concept files docs (WP-C content-only); bundle zip
-//      stored as a file doc (repo-associated, graph-stamped, KH labels,
-//      is_bundle @ Ingested).
-//   9. The 2.9.4 INGESTION WORKER drains the 5 parsed meta rows directly to
-//      dataprep (no doc-repo round-trip — WP-C) and the concept-status
-//      callback transitions each meta row parsed→indexed + writes within-repo
-//      edges + stamps chunk_count + last_good_index_at.
-//  10. Chunks in OKF_{repo}_SOURCE carry concept_id (WP-C citation provenance);
-//      the index.md root carries is_index: true on its ENTITY vertex (WP-B);
-//      ZERO OKF chunks in the default graph (2.9.6 split); re-ingest of
-//      unchanged+indexed concepts → skipped_dedup=N, enqueued=0 (the 4e dedup
-//      rule fires LIVE), meta rows stay indexed (no downgrade).
+//      parsed+graph-stamped (the PRODUCT's own graph name, resolved through
+//      workingGraphName — composing OKF_+repo_id was a second source of
+//      truth, #1568) + 1 rejected with 2 issues; PII clean on the 5
+//      conforming; ZERO per-concept files docs (WP-C content-only); bundle
+//      zip stored as a file doc (repo-associated, graph-stamped, KH labels,
+//      is_bundle @ Pending — the sad repo is publish-gate-REFUSED by design,
+//      so Pending is its TERMINAL state; it can never drain and is never
+//      asked to).
+//   9. The LIFECYCLE walk arms the drain (the #1568 re-anchor): the happy
+//      repo goes markRepoPiiScanned → submit → approve → publish (this mints
+//      v1) → ingest — and ONLY the ingest transition writes rag_drain_active,
+//      the worker's sole claim precondition. An unpublished repo NEVER
+//      drains (R1 contract) — the old harness polled a drain that could not
+//      legally start and named the wrong remedy. The 2.9.4 worker then
+//      drains the happy repo's 5 parsed meta rows directly to dataprep (no
+//      doc-repo round-trip — WP-C) and the concept-status callback
+//      transitions each meta row parsed→indexed + writes within-repo edges
+//      + stamps chunk_count + last_good_index_at.
+//  10. Chunks in OKF_<slug>_vN_SOURCE carry concept_id (WP-C citation
+//      provenance); the index.md root carries is_index: true on its ENTITY
+//      vertex (WP-B); ZERO OKF chunks in the default graph (2.9.6 split);
+//      re-ingest of unchanged+indexed concepts → skipped_dedup=N, enqueued=0
+//      (the 4e dedup rule fires LIVE, on the happy repo post-drain), meta
+//      rows stay indexed (no downgrade).
 //  11. SAD-PATH MINT GATE (WP-A): mintVersion on the sad repo REFUSES
-//      (PUBLISH_GATE_BLOCKED — bad_concept is rejected); HAPPY-PATH mint
-//      SUCCEEDS (v1 manifest with 5 concepts + stored canonical hashes +
-//      okf:v1; repo.version stamped).
-//  12. Bundle retraction VERIFIED: retracting one concept physically removes
-//      its chunks from OKF_{repo_id}_SOURCE (right graph, real delete — never
-//      a silent 200) and leaves the other concepts' chunks untouched.
+//      (PUBLISH_GATE_BLOCKED — bad_concept is rejected); HAPPY-PATH publish
+//      SUCCEEDS (the lifecycle publish mints v1: manifest with 5 concepts +
+//      stored canonical hashes + okf:v1; repo.version stamped).
+//  12. Per-CONCEPT retraction is NOT asserted (removed post-WP-C, 2026-08-24
+//      — concepts are not files docs, nothing per-concept exists to retract;
+//      the natural candidate bad_concept has 0 chunks). Bundle-level
+//      retraction (13) is the physical proof.
 //  13. Bundle-level retraction VERIFIED: repo delete DROPS the per-repo graph
 //      (definition + all 4 collections physically gone from ArangoDB) and
 //      removes the repo's meta rows + the bundle-zip files doc.
@@ -82,10 +95,12 @@
 //      manifest v1 INTACT (INSERT-only).
 //  15. Clone VERIFIED (4.8, D-V5 §8.4): the clone endpoint 403s a scoped READ
 //      caller (admin mutation); cloning the minted source yields a NEW repo
-//      (new repo_id + OKF_{new} graph + lifecycle draft) with cloned_from
-//      {repo_id, version: 2} + 5 meta rows copied verbatim (title/bundle_version/
-//      content_hash/index_status preserved); a modified concept re-ingests into
-//      the CLONE graph ONLY (dedup-skips the other 4), and the SOURCE's chunks
+//      (new repo_id + the product's own graph name + lifecycle draft) with
+//      cloned_from {repo_id, version: 2} + 5 meta rows copied verbatim
+//      (title/bundle_version/content_hash/index_status preserved); the clone
+//      walks the SAME lifecycle (a clone is born draft — its re-ingested
+//      concept can only drain after publish→ingest), re-indexes into the
+//      CLONE graph ONLY (dedup-skips the other 4), and the SOURCE's chunks
 //      + edges are UNCHANGED (isolation).
 //  16. HAPPY-PATH ZIP ingest: POST kenya-bundle-clean.zip → 202 with total=5/
 //      parsed=5/rejected=0/enqueued=5; 5 meta rows parsed+graph-stamped;
@@ -154,38 +169,59 @@ async function listOkfGraphs(db) {
 }
 
 /** Assert ZERO OKF_* graphs + collections remain (the "properly cleaned" proof). */
+// The orphan-manifest set captured BEFORE the run creates anything (the
+// pre-clean section). The final assert compares against THIS — a shared
+// ArangoDB can carry pre-existing dangling manifests from OTHER deletions
+// (live-caught run 11), and they are not this run's leftovers.
+let PREEXISTING_ORPHAN_MANIFESTS = null;
+
 async function assertZeroOkfArtifacts(db) {
   const graphs = await listOkfGraphs(db);
   const cols = await db.listCollections();
   const okfCols = cols.filter((c) => String(c.name).startsWith('OKF_'));
-  // Orphan-manifest check (live-caught 2026-08-25): every okf_bundle_manifest
-  // doc must reference a LIVE repo — a deleted repo's lingering manifest
-  // crowds discoverRepos' k-clamped candidate slice (non-smoke repos are fine;
-  // the assert is the dangling reference, not the doc count).
-  const orphanManifests = await (
-    await db.query('FOR d IN okf_bundle_manifest FILTER !DOCUMENT(okf_repositories, d._key) RETURN d._key')
-  ).all();
+  // Orphan-manifest check (live-caught 2026-08-25), DELTA-SCOPED (#1568): every
+  // okf_bundle_manifest doc must reference a LIVE repo — a deleted repo's
+  // lingering manifest crowds discoverRepos' k-clamped candidate slice. This
+  // ArangoDB hosts REAL repositories whose deletions are not this run's
+  // business, so only orphans that APPEARED during this run are failures.
+  const orphanManifests = (
+    await (
+      await db.query('FOR d IN okf_bundle_manifest FILTER !DOCUMENT(okf_repositories, d._key) RETURN d._key')
+    ).all()
+  ).filter((k) => !(PREEXISTING_ORPHAN_MANIFESTS && PREEXISTING_ORPHAN_MANIFESTS.has(k)));
   if (orphanManifests.length > 0) {
     fail(
       'cleanup NOT clean: ' +
         orphanManifests.length +
-        ' ORPHAN okf_bundle_manifest docs (repo gone): ' +
+        ' NEW ORPHAN okf_bundle_manifest docs (repo gone): ' +
         orphanManifests.join(',')
     );
   }
-  if (graphs.length === 0 && okfCols.length === 0) {
-    pass('cleanup VERIFIED: ZERO OKF_* graphs + collections remain in ArangoDB');
+  // SMOKE-SCOPED (#1568, live-caught run 11): a shared ArangoDB carries REAL
+  // repositories' serving graphs (Solar System, Bali, Quran, El Salvador...).
+  // The assert covers what THIS RUN owns — every graph or collection under the
+  // smoke repos' slug prefix must be gone after CLEANUP=full. Non-smoke OKF_*
+  // artifacts are live state, counted and reported, never failed on.
+  const SMOKE_GRAPH_PREFIX = 'OKF_kenya-government-services-knowledge-base-smoke';
+  const smokeGraphs = graphs.filter((g) => String(g.name).startsWith(SMOKE_GRAPH_PREFIX));
+  const smokeCols = okfCols.filter((c) => String(c.name).startsWith(SMOKE_GRAPH_PREFIX));
+  if (smokeGraphs.length === 0 && smokeCols.length === 0) {
+    pass(
+      'cleanup VERIFIED: ZERO smoke-owned OKF_* graphs + collections remain (' +
+        graphs.length +
+        ' non-smoke OKF_* graphs belong to live repositories — untouched)'
+    );
     return true;
   }
   fail(
     'cleanup NOT clean: ' +
-      graphs.length +
-      ' OKF_* graphs (' +
-      graphs.map((g) => g.name).join(',') +
+      smokeGraphs.length +
+      ' smoke OKF_* graphs (' +
+      smokeGraphs.map((g) => g.name).join(',') +
       ') + ' +
-      okfCols.length +
-      ' OKF_* collections (' +
-      okfCols.map((c) => c.name).join(',') +
+      smokeCols.length +
+      ' smoke OKF_* collections (' +
+      smokeCols.map((c) => c.name).join(',') +
       ') remain'
   );
   return false;
@@ -668,6 +704,12 @@ async function ingestPhase(db) {
   //    this is SKIPPED so the previous run stays visible. ──
   const repositoryServiceCleanup = require('./services/repository-service');
   if (CLEANUP !== 'none') {
+    // The pre-run orphan snapshot (the final assert is DELTA-scoped — see
+    // assertZeroOkfArtifacts): dangling manifests that exist BEFORE this run
+    // are not this run's leftovers.
+    PREEXISTING_ORPHAN_MANIFESTS = new Set(
+      await aqlAll('FOR d IN okf_bundle_manifest FILTER !DOCUMENT(okf_repositories, d._key) RETURN d._key')
+    );
     const single = (
       await aqlAll("FOR f IN files FILTER f.file_name == 'smoke-single-doc.md' RETURN KEEP(f, ['file_id'])")
     )[0];
@@ -709,10 +751,27 @@ async function ingestPhase(db) {
     domain: 'smoke',
     acl: { required_scopes: [] }
   });
+  // The graph-name authority (#1568): the harness resolves the name through
+  // the PRODUCT's single source of truth — the same workingGraphName() call
+  // ingest-service makes when it stamps the meta rows (:712) — never by
+  // composing 'OKF_' + repo_id (the legacy anchor shape the registry keeps
+  // only as an immutable technical holdover; the live graphs are
+  // OKF_<slug>_v<N>).
+  const { workingGraphName } = require('./services/graph-lifecycle-service');
   if (createRes.status === 201 && createRes.body && createRes.body.repo_id) {
     INGEST_REPO = createRes.body.repo_id;
-    OKF_GRAPH = 'OKF_' + INGEST_REPO;
-    pass('flow: OKF repository "' + REPO_NAME + '" created via the API (repo_id=' + INGEST_REPO + ')');
+    OKF_GRAPH = workingGraphName(
+      (await aqlAll("FOR r IN okf_repositories FILTER r.repo_id == '" + INGEST_REPO + "' RETURN r"))[0]
+    );
+    pass(
+      'flow: OKF repository "' +
+        REPO_NAME +
+        '" created via the API (repo_id=' +
+        INGEST_REPO +
+        ', graph ' +
+        OKF_GRAPH +
+        ' resolved via workingGraphName)'
+    );
   } else {
     fail('flow: repo create via API -> ' + createRes.status + ' ' + JSON.stringify(createRes.body).slice(0, 150));
   }
@@ -851,7 +910,9 @@ async function ingestPhase(db) {
     ? pass(
         'bundle zip: stored as a file doc — repo-associated, graph-stamped, KH labels (' +
           JSON.stringify(bundleDoc.labels) +
-          '), is_bundle=true @ Pending (state machine: born Pending, settles post-drain)'
+          '), is_bundle=true @ Pending. The sad repo is publish-gate-REFUSED by ' +
+          'design (bad_concept), so Pending is its TERMINAL state — it never drains and is never asked to ' +
+          '(the happy repo below proves the full Pending → Ingesting → Ingested walk)'
       )
     : fail('bundle zip file doc: ' + JSON.stringify(bundleDoc));
 
@@ -893,9 +954,7 @@ async function ingestPhase(db) {
         );
     plainRows.some((f) => f.file_id === bundleFileId)
       ? fail('artifacts view source: the bundle LEAKED into the is_bundle=false document list')
-      : pass(
-          'artifacts view source: the bundle does NOT appear in the document list (the two views never mix)'
-        );
+      : pass('artifacts view source: the bundle does NOT appear in the document list (the two views never mix)');
     // The provenance the view renders: the repository the artifact came
     // from. (The VERSION is stamped by the mint phase — a bundle that
     // carries none reads "unknown version", which the view renders as such
@@ -995,68 +1054,265 @@ async function ingestPhase(db) {
       ? pass('bundle zip: ACL labels (t:/r:/d:) + caller label + graph_name stamped (sole injector)')
       : fail('bundle zip labels/graph: ' + JSON.stringify(bundleDoc.labels));
   }
-  const okfIds = []; // WP-C: no per-concept files docs ⇒ no file_id list to drain
 
-  // ── (v) DRAIN — the 2.9.4 INGESTION WORKER claims meta rows @ parsed (WP-C) ──
-  // WP-C content-only: there are NO per-concept files docs to poll. The worker
-  // reads okf_concepts_meta FILTER index_status='parsed' and POSTs each concept's
-  // markdown DIRECTLY to dataprep. The completion callback (dataprep → okf-server
-  // internal concept-status) transitions the meta row to indexed|failed and
-  // writes the post-index edges. The smoke settle-waits on the meta row.
-  // concept_ids are file names MINUS .md (the parser's bare-id form) — polling
-  // for 'index.md' never matches the meta row 'index' (live-caught: the drain
-  // loop always timed out 25 min while the worker had already finished).
-  const DRAIN_CONCEPTS = GOOD_FILES.map((f) => f.replace(/\.md$/, ''));
-  console.log('  draining: ' + DRAIN_CONCEPTS.length + ' OKF concepts (WORKER-paced — meta row poll)...');
-  const statuses = {};
-  for (let i = 0; i < 100; i++) {
-    await new Promise((r) => setTimeout(r, 15000));
+  // ── WHY THERE IS NO DRAIN ON THE SAD REPO (#1568 re-anchor) ──
+  // The worker claims rows ONLY for repos with rag_drain_active == true, and
+  // that flag is written by exactly ONE place: the lifecycle 'ingest'
+  // transition (lifecycle-service armRagDrain) — which requires the repo to
+  // be PUBLISHED first. The sad repo can never publish (bad_concept is
+  // rejected; the gate below proves the refusal), so it can never legally
+  // drain. The old harness polled a drain that could not start and told the
+  // reader to check OKF_INGEST_WORKER_ENABLED — the wrong remedy for a
+  // precondition the flow itself never met. ALL drain-dependent coverage
+  // (worker drain, transitions, bundle settle, manifest, author edges,
+  // ingestion log, dedup-live) runs against the HAPPY repo, which walks the
+  // real lifecycle below.
+
+  // ── (ix) SAD-PATH PUBLISH GATE (WP-A / FR-25) — this is the ONLY mint the
+  // sad repo ever attempts; the happy repo's v1 mint happens inside the
+  // lifecycle publish transition below (#1568 re-anchor).
+  // In-container service call (the HTTP route's authz matrix is unit-tested;
+  // user tokens are expired by this point in the run).
+  const versionService = require('./services/version-service');
+  // The mint's PII gate requires the INGEST repo's repo-level scan complete —
+  // the orchestrator scans concepts (4d) but the repo marker is only set by
+  // an explicit repo-level scan pass (same call the control-plane phase makes
+  // for the scratch repo). Live-caught: mint refused 'pii_scan_status !=
+  // complete' with all concepts pii_state=clean.
+  await piiService.markRepoPiiScanned(INGEST_REPO);
+  // ── (ix-a) SAD-PATH PUBLISH GATE (WP-A / FR-25): this repo's bundle
+  // contains bad_concept (REJECTED + conformance issues) — mint MUST refuse.
+  // "No invalid concept reaches published."
+  let sadGateRefused = null;
+  try {
+    await versionService.mintVersion(
+      INGEST_REPO,
+      { trigger: 'publish', source_ref: 'smoke://sad/v1' },
+      { sub: 'smoke-run' }
+    );
+    fail('WP-A publish gate: sad-repo mint SUCCEEDED — the gate did not enforce');
+  } catch (e) {
+    sadGateRefused = e;
+    e.code === 'PUBLISH_GATE_BLOCKED' || /gate|conform|rejected|indexed/i.test(e.message)
+      ? pass('WP-A publish gate: sad-repo mint REFUSED (' + (e.code || e.message).toString().slice(0, 80) + ')')
+      : fail('sad-repo mint refused for the WRONG reason: ' + e.message.slice(0, 120));
+  }
+
+  // ── (ix-b) HAPPY PATH — a SECOND repo + the CLEAN bundle (requirement 11:
+  // happy + sad as SEPARATE repos and SEPARATE bundles so both results stay
+  // inspectable). All drain-dependent phases (the lifecycle walk, the worker
+  // drain, bundle settle, manifest, author edges, ingestion log, dedup,
+  // mint v2 threading, edges, clone, retraction) run against the HAPPY repo —
+  // it is the only one that can legally reach a drain, because it is the only
+  // one that can publish (#1568).
+  const repositoryServiceLate = require('./services/repository-service');
+  const ingestService = require('./services/ingest-service');
+  const HAPPY_NAME = 'Kenya Government Services Knowledge Base (smoke happy)';
+  const HAPPY_COUNT = 5; // the clean bundle's conforming concepts
+  // Re-run safety: remove a prior happy repo by name. A prior run can leave
+  // the repo in 'approve' (a publish that failed mid-run — live-caught run 2
+  // of the #1568 fix): remove() refuses a non-draft repo, so walk it to
+  // retracted first, then delete; the AQL purge is the final hammer so the
+  // create below can never 409 (the same pattern the clone pre-clean uses).
+  const priorHappy = await aqlAll(
+    "FOR r IN okf_repositories FILTER r.name == '" + HAPPY_NAME + "' RETURN KEEP(r, ['repo_id'])"
+  );
+  for (const ph of priorHappy) {
+    try {
+      await repositoryServiceLate.remove(ph.repo_id, { sub: 'smoke-run' });
+    } catch (e) {
+      try {
+        await call('POST', BASE + '/api/okf/repos/' + ph.repo_id + '/lifecycle', ADMIN, { action: 'retract' });
+        await repositoryServiceLate.remove(ph.repo_id, { sub: 'smoke-run' });
+      } catch (e2) {
+        console.log('  cleanup: prior happy ' + ph.repo_id + ' service remove failed (' + e2.message + ') — AQL purge');
+      }
+    }
+    await aqlAll("FOR m IN okf_concepts_meta FILTER m.repo_id == '" + ph.repo_id + "' REMOVE m IN okf_concepts_meta");
+    await aqlAll("FOR v IN okf_versions FILTER v.repo_id == '" + ph.repo_id + "' REMOVE v IN okf_versions");
+    // The settle-path writes the manifest keyed on the repo id — purge it too,
+    // or every prior-run repo leaves an orphan manifest behind (live-caught
+    // run 11: the final zero-artifacts assert died on exactly these).
+    await aqlAll("FOR d IN okf_bundle_manifest FILTER d._key == '" + ph.repo_id + "' REMOVE d IN okf_bundle_manifest");
+    await aqlAll("FOR r IN okf_repositories FILTER r.repo_id == '" + ph.repo_id + "' REMOVE r IN okf_repositories");
+  }
+  const happyRepo = await repositoryServiceLate.create(
+    { name: HAPPY_NAME, domain: 'smoke', acl: { required_scopes: [] } },
+    { sub: 'smoke-run', source_ip: null }
+  );
+  // The SAD repo's id — captured BEFORE the reassignment so CLEANUP=full can
+  // remove it at the end (the (x) retraction phase below now targets the HAPPY
+  // repo; without this the sad repo's graph survived full-mode runs —
+  // live-caught 2026-08-25, runs 5+6).
+  const SAD_REPO = INGEST_REPO;
+  INGEST_REPO = happyRepo.repo_id;
+  // NOT the registry's graph_name field — the registry keeps OKF_{repo_id} as
+  // an immutable technical ANCHOR only (the #1568 issue's own warning); the
+  // live graph is whatever the product's authority computes for the doc
+  // (live-caught: the registry anchor made the author-edge AQL miss the real
+  // OKF_<slug>_vN_LINKS_TO).
+  OKF_GRAPH = workingGraphName(await repos.document(INGEST_REPO));
+  pass('happy path: second repo created (' + INGEST_REPO + ' graph ' + OKF_GRAPH + ' — via workingGraphName)');
+  const happyZipB64 = fs.readFileSync('/app/kenya-bundle-clean.zip').toString('base64');
+  const rh = await ingestService.ingestRepoConcepts(
+    INGEST_REPO,
+    { zip: happyZipB64, bundle_name: 'kenya-bundle-clean.zip', labels: SELECTED_KH_LABELS },
+    { sub: 'smoke-run', source_ip: null }
+  );
+  rh.total === 5 && rh.parsed === 5 && rh.rejected === 0 && rh.enqueued === 5
+    ? pass('happy ingest: 202-equivalent summary (total=5 parsed=5 rejected=0 enqueued=5)')
+    : fail(
+        'happy ingest summary: ' +
+          JSON.stringify({ total: rh.total, parsed: rh.parsed, rejected: rh.rejected, enqueued: rh.enqueued })
+      );
+
+  // The publish gate refuses FLAGGED PII entities (review required), and the
+  // clean bundle's concepts each carry one LOCATION hit — place names are
+  // exactly what a government-services KB contains. The steward's flow is
+  // scan → review → ACCEPT, so the harness walks the product's OWN bulk
+  // accept (the same 'accept' action the editor's Accept-All drives; #1650
+  // pinned an accepted PII state as a change publish certifies). Settle-wait
+  // on the job registry — the bulk job is fire-and-forget by design.
+  const piiBulkJob = piiService.startRepoBulkPiiJob(INGEST_REPO, { action: 'accept' }, { sub: 'smoke-run' });
+  let piiBulk = null;
+  for (let i = 0; i < 60; i++) {
+    piiBulk = piiService.getRepoBulkPiiJob(piiBulkJob.job_id);
+    if (piiBulk && (piiBulk.status === 'done' || piiBulk.status === 'failed')) break;
+    await new Promise((r2) => setTimeout(r2, 1000));
+  }
+  piiBulk && piiBulk.status === 'done'
+    ? pass('happy pii: bulk ACCEPT settled the flagged entities (' + JSON.stringify(piiBulk.result).slice(0, 140) + ')')
+    : fail('happy pii bulk accept did not settle: ' + JSON.stringify(piiBulk));
+  // Lifecycle-phase content comes from the CLEAN bundle (the sad bundle's
+  // concepts would inject bad_concept into the happy repo and trip the gate).
+  const happyBundleDir = '/app/kenya-bundle-clean';
+  let concepts = fs
+    .readdirSync(happyBundleDir)
+    .filter((f) => f.endsWith('.md'))
+    .sort()
+    .map((f) => {
+      const { data, content } = matter(fs.readFileSync(path.join(happyBundleDir, f), 'utf8'));
+      return { path: f, frontmatter: data, body: content.trim() };
+    });
+  const HAPPY_BUNDLE_CONCEPTS = concepts.map((c) => c.path.replace(/\.md$/, ''));
+
+  // ── THE LIFECYCLE WALK (#1568): an import NEVER drains — the drain arms
+  // only through the lifecycle 'ingest' transition, which requires PUBLISHED.
+  // The walk is markRepoPiiScanned → submit → approve → publish → ingest,
+  // the exact flow the lifecycle harness pins (ALL PASS, 2026-11-09). The
+  // publish mints v1 — the explicit mintVersion call the old harness made
+  // here is gone (it would now mint a SECOND version).
+  await piiService.markRepoPiiScanned(INGEST_REPO);
+  pass('happy: repo PII scan marked complete (publish prerequisite)');
+  let r;
+  r = await call('POST', BASE + '/api/okf/repos/' + INGEST_REPO + '/lifecycle', ADMIN, { action: 'submit' });
+  r.status === 200 && r.body && r.body.lifecycle_state === 'review'
+    ? pass('happy lifecycle: submit → review')
+    : fail('happy lifecycle submit → ' + r.status + ' ' + JSON.stringify(r.body).slice(0, 200));
+  r = await call('POST', BASE + '/api/okf/repos/' + INGEST_REPO + '/lifecycle', ADMIN, { action: 'approve' });
+  r.status === 200 && r.body && r.body.lifecycle_state === 'approve'
+    ? pass('happy lifecycle: approve → approve')
+    : fail('happy lifecycle approve → ' + r.status + ' ' + JSON.stringify(r.body).slice(0, 200));
+  r = await call('POST', BASE + '/api/okf/repos/' + INGEST_REPO + '/lifecycle', ADMIN, { action: 'publish' });
+  if (r.status !== 200 || !r.body || r.body.bundle_version !== 1) {
+    fail('happy lifecycle publish → ' + r.status + ' ' + JSON.stringify(r.body).slice(0, 300));
+    return;
+  }
+  pass('happy lifecycle: publish → v1 minted (bundle ' + (r.body.bundle && r.body.bundle.file_name) + ')');
+  r = await call('POST', BASE + '/api/okf/repos/' + INGEST_REPO + '/lifecycle', ADMIN, { action: 'ingest' });
+  r.status === 200 || r.status === 202
+    ? pass('happy lifecycle: ingest → ' + r.status + ' (rag_drain_active armed — the ONLY writer is this transition)')
+    : fail('happy lifecycle ingest → ' + r.status + ' ' + JSON.stringify(r.body).slice(0, 300));
+
+  // Publish-mint asserts — BEFORE the drain, while the meta rows still hold
+  // the pristine import-time hashes (the (x) modified re-ingest below changes
+  // service_directory's; the manifest is INSERT-only and must be compared now).
+  const repoAfterMint = await repos.document(INGEST_REPO);
+  repoAfterMint.version === 1 && repoAfterMint.okf_tag === 'okf:v1'
+    ? pass('publish mint: repo doc version=1 + okf_tag=okf:v1 stamped')
+    : fail(
+        'repo doc after publish: ' + JSON.stringify({ version: repoAfterMint.version, okf_tag: repoAfterMint.okf_tag })
+      );
+  const manifest1 = await versionService.getVersion(INGEST_REPO, 1);
+  const metaHashes = await aqlAll(
+    "FOR m IN okf_concepts_meta FILTER m.repo_id == '" +
+      INGEST_REPO +
+      "' SORT m.concept_id RETURN KEEP(m, ['concept_id','content_hash'])"
+  );
+  manifest1.concept_count === HAPPY_COUNT &&
+  manifest1.concepts.every(
+    (c, i) => c.concept_id === metaHashes[i].concept_id && c.content_hash === metaHashes[i].content_hash
+  )
+    ? pass('manifest v1: all ' + HAPPY_COUNT + ' concepts snapshotted with the STORED canonical hashes')
+    : fail(
+        'manifest v1 mismatch: ' +
+          JSON.stringify(manifest1.concepts.slice(0, 2)) +
+          ' vs ' +
+          JSON.stringify(metaHashes.slice(0, 2))
+      );
+  manifest1.okf_tag === 'okf:v1' && manifest1.trigger === 'publish' && typeof manifest1.minted_at === 'string'
+    ? pass('manifest v1: okf:v1 + trigger + minted_at recorded (the publish transition minted it)')
+    : fail('manifest v1 metadata: ' + JSON.stringify(manifest1));
+
+  // ── THE DRAIN (on the happy repo, via the armed worker) ──
+  // WP-C content-only: the worker reads okf_concepts_meta FILTER
+  // index_status='parsed' + rag_drain_active repo, POSTs each concept's
+  // markdown DIRECTLY to dataprep, and the completion callback transitions the
+  // meta row to indexed|failed. concept_ids are file names MINUS .md (polling
+  // for 'index.md' never matches the meta row 'index' — live-caught).
+  console.log('  happy drain: ' + HAPPY_BUNDLE_CONCEPTS.length + ' concepts (WORKER-paced — meta row poll)...');
+  const drainStatuses = {};
+  let happySettled = false;
+  for (let i = 0; i < 100 && !happySettled; i++) {
+    await new Promise((r2) => setTimeout(r2, 15000));
     const rows = await aqlAll(
       "FOR m IN okf_concepts_meta FILTER m.repo_id == '" +
         INGEST_REPO +
         "' AND m.concept_id IN " +
-        JSON.stringify(DRAIN_CONCEPTS) +
+        JSON.stringify(HAPPY_BUNDLE_CONCEPTS) +
         " RETURN KEEP(m, ['concept_id','index_status','chunk_count','last_error'])"
     );
-    let allTerminal = true;
-    for (const cid of DRAIN_CONCEPTS) {
-      if (statuses[cid]) continue;
-      const row = rows.find((r) => r.concept_id === cid);
+    for (const cid of HAPPY_BUNDLE_CONCEPTS) {
+      if (drainStatuses[cid]) continue;
+      const row = rows.find((x) => x.concept_id === cid);
       if (row && (row.index_status === 'indexed' || row.index_status === 'failed')) {
-        statuses[cid] = row.index_status + ':' + (row.chunk_count || 0);
-        console.log('    ' + cid + ' -> ' + statuses[cid]);
-      } else {
-        allTerminal = false;
+        drainStatuses[cid] = row.index_status + ':' + (row.chunk_count || 0);
+        console.log('    ' + cid + ' -> ' + drainStatuses[cid]);
       }
     }
-    if (allTerminal && Object.keys(statuses).length === DRAIN_CONCEPTS.length) break;
+    happySettled = HAPPY_BUNDLE_CONCEPTS.every((c) => drainStatuses[c]);
   }
-  for (const cid of DRAIN_CONCEPTS) {
-    if (!statuses[cid]) {
-      statuses[cid] = 'timeout';
+  for (const cid of HAPPY_BUNDLE_CONCEPTS) {
+    if (!drainStatuses[cid]) {
+      drainStatuses[cid] = 'timeout';
       fail(
-        'drain ' + cid + ' never reached a terminal meta state (worker interval 15s — is OKF_INGEST_WORKER_ENABLED?)'
+        'drain ' +
+          cid +
+          ' never reached a terminal meta state. The REAL precondition: the repo must be PUBLISHED and the ' +
+          "lifecycle 'ingest' transition must have armed rag_drain_active (the worker's sole claim filter) — " +
+          'OKF_INGEST_WORKER_ENABLED is NOT the cause to chase (#1568)'
       );
-    } else if (statuses[cid].split(':')[0] !== 'indexed') {
-      fail('drain ' + cid + ' ended "' + statuses[cid] + '"');
+    } else if (drainStatuses[cid].split(':')[0] !== 'indexed') {
+      fail('drain ' + cid + ' ended "' + drainStatuses[cid] + '"');
     }
   }
-  const indexed = DRAIN_CONCEPTS.filter((c) => statuses[c] && statuses[c].split(':')[0] === 'indexed');
-  indexed.length === DRAIN_CONCEPTS.length
+  const drainIndexed = HAPPY_BUNDLE_CONCEPTS.filter(
+    (c) => drainStatuses[c] && drainStatuses[c].split(':')[0] === 'indexed'
+  );
+  drainIndexed.length === HAPPY_BUNDLE_CONCEPTS.length
     ? pass(
         'WP-C: WORKER drained all ' +
-          DRAIN_CONCEPTS.length +
+          drainIndexed.length +
           ' meta rows parsed→indexed (content-only — the meta row is the queue)'
       )
-    : fail('WP-C worker drain: ' + indexed.length + '/' + DRAIN_CONCEPTS.length + ' indexed');
+    : fail('WP-C worker drain: ' + drainIndexed.length + '/' + HAPPY_BUNDLE_CONCEPTS.length + ' indexed');
 
-  // ── (vii) WORKER TRANSITIONS — the worker-EXCLUSIVE meta states ──
-  // The worker sets the FILE status to 'Ingested' BEFORE transitioning the META
-  // to 'indexed' (a sub-second window — live-caught r4: the drain broke the
-  // instant the last file looked terminal, but the meta transition landed ~1s
-  // later, so the old one-shot check flaked). Settle-wait for the transitions
-  // (up to 60s) so the check is deterministic — the assertion then reads the
-  // settled state, never a mid-transition race.
+  // Worker-EXCLUSIVE meta states: the worker sets the FILE status to
+  // 'Ingested' BEFORE transitioning the META to 'indexed' (a sub-second
+  // window — live-caught r4). Settle-wait, then assert the settled state:
+  // every happy concept indexed + last_good_index_at stamped (the happy
+  // bundle has no bad_concept — the rejected-row branch lives on the sad
+  // repo's meta asserts above).
   let metaAfter = null;
   for (let i = 0; i < 20; i++) {
     metaAfter = await aqlAll(
@@ -1065,37 +1321,25 @@ async function ingestPhase(db) {
         "' RETURN KEEP(d, ['concept_id','index_status','last_good_index_at'])"
     );
     if (
-      metaAfter.length === EXPECTED_CONCEPTS &&
-      // bad_concept is REJECTED (WP-A — never indexed, never last_good stamped);
-      // only the CONFORMING concepts must settle indexed + stamped.
-      metaAfter.every(
-        (m) =>
-          (m.concept_id === 'bad_concept' ? m.index_status === 'rejected' : m.index_status === 'indexed') &&
-          (m.concept_id === 'bad_concept' || typeof m.last_good_index_at === 'string')
-      )
+      metaAfter.length === HAPPY_COUNT &&
+      metaAfter.every((m) => m.index_status === 'indexed' && typeof m.last_good_index_at === 'string')
     ) {
       break;
     }
-    await new Promise((r) => setTimeout(r, 3000));
+    await new Promise((r2) => setTimeout(r2, 3000));
   }
-  const goodRows = metaAfter.filter((m) => m.concept_id !== 'bad_concept');
-  const allIndexed =
-    metaAfter.length === EXPECTED_CONCEPTS &&
-    metaAfter.some((m) => m.concept_id === 'bad_concept' && m.index_status === 'rejected') &&
-    goodRows.every((m) => m.index_status === 'indexed');
+  const allIndexed = metaAfter.length === HAPPY_COUNT && metaAfter.every((m) => m.index_status === 'indexed');
   allIndexed
-    ? pass('worker transition: 5 conforming meta rows indexed + bad_concept rejected (parsed→indexed / hard-gate)')
+    ? pass('worker transition: all ' + HAPPY_COUNT + ' meta rows indexed (parsed→indexed)')
     : fail('worker transition: ' + JSON.stringify(metaAfter.map((m) => [m.concept_id, m.index_status])));
-  const allStamped = goodRows.every((m) => typeof m.last_good_index_at === 'string' && m.last_good_index_at);
+  const allStamped = metaAfter.every((m) => typeof m.last_good_index_at === 'string' && m.last_good_index_at);
   allStamped
     ? pass('worker transition: last_good_index_at stamped on every concept')
     : fail('worker transition: missing last_good_index_at: ' + JSON.stringify(metaAfter));
 
-  // ── Bundle state machine CLOSE-OUT: every concept settled ⇒ the bundle zip
+  // Bundle state machine close-out: every concept settled ⇒ the bundle zip
   // must have transitioned Pending → Ingesting → Ingested (David's directive:
   // nothing is 'Ingested' until it has actually been ingested + logs written).
-  // Settle-wait: the controller settles the bundle right after the LAST
-  // concept callback — poll briefly for the terminal bundle state.
   let bundleAfter = null;
   for (let i = 0; i < 20; i++) {
     bundleAfter = (
@@ -1106,7 +1350,7 @@ async function ingestPhase(db) {
       )
     )[0];
     if (bundleAfter && bundleAfter.dataprep && bundleAfter.dataprep.status === 'Ingested') break;
-    await new Promise((r) => setTimeout(r, 3000));
+    await new Promise((r2) => setTimeout(r2, 3000));
   }
   const bundleStatus = bundleAfter && bundleAfter.dataprep && bundleAfter.dataprep.status;
   bundleStatus === 'Ingested'
@@ -1124,19 +1368,13 @@ async function ingestPhase(db) {
   for (let i = 0; i < 20; i++) {
     happyManifest = (await aqlAll("FOR d IN okf_bundle_manifest FILTER d._key == '" + INGEST_REPO + "' RETURN d"))[0];
     if (happyManifest) break;
-    await new Promise((r) => setTimeout(r, 3000));
+    await new Promise((r2) => setTimeout(r2, 3000));
   }
-  // The SAD manifest legitimately carries 6 concepts (bad_concept present as
-  // 'rejected' — surfaced, not hidden). The assert checks: >=5 concepts, the
-  // 5 conforming present, rejected-present (sad) or absent (happy), the root,
-  // author links, and every link source='author'.
   const mfConcepts = happyManifest ? happyManifest.concepts || [] : [];
   const mfLinks = happyManifest ? happyManifest.links || [] : [];
-  const conformingPresent = GOOD_FILES.map((f) => f.replace(/\.md$/, '')).every((id) =>
-    mfConcepts.some((c) => c.id === id)
-  );
+  const conformingPresent = HAPPY_BUNDLE_CONCEPTS.every((id) => mfConcepts.some((c) => c.id === id));
   happyManifest &&
-  mfConcepts.length >= 5 &&
+  mfConcepts.length >= HAPPY_COUNT &&
   conformingPresent &&
   happyManifest.root_id === 'index' &&
   mfLinks.length > 0 &&
@@ -1197,6 +1435,15 @@ async function ingestPhase(db) {
   // Settle-wait (review P1c, live-caught v13b): the LAST concept's final
   // System stage can mirror just after the bundle status lands Ingested —
   // poll until all conforming concepts carry all required stages (max 60s).
+  //
+  // KNOWN RED (David's call, 2026-11-09): on the CURRENT build this assert is
+  // the sentinel for a REAL dataprep defect — the worker-kick path drops the
+  // primaries of 4/5 concepts and ALL bundle mirrors (wizard-shaped repos
+  // write both channels perfectly; the import/worker path loses them; the
+  // August runs on the pre-rebuild image were green). Filed as #1709
+  // (dataprep) + #1710 (doc-repo clock skew that muddied the diagnosis).
+  // The assert stays STRICT and this run legitimately carries ONE expected
+  // failure until #1709 lands.
   const REQUIRED_STAGES = ['System', 'Chunking', 'Labeling', 'Graph'];
   let bundleLogs = [];
   for (let i = 0; i < 20; i++) {
@@ -1211,12 +1458,12 @@ async function ingestPhase(db) {
       const cid = m ? m[1].replace(/\.md$/, '') : '(unknown)';
       (seen[cid] = seen[cid] || new Set()).add(l.stage);
     });
-    const complete = GOOD_FILES.map((f) => f.replace(/\.md$/, '')).every((id) => {
+    const complete = HAPPY_BUNDLE_CONCEPTS.every((id) => {
       const st = seen[id] || new Set();
       return REQUIRED_STAGES.every((s) => st.has(s));
     });
     if (complete) break;
-    await new Promise((r) => setTimeout(r, 3000));
+    await new Promise((r2) => setTimeout(r2, 3000));
   }
   const stagesByConcept = {};
   bundleLogs.forEach((l) => {
@@ -1225,12 +1472,25 @@ async function ingestPhase(db) {
     if (!stagesByConcept[cid]) stagesByConcept[cid] = new Set();
     stagesByConcept[cid].add(l.stage);
   });
-  const conceptFiles = GOOD_FILES.map((f) => f.replace(/\.md$/, ''));
   const allComplete =
-    conceptFiles.every((f) => {
+    HAPPY_BUNDLE_CONCEPTS.every((f) => {
       const stages = stagesByConcept[f] || new Set();
       return REQUIRED_STAGES.every((s) => stages.has(s));
-    }) && bundleLogs.length >= conceptFiles.length * REQUIRED_STAGES.length;
+    }) && bundleLogs.length >= HAPPY_BUNDLE_CONCEPTS.length * REQUIRED_STAGES.length;
+  if (!allComplete) {
+    // DIAGNOSTIC (run 13→15: the assert failed with {} — zero rows matched the
+    // bundle's file_id — with the manifest and author edges settled green).
+    // Dump what ingestion_log actually holds around this run. The rows carry NO
+    // repo_id (the earlier diag filtered l.repo_id and printed {} — that field
+    // does not exist on ingestion_log docs), so this dumps the newest rows'
+    // file_id keying — the drain's primaries land keyed by concept_id, the
+    // mirrors keyed by the bundle's file_id — plus the queried bundle id.
+    const logKeying = await aqlAll(
+      "FOR l IN ingestion_log SORT l.timestamp DESC LIMIT 400 COLLECT fid = l.file_id WITH COUNT INTO n SORT n DESC RETURN {file_id: fid, rows: n}"
+    );
+    console.log('  [diag] queried bundle file_id: ' + (bundleAfter && bundleAfter.file_id));
+    console.log('  [diag] newest ingestion_log file_id keying (any owner): ' + JSON.stringify(logKeying.slice(0, 12)));
+  }
   allComplete
     ? pass(
         'bundle ingestion log: ' +
@@ -1238,206 +1498,48 @@ async function ingestPhase(db) {
           ' entries on the bundle file — every stage (' +
           REQUIRED_STAGES.join('/') +
           ') logged for all ' +
-          conceptFiles.length +
+          HAPPY_BUNDLE_CONCEPTS.length +
           ' conforming concepts, each prefixed with its file name'
       )
     : fail(
-        'bundle ingestion log incomplete: ' +
+        'bundle ingestion log incomplete (KNOWN RED — dataprep drops the kick-path ' +
+          'log writes on this build; filed #1709, see also #1710): ' +
           JSON.stringify(Object.fromEntries(Object.entries(stagesByConcept).map(([k, v]) => [k, [...v]])))
       );
 
-  // ── (viii) re-ingest AFTER indexing — the 4e DEDUP rule fires LIVE ──
-  // Unchanged content + now-indexed ⇒ skipped_dedup, no new Pending docs.
-  // Called via the service module (in-container — immune to the 5-min user
-  // token TTL; the HTTP surface is asserted by the earlier zip ingest + 403).
-  const bundleFiles = fs
-    .readdirSync(BUNDLE_DIR)
-    .filter((f) => f.endsWith('.md'))
-    .sort();
-  const sadConcepts = bundleFiles.map((f) => {
-    const { data, content } = matter(fs.readFileSync(path.join(BUNDLE_DIR, f), 'utf8'));
-    return { path: f, frontmatter: data, body: content.trim() };
-  });
-  const ingestService = require('./services/ingest-service');
+  // ── re-ingest AFTER indexing — the 4e DEDUP rule fires LIVE (moved here
+  // from the sad repo: dedup skips UNCHANGED + INDEXED concepts, and only the
+  // happy repo ever reaches indexed — #1568). Unchanged content + now-indexed
+  // ⇒ skipped_dedup, no new Pending docs. Called via the service module
+  // (in-container — immune to the 5-min user token TTL; the HTTP surface is
+  // asserted by the earlier zip ingest + 403).
   const filesCountQuery =
     "RETURN LENGTH(FOR f IN files FILTER f.repo_id == '" + INGEST_REPO + "' AND f.is_bundle != true RETURN 1)";
   const filesBefore = (await aqlAll(filesCountQuery))[0];
   const r2 = await ingestService.ingestRepoConcepts(
     INGEST_REPO,
-    { concepts: sadConcepts, labels: SELECTED_KH_LABELS },
+    { concepts, labels: SELECTED_KH_LABELS },
     { sub: 'smoke-run', source_ip: null }
   );
-  r2.skipped_dedup === EXPECTED_CONCEPTS - 1 && r2.enqueued === 0
-    ? pass(
-        'DEDUP LIVE: re-ingest of unchanged+indexed concepts → skipped_dedup=' +
-          (EXPECTED_CONCEPTS - 1) +
-          ', enqueued=0'
-      )
+  r2.skipped_dedup === HAPPY_COUNT && r2.enqueued === 0
+    ? pass('DEDUP LIVE: re-ingest of unchanged+indexed concepts → skipped_dedup=' + HAPPY_COUNT + ', enqueued=0')
     : fail(
         'dedup summary: ' +
           JSON.stringify({ skipped_dedup: r2.skipped_dedup, enqueued: r2.enqueued, errors: r2.enqueue_errors })
       );
-  r2.created === 0 && r2.updated === EXPECTED_CONCEPTS
-    ? pass('re-ingest: meta rows updated in place (created=0, updated=' + EXPECTED_CONCEPTS + ' — no duplicates)')
+  r2.created === 0 && r2.updated === HAPPY_COUNT
+    ? pass('re-ingest: meta rows updated in place (created=0, updated=' + HAPPY_COUNT + ' — no duplicates)')
     : fail('re-ingest summary: ' + JSON.stringify({ created: r2.created, updated: r2.updated }));
   const metaPostDedup = await aqlAll(
     "FOR d IN okf_concepts_meta FILTER d.repo_id == '" + INGEST_REPO + "' RETURN KEEP(d, ['index_status'])"
   );
-  metaPostDedup.every((m) => m.index_status === 'indexed' || m.index_status === 'rejected')
-    ? pass('re-ingest: index_status stays indexed|rejected (writer protection — never downgraded by 4b)')
+  metaPostDedup.every((m) => m.index_status === 'indexed')
+    ? pass('re-ingest: index_status stays indexed (writer protection — never downgraded by 4b)')
     : fail('index_status downgraded after re-ingest: ' + JSON.stringify(metaPostDedup));
   const filesAfter = (await aqlAll(filesCountQuery))[0];
   filesAfter === filesBefore
     ? pass('re-ingest: ZERO new files docs (dedup enqueued nothing)')
     : fail('re-ingest created files docs: before=' + filesBefore + ' after=' + filesAfter);
-
-  // ── (ix) MINT v1 (Story 2.9.7 — ADR-031) ──
-  // In-container service call (the HTTP route's authz matrix is unit-tested;
-  // user tokens are expired by this point in the run).
-  const versionService = require('./services/version-service');
-  // The mint's PII gate requires the INGEST repo's repo-level scan complete —
-  // the orchestrator scans concepts (4d) but the repo marker is only set by
-  // an explicit repo-level scan pass (same call the control-plane phase makes
-  // for the scratch repo). Live-caught: mint refused 'pii_scan_status !=
-  // complete' with all concepts pii_state=clean.
-  await piiService.markRepoPiiScanned(INGEST_REPO);
-  // ── (ix-a) SAD-PATH PUBLISH GATE (WP-A / FR-25): this repo's bundle
-  // contains bad_concept (REJECTED + conformance issues) — mint MUST refuse.
-  // "No invalid concept reaches published."
-  let sadGateRefused = null;
-  try {
-    await versionService.mintVersion(
-      INGEST_REPO,
-      { trigger: 'publish', source_ref: 'smoke://sad/v1' },
-      { sub: 'smoke-run' }
-    );
-    fail('WP-A publish gate: sad-repo mint SUCCEEDED — the gate did not enforce');
-  } catch (e) {
-    sadGateRefused = e;
-    e.code === 'PUBLISH_GATE_BLOCKED' || /gate|conform|rejected|indexed/i.test(e.message)
-      ? pass('WP-A publish gate: sad-repo mint REFUSED (' + (e.code || e.message).toString().slice(0, 80) + ')')
-      : fail('sad-repo mint refused for the WRONG reason: ' + e.message.slice(0, 120));
-  }
-
-  // ── (ix-b) HAPPY PATH — a SECOND repo + the CLEAN bundle (requirement 11:
-  // happy + sad as SEPARATE repos and SEPARATE bundles so both results stay
-  // inspectable). All remaining lifecycle phases (dedup re-ingest, mint v1/v2,
-  // edges, clone, retraction) run against the HAPPY repo.
-  const repositoryServiceLate = require('./services/repository-service');
-  const HAPPY_NAME = 'Kenya Government Services Knowledge Base (smoke happy)';
-  const HAPPY_COUNT = 5; // the clean bundle's conforming concepts
-  // Re-run safety: remove a prior happy repo by name.
-  const priorHappy = await aqlAll(
-    "FOR r IN okf_repositories FILTER r.name == '" + HAPPY_NAME + "' RETURN KEEP(r, ['repo_id'])"
-  );
-  for (const ph of priorHappy) {
-    try {
-      await repositoryServiceLate.remove(ph.repo_id, { sub: 'smoke-run' });
-    } catch (e) {
-      /* best-effort */
-    }
-  }
-  const happyRepo = await repositoryServiceLate.create(
-    { name: HAPPY_NAME, domain: 'smoke', acl: { required_scopes: [] } },
-    { sub: 'smoke-run', source_ip: null }
-  );
-  // The SAD repo's id — captured BEFORE the reassignment so CLEANUP=full can
-  // remove it at the end (the (x) retraction phase below now targets the HAPPY
-  // repo; without this the sad repo's graph survived full-mode runs —
-  // live-caught 2026-08-25, runs 5+6).
-  const SAD_REPO = INGEST_REPO;
-  INGEST_REPO = happyRepo.repo_id;
-  OKF_GRAPH = happyRepo.graph_name;
-  pass('happy path: second repo created (' + INGEST_REPO + ' graph ' + OKF_GRAPH + ')');
-  const happyZipB64 = fs.readFileSync('/app/kenya-bundle-clean.zip').toString('base64');
-  const rh = await ingestService.ingestRepoConcepts(
-    INGEST_REPO,
-    { zip: happyZipB64, bundle_name: 'kenya-bundle-clean.zip', labels: SELECTED_KH_LABELS },
-    { sub: 'smoke-run', source_ip: null }
-  );
-  rh.total === 5 && rh.parsed === 5 && rh.rejected === 0 && rh.enqueued === 5
-    ? pass('happy ingest: 202-equivalent summary (total=5 parsed=5 rejected=0 enqueued=5)')
-    : fail(
-        'happy ingest summary: ' +
-          JSON.stringify({ total: rh.total, parsed: rh.parsed, rejected: rh.rejected, enqueued: rh.enqueued })
-      );
-  // Worker drains the happy repo's 5 concepts (settle-wait, same poll shape).
-  console.log('  happy drain: 5 concepts (WORKER-paced)...');
-  let happySettled = false;
-  for (let i = 0; i < 100 && !happySettled; i++) {
-    await new Promise((r) => setTimeout(r, 15000));
-    const rows = await aqlAll(
-      "FOR m IN okf_concepts_meta FILTER m.repo_id == '" + INGEST_REPO + "' RETURN KEEP(m, ['index_status'])"
-    );
-    happySettled = rows.length === 5 && rows.every((m) => m.index_status === 'indexed' || m.index_status === 'failed');
-  }
-  happySettled
-    ? pass('happy drain: all 5 concepts settled (worker + callback)')
-    : fail('happy drain: concepts did not settle in 25 min');
-  // Happy bundle state machine + log completeness (same asserts as the sad repo).
-  let happyBundle = null;
-  for (let i = 0; i < 20; i++) {
-    happyBundle = (
-      await aqlAll(
-        "FOR f IN files FILTER f.repo_id == '" +
-          INGEST_REPO +
-          "' AND f.is_bundle == true RETURN KEEP(f, ['file_id','dataprep'])"
-      )
-    )[0];
-    if (happyBundle && happyBundle.dataprep && happyBundle.dataprep.status === 'Ingested') break;
-    await new Promise((r) => setTimeout(r, 3000));
-  }
-  const happyBundleStatus = happyBundle && happyBundle.dataprep && happyBundle.dataprep.status;
-  happyBundleStatus === 'Ingested'
-    ? pass('happy bundle state machine: Pending → Ingesting → Ingested')
-    : fail('happy bundle state machine: expected Ingested, got "' + happyBundleStatus + '"');
-  bundleAfter = happyBundle; // the lifecycle + log-completeness asserts below read this
-  await piiService.markRepoPiiScanned(INGEST_REPO);
-  // Lifecycle-phase content comes from the CLEAN bundle (the sad bundle's
-  // concepts would inject bad_concept into the happy repo and trip the gate).
-  const happyBundleDir = '/app/kenya-bundle-clean';
-  let concepts = fs
-    .readdirSync(happyBundleDir)
-    .filter((f) => f.endsWith('.md'))
-    .sort()
-    .map((f) => {
-      const { data, content } = matter(fs.readFileSync(path.join(happyBundleDir, f), 'utf8'));
-      return { path: f, frontmatter: data, body: content.trim() };
-    });
-  const mint1 = await versionService.mintVersion(
-    INGEST_REPO,
-    { trigger: 'publish', source_ref: 'smoke://kenya-bundle/v1' },
-    { sub: 'smoke-run' }
-  );
-  mint1.bundle_version === 1 && mint1.okf_tag === 'okf:v1'
-    ? pass('mint v1: ' + mint1.okf_tag + ' (' + mint1.concept_count + ' concepts, trigger=publish)')
-    : fail('mint v1: ' + JSON.stringify(mint1));
-  const repoAfterMint = await repos.document(INGEST_REPO);
-  repoAfterMint.version === 1 && repoAfterMint.okf_tag === 'okf:v1'
-    ? pass('mint v1: repo doc version=1 + okf_tag=okf:v1 stamped')
-    : fail(
-        'repo doc after mint: ' + JSON.stringify({ version: repoAfterMint.version, okf_tag: repoAfterMint.okf_tag })
-      );
-  const manifest1 = await versionService.getVersion(INGEST_REPO, 1);
-  const metaHashes = await aqlAll(
-    "FOR m IN okf_concepts_meta FILTER m.repo_id == '" +
-      INGEST_REPO +
-      "' SORT m.concept_id RETURN KEEP(m, ['concept_id','content_hash'])"
-  );
-  manifest1.concept_count === HAPPY_COUNT &&
-  manifest1.concepts.every(
-    (c, i) => c.concept_id === metaHashes[i].concept_id && c.content_hash === metaHashes[i].content_hash
-  )
-    ? pass('manifest v1: all ' + HAPPY_COUNT + ' concepts snapshotted with the STORED canonical hashes')
-    : fail(
-        'manifest v1 mismatch: ' +
-          JSON.stringify(manifest1.concepts.slice(0, 2)) +
-          ' vs ' +
-          JSON.stringify(metaHashes.slice(0, 2))
-      );
-  manifest1.okf_tag === 'okf:v1' && manifest1.trigger === 'publish' && typeof manifest1.minted_at === 'string'
-    ? pass('manifest v1: okf:v1 + trigger + minted_at recorded')
-    : fail('manifest v1 metadata: ' + JSON.stringify(manifest1));
 
   // ── (x) MODIFIED re-ingest → version threading onto meta rows + CHUNKS ──
   // Change ONE concept (service_directory): the other 5 dedup-skip (unchanged +
@@ -1474,11 +1576,35 @@ async function ingestPhase(db) {
   versionedMetaRow && versionedMetaRow.bundle_version === 1
     ? pass('version threading: the re-written meta row carries bundle_version=1 (4b leg)')
     : fail('versioned meta row: ' + JSON.stringify(versionedMetaRow));
+  // RE-ARM for the modified concept's re-drain (#1568, live-caught runs 4+5):
+  // drain COMPLETION clears rag_drain_active ("the drain served its purpose" —
+  // lifecycle-service :1044), and the HTTP ingest transition CANNOT re-arm a
+  // serving repo — its idempotent guard short-circuits first
+  // (ingested_at && ingested_version === version → { already: true }, :1121).
+  // The product's own re-drain path is the RE-INGEST arm: armRagDrain called
+  // DIRECTLY with reason 're-ingest' (the exported single implementation the
+  // lifecycle's re-ingest function itself uses — "a requeue without an arm
+  // leaves the rows invisible FOREVER", :495).
+  const lifecycleService = require('./services/lifecycle-service');
+  const rearmRepo = await repos.document(INGEST_REPO);
+  await lifecycleService.armRagDrain(db, INGEST_REPO, rearmRepo, { sub: 'smoke-run' }, { reason: 're-ingest' });
+  pass(
+    're-arm: armRagDrain(reason re-ingest) re-armed the drain for the modified concept (the serving repo short-circuits the HTTP ingest guard)'
+  );
   // Settle-wait: the modified concept goes parsed (4b re-upsert) → indexed
   // (worker + callback). Poll until its meta shows indexed with the NEW
   // content (the amended body changed the canonical hash).
+  // THE CEILING IS THE CLAIM WINDOW (#1568, live-caught runs 6-8): a parsed
+  // row carries worker_claimed_at from the FIRST drain (the completion paths
+  // keep the stamp), and the claim filter refuses a row until
+  // OKF_INGEST_WORKER_JOB_TIMEOUT_MS (default 30 MIN — David's 2026-09-15
+  // ruling: dataprep's per-doc retry path legitimately takes 9-13 min) has
+  // elapsed since the stamp. The product's own requeue path
+  // (requeueFailedForReingest) covers index_status='failed' rows only — a
+  // parsed row re-drains by waiting the window out. The poll therefore runs
+  // 40 min: the window plus drain time.
   let versionedSettled = false;
-  for (let i = 0; i < 100 && !versionedSettled; i++) {
+  for (let i = 0; i < 160 && !versionedSettled; i++) {
     await new Promise((r) => setTimeout(r, 15000));
     const row = (
       await aqlAll(
@@ -1491,7 +1617,26 @@ async function ingestPhase(db) {
   }
   versionedSettled
     ? pass('version threading: worker + callback re-indexed the modified concept (new content_hash indexed)')
-    : fail('versioned concept did not re-index with the amended hash in 25 min');
+    : fail(
+        'versioned concept did not re-index in 40 min — precondition check: after a completed drain ' +
+          'rag_drain_active is CLEARED and the HTTP ingest idempotent-guard short-circuits a serving repo ' +
+          "(:1121 already:true) — the re-drain needs armRagDrain(reason re-ingest), the product's own " +
+          're-ingest path (#1568)'
+      );
+  // THE SETTLE RACE (live-caught run 10): the worker indexes the row BEFORE the
+  // settle clears rag_drain_active — a poll that breaks on 'indexed' can hand a
+  // still-armed repo to mint v2, which refuses writes while a drain is in
+  // flight ("has a RAG ingestion in progress"). The drain is over when the ARM
+  // is gone, not when the last row indexes — wait for the flag itself.
+  let rearmSettled = false;
+  for (let i = 0; i < 60 && !rearmSettled; i++) {
+    const armedRepo = await repos.document(INGEST_REPO);
+    rearmSettled = !!armedRepo && armedRepo.rag_drain_active !== true;
+    if (!rearmSettled) await new Promise((r4) => setTimeout(r4, 2000));
+  }
+  rearmSettled
+    ? pass('re-drain settled: rag_drain_active cleared (writes unfrozen for mint v2)')
+    : fail('re-drain did not settle — rag_drain_active still armed 120s after the last row indexed');
   // CHUNK version stamps (content-only: chunks key on metadata.concept_id).
   const versionedChunks = (
     await aqlAll(
@@ -1633,13 +1778,26 @@ async function ingestPhase(db) {
     // WP-C: only the bundle zip is a files doc and remove() → retractRepoGraph
     // DROPS the graph collections + cleans the files/meta/versions rows — no
     // per-concept doc-repo retract exists (or is needed) for a clone.
+    // Since the clone now WALKS THE LIFECYCLE (#1568), a prior-run clone sits
+    // in published/retracted, not draft — remove() refuses it, so retract
+    // first (retract drops the graph), then delete. The AQL purge below is
+    // the final hammer; without the retract its graph would survive as an
+    // orphan and the zero-artifacts assert would die at cleanup.
     try {
       await repositoryService.remove(pc.repo_id, { sub: 'smoke-run' });
     } catch (e) {
-      /* best-effort — already removed */
+      try {
+        // LATE-PHASE (token long expired) — the service module, not HTTP.
+        await lifecycleService.transition(pc.repo_id, 'retract', { sub: 'smoke-run' });
+        await repositoryService.remove(pc.repo_id, { sub: 'smoke-run' });
+      } catch (e2) {
+        console.log('  cleanup: prior clone ' + pc.repo_id + ' service remove failed (' + e2.message + ') — AQL purge');
+      }
     }
     await aqlAll("FOR m IN okf_concepts_meta FILTER m.repo_id == '" + pc.repo_id + "' REMOVE m IN okf_concepts_meta");
     await aqlAll("FOR v IN okf_versions FILTER v.repo_id == '" + pc.repo_id + "' REMOVE v IN okf_versions");
+    // The manifest too (see the prior-happy purge — live-caught run 11).
+    await aqlAll("FOR d IN okf_bundle_manifest FILTER d._key == '" + pc.repo_id + "' REMOVE d IN okf_bundle_manifest");
     // FILTER-based (not by-key): remove() already deletes the registry entry —
     // a by-key REMOVE on the missing doc throws 'document not found'.
     await aqlAll("FOR r IN okf_repositories FILTER r.repo_id == '" + pc.repo_id + "' REMOVE r IN okf_repositories");
@@ -1656,8 +1814,16 @@ async function ingestPhase(db) {
     { sub: 'smoke-run', source_ip: null }
   );
   const CLONE_ID = clone.repo_id;
-  const CLONE_GRAPH = clone.graph_name || 'OKF_' + CLONE_ID;
-  clone.repo_id !== INGEST_REPO && clone.graph_name === CLONE_GRAPH && clone.lifecycle_state === 'draft'
+  // The clone's graph name comes from the product's authority too — the
+  // registry's graph_name field is the legacy OKF_{repo_id} anchor, not the
+  // live graph (same trap the happy repo's stamp just proved live, #1568).
+  const CLONE_GRAPH = workingGraphName(
+    (await aqlAll("FOR r IN okf_repositories FILTER r.repo_id == '" + CLONE_ID + "' RETURN r"))[0]
+  );
+  clone.repo_id !== INGEST_REPO &&
+  typeof CLONE_GRAPH === 'string' &&
+  CLONE_GRAPH.startsWith('OKF_') &&
+  clone.lifecycle_state === 'draft'
     ? pass('clone: new repo_id + ' + CLONE_GRAPH + ' graph + lifecycle_state=draft (unique registry entry)')
     : fail('clone registry: ' + JSON.stringify(clone));
   clone.cloned_from && clone.cloned_from.repo_id === INGEST_REPO && clone.cloned_from.version === 2
@@ -1717,17 +1883,68 @@ async function ingestPhase(db) {
   );
   rc.skipped_dedup === HAPPY_COUNT - 1 && rc.enqueued === 1
     ? pass(
-        'clone re-ingest: ' +
-          (EXPECTED_CONCEPTS - 1) +
-          ' dedup-skipped (unchanged+indexed), 1 enqueued (modified concept)'
+        'clone re-ingest: ' + (HAPPY_COUNT - 1) + ' dedup-skipped (unchanged+indexed), 1 enqueued (modified concept)'
       )
     : fail(
         'clone re-ingest summary: ' +
           JSON.stringify({ skipped: rc.skipped_dedup, enqueued: rc.enqueued, errors: rc.enqueue_errors })
       );
+  // DIAGNOSTIC (run 13's live evidence: the clone's ingest arm counted FIVE
+  // parsed rows — someone re-parses the copied 'indexed' rows between the
+  // copy and the drain; the resulting clone graph is COMPLETE, which is the
+  // born-right serving contract, but the WRITER is unnamed). These dumps pin
+  // the row state at each stage so the next run names it.
+  console.log('  [diag] clone rows after re-ingest:');
+  const diagRows1 = await aqlAll(
+    "FOR m IN okf_concepts_meta FILTER m.repo_id == '" +
+      CLONE_ID +
+      "' SORT m.concept_id RETURN KEEP(m, ['concept_id','index_status','graph_name'])"
+  );
+  diagRows1.forEach((m) => console.log('    ' + m.concept_id + ': ' + m.index_status + ' @ ' + m.graph_name));
 
   // CONTENT-ONLY (WP-C): the clone's modified concept drains via its META row
-  // (no per-concept files doc). Settle-wait for index_status terminal.
+  // (no per-concept files doc) — but ONLY after the clone walks the lifecycle
+  // (#1568): a clone is born draft, and a draft repo's rows are invisible to
+  // the worker (rag_drain_active is written solely by the lifecycle 'ingest'
+  // transition). The walk mints the clone's own v1; the isolation proof below
+  // stays intact.
+  await piiService.markRepoPiiScanned(CLONE_ID);
+  // The clone's walk fires ~40 min into the run — far past the 5-min user-token
+  // TTL (the header's documented pitfall, live-caught run 9: four 401s). The
+  // HTTP authz matrix is unit-tested; the in-container pattern is the service
+  // module — the SAME call shape ingestRepoConcepts/mintVersion/remove use.
+  // A refusal throws LifecycleError; caught and failed honestly.
+  const cloneStep = async (action) => {
+    try {
+      return { ok: true, body: await lifecycleService.transition(CLONE_ID, action, { sub: 'smoke-run' }) };
+    } catch (e) {
+      return { ok: false, error: e.code || e.message };
+    }
+  };
+  let rc2 = await cloneStep('submit');
+  rc2.ok && rc2.body.lifecycle_state === 'review'
+    ? pass('clone lifecycle: submit → review')
+    : fail('clone lifecycle submit → ' + JSON.stringify(rc2.error || rc2.body).slice(0, 200));
+  rc2 = await cloneStep('approve');
+  rc2.ok && rc2.body.lifecycle_state === 'approve'
+    ? pass('clone lifecycle: approve → approve')
+    : fail('clone lifecycle approve → ' + JSON.stringify(rc2.error || rc2.body).slice(0, 200));
+  rc2 = await cloneStep('publish');
+  rc2.ok && rc2.body.bundle_version === 1
+    ? pass("clone lifecycle: publish → the clone's own v1 minted")
+    : fail('clone lifecycle publish → ' + JSON.stringify(rc2.error || rc2.body).slice(0, 300));
+  console.log('  [diag] clone rows after publish (who re-parsed?):');
+  const diagRows2 = await aqlAll(
+    "FOR m IN okf_concepts_meta FILTER m.repo_id == '" +
+      CLONE_ID +
+      "' SORT m.concept_id RETURN KEEP(m, ['concept_id','index_status'])"
+  );
+  diagRows2.forEach((m) => console.log('    ' + m.concept_id + ': ' + m.index_status));
+  rc2 = await cloneStep('ingest');
+  rc2.ok
+    ? pass('clone lifecycle: ingest (drain armed)')
+    : fail('clone lifecycle ingest → ' + JSON.stringify(rc2.error || rc2.body).slice(0, 300));
+  // Settle-wait for index_status terminal.
   let cStatus = null;
   for (let i = 0; i < 100; i++) {
     await new Promise((r) => setTimeout(r, 15000));
@@ -1753,7 +1970,12 @@ async function ingestPhase(db) {
     : fail('clone graph_name: ' + JSON.stringify(cloneGraphRow));
   cStatus === 'indexed'
     ? pass('clone: worker drained the modified concept to indexed')
-    : fail('clone drain ended "' + cStatus + '"');
+    : fail(
+        'clone drain ended "' +
+          cStatus +
+          '" — precondition check: the clone must be PUBLISHED with the lifecycle ingest transition armed ' +
+          '(rag_drain_active) before its rows are claimable (#1568)'
+      );
 
   // Physical isolation: the modified concept's chunks in the CLONE graph ONLY,
   // and the SOURCE's chunks + edges are UNCHANGED (the original is never touched).
@@ -1802,13 +2024,39 @@ async function ingestPhase(db) {
       );
   const cloneGraphTotal =
     (await aqlAll('FOR c IN `' + CLONE_GRAPH + '_SOURCE` COLLECT WITH COUNT INTO n RETURN n'))[0] || 0;
-  cloneGraphTotal === (cloneChunks || 0)
+  // THE BORN-RIGHT SERVING CONTRACT (live-caught run 13: the clone's ingest arm
+  // counted FIVE parsed rows and its graph materialized ALL concepts' chunks):
+  // a clone is not a metadata-only stub — the publish/drain rebuilds the WHOLE
+  // corpus into the clone's own graph, because the clone must SERVE (the
+  // graph-retract contract: "re-ingest rebuilds the graph born-right from the
+  // meta rows"). The old assert (only the modified concept materializes)
+  // described the pre-W9 serving model. What must hold now: EVERY cloned
+  // concept has chunks in the clone graph, the modified concept included, and
+  // the SOURCE's physical state is unchanged (asserted above).
+  const perConceptChunks = await aqlAll(
+    'FOR c IN `' + CLONE_GRAPH + '_SOURCE` COLLECT cid = c.concept_id WITH COUNT INTO n RETURN {cid, n}'
+  );
+  const conceptsWithChunks = perConceptChunks.filter((r) => r.n > 0).map((r) => r.cid);
+  const missingConcepts = HAPPY_BUNDLE_CONCEPTS.filter((c) => !conceptsWithChunks.includes(c));
+  missingConcepts.length === 0 && cloneGraphTotal >= HAPPY_COUNT
     ? pass(
-        'clone: exactly the modified concept materialized in the clone graph (' +
+        'clone: BORN-RIGHT serving — the clone graph materialized the FULL corpus (' +
           cloneGraphTotal +
-          ' chunks; the other 5 metadata-only until curated)'
+          ' chunks across ' +
+          conceptsWithChunks.length +
+          ' concepts in ' +
+          CLONE_GRAPH +
+          '_SOURCE; a clone serves, it does not stub)'
       )
-    : fail('clone graph total: ' + cloneGraphTotal + ' != ' + cloneChunks);
+    : fail(
+        'clone graph incomplete: ' +
+          cloneGraphTotal +
+          ' chunks, missing concepts: ' +
+          JSON.stringify(missingConcepts) +
+          ' (per-concept: ' +
+          JSON.stringify(perConceptChunks) +
+          ')'
+      );
 
   // Cleanup (CLEANUP=full only): remove the clone via the okf-server repo-delete
   // CRUD (remove() → retractRepoGraph drops the clone's graph + meta + files +
@@ -1816,8 +2064,20 @@ async function ingestPhase(db) {
   // contract (the next run's clone cleanup finds it by name). With CLEANUP=none
   // the clone PERSISTS for inspection.
   if (CLEANUP === 'full') {
+    // The clone WALKED the lifecycle (#1568) — it is published/ingested, and
+    // remove() refuses that. Retract first (drops the graph), then delete.
+    // LATE-PHASE (token long expired) — the service module, not HTTP.
+    let cret;
+    try {
+      cret = await lifecycleService.transition(CLONE_ID, 'retract', { sub: 'smoke-run' });
+    } catch (e) {
+      cret = { lifecycle_state: null, error: e.code || e.message };
+    }
+    if (!(cret && cret.lifecycle_state === 'retracted')) {
+      console.log('  cleanup: clone retract -> ' + JSON.stringify(cret.error || cret).slice(0, 120));
+    }
     await repositoryService.remove(CLONE_ID, { sub: 'smoke-run' });
-    pass('clone: cleanup — clone removed, its ' + CLONE_GRAPH + ' graph dropped (CRUD repo-delete)');
+    pass('clone: cleanup — clone retracted + removed, its ' + CLONE_GRAPH + ' graph dropped (CRUD repo-delete)');
   } else {
     console.log('  NOTE: clone ' + CLONE_ID + ' LEFT IN PLACE (CLEANUP=none — run OKF_SMOKE_CLEANUP=only to remove)');
   }
@@ -1854,8 +2114,9 @@ async function ingestPhase(db) {
   // chunks are NOT keyed by file_id (no per-concept files doc) — they're keyed
   // by the concept's markdown via the worker. Chunks carry `concept_id` in
   // metadata (citation provenance — Story 4.8-amend).
-  // The OKF graph name is hyphenated (OKF_<uuid>) — AQL needs backtick-quoted
-  // identifiers for it (live-caught: unquoted → lexer error at the first '-').
+  // The OKF graph name is hyphenated (OKF_<slug>_v<N>) — AQL needs
+  // backtick-quoted identifiers for it (live-caught: unquoted → lexer error
+  // at the first '-').
   const HAPPY_CONCEPTS = GOOD_FILES.map((f) => f.replace(/\.md$/, '')); // concept ids are file names MINUS .md
   const bChunkRows = await aqlAll(
     'FOR c IN `' +
@@ -1934,6 +2195,24 @@ async function ingestPhase(db) {
     // remove() flow (the service function — the HTTP DELETE route's authz is
     // unit-tested; the user token has expired by this point in the run).
     // (repositoryService already required by the clone phase above.)
+    // The happy repo is SERVING now — the drain completing is the whole point
+    // of the #1568 re-anchor — and delete on a serving repo is
+    // INGESTED_DELETE_BLOCKED (R5). The state machine's exit is retract
+    // (W7: mark-only for the bundle zips, the graph drops), then the delete
+    // cascade removes the rest. The lifecycle harness proves this exact pair.
+    // LATE-PHASE (token long expired) — the service module, not HTTP. A
+    // refusal throws LifecycleError; caught and failed honestly.
+    let retr;
+    try {
+      retr = await lifecycleService.transition(INGEST_REPO, 'retract', { sub: 'smoke-run' });
+    } catch (e) {
+      retr = { lifecycle_state: null, error: e.code || e.message };
+    }
+    retr && retr.lifecycle_state === 'retracted'
+      ? pass(
+          'bundle retract: lifecycle retract from serving → retracted (W7 retention: the version bundle zips stay, marked Retracted)'
+        )
+      : fail('bundle retract: lifecycle retract → ' + JSON.stringify(retr.error || retr).slice(0, 200));
     const delResult = await repositoryService.remove(INGEST_REPO, { sub: 'smoke-run' });
     delResult && delResult.deleted_at && delResult.status === 'deleted'
       ? pass('bundle retract: repo-delete CRUD ran (delete service cleans everything)')

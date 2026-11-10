@@ -579,16 +579,27 @@ describe('keycloakAuthService', () => {
       expect(mockJwtVerify).toHaveBeenCalledTimes(1);
     });
 
+    // Spies on the REAL shared/lib winston logger — the virtual
+    // '../shared-lib' mock covers only the barrel, so the verifier's log
+    // lines are visible here and nowhere else. Silences the transport and
+    // restores the spy even when the assertions fail, so a failing test
+    // cannot leak the mock into its neighbours.
+    function captureWarns() {
+      const loggerModule = require('../../shared/lib/logger');
+      const warnSpy = jest.spyOn(loggerModule.logger, 'warn').mockImplementation(() => {});
+      return {
+        lines: () => warnSpy.mock.calls.map(([msg]) => String(msg)).join('\n'),
+        restore: () => warnSpy.mockRestore()
+      };
+    }
+
     it('logs the cause of a rejection, and neither the token nor key material', async () => {
       // Without the cause, every distinct failure (tampered signature,
       // unknown key id, ambiguous key set, wrong algorithm) reaches the
       // operator's log as the same 'Token verification failed'. The line
       // must name the cause — and carry neither the token nor any key
-      // material. The service logs through the REAL shared/lib winston
-      // logger (the virtual '../shared-lib' mock covers only the barrel),
-      // so spy there.
-      const loggerModule = require('../../shared/lib/logger');
-      const warnSpy = jest.spyOn(loggerModule.logger, 'warn').mockImplementation(() => {});
+      // material.
+      const warns = captureWarns();
       mockJwtVerify.mockRejectedValue(unknownKidError());
       // exp: undefined → the encoded payload carries NO exp claim, so the
       // token is not a rotation candidate and the rejection is the plain one.
@@ -599,12 +610,12 @@ describe('keycloakAuthService', () => {
           code: 'TOKEN_INVALID'
         });
 
-        const logged = warnSpy.mock.calls.map(([msg]) => String(msg)).join('\n');
+        const logged = warns.lines();
         expect(logged).toContain('JWKSNoMatchingKey');
         expect(logged).not.toContain(token);
         expect(logged).not.toContain('BEGIN');
       } finally {
-        warnSpy.mockRestore();
+        warns.restore();
       }
     });
 
@@ -613,8 +624,7 @@ describe('keycloakAuthService', () => {
       // up by the NEXT refresh. Without that in the log, a burst of 401s
       // around a key rotation is indistinguishable from a burst of junk
       // tokens.
-      const loggerModule = require('../../shared/lib/logger');
-      const warnSpy = jest.spyOn(loggerModule.logger, 'warn').mockImplementation(() => {});
+      const warns = captureWarns();
       mockJwtVerify.mockRejectedValue(unknownKidError());
       const token = generateMockJwtString(mockJwtPayload);
 
@@ -628,11 +638,11 @@ describe('keycloakAuthService', () => {
           code: 'TOKEN_INVALID'
         });
 
-        const logged = warnSpy.mock.calls.map(([msg]) => String(msg)).join('\n');
+        const logged = warns.lines();
         expect(logged).toContain('key-set refresh floored');
         expect(logged).not.toContain(token);
       } finally {
-        warnSpy.mockRestore();
+        warns.restore();
       }
     });
 

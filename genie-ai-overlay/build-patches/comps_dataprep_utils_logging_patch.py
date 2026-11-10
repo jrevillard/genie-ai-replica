@@ -109,8 +109,19 @@ SITES = [
 # call and must not abort the build as a phantom upstream print. A file
 # that does not parse cannot be patched safely either: the SyntaxError
 # becomes the same fail-loud guard message as any other drift.
-def _print_call_lines(source: str, path: Path) -> list[int]:
-    """Line numbers of the `print(...)` / `builtins.print(...)` calls in *source*."""
+def _parse(source: str, path: Path) -> ast.Module:
+    """Parse *source*, turning a SyntaxError into the fail-loud guard convention."""
+    try:
+        return ast.parse(source)
+    except SyntaxError as exc:
+        raise SystemExit(
+            f"ASSERT-ON-PATCH GUARD FAILED: {path} does not parse (line {exc.lineno}): {exc.msg} — "
+            f"upstream shipped a file the patcher cannot safely rewrite."
+        ) from exc
+
+
+def _print_call_lines(tree: ast.Module) -> list[int]:
+    """Line numbers of the `print(...)` / `builtins.print(...)` calls in *tree*."""
 
     def _is_print_reference(func: ast.expr) -> bool:
         if isinstance(func, ast.Name):
@@ -122,18 +133,12 @@ def _print_call_lines(source: str, path: Path) -> list[int]:
             and func.value.id == "builtins"
         )
 
-    try:
-        tree = ast.parse(source)
-    except SyntaxError as exc:
-        raise SystemExit(
-            f"ASSERT-ON-PATCH GUARD FAILED: {path} does not parse (line {exc.lineno}): {exc.msg} — "
-            f"upstream shipped a file the patcher cannot safely rewrite."
-        ) from exc
     return [node.lineno for node in ast.walk(tree) if isinstance(node, ast.Call) and _is_print_reference(node.func)]
 
 
 def target_path() -> Path:
-    """The vendored utils.py in the image; argv[1] overrides it for tests."""
+    """The vendored utils.py in the image; argv[1] overrides it for a manual run
+    against a different target (the tests call apply_patch() with explicit paths)."""
     if len(sys.argv) > 1:
         return Path(sys.argv[1])
     return DEFAULT_TARGET
@@ -156,6 +161,7 @@ def apply_patch(path: Path) -> str:
         raise SystemExit(f"ASSERT-ON-PATCH GUARD FAILED: {path} does not exist")
 
     text = _read(path)
+    tree = _parse(text, path)
     # The rewrite targets the module's `logger` name AND the wiring contract:
     # the repo's genieai_dataprep_utils.py wires the logger NAME
     # "prepare_doc_util" into the trace + JSON envelope, so an upstream
@@ -164,11 +170,23 @@ def apply_patch(path: Path) -> str:
     # first rewritten call; a renamed name string leaves the rewritten
     # records wired to nothing (severity Unspecified again), with every
     # site still matching and the build passing. Anchor the rewrite on the
-    # full assignment at MODULE level (utils.py:50): the rewritten call
-    # sites are module-level functions, so an assignment inside a helper
-    # would NameError on the first rewritten call even though the text
-    # matched.
-    if not re.search(r'^logger\s*=\s*CustomLogger\("prepare_doc_util"\)', text, re.MULTILINE):
+    # actual module-level statement (utils.py:50), checked on the AST body —
+    # a column-0 text match could also be satisfied by the same line sitting
+    # inside a docstring, while the rewritten call sites (module-level
+    # functions) would NameError on the real assignment being gone.
+    has_wired_assignment = any(
+        isinstance(node, ast.Assign)
+        and isinstance(node.targets[0], ast.Name)
+        and node.targets[0].id == "logger"
+        and isinstance(node.value, ast.Call)
+        and isinstance(node.value.func, ast.Name)
+        and node.value.func.id == "CustomLogger"
+        and node.value.args
+        and isinstance(node.value.args[0], ast.Constant)
+        and node.value.args[0].value == "prepare_doc_util"
+        for node in tree.body
+    )
+    if not has_wired_assignment:
         raise SystemExit(
             f'ASSERT-ON-PATCH GUARD FAILED: no module-level `logger = CustomLogger("prepare_doc_util")` found '
             f"in {path} — "
@@ -200,7 +218,7 @@ def apply_patch(path: Path) -> str:
         text = pattern.sub(lambda m, call=patched_call: f"{m.group('indent')}{call}{m.group('eol')}", text)
 
     if patched_call_counts == len(SITES):
-        leftovers = _print_call_lines(text, path)
+        leftovers = _print_call_lines(tree)
         if leftovers:
             raise SystemExit(
                 f"ASSERT-ON-PATCH GUARD FAILED: all known sites are logger calls but unexpected `print(` "
@@ -221,7 +239,7 @@ def apply_patch(path: Path) -> str:
     # diagnostic: name the surviving print and the remedy, like every other
     # guard here.
     post = _read(path)
-    leftovers = _print_call_lines(post, path)
+    leftovers = _print_call_lines(_parse(post, path))
     if leftovers:
         raise SystemExit(
             f"ASSERT-ON-PATCH GUARD FAILED: an unexpected `print(` call survives at "

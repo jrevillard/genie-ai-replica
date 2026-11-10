@@ -291,7 +291,9 @@ sys.modules.setdefault("docling.document_converter", MagicMock())
 # module tests/test_dataprep_logging.py imports through `dataprep.`).
 from dataprep.genieai_dataprep_utils import DOCLING_SUPPORTED_EXTENSIONS as _real_docling_extensions
 
-sys.modules["comps.dataprep.src.genieai_dataprep_utils"].DOCLING_SUPPORTED_EXTENSIONS = _real_docling_extensions
+sys.modules.setdefault(
+    "comps.dataprep.src.genieai_dataprep_utils", MagicMock()
+).DOCLING_SUPPORTED_EXTENSIONS = _real_docling_extensions
 
 
 # ---------------------------------------------------------------------------

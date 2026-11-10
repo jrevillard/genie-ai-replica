@@ -3858,13 +3858,15 @@ describe('the jest worker-memory cap contract (#1419)', () => {
   // #1676: the matcher's vocabulary above is the npm/npx house spelling.
   // Any OTHER command that looks like a test runner — mentions jest, or is
   // a package-manager test spelling (`npm|yarn|pnpm test` or the `run
-  // test` long form, bare or with a variant suffix) — must either match
-  // the vocabulary or belong to the pinned non-invocation list: an exotic
+  // test` long form, bare or with a variant suffix, with npm flags such
+  // as --prefix/--workspace in between) — must either match the
+  // vocabulary or belong to the pinned non-invocation list: an exotic
   // spelling (`npm exec -- jest`, `yarn jest`, `./node_modules/.bin/jest`)
   // then fails this suite and forces the matcher (or a reasoned
   // exemption) to grow, instead of running uncapped with a fully green
   // contract suite.
-  const TEST_RUNNER_LOOKING = /\bjest\b|(^|\s)(npm|yarn|pnpm) (test|run test)\b/;
+  const TEST_RUNNER_LOOKING =
+    /\bjest\b|(^|\s)(npm|yarn|pnpm)(( +--?[\w-]+)(=[^\s]+)?( +[^-\s][^\s]*)?)* +(test|run test)\b/;
   // A command that merely READS a jest-produced report is not an
   // invocation: it runs node, not jest. The predicate is pinned to the
   // report reader of test:backend-arango — a new jest-touching node -e
@@ -3877,8 +3879,12 @@ describe('the jest worker-memory cap contract (#1419)', () => {
 
   test('every test-runner-looking CI command is matched or pinned (#1676)', () => {
     const looking = commandsOf(ciBlocks()).filter((cmd) => TEST_RUNNER_LOOKING.test(cmd));
-    // The guard must SEE the class it protects: the five capped invocations
-    // all look like test runners.
+    // The guard must SEE the class it protects: today's population is the
+    // four materialized template lines, the arango npx jest line,
+    // config:validate's two lines, and the pinned reader (~8 commands).
+    // The floor guards catastrophic extraction breakage, not per-line
+    // drift — individual lines are pinned by the owner-set and exempt-jobs
+    // inventories above.
     expect(looking.length).toBeGreaterThanOrEqual(5);
     // Nothing outside the matcher's vocabulary except the pinned reader.
     expect(looking.filter((cmd) => !JEST_INVOCATION.test(cmd) && !isJestReportReader(cmd))).toEqual([]);
@@ -3895,6 +3901,8 @@ describe('the jest worker-memory cap contract (#1419)', () => {
       'yarn run test',
       'pnpm test',
       'pnpm run test',
+      'npm --prefix components/okf-server test',
+      'npm --workspace pkg run test',
       './node_modules/.bin/jest --coverage'
     ]) {
       expect(TEST_RUNNER_LOOKING.test(cmd)).toBe(true);

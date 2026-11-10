@@ -175,17 +175,24 @@ def apply_patch(path: Path) -> str:
             )
         return "already-patched"
 
-    # Compile the edited source BEFORE writing it, so a botched edit can
-    # never reach disk.
+    # Compile the edited source BEFORE writing it, so a syntactically botched
+    # edit can never reach disk.
     compile(text, str(path), "exec")
     _write(path, text)
     # Re-read: the file on disk is the artefact that ships, so verify THAT —
     # this scan also catches a print the table does not know (same failure
     # as the already-patched branch's self-check, which returns before any
-    # write and must therefore test itself).
+    # write and must therefore test itself). A failed build discards the
+    # Docker layer, so this message is the operator's only diagnostic: name
+    # the surviving print and the remedy, like every other guard here.
     post = _read(path)
-    if ANY_PRINT_RE.search(post):
-        raise SystemExit(f"ASSERT-ON-PATCH GUARD FAILED: post-write verification failed for {path}")
+    leftover = ANY_PRINT_RE.search(post)
+    if leftover:
+        line = post[: leftover.start()].count("\n") + 1
+        raise SystemExit(
+            f"ASSERT-ON-PATCH GUARD FAILED: an unexpected `print(` survives at {path}:{line} after patching — "
+            f"upstream grew a print the table does not know; add it to the site table."
+        )
     return "patched"
 
 

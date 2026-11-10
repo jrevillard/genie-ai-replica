@@ -226,7 +226,12 @@ main {
     box-shadow 160ms ease;
 }
 :root body .analytics-section:hover {
-  border-color: rgba(76, 175, 80, 0.35);
+  /* T1: was a literal green (rgba(76,175,80,…)) that ignored --brand, the
+   * status tokens and every deployment flavour — now the accent, faded.
+   * The plain-var declaration comes first: an engine without color-mix()
+   * drops the second and keeps this (review F9). */
+  border-color: var(--accent-muted);
+  border-color: color-mix(in srgb, var(--accent) 35%, transparent);
   transform: translateY(-1px);
   box-shadow: var(--shadow-md);
 }

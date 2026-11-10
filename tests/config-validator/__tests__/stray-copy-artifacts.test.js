@@ -30,7 +30,6 @@ const ROOT = path.resolve(__dirname, '../../..');
 // ignore rules and the detector must both recognise.
 const SHAPES = [
   {
-    family: 'Windows / VS Code',
     marker: ' - Copy',
     glob: '**/* - Copy*',
     samples: [
@@ -40,17 +39,27 @@ const SHAPES = [
     ]
   },
   {
-    family: 'macOS Finder',
     marker: ' copy',
     glob: '**/* copy*',
     samples: ['docs/readme copy', 'docs/readme copy.md']
   },
   {
-    family: 'GNOME Nautilus',
     marker: '(copy)',
     glob: '**/* (copy)*',
     samples: ['docs/readme (copy)', 'docs/readme (copy).md']
   }
+];
+
+// Names that carry no copy marker and must stay stageable — the two English
+// words a copy marker could hide in ("copying", "COPYING") and the browser
+// downloads that carry a number instead of a marker.
+const NOT_COPIES = [
+  'genie-ai-overlay/chatqna/Dockerfile-chatqna_genie-ai',
+  'docs/readme.md',
+  'LICENSE',
+  'COPYING',
+  'docs/copywriting.md',
+  'components/gov-chat-frontend/public/icons/downloads/user-svgrepo-com (1).svg'
 ];
 
 const escapeRegExp = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
@@ -96,23 +105,14 @@ describe('stray copy artifacts (#516)', () => {
   });
 
   it('recognises every copy shape, and only those', () => {
-    const flagged = findStrayCopies([
+    const copies = [
       ...SHAPES.flatMap((shape) => shape.samples),
       'genie-ai-overlay/chatqna/Dockerfile-chatqna_genie-ai - Copy (3).txt',
       'docs/readme copy 2',
       'docs/readme (copy) (2)'
-    ]);
-    expect(flagged).toHaveLength(SHAPES.flatMap((shape) => shape.samples).length + 3);
-
-    const kept = findStrayCopies([
-      'genie-ai-overlay/chatqna/Dockerfile-chatqna_genie-ai',
-      'docs/readme.md',
-      'LICENSE',
-      'COPYING',
-      'docs/copywriting.md',
-      'components/gov-chat-frontend/public/icons/downloads/user-svgrepo-com (1).svg'
-    ]);
-    expect(kept).toEqual([]);
+    ];
+    expect(findStrayCopies(copies).sort()).toEqual([...copies].sort());
+    expect(findStrayCopies(NOT_COPIES)).toEqual([]);
   });
 
   it('refuses to stage a copy artifact', () => {
@@ -121,15 +121,7 @@ describe('stray copy artifacts (#516)', () => {
   });
 
   it('keeps staging the files that are not copies', () => {
-    const kept = [
-      'genie-ai-overlay/chatqna/Dockerfile-chatqna_genie-ai',
-      'docs/readme.md',
-      'LICENSE',
-      'COPYING',
-      'docs/copywriting.md',
-      'components/gov-chat-frontend/public/icons/downloads/user-svgrepo-com (1).svg'
-    ];
-    expect(ignoredPaths(kept)).toEqual([]);
+    expect(ignoredPaths(NOT_COPIES)).toEqual([]);
   });
 
   it('runs the gate in the pipeline that adds a copy artifact', () => {

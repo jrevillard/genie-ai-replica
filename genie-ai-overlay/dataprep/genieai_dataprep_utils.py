@@ -24,6 +24,13 @@ logger = CustomLogger("genie-ai_prepare_doc_util")
 # severity path, so an unwired logger reaches VictoriaLogs as Unspecified).
 setup_trace_logging("genie-ai_prepare_doc_util")
 setup_json_logging("genie-ai_prepare_doc_util")
+# The vendored comps utils module (imported just above for the standard
+# loader) logs through its own CustomLogger("prepare_doc_util") — its
+# conversion progress and fetch-failure records after the build patch that
+# routed its prints there (issue #1662). Unwired, those records would reach
+# VictoriaLogs in the bracket format with severity Unspecified.
+setup_trace_logging("prepare_doc_util")
+setup_json_logging("prepare_doc_util")
 
 # Remote docling-serve endpoint (when set, document processing is delegated to remote GPU node)
 DOCLING_ENDPOINT = os.getenv("DOCLING_ENDPOINT", "")
@@ -172,11 +179,15 @@ async def load_with_docling(doc_path: str) -> str:
     return content
 
 
-async def docling_document_loader(doc_path):
-    # Support for PDF, DOCX, PPTX, XLSX, HTML, Markdown, and Text
-    supported_extensions = (".pdf", ".docx", ".pptx", ".xlsx", ".html", ".txt", ".md", ".asciidoc")
+# The single owner of the docling-supported extension set. The ingest caller
+# (`genieai_dataprep_arangodb.py`) imports this constant to decide which files
+# are routed here; a second, restated tuple would let the two lists drift
+# apart and silently flip this guard between live and dead (issue #1661).
+DOCLING_SUPPORTED_EXTENSIONS = (".pdf", ".docx", ".pptx", ".xlsx", ".html", ".txt", ".md", ".asciidoc")
 
-    if doc_path.endswith(supported_extensions):
+
+async def docling_document_loader(doc_path):
+    if doc_path.endswith(DOCLING_SUPPORTED_EXTENSIONS):
         return await load_with_docling(doc_path)
     else:
         logger.warning(f"File type {doc_path} not supported by Docling")

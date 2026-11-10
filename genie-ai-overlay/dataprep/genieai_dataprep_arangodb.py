@@ -240,7 +240,12 @@ from comps import CustomLogger, DocPath, OpeaComponentRegistry
 from comps.cores.proto.genieai_api_protocol import ArangoDBDataprepRequestFromDocRepo
 
 # Import Custom Utils
-from comps.dataprep.src.genieai_dataprep_utils import docling_document_loader, document_loader, is_valid_content
+from comps.dataprep.src.genieai_dataprep_utils import (
+    DOCLING_SUPPORTED_EXTENSIONS,
+    docling_document_loader,
+    document_loader,
+    is_valid_content,
+)
 from comps.dataprep.src.integrations.arangodb import OpeaArangoDataprep
 from comps.dataprep.src.utils import get_separators
 from fastapi import HTTPException
@@ -2505,11 +2510,11 @@ class GenieArangoDataprep(OpeaArangoDataprep):
     async def _load_and_chunk(self, doc_path: DocPath) -> list[str]:
         path = doc_path.path
 
-        # --- FIX: Expanded Docling Support ---
-        # Added .docx, .pptx, .xlsx, .md, .txt, .html support
-        docling_extensions = (".pdf", ".docx", ".pptx", ".xlsx", ".html", ".txt", ".md", ".asciidoc")
-
-        if path.endswith(docling_extensions) and CONTENT_EXTRACTION_METHOD == "docling":
+        # The docling-supported extension set has ONE owner: the loader module's
+        # exported DOCLING_SUPPORTED_EXTENSIONS (issue #1661). A restated tuple
+        # here would drift from the loader's own guard and silently flip it
+        # between live and dead.
+        if path.endswith(DOCLING_SUPPORTED_EXTENSIONS) and CONTENT_EXTRACTION_METHOD == "docling":
             logger.info(f"Using Docling for file: {path}")
             content = await docling_document_loader(path)
         else:

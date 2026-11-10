@@ -1,5 +1,6 @@
 const { test, expect } = require('@playwright/test');
 const { expectRevalidated } = require('./helpers/cache-headers');
+const { BASE_URL } = require('./helpers/base-url');
 
 // Cache-header contract for the runtime theme configuration.
 //
@@ -59,7 +60,7 @@ test.describe('Keycloak runtime theme mount', () => {
     // The issuer comes from Keycloak's own hostname config (KC_HOSTNAME), not
     // from this request's URL: a wrong hostname setting keeps the endpoint
     // green while silently breaking every OIDC redirect.
-    const base = process.env.BASE_URL || 'https://localhost';
+    const base = BASE_URL;
     // A multi-origin dev slot (9444/9445 in front of a shared stack) mints
     // the stack's canonical issuer for every origin — the backend's issuer
     // map knows only that one. KEYCLOAK_PUBLIC_ORIGIN names it; unset, the
@@ -85,7 +86,7 @@ test.describe('Keycloak runtime theme mount', () => {
     // renders the login form after validating the request. A syntactically
     // valid dummy challenge yields the real login page without any session;
     // the redirect URI is accepted via the client's KC_PUBLIC_ORIGIN/* wildcard.
-    const base = process.env.BASE_URL || 'https://localhost';
+    const base = BASE_URL;
     const challenge = 'a'.repeat(43);
     const response = await request.get(
       `/auth/realms/genie/protocol/openid-connect/auth` +

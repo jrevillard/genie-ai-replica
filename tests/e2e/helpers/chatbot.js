@@ -10,11 +10,10 @@ const {
   TEST_PLAIN_USER,
 } = require('./e2e-fixtures');
 const { runPostOnlyRouteHandler } = require('./route');
-
-// Normalized once: page.url() never produces a trailing double slash,
-// so every `${BASE_URL}/...` interpolation stays well-formed even when
-// the environment configures BASE_URL with a trailing '/'.
-const BASE_URL = (process.env.BASE_URL || 'https://localhost').replace(/\/+$/, '');
+// The venue's edge lives in its own module (helpers/base-url.js): a spec
+// that needs the edge but no credential requires it from there, so the
+// two credential import paths are never mixed in one file.
+const { BASE_URL } = require('./base-url');
 
 // The handles the chat surface declares. A row's handle carries its
 // sender (`chat-message-bot` / `chat-message-user`), so a spec never

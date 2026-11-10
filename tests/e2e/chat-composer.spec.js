@@ -48,7 +48,7 @@ const path = require('path');
 const { openWelcomeScreen } = require('./helpers/welcome');
 const { QUICK_HELP_GRID_ITEM } = require('./helpers/layout');
 
-const BASE_URL = process.env.BASE_URL || 'https://localhost';
+const { BASE_URL } = require('./helpers/base-url');
 
 /*
  * The app's locale files, read from disk rather than listed here.

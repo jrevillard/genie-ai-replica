@@ -24,6 +24,7 @@
 //   cd C:/Dev/builds/main && npx playwright test --config=D:/ITU-Gitlab/playwright.config.js
 
 const { test, expect } = require('@playwright/test');
+const { BASE_URL } = require('../helpers/base-url');
 const { getAdminToken, SESSION_MINT_TIMEOUT_MS } = require('../helpers/auth');
 const { createUser, deleteUser } = require('../helpers/keycloak-admin');
 const { pinLocale } = require('../helpers/locale');
@@ -68,15 +69,15 @@ test.describe('the RAGAS guide documents what each error state does to the resul
     const page = await context.newPage();
 
     // 1. log in through Keycloak
-    await page.goto('https://localhost/', { waitUntil: 'domcontentloaded', timeout: 30000 });
+    await page.goto(`${BASE_URL}/`, { waitUntil: 'domcontentloaded', timeout: 30000 });
     await page.waitForURL('**/protocol/openid-connect/auth**', { timeout: 20000 });
     await page.fill('#username', USER);
     await page.fill('#password', PW);
     await page.click('#kc-login');
-    await page.waitForURL('https://localhost/**', { timeout: 30000 });
+    await page.waitForURL(`${BASE_URL}/**`, { timeout: 30000 });
 
     // 2. the admin dashboard -> OKF Studio -> the repo card's "Testing Lab"
-    await page.goto('https://localhost/admin', { waitUntil: 'networkidle', timeout: 30000 });
+    await page.goto(`${BASE_URL}/admin`, { waitUntil: 'networkidle', timeout: 30000 });
     const studioTab = page.getByRole('button', { name: /OKF Studio/i }).first();
     await expect(studioTab, 'the OKF Studio tab must be reachable').toBeVisible({ timeout: 20000 });
     await studioTab.click();

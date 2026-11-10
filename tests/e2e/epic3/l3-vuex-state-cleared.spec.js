@@ -1,8 +1,9 @@
 const { test, expect } = require('@playwright/test');
-// The venue's origin: the Compose stack serves it on localhost, the
+// The venue's origin, resolved once for the whole suite
+// (helpers/base-url.js): the Compose stack serves it on localhost, the
 // k8s cluster on its own host. A literal origin makes every
 // assertion below a statement about the Compose venue alone.
-const BASE_URL = process.env.BASE_URL || 'https://localhost';
+const { BASE_URL } = require('../helpers/base-url');
 const { TEST_USER } = require('../helpers/e2e-fixtures');
 
 // Test L.3 — Vuex Auth State Cleared on Logout

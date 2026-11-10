@@ -44,7 +44,15 @@ const { publicKey: partnerPublicKey, privateKey: partnerPrivateKey } = generateK
   publicKeyEncoding: { type: 'spki', format: 'jwk' },
   privateKeyEncoding: { type: 'pkcs8', format: 'jwk' }
 });
-const JWKS = { keys: [{ ...publicKey, kid: 'test-key', alg: 'RS256', use: 'sig' }] };
+const JWKS = {
+  keys: [
+    { ...publicKey, kid: 'test-key', alg: 'RS256', use: 'sig' },
+    // A second key whose kid no token names: a token that names NO key id
+    // then has two candidates, and jose raises JWKSMultipleMatchingKeys —
+    // the token-side ambiguity the verifier must not report as an outage.
+    { ...partnerPublicKey, kid: 'second-key', alg: 'RS256', use: 'sig' }
+  ]
+};
 const PARTNER_JWKS_URI = `${KEYCLOAK_URL}/realms/partner/protocol/openid-connect/certs`;
 const PARTNER_JWKS = { keys: [{ ...partnerPublicKey, kid: 'partner-key', alg: 'RS256', use: 'sig' }] };
 
@@ -409,6 +417,21 @@ test('KEYCLOAK_DISCOVERY_URL moves the discovery leg; the issuer surface is unch
   assert.ok(
     !fetchCalls.includes(`${DISCOVERY_ISSUER}/.well-known/openid-configuration`),
     'the discovery leg still targeted KEYCLOAK_URL'
+  );
+});
+
+test('a kid-less token against a multi-key set is a bad token, not an outage', async () => {
+  // jose raises JWKSMultipleMatchingKeys when the token names NO key id and
+  // the key set holds several keys. That is a TOKEN-side ambiguity: it must
+  // not be classified as an outage, or an unauthenticated caller could make
+  // the service answer 503 at will.
+  const svc = loadVerifier();
+  const kidless = await new SignJWT(baseClaims(DISCOVERY_ISSUER))
+    .setProtectedHeader({ alg: 'RS256' }) // alg, but NO key id
+    .sign(privateKey);
+  await assert.rejects(
+    () => svc.verifyToken(kidless),
+    (err) => err.code === 'TOKEN_INVALID'
   );
 });
 

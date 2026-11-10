@@ -27,6 +27,13 @@ const DISCOVERY_BASE_URL = (KEYCLOAK_DISCOVERY_URL || KEYCLOAK_URL || '').replac
 const INIT_RETRY_COOLDOWN = 30000; // 30 seconds between retry attempts
 const JWKS_CACHE_TTL = 300000; // 5 minutes JWKS cache TTL (NFR10)
 
+// The key-resolution errors that are the TOKEN's fault, not the auth
+// service's: an unknown kid (the key set may be stale — a rotation
+// candidate) and an ambiguous match (a token that names no kid, against a
+// key set holding several). Every other failure of the key-set leg is an
+// outage. jose raises these by name.
+const TOKEN_SIDE_KEY_ERRORS = new Set(['JWKSNoMatchingKey', 'JWKSMultipleMatchingKeys']);
+
 // Additional realms for backend token validation (JSON array of realm names).
 // e.g. ["partner","contractor"]
 let additionalRealms = [];
@@ -94,15 +101,16 @@ function createJwksCache(jwksUri, ttlMs = JWKS_CACHE_TTL) {
       return await inner(protectedHeader, token);
     } catch (err) {
       // This wrapper is the ONLY network call of the verification path: a
-      // failure here is the AUTH SERVICE's, never the token's. The single
-      // token-side error this leg can raise is an unknown kid
-      // (JWKSNoMatchingKey — the key set may simply be stale), which the
-      // caller treats as a rotation candidate. Everything else (a refused
-      // connection, a non-200 response, an unparsable body, a timeout) is
-      // an outage: it must NOT be reported as a bad token, or the consumers
-      // answer 401 and send every user to the login page during an
-      // infrastructure outage (#1723).
-      if (err && err.name === 'JWKSNoMatchingKey') {
+      // failure here is the AUTH SERVICE's, never the token's. Two errors
+      // from this leg are the TOKEN's: an unknown kid (JWKSNoMatchingKey —
+      // the key set may simply be stale; the caller treats it as a rotation
+      // candidate) and an ambiguous key match (JWKSMultipleMatchingKeys — a
+      // token that names no kid against a multi-key set). Everything else
+      // (a refused connection, a non-200 response, an unparsable body, a
+      // timeout, a malformed key set) is an outage: it must NOT be reported
+      // as a bad token, or the consumers answer 401 and send every user to
+      // the login page during an infrastructure outage (#1723).
+      if (err && TOKEN_SIDE_KEY_ERRORS.has(err.name)) {
         throw err;
       }
       throw new TokenVerificationError(

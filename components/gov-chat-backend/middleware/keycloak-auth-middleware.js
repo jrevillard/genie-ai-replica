@@ -128,6 +128,22 @@ const keycloakAuthMiddleware = {
 
         next();
       } catch (err) {
+        // The auth service is unreachable — the verifier reports it as
+        // AUTH_SERVICE_UNAVAILABLE. That is an infrastructure outage, NOT a
+        // dead session: answering 401 here sends every user to the login
+        // page, because the frontend's httpService treats 401 as "your token
+        // died" (silent refresh, then redirect to Keycloak). 503 with the
+        // fixed body is the contract the document repository already
+        // answers and the frontend already understands (#1722).
+        if (err.code === 'AUTH_SERVICE_UNAVAILABLE') {
+          logger.warn(`[KeycloakAuth Middleware] Authentication service unavailable: ${err.message}`);
+          return res.status(503).json({
+            error: 'AUTH_SERVICE_UNAVAILABLE',
+            message: 'Authentication service unavailable',
+            details: {}
+          });
+        }
+
         if (err.code === 'TOKEN_EXPIRED') {
           // Check user status in Keycloak via UserInfo to determine if disabled/deleted.
           // tokenIssuer comes from the UNVERIFIED payload. Today the shared

@@ -18,11 +18,13 @@
  * Two steps, in this order:
  *
  *   1. the checkout matches the lockfile — `npm ci` when the versions the
- *      RUNNER loads differ from the pinned ones. Without this step the tree
- *      would be reconciled against a STALE checkout: node_modules can
- *      disagree with package-lock.json while node_modules/.package-lock.json
- *      claims otherwise, and then the revision is derived from the wrong
- *      source and "the pinned Playwright" is a fiction;
+ *      RUNNER loads differ from the pinned ones. Both sides of that
+ *      comparison walk the same chain (`@playwright/test` → `playwright` →
+ *      `playwright-core`): one walk on disk (what the runner would load),
+ *      one walk in lockfile space (what the lockfile pins for those very
+ *      paths) — so a checkout whose `node_modules` disagrees with the
+ *      lockfile cannot make this script read one package and install
+ *      another, and a nested install is compared against its own pin;
  *   2. the browser tree carries the revision the installed Playwright names
  *      — installed by that Playwright's own installer, and then VERIFIED
  *      against the build the runner actually launches: a headless run
@@ -41,10 +43,9 @@ const REPO_ROOT = path.resolve(__dirname, '..', '..', '..');
 const PINNED_PACKAGE = '@playwright/test';
 
 // The chain the RUNNER loads: @playwright/test -> playwright ->
-// playwright-core. Every version and every revision is read through it,
-// resolved the way the runner resolves it: a checkout whose node_modules
-// disagrees with the lockfile must not be able to make this script read one
-// package and install another.
+// playwright-core. Every version and every revision is read through it —
+// a checkout whose node_modules disagrees with the lockfile must not be
+// able to make this script read one package and install another.
 const RUNNER_CHAIN = ['@playwright/test', 'playwright', 'playwright-core'];
 
 // The two builds a Chromium run needs: the browser itself, and the headless
@@ -59,6 +60,78 @@ const INSTALL_MARKER = 'INSTALLATION_COMPLETE';
 
 const readJson = (file) => JSON.parse(fs.readFileSync(file, 'utf8'));
 
+// The runner resolves the suite's modules from the spec directories, whose
+// walk reaches tests/e2e/node_modules BEFORE the repository root — so the
+// chain starts there, not at the root, to be the walk the runner actually
+// performs.
+const chainAnchor = (repoRoot) => path.join(repoRoot, 'tests', 'e2e', 'run');
+
+/**
+ * The runner's own resolution of one package of the chain: the first
+ * `package.json` found walking the `node_modules` hierarchy the way Node
+ * does, from the anchor upward. Each package is resolved from the directory
+ * of the package that requires it, so a NESTED copy — the tree the runner
+ * would really load — is found instead of a hoisted sibling. The lookup is
+ * a plain path construction and a stat, deliberately: `require.resolve`
+ * caches its answers, and a cache filled before `npm ci` replaced the tree
+ * would hand back paths that no longer exist.
+ * @param {string} name the package to resolve
+ * @param {string} repoRoot the checkout root
+ * @returns {string} the path of the package's package.json
+ */
+function resolvePackage(name, repoRoot = REPO_ROOT) {
+  let dir = chainAnchor(repoRoot);
+  for (const candidate of RUNNER_CHAIN) {
+    const file = resolveInNodeModules(candidate, dir);
+    if (!file) {
+      throw new Error(`the checkout carries no ${candidate} — node_modules is missing or does not carry the runner's chain`);
+    }
+    if (candidate === name) return file;
+    dir = path.dirname(file);
+  }
+  throw new Error(`the runner's chain carries no ${name}`);
+}
+
+/**
+ * One package's `package.json`, found the way Node looks for it: the
+ * `node_modules` hierarchy of the given directory and of each of its
+ * parents, nearest first.
+ * @param {string} name the package
+ * @param {string} fromDir the directory the walk starts from
+ * @returns {string|null} the package.json path, or null when it is not there
+ */
+function resolveInNodeModules(name, fromDir) {
+  let dir = fromDir;
+  for (;;) {
+    const candidate = path.join(dir, 'node_modules', name, 'package.json');
+    if (fs.existsSync(candidate)) return candidate;
+    const parent = path.dirname(dir);
+    if (parent === dir) return null;
+    dir = parent;
+  }
+}
+
+/**
+ * The lockfile's entry for one package, found by the SAME walk the disk
+ * resolution performs — one walk in lockfile space, so the pinned side and
+ * the loaded side of the comparison are resolutions of the same shape. A
+ * nested install is pinned by its own nested entry, not by a hoisted
+ * sibling's.
+ * @param {Object} lock the parsed package-lock.json
+ * @param {string} name the package to look up
+ * @param {string} fromRel the directory the walk starts from, relative to the checkout root
+ * @returns {{key: string, entry: Object}|null} the entry and its lockfile key
+ */
+function lockfileEntry(lock, name, fromRel) {
+  let dir = fromRel;
+  for (;;) {
+    const key = (dir ? `${dir}/` : '') + `node_modules/${name}`;
+    if (lock.packages && lock.packages[key]) return { key, entry: lock.packages[key] };
+    if (!dir) return null;
+    dir = path.posix.dirname(dir) === '.' ? '' : path.posix.dirname(dir);
+  }
+}
+
 /**
  * The versions the lockfile pins for the runner's chain.
  * @param {string} repoRoot the checkout root
@@ -67,33 +140,16 @@ const readJson = (file) => JSON.parse(fs.readFileSync(file, 'utf8'));
 function pinnedVersions(repoRoot = REPO_ROOT) {
   const lock = readJson(path.join(repoRoot, 'package-lock.json'));
   const pinned = {};
+  let fromRel = path.relative(repoRoot, chainAnchor(repoRoot)).split(path.sep).join('/');
   for (const name of RUNNER_CHAIN) {
-    const entry = lock.packages && lock.packages[`node_modules/${name}`];
-    if (!entry || !entry.version) {
-      throw new Error(`package-lock.json pins no ${name} — this is not the lockfile of this checkout`);
+    const found = lockfileEntry(lock, name, fromRel);
+    if (!found || !found.entry.version) {
+      throw new Error(`package-lock.json pins no ${name} (the walk from ${fromRel || 'the checkout root'} found no entry) — this is not the lockfile of this checkout`);
     }
-    pinned[name] = entry.version;
+    pinned[name] = found.entry.version;
+    fromRel = found.key;
   }
   return pinned;
-}
-
-/**
- * The runner's OWN resolution of one package of the chain. Each package is
- * resolved from the directory of the package that requires it, so a NESTED
- * copy — the tree the runner would really load — is found instead of a
- * hoisted sibling.
- * @param {string} name the package to resolve
- * @param {string} repoRoot the checkout root
- * @returns {string} the path of the package's package.json
- */
-function resolvePackage(name, repoRoot = REPO_ROOT) {
-  let from = repoRoot;
-  for (const candidate of RUNNER_CHAIN) {
-    const file = require.resolve(`${candidate}/package.json`, { paths: [from] });
-    if (candidate === name) return file;
-    from = path.dirname(file);
-  }
-  throw new Error(`the runner's chain carries no ${name}`);
 }
 
 /**
@@ -147,6 +203,9 @@ function browserInstallCommand(repoRoot = REPO_ROOT) {
  * The install locations the installer itself names. Playwright's own dry run
  * is the authority on where a build lands — the browser root, the platform
  * directory and the build name are all its business, not this script's.
+ * NOTE: the output format is the CLI's human-readable text, not a stable
+ * API; a lockfile bump that changes it fails the parse below loudly, and
+ * the regex is what has to be re-pinned then.
  * @param {string} cliPath the resolved Playwright CLI
  * @param {Function} run the process runner
  * @param {string} repoRoot the checkout root
@@ -179,7 +238,15 @@ function installLocations(cliPath, run, repoRoot = REPO_ROOT) {
  * @returns {{playwrightVersion: string, chromium: string, chromiumHeadlessShell: string}} the runner
  */
 function describeRunner(repoRoot = REPO_ROOT) {
-  const versions = runnerVersions(repoRoot);
+  let versions;
+  try {
+    versions = runnerVersions(repoRoot);
+  } catch (e) {
+    throw new Error(
+      `the checkout has no ${PINNED_PACKAGE} installed — node_modules is missing or incomplete (${e.message.split('\n')[0]})`,
+      { cause: e }
+    );
+  }
   return {
     playwrightVersion: versions[PINNED_PACKAGE],
     ...requiredBrowserRevisions(repoRoot)
@@ -228,8 +295,8 @@ function reconcile(repoRoot = REPO_ROOT, io = {}) {
     }
     if (npm.status !== 0) {
       throw new Error(
-        `npm ci failed (exit ${npm.status}). npm ci REMOVES node_modules before it installs, ` +
-          `so the checkout now has no node_modules at all: restore it with "npm ci" before running the suite`
+        `npm ci failed (exit ${npm.status}). npm ci removes node_modules before it installs, so the checkout may ` +
+          `have no node_modules at all now — check it and restore it with "npm ci" before running the suite`
       );
     }
     versions = runnerVersions(repoRoot);
@@ -247,6 +314,7 @@ function reconcile(repoRoot = REPO_ROOT, io = {}) {
   if (!exists(cliPath)) {
     throw new Error(`the checkout's Playwright CLI is not there: ${cliPath}`);
   }
+  const revisions = requiredBrowserRevisions(repoRoot);
   const locations = installLocations(cliPath, run, repoRoot);
   const install = run(command, args, { cwd: repoRoot, stdio: 'inherit' });
   if (install.error) {
@@ -259,10 +327,18 @@ function reconcile(repoRoot = REPO_ROOT, io = {}) {
   // The build the runner LAUNCHES is verified, not the one it happens to
   // carry: a headless run launches the headless shell, and that is the
   // binary that was missing when one missing build became twelve issues.
+  // The location's own revision must also be the one the browsers.json
+  // names — the two sources name the same build or something moved.
   for (const name of [CHROMIUM, HEADLESS_SHELL]) {
     const entry = locations.find((l) => l.name === name);
     if (!entry) {
       throw new Error(`the Playwright installer named no ${name} build — its output is not the one this script reads`);
+    }
+    const revision = name === CHROMIUM ? revisions.chromium : revisions.chromiumHeadlessShell;
+    if (entry.revision !== revision) {
+      throw new Error(
+        `the installer names ${name} v${entry.revision} while the browsers.json names v${revision} — the two sources disagree`
+      );
     }
     if (!exists(entry.location)) {
       throw new Error(`the ${name} build is not installed: ${entry.location}`);
@@ -274,7 +350,7 @@ function reconcile(repoRoot = REPO_ROOT, io = {}) {
     }
   }
 
-  return { versions, ...requiredBrowserRevisions(repoRoot), locations };
+  return { versions, ...revisions, locations };
 }
 
 if (require.main === module) {
@@ -299,6 +375,7 @@ module.exports = {
   browserInstallCommand,
   describeRunner,
   installLocations,
+  lockfileEntry,
   pinnedVersions,
   reconcile,
   requiredBrowserRevisions,

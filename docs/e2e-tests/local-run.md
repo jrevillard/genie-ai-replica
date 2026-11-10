@@ -59,7 +59,7 @@ death passed through (a signal, an OOM).
 
 | Requirement | Note |
 |---|---|
-| `npm install` at the repository root | Playwright resolves from the root `node_modules` |
+| `npm ci` at the repository root | Playwright resolves from the root `node_modules`, and `npm ci` is what puts the tree at the lockfile's versions (`npm install` is free to drift from them) |
 | `node tests/e2e/run/install-browsers.js` | reconciles the checkout and the browser tree with the pinned `@playwright/test` — the build the suite drives must be the one the lockfile pins, and `PLAYWRIGHT_BROWSERS_PATH` must point at it when it lives outside the default cache (see *The browser tree* below) |
 | the browser's shared libraries on `LD_LIBRARY_PATH` | a bare container image has no libatk/libgbm |
 | the Inter fonts on `XDG_DATA_HOME` | the pixel-measurement specs measure rendered text |
@@ -92,12 +92,17 @@ as twelve product bugs (#1779).
 
 `node tests/e2e/run/install-browsers.js` reconciles both sides, in order:
 
-1. the **checkout** matches the lockfile — `npm ci` when the installed
-   `@playwright/test` is not the pinned one (a checkout's `node_modules` can
-   disagree with `package-lock.json` while `node_modules/.package-lock.json`
-   claims otherwise);
+1. the **checkout** matches the lockfile — `npm ci` when the versions the
+   runner loads (`@playwright/test` → `playwright` → `playwright-core`)
+   differ from the ones the lockfile pins for those same paths. A
+   checkout's `node_modules` can disagree with `package-lock.json` while
+   `node_modules/.package-lock.json` claims otherwise, and a nested install
+   is pinned by its own entry, not by a hoisted sibling's;
 2. the **browser tree** carries the revision the installed Playwright names
-   — installed by that Playwright's own installer.
+   — installed by that Playwright's own installer, then **verified**: the
+   build a headless run launches is the *headless shell*, a build of its
+   own, and that is the one the check asserts (together with the install's
+   completion marker).
 
 No revision number is written in the repository: it is derived from the
 installed Playwright, so a lockfile bump needs no second number to change.

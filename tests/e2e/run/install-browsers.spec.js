@@ -10,6 +10,11 @@
  * runner's OWN resolved chain for the revisions — and about WHAT the
  * reconciler verifies: the build the runner launches (the headless shell),
  * not the build it happens to carry.
+ *
+ * The fixtures carry revisions and versions that appear nowhere in the
+ * repository, and a NESTED install whose hoisted siblings carry DIFFERENT
+ * ones: a reader that resolves a fixed path instead of the runner's chain
+ * reads the sibling and fails here.
  */
 const { test, expect } = require('@playwright/test');
 const fs = require('fs');
@@ -34,6 +39,11 @@ const {
 const FIXTURE_CHROMIUM = '4711';
 const FIXTURE_SHELL = '4712';
 const FIXTURE_VERSION = '9.9.9-fixture';
+// The hoisted sibling's own numbers: what a reader that resolves a fixed
+// path would find instead of the nested copy the runner loads.
+const HOISTED_VERSION = '1.0.0-hoisted';
+const HOISTED_CHROMIUM = '1001';
+const HOISTED_SHELL = '1002';
 
 const roots = [];
 
@@ -53,6 +63,13 @@ const makeRoot = (files) => {
   return root;
 };
 
+const browsersJson = (chromium, shell) => ({
+  browsers: [
+    { name: 'chromium', revision: chromium },
+    { name: 'chromium-headless-shell', revision: shell }
+  ]
+});
+
 /**
  * A checkout whose runner chain is installed at the pinned versions.
  * @param {Object} [options] the versions to install
@@ -61,7 +78,7 @@ const makeRoot = (files) => {
 const makeCheckout = (options = {}) => {
   const version = options.version || FIXTURE_VERSION;
   const coreVersion = options.coreVersion || version;
-  const files = {
+  return makeRoot({
     'package-lock.json': {
       packages: {
         '': { name: 'genie-ai' },
@@ -74,15 +91,47 @@ const makeCheckout = (options = {}) => {
     'node_modules/playwright/package.json': { name: 'playwright', version },
     'node_modules/playwright/cli.js': '// the CLI of the fixture',
     'node_modules/playwright-core/package.json': { name: 'playwright-core', version: coreVersion },
-    'node_modules/playwright-core/browsers.json': {
-      browsers: [
-        { name: 'chromium', revision: FIXTURE_CHROMIUM },
-        { name: 'chromium-headless-shell', revision: FIXTURE_SHELL }
-      ]
-    }
-  };
-  return makeRoot(files);
+    'node_modules/playwright-core/browsers.json': browsersJson(FIXTURE_CHROMIUM, FIXTURE_SHELL)
+  });
 };
+
+/**
+ * A checkout whose runner chain is NESTED under @playwright/test, with
+ * hoisted siblings that carry other versions — the shape a version
+ * conflict produces, and the shape a fixed-path reader gets wrong.
+ * @returns {string} the root
+ */
+const makeNestedCheckout = () =>
+  makeRoot({
+    'package-lock.json': {
+      packages: {
+        '': { name: 'genie-ai' },
+        'node_modules/@playwright/test': { version: FIXTURE_VERSION },
+        'node_modules/playwright': { version: HOISTED_VERSION },
+        'node_modules/playwright-core': { version: HOISTED_VERSION },
+        'node_modules/@playwright/test/node_modules/playwright': { version: FIXTURE_VERSION },
+        'node_modules/@playwright/test/node_modules/playwright/node_modules/playwright-core': {
+          version: FIXTURE_VERSION
+        }
+      }
+    },
+    'node_modules/@playwright/test/package.json': { name: '@playwright/test', version: FIXTURE_VERSION },
+    'node_modules/playwright/package.json': { name: 'playwright', version: HOISTED_VERSION },
+    'node_modules/playwright/cli.js': '// the CLI of the HOISTED sibling',
+    'node_modules/playwright-core/package.json': { name: 'playwright-core', version: HOISTED_VERSION },
+    'node_modules/playwright-core/browsers.json': browsersJson(HOISTED_CHROMIUM, HOISTED_SHELL),
+    'node_modules/@playwright/test/node_modules/playwright/package.json': {
+      name: 'playwright',
+      version: FIXTURE_VERSION
+    },
+    'node_modules/@playwright/test/node_modules/playwright/cli.js': '// the CLI of the NESTED copy',
+    'node_modules/@playwright/test/node_modules/playwright/node_modules/playwright-core/package.json': {
+      name: 'playwright-core',
+      version: FIXTURE_VERSION
+    },
+    'node_modules/@playwright/test/node_modules/playwright/node_modules/playwright-core/browsers.json':
+      browsersJson(FIXTURE_CHROMIUM, FIXTURE_SHELL)
+  });
 
 test.afterAll(() => {
   for (const root of roots) fs.rmSync(root, { recursive: true, force: true });
@@ -103,24 +152,7 @@ test('a lockfile that pins no playwright fails loudly', () => {
 });
 
 test("the runner's chain is resolved the way the runner resolves it", () => {
-  // A NESTED copy is the tree the runner would really load; a fixed path
-  // would find the hoisted sibling and read the wrong package.
-  const root = makeRoot({
-    'package-lock.json': {
-      packages: {
-        'node_modules/@playwright/test': { version: FIXTURE_VERSION },
-        'node_modules/playwright': { version: FIXTURE_VERSION },
-        'node_modules/playwright-core': { version: FIXTURE_VERSION }
-      }
-    },
-    'node_modules/@playwright/test/package.json': { version: FIXTURE_VERSION },
-    'node_modules/playwright/package.json': { version: '1.0.0-hoisted' },
-    'node_modules/playwright-core/package.json': { version: '1.0.0-hoisted' },
-    'node_modules/@playwright/test/node_modules/playwright/package.json': { version: FIXTURE_VERSION },
-    'node_modules/@playwright/test/node_modules/playwright/node_modules/playwright-core/package.json': {
-      version: FIXTURE_VERSION
-    }
-  });
+  const root = makeNestedCheckout();
   expect(resolvePackage('playwright', root)).toBe(
     path.join(root, 'node_modules/@playwright/test/node_modules/playwright/package.json')
   );
@@ -141,8 +173,39 @@ test('the loaded versions are read from the chain, one package at a time', () =>
   });
 });
 
+test('a NESTED chain is loaded, not the hoisted sibling', () => {
+  // The mutation this pins: a reader that resolved a fixed path would read
+  // the hoisted sibling's versions, and the reconciler would compare one
+  // package against another.
+  const root = makeNestedCheckout();
+  expect(runnerVersions(root)).toEqual({
+    '@playwright/test': FIXTURE_VERSION,
+    playwright: FIXTURE_VERSION,
+    'playwright-core': FIXTURE_VERSION
+  });
+});
+
+test('a NESTED chain is pinned by its own lockfile entry', () => {
+  // The pin side must walk the same chain as the loaded side, or the
+  // comparison is between two differently-resolved things.
+  const root = makeNestedCheckout();
+  expect(pinnedVersions(root)).toEqual({
+    '@playwright/test': FIXTURE_VERSION,
+    playwright: FIXTURE_VERSION,
+    'playwright-core': FIXTURE_VERSION
+  });
+});
+
 test('the revisions come from the resolved playwright-core browsers.json', () => {
   const root = makeCheckout();
+  expect(requiredBrowserRevisions(root)).toEqual({
+    chromium: FIXTURE_CHROMIUM,
+    chromiumHeadlessShell: FIXTURE_SHELL
+  });
+});
+
+test('a NESTED chain names its own revisions, not the hoisted sibling\'s', () => {
+  const root = makeNestedCheckout();
   expect(requiredBrowserRevisions(root)).toEqual({
     chromium: FIXTURE_CHROMIUM,
     chromiumHeadlessShell: FIXTURE_SHELL
@@ -168,6 +231,16 @@ test('the browser build is installed by the CHECKOUT Playwright, not a global on
   expect(args).toEqual([path.join(root, 'node_modules/playwright/cli.js'), 'install', 'chromium']);
 });
 
+test('a NESTED chain is installed by its own CLI', () => {
+  const root = makeNestedCheckout();
+  const { args } = browserInstallCommand(root);
+  expect(args).toEqual([
+    path.join(root, 'node_modules/@playwright/test/node_modules/playwright/cli.js'),
+    'install',
+    'chromium'
+  ]);
+});
+
 test('the runner describes the versions loaded and the revisions they name', () => {
   const root = makeCheckout();
   expect(describeRunner(root)).toEqual({
@@ -177,9 +250,9 @@ test('the runner describes the versions loaded and the revisions they name', () 
   });
 });
 
-test('a checkout without @playwright/test cannot describe a runner', () => {
+test('a checkout without @playwright/test cannot describe a runner, and says so', () => {
   const root = makeRoot({ 'package-lock.json': { packages: {} } });
-  expect(() => describeRunner(root)).toThrow();
+  expect(() => describeRunner(root)).toThrow(/no @playwright\/test installed/);
 });
 
 // --- the reconciler itself (the part with the side effects) --------------------
@@ -199,13 +272,14 @@ const fakeRun = (options = {}) => {
   const run = (command, args) => {
     calls.push({ command, args });
     if (args.includes('--dry-run')) {
+      if (options.dryRunResult) return options.dryRunResult;
       const stdout = locations
         .map((l) => `Chrome (playwright ${l.name} v${l.revision})\n  Install location:    ${l.location}`)
         .join('\n');
       return { status: 0, stdout, stderr: '' };
     }
     if (args[0] && args[0].endsWith('cli.js')) {
-      return { status: 0, stdout: '', stderr: '' };
+      return options.installResult || { status: 0, stdout: '', stderr: '' };
     }
     // npm ci restores the tree from the lockfile; the fixture's onCi stands
     // in for that restore.
@@ -253,6 +327,14 @@ test('a checkout that does not match the lockfile is reinstalled with the dev de
   expect(ci.args).toContain('--include=dev');
 });
 
+test('a checkout that STILL does not match after npm ci fails loudly', () => {
+  // The guard that makes npm ci trustworthy: a tree npm ci did not bring
+  // back to the lockfile must not pass as reconciled.
+  const root = makeCheckout({ coreVersion: '1.0.0-older-core' });
+  const { run } = fakeRun();
+  expect(() => reconcile(root, { run, exists: fakeExists() })).toThrow(/still does not match the lockfile/);
+});
+
 test('the HEADLESS SHELL is verified — the build the runner launches', () => {
   // The mutation this pins: a check that only looked at the full chrome
   // would pass a tree whose headless shell is missing, and every spec would
@@ -272,10 +354,44 @@ test('a build without the completion marker is not a complete build', () => {
   ).toThrow(/carries no INSTALLATION_COMPLETE/);
 });
 
-test('a failed npm ci says that node_modules is gone — npm ci removes it first', () => {
+test('a build whose revision the browsers.json does not name is refused', () => {
+  const root = makeCheckout();
+  const { run } = fakeRun({
+    locations: [
+      { name: 'chromium', revision: '9999', location: '/browsers/chromium-9999' },
+      {
+        name: 'chromium-headless-shell',
+        revision: FIXTURE_SHELL,
+        location: '/browsers/chromium_headless_shell-4712'
+      }
+    ]
+  });
+  expect(() => reconcile(root, { run, exists: fakeExists() })).toThrow(/the two sources disagree/);
+});
+
+test('a checkout without a Playwright CLI fails loudly', () => {
+  const root = makeCheckout();
+  const { run } = fakeRun();
+  const cli = path.join(root, 'node_modules/playwright/cli.js');
+  expect(() => reconcile(root, { run, exists: fakeExists([cli]) })).toThrow(/Playwright CLI is not there/);
+});
+
+test('an install that fails is not reported as a reconciled tree', () => {
+  const root = makeCheckout();
+  const { run } = fakeRun({ installResult: { status: 1, stdout: '', stderr: 'boom' } });
+  expect(() => reconcile(root, { run, exists: fakeExists() })).toThrow(/browser install failed/);
+});
+
+test('a dry run that fails is not reported as a reconciled tree', () => {
+  const root = makeCheckout();
+  const { run } = fakeRun({ dryRunResult: { status: 1, stdout: '', stderr: 'boom' } });
+  expect(() => reconcile(root, { run, exists: fakeExists() })).toThrow(/dry run failed/);
+});
+
+test('a failed npm ci says that node_modules may be gone — npm ci removes it first', () => {
   const root = makeCheckout({ coreVersion: '1.0.0-older-core' });
   const { run } = fakeRun({ npmResult: { status: 1, stdout: '', stderr: 'boom' } });
-  expect(() => reconcile(root, { run, exists: fakeExists() })).toThrow(/REMOVES node_modules/);
+  expect(() => reconcile(root, { run, exists: fakeExists() })).toThrow(/may have no node_modules/);
 });
 
 test('an npm that cannot be started is named, not reported as an exit code', () => {

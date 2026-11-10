@@ -152,7 +152,8 @@ RUN python /tmp/unstructured_html_pi_patch.py && rm -f /tmp/unstructured_html_pi
 # in this repository, so the rewrite happens here, at build time. Sits with
 # the sibling patcher AFTER the multi-GB dependency COPY layers so editing
 # the patcher does not invalidate and re-run them (both patchers are
-# stdlib-only and need nothing but the base interpreter and /app/comps).
+# stdlib-only; this one needs only the base interpreter and /app/comps from
+# Step B, the sibling needs the site-packages this position already has).
 #
 # FAIL-LOUD BY DESIGN. The patcher aborts the BUILD if the expected
 # CustomLogger("prepare_doc_util") assignment is missing (renamed symbol or

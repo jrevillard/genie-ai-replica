@@ -157,6 +157,28 @@ def test_fails_loud_when_the_logger_name_string_drifts(tmp_path):
         mod.apply_patch(path)
 
 
+def test_fails_loud_when_only_a_docstring_carries_the_assignment(tmp_path):
+    """Assignment TEXT inside a docstring must not satisfy the anchor guard.
+
+    The guard checks the AST module body for the actual Assign statement:
+    a column-0 text regex would accept the same line sitting inside a
+    module docstring while the real assignment is gone — every print site
+    still matches, the build ships, and the first rewritten call NameErrors.
+    Both other guard-drift tests fail under a text regex too, so this one
+    is what makes the AST anchor mutation-visible.
+    """
+    body = _fixture_module(UPSTREAM_SITES).replace(
+        'logger = CustomLogger("prepare_doc_util")\n',
+        "",
+        1,
+    )
+    body = '"""\nlogger = CustomLogger("prepare_doc_util")\n"""\n' + body
+    path = _write(tmp_path, body)
+
+    with pytest.raises(SystemExit, match="GUARD FAILED"):
+        mod.apply_patch(path)
+
+
 def test_is_idempotent_on_a_patched_file(tmp_path):
     path = _write(tmp_path, _fixture_module(UPSTREAM_SITES))
     mod.apply_patch(path)

@@ -37,4 +37,4 @@ async function fetchDocMeta(fileId, timeout = 10000) {
   return docRepoFileOf(res);
 }
 
-module.exports = { docRepoFileOf, fetchDocMeta };
+module.exports = { fetchDocMeta };

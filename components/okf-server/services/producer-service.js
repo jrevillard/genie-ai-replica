@@ -1006,17 +1006,19 @@ async function startDocumentsConversion({ repo_id, file_ids, requested_name, cla
     await patchConversion(repo_id, queued);
     await stampSources(repo_id, file_ids, metaByKey);
   } catch (err) {
-    // The reservation must not outlive a failed start — the repo is free again.
-    live.delete(repo_id);
-    settleInFlight();
     // The conversion record must not claim a queued run that has no worker:
     // the interrupted-conversion sweep is one-shot per process and has
-    // already run, so nothing else would ever close this record.
+    // already run, so nothing else would ever close this record. It is
+    // written BEFORE the reservation is released — this patch REPLACES the
+    // whole conversion object, so a write landing after a concurrent start's
+    // own record would clobber it.
     try {
       await patchConversion(repo_id, {
         status: 'failed',
-        stage: 'failed',
         error: err.message,
+        files_done: 0,
+        files_total: file_ids.length,
+        per_file: [],
         finished_at: new Date().toISOString()
       });
     } catch (patchErr) {
@@ -1025,15 +1027,15 @@ async function startDocumentsConversion({ repo_id, file_ids, requested_name, cla
         error: patchErr.message
       });
     }
+    // The reservation must not outlive a failed start — the repo is free
+    // again. Settled before the delete, like the runner's finally does.
+    settleInFlight();
+    live.delete(repo_id);
     throw err;
   }
 
   const job = { repo_id, file_ids, source_metas: metaByKey, requested_name, classification, actor: actor || null };
-  // The background runner: it settles the registry's value and releases the
-  // reservation in its finally. It swallows its own errors (the terminal
-  // state is recorded by runDocumentsConversion), so it never surfaces as an
-  // unhandled rejection.
-  (async () => {
+  const runner = (async () => {
     await acquireSlot();
     try {
       await withSpan('okf.documents.conversion', async (span) => {
@@ -1052,6 +1054,12 @@ async function startDocumentsConversion({ repo_id, file_ids, requested_name, cla
       live.delete(repo_id);
     }
   })();
+  // The runner swallows its own errors (the terminal state is recorded by
+  // runDocumentsConversion); this guard keeps a rejection raised OUTSIDE its
+  // try — the slot acquire — from surfacing as an unhandled rejection: Node
+  // 22 treats those as fatal, and it would leave the reservation held
+  // forever (the repo permanently 409-locked).
+  runner.catch(() => {});
   return queued;
 }
 

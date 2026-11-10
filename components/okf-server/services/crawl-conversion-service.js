@@ -107,7 +107,8 @@ const TERMINAL_STATES = ['done', 'failed'];
 
 /** repo_id → the in-flight conversion's COMPLETION promise (in-process
  * registry). This is the SHARED registry: the documents importer registers
- * its conversion here too, so ONE repo is converted at a time whichever path
+ * its conversion here too (producer-service re-exports this same Map as
+ * `producer.live`), so ONE repo is converted at a time whichever path
  * started it (the two paths write the same repo.conversion record — the crawl
  * merges its patch, the producer replaces it — so running both on one repo
  * leaves a record describing neither run).
@@ -900,10 +901,8 @@ async function startConversion({
     actor: actor || null
   };
   // The background runner: it settles the registry's value and releases the
-  // reservation in its finally. It swallows its own errors (the terminal
-  // state is recorded by runConversion), so it never surfaces as an
-  // unhandled rejection.
-  (async () => {
+  // reservation in its finally.
+  const runner = (async () => {
     dlog(`runner queued repo=${repo_id} running=${running}/${MAX_CONCURRENT} waiting=${waiting.length}`);
     await acquireSlot();
     dlog(`runner START repo=${repo_id}`);
@@ -926,6 +925,12 @@ async function startConversion({
       live.delete(repo_id);
     }
   })();
+  // The runner swallows its own errors (the terminal state is recorded by
+  // runConversion); this guard keeps a rejection raised OUTSIDE its try — the
+  // slot acquire — from surfacing as an unhandled rejection: Node 22 treats
+  // those as fatal, and it would leave the reservation held forever (the repo
+  // permanently 409-locked).
+  runner.catch(() => {});
   return queued;
 }
 

@@ -458,6 +458,7 @@ describe('producer-service — startDocumentsConversion + run', () => {
     const crawl = require('../services/crawl-conversion-service');
     const crawlRun = crawl.startConversion({ repo_id: RID, file_id: 'f1', split_mode: 'B' });
     await stamping; // the crawl conversion is parked inside its provenance stamp
+    const crawlInFlight = crawl.live.get(RID); // the conversion's completion promise
     const documents = await producer
       .startDocumentsConversion({ repo_id: RID, file_ids: ['f1'], requested_name: 'x' })
       .then(
@@ -466,6 +467,7 @@ describe('producer-service — startDocumentsConversion + run', () => {
       );
     releaseStamp();
     await crawlRun;
+    if (crawlInFlight) await crawlInFlight.catch(() => {});
     authedAxios.get.mockImplementation(realGet);
     expect(documents.err).toMatchObject({ code: 'CONVERSION_IN_FLIGHT', status: 409 });
   });

@@ -57,29 +57,10 @@ const fetchCalls = [];
 global.fetch = async (url, opts) => {
   const u = String(url);
   fetchCalls.push(u);
-  // A slow-body host resolves the fetch (ok:true) then hangs in json() —
-  // the response-body half of the abort window. Without the abort guard
-  // covering the body read, init would hang past the budget here.
-  if (u.includes('slow-body')) {
-    return {
-      ok: true,
-      status: 200,
-      json: () =>
-        new Promise((resolve, reject) => {
-          const signal = opts && opts.signal;
-          if (signal) {
-            signal.addEventListener('abort', () =>
-              reject(Object.assign(new Error('The operation was aborted.'), { name: 'AbortError' }))
-            );
-          }
-          // No timer: only the abort settles this promise.
-        })
-    };
-  }
-  // A hanging host never answers — the fetch must honor the AbortController
-  // signal, or the discovery-timeout guard could never fire in a test.
-  if (u.includes('hang')) {
-    return new Promise((resolve, reject) => {
+  // Both stall topologies settle ONLY on the AbortController signal — the
+  // discovery-timeout guard can fire only if fetch honors it.
+  const abortOnlyPromise = () =>
+    new Promise((resolve, reject) => {
       const signal = opts && opts.signal;
       if (signal) {
         signal.addEventListener('abort', () =>
@@ -88,6 +69,19 @@ global.fetch = async (url, opts) => {
       }
       // No timer: only the abort settles this promise.
     });
+  // A slow-body host resolves the fetch (ok:true) then hangs in json() —
+  // the response-body half of the abort window. Without the abort guard
+  // covering the body read, init would hang past the budget here.
+  if (u.includes('slow-body')) {
+    return {
+      ok: true,
+      status: 200,
+      json: abortOnlyPromise
+    };
+  }
+  // A hanging host never answers at all — the fetch-phase half.
+  if (u.includes('hang')) {
+    return abortOnlyPromise();
   }
   // An unreachable host refuses every request (503) — the init-failure
   // topology names its host 'unreachable' to land here.
@@ -195,9 +189,9 @@ test('matching-aud token with opts.audience verifies', async () => {
 });
 
 test('a STALE alg-confusion token reports TOKEN_EXPIRED (expiry outranks alg)', async () => {
-  // Reordering the two rejection branches (exp check above JOSEAlgNotAllowed)
-  // changed observable behavior for a token that is BOTH expired and
-  // alg-mismatched — this test is the mutation gate for that order.
+  // Order is load-bearing: a token BOTH expired and alg-mismatched must
+  // report TOKEN_EXPIRED (expiry outranks the algorithm mismatch) — this
+  // test is the mutation gate for the exp-before-alg branch order.
   const svc = loadVerifier();
   const claims = baseClaims(DISCOVERY_ISSUER);
   claims.exp = Math.floor(Date.now() / 1000) - 10;

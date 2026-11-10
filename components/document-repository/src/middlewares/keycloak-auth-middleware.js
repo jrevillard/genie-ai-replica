@@ -50,8 +50,7 @@ function mapRole(roles) {
   // mapping rule — a tools-admin USER token's realm roles are typically
   // ['default-roles-genie', 'offline_access', 'uma_authorization',
   // 'tools-admin'], so without this the scalar falls through to
-  // 'Default-roles-genie' and every tools-admin grant is dead for most tokens
-  // (review 2026-10-29).
+  // 'Default-roles-genie' and every tools-admin grant is dead for most tokens.
   if (roles.includes('tools-admin')) {
     return 'tools-admin';
   }

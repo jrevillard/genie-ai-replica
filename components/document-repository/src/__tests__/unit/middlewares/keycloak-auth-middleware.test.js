@@ -167,6 +167,17 @@ describe('keycloak-auth-middleware', () => {
           message: 'Authentication service unavailable'
         })
       );
+      // The outage is warn-level with no token diagnostics — the error-level
+      // DIAG payload stays reserved for genuine 401 root causes.
+      const { logger } = require('../../../__tests__/__mocks__/shared-lib');
+      expect(logger.error).not.toHaveBeenCalled();
+      expect(logger.warn).toHaveBeenCalledWith(
+        '[KEYCLOAK-AUTH] verifier unavailable',
+        expect.objectContaining({
+          path: '/api/files',
+          err_message: 'Authentication service is temporarily unavailable'
+        })
+      );
     });
 
     it('should log the 401 root cause (token issuer) for a failed verification', async () => {
@@ -179,7 +190,11 @@ describe('keycloak-auth-middleware', () => {
       expect(res.status).toHaveBeenCalledWith(401);
       expect(logger.error).toHaveBeenCalledWith(
         '[KEYCLOAK-AUTH] verifyToken failed',
-        expect.objectContaining({ err_code: 'TOKEN_INVALID', token_issuer: 'unparseable' })
+        expect.objectContaining({
+          err_code: 'TOKEN_INVALID',
+          err_name: 'TokenVerificationError',
+          token_issuer: 'unparseable'
+        })
       );
     });
 

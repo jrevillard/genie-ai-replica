@@ -25,11 +25,12 @@ if (!repoId || !suiteKey || !runKey) {
   // Which judge will this actually use? The env pick resolves to the
   // sidecar's own default — print what that is so the run doc can be
   // checked against it.
-  const cfg = await db.collection('okf_model_configs').document(judgeConfigKey).catch(() => null);
+  const cfg = await db
+    .collection('okf_model_configs')
+    .document(judgeConfigKey)
+    .catch(() => null);
   console.log(
-    `judge pick: ${judgeConfigKey} -> ${
-      cfg ? `${cfg.name} / ${cfg.default_model}` : 'the ENV judge (sidecar default)'
-    }`
+    `judge pick: ${judgeConfigKey} -> ${cfg ? `${cfg.name} / ${cfg.default_model}` : 'the ENV judge (sidecar default)'}`
   );
   console.log(`metrics: ${metrics.join(', ')}`);
   console.log(`source run: ${runKey}`);

@@ -63,7 +63,12 @@ function req(method, url, { token, form, json } = {}) {
         rejectUnauthorized: false,
         headers: {
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
-          ...(body ? { 'Content-Type': json ? 'application/json' : 'application/x-www-form-urlencoded', 'Content-Length': Buffer.byteLength(body) } : {})
+          ...(body
+            ? {
+                'Content-Type': json ? 'application/json' : 'application/x-www-form-urlencoded',
+                'Content-Length': Buffer.byteLength(body)
+              }
+            : {})
         }
       },
       (res) => {
@@ -134,14 +139,20 @@ async function cleanup() {
 // Story 1-8f2: generation is now 202 + poll — POST returns
 // {suite_key, status:'generating'} and the doc lands later.
 async function generateSuite(body) {
-  const start = j(await req('POST', `${API_BASE}/api/okf/repos/${REPO_ID}/routing-testsuite`, { token: USER_TOKEN, json: body }));
+  const start = j(
+    await req('POST', `${API_BASE}/api/okf/repos/${REPO_ID}/routing-testsuite`, { token: USER_TOKEN, json: body })
+  );
   const key = start.suite_key;
   if (!key || start.status !== 'generating') return start;
   // 1-8f2 contract: an in-flight key answers 200 {suite_key, status:'generating'}
   // (never a 404 — the minted-key envelope is the poll's keep-waiting signal).
-  const first = j(await req('GET', `${API_BASE}/api/okf/repos/${REPO_ID}/routing-testsuite/${key}`, { token: USER_TOKEN }));
+  const first = j(
+    await req('GET', `${API_BASE}/api/okf/repos/${REPO_ID}/routing-testsuite/${key}`, { token: USER_TOKEN })
+  );
   if (!(first && first.suite_key === key && first.status === 'generating')) {
-    console.log(`  [WARN] generating-key GET did not return the generating envelope: ${JSON.stringify(first).slice(0, 120)}`);
+    console.log(
+      `  [WARN] generating-key GET did not return the generating envelope: ${JSON.stringify(first).slice(0, 120)}`
+    );
   }
   // 300s window: generation embeds every candidate (TEI) and slows down as
   // the repo accumulates suites — 150s timed out on a busy repo (measured
@@ -151,7 +162,9 @@ async function generateSuite(body) {
     // eslint-disable-next-line no-await-in-loop
     await new Promise((r) => setTimeout(r, 2500));
     // eslint-disable-next-line no-await-in-loop
-    const got = j(await req('GET', `${API_BASE}/api/okf/repos/${REPO_ID}/routing-testsuite/${key}`, { token: USER_TOKEN }));
+    const got = j(
+      await req('GET', `${API_BASE}/api/okf/repos/${REPO_ID}/routing-testsuite/${key}`, { token: USER_TOKEN })
+    );
     if (got.error === 'TOKEN_INVALID') await refreshUserToken();
     else if (got.suite_key && got.status !== 'generating') return got;
   }
@@ -360,7 +373,11 @@ async function refreshUserToken() {
   // legitimately sit below the claim threshold — report, don't fail: the
   // guard math below is the structural check that must hold everywhere.
   if (ex.under_test && ex.under_test.head_claimed === true) {
-    check('explain: HIV query CLAIMS (pre-fix state)', true, `score=${ex.under_test.head_score && ex.under_test.head_score.toFixed(3)}`);
+    check(
+      'explain: HIV query CLAIMS (pre-fix state)',
+      true,
+      `score=${ex.under_test.head_score && ex.under_test.head_score.toFixed(3)}`
+    );
   } else {
     skip(
       'explain: HIV query CLAIMS (pre-fix state)',
@@ -370,7 +387,7 @@ async function refreshUserToken() {
   check(
     'explain: suggestion shape + LLM tags',
     ex.suggestion && Array.isArray(ex.suggestion.tags),
-    `tags=[${(ex.suggestion && ex.suggestion.tags || []).join(', ')}] source=${ex.suggestion && ex.suggestion.source}`
+    `tags=[${((ex.suggestion && ex.suggestion.tags) || []).join(', ')}] source=${ex.suggestion && ex.suggestion.source}`
   );
 
   // 5. suite generation with count controls + near-miss class (1-8f2: async)
@@ -379,7 +396,11 @@ async function refreshUserToken() {
   const negs = (gen.payload && gen.payload.negative) || [];
   const byCls = negs.reduce((m, q) => ((m[q.cls] = (m[q.cls] || 0) + 1), m), {});
   check('suite: generated', !!SUITE_KEY, `key=${SUITE_KEY}`);
-  check('suite: count controls honored', byCls.meta === 2 && byCls['near-miss'] === 3 && byCls['off-domain'] === 2, JSON.stringify(byCls));
+  check(
+    'suite: count controls honored',
+    byCls.meta === 2 && byCls['near-miss'] === 3 && byCls['off-domain'] === 2,
+    JSON.stringify(byCls)
+  );
 
   // 6. run the suite (1-8g-v: async — POST answers {run_key, status:'running'})
   await refreshUserToken(); // the generation above can outlive the boot token
@@ -398,11 +419,17 @@ async function refreshUserToken() {
   // 7. batch explain (async since 1-8g — the terminal doc carries the advice
   // payload; the POST envelope is only {run_key, status:'running'})
   const batchStart = j(
-    await req('POST', `${API_BASE}/api/okf/repos/${REPO_ID}/routing-testsuite/${SUITE_KEY}/explain`, { token: USER_TOKEN })
+    await req('POST', `${API_BASE}/api/okf/repos/${REPO_ID}/routing-testsuite/${SUITE_KEY}/explain`, {
+      token: USER_TOKEN
+    })
   );
   const batchDoc = batchStart.run_key ? await waitForRunDoc(SUITE_KEY, batchStart.run_key, 'explain') : batchStart;
   const batch = batchDoc.payload || batchDoc;
-  check('batch explain: 200 + shape', batch.suite_key === SUITE_KEY && Array.isArray(batch.suggested_tags), `failing=${batch.failing_count} tags=[${(batch.suggested_tags || []).join(', ')}] source=${batch.source}`);
+  check(
+    'batch explain: 200 + shape',
+    batch.suite_key === SUITE_KEY && Array.isArray(batch.suggested_tags),
+    `failing=${batch.failing_count} tags=[${(batch.suggested_tags || []).join(', ')}] source=${batch.source}`
+  );
 
   // 8. authz: explain without token -> 401
   const noauth = await req('POST', `${API_BASE}/api/okf/repos/${REPO_ID}/routing-explain`, { json: { query: 'x' } });
@@ -423,7 +450,9 @@ async function refreshUserToken() {
   check(
     'guardrail: repo head carries per-field vectors',
     !!pf && ['topic', 'entity', 'keyword', 'summary', 'scope'].some((f) => Array.isArray(pf[f])),
-    pf ? `fields=${['topic', 'entity', 'keyword', 'summary', 'scope'].filter((f) => Array.isArray(pf[f])).join('/')}` : 'no head.per_field'
+    pf
+      ? `fields=${['topic', 'entity', 'keyword', 'summary', 'scope'].filter((f) => Array.isArray(pf[f])).join('/')}`
+      : 'no head.per_field'
   );
   const sugg = ex.suggestion || {};
   const rej = Array.isArray(sugg.rejected) ? sugg.rejected : null;
@@ -440,7 +469,8 @@ async function refreshUserToken() {
   } else {
     check(
       'guardrail: suggestion.rejected array, disjoint from tags',
-      rej.every((e) => e && typeof e.tag === 'string' && typeof e.reason === 'string') && accepted.every((t) => !rejTags.includes(t)),
+      rej.every((e) => e && typeof e.tag === 'string' && typeof e.reason === 'string') &&
+        accepted.every((t) => !rejTags.includes(t)),
       `rejected=[${rej.map((e) => e.tag + ' (' + e.reason.slice(0, 40) + '...)').join('; ')}] accepted=[${accepted.join(', ')}]`
     );
   }
@@ -485,104 +515,117 @@ async function refreshUserToken() {
   const fresh0 = j(await req('GET', `${API_BASE}/api/okf/repos/${REPO_ID}`, { token: USER_TOKEN }));
   const readOnly = fresh0.lifecycle_state === 'publish' && !!fresh0.ingested_at;
   if (!readOnly) {
-  const F0 = Array.isArray(repoDoc.frontmatter && repoDoc.frontmatter.forbidden)
-    ? repoDoc.frontmatter.forbidden
-    : [];
-  // The UI's 6-field save shape (drops legacy _approved stamps — they 400).
-  const fmShape = (forbidden) => {
-    const src = repoDoc.frontmatter || {};
-    const arr = (v) => (Array.isArray(v) ? v : []);
-    return {
-      topic: arr(src.topic),
-      entity: arr(src.entity),
-      scope: typeof src.scope === 'string' ? src.scope : '',
-      forbidden,
-      summary: typeof src.summary === 'string' ? src.summary : '',
-      keyword: arr(src.keyword)
+    const F0 = Array.isArray(repoDoc.frontmatter && repoDoc.frontmatter.forbidden) ? repoDoc.frontmatter.forbidden : [];
+    // The UI's 6-field save shape (drops legacy _approved stamps — they 400).
+    const fmShape = (forbidden) => {
+      const src = repoDoc.frontmatter || {};
+      const arr = (v) => (Array.isArray(v) ? v : []);
+      return {
+        topic: arr(src.topic),
+        entity: arr(src.entity),
+        scope: typeof src.scope === 'string' ? src.scope : '',
+        forbidden,
+        summary: typeof src.summary === 'string' ? src.summary : '',
+        keyword: arr(src.keyword)
+      };
     };
-  };
-  const hist0 = j(await req('GET', `${API_BASE}/api/okf/repos/${REPO_ID}/frontmatter/history`, { token: USER_TOKEN }));
-  check(
-    'history: GET 200 + entries array',
-    Array.isArray(hist0.entries),
-    `n=${(hist0.entries || []).length} latest=${hist0.entries && hist0.entries[0] && hist0.entries[0].saved_at}`
-  );
-  const pBase = await req('PATCH', `${API_BASE}/api/okf/repos/${REPO_ID}`, {
-    token: USER_TOKEN,
-    json: { frontmatter: fmShape(F0) }
-  });
-  check('history: baseline save PATCH 200', pBase.status === 200, `status=${pBase.status}`);
-  const pTag = await req('PATCH', `${API_BASE}/api/okf/repos/${REPO_ID}`, {
-    token: USER_TOKEN,
-    json: { frontmatter: fmShape([...F0, THROWAWAY_TAG]) }
-  });
-  check('history: throwaway-tag save PATCH 200', pTag.status === 200, `status=${pTag.status}`);
-  const hist1 = j(await req('GET', `${API_BASE}/api/okf/repos/${REPO_ID}/frontmatter/history`, { token: USER_TOKEN }));
-  const top1 = hist1.entries && hist1.entries[0];
-  const below1 = hist1.entries && hist1.entries[1];
-  check(
-    'history: top entry is the throwaway save',
-    !!top1 && Array.isArray(top1.shape && top1.shape.forbidden) && top1.shape.forbidden.includes(THROWAWAY_TAG) && typeof top1.saved_at === 'string',
-    top1 ? `saved_at=${top1.saved_at} forbidden_count=${top1.forbidden_count} actor=${top1.actor}` : 'no entries'
-  );
-  check(
-    'history: baseline snapshot directly below',
-    !!below1 && eqTags(below1.shape && below1.shape.forbidden, F0),
-    below1 ? `saved_at=${below1.saved_at}` : 'missing second entry'
-  );
-  // Revert to the TOP entry — the restored frontmatter must deep-equal
-  // that entry's shape (the revert restores the snapshotted state).
-  const rev1 = j(
-    await req('POST', `${API_BASE}/api/okf/repos/${REPO_ID}/frontmatter/revert`, {
-      token: USER_TOKEN,
-      json: { saved_at: top1 && top1.saved_at }
-    })
-  );
-  check(
-    'revert: 200 to the top entry',
-    rev1.reverted_to === (top1 && top1.saved_at) && !!rev1.frontmatter,
-    rev1.reverted_to ? `reverted_to=${rev1.reverted_to}` : `status/body: ${JSON.stringify(rev1).slice(0, 120)}`
-  );
-  const repoRev = j(await req('GET', `${API_BASE}/api/okf/repos/${REPO_ID}`, { token: USER_TOKEN }));
-  check(
-    'revert: frontmatter.forbidden deep-equals the reverted entry shape',
-    JSON.stringify(repoRev.frontmatter && repoRev.frontmatter.forbidden) === JSON.stringify(top1 && top1.shape && top1.shape.forbidden),
-    `forbidden=[${(repoRev.frontmatter && repoRev.frontmatter.forbidden || []).join(', ')}]`
-  );
-  // The revert goes back through update() — it is itself snapshotted.
-  const hist2 = j(await req('GET', `${API_BASE}/api/okf/repos/${REPO_ID}/frontmatter/history`, { token: USER_TOKEN }));
-  const top2 = hist2.entries && hist2.entries[0];
-  check(
-    'revert: revert itself snapshotted (new top entry)',
-    !!top2 && top2.saved_at !== (top1 && top1.saved_at) && eqTags(top2.shape && top2.shape.forbidden, top1 && top1.shape && top1.shape.forbidden),
-    top2 ? `saved_at=${top2.saved_at}` : 'no entries'
-  );
-  // COMPENSATION via the revert endpoint: restore the pre-tag baseline.
-  // If the endpoint path itself fails, fall back to a direct PATCH of the
-  // baseline so the stack never stays mutated by a half-run smoke.
-  const rev2 = await req('POST', `${API_BASE}/api/okf/repos/${REPO_ID}/frontmatter/revert`, {
-    token: USER_TOKEN,
-    json: { saved_at: below1 && below1.saved_at }
-  });
-  let repoClean = j(await req('GET', `${API_BASE}/api/okf/repos/${REPO_ID}`, { token: USER_TOKEN }));
-  let fmNow = repoClean.frontmatter && repoClean.frontmatter.forbidden;
-  let via = 'revert endpoint';
-  if (rev2.status !== 200 || !Array.isArray(fmNow) || fmNow.includes(THROWAWAY_TAG)) {
-    const pFix = await req('PATCH', `${API_BASE}/api/okf/repos/${REPO_ID}`, {
+    const hist0 = j(
+      await req('GET', `${API_BASE}/api/okf/repos/${REPO_ID}/frontmatter/history`, { token: USER_TOKEN })
+    );
+    check(
+      'history: GET 200 + entries array',
+      Array.isArray(hist0.entries),
+      `n=${(hist0.entries || []).length} latest=${hist0.entries && hist0.entries[0] && hist0.entries[0].saved_at}`
+    );
+    const pBase = await req('PATCH', `${API_BASE}/api/okf/repos/${REPO_ID}`, {
       token: USER_TOKEN,
       json: { frontmatter: fmShape(F0) }
     });
-    repoClean = j(await req('GET', `${API_BASE}/api/okf/repos/${REPO_ID}`, { token: USER_TOKEN }));
-    fmNow = repoClean.frontmatter && repoClean.frontmatter.forbidden;
-    via = `PATCH fallback (revert status=${rev2.status}, patch status=${pFix.status})`;
-  }
-  check(
-    'revert: compensation — throwaway removed, baseline restored',
-    Array.isArray(fmNow) && !fmNow.includes(THROWAWAY_TAG) && eqTags(fmNow, F0),
-    `via=${via} forbidden=[${(fmNow || []).join(', ')}]`
-  );
+    check('history: baseline save PATCH 200', pBase.status === 200, `status=${pBase.status}`);
+    const pTag = await req('PATCH', `${API_BASE}/api/okf/repos/${REPO_ID}`, {
+      token: USER_TOKEN,
+      json: { frontmatter: fmShape([...F0, THROWAWAY_TAG]) }
+    });
+    check('history: throwaway-tag save PATCH 200', pTag.status === 200, `status=${pTag.status}`);
+    const hist1 = j(
+      await req('GET', `${API_BASE}/api/okf/repos/${REPO_ID}/frontmatter/history`, { token: USER_TOKEN })
+    );
+    const top1 = hist1.entries && hist1.entries[0];
+    const below1 = hist1.entries && hist1.entries[1];
+    check(
+      'history: top entry is the throwaway save',
+      !!top1 &&
+        Array.isArray(top1.shape && top1.shape.forbidden) &&
+        top1.shape.forbidden.includes(THROWAWAY_TAG) &&
+        typeof top1.saved_at === 'string',
+      top1 ? `saved_at=${top1.saved_at} forbidden_count=${top1.forbidden_count} actor=${top1.actor}` : 'no entries'
+    );
+    check(
+      'history: baseline snapshot directly below',
+      !!below1 && eqTags(below1.shape && below1.shape.forbidden, F0),
+      below1 ? `saved_at=${below1.saved_at}` : 'missing second entry'
+    );
+    // Revert to the TOP entry — the restored frontmatter must deep-equal
+    // that entry's shape (the revert restores the snapshotted state).
+    const rev1 = j(
+      await req('POST', `${API_BASE}/api/okf/repos/${REPO_ID}/frontmatter/revert`, {
+        token: USER_TOKEN,
+        json: { saved_at: top1 && top1.saved_at }
+      })
+    );
+    check(
+      'revert: 200 to the top entry',
+      rev1.reverted_to === (top1 && top1.saved_at) && !!rev1.frontmatter,
+      rev1.reverted_to ? `reverted_to=${rev1.reverted_to}` : `status/body: ${JSON.stringify(rev1).slice(0, 120)}`
+    );
+    const repoRev = j(await req('GET', `${API_BASE}/api/okf/repos/${REPO_ID}`, { token: USER_TOKEN }));
+    check(
+      'revert: frontmatter.forbidden deep-equals the reverted entry shape',
+      JSON.stringify(repoRev.frontmatter && repoRev.frontmatter.forbidden) ===
+        JSON.stringify(top1 && top1.shape && top1.shape.forbidden),
+      `forbidden=[${((repoRev.frontmatter && repoRev.frontmatter.forbidden) || []).join(', ')}]`
+    );
+    // The revert goes back through update() — it is itself snapshotted.
+    const hist2 = j(
+      await req('GET', `${API_BASE}/api/okf/repos/${REPO_ID}/frontmatter/history`, { token: USER_TOKEN })
+    );
+    const top2 = hist2.entries && hist2.entries[0];
+    check(
+      'revert: revert itself snapshotted (new top entry)',
+      !!top2 &&
+        top2.saved_at !== (top1 && top1.saved_at) &&
+        eqTags(top2.shape && top2.shape.forbidden, top1 && top1.shape && top1.shape.forbidden),
+      top2 ? `saved_at=${top2.saved_at}` : 'no entries'
+    );
+    // COMPENSATION via the revert endpoint: restore the pre-tag baseline.
+    // If the endpoint path itself fails, fall back to a direct PATCH of the
+    // baseline so the stack never stays mutated by a half-run smoke.
+    const rev2 = await req('POST', `${API_BASE}/api/okf/repos/${REPO_ID}/frontmatter/revert`, {
+      token: USER_TOKEN,
+      json: { saved_at: below1 && below1.saved_at }
+    });
+    let repoClean = j(await req('GET', `${API_BASE}/api/okf/repos/${REPO_ID}`, { token: USER_TOKEN }));
+    let fmNow = repoClean.frontmatter && repoClean.frontmatter.forbidden;
+    let via = 'revert endpoint';
+    if (rev2.status !== 200 || !Array.isArray(fmNow) || fmNow.includes(THROWAWAY_TAG)) {
+      const pFix = await req('PATCH', `${API_BASE}/api/okf/repos/${REPO_ID}`, {
+        token: USER_TOKEN,
+        json: { frontmatter: fmShape(F0) }
+      });
+      repoClean = j(await req('GET', `${API_BASE}/api/okf/repos/${REPO_ID}`, { token: USER_TOKEN }));
+      fmNow = repoClean.frontmatter && repoClean.frontmatter.forbidden;
+      via = `PATCH fallback (revert status=${rev2.status}, patch status=${pFix.status})`;
+    }
+    check(
+      'revert: compensation — throwaway removed, baseline restored',
+      Array.isArray(fmNow) && !fmNow.includes(THROWAWAY_TAG) && eqTags(fmNow, F0),
+      `via=${via} forbidden=[${(fmNow || []).join(', ')}]`
+    );
   } else {
-    skip('history + revert (whole section)', 'repo is serving (ingested) and READ ONLY — retract to mutate; run this smoke before ingesting');
+    skip(
+      'history + revert (whole section)',
+      'repo is serving (ingested) and READ ONLY — retract to mutate; run this smoke before ingesting'
+    );
   }
 
   // ---- 11. STALENESS: forbidden_snapshot on generation ----
@@ -593,7 +636,8 @@ async function refreshUserToken() {
   SUITE_KEY = gen2.suite_key || SUITE_KEY;
   check(
     'staleness: payload.forbidden_snapshot equals current forbidden',
-    Array.isArray(gen2.payload && gen2.payload.forbidden_snapshot) && eqTags(gen2.payload.forbidden_snapshot, forbiddenNow),
+    Array.isArray(gen2.payload && gen2.payload.forbidden_snapshot) &&
+      eqTags(gen2.payload.forbidden_snapshot, forbiddenNow),
     `snapshot=[${((gen2.payload && gen2.payload.forbidden_snapshot) || []).join(', ')}] current=[${forbiddenNow.join(', ')}]`
   );
 
@@ -605,18 +649,25 @@ async function refreshUserToken() {
   const run2 = run2Start.run_key ? await waitForRunDoc(SUITE_KEY, run2Start.run_key) : run2Start;
   const run2Rows = (run2.payload && run2.payload.results) || [];
   const batch2Start = j(
-    await req('POST', `${API_BASE}/api/okf/repos/${REPO_ID}/routing-testsuite/${SUITE_KEY}/explain`, { token: USER_TOKEN })
+    await req('POST', `${API_BASE}/api/okf/repos/${REPO_ID}/routing-testsuite/${SUITE_KEY}/explain`, {
+      token: USER_TOKEN
+    })
   );
   const batch2 = batch2Start.run_key
     ? (await waitForRunDoc(SUITE_KEY, batch2Start.run_key, 'explain')).payload || {}
     : batch2Start;
   const pfShape = batch2.positive_failures;
-  const vetoSum = pfShape && pfShape.veto_counts
-    ? Object.values(pfShape.veto_counts).reduce((a, b) => a + (typeof b === 'number' ? b : 0), 0)
-    : -1;
+  const vetoSum =
+    pfShape && pfShape.veto_counts
+      ? Object.values(pfShape.veto_counts).reduce((a, b) => a + (typeof b === 'number' ? b : 0), 0)
+      : -1;
   check(
     'advice: positive_failures {count, veto_counts, margin_killed}',
-    !!pfShape && typeof pfShape.count === 'number' && !!pfShape.veto_counts && typeof pfShape.veto_counts === 'object' && typeof pfShape.margin_killed === 'number',
+    !!pfShape &&
+      typeof pfShape.count === 'number' &&
+      !!pfShape.veto_counts &&
+      typeof pfShape.veto_counts === 'object' &&
+      typeof pfShape.margin_killed === 'number',
     `count=${pfShape && pfShape.count} veto_counts=${JSON.stringify(pfShape && pfShape.veto_counts)} margin_killed=${pfShape && pfShape.margin_killed}`
   );
   check(
@@ -626,7 +677,8 @@ async function refreshUserToken() {
   );
   check(
     'advice: removal_suggestions array (possibly empty)',
-    Array.isArray(batch2.removal_suggestions) && batch2.removal_suggestions.every((r) => r && typeof r.tag === 'string' && typeof r.killed === 'number'),
+    Array.isArray(batch2.removal_suggestions) &&
+      batch2.removal_suggestions.every((r) => r && typeof r.tag === 'string' && typeof r.killed === 'number'),
     `removals=[${(batch2.removal_suggestions || []).map((r) => r.tag + 'x' + r.killed).join(', ')}] note=${(batch2.note || '').slice(0, 60)}`
   );
 
@@ -639,21 +691,38 @@ async function refreshUserToken() {
   // 1-8g-advisor: 202 {job_key, status:'running'} — the advice takes MINUTES
   // (embed every query + simulate + an LLM ladder call); poll the job.
   await refreshUserToken(); // section 12's run + explain waits burn minutes
-  const advStart = j(await req('POST', `${API_BASE}/api/okf/repos/${REPO_ID}/routing-advisor`, { token: USER_TOKEN, json: {} }));
+  const advStart = j(
+    await req('POST', `${API_BASE}/api/okf/repos/${REPO_ID}/routing-advisor`, { token: USER_TOKEN, json: {} })
+  );
   const advDoc = advStart.job_key ? await waitForAdvisorJob(advStart.job_key) : advStart;
   const adv = advDoc.payload || advDoc;
   const cur = adv.current_scorecard;
   const rec = adv.recommended_scorecard;
   const scOk = (s) =>
-    !!s && typeof s.positive_claimed === 'number' && typeof s.positive_total === 'number' && typeof s.negative_suppressed === 'number' && typeof s.negative_total === 'number';
+    !!s &&
+    typeof s.positive_claimed === 'number' &&
+    typeof s.positive_total === 'number' &&
+    typeof s.negative_suppressed === 'number' &&
+    typeof s.negative_total === 'number';
   check(
     'advisor: 200 + scorecard/changes shape',
-    scOk(cur) && scOk(rec) && !!adv.changes && Array.isArray(adv.changes.add) && Array.isArray(adv.changes.remove) && Array.isArray(adv.add_eval) && Array.isArray(adv.remove_eval),
-    `add=[${(adv.changes && adv.changes.add || []).join(', ')}] remove=[${(adv.changes && adv.changes.remove || []).map((r) => (typeof r === 'string' ? r : r && r.tag)).join(', ')}] queries=${adv.queries_considered} runs=${adv.runs_considered}`
+    scOk(cur) &&
+      scOk(rec) &&
+      !!adv.changes &&
+      Array.isArray(adv.changes.add) &&
+      Array.isArray(adv.changes.remove) &&
+      Array.isArray(adv.add_eval) &&
+      Array.isArray(adv.remove_eval),
+    `add=[${((adv.changes && adv.changes.add) || []).join(', ')}] remove=[${((adv.changes && adv.changes.remove) || []).map((r) => (typeof r === 'string' ? r : r && r.tag)).join(', ')}] queries=${adv.queries_considered} runs=${adv.runs_considered}`
   );
   check(
     'advisor: scorecard totals agree between current and recommended',
-    !!cur && !!rec && cur.positive_total === rec.positive_total && cur.negative_total === rec.negative_total && cur.positive_total > 0 && cur.negative_total > 0,
+    !!cur &&
+      !!rec &&
+      cur.positive_total === rec.positive_total &&
+      cur.negative_total === rec.negative_total &&
+      cur.positive_total > 0 &&
+      cur.negative_total > 0,
     `positives ${cur && cur.positive_total}/${rec && rec.positive_total} negatives ${cur && cur.negative_total}/${rec && rec.negative_total}`
   );
   check(
@@ -671,16 +740,26 @@ async function refreshUserToken() {
   console.log('[14] suite load + row edit');
   await refreshUserToken(); // sections 10-13 (runs + advisor) burn minutes
   const suitesList = j(
-    await req('GET', `${API_BASE}/api/okf/repos/${REPO_ID}/routing-testsuite/runs?kind=suite&limit=1`, { token: USER_TOKEN })
+    await req('GET', `${API_BASE}/api/okf/repos/${REPO_ID}/routing-testsuite/runs?kind=suite&limit=1`, {
+      token: USER_TOKEN
+    })
   );
   const latestSuite = suitesList.runs && suitesList.runs[0];
-  check('suites: saved-suites listing returns suite docs', !!latestSuite && !!latestSuite._key, `key=${latestSuite && latestSuite._key}`);
-  const loaded = j(await req('GET', `${API_BASE}/api/okf/repos/${REPO_ID}/routing-testsuite/${latestSuite && latestSuite._key}`, { token: USER_TOKEN }));
-  const firstNeg = (loaded.payload && loaded.payload.negative || [])[0];
+  check(
+    'suites: saved-suites listing returns suite docs',
+    !!latestSuite && !!latestSuite._key,
+    `key=${latestSuite && latestSuite._key}`
+  );
+  const loaded = j(
+    await req('GET', `${API_BASE}/api/okf/repos/${REPO_ID}/routing-testsuite/${latestSuite && latestSuite._key}`, {
+      token: USER_TOKEN
+    })
+  );
+  const firstNeg = ((loaded.payload && loaded.payload.negative) || [])[0];
   check(
     'suite load: full rows returned',
     !!loaded.suite_key && Array.isArray(loaded.payload && loaded.payload.negative) && !!firstNeg,
-    `negatives=${(loaded.payload && loaded.payload.negative || []).length} positives=${(loaded.payload && loaded.payload.positive || []).length}`
+    `negatives=${((loaded.payload && loaded.payload.negative) || []).length} positives=${((loaded.payload && loaded.payload.positive) || []).length}`
   );
   if (!firstNeg) {
     // Nothing to flip — the section's remaining checks all mutate firstNeg.
@@ -688,40 +767,57 @@ async function refreshUserToken() {
     skip('suite edit: flip-back restores the row (compensating roundtrip)', 'no negative row to flip');
     skip('suite edit: unauthenticated rejected', 'no negative row to flip');
   } else {
-  const flipBody = {
-    updates: [{ match: { query: firstNeg.query, kind: firstNeg.kind || 'negative' }, set: { kind: 'positive' } }]
-  };
-  const flipped = j(
-    await req('POST', `${API_BASE}/api/okf/repos/${REPO_ID}/routing-testsuite/${latestSuite._key}/rows`, { token: USER_TOKEN, json: flipBody })
-  );
-  const negAfter = (flipped.payload && flipped.payload.negative) || [];
-  check(
-    'suite edit: row flipped out of negatives',
-    Array.isArray(flipped.payload && flipped.payload.negative) &&
-      !negAfter.some((r) => r.query === firstNeg.query && (r.kind || 'negative') === 'negative'),
-    `negatives now=${negAfter.length}`
-  );
-  const flipBack = j(
-    await req('POST', `${API_BASE}/api/okf/repos/${REPO_ID}/routing-testsuite/${latestSuite._key}/rows`, {
-      token: USER_TOKEN,
-      json: { updates: [{ match: { query: firstNeg.query, kind: 'positive' }, set: { kind: firstNeg.kind || 'negative' } }] }
-    })
-  );
-  const negBack = (flipBack.payload && flipBack.payload.negative) || [];
-  check(
-    'suite edit: flip-back restores the row (compensating roundtrip)',
-    negBack.some((r) => r.query === firstNeg.query && r.kind === (firstNeg.kind || 'negative')),
-    `negatives=${negBack.length} (cls cleared by the flip — documented)`
-  );
-  const noauthEdit = await req('POST', `${API_BASE}/api/okf/repos/${REPO_ID}/routing-testsuite/${latestSuite._key}/rows`, { json: flipBody });
-  check('suite edit: unauthenticated rejected', noauthEdit.status === 401 || noauthEdit.status === 403, `status=${noauthEdit.status}`);
+    const flipBody = {
+      updates: [{ match: { query: firstNeg.query, kind: firstNeg.kind || 'negative' }, set: { kind: 'positive' } }]
+    };
+    const flipped = j(
+      await req('POST', `${API_BASE}/api/okf/repos/${REPO_ID}/routing-testsuite/${latestSuite._key}/rows`, {
+        token: USER_TOKEN,
+        json: flipBody
+      })
+    );
+    const negAfter = (flipped.payload && flipped.payload.negative) || [];
+    check(
+      'suite edit: row flipped out of negatives',
+      Array.isArray(flipped.payload && flipped.payload.negative) &&
+        !negAfter.some((r) => r.query === firstNeg.query && (r.kind || 'negative') === 'negative'),
+      `negatives now=${negAfter.length}`
+    );
+    const flipBack = j(
+      await req('POST', `${API_BASE}/api/okf/repos/${REPO_ID}/routing-testsuite/${latestSuite._key}/rows`, {
+        token: USER_TOKEN,
+        json: {
+          updates: [{ match: { query: firstNeg.query, kind: 'positive' }, set: { kind: firstNeg.kind || 'negative' } }]
+        }
+      })
+    );
+    const negBack = (flipBack.payload && flipBack.payload.negative) || [];
+    check(
+      'suite edit: flip-back restores the row (compensating roundtrip)',
+      negBack.some((r) => r.query === firstNeg.query && r.kind === (firstNeg.kind || 'negative')),
+      `negatives=${negBack.length} (cls cleared by the flip — documented)`
+    );
+    const noauthEdit = await req(
+      'POST',
+      `${API_BASE}/api/okf/repos/${REPO_ID}/routing-testsuite/${latestSuite._key}/rows`,
+      { json: flipBody }
+    );
+    check(
+      'suite edit: unauthenticated rejected',
+      noauthEdit.status === 401 || noauthEdit.status === 403,
+      `status=${noauthEdit.status}`
+    );
   }
 
   // ---- 15. DEFAULT SUITE NAME (1-8g) ----
   // An unnamed generation lands as "<Repo> suite N" (N = the repo's running
   // suite count) — the Saved list stays scannable; rename still wins.
   console.log('[15] default suite name');
-  const latest = j(await req('GET', `${API_BASE}/api/okf/repos/${REPO_ID}/routing-testsuite/${latestSuite._key}`, { token: USER_TOKEN }));
+  const latest = j(
+    await req('GET', `${API_BASE}/api/okf/repos/${REPO_ID}/routing-testsuite/${latestSuite._key}`, {
+      token: USER_TOKEN
+    })
+  );
   // The prefix comes from the repo's OWN name (the smoke runs against any
   // repo passed as argv[2] — the old 'NCD Information' fallback assumed the
   // original target corpus).
@@ -749,7 +845,10 @@ async function refreshUserToken() {
   // latestSuite from section 11 predates the section-14 row edits)
   const probeQuery =
     (latest.payload && latest.payload.positive && latest.payload.positive[0] && latest.payload.positive[0].query) ||
-    (latestSuite.payload && latestSuite.payload.positive && latestSuite.payload.positive[0] && latestSuite.payload.positive[0].query) ||
+    (latestSuite.payload &&
+      latestSuite.payload.positive &&
+      latestSuite.payload.positive[0] &&
+      latestSuite.payload.positive[0].query) ||
     'colorectal cancer screening guidelines';
   const probe = j(
     await req('POST', `${API_BASE}/api/okf/repos/${REPO_ID}/routing-testsuite/${latestSuite._key}/probe`, {
@@ -764,7 +863,9 @@ async function refreshUserToken() {
     `verdict=${probe.verdict} top=${probe.top_score} docs=${probe.docs} note=${probe.note || ''} raw=${JSON.stringify(probe).slice(0, 160)}`
   );
   const probeBack = j(
-    await req('GET', `${API_BASE}/api/okf/repos/${REPO_ID}/routing-testsuite/${latestSuite._key}`, { token: USER_TOKEN })
+    await req('GET', `${API_BASE}/api/okf/repos/${REPO_ID}/routing-testsuite/${latestSuite._key}`, {
+      token: USER_TOKEN
+    })
   );
   const probedRow = [...(probeBack.payload.positive || []), ...(probeBack.payload.negative || [])].find(
     (r) => r.query === probeQuery && r.lastProbe
@@ -774,29 +875,52 @@ async function refreshUserToken() {
     !!probedRow && probedRow.lastProbe.verdict === probe.verdict,
     probedRow ? `row.lastProbe.verdict=${probedRow.lastProbe.verdict}` : 'row not found / not persisted'
   );
-  const probeNoauth = await req('POST', `${API_BASE}/api/okf/repos/${REPO_ID}/routing-testsuite/${latestSuite._key}/probe`, {
-    json: { query: probeQuery }
-  });
-  check('probe: unauthenticated rejected', probeNoauth.status === 401 || probeNoauth.status === 403, `status=${probeNoauth.status}`);
+  const probeNoauth = await req(
+    'POST',
+    `${API_BASE}/api/okf/repos/${REPO_ID}/routing-testsuite/${latestSuite._key}/probe`,
+    {
+      json: { query: probeQuery }
+    }
+  );
+  check(
+    'probe: unauthenticated rejected',
+    probeNoauth.status === 401 || probeNoauth.status === 403,
+    `status=${probeNoauth.status}`
+  );
 
   // ---- 17. DELETE SUITE (1-8g) ----
   console.log('[17] delete suite');
   const doomed = await generateSuite({ n_positive: 1, name: 'smoke-doomed-suite' });
-  const del = await req('DELETE', `${API_BASE}/api/okf/repos/${REPO_ID}/routing-testsuite/${doomed.suite_key}`, { token: USER_TOKEN });
+  const del = await req('DELETE', `${API_BASE}/api/okf/repos/${REPO_ID}/routing-testsuite/${doomed.suite_key}`, {
+    token: USER_TOKEN
+  });
   check('delete: 200 + deleted flag', del.status === 200 && j(del).deleted === true, `status=${del.status}`);
-  const gone = await req('GET', `${API_BASE}/api/okf/repos/${REPO_ID}/routing-testsuite/${doomed.suite_key}`, { token: USER_TOKEN });
+  const gone = await req('GET', `${API_BASE}/api/okf/repos/${REPO_ID}/routing-testsuite/${doomed.suite_key}`, {
+    token: USER_TOKEN
+  });
   check('delete: the suite is gone (404 on re-read)', gone.status === 404, `status=${gone.status}`);
-  const delAgain = await req('DELETE', `${API_BASE}/api/okf/repos/${REPO_ID}/routing-testsuite/${doomed.suite_key}`, { token: USER_TOKEN });
+  const delAgain = await req('DELETE', `${API_BASE}/api/okf/repos/${REPO_ID}/routing-testsuite/${doomed.suite_key}`, {
+    token: USER_TOKEN
+  });
   check('delete: double-delete 404s', delAgain.status === 404, `status=${delAgain.status}`);
-  const delNoauth = await req('DELETE', `${API_BASE}/api/okf/repos/${REPO_ID}/routing-testsuite/${doomed.suite_key}`, {});
-  check('delete: unauthenticated rejected', delNoauth.status === 401 || delNoauth.status === 403, `status=${delNoauth.status}`);
+  const delNoauth = await req(
+    'DELETE',
+    `${API_BASE}/api/okf/repos/${REPO_ID}/routing-testsuite/${doomed.suite_key}`,
+    {}
+  );
+  check(
+    'delete: unauthenticated rejected',
+    delNoauth.status === 401 || delNoauth.status === 403,
+    `status=${delNoauth.status}`
+  );
 
   const failed = results.filter((r) => !r.ok);
   const skipped = results.filter((r) => r.skipped).length;
   const active = results.length - skipped;
   console.log(
     `\n== SMOKE ${failed.length ? 'FAILED' : 'PASSED'}: ${active - failed.length}/${active} checks` +
-      (skipped ? ` (${skipped} skipped)` : '') + ' =='
+      (skipped ? ` (${skipped} skipped)` : '') +
+      ' =='
   );
   process.exitCode = failed.length ? 1 : 0;
 })()

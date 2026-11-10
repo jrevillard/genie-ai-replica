@@ -1,6 +1,7 @@
 const path = require('path');
 const fs = require('fs');
 const os = require('os');
+const { execSync } = require('child_process');
 const { parseEnvTemplate, getRequiredSecrets } = require('../validators/parse-env');
 const { findUnwiredDocumented, findDuplicatedDocumented } = require('../validators/unwired-documented');
 const { parseAnsibleEnvVars } = require('../validators/parse-ansible');
@@ -3682,8 +3683,9 @@ describe('the jest worker-memory cap contract (#1419)', () => {
   // (test:e2e:<suffix>) follow that exclusion, while dash-suffixed and
   // any other unknown variant over-triggers and forces a conscious
   // decision rather than silently escaping the class. The exclusion
-  // assumes only the root package defines Playwright test:e2e* scripts
-  // (#1674 tracks the pin for that assumption).
+  // assumes only the root package defines Playwright test:e2e* scripts —
+  // pinned by the #1674 test below, so a component-level definition fails
+  // this suite and forces the exclusion to be revisited.
   const JEST_INVOCATION = /(^|\s)(npm test\b|npx jest\b|npm run test:(?!e2e(?![-\w]))\w+|npm run test(?![:\w]))/;
   // Shell line continuations (`\` + newline) join after comments are
   // stripped (bash ends a comment at the newline), so one continued
@@ -3721,14 +3723,18 @@ describe('the jest worker-memory cap contract (#1419)', () => {
   // quoted-# line invokes jest today, and a quote-aware lexer would
   // exceed this heuristic guard.
   const STRIP_COMMENTS = /(^|\s)#.*$/gm;
+  // The shell commands of one block text: comments stripped, line
+  // continuations joined, chained commands split. THE one normalization
+  // pipeline — the matcher sweep and the #1676 accounting both read
+  // commands through it, so a change to the command grammar lands in
+  // both or neither.
+  const splitCommands = (text) =>
+    text.replace(STRIP_COMMENTS, '$1').replace(JOIN_CONTINUATIONS, ' ').split(COMMAND_SPLIT);
   // The jest commands of the given shell blocks — the same matcher, split,
   // and flag check the real CI file goes through below.
   const invocationsOf = (blocks) =>
     blocks.flatMap((b) =>
-      b.text
-        .replace(STRIP_COMMENTS, '$1')
-        .replace(JOIN_CONTINUATIONS, ' ')
-        .split(COMMAND_SPLIT)
+      splitCommands(b.text)
         .filter((cmd) => JEST_INVOCATION.test(cmd))
         .map((cmd) => ({ owner: b.owner, key: b.key, cmd }))
     );
@@ -3771,6 +3777,24 @@ describe('the jest worker-memory cap contract (#1419)', () => {
       // config:validate: the validator harness, the new-config suite.
       'npm run test:ci',
       'npm test'
+    ]);
+  });
+
+  test('exactly the known jobs invoke jest (#1670)', () => {
+    // The template pin counts who EXTENDS the template; this pin counts
+    // who RUNS jest — a fifth job that hand-copies the capped line
+    // without extending the template passes the sweep (its line carries
+    // the flags) and passes the template pin (the user set is unchanged),
+    // but fails here: adding a jest-invoking job, by any spelling, must
+    // grow this set through a conscious edit.
+    const owners = [...new Set(invocationsOf(ciBlocks()).map((inv) => inv.owner))].sort();
+    expect(owners).toEqual([
+      'config:validate',
+      'test:backend',
+      'test:backend-arango',
+      'test:doc-repo',
+      'test:frontend',
+      'test:okf-server'
     ]);
   });
 
@@ -3829,6 +3853,180 @@ describe('the jest worker-memory cap contract (#1419)', () => {
     expect(
       violationsFor('npm test -- --maxWorkers=2% --workerIdleMemoryLimit=500MB --coverage').map((v) => v.cmd)
     ).toEqual(['npm test -- --maxWorkers=2% --workerIdleMemoryLimit=500MB --coverage']);
+  });
+
+  // #1676: the matcher's vocabulary above is the npm/npx house spelling.
+  // Any OTHER command that looks like a test runner — mentions jest, or is
+  // a package-manager test spelling (`npm|yarn|pnpm test` or the `run
+  // test` long form, bare or with a variant suffix, with npm flags such
+  // as --prefix/--workspace in between) — must either match the
+  // vocabulary or belong to the pinned non-invocation list: an exotic
+  // spelling (`npm exec -- jest`, `yarn jest`, `./node_modules/.bin/jest`)
+  // then fails this suite and forces the matcher (or a reasoned
+  // exemption) to grow, instead of running uncapped with a fully green
+  // contract suite.
+  const TEST_RUNNER_LOOKING =
+    /\bjest\b|(^|\s)(npm|yarn|pnpm)(( +--?[\w-]+)(=[^\s]+)?( +[^-\s][^\s]*)?)* +(test|run test)\b/;
+  // A command that merely READS a jest-produced report is not an
+  // invocation: it runs node, not jest. The predicate is pinned to the
+  // report reader of test:backend-arango — a new jest-touching node -e
+  // command matches TEST_RUNNER_LOOKING but not this predicate, so it
+  // fails the accounting below. The node -e token may carry a prefix
+  // (`timeout 300 node -e ...`), so the match is position-independent.
+  const isJestReportReader = (cmd) => /(^|\s)node -e\b/.test(cmd) && cmd.includes('reports/jest-integration');
+  // Every command of the given shell blocks — no JEST_INVOCATION filter.
+  const commandsOf = (blocks) => blocks.flatMap((b) => splitCommands(b.text));
+
+  test('every test-runner-looking CI command is matched or pinned (#1676)', () => {
+    const looking = commandsOf(ciBlocks()).filter((cmd) => TEST_RUNNER_LOOKING.test(cmd));
+    // The guard must SEE the class it protects: today's population is the
+    // four materialized template lines, the arango npx jest line,
+    // config:validate's two lines, and the pinned reader (~8 commands).
+    // The floor guards catastrophic extraction breakage, not per-line
+    // drift — individual lines are pinned by the owner-set and exempt-jobs
+    // inventories above.
+    expect(looking.length).toBeGreaterThanOrEqual(5);
+    // Nothing outside the matcher's vocabulary except the pinned reader.
+    expect(looking.filter((cmd) => !JEST_INVOCATION.test(cmd) && !isJestReportReader(cmd))).toEqual([]);
+    // The pin is not vacuous: exactly the report reader of
+    // test:backend-arango rides the exemption today.
+    expect(looking.filter((cmd) => isJestReportReader(cmd))).toHaveLength(1);
+  });
+
+  test('an exotic runner spelling is looking-but-unmatched (#1676)', () => {
+    for (const cmd of [
+      'npm exec -- jest',
+      'yarn jest --silent',
+      'yarn test --coverage',
+      'yarn run test',
+      'pnpm test',
+      'pnpm run test',
+      'npm --prefix components/okf-server test',
+      'npm --workspace pkg run test',
+      './node_modules/.bin/jest --coverage'
+    ]) {
+      expect(TEST_RUNNER_LOOKING.test(cmd)).toBe(true);
+      expect(JEST_INVOCATION.test(cmd)).toBe(false);
+    }
+  });
+
+  test('the bare long-form npm spelling is both looking and matched (#1676)', () => {
+    // `npm run test` (bare) is in the matcher's own vocabulary — the pin
+    // keeps that true deliberately: dropping the matcher's bare-run
+    // alternative would otherwise pass every suite silently.
+    expect(TEST_RUNNER_LOOKING.test('npm run test')).toBe(true);
+    expect(JEST_INVOCATION.test('npm run test')).toBe(true);
+  });
+});
+
+// --- The capped-jest template structure (#1670) ---
+// The worker-memory cap is enforced STRUCTURALLY by the .test_capped_jest
+// template: the capped script line lives there once, and every
+// product-component jest job inherits it. The textual sweep above still
+// sees the line (the shell extractor re-materializes an extended base's
+// script inside each extending job), but the template-usage pin is what
+// makes the template load-bearing: a fifth jest job, or one of the four
+// leaving the template, must fail this suite and force a conscious
+// decision rather than re-introducing a hand-copied (or uncapped) line.
+describe('the capped-jest template structure (#1670)', () => {
+  // The job -> extends mapping comes from the SAME parser the shell gate
+  // uses: extractCiShellBlocks resolves extends while re-materializing
+  // inherited scripts, so the pin and the textual sweep can never
+  // disagree about what extends what.
+  const ciExtendsMap = () => {
+    const content = fs.readFileSync(path.join(ROOT, '.gitlab-ci.yml'), 'utf-8');
+    const { extendsMap, errors } = extractCiShellBlocks(content);
+    expect(errors).toEqual([]);
+    return extendsMap;
+  };
+
+  // Transitive ancestors of a job in the inheritance graph (extends AND
+  // `<<:` merge sources — the extractor maps both): an intermediary
+  // template extending the capped template must not let a fifth job
+  // inherit the cap inventory through one indirection, however that
+  // indirection is spelled — the pin counts EVERY job whose ancestor
+  // chain reaches the template, direct or not.
+  const ancestorsOf = (job, map) => {
+    const seen = new Set();
+    const stack = [...(map.get(job) || [])];
+    while (stack.length) {
+      const base = stack.pop();
+      if (seen.has(base)) {
+        continue;
+      }
+      seen.add(base);
+      stack.push(...(map.get(base) || []));
+    }
+    return seen;
+  };
+
+  test('exactly the four product-component jobs inherit the capped template', () => {
+    const map = ciExtendsMap();
+    const users = [...map.keys()].filter((job) => ancestorsOf(job, map).has('.test_capped_jest')).sort();
+    expect(users).toEqual(['test:backend', 'test:doc-repo', 'test:frontend', 'test:okf-server']);
+  });
+
+  test('the capped template is a test-node job', () => {
+    // The cap rides the same base (image, stage, NODE_ENV, artifact
+    // defaults) as every other test job — a template that silently leaves
+    // .test_node is a fork of the base, not an extension of it.
+    expect(ciExtendsMap().get('.test_capped_jest')).toContain('.test_node');
+  });
+});
+
+// --- The test:e2e name exclusion stays root-only (#1674) ---
+// The JEST_INVOCATION matcher above excludes the names test:e2e and
+// test:e2e:list by NAME, in every package — justified today by the root
+// package.json defining them as Playwright. That justification can
+// silently rot: a COMPONENT later defining a jest-based test:e2e* script
+// would make the exclusion hide a real uncapped jest run. This pin fails
+// the suite the moment a component-level definition appears, forcing the
+// exclusion to be revisited instead of letting it drift.
+describe('the test:e2e name exclusion stays root-only (#1674)', () => {
+  test('no component-level package.json defines a test:e2e* script', () => {
+    // Every TRACKED package.json below the root: git ls-files sees the
+    // repository the pipeline sees (node_modules and gitignored trees
+    // never appear), and the leading `**/` keeps the ROOT package.json
+    // itself out — its Playwright definitions are exactly what justifies
+    // the matcher's name exclusion.
+    const tracked = execSync('git ls-files -- "**/package.json"', { cwd: ROOT, encoding: 'utf-8' })
+      .split('\n')
+      .filter(Boolean);
+    // The guard must SEE the class it protects; a silent-empty pass would
+    // mean the enumeration broke, not that the packages are compliant.
+    // The floor sits well below the current population (8), so removing
+    // one package.json is a non-event while a broken enumeration still
+    // fails loudly.
+    expect(tracked.length).toBeGreaterThanOrEqual(5);
+    const offenders = [];
+    for (const rel of tracked) {
+      const scripts = JSON.parse(fs.readFileSync(path.join(ROOT, rel), 'utf-8')).scripts || {};
+      offenders.push(
+        ...Object.keys(scripts)
+          .filter((name) => /^test:e2e/.test(name))
+          .map((name) => `${rel}: ${name}`)
+      );
+    }
+    expect(offenders).toEqual([]);
+  });
+
+  test('the root package defines exactly the two Playwright test:e2e* scripts', () => {
+    // The matcher's exclusion covers `test:e2e` and its `:` variants, and
+    // the scan above skips the root package by construction — so a new
+    // ROOT-level script in that family (a jest-based `test:e2e:smoke`,
+    // say) would ride the exclusion while not being Playwright. The
+    // root's test:e2e* set is pinned to these two names AND to their
+    // Playwright implementations: the bodies are what justify the
+    // exclusion — repointing either at jest keeps the name set intact
+    // while the exclusion starts hiding a real uncapped jest run.
+    const scripts = JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf-8')).scripts || {};
+    const e2eScripts = Object.keys(scripts)
+      .filter((name) => /^test:e2e/.test(name))
+      .sort();
+    expect(e2eScripts).toEqual(['test:e2e', 'test:e2e:list']);
+    for (const name of e2eScripts) {
+      expect(scripts[name]).toMatch(/playwright/);
+    }
   });
 });
 

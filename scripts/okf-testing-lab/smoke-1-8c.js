@@ -45,7 +45,12 @@ function req(method, url, { token, form, json } = {}) {
         rejectUnauthorized: false,
         headers: {
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
-          ...(body ? { 'Content-Type': json ? 'application/json' : 'application/x-www-form-urlencoded', 'Content-Length': Buffer.byteLength(body) } : {})
+          ...(body
+            ? {
+                'Content-Type': json ? 'application/json' : 'application/x-www-form-urlencoded',
+                'Content-Length': Buffer.byteLength(body)
+              }
+            : {})
         }
       },
       (res) => {
@@ -194,7 +199,7 @@ async function cleanup() {
   check(
     'explain: suggestion shape + LLM tags',
     ex.suggestion && Array.isArray(ex.suggestion.tags),
-    `tags=[${(ex.suggestion && ex.suggestion.tags || []).join(', ')}] source=${ex.suggestion && ex.suggestion.source}`
+    `tags=[${((ex.suggestion && ex.suggestion.tags) || []).join(', ')}] source=${ex.suggestion && ex.suggestion.source}`
   );
 
   // 5. suite generation with count controls + near-miss class
@@ -208,10 +213,16 @@ async function cleanup() {
   const negs = (gen.payload && gen.payload.negative) || [];
   const byCls = negs.reduce((m, q) => ((m[q.cls] = (m[q.cls] || 0) + 1), m), {});
   check('suite: generated', !!SUITE_KEY, `key=${SUITE_KEY}`);
-  check('suite: count controls honored', byCls.meta === 2 && byCls['near-miss'] === 3 && byCls['off-domain'] === 2, JSON.stringify(byCls));
+  check(
+    'suite: count controls honored',
+    byCls.meta === 2 && byCls['near-miss'] === 3 && byCls['off-domain'] === 2,
+    JSON.stringify(byCls)
+  );
 
   // 6. run the suite
-  const run = j(await req('POST', `${API_BASE}/api/okf/repos/${REPO_ID}/routing-testsuite/${SUITE_KEY}/run`, { token: USER_TOKEN }));
+  const run = j(
+    await req('POST', `${API_BASE}/api/okf/repos/${REPO_ID}/routing-testsuite/${SUITE_KEY}/run`, { token: USER_TOKEN })
+  );
   const runRows = (run.payload && run.payload.results) || [];
   check(
     'run: rows carry gate telemetry',
@@ -221,16 +232,24 @@ async function cleanup() {
 
   // 7. batch explain — expect 200 with the consolidated shape
   const batch = j(
-    await req('POST', `${API_BASE}/api/okf/repos/${REPO_ID}/routing-testsuite/${SUITE_KEY}/explain`, { token: USER_TOKEN })
+    await req('POST', `${API_BASE}/api/okf/repos/${REPO_ID}/routing-testsuite/${SUITE_KEY}/explain`, {
+      token: USER_TOKEN
+    })
   );
-  check('batch explain: 200 + shape', batch.suite_key === SUITE_KEY && Array.isArray(batch.suggested_tags), `failing=${batch.failing_count} tags=[${(batch.suggested_tags || []).join(', ')}] source=${batch.source}`);
+  check(
+    'batch explain: 200 + shape',
+    batch.suite_key === SUITE_KEY && Array.isArray(batch.suggested_tags),
+    `failing=${batch.failing_count} tags=[${(batch.suggested_tags || []).join(', ')}] source=${batch.source}`
+  );
 
   // 8. authz: explain without token -> 401
   const noauth = await req('POST', `${API_BASE}/api/okf/repos/${REPO_ID}/routing-explain`, { json: { query: 'x' } });
   check('explain: unauthenticated rejected', noauth.status === 401 || noauth.status === 403, `status=${noauth.status}`);
 
   const failed = results.filter((r) => !r.ok);
-  console.log(`\n== SMOKE ${failed.length ? 'FAILED' : 'PASSED'}: ${results.length - failed.length}/${results.length} checks ==`);
+  console.log(
+    `\n== SMOKE ${failed.length ? 'FAILED' : 'PASSED'}: ${results.length - failed.length}/${results.length} checks ==`
+  );
   process.exitCode = failed.length ? 1 : 0;
 })()
   .catch((e) => {

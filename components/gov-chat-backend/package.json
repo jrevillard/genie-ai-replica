@@ -6,7 +6,7 @@
   "scripts": {
     "start": "node index.js",
     "dev": "nodemon index.js",
-    "test": "jest",
+    "test": "jest && node --test scripts/verifier-real-crypto.node-test.js",
     "test:contract": "jest --testPathPattern='__tests__/routes/'",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
@@ -80,7 +80,7 @@
           "outputName": "jest-backend.xml",
           "classNameTemplate": "{classname}",
           "titleTemplate": "{title}",
-          "ancestorSeparator": " › ",
+          "ancestorSeparator": " \u203a ",
           "usePathForSuiteName": true
         }
       ]

@@ -57,7 +57,13 @@ const fromFile = fs.existsSync(envFile)
         .filter((l) => l && !l.trim().startsWith('#') && l.includes('='))
         .map((l) => {
           const i = l.indexOf('=');
-          return [l.slice(0, i).trim(), l.slice(i + 1).trim().replace(/^["']|["']$/g, '')];
+          return [
+            l.slice(0, i).trim(),
+            l
+              .slice(i + 1)
+              .trim()
+              .replace(/^["']|["']$/g, '')
+          ];
         })
     )
   : {};
@@ -95,7 +101,12 @@ function req(method, url, { token, form, json } = {}) {
         rejectUnauthorized: false,
         headers: {
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
-          ...(body ? { 'Content-Type': form ? 'application/x-www-form-urlencoded' : 'application/json', 'Content-Length': Buffer.byteLength(body) } : {})
+          ...(body
+            ? {
+                'Content-Type': form ? 'application/x-www-form-urlencoded' : 'application/json',
+                'Content-Length': Buffer.byteLength(body)
+              }
+            : {})
         }
       },
       (rs) => {
@@ -122,7 +133,12 @@ const j = (r) => {
 async function mintToken() {
   const tok = j(
     await req('POST', `${AUTH}/realms/master/protocol/openid-connect/token`, {
-      form: { client_id: 'admin-cli', username: env.KEYCLOAK_ADMIN || 'admin', password: env.KEYCLOAK_ADMIN_PASSWORD, grant_type: 'password' }
+      form: {
+        client_id: 'admin-cli',
+        username: env.KEYCLOAK_ADMIN || 'admin',
+        password: env.KEYCLOAK_ADMIN_PASSWORD,
+        grant_type: 'password'
+      }
     })
   );
   const at = tok.access_token;
@@ -139,7 +155,9 @@ async function mintToken() {
       credentials: [{ type: 'password', value: SMOKE_PW, temporary: false }]
     }
   });
-  const uid = j(await req('GET', `${AUTH}/admin/realms/genie/users?username=${SMOKE_USER}&exact=true`, { token: at }))[0].id;
+  const uid = j(
+    await req('GET', `${AUTH}/admin/realms/genie/users?username=${SMOKE_USER}&exact=true`, { token: at })
+  )[0].id;
   const role = j(await req('GET', `${AUTH}/admin/realms/genie/roles/tools-admin`, { token: at }));
   await req('POST', `${AUTH}/admin/realms/genie/users/${uid}/role-mappings/realm`, { token: at, json: [role] });
   const cu = j(await req('GET', `${AUTH}/admin/realms/genie/clients?clientId=genie-app`, { token: at }))[0].id;
@@ -211,7 +229,9 @@ async function editorGraph(repoId, token) {
     await new Promise((r) => setTimeout(r, 4000));
     run = j(await req('GET', `${API}/api/okf/repos/${REPO}/topic-links`, { token: T })).run;
     const pct = run && run.batches_total ? `${run.batches_done}/${run.batches_total}` : '…';
-    console.log(`  ${Math.round((Date.now() - t0) / 1000)}s  status=${run && run.status} batches=${pct} written=${run && run.written}`);
+    console.log(
+      `  ${Math.round((Date.now() - t0) / 1000)}s  status=${run && run.status} batches=${pct} written=${run && run.written}`
+    );
     if (!run) {
       console.log('  state is null — the progress channel never landed');
       break;
@@ -223,13 +243,21 @@ async function editorGraph(repoId, token) {
     }
   }
   check('R2', !!run && run.status !== 'running' && !!run.status, `terminal status=${run && run.status}`);
-  check('R3', !!run && run.written > 0, `written=${run && run.written} of proposed=${run && run.proposed} (kept=${run && run.kept}, already_linked=${run && run.already_linked}, failures=${run && run.failures})`);
+  check(
+    'R3',
+    !!run && run.written > 0,
+    `written=${run && run.written} of proposed=${run && run.proposed} (kept=${run && run.kept}, already_linked=${run && run.already_linked}, failures=${run && run.failures})`
+  );
   if (run && run.error) console.log(`  run.error: ${run.error}`);
 
   console.log('\nAFTER');
   const after = await editorGraph(REPO, T);
   console.log(`  editor-graph edges=${after.edgeCount} (sources=${after.fromConcepts}, targets=${after.targets})`);
-  check('R4', after.fromConcepts > before.fromConcepts, `pages carrying >=1 link: ${before.fromConcepts} -> ${after.fromConcepts}`);
+  check(
+    'R4',
+    after.fromConcepts > before.fromConcepts,
+    `pages carrying >=1 link: ${before.fromConcepts} -> ${after.fromConcepts}`
+  );
   check('R5', after.edgeCount > 0, `editor projection is non-empty: ${after.edgeCount} edges`);
 
   // R6/R9 — every stored edge points at a real, different concept.
@@ -259,7 +287,11 @@ async function editorGraph(repoId, token) {
     sampled += 1;
     if (fmLinks.length > 0) withFm += 1;
   }
-  check('R7', sampled > 0 && withFm === sampled, `${withFm}/${sampled} sampled sources carry frontmatter.links[] (the born-right channel)`);
+  check(
+    'R7',
+    sampled > 0 && withFm === sampled,
+    `${withFm}/${sampled} sampled sources carry frontmatter.links[] (the born-right channel)`
+  );
 
   if (DO_SECOND_PASS) {
     // The real invariant is NOT "a second run writes nothing" — the assistant
@@ -298,7 +330,10 @@ async function editorGraph(repoId, token) {
       });
       check(
         'R8',
-        r2.status === 'done' && (r2.already_linked || 0) > 0 && dupes.length === 0 && pairs2.size === after2.links.length,
+        r2.status === 'done' &&
+          (r2.already_linked || 0) > 0 &&
+          dupes.length === 0 &&
+          pairs2.size === after2.links.length,
         `status=${r2.status}, ${r2.already_linked} existing pair(s) skipped, ${dupes.length} duplicated pair(s) in ${after2.links.length} entries`
       );
       void beforePairs;

@@ -3270,6 +3270,10 @@ lint:site-scripts:
       changes:
         - "site/scripts/**/*"
         - "components/shared/lib/package-lock.json"
+        # The gate's command and glob live in the root package.json — an
+        # edit there (a typoed glob, a moved prettier path) must re-run
+        # the gate that defines it.
+        - "package.json"
         - ".gitlab-ci.yml"
       when: on_success
     - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH || $CI_COMMIT_BRANCH =~ /^release\/*/'
@@ -3302,6 +3306,10 @@ lint:root-scripts:
         - "scripts/**/*.js"
         - "scripts/**/*.cjs"
         - "components/shared/lib/package-lock.json"
+        # The gate's command and glob live in the root package.json — an
+        # edit there (a typoed glob, a moved prettier path) must re-run
+        # the gate that defines it.
+        - "package.json"
         - ".gitlab-ci.yml"
       when: on_success
     - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH || $CI_COMMIT_BRANCH =~ /^release\/*/'

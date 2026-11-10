@@ -3839,12 +3839,13 @@ describe('the jest worker-memory cap contract (#1419)', () => {
 
   // #1676: the matcher's vocabulary above is the npm/npx house spelling.
   // Any OTHER command that looks like a test runner — mentions jest, or is
-  // an npm test / npm run test* spelling — must either match the vocabulary
-  // or belong to the pinned non-invocation list: an exotic spelling
-  // (`npm exec -- jest`, `yarn jest`, `./node_modules/.bin/jest`) then fails
-  // this suite and forces the matcher (or a reasoned exemption) to grow,
-  // instead of running uncapped with a fully green contract suite.
-  const TEST_RUNNER_LOOKING = /\bjest\b|(^|\s)npm (test\b|run test[:\w])/;
+  // a package-manager test spelling (`npm|yarn|pnpm test`, `... run test*`)
+  // — must either match the vocabulary or belong to the pinned
+  // non-invocation list: an exotic spelling (`npm exec -- jest`,
+  // `yarn jest`, `./node_modules/.bin/jest`) then fails this suite and
+  // forces the matcher (or a reasoned exemption) to grow, instead of
+  // running uncapped with a fully green contract suite.
+  const TEST_RUNNER_LOOKING = /\bjest\b|(^|\s)(npm|yarn|pnpm) (test\b|run test[:\w])/;
   // A command that merely READS a jest-produced report is not an
   // invocation: it runs node, not jest. The predicate is pinned to the
   // report reader of test:backend-arango — a new jest-touching node -e
@@ -3867,7 +3868,13 @@ describe('the jest worker-memory cap contract (#1419)', () => {
   });
 
   test('an exotic runner spelling is looking-but-unmatched (#1676)', () => {
-    for (const cmd of ['npm exec -- jest', 'yarn jest --silent', './node_modules/.bin/jest --coverage']) {
+    for (const cmd of [
+      'npm exec -- jest',
+      'yarn jest --silent',
+      'yarn test --coverage',
+      'pnpm test',
+      './node_modules/.bin/jest --coverage'
+    ]) {
       expect(TEST_RUNNER_LOOKING.test(cmd)).toBe(true);
       expect(JEST_INVOCATION.test(cmd)).toBe(false);
     }
@@ -3895,11 +3902,27 @@ describe('the capped-jest template structure (#1670)', () => {
     return extendsMap;
   };
 
-  test('exactly the four product-component jobs extend the capped template', () => {
-    const users = [...ciExtendsMap().entries()]
-      .filter(([, bases]) => bases.includes('.test_capped_jest'))
-      .map(([job]) => job)
-      .sort();
+  // Transitive ancestors of a job in the extends graph: an intermediary
+  // template extending the capped template must not let a fifth job
+  // inherit the cap inventory through one indirection — the pin counts
+  // EVERY job whose ancestor chain reaches the template, direct or not.
+  const ancestorsOf = (job, map) => {
+    const seen = new Set();
+    const stack = [...(map.get(job) || [])];
+    while (stack.length) {
+      const base = stack.pop();
+      if (seen.has(base)) {
+        continue;
+      }
+      seen.add(base);
+      stack.push(...(map.get(base) || []));
+    }
+    return seen;
+  };
+
+  test('exactly the four product-component jobs inherit the capped template', () => {
+    const map = ciExtendsMap();
+    const users = [...map.keys()].filter((job) => ancestorsOf(job, map).has('.test_capped_jest')).sort();
     expect(users).toEqual(['test:backend', 'test:doc-repo', 'test:frontend', 'test:okf-server']);
   });
 

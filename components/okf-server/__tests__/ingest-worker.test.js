@@ -1285,7 +1285,12 @@ describe('ingestWorker._reapStuckParsed (2-9-5 atomicity — claim-stamp reaping
 });
 
 describe("the bundle-id cache (issue #1709: the repo's CURRENT bundle doc)", () => {
-  beforeEach(() => jest.clearAllMocks());
+  beforeEach(() => {
+    jest.clearAllMocks();
+    // The cache is module-level: a previous test must not leave a seeded
+    // entry behind for this one.
+    worker.invalidateBundleFileCache(REPO);
+  });
 
   test('the cache is "first answer wins" until it is invalidated', async () => {
     authedAxios.get.mockResolvedValue({ data: { data: [{ file_id: 'bundle-1' }] } });
@@ -1299,6 +1304,26 @@ describe("the bundle-id cache (issue #1709: the repo's CURRENT bundle doc)", () 
     // without it the drain's verdicts and the bundle state machine keep
     // hitting the FIRST bundle the repo ever had.
     worker.invalidateBundleFileCache(REPO);
+    expect(await worker.getBundleFileId(REPO)).toBe('bundle-2');
+    expect(authedAxios.get).toHaveBeenCalledTimes(2);
+  });
+
+  test('a resolution that raced an invalidation does not re-seed the cache', async () => {
+    // The GET issued BEFORE the invalidation resolves the PREVIOUS bundle —
+    // caching that answer would re-poison the cache for the process lifetime
+    // (a store landing between the miss and the resolution is exactly the
+    // #1709 race).
+    let release;
+    const gate = new Promise((resolve) => {
+      release = resolve;
+    });
+    authedAxios.get.mockImplementation(() => gate.then(() => ({ data: { data: [{ file_id: 'bundle-1' }] } })));
+    const inFlight = worker.getBundleFileId(REPO); // cache miss -> GET in flight
+    worker.invalidateBundleFileCache(REPO); // a new bundle is stored NOW
+    release();
+    expect(await inFlight).toBe('bundle-1'); // the stale answer still comes back...
+    authedAxios.get.mockResolvedValue({ data: { data: [{ file_id: 'bundle-2' }] } });
+    // ...but it must not have been cached: the next read resolves again.
     expect(await worker.getBundleFileId(REPO)).toBe('bundle-2');
     expect(authedAxios.get).toHaveBeenCalledTimes(2);
   });

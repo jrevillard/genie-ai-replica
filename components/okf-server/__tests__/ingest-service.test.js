@@ -65,6 +65,9 @@ jest.mock('../services/service-token', () => ({
 // stores a NEW bundle zip, so it must drop the cached id — otherwise the
 // drain keeps mirroring into the first bundle the repo ever had (#1709).
 jest.mock('../workers/ingestWorker', () => ({
+  // Spread the real module so a future use of another worker export inside
+  // ingest-service still resolves — only the cache invalidation is replaced.
+  ...jest.requireActual('../workers/ingestWorker'),
   invalidateBundleFileCache: jest.fn()
 }));
 jest.mock('../services/repository-service', () => ({

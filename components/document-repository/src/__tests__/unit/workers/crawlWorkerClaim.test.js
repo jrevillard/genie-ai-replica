@@ -95,9 +95,10 @@ describe('crawl worker job claim', () => {
     if (claimWrite()) {
       await waitFor(
         // The job leaves 'Crawling' when it is finalized — 'Succeeded',
-        // 'Failed' or 'Killed'. Any status other than 'Crawling' means the
-        // chain settled, whatever the outcome was.
-        () => jobCollection.update.mock.calls.some((c) => c[1] && c[1].status && c[1].status !== 'Crawling'),
+        // 'Failed' or 'Killed' (the worker's terminal states). A bare "not
+        // 'Crawling'" would also match a non-terminal write.
+        () =>
+          jobCollection.update.mock.calls.some((c) => c[1] && ['Succeeded', 'Failed', 'Killed'].includes(c[1].status)),
         'the crawl job to reach its terminal status'
       );
     }

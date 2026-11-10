@@ -186,14 +186,18 @@ This is the single most reliable way to run analysis on a remote swarm node.
 7. **Every timestamp doc-repo STORES is stamped in UTC** — `ingestion_log.timestamp`
    is written by `fileService.addIngestionLog`, `crawl_log.timestamp` by
    `addCrawlLog`, and the `files` collection's `uploaded_date` / `create_date` /
-   `crawl_date` / `ingest_date` / `retract_date` by `fileService`, `metadataService`
-   and `fileController` — every one of them with `new Date().toISOString()` (or
-   `stats.birthtime.toISOString()`), which is UTC and timezone-independent. So a
-   stored stamp that looks shifted by EXACTLY your UTC offset is not a doc-repo
-   bug: either the host clock is skewed (containers share the host kernel clock,
-   so every service on that host is off by the same amount — including the
-   dataprep stdout you compare against) or you are reading the UTC stamp back in
-   local time. Check the host first: `date` vs `date -u` inside the container.
+   `crawl_date` / `ingest_date` / `retract_date` by `fileService`, `metadataService`,
+   `fileController` and the crawl worker — every one of them with
+   `new Date().toISOString()` (or `stats.birthtime.toISOString()`), which is UTC
+   and timezone-independent (`crawl_job`'s `claimed_at`/`finished_at` and
+   `crawl_metrics.timestamp` are stamped the same way). So a stored stamp that
+   looks shifted by EXACTLY your UTC offset is not a doc-repo bug: either the
+   host clock is skewed (containers share the host kernel clock, so every
+   service on that host is off by the same amount — including the dataprep
+   stdout you compare against) or you are reading the UTC stamp back in local
+   time. Check the host against a trusted reference (NTP state, `date -u` from a
+   machine you trust) — `date` vs `date -u` INSIDE one container proves nothing:
+   in a UTC-default container the two are equal even when the clock is skewed.
 
 ## 7. Quick probe of the live vLLM (isolate model vs pipeline)
 

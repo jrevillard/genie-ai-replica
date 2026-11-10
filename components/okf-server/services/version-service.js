@@ -278,11 +278,18 @@ async function mintVersion(repo_id, opts = {}, actor) {
     // belong to a running import. Reconciling it would report a drain that
     // never happened — the zip's conversion record ('adding' → 'done'/'failed')
     // is the in-flight signal, and it is written by the same import that
-    // stores the bundle.
-    const importInFlight = !!(repo.conversion && repo.conversion.status === 'adding');
+    // stores the bundle. The record is SHARED with the crawl conversion, so
+    // `status === 'adding'` alone is not enough: the crawl conversion writes
+    // bytes/pages progress and never `concepts_total`, which only a zip
+    // import carries.
+    const zipImportInFlight = !!(
+      repo.conversion &&
+      repo.conversion.status === 'adding' &&
+      repo.conversion.concepts_total != null
+    );
     const drainInFlight = async (aql) => (await (await db.query(aql, { repo_id })).all()).length > 0;
     if (
-      !importInFlight &&
+      !zipImportInFlight &&
       (await drainInFlight(
         `FOR f IN files FILTER f.repo_id == @repo_id AND f.dataprep.status == 'Pending' LIMIT 1 RETURN 1`
       ))

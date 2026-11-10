@@ -18,5 +18,6 @@ throw new Error(
     'the auth middleware must stand in for the verifier at its module boundary: ' +
     "jest.mock('../../shared-lib/keycloak-auth-service', () => mockVerifier). " +
     'A suite that needs jose itself must declare it as a devDependency and drop the ' +
-    "'^jose$' mapping in jest.config.js."
+    "'^jose$' mapping in jest.config.js — together with the verifierTrap suite that " +
+    'pins that mapping.'
 );

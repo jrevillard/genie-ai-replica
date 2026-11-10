@@ -800,6 +800,11 @@ async function waitForTerminal(db, repoId, conceptId, windowMs) {
 // bundle-zip panel then shows the per-concept ingest progress (Started /
 // Ingested / Ingestion Error).
 const _bundleFileCache = new Map(); // repo_id -> bundle file_id (the repo's CURRENT bundle)
+// Bumped on every invalidation. A resolution that STARTED before the last
+// invalidation must not re-seed the cache afterwards: it raced the store and
+// resolved the PREVIOUS bundle — caching it would re-poison the cache for the
+// process lifetime, right back to the #1709 symptom.
+let _bundleFileCacheEpoch = 0;
 
 /**
  * Drop the cached bundle id of a repo — its bundle doc changed (a new zip was
@@ -810,14 +815,20 @@ const _bundleFileCache = new Map(); // repo_id -> bundle file_id (the repo's CUR
  * the worker's own ingestion-log mirror and the bundle state machine keep
  * addressing the stale doc — the current bundle never leaves 'Pending' and
  * its Ingestion Log never receives the drain's verdicts (issue #1709).
+ *
+ * PROCESS-LOCAL BY DESIGN: with more than one okf-server replica each pod
+ * caches and invalidates independently, so the stale-first-answer behaviour
+ * would come back per pod. Single-replica is the shipped deployment.
  */
 function invalidateBundleFileCache(repoId) {
   _bundleFileCache.delete(repoId);
+  _bundleFileCacheEpoch += 1;
 }
 
 async function getBundleFileId(repoId) {
   const cached = _bundleFileCache.get(repoId);
   if (cached) return cached;
+  const epochAtStart = _bundleFileCacheEpoch;
   // The bundle zip is the only doc-repo artifact with is_bundle=true for the repo.
   // Doc-repo returns { data: [...], pagination: {...} } (no `items`/`files` key).
   const resp = await authedAxios.get(
@@ -829,7 +840,9 @@ async function getBundleFileId(repoId) {
   if (!bundle || !bundle.file_id) {
     throw new Error(`Bundle zip not found in doc-repo for repo_id=${repoId}`);
   }
-  _bundleFileCache.set(repoId, bundle.file_id);
+  if (epochAtStart === _bundleFileCacheEpoch) {
+    _bundleFileCache.set(repoId, bundle.file_id);
+  }
   return bundle.file_id;
 }
 

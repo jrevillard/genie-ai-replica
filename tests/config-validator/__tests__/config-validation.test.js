@@ -3893,7 +3893,10 @@ describe('the capped-jest template structure (#1670)', () => {
     let i = 0;
     while (i < lines.length) {
       const line = lines[i];
-      const topKey = line.match(/^([^\s#][^#]*):\s*(?:#.*)?$/);
+      // The extractor's own top-key shape (anchors included): a key
+      // carrying an anchor token (`job: &anchor`) is still a job, and its
+      // extends must be attributed to IT, not to the previous owner.
+      const topKey = line.match(/^([^\s#][^#]*):\s*(?:&(\S+)\s*)?(?:#.*)?$/);
       if (topKey) {
         owner = topKey[1].trim();
         jobIndent = null;

@@ -168,12 +168,15 @@ workflow:
 # npm ci lane — the cache is content-addressed, so overlapping tarballs
 # coexist, and npm verifies integrity against each install's lock, so a
 # store that predates a dependency bump is stale, never wrong. The key
-# rides TWO lock files (cache:key:files takes literal paths only and caps
-# at two entries on this instance): the backend and frontend locks, the
-# two largest and most-churned dependency trees — either moving refreshes
-# the store and abandons the old archive. Jobs with their own cache array
-# (which REPLACES an inherited one) must append the entry themselves; a
-# job that runs no npm at all opts out with `cache: []`.
+# rides TWO lock files (this instance's ci/lint rejects more than two
+# cache:key:files entries — the raised limit ships behind a disabled
+# feature flag): the backend and frontend locks, the two largest and
+# most-churned dependency trees — either moving refreshes the store and
+# abandons the old archive. No fallback_keys: stores exist only under
+# content-derived keys, so a branch-named fallback would never match
+# anything. Jobs with their own cache array (which REPLACES an inherited
+# one) must append the entry themselves; a job that runs no npm at all
+# opts out with `cache: []`.
 .npm_download_cache: &npm_download_cache
   key:
     files:
@@ -182,9 +185,6 @@ workflow:
     prefix: npm-dl
   paths:
     - .npm/
-  fallback_keys:
-    - "npm-dl-$CI_DEFAULT_BRANCH"
-    - "npm-dl-"
 
 .node_base:
   # node:22-alpine: Node 20 reached EOL (2026-04-30) and a stale cached
@@ -4308,6 +4308,10 @@ config:api-client:
           - openapitools.json
       paths:
         - .openapi-tools/
+    # The job's cache array replaces the .node_base entry — the npm
+    # download cache must be spelled here too (#1671): the wrapper install
+    # and the swagger-jsdoc install both read it.
+    - *npm_download_cache
   rules:
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
       # The whole backend tree, not just the spec sources: the extraction

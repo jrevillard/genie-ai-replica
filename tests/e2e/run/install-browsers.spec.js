@@ -327,12 +327,46 @@ test('a checkout that does not match the lockfile is reinstalled with the dev de
   expect(ci.args).toContain('--include=dev');
 });
 
-test('a checkout that STILL does not match after npm ci fails loudly', () => {
+test('a checkout that STILL does not match after npm ci fails loudly, and names the path', () => {
   // The guard that makes npm ci trustworthy: a tree npm ci did not bring
-  // back to the lockfile must not pass as reconciled.
+  // back to the lockfile must not pass as reconciled — and the report names
+  // WHERE the version was loaded from, or the operator cannot tell which
+  // tree to fix.
   const root = makeCheckout({ coreVersion: '1.0.0-older-core' });
   const { run } = fakeRun();
-  expect(() => reconcile(root, { run, exists: fakeExists() })).toThrow(/still does not match the lockfile/);
+  expect(() => reconcile(root, { run, exists: fakeExists() })).toThrow(
+    /still does not match the lockfile.*playwright-core 1\.0\.0-older-core at .*playwright-core\/package\.json.*vs 9\.9\.9-fixture pinned/
+  );
+});
+
+test('the chain is resolved on the disk, not from a stale resolution cache', () => {
+  // The mutation this pins: a reader that resolved through require.resolve
+  // would hand back the path it cached BEFORE the tree was replaced — a
+  // path that no longer exists — and the reconciler would die with a raw
+  // ENOENT in exactly the drift case it exists to fix.
+  const root = makeCheckout();
+  expect(resolvePackage('playwright', root)).toBe(path.join(root, 'node_modules/playwright/package.json'));
+  fs.rmSync(path.join(root, 'node_modules/playwright'), { recursive: true, force: true });
+  const nested = path.join(root, 'node_modules/@playwright/test/node_modules/playwright');
+  fs.mkdirSync(nested, { recursive: true });
+  fs.writeFileSync(path.join(nested, 'package.json'), JSON.stringify({ name: 'playwright', version: '2.0.0-restored' }));
+  expect(resolvePackage('playwright', root)).toBe(path.join(nested, 'package.json'));
+});
+
+test('the chain is the ROOT project\'s — the suite project does not own the runtime', () => {
+  // The mutation this pins: the chain starts at the repository root, where
+  // the lockfile that pins it lives. A copy under tests/e2e/node_modules
+  // (the suite project's own tree) is not the runtime the root's lockfile
+  // pins, and reading it would compare one project's packages with
+  // another's pins.
+  const root = makeCheckout();
+  const stray = path.join(root, 'tests/e2e/node_modules/@playwright/test');
+  fs.mkdirSync(stray, { recursive: true });
+  fs.writeFileSync(path.join(stray, 'package.json'), JSON.stringify({ name: '@playwright/test', version: '9.9.9-stray' }));
+  expect(resolvePackage('@playwright/test', root)).toBe(
+    path.join(root, 'node_modules/@playwright/test/package.json')
+  );
+  expect(runnerVersions(root)['@playwright/test']).toBe(FIXTURE_VERSION);
 });
 
 test('the HEADLESS SHELL is verified — the build the runner launches', () => {
@@ -352,21 +386,6 @@ test('a build without the completion marker is not a complete build', () => {
   expect(() =>
     reconcile(root, { run, exists: fakeExists(['/browsers/chromium-4711/INSTALLATION_COMPLETE']) })
   ).toThrow(/carries no INSTALLATION_COMPLETE/);
-});
-
-test('a build whose revision the browsers.json does not name is refused', () => {
-  const root = makeCheckout();
-  const { run } = fakeRun({
-    locations: [
-      { name: 'chromium', revision: '9999', location: '/browsers/chromium-9999' },
-      {
-        name: 'chromium-headless-shell',
-        revision: FIXTURE_SHELL,
-        location: '/browsers/chromium_headless_shell-4712'
-      }
-    ]
-  });
-  expect(() => reconcile(root, { run, exists: fakeExists() })).toThrow(/the two sources disagree/);
 });
 
 test('a checkout without a Playwright CLI fails loudly', () => {

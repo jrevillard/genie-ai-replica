@@ -99,10 +99,12 @@ as twelve product bugs (#1779).
    `node_modules/.package-lock.json` claims otherwise, and a nested install
    is pinned by its own entry, not by a hoisted sibling's;
 2. the **browser tree** carries the revision the installed Playwright names
-   — installed by that Playwright's own installer, then **verified**: the
-   build a headless run launches is the *headless shell*, a build of its
-   own, and that is the one the check asserts (together with the install's
-   completion marker).
+   — installed by that Playwright's own installer, then **verified**: both
+   builds are asserted, because the build a headless run launches is the
+   *headless shell*, a build of its own, and that is the one that was
+   missing when one missing build became twelve filed issues. Each is
+   checked at the location the installer named, together with the install's
+   completion marker.
 
 No revision number is written in the repository: it is derived from the
 installed Playwright, so a lockfile bump needs no second number to change.

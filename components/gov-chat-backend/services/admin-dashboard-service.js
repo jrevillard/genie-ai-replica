@@ -1,4 +1,4 @@
-const { logger, dbService, parsePositiveInt, formatSize } = require('../shared-lib');
+const { logger, dbService, parsePositiveInt, formatSize, readCollectionUsage } = require('../shared-lib');
 const os = require('os');
 const fs = require('fs').promises;
 const path = require('path');
@@ -393,34 +393,24 @@ class AdminDashboardService {
       const collectionStats = await Promise.all(
         collections.map(async (collection) => {
           const figures = await collection.figures();
-          // The driver's shape (verified against ArangoDB 3.12 + arangojs
-          // 8.8.1 types, issue #1761): the live document count sits at the
-          // TOP level (`figures.count`), the byte sizes nest under
-          // `figures.figures` (`documentsSize`). The old flat read
-          // (`figures.size`) was always undefined and summed into the
-          // "NaN GB" database size.
-          const inner = (figures && figures.figures) || {};
-          logger.debug(`Collection ${collection.name}: count=${figures && figures.count}, size=${inner.documentsSize}`);
-          // MISSING reads default to 0; GARBAGE values (NaN) must propagate
-          // to the total's non-finite tripwire below — `|| 0` here would
-          // silently turn a broken payload into a confident "0 B".
-          const rawSize = inner.documentsSize === undefined ? 0 : inner.documentsSize;
+          // The driver-shape decode lives in shared-lib: count at the TOP
+          // level, byte sizes under figures.figures, missing defaults to 0,
+          // garbage throws naming the collection (issue #1761 — the old
+          // flat read summed undefineds into a "NaN GB" database size).
+          const usage = readCollectionUsage(figures, collection.name);
+          logger.debug(`Collection ${collection.name}: count=${usage.count}, size=${usage.size}`);
           return {
             name: collection.name,
-            count: figures && figures.count !== undefined ? figures.count : 0,
-            size: rawSize,
-            sizeFormatted: formatSize(rawSize)
+            count: usage.count,
+            size: usage.size,
+            sizeFormatted: formatSize(usage.size)
           };
         })
       );
 
+      // No total tripwire needed: readCollectionUsage validated every
+      // collection, so the sum of finite non-negatives is one too.
       const totalSize = collectionStats.reduce((sum, coll) => sum + coll.size, 0);
-      // A non-finite or negative total is a payload failure, not a
-      // renderable value: the card must show its error state, never a
-      // confident "NaN GB" / "NaN undefined".
-      if (!Number.isFinite(totalSize) || totalSize < 0) {
-        throw new Error(`Database stats total size is not a valid byte count: ${totalSize}`);
-      }
       const formattedSize = formatSize(totalSize);
       logger.debug(`Total database size: ${totalSize} bytes, formatted: ${formattedSize}`);
 
@@ -697,6 +687,8 @@ class AdminDashboardService {
    * @returns {Promise<Object>} Backup result
    */
   async backupDatabase() {
+    let backupFile = null;
+    let backupCompleted = false;
     if (!this.db) {
       throw new Error('Database not initialized. Call init() first.');
     }
@@ -708,34 +700,72 @@ class AdminDashboardService {
       const backupDir = process.env.BACKUP_DIR || path.join(__dirname, '../backups');
       await fs.mkdir(backupDir, { recursive: true });
 
+      // Streamed per-document (issue #1762): the old export accumulated the
+      // ENTIRE database into one object and stringified it whole — the same
+      // V8 string-cap failure the sibling /database/backup 500'd on. Same
+      // bounded-write contract: per-document stringify, drain backpressure,
+      // stream errors fail the backup instead of hanging or crashing.
+      const fsStandard = require('fs');
+      backupFile = path.join(backupDir, `backup-${timestamp}.json`);
+      const writeStream = fsStandard.createWriteStream(backupFile);
+      let streamFailure = null;
+      writeStream.on('error', (err) => {
+        streamFailure = err;
+      });
+      const writeBounded = (chunk) => {
+        if (streamFailure) return Promise.reject(streamFailure);
+        return new Promise((resolve, reject) => {
+          if (writeStream.write(chunk)) return resolve();
+          const onDrain = () => {
+            writeStream.off('error', onFail);
+            resolve();
+          };
+          const onFail = (e) => {
+            writeStream.off('drain', onDrain);
+            reject(e);
+          };
+          writeStream.once('drain', onDrain);
+          writeStream.once('error', onFail);
+        });
+      };
+
       // Export all collections using arangojs API (no shell commands needed)
       const collections = await this.db.collections();
-      const backupData = {};
+      await writeBounded('{');
+      const exportedCollections = [];
       let totalDocuments = 0;
+      let collectionCount = 0;
 
       for (const collection of collections) {
-        try {
-          const cursor = await collection.all();
-          const documents = await cursor.all();
-          backupData[collection.name] = documents;
-          totalDocuments += documents.length;
-          logger.debug(`Exported ${documents.length} documents from ${collection.name}`);
-        } catch (err) {
-          logger.warn(`Skipping collection ${collection.name}: ${err.message}`);
+        const cursor = await collection.all();
+        await writeBounded(`${collectionCount === 0 ? '' : ',\n'}  "${collection.name}": [`);
+        let docCount = 0;
+        for await (const doc of cursor) {
+          await writeBounded(`${docCount === 0 ? '' : ','}${JSON.stringify(doc)}`);
+          docCount++;
+          totalDocuments++;
         }
+        await writeBounded(']');
+        collectionCount++;
+        exportedCollections.push(collection.name);
+        logger.debug(`Exported ${docCount} documents from ${collection.name}`);
       }
 
-      const backupFile = path.join(backupDir, `backup-${timestamp}.json`);
-      await fs.writeFile(backupFile, JSON.stringify(backupData, null, 2));
-      logger.debug(
-        `Backup completed: ${totalDocuments} documents across ${Object.keys(backupData).length} collections`
-      );
+      await writeBounded('\n}');
+      writeStream.end();
+      await new Promise((resolve, reject) => {
+        writeStream.on('finish', resolve);
+        writeStream.on('error', reject);
+      });
+      backupCompleted = true;
+
+      logger.debug(`Backup completed: ${totalDocuments} documents across ${collectionCount} collections`);
 
       const response = {
         status: 'success',
         message: 'Database backup completed successfully',
         backupFile,
-        collections: Object.keys(backupData),
+        collections: exportedCollections,
         documentCount: totalDocuments
       };
       logger.debug(`Backup response: ${JSON.stringify(response)}`);
@@ -743,6 +773,16 @@ class AdminDashboardService {
       return response;
     } catch (error) {
       logger.error(`Error in backupDatabase: ${error.message}`, { stack: error.stack });
+      // A mid-backup failure leaves a partial file on disk — remove it.
+      // A failure AFTER the stream finished never destroys the backup.
+      if (backupFile && !backupCompleted) {
+        try {
+          await fs.unlink(backupFile);
+          logger.info(`Removed partial backup file: ${backupFile}`);
+        } catch (cleanupError) {
+          logger.warn(`Could not remove partial backup file: ${cleanupError.message}`);
+        }
+      }
       throw error;
     }
   }

@@ -15,8 +15,9 @@ const { isExpectedAbsence } = require('../../../shared/lib/arango-absence');
 // digest shared by keycloak-proxy-service and user-provisioning-service.
 const { erasureTombstoneKey } = require('../../../shared/lib/erasure-tombstone');
 // Re-exported for real (pure function, no deps): human-readable byte
-// formatting shared by the admin stats and backup services.
-const { formatSize } = require('../../../shared/lib/format-utils');
+// formatting and the arangojs figures() decode shared by the admin stats
+// and backup services.
+const { formatSize, readCollectionUsage } = require('../../../shared/lib/format-utils');
 
 module.exports = {
   logger: {
@@ -33,6 +34,7 @@ module.exports = {
   parsePositiveInt,
   erasureTombstoneKey,
   formatSize,
+  readCollectionUsage,
   spanAttrs,
   tracingBaggage
 };

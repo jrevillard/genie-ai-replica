@@ -34,22 +34,21 @@ jest.mock(
       debug: jest.fn()
     },
     dbService: { getConnection: jest.fn() },
-    // The real formatter — the backup's size strings come from the shared
-    // helper now (issue #1761/#1762 review: one formatSize, not three).
-    formatSize: require('../../../shared/lib/format-utils').formatSize
+    // The real formatters — sizes come from the shared helpers now
+    // (issue #1761/#1762 review: one formatSize + one figures() decode,
+    // not three drifting copies).
+    ...require('../../../shared/lib/format-utils')
   }),
   { virtual: true }
 );
 
 const { dbService } = require('../../shared-lib');
 
-// The backup streams documents via `for await...of` (issue #1762) — the
-// mock cursor must be async-iterable.
+// The backup consumes the cursor ONLY via `for await...of` (issue #1762) —
+// the mock carries exactly that surface, no dead cursor.all().
 function makeIterableCursor(docs) {
   let i = 0;
   return {
-    all: jest.fn().mockResolvedValue(docs),
-    next: jest.fn(async () => (i < docs.length ? docs[i++] : null)),
     [Symbol.asyncIterator]() {
       return {
         next: async () => (i < docs.length ? { value: docs[i++], done: false } : { value: undefined, done: true })
@@ -189,11 +188,11 @@ describe('DatabaseOperationsService', () => {
       expect(require('fs').promises.unlink).toHaveBeenCalledWith(expect.stringMatching(/huduma_backup_.*\.json$/));
     });
 
-    it('streams documents without ever stringifying a whole collection', async () => {
+    it('streams documents in bounded chunks, never a whole collection', async () => {
       // Issue #1762: the backup stringified each collection's ENTIRE array
       // into one string — a 46,938-doc collection crossed V8's string cap
-      // and 500'd after 34s of successful work. Every write must stay at
-      // document size, whatever the collection holds.
+      // and 500'd after 34s of successful work. Chunks are capped at 256
+      // docs / 1 MiB (plus one document), whatever the collection holds.
       const bigDoc = { _key: 'big', blob: 'x'.repeat(400000) };
       mockDb.listCollections.mockResolvedValue([{ name: 'big_collection', isSystem: false }]);
       mockDb.query.mockImplementation(() => Promise.resolve(makeIterableCursor([bigDoc, { _key: 'small' }])));
@@ -204,14 +203,15 @@ describe('DatabaseOperationsService', () => {
       const writes = mockWriteStream.write.mock.calls.map((c) => c[0]);
       // The collection header opens the array...
       expect(writes.some((w) => w.includes('"big_collection": ['))).toBe(true);
-      // ...and the big document is written AS ONE DOCUMENT, never inside a
-      // whole-array string.
-      expect(writes.some((w) => w.startsWith('{"_key":"big"'))).toBe(true);
-      // The biggest single write is the biggest single DOCUMENT (bounded by
-      // document size + a separator), never a multi-document array.
+      // ...and no single write may exceed the chunk cap plus one document —
+      // a whole-collection array (or the old whole-database stringify) is
+      // orders of magnitude over this bound at corpus scale.
       const biggest = Math.max(...writes.map((w) => w.length));
-      expect(biggest).toBeLessThan(400100);
-      expect(writes.every((w) => !(w.includes('"_key":"big"') && w.includes('"_key":"small"')))).toBe(true);
+      expect(biggest).toBeLessThan(1024 * 1024 + 400020);
+
+      // The streamed envelope must be parseable JSON.
+      const joined = writes.join('');
+      expect(JSON.parse(joined).big_collection).toEqual([bigDoc, { _key: 'small' }]);
     });
 
     it('removes the partial backup file when a mid-backup failure fires', async () => {
@@ -252,7 +252,8 @@ describe('DatabaseOperationsService', () => {
       mockDb.listCollections.mockResolvedValue([{ name: 'users', isSystem: false }]);
       mockDb.query.mockImplementation(() => Promise.resolve(makeIterableCursor([{ _key: 'u1' }])));
       service.compressBackups = true;
-      const compressSpy = jest.spyOn(service, '_compressBackup').mockImplementation(async (p) => p); // the internal-failure contract
+      // The honest contract: compression failure reports null.
+      const compressSpy = jest.spyOn(service, '_compressBackup').mockResolvedValue(null);
 
       const result = await service.backupDatabase();
 

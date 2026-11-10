@@ -1,6 +1,6 @@
 'use strict';
 
-const { formatSize } = require('../format-utils');
+const { formatSize, readCollectionUsage } = require('../format-utils');
 
 describe('formatSize', () => {
   it('formats 0 bytes', () => {
@@ -31,5 +31,31 @@ describe('formatSize', () => {
     expect(formatSize(NaN)).toBe('0 B');
     expect(formatSize(Infinity)).toBe('0 B');
     expect(formatSize(undefined)).toBe('0 B');
+  });
+});
+
+describe('readCollectionUsage', () => {
+  it('decodes the real driver shape: top-level count, nested documentsSize', () => {
+    // Verified against ArangoDB 3.12 + arangojs 8.8.1 types (issue #1761).
+    expect(readCollectionUsage({ count: 100, figures: { documentsSize: 5000 } }, 'users')).toEqual({
+      count: 100,
+      size: 5000
+    });
+  });
+
+  it('defaults MISSING values to 0', () => {
+    expect(readCollectionUsage({ figures: {} }, 'empty')).toEqual({ count: 0, size: 0 });
+    expect(readCollectionUsage(null, 'nullish')).toEqual({ count: 0, size: 0 });
+  });
+
+  it('throws NAMING the collection on garbage counts and sizes', () => {
+    // Garbage must fail at the source — `|| 0` here once turned a broken
+    // payload into a confident zero ("NaN GB" was its sibling failure).
+    expect(() => readCollectionUsage({ count: 1, figures: { documentsSize: NaN } }, 'weird')).toThrow(
+      'Collection "weird" reported an invalid byte size: NaN'
+    );
+    expect(() => readCollectionUsage({ count: -5, figures: {} }, 'neg')).toThrow(
+      'Collection "neg" reported an invalid document count: -5'
+    );
   });
 });

@@ -34,12 +34,20 @@ const mockFs = {
   writeFile: jest.fn(),
   stat: jest.fn(),
   statfs: jest.fn(),
-  open: jest.fn()
+  open: jest.fn(),
+  unlink: jest.fn()
+};
+
+const mockFsStandard = {
+  createWriteStream: jest.fn(),
+  createReadStream: jest.fn()
 };
 
 jest.mock('fs', () => ({
   promises: mockFs,
-  constants: { R_OK: 4 }
+  constants: { R_OK: 4 },
+  createWriteStream: mockFsStandard.createWriteStream,
+  createReadStream: mockFsStandard.createReadStream
 }));
 
 jest.mock('os', () => ({
@@ -58,19 +66,31 @@ jest.mock('../../services/path-sanitizer', () => ({
 }));
 
 function createMockCursor(results) {
+  // The streaming backup consumes cursors via `for await...of` — provide
+  // the real async surface.
+  let i = 0;
   return {
     next: jest.fn().mockResolvedValue(results.length > 0 ? results[0] : null),
-    all: jest.fn().mockResolvedValue(results)
+    all: jest.fn().mockResolvedValue(results),
+    [Symbol.asyncIterator]() {
+      return {
+        next: async () => (i < results.length ? { value: results[i++], done: false } : { value: undefined, done: true })
+      };
+    }
   };
+}
+
+// The real driver figures() shape (ArangoDB 3.12): count at the TOP level,
+// byte sizes under figures.figures — NO "alive" field anywhere (an inner
+// alive once pinned a deterministic count=0, issue #1761).
+function makeFigures(count, documentsSize) {
+  return { count, figures: { documentsSize } };
 }
 
 function createMockCollection(figures) {
   return {
     all: jest.fn().mockResolvedValue(createMockCursor([])),
-    // The REAL driver shape (ArangoDB 3.12): count at the TOP level of the
-    // figures() return, byte sizes under figures.figures — and NO "alive"
-    // field anywhere (an inner alive once pinned a deterministic count=0).
-    figures: jest.fn().mockResolvedValue(figures || { count: 0, figures: { documentsSize: 0 } }),
+    figures: jest.fn().mockResolvedValue(figures || makeFigures(0, 0)),
     name: 'testCollection'
   };
 }
@@ -195,14 +215,15 @@ describe('AdminDashboardService', () => {
       expect(result.databaseSize).toBe('4 KB');
     });
 
-    it('should throw when the total size is not finite (never render NaN)', async () => {
-      // A garbage figures payload must fail the payload — the card renders
-      // its error state instead of a confident "NaN GB" (issue #1761).
-      const mockColl = createMockCollection({ count: 1, figures: { documentsSize: NaN } });
+    it('should throw when a collection reports garbage figures (never render NaN)', async () => {
+      // Garbage fails at the SOURCE (readCollectionUsage names the
+      // collection) — the payload fails, the card renders its error state,
+      // never a confident "NaN GB" (issue #1761).
+      const mockColl = createMockCollection(makeFigures(1, NaN));
       mockColl.name = 'weird';
       mockDb.collections.mockResolvedValueOnce([mockColl]);
 
-      await expect(adminDashboardService.getDatabaseStats()).rejects.toThrow('not a valid byte count');
+      await expect(adminDashboardService.getDatabaseStats()).rejects.toThrow('invalid byte size');
     });
 
     it('should throw when not initialized', async () => {
@@ -759,23 +780,44 @@ describe('AdminDashboardService', () => {
   });
 
   describe('backupDatabase', () => {
+    let mockWriteStream;
+
     beforeEach(async () => {
+      // The backup streams through a write stream — a real EventEmitter,
+      // so drain/error listener registration behaves.
+      const { EventEmitter } = require('events');
+      mockWriteStream = Object.assign(new EventEmitter(), {
+        write: jest.fn().mockReturnValue(true),
+        end: jest.fn(function () {
+          setImmediate(() => this.emit('finish'));
+        })
+      });
+      mockFsStandard.createWriteStream.mockReturnValue(mockWriteStream);
+      mockFs.mkdir.mockResolvedValue(undefined);
+      mockFs.unlink.mockResolvedValue(undefined);
+
       await adminDashboardService.init();
     });
 
-    it('should backup all collections', async () => {
-      const mockColl = createMockCollection({ count: 10, size: 500 });
+    it('should backup all collections, streaming valid JSON', async () => {
+      // Issue #1762: the admin backup used to accumulate the ENTIRE
+      // database into one object and stringify it whole — the same V8
+      // string-cap failure that 500'd /database/backup on a 46,938-doc
+      // collection.
+      const mockColl = createMockCollection(makeFigures(10, 500));
       mockColl.name = 'users';
-      const cursorMock = createMockCursor([{ _key: 'u1' }]);
-      mockColl.all = jest.fn().mockResolvedValue(cursorMock);
+      mockColl.all = jest.fn().mockResolvedValue(createMockCursor([{ _key: 'u1' }]));
       mockDb.collections.mockResolvedValueOnce([mockColl]);
-      mockFs.mkdir.mockResolvedValueOnce(undefined);
-      mockFs.writeFile.mockResolvedValueOnce(undefined);
 
       const result = await adminDashboardService.backupDatabase();
       expect(result.status).toBe('success');
       expect(result.collections).toContain('users');
       expect(result.documentCount).toBe(1);
+
+      // The streamed envelope must be parseable JSON.
+      const joined = mockWriteStream.write.mock.calls.map((c) => c[0]).join('');
+      const parsed = JSON.parse(joined);
+      expect(parsed.users).toEqual([{ _key: 'u1' }]);
     });
 
     it('should throw when not initialized', async () => {
@@ -783,17 +825,18 @@ describe('AdminDashboardService', () => {
       await expect(adminDashboardService.backupDatabase()).rejects.toThrow('Database not initialized');
     });
 
-    it('should skip collections that fail to export', async () => {
-      const mockColl = createMockCollection({ count: 0, size: 0 });
-      mockColl.name = 'broken';
-      mockColl.all.mockRejectedValueOnce(new Error('Cannot read'));
-      mockDb.collections.mockResolvedValueOnce([mockColl]);
-      mockFs.mkdir.mockResolvedValueOnce(undefined);
-      mockFs.writeFile.mockResolvedValueOnce(undefined);
+    it('fails loudly (and cleans up) when a collection fails to export', async () => {
+      // Semantics change with streaming: the old accumulate-then-write
+      // model SKIPPED a failing collection and still reported success — a
+      // silent partial backup claiming completeness. The streaming model
+      // aborts, removes the partial file, and surfaces the error.
+      const broken = createMockCollection(makeFigures(0, 0));
+      broken.name = 'broken';
+      broken.all.mockRejectedValueOnce(new Error('Cannot read'));
+      mockDb.collections.mockResolvedValueOnce([broken]);
 
-      const result = await adminDashboardService.backupDatabase();
-      expect(result.status).toBe('success');
-      expect(result.documentCount).toBe(0);
+      await expect(adminDashboardService.backupDatabase()).rejects.toThrow('Cannot read');
+      expect(mockFs.unlink).toHaveBeenCalledWith(expect.stringMatching(/backup-.*\.json$/));
     });
   });
 
@@ -803,7 +846,7 @@ describe('AdminDashboardService', () => {
     });
 
     it('should optimize all collections', async () => {
-      const mockColl = createMockCollection({ count: 10, size: 500 });
+      const mockColl = createMockCollection(makeFigures(10, 500));
       mockColl.name = 'users';
       mockDb.collections.mockResolvedValueOnce([mockColl]);
       mockDb.query.mockResolvedValueOnce(createMockCursor([]));

@@ -2,7 +2,7 @@ require('dotenv').config();
 const fs = require('fs').promises;
 const path = require('path');
 const { aql } = require('arangojs');
-const { logger, dbService, formatSize } = require('../shared-lib');
+const { logger, dbService, formatSize, readCollectionUsage } = require('../shared-lib');
 
 class DatabaseOperationsService {
   constructor() {
@@ -83,6 +83,8 @@ class DatabaseOperationsService {
       // A stream error mid-backup must fail THIS backup, not hang the
       // request (a pending 'drain' never fires after 'error') or crash the
       // process (an 'error' event with no listener is an uncaughtException).
+      // The recorder makes post-failure writes fail fast; events.once()
+      // rejects a PENDING drain when the error arrives.
       let streamFailure = null;
       writeStream.on('error', (err) => {
         streamFailure = err;
@@ -91,26 +93,21 @@ class DatabaseOperationsService {
       // Bounded writes (issue #1762): the old backup stringified each
       // collection's ENTIRE document array into one string — a 46,938-doc
       // OKF collection crossed V8's string cap and 500'd the backup after
-      // 34s of successful per-collection work. Per-document stringify
-      // keeps every string at document size; awaiting 'drain' when the
-      // stream signals backpressure keeps memory bounded too. Every write
-      // (and every pending drain) rejects once the stream has failed.
-      const writeBounded = (chunk) => {
-        if (streamFailure) return Promise.reject(streamFailure);
-        return new Promise((resolve, reject) => {
-          if (writeStream.write(chunk)) return resolve();
-          const onDrain = () => {
-            writeStream.off('error', onFail);
-            resolve();
-          };
-          const onFail = (e) => {
-            writeStream.off('drain', onDrain);
-            reject(e);
-          };
-          writeStream.once('drain', onDrain);
-          writeStream.once('error', onFail);
-        });
+      // 34s of successful per-collection work.
+      const { once } = require('events');
+      const writeBounded = async (chunk) => {
+        if (streamFailure) throw streamFailure;
+        if (!writeStream.write(chunk)) await once(writeStream, 'drain');
       };
+
+      // Bounded batching: documents are stringified per-document and
+      // flushed at 256 docs or ~1 MiB per chunk — identical output bytes
+      // to per-document writes, ~256x fewer stream round-trips, and the
+      // buffer never exceeds the cap plus one document.
+      const MAX_CHUNK_DOCS = 256;
+      const MAX_CHUNK_BYTES = 1024 * 1024;
+      let chunk = [];
+      let chunkBytes = 0;
 
       // No trailing comma after the metadata: a database with zero
       // non-system collections must still produce parseable JSON.
@@ -146,14 +143,29 @@ class DatabaseOperationsService {
           await writeBounded(`{"collection":"${collectionName}","data":[`);
         }
 
-        // Stream the documents one at a time — never accumulate the array.
+        // Stream the documents in bounded chunks — never accumulate the
+        // array. The separator counts ALREADY-FLUSHED docs, so chunk
+        // boundaries are invisible in the output (buffered docs have
+        // written nothing yet — their comma belongs to the chunk's join).
         let docCount = 0;
-        let first = true;
+        let flushedDocs = 0;
+        const flushChunk = async () => {
+          if (chunk.length === 0) return;
+          await writeBounded(`${flushedDocs > 0 ? ',' : ''}${chunk.join(',')}`);
+          flushedDocs += chunk.length;
+          chunk = [];
+          chunkBytes = 0;
+        };
         for await (const doc of cursor) {
-          await writeBounded((first ? '' : ',') + JSON.stringify(doc));
-          first = false;
+          const docStr = JSON.stringify(doc);
+          if (chunk.length >= MAX_CHUNK_DOCS || (chunkBytes > 0 && chunkBytes + docStr.length > MAX_CHUNK_BYTES)) {
+            await flushChunk();
+          }
+          chunk.push(docStr);
+          chunkBytes += docStr.length;
           docCount++;
         }
+        await flushChunk();
 
         if (this.backupFormat === 'json') {
           await writeBounded(']');
@@ -182,12 +194,13 @@ class DatabaseOperationsService {
 
       let finalPath = backupPath;
       if (this.compressBackups) {
-        finalPath = await this._compressBackup(backupPath);
-        // _compressBackup swallows its own errors and returns the ORIGINAL
-        // path when gzip fails — only unlink the raw file when compression
-        // actually produced a new one, or we would delete the only copy of
-        // a completed backup (review round-2, issue #1762).
-        if (finalPath !== backupPath) {
+        // _compressBackup reports failure as null — no sentinel path
+        // comparison, no way for a contract change to unlink the only
+        // copy of a completed backup (issue #1762 review). On null the
+        // uncompressed backup IS the final artifact.
+        const compressedPath = await this._compressBackup(backupPath);
+        if (compressedPath) {
+          finalPath = compressedPath;
           await fs.unlink(backupPath);
           const compressedStats = await fs.stat(finalPath);
           const compressedSize = formatSize(compressedStats.size);
@@ -251,8 +264,10 @@ class DatabaseOperationsService {
       logger.info(`File compressed successfully: ${filePath} -> ${compressedPath}`);
       return compressedPath;
     } catch (error) {
+      // Failure is reported as null — an honest signal, not a sentinel
+      // that happens to equal the input path (issue #1762 review).
       logger.error(`Error compressing backup: ${error.message}`, { stack: error.stack });
-      return filePath;
+      return null;
     }
   }
 
@@ -389,28 +404,22 @@ class DatabaseOperationsService {
 
       for (const collection of collections) {
         const figures = await collection.figures();
+        // The shared driver-shape decode (issue #1761): count at the TOP
+        // level, sizes under figures.figures, missing → 0, garbage → throw
+        // naming the collection. This dead-for-UI sibling once carried the
+        // exact `|| 0` silent-zero pattern and a nonexistent "alive" read.
         if (figures) {
-          // Same driver shape as the admin service (issue #1761): count at
-          // the TOP level, byte sizes under figures.figures. MISSING reads
-          // default to 0; GARBAGE (NaN) propagates to the tripwire below —
-          // `|| 0` here once turned a broken payload into a confident zero.
-          const inner = figures.figures || {};
-          const rawSize = inner.documentsSize === undefined ? 0 : inner.documentsSize;
-          totalSize += rawSize;
+          const usage = readCollectionUsage(figures, collection.name);
+          totalSize += usage.size;
           collectionStats.push({
             name: collection.name,
-            count: figures.count !== undefined ? figures.count : 0,
-            size: rawSize,
-            sizeFormatted: formatSize(rawSize)
+            count: usage.count,
+            size: usage.size,
+            sizeFormatted: formatSize(usage.size)
           });
         }
       }
 
-      // A non-finite or negative total is a payload failure, never a
-      // renderable "NaN GB" (issue #1761).
-      if (!Number.isFinite(totalSize) || totalSize < 0) {
-        throw new Error(`Database stats total size is not a valid byte count: ${totalSize}`);
-      }
       const formattedSize = formatSize(totalSize);
 
       logger.info('Database statistics retrieved successfully');

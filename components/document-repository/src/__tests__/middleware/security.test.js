@@ -250,11 +250,12 @@ describe('Security Middleware Tests', () => {
     // module boundary (the jose-level behavior is pinned in the verifier's
     // own suites).
     let mockVerifyToken;
+    let mockVerifier;
     const makeVerifierMock = require('../helpers/verifierMock');
 
     beforeEach(() => {
       jest.resetModules();
-      const mockVerifier = makeVerifierMock();
+      mockVerifier = makeVerifierMock();
       mockVerifyToken = mockVerifier.verifyToken;
 
       jest.mock('../../shared-lib/keycloak-auth-service', () => mockVerifier);
@@ -296,7 +297,7 @@ describe('Security Middleware Tests', () => {
     });
 
     it('should return 401 when JWT signature is invalid', async () => {
-      mockVerifyToken.mockRejectedValue({ code: 'TOKEN_INVALID', message: 'Token verification failed' });
+      mockVerifyToken.mockRejectedValue(mockVerifier.rejection('TOKEN_INVALID', 'Token verification failed'));
 
       const { authenticateToken } = require('../../middlewares/keycloak-auth-middleware');
 
@@ -311,7 +312,7 @@ describe('Security Middleware Tests', () => {
     });
 
     it('should return 401 for expired tokens', async () => {
-      mockVerifyToken.mockRejectedValue({ code: 'TOKEN_EXPIRED', message: 'Token has expired' });
+      mockVerifyToken.mockRejectedValue(mockVerifier.rejection('TOKEN_EXPIRED', 'Token has expired'));
 
       const { authenticateToken } = require('../../middlewares/keycloak-auth-middleware');
 

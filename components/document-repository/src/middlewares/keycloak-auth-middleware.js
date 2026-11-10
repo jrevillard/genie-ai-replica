@@ -106,6 +106,23 @@ const authenticateToken = async (req, res, next) => {
       } catch {
         diagClaims = null; // unparseable token — the null fields say so
       }
+      if (err && err.code === 'AUTH_SERVICE_UNAVAILABLE') {
+        // Keycloak discovery down / init cooldown — NOT a bad token. Kept as
+        // the doc-repo 503 contract (frontend httpService handles this code);
+        // the backend middleware 401s the same condition — per-component
+        // HTTP mapping over the one shared verifier. Warn-level with no
+        // token diagnostics: an outage must not flood the error stream with
+        // per-request entries and bury genuine 401 root causes.
+        logger.warn('[KEYCLOAK-AUTH] verifier unavailable', {
+          path,
+          err_message: err && err.message
+        });
+        return res.status(503).json({
+          error: 'AUTH_SERVICE_UNAVAILABLE',
+          message: 'Authentication service unavailable',
+          details: {}
+        });
+      }
       logger.error('[KEYCLOAK-AUTH] verifyToken failed', {
         path,
         err_name: err && err.name,
@@ -115,17 +132,6 @@ const authenticateToken = async (req, res, next) => {
         token_exp: (diagClaims && diagClaims.exp) || 0,
         accepted_issuers: keycloakAuthService.getConfiguredIssuers()
       });
-      if (err && err.code === 'AUTH_SERVICE_UNAVAILABLE') {
-        // Keycloak discovery down / init cooldown — NOT a bad token. Kept as
-        // the doc-repo 503 contract (frontend httpService handles this code);
-        // the backend middleware 401s the same condition — per-component
-        // HTTP mapping over the one shared verifier.
-        return res.status(503).json({
-          error: 'AUTH_SERVICE_UNAVAILABLE',
-          message: 'Authentication service unavailable',
-          details: {}
-        });
-      }
       if (err && err.code === 'TOKEN_EXPIRED') {
         return res.status(401).json({
           error: 'TOKEN_EXPIRED',

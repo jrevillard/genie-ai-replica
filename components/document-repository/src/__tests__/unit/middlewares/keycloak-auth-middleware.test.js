@@ -117,7 +117,7 @@ describe('keycloak-auth-middleware', () => {
     });
 
     it('should return 401 TOKEN_EXPIRED when the verifier reports an expired token', async () => {
-      mockVerifyToken.mockRejectedValue({ code: 'TOKEN_EXPIRED', message: 'Token has expired' });
+      mockVerifyToken.mockRejectedValue(mockVerifier.rejection('TOKEN_EXPIRED', 'Token has expired'));
       const { req, res, next } = createMocks({
         req: { headers: { authorization: 'Bearer expired-token' } }
       });
@@ -127,7 +127,7 @@ describe('keycloak-auth-middleware', () => {
     });
 
     it('should return 401 TOKEN_INVALID when verification fails', async () => {
-      mockVerifyToken.mockRejectedValue({ code: 'TOKEN_INVALID', message: 'Token verification failed' });
+      mockVerifyToken.mockRejectedValue(mockVerifier.rejection('TOKEN_INVALID', 'Token verification failed'));
       const { req, res, next } = createMocks({
         req: { headers: { authorization: 'Bearer invalid-token' } }
       });
@@ -137,7 +137,7 @@ describe('keycloak-auth-middleware', () => {
     });
 
     it('should map a claim-validation failure to 401 with the verifier message', async () => {
-      mockVerifyToken.mockRejectedValue({ code: 'TOKEN_INVALID', message: 'Token claim validation failed' }); // internal message
+      mockVerifyToken.mockRejectedValue(mockVerifier.rejection('TOKEN_INVALID', 'Token claim validation failed')); // internal message
       const { req, res, next } = createMocks({
         req: { headers: { authorization: 'Bearer bad-claim-token' } }
       });
@@ -153,10 +153,9 @@ describe('keycloak-auth-middleware', () => {
       // AUTH_SERVICE_UNAVAILABLE; the middleware maps it to the doc-repo 503
       // contract the frontend httpService handles (a Keycloak outage is not a
       // bad token).
-      mockVerifyToken.mockRejectedValue({
-        code: 'AUTH_SERVICE_UNAVAILABLE',
-        message: 'Authentication service is temporarily unavailable'
-      });
+      mockVerifyToken.mockRejectedValue(
+        mockVerifier.rejection('AUTH_SERVICE_UNAVAILABLE', 'Authentication service is temporarily unavailable')
+      );
       const { req, res, next } = createMocks({
         req: { headers: { authorization: 'Bearer some-token' } }
       });
@@ -172,7 +171,7 @@ describe('keycloak-auth-middleware', () => {
 
     it('should log the 401 root cause (token issuer) for a failed verification', async () => {
       const { logger } = require('../../../__tests__/__mocks__/shared-lib');
-      mockVerifyToken.mockRejectedValue({ code: 'TOKEN_INVALID', message: 'Unknown issuer' });
+      mockVerifyToken.mockRejectedValue(mockVerifier.rejection('TOKEN_INVALID', 'Unknown issuer'));
       const { req, res, next } = createMocks({
         req: { headers: { authorization: 'Bearer wrong-issuer-token' } }
       });

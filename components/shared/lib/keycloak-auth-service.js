@@ -292,8 +292,8 @@ async function initAllRealms() {
   if (additionalRealms.length === 0) return;
 
   // KEYCLOAK_JWKS_URL pins ONE certs URL — with additional realms, every
-  // realm's issuer would map to that one realm's keys. Visible at boot
-  // instead of only in the env NOTES.
+  // realm's issuer would map to that one realm's keys. Surfaced on the
+  // verifier's first use (init is lazy), not at container boot.
   if (process.env.KEYCLOAK_JWKS_URL) {
     logger.warn(
       "[KeycloakAuth] KEYCLOAK_JWKS_URL pins ONE realm's certs URL — additional realms " +

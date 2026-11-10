@@ -11,6 +11,16 @@ module.exports = function makeVerifierMock() {
   const verifyToken = jest.fn();
   return {
     verifyToken,
-    getConfiguredIssuers: () => ['https://localhost/auth/realms/genie']
+    getConfiguredIssuers: () => ['https://localhost/auth/realms/genie'],
+    // TokenVerificationError-shaped rejection: the real verifier throws
+    // class instances (name 'TokenVerificationError', a code, a message).
+    // Suites reject with THIS — never a plain object — so the DIAG log's
+    // err_name mirrors production instead of pinning undefined.
+    rejection(code, message) {
+      const err = new Error(message);
+      err.name = 'TokenVerificationError';
+      err.code = code;
+      return err;
+    }
   };
 };

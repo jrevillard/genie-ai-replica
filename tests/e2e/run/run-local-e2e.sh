@@ -97,9 +97,9 @@ if [ -z "${ADMIN_TOKEN:-}" ] && [ -z "${KEYCLOAK_ADMIN_PASSWORD:-}" ]; then
     kubectl -n "$NAMESPACE" get secret keycloak-admin-credentials >/dev/null 2>&1; then
     KEYCLOAK_ADMIN_PASSWORD="$(kubectl -n "$NAMESPACE" get secret keycloak-admin-credentials \
       -o go-template='{{ index .data "password" | base64decode }}')"
-    if [ -z "$KEYCLOAK_ADMIN_PASSWORD" ]; then
+    if [ -z "$KEYCLOAK_ADMIN_PASSWORD" ] || [ "$KEYCLOAK_ADMIN_PASSWORD" = "<no value>" ]; then
       echo "ERROR: the keycloak-admin-credentials secret in namespace $NAMESPACE carries no 'password' key." >&2
-      echo "       The auto-read exported an empty credential - set KEYCLOAK_ADMIN_PASSWORD explicitly." >&2
+      echo "       The auto-read exported no usable credential - set KEYCLOAK_ADMIN_PASSWORD explicitly." >&2
       exit 2
     fi
     export KEYCLOAK_ADMIN_PASSWORD

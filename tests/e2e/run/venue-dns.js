@@ -66,7 +66,11 @@ if (mapping) {
 
   dns.promises.lookup = async function promiseLookupWithVenueMapping(hostname, options) {
     if (hostname !== host) return originalPromiseLookup.call(dns.promises, hostname, options);
-    const opts = options || {};
+    const opts = typeof options === 'number' ? { family: options } : options || {};
+    // The same contract as the callback form: an explicit family 6 gets the
+    // RESOLVER's answer (the venue has no AAAA), not the mapped IPv4 — the
+    // two lookup forms must not disagree on the same input.
+    if (opts.family === 6) return originalPromiseLookup.call(dns.promises, hostname, options);
     const family = familyOf(ip);
     if (opts.all) return [{ address: ip, family }];
     return { address: ip, family };

@@ -64,6 +64,11 @@ const MAX_FAILURES_PER_ISSUE = 10;
 // runner is finite and so is this one.
 const TRACKER_TIMEOUT_MS = 60000;
 
+// A single failure's text is bounded in BOTH dimensions: the line count
+// above, and the character count here — one enormous line would otherwise
+// push the issue body past the kernel's per-argument cap on its own.
+const MAX_ERROR_CHARS = 8000;
+
 function fail(message) {
   process.stderr.write(`file-failure-issues: ${message}\n`);
   process.exit(1);
@@ -133,7 +138,8 @@ function errorText(result) {
   const error = result.error || (result.errors || [])[0];
   if (!error) return 'no error recorded';
   const text = [error.message || '', error.stack || ''].filter(Boolean).join('\n');
-  return text.split('\n').slice(0, MAX_ERROR_LINES).join('\n');
+  const lines = text.split('\n').slice(0, MAX_ERROR_LINES).join('\n');
+  return lines.length > MAX_ERROR_CHARS ? `${lines.slice(0, MAX_ERROR_CHARS)}\n(truncated)` : lines;
 }
 
 function glab(args) {
@@ -279,24 +285,26 @@ function issueBody(file, failures, venue, runStamp) {
  * The comment posted on an issue that already tracks the failure.
  */
 function commentBody(files, venue, runStamp) {
+  // One argv element carries the whole comment, so the cap is the COMMENT's
+  // budget, not each file's — an umbrella issue tracking many files must not
+  // push the body past the kernel's per-argument cap either.
+  let budget = MAX_FAILURES_PER_ISSUE;
   return [
     `The local e2e run is still red on ${files.length} spec file(s) this issue covers ` +
       `(${runStamp}, venue \`${venue}\`).`,
     '',
-    ...files.flatMap((entry) => [
-      `### ${entry.file}`,
-      '',
-      ...entry.failures.slice(0, MAX_FAILURES_PER_ISSUE).flatMap((failure) => [
-        `**${failure.title}**`,
-        '```',
-        failure.error,
-        '```',
+    ...files.flatMap((entry) => {
+      const taken = entry.failures.slice(0, Math.max(0, budget));
+      budget -= taken.length;
+      return [
+        `### ${entry.file}`,
         '',
-      ]),
-      ...(entry.failures.length > MAX_FAILURES_PER_ISSUE
-        ? [`(${entry.failures.length - MAX_FAILURES_PER_ISSUE} more failures omitted.)`, '']
-        : []),
-    ]),
+        ...taken.flatMap((failure) => [`**${failure.title}**`, '```', failure.error, '```', '']),
+        ...(entry.failures.length > taken.length
+          ? [`(${entry.failures.length - taken.length} more failures omitted.)`, '']
+          : []),
+      ];
+    }),
   ].join('\n');
 }
 
@@ -417,7 +425,6 @@ function main() {
     return;
   }
 
-  process.stdout.write('\nfiled:\n');
   // The venue must be drivable BEFORE anything is filed: the documented
   // venue-death case (the node reboots mid-run) fails every spec that
   // navigates afterwards with ERR_CONNECTION_REFUSED, and filing one issue
@@ -436,6 +443,7 @@ function main() {
     );
     process.exit(1);
   }
+  process.stdout.write('\nfiled:\n');
   // The failing files are grouped by the issue that already tracks them, so
   // one umbrella issue receives ONE comment for the whole run — not one per
   // file. A file nobody tracks yet gets its own issue.

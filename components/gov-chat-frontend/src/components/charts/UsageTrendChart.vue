@@ -15,6 +15,7 @@
 import * as d3 from 'd3';
 import analyticsService from '../../services/analyticsService';
 import { useChartTheme } from '../../composables/useChartTheme';
+import { shiftLightness } from '../../utils/chartColors';
 import DsSpinner from '../ds/Spinner.vue';
 import DsStateDisplay from '../ds/StateDisplay.vue';
 
@@ -48,8 +49,8 @@ export default {
     }
   },
   setup() {
-    const { theme, isDarkMode, getCssVarStrings } = useChartTheme();
-    return { theme, isDarkMode, getCssVarStrings };
+    const { theme, isDarkMode, getResolvedTheme } = useChartTheme();
+    return { theme, isDarkMode, getResolvedTheme };
   },
   data() {
     return {
@@ -168,8 +169,7 @@ export default {
 
       const styleEl = document.createElement('style');
       styleEl.id = 'usage-trend-chart-theme-style';
-      const theme = this.getCssVarStrings();
-      if (theme.isDarkMode) {
+      if (this.isDarkMode) {
         styleEl.textContent = `
             [data-theme="dark"] .x-axis text,
             [data-theme="dark"] .y-axis-left text,
@@ -265,14 +265,13 @@ export default {
     },
 
     /**
-     * Force text elements to use appropriate color based on theme
+     * Force text elements to use appropriate color based on theme.
+     * Takes the already-resolved textColor — renderChart resolved the theme
+     * moments earlier; re-resolving here doubled the probe work per render.
      */
-    forceAxisTextColor() {
-      const theme = this.getCssVarStrings();
-      const textColor = theme.textColor;
-
+    forceAxisTextColor(textColor) {
       const chartContainer = this.$refs.chartContainer;
-      if (!chartContainer) return;
+      if (!chartContainer || !textColor) return;
 
       setTimeout(() => {
         const xAxisText = chartContainer.querySelectorAll('.x-axis text');
@@ -313,16 +312,27 @@ export default {
         return;
       }
 
-      const theme = this.getCssVarStrings();
+      const theme = this.getResolvedTheme();
       const { textColor, borderColor, gridColor, isDarkMode } = theme;
 
-      // Data series colors — constant across themes (dataviz convention)
+      // Data series colors — derived from the brand ramp (T1: was a private
+      // hardcoded 5-color palette that matched no theme and no deployment flavour).
+      // Bars ride the first ramp entry, the line the THIRD: entries 0 and 1 are
+      // adjacent in hue (both blue on most flavours — entry 1 is the
+      // info-infused step), and a two-series chart needs hue separation; the
+      // old palette was green/blue for the same reason. Gradients are
+      // lightness steps so the pair keeps its depth.
+      const barBase = theme.chartColors[0] || theme.accentColor;
+      const lineBase = theme.chartColors[2] || theme.brandColor || theme.accentColor;
       const colors = {
-        barStart: '#62d9a6',
-        barEnd: '#2da676',
-        lineStart: '#5b9bd5',
-        lineEnd: '#3a6da0',
-        area: '#4682B4'
+        barStart: shiftLightness(barBase, 0.08),
+        barEnd: shiftLightness(barBase, -0.08),
+        lineStart: lineBase,
+        lineEnd: shiftLightness(lineBase, -0.08),
+        // Opaque on purpose: the gradient's stop-opacity (0.7/0.1) is the one
+        // alpha knob — fade() here multiplied it twice and the area washed
+        // out ~35% vs the pre-T1 chart (review round 2).
+        area: lineBase
       };
 
       // UI colors — adapt to theme
@@ -715,11 +725,11 @@ export default {
           const tooltipContent = `
         <div class="tt-header">${d.dateLabel}</div>
         <div class="tt-row">
-          <span class="tt-swatch tt-swatch--bar"></span>
+          <span class="tt-swatch tt-swatch--bar" style="background: linear-gradient(to bottom, ${colors.barStart}, ${colors.barEnd})"></span>
           ${totalQueriesLabel}: <strong>${d.value.toLocaleString(this.$i18n.locale)}</strong>
         </div>
         <div class="tt-row">
-          <span class="tt-swatch tt-swatch--line"></span>
+          <span class="tt-swatch tt-swatch--line" style="background: ${colors.lineStart}"></span>
           ${uniqueUsersLabel}: <strong>${d.userCount.toLocaleString(this.$i18n.locale)}</strong>
         </div>
       `;
@@ -730,7 +740,7 @@ export default {
             .style('top', event.pageY - 60 + 'px');
         });
 
-      this.forceAxisTextColor();
+      this.forceAxisTextColor(textColor);
     }
   }
 };
@@ -786,13 +796,14 @@ export default {
   vertical-align: middle;
 }
 
+/* T1 review: the old color rules also carried the swatch SHAPES — the
+ * rounded bar and the circular line marker. Shape-only rules restored;
+ * the colors stay inline in the tooltip builder. */
 :global(.d3-tooltip .tt-swatch--bar) {
-  background: linear-gradient(to bottom, #62d9a6, #2da676);
   border-radius: var(--radius-sm);
 }
 
 :global(.d3-tooltip .tt-swatch--line) {
-  background: #5b9bd5;
   border-radius: 50%;
 }
 </style>

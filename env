@@ -860,6 +860,16 @@ KEYCLOAK_URL=https://localhost/auth
 #                           It moves WHERE the document comes from, never WHO
 #                           is accepted (the accepted issuers still come from
 #                           that document + the aliases above).
+#                           CO-REQUIRED with KEYCLOAK_PUBLIC_URL (or
+#                           KEYCLOAK_BROWSER_ISSUER) when the discovery host
+#                           is not the host the browser tokens are minted
+#                           on: the document fetched from another host
+#                           reports THAT host's issuer, and the browser's
+#                           token carries the public one — without the alias
+#                           every browser token is rejected with 'Unknown
+#                           issuer'. (A realm whose KC_HOSTNAME is pinned to
+#                           the public domain publishes the public issuer
+#                           from every host, and needs no alias.)
 #                           Default: unset (= KEYCLOAK_URL).
 #                           Used by: every consumer of the shared verifier
 #                           (backend, document-repository, okf-server).

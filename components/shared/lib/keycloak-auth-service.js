@@ -26,13 +26,40 @@ const KEYCLOAK_DISCOVERY_URL = process.env.KEYCLOAK_DISCOVERY_URL;
 const DISCOVERY_BASE_URL = (KEYCLOAK_DISCOVERY_URL || KEYCLOAK_URL || '').replace(/\/+$/, '');
 const INIT_RETRY_COOLDOWN = 30000; // 30 seconds between retry attempts
 const JWKS_CACHE_TTL = 300000; // 5 minutes JWKS cache TTL (NFR10)
+// Floor between FORCED key-set refreshes. A forced refresh re-fetches the
+// key set from the auth service, and reaching one takes nothing more than
+// a token naming a key id the realm does not publish — an unauthenticated
+// caller could therefore make the service hammer that endpoint. The floor
+// bounds the rate; it does NOT delay rotation recovery, because the FIRST
+// request after a rotation refreshes and the ones that follow already find
+// the new key cached.
+const FORCED_REFRESH_MIN_INTERVAL_MS = 1000;
 
-// The key-resolution errors that are the TOKEN's fault, not the auth
-// service's: an unknown kid (the key set may be stale — a rotation
-// candidate) and an ambiguous match (a token that names no kid, against a
-// key set holding several). Every other failure of the key-set leg is an
-// outage. jose raises these by name.
-const TOKEN_SIDE_KEY_ERRORS = new Set(['JWKSNoMatchingKey', 'JWKSMultipleMatchingKeys']);
+/**
+ * Does the fetched key set hold a key that can verify an RS256 signature?
+ *
+ * jose's local key set filters the published keys by the token's algorithm
+ * (kty, alg, use, key_ops) and raises JWKSNoMatchingKey when NOTHING
+ * matches — which covers two different faults: a token naming a key id the
+ * realm does not publish (the token's fault) and a realm publishing no
+ * usable key at all (the auth service's fault). This mirrors jose's filter
+ * for RS256, the only algorithm this verifier accepts.
+ *
+ * @param {Object|undefined} jwks - The published key set (jose's `jwks()`)
+ * @returns {boolean} True when the set holds a usable key, or when the set
+ *   is unknown (no information → never claim an outage on a guess)
+ */
+function keySetHasUsableKey(jwks) {
+  if (!jwks || !Array.isArray(jwks.keys)) return true;
+  return jwks.keys.some(
+    (jwk) =>
+      jwk &&
+      jwk.kty === 'RSA' &&
+      (!jwk.alg || jwk.alg === 'RS256') &&
+      (!jwk.use || jwk.use === 'sig') &&
+      (!Array.isArray(jwk.key_ops) || jwk.key_ops.includes('verify'))
+  );
+}
 
 // Additional realms for backend token validation (JSON array of realm names).
 // e.g. ["partner","contractor"]
@@ -84,6 +111,7 @@ function createJwksCache(jwksUri, ttlMs = JWKS_CACHE_TTL) {
   let inner = createRemoteJWKSet(new URL(jwksUri));
   const _jwksUri = jwksUri; // Store for re-fetch
   let createdAt = Date.now();
+  let lastForcedRefreshAt = 0;
 
   /**
    * JWKS function compatible with jose's jwtVerify
@@ -110,7 +138,26 @@ function createJwksCache(jwksUri, ttlMs = JWKS_CACHE_TTL) {
       // timeout, a malformed key set) is an outage: it must NOT be reported
       // as a bad token, or the consumers answer 401 and send every user to
       // the login page during an infrastructure outage (#1723).
-      if (err && TOKEN_SIDE_KEY_ERRORS.has(err.name)) {
+      if (err && err.name === 'JWKSNoMatchingKey') {
+        // jose raises the same error for two different faults: a token
+        // naming a key id the realm does not publish (the token's fault) and
+        // a realm publishing no usable key at all (the auth service's
+        // fault). The published key set tells them apart: no usable key
+        // means the realm's own state is broken, which is an outage, not a
+        // rejected token.
+        const published = typeof inner.jwks === 'function' ? inner.jwks() : undefined;
+        if (!keySetHasUsableKey(published)) {
+          throw new TokenVerificationError(
+            'AUTH_SERVICE_UNAVAILABLE',
+            'Authentication service is temporarily unavailable (the realm published no usable signing key)'
+          );
+        }
+        throw err;
+      }
+      if (err && err.name === 'JWKSMultipleMatchingKeys') {
+        // A token that names no key id, against a key set holding several:
+        // the token's own ambiguity (the realm in scope — Keycloak — always
+        // publishes a key id).
         throw err;
       }
       throw new TokenVerificationError(
@@ -123,9 +170,24 @@ function createJwksCache(jwksUri, ttlMs = JWKS_CACHE_TTL) {
   /**
    * Force refresh the JWKS cache on next use
    * Resets createdAt to 0, triggering re-fetch on next call
+   *
+   * Forced refreshes are floored (FORCED_REFRESH_MIN_INTERVAL_MS): the
+   * refresh re-fetches the key set from the auth service, and reaching one
+   * takes nothing more than a token naming a key id the realm does not
+   * publish — an unauthenticated caller could otherwise make the service
+   * hammer that endpoint.
+   *
+   * @returns {boolean} True when the refresh was scheduled, false when the
+   *   floor held it back (the caller then skips the retry).
    */
   jwksFn.forceRefresh = function () {
+    const now = Date.now();
+    if (now - lastForcedRefreshAt < FORCED_REFRESH_MIN_INTERVAL_MS) {
+      return false;
+    }
+    lastForcedRefreshAt = now;
     createdAt = 0;
+    return true;
   };
 
   return jwksFn;
@@ -562,9 +624,8 @@ const keycloakAuthService = {
       // is fast-failed instead of refreshed.
       const rotationCandidate =
         err.name === 'JWKSNoMatchingKey' && typeof unverifiedExp === 'number' && unverifiedExp > now;
-      if (rotationCandidate) {
+      if (rotationCandidate && jwks.forceRefresh()) {
         try {
-          jwks.forceRefresh();
           const result = toResult(await verifyWithJwt());
 
           logger.debug(`[KeycloakAuth] Token verified after JWKS force-refresh for ${result.iss_sub}`);
@@ -578,6 +639,12 @@ const keycloakAuthService = {
           throw new TokenVerificationError('TOKEN_INVALID', 'Token verification failed');
         }
       }
+
+      // The rejection names the underlying jose error: without it every
+      // distinct cause (tampered signature, unknown key id, ambiguous key
+      // set, wrong algorithm) reaches the operator's log as the same
+      // 'Token verification failed'.
+      logger.warn(`[KeycloakAuth] Token verification failed (${err.name || 'Error'}): ${err.message}`);
 
       throw new TokenVerificationError('TOKEN_INVALID', 'Token verification failed');
     }

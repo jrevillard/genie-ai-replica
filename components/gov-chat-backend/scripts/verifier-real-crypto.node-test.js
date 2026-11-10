@@ -67,6 +67,11 @@ const fetchCalls = [];
 // auth service goes down, and the next key-set fetch must be classified as an
 // outage rather than as a bad token).
 let jwksDown = false;
+// The realm publishes an EMPTY key set: no signing key the verifier could
+// ever use. jose raises the same "no matching key" error for that as for a
+// token naming an unknown key id — the published key set is what tells them
+// apart.
+let jwksEmpty = false;
 global.fetch = async (url, opts) => {
   const u = String(url);
   fetchCalls.push(u);
@@ -119,6 +124,14 @@ global.fetch = async (url, opts) => {
     return { ok: false, status: 503, statusText: 'Service Unavailable', json: async () => ({}) };
   }
   if (u === JWKS_URI) {
+    if (jwksEmpty) {
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({ keys: [] }),
+        headers: new Map([['cache-control', 'no-store']])
+      };
+    }
     return { ok: true, status: 200, json: async () => JWKS, headers: new Map([['cache-control', 'no-store']]) };
   }
   if (u === PARTNER_JWKS_URI) {
@@ -132,6 +145,7 @@ global.fetch = async (url, opts) => {
 function loadVerifier(env) {
   fetchCalls.length = 0; // per-topology recorder — no earlier test's traffic
   jwksDown = false; // per-topology outage switch
+  jwksEmpty = false; // per-topology empty-key-set switch
   delete require.cache[require.resolve('../../shared/lib/keycloak-auth-service.js')];
   for (const key of [
     'KEYCLOAK_URL',
@@ -520,6 +534,41 @@ test('an unknown-kid token (rotation candidate) refreshes the key set — the pr
     (err) => err.code === 'TOKEN_INVALID'
   );
   assert.ok(jwksFetches() > before, 'the rotation candidate did not refresh the key set');
+});
+
+test('a burst of unknown-kid tokens refreshes the key set at most once per interval', async () => {
+  // The rotation candidate's refresh re-fetches the key set, and reaching
+  // one takes nothing more than a token naming a key id the realm does not
+  // publish — so the refresh rate is floored: a burst of such tokens must
+  // not make the service hammer the realm's certificate endpoint.
+  const svc = loadVerifier();
+  const warm = await sign(baseClaims(DISCOVERY_ISSUER));
+  await svc.verifyToken(warm); // warm: one fetch
+  const jwksFetches = () => fetchCalls.filter((c) => c === JWKS_URI).length;
+  const before = jwksFetches();
+
+  for (let i = 0; i < 5; i++) {
+    const junk = await sign(baseClaims(DISCOVERY_ISSUER), { partner: true }); // kid 'partner-key': unknown
+    await assert.rejects(
+      () => svc.verifyToken(junk),
+      (err) => err.code === 'TOKEN_INVALID'
+    );
+  }
+  assert.equal(jwksFetches(), before + 1, 'the burst refreshed the key set more than once');
+});
+
+test('a realm that publishes no usable signing key is an outage, not a bad token', async () => {
+  // jose raises "no matching key" for an empty key set exactly as it does
+  // for a token naming an unknown key id. The published key set tells them
+  // apart: no usable key at all is the realm's own broken state, so the
+  // failure is an outage — a 401 there would sign every user out.
+  const svc = loadVerifier();
+  jwksEmpty = true;
+  const token = await sign(baseClaims(DISCOVERY_ISSUER));
+  await assert.rejects(
+    () => svc.verifyToken(token),
+    (err) => err.code === 'AUTH_SERVICE_UNAVAILABLE'
+  );
 });
 
 test('non-bare-integer KEYCLOAK_DISCOVERY_TIMEOUT_MS falls back to the 5000ms default', async () => {

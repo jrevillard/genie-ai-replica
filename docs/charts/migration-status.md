@@ -118,6 +118,46 @@ contractual evidence — a fresh clone does not carry them.)
   - the **Pending filter** (`documents/search`) failed against a document
     the run itself uploaded in an earlier spec — a leftover-state
     collision, not a filter defect.
+- **The Playwright suite has NO CI gate, and has had none for months** —
+  the audit of the branch's own test surface found it: the
+  `e2e:playwright` job requires `$E2E_ENABLED == "1"` AND
+  `$CI_MERGE_REQUEST_EVENT_TYPE == "merge_train"`, and the instance has
+  run **zero** merge trains in its last 100 pipelines (sources seen:
+  `merge_request_event` and `push` only) — so the job never starts. The
+  monthly schedule (pipeline schedule id 5, `0 4 1 * *`) is the other
+  door, and it has **failed four months in a row** (31/08, 01/09, 01/10,
+  01/11): `scheduled:integration` cannot start the stack — the collector's
+  bind-mount source `configs/otel/otel-collector-config.yaml` is a
+  DIRECTORY on the runner, so the container refuses to mount it (the
+  trap this repo already documents for the frontend's config mount: a
+  bind-mount source that is not a file is silently a directory, and the
+  mount then fails with "not a directory"). `scheduled:e2e-web` is
+  `needs: [scheduled:integration]`, so it is **skipped** — the suite
+  never runs. And even when it does run, it invokes **117 of the 242
+  specs**: the `okf/` directory (12 specs, each driving an OKF surface),
+  `epic1/`, `epic2/`, `epic3/`, and the visual-fidelity specs
+  (`welcome-banner`, `resizable-sidebars`, `responsive-layout`,
+  `chat-composer`, `chat-conversation`) are OUT of the invocation. The
+  drift this let accumulate is visible: the chat specs have been RED
+  since the CSR refactor (`f1d82e2461`, 2026-11-08) deleted
+  `state.conversation.messages` — the helper reads a Vuex path the store
+  no longer has — and nobody saw it because no job ran the suite.
+- **The BASE_URL sweep was incomplete — the last four specs are fixed**
+  — four specs still navigated to a literal `https://localhost/`
+  (`epic1/a2`, `epic3/l1`, `l2`, `l3`), so on the k8s cluster they
+  failed with `ERR_CONNECTION_REFUSED`: a statement about the Compose
+  venue, not about the behaviour they claim to check. They now read
+  `BASE_URL` like the nine specs already fixed — **4/4 green** on the
+  1.37 cluster (they were 4/4 red).
+- **Every render names ONE Kubernetes version, from one file** — six
+  render surfaces did not pass `--kube-version` (the three gate scripts
+  that render for themselves, the `charts/Makefile` targets, and
+  `scripts/local-test.sh`): they passed only because helm 4.3.0 happens
+  to compile a Kubernetes version inside the chart's declared range. The
+  day it compiles one outside, those surfaces break for a reason that
+  has nothing to do with the chart — while the CI jobs (which pass the
+  flag) keep working, so the breakage reads as a chart defect.
+  `charts/ci/kube-version` holds the version and every surface reads it.
 - **The CI gates live in `scripts/ci/`** — the eleven gate scripts the
   pipeline invokes moved out of the flat `scripts/` (operator and
   dev-node tools stay); every reference swept and the gates proven

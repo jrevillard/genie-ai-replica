@@ -12,7 +12,7 @@ the ORDER and the cross-stream slots.
 
 | Stream | Branch | Tracker | Scope |
 |---|---|---|---|
-| **U — Admin-Dashboard UX pass** (PRIORITY) | `feat/admin-dashboard-ux` (cut from origin/main — independent of the unmerged CSR code) — **MERGED to main 2026-11-05** (MR **!770**; rebase merge → `bc1989f8a`; the branch is back on origin as the readable form of the work) | UX-1 + UX-2 issues (below), folding #947 + #1510 + #932 | See Phase U |
+| **U — Admin-Dashboard UX pass** (PRIORITY) | `feat/admin-dashboard-ux` (cut from origin/main — independent of the unmerged CSR code) — **MERGED to main 2026-11-05** (MR **!770**; rebase merge → `bc1989f8a`; the branch is back on origin as the readable form of the work). **Continuation waves 2026-11-10**: T1 chart theming **MERGED** (!842 → `7f22a1310`); H1 honest states **this MR** — see *Phase U continuation* below | UX-1 + UX-2 issues (below), folding #947 + #1510 + #932, plus the T1/H1 waves | See Phase U |
 | **C — CSR waves resume** | **COMPLETE — every wave merged.** The batch that held W1–W5 landed as ONE squash MR (merge commit `b2bcbb591`, the squash `f1d82e246` carrying CAP-1/2/3 citations, W4/D4 restricted serve, W5 origins, 2026-11-09); W6 !780, #1634 !803, W7 !804, W8 !805, W9 !808 followed; the old `feat/okf-chat-source-w1` branch was verified superseded by content and deleted locally (archive tag `archive/2026-11-09/feat-okf-chat-source-w1`) | #1409 umbrella (all child waves done — ready for David's close), !720 planning MR **MERGED to main 2026-11-06** (`b4cc40dbe`) | W6–W9 per the remediation plan — **all landed** |
 | **T — Triage-scheduled items** | slot into U/C per their rulings | the 12 open `prd::okf-server` issues | See Phase T |
 
@@ -102,6 +102,27 @@ the ORDER and the cross-stream slots.
    console open names the slow leg on the `[okf-lab-timing]` channel, or his
    next clean Apply closes the item as no-repro. Not blocking any work — the
    instrumentation is shipped and the ruling (measurement first) stands.
+
+### Phase U continuation — the admin-UX waves after !770 (David's "go", 2026-11-10)
+
+Two further waves inside David's standing fence (**only AdminDashboard.vue, its
+tabs and the dialogs its features launch — never UnifiedAnalytics or the chart
+components as surfaces**; shared files consumed by non-admin surfaces get
+flagged before touching):
+
+| Wave | What | Status |
+|---|---|---|
+| **T1 — chart theming** | the five analytics charts consume resolved DS tokens (light/dark correct across theme switches; no ApexCharts hardcoded palette) | **MERGED to main** (MR **!842**, merge commit `7f22a1310`, David's merge train 2026-11-10). BMAD bookkeeping rides the H1 MR per the no-standalone-docs-MR rule |
+| **H1 — the dashboard stops lying** | fabricated boot defaults removed (99.98% uptime, 245 ms, 1,247 MAU, 42.3 GB DB, "2 days ago" scan stamp, hardcoded service statuses) → null-until-measured + tri-state cards (DsStateDisplay error+Retry / Measuring… / real data); swallowed failures surfaced (loadSystemHealth resets every surface, loadDatabaseStats treats figure-less payloads as failures, loadSecurityDetails rethrows instead of returning a fabricated clean bill, runSecurityScan no longer stamps "Just now" over a failed refresh, LogSearchDialog reports its own failure via a second emit argument); 8 new i18n keys × 14 locales | **this MR** (branch `worktree-admin-ux-h1-honest-services`, two commits: `2f2dfbf74` + review-round `3a80cc701`) |
+
+Diagnosis worth keeping: the H1 review found the **backend already honest** —
+`/admin/system-health` returns nulls on VL outage by design, `/admin/database/stats`
+is wired to a service that throws, `/admin/security-metrics` serves the real scan
+store. Every finding was a frontend boot-lie or a swallowed failure; zero backend
+changes. The dead `lastScan` key (the loader writes `lastSecurityScan`) was fixed
+in passing. **Out of fence, flagged for the MR description:** H4 (UnifiedAnalytics
+renders random demo data) — David ruled the charts untouchable; the wave that
+fixes H4 must be scoped explicitly.
 
 ## Phase C — CSR waves resume (after Phase U)
 

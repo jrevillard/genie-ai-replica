@@ -210,6 +210,8 @@ export default {
     close: 'Tutup dasbor',
     edit: 'Ubah',
     manage: 'Kelola',
+    retry: 'Coba lagi',
+    measuring: 'Mengukur…',
     systemUptime: 'Waktu Aktif Sistem',
     avgResponseTime: 'Waktu Respon Rata-rata',
     errorRate: 'Tingkat Kesalahan',
@@ -259,7 +261,14 @@ export default {
       cpu: 'Penggunaan CPU',
       memory: 'Penggunaan Memori',
       storage: 'Penggunaan Penyimpanan',
-      network: 'Bandwidth Jaringan'
+      network: 'Bandwidth Jaringan',
+      unavailable: 'Penggunaan sumber daya tidak tersedia saat ini.'
+    },
+    health: {
+      unavailable: 'Kesehatan sistem tidak tersedia saat ini.'
+    },
+    dbStats: {
+      unavailable: 'Statistik basis data tidak tersedia saat ini.'
     },
     databaseManagement: 'Manajemen Database',
     databaseSize: 'Ukuran Database',
@@ -331,7 +340,8 @@ export default {
       },
       runSecurityScan: {
         success: 'Pemindaian keamanan berhasil diselesaikan',
-        loading: 'Menjalankan pemindaian keamanan...'
+        loading: 'Menjalankan pemindaian keamanan...',
+        refreshFailed: 'Pemindaian selesai, tetapi penyegaran hasil gagal'
       },
       cancel: 'Batal',
       save: 'Simpan Perubahan'
@@ -385,11 +395,13 @@ export default {
       },
       logSearch: {
         noResultsFound: 'Tidak ada log yang cocok dengan kriteria pencarian Anda',
+        searchFailed: 'Pencarian log gagal',
         resultsFound: "Ditemukan {'{'}count{'}'} entri log",
         degraded: 'Menampilkan hasil sebagian karena gangguan VictoriaLogs. Beberapa entri log terbaru mungkin hilang.'
       }
     },
     security: {
+      loadingMetrics: 'Memuat data keamanan…',
       title: 'Pemantauan Keamanan',
       securityScan: 'Pemindaian Keamanan',
       runningSecurityScan: 'Menjalankan Pemindaian...',
@@ -440,7 +452,8 @@ export default {
       lineNumbers: 'Nomor Baris',
       showLess: 'Tampilkan Lebih Sedikit',
       showMore: 'Tampilkan Semua Masalah',
-      lastScanJustNow: 'Baru saja'
+      lastScanJustNow: 'Baru saja',
+      unavailable: 'Data keamanan tidak tersedia saat ini.'
     },
     hierarchy: {
       title: 'Manajemen Hierarki Pengetahuan (catatan: selalu dalam Bahasa Inggris - tambahkan terjemahan)',

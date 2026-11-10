@@ -210,6 +210,8 @@ export default {
     close: 'Close dashboard',
     edit: 'Edit',
     manage: 'Manage',
+    retry: 'Retry',
+    measuring: 'Measuring…',
     systemUptime: 'System Uptime',
     avgResponseTime: 'Average Response Time',
     errorRate: 'Error Rate',
@@ -259,7 +261,14 @@ export default {
       cpu: 'CPU Usage',
       memory: 'Memory Usage',
       storage: 'Storage Usage',
-      network: 'Network Bandwidth'
+      network: 'Network Bandwidth',
+      unavailable: 'Resource usage is unavailable right now.'
+    },
+    health: {
+      unavailable: 'System health is unavailable right now.'
+    },
+    dbStats: {
+      unavailable: 'Database statistics are unavailable right now.'
     },
     databaseManagement: 'Database Management',
     databaseSize: 'Database Size',
@@ -330,7 +339,8 @@ export default {
       },
       runSecurityScan: {
         success: 'Security scan completed successfully',
-        loading: 'Running security scan...'
+        loading: 'Running security scan...',
+        refreshFailed: 'The scan completed, but refreshing its results failed'
       },
       cancel: 'Cancel',
       save: 'Save Changes'
@@ -384,11 +394,13 @@ export default {
       },
       logSearch: {
         noResultsFound: 'No logs matched your search criteria',
+        searchFailed: 'The log search failed',
         resultsFound: "Found {'{'}count{'}'} log entries",
         degraded: 'Showing partial results due to VictoriaLogs outage. Some recent log entries may be missing.'
       }
     },
     security: {
+      loadingMetrics: 'Loading security data…',
       title: 'Security Monitoring',
       securityScan: 'Security Scan',
       runningSecurityScan: 'Running Scan...',
@@ -439,7 +451,8 @@ export default {
       lineNumbers: 'Line Numbers',
       showLess: 'Show Less',
       showMore: 'Show All Issues',
-      lastScanJustNow: 'Just now'
+      lastScanJustNow: 'Just now',
+      unavailable: 'Security data is unavailable right now.'
     },
     hierarchy: {
       title: 'Knowledge Hierarchy Management (note: always English - add translations)',

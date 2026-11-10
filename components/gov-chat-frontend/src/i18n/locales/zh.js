@@ -207,6 +207,8 @@ export default {
     userManagement: '用户管理',
     systemAdministration: '系统管理',
     manage: '管理',
+    retry: '重试',
+    measuring: '测量中…',
     loading: '加载中...',
     close: '关闭',
     edit: '编辑',
@@ -259,7 +261,14 @@ export default {
       cpu: 'CPU 使用',
       memory: '内存使用',
       storage: '存储使用',
-      network: '网络带宽'
+      network: '网络带宽',
+      unavailable: '资源使用情况当前不可用。'
+    },
+    health: {
+      unavailable: '系统健康状态当前不可用。'
+    },
+    dbStats: {
+      unavailable: '数据库统计信息当前不可用。'
     },
     databaseManagement: '数据库管理',
     databaseSize: '数据库大小',
@@ -331,7 +340,8 @@ export default {
       },
       runSecurityScan: {
         success: '安全扫描成功完成',
-        loading: '正在运行安全扫描...'
+        loading: '正在运行安全扫描...',
+        refreshFailed: '扫描已完成，但刷新结果失败'
       },
       cancel: '取消',
       save: '保存更改'
@@ -385,11 +395,13 @@ export default {
       },
       logSearch: {
         noResultsFound: '未找到匹配搜索条件的日志',
+        searchFailed: '日志搜索失败',
         resultsFound: "找到 {'{'}count{'}'} 条日志条目",
         degraded: '由于 VictoriaLogs 故障,正在显示部分结果。某些最近的日志条目可能缺失。'
       }
     },
     security: {
+      loadingMetrics: '正在加载安全数据…',
       title: '安全监控',
       securityScan: '安全扫描',
       runningSecurityScan: '正在运行扫描...',
@@ -437,7 +449,8 @@ export default {
       lineNumbers: '行号',
       showLess: '显示较少',
       showMore: '显示所有问题',
-      lastScanJustNow: '刚才'
+      lastScanJustNow: '刚才',
+      unavailable: '安全数据当前不可用。'
     },
     hierarchy: {
       title: '知识层级管理 (注意: 始终为英文 - 添加翻译)',

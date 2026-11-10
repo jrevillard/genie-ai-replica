@@ -17,7 +17,7 @@ jest.mock('../../middlewares/keycloak-auth-middleware', () => ({
     req.user = {
       sub: '12345678-1234-1234-1234-123456789012',
       preferred_username: 'testuser',
-      realm_realm: { roles: ['user', 'admin'] }
+      realm_access: { roles: ['user', 'admin'] }
     };
     next();
   }),
@@ -110,6 +110,19 @@ describe('GET /api/files (list) — the bundle lookup contract', () => {
     expect(fileService.getFiles).toHaveBeenCalledWith(
       expect.objectContaining({ repo_id: 'repo-1', is_bundle: true, limit: 1 })
     );
+    expect(typeof fileService.getFiles.mock.calls[0][0].is_bundle).toBe('boolean');
+  });
+
+  // The other direction of the same contract: the admin Documents list sends
+  // `is_bundle=false` and the service's strict `is_bundle === false` branch
+  // (bundle zips excluded, everything else included) is what keeps a bundle
+  // zip out of the list — losing it re-opens the WS2 leak (a bundle rendered
+  // as a document with a Delete affordance the server refuses).
+  it("coerces is_bundle='false' to the boolean the non-bundle filter needs", async () => {
+    const res = await request(app).get('/api/files?is_bundle=false');
+
+    expect(res.status).toBe(200);
+    expect(fileService.getFiles).toHaveBeenCalledWith(expect.objectContaining({ is_bundle: false }));
     expect(typeof fileService.getFiles.mock.calls[0][0].is_bundle).toBe('boolean');
   });
 });

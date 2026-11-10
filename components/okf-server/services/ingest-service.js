@@ -37,8 +37,9 @@ const { authedAxios } = require('./service-token');
 const dbService = require('../shared-lib/db-connection-service');
 const config = require('../config');
 // The repo's CURRENT bundle doc is the one the okf-server ingest worker
-// resolves FRESH per call (a doc-repo lookup, no cache to invalidate) —
-// dataprep's own bundle-log mirror keeps a per-concept cache, cleared per
+// (workers/ingestWorker.js — getBundleFileId) resolves FRESH per call (a
+// doc-repo lookup, no cache to invalidate); dataprep's own bundle-log mirror
+// keeps its own per-concept cache, reset at the start of every concept
 // ingest. Storing a new bundle zip therefore drives the state machine from
 // its first drain onwards.
 

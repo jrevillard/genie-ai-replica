@@ -319,6 +319,25 @@ describe('fileService', () => {
       // matches nothing (or everything, depending on the driver).
       expect(mockDb.query.mock.calls[0][1]).toMatchObject({ repo_id: 'repo-1' });
     });
+
+    // The symmetric branch: `is_bundle=false` must EXCLUDE the bundle zips
+    // (and the legacy docs without the field) — the admin Documents list
+    // depends on it, and a bundle rendered there carries a Delete affordance
+    // the server refuses.
+    it('excludes bundle zips (and legacy docs without the field) when is_bundle is false', async () => {
+      const mockCursor = { all: jest.fn().mockResolvedValue([]) };
+      const mockCountCursor = { next: jest.fn().mockResolvedValue(0) };
+      const mockDb = {
+        query: jest.fn().mockResolvedValueOnce(mockCursor).mockResolvedValueOnce(mockCountCursor)
+      };
+
+      fileService.getDb = jest.fn().mockResolvedValue(mockDb);
+
+      await fileService.getFiles({ page: 1, limit: 10, is_bundle: false });
+
+      const query = mockDb.query.mock.calls[0][0];
+      expect(query).toContain('(file.is_bundle == false OR file.is_bundle == null)');
+    });
   });
 
   // Story 3.10 T1 (D1): every file knows its origin — the wizard's source

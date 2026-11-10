@@ -175,4 +175,6 @@ The run of 2026-11-10 (forge venue, chart 0.2.171, `genieai-forge.local:4443`):
 An earlier run of the same day showed five more failures (`welcome-banner`, `resizable-sidebars`) that were **not** a spec defect: the `forge-k3s` node rebooted mid-run and the edge refused connections. On the settled stack they pass.
 
 A spec that is known-red is named, never silently excluded, and never edited
-to make it pass.
+to make it pass. These reds are the **proof that the suite runs** — the run
+executed them, in their broken state, on a branch that does not carry the
+fixes; they are not defects of the run's own change-set.

@@ -3940,10 +3940,12 @@ describe('the capped-jest template structure (#1670)', () => {
     return extendsMap;
   };
 
-  // Transitive ancestors of a job in the extends graph: an intermediary
+  // Transitive ancestors of a job in the inheritance graph (extends AND
+  // `<<:` merge sources — the extractor maps both): an intermediary
   // template extending the capped template must not let a fifth job
-  // inherit the cap inventory through one indirection — the pin counts
-  // EVERY job whose ancestor chain reaches the template, direct or not.
+  // inherit the cap inventory through one indirection, however that
+  // indirection is spelled — the pin counts EVERY job whose ancestor
+  // chain reaches the template, direct or not.
   const ancestorsOf = (job, map) => {
     const seen = new Set();
     const stack = [...(map.get(job) || [])];

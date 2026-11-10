@@ -376,7 +376,7 @@ describe('ci shell gate: extraction', () => {
     expect(checkShellSyntax(blocks)).toHaveLength(1);
   });
 
-  test('an extended base runs its script in the extending job', () => {
+  test("an extending job's own script replaces the extended base's script", () => {
     // extends is a reverse deep merge: the job's own script REPLACES the
     // base's (GitLab runs only what the job defines — the extension reads
     // the base's script through the job only when the job defines none),

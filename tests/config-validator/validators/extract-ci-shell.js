@@ -611,7 +611,12 @@ function extractCiShellBlocks(content) {
   // base's (`<<:` by YAML merge-key semantics, `extends` by GitLab's —
   // which is why `!reference` exists to concatenate scripts). The base's
   // script therefore runs in the job only when the job defines none of
-  // its own; the sweep must never credit a line the job would not run.
+  // its own, and this extraction credits exactly the lines a job can
+  // run for the single-base shapes the CI file uses today. (Approximation
+  // kept from the original gate: a multi-base `extends: [.a, .b]` with
+  // script-carrying bases credits both scripts, where GitLab runs one
+  // array — no such job exists here; tightening it is a conscious future
+  // decision, not a silent gap.)
   // The job -> inherited sources mapping (extends AND `<<:` merge — a
   // job can reach a template through either) is returned alongside the
   // blocks: a structural guard (which jobs inherit which template) must
@@ -623,11 +628,6 @@ function extractCiShellBlocks(content) {
     const droppedSources = new Set(); // templates/bases that never run alone
     for (const site of mergeSites) {
       const sourceOwner = site.kind === 'merge' ? (anchors.get(site.anchorName) || {}).owner : site.baseOwner;
-      if (sourceOwner) {
-        const bases = extendsMap.get(site.jobOwner) || [];
-        bases.push(sourceOwner);
-        extendsMap.set(site.jobOwner, bases);
-      }
       if (!sourceOwner) {
         pushError({
           owner: site.jobOwner,
@@ -637,6 +637,9 @@ function extractCiShellBlocks(content) {
         });
         continue;
       }
+      const bases = extendsMap.get(site.jobOwner) || [];
+      bases.push(sourceOwner);
+      extendsMap.set(site.jobOwner, bases);
       const ownKeys = new Set(blocks.filter((b) => b.owner === site.jobOwner).map((b) => b.key));
       const copies = inherited.get(site.jobOwner) || [];
       for (const sb of blocks.filter((b) => b.owner === sourceOwner)) {

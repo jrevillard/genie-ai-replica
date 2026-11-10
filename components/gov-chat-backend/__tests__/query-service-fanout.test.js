@@ -183,6 +183,10 @@ describe('QueryService fan-out carrier (Story 1.1 — I/O Matrix)', () => {
     expect(opeaPayload.context.exclude_legacy).toBeUndefined();
     // The carrier is empty regardless — the authz call is skipped.
     expect(retrievalConfigClient.getAuthorizedGraphs).not.toHaveBeenCalled();
+    // A REAL hybrid zero-serving response is normal free-form-only operation
+    // (the okf-server's own engagement comment): it stays warning-free —
+    // only a locally synthesized hybrid posture reaches the warning channel.
+    expect(logger.warn).not.toHaveBeenCalledWith('QueryService.fanout_warning', expect.anything());
   });
 
   it('OKF_ONLY_ZERO_SERVING: engaged false + okf_only → empty carrier + exclude_legacy + structured warning', async () => {

@@ -925,9 +925,9 @@ async function startConversion({
   // The background runner: it settles the registry's value and releases the
   // reservation in its finally.
   const runner = (async () => {
-    dlog(`runner queued repo=${repo_id} running=${running}/${MAX_CONCURRENT} waiting=${waiting.length}`);
     let acquired = false;
     try {
+      dlog(`runner queued repo=${repo_id} running=${running}/${MAX_CONCURRENT} waiting=${waiting.length}`);
       // The slot acquire is INSIDE the try: a rejection there must still
       // release the reservation, or the repo stays 409-locked forever.
       await acquireSlot();

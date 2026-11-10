@@ -1016,9 +1016,11 @@ async function startDocumentsConversion({ repo_id, file_ids, requested_name, cla
       await patchConversion(repo_id, {
         status: 'failed',
         error: err.message,
+        code: err.code || 'CONVERSION_FAILED',
         files_done: 0,
         files_total: file_ids.length,
         per_file: [],
+        started_at: queued.started_at,
         finished_at: new Date().toISOString()
       });
     } catch (patchErr) {
@@ -1036,8 +1038,12 @@ async function startDocumentsConversion({ repo_id, file_ids, requested_name, cla
 
   const job = { repo_id, file_ids, source_metas: metaByKey, requested_name, classification, actor: actor || null };
   const runner = (async () => {
-    await acquireSlot();
+    let acquired = false;
     try {
+      // The slot acquire is INSIDE the try: a rejection there must still
+      // release the reservation, or the repo stays 409-locked forever.
+      await acquireSlot();
+      acquired = true;
       await withSpan('okf.documents.conversion', async (span) => {
         span.setAttribute('okf.repo_id', repo_id);
         span.setAttribute('okf.files_total', file_ids.length);
@@ -1046,7 +1052,7 @@ async function startDocumentsConversion({ repo_id, file_ids, requested_name, cla
     } catch {
       // Terminal state already recorded by runDocumentsConversion.
     } finally {
-      releaseSlot();
+      if (acquired) releaseSlot();
       // The registry's value settles BEFORE the entry goes, so the map and
       // its value never disagree: awaiting live.get(repo_id) waits for the
       // run (the registry's contract).
@@ -1055,10 +1061,9 @@ async function startDocumentsConversion({ repo_id, file_ids, requested_name, cla
     }
   })();
   // The runner swallows its own errors (the terminal state is recorded by
-  // runDocumentsConversion); this guard keeps a rejection raised OUTSIDE its
-  // try — the slot acquire — from surfacing as an unhandled rejection: Node
-  // 22 treats those as fatal, and it would leave the reservation held
-  // forever (the repo permanently 409-locked).
+  // runDocumentsConversion); this guard keeps a rejection raised in its
+  // finally from surfacing as an unhandled rejection — Node 22 treats those
+  // as fatal.
   runner.catch(() => {});
   return queued;
 }

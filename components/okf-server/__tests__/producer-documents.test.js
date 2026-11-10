@@ -427,6 +427,75 @@ describe('producer-service — startDocumentsConversion + run', () => {
     expect(second.err).toMatchObject({ code: 'CONVERSION_IN_FLIGHT', status: 409 });
   });
 
+  it('a FAILED start writes the terminal record while the reservation is still held, then releases it', async () => {
+    // The write-before-release ordering is the point of the failed-start
+    // record: the producer's patch REPLACES the conversion object, so a
+    // failed write landing after a concurrent start's own 'queued' record
+    // would clobber it. The start fails in the STAMP stage here — the queued
+    // patch before it succeeds, so the failed record can be written.
+    mockDocs({ f1: 'alpha.md' });
+    await mockDb.collection('okf_repositories').save({ _key: RID, repo_id: RID, name: 'Mine', domain: 'general' });
+    const dbService = require('../shared-lib/db-connection-service');
+    let failGetDb = false;
+    let reservationHeldAtWrite = null;
+    const programQueryImpl = mockDb.query.getMockImplementation();
+    mockDb.query.mockImplementation(async (q, bind) => {
+      const text = typeof q === 'string' ? q : q && q.query;
+      const patch = bind && bind.patch;
+      if (text && text.includes('UPDATE doc WITH { conversion') && patch) {
+        if (patch.status === 'failed') {
+          // The failed record is written while the repo must STILL be reserved.
+          reservationHeldAtWrite = producer.live.has(RID);
+        }
+        if (patch.status === 'queued') {
+          // The queued patch is the last stage before the stamping: arm the
+          // failure so the stamp's own db connection rejects.
+          failGetDb = true;
+        }
+      }
+      return programQueryImpl(q, bind);
+    });
+    dbService.getConnection.mockImplementation(async () => {
+      if (failGetDb) {
+        failGetDb = false; // one-shot: only the stamp's connection fails
+        throw new Error('db down');
+      }
+      return mockDb;
+    });
+
+    try {
+      await expect(
+        producer.startDocumentsConversion({ repo_id: RID, file_ids: ['f1'], requested_name: 'x' })
+      ).rejects.toThrow(/db down/);
+
+      // The terminal record: status, the counters the UI reads, and the
+      // shape its sibling failure records carry.
+      const patches = mockDb.query.mock.calls.map((c) => (c[1] && c[1].patch) || null).filter(Boolean);
+      const failed = patches[patches.length - 1];
+      expect(failed).toMatchObject({
+        status: 'failed',
+        code: 'CONVERSION_FAILED',
+        files_done: 0,
+        files_total: 1,
+        per_file: []
+      });
+      expect(typeof failed.started_at).toBe('string');
+      // The reservation was still held while that record was written.
+      expect(reservationHeldAtWrite).toBe(true);
+      // And it is released afterwards — the repo is free again.
+      expect(producer.live.has(RID)).toBe(false);
+      const fresh = await producer
+        .startDocumentsConversion({ repo_id: RID, file_ids: ['f1'], requested_name: 'x' })
+        .then(
+          (queued) => ({ queued }),
+          (err) => ({ err })
+        );
+      expect(fresh.err && fresh.err.code).not.toBe('CONVERSION_IN_FLIGHT');
+    } finally {
+      dbService.getConnection.mockImplementation(() => Promise.resolve(mockDb));
+    }
+  });
+
   it('a CRAWL conversion in flight refuses a documents conversion for the same repo', async () => {
     // ONE conversion per repo, whichever path started it: the two paths write
     // the SAME repo.conversion record (the crawl merges its patch, the

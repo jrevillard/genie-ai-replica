@@ -904,9 +904,13 @@ async function startConversion({
   // reservation in its finally.
   const runner = (async () => {
     dlog(`runner queued repo=${repo_id} running=${running}/${MAX_CONCURRENT} waiting=${waiting.length}`);
-    await acquireSlot();
-    dlog(`runner START repo=${repo_id}`);
+    let acquired = false;
     try {
+      // The slot acquire is INSIDE the try: a rejection there must still
+      // release the reservation, or the repo stays 409-locked forever.
+      await acquireSlot();
+      acquired = true;
+      dlog(`runner START repo=${repo_id}`);
       await withSpan('okf.crawl.conversion', async (span) => {
         span.setAttribute('okf.repo_id', repo_id);
         span.setAttribute('okf.file_id', file_id);
@@ -917,7 +921,7 @@ async function startConversion({
       // Terminal state already recorded by runConversion; swallow so the
       // background promise never surfaces as an unhandled rejection.
     } finally {
-      releaseSlot();
+      if (acquired) releaseSlot();
       // The registry's value settles BEFORE the entry goes, so the map and
       // its value never disagree: awaiting live.get(repo_id) waits for the
       // run (the registry's contract).
@@ -926,10 +930,8 @@ async function startConversion({
     }
   })();
   // The runner swallows its own errors (the terminal state is recorded by
-  // runConversion); this guard keeps a rejection raised OUTSIDE its try — the
-  // slot acquire — from surfacing as an unhandled rejection: Node 22 treats
-  // those as fatal, and it would leave the reservation held forever (the repo
-  // permanently 409-locked).
+  // runConversion); this guard keeps a rejection raised in its finally from
+  // surfacing as an unhandled rejection — Node 22 treats those as fatal.
   runner.catch(() => {});
   return queued;
 }

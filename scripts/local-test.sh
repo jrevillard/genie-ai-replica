@@ -71,11 +71,11 @@ echo "=== STEP 1: helm lint ==="
 # `helm dependency update genieai-umbrella` resolves the path RELATIVE to
 # the working directory.
 ( cd "$(dirname "$CHART")" && helm dependency update genieai-umbrella >/dev/null )
-helm lint "$CHART" --strict
+helm lint "$CHART" --strict --kube-version "$(cat charts/ci/kube-version)"
 
 echo
 echo "=== STEP 2: helm template (dry-run render) ==="
-helm template "$RELEASE" "$CHART" -n "$NS" --kube-version 1.33.0 \
+helm template "$RELEASE" "$CHART" -n "$NS" --kube-version "$(cat charts/ci/kube-version)" \
   --set data.keycloak.failOnPlaceholderSecrets=false \
   --set "data.keycloak.clientSecrets.proxyClient=$CLIENT_PROXY" \
   --set "data.keycloak.clientSecrets.dataprep=$CLIENT_DATAPREP" \

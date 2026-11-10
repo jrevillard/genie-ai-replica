@@ -18,7 +18,21 @@ ct lint --config charts/ci/ct.yaml \
   --charts charts/genieai-umbrella
 ```
 
-Pinned K8s version: **1.33.0** — solely via the kind node image (`kindest/node:v1.33.0`) the cluster is created from. There is no ct config key and no ct CLI flag for it (verified against chart-testing v3.15.0 source).
+Pinned K8s version: **1.33.0** — the kind node image (`kindest/node:v1.33.0`)
+the cluster is created from, and `kube-version`, the file every render
+names. There is no ct config key and no ct CLI flag for the node image
+(verified against chart-testing v3.15.0 source).
+
+`kube-version` holds the version the chart is RENDERED against, and it
+is one value for every surface: the pipeline's renders, the CI jobs'
+renders, the gate scripts' own renders (`scripts/ci/*.py`), the render
+guards and `scripts/local-test.sh`. Without an explicit `--kube-version`,
+helm compares the chart's `kubeVersion` constraint against the
+Kubernetes version COMPILED INTO the helm binary — so the same chart
+renders on one machine and fails on another, and a helm release that
+ships a newer k8s breaks every render in the pipeline for a reason that
+has nothing to do with the chart. The file holds the range's LOW bound
+(the CI validates against it; the laptop cluster runs the high bound).
 
 ## The GPU node host every CI render names
 

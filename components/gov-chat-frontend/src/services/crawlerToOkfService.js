@@ -22,34 +22,21 @@
 
 import httpService from './httpService';
 
-/**
- * Slugify a URL or filename into a valid repo name (mirrors the okf-server
- * slug rules: lowercase, non-alphanumerics → '-', trim, ≤200 chars).
- */
-export function slugify(input) {
-  if (!input) return 'crawled-repository';
-  return (
-    String(input)
-      .toLowerCase()
-      .replace(/^https?:\/\/(www\.)?/, '') // strip scheme + www.
-      .replace(/\.(md|html|htm|txt)$/i, '') // strip extension if filename
-      .replace(/[^a-z0-9]+/g, '-')
-      .replace(/-+/g, '-')
-      .replace(/^-|-$/g, '')
-      .slice(0, 200) || 'crawled-repository'
-  );
-}
-
 const crawlerToOkfService = {
   /**
    * Trigger the server-side conversion. Returns as soon as the repo exists
    * (202) — progress is polled separately via repoOkfService.get(repoId).
    *
+   * NO client-side slugging (issue #1190): the server applies the slug SSOT
+   * (okf-server services/slug.js) to the raw intent, so there is exactly one
+   * grammar — the name sent here is the RAW filename or seed URL, and the
+   * server derives (and defaults) the repo name from it.
+   *
    * @param {Object} input
    * @param {string} input.fileId       doc-repo file_id of the crawled .md
-   * @param {string} [input.url]        crawl seed URL (slug + provenance)
+   * @param {string} [input.url]        crawl seed URL (name + provenance source)
    * @param {string} [input.crawlJobId] crawl_job _key (audit provenance)
-   * @param {string} [input.filename]   original file_name (repo name slug)
+   * @param {string} [input.filename]   original file_name — sent RAW; the server derives the repo name from it
    * @param {string} [input.splitMode]  'B' per-page (default) | 'A' mega-concept
    * @param {string} [input.classification] 'heuristics' (default) | 'llm' | 'hybrid'
    * @param {Object} [input.actor]      auth hints (sub → x-actor-sub)
@@ -62,7 +49,7 @@ const crawlerToOkfService = {
       err.code = 'VALIDATION_ERROR';
       throw err;
     }
-    const baseName = slugify(filename || url);
+    const baseName = filename || url || null; // raw intent — the server owns the grammar (#1190)
     const repoDomain = domain || 'general';
     const headers = actor && actor.sub ? { 'x-actor-sub': actor.sub } : {};
     // silent: true — the dialog/list owns the user-facing error; a raw

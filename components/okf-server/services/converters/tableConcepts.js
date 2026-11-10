@@ -100,13 +100,9 @@ function cellText(cell) {
   return String(cell.v == null ? '' : cell.v);
 }
 
-function slugify(s) {
-  return String(s || '')
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '')
-    .slice(0, 60);
-}
+/** The #1190 slug SSOT, bound to the tabular grammar: no fold, 60-char cap. */
+const { slugify: slugifyBase } = require('../slug');
+const slugify = (s) => slugifyBase(s, { cap: 60 });
 
 /**
  * Turn ONE parsed grid into the FR-42 concept pair set.

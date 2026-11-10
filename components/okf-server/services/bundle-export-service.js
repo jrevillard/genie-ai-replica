@@ -45,6 +45,7 @@ const { withSpan } = require('../shared-lib/tracing');
 const { authedAxios } = require('./service-token');
 const config = require('../config');
 const { versionedGraphName } = require('./graph-lifecycle-service');
+const { slugFor } = require('./slug');
 
 const META = 'okf_concepts_meta';
 
@@ -54,18 +55,6 @@ class ExportError extends Error {
     this.code = code;
     this.status = status;
   }
-}
-
-/** Filename-safe slug of the repo name for the bundle file name. */
-function slugFor(name) {
-  return (
-    String(name || 'repo')
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, '-')
-      .replace(/-+/g, '-')
-      .replace(/^-|-$/g, '')
-      .slice(0, 80) || 'repo'
-  );
 }
 
 /** The exported zip's file name — THE visible repo+version link (David:
@@ -252,4 +241,4 @@ async function exportBundle(repo, actor) {
   });
 }
 
-module.exports = { exportBundle, buildBundleZip, bundleFileName, slugFor, ExportError };
+module.exports = { exportBundle, buildBundleZip, bundleFileName, ExportError };

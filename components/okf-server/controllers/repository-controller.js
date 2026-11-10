@@ -27,6 +27,7 @@ const {
   piiAckSchema
 } = require('../validators/repository-validator');
 const lifecycleService = require('../services/lifecycle-service');
+const { nameFromSource, slugFor } = require('../services/slug');
 const { assertWritable } = lifecycleService;
 const bundleExportService = require('../services/bundle-export-service');
 const conformanceService = require('../services/conformance-service');
@@ -196,7 +197,7 @@ async function createRepo(req, res, next) {
     // scope (other tenants, repo-uuid scopes) is preserved untouched.
     // Idempotent: an already-slugged scope matches the filter and is re-added
     // exactly once.
-    const domainSlug = bundleExportService.slugFor(input.domain);
+    const domainSlug = slugFor(input.domain);
     const callerScopes = ((input.acl && input.acl.required_scopes) || []).filter(
       (s) => !(typeof s === 'string' && /^okf:t:[^:]+:(read|admin)$/.test(s))
     );
@@ -243,7 +244,7 @@ async function createRepo(req, res, next) {
  */
 async function resolveTargetRepo(body, authz, actor, defaultName) {
   const repoDomain = body.domain || 'general';
-  const acl = { required_scopes: [`okf:t:${bundleExportService.slugFor(repoDomain)}:admin`] };
+  const acl = { required_scopes: [`okf:t:${slugFor(repoDomain)}:admin`] };
   const baseName = typeof body.name === 'string' && body.name ? body.name : defaultName;
   if (typeof body.repo_id === 'string' && body.repo_id.trim()) {
     const existing = await repoService.getById(body.repo_id.trim(), { authz });
@@ -305,7 +306,17 @@ async function convertFromCrawl(req, res, next) {
       body.classification !== undefined ? typeInference.resolveStrategy(body.classification).strategy : undefined;
     // Repo targeting (see resolveTargetRepo — #78672): existing-repo branch
     // or the create-with-suffix loop, one implementation for both endpoints.
-    const target = await resolveTargetRepo(body, authzForService(req), actor, 'crawled-repository');
+    // The crawl path's `name` is artifact-derived (a crawl filename or the
+    // seed URL): the #1190 slug SSOT owns the grammar server-side now — the
+    // frontend sends the raw intent. (convert-from-documents keeps its
+    // user-typed display names verbatim.)
+    const requestedName = nameFromSource(body.name, 'crawled-repository');
+    const target = await resolveTargetRepo(
+      { ...body, name: requestedName },
+      authzForService(req),
+      actor,
+      requestedName
+    );
     if (target.failure) return res.status(target.failure.status).json(target.failure.payload);
     const repo = target.repo;
     await crawlConversionService.startConversion({
@@ -314,7 +325,11 @@ async function convertFromCrawl(req, res, next) {
       url: body.url || null,
       crawl_job_id: body.crawl_job_id || null,
       split_mode: body.split_mode,
-      requested_name: body.name || null,
+      // The job record carries the CALLER's intent: the raw name string when
+      // one was sent (the index concept title reads it — readable text, not
+      // a slug), null when none did, so the title keeps its readable
+      // default (a blank name is no name). The repo identity above carries the slug.
+      requested_name: typeof body.name === 'string' && body.name.trim() ? body.name : null,
       classification, // TYPE INFERENCE (David, 2026-09-05): rides the job → flushes
       actor
     });

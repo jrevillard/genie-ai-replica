@@ -66,13 +66,6 @@ jest.mock('../services/version-service', () => ({
   fingerprintOfCurrentVersion: jest.fn().mockResolvedValue(null)
 }));
 jest.mock('../services/bundle-export-service', () => ({
-  slugFor: (name) =>
-    String(name || 'repo')
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, '-')
-      .replace(/-+/g, '-')
-      .replace(/^-|-$/g, '')
-      .slice(0, 80) || 'repo',
   exportBundle: jest.fn().mockResolvedValue({
     file_id: 'file-bundle-1',
     file_name: 'demo-v1.zip',

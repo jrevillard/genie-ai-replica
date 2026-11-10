@@ -159,6 +159,12 @@ function isPostureUnknown(config) {
  * it into an engaged fan-out. A response that declares no vocabulary (an
  * okf-server older than the enum's publication) is accepted as-is: the
  * upstream owns membership, this is the boundary check (issue #1690).
+ * Against the SHIPPED okf-server this can never reject — the server's own
+ * sanitizer maps every non-member mode (a padded one included) to 'legacy'
+ * before publishing, so `config.mode` is always a member of the modes it
+ * publishes. The check exists for VERSION SKEW: an old okf-server that
+ * predates the enum's publication, or one whose sanitizer regressed, and a
+ * BFF newer than both — the pair this MR ships cannot exercise it.
  * @param {object} raw — the upstream read-model
  * @param {string} mode — the mode the response carried, untrimmed
  */

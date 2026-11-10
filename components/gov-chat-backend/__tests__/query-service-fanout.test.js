@@ -276,6 +276,11 @@ describe('QueryService fan-out carrier (Story 1.1 — I/O Matrix)', () => {
       })
     );
     expect(fanoutWarnings()).toHaveLength(1);
+    // The synthesized composition has no upstream report behind it: a
+    // `server_warnings` field here would always be [] and would read as
+    // "the okf-server answered cleanly with an empty serving set".
+    const warn = logger.warn.mock.calls.find(([m]) => m === 'QueryService.fanout_warning');
+    expect(warn[1]).not.toHaveProperty('server_warnings');
   });
 
   it('LEGACY_BY_DESIGN: a parked OKF stack and a scope-less caller stay WARNING-FREE (their legacy answer is the correct posture)', async () => {

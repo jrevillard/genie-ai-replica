@@ -49,7 +49,11 @@
   color: var(--fg) !important;
 }
 
-/* --- Radial bar track (SatisfactionGauge) --- */
+/* --- Radial bar track (SatisfactionGauge) ---
+   Dark mode paints the track here (stylesheet rules beat ApexCharts'
+   presentation attributes, and var() resolves natively in CSS); the T1
+   bridge's resolved trackColor attribute covers light mode, where no
+   stylesheet rule exists. */
 [data-theme='dark'] .apexcharts-radialbar .apexcharts-radialbar-track .apexcharts-radialbar-area {
   stroke: var(--muted) !important;
 }

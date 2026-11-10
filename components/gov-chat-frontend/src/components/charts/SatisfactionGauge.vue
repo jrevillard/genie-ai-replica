@@ -350,18 +350,35 @@ export default {
      * The gauge's four value bands (poor/low/medium/high), derived from the
      * status tokens via the shared satisfaction scale — resolves to the
      * deployment's own semantic colors instead of hardcoded hexes.
+     * A METHOD, deliberately not a computed: the values come from
+     * getComputedStyle (non-reactive), so a computed would cache the first
+     * evaluation and serve stale colors after a theme switch; this
+     * re-resolves on every call (the theme watch re-runs initChart).
      */
-    gaugeBandColors() {
-      const scale = buildSatisfactionScale(this.getResolvedTheme().statusColors);
-      // [poor=danger, low=warning, medium=warning→success mix, high=success]
-      return [scale[0], scale[2], scale[3], scale[4]];
+    getGaugeBandColors() {
+      const { statusColors } = this.getResolvedTheme();
+      const scale = buildSatisfactionScale(statusColors) || [];
+      const st = statusColors || {};
+      // [poor=danger, low=danger→warning mix, medium=warning, high=success] —
+      // the same poor→excellent ordering the heatmap paints (review F2: the old
+      // [0,2,3,4] pick painted 'low' as pure warning, one stop ahead of the
+      // shared scale). A band the scale could not produce degrades to its
+      // nearest raw status token (review F4); an unresolvable set yields []
+      // (ApexCharts' default palette) rather than empty colors.
+      return [
+        scale[0] || st.danger || '',
+        scale[1] || st.warning || st.danger || '',
+        scale[2] || st.warning || '',
+        scale[4] || st.success || ''
+      ].filter(Boolean);
     },
 
     /**
      * Get gauge color based on value
      */
     getGaugeColor(value) {
-      const bands = this.gaugeBandColors;
+      const bands = this.getGaugeBandColors();
+      if (bands.length < 4) return '';
       if (value >= 90) return bands[3];
       if (value >= 80) return bands[2];
       if (value >= 70) return bands[1];
@@ -378,11 +395,14 @@ export default {
 
       const isDarkMode = this.theme === 'dark';
 
-      const textColor = this.getResolvedTheme().textColor;
+      const { textColor, mutedColor, borderColor, accentColor } = this.getResolvedTheme();
       const backgroundColor = 'transparent';
-      const trackColor = isDarkMode ? 'var(--muted)' : 'var(--border)';
+      // Review F3: this was 'var(--muted)'/'var(--border)' — reference strings
+      // ApexCharts drops at the presentation attribute (the stylesheet override
+      // papered over it). Resolve the same tokens through the bridge.
+      const trackColor = isDarkMode ? mutedColor : borderColor;
 
-      const bands = this.gaugeBandColors;
+      const bands = this.getGaugeBandColors();
       const getGradientColors = (value) => {
         if (value < 60) return [bands[0], bands[0]];
         if (value < 70) return [bands[0], bands[1]];
@@ -391,7 +411,10 @@ export default {
         return [bands[3], bands[3]];
       };
 
-      const gradientColors = getGradientColors(this.actualSatisfactionValue);
+      // With fewer than four resolved bands the indexes would read undefined —
+      // fall back to the resolved accent instead of feeding ApexCharts nothing.
+      const gradientColors =
+        bands.length === 4 ? getGradientColors(this.actualSatisfactionValue) : [accentColor, accentColor];
 
       this.chartOptions = {
         chart: {

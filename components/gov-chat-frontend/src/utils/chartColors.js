@@ -2,12 +2,12 @@
  * chartColors - resolves DS design tokens into CONCRETE color strings for chart libraries.
  *
  * WHY THIS EXISTS (T1, admin-ux review §2): chart libraries cannot resolve CSS var()
- * references. ECharts paints to canvas (fillStyle parses CSS colors, not references);
- * ApexCharts applies config colors as SVG presentation attributes, and var() is invalid
- * inside presentation attributes (css-variables-1 — the value is dropped at parse).
- * The old bridge shipped 'var(--fg)'-style strings and a hardcoded stock palette; the
- * strings silently failed everywhere they reached SVG attributes or canvas, and the
- * palette ignored --brand and every deployment flavour.
+ * references — ApexCharts applies config colors as SVG presentation attributes (SVG.js
+ * .attr(), verified against the installed bundle: 137 attr sites, one .style.fill for
+ * dataLabels), and var() is invalid inside presentation attributes per css-variables-1
+ * (the value is dropped at parse). The old bridge shipped 'var(--fg)'-style strings and
+ * a hardcoded stock palette; the strings silently failed everywhere they reached
+ * attributes, and the palette ignored --brand and every deployment flavour.
  *
  * HOW: each token is resolved through a hidden probe element (set style.color, read the
  * computed value) — this works for ANY token definition, including theme-variables.css's
@@ -15,7 +15,10 @@
  * relative-OKLch / color-mix EXPRESSIONS the browser engine evaluates, so there is no
  * hand-written color math on the primary path. Where an expression is unsupported (the
  * probe's sentinel read-back catches invalid values), derivation falls back to a small
- * pure HSL rotation — deterministic and unit-testable.
+ * pure HSL rotation — deterministic and unit-testable. The pure path normalizes its
+ * input FIRST (review F1): browsers serialize computed colors back as oklch(...) when
+ * the token is defined in oklch, and an oklch string must convert — not echo — or
+ * every fallback silently no-ops and the derived ramp comes up short.
  */
 
 const SENTINEL = 'rgb(1, 2, 3)';
@@ -101,6 +104,68 @@ function parseComputedRgb(str) {
   return [Number(m[1]), Number(m[2]), Number(m[3]), m[4] === undefined ? 1 : Number(m[4])];
 }
 
+/**
+ * Parse the computed oklch() form — what getComputedStyle().color returns when
+ * the token is DEFINED in oklch (theme-variables.css) on engines that serialize
+ * computed colors in their specified color space. Accepts number-or-percentage
+ * L/C, a 'deg' hue suffix, and an '/ alpha' tail. Returns [l, c, hDeg, a] or null.
+ */
+function parseComputedOklch(str) {
+  const m = /^oklch\(\s*([\d.]+%?)\s+([\d.]+%?)\s+(-?[\d.]+)(?:deg)?(?:\s*\/\s*([\d.]+%?))?\s*\)$/i.exec(str || '');
+  if (!m) return null;
+  const num = (v) => Number(String(v).replace(/%$/, ''));
+  const l = String(m[1]).endsWith('%') ? num(m[1]) / 100 : num(m[1]);
+  // C percentages top out at the 0.4 chroma ceiling (css-color-4).
+  const c = String(m[2]).endsWith('%') ? num(m[2]) / 250 : num(m[2]);
+  const h = num(m[3]);
+  const a = m[4] === undefined ? 1 : String(m[4]).endsWith('%') ? num(m[4]) / 100 : num(m[4]);
+  return [l, c, h, a];
+}
+
+/**
+ * Convert OKLch components to a concrete sRGB 'rgb(r, g, b)' string — the
+ * standard OKLab → linear-sRGB transform (Ottosson 2020; what browsers
+ * implement). Alpha is dropped on this path: chart series are opaque, and
+ * fade() re-applies alpha itself.
+ */
+function oklchToRgbString([l, c, hDeg]) {
+  const hr = (hDeg * Math.PI) / 180;
+  const aAxis = c * Math.cos(hr);
+  const bAxis = c * Math.sin(hr);
+  const lPrime = l + 0.3963377774 * aAxis + 0.2158037573 * bAxis;
+  const mPrime = l - 0.1055613458 * aAxis - 0.0638541728 * bAxis;
+  const sPrime = l - 0.0894841775 * aAxis - 1.291485548 * bAxis;
+  const lCube = lPrime * lPrime * lPrime;
+  const mCube = mPrime * mPrime * mPrime;
+  const sCube = sPrime * sPrime * sPrime;
+  const linear = [
+    4.0767416621 * lCube - 3.3077115913 * mCube + 0.2309699292 * sCube,
+    -1.2684380046 * lCube + 2.6097574011 * mCube - 0.3413193965 * sCube,
+    -0.0041960863 * lCube - 0.7034186147 * mCube + 1.707614701 * sCube
+  ];
+  const gamma = (v) => (v <= 0.0031308 ? 12.92 * v : 1.055 * Math.pow(v, 1 / 2.4) - 0.055);
+  const [r, g, b] = linear.map((v) => Math.round(clamp(gamma(v), 0, 1) * 255));
+  return `rgb(${r}, ${g}, ${b})`;
+}
+
+/**
+ * Normalize a computed color to the concrete rgb()/rgba() form the pure
+ * fallback path operates on: rgb/rgba pass through, oklch converts to sRGB,
+ * anything else returns '' — the failure marker callers guard with isFailure.
+ */
+function normalizeComputedColor(str) {
+  if (!str) return '';
+  if (parseComputedRgb(str)) return str;
+  const oklch = parseComputedOklch(str);
+  return oklch ? oklchToRgbString(oklch) : '';
+}
+
+/** Normalize then parse — [r, g, b, a] or null. */
+function toRgbTuple(color) {
+  const normalized = normalizeComputedColor(color);
+  return normalized ? parseComputedRgb(normalized) : null;
+}
+
 function rgbToHsl(r, g, b) {
   const rn = r / 255;
   const gn = g / 255;
@@ -139,21 +204,23 @@ function hslToRgb(h, s, l) {
 }
 
 /**
- * Rotate a computed rgb() string's hue by deltaDeg (pure fallback path).
- * Non-parseable input returns the input unchanged.
+ * Rotate a computed color's hue by deltaDeg (pure fallback path). The input is
+ * normalized first (review F1): an oklch(...) computed value converts to sRGB
+ * and is then rotated — it is NOT echoed back. Unparseable input returns ''
+ * (the isFailure marker).
  */
 function hslRotate(color, deltaDeg) {
-  const rgb = parseComputedRgb(color);
-  if (!rgb) return color;
+  const rgb = toRgbTuple(color);
+  if (!rgb) return '';
   const [h, s, l] = rgbToHsl(rgb[0], rgb[1], rgb[2]);
   const [r, g, b] = hslToRgb(h + deltaDeg, s, l);
   return `rgb(${r}, ${g}, ${b})`;
 }
 
-/** Lighten/darken a computed rgb() string in HSL space (pure fallback path). */
+/** Step lightness on a computed color in HSL space (pure fallback path). */
 function hslLightness(color, delta) {
-  const rgb = parseComputedRgb(color);
-  if (!rgb) return color;
+  const rgb = toRgbTuple(color);
+  if (!rgb) return '';
   const [h, s, l] = rgbToHsl(rgb[0], rgb[1], rgb[2]);
   const [r, g, b] = hslToRgb(h, s, clamp(l + delta, 0.05, 0.95));
   return `rgb(${r}, ${g}, ${b})`;
@@ -171,7 +238,15 @@ function isFailure(value) {
 function mix(a, b, pct, compute = domCompute) {
   if (!a || !b) return '';
   const out = resolveExpression(`color-mix(in oklch, ${a} ${100 - pct}%, ${b} ${pct}%)`, compute);
-  return isFailure(out) ? '' : out;
+  if (!isFailure(out)) return out;
+  // Pure fallback (review F5): a linear-sRGB lerp — not perceptual, but the
+  // degraded-engine path only needs plausible distinct steps, not precision.
+  const ra = toRgbTuple(a);
+  const rb = toRgbTuple(b);
+  if (!ra || !rb) return '';
+  const t = pct / 100;
+  const channel = (i) => Math.round(ra[i] + (rb[i] - ra[i]) * t);
+  return `rgb(${channel(0)}, ${channel(1)}, ${channel(2)})`;
 }
 
 /** Rotate hue via relative OKLch, falling back to pure HSL rotation. */
@@ -192,7 +267,11 @@ function shiftLightness(color, delta, compute = domCompute) {
 function fade(color, pct, compute = domCompute) {
   if (!color) return '';
   const out = resolveExpression(`color-mix(in srgb, ${color} ${pct}%, transparent)`, compute);
-  return isFailure(out) ? '' : out;
+  if (!isFailure(out)) return out;
+  // Pure fallback (review F5): apply the alpha directly.
+  const rgb = toRgbTuple(color);
+  if (!rgb) return '';
+  return `rgba(${rgb[0]}, ${rgb[1]}, ${rgb[2]}, ${(pct / 100).toFixed(2)})`;
 }
 
 /**
@@ -205,7 +284,9 @@ function fade(color, pct, compute = domCompute) {
  * `count` distinct concrete colors and never contains ''.
  */
 function buildBrandRamp({ accent, brand, statuses = {}, fg = '', count = 8, compute = domCompute } = {}) {
-  const base = accent || brand;
+  // Normalized first (review F1): every derivation and the 47° shortfall fill
+  // below parse this base — an oklch() accent must convert, not echo.
+  const base = normalizeComputedColor(accent || brand);
   if (!base) return [];
   const st = statuses || {};
   const wanted = [
@@ -246,8 +327,11 @@ function buildBrandRamp({ accent, brand, statuses = {}, fg = '', count = 8, comp
  */
 function buildSatisfactionScale(statuses = {}, { dimmed = false, compute = domCompute } = {}) {
   const { danger = '', warning = '', success = '' } = statuses || {};
-  if (!danger || !warning || !success) return [];
-  const steps = [danger, mix(danger, warning, 50, compute), warning, mix(warning, success, 50, compute), success];
+  const d = normalizeComputedColor(danger);
+  const w = normalizeComputedColor(warning);
+  const s = normalizeComputedColor(success);
+  if (!d || !w || !s) return [];
+  const steps = [d, mix(d, w, 50, compute), w, mix(w, s, 50, compute), s];
   // Degraded compute (color-mix unsupported): a mix that cannot resolve takes
   // its LEFT anchor so the scale stays total — the browser path resolves every
   // mix, this only fires on the fallback path.
@@ -287,6 +371,8 @@ export {
   hslRotate,
   hslLightness,
   parseComputedRgb,
+  parseComputedOklch,
+  normalizeComputedColor,
   buildBrandRamp,
   buildSatisfactionScale,
   resolveChartTokens

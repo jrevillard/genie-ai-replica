@@ -12,9 +12,11 @@ const {
   SENTINEL,
   buildBrandRamp,
   buildSatisfactionScale,
+  fade,
   hslLightness,
   hslRotate,
   mix,
+  normalizeComputedColor,
   parseComputedRgb,
   shiftHue,
   shiftLightness
@@ -51,8 +53,12 @@ describe('chartColors — pure HSL fallback math', () => {
     expect(hslLightness('rgb(0, 0, 0)', -0.5)).toBe('rgb(13, 13, 13)');
   });
 
-  test('non-parseable input passes through unchanged', () => {
-    expect(hslRotate('var(--fg)', 90)).toBe('var(--fg)');
+  test('unparseable input resolves to empty (the failure marker), never echoed back', () => {
+    // Review F1: echoing the input was the silent no-op — an untransformable
+    // color must surface as '' so callers (isFailure guards, ramp dedup) see
+    // the failure instead of a color that never changed.
+    expect(hslRotate('var(--fg)', 90)).toBe('');
+    expect(hslLightness('garbage', 0.1)).toBe('');
     expect(hslLightness('', 0.1)).toBe('');
   });
 
@@ -216,5 +222,65 @@ describe('chartColors — buildSatisfactionScale contract', () => {
 
   test('missing status tokens yield an empty scale', () => {
     expect(buildSatisfactionScale({ danger: 'rgb(1,2,3)' })).toEqual([]);
+  });
+});
+
+describe('chartColors — oklch normalization (review F1) and pure fallbacks (F5/F6)', () => {
+  test('oklch pins: the achromatic axis converts exactly', () => {
+    expect(normalizeComputedColor('oklch(1 0 0)')).toBe('rgb(255, 255, 255)');
+    expect(normalizeComputedColor('oklch(0 0 0)')).toBe('rgb(0, 0, 0)');
+    // L=0.5 gray → linear 0.125 → gamma 0.3886 → 99 per channel.
+    expect(normalizeComputedColor('oklch(0.5 0 0)')).toBe('rgb(99, 99, 99)');
+  });
+
+  test('oklch pins: the sRGB primaries at their published OKLch values', () => {
+    // #FF0000 = oklch(0.628 0.258 29.23); #0000FF = oklch(0.452 0.313 264.05).
+    const red = normalizeComputedColor('oklch(0.628 0.258 29.23)').match(/\d+/g).map(Number);
+    expect(red[0]).toBeGreaterThanOrEqual(250);
+    expect(red[1]).toBeLessThanOrEqual(5);
+    expect(red[2]).toBeLessThanOrEqual(5);
+    const blue = normalizeComputedColor('oklch(0.452 0.313 264.05)').match(/\d+/g).map(Number);
+    expect(blue[0]).toBeLessThanOrEqual(5);
+    expect(blue[1]).toBeLessThanOrEqual(5);
+    expect(blue[2]).toBeGreaterThanOrEqual(250);
+  });
+
+  test('rgb() input passes through unchanged; unparseable input fails to empty', () => {
+    expect(normalizeComputedColor('rgb(10, 20, 30)')).toBe('rgb(10, 20, 30)');
+    expect(normalizeComputedColor('lab(50% 20 30)')).toBe('');
+    expect(normalizeComputedColor('var(--fg)')).toBe('');
+    expect(normalizeComputedColor('')).toBe('');
+  });
+
+  test('hslRotate transforms an oklch input instead of echoing it', () => {
+    const base = normalizeComputedColor('oklch(0.628 0.258 29.23)');
+    const rotated = hslRotate('oklch(0.628 0.258 29.23)', 120);
+    expect(rotated.startsWith('rgb(')).toBe(true);
+    expect(rotated).not.toBe(base);
+  });
+
+  test('mix gains a pure lerp fallback for degraded engines', () => {
+    const failing = () => SENTINEL;
+    expect(mix('rgb(0, 0, 0)', 'rgb(255, 255, 255)', 50, failing)).toBe('rgb(128, 128, 128)');
+    // the oklch side normalizes first: gray 99 halfway toward white 255
+    expect(mix('oklch(0.5 0 0)', 'rgb(255, 255, 255)', 50, failing)).toBe('rgb(177, 177, 177)');
+    // an input even the fallback cannot parse degrades to empty, never the sentinel
+    expect(mix('lab(50% 20 30)', 'rgb(255, 255, 255)', 50, failing)).toBe('');
+  });
+
+  test('fade gains a pure alpha fallback for degraded engines', () => {
+    const failing = () => SENTINEL;
+    expect(fade('rgb(255, 0, 0)', 30, failing)).toBe('rgba(255, 0, 0, 0.30)');
+    expect(fade('var(--accent)', 30, failing)).toBe('');
+  });
+
+  test('the ramp fills to count even when the base arrives as oklch and expressions fail', () => {
+    // The F1 regression shape: pre-fix, hslRotate echoed the oklch base, every
+    // fallback step deduped to nothing, and the ramp came back SHORT of count.
+    const compute = (expression) => (expression.startsWith('var(') ? 'oklch(0.628 0.258 29.23)' : SENTINEL);
+    const ramp = buildBrandRamp({ accent: 'oklch(0.628 0.258 29.23)', count: 8, compute });
+    expect(ramp).toHaveLength(8);
+    expect(new Set(ramp).size).toBe(8);
+    ramp.forEach((c) => expect(parseComputedRgb(c)).not.toBeNull());
   });
 });

@@ -148,6 +148,24 @@ def test_fails_loud_when_the_logger_assignment_is_missing(tmp_path):
         mod.apply_patch(path)
 
 
+def test_fails_loud_when_the_logger_name_string_drifts(tmp_path):
+    """A renamed logger NAME STRING must abort the build, not re-silence the records.
+
+    The repo wires the logger by its name ("prepare_doc_util") into the
+    trace + JSON envelope; an upstream rename of the string alone leaves
+    every print site matching and the build passing — while the rewritten
+    records are wired to nothing and land as severity Unspecified again,
+    the exact defect this patch removes.
+    """
+    body = _fixture_module(UPSTREAM_SITES).replace(
+        'logger = CustomLogger("prepare_doc_util")', 'logger = CustomLogger("doc_utils")'
+    )
+    path = _write(tmp_path, body)
+
+    with pytest.raises(SystemExit, match="GUARD FAILED"):
+        mod.apply_patch(path)
+
+
 def test_is_idempotent_on_a_patched_file(tmp_path):
     path = _write(tmp_path, _fixture_module(UPSTREAM_SITES))
     mod.apply_patch(path)

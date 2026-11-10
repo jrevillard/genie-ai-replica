@@ -128,15 +128,21 @@ def apply_patch(path: Path) -> str:
         raise SystemExit(f"ASSERT-ON-PATCH GUARD FAILED: {path} does not exist")
 
     text = _read(path)
-    # The rewrite targets the module's `logger` name. An upstream rename of
-    # the CustomLogger assignment (utils.py:50) would still let every site
-    # match and compile — and NameError on the first .doc upload at runtime.
-    # Anchor the rewrite on the assignment being present.
-    if not re.search(r"^[ \t]*logger\s*=", text, re.MULTILINE):
+    # The rewrite targets the module's `logger` name AND the wiring contract:
+    # the repo's genieai_dataprep_utils.py wires the logger NAME
+    # "prepare_doc_util" into the trace + JSON envelope, so an upstream
+    # rename of either the symbol or the name string would silently rebuild
+    # the defect this patch removes — a renamed symbol NameErrors at the
+    # first rewritten call; a renamed name string leaves the rewritten
+    # records wired to nothing (severity Unspecified again), with every
+    # site still matching and the build passing. Anchor the rewrite on the
+    # full assignment (utils.py:50).
+    if not re.search(r'^[ \t]*logger\s*=\s*CustomLogger\("prepare_doc_util"\)', text, re.MULTILINE):
         raise SystemExit(
-            f"ASSERT-ON-PATCH GUARD FAILED: no `logger = ...` assignment found in {path} — the rewrite "
-            f"targets the module's CustomLogger instance; upstream renamed it. Re-derive the site table "
-            f"and update genie-ai-overlay/OVERRIDES.yaml."
+            f'ASSERT-ON-PATCH GUARD FAILED: no `logger = CustomLogger("prepare_doc_util")` found in {path} — '
+            f"the rewrite targets that instance and the repo wires it by that name. Upstream renamed the "
+            f"symbol or the logger name string: re-derive the site table, update the wiring in "
+            f"genieai_dataprep_utils.py, and update genie-ai-overlay/OVERRIDES.yaml."
         )
     patched_call_counts = 0
     for args, level, override in SITES:

@@ -120,9 +120,11 @@ COPY --from=opea_base /src/comps/ /app/comps/
 # existing CustomLogger("prepare_doc_util") in place; the file itself is not
 # in this repository, so the rewrite happens here, at build time.
 #
-# FAIL-LOUD BY DESIGN. The patcher aborts the BUILD if any expected line is
-# missing or an unexpected print() survives, rather than silently shipping an
-# image that still prints.
+# FAIL-LOUD BY DESIGN. The patcher aborts the BUILD if the expected
+# CustomLogger("prepare_doc_util") assignment is missing (renamed symbol or
+# logger name — the repo wires the rewritten records by that name), if any
+# expected line is missing, or if an unexpected print() survives, rather
+# than silently shipping an image that still prints.
 COPY genie-ai-overlay/build-patches/comps_dataprep_utils_logging_patch.py /tmp/comps_dataprep_utils_logging_patch.py
 RUN python /tmp/comps_dataprep_utils_logging_patch.py && rm -f /tmp/comps_dataprep_utils_logging_patch.py
 

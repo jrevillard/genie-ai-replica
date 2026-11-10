@@ -4515,11 +4515,14 @@ chart:parity:
     # those categories drops the number and trips the floor instead of
     # quietly greening the gate). The floor equals the count, not one
     # below it: with a floor of 171 a single reclassification was
-    # invisible. The count rose from 323 when the shared OIDC verifier
-    # started reading KEYCLOAK_REALM on the document-repository (the
-    # row the chart now carries, the one the backend and okf-server
-    # already had) — a variable that became comparable on both
-    # surfaces, not a reclassification.
+    # invisible. The count FELL 331 → 325 with this commit: six of the
+    # seven gaps it closes are filed under codeDefault / mayDiffer, the
+    # two categories excluded from the compared count (each verified
+    # unset on both surfaces, or the chart's public-issuer pin). The
+    # seventh — the document-repository's KEYCLOAK_REALM, the row the
+    # shared verifier reads — was ALREADY counted as a gap ("absent
+    # from the chart" counts as compared) and stays counted once the
+    # chart renders it, so it moves the gaps, not the count.
     - python3 scripts/ci/config-parity-check.py /tmp/rendered.yaml --min-compared=325
   rules:
     # The gate verifies its `notRead` claims against the APPLICATION

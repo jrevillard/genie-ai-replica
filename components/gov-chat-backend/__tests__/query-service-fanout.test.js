@@ -43,7 +43,7 @@ jest.mock('worker_threads', () => ({
 
 jest.mock('../services/retrieval-config-client', () => {
   // The REAL module for everything but the network calls: the predicates it
-  // exports (isBffSynthesized and its source-label set) must not be
+  // exports (isPostureUnknown, over synthesis_reason) must not be
   // re-implemented here, or the mock drifts from production silently.
   const actual = jest.requireActual('../services/retrieval-config-client');
   return {

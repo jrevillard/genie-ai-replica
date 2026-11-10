@@ -196,9 +196,14 @@ contractual evidence — a fresh clone does not carry them.)
   dev-node tools stay); every reference swept and the gates proven
   green from the new depth.
 - **The Playwright E2E suite runs against the k8s cluster** — 13 spec
-  files carried a literal `https://localhost`; every literal now
-  resolves through `BASE_URL` (compose default unchanged) and ~110
-  specs ran against the dev cluster through the Envoy edge: ~102
+  files carried a literal `https://localhost`; the sweep now resolves
+  every literal through `BASE_URL` (compose default unchanged) — but
+  **the first sweep was incomplete**: four specs (`epic1/a2`,
+  `epic3/l1`, `l2`, `l3`) kept the literal and failed on the cluster
+  with `ERR_CONNECTION_REFUSED`, which the audit of the branch's own
+  test surface found (they now read `BASE_URL`; fixed in **!841**,
+  against `main`, since the specs are app-level and not the chart's).
+  ~110 specs ran against the dev cluster through the Envoy edge: ~102
   green, 8 red, all eight classified spec-vs-frontend drift with the
   evidence recorded in the pre-merge gate below. The suite is no
   longer Compose-only.

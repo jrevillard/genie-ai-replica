@@ -121,6 +121,12 @@ export async function loadSubjectAreaOptions(repoDomains = []) {
  * names ('Water Supply') since the hierarchy-driven wave (defense-in-depth;
  * server-side normalization lands separately). Empty input falls back to
  * 'general' so a scope segment is never blank.
+ *
+ * A MIRROR of the server's scope-segment grammar (services/slug.js slugFor,
+ * #1190) with two local divergences: no 80-char cap and a 'general'
+ * fallback (the server's is 'repo'). Currently masked — createRepo strips
+ * client okf:t:* scopes and recomputes server-side — but keep the pairing
+ * in mind before any path starts trusting client scopes (#1692).
  */
 function slugScopeDomain(input) {
   return (

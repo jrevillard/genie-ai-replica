@@ -1443,7 +1443,6 @@ module.exports = {
   applyDocumentCeiling,
   partPath,
   maxZipBytesFromEnv,
-  slugify,
   uniquifySlug,
   markdownFor,
   zipToRawInputs,

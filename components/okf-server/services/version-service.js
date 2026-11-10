@@ -279,9 +279,11 @@ async function mintVersion(repo_id, opts = {}, actor) {
     // never happened — the zip's conversion record ('adding' → 'done'/'failed')
     // is the in-flight signal, and it is written by the same import that
     // stores the bundle. The record is SHARED with the crawl conversion, so
-    // `status === 'adding'` alone is not enough: the crawl conversion writes
-    // bytes/pages progress and never `concepts_total`, which only a zip
-    // import carries.
+    // `status === 'adding'` alone is not enough: the crawl's own 'adding'
+    // windows (flush, curating) must not read as a zip import. `concepts_total`
+    // is the discriminator — only a zip import writes it, and the crawl's
+    // start patch clears it, so a repo zip-imported ONCE does not carry the
+    // marker into a later crawl through the record's MERGE.
     const zipImportInFlight = !!(
       repo.conversion &&
       repo.conversion.status === 'adding' &&

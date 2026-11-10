@@ -83,8 +83,9 @@ export function useChartTheme(options = {}) {
 
   /**
    * Backward-compatible alias — now returns RESOLVED colors (the historic
-   * 'var(--x)' string contract never resolved outside stylesheets; every
-   * consumer was migrated to concrete values in T1).
+   * 'var(--x)' string contract never resolved outside stylesheets). STILL
+   * LIVE: RagasPanel.vue consumes it; the chart components were migrated to
+   * getResolvedTheme in T1. Do not delete without migrating RagasPanel first.
    */
   function getCssVarStrings() {
     return getResolvedTheme();

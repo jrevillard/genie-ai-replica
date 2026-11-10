@@ -13,7 +13,12 @@
     <DsSpinner v-if="loading" overlay>
       <span>{{ translate('analytics.status.loading', 'Loading...') }}</span>
     </DsSpinner>
-    <DsStateDisplay v-if="error" :type="errorType" :message="error" />
+    <DsStateDisplay v-if="error" type="error" :message="error" />
+    <DsStateDisplay
+      v-else-if="noData"
+      type="empty"
+      :message="translate('analytics.status.noData', 'No data available')"
+    />
   </div>
 </template>
 
@@ -54,16 +59,19 @@ export default {
     }
   },
   setup() {
-    const { theme, getCssVarStrings, getResolvedTheme } = useChartTheme({ listenToSystem: true });
-    return { theme, getCssVarStrings, getResolvedTheme };
+    const { theme, getResolvedTheme } = useChartTheme({ listenToSystem: true });
+    return { theme, getResolvedTheme };
   },
   data() {
     return {
       chartData: [],
       loading: false,
+      // error = fetch failures ONLY; noData = an empty dataset (an EMPTY state).
+      // Two fields, one meaning each: updateChart runs after a failed fetch too,
+      // and a single overloaded field let the empty branch overwrite the
+      // failure message into a benign "No data available" (simplify review).
       error: null,
-      // T1: no-data renders as an EMPTY state; only fetch failures render as errors
-      errorType: 'error',
+      noData: false,
       chartOptions: null,
       isMobile: false
     };
@@ -229,7 +237,7 @@ export default {
       }
       this.loading = true;
       this.error = null;
-      this.errorType = 'error';
+      this.noData = false;
 
       try {
         const locale = this.isI18nReady ? this.$i18n.locale : 'en';
@@ -289,10 +297,13 @@ export default {
       if (!this.chartData || this.chartData.length === 0) {
         // T1: an empty dataset is an EMPTY state, not an error — the siblings
         // (UsageTrend/TopQueries) already render their no-data as type=empty.
-        this.error = this.translate('analytics.status.noData', 'No data available');
-        this.errorType = 'empty';
+        // This never touches this.error: a failed fetch lands here with empty
+        // data, and the template shows the error branch first, so a failure
+        // stays a failure instead of being overwritten into "No data available".
+        this.noData = true;
         return;
       }
+      this.noData = false;
 
       const theme = this.getResolvedTheme();
       const textColor = theme.textColor;

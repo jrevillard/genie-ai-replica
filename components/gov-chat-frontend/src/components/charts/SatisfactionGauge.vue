@@ -71,7 +71,7 @@
 import { nextTick } from 'vue';
 import analyticsService from '../../services/analyticsService';
 import { useChartTheme } from '../../composables/useChartTheme';
-import { buildSatisfactionScale } from '../../utils/chartColors';
+import { buildSatisfactionBands } from '../../utils/chartColors';
 import { SATISFACTION_PERIOD_KEYS, periodLabel as translatePeriodLabel } from '../../utils/satisfactionPeriods.js';
 import DsSpinner from '../ds/Spinner.vue';
 import DsStateDisplay from '../ds/StateDisplay.vue';
@@ -124,8 +124,8 @@ export default {
     }
   },
   setup() {
-    const { theme, getCssVarStrings, getResolvedTheme } = useChartTheme();
-    return { theme, getCssVarStrings, getResolvedTheme };
+    const { theme, getResolvedTheme } = useChartTheme();
+    return { theme, getResolvedTheme };
   },
   data() {
     return {
@@ -347,42 +347,15 @@ export default {
     },
 
     /**
-     * The gauge's four value bands (poor/low/medium/high), derived from the
-     * status tokens via the shared satisfaction scale — resolves to the
-     * deployment's own semantic colors instead of hardcoded hexes.
-     * A METHOD, deliberately not a computed: the values come from
-     * getComputedStyle (non-reactive), so a computed would cache the first
-     * evaluation and serve stale colors after a theme switch; this
-     * re-resolves on every call (the theme watch re-runs initChart).
+     * The gauge's four value bands (poor/low/medium/high), built by the shared
+     * band builder so the poor→excellent contract lives in ONE place, next to
+     * the scale it projects. A METHOD, deliberately not a computed: the values
+     * come from getComputedStyle (non-reactive), so a computed would cache the
+     * first evaluation and go stale across theme switches. Pass an
+     * already-resolved theme to avoid a second resolution (initChart does).
      */
-    getGaugeBandColors() {
-      const { statusColors } = this.getResolvedTheme();
-      const scale = buildSatisfactionScale(statusColors) || [];
-      const st = statusColors || {};
-      // [poor=danger, low=danger→warning mix, medium=warning, high=success] —
-      // the same poor→excellent ordering the heatmap paints (review F2: the old
-      // [0,2,3,4] pick painted 'low' as pure warning, one stop ahead of the
-      // shared scale). A band the scale could not produce degrades to its
-      // nearest raw status token (review F4); an unresolvable set yields []
-      // (ApexCharts' default palette) rather than empty colors.
-      return [
-        scale[0] || st.danger || '',
-        scale[1] || st.warning || st.danger || '',
-        scale[2] || st.warning || '',
-        scale[4] || st.success || ''
-      ].filter(Boolean);
-    },
-
-    /**
-     * Get gauge color based on value
-     */
-    getGaugeColor(value) {
-      const bands = this.getGaugeBandColors();
-      if (bands.length < 4) return '';
-      if (value >= 90) return bands[3];
-      if (value >= 80) return bands[2];
-      if (value >= 70) return bands[1];
-      return bands[0];
+    getGaugeBandColors(resolvedTheme) {
+      return buildSatisfactionBands((resolvedTheme || this.getResolvedTheme()).statusColors);
     },
 
     /**
@@ -393,16 +366,17 @@ export default {
         return;
       }
 
-      const isDarkMode = this.theme === 'dark';
-
-      const { textColor, mutedColor, borderColor, accentColor } = this.getResolvedTheme();
+      const resolved = this.getResolvedTheme();
+      const { textColor, mutedColor, borderColor, accentColor, isDarkMode } = resolved;
       const backgroundColor = 'transparent';
       // Review F3: this was 'var(--muted)'/'var(--border)' — reference strings
       // ApexCharts drops at the presentation attribute (the stylesheet override
-      // papered over it). Resolve the same tokens through the bridge.
+      // papered over it). Resolve the same tokens through the bridge; dark mode
+      // reads the payload's isDarkMode like the heatmap does, not a local
+      // re-derivation of the theme string.
       const trackColor = isDarkMode ? mutedColor : borderColor;
 
-      const bands = this.getGaugeBandColors();
+      const bands = this.getGaugeBandColors(resolved);
       const getGradientColors = (value) => {
         if (value < 60) return [bands[0], bands[0]];
         if (value < 70) return [bands[0], bands[1]];

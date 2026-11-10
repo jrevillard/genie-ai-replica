@@ -49,8 +49,8 @@ export default {
     }
   },
   setup() {
-    const { theme, isDarkMode, getCssVarStrings, getResolvedTheme } = useChartTheme();
-    return { theme, isDarkMode, getCssVarStrings, getResolvedTheme };
+    const { theme, isDarkMode, getResolvedTheme } = useChartTheme();
+    return { theme, isDarkMode, getResolvedTheme };
   },
   data() {
     return {
@@ -169,8 +169,7 @@ export default {
 
       const styleEl = document.createElement('style');
       styleEl.id = 'usage-trend-chart-theme-style';
-      const theme = this.getCssVarStrings();
-      if (theme.isDarkMode) {
+      if (this.isDarkMode) {
         styleEl.textContent = `
             [data-theme="dark"] .x-axis text,
             [data-theme="dark"] .y-axis-left text,
@@ -266,14 +265,13 @@ export default {
     },
 
     /**
-     * Force text elements to use appropriate color based on theme
+     * Force text elements to use appropriate color based on theme.
+     * Takes the already-resolved textColor — renderChart resolved the theme
+     * moments earlier; re-resolving here doubled the probe work per render.
      */
-    forceAxisTextColor() {
-      const theme = this.getResolvedTheme();
-      const textColor = theme.textColor;
-
+    forceAxisTextColor(textColor) {
       const chartContainer = this.$refs.chartContainer;
-      if (!chartContainer) return;
+      if (!chartContainer || !textColor) return;
 
       setTimeout(() => {
         const xAxisText = chartContainer.querySelectorAll('.x-axis text');
@@ -736,7 +734,7 @@ export default {
             .style('top', event.pageY - 60 + 'px');
         });
 
-      this.forceAxisTextColor();
+      this.forceAxisTextColor(textColor);
     }
   }
 };
@@ -792,7 +790,14 @@ export default {
   vertical-align: middle;
 }
 
-/* T1: the swatch COLORS moved into the tooltip builder as inline styles —
- * they now carry the resolved brand-ramp colors instead of two hardcoded
- * hex gradients that matched no theme and no deployment flavour. */
+/* T1 review: the old color rules also carried the swatch SHAPES — the
+ * rounded bar and the circular line marker. Shape-only rules restored;
+ * the colors stay inline in the tooltip builder. */
+:global(.d3-tooltip .tt-swatch--bar) {
+  border-radius: var(--radius-sm);
+}
+
+:global(.d3-tooltip .tt-swatch--line) {
+  border-radius: 50%;
+}
 </style>

@@ -57,10 +57,10 @@ export default {
     }
   },
   setup() {
-    const { theme, getCssVarStrings, getResolvedTheme } = useChartTheme({
+    const { theme, getResolvedTheme } = useChartTheme({
       listenToSystem: true
     });
-    return { theme, getCssVarStrings, getResolvedTheme };
+    return { theme, getResolvedTheme };
   },
   data() {
     return {

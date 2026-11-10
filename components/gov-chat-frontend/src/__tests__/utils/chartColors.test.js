@@ -11,6 +11,7 @@
 const {
   SENTINEL,
   buildBrandRamp,
+  buildSatisfactionBands,
   buildSatisfactionScale,
   fade,
   hslLightness,
@@ -222,6 +223,34 @@ describe('chartColors — buildSatisfactionScale contract', () => {
 
   test('missing status tokens yield an empty scale', () => {
     expect(buildSatisfactionScale({ danger: 'rgb(1,2,3)' })).toEqual([]);
+  });
+});
+
+describe('chartColors — buildSatisfactionBands (the gauge projection, review F2/F4)', () => {
+  const STATUSES = { success: 'rgb(20, 160, 90)', warning: 'rgb(230, 170, 20)', danger: 'rgb(220, 60, 50)' };
+  const failing = () => SENTINEL; // mixes resolve through the pure lerp fallback
+
+  test('projects the scale to [0, 1, 2, 4] — the danger→warning mix included', () => {
+    // The gauge's poor→excellent edges must read the same ordering the heatmap
+    // paints: the old [0,2,3,4] pick painted 'low' pure warning, one stop ahead.
+    const bands = buildSatisfactionBands(STATUSES, { compute: failing });
+    expect(bands).toEqual([
+      'rgb(220, 60, 50)', // poor — danger
+      'rgb(225, 115, 35)', // low — danger→warning mix (the lerp fallback)
+      'rgb(230, 170, 20)', // medium — warning
+      'rgb(20, 160, 90)' // high — success
+    ]);
+  });
+
+  test('a missing status token degrades each band to its nearest available token', () => {
+    // F4: a band the scale cannot produce never hands ApexCharts an empty
+    // color — it degrades to the nearest raw status token, and a fully
+    // unresolvable set yields [] (ApexCharts' default palette).
+    expect(buildSatisfactionBands({ danger: 'rgb(1, 2, 3)' }, { compute: failing })).toEqual([
+      'rgb(1, 2, 3)', // poor → danger
+      'rgb(1, 2, 3)' // low → warning missing → danger; medium/high unresolvable → filtered
+    ]);
+    expect(buildSatisfactionBands({}, { compute: failing })).toEqual([]);
   });
 });
 

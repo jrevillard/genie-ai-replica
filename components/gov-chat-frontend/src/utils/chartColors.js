@@ -19,6 +19,10 @@
  * input FIRST (review F1): browsers serialize computed colors back as oklch(...) when
  * the token is defined in oklch, and an oklch string must convert — not echo — or
  * every fallback silently no-ops and the derived ramp comes up short.
+ *
+ * NOTE ON THE EXPORT SURFACE: deliberately wider than production needs — the
+ * parse/fallback internals are exported test-facing so the pure path can be
+ * pinned directly; production consumes the builders through useChartTheme.
  */
 
 const SENTINEL = 'rgb(1, 2, 3)';
@@ -45,16 +49,15 @@ let probeEl = null;
  * Lazily create the one hidden probe element used for all resolutions.
  * Appended to document.body so it inherits html[data-theme] custom properties.
  */
-function getProbe(doc) {
+function getProbe() {
   if (!probeEl || !probeEl.isConnected) {
-    const d = doc || document;
-    probeEl = d.createElement('span');
+    probeEl = document.createElement('span');
     probeEl.setAttribute('aria-hidden', 'true');
     probeEl.style.position = 'absolute';
     probeEl.style.visibility = 'hidden';
     probeEl.style.pointerEvents = 'none';
     probeEl.style.lineHeight = '0';
-    d.body.appendChild(probeEl);
+    document.body.appendChild(probeEl);
   }
   return probeEl;
 }
@@ -66,10 +69,10 @@ function getProbe(doc) {
  * so a read that still equals the sentinel means the expression never applied.
  * Returns '' when the expression could not be resolved to a different color.
  */
-function domCompute(expression, doc) {
+function domCompute(expression) {
   if (typeof document === 'undefined' || !document.body) return '';
   try {
-    const el = getProbe(doc);
+    const el = getProbe();
     el.style.color = SENTINEL;
     el.style.color = expression;
     const computed = window.getComputedStyle(el).color;
@@ -333,10 +336,11 @@ function buildSatisfactionScale(statuses = {}, { dimmed = false, compute = domCo
   if (!d || !w || !s) return [];
   const steps = [d, mix(d, w, 50, compute), w, mix(w, s, 50, compute), s];
   // Degraded compute (color-mix unsupported): a mix that cannot resolve takes
-  // its LEFT anchor so the scale stays total — the browser path resolves every
-  // mix, this only fires on the fallback path.
+  // its LEFT anchor so the scale stays total — the anchors at 0/2/4 are
+  // guaranteed non-empty above, so a left anchor always exists for the only
+  // indexes (1, 3) that can ever be empty.
   for (let i = 0; i < steps.length; i += 1) {
-    if (!steps[i]) steps[i] = steps[i - 1] || steps[i + 1] || '';
+    if (!steps[i]) steps[i] = steps[i - 1];
   }
   if (!dimmed) return steps;
   return steps.map((c) => {
@@ -344,6 +348,27 @@ function buildSatisfactionScale(statuses = {}, { dimmed = false, compute = domCo
     const dimmedOut = resolveExpression(`oklch(from ${c} calc(l * 0.45) c h)`, compute);
     return isFailure(dimmedOut) ? hslLightness(c, -0.2) : dimmedOut;
   });
+}
+
+/**
+ * The gauge's four value bands (poor/low/medium/high): the satisfaction scale,
+ * projected to the gauge's four ranges by picking [0, 1, 2, 4] — the
+ * danger→warning mix INCLUDED (review F2: [0,2,3,4] painted 'low' pure
+ * warning, one stop ahead of the scale the heatmap shows). A band the scale
+ * could not produce degrades to its nearest raw status token (review F4); an
+ * unresolvable set yields [] (ApexCharts' default palette) rather than empty
+ * colors. The heatmap consumes buildSatisfactionScale directly — it renders
+ * all five stops with its own pick semantics.
+ */
+function buildSatisfactionBands(statusColors = {}, { compute = domCompute } = {}) {
+  const scale = buildSatisfactionScale(statusColors, { compute });
+  const st = statusColors || {};
+  return [
+    scale[0] || st.danger || '',
+    scale[1] || st.warning || st.danger || '',
+    scale[2] || st.warning || '',
+    scale[4] || st.success || ''
+  ].filter(Boolean);
 }
 
 /**
@@ -375,5 +400,6 @@ export {
   normalizeComputedColor,
   buildBrandRamp,
   buildSatisfactionScale,
+  buildSatisfactionBands,
   resolveChartTokens
 };

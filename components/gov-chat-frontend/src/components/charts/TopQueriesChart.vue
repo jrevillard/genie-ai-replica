@@ -92,8 +92,8 @@ export default {
     }
   },
   setup() {
-    const { theme, getCssVarStrings, getResolvedTheme } = useChartTheme();
-    return { theme, getCssVarStrings, getResolvedTheme };
+    const { theme, getResolvedTheme } = useChartTheme();
+    return { theme, getResolvedTheme };
   },
   data() {
     return {

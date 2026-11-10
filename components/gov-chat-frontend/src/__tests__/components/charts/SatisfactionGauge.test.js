@@ -52,10 +52,10 @@ jest.mock('@/composables/useChartTheme', () => ({
 }));
 
 jest.mock('../../../utils/chartColors', () => ({
-  buildSatisfactionScale: jest.fn(() => [])
+  buildSatisfactionBands: jest.fn(() => [])
 }));
 
-const { buildSatisfactionScale } = require('../../../utils/chartColors');
+const { buildSatisfactionBands } = require('../../../utils/chartColors');
 
 const i18n = createRealEnI18n();
 const $t = (...args) => i18n.global.t(...args);
@@ -101,49 +101,36 @@ describe('SatisfactionGauge period labels', () => {
 describe('SatisfactionGauge value bands (admin-ux T1 review F2/F4)', () => {
   afterEach(() => {
     mockResolvedTheme.statusColors = { ...mockStatusColors };
+    buildSatisfactionBands.mockReset();
+    buildSatisfactionBands.mockReturnValue([]);
   });
 
-  it('picks the heatmap-aligned poor→excellent edges from the shared scale', () => {
-    // The full 5-stop satisfaction scale; the gauge's four value ranges must
-    // read the SAME poor→excellent ordering the heatmap paints — including the
-    // danger→warning mix the old [0,2,3,4] pick skipped (review F2).
-    buildSatisfactionScale.mockReturnValue([
-      'rgb(201, 8, 28)', // poor — danger
-      'rgb(220, 60, 50)', // low — danger→warning mix
-      'rgb(245, 158, 11)', // medium — warning
-      'rgb(250, 190, 60)', // warning→success mix — NOT picked by the gauge
-      'rgb(34, 197, 94)' // high — success
-    ]);
+  it('builds the bands through the shared builder from its resolved status colors', async () => {
+    // The band PICK contract ([0,1,2,4] of the scale, with token fallbacks)
+    // lives in the builder and is pinned in utils/chartColors.test.js; the
+    // component pins its half: delegate with the resolved theme's statusColors.
+    const bands = ['rgb(201, 8, 28)', 'rgb(220, 60, 50)', 'rgb(245, 158, 11)', 'rgb(34, 197, 94)'];
+    buildSatisfactionBands.mockReturnValue(bands);
     const wrapper = mountGauge([]);
-    expect(wrapper.vm.getGaugeBandColors()).toEqual([
-      'rgb(201, 8, 28)',
-      'rgb(220, 60, 50)',
-      'rgb(245, 158, 11)',
-      'rgb(34, 197, 94)'
-    ]);
-    expect(wrapper.vm.getGaugeColor(95)).toBe('rgb(34, 197, 94)');
+    // initChart runs inside the mounted hook's own $nextTick
+    await wrapper.vm.$nextTick();
+    expect(wrapper.vm.getGaugeBandColors()).toEqual(bands);
+    expect(buildSatisfactionBands).toHaveBeenCalledWith(mockResolvedTheme.statusColors);
+    // value 0 (< 60) → the poor band at both gradient ends
+    expect(wrapper.vm.chartOptions.fill.gradient.colorStops.map((stop) => stop.color)).toEqual([bands[0], bands[0]]);
+    expect(wrapper.vm.chartOptions.fill.gradient.gradientToColors[0]).toBe(bands[0]);
   });
 
-  it('degrades each band to its nearest raw status token when the scale is empty', () => {
-    // An empty scale (e.g. a mix that cannot resolve) must not hand ApexCharts
-    // undefined colors — each band falls back to its nearest status token
-    // (review F4), and a fully-resolvable token set still yields four bands.
-    buildSatisfactionScale.mockReturnValue([]);
+  it('hands ApexCharts the resolved accent gradient when no bands could be built', async () => {
+    // An empty band array must not reach the gradient config as undefined
+    // indexes (review F4) — initChart falls back to the resolved accent.
+    buildSatisfactionBands.mockReturnValue([]);
     const wrapper = mountGauge([]);
-    expect(wrapper.vm.getGaugeBandColors()).toEqual([
-      'rgb(239, 68, 68)', // poor → danger
-      'rgb(245, 158, 11)', // low → warning
-      'rgb(245, 158, 11)', // medium → warning
-      'rgb(34, 197, 94)' // high → success
-    ]);
-    expect(wrapper.vm.getGaugeColor(95)).toBe('rgb(34, 197, 94)');
-  });
-
-  it('yields no bands and no value color when even the status tokens are missing', () => {
-    buildSatisfactionScale.mockReturnValue([]);
-    mockResolvedTheme.statusColors = {};
-    const wrapper = mountGauge([]);
+    await wrapper.vm.$nextTick();
     expect(wrapper.vm.getGaugeBandColors()).toEqual([]);
-    expect(wrapper.vm.getGaugeColor(95)).toBe('');
+    expect(wrapper.vm.chartOptions.fill.gradient.colorStops.map((stop) => stop.color)).toEqual([
+      'rgb(31, 111, 235)',
+      'rgb(31, 111, 235)'
+    ]);
   });
 });

@@ -21,18 +21,25 @@
 // outage): 401 propagates (the request itself is invalid — no silent legacy
 // fallback); 403 means the caller holds no okf read scope OR the deployment
 // runs OKF_SCOPE_MODE=closed (default-deny) — either way the per-caller
-// serving view is empty by construction → legacy default; 5xx/network →
+// serving view is empty by construction → legacy default; 5xx/network, or a
+// 200 whose body fails the shape/vocabulary gate (a garbled upstream) →
 // the locally synthesized fail-closed composition carrying the last-known
 // mode (source 'bff-last-known-good'), else the legacy default
 // (mode=legacy, engaged=false).
 // The resolved value (including the failure-resolved one) is cached for the
-// remainder of the TTL window — one upstream attempt per scope-equivalent
-// caller per window, best-effort under concurrent cold-window misses.
+// remainder of the TTL window — ONE upstream attempt per scope-equivalent
+// caller per window: a cold-window miss publishes its in-flight attempt in
+// the cache BEFORE the upstream answers, so concurrent misses await that
+// attempt instead of each burning the full timeout budget (the outage case,
+// where every attempt costs the request timeout).
 // The last-known-good carries only the deployment-global posture (the
 // mode), never a per-caller view — the full invariant is stated at the
 // write site in getRetrievalConfig's onSuccess. The per-caller graph set
 // always comes from the caller's own live authz call and is never served
-// from last-known-good.
+// from last-known-good. The last-known-good is STALE-BOUNDED: it is trusted
+// for LKG_MAX_AGE_MS after the last successful upstream read, then the
+// legacy default takes over — a deployment-mode change during a long
+// upstream outage must not shadow the real posture for the whole outage.
 
 const axios = require('axios');
 const nodeCrypto = require('crypto');
@@ -78,6 +85,15 @@ const REQUEST_TIMEOUT_MS = envPositiveInt(
   3000,
   100
 );
+// How long the last-known-good posture stays TRUSTED after the last successful
+// upstream read (issue #1683). The copy is a short-lived cache, not a durable
+// mirror of the deployment config: past this horizon the BFF degrades to the
+// legacy default, so a deployment-mode change (a flip to/from okf_only) is
+// picked up within minutes instead of being shadowed for the whole outage.
+// A FIXED horizon, deliberately NOT derived from the cache TTL: that knob tunes
+// how fresh the CACHE is, and an operator raising it to cut upstream load must
+// not silently widen the window in which an unverified posture is trusted.
+const LKG_MAX_AGE_MS = 5 * 60 * 1000; // 5 minutes
 
 /**
  * OKF feature flag (2026-10-21, merge prep): OKF_ENABLED=0 parks the OKF
@@ -96,17 +112,68 @@ const REQUEST_TIMEOUT_MS = envPositiveInt(
 // now stated once in compose and defaults to parked everywhere.
 const OKF_ENABLED = (process.env.OKF_ENABLED ?? '0').trim() === '1';
 
-/** The fail-closed default: legacy mode, fan-out never engaged. */
-function legacyDefaultConfig() {
+/**
+ * The fail-closed default: legacy mode, fan-out never engaged. `reason`
+ * records WHY this client synthesized it — the payload carries it so a
+ * consumer can tell a by-design default (OKF parked, a caller without okf
+ * scopes) from a posture the client could not read (an unreachable upstream,
+ * a garbled body).
+ * @param {string} reason — 'parked' | 'caller_without_scope' |
+ *   'malformed_response' | 'upstream_unreachable'. The default is the
+ *   fail-safe direction: a reason-less composition still reads as a posture
+ *   the client could NOT read (so it is warned about), never as a known one.
+ */
+function legacyDefaultConfig(reason = 'upstream_unreachable') {
   return {
     config: { mode: 'legacy' },
     source: 'bff-fail-closed-default',
+    synthesis_reason: reason,
     serving_graph_count: 0,
     serving_repo_ids: [],
     serving_graphs: [],
     engaged: false,
     warnings: []
   };
+}
+
+/**
+ * Was this composition synthesized because the deployment's posture could NOT
+ * be read (an unreachable upstream, a garbled body)? The by-design defaults
+ * (OKF parked, a caller without okf scopes) are NOT included: their legacy
+ * answer is the correct posture, not an unknown one — a consumer that warns
+ * on an unreadable posture must not fire per query in a parked deployment.
+ * `synthesis_reason` is the single discriminant: every composition this
+ * client synthesizes carries one, every upstream-read composition carries
+ * none.
+ * @param {object|null} config — a retrieval-config composition
+ * @returns {boolean}
+ */
+function isPostureUnknown(config) {
+  return config?.synthesis_reason === 'malformed_response' || config?.synthesis_reason === 'upstream_unreachable';
+}
+
+/**
+ * Is `mode` a member of the vocabulary the RESPONSE ITSELF declares? The
+ * okf-server publishes its mode enum next to the read-model (`modes`), so the
+ * BFF checks membership against THAT — no second copy of the vocabulary in
+ * the BFF (the cross-component duplication #1158 exists to remove). The mode
+ * is checked EXACTLY as it arrived: the server's sanitizer treats a padded
+ * value as garbled (safe default), and the BFF must agree rather than trim
+ * it into an engaged fan-out. A response that declares no vocabulary (an
+ * okf-server older than the enum's publication) is accepted as-is: the
+ * upstream owns membership, this is the boundary check (issue #1690).
+ * Against the SHIPPED okf-server this can never reject — the server's own
+ * sanitizer maps every non-member mode (a padded one included) to 'legacy'
+ * before publishing, so `config.mode` is always a member of the modes it
+ * publishes. The check exists for VERSION SKEW: an old okf-server that
+ * predates the enum's publication, or one whose sanitizer regressed, and a
+ * BFF newer than both — the pair this MR ships cannot exercise it.
+ * @param {object} raw — the upstream read-model
+ * @param {string} mode — the mode the response carried, untrimmed
+ */
+function modeIsDeclared(raw, mode) {
+  const declared = Array.isArray(raw.modes) ? raw.modes : null;
+  return !declared || declared.includes(mode);
 }
 
 /** Typed 401 — the bearer is invalid/expired; callers must propagate it. */
@@ -216,18 +283,36 @@ function effectiveScopesKey(bearerHeader) {
 
 // ─── Cache + upstream ─────────────────────────────────────────────────────────
 
-const _cache = new Map(); // "<window>|<kind>|<scopesKey>" → { window, value }
-let _lastGoodConfig = null; // deployment-global posture from the last good retrieval-config (mode only)
+const _cache = new Map(); // "<window>|<kind>|<scopesKey>" → { window, promise }
+let _lastGoodConfig = null; // { config: { mode }, captured_at } — deployment-global posture from the last good retrieval-config
 
 function currentWindow() {
   return Math.floor(Date.now() / RETRIEVAL_CONFIG_TTL_MS);
 }
 
-/** Drop entries from previous windows (bounded memory: callers × kinds per window). */
+/**
+ * Drop entries from OLDER windows (bounded memory: callers × kinds per
+ * window). Only STRICTLY older entries go: an entry a concurrent caller
+ * wrote in the CURRENT window must survive — dropping it would force that
+ * caller to fetch again, so the cache would buy nothing exactly when the
+ * upstream is slow.
+ */
 function pruneCache(window) {
   for (const [key, entry] of _cache) {
-    if (entry.window !== window) _cache.delete(key);
+    if (entry.window < window) _cache.delete(key);
   }
+}
+
+/**
+ * The last-known-good posture, if it is still TRUSTED. A copy captured more
+ * than LKG_MAX_AGE_MS ago is dropped (#1683): past that horizon the
+ * deployment's posture cannot be confirmed, and a mode change (a flip to or
+ * from okf_only) must not be shadowed for the whole outage.
+ * @returns {object|null}
+ */
+function freshLastGoodConfig() {
+  if (!_lastGoodConfig) return null;
+  return Date.now() - _lastGoodConfig.captured_at > LKG_MAX_AGE_MS ? null : _lastGoodConfig;
 }
 
 async function fetchUpstream(path, bearerHeader, correlationId) {
@@ -251,12 +336,44 @@ async function fetchUpstream(path, bearerHeader, correlationId) {
 }
 
 /**
+ * One upstream attempt: fetch + policy resolution. Never touches the cache —
+ * the published path wraps this, and so does a joiner's own-attempt fallback
+ * (a retry that published would re-create exactly the cross-caller
+ * inheritance the fallback exists to prevent).
+ */
+async function attemptUpstream(policy, bearerHeader, opts, correlationId) {
+  try {
+    const raw = await fetchUpstream(policy.path, bearerHeader, correlationId);
+    // The generated id reaches the policy callbacks even when the caller
+    // omitted one — the malformed-response warns would otherwise log a
+    // correlationId the upstream_ok debug line cannot be matched with.
+    return policy.onSuccess(raw, { ...opts, correlationId });
+  } catch (err) {
+    const resolved = policy.onFailure(err, correlationId);
+    if (resolved.throw) throw resolved.error; // never cached — see docstring
+    return resolved.value;
+  }
+}
+
+/**
  * Resolve one endpoint through the window cache. On a cache miss the upstream
- * runs ONCE per window per (kind, scopes) — best-effort under concurrent
- * cold-window misses; the RESOLVED value — including a
- * policy-resolved failure — is what gets cached. A 401 is NEVER cached: a
- * refreshed token of the same caller shares the scopes key, and a cached 401
- * would lock them out until the window rolls.
+ * runs ONCE per window per (kind, scopes): the attempt is published in the
+ * cache BEFORE it settles, so concurrent cold-window misses await THAT
+ * attempt instead of starting one each (each attempt costs the full request
+ * timeout when the upstream is down). The attempt's RESULT — including a
+ * policy-resolved failure — is what the cache serves for the window.
+ *
+ * Two guarantees survive the sharing:
+ * - A 401 is NEVER served from a shared attempt to a caller whose own token
+ *   was never tested: the attempt ran with the INITIATOR's bearer, so a
+ *   joiner that sees its 401 runs its OWN attempt — outside the cache, where
+ *   it can neither join another caller's attempt nor be joined by one.
+ * - A composition that stamps a `_bff_expires_at` on itself (the
+ *   last-known-good posture) is re-validated at SERVE time, so a window
+ *   longer than the horizon cannot keep serving it. The marker is namespaced:
+ *   it belongs to the BFF's own composition, never to the upstream's
+ *   read-model, so a future upstream field of the same name cannot be read
+ *   as a composition expiry.
  */
 async function resolveCached(kind, bearerHeader, policy, opts = {}) {
   const correlationId = opts.correlationId || nodeCrypto.randomUUID();
@@ -267,26 +384,53 @@ async function resolveCached(kind, bearerHeader, policy, opts = {}) {
   const key = `${window}|${kind}|${effectiveScopesKey(bearerHeader)}`;
 
   const hit = _cache.get(key);
-  if (hit && hit.window === window) {
-    logger.debug('RetrievalConfigClient.cache_hit', { kind, correlationId });
-    return hit.value;
+  if (hit) {
+    // The entry holds the ATTEMPT (settled or still in flight), not just its
+    // result — awaiting it is what shares one upstream call. The debug label
+    // says which: a join of an IN-FLIGHT attempt must not read as a hit in
+    // an incident timeline (during an outage nothing has answered yet).
+    logger.debug(hit.settled ? 'RetrievalConfigClient.cache_hit' : 'RetrievalConfigClient.cache_join', {
+      kind,
+      correlationId
+    });
+    let value;
+    try {
+      value = await hit.promise;
+    } catch (err) {
+      // The shared attempt ran with the INITIATOR's bearer: its 401 says
+      // nothing about OUR token (a refreshed token of the same caller shares
+      // the scopes key — the invariant the docstring above protects). Run
+      // our OWN attempt, outside the cache. This catch sees only the SHARED
+      // attempt: the expiry re-resolution below happens after it, so a 401
+      // from the caller's own re-resolution propagates directly.
+      if (err instanceof OkfAuthzUnauthorizedError) {
+        return attemptUpstream(policy, bearerHeader, opts, correlationId);
+      }
+      throw err;
+    }
+    if (value?._bff_expires_at && Date.now() > value._bff_expires_at) {
+      // The composition carried an expiry that passed while the entry sat
+      // cached (a window longer than the horizon): drop the entry and
+      // resolve again — the fresh attempt finds no trusted posture and
+      // takes the fail-closed default.
+      if (_cache.get(key) === hit) _cache.delete(key);
+      return resolveCached(kind, bearerHeader, policy, opts);
+    }
+    return value;
   }
 
-  let entry;
-  try {
-    const raw = await fetchUpstream(policy.path, bearerHeader, correlationId);
-    // The generated id reaches the policy callbacks even when the caller
-    // omitted one — the malformed-response warns would otherwise log a
-    // correlationId the upstream_ok debug line cannot be matched with.
-    entry = { window, value: policy.onSuccess(raw, { ...opts, correlationId }) };
-  } catch (err) {
-    const resolved = policy.onFailure(err, correlationId);
-    if (resolved.throw) throw resolved.error; // never cached — see docstring
-    entry = { window, value: resolved.value };
-  }
+  const entry = { window, promise: null, settled: false };
+  entry.promise = attemptUpstream(policy, bearerHeader, opts, correlationId);
   _cache.set(key, entry);
-  pruneCache(window);
-  return entry.value;
+  entry.promise.catch(() => {
+    // A 401 is never retained: the entry goes, so the next caller attempts
+    // again with its own (possibly refreshed) token.
+    if (_cache.get(key) === entry) _cache.delete(key);
+  });
+  const value = await entry.promise;
+  entry.settled = true;
+  pruneCache(currentWindow());
+  return value;
 }
 
 // ─── Public API ───────────────────────────────────────────────────────────────
@@ -295,14 +439,15 @@ async function resolveCached(kind, bearerHeader, policy, opts = {}) {
  * The retrieval posture for this caller: {config, source, serving_graph_count,
  * serving_repo_ids, serving_graphs, engaged, warnings} — the response verbatim
  * from the okf-server (the `engaged` flag is the AUTHORITATIVE engagement
- * signal; this client never re-computes the gate). On a 5xx/network failure:
+ * signal; this client never re-computes the gate). On a 5xx/network failure,
+ * or a 200 whose body fails the shape/vocabulary gate (a garbled upstream):
  * the fail-closed composition carrying the last-known mode (source
  * 'bff-last-known-good'), else the legacy default. On 403: the legacy
  * default (the caller holds no okf read scope → empty per-caller serving
  * view by construction). On 401: throws OkfAuthzUnauthorizedError (propagate).
  */
 async function getRetrievalConfig(bearerHeader, opts = {}) {
-  if (!OKF_ENABLED) return legacyDefaultConfig();
+  if (!OKF_ENABLED) return legacyDefaultConfig('parked');
   return resolveCached(
     'retrieval-config',
     bearerHeader,
@@ -311,15 +456,30 @@ async function getRetrievalConfig(bearerHeader, opts = {}) {
       onSuccess(raw, callOpts) {
         // Shape gate: the response must carry the fields the BFF consumes
         // (config.mode + engaged at minimum). A garbled body degrades to the
-        // legacy default instead of reaching the carrier logic.
-        if (
+        // fail-closed composition instead of reaching the carrier logic —
+        // the same stale-bounded last-known-good consultation an unreachable
+        // upstream gets (both are transport-adjacent failures; nothing the
+        // garbled payload SAID feeds the carrier, only the posture captured
+        // from an earlier healthy read). The reason carried on the
+        // composition stays 'malformed_response', so the telemetry still
+        // tells a garbled body from a transport outage. The mode is
+        // checked AS IT ARRIVED — never trimmed into a valid one: the
+        // okf-server's own sanitizer treats a padded value as garbled (safe
+        // default), and this client must not promote it into an engaged
+        // fan-out the server would have refused. When the response declares
+        // no vocabulary at all (an okf-server older than the enum's
+        // publication) the mode is accepted as-is and stays untrimmed: a
+        // value the downstream cannot match exactly can only ever take the
+        // legacy branch (fail-safe), and the degraded branch now says so.
+        const mode = typeof raw?.config?.mode === 'string' ? raw.config.mode : '';
+        const shapeOk = !!(
           raw &&
           typeof raw === 'object' &&
           raw.config &&
-          typeof raw.config.mode === 'string' &&
-          raw.config.mode.trim() &&
+          mode.trim() &&
           typeof raw.engaged === 'boolean'
-        ) {
+        );
+        if (shapeOk && modeIsDeclared(raw, mode)) {
           // The last-known-good copy is served to ANY caller on upstream
           // failure, so it carries only what the BFF consumes of the
           // deployment-global posture: the mode. Everything scope-derived
@@ -331,13 +491,32 @@ async function getRetrievalConfig(bearerHeader, opts = {}) {
           // unconsumed here and stay out of the copy until a consumer needs
           // them — a field carried here must survive being served to every
           // caller, so it joins the copy together with its consumer.
-          _lastGoodConfig = { config: { mode: raw.config.mode } };
+          // The capture time bounds how long this copy stays trusted (#1683).
+          _lastGoodConfig = { config: { mode }, captured_at: Date.now() };
           return raw;
         }
+        const lkg = freshLastGoodConfig();
         logger.warn('RetrievalConfigClient.malformed_config_response', {
-          correlationId: callOpts?.correlationId
+          correlationId: callOpts?.correlationId,
+          reason: shapeOk ? 'mode_not_declared' : 'shape',
+          last_known_good: Boolean(lkg),
+          last_known_good_age_ms: _lastGoodConfig ? Date.now() - _lastGoodConfig.captured_at : null
         });
-        return legacyDefaultConfig();
+        // A garbled body is a transport-adjacent failure exactly like an
+        // unreachable upstream: the same last-known-good consultation
+        // applies. Without it, an okf_only deployment whose upstream answers
+        // an unreadable body silently serves the legacy corpus the deployment
+        // excluded — the one failure shape that downgraded the governance
+        // posture instead of failing closed. The reason stays
+        // 'malformed_response': the warn log and the warning payload must
+        // still tell a garbled body from a transport outage.
+        if (!lkg) return legacyDefaultConfig('malformed_response');
+        return {
+          ...legacyDefaultConfig('malformed_response'),
+          config: { mode: lkg.config.mode },
+          source: 'bff-last-known-good',
+          _bff_expires_at: lkg.captured_at + LKG_MAX_AGE_MS
+        };
       },
       onFailure(err, cid) {
         const status = err?.response?.status;
@@ -349,23 +528,29 @@ async function getRetrievalConfig(bearerHeader, opts = {}) {
           // construction (zero-hit guarantee); legacy path is the correct
           // posture for this caller.
           logger.info('RetrievalConfigClient.caller_without_okf_scope', { correlationId: cid });
-          return { value: legacyDefaultConfig() };
+          return { value: legacyDefaultConfig('caller_without_scope') };
         }
+        const lkg = freshLastGoodConfig();
         logger.warn('RetrievalConfigClient.retrieval_config_unreachable', {
           correlationId: cid,
           status: status || err?.code || err?.message,
-          last_known_good: Boolean(_lastGoodConfig)
+          last_known_good: Boolean(lkg),
+          last_known_good_age_ms: _lastGoodConfig ? Date.now() - _lastGoodConfig.captured_at : null
         });
-        if (!_lastGoodConfig) return { value: legacyDefaultConfig() };
+        if (!lkg) return { value: legacyDefaultConfig('upstream_unreachable') };
         // The deployment-global posture survives the outage; everything
         // else is locally synthesized (fail-closed) and says so: the
         // source label marks the payload as the BFF's own last-known-good
-        // composition, not the upstream's.
+        // composition, not the upstream's. `_bff_expires_at` is when the
+        // POSTURE it carries stops being trusted — the cache re-validates it
+        // at serve time, so a window longer than the horizon cannot keep
+        // serving it (#1683).
         return {
           value: {
-            ...legacyDefaultConfig(),
-            config: { mode: _lastGoodConfig.config.mode },
-            source: 'bff-last-known-good'
+            ...legacyDefaultConfig('upstream_unreachable'),
+            config: { mode: lkg.config.mode },
+            source: 'bff-last-known-good',
+            _bff_expires_at: lkg.captured_at + LKG_MAX_AGE_MS
           }
         };
       }
@@ -412,27 +597,17 @@ async function getAuthorizedGraphs(bearerHeader, opts = {}) {
   );
 }
 
-/** Test hook: drop the window cache + last-known-good (no production caller). */
-function _resetCache() {
-  _cache.clear();
-  _lastGoodConfig = null;
-}
-
 module.exports = {
   getRetrievalConfig,
   getAuthorizedGraphs,
   OkfAuthzUnauthorizedError,
-  legacyDefaultConfig,
-  _resetCache,
-  // Exposed for tests/diagnostics only — production code reads nothing here.
+  isPostureUnknown,
+  // Exposed for the tests that pin them — production code reads nothing here.
   _internals: {
     effectiveScopesKey,
     parseOkfScopes,
-    decodeJwtPayload,
-    currentWindow,
     fetchUpstream, // exposed so the egress guard (wave 2) can be pinned by a test
-    OKF_SERVER_URL,
-    RETRIEVAL_CONFIG_TTL_MS,
-    REQUEST_TIMEOUT_MS
+    REQUEST_TIMEOUT_MS,
+    LKG_MAX_AGE_MS
   }
 };

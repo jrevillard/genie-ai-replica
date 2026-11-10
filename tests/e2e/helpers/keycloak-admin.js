@@ -10,8 +10,8 @@ const request = (...args) => auth.request(...args);
  * @param {string} message - The diagnosis
  * @returns {Error} The error, flagged transient
  */
-function transientError(message) {
-  const error = new Error(message);
+function transientError(message, options) {
+  const error = new Error(message, options);
   error.transient = true;
   return error;
 }
@@ -579,7 +579,7 @@ async function convergeUser(adminToken, realm, userData) {
         // deadline-based retry exists to save. The probe's verdict already
         // names the operation — it is kept whole, with the diagnosis step
         // added after it, so no verdict is stitched inside another.
-        throw transientError(`${probeErr.message} (while running the email-ownership probe of ${email})`);
+        throw transientError(`${probeErr.message} (while running the email-ownership probe of ${email})`, { cause: probeErr });
       }
       if (owners.length > 0) {
         throw new Error(EMAIL_CONFLICT_VERDICT(err.message, owners[0].username, email), { cause: err });

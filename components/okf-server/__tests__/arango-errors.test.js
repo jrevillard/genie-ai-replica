@@ -28,6 +28,25 @@ describe('arango-error classifiers (strict, errorNum-authoritative)', () => {
     expect(isArangoNotFound({ errorNum: 1203, message: 'collection or view not found' })).toBe(false);
   });
 
+  test('isArangoNotFound: no errorNum — the STATUS fallback (raw HTTP / driver errors)', () => {
+    // DW-433/#1163: the errorNum semantics above are delegated to the shared
+    // canonical (shared/lib/arango-absence.js); what stays LOCAL is this
+    // status fallback for errors that carry no errorNum at all. The arangojs
+    // driver carries the HTTP status on .code, HTTP-layer errors on
+    // .statusCode.
+    expect(isArangoNotFound({ code: 404 })).toBe(true);
+    expect(isArangoNotFound({ statusCode: 404 })).toBe(true);
+    expect(isArangoNotFound({ code: 500 })).toBe(false);
+    expect(isArangoNotFound({ statusCode: 503 })).toBe(false);
+    // THE deliberate divergence from the canonical: the shared/lib predicate
+    // answers a no-errorNum error with the narrow 'no match' MESSAGE rule and
+    // treats a bare 404 status as a fault — this file flips exactly that arm
+    // (status counts, message alone does not).
+    expect(isArangoNotFound(new Error('no match'))).toBe(false);
+    expect(isArangoNotFound(Object.assign(new Error('route not found'), { code: 404 }))).toBe(true);
+    expect(isArangoNotFound(null)).toBe(false);
+  });
+
   test('isArangoCollectionNotFound: exactly 1203 — the call site decides expected-vs-fault', () => {
     expect(isArangoCollectionNotFound({ errorNum: 1203 })).toBe(true);
     // The live shape, verbatim from the settle wedge (2026-11-03).

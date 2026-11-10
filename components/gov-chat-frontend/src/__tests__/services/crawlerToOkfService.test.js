@@ -5,7 +5,8 @@
  *
  * Regression intent: the crawl→OKF conversion is a SERVER-SIDE async job
  * (okf-server services/crawl-conversion-service.js). The browser service
- * must ONLY derive the slug and POST /okf/repos/convert-from-crawl (202),
+ * must ONLY POST the raw intent (filename or URL — the server owns the
+ * slug grammar, issue #1190) to /okf/repos/convert-from-crawl (202),
  * returning the created repo whose `conversion` field carries progress.
  * All download/split/sanitize/batch logic lives server-side now — none of
  * it may leak back into this service (it cannot scale to 10 GB in-browser).
@@ -22,38 +23,9 @@ jest.mock('@/services/httpService', () => ({
 }));
 
 const crawlerToOkfService = require('@/services/crawlerToOkfService').default;
-const { slugify } = require('@/services/crawlerToOkfService');
 
 beforeEach(() => {
   jest.clearAllMocks();
-});
-
-describe('crawlerToOkfService — slug derivation', () => {
-  describe('slugify', () => {
-    it('strips http(s) scheme and www. prefix', () => {
-      expect(slugify('https://www.example.com/path/to/article')).toBe('example-com-path-to-article');
-    });
-
-    it('replaces non-alphanumerics with single dash and trims', () => {
-      expect(slugify('Foo  Bar__Baz!!')).toBe('foo-bar-baz');
-    });
-
-    it('caps the slug at 200 characters', () => {
-      const long = 'a'.repeat(500);
-      expect(slugify(long).length).toBeLessThanOrEqual(200);
-    });
-
-    it('falls back to a default slug for empty / falsy input', () => {
-      expect(slugify('')).toBe('crawled-repository');
-      expect(slugify(null)).toBe('crawled-repository');
-      expect(slugify(undefined)).toBe('crawled-repository');
-    });
-
-    it('strips common markdown / html extensions', () => {
-      expect(slugify('My Article.md')).toBe('my-article');
-      expect(slugify('My Article.html')).toBe('my-article');
-    });
-  });
 });
 
 describe('crawlerToOkfService — convertCrawlToOkf (202 trigger)', () => {
@@ -81,7 +53,7 @@ describe('crawlerToOkfService — convertCrawlToOkf (202 trigger)', () => {
       crawl_job_id: 'job-9',
       split_mode: 'B',
       classification: 'heuristics',
-      name: 'my-crawl',
+      name: 'My Crawl.md',
       domain: 'general'
     });
   });
@@ -107,20 +79,26 @@ describe('crawlerToOkfService — convertCrawlToOkf (202 trigger)', () => {
     expect(mockPost.mock.calls[0][1].split_mode).toBe('A');
   });
 
-  it('prefers the filename over the URL for the repo name slug', async () => {
+  it('sends the RAW filename (no client-side slugging — the server owns the grammar)', async () => {
     mockCreated();
     await crawlerToOkfService.convertCrawlToOkf({
       fileId: 'f-1',
       url: 'https://en.wikipedia.org/wiki/ML',
       filename: 'ml-notes.md'
     });
-    expect(mockPost.mock.calls[0][1].name).toBe('ml-notes');
+    expect(mockPost.mock.calls[0][1].name).toBe('ml-notes.md');
   });
 
-  it('slugifies the URL when no filename is given', async () => {
+  it('sends the RAW URL when no filename is given', async () => {
     mockCreated();
     await crawlerToOkfService.convertCrawlToOkf({ fileId: 'f-1', url: 'https://www.usa.gov/x' });
-    expect(mockPost.mock.calls[0][1].name).toBe('usa-gov-x');
+    expect(mockPost.mock.calls[0][1].name).toBe('https://www.usa.gov/x');
+  });
+
+  it('sends a null name when neither filename nor URL is supplied', async () => {
+    mockCreated();
+    await crawlerToOkfService.convertCrawlToOkf({ fileId: 'f-1' });
+    expect(mockPost.mock.calls[0][1].name).toBeNull();
   });
 
   it('sends null url / crawl_job_id when not supplied', async () => {

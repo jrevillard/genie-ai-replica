@@ -219,8 +219,13 @@ no zip extraction (#1410 guardrails).
    concepts excluded from the index itself.
 2. UX design + modal viewer: create-ux-design pass first (D8: the viewer is a
    modal dialog — chat real estate is tight), then the citizen-facing modal
-   tree/browse view from the card, rendered markdown per concept via the CAP-2
+   tree/browse view, rendered markdown per concept via the CAP-2
    route on demand; DS primitives only; entry affordance only on working cards.
+   **The affordance attaches to BOTH citation surfaces (David, 2026-11-07): the
+   related-documents grid under every chat response AND the right sidebar's
+   per-conversation source list — they render the same citations, so the
+   browser dialog opens from either; a card-only entry leaves the sidebar's
+   citations without a working browse path.**
 3. Efficiency + i18n + tests: large-repo payload bounds; per-hop authz tests
    (unauthorized concepts unreachable); i18n × 14; Playwright handles swept;
    smoke harness extended; live run.

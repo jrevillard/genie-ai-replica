@@ -78,15 +78,10 @@ async function main() {
   const repos = await db
     .query('FOR r IN okf_repositories FILTER r.deleted_at == null RETURN r')
     .then((cur) => cur.all());
-  const slugify = (s) =>
-    String(s || '')
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, '-')
-      .replace(/^-+|-+$/g, '');
-  const want = slugify(target);
+  const { sameSlug } = require('../services/slug');
   const repo = repos.find(
     (r) =>
-      r.repo_id === target || String(r.name || '').toLowerCase() === target.toLowerCase() || slugify(r.name) === want
+      r.repo_id === target || String(r.name || '').toLowerCase() === target.toLowerCase() || sameSlug(target, r.name) // a degenerate target matches nothing
   );
   if (!repo) {
     record(

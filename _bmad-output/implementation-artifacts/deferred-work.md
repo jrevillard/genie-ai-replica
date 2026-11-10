@@ -2920,11 +2920,11 @@ status: open
 
 ### DW-433: Arango "absent" classifier exists in FOUR variants with divergent no-errorNum fallbacks — one owner in shared/lib + 1202/1203/1204 matrix tests on both consumers; then _isExpectedAbsence goes private again
 origin: !597 Jerome AI review (test-audit, threads 2a4cb43e + e00bd322, 2026-10-29)
-location: components/shared/lib/db-connection-service.js (_isExpectedAbsence), components/okf-server/services/arango-errors.js, components/document-repository/src/workers/crawlWorker.js isDocumentNotFound
+location: components/shared/lib/arango-absence.js (the owner — `isExpectedAbsence` + `hasNotFoundStatus`), components/okf-server/services/arango-errors.js (isArangoNotFound), components/document-repository/src/services/fileService.js (isDocumentNotFound; consumed by crawlWorker)
 severity: medium (the same driver error classifies differently per layer — a 1203 collection-miss must fail open in crawls but read as "absent" elsewhere)
 reason: STATUS CORRECTION (round-3 review, 2026-10-29): wave 5 moved ~12 okf-server sites onto isArangoNotFound, so the original 14-site scope is overtaken — what REMAINS is only the shared/lib vs okf-server status-404 fallback divergence plus the test-only _isExpectedAbsence seam going private (its observable behaviour is already asserted). Pin the divergence matrix by tests on both consumers, then make the seam private.
 reason: crawlWorker already adopted the canonical classifier (this MR); okf-server's status-404 fallback still diverges from shared/lib's exact-message rule. Pin the matrix by tests on both consumers, then the test-only _isExpectedAbsence attachment on the frozen singleton can go private (its observable behaviour is already asserted).
-status: open
+status: done 2026-11-09 (MR !829) — errorNum semantics single-owned in shared/lib/arango-absence.js (okf-server delegates, keeps its deliberate no-errorNum STATUS fallback; doc-repo keeps its deliberate superset fallback); dbService._isExpectedAbsence seam deleted (consumers on the shared-lib barrel); the drifted doc-repo test fixture replaced by the real module; matrix pinned on all three consumers. Residue (deliberate, documented in arango-errors.js): repository-service.js ARANGO_NOT_FOUND/notFoundAsNull stays laxer for the registry CRUD paths; ad-hoc 1202 checks remain at components/gov-chat-backend/routes/admin-routes.js:1093 and components/gov-chat-backend/services/query-service.js:1958.
 
 ### DW-434: Audience-binding tests mock jose.jwtVerify entirely — add a locally-built JWKS (generateKeyPair + exportJWK, stubbed fetch) with a real wrong-aud RS256 token, for BOTH the backend verifier and the shared/lib verifier
 origin: !597 Jerome AI review (test-audit, thread e801498f, 2026-10-29)
@@ -3072,3 +3072,28 @@ location: components/okf-server/services/lifecycle-service.js (~:784-795 + :856-
 severity: low (maintenance; ~12 lines + one releaseLease() local with a single catch path)
 reason: Ship together with DW-444 on the next lifecycle touch — the reviewer's own framing is "cheap to fold into the next lifecycle touch"; recording both pairs here so the next diff carries them together.
 status: open
+
+- source_spec: `.claude/worktrees/csr-batch/_bmad-output/implementation-artifacts/spec-gh-1598-csr-batch-integration.md`
+  summary: Restored conversations and earlier-turn messages never resolve OKF citation titles/origins — the title resolver dispatches only from sendStream's onSources and patches only the last message, so reopened conversations render raw concept-id titles with no origin rows (epic slice-3 "best-effort resolve persisted rows" remaining scope; hard requirement "never a dead link" already holds).
+  evidence: Verified in review (B6+E5, triage row 19): dispatch site is conversation.js sendStream only; patchSource touches entry.messages.at(-1); before the batch those rows were dead links (#1598) — the landing strictly improves them. Fix = dispatch the resolver on rehydrate + generalize patchSource to patch by message id; epic-level follow-up, not a merge defect.
+- source_spec: `.claude/worktrees/csr-batch/_bmad-output/implementation-artifacts/spec-gh-1598-csr-batch-integration.md`
+  summary: CAP-1 identity enrichment joins okf_concepts_meta only on the chunk search leg — graph-routed queries (search_start threaded from chatqna routing into the edge/node traversal legs) cite OKF chunks without repo_id/bundle_version, degrading those citations to id-titles with no origin rows (graceful, no dead link).
+  evidence: Verified in review (B7, triage row 20): the join lives inside `if search_start == "chunk"` (genieai_retriever_arangodb.py); routing can select graph modes for OKF graphs (they carry author/parser _LINKS_TO edges). Fix = apply the same meta join to the traversal legs' results; epic FR-001 remaining scope, track with the W9+ waves.
+- source_spec: `.claude/worktrees/csr-batch/_bmad-output/implementation-artifacts/spec-gh-1598-csr-batch-integration.md`
+  summary: Read-level per-repo scope holders receive the FULL steward meta row (pii_scan_error, last_worker_error, ingest bookkeeping) rather than the CAP-2 card — pre-existing semantics the batch's citizen projection did not narrow (the diff only ADDED the citizen path).
+  evidence: Verified in review (B16+SR-O3, triage row 21): pre-diff callers got the same full row via the same handler; security traced it as documented steward intent ("a scope naming THIS repo" = editor's working set). If ops internals should not reach read-level editors, that is a product decision on the steward-class definition — operator's call, pre-existing surface.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-csr-w9-concept-tree-browse.md`
+  summary: epic-9-context.md still says both author and parser edges are walkable; the approved W9 spec and the implementation narrowed the tree index to AUTHOR edges only — the compiled context doc needs the one-line amendment when next touched.
+  evidence: epic-9-context.md "Technical Decisions" vs the approved spec's Design Notes (author edges 13-16k per large repo; raw parser edge collections reach 483k rows on Bali — the index must never join them). Fix edits an agent-context file, so it defers per the review rules.
+
+- source_spec: `_bmad-output/implementation-artifacts/spec-csr-w9-concept-tree-browse.md`
+  summary: the st locale mixes two nouns for "concept" inside the concept browser dialog — 'maikutlo' in the filter/count strings vs 'kgopolo' in related/unavailable/column strings; needs a native Sesotho review before normalizing.
+  evidence: st.js chatbot.okfBrowser block ('Fetsa maikutlo…', 'maikutlo a {n}' vs 'Mekgopolo e amanang', 'Kgopolo ena ha e fumanehe.'). Guessing the morphology would violate the verbatim-i18n rule (locale text inserted only as verified text).
+
+- source_spec: `data/okf/smoke-test/run-smoke.js` (#1568 MR, harness-discovered 2026-11-09) — tracked as GitLab **#1709**
+  summary: dataprep's worker-kick ingestion-log writes drop and mis-key on the current build — zero primaries for 4/5 concepts, all retract rows and all bundle mirrors missing for import-path repos, while the same kick against a wizard-shaped repo writes both channels perfectly and the August runs on the pre-rebuild image were green. The admin Ingestion Log tab is blind for every drained OKF repo.
+  evidence: the smoke harness's completeness assert is the sentinel (14-run evidence trail + the single-kick probe in the MR description); David ruled the harness stays STRICT with the known red named in its failure message.
+- source_spec: `data/okf/smoke-test/run-smoke.js` (#1568 MR, harness-discovered 2026-11-09) — tracked as GitLab **#1710**
+  summary: doc-repo stamps host-local time (UTC+7) with a `Z` suffix — every `ingestion_log`/`files` timestamp is 7 h off; any AQL time-window filter in real UTC misses the rows, and the first diagnosis pass chased a phantom "no rows written since September" on it.
+  evidence: a probe POST at real 14:17Z persisted as `2026-11-09T21:17:06.480Z`; dataprep runs true UTC and the two services disagree by the TZ offset. Fix = `TZ=UTC` on the doc-repo compose service (one line) + a gotcha note in DEBUGGING-TRACING.md.

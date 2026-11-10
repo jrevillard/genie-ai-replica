@@ -677,3 +677,22 @@ describe('curation callVllm — model-id resolution (!631 policy)', () => {
     );
   });
 });
+
+describe('resolveAreaContext — degenerate domain guard (!830 round 3)', () => {
+  it('a domain that slugs to nothing resolves null — never a false match on a slug-empty category', async () => {
+    // A non-Latin category name slugs to ''; a non-Latin domain slugs to ''
+    // too — the unguarded equality used to resolve the WRONG Subject Area
+    // and feed its labels into curation. Degenerate matches nothing.
+    mockDb = {
+      query: jest.fn(async (q) => ({
+        all: async () => (q.includes('serviceCategories') ? [{ key: 'cat-x', name: '日本語' }] : [])
+      }))
+    };
+    await expect(service.resolveAreaContext('日本語テスト')).resolves.toBeNull();
+  });
+
+  it('a real domain still resolves its category', async () => {
+    mockDb = makeDb([], undefined, {});
+    await expect(service.resolveAreaContext('Indonesia')).resolves.toMatchObject({ key: 'cat-9' });
+  });
+});

@@ -12,7 +12,7 @@
 //     (zero-hit by construction; the resolver is the isolation boundary).
 //
 // Cache: ≤30s TTL (mirrors the authz-resolver's SERVING_TTL_MS), keyed
-// (effective_scopes, ttl_window) — scope-equivalence inference is safe because
+// (ttl_window, endpoint kind, effective_scopes) — scope-equivalence inference is safe because
 // the authz-resolver already filters by the caller's authorized_repo_ids; the
 // cache is the latency optimization, NOT a separate authz layer. Keys are
 // NEVER the raw bearer token (no isolation benefit, unbounded memory).
@@ -22,12 +22,17 @@
 // fallback); 403 means the caller holds no okf read scope OR the deployment
 // runs OKF_SCOPE_MODE=closed (default-deny) — either way the per-caller
 // serving view is empty by construction → legacy default; 5xx/network →
-// last-known-good config, else the legacy default (mode=legacy, engaged=false).
+// the locally synthesized fail-closed composition carrying the last-known
+// mode (source 'bff-last-known-good'), else the legacy default
+// (mode=legacy, engaged=false).
 // The resolved value (including the failure-resolved one) is cached for the
-// remainder of the TTL window — one upstream attempt per caller per window.
-// The last-known-good carries only the deployment-global POSTURE fields
-// (mode/serving/engaged/warnings); the per-caller graph set always comes from
-// the caller's own live authz call and is never served from last-known-good.
+// remainder of the TTL window — one upstream attempt per scope-equivalent
+// caller per window, best-effort under concurrent cold-window misses.
+// The last-known-good carries only the deployment-global posture (the
+// mode), never a per-caller view — the full invariant is stated at the
+// write site in getRetrievalConfig's onSuccess. The per-caller graph set
+// always comes from the caller's own live authz call and is never served
+// from last-known-good.
 
 const axios = require('axios');
 const nodeCrypto = require('crypto');
@@ -167,8 +172,8 @@ function parseOkfScopes(payload) {
   // NAMES that ARE scope strings. The okf-server copy folds
   // `realm_access.roles` in — a user granted a scope-shaped role directly or
   // through a GROUP carries it there — so this copy must see the same set.
-  // Missing it keyed a role-granted caller as `@no-scopes`, colliding with
-  // every scope-less caller on the shared authz cache entry.
+  // Missing it keyed a role-granted caller as scope-less (`[]`), colliding
+  // with every scope-less caller on the shared authz cache entry.
   if (p.realm_access && Array.isArray(p.realm_access.roles)) {
     p.realm_access.roles.forEach(push);
   }
@@ -200,13 +205,19 @@ function effectiveScopesKey(bearerHeader) {
     payload.realm_access.roles.includes('tools-admin')
   );
   const scopes = parseOkfScopes(payload).sort();
-  return (isSuperAdmin ? ['@superadmin'] : []).concat(scopes).join('|') || '@no-scopes';
+  // JSON serialization keeps the key INJECTIVE over scope lists: a bare
+  // delimiter join would collide the single literal scope "a|b" with the
+  // two-scope set {a, b} — the scope grammar is not delimiter-free, so a
+  // collided pair would share one cache entry and one per-caller payload.
+  // The admin flag is a named field, never a member of the scope list —
+  // the encoding must not depend on what a scope string can be.
+  return JSON.stringify({ admin: isSuperAdmin, scopes });
 }
 
 // ─── Cache + upstream ─────────────────────────────────────────────────────────
 
-const _cache = new Map(); // "<window>|<kind>|<scopesKey>" → { window, value } | { window, throw }
-let _lastGoodConfig = null; // last-known-good retrieval-config response
+const _cache = new Map(); // "<window>|<kind>|<scopesKey>" → { window, value }
+let _lastGoodConfig = null; // deployment-global posture from the last good retrieval-config (mode only)
 
 function currentWindow() {
   return Math.floor(Date.now() / RETRIEVAL_CONFIG_TTL_MS);
@@ -241,7 +252,8 @@ async function fetchUpstream(path, bearerHeader, correlationId) {
 
 /**
  * Resolve one endpoint through the window cache. On a cache miss the upstream
- * runs ONCE per window per (kind, scopes); the RESOLVED value — including a
+ * runs ONCE per window per (kind, scopes) — best-effort under concurrent
+ * cold-window misses; the RESOLVED value — including a
  * policy-resolved failure — is what gets cached. A 401 is NEVER cached: a
  * refreshed token of the same caller shares the scopes key, and a cached 401
  * would lock them out until the window rolls.
@@ -249,6 +261,9 @@ async function fetchUpstream(path, bearerHeader, correlationId) {
 async function resolveCached(kind, bearerHeader, policy, opts = {}) {
   const correlationId = opts.correlationId || nodeCrypto.randomUUID();
   const window = currentWindow();
+  // Injective composite: window (digits) and kind (a hard-coded literal)
+  // never contain '|', and the scopes segment is a self-delimiting JSON
+  // document — the separator cannot shift a boundary between segments.
   const key = `${window}|${kind}|${effectiveScopesKey(bearerHeader)}`;
 
   const hit = _cache.get(key);
@@ -260,9 +275,12 @@ async function resolveCached(kind, bearerHeader, policy, opts = {}) {
   let entry;
   try {
     const raw = await fetchUpstream(policy.path, bearerHeader, correlationId);
-    entry = { window, value: policy.onSuccess(raw, opts) };
+    // The generated id reaches the policy callbacks even when the caller
+    // omitted one — the malformed-response warns would otherwise log a
+    // correlationId the upstream_ok debug line cannot be matched with.
+    entry = { window, value: policy.onSuccess(raw, { ...opts, correlationId }) };
   } catch (err) {
-    const resolved = policy.onFailure(err, correlationId, window);
+    const resolved = policy.onFailure(err, correlationId);
     if (resolved.throw) throw resolved.error; // never cached — see docstring
     entry = { window, value: resolved.value };
   }
@@ -278,9 +296,10 @@ async function resolveCached(kind, bearerHeader, policy, opts = {}) {
  * serving_repo_ids, serving_graphs, engaged, warnings} — the response verbatim
  * from the okf-server (the `engaged` flag is the AUTHORITATIVE engagement
  * signal; this client never re-computes the gate). On a 5xx/network failure:
- * last-known-good, else the legacy default. On 403: the legacy default (the
- * caller holds no okf read scope → empty per-caller serving view by
- * construction). On 401: throws OkfAuthzUnauthorizedError (propagate).
+ * the fail-closed composition carrying the last-known mode (source
+ * 'bff-last-known-good'), else the legacy default. On 403: the legacy
+ * default (the caller holds no okf read scope → empty per-caller serving
+ * view by construction). On 401: throws OkfAuthzUnauthorizedError (propagate).
  */
 async function getRetrievalConfig(bearerHeader, opts = {}) {
   if (!OKF_ENABLED) return legacyDefaultConfig();
@@ -298,14 +317,21 @@ async function getRetrievalConfig(bearerHeader, opts = {}) {
           typeof raw === 'object' &&
           raw.config &&
           typeof raw.config.mode === 'string' &&
+          raw.config.mode.trim() &&
           typeof raw.engaged === 'boolean'
         ) {
-          // Exposure boundary (2026-10-16): okf-server nulls config.updated_by
-          // for non-superadmin callers, but the last-known-good copy is
-          // served to ANY caller on upstream failure — keep the admin's
-          // identity sub out of the shared copy (the BFF itself reads only
-          // the posture fields; this is defense in depth).
-          _lastGoodConfig = { ...raw, config: { ...raw.config, updated_by: null } };
+          // The last-known-good copy is served to ANY caller on upstream
+          // failure, so it carries only what the BFF consumes of the
+          // deployment-global posture: the mode. Everything scope-derived
+          // in the response (engaged, serving_graph_count, serving_repo_ids,
+          // serving_graphs, warnings) is computed BY the okf-server FROM
+          // this caller's scopes — carrying it in the shared copy would
+          // hand one caller's serving view to another on an outage. Other
+          // global fields (revision, tuning caps, updated_by) are simply
+          // unconsumed here and stay out of the copy until a consumer needs
+          // them — a field carried here must survive being served to every
+          // caller, so it joins the copy together with its consumer.
+          _lastGoodConfig = { config: { mode: raw.config.mode } };
           return raw;
         }
         logger.warn('RetrievalConfigClient.malformed_config_response', {
@@ -313,7 +339,7 @@ async function getRetrievalConfig(bearerHeader, opts = {}) {
         });
         return legacyDefaultConfig();
       },
-      onFailure(err, cid, window) {
+      onFailure(err, cid) {
         const status = err?.response?.status;
         if (status === 401 || err instanceof OkfAuthzUnauthorizedError) {
           return { throw: true, error: new OkfAuthzUnauthorizedError(err.message) };
@@ -330,7 +356,18 @@ async function getRetrievalConfig(bearerHeader, opts = {}) {
           status: status || err?.code || err?.message,
           last_known_good: Boolean(_lastGoodConfig)
         });
-        return { window, value: _lastGoodConfig || legacyDefaultConfig() };
+        if (!_lastGoodConfig) return { value: legacyDefaultConfig() };
+        // The deployment-global posture survives the outage; everything
+        // else is locally synthesized (fail-closed) and says so: the
+        // source label marks the payload as the BFF's own last-known-good
+        // composition, not the upstream's.
+        return {
+          value: {
+            ...legacyDefaultConfig(),
+            config: { mode: _lastGoodConfig.config.mode },
+            source: 'bff-last-known-good'
+          }
+        };
       }
     },
     opts

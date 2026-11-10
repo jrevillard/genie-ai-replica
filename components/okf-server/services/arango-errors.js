@@ -44,39 +44,22 @@
  * the echoed 404 AND the server's own 'no match' errorMessage. 1203 keeps its
  * own errorNum and stays excluded.
  */
-// ABSENCE-CLASSIFIER TWINS (review 84589): this file (strict predicates,
-// errorNum enumerated) is encoding 1 of 3. Encoding 2:
-// shared/lib/db-connection-service.js _isExpectedAbsence — same contract,
-// owns the LOG-SEVERITY decision. Encoding 3: repository-service.js
-// ARANGO_NOT_FOUND / notFoundAsNull — the OLDER, LAXER control-flow twin
-// (bare 404 and /not found/i count); kept deliberately for the registry CRUD
-// paths, but its laxity is exactly what the strict rule refuses. An ArangoDB
-// message change needs ALL THREE lockstep edits — unification tracked on
-// #1350.
+// ABSENCE CLASSIFIER (DW-433 / #1163): the errorNum semantics — measured
+// above — have ONE owner, shared/lib/arango-absence.js (deep import below:
+// this component never loads the shared barrel). This file keeps only its
+// no-errorNum arm, the STATUS fallback, where it deliberately diverges from
+// the canonical (there, a bare 404 without the server's 'no match' message
+// stays a fault). repository-service.js ARANGO_NOT_FOUND / notFoundAsNull
+// remains the OLDER, LAXER control-flow twin (bare 404 and /not found/i
+// count), kept deliberately for the registry CRUD paths.
 const { isRetriableUpstreamError, RETRIABLE_STATUS } = require('./llm-transient-errors');
-
-const ABSENT_ERROR_NUMS = new Set([1202, 1204]);
-const ABSENT_404_MESSAGE = 'no match';
+const { isExpectedAbsence, hasNotFoundStatus } = require('../shared-lib/arango-absence');
 
 function isArangoNotFound(err) {
   if (!err) return false;
-  if (err.errorNum != null) {
-    if (ABSENT_ERROR_NUMS.has(err.errorNum)) return true;
-    // The 3.12 simple-API miss: errorNum 404 + the server's own 'no match'.
-    // Both halves required — a bare 404 errorNum (route/collection faults)
-    // stays a real fault.
-    if (
-      err.errorNum === 404 &&
-      String(err.message || '')
-        .trim()
-        .toLowerCase() === ABSENT_404_MESSAGE
-    ) {
-      return true;
-    }
-    return false;
-  }
+  if (err.errorNum != null) return isExpectedAbsence(err);
   // No errorNum (raw HTTP, or a driver-level error): fall back to the status.
-  return err.code === 404 || err.statusCode === 404;
+  return hasNotFoundStatus(err);
 }
 
 /** COLLECTION-level absence (errorNum 1203 — arangojs COLLECTION_NOT_FOUND,

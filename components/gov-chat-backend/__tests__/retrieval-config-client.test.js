@@ -1,11 +1,11 @@
 'use strict';
 
 // Story 1.1 — the BFF-side retrieval-config client (cache seam contract).
-// Pins: cache hit/miss/expiry, okf-server 5xx → last-known-good, 401
-// propagation (never cached), last-known-good default, bearer (scope)
-// isolation, no-eviction within a window, 403 → legacy default.
-// DW-428: a realm-role grant of a scope keys the claim-scoped cache entry,
-// never the scope-less one.
+// Pins: cache hit/miss/expiry, okf-server 5xx → the fail-closed composition
+// carrying the last-known mode, 401 propagation (never cached), legacy
+// default, bearer (scope) isolation, no-eviction within a window, 403 →
+// legacy default. DW-428: a realm-role grant of a scope keys the
+// claim-scoped cache entry, never the scope-less one.
 
 require('./setup-env');
 
@@ -40,9 +40,11 @@ function b64url(obj) {
   return Buffer.from(JSON.stringify(obj)).toString('base64url');
 }
 
-/** A syntactically-valid (unverified — cache-key only) JWT bearer header. */
-function makeBearer(scopes = [], roles = [], sub = 'user-1') {
-  const payload = { sub, okf_scopes: scopes, realm_access: { roles } };
+/** A syntactically-valid (unverified — cache-key only) JWT bearer header.
+ *  `extra` overrides/adds payload fields (e.g. a `scope` claim, or an
+ *  `okf_scopes` STRING instead of the default array). */
+function makeBearer(scopes = [], roles = [], sub = 'user-1', extra = {}) {
+  const payload = { sub, okf_scopes: scopes, realm_access: { roles }, ...extra };
   return `Bearer ${b64url({ alg: 'none' })}.${b64url(payload)}.sig`;
 }
 
@@ -117,6 +119,10 @@ afterEach(() => {
 });
 
 describe('retrieval-config-client (Story 1.1)', () => {
+  // One accessor for the key derivation — closes over the `client` let, so
+  // every call reads the module generation the current beforeEach loaded.
+  const keyOf = (bearer) => client._internals.effectiveScopesKey(bearer);
+
   it('cache hit: the same caller within the TTL window hits upstream once', async () => {
     axios.get.mockReturnValue(okfGetResponse(HYBRID_CONFIG));
 
@@ -149,7 +155,7 @@ describe('retrieval-config-client (Story 1.1)', () => {
     expect(axios.get).toHaveBeenCalledTimes(2);
   });
 
-  it('okf-server 5xx: serves the last-known-good config (identity-sanitized)', async () => {
+  it('okf-server 5xx: the degraded caller keeps the global posture and the fail-closed per-caller view', async () => {
     axios.get
       .mockReturnValueOnce(
         okfGetResponse({ ...HYBRID_CONFIG, config: { ...HYBRID_CONFIG.config, updated_by: 'steward-9' } })
@@ -162,14 +168,53 @@ describe('retrieval-config-client (Story 1.1)', () => {
     nowMs += REAL_TTL_MS + 1;
     const degraded = await client.getRetrievalConfig(bearer);
 
-    // Posture fields survive verbatim from the last-known-good...
-    expect(degraded.engaged).toBe(true);
+    // The deployment-global posture survives the outage: the mode the
+    // deployment was last known to run. The source label names the LOCAL
+    // composition (the synthesized fail-closed fields are the BFF's own,
+    // not the upstream's response — an admin debugging the outage must
+    // not read source:'database' as the database declaring an empty view).
+    expect(degraded.config).toEqual({ mode: 'hybrid' });
+    expect(degraded.source).toBe('bff-last-known-good');
+    // Everything else on the shared last-known-good copy is PER-CALLER
+    // state (it is computed by the okf-server FROM the caller's scopes) —
+    // the degraded caller falls back to the fail-closed defaults instead
+    // of being handed a serving view computed for a caller it may not be.
+    expect(degraded.engaged).toBe(false);
+    expect(degraded.serving_graph_count).toBe(0);
+    expect(degraded.serving_repo_ids).toEqual([]);
+    expect(degraded.serving_graphs).toEqual([]);
+    expect(degraded.warnings).toEqual([]);
+
+    // The failure-resolved value is cached for the window remainder — the
+    // degraded caller does not re-burn an upstream attempt on every call.
+    const again = await client.getRetrievalConfig(bearer);
+    expect(again).toBe(degraded);
+    expect(axios.get).toHaveBeenCalledTimes(2); // the success + the one failure attempt
+  });
+
+  it("okf-server 5xx cross-caller: a failing caller is never served another caller's serving view", async () => {
+    axios.get.mockImplementation((path, config) => {
+      const sub = payloadOf(config?.headers?.Authorization)?.sub;
+      if (sub === 'caller-b') return okfGetError(503);
+      return okfGetResponse({
+        ...HYBRID_CONFIG,
+        serving_repo_ids: [`repo-of-${sub}`],
+        serving_graphs: [{ repo_id: `repo-of-${sub}`, graph_name: `graph-of-${sub}`, domain: 'agri' }]
+      });
+    });
+
+    await client.getRetrievalConfig(makeBearer(['okf:t:a:read'], [], 'caller-a'));
+    const degraded = await client.getRetrievalConfig(makeBearer([], [], 'caller-b'));
+
+    // The mode is deployment-global (shared posture is legitimate) — but
+    // caller-b's serving view is its own fail-closed one, never caller-a's,
+    // and the source label names the local composition, not the upstream.
     expect(degraded.config.mode).toBe('hybrid');
-    expect(degraded.serving_repo_ids).toEqual(['a', 'b']);
-    // ...but the shared LKG copy never carries the governing admin's sub:
-    // it is served to ANY caller on upstream failure, so the okf-server's
-    // per-caller updated_by redaction must hold on this side too.
-    expect(degraded.config.updated_by).toBeNull();
+    expect(degraded.source).toBe('bff-last-known-good');
+    expect(degraded.engaged).toBe(false);
+    expect(degraded.serving_repo_ids).toEqual([]);
+    expect(degraded.serving_graphs).toEqual([]);
+    expect(degraded.warnings).toEqual([]);
   });
 
   it('okf-server 401: throws the typed error (propagates, never cached into a stale lockout)', async () => {
@@ -257,12 +302,44 @@ describe('retrieval-config-client (Story 1.1)', () => {
   });
 
   it('malformed success body: degrades to the legacy default instead of throwing', async () => {
-    axios.get.mockReturnValue(okfGetResponse({ unexpected: true }));
+    // A vacuous mode (an empty or whitespace-only string passes a typeof
+    // check) is as garbled as an unexpected body — the deployment posture
+    // must never be an empty label on a response the caller sees.
+    axios.get
+      .mockReturnValueOnce(okfGetResponse({ unexpected: true }))
+      .mockReturnValueOnce(okfGetResponse({ ...HYBRID_CONFIG, config: { mode: '' }, engaged: true }))
+      .mockReturnValueOnce(okfGetResponse({ ...HYBRID_CONFIG, config: { mode: '   ' }, engaged: true }));
 
     const config = await client.getRetrievalConfig(makeBearer(['okf:t:a:read']));
+    const vacuousMode = await client.getRetrievalConfig(makeBearer(['okf:t:a:read', 'okf:t:b:read']));
+    const whitespaceMode = await client.getRetrievalConfig(makeBearer(['okf:t:d:read']));
 
     expect(config.config.mode).toBe('legacy');
     expect(config.engaged).toBe(false);
+    expect(vacuousMode.config.mode).toBe('legacy');
+    expect(vacuousMode.engaged).toBe(false);
+    expect(whitespaceMode.config.mode).toBe('legacy');
+    expect(whitespaceMode.engaged).toBe(false);
+
+    // The malformed-response warn carries the correlationId the resolution
+    // was traced with — the one this caller omitted is generated by the
+    // client, not logged as undefined.
+    const { logger } = require('../shared-lib');
+    const malformedWarn = logger.warn.mock.calls.find(
+      ([msg]) => msg === 'RetrievalConfigClient.malformed_config_response'
+    );
+    expect(malformedWarn).toBeDefined();
+    expect(malformedWarn[1].correlationId).toEqual(expect.any(String));
+
+    // A malformed or vacuous response must leave the last-known-good copy
+    // untouched: no successful read happened in this window, so a later
+    // outage degrades to the plain legacy default — never to a mode a
+    // garbled body carried.
+    nowMs += REAL_TTL_MS + 1;
+    axios.get.mockImplementationOnce(() => okfGetError(503));
+    const afterOutage = await client.getRetrievalConfig(makeBearer(['okf:t:c:read']));
+    expect(afterOutage.config.mode).toBe('legacy');
+    expect(afterOutage.source).toBe('bff-fail-closed-default');
   });
 
   it('scope-equivalence: scope ORDER does not change the cache key', async () => {
@@ -273,6 +350,17 @@ describe('retrieval-config-client (Story 1.1)', () => {
 
     // Same effective scopes (sorted) → one cache entry, one upstream call.
     expect(axios.get).toHaveBeenCalledTimes(1);
+  });
+
+  it('injective key: a scope set and a single literal scope containing the delimiter key differently', () => {
+    // The scope grammar is not constrained to the 4-part shape, so a single
+    // scope whose NAME contains the delimiter can exist. The key must be
+    // injective over scope LISTS: the set {a, b} and the one-scope list
+    // [a|b] must never join to the same bytes (they would share one cache
+    // entry and be served the same per-caller payload).
+    const setKey = keyOf(makeBearer(['okf:t:a:read', 'okf:t:b:read']));
+    const literalKey = keyOf(makeBearer(['okf:t:a:read|okf:t:b:read']));
+    expect(literalKey).not.toBe(setKey);
   });
 
   it('super-admin posture is part of the key: same scopes, different realm roles → separate entries', async () => {
@@ -315,7 +403,7 @@ describe('retrieval-config-client (Story 1.1)', () => {
   // ROLE NAMES that ARE scopes into the scope set (Story 6-1c group grants —
   // a user whose only path to the role is group membership carries it in
   // realm_access.roles). The BFF copy must see the same set, or a
-  // role-granted caller keys the shared authz cache as `@no-scopes`,
+  // role-granted caller keys the shared authz cache as scope-less,
   // colliding with every scope-less caller.
   it('parseOkfScopes: a scope-shaped realm role lands in the parsed set', () => {
     expect(
@@ -324,6 +412,24 @@ describe('retrieval-config-client (Story 1.1)', () => {
         realm_access: { roles: ['default-roles-genie', 'offline_access', 'okf:t:c:read'] }
       })
     ).toEqual(['okf:t:c:read']);
+  });
+
+  it('parseOkfScopes: the standard scope claim lands in the parsed set — same key as the array grant', () => {
+    expect(keyOf(makeBearer([], [], 'u1', { scope: 'okf:t:a:read okf:t:b:read openid offline_access' }))).toBe(
+      keyOf(makeBearer(['okf:t:a:read', 'okf:t:b:read']))
+    );
+    // Literal expectation — not routed through the parser under test.
+    expect(client._internals.parseOkfScopes({ scope: 'okf:t:a:read openid offline_access' })).toEqual(['okf:t:a:read']);
+  });
+
+  it('parseOkfScopes: a space-joined okf_scopes STRING attribute matches the array grant', () => {
+    expect(keyOf(makeBearer([], [], 'u2', { okf_scopes: 'okf:t:a:read okf:t:b:read' }))).toBe(
+      keyOf(makeBearer(['okf:t:a:read', 'okf:t:b:read']))
+    );
+    // Literal expectation — not routed through the parser under test.
+    expect(client._internals.parseOkfScopes({ okf_scopes: 'okf:t:a:read default-roles-genie' })).toEqual([
+      'okf:t:a:read'
+    ]);
   });
 
   it("role-granted scopes share the claim-scoped cache entry, never the scope-less caller's entry", async () => {
@@ -354,7 +460,6 @@ describe('retrieval-config-client (Story 1.1)', () => {
 
     // The KEY decides the cache entry: the realm-role grant must land in the
     // claim-scoped entry, never in the scope-less one.
-    const keyOf = (bearer) => client._internals.effectiveScopesKey(bearer);
     const claimKey = keyOf(byClaim);
     const roleKey = keyOf(byRole);
     const noScopesKey = keyOf(noScopes);
@@ -407,7 +512,7 @@ describe('retrieval-config-client (Story 1.1)', () => {
       process.env.OKF_ENABLED = '0';
       try {
         // The flag is read once at module load — reload the client under the
-        // parked env (beforeEach already loaded it with the flag unset) and
+        // parked env (beforeEach loaded it with the flag ENABLED) and
         // bind the axios mock of the SAME registry generation for the assertion.
         jest.resetModules();
         const parked = require('../services/retrieval-config-client');

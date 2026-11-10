@@ -19,6 +19,7 @@ const AdmZip = require('adm-zip');
 const matter = require('gray-matter');
 const { aql } = require('arangojs');
 const typeInference = require('./type-inference-service');
+const { slugify: slugSSOT } = require('./slug');
 const { logger } = require('../shared-lib/logger');
 const { withSpan } = require('../shared-lib/tracing');
 const { getMeter } = require('../shared-lib/metrics');
@@ -141,17 +142,11 @@ function composeIngestLabels(repo, callerLabels) {
 }
 
 /** Slugify a title (or name) into a stable path component: "Service Directory"
- * → "service-directory". ASCII-fold, lowercase, non-alphanum → '-'. May return
+ * → "service-directory". ASCII-fold (the #1190 SSOT's only folding consumer),
+ * lowercase, non-alphanum → '-'. May return
  * '' for non-Latin input — uniquifySlug() handles that (empty is a collision
  * class of its own: every non-Latin title would otherwise collide). */
-function slugify(value) {
-  return String(value || '')
-    .normalize('NFKD')
-    .replace(/[̀-ͯ]/g, '')
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '');
-}
+const slugify = (value) => slugSSOT(value, { fold: true });
 
 /** Collision-free slug per batch (review fix): an empty slug (non-Latin) or an
  * in-batch duplicate gets a '-' + 8-hex content-hash suffix; identical title
@@ -1325,10 +1320,7 @@ function urlToConceptPath(url) {
   if (!url) return null;
   try {
     const u = new URL(url);
-    const slug = (u.hostname + u.pathname)
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, '-')
-      .replace(/^-|-$/g, '');
+    const slug = slugSSOT(u.hostname + u.pathname);
     return `${slug || 'concept'}.md`;
   } catch {
     return null;
@@ -1451,7 +1443,6 @@ module.exports = {
   applyDocumentCeiling,
   partPath,
   maxZipBytesFromEnv,
-  slugify,
   uniquifySlug,
   markdownFor,
   zipToRawInputs,

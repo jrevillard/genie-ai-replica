@@ -88,7 +88,6 @@ jest.mock('../services/lifecycle-service', () => ({
   transition: jest.fn().mockResolvedValue({ repo_id: 'r1' })
 }));
 jest.mock('../services/bundle-export-service', () => ({
-  slugFor: jest.fn().mockReturnValue('general'),
   buildBundleZip: jest.fn().mockResolvedValue({ buffer: Buffer.from('zip-bytes') }),
   bundleFileName: jest.fn().mockReturnValue('repo-v3.zip')
 }));
@@ -612,6 +611,83 @@ describe('repository-controller — pii / lifecycle / export / autocorrect surfa
     expect(repoService.create).not.toHaveBeenCalled();
     expect(require('../services/crawl-conversion-service').startConversion).toHaveBeenCalledWith(
       expect.objectContaining({ repo_id: 'r1', file_id: 'f1', split_mode: 'B' })
+    );
+  });
+
+  // Issue #1190: on the CREATE path the crawl endpoint applies the slug SSOT
+  // (nameFromSource) to the raw intent the frontend now sends — a client-side
+  // slugging regression (raw filename/URL stored as the repo name) must ship
+  // red. A non-string name falls back to the safe default, never String()
+  // coercion ('[object Object]').
+  it('convertFromCrawl create path derives the repo name via nameFromSource (#1190)', async () => {
+    repoService.create.mockReset().mockResolvedValue({ repo_id: 'r1' });
+    const { res } = await drive(controller.convertFromCrawl, {
+      body: { file_id: 'f1', split_mode: 'B', name: 'https://www.example.com/Kenya Health.md' }
+    });
+    expect(res.statusCode).toBe(202);
+    expect(repoService.create).toHaveBeenCalledWith(
+      expect.objectContaining({ name: 'example-com-kenya-health' }),
+      expect.anything(),
+      expect.anything()
+    );
+    // The job record carries the CALLER's string (readable index title);
+    // the repo identity carries the slug.
+    expect(require('../services/crawl-conversion-service').startConversion).toHaveBeenCalledWith(
+      expect.objectContaining({ requested_name: 'https://www.example.com/Kenya Health.md' })
+    );
+  });
+
+  it('convertFromCrawl: an absent name keeps requested_name null — the index title keeps its readable default (#1190)', async () => {
+    // Round-2 regression pin: the controller derives the repo name for
+    // targeting, but the conversion job's requested_name stays null when the
+    // caller sent no name — crawl-conversion renders the readable
+    // 'Crawled knowledge base' index title from that null, not the slug.
+    repoService.create.mockReset().mockResolvedValue({ repo_id: 'r1' });
+    await drive(controller.convertFromCrawl, { body: { file_id: 'f1', split_mode: 'B' } });
+    // The create-path name for an absent caller name is pinned by the
+    // non-string test below (same nameFromSource arm) — this test's unique
+    // subject is the job record.
+    expect(require('../services/crawl-conversion-service').startConversion).toHaveBeenCalledWith(
+      expect.objectContaining({ requested_name: null })
+    );
+  });
+
+  it('convertFromCrawl: a non-Latin name is recorded raw as requested_name (#1190)', async () => {
+    // A non-Latin name passes the presence gate: requested_name is the raw
+    // caller string (the repo name independently falls back to
+    // 'crawled-repository') — pinned so the gate cannot drift to null or a
+    // slugged value.
+    repoService.create.mockReset().mockResolvedValue({ repo_id: 'r1' });
+    await drive(controller.convertFromCrawl, { body: { file_id: 'f1', split_mode: 'B', name: '日本語' } });
+    expect(require('../services/crawl-conversion-service').startConversion).toHaveBeenCalledWith(
+      expect.objectContaining({ requested_name: '日本語' })
+    );
+  });
+
+  it('convertFromCrawl: a whitespace-only name is no name — requested_name stays null (#1190)', async () => {
+    // ' ' passes typeof-string but is not a caller name: the gate trims, so
+    // the index title keeps its readable default instead of a blank string.
+    const startConversion = require('../services/crawl-conversion-service').startConversion;
+    startConversion.mockClear();
+    repoService.create.mockReset().mockResolvedValue({ repo_id: 'r1' });
+    await drive(controller.convertFromCrawl, { body: { file_id: 'f1', split_mode: 'B', name: '  ' } });
+    expect(startConversion).toHaveBeenCalledWith(expect.objectContaining({ requested_name: null }));
+    // A padded-but-real name is recorded VERBATIM (raw intent — not trimmed,
+    // not slugged): the trim gates presence only.
+    startConversion.mockClear();
+    await drive(controller.convertFromCrawl, {
+      body: { file_id: 'f1', split_mode: 'B', name: '  Kenya Health  ' }
+    });
+    expect(startConversion).toHaveBeenCalledWith(expect.objectContaining({ requested_name: '  Kenya Health  ' }));
+  });
+
+  it('convertFromCrawl: a non-string name falls back to the default, never String() coercion (#1190)', async () => {
+    repoService.create.mockReset().mockResolvedValue({ repo_id: 'r1' });
+    await drive(controller.convertFromCrawl, { body: { file_id: 'f1', split_mode: 'B', name: {} } });
+    expect(repoService.create).toHaveBeenCalledWith(
+      expect.objectContaining({ name: 'crawled-repository' }),
+      expect.anything(),
+      expect.anything()
     );
   });
 

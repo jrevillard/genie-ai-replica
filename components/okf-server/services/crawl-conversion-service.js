@@ -39,6 +39,7 @@ const { logger } = require('../shared-lib/logger');
 const { authedAxios } = require('./service-token');
 const { ingestRepoConcepts, buildMegaConcept } = require('./ingest-service');
 const { withSpan } = require('../shared-lib/tracing');
+const { slugify: slugSSOT } = require('./slug');
 
 const COLLECTION = 'okf_repositories';
 
@@ -418,15 +419,12 @@ async function downloadToTempFile(repoId, res, cap, onBytes) {
   return { tmpPath, bytes };
 }
 
-/** Slug a URL/path to a concept path (same shape as the import service's). */
+/** Slug a URL/path to a concept path (the #1190 SSOT's base grammar). */
 function conceptPathForUrl(url, fallbackIndex) {
   if (!url) return `crawl-page-${fallbackIndex}.md`;
   try {
     const u = new URL(url);
-    const slug = `${u.hostname}${u.pathname}`
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, '-')
-      .replace(/^-|-$/g, '');
+    const slug = slugSSOT(`${u.hostname}${u.pathname}`);
     return (slug || `crawl-page-${fallbackIndex}`) + '.md';
   } catch {
     return `crawl-page-${fallbackIndex}.md`;

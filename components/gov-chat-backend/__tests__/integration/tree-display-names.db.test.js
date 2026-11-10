@@ -16,32 +16,29 @@
  *   ARANGO_TEST_URL=https://arango:8529 ARANGO_TEST_USER=root \
  *   ARANGO_TEST_PASSWORD=… npx jest __tests__/integration
  *
- * The suite has no database of its own (the CI runs it without one), and
- * this test creates its OWN database and drops it afterwards — it never
- * touches the one the application uses.
+ * The suite has no database of its own: the CI job points ARANGO_TEST_URL
+ * at the job's own ArangoDB service container, and this test creates its
+ * OWN throwaway database and drops it afterwards — it never touches the
+ * one the application uses.
  */
 
 jest.mock('dotenv', () => ({ config: jest.fn() }));
 
-jest.mock(
-  '../../shared-lib',
-  () => ({
-    logger: {
-      info: jest.fn(),
-      error: jest.fn(),
-      warn: jest.fn(),
-      debug: jest.fn()
-    },
-    // The service classifies an absence with the canonical predicate — the
-    // same function the production db-connection-service exposes. Mocking
-    // the connection without it would turn a missing row into a TypeError.
-    dbService: {
-      getConnection: jest.fn(),
-      _isExpectedAbsence: require('../../../shared/lib/arango-absence').isExpectedAbsence
-    }
-  }),
-  { virtual: true }
-);
+// Delegate the barrel surface to the central mock (same pattern as
+// service-category-service.test.js): one home for logger / dbService /
+// the real canonical isExpectedAbsence, so a barrel-surface change cannot
+// drift this suite away from the rest.
+jest.mock('../../shared-lib', () => require('../mocks/shared-lib'), { virtual: true });
+
+const {
+  WAIT_BUDGET_MS,
+  HOOK_TIMEOUT_MS,
+  authHeader,
+  waitForServer,
+  recreateDatabase,
+  dropDatabase,
+  databaseConfig
+} = require('./helpers/arango');
 
 const TEST_URL = process.env.ARANGO_TEST_URL;
 const TEST_USER = process.env.ARANGO_TEST_USER || '';
@@ -50,14 +47,7 @@ const DB_NAME = 'genie_tree_display_names_test';
 
 // The HTTP calls (creating a database, creating a collection) carry the
 // same credentials the driver does.
-function authHeader() {
-  if (!TEST_USER) {
-    return {};
-  }
-  return {
-    Authorization: `Basic ${Buffer.from(`${TEST_USER}:${TEST_PASSWORD}`).toString('base64')}`
-  };
-}
+const AUTH = authHeader(TEST_USER, TEST_PASSWORD);
 
 const describeWithDatabase = TEST_URL ? describe : describe.skip;
 
@@ -100,6 +90,9 @@ const TAXONOMY = {
 async function seed(db) {
   // The schema the migration creates: categoryServices is an EDGE
   // collection (type 3), the rest are document collections (type 2).
+  // Created through the same driver handle the tests use (the husk
+  // suite's idiom) — the handle carries the credentials and the
+  // connection the lifecycle calls above already established.
   for (const [name, type] of [
     ['serviceCategories', 2],
     ['services', 2],
@@ -107,15 +100,7 @@ async function seed(db) {
     ['serviceCategoryTranslations', 2],
     ['serviceTranslations', 2]
   ]) {
-    const response = await fetch(`${TEST_URL}/_db/${DB_NAME}/_api/collection`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', ...authHeader() },
-      body: JSON.stringify({ name, type })
-    });
-    const body = await response.json();
-    if (body.error) {
-      throw new Error(`creating ${name}: ${JSON.stringify(body)}`);
-    }
+    await db.collection(name).create({ type });
   }
   await db.collection('serviceCategories').saveAll(TAXONOMY.categories);
   await db.collection('services').saveAll(TAXONOMY.services);
@@ -129,48 +114,40 @@ describeWithDatabase('the category tree (against a real ArangoDB)', () => {
   let serviceCategoryService;
 
   beforeAll(async () => {
+    // The CI service container is RUNNING long before ArangoDB serves:
+    // the suite waits for the server, not for the container.
+    await waitForServer(TEST_URL, AUTH, WAIT_BUDGET_MS);
     // Loaded HERE and not at the top of the file: a SKIPPED suite must
     // not open a connection, and the driver keeps one open until it is
     // closed.
     const { Database } = require('arangojs');
     serviceCategoryService = require('../../services/service-category-service');
     // The database is created over the HTTP API (arangojs 8's Database
-    // binds to an existing one) and dropped in afterAll. A database left
-    // behind by an interrupted run is dropped first: the test must be
-    // repeatable.
-    await fetch(`${TEST_URL}/_api/database/${DB_NAME}`, { method: 'DELETE', headers: authHeader() });
-    const created = await fetch(`${TEST_URL}/_api/database`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', ...authHeader() },
-      body: JSON.stringify({ name: DB_NAME })
-    });
-    const createdBody = await created.json();
-    if (createdBody.error && !String(createdBody.errorMessage).includes('duplicate')) {
-      throw new Error(`creating ${DB_NAME}: ${JSON.stringify(createdBody)}`);
-    }
-    db = new Database({
-      url: TEST_URL,
-      databaseName: DB_NAME,
-      username: TEST_USER || undefined,
-      password: TEST_PASSWORD || undefined
-    });
+    // binds to an existing one) and dropped in afterAll: a database
+    // left behind by an interrupted run is dropped first, both halves
+    // checked (the shared helper).
+    await recreateDatabase(TEST_URL, DB_NAME, AUTH);
+    db = new Database(databaseConfig(TEST_URL, DB_NAME, TEST_USER, TEST_PASSWORD));
     await seed(db);
     // The service is a singleton whose init() would dial the configured
     // ArangoDB; the test hands it THIS database instead.
     serviceCategoryService.db = db;
     serviceCategoryService.initialized = true;
-  });
+  }, HOOK_TIMEOUT_MS);
 
   afterAll(async () => {
     // The database is dropped over the HTTP API (arangojs 8's Database
     // binds to an existing one).
-    await fetch(`${TEST_URL}/_api/database/${DB_NAME}`, { method: 'DELETE', headers: authHeader() });
-    // The driver's connection is closed: an open one keeps the test
-    // process alive after the run.
-    if (db) {
-      db.close();
+    try {
+      await dropDatabase(TEST_URL, DB_NAME, AUTH);
+    } finally {
+      // The driver's connection is closed: an open one keeps the test
+      // process alive after the run — closed even when the drop fails.
+      if (db) {
+        db.close();
+      }
     }
-  });
+  }, HOOK_TIMEOUT_MS);
 
   it('names every entity — the locale, or the English one it falls back to', async () => {
     const tree = await serviceCategoryService.getAllCategoriesWithServices('fr');

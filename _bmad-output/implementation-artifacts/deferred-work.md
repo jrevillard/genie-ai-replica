@@ -3090,3 +3090,10 @@ status: open
 - source_spec: `_bmad-output/implementation-artifacts/spec-csr-w9-concept-tree-browse.md`
   summary: the st locale mixes two nouns for "concept" inside the concept browser dialog — 'maikutlo' in the filter/count strings vs 'kgopolo' in related/unavailable/column strings; needs a native Sesotho review before normalizing.
   evidence: st.js chatbot.okfBrowser block ('Fetsa maikutlo…', 'maikutlo a {n}' vs 'Mekgopolo e amanang', 'Kgopolo ena ha e fumanehe.'). Guessing the morphology would violate the verbatim-i18n rule (locale text inserted only as verified text).
+
+- source_spec: `data/okf/smoke-test/run-smoke.js` (#1568 MR, harness-discovered 2026-11-09) — tracked as GitLab **#1709**
+  summary: dataprep's worker-kick ingestion-log writes drop and mis-key on the current build — zero primaries for 4/5 concepts, all retract rows and all bundle mirrors missing for import-path repos, while the same kick against a wizard-shaped repo writes both channels perfectly and the August runs on the pre-rebuild image were green. The admin Ingestion Log tab is blind for every drained OKF repo.
+  evidence: the smoke harness's completeness assert is the sentinel (14-run evidence trail + the single-kick probe in the MR description); David ruled the harness stays STRICT with the known red named in its failure message.
+- source_spec: `data/okf/smoke-test/run-smoke.js` (#1568 MR, harness-discovered 2026-11-09) — tracked as GitLab **#1710**
+  summary: doc-repo stamps host-local time (UTC+7) with a `Z` suffix — every `ingestion_log`/`files` timestamp is 7 h off; any AQL time-window filter in real UTC misses the rows, and the first diagnosis pass chased a phantom "no rows written since September" on it.
+  evidence: a probe POST at real 14:17Z persisted as `2026-11-09T21:17:06.480Z`; dataprep runs true UTC and the two services disagree by the TZ offset. Fix = `TZ=UTC` on the doc-repo compose service (one line) + a gotcha note in DEBUGGING-TRACING.md.

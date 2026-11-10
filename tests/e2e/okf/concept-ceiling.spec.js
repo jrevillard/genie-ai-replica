@@ -23,9 +23,10 @@
 // over-ceiling state reachable without typing a quarter-megabyte of text.
 //
 // WHY IT LIVES HERE (tests/e2e/okf/): the Studio only exists on an
-// OKF-enabled deployment (OKF_ENABLED=1). The CI e2e job runs the core
-// profile with the OKF pillar parked and keeps tests/e2e/okf/ out of its
-// invocation for exactly that reason (see .gitlab-ci.yml).
+// OKF-enabled deployment (OKF_ENABLED=1). The local run executes the whole
+// tree — this directory included — against whatever venue it is pointed at,
+// so on a core-profile venue the spec skips ITSELF, with the venue's own
+// profile as the reason (#1742).
 //
 // Run against the local build (OKF_ENABLED=1):
 //   cd C:/Dev/builds/main && npx playwright test \
@@ -33,6 +34,7 @@
 
 const { test, expect } = require('@playwright/test');
 const { loginViaUI, BASE_URL } = require('../helpers/chatbot');
+const { okfEnabled, okfParkedReason } = require('../helpers/venue-profile');
 
 /**
  * WHO LOGS IN.
@@ -126,6 +128,15 @@ test.describe('the concept-document ceiling in the concept editor', () => {
   // The advisory's label is translated (okf.editor.ceiling); pin the locale
   // so the exact wording is fixed.
   test.use({ locale: 'en-US' });
+
+  // The Studio's concept editor is an OKF surface: a deployment whose OKF
+  // pillar is parked does not render it, and this spec would fail looking
+  // for a surface that never appears. It SKIPS WITH A REASON instead
+  // (#1742), and the reason is the venue's own profile — read from the
+  // runtime config the frontend itself reads — not a guess.
+  test.beforeEach(async () => {
+    test.skip(!(await okfEnabled()), okfParkedReason());
+  });
 
   test("the advisory carries the SERVER's ceiling", async ({ page }) => {
     await openEditor(page);

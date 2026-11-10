@@ -1,5 +1,6 @@
 const { defineConfig } = require('@playwright/test');
 require('dotenv').config();
+const { venueLaunchArgs } = require('./tests/e2e/helpers/venue-launch-args');
 
 module.exports = defineConfig({
   testDir: './tests/e2e',
@@ -20,12 +21,22 @@ module.exports = defineConfig({
   reporter: [
     ['list'],
     ['junit', { outputFile: 'reports/playwright-report.xml' }],
+    // The local run's outcome is read by the failure path
+    // (tests/e2e/run/file-failure-issues.js): which specs failed, with
+    // their logs, and which were skipped and WHY. The JSON report is that
+    // source — the list reporter's output is not machine-readable.
+    ['json', { outputFile: 'reports/playwright-report.json' }],
   ],
   use: {
     baseURL: process.env.BASE_URL || 'https://localhost',
     ignoreHTTPSErrors: true,
     bypassCSP: true,
     actionTimeout: 15000,
+    // A venue whose name the runner cannot resolve needs the mapping in the
+    // BROWSER too — Chromium resolves hostnames with its own stack, so the
+    // Node-side mapping alone leaves the suite failing on the login
+    // redirect. Empty unless E2E_VENUE_IP is set.
+    launchOptions: { args: venueLaunchArgs() },
   },
   projects: [
     {

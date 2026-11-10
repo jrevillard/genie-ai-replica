@@ -1,6 +1,7 @@
 const https = require('https');
 const { chromium } = require('@playwright/test');
 const { loginViaUI, TEST_USER, BASE_URL } = require('./chatbot');
+const { venueLaunchArgs } = require('./venue-launch-args');
 
 /**
  * Make an HTTPS request ignoring self-signed certificate errors.
@@ -216,7 +217,11 @@ async function getSessionTokenViaUI({ browser, user } = {}) {
   let ownBrowser = null;
   let context = null;
   try {
-    ownBrowser = browser ? null : await chromium.launch();
+    // The throwaway browser carries the venue mapping (empty unless
+    // E2E_VENUE_IP is set): Chromium resolves hostnames with its own stack,
+    // so a browser launched without it cannot open a venue whose name the
+    // runner cannot resolve.
+    ownBrowser = browser ? null : await chromium.launch({ args: venueLaunchArgs() });
     context = await (browser || ownBrowser).newContext({ ignoreHTTPSErrors: true });
     const page = await context.newPage();
     await loginViaUI(page, user || TEST_USER);

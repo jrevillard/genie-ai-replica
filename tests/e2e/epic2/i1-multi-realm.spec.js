@@ -8,6 +8,7 @@ const {
   SESSION_MINT_TIMEOUT_MS,
 } = require('../helpers/auth');
 const { createUser, deleteUser, enableDirectAccessGrants } = require('../helpers/keycloak-admin');
+const { realmExists, missingRealmReason } = require('../helpers/venue-profile');
 
 /**
  * Phase I: Multi-Realm Configuration (Story 2-9)
@@ -28,8 +29,23 @@ test.describe.serial('Phase I: Multi-Realm Configuration', () => {
   const TEST_REALM = 'genie2';
   const TEST_USER = { username: 'testuser2', password: 'TestPass123!', email: 'testuser2@genie2.local' };
 
+  // The venue profile decides: a deployment that exposes no second realm
+  // cannot answer a multi-realm request, so the test below SKIPS WITH A
+  // REASON instead of failing on a realm that was never provisioned
+  // (#1742). The reason is the venue's own profile, read from the realm
+  // inventory — not a guess, and never a silent skip.
+  test.beforeEach(async () => {
+    test.skip(!(await realmExists(TEST_REALM)), missingRealmReason(TEST_REALM));
+  });
+
   test.beforeAll(async ({ browser }) => {
     test.setTimeout(SESSION_MINT_TIMEOUT_MS);
+
+    // The second realm is absent: the tests skip, and the setup below
+    // (which mints into that realm) must not run against a realm that does
+    // not exist.
+    if (!(await realmExists(TEST_REALM))) return;
+
     adminToken = await getAdminToken();
 
     // genie2 is test-only: enable ROPC for its direct token mints

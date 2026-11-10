@@ -393,17 +393,29 @@ class AdminDashboardService {
       const collectionStats = await Promise.all(
         collections.map(async (collection) => {
           const figures = await collection.figures();
-          logger.debug(`Collection ${collection.name}: count=${figures.count}, size=${figures.size}`);
+          // The driver nests the live numbers under `figures` — the flat
+          // `figures.size` / `figures.count` reads are always undefined,
+          // which summed into a "NaN GB" database size (issue #1761).
+          const inner = (figures && figures.figures) || {};
+          logger.debug(`Collection ${collection.name}: count=${inner.alive}, size=${inner.documentsSize}`);
+          // MISSING reads default to 0; GARBAGE values (NaN) must propagate
+          // to the total's non-finite tripwire below — `|| 0` here would
+          // silently turn a broken payload into a confident "0 B".
           return {
             name: collection.name,
-            count: figures.count,
-            size: figures.size
+            count: inner.alive === undefined ? 0 : inner.alive,
+            size: inner.documentsSize === undefined ? 0 : inner.documentsSize
           };
         })
       );
 
       const totalSize = collectionStats.reduce((sum, coll) => sum + coll.size, 0);
-      const formattedSize = (totalSize / (1024 * 1024 * 1024)).toFixed(1) + ' GB';
+      // A non-finite total is a payload failure, not a renderable value:
+      // the card must show its error state, never a confident "NaN GB".
+      if (!Number.isFinite(totalSize)) {
+        throw new Error(`Database stats total size is not finite: ${totalSize}`);
+      }
+      const formattedSize = this._formatSize(totalSize);
       logger.debug(`Total database size: ${totalSize} bytes, formatted: ${formattedSize}`);
 
       const response = {
@@ -418,6 +430,20 @@ class AdminDashboardService {
       logger.error(`Error in getDatabaseStats: ${error.message}`, { stack: error.stack });
       throw error;
     }
+  }
+
+  /**
+   * Format a byte count as a human-readable size (same scale as the
+   * sibling database-operations-service; a fixed "/ 1 GiB" render
+   * mislabels any database smaller than 1 GiB).
+   * @param {number} bytes - Byte count
+   * @returns {string} Human-readable size
+   */
+  _formatSize(bytes) {
+    if (bytes === 0) return '0 B';
+    const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
+    const i = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), sizes.length - 1);
+    return parseFloat((bytes / Math.pow(1024, i)).toFixed(2)) + ' ' + sizes[i];
   }
 
   /**

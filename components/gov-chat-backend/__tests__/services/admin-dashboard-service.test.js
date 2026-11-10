@@ -67,7 +67,9 @@ function createMockCursor(results) {
 function createMockCollection(figures) {
   return {
     all: jest.fn().mockResolvedValue(createMockCursor([])),
-    figures: jest.fn().mockResolvedValue(figures || { count: 0, size: 0 }),
+    // The REAL driver nests the live numbers under `figures` (the flat
+    // {count, size} shape here once pinned the #1761 "NaN GB" bug).
+    figures: jest.fn().mockResolvedValue(figures || { figures: { alive: 0, documentsSize: 0 } }),
     name: 'testCollection'
   };
 }
@@ -162,7 +164,10 @@ describe('AdminDashboardService', () => {
     });
 
     it('should return collection stats', async () => {
-      const mockColl = createMockCollection({ count: 100, size: 5000 });
+      // The driver's real shape: live numbers under `figures.figures`
+      // (issue #1761 — the flat shape made every read undefined and the
+      // total "NaN GB").
+      const mockColl = createMockCollection({ figures: { alive: 100, documentsSize: 5000 } });
       mockColl.name = 'users';
       mockDb.collections.mockResolvedValueOnce([mockColl]);
 
@@ -171,6 +176,19 @@ describe('AdminDashboardService', () => {
       expect(result.collections).toHaveLength(1);
       expect(result.collections[0].name).toBe('users');
       expect(result.collections[0].count).toBe(100);
+      expect(result.collections[0].size).toBe(5000);
+      // Human-readable, never "NaN GB": 5000 bytes = 4.88 KB.
+      expect(result.databaseSize).toBe('4.88 KB');
+    });
+
+    it('should throw when the total size is not finite (never render NaN)', async () => {
+      // A garbage figures payload must fail the payload — the card renders
+      // its error state instead of a confident "NaN GB" (issue #1761).
+      const mockColl = createMockCollection({ figures: { alive: 1, documentsSize: NaN } });
+      mockColl.name = 'weird';
+      mockDb.collections.mockResolvedValueOnce([mockColl]);
+
+      await expect(adminDashboardService.getDatabaseStats()).rejects.toThrow('not finite');
     });
 
     it('should throw when not initialized', async () => {

@@ -57,13 +57,15 @@ class DatabaseOperationsService {
   }
 
   async backupDatabase() {
+    let backupPath = null;
+    let backupCompleted = false;
     try {
       logger.info('Starting database backup');
       const fsStandard = require('fs');
       const timestamp = new Date().toISOString().replace(/:/g, '-').replace(/\..+/, '');
       const filenameBase = `${this.appName.toLowerCase()}_backup_${timestamp}`;
       const backupFilename = `${filenameBase}.${this.backupFormat}`;
-      const backupPath = path.join(this.backupDir, backupFilename);
+      backupPath = path.join(this.backupDir, backupFilename);
 
       const dbInfo = {
         name: process.env.ARANGO_DB,
@@ -77,9 +79,21 @@ class DatabaseOperationsService {
       dbInfo.collections = collectionInfos.filter((info) => !info.isSystem).map((info) => info.name);
 
       const writeStream = fsStandard.createWriteStream(backupPath);
+
+      // Bounded writes (issue #1762): the old backup stringified each
+      // collection's ENTIRE document array into one string — a 46,938-doc
+      // OKF collection crossed V8's string cap and 500'd the backup after
+      // 34s of successful per-collection work. Per-document stringify
+      // keeps every string at document size; awaiting 'drain' when the
+      // stream signals backpressure keeps memory bounded too.
+      const writeBounded = (chunk) => {
+        if (writeStream.write(chunk)) return Promise.resolve();
+        return new Promise((resolve) => writeStream.once('drain', resolve));
+      };
+
       if (this.backupFormat === 'json') {
-        writeStream.write('{\n');
-        writeStream.write(`  "_metadata": ${JSON.stringify(dbInfo, null, 2)},\n`);
+        writeBounded('{\n');
+        writeBounded(`  "_metadata": ${JSON.stringify(dbInfo, null, 2)},\n`);
       }
 
       let collectionCount = 0;
@@ -101,22 +115,35 @@ class DatabaseOperationsService {
           RETURN doc
         `);
 
-        const documents = await cursor.all();
-        logger.info(`Backed up collection: ${collectionName} (${documents.length} documents)`);
-
         if (this.backupFormat === 'json') {
           if (collectionCount > 0) {
-            writeStream.write(',\n');
+            await writeBounded(',\n');
           }
-          writeStream.write(`  "${collectionName}": ${JSON.stringify(documents, null, 2)}`);
+          await writeBounded(`  "${collectionName}": [`);
         } else {
-          writeStream.write(`{"collection":"${collectionName}","data":${JSON.stringify(documents)}}\n`);
+          await writeBounded(`{"collection":"${collectionName}","data":[`);
         }
+
+        // Stream the documents one at a time — never accumulate the array.
+        let docCount = 0;
+        let first = true;
+        for await (const doc of cursor) {
+          await writeBounded((first ? '' : ',') + JSON.stringify(doc));
+          first = false;
+          docCount++;
+        }
+
+        if (this.backupFormat === 'json') {
+          await writeBounded(']');
+        } else {
+          await writeBounded(']}\n');
+        }
+        logger.info(`Backed up collection: ${collectionName} (${docCount} documents)`);
         collectionCount++;
       }
 
       if (this.backupFormat === 'json') {
-        writeStream.write('\n}');
+        await writeBounded('\n}');
       }
       writeStream.end();
 
@@ -124,6 +151,9 @@ class DatabaseOperationsService {
         writeStream.on('finish', resolve);
         writeStream.on('error', reject);
       });
+      // The file on disk is complete from here — a later failure (stat,
+      // compression, old-backup cleanup) must NOT destroy it.
+      backupCompleted = true;
 
       const stats = await fs.stat(backupPath);
       const fileSize = this._formatSize(stats.size);
@@ -153,6 +183,20 @@ class DatabaseOperationsService {
       };
     } catch (error) {
       logger.error(`Database backup error: ${error.message}`, { stack: error.stack });
+      // A failed backup must not leave a partial file that looks complete
+      // (issue #1762): the streaming backup persists incrementally, so a
+      // mid-backup failure leaves bytes on disk — remove them best-effort.
+      // A failure AFTER the stream finished (stat/compress/cleanup) leaves
+      // a COMPLETE backup — never destroy that one.
+      if (backupPath && !backupCompleted) {
+        try {
+          await fs.unlink(backupPath);
+          logger.info(`Removed partial backup file: ${backupPath}`);
+        } catch (cleanupError) {
+          // Nothing was written yet, or the unlink failed — nothing to do.
+          logger.warn(`Could not remove partial backup file: ${cleanupError.message}`);
+        }
+      }
       return {
         success: false,
         message: 'Failed to backup database',

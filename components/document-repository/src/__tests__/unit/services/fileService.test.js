@@ -315,6 +315,9 @@ describe('fileService', () => {
       expect(query).toContain('file.repo_id == @repo_id');
       expect(query).toContain('SORT file.file_id DESC');
       expect(query).toContain('LIMIT 0, 1');
+      // The filter's VALUE must be bound: an unbound @repo_id silently
+      // matches nothing (or everything, depending on the driver).
+      expect(mockDb.query.mock.calls[0][1]).toMatchObject({ repo_id: 'repo-1' });
     });
   });
 

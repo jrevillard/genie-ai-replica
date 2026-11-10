@@ -36,9 +36,11 @@ const auditService = require('./audit-service');
 const { authedAxios } = require('./service-token');
 const dbService = require('../shared-lib/db-connection-service');
 const config = require('../config');
-// The repo's CURRENT bundle doc is the one the worker resolves per call (a
-// fresh doc-repo lookup, no cache to invalidate); storing a new bundle zip
-// therefore drives the state machine from its first drain onwards.
+// The repo's CURRENT bundle doc is the one the okf-server ingest worker
+// resolves FRESH per call (a doc-repo lookup, no cache to invalidate) —
+// dataprep's own bundle-log mirror keeps a per-concept cache, cleared per
+// ingest. Storing a new bundle zip therefore drives the state machine from
+// its first drain onwards.
 
 // !1081 — 200 was wrong for almost every real deployment. It is checked AFTER
 // the document-ceiling split, so the operator's "how many documents did I pick"

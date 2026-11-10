@@ -75,7 +75,12 @@ test.describe('RAG error handling', () => {
 
     await sendMessage(page, 'Second attempt should work');
     await waitForBotResponse(page, { timeout: 120000 });
-    expect(await getLastBotMessage(page), 'the retry must produce an answer').not.toBe('');
+    // The ANSWER, not merely a non-empty bubble: the welcome turn is a
+    // bot bubble too, so "not empty" would pass on a retry that never
+    // answered. The mock makes the exact text assertable.
+    expect(await getLastBotMessage(page), 'the retry must produce the answer').toContain(
+      'Recovered answer after the error.'
+    );
 
     // Verify the input is still functional
     await expect(textarea).toBeVisible({ timeout: 5000 });

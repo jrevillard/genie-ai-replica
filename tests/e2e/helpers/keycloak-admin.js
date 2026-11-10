@@ -37,6 +37,7 @@ function isTransientStatus(status) {
  * re-derive the verdict for its own operation.
  * @param {string} message - The diagnosis
  * @param {number} status - The HTTP status
+ * @param {{cause?: Error}} [options] - Passed to the Error constructor
  * @throws {Error} The error — transient when the status is transient
  */
 function failWithStatus(message, status, options) {

@@ -23,13 +23,16 @@ const STREAM_ROUTE_SOURCE = path.join(E2E_ROOT, 'helpers/chatbot.js');
 // commits, never mid-run, so a within-run snapshot cannot hide it.
 const STREAM_ROUTE_SOURCE_CONTENT = fs.readFileSync(STREAM_ROUTE_SOURCE, 'utf8');
 
-const streamPathFromSource = () => {
+const streamPathFrom = (source) => {
   // Anchored to line start: a commented-out copy of the declaration must
   // not become the scan target — the gate would then watch a stale
-  // endpoint while green, the exact drift it exists to catch.
-  const match = STREAM_ROUTE_SOURCE_CONTENT.match(/^const STREAM_PATH = '([^']+)';/m);
+  // endpoint while green, the exact drift it exists to catch. The anchor
+  // is itself mutation-gated below (a fixture only it can satisfy).
+  const match = source.match(/^const STREAM_PATH = '([^']+)';/m);
   return match ? match[1] : null;
 };
+
+const streamPathFromSource = () => streamPathFrom(STREAM_ROUTE_SOURCE_CONTENT);
 
 // Every .js file under the given root. Depth-first, pruning node_modules
 // at the directory level — readdirSync's recursive mode cannot prune,
@@ -66,6 +69,18 @@ describe('the e2e suite intercepts the stream endpoint through the shared consta
     // constant moves (renamed, inlined, moved to another module), this
     // fails and names the file the scan reads.
     expect(streamPathFromSource()).not.toBeNull();
+  });
+
+  test('the extraction anchor skips a commented-out declaration', () => {
+    // The anchor's own mutation gate: the fixture matches ONLY when the
+    // match is anchored to line start — an unanchored regex would pick
+    // the commented copy of an OLD endpoint as the scan target, and the
+    // gate would then watch a stale string while green. A source with no
+    // real declaration extracts null, which fails the first test loudly
+    // — the designed direction.
+    const staged = "// const STREAM_PATH = '/old';\nconst STREAM_PATH = '/queries/stream';\n";
+    expect(streamPathFrom(staged)).toBe('/queries/stream');
+    expect(streamPathFrom("// const STREAM_PATH = '/old';\n")).toBeNull();
   });
 
   test('no other e2e file carries the endpoint string in any spelling', () => {

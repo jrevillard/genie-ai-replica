@@ -165,14 +165,14 @@ Two caveats the operator should know before booking a slot:
 ## Known-red specs
 
 The run of 2026-11-10 (forge venue, chart 0.2.171, `genieai-forge.local:4443`):
-**242 tests — 207 passed, 18 failed, 17 skipped.**
+**242 tests — 212 passed, 13 failed, 17 skipped.**
 
 | Spec | Failures | Why it is red | Fix |
 |---|---|---|---|
-| `epic1/a1`, `a2`, `a3`, `epic3/l1`, `l2`, `l3` | 9 | the specs navigate to a literal `https://localhost/`, which answers nothing on a k8s venue | #1737 (MR !841) |
-| `chatbot/error-handling`, `chatbot/send-message-and-stream` | 3 | `waitForBotResponse` polls a Vuex path the CSR refactor deleted | #1738 (MR !841) |
-| `chat-conversation` | 2 | the same CSR drift, seen as a disposed route context and a click timeout | #1738 (MR !841) |
-| `welcome-banner`, `resizable-sidebars` | 5 | **not a spec defect**: the `forge-k3s` node rebooted during the run and the edge refused connections (`ERR_CONNECTION_REFUSED`) — a venue event |
+| `epic1/a1`, `a2`, `a3`, `epic3/l1`, `l2`, `l3` | 8 | the specs navigate to a literal `https://localhost/`, which answers nothing on a k8s venue | #1737 (MR !841) |
+| `chatbot/error-handling`, `chatbot/send-message-and-stream`, `chat-conversation` | 5 | `waitForBotResponse` polls a Vuex path the CSR refactor deleted — the same drift, seen as a disposed route context and a click timeout | #1738, #1758 (MR !841) |
+
+An earlier run of the same day showed five more failures (`welcome-banner`, `resizable-sidebars`) that were **not** a spec defect: the `forge-k3s` node rebooted mid-run and the edge refused connections. On the settled stack they pass.
 
 A spec that is known-red is named, never silently excluded, and never edited
 to make it pass.

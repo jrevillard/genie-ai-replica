@@ -156,8 +156,14 @@ async function waitForBotResponse(page, options = {}) {
         page.evaluate(() => {
           const app = document.querySelector('#app');
           const store = app && app.__vue_app__ ? app.__vue_app__.config.globalProperties.$store : null;
-          const messages =
-            store && store.state && store.state.conversation ? store.state.conversation.messages : [];
+          // The store's PUBLIC read path: the "conversation" module's
+          // getter returns the open conversation — its messages and the
+          // stream flag. The raw state shape is NOT a contract: the CSR
+          // refactor moved the messages under conversations[openId], and
+          // a helper reading "state.conversation.messages" threw on every
+          // poll (the three chat specs went red the day it landed).
+          const open = store && store.getters ? store.getters['conversation/openConversation'] : null;
+          const messages = open && open.messages ? open.messages : [];
           const bots = messages.filter((m) => m.sender === 'bot');
           const last = bots[bots.length - 1];
           // No bot message yet: the turn has not produced one, so the

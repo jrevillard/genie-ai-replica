@@ -46,7 +46,8 @@
 #                           into <dir> and exit — the producer of the
 #                           files the restore path consumes; exits
 #                           non-zero naming anything it could not capture
-#   --kubernetes-version    default v1.32.0
+#   --kubernetes-version    default v1.37.0 (inside the chart's declared
+#                           range — helm REFUSES an install outside it)
 #   --skip-start            do NOT touch the cluster (prereqs + secret restore only)
 #
 # The script NEVER deletes the cluster. It creates it if missing and
@@ -66,7 +67,7 @@ CLUSTER="minikube"
 # failed only at the last step — after the destructive ones.
 DEPLOY_REPO="${DEPLOY_REPO:-${REPO_ROOT}/../genie-ai-deploy}"
 OVERLAY="jrevillard-laptop"
-K8S_VERSION="v1.32.0"
+K8S_VERSION="v1.37.0"
 CPUS=4
 # The node's REAL memory. The kubelet inside minikube reports the HOST's
 # memory to the scheduler, not this container's limit — so the scheduler
@@ -331,6 +332,24 @@ log "waiting for the Flux sources"
 if ! kubectl -n flux-system wait --for=condition=ready gitrepository --all --timeout=180s; then
   echo "ERROR: the Flux GitRepositories never became Ready — check the flux-git-auth Secret (PAT) and the deploy repo's reachability:" >&2
   echo "  kubectl -n flux-system get gitrepositories -o wide" >&2
+  exit 1
+fi
+
+log "waiting for the overlay to apply the HelmRelease"
+# ORDER: the HelmRelease lives in the OVERLAY's kustomization output, so
+# the object does not exist until Flux has synced that Kustomization.
+# Reconciling it before that fails with "helmreleases.helm.toolkit.fluxcd.io
+# \"genieai\" not found" — the reconcile races the creation.
+#
+# Waiting for the OBJECT (--for=create), NOT for the Kustomization to be
+# Ready: the overlay Kustomization carries `wait: true`, so Ready means
+# "the HelmRelease finished its install" — waiting on that here would
+# hold the script for the whole install and time out on a slow image
+# pull, which is the very thing this wait is not about.
+if ! kubectl -n flux-system wait --for=create helmrelease/genieai --timeout=300s; then
+  echo "ERROR: the HelmRelease never appeared — the overlay Kustomization did not apply it:" >&2
+  echo "  kubectl -n flux-system get kustomizations -o wide" >&2
+  echo "  kubectl -n flux-system describe kustomization overlay-$OVERLAY-dev" >&2
   exit 1
 fi
 

@@ -14,6 +14,8 @@ jest.mock(
 // Mock auth middleware to bypass Keycloak
 jest.mock('../../middlewares/keycloak-auth-middleware', () => ({
   authenticateToken: jest.fn((req, res, next) => {
+    // Synthetic fixture shape (the real middleware sets userId / role /
+    // roles / iss / sub / okfScopes); nothing in this suite reads it.
     req.user = {
       sub: '12345678-1234-1234-1234-123456789012',
       preferred_username: 'testuser',

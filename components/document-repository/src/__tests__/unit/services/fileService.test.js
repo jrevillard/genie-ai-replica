@@ -338,6 +338,25 @@ describe('fileService', () => {
       const query = mockDb.query.mock.calls[0][0];
       expect(query).toContain('(file.is_bundle == false OR file.is_bundle == null)');
     });
+
+    // The default list (no is_bundle parameter) must stay BUNDLE-INCLUSIVE:
+    // absent is not false. The Studio's source dialog relies on it (it
+    // strips the bundles client-side), so the strict `is_bundle === false`
+    // comparison is load-bearing — a weakened predicate (!is_bundle)
+    // silently drops the bundles from the default list.
+    it('the DEFAULT list stays bundle-inclusive (absent is_bundle is not false)', async () => {
+      const mockCursor = { all: jest.fn().mockResolvedValue([]) };
+      const mockCountCursor = { next: jest.fn().mockResolvedValue(0) };
+      const mockDb = {
+        query: jest.fn().mockResolvedValueOnce(mockCursor).mockResolvedValueOnce(mockCountCursor)
+      };
+
+      fileService.getDb = jest.fn().mockResolvedValue(mockDb);
+
+      await fileService.getFiles({ page: 1, limit: 10 });
+
+      expect(mockDb.query.mock.calls[0][0]).not.toContain('file.is_bundle');
+    });
   });
 
   // Story 3.10 T1 (D1): every file knows its origin — the wizard's source

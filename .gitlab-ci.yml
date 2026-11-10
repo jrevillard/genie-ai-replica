@@ -4211,6 +4211,20 @@ config:validate:
         # file under __tests__/integration must fail the pin in its own
         # pipeline, not as a red main pipeline after the merge.
         - "components/gov-chat-backend/__tests__/integration/**/*"
+        # The stray-copy gate (tests/config-validator/__tests__/stray-copy-artifacts.test.js)
+        # reads the tracked tree: an MR that adds a copy artifact of a source
+        # file must fail the gate in its own pipeline, not as a red main
+        # pipeline after the merge. One glob per marker family — the GNOME
+        # duplicates ("(copy)", "(another copy)") carry no space before the
+        # word, so the macOS glob cannot see them, and the JetBrains family
+        # ("Copy of name") is a prefix, not a suffix. The ignore layer itself
+        # is gated too: an MR that weakens or over-broadens the .gitignore
+        # rules must run the gate.
+        - "**/* - Copy*"
+        - "**/* copy*"
+        - "**/*copy)*"
+        - "**/Copy of *"
+        - ".gitignore"
         - "tests/fixtures/config/**/*"
         - "api-gateway-solution/new-config/**/*"
         - "components/gov-chat-frontend/public/config/genie-ai-config*.json"

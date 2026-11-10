@@ -104,6 +104,35 @@ Thumbs.db
 *~
 .env.swp
 
+# Stray copies of a tracked file — the artifact a file manager or an editor
+# leaves behind when a file is duplicated: "name - Copy" (Windows/VS Code,
+# second duplicate "name - Copy (2)"), "name copy" (macOS, "name copy 2"),
+# "name (copy)" (GNOME Nautilus, "name (another copy)", "name (3rd copy)"),
+# "Copy of name" (JetBrains IDEs, second duplicate "Copy of name (1)").
+# A copy is never a source: it silently drifts from the file it duplicates.
+# The pipeline gate
+# (tests/config-validator/__tests__/stray-copy-artifacts.test.js) fails the
+# build if one is ever tracked anyway.
+#
+# The marker is reserved: a file that legitimately carries one (a real source
+# called "deep copy.js") must be renamed, not forced in — `git add -f` gets it
+# past this layer and straight into the gate. Negation rules further down this
+# file win over these (last match wins), so a fixture that legitimately needs
+# a copy-shaped name can negate it — the pipeline gate still flags it.
+* - Copy
+* - Copy.*
+* - Copy ([0-9]*
+* - Copy [0-9]*
+* copy
+* copy.*
+* copy ([0-9]*
+* copy [0-9]*
+*copy)
+*copy).*
+*copy) ([0-9]*
+*copy) [0-9]*
+Copy of *
+
 # Temporary files
 *.tmp
 .tmp/

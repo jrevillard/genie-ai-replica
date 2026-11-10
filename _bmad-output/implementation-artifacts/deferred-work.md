@@ -2949,10 +2949,10 @@ status: open
 
 ### DW-437: FOUR OpenAI-wire chat clients in okf-server — route topic-link-authoring / concept-meta runLlmSummary / frontmatter vllmChatCompletions / ragas-suite callVllm through adaptive-llm-call
 origin: !597 Jerome AI review (simplify, thread b4baaf4d, 2026-10-29)
-location: components/okf-server/services/ (topic-link authoring, concept-meta-service.js runLlmSummary, frontmatter-service.js vllmChatCompletions, ragas-suite-service.js callVllm) vs services/adaptive-llm-call.js
+location: components/okf-server/services/ (frontmatter-service.js vllmChatCompletions, llm-curation-service.js callVllm, topic-link-authoring-service.js, concept-meta-service.js runLlmSummary) vs services/adaptive-llm-call.js — the ledger's fourth client ("ragas-suite-service.js callVllm") never existed: ragas-suite has always ridden frontmatterService.vllmChatCompletions (today :837, :4441, :4467)
 severity: medium (a reasoning-model deployment starves the raw-axios legs: no 400 param-negotiation, no budget ladder)
 reason: adaptive-llm-call already implements the strict-JSON contract; migration is behaviour-affecting (retry ladder semantics) — post-train consolidation MR with the other client unifications.
-status: open
+status: RESOLVED — tracked as #1167 (closed 2026-11-10; the three refuter-lens verdicts behind the close are recorded in the issue's verification-record note): every OpenAI-wire chat POST in okf-server routes through adaptive-llm-call.js:113 (frontmatter + llm-curation in !597 / 3d3f4c484, topic-link + concept-meta in !622 / 5d6a679f6); the post-verification exhaustive sweep found no remaining OpenAI-wire raw chat client and all five migrated-service suites pass. Outside that wire, by design: the Anthropic /v1/messages fetch (model-config-service.js:476) and the chatqna serve streaming POST (ragas-suite-service.js:646) carry no adaptive-llm-call protections. Residual from the verification filed as #1725 (ladder ignores caller budgets).
 
 ### DW-438: THREE client-credentials minters (okf-server keycloak-access-service with NO expiry tracking + module-load env; okf-server services/service-token.js hardened; backend keycloak-proxy-service.js) — one shared/lib helper parameterized by client id/secret/endpoint
 origin: !597 Jerome AI review (simplify, thread 912b141a, 2026-10-29)

@@ -248,6 +248,128 @@ describe('versionService.mintVersion — review fixes (2026-08-17)', () => {
     expect(result.bundle_version).toBe(3);
   });
 
+  test('D1: a Pending zip of an import IN FLIGHT is not a stale marker — the mint does not reconcile it', async () => {
+    // The import stores its bundle zip before it parses the concepts (issue
+    // #1709), so a Pending bundle can belong to a RUNNING import. Reconciling
+    // it would report a drain that never happened. The zip's conversion
+    // record is the in-flight signal — `concepts_total` is what marks it as a
+    // ZIP import (the crawl conversion shares the record and writes only
+    // bytes/pages progress), and the fresh `started_at` proves the run is
+    // alive (an import runs minutes — see the age test below).
+    seedRepo({
+      version: 2,
+      conversion: { status: 'adding', concepts_total: 5, started_at: new Date().toISOString() }
+    });
+    // The reconcile's Pending probe is SKIPPED, so the snapshot is the first
+    // query the mint runs.
+    mockDb.query.mockResolvedValueOnce({
+      all: async () => [{ concept_id: 'x', title: 'X', content_hash: 'h', index_status: 'indexed' }]
+    });
+    mockDb.query.mockResolvedValueOnce({ all: async () => [] }); // modification ledger: none
+    const result = await versionService.mintVersion(REPO, { trigger: 'manual' });
+    expect(result.bundle_version).toBe(3);
+    expect(mockDb.query.mock.calls[0][0]).not.toContain("dataprep.status == 'Pending'");
+  });
+
+  // Nothing clears a conversion record whose import CRASHED mid-run (no
+  // reaper for the doc), so an 'adding' marker frozen forever would
+  // permanently disable the reconcile — the self-heal would be dead for that
+  // repo. The skip is age-bounded on started_at: an import runs minutes, so
+  // anything still 'adding' after a day is a crashed run, and its Pending
+  // bundle is exactly the stale marker the reconcile exists for.
+  test('D1: a zip marker whose started_at is a day old is a CRASHED run — the reconcile runs', async () => {
+    seedRepo({
+      version: 2,
+      conversion: {
+        status: 'adding',
+        concepts_total: 5,
+        started_at: new Date(Date.now() - 25 * 60 * 60 * 1000).toISOString()
+      }
+    });
+    mockDb.query.mockResolvedValueOnce({ all: async () => [1] }); // Pending zip present
+    mockDb.query.mockResolvedValueOnce({
+      all: async () => [{ concept_id: 'x', title: 'X', content_hash: 'h', index_status: 'indexed' }]
+    });
+    mockDb.query.mockResolvedValueOnce({ all: async () => [] }); // modification ledger: none
+    const result = await versionService.mintVersion(REPO, { trigger: 'manual' });
+    expect(result.bundle_version).toBe(3);
+    expect(mockDb.query.mock.calls[0][0]).toContain("dataprep.status == 'Pending'");
+  });
+
+  test('D1: a zip marker with NO started_at is not proven alive — the reconcile runs', async () => {
+    seedRepo({ version: 2, conversion: { status: 'adding', concepts_total: 5 } });
+    mockDb.query.mockResolvedValueOnce({ all: async () => [1] }); // Pending zip present
+    mockDb.query.mockResolvedValueOnce({
+      all: async () => [{ concept_id: 'x', title: 'X', content_hash: 'h', index_status: 'indexed' }]
+    });
+    mockDb.query.mockResolvedValueOnce({ all: async () => [] }); // modification ledger: none
+    const result = await versionService.mintVersion(REPO, { trigger: 'manual' });
+    expect(result.bundle_version).toBe(3);
+    expect(mockDb.query.mock.calls[0][0]).toContain("dataprep.status == 'Pending'");
+  });
+
+  test('D1: an UNPARSABLE started_at is not proven alive either — the reconcile runs', async () => {
+    // Date.parse(garbage) is NaN; a truthy-NaN slip would silently keep the
+    // skip active forever on a corrupted record.
+    seedRepo({ version: 2, conversion: { status: 'adding', concepts_total: 5, started_at: 'not-a-date' } });
+    mockDb.query.mockResolvedValueOnce({ all: async () => [1] }); // Pending zip present
+    mockDb.query.mockResolvedValueOnce({
+      all: async () => [{ concept_id: 'x', title: 'X', content_hash: 'h', index_status: 'indexed' }]
+    });
+    mockDb.query.mockResolvedValueOnce({ all: async () => [] }); // modification ledger: none
+    const result = await versionService.mintVersion(REPO, { trigger: 'manual' });
+    expect(result.bundle_version).toBe(3);
+    expect(mockDb.query.mock.calls[0][0]).toContain("dataprep.status == 'Pending'");
+  });
+
+  test('D1: a started_at far in the FUTURE proves no more than a stale one — the reconcile runs', async () => {
+    // The bound is two-sided: a clock-skewed or bogus writer must not be able
+    // to hold the reconcile off for the whole skew window.
+    seedRepo({
+      version: 2,
+      conversion: {
+        status: 'adding',
+        concepts_total: 5,
+        started_at: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString()
+      }
+    });
+    mockDb.query.mockResolvedValueOnce({ all: async () => [1] }); // Pending zip present
+    mockDb.query.mockResolvedValueOnce({
+      all: async () => [{ concept_id: 'x', title: 'X', content_hash: 'h', index_status: 'indexed' }]
+    });
+    mockDb.query.mockResolvedValueOnce({ all: async () => [] }); // modification ledger: none
+    const result = await versionService.mintVersion(REPO, { trigger: 'manual' });
+    expect(result.bundle_version).toBe(3);
+    expect(mockDb.query.mock.calls[0][0]).toContain("dataprep.status == 'Pending'");
+  });
+
+  // The crawl conversion shares the repo's `conversion` record and writes
+  // only bytes/pages progress — it is not a zip import, so a Pending bundle
+  // under it is still the stale marker the reconcile exists for. The record
+  // is MERGE-patched, so a repo zip-imported once keeps `concepts_total`
+  // unless the crawl's start patch clears it — and it does
+  // (crawl-conversion-service), so by the time a mint runs during a crawl
+  // the marker is an explicit null. `!= null` treats null and absent alike;
+  // both shapes pin that.
+  test.each([
+    ['an in-flight CRAWL conversion (no zip marker)', { status: 'adding', bytes_done: 10, pages_done: 2 }],
+    [
+      'a record whose zip marker the crawl already cleared',
+      { status: 'adding', bytes_done: 10, pages_done: 2, concepts_total: null }
+    ]
+  ])('D1: %s does NOT mask a stale Pending bundle', async (_label, conversion) => {
+    seedRepo({ version: 2, conversion });
+    mockDb.query.mockResolvedValueOnce({ all: async () => [1] }); // Pending zip present
+    // The stale-zip reconcile runs (its doc-repo PATCH is best-effort here).
+    mockDb.query.mockResolvedValueOnce({
+      all: async () => [{ concept_id: 'x', title: 'X', content_hash: 'h', index_status: 'indexed' }]
+    });
+    mockDb.query.mockResolvedValueOnce({ all: async () => [] }); // modification ledger: none
+    const result = await versionService.mintVersion(REPO, { trigger: 'manual' });
+    expect(result.bundle_version).toBe(3);
+    expect(mockDb.query.mock.calls[0][0]).toContain("dataprep.status == 'Pending'");
+  });
+
   test('D1: mint proceeds when no Pending files exist', async () => {
     seedRepo({ version: 2 });
     programQuery([{ concept_id: 'x', title: 'X', content_hash: 'h', index_status: 'indexed' }]); // gates [](auto) + snapshot

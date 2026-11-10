@@ -575,19 +575,25 @@ test('a burst of unknown-kid tokens does not refresh the key set once per token'
   await warmCache(svc);
   const before = jwksFetches();
 
-  for (let i = 0; i < 5; i++) {
-    const junk = await sign(baseClaims(DISCOVERY_ISSUER), { partner: true }); // kid 'partner-key': unknown
-    await assert.rejects(
-      () => svc.verifyToken(junk),
-      (err) => err.code === 'TOKEN_INVALID'
-    );
+  // The clock is frozen for the burst so a stalled runner cannot span two
+  // floor intervals: every junk token then lands inside the first one, and
+  // the count is exact. (The floor removed — the behaviour this guards
+  // against — refreshes once per token, which is 5.)
+  const realNow = Date.now();
+  const clockSpy = Date.now;
+  Date.now = () => realNow;
+  try {
+    for (let i = 0; i < 5; i++) {
+      const junk = await sign(baseClaims(DISCOVERY_ISSUER), { partner: true }); // kid 'partner-key': unknown
+      await assert.rejects(
+        () => svc.verifyToken(junk),
+        (err) => err.code === 'TOKEN_INVALID'
+      );
+    }
+  } finally {
+    Date.now = clockSpy;
   }
-  // The floor allows ONE refresh per interval. The bound is 2 rather than 1
-  // because the assertion is wall-clock dependent (a runner that stalls
-  // mid-burst spans two intervals): the behaviour this guards against — the
-  // floor removed — refreshes once per token, which is 5.
-  const refreshes = jwksFetches() - before;
-  assert.ok(refreshes >= 1 && refreshes <= 2, `the burst refreshed the key set ${refreshes} times`);
+  assert.equal(jwksFetches(), before + 1, 'the burst refreshed the key set more than once');
 });
 
 // The broken-realm shapes, one test each: jose raises the same "no matching
@@ -636,10 +642,21 @@ test('a key published inside the refresh-floor window is picked up by the next r
   // The realm rotates while the floor is held: it publishes the new key id.
   publishedKeys = ROTATED_JWKS;
   const rotated = await sign(baseClaims(DISCOVERY_ISSUER), { rotated: true });
-  await assert.rejects(
-    () => svc.verifyToken(rotated),
-    (err) => err.code === 'TOKEN_INVALID'
-  );
+  // The clock is frozen for the rejected attempt so a stalled runner cannot
+  // let the floor expire mid-test and turn the expected rejection into an
+  // acceptance; the sleep below runs on the real clock, which is what lets
+  // the final verification through.
+  const realNow = Date.now();
+  const clockSpy = Date.now;
+  Date.now = () => realNow;
+  try {
+    await assert.rejects(
+      () => svc.verifyToken(rotated),
+      (err) => err.code === 'TOKEN_INVALID'
+    );
+  } finally {
+    Date.now = clockSpy;
+  }
   // Once the window elapses, the next refresh observes the rotation.
   await new Promise((resolve) => setTimeout(resolve, 1100));
   const payload = await svc.verifyToken(rotated);

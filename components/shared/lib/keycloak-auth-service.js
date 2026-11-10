@@ -179,9 +179,13 @@ function createJwksCache(jwksUri, ttlMs = JWKS_CACHE_TTL) {
         throw err;
       }
       if (err && err.name === 'JWKSMultipleMatchingKeys') {
-        // A token that names no key id, against a key set holding several:
-        // the token's own ambiguity (the realm in scope — Keycloak — always
-        // publishes a key id).
+        // jose raises this when a key resolves to MORE THAN ONE candidate:
+        // a token that names no key id against a multi-key set, or a token
+        // whose kid appears twice in the published set (a misconfigured
+        // rotation). Either way the ambiguity is resolvable only by the
+        // caller — the token cannot be verified unambiguously, so it stays
+        // a token-side rejection. (The realm in scope — Keycloak — always
+        // publishes a key id, and never duplicates one.)
         throw err;
       }
       throw new TokenVerificationError(

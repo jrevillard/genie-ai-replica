@@ -118,9 +118,11 @@ const OKF_ENABLED = (process.env.OKF_ENABLED ?? '0').trim() === '1';
  * scopes) from a posture the client could not read (an unreachable upstream,
  * a garbled body).
  * @param {string} reason — 'parked' | 'caller_without_scope' |
- *   'malformed_response' | 'upstream_unreachable'
+ *   'malformed_response' | 'upstream_unreachable'. The default is the
+ *   fail-safe direction: a reason-less composition still reads as a posture
+ *   the client could NOT read (so it is warned about), never as a known one.
  */
-function legacyDefaultConfig(reason) {
+function legacyDefaultConfig(reason = 'upstream_unreachable') {
   return {
     config: { mode: 'legacy' },
     source: 'bff-fail-closed-default',
@@ -365,9 +367,12 @@ async function attemptUpstream(policy, bearerHeader, opts, correlationId) {
  *   was never tested: the attempt ran with the INITIATOR's bearer, so a
  *   joiner that sees its 401 runs its OWN attempt — outside the cache, where
  *   it can neither join another caller's attempt nor be joined by one.
- * - A composition that stamps an `expires_at` on itself (the last-known-good
- *   posture) is re-validated at SERVE time, so a window longer than the
- *   horizon cannot keep serving it.
+ * - A composition that stamps a `_bff_expires_at` on itself (the
+ *   last-known-good posture) is re-validated at SERVE time, so a window
+ *   longer than the horizon cannot keep serving it. The marker is namespaced:
+ *   it belongs to the BFF's own composition, never to the upstream's
+ *   read-model, so a future upstream field of the same name cannot be read
+ *   as a composition expiry.
  */
 async function resolveCached(kind, bearerHeader, policy, opts = {}) {
   const correlationId = opts.correlationId || nodeCrypto.randomUUID();
@@ -402,7 +407,7 @@ async function resolveCached(kind, bearerHeader, policy, opts = {}) {
       }
       throw err;
     }
-    if (value?.expires_at && Date.now() > value.expires_at) {
+    if (value?._bff_expires_at && Date.now() > value._bff_expires_at) {
       // The composition carried an expiry that passed while the entry sat
       // cached (a window longer than the horizon): drop the entry and
       // resolve again — the fresh attempt finds no trusted posture and
@@ -516,16 +521,16 @@ async function getRetrievalConfig(bearerHeader, opts = {}) {
         // The deployment-global posture survives the outage; everything
         // else is locally synthesized (fail-closed) and says so: the
         // source label marks the payload as the BFF's own last-known-good
-        // composition, not the upstream's. `expires_at` is when the POSTURE
-        // it carries stops being trusted — the cache re-validates it at
-        // serve time, so a window longer than the horizon cannot keep
+        // composition, not the upstream's. `_bff_expires_at` is when the
+        // POSTURE it carries stops being trusted — the cache re-validates it
+        // at serve time, so a window longer than the horizon cannot keep
         // serving it (#1683).
         return {
           value: {
             ...legacyDefaultConfig('upstream_unreachable'),
             config: { mode: lkg.config.mode },
             source: 'bff-last-known-good',
-            expires_at: lkg.captured_at + LKG_MAX_AGE_MS
+            _bff_expires_at: lkg.captured_at + LKG_MAX_AGE_MS
           }
         };
       }
@@ -582,7 +587,6 @@ module.exports = {
   getRetrievalConfig,
   getAuthorizedGraphs,
   OkfAuthzUnauthorizedError,
-  legacyDefaultConfig,
   isPostureUnknown,
   _resetCache,
   // Exposed for tests/diagnostics only — production code reads nothing here.
@@ -592,7 +596,6 @@ module.exports = {
     decodeJwtPayload,
     currentWindow,
     fetchUpstream, // exposed so the egress guard (wave 2) can be pinned by a test
-    modeIsDeclared,
     OKF_SERVER_URL,
     RETRIEVAL_CONFIG_TTL_MS,
     REQUEST_TIMEOUT_MS,

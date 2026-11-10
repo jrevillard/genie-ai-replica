@@ -460,8 +460,11 @@ describe('retrieval-config-client (Story 1.1)', () => {
       expect(degraded.config.mode).toBe('hybrid');
       expect(degraded.source).toBe('bff-last-known-good');
       // The composition carries when the posture it was built from stops
-      // being trusted — the cache re-validates it at serve time.
-      expect(degraded.expires_at).toBe(599000 + longClient._internals.LKG_MAX_AGE_MS);
+      // being trusted — the cache re-validates it at serve time. The marker
+      // is namespaced: it is the BFF's own, never an upstream read-model
+      // field of the same name.
+      expect(degraded._bff_expires_at).toBe(599000 + longClient._internals.LKG_MAX_AGE_MS);
+      expect(degraded.expires_at).toBeUndefined();
 
       nowMs = 899500; // SAME window, past the horizon (age 300500 > 300000)
       const afterHorizon = await longClient.getRetrievalConfig(bearer);

@@ -23,6 +23,7 @@
 const { test, expect } = require('@playwright/test');
 const { getAdminToken, SESSION_MINT_TIMEOUT_MS } = require('../helpers/auth');
 const { createUser, deleteUser } = require('../helpers/keycloak-admin');
+const { okfEnabled, okfParkedReason } = require('../helpers/venue-profile');
 const { pinLocale } = require('../helpers/locale');
 
 const REALM = process.env.KEYCLOAK_REALM || 'genie';
@@ -35,12 +36,25 @@ test.describe('the RAGAS guide explains the output, and a re-score is a tracked 
   // covers beforeAll — see SESSION_MINT_TIMEOUT_MS in helpers/auth.js.
   test.describe.configure({ timeout: SESSION_MINT_TIMEOUT_MS });
 
+  // The RAGAS panel lives in the OKF Studio's Testing Lab — an OKF surface.
+  // A deployment whose OKF pillar is parked does not render it, so this
+  // spec SKIPS WITH A REASON instead of failing on a surface that never
+  // appears (#1742). The reason is the venue's own profile, read from the
+  // runtime config the frontend itself reads.
+  test.beforeEach(async () => {
+    test.skip(!(await okfEnabled()), await okfParkedReason());
+  });
+
   let adminToken;
   let userId;
 
   test.beforeAll(async () => {
     // Minting can exceed the 60s beforeAll hook default — see SESSION_MINT_TIMEOUT_MS.
     test.setTimeout(SESSION_MINT_TIMEOUT_MS);
+
+    // The OKF pillar parked means every test below skips — and a skipped
+    // spec must leave no user behind in the venue's realm.
+    if (!(await okfEnabled())) return;
 
     adminToken = await getAdminToken();
     userId = await createUser(adminToken, REALM, {

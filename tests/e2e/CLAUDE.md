@@ -85,6 +85,8 @@ reference; do not duplicate or restate them here or in specs.
 | `*.spec.js`, `chatbot/`, `documents/`, `admin/`, `okf/` | Feature specs (Playwright) |
 | `epic1/`, `epic2/`, `epic3/` | Auth/session lifecycle specs (mirror the `docs/e2e-tests/` phases) |
 | `helpers/` | Shared auth/login, chat, documents, locale, Keycloak admin, cache-header and welcome helpers (helper unit specs live here too — e.g. `helpers/auth.spec.js`) |
+| `helpers/venue-profile.js` | What the venue actually exposes (OKF pillar, realms, identity providers) — the source of every runtime skip's reason |
+| `run/` | The local run: the runner script, the venue-name mapping and the failure path (their unit spec lives here too) |
 | `helpers/e2e-fixtures.js` | The venue fixture definitions (username, email, password, realm roles) |
 | `provision-e2e-fixtures.js` | Provisions those fixtures for a venue (CI e2e job and Phase 0 both run it) |
 | `fixtures/` | Fixed seed files for upload tests |
@@ -106,6 +108,36 @@ BASE_URL=https://localhost npx playwright test tests/e2e/<area>/ --project=chrom
 The specs log in through the browser (`loginViaUI`) — the realm refuses
 direct access grants, so a minted token gives an API call a token, not a
 page a session.
+
+## The executed set
+
+The suite has **no CI door** (operator decision, 2026-11-10: this suite gets
+no CI resources — it runs locally, regularly). The executed set is what the
+**local run** executes:
+
+```bash
+BASE_URL=https://genieai-forge.local:4443 tests/e2e/run/run-local-e2e.sh
+```
+
+It provisions the venue fixtures, runs the **whole `tests/e2e/` tree**,
+prints the outcome — every skipped spec with its reason — and files a
+`status::backlog` issue per failing spec file. The contract, the venue
+profile and the runtime skips: [`docs/e2e-tests/local-run.md`](../../docs/e2e-tests/local-run.md).
+
+The executed set is pinned by `tests/config-validator/`: the guard derives
+the run's invocation from the run script (never a second hand-maintained
+list) and requires it to cover **every** spec file in the tree. Adding a spec
+is free — the tree is the set; narrowing the invocation is what fails the
+guard.
+
+A spec that needs a surface the venue does not expose **skips with a
+reason** — see `helpers/venue-profile.js`. The reason is read from the
+venue, and a probe that cannot read the venue fails loudly: an unreadable
+venue is not an absent surface.
+
+The `e2e:playwright` job still sits in `.gitlab-ci.yml` and its rule still
+requires a merge train. The file is frozen and the job does not start — it
+is not the executed set.
 
 ## Fixtures
 
@@ -132,6 +164,8 @@ default-roles composite or a group) — and names the cause.
 
 `e2e:playwright` runs on **merge trains** and scheduled pipelines only
 (`CI_MERGE_REQUEST_EVENT_TYPE == "merge_train"`), so a plain MR pipeline
-does not execute the Playwright stage. The executed set is pinned by
-`tests/config-validator/` — adding a spec directory to the invocation
-means adding it there too.
+does not execute the Playwright stage — and this instance never creates a
+merge train, so the stage does not run at all. The suite's CI resources were
+withdrawn by the operator's decision of 2026-11-10; the executed set is the
+local run's (see *The executed set* above), and that is what
+`tests/config-validator/` pins.

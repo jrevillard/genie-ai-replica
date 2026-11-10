@@ -173,6 +173,12 @@ async function waitForBotResponse(page, options = {}) {
           // a helper reading "state.conversation.messages" threw on every
           // poll (the three chat specs went red the day it landed).
           const open = store && store.getters ? store.getters['conversation/openConversation'] : null;
+          // A booted app without the getter is a broken store contract,
+          // not a slow answer: fail now with the path in the message
+          // instead of polling to a cause-less timeout.
+          if (store && !open) {
+            throw new Error('conversation/openConversation getter missing or returned nothing');
+          }
           const messages = open && open.messages ? open.messages : [];
           const bots = messages.filter((m) => m.sender === 'bot');
           const last = bots[bots.length - 1];
@@ -281,7 +287,7 @@ const CORS_HEADERS = { 'access-control-allow-origin': '*' };
  * one-file edit.
  */
 function sseFulfill(route, body) {
-  return route.fulfill({ status, contentType: 'text/event-stream', headers: CORS_HEADERS, body });
+  return route.fulfill({ status: 200, contentType: 'text/event-stream', headers: CORS_HEADERS, body });
 }
 
 /**

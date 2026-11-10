@@ -5,6 +5,7 @@ const {
   sendMessage,
   waitForBotResponse,
   getLastBotMessage,
+  mockChatStream,
   mockStreamError,
   NAV_STATUS,
   STREAM_ROUTE,
@@ -62,12 +63,16 @@ test.describe('RAG error handling', () => {
     const textarea = page.locator('[data-testid="composer-field"]');
     await expect(textarea).toBeVisible({ timeout: 5000 });
 
-    // Remove the intercept so subsequent requests go through normally
+    // Replace the failing mock with an answering one: the retry probe
+    // proves the app RECOVERS from the error state, which is a property
+    // of the app — whether the real RAG pipeline answers is not, and a
+    // live-backend dependency here would fail the spec on a loaded venue
+    // (tests/e2e/CLAUDE.md: fixed, deterministic seed). The probe is only
+    // a probe if the retry actually ANSWERS: a second turn that silently
+    // fails must fail this test too — hence the answer assertion below.
     await page.unroute(STREAM_ROUTE);
+    await mockChatStream(page, ['Recovered answer after the error.']);
 
-    // Send another message — should work now (retry probe). The
-    // probe is only a probe if the retry actually ANSWERS: a second
-    // turn that silently fails must fail this test too.
     await sendMessage(page, 'Second attempt should work');
     await waitForBotResponse(page, { timeout: 120000 });
     expect(await getLastBotMessage(page), 'the retry must produce an answer').not.toBe('');

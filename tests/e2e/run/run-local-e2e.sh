@@ -70,6 +70,13 @@ if [ -n "${E2E_VENUE_IP:-}" ]; then
   echo "venue mapping: $E2E_VENUE_HOST -> $E2E_VENUE_IP"
 fi
 
+# --- the runner's pre-flight -------------------------------------------------
+# Can this machine drive a browser against the venue at all? A broken runner
+# and a broken product look the same in a report, and only one of them is a
+# finding. The pre-flight stops the run before it touches the venue.
+echo "pre-flight"
+node tests/e2e/run/preflight.js
+
 # --- the venue fixtures ------------------------------------------------------
 echo "provisioning the venue fixtures"
 node tests/e2e/provision-e2e-fixtures.js

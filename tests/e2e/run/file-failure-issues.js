@@ -112,26 +112,57 @@ function glab(args) {
 }
 
 /**
- * The open issue with this exact title, or null. The tracker search is
- * fuzzy; the title match is exact, so a similar issue from another wave is
- * not mistaken for this one.
+ * The project's open issues, fetched ONCE.
+ *
+ * The tracker rate-limits its search endpoint hard, and a run with thirty
+ * failing spec files would hit that limit — the failure path must not die
+ * of its own bookkeeping (it would leave the failures unfiled, which is the
+ * silence this path exists to end). The issue LIST is a plain paginated
+ * read, and the matching happens locally: an issue that already tracks a
+ * spec file mentions the file's repository path in its title or in its
+ * description.
  */
-function findOpenIssue(title) {
-  let issues;
-  try {
-    issues = JSON.parse(
-      glab([`projects/${GITLAB_PROJECT_ID}/issues?state=opened&search=${encodeURIComponent(title)}&per_page=50`])
-    );
-  } catch (e) {
-    fail(`the tracker could not be read: ${e.message}`);
+function fetchOpenIssues() {
+  const issues = [];
+  for (let page = 1; page <= 20; page += 1) {
+    let batch;
+    try {
+      batch = JSON.parse(
+        glab([`projects/${GITLAB_PROJECT_ID}/issues?state=opened&per_page=100&page=${page}`])
+      );
+    } catch (e) {
+      fail(`the tracker could not be read: ${e.message}`);
+    }
+    if (!Array.isArray(batch)) fail('the tracker answered with something that is not an issue list');
+    issues.push(...batch);
+    if (batch.length < 100) break;
   }
-  if (!Array.isArray(issues)) return null;
-  return issues.find((issue) => issue.title === title) || null;
+  return issues;
 }
 
-function fileIssue(file, failures, venue, runStamp) {
-  const title = `test(e2e): ${file} is red on the local run`;
-  const body = [
+/**
+ * The open issue that already tracks this spec file, or null.
+ *
+ * An issue that already tracks the failure must NOT be duplicated: the run
+ * comments on it instead, and a spec file nobody tracks yet gets its own
+ * issue. The file's own dedicated issue (the one this script files, whose
+ * title carries the path) wins over an umbrella that merely mentions the
+ * file.
+ */
+function findTrackedIssue(file, openIssues) {
+  const matches = openIssues.filter((issue) =>
+    `${issue.title}\n${issue.description || ''}`.includes(file)
+  );
+  if (matches.length === 0) return null;
+  const dedicated = matches.find((issue) => issue.title.includes(file));
+  return dedicated || matches[0];
+}
+
+/**
+ * The issue body of a spec file nobody tracks yet.
+ */
+function issueBody(file, failures, venue, runStamp) {
+  return [
     'Filed by the local e2e run (`tests/e2e/run/run-local-e2e.sh`).',
     '',
     `- venue: \`${venue}\``,
@@ -155,26 +186,29 @@ function fileIssue(file, failures, venue, runStamp) {
     `BASE_URL=${venue} tests/e2e/run/run-local-e2e.sh`,
     '```',
     '',
-    `The full log of the run is in the JSON report (\`reports/playwright-report.json\`) and the`,
+    'The full log of the run is in the JSON report (`reports/playwright-report.json`) and the',
     `JUnit report (\`${path.relative(REPO_ROOT, REPORT_PATH)}\`).`,
   ].join('\n');
+}
 
-  const existing = findOpenIssue(title);
-  if (existing) {
-    const comment = [
-      `The local e2e run is still red on this spec file (${runStamp}, venue \`${venue}\`).`,
+/**
+ * The comment posted on an issue that already tracks the failure.
+ */
+function commentBody(files, venue, runStamp) {
+  return [
+    `The local e2e run is still red on ${files.length} spec file(s) this issue covers ` +
+      `(${runStamp}, venue \`${venue}\`).`,
+    '',
+    ...files.flatMap((entry) => [
+      `### ${entry.file}`,
       '',
-      ...failures.flatMap((failure) => [`**${failure.title}**`, '```', failure.error, '```', '']),
-    ].join('\n');
-    try {
-      glab(['-X', 'POST', `projects/${GITLAB_PROJECT_ID}/issues/${existing.iid}/notes`, '-f', `body=${comment}`]);
-    } catch (e) {
-      fail(`the comment on issue #${existing.iid} could not be posted: ${e.message}`);
-    }
-    process.stdout.write(`  #${existing.iid} (existing) ${title}\n`);
-    return { iid: existing.iid, created: false };
-  }
+      ...entry.failures.flatMap((failure) => [`**${failure.title}**`, '```', failure.error, '```', '']),
+    ]),
+  ].join('\n');
+}
 
+function createIssue(file, failures, venue, runStamp) {
+  const title = `test(e2e): ${file} is red on the local run`;
   try {
     const created = JSON.parse(
       glab([
@@ -184,16 +218,31 @@ function fileIssue(file, failures, venue, runStamp) {
         '-f',
         `title=${title}`,
         '-f',
-        `description=${body}`,
+        `description=${issueBody(file, failures, venue, runStamp)}`,
         '-f',
         `labels=${LABELS.join(',')}`,
       ])
     );
     process.stdout.write(`  #${created.iid} (created) ${title}\n`);
-    return { iid: created.iid, created: true };
+    return created.iid;
   } catch (e) {
     fail(`the issue for ${file} could not be filed: ${e.message}`);
   }
+}
+
+function commentOnIssue(issue, files, venue, runStamp) {
+  try {
+    glab([
+      '-X',
+      'POST',
+      `projects/${GITLAB_PROJECT_ID}/issues/${issue.iid}/notes`,
+      '-f',
+      `body=${commentBody(files, venue, runStamp)}`,
+    ]);
+  } catch (e) {
+    fail(`the comment on issue #${issue.iid} could not be posted: ${e.message}`);
+  }
+  process.stdout.write(`  #${issue.iid} (commented) ${issue.title}\n`);
 }
 
 function main() {
@@ -203,8 +252,19 @@ function main() {
   const runStamp = report.stats && report.stats.startTime ? report.stats.startTime : new Date().toISOString();
 
   const tests = collectTests(report.suites);
+  // The report's status vocabulary is expected | unexpected | flaky | skipped:
+  // a test that passed is 'expected', and ONLY 'unexpected' is a failure.
+  // Reading anything that is not 'passed' as a failure files an issue for
+  // every green spec — the whole point of the path is that the issues it
+  // files mean something.
   const skipped = tests.filter((entry) => entry.test.status === 'skipped');
-  const failed = tests.filter((entry) => entry.test.status !== 'passed' && entry.test.status !== 'skipped');
+  const failed = tests.filter((entry) => entry.test.status === 'unexpected');
+
+  // A run that executed NOTHING is not a green run — it is a run that did
+  // not happen. The suite's own rule: a green must never mean "nothing ran".
+  if (tests.length === 0) {
+    fail('the run executed no test — a green that means "nothing ran" is not a result');
+  }
 
   const stats = report.stats || {};
   process.stdout.write(`\ne2e run: ${venue} (${runStamp})\n`);
@@ -245,8 +305,23 @@ function main() {
   }
 
   process.stdout.write('\nfiled:\n');
+  // The failing files are grouped by the issue that already tracks them, so
+  // one umbrella issue receives ONE comment for the whole run — not one per
+  // file. A file nobody tracks yet gets its own issue.
+  const openIssues = fetchOpenIssues();
+  const byIssue = new Map();
   for (const [file, failures] of byFile) {
-    fileIssue(file, failures, venue, runStamp);
+    const tracked = findTrackedIssue(file, openIssues);
+    if (!tracked) {
+      createIssue(file, failures, venue, runStamp);
+      continue;
+    }
+    const entry = byIssue.get(tracked.iid) || { issue: tracked, files: [] };
+    entry.files.push({ file, failures });
+    byIssue.set(tracked.iid, entry);
+  }
+  for (const { issue, files } of byIssue.values()) {
+    commentOnIssue(issue, files, venue, runStamp);
   }
 }
 

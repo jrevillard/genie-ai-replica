@@ -56,6 +56,33 @@ const JS_EXT_SRC = '[cm]?[jt]sx?';
 const EXECUTED_SPEC_RE = new RegExp('\\.(?:spec|test)\\.' + JS_EXT_SRC + '$');
 const WALKABLE_FILE_RE = new RegExp('\\.(?:' + JS_EXT_SRC + ')$');
 
+// The e2e tree root. Module scope because two guards read it: the CI
+// derivation below (the dormant job's own invocation) and the local-run
+// guard that pins the executed set (#1736).
+const TESTS_E2E_ROOT = 'tests/e2e';
+
+// How an invocation target selects a test file — EXACTLY as the runner
+// selects it. Every Playwright CLI arg becomes an UNANCHORED case-
+// insensitive regex (forceRegExp in the runner's util) tested against the
+// test file path: the file executes whenever its path CONTAINS the arg's
+// text. No anchors, no escaping — the arg is the regex. So the canonical
+// `X/**/*` entry (a trailing-slash dir arg, whose slash the canonical
+// form folded into the glob) selects every path CONTAINING `X/` — the
+// unfold below restores that slash, which IS the directory boundary a
+// plain prefix match would lose (…/chatbot/ does not match
+// …/chatbot-v2/…) — and an exact entry selects every path containing it
+// verbatim: a basename sibling does NOT contain the arg text and is not
+// executed, while a nested tail-duplicate
+// (…/helpers/tests/e2e/theme-runtime-config.spec.js) does and is.
+// Modeling the containment instead of assuming "exact file" keeps the
+// executed set never narrower than the runner's. The `g` flag the runner
+// adds is dead weight for a boolean .test and carries a lastIndex trap on
+// a precompiled regex — 'i' alone matches identically.
+const scanTargets = (files, executedGlobs) => {
+  const matchers = executedGlobs.map((entry) => new RegExp(entry.replace(/\/\*\*\/\*$/, '/'), 'i'));
+  return files.filter((f) => EXECUTED_SPEC_RE.test(f)).filter((f) => matchers.some((re) => re.test(f)));
+};
+
 // The module-path matcher the import-path pin runs over spec sources,
 // built once: the basename is matched (not the 'helpers/' prefix, and
 // not a longer module name merely ending in the same fragment), the
@@ -2376,7 +2403,12 @@ describe('e2e merge-train changes filters (#1264)', () => {
   // Executed paths are derived from the `npx playwright test` invocation
   // line(s) in .e2e_web_base rather than copied into a second hand-maintained
   // list — a hardcoded list would inherit the same drift this guard exists to
-  // catch. The derivation is anchored to that base's section so an invocation
+  // catch. This is the CI JOB's own invocation: the suite has no CI door
+  // (operator decision, 2026-11-10 — no CI resources for this suite), so the
+  // EXECUTED SET is the local run's, pinned by the guard below (#1736). What
+  // this block keeps honest is the dormant job's wiring: it must stay
+  // internally consistent for the day the suite gets a door again.
+  // The derivation is anchored to that base's section so an invocation
   // added elsewhere in the file cannot silently redirect it, and it consumes
   // EVERY invocation the base carries (a second script line's targets reach
   // the anchor check instead of silently escaping it). The npx spelling is
@@ -2423,7 +2455,7 @@ describe('e2e merge-train changes filters (#1264)', () => {
   // (the fixtures dir). Anything else a spec consumes is not derived —
   // including joins anchored on __filename or import.meta.url and a join
   // resolving to the tests/e2e root itself; none exist in the tree.
-  const TESTS_E2E_ROOT = 'tests/e2e';
+  // (TESTS_E2E_ROOT is at module scope — the local-run guard reads it too.)
 
   // Containment + existence + file reads in one seam. Both derivation shapes
   // drop anything that leaves tests/e2e (a traversal, a cross-tree import) or
@@ -2683,27 +2715,7 @@ describe('e2e merge-train changes filters (#1264)', () => {
       executedGlobs
     );
 
-  // How an invocation target selects a test file — EXACTLY as the runner
-  // selects it. Every Playwright CLI arg becomes an UNANCHORED case-
-  // insensitive regex (forceRegExp in the runner's util) tested against the
-  // test file path: the file executes whenever its path CONTAINS the arg's
-  // text. No anchors, no escaping — the arg is the regex. So the canonical
-  // `X/**/*` entry (a trailing-slash dir arg, whose slash the canonical
-  // form folded into the glob) selects every path CONTAINING `X/` — the
-  // unfold below restores that slash, which IS the directory boundary a
-  // plain prefix match would lose (…/chatbot/ does not match
-  // …/chatbot-v2/…) — and an exact entry selects every path containing it
-  // verbatim: a basename sibling does NOT contain the arg text and is not
-  // executed, while a nested tail-duplicate
-  // (…/helpers/tests/e2e/theme-runtime-config.spec.js) does and is.
-  // Modeling the containment instead of assuming "exact file" keeps the
-  // executed set never narrower than the runner's. The `g` flag the runner
-  // adds is dead weight for a boolean .test and carries a lastIndex trap on
-  // a precompiled regex — 'i' alone matches identically.
-  const scanTargets = (files, executedGlobs) => {
-    const matchers = executedGlobs.map((entry) => new RegExp(entry.replace(/\/\*\*\/\*$/, '/'), 'i'));
-    return files.filter((f) => EXECUTED_SPEC_RE.test(f)).filter((f) => matchers.some((re) => re.test(f)));
-  };
+  // (scanTargets is at module scope — the local-run guard below reads it too.)
 
   test('executed and consumed paths are covered by the shared anchor', () => {
     const anchorPaths = filters.get(ANCHOR);
@@ -2735,6 +2747,7 @@ describe('e2e merge-train changes filters (#1264)', () => {
       'tests/e2e/helpers/auth.spec.js',
       'tests/e2e/helpers/keycloak-admin.spec.js',
       'tests/e2e/helpers/route.spec.js',
+      'tests/e2e/helpers/venue-profile.spec.js',
       'tests/e2e/theme-runtime-config.spec.js'
     ]);
   });
@@ -3336,6 +3349,114 @@ describe('e2e merge-train changes filters (#1264)', () => {
   // every excluded directory.
   test('the anchor does not cover the excluded okf specs', () => {
     expect(isCovered(filters.get(ANCHOR), 'tests/e2e/okf/**/*')).toBe(false);
+  });
+});
+
+// --- the local e2e run defines the executed set (#1736) ---
+// The Playwright suite has no CI door: the operator's decision of
+// 2026-11-10 gives this suite NO CI resources — no CI stage, no per-MR
+// e2e, no repaired monthly schedule — and the suite runs LOCALLY,
+// regularly. The executed set is therefore no longer "what a CI job
+// invokes": it is what the LOCAL RUN executes, and it has to be pinned
+// here, or the guard above keeps pinning a job nobody runs.
+//
+// What this guard pins:
+//   - the local run invokes the WHOLE tests/e2e/ tree, so no spec is
+//     "not executed by construction" — the gap #1740 measured (the
+//     epic1/epic2/epic3/okf directories and the root-level specs sat
+//     outside the CI invocation, and the repo said nothing about it);
+//   - the invocation is DERIVED from the run script, never copied into a
+//     second hand-maintained list (the rule the CI derivation follows);
+//   - the run provisions the venue fixtures, and its failure path files a
+//     status::backlog issue — a red run must not stay a silent red.
+describe('the local e2e run defines the executed set (#1736)', () => {
+  const RUN_SCRIPT = path.join(ROOT, 'tests/e2e/run/run-local-e2e.sh');
+  const FAILURE_PATH = path.join(ROOT, 'tests/e2e/run/file-failure-issues.js');
+  let runScript;
+  let executedGlobs;
+  let specFiles;
+  let invocationFlags;
+
+  beforeAll(() => {
+    runScript = fs.readFileSync(RUN_SCRIPT, 'utf-8');
+    const invocations = runScript.match(/npx playwright test ([^\n]+)/g) || [];
+    // Exactly one invocation: a second one would execute a set this guard
+    // does not pin.
+    expect(invocations.length).toBe(1);
+    invocationFlags = invocations.map((invocation) =>
+      invocation
+        .replace(/^npx playwright test /, '')
+        .split(/\s+/)
+        .filter((arg) => arg.startsWith('-'))
+    );
+    let targets = invocations.flatMap((line) =>
+      line
+        .replace(/^npx playwright test /, '')
+        .split(/\s+/)
+        .filter((arg) => arg.startsWith('tests/e2e'))
+        .map((arg) => (arg.endsWith('/') ? `${arg}**/*` : arg))
+    );
+    targets = [...new Set(targets)].sort();
+    executedGlobs = targets;
+    specFiles = fs
+      .readdirSync(path.join(ROOT, TESTS_E2E_ROOT), { recursive: true })
+      .map((f) => `${TESTS_E2E_ROOT}/${f.split(path.sep).join('/')}`)
+      // Playwright excludes **/node_modules/** from its discovery, so the
+      // inventory excludes it too: counting a vendored spec as "executed"
+      // would over-claim what the runner runs.
+      .filter((f) => !f.includes('/node_modules/'))
+      .filter((f) => EXECUTED_SPEC_RE.test(f));
+  });
+
+  // Any flag other than the project selector would shrink the executed set
+  // without the path derivation noticing it (--grep, --shard, a reporter
+  // that drops results). Its own test, so a violation names itself instead
+  // of failing the whole describe.
+  test('the invocation carries no flag that filters the executed set', () => {
+    for (const flags of invocationFlags) {
+      expect(flags.filter((flag) => !flag.startsWith('--project='))).toEqual([]);
+    }
+  });
+
+  // The assertion is about the SET the invocation selects, not about the
+  // spelling of the invocation: `tests/e2e/` and `tests/e2e` select the
+  // same files, and a guard that breaks on the spelling sends the author
+  // hunting for an executed-set change that does not exist.
+  test('the run executes every spec under tests/e2e/ — the whole tree', () => {
+    const notExecuted = specFiles.filter((f) => scanTargets([f], executedGlobs).length === 0);
+    expect(notExecuted).toEqual([]);
+  });
+
+  test('the run provisions the venue fixtures BEFORE the suite', () => {
+    // The ORDER is the contract: a suite that runs before the fixtures
+    // exist logs in as nobody and fails every spec.
+    const provisioning = runScript.indexOf('tests/e2e/provision-e2e-fixtures.js');
+    const suite = runScript.indexOf('npx playwright test');
+    expect(provisioning).toBeGreaterThan(-1);
+    expect(suite).toBeGreaterThan(-1);
+    expect(provisioning).toBeLessThan(suite);
+  });
+
+  test('the failure path files a status::backlog issue', () => {
+    const failurePath = fs.readFileSync(FAILURE_PATH, 'utf-8');
+    // The label set the path files with — PARSED, not grepped: the string
+    // also appears in the module's comment, and a guard that a comment
+    // satisfies does not guard anything.
+    const labels = failurePath.match(/const LABELS = \[([^\]]*)\]/);
+    expect(labels).not.toBeNull();
+    expect(labels[1]).toContain("'status::backlog'");
+  });
+
+  test('the runner, the failure path and the config agree on the report path', () => {
+    const config = fs.readFileSync(path.join(ROOT, 'playwright.config.js'), 'utf-8');
+    const failurePath = fs.readFileSync(FAILURE_PATH, 'utf-8');
+    // Three files spell the one report path — the config declares it, the
+    // runner clears/moves it, the failure path defaults to it. A rename in
+    // one and not the others mixes runs' reports (the staleness check
+    // exists for exactly that), so the agreement itself is the contract.
+    for (const source of [config, runScript, failurePath]) {
+      expect(source).toContain('playwright-report.json');
+    }
   });
 });
 

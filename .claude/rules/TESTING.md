@@ -194,7 +194,7 @@ GitLab CI pipeline (`.gitlab-ci.yml`) runs on every merge request with stages in
 3. **Config** — Environment-variable coverage (`config:validate`), shell-syntax gate over the `.gitlab-ci.yml` script blocks (same job — `bash -n` on every embedded block, #1306/#1322), and dependency-lock freshness (`verify:overlay-locks:retriever` / `verify:overlay-locks:reranker`). Runs before build so cheap validation fails fast.
 4. **Build** — publish candidate images to GitLab Container Registry (`tmp/` namespace)
 5. **Scan** — Trivy container scanning of candidate images (advisory + dashboard)
-6. **E2E** — Playwright tests against deployed infrastructure (scheduled only)
+6. **E2E** — the Playwright stage. It has no CI resources (operator decision, 2026-11-10): the suite runs **locally** — `tests/e2e/run/run-local-e2e.sh`, over the whole `tests/e2e/` tree (`docs/e2e-tests/local-run.md`). The stage's rule still requires a merge train this instance never creates.
 7. **Promote** — retag tested digests to deployable tags (main/tags only)
 
 All test runners produce JUnit XML reports as CI artifacts. Pipeline blocks MR on any mandatory stage failure.

@@ -93,6 +93,13 @@ Multi-phase procedure in `docs/e2e-tests/`:
 
 **Important**: Phase K mutates realm settings. Cleanup steps K.5+K.6 MUST run after Phase K before proceeding to Phase L.
 
+**The suite has no CI door** (operator decision, 2026-11-10: no CI resources
+for the Playwright suite — it runs locally, regularly). The executed set is
+the local run's: `tests/e2e/run/run-local-e2e.sh` runs the whole `tests/e2e/`
+tree against a deployed stack, prints the outcome and files a
+`status::backlog` issue per failing spec file →
+`docs/e2e-tests/local-run.md`.
+
 ### Demo Data Seeding
 
 Populate a fresh demo instance (knowledge hierarchy + docs corpus +

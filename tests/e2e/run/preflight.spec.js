@@ -1,0 +1,46 @@
+// Copyright (C) 2026 International Telecommunication Union (ITU)
+// SPDX-License-Identifier: Apache-2.0
+const { test, expect } = require('@playwright/test');
+const { classifyVenueStatus } = require('./preflight');
+
+/**
+ * Unit spec for the pre-flight's diagnosis.
+ *
+ * The message the pre-flight prints is the operator's FIRST clue: it must
+ * say which finding they are looking at — no answer at all, a 5xx (the
+ * deployment is down), or a 4xx (the edge refused). The classification is
+ * a pure function, so it is pinned here without a browser and without a
+ * venue.
+ *
+ * Requiring the module must not START the pre-flight — the file runs its
+ * body only when it is the entry point (a spec that required it would
+ * otherwise launch a Chromium).
+ */
+const VENUE = 'https://venue.example:4443';
+
+test.describe('the pre-flight names the finding the venue status carries', () => {
+  test('no answer at all is its own finding', () => {
+    const message = classifyVenueStatus(0, VENUE);
+    expect(message).toContain('no response arrived');
+    // It must not claim the venue answered: it did not.
+    expect(message).not.toContain('answered HTTP 0');
+  });
+
+  test('a 5xx is the deployment being down', () => {
+    const message = classifyVenueStatus(503, VENUE);
+    expect(message).toContain('the deployment is down');
+    expect(message).toContain('HTTP 503');
+  });
+
+  test('a 4xx is the edge refusing — and both of its causes are named', () => {
+    const message = classifyVenueStatus(404, VENUE);
+    expect(message).toContain("the address is not the app's edge");
+    expect(message).toContain('refuses an anonymous request');
+    expect(message).toContain('HTTP 404');
+  });
+
+  test('the venue address is in the message', () => {
+    expect(classifyVenueStatus(404, VENUE)).toContain(VENUE);
+    expect(classifyVenueStatus(0, VENUE)).toContain(VENUE);
+  });
+});

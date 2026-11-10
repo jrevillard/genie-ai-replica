@@ -40,7 +40,29 @@ function remedy(what) {
   return lines.join('\n');
 }
 
-(async () => {
+/**
+ * What the venue's answer at the root MEANS.
+ *
+ * THREE findings, not one: no answer at all, a 5xx (the deployment is
+ * down), and a 4xx (the edge refused — wrong address, or a realm that
+ * refuses an anonymous request: a broken realm answers 4xx at the edge
+ * too). The message is the operator's first clue, so each finding says
+ * itself.
+ *
+ * @param {number} status - the status the root answered with (0 = none)
+ * @param {string} venue - the address the run pointed at
+ * @returns {string} the diagnosis, in the operator's words
+ */
+function classifyVenueStatus(status, venue) {
+  if (status === 0) return `no response arrived at ${venue} — the venue did not answer at all.`;
+  if (status >= 500) return `the venue answered HTTP ${status} at ${venue} — the deployment is down.`;
+  return (
+    `the venue answered HTTP ${status} at ${venue} — the address is not the app's edge, or the ` +
+    'venue refuses an anonymous request to it (a broken realm answers 4xx at the edge too).'
+  );
+}
+
+async function main() {
   const mapping = venueMapping();
   process.stdout.write(
     `pre-flight: venue ${BASE_URL}` + (mapping ? ` (mapped ${mapping.host} -> ${mapping.ip})` : '') + '\n'
@@ -60,29 +82,14 @@ function remedy(what) {
     const page = await context.newPage();
     const response = await page.goto(BASE_URL, { waitUntil: 'domcontentloaded', timeout: 45000 });
     const status = response ? response.status() : 0;
-    // ANY 4xx or 5xx at the venue ROOT stops the run: it is not a surface
-    // the app serves to an anonymous browser. The two statuses are
-    // DIFFERENT findings — a 4xx is the edge refusing (wrong address, or
-    // a realm that refuses an anonymous request: a broken realm answers
-    // 4xx at the edge too), a 5xx is the deployment down. Letting the run
-    // proceed would fail every spec on navigation and the failure path
+    // NO answer, a 4xx or a 5xx at the venue ROOT stops the run: it is not
+    // a surface the app serves to an anonymous browser, and each of the
+    // three is a DIFFERENT finding (see classifyVenueStatus). Letting the
+    // run proceed would fail every spec on navigation and the failure path
     // would file one issue per spec file for a RUNNER-CONFIG cause — the
     // flood this pre-flight exists to stop.
     if (!status || status >= 400) {
-      // Three findings, not one: NO response at all, a 5xx (the deployment
-      // is down), and a 4xx (the edge refused — wrong address, or a realm
-      // that refuses an anonymous request: a broken realm answers 4xx at
-      // the edge too).
-      if (status === 0) {
-        failure = `no response arrived at ${BASE_URL} — the venue did not answer at all.`;
-      } else {
-        const cause =
-          status >= 500
-            ? 'the deployment is down'
-            : "the address is not the app's edge, or the venue refuses an anonymous request to " +
-              'it (a broken realm answers 4xx at the edge too)';
-        failure = `the venue answered HTTP ${status} at ${BASE_URL} — ${cause}.`;
-      }
+      failure = classifyVenueStatus(status, BASE_URL);
     } else {
       process.stdout.write(`pre-flight: the browser reached the venue (HTTP ${status}).\n`);
     }
@@ -96,4 +103,15 @@ function remedy(what) {
     process.stderr.write(`pre-flight: ${failure}\n`);
     process.exit(1);
   }
-})();
+}
+
+// The pre-flight RUNS when it is the entry point — and only then: the
+// diagnosis below is a pure function, and its spec must be able to read it
+// without a browser. The run script and the failure path both invoke this
+// file as a process (`node tests/e2e/run/preflight.js`), so the entry point
+// is the only way it starts.
+if (require.main === module) {
+  main();
+}
+
+module.exports = { classifyVenueStatus };

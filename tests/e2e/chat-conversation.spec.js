@@ -411,15 +411,10 @@ test.describe('Conversation — contrast', () => {
         const d = x.getImageData(0, 0, 1, 1).data;
         return [d[0], d[1], d[2]];
       };
-      const cs = (el) => el.style.cssText;
       const pick = (sel, prop) => {
         const el = document.querySelector(sel);
         return el ? getComputedStyle(el)[prop] : null;
       };
-      // The warning sits on the card's surface, not on the page background.
-      const warn = document.querySelector('[data-testid="chat-message-bot"] [data-testid="answer-warning"]');
-      const card = warn ? warn.closest('[data-testid="answer-card"]') : null;
-      const initials = document.querySelector('[data-testid="message-avatar-initials"]');
       return {
         warnColor: rgb(pick('[data-testid="chat-message-bot"] [data-testid="answer-warning"]', 'color')),
         warnBg: rgb(pick('[data-testid="chat-message-bot"] [data-testid="answer-warning"]', 'backgroundColor')),

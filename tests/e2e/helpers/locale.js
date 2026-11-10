@@ -20,7 +20,7 @@ async function pinLocale(context, locale = 'en') {
   await context.addInitScript((loc) => {
     try {
       window.localStorage.setItem('userLocale', loc);
-    } catch (e) {
+    } catch {
       // A browser context with storage disabled — the app falls back to
       // navigator.language, which the context's locale option also pins.
     }

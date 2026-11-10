@@ -425,18 +425,20 @@ async function createUser(adminToken, realm, userData) {
           // an expired admin token.
           throw new Error(
             `${err.message} — the create answered 409, but the email-ownership probe for ${email} ` +
-              `could not run (HTTP ${probeErr.httpStatus})`
+              `could not run (HTTP ${probeErr.httpStatus})`,
+            { cause: probeErr }
           );
         }
         throw new Error(
           `${err.message} — the create answered 409, but the email-ownership probe for ${email} ` +
-            `could not run: ${probeErr.message}`
+            `could not run: ${probeErr.message}`,
+          { cause: probeErr }
         );
       }
       if (owners.length > 0) {
-        throw new Error(EMAIL_CONFLICT_VERDICT(err.message, owners[0].username, email));
+        throw new Error(EMAIL_CONFLICT_VERDICT(err.message, owners[0].username, email), { cause: err });
       }
-      throw new Error(ACCOUNT_VANISHED_VERDICT(err.message, username, email));
+      throw new Error(ACCOUNT_VANISHED_VERDICT(err.message, username, email), { cause: err });
     }
     throw err;
   }
@@ -568,7 +570,8 @@ async function convergeUser(adminToken, realm, userData) {
           // transport break: retrying it would only burn the budget.
           throw new Error(
             `${err.message} — the create answered 409, but the email-ownership probe for ${email} ` +
-              `could not run: ${probeErr.message}`
+              `could not run: ${probeErr.message}`,
+            { cause: probeErr }
           );
         }
         // A transport-level failure of the probe is transient, exactly like
@@ -579,9 +582,9 @@ async function convergeUser(adminToken, realm, userData) {
         throw transientError(`${probeErr.message} (while running the email-ownership probe of ${email})`);
       }
       if (owners.length > 0) {
-        throw new Error(EMAIL_CONFLICT_VERDICT(err.message, owners[0].username, email));
+        throw new Error(EMAIL_CONFLICT_VERDICT(err.message, owners[0].username, email), { cause: err });
       }
-      throw new Error(ACCOUNT_VANISHED_VERDICT(err.message, username, email));
+      throw new Error(ACCOUNT_VANISHED_VERDICT(err.message, username, email), { cause: err });
     }
     throw err;
   }
@@ -665,12 +668,10 @@ async function convergeUser(adminToken, realm, userData) {
  */
 async function ensureUser(adminToken, realm, userData) {
   const deadline = Date.now() + TRANSIENT_RETRY_BUDGET_MS;
-  let lastError;
   for (let attempt = 1; ; attempt++) {
     try {
       return await convergeUser(adminToken, realm, userData);
     } catch (err) {
-      lastError = err;
       // A non-transient error is a real failure: it propagates at once.
       if (!err.transient) throw err;
       // The budget expired while Keycloak kept answering transiently:
@@ -678,7 +679,8 @@ async function ensureUser(adminToken, realm, userData) {
       if (Date.now() >= deadline) {
         throw new Error(
           `Keycloak kept answering transiently for ${TRANSIENT_RETRY_BUDGET_MS}ms while ` +
-            `provisioning ${userData.username}: ${err.message}`
+            `provisioning ${userData.username}: ${err.message}`,
+          { cause: err }
         );
       }
       // Back off between attempts: the pause grows so a struggling

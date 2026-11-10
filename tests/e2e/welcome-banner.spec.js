@@ -372,7 +372,7 @@ async function wordmarkContrast(page) {
 
   return await page.evaluate(
     async ({ a, b, hk, hw, wcag }) => {
-      const { lum, contrastRatio } = new Function(wcag)();
+      const { contrastRatio } = new Function(wcag)();
       const load = (b64) =>
         new Promise((resolve, reject) => {
           const img = new Image();
@@ -985,7 +985,7 @@ async function subtitleContrast(page) {
 
   return await page.evaluate(
     async ({ a, b, geo, coverageFloor, minSpan, wcag }) => {
-      const { lum, contrastRatio } = new Function(wcag)();
+      const { contrastRatio } = new Function(wcag)();
       const load = (b64) =>
         new Promise((resolve, reject) => {
           const img = new Image();

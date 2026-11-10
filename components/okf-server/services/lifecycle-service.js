@@ -171,13 +171,13 @@ async function buildingBlocker(repo) {
 async function sourcesBusyBlocker(repo) {
   const sources = (repo && Array.isArray(repo.source_documents) && repo.source_documents) || [];
   if (sources.length === 0) return null;
-  // Shared doc-repo metadata fetch + envelope unwrap — lazy like every HTTP
-  // dep here (a top-level producer-service require drags the ingest/pii
-  // client chain into partial-mock test contexts that do not carry its
-  // config). One implementation for the importer, the crawl stamper and this
-  // gate (issue #1686); the 5 s timeout is this gate's own (it is the
+  // Shared doc-repo metadata fetch + envelope unwrap — the leaf client module
+  // (one implementation for the importer, the crawl stamper and this gate,
+  // issue #1686). Lazy like every HTTP dep here: a top-level require drags
+  // the service-token/config chain into partial-mock test contexts that do
+  // not carry its config. The 5 s timeout is this gate's own (it is the
   // latency-critical fail-closed re-check).
-  const { fetchDocMeta } = require('./producer-service');
+  const { fetchDocMeta } = require('./doc-repo-client');
   const serving = [];
   for (const s of sources) {
     if (!s || !s.file_id) continue;

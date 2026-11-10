@@ -27,6 +27,7 @@ const { isArangoNotFound } = require('./arango-errors');
 const { ingestRepoConcepts } = require('./ingest-service');
 const { withSpan } = require('../shared-lib/tracing');
 const crawlConversion = require('./crawl-conversion-service');
+const { fetchDocMeta } = require('./doc-repo-client');
 const { convertXlsx, slugify } = require('./converters/xlsxSheetConverter');
 // FR-42 for CSV (David 2026-10-12): the SAME dictionary + row-group shape as
 // xlsx, plus LLM topics summarised from the dictionary columns. Async (one
@@ -44,12 +45,20 @@ const MAX_FILES = Math.max(1, parseInt(process.env.OKF_MAX_IMPORT_FILES, 10) || 
 const MAX_SEGMENTS_PER_FILE = 200;
 const MIN_SEGMENT_CHARS = 200; // smaller sections merge into the previous one
 
-// repo_id -> the in-flight conversion's COMPLETION promise (same registry
-// discipline as crawl). The RESERVATION is the guard: the entry is claimed
-// synchronously, BEFORE the awaited stages below, so a second start for the
-// same repo cannot slip through a check-then-set window and import the corpus
-// twice (issue #1684).
-const live = new Map();
+// The SHARED conversion registry — ONE in-flight conversion per repo_id,
+// whichever path started it (documents or crawl). It lives in
+// crawl-conversion-service, next to the shared FIFO slot: the producer
+// requires the crawl service (the crawl service must NOT require the
+// producer — that direction is circular), so this is the one place both
+// paths can share. It matters: a crawl conversion and a documents conversion
+// write the SAME repo.conversion record (the crawl merges its patch, the
+// producer replaces it), so running both on one repo leaves a record that
+// describes neither run (issue #1684).
+//
+// The RESERVATION is the guard: the entry is claimed synchronously, BEFORE
+// the awaited stages below, so a second start for the same repo cannot slip
+// through a check-then-set window and import the corpus twice.
+const live = crawlConversion.live;
 
 async function getDb() {
   return dbService.getConnection();
@@ -75,11 +84,15 @@ function releaseSlot() {
 
 // ── source stamping ─────────────────────────────────────────────────────────
 
-/** OWN-property read of a per-file metadata cache. A plain object resolves
+/** The doc-repo metadata for one source file: the import pre-flight's cached
+ * copy when it carries the file, else a fresh GET. The cache is a FAST PATH,
+ * not a contract — a caller that omits an entry gets the GET (issue #1691).
+ * The lookup is an OWN-property read: a plain object resolves
  * 'constructor'/'__proto__' to an INHERITED value — truthy — so a cache miss
- * would silently skip the doc-repo GET and stamp null metadata (issue #1685). */
-function cachedMeta(cache, file_id) {
-  return cache && Object.prototype.hasOwnProperty.call(cache, file_id) ? cache[file_id] : undefined;
+ * would silently skip the GET and stamp null metadata (issue #1685). */
+async function sourceMeta(cache, file_id) {
+  const cached = cache && Object.prototype.hasOwnProperty.call(cache, file_id) ? cache[file_id] : undefined;
+  return cached || (await fetchDocMeta(file_id));
 }
 
 /** Stamp the repo doc with source_documents[] (kind 'document' — never collides
@@ -115,7 +128,7 @@ async function stampSources(repoId, fileIds, metaByKey = Object.create(null)) {
   for (const file_id of fileIds) {
     let meta = { file_id, file_name: null, file_type: null, size_bytes: null, uploaded_date: null };
     try {
-      const f = cachedMeta(metaByKey, file_id) || (await fetchDocMeta(file_id));
+      const f = await sourceMeta(metaByKey, file_id);
       meta = {
         file_id,
         file_name: f.file_name || null,
@@ -243,25 +256,6 @@ async function propagateRestrictedToSources(repoId, restricted) {
 }
 
 // ── fetch + convert ─────────────────────────────────────────────────────────
-
-/** doc-repo GET /api/files/:id response envelopes have varied across versions
- * ({file}, {data: {file}}, {data}) — unwrap every shape the fleet ships. */
-function docRepoFileOf(res) {
-  const d = (res && res.data) || {};
-  return d.file || (d.data && d.data.file) || d.data || d || {};
-}
-
-/** THE doc-repo metadata fetch — one GET + the envelope unwrap. Shared by the
- * importer, the crawl stamper and the SOURCES-BUSY gate (issue #1686), so the
- * envelope shapes cannot drift between three copies of it. `timeout` is a
- * parameter because the SOURCES-BUSY gate is latency-critical (5 s fail-closed
- * re-check) while the import path tolerates 10 s. */
-async function fetchDocMeta(fileId, timeout = 10000) {
-  const res = await authedAxios.get(`${config.documentRepository.url}/api/files/${encodeURIComponent(fileId)}`, {
-    timeout
-  });
-  return docRepoFileOf(res);
-}
 
 /** Stream /download into a Buffer with a hard byte cap (crawl-parity: the
  * content-length is often absent, so the cap is enforced on accumulation). */
@@ -620,7 +614,7 @@ async function runDocumentsConversion(job) {
         // path, not a contract — a caller that omits an entry gets the
         // doc-repo GET instead of a per-file TypeError swallowed by the
         // per-file catch (every file reported CONVERSION_FAILED).
-        const f = cachedMeta(job.source_metas, file_id) || (await fetchDocMeta(file_id));
+        const f = await sourceMeta(job.source_metas, file_id);
         meta.file_name = f.file_name || file_id;
         meta.file_type = f.file_type || f.type || f.mimetype || null;
         const size = Number.isFinite(f.size) ? f.size : null;
@@ -1015,11 +1009,31 @@ async function startDocumentsConversion({ repo_id, file_ids, requested_name, cla
     // The reservation must not outlive a failed start — the repo is free again.
     live.delete(repo_id);
     settleInFlight();
+    // The conversion record must not claim a queued run that has no worker:
+    // the interrupted-conversion sweep is one-shot per process and has
+    // already run, so nothing else would ever close this record.
+    try {
+      await patchConversion(repo_id, {
+        status: 'failed',
+        stage: 'failed',
+        error: err.message,
+        finished_at: new Date().toISOString()
+      });
+    } catch (patchErr) {
+      logger.warn('Failed-start record could not be written (non-fatal)', {
+        repo_id,
+        error: patchErr.message
+      });
+    }
     throw err;
   }
 
   const job = { repo_id, file_ids, source_metas: metaByKey, requested_name, classification, actor: actor || null };
-  const runner = (async () => {
+  // The background runner: it settles the registry's value and releases the
+  // reservation in its finally. It swallows its own errors (the terminal
+  // state is recorded by runDocumentsConversion), so it never surfaces as an
+  // unhandled rejection.
+  (async () => {
     await acquireSlot();
     try {
       await withSpan('okf.documents.conversion', async (span) => {
@@ -1031,12 +1045,13 @@ async function startDocumentsConversion({ repo_id, file_ids, requested_name, cla
       // Terminal state already recorded by runDocumentsConversion.
     } finally {
       releaseSlot();
+      // The registry's value settles BEFORE the entry goes, so the map and
+      // its value never disagree: awaiting live.get(repo_id) waits for the
+      // run (the registry's contract).
+      settleInFlight();
       live.delete(repo_id);
     }
   })();
-  // The registry's value settles when the conversion ENDS, so awaiting
-  // live.get(repo_id) still waits for the run (the registry's contract).
-  runner.then(settleInFlight, settleInFlight);
   return queued;
 }
 
@@ -1047,17 +1062,10 @@ function isTerminal(conversion) {
 module.exports = {
   startDocumentsConversion,
   isTerminal,
-  live,
-  // THE doc-repo metadata fetch + envelope unwrap — the crawl stamper and the
-  // SOURCES-BUSY gate read doc-repo through it (issue #1686)
-  fetchDocMeta,
+  live, // the SHARED conversion registry (documents + crawl), see crawl-conversion-service
   // D4: the restricted-snapshot stamp + the Access-toggle propagation
   stampSources,
   propagateRestrictedToSources,
-  // the conversion itself — exported so its own boundary can be tested: the
-  // metadata it reads must not depend on a caller-populated cache (issue
-  // #1691)
-  runDocumentsConversion,
   // exported for unit tests (pure functions)
   segmentMarkdown,
   draftWholeMarkdown,

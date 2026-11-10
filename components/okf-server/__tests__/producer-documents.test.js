@@ -39,6 +39,7 @@ const { Readable } = require('stream');
 const { logger } = require('../shared-lib/logger');
 
 const producer = require('../services/producer-service');
+const docRepoClient = require('../services/doc-repo-client');
 const lifecycle = require('../services/lifecycle-service');
 const { convertXlsx } = require('../services/converters/xlsxSheetConverter');
 const XLSX = require('xlsx');
@@ -84,7 +85,12 @@ function programQuery() {
   });
 }
 
-beforeEach(() => {
+beforeEach(async () => {
+  // Drain the in-flight conversions BEFORE resetting the shared mocks — a
+  // runner left alive by an earlier test deletes the registry entry when it
+  // ends, and that would delete the NEXT test's reservation (the registry is
+  // load-bearing for the 409 assertions).
+  await Promise.all(Array.from(producer.live.values(), (p) => p.catch(() => {})));
   jest.clearAllMocks();
   producer.live.delete(RID);
   programQuery();
@@ -415,27 +421,53 @@ describe('producer-service — startDocumentsConversion + run', () => {
     releaseStamp();
     await first;
     await producer.live.get(RID);
+    // Restore the module's default stamp mock — clearAllMocks() clears the
+    // CALL history but keeps the implementation.
+    authedAxios.patch.mockImplementation(async () => ({ status: 200 }));
     expect(second.err).toMatchObject({ code: 'CONVERSION_IN_FLIGHT', status: 409 });
   });
 
-  it('the conversion fetches the metadata a caller did NOT pre-load (self-sufficient, #1691)', async () => {
-    // The importer pre-flights every file's metadata and hands the cache to
-    // the conversion — but the conversion must not DEPEND on that cache: a
-    // caller that omits an entry used to fail EVERY file with a TypeError
-    // swallowed by the per-file catch (a confusing CONVERSION_FAILED per
-    // file instead of the metadata the file needs).
+  it('a CRAWL conversion in flight refuses a documents conversion for the same repo', async () => {
+    // ONE conversion per repo, whichever path started it: the two paths write
+    // the SAME repo.conversion record (the crawl merges its patch, the
+    // producer replaces it), so running both on one repo leaves a record that
+    // describes neither run.
     mockDocs({ f1: 'alpha.md' });
     await mockDb.collection('okf_repositories').save({ _key: RID, repo_id: RID, name: 'Mine', domain: 'general' });
-    await producer.runDocumentsConversion({
-      repo_id: RID,
-      file_ids: ['f1'],
-      requested_name: 'x',
-      classification: 'heuristics',
-      actor: { sub: 's' }
+    let parked = false;
+    let stampStarted;
+    const stamping = new Promise((resolve) => {
+      stampStarted = resolve;
     });
-    const repoDoc = await mockDb.collection('okf_repositories').document(RID);
-    expect(repoDoc.conversion.per_file[0].status).toBe('imported');
-    expect(repoDoc.conversion.per_file[0].file_name).toBe('alpha.md');
+    let releaseStamp;
+    const held = new Promise((resolve) => {
+      releaseStamp = resolve;
+    });
+    const realGet = authedAxios.get.getMockImplementation();
+    authedAxios.get.mockImplementation(async (url, opts) => {
+      // The crawl's provenance stamp is the FIRST metadata GET; park it so
+      // the crawl conversion stays in flight.
+      if (!parked && !String(url).endsWith('/download')) {
+        parked = true;
+        stampStarted();
+        await held;
+      }
+      return realGet(url, opts);
+    });
+
+    const crawl = require('../services/crawl-conversion-service');
+    const crawlRun = crawl.startConversion({ repo_id: RID, file_id: 'f1', split_mode: 'B' });
+    await stamping; // the crawl conversion is parked inside its provenance stamp
+    const documents = await producer
+      .startDocumentsConversion({ repo_id: RID, file_ids: ['f1'], requested_name: 'x' })
+      .then(
+        (queued) => ({ queued }),
+        (err) => ({ err })
+      );
+    releaseStamp();
+    await crawlRun;
+    authedAxios.get.mockImplementation(realGet);
+    expect(documents.err).toMatchObject({ code: 'CONVERSION_IN_FLIGHT', status: 409 });
   });
 
   it('a CSV whose topics leg degraded is RECORDED and MIRRORED to the file log', async () => {
@@ -823,7 +855,7 @@ describe('lifecycle sourcesBusyBlocker (Story 7.7 gate)', () => {
   });
 });
 
-describe('producer-service — fetchDocMeta (the ONE doc-repo metadata fetch + envelope unwrap)', () => {
+describe('doc-repo-client — fetchDocMeta (the ONE doc-repo metadata fetch + envelope unwrap)', () => {
   // The fetch + the unwrap are shared by the importer, the crawl stamper and
   // the SOURCES-BUSY gate — a diverging copy that handled only {file} | {data}
   // silently degraded the {data: {file}} shape to id-only stamping (review
@@ -837,12 +869,12 @@ describe('producer-service — fetchDocMeta (the ONE doc-repo metadata fetch + e
     ['{data}', { data: { data: file } }]
   ])('unwraps the %s envelope to the file doc', async (_shape, res) => {
     authedAxios.get.mockResolvedValueOnce(res);
-    await expect(producer.fetchDocMeta('f-1')).resolves.toBe(file);
+    await expect(docRepoClient.fetchDocMeta('f-1')).resolves.toBe(file);
   });
 
   test('degrades to {} on an empty response (never throws)', async () => {
     authedAxios.get.mockResolvedValueOnce({});
-    await expect(producer.fetchDocMeta('f-1')).resolves.toEqual({});
+    await expect(docRepoClient.fetchDocMeta('f-1')).resolves.toEqual({});
   });
 });
 
@@ -858,7 +890,7 @@ describe('producer-service — the source metadata cache (stampSources)', () => 
     // with NULL metadata (issue #1685). The cache is null-prototype and read
     // with an own-property lookup.
     await mockDb.collection('okf_repositories').save({ repo_id: R3 });
-    authedAxios.get.mockResolvedValue({
+    authedAxios.get.mockResolvedValueOnce({
       data: { file: { file_id: 'constructor', file_name: 'real.md', size: 12 } }
     });
     await producer.stampSources(R3, ['constructor']);

@@ -40,6 +40,7 @@ const { authedAxios } = require('./service-token');
 const { ingestRepoConcepts, buildMegaConcept } = require('./ingest-service');
 const { withSpan } = require('../shared-lib/tracing');
 const { slugify: slugSSOT } = require('./slug');
+const { fetchDocMeta } = require('./doc-repo-client');
 
 const COLLECTION = 'okf_repositories';
 
@@ -105,9 +106,15 @@ const MAX_CONCURRENT = Math.max(1, parseInt(process.env.OKF_MAX_CONCURRENT_CONVE
 const TERMINAL_STATES = ['done', 'failed'];
 
 /** repo_id → the in-flight conversion's COMPLETION promise (in-process
- * registry). The RESERVATION is the guard — it is claimed synchronously,
- * before the awaited stages below, so a second start for the same repo
- * cannot slip through a check-then-set window (issue #1684). */
+ * registry). This is the SHARED registry: the documents importer registers
+ * its conversion here too, so ONE repo is converted at a time whichever path
+ * started it (the two paths write the same repo.conversion record — the crawl
+ * merges its patch, the producer replaces it — so running both on one repo
+ * leaves a record describing neither run).
+ *
+ * The RESERVATION is the guard — it is claimed synchronously, before the
+ * awaited stages below, so a second start for the same repo cannot slip
+ * through a check-then-set window (issue #1684). */
 const live = new Map();
 /** Simple FIFO semaphore so heavy conversions don't stampede the DB/LLM. */
 const waiting = [];
@@ -181,10 +188,8 @@ async function stampSourceDocument(repoId, { file_id, url, crawl_job_id }) {
   try {
     // Shared doc-repo metadata fetch + envelope unwrap ({file} | {data: {file}}
     // | {data}) — the previous two-shape unwrap silently degraded {data:
-    // {file}} to id-only stamping. Lazy require: producer-service loads this
-    // module (issue #1686 — one fetch, one unwrap, shared with the importer
-    // and the SOURCES-BUSY gate).
-    const { fetchDocMeta } = require('./producer-service');
+    // {file}} to id-only stamping (issue #1686: one fetch, one unwrap, shared
+    // with the importer and the SOURCES-BUSY gate).
     const f = await fetchDocMeta(file_id);
     const db = await getDb();
     // The metadata size doubles as the cap/mode-A guard + progress total
@@ -870,20 +875,15 @@ async function startConversion({
     error: null,
     started_at: new Date().toISOString()
   };
-  let sourceMeta;
-  try {
-    await patchConversion(repo_id, queued);
+  // Both stages below are fail-soft in this service (the progress patch only
+  // warns, the provenance stamp returns null) — neither can throw, so the
+  // reservation cannot leak here.
+  await patchConversion(repo_id, queued);
 
-    // Provenance first (fail-soft) so the editor can show the source document
-    // even while the conversion is still queued — and its size doubles as the
-    // cap/mode-A guard + progress total for the run.
-    sourceMeta = await stampSourceDocument(repo_id, { file_id, url, crawl_job_id });
-  } catch (err) {
-    // The reservation must not outlive a failed start — the repo is free again.
-    live.delete(repo_id);
-    settleInFlight();
-    throw err;
-  }
+  // Provenance first (fail-soft) so the editor can show the source document
+  // even while the conversion is still queued — and its size doubles as the
+  // cap/mode-A guard + progress total for the run.
+  const sourceMeta = await stampSourceDocument(repo_id, { file_id, url, crawl_job_id });
   const job = {
     repo_id,
     file_id,
@@ -899,7 +899,11 @@ async function startConversion({
     source_size: sourceMeta && Number.isFinite(sourceMeta.size_bytes) ? sourceMeta.size_bytes : null,
     actor: actor || null
   };
-  const runner = (async () => {
+  // The background runner: it settles the registry's value and releases the
+  // reservation in its finally. It swallows its own errors (the terminal
+  // state is recorded by runConversion), so it never surfaces as an
+  // unhandled rejection.
+  (async () => {
     dlog(`runner queued repo=${repo_id} running=${running}/${MAX_CONCURRENT} waiting=${waiting.length}`);
     await acquireSlot();
     dlog(`runner START repo=${repo_id}`);
@@ -915,12 +919,13 @@ async function startConversion({
       // background promise never surfaces as an unhandled rejection.
     } finally {
       releaseSlot();
+      // The registry's value settles BEFORE the entry goes, so the map and
+      // its value never disagree: awaiting live.get(repo_id) waits for the
+      // run (the registry's contract).
+      settleInFlight();
       live.delete(repo_id);
     }
   })();
-  // The registry's value settles when the conversion ENDS, so awaiting
-  // live.get(repo_id) still waits for the run (the registry's contract).
-  runner.then(settleInFlight, settleInFlight);
   return queued;
 }
 

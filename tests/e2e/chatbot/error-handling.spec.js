@@ -11,6 +11,10 @@ const {
   STREAM_ROUTE,
 } = require('../helpers/chatbot');
 
+// The answer the mocked retry serves — the same string the assertion
+// reads, so the two cannot drift apart.
+const RECOVERED_ANSWER = 'Recovered answer after the error.';
+
 // A failed turn ends with the answer card's error block, and that card
 // is the turn's completion signal: the app renders it only once the
 // stream has closed. It is also the surface the old assertions missed —
@@ -71,16 +75,18 @@ test.describe('RAG error handling', () => {
     // a probe if the retry actually ANSWERS: a second turn that silently
     // fails must fail this test too — hence the answer assertion below.
     await page.unroute(STREAM_ROUTE);
-    await mockChatStream(page, ['Recovered answer after the error.']);
+    await mockChatStream(page, [RECOVERED_ANSWER]);
 
     await sendMessage(page, 'Second attempt should work');
-    await waitForBotResponse(page, { timeout: 120000 });
+    // A mocked answer arrives in milliseconds: the ceiling is a ceiling,
+    // not a floor — and it sits under the project's per-test budget, so a
+    // retry that never answers is reported by the assertion below rather
+    // than by the generic project timeout.
+    await waitForBotResponse(page, { timeout: 30000 });
     // The ANSWER, not merely a non-empty bubble: the welcome turn is a
     // bot bubble too, so "not empty" would pass on a retry that never
     // answered. The mock makes the exact text assertable.
-    expect(await getLastBotMessage(page), 'the retry must produce the answer').toContain(
-      'Recovered answer after the error.'
-    );
+    expect(await getLastBotMessage(page), 'the retry must produce the answer').toContain(RECOVERED_ANSWER);
 
     // Verify the input is still functional
     await expect(textarea).toBeVisible({ timeout: 5000 });

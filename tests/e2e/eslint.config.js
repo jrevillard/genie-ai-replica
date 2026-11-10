@@ -9,6 +9,15 @@
 // sets are: Node (CommonJS `require`, `process`, `__dirname` — the
 // suite and helpers) and browser (`document`, `window`,
 // `getComputedStyle` — the code that runs inside page.evaluate).
+//
+// Known boundary: the Node and browser globals are merged into one
+// pool, so a Node-only global used inside a page.evaluate callback (or
+// a browser global in Node-side helper code) is NOT flagged — the
+// evaluate bodies are inline in the same file, and per-scope globals
+// would need a dedicated rule that knows the evaluate boundary. The
+// gate's target is the #1632 class: a binding declared NOWHERE, which
+// no-undef still catches from the merged pool.
+//
 // Stylistic rules stay out: the suite has no Prettier gate, so
 // formatting rules would only fight the existing files.
 const js = require('@eslint/js');
@@ -31,6 +40,6 @@ module.exports = [
     }
   },
   {
-    ignores: ['node_modules/', 'test-results/', 'playwright-report/', 'fixtures/']
+    ignores: ['fixtures/']
   }
 ];

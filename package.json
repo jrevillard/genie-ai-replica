@@ -39,6 +39,9 @@
     "components/document-repository/**/*.{js,vue}": [
       "components/document-repository/node_modules/.bin/eslint --fix",
       "components/document-repository/node_modules/.bin/prettier --write"
+    ],
+    "tests/e2e/**/*.{js}": [
+      "tests/e2e/node_modules/.bin/eslint --fix"
     ]
   },
   "dependencies": {

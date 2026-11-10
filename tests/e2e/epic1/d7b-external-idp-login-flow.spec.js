@@ -145,7 +145,7 @@ test('completes full external IdP brokered login flow', async ({ browser }) => {
       } catch (restoreError) {
         restoreStatus = restoreError.message;
       }
-      if (restoreStatus) {
+      if (restoreStatus !== null) {
         restoreFailure =
           `VERIFY_EMAIL restore failed — the genie realm keeps VERIFY_EMAIL disabled ` +
           `(brokered logins skip email verification) until keycloak-config-cli ` +

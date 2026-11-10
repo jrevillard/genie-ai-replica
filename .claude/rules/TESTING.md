@@ -53,6 +53,7 @@ CI does the same sequencing (`.gitlab-ci.yml` test jobs). Match it locally.
 ```bash
 # Per-component (run from component directory)
 cd components/gov-chat-backend && npm test                # All backend tests
+cd components/gov-chat-backend && node --test scripts/verifier-real-crypto.node-test.js  # Real-crypto OIDC verifier suite (DW-434/435; jest cannot require the ESM-only `jose`)
 cd components/gov-chat-backend && npm run test:contract   # Route handler tests only
 cd components/gov-chat-backend && npm run test:coverage   # With coverage report
 

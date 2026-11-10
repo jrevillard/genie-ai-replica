@@ -251,7 +251,7 @@ The auth middleware does **not** propagate the user identity via HTTP headers (`
 
 | Step | Where | File / line |
 |---|---|---|
-| Verify JWT signature | `keycloakAuthService.verifyToken` | `components/gov-chat-backend/services/keycloak-auth-service.js` |
+| Verify JWT signature | `keycloakAuthService.verifyToken` | `components/shared/lib/keycloak-auth-service.js` (re-exported by the backend) |
 | JIT-provision user in ArangoDB | `userProvisioningService.provisionUser` | `components/gov-chat-backend/services/user-provisioning-service.js:65` |
 | Attach ArangoDB user to request | `req.user = user` | `components/gov-chat-backend/middleware/keycloak-auth-middleware.js:122` |
 | Preserve JWT claims for downstream code | `req.claims = decoded` | `components/gov-chat-backend/middleware/keycloak-auth-middleware.js:125` |

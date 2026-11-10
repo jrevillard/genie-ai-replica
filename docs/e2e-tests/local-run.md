@@ -25,21 +25,36 @@ One command, from the repository root. It:
    credential in the repository);
 2. maps the venue **name** to an address when the runner cannot resolve it
    (see *Venue address* below);
-3. **provisions the venue fixtures** — `tests/e2e/provision-e2e-fixtures.js`,
+3. runs the **pre-flight** — the runner launches the browser and opens the
+   venue, and a broken runner stops the run there, before the venue and
+   before the tracker (see *The pre-flight* below);
+4. **provisions the venue fixtures** — `tests/e2e/provision-e2e-fixtures.js`,
    the same script the CI job and Phase 0 run, so `testuser`, `testadmin`
    and `testplain` exist and are converged before the suite starts;
-4. runs the **whole `tests/e2e/` tree** — `npx playwright test tests/e2e/
+5. runs the **whole `tests/e2e/` tree** — `npx playwright test tests/e2e/
    --project=chromium`;
-5. reports the outcome and runs the **failure path** (below).
+6. reports the outcome and runs the **failure path** (below).
 
 ### Prerequisites
 
 | Requirement | Note |
 |---|---|
 | `npm install` at the repository root | Playwright resolves from the root `node_modules` |
-| `npx playwright install chromium` | the suite drives a real browser |
+| `npx playwright install chromium` | the suite drives a real browser — the build must match the installed `@playwright/test`, and `PLAYWRIGHT_BROWSERS_PATH` must point at it when it lives outside the default cache |
+| the browser's shared libraries on `LD_LIBRARY_PATH` | a bare container image has no libatk/libgbm |
+| the Inter fonts on `XDG_DATA_HOME` | the pixel-measurement specs measure rendered text |
 | a reachable venue | `BASE_URL` points at the stack's edge |
 | Keycloak master-realm admin | see step 1 above |
+
+### The pre-flight
+
+A broken runner and a broken product look the same in a report: every test
+dies on the same message. `tests/e2e/run/preflight.js` tells them apart —
+it launches the browser and opens the venue **before** the suite touches
+anything, and stops the run with the named cause. Without it, a runner
+whose Chromium build does not match the installed `@playwright/test` turns
+220 of 242 tests into the same launch error, and the failure path files an
+issue per spec file for one missing binary.
 
 ### Venue address
 
@@ -114,6 +129,22 @@ A red run must not stay a silent red (#1736). The run ends with
 To only report, without filing: `E2E_FILE_ISSUES=0 tests/e2e/run/run-local-e2e.sh`.
 To file a past run's failures by hand: `node tests/e2e/run/file-failure-issues.js --file-issues`.
 
+An issue that already tracks the failing spec file is **not** duplicated:
+the path comments on it instead (an umbrella issue that mentions the file's
+path gets one comment for the whole run, not one per file).
+
+**A red run is not automatically a finding.** A venue that goes away
+mid-run — the `forge-k3s` node rebooting during a run moves its address
+and with it the edge's LoadBalancer IP, and every spec that navigates
+during that window fails with `net::ERR_CONNECTION_REFUSED at the edge` —
+produces exactly the same report as a product defect. Check the venue's
+own events before filing anything:
+
+```bash
+kubectl get events -A --field-selector reason=NodeReady --sort-by=.lastTimestamp
+kubectl -n genieai get events --sort-by=.lastTimestamp | tail
+```
+
 ## Shared-stack discipline
 
 The run drives a **shared** stack (namespace `genieai`, chart
@@ -133,10 +164,15 @@ Two caveats the operator should know before booking a slot:
 
 ## Known-red specs
 
-| Spec | Why it is red | Fix |
-|---|---|---|
-| the specs that hardcode `https://localhost/` | the venue answers under another origin | #1737 (MR !841) |
-| the chat specs reading a Vuex path the CSR refactor deleted | `waitForBotResponse` polls a path the frontend no longer exposes | #1738 (MR !841) |
+The run of 2026-11-10 (forge venue, chart 0.2.171, `genieai-forge.local:4443`):
+**242 tests — 207 passed, 18 failed, 17 skipped.**
+
+| Spec | Failures | Why it is red | Fix |
+|---|---|---|---|
+| `epic1/a1`, `a2`, `a3`, `epic3/l1`, `l2`, `l3` | 9 | the specs navigate to a literal `https://localhost/`, which answers nothing on a k8s venue | #1737 (MR !841) |
+| `chatbot/error-handling`, `chatbot/send-message-and-stream` | 3 | `waitForBotResponse` polls a Vuex path the CSR refactor deleted | #1738 (MR !841) |
+| `chat-conversation` | 2 | the same CSR drift, seen as a disposed route context and a click timeout | #1738 (MR !841) |
+| `welcome-banner`, `resizable-sidebars` | 5 | **not a spec defect**: the `forge-k3s` node rebooted during the run and the edge refused connections (`ERR_CONNECTION_REFUSED`) — a venue event |
 
 A spec that is known-red is named, never silently excluded, and never edited
 to make it pass.

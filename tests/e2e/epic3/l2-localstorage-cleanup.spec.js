@@ -66,7 +66,6 @@ test('clears legacy localStorage items after logout', async ({ browser }) => {
   const logoutButton = page.getByRole('button', { name: 'Log out' });
   await expect(logoutButton, 'Logout button should be visible').toBeVisible({ timeout: 10000 });
 
-  // Evaluate localStorage right before clicking (synchronous cleanup happens in the click handler)
   await logoutButton.click();
 
   // Step 6: Wait for navigation to complete (redirect to Keycloak or back to app)

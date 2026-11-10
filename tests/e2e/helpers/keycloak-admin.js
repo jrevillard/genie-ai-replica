@@ -39,8 +39,10 @@ function isTransientStatus(status) {
  * @param {number} status - The HTTP status
  * @throws {Error} The error — transient when the status is transient
  */
-function failWithStatus(message, status) {
-  const error = isTransientStatus(status) ? transientError(message) : new Error(message);
+function failWithStatus(message, status, options) {
+  const error = isTransientStatus(status)
+    ? transientError(message, options)
+    : new Error(message, options);
   error.httpStatus = status;
   throw error;
 }
@@ -562,7 +564,8 @@ async function convergeUser(adminToken, realm, userData) {
           failWithStatus(
             `${err.message} — the create answered 409, but the email-ownership probe for ${email} ` +
               `could not run (HTTP ${probeErr.httpStatus})`,
-            probeErr.httpStatus
+            probeErr.httpStatus,
+            { cause: probeErr }
           );
         }
         if (probeErr.invalidPayload || probeErr.nonJsonBody) {

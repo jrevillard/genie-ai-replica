@@ -116,7 +116,9 @@ async function mintToken() {
       credentials: [{ type: 'password', value: SMOKE_PW, temporary: false }]
     }
   });
-  const uid = j(await req('GET', `${AUTH}/admin/realms/genie/users?username=${SMOKE_USER}&exact=true`, { token: at }))[0].id;
+  const uid = j(
+    await req('GET', `${AUTH}/admin/realms/genie/users?username=${SMOKE_USER}&exact=true`, { token: at })
+  )[0].id;
   const role = j(await req('GET', `${AUTH}/admin/realms/genie/roles/tools-admin`, { token: at }));
   await req('POST', `${AUTH}/admin/realms/genie/users/${uid}/role-mappings/realm`, { token: at, json: [role] });
   const cu = j(await req('GET', `${AUTH}/admin/realms/genie/clients?clientId=genie-app`, { token: at }))[0].id;
@@ -150,7 +152,11 @@ async function mintToken() {
   console.log('C1 — mint a version (publish)');
   const mint = await req('POST', `${API}/api/okf/repos/${REPO}/versions`, { token: T, json: {} });
   const mintBody = j(mint);
-  check('C1', mint.status >= 200 && mint.status < 300, `POST /versions -> ${mint.status} ${JSON.stringify(mintBody).slice(0, 140)}`);
+  check(
+    'C1',
+    mint.status >= 200 && mint.status < 300,
+    `POST /versions -> ${mint.status} ${JSON.stringify(mintBody).slice(0, 140)}`
+  );
 
   console.log('\nC2 — drive the lifecycle draft → review → approve → publish → ingest');
   // The state machine is explicit (lifecycle-service TRANSITIONS):

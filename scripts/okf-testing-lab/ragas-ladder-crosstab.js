@@ -62,14 +62,20 @@ if (!runKey) {
   // Of those, how many actually had the passage DELIVERED (in_contexts>0)?
   const delivered = entRows.filter((a) => a.evidence && a.evidence.in_contexts > 0).length;
   const inCorpus = entRows.filter((a) => a.evidence && a.evidence.in_corpus > 0).length;
-  console.log(`\n  of the ${entRows.length}: passage reached the contexts in ${delivered}, present in the corpus in ${inCorpus}`);
+  console.log(
+    `\n  of the ${entRows.length}: passage reached the contexts in ${delivered}, present in the corpus in ${inCorpus}`
+  );
   const notDelivered = entRows.filter((a) => a.evidence && a.evidence.in_contexts === 0);
   console.log(`  NOT delivered (in_contexts=0): ${notDelivered.length}`);
-  console.log(`  their ladder verdicts: ${JSON.stringify(notDelivered.reduce((acc, a) => {
-    const ls = (a.evidence && a.evidence.ladder_stage) || 'no-ladder';
-    acc[ls] = (acc[ls] || 0) + 1;
-    return acc;
-  }, {}))}`);
+  console.log(
+    `  their ladder verdicts: ${JSON.stringify(
+      notDelivered.reduce((acc, a) => {
+        const ls = (a.evidence && a.evidence.ladder_stage) || 'no-ladder';
+        acc[ls] = (acc[ls] || 0) + 1;
+        return acc;
+      }, {})
+    )}`
+  );
   console.log(`  ids: ${notDelivered.map((a) => a.id).join(', ')}`);
   process.exit(0);
 })().catch((e) => {

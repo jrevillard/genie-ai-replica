@@ -376,7 +376,11 @@ describe('ci shell gate: extraction', () => {
     expect(checkShellSyntax(blocks)).toHaveLength(1);
   });
 
-  test('an extended base runs its script in the extending job', () => {
+  test("an extending job's own script replaces the extended base's script", () => {
+    // extends is a reverse deep merge: the job's own script REPLACES the
+    // base's (GitLab runs only what the job defines — the extension reads
+    // the base's script through the job only when the job defines none),
+    // so the gate must credit `echo own` and never the base's line.
     const content = [
       '.base:',
       '  script:',
@@ -388,8 +392,26 @@ describe('ci shell gate: extraction', () => {
     ].join('\n');
     const { blocks, errors } = extractCiShellBlocks(content);
     expect(errors).toEqual([]);
-    expect(blocks.map((b) => b.owner)).toEqual(['job', 'job']);
-    expect(blocks.map((b) => b.text)).toEqual(['echo base', 'echo own']);
+    expect(blocks.map((b) => b.owner)).toEqual(['job']);
+    expect(blocks.map((b) => b.text)).toEqual(['echo own']);
+  });
+
+  test('a job that defines no script inherits the extended base script', () => {
+    const content = ['.base:', '  script:', '    - echo base', 'job:', '  extends: .base'].join('\n');
+    const { blocks, errors } = extractCiShellBlocks(content);
+    expect(errors).toEqual([]);
+    expect(blocks.map((b) => b.owner)).toEqual(['job']);
+    expect(blocks.map((b) => b.text)).toEqual(['echo base']);
+  });
+
+  test('a job that cancels its script with an empty list runs nothing', () => {
+    // `script: []` is the documented idiom to cancel an inherited
+    // default: the key is defined-and-empty, so the base's script must
+    // NOT be credited to the job (GitLab runs no script at all).
+    const content = ['.base:', '  script:', '    - echo base', 'job:', '  extends: .base', '  script: []'].join('\n');
+    const { blocks, errors } = extractCiShellBlocks(content);
+    expect(errors).toEqual([]);
+    expect(blocks).toHaveLength(0);
   });
 
   test('a global variables block is data, never shell', () => {

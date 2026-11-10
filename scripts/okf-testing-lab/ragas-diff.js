@@ -82,10 +82,16 @@ const mean = (xs) => (xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : nu
   console.log('\n=== per-metric means ===');
   console.log('metric'.padEnd(26), 'baseline'.padStart(9), 'candidate'.padStart(10), 'delta'.padStart(9), 'n_cand');
   for (const m of METRICS) {
-    const av = mean([...aRows.values()].map((r) => r.metrics && r.metrics[m]).filter((v) => v != null && !Number.isNaN(v)));
-    const bv = mean([...bRows.values()].map((r) => r.metrics && r.metrics[m]).filter((v) => v != null && !Number.isNaN(v)));
+    const av = mean(
+      [...aRows.values()].map((r) => r.metrics && r.metrics[m]).filter((v) => v != null && !Number.isNaN(v))
+    );
+    const bv = mean(
+      [...bRows.values()].map((r) => r.metrics && r.metrics[m]).filter((v) => v != null && !Number.isNaN(v))
+    );
     const d = av != null && bv != null ? bv - av : null;
-    const nb = [...bRows.values()].filter((r) => r.metrics && r.metrics[m] != null && !Number.isNaN(r.metrics[m])).length;
+    const nb = [...bRows.values()].filter(
+      (r) => r.metrics && r.metrics[m] != null && !Number.isNaN(r.metrics[m])
+    ).length;
     console.log(
       m.padEnd(26),
       (av == null ? '-' : av.toFixed(4)).padStart(9),
@@ -128,9 +134,15 @@ const mean = (xs) => (xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : nu
     .sort((x, y) => (y.delta == null ? -99 : y.delta) - (x.delta == null ? -99 : x.delta));
   rowsOut.forEach(({ id, delta, c }) => {
     const tag = delta == null ? 'n/a' : (delta >= 0 ? '+' : '') + delta.toFixed(3);
-    const mA = ANSWER_SIDE.map((m) => `${m.slice(0, 4)}=${c.aRow.metrics && c.aRow.metrics[m] != null ? c.aRow.metrics[m].toFixed(2) : 'null'}`).join(' ');
-    const mB = ANSWER_SIDE.map((m) => `${m.slice(0, 4)}=${c.bRow.metrics && c.bRow.metrics[m] != null ? c.bRow.metrics[m].toFixed(2) : 'null'}`).join(' ');
-    console.log(`${id} ${tag.padStart(7)}  abst ${c.abstA ? 'Y' : 'n'}→${c.abstB ? 'Y' : 'n'}  base[${mA}]  cand[${mB}]`);
+    const mA = ANSWER_SIDE.map(
+      (m) => `${m.slice(0, 4)}=${c.aRow.metrics && c.aRow.metrics[m] != null ? c.aRow.metrics[m].toFixed(2) : 'null'}`
+    ).join(' ');
+    const mB = ANSWER_SIDE.map(
+      (m) => `${m.slice(0, 4)}=${c.bRow.metrics && c.bRow.metrics[m] != null ? c.bRow.metrics[m].toFixed(2) : 'null'}`
+    ).join(' ');
+    console.log(
+      `${id} ${tag.padStart(7)}  abst ${c.abstA ? 'Y' : 'n'}→${c.abstB ? 'Y' : 'n'}  base[${mA}]  cand[${mB}]`
+    );
   });
 
   console.log('\n=== proof rows ===');
@@ -141,13 +153,25 @@ const mean = (xs) => (xs.length ? xs.reduce((a, b) => a + b, 0) / xs.length : nu
       console.log(`${id}: missing (${!a ? 'no baseline' : 'no candidate'})`);
       return;
     }
-    const mA = ANSWER_SIDE.map((m) => `${m.slice(0, 4)}=${a.metrics && a.metrics[m] != null ? a.metrics[m].toFixed(2) : 'null'}`).join(' ');
-    const mB = ANSWER_SIDE.map((m) => `${m.slice(0, 4)}=${b.metrics && b.metrics[m] != null ? b.metrics[m].toFixed(2) : 'null'}`).join(' ');
+    const mA = ANSWER_SIDE.map(
+      (m) => `${m.slice(0, 4)}=${a.metrics && a.metrics[m] != null ? a.metrics[m].toFixed(2) : 'null'}`
+    ).join(' ');
+    const mB = ANSWER_SIDE.map(
+      (m) => `${m.slice(0, 4)}=${b.metrics && b.metrics[m] != null ? b.metrics[m].toFixed(2) : 'null'}`
+    ).join(' ');
     console.log(`\n${id}  abst ${a.abstained ? 'Y' : 'n'}→${b.abstained ? 'Y' : 'n'}`);
     console.log(`   base[${mA}]  cand[${mB}]`);
     console.log(`   Q: ${String(b.query || '').slice(0, 110)}`);
-    console.log(`   base A: ${String(a.answer || '').replace(/\s+/g, ' ').slice(0, 200)}`);
-    console.log(`   cand A: ${String(b.answer || '').replace(/\s+/g, ' ').slice(0, 200)}`);
+    console.log(
+      `   base A: ${String(a.answer || '')
+        .replace(/\s+/g, ' ')
+        .slice(0, 200)}`
+    );
+    console.log(
+      `   cand A: ${String(b.answer || '')
+        .replace(/\s+/g, ' ')
+        .slice(0, 200)}`
+    );
   });
 })().catch((e) => {
   console.error('ERR', e.message);

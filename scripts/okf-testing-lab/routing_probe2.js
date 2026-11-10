@@ -13,10 +13,23 @@ const auth = 'Basic ' + Buffer.from('root:' + pw).toString('base64');
 function arango(q) {
   return new Promise((res, rej) => {
     const d = JSON.stringify(q);
-    const r = https.request({method:'POST',host:'localhost',port:8529,path:'/_db/genie-ai/_api/cursor',
-      headers:{'Content-Type':'application/json','Authorization':auth,'Content-Length':d.length}},
-      resp => { let s=''; resp.on('data',c=>s+=c); resp.on('end',()=>res(JSON.parse(s))); });
-    r.on('error',rej); r.write(d); r.end();
+    const r = https.request(
+      {
+        method: 'POST',
+        host: 'localhost',
+        port: 8529,
+        path: '/_db/genie-ai/_api/cursor',
+        headers: { 'Content-Type': 'application/json', Authorization: auth, 'Content-Length': d.length }
+      },
+      (resp) => {
+        let s = '';
+        resp.on('data', (c) => (s += c));
+        resp.on('end', () => res(JSON.parse(s)));
+      }
+    );
+    r.on('error', rej);
+    r.write(d);
+    r.end();
   });
 }
 
@@ -31,9 +44,19 @@ function arango(q) {
   for (const c of baliChunks.result || []) {
     if (!baliConcepts[c.concept]) baliConcepts[c.concept] = { count: 0, maxLen: 0, sample: '' };
     baliConcepts[c.concept].count++;
-    if (c.len > baliConcepts[c.concept].maxLen) { baliConcepts[c.concept].maxLen = c.len; baliConcepts[c.concept].sample = c.preview; }
+    if (c.len > baliConcepts[c.concept].maxLen) {
+      baliConcepts[c.concept].maxLen = c.len;
+      baliConcepts[c.concept].sample = c.preview;
+    }
   }
-  console.log('baliChunks keys:', Object.keys(baliChunks), 'err?', baliChunks.errorMessage, 'first row?', (baliChunks.result||[])[0]);
+  console.log(
+    'baliChunks keys:',
+    Object.keys(baliChunks),
+    'err?',
+    baliChunks.errorMessage,
+    'first row?',
+    (baliChunks.result || [])[0]
+  );
   for (const [concept, info] of Object.entries(baliConcepts)) {
     console.log('  ' + concept + '  count=' + info.count + '  maxLen=' + info.maxLen);
     console.log('     ' + info.sample.replace(/\n/g, ' ').slice(0, 200));

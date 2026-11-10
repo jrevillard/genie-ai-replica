@@ -138,9 +138,7 @@ async function main() {
   const token = tok.access_token;
 
   const getRun = async (rk) =>
-    j(
-      await req('GET', `${API_BASE}/api/okf/repos/${REPO_ID}/ragas-testsuite/${SUITE_KEY}/runs/${rk}`, { token })
-    );
+    j(await req('GET', `${API_BASE}/api/okf/repos/${REPO_ID}/ragas-testsuite/${SUITE_KEY}/runs/${rk}`, { token }));
   const base = await getRun(BASELINE);
   const comp = await getRun(COMPARE);
   const baseRows = new Map((base.payload.results || []).map((r) => [r.id, r]));
@@ -193,7 +191,14 @@ async function main() {
     const bp = prec(br);
     const cp = prec(compRows.get(id));
     if (bp === null || cp === null) continue;
-    deltas.push({ id, bp, cp, delta: cp - bp, bc: (br.contexts || []).length, cc: (compRows.get(id).contexts || []).length });
+    deltas.push({
+      id,
+      bp,
+      cp,
+      delta: cp - bp,
+      bc: (br.contexts || []).length,
+      cc: (compRows.get(id).contexts || []).length
+    });
   }
   deltas.sort((a, b) => a.delta - b.delta);
   for (const d of deltas.slice(0, 12)) {
@@ -204,7 +209,9 @@ async function main() {
   }
   const dropped = deltas.filter((d) => d.delta < -0.001);
   const improved = deltas.filter((d) => d.delta > 0.001);
-  console.log(`  rows dropped: ${dropped.length}, improved: ${improved.length}, flat: ${deltas.length - dropped.length - improved.length}`);
+  console.log(
+    `  rows dropped: ${dropped.length}, improved: ${improved.length}, flat: ${deltas.length - dropped.length - improved.length}`
+  );
   const droppedSum = dropped.reduce((s, d) => s + d.delta, 0);
   const improvedSum = improved.reduce((s, d) => s + d.delta, 0);
   console.log(`  sum of drops: ${droppedSum.toFixed(3)} | sum of gains: ${improvedSum.toFixed(3)}`);

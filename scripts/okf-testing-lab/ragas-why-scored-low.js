@@ -51,8 +51,12 @@ const STOP = new Set(
     const e = entries.get(r.id) || {};
     const a = byId.get(r.id);
     console.log(`\n${'='.repeat(78)}\n${r.id}  stage=${a.stage}  fails=${(a.fails || []).join(',')}`);
-    console.log(`entity_recall=${r.metrics.context_entities_recall} factual_correctness=${r.metrics.factual_correctness} answer_relevancy=${r.metrics.answer_relevancy} faithfulness=${r.metrics.faithfulness}`);
-    console.log(`ladder_stage=${(a.evidence || {}).ladder_stage} in_corpus=${(a.evidence || {}).in_corpus} in_contexts=${(a.evidence || {}).in_contexts}`);
+    console.log(
+      `entity_recall=${r.metrics.context_entities_recall} factual_correctness=${r.metrics.factual_correctness} answer_relevancy=${r.metrics.answer_relevancy} faithfulness=${r.metrics.faithfulness}`
+    );
+    console.log(
+      `ladder_stage=${(a.evidence || {}).ladder_stage} in_corpus=${(a.evidence || {}).in_corpus} in_contexts=${(a.evidence || {}).in_contexts}`
+    );
     console.log(`\nQUERY: ${r.query}`);
     console.log(`\nREFERENCE ANSWER:\n  ${String(e.reference_answer || '').slice(0, 600)}`);
     console.log(`\nEXPECTED PASSAGES (reference_passages):`);

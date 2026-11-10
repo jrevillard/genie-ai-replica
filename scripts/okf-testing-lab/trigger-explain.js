@@ -24,7 +24,9 @@ const svc = require('/app/services/ragas-suite-service');
   console.log('\n--- ADVICE ---');
   console.log(JSON.stringify(doc.payload.advice, null, 1));
   console.log('\n--- sample attributions ---');
-  attrs.slice(0, 6).forEach((a) => console.log(`${a.id} [${a.stage}] ${(a.fails || []).join(',')} :: ${a.recommendation}`));
+  attrs
+    .slice(0, 6)
+    .forEach((a) => console.log(`${a.id} [${a.stage}] ${(a.fails || []).join(',')} :: ${a.recommendation}`));
   process.exit(0);
 })().catch((e) => {
   console.error('ERR', e && e.message);

@@ -397,6 +397,10 @@ function extractCiShellBlocks(content) {
   let owner = null;
   let jobIndent = null; // the body indent of the current top-level mapping
   const mergeSites = []; // inherited script sources, resolved after the scan
+  // Keys explicitly cancelled with an empty value (`script: []`): defined
+  // for the owning job, producing no shell. Inheritance must treat them
+  // as present-and-empty, not absent.
+  const canceledKeys = new Map(); // job owner -> Set of keys
   let i = 0;
   while (i < lines.length) {
     const line = lines[i];
@@ -560,8 +564,15 @@ function extractCiShellBlocks(content) {
       }
       i += 1;
     } else if (EMPTY_FLOW_SEQ_RE.test(rest) || EMPTY_FLOW_MAP_RE.test(rest)) {
-      // `script: []` / `before_script: []` — a legal no-op (the documented
-      // idiom to cancel an inherited default): no shell, nothing to check.
+      // `script: []` / `before_script: []` — a legal no-op producing no
+      // shell to check, but the KEY is defined: GitLab runs no script at
+      // all for this job, cancelling any inherited one. Recorded so the
+      // inheritance resolution does not credit a base's script to a job
+      // that explicitly cancelled it.
+      if (!canceledKeys.has(owner)) {
+        canceledKeys.set(owner, new Set());
+      }
+      canceledKeys.get(owner).add(key);
       if (itemName) {
         anchors.set(itemName, { kind: 'none' });
       }
@@ -606,10 +617,23 @@ function extractCiShellBlocks(content) {
   }
 
   // Resolve inherited scripts: a merged template or an extended base runs
-  // its script inside the inheriting job. YAML merge (`<<:`) replaces a
-  // key the job defines itself; GitLab's `extends` concatenates the base
-  // script before the job's own and lets the job override before_script
-  // and after_script.
+  // its script inside the inheriting job. BOTH mechanisms are reverse
+  // deep merges: the job's own keys — script included — replace the
+  // base's (`<<:` by YAML merge-key semantics, `extends` by GitLab's —
+  // which is why `!reference` exists to concatenate scripts). The base's
+  // script therefore runs in the job only when the job defines none of
+  // its own, and this extraction credits exactly the lines a job can
+  // run for the single-base shapes the CI file uses today. (Approximation
+  // kept from the original gate: a multi-base `extends: [.a, .b]` with
+  // script-carrying bases credits both scripts, where GitLab runs one
+  // array — no such job exists here; tightening it is a conscious future
+  // decision, not a silent gap.)
+  // The job -> inherited sources mapping (extends AND `<<:` merge — a
+  // job can reach a template through either) is returned alongside the
+  // blocks: a structural guard (which jobs inherit which template) must
+  // read the SAME derivation the shell re-materialization used, or the
+  // guard and the sweep can silently disagree about what inherits what.
+  const extendsMap = new Map(); // job owner -> [source names]
   if (mergeSites.length > 0) {
     const inherited = new Map(); // job owner -> inherited blocks
     const droppedSources = new Set(); // templates/bases that never run alone
@@ -624,10 +648,16 @@ function extractCiShellBlocks(content) {
         });
         continue;
       }
+      const bases = extendsMap.get(site.jobOwner) || [];
+      bases.push(sourceOwner);
+      extendsMap.set(site.jobOwner, bases);
       const ownKeys = new Set(blocks.filter((b) => b.owner === site.jobOwner).map((b) => b.key));
+      for (const key of canceledKeys.get(site.jobOwner) || []) {
+        ownKeys.add(key);
+      }
       const copies = inherited.get(site.jobOwner) || [];
       for (const sb of blocks.filter((b) => b.owner === sourceOwner)) {
-        const include = site.kind === 'merge' ? !ownKeys.has(sb.key) : sb.key === 'script' || !ownKeys.has(sb.key);
+        const include = !ownKeys.has(sb.key);
         if (include) {
           copies.push({ ...sb, owner: site.jobOwner });
         }
@@ -653,7 +683,7 @@ function extractCiShellBlocks(content) {
     blocks.length = 0;
     blocks.push(...assembled.filter((b) => !droppedSources.has(b.owner)));
   }
-  return { blocks, errors };
+  return { blocks, errors, extendsMap };
 }
 
 module.exports = { extractCiShellBlocks };

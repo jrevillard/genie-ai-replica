@@ -401,6 +401,7 @@ export default {
       }
     },
     security: {
+      loadingMetrics: 'Inapakia taarifa za usalama…',
       title: 'Ufuatiliaji wa Usalama',
       securityScan: 'Ukaguzi wa Usalama',
       runningSecurityScan: 'Uchunguzi Unaendelea...',

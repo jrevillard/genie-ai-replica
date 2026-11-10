@@ -402,6 +402,7 @@ export default {
       }
     },
     security: {
+      loadingMetrics: 'Sicherheitsdaten werden geladen…',
       title: 'Sicherheitsüberwachung',
       securityScan: 'Sicherheitsscan',
       runningSecurityScan: 'Scan wird durchgeführt...',

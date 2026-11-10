@@ -401,6 +401,7 @@ export default {
       }
     },
     security: {
+      loadingMetrics: 'Cargando los datos de seguridad…',
       title: 'Monitoreo de Seguridad',
       securityScan: 'Escaneo de Seguridad',
       runningSecurityScan: 'Ejecutando Escaneo...',

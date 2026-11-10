@@ -401,6 +401,7 @@ export default {
       }
     },
     security: {
+      loadingMetrics: 'Kantari kijeraalu cheet benta…',
       title: 'Kantari Kumpaboo',
       securityScan: 'Kantari Ñiningo',
       runningSecurityScan: 'A ka ñiningo ke...',

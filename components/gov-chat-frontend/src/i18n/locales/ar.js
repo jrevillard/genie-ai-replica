@@ -401,6 +401,7 @@ export default {
       }
     },
     security: {
+      loadingMetrics: 'جارٍ تحميل بيانات الأمان…',
       title: 'مراقبة الأمان',
       securityScan: 'فحص الأمان',
       runningSecurityScan: 'جاري تشغيل الفحص...',

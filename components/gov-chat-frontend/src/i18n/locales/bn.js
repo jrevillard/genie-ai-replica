@@ -402,6 +402,7 @@ export default {
       }
     },
     security: {
+      loadingMetrics: 'নিরাপত্তা তথ্য লোড হচ্ছে…',
       title: 'নিরাপত্তা মনিটরিং',
       securityScan: 'সিকিউরিটি স্ক্যান',
       runningSecurityScan: 'স্ক্যান চলছে...',

@@ -401,6 +401,7 @@ export default {
       }
     },
     security: {
+      loadingMetrics: 'E kenya lintlha tsa tsireletso…',
       title: 'Tlhokomelo ya Tshireletso',
       securityScan: 'Tekolo ya Tshireletso',
       runningSecurityScan: 'E Matha Tekolo...',

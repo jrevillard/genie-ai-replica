@@ -967,7 +967,7 @@
                   <div v-else-if="!isLoading && securityMetrics" class="security-details">
                     <div>
                       <strong>{{ translate('admin.security.lastSecurityScan', 'Last Security Scan') }}:</strong>
-                      {{ securityMetrics.lastSecurityScan }}
+                      {{ formatScanStamp(securityMetrics.lastSecurityScan) }}
                     </div>
                     <div>
                       <strong>{{ translate('admin.security.vulnerabilitiesFound', 'Vulnerabilities Found') }}:</strong>
@@ -1458,13 +1458,19 @@
                       </div>
                     </div>
 
+                    <!-- REVIEW round-4: the conjunction also consults
+                         suspiciousDetails — a "clean bill" above a table
+                         listing suspicious activity is the false-verdict
+                         shape this wave exists to kill. (patternMatches
+                         stay informational by the backend's own semantics.) -->
                     <div
                       v-if="
                         !securityDetails.vulnerabilityDetails ||
                         (securityDetails.vulnerabilityDetails.critical.length === 0 &&
                           securityDetails.vulnerabilityDetails.medium.length === 0 &&
                           securityDetails.vulnerabilityDetails.low.length === 0 &&
-                          (!securityDetails.failedLoginDetails || securityDetails.failedLoginDetails.length === 0))
+                          (!securityDetails.failedLoginDetails || securityDetails.failedLoginDetails.length === 0) &&
+                          (!securityDetails.suspiciousDetails || securityDetails.suspiciousDetails.length === 0))
                       "
                     >
                       <DsStateDisplay type="empty">
@@ -3009,6 +3015,19 @@ export default {
       } else {
         await this.loadSecurityDetails();
       }
+    },
+
+    // REVIEW round-4: the /admin/security-metrics route stamps
+    // lastSecurityScan as a raw ISO string (new Date().toISOString()) and
+    // the tile rendered it verbatim. Human strings ('Never', the post-scan
+    // 'Just now', the mock's '1 hour ago') pass through unchanged; a
+    // parseable timestamp renders localized.
+    formatScanStamp(value) {
+      if (typeof value !== 'string' || value === '') return value;
+      if (!/^\d{4}-\d{2}-\d{2}T/.test(value)) return value;
+      const t = Date.parse(value);
+      if (Number.isNaN(t)) return value;
+      return new Date(t).toLocaleString(this.currentLocale);
     },
 
     // Load user stats

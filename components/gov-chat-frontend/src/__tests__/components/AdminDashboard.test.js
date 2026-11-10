@@ -1298,6 +1298,120 @@ describe('AdminDashboard', () => {
       expect(wrapper.find('[data-test-id="security-retry"]').exists()).toBe(true);
     });
 
+    it('retrySecurity retries only the fetch that actually fired', async () => {
+      // REVIEW round-4 coverage: the two-branch dispatch had no test — a
+      // refactor flipping it (a redundant metrics round-trip on a
+      // details-only failure) passed the whole suite silently.
+      const wrapper = createAdminDashboardWrapper();
+      await flushPromises();
+      const metricsSpy = jest.spyOn(wrapper.vm, 'loadSecurityMetrics').mockImplementation(() => {});
+      const detailsSpy = jest.spyOn(wrapper.vm, 'loadSecurityDetails').mockImplementation(() => {});
+
+      wrapper.vm.securityMetricsError = true;
+      wrapper.vm.securityDetailsError = false;
+      await wrapper.vm.retrySecurity();
+      expect(metricsSpy).toHaveBeenCalledTimes(1);
+      expect(detailsSpy).not.toHaveBeenCalled();
+
+      metricsSpy.mockClear();
+      wrapper.vm.securityMetricsError = false;
+      wrapper.vm.securityDetailsError = true;
+      await wrapper.vm.retrySecurity();
+      expect(metricsSpy).not.toHaveBeenCalled();
+      expect(detailsSpy).toHaveBeenCalledTimes(1);
+      metricsSpy.mockRestore();
+      detailsSpy.mockRestore();
+    });
+
+    it('renders the security loading state while the security load is in flight', async () => {
+      // REVIEW round-4 coverage: the security-loading tri-state render was
+      // unpinned — the F4 loading card could vanish without a red test.
+      const wrapper = createAdminDashboardWrapper();
+      await flushPromises();
+      wrapper.vm.activeTab = 'security';
+      wrapper.vm.securityLoading = true;
+      await wrapper.vm.$nextTick();
+
+      expect(wrapper.find('[data-test-id="security-loading"]').exists()).toBe(true);
+      expect(wrapper.find('[data-test-id="security-error"]').exists()).toBe(false);
+    });
+
+    it('renders the health, usage and db-stats error cards with their retry buttons', async () => {
+      // REVIEW round-4 coverage: health-error / usage-error / db-stats-error
+      // had no render assertions.
+      const dbMock = require('../../services/databaseOperationsService').getDatabaseStats;
+      const wrapper = createAdminDashboardWrapper();
+      await flushPromises();
+      mockGetSystemHealth.mockRejectedValueOnce(new Error('health down'));
+      dbMock.mockRejectedValueOnce(new Error('arango down'));
+
+      await wrapper.vm.loadSystemHealth();
+      await wrapper.vm.loadDatabaseStats();
+      await wrapper.vm.$nextTick();
+
+      // The health/usage cards live on the overview tab; the db-stats card
+      // on the database tab.
+      expect(wrapper.find('[data-test-id="health-error"]').exists()).toBe(true);
+      expect(wrapper.find('[data-test-id="usage-error"]').exists()).toBe(true);
+      wrapper.vm.activeTab = 'database';
+      await wrapper.vm.$nextTick();
+      expect(wrapper.find('[data-test-id="db-stats-error"]').exists()).toBe(true);
+      expect(wrapper.vm.healthLoadError).toBe(true);
+      expect(wrapper.vm.dbStatsError).toBe(true);
+    });
+
+    it('shows the Measuring fallback on boot, before any measurement lands', () => {
+      // REVIEW round-4 coverage: the boot state renders "Measuring…", never
+      // a fabricated figure.
+      const wrapper = createAdminDashboardWrapper();
+      expect(wrapper.find('.measuring-note').exists()).toBe(true);
+    });
+
+    it('renders an ISO scan stamp localized and passes human strings through', () => {
+      // REVIEW round-4: the /admin/security-metrics route stamps the tile
+      // with a raw ISO string; the tile must not render it verbatim.
+      const wrapper = createAdminDashboardWrapper();
+      const stamped = wrapper.vm.formatScanStamp('2026-11-09T14:03:12.482Z');
+      expect(stamped).toContain('2026'); // the same moment, rendered
+      expect(stamped).not.toMatch(/^\d{4}-\d{2}-\d{2}T/); // not the raw ISO form
+      expect(wrapper.vm.formatScanStamp('Never')).toBe('Never');
+      expect(wrapper.vm.formatScanStamp('Just now')).toBe('Just now');
+      expect(wrapper.vm.formatScanStamp('')).toBe('');
+    });
+
+    it('does not render the clean bill above a suspicious-activity table', async () => {
+      // REVIEW round-4: the clean-bill conjunction ignored suspiciousDetails
+      // — zero vulnerabilities + zero failed logins + 5 suspicious rows read
+      // as "Your system appears to be secure" under a suspicious-activity
+      // table. The exact false-verdict shape this wave kills.
+      const wrapper = createAdminDashboardWrapper();
+      await flushPromises();
+      mockGetSecurityMetrics.mockResolvedValueOnce({
+        data: {
+          failedLoginAttempts: 0,
+          suspiciousActivities: 5,
+          lastSecurityScan: 'Yesterday',
+          vulnerabilities: { critical: 0, medium: 0, low: 0 }
+        }
+      });
+      mockGetSecurityDetails.mockResolvedValueOnce({
+        lastScan: '2026-11-10T10:00:00Z',
+        vulnerabilities: { critical: 0, medium: 0, low: 0 },
+        vulnerabilityDetails: { critical: [], medium: [], low: [] },
+        failedLoginDetails: [],
+        suspiciousDetails: [{ timestamp: '2026-11-10T09:00:00Z', type: 'ERROR', message: 'suspicious login pattern' }],
+        patternMatches: []
+      });
+
+      await wrapper.vm.loadSecurityMetrics();
+      wrapper.vm.activeTab = 'security';
+      await wrapper.vm.$nextTick();
+
+      expect(wrapper.find('[data-test-id="security-error"]').exists()).toBe(false);
+      expect(wrapper.text()).toContain('suspicious login pattern');
+      expect(wrapper.text()).not.toContain('appears to be secure');
+    });
+
     it('loadSecurityDetails maps patternMatches out of the severity buckets', async () => {
       // The backend stopped calling a bare substring a vulnerability.
       // The panel must show the term, the count and the real log line —

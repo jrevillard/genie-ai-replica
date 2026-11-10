@@ -271,6 +271,32 @@ describe('LogSearchDialog', () => {
       expect(wrapper.vm.searchResults[1].level).toBe('WARNING');
     });
 
+    it('filters a level-less wire row without crashing the search', async () => {
+      // REVIEW round-4: the level filter ran on raw wire rows BEFORE the
+      // normalizing map — one row without a level threw a TypeError and the
+      // whole search landed in the error state instead of returning the
+      // other hits.
+      mockSearchLogs.mockResolvedValueOnce({
+        data: {
+          logs: [
+            { date: '2026-11-10', time: '10:00:00', level: 'ERROR', service: 'api', message: 'a' },
+            { date: '2026-11-10', time: '11:00:00', service: 'api', message: 'no level here' }
+          ]
+        }
+      });
+
+      const wrapper = createLogSearchDialogWrapper();
+      wrapper.vm.searchParams.level = 'ERROR';
+      wrapper.vm.searchParams.dateRange = 'today';
+
+      await wrapper.vm.performSearch();
+      await wrapper.vm.$nextTick();
+
+      expect(wrapper.vm.searchError).toBeNull();
+      expect(wrapper.vm.searchResults).toHaveLength(1); // the level-less row filtered out as INFO
+      expect(wrapper.emitted('search-results')[0][1]).toBeNull(); // a clean search, not a failure
+    });
+
     it('normalizes log entries with default values', async () => {
       const incompleteLogs = [{ time: '10:00:00', level: 'INFO', service: 'API' }, { time: '11:00:00' }];
       mockSearchLogs.mockResolvedValueOnce({

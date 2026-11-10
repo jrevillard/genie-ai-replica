@@ -402,6 +402,7 @@ export default {
       }
     },
     security: {
+      loadingMetrics: 'A carregar os dados de segurança…',
       title: 'Monitoramento de Segurança',
       securityScan: 'Varredura de Segurança',
       runningSecurityScan: 'Executando Varredura...',

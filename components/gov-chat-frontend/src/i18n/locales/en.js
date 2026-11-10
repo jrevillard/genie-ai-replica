@@ -400,6 +400,7 @@ export default {
       }
     },
     security: {
+      loadingMetrics: 'Loading security data…',
       title: 'Security Monitoring',
       securityScan: 'Security Scan',
       runningSecurityScan: 'Running Scan...',

@@ -401,6 +401,7 @@ export default {
       }
     },
     security: {
+      loadingMetrics: 'กำลังโหลดข้อมูลความปลอดภัย…',
       title: 'การตรวจสอบความปลอดภัย',
       securityScan: 'สแกนความปลอดภัย',
       runningSecurityScan: 'กำลังรันสแกน...',

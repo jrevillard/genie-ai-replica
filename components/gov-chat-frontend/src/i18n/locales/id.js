@@ -401,6 +401,7 @@ export default {
       }
     },
     security: {
+      loadingMetrics: 'Memuat data keamanan…',
       title: 'Pemantauan Keamanan',
       securityScan: 'Pemindaian Keamanan',
       runningSecurityScan: 'Menjalankan Pemindaian...',

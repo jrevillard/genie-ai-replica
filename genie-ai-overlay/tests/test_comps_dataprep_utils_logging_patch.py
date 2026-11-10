@@ -167,11 +167,13 @@ def test_a_print_mention_in_a_docstring_is_not_an_abort(tmp_path):
     """A `print(` that is not a call must not abort the build.
 
     The leftover guard is AST-based for the same reason the repository's own
-    print ban is: an upstream docstring or comment whose text begins with
-    `print(` — a usage example, say — is not a logging call, and a text
-    regex would demand a site-table re-derivation for a phantom.
+    print ban is. The fixture pins the exact phantom the old text regex
+    caught: a MULTI-LINE docstring whose continuation line begins with
+    `print(` — a one-line docstring never matched that regex, this shape
+    did (its line starts with the bare text), and only an AST scan tells a
+    docstring from a call.
     """
-    docstring_print = (4, '"""usage: print(value) then log it"""', "info", None)
+    docstring_print = (4, '"""Usage.\n\n    print(value) logs it to stdout.\n    """', "info", None)
     path = _write(tmp_path, _fixture_module([*UPSTREAM_SITES, docstring_print]))
 
     assert mod.apply_patch(path) == "patched"

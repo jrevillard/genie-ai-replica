@@ -104,9 +104,12 @@ SITES = [
 # Any bare print CALL left in the file — the guard for upstream lines the
 # table does not know about. AST-based, not a text regex, for the same
 # reason the repository's own print ban is (tests/test_dataprep_logging.py):
-# a `print(` inside a docstring or a comment is not a logging call and must
-# not abort the build as a phantom upstream print.
-def _print_call_lines(source: str) -> list[int]:
+# a `print(` that is not a call — a usage example in a docstring whose
+# continuation line begins with it, prose in a comment — is not a logging
+# call and must not abort the build as a phantom upstream print. A file
+# that does not parse cannot be patched safely either: the SyntaxError
+# becomes the same fail-loud guard message as any other drift.
+def _print_call_lines(source: str, path: Path) -> list[int]:
     """Line numbers of the `print(...)` / `builtins.print(...)` calls in *source*."""
 
     def _is_print_reference(func: ast.expr) -> bool:
@@ -119,7 +122,13 @@ def _print_call_lines(source: str) -> list[int]:
             and func.value.id == "builtins"
         )
 
-    tree = ast.parse(source)
+    try:
+        tree = ast.parse(source)
+    except SyntaxError as exc:
+        raise SystemExit(
+            f"ASSERT-ON-PATCH GUARD FAILED: {path} does not parse (line {exc.lineno}): {exc.msg} — "
+            f"upstream shipped a file the patcher cannot safely rewrite."
+        ) from exc
     return [node.lineno for node in ast.walk(tree) if isinstance(node, ast.Call) and _is_print_reference(node.func)]
 
 
@@ -191,7 +200,7 @@ def apply_patch(path: Path) -> str:
         text = pattern.sub(lambda m, call=patched_call: f"{m.group('indent')}{call}{m.group('eol')}", text)
 
     if patched_call_counts == len(SITES):
-        leftovers = _print_call_lines(text)
+        leftovers = _print_call_lines(text, path)
         if leftovers:
             raise SystemExit(
                 f"ASSERT-ON-PATCH GUARD FAILED: all known sites are logger calls but unexpected `print(` "
@@ -212,7 +221,7 @@ def apply_patch(path: Path) -> str:
     # diagnostic: name the surviving print and the remedy, like every other
     # guard here.
     post = _read(path)
-    leftovers = _print_call_lines(post)
+    leftovers = _print_call_lines(post, path)
     if leftovers:
         raise SystemExit(
             f"ASSERT-ON-PATCH GUARD FAILED: an unexpected `print(` call survives at "

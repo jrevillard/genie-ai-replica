@@ -3213,6 +3213,8 @@ lint:e2e:
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
       changes:
         - "tests/e2e/**/*"
+        # the suite's eslint.config.js requires this one shared file —
+        # the gate's only dependency outside tests/e2e
         - "components/shared/eslint-rules-base.js"
         - ".gitlab-ci.yml"
       when: on_success

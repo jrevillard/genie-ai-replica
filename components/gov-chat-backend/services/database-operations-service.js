@@ -2,7 +2,7 @@ require('dotenv').config();
 const fs = require('fs').promises;
 const path = require('path');
 const { aql } = require('arangojs');
-const { logger, dbService } = require('../shared-lib');
+const { logger, dbService, formatSize } = require('../shared-lib');
 
 class DatabaseOperationsService {
   constructor() {
@@ -80,20 +80,43 @@ class DatabaseOperationsService {
 
       const writeStream = fsStandard.createWriteStream(backupPath);
 
+      // A stream error mid-backup must fail THIS backup, not hang the
+      // request (a pending 'drain' never fires after 'error') or crash the
+      // process (an 'error' event with no listener is an uncaughtException).
+      let streamFailure = null;
+      writeStream.on('error', (err) => {
+        streamFailure = err;
+      });
+
       // Bounded writes (issue #1762): the old backup stringified each
       // collection's ENTIRE document array into one string — a 46,938-doc
       // OKF collection crossed V8's string cap and 500'd the backup after
       // 34s of successful per-collection work. Per-document stringify
       // keeps every string at document size; awaiting 'drain' when the
-      // stream signals backpressure keeps memory bounded too.
+      // stream signals backpressure keeps memory bounded too. Every write
+      // (and every pending drain) rejects once the stream has failed.
       const writeBounded = (chunk) => {
-        if (writeStream.write(chunk)) return Promise.resolve();
-        return new Promise((resolve) => writeStream.once('drain', resolve));
+        if (streamFailure) return Promise.reject(streamFailure);
+        return new Promise((resolve, reject) => {
+          if (writeStream.write(chunk)) return resolve();
+          const onDrain = () => {
+            writeStream.off('error', onFail);
+            resolve();
+          };
+          const onFail = (e) => {
+            writeStream.off('drain', onDrain);
+            reject(e);
+          };
+          writeStream.once('drain', onDrain);
+          writeStream.once('error', onFail);
+        });
       };
 
+      // No trailing comma after the metadata: a database with zero
+      // non-system collections must still produce parseable JSON.
       if (this.backupFormat === 'json') {
-        writeBounded('{\n');
-        writeBounded(`  "_metadata": ${JSON.stringify(dbInfo, null, 2)},\n`);
+        await writeBounded('{\n');
+        await writeBounded(`  "_metadata": ${JSON.stringify(dbInfo, null, 2)}`);
       }
 
       let collectionCount = 0;
@@ -116,10 +139,9 @@ class DatabaseOperationsService {
         `);
 
         if (this.backupFormat === 'json') {
-          if (collectionCount > 0) {
-            await writeBounded(',\n');
-          }
-          await writeBounded(`  "${collectionName}": [`);
+          // Every collection block is comma-prefixed (the metadata carries
+          // no trailing comma), so an empty database still parses.
+          await writeBounded(`,\n  "${collectionName}": [`);
         } else {
           await writeBounded(`{"collection":"${collectionName}","data":[`);
         }
@@ -156,15 +178,23 @@ class DatabaseOperationsService {
       backupCompleted = true;
 
       const stats = await fs.stat(backupPath);
-      const fileSize = this._formatSize(stats.size);
+      const fileSize = formatSize(stats.size);
 
       let finalPath = backupPath;
       if (this.compressBackups) {
         finalPath = await this._compressBackup(backupPath);
-        await fs.unlink(backupPath);
-        const compressedStats = await fs.stat(finalPath);
-        const compressedSize = this._formatSize(compressedStats.size);
-        logger.info(`Backup compressed successfully: ${fileSize} -> ${compressedSize}`);
+        // _compressBackup swallows its own errors and returns the ORIGINAL
+        // path when gzip fails — only unlink the raw file when compression
+        // actually produced a new one, or we would delete the only copy of
+        // a completed backup (review round-2, issue #1762).
+        if (finalPath !== backupPath) {
+          await fs.unlink(backupPath);
+          const compressedStats = await fs.stat(finalPath);
+          const compressedSize = formatSize(compressedStats.size);
+          logger.info(`Backup compressed successfully: ${fileSize} -> ${compressedSize}`);
+        } else {
+          logger.warn(`Compression failed — keeping the uncompressed backup: ${backupPath}`);
+        }
       }
 
       await this._cleanupOldBackups();
@@ -359,17 +389,29 @@ class DatabaseOperationsService {
 
       for (const collection of collections) {
         const figures = await collection.figures();
-        if (figures && figures.figures) {
-          totalSize += figures.figures.documentsSize || 0;
+        if (figures) {
+          // Same driver shape as the admin service (issue #1761): count at
+          // the TOP level, byte sizes under figures.figures. MISSING reads
+          // default to 0; GARBAGE (NaN) propagates to the tripwire below —
+          // `|| 0` here once turned a broken payload into a confident zero.
+          const inner = figures.figures || {};
+          const rawSize = inner.documentsSize === undefined ? 0 : inner.documentsSize;
+          totalSize += rawSize;
           collectionStats.push({
             name: collection.name,
-            count: figures.figures.alive || 0,
-            size: this._formatSize(figures.figures.documentsSize || 0)
+            count: figures.count !== undefined ? figures.count : 0,
+            size: rawSize,
+            sizeFormatted: formatSize(rawSize)
           });
         }
       }
 
-      const formattedSize = this._formatSize(totalSize);
+      // A non-finite or negative total is a payload failure, never a
+      // renderable "NaN GB" (issue #1761).
+      if (!Number.isFinite(totalSize) || totalSize < 0) {
+        throw new Error(`Database stats total size is not a valid byte count: ${totalSize}`);
+      }
+      const formattedSize = formatSize(totalSize);
 
       logger.info('Database statistics retrieved successfully');
       return {
@@ -392,13 +434,6 @@ class DatabaseOperationsService {
         error: error.message
       };
     }
-  }
-
-  _formatSize(bytes) {
-    if (bytes === 0) return '0 B';
-    const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
-    const i = Math.floor(Math.log(bytes) / Math.log(1024));
-    return parseFloat((bytes / Math.pow(1024, i)).toFixed(2)) + ' ' + sizes[i];
   }
 }
 

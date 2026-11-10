@@ -1,4 +1,4 @@
-const { logger, dbService, parsePositiveInt } = require('../shared-lib');
+const { logger, dbService, parsePositiveInt, formatSize } = require('../shared-lib');
 const os = require('os');
 const fs = require('fs').promises;
 const path = require('path');
@@ -393,29 +393,35 @@ class AdminDashboardService {
       const collectionStats = await Promise.all(
         collections.map(async (collection) => {
           const figures = await collection.figures();
-          // The driver nests the live numbers under `figures` — the flat
-          // `figures.size` / `figures.count` reads are always undefined,
-          // which summed into a "NaN GB" database size (issue #1761).
+          // The driver's shape (verified against ArangoDB 3.12 + arangojs
+          // 8.8.1 types, issue #1761): the live document count sits at the
+          // TOP level (`figures.count`), the byte sizes nest under
+          // `figures.figures` (`documentsSize`). The old flat read
+          // (`figures.size`) was always undefined and summed into the
+          // "NaN GB" database size.
           const inner = (figures && figures.figures) || {};
-          logger.debug(`Collection ${collection.name}: count=${inner.alive}, size=${inner.documentsSize}`);
+          logger.debug(`Collection ${collection.name}: count=${figures && figures.count}, size=${inner.documentsSize}`);
           // MISSING reads default to 0; GARBAGE values (NaN) must propagate
           // to the total's non-finite tripwire below — `|| 0` here would
           // silently turn a broken payload into a confident "0 B".
+          const rawSize = inner.documentsSize === undefined ? 0 : inner.documentsSize;
           return {
             name: collection.name,
-            count: inner.alive === undefined ? 0 : inner.alive,
-            size: inner.documentsSize === undefined ? 0 : inner.documentsSize
+            count: figures && figures.count !== undefined ? figures.count : 0,
+            size: rawSize,
+            sizeFormatted: formatSize(rawSize)
           };
         })
       );
 
       const totalSize = collectionStats.reduce((sum, coll) => sum + coll.size, 0);
-      // A non-finite total is a payload failure, not a renderable value:
-      // the card must show its error state, never a confident "NaN GB".
-      if (!Number.isFinite(totalSize)) {
-        throw new Error(`Database stats total size is not finite: ${totalSize}`);
+      // A non-finite or negative total is a payload failure, not a
+      // renderable value: the card must show its error state, never a
+      // confident "NaN GB" / "NaN undefined".
+      if (!Number.isFinite(totalSize) || totalSize < 0) {
+        throw new Error(`Database stats total size is not a valid byte count: ${totalSize}`);
       }
-      const formattedSize = this._formatSize(totalSize);
+      const formattedSize = formatSize(totalSize);
       logger.debug(`Total database size: ${totalSize} bytes, formatted: ${formattedSize}`);
 
       const response = {
@@ -430,20 +436,6 @@ class AdminDashboardService {
       logger.error(`Error in getDatabaseStats: ${error.message}`, { stack: error.stack });
       throw error;
     }
-  }
-
-  /**
-   * Format a byte count as a human-readable size (same scale as the
-   * sibling database-operations-service; a fixed "/ 1 GiB" render
-   * mislabels any database smaller than 1 GiB).
-   * @param {number} bytes - Byte count
-   * @returns {string} Human-readable size
-   */
-  _formatSize(bytes) {
-    if (bytes === 0) return '0 B';
-    const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
-    const i = Math.min(Math.floor(Math.log(bytes) / Math.log(1024)), sizes.length - 1);
-    return parseFloat((bytes / Math.pow(1024, i)).toFixed(2)) + ' ' + sizes[i];
   }
 
   /**

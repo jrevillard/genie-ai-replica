@@ -4,14 +4,20 @@ require('../setup-env');
 
 jest.mock('dotenv', () => ({ config: jest.fn() }));
 
+// One fs.promises mock instance for every registry: jest.isolateModules (in
+// beforeEach) re-invokes jest.mock factories, so a factory-literal promises
+// object gives the SERVICE one set of jest.fns and the TEST another — fs
+// assertions read a different instance than the code writes to (the
+// out-of-scope `mock` prefix is jest's allow-list for factory references).
+const mockFsPromises = {
+  mkdir: jest.fn().mockResolvedValue(undefined),
+  stat: jest.fn().mockResolvedValue({ size: 1024 }),
+  readdir: jest.fn().mockResolvedValue([]),
+  unlink: jest.fn().mockResolvedValue(undefined)
+};
 jest.mock('fs', () => ({
   ...jest.requireActual('fs'),
-  promises: {
-    mkdir: jest.fn().mockResolvedValue(undefined),
-    stat: jest.fn().mockResolvedValue({ size: 1024 }),
-    readdir: jest.fn().mockResolvedValue([]),
-    unlink: jest.fn().mockResolvedValue(undefined)
-  }
+  promises: mockFsPromises
 }));
 
 jest.mock('arangojs', () => ({
@@ -27,7 +33,10 @@ jest.mock(
       warn: jest.fn(),
       debug: jest.fn()
     },
-    dbService: { getConnection: jest.fn() }
+    dbService: { getConnection: jest.fn() },
+    // The real formatter — the backup's size strings come from the shared
+    // helper now (issue #1761/#1762 review: one formatSize, not three).
+    formatSize: require('../../../shared/lib/format-utils').formatSize
   }),
   { virtual: true }
 );
@@ -104,16 +113,15 @@ describe('DatabaseOperationsService', () => {
     let mockWriteStream;
 
     beforeEach(async () => {
-      mockWriteStream = {
+      // A real EventEmitter: the backup now registers persistent error
+      // listeners and per-write drain/error pairs (issue #1762 review).
+      const { EventEmitter } = require('events');
+      mockWriteStream = Object.assign(new EventEmitter(), {
         write: jest.fn().mockReturnValue(true), // the real stream reports "no backpressure"
-        end: jest.fn(),
-        on: jest.fn().mockImplementation(function (event, cb) {
-          if (event === 'finish') {
-            setTimeout(cb, 0);
-          }
-          return this;
+        end: jest.fn(function () {
+          setImmediate(() => this.emit('finish'));
         })
-      };
+      });
 
       jest.spyOn(require('fs'), 'createWriteStream').mockReturnValue(mockWriteStream);
 
@@ -135,6 +143,50 @@ describe('DatabaseOperationsService', () => {
       expect(result.message).toBe('Database backup completed');
       expect(result.collections).toBe(2);
       expect(result.backupFile).toMatch(/^huduma_backup_.*\.json$/);
+
+      // The streamed envelope must be parseable JSON — the format change
+      // (compact arrays, comma-prefixed collection blocks) stays honest.
+      const joined = mockWriteStream.write.mock.calls.map((c) => c[0]).join('');
+      const parsed = JSON.parse(joined);
+      expect(parsed._metadata.name).toBe(process.env.ARANGO_DB);
+      expect(parsed.users).toEqual([{ _key: 'doc1' }]);
+    });
+
+    it('produces valid JSON for a database with zero non-system collections', async () => {
+      // A trailing comma after the metadata once made an empty database's
+      // backup unparseable while still reporting success.
+      mockDb.listCollections.mockResolvedValue([{ name: '_system', isSystem: true }]);
+
+      const result = await service.backupDatabase();
+      expect(result.success).toBe(true);
+
+      const joined = mockWriteStream.write.mock.calls.map((c) => c[0]).join('');
+      const parsed = JSON.parse(joined);
+      expect(Object.keys(parsed)).toEqual(['_metadata']);
+    });
+
+    it('fails the backup (and cleans up) when the stream errors mid-backup', async () => {
+      // Issue #1762 review: a stream error with no listener crashed the
+      // process or hung the request on a never-firing drain. The backup
+      // must reject, return a failure result, and remove the partial file.
+      mockDb.listCollections.mockResolvedValue([
+        { name: 'users', isSystem: false },
+        { name: 'broken', isSystem: false }
+      ]);
+      mockDb.query
+        .mockImplementationOnce(() => Promise.resolve(makeIterableCursor([{ _key: 'u1' }])))
+        .mockImplementationOnce(() => Promise.resolve(makeIterableCursor([])));
+      mockWriteStream.write.mockImplementation((chunk) => {
+        if (chunk.includes('"broken"')) {
+          process.nextTick(() => mockWriteStream.emit('error', new Error('ENOSPC: no space left on device')));
+        }
+        return true;
+      });
+
+      const result = await service.backupDatabase();
+
+      expect(result.success).toBe(false);
+      expect(require('fs').promises.unlink).toHaveBeenCalledWith(expect.stringMatching(/huduma_backup_.*\.json$/));
     });
 
     it('streams documents without ever stringifying a whole collection', async () => {
@@ -191,6 +243,23 @@ describe('DatabaseOperationsService', () => {
 
       expect(result.success).toBe(false);
       expect(require('fs').promises.unlink).not.toHaveBeenCalled();
+    });
+
+    it('keeps the uncompressed backup when compression fails', async () => {
+      // _compressBackup swallows its own errors and returns the ORIGINAL
+      // path — the compress branch must then keep that file, not unlink the
+      // only copy of a completed backup (issue #1762 review).
+      mockDb.listCollections.mockResolvedValue([{ name: 'users', isSystem: false }]);
+      mockDb.query.mockImplementation(() => Promise.resolve(makeIterableCursor([{ _key: 'u1' }])));
+      service.compressBackups = true;
+      const compressSpy = jest.spyOn(service, '_compressBackup').mockImplementation(async (p) => p); // the internal-failure contract
+
+      const result = await service.backupDatabase();
+
+      expect(result.success).toBe(true);
+      expect(compressSpy).toHaveBeenCalled();
+      expect(require('fs').promises.unlink).not.toHaveBeenCalled();
+      compressSpy.mockRestore();
     });
 
     it('should skip system collections during backup', async () => {
@@ -323,9 +392,13 @@ describe('DatabaseOperationsService', () => {
     });
 
     it('should return database statistics', async () => {
+      // The driver's REAL shape (issue #1761): count at the TOP level,
+      // sizes under figures.figures — the fabricated inner "alive" count
+      // (which does not exist on ArangoDB 3.12) once pinned count=0.
       const mockColl = createMockCollection('users');
       mockColl.figures = jest.fn().mockResolvedValue({
-        figures: { alive: 100, documentsSize: 4096 }
+        count: 100,
+        figures: { documentsSize: 4096 }
       });
 
       mockDb.collections.mockResolvedValue([mockColl]);
@@ -341,8 +414,10 @@ describe('DatabaseOperationsService', () => {
       expect(result.collections[0]).toEqual({
         name: 'users',
         count: 100,
-        size: '4 KB'
+        size: 4096,
+        sizeFormatted: '4 KB'
       });
+      expect(result.databaseSize).toBe('4 KB');
       expect(result.systemStats).toEqual({ system: 'stats' });
     });
 
@@ -376,29 +451,6 @@ describe('DatabaseOperationsService', () => {
     });
   });
 
-  describe('_formatSize', () => {
-    beforeEach(async () => {
-      await service.init();
-    });
-
-    it('should format 0 bytes', () => {
-      expect(service._formatSize(0)).toBe('0 B');
-    });
-
-    it('should format bytes', () => {
-      expect(service._formatSize(512)).toBe('512 B');
-    });
-
-    it('should format kilobytes', () => {
-      expect(service._formatSize(1024)).toBe('1 KB');
-    });
-
-    it('should format megabytes', () => {
-      expect(service._formatSize(1048576)).toBe('1 MB');
-    });
-
-    it('should format gigabytes', () => {
-      expect(service._formatSize(1073741824)).toBe('1 GB');
-    });
-  });
+  // _formatSize moved to shared-lib as formatSize — its contract is pinned
+  // by components/shared/lib/__tests__/format-utils.test.js.
 });

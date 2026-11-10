@@ -67,9 +67,10 @@ function createMockCursor(results) {
 function createMockCollection(figures) {
   return {
     all: jest.fn().mockResolvedValue(createMockCursor([])),
-    // The REAL driver nests the live numbers under `figures` (the flat
-    // {count, size} shape here once pinned the #1761 "NaN GB" bug).
-    figures: jest.fn().mockResolvedValue(figures || { figures: { alive: 0, documentsSize: 0 } }),
+    // The REAL driver shape (ArangoDB 3.12): count at the TOP level of the
+    // figures() return, byte sizes under figures.figures — and NO "alive"
+    // field anywhere (an inner alive once pinned a deterministic count=0).
+    figures: jest.fn().mockResolvedValue(figures || { count: 0, figures: { documentsSize: 0 } }),
     name: 'testCollection'
   };
 }
@@ -164,10 +165,12 @@ describe('AdminDashboardService', () => {
     });
 
     it('should return collection stats', async () => {
-      // The driver's real shape: live numbers under `figures.figures`
-      // (issue #1761 — the flat shape made every read undefined and the
-      // total "NaN GB").
-      const mockColl = createMockCollection({ figures: { alive: 100, documentsSize: 5000 } });
+      // The driver's REAL shape (verified against ArangoDB 3.12 + arangojs
+      // 8.8.1 types, issue #1761): count at the TOP level of figures(),
+      // byte sizes under figures.figures. The flat {count, size} mock here
+      // once pinned the "NaN GB" bug, and an inner "alive" count (which
+      // does not exist on 3.12) would pin a deterministic count=0.
+      const mockColl = createMockCollection({ count: 100, figures: { documentsSize: 5000 } });
       mockColl.name = 'users';
       mockDb.collections.mockResolvedValueOnce([mockColl]);
 
@@ -178,17 +181,28 @@ describe('AdminDashboardService', () => {
       expect(result.collections[0].count).toBe(100);
       expect(result.collections[0].size).toBe(5000);
       // Human-readable, never "NaN GB": 5000 bytes = 4.88 KB.
+      expect(result.collections[0].sizeFormatted).toBe('4.88 KB');
       expect(result.databaseSize).toBe('4.88 KB');
+    });
+
+    it('defaults a missing count to 0 instead of undefined', async () => {
+      const mockColl = createMockCollection({ figures: { documentsSize: 4096 } });
+      mockColl.name = 'nocount';
+      mockDb.collections.mockResolvedValueOnce([mockColl]);
+
+      const result = await adminDashboardService.getDatabaseStats();
+      expect(result.collections[0].count).toBe(0);
+      expect(result.databaseSize).toBe('4 KB');
     });
 
     it('should throw when the total size is not finite (never render NaN)', async () => {
       // A garbage figures payload must fail the payload — the card renders
       // its error state instead of a confident "NaN GB" (issue #1761).
-      const mockColl = createMockCollection({ figures: { alive: 1, documentsSize: NaN } });
+      const mockColl = createMockCollection({ count: 1, figures: { documentsSize: NaN } });
       mockColl.name = 'weird';
       mockDb.collections.mockResolvedValueOnce([mockColl]);
 
-      await expect(adminDashboardService.getDatabaseStats()).rejects.toThrow('not finite');
+      await expect(adminDashboardService.getDatabaseStats()).rejects.toThrow('not a valid byte count');
     });
 
     it('should throw when not initialized', async () => {

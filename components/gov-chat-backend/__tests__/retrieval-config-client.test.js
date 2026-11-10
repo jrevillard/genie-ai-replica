@@ -288,6 +288,15 @@ describe('retrieval-config-client (Story 1.1)', () => {
     expect(config.config.mode).toBe('legacy');
     expect(config.engaged).toBe(false);
 
+    // The warn names WHY the response was rejected — a shape problem and an
+    // out-of-vocabulary mode are different operator problems.
+    const { logger } = require('../shared-lib');
+    const malformedWarn = logger.warn.mock.calls.find(
+      ([msg]) => msg === 'RetrievalConfigClient.malformed_config_response'
+    );
+    expect(malformedWarn).toBeDefined();
+    expect(malformedWarn[1].reason).toBe('mode_not_declared');
+
     nowMs += REAL_TTL_MS + 1;
     axios.get.mockImplementationOnce(() => okfGetError(503));
     const afterOutage = await client.getRetrievalConfig(makeBearer(['okf:t:c:read']));

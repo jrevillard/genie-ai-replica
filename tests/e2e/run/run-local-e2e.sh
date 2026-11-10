@@ -19,6 +19,9 @@
 #   E2E_VENUE_IP             the address of the venue edge, for a runner that
 #                            cannot resolve the venue NAME (see
 #                            tests/e2e/helpers/venue-launch-args.js).
+#   E2E_NAMESPACE            the namespace the Keycloak admin secret is read
+#                            from when the credentials are auto-read
+#                            (default: genieai).
 #   E2E_FILE_ISSUES          0 reports the failures without filing issues.
 #
 # The run ends with the failure path: a red run files one status::backlog
@@ -94,6 +97,11 @@ if [ -z "${ADMIN_TOKEN:-}" ] && [ -z "${KEYCLOAK_ADMIN_PASSWORD:-}" ]; then
     kubectl -n "$NAMESPACE" get secret keycloak-admin-credentials >/dev/null 2>&1; then
     KEYCLOAK_ADMIN_PASSWORD="$(kubectl -n "$NAMESPACE" get secret keycloak-admin-credentials \
       -o go-template='{{ index .data "password" | base64decode }}')"
+    if [ -z "$KEYCLOAK_ADMIN_PASSWORD" ]; then
+      echo "ERROR: the keycloak-admin-credentials secret in namespace $NAMESPACE carries no 'password' key." >&2
+      echo "       The auto-read exported an empty credential - set KEYCLOAK_ADMIN_PASSWORD explicitly." >&2
+      exit 2
+    fi
     export KEYCLOAK_ADMIN_PASSWORD
     echo "admin credentials: the shared stack's keycloak-admin-credentials secret (namespace $NAMESPACE)"
   else
@@ -164,7 +172,7 @@ if [ "${E2E_FILE_ISSUES:-1}" = "0" ]; then
   FILE_FLAG=""
 fi
 set +e
-node tests/e2e/run/file-failure-issues.js --report "$RUN_REPORT" ${FILE_FLAG}
+node tests/e2e/run/file-failure-issues.js --report "$RUN_REPORT" --venue "$BASE_URL" ${FILE_FLAG}
 REPORT_STATUS=$?
 set -e
 

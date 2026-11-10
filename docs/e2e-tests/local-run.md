@@ -65,6 +65,7 @@ death passed through (a signal, an OOM).
 | the Inter fonts on `XDG_DATA_HOME` | the pixel-measurement specs measure rendered text |
 | a reachable venue | `BASE_URL` points at the stack's edge |
 | Keycloak master-realm admin | see step 1 above |
+| `glab`, authenticated to the project | the failure path reads the open-issue list before it files — a red run on a machine without it reports the failures but files nothing |
 
 ### The pre-flight
 
@@ -152,8 +153,13 @@ renames it — the fixed path holds whatever ran last):
 
 ```bash
 ls reports/playwright-report-run-*.json
-node tests/e2e/run/file-failure-issues.js --report reports/playwright-report-run-<stamp>.json --file-issues
+node tests/e2e/run/file-failure-issues.js --report reports/playwright-report-run-<stamp>.json \
+  --venue https://genieai-forge.local:4443 --file-issues
 ```
+
+`--venue` is the address the FAILED RUN pointed at — the evidence in the
+issue and the venue-alive re-probe both key on it, not on this shell's
+`BASE_URL`.
 
 A run that wrote **no** report is a broken run: the runner stops there and
 files nothing rather than reading the fixed path, which would be another

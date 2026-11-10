@@ -52,20 +52,29 @@ function remedy(what) {
     process.exit(1);
   }
 
+  let failure = null;
   try {
     const context = await browser.newContext({ ignoreHTTPSErrors: true });
     const page = await context.newPage();
     const response = await page.goto(BASE_URL, { waitUntil: 'domcontentloaded', timeout: 45000 });
     const status = response ? response.status() : 0;
-    if (!status || status >= 500) {
-      process.stderr.write(`pre-flight: the venue answered HTTP ${status} at ${BASE_URL}.\n`);
-      process.exit(1);
+    // ANY 4xx at the venue ROOT is a misconfigured BASE_URL, not a surface
+    // the app serves: letting the run proceed would fail every spec on
+    // navigation and the failure path would file one issue per spec file
+    // for a RUNNER-CONFIG cause — the flood this pre-flight exists to stop.
+    if (!status || status >= 400) {
+      failure = `the venue answered HTTP ${status} at ${BASE_URL} — the address is not the app's edge.`;
+    } else {
+      process.stdout.write(`pre-flight: the browser reached the venue (HTTP ${status}).\n`);
     }
-    process.stdout.write(`pre-flight: the browser reached the venue (HTTP ${status}).\n`);
   } catch (e) {
-    process.stderr.write(`pre-flight: the browser could not open the venue.\n${remedy(e.message.split('\n')[0])}\n`);
+    failure = `the browser could not open the venue.\n${remedy(e.message.split('\n')[0])}`;
+  }
+  // The browser closes BEFORE the exit: process.exit skips a finally block,
+  // and every failed pre-flight would orphan a live Chromium on the machine.
+  await browser.close();
+  if (failure) {
+    process.stderr.write(`pre-flight: ${failure}\n`);
     process.exit(1);
-  } finally {
-    await browser.close();
   }
 })();

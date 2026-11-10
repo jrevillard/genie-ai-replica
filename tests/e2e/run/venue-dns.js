@@ -51,9 +51,17 @@ if (mapping) {
     } else {
       opts = opts || {};
     }
+    // A caller that asks for family 6 gets the RESOLVER's answer, not the
+    // mapped IPv4: the venue has no AAAA record, and answering a different
+    // family than the one requested would break the lookup contract the
+    // preload promises to preserve.
+    if (opts.family === 6) return originalLookup.apply(this, arguments);
     const family = familyOf(ip);
-    if (opts.all) return done(null, [{ address: ip, family }]);
-    return done(null, ip, family);
+    // Async dispatch, like the resolver callbacks below: Node's own lookup
+    // never fires its callback inside the call, and a caller that sets up
+    // state after the call must not observe the answer first.
+    if (opts.all) return process.nextTick(done, null, [{ address: ip, family }]);
+    return process.nextTick(done, null, ip, family);
   };
 
   dns.promises.lookup = async function promiseLookupWithVenueMapping(hostname, options) {

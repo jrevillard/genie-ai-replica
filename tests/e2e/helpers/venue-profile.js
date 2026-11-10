@@ -202,7 +202,6 @@ function missingIdentityProviderReason(realm) {
 
 module.exports = {
   okfEnabled,
-  okfProfile,
   okfParkedReason,
   realmExists,
   missingRealmReason,

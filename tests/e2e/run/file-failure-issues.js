@@ -52,6 +52,18 @@ const LABELS = ['status::backlog', 'type::bug', 'area::testing'];
 // browser trace.
 const MAX_ERROR_LINES = 40;
 
+// How many failures travel into ONE issue body. A spec file with dozens of
+// failures would push the description past the kernel's per-argument cap
+// (~128 KiB), the spawn would die with E2BIG, and the file would be
+// permanently un-fileable — the cap keeps the filing possible; the count
+// line above the fold still says how many failed.
+const MAX_FAILURES_PER_ISSUE = 10;
+
+// One tracker call, in milliseconds. A wedged connection must not hang the
+// run forever with both serial-slot locks held — every other bound in the
+// runner is finite and so is this one.
+const TRACKER_TIMEOUT_MS = 60000;
+
 function fail(message) {
   process.stderr.write(`file-failure-issues: ${message}\n`);
   process.exit(1);
@@ -128,6 +140,7 @@ function glab(args) {
   return execFileSync('glab', ['api', '--hostname', GITLAB_HOST, ...args], {
     encoding: 'utf-8',
     maxBuffer: 32 * 1024 * 1024,
+    timeout: TRACKER_TIMEOUT_MS,
   });
 }
 
@@ -240,7 +253,7 @@ function issueBody(file, failures, venue, runStamp) {
     '',
     '## Failures',
     '',
-    ...failures.flatMap((failure) => [
+    ...failures.slice(0, MAX_FAILURES_PER_ISSUE).flatMap((failure) => [
       `### ${failure.title}`,
       '',
       '```',
@@ -248,6 +261,9 @@ function issueBody(file, failures, venue, runStamp) {
       '```',
       '',
     ]),
+    ...(failures.length > MAX_FAILURES_PER_ISSUE
+      ? [`(${failures.length - MAX_FAILURES_PER_ISSUE} more failures omitted.)`, '']
+      : []),
     '## Reproduce',
     '',
     '```bash',
@@ -270,7 +286,16 @@ function commentBody(files, venue, runStamp) {
     ...files.flatMap((entry) => [
       `### ${entry.file}`,
       '',
-      ...entry.failures.flatMap((failure) => [`**${failure.title}**`, '```', failure.error, '```', '']),
+      ...entry.failures.slice(0, MAX_FAILURES_PER_ISSUE).flatMap((failure) => [
+        `**${failure.title}**`,
+        '```',
+        failure.error,
+        '```',
+        '',
+      ]),
+      ...(entry.failures.length > MAX_FAILURES_PER_ISSUE
+        ? [`(${entry.failures.length - MAX_FAILURES_PER_ISSUE} more failures omitted.)`, '']
+        : []),
     ]),
   ].join('\n');
 }
@@ -324,9 +349,19 @@ function main() {
   if (reportFlag !== -1 && (!reportValue || reportValue.startsWith('-'))) {
     fail('--report needs the path of the report to read');
   }
+  const venueFlag = process.argv.indexOf('--venue');
+  const venueValue = venueFlag === -1 ? null : process.argv[venueFlag + 1];
+  if (venueFlag !== -1 && (!venueValue || venueValue.startsWith('-'))) {
+    fail('--venue needs the address the failed run pointed at');
+  }
   const reportPath = reportValue ? path.resolve(reportValue) : DEFAULT_REPORT_PATH;
   const report = readReport(reportPath);
-  const venue = process.env.BASE_URL || 'https://localhost';
+  // The venue is the address the FAILED RUN pointed at, not whatever this
+  // shell happens to carry: the runner passes --venue explicitly, and a
+  // hand re-run in a fresh shell (no BASE_URL exported) would otherwise
+  // file issues naming https://localhost with a reproduce command that
+  // reproduces nothing.
+  const venue = venueValue || process.env.BASE_URL || 'https://localhost';
   const runStamp = report.stats && report.stats.startTime ? report.stats.startTime : new Date().toISOString();
 
   const tests = collectTests(report.suites);
@@ -383,6 +418,24 @@ function main() {
   }
 
   process.stdout.write('\nfiled:\n');
+  // The venue must be drivable BEFORE anything is filed: the documented
+  // venue-death case (the node reboots mid-run) fails every spec that
+  // navigates afterwards with ERR_CONNECTION_REFUSED, and filing one issue
+  // per spec file for that single cause is exactly the tracker noise the
+  // failure path exists to prevent. The pre-flight answers "is the venue
+  // drivable" — the same check the run started with.
+  try {
+    execFileSync('node', [path.join(__dirname, 'preflight.js')], {
+      stdio: 'inherit',
+      env: { ...process.env, BASE_URL: venue },
+    });
+  } catch {
+    process.stderr.write(
+      'file-failure-issues: the venue is not drivable — the failures are a venue event, ' +
+        'not per-spec findings. NOTHING is filed; re-run the suite once the venue answers.\n'
+    );
+    process.exit(1);
+  }
   // The failing files are grouped by the issue that already tracks them, so
   // one umbrella issue receives ONE comment for the whole run — not one per
   // file. A file nobody tracks yet gets its own issue.

@@ -3446,6 +3446,18 @@ describe('the local e2e run defines the executed set (#1736)', () => {
     expect(labels).not.toBeNull();
     expect(labels[1]).toContain("'status::backlog'");
   });
+
+  test('the runner, the failure path and the config agree on the report path', () => {
+    const config = fs.readFileSync(path.join(ROOT, 'playwright.config.js'), 'utf-8');
+    const failurePath = fs.readFileSync(FAILURE_PATH, 'utf-8');
+    // Three files spell the one report path — the config declares it, the
+    // runner clears/moves it, the failure path defaults to it. A rename in
+    // one and not the others mixes runs' reports (the staleness check
+    // exists for exactly that), so the agreement itself is the contract.
+    for (const source of [config, runScript, failurePath]) {
+      expect(source).toContain('playwright-report.json');
+    }
+  });
 });
 
 // The venue-fixture provisioning in .e2e_web_base (issue #1324): all three

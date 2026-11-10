@@ -490,9 +490,35 @@ describe('producer-service — startDocumentsConversion + run', () => {
           (queued) => ({ queued }),
           (err) => ({ err })
         );
-      expect(fresh.err && fresh.err.code).not.toBe('CONVERSION_IN_FLIGHT');
+      // The fresh start got PAST the guard — it fails in the stamp stage
+      // again (the failure re-arms at its own queued patch), not with 409.
+      expect(fresh.err && fresh.err.message).toMatch(/db down/);
     } finally {
       dbService.getConnection.mockImplementation(() => Promise.resolve(mockDb));
+    }
+  });
+
+  it('a slot-acquire rejection releases the reservation instead of 409-locking the repo', async () => {
+    // The slot acquire sits INSIDE the runner's try: a rejection there must
+    // still release the reservation, or the repo stays 409-locked forever
+    // and `await live.get(repo_id)` never settles. acquireSlot cannot reject
+    // today — this pins the guard against a future acquire that can.
+    mockDocs({ f1: 'alpha.md' });
+    await mockDb.collection('okf_repositories').save({ _key: RID, repo_id: RID, name: 'Mine', domain: 'general' });
+    const crawlConversion = require('../services/crawl-conversion-service');
+    const releaseSpy = jest.spyOn(crawlConversion, 'releaseSlot');
+    const acquireSpy = jest.spyOn(crawlConversion, 'acquireSlot').mockRejectedValueOnce(new Error('slot boom'));
+    try {
+      await expect(
+        producer.startDocumentsConversion({ repo_id: RID, file_ids: ['f1'], requested_name: 'x' })
+      ).resolves.toMatchObject({ status: 'queued' });
+      const inFlight = producer.live.get(RID);
+      if (inFlight) await inFlight.catch(() => {});
+      expect(producer.live.has(RID)).toBe(false);
+      expect(releaseSpy).not.toHaveBeenCalled(); // no slot was ever taken
+    } finally {
+      acquireSpy.mockRestore();
+      releaseSpy.mockRestore();
     }
   });
 

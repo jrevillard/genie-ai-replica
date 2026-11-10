@@ -133,29 +133,15 @@ function legacyDefaultConfig(reason) {
   };
 }
 
-// The source labels the OKF-SERVER stamps on its own read-model ('database',
-// 'env-defaults') versus the ones THIS client synthesizes locally when the
-// upstream cannot be reached. A consumer that must tell "the deployment
-// serves zero graphs" from "we could not reach the deployment" reads the
-// label through isBffSynthesized — never by string-matching a prefix.
-const BFF_SYNTHESIZED_SOURCES = new Set(['bff-last-known-good', 'bff-fail-closed-default']);
-
-/**
- * Was this composition synthesized LOCALLY by this client (an upstream
- * outage, a 403, a malformed body) rather than read from the okf-server?
- * @param {object|null} config — a retrieval-config composition
- * @returns {boolean}
- */
-function isBffSynthesized(config) {
-  return BFF_SYNTHESIZED_SOURCES.has(config?.source);
-}
-
 /**
  * Was this composition synthesized because the deployment's posture could NOT
  * be read (an unreachable upstream, a garbled body)? The by-design defaults
  * (OKF parked, a caller without okf scopes) are NOT included: their legacy
  * answer is the correct posture, not an unknown one — a consumer that warns
  * on an unreadable posture must not fire per query in a parked deployment.
+ * `synthesis_reason` is the single discriminant: every composition this
+ * client synthesizes carries one, every upstream-read composition carries
+ * none.
  * @param {object|null} config — a retrieval-config composition
  * @returns {boolean}
  */
@@ -373,9 +359,9 @@ async function attemptUpstream(policy, bearerHeader, opts, correlationId) {
  *   was never tested: the attempt ran with the INITIATOR's bearer, so a
  *   joiner that sees its 401 runs its OWN attempt — outside the cache, where
  *   it can neither join another caller's attempt nor be joined by one.
- * - A failure-resolved composition that carries a posture (the
- *   last-known-good) is re-validated against the trust horizon at SERVE
- *   time, so a window longer than the horizon cannot keep serving it.
+ * - A composition that stamps an `expires_at` on itself (the last-known-good
+ *   posture) is re-validated at SERVE time, so a window longer than the
+ *   horizon cannot keep serving it.
  */
 async function resolveCached(kind, bearerHeader, policy, opts = {}) {
   const correlationId = opts.correlationId || nodeCrypto.randomUUID();
@@ -392,11 +378,11 @@ async function resolveCached(kind, bearerHeader, policy, opts = {}) {
     // result — awaiting it is what shares one upstream call.
     try {
       const value = await hit.promise;
-      if (value?.source === 'bff-last-known-good' && Date.now() - value.captured_at > LKG_MAX_AGE_MS) {
-        // The posture this composition was built from expired while the
-        // entry sat cached (a window longer than the horizon): drop the
-        // entry and resolve again — the fresh attempt finds no trusted
-        // posture and takes the fail-closed default.
+      if (value?.expires_at && Date.now() > value.expires_at) {
+        // The composition carried an expiry that passed while the entry sat
+        // cached (a window longer than the horizon): drop the entry and
+        // resolve again — the fresh attempt finds no trusted posture and
+        // takes the fail-closed default.
         if (_cache.get(key) === hit) _cache.delete(key);
         return resolveCached(kind, bearerHeader, policy, opts);
       }
@@ -448,7 +434,12 @@ async function getRetrievalConfig(bearerHeader, opts = {}) {
       onSuccess(raw, callOpts) {
         // Shape gate: the response must carry the fields the BFF consumes
         // (config.mode + engaged at minimum). A garbled body degrades to the
-        // legacy default instead of reaching the carrier logic. The mode is
+        // legacy default instead of reaching the carrier logic — the PLAIN
+        // default, deliberately never the last-known-good: the upstream
+        // answered but its payload cannot be trusted, so nothing it said
+        // feeds the carrier (an unreachable upstream, by contrast, still
+        // consults the fresh last-known-good — a transport accident, not a
+        // broken payload). The mode is
         // checked AS IT ARRIVED — never trimmed into a valid one: the
         // okf-server's own sanitizer treats a padded value as garbled (safe
         // default), and this client must not promote it into an engaged
@@ -510,15 +501,16 @@ async function getRetrievalConfig(bearerHeader, opts = {}) {
         // The deployment-global posture survives the outage; everything
         // else is locally synthesized (fail-closed) and says so: the
         // source label marks the payload as the BFF's own last-known-good
-        // composition, not the upstream's. `captured_at` is the age of the
-        // POSTURE it carries — the cache re-validates it at serve time, so
-        // a window longer than the trust horizon cannot keep serving it.
+        // composition, not the upstream's. `expires_at` is when the POSTURE
+        // it carries stops being trusted — the cache re-validates it at
+        // serve time, so a window longer than the horizon cannot keep
+        // serving it (#1683).
         return {
           value: {
             ...legacyDefaultConfig('upstream_unreachable'),
             config: { mode: lkg.config.mode },
             source: 'bff-last-known-good',
-            captured_at: lkg.captured_at
+            expires_at: lkg.captured_at + LKG_MAX_AGE_MS
           }
         };
       }
@@ -576,7 +568,6 @@ module.exports = {
   getAuthorizedGraphs,
   OkfAuthzUnauthorizedError,
   legacyDefaultConfig,
-  isBffSynthesized,
   isPostureUnknown,
   _resetCache,
   // Exposed for tests/diagnostics only — production code reads nothing here.

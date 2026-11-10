@@ -61,6 +61,23 @@ describe('auth middleware (authenticate)', () => {
     expect(next).not.toHaveBeenCalled();
   });
 
+  test('a falsy verified payload: the same fixed 401 body shape', async () => {
+    // verifyToken resolving to nothing is the same contract as a thrown
+    // verification failure: 401 TOKEN_INVALID, fixed message, doc-repo shape.
+    keycloakAuthService.verifyToken.mockResolvedValue(null);
+    const req = { headers: { authorization: 'Bearer some-token' }, path: '/api/okf' };
+    const res = mockRes();
+    const next = jest.fn();
+    await authenticate(req, res, next);
+    expect(res.status).toHaveBeenCalledWith(401);
+    expect(res.json).toHaveBeenCalledWith({
+      error: 'TOKEN_INVALID',
+      message: 'Token verification failed',
+      details: {}
+    });
+    expect(next).not.toHaveBeenCalled();
+  });
+
   test("the verifier's internal text never reaches the client (a fixed 401 body)", async () => {
     // The verification error carries operator detail (issuer mismatch, JWKS
     // key id, decoding detail). It belongs in the log, not in a body an

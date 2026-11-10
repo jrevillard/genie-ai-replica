@@ -290,7 +290,7 @@ describe('QueryService fan-out carrier (Story 1.1 — I/O Matrix)', () => {
     expect(logger.warn).toHaveBeenCalledWith(
       'QueryService.fanout_warning',
       expect.objectContaining({
-        fanout: { warning: 'hybrid_serving_unknown', mode: 'hybrid', engaged: false }
+        fanout: { warning: 'posture_unknown', mode: 'hybrid', engaged: false }
       })
     );
   });
@@ -304,6 +304,7 @@ describe('QueryService fan-out carrier (Story 1.1 — I/O Matrix)', () => {
       okfConfig({
         config: { mode: 'okf_only' },
         source: 'bff-last-known-good',
+        synthesis_reason: 'upstream_unreachable',
         engaged: false,
         serving_graph_count: 0,
         warnings: []
@@ -315,8 +316,14 @@ describe('QueryService fan-out carrier (Story 1.1 — I/O Matrix)', () => {
     expect(logger.warn).toHaveBeenCalledWith(
       'QueryService.fanout_warning',
       expect.objectContaining({
-        fanout: { warning: 'okf_only_serving_unknown', mode: 'okf_only', engaged: false }
+        fanout: { warning: 'posture_unknown', mode: 'okf_only', engaged: false }
       })
+    );
+    // And it is not double-warned as a genuine zero-serving deployment: the
+    // okf_only branch's own warning is for REAL upstream responses only.
+    expect(logger.warn).not.toHaveBeenCalledWith(
+      'QueryService.fanout_warning',
+      expect.objectContaining({ fanout: expect.objectContaining({ warning: 'okf_only_zero_serving' }) })
     );
     // The resolved line carries the source label — the honest provenance.
     expect(logger.info).toHaveBeenCalledWith(

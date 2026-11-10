@@ -460,7 +460,9 @@ describe('retrieval-config-client (Story 1.1)', () => {
       expect(degraded.config.mode).toBe('hybrid');
       expect(degraded.source).toBe('bff-last-known-good');
       // The composition carries the age of the posture it was built from.
-      expect(degraded.captured_at).toBe(599000);
+      // The composition carries when the posture it was built from stops
+      // being trusted — the cache re-validates it at serve time.
+      expect(degraded.expires_at).toBe(599000 + longClient._internals.LKG_MAX_AGE_MS);
 
       nowMs = 899500; // SAME window, past the horizon (age 300500 > 300000)
       const afterHorizon = await longClient.getRetrievalConfig(bearer);

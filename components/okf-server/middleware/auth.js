@@ -71,7 +71,7 @@ async function authenticate(req, res, next) {
   try {
     const payload = await keycloakAuthService.verifyToken(token, verifyOpts);
     if (!payload) {
-      return res.status(401).json({ error: 'TOKEN_INVALID', message: 'Token verification failed' });
+      return res.status(401).json({ error: 'TOKEN_INVALID', message: 'Token verification failed', details: {} });
     }
     req.user = payload;
     // Authorization context (Story 6.1): scopes + bootstrap super-role.

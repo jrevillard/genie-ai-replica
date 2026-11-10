@@ -505,6 +505,14 @@ describe('keycloakAuthService', () => {
   });
 
   describe('verifyToken with force-refresh on signature failure', () => {
+    // The rotation candidate: jose's "no key matches this kid" — the key set
+    // may be stale because the realm rotated its keys.
+    const unknownKidError = () => {
+      const err = new Error('no key found matching the kid');
+      err.name = 'JWKSNoMatchingKey';
+      return err;
+    };
+
     beforeEach(() => {
       // Reset mocks
       mockCreateRemoteJWKSet = jest.fn().mockReturnValue(jest.fn());
@@ -515,10 +523,9 @@ describe('keycloakAuthService', () => {
       });
     });
 
-    it('should force-refresh JWKS on signature failure with valid exp and retry once', async () => {
-      const signatureError = new Error('Signature verification failed');
+    it('should force-refresh JWKS on an unknown kid (rotation candidate) and retry once', async () => {
       mockJwtVerify
-        .mockRejectedValueOnce(signatureError) // First call: signature fails
+        .mockRejectedValueOnce(unknownKidError()) // First call: kid not in the key set
         .mockResolvedValueOnce({
           // Second call: succeeds after refresh
           payload: mockJwtPayload,
@@ -538,11 +545,116 @@ describe('keycloakAuthService', () => {
       expect(mockJwtVerify).toHaveBeenCalledTimes(2);
     });
 
+    it('should NOT force-refresh on a resolved-kid signature failure (junk-signature flood)', async () => {
+      // A resolved kid whose signature does not verify can never become
+      // valid through rotation. Refreshing the key set only zeroes the JWKS
+      // cache TTL, so a flood of junk-signature tokens would make every
+      // legitimate token pay a fresh JWKS fetch (#1703).
+      mockJwtVerify.mockRejectedValue(new Error('signature verification failed'));
+
+      const token = generateMockJwtString(mockJwtPayload);
+
+      await expect(keycloakAuthService.verifyToken(token)).rejects.toMatchObject({
+        code: 'TOKEN_INVALID',
+        message: 'Token verification failed'
+      });
+
+      // jwtVerify called once — no refresh, no retry
+      expect(mockJwtVerify).toHaveBeenCalledTimes(1);
+    });
+
+    it('should NOT force-refresh an unknown-kid token with no exp claim (never rotatable)', async () => {
+      // A missing exp can never pass jose's requiredClaims ['iss','exp'], so
+      // it can never be a rotation case: fast-fail, no refresh.
+      mockJwtVerify.mockRejectedValue(unknownKidError());
+
+      // exp: undefined → the encoded payload carries NO exp claim
+      const token = generateMockJwtString({ exp: undefined });
+
+      await expect(keycloakAuthService.verifyToken(token)).rejects.toMatchObject({
+        code: 'TOKEN_INVALID',
+        message: 'Token verification failed'
+      });
+
+      expect(mockJwtVerify).toHaveBeenCalledTimes(1);
+    });
+
+    // Spies on the REAL shared/lib winston logger — the virtual
+    // '../shared-lib' mock covers only the barrel, so the verifier's log
+    // lines are visible here and nowhere else. Silences the transport and
+    // restores the spy even when the assertions fail, so a failing test
+    // cannot leak the mock into its neighbours.
+    function captureWarns() {
+      const loggerModule = require('../../shared/lib/logger');
+      const warnSpy = jest.spyOn(loggerModule.logger, 'warn').mockImplementation(() => {});
+      return {
+        lines: () => warnSpy.mock.calls.map(([msg]) => String(msg)).join('\n'),
+        restore: () => warnSpy.mockRestore()
+      };
+    }
+
+    it('logs the cause of a rejection, and neither the token nor key material', async () => {
+      // Without the cause, every distinct failure (tampered signature,
+      // unknown key id, ambiguous key set, wrong algorithm) reaches the
+      // operator's log as the same 'Token verification failed'. The line
+      // must name the cause — and carry neither the token nor any key
+      // material.
+      const warns = captureWarns();
+      mockJwtVerify.mockRejectedValue(unknownKidError());
+      // exp: undefined → the encoded payload carries NO exp claim, so the
+      // token is not a rotation candidate and the rejection is the plain one.
+      const token = generateMockJwtString({ exp: undefined });
+
+      try {
+        await expect(keycloakAuthService.verifyToken(token)).rejects.toMatchObject({
+          code: 'TOKEN_INVALID'
+        });
+
+        const logged = warns.lines();
+        expect(logged).toContain('JWKSNoMatchingKey');
+        expect(logged).not.toContain(token);
+        expect(logged).not.toContain('BEGIN');
+      } finally {
+        warns.restore();
+      }
+    });
+
+    it('names the refresh floor in the log when it held the refresh back', async () => {
+      // The floor is why a rotation that lands inside the window is picked
+      // up by the NEXT refresh. Without that in the log, a burst of 401s
+      // around a key rotation is indistinguishable from a burst of junk
+      // tokens. The clock is frozen for the two calls so a stalled runner
+      // cannot push the second one past the 1000 ms window — the same
+      // wall-clock dependence the node suite's burst assertion tolerates.
+      const warns = captureWarns();
+      const realNow = Date.now();
+      const clockSpy = jest.spyOn(Date, 'now').mockReturnValue(realNow);
+      mockJwtVerify.mockRejectedValue(unknownKidError());
+      const token = generateMockJwtString(mockJwtPayload);
+
+      try {
+        // The first unknown-kid token consumes the refresh floor (and retries).
+        await expect(keycloakAuthService.verifyToken(token)).rejects.toMatchObject({
+          code: 'TOKEN_INVALID'
+        });
+        // The second one lands inside the floor window.
+        await expect(keycloakAuthService.verifyToken(token)).rejects.toMatchObject({
+          code: 'TOKEN_INVALID'
+        });
+
+        const logged = warns.lines();
+        expect(logged).toContain('key-set refresh floored');
+        expect(logged).not.toContain(token);
+      } finally {
+        clockSpy.mockRestore();
+        warns.restore();
+      }
+    });
+
     it('should reject with TOKEN_INVALID when retry also fails', async () => {
-      const signatureError = new Error('Signature verification failed');
       mockJwtVerify
-        .mockRejectedValueOnce(signatureError) // First call: fails
-        .mockRejectedValueOnce(signatureError); // Retry: also fails
+        .mockRejectedValueOnce(unknownKidError()) // First call: unknown kid
+        .mockRejectedValueOnce(unknownKidError()); // Retry: also fails
 
       mockCreateRemoteJWKSet.mockReturnValue(jest.fn());
 
@@ -593,6 +705,21 @@ describe('keycloakAuthService', () => {
       expect(mockJwtVerify).toHaveBeenCalledTimes(1);
     });
 
+    it('should not force-refresh an unknown-kid token whose exp has passed', async () => {
+      // The expiry outranks the rotation candidate: an expired token is
+      // TOKEN_EXPIRED, and the key set is left alone.
+      mockJwtVerify.mockRejectedValue(unknownKidError());
+
+      const token = generateMockJwtString({ exp: Math.floor(Date.now() / 1000) - 3600 });
+
+      await expect(keycloakAuthService.verifyToken(token)).rejects.toMatchObject({
+        code: 'TOKEN_EXPIRED',
+        message: 'Token has expired'
+      });
+
+      expect(mockJwtVerify).toHaveBeenCalledTimes(1);
+    });
+
     it('should reject with TOKEN_INVALID on JWTClaimValidationFailed (iss mismatch)', async () => {
       const claimError = new Error('iss claim validation failed');
       claimError.name = 'JWTClaimValidationFailed';
@@ -611,8 +738,7 @@ describe('keycloakAuthService', () => {
     });
 
     it('should succeed on retry after force-refresh', async () => {
-      const signatureError = new Error('Signature verification failed');
-      mockJwtVerify.mockRejectedValueOnce(signatureError).mockResolvedValueOnce({
+      mockJwtVerify.mockRejectedValueOnce(unknownKidError()).mockResolvedValueOnce({
         payload: mockJwtPayload,
         protectedHeader: { alg: 'RS256' }
       });
@@ -627,24 +753,37 @@ describe('keycloakAuthService', () => {
     });
 
     it('should handle forceRefresh errors gracefully', async () => {
-      const signatureError = new Error('Signature verification failed');
-      mockJwtVerify.mockRejectedValue(signatureError);
-
-      // Mock forceRefresh to throw (network error scenario)
-      mockCreateRemoteJWKSet.mockImplementation(() => {
-        const fn = jest.fn().mockRejectedValue(new Error('Network error'));
-        fn.forceRefresh = () => {
-          throw new Error('Network error');
-        };
-        return fn;
-      });
-
+      // The retry's refresh call sits INSIDE its try, as it always has: a
+      // refresh that itself throws must reach the caller as the structured
+      // TOKEN_INVALID, never as a raw error escaping verifyToken's catch
+      // block. The throw is planted on the WRAPPER's own forceRefresh (the
+      // one verifyToken actually calls), reachable through the test-only
+      // cache accessor — attaching it to the inner jose mock would never
+      // execute.
+      mockJwtVerify.mockRejectedValue(unknownKidError());
       const token = generateMockJwtString(mockJwtPayload);
 
+      // First call: establishes the issuer's JWKS cache (and is rejected).
       await expect(keycloakAuthService.verifyToken(token)).rejects.toMatchObject({
-        code: 'TOKEN_INVALID',
-        message: 'Token verification failed'
+        code: 'TOKEN_INVALID'
       });
+
+      const wrapper = keycloakAuthService._getJwksCache('http://localhost:8080/realms/genie');
+      const originalForceRefresh = wrapper.forceRefresh;
+      wrapper.forceRefresh = () => {
+        throw new Error('Network error');
+      };
+
+      try {
+        // Second call: rotation candidate → forceRefresh throws → the catch
+        // wraps it as TOKEN_INVALID.
+        await expect(keycloakAuthService.verifyToken(token)).rejects.toMatchObject({
+          code: 'TOKEN_INVALID',
+          message: 'Token verification failed'
+        });
+      } finally {
+        wrapper.forceRefresh = originalForceRefresh;
+      }
     });
   });
 

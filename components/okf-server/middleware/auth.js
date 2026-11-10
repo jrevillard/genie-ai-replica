@@ -87,15 +87,14 @@ async function authenticate(req, res, next) {
       // An infrastructure outage must not flood the error stream with
       // per-request entries and bury genuine 401 root causes (the doc-repo
       // middleware makes the same choice): warn-level, the detail in the
-      // message kept whole. Keycloak is unreachable for the verifier's
-      // INIT path (discovery/JWKS bootstrap, or the retry cooldown after
-      // it) — NOT a bad token. 503, the doc-repo contract the frontend
+      // message kept whole. Keycloak being unreachable for the verifier —
+      // the INIT path (discovery/JWKS bootstrap, or the retry cooldown
+      // after it) and, since the verifier's mid-life classification
+      // (#1723), a key-set fetch failure after a successful init too — is
+      // NOT a bad token. 503, the doc-repo contract the frontend
       // httpService handles: a 401 here would tell the client its session
       // had died and send it to the login page during an infrastructure
-      // outage. (A Keycloak outage that starts AFTER a successful init is
-      // NOT covered here: the shared verifier classifies it as an invalid
-      // token and it still answers a bad-token 401 — tracked in issue
-      // #1723.)
+      // outage.
       logger.warn('OKF auth service unavailable', { error: err.message, path: req.path });
       return res.status(503).json({
         error: 'AUTH_SERVICE_UNAVAILABLE',

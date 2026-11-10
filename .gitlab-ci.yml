@@ -4508,15 +4508,19 @@ chart:parity:
       --set okf.enabled=true
       --set opea.gpu.nodeHost=https://gpu.ci-render.local:444
       > /tmp/rendered.yaml
-    # --min-compared is the floor on variables actually compared (323 —
+    # --min-compared is the floor on variables actually compared (325 —
     # the number the gate compares TODAY, with the OPEA and OKF tiers
     # switched on; secretProvided, mayDiffer and
     # codeDefault rows are excluded from the count, so growing ANY of
     # those categories drops the number and trips the floor instead of
     # quietly greening the gate). The floor equals the count, not one
     # below it: with a floor of 171 a single reclassification was
-    # invisible.
-    - python3 scripts/ci/config-parity-check.py /tmp/rendered.yaml --min-compared=323
+    # invisible. The count rose from 323 when the shared OIDC verifier
+    # started reading KEYCLOAK_REALM on the document-repository (the
+    # row the chart now carries, the one the backend and okf-server
+    # already had) — a variable that became comparable on both
+    # surfaces, not a reclassification.
+    - python3 scripts/ci/config-parity-check.py /tmp/rendered.yaml --min-compared=325
   rules:
     # The gate verifies its `notRead` claims against the APPLICATION
     # source: a commit under components/ or genie-ai-overlay/ that starts

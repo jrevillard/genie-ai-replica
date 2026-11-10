@@ -84,9 +84,14 @@ names a service absent here, and DATAPREP_PORT collides with
 the Kubernetes-injected connection env for the dataprep Service
 (tcp://<ip>:5000) — the controller concatenates host:port into a URL, so
 both rows must be set explicitly. */ -}}
+{{- /* The shared OIDC verifier reads KEYCLOAK_REALM (not the legacy
+KC_REALM spelling) — the same row the backend and okf-server carry.
+Without it the realm falls back to undefined when the discovery URL
+carries no /realms/ segment. */ -}}
 {{- $urls := list
     (dict "name" "KEYCLOAK_URL" "value" (include "genieai-umbrella.keycloakInternalURL" .))
     (dict "name" "KC_REALM" "value" ($dataKeycloak.realm | default "genie" | toString))
+    (dict "name" "KEYCLOAK_REALM" "value" ($dataKeycloak.realm | default "genie" | toString))
     (dict "name" "KEYCLOAK_EXPECTED_ISSUER" "value" (printf "%s/realms/%s" (include "genieai-umbrella.keycloakPublicIssuer" .) ($dataKeycloak.realm | default "genie")))
     (dict "name" "KEYCLOAK_PUBLIC_URL" "value" (index $dataKeycloak "publicUrl" | default "" | toString))
     (dict "name" "KEYCLOAK_JWKS_URL" "value" (index $dataKeycloak "jwksUrl" | default "" | toString))

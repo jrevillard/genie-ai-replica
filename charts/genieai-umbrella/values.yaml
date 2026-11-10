@@ -366,6 +366,19 @@ data:
     grafanaClientId: grafana
     adminUsername: genie-admin
     defaultLocale: en
+    # The shared OIDC verifier's discovery budget. NOT rendered as an
+    # environment row: the code applies its own 5000ms default when
+    # KEYCLOAK_DISCOVERY_TIMEOUT_MS is unset, and Compose leaves it unset
+    # too — so both surfaces run the same default (the parity gate files
+    # this under codeDefault). The name is documented here because an
+    # operator reading the chart must be able to find it: a venue that
+    # needs a different budget sets it on the Compose surface, or pins
+    # the row on the pods directly. The same goes for
+    # KEYCLOAK_EXPECTED_ISSUER on the services that do not pin an
+    # issuer (the backend and okf-server accept the discovery issuer
+    # plus the KEYCLOAK_PUBLIC_URL / KEYCLOAK_BROWSER_ISSUER aliases;
+    # only the document-repository pins one, because its tokens are
+    # minted against the public issuer).
     # Explicit Keycloak URL overrides, all empty by default: the
     # applications derive what they need from the issuer they were
     # given, and a default that guessed an address would override that

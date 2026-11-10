@@ -14,7 +14,11 @@ rewrites the 15 calls to the module's existing ``CustomLogger`` at image
 build time; the vendored file is not in this repository, so these tests run
 the patcher against a fixture carrying the 15 lines VERBATIM (hand-copied
 from the upstream v1.5 tag, independent of the patcher's own table — a typo
-in either fails here, not at image build).
+in either fails here, not at image build). The fixture's logger-assignment
+line is hand-copied the same way (verified verbatim against the v1.5 tag:
+utils.py:50); the fixture-↔-anchor consistency itself is exercised by every
+test, since apply_patch runs the assignment guard on the fixture it is
+given.
 
 NON-VACUITY. The fail-loud tests are the load-bearing ones: they prove the
 image build FAILS when the patch cannot be applied, rather than shipping an
@@ -157,6 +161,39 @@ def test_is_idempotent_on_a_patched_file(tmp_path):
     path = _write(tmp_path, _fixture_module(UPSTREAM_SITES))
     mod.apply_patch(path)
     assert mod.apply_patch(path) == "already-patched"
+
+
+def test_a_print_mention_in_a_docstring_is_not_an_abort(tmp_path):
+    """A `print(` that is not a call must not abort the build.
+
+    The leftover guard is AST-based for the same reason the repository's own
+    print ban is: an upstream docstring or comment whose text begins with
+    `print(` — a usage example, say — is not a logging call, and a text
+    regex would demand a site-table re-derivation for a phantom.
+    """
+    docstring_print = (4, '"""usage: print(value) then log it"""', "info", None)
+    path = _write(tmp_path, _fixture_module([*UPSTREAM_SITES, docstring_print]))
+
+    assert mod.apply_patch(path) == "patched"
+
+
+def test_patch_preserves_crlf_line_endings(tmp_path):
+    """A one-line rewrite must not rewrite the file's line terminators.
+
+    The re-emit keeps the matched line's own ending ([ \\t\\r]*) and _read /
+    _write pass newline="" — together they leave a CRLF upstream file
+    byte-identical apart from the 15 rewritten calls (the sibling
+    unstructured patcher pins the same contract).
+    """
+    body = _fixture_module(UPSTREAM_SITES)
+    path = tmp_path / "utils.py"
+    with path.open("w", encoding="utf-8", newline="") as handle:
+        handle.write(body.replace("\n", "\r\n"))
+
+    assert mod.apply_patch(path) == "patched"
+    raw = path.read_bytes()
+    assert raw.count(b"\r\n") == body.count("\n"), "every line keeps its CRLF terminator"
+    assert b"logger.info" in raw and b"print(" not in raw
 
 
 def test_fails_loud_when_upstream_restructured_a_site(tmp_path):

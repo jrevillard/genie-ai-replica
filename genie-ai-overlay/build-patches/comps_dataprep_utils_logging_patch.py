@@ -62,6 +62,7 @@ THREE OUTCOMES, NEVER A SILENT NO-OP
    ``unstructured_html_pi_patch.py``)
 """
 
+import ast
 import re
 import sys
 from pathlib import Path
@@ -99,9 +100,27 @@ SITES = [
     (r'f"except patterns: {except_patterns}"', "info", None),
 ]
 
-# Any bare print call left in the file — the guard for upstream lines the
-# table does not know about.
-ANY_PRINT_RE = re.compile(r"^[ \t]*print\(", re.MULTILINE)
+
+# Any bare print CALL left in the file — the guard for upstream lines the
+# table does not know about. AST-based, not a text regex, for the same
+# reason the repository's own print ban is (tests/test_dataprep_logging.py):
+# a `print(` inside a docstring or a comment is not a logging call and must
+# not abort the build as a phantom upstream print.
+def _print_call_lines(source: str) -> list[int]:
+    """Line numbers of the `print(...)` / `builtins.print(...)` calls in *source*."""
+
+    def _is_print_reference(func: ast.expr) -> bool:
+        if isinstance(func, ast.Name):
+            return func.id == "print"
+        return (
+            isinstance(func, ast.Attribute)
+            and func.attr == "print"
+            and isinstance(func.value, ast.Name)
+            and func.value.id == "builtins"
+        )
+
+    tree = ast.parse(source)
+    return [node.lineno for node in ast.walk(tree) if isinstance(node, ast.Call) and _is_print_reference(node.func)]
 
 
 def target_path() -> Path:
@@ -136,12 +155,17 @@ def apply_patch(path: Path) -> str:
     # first rewritten call; a renamed name string leaves the rewritten
     # records wired to nothing (severity Unspecified again), with every
     # site still matching and the build passing. Anchor the rewrite on the
-    # full assignment (utils.py:50).
-    if not re.search(r'^[ \t]*logger\s*=\s*CustomLogger\("prepare_doc_util"\)', text, re.MULTILINE):
+    # full assignment at MODULE level (utils.py:50): the rewritten call
+    # sites are module-level functions, so an assignment inside a helper
+    # would NameError on the first rewritten call even though the text
+    # matched.
+    if not re.search(r'^logger\s*=\s*CustomLogger\("prepare_doc_util"\)', text, re.MULTILINE):
         raise SystemExit(
-            f'ASSERT-ON-PATCH GUARD FAILED: no `logger = CustomLogger("prepare_doc_util")` found in {path} — '
+            f'ASSERT-ON-PATCH GUARD FAILED: no module-level `logger = CustomLogger("prepare_doc_util")` found '
+            f"in {path} — "
             f"the rewrite targets that instance and the repo wires it by that name. Upstream renamed the "
-            f"symbol or the logger name string: re-derive the site table, update the wiring in "
+            f"symbol, the logger name string, or moved the assignment out of module scope: re-derive the "
+            f"site table, update the wiring in "
             f"genieai_dataprep_utils.py, and update genie-ai-overlay/OVERRIDES.yaml."
         )
     patched_call_counts = 0
@@ -167,11 +191,12 @@ def apply_patch(path: Path) -> str:
         text = pattern.sub(lambda m, call=patched_call: f"{m.group('indent')}{call}{m.group('eol')}", text)
 
     if patched_call_counts == len(SITES):
-        leftover = ANY_PRINT_RE.search(text)
-        if leftover:
+        leftovers = _print_call_lines(text)
+        if leftovers:
             raise SystemExit(
-                f"ASSERT-ON-PATCH GUARD FAILED: all known sites are logger calls but an unexpected "
-                f"`print(` survives in {path} — upstream grew a new print; add it to the site table."
+                f"ASSERT-ON-PATCH GUARD FAILED: all known sites are logger calls but unexpected `print(` "
+                f"call(s) survive at {path}:{','.join(map(str, leftovers))} — upstream grew a new print; "
+                f"add it to the site table."
             )
         return "already-patched"
 
@@ -180,18 +205,19 @@ def apply_patch(path: Path) -> str:
     compile(text, str(path), "exec")
     _write(path, text)
     # Re-read: the file on disk is the artefact that ships, so verify THAT —
-    # this scan also catches a print the table does not know (same failure
-    # as the already-patched branch's self-check, which returns before any
-    # write and must therefore test itself). A failed build discards the
-    # Docker layer, so this message is the operator's only diagnostic: name
-    # the surviving print and the remedy, like every other guard here.
+    # this scan also catches a print call the table does not know (same
+    # failure as the already-patched branch's self-check, which returns
+    # before any write and must therefore test itself). A failed build
+    # discards the Docker layer, so this message is the operator's only
+    # diagnostic: name the surviving print and the remedy, like every other
+    # guard here.
     post = _read(path)
-    leftover = ANY_PRINT_RE.search(post)
-    if leftover:
-        line = post[: leftover.start()].count("\n") + 1
+    leftovers = _print_call_lines(post)
+    if leftovers:
         raise SystemExit(
-            f"ASSERT-ON-PATCH GUARD FAILED: an unexpected `print(` survives at {path}:{line} after patching — "
-            f"upstream grew a print the table does not know; add it to the site table."
+            f"ASSERT-ON-PATCH GUARD FAILED: an unexpected `print(` call survives at "
+            f"{path}:{','.join(map(str, leftovers))} after patching — upstream grew a print the table "
+            f"does not know; add it to the site table."
         )
     return "patched"
 

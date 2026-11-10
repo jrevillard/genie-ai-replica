@@ -328,6 +328,9 @@ test('pin + DIRECT partner init: the singleton is not poisoned by a registering-
   // call throws (a loud misconfiguration that arms the retry cooldown)
   // instead of silently leaving the singleton un-flipped.
   await assert.rejects(() => svc.init(partnerUrl), /matches no registered issuer/);
+  // And the healthy inverse: a repeat init on an ALREADY-registered pin
+  // must not throw (the guard requires the pin to be genuinely absent).
+  await assert.doesNotReject(() => svc.init());
   const token = await sign(baseClaims(pinned));
   const payload = await svc.verifyToken(token);
   assert.equal(payload.iss, pinned);

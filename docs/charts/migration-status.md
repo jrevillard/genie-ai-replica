@@ -202,6 +202,39 @@ contractual evidence — a fresh clone does not carry them.)
   every cluster in the range, so it pins the range's LOW bound, and
   the only commands the hooks run (`get ns`, `describe ns`, `create -f`
   of an Event) are on stable APIs.
+- **The 1.37 laptop cluster runs chart 0.2.170, validated live** — the
+  cluster was rebuilt on Kubernetes **v1.37.0** (minikube v1.39.0, Calico
+  enforcing the NetworkPolicies) and the whole platform converged:
+  the HelmRelease reports Ready with chart `genieai-umbrella@0.2.170`,
+  and the two operator bumps are effective on the cluster
+  (cert-manager **v1.21.3**, kube-arangodb **1.4.7** — read back from
+  the Flux HelmReleases, not from the file). Live evidence for the
+  three fixes this cycle carried:
+  - the backend reaches a public HTTPS API **HTTP 200** from inside its
+    pod, under enforced Calico — the port-scoped `ipBlock` egress rule
+    is present in the backend's NetworkPolicy and the connection goes
+    through;
+  - the ArangoDB member carries `resources.requests.cpu: 500m` and
+    `timeoutSeconds: 10` on its three probe specs in the live
+    `ArangoMember` CR, and its pod has been up with **restartCount 0**
+    (the #1606 flapping does not reproduce);
+  - the document-repository carries `KEYCLOAK_REALM=genie` and the
+    pinned `KEYCLOAK_EXPECTED_ISSUER=https://genieai.local:4443/auth/realms/genie`,
+    and the in-cluster discovery document's `issuer` is that same
+    string — the three-point issuer check (in-cluster discovery =
+    browser-reachable discovery = expected) holds;
+  - `GET /api/health` through the Envoy edge (nodePort 30356) answers
+    **200** `{"status":"ok"}`.
+  Two defects in the bootstrap script itself surfaced during that
+  rebuild and are fixed (commit `8124bb1fe7`): its default Kubernetes
+  version was **v1.32.0**, below the range the chart now declares — the
+  bootstrap built a cluster the chart then refused to install on — and
+  the HelmRelease reconcile ran before the overlay Kustomization had
+  applied the HelmRelease, so `flux reconcile helmrelease genieai`
+  failed with "not found". The reconcile now waits for the OBJECT
+  (`kubectl wait --for=create`), not for the Kustomization to be Ready:
+  the overlay carries `wait: true`, so Ready means "the install
+  finished", which is a different and much longer condition.
 - **The vendored dependency tarballs no longer block a rebase** — the
   branch's oldest commits TRACKED `charts/*/charts/*.tgz`, so every
   replay recreated them as untracked files and the merge refused to

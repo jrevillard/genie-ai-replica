@@ -20,9 +20,11 @@ BASE_URL=https://genieai-forge.local:4443 tests/e2e/run/run-local-e2e.sh
 One command, from the repository root. It:
 
 1. resolves the **Keycloak admin credentials** — `KEYCLOAK_ADMIN_PASSWORD` or
-   `ADMIN_TOKEN` from the environment, otherwise the shared stack's
-   `keycloak-admin-credentials` secret (`kubectl -n genieai`, never a
-   credential in the repository);
+   `ADMIN_TOKEN` from the environment; otherwise, for the DEFAULT venue only,
+   the shared stack's `keycloak-admin-credentials` secret (`kubectl -n
+   genieai`, never a credential in the repository). The secret belongs to
+   that stack: point `BASE_URL` at any other venue and the run asks for
+   credentials instead of guessing;
 2. maps the venue **name** to an address when the runner cannot resolve it
    (see *Venue address* below);
 3. runs the **pre-flight** — the runner launches the browser and opens the

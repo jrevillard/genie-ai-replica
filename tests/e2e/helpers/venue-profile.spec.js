@@ -114,7 +114,9 @@ test.describe('the OKF probe reads the venue like the frontend reads it', () => 
     fakeTransport([{ status: 200, data: 'window.APP_CONFIG = {\n  okfEnabled: "0",\n};\n' }]);
     const profile = freshProfile();
     const reason = await profile.okfParkedReason();
-    expect(reason).toContain('okfEnabled=0');
+    // The value is rendered precisely — a string carries its quotes, a
+    // number does not.
+    expect(reason).toContain('okfEnabled="0"');
     // The reason is the only record of why a spec did not run: it must say
     // that the surface was NOT exercised.
     expect(reason).toMatch(/NOT exercised/);

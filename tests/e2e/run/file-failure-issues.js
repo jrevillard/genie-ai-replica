@@ -39,6 +39,7 @@ const REPO_ROOT = path.resolve(__dirname, '..', '..', '..');
 const DEFAULT_REPORT_PATH = path.join(REPO_ROOT, 'reports', 'playwright-report.json');
 
 const TESTS_E2E_ROOT = 'tests/e2e';
+const { VENUE_IP_ENV, VENUE_HOST_ENV } = require('../helpers/venue-launch-args');
 const GITLAB_HOST = process.env.GITLAB_HOST || 'opensource.unicc.org';
 const GITLAB_PROJECT_ID = process.env.GITLAB_PROJECT_ID || '90';
 
@@ -210,11 +211,11 @@ function findTrackedIssue(file, openIssues) {
  */
 function reproduceCommand(venue) {
   const parts = [`BASE_URL=${venue}`];
-  if (process.env.E2E_VENUE_IP) {
+  if (process.env[VENUE_IP_ENV]) {
     // Only when the runner knows the host: a placeholder here would paste
     // an array into the command.
-    if (process.env.E2E_VENUE_HOST) parts.push(`E2E_VENUE_HOST=${process.env.E2E_VENUE_HOST}`);
-    parts.push(`E2E_VENUE_IP=${process.env.E2E_VENUE_IP}`);
+    if (process.env[VENUE_HOST_ENV]) parts.push(`E2E_VENUE_HOST=${process.env[VENUE_HOST_ENV]}`);
+    parts.push(`E2E_VENUE_IP=${process.env[VENUE_IP_ENV]}`);
   }
   return `${parts.join(' ')} tests/e2e/run/run-local-e2e.sh`;
 }
@@ -227,10 +228,10 @@ function issueBody(file, failures, venue, runStamp) {
     'Filed by the local e2e run (`tests/e2e/run/run-local-e2e.sh`).',
     '',
     `- venue: \`${venue}\``,
-    ...(process.env.E2E_VENUE_IP
+    ...(process.env[VENUE_IP_ENV]
       ? [
           `- the runner resolved the venue name to ` +
-            `\`${process.env.E2E_VENUE_HOST || '(the BASE_URL host)'}\` = \`${process.env.E2E_VENUE_IP}\``,
+            `\`${process.env[VENUE_HOST_ENV] || '(the BASE_URL host)'}\` = \`${process.env[VENUE_IP_ENV]}\``,
         ]
       : []),
     `- run: ${runStamp}`,

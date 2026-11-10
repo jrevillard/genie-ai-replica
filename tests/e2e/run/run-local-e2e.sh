@@ -31,7 +31,13 @@ set -euo pipefail
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../../.." && pwd)"
 cd "$REPO_ROOT"
 
-BASE_URL="${BASE_URL:-https://genieai-forge.local:4443}"
+# The venue the run points at. The DEFAULT venue is the shared k8s stack,
+# and the stack's Keycloak admin secret lives in this cluster - the
+# credential auto-read below is tied to THAT venue, because the password it
+# reads belongs to it. Point BASE_URL anywhere else and the run asks for
+# credentials instead of guessing.
+DEFAULT_VENUE="https://genieai-forge.local:4443"
+BASE_URL="${BASE_URL:-$DEFAULT_VENUE}"
 export BASE_URL
 NAMESPACE="${E2E_NAMESPACE:-genieai}"
 
@@ -61,7 +67,7 @@ done
 CHECKOUT_LOCK="${E2E_RUN_LOCK:-$REPO_ROOT/.e2e-run.lock}"
 # The venue key is the NORMALIZED address: https://x:4443, https://x:4443/ and
 # https://x:4443// are the same venue and must not take three locks.
-VENUE_KEY="$(printf '%s' "$(printf '%s' "$BASE_URL" | sed 's#/*$##')" | md5sum | cut -c1-12)"
+VENUE_KEY="$(printf '%s' "$BASE_URL" | sed 's#/*$##' | md5sum | cut -c1-12)"
 VENUE_LOCK="${E2E_VENUE_LOCK:-/tmp/genieai-e2e-$VENUE_KEY.lock}"
 
 exec 9>"$CHECKOUT_LOCK"
@@ -84,16 +90,16 @@ echo "slot: acquired (checkout $CHECKOUT_LOCK, venue $VENUE_LOCK)"
 # shared stack's secret (the password lives in the cluster, never in the
 # repository — see .claude/rules/DEMO-SEEDING.md for the same convention).
 if [ -z "${ADMIN_TOKEN:-}" ] && [ -z "${KEYCLOAK_ADMIN_PASSWORD:-}" ]; then
-  if command -v kubectl >/dev/null 2>&1 &&
+  if [ "$BASE_URL" = "$DEFAULT_VENUE" ] && command -v kubectl >/dev/null 2>&1 &&
     kubectl -n "$NAMESPACE" get secret keycloak-admin-credentials >/dev/null 2>&1; then
     KEYCLOAK_ADMIN_PASSWORD="$(kubectl -n "$NAMESPACE" get secret keycloak-admin-credentials \
       -o go-template='{{ index .data "password" | base64decode }}')"
     export KEYCLOAK_ADMIN_PASSWORD
     echo "admin credentials: the shared stack's keycloak-admin-credentials secret (namespace $NAMESPACE)"
   else
-    echo "ERROR: no Keycloak admin credentials." >&2
-    echo "       Set KEYCLOAK_ADMIN_PASSWORD (or ADMIN_TOKEN), or make the shared stack" >&2
-    echo "       reachable (kubectl -n $NAMESPACE get secret keycloak-admin-credentials)." >&2
+    echo "ERROR: no Keycloak admin credentials for $BASE_URL." >&2
+    echo "       Set KEYCLOAK_ADMIN_PASSWORD (or ADMIN_TOKEN). The secret auto-read only serves" >&2
+    echo "       the default venue ($DEFAULT_VENUE): its password belongs to that stack." >&2
     exit 2
   fi
 fi
@@ -104,7 +110,8 @@ fi
 # both — the preload patches Node's resolver, the launch arguments carry it
 # into the browser.
 if [ -n "${E2E_VENUE_IP:-}" ]; then
-  E2E_VENUE_HOST="${E2E_VENUE_HOST:-$(node -e 'console.log(new URL(process.env.BASE_URL).hostname)')}"
+  # One owner of the "which host is the venue" rule: the mapping module.
+  E2E_VENUE_HOST="${E2E_VENUE_HOST:-$(node -p "require('$REPO_ROOT/tests/e2e/helpers/venue-launch-args').venueMapping().host")}"
   export E2E_VENUE_HOST
   export NODE_OPTIONS="--require $REPO_ROOT/tests/e2e/run/venue-dns.js${NODE_OPTIONS:+ $NODE_OPTIONS}"
   echo "venue mapping: $E2E_VENUE_HOST -> $E2E_VENUE_IP"

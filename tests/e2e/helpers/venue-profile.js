@@ -22,6 +22,10 @@
  *   - ANY other value, and a config with no `okfEnabled` key at all →
  *     DISABLED (fail closed: a typo must never silently enable the Studio).
  *
+ * The config is EVALUATED, not parsed: the frontend evaluates it, and a
+ * reader that emulates evaluation with a regex drifts in the skip
+ * direction — invisible.
+ *
  * A probe that cannot READ the venue fails LOUDLY — an unreadable venue is
  * not an absent surface, and a skip built on a failed probe is exactly the
  * silent fallback the suite forbids. A probe result is cached per process;
@@ -32,6 +36,7 @@
  * module object so a unit spec can swap it — the pattern the sibling
  * helper specs use.
  */
+const vm = require('vm');
 const auth = require('./auth');
 const { BASE_URL } = require('./chatbot');
 
@@ -62,29 +67,33 @@ async function okfProfile() {
         `which is not the same as "the OKF pillar is parked"`
     );
   }
-  // The frontend compares the STRING it read: `cfg.okfEnabled === '1'`.
-  // A config written by another writer — a bare `1`, a `true` — is not that
-  // string, and the frontend reads it as parked. The probe therefore has to
-  // tell a quoted string from a bare token, or it would enable the Studio
-  // where the product keeps it dark.
-  // The ASSIGNMENT, not the first mention of the key: a config whose
-  // comment names the knob before the real assignment would be misread.
-  const match = /(?:^|[{,\n])\s*okfEnabled\s*:\s*("([^"]*)"|'([^']*)'|([^"'\s,}]+))/m.exec(
-    res.data || ''
-  );
-  let enabled = false;
-  let value = '';
-  if (match) {
-    const quoted = match[2] !== undefined ? match[2] : match[3] !== undefined ? match[3] : null;
-    if (quoted === null) {
-      // A bare token: a different writer than the entrypoint's '1'.
-      value = `${match[4]} (unquoted — the frontend reads it as parked)`;
-    } else {
-      value = quoted;
-      enabled = quoted === '1';
-    }
+  // The frontend EVALUATES this file; a text probe that emulates evaluation
+  // with a regex would misread every shape the entrypoint legitimately
+  // writes (a comment naming the knob, a key it does not expect), and the
+  // misread lands in the skip direction — invisible drift. So evaluate it,
+  // in a sandbox where `window` is the only global, and apply the
+  // frontend's own strict rule to what comes out.
+  let config;
+  try {
+    config = vm.runInNewContext(`${res.data};\nwindow.APP_CONFIG`, { window: {} }, { timeout: 2000 });
+  } catch (e) {
+    throw new Error(
+      `the venue runtime config could not be evaluated (${e.message.split('\n')[0]}) — ` +
+        'the venue profile is UNKNOWN, which is not the same as "the OKF pillar is parked"',
+      { cause: e }
+    );
   }
-  okfCache = { enabled, value };
+  if (!config || typeof config !== 'object') {
+    throw new Error(
+      'the venue runtime config leaves no window.APP_CONFIG — the venue profile is UNKNOWN'
+    );
+  }
+  // Strict equality, exactly like okfFlag.js: only the string '1' enables
+  // the Studio; a numeric 1 is a different writer and must not enable it.
+  okfCache = {
+    enabled: config.okfEnabled === '1',
+    value: config.okfEnabled === undefined ? '' : JSON.stringify(config.okfEnabled),
+  };
   return okfCache;
 }
 
@@ -105,21 +114,14 @@ async function okfEnabled() {
  */
 async function okfParkedReason() {
   const { value } = await okfProfile();
-  const what = value ? `okfEnabled=${value}` : 'the runtime config carries no okfEnabled knob';
+  const what = value
+    ? `okfEnabled=${value}`
+    : 'the runtime config carries no okfEnabled knob';
   return (
     `venue profile: the OKF pillar is parked (${what} in ${BASE_URL}${RUNTIME_CONFIG_PATH}) — ` +
     'this spec drives an OKF surface, which a core-profile deployment does not render, ' +
     'and that surface is therefore NOT exercised by this run'
   );
-}
-
-/**
- * The venue's master-realm admin token — the one the runner supplies
- * (`ADMIN_TOKEN`) or the one minted from the admin password.
- * @returns {Promise<string>} the token
- */
-async function adminToken() {
-  return auth.getAdminToken();
 }
 
 /**
@@ -130,7 +132,7 @@ async function adminToken() {
 async function realmExists(realm) {
   if (realmCache.has(realm)) return realmCache.get(realm);
   const res = await auth.request('GET', `/auth/admin/realms/${encodeURIComponent(realm)}`, {
-    headers: { Authorization: `Bearer ${await adminToken()}` },
+    headers: { Authorization: `Bearer ${await auth.getAdminToken()}` },
   });
   if (res.status === 404) {
     realmCache.set(realm, false);
@@ -169,7 +171,7 @@ async function hasIdentityProvider(realm) {
   const res = await auth.request(
     'GET',
     `/auth/admin/realms/${encodeURIComponent(realm)}/identity-provider/instances`,
-    { headers: { Authorization: `Bearer ${await adminToken()}` } }
+    { headers: { Authorization: `Bearer ${await auth.getAdminToken()}` } }
   );
   if (res.status !== 200) {
     throw new Error(

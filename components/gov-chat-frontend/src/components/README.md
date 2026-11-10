@@ -60,10 +60,8 @@ The application is broken down into the following functional categories:
 ### Analytics & Dashboards
 
 -   **`AdminDashboard.vue`**: A comprehensive administration panel for system monitoring. It includes system health status, resource usage, database management, log viewing, and security scanning tools.
--   **`AnalyticsDashboard.vue`**: A dashboard focused on key performance indicators and user engagement metrics, such as total queries, unique users, response times, and user satisfaction.
 -   **`UnifiedAnalytics.vue`**: A detailed, modal-based analytics dashboard that combines usage trends, top queries, service usage distribution, and user satisfaction analysis into a single view.
--   **`AnalyticsComponent.vue`**: A simpler, likely older version of the analytics modal.
--   **`UsageTrendChart.vue`**: A reusable chart component that visualizes usage trends (queries, unique users) over different time periods.
+-   **`charts/`**: The reusable chart components (UsageTrend, TopQueries, CategoryDistribution, SatisfactionGauge, SatisfactionHeatmap) consumed by the analytics and admin surfaces.
 
 ### Reusable Utility Components
 

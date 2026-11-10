@@ -395,14 +395,14 @@ async function getRetrievalConfig(bearerHeader, opts = {}) {
         // ('hybrid', 'okf_only'), so a padded value must not reach them —
         // nor the last-known-good copy, which is served on a later outage.
         const mode = typeof raw?.config?.mode === 'string' ? raw.config.mode.trim() : '';
-        if (
+        const shapeOk = !!(
           raw &&
           typeof raw === 'object' &&
           raw.config &&
           mode &&
-          typeof raw.engaged === 'boolean' &&
-          modeIsDeclared(raw, mode)
-        ) {
+          typeof raw.engaged === 'boolean'
+        );
+        if (shapeOk && modeIsDeclared(raw, mode)) {
           // The last-known-good copy is served to ANY caller on upstream
           // failure, so it carries only what the BFF consumes of the
           // deployment-global posture: the mode. Everything scope-derived
@@ -420,7 +420,7 @@ async function getRetrievalConfig(bearerHeader, opts = {}) {
         }
         logger.warn('RetrievalConfigClient.malformed_config_response', {
           correlationId: callOpts?.correlationId,
-          reason: mode ? 'mode_not_declared' : 'shape'
+          reason: shapeOk ? 'mode_not_declared' : 'shape'
         });
         return legacyDefaultConfig();
       },

@@ -40,7 +40,7 @@ function mapRole(roles) {
   if (roles.includes('dataprep-service')) {
     return 'dataprep-service';
   }
-  // Story 2.9.1: the okf-server orchestrator's service-account token — must
+  // The okf-server orchestrator's service-account token — must
   // map verbatim (like dataprep-service), else the scalar falls through to the
   // first role ('offline_access') and authorizeRole rejects it.
   if (roles.includes('okf-service')) {
@@ -163,11 +163,11 @@ const authenticateToken = async (req, res, next) => {
       iss: decoded.iss,
       sub: decoded.sub,
       roles: roles,
-      // D4 (chat-source resolution, W4): the okf scope list rides the token
+      // The okf scope list rides the token
       // (user-attribute protocol mapper on the genie-app + okf-server
       // clients). The serve-refusal gate keys on it — a caller holding the
       // repo's okf scope is INSIDE the restriction fence's exception, not
-      // outside it (D4: refused WITHOUT the okf scope). Absent claim = no
+      // outside it (refused WITHOUT the okf scope). Absent claim = no
       // scopes, never an error.
       okfScopes: Array.isArray(decoded.okf_scopes) ? decoded.okf_scopes : []
     };

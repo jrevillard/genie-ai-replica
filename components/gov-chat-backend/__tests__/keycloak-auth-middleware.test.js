@@ -17,9 +17,11 @@ jest.mock(
 // Mock keycloak-auth-service
 const mockVerifyToken = jest.fn();
 const mockCheckUserStatusInKeycloak = jest.fn();
+const mockConfiguredIssuers = jest.fn().mockReturnValue(['http://localhost:8080/realms/genie']);
 jest.mock('../services/keycloak-auth-service', () => ({
   verifyToken: (...args) => mockVerifyToken(...args),
-  checkUserStatusInKeycloak: (...args) => mockCheckUserStatusInKeycloak(...args)
+  checkUserStatusInKeycloak: (...args) => mockCheckUserStatusInKeycloak(...args),
+  getConfiguredIssuers: (...args) => mockConfiguredIssuers(...args)
 }));
 
 // Mock user-provisioning-service
@@ -246,6 +248,39 @@ describe('keycloakAuthMiddleware.authenticate', () => {
     expect(mockCheckUserStatusInKeycloak).toHaveBeenCalled();
     expect(mockMarkUserAsDeleted).not.toHaveBeenCalled();
     expect(res.status).toHaveBeenCalledWith(401);
+  });
+
+  it('should not call introspection when the expired token names an issuer the verifier does not trust', async () => {
+    // The issuer is read from the UNVERIFIED payload, so an expired junk
+    // token can name any iss — dereferencing it would turn the disable
+    // probe into a request to an attacker-chosen URL (blind SSRF). Only an
+    // issuer in getConfiguredIssuers() may be probed.
+    const header = Buffer.from(JSON.stringify({ alg: 'RS256', kid: 'test-key' })).toString('base64url');
+    const payload = Buffer.from(
+      JSON.stringify({
+        sub: '12345678-1234-1234-1234-123456789012',
+        iss: 'http://10.0.0.5:8500/realms/attacker',
+        exp: Math.floor(Date.now() / 1000) - 3600
+      })
+    ).toString('base64url');
+    const sig = Buffer.from('mock-signature').toString('base64url');
+    const expiredToken = `${header}.${payload}.${sig}`;
+
+    req.headers.authorization = `Bearer ${expiredToken}`;
+    const err = new Error('Token expired');
+    err.code = 'TOKEN_EXPIRED';
+    mockVerifyToken.mockRejectedValue(err);
+
+    await keycloakAuthMiddleware.authenticate(req, res, next);
+
+    expect(mockCheckUserStatusInKeycloak).not.toHaveBeenCalled();
+    expect(mockMarkUserAsDeleted).not.toHaveBeenCalled();
+    expect(res.status).toHaveBeenCalledWith(401);
+    expect(res.json).toHaveBeenCalledWith({
+      error: 'TOKEN_EXPIRED',
+      message: 'Token has expired',
+      details: {}
+    });
   });
 
   it('should not call introspection when token format is invalid (cannot extract issuer)', async () => {

@@ -129,8 +129,17 @@ const keycloakAuthMiddleware = {
         next();
       } catch (err) {
         if (err.code === 'TOKEN_EXPIRED') {
-          // Check user status in Keycloak via UserInfo to determine if disabled/deleted
-          if (token && tokenIssuer && tokenPayload) {
+          // Check user status in Keycloak via UserInfo to determine if disabled/deleted.
+          // tokenIssuer comes from the UNVERIFIED payload — an expired junk
+          // token can name any iss — so only an issuer the verifier actually
+          // trusts may be dereferenced (the probe GETs `${issuer}/protocol/
+          // openid-connect/userinfo`). A foreign iss skips the probe entirely.
+          if (
+            token &&
+            tokenIssuer &&
+            tokenPayload &&
+            keycloakAuthService.getConfiguredIssuers().includes(tokenIssuer)
+          ) {
             const statusResult = await keycloakAuthService.checkUserStatusInKeycloak(token, tokenIssuer);
             if (statusResult && statusResult.disabled) {
               // Update ArangoDB user to reflect disabled status

@@ -8,7 +8,8 @@ jest.mock('../../shared-lib', () => require('../mocks/shared-lib'), { virtual: t
 // Mock keycloak-auth-service (used by middleware)
 jest.mock('../../services/keycloak-auth-service', () => ({
   verifyToken: jest.fn(),
-  checkUserStatusInKeycloak: jest.fn()
+  checkUserStatusInKeycloak: jest.fn(),
+  getConfiguredIssuers: jest.fn().mockReturnValue(['http://localhost:8080/realms/genie'])
 }));
 
 // Mock user-provisioning-service (used by middleware)

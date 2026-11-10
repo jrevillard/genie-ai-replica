@@ -231,14 +231,17 @@ describe('keycloakAuthService', () => {
       jest.restoreAllMocks();
     });
 
-    it('should return temporarily unavailable after init failure', async () => {
+    it('should return temporarily unavailable after init failure, with the init detail preserved', async () => {
       mockFetch.mockResolvedValue({ ok: false, status: 502, statusText: 'Bad Gateway' });
 
       const token = generateMockJwtString(mockJwtPayload);
 
+      // The wrapped message is what callers' DIAG logs print — the init
+      // failure's own detail (here the discovery HTTP status) must ride
+      // along, or an operator debugging a 503 sees only the generic text.
       await expect(keycloakAuthService.verifyToken(token)).rejects.toMatchObject({
         code: 'AUTH_SERVICE_UNAVAILABLE',
-        message: 'Authentication service is temporarily unavailable'
+        message: expect.stringMatching(/^Authentication service is temporarily unavailable \(.*Bad Gateway.*\)$/)
       });
     });
 
@@ -251,8 +254,13 @@ describe('keycloakAuthService', () => {
       await keycloakAuthService.verifyToken(token).catch(() => {});
       const fetchCountAfterFirst = mockFetch.mock.calls.length;
 
-      // Second call within cooldown — should NOT call fetch again
-      await keycloakAuthService.verifyToken(token).catch(() => {});
+      // Second call within cooldown — should NOT call fetch again, and the
+      // rejection still names the original failure (the DIAG log must carry
+      // the cause even while init retries are suppressed).
+      await expect(keycloakAuthService.verifyToken(token)).rejects.toMatchObject({
+        code: 'AUTH_SERVICE_UNAVAILABLE',
+        message: expect.stringMatching(/^Authentication service is temporarily unavailable \(.*Bad Gateway.*\)$/)
+      });
       expect(mockFetch.mock.calls.length).toBe(fetchCountAfterFirst);
     });
 
@@ -833,10 +841,12 @@ describe('keycloakAuthService', () => {
       expect(result).toBeNull();
     });
 
-    it('should return null when UserInfo returns unexpected status', async () => {
+    it('should return null when a 2xx UserInfo response carries no body', async () => {
+      // axios rejects non-2xx by default, so a resolved response is always
+      // 2xx — the only non-active 2xx shape left is a bodyless one.
       mockAxiosGet.mockResolvedValue({
-        status: 500, // Unexpected status
-        data: {}
+        status: 204,
+        data: undefined
       });
 
       const result = await keycloakAuthService.checkUserStatusInKeycloak(
@@ -959,7 +969,15 @@ describe('keycloakAuthService', () => {
       expect(result).toBeNull();
     });
 
-    it('should return { active: false, disabled: true } when UserInfo returns 403', async () => {
+    it('should stay null when UserInfo returns 403 (no corroborated disable)', async () => {
+      // A 403 means the token was ACCEPTED but lacks the scopes/roles the
+      // UserInfo endpoint requires (an active user), and anything on the
+      // path (proxy, WAF, rate limiter) can answer 403 too. Keycloak reports
+      // a real disable as 401 with the WWW-Authenticate challenge (pinned
+      // above); the caller soft-deletes accounts on a confirmed disable, so
+      // an uncorroborated 403 must not trigger it.
+      const loggerModule = require('../../shared/lib/logger');
+      const warnSpy = jest.spyOn(loggerModule.logger, 'warn').mockImplementation(() => {});
       mockAxiosGet.mockRejectedValue({
         response: { status: 403 }
       });
@@ -969,7 +987,9 @@ describe('keycloakAuthService', () => {
         'http://localhost:8080/realms/genie'
       );
 
-      expect(result).toEqual({ active: false, disabled: true });
+      expect(result).toBeNull();
+      expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('403'));
+      warnSpy.mockRestore();
     });
   });
 });

@@ -105,6 +105,7 @@ const issuerMap = new Map();
  */
 let initPromise = null;
 let initFailedAt = 0;
+let initFailureReason = null;
 let initialized = false;
 
 /**
@@ -261,6 +262,7 @@ async function init(idpUrl) {
   if (issuerMap.size > sizeBefore) {
     initialized = true;
     initFailedAt = 0;
+    initFailureReason = null;
   } else if (pinnedIssuer && realm !== KEYCLOAK_REALM) {
     // A partner-realm init under the pin registers nothing whether or not
     // the primary has already registered the pin — the identical silent
@@ -339,9 +341,15 @@ async function initAllRealms() {
 async function ensureInitialized() {
   if (initialized) return;
 
-  // Within cooldown after a failure — skip retry
+  // Within cooldown after a failure — skip retry. The first failure's
+  // detail (why init failed) rides along: this message is what callers'
+  // DIAG logs print, and without it a 503 during the cooldown window
+  // names no cause at all.
   if (initFailedAt && Date.now() - initFailedAt < INIT_RETRY_COOLDOWN) {
-    throw new TokenVerificationError('AUTH_SERVICE_UNAVAILABLE', 'Authentication service is temporarily unavailable');
+    throw new TokenVerificationError(
+      'AUTH_SERVICE_UNAVAILABLE',
+      `Authentication service is temporarily unavailable (${initFailureReason || 'init failed previously'})`
+    );
   }
 
   // If an init is already in progress, wait for it
@@ -353,6 +361,7 @@ async function ensureInitialized() {
     })
     .catch((err) => {
       initFailedAt = Date.now();
+      initFailureReason = err.message;
       initPromise = null;
       throw err;
     });
@@ -387,7 +396,14 @@ const keycloakAuthService = {
       await ensureInitialized();
     } catch (err) {
       if (err instanceof TokenVerificationError) throw err;
-      throw new TokenVerificationError('AUTH_SERVICE_UNAVAILABLE', 'Authentication service is temporarily unavailable');
+      // The original message rides along: this message is what the callers'
+      // DIAG logs print, and init failures carry operator-actionable detail
+      // (discovery unreachable, the KEYCLOAK_EXPECTED_ISSUER pin-mismatch
+      // remedy). Clients only ever see the fixed 503/401 bodies, never this.
+      throw new TokenVerificationError(
+        'AUTH_SERVICE_UNAVAILABLE',
+        `Authentication service is temporarily unavailable (${err.message})`
+      );
     }
 
     // Extract unverified iss and exp to lookup in trusted issuer map (whitelist)
@@ -409,7 +425,7 @@ const keycloakAuthService = {
 
     // Helper function to verify token with JWT
     const verifyWithJwt = async () => {
-      // Opt-in audience binding (RFC 8707, Story 6.1): when the caller supplies
+      // Opt-in audience binding (RFC 8707): when the caller supplies
       // an `audience`, jose additionally validates the token's `aud` claim.
       // Omitted → no audience check (the historical resource-server behavior —
       // see the azp note below; pinned by keycloak-auth-service.audience.test.js).
@@ -551,8 +567,9 @@ const keycloakAuthService = {
         timeout: 3000
       });
 
-      // If we get a 200 response, user is active
-      if (response.status === 200 && response.data) {
+      // axios rejects non-2xx by default, so a resolved response is always
+      // 2xx — a body is the active-user answer.
+      if (response.data) {
         return { active: true, disabled: false };
       }
 
@@ -560,16 +577,22 @@ const keycloakAuthService = {
       logger.warn(`[KeycloakAuth] Unexpected Keycloak UserInfo response: ${response.status}`);
       return null;
     } catch (error) {
-      // 403 explicitly indicates user is disabled/deleted
+      // 403 does NOT confirm a disable: Keycloak answers a disabled user 401
+      // with the WWW-Authenticate challenge handled below, while a 403 means
+      // the token was ACCEPTED but lacks the scopes/roles the UserInfo
+      // endpoint requires (an active user) — and anything else on the path
+      // (proxy, WAF, rate limiter) can answer 403 too. The middleware acts
+      // destructively on a confirmed disable (soft-deletes the account), so
+      // an uncorroborated 403 stays ambiguous, like an uncorroborated 401.
       if (error.response && error.response.status === 403) {
-        return { active: false, disabled: true };
+        logger.warn('[KeycloakAuth] Keycloak UserInfo returned 403 — ambiguous, treating as null');
+        return null;
       }
       // 401 is ambiguous: an expired token and a disabled user both answer
-      // 401 (a disabled user's userinfo does NOT answer 403). Act only when
-      // the challenge names the disable: WWW-Authenticate carrying BOTH
-      // error="invalid_token" and error_description="User disabled" is the
-      // confirmed-disable answer (same contract as the 403 branch above);
-      // anything else (expired token, bad signature) stays ambiguous.
+      // 401. Act only when the challenge names the disable: WWW-Authenticate
+      // carrying BOTH error="invalid_token" and error_description="User
+      // disabled" is the confirmed-disable answer; anything else (expired
+      // token, bad signature) stays ambiguous.
       if (error.response && error.response.status === 401) {
         const wwwAuthenticate = error.response.headers && error.response.headers['www-authenticate'];
         // Require BOTH the challenge code and the description: the
@@ -625,6 +648,7 @@ const keycloakAuthService = {
     issuerMap.clear();
     initPromise = null;
     initFailedAt = 0;
+    initFailureReason = null;
     initialized = false;
   },
 

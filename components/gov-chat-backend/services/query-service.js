@@ -693,6 +693,10 @@ class QueryService {
       // The SERVER's engaged flag is the gate — read, never re-derived.
       const engaged = config?.engaged === true;
       const warnings = Array.isArray(config?.warnings) ? config.warnings : [];
+      // The single discriminant for "this answer was composed locally because
+      // the deployment's posture could not be read" — read once, used by the
+      // warning below and by the okf_only branch's genuine-zero-serving gate.
+      const postureUnknown = retrievalConfigClient.isPostureUnknown(config);
       logger.info('QueryService.fanout_config_resolved', {
         queryId,
         correlationId,
@@ -703,19 +707,22 @@ class QueryService {
         serving_graphs: Array.isArray(config?.serving_graphs) ? config.serving_graphs.length : 0,
         warnings: warnings.length
       });
-      if (retrievalConfigClient.isPostureUnknown(config)) {
+      if (postureUnknown) {
         // ONE emission site for the whole "the deployment's posture could not
         // be read" fact (#1687): an unreachable upstream or a garbled body —
         // whatever mode the local fallback carries. The warning code is the
-        // same and the payload's `mode` says which fallback is being served,
-        // so a dashboard cannot read the outage as "the deployment serves
-        // zero graphs" or "the deployment runs legacy/hybrid". The by-design
-        // defaults (OKF parked, a caller without okf scopes) never reach
-        // this: their legacy answer IS the correct posture.
+        // same; `source` and `mode` in the payload say which fallback is
+        // being served and why, so a dashboard cannot read the outage as
+        // "the deployment serves zero graphs" or "the deployment runs
+        // legacy/hybrid", and can tell a transport outage from a broken
+        // upstream payload. The by-design defaults (OKF parked, a caller
+        // without okf scopes) never reach this: their legacy answer IS the
+        // correct posture.
         logger.warn('QueryService.fanout_warning', {
           queryId,
           correlationId,
           fanout: { warning: 'posture_unknown', mode, engaged },
+          source: config?.source,
           server_warnings: warnings
         });
       }
@@ -780,7 +787,7 @@ class QueryService {
           context.sticky_graph_names = stickyClean;
           logger.info('QueryService.sticky_carrier_attached', { queryId, correlationId, sticky: stickyClean });
         }
-        if (!engaged && !retrievalConfigClient.isPostureUnknown(config)) {
+        if (!engaged && !postureUnknown) {
           // Structured telemetry for the admin dashboard (NOT surfaced to the
           // user chat): a REAL okf_only zero-serving response (the upstream
           // answered: the deployment genuinely serves zero graphs). A locally

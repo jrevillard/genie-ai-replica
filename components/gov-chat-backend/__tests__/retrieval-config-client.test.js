@@ -474,6 +474,30 @@ describe('retrieval-config-client (Story 1.1)', () => {
       // Three attempts: the success, the in-window failure, the re-resolution.
       expect(axiosLong.get).toHaveBeenCalledTimes(3);
     });
+
+    it('a 401 on the expiry re-resolution propagates with ONE upstream attempt', async () => {
+      const { loaded: longClient, axiosLong } = loadWithLongTtl();
+      nowMs = 599000;
+      axiosLong.get
+        .mockReturnValueOnce(okfGetResponse(HYBRID_CONFIG)) // the posture is confirmed
+        .mockImplementationOnce(() => okfGetError(503)); // in-window outage: the degraded posture is cached
+      const bearer = makeBearer(['okf:t:a:read']);
+      await longClient.getRetrievalConfig(bearer);
+      nowMs = 700000;
+      const degraded = await longClient.getRetrievalConfig(bearer);
+      expect(degraded.source).toBe('bff-last-known-good');
+
+      // Past the horizon, the caller's own token is now rejected: the
+      // serve-time re-resolution runs its own upstream attempt ONCE, and
+      // the 401 — the caller's own, from its own attempt, never a shared
+      // one — propagates directly instead of triggering a second attempt.
+      nowMs = 899500;
+      axiosLong.get.mockImplementationOnce(() => okfGetError(401, 'token expired'));
+      await expect(longClient.getRetrievalConfig(bearer)).rejects.toMatchObject({
+        name: 'OkfAuthzUnauthorizedError'
+      });
+      expect(axiosLong.get).toHaveBeenCalledTimes(3);
+    });
   });
 
   it('bearer isolation: two callers with different scopes get their own graph sets', async () => {

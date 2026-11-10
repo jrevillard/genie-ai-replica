@@ -372,34 +372,42 @@ async function resolveCached(kind, bearerHeader, policy, opts = {}) {
   const key = `${window}|${kind}|${effectiveScopesKey(bearerHeader)}`;
 
   const hit = _cache.get(key);
-  if (hit && hit.window === window) {
-    logger.debug('RetrievalConfigClient.cache_hit', { kind, correlationId });
+  if (hit) {
     // The entry holds the ATTEMPT (settled or still in flight), not just its
-    // result — awaiting it is what shares one upstream call.
+    // result — awaiting it is what shares one upstream call. The debug label
+    // says which: a join of an IN-FLIGHT attempt must not read as a hit in
+    // an incident timeline (during an outage nothing has answered yet).
+    logger.debug(hit.settled ? 'RetrievalConfigClient.cache_hit' : 'RetrievalConfigClient.cache_join', {
+      kind,
+      correlationId
+    });
+    let value;
     try {
-      const value = await hit.promise;
-      if (value?.expires_at && Date.now() > value.expires_at) {
-        // The composition carried an expiry that passed while the entry sat
-        // cached (a window longer than the horizon): drop the entry and
-        // resolve again — the fresh attempt finds no trusted posture and
-        // takes the fail-closed default.
-        if (_cache.get(key) === hit) _cache.delete(key);
-        return resolveCached(kind, bearerHeader, policy, opts);
-      }
-      return value;
+      value = await hit.promise;
     } catch (err) {
       // The shared attempt ran with the INITIATOR's bearer: its 401 says
       // nothing about OUR token (a refreshed token of the same caller shares
       // the scopes key — the invariant the docstring above protects). Run
-      // our OWN attempt, outside the cache.
+      // our OWN attempt, outside the cache. This catch sees only the SHARED
+      // attempt: the expiry re-resolution below happens after it, so a 401
+      // from the caller's own re-resolution propagates directly.
       if (err instanceof OkfAuthzUnauthorizedError) {
         return attemptUpstream(policy, bearerHeader, opts, correlationId);
       }
       throw err;
     }
+    if (value?.expires_at && Date.now() > value.expires_at) {
+      // The composition carried an expiry that passed while the entry sat
+      // cached (a window longer than the horizon): drop the entry and
+      // resolve again — the fresh attempt finds no trusted posture and
+      // takes the fail-closed default.
+      if (_cache.get(key) === hit) _cache.delete(key);
+      return resolveCached(kind, bearerHeader, policy, opts);
+    }
+    return value;
   }
 
-  const entry = { window, promise: null };
+  const entry = { window, promise: null, settled: false };
   entry.promise = attemptUpstream(policy, bearerHeader, opts, correlationId);
   _cache.set(key, entry);
   entry.promise.catch(() => {
@@ -408,6 +416,7 @@ async function resolveCached(kind, bearerHeader, policy, opts = {}) {
     if (_cache.get(key) === entry) _cache.delete(key);
   });
   const value = await entry.promise;
+  entry.settled = true;
   pruneCache(currentWindow());
   return value;
 }

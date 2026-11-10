@@ -55,12 +55,12 @@ function parseOkfScopes(payload) {
 async function authenticate(req, res, next) {
   const authHeader = req.headers.authorization;
   if (!authHeader) {
-    return res.status(401).json({ error: 'TOKEN_INVALID', message: 'Missing Authorization header' });
+    return res.status(401).json({ error: 'TOKEN_INVALID', message: 'Missing Authorization header', details: {} });
   }
   // RFC 6750 §2.1: the Bearer scheme is case-insensitive (accept bearer/Bearer/BEARER).
   const match = authHeader.match(/^\s*bearer\s+(.+)$/i);
   if (!match) {
-    return res.status(401).json({ error: 'TOKEN_INVALID', message: 'Malformed Authorization header' });
+    return res.status(401).json({ error: 'TOKEN_INVALID', message: 'Malformed Authorization header', details: {} });
   }
   const token = match[1].trim();
   // Opt-in audience binding (RFC 8707, Story 6.1): OKF_AUDIENCE gates the check —
@@ -83,21 +83,25 @@ async function authenticate(req, res, next) {
     );
     next();
   } catch (err) {
-    logger.error('OKF auth error', { error: err.message, path: req.path });
     if (err && err.code === 'AUTH_SERVICE_UNAVAILABLE') {
-      // Keycloak is unreachable (discovery/JWKS init failure) — NOT a bad
-      // token. 503, the doc-repo contract the frontend httpService handles:
-      // a 401 here would tell the client its session had died and send it
-      // to the login page during an infrastructure outage. The verifier's
-      // init-failure message carries operator detail (discovery hostname,
-      // HTTP status, the pin-mismatch remedy): the full text belongs in the
-      // log above, never in a body an unauthenticated caller can read.
+      // An infrastructure outage must not flood the error stream with
+      // per-request entries and bury genuine 401 root causes (the doc-repo
+      // middleware makes the same choice): warn-level, the detail in the
+      // message kept whole. Keycloak is unreachable for the verifier's
+      // INIT path (discovery/JWKS bootstrap, or the retry cooldown after
+      // it) — NOT a bad token. 503, the doc-repo contract the frontend
+      // httpService handles: a 401 here would tell the client its session
+      // had died and send it to the login page during an infrastructure
+      // outage. (A Keycloak outage that starts AFTER a successful init is
+      // classified by the shared verifier itself — see issue #1723.)
+      logger.warn('OKF auth service unavailable', { error: err.message, path: req.path });
       return res.status(503).json({
         error: 'AUTH_SERVICE_UNAVAILABLE',
         message: 'Authentication service unavailable',
         details: {}
       });
     }
+    logger.error('OKF auth error', { error: err.message, path: req.path });
     // An expired token is a genuine token failure with its own CODE: the
     // document-repository middleware and the web app both distinguish it from
     // a rejected token, and the fixed message keeps the internal text out.

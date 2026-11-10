@@ -206,6 +206,16 @@ function mentionsPath(text, file) {
 }
 
 /**
+ * The marker this script writes in an issue body to bind that issue to
+ * one spec file. ONE spelling, used both to write it and to read it back:
+ * a drift between the two would silently degrade the dedupe to
+ * title-only.
+ */
+function specFileMarker(file) {
+  return `- spec file: \`${file}\``;
+}
+
+/**
  * The open issue that already tracks this spec file, or null.
  *
  * An issue that already tracks the failure must NOT be duplicated: the run
@@ -226,9 +236,10 @@ function mentionsPath(text, file) {
  * the file as red with nothing pointing at it.
  */
 function findTrackedIssue(file, openIssues) {
-  const marker = `- spec file: \`${file}\``;
+  const marker = specFileMarker(file);
   const matches = openIssues.filter(
-    (issue) => mentionsPath(issue.title, file) || (issue.description || '').includes(marker)
+    (issue) =>
+      mentionsPath(issue.title || '', file) || (issue.description || '').includes(marker)
   );
   return matches[0] || null;
 }
@@ -264,7 +275,7 @@ function issueBody(file, failures, venue, runStamp) {
         ]
       : []),
     `- run: ${runStamp}`,
-    `- spec file: \`${file}\``,
+    specFileMarker(file),
     `- failing tests: ${failures.length}`,
     '',
     '## Failures',

@@ -122,14 +122,28 @@ test.describe('runRouteHandler', () => {
     // Error with a "route.fetch: " prefix. Measured on the venue: the
     // name is 'Error', the class survives only RENAMED
     // ('TargetClosedError2'), and only the wording is intact — so the
-    // guard recognised the name and the constructor, rethrew this
-    // shape, and the teardown error landed in the NEXT test.
+    // guard read the name and the constructor, matched NEITHER, rethrew
+    // this shape, and the teardown error landed in the NEXT test.
     const { page } = pageState({ contextClosed: true });
     await expect(
       runOnce(page, async () => {
         throw new Error('route.fetch: Request context disposed.');
       })
     ).resolves.toBeUndefined();
+  });
+
+  test('rethrows a defect that merely ALMOST says the disposed wording — the branch is narrow', async () => {
+    // The wording branch names the race's own text ("Request context
+    // disposed"), not every text that contains "disposed". A mock defect
+    // that ALMOST says it must surface even on a closing target: a wider
+    // branch would swallow it, and this spec is what makes that
+    // widening visible.
+    const { page } = pageState({ pageClosed: true });
+    await expect(
+      runOnce(page, async () => {
+        throw new Error('route.fulfill: context disposed by the mock');
+      })
+    ).rejects.toThrow('route.fulfill: context disposed by the mock');
   });
 
   test('rethrows a mock defect that carries the disposed wording — the target is alive', async () => {

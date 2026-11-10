@@ -60,8 +60,11 @@ const filesCarrying = (root, needle) => {
   const defining = path.join(root, 'helpers', 'chatbot.js');
   // Both spellings of the path: a glob that drops the leading slash
   // ('**queries/stream**') matches the app's request just as well, and
-  // must not slip past the gate.
-  const needles = [needle, needle.replace(/^\//, '')];
+  // must not slip past the gate. The slash-less needle is dropped when
+  // the path IS the slash alone — an empty needle matches every file,
+  // and a gate that flags the whole tree is no gate.
+  const slashless = needle.replace(/^\//, '');
+  const needles = slashless ? [needle, slashless] : [needle];
   return e2eFiles(root)
     .filter((f) => path.resolve(f) !== path.resolve(defining))
     .filter((f) => {
@@ -109,13 +112,20 @@ describe('the e2e suite intercepts the stream endpoint through the shared consta
       fs.mkdirSync(path.join(tree, 'node_modules', 'dep'), { recursive: true });
       fs.writeFileSync(path.join(tree, 'helpers', 'chatbot.js'), `const STREAM_PATH = '${endpoint}';\n`);
       fs.writeFileSync(path.join(tree, 'spec.js'), `await page.route('**${endpoint}**', () => {});\n`);
+      // The slash-less spelling — caught ONLY by the second needle. It is
+      // the fixture that needle exists for: without it, the needle has no
+      // fixture and deleting it leaves the gate green.
+      fs.writeFileSync(
+        path.join(tree, 'slashless.js'),
+        `await page.route('**${endpoint.replace(/^\//, '')}**', () => {});\n`
+      );
       fs.writeFileSync(path.join(tree, 'clean.js'), 'await page.goto(BASE_URL);\n');
       // The dependency tree is excluded: a copy of the endpoint inside
       // node_modules is not a drift this gate is for — and the exclusion
       // itself is pinned here, so deleting the filter turns this red.
       fs.writeFileSync(path.join(tree, 'node_modules', 'dep', 'index.js'), `fetch('${endpoint}')\n`);
       const strays = filesCarrying(tree, endpoint).map((f) => path.basename(f));
-      expect(strays.sort()).toEqual(['spec.js']);
+      expect(strays.sort()).toEqual(['slashless.js', 'spec.js']);
     } finally {
       fs.rmSync(tree, { recursive: true, force: true });
     }

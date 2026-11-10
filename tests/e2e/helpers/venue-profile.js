@@ -38,10 +38,9 @@
  */
 const vm = require('vm');
 const auth = require('./auth');
-// The venue's edge from the credential-free module: this helper is
-// loaded by specs that take their credentials straight from
-// helpers/e2e-fixtures.js, and the chat helper re-exports those
-// credentials — importing it here would mix the two import paths.
+// The venue's edge from the credential-free module: this helper needs
+// only the edge, and the chat helper it used to import re-exports the
+// fixtures' credentials — a module this probe has no use for.
 const { BASE_URL } = require('./base-url');
 
 const RUNTIME_CONFIG_PATH = '/runtime/config.js';

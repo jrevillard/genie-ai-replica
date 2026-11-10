@@ -60,18 +60,21 @@ function remedy(what) {
     const page = await context.newPage();
     const response = await page.goto(BASE_URL, { waitUntil: 'domcontentloaded', timeout: 45000 });
     const status = response ? response.status() : 0;
-    // ANY 4xx at the venue ROOT stops the run: it is not a surface the app
-    // serves to an anonymous browser. TWO causes, and the message must name
-    // both — the address is not the app's edge, OR the venue's realm
-    // refuses an anonymous request to it (a broken realm answers 4xx at
-    // the edge too). Letting the run proceed would fail every spec on
-    // navigation and the failure path would file one issue per spec file
-    // for a RUNNER-CONFIG cause — the flood this pre-flight exists to stop.
+    // ANY 4xx or 5xx at the venue ROOT stops the run: it is not a surface
+    // the app serves to an anonymous browser. The two statuses are
+    // DIFFERENT findings — a 4xx is the edge refusing (wrong address, or
+    // a realm that refuses an anonymous request: a broken realm answers
+    // 4xx at the edge too), a 5xx is the deployment down. Letting the run
+    // proceed would fail every spec on navigation and the failure path
+    // would file one issue per spec file for a RUNNER-CONFIG cause — the
+    // flood this pre-flight exists to stop.
     if (!status || status >= 400) {
-      failure =
-        `the venue answered HTTP ${status} at ${BASE_URL} — either the address is not the app's ` +
-        'edge, or the venue refuses an anonymous request to it (a broken realm answers 4xx at ' +
-        'the edge too).';
+      const cause =
+        status >= 500
+          ? 'the deployment is down'
+          : "the address is not the app's edge, or the venue refuses an anonymous request to " +
+            'it (a broken realm answers 4xx at the edge too)';
+      failure = `the venue answered HTTP ${status} at ${BASE_URL} — ${cause}.`;
     } else {
       process.stdout.write(`pre-flight: the browser reached the venue (HTTP ${status}).\n`);
     }

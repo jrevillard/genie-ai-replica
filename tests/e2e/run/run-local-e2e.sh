@@ -41,10 +41,10 @@ cd "$REPO_ROOT"
 # credentials instead of guessing.
 DEFAULT_VENUE="https://genieai-forge.local:4443"
 # The venue address is NORMALIZED once, here: https://x:4443, https://x:4443/
-# and https://x:4443// are the same venue. One spelling for the whole run,
-# so the credential auto-read below, the venue lock and the browser's
-# baseURL all agree on WHICH venue they are on — a trailing slash used to
-# make the auto-read miss the default venue and take three venue locks.
+# and https://x:4443// are the same venue. The lock key already normalized
+# it; the credential auto-read below compared the RAW address against the
+# default venue, so a trailing slash made the auto-read miss the shared
+# stack's secret and ask for credentials the run already had.
 BASE_URL="$(printf '%s' "${BASE_URL:-$DEFAULT_VENUE}" | sed 's#/*$##')"
 export BASE_URL
 NAMESPACE="${E2E_NAMESPACE:-genieai}"

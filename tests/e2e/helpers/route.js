@@ -82,9 +82,9 @@ function isTargetGone(page) {
  *   survives only RENAMED (the shipped bundle dedups the server's and
  *   the client's classes: the race arrives as `TargetClosedError2`).
  *   Only the WORDING survives unrenamed — "Request context disposed.".
- *   That shape was measured on the venue: the guard recognised the name
- *   and the constructor, and still rethrew it, and the teardown error
- *   landed in the next test.
+ *   That shape was measured on the venue: the guard read the name and
+ *   the constructor, matched NEITHER, rethrew it, and the teardown
+ *   error landed in the next test.
  *
  * The wording branch is narrow (it names a closed target, or the
  * request context the race disposes) and the state half still gates it:

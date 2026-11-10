@@ -61,14 +61,6 @@ jest.mock('../services/pii-service', () => ({
 jest.mock('../services/service-token', () => ({
   authedAxios: { get: jest.fn(), post: jest.fn(async () => ({ status: 202, data: { file_id: 'file-x' } })) }
 }));
-// The worker's bundle-id cache (the repo's CURRENT bundle doc): the import
-// stores a NEW bundle zip, so it must drop the cached id — otherwise the
-// drain keeps mirroring into the first bundle the repo ever had (#1709).
-// Only the export ingest-service imports — `invalidateBundleFileCache` — is
-// mocked; extend when it uses more.
-jest.mock('../workers/ingestWorker', () => ({
-  invalidateBundleFileCache: jest.fn()
-}));
 jest.mock('../services/repository-service', () => ({
   getById: jest.fn(async (repo_id) => ({
     repo_id,
@@ -406,18 +398,6 @@ describe('ingestService.ingestRepoConcepts (ADR-021 4a–4f)', () => {
     zip.addFile('tmo.md', Buffer.from('# Tmo'));
     await ingestService.ingestRepoConcepts(REPO, { zip: zip.toBuffer().toString('base64') }, ACTOR);
     expect(authedAxios.post.mock.calls[0][2]).toEqual({ timeout: 30000 });
-  });
-
-  test("storing the bundle zip drops the worker's cached bundle id (issue #1709)", async () => {
-    const AdmZip = require('adm-zip');
-    const zip = new AdmZip();
-    zip.addFile('c.md', Buffer.from('# C'));
-    await ingestService.ingestRepoConcepts(REPO, { zip: zip.toBuffer().toString('base64') }, ACTOR);
-    // The worker's cache points at the repo's CURRENT bundle doc; a new zip
-    // invalidates it, so the drain's verdicts and the bundle state machine
-    // address THIS bundle.
-    const { invalidateBundleFileCache } = require('../workers/ingestWorker');
-    expect(invalidateBundleFileCache).toHaveBeenCalledWith(REPO);
   });
 
   test('the bundle-zip doc lands BEFORE the first concept becomes claimable (issue #1709)', async () => {

@@ -254,8 +254,12 @@ describe('versionService.mintVersion — review fixes (2026-08-17)', () => {
     // it would report a drain that never happened. The zip's conversion
     // record is the in-flight signal — `concepts_total` is what marks it as a
     // ZIP import (the crawl conversion shares the record and writes only
-    // bytes/pages progress).
-    seedRepo({ version: 2, conversion: { status: 'adding', concepts_total: 5 } });
+    // bytes/pages progress), and the fresh `started_at` proves the run is
+    // alive (an import runs minutes — see the age test below).
+    seedRepo({
+      version: 2,
+      conversion: { status: 'adding', concepts_total: 5, started_at: new Date().toISOString() }
+    });
     // The reconcile's Pending probe is SKIPPED, so the snapshot is the first
     // query the mint runs.
     mockDb.query.mockResolvedValueOnce({
@@ -265,6 +269,43 @@ describe('versionService.mintVersion — review fixes (2026-08-17)', () => {
     const result = await versionService.mintVersion(REPO, { trigger: 'manual' });
     expect(result.bundle_version).toBe(3);
     expect(mockDb.query.mock.calls[0][0]).not.toContain("dataprep.status == 'Pending'");
+  });
+
+  // Nothing clears a conversion record whose import CRASHED mid-run (no
+  // reaper for the doc), so an 'adding' marker frozen forever would
+  // permanently disable the reconcile — the self-heal would be dead for that
+  // repo. The skip is age-bounded on started_at: an import runs minutes, so
+  // anything still 'adding' after a day is a crashed run, and its Pending
+  // bundle is exactly the stale marker the reconcile exists for.
+  test('D1: a zip marker whose started_at is a day old is a CRASHED run — the reconcile runs', async () => {
+    seedRepo({
+      version: 2,
+      conversion: {
+        status: 'adding',
+        concepts_total: 5,
+        started_at: new Date(Date.now() - 25 * 60 * 60 * 1000).toISOString()
+      }
+    });
+    mockDb.query.mockResolvedValueOnce({ all: async () => [1] }); // Pending zip present
+    mockDb.query.mockResolvedValueOnce({
+      all: async () => [{ concept_id: 'x', title: 'X', content_hash: 'h', index_status: 'indexed' }]
+    });
+    mockDb.query.mockResolvedValueOnce({ all: async () => [] }); // modification ledger: none
+    const result = await versionService.mintVersion(REPO, { trigger: 'manual' });
+    expect(result.bundle_version).toBe(3);
+    expect(mockDb.query.mock.calls[0][0]).toContain("dataprep.status == 'Pending'");
+  });
+
+  test('D1: a zip marker with NO started_at is not proven alive — the reconcile runs', async () => {
+    seedRepo({ version: 2, conversion: { status: 'adding', concepts_total: 5 } });
+    mockDb.query.mockResolvedValueOnce({ all: async () => [1] }); // Pending zip present
+    mockDb.query.mockResolvedValueOnce({
+      all: async () => [{ concept_id: 'x', title: 'X', content_hash: 'h', index_status: 'indexed' }]
+    });
+    mockDb.query.mockResolvedValueOnce({ all: async () => [] }); // modification ledger: none
+    const result = await versionService.mintVersion(REPO, { trigger: 'manual' });
+    expect(result.bundle_version).toBe(3);
+    expect(mockDb.query.mock.calls[0][0]).toContain("dataprep.status == 'Pending'");
   });
 
   // The crawl conversion shares the repo's `conversion` record and writes

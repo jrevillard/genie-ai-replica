@@ -799,37 +799,15 @@ async function waitForTerminal(db, repoId, conceptId, windowMs) {
 // ZIP's file_id, with the concept_id embedded in the message — the UI's
 // bundle-zip panel then shows the per-concept ingest progress (Started /
 // Ingested / Ingestion Error).
-const _bundleFileCache = new Map(); // repo_id -> bundle file_id (the repo's CURRENT bundle)
-// Per-repo epoch counters. A resolution that STARTED before its repo's last
-// invalidation must not re-seed the cache afterwards: it raced the store and
-// resolved the PREVIOUS bundle — caching it would re-poison the cache for the
-// process lifetime, right back to the #1709 symptom. Scoped per repo so one
-// repo's re-import does not discard another repo's in-flight resolution.
-const _bundleFileCacheEpoch = new Map();
-
-/**
- * Drop the cached bundle id of a repo — its bundle doc changed (a new zip was
- * stored for it).
- *
- * The cache is a "first answer wins" one: without this, the FIRST bundle a
- * repo ever had stays cached for the life of the process, so after a re-import
- * the worker's own ingestion-log mirror and the bundle state machine keep
- * addressing the stale doc — the current bundle never leaves 'Pending' and
- * its Ingestion Log never receives the drain's verdicts (issue #1709).
- *
- * PROCESS-LOCAL BY DESIGN: with more than one okf-server replica each pod
- * caches and invalidates independently, so the stale-first-answer behaviour
- * would come back per pod. Single-replica is the shipped deployment.
- */
-function invalidateBundleFileCache(repoId) {
-  _bundleFileCache.delete(repoId);
-  _bundleFileCacheEpoch.set(repoId, (_bundleFileCacheEpoch.get(repoId) || 0) + 1);
-}
+// The bundle id is resolved FRESH on every call — one cheap doc-repo GET (the
+// lookup dataprep itself does per log write). No process-lifetime cache: a
+// cached "first answer" outlives re-imports, and keeping it coherent needs an
+// invalidation protocol every bundle-store site must remember (the stale doc
+// then receives the drain's verdicts and never leaves 'Pending' — the #1709
+// symptom). Resolving per call leaves nothing to invalidate, so a new bundle
+// store site cannot reintroduce the bug by forgetting a call.
 
 async function getBundleFileId(repoId) {
-  const cached = _bundleFileCache.get(repoId);
-  if (cached) return cached;
-  const epochAtStart = _bundleFileCacheEpoch.get(repoId) || 0;
   // The bundle zip is the only doc-repo artifact with is_bundle=true for the repo.
   // Doc-repo returns { data: [...], pagination: {...} } (no `items`/`files` key).
   const resp = await authedAxios.get(
@@ -840,9 +818,6 @@ async function getBundleFileId(repoId) {
   const bundle = items[0];
   if (!bundle || !bundle.file_id) {
     throw new Error(`Bundle zip not found in doc-repo for repo_id=${repoId}`);
-  }
-  if (epochAtStart === (_bundleFileCacheEpoch.get(repoId) || 0)) {
-    _bundleFileCache.set(repoId, bundle.file_id);
   }
   return bundle.file_id;
 }
@@ -1876,7 +1851,6 @@ module.exports = {
   _unclaimAttempt,
   claimNextJob,
   getBundleFileId,
-  invalidateBundleFileCache,
   jobWindowMs,
   reapGraceMs
 };

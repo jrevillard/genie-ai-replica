@@ -1284,68 +1284,24 @@ describe('ingestWorker._reapStuckParsed (2-9-5 atomicity — claim-stamp reaping
   });
 });
 
-describe("the bundle-id cache (issue #1709: the repo's CURRENT bundle doc)", () => {
+describe("the bundle-id resolution (issue #1709: the repo's CURRENT bundle doc)", () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    // The cache is module-level: a previous test must not leave a seeded
-    // entry behind for this one.
-    worker.invalidateBundleFileCache(REPO);
   });
 
-  test('the cache is "first answer wins" until it is invalidated', async () => {
+  test('resolves FRESH on every call — a re-imported bundle is picked up immediately', async () => {
+    // No process-lifetime cache: a cached "first answer" outlives re-imports
+    // and keeps pointing the mirror + state machine at the FIRST bundle the
+    // repo ever had (#1709). The next read after a re-store MUST see the new
+    // doc — nothing to invalidate, so a new bundle-store site cannot
+    // reintroduce the bug by forgetting a call.
     authedAxios.get.mockResolvedValue({ data: { data: [{ file_id: 'bundle-1' }] } });
     expect(await worker.getBundleFileId(REPO)).toBe('bundle-1');
-    // A second bundle was stored for the repo — the resolution would now
-    // answer differently.
+    // A second bundle was stored for the repo — the resolution answers
+    // differently right away.
     authedAxios.get.mockResolvedValue({ data: { data: [{ file_id: 'bundle-2' }] } });
-    expect(await worker.getBundleFileId(REPO)).toBe('bundle-1'); // still cached
-    expect(authedAxios.get).toHaveBeenCalledTimes(1);
-    // The invalidation is what makes the worker address the CURRENT bundle:
-    // without it the drain's verdicts and the bundle state machine keep
-    // hitting the FIRST bundle the repo ever had.
-    worker.invalidateBundleFileCache(REPO);
     expect(await worker.getBundleFileId(REPO)).toBe('bundle-2');
     expect(authedAxios.get).toHaveBeenCalledTimes(2);
-  });
-
-  test('a resolution that raced an invalidation does not re-seed the cache', async () => {
-    // The GET issued BEFORE the invalidation resolves the PREVIOUS bundle —
-    // caching that answer would re-poison the cache for the process lifetime
-    // (a store landing between the miss and the resolution is exactly the
-    // #1709 race).
-    let release;
-    const gate = new Promise((resolve) => {
-      release = resolve;
-    });
-    authedAxios.get.mockImplementation(() => gate.then(() => ({ data: { data: [{ file_id: 'bundle-1' }] } })));
-    const inFlight = worker.getBundleFileId(REPO); // cache miss -> GET in flight
-    worker.invalidateBundleFileCache(REPO); // a new bundle is stored NOW
-    release();
-    expect(await inFlight).toBe('bundle-1'); // the stale answer still comes back...
-    authedAxios.get.mockResolvedValue({ data: { data: [{ file_id: 'bundle-2' }] } });
-    // ...but it must not have been cached: the next read resolves again.
-    expect(await worker.getBundleFileId(REPO)).toBe('bundle-2');
-    expect(authedAxios.get).toHaveBeenCalledTimes(2);
-  });
-
-  test('an invalidation of ANOTHER repo does not discard this repo in-flight resolution', async () => {
-    // The epoch counters are per repo: repo B storing a bundle must not
-    // throw away repo A's just-resolved answer (a global counter would —
-    // the resolution re-GETs on every read and the cache stays cold).
-    const OTHER_REPO = `${REPO}-other`;
-    let release;
-    const gate = new Promise((resolve) => {
-      release = resolve;
-    });
-    authedAxios.get.mockImplementation(() => gate.then(() => ({ data: { data: [{ file_id: 'bundle-a' }] } })));
-    const inFlight = worker.getBundleFileId(REPO); // cache miss -> GET in flight
-    worker.invalidateBundleFileCache(OTHER_REPO); // an unrelated repo re-imports
-    release();
-    expect(await inFlight).toBe('bundle-a');
-    // The resolution survived: the next read for THIS repo is served from
-    // the cache (the epoch did not move for it).
-    expect(await worker.getBundleFileId(REPO)).toBe('bundle-a');
-    expect(authedAxios.get).toHaveBeenCalledTimes(1);
   });
 });
 

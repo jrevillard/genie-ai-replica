@@ -46,8 +46,6 @@ const { authedAxios } = require('./service-token');
 const config = require('../config');
 const { versionedGraphName } = require('./graph-lifecycle-service');
 const { slugFor } = require('./slug');
-// The worker's bundle-id cache points at the repo's CURRENT bundle doc.
-const { invalidateBundleFileCache } = require('../workers/ingestWorker');
 
 const META = 'okf_concepts_meta';
 
@@ -156,9 +154,6 @@ async function exportBundle(repo, actor) {
         { timeout: config.documentRepository.bundleStoreTimeoutMs }
       );
       fileId = res && res.data && res.data.file_id;
-      // The published zip is the repo's CURRENT bundle doc — drop the worker's
-      // cached id for it (same rationale as the ingest-service import path).
-      invalidateBundleFileCache(repoId);
     } catch (err) {
       const status = err && err.response && err.response.status;
       logger.error('Bundle export store failed', {

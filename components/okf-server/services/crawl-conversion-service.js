@@ -127,11 +127,12 @@ let swept = false;
  * check and its claim are one atomic step (no await between them), so the
  * awaited stages that follow (the queued patch, the source stamping) cannot
  * be slipped through by a second start, which imported the corpus twice
- * (issue #1684). Returns the settle callback the runner hands to
- * releaseConversion when the run ends. Throws 409 CONVERSION_IN_FLIGHT when
- * the repo is already claimed. BOTH converting paths claim through this one
- * implementation — a diverging copy is how the documents path lost its trim
- * gate (#1699) and its guard window (#1684) in the first place.
+ * (issue #1684). Returns the settle callback the caller hands to
+ * releaseConversion when the run ends — or, on a failed start that never
+ * began a run, the start's own catch does. Throws 409 CONVERSION_IN_FLIGHT
+ * when the repo is already claimed. BOTH converting paths claim through this
+ * one implementation — a diverging copy is how the documents path lost its
+ * trim gate (#1699) and its guard window (#1684) in the first place.
  */
 function reserveConversion(repoId) {
   if (live.has(repoId)) {
@@ -977,7 +978,10 @@ module.exports = {
   releaseSlot,
   // THE one-conversion-per-repo guard (issue #1684): both converting paths
   // claim and release through these two — the producer imports them, the way
-  // it imports the shared slot above.
+  // it imports the shared slot above. releaseConversion ONLY from the code
+  // path that received the settle: the identity link between a settle and its
+  // map entry lives at the call site, so a superseded run's release would
+  // otherwise delete a newer reservation.
   reserveConversion,
   releaseConversion
 };

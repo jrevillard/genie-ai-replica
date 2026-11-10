@@ -72,7 +72,13 @@ valid_flags_except() {
 # render_capture <flags...> — sets GUARD_OUTPUT and GUARD_RC for the
 # four helpers below, so the render mechanics live in exactly one copy.
 render_capture() {
-  GUARD_OUTPUT="$(helm template "${RELEASE}" "${CHART}" -n "${NS}" "$@" 2>&1)"
+  # --kube-version is explicit: without it helm compares the chart's
+  # kubeVersion constraint against the Kubernetes version COMPILED INTO the
+  # helm binary — so the same chart renders on one machine and fails on
+  # another, and a helm release that ships a newer k8s breaks every
+  # render in the pipeline. 1.33.0 is the range's low bound (the CI
+  # validates against it; the laptop cluster runs the high bound).
+  GUARD_OUTPUT="$(helm template "${RELEASE}" "${CHART}" -n "${NS}" --kube-version 1.33.0 "$@" 2>&1)"
   GUARD_RC=$?
 }
 
@@ -113,6 +119,34 @@ expect_ok() {
     return
   fi
   echo "PASS: ${label} — render accepted"
+}
+
+# expect_kube_version_rejected <label> <kubernetes version> [flags...]
+#   The chart declares the Kubernetes range it is validated on (Chart.yaml
+#   kubeVersion). Helm compares that constraint against the version
+#   COMPILED INTO the helm binary unless the version is passed
+#   explicitly — so a chart whose range drifts from what the pipeline
+#   renders against renders on one machine and fails on another. This
+#   case pins the range: a version outside it must be refused BY NAME,
+#   and the refusal must be about kubeVersion (a render failing for
+#   another reason would satisfy a weaker assertion).
+expect_kube_version_rejected() {
+  local label="$1" version="$2"; shift 2
+  local output rc
+  output="$(helm template "${RELEASE}" "${CHART}" -n "${NS}" --kube-version "${version}" "$@" 2>&1)"
+  rc=$?
+  if [ "${rc}" -eq 0 ]; then
+    echo "FAIL: ${label} — the render SUCCEEDED on Kubernetes ${version}; the chart's kubeVersion does not exclude it"
+    fails=$((fails + 1))
+    return
+  fi
+  if ! printf '%s' "${output}" | grep -qF "kubeVersion"; then
+    echo "FAIL: ${label} — the render failed on Kubernetes ${version}, but not on the kubeVersion constraint:"
+    printf '%s\n' "${output}" | head -4
+    fails=$((fails + 1))
+    return
+  fi
+  echo "PASS: ${label} — the chart refuses Kubernetes ${version} by name"
 }
 
 # expect_render_contains <label> <needle> <flags...>
@@ -740,6 +774,19 @@ expect_fail "a kubeletToolsMirror carrying shell metacharacters" \
 expect_fail "a toolingArch outside the download URL's vocabulary" \
   "toolingArch" \
   $(valid_flags) --set global.toolingArch=x86_64
+
+# 30b. The chart's declared Kubernetes range: the pipeline renders
+#      against 1.33 (the low bound) and the laptop cluster runs 1.37
+#      (the high bound). A version outside the range must be refused
+#      BY NAME — a chart that stopped declaring kubeVersion renders
+#      everywhere, and the range stops being a contract.
+expect_kube_version_rejected "a Kubernetes version below the declared range" \
+  "1.32.0" \
+  $(valid_flags)
+
+expect_kube_version_rejected "a Kubernetes version above the declared range" \
+  "1.38.0" \
+  $(valid_flags)
 
 # 31. An ArangoDB member with NO cpu request is the pathology #1606
 #     recorded: the member runs on the node's leftovers, its exec probes

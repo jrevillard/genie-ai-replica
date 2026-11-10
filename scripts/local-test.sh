@@ -75,7 +75,7 @@ helm lint "$CHART" --strict
 
 echo
 echo "=== STEP 2: helm template (dry-run render) ==="
-helm template "$RELEASE" "$CHART" -n "$NS" \
+helm template "$RELEASE" "$CHART" -n "$NS" --kube-version 1.33.0 \
   --set data.keycloak.failOnPlaceholderSecrets=false \
   --set "data.keycloak.clientSecrets.proxyClient=$CLIENT_PROXY" \
   --set "data.keycloak.clientSecrets.dataprep=$CLIENT_DATAPREP" \

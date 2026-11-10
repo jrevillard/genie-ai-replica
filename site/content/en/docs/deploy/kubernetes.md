@@ -32,7 +32,16 @@ lives under `charts/` in the application repo and is referenced by path.
 
 **Cluster.**
 
-- Kubernetes **1.33+**
+- Kubernetes **1.33 – 1.37** (the range the chart is validated on: CI
+  renders and dry-runs against 1.33, the laptop cluster runs 1.37 with
+  NetworkPolicy enforced by Calico). The chart declares it in
+  `kubeVersion`, so Helm refuses an install outside the range and names
+  the range in the error.
+- On 1.35 and above, the pinned cluster-scoped components run in their
+  upstream **best-effort** mode: Keycloak's tested range ends at 1.34
+  and cert-manager's at 1.36, and neither upstream publishes a build
+  that claims 1.37. 1.33 and 1.34 are inside every component's tested
+  range — prefer them for a production cluster.
 - A default StorageClass that supports dynamic provisioning (used by the
   Arango, document-repository, Redis, and (in-cluster mode) model-cache PVCs)
 - `kubectl` access to the target cluster from the operator workstation

@@ -86,7 +86,7 @@ reference; do not duplicate or restate them here or in specs.
 | `epic1/`, `epic2/`, `epic3/` | Auth/session lifecycle specs (mirror the `docs/e2e-tests/` phases) |
 | `helpers/` | Shared auth/login, chat, documents, locale, Keycloak admin, cache-header and welcome helpers (helper unit specs live here too — e.g. `helpers/auth.spec.js`) |
 | `helpers/venue-profile.js` | What the venue actually exposes (OKF pillar, realms, identity providers) — the source of every runtime skip's reason |
-| `run/` | The local run: the runner script, the venue-name mapping and the failure path (not specs) |
+| `run/` | The local run: the runner script, the venue-name mapping and the failure path (their unit spec lives here too) |
 | `helpers/e2e-fixtures.js` | The venue fixture definitions (username, email, password, realm roles) |
 | `provision-e2e-fixtures.js` | Provisions those fixtures for a venue (CI e2e job and Phase 0 both run it) |
 | `fixtures/` | Fixed seed files for upload tests |

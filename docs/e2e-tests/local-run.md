@@ -52,7 +52,8 @@ Exit codes of the runner: `0` the suite passed and the failure path read its
 report; `1` the suite is red (or the failure path could not file); `2` the
 runner is missing a tool or the admin credentials; `3` another run holds the
 slot (the checkout or the venue lock); `4` the suite wrote no report — a
-broken run, nothing is filed.
+broken run, nothing is filed; any other code is the suite process's own
+death passed through (a signal, an OOM).
 
 | Requirement | Note |
 |---|---|

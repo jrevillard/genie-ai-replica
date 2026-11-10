@@ -881,6 +881,41 @@ describe('keycloakAuthService', () => {
       expect(result).toBeNull();
     });
 
+    it('strips control characters and line separators from the logged WWW-Authenticate tail', async () => {
+      // The sanitizer owns a log-forging guard on server-controlled header
+      // input: C0, C1 (U+0085 survives many naive filters) and Unicode line
+      // separators must not reach the log line — and the header content that
+      // survives must still be there to diagnose the ambiguity.
+      // The service logs through the REAL shared/lib winston logger (the
+      // virtual '../shared-lib' mock covers only the barrel), so spy there.
+      const loggerModule = require('../../shared/lib/logger');
+      const warnSpy = jest.spyOn(loggerModule.logger, 'warn');
+      mockAxiosGet.mockRejectedValue({
+        response: {
+          status: 401,
+          headers: {
+            'www-authenticate':
+              'Bearer realm="genie", error="invalid_token", error_description="Token expired"\u2028\u0085Injected\nline'
+          }
+        }
+      });
+
+      const result = await keycloakAuthService.checkUserStatusInKeycloak(
+        'valid-token',
+        'http://localhost:8080/realms/genie'
+      );
+
+      expect(result).toBeNull();
+      const warnCall = warnSpy.mock.calls.find(([msg]) => String(msg).includes('WWW-Authenticate'));
+      expect(warnCall).toBeDefined();
+      const tail = String(warnCall[0]);
+      expect(tail).toContain('error_description="Token expired"');
+      for (const banned of ['\u2028', '\u0085', '\n', 'Injected\nline']) {
+        expect(tail).not.toContain(banned);
+      }
+      warnSpy.mockRestore();
+    });
+
     it('should stay null when a 401 WWW-Authenticate names another reason (expired token)', async () => {
       mockAxiosGet.mockRejectedValue({
         response: {

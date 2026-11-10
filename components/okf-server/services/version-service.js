@@ -285,10 +285,25 @@ async function mintVersion(repo_id, opts = {}, actor) {
     // 'adding' (the producer writes it standalone at 'classifying'), and the
     // crawl's start patch clears it, so a repo zip-imported ONCE does not
     // carry the marker into a later crawl through the record's MERGE.
+    //
+    // The skip is AGE-BOUNDED on the record's started_at: nothing clears a
+    // record whose import CRASHED mid-run (no reaper for the conversion
+    // doc), and an 'adding' marker frozen forever would permanently disable
+    // this reconcile — the self-heal would be dead for that repo. An import
+    // runs minutes; anything still 'adding' after a day is a crashed run,
+    // and its Pending bundle (if any) is exactly the stale marker the
+    // reconcile exists for. No / unparsable started_at = no proof of a live
+    // run = reconcile runs. A FUTURE started_at (clock skew, or a bogus
+    // writer) reads as fresh and keeps the skip active — benign, and the
+    // record ages into reconciliation on its own.
+    const ZIP_IMPORT_IN_FLIGHT_MAX_AGE_MS = 24 * 60 * 60 * 1000;
+    const startedAtMs = repo.conversion ? Date.parse(repo.conversion.started_at) : NaN;
     const zipImportInFlight = !!(
       repo.conversion &&
       repo.conversion.status === 'adding' &&
-      repo.conversion.concepts_total != null
+      repo.conversion.concepts_total != null &&
+      !Number.isNaN(startedAtMs) &&
+      Date.now() - startedAtMs < ZIP_IMPORT_IN_FLIGHT_MAX_AGE_MS
     );
     const drainInFlight = async (aql) => (await (await db.query(aql, { repo_id })).all()).length > 0;
     if (

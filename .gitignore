@@ -107,7 +107,8 @@ Thumbs.db
 # Stray copies of a tracked file — the artifact a file manager or an editor
 # leaves behind when a file is duplicated: "name - Copy" (Windows/VS Code,
 # second duplicate "name - Copy (2)"), "name copy" (macOS, "name copy 2"),
-# "name (copy)" (GNOME Nautilus, "name (another copy)", "name (3rd copy)").
+# "name (copy)" (GNOME Nautilus, "name (another copy)", "name (3rd copy)"),
+# "Copy of name" (JetBrains IDEs, second duplicate "Copy of name (1)").
 # A copy is never a source: it silently drifts from the file it duplicates.
 # The pipeline gate
 # (tests/config-validator/__tests__/stray-copy-artifacts.test.js) fails the
@@ -130,6 +131,7 @@ Thumbs.db
 *copy).*
 *copy) ([0-9]*
 *copy) [0-9]*
+Copy of *
 
 # Temporary files
 *.tmp

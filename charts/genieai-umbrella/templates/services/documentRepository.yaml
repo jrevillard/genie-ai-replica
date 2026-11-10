@@ -86,11 +86,16 @@ the Kubernetes-injected connection env for the dataprep Service
 both rows must be set explicitly. */ -}}
 {{- /* The shared OIDC verifier reads KEYCLOAK_REALM (not the legacy
 KC_REALM spelling) — the same row the backend and okf-server carry.
-Without it the realm falls back to undefined when the discovery URL
-carries no /realms/ segment. */ -}}
+The chart's KEYCLOAK_URL is the in-cluster URL, which carries no
+/realms/ segment, so without this row the verifier would fetch the
+discovery document from .../realms/undefined and the document-repository
+would verify nothing at all. The legacy KC_REALM row that used to sit
+here was read by nobody on this service (only the OPEA Python
+services read that spelling) and Compose never set it for the
+document-repository either — a chart-only row the parity gate cannot
+see. */ -}}
 {{- $urls := list
     (dict "name" "KEYCLOAK_URL" "value" (include "genieai-umbrella.keycloakInternalURL" .))
-    (dict "name" "KC_REALM" "value" ($dataKeycloak.realm | default "genie" | toString))
     (dict "name" "KEYCLOAK_REALM" "value" ($dataKeycloak.realm | default "genie" | toString))
     (dict "name" "KEYCLOAK_EXPECTED_ISSUER" "value" (printf "%s/realms/%s" (include "genieai-umbrella.keycloakPublicIssuer" .) ($dataKeycloak.realm | default "genie")))
     (dict "name" "KEYCLOAK_PUBLIC_URL" "value" (index $dataKeycloak "publicUrl" | default "" | toString))

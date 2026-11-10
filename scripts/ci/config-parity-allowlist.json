@@ -4,18 +4,18 @@
     "same application. The parity gate (scripts/config-parity-check.py) compares",
     "the environment both surfaces give that application.",
     "",
-    "Three categories, per service. Every entry carries the reason it is one \u2014",
+    "Three categories, per service. Every entry carries the reason it is one —",
     "an entry without a reason is a gap in disguise.",
     "",
     "  mayDiffer    : the chart sets the variable and its value is the",
-    "                 Kubernetes one \u2014 an address, a topology fact, or a",
+    "                 Kubernetes one — an address, a topology fact, or a",
     "                 deliberate policy difference. The variable must still be",
     "                 present: the application needs it on both surfaces.",
     "  composeOnly  : the variable only makes sense on the Compose surface.",
     "  notRead      : no code in the repository reads the variable.",
     "",
     "A variable in none of the three must be configured the same way on both",
-    "surfaces \u2014 that is the parity this gate protects."
+    "surfaces — that is the parity this gate protects."
   ],
   "services": {
     "backend": {
@@ -40,17 +40,17 @@
         "OKF_ENABLED": "the flag follows the tier gate: the parity render switches the tier on (--set okf.enabled=true) so its rows get compared, while the Compose reference ships dark (OKF_ENABLED=0). A production deployment chooses the value on both surfaces; the gate compares them at opposite states by construction"
       },
       "notRead": {
-        "EMAIL_FROM": "read by no service in the repository \u2014 the Keycloak convergence job is the only consumer of the EMAIL_* names, and it takes the password from a Secret",
-        "EMAIL_HOST": "read by no service in the repository \u2014 see EMAIL_FROM",
-        "EMAIL_PORT": "read by no service in the repository \u2014 see EMAIL_FROM",
-        "EMAIL_SECURE": "read by no service in the repository \u2014 see EMAIL_FROM",
-        "EMAIL_USER": "read by no service in the repository \u2014 see EMAIL_FROM",
-        "EMAIL_PASSWORD": "read by no service in the repository \u2014 see EMAIL_FROM"
+        "EMAIL_FROM": "read by no service in the repository — the Keycloak convergence job is the only consumer of the EMAIL_* names, and it takes the password from a Secret",
+        "EMAIL_HOST": "read by no service in the repository — see EMAIL_FROM",
+        "EMAIL_PORT": "read by no service in the repository — see EMAIL_FROM",
+        "EMAIL_SECURE": "read by no service in the repository — see EMAIL_FROM",
+        "EMAIL_USER": "read by no service in the repository — see EMAIL_FROM",
+        "EMAIL_PASSWORD": "read by no service in the repository — see EMAIL_FROM"
       },
       "codeDefault": {
         "KEYCLOAK_ADDITIONAL_REALMS": "empty in Compose; the backend parses an unset value as an empty JSON array, so leaving it unset is the same result",
         "OPEA_SSL_SKIP_VERIFY": "empty in Compose; the code treats an unset value as 'verify', and the chart's NODE_TLS_REJECT_UNAUTHORIZED=1 says the same thing for the Node client",
-        "KEYCLOAK_DISCOVERY_TIMEOUT_MS": "the shared OIDC verifier applies its own 5000ms discovery budget when the variable is unset, and Compose leaves it unset too \u2014 both surfaces run the same default",
+        "KEYCLOAK_DISCOVERY_TIMEOUT_MS": "the shared OIDC verifier applies its own 5000ms discovery budget when the variable is unset, and Compose leaves it unset too — both surfaces run the same default",
         "KEYCLOAK_EXPECTED_ISSUER": "the variable pins a strict issuer only when set; on this service it is unset on both surfaces, so the verifier accepts the discovery issuer plus the KEYCLOAK_PUBLIC_URL / KEYCLOAK_BROWSER_ISSUER aliases"
       },
       "secretProvided": {
@@ -78,12 +78,12 @@
         "KEYCLOAK_URL": "the service resolves JWKS in-cluster; Compose reaches Keycloak through the public origin",
         "OTEL_EXPORTER_OTLP_ENDPOINT": "the collector is an operator-managed instance with its own Service name",
         "VICTORIALOGS_URL": "the collector is an operator-managed instance with its own Service name",
-        "KEYCLOAK_EXPECTED_ISSUER": "the chart pins the PUBLIC issuer (the realm's tokens carry it), while Compose leaves the variable unset \u2014 the Kubernetes adaptation of the same split-URL OIDC contract (KEYCLOAK_PUBLIC_URL / KEYCLOAK_JWKS_URL) the backend and okf-server share"
+        "KEYCLOAK_EXPECTED_ISSUER": "the chart pins the PUBLIC issuer (the realm's tokens carry it), while Compose leaves the variable unset — the Kubernetes adaptation of the same split-URL OIDC contract (KEYCLOAK_PUBLIC_URL / KEYCLOAK_JWKS_URL) the backend and okf-server share"
       },
       "composeOnly": {},
       "notRead": {},
       "codeDefault": {
-        "KEYCLOAK_DISCOVERY_TIMEOUT_MS": "the shared OIDC verifier applies its own 5000ms discovery budget when the variable is unset, and Compose leaves it unset too \u2014 both surfaces run the same default"
+        "KEYCLOAK_DISCOVERY_TIMEOUT_MS": "the shared OIDC verifier applies its own 5000ms discovery budget when the variable is unset, and Compose leaves it unset too — both surfaces run the same default"
       },
       "secretProvided": {}
     },
@@ -104,7 +104,7 @@
         "VLLM_API_KEY": "carried by the vllm-api-key Secret the operator provides",
         "VLLM_LLM_ENDPOINT": "the chart points at the OPEA tier's endpoint (in-cluster Service or GPU node); Compose leaves it to the in-cluster default",
         "VLLM_TRANSLATION_ENDPOINT": "the chart points at the OPEA tier's endpoint (in-cluster Service or GPU node); Compose leaves it to the in-cluster default",
-        "KEYCLOAK_INTERNAL_URL": "the chart derives the in-cluster Keycloak address (the operator's own Service plus the /auth context the Keycloak CR is configured with); Compose leaves it empty and the application derives from the request issuer \u2014 the same Kubernetes adaptation already recorded for KEYCLOAK_URL"
+        "KEYCLOAK_INTERNAL_URL": "the chart derives the in-cluster Keycloak address (the operator's own Service plus the /auth context the Keycloak CR is configured with); Compose leaves it empty and the application derives from the request issuer — the same Kubernetes adaptation already recorded for KEYCLOAK_URL"
       },
       "codeDefault": {
         "CHATQNA_SYSTEM_PROMPT": "empty in Compose; the chart has its own prompt knob (opea.chatqna.systemPrompt) and omits the row when it is empty, so the code's built-in prompt applies on both surfaces",
@@ -118,7 +118,7 @@
       },
       "secretProvided": {
         "OPENAI_API_KEY": {
-          "why": "Compose maps `${VLLM_API_KEY:-}` into it (docker-compose.yaml); the chart delivers the same GPU key from the vllm-api-key Secret under that name \u2014 the translation and condense clients read only OPENAI_API_KEY for their Bearer header, and a GPU node enforcing the key would see 'Bearer None' without it.",
+          "why": "Compose maps `${VLLM_API_KEY:-}` into it (docker-compose.yaml); the chart delivers the same GPU key from the vllm-api-key Secret under that name — the translation and condense clients read only OPENAI_API_KEY for their Bearer header, and a GPU node enforcing the key would see 'Bearer None' without it.",
           "secret": "vllm-api-key",
           "via": "secretKeyRef"
         }
@@ -143,10 +143,10 @@
         "TEI_EMBEDDING_ENDPOINT": "the chart points at the OPEA tier's endpoint (in-cluster Service or GPU node); Compose at its own TEI service",
         "VLLM_API_KEY": "carried by the vllm-api-key Secret the operator provides",
         "VLLM_ENDPOINT": "the chart points at the OPEA tier's endpoint (in-cluster Service or GPU node); Compose at its own vLLM service",
-        "VLLM_MODEL_ID": "main's compose moved to runtime model discovery (empty default, the job fails loudly on a cold vLLM) while the chart still pins the model id; the static-env vs runtime-discovery homogenization is tracked in issue #1182 \u2014 the chart re-mirrors whichever shape #1182 lands"
+        "VLLM_MODEL_ID": "main's compose moved to runtime model discovery (empty default, the job fails loudly on a cold vLLM) while the chart still pins the model id; the static-env vs runtime-discovery homogenization is tracked in issue #1182 — the chart re-mirrors whichever shape #1182 lands"
       },
       "composeOnly": {
-        "NVIDIA_VISIBLE_DEVICES": "Docker GPU passthrough \u2014 Kubernetes expresses the same thing with the device plugin and a node selector, not with this variable"
+        "NVIDIA_VISIBLE_DEVICES": "Docker GPU passthrough — Kubernetes expresses the same thing with the device plugin and a node selector, not with this variable"
       },
       "codeDefault": {
         "CONTEXTUAL_RETRIEVAL_PROMPT": "empty in Compose; the code falls back to its built-in prompt when the variable is unset, and the chart has its own knob (opea.dataprep.contextualRetrievalPrompt)",
@@ -155,7 +155,7 @@
       },
       "secretProvided": {
         "OKF_INTERNAL_SECRET": {
-          "why": "carried by the okf-internal-secret Secret through an optional secretKeyRef; the operator provides the key, so there is no value to compare \u2014 and the tier is dark by default, so a deployment that has not installed the sealed secret must still boot",
+          "why": "carried by the okf-internal-secret Secret through an optional secretKeyRef; the operator provides the key, so there is no value to compare — and the tier is dark by default, so a deployment that has not installed the sealed secret must still boot",
           "secret": "okf-internal-secret",
           "via": "secretKeyRef"
         }
@@ -176,7 +176,7 @@
         "TEI_EMBEDDING_ENDPOINT": "the chart points at the OPEA tier's endpoint (in-cluster Service or GPU node); Compose at its own TEI service",
         "VLLM_API_KEY": "carried by the vllm-api-key Secret the operator provides",
         "VLLM_ENDPOINT": "the chart points at the OPEA tier's endpoint (in-cluster Service or GPU node); Compose at its own vLLM service",
-        "VLLM_MODEL_ID": "main's compose moved to runtime model discovery (empty default, the job fails loudly on a cold vLLM) while the chart still pins the model id; the static-env vs runtime-discovery homogenization is tracked in issue #1182 \u2014 the chart re-mirrors whichever shape #1182 lands"
+        "VLLM_MODEL_ID": "main's compose moved to runtime model discovery (empty default, the job fails loudly on a cold vLLM) while the chart still pins the model id; the static-env vs runtime-discovery homogenization is tracked in issue #1182 — the chart re-mirrors whichever shape #1182 lands"
       }
     },
     "reranker": {
@@ -218,17 +218,17 @@
       "chart": "frontend",
       "codeDefault": {
         "VUE_APP_AVAILABLE_LOCALES": "empty in Compose; the frontend treats an unset value as 'every locale available'",
-        "VUE_APP_STREAM_IDLE_TIMEOUT_MS": "Compose leaves it empty (the env template line is commented) and the frontend entrypoint injects the empty value into the runtime config.js \u2014 the code default applies on both surfaces. The chart leaves it unset for the same result; a deployment that tunes it adds the env row to services.frontend.env."
+        "VUE_APP_STREAM_IDLE_TIMEOUT_MS": "Compose leaves it empty (the env template line is commented) and the frontend entrypoint injects the empty value into the runtime config.js — the code default applies on both surfaces. The chart leaves it unset for the same result; a deployment that tunes it adds the env row to services.frontend.env."
       },
       "mayDiffer": {
         "VUE_APP_CSP_CONNECT_SRC": "the browser's origin is the deployment's public origin (ingress.scheme + ingress.host); Compose's list names the localhost development origins",
         "VUE_APP_OKF_ENABLED": "the flag follows the tier gate: the parity render switches the tier on (--set okf.enabled=true) so its rows get compared, while the Compose reference ships dark (OKF_ENABLED=0). A production deployment chooses the value on both surfaces; the gate compares them at opposite states by construction"
       },
       "notApplicable": {
-        "VUE_PROXY_HOST": "the chart's runtime never dials it: the frontend image's CMD runs nginx (Dockerfile:31), whose /api block proxies the backend itself \u2014 server.js (the dev-only proxy that reads VUE_PROXY_HOST at line 11) is not executed by the image, and no module under src/ reads the proxyHost key that docker-entrypoint.sh writes into window.APP_CONFIG"
+        "VUE_PROXY_HOST": "the chart's runtime never dials it: the frontend image's CMD runs nginx (Dockerfile:31), whose /api block proxies the backend itself — server.js (the dev-only proxy that reads VUE_PROXY_HOST at line 11) is not executed by the image, and no module under src/ reads the proxyHost key that docker-entrypoint.sh writes into window.APP_CONFIG"
       },
       "composeOnly": {
-        "PORT": "The chart does not set the name at all: its Deployment carries the port as containerPort 8090 (services.frontend.port), and the frontend image's embedded nginx listens on that baked-in default \u2014 the PORT env only steers the compose-run process."
+        "PORT": "The chart does not set the name at all: its Deployment carries the port as containerPort 8090 (services.frontend.port), and the frontend image's embedded nginx listens on that baked-in default — the PORT env only steers the compose-run process."
       }
     },
     "redisCache": {
@@ -286,7 +286,7 @@
           "via": "secretKeyRef"
         },
         "KC_OKF_SERVER_CLIENT_SECRET": {
-          "why": "carried by the okf-server-client-secret Secret through an optional secretKeyRef on the convergence Job; the operator provides the key, so there is no value to compare \u2014 the OKF tier is dark by default and the job must not fail the install for a workload that does not run",
+          "why": "carried by the okf-server-client-secret Secret through an optional secretKeyRef on the convergence Job; the operator provides the key, so there is no value to compare — the OKF tier is dark by default and the job must not fail the install for a workload that does not run",
           "secret": "okf-server-client-secret",
           "via": "secretKeyRef"
         }
@@ -296,36 +296,36 @@
       "compose": "okf-server",
       "chart": "okf-server",
       "mayDiffer": {
-        "ARANGO_DB": "the chart's ArangoDB instance serves _system, ArangoDB's own database, which always exists; Compose uses a dedicated genie-ai database \u2014 the same adaptation the backend, dataprep and retriever entries carry",
+        "ARANGO_DB": "the chart's ArangoDB instance serves _system, ArangoDB's own database, which always exists; Compose uses a dedicated genie-ai database — the same adaptation the backend, dataprep and retriever entries carry",
         "ARANGO_URL": "the chart's ArangoDB is the kube-arangodb operator's service; Compose points at its own container name",
-        "DATAPREP_URL": "the chart's dataprep Service is named dataprep; Compose's container is dataprep-arango-service \u2014 same application, either surface's own DNS",
-        "ENABLE_OBSERVABILITY": "the chart derives the flag from the observability tier's values; Compose resolves the root OKF_ENABLED-independent default 0 \u2014 the k8s deployment always ships the collector, so the tier follows the observability gate",
+        "DATAPREP_URL": "the chart's dataprep Service is named dataprep; Compose's container is dataprep-arango-service — same application, either surface's own DNS",
+        "ENABLE_OBSERVABILITY": "the chart derives the flag from the observability tier's values; Compose resolves the root OKF_ENABLED-independent default 0 — the k8s deployment always ships the collector, so the tier follows the observability gate",
         "OTEL_EXPORTER_OTLP_ENDPOINT": "the chart's collector is the OpenTelemetry operator's service; Compose points at its own container name",
         "KEYCLOAK_URL": "the chart derives the public edge address from ingress.scheme + ingress.host (the same derivation the convergence Job's KC_PUBLIC_ORIGIN uses); Compose assembles it from the NGINX host/port variables",
-        "OKF_RAGAS_SERVE_URL": "the chart's chatqna Service is named chatqna; Compose's container is chatqna-xeon-backend-server \u2014 same application, either surface's own DNS",
+        "OKF_RAGAS_SERVE_URL": "the chart's chatqna Service is named chatqna; Compose's container is chatqna-xeon-backend-server — same application, either surface's own DNS",
         "RAGAS_JUDGE_BASE_URL": "the chart derives the LLM endpoint from the OPEA GPU tier (external nodeHost or the in-cluster service); Compose points at its own vllm container",
-        "TEI_EMBED_HOST": "the chart derives the embedding endpoint from the OPEA GPU tier (external nodeHost or the in-cluster service); Compose names its own TEI container \u2014 a name that exists on neither Kubernetes surface, so the derived address is the only live one here",
-        "RAGAS_JUDGE_MODEL": "the chart flows the deployment's declared model id (opea.models.*); Compose carries an unresolvable nested default that resolves to empty at runtime \u2014 with the id empty the judge falls back to the server's served model, with it set the judge names the model explicitly",
-        "EMBEDDING_MODEL_ID": "the chart flows the deployment's declared model id (opea.models.*); Compose carries an unresolvable nested default that resolves to empty at runtime \u2014 with the id empty the judge falls back to the server's served model, with it set the judge names the model explicitly"
+        "TEI_EMBED_HOST": "the chart derives the embedding endpoint from the OPEA GPU tier (external nodeHost or the in-cluster service); Compose names its own TEI container — a name that exists on neither Kubernetes surface, so the derived address is the only live one here",
+        "RAGAS_JUDGE_MODEL": "the chart flows the deployment's declared model id (opea.models.*); Compose carries an unresolvable nested default that resolves to empty at runtime — with the id empty the judge falls back to the server's served model, with it set the judge names the model explicitly",
+        "EMBEDDING_MODEL_ID": "the chart flows the deployment's declared model id (opea.models.*); Compose carries an unresolvable nested default that resolves to empty at runtime — with the id empty the judge falls back to the server's served model, with it set the judge names the model explicitly"
       },
       "secretProvided": {
         "KC_OKF_ACCESS_CLIENT_SECRET": {
-          "why": "carried by the keycloak-proxy-client-secret Secret (the same credential the backend's KEYCLOAK_PROXY_CLIENT_SECRET row uses) through an optional secretKeyRef; the operator provides the key, so there is no value to compare \u2014 and the tier is dark by default",
+          "why": "carried by the keycloak-proxy-client-secret Secret (the same credential the backend's KEYCLOAK_PROXY_CLIENT_SECRET row uses) through an optional secretKeyRef; the operator provides the key, so there is no value to compare — and the tier is dark by default",
           "secret": "keycloak-proxy-client-secret",
           "via": "secretKeyRef"
         },
         "RAGAS_INTERNAL_SECRET": {
-          "why": "carried by the okf-internal-secret Secret through an optional secretKeyRef; the operator provides the key, so there is no value to compare \u2014 the tier is dark by default",
+          "why": "carried by the okf-internal-secret Secret through an optional secretKeyRef; the operator provides the key, so there is no value to compare — the tier is dark by default",
           "secret": "okf-internal-secret",
           "via": "secretKeyRef"
         },
         "KC_OKF_SERVER_CLIENT_SECRET": {
-          "why": "carried by the okf-server-client-secret Secret through an optional secretKeyRef; the operator provides the key, so there is no value to compare \u2014 the tier is dark by default",
+          "why": "carried by the okf-server-client-secret Secret through an optional secretKeyRef; the operator provides the key, so there is no value to compare — the tier is dark by default",
           "secret": "okf-server-client-secret",
           "via": "secretKeyRef"
         },
         "OKF_INTERNAL_SECRET": {
-          "why": "carried by the okf-internal-secret Secret through an optional secretKeyRef; the operator provides the key, so there is no value to compare \u2014 the tier is dark by default",
+          "why": "carried by the okf-internal-secret Secret through an optional secretKeyRef; the operator provides the key, so there is no value to compare — the tier is dark by default",
           "secret": "okf-internal-secret",
           "via": "secretKeyRef"
         }
@@ -333,7 +333,7 @@
       "composeOnly": {},
       "notRead": {},
       "codeDefault": {
-        "KEYCLOAK_DISCOVERY_TIMEOUT_MS": "the shared OIDC verifier applies its own 5000ms discovery budget when the variable is unset, and Compose leaves it unset too \u2014 both surfaces run the same default",
+        "KEYCLOAK_DISCOVERY_TIMEOUT_MS": "the shared OIDC verifier applies its own 5000ms discovery budget when the variable is unset, and Compose leaves it unset too — both surfaces run the same default",
         "KEYCLOAK_EXPECTED_ISSUER": "the variable pins a strict issuer only when set; on this service it is unset on both surfaces, so the verifier accepts the discovery issuer plus the KEYCLOAK_PUBLIC_URL / KEYCLOAK_BROWSER_ISSUER aliases"
       }
     },
@@ -346,13 +346,13 @@
       "chart": "ragas-service",
       "mayDiffer": {
         "RAGAS_JUDGE_BASE_URL": "the chart derives the LLM endpoint from the OPEA GPU tier (external nodeHost or the in-cluster service); Compose points at its own vllm container",
-        "RAGAS_EMBED_BASE_URL": "the chart derives the embedding endpoint from the OPEA GPU tier (external nodeHost or the in-cluster service); Compose names its own TEI container \u2014 a name that exists on neither Kubernetes surface, so the derived address is the only live one here",
-        "RAGAS_JUDGE_MODEL": "the chart flows the deployment's declared model id (opea.models.*); Compose carries an unresolvable nested default that resolves to empty at runtime \u2014 with the id empty the judge falls back to the server's served model, with it set the judge names the model explicitly",
-        "RAGAS_EMBED_MODEL": "the chart flows the deployment's declared model id (opea.models.*); Compose carries an unresolvable nested default that resolves to empty at runtime \u2014 with the id empty the judge falls back to the server's served model, with it set the judge names the model explicitly"
+        "RAGAS_EMBED_BASE_URL": "the chart derives the embedding endpoint from the OPEA GPU tier (external nodeHost or the in-cluster service); Compose names its own TEI container — a name that exists on neither Kubernetes surface, so the derived address is the only live one here",
+        "RAGAS_JUDGE_MODEL": "the chart flows the deployment's declared model id (opea.models.*); Compose carries an unresolvable nested default that resolves to empty at runtime — with the id empty the judge falls back to the server's served model, with it set the judge names the model explicitly",
+        "RAGAS_EMBED_MODEL": "the chart flows the deployment's declared model id (opea.models.*); Compose carries an unresolvable nested default that resolves to empty at runtime — with the id empty the judge falls back to the server's served model, with it set the judge names the model explicitly"
       },
       "secretProvided": {
         "RAGAS_INTERNAL_SECRET": {
-          "why": "carried by the okf-internal-secret Secret through an optional secretKeyRef; the operator provides the key, so there is no value to compare \u2014 the tier is dark by default",
+          "why": "carried by the okf-internal-secret Secret through an optional secretKeyRef; the operator provides the key, so there is no value to compare — the tier is dark by default",
           "secret": "okf-internal-secret",
           "via": "secretKeyRef"
         },
@@ -369,7 +369,7 @@
     "certbot": "the chart terminates TLS with cert-manager; there is no certbot container",
     "chatqna-xeon-nginx-server": "the OPEA demo UI is not deployed by the chart",
     "chatqna-xeon-ui-server": "the OPEA demo UI is not deployed by the chart",
-    "clusterprofile-detect": "the chart's pre-upgrade cluster-profile drift hook has no Compose counterpart \u2014 the Compose path has no install-time lifecycle to drift from",
+    "clusterprofile-detect": "the chart's pre-upgrade cluster-profile drift hook has no Compose counterpart — the Compose path has no install-time lifecycle to drift from",
     "grafana": "the chart's Grafana is a grafana-operator custom resource, configured through the CR",
     "guardrail": "the chart deploys no guardrail; the orchestrators tolerate an unreachable one and carry its default address",
     "keycloak": "the chart's Keycloak is a keycloak-operator custom resource, configured through the CR",
@@ -381,7 +381,7 @@
     "otel-collector-init": "the chart ships the collector's configuration as a ConfigMap the operator consumes; there is no init container",
     "postgres": "the chart's PostgreSQL is CloudNativePG, configured through the CR",
     "postgres-init": "the chart's PostgreSQL is CloudNativePG; the operator creates the database and its owner",
-    "pre-install": "the chart's pre-install dependency-check hook has no Compose counterpart \u2014 Compose has no install-time dependency graph",
+    "pre-install": "the chart's pre-install dependency-check hook has no Compose counterpart — Compose has no install-time dependency graph",
     "tei": "the chart's in-cluster embedding model is a Deployment whose model and endpoint come from the OPEA tier's values, not from an environment list",
     "tei_reranker": "the chart's in-cluster reranking model is a Deployment configured through the OPEA tier's values",
     "tempo-proxy": "the chart's traces go to the vmoperator's VMSingle, not through a tempo proxy",
@@ -391,10 +391,10 @@
     "victoriatraces": "the chart's trace store is a vmoperator VMSingle custom resource",
     "vllm": "the chart's in-cluster LLM is a vLLM Deployment configured through the OPEA tier's values",
     "vllm-translation-guardrail": "the chart's translation model belongs to the OPEA tier and is configured through the tier's values",
-    "arango-vector-db-init": "one-shot chown of the ArangoDB data volumes to uid 999 \u2014 the chart's ArangoDB is a kube-arangodb operator custom resource whose storage the operator owns; there is no chart-side container to pair",
-    "backend-init": "one-shot chown of the backend volumes (data, Uploads, database_backups) to uid 1000 for the compose non-root posture (#1227) \u2014 the chart grants the same write access with fsGroup on the pod, which the kubelet applies at mount time; there is no init service to pair",
-    "document-repository-init": "one-shot chown of the uploads volume to uid 1000 (#1227) \u2014 same as backend-init, the chart covers it with fsGroup on the pod",
-    "secrets-ssl-init": "one-shot re-permission of the host ./secrets/ssl tree to root:101 for the gid-101 nginx edge \u2014 the chart's edge is Envoy Gateway with cert-manager TLS; there is no ssl tree and no nginx to own it",
-    "victorialogs-init": "one-shot chown of the VictoriaLogs data volume to uid 65534 \u2014 the chart's log store is a vmoperator VMSingle custom resource whose storage the operator owns"
+    "arango-vector-db-init": "one-shot chown of the ArangoDB data volumes to uid 999 — the chart's ArangoDB is a kube-arangodb operator custom resource whose storage the operator owns; there is no chart-side container to pair",
+    "backend-init": "one-shot chown of the backend volumes (data, Uploads, database_backups) to uid 1000 for the compose non-root posture (#1227) — the chart grants the same write access with fsGroup on the pod, which the kubelet applies at mount time; there is no init service to pair",
+    "document-repository-init": "one-shot chown of the uploads volume to uid 1000 (#1227) — same as backend-init, the chart covers it with fsGroup on the pod",
+    "secrets-ssl-init": "one-shot re-permission of the host ./secrets/ssl tree to root:101 for the gid-101 nginx edge — the chart's edge is Envoy Gateway with cert-manager TLS; there is no ssl tree and no nginx to own it",
+    "victorialogs-init": "one-shot chown of the VictoriaLogs data volume to uid 65534 — the chart's log store is a vmoperator VMSingle custom resource whose storage the operator owns"
   }
 }

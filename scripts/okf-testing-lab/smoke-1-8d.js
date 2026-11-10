@@ -157,7 +157,12 @@ async function generateSuite(body) {
   // poll had already given up and mis-reported "count controls {}").
   return pollJobDoc(
     `${API_BASE}/api/okf/repos/${REPO_ID}/routing-testsuite/${key}`,
-    120,
+    // 121, not 120: the inline loop this replaced slept BEFORE each GET
+    // (probes at t=2.5s..300s), while pollJobDoc GETs first (probes at
+    // t=0s..295s). One extra tick puts the LAST observation back on the
+    // 300s mark, so a suite completing inside the window is still caught
+    // instead of timing out 2.5s early.
+    121,
     // keep-waiting signal: the minted-key envelope ({suite_key,
     // status:'generating'}) — anything else carrying a suite_key is
     // terminal, INCLUDING a failed generation doc (returned so the

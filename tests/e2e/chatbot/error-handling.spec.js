@@ -50,8 +50,8 @@ test.describe('RAG error handling', () => {
 
   test('displays error message when backend returns error', async () => {
     // The backend answers the stream with a server error; only the
-    // status matters here, the body is the helper's default.
-    await mockStreamError(page, { status: 503 });
+    // status matters here, and the helper's default IS that status.
+    await mockStreamError(page);
 
     await sendMessage(page, 'First attempt will fail');
 

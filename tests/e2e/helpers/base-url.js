@@ -9,8 +9,8 @@
  * connection error before its first assertion — the failure mode #1737
  * was filed for.
  *
- * The trailing slashes are stripped ONCE, here: `page.url()` never
- * produces a trailing double slash, so every `${BASE_URL}/...`
+ * The trailing slashes are stripped here, once per process: `page.url()`
+ * never produces a trailing double slash, so every `${BASE_URL}/...`
  * interpolation stays well-formed even when the environment configures
  * BASE_URL with a trailing '/'.
  *

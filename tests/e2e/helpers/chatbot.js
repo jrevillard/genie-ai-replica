@@ -24,15 +24,12 @@ const MESSAGE_ROW = '[data-testid^="chat-message-"]';
 const BOT_BUBBLE = '[data-testid="chat-message-bot"] [data-testid="message-bubble-bot"]';
 const NAV_STATUS = '[data-testid="nav-status"]';
 
-// The stream endpoint, stated ONCE: the path under the API base is the
-// endpoint; the route pattern is its interception glob. A copy of either
-// in a spec is a copy that can drift away from what the app calls
-// (#1271) — a drifted interception silently lets the request reach the
-// real network, so the spec then asserts against a live backend, and a
-// drifted predicate never matches at all. Both are exported: STREAM_ROUTE
-// for page.route, STREAM_PATH for URL predicates.
-const STREAM_PATH = '/queries/stream';
-const STREAM_ROUTE = `**${STREAM_PATH}**`;
+// The stream interception contract lives in its own module
+// (helpers/stream-route.js): the endpoint, the interception glob and the
+// SSE envelope — no credential in it, so a spec that intercepts the
+// stream and needs nothing else never imports the credential module.
+// Re-exported here for the specs that already import the login helpers.
+const { CORS_HEADERS, STREAM_PATH, STREAM_ROUTE, sseBody, sseFulfill } = require('./stream-route');
 
 // The wait from the submit click to the dashboard: the identity provider
 // deciding to issue a code, then the app exchanging it. On an idle stack the
@@ -266,29 +263,6 @@ async function waitForBotMessage(page, text, { timeout = 30000 } = {}) {
  * done frame's queryId is recorded on the finished message by the store;
  * the value itself is never asserted.
  */
-function sseBody(chunks, metadata) {
-  const frames = chunks.map((c) => `data: ${JSON.stringify({ type: 'chunk', content: c })}`);
-  if (metadata) frames.push(`data: ${JSON.stringify({ type: 'metadata', ...metadata })}`);
-  return [...frames, '', `data: ${JSON.stringify({ type: 'done', queryId: 'mock-query-1' })}`, ''].join('\n');
-}
-
-// The CORS header a cross-origin reader needs to read ANY mocked
-// answer: without it the browser drops the fulfilment and the app reads
-// a transport failure instead of the mocked bytes (#1587). One
-// definition — every fulfilment of a mocked answer uses it.
-const CORS_HEADERS = { 'access-control-allow-origin': '*' };
-
-/**
- * The SSE envelope every mocked stream answer shares: 200, the event
- * stream content type, the CORS header. `mockChatStream`, the
- * held-release test in chat-conversation.spec.js and the query watcher
- * in chatbot/quick-help-scope.spec.js hand the same envelope different
- * bodies; stating it once is what keeps a wire-contract change a
- * one-file edit.
- */
-function sseFulfill(route, body) {
-  return route.fulfill({ status: 200, contentType: 'text/event-stream', headers: CORS_HEADERS, body });
-}
 
 /**
  * Mock the chat answer stream. `chunks` arrive as chunk frames; `metadata`,
@@ -314,9 +288,14 @@ async function mockChatStream(page, chunks, metadata) {
  * same endpoint, the same POST-only interception, the same CORS header a
  * cross-origin reader needs.
  */
-async function mockStreamError(page, { status = 503, error = 'SERVICE_UNAVAILABLE', message = 'RAG pipeline is temporarily unavailable' } = {}) {
+async function mockStreamError(page, status = 503) {
   // Registration-invariant like the SSE body: build the wire bytes once.
-  const body = JSON.stringify({ error, message });
+  // The body is the app's own error shape — every 5xx reaches the same
+  // branch, so the mock does not need a knob for it.
+  const body = JSON.stringify({
+    error: 'SERVICE_UNAVAILABLE',
+    message: 'RAG pipeline is temporarily unavailable',
+  });
   await page.route(
     STREAM_ROUTE,
     runPostOnlyRouteHandler(page, async (route) => {

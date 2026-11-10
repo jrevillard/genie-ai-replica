@@ -12,13 +12,24 @@ const { runPostOnlyRouteHandler, runRouteHandler } = require('./route');
 //     "browser died" spec red;
 //   - classifying by the state alone turns the defect-while-closing
 //     spec red;
+//   - dropping the NAME branch turns the protocol-shape spec red;
+//   - dropping the CONSTRUCTOR branch turns the client-shape and the
+//     in-process specs red;
+//   - reading the MESSAGE instead of the class (the wording branch this
+//     guard used to carry) turns the "wording is not the signal" spec
+//     red — it tolerates a plain error that merely quotes the race;
 //   - snapshotting the target state BEFORE awaiting the handler (an
 //     ordering bug) turns the mid-flight-close spec red — the mutable
 //     double is what makes that mutation observable.
 
-// Playwright's client-side close error, shaped the way the library
-// constructs it — the class is not publicly importable.
+// Playwright's close error, shaped the way the library constructs it —
+// the class is not publicly importable.
 class TargetClosedError extends Error {}
+
+// The CLIENT bundle's copy of the same class: the bundler renames the
+// second one, so the client-side error arrives as `TargetClosedError2`
+// (measured on the shipped playwright-core 1.62.1).
+class TargetClosedError2 extends Error {}
 
 function raceError() {
   return new TargetClosedError('Target page, context or browser has been closed');
@@ -75,25 +86,11 @@ test.describe('runRouteHandler', () => {
     ).resolves.toBeUndefined();
   });
 
-  test('tolerates the protocol form of the race when the target is gone', async () => {
-    // A dead target can also answer through the protocol path: the same
-    // wording on a plain Error. The message half of the discrimination
-    // must catch it.
-    const { page } = pageState({ pageClosed: true });
-    await expect(
-      runOnce(page, async () => {
-        throw new Error('Target page, context or browser has been closed');
-      })
-    ).resolves.toBeUndefined();
-  });
-
   test('tolerates an in-process instance of the class, whatever its message', async () => {
     // The constructor form is what an in-process throw carries, and its
     // message can be a custom close reason — not the standard wording,
-    // not the name a subclass omits. This spec is the ONLY one whose
-    // fixture matches the constructor branch alone: dropping that branch
-    // leaves it tolerated by nothing.
-    class TargetClosedError extends Error {}
+    // not the name a subclass omits. This fixture matches the constructor
+    // branch alone: dropping that branch leaves it tolerated by nothing.
     const { page } = pageState({ pageClosed: true });
     await expect(
       runOnce(page, async () => {
@@ -102,60 +99,47 @@ test.describe('runRouteHandler', () => {
     ).resolves.toBeUndefined();
   });
 
-  test('tolerates the pipeline form of the race — the name survives, the class does not', async () => {
-    // An error that crossed the pipeline keeps its NAME — Playwright's own
-    // discrimination accepts the instance or the name. The wording here
-    // matches NEITHER message branch, so this fixture is the only one the
-    // name branch tolerates: dropping that branch turns this red.
+  test('tolerates the protocol shape of the race — the NAME survives', async () => {
+    // The protocol-side error keeps Playwright's own name. This fixture
+    // matches the NAME branch alone — its class is a plain Error — so
+    // dropping that branch turns this red.
     const { page } = pageState({ contextClosed: true });
     await expect(
       runOnce(page, async () => {
-        const pipelineError = new Error('TargetClosedError: the target is gone');
-        pipelineError.name = 'TargetClosedError';
-        throw pipelineError;
+        const protocolError = new Error('Target page, context or browser has been closed');
+        protocolError.name = 'TargetClosedError';
+        throw protocolError;
       })
     ).resolves.toBeUndefined();
   });
 
-  test('tolerates the client-side re-wrap of the race — the wording is all that survives', async () => {
-    // `route.fetch()` re-wraps its failure CLIENT-side into a plain
-    // Error with a "route.fetch: " prefix. Measured on the venue: the
-    // name is 'Error', the class survives only RENAMED
-    // ('TargetClosedError2'), and only the wording is intact — so the
-    // guard read the name and the constructor, matched NEITHER, rethrew
-    // this shape, and the teardown error landed in the NEXT test.
+  test('tolerates the client shape of the race — the class survives, renamed', async () => {
+    // Measured on the shipped playwright-core 1.62.1: an in-flight
+    // `route.fetch()` whose context is closed rejects with an error whose
+    // `name` is 'Error' and whose CLASS is the bundle's renamed copy,
+    // 'TargetClosedError2'. The guard used to match the WORDING instead
+    // and rethrew this shape — the teardown error landed in the NEXT
+    // test.
     const { page } = pageState({ contextClosed: true });
+    await expect(
+      runOnce(page, async () => {
+        throw new TargetClosedError2('route.fetch: Request context disposed.');
+      })
+    ).resolves.toBeUndefined();
+  });
+
+  test('rethrows a plain error that merely QUOTES the race wording — the wording is not the signal', async () => {
+    // The same message as the client shape, without the class. The
+    // wording was never the signal: a mock defect that says "Request
+    // context disposed" must surface even while the target is closing.
+    // A guard that reads the message instead of the class swallows this
+    // one — and this spec is what makes that visible.
+    const { page } = pageState({ pageClosed: true });
     await expect(
       runOnce(page, async () => {
         throw new Error('route.fetch: Request context disposed.');
       })
-    ).resolves.toBeUndefined();
-  });
-
-  test('rethrows a defect that merely ALMOST says the disposed wording — the branch is narrow', async () => {
-    // The wording branch names the race's own text ("Request context
-    // disposed"), not every text that contains "disposed". A mock defect
-    // that ALMOST says it must surface even on a closing target: a wider
-    // branch would swallow it, and this spec is what makes that
-    // widening visible.
-    const { page } = pageState({ pageClosed: true });
-    await expect(
-      runOnce(page, async () => {
-        throw new Error('route.fulfill: context disposed by the mock');
-      })
-    ).rejects.toThrow('route.fulfill: context disposed by the mock');
-  });
-
-  test('tolerates the race wording in any casing — the branch is case-insensitive', async () => {
-    // The wording branch is case-insensitive: a Playwright casing change
-    // must not turn the race into a loud teardown failure — the header
-    // promises the race is tolerated, whatever the library's spelling.
-    const { page } = pageState({ contextClosed: true });
-    await expect(
-      runOnce(page, async () => {
-        throw new Error('route.fetch: request context disposed.');
-      })
-    ).resolves.toBeUndefined();
+    ).rejects.toThrow('route.fetch: Request context disposed.');
   });
 
   test('rethrows a mock defect that carries the disposed wording — the target is alive', async () => {

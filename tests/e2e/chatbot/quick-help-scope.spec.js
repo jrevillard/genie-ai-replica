@@ -56,7 +56,9 @@
 const { test, expect } = require('@playwright/test');
 const { openWelcomeScreen } = require('../helpers/welcome');
 const { runRouteHandler } = require('../helpers/route');
-const { STREAM_ROUTE, sseFulfill } = require('../helpers/chatbot');
+// The stream interception contract — no credential in it, so this spec
+// (which needs neither) never imports the credential module.
+const { STREAM_ROUTE, sseFulfill } = require('../helpers/stream-route');
 
 // The live hierarchy this spec serves. The category 'Civil Registry' exists and
 // names itself in ENGLISH; 'Taxes & Revenue' does not exist at all.

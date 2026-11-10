@@ -40,6 +40,9 @@ const DEFAULT_REPORT_PATH = path.join(REPO_ROOT, 'reports', 'playwright-report.j
 
 const TESTS_E2E_ROOT = 'tests/e2e';
 const { VENUE_IP_ENV, VENUE_HOST_ENV } = require('../helpers/venue-launch-args');
+// The venue's edge: ONE definition, credential-free — the same address the
+// run used, so the issue's reproduce command reproduces the run.
+const { BASE_URL } = require('../helpers/base-url');
 const GITLAB_HOST = process.env.GITLAB_HOST || 'opensource.unicc.org';
 const GITLAB_PROJECT_ID = process.env.GITLAB_PROJECT_ID || '90';
 
@@ -390,7 +393,7 @@ function main() {
   // hand re-run in a fresh shell (no BASE_URL exported) would otherwise
   // file issues naming https://localhost with a reproduce command that
   // reproduces nothing.
-  const venue = venueValue || process.env.BASE_URL || 'https://localhost';
+  const venue = venueValue || BASE_URL;
   const runStamp = report.stats && report.stats.startTime ? report.stats.startTime : new Date().toISOString();
 
   const tests = collectTests(report.suites);

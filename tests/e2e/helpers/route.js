@@ -30,13 +30,12 @@
  *   usually delivers the close events before an in-flight route call
  *   rejects, so by then the state half is often already true too; a
  *   crashed browser fails the spec on its other awaits either way. The
- *   error arrives in three shapes (class, name, or the client's
- *   re-wrapped wording) — `isTargetClosedError` reads all three.
+ *   error is recognised by its CLASS (`isTargetClosedError`).
  *
  * Only their conjunction is the named race. The error check reads the
- * name, the constructor name and the message; if a Playwright upgrade
- * changed all of them, the race would surface as a loud teardown
- * failure — the acceptable direction to fail in.
+ * name and the constructor; if a Playwright upgrade changed both, the
+ * race would surface as a loud teardown failure — the acceptable
+ * direction to fail in.
  *
  * The state half relies on an ordering Playwright's client guarantees:
  * `Page._onClose` sets `_closed` BEFORE emitting the close event whose
@@ -71,34 +70,31 @@ function isTargetGone(page) {
  * both of its client-side close event and of the protocol answer a dead
  * target produces.
  *
- * Three spellings, because the error reaches the handler in three
- * shapes:
+ * The CLASS is the signal, and it is the whole signal. Measured on the
+ * shipped playwright-core 1.62.1 — an in-flight `route.fetch()` whose
+ * context is closed, and a `page.goto` / `page.click` on a closed
+ * target:
  *
- * - an in-process throw carries the CLASS (constructor name);
- * - an error that crossed the pipeline keeps its NAME — Playwright's own
- *   discrimination accepts the instance or the name;
- * - `route.fetch()` re-wraps the failure CLIENT-side into a plain Error
- *   with a "route.fetch: " prefix, so the NAME is gone and the CLASS
- *   survives only RENAMED (the shipped bundle dedups the server's and
- *   the client's classes: the race arrives as `TargetClosedError2`).
- *   Only the WORDING survives unrenamed — "Request context disposed.".
- *   That shape was measured on the venue: the guard read the name and
- *   the constructor, matched NEITHER, rethrew it, and the teardown
- *   error landed in the next test.
+ * - the error's `name` is `'Error'`;
+ * - its `constructor.name` is `'TargetClosedError2'` — the CLIENT bundle
+ *   carries its own copy of Playwright's class and the bundler renames
+ *   the second one, so the client-side class arrives renamed;
+ * - the protocol-side error keeps the original name, `'TargetClosedError'`.
  *
- * The wording branch is narrow (it names a closed target, or the
- * request context the race disposes) and the state half still gates it:
- * a defect whose text says "Request context disposed" while the target
- * is ALIVE is rethrown. A defect that says it while the target is
- * CLOSING is tolerated — that is the race's own window, and it is the
- * one case the contract above no longer promises to surface.
+ * So the class FAMILY covers every shape the handler meets, and the
+ * message is not consulted at all: a version bump that rewords the
+ * message cannot turn the race back into a loud teardown failure, and a
+ * mock defect that merely QUOTES the race's wording ("Request context
+ * disposed", "has been closed") is not swallowed — the wording was
+ * never the signal.
  */
+const TARGET_CLOSED_CLASS = /^TargetClosedError\d*$/;
+
 function isTargetClosedError(error) {
   if (!error) return false;
-  if (error.name === 'TargetClosedError') return true;
-  if (error.constructor && error.constructor.name === 'TargetClosedError') return true;
-  if (typeof error.message !== 'string') return false;
-  return /has been closed/i.test(error.message) || /Request context disposed/i.test(error.message);
+  if (typeof error.name === 'string' && TARGET_CLOSED_CLASS.test(error.name)) return true;
+  if (error.constructor && TARGET_CLOSED_CLASS.test(error.constructor.name)) return true;
+  return false;
 }
 
 /**

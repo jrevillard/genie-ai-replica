@@ -103,17 +103,14 @@ test.describe('runRouteHandler', () => {
   });
 
   test('tolerates the pipeline form of the race — the name survives, the class does not', async () => {
-    // A route callback's error is raised in the server and crosses the
-    // pipeline as {message, stack, name}: the client rebuilds it as a
-    // plain Error with the class lost and the NAME kept. This is the
-    // shape `route.fetch()`'s "Request context disposed." actually
-    // arrives in — a constructor-name check alone misses it, and the
-    // teardown error then leaks into the NEXT test, which fails on a
-    // failure it did not cause.
+    // An error that crossed the pipeline keeps its NAME — Playwright's own
+    // discrimination accepts the instance or the name. The wording here
+    // matches NEITHER message branch, so this fixture is the only one the
+    // name branch tolerates: dropping that branch turns this red.
     const { page } = pageState({ contextClosed: true });
     await expect(
       runOnce(page, async () => {
-        const pipelineError = new Error('route.fetch: Request context disposed.');
+        const pipelineError = new Error('TargetClosedError: the target is gone');
         pipelineError.name = 'TargetClosedError';
         throw pipelineError;
       })
@@ -122,8 +119,9 @@ test.describe('runRouteHandler', () => {
 
   test('tolerates the client-side re-wrap of the race — the wording is all that survives', async () => {
     // `route.fetch()` re-wraps its failure CLIENT-side into a plain
-    // Error with a "route.fetch: " prefix: neither the class nor the
-    // name survives, only the wording. Measured on the venue — the
+    // Error with a "route.fetch: " prefix. Measured on the venue: the
+    // name is 'Error', the class survives only RENAMED
+    // ('TargetClosedError2'), and only the wording is intact — so the
     // guard recognised the name and the constructor, rethrew this
     // shape, and the teardown error landed in the NEXT test.
     const { page } = pageState({ contextClosed: true });

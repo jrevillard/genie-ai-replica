@@ -18,6 +18,12 @@
 const VENUE_IP_ENV = 'E2E_VENUE_IP';
 const VENUE_HOST_ENV = 'E2E_VENUE_HOST';
 
+// The venue's edge, from the ONE definition (helpers/base-url.js): a
+// second copy of the default here could drift from it, and a drifted
+// host would map the browser to a different venue than the API half of
+// the mapping resolves.
+const { BASE_URL } = require('./base-url');
+
 /**
  * The venue mapping in force, or null when the runner resolves the venue
  * name itself.
@@ -28,7 +34,7 @@ function venueMapping() {
   if (!ip) return null;
   const host =
     process.env[VENUE_HOST_ENV] ||
-    new URL(process.env.BASE_URL || 'https://localhost').hostname;
+    new URL(BASE_URL).hostname;
   return { host, ip };
 }
 

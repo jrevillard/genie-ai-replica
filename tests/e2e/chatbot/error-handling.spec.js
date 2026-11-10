@@ -79,10 +79,12 @@ test.describe('RAG error handling', () => {
 
     await sendMessage(page, 'Second attempt should work');
     // A mocked answer arrives in milliseconds: the ceiling is a ceiling,
-    // not a floor — and it sits under the project's per-test budget, so a
+    // not a floor. It sits under the project's per-test budget ON ITS
+    // OWN — the error card's wait above takes 30 s of the same 60 s, so
+    // this one takes 20: the two together stay under the budget, and a
     // retry that never answers is reported by the assertion below rather
     // than by the generic project timeout.
-    await waitForBotResponse(page, { timeout: 30000 });
+    await waitForBotResponse(page, { timeout: 20000 });
     // The ANSWER, not merely a non-empty bubble: the welcome turn is a
     // bot bubble too, so "not empty" would pass on a retry that never
     // answered. The mock makes the exact text assertable.

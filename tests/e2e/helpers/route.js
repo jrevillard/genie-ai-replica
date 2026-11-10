@@ -34,10 +34,9 @@
  *   re-wrapped wording) — `isTargetClosedError` reads all three.
  *
  * Only their conjunction is the named race. The error check reads the
- * constructor name and the message (the message form is the same
- * discrimination `chatbot/error-handling.spec.js` has always used); if a
- * Playwright upgrade changed both, the race would surface as a loud
- * teardown failure — the acceptable direction to fail in.
+ * name, the constructor name and the message; if a Playwright upgrade
+ * changed all of them, the race would surface as a loud teardown
+ * failure — the acceptable direction to fail in.
  *
  * The state half relies on an ordering Playwright's client guarantees:
  * `Page._onClose` sets `_closed` BEFORE emitting the close event whose
@@ -79,22 +78,27 @@ function isTargetGone(page) {
  * - an error that crossed the pipeline keeps its NAME — Playwright's own
  *   discrimination accepts the instance or the name;
  * - `route.fetch()` re-wraps the failure CLIENT-side into a plain Error
- *   with a "route.fetch: " prefix, so neither the class nor the name
- *   survives — only the WORDING ("Request context disposed."). That
- *   spelling was measured on the venue: the guard recognised the name
+ *   with a "route.fetch: " prefix, so the NAME is gone and the CLASS
+ *   survives only RENAMED (the shipped bundle dedups the server's and
+ *   the client's classes: the race arrives as `TargetClosedError2`).
+ *   Only the WORDING survives unrenamed — "Request context disposed.".
+ *   That shape was measured on the venue: the guard recognised the name
  *   and the constructor, and still rethrew it, and the teardown error
  *   landed in the next test.
  *
- * The wording branch is narrow (it names a closed target or a disposed
- * context) and the state half still gates it: a defect whose text says
- * "context disposed" while the target is ALIVE is rethrown.
+ * The wording branch is narrow (it names a closed target, or the
+ * request context the race disposes) and the state half still gates it:
+ * a defect whose text says "Request context disposed" while the target
+ * is ALIVE is rethrown. A defect that says it while the target is
+ * CLOSING is tolerated — that is the race's own window, and it is the
+ * one case the contract above no longer promises to surface.
  */
 function isTargetClosedError(error) {
   if (!error) return false;
   if (error.name === 'TargetClosedError') return true;
   if (error.constructor && error.constructor.name === 'TargetClosedError') return true;
   if (typeof error.message !== 'string') return false;
-  return /has been closed/i.test(error.message) || /context disposed/i.test(error.message);
+  return /has been closed/i.test(error.message) || /Request context disposed/i.test(error.message);
 }
 
 /**

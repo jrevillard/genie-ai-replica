@@ -18,7 +18,9 @@
  * otherwise.
  */
 const { chromium } = require('@playwright/test');
-const { BASE_URL } = require('../helpers/chatbot');
+// The venue's edge from the credential-free module (the chat helper
+// re-exports the fixtures' credentials; the pre-flight needs neither).
+const { BASE_URL } = require('../helpers/base-url');
 const { venueLaunchArgs, venueMapping } = require('../helpers/venue-launch-args');
 
 function remedy(what) {
@@ -58,12 +60,18 @@ function remedy(what) {
     const page = await context.newPage();
     const response = await page.goto(BASE_URL, { waitUntil: 'domcontentloaded', timeout: 45000 });
     const status = response ? response.status() : 0;
-    // ANY 4xx at the venue ROOT is a misconfigured BASE_URL, not a surface
-    // the app serves: letting the run proceed would fail every spec on
+    // ANY 4xx at the venue ROOT stops the run: it is not a surface the app
+    // serves to an anonymous browser. TWO causes, and the message must name
+    // both — the address is not the app's edge, OR the venue's realm
+    // refuses an anonymous request to it (a broken realm answers 4xx at
+    // the edge too). Letting the run proceed would fail every spec on
     // navigation and the failure path would file one issue per spec file
     // for a RUNNER-CONFIG cause — the flood this pre-flight exists to stop.
     if (!status || status >= 400) {
-      failure = `the venue answered HTTP ${status} at ${BASE_URL} — the address is not the app's edge.`;
+      failure =
+        `the venue answered HTTP ${status} at ${BASE_URL} — either the address is not the app's ` +
+        'edge, or the venue refuses an anonymous request to it (a broken realm answers 4xx at ' +
+        'the edge too).';
     } else {
       process.stdout.write(`pre-flight: the browser reached the venue (HTTP ${status}).\n`);
     }

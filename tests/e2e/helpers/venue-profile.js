@@ -38,7 +38,11 @@
  */
 const vm = require('vm');
 const auth = require('./auth');
-const { BASE_URL } = require('./chatbot');
+// The venue's edge from the credential-free module: this helper is
+// loaded by specs that take their credentials straight from
+// helpers/e2e-fixtures.js, and the chat helper re-exports those
+// credentials — importing it here would mix the two import paths.
+const { BASE_URL } = require('./base-url');
 
 const RUNTIME_CONFIG_PATH = '/runtime/config.js';
 

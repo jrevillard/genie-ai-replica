@@ -58,9 +58,16 @@ const filesCarrying = (root, needle) => {
   // helpers/chatbot.js relative to the scanned root, so the same scan
   // works over the real tree and over a throwaway mutation tree.
   const defining = path.join(root, 'helpers', 'chatbot.js');
+  // Both spellings of the path: a glob that drops the leading slash
+  // ('**queries/stream**') matches the app's request just as well, and
+  // must not slip past the gate.
+  const needles = [needle, needle.replace(/^\//, '')];
   return e2eFiles(root)
     .filter((f) => path.resolve(f) !== path.resolve(defining))
-    .filter((f) => fs.readFileSync(f, 'utf8').includes(needle));
+    .filter((f) => {
+      const source = fs.readFileSync(f, 'utf8');
+      return needles.some((n) => source.includes(n));
+    });
 };
 
 describe('the e2e suite intercepts the stream endpoint through the shared constant', () => {

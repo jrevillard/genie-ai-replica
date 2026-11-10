@@ -53,8 +53,9 @@ module.exports = {
     // TRAP: the real verifier requires `jose`, which this component does NOT
     // declare — a suite that loads the middleware WITHOUT
     // jest.mock('../../shared-lib/keycloak-auth-service') dies here with
-    // MODULE_NOT_FOUND in CI (the test:doc-repo job installs only this
-    // component's node_modules). Every suite must stand in for the verifier
+    // MODULE_NOT_FOUND in CI after a clean install (the test:doc-repo job
+    // installs only this component's node_modules; a dev machine may carry a
+    // hoisted stray jose that masks it). Every suite must stand in for the verifier
     // at that module boundary, as all three existing ones do.
     '^\\.\\./\\.\\./shared-lib/keycloak-auth-service$': '<rootDir>/../shared/lib/keycloak-auth-service.js',
     // Everything else in shared-lib still goes to the mock barrel, so require

@@ -309,6 +309,31 @@ describe('keycloakAuthService', () => {
       expect(issuers).toContain('http://localhost:8080/realms/genie');
     });
 
+    it('warns when KEYCLOAK_DISCOVERY_TIMEOUT_MS is discarded and stays silent for a valid value', async () => {
+      // The bare-integer guard silently falls back to the default budget —
+      // the warn is the operator's only signal that their value was
+      // discarded, so it must fire for garbage and stay quiet for '5000'
+      // spelled out.
+      const loggerModule = require('../../shared/lib/logger');
+      const warnSpy = jest.spyOn(loggerModule.logger, 'warn');
+      const original = process.env.KEYCLOAK_DISCOVERY_TIMEOUT_MS;
+      try {
+        process.env.KEYCLOAK_DISCOVERY_TIMEOUT_MS = 'abc';
+        await keycloakAuthService.init();
+        expect(warnSpy.mock.calls.some(([m]) => String(m).includes('not a bare positive integer'))).toBe(true);
+
+        warnSpy.mockClear();
+        keycloakAuthService._resetForTesting();
+        process.env.KEYCLOAK_DISCOVERY_TIMEOUT_MS = '5000';
+        await keycloakAuthService.init();
+        expect(warnSpy.mock.calls.some(([m]) => String(m).includes('not a bare positive integer'))).toBe(false);
+      } finally {
+        if (original === undefined) delete process.env.KEYCLOAK_DISCOVERY_TIMEOUT_MS;
+        else process.env.KEYCLOAK_DISCOVERY_TIMEOUT_MS = original;
+        warnSpy.mockRestore();
+      }
+    });
+
     it('should throw if discovery fetch fails', async () => {
       mockFetch.mockResolvedValue({ ok: false, status: 502, statusText: 'Bad Gateway' });
 

@@ -142,7 +142,7 @@ async function init(idpUrl) {
   const parsedTimeout = parseInt(rawTimeout, 10);
   const discoveryTimeoutMs =
     Number.isFinite(parsedTimeout) && parsedTimeout > 0 && String(parsedTimeout) === rawTimeout ? parsedTimeout : 5000;
-  if (discoveryTimeoutMs === 5000 && process.env.KEYCLOAK_DISCOVERY_TIMEOUT_MS) {
+  if (discoveryTimeoutMs === 5000 && rawTimeout !== '5000' && process.env.KEYCLOAK_DISCOVERY_TIMEOUT_MS) {
     logger.warn(
       `KEYCLOAK_DISCOVERY_TIMEOUT_MS='${process.env.KEYCLOAK_DISCOVERY_TIMEOUT_MS}' is not a bare positive integer — using the 5000ms default`
     );
@@ -249,10 +249,11 @@ async function init(idpUrl) {
   if (issuerMap.size > sizeBefore) {
     initialized = true;
     initFailedAt = 0;
-  } else if (pinnedIssuer) {
-    // The pin names an issuer no init registered — on the PRIMARY init this
-    // means the discovery URL's realm does not match KEYCLOAK_REALM (the pin
-    // branch is primary-gated). Throwing arms the retry cooldown; failing
+  } else if (pinnedIssuer && !issuerMap.has(pinnedIssuer)) {
+    // The pin names an issuer no init registered — on the no-args primary
+    // init this means KEYCLOAK_REALM is unset or unusable (the realm then
+    // derives from the URL and cannot equal the undefined KEYCLOAK_REALM the
+    // pin gate compares against). Throwing arms the retry cooldown; failing
     // silently here would re-run full discovery on every single token.
     throw new Error(
       `KEYCLOAK_EXPECTED_ISSUER (${pinnedIssuer}) matches no registered issuer — ` +

@@ -596,6 +596,45 @@ describe('retrieval-config-client (Story 1.1)', () => {
     expect(afterOutage.source).toBe('bff-fail-closed-default');
   });
 
+  it('a garbled body degrades to the last-known-good posture, not to the plain legacy default', async () => {
+    // The malformed path is transport-adjacent exactly like an outage: an
+    // okf_only deployment whose upstream answers an unreadable body must
+    // degrade to its fail-closed zero-hit posture (the last-known mode), not
+    // silently serve the legacy corpus the deployment excluded. The reason
+    // stays 'malformed_response' so the telemetry still tells a garbled
+    // body from a transport outage.
+    axios.get.mockImplementationOnce(() => okfGetResponse(HYBRID_CONFIG));
+    const good = await client.getRetrievalConfig(makeBearer(['okf:t:a:read']));
+    expect(good.config.mode).toBe('hybrid');
+    expect(good.source).toBe('database');
+
+    axios.get.mockImplementationOnce(() => okfGetResponse({ unexpected: true }));
+    const garbled = await client.getRetrievalConfig(makeBearer(['okf:t:b:read']));
+
+    expect(garbled.config.mode).toBe('hybrid');
+    expect(garbled.source).toBe('bff-last-known-good');
+    expect(garbled.synthesis_reason).toBe('malformed_response');
+    expect(client.isPostureUnknown(garbled)).toBe(true);
+    expect(garbled._bff_expires_at).toBe(nowMs + client._internals.LKG_MAX_AGE_MS);
+  });
+
+  it('an upstream body carrying its own `expires_at` is cached verbatim — the expiry marker is the BFF’s own', async () => {
+    // The cache re-validates a composition stamped with the BFF's expiry
+    // marker. That marker is namespaced (`_bff_expires_at`) so an upstream
+    // read-model field of the old name can never be read as a composition
+    // expiry: a body carrying `expires_at` is an ordinary successful read —
+    // cached for the window, served again without a second upstream call.
+    axios.get.mockImplementationOnce(() => okfGetResponse({ ...HYBRID_CONFIG, expires_at: 1 }));
+
+    const first = await client.getRetrievalConfig(makeBearer(['okf:t:a:read']));
+    expect(first.expires_at).toBe(1);
+
+    const second = await client.getRetrievalConfig(makeBearer(['okf:t:a:read']));
+    expect(second.config.mode).toBe(first.config.mode);
+    expect(second.expires_at).toBe(1); // served verbatim, not dropped
+    expect(axios.get).toHaveBeenCalledTimes(1);
+  });
+
   it('scope-equivalence: scope ORDER does not change the cache key', async () => {
     axios.get.mockReturnValue(okfGetResponse(HYBRID_CONFIG));
 

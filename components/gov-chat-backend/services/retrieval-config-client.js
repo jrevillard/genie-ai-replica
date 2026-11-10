@@ -21,7 +21,8 @@
 // outage): 401 propagates (the request itself is invalid — no silent legacy
 // fallback); 403 means the caller holds no okf read scope OR the deployment
 // runs OKF_SCOPE_MODE=closed (default-deny) — either way the per-caller
-// serving view is empty by construction → legacy default; 5xx/network →
+// serving view is empty by construction → legacy default; 5xx/network, or a
+// 200 whose body fails the shape/vocabulary gate (a garbled upstream) →
 // the locally synthesized fail-closed composition carrying the last-known
 // mode (source 'bff-last-known-good'), else the legacy default
 // (mode=legacy, engaged=false).
@@ -496,7 +497,22 @@ async function getRetrievalConfig(bearerHeader, opts = {}) {
           correlationId: callOpts?.correlationId,
           reason: shapeOk ? 'mode_not_declared' : 'shape'
         });
-        return legacyDefaultConfig('malformed_response');
+        // A garbled body is a transport-adjacent failure exactly like an
+        // unreachable upstream: the same last-known-good consultation
+        // applies. Without it, an okf_only deployment whose upstream answers
+        // an unreadable body silently serves the legacy corpus the deployment
+        // excluded — the one failure shape that downgraded the governance
+        // posture instead of failing closed. The reason stays
+        // 'malformed_response': the warn log and the warning payload must
+        // still tell a garbled body from a transport outage.
+        const lkg = freshLastGoodConfig();
+        if (!lkg) return legacyDefaultConfig('malformed_response');
+        return {
+          ...legacyDefaultConfig('malformed_response'),
+          config: { mode: lkg.config.mode },
+          source: 'bff-last-known-good',
+          _bff_expires_at: lkg.captured_at + LKG_MAX_AGE_MS
+        };
       },
       onFailure(err, cid) {
         const status = err?.response?.status;
@@ -577,27 +593,16 @@ async function getAuthorizedGraphs(bearerHeader, opts = {}) {
   );
 }
 
-/** Test hook: drop the window cache + last-known-good (no production caller). */
-function _resetCache() {
-  _cache.clear();
-  _lastGoodConfig = null;
-}
-
 module.exports = {
   getRetrievalConfig,
   getAuthorizedGraphs,
   OkfAuthzUnauthorizedError,
   isPostureUnknown,
-  _resetCache,
-  // Exposed for tests/diagnostics only — production code reads nothing here.
+  // Exposed for the tests that pin them — production code reads nothing here.
   _internals: {
     effectiveScopesKey,
     parseOkfScopes,
-    decodeJwtPayload,
-    currentWindow,
     fetchUpstream, // exposed so the egress guard (wave 2) can be pinned by a test
-    OKF_SERVER_URL,
-    RETRIEVAL_CONFIG_TTL_MS,
     REQUEST_TIMEOUT_MS,
     LKG_MAX_AGE_MS
   }

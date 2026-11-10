@@ -93,7 +93,9 @@ async function authenticate(req, res, next) {
       // httpService handles: a 401 here would tell the client its session
       // had died and send it to the login page during an infrastructure
       // outage. (A Keycloak outage that starts AFTER a successful init is
-      // classified by the shared verifier itself — see issue #1723.)
+      // NOT covered here: the shared verifier classifies it as an invalid
+      // token and it still answers a bad-token 401 — tracked in issue
+      // #1723.)
       logger.warn('OKF auth service unavailable', { error: err.message, path: req.path });
       return res.status(503).json({
         error: 'AUTH_SERVICE_UNAVAILABLE',

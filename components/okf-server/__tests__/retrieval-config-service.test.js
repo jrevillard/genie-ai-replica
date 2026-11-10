@@ -146,6 +146,20 @@ describe('retrieval-config-service (Story 1.7, ADR-okf-039)', () => {
       expect(out.engaged).toBe(false);
     });
 
+    test('a PADDED mode is garbled too: it degrades to the safe default, never to a silent engagement', async () => {
+      // ' okf_only ' is not a member of the vocabulary — the read-path
+      // sanitizer treats it as any other garbled value (safe default), it
+      // does NOT trim it into an engaged fan-out. The vocabulary is owned
+      // HERE (the server publishes it next to the read-model, so a consumer
+      // can check membership without a second copy of the enum).
+      mockDb.collection('okf_system_config').save({ _key: 'retrieval', mode: ' okf_only ' });
+      seedServing([repoRow()]);
+      const out = await svc.getRetrievalConfig({ okfScopes: [], isSuperAdmin: true });
+      expect(out.config.mode).toBe('legacy');
+      expect(out.engaged).toBe(false);
+      expect(out.modes).toEqual(['legacy', 'okf_only', 'hybrid']); // the declared vocabulary
+    });
+
     test('engaged=true only when mode≠legacy AND ≥1 serving graph', async () => {
       mockDb.collection('okf_system_config').save({ _key: 'retrieval', mode: 'okf_only' });
       seedServing([repoRow()]);

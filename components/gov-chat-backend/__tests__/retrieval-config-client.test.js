@@ -217,6 +217,149 @@ describe('retrieval-config-client (Story 1.1)', () => {
     expect(degraded.warnings).toEqual([]);
   });
 
+  it('concurrent cold-window misses share ONE upstream attempt', async () => {
+    // Each attempt costs the full request timeout when the upstream is down —
+    // a burst of concurrent callers must not pay it N times. The attempt is
+    // published in the cache BEFORE it settles, so the misses await it.
+    let resolveUpstream;
+    const pending = new Promise((resolve) => {
+      resolveUpstream = resolve;
+    });
+    axios.get.mockImplementation(() => pending);
+    const bearer = makeBearer(['okf:t:a:read']);
+
+    const calls = [
+      client.getRetrievalConfig(bearer),
+      client.getRetrievalConfig(bearer),
+      client.getRetrievalConfig(bearer)
+    ];
+    resolveUpstream({ status: 200, data: HYBRID_CONFIG });
+    const results = await Promise.all(calls);
+
+    expect(axios.get).toHaveBeenCalledTimes(1);
+    expect(results[1]).toBe(results[0]); // the SAME composition object
+    expect(results[2]).toBe(results[0]);
+    expect(results[0].config.mode).toBe('hybrid');
+  });
+
+  it('a last-known-good WITHIN the trust horizon still serves the deployment posture', async () => {
+    axios.get.mockReturnValueOnce(okfGetResponse(HYBRID_CONFIG)).mockImplementationOnce(() => okfGetError(503));
+    const bearer = makeBearer(['okf:t:a:read']);
+
+    await client.getRetrievalConfig(bearer); // the posture is confirmed
+    nowMs += client._internals.LKG_MAX_AGE_MS - 1; // still inside the horizon
+    const degraded = await client.getRetrievalConfig(bearer);
+
+    expect(degraded.config.mode).toBe('hybrid');
+    expect(degraded.source).toBe('bff-last-known-good');
+  });
+
+  it('a last-known-good BEYOND the trust horizon degrades to the legacy default', async () => {
+    // The copy is a short-lived cache, not a durable mirror of the deployment
+    // config: past the horizon the posture is unverifiable, and a deployment
+    // mode change (a flip to/from okf_only) must not be shadowed for the
+    // whole outage.
+    axios.get.mockReturnValueOnce(okfGetResponse(HYBRID_CONFIG)).mockImplementationOnce(() => okfGetError(503));
+    const bearer = makeBearer(['okf:t:a:read']);
+
+    await client.getRetrievalConfig(bearer); // the posture is confirmed
+    nowMs += client._internals.LKG_MAX_AGE_MS + 1; // ... then it goes stale
+    const degraded = await client.getRetrievalConfig(bearer);
+
+    expect(degraded.config.mode).toBe('legacy');
+    expect(degraded.source).toBe('bff-fail-closed-default');
+    expect(degraded.engaged).toBe(false);
+  });
+
+  it('a mode outside the vocabulary the response declares degrades to the legacy default', async () => {
+    // The okf-server owns the mode vocabulary (it publishes it next to the
+    // read-model); the BFF checks membership against THAT — no second copy of
+    // the enum here. A mode the response does not declare never reaches the
+    // carrier, and never lands in the last-known-good copy.
+    axios.get.mockReturnValueOnce(
+      okfGetResponse({
+        ...HYBRID_CONFIG,
+        config: { mode: 'hibrind' },
+        modes: ['legacy', 'okf_only', 'hybrid']
+      })
+    );
+
+    const config = await client.getRetrievalConfig(makeBearer(['okf:t:a:read']));
+    expect(config.config.mode).toBe('legacy');
+    expect(config.engaged).toBe(false);
+
+    // The warn names WHY the response was rejected — a shape problem and an
+    // out-of-vocabulary mode are different operator problems.
+    const { logger } = require('../shared-lib');
+    const malformedWarn = logger.warn.mock.calls.find(
+      ([msg]) => msg === 'RetrievalConfigClient.malformed_config_response'
+    );
+    expect(malformedWarn).toBeDefined();
+    expect(malformedWarn[1].reason).toBe('mode_not_declared');
+
+    nowMs += REAL_TTL_MS + 1;
+    axios.get.mockImplementationOnce(() => okfGetError(503));
+    const afterOutage = await client.getRetrievalConfig(makeBearer(['okf:t:c:read']));
+    expect(afterOutage.config.mode).toBe('legacy');
+    expect(afterOutage.source).toBe('bff-fail-closed-default');
+  });
+
+  it('a padded mode is garbled: rejected at the boundary, exactly like the server sanitizer', async () => {
+    // The okf-server's own sanitizer treats ' hybrid ' as garbled (safe
+    // default) — the BFF must agree rather than trim it into an engaged
+    // fan-out the server would have refused. The garbled mode also never
+    // reaches the last-known-good copy.
+    axios.get.mockReturnValueOnce(
+      okfGetResponse({
+        ...HYBRID_CONFIG,
+        config: { mode: ' hybrid ' },
+        modes: ['legacy', 'okf_only', 'hybrid']
+      })
+    );
+
+    const config = await client.getRetrievalConfig(makeBearer(['okf:t:a:read']));
+    expect(config.config.mode).toBe('legacy');
+    expect(config.engaged).toBe(false);
+
+    nowMs += REAL_TTL_MS + 1;
+    axios.get.mockImplementationOnce(() => okfGetError(503));
+    const degraded = await client.getRetrievalConfig(makeBearer(['okf:t:c:read']));
+    expect(degraded.config.mode).toBe('legacy');
+    expect(degraded.source).toBe('bff-fail-closed-default');
+  });
+
+  it("a concurrent joiner is not poisoned by the initiator's 401 — every caller runs its OWN attempt", async () => {
+    // The shared attempt runs with the INITIATOR's bearer: its 401 says
+    // nothing about a joiner's own token (a refreshed token of the same
+    // scopes shares the key). The own-attempt fallback must run OUTSIDE the
+    // shared cache: a retry that published its attempt would be JOINED by
+    // the next caller, who would inherit a foreign outcome without its own
+    // token ever being tested. Four callers, two rejected tokens, two valid:
+    // every caller must hit the upstream exactly once, with its OWN bearer.
+    const subs = [];
+    axios.get.mockImplementation((path, config) => {
+      const sub = payloadOf(config?.headers?.Authorization)?.sub;
+      subs.push(sub);
+      if (sub === 'caller-a' || sub === 'caller-b') return okfGetError(401, 'token expired');
+      return okfGetResponse(HYBRID_CONFIG);
+    });
+
+    const a = client.getRetrievalConfig(makeBearer(['okf:t:a:read'], [], 'caller-a'));
+    const b = client.getRetrievalConfig(makeBearer(['okf:t:a:read'], [], 'caller-b'));
+    const c = client.getRetrievalConfig(makeBearer(['okf:t:a:read'], [], 'caller-c'));
+    const d = client.getRetrievalConfig(makeBearer(['okf:t:a:read'], [], 'caller-d'));
+
+    await expect(a).rejects.toMatchObject({ name: 'OkfAuthzUnauthorizedError' });
+    await expect(b).rejects.toMatchObject({ name: 'OkfAuthzUnauthorizedError' });
+    await expect(c).resolves.toMatchObject({ config: { mode: 'hybrid' } });
+    await expect(d).resolves.toMatchObject({ config: { mode: 'hybrid' } });
+    // Four attempts: the shared one plus each caller's own fallback — no
+    // caller inherited another's outcome without its own attempt.
+    expect(axios.get).toHaveBeenCalledTimes(4);
+    // And each attempt carried the caller's own token, not a neighbour's.
+    expect(subs.sort()).toEqual(['caller-a', 'caller-b', 'caller-c', 'caller-d']);
+  });
+
   it('okf-server 401: throws the typed error (propagates, never cached into a stale lockout)', async () => {
     axios.get.mockImplementation(() => okfGetError(401, 'token expired'));
     const bearer = makeBearer(['okf:t:a:read']);
@@ -241,11 +384,122 @@ describe('retrieval-config-client (Story 1.1)', () => {
     expect(config).toEqual({
       config: { mode: 'legacy' },
       source: 'bff-fail-closed-default',
+      synthesis_reason: 'upstream_unreachable',
       serving_graph_count: 0,
       serving_repo_ids: [],
       serving_graphs: [],
       engaged: false,
       warnings: []
+    });
+  });
+
+  it('every synthesized composition names WHY it was synthesized', async () => {
+    // A consumer must be able to tell a by-design default (OKF parked, a
+    // caller without okf scopes — their legacy answer IS the correct
+    // posture) from a posture the client could not read.
+    axios.get
+      .mockImplementationOnce(() => okfGetError(403))
+      .mockImplementationOnce(() => okfGetResponse({ unexpected: true }))
+      .mockImplementationOnce(() => okfGetError(503));
+
+    const forbidden = await client.getRetrievalConfig(makeBearer(['okf:t:a:read'], [], 'u1'));
+    const garbled = await client.getRetrievalConfig(makeBearer(['okf:t:b:read'], [], 'u2'));
+    const unreachable = await client.getRetrievalConfig(makeBearer(['okf:t:c:read'], [], 'u3'));
+
+    expect(forbidden.synthesis_reason).toBe('caller_without_scope');
+    expect(garbled.synthesis_reason).toBe('malformed_response');
+    expect(unreachable.synthesis_reason).toBe('upstream_unreachable');
+    // Only the unreadable-posture cases are flagged as unknown.
+    expect(client.isPostureUnknown(forbidden)).toBe(false);
+    expect(client.isPostureUnknown(garbled)).toBe(true);
+    expect(client.isPostureUnknown(unreachable)).toBe(true);
+  });
+
+  it('the trust horizon is a fixed value, not a multiple of the cache TTL', () => {
+    // Pinning the VALUE: deriving it from OKF_RETRIEVAL_CONFIG_TTL_MS would
+    // silently widen the unverified-posture window whenever an operator
+    // raises the TTL to cut upstream load.
+    expect(client._internals.LKG_MAX_AGE_MS).toBe(300000);
+  });
+
+  describe('with a cache TTL longer than the trust horizon', () => {
+    // #1683's bound must hold at SERVE time: a failure-resolved composition
+    // is cached for the window, and a window longer than the horizon would
+    // otherwise keep serving an unverified posture past its bound.
+    const LONG_TTL_MS = 600000;
+
+    function loadWithLongTtl() {
+      process.env.OKF_RETRIEVAL_CONFIG_TTL_MS = String(LONG_TTL_MS);
+      jest.resetModules();
+      const loaded = require('../services/retrieval-config-client');
+      const axiosLong = require('axios');
+      axiosLong.get.mockReset();
+      return { loaded, axiosLong };
+    }
+
+    afterEach(() => {
+      delete process.env.OKF_RETRIEVAL_CONFIG_TTL_MS;
+    });
+
+    it('a cached degraded posture stops being served once the horizon passes', async () => {
+      const { loaded: longClient, axiosLong } = loadWithLongTtl();
+      // The posture is confirmed at 599000, just before window 0 ends; the
+      // outage hits in window 1 (the failure-resolved composition is cached
+      // under window 1's key), and the horizon (5 min from 599000 = 899000)
+      // expires while window 1 [600000, 1200000) is STILL current — exactly
+      // the case a per-window cache would otherwise serve past the bound.
+      nowMs = 599000;
+      axiosLong.get.mockReturnValue(okfGetResponse(HYBRID_CONFIG));
+      const bearer = makeBearer(['okf:t:a:read']);
+
+      await longClient.getRetrievalConfig(bearer); // the posture is confirmed
+
+      nowMs = 700000; // window 1; the upstream fails; the LKG (age 101 s) is fresh
+      axiosLong.get.mockImplementation(() => okfGetError(503));
+      const degraded = await longClient.getRetrievalConfig(bearer);
+      expect(degraded.config.mode).toBe('hybrid');
+      expect(degraded.source).toBe('bff-last-known-good');
+      // The composition carries when the posture it was built from stops
+      // being trusted — the cache re-validates it at serve time. The marker
+      // is namespaced: it is the BFF's own, never an upstream read-model
+      // field of the same name.
+      expect(degraded._bff_expires_at).toBe(599000 + longClient._internals.LKG_MAX_AGE_MS);
+      expect(degraded.expires_at).toBeUndefined();
+
+      nowMs = 899500; // SAME window, past the horizon (age 300500 > 300000)
+      const afterHorizon = await longClient.getRetrievalConfig(bearer);
+
+      // The serve-time re-validation dropped the entry and resolved again:
+      // no trusted posture remains, so the fail-closed default takes over
+      // even though the window has not rolled.
+      expect(afterHorizon.config.mode).toBe('legacy');
+      expect(afterHorizon.source).toBe('bff-fail-closed-default');
+      // Three attempts: the success, the in-window failure, the re-resolution.
+      expect(axiosLong.get).toHaveBeenCalledTimes(3);
+    });
+
+    it('a 401 on the expiry re-resolution propagates with ONE upstream attempt', async () => {
+      const { loaded: longClient, axiosLong } = loadWithLongTtl();
+      nowMs = 599000;
+      axiosLong.get
+        .mockReturnValueOnce(okfGetResponse(HYBRID_CONFIG)) // the posture is confirmed
+        .mockImplementationOnce(() => okfGetError(503)); // in-window outage: the degraded posture is cached
+      const bearer = makeBearer(['okf:t:a:read']);
+      await longClient.getRetrievalConfig(bearer);
+      nowMs = 700000;
+      const degraded = await longClient.getRetrievalConfig(bearer);
+      expect(degraded.source).toBe('bff-last-known-good');
+
+      // Past the horizon, the caller's own token is now rejected: the
+      // serve-time re-resolution runs its own upstream attempt ONCE, and
+      // the 401 — the caller's own, from its own attempt, never a shared
+      // one — propagates directly instead of triggering a second attempt.
+      nowMs = 899500;
+      axiosLong.get.mockImplementationOnce(() => okfGetError(401, 'token expired'));
+      await expect(longClient.getRetrievalConfig(bearer)).rejects.toMatchObject({
+        name: 'OkfAuthzUnauthorizedError'
+      });
+      expect(axiosLong.get).toHaveBeenCalledTimes(3);
     });
   });
 
@@ -340,6 +594,66 @@ describe('retrieval-config-client (Story 1.1)', () => {
     const afterOutage = await client.getRetrievalConfig(makeBearer(['okf:t:c:read']));
     expect(afterOutage.config.mode).toBe('legacy');
     expect(afterOutage.source).toBe('bff-fail-closed-default');
+  });
+
+  it('a garbled body degrades to the last-known-good posture, not to the plain legacy default', async () => {
+    // The malformed path is transport-adjacent exactly like an outage: an
+    // okf_only deployment whose upstream answers an unreadable body must
+    // degrade to its fail-closed zero-hit posture (the last-known mode), not
+    // silently serve the legacy corpus the deployment excluded. The reason
+    // stays 'malformed_response' so the telemetry still tells a garbled
+    // body from a transport outage.
+    axios.get.mockImplementationOnce(() => okfGetResponse(HYBRID_CONFIG));
+    const good = await client.getRetrievalConfig(makeBearer(['okf:t:a:read']));
+    expect(good.config.mode).toBe('hybrid');
+    expect(good.source).toBe('database');
+
+    axios.get.mockImplementationOnce(() => okfGetResponse({ unexpected: true }));
+    const garbled = await client.getRetrievalConfig(makeBearer(['okf:t:b:read']));
+
+    expect(garbled.config.mode).toBe('hybrid');
+    expect(garbled.source).toBe('bff-last-known-good');
+    expect(garbled.synthesis_reason).toBe('malformed_response');
+    expect(client.isPostureUnknown(garbled)).toBe(true);
+    expect(garbled._bff_expires_at).toBe(nowMs + client._internals.LKG_MAX_AGE_MS);
+
+    // The warn carries the same degrade facts the unreachable warn does, so
+    // an operator triaging a garbled-body incident reads the degrade from
+    // the log instead of inferring it from the served payload.
+    const { logger } = require('../shared-lib');
+    const malformedWarn = logger.warn.mock.calls.find(
+      ([msg]) => msg === 'RetrievalConfigClient.malformed_config_response'
+    );
+    expect(malformedWarn).toBeDefined();
+    expect(malformedWarn[1].last_known_good).toBe(true);
+    expect(malformedWarn[1].last_known_good_age_ms).toEqual(expect.any(Number));
+
+    // The consultation is horizon-bounded like the outage path: past the
+    // 5-minute trust horizon the last-known-good is dropped and the garbled
+    // body degrades to the plain legacy default.
+    nowMs += REAL_TTL_MS + client._internals.LKG_MAX_AGE_MS + 1;
+    axios.get.mockImplementationOnce(() => okfGetResponse({ unexpected: true }));
+    const garbledStale = await client.getRetrievalConfig(makeBearer(['okf:t:e:read']));
+    expect(garbledStale.config.mode).toBe('legacy');
+    expect(garbledStale.source).toBe('bff-fail-closed-default');
+    expect(garbledStale.synthesis_reason).toBe('malformed_response');
+  });
+
+  it('an upstream body carrying its own `expires_at` is cached verbatim — the expiry marker is the BFF’s own', async () => {
+    // The cache re-validates a composition stamped with the BFF's expiry
+    // marker. That marker is namespaced (`_bff_expires_at`) so an upstream
+    // read-model field of the old name can never be read as a composition
+    // expiry: a body carrying `expires_at` is an ordinary successful read —
+    // cached for the window, served again without a second upstream call.
+    axios.get.mockImplementationOnce(() => okfGetResponse({ ...HYBRID_CONFIG, expires_at: 1 }));
+
+    const first = await client.getRetrievalConfig(makeBearer(['okf:t:a:read']));
+    expect(first.expires_at).toBe(1);
+
+    const second = await client.getRetrievalConfig(makeBearer(['okf:t:a:read']));
+    expect(second.config.mode).toBe(first.config.mode);
+    expect(second.expires_at).toBe(1); // served verbatim, not dropped
+    expect(axios.get).toHaveBeenCalledTimes(1);
   });
 
   it('scope-equivalence: scope ORDER does not change the cache key', async () => {
@@ -518,7 +832,12 @@ describe('retrieval-config-client (Story 1.1)', () => {
         const parked = require('../services/retrieval-config-client');
         const axiosParked = require('axios');
         const cfg = await parked.getRetrievalConfig(makeBearer());
-        expect(cfg).toMatchObject({ config: { mode: 'legacy' }, engaged: false, source: 'bff-fail-closed-default' });
+        expect(cfg).toMatchObject({
+          config: { mode: 'legacy' },
+          engaged: false,
+          source: 'bff-fail-closed-default',
+          synthesis_reason: 'parked'
+        });
         const graphs = await parked.getAuthorizedGraphs(makeBearer());
         expect(graphs).toEqual({ graph_names: [] });
         expect(axiosParked.get).not.toHaveBeenCalled();

@@ -13,7 +13,7 @@ lint-common:
 	helm lint genieai-common --strict
 
 lint-umbrella: lint-common deps
-	helm lint genieai-umbrella --strict
+	helm lint genieai-umbrella --strict --kube-version $(shell cat ci/kube-version)
 
 template: template-umbrella
 
@@ -28,6 +28,7 @@ template: template-umbrella
 # render that proves nothing about CI. The placeholder guard stays off
 # here: it is the one flag the fixture does not carry.
 RENDER_FLAGS = --set data.keycloak.failOnPlaceholderSecrets=false \
+	--kube-version $(shell cat ci/kube-version) \
 	$(shell cat ci/render-base-flags)
 
 template-umbrella: deps

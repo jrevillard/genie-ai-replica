@@ -76,9 +76,12 @@ render_capture() {
   # kubeVersion constraint against the Kubernetes version COMPILED INTO the
   # helm binary — so the same chart renders on one machine and fails on
   # another, and a helm release that ships a newer k8s breaks every
-  # render in the pipeline. 1.33.0 is the range's low bound (the CI
-  # validates against it; the laptop cluster runs the high bound).
-  GUARD_OUTPUT="$(helm template "${RELEASE}" "${CHART}" -n "${NS}" --kube-version 1.33.0 "$@" 2>&1)"
+  # render in the pipeline. The version comes from the shared fixture
+  # (charts/ci/kube-version), so the pipeline's renders, the CI jobs'
+  # renders and the gate scripts' renders all target the SAME one; it is
+  # the range's low bound (the CI validates against it; the laptop
+  # cluster runs the high bound).
+  GUARD_OUTPUT="$(helm template "${RELEASE}" "${CHART}" -n "${NS}" --kube-version "$(cat "$(dirname "${CHART}")/ci/kube-version")" "$@" 2>&1)"
   GUARD_RC=$?
 }
 

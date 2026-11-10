@@ -93,6 +93,23 @@ def fixture_flags(chart_path, name):
     return flags
 
 
+def kube_version(chart_path):
+    """The Kubernetes version every render targets (charts/ci/kube-version).
+
+    Without an explicit --kube-version, helm compares the chart's
+    kubeVersion constraint against the Kubernetes version COMPILED INTO
+    the helm binary — so the same chart renders on one machine and fails
+    on another, and a helm release that ships a newer k8s breaks every
+    render in the pipeline.
+    """
+    ci_dir = os.path.join(os.path.dirname(os.path.abspath(chart_path)), "ci")
+    version_file = os.path.join(ci_dir, "kube-version")
+    if not os.path.isfile(version_file):
+        sys.exit(f"missing kube version fixture: {version_file}")
+    with open(version_file) as handle:
+        return handle.read().strip()
+
+
 def render(chart_path, extra_flags, with_full_tier=False):
     flags = base_flags(chart_path)
     if with_full_tier:
@@ -104,6 +121,8 @@ def render(chart_path, extra_flags, with_full_tier=False):
         chart_path,
         "-n",
         "genieai",
+        "--kube-version",
+        kube_version(chart_path),
     ] + flags + list(extra_flags)
     proc = subprocess.run(cmd, capture_output=True, text=True)
     if proc.returncode != 0:

@@ -15,6 +15,7 @@
 import * as d3 from 'd3';
 import analyticsService from '../../services/analyticsService';
 import { useChartTheme } from '../../composables/useChartTheme';
+import { fade, shiftLightness } from '../../utils/chartColors';
 import DsSpinner from '../ds/Spinner.vue';
 import DsStateDisplay from '../ds/StateDisplay.vue';
 
@@ -48,8 +49,8 @@ export default {
     }
   },
   setup() {
-    const { theme, isDarkMode, getCssVarStrings } = useChartTheme();
-    return { theme, isDarkMode, getCssVarStrings };
+    const { theme, isDarkMode, getCssVarStrings, getResolvedTheme } = useChartTheme();
+    return { theme, isDarkMode, getCssVarStrings, getResolvedTheme };
   },
   data() {
     return {
@@ -268,7 +269,7 @@ export default {
      * Force text elements to use appropriate color based on theme
      */
     forceAxisTextColor() {
-      const theme = this.getCssVarStrings();
+      const theme = this.getResolvedTheme();
       const textColor = theme.textColor;
 
       const chartContainer = this.$refs.chartContainer;
@@ -313,16 +314,21 @@ export default {
         return;
       }
 
-      const theme = this.getCssVarStrings();
+      const theme = this.getResolvedTheme();
       const { textColor, borderColor, gridColor, isDarkMode } = theme;
 
-      // Data series colors — constant across themes (dataviz convention)
+      // Data series colors — derived from the brand ramp (T1: was a private
+      // hardcoded 5-color palette that matched no theme and no deployment flavour).
+      // Bars ride the first ramp entry, the line the second; gradients are
+      // lightness steps so the pair keeps its depth.
+      const barBase = theme.chartColors[0] || theme.accentColor;
+      const lineBase = theme.chartColors[1] || theme.brandColor || theme.accentColor;
       const colors = {
-        barStart: '#62d9a6',
-        barEnd: '#2da676',
-        lineStart: '#5b9bd5',
-        lineEnd: '#3a6da0',
-        area: '#4682B4'
+        barStart: shiftLightness(barBase, 0.08),
+        barEnd: shiftLightness(barBase, -0.08),
+        lineStart: lineBase,
+        lineEnd: shiftLightness(lineBase, -0.08),
+        area: fade(lineBase, 65)
       };
 
       // UI colors — adapt to theme
@@ -715,11 +721,11 @@ export default {
           const tooltipContent = `
         <div class="tt-header">${d.dateLabel}</div>
         <div class="tt-row">
-          <span class="tt-swatch tt-swatch--bar"></span>
+          <span class="tt-swatch tt-swatch--bar" style="background: linear-gradient(to bottom, ${colors.barStart}, ${colors.barEnd})"></span>
           ${totalQueriesLabel}: <strong>${d.value.toLocaleString(this.$i18n.locale)}</strong>
         </div>
         <div class="tt-row">
-          <span class="tt-swatch tt-swatch--line"></span>
+          <span class="tt-swatch tt-swatch--line" style="background: ${colors.lineStart}"></span>
           ${uniqueUsersLabel}: <strong>${d.userCount.toLocaleString(this.$i18n.locale)}</strong>
         </div>
       `;
@@ -786,13 +792,7 @@ export default {
   vertical-align: middle;
 }
 
-:global(.d3-tooltip .tt-swatch--bar) {
-  background: linear-gradient(to bottom, #62d9a6, #2da676);
-  border-radius: var(--radius-sm);
-}
-
-:global(.d3-tooltip .tt-swatch--line) {
-  background: #5b9bd5;
-  border-radius: 50%;
-}
+/* T1: the swatch COLORS moved into the tooltip builder as inline styles —
+ * they now carry the resolved brand-ramp colors instead of two hardcoded
+ * hex gradients that matched no theme and no deployment flavour. */
 </style>

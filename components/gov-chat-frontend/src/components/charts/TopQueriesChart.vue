@@ -92,8 +92,8 @@ export default {
     }
   },
   setup() {
-    const { theme, getCssVarStrings } = useChartTheme();
-    return { theme, getCssVarStrings };
+    const { theme, getCssVarStrings, getResolvedTheme } = useChartTheme();
+    return { theme, getCssVarStrings, getResolvedTheme };
   },
   data() {
     return {
@@ -385,7 +385,7 @@ export default {
         }
       }
 
-      const theme = this.getCssVarStrings();
+      const theme = this.getResolvedTheme();
       const textColor = theme.textColor;
 
       const topQueries = this.chartData.slice(0, 5);
@@ -428,7 +428,10 @@ export default {
             dataLabels: { position: 'top' }
           }
         },
-        colors: ['var(--accent)'],
+        // T1: a resolved accent — Apex applies series colors as SVG presentation
+        // attributes and var() is invalid there (the raw string rendered the
+        // chart unthemed in every theme; see charts-apex-overrides.css header).
+        colors: [theme.accentColor],
         dataLabels: {
           enabled: true,
           formatter: (val) => val.toLocaleString(),

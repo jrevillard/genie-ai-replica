@@ -71,6 +71,7 @@
 import { nextTick } from 'vue';
 import analyticsService from '../../services/analyticsService';
 import { useChartTheme } from '../../composables/useChartTheme';
+import { buildSatisfactionScale } from '../../utils/chartColors';
 import { SATISFACTION_PERIOD_KEYS, periodLabel as translatePeriodLabel } from '../../utils/satisfactionPeriods.js';
 import DsSpinner from '../ds/Spinner.vue';
 import DsStateDisplay from '../ds/StateDisplay.vue';
@@ -123,8 +124,8 @@ export default {
     }
   },
   setup() {
-    const { theme, getCssVarStrings } = useChartTheme();
-    return { theme, getCssVarStrings };
+    const { theme, getCssVarStrings, getResolvedTheme } = useChartTheme();
+    return { theme, getCssVarStrings, getResolvedTheme };
   },
   data() {
     return {
@@ -346,13 +347,25 @@ export default {
     },
 
     /**
+     * The gauge's four value bands (poor/low/medium/high), derived from the
+     * status tokens via the shared satisfaction scale — resolves to the
+     * deployment's own semantic colors instead of hardcoded hexes.
+     */
+    gaugeBandColors() {
+      const scale = buildSatisfactionScale(this.getResolvedTheme().statusColors);
+      // [poor=danger, low=warning, medium=warning→success mix, high=success]
+      return [scale[0], scale[2], scale[3], scale[4]];
+    },
+
+    /**
      * Get gauge color based on value
      */
     getGaugeColor(value) {
-      if (value >= 90) return '#22C55E'; // Green - matches var(--success)
-      if (value >= 80) return '#84CC16'; // Light green
-      if (value >= 70) return '#F59E0B'; // Orange - matches var(--warning)
-      return '#EF4444'; // Red - matches var(--danger)
+      const bands = this.gaugeBandColors;
+      if (value >= 90) return bands[3];
+      if (value >= 80) return bands[2];
+      if (value >= 70) return bands[1];
+      return bands[0];
     },
 
     /**
@@ -365,23 +378,17 @@ export default {
 
       const isDarkMode = this.theme === 'dark';
 
-      const textColor = this.getCssVarStrings().textColor;
+      const textColor = this.getResolvedTheme().textColor;
       const backgroundColor = 'transparent';
       const trackColor = isDarkMode ? 'var(--muted)' : 'var(--border)';
 
+      const bands = this.gaugeBandColors;
       const getGradientColors = (value) => {
-        const colors = {
-          poor: '#EF4444', // var(--danger)
-          low: '#F59E0B', // var(--warning)
-          medium: '#84CC16',
-          high: '#22C55E' // var(--success)
-        };
-
-        if (value < 60) return [colors.poor, colors.poor];
-        if (value < 70) return [colors.poor, colors.low];
-        if (value < 80) return [colors.low, colors.medium];
-        if (value < 90) return [colors.medium, colors.high];
-        return [colors.high, colors.high];
+        if (value < 60) return [bands[0], bands[0]];
+        if (value < 70) return [bands[0], bands[1]];
+        if (value < 80) return [bands[1], bands[2]];
+        if (value < 90) return [bands[2], bands[3]];
+        return [bands[3], bands[3]];
       };
 
       const gradientColors = getGradientColors(this.actualSatisfactionValue);

@@ -13,13 +13,14 @@
     <DsSpinner v-if="loading" overlay>
       <span>{{ translate('analytics.status.loading', 'Loading...') }}</span>
     </DsSpinner>
-    <DsStateDisplay v-if="error" type="error" :message="error" />
+    <DsStateDisplay v-if="error" :type="errorType" :message="error" />
   </div>
 </template>
 
 <script>
 import analyticsService from '../../services/analyticsService';
 import { useChartTheme } from '../../composables/useChartTheme';
+import { buildSatisfactionScale } from '../../utils/chartColors';
 import { periodLabel as translatePeriodLabel } from '../../utils/satisfactionPeriods.js';
 import DsSpinner from '../ds/Spinner.vue';
 import DsStateDisplay from '../ds/StateDisplay.vue';
@@ -53,14 +54,16 @@ export default {
     }
   },
   setup() {
-    const { theme, getCssVarStrings } = useChartTheme({ listenToSystem: true });
-    return { theme, getCssVarStrings };
+    const { theme, getCssVarStrings, getResolvedTheme } = useChartTheme({ listenToSystem: true });
+    return { theme, getCssVarStrings, getResolvedTheme };
   },
   data() {
     return {
       chartData: [],
       loading: false,
       error: null,
+      // T1: no-data renders as an EMPTY state; only fetch failures render as errors
+      errorType: 'error',
       chartOptions: null,
       isMobile: false
     };
@@ -226,6 +229,7 @@ export default {
       }
       this.loading = true;
       this.error = null;
+      this.errorType = 'error';
 
       try {
         const locale = this.isI18nReady ? this.$i18n.locale : 'en';
@@ -253,7 +257,7 @@ export default {
     },
 
     enforceColorScheme() {
-      const theme = this.getCssVarStrings();
+      const theme = this.getResolvedTheme();
       const textColor = theme.textColor;
       setTimeout(() => {
         const chartContainer = this.$refs.chart;
@@ -283,11 +287,14 @@ export default {
 
     updateChart() {
       if (!this.chartData || this.chartData.length === 0) {
+        // T1: an empty dataset is an EMPTY state, not an error — the siblings
+        // (UsageTrend/TopQueries) already render their no-data as type=empty.
         this.error = this.translate('analytics.status.noData', 'No data available');
+        this.errorType = 'empty';
         return;
       }
 
-      const theme = this.getCssVarStrings();
+      const theme = this.getResolvedTheme();
       const textColor = theme.textColor;
       const backgroundColor = theme.backgroundColor;
       const borderColor = theme.borderColor;
@@ -298,25 +305,18 @@ export default {
         const goodText = this.translate('analytics.ratings.good', 'Good');
         const excellentText = this.translate('analytics.ratings.excellent', 'Excellent');
 
-        if (theme.isDarkMode) {
-          return {
-            ranges: [
-              { from: 0, to: 69.99, color: '#7D3030', name: poorText },
-              { from: 70, to: 79.99, color: '#A36624', name: averageText },
-              { from: 80, to: 89.99, color: '#3D7242', name: goodText },
-              { from: 90, to: 100, color: '#1A9350', name: excellentText }
-            ]
-          };
-        } else {
-          return {
-            ranges: [
-              { from: 0, to: 69.99, color: '#EF4444', name: poorText },
-              { from: 70, to: 79.99, color: '#F59E0B', name: averageText },
-              { from: 80, to: 89.99, color: '#84CC16', name: goodText },
-              { from: 90, to: 100, color: '#22C55E', name: excellentText }
-            ]
-          };
-        }
+        // T1: the scale derives from the deployment's own status tokens
+        // (was two hardcoded 4-stop hex scales). Dark mode steps lightness down.
+        const scale = buildSatisfactionScale(theme.statusColors, { dimmed: theme.isDarkMode });
+        const pick = (i, fallback) => scale[i] || fallback;
+        return {
+          ranges: [
+            { from: 0, to: 69.99, color: pick(0, theme.statusColors.danger), name: poorText },
+            { from: 70, to: 79.99, color: pick(1, theme.statusColors.warning), name: averageText },
+            { from: 80, to: 89.99, color: pick(2, theme.statusColors.warning), name: goodText },
+            { from: 90, to: 100, color: pick(4, theme.statusColors.success), name: excellentText }
+          ]
+        };
       };
 
       this.chartOptions = {
@@ -481,24 +481,10 @@ export default {
   }
 }
 
-:deep([data-theme='dark']) .apexcharts-title-text,
-:deep([data-theme='dark']) .apexcharts-subtitle-text {
-  fill: var(--fg) !important;
-}
-
-:deep([data-theme='dark']) .apexcharts-yaxis-label text,
-:deep([data-theme='dark']) .apexcharts-xaxis-label text {
-  fill: var(--fg) !important;
-}
-
-:deep([data-theme='dark']) .apexcharts-legend-text {
-  color: var(--fg) !important;
-}
-
-:deep([data-theme='dark']) text,
-:deep([data-theme='dark']) tspan {
-  fill: var(--fg) !important;
-}
+/* T1: the old `:deep([data-theme='dark'])` overrides were DELETED — a leading
+ * [data-theme] inside :deep() can never match (html/body carry the attribute,
+ * not a node inside this component), so the block was dead; the global
+ * charts-apex-overrides.css already owns these selectors. */
 
 :deep(.apexcharts-tooltip, .apexcharts-tooltip *) {
   background-color: transparent !important;

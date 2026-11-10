@@ -142,6 +142,39 @@ contractual evidence — a fresh clone does not carry them.)
   since the CSR refactor (`f1d82e2461`, 2026-11-08) deleted
   `state.conversation.messages` — the helper reads a Vuex path the store
   no longer has — and nobody saw it because no job ran the suite.
+- **The chat helper read a Vuex path the store no longer has — fixed** —
+  the helper polled `store.state.conversation.messages`, a path the CSR
+  refactor (`f1d82e2461`, 2026-11-08) deleted when the messages moved
+  under `conversations[openId]`. The poll threw on every attempt
+  (`Cannot read properties of undefined`), so the three chat specs that
+  use it — all three IN the set the CI invokes — have been **red since
+  that refactor landed**, and nobody saw it because no job runs the
+  suite. It now reads the module's PUBLIC getter
+  (`conversation/openConversation`, the accessor the component itself
+  uses), which returns the open conversation with its messages and the
+  per-message streaming flag. The raw state shape was never a contract;
+  the getter is. **4/4 green** on the 1.37 cluster (they were 4/4 red).
+- **One spec depends on the spec that ran before it** — *"navigating
+  away never prompts and never loses the conversation"*
+  (`tests/e2e/chat-conversation.spec.js:524`) **fails when
+  `chatbot/conversation-history.spec.js` ran first in the same
+  Playwright run, and passes alone** — the reproduction is
+  deterministic (`npx playwright test
+  tests/e2e/chatbot/conversation-history.spec.js
+  tests/e2e/chat-conversation.spec.js` → 1 failed / 18 passed; the
+  chat-conversation file alone → 16/16). The page snapshot shows the
+  app back on the **welcome** screen after the `goBack()` ("Just Chat"
+  header, "Welcome! How can I assist you today?") — so the open
+  conversation was NOT restored. The server is empty afterwards and the
+  two contexts are isolated, so the shared state is neither the
+  conversations collection nor the browser storage. The spec claims a
+  product contract ("navigating away never loses the conversation"), and
+  a contract that only holds when nothing ran before it is not asserted.
+  **Not fixed here**: the candidate mechanisms (the router history
+  stack gaining an entry, or the store being reset on the chat view's
+  remount) are FRONTEND behaviour on `main`, and the answer to "does
+  the app restore the open conversation after a navigation?" is a
+  product question the chart branch has no business answering.
 - **The BASE_URL sweep was incomplete — the last four specs are fixed**
   — four specs still navigated to a literal `https://localhost/`
   (`epic1/a2`, `epic3/l1`, `l2`, `l3`), so on the k8s cluster they

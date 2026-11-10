@@ -5,13 +5,10 @@ const {
   sendMessage,
   waitForBotResponse,
   getLastBotMessage,
+  mockStreamError,
+  NAV_STATUS,
+  STREAM_ROUTE,
 } = require('../helpers/chatbot');
-const { runPostOnlyRouteHandler } = require('../helpers/route');
-
-// One spelling for the stream endpoint inside this file: the route and
-// the unroute that removes it must be the same string — Playwright drops
-// a handler only on an exact match — so both read the constant.
-const STREAM_ROUTE = '**/queries/stream**';
 
 // A failed turn ends with the answer card's error block, and that card
 // is the turn's completion signal: the app renders it only once the
@@ -47,29 +44,15 @@ test.describe('RAG error handling', () => {
   });
 
   test('displays error message when backend returns error', async () => {
-    // The backend answers the stream with a server error.
-    //
-    // Only the POST carries a stream: a CORS preflight (the cross-origin
-    // posture) must reach the network — answered with the error body it
-    // fails the handshake and the browser never delivers the POST. The
-    // mocked response carries the CORS header a cross-origin reader
-    // needs, or the browser drops it and the app renders a transport
-    // failure instead of the injected status.
-    const body = JSON.stringify({
+    // The backend answers the stream with a server error. The helper's
+    // fulfilment carries the CORS header a cross-origin reader needs —
+    // without it the browser drops the mocked answer and the app renders
+    // a transport failure instead of the injected status.
+    await mockStreamError(page, {
+      status: 503,
       error: 'SERVICE_UNAVAILABLE',
       message: 'RAG pipeline is temporarily unavailable',
     });
-    await page.route(
-      STREAM_ROUTE,
-      runPostOnlyRouteHandler(page, async (route) => {
-        await route.fulfill({
-          status: 503,
-          contentType: 'application/json',
-          headers: { 'access-control-allow-origin': '*' },
-          body,
-        });
-      })
-    );
 
     await sendMessage(page, 'First attempt will fail');
 
@@ -79,7 +62,7 @@ test.describe('RAG error handling', () => {
 
     // A 5xx means the deployment is down, not that it refused the
     // request: the navbar pill flips to its offline state.
-    await expect(page.locator('[data-testid="nav-status"]')).toHaveAttribute('data-status', 'offline');
+    await expect(page.locator(NAV_STATUS)).toHaveAttribute('data-status', 'offline');
 
     // Input should be usable again after error
     const textarea = page.locator('[data-testid="composer-field"]');

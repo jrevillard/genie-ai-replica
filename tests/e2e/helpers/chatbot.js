@@ -22,6 +22,15 @@ const { BASE_URL } = require('./base-url');
 // re-typing them.
 const MESSAGE_ROW = '[data-testid^="chat-message-"]';
 const BOT_BUBBLE = '[data-testid="chat-message-bot"] [data-testid="message-bubble-bot"]';
+const NAV_STATUS = '[data-testid="nav-status"]';
+
+// The stream endpoint's route pattern, stated ONCE. The app calls
+// `/queries/stream` under the API base; a copy of this glob in each
+// spec is a copy that can drift away from the endpoint the app calls
+// (#1271) — and a drifted interception silently lets the request
+// reach the real network, so the spec then asserts against a live
+// backend. Exported here so every spec intercepts the same endpoint.
+const STREAM_ROUTE = '**/queries/stream**';
 
 // The wait from the submit click to the dashboard: the identity provider
 // deciding to issue a code, then the app exchanging it. On an idle stack the
@@ -266,9 +275,37 @@ async function mockChatStream(page, chunks, metadata) {
   // every call site, so build the wire bytes once, not per interception.
   const body = sseBody(chunks, metadata);
   await page.route(
-    '**/queries/stream**',
+    STREAM_ROUTE,
     runPostOnlyRouteHandler(page, async (route) => {
-      await route.fulfill({ status: 200, contentType: 'text/event-stream', body });
+      await route.fulfill({
+        status: 200,
+        contentType: 'text/event-stream',
+        // The browser drops a cross-origin answer that carries no CORS
+        // header, so the app reads a transport failure instead of the
+        // mocked frames (#1587).
+        headers: { 'access-control-allow-origin': '*' },
+        body
+      });
+    })
+  );
+}
+
+/**
+ * Mock a FAILED stream: the app must render the error card for a non-2xx
+ * answer. Beside `mockChatStream` because it is the same contract — the
+ * same endpoint, the same POST-only interception, the same CORS header a
+ * cross-origin reader needs.
+ */
+async function mockStreamError(page, { status = 503, error = 'SERVICE_UNAVAILABLE', message = 'RAG pipeline is temporarily unavailable' } = {}) {
+  await page.route(
+    STREAM_ROUTE,
+    runPostOnlyRouteHandler(page, async (route) => {
+      await route.fulfill({
+        status,
+        contentType: 'application/json',
+        headers: { 'access-control-allow-origin': '*' },
+        body: JSON.stringify({ error, message })
+      });
     })
   );
 }
@@ -295,6 +332,7 @@ module.exports = {
   waitForBotMessage,
   sseBody,
   mockChatStream,
+  mockStreamError,
   ackFeedback,
   getMessages,
   getLastBotMessage,
@@ -304,5 +342,7 @@ module.exports = {
   TEST_PLAIN_USER,
   BASE_URL,
   MESSAGE_ROW,
-  BOT_BUBBLE
+  BOT_BUBBLE,
+  NAV_STATUS,
+  STREAM_ROUTE
 };

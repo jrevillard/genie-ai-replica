@@ -79,6 +79,11 @@ const adminDashboardService = {
   /**
    * Get security scan details
    * @returns {Promise} Security scan details
+   * REVIEW H2 (admin-ux): this used to CATCH and return the all-empty
+   * "clean bill" shape — which the dashboard renders as "No Vulnerabilities
+   * Found / Your system appears to be secure". A FAILED fetch must never
+   * read as a clean bill of health; it now propagates and the component
+   * renders an explicit error state.
    */
   async getSecurityDetails() {
     try {
@@ -86,13 +91,7 @@ const adminDashboardService = {
       return response.data;
     } catch (error) {
       console.error('[AdminDashboardService] Error fetching security scan details:', error.message, error.stack);
-      return {
-        lastScan: 'Never',
-        vulnerabilities: { critical: 0, medium: 0, low: 0, details: [] },
-        vulnerabilityDetails: { critical: [], medium: [], low: [] },
-        failedLoginDetails: [],
-        suspiciousDetails: []
-      };
+      throw error;
     }
   },
 

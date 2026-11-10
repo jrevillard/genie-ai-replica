@@ -11,7 +11,6 @@ module.exports = function makeVerifierMock() {
   const verifyToken = jest.fn();
   return {
     verifyToken,
-    getConfiguredIssuers: () => ['https://localhost/auth/realms/genie'],
-    TokenVerificationError: class TokenVerificationError extends Error {}
+    getConfiguredIssuers: () => ['https://localhost/auth/realms/genie']
   };
 };

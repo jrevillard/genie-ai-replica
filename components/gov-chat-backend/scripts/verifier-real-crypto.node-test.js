@@ -357,15 +357,16 @@ test('additional realms without a pin: a partner-realm token verifies against it
 });
 
 test('non-bare-integer KEYCLOAK_DISCOVERY_TIMEOUT_MS falls back to the 5000ms default', async () => {
-  // A bare-integer requirement with two real failure modes: parseInt('abc')
-  // is NaN (a NaN setTimeout fires immediately) and parseInt('10s') is 10
-  // (an instant-abort loop at 10 ms). The guard must fall back to the
-  // default budget for both — the DURATION is the discriminator, since the
-  // verifier wraps init failures and the budget is not on the public error.
-  // A hanging discovery leg is the only way to make the abort (not a stub
-  // refusal) settle the fetch.
+  // A bare-integer requirement with three real failure modes: parseInt('abc')
+  // is NaN (a NaN setTimeout fires immediately), parseInt('10s') is 10 (an
+  // instant-abort loop at 10 ms), and anything above 2^31-1 ms clamps to 1 ms
+  // in Node's timers ('2147483648' — the same instant abort). The guard must
+  // fall back to the default budget for all of them — the DURATION is the
+  // discriminator, since the verifier wraps init failures and the budget is
+  // not on the public error. A hanging discovery leg is the only way to make
+  // the abort (not a stub refusal) settle the fetch.
   const token = await sign(baseClaims(DISCOVERY_ISSUER));
-  for (const badValue of ['abc', '10s']) {
+  for (const badValue of ['abc', '10s', '2147483648']) {
     const svc = loadVerifier({
       KEYCLOAK_DISCOVERY_TIMEOUT_MS: badValue,
       KEYCLOAK_URL: 'http://keycloak-hang:8080'

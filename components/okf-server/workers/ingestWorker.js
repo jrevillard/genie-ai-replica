@@ -799,10 +799,15 @@ async function waitForTerminal(db, repoId, conceptId, windowMs) {
 // ZIP's file_id, with the concept_id embedded in the message — the UI's
 // bundle-zip panel then shows the per-concept ingest progress (Started /
 // Ingested / Ingestion Error).
-const _bundleFileCache = new Map(); // repo_id -> bundle file_id (one bundle per repo)
+// The bundle id is resolved FRESH on every call — one cheap doc-repo GET (the
+// lookup dataprep itself does per log write). No process-lifetime cache: a
+// cached "first answer" outlives re-imports, and keeping it coherent needs an
+// invalidation protocol every bundle-store site must remember (the stale doc
+// then receives the drain's verdicts and never leaves 'Pending' — the #1709
+// symptom). Resolving per call leaves nothing to invalidate, so a new bundle
+// store site cannot reintroduce the bug by forgetting a call.
+
 async function getBundleFileId(repoId) {
-  const cached = _bundleFileCache.get(repoId);
-  if (cached) return cached;
   // The bundle zip is the only doc-repo artifact with is_bundle=true for the repo.
   // Doc-repo returns { data: [...], pagination: {...} } (no `items`/`files` key).
   const resp = await authedAxios.get(
@@ -814,7 +819,6 @@ async function getBundleFileId(repoId) {
   if (!bundle || !bundle.file_id) {
     throw new Error(`Bundle zip not found in doc-repo for repo_id=${repoId}`);
   }
-  _bundleFileCache.set(repoId, bundle.file_id);
   return bundle.file_id;
 }
 

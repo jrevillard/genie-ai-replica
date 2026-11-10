@@ -400,6 +400,27 @@ describe('ingestService.ingestRepoConcepts (ADR-021 4a–4f)', () => {
     expect(authedAxios.post.mock.calls[0][2]).toEqual({ timeout: 30000 });
   });
 
+  test('the bundle-zip doc lands BEFORE the first concept becomes claimable (issue #1709)', async () => {
+    const AdmZip = require('adm-zip');
+    const zip = new AdmZip();
+    zip.addFile('c.md', Buffer.from('# C'));
+    await ingestService.ingestRepoConcepts(REPO, { zip: zip.toBuffer().toString('base64') }, ACTOR);
+
+    const bundleCall = authedAxios.post.mock.calls.findIndex((c) => String(c[0]).includes('ingest-bundle'));
+    expect(bundleCall).toBeGreaterThanOrEqual(0);
+
+    // A concept becomes claimable when its meta row turns 'parsed' — the
+    // ingest worker drains it from that moment. dataprep's bundle-log mirror
+    // resolves the repo's bundle by (repo_id, is_bundle=true) and CACHES the
+    // first answer it gets, so a drain that starts before the bundle doc
+    // exists resolves the PREVIOUS import's bundle and mirrors this run's
+    // stage rows into it — the admin Ingestion Log of the current bundle
+    // stays empty. The bundle doc must therefore land first.
+    const bundleOrder = authedAxios.post.mock.invocationCallOrder[bundleCall];
+    const firstClaimableOrder = conceptMeta.upsertConceptMeta.mock.invocationCallOrder[0];
+    expect(bundleOrder).toBeLessThan(firstClaimableOrder);
+  });
+
   test('the user-zip import declares source=user-import — it must never hit the doc-repo reuse guard (round 28)', async () => {
     const AdmZip = require('adm-zip');
     const zip = new AdmZip();

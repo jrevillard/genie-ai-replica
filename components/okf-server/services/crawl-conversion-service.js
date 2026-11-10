@@ -483,6 +483,13 @@ async function runConversion(job) {
     bytes_total: null,
     pages_done: 0,
     batches_done: 0,
+    // The record is SHARED with the zip import, which carries
+    // `concepts_total` for as long as the MERGE keeps it — a repo that was
+    // zip-imported once would otherwise keep that marker through every later
+    // crawl, and the mint's zip-import-in-flight check (version-service)
+    // would misread this crawl as one (#1709 review round 2). Nulling it
+    // here hands the record over to the crawl cleanly.
+    concepts_total: null,
     error: null,
     started_at: startedAt,
     finished_at: null

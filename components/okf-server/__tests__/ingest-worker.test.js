@@ -1284,6 +1284,27 @@ describe('ingestWorker._reapStuckParsed (2-9-5 atomicity — claim-stamp reaping
   });
 });
 
+describe("the bundle-id resolution (issue #1709: the repo's CURRENT bundle doc)", () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+  });
+
+  test('resolves FRESH on every call — a re-imported bundle is picked up immediately', async () => {
+    // No process-lifetime cache: a cached "first answer" outlives re-imports
+    // and keeps pointing the mirror + state machine at the FIRST bundle the
+    // repo ever had (#1709). The next read after a re-store MUST see the new
+    // doc — nothing to invalidate, so a new bundle-store site cannot
+    // reintroduce the bug by forgetting a call.
+    authedAxios.get.mockResolvedValue({ data: { data: [{ file_id: 'bundle-1' }] } });
+    expect(await worker.getBundleFileId(REPO)).toBe('bundle-1');
+    // A second bundle was stored for the repo — the resolution answers
+    // differently right away.
+    authedAxios.get.mockResolvedValue({ data: { data: [{ file_id: 'bundle-2' }] } });
+    expect(await worker.getBundleFileId(REPO)).toBe('bundle-2');
+    expect(authedAxios.get).toHaveBeenCalledTimes(2);
+  });
+});
+
 describe('ingestWorker.start (bootstrap guard)', () => {
   afterEach(() => worker.stop());
 

@@ -292,6 +292,71 @@ describe('fileService', () => {
       expect(query).toContain('file.language == @language');
       expect(query).toContain('CONTAINS(LOWER(file.file_name)');
     });
+
+    // The OKF ingest worker resolves the repo's CURRENT bundle with
+    // `GET /api/files?repo_id=..&is_bundle=true&limit=1` — one row, so the
+    // ORDER of this query is load-bearing: the newest bundle must come
+    // first, or the worker drives the state machine and the ingestion-log
+    // mirror of the FIRST bundle the repo ever had. Pinned here, in the
+    // component that owns the query.
+    it('sorts by file_id DESC so the newest bundle comes first (is_bundle + limit=1 lookup)', async () => {
+      const mockCursor = { all: jest.fn().mockResolvedValue([]) };
+      const mockCountCursor = { next: jest.fn().mockResolvedValue(0) };
+      const mockDb = {
+        query: jest.fn().mockResolvedValueOnce(mockCursor).mockResolvedValueOnce(mockCountCursor)
+      };
+
+      fileService.getDb = jest.fn().mockResolvedValue(mockDb);
+
+      await fileService.getFiles({ page: 1, limit: 1, repo_id: 'repo-1', is_bundle: true });
+
+      const query = mockDb.query.mock.calls[0][0];
+      expect(query).toContain('file.is_bundle == true');
+      expect(query).toContain('file.repo_id == @repo_id');
+      expect(query).toContain('SORT file.file_id DESC');
+      expect(query).toContain('LIMIT 0, 1');
+      // The filter's VALUE must be bound: an unbound @repo_id silently
+      // matches nothing (or everything, depending on the driver).
+      expect(mockDb.query.mock.calls[0][1]).toMatchObject({ repo_id: 'repo-1' });
+    });
+
+    // The symmetric branch: `is_bundle=false` must EXCLUDE the bundle zips
+    // (and the legacy docs without the field) — the admin Documents list
+    // depends on it, and a bundle rendered there carries a Delete affordance
+    // the server refuses.
+    it('excludes bundle zips (and legacy docs without the field) when is_bundle is false', async () => {
+      const mockCursor = { all: jest.fn().mockResolvedValue([]) };
+      const mockCountCursor = { next: jest.fn().mockResolvedValue(0) };
+      const mockDb = {
+        query: jest.fn().mockResolvedValueOnce(mockCursor).mockResolvedValueOnce(mockCountCursor)
+      };
+
+      fileService.getDb = jest.fn().mockResolvedValue(mockDb);
+
+      await fileService.getFiles({ page: 1, limit: 10, is_bundle: false });
+
+      const query = mockDb.query.mock.calls[0][0];
+      expect(query).toContain('(file.is_bundle == false OR file.is_bundle == null)');
+    });
+
+    // The default list (no is_bundle parameter) must stay BUNDLE-INCLUSIVE:
+    // absent is not false. The Studio's source dialog relies on it (it
+    // strips the bundles client-side), so the strict `is_bundle === false`
+    // comparison is load-bearing — a weakened predicate (!is_bundle)
+    // silently drops the bundles from the default list.
+    it('the DEFAULT list stays bundle-inclusive (absent is_bundle is not false)', async () => {
+      const mockCursor = { all: jest.fn().mockResolvedValue([]) };
+      const mockCountCursor = { next: jest.fn().mockResolvedValue(0) };
+      const mockDb = {
+        query: jest.fn().mockResolvedValueOnce(mockCursor).mockResolvedValueOnce(mockCountCursor)
+      };
+
+      fileService.getDb = jest.fn().mockResolvedValue(mockDb);
+
+      await fileService.getFiles({ page: 1, limit: 10 });
+
+      expect(mockDb.query.mock.calls[0][0]).not.toContain('file.is_bundle');
+    });
   });
 
   // Story 3.10 T1 (D1): every file knows its origin — the wizard's source

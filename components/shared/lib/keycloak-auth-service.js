@@ -29,10 +29,23 @@ const JWKS_CACHE_TTL = 300000; // 5 minutes JWKS cache TTL (NFR10)
 // Floor between FORCED key-set refreshes. A forced refresh re-fetches the
 // key set from the auth service, and reaching one takes nothing more than
 // a token naming a key id the realm does not publish — an unauthenticated
-// caller could therefore make the service hammer that endpoint. The floor
-// bounds the rate; it does NOT delay rotation recovery, because the FIRST
-// request after a rotation refreshes and the ones that follow already find
-// the new key cached.
+// caller could therefore make the service hammer that endpoint.
+//
+// The floor is 1 s, per issuer (every JWKS cache carries its own). What it
+// buys and what it costs are both deliberate:
+//
+//   - It bounds the fetch rate at one per second per issuer. Before the
+//     floor, a forced refresh threw jose's own 30 s cooldown away (a fresh
+//     remote key set starts cold — `jwksTimestamp` unset), so the realm's
+//     certificate endpoint was hit once per junk token.
+//
+//   - Inside the window, a rotation is picked up by the NEXT refresh, not
+//     by the one the rotated token triggers: a token naming a key id the
+//     realm has just published is rejected ONCE (401) when an unrelated
+//     unknown-kid token consumed the floor in the preceding second. That
+//     window is the price of the bound — jose's own cooldown has the very
+//     same property, with a 30 s window instead of 1 s, and the realm's
+//     rotation recovery is no faster than the refresh that observes it.
 const FORCED_REFRESH_MIN_INTERVAL_MS = 1000;
 
 /**
@@ -48,6 +61,15 @@ const FORCED_REFRESH_MIN_INTERVAL_MS = 1000;
  * @param {Object|undefined} jwks - The published key set (jose's `jwks()`)
  * @returns {boolean} True when the set holds a usable key, or when the set
  *   is unknown (no information → never claim an outage on a guess)
+ *
+ * This filter is deliberately LOOSER than jose's own candidate filter: it
+ * ignores jose's `ext` check, its key_ops uniqueness/type strictness and the
+ * `kid` match (a key set holding a usable key is usable whatever the token
+ * names). The divergence is one-way — this filter can only under-report an
+ * outage (a bad token where jose would say "no usable key"), never invent
+ * one — so a healthy key set is never misread as a broken realm. Tightening
+ * it toward jose would flip that direction and turn every valid token into a
+ * 503.
  */
 function keySetHasUsableKey(jwks) {
   if (!jwks || !Array.isArray(jwks.keys)) return true;
@@ -178,7 +200,8 @@ function createJwksCache(jwksUri, ttlMs = JWKS_CACHE_TTL) {
    * hammer that endpoint.
    *
    * @returns {boolean} True when the refresh was scheduled, false when the
-   *   floor held it back (the caller then skips the retry).
+   *   floor held it back (the caller then skips the retry — a rotation that
+   *   lands inside the window is picked up by the next refresh).
    */
   jwksFn.forceRefresh = function () {
     const now = Date.now();
@@ -624,7 +647,8 @@ const keycloakAuthService = {
       // is fast-failed instead of refreshed.
       const rotationCandidate =
         err.name === 'JWKSNoMatchingKey' && typeof unverifiedExp === 'number' && unverifiedExp > now;
-      if (rotationCandidate && jwks.forceRefresh()) {
+      const refreshScheduled = rotationCandidate ? jwks.forceRefresh() : false;
+      if (refreshScheduled) {
         try {
           const result = toResult(await verifyWithJwt());
 
@@ -644,7 +668,18 @@ const keycloakAuthService = {
       // distinct cause (tampered signature, unknown key id, ambiguous key
       // set, wrong algorithm) reaches the operator's log as the same
       // 'Token verification failed'.
-      logger.warn(`[KeycloakAuth] Token verification failed (${err.name || 'Error'}): ${err.message}`);
+      if (rotationCandidate && !refreshScheduled) {
+        // The refresh floor held the key-set refresh back. The realm may
+        // ALREADY publish the key this token names — a rotation that landed
+        // inside the window is observed by the next refresh, not by this
+        // one. Saying so keeps a burst of 401s around a key rotation
+        // distinguishable from a burst of junk tokens.
+        logger.warn(
+          `[KeycloakAuth] Token verification failed (${err.name}): key-set refresh floored — rotation recovery deferred to the next refresh`
+        );
+      } else {
+        logger.warn(`[KeycloakAuth] Token verification failed (${err.name || 'Error'}): ${err.message}`);
+      }
 
       throw new TokenVerificationError('TOKEN_INVALID', 'Token verification failed');
     }

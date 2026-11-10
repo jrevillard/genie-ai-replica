@@ -44,6 +44,20 @@ const { publicKey: partnerPublicKey, privateKey: partnerPrivateKey } = generateK
   publicKeyEncoding: { type: 'spki', format: 'jwk' },
   privateKeyEncoding: { type: 'pkcs8', format: 'jwk' }
 });
+// A THIRD pair stands for the realm's key AFTER a rotation: the realm
+// publishes it under a new key id while the old ones stay published.
+const { publicKey: rotatedPublicKey, privateKey: rotatedPrivateKey } = generateKeyPairSync('rsa', {
+  modulusLength: 2048,
+  publicKeyEncoding: { type: 'spki', format: 'jwk' },
+  privateKeyEncoding: { type: 'pkcs8', format: 'jwk' }
+});
+// An EC pair stands for a realm that publishes an EC signing key only. The
+// verifier accepts RS256 only, so such a key set holds nothing usable.
+const { publicKey: ecPublicKey } = generateKeyPairSync('ec', {
+  namedCurve: 'P-256',
+  publicKeyEncoding: { type: 'spki', format: 'jwk' },
+  privateKeyEncoding: { type: 'pkcs8', format: 'jwk' }
+});
 const JWKS = {
   keys: [
     { ...publicKey, kid: 'test-key', alg: 'RS256', use: 'sig' },
@@ -52,6 +66,17 @@ const JWKS = {
     // the token-side ambiguity the verifier must not report as an outage.
     { ...partnerPublicKey, kid: 'second-key', alg: 'RS256', use: 'sig' }
   ]
+};
+// The key set after a rotation: the same two keys plus the new one.
+const ROTATED_JWKS = {
+  keys: [...JWKS.keys, { ...rotatedPublicKey, kid: 'rotated-key', alg: 'RS256', use: 'sig' }]
+};
+// A realm publishing an EC signing key only — nothing the verifier (RS256
+// only) could ever use.
+const EC_ONLY_JWKS = { keys: [{ ...ecPublicKey, kid: 'ec-key', alg: 'ES256', use: 'sig' }] };
+// An RS256 key that forbids verification: usable to sign, never to verify.
+const NO_VERIFY_OP_JWKS = {
+  keys: [{ ...publicKey, kid: 'test-key', alg: 'RS256', use: 'sig', key_ops: ['sign'] }]
 };
 const PARTNER_JWKS_URI = `${KEYCLOAK_URL}/realms/partner/protocol/openid-connect/certs`;
 const PARTNER_JWKS = { keys: [{ ...partnerPublicKey, kid: 'partner-key', alg: 'RS256', use: 'sig' }] };
@@ -67,11 +92,18 @@ const fetchCalls = [];
 // auth service goes down, and the next key-set fetch must be classified as an
 // outage rather than as a bad token).
 let jwksDown = false;
-// The realm publishes an EMPTY key set: no signing key the verifier could
-// ever use. jose raises the same "no matching key" error for that as for a
-// token naming an unknown key id — the published key set is what tells them
-// apart.
-let jwksEmpty = false;
+// The shape of the key set the realm publishes. jose raises the same "no
+// matching key" error for every one of these as for a token naming an
+// unknown key id — the published key set is what tells them apart:
+//   'normal'       — two RS256 signing keys (the healthy realm)
+//   'empty'        — no key at all: nothing the verifier could ever use
+//   'ec-only'      — an EC signing key only: the verifier accepts RS256
+//   'no-verify-op' — an RS256 key whose key_ops forbids verification
+let jwksMode = 'normal';
+// The realm ROTATES: it starts publishing a third key under a new key id,
+// the way it does after a key rotation. The rotation candidate's refresh
+// must observe it.
+let jwksRotated = false;
 global.fetch = async (url, opts) => {
   const u = String(url);
   fetchCalls.push(u);
@@ -124,15 +156,17 @@ global.fetch = async (url, opts) => {
     return { ok: false, status: 503, statusText: 'Service Unavailable', json: async () => ({}) };
   }
   if (u === JWKS_URI) {
-    if (jwksEmpty) {
-      return {
-        ok: true,
-        status: 200,
-        json: async () => ({ keys: [] }),
-        headers: new Map([['cache-control', 'no-store']])
-      };
-    }
-    return { ok: true, status: 200, json: async () => JWKS, headers: new Map([['cache-control', 'no-store']]) };
+    const doc =
+      jwksMode === 'empty'
+        ? { keys: [] }
+        : jwksMode === 'ec-only'
+          ? EC_ONLY_JWKS
+          : jwksMode === 'no-verify-op'
+            ? NO_VERIFY_OP_JWKS
+            : jwksRotated
+              ? ROTATED_JWKS
+              : JWKS;
+    return { ok: true, status: 200, json: async () => doc, headers: new Map([['cache-control', 'no-store']]) };
   }
   if (u === PARTNER_JWKS_URI) {
     return { ok: true, status: 200, json: async () => PARTNER_JWKS, headers: new Map([['cache-control', 'no-store']]) };
@@ -145,7 +179,8 @@ global.fetch = async (url, opts) => {
 function loadVerifier(env) {
   fetchCalls.length = 0; // per-topology recorder — no earlier test's traffic
   jwksDown = false; // per-topology outage switch
-  jwksEmpty = false; // per-topology empty-key-set switch
+  jwksMode = 'normal'; // per-topology key-set shape
+  jwksRotated = false; // per-topology rotation switch
   delete require.cache[require.resolve('../../shared/lib/keycloak-auth-service.js')];
   for (const key of [
     'KEYCLOAK_URL',
@@ -180,8 +215,8 @@ function baseClaims(iss, extra = {}) {
 }
 
 const sign = async (claims, opts = {}) => {
-  const key = opts.partner ? partnerPrivateKey : privateKey;
-  const kid = opts.partner ? 'partner-key' : 'test-key';
+  const key = opts.rotated ? rotatedPrivateKey : opts.partner ? partnerPrivateKey : privateKey;
+  const kid = opts.rotated ? 'rotated-key' : opts.partner ? 'partner-key' : 'test-key';
   return new SignJWT(claims).setProtectedHeader({ alg: 'RS256', kid }).sign(key);
 };
 
@@ -536,7 +571,7 @@ test('an unknown-kid token (rotation candidate) refreshes the key set — the pr
   assert.ok(jwksFetches() > before, 'the rotation candidate did not refresh the key set');
 });
 
-test('a burst of unknown-kid tokens refreshes the key set at most once per interval', async () => {
+test('a burst of unknown-kid tokens does not refresh the key set once per token', async () => {
   // The rotation candidate's refresh re-fetches the key set, and reaching
   // one takes nothing more than a token naming a key id the realm does not
   // publish — so the refresh rate is floored: a burst of such tokens must
@@ -554,7 +589,12 @@ test('a burst of unknown-kid tokens refreshes the key set at most once per inter
       (err) => err.code === 'TOKEN_INVALID'
     );
   }
-  assert.equal(jwksFetches(), before + 1, 'the burst refreshed the key set more than once');
+  // The floor allows ONE refresh per interval. The bound is 2 rather than 1
+  // because the assertion is wall-clock dependent (a runner that stalls
+  // mid-burst spans two intervals): the behaviour this guards against — the
+  // floor removed — refreshes once per token, which is 5.
+  const refreshes = jwksFetches() - before;
+  assert.ok(refreshes >= 1 && refreshes <= 2, `the burst refreshed the key set ${refreshes} times`);
 });
 
 test('a realm that publishes no usable signing key is an outage, not a bad token', async () => {
@@ -563,12 +603,68 @@ test('a realm that publishes no usable signing key is an outage, not a bad token
   // apart: no usable key at all is the realm's own broken state, so the
   // failure is an outage — a 401 there would sign every user out.
   const svc = loadVerifier();
-  jwksEmpty = true;
+  jwksMode = 'empty';
   const token = await sign(baseClaims(DISCOVERY_ISSUER));
   await assert.rejects(
     () => svc.verifyToken(token),
     (err) => err.code === 'AUTH_SERVICE_UNAVAILABLE'
   );
+});
+
+test('a realm that publishes only an EC signing key is an outage, not a bad token', async () => {
+  // The verifier accepts RS256 only. A realm whose published key set holds
+  // an EC key therefore holds NOTHING usable — the same broken state as an
+  // empty key set, reached by a different route, and the same answer: an
+  // outage (503), never a bad token (401).
+  const svc = loadVerifier();
+  jwksMode = 'ec-only';
+  const token = await sign(baseClaims(DISCOVERY_ISSUER));
+  await assert.rejects(
+    () => svc.verifyToken(token),
+    (err) => err.code === 'AUTH_SERVICE_UNAVAILABLE'
+  );
+});
+
+test('a realm whose signing key forbids verification is an outage, not a bad token', async () => {
+  // An RS256 key carrying key_ops ['sign'] is a key the realm cannot verify
+  // with. jose finds no candidate for it — the same "no matching key" as an
+  // empty set — and the published key set says why: no usable key.
+  const svc = loadVerifier();
+  jwksMode = 'no-verify-op';
+  const token = await sign(baseClaims(DISCOVERY_ISSUER));
+  await assert.rejects(
+    () => svc.verifyToken(token),
+    (err) => err.code === 'AUTH_SERVICE_UNAVAILABLE'
+  );
+});
+
+test('a key published inside the refresh-floor window is picked up by the next refresh', async () => {
+  // The refresh floor bounds the refresh rate at one per second per issuer.
+  // A rotation that lands INSIDE that window is observed by the NEXT
+  // refresh, not by the one the rotated token triggers: the rotated token
+  // is rejected once, and the same token verifies once the window elapses.
+  // This is the documented cost of the bound — the token library's own
+  // cooldown has the same property, with a 30 s window instead of 1 s.
+  const svc = loadVerifier();
+  const warm = await sign(baseClaims(DISCOVERY_ISSUER));
+  await svc.verifyToken(warm); // warm the cache
+  // An unrelated unknown-kid token consumes the refresh floor.
+  const junk = await sign(baseClaims(DISCOVERY_ISSUER), { partner: true });
+  await assert.rejects(
+    () => svc.verifyToken(junk),
+    (err) => err.code === 'TOKEN_INVALID'
+  );
+  // The realm rotates while the floor is held: it publishes the new key id.
+  jwksRotated = true;
+  const rotated = await sign(baseClaims(DISCOVERY_ISSUER), { rotated: true });
+  await assert.rejects(
+    () => svc.verifyToken(rotated),
+    (err) => err.code === 'TOKEN_INVALID'
+  );
+  // Once the window elapses, the next refresh observes the rotation.
+  await new Promise((resolve) => setTimeout(resolve, 1100));
+  const payload = await svc.verifyToken(rotated);
+  assert.equal(payload.sub, 'user-1');
 });
 
 test('non-bare-integer KEYCLOAK_DISCOVERY_TIMEOUT_MS falls back to the 5000ms default', async () => {

@@ -579,6 +579,63 @@ describe('keycloakAuthService', () => {
       expect(mockJwtVerify).toHaveBeenCalledTimes(1);
     });
 
+    it('logs the cause of a rejection, and neither the token nor key material', async () => {
+      // Without the cause, every distinct failure (tampered signature,
+      // unknown key id, ambiguous key set, wrong algorithm) reaches the
+      // operator's log as the same 'Token verification failed'. The line
+      // must name the cause — and carry neither the token nor any key
+      // material. The service logs through the REAL shared/lib winston
+      // logger (the virtual '../shared-lib' mock covers only the barrel),
+      // so spy there.
+      const loggerModule = require('../../shared/lib/logger');
+      const warnSpy = jest.spyOn(loggerModule.logger, 'warn').mockImplementation(() => {});
+      mockJwtVerify.mockRejectedValue(unknownKidError());
+      // exp: undefined → the encoded payload carries NO exp claim, so the
+      // token is not a rotation candidate and the rejection is the plain one.
+      const token = generateMockJwtString({ exp: undefined });
+
+      try {
+        await expect(keycloakAuthService.verifyToken(token)).rejects.toMatchObject({
+          code: 'TOKEN_INVALID'
+        });
+
+        const logged = warnSpy.mock.calls.map(([msg]) => String(msg)).join('\n');
+        expect(logged).toContain('JWKSNoMatchingKey');
+        expect(logged).not.toContain(token);
+        expect(logged).not.toContain('BEGIN');
+      } finally {
+        warnSpy.mockRestore();
+      }
+    });
+
+    it('names the refresh floor in the log when it held the refresh back', async () => {
+      // The floor is why a rotation that lands inside the window is picked
+      // up by the NEXT refresh. Without that in the log, a burst of 401s
+      // around a key rotation is indistinguishable from a burst of junk
+      // tokens.
+      const loggerModule = require('../../shared/lib/logger');
+      const warnSpy = jest.spyOn(loggerModule.logger, 'warn').mockImplementation(() => {});
+      mockJwtVerify.mockRejectedValue(unknownKidError());
+      const token = generateMockJwtString(mockJwtPayload);
+
+      try {
+        // The first unknown-kid token consumes the refresh floor (and retries).
+        await expect(keycloakAuthService.verifyToken(token)).rejects.toMatchObject({
+          code: 'TOKEN_INVALID'
+        });
+        // The second one lands inside the floor window.
+        await expect(keycloakAuthService.verifyToken(token)).rejects.toMatchObject({
+          code: 'TOKEN_INVALID'
+        });
+
+        const logged = warnSpy.mock.calls.map(([msg]) => String(msg)).join('\n');
+        expect(logged).toContain('key-set refresh floored');
+        expect(logged).not.toContain(token);
+      } finally {
+        warnSpy.mockRestore();
+      }
+    });
+
     it('should reject with TOKEN_INVALID when retry also fails', async () => {
       mockJwtVerify
         .mockRejectedValueOnce(unknownKidError()) // First call: unknown kid

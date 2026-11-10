@@ -99,6 +99,26 @@ describe('the e2e suite intercepts the stream endpoint through the shared consta
     expect(offenders).toEqual([]);
   });
 
+  test('the slash-less needle is dropped when the path IS the slash alone', () => {
+    // An empty needle matches EVERY file, and a gate that flags the whole
+    // tree is no gate. The endpoint is read from the source, so the
+    // degenerate case is reachable by a rename — and the guard is what
+    // keeps it from reporting files that carry no path at all.
+    const tree = fs.mkdtempSync(path.join(os.tmpdir(), 'stream-route-gate-'));
+    try {
+      fs.mkdirSync(path.join(tree, 'helpers'), { recursive: true });
+      fs.writeFileSync(path.join(tree, 'helpers', 'chatbot.js'), "const STREAM_PATH = '/';\n");
+      fs.writeFileSync(path.join(tree, 'with-path.js'), "await page.goto('/somewhere');\n");
+      fs.writeFileSync(path.join(tree, 'without-path.js'), 'const x = 1;\n');
+      const strays = filesCarrying(tree, '/').map((f) => path.basename(f));
+      expect(strays).toContain('with-path.js');
+      // The slash-free file is NOT an offender: the empty needle is gone.
+      expect(strays).not.toContain('without-path.js');
+    } finally {
+      fs.rmSync(tree, { recursive: true, force: true });
+    }
+  });
+
   test('a drifted copy is an offender', () => {
     // Mutation check, on a THROWAWAY tree in the system temp dir — never
     // inside the tracked tests/e2e tree, where a worker killed mid-test

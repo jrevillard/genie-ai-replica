@@ -146,6 +146,18 @@ test.describe('runRouteHandler', () => {
     ).rejects.toThrow('route.fulfill: context disposed by the mock');
   });
 
+  test('tolerates the race wording in any casing — the branch is case-insensitive', async () => {
+    // The wording branch is case-insensitive: a Playwright casing change
+    // must not turn the race into a loud teardown failure — the header
+    // promises the race is tolerated, whatever the library's spelling.
+    const { page } = pageState({ contextClosed: true });
+    await expect(
+      runOnce(page, async () => {
+        throw new Error('route.fetch: request context disposed.');
+      })
+    ).resolves.toBeUndefined();
+  });
+
   test('rethrows a mock defect that carries the disposed wording — the target is alive', async () => {
     // The same two halves, on the pipeline wording: the wording alone is
     // not the verdict. A defect on a live target must surface, whatever

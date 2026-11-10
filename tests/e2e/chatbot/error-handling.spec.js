@@ -83,8 +83,10 @@ test.describe('RAG error handling', () => {
     // (the bubble's text, then the streaming flag), so 10 s is 20 s in
     // the worst case — and the two ceilings are never both spent: the
     // error card's 30 s wait above aborts the test there if it expires.
-    // A retry that never answers fails on that wait, with the helper's
-    // own message — not on the project's generic 60 s timeout.
+    // A retry that HANGS fails on that wait, with the helper's own
+    // message; a retry that ERRORS renders no answer bubble and fails on
+    // the assertion below. Neither reaches the project's generic 60 s
+    // timeout.
     await waitForBotResponse(page, { timeout: 10000 });
     // The ANSWER, not merely a non-empty bubble: the welcome turn is a
     // bot bubble too, so "not empty" would pass on a retry that never

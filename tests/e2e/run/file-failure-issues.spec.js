@@ -70,6 +70,13 @@ test.describe('a match must be DEDICATED to the spec file', () => {
     const issue = { title: 'local e2e run failures', description: '- spec file: `tests/e2e/other.spec.js`' };
     expect(findTrackedIssue(FILE, [issue])).toBe(null);
   });
+
+  test('an issue without a title does not take the filing loop down', () => {
+    // The tracker's issues always carry a title; a malformed one must not
+    // throw out of the per-file error handling (an undefined title is a
+    // TypeError in the path matcher, not a verdict).
+    expect(findTrackedIssue(FILE, [{ description: '' }])).toBe(null);
+  });
 });
 
 test.describe('the tracker refusal names the tracker, not the command', () => {

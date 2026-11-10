@@ -69,12 +69,20 @@ function remedy(what) {
     // would file one issue per spec file for a RUNNER-CONFIG cause — the
     // flood this pre-flight exists to stop.
     if (!status || status >= 400) {
-      const cause =
-        status >= 500
-          ? 'the deployment is down'
-          : "the address is not the app's edge, or the venue refuses an anonymous request to " +
-            'it (a broken realm answers 4xx at the edge too)';
-      failure = `the venue answered HTTP ${status} at ${BASE_URL} — ${cause}.`;
+      // Three findings, not one: NO response at all, a 5xx (the deployment
+      // is down), and a 4xx (the edge refused — wrong address, or a realm
+      // that refuses an anonymous request: a broken realm answers 4xx at
+      // the edge too).
+      if (status === 0) {
+        failure = `no response arrived at ${BASE_URL} — the venue did not answer at all.`;
+      } else {
+        const cause =
+          status >= 500
+            ? 'the deployment is down'
+            : "the address is not the app's edge, or the venue refuses an anonymous request to " +
+              'it (a broken realm answers 4xx at the edge too)';
+        failure = `the venue answered HTTP ${status} at ${BASE_URL} — ${cause}.`;
+      }
     } else {
       process.stdout.write(`pre-flight: the browser reached the venue (HTTP ${status}).\n`);
     }

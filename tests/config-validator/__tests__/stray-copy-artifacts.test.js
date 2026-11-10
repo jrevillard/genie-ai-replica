@@ -1,20 +1,13 @@
 'use strict';
 
-// #516 — a stray copy of a tracked file must never sit in the repository.
-//
-// The file that opened the issue
-// ("genie-ai-overlay/chatqna/Dockerfile-chatqna_genie-ai - Copy") was a
-// duplicate of a live Dockerfile: a second, silently drifting copy of a file
-// the build already had. Nothing failed when it drifted — it simply sat
-// there, and the next reader could have edited the wrong one.
-//
-// Two layers keep it out:
-//   - the .gitignore rules refuse to stage such a file at all, and
-//   - this gate fails the pipeline when one is tracked anyway (force-added, or
-//     added before the rules existed).
-// The layers must recognise the same set: a shape only the ignore rules know
-// is silently un-committable; a shape only this gate knows can slip in with
-// `git add -f`.
+// A stray copy of a tracked file must never sit in the repository: a
+// duplicate drifts silently from the file it duplicates, and the next reader
+// can edit the wrong one. Two layers keep it out, and they must recognise
+// the same set — a shape only the ignore rules know is silently
+// un-committable, a shape only this gate knows can slip in with `git add -f`:
+//   - the .gitignore rules refuse to stage a copy artifact at all, and
+//   - this gate fails the pipeline when one is tracked anyway (force-added,
+//     or added before the rules existed).
 //
 // The markers are the ones the file managers and editors leave behind:
 //   Windows / VS Code : "name - Copy", "name - Copy (2)", "name - Copy.ext"
@@ -34,50 +27,47 @@ const { parseGitlabCiJobChanges } = require('../validators/parse-compose');
 
 const ROOT = path.resolve(__dirname, '../../..');
 
+// Every tail a duplicate can carry after the marker. The parity tests run
+// both layers over the whole SHAPES × TAILS matrix, so a rule or a detector
+// alternative that misses one cell fails here instead of eroding on a tail
+// no hand-picked sample covered.
+const TAILS = ['', '.txt', '.tar.gz', ' 2', ' 2.txt', ' (2)', ' (2).txt'];
+
 // One entry per marker convention: the marker that ends the name (or a
 // component of the path — a duplicated directory counts), the glob that makes
-// the pipeline run when such a path changes, and the samples both layers must
-// recognise.
+// the pipeline run when such a path changes, and how a sample name is built
+// from a tail.
 const SHAPES = [
   {
     marker: ' - Copy',
     glob: '**/* - Copy*',
-    samples: [
-      'genie-ai-overlay/chatqna/Dockerfile-chatqna_genie-ai - Copy',
-      'genie-ai-overlay/chatqna/Dockerfile-chatqna_genie-ai - Copy (2)',
-      'components/gov-chat-frontend/src/main.js - Copy.js',
-      'genie-ai-overlay/chatqna/Dockerfile-chatqna_genie-ai - Copy (3).tar.gz',
-      'genie-ai-overlay/chatqna/Dockerfile-chatqna_genie-ai - Copy 2.txt'
-    ]
+    sampleName: (tail) => `docs/readme - Copy${tail}`
   },
   {
     marker: ' copy',
     glob: '**/* copy*',
-    samples: [
-      'docs/readme copy',
-      'docs/readme copy.md',
-      'docs/readme copy 2',
-      'docs/readme copy 2.tar.gz',
-      'docs/readme copy (2)',
-      'docs/readme copy (3).tar.gz'
-    ]
+    sampleName: (tail) => `docs/readme copy${tail}`
   },
   {
     marker: 'copy)',
     glob: '**/*copy)*',
-    samples: [
-      'docs/readme (copy)',
-      'docs/readme (copy).md',
-      'docs/readme (another copy)',
-      'docs/readme (copy) (2)',
-      'docs/readme (copy) 2'
-    ]
+    sampleName: (tail) => `docs/readme (copy)${tail}`
   }
+];
+
+const samplesOf = (shape) => TAILS.map((tail) => shape.sampleName(tail));
+
+// Real-world shapes the matrix does not carry: the artifact that opened the
+// issue (with its real stem) and a duplicated directory.
+const EXTRA_COPIES = [
+  'genie-ai-overlay/chatqna/Dockerfile-chatqna_genie-ai - Copy',
+  'genie-ai-overlay/chatqna copy/Dockerfile-chatqna_genie-ai'
 ];
 
 // Names that carry no copy marker and must stay stageable: the English words
 // a marker could hide in ("copying", "copywriting"), the all-caps licence
-// file, and the browser downloads that carry a number instead of a marker.
+// file, and the browser downloads that carry a number instead of a marker —
+// each also in the numbered shapes a duplicate would take.
 const NOT_COPIES = [
   'genie-ai-overlay/chatqna/Dockerfile-chatqna_genie-ai',
   'docs/readme.md',
@@ -86,7 +76,7 @@ const NOT_COPIES = [
   'docs/copying.md',
   'docs/copywriting.md',
   'components/gov-chat-frontend/public/icons/downloads/user-svgrepo-com (1).svg'
-];
+].flatMap((stem) => [stem, `${stem} 2`, `${stem} (2)`]);
 
 // A glob that must match none of the copy shapes — it guards against a
 // fnmatch implementation that matches everything.
@@ -155,24 +145,19 @@ const globSegment = (segment) =>
       .map((part) => escapeRegExp(part))
       .join('.*')}$`
   );
-const gitlabGlobMatches = (glob, p) => {
-  const pattern = glob.split('/');
-  const parts = p.split('/');
-  if (pattern[0] === '**') {
-    for (let skip = 0; skip <= parts.length; skip++) {
-      if (gitlabGlobMatches(pattern.slice(1).join('/'), parts.slice(skip).join('/'))) return true;
+const matchesSegments = (pattern, pi, parts, pj) => {
+  if (pi >= pattern.length) return pj >= parts.length;
+  if (pattern[pi] === '**') {
+    for (let skip = pj; skip <= parts.length; skip++) {
+      if (matchesSegments(pattern, pi + 1, parts, skip)) return true;
     }
     return false;
   }
-  if (pattern.length > 1) {
-    return (
-      parts.length > 1 &&
-      globSegment(pattern[0]).test(parts[0]) &&
-      gitlabGlobMatches(pattern.slice(1).join('/'), parts.slice(1).join('/'))
-    );
-  }
-  return parts.length === 1 && globSegment(pattern[0]).test(p);
+  return (
+    pj < parts.length && globSegment(pattern[pi]).test(parts[pj]) && matchesSegments(pattern, pi + 1, parts, pj + 1)
+  );
 };
+const gitlabGlobMatches = (glob, p) => matchesSegments(glob.split('/'), 0, p.split('/'), 0);
 
 describe('stray copy artifacts (#516)', () => {
   it('tracks no copy artifact', () => {
@@ -186,20 +171,13 @@ describe('stray copy artifacts (#516)', () => {
   });
 
   it('recognises every copy shape, and only those', () => {
-    const copies = [
-      ...SHAPES.flatMap((shape) => shape.samples),
-      // A duplicated directory: the marker sits on the folder, not the file.
-      'genie-ai-overlay/chatqna copy/Dockerfile-chatqna_genie-ai',
-      'genie-ai-overlay/chatqna/Dockerfile-chatqna_genie-ai - Copy (3).txt',
-      'docs/readme copy 2',
-      'docs/readme (copy) (2)'
-    ];
+    const copies = [...SHAPES.flatMap(samplesOf), ...EXTRA_COPIES];
     expect(findStrayCopies(copies).sort()).toEqual([...copies].sort());
     expect(findStrayCopies(NOT_COPIES)).toEqual([]);
   });
 
   it('refuses to stage a copy artifact', () => {
-    const samples = SHAPES.flatMap((shape) => shape.samples);
+    const samples = SHAPES.flatMap(samplesOf);
     const ignored = ignoredByRepoRules(samples).map((entry) => entry.path);
     expect(ignored.sort()).toEqual([...samples].sort());
   });
@@ -213,20 +191,23 @@ describe('stray copy artifacts (#516)', () => {
     // The gate reads the tracked tree, so the pipeline that adds a copy must
     // run the job that holds it — otherwise the failure only shows up on the
     // default branch, after the merge. The globs are pinned as literal
-    // members of the job's changes list and checked against the sample paths
-    // under the fnmatch dialect rules:changes uses, so a glob that never
-    // matches fails here instead of silently never firing.
+    // members of the job's changes list and checked against every sample of
+    // the matrix under the fnmatch dialect rules:changes uses, so a glob that
+    // never matches fails here instead of silently never firing.
     const changes = parseGitlabCiJobChanges(path.join(ROOT, '.gitlab-ci.yml'), ['config:validate']);
     const entries = changes.get('config:validate');
     for (const shape of SHAPES) {
       expect(entries).toContain(shape.glob);
-      for (const sample of shape.samples) {
+      for (const sample of samplesOf(shape)) {
         expect(gitlabGlobMatches(shape.glob, sample)).toBe(true);
       }
+      // A root-level path pins the zero-directory skip of the `**` prefix:
+      // without it, a helper that requires at least one directory stays green.
+      expect(gitlabGlobMatches(shape.glob, path.basename(shape.sampleName('')))).toBe(true);
     }
     // The ignore layer itself is an input to the gate: an MR that weakens or
     // over-broadens the .gitignore rules must run the job too.
     expect(entries).toContain('.gitignore');
-    expect(gitlabGlobMatches(CONTROL_GLOB, SHAPES[0].samples[0])).toBe(false);
+    expect(gitlabGlobMatches(CONTROL_GLOB, SHAPES[0].sampleName(''))).toBe(false);
   });
 });

@@ -1,6 +1,11 @@
 const { expect } = require('@playwright/test');
 const { loginViaUI, BASE_URL, TEST_ADMIN_USER } = require('./chatbot');
-const { getSessionTokenViaUI, request } = require('./auth');
+const {
+  getSessionTokenViaUI,
+  mapWithConcurrency,
+  request,
+  SWEEP_DELETE_CONCURRENCY,
+} = require('./auth');
 
 /**
  * Login and navigate to Document Management tab in Admin Dashboard.
@@ -78,11 +83,11 @@ async function waitForDocumentInTable(page, fileName, options = {}) {
 
 /**
  * The status predicate the admin table applies CLIENT-SIDE
- * (AdminDashboard.vue `filteredDocuments`): a document matches the
- * selected status when its dataprep status, lowercased and trimmed,
- * equals it. The list request carries NO status parameter, so the
- * response payload is the WHOLE page and the table renders the payload's
- * subset of the selected status.
+ * (AdminDashboard.vue `filteredDocuments`): 'all' lists every document,
+ * and any other selection lists the documents whose dataprep status —
+ * lowercased and trimmed — equals it. The list request carries NO status
+ * parameter, so the response payload is the WHOLE page and the table
+ * renders the payload's subset of the selected status.
  *
  * @param {object} file - one document of the /api/files payload
  * @param {string} status - the selected status
@@ -90,6 +95,7 @@ async function waitForDocumentInTable(page, fileName, options = {}) {
  */
 function matchesStatus(file, status) {
   const wanted = String(status).toLowerCase().trim();
+  if (wanted === 'all') return true;
   return Boolean(file.dataprep) && String(file.dataprep.status).toLowerCase().trim() === wanted;
 }
 
@@ -200,9 +206,9 @@ async function getDocumentTableRows(page) {
  * outlives the 60s hook default — callers must set
  * `test.setTimeout(SESSION_MINT_TIMEOUT_MS)` as the first line of the hook
  * (see tests/e2e/helpers/auth.js). That budget covers the sweep: the mint
- * (≈135s on a stalled stack) plus the list plus ONE round of parallel
- * deletes (one 30s request cap), and the token the sweep holds outlives it
- * too — the realm issues it for 300s.
+ * (≈135s on a stalled stack) plus the list plus the bounded-parallel delete
+ * waves, and the token the sweep holds outlives it too — the realm issues
+ * it for 300s.
  * @param {string} [prefix] - File-name prefix to delete
  * @param {object} [options]
  * @param {import('@playwright/test').Browser} [options.browser] - Reuse this
@@ -231,45 +237,50 @@ async function deleteAllTestDocuments(prefix = 'test-document', { browser } = {}
     throw new Error(`cleanup: file list failed with HTTP ${listRes.status} — no test document was deleted`);
   }
   const files = listRes.data?.data || [];
-  if (files.length === 50) {
-    throw new Error(
-      'cleanup: the file list hit the 50-entry page cap — the sweep cannot enumerate ' +
-        'every prefix-matching file, so deletions it cannot verify as complete must not run silently'
-    );
-  }
+  const total = listRes.data?.pagination?.totalFiles;
+  // The list is ONE page (the endpoint validates limit <= 50). When the
+  // page is not the whole population, the sweep cannot enumerate every
+  // prefix-matching file — it deletes the ones it CAN see and REPORTS the
+  // ones it cannot. Refusing to delete anything would leave the suite's
+  // own documents behind for good: the next run would meet the same full
+  // page.
+  const incomplete = total !== undefined ? total > files.length : files.length >= 50;
 
   const testFiles = files.filter((f) => f.file_name && f.file_name.startsWith(prefix));
-  // The deletes run CONCURRENTLY. Every one of them is capped at the
-  // 30 s request timeout, so a sequential sweep of a full page costs
-  // 50 × 30 s — more than the hook's budget AND more than the realm's
-  // access-token lifespan, and the tail of it would run on an expired
-  // token. One round of parallel deletes costs one cap instead of N, so
-  // the sweep fits the budget the hook already carries and the token it
-  // already holds. The API page is the bound: the endpoint validates
-  // limit <= 50 and a full page is refused above, so the sweep never
-  // fans out wider than the page it enumerated.
+  // The deletes run in bounded-parallel waves. Every one of them is
+  // capped at the 30 s request timeout, so a sequential sweep of a full
+  // page costs 50 × 30 s — more than the hook's budget AND more than the
+  // realm's access-token lifespan, and the tail of it would run on an
+  // expired token. The wave width is bounded by SWEEP_DELETE_CONCURRENCY
+  // so the sweep still fits both, and so a fan-out does not pile up on
+  // the data tier's one-writer-per-collection rule.
   const failures = (
-    await Promise.all(
-      testFiles.map(async (f) => {
-        const file_id = f.file_id || f._key || f.id;
-        try {
-          const res = await request('DELETE', `/api/files/${file_id}`, {
-            headers: { Authorization: `Bearer ${token}` },
-          });
-          if (res.status < 200 || res.status >= 300) {
-            return `${f.file_name}: HTTP ${res.status}`;
-          }
-          return null;
-        } catch (e) {
-          return `${f.file_name}: ${e.message}`;
+    await mapWithConcurrency(testFiles, SWEEP_DELETE_CONCURRENCY, async (f) => {
+      const file_id = f.file_id || f._key || f.id;
+      try {
+        const res = await request('DELETE', `/api/files/${file_id}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (res.status < 200 || res.status >= 300) {
+          return `${f.file_name}: HTTP ${res.status}`;
         }
-      })
-    )
+        return null;
+      } catch (e) {
+        return `${f.file_name}: ${e.message}`;
+      }
+    })
   ).filter(Boolean);
   if (failures.length > 0) {
     throw new Error(
       `cleanup: ${failures.length} of ${testFiles.length} test documents were not deleted — ` +
         `leftover documents remain in the stack: ${failures.join('; ')}`
+    );
+  }
+  if (incomplete) {
+    throw new Error(
+      `cleanup: the file list is one page of ${total !== undefined ? total : files.length} matching ` +
+        `files — the sweep cannot enumerate every prefix-matching file, so the ${testFiles.length} it ` +
+        `could see were deleted and the ones beyond the page stay behind`
     );
   }
 }

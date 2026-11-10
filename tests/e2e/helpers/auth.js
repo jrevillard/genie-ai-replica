@@ -222,6 +222,46 @@ async function getSessionToken(page) {
 const SESSION_MINT_TIMEOUT_MS = 360000;
 
 /**
+ * Ceiling for the delete fan-out of a cleanup sweep.
+ *
+ * The sweep's budget must cover the work it does: after the mint (≈135s
+ * on a stalled stack) and the list, the 360s hook budget leaves room for
+ * five waves of ten at the 30s request cap (135 + 30 + 5 × 30 = 315s), so
+ * a full 50-entry page is swept inside the budget AND inside the 300s
+ * life of the token the sweep holds.
+ *
+ * A wave wider than that is not free: the conversation delete opens a
+ * write transaction over six collections, and ArangoDB admits one write
+ * transaction per collection at a time — a fan-out of fifty piles the
+ * waits up until they time out (ERROR 1201) and the sweep reports
+ * conflicts for a stack that was merely slow.
+ */
+const SWEEP_DELETE_CONCURRENCY = 10;
+
+/**
+ * Map `fn` over `items`, at most `limit` calls in flight at a time. The
+ * results keep the input order, so a failure report reads the same way
+ * whatever order the calls completed in.
+ *
+ * @param {Array} items - the items to map
+ * @param {number} limit - the maximum number of calls in flight
+ * @param {Function} fn - called with (item, index); its result is kept
+ * @returns {Promise<Array>} the results, in the input order
+ */
+async function mapWithConcurrency(items, limit, fn) {
+  const results = new Array(items.length);
+  let next = 0;
+  const workers = Array.from({ length: Math.min(limit, items.length) }, async () => {
+    while (next < items.length) {
+      const index = next++;
+      results[index] = await fn(items[index], index);
+    }
+  });
+  await Promise.all(workers);
+  return results;
+}
+
+/**
  * Log in through the UI in a throwaway session and return that session's
  * access token — the cleanup paths' replacement for minting a token with
  * ROPC, which the realm refuses by design.
@@ -279,5 +319,7 @@ module.exports = {
   getSessionTokenViaUI,
   parseJwtClaims,
   request,
+  mapWithConcurrency,
   SESSION_MINT_TIMEOUT_MS,
+  SWEEP_DELETE_CONCURRENCY,
 };

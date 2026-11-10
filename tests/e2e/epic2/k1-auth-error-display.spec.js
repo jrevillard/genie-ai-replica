@@ -45,14 +45,28 @@ test.describe.serial('Phase K: Auth Error Display', () => {
     // suite inherited the mutated lifespan AND the stray user while the
     // report named only the lifespan.
     const failures = [];
+    const causes = [];
+
+    // ONE admin token for both cleanups: two mints meant two password
+    // grants to the master realm, and the second one could eat the rest
+    // of the hook's budget on a stalled realm — reported then as a
+    // generic hook timeout instead of the leftover this hook names.
+    let adminTokenForCleanup = null;
+    try {
+      adminTokenForCleanup = await getAdminToken();
+    } catch (e) {
+      failures.push(`the master-realm admin token could not be minted — no cleanup ran: ${e.message}`);
+      causes.push(e);
+    }
 
     // Restore the lifespan only when it was actually captured AND K.2
     // could have mutated it — afterAll runs even when beforeAll threw,
     // and guessing 300 would rewrite a deployment running something else.
-    if (originalLifespan) {
+    if (adminTokenForCleanup && originalLifespan) {
       try {
-        const token = await getAdminToken();
-        await updateRealmSettings(token, 'genie', { accessTokenLifespan: originalLifespan });
+        await updateRealmSettings(adminTokenForCleanup, 'genie', {
+          accessTokenLifespan: originalLifespan,
+        });
       } catch (e) {
         // Failing cleanup, never silent: if K.2 ran, a failed restore leaves
         // the realm at its 10s lifespan, poisoning every suite after.
@@ -60,6 +74,7 @@ test.describe.serial('Phase K: Auth Error Display', () => {
           `accessTokenLifespan restore failed — the genie realm is left at a mutated lifespan that ` +
             `every later suite inherits. Restore it manually, then re-run. Cause: ${e.message}`
         );
+        causes.push(e);
       }
     }
 
@@ -67,21 +82,22 @@ test.describe.serial('Phase K: Auth Error Display', () => {
     // names the leftover; a leftover account is harmless to the next run
     // only because createUser tolerates the 409, so the failure must be
     // visible, not swallowed.
-    if (noRolesUserId) {
+    if (adminTokenForCleanup && noRolesUserId) {
       try {
-        const token = await getAdminToken();
-        await deleteUser(token, 'genie', noRolesUserId);
+        await deleteUser(adminTokenForCleanup, 'genie', noRolesUserId);
       } catch (e) {
         failures.push(
           `the no-roles user ${noRolesUserId} was not deleted — it stays in the realm for the next ` +
             `run. Cause: ${e.message}`
         );
+        causes.push(e);
       }
     }
 
     if (failures.length > 0) {
       throw new Error(
-        `k1 afterAll: ${failures.length} cleanup(s) failed — every leftover is named: ${failures.join(' | ')}`
+        `k1 afterAll: ${failures.length} cleanup(s) failed — every leftover is named: ${failures.join(' | ')}`,
+        { cause: causes[0] }
       );
     }
   });

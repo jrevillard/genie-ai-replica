@@ -820,6 +820,59 @@ async function _ingestWithCap(repo_id, input, actor, maxConcepts = maxConceptsFr
       started_at: new Date().toISOString()
     });
   }
+  // [4g] Story 2.9.5-amend (2026-08-18): when the input was a ZIP bundle, ALSO
+  // store the bundle zip itself as a file doc in the doc-repo — associated with
+  // the OKF repo (repo_id + graph_name) + the SAME knowledge-hierarchy labels
+  // that flow to dataprep. The bundle is the ingestion INPUT (a means to feed
+  // the process), stored at 'Ingested' + is_bundle=true so the worker ignores it.
+  // Isolated + non-fatal: a bundle-doc store failure never fails the ingest.
+  //
+  // ORDERING (issue #1709): the bundle doc is stored BEFORE the concepts are
+  // parsed, not after. A concept becomes claimable — its meta row turns
+  // 'parsed' — while the import is still working through the concepts that
+  // follow it (the PII scan is ~100 s per concept), so the ingest worker can
+  // drain a concept before this import's bundle doc exists. dataprep's
+  // bundle-log mirror resolves the repo's bundle by (repo_id,
+  // is_bundle=true) and CACHES the first answer it gets, so a drain that
+  // starts before the bundle doc lands resolves the PREVIOUS import's bundle
+  // and mirrors every stage row of this run into it — the admin Ingestion Log
+  // of the current bundle stays empty. Storing the bundle first closes that
+  // window: the repo's newest bundle doc is this import's by the time the
+  // first concept can be claimed.
+  let bundleDocFileId = null;
+  if (typeof (input || {}).zip === 'string' && input.zip) {
+    const bundleFileName = (input && input.bundle_name) || `${repo.name || 'repo'}-bundle.zip`;
+    try {
+      const bres = await authedAxios.post(
+        `${config.documentRepository.url}/api/files/ingest-bundle`,
+        {
+          bundle: input.zip,
+          graph_name: graphName,
+          repo_id,
+          originalFileName: bundleFileName,
+          labels, // the ACL + caller hierarchy labels — the SAME set dataprep's
+          // LLM labeler selects from (per-concept 4f + the bundle doc both carry it)
+          bundle_version: bundleVersion,
+          is_bundle: true,
+          // ROUND 28 (review — ingest-bundle collision): declare the caller
+          // class. A user-zip import must NEVER hit the doc-repo reuse guard
+          // — it stores its OWN bytes even when the same (repo_id,
+          // bundle_version) already holds the publish zip (the guard silently
+          // substituted it before the source scoping).
+          source: 'user-import'
+        },
+        { timeout: ENQUEUE_TIMEOUT_MS }
+      );
+      summary.bundle_stored = bundleFileName;
+      bundleDocFileId = bres.data && bres.data.file_id;
+      summary.bundle_file_id = bundleDocFileId;
+      logger.info('OKF bundle zip stored as a file doc', { repo_id, bundle_file_id: bundleDocFileId });
+    } catch (err) {
+      summary.bundle_storage_error = err.message;
+      logger.error('Import 4g bundle-zip store failed (isolated, non-fatal)', { repo_id, error: err.message });
+    }
+  }
+
   const outcomes = await _pool(rawInputs, _logLaneCapacity(repo_id, rawInputs.length), async (raw) => {
     const o = await _importOneConcept(repo_id, raw, {
       bundleVersion,
@@ -941,62 +994,27 @@ async function _ingestWithCap(repo_id, input, actor, maxConcepts = maxConceptsFr
     }
   }
 
-  // [4g] Story 2.9.5-amend (2026-08-18): when the input was a ZIP bundle, ALSO
-  // store the bundle zip itself as a file doc in the doc-repo — associated with
-  // the OKF repo (repo_id + graph_name) + the SAME knowledge-hierarchy labels
-  // that flow to dataprep. The bundle is the ingestion INPUT (a means to feed
-  // the process), stored at 'Ingested' + is_bundle=true so the worker ignores it.
-  // Isolated + non-fatal: a bundle-doc store failure never fails the ingest.
-  if (typeof (input || {}).zip === 'string' && input.zip) {
-    const bundleFileName = (input && input.bundle_name) || `${repo.name || 'repo'}-bundle.zip`;
+  // A bundle whose concepts were ALL dedup-skipped has nothing in flight —
+  // the zip must be born 'Ingested' (the state machine only advances on
+  // concept callbacks; zero enqueues means it would sit 'Pending' forever
+  // and the version mint's D1 gate would block publishing). Live-caught
+  // 2026-08-30: a no-op re-ingest of a fully-indexed repo re-stored the
+  // zip at Pending and bricked the publish. The bundle doc itself is stored
+  // BEFORE the concepts are parsed (see the ORDERING note above) — only this
+  // status flip waits for the enqueue tally.
+  if (summary.enqueued === 0 && bundleDocFileId) {
     try {
-      const bres = await authedAxios.post(
-        `${config.documentRepository.url}/api/files/ingest-bundle`,
-        {
-          bundle: input.zip,
-          graph_name: graphName,
-          repo_id,
-          originalFileName: bundleFileName,
-          labels, // the ACL + caller hierarchy labels — the SAME set dataprep's
-          // LLM labeler selects from (per-concept 4f + the bundle doc both carry it)
-          bundle_version: bundleVersion,
-          is_bundle: true,
-          // ROUND 28 (review — ingest-bundle collision): declare the caller
-          // class. A user-zip import must NEVER hit the doc-repo reuse guard
-          // — it stores its OWN bytes even when the same (repo_id,
-          // bundle_version) already holds the publish zip (the guard silently
-          // substituted it before the source scoping).
-          source: 'user-import'
-        },
-        { timeout: ENQUEUE_TIMEOUT_MS }
+      await authedAxios.patch(
+        `${config.documentRepository.url}/api/files/${encodeURIComponent(bundleDocFileId)}/status`,
+        { dataprep: { status: 'Ingested' } },
+        { timeout: 10000 }
       );
-      summary.bundle_stored = bundleFileName;
-      summary.bundle_file_id = bres.data && bres.data.file_id;
-      logger.info('OKF bundle zip stored as a file doc', { repo_id, bundle_file_id: summary.bundle_file_id });
-      // A bundle whose concepts were ALL dedup-skipped has nothing in flight —
-      // the zip must be born 'Ingested' (the state machine only advances on
-      // concept callbacks; zero enqueues means it would sit 'Pending' forever
-      // and the version mint's D1 gate would block publishing). Live-caught
-      // 2026-08-30: a no-op re-ingest of a fully-indexed repo re-stored the
-      // zip at Pending and bricked the publish.
-      if (summary.enqueued === 0 && bres.data && bres.data.file_id) {
-        try {
-          await authedAxios.patch(
-            `${config.documentRepository.url}/api/files/${encodeURIComponent(bres.data.file_id)}/status`,
-            { dataprep: { status: 'Ingested' } },
-            { timeout: 10000 }
-          );
-          logger.info('Bundle zip born Ingested (zero enqueues — nothing in flight)', {
-            repo_id,
-            bundle_file_id: summary.bundle_file_id
-          });
-        } catch (patchErr) {
-          logger.warn('Bundle born-Ingested patch failed (non-fatal)', { repo_id, error: patchErr.message });
-        }
-      }
-    } catch (err) {
-      summary.bundle_storage_error = err.message;
-      logger.error('Import 4g bundle-zip store failed (isolated, non-fatal)', { repo_id, error: err.message });
+      logger.info('Bundle zip born Ingested (zero enqueues — nothing in flight)', {
+        repo_id,
+        bundle_file_id: bundleDocFileId
+      });
+    } catch (patchErr) {
+      logger.warn('Bundle born-Ingested patch failed (non-fatal)', { repo_id, error: patchErr.message });
     }
   }
 

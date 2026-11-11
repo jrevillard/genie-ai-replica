@@ -102,7 +102,14 @@ function programQuery() {
       return { all: async () => [] };
     }
     if (live && text && text.includes('source_documents')) {
-      live.source_documents = bind.docs;
+      if (text.includes('APPEND(')) {
+        // the durable list is upserted per file: the entries of the OTHER
+        // files stay, the ones this import carries are replaced
+        const kept = (live.source_documents || []).filter((s) => !bind.file_ids.includes(s.file_id));
+        live.source_documents = kept.concat(bind.docs);
+      } else {
+        live.source_documents = bind.docs;
+      }
       return { all: async () => [1] }; // the write updated ONE document
     }
     return { all: async () => [] };
@@ -120,7 +127,7 @@ beforeEach(async () => {
   // The content claim registry (issue #1744) is cleared for the same reason
   // the conversion registry is: a test that aborts between the claim and its
   // release would otherwise leave the content claimed for the whole process.
-  producer.contentClaims.clear();
+  producer.resetContentClaims();
   programQuery();
 });
 
@@ -1397,6 +1404,20 @@ describe('producer-service — D4 restricted-snapshot stamp (stampSources)', () 
       { okf_repo_id: R2, okf_restricted: false },
       expect.anything()
     );
+  });
+
+  it('a second stamp KEEPS the first import\'s sources in the durable record', async () => {
+    // The duplicate-content gate reads this list: an erased hash would let
+    // the same content land in another repository (issue #1793) — so the
+    // list is upserted per file, never replaced wholesale.
+    await mockDb.collection('okf_repositories').save({ _key: RID, repo_id: RID, name: 'Mine', domain: 'general' });
+    authedAxios.get.mockResolvedValue({
+      data: { file: { file_id: 'f1', file_name: 'alpha.md', file_hash: 'HASH-A' } }
+    });
+    await producer.stampSources(RID, ['f1']);
+    await producer.stampSources(RID, ['f2']);
+    const repo = await mockDb.collection('okf_repositories').document(RID);
+    expect(repo.source_documents.map((s) => s.file_id).sort()).toEqual(['f1', 'f2']);
   });
 
   it('a repository that no longer exists fails the import — nothing is stamped anywhere', async () => {

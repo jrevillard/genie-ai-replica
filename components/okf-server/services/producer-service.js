@@ -120,6 +120,15 @@ function claimContent(repoId, kind, values) {
 }
 
 /**
+ * Drop every claim. TEST SUITE ONLY (the registry is private): a test that
+ * aborts between a claim and its release would otherwise leave the content
+ * claimed for the rest of the process.
+ */
+function resetContentClaims() {
+  contentClaims.clear();
+}
+
+/**
  * Release a claim — ONLY the owner's claim: a late release must never drop
  * another import's claim.
  * @param {string} repoId the importing repository
@@ -220,7 +229,11 @@ async function sourceMeta(cache, file_id) {
 
 /**
  * Record the repository's source documents — the DURABLE record of what this
- * repository backs. The DUPLICATE_CONTENT gate (issue #1744) and the
+ * repository backs. The list is UPSERTED per file: an entry for a file this
+ * import carries is replaced, the entries of the OTHER files stay. A second
+ * import into the same repository must not erase the first one's sources —
+ * the duplicate-content gate reads this list, so an erased hash would let
+ * the same content land in another repository. The DUPLICATE_CONTENT gate (issue #1744) and the
  * SOURCES-BUSY lifecycle gate read it, so a FAILED write is FATAL: the
  * repository does not own its sources as far as every other guard is
  * concerned, and the import must not report success. It is written FIRST,
@@ -262,14 +275,20 @@ async function recordSourceDocuments(repoId, fileIds, metaByKey = Object.create(
     const written = await db.query(
       `LET doc = DOCUMENT(${COLLECTION}, @repo_id)
        FILTER doc != null
+       LET kept = (
+         FOR s IN (doc.source_documents || [])
+           FILTER s.file_id NOT IN @file_ids
+           RETURN s
+       )
        UPDATE doc WITH {
-         source_documents: @docs,
+         source_documents: APPEND(kept, @docs),
          updated_at: @now
        } IN ${COLLECTION}
        RETURN 1`,
       {
         repo_id: repoId,
         now: new Date().toISOString(),
+        file_ids: fileIds,
         docs: metas.map((m) => ({
           kind: 'document',
           file_id: m.file_id,
@@ -300,6 +319,9 @@ async function recordSourceDocuments(repoId, fileIds, metaByKey = Object.create(
       });
     }
   } catch (err) {
+    // The vanished-repository error carries its own message — it is not a
+    // write failure, and the client must be able to tell them apart.
+    if (err && err.code === 'SOURCE_STAMP_FAILED') throw err;
     // The internal reason stays in the log — the client gets a fixed sentence.
     logger.error('source_documents record could not be written — the import was not completed', {
       repo_id: repoId,
@@ -1061,6 +1083,7 @@ async function runDocumentsConversion(job) {
     logger.error(`Documents conversion FAILED repo=${repo_id} code=${err.code || '-'}: ${err.message}`);
     await patchConversion(repo_id, {
       status: 'failed',
+      stage: 'failed',
       error: err.message,
       code: err.code || 'CONVERSION_FAILED',
       per_file: perFile.slice(),
@@ -1224,7 +1247,7 @@ async function startDocumentsConversion({ repo_id, file_ids, requested_name, cla
     await stampSources(repo_id, file_ids, metaByKey);
   } catch (err) {
     // A refused start must leave the repository as it found it. The
-    // conversion patch REPLACES the whole record, so a prior TERMINAL record
+    // conversion record is merged, so a prior TERMINAL record
     // — a healthy 'done' with its summary — is RESTORED instead of being
     // overwritten with 'failed': the web client renders a failed record as
     // "import failed — delete the repository", which would be a lie about a
@@ -1232,8 +1255,8 @@ async function startDocumentsConversion({ repo_id, file_ids, requested_name, cla
     // closed as failed: the interrupted-conversion sweep is one-shot per
     // process and has already run, so nothing else would ever close a queued
     // record with no worker. It is written BEFORE the reservation is
-    // released — this patch REPLACES the whole conversion object, so a write
-    // landing after a concurrent start's own record would clobber it.
+    // released — a write landing after a concurrent start's own record
+    // would clobber it.
     //
     // COMPARE-AND-SET: the record is written only while it is still THIS
     // run's ('queued', with this run's started_at). The zip-ingest path does
@@ -1252,6 +1275,7 @@ async function startDocumentsConversion({ repo_id, file_ids, requested_name, cla
         ? previous
         : {
             status: 'failed',
+            stage: 'failed',
             error: err.message,
             code: err.code || 'CONVERSION_FAILED',
             files_done: 0,
@@ -1318,11 +1342,12 @@ async function startDocumentsConversion({ repo_id, file_ids, requested_name, cla
 module.exports = {
   startDocumentsConversion,
   live, // the SHARED conversion registry (documents + crawl), see crawl-conversion-service
-  // The content claim registry (issue #1744) — exported so a test can clear
-  // it, exactly like the conversion registry above: a test that aborts
-  // between the claim and its release would otherwise leave the content
-  // claimed for the rest of the process.
-  contentClaims,
+  // The content claim registry (issue #1744) stays PRIVATE — a consumer
+  // that could wipe it would silently re-open the window it closes. The
+  // reset below is the only seam, and it exists for the test suite: a test
+  // that aborts between the claim and its release would otherwise leave the
+  // content claimed for the rest of the process.
+  resetContentClaims,
   // D4: the restricted-snapshot stamp + the Access-toggle propagation
   stampSources,
   propagateRestrictedToSources,

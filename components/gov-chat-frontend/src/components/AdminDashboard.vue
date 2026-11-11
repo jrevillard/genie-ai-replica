@@ -86,19 +86,18 @@
                   <!-- REVIEW H1: tri-state. The fabricated six-status list is
                        gone — a failed fetch renders an explicit error with a
                        retry, an in-flight first load renders Measuring…, and
-                       only a real measurement renders the service list. -->
-                  <DsStateDisplay
+                       only a real measurement renders the service list.
+                       REVIEW T2: the state leaves collapsed into the shared
+                       AdminStatePanel (one copy of the error+retry shell). -->
+                  <AdminStatePanel
                     v-if="healthLoadError"
                     type="error"
                     :message="translate('admin.health.unavailable', 'System health is unavailable right now.')"
-                    data-test-id="health-error"
-                  >
-                    <template #action>
-                      <DsButton variant="secondary" small data-test-id="health-retry" @click="loadSystemHealth">
-                        {{ translate('admin.retry', 'Retry') }}
-                      </DsButton>
-                    </template>
-                  </DsStateDisplay>
+                    test-id="health-error"
+                    retry-test-id="health-retry"
+                    :retry-label="translate('admin.retry', 'Retry')"
+                    @retry="loadSystemHealth"
+                  />
                   <div v-else-if="healthServices" class="health-status">
                     <div
                       v-for="service in healthServices"
@@ -110,9 +109,7 @@
                       <span>{{ translate(`admin.services.${service.id}`, service.name) }}</span>
                     </div>
                   </div>
-                  <div v-else class="health-status">
-                    <span class="measuring-note">{{ translate('admin.measuring', 'Measuring…') }}</span>
-                  </div>
+                  <AdminStatePanel v-else type="loading" :message="translate('admin.measuring', 'Measuring…')" />
                 </div>
 
                 <div v-if="activeTab === 'overview'" class="dashboard-card">
@@ -124,18 +121,15 @@
 
                   <!-- REVIEW H1: same tri-state as the health card — no
                        fabricated CPU/memory/storage/network numbers. -->
-                  <DsStateDisplay
+                  <AdminStatePanel
                     v-if="healthLoadError"
                     type="error"
                     :message="translate('admin.resources.unavailable', 'Resource usage is unavailable right now.')"
-                    data-test-id="usage-error"
-                  >
-                    <template #action>
-                      <DsButton variant="secondary" small data-test-id="usage-retry" @click="loadSystemHealth">
-                        {{ translate('admin.retry', 'Retry') }}
-                      </DsButton>
-                    </template>
-                  </DsStateDisplay>
+                    test-id="usage-error"
+                    retry-test-id="usage-retry"
+                    :retry-label="translate('admin.retry', 'Retry')"
+                    @retry="loadSystemHealth"
+                  />
                   <div v-else-if="resourceUsage" class="resource-usage">
                     <div
                       v-for="resource in resourceUsage"
@@ -158,9 +152,7 @@
                       </div>
                     </div>
                   </div>
-                  <div v-else class="resource-usage">
-                    <span class="measuring-note">{{ translate('admin.measuring', 'Measuring…') }}</span>
-                  </div>
+                  <AdminStatePanel v-else type="loading" :message="translate('admin.measuring', 'Measuring…')" />
                 </div>
 
                 <div v-if="activeTab === 'hierarchy'" class="dashboard-card" style="grid-column: span 2">
@@ -285,28 +277,20 @@
                         </DsStateDisplay>
 
                         <div v-else>
-                          <DsStateDisplay
+                          <AdminStatePanel
                             v-if="translationsLoadFailed"
                             type="error"
-                            data-test-id="hierarchy-translations-load-failed"
+                            test-id="hierarchy-translations-load-failed"
                             :message="
                               translate(
                                 'admin.hierarchy.translationsLoadFailedNotice',
                                 'Translations could not be loaded. Editing the translations and saving stay disabled until they load.'
                               )
                             "
-                          >
-                            <template #action>
-                              <DsButton
-                                variant="secondary"
-                                :small="true"
-                                data-test-id="hierarchy-translations-retry"
-                                @click="retryHierarchyTranslations"
-                              >
-                                {{ translate('admin.hierarchy.retryTranslations', 'Retry') }}
-                              </DsButton>
-                            </template>
-                          </DsStateDisplay>
+                            retry-test-id="hierarchy-translations-retry"
+                            :retry-label="translate('admin.hierarchy.retryTranslations', 'Retry')"
+                            @retry="retryHierarchyTranslations"
+                          />
                           <div
                             v-for="(translation, index) in hierarchyForm.translations"
                             :key="index"
@@ -711,21 +695,19 @@
                   </div>
 
                   <!-- REVIEW H3: the hardcoded "42.3 GB / 128 tables" is gone.
-                       A failed (or success:false) stats fetch renders an
+                       A failed (or figure-less) stats fetch renders an
                        explicit error with a retry; a first load renders
-                       Measuring…; real figures render only when measured. -->
-                  <DsStateDisplay
+                       Measuring…; real figures render only when measured.
+                       REVIEW T2: leaves collapsed into AdminStatePanel. -->
+                  <AdminStatePanel
                     v-if="dbStatsError"
                     type="error"
                     :message="translate('admin.dbStats.unavailable', 'Database statistics are unavailable right now.')"
-                    data-test-id="db-stats-error"
-                  >
-                    <template #action>
-                      <DsButton variant="secondary" small data-test-id="db-stats-retry" @click="loadDatabaseStats">
-                        {{ translate('admin.retry', 'Retry') }}
-                      </DsButton>
-                    </template>
-                  </DsStateDisplay>
+                    test-id="db-stats-error"
+                    retry-test-id="db-stats-retry"
+                    :retry-label="translate('admin.retry', 'Retry')"
+                    @retry="loadDatabaseStats"
+                  />
                   <div v-else-if="dbStats" class="db-stats">
                     <div>
                       <strong>{{ translate('admin.databaseSize', 'Database Size') }}:</strong>
@@ -736,9 +718,7 @@
                       {{ dbStats.totalTables }}
                     </div>
                   </div>
-                  <div v-else class="db-stats">
-                    <span class="measuring-note">{{ translate('admin.measuring', 'Measuring…') }}</span>
-                  </div>
+                  <AdminStatePanel v-else type="loading" :message="translate('admin.measuring', 'Measuring…')" />
                 </div>
 
                 <div v-if="activeTab === 'logs'" class="dashboard-card" style="grid-column: span 2">
@@ -946,24 +926,21 @@
                        response. Also fixed in passing: the tile read
                        `securityMetrics.lastScan` while the loader writes
                        `lastSecurityScan` — the value has been rendering empty. -->
-                  <DsStateDisplay
+                  <AdminStatePanel
                     v-if="securityLoading"
                     type="loading"
                     :message="translate('admin.security.loadingMetrics', 'Loading security data…')"
-                    data-test-id="security-loading"
+                    test-id="security-loading"
                   />
-                  <DsStateDisplay
+                  <AdminStatePanel
                     v-else-if="securityUnavailable"
                     type="error"
                     :message="translate('admin.security.unavailable', 'Security data is unavailable right now.')"
-                    data-test-id="security-error"
-                  >
-                    <template #action>
-                      <DsButton variant="secondary" small data-test-id="security-retry" @click="retrySecurity">
-                        {{ translate('admin.retry', 'Retry') }}
-                      </DsButton>
-                    </template>
-                  </DsStateDisplay>
+                    test-id="security-error"
+                    retry-test-id="security-retry"
+                    :retry-label="translate('admin.retry', 'Retry')"
+                    @retry="retrySecurity"
+                  />
                   <div v-else-if="!isLoading && securityMetrics" class="security-details">
                     <div>
                       <strong>{{ translate('admin.security.lastSecurityScan', 'Last Security Scan') }}:</strong>
@@ -1760,6 +1737,7 @@ import AddFromLinkDialog from './AddFromLinkDialog.vue';
 import FileDetailsDialog from './FileDetailsDialog.vue';
 import ConfirmDialog from './ConfirmDialog.vue'; // IMPORT ConfirmDialog
 import QueryInspector from './admin/QueryInspector/QueryInspector.vue';
+import AdminStatePanel from './admin/AdminStatePanel.vue';
 import DsButton from './ds/Button.vue';
 import DsInput from './ds/Input.vue';
 import DsStatusTag from './ds/StatusTag.vue';
@@ -1827,6 +1805,7 @@ export default {
     LogSearchDialog,
     OkfModelConfigPanel,
     OkfArtifactsView,
+    AdminStatePanel,
     ConfirmDialog,
     UploadFilesDialog,
     AddFromLinkDialog,
@@ -4671,12 +4650,6 @@ export default {
 
 .db-stats {
   color: var(--fg);
-  font-size: var(--text-base);
-}
-
-/* REVIEW H1/H3: the "Measuring…" first-load note (null data + no error) */
-.measuring-note {
-  color: var(--muted);
   font-size: var(--text-base);
 }
 

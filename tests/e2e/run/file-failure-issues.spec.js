@@ -63,7 +63,7 @@ test.describe('a match must be DEDICATED to the spec file', () => {
     // description. Absorbing their failures would leave a red file with no
     // issue of its own — the tracker noise this path exists to end.
     const umbrella = {
-      title: '13 spec files hardcode https://localhost',
+      title: '13 spec files hardcode the Compose edge',
       description: `The wave touched ${FILE} and twelve other files.`,
     };
     expect(findTrackedIssue(FILE, [umbrella])).toBe(null);

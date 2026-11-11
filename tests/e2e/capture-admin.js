@@ -293,7 +293,7 @@ const audit = (label) => {
     await page.route('**/config/genie-ai-config.json', (route) =>
       route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(offConfig) })
     );
-    await page.goto(new URL('/admin', process.env.BASE_URL || 'https://localhost').toString(), {
+    await page.goto(new URL('/admin', BASE_URL).toString(), {
       waitUntil: 'domcontentloaded'
     });
     await page.waitForSelector('[data-test-id="admin-dashboard"]', { timeout: 30000 });

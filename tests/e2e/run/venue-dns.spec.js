@@ -54,12 +54,17 @@ function inChild(script, env = {}) {
     return execFileSync(process.execPath, ['-e', script], {
       env: childEnv,
       encoding: 'utf8',
-      timeout: CHILD_BOUND_MS
+      timeout: CHILD_BOUND_MS,
+      // SIGKILL, not the default SIGTERM: a child that IGNORES SIGTERM
+      // would not die at the bound, and a bound that does not bind is no
+      // bound. The discriminator is the CODE, not the signal: a timeout
+      // reports ETIMEDOUT whichever signal carried the kill.
+      killSignal: 'SIGKILL'
     }).trim();
   } catch (e) {
     // The bound was reached — the child is killed, and the cause is the
     // bound, not the child's own error.
-    if (e.signal === 'SIGTERM') {
+    if (e.code === 'ETIMEDOUT') {
       throw new Error(`the child did not answer within ${CHILD_BOUND_MS} ms — it is waiting on an answer that never came`, {
         cause: e
       });

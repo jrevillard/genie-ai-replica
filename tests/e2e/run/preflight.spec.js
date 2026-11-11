@@ -136,7 +136,7 @@ test.describe('the pre-flight NAMES a cause it cannot use', () => {
  * is stubbed too, so the tree needs no browser tree and no real
  * package chain. Nothing in the repo is touched.
  */
-function withStubbedRunner(fn) {
+function withStubbedRunner(fn, venueAnswers = 'no') {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'preflight-stub-'));
   try {
     for (const file of ['run/preflight.js', 'helpers/base-url.js', 'helpers/venue-launch-args.js']) {
@@ -150,7 +150,8 @@ function withStubbedRunner(fn) {
       "module.exports = { describeRunner: () => ({ playwrightVersion: 'stub', chromium: 'stub', " +
         "chromiumHeadlessShell: 'stub' }) };\n"
     );
-    // The runner itself, stubbed: the navigation AND the close fail.
+    // The runner itself, stubbed: the close ALWAYS fails, and the
+    // navigation fails unless the case says the venue answered.
     const pkg = path.join(root, 'node_modules', '@playwright', 'test');
     fs.mkdirSync(pkg, { recursive: true });
     fs.writeFileSync(
@@ -163,7 +164,12 @@ function withStubbedRunner(fn) {
         'const chromium = {',
         '  launch: async () => ({',
         '    newContext: async () => ({',
-        "      newPage: async () => ({ goto: async () => { throw new Error('the stub could not open the venue'); } })",
+        '      newPage: async () => ({',
+        '        goto: async () => {',
+        "          if (process.env.STUB_VENUE_ANSWERS === 'yes') return { status: () => 200 };",
+        "          throw new Error('the stub could not open the venue');",
+        '        }',
+        '      })',
         '    }),',
         "    close: async () => { throw new Error('the stub could not close'); }",
         '  })',
@@ -176,7 +182,9 @@ function withStubbedRunner(fn) {
     let code = 0;
     try {
       execFileSync(process.execPath, [path.join(root, 'run', 'preflight.js')], {
-        env: { ...process.env, BASE_URL: VENUE },
+        // The mapping is the case's business, not the developer's shell:
+        // an ambient E2E_VENUE_IP (or an invalid one) would hijack it.
+        env: { ...process.env, BASE_URL: VENUE, E2E_VENUE_IP: '', E2E_VENUE_HOST: '', STUB_VENUE_ANSWERS: venueAnswers },
         stdio: ['ignore', 'pipe', 'pipe']
       });
     } catch (e) {
@@ -199,10 +207,33 @@ test.describe('the pre-flight reports a FAILED CLEANUP', () => {
       // running, and the operator has to hear it.
       expect(stderr).toContain('pre-flight: the browser could not close.');
       expect(stderr).toContain('the stub could not close');
+      // The ORDER is the disposition: the finding comes first, the
+      // cleanup after it. A report that put the cleanup first would
+      // bury the finding.
+      expect(stderr.indexOf('pre-flight: the browser could not close.')).toBeGreaterThan(
+        stderr.indexOf('pre-flight: the browser could not open the venue.')
+      );
       // Both are causes, not traces.
       expect(stderr).not.toContain('\n    at ');
       // And the run stops.
       expect(code).toBe(1);
     });
+  });
+
+  test('a close that fails ALONE still stops the run', () => {
+    // The venue answered, the browser could not close: nothing else
+    // failed, so the exit code belongs to the CLEANUP. A cleanup that
+    // left the run at 0 would let the suite start against a browser
+    // nobody closed.
+    withStubbedRunner(
+      ({ stderr, code }) => {
+        expect(stderr).toContain('pre-flight: the browser could not close.');
+        expect(stderr).toContain('the stub could not close');
+        // There was no other cause: the venue answered.
+        expect(stderr).not.toContain('pre-flight: the browser could not open the venue.');
+        expect(code).toBe(1);
+      },
+      'yes'
+    );
   });
 });

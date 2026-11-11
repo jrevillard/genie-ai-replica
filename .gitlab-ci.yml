@@ -4020,6 +4020,7 @@ docs:validate:
   script:
     - ansible-playbook --syntax-check deploy/ansible/deploy.yml
     - ansible-playbook --syntax-check deploy/ansible/deploy-gpu.yml
+    - ansible-playbook --syntax-check deploy/ansible/deploy-gpu-rocm.yml
     - yamllint -c deploy/ansible/.yamllint deploy/ansible/
     # Renders the #1227 payload probe/heal command builders through real
     # ansible and executes the tokenized output — the two layers

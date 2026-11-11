@@ -1,0 +1,37 @@
+---
+# ROCm GPU node (AMD Strix Halo / gfx1151 class) — non-secret variables.
+# Secrets (hugging_face_hub_token, gpu_api_keys) live in vault.yml
+# (encrypted, never committed) — see deploy/ansible/README.md.
+#
+# Image pins from the ROCm spike (2026-11-11):
+# docs/superpowers/specs/2026-11-11-rocm-gpu-tier-spike-results.md
+
+gpu_deploy_dir: /opt/genieai-rocm-gpu
+gpu_data_dir: /opt/genieai-rocm-gpu/data
+gpu_generated_dir: configs/nginx-gpu
+gpu_public_domain: ""          # set per deployment
+gpu_https_port: "443"
+gpu_self_signed_certs: true
+
+# The template renders NVIDIA_VISIBLE_DEVICES from this var; `void`
+# neutralizes it on the ROCm path (containers ignore it, no GPU claimed
+# even on an NVIDIA host).
+nvidia_visible_devices: "void"
+
+# ROCm image pins (spike winners)
+vllm_llm_image: rocm/vllm:rocm10.1.0_ubuntu24.04_py3.14-pytorch_2.13.0_vllm-0.29.0
+vllm_translation_image: rocm/vllm:rocm10.1.0_ubuntu24.04_py3.14-pytorch_2.13.0_vllm-0.29.0
+tei_embedding_image: ghcr.io/huggingface/text-embeddings-inference:cpu-1.9.3
+tei_reranker_image: ghcr.io/huggingface/text-embeddings-inference:cpu-1.9.3
+docling_serve_image: ghcr.io/docling-project/docling-serve:v1.21.0
+nginx_image: nginx:1.28-alpine
+
+# Host-specific device group GIDs (distro-specific; verified in the
+# install tag against `getent group render video`)
+rocm_render_gid: 990
+rocm_video_gid: 44
+
+# Set true ONLY on a single-server ROCm host that co-locates the app
+# stack with this GPU-node stack (renders SECTION 18B endpoint overrides
+# in the app .env). Undefined/false = no output.
+# rocm_gpu_node_local: true

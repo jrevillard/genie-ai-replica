@@ -325,14 +325,27 @@ const fakeRun = (root, options = {}) => {
   return { run, calls };
 };
 
-test('a matching checkout is not reinstalled, and the install uses its own CLI', () => {
+test('a matching checkout is not reinstalled, and a complete tree is not reinstalled either', () => {
+  // The install is a no-op when every build the installer names is already
+  // there — spawning it again would cost a process and change nothing.
   const root = makeCheckout();
   const { run, calls } = fakeRun(root);
   const result = reconcile(root, { run });
   expect(calls.some((c) => c.args[0] === 'ci')).toBe(false);
-  expect(calls.some((c) => c.args.includes('install') && c.args.includes('chromium'))).toBe(true);
+  expect(calls.filter((c) => c.args.includes('chromium') && !c.args.includes('--dry-run'))).toEqual([]);
   expect(result.versions['@playwright/test']).toBe(FIXTURE_VERSION);
   expect(result.chromium).toBe(FIXTURE_CHROMIUM);
+});
+
+test('a missing build is installed by the CHECKOUT Playwright, not a global one', () => {
+  const root = makeCheckout();
+  const { run, calls } = fakeRun(root, {
+    tree: buildTree(root, { include: { chromium: 'no-marker', 'chromium-headless-shell': true } })
+  });
+  expect(() => reconcile(root, { run })).toThrow(/carries no INSTALLATION_COMPLETE/);
+  const install = calls.find((c) => c.args.includes('chromium') && !c.args.includes('--dry-run'));
+  expect(install).toBeDefined();
+  expect(install.args[0]).toBe(path.join(root, 'node_modules/playwright/cli.js'));
 });
 
 test('a checkout that does not match the lockfile is reinstalled with the dev dependencies', () => {
@@ -474,7 +487,11 @@ test('a checkout without a Playwright CLI fails loudly', () => {
 
 test('an install that fails is not reported as a reconciled tree', () => {
   const root = makeCheckout();
-  const { run } = fakeRun(root, { installResult: { status: 1, stdout: '', stderr: 'boom' } });
+  const { run } = fakeRun(root, {
+    // A missing build, so the install is actually spawned.
+    tree: buildTree(root, { include: { chromium: 'no-marker', 'chromium-headless-shell': true } }),
+    installResult: { status: 1, stdout: '', stderr: 'boom' }
+  });
   expect(() => reconcile(root, { run })).toThrow(/browser install failed/);
 });
 

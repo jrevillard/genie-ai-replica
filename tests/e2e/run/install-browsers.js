@@ -257,12 +257,12 @@ function installLocations(cliPath, run, repoRoot = REPO_ROOT) {
     throw new Error(`the Playwright installer's dry run failed (exit ${result.status})`);
   }
   const locations = [];
-  const pattern = /\(playwright ([^\s)]+) v(\d+)\)\s*\n\s*Install location:\s*(\S+)/g;
+  const pattern = /\(playwright ([^\s)]+) v\d+\)\s*\n\s*Install location:\s*(\S+)/g;
   for (const match of String(result.stdout || '').matchAll(pattern)) {
     // The revision the installer names is the one the browsers.json names
     // (both come from the same package), so the pin is reported once, from
     // the pin — and the location only answers "where".
-    locations.push({ name: match[1], location: match[3] });
+    locations.push({ name: match[1], location: match[2] });
   }
   if (!locations.length) {
     throw new Error('the Playwright installer named no install location — its output is not the one this script reads');
@@ -366,12 +366,22 @@ function reconcile(repoRoot = REPO_ROOT, io = {}) {
   }
   const revisions = requiredBrowserRevisions(repoRoot);
   const locations = installLocations(cliPath, run, repoRoot);
-  const install = run(command, args, { cwd: repoRoot, stdio: 'inherit' });
-  if (install.error) {
-    throw new Error(`the Playwright installer could not be started: ${install.error.message}`);
-  }
-  if (install.status !== 0) {
-    throw new Error(`the browser install failed (exit ${install.status})`);
+  // The install is a no-op when every build the installer names is already
+  // there — Playwright checks the same completion marker this script
+  // checks — so the process is spawned only when something is missing (and
+  // the tree is checked again afterwards either way).
+  const complete = locations.every(
+    (entry) =>
+      fs.existsSync(entry.location) && fs.existsSync(path.join(entry.location, INSTALL_MARKER))
+  );
+  if (!complete) {
+    const install = run(command, args, { cwd: repoRoot, stdio: 'inherit' });
+    if (install.error) {
+      throw new Error(`the Playwright installer could not be started: ${install.error.message}`);
+    }
+    if (install.status !== 0) {
+      throw new Error(`the browser install failed (exit ${install.status})`);
+    }
   }
 
   // The build the runner LAUNCHES is verified, not the one it happens to

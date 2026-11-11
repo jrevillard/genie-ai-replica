@@ -90,6 +90,7 @@ function programQuery() {
         (r) =>
           r &&
           !r.deleted_at &&
+          r.lifecycle_state !== 'retracted' &&
           r.repo_id !== bind.rid &&
           (r.source_documents || []).some((s) => s.file_hash && wanted.includes(s.file_hash))
       );
@@ -102,7 +103,7 @@ function programQuery() {
       return { all: async () => [] };
     }
     if (live && text && text.includes('source_documents')) {
-      if (text.includes('APPEND(')) {
+      if (text.includes('APPEND(') && text.includes('NOT IN @file_ids')) {
         // the durable list is upserted per file: the entries of the OTHER
         // files stay, the ones this import carries are replaced
         const kept = (live.source_documents || []).filter((s) => !bind.file_ids.includes(s.file_id));
@@ -1417,6 +1418,9 @@ describe('producer-service — D4 restricted-snapshot stamp (stampSources)', () 
     await producer.stampSources(RID, ['f1']);
     await producer.stampSources(RID, ['f2']);
     const repo = await mockDb.collection('okf_repositories').document(RID);
+    // the gate matches on file_hash — the SURVIVING entry must keep its hash
+    const first = repo.source_documents.find((s) => s.file_id === 'f1');
+    expect(first).toMatchObject({ file_id: 'f1', file_name: 'alpha.md', file_hash: 'HASH-A' });
     expect(repo.source_documents.map((s) => s.file_id).sort()).toEqual(['f1', 'f2']);
   });
 
@@ -1426,7 +1430,8 @@ describe('producer-service — D4 restricted-snapshot stamp (stampSources)', () 
     // must not point at a repository that does not exist
     authedAxios.get.mockResolvedValue({ data: { file: { file_id: 'f1', file_name: 'a.md' } } });
     await expect(producer.stampSources(R2 + '-ghost', ['f1'])).rejects.toMatchObject({
-      code: 'SOURCE_STAMP_FAILED'
+      code: 'SOURCE_REPO_VANISHED',
+      status: 404
     });
     expect(authedAxios.patch).not.toHaveBeenCalled();
   });

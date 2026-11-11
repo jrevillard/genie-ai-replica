@@ -229,25 +229,25 @@ async function sourceMeta(cache, file_id) {
 
 /**
  * Record the repository's source documents — the DURABLE record of what this
- * repository backs. The list is UPSERTED per file: an entry for a file this
- * import carries is replaced, the entries of the OTHER files stay. A second
- * import into the same repository must not erase the first one's sources —
- * the duplicate-content gate reads this list, so an erased hash would let
- * the same content land in another repository. The DUPLICATE_CONTENT gate (issue #1744) and the
+ * repository backs. The DUPLICATE_CONTENT gate (issue #1744) and the
  * SOURCES-BUSY lifecycle gate read it, so a FAILED write is FATAL: the
  * repository does not own its sources as far as every other guard is
- * concerned, and the import must not report success. It is written FIRST,
- * so a failure leaves nothing stamped anywhere: the per-file doc-repo stamps
+ * concerned, and the import must not report success. It is written FIRST, so
+ * a failure leaves nothing stamped anywhere: the per-file doc-repo stamps
  * would otherwise leave the files owned by a repository that does not list
  * them, and no gate would see the content again. (A missing repository
- * DOCUMENT is a different case: the write is a no-op, and the import's
- * sources stay unowned by a repository that does not exist — the doc-repo
- * stamps then self-heal as stale.)
+ * DOCUMENT is a different case: the write matches no row, and the import
+ * fails rather than stamping files for a repository that does not exist.)
  *
- * @param {string} repoId
- * @param {string[]} fileIds the source documents
- * @param {object} metaByKey the import pre-flight's per-file metadata
- * @returns {Promise<object[]>} the recorded source entries
+ * The list is UPSERTED per file: an entry for a file this import carries is
+ * replaced, the entries of the OTHER files stay. A second import into the
+ * same repository must not erase the first one's sources — the gate reads
+ * this list, so an erased hash would let the same content land in another
+ * repository.
+ *
+ * RETENTION: the list only grows. It never forgets what the repository
+ * backed — that is the point of the gate — so a retracted source stays listed
+ * (with its content hash) until the repository is deleted.
  */
 async function recordSourceDocuments(repoId, fileIds, metaByKey = Object.create(null)) {
   const db = await getDb();
@@ -314,14 +314,14 @@ async function recordSourceDocuments(repoId, fileIds, metaByKey = Object.create(
         repo_id: repoId
       });
       throw Object.assign(new Error('the repository no longer exists — the import was not completed'), {
-        code: 'SOURCE_STAMP_FAILED',
-        status: 500
+        code: 'SOURCE_REPO_VANISHED',
+        status: 404
       });
     }
   } catch (err) {
     // The vanished-repository error carries its own message — it is not a
     // write failure, and the client must be able to tell them apart.
-    if (err && err.code === 'SOURCE_STAMP_FAILED') throw err;
+    if (err && (err.code === 'SOURCE_STAMP_FAILED' || err.code === 'SOURCE_REPO_VANISHED')) throw err;
     // The internal reason stays in the log — the client gets a fixed sentence.
     logger.error('source_documents record could not be written — the import was not completed', {
       repo_id: repoId,
@@ -1086,6 +1086,7 @@ async function runDocumentsConversion(job) {
       stage: 'failed',
       error: err.message,
       code: err.code || 'CONVERSION_FAILED',
+      summary: null, // the record is merged — the previous run's summary must not survive
       per_file: perFile.slice(),
       finished_at: new Date().toISOString()
     });
@@ -1221,7 +1222,7 @@ async function startDocumentsConversion({ repo_id, file_ids, requested_name, cla
     if (candidateHashes.length > 0) {
       const dupRows = await db.query(
         `FOR r IN ${COLLECTION}
-           FILTER r.deleted_at == null AND r.repo_id != @rid
+           FILTER r.deleted_at == null AND r.repo_id != @rid AND r.lifecycle_state != 'retracted'
            LET dupFiles = (
              FOR s IN (r.source_documents || [])
                FILTER s.file_hash != null AND POSITION(@hashes, s.file_hash)
@@ -1238,7 +1239,7 @@ async function startDocumentsConversion({ repo_id, file_ids, requested_name, cla
         const names = dup.dupFiles.map((d) => d.file_name || d.file_id).join(', ');
         throw Object.assign(
           new Error(
-            `the same content is already imported into OKF repository "${dup.name}" (files: ${names}) — retract or delete that repository before importing these documents`
+            `the same content is already imported into OKF repository "${dup.name}" (files: ${names}) — delete that repository before importing these documents`
           ),
           { code: 'DUPLICATE_CONTENT', status: 409 }
         );
@@ -1278,6 +1279,7 @@ async function startDocumentsConversion({ repo_id, file_ids, requested_name, cla
             stage: 'failed',
             error: err.message,
             code: err.code || 'CONVERSION_FAILED',
+            summary: null, // the record is merged — the previous run's summary must not survive
             files_done: 0,
             files_total: file_ids.length,
             per_file: [],

@@ -184,6 +184,7 @@ async function sweepInterruptedOnce() {
           && r.conversion.status NOT IN @terminal
         UPDATE r WITH { conversion: MERGE(r.conversion, {
           status: 'failed',
+          stage: 'failed',
           error: 'interrupted by server restart — start the conversion again',
           finished_at: DATE_ISO8601(DATE_NOW())
         })} IN ${COLLECTION}
@@ -820,8 +821,10 @@ async function runConversion(job) {
     );
     await patchConversion(repo_id, {
       status: 'failed',
+      stage: 'failed',
       error: err.message,
       code: err.code || 'CONVERSION_FAILED',
+      summary: null, // the record is merged — the previous run's summary must not survive
       bytes_done: bytesDone,
       pages_done: pagesDone,
       batches_done: batchesDone,

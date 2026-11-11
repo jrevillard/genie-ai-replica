@@ -527,6 +527,20 @@ test('a kid-less token that no published candidate signs is a bad token, not an 
   );
 });
 
+test('a token whose key id is not a string is a bad token, not a candidate trial', async () => {
+  // A key id that is not a string (a number) is a MALFORMED token, not a
+  // token naming no key id: a realm's key id is a string, so resolving the
+  // token against the published candidates would accept a token the realm
+  // never issued. The trial applies ONLY to a token that names NO key id —
+  // so this one is rejected, like any other bad token.
+  const svc = loadVerifier();
+  const malformed = await sign(baseClaims(DISCOVERY_ISSUER), { kid: 123 });
+  await assert.rejects(
+    () => svc.verifyToken(malformed),
+    (err) => err.code === 'TOKEN_INVALID'
+  );
+});
+
 test('a realm publishing more candidate keys than the trial cap cannot resolve a kid-less token', async () => {
   // The trial is bounded (three candidates): a realm that publishes more
   // signing keys than the cap is a realm to clean up, not a token to guess

@@ -633,6 +633,22 @@ describe('keycloakAuthService', () => {
     const resolveThroughKey = (protectedHeader) =>
       mockJwtVerify.mockImplementation(async (token, key) => key(protectedHeader, token));
 
+    // The AMBIGUITY is raised by the key resolver too, the way jose raises
+    // it: the mock calls the resolver the verifier owns, so the resolver
+    // classifies the ambiguity (a token naming NO key id may be resolved by
+    // the published candidates; one naming a key id is the realm's outage)
+    // and the trial only runs for the case it could not answer itself. The
+    // trial's own attempts carry a CANDIDATE key instead of the resolver —
+    // that is how the two are told apart.
+    const mockAmbiguousKeySet = ({ protectedHeader, candidates, onCandidate }) => {
+      const ambiguous = ambiguousKeysError(candidates);
+      mockCreateRemoteJWKSet.mockReturnValue(jest.fn().mockRejectedValue(ambiguous));
+      mockJwtVerify.mockImplementation(async (token, key) => {
+        if (typeof key === 'function') return key(protectedHeader, token);
+        return onCandidate(key);
+      });
+    };
+
     it('logs the cause of a rejection, and neither the token nor key material', async () => {
       // Without the cause, every distinct failure (tampered signature,
       // unknown key id, ambiguous key set, wrong algorithm) reaches the
@@ -747,15 +763,18 @@ describe('keycloakAuthService', () => {
       // cannot resolve by key id alone. The published candidates resolve
       // it — the first one whose signature verifies wins.
       const candidates = [{ key: 'candidate-1' }, { key: 'candidate-2' }];
-      const ambiguous = ambiguousKeysError(candidates);
 
-      mockJwtVerify.mockRejectedValueOnce(ambiguous).mockImplementation(async (token, key) => {
-        if (key === candidates[1]) {
-          return { payload: mockJwtPayload, protectedHeader: { alg: 'RS256' } };
+      mockAmbiguousKeySet({
+        protectedHeader: { alg: 'RS256' },
+        candidates,
+        onCandidate: (candidate) => {
+          if (candidate === candidates[1]) {
+            return { payload: mockJwtPayload, protectedHeader: { alg: 'RS256' } };
+          }
+          const signatureError = new Error('signature verification failed');
+          signatureError.name = 'JWSSignatureVerificationFailed';
+          throw signatureError;
         }
-        const signatureError = new Error('signature verification failed');
-        signatureError.name = 'JWSSignatureVerificationFailed';
-        throw signatureError;
       });
 
       const token = generateMockJwtString(mockJwtPayload);
@@ -770,12 +789,14 @@ describe('keycloakAuthService', () => {
       // The opposite case: the token names no key id and none of the
       // published candidates signs it. It stays a bad token — a kid-less
       // token is never ACCEPTED without a signature that verifies.
-      const ambiguous = ambiguousKeysError([{ key: 'candidate-1' }, { key: 'candidate-2' }]);
-
-      mockJwtVerify.mockRejectedValueOnce(ambiguous).mockImplementation(async () => {
-        const signatureError = new Error('signature verification failed');
-        signatureError.name = 'JWSSignatureVerificationFailed';
-        throw signatureError;
+      mockAmbiguousKeySet({
+        protectedHeader: { alg: 'RS256' },
+        candidates: [{ key: 'candidate-1' }, { key: 'candidate-2' }],
+        onCandidate: () => {
+          const signatureError = new Error('signature verification failed');
+          signatureError.name = 'JWSSignatureVerificationFailed';
+          throw signatureError;
+        }
       });
 
       await expect(keycloakAuthService.verifyToken(generateMockJwtString(mockJwtPayload))).rejects.toMatchObject({
@@ -848,16 +869,14 @@ describe('keycloakAuthService', () => {
       // log names the realm\'s key set as the reason instead of leaving the
       // operator with a bare rejection.
       const warns = captureWarns();
-      const ambiguous = ambiguousKeysError([
-        { key: 'candidate-1' },
-        { key: 'candidate-2' },
-        { key: 'candidate-3' },
-        { key: 'candidate-4' }
-      ]);
-      mockJwtVerify.mockRejectedValueOnce(ambiguous).mockImplementation(async () => {
-        const signatureError = new Error('signature verification failed');
-        signatureError.name = 'JWSSignatureVerificationFailed';
-        throw signatureError;
+      mockAmbiguousKeySet({
+        protectedHeader: { alg: 'RS256' },
+        candidates: [{ key: 'candidate-1' }, { key: 'candidate-2' }, { key: 'candidate-3' }, { key: 'candidate-4' }],
+        onCandidate: () => {
+          const signatureError = new Error('signature verification failed');
+          signatureError.name = 'JWSSignatureVerificationFailed';
+          throw signatureError;
+        }
       });
 
       try {
@@ -882,8 +901,15 @@ describe('keycloakAuthService', () => {
       // The trial costs one verification per candidate. An expired token can
       // never verify — jose checks the signature BEFORE the claims — so it
       // is decided from the unverified payload and the trial never runs.
-      const ambiguous = ambiguousKeysError([{ key: 'candidate-1' }]);
-      mockJwtVerify.mockRejectedValue(ambiguous);
+      mockAmbiguousKeySet({
+        protectedHeader: { alg: 'RS256' },
+        candidates: [{ key: 'candidate-1' }],
+        onCandidate: () => {
+          const signatureError = new Error('signature verification failed');
+          signatureError.name = 'JWSSignatureVerificationFailed';
+          throw signatureError;
+        }
+      });
 
       const token = generateMockJwtString({ exp: Math.floor(Date.now() / 1000) - 3600 });
       await expect(keycloakAuthService.verifyToken(token)).rejects.toMatchObject({
@@ -891,6 +917,55 @@ describe('keycloakAuthService', () => {
         message: 'Token has expired'
       });
 
+      expect(mockJwtVerify).toHaveBeenCalledTimes(1);
+    });
+
+    it('does not spend a signature verification on a kid-less token whose expiry jose refuses', async () => {
+      // jose REQUIRES the expiry claim (`requiredClaims`) and refuses one
+      // that is not a number, so a token without a numeric expiry is
+      // invalid whatever key signs it. The trial must not spend a
+      // signature verification to learn that.
+      mockAmbiguousKeySet({
+        protectedHeader: { alg: 'RS256' },
+        candidates: [{ key: 'candidate-1' }, { key: 'candidate-2' }],
+        onCandidate: () => {
+          const signatureError = new Error('signature verification failed');
+          signatureError.name = 'JWSSignatureVerificationFailed';
+          throw signatureError;
+        }
+      });
+
+      const token = generateMockJwtString({ exp: undefined });
+      await expect(keycloakAuthService.verifyToken(token)).rejects.toMatchObject({
+        code: 'TOKEN_INVALID',
+        message: 'Token verification failed'
+      });
+
+      // Only the first attempt: no candidate was tried.
+      expect(mockJwtVerify).toHaveBeenCalledTimes(1);
+    });
+
+    it('does not resolve a token whose key id is not a string', async () => {
+      // A key id that is not a string (a number, null) is a MALFORMED
+      // token, not a token naming no key id: jose matched the candidates
+      // without comparing that key id, so resolving the token against them
+      // would accept a token the realm never issued. It stays a bad token.
+      mockAmbiguousKeySet({
+        protectedHeader: { alg: 'RS256', kid: 123 },
+        candidates: [{ key: 'candidate-1' }, { key: 'candidate-2' }],
+        onCandidate: () => {
+          const signatureError = new Error('signature verification failed');
+          signatureError.name = 'JWSSignatureVerificationFailed';
+          throw signatureError;
+        }
+      });
+
+      await expect(keycloakAuthService.verifyToken(generateMockJwtString(mockJwtPayload))).rejects.toMatchObject({
+        code: 'TOKEN_INVALID',
+        message: 'Token verification failed'
+      });
+
+      // Only the first attempt: no candidate was tried.
       expect(mockJwtVerify).toHaveBeenCalledTimes(1);
     });
 

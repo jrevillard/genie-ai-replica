@@ -35,6 +35,13 @@ test.describe('the streaming flag is read through the store getter', () => {
     expect(streamingFlagOf({ state: 'ok', messages: [{ sender: 'user', isStreaming: false }] })).toBe(null);
   });
 
+  test('the WELCOME bubble is not the turn — the wait continues', () => {
+    // The app appends a welcome bot message on mount, and it carries no
+    // streaming flag at all. Reading it as "not streaming" would end the
+    // wait BEFORE the turn's answer exists.
+    expect(streamingFlagOf({ state: 'ok', messages: [{ sender: 'bot' }] })).toBe(null);
+  });
+
   test('the LAST bot message decides the flag', () => {
     // The page sends each message's sender and flag; the LAST BOT one is
     // the turn that is still open.

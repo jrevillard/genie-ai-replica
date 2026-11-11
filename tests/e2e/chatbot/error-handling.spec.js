@@ -30,6 +30,17 @@ const RECOVERED_ANSWER = 'Recovered answer after the error.';
 // timeout and the server error frames have their own owners in the store
 // tests, and a dropped connection has one in chat-conversation.spec.js.
 test.describe('RAG error handling', () => {
+  // This spec's OWN budget. The project's 60 s is too small for what it
+  // asserts on purpose: the waits below are ceilings, and a loaded
+  // venue spends them slowly. The arithmetic of the ceilings — the error
+  // card 30 s, the navbar status 15 s (expect's default), the composer
+  // 5 s, the retry's two successive 10 s waits (20 s), the composer
+  // again 5 s — is 75 s of waiting in the body, plus the login and the
+  // navigation in the beforeEach. A budget that cannot cover its own
+  // ceilings would abort the test with a generic timeout instead of the
+  // assertion that names the cause.
+  test.describe.configure({ timeout: 120000 });
+
   let page;
   let context;
 
@@ -85,8 +96,8 @@ test.describe('RAG error handling', () => {
     // error card's 30 s wait above aborts the test there if it expires.
     // A retry that HANGS fails on that wait, with the helper's own
     // message; a retry that ERRORS renders no answer bubble and fails on
-    // the assertion below. Neither reaches the project's generic 60 s
-    // timeout.
+    // the assertion below. The spec's own timeout (120 s, above) covers
+    // the sum of these ceilings plus the beforeEach's login.
     await waitForBotResponse(page, { timeout: 10000 });
     // The ANSWER, not merely a non-empty bubble: the welcome turn is a
     // bot bubble too, so "not empty" would pass on a retry that never

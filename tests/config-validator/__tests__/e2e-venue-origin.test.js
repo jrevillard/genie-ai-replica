@@ -37,7 +37,9 @@ const E2E_ROOT = path.join(ROOT, 'tests/e2e');
 const LOCAL_ORIGIN = /https?:\/\/(?:localhost|127\.0\.0\.1|genieai(?:-forge)?\.local)(?::\d+)?(?=[/:]|$)/gi;
 
 // The local origins the suite may drive on purpose: a mocked identity
-// provider, a local stub. One per line, with the reason.
+// provider, a local stub. One per line, with the reason. It is EMPTY on
+// purpose today — every local origin in the tree is the edge itself — and
+// it is the escape hatch a spec that needs a local mock adds to.
 const MOCK_ORIGINS = [];
 
 // The defining module, resolved — not a literal path: if the module
@@ -60,7 +62,7 @@ const baseUrlReaders = (root) =>
  * (`const { BASE_URL } = process.env`).
  */
 const READS_EDGE =
-  /process\.env\.BASE_URL\b|process\.env\s*\[\s*['"]BASE_URL['"]\s*\]|\{\s*BASE_URL\s*[,}][^=]*=\s*process\.env/;
+  /process\.env\.BASE_URL\b|process\.env\s*\[\s*['"]BASE_URL['"]\s*\]|\{\s*BASE_URL\s*[:=,}][^=]*=\s*process\.env/;
 
 const offenders = (root, allowed = MOCK_ORIGINS) =>
   jsFiles(root)
@@ -93,7 +95,9 @@ describe('the e2e suite names the venue it was given, and names it once', () => 
       fs.writeFileSync(path.join(tree, 'b.spec.js'), 'const EDGE = process.env.BASE_URL;\n');
       // The destructuring spelling is a read too.
       fs.writeFileSync(path.join(tree, 'c.spec.js'), 'const { BASE_URL } = process.env;\n');
-      expect(baseUrlReaders(tree).sort()).toEqual(['a.spec.js', 'b.spec.js', 'c.spec.js']);
+      // The RENAMED destructuring is a read too.
+      fs.writeFileSync(path.join(tree, 'd.spec.js'), 'const { BASE_URL: EDGE } = process.env;\n');
+      expect(baseUrlReaders(tree).sort()).toEqual(['a.spec.js', 'b.spec.js', 'c.spec.js', 'd.spec.js']);
     } finally {
       fs.rmSync(tree, { recursive: true, force: true });
     }

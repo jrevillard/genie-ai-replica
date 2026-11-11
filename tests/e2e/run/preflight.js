@@ -89,7 +89,17 @@ async function main() {
   }
   const { chromium, BASE_URL, venueLaunchArgs, venueMapping, runner } = loaded;
 
-  const mapping = venueMapping();
+  // The mapping is read inside a try: a malformed E2E_VENUE_IP (a value
+  // that is not a host, a mapping that does not parse) must reach the
+  // operator as the NAMED remedy, not as an unhandled throw that hides
+  // the cause behind a stack trace.
+  let mapping;
+  try {
+    mapping = venueMapping();
+  } catch (e) {
+    process.stderr.write(`pre-flight: the venue mapping is not usable.\n${remedy(e.message.split('\n')[0])}\n`);
+    process.exit(1);
+  }
   process.stdout.write(
     `pre-flight: venue ${BASE_URL}` + (mapping ? ` (mapped ${mapping.host} -> ${mapping.ip})` : '') + '\n'
   );

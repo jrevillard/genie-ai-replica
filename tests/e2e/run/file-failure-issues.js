@@ -231,8 +231,10 @@ function namesThisFile(token, file) {
 function isE2ePath(token) {
   if (token.includes(`${TESTS_E2E_ROOT}/`)) return true;
   const first = token.split('/')[0];
-  // A bare file name counts when the e2e tree really carries it.
-  if (first === token) return fs.existsSync(path.join(REPO_ROOT, TESTS_E2E_ROOT, token));
+  // A bare spec file name is this tree's path — whether it still
+  // exists or not: a file that was RENAMED must not drop out of the
+  // comparison (that would turn a multi-file title into a dedication).
+  if (first === token) return /\.(?:spec|test)\.[cm]?[jt]sx?$/.test(token);
   return fs.existsSync(path.join(REPO_ROOT, TESTS_E2E_ROOT, first));
 }
 
@@ -295,7 +297,10 @@ function findTrackedIssue(file, openIssues) {
     (issue) =>
       titleIsDedicatedTo(issue.title, file) || (issue.description || '').includes(marker)
   );
-  return matches[0] || null;
+  // The dedicated TITLE wins: an issue matched only by the marker is
+  // the same file's issue too, but the one whose title says so is the
+  // one a reader lands on.
+  return matches.find((issue) => titleIsDedicatedTo(issue.title, file)) || matches[0] || null;
 }
 
 /**

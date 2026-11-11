@@ -42,6 +42,20 @@ describe('the stripper removes prose and keeps code', () => {
     expect(out).not.toContain('the edge was');
   });
 
+  test('a nested template inside a template expression is code, not prose', () => {
+    // `\`${a(`\${B}/c`)}\`` — the inner backtick closes the OUTER
+    // template for a scanner that does not know about the expression.
+    // The scanner then reads the rest of the file in the wrong state,
+    // and the comments survive the strip as code.
+    const out = stripJsComments('const u = `${a(`${B}/c`)}`;\n// the edge was https://localhost/\n');
+    expect(out).not.toContain('the edge was');
+  });
+
+  test('a slash inside a regex character class does not end the literal', () => {
+    const out = stripJsComments('const re = /[A-Za-z0-9_./-]*\\./;\n// the edge was https://localhost/\n');
+    expect(out).not.toContain('the edge was');
+  });
+
   test('a division after a plain expression is a division', () => {
     const out = stripJsComments('function f() { a / b; }\n// the edge was https://localhost/\n');
     expect(out).not.toContain('the edge was');

@@ -230,9 +230,12 @@ function streamingFlagOf(read) {
   const messages = read.messages || [];
   const bots = messages.filter((m) => m.sender === 'bot');
   const last = bots[bots.length - 1];
-  // No bot message yet: the turn has not produced one, so the wait
-  // continues (null is not false).
-  return last === undefined ? null : last.isStreaming;
+  // No bot message yet — or the last one is the WELCOME bubble, which
+  // carries no flag at all: the turn has not produced an answer, so the
+  // wait continues (null is not false). A message without the flag is
+  // not the turn's answer.
+  if (last === undefined || last.isStreaming === undefined) return null;
+  return last.isStreaming;
 }
 
 /**
@@ -302,14 +305,6 @@ async function waitForBotMessage(page, text, { timeout = 30000 } = {}) {
   await expect(page.locator(BOT_BUBBLE).last()).toContainText(text, { timeout });
 }
 
-/**
- * Build the SSE body the specs mock the answer stream with: `data: ` frames,
- * one JSON payload per line, ending with a done frame — the app's wire
- * contract, in one place. `metadata`, when given, travels as its own frame
- * before the done frame (an is_grounded flag, source_documents, ...). The
- * done frame's queryId is recorded on the finished message by the store;
- * the value itself is never asserted.
- */
 
 /**
  * Mock the chat answer stream. `chunks` arrive as chunk frames; `metadata`,

@@ -39,15 +39,74 @@ const jsFiles = (root) =>
 // this one knows a regex may follow a keyword, the sibling's does not.
 // Consolidating the two is a separate cleanup, in the wave that owns that
 // file.)
+/**
+ * The end of a template's ${...} expression, given the position of its
+ * opening brace. The braces are counted, and the strings inside (a
+ * nested template among them) are skipped whole.
+ */
+const skipTemplateExpression = (source, start) => {
+  let depth = 0;
+  let i = start;
+  while (i < source.length) {
+    const ch = source[i];
+    if (ch === '{') {
+      depth++;
+      i++;
+      continue;
+    }
+    if (ch === '}') {
+      depth--;
+      i++;
+      if (depth === 0) return i - 1;
+      continue;
+    }
+    if (ch === "'" || ch === '"' || ch === '`') {
+      const quote = ch;
+      i++;
+      while (i < source.length && source[i] !== quote) {
+        if (source[i] === '\\') i++;
+        i++;
+      }
+      i++;
+      continue;
+    }
+    i++;
+  }
+  return source.length - 1;
+};
+
 const stripJsComments = (source) => {
   let out = '';
   let state = null; // null | "'" | '"' | '`' | '/'
   let prevSignificant = ''; // last non-whitespace character kept
+  let inCharClass = false; // inside a regex character class
   let wordBuffer = ''; // the word being read
   let lastWord = ''; // the last COMPLETED word
   let wordAfterDot = false; // was that word a member name (obj.return)?
   for (let i = 0; i < source.length; i++) {
     const ch = source[i];
+    if (state === '`') {
+      // Inside a template literal, an embedded ${...} is CODE — and it
+      // may hold a nested template. Skipping it as a balanced brace
+      // group keeps the scanner in the template: reading the nested
+      // backtick as the template's end would close the template early
+      // and leave the rest of the file in the wrong state.
+      if (ch === '\\') {
+        out += ch;
+        out += source[i + 1] || '';
+        i++;
+        continue;
+      }
+      if (ch === '$' && source[i + 1] === '{') {
+        const end = skipTemplateExpression(source, i + 1);
+        out += source.slice(i, end + 1);
+        i = end;
+        continue;
+      }
+      out += ch;
+      if (ch === '`') state = null;
+      continue;
+    }
     if (state && state !== '/') {
       out += ch;
       if (ch === '\\') {
@@ -59,12 +118,18 @@ const stripJsComments = (source) => {
       continue;
     }
     if (state === '/') {
-      // Inside a regex literal: a `\` escapes the next character.
+      // Inside a regex literal: a `\` escapes the next character, and a
+      // character class may hold a slash ([A-Za-z0-9_./-]) — the slash
+      // inside it does not end the literal.
       out += ch;
       if (ch === '\\') {
         out += source[i + 1] || '';
         i++;
-      } else if (ch === '/') {
+      } else if (ch === '[') {
+        inCharClass = true;
+      } else if (ch === ']') {
+        inCharClass = false;
+      } else if (ch === '/' && !inCharClass) {
         state = null;
         prevSignificant = ch;
       }

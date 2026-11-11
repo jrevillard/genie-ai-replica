@@ -93,6 +93,10 @@ beforeEach(async () => {
   await Promise.all(Array.from(producer.live.values(), (p) => p.catch(() => {})));
   jest.clearAllMocks();
   producer.live.delete(RID);
+  // The content claim registry (issue #1744) is cleared for the same reason
+  // the conversion registry is: a test that aborts between the claim and its
+  // release would otherwise leave the content claimed for the whole process.
+  producer.contentClaims.clear();
   programQuery();
 });
 
@@ -766,16 +770,94 @@ describe('producer-service — startDocumentsConversion + run', () => {
     await producer.live.get(RID);
     authedAxios.patch.mockImplementation(async () => ({ status: 200 }));
 
-    expect(second).toMatchObject({ code: 'DUPLICATE_CONTENT', status: 409 });
-    // The loser wrote NOTHING: no source stamp, and no conversion record (a
-    // pre-flight refusal is not a conversion).
+    expect(second).toMatchObject({ code: 'DUPLICATE_CONTENT_IN_FLIGHT', status: 409 });
+    // The loser wrote NOTHING: no source stamp. Its conversion record is
+    // closed as failed — the run was refused, and the record says why.
     const loser = await mockDb.collection('okf_repositories').document(RID2);
     expect(loser.source_documents).toBeUndefined();
-    expect(loser.conversion).toBeUndefined();
+    expect(loser.conversion).toMatchObject({ status: 'failed', code: 'DUPLICATE_CONTENT_IN_FLIGHT' });
     // The winner kept its content.
     const winner = await mockDb.collection('okf_repositories').document(RID);
     expect(winner.source_documents).toHaveLength(1);
     expect(winner.source_documents[0].file_hash).toBe('HASH-CONCURRENT-1');
+  });
+
+  it('releases the content claim when a start fails — the next import of the same content is not refused', async () => {
+    // The claim is the CONCURRENT-window guard: once the run is over it must
+    // not keep the content spoken for. Here the run fails in the duplicate
+    // query — before any durable record is written — so nothing else holds
+    // the content: the next import into another repository must proceed.
+    const RID2 = '88888888-8888-4888-8888-888888888888';
+    await mockDb.collection('okf_repositories').save({ _key: RID, repo_id: RID, name: 'Mine', domain: 'general' });
+    await mockDb.collection('okf_repositories').save({ _key: RID2, repo_id: RID2, name: 'Other', domain: 'social' });
+    const metaOf = (fid) => ({
+      data: {
+        file: {
+          file_id: fid,
+          file_name: 'alpha.md',
+          size: 100,
+          file_hash: 'HASH-RELEASE-1',
+          dataprep: { status: 'Pending' }
+        }
+      }
+    });
+    authedAxios.get.mockImplementation((url) => {
+      const s = String(url);
+      if (s.endsWith('/download')) {
+        const fid = s.split('/api/files/')[1].replace(/\/download$/, '');
+        return Promise.resolve({ data: Readable.from([Buffer.from('# T\n\nbody for ' + fid)]) });
+      }
+      return Promise.resolve(metaOf(s.split('/api/files/')[1]));
+    });
+    const programImpl = mockDb.query.getMockImplementation();
+    let failOnce = true;
+    mockDb.query.mockImplementation(async (q, bind) => {
+      const text = typeof q === 'string' ? q : q && q.query;
+      if (failOnce && text && text.includes('POSITION(@hashes')) {
+        failOnce = false;
+        throw new Error('db down');
+      }
+      return programImpl(q, bind);
+    });
+
+    await expect(
+      producer.startDocumentsConversion({ repo_id: RID, file_ids: ['f1'], requested_name: 'x' })
+    ).rejects.toThrow(/db down/);
+    // The claim is gone: the same content imports into another repository.
+    const second = await producer.startDocumentsConversion({
+      repo_id: RID2,
+      file_ids: ['f1'],
+      requested_name: 'y'
+    });
+    expect(second).toMatchObject({ status: 'queued' });
+    await producer.live.get(RID2);
+    const repo2 = await mockDb.collection('okf_repositories').document(RID2);
+    expect(repo2.source_documents).toHaveLength(1);
+  });
+
+  it('fails the start when the durable source_documents record cannot be written', async () => {
+    // The source_documents list IS what the DUPLICATE_CONTENT gate reads: if
+    // it cannot be written, the repository does not own its sources as far as
+    // every other guard is concerned — so the import must not report success.
+    await mockDb.collection('okf_repositories').save({ _key: RID, repo_id: RID, name: 'Mine', domain: 'general' });
+    mockDocs({ f1: 'alpha.md' });
+    const programImpl = mockDb.query.getMockImplementation();
+    let failed = false;
+    mockDb.query.mockImplementation(async (q, bind) => {
+      const text = typeof q === 'string' ? q : q && q.query;
+      if (!failed && text && text.includes('source_documents') && !text.includes('POSITION(@hashes')) {
+        failed = true;
+        throw new Error('db down');
+      }
+      return programImpl(q, bind);
+    });
+
+    await expect(
+      producer.startDocumentsConversion({ repo_id: RID, file_ids: ['f1'], requested_name: 'x' })
+    ).rejects.toMatchObject({ code: 'SOURCE_STAMP_FAILED' });
+    const repo = await mockDb.collection('okf_repositories').document(RID);
+    expect(repo.source_documents).toBeUndefined();
+    expect(repo.conversion).toMatchObject({ status: 'failed', code: 'SOURCE_STAMP_FAILED' });
   });
 
   it('allows re-importing the same content into the SAME repository (idempotent)', async () => {

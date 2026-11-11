@@ -193,7 +193,14 @@ async function create(input, actor, opts = {}) {
     // apply. The Joi schema validates SHAPE, not naming (min(1) accepts
     // '   '), so the rule is enforced here, at the write boundary: a
     // repository is REFUSED, never stored under a blank name and never
-    // silently renamed.
+    // silently renamed. A name of the wrong TYPE is its own error — the
+    // Joi layer rejects it at the route, so only an internal caller reaches
+    // it, and "a name of only spaces" would send it looking for whitespace
+    // in a number.
+    if (typeof input.name !== 'string') {
+      recordOp('create', 'validation');
+      throw new RepoError('VALIDATION_ERROR', 'name must be a string', 400);
+    }
     if (!intentName(input.name)) {
       recordOp('create', 'validation');
       throw new RepoError('VALIDATION_ERROR', 'a name of only spaces is no name', 400);
@@ -642,6 +649,22 @@ async function update(repo_id, patch, actor) {
       throw new RepoError('REPO_NOT_FOUND', `Repository ${repo_id} not found`, 404);
     }
 
+    // A rename to a name of only spaces is NO name (issue #1774) — the same
+    // SSOT (intentName), the same refusal. A patch WITHOUT a name is not a
+    // rename and is untouched. The check sits BEFORE the serving-repo
+    // read-only gate, so the same malformed request gets the same answer
+    // whatever the repository's lifecycle state is.
+    if (Object.prototype.hasOwnProperty.call(patch, 'name')) {
+      if (typeof patch.name !== 'string') {
+        recordOp('update', 'validation');
+        throw new RepoError('VALIDATION_ERROR', 'name must be a string', 400);
+      }
+      if (!intentName(patch.name)) {
+        recordOp('update', 'validation');
+        throw new RepoError('VALIDATION_ERROR', 'a name of only spaces is no name', 400);
+      }
+    }
+
     // SERVING MAINTENANCE (1-8g-q, David 2026-10-11: "I see it as a
     // maintenance operation, similar to indexing a database"): a serving
     // repo accepts HEAD/METADATA patches — `frontmatter`, the tag-set the
@@ -664,14 +687,6 @@ async function update(repo_id, patch, actor) {
         );
       }
       recordOp('update', 'frontmatter_maintenance');
-    }
-
-    // A rename to a name of only spaces is NO name (issue #1774) — the same
-    // SSOT (intentName), the same refusal. A patch WITHOUT a name is not a
-    // rename and is untouched.
-    if (Object.prototype.hasOwnProperty.call(patch, 'name') && !intentName(patch.name)) {
-      recordOp('update', 'validation');
-      throw new RepoError('VALIDATION_ERROR', 'a name of only spaces is no name', 400);
     }
 
     // If renaming, reject collision with another LIVE repo in the same domain.

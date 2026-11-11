@@ -85,6 +85,12 @@ const contentClaims = new Map(); // claim key -> owning repo_id
  * Synchronous on purpose: the check and the set must not be separated by an
  * await, or a concurrent run could slip in between and claim the same
  * content.
+ *
+ * The rule matches the durable gate's: the same content may not back a
+ * DIFFERENT live repository. The target repository is exempt (its own
+ * content is its own), exactly as the gate exempts it — so the two guards
+ * agree on what "the same content" means.
+ *
  * @param {string} repoId the importing repository
  * @param {string[]} fileIds the candidate source documents
  * @param {string[]} hashes the candidate content hashes
@@ -96,12 +102,18 @@ function claimContent(repoId, fileIds, hashes) {
   for (const hash of hashes) keys.push(`hash:${hash}`);
   for (const key of keys) {
     const owner = contentClaims.get(key);
-    if (owner !== undefined) {
+    if (owner !== undefined && owner !== repoId) {
+      logger.warn('Content claim refused — the same content is in flight into another repository', {
+        repo_id: repoId,
+        claimed_by: owner
+      });
+      // Its own code: DUPLICATE_CONTENT means "already imported — retract or
+      // delete that repository", and that remedy is WRONG for a run that is
+      // still in flight. The message says "in flight" so the web client
+      // shows its wait-for-the-run advice instead.
       throw Object.assign(
-        new Error(
-          `the same content is already being imported into OKF repository ${owner} — wait for that import to finish`
-        ),
-        { code: 'DUPLICATE_CONTENT', status: 409 }
+        new Error('the same content is in flight into another OKF repository — wait for that import to finish'),
+        { code: 'DUPLICATE_CONTENT_IN_FLIGHT', status: 409 }
       );
     }
   }
@@ -257,7 +269,18 @@ async function stampSources(repoId, fileIds, metaByKey = Object.create(null)) {
       }
     );
   } catch (err) {
-    logger.warn('source_documents stamp failed (non-fatal)', { repo_id: repoId, error: err.message });
+    // The source_documents list IS the durable record of what this repository
+    // backs: the DUPLICATE_CONTENT gate reads it (issue #1744) and so does
+    // the SOURCES-BUSY lifecycle gate. If it cannot be written, the
+    // repository does not own its sources as far as every other guard is
+    // concerned — so the import must NOT report success. The caller closes
+    // the conversion as failed and releases the content claim with it.
+    throw Object.assign(
+      new Error(
+        `the repository's source documents could not be recorded (${err.message}) — the import was not completed`
+      ),
+      { code: 'SOURCE_STAMP_FAILED', status: 500 }
+    );
   }
   return metas;
 }
@@ -992,10 +1015,23 @@ async function startDocumentsConversion({ repo_id, file_ids, requested_name, cla
   // the conversion (job.source_metas). The cache is null-prototype: a plain
   // object resolves a prototype-named file id to an INHERITED value (issue
   // #1685).
+  const queued = {
+    status: 'queued',
+    stage: 'queued',
+    files_done: 0,
+    files_total: file_ids.length,
+    error: null,
+    started_at: new Date().toISOString()
+  };
   const metaByKey = Object.create(null);
   // The content claim (issue #1744) — released on every path below.
   let claimed = null;
   try {
+    // The conversion record is written FIRST, so the repository SHOWS the run
+    // while the pre-flight works: the reservation now spans the pre-flight,
+    // and a lock with no visible owner is a lock nobody can explain (#1775).
+    await patchConversion(repo_id, queued);
+
     const db = await getDb();
     const candidateHashes = [];
     for (const file_id of file_ids) {
@@ -1064,25 +1100,6 @@ async function startDocumentsConversion({ repo_id, file_ids, requested_name, cla
         );
       }
     }
-  } catch (err) {
-    // The pre-flight never started a conversion: the repo is free again and
-    // NO conversion record is written (a record would describe a run that had
-    // no worker).
-    releaseContent(repo_id, claimed);
-    crawlConversion.releaseConversion(repo_id, settleInFlight);
-    throw err;
-  }
-
-  const queued = {
-    status: 'queued',
-    stage: 'queued',
-    files_done: 0,
-    files_total: file_ids.length,
-    error: null,
-    started_at: new Date().toISOString()
-  };
-  try {
-    await patchConversion(repo_id, queued);
     await stampSources(repo_id, file_ids, metaByKey);
   } catch (err) {
     // The conversion record must not claim a queued run that has no worker:
@@ -1090,7 +1107,9 @@ async function startDocumentsConversion({ repo_id, file_ids, requested_name, cla
     // already run, so nothing else would ever close this record. It is
     // written BEFORE the reservation is released — this patch REPLACES the
     // whole conversion object, so a write landing after a concurrent start's
-    // own record would clobber it.
+    // own record would clobber it. A pre-flight refusal is closed the same
+    // way: the record says "failed" with the error code, so the steward sees
+    // WHY the import did not run.
     try {
       await patchConversion(repo_id, {
         status: 'failed',
@@ -1153,6 +1172,11 @@ module.exports = {
   startDocumentsConversion,
   isTerminal,
   live, // the SHARED conversion registry (documents + crawl), see crawl-conversion-service
+  // The content claim registry (issue #1744) — exported so a test can clear
+  // it, exactly like the conversion registry above: a test that aborts
+  // between the claim and its release would otherwise leave the content
+  // claimed for the rest of the process.
+  contentClaims,
   // D4: the restricted-snapshot stamp + the Access-toggle propagation
   stampSources,
   propagateRestrictedToSources,

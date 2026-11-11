@@ -5,6 +5,8 @@ const {
   mapWithConcurrency,
   request,
   SWEEP_DELETE_CONCURRENCY,
+  SWEEP_MAX_DELETES,
+  SWEEP_MAX_LIST_PAGES
 } = require('./auth');
 
 /**
@@ -206,7 +208,7 @@ async function getDocumentTableRows(page) {
  * outlives the 60s hook default — callers must set
  * `test.setTimeout(SESSION_MINT_TIMEOUT_MS)` as the first line of the hook
  * (see tests/e2e/helpers/auth.js). That budget covers the sweep: the mint
- * (≈135s on a stalled stack) plus the list plus the bounded-parallel delete
+ * (≈135s on a stalled stack) plus the pages plus the bounded-parallel delete
  * waves, and the token the sweep holds outlives it too — the realm issues
  * it for 300s.
  * @param {string} [prefix] - File-name prefix to delete
@@ -222,40 +224,62 @@ async function deleteAllTestDocuments(prefix = 'test-document', { browser } = {}
     throw new Error(`cleanup: login failed — no test document was deleted: ${e.message}`, { cause: e });
   }
 
-  // The search param narrows the list to the prefix itself, so one page
-  // (the endpoint validates limit <= 50) covers the test documents however
-  // many unrelated files the stack holds.
-  let listRes;
-  try {
-    listRes = await request('GET', `/api/files?limit=50&search=${encodeURIComponent(prefix)}`, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
-  } catch (e) {
-    throw new Error(`cleanup: file list failed — no test document was deleted: ${e.message}`, { cause: e });
+  // The list is paginated, and its search matches a SUPERSET of the
+  // suite's own files: the endpoint filters CONTAINS(LOWER(file_name)) OR
+  // CONTAINS(LOWER(source_url)), while the sweep deletes the files whose
+  // NAME starts with the prefix. One page (the endpoint validates
+  // limit <= 50) is therefore not the population, and the sweep cannot
+  // tell "the files beyond the page are not mine" from "the files beyond
+  // the page are mine and were not removed" — the second one is a
+  // leftover. Enumerate the pages the budget allows.
+  const files = [];
+  let total;
+  let listFailure = null;
+  let exhausted = false;
+  for (let page = 1; page <= SWEEP_MAX_LIST_PAGES; page++) {
+    let listRes;
+    try {
+      listRes = await request(
+        'GET',
+        `/api/files?limit=50&page=${page}&search=${encodeURIComponent(prefix)}`,
+        { headers: { Authorization: `Bearer ${token}` } }
+      );
+    } catch (e) {
+      listFailure = `page ${page} failed: ${e.message}`;
+      break;
+    }
+    if (listRes.status !== 200) {
+      listFailure = `page ${page} returned HTTP ${listRes.status}`;
+      break;
+    }
+    const pageFiles = listRes.data?.data || [];
+    files.push(...pageFiles);
+    total = listRes.data?.pagination?.totalFiles;
+    if (pageFiles.length < 50) {
+      exhausted = true;
+      break;
+    }
   }
-  if (listRes.status !== 200) {
-    throw new Error(`cleanup: file list failed with HTTP ${listRes.status} — no test document was deleted`);
-  }
-  const files = listRes.data?.data || [];
-  const total = listRes.data?.pagination?.totalFiles;
-  // The list is ONE page (the endpoint validates limit <= 50). When the
-  // page is not the whole population, the sweep cannot enumerate every
-  // prefix-matching file — it deletes the ones it CAN see and REPORTS the
-  // ones it cannot. Refusing to delete anything would leave the suite's
-  // own documents behind for good: the next run would meet the same full
-  // page.
-  const incomplete = total !== undefined ? total > files.length : files.length >= 50;
 
+  // Two populations, and the report must not conflate them: the POPULATION
+  // is every file the endpoint matched (the CONTAINS set), the DELETE SET
+  // is the suite's own files inside it (the prefix-matching ones). Only
+  // the delete set is the sweep's to remove.
   const testFiles = files.filter((f) => f.file_name && f.file_name.startsWith(prefix));
+  const population = total !== undefined ? total : files.length;
+  const enumeratedAll = total !== undefined ? files.length >= total : exhausted;
+
+  const deleteSet = testFiles.slice(0, SWEEP_MAX_DELETES);
+  const beyondBudget = testFiles.length - deleteSet.length;
+
   // The deletes run in bounded-parallel waves. Every one of them is
   // capped at the 30 s request timeout, so a sequential sweep of a full
   // page costs 50 × 30 s — more than the hook's budget AND more than the
   // realm's access-token lifespan, and the tail of it would run on an
   // expired token. The wave width is bounded by SWEEP_DELETE_CONCURRENCY
-  // so the sweep still fits both, and so a fan-out does not pile up on
-  // the data tier's one-writer-per-collection rule.
+  // so the sweep still fits both.
   const failures = (
-    await mapWithConcurrency(testFiles, SWEEP_DELETE_CONCURRENCY, async (f) => {
+    await mapWithConcurrency(deleteSet, SWEEP_DELETE_CONCURRENCY, async (f) => {
       const file_id = f.file_id || f._key || f.id;
       try {
         const res = await request('DELETE', `/api/files/${file_id}`, {
@@ -270,18 +294,37 @@ async function deleteAllTestDocuments(prefix = 'test-document', { browser } = {}
       }
     })
   ).filter(Boolean);
+
+  // Every failure condition is reported: the first throw used to hide the
+  // others (a delete failure hid the enumeration gap), so a run could
+  // name one leftover and pass over the rest.
+  const problems = [];
+  if (listFailure) {
+    problems.push(`the file list could not be read — ${listFailure}`);
+  }
   if (failures.length > 0) {
-    throw new Error(
-      `cleanup: ${failures.length} of ${testFiles.length} test documents were not deleted — ` +
-        `leftover documents remain in the stack: ${failures.join('; ')}`
+    problems.push(
+      `${failures.length} of ${deleteSet.length} test documents were not deleted — leftover ` +
+        `documents remain in the stack: ${failures.join('; ')}`
     );
   }
-  if (incomplete) {
-    throw new Error(
-      `cleanup: the file list is one page of ${total !== undefined ? total : files.length} matching ` +
-        `files — the sweep cannot enumerate every prefix-matching file, so the ${testFiles.length} it ` +
-        `could see were deleted and the ones beyond the page stay behind`
+  if (beyondBudget > 0) {
+    problems.push(
+      `${beyondBudget} test documents are beyond the sweep's delete budget (${SWEEP_MAX_DELETES} ` +
+        `per run) — they stay behind until a later run removes them`
     );
+  }
+  if (!enumeratedAll && !listFailure) {
+    problems.push(
+      `the population is ${population} matching files and the sweep enumerated ${files.length} of ` +
+        `them — a prefix-matching file beyond the last enumerated page was not removed`
+    );
+  }
+  if (problems.length > 0) {
+    const scope = listFailure
+      ? 'the file list could not be read, so the population is unknown'
+      : `the population holds ${population} matching files, of which ${testFiles.length} are the suite's own`;
+    throw new Error(`cleanup: ${problems.length} problem(s) — ${scope} — ${problems.join(' | ')}`);
   }
 }
 

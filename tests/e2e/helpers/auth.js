@@ -224,24 +224,63 @@ const SESSION_MINT_TIMEOUT_MS = 360000;
 /**
  * Ceiling for the delete fan-out of a cleanup sweep.
  *
- * The sweep's budget must cover the work it does: after the mint (≈135s
- * on a stalled stack) and the list, the 360s hook budget leaves room for
- * five waves of ten at the 30s request cap (135 + 30 + 5 × 30 = 315s), so
- * a full 50-entry page is swept inside the budget AND inside the 300s
- * life of the token the sweep holds.
+ * The sweep must fit TWO limits, and they are not the same clock:
  *
- * A wave wider than that is not free: the conversation delete opens a
- * write transaction over six collections, and ArangoDB admits one write
- * transaction per collection at a time — a fan-out of fifty piles the
- * waits up until they time out (ERROR 1201) and the sweep reports
- * conflicts for a stack that was merely slow.
+ *  - the HOOK's budget (360 s) counts everything, including the login
+ *    that mints the token (≈135 s on a stalled stack);
+ *  - the TOKEN's life (300 s) starts when that login COMPLETES, so it
+ *    covers only the work after the mint.
+ *
+ * After the mint the sweep lists the population (≤ 2 pages at the 30 s
+ * request cap = 60 s) and deletes the suite's own files (50 deletes in
+ * waves of 10 = 5 × 30 s = 150 s): 210 s, inside the token's 300 s.
+ * With the login counted, 135 + 60 + 150 = 345 s, inside the hook's
+ * 360 s.
+ *
+ * The bound is that arithmetic and nothing else. The deletes hit
+ * DISTINCT documents, and ArangoDB takes its write locks per document —
+ * a fan-out over distinct documents does not inherently conflict (the
+ * write-conflict code is 1200, not 1201). A wider wave would fit more
+ * deletes in less time; the width stays at 10 so the sweep remains a
+ * modest load on a shared stack.
  */
 const SWEEP_DELETE_CONCURRENCY = 10;
+
+/**
+ * How many pages of the population a cleanup sweep enumerates.
+ *
+ * One page is not enough to know what the sweep owns. Both list
+ * endpoints search a SUPERSET of the suite's own files: doc-repo matches
+ * CONTAINS(LOWER(file_name)) OR CONTAINS(LOWER(source_url)), and the
+ * conversation list matches LIKE over title OR lastMessage OR category.
+ * A sweep that stops at the first page therefore cannot tell "the files
+ * beyond the page are not mine" from "the files beyond the page are mine
+ * and were not removed" — and the second one is a leftover. Two pages
+ * cover a population of 100, twice the delete budget below; beyond that
+ * the sweep says it could not enumerate the whole population.
+ */
+const SWEEP_MAX_LIST_PAGES = 2;
+
+/**
+ * How many of the suite's own files one sweep deletes.
+ *
+ * 50 deletes in waves of 10 cost 5 × 30 s = 150 s, which is what the
+ * budget above is sized for. A bigger delete set overruns the hook's
+ * budget, so the sweep deletes what fits and REPORTS the rest — a
+ * leftover is reported, never dropped.
+ */
+const SWEEP_MAX_DELETES = 50;
 
 /**
  * Map `fn` over `items`, at most `limit` calls in flight at a time. The
  * results keep the input order, so a failure report reads the same way
  * whatever order the calls completed in.
+ *
+ * Safe by construction: a call that THROWS does not abandon the rest of
+ * the items — every item is attempted, and the first failure is
+ * rethrown once the whole batch has run. A worker that died on its
+ * first item would otherwise leave the remaining items untouched, and
+ * the sweep would report a partial deletion as a complete one.
  *
  * @param {Array} items - the items to map
  * @param {number} limit - the maximum number of calls in flight
@@ -250,14 +289,22 @@ const SWEEP_DELETE_CONCURRENCY = 10;
  */
 async function mapWithConcurrency(items, limit, fn) {
   const results = new Array(items.length);
+  const failures = [];
   let next = 0;
   const workers = Array.from({ length: Math.min(limit, items.length) }, async () => {
     while (next < items.length) {
       const index = next++;
-      results[index] = await fn(items[index], index);
+      try {
+        results[index] = await fn(items[index], index);
+      } catch (e) {
+        failures.push({ index, error: e });
+      }
     }
   });
   await Promise.all(workers);
+  if (failures.length > 0) {
+    throw failures[0].error;
+  }
   return results;
 }
 
@@ -322,4 +369,6 @@ module.exports = {
   mapWithConcurrency,
   SESSION_MINT_TIMEOUT_MS,
   SWEEP_DELETE_CONCURRENCY,
+  SWEEP_MAX_LIST_PAGES,
+  SWEEP_MAX_DELETES,
 };

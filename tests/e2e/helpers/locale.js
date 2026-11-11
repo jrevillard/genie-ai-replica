@@ -10,10 +10,10 @@
 //
 // This pins it before any page script runs.
 //
-// The write happens in an init script, and an init script has no way to
-// fail a test by itself: an exception there is only a page error, and
-// the suite does not fail on page errors. A storage that refuses the
-// write would therefore leave the app on navigator.language, and the
+// The write happens in an init script, and an init script cannot fail a
+// test by itself: Chromium SWALLOWS an exception thrown there — it
+// surfaces no page error to the runner at all. A storage that refuses
+// the write would therefore leave the app on navigator.language, and the
 // spec would assert locale behaviour it never pinned — a mismatch
 // nothing attributes. So the pin is PROVEN, not assumed: a probe page
 // loads the edge with the init script in place and the stored value is
@@ -79,6 +79,11 @@ async function pinLocale(context, locale = 'en') {
  * Read the locale the init script stored, from the context's storage
  * snapshot — the value the app itself reads, not the init script's own
  * account of it.
+ *
+ * The proof covers the origin the app is served from (BASE_URL's). The
+ * init script itself runs on EVERY origin of the context, so the pin
+ * lands wherever the spec navigates; what the read-back certifies is
+ * that this context's storage accepts the write at all.
  *
  * @param {import('@playwright/test').BrowserContext} context
  * @returns {Promise<string|undefined>} the stored locale, or undefined

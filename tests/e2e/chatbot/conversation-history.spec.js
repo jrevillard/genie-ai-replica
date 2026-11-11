@@ -15,9 +15,16 @@ const {
   request,
   SESSION_MINT_TIMEOUT_MS,
   SWEEP_DELETE_CONCURRENCY,
+  SWEEP_MAX_DELETES,
+  SWEEP_MAX_LIST_PAGES
 } = require('../helpers/auth');
 
 const API_TIMEOUT_MS = 30000;
+
+// The page size the cleanup sweep lists the conversation population with.
+// The endpoint accepts up to 100; 50 keeps the page inside the delete
+// budget the sweep's helper is sized for.
+const LIST_PAGE_SIZE = 50;
 
 const MOCKED_ANSWER = 'Mocked answer for the history test.';
 
@@ -60,9 +67,9 @@ test.describe('Conversation history persistence', () => {
   // conversation it already persisted.
   test.afterAll(async ({ browser }) => {
     // The cleanup's mint + list + delete sweep outlives the 60s hook default.
-    // The budget covers it: the mint (≈135s on a stalled stack) plus the list
-    // plus the bounded-parallel delete waves, and the token the sweep holds
-    // outlives it too — the realm issues it for 300s.
+    // The budget covers it: the mint (≈135s on a stalled stack) plus the
+    // pages plus the bounded-parallel delete waves, and the token the sweep
+    // holds outlives it too — the realm issues it for 300s.
     test.setTimeout(SESSION_MINT_TIMEOUT_MS);
 
     // A failing cleanup FAILS: a conversation left behind poisons later
@@ -72,48 +79,68 @@ test.describe('Conversation history persistence', () => {
       throw new Error(`cleanup login failed — the suite's conversations were not swept: ${e.message}`);
     });
 
-    let targets;
+    // The list is paginated, and its search matches a SUPERSET of the
+    // suite's own conversations: the endpoint filters LIKE over title OR
+    // lastMessage OR category, while the sweep deletes the conversations
+    // whose TITLE starts with 'E2E '. One page is therefore not the
+    // population, and the sweep cannot tell "the conversations beyond the
+    // page are not mine" from "the conversations beyond the page are mine
+    // and were not removed" — the second one is a leftover. Enumerate the
+    // pages the budget allows.
+    const conversations = [];
+    let total;
     let listFailure = null;
-    // searchTerm narrows the list to the suite's own titles (the route's
-    // default page is 20 — old leftovers would rotate off it unfiltered).
-    const listRes = await request('GET', `${BASE_URL}/api/chat/conversations?searchTerm=E2E&limit=50`, {
-      headers: { Authorization: `Bearer ${token}` }
-    }).catch((e) => {
-      listFailure = e.message;
-      return null;
-    });
-    if (listRes && listRes.status === 200) {
-      const list = listRes.data.conversations || listRes.data;
-      const listed = Array.isArray(list) ? list : [];
-      const total = listRes.data?.pagination?.total;
-      // The list is ONE page. When the page is not the whole population,
-      // the sweep cannot enumerate every conversation it must remove: it
-      // deletes the ones it CAN see and REPORTS the ones it cannot.
-      // Refusing to delete anything would leave the suite's conversations
-      // behind for good — the next run would meet the same full page.
-      if (total !== undefined ? total > listed.length : listed.length >= 50) {
-        listFailure =
-          `the conversation list is one page of ${total !== undefined ? total : listed.length} — ` +
-          'the sweep cannot enumerate every conversation it must remove';
+    let exhausted = false;
+    for (let offset = 0; offset < SWEEP_MAX_LIST_PAGES * LIST_PAGE_SIZE; offset += LIST_PAGE_SIZE) {
+      let listRes;
+      try {
+        listRes = await request(
+          'GET',
+          `${BASE_URL}/api/chat/conversations?searchTerm=E2E&limit=${LIST_PAGE_SIZE}&offset=${offset}`,
+          { headers: { Authorization: `Bearer ${token}` } }
+        );
+      } catch (e) {
+        listFailure = `offset ${offset} failed: ${e.message}`;
+        break;
       }
-      targets = listed.filter((c) => c.title?.startsWith('E2E ')).map((c) => c._key || c.id);
-    } else {
-      listFailure = listFailure || `list returned ${listRes ? listRes.status : 'no response'}`;
-      // Fall back to the ids captured in-flight so the deletes still run,
-      // but the unenumerated leftovers still fail the cleanup below.
-      targets = [...createdConversationIds];
+      if (listRes.status !== 200) {
+        listFailure = `offset ${offset} returned HTTP ${listRes.status}`;
+        break;
+      }
+      const list = listRes.data?.conversations || listRes.data;
+      const listed = Array.isArray(list) ? list : [];
+      conversations.push(...listed);
+      total = listRes.data?.pagination?.total;
+      if (listed.length < LIST_PAGE_SIZE) {
+        exhausted = true;
+        break;
+      }
     }
+
+    // Two populations, and the report must not conflate them: the
+    // POPULATION is every conversation the endpoint matched (the LIKE
+    // set), the DELETE SET is the suite's own inside it (the E2E-titled
+    // ones). Only the delete set is the sweep's to remove.
+    const targets = conversations
+      .filter((c) => c.title?.startsWith('E2E '))
+      .map((c) => c._key || c.id);
+    const population = total !== undefined ? total : conversations.length;
+    const enumeratedAll = total !== undefined ? conversations.length >= total : exhausted;
+
+    // The ids captured in-flight are the fallback when the LIST could not
+    // be read at all: the deletes still run, and the failure is reported
+    // below. When the list was read, the enumerated set IS the sweep's.
+    const deleteSet = listFailure ? [...createdConversationIds] : targets;
+    const beyondBudget = Math.max(0, deleteSet.length - SWEEP_MAX_DELETES);
 
     // The deletes run in bounded-parallel waves: each one is capped at the
     // 30 s request timeout, so a sequential sweep of a full page costs
     // 50 × 30 s — more than the hook's budget and more than the realm's
     // access-token lifespan, and the tail of it would run on an expired
     // token. The wave width is bounded by SWEEP_DELETE_CONCURRENCY so the
-    // sweep still fits both, and so a fan-out does not pile up on the
-    // data tier's one-writer-per-collection rule (the conversation delete
-    // opens a write transaction over six collections).
+    // sweep still fits both.
     const undeleted = (
-      await mapWithConcurrency(targets, SWEEP_DELETE_CONCURRENCY, async (convId) => {
+      await mapWithConcurrency(deleteSet.slice(0, SWEEP_MAX_DELETES), SWEEP_DELETE_CONCURRENCY, async (convId) => {
         try {
           const res = await request('DELETE', `${BASE_URL}/api/chat/conversations/${convId}`, {
             headers: { Authorization: `Bearer ${token}` }
@@ -127,18 +154,38 @@ test.describe('Conversation history persistence', () => {
         }
       })
     ).filter(Boolean);
+
+    // Every failure condition is reported: the first throw used to hide
+    // the others (the enumeration failure hid the failed deletes), so a
+    // run could name one leftover and pass over the rest.
+    const problems = [];
     if (listFailure) {
-      throw new Error(
-        `cleanup could not enumerate leftover conversations (${listFailure}) — ` +
-          `${targets.length} enumerated conversations were deleted, but any conversation saved by a ` +
-          `failed test and missed by the bookkeeping stays behind`
-      );
+      problems.push(`the conversation list could not be read — ${listFailure}`);
     }
     if (undeleted.length > 0) {
-      throw new Error(
-        `cleanup deleted ${targets.length - undeleted.length} of ${targets.length} conversations — ` +
-          `leftover: ${undeleted.map((u) => `${u.id} (${u.cause})`).join(', ')}`
+      problems.push(
+        `${undeleted.length} of ${deleteSet.length} conversations were not deleted — leftover: ` +
+          `${undeleted.map((u) => `${u.id} (${u.cause})`).join(', ')}`
       );
+    }
+    if (beyondBudget > 0) {
+      problems.push(
+        `${beyondBudget} conversations are beyond the sweep's delete budget (${SWEEP_MAX_DELETES} per ` +
+          `run) — they stay behind until a later run removes them`
+      );
+    }
+    if (!enumeratedAll && !listFailure) {
+      problems.push(
+        `the population is ${population} matching conversations and the sweep enumerated ` +
+          `${conversations.length} of them — an E2E-titled conversation beyond the last enumerated page ` +
+          `was not removed`
+      );
+    }
+    if (problems.length > 0) {
+      const scope = listFailure
+        ? 'the conversation list could not be read, so the population is unknown'
+        : `the population holds ${population} matching conversations, of which ${deleteSet.length} are the suite's own`;
+      throw new Error(`cleanup: ${problems.length} problem(s) — ${scope} — ${problems.join(' | ')}`);
     }
   });
 

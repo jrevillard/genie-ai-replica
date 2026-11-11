@@ -1406,7 +1406,7 @@ describe('producer-service — D4 restricted-snapshot stamp (stampSources)', () 
     );
   });
 
-  it('a second stamp KEEPS the first import\'s sources in the durable record', async () => {
+  it("a second stamp KEEPS the first import's sources in the durable record", async () => {
     // The duplicate-content gate reads this list: an erased hash would let
     // the same content land in another repository (issue #1793) — so the
     // list is upserted per file, never replaced wholesale.

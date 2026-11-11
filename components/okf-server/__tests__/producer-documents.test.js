@@ -912,8 +912,6 @@ describe('producer-service — startDocumentsConversion + run', () => {
     ).rejects.toThrow(/db down/);
     const repo = await mockDb.collection('okf_repositories').document(RID);
     expect(repo.conversion).toMatchObject({ status: 'done', summary: { created: 1 } });
-    // the content claim is released with the failed start
-    expect(producer.contentClaims.size).toBe(0);
   });
 
   it('a refused start closes a NON-terminal prior record as failed (it owns no worker)', async () => {

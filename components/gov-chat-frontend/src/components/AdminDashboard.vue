@@ -377,10 +377,10 @@
                         the crawl→OKF CONVERSION the dialog then offers is
                         flag-gated (inside AddFromLinkDialog), so a parked
                         deployment keeps its crawl entry. -->
-                      <DsButton variant="secondary" @click="addFromLink">
+                      <DsButton variant="secondary" data-test-id="documents-add-from-link" @click="addFromLink">
                         {{ translate('admin.documents.addLink', 'Add from Link') }}
                       </DsButton>
-                      <DsButton variant="primary" @click="uploadFiles">
+                      <DsButton variant="primary" data-test-id="documents-upload-files" @click="uploadFiles">
                         {{ translate('admin.documents.uploadFiles', 'Upload Files') }}
                       </DsButton>
                     </div>
@@ -743,7 +743,7 @@
                       {{ translate('admin.logManagement', 'Log Management') }}
                     </div>
                     <div class="card-actions">
-                      <DsButton variant="secondary" @click="searchLogs">
+                      <DsButton variant="secondary" data-test-id="logs-search" @click="searchLogs">
                         <span style="display: flex; align-items: center">
                           <svg
                             xmlns="http://www.w3.org/2000/svg"
@@ -1892,25 +1892,26 @@ export default {
       pendingStudioEvents: [],
       tabs: [
         // UX-1 (#1512): the icons are the sidebar rail's, relocated onto the
-        // rack (the rail itself is gone). testid preserves the ONE handle a
-        // spec used (admin-logs-link) — the E2E rule adds handles only where
-        // a spec needs them.
-        { id: 'overview', label: 'System Health', icon: '📊' },
-        { id: 'hierarchy', label: 'Knowledge Hierarchy', icon: '🔀' },
+        // rack (the rail itself is gone). Every tab now carries its handle:
+        // the Phase V capture harness (#1799) walks all ten panels and the
+        // E2E rule locates by declared handle only — a tab without one is a
+        // panel the harness would have to reach by label or index.
+        { id: 'overview', label: 'System Health', icon: '📊', testid: 'admin-overview-link' },
+        { id: 'hierarchy', label: 'Knowledge Hierarchy', icon: '🔀', testid: 'admin-hierarchy-link' },
         // W6: the documents tab carries a test handle. The tab rack replaced
         // the sidebar (UX-1), and the e2e helper still navigated by the
         // REMOVED sidebar link — a locator for a surface that no longer
         // exists. The handle is the tab's own address, as the logs tab
         // already had.
         { id: 'documents', label: 'Document Management', icon: '📂', testid: 'admin-documents-link' },
-        { id: 'studio', label: 'OKF Studio', icon: '🧪' },
-        { id: 'database', label: 'Database', icon: '💾' },
+        { id: 'studio', label: 'OKF Studio', icon: '🧪', testid: 'admin-studio-link' },
+        { id: 'database', label: 'Database', icon: '💾', testid: 'admin-database-link' },
         { id: 'logs', label: 'Logs', icon: '📋', testid: 'admin-logs-link' },
-        { id: 'queryInspector', label: 'Query Inspector', icon: '🔍' },
-        { id: 'security', label: 'Security', icon: '🔒' },
-        { id: 'users', label: 'Users', icon: '👥' },
+        { id: 'queryInspector', label: 'Query Inspector', icon: '🔍', testid: 'admin-query-inspector-link' },
+        { id: 'security', label: 'Security', icon: '🔒', testid: 'admin-security-link' },
+        { id: 'users', label: 'Users', icon: '👥', testid: 'admin-users-link' },
         // Story 8-7 (David 2026-10-20): model configurations — the LAST tab.
-        { id: 'models', label: 'Models', icon: '🤖' }
+        { id: 'models', label: 'Models', icon: '🤖', testid: 'admin-models-link' }
       ],
 
       // Loading state

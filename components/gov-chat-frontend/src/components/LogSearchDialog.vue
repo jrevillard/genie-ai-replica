@@ -1,10 +1,17 @@
 <template>
-  <div class="modal">
+  <div class="modal" data-test-id="log-search-dialog">
     <div class="overlay" @click="$emit('close')"></div>
     <div class="modal-content">
       <div class="modal-title">
         <h2>{{ translate('admin.logSearch.title', 'Search Logs') }}</h2>
-        <DsButton variant="ghost" class="close-btn" aria-label="Close dialog" @click="$emit('close')">×</DsButton>
+        <DsButton
+          variant="ghost"
+          class="close-btn"
+          data-test-id="log-search-dialog-close"
+          aria-label="Close dialog"
+          @click="$emit('close')"
+          >×</DsButton
+        >
       </div>
 
       <div class="modal-body">

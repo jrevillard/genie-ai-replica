@@ -1,7 +1,7 @@
 <template>
   <Teleport to="body">
-    <div class="dialog-backdrop" data-test-id="dialog-backdrop" @click="$emit('close')"></div>
-    <div class="dialog-container">
+    <div class="dialog-backdrop genie-living-intelligence" data-test-id="dialog-backdrop" @click="$emit('close')"></div>
+    <div class="dialog-container genie-living-intelligence" data-test-id="file-details-dialog">
       <DsSpinner v-if="isLoading || isFetchingData || isDownloading" overlay size="lg">
         <span v-if="!isDownloading">{{ translate('details.loading', 'Loading File Details...') }}</span>
 
@@ -28,6 +28,7 @@
           <DsButton
             variant="ghost"
             class="dialog-close-btn"
+            data-test-id="file-details-dialog-close"
             :aria-label="translate('details.close', 'Close')"
             @click="$emit('close')"
           >
@@ -156,7 +157,7 @@
                       ? translate('details.downloadFile', 'Download File')
                       : crawlJob
                         ? translate('details.viewCrawled', 'View Generated Markdown')
-                        : translate('details.viewFileContent', 'View File')
+                        : translate('details.viewFile', 'View File')
                   }}
                   <span v-if="file.file_size > 20 * 1024 * 1024" class="external-icon">⭳</span>
                   <span v-else class="external-icon">↗</span>
@@ -315,7 +316,7 @@
               </DsButton>
 
               <DsButton v-if="crawlJob && crawlJob.status === 'Crawling'" variant="danger" @click="handleKillCrawl">
-                {{ translate('details.log.killCrawl', 'Kill Crawl Task') }}
+                {{ translate('details.log.killCrawl', 'Kill Task') }}
               </DsButton>
             </div>
 
@@ -1342,7 +1343,10 @@ export default {
             </html>
           `);
         } else {
-          this.showNotification('Popup blocked. Please allow popups for this site.', 'error');
+          this.showNotification(
+            this.translate('details.notifications.popupBlocked', 'Popup blocked. Please allow popups for this site.'),
+            'error'
+          );
           return;
         }
       }
@@ -1407,7 +1411,10 @@ export default {
             xhr.send();
           });
 
-          this.showNotification('Download complete.', 'success');
+          this.showNotification(
+            this.translate('details.notifications.downloadComplete', 'Download complete.'),
+            'success'
+          );
         } else {
           // --- FETCH VIEW (Tab Navigation) ---
           const response = await fetch(this.fileViewUrl, {
@@ -1443,7 +1450,10 @@ export default {
             </div>
           `;
         }
-        this.showNotification('Could not load file. ' + error.message, 'error');
+        this.showNotification(
+          this.translate('details.notifications.loadFailed', 'Could not load file.') + ` Error: ${error.message}`,
+          'error'
+        );
       } finally {
         this.isDownloading = false;
         this.downloadProgress = 0;
@@ -1674,7 +1684,10 @@ export default {
         // Refresh logs to see the rollback progress
         setTimeout(() => this.fetchIngestionLogs(), 2000);
       } catch (error) {
-        this.showNotification('Failed to kill ingestion: ' + error.message, 'error');
+        this.showNotification(
+          this.translate('details.notifications.killFailed', 'Failed to kill ingestion:') + ` Error: ${error.message}`,
+          'error'
+        );
       } finally {
         this.isLogLoading = false;
       }

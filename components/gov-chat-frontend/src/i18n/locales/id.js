@@ -265,8 +265,11 @@ export default {
       unavailable: 'Penggunaan sumber daya tidak tersedia saat ini.'
     },
     health: {
+      parseFailed: 'Gagal memproses data kesehatan sistem.',
+      loadFailed: 'Gagal memuat data kesehatan sistem.',
       unavailable: 'Kesehatan sistem tidak tersedia saat ini.'
     },
+    logsLoadFailed: 'Gagal memuat log.',
     dbStats: {
       unavailable: 'Statistik basis data tidak tersedia saat ini.'
     },
@@ -339,6 +342,7 @@ export default {
         loading: 'Menjalankan diagnostik...'
       },
       runSecurityScan: {
+        error: 'Gagal menjalankan pemindaian keamanan',
         success: 'Pemindaian keamanan berhasil diselesaikan',
         loading: 'Menjalankan pemindaian keamanan...',
         refreshFailed: 'Pemindaian selesai, tetapi penyegaran hasil gagal'
@@ -1434,6 +1438,7 @@ export default {
       "Bertindaklah sebagai teman lokal yang ramah. Bersikaplah sopan, suka menolong, dan memiliki pengetahuan baik tentang budaya lokal dan kehidupan sehari-hari. PENTING: Ingatkan pengguna bahwa meski bisa membahas apa saja, keunggulan utama Anda adalah membantunya mengurus layanan publik seperti kartu identitas, pajak, dan pendaftaran usaha. ATURAN: Selalu sebut aplikasi ini sebagai 'Genie AI'."
   },
   common: {
+    close: 'Tutup',
     cancel: 'Batal',
     create: 'Buat',
     save: 'Simpan',
@@ -1480,6 +1485,11 @@ export default {
     alt: 'Unggah'
   },
   details: {
+    downloading: 'Mengunduh...',
+    sourceUrl: 'URL Sumber',
+    downloadFile: 'Unduh File',
+    viewCrawled: 'Lihat Markdown yang Dihasilkan',
+    visitSource: 'Kunjungi Situs Asli',
     bundleBadge: 'Dikelola oleh siklus hidup OKF',
     crawl: {
       seconds: 'detik',
@@ -1512,6 +1522,7 @@ export default {
     uploadDate: 'Tanggal Unggah',
     hash: 'Hash SHA256',
     tabs: {
+      crawlLog: 'Log Crawling',
       dashboard: 'Dasbor',
       details: 'Detail',
       ingestionLog: 'Log Pemrosesan',
@@ -1525,6 +1536,7 @@ export default {
         'Kemajuan tahap demi tahap penyiapan berkas ini untuk jawaban AI: pemotongan (chunking), pelabelan, embedding, dan pengindeksan. Kesalahan di sini menunjukkan secara tepat di mana proses ingest terhenti.'
     },
     log: {
+      killCrawl: 'Hentikan Tugas',
       killActions: 'Tindakan Penghentian:',
       killDocument: 'Hentikan Dokumen Ini',
       killProcess: 'Hentikan Proses Pemrosesan',
@@ -1557,10 +1569,18 @@ export default {
       ingestSaving: 'Menyimpan metadata sebelum pemrosesan...',
       ingestSaveFailed: 'Gagal menyimpan metadata. Pemrosesan dibatalkan.',
       logError: 'Gagal mengambil log pemrosesan.',
+      popupBlocked: 'Popup diblokir. Izinkan popup untuk situs ini.',
+      downloadComplete: 'Unduhan selesai.',
+      loadFailed: 'Tidak dapat memuat file.',
+      killFailed: 'Gagal menghentikan ingest:',
+      crawlLogError: 'Gagal mengambil log crawling.',
+      killCrawlError: 'Gagal mengirim sinyal hentikan.',
+      killCrawlSuccess: 'Sinyal hentikan terkirim.',
       killDocSent: 'Permintaan penghentian untuk dokumen ini telah dikirim.',
       killProcSent: 'Permintaan penghentian untuk proses pemrosesan telah dikirim.'
     },
     confirm: {
+      killCrawlTitle: 'Hentikan Tugas Crawling',
       ingest: 'Apakah Anda yakin ingin memproses file ini? Ini akan memulai alur pemrosesan data.',
       retract: 'Apakah Anda yakin ingin menarik kembali file ini?',
       delete: 'Apakah Anda yakin ingin menghapus file ini secara permanen? Tindakan ini tidak dapat dibatalkan.',

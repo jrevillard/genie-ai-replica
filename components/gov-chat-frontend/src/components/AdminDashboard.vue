@@ -1,5 +1,5 @@
 <template>
-  <div class="admin-page">
+  <div class="admin-page genie-living-intelligence">
     <div class="admin-dashboard" data-test-id="admin-dashboard">
       <div class="dashboard">
         <div class="main">
@@ -10,7 +10,7 @@
           </div>
 
           <div class="quick-stats">
-            <div class="stat-card" data-test-id="stat-system-uptime">
+            <div class="stat-card stat-card--uptime" data-test-id="stat-system-uptime">
               <div class="stat-title">
                 {{ translate('admin.systemUptime', 'System Uptime') }}
               </div>
@@ -20,7 +20,7 @@
                 {{ translate('admin.fromLastMonth', 'from last month') }}
               </div>
             </div>
-            <div class="stat-card" data-test-id="stat-avg-response-time">
+            <div class="stat-card stat-card--response" data-test-id="stat-avg-response-time">
               <div class="stat-title">
                 {{ translate('admin.avgResponseTime', 'Average Response Time') }}
               </div>
@@ -34,7 +34,7 @@
                 {{ translate('admin.fromLastMonth', 'from last month') }}
               </div>
             </div>
-            <div class="stat-card" data-test-id="stat-error-rate">
+            <div class="stat-card stat-card--errors" data-test-id="stat-error-rate">
               <div class="stat-title">
                 {{ translate('admin.errorRate', 'Error Rate') }}
               </div>
@@ -44,7 +44,7 @@
                 {{ translate('admin.fromLastMonth', 'from last month') }}
               </div>
             </div>
-            <div class="stat-card" data-test-id="stat-monthly-active-users">
+            <div class="stat-card stat-card--users" data-test-id="stat-monthly-active-users">
               <div class="stat-title">
                 {{ translate('admin.monthlyActiveUsers', 'Monthly Active Users (MAU)') }}
               </div>
@@ -86,19 +86,18 @@
                   <!-- REVIEW H1: tri-state. The fabricated six-status list is
                        gone — a failed fetch renders an explicit error with a
                        retry, an in-flight first load renders Measuring…, and
-                       only a real measurement renders the service list. -->
-                  <DsStateDisplay
+                       only a real measurement renders the service list.
+                       REVIEW T2: the state leaves collapsed into the shared
+                       AdminStatePanel (one copy of the error+retry shell). -->
+                  <AdminStatePanel
                     v-if="healthLoadError"
                     type="error"
                     :message="translate('admin.health.unavailable', 'System health is unavailable right now.')"
                     data-test-id="health-error"
-                  >
-                    <template #action>
-                      <DsButton variant="secondary" small data-test-id="health-retry" @click="loadSystemHealth">
-                        {{ translate('admin.retry', 'Retry') }}
-                      </DsButton>
-                    </template>
-                  </DsStateDisplay>
+                    retryable
+                    retry-test-id="health-retry"
+                    @retry="loadSystemHealth"
+                  />
                   <div v-else-if="healthServices" class="health-status">
                     <div
                       v-for="service in healthServices"
@@ -110,9 +109,12 @@
                       <span>{{ translate(`admin.services.${service.id}`, service.name) }}</span>
                     </div>
                   </div>
-                  <div v-else class="health-status">
-                    <span class="measuring-note">{{ translate('admin.measuring', 'Measuring…') }}</span>
-                  </div>
+                  <AdminStatePanel
+                    v-else
+                    type="loading"
+                    :message="translate('admin.measuring', 'Measuring…')"
+                    data-test-id="health-measuring"
+                  />
                 </div>
 
                 <div v-if="activeTab === 'overview'" class="dashboard-card">
@@ -124,18 +126,15 @@
 
                   <!-- REVIEW H1: same tri-state as the health card — no
                        fabricated CPU/memory/storage/network numbers. -->
-                  <DsStateDisplay
+                  <AdminStatePanel
                     v-if="healthLoadError"
                     type="error"
                     :message="translate('admin.resources.unavailable', 'Resource usage is unavailable right now.')"
                     data-test-id="usage-error"
-                  >
-                    <template #action>
-                      <DsButton variant="secondary" small data-test-id="usage-retry" @click="loadSystemHealth">
-                        {{ translate('admin.retry', 'Retry') }}
-                      </DsButton>
-                    </template>
-                  </DsStateDisplay>
+                    retryable
+                    retry-test-id="usage-retry"
+                    @retry="loadSystemHealth"
+                  />
                   <div v-else-if="resourceUsage" class="resource-usage">
                     <div
                       v-for="resource in resourceUsage"
@@ -158,9 +157,12 @@
                       </div>
                     </div>
                   </div>
-                  <div v-else class="resource-usage">
-                    <span class="measuring-note">{{ translate('admin.measuring', 'Measuring…') }}</span>
-                  </div>
+                  <AdminStatePanel
+                    v-else
+                    type="loading"
+                    :message="translate('admin.measuring', 'Measuring…')"
+                    data-test-id="usage-measuring"
+                  />
                 </div>
 
                 <div v-if="activeTab === 'hierarchy'" class="dashboard-card" style="grid-column: span 2">
@@ -285,7 +287,7 @@
                         </DsStateDisplay>
 
                         <div v-else>
-                          <DsStateDisplay
+                          <AdminStatePanel
                             v-if="translationsLoadFailed"
                             type="error"
                             data-test-id="hierarchy-translations-load-failed"
@@ -295,18 +297,11 @@
                                 'Translations could not be loaded. Editing the translations and saving stay disabled until they load.'
                               )
                             "
-                          >
-                            <template #action>
-                              <DsButton
-                                variant="secondary"
-                                :small="true"
-                                data-test-id="hierarchy-translations-retry"
-                                @click="retryHierarchyTranslations"
-                              >
-                                {{ translate('admin.hierarchy.retryTranslations', 'Retry') }}
-                              </DsButton>
-                            </template>
-                          </DsStateDisplay>
+                            retryable
+                            retry-test-id="hierarchy-translations-retry"
+                            :retry-label="translate('admin.hierarchy.retryTranslations', 'Retry')"
+                            @retry="retryHierarchyTranslations"
+                          />
                           <div
                             v-for="(translation, index) in hierarchyForm.translations"
                             :key="index"
@@ -382,10 +377,10 @@
                         the crawl→OKF CONVERSION the dialog then offers is
                         flag-gated (inside AddFromLinkDialog), so a parked
                         deployment keeps its crawl entry. -->
-                      <DsButton variant="secondary" @click="addFromLink">
+                      <DsButton variant="secondary" data-test-id="documents-add-from-link" @click="addFromLink">
                         {{ translate('admin.documents.addLink', 'Add from Link') }}
                       </DsButton>
-                      <DsButton variant="primary" @click="uploadFiles">
+                      <DsButton variant="primary" data-test-id="documents-upload-files" @click="uploadFiles">
                         {{ translate('admin.documents.uploadFiles', 'Upload Files') }}
                       </DsButton>
                     </div>
@@ -599,6 +594,7 @@
                             v-for="doc in sortedAndFilteredDocuments"
                             :key="doc._key"
                             class="document-row"
+                            data-test-id="document-row"
                             @click="viewDocumentDetails(doc.file_id)"
                           >
                             <td @click.stop>
@@ -711,21 +707,19 @@
                   </div>
 
                   <!-- REVIEW H3: the hardcoded "42.3 GB / 128 tables" is gone.
-                       A failed (or success:false) stats fetch renders an
+                       A failed (or figure-less) stats fetch renders an
                        explicit error with a retry; a first load renders
-                       Measuring…; real figures render only when measured. -->
-                  <DsStateDisplay
+                       Measuring…; real figures render only when measured.
+                       REVIEW T2: leaves collapsed into AdminStatePanel. -->
+                  <AdminStatePanel
                     v-if="dbStatsError"
                     type="error"
                     :message="translate('admin.dbStats.unavailable', 'Database statistics are unavailable right now.')"
                     data-test-id="db-stats-error"
-                  >
-                    <template #action>
-                      <DsButton variant="secondary" small data-test-id="db-stats-retry" @click="loadDatabaseStats">
-                        {{ translate('admin.retry', 'Retry') }}
-                      </DsButton>
-                    </template>
-                  </DsStateDisplay>
+                    retryable
+                    retry-test-id="db-stats-retry"
+                    @retry="loadDatabaseStats"
+                  />
                   <div v-else-if="dbStats" class="db-stats">
                     <div>
                       <strong>{{ translate('admin.databaseSize', 'Database Size') }}:</strong>
@@ -736,9 +730,12 @@
                       {{ dbStats.totalTables }}
                     </div>
                   </div>
-                  <div v-else class="db-stats">
-                    <span class="measuring-note">{{ translate('admin.measuring', 'Measuring…') }}</span>
-                  </div>
+                  <AdminStatePanel
+                    v-else
+                    type="loading"
+                    :message="translate('admin.measuring', 'Measuring…')"
+                    data-test-id="db-stats-measuring"
+                  />
                 </div>
 
                 <div v-if="activeTab === 'logs'" class="dashboard-card" style="grid-column: span 2">
@@ -747,7 +744,7 @@
                       {{ translate('admin.logManagement', 'Log Management') }}
                     </div>
                     <div class="card-actions">
-                      <DsButton variant="secondary" @click="searchLogs">
+                      <DsButton variant="secondary" data-test-id="logs-search" @click="searchLogs">
                         <span style="display: flex; align-items: center">
                           <svg
                             xmlns="http://www.w3.org/2000/svg"
@@ -857,9 +854,9 @@
                   <div v-if="searchResults && searchResults.length > 0" class="logs-summary">
                     <h3 class="summary-title">
                       <span class="status-indicator info"></span>
-                      {{ translate('admin.searchResults', 'Latest Search Results') }}
+                      {{ translate('admin.logsSection.searchResults', 'Latest Search Results') }}
                       <span class="results-count">
-                        ({{ searchResults.length }} {{ translate('admin.entriesFound', 'entries found') }})
+                        ({{ searchResults.length }} {{ translate('admin.logsSection.entriesFound', 'entries found') }})
                       </span>
                     </h3>
                     <div class="log-summary-table">
@@ -891,7 +888,7 @@
                       </table>
                       <div v-if="searchResults.length > 5" class="view-more-logs">
                         <DsButton variant="secondary" :small="true" @click="searchLogs">
-                          {{ translate('admin.viewAllResults', 'View All Results') }}
+                          {{ translate('admin.logsSection.viewAllResults', 'View All Results') }}
                         </DsButton>
                       </div>
                     </div>
@@ -946,24 +943,21 @@
                        response. Also fixed in passing: the tile read
                        `securityMetrics.lastScan` while the loader writes
                        `lastSecurityScan` — the value has been rendering empty. -->
-                  <DsStateDisplay
+                  <AdminStatePanel
                     v-if="securityLoading"
                     type="loading"
                     :message="translate('admin.security.loadingMetrics', 'Loading security data…')"
                     data-test-id="security-loading"
                   />
-                  <DsStateDisplay
+                  <AdminStatePanel
                     v-else-if="securityUnavailable"
                     type="error"
                     :message="translate('admin.security.unavailable', 'Security data is unavailable right now.')"
                     data-test-id="security-error"
-                  >
-                    <template #action>
-                      <DsButton variant="secondary" small data-test-id="security-retry" @click="retrySecurity">
-                        {{ translate('admin.retry', 'Retry') }}
-                      </DsButton>
-                    </template>
-                  </DsStateDisplay>
+                    retryable
+                    retry-test-id="security-retry"
+                    @retry="retrySecurity"
+                  />
                   <div v-else-if="!isLoading && securityMetrics" class="security-details">
                     <div>
                       <strong>{{ translate('admin.security.lastSecurityScan', 'Last Security Scan') }}:</strong>
@@ -1549,7 +1543,7 @@
                         variant="ghost"
                         :small="true"
                         class="search-clear-btn"
-                        :aria-label="translate('admin.clearSearch', 'Clear search')"
+                        :aria-label="translate('admin.userManagementSection.clearSearch', 'Clear search')"
                         @click="resetUserSearch"
                       >
                         <svg
@@ -1644,10 +1638,15 @@
                             {{ translate('admin.userManagementSection.searchingUsers', 'Searching for users...') }}
                           </div>
                           <div v-else-if="userSearchResults !== null">
-                            {{ translate('admin.noUsersFound', 'No users found matching your search criteria.') }}
+                            {{
+                              translate(
+                                'admin.userManagementSection.noUsersFound',
+                                'No users found matching your search criteria.'
+                              )
+                            }}
                           </div>
                           <div v-else>
-                            {{ translate('admin.noUsers', 'No users available.') }}
+                            {{ translate('admin.userManagementSection.noUsers', 'No users available.') }}
                           </div>
                         </td>
                       </tr>
@@ -1760,6 +1759,7 @@ import AddFromLinkDialog from './AddFromLinkDialog.vue';
 import FileDetailsDialog from './FileDetailsDialog.vue';
 import ConfirmDialog from './ConfirmDialog.vue'; // IMPORT ConfirmDialog
 import QueryInspector from './admin/QueryInspector/QueryInspector.vue';
+import AdminStatePanel from './admin/AdminStatePanel.vue';
 import DsButton from './ds/Button.vue';
 import DsInput from './ds/Input.vue';
 import DsStatusTag from './ds/StatusTag.vue';
@@ -1827,6 +1827,7 @@ export default {
     LogSearchDialog,
     OkfModelConfigPanel,
     OkfArtifactsView,
+    AdminStatePanel,
     ConfirmDialog,
     UploadFilesDialog,
     AddFromLinkDialog,
@@ -1892,25 +1893,26 @@ export default {
       pendingStudioEvents: [],
       tabs: [
         // UX-1 (#1512): the icons are the sidebar rail's, relocated onto the
-        // rack (the rail itself is gone). testid preserves the ONE handle a
-        // spec used (admin-logs-link) — the E2E rule adds handles only where
-        // a spec needs them.
-        { id: 'overview', label: 'System Health', icon: '📊' },
-        { id: 'hierarchy', label: 'Knowledge Hierarchy', icon: '🔀' },
+        // rack (the rail itself is gone). Every tab now carries its handle:
+        // the Phase V capture harness (#1799) walks all ten panels and the
+        // E2E rule locates by declared handle only — a tab without one is a
+        // panel the harness would have to reach by label or index.
+        { id: 'overview', label: 'System Health', icon: '📊', testid: 'admin-overview-link' },
+        { id: 'hierarchy', label: 'Knowledge Hierarchy', icon: '🔀', testid: 'admin-hierarchy-link' },
         // W6: the documents tab carries a test handle. The tab rack replaced
         // the sidebar (UX-1), and the e2e helper still navigated by the
         // REMOVED sidebar link — a locator for a surface that no longer
         // exists. The handle is the tab's own address, as the logs tab
         // already had.
         { id: 'documents', label: 'Document Management', icon: '📂', testid: 'admin-documents-link' },
-        { id: 'studio', label: 'OKF Studio', icon: '🧪' },
-        { id: 'database', label: 'Database', icon: '💾' },
+        { id: 'studio', label: 'OKF Studio', icon: '🧪', testid: 'admin-studio-link' },
+        { id: 'database', label: 'Database', icon: '💾', testid: 'admin-database-link' },
         { id: 'logs', label: 'Logs', icon: '📋', testid: 'admin-logs-link' },
-        { id: 'queryInspector', label: 'Query Inspector', icon: '🔍' },
-        { id: 'security', label: 'Security', icon: '🔒' },
-        { id: 'users', label: 'Users', icon: '👥' },
+        { id: 'queryInspector', label: 'Query Inspector', icon: '🔍', testid: 'admin-query-inspector-link' },
+        { id: 'security', label: 'Security', icon: '🔒', testid: 'admin-security-link' },
+        { id: 'users', label: 'Users', icon: '👥', testid: 'admin-users-link' },
         // Story 8-7 (David 2026-10-20): model configurations — the LAST tab.
-        { id: 'models', label: 'Models', icon: '🤖' }
+        { id: 'models', label: 'Models', icon: '🤖', testid: 'admin-models-link' }
       ],
 
       // Loading state
@@ -2730,7 +2732,10 @@ export default {
           // treat it exactly like a rejection (review H1).
           this.healthLoadError = true;
           this.resetHealthSurfaces();
-          this.showNotification('Failed to parse system health data', 'error');
+          this.showNotification(
+            this.translate('admin.health.parseFailed', 'Failed to parse system health data'),
+            'error'
+          );
         }
       } catch (error) {
         console.error('Error loading system health:', error);
@@ -2740,7 +2745,7 @@ export default {
         // retry affordance.
         this.healthLoadError = true;
         this.resetHealthSurfaces();
-        this.showNotification('Failed to load system health data', 'error');
+        this.showNotification(this.translate('admin.health.loadFailed', 'Failed to load system health data'), 'error');
       } finally {
         this.isLoading = false;
       }
@@ -2775,7 +2780,7 @@ export default {
         }
       } catch (error) {
         console.error('Error loading logs:', error);
-        this.showNotification('Failed to load logs', 'error');
+        this.showNotification(this.translate('admin.logsLoadFailed', 'Failed to load logs'), 'error');
       } finally {
         this.isLoading = false;
       }
@@ -3214,7 +3219,10 @@ export default {
         }
       } catch (error) {
         console.error('Error searching users:', error);
-        this.showNotification(this.translate('admin.userSearch.error', 'Error searching users'), 'error');
+        this.showNotification(
+          this.translate('admin.userManagementSection.userSearch.error', 'Error searching users'),
+          'error'
+        );
         this.userSearchResults = [];
         this.userSearchTotal = 0;
       } finally {
@@ -4021,7 +4029,7 @@ export default {
                   '{count} ingested/ingesting file(s) will be SKIPPED — retract them first to delete them.'
                 ).replace('{count}', String(blockedIds.size))
               : ''),
-          confirmText: this.translate('admin.documents.delete', 'Delete'),
+          confirmText: this.translate('common.delete', 'Delete'),
           cancelText: this.translate('common.cancel', 'Cancel'),
           onConfirm: async () => {
             this.isLoading = true;
@@ -4529,6 +4537,12 @@ export default {
 .stat-trend {
   display: flex;
   align-items: center;
+  /* The trend arrow+value is one child (the accent-coloured span) and the
+     "from last month" label is the anonymous text child — a whitespace-only
+     separator between them is DROPPED by flex layout, which is how the
+     capture harness caught "0.00%from last month". Flex gap is the
+     separator that survives. */
+  gap: var(--space-xs);
   font-size: var(--text-sm);
   color: var(--muted);
 }
@@ -4671,12 +4685,6 @@ export default {
 
 .db-stats {
   color: var(--fg);
-  font-size: var(--text-base);
-}
-
-/* REVIEW H1/H3: the "Measuring…" first-load note (null data + no error) */
-.measuring-note {
-  color: var(--muted);
   font-size: var(--text-base);
 }
 

@@ -1,4 +1,3 @@
-const { flattenKeys, deepGet } = require('./helpers/i18nKeys');
 // Copyright (C) 2026 International Telecommunication Union (ITU)
 // SPDX-License-Identifier: Apache-2.0
 // The OKF surfaces' i18n contract (round 28, David's "100% i18n" bar): every
@@ -11,8 +10,9 @@ const { flattenKeys, deepGet } = require('./helpers/i18nKeys');
 // status)) — they are validated as prefixes, not as leaves. localeConsistency
 // keeps the other 13 locales key-identical to en, so owning en owns all.
 
-const fs = require('fs');
 const path = require('path');
+
+const { flattenKeys, deepGet, filesUnder, extractLiteralKeys } = require('./helpers/i18nKeys');
 
 // __dirname is src/__tests__ — surfaces are stated from the component root.
 const SRC = path.join(__dirname, '..', '..');
@@ -35,31 +35,8 @@ const SURFACES = [
   'src/components/okf/wizard/'
 ];
 
-function filesUnder(p, acc = []) {
-  const full = path.join(SRC, p);
-  if (!fs.existsSync(full)) return acc;
-  if (fs.statSync(full).isFile()) {
-    acc.push(full);
-    return acc;
-  }
-  for (const e of fs.readdirSync(full, { withFileTypes: true })) {
-    const f = path.join(full, e.name);
-    if (e.isDirectory()) filesUnder(path.relative(SRC, f), acc);
-    else if (/\.(vue|js)$/.test(e.name)) acc.push(f);
-  }
-  return acc;
-}
-
-const files = [...new Set(SURFACES.flatMap((s) => filesUnder(s)))];
-const literal = new Map();
-for (const f of files) {
-  const t = fs.readFileSync(f, 'utf8');
-  t.split(/\r?\n/).forEach((line, i) => {
-    for (const m of line.matchAll(/(?:translate|\$t)\(\s*['"`](okf[A-Za-z0-9_.]*)['"`]/g)) {
-      if (!literal.has(m[1])) literal.set(m[1], `${path.relative(SRC, f)}:${i + 1}`);
-    }
-  });
-}
+const files = [...new Set(SURFACES.flatMap((s) => filesUnder(SRC, s)))];
+const literal = extractLiteralKeys(files, /(?:translate|\$t)\(\s*['"`](okf[A-Za-z0-9_.]*)['"`]/, SRC);
 const used = [...literal.keys()].sort();
 const leaves = used.filter((k) => !/[._]$/.test(k));
 const prefixes = used.filter((k) => /[._]$/.test(k));

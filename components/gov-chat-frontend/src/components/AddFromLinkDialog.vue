@@ -1,7 +1,7 @@
 <template>
   <Teleport to="body">
-    <div class="dialog-backdrop" @click="$emit('close')"></div>
-    <div class="dialog-container">
+    <div class="dialog-backdrop genie-living-intelligence" @click="$emit('close')"></div>
+    <div class="dialog-container genie-living-intelligence" data-test-id="add-from-link-dialog">
       <div class="dialog-header">
         <h2 class="dialog-title">
           {{ translate('admin.documents.addLink', 'Add from Link') }}
@@ -9,6 +9,7 @@
         <DsButton
           variant="ghost"
           class="dialog-close-btn"
+          data-test-id="add-from-link-dialog-close"
           :aria-label="translate('common.close', 'Close')"
           @click="$emit('close')"
         >

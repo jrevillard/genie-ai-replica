@@ -105,6 +105,11 @@ as twelve product bugs (#1779).
    became twelve filed issues. Each is checked at the location the
    installer named, together with the install's completion marker.
 
+   The installer is spawned **only when a build it names is absent or
+   carries no completion marker** — a reconciled machine pays nothing for
+   the run — and the verification runs either way, so a tree that was
+   never installed still fails loudly.
+
 No revision number is written in the repository: it is derived from the
 installed Playwright, so a lockfile bump needs no second number to change.
 The command is idempotent.

@@ -33,7 +33,8 @@
  *
  * Usage: node tests/e2e/run/install-browsers.js
  * Idempotent: on an already reconciled machine the second run changes
- * nothing (the installer skips the builds it already has).
+ * nothing — the installer is spawned only when a build it names is absent
+ * or carries no completion marker, and the verification runs either way.
  */
 const fs = require('fs');
 const path = require('path');
@@ -229,7 +230,7 @@ function requiredBrowserRevisions(repoRoot = REPO_ROOT) {
  * CLI — the one the runner's chain resolves — so the build comes from the
  * Playwright this checkout pins and not from a global one.
  * @param {string} repoRoot the checkout root
- * @returns {{command: string, args: string[]}} the command
+ * @returns {{command: string, cli: string, args: string[]}} the command
  */
 function browserInstallCommand(repoRoot = REPO_ROOT) {
   const cli = path.join(path.dirname(resolvePackage('playwright', repoRoot)), 'cli.js');
@@ -246,7 +247,7 @@ function browserInstallCommand(repoRoot = REPO_ROOT) {
  * @param {string} cliPath the resolved Playwright CLI
  * @param {Function} run the process runner
  * @param {string} repoRoot the checkout root
- * @returns {Array<{name: string, revision: string, location: string}>} the locations
+ * @returns {Array<{name: string, location: string}>} the locations
  */
 function installLocations(cliPath, run, repoRoot = REPO_ROOT) {
   const result = run(process.execPath, [cliPath, 'install', '--dry-run', 'chromium'], { cwd: repoRoot });
@@ -257,12 +258,15 @@ function installLocations(cliPath, run, repoRoot = REPO_ROOT) {
     throw new Error(`the Playwright installer's dry run failed (exit ${result.status})`);
   }
   const locations = [];
-  const pattern = /\(playwright ([^\s)]+) v\d+\)\s*\n\s*Install location:\s*(\S+)/g;
+  const pattern = /\(playwright ([^\s)]+) v\d+\)\s*\n\s*Install location:\s*([^\n]+)/g;
   for (const match of String(result.stdout || '').matchAll(pattern)) {
-    // The revision the installer names is the one the browsers.json names
-    // (both come from the same package), so the pin is reported once, from
-    // the pin — and the location only answers "where".
-    locations.push({ name: match[1], location: match[2] });
+    // The LOCATION is what this needs — the installer's own word on where
+    // a build lands, with the revision it will land in the path. The
+    // revision the installer prints is NOT read back: browsers.json may
+    // carry per-platform overrides, so the base revision this script
+    // reports is not necessarily the one that gets installed. The pin is
+    // reported once, from the pin; the location only answers "where".
+    locations.push({ name: match[1], location: match[2].trim() });
   }
   if (!locations.length) {
     throw new Error('the Playwright installer named no install location — its output is not the one this script reads');
@@ -424,7 +428,6 @@ if (require.main === module) {
 }
 
 module.exports = {
-  RUNNER_CHAIN,
   browserInstallCommand,
   describeRunner,
   installLocations,

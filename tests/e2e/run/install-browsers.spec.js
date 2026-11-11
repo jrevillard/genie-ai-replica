@@ -37,6 +37,8 @@ const {
 // constant.
 const FIXTURE_CHROMIUM = '4711';
 const FIXTURE_SHELL = '4712';
+// The real installer names ffmpeg alongside the two chromium builds.
+const FIXTURE_FFMPEG = '4713';
 const FIXTURE_VERSION = '9.9.9-fixture';
 // The hoisted sibling's own numbers: what a reader that resolves a fixed
 // path would find instead of the nested copy the runner loads.
@@ -52,8 +54,14 @@ const roots = [];
  * @returns {string} the root
  */
 const makeRoot = (files) => {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'genieai-install-browsers-'));
-  roots.push(root);
+  // The checkout lives INSIDE its own temporary directory, so the
+  // directory above it is this test's alone: a test that plants a package
+  // in an ancestor directory must not write to a shared one (/tmp), where
+  // it would collide with another run and delete another run's state.
+  const base = fs.mkdtempSync(path.join(os.tmpdir(), 'genieai-install-browsers-'));
+  roots.push(base);
+  const root = path.join(base, 'checkout');
+  fs.mkdirSync(root, { recursive: true });
   for (const [rel, content] of Object.entries(files)) {
     const file = path.join(root, rel);
     fs.mkdirSync(path.dirname(file), { recursive: true });
@@ -70,9 +78,11 @@ const browsersJson = (chromium, shell) => ({
 });
 
 /**
- * A checkout whose runner chain is installed at the pinned versions.
- * @param {Object} [options] the versions to install
- * @returns {string} the root
+ * The files of a runner chain: the three packages the runner loads, at the
+ * versions given, plus the browsers.json the revisions come from.
+ * @param {string} version the version of @playwright/test and playwright
+ * @param {string} coreVersion the version of playwright-core
+ * @returns {Object<string, Object|string>} the files, by relative path
  */
 const chainFiles = (version, coreVersion) => ({
   'node_modules/@playwright/test/package.json': { name: '@playwright/test', version },
@@ -91,6 +101,11 @@ const lockfile = (version) => ({
   }
 });
 
+/**
+ * A checkout whose runner chain is installed at the pinned versions.
+ * @param {Object} [options] the versions that differ from the pinned one
+ * @returns {string} the root
+ */
 const makeCheckout = (options = {}) => {
   const version = FIXTURE_VERSION;
   const coreVersion = options.coreVersion || version;
@@ -278,9 +293,10 @@ test('a checkout without @playwright/test cannot describe a runner, and says so'
 const buildTree = (root, options = {}) => {
   const locations = {
     chromium: path.join(root, 'browsers', `chromium-${FIXTURE_CHROMIUM}`),
+    ffmpeg: path.join(root, 'browsers', `ffmpeg-${FIXTURE_FFMPEG}`),
     'chromium-headless-shell': path.join(root, 'browsers', `chromium_headless_shell-${FIXTURE_SHELL}`)
   };
-  const wanted = options.include || { chromium: true, 'chromium-headless-shell': true };
+  const wanted = { chromium: true, ffmpeg: true, 'chromium-headless-shell': true, ...options.include };
   for (const name of Object.keys(wanted)) {
     const location = locations[name];
     if (wanted[name] === 'absent') continue;
@@ -303,7 +319,12 @@ const fakeRun = (root, options = {}) => {
   const tree = options.tree || buildTree(root);
   const locations = [
     { name: 'chromium', revision: FIXTURE_CHROMIUM, location: tree.chromium },
-    { name: 'chromium-headless-shell', revision: FIXTURE_SHELL, location: tree['chromium-headless-shell'] }
+    { name: 'ffmpeg', revision: FIXTURE_FFMPEG, location: tree.ffmpeg },
+    {
+      name: 'chromium-headless-shell',
+      revision: FIXTURE_SHELL,
+      location: tree['chromium-headless-shell']
+    }
   ];
   const run = (command, args) => {
     calls.push({ command, args });
@@ -340,7 +361,7 @@ test('a matching checkout is not reinstalled, and a complete tree is not reinsta
 test('a missing build is installed by the CHECKOUT Playwright, not a global one', () => {
   const root = makeCheckout();
   const { run, calls } = fakeRun(root, {
-    tree: buildTree(root, { include: { chromium: 'no-marker', 'chromium-headless-shell': true } })
+    tree: buildTree(root, { include: { chromium: 'no-marker' } })
   });
   expect(() => reconcile(root, { run })).toThrow(/carries no INSTALLATION_COMPLETE/);
   const install = calls.find((c) => c.args.includes('chromium') && !c.args.includes('--dry-run'));
@@ -409,6 +430,38 @@ test('the walk does not escape ABOVE the checkout', () => {
   }
 });
 
+test('the walk does not probe a node_modules level for another one', () => {
+  // The mutation this pins: Node never looks inside a node_modules
+  // directory for another one, and neither does this walk. A copy planted
+  // at <root>/node_modules/node_modules is not a package the checkout
+  // carries — resolving it would reconcile against a tree that does not
+  // exist.
+  const root = makeCheckout();
+  fs.rmSync(path.join(root, 'node_modules/playwright-core'), { recursive: true, force: true });
+  const planted = path.join(root, 'node_modules/node_modules/playwright-core');
+  fs.mkdirSync(path.join(planted), { recursive: true });
+  fs.writeFileSync(
+    path.join(planted, 'package.json'),
+    JSON.stringify({ name: 'playwright-core', version: '9.9.9-planted' })
+  );
+  expect(() => resolvePackage('playwright-core', root)).toThrow(/carries no playwright-core/);
+});
+
+test('the runner reported is the @playwright/test of the chain, not another link of it', () => {
+  // The mutation this pins: the three links of the chain can carry
+  // DIFFERENT versions, so a reader that reported the wrong one would
+  // report a runner the suite never loads.
+  const root = makeRoot({
+    'package-lock.json': lockfile(FIXTURE_VERSION),
+    'node_modules/@playwright/test/package.json': { name: '@playwright/test', version: FIXTURE_VERSION },
+    'node_modules/playwright/package.json': { name: 'playwright', version: '1.2.3-other' },
+    'node_modules/playwright/cli.js': '// the CLI of the fixture',
+    'node_modules/playwright-core/package.json': { name: 'playwright-core', version: '4.5.6-other' },
+    'node_modules/playwright-core/browsers.json': browsersJson(FIXTURE_CHROMIUM, FIXTURE_SHELL)
+  });
+  expect(describeRunner(root).playwrightVersion).toBe(FIXTURE_VERSION);
+});
+
 test('the chain is the ROOT project\'s — the suite project does not own the runtime', () => {
   // The mutation this pins: the chain starts at the repository root, where
   // the lockfile that pins it lives. A copy under tests/e2e/node_modules
@@ -464,16 +517,21 @@ test('the HEADLESS SHELL is verified — the build the runner launches', () => {
   // would pass a tree whose headless shell is missing, and every spec would
   // still die at launch.
   const root = makeCheckout();
-  const { run } = fakeRun(root, {
-    tree: buildTree(root, { include: { chromium: true, 'chromium-headless-shell': 'absent' } })
+  const { run, calls } = fakeRun(root, {
+    tree: buildTree(root, { include: { 'chromium-headless-shell': 'absent' } })
   });
   expect(() => reconcile(root, { run })).toThrow(/chromium-headless-shell build is not installed/);
+  // The missing build must have TRIGGERED the install: without this the
+  // reconciler could skip the repair and still report the same error, and
+  // #1779's own defect — one missing binary, unrepaired — would survive a
+  // green suite.
+  expect(calls.find((c) => c.args.includes('chromium') && !c.args.includes('--dry-run'))).toBeDefined();
 });
 
 test('a build without the completion marker is not a complete build', () => {
   const root = makeCheckout();
   const { run } = fakeRun(root, {
-    tree: buildTree(root, { include: { chromium: 'no-marker', 'chromium-headless-shell': true } })
+    tree: buildTree(root, { include: { chromium: 'no-marker' } })
   });
   expect(() => reconcile(root, { run })).toThrow(/carries no INSTALLATION_COMPLETE/);
 });
@@ -489,7 +547,7 @@ test('an install that fails is not reported as a reconciled tree', () => {
   const root = makeCheckout();
   const { run } = fakeRun(root, {
     // A missing build, so the install is actually spawned.
-    tree: buildTree(root, { include: { chromium: 'no-marker', 'chromium-headless-shell': true } }),
+    tree: buildTree(root, { include: { chromium: 'no-marker' } }),
     installResult: { status: 1, stdout: '', stderr: 'boom' }
   });
   expect(() => reconcile(root, { run })).toThrow(/browser install failed/);
@@ -519,7 +577,7 @@ test('the installer locations are read from the installer itself', () => {
   const { run } = fakeRun(root);
   const cli = path.join(root, 'node_modules/playwright/cli.js');
   const locations = installLocations(cli, run, root);
-  expect(locations.map((l) => l.name)).toEqual(['chromium', 'chromium-headless-shell']);
+  expect(locations.map((l) => l.name)).toEqual(['chromium', 'ffmpeg', 'chromium-headless-shell']);
 });
 
 test('an installer that names no location fails loudly', () => {

@@ -1,8 +1,8 @@
 <template>
-  <DsStateDisplay :type="type" :message="message" :data-test-id="testId">
+  <DsStateDisplay :type="type" :message="message">
     <template v-if="retryable" #action>
       <DsButton variant="secondary" small :data-test-id="retryTestId" @click="$emit('retry')">
-        {{ retryLabel }}
+        {{ retryLabel || translate('admin.retry', 'Retry') }}
       </DsButton>
     </template>
   </DsStateDisplay>
@@ -11,6 +11,7 @@
 <script>
 import DsStateDisplay from '../ds/StateDisplay.vue';
 import DsButton from '../ds/Button.vue';
+import translateMixin from '../../mixins/translateMixin';
 
 /**
  * AdminStatePanel — the admin dashboard's repeated state leaf (issue-wave
@@ -21,13 +22,15 @@ import DsButton from '../ds/Button.vue';
  * any retry-affordance change had to land six times, and the measuring
  * note carried its own ad-hoc CSS beside a DS primitive that already
  * renders the same state. The wrapper is the single copy of that shell.
- * It is admin-scoped on purpose: the panel composes the dashboard's
- * translate() output into DS primitives and adds nothing a DS primitive
- * should own.
+ * It is admin-scoped on purpose: it composes translate() output (the
+ * dashboard-wide Retry label is the wrapper's default; a call site may
+ * override it via retryLabel) and adds nothing a DS primitive should own.
  *
  * The Retry affordance is gated on `retryable`, NOT on the test handle:
  * a data-test-id is an inert attribute (E2E-TESTING.md) and must never be
- * load-bearing for behavior. The wrapper renders only `message` — the
+ * load-bearing for behavior. Call sites pass their panel handle as a plain
+ * `data-test-id` attribute — single-root fallthrough carries it to the
+ * rendered .ds-state div. The wrapper renders only `message` — the
  * DsStateDisplay default slot is intentionally not forwarded, so a caller
  * passing slot content gets a dev-time warning instead of a silently
  * empty panel.
@@ -35,6 +38,7 @@ import DsButton from '../ds/Button.vue';
 export default {
   name: 'AdminStatePanel',
   components: { DsStateDisplay, DsButton },
+  mixins: [translateMixin],
   props: {
     // Passed straight through to DsStateDisplay — the primitive owns the
     // type vocabulary and validates it; a second validator here would be a
@@ -47,18 +51,19 @@ export default {
       type: String,
       required: true
     },
-    testId: {
-      type: String,
-      default: undefined
-    },
     retryable: {
       type: Boolean,
       default: false
     },
+    // The retry button is NOT the root element — attr fallthrough cannot
+    // reach it, so its handle rides this prop. The panel's own handle (if
+    // any) is a plain data-test-id attribute on the wrapper.
     retryTestId: {
       type: String,
       default: undefined
     },
+    // Override for the dashboard-wide Retry label (the hierarchy tab's
+    // "Retry translations" is the current user).
     retryLabel: {
       type: String,
       default: undefined
@@ -66,11 +71,6 @@ export default {
   },
   emits: ['retry'],
   created() {
-    if (this.retryable && !this.retryLabel && process.env.NODE_ENV !== 'production') {
-      // An unlabeled button is a blank pill for sighted users and silence
-      // for screen readers — make the missing label loud in dev.
-      console.warn('[AdminStatePanel] retryable is set but retryLabel is missing — the button would render unlabeled.');
-    }
     if (this.$slots.default && process.env.NODE_ENV !== 'production') {
       console.warn(
         '[AdminStatePanel] renders only `message` — default-slot content is discarded. Pass the text via the message prop.'

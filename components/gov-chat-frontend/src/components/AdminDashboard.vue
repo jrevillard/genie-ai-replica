@@ -93,10 +93,9 @@
                     v-if="healthLoadError"
                     type="error"
                     :message="translate('admin.health.unavailable', 'System health is unavailable right now.')"
-                    test-id="health-error"
+                    data-test-id="health-error"
                     retryable
                     retry-test-id="health-retry"
-                    :retry-label="translate('admin.retry', 'Retry')"
                     @retry="loadSystemHealth"
                   />
                   <div v-else-if="healthServices" class="health-status">
@@ -114,7 +113,7 @@
                     v-else
                     type="loading"
                     :message="translate('admin.measuring', 'Measuring…')"
-                    test-id="health-measuring"
+                    data-test-id="health-measuring"
                   />
                 </div>
 
@@ -131,10 +130,9 @@
                     v-if="healthLoadError"
                     type="error"
                     :message="translate('admin.resources.unavailable', 'Resource usage is unavailable right now.')"
-                    test-id="usage-error"
+                    data-test-id="usage-error"
                     retryable
                     retry-test-id="usage-retry"
-                    :retry-label="translate('admin.retry', 'Retry')"
                     @retry="loadSystemHealth"
                   />
                   <div v-else-if="resourceUsage" class="resource-usage">
@@ -163,7 +161,7 @@
                     v-else
                     type="loading"
                     :message="translate('admin.measuring', 'Measuring…')"
-                    test-id="usage-measuring"
+                    data-test-id="usage-measuring"
                   />
                 </div>
 
@@ -292,7 +290,7 @@
                           <AdminStatePanel
                             v-if="translationsLoadFailed"
                             type="error"
-                            test-id="hierarchy-translations-load-failed"
+                            data-test-id="hierarchy-translations-load-failed"
                             :message="
                               translate(
                                 'admin.hierarchy.translationsLoadFailedNotice',
@@ -716,10 +714,9 @@
                     v-if="dbStatsError"
                     type="error"
                     :message="translate('admin.dbStats.unavailable', 'Database statistics are unavailable right now.')"
-                    test-id="db-stats-error"
+                    data-test-id="db-stats-error"
                     retryable
                     retry-test-id="db-stats-retry"
-                    :retry-label="translate('admin.retry', 'Retry')"
                     @retry="loadDatabaseStats"
                   />
                   <div v-else-if="dbStats" class="db-stats">
@@ -736,7 +733,7 @@
                     v-else
                     type="loading"
                     :message="translate('admin.measuring', 'Measuring…')"
-                    test-id="db-stats-measuring"
+                    data-test-id="db-stats-measuring"
                   />
                 </div>
 
@@ -949,16 +946,15 @@
                     v-if="securityLoading"
                     type="loading"
                     :message="translate('admin.security.loadingMetrics', 'Loading security data…')"
-                    test-id="security-loading"
+                    data-test-id="security-loading"
                   />
                   <AdminStatePanel
                     v-else-if="securityUnavailable"
                     type="error"
                     :message="translate('admin.security.unavailable', 'Security data is unavailable right now.')"
-                    test-id="security-error"
+                    data-test-id="security-error"
                     retryable
                     retry-test-id="security-retry"
-                    :retry-label="translate('admin.retry', 'Retry')"
                     @retry="retrySecurity"
                   />
                   <div v-else-if="!isLoading && securityMetrics" class="security-details">

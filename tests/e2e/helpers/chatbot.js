@@ -237,15 +237,18 @@ function readStreamingState() {
  * public getter.
  *
  * Pure, and OUT of the page: the page hands over what it read, this
- * decides what it MEANS. Three cases live here, and each is easy to
- * break by accident:
+ * decides what it MEANS. Every case the read can report is named here,
+ * because each is easy to break by accident:
  *
- * - a store that does not expose the getter at all is a BROKEN store
- *   contract, not a slow answer: it fails now, by name, instead of
- *   polling to a cause-less timeout — and so is a BOOTED app whose store
- *   is gone ("the app is booted but has no store"). A getter that
- *   EXISTS and returns nothing is a different finding — no conversation
- *   is open yet — and the wait continues;
+ * - NOT BOOTED is transient, not broken: the app may still be mounting,
+ *   or a reload is in flight — the wait continues;
+ * - a BOOTED app whose store is gone is a broken contract: it fails now,
+ *   by name ("the app is booted but has no store");
+ * - a store that does not expose the getter at all is a broken contract
+ *   too: it fails now, by name, instead of polling to a cause-less
+ *   timeout;
+ * - a getter that EXISTS and returns nothing is a different finding — no
+ *   conversation is open yet — and the wait continues;
  * - no bot message yet is NOT "not streaming" — the turn has not
  *   produced one, so the wait continues (null is not false).
  *

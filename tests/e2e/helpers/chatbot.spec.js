@@ -10,8 +10,8 @@ const { readStreamingState, streamingFlagOf, botStreamingFlag } = require('./cha
  * The helper reads the app's store through its PUBLIC getter
  * (`conversation/openConversation`), not through the raw state shape. The
  * read itself happens in the page; this is the half that decides what the
- * read MEANS, and it is where the two contracts that are easy to break by
- * accident live.
+ * read MEANS, and it is where the cases that are easy to break by
+ * accident live — each of them named in the helper's own doc block.
  */
 test.describe('the streaming flag is read through the store getter', () => {
   test('a store without the getter is a broken contract, named', () => {

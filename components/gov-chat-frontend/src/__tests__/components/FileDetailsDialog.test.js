@@ -233,6 +233,18 @@ describe('FileDetailsDialog', () => {
       expect(wrapper.exists()).toBe(true);
     });
 
+    it('the teleported dialog carries the living-intelligence gate (Phase V4)', async () => {
+      // This dialog TELEPORTS to body — outside .admin-page's gate — so the
+      // layer class rides on its own roots (backdrop + container). A silent
+      // class drop here flattens the dialog back to undecorated chrome; the
+      // pin makes that red.
+      mockGetFileMetadata.mockResolvedValue(createMockFile());
+      const wrapper = createFileDetailsDialogWrapper();
+      await wrapper.vm.$nextTick();
+      expect(wrapper.find('.dialog-container').classes()).toContain('genie-living-intelligence');
+      expect(wrapper.find('[data-test-id="dialog-backdrop"]').classes()).toContain('genie-living-intelligence');
+    });
+
     it('initializes with loading state true', async () => {
       mockGetFileMetadata.mockResolvedValue(createMockFile());
       const wrapper = createFileDetailsDialogWrapper();

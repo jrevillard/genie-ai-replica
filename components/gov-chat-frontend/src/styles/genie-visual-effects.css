@@ -815,3 +815,52 @@ html[data-visual='on'] .genie-living-intelligence .admin-dashboard .hierarchy-it
 /* The reduced-motion universal rule in this file already kills the
    transform transition; the colour transitions collapse to instant
    changes, which is the correct reduced-motion behaviour. */
+
+/*
+ * V4 — the admin dialogs.
+ *
+ * Two shapes, two gates:
+ *  - FileDetailsDialog and AddFromLinkDialog TELEPORT to body (multi-root:
+ *    backdrop + container), so the gate class rides on each root itself —
+ *    the components are admin-launched only, so no other surface is
+ *    touched (DsModal itself is deliberately NOT gated: it serves the
+ *    whole app).
+ *  - LogSearchDialog, OperationResultsModal and UploadFilesDialog render
+ *    in place inside the admin route, so .admin-page's gate already
+ *    reaches them.
+ *
+ * The treatment is the same vocabulary as the shell: frost border and
+ * top-lit wash on the container, display-family titles, and a backdrop
+ * tinted a whisper of accent instead of flat black. DsModal (the
+ * ConfirmDialog's shell) keeps the DS primitive's own paint — a small
+ * confirm dialog gains nothing from decoration.
+ */
+html[data-visual='on'] .dialog-container.genie-living-intelligence {
+  border: 1px solid var(--gli-frost-border);
+  background-image: linear-gradient(180deg, color-mix(in srgb, var(--accent) 5%, var(--surface)), var(--surface) 28%);
+  box-shadow:
+    var(--shadow-lg),
+    0 1px 0 color-mix(in srgb, var(--accent) 16%, transparent) inset;
+}
+
+html[data-visual='on'] .dialog-container.genie-living-intelligence .dialog-title {
+  font-family: var(--font-display);
+  letter-spacing: -0.01em;
+}
+
+html[data-visual='on'] .dialog-backdrop.genie-living-intelligence {
+  background: color-mix(in srgb, var(--accent) 7%, var(--overlay-bg));
+}
+
+/* The in-place dialogs, reached through .admin-page's gate. */
+html[data-visual='on'] .genie-living-intelligence .admin-dashboard .modal .modal-content,
+html[data-visual='on'] .genie-living-intelligence .admin-dashboard .dialog-container {
+  border: 1px solid var(--gli-frost-border);
+  background-image: linear-gradient(180deg, color-mix(in srgb, var(--accent) 5%, var(--surface)), var(--surface) 28%);
+}
+
+html[data-visual='on'] .genie-living-intelligence .admin-dashboard .modal-title,
+html[data-visual='on'] .genie-living-intelligence .admin-dashboard .dialog-title {
+  font-family: var(--font-display);
+  letter-spacing: -0.01em;
+}

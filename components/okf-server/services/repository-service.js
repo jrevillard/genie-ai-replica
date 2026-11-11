@@ -158,6 +158,29 @@ function decodeCursor(cursor) {
 }
 
 /**
+ * The naming rule at the write boundary (issue #1774): a name of only spaces
+ * is NO name. The naming SSOT is intentName (services/slug.js) — the same
+ * rule the convert endpoints apply. The Joi schema validates SHAPE, not
+ * naming (min(1) accepts '   '), so the rule is enforced here: a repository
+ * is REFUSED, never stored under a blank name and never silently renamed. A
+ * name of the wrong TYPE is its own error — the Joi layer rejects it at the
+ * route, so only an internal caller reaches it, and "a name of only spaces"
+ * would send it looking for whitespace in a number.
+ * @param {string} name
+ * @param {'create'|'update'} op the operation, for the operations counter
+ */
+function assertValidName(name, op) {
+  if (typeof name !== 'string') {
+    recordOp(op, 'validation');
+    throw new RepoError('VALIDATION_ERROR', 'name must be a string', 400);
+  }
+  if (!intentName(name)) {
+    recordOp(op, 'validation');
+    throw new RepoError('VALIDATION_ERROR', 'a name of only spaces is no name', 400);
+  }
+}
+
+/**
  * Create a repository: mint repo_id, reserve graph_name=OKF_{repo_id}, bind domain.
  * Uniqueness on (name, domain) is DB-ENFORCED (unique index on [name,domain,deleted_at]);
  * the app-layer check is a clean-error fast path, and save() catches the unique-violation
@@ -188,23 +211,7 @@ async function create(input, actor, opts = {}) {
     if (opts.cloned_from != null && typeof opts.cloned_from.repo_id !== 'string') {
       throw new RepoError('VALIDATION_ERROR', 'cloned_from.repo_id must be a string', 400);
     }
-    // A name of only spaces is NO name (issue #1774). The naming SSOT is
-    // intentName (services/slug.js) — the same rule the convert endpoints
-    // apply. The Joi schema validates SHAPE, not naming (min(1) accepts
-    // '   '), so the rule is enforced here, at the write boundary: a
-    // repository is REFUSED, never stored under a blank name and never
-    // silently renamed. A name of the wrong TYPE is its own error — the
-    // Joi layer rejects it at the route, so only an internal caller reaches
-    // it, and "a name of only spaces" would send it looking for whitespace
-    // in a number.
-    if (typeof input.name !== 'string') {
-      recordOp('create', 'validation');
-      throw new RepoError('VALIDATION_ERROR', 'name must be a string', 400);
-    }
-    if (!intentName(input.name)) {
-      recordOp('create', 'validation');
-      throw new RepoError('VALIDATION_ERROR', 'a name of only spaces is no name', 400);
-    }
+    assertValidName(input.name, 'create');
     logger.info('Creating OKF repository', { name: input.name, domain: input.domain });
     const db = await getDb();
 
@@ -327,7 +334,9 @@ async function cloneRepository(source_id, input, actor) {
     // named at the Joi max would otherwise derive a 209-char name past it).
     const derivedName = String(source.name || '').slice(0, 190) + ' (clone)';
     const target = {
-      name: (input && input.name) || derivedName,
+      // A blank name is no name (#1699): the clone keeps the derived default
+      // instead of being refused — the same rule the convert endpoints apply.
+      name: intentName(input && input.name) || derivedName,
       domain: (input && input.domain) || source.domain,
       acl: (input && input.acl) || source.acl || {}
     };
@@ -655,14 +664,7 @@ async function update(repo_id, patch, actor) {
     // read-only gate, so the same malformed request gets the same answer
     // whatever the repository's lifecycle state is.
     if (Object.prototype.hasOwnProperty.call(patch, 'name')) {
-      if (typeof patch.name !== 'string') {
-        recordOp('update', 'validation');
-        throw new RepoError('VALIDATION_ERROR', 'name must be a string', 400);
-      }
-      if (!intentName(patch.name)) {
-        recordOp('update', 'validation');
-        throw new RepoError('VALIDATION_ERROR', 'a name of only spaces is no name', 400);
-      }
+      assertValidName(patch.name, 'update');
     }
 
     // SERVING MAINTENANCE (1-8g-q, David 2026-10-11: "I see it as a

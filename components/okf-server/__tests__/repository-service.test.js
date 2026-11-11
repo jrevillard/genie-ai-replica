@@ -766,12 +766,13 @@ describe('cloneRepository (Story 4.8 — D-V5)', () => {
     expect(clone.copied_concepts).toBe(3);
   });
 
-  test('refuses a clone name of only spaces (issue #1774 — the clone writes through create())', async () => {
+  test('a clone name of only spaces is NO name (issue #1774) — the clone keeps the derived default', async () => {
+    // The same rule the convert endpoints apply: a blank name is not a name,
+    // it is the absence of one — and the clone has a default to fall back to
+    // ('<source> (clone)'), so it takes it instead of being refused.
     const { src } = await seedSource();
-    await expect(repoService.cloneRepository(src.repo_id, { name: '   ' }, ACTOR)).rejects.toMatchObject({
-      code: 'VALIDATION_ERROR',
-      status: 400
-    });
+    const clone = await repoService.cloneRepository(src.repo_id, { name: '   ' }, ACTOR);
+    expect(clone.name).toBe('Source KB (clone)');
   });
 
   test('cloned_from.version = the source CURRENT version (never-minted → null)', async () => {

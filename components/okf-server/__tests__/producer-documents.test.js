@@ -58,8 +58,20 @@ function programQuery() {
       // The producer's AQL REPLACES the whole conversion object; the crawl
       // path's (and the zip path's) MERGEs into it — the mock follows the
       // same split, or a REPLACE-only regression would stay invisible here.
+      const old = live.conversion;
+      if (bind && bind.startedAt) {
+        // the CONDITIONAL close: it applies only while the record is still
+        // this run's ('queued' with this run's started_at)
+        if (!old || old.status !== 'queued' || old.started_at !== bind.startedAt) {
+          return { all: async () => [] };
+        }
+        live.conversion = { ...bind.patch };
+        return { all: async () => [1] };
+      }
       if (text.includes('MERGE(')) live.conversion = Object.assign({}, live.conversion, bind.patch);
       else live.conversion = { ...bind.patch };
+      // the queued write hands back the record it replaced (RETURN OLD)
+      if (text.includes('RETURN OLD')) return { all: async () => [old === undefined ? null : old] };
       return { all: async () => [] };
     }
     if (text && text.includes('POSITION(@hashes')) {
@@ -83,7 +95,7 @@ function programQuery() {
     }
     if (live && text && text.includes('source_documents')) {
       live.source_documents = bind.docs;
-      return { all: async () => [live] }; // the write updated ONE document
+      return { all: async () => [1] }; // the write updated ONE document
     }
     return { all: async () => [] };
   });
@@ -308,6 +320,45 @@ describe('producer-service — startDocumentsConversion + run', () => {
       return Promise.resolve({
         data: { file: { file_id: fid, file_name: fn, size: 100, dataprep: { status: 'Pending' } } }
       });
+    });
+  }
+
+  /** A doc-repo metadata mock that also carries a content hash — the
+   * duplicate-content gate needs one to read. */
+  function mockDocsWithHash(hash) {
+    authedAxios.get.mockImplementation((url) => {
+      const s = String(url);
+      if (s.endsWith('/download')) {
+        const fid = s.split('/api/files/')[1].replace(/\/download$/, '');
+        return Promise.resolve({ data: Readable.from([Buffer.from('# T\n\nbody for ' + fid)]) });
+      }
+      return Promise.resolve({
+        data: {
+          file: {
+            file_id: s.split('/api/files/')[1],
+            file_name: 'alpha.md',
+            size: 100,
+            file_hash: hash,
+            dataprep: { status: 'Pending' }
+          }
+        }
+      });
+    });
+  }
+
+  /** Make the next duplicate-content query fail — the pre-flight's
+   * read-then-act gap, or a database fault. */
+  function failNextDuplicateQuery({ beforeThrow } = {}) {
+    const programImpl = mockDb.query.getMockImplementation();
+    let failOnce = true;
+    mockDb.query.mockImplementation(async (q, bind) => {
+      const text = typeof q === 'string' ? q : q && q.query;
+      if (failOnce && text && text.includes('POSITION(@hashes')) {
+        failOnce = false;
+        if (beforeThrow) beforeThrow();
+        throw new Error('db down');
+      }
+      return programImpl(q, bind);
     });
   }
 
@@ -727,25 +778,7 @@ describe('producer-service — startDocumentsConversion + run', () => {
     const RID2 = '88888888-8888-4888-8888-888888888888';
     await mockDb.collection('okf_repositories').save({ _key: RID, repo_id: RID, name: 'Mine', domain: 'general' });
     await mockDb.collection('okf_repositories').save({ _key: RID2, repo_id: RID2, name: 'Other', domain: 'social' });
-    const metaOf = (fid) => ({
-      data: {
-        file: {
-          file_id: fid,
-          file_name: 'alpha.md',
-          size: 100,
-          file_hash: 'HASH-CONCURRENT-1',
-          dataprep: { status: 'Pending' }
-        }
-      }
-    });
-    authedAxios.get.mockImplementation((url) => {
-      const s = String(url);
-      if (s.endsWith('/download')) {
-        const fid = s.split('/api/files/')[1].replace(/\/download$/, '');
-        return Promise.resolve({ data: Readable.from([Buffer.from('# T\n\nbody for ' + fid)]) });
-      }
-      return Promise.resolve(metaOf(s.split('/api/files/')[1]));
-    });
+    mockDocsWithHash('HASH-CONCURRENT-1');
     let parked = false;
     let stampStarted;
     const stamping = new Promise((resolve) => {
@@ -794,35 +827,8 @@ describe('producer-service — startDocumentsConversion + run', () => {
     const RID2 = '88888888-8888-4888-8888-888888888888';
     await mockDb.collection('okf_repositories').save({ _key: RID, repo_id: RID, name: 'Mine', domain: 'general' });
     await mockDb.collection('okf_repositories').save({ _key: RID2, repo_id: RID2, name: 'Other', domain: 'social' });
-    const metaOf = (fid) => ({
-      data: {
-        file: {
-          file_id: fid,
-          file_name: 'alpha.md',
-          size: 100,
-          file_hash: 'HASH-RELEASE-1',
-          dataprep: { status: 'Pending' }
-        }
-      }
-    });
-    authedAxios.get.mockImplementation((url) => {
-      const s = String(url);
-      if (s.endsWith('/download')) {
-        const fid = s.split('/api/files/')[1].replace(/\/download$/, '');
-        return Promise.resolve({ data: Readable.from([Buffer.from('# T\n\nbody for ' + fid)]) });
-      }
-      return Promise.resolve(metaOf(s.split('/api/files/')[1]));
-    });
-    const programImpl = mockDb.query.getMockImplementation();
-    let failOnce = true;
-    mockDb.query.mockImplementation(async (q, bind) => {
-      const text = typeof q === 'string' ? q : q && q.query;
-      if (failOnce && text && text.includes('POSITION(@hashes')) {
-        failOnce = false;
-        throw new Error('db down');
-      }
-      return programImpl(q, bind);
-    });
+    mockDocsWithHash('HASH-RELEASE-1');
+    failNextDuplicateQuery();
 
     await expect(
       producer.startDocumentsConversion({ repo_id: RID, file_ids: ['f1'], requested_name: 'x' })
@@ -899,16 +905,7 @@ describe('producer-service — startDocumentsConversion + run', () => {
         }
       });
     });
-    const programImpl = mockDb.query.getMockImplementation();
-    let failOnce = true;
-    mockDb.query.mockImplementation(async (q, bind) => {
-      const text = typeof q === 'string' ? q : q && q.query;
-      if (failOnce && text && text.includes('POSITION(@hashes')) {
-        failOnce = false;
-        throw new Error('db down');
-      }
-      return programImpl(q, bind);
-    });
+    failNextDuplicateQuery();
 
     await expect(
       producer.startDocumentsConversion({ repo_id: RID, file_ids: ['f1'], requested_name: 'x' })
@@ -930,16 +927,7 @@ describe('producer-service — startDocumentsConversion + run', () => {
       conversion: { status: 'queued', stage: 'queued', files_done: 0, files_total: 3 }
     });
     mockDocs({ f1: 'alpha.md' });
-    const programImpl = mockDb.query.getMockImplementation();
-    let failOnce = true;
-    mockDb.query.mockImplementation(async (q, bind) => {
-      const text = typeof q === 'string' ? q : q && q.query;
-      if (failOnce && text && text.includes('POSITION(@hashes')) {
-        failOnce = false;
-        throw new Error('db down');
-      }
-      return programImpl(q, bind);
-    });
+    failNextDuplicateQuery();
     // the file must carry a hash, or the duplicate query never runs
     authedAxios.get.mockImplementation((url) => {
       const s = String(url);
@@ -995,20 +983,14 @@ describe('producer-service — startDocumentsConversion + run', () => {
         }
       });
     });
-    const programImpl = mockDb.query.getMockImplementation();
-    let failOnce = true;
     let zipMerged = false;
-    mockDb.query.mockImplementation(async (q, bind) => {
-      const text = typeof q === 'string' ? q : q && q.query;
-      if (failOnce && text && text.includes('POSITION(@hashes')) {
-        failOnce = false;
+    failNextDuplicateQuery({
+      beforeThrow: () => {
         // the other writer takes the record while this run is in its pre-flight
         const store = mockDb._stores.okf_repositories;
         store[RID].conversion = Object.assign({}, store[RID].conversion, { status: 'adding', pages_done: 2 });
         zipMerged = true;
-        throw new Error('db down');
       }
-      return programImpl(q, bind);
     });
 
     await expect(

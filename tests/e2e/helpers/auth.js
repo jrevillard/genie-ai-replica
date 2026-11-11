@@ -228,21 +228,37 @@ const SESSION_MINT_TIMEOUT_MS = 360000;
  *
  *  - the HOOK's budget (360 s) counts everything, including the login
  *    that mints the token (≈135 s on a stalled stack);
- *  - the TOKEN's life (300 s) starts when that login COMPLETES, so it
- *    covers only the work after the mint.
+ *  - the TOKEN's life (the realm's `accessTokenLifespan` — 300 s on the
+ *    venue, and a value the repo does not pin: `deploy/ansible` leaves
+ *    it optional, and the k1 spec sets the realm to 10 s for the length
+ *    of its own run) starts when the token is ISSUED — during the OIDC
+ *    code exchange inside the login redirect, BEFORE the mint returns.
+ *    The window the sweep works in is therefore 300 s MINUS the gap
+ *    between the issuance and the mint returning.
  *
  * After the mint the sweep lists the population (≤ 2 pages at the 30 s
  * request cap = 60 s) and deletes the suite's own files (50 deletes in
- * waves of 10 = 5 × 30 s = 150 s): 210 s, inside the token's 300 s.
- * With the login counted, 135 + 60 + 150 = 345 s, inside the hook's
- * 360 s.
+ * waves of 10 = 5 × 30 s = 150 s): 210 s of work, inside the token's
+ * 300 s with ~90 s left for that gap. With the login counted, 135 + 60
+ * + 150 = 345 s, inside the hook's 360 s.
  *
- * The bound is that arithmetic and nothing else. The deletes hit
- * DISTINCT documents, and ArangoDB takes its write locks per document —
- * a fan-out over distinct documents does not inherently conflict (the
- * write-conflict code is 1200, not 1201). A wider wave would fit more
- * deletes in less time; the width stays at 10 so the sweep remains a
- * modest load on a shared stack.
+ * The wave width is bounded by the DATA TIER, and the engine decides
+ * how:
+ *
+ *  - RocksDB — the venue's deployment passes `--server.storage-engine=
+ *    rocksdb` — takes its locks per DOCUMENT: concurrent deletes of
+ *    distinct documents do not conflict, and a conflict surfaces as a
+ *    write-write conflict (error 1200; 1201 is "datfile sealed");
+ *  - MMFiles — the compose deployment, ArangoDB 3.12's default engine,
+ *    which `docker-compose.yaml` does not override — takes the write
+ *    lock per COLLECTION. The conversation delete opens a write
+ *    transaction over six collections (chat-history-service.js), so a
+ *    wave of concurrent deletes serialises on that lock and the waits
+ *    grow with the wave width until the transaction lock timeout
+ *    surfaces.
+ *
+ * Ten at a time keeps the serialised writes landing inside the 30 s
+ * request cap on the stricter engine.
  */
 const SWEEP_DELETE_CONCURRENCY = 10;
 

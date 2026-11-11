@@ -254,7 +254,12 @@ async function deleteAllTestDocuments(prefix = 'test-document', { browser } = {}
     }
     const pageFiles = listRes.data?.data || [];
     files.push(...pageFiles);
-    total = listRes.data?.pagination?.totalFiles;
+    // The population is the same on every page: keep the first count
+    // that arrives, so a page without a pagination object does not erase
+    // what the previous page established.
+    if (total === undefined) {
+      total = listRes.data?.pagination?.totalFiles;
+    }
     if (pageFiles.length < 50) {
       exhausted = true;
       break;
@@ -266,8 +271,8 @@ async function deleteAllTestDocuments(prefix = 'test-document', { browser } = {}
   // is the suite's own files inside it (the prefix-matching ones). Only
   // the delete set is the sweep's to remove.
   const testFiles = files.filter((f) => f.file_name && f.file_name.startsWith(prefix));
-  const population = total !== undefined ? total : files.length;
-  const enumeratedAll = total !== undefined ? files.length >= total : exhausted;
+  const populationKnown = total !== undefined;
+  const enumeratedAll = populationKnown ? files.length >= total : exhausted;
 
   const deleteSet = testFiles.slice(0, SWEEP_MAX_DELETES);
   const beyondBudget = testFiles.length - deleteSet.length;
@@ -315,15 +320,21 @@ async function deleteAllTestDocuments(prefix = 'test-document', { browser } = {}
     );
   }
   if (!enumeratedAll && !listFailure) {
+    // What the sweep knows is that the POPULATION exceeds the window it
+    // enumerated — not that a suite file lies beyond it. Say that.
     problems.push(
-      `the population is ${population} matching files and the sweep enumerated ${files.length} of ` +
-        `them — a prefix-matching file beyond the last enumerated page was not removed`
+      populationKnown
+        ? `the population is ${total} matching files and the sweep enumerated ${files.length} of ` +
+            `them — a prefix-matching file beyond the last enumerated page, if any, was not removed`
+        : `the sweep enumerated ${files.length} matching files in full pages — the population may be ` +
+            `larger, and a prefix-matching file beyond the last enumerated page, if any, was not removed`
     );
   }
   if (problems.length > 0) {
-    const scope = listFailure
-      ? 'the file list could not be read, so the population is unknown'
-      : `the population holds ${population} matching files, of which ${testFiles.length} are the suite's own`;
+    const scope = populationKnown
+      ? `the population holds ${total} matching files, of which ${testFiles.length} were enumerated as ` +
+        `the suite's own`
+      : `the population is unknown (${files.length} matching files were enumerated)`;
     throw new Error(`cleanup: ${problems.length} problem(s) — ${scope} — ${problems.join(' | ')}`);
   }
 }

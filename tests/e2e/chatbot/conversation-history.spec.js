@@ -91,6 +91,7 @@ test.describe('Conversation history persistence', () => {
     let total;
     let listFailure = null;
     let exhausted = false;
+    let pagesRead = 0;
     for (let offset = 0; offset < SWEEP_MAX_LIST_PAGES * LIST_PAGE_SIZE; offset += LIST_PAGE_SIZE) {
       let listRes;
       try {
@@ -110,7 +111,13 @@ test.describe('Conversation history persistence', () => {
       const list = listRes.data?.conversations || listRes.data;
       const listed = Array.isArray(list) ? list : [];
       conversations.push(...listed);
-      total = listRes.data?.pagination?.total;
+      pagesRead++;
+      // The population is the same on every page: keep the first count
+      // that arrives, so a page without a pagination object does not
+      // erase what the previous page established.
+      if (total === undefined) {
+        total = listRes.data?.pagination?.total;
+      }
       if (listed.length < LIST_PAGE_SIZE) {
         exhausted = true;
         break;
@@ -124,13 +131,16 @@ test.describe('Conversation history persistence', () => {
     const targets = conversations
       .filter((c) => c.title?.startsWith('E2E '))
       .map((c) => c._key || c.id);
-    const population = total !== undefined ? total : conversations.length;
-    const enumeratedAll = total !== undefined ? conversations.length >= total : exhausted;
+    const populationKnown = total !== undefined;
+    const enumeratedAll = populationKnown ? conversations.length >= total : exhausted;
 
-    // The ids captured in-flight are the fallback when the LIST could not
-    // be read at all: the deletes still run, and the failure is reported
-    // below. When the list was read, the enumerated set IS the sweep's.
-    const deleteSet = listFailure ? [...createdConversationIds] : targets;
+    // The ids captured in-flight are the fallback when NOT ONE page could
+    // be read: the deletes still run, and the failure is reported below.
+    // A later page that fails must NOT discard the pages that succeeded
+    // — those conversations are known, and leaving them behind is the
+    // leftover this sweep exists to prevent.
+    const deleteSet = pagesRead > 0 ? targets : [...createdConversationIds];
+    const attempted = deleteSet.slice(0, SWEEP_MAX_DELETES);
     const beyondBudget = Math.max(0, deleteSet.length - SWEEP_MAX_DELETES);
 
     // The deletes run in bounded-parallel waves: each one is capped at the
@@ -140,7 +150,7 @@ test.describe('Conversation history persistence', () => {
     // token. The wave width is bounded by SWEEP_DELETE_CONCURRENCY so the
     // sweep still fits both.
     const undeleted = (
-      await mapWithConcurrency(deleteSet.slice(0, SWEEP_MAX_DELETES), SWEEP_DELETE_CONCURRENCY, async (convId) => {
+      await mapWithConcurrency(attempted, SWEEP_DELETE_CONCURRENCY, async (convId) => {
         try {
           const res = await request('DELETE', `${BASE_URL}/api/chat/conversations/${convId}`, {
             headers: { Authorization: `Bearer ${token}` }
@@ -164,7 +174,7 @@ test.describe('Conversation history persistence', () => {
     }
     if (undeleted.length > 0) {
       problems.push(
-        `${undeleted.length} of ${deleteSet.length} conversations were not deleted — leftover: ` +
+        `${undeleted.length} of ${attempted.length} conversations were not deleted — leftover: ` +
           `${undeleted.map((u) => `${u.id} (${u.cause})`).join(', ')}`
       );
     }
@@ -175,16 +185,23 @@ test.describe('Conversation history persistence', () => {
       );
     }
     if (!enumeratedAll && !listFailure) {
+      // What the sweep knows is that the POPULATION exceeds the window it
+      // enumerated — not that a suite conversation lies beyond it. Say that.
       problems.push(
-        `the population is ${population} matching conversations and the sweep enumerated ` +
-          `${conversations.length} of them — an E2E-titled conversation beyond the last enumerated page ` +
-          `was not removed`
+        populationKnown
+          ? `the population is ${total} matching conversations and the sweep enumerated ` +
+            `${conversations.length} of them — a suite conversation beyond the last enumerated page, ` +
+            `if any, was not removed`
+          : `the sweep enumerated ${conversations.length} matching conversations in full pages — the ` +
+            `population may be larger, and a suite conversation beyond the last enumerated page, if any, ` +
+            `was not removed`
       );
     }
     if (problems.length > 0) {
-      const scope = listFailure
-        ? 'the conversation list could not be read, so the population is unknown'
-        : `the population holds ${population} matching conversations, of which ${deleteSet.length} are the suite's own`;
+      const scope = populationKnown
+        ? `the population holds ${total} matching conversations, of which ${deleteSet.length} were ` +
+          `enumerated as the suite's own`
+        : `the population is unknown (${conversations.length} matching conversations were enumerated)`;
       throw new Error(`cleanup: ${problems.length} problem(s) — ${scope} — ${problems.join(' | ')}`);
     }
   });

@@ -137,6 +137,19 @@ try {
 }
 
 /**
+ * Would a DEBUG line be written at all?
+ *
+ * The logger is the shared winston one, but a consumer's test double may
+ * not implement the level check — and a rejected token must never fail on
+ * the way to its log line.
+ *
+ * @returns {boolean} True when the debug level would write the line
+ */
+function debugEnabled() {
+  return typeof logger.isDebugEnabled === 'function' && logger.isDebugEnabled();
+}
+
+/**
  * Log a rejected token without letting the caller turn the log into a flood.
  *
  * The first rejection of each distinct cause in a window is a WARN; the
@@ -166,10 +179,7 @@ function logRejection(issuer, cause, buildLine) {
     logger.warn(`${buildLine()}${tail}`);
   } else {
     bucket.suppressed += 1;
-    // The debug level is asked of the logger only when it can answer: a
-    // consumer's test double may not implement it, and a rejected token
-    // must never fail on the way to its log line.
-    if (typeof logger.isDebugEnabled === 'function' && logger.isDebugEnabled()) {
+    if (debugEnabled()) {
       logger.debug(buildLine());
     }
   }
@@ -214,6 +224,17 @@ function effectiveKid(protectedHeader) {
 }
 
 /**
+ * The published key set, as jose exposes it.
+ *
+ * @param {Function} inner - jose's remote key set
+ * @returns {Object|undefined} The published key set, or undefined when the
+ *   remote set does not expose one
+ */
+function publishedKeySet(inner) {
+  return typeof inner.jwks === 'function' ? inner.jwks() : undefined;
+}
+
+/**
  * How many published SIGNING keys share one key id.
  *
  * Only the keys the verifier could have used are counted (the same filter
@@ -226,7 +247,11 @@ function effectiveKid(protectedHeader) {
  */
 function countKeysWithKid(jwks, kid) {
   if (!jwks || !Array.isArray(jwks.keys)) return 0;
-  return jwks.keys.filter((jwk) => jwk && jwk.kid === kid && isUsableSigningKey(jwk)).length;
+  let count = 0;
+  for (const jwk of jwks.keys) {
+    if (jwk && jwk.kid === kid && isUsableSigningKey(jwk)) count += 1;
+  }
+  return count;
 }
 
 /**
@@ -251,30 +276,31 @@ function countKeysWithKid(jwks, kid) {
  *   candidates than the trial may try.
  */
 async function tryCandidateKeys(err, token, jwtOptions) {
-  const failed = { ok: false, payload: null, error: null, tried: 0, truncated: false };
-  if (!err || typeof err[Symbol.asyncIterator] !== 'function') return failed;
+  const failure = { ok: false, payload: null, error: null, truncated: false };
+  if (!err || typeof err[Symbol.asyncIterator] !== 'function') return failure;
 
   let lastError = null;
+  let tried = 0;
   for await (const candidate of err) {
-    if (failed.tried >= MAX_CANDIDATE_KEYS) {
+    if (tried >= MAX_CANDIDATE_KEYS) {
       // More candidates than the trial may try: the token is NOT resolved by
       // guessing — the realm's key set is too wide to pick from.
-      return { ...failed, error: lastError, truncated: true };
+      return { ...failure, error: lastError, truncated: true };
     }
-    failed.tried += 1;
+    tried += 1;
     try {
       const { payload } = await jwtVerify(token, candidate, jwtOptions);
-      return { ok: true, payload, error: null, tried: failed.tried, truncated: false };
+      return { ok: true, payload, error: null, truncated: false };
     } catch (candidateError) {
       if (candidateError.name !== 'JWSSignatureVerificationFailed') {
         // The token's own defect (expiry, claims, algorithm) — no other
         // candidate can repair it.
-        return { ...failed, error: candidateError };
+        return { ...failure, error: candidateError };
       }
       lastError = candidateError;
     }
   }
-  return { ...failed, error: lastError };
+  return { ...failure, error: lastError };
 }
 
 /**
@@ -337,7 +363,7 @@ function createJwksCache(jwksUri, ttlMs = JWKS_CACHE_TTL) {
         // fault). The published key set tells them apart: no usable key
         // means the realm's own state is broken, which is an outage, not a
         // rejected token.
-        const published = typeof inner.jwks === 'function' ? inner.jwks() : undefined;
+        const published = publishedKeySet(inner);
         if (!keySetHasUsableKey(published)) {
           throw new TokenVerificationError(
             'AUTH_SERVICE_UNAVAILABLE',
@@ -359,11 +385,6 @@ function createJwksCache(jwksUri, ttlMs = JWKS_CACHE_TTL) {
         // id more than once — an outage, #1776) and a token that names none
         // (the published candidates can resolve it — #1767).
         const kid = effectiveKid(protectedHeader);
-        // The key id the token names rides along with the error: the caller
-        // runs the candidate trial ONLY for a token that names none, so a
-        // token naming a duplicated key id is never resolved by trying one
-        // of the duplicates.
-        err.kidNamed = kid;
         if (kid !== undefined) {
           // jose matches the candidates by that EXACT key id, so more than
           // one candidate means the realm published that key id more than
@@ -373,7 +394,7 @@ function createJwksCache(jwksUri, ttlMs = JWKS_CACHE_TTL) {
           // signed out by a 401 they cannot act on (#1776). The published
           // key set gives the count for the operator; the verdict does not
           // depend on reading it.
-          const published = typeof inner.jwks === 'function' ? inner.jwks() : undefined;
+          const published = publishedKeySet(inner);
           const duplicates = countKeysWithKid(published, kid);
           throw new TokenVerificationError(
             'AUTH_SERVICE_UNAVAILABLE',
@@ -385,7 +406,9 @@ function createJwksCache(jwksUri, ttlMs = JWKS_CACHE_TTL) {
         // The token names NO key id: RFC 7515 §4.1.4 makes the key id
         // OPTIONAL, so the ambiguity is the token's, and the published
         // candidates can resolve it. The error carries them; the caller
-        // tries them (#1767).
+        // tries them (#1767). ONLY a kid-less ambiguity reaches the caller
+        // — the named-kid case above is answered here, so the trial can
+        // never resolve a token naming a duplicated key id.
         throw err;
       }
       throw new TokenVerificationError(
@@ -778,7 +801,9 @@ const keycloakAuthService = {
       // The token's signature, issuer, and expiration are already verified above.
       const result = toResult(verifiedPayload);
 
-      logger.debug(`[KeycloakAuth] Token verified for ${result.iss_sub}`);
+      if (debugEnabled()) {
+        logger.debug(`[KeycloakAuth] Token verified for ${result.iss_sub}`);
+      }
       return result;
     } catch (err) {
       // TokenVerificationError is re-thrown as-is
@@ -798,16 +823,17 @@ const keycloakAuthService = {
       // signature BEFORE the claims, so the manual check is what keeps an
       // expired junk token from costing a verification).
       const expired = unverifiedExp && unverifiedExp < Math.floor(Date.now() / 1000);
-      // The trial applies ONLY to a token that names NO key id: a token
-      // naming a key id that the realm published twice is the realm's
-      // outage (#1776), and it is never resolved by trying one of the
-      // duplicates. The key id the token names rides along with the error.
-      const kidless = err.name === 'JWKSMultipleMatchingKeys' && err.kidNamed === undefined;
-      if (kidless && !expired) {
+      // The trial applies ONLY to a token that names NO key id: the key
+      // resolver answers the named-kid case itself (the realm's outage,
+      // #1776), so a token naming a duplicated key id never reaches this
+      // branch and is never resolved by trying one of the duplicates.
+      if (err.name === 'JWKSMultipleMatchingKeys' && !expired) {
         const trial = await tryCandidateKeys(err, token, jwtOptions);
         if (trial.ok) {
           const result = toResult(trial.payload);
-          logger.debug(`[KeycloakAuth] Token verified against a published candidate key for ${result.iss_sub}`);
+          if (debugEnabled()) {
+            logger.debug(`[KeycloakAuth] Token verified against a published candidate key for ${result.iss_sub}`);
+          }
           return result;
         }
         if (trial.truncated) {
@@ -817,7 +843,7 @@ const keycloakAuthService = {
           // below would only repeat it.
           logRejection(
             unverifiedIss,
-            'JWKSMultipleMatchingKeys:trial-truncated',
+            `${err.name}:trial-truncated`,
             () =>
               `[KeycloakAuth] Token verification failed (JWKSMultipleMatchingKeys): the realm published more candidate keys than the trial cap (${MAX_CANDIDATE_KEYS} tried) — the token could not be resolved`
           );

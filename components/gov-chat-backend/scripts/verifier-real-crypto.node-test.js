@@ -224,10 +224,26 @@ function baseClaims(iss, extra = {}) {
 }
 
 const sign = async (claims, opts = {}) => {
-  const key = opts.rotated ? rotatedPrivateKey : opts.partner ? partnerPrivateKey : privateKey;
-  const kid = opts.rotated ? 'rotated-key' : opts.partner ? 'partner-key' : 'test-key';
+  const key = opts.key || (opts.rotated ? rotatedPrivateKey : opts.partner ? partnerPrivateKey : privateKey);
+  const defaultKid = opts.rotated ? 'rotated-key' : opts.partner ? 'partner-key' : 'test-key';
+  // `kid: undefined` means NO key id (RFC 7515 §4.1.4 makes it optional).
+  const kid = 'kid' in opts ? opts.kid : defaultKid;
   return new SignJWT(claims).setProtectedHeader({ alg: 'RS256', kid }).sign(key);
 };
+
+// (R5) the clock override, in one place: the refresh floor and the cache TTL
+// are measured against the clock, so a stalled runner must not decide an
+// outcome.
+async function withClock(offsetMs, fn) {
+  const realNow = Date.now();
+  const clockSpy = Date.now;
+  Date.now = () => realNow + offsetMs;
+  try {
+    return await fn();
+  } finally {
+    Date.now = clockSpy;
+  }
+}
 
 test('azp tolerance: a valid token with a foreign azp verifies (no authorized-party check)', async () => {
   // Service accounts (dataprep-service, okf-service) carry an azp that
@@ -484,9 +500,7 @@ test('a kid-less token resolves against a published candidate key', async () => 
   // resolve by key id alone. The published candidates resolve it — the first
   // one whose signature verifies wins.
   const svc = loadVerifier();
-  const kidless = await new SignJWT(baseClaims(DISCOVERY_ISSUER))
-    .setProtectedHeader({ alg: 'RS256' }) // alg, but NO key id
-    .sign(privateKey);
+  const kidless = await sign(baseClaims(DISCOVERY_ISSUER), { kid: undefined }); // alg, but NO key id
   const payload = await svc.verifyToken(kidless);
   assert.equal(payload.sub, 'user-1');
   assert.equal(payload.iss_sub, `${DISCOVERY_ISSUER}#user-1`);
@@ -498,9 +512,8 @@ test('a kid-less token that no published candidate signs is a bad token, not an 
   // never ACCEPTED without a signature that verifies, and an unresolvable
   // token is never reported as an outage.
   const svc = loadVerifier();
-  const kidless = await new SignJWT(baseClaims(DISCOVERY_ISSUER))
-    .setProtectedHeader({ alg: 'RS256' })
-    .sign(rotatedPrivateKey); // a key the realm does not publish
+  // a key the realm does not publish
+  const kidless = await sign(baseClaims(DISCOVERY_ISSUER), { key: rotatedPrivateKey, kid: undefined });
   await assert.rejects(
     () => svc.verifyToken(kidless),
     (err) => err.code === 'TOKEN_INVALID'
@@ -537,18 +550,13 @@ test('a mid-life JWKS fetch failure is an outage (AUTH_SERVICE_UNAVAILABLE), not
   // measured from the last key-set FETCH: the clock jumps past it so the
   // unknown-kid token makes the verifier re-read the key set, and that
   // fetch is the one that fails.
-  const realNow = Date.now();
-  const clockSpy = Date.now;
-  Date.now = () => realNow + 60000;
-  try {
+  await withClock(60000, async () => {
     const rotated = await sign(baseClaims(DISCOVERY_ISSUER), { partner: true });
     await assert.rejects(
       () => svc.verifyToken(rotated),
       (err) => err.code === 'AUTH_SERVICE_UNAVAILABLE'
     );
-  } finally {
-    Date.now = clockSpy;
-  }
+  });
 });
 
 test('the key set is re-read after the cache TTL expires', async () => {
@@ -565,22 +573,16 @@ test('the key set is re-read after the cache TTL expires', async () => {
   await warmCache(svc);
   const before = jwksFetches();
 
-  const realNow = Date.now();
-  const clockSpy = Date.now;
-  Date.now = () => realNow + 600000; // 10 minutes: past the 5-minute TTL
-  try {
+  await withClock(600000, async () => {
+    // 10 minutes: past the 5-minute TTL
     publishedKeys = {
       keys: [{ ...rotatedPublicKey, kid: 'test-key', alg: 'RS256', use: 'sig' }]
     };
-    const token = await new SignJWT(baseClaims(DISCOVERY_ISSUER))
-      .setProtectedHeader({ alg: 'RS256', kid: 'test-key' })
-      .sign(rotatedPrivateKey);
+    const token = await sign(baseClaims(DISCOVERY_ISSUER), { key: rotatedPrivateKey, kid: 'test-key' });
     const payload = await svc.verifyToken(token);
     assert.equal(payload.sub, 'user-1');
     assert.equal(jwksFetches(), before + 1, 'the expired key set was not re-read');
-  } finally {
-    Date.now = clockSpy;
-  }
+  });
 });
 
 test('a junk-signature token does not re-fetch the JWKS (the cache-thrash vector)', async () => {
@@ -621,10 +623,7 @@ test('a token that can never verify costs no key-set fetch inside the refresh-fl
   await warmCache(svc);
   const before = jwksFetches();
 
-  const realNow = Date.now();
-  const clockSpy = Date.now;
-  Date.now = () => realNow;
-  try {
+  await withClock(0, async () => {
     const claims = baseClaims(DISCOVERY_ISSUER);
     delete claims.exp;
     const unknownKid = await sign(claims, { partner: true });
@@ -632,9 +631,7 @@ test('a token that can never verify costs no key-set fetch inside the refresh-fl
       () => svc.verifyToken(unknownKid),
       (err) => err.code === 'TOKEN_INVALID'
     );
-  } finally {
-    Date.now = clockSpy;
-  }
+  });
   assert.equal(jwksFetches(), before);
 });
 
@@ -651,18 +648,13 @@ test('an unknown-kid token refreshes the key set — the price of rotation recov
   // The cooldown window is measured from the last fetch: the clock jumps
   // past it (still inside the cache TTL) so the refresh is not floored, and
   // a stalled runner cannot decide the outcome.
-  const realNow = Date.now();
-  const clockSpy = Date.now;
-  Date.now = () => realNow + 60000;
-  try {
+  await withClock(60000, async () => {
     const token = await sign(baseClaims(DISCOVERY_ISSUER), { partner: true });
     await assert.rejects(
       () => svc.verifyToken(token),
       (err) => err.code === 'TOKEN_INVALID'
     );
-  } finally {
-    Date.now = clockSpy;
-  }
+  });
   assert.ok(jwksFetches() > before, 'the unknown-kid token did not refresh the key set');
 });
 
@@ -680,10 +672,7 @@ test('a burst of unknown-kid tokens does not refresh the key set once per token'
   // runner cannot span two windows: every junk token after the first lands
   // inside the same one, and the count is exact. (The floor removed — the
   // behaviour this guards against — refreshes once per token, which is 5.)
-  const realNow = Date.now();
-  const clockSpy = Date.now;
-  Date.now = () => realNow + 60000;
-  try {
+  await withClock(60000, async () => {
     for (let i = 0; i < 5; i++) {
       const junk = await sign(baseClaims(DISCOVERY_ISSUER), { partner: true }); // kid 'partner-key': unknown
       await assert.rejects(
@@ -691,9 +680,7 @@ test('a burst of unknown-kid tokens does not refresh the key set once per token'
         (err) => err.code === 'TOKEN_INVALID'
       );
     }
-  } finally {
-    Date.now = clockSpy;
-  }
+  });
   assert.equal(jwksFetches(), before + 1, 'the burst refreshed the key set more than once');
 });
 
@@ -735,10 +722,7 @@ test('a key published inside the refresh-floor window is picked up by the next r
   // stalled runner cannot let it expire mid-test and turn the expected
   // rejection into an acceptance.
   const svc = loadVerifier();
-  const realNow = Date.now();
-  const clockSpy = Date.now;
-  Date.now = () => realNow;
-  try {
+  await withClock(0, async () => {
     await warmCache(svc);
     // An unrelated unknown-kid token lands inside the window.
     const junk = await sign(baseClaims(DISCOVERY_ISSUER), { partner: true });
@@ -759,12 +743,11 @@ test('a key published inside the refresh-floor window is picked up by the next r
     // The clock then jumps past the floor window (the suite cannot read the
     // constant, so it out-jumps it) but stays inside the cache TTL: the next
     // refresh observes the rotation, with no real-time sleep.
-    Date.now = () => realNow + 60000;
-    const payload = await svc.verifyToken(rotated);
-    assert.equal(payload.sub, 'user-1');
-  } finally {
-    Date.now = clockSpy;
-  }
+    await withClock(60000, async () => {
+      const payload = await svc.verifyToken(rotated);
+      assert.equal(payload.sub, 'user-1');
+    });
+  });
 });
 
 test('non-bare-integer KEYCLOAK_DISCOVERY_TIMEOUT_MS falls back to the 5000ms default', async () => {

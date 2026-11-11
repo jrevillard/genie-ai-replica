@@ -506,6 +506,17 @@ describe('keycloakAuthService', () => {
       return err;
     };
 
+    // jose hands the candidate keys over with the ambiguity error; the
+    // verifier tries them.
+    const ambiguousKeysError = (candidates = []) => {
+      const err = new Error('multiple matching keys');
+      err.name = 'JWKSMultipleMatchingKeys';
+      err[Symbol.asyncIterator] = async function* () {
+        yield* candidates;
+      };
+      return err;
+    };
+
     beforeEach(() => {
       // Reset mocks — global.fetch too: the verifier fetches the discovery
       // document through the global, so a mock that is not installed there
@@ -577,7 +588,7 @@ describe('keycloakAuthService', () => {
       mockCreateRemoteJWKSet.mockReturnValue(inner);
       // jose resolves the key through the wrapper — the wrapper is where the
       // network failure is classified.
-      mockJwtVerify.mockImplementation(async (token, key) => key({ alg: 'RS256' }, token));
+      resolveThroughKey({ alg: 'RS256' });
 
       await expect(keycloakAuthService.verifyToken(generateMockJwtString(mockJwtPayload))).rejects.toMatchObject({
         code: 'AUTH_SERVICE_UNAVAILABLE'
@@ -605,14 +616,22 @@ describe('keycloakAuthService', () => {
     // lines are visible here and nowhere else. Silences the transport and
     // restores the spy even when the assertions fail, so a failing test
     // cannot leak the mock into its neighbours.
-    function captureWarns() {
+    function captureLogs(level) {
       const loggerModule = require('../../shared/lib/logger');
-      const warnSpy = jest.spyOn(loggerModule.logger, 'warn').mockImplementation(() => {});
+      const spy = jest.spyOn(loggerModule.logger, level).mockImplementation(() => {});
       return {
-        lines: () => warnSpy.mock.calls.map(([msg]) => String(msg)).join('\n'),
-        restore: () => warnSpy.mockRestore()
+        lines: () => spy.mock.calls.map(([msg]) => String(msg)).join('\n'),
+        restore: () => spy.mockRestore()
       };
     }
+
+    const captureWarns = () => captureLogs('warn');
+    const captureDebugs = () => captureLogs('debug');
+
+    // The mocked jwtVerify resolves the key the way jose does — through the
+    // wrapper — so the wrapper's own classification is exercised.
+    const resolveThroughKey = (protectedHeader) =>
+      mockJwtVerify.mockImplementation(async (token, key) => key(protectedHeader, token));
 
     it('logs the cause of a rejection, and neither the token nor key material', async () => {
       // Without the cause, every distinct failure (tampered signature,
@@ -728,11 +747,7 @@ describe('keycloakAuthService', () => {
       // cannot resolve by key id alone. The published candidates resolve
       // it — the first one whose signature verifies wins.
       const candidates = [{ key: 'candidate-1' }, { key: 'candidate-2' }];
-      const ambiguous = new Error('multiple matching keys');
-      ambiguous.name = 'JWKSMultipleMatchingKeys';
-      ambiguous[Symbol.asyncIterator] = async function* () {
-        yield* candidates;
-      };
+      const ambiguous = ambiguousKeysError(candidates);
 
       mockJwtVerify.mockRejectedValueOnce(ambiguous).mockImplementation(async (token, key) => {
         if (key === candidates[1]) {
@@ -755,12 +770,7 @@ describe('keycloakAuthService', () => {
       // The opposite case: the token names no key id and none of the
       // published candidates signs it. It stays a bad token — a kid-less
       // token is never ACCEPTED without a signature that verifies.
-      const ambiguous = new Error('multiple matching keys');
-      ambiguous.name = 'JWKSMultipleMatchingKeys';
-      ambiguous[Symbol.asyncIterator] = async function* () {
-        yield { key: 'candidate-1' };
-        yield { key: 'candidate-2' };
-      };
+      const ambiguous = ambiguousKeysError([{ key: 'candidate-1' }, { key: 'candidate-2' }]);
 
       mockJwtVerify.mockRejectedValueOnce(ambiguous).mockImplementation(async () => {
         const signatureError = new Error('signature verification failed');
@@ -774,32 +784,63 @@ describe('keycloakAuthService', () => {
       });
     });
 
-    it('reports the duplicate key id as an outage even when the published key set cannot be read', async () => {
-      // The verdict does not depend on reading the published key set: jose
-      // matched the candidates by that EXACT key id, so more than one
-      // candidate means the realm published that id more than once. A jose
-      // that did not expose the published set would otherwise turn the
-      // outage back into a 401.
-      const ambiguous = new Error('multiple matching keys');
-      ambiguous.name = 'JWKSMultipleMatchingKeys';
-      const inner = jest.fn().mockRejectedValue(ambiguous); // no published-set accessor
-      mockCreateRemoteJWKSet.mockReturnValue(inner);
-      mockJwtVerify.mockImplementation(async (token, key) => key({ alg: 'RS256', kid: 'dup' }, token));
+    // The three shapes of the same fault: a realm that published one key id
+    // more than once. The verdict never depends on reading the published key
+    // set — jose matched the candidates by that EXACT key id, so more than
+    // one candidate means the realm published that id more than once. A jose
+    // that did not expose the published set would otherwise turn the outage
+    // back into a 401.
+    const DUPLICATE_KEY_ID_CASES = [
+      {
+        name: 'the published key set cannot be read',
+        publishedKeys: null,
+        expectedMessage: 'more than one signing key'
+      },
+      {
+        name: 'two signing keys share the key id',
+        publishedKeys: [
+          { kid: 'dup', kty: 'RSA', alg: 'RS256', use: 'sig' },
+          { kid: 'dup', kty: 'RSA', alg: 'RS256', use: 'sig' }
+        ],
+        expectedMessage: 'published 2 signing keys'
+      },
+      {
+        name: 'only the keys that could verify are counted',
+        publishedKeys: [
+          { kid: 'dup', kty: 'RSA', alg: 'RS256', use: 'sig' },
+          { kid: 'dup', kty: 'RSA', alg: 'RS256', use: 'sig' },
+          { kid: 'dup', kty: 'EC', alg: 'ES256', use: 'sig' },
+          { kid: 'dup', kty: 'RSA', alg: 'RS256', use: 'sig', key_ops: ['sign'] },
+          { kid: 'dup', kty: 'RSA', alg: 'RS256', use: 'sig', key_ops: ['verify', 'verify'] }
+        ],
+        expectedMessage: 'published 3 signing keys'
+      }
+    ];
+    for (const { name, publishedKeys, expectedMessage } of DUPLICATE_KEY_ID_CASES) {
+      it(`reports a realm that published the same key id twice as an outage (${name})`, async () => {
+        const ambiguous = ambiguousKeysError();
+        const inner = jest.fn().mockRejectedValue(ambiguous);
+        if (publishedKeys) {
+          Object.assign(inner, { jwks: () => ({ keys: publishedKeys }) });
+        }
+        mockCreateRemoteJWKSet.mockReturnValue(inner);
+        resolveThroughKey({ alg: 'RS256', kid: 'dup' });
 
-      await expect(keycloakAuthService.verifyToken(generateMockJwtString(mockJwtPayload))).rejects.toMatchObject({
-        code: 'AUTH_SERVICE_UNAVAILABLE'
+        await expect(keycloakAuthService.verifyToken(generateMockJwtString(mockJwtPayload))).rejects.toMatchObject({
+          code: 'AUTH_SERVICE_UNAVAILABLE',
+          message: expect.stringContaining(expectedMessage)
+        });
+
+        // No candidate was tried: the verdict was the realm's, not the token's.
+        expect(mockJwtVerify).toHaveBeenCalledTimes(1);
       });
-    });
+    }
 
     it('does not spend a signature verification on an expired kid-less token', async () => {
       // The trial costs one verification per candidate. An expired token can
       // never verify — jose checks the signature BEFORE the claims — so it
       // is decided from the unverified payload and the trial never runs.
-      const ambiguous = new Error('multiple matching keys');
-      ambiguous.name = 'JWKSMultipleMatchingKeys';
-      ambiguous[Symbol.asyncIterator] = async function* () {
-        yield { key: 'candidate-1' };
-      };
+      const ambiguous = ambiguousKeysError([{ key: 'candidate-1' }]);
       mockJwtVerify.mockRejectedValue(ambiguous);
 
       const token = generateMockJwtString({ exp: Math.floor(Date.now() / 1000) - 3600 });
@@ -811,82 +852,11 @@ describe('keycloakAuthService', () => {
       expect(mockJwtVerify).toHaveBeenCalledTimes(1);
     });
 
-    it('reports a realm that publishes the same key id twice as an outage', async () => {
-      // A realm that publishes the SAME key id twice (a misconfigured
-      // rotation, or imported JWKs carrying an operator-chosen id) makes
-      // every token naming that id resolve to two candidates. The fault is
-      // the realm's own state: it is an outage (503), so the operator is
-      // told — not a 401 that signs every user out.
-      //
-      // The mocked ambiguity carries CANDIDATES, so the trial could run if
-      // the guard broke: the call count below proves it did not.
-      const ambiguous = new Error('multiple matching keys');
-      ambiguous.name = 'JWKSMultipleMatchingKeys';
-      ambiguous[Symbol.asyncIterator] = async function* () {
-        yield { key: 'candidate-1' };
-      };
-      const inner = Object.assign(jest.fn().mockRejectedValue(ambiguous), {
-        jwks: () => ({
-          keys: [
-            { kid: 'dup', kty: 'RSA', alg: 'RS256', use: 'sig' },
-            { kid: 'dup', kty: 'RSA', alg: 'RS256', use: 'sig' }
-          ]
-        })
-      });
-      mockCreateRemoteJWKSet.mockReturnValue(inner);
-      mockJwtVerify.mockImplementation(async (token, key) => key({ alg: 'RS256', kid: 'dup' }, token));
-
-      await expect(keycloakAuthService.verifyToken(generateMockJwtString(mockJwtPayload))).rejects.toMatchObject({
-        code: 'AUTH_SERVICE_UNAVAILABLE'
-      });
-
-      // No candidate was tried: the verdict was the realm's, not the token's.
-      expect(mockJwtVerify).toHaveBeenCalledTimes(1);
-    });
-
-    it('counts only the signing keys the realm published under one key id', async () => {
-      // The number the operator reads is the number of CANDIDATES the
-      // ambiguity really had: a key the verifier could never use (an EC
-      // key, a key that forbids verification) is not a signing key. The
-      // filter is deliberately looser than jose's own — a key_ops list that
-      // repeats an operation is refused by jose and accepted here — so the
-      // count can over-report but never under-report.
-      const ambiguous = new Error('multiple matching keys');
-      ambiguous.name = 'JWKSMultipleMatchingKeys';
-      const inner = Object.assign(jest.fn().mockRejectedValue(ambiguous), {
-        jwks: () => ({
-          keys: [
-            { kid: 'dup', kty: 'RSA', alg: 'RS256', use: 'sig' },
-            { kid: 'dup', kty: 'RSA', alg: 'RS256', use: 'sig' },
-            { kid: 'dup', kty: 'EC', alg: 'ES256', use: 'sig' },
-            { kid: 'dup', kty: 'RSA', alg: 'RS256', use: 'sig', key_ops: ['sign'] },
-            { kid: 'dup', kty: 'RSA', alg: 'RS256', use: 'sig', key_ops: ['verify', 'verify'] }
-          ]
-        })
-      });
-      mockCreateRemoteJWKSet.mockReturnValue(inner);
-      mockJwtVerify.mockImplementation(async (token, key) => key({ alg: 'RS256', kid: 'dup' }, token));
-
-      await expect(keycloakAuthService.verifyToken(generateMockJwtString(mockJwtPayload))).rejects.toMatchObject({
-        code: 'AUTH_SERVICE_UNAVAILABLE',
-        message: expect.stringContaining('published 3 signing keys')
-      });
-    });
-
     // Spies on the REAL shared/lib winston logger — the virtual
     // '../shared-lib' mock covers only the barrel, so the verifier's log
     // lines are visible here and nowhere else. Silences the transport and
     // restores the spy even when the assertions fail, so a failing test
     // cannot leak the mock into its neighbours.
-    function captureDebugs() {
-      const loggerModule = require('../../shared/lib/logger');
-      const debugSpy = jest.spyOn(loggerModule.logger, 'debug').mockImplementation(() => {});
-      return {
-        lines: () => debugSpy.mock.calls.map(([msg]) => String(msg)).join('\n'),
-        restore: () => debugSpy.mockRestore()
-      };
-    }
-
     it('logs the first rejection of a cause at WARN and nothing more at the default log level', async () => {
       // A rejected token is caller-controlled and unauthenticated: one WARN
       // line per rejection is a log flood the caller can produce (#1769).

@@ -84,7 +84,14 @@ test.describe('Document Search', () => {
     // from BEFORE the filter (the pre-filter table already listed rows).
     // Hold until the rendered rows ARE the filter's own response payload
     // before reading them.
-    await waitForTableRowsSettled(page, filterResponse);
+    //
+    // The status filter is CLIENT-SIDE — the list request carries no
+    // status, so the payload is the whole page and the table renders the
+    // payload's documents of the selected status. The hold therefore
+    // compares the rows with that subset, by the same predicate the
+    // table applies; comparing them with the WHOLE payload could only
+    // hold on a page whose documents all carry the selected status.
+    await waitForTableRowsSettled(page, filterResponse, { status: 'pending' });
 
     const rows = await getDocumentTableRows(page);
     // Earlier tests in this suite uploaded pending test documents, so a

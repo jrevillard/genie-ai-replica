@@ -35,15 +35,17 @@ const jsFiles = (root) =>
 // one after an identifier/`)`/`]` is division — a quote inside the regex
 // therefore cannot flip the scanner into string state.
 //
-// (The same algorithm as the sibling handle-locators gate's own copy, so
-// the gates that watch the e2e tree agree on what "the code" means. The
-// sibling keeps its copy for now — consolidating the two is a separate
-// cleanup, in the wave that owns that file.)
+// (The sibling handle-locators gate keeps its own copy of this scanner:
+// this one knows a regex may follow a keyword, the sibling's does not.
+// Consolidating the two is a separate cleanup, in the wave that owns that
+// file.)
 const stripJsComments = (source) => {
   let out = '';
   let state = null; // null | "'" | '"' | '`' | '/'
   let prevSignificant = ''; // last non-whitespace character kept
-  let prevWord = ''; // the last identifier read
+  let wordBuffer = ''; // the word being read
+  let lastWord = ''; // the last COMPLETED word
+  let wordAfterDot = false; // was that word a member name (obj.return)?
   for (let i = 0; i < source.length; i++) {
     const ch = source[i];
     if (state && state !== '/') {
@@ -72,10 +74,16 @@ const stripJsComments = (source) => {
       state = ch;
       out += ch;
       prevSignificant = ch;
-      prevWord = '';
+      wordBuffer = '';
       continue;
     }
     if (ch === '/') {
+      // The word before the slash is complete: flush it before the
+      // regex heuristic looks at it.
+      if (wordBuffer) {
+        lastWord = wordBuffer;
+        wordBuffer = '';
+      }
       if (source[i + 1] === '/') {
         while (i < source.length && source[i] !== '\n') i++;
         out += '\n';
@@ -93,9 +101,12 @@ const stripJsComments = (source) => {
       const regexStart =
         '(,=:[!&|?{};+-*%~^<>'.includes(prevSignificant) ||
         prevSignificant === '' ||
-        ['return', 'typeof', 'case', 'in', 'of', 'new', 'delete', 'void', 'do', 'else', 'yield', 'await'].includes(
-          prevWord
-        );
+        // A keyword may open a regex — but only as a STANDALONE word:
+        // `obj.return / 2` is a division.
+        (!wordAfterDot &&
+          ['return', 'typeof', 'case', 'in', 'of', 'new', 'delete', 'void', 'do', 'else', 'yield', 'await'].includes(
+            lastWord
+          ));
       if (regexStart && source[i + 1] !== '=') {
         state = '/';
         out += ch;
@@ -106,13 +117,22 @@ const stripJsComments = (source) => {
       continue;
     }
     out += ch;
+    // The character BEFORE this one — the word's first character reads
+    // it, to know whether the word is a member name (obj.return).
+    const before = prevSignificant;
     if (!/\s/.test(ch)) prevSignificant = ch;
     if (/[A-Za-z0-9_$]/.test(ch)) {
-      prevWord += ch;
-    } else if (!/\s/.test(ch)) {
-      // Whitespace keeps the word (a keyword may be followed by a
-      // space); anything else ends it.
-      prevWord = '';
+      // The first character of a word: what came before it decides
+      // whether it is a member name (obj.return) or a keyword.
+      if (!wordBuffer) wordAfterDot = before === '.';
+      wordBuffer += ch;
+    } else {
+      // Whitespace ENDS the word (a keyword may be followed by a
+      // space); the completed word is what the regex heuristic reads.
+      if (wordBuffer) {
+        lastWord = wordBuffer;
+        wordBuffer = '';
+      }
     }
   }
   return out;

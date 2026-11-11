@@ -175,6 +175,11 @@ async function waitForBotResponse(page, options = {}) {
             // not a slow answer: say so now, in the shape the reader
             // (streamingFlagOf) turns into a named failure, instead of
             // polling to a cause-less timeout.
+            // NOT booted (no app, no __vue_app__) is transient — the app
+            // may still be mounting, or a reload is in flight. A BOOTED
+            // app whose store is gone is a broken contract, and so is a
+            // store without the getter.
+            if (!app || !app.__vue_app__) return { state: 'not-booted' };
             if (!store) return { state: 'no-store' };
             if (!open) return { state: 'no-open-conversation' };
             // Only what the decision needs: each message's sender and
@@ -210,17 +215,17 @@ async function waitForBotResponse(page, options = {}) {
  * @returns {boolean|null} the flag, or null while the turn has no answer
  */
 function streamingFlagOf(read) {
-  if (read && read.state === 'no-store') {
+  if (read && read.state === 'not-booted') {
     // NOT booted is transient — the app may still be mounting (a reload
-    // mid-wait). The wait continues; only a BOOTED app whose store lost
-    // the getter is a broken contract.
+    // mid-wait). The wait continues.
     return null;
   }
   if (!read || read.state !== 'ok') {
-    throw new Error(
-      'the store does not expose the conversation/openConversation getter — ' +
-        'that is a broken store contract, not a slow answer'
-    );
+    const cause =
+      read && read.state === 'no-store'
+        ? 'the app is booted but has no store'
+        : 'the store does not expose the conversation/openConversation getter';
+    throw new Error(`${cause} — that is a broken store contract, not a slow answer`);
   }
   const messages = read.messages || [];
   const bots = messages.filter((m) => m.sender === 'bot');

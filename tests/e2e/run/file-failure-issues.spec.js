@@ -85,6 +85,15 @@ test.describe('a dedicated title names ONE spec file', () => {
 
   test('a title that names this file AND another one is an umbrella', () => {
     expect(titleIsDedicatedTo(`test(e2e): ${FILE} and tests/e2e/other.spec.js are red`, FILE)).toBe(false);
+    // The same umbrella in the RELATIVE spelling: the relative path of
+    // another file is this tree's path too, and it must not be dropped
+    // from the comparison (that would read the umbrella as a dedication).
+    expect(
+      titleIsDedicatedTo(
+        'test(e2e): helpers/chatbot.spec.js and helpers/other.spec.js are red',
+        'tests/e2e/helpers/chatbot.spec.js'
+      )
+    ).toBe(false);
   });
 
   test('a path that is only the TAIL of another e2e file does not match', () => {

@@ -217,6 +217,26 @@ function namesThisFile(token, file) {
 }
 
 /**
+ * Does this path token name a file of the e2e tree?
+ *
+ * The tokens come from a title, so they may be written three ways: the
+ * repository path, an absolute path or a tracker URL (all of which carry
+ * the tree's root), or relative to the tree's root ('helpers/a.spec.js').
+ * A path of ANOTHER tree (a frontend unit test) is not this tree's
+ * business — the failure path does not file it.
+ *
+ * The relative spelling is recognised by its FIRST segment: it is a
+ * directory of the e2e tree.
+ */
+function isE2ePath(token) {
+  if (token.includes(`${TESTS_E2E_ROOT}/`)) return true;
+  const first = token.split('/')[0];
+  // A bare file name counts when the e2e tree really carries it.
+  if (first === token) return fs.existsSync(path.join(REPO_ROOT, TESTS_E2E_ROOT, token));
+  return fs.existsSync(path.join(REPO_ROOT, TESTS_E2E_ROOT, first));
+}
+
+/**
  * Is this issue DEDICATED to the file — does its title name that file and
  * no other?
  *
@@ -229,10 +249,7 @@ function titleIsDedicatedTo(title, file) {
   // Only the paths of the tree this path covers count: a title that
   // also names a FRONTEND test (a different tree, a different failure
   // path) is still dedicated to this e2e file.
-  const relative = file.startsWith(`${TESTS_E2E_ROOT}/`) ? file.slice(TESTS_E2E_ROOT.length + 1) : null;
-  const paths = specPathsIn(title).filter(
-    (token) => token.includes(`${TESTS_E2E_ROOT}/`) || token === relative
-  );
+  const paths = specPathsIn(title).filter((token) => isE2ePath(token));
   if (paths.length === 0) return false;
   // EVERY path the title names must name THIS file — under the
   // repository path, an absolute path or a tracker URL. A title that

@@ -34,7 +34,7 @@ const E2E_ROOT = path.join(ROOT, 'tests/e2e');
 // edge (genieai-forge.local) and the deployment edge (genieai.local).
 // A spec that hardcodes ANY of them names one venue instead of the one
 // it was given, and dies before its first assertion everywhere else.
-const LOCAL_ORIGIN = /https?:\/\/(?:localhost|127\.0\.0\.1|genieai(?:-forge)?\.local)(?::\d+)?/gi;
+const LOCAL_ORIGIN = /https?:\/\/(?:localhost|127\.0\.0\.1|genieai(?:-forge)?\.local)(?::\d+)?(?=[/:]|$)/gi;
 
 // The local origins the suite may drive on purpose: a mocked identity
 // provider, a local stub. One per line, with the reason.
@@ -59,7 +59,8 @@ const baseUrlReaders = (root) =>
  * (`process.env.BASE_URL`) and the destructuring
  * (`const { BASE_URL } = process.env`).
  */
-const READS_EDGE = /process\.env\.BASE_URL|\{\s*BASE_URL\s*\}\s*=\s*process\.env/;
+const READS_EDGE =
+  /process\.env\.BASE_URL\b|process\.env\s*\[\s*['"]BASE_URL['"]\s*\]|\{\s*BASE_URL\s*[,}][^=]*=\s*process\.env/;
 
 const offenders = (root, allowed = MOCK_ORIGINS) =>
   jsFiles(root)

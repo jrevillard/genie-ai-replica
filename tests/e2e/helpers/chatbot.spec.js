@@ -21,7 +21,9 @@ test.describe('the streaming flag is read through the store getter', () => {
       /conversation\/openConversation/
     );
     // NOT booted is transient: the wait continues.
-    expect(streamingFlagOf({ state: 'no-store' })).toBe(null);
+    expect(streamingFlagOf({ state: 'not-booted' })).toBe(null);
+    // A BOOTED app without a store is broken, and says so.
+    expect(() => streamingFlagOf({ state: 'no-store' })).toThrow(/no store/);
   });
 
   test('no bot message yet is NOT "not streaming" — the wait continues', () => {

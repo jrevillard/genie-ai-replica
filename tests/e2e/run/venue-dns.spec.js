@@ -31,17 +31,43 @@ const VENUE_IP = '10.42.0.189';
  * Run a script in a child process that loads the preload the way the run
  * does — through NODE_OPTIONS --require.
  *
- * The child is waited on, never timed: execFileSync returns when the
- * child exits, and THROWS when it does not exit 0. So "the process
- * survived the preload" is exactly "this call did not throw".
+ * The child is waited on, never timed for an ANSWER: execFileSync returns
+ * when the child exits, and THROWS when it does not exit 0. So "the
+ * process survived the preload" is exactly "this call did not throw".
+ *
+ * The child's lifetime is BOUNDED all the same. execFileSync is
+ * SYNCHRONOUS, so Playwright's own test timeout cannot interrupt it: a
+ * child that never answers would wedge the worker with no failure at
+ * all — and the child answers the resolver when the preload's mapping is
+ * broken, which is exactly the regression this spec exists to catch. The
+ * bound is the suite's own rule (wait for the condition, with a hard
+ * bound): past it the child is killed and this call FAILS, loudly.
  */
+const CHILD_BOUND_MS = 30000;
 function inChild(script, env = {}) {
   const childEnv = { ...process.env, NODE_OPTIONS: `--require ${PRELOAD}` };
   for (const [k, v] of Object.entries(env)) {
     if (v === undefined) delete childEnv[k];
     else childEnv[k] = v;
   }
-  return execFileSync(process.execPath, ['-e', script], { env: childEnv, encoding: 'utf8' }).trim();
+  try {
+    return execFileSync(process.execPath, ['-e', script], {
+      env: childEnv,
+      encoding: 'utf8',
+      timeout: CHILD_BOUND_MS
+    }).trim();
+  } catch (e) {
+    // The bound was reached — the child is killed, and the cause is the
+    // bound, not the child's own error.
+    if (e.signal === 'SIGTERM') {
+      throw new Error(`the child did not answer within ${CHILD_BOUND_MS} ms — it is waiting on an answer that never came`, {
+        cause: e
+      });
+    }
+    // A child that DIED (the preload threw at load) keeps its own error:
+    // that error is the finding.
+    throw e;
+  }
 }
 
 /**
@@ -52,16 +78,27 @@ function inChild(script, env = {}) {
  * timer can win while the answer is still on its way, and a case that
  * goes red on the resolver's mood is a flake, not a gate (the suite's
  * rule: wait for conditions, not durations).
+ *
+ * SIX probes, not four: the promise form is what Playwright's
+ * APIRequestContext uses, and it resolves with `all: true` — a shape the
+ * plain probe never asks for, so the preload's `all` branch would go
+ * unpinned. The callback form has the same `all` branch, and both are
+ * probed here.
  */
 const FOUR_ENTRIES = `
 const dns = require('dns');
 const out = {};
-let pending = 4;
+let pending = 6;
 const settle = () => { if (--pending === 0) console.log(JSON.stringify(out)); };
 dns.lookup(process.env.PROBE_HOST, (e, a) => { out.lookup = e ? 'ERR:' + e.code : a; settle(); });
+dns.lookup(process.env.PROBE_HOST, { all: true }, (e, a) => { out.lookupAll = e ? 'ERR:' + e.code : a; settle(); });
 dns.promises.lookup(process.env.PROBE_HOST).then(
   (r) => { out.promise = r.address; settle(); },
   (e) => { out.promise = 'ERR:' + e.code; settle(); }
+);
+dns.promises.lookup(process.env.PROBE_HOST, { all: true }).then(
+  (r) => { out.promiseAll = r; settle(); },
+  (e) => { out.promiseAll = 'ERR:' + e.code; settle(); }
 );
 dns.resolve4(process.env.PROBE_HOST, (e, a) => { out.resolve4 = e ? 'ERR:' + e.code : a; settle(); });
 dns.resolve6(process.env.PROBE_HOST, (e, a) => { out.resolve6 = e ? 'ERR:' + e.code : a; settle(); });
@@ -102,6 +139,11 @@ test.describe("the preload maps the venue name in Node's resolver", () => {
     // caller stays on the IPv4 path instead of waiting for a resolution
     // that cannot succeed.
     expect(out.resolve6).toEqual([]);
+    // The `all: true` shape: the API helpers ask for it, and the preload
+    // answers it with an ARRAY of {address, family} — not the plain
+    // answer the plain probe gets.
+    expect(out.lookupAll).toEqual([{ address: VENUE_IP, family: 4 }]);
+    expect(out.promiseAll).toEqual([{ address: VENUE_IP, family: 4 }]);
   });
 
   test('a name that is not the venue is left to the resolver', () => {

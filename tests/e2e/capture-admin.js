@@ -20,11 +20,18 @@
  *   - the clicked tab is the ACTIVE tab (the DS primitive's own class) —
  *     a panel capture mislabelled by a click that did not take is evidence
  *     of nothing
+ *   - the layer-off capture pins dataVisual === 'off' with the static gate
+ *     class still present on .admin-page and NO gradient painting — the
+ *     additive-layer contract's other half: the flag turns the paint off,
+ *     never the markup
  *
- * The data-dependent dialogs (FileDetails, OperationResults) need a file
- * row / a finished operation — venue state this script does not fabricate.
- * They are deliberately absent; a "skip" here is a named gap, not a
- * swallowed one.
+ * The OperationResults dialog needs a finished operation — venue state this
+ * script does not fabricate (it must not trigger a backup to make one). It
+ * is deliberately absent; a "skip" here is a named gap, not a swallowed one.
+ * FileDetails IS captured: the documents panel's first row opens it. The
+ * layer-off variant rides the config transport (theme.visual disabled via
+ * request interception — the same lever an operator's config edit pulls),
+ * re-bootstrapping the app on the /admin reload.
  *
  * Usage:
  *   NODE_PATH=<repo>/node_modules BASE_URL=https://localhost node tests/e2e/capture-admin.js [--theme light|dark]
@@ -182,6 +189,19 @@ const audit = (label) => {
         name: 'upload-files'
       },
       {
+        // The data-dependent one: the first document row opens the
+        // FileDetails dialog (row click = viewDocumentDetails). needsRows
+        // names the venue state it depends on, checked loudly before the
+        // click — a venue with no ingested files fails here with that
+        // reason, not with a click timeout.
+        tab: 'documents',
+        needsRows: '[data-test-id="document-row"]',
+        openSel: '[data-test-id="document-row"]', // page.click takes the first row
+        dialogSel: '[data-test-id="file-details-dialog"]',
+        closeSel: '[data-test-id="file-details-dialog-close"]',
+        name: 'file-details'
+      },
+      {
         tab: 'logs',
         openSel: '[data-test-id="logs-search"]',
         dialogSel: '[data-test-id="log-search-dialog"]',
@@ -195,6 +215,16 @@ const audit = (label) => {
       await page.waitForSelector(`[data-test-id="ds-tab-${d.tab}"].ds-tabs__btn--active`, {
         timeout: 10000
       });
+      if (d.needsRows) {
+        const rows = await page.locator(d.needsRows).count();
+        if (!rows) {
+          throw new Error(
+            `capture-admin ${theme} ${d.name}: no ${d.needsRows} in the ` +
+              `documents panel — the venue has no ingested files. Seed one; ` +
+              `this capture is a named venue dependency, not a skip.`
+          );
+        }
+      }
       await page.click(d.openSel);
       await page.waitForSelector(d.dialogSel, { timeout: 10000 });
 
@@ -205,16 +235,13 @@ const audit = (label) => {
       // (upload-files, log-search) are reached through .admin-page's gate
       // and carry none of their own. Assert the layer REACHES the container
       // by either mechanism and record which one.
-      data.dialogGate = await page.evaluate(
-        (sel) => {
-          const el = document.querySelector(sel);
-          if (!el) return 'missing';
-          if (el.classList.contains('genie-living-intelligence')) return 'own';
-          if (el.closest('.genie-living-intelligence')) return 'ancestor';
-          return 'none';
-        },
-        d.dialogSel
-      );
+      data.dialogGate = await page.evaluate((sel) => {
+        const el = document.querySelector(sel);
+        if (!el) return 'missing';
+        if (el.classList.contains('genie-living-intelligence')) return 'own';
+        if (el.closest('.genie-living-intelligence')) return 'ancestor';
+        return 'none';
+      }, d.dialogSel);
       if (data.dialogGate === 'none') {
         throw new Error(
           `capture-admin ${theme} ${d.name}: the dialog container is not ` +
@@ -236,6 +263,64 @@ const audit = (label) => {
       await page.click(d.closeSel);
       await page.waitForSelector(d.dialogSel, { state: 'detached', timeout: 10000 });
     }
+
+    // -- the layer-off variant ---------------------------------------------
+    // The additive-layer contract's other half: with theme.visual disabled,
+    // the route paints NO decorations while its markup (the static gate
+    // classes) stays intact. The lever is the config transport — a request
+    // interception serves the runtime config with theme.visual flipped off,
+    // the same document an operator's config edit would produce — and the
+    // /admin reload re-runs the config loader, so the app bootstraps
+    // honestly off, not disguised. The original is read once, in-page, the
+    // same way the loader reads it; the handler replays the rewritten copy
+    // (the interception's pass-through API differs across Playwright builds
+    // — this form does not depend on it).
+    const originalConfig = await page.evaluate(async () => {
+      const response = await fetch('/config/genie-ai-config.json');
+      if (!response.ok) throw new Error(`config fetch failed: HTTP ${response.status}`);
+      return response.json();
+    });
+    const offConfig = JSON.parse(JSON.stringify(originalConfig));
+    offConfig.theme = offConfig.theme || {};
+    offConfig.theme.visual = { ...(offConfig.theme.visual || {}), enabled: false };
+    await page.route('**/config/genie-ai-config.json', (route) =>
+      route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(offConfig) })
+    );
+    await page.goto(new URL('/admin', process.env.BASE_URL || 'https://localhost').toString(), {
+      waitUntil: 'domcontentloaded'
+    });
+    await page.waitForSelector('[data-test-id="admin-dashboard"]', { timeout: 30000 });
+    await page.waitForSelector('.ds-spinner-wrapper--fixed', { state: 'detached', timeout: 30000 });
+
+    const off = await page.evaluate(audit, 'layer-off-overview');
+    if (off.dataVisual !== 'off') {
+      throw new Error(
+        `capture-admin ${theme} layer-off: html[data-visual] is ` +
+          `'${off.dataVisual}', not 'off' — the /admin reload did not ` +
+          `re-bootstrap the config, or the interception missed the fetch.`
+      );
+    }
+    if (!off.adminPageHasGate) {
+      throw new Error(
+        `capture-admin ${theme} layer-off: .admin-page lost its gate ` +
+          `class — the gate markup is static and must survive the flag ` +
+          `(the paint is what turns off, never the markup).`
+      );
+    }
+    if (off.pageTitleGradient || off.uptimeTileGradient) {
+      throw new Error(
+        `capture-admin ${theme} layer-off: a decoration still paints with ` +
+          `the layer disabled (title gradient: ${off.pageTitleGradient}, ` +
+          `uptime wash: ${off.uptimeTileGradient}) — the ` +
+          `html[data-visual='on'] CSS gate is not containing the layer.`
+      );
+    }
+    const offName = `${theme}-layer-off-overview`;
+    const offFile = path.join(OUT_DIR, `${offName}.png`);
+    await page.screenshot({ path: offFile, fullPage: false, animations: 'disabled' });
+    fs.writeFileSync(path.join(OUT_DIR, `${offName}.audit.json`), JSON.stringify(off, null, 2));
+    results[offName] = offFile;
+    console.log(`${offName}: ${offFile}`);
 
     await context.close();
   }

@@ -430,7 +430,7 @@ TOKEN=$(curl -sk -X POST "https://localhost/auth/realms/master/protocol/openid-c
 
 - GENIE.AI Docker Compose stack deployed and healthy (Phase 0 complete)
 - Admin access to Keycloak (`KEYCLOAK_ADMIN_PASSWORD` from `.env`)
-- `@playwright/test` installed (`npm install` at project root, then `npx playwright install chromium`)
+- `@playwright/test` installed (`npm ci` at project root, then `node tests/e2e/run/install-browsers.js` — it reconciles the checkout and the browser tree with the version the lockfile pins)
 - `curl`, `python3`, `jq` available on the host
 
 ## Architecture Notes

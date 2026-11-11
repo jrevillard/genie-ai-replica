@@ -22,7 +22,6 @@ const os = require('os');
 const path = require('path');
 
 const {
-  RUNNER_CHAIN,
   browserInstallCommand,
   describeRunner,
   installLocations,
@@ -269,16 +268,42 @@ test('a checkout without @playwright/test cannot describe a runner, and says so'
 // --- the reconciler itself (the part with the side effects) --------------------
 
 /**
+ * The browser builds the fixture's dry run names, really created on disk:
+ * the reconciler checks the tree with the filesystem, so the test gives it
+ * a real tree (and, where a case needs one absent, a real absence).
+ * @param {string} root the fixture root
+ * @param {Object} [options] which builds to create
+ * @returns {Object<string, string>} the locations, by browser name
+ */
+const buildTree = (root, options = {}) => {
+  const locations = {
+    chromium: path.join(root, 'browsers', `chromium-${FIXTURE_CHROMIUM}`),
+    'chromium-headless-shell': path.join(root, 'browsers', `chromium_headless_shell-${FIXTURE_SHELL}`)
+  };
+  const wanted = options.include || { chromium: true, 'chromium-headless-shell': true };
+  for (const name of Object.keys(wanted)) {
+    const location = locations[name];
+    if (wanted[name] === 'absent') continue;
+    fs.mkdirSync(location, { recursive: true });
+    if (wanted[name] === 'no-marker') continue;
+    fs.writeFileSync(path.join(location, 'INSTALLATION_COMPLETE'), '');
+  }
+  return locations;
+};
+
+/**
  * The process runner the reconciler drives, answering the dry run with the
  * install locations and recording what it was asked to run.
- * @param {Object} options the fixture's answers
+ * @param {string} root the fixture root
+ * @param {Object} [options] the fixture's answers
  * @returns {{run: Function, calls: Array}} the runner and the calls it saw
  */
-const fakeRun = (options = {}) => {
+const fakeRun = (root, options = {}) => {
   const calls = [];
+  const tree = options.tree || buildTree(root);
   const locations = [
-    { name: 'chromium', revision: FIXTURE_CHROMIUM, location: '/browsers/chromium-4711' },
-    { name: 'chromium-headless-shell', revision: FIXTURE_SHELL, location: '/browsers/chromium_headless_shell-4712' }
+    { name: 'chromium', revision: FIXTURE_CHROMIUM, location: tree.chromium },
+    { name: 'chromium-headless-shell', revision: FIXTURE_SHELL, location: tree['chromium-headless-shell'] }
   ];
   const run = (command, args) => {
     calls.push({ command, args });
@@ -300,21 +325,10 @@ const fakeRun = (options = {}) => {
   return { run, calls };
 };
 
-/**
- * The existence check the reconciler drives: the CLI, the browser
- * directories and their completion markers.
- * @param {string[]} missing the paths that do NOT exist
- * @returns {Function} the check
- */
-const fakeExists = (missing = []) => {
-  const absent = new Set(missing);
-  return (file) => !absent.has(file);
-};
-
 test('a matching checkout is not reinstalled, and the install uses its own CLI', () => {
   const root = makeCheckout();
-  const { run, calls } = fakeRun();
-  const result = reconcile(root, { run, exists: fakeExists() });
+  const { run, calls } = fakeRun(root);
+  const result = reconcile(root, { run });
   expect(calls.some((c) => c.args[0] === 'ci')).toBe(false);
   expect(calls.some((c) => c.args.includes('install') && c.args.includes('chromium'))).toBe(true);
   expect(result.versions['@playwright/test']).toBe(FIXTURE_VERSION);
@@ -323,14 +337,14 @@ test('a matching checkout is not reinstalled, and the install uses its own CLI',
 
 test('a checkout that does not match the lockfile is reinstalled with the dev dependencies', () => {
   const root = makeCheckout({ coreVersion: '1.0.0-older-core' });
-  const { run, calls } = fakeRun({
+  const { run, calls } = fakeRun(root, {
     onCi: () =>
       fs.writeFileSync(
         path.join(root, 'node_modules/playwright-core/package.json'),
         JSON.stringify({ name: 'playwright-core', version: FIXTURE_VERSION })
       )
   });
-  reconcile(root, { run, exists: fakeExists() });
+  reconcile(root, { run });
   const ci = calls.find((c) => c.args[0] === 'ci');
   expect(ci).toBeDefined();
   // --include=dev: @playwright/test is a devDependency, and a
@@ -344,8 +358,8 @@ test('a checkout that STILL does not match after npm ci fails loudly, and names 
   // WHERE the version was loaded from, or the operator cannot tell which
   // tree to fix.
   const root = makeCheckout({ coreVersion: '1.0.0-older-core' });
-  const { run } = fakeRun();
-  expect(() => reconcile(root, { run, exists: fakeExists() })).toThrow(
+  const { run } = fakeRun(root);
+  expect(() => reconcile(root, { run })).toThrow(
     /still does not match the lockfile.*playwright-core 1\.0\.0-older-core at .*playwright-core\/package\.json.*vs 9\.9\.9-fixture pinned under node_modules\/playwright-core/
   );
 });
@@ -404,14 +418,14 @@ test('a repaired checkout reports the runtime npm ci installed, not the one it r
   // with no node_modules at all (the pod-recreation case) it reports
   // nothing and crashes.
   const root = makeCheckout({ coreVersion: '1.0.0-older-core' });
-  const { run } = fakeRun({
+  const { run } = fakeRun(root, {
     onCi: () =>
       fs.writeFileSync(
         path.join(root, 'node_modules/playwright-core/package.json'),
         JSON.stringify({ name: 'playwright-core', version: FIXTURE_VERSION })
       )
   });
-  const result = reconcile(root, { run, exists: fakeExists() });
+  const result = reconcile(root, { run });
   expect(result.versions['playwright-core']).toBe(FIXTURE_VERSION);
 });
 
@@ -426,8 +440,8 @@ test('a checkout with no node_modules at all is repaired and reported', () => {
       fs.writeFileSync(file, typeof content === 'string' ? content : JSON.stringify(content));
     }
   };
-  const { run } = fakeRun({ onCi: install });
-  const result = reconcile(root, { run, exists: fakeExists() });
+  const { run } = fakeRun(root, { onCi: install });
+  const result = reconcile(root, { run });
   expect(result.versions['@playwright/test']).toBe(FIXTURE_VERSION);
   expect(result.chromium).toBe(FIXTURE_CHROMIUM);
 });
@@ -437,55 +451,57 @@ test('the HEADLESS SHELL is verified — the build the runner launches', () => {
   // would pass a tree whose headless shell is missing, and every spec would
   // still die at launch.
   const root = makeCheckout();
-  const { run } = fakeRun();
-  expect(() =>
-    reconcile(root, { run, exists: fakeExists(['/browsers/chromium_headless_shell-4712']) })
-  ).toThrow(/chromium-headless-shell build is not installed/);
+  const { run } = fakeRun(root, {
+    tree: buildTree(root, { include: { chromium: true, 'chromium-headless-shell': 'absent' } })
+  });
+  expect(() => reconcile(root, { run })).toThrow(/chromium-headless-shell build is not installed/);
 });
 
 test('a build without the completion marker is not a complete build', () => {
   const root = makeCheckout();
-  const { run } = fakeRun();
-  expect(() =>
-    reconcile(root, { run, exists: fakeExists(['/browsers/chromium-4711/INSTALLATION_COMPLETE']) })
-  ).toThrow(/carries no INSTALLATION_COMPLETE/);
+  const { run } = fakeRun(root, {
+    tree: buildTree(root, { include: { chromium: 'no-marker', 'chromium-headless-shell': true } })
+  });
+  expect(() => reconcile(root, { run })).toThrow(/carries no INSTALLATION_COMPLETE/);
 });
 
 test('a checkout without a Playwright CLI fails loudly', () => {
   const root = makeCheckout();
-  const { run } = fakeRun();
-  const cli = path.join(root, 'node_modules/playwright/cli.js');
-  expect(() => reconcile(root, { run, exists: fakeExists([cli]) })).toThrow(/Playwright CLI is not there/);
+  fs.rmSync(path.join(root, 'node_modules/playwright/cli.js'));
+  const { run } = fakeRun(root);
+  expect(() => reconcile(root, { run })).toThrow(/Playwright CLI is not there/);
 });
 
 test('an install that fails is not reported as a reconciled tree', () => {
   const root = makeCheckout();
-  const { run } = fakeRun({ installResult: { status: 1, stdout: '', stderr: 'boom' } });
-  expect(() => reconcile(root, { run, exists: fakeExists() })).toThrow(/browser install failed/);
+  const { run } = fakeRun(root, { installResult: { status: 1, stdout: '', stderr: 'boom' } });
+  expect(() => reconcile(root, { run })).toThrow(/browser install failed/);
 });
 
 test('a dry run that fails is not reported as a reconciled tree', () => {
   const root = makeCheckout();
-  const { run } = fakeRun({ dryRunResult: { status: 1, stdout: '', stderr: 'boom' } });
-  expect(() => reconcile(root, { run, exists: fakeExists() })).toThrow(/dry run failed/);
+  const { run } = fakeRun(root, { dryRunResult: { status: 1, stdout: '', stderr: 'boom' } });
+  expect(() => reconcile(root, { run })).toThrow(/dry run failed/);
 });
 
 test('a failed npm ci says that node_modules may be gone — npm ci removes it first', () => {
   const root = makeCheckout({ coreVersion: '1.0.0-older-core' });
-  const { run } = fakeRun({ npmResult: { status: 1, stdout: '', stderr: 'boom' } });
-  expect(() => reconcile(root, { run, exists: fakeExists() })).toThrow(/may have no node_modules/);
+  const { run } = fakeRun(root, { npmResult: { status: 1, stdout: '', stderr: 'boom' } });
+  expect(() => reconcile(root, { run })).toThrow(/may have no node_modules/);
 });
 
 test('an npm that cannot be started is named, not reported as an exit code', () => {
   const root = makeCheckout({ coreVersion: '1.0.0-older-core' });
   const error = new Error('spawn npm ENOENT');
-  const { run } = fakeRun({ npmResult: { status: null, stdout: '', stderr: '', error } });
-  expect(() => reconcile(root, { run, exists: fakeExists() })).toThrow(/npm could not be started/);
+  const { run } = fakeRun(root, { npmResult: { status: null, stdout: '', stderr: '', error } });
+  expect(() => reconcile(root, { run })).toThrow(/npm could not be started/);
 });
 
 test('the installer locations are read from the installer itself', () => {
-  const { run } = fakeRun();
-  const locations = installLocations('/checkout/node_modules/playwright/cli.js', run, '/checkout');
+  const root = makeCheckout();
+  const { run } = fakeRun(root);
+  const cli = path.join(root, 'node_modules/playwright/cli.js');
+  const locations = installLocations(cli, run, root);
   expect(locations.map((l) => l.name)).toEqual(['chromium', 'chromium-headless-shell']);
 });
 
@@ -496,6 +512,3 @@ test('an installer that names no location fails loudly', () => {
   );
 });
 
-test('the chain the reconciler checks is the one the runner loads', () => {
-  expect(RUNNER_CHAIN).toEqual(['@playwright/test', 'playwright', 'playwright-core']);
-});

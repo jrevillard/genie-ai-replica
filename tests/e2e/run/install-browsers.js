@@ -305,13 +305,12 @@ const defaultRun = (command, args, options = {}) => spawnSync(command, args, { .
 /**
  * Bring the checkout and the browser tree onto the pinned Playwright.
  * @param {string} repoRoot the checkout root
- * @param {{run?: Function, exists?: Function}} io the seams the unit spec drives
+ * @param {{run?: Function}} io the seam the unit spec drives
  * @returns {{versions: Object<string, string>, chromium: string, chromiumHeadlessShell: string, locations: Array}}
  *   the reconciled runner
  */
 function reconcile(repoRoot = REPO_ROOT, io = {}) {
   const run = io.run || defaultRun;
-  const exists = io.exists || ((file) => fs.existsSync(file));
 
   const { versions: pinned, keys: pinnedKeys } = pinnedVersions(repoRoot);
   // The chain may be absent altogether — that is one of the states the
@@ -362,7 +361,7 @@ function reconcile(repoRoot = REPO_ROOT, io = {}) {
   }
 
   const { command, cli: cliPath, args } = browserInstallCommand(repoRoot);
-  if (!exists(cliPath)) {
+  if (!fs.existsSync(cliPath)) {
     throw new Error(`the checkout's Playwright CLI is not there: ${cliPath}`);
   }
   const revisions = requiredBrowserRevisions(repoRoot);
@@ -385,10 +384,10 @@ function reconcile(repoRoot = REPO_ROOT, io = {}) {
     if (!entry) {
       throw new Error(`the Playwright installer named no ${name} build — its output is not the one this script reads`);
     }
-    if (!exists(entry.location)) {
+    if (!fs.existsSync(entry.location)) {
       throw new Error(`the ${name} build is not installed: ${entry.location}`);
     }
-    if (!exists(path.join(entry.location, INSTALL_MARKER))) {
+    if (!fs.existsSync(path.join(entry.location, INSTALL_MARKER))) {
       throw new Error(
         `the ${name} build at ${entry.location} carries no ${INSTALL_MARKER} — the install was interrupted`
       );

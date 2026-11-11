@@ -75,10 +75,11 @@ const readJson = (file) => JSON.parse(fs.readFileSync(file, 'utf8'));
  * package-lock.json is the lockfile that pins the Playwright runtime —
  * `tests/e2e/package.json` says so itself: "The Playwright runtime itself
  * resolves from the repository root's node_modules". Both walks therefore
- * live in the root's universe. The disk walk may still find a package
- * ABOVE the checkout (Node allows it) where the lock walk stops at the
- * root; that asymmetry is loud — the pin lookup fails naming the package
- * it could not find — and the mismatch report names the resolved path.
+ * live in the root's universe, and the disk walk is BOUNDED by the
+ * checkout: Node would also find a package in an ancestor directory, but
+ * that copy is not the one the lockfile pins and not the one the run's
+ * checkout should be reconciled against — so the walk stops at the root
+ * and a package that is not there is a package the checkout does not have.
  * @param {string} name the package to resolve
  * @param {string} repoRoot the checkout root
  * @returns {string} the path of the package's package.json
@@ -86,7 +87,7 @@ const readJson = (file) => JSON.parse(fs.readFileSync(file, 'utf8'));
 function resolvePackage(name, repoRoot = REPO_ROOT) {
   let dir = repoRoot;
   for (const candidate of RUNNER_CHAIN) {
-    const file = resolveInNodeModules(candidate, dir);
+    const file = resolveInNodeModules(candidate, dir, repoRoot);
     if (!file) {
       throw new Error(`the checkout carries no ${candidate} — node_modules is missing or does not carry the runner's chain`);
     }
@@ -99,16 +100,19 @@ function resolvePackage(name, repoRoot = REPO_ROOT) {
 /**
  * One package's `package.json`, found the way Node looks for it: the
  * `node_modules` hierarchy of the given directory and of each of its
- * parents, nearest first.
+ * parents, nearest first — but never above the checkout, whose lockfile is
+ * the one that pins the runtime.
  * @param {string} name the package
  * @param {string} fromDir the directory the walk starts from
+ * @param {string} repoRoot the checkout root, the walk's boundary
  * @returns {string|null} the package.json path, or null when it is not there
  */
-function resolveInNodeModules(name, fromDir) {
+function resolveInNodeModules(name, fromDir, repoRoot) {
   let dir = fromDir;
   for (;;) {
     const candidate = path.join(dir, 'node_modules', name, 'package.json');
     if (fs.existsSync(candidate)) return candidate;
+    if (dir === repoRoot) return null;
     const parent = path.dirname(dir);
     if (parent === dir) return null;
     dir = parent;
@@ -137,23 +141,27 @@ function lockfileEntry(lock, name, fromRel) {
 }
 
 /**
- * The versions the lockfile pins for the runner's chain.
+ * The versions the lockfile pins for the runner's chain, and the lockfile
+ * keys they were pinned under — the key is what a reader needs to see when
+ * a nested package is compared against its own entry.
  * @param {string} repoRoot the checkout root
- * @returns {Object<string, string>} the pinned versions, by package name
+ * @returns {{versions: Object<string, string>, keys: Object<string, string>}} the pins and their keys
  */
 function pinnedVersions(repoRoot = REPO_ROOT) {
   const lock = readJson(path.join(repoRoot, 'package-lock.json'));
-  const pinned = {};
+  const versions = {};
+  const keys = {};
   let fromRel = '';
   for (const name of RUNNER_CHAIN) {
     const found = lockfileEntry(lock, name, fromRel);
     if (!found || !found.entry.version) {
       throw new Error(`package-lock.json pins no ${name} (the walk from ${fromRel || 'the checkout root'} found no entry) — this is not the lockfile of this checkout`);
     }
-    pinned[name] = found.entry.version;
+    versions[name] = found.entry.version;
+    keys[name] = found.key;
     fromRel = found.key;
   }
-  return pinned;
+  return { versions, keys };
 }
 
 /**
@@ -185,6 +193,10 @@ function runnerVersions(repoRoot = REPO_ROOT) {
  * The browser revisions the INSTALLED Playwright names. The numbers are read
  * from the resolved playwright-core's own browsers.json — never written
  * here: a hardcoded revision is the drift this script exists to remove.
+ * (browsers.json may carry a per-platform `revisionOverrides`; the base
+ * revision is what is reported, and the installer is what decides what
+ * actually lands on disk — the report is about the pin, not about a
+ * platform's special build.)
  * @param {string} repoRoot the checkout root
  * @returns {{chromium: string, chromiumHeadlessShell: string}} the revisions
  */
@@ -289,7 +301,7 @@ function reconcile(repoRoot = REPO_ROOT, io = {}) {
   const run = io.run || defaultRun;
   const exists = io.exists || ((file) => fs.existsSync(file));
 
-  const pinned = pinnedVersions(repoRoot);
+  const { versions: pinned, keys: pinnedKeys } = pinnedVersions(repoRoot);
   // The chain may be absent altogether — that is one of the states the
   // reconciliation repairs, not a failure of this step.
   const loaded = (() => {
@@ -299,7 +311,9 @@ function reconcile(repoRoot = REPO_ROOT, io = {}) {
       return null;
     }
   })();
-  const versions = loaded ? loaded.versions : null;
+  // The versions the run will USE: refreshed after a repair, so the summary
+  // names the runtime that is on disk, not the one that was replaced.
+  let versions = loaded ? loaded.versions : null;
   const stale = () => !versions || RUNNER_CHAIN.some((name) => versions[name] !== pinned[name]);
   if (stale()) {
     process.stdout.write(
@@ -320,12 +334,16 @@ function reconcile(repoRoot = REPO_ROOT, io = {}) {
       );
     }
     const reloaded = locatedVersions(repoRoot);
-    const mismatched = RUNNER_CHAIN.filter((name) => reloaded.versions[name] !== pinned[name]);
+    versions = reloaded.versions;
+    const mismatched = RUNNER_CHAIN.filter((name) => versions[name] !== pinned[name]);
     if (mismatched.length) {
       throw new Error(
         `the checkout still does not match the lockfile after npm ci: ` +
           `${mismatched
-            .map((name) => `${name} ${reloaded.versions[name]} at ${reloaded.paths[name]} vs ${pinned[name]} pinned`)
+            .map(
+              (name) =>
+                `${name} ${versions[name]} at ${reloaded.paths[name]} vs ${pinned[name]} pinned under ${pinnedKeys[name]}`
+            )
             .join(', ')}`
       );
     }
@@ -391,7 +409,6 @@ module.exports = {
   browserInstallCommand,
   describeRunner,
   installLocations,
-  locatedVersions,
   pinnedVersions,
   reconcile,
   requiredBrowserRevisions,

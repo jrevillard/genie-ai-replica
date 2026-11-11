@@ -139,11 +139,12 @@ test.afterAll(() => {
 
 test('the pinned versions come from the lockfile, for every package of the chain', () => {
   const root = makeCheckout();
-  expect(pinnedVersions(root)).toEqual({
+  expect(pinnedVersions(root).versions).toEqual({
     '@playwright/test': FIXTURE_VERSION,
     playwright: FIXTURE_VERSION,
     'playwright-core': FIXTURE_VERSION
   });
+  expect(pinnedVersions(root).keys['playwright-core']).toBe('node_modules/playwright-core');
 });
 
 test('a lockfile that pins no playwright fails loudly', () => {
@@ -189,11 +190,15 @@ test('a NESTED chain is pinned by its own lockfile entry', () => {
   // The pin side must walk the same chain as the loaded side, or the
   // comparison is between two differently-resolved things.
   const root = makeNestedCheckout();
-  expect(pinnedVersions(root)).toEqual({
+  const pinned = pinnedVersions(root);
+  expect(pinned.versions).toEqual({
     '@playwright/test': FIXTURE_VERSION,
     playwright: FIXTURE_VERSION,
     'playwright-core': FIXTURE_VERSION
   });
+  expect(pinned.keys['playwright-core']).toBe(
+    'node_modules/@playwright/test/node_modules/playwright/node_modules/playwright-core'
+  );
 });
 
 test('the revisions come from the resolved playwright-core browsers.json', () => {
@@ -335,7 +340,7 @@ test('a checkout that STILL does not match after npm ci fails loudly, and names 
   const root = makeCheckout({ coreVersion: '1.0.0-older-core' });
   const { run } = fakeRun();
   expect(() => reconcile(root, { run, exists: fakeExists() })).toThrow(
-    /still does not match the lockfile.*playwright-core 1\.0\.0-older-core at .*playwright-core\/package\.json.*vs 9\.9\.9-fixture pinned/
+    /still does not match the lockfile.*playwright-core 1\.0\.0-older-core at .*playwright-core\/package\.json.*vs 9\.9\.9-fixture pinned under node_modules\/playwright-core/
   );
 });
 
@@ -367,6 +372,55 @@ test('the chain is the ROOT project\'s — the suite project does not own the ru
     path.join(root, 'node_modules/@playwright/test/package.json')
   );
   expect(runnerVersions(root)['@playwright/test']).toBe(FIXTURE_VERSION);
+});
+
+test('a repaired checkout reports the runtime npm ci installed, not the one it replaced', () => {
+  // The mutation this pins: a summary that still names the PRE-repair
+  // version reports the runtime the run did NOT use — and on a checkout
+  // with no node_modules at all (the pod-recreation case) it reports
+  // nothing and crashes.
+  const root = makeCheckout({ coreVersion: '1.0.0-older-core' });
+  const { run } = fakeRun({
+    onCi: () =>
+      fs.writeFileSync(
+        path.join(root, 'node_modules/playwright-core/package.json'),
+        JSON.stringify({ name: 'playwright-core', version: FIXTURE_VERSION })
+      )
+  });
+  const result = reconcile(root, { run, exists: fakeExists() });
+  expect(result.versions['playwright-core']).toBe(FIXTURE_VERSION);
+});
+
+test('a checkout with no node_modules at all is repaired and reported', () => {
+  // The pod-recreation case: the checkout has nothing installed, npm ci
+  // installs it, and the summary names what is now on disk.
+  const root = makeRoot({
+    'package-lock.json': {
+      packages: {
+        '': { name: 'genie-ai' },
+        'node_modules/@playwright/test': { version: FIXTURE_VERSION },
+        'node_modules/playwright': { version: FIXTURE_VERSION },
+        'node_modules/playwright-core': { version: FIXTURE_VERSION }
+      }
+    }
+  });
+  const install = () => {
+    for (const [rel, content] of Object.entries({
+      'node_modules/@playwright/test/package.json': { name: '@playwright/test', version: FIXTURE_VERSION },
+      'node_modules/playwright/package.json': { name: 'playwright', version: FIXTURE_VERSION },
+      'node_modules/playwright/cli.js': '// the CLI of the fixture',
+      'node_modules/playwright-core/package.json': { name: 'playwright-core', version: FIXTURE_VERSION },
+      'node_modules/playwright-core/browsers.json': browsersJson(FIXTURE_CHROMIUM, FIXTURE_SHELL)
+    })) {
+      const file = path.join(root, rel);
+      fs.mkdirSync(path.dirname(file), { recursive: true });
+      fs.writeFileSync(file, typeof content === 'string' ? content : JSON.stringify(content));
+    }
+  };
+  const { run } = fakeRun({ onCi: install });
+  const result = reconcile(root, { run, exists: fakeExists() });
+  expect(result.versions['@playwright/test']).toBe(FIXTURE_VERSION);
+  expect(result.chromium).toBe(FIXTURE_CHROMIUM);
 });
 
 test('the HEADLESS SHELL is verified — the build the runner launches', () => {

@@ -97,12 +97,18 @@ describe('the e2e suite names the venue it was given, and names it once', () => 
   });
 
   test('the edge is defined ONCE — one module reads the environment', () => {
-    // Before the wave, THREE files read the environment — measured with
-    // this very matcher over the wave's base tree: `chatbot.js`,
-    // `chat-composer.spec.js` and `theme-runtime-config.spec.js`. Two of
-    // them carried their own default, so the edge could drift. That drift
-    // is invisible to the edge match above (a spec that builds its URL
-    // from a variable breaks just as hard).
+    // Before the wave, FOUR files read the environment — five read sites
+    // — measured over the wave's base tree (`fa192ab7`):
+    // `playwright.config.js` (1), `tests/e2e/chat-composer.spec.js` (1),
+    // `tests/e2e/helpers/chatbot.js` (1) and
+    // `tests/e2e/theme-runtime-config.spec.js` (2). Every one of them
+    // carried its OWN default, so the edge could drift — and the drift is
+    // invisible to the edge match above (a spec that builds its URL from
+    // a variable breaks just as hard).
+    //
+    // The gate scans the e2e tree, so `playwright.config.js` is not among
+    // the readers it counts — the config is a suite-wide setting, not a
+    // spec.
     expect(baseUrlReaders(E2E_ROOT)).toEqual([path.relative(E2E_ROOT, DEFINING_MODULE)]);
   });
 

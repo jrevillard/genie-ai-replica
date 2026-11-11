@@ -47,9 +47,12 @@ test.describe('RAG error handling', () => {
   //     text, then the streaming flag — so 20 s;
   //   - the composer a third time: 5 s.
   //
-  // That is 95 s of waiting, and the beforeEach adds the login (up to
-  // 30 s + 15 s) and the navigation (30 s). The budget covers the sum:
-  // 180 s.
+  // That is 95 s of waiting in the BODY. The beforeEach adds the login
+  // (up to 30 s + a 15 s retry) and the navigation (30 s) — 75 s more.
+  //
+  // The budget covers the BODY's sum: the hook has its own budget, and
+  // `test.describe.configure({ timeout })` reaches it (measured: the hook
+  // reads the same 180 s).
   test.describe.configure({ timeout: 180000 });
 
   let page;

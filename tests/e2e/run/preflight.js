@@ -33,7 +33,8 @@ function remedy(what) {
     '      container image has no libatk/libgbm);',
     '    - the Inter fonts on XDG_DATA_HOME for the pixel-measurement specs;',
     '    - a resolvable venue name — or E2E_VENUE_IP for one the runner',
-    '      cannot resolve.',
+    '      cannot resolve; E2E_VENUE_IP must be an IPv4 or IPv6 address;',
+    '    - a venue address that is a URL (BASE_URL).',
   ];
   return lines.join('\n');
 }
@@ -63,10 +64,10 @@ function loadRunner() {
  * The read is a pure function of the mapping reader, so it is pinned
  * without a browser and without a venue.
  *
- * What can go wrong HERE is a malformed ADDRESS: the mapping reads the
- * host out of the venue's URL, and a URL that is not a URL throws. A
- * malformed E2E_VENUE_IP does not reach this read as a failure — the
- * mapping carries the value as it is.
+ * What can go wrong HERE is a malformed ADDRESS (the mapping reads the
+ * host out of the venue's URL, and a URL that is not a URL throws) or a
+ * malformed E2E_VENUE_IP (the mapping validates it, so a value that is
+ * not an address throws here too).
  *
  * @param {Function} venueMapping - the mapping reader
  * @returns {{mapping: object|null, error: string|null}} the mapping, or
@@ -118,13 +119,11 @@ async function main() {
   const { chromium, BASE_URL, venueLaunchArgs, venueMapping, runner } = loaded;
 
   // The mapping is read inside a try: a malformed ADDRESS (a BASE_URL
-  // that is not a URL — the mapping reads the host out of it) must reach
+  // that is not a URL — the mapping reads the host out of it) or a
+  // malformed E2E_VENUE_IP (a value that is not an address) must reach
   // the operator as the NAMED remedy, not as an unhandled throw that
-  // hides the cause behind a stack trace.
-  //
-  // That is what throws here. A malformed E2E_VENUE_IP does NOT: the
-  // mapping carries the value as it is, and the run fails later — at the
-  // browser's launch, with the remedy already printed.
+  // hides the cause behind a stack trace, and not as a browser failure
+  // much later that reads like a runner problem.
   const { mapping, error: mappingError } = readVenueMapping(venueMapping);
   if (mappingError) {
     process.stderr.write(`pre-flight: the venue mapping is not usable.\n${mappingError}\n`);

@@ -82,14 +82,17 @@ test.describe('a venue mapping that cannot be read is a NAMED cause', () => {
     expect(read.error).toContain('E2E_VENUE_IP');
   });
 
-  test('a malformed IP is NOT a failure HERE — it is carried as it is', () => {
-    // The mapping reader validates nothing: a value that is not an
-    // address is carried through, and the run fails LATER — at the
-    // browser's launch, with the remedy already printed. The pre-flight
-    // must not claim otherwise.
-    const mapping = { host: 'venue.example', ip: 'not an address' };
-    const read = readVenueMapping(() => mapping);
-    expect(read.mapping).toBe(mapping);
-    expect(read.error).toBe(null);
+  test('a malformed IP is NAMED too — not carried into the browser', () => {
+    // The mapping VALIDATES the address, so a value that is not one
+    // throws here and is named — instead of reaching Chromium as
+    // `--host-resolver-rules=MAP <host> <not an address>` and being
+    // rejected there, where the failure reads like a runner problem.
+    const read = readVenueMapping(() => {
+      throw new Error('E2E_VENUE_IP is not an address: "not an address"');
+    });
+    expect(read.mapping).toBe(null);
+    expect(read.error).toContain('E2E_VENUE_IP is not an address');
+    // The remedy the runner needs is in the message too.
+    expect(read.error).toContain('E2E_VENUE_IP');
   });
 });

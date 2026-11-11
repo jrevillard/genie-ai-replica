@@ -15,6 +15,8 @@
  * names the host to map (it defaults to the `BASE_URL` host). Unset, this
  * module is inert and the suite behaves exactly as before.
  */
+const net = require('net');
+
 const VENUE_IP_ENV = 'E2E_VENUE_IP';
 const VENUE_HOST_ENV = 'E2E_VENUE_HOST';
 
@@ -27,11 +29,25 @@ const { BASE_URL } = require('./base-url');
 /**
  * The venue mapping in force, or null when the runner resolves the venue
  * name itself.
+ *
+ * The ADDRESS is validated here, and the venue's URL is read here too —
+ * so a bad value in either is named AT THE POINT IT IS READ. A value
+ * that is not an address would otherwise reach Chromium as
+ * `--host-resolver-rules=MAP <host> <not an address>` and be rejected
+ * there, with the cause buried in the browser's own error: the runner
+ * would read a browser failure for what is a configuration mistake.
+ *
  * @returns {{host: string, ip: string}|null} the mapping
+ * @throws {Error} when the configured address or venue is not usable
  */
 function venueMapping() {
   const ip = process.env[VENUE_IP_ENV];
   if (!ip) return null;
+  if (!net.isIP(ip)) {
+    throw new Error(
+      `${VENUE_IP_ENV} is not an address: ${JSON.stringify(ip)} — it must be an IPv4 or IPv6 address.`
+    );
+  }
   const host =
     process.env[VENUE_HOST_ENV] ||
     new URL(BASE_URL).hostname;

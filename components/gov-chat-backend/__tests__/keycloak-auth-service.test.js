@@ -805,6 +805,12 @@ describe('keycloakAuthService', () => {
         expectedMessage: 'published 2 signing keys'
       },
       {
+        // The number the operator reads is the number of CANDIDATES the
+        // ambiguity really had: a key the verifier could never use (an EC
+        // key, a key that forbids verification) is not a signing key. The
+        // filter is deliberately looser than jose's own — a key_ops list that
+        // repeats an operation is refused by jose and accepted here — so the
+        // count can over-report but never under-report.
         name: 'only the keys that could verify are counted',
         publishedKeys: [
           { kid: 'dup', kty: 'RSA', alg: 'RS256', use: 'sig' },
@@ -861,6 +867,12 @@ describe('keycloakAuthService', () => {
 
         const logged = warns.lines();
         expect(logged).toContain('more candidate keys than the trial cap');
+        // The cap itself is pinned: one verification for the token, then
+        // exactly three for the published candidates — a fourth candidate is
+        // never tried. A smaller cap must change this count, a bigger one
+        // must change the line above.
+        expect(mockJwtVerify).toHaveBeenCalledTimes(4);
+        expect(logged).toContain('(3 tried)');
       } finally {
         warns.restore();
       }

@@ -146,7 +146,12 @@ try {
  * @returns {boolean} True when the debug level would write the line
  */
 function debugEnabled() {
-  return typeof logger.isDebugEnabled === 'function' && logger.isDebugEnabled();
+  if (typeof logger.isDebugEnabled === 'function') return logger.isDebugEnabled();
+  // A logger that cannot answer is asked to log: the transport decides
+  // whether the line is written (production is winston, which filters on
+  // level; only a consumer's test double lands here). Skipping the call
+  // instead would silently swallow the line for every such consumer.
+  return typeof logger.debug === 'function';
 }
 
 /**
@@ -270,7 +275,7 @@ function countKeysWithKid(jwks, kid) {
  * @param {Error} err - The JWKSMultipleMatchingKeys error (it carries the candidates)
  * @param {string} token - The raw JWT
  * @param {Object} jwtOptions - The same verification options the first attempt used
- * @returns {Promise<Object>} `{ ok, payload, error, tried, truncated }` — `error`
+ * @returns {Promise<Object>} `{ ok, payload, error, truncated }` — `error`
  *   is the failure that decides the rejection (the last signature failure, or
  *   the token's own defect), `truncated` says the realm published more
  *   candidates than the trial may try.

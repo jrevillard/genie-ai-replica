@@ -227,8 +227,9 @@ function namesThisFile(token, file) {
  * failure path would file a second issue for a file that already has
  * one.
  *
- * The set is built ONCE (the walk costs ~0.1 s) and only when a bare
- * name is actually met, which is at most once per title.
+ * The set is built ONCE (the walk costs ~0.1 s in a branch worktree and
+ * ~0.8 s in a checkout that carries sibling worktrees' copies) and only
+ * when a bare name is actually met, which is at most once per title.
  */
 let otherTreeNames = null;
 
@@ -247,8 +248,13 @@ function namesOutsideE2eTree(token) {
         const full = path.join(dir, entry.name);
         if (entry.isDirectory()) {
           // The e2e tree is this tree's own business; only the OTHER
-          // trees' names can make a bare name ambiguous.
-          if (path.relative(REPO_ROOT, full) === TESTS_E2E_ROOT) continue;
+          // trees' names can make a bare name ambiguous. EVERY copy of
+          // it is this tree's business — a checkout that carries sibling
+          // worktrees holds a full copy of tests/e2e under each of
+          // them, and their spec names would make this tree's OWN bare
+          // names look like another tree's files.
+          const rel = path.relative(REPO_ROOT, full).split(path.sep);
+          if (rel.length >= 2 && rel[rel.length - 2] === 'tests' && rel[rel.length - 1] === 'e2e') continue;
           walk(full);
         } else if (/\.(?:spec|test)\.[cm]?[jt]sx?$/.test(entry.name)) {
           otherTreeNames.add(entry.name);

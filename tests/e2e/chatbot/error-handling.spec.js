@@ -118,8 +118,8 @@ test.describe('RAG error handling', () => {
     // error card's 30 s wait above aborts the test there if it expires.
     // A retry that HANGS fails on that wait, with the helper's own
     // message; a retry that ERRORS renders no answer bubble and fails on
-    // the assertion below. The spec's own budget (300 s, above) covers
-    // the sum of these ceilings plus the beforeEach's login.
+    // the assertion below. The spec's own 300 s budget (above) is ONE
+    // total for the hook and the body — see the describe comment.
     await waitForBotResponse(page, { timeout: 10000 });
     // The ANSWER, not merely a non-empty bubble: the welcome turn is a
     // bot bubble too, so "not empty" would pass on a retry that never

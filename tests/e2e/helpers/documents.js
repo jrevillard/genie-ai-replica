@@ -332,8 +332,11 @@ async function deleteAllTestDocuments(prefix = 'test-document', { browser } = {}
     );
   }
   if (!enumeratedAll) {
-    // What the sweep knows is that the POPULATION exceeds the window it
-    // enumerated — not that a suite file lies beyond it. Say that.
+    // What the sweep knows depends on the branch: either the POPULATION
+    // exceeds the window it enumerated, or the population's size is
+    // unknown. Either way the sweep cannot account for everything it
+    // may own — and it says so, rather than naming a leftover it has
+    // not established.
     problems.push(
       populationKnown
         ? `the sweep did not enumerate the whole population — a prefix-matching file beyond the ` +

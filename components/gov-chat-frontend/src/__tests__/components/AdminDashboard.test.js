@@ -353,6 +353,16 @@ describe('AdminDashboard', () => {
       expect(wrapper.find('[data-test-id="admin-dashboard"]').exists()).toBe(true);
     });
 
+    it('the admin route joins the living-intelligence layer (Phase V)', () => {
+      // The visual layer gates on .genie-living-intelligence — DashboardView
+      // carries it on the welcome/chat route; the admin route must carry it
+      // too, or the decorated chrome (brand-ramp title, frost cards, corner
+      // network) never renders there. Layer-off stays a no-op by the same
+      // html[data-visual] gate the rest of the layer uses.
+      const wrapper = createAdminDashboardWrapper();
+      expect(wrapper.find('.admin-page').classes()).toContain('genie-living-intelligence');
+    });
+
     it('renders the overview tab by default', () => {
       const wrapper = createAdminDashboardWrapper();
       expect(wrapper.find('[data-test-id="admin-dashboard"]').exists()).toBe(true);

@@ -640,3 +640,95 @@ html[data-visual='on'] .genie-living-intelligence .chatbot-container {
 html[data-visual='on'] .genie-living-intelligence .chatbot-container .chat-window {
   background: transparent;
 }
+
+/*
+ * The admin route (Phase V — David, 2026-11-11: "the Admin Dashboard and
+ * its related dialogs … match the color schemes and the bright lively look
+ * and feel of the main UI").
+ *
+ * The admin surface already carries the design tokens; what it never had
+ * is this layer. These rules bring the same vocabulary the welcome and
+ * chat surfaces wear — the brand ramp on the page title, frost borders
+ * and a top-lit wash on the card chrome, the corner network and a soft
+ * accent ambient behind the header — at DATA-SURFACE strength: the admin
+ * page is a working screen, so the motifs sit behind the chrome and stay
+ * out of the tables' way. Everything derives from tokens via color-mix();
+ * layer off = the admin route paints exactly as it did.
+ *
+ * Stacking: .admin-dashboard isolates and paints the motifs on ::before
+ * at z-index 0; .dashboard (its only child) sits at z-index 1, so no
+ * app rule needs a layer compensation.
+ */
+html[data-visual='on'] .genie-living-intelligence .admin-dashboard {
+  position: relative;
+  isolation: isolate;
+}
+
+html[data-visual='on'] .genie-living-intelligence .admin-dashboard::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  /* A soft accent ambient rising behind the header and the tile row —
+     the welcome mesh's energy at operating strength. The corner network
+     anchors top-right on the same pseudo, sized like the chat sidebar's
+     narrow band so it clears the tab rack's first row. */
+  background-image:
+    radial-gradient(
+      1100px 240px at 50% -60px,
+      color-mix(in srgb, var(--accent) calc(13% * var(--gli-deco-strength)), transparent),
+      transparent 72%
+    ),
+    var(--visual-corner, none);
+  background-position:
+    center top,
+    right -30px top -20px;
+  background-size:
+    100% 100%,
+    min(30%, 300px) min(45vh, 420px);
+  background-repeat: no-repeat, no-repeat;
+}
+
+html[data-visual='on'] .genie-living-intelligence .admin-dashboard > .dashboard {
+  position: relative;
+  z-index: 1;
+}
+
+/* Card chrome: the frost border every decorated card wears, plus the
+   quick-help row's top-lit wash — a pale accent breath at the top edge
+   fading into the surface within a third of the card's height. */
+html[data-visual='on'] .genie-living-intelligence .admin-dashboard .stat-card,
+html[data-visual='on'] .genie-living-intelligence .admin-dashboard .tabs-card,
+html[data-visual='on'] .genie-living-intelligence .admin-dashboard .dashboard-card {
+  border: 1px solid var(--gli-frost-border);
+  background-image: linear-gradient(180deg, color-mix(in srgb, var(--accent) 5%, var(--surface)), var(--surface) 34%);
+}
+
+/* The page title wears the brand ramp — the same live-type gradient as
+   the welcome heading and the navbar name, theme-adaptive via the same
+   tokens, with the accent fallback for renderers without clip. Gated:
+   identity is the brand's own class; this is decoration. */
+html[data-visual='on'] .genie-living-intelligence .admin-dashboard .page-title {
+  font-family: var(--font-display);
+  letter-spacing: -0.02em;
+  background-image: linear-gradient(
+    100deg,
+    var(--brand-mark-from) 5%,
+    var(--brand-mark-mid) 62%,
+    var(--brand-mark-to) 100%
+  );
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  color: var(--accent);
+}
+
+/* The rack row reads as part of the decorated chrome rather than a grey
+   strip glued to the cards: a whisper of accent light along its top
+   edge, inside the DS primitive's own active-tab underline. */
+html[data-visual='on'] .genie-living-intelligence .admin-dashboard .tabs-card {
+  box-shadow:
+    var(--shadow-sm),
+    0 1px 0 color-mix(in srgb, var(--accent) 18%, transparent) inset;
+}

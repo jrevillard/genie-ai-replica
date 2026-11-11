@@ -52,24 +52,32 @@ function programQuery() {
   // object) so assertions can read repoDoc.conversion / source_documents.
   mockDb.query.mockImplementation(async (q, bind) => {
     const text = typeof q === 'string' ? q : q && q.query;
+    // Every @param in the AQL must have a matching key in the bind object:
+    // ArangoDB rejects the statement at PARSE time otherwise, and the
+    // rejection is invisible to a mock that dispatches on the bind shape.
+    const params = (String(text).match(/@\w+/g) || []).map((p) => p.slice(1));
+    for (const p of params) {
+      if (!bind || !(p in bind)) {
+        throw new Error(`mock: the query binds @${p} but the bind object has no such key`);
+      }
+    }
     const store = (mockDb._stores && mockDb._stores.okf_repositories) || {};
     const live = store[bind && bind.repo_id];
     if (live && text && text.includes('UPDATE doc WITH { conversion')) {
-      // The producer's AQL REPLACES the whole conversion object; the crawl
-      // path's (and the zip path's) MERGEs into it — the mock follows the
-      // same split, or a REPLACE-only regression would stay invisible here.
+      // An ArangoDB UPDATE MERGES the nested `conversion` object by default
+      // (the record is a shared slot) — the mock follows the database, not a
+      // guess, or the assertions would prove a fiction.
       const old = live.conversion;
-      if (bind && bind.startedAt) {
+      if (text.includes('@startedAt')) {
         // the CONDITIONAL close: it applies only while the record is still
         // this run's ('queued' with this run's started_at)
         if (!old || old.status !== 'queued' || old.started_at !== bind.startedAt) {
           return { all: async () => [] };
         }
-        live.conversion = { ...bind.patch };
+        live.conversion = Object.assign({}, live.conversion, bind.patch);
         return { all: async () => [1] };
       }
-      if (text.includes('MERGE(')) live.conversion = Object.assign({}, live.conversion, bind.patch);
-      else live.conversion = { ...bind.patch };
+      live.conversion = Object.assign({}, live.conversion, bind.patch);
       // the queued write hands back the record it replaced (RETURN OLD)
       if (text.includes('RETURN OLD')) return { all: async () => [old === undefined ? null : old] };
       return { all: async () => [] };
@@ -1367,14 +1375,39 @@ describe('producer-service — D4 restricted-snapshot stamp (stampSources)', () 
   });
 
   it('an unreadable repo doc stamps unrestricted and does not throw', async () => {
-    // no repo doc saved — document() rejects; the stamp must still land
+    // the repo doc read fails (the snapshot degrades to unrestricted) while
+    // the durable record still lands — the read is not the import's contract
     authedAxios.get.mockResolvedValue({ data: { file: { file_id: 'f1', file_name: 'a.md' } } });
-    await expect(producer.stampSources(R2 + '-ghost', ['f1'])).resolves.toBeDefined();
+    await mockDb.collection('okf_repositories').save({
+      _key: R2,
+      repo_id: R2,
+      name: 'Restricted',
+      domain: 'general',
+      acl: { restricted: true }
+    });
+    const mockCollection = mockDb.collection('okf_repositories');
+    const realDocument = mockCollection.document.getMockImplementation();
+    mockCollection.document.mockImplementationOnce(async () => {
+      throw new Error('doc read failed');
+    });
+    await expect(producer.stampSources(R2, ['f1'])).resolves.toBeDefined();
+    mockCollection.document.mockImplementation(realDocument);
     expect(authedAxios.patch).toHaveBeenCalledWith(
       expect.anything(),
-      { okf_repo_id: R2 + '-ghost', okf_restricted: false },
+      { okf_repo_id: R2, okf_restricted: false },
       expect.anything()
     );
+  });
+
+  it('a repository that no longer exists fails the import — nothing is stamped anywhere', async () => {
+    // the durable record could not be written (the repository document is
+    // gone): the import must not report success, and the per-file stamps
+    // must not point at a repository that does not exist
+    authedAxios.get.mockResolvedValue({ data: { file: { file_id: 'f1', file_name: 'a.md' } } });
+    await expect(producer.stampSources(R2 + '-ghost', ['f1'])).rejects.toMatchObject({
+      code: 'SOURCE_STAMP_FAILED'
+    });
+    expect(authedAxios.patch).not.toHaveBeenCalled();
   });
 });
 

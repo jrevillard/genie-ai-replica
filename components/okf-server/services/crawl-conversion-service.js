@@ -109,9 +109,9 @@ const TERMINAL_STATES = ['done', 'failed'];
  * registry). This is the SHARED registry: the documents importer registers
  * its conversion here too (producer-service re-exports this same Map as
  * `producer.live`), so ONE repo is converted at a time whichever path
- * started it (the two paths write the same repo.conversion record — the crawl
- * merges its patch, the producer replaces it — so running both on one repo
- * leaves a record describing neither run).
+ * started it (the two paths write the same repo.conversion record — an
+ * ArangoDB UPDATE merges into it, so both paths' fields end up in one slot —
+ * so running both on one repo leaves a record describing neither run).
  *
  * The RESERVATION is the guard — it is claimed synchronously, before the
  * awaited stages below, so a second start for the same repo cannot slip

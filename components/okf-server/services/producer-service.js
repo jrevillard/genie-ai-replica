@@ -140,6 +140,10 @@ async function getDb() {
  * Write the conversion record and hand back the record it REPLACED (AQL
  * RETURN OLD): the snapshot a refused start restores comes from the write
  * itself — no extra read, and exactly the record at the moment we took over.
+ * (An ArangoDB UPDATE MERGES the nested `conversion` object by default — the
+ * record is a SHARED slot: the crawl path and the zip path write their own
+ * fields into it — so a write carries the fields it sets, not a replacement
+ * of the whole record.)
  * @param {string} repoId
  * @param {object} patch the conversion record to write
  * @returns {Promise<object|null>} the previous record, or null when there was none
@@ -161,9 +165,9 @@ async function patchConversionReturningOld(repoId, patch) {
 /**
  * Close a refused start — ONE atomic statement: the record is written only
  * while it is still THIS run's ('queued' with this run's started_at). The
- * producer's patch REPLACES the whole conversion object and the zip-ingest
- * path (which takes no reservation) MERGEs into the same attribute, so a
- * read-then-write would clobber a writer that slipped in between.
+ * conversion record is a SHARED slot — the zip-ingest path (which takes no
+ * reservation) writes its own fields into it — so a read-then-write would
+ * clobber a writer that slipped in between.
  * @param {string} repoId
  * @param {string} startedAt the started_at of the run that owns the record
  * @param {object} patch the record to write
@@ -174,7 +178,7 @@ async function closeConversionIfOwned(repoId, startedAt, patch) {
   const cursor = await db.query(
     `LET doc = DOCUMENT(${COLLECTION}, @repo_id)
      FILTER doc != null
-     FILTER doc.conversion != null && doc.conversion.status == 'queued' && doc.conversion.started_at == @started_at
+     FILTER doc.conversion != null && doc.conversion.status == 'queued' && doc.conversion.started_at == @startedAt
      UPDATE doc WITH { conversion: @patch, updated_at: @now } IN ${COLLECTION}
      RETURN 1`,
     { repo_id: repoId, patch, now: new Date().toISOString(), startedAt }
@@ -285,8 +289,14 @@ async function recordSourceDocuments(repoId, fileIds, metaByKey = Object.create(
     // repository that does not exist.
     const rows = await written.all();
     if (!rows || rows.length === 0) {
+      // The repository document is gone: nothing was recorded, and the
+      // per-file stamps would point at a repository that does not exist.
       logger.error('source_documents record was not written — the repository document is gone', {
         repo_id: repoId
+      });
+      throw Object.assign(new Error('the repository no longer exists — the import was not completed'), {
+        code: 'SOURCE_STAMP_FAILED',
+        status: 500
       });
     }
   } catch (err) {
@@ -1023,10 +1033,6 @@ async function runDocumentsConversion(job) {
       stage: 'done',
       files_done: filesDone,
       files_total: file_ids.length,
-      // The conversion patch REPLACES the whole record, so the per-file
-      // outcomes have to be carried by the final patch too — otherwise the
-      // list of what happened to each document disappears when the import
-      // ends (it only lives in the progress records).
       per_file: perFile.slice(),
       concepts_done: allDrafts.length,
       batches_done: batches,
@@ -1256,15 +1262,18 @@ async function startDocumentsConversion({ repo_id, file_ids, requested_name, cla
           };
     try {
       // ONE atomic statement: the record is written only while it is still
-      // THIS run's. The producer's patch REPLACES the whole conversion
-      // object and the zip-ingest path (which takes no reservation) MERGEs
-      // into the same attribute — a blind write would clobber that writer.
+      // THIS run's. The conversion record is a shared slot — the zip-ingest
+      // path (which takes no reservation) writes its own fields into it — so
+      // a blind write would clobber that writer.
       const written = await closeConversionIfOwned(repo_id, queued.started_at, close);
       if (!written) {
         logger.warn("Conversion record is not this run's — left untouched", { repo_id });
       }
     } catch (patchErr) {
-      logger.warn('Failed-start record could not be written (non-fatal)', {
+      // The request is already an error; this is the SECOND failure — the
+      // repository keeps a 'queued' record it never closes, which blocks its
+      // transitions. It must not be a quiet warning.
+      logger.error('Failed-start record could not be written — the repository keeps a queued conversion', {
         repo_id,
         error: patchErr.message
       });

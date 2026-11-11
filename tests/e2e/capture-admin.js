@@ -154,7 +154,12 @@ const audit = (label) => {
 
       const name = `${theme}-tab-${tab}`;
       const file = path.join(OUT_DIR, `${name}.png`);
-      await page.screenshot({ path: file, fullPage: false });
+      // animations:'disabled' fast-forwards CSS transitions before the
+      // frame is taken: the first live run captured the tab underline
+      // MID-TRANSITION (visually still on the previous tab while the DOM
+      // already carried the new one — the probe proved the app state was
+      // correct, so the stale frame was the capture's, not the app's).
+      await page.screenshot({ path: file, fullPage: false, animations: 'disabled' });
       fs.writeFileSync(path.join(OUT_DIR, `${name}.audit.json`), JSON.stringify(data, null, 2));
       results[name] = file;
       console.log(`${name}: ${file}`);
@@ -220,7 +225,7 @@ const audit = (label) => {
 
       const name = `${theme}-dialog-${d.name}`;
       const file = path.join(OUT_DIR, `${name}.png`);
-      await page.screenshot({ path: file, fullPage: false });
+      await page.screenshot({ path: file, fullPage: false, animations: 'disabled' });
       fs.writeFileSync(path.join(OUT_DIR, `${name}.audit.json`), JSON.stringify(data, null, 2));
       results[name] = file;
       console.log(`${name}: ${file}`);

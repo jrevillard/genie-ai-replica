@@ -64,7 +64,8 @@ test.describe('Conversation history persistence', () => {
   // Direct access grants are disabled on the realm by design, so the
   // cleanup session logs in through the browser like the tests do and
   // reuses that session's token for the API deletes. The sweep is by the
-  // suite's title prefix, not just the ids captured in-flight — a test
+  // suite's title prefix — and the ids captured in-flight are its FALLBACK
+  // for the case where not one page of the list could be read: a test
   // that failed between its save and its bookkeeping must not leak the
   // conversation it already persisted.
   test.afterAll(async ({ browser }) => {
@@ -197,8 +198,11 @@ test.describe('Conversation history persistence', () => {
       );
     }
     if (!enumeratedAll) {
-      // What the sweep knows is that the POPULATION exceeds the window it
-      // enumerated — not that a suite conversation lies beyond it. Say that.
+      // What the sweep knows depends on the branch: either the POPULATION
+      // exceeds the window it enumerated, or the population's size is
+      // unknown. Either way the sweep cannot account for everything it
+      // may own — and it says so, rather than naming a leftover it has
+      // not established.
       problems.push(
         populationKnown
           ? `the sweep did not enumerate the whole population — a suite conversation beyond the ` +
@@ -206,8 +210,8 @@ test.describe('Conversation history persistence', () => {
           : pagesRead > 0
             ? `the population size is unknown — the sweep read full pages, so a suite conversation ` +
                 `beyond the last enumerated page, if any, was not removed`
-            : `the population size is unknown and the sweep read NOTHING — no suite conversation ` +
-                `can be accounted for, and any of them may remain`
+            : `the population size is unknown and the sweep read NOTHING — only the conversations ` +
+                `captured in flight were removed, and any other suite conversation may remain`
       );
     }
     if (problems.length > 0) {

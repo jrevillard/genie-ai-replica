@@ -338,15 +338,17 @@ function describeUnauthorized(res, token) {
  * results keep the input order, so a failure report reads the same way
  * whatever order the calls completed in.
  *
- * Safe by construction: a call that THROWS does not abandon the rest of
- * the items — every item is attempted, and the lowest-indexed failure
- * is rethrown once the whole batch has run. Without the per-item catch
- * a worker's rejection would propagate through `Promise.all` and abort
- * the batch, and the items the other workers had not reached would
- * never run. The two sweeps do not rely on the rethrow — they catch
- * inside the mapper so they can name each failure — but the guarantee
- * is the helper's, and the failure that is rethrown must not depend on
- * which call rejected FIRST: the index decides, not the clock.
+ * Safe by construction: a call that THROWS does not end the batch. The
+ * rejection is captured, every item is attempted, and the lowest-indexed
+ * failure is rethrown once the whole batch has run. Without the
+ * capture, the first rejection propagates straight out of
+ * `Promise.all`: the caller loses the whole batch's report, while the
+ * sibling workers keep going in the background — deleting after the hook
+ * has already failed, unobserved. The two sweeps do not rely on the
+ * rethrow — they catch inside the mapper so they can name each failure —
+ * but the guarantee is the helper's, and the failure that is rethrown
+ * must not depend on which call rejected FIRST: the index decides, not
+ * the clock.
  *
  * @param {Array} items - the items to map
  * @param {number} limit - the maximum number of calls in flight

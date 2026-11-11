@@ -222,6 +222,164 @@ async function getSessionToken(page) {
 const SESSION_MINT_TIMEOUT_MS = 360000;
 
 /**
+ * Ceiling for the delete fan-out of a cleanup sweep.
+ *
+ * The sweep must fit TWO limits, and they are not the same clock:
+ *
+ *  - the HOOK's budget (360 s) counts everything, including the login
+ *    that mints the token (≈135 s on a stalled stack);
+ *  - the TOKEN's life (the realm's `accessTokenLifespan` — 300 s, the
+ *    shipped default: `docker-compose.yaml` pins
+ *    `KEYCLOAK_ACCESS_TOKEN_LIFESPAN:-300` and `configs/keycloak/
+ *    genie-realm.yaml` feeds it into the realm; `deploy/ansible` leaves
+ *    its own variable optional, so a deployment CAN run another value,
+ *    and the k1 spec sets the realm to 10 s for the length of its own
+ *    run) starts when the token is ISSUED — during the OIDC code
+ *    exchange inside the login redirect, BEFORE the mint returns. The
+ *    window the sweep works in is therefore 300 s MINUS the gap between
+ *    the issuance and the mint returning.
+ *
+ * After the mint the sweep lists the population (≤ 2 pages at the 30 s
+ * request cap = 60 s) and deletes the suite's own files (50 deletes in
+ * waves of 10 = 5 × 30 s = 150 s): 210 s of work, inside the token's
+ * 300 s with ~90 s left for that gap. With the login counted, 135 + 60
+ * + 150 = 345 s, inside the hook's 360 s.
+ *
+ * The wave width is bounded by the BUDGET and by what a shared stack
+ * can take. The engine says how the contention behaves, and both
+ * engines are in the field:
+ *
+ *  - RocksDB — the DEFAULT since ArangoDB 3.4, and what the venue's
+ *    deployment passes explicitly (`--server.storage-engine=rocksdb`) —
+ *    takes its locks per DOCUMENT: concurrent deletes of distinct
+ *    documents do not conflict, and a conflict surfaces as a
+ *    write-write conflict (error 1200; 1201 is "datfile sealed");
+ *  - MMFiles — only where a deployment selects it explicitly — takes
+ *    the write lock per COLLECTION. The conversation delete opens a
+ *    write transaction over six collections (chat-history-service.js),
+ *    so a wave of concurrent deletes serialises on that lock and the
+ *    waits grow with the wave width until the transaction lock timeout
+ *    surfaces.
+ *
+ * Ten at a time is what the budget above is sized for, and it keeps the
+ * fan-out a modest load on a shared stack — on either engine.
+ */
+const SWEEP_DELETE_CONCURRENCY = 10;
+
+/**
+ * How many pages of the population a cleanup sweep enumerates.
+ *
+ * One page is not enough to know what the sweep owns. Both list
+ * endpoints search a SUPERSET of the suite's own files: doc-repo matches
+ * CONTAINS(LOWER(file_name)) OR CONTAINS(LOWER(source_url)), and the
+ * conversation list matches LIKE over title OR lastMessage OR category.
+ * A sweep that stops at the first page therefore cannot tell "the files
+ * beyond the page are not mine" from "the files beyond the page are mine
+ * and were not removed" — and the second one is a leftover.
+ *
+ * Two pages are what the sweep enumerates: 100 files for the doc-repo
+ * sweep (its endpoint caps `limit` at 50) and 200 conversations for the
+ * chat sweep (its endpoint accepts 100). The delete budget below is a
+ * separate cap. Beyond the two pages the sweep says it could not
+ * enumerate the whole population.
+ */
+const SWEEP_MAX_LIST_PAGES = 2;
+
+/**
+ * How many of the suite's own files one sweep deletes.
+ *
+ * 50 deletes in waves of 10 cost 5 × 30 s = 150 s, which is what the
+ * budget above is sized for. A bigger delete set overruns the hook's
+ * budget, so the sweep deletes what fits and REPORTS the rest — a
+ * leftover is reported, never dropped.
+ */
+const SWEEP_MAX_DELETES = 50;
+
+/**
+ * The token's expiry, for a failure report that names the cause.
+ *
+ * Never throws: a token that is not a JWT, or one without an `exp`
+ * claim, has no expiry to report — and a diagnostic must not take the
+ * cleanup down before a single delete has run. The reason it could not
+ * be read travels IN the label, so nothing is swallowed.
+ *
+ * @param {string} token - the access token the sweep holds
+ * @returns {string} the expiry as an ISO timestamp, or why it is unknown
+ */
+function tokenExpiryLabel(token) {
+  try {
+    const exp = parseJwtClaims(token).exp;
+    return exp ? new Date(exp * 1000).toISOString() : 'unknown (the token carries no exp claim)';
+  } catch (e) {
+    return `unknown (the token could not be read: ${e.message})`;
+  }
+}
+
+/**
+ * Describe a 401 from an authenticated endpoint.
+ *
+ * The verdict is the SERVER's, not the sweep's: both endpoints answer
+ * `TOKEN_EXPIRED` and `TOKEN_INVALID` with the same status, and a
+ * rotated signing key answers the latter. Calling that an expiry sends
+ * the operator after the wrong layer.
+ *
+ * @param {{status: number, data: object}} res - the request helper's response
+ * @param {string} token - the access token the sweep holds
+ * @returns {string} the description for the failure report
+ */
+function describeUnauthorized(res, token) {
+  const verdict = res.data?.error;
+  const expiry = verdict === 'TOKEN_EXPIRED' ? ` — the access token expired at ${tokenExpiryLabel(token)}` : '';
+  return `HTTP 401 (the endpoint answered ${verdict ?? 'no error code'}${expiry})`;
+}
+
+/**
+ * Map `fn` over `items`, at most `limit` calls in flight at a time. The
+ * results keep the input order, so a failure report reads the same way
+ * whatever order the calls completed in.
+ *
+ * Safe by construction: a call that THROWS does not end the batch. The
+ * rejection is captured, every item is attempted, and the lowest-indexed
+ * failure is rethrown once the whole batch has run. Without the
+ * capture, the first rejection propagates straight out of
+ * `Promise.all`: the caller loses the whole batch's report, while the
+ * sibling workers keep going in the background — deleting after the hook
+ * has already failed, unobserved. The two sweeps do not rely on the
+ * rethrow — they catch inside the mapper so they can name each failure —
+ * but the guarantee is the helper's, and the failure that is rethrown
+ * must not depend on which call rejected FIRST: the index decides, not
+ * the clock.
+ *
+ * @param {Array} items - the items to map
+ * @param {number} limit - the maximum number of calls in flight
+ * @param {Function} fn - called with (item, index); its result is kept
+ * @returns {Promise<Array>} the results, in the input order
+ */
+async function mapWithConcurrency(items, limit, fn) {
+  const results = new Array(items.length);
+  const failures = [];
+  let next = 0;
+  const workers = Array.from({ length: Math.min(limit, items.length) }, async () => {
+    while (next < items.length) {
+      const index = next++;
+      try {
+        results[index] = await fn(items[index], index);
+      } catch (e) {
+        failures.push({ index, error: e });
+      }
+    }
+  });
+  await Promise.all(workers);
+  if (failures.length > 0) {
+    // The lowest index, not the first to reject: the same input must
+    // raise the same error whatever order the calls completed in.
+    failures.sort((a, b) => a.index - b.index);
+    throw failures[0].error;
+  }
+  return results;
+}
+
+/**
  * Log in through the UI in a throwaway session and return that session's
  * access token — the cleanup paths' replacement for minting a token with
  * ROPC, which the realm refuses by design.
@@ -279,5 +437,10 @@ module.exports = {
   getSessionTokenViaUI,
   parseJwtClaims,
   request,
+  mapWithConcurrency,
+  describeUnauthorized,
   SESSION_MINT_TIMEOUT_MS,
+  SWEEP_DELETE_CONCURRENCY,
+  SWEEP_MAX_LIST_PAGES,
+  SWEEP_MAX_DELETES,
 };

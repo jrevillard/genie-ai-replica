@@ -16,6 +16,13 @@ test.describe.serial('Phase K: Auth Error Display', () => {
   let adminToken;
   let noRolesUserId;
   let originalLifespan;
+  // Whether a lifespan mutation was ATTEMPTED. K.2 sets it and K.3 puts
+  // it back; if K.1 fails first, `describe.serial` skips both and the
+  // realm was never touched — a restore then would rewrite a deployment
+  // that was never changed. The flag is set BEFORE the request, so it
+  // means "the realm MAY have been changed": a request that times out
+  // may still have mutated it, and the restore must then run.
+  let lifespanMutated = false;
   const NOROLES_USERNAME = 'noroles-user-e2e';
   const NOROLES_PASSWORD = 'TestPass123!';
 
@@ -40,22 +47,58 @@ test.describe.serial('Phase K: Auth Error Display', () => {
     // stack — past the 60s project timeout the hook otherwise runs under.
     test.setTimeout(SESSION_MINT_TIMEOUT_MS);
 
+    // Both cleanups run, and BOTH failures are reported: a throw from the
+    // first one used to abort the hook and skip the second, so the next
+    // suite inherited the mutated lifespan AND the stray user while the
+    // report named only the lifespan.
+    // One array, one entry per failure: the message names it, the cause
+    // is the error behind it. Two parallel arrays could drift.
+    const failures = [];
+
+    // ONE admin token for both cleanups: two mints meant two password
+    // grants to the master realm, and the second one could eat the rest
+    // of the hook's budget on a stalled realm — reported then as a
+    // generic hook timeout instead of the leftover this hook names.
+    // Minted only when there IS something to clean: afterAll runs even
+    // when beforeAll threw, and a mint that serves nothing would report
+    // a failure for a cleanup that was never needed.
+    let adminTokenForCleanup = null;
+    if ((originalLifespan && lifespanMutated) || noRolesUserId) {
+      try {
+        adminTokenForCleanup = await getAdminToken();
+      } catch (e) {
+        // Name what stayed behind: the report's header says every
+        // leftover is named, and a mint that fails skips BOTH cleanups.
+        const skipped = [];
+        if (originalLifespan && lifespanMutated) skipped.push('the accessTokenLifespan restore');
+        if (noRolesUserId) skipped.push(`the no-roles user ${noRolesUserId} delete`);
+        failures.push({
+          message:
+            `the master-realm admin token could not be minted — ${skipped.length} cleanup(s) did not ` +
+            `run: ${skipped.join(', ')}. Cause: ${e.message}`,
+          cause: e
+        });
+      }
+    }
+
     // Restore the lifespan only when it was actually captured AND K.2
     // could have mutated it — afterAll runs even when beforeAll threw,
     // and guessing 300 would rewrite a deployment running something else.
-    if (originalLifespan) {
+    if (adminTokenForCleanup && originalLifespan && lifespanMutated) {
       try {
-        const token = await getAdminToken();
-        await updateRealmSettings(token, 'genie', { accessTokenLifespan: originalLifespan });
+        await updateRealmSettings(adminTokenForCleanup, 'genie', {
+          accessTokenLifespan: originalLifespan,
+        });
       } catch (e) {
         // Failing cleanup, never silent: if K.2 ran, a failed restore leaves
         // the realm at its 10s lifespan, poisoning every suite after.
-        throw new Error(
-          `k1 afterAll: accessTokenLifespan restore failed — the genie realm is left at a ` +
-            `mutated lifespan that every later suite inherits. Restore it manually, then re-run. ` +
+        failures.push({
+          message:
+            `accessTokenLifespan restore failed — the genie realm MAY be left at a mutated lifespan ` +
+            `that every later suite inherits. If it is, restore it manually, then re-run. ` +
             `Cause: ${e.message}`,
-          { cause: e },
-        );
+          cause: e
+        });
       }
     }
 
@@ -63,9 +106,25 @@ test.describe.serial('Phase K: Auth Error Display', () => {
     // names the leftover; a leftover account is harmless to the next run
     // only because createUser tolerates the 409, so the failure must be
     // visible, not swallowed.
-    if (noRolesUserId) {
-      const token = await getAdminToken();
-      await deleteUser(token, 'genie', noRolesUserId);
+    if (adminTokenForCleanup && noRolesUserId) {
+      try {
+        await deleteUser(adminTokenForCleanup, 'genie', noRolesUserId);
+      } catch (e) {
+        failures.push({
+          message:
+            `the no-roles user ${noRolesUserId} was not deleted — it stays in the realm for the next ` +
+            `run. Cause: ${e.message}`,
+          cause: e
+        });
+      }
+    }
+
+    if (failures.length > 0) {
+      throw new Error(
+        `k1 afterAll: ${failures.length} cleanup(s) failed — every leftover is named: ` +
+          `${failures.map((f) => f.message).join(' | ')}`,
+        { cause: failures[0].cause }
+      );
     }
   });
 
@@ -93,7 +152,10 @@ test.describe.serial('Phase K: Auth Error Display', () => {
     // own session mint and expiry poll have run.
     adminToken = await getAdminToken();
 
-    // Reduce lifespan to 10s
+    // Reduce lifespan to 10s. The flag is set BEFORE the call: a request
+    // that times out may still have mutated the realm, and the restore
+    // must then run.
+    lifespanMutated = true;
     await updateRealmSettings(adminToken, 'genie', { accessTokenLifespan: '10' });
 
     // Get fresh session token (issued after the lifespan change above,
@@ -131,6 +193,7 @@ test.describe.serial('Phase K: Auth Error Display', () => {
     // is what this test verifies. Admin tokens are issued by the
     // master realm and are not affected by the genie setting.
     await updateRealmSettings(adminToken, 'genie', { accessTokenLifespan: originalLifespan });
+    lifespanMutated = false;
 
     // Create no-roles user
     noRolesUserId = await createUser(adminToken, 'genie', {

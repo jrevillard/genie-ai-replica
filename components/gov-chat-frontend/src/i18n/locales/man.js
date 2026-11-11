@@ -265,8 +265,11 @@ export default {
       unavailable: 'Risoosi baara-coko mang benta to saaying-saaying'
     },
     health: {
+      parseFailed: 'Filiyata data Kendeya sistemoo mambaca to.',
+      loadFailed: 'Filiyata data Kendeya sistemoo luka to.',
       unavailable: 'Sistemoo Kendeya coko mang benta to saaying-saaying'
     },
+    logsLoadFailed: 'Filiyata log looti to.',
     dbStats: {
       unavailable: 'Detabeesi kijeraalu mang benta to saaying-saaying'
     },
@@ -339,6 +342,7 @@ export default {
         loading: 'A ka fili-ñiningo ke...'
       },
       runSecurityScan: {
+        error: 'Filiyata scan damina to.',
         success: 'Kantari ñiningo benta',
         loading: 'A ka kantari ñiningo ke...',
         refreshFailed: 'Filiya benta, koma kijeraalu fiti mang ben'
@@ -1418,6 +1422,7 @@ export default {
       "Jerbal āinwōt juon m̦ōttam̦ em̦m̦an. Kōm̦m̦an māniti, jipañ, im jel̦ā kōn mānit an kajin ām im mour an kajojo raan. MEN EAUJELOK: Kakememej armij eo bwe meñe kwomaron̦ bwebwenato kōn jabdewōt men, kajoor eo am el̦aptata ej jipañ er ilo jikin jerbal ko an kien āinwōt **ID ko**, **Taaj ko**, im **Rejistōr Būjinij**. KIEN: Iien otemjej kowadoñ application in āinwōt 'Genie AI'."
   },
   common: {
+    close: 'A dade',
     cancel: 'A bula',
     create: 'Dada',
     save: 'Mara',
@@ -1464,6 +1469,11 @@ export default {
     alt: 'Yele'
   },
   details: {
+    downloading: 'A ka luka...',
+    sourceUrl: 'URL asali',
+    downloadFile: 'Fayil luka',
+    viewCrawled: 'Markdown damina kita',
+    visitSource: 'Sitio asali kita',
     bundleBadge: 'Ta goll l jehe ayr daa ny rea er OKF',
     crawl: {
       seconds: 'seconds',
@@ -1496,6 +1506,7 @@ export default {
     uploadDate: 'Yele Lung',
     hash: 'SHA256 Has',
     tabs: {
+      crawlLog: 'Crawl log',
       dashboard: 'Dasboodoo',
       details: 'Kibaroo',
       ingestionLog: 'Dung Log',
@@ -1509,6 +1520,7 @@ export default {
         'Wōnm̦aanl̦o̦k an kajojo wāween kōpooj fail in ñan uwaak ko an AI: kōm̦m̦an kōkōm̧bōļ (chunking), kakōl̦l̦e, embedding im kakoba ilo laajrak. L̦apier ilo ijin rej kwal̦o̦k kajjien ia eo ingest ear bōjrak ie.'
     },
     log: {
+      killCrawl: 'Faha kilaa',
       killActions: 'Faha Kewol (Kill Actions):',
       killDocument: 'Nying Dokuuma Faha',
       killProcess: 'Dung Lataramoo Faha',
@@ -1541,10 +1553,18 @@ export default {
       ingestSaving: 'A ka metadeta mara folo ka dung...',
       ingestSaveFailed: 'Filiyata metadeta mara to. Dung ti baara.',
       logError: 'Filiyata dung log looti to.',
+      popupBlocked: 'Pop-up kiyata. Ibay dii pop-up bo sitio kadai le.',
+      downloadComplete: 'Download benta.',
+      loadFailed: 'Filiyata fayil luka.',
+      killFailed: 'Filiyata dung faha:',
+      crawlLogError: 'Filiyata crawl log looti to.',
+      killCrawlError: 'Filiyata faha kilaa kiyata to.',
+      killCrawlSuccess: 'Faha kilaa kiyata.',
       killDocSent: 'Nying dokuuma faha kilaa kiyata.',
       killProcSent: 'Dung lataramoo faha kilaa kiyata.'
     },
     confirm: {
+      killCrawlTitle: 'Crawl faha kilaa',
       ingest: 'I lafiya la ka nying fayiloo dung le ti? Nying si data lataramoo damina.',
       retract: 'I lafiya la ka nying fayiloo bota le ti?',
       delete: 'I lafiya la ka nying fayiloo fiti abada le ti? Nying kwoo mang si murung.',

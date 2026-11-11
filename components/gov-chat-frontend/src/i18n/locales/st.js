@@ -265,8 +265,11 @@ export default {
       unavailable: 'Tšebeliso ya mehlodi ha e fumanehe hona joale.'
     },
     health: {
+      parseFailed: 'Ho hlolehile ho hlalosa lintlha tsa bophelo ba sistimi',
+      loadFailed: 'Ho hlolehile ho kenya lintlha tsa bophelo ba sistimi',
       unavailable: 'Bophelo ba sistimi ha bo fumanehe hona joale.'
     },
+    logsLoadFailed: 'Ho hlolehile ho kenya Lilog',
     dbStats: {
       unavailable: 'Lipalo-palo tsa polokelo ya data ha li fumanehe hona joale.'
     },
@@ -339,6 +342,7 @@ export default {
         loading: 'E matha tlhahlobo...'
       },
       runSecurityScan: {
+        error: "Ho hlolehile ho sebetsa tlhahlobo ea ts'ireletso",
         success: 'Ho lekolwa ha tshireletso ho phethetswe ka katleho',
         loading: 'E matha tekolo ya tshireletso...',
         refreshFailed: 'Sekolo sa tsireletso se phethiloe, empa ho nchafatsa liphetho ho hlolehile'
@@ -1440,6 +1444,7 @@ export default {
       "Sebetsa joaloka motsoalle ea mosa oa sebaka seo. E-ba le mekhoa e metle, ea thusang, 'me u be le tsebo e batsi ka setso sa sebaka le bophelo ba letsatsi le letsatsi. EA BOHLOKOA: Hopotsa mosebelisi hore leha u ka qoqa ka eng kapa eng, matla a hau a maholo ke ho ba thusa ho tsamaea lits'ebeletsong tsa mmuso joaloka **Li-ID**, **Lekhetho**, le **Ngoliso ea Khoebo**. MOLAO: Kamehla bua ka ts'ebeliso ena e le 'Genie AI'."
   },
   common: {
+    close: 'Kwala',
     cancel: 'Hlakola',
     create: 'Theha',
     save: 'Boloka',
@@ -1486,6 +1491,11 @@ export default {
     alt: 'Kenya'
   },
   details: {
+    downloading: 'E jarolla...',
+    sourceUrl: 'URL ya mohloli',
+    downloadFile: 'Jarolla faele',
+    viewCrawled: 'Bona Markdown e entsoeng',
+    visitSource: 'Ketela sebaka sa pele',
     bundleBadge: 'Lauloa ke bophelo ba OKF',
     crawl: {
       seconds: 'metsotso',
@@ -1518,6 +1528,7 @@ export default {
     uploadDate: 'Letsatsi la ho Kenya',
     hash: 'SHA256 Hash',
     tabs: {
+      crawlLog: 'Lilog ya crawl',
       dashboard: 'Dashboto',
       details: 'Dintlha',
       ingestionLog: 'Log ya ho Kenya',
@@ -1531,6 +1542,7 @@ export default {
         'Tsoelo-pele ea mohato ka mohato ea ho lokisetsa faele ena bakeng sa likarabo tsa AI: ho arola likaroloana (chunking), ho leibola, ho etsa di-embedding le ho kenya tšebetsong ho indexa. Liphoso mona li bontša hantle moo ingest e emisitseng teng.'
     },
     log: {
+      killCrawl: 'Emisa mosebetsi',
       killActions: 'Diketo tsa ho Bolaya:',
       killDocument: 'Bolaya Tokomane Ena',
       killProcess: 'Bolaya Tshebetso ya ho Kenya',
@@ -1563,10 +1575,18 @@ export default {
       ingestSaving: 'E boloka metadata pele e kengwa...',
       ingestSaveFailed: 'Ho hlolehile ho boloka metadata. Kentsho e hlakotswe.',
       logError: 'Ho hlolehile ho latedisa lilog tsa ho kenya.',
+      popupBlocked: 'Fensetere e thibilwe. Ka kopo lumella difensetere tsa pop-up bakeng sa saite ena.',
+      downloadComplete: 'Ho jarolla ho phethetse.',
+      loadFailed: 'Ha e kgone ho kenya faele.',
+      killFailed: 'Ho hlolehile ho emisa ho kenya:',
+      crawlLogError: 'Ho hlolehile ho fumana lilog tsa crawl.',
+      killCrawlError: 'Ho hlolehile ho romela sinyala ya ho emisa.',
+      killCrawlSuccess: 'Sinyala ya ho emisa e rometsoe.',
       killDocSent: 'Kopo ya ho bolaya bakeng sa tokomane ena e rometswe.',
       killProcSent: 'Kopo ya ho bolaya bakeng sa tshebetso ya ho kenya e rometswe.'
     },
     confirm: {
+      killCrawlTitle: 'Emisa mosebetsi oa crawl',
       ingest: 'Na o na le bonnete ba hore o batla ho kenya faele ena? Sena se tla qala mokgwa wa ho thehwa ha datha.',
       retract: 'Na o na le bonnete ba hore o batla ho hulela faele ena morao?',
       delete: 'Na o na le bonnete ba hore o batla ho hlakola faele ena ka ho sa feleng? Keto ena ha e kgutlele morao.',

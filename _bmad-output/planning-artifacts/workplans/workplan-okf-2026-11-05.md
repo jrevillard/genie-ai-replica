@@ -115,7 +115,9 @@ flagged before touching):
 | **T1 — chart theming** | the five analytics charts consume resolved DS tokens (light/dark correct across theme switches; no ApexCharts hardcoded palette) | **MERGED to main** (MR **!842**, merge commit `7f22a1310`, David's merge train 2026-11-10). BMAD bookkeeping rides the H1 MR per the no-standalone-docs-MR rule |
 | **H1 — the dashboard stops lying** | fabricated boot defaults removed (99.98% uptime, 245 ms, 1,247 MAU, 42.3 GB DB, "2 days ago" scan stamp, hardcoded service statuses) → null-until-measured + tri-state cards (DsStateDisplay error+Retry / Measuring… / real data); swallowed failures surfaced (loadSystemHealth resets every surface, loadDatabaseStats treats figure-less payloads as failures, loadSecurityDetails rethrows instead of returning a fabricated clean bill, runSecurityScan no longer stamps "Just now" over a failed refresh, LogSearchDialog reports its own failure via a second emit argument); 9 new i18n keys × 14 locales | **MERGED to main** (MR **!845**, David's merge train, `a96ba311d`, squash `9d5ea0805`). Branch `feat/admin-ux-h1-honest-services`, 4 commits — three review rounds + a 4-agent simplify pass. Deployed to the local build PRE-merge; David's visual review exposed two backend bugs the honest render had been masking — **#1761** (Database tab "NaN GB") and **#1762** (Backup 500 at corpus scale), fixed in this MR |
 | **H2 — the two Database-tab bugs the honest render exposed** | #1761: `admin-dashboard-service.getDatabaseStats` misread the driver's `collection.figures()` shape (the total summed to NaN → `"NaN GB"`); the shared `readCollectionUsage` decodes the REAL shape (verified against ArangoDB 3.12 + arangojs 8.8.1 — count TOP-level, sizes under `figures.figures`), missing → 0, garbage throws naming the collection; human-formatted via the shared `formatSize`. #1762: `database-operations-service.backupDatabase` stringified each collection's ENTIRE array (and loaded it whole) — a 46,938-doc collection crossed V8's string cap and 500'd after 34s; now streams in bounded chunks (256 docs / 1 MiB) through a backpressure-aware write, removes the partial file on mid-backup failure, never destroys a completed backup, and the twin admin backup endpoint got the same port | **MERGED to main** (MR **!846**, David's merge train, 2026-11-11 ~03:17). Branch `feat/admin-ux-db-fixes`, three commits (fixes / review round / simplify round). Deployed to the local build pre-merge; David's first live backup streamed ~700k docs until **ArangoDB itself died** — **#1788** tracks the database death (workload-vs-environment watch plan), the backup's honest-failure behavior worked exactly as built |
-| **T2a — the state-shell collapse** | the admin dashboard's repeated state leaf became ONE component: `components/admin/AdminStatePanel.vue` (DsStateDisplay + optional secondary Retry button). Six hand-rolled shells collapsed — the four error+Retry cards (health, usage, db-stats, security), the hierarchy-translations error, and the three "Measuring…" fallbacks; the ad-hoc `.measuring-note` CSS is retired (DsStateDisplay renders the state with tokens). Every `data-test-id` handle preserved (health-error/retry, usage-error/retry, db-stats-error/retry, security-error/retry, security-loading, hierarchy-translations-*). Visual delta (deliberate, for David's review): Measuring… now renders as the DS state message (centered, muted-soft) instead of the small inline note | **this MR** (`feat/admin-ux-t2-state-shells`) |
+| **T2a — the state-shell collapse** | the admin dashboard's repeated state leaf became ONE component: `components/admin/AdminStatePanel.vue` (DsStateDisplay + optional secondary Retry button). Six hand-rolled shells collapsed — the four error+Retry cards (health, usage, db-stats, security), the hierarchy-translations error, and the three "Measuring…" fallbacks; the ad-hoc `.measuring-note` CSS is retired (DsStateDisplay renders the state with tokens). Every `data-test-id` handle preserved (health-error/retry, usage-error/retry, db-stats-error/retry, security-error/retry, security-loading, hierarchy-translations-*). Visual delta (deliberate, for David's review): Measuring… now renders as the DS state message (centered, muted-soft) instead of the small inline note | **MERGED to main** (MR **!849**, David's merge train, 2026-11-11). Branch `feat/admin-ux-t2-state-shells`, three commits (collapse / review round / simplify round) |
+| **H2b — the destructive-action inventory (H2 remainder)** | swept every destructive action in the fence (deleteHierarchyItem, batch ingest/retract/delete, FileDetailsDialog single-file retract/delete/kill) — ALL already route through the DS-native ConfirmDialog with consistent copy; nothing to fix, disposition recorded | **closed — no code** (inventory consistent; disposition rides the P1 MR) |
+| **P1 — the last raw literals** | the 7 remaining raw `showNotification` strings (AdminDashboard: health parse/load failures, logs load failure; FileDetailsDialog: popup-blocked, download-complete, load-file, kill-ingestion) got i18n keys ×14 locales (`admin.health.parseFailed/loadFailed`, `admin.logsLoadFailed` — flat, mirroring the `admin.logsSummaryError` sibling; NOT `admin.logs`, that key already holds the tab label; `details.notifications.popupBlocked/downloadComplete/loadFailed/killFailed`). The two error-detail sites append `error.message` OUTSIDE i18n in the dialog's `+ \` Error: ${error.message}\`` spelling. The review round's contract test (new: `admin-surface-i18n-contract.test.js`, extraction shared in `helpers/i18nKeys.js` with the OKF suite — the mechanism moved from copy-paste to import) exposed **22 pre-existing referenced-but-uncatalogued keys** rendering English fallbacks in every locale — all catalogued ×14. The simplify round then deduplicated: 8 of the minted keys duplicated catalogue strings that already existed (userManagementSection/logsSection/search flats, `common.delete`, `details.viewFile`) — the 8 component references repointed to the real homes, the duplicates deleted (−112 locale rows); `details.log.killCrawl`'s two divergent inline fallbacks aligned to the catalogue's single value | **this MR** (branch `feat/admin-ux-p1-raw-literals`) |
 
 Diagnosis worth keeping — amended by the merge review: the H1 review found the
 **backend delivery already honest** (`/admin/system-health` nulls on VL outage by
@@ -128,6 +130,52 @@ values. The dead `lastScan` key (the loader writes `lastSecurityScan`) was fixed
 in passing. **Out of fence, flagged:** H4 (UnifiedAnalytics renders random demo
 data) — David ruled the charts untouchable; the wave that fixes H4 must be
 scoped explicitly.
+
+### David's re-direction (2026-11-11, after P1) — the GOAL is the look
+
+David: *"The purpose of this workplan is to enhance the UX in the Admin
+Dashboard and it's related dialogs etc. to match the color schemes and the
+bright lively look and feel of the main UI outside of the Admin Dashboard."*
+The T/H/T2a/P1 waves delivered honesty, structure and i18n — **nothing
+substantial toward the look**. The measured gap (2026-11-11):
+
+- The "bright lively" energy of the main UI **is the Living-Intelligence
+  layer** (`src/styles/genie-visual-effects.css`): hero banner artwork, the
+  welcome mesh, the corner network, quick-help card tints, `color-mix()`
+  frost borders, deco waves, the brand-wordmark gradient. It is gated
+  `.genie-living-intelligence` **scoped to DashboardView.vue only** — the
+  admin route (`router.js:40`, root `.admin-page`) never receives it.
+- The admin surface is NOT missing tokens: AdminDashboard.vue carries 345
+  `var(--…)` usages vs 31 hex literals; FileDetailsDialog 210 vs 14. The
+  flatness is **absence of the layer + a flat card vocabulary**, not a
+  token debt. (The dialogs still carry ~30 inline `style="…"` attributes —
+  that part IS cleanup-able.)
+- Wave process amended: **trivial MRs are mine to merge** (David's explicit
+  grant) — pipeline-green + suite-green + local-build-deployed + no
+  architectural risk; substantial ones still wait for David. The session's
+  permission layer blocks the merge API call (`[Merge Without Review]`),
+  so until a permission rule exists, "mine to merge" executes as:
+  everything push-ready and merge-attempted, and the refusal surfaced.
+
+### Phase V — the admin surface adopts the main UI's look (the remaining work)
+
+Six waves, in the order that delivers the visible delta soonest. Every wave
+rides the Visual-Fidelity loop (capture script extended to the admin route +
+open dialogs; measure, mutation-test every assertion, never judge by eye)
+and the standing local-build deploy + smoke checklist.
+
+| Wave | What | The visible delta |
+|---|---|---|
+| **V1 — admit the layer to the admin route** | the Living-Intelligence layer reaches the admin shell: `.genie-living-intelligence` (or a scoped admin variant with its own strength profile — this is a data surface, not the welcome page) on `.admin-page`; the header's `System Administration` gets the brand-wordmark gradient treatment (the ungated identity block already exists); the tab strip gets a lively active-tab treatment (accent wash/underline) instead of the flat strip; page background admits the mesh/corner-network motifs at data-surface strength. **The single biggest step toward the goal** | the admin page stops looking like a settings screen and starts looking like the same product as the welcome/chat page |
+| **V2 — the overview tiles come alive** | the four `stat-card`s (uptime, response, error rate, MAU) adopt the layer's card vocabulary — quick-help-style tints, top-lit wash, `--gli-frost-border` — at data-surface strength; trend arrows get accent/success/danger colouring; the service-status cards and AdminStatePanel states inherit the same surface treatment (honest states stay honest — this is chrome, not data) | the dashboard's first screen reads as the lively one, not the grey one |
+| **V3 — the data tabs' panels** | documents / database / logs / security / users / hierarchy: section headers, DsCard variant selection (flat grey → elevated/outline where density allows), accent-tinted hover washes on rows/tiles, the db-stats + ingestion-log panels' chrome. Tables keep their data density — the treatment is on the containers, not the rows' typography | every tab shares the shell's energy without losing operational density |
+| **V4 — the dialogs, restyled in place** | FileDetailsDialog (the hand-rolled one — Visual Fidelity doc forbids re-delegating it to DsModal, so restyle in place), LogSearchDialog, AddFromLinkDialog, OperationResultsModal, UploadFilesDialog, ConfirmDialog, QueryInspector: header treatments, frost borders, DS-primitive button/pill consistency, and the **~30 inline `style="…"` attributes retired to token-based scoped CSS** | the dialogs stop feeling like a different app |
+| **V5 — dark-mode parity** | the layer's dark profile (`--gli-deco-strength: 0.53`, frost 27 %) verified across every admin tab + dialog; the dark-banner-artwork gap (documented in the frontend CLAUDE.md) does not apply to admin chrome — but every V1–V4 treatment is checked in dark | the admin surface is correct in both themes, first time |
+| **V6 — finishing chrome** | chart-adjacent card chrome (the charts themselves stay as T1 shipped them — their internals are out of this fence); scrollbar/selection/focus treatments; the admin loading splash aligned with the app splash; final capture suite + a screenshot diff page for David's review | polish and the reviewable before/after |
+
+Not in Phase V: UnifiedAnalytics and the chart components as surfaces (the
+fence stands); the OKF Studio tab's inner surfaces (own initiative's look,
+already DS-native); any backend change.
 
 ## Phase C — CSR waves resume (after Phase U)
 

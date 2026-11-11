@@ -265,8 +265,11 @@ export default {
       unavailable: 'Resource usage is unavailable right now.'
     },
     health: {
+      parseFailed: 'Failed to parse system health data',
+      loadFailed: 'Failed to load system health data',
       unavailable: 'System health is unavailable right now.'
     },
+    logsLoadFailed: 'Failed to load logs',
     dbStats: {
       unavailable: 'Database statistics are unavailable right now.'
     },
@@ -338,6 +341,7 @@ export default {
         loading: 'Running diagnostics...'
       },
       runSecurityScan: {
+        error: 'Failed to run security scan',
         success: 'Security scan completed successfully',
         loading: 'Running security scan...',
         refreshFailed: 'The scan completed, but refreshing its results failed'
@@ -1427,6 +1431,7 @@ export default {
       "Act as a friendly local companion. Be polite, helpful, and knowledgeable about local culture and daily life. IMPORTANT: Remind the user that while you can chat about anything, your main strength is helping them navigate public services like IDs, Taxes, and Business Registration. RULE: Always refer to the application as 'Genie AI'."
   },
   common: {
+    close: 'Close',
     cancel: 'Cancel',
     create: 'Create',
     save: 'Save',
@@ -1473,6 +1478,11 @@ export default {
     alt: 'Upload'
   },
   details: {
+    downloading: 'Downloading...',
+    sourceUrl: 'Source URL',
+    downloadFile: 'Download File',
+    viewCrawled: 'View Generated Markdown',
+    visitSource: 'Visit Original Website',
     bundleBadge: 'Managed by the OKF lifecycle',
     crawl: {
       seconds: 'seconds',
@@ -1505,6 +1515,7 @@ export default {
     uploadDate: 'Upload Date',
     hash: 'SHA256 Hash',
     tabs: {
+      crawlLog: 'Crawling Log',
       dashboard: 'Dashboard',
       details: 'Details',
       ingestionLog: 'Ingestion Log',
@@ -1518,6 +1529,7 @@ export default {
         'Stage-by-stage progress of preparing this file for AI answers: chunking, labelling, embedding and indexing. Errors here show exactly where ingestion stopped.'
     },
     log: {
+      killCrawl: 'Kill Task',
       killActions: 'Kill Actions:',
       killDocument: 'Kill This Document',
       killProcess: 'Kill Ingestion Process',
@@ -1550,10 +1562,18 @@ export default {
       ingestSaving: 'Saving metadata before ingestion...',
       ingestSaveFailed: 'Failed to save metadata. Ingestion cancelled.',
       logError: 'Failed to fetch ingestion logs.',
+      popupBlocked: 'Popup blocked. Please allow popups for this site.',
+      downloadComplete: 'Download complete.',
+      loadFailed: 'Could not load file.',
+      killFailed: 'Failed to kill ingestion:',
+      crawlLogError: 'Failed to fetch crawl logs.',
+      killCrawlError: 'Failed to send kill signal.',
+      killCrawlSuccess: 'Kill signal sent.',
       killDocSent: 'Kill request for this document has been sent.',
       killProcSent: 'Kill request for the ingestion process has been sent.'
     },
     confirm: {
+      killCrawlTitle: 'Kill Crawl Task',
       ingest: 'Are you sure you want to ingest this file? This will start the data processing pipeline.',
       retract: 'Are you sure you want to retract this file?',
       delete: 'Are you sure you want to permanently delete this file? This action cannot be undone.',

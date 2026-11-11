@@ -220,6 +220,26 @@ describe('isTerminal', () => {
   });
 });
 
+describe('failedConversionRecord — the ONE failed-record vocabulary', () => {
+  test("the path-specific counters ride along, and they cannot override the record's own fields", () => {
+    // Three writers write the failed record (the crawl failure, the
+    // documents failure, a refused start). The counters are theirs; the
+    // vocabulary is the service's. A caller that passed `{ status: 'x' }`
+    // would silently defeat it — so the vocabulary is spread LAST.
+    const err = Object.assign(new Error('boom'), { code: 'SOURCE_STAMP_FAILED' });
+    const record = conv.failedConversionRecord(err, { bytes_done: 3, status: 'x', summary: { created: 9 } });
+    expect(record).toMatchObject({
+      status: 'failed',
+      stage: 'failed',
+      error: 'boom',
+      code: 'SOURCE_STAMP_FAILED',
+      summary: null,
+      bytes_done: 3
+    });
+    expect(record.finished_at).toEqual(expect.any(String));
+  });
+});
+
 describe('startConversion validation', () => {
   test('requires repo_id and file_id', async () => {
     await expect(conv.startConversion({ file_id: 'f1', split_mode: 'B' })).rejects.toMatchObject({

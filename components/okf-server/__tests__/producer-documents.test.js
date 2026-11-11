@@ -140,6 +140,7 @@ function programQuery() {
         !/r\.deleted_at\s*==\s*null/.test(text) ||
         !/r\.lifecycle_state\s*!=\s*'retracted'/.test(text) ||
         !/s\.file_hash\s*!=\s*null/.test(text) ||
+        !/LENGTH\(\s*dupFiles\s*\)\s*>\s*0/.test(text) ||
         !rid
       ) {
         throw new Error('mock: the duplicate-content gate no longer states the filters it models');
@@ -155,14 +156,36 @@ function programQuery() {
           'mock: the duplicate-content gate no longer states the order, the limit and the projection it models'
         );
       }
-      const projected = order[4]
+      // The projection is read as KEY: SOURCE, and the source is READ: the
+      // refusal carries the repository's own field values, so a projection
+      // that reads another attribute (r.title instead of r.name) changes the
+      // answer and the mock must follow the statement, not its own belief.
+      const projection = order[4]
         .split(',')
-        .map((f) => f.split(':')[0].trim())
-        .filter(Boolean);
+        .map((f) => f.split(':').map((part) => part.trim()))
+        .filter((parts) => parts.length)
+        .map((parts) => ({ key: parts[0], source: parts.length > 1 ? parts[1] : parts[0] }));
+      const projected = projection.map((p) => p.key);
       for (const field of ['repo_id', 'name', 'dupFiles']) {
         if (!projected.includes(field)) {
           throw new Error(
             `mock: the duplicate-content gate no longer projects ${field} — the refusal names the repository it must`
+          );
+        }
+      }
+      // the inner subquery projects the FILES the refusal lists
+      const inner = /LET\s+dupFiles\s*=\s*\([\s\S]*?RETURN\s+\{([^}]*)\}/.exec(text);
+      const fileProjection = inner
+        ? inner[1]
+            .split(',')
+            .map((f) => f.split(':').map((part) => part.trim()))
+            .filter((parts) => parts.length)
+            .map((parts) => ({ key: parts[0], source: parts.length > 1 ? parts[1] : parts[0] }))
+        : [];
+      for (const field of ['file_id', 'file_name']) {
+        if (!fileProjection.some((p) => p.key === field)) {
+          throw new Error(
+            `mock: the duplicate-content gate no longer projects ${field} — the refusal lists the files it must`
           );
         }
       }
@@ -181,7 +204,9 @@ function programQuery() {
           r.repo_id !== otherRepo &&
           (r.source_documents || []).some(carriesWantedHash)
       );
-      // AQL's ASC order: null first, then booleans, numbers, strings.
+      // The offenders are ordered by the statement's sort key; the values
+      // are ISO date strings, so the JS comparison follows AQL's string
+      // order. A missing value sorts first, as AQL's null does.
       const sortKey = order[1];
       const descending = (order[2] || 'ASC').toUpperCase() === 'DESC';
       offenders.sort((a, b) => {
@@ -193,14 +218,27 @@ function programQuery() {
         return av > bv ? 1 : -1;
       });
       if (descending) offenders.reverse();
-      const dup = offenders.slice(0, Number(order[3]))[0];
-      if (dup) {
-        const dupFiles = (dup.source_documents || [])
-          .filter(carriesWantedHash)
-          .map((s) => ({ file_id: s.file_id, file_name: s.file_name }));
-        return { all: async () => [{ repo_id: dup.repo_id, name: dup.name, dupFiles }] };
-      }
-      return { all: async () => [] };
+      // the LIMIT is the statement's: the gate returns at most that many
+      // repositories
+      const rows = offenders.slice(0, Number(order[3])).map((dup) => {
+        const dupFiles = (dup.source_documents || []).filter(carriesWantedHash).map((s) => {
+          const entry = {};
+          for (const p of fileProjection) {
+            entry[p.key] = p.source.startsWith('s.') ? s[p.source.slice(2)] : s[p.source];
+          }
+          return entry;
+        });
+        const row = {};
+        for (const p of projection) {
+          row[p.key] = p.source.startsWith('r.')
+            ? dup[p.source.slice(2)]
+            : p.key === 'dupFiles'
+              ? dupFiles
+              : dup[p.source];
+        }
+        return row;
+      });
+      return { all: async () => rows };
     }
 
     return { all: async () => [] };
@@ -226,6 +264,45 @@ beforeEach(async () => {
 const restoreEndpoint = captureEnv('VLLM_ENDPOINT');
 afterEach(() => {
   restoreEndpoint();
+});
+
+// The gate statement the mock MODELS. The production AQL is the source of
+// truth; this copy is what the guard test below doctor.
+const GATE_AQL = `FOR r IN okf_repositories
+   FILTER r.deleted_at == null AND r.repo_id != @rid AND r.lifecycle_state != 'retracted'
+   LET dupFiles = (
+     FOR s IN (r.source_documents || [])
+       FILTER s.file_hash != null AND POSITION(@hashes, s.file_hash)
+       RETURN {file_id: s.file_id, file_name: s.file_name}
+   )
+   FILTER LENGTH(dupFiles) > 0
+   SORT r.created_at
+   LIMIT 1
+   RETURN {repo_id: r.repo_id, name: r.name, dupFiles}`;
+
+describe('the mock refuses to answer for a gate that lost a stated predicate', () => {
+  // The branch's contract: the mock MODELS the production AQL, so a
+  // production statement that dropped a predicate is a DIFFERENT statement
+  // and the mock refuses it. That refusal is a guard like any other — a
+  // broken regex would make it never fire, with a green suite. This test
+  // fires each guard once, on a doctored statement.
+  const bind = { rid: RID, hashes: [] };
+
+  it.each([
+    ['the retracted exemption', GATE_AQL.replace(" AND r.lifecycle_state != 'retracted'", ''), /filters it models/],
+    ['the length filter', GATE_AQL.replace('FILTER LENGTH(dupFiles) > 0', ''), /filters it models/],
+    ['the order', GATE_AQL.replace('SORT r.created_at', ''), /order, the limit and the projection/],
+    ['the limit', GATE_AQL.replace('LIMIT 1', ''), /order, the limit and the projection/],
+    ['the projected name', GATE_AQL.replace('name: r.name, ', ''), /no longer projects name/],
+    ['the projected file name', GATE_AQL.replace(', file_name: s.file_name', ''), /no longer projects file_name/]
+  ])('refuses a gate that lost %s', async (_what, statement, message) => {
+    await expect(mockDb.query(statement, bind)).rejects.toThrow(message);
+  });
+
+  it('answers for the statement it models', async () => {
+    const cursor = await mockDb.query(GATE_AQL, bind);
+    await expect(cursor.all()).resolves.toEqual([]);
+  });
 });
 
 // ── segmentation + cross-file linking (pure) ────────────────────────────────
@@ -874,6 +951,10 @@ describe('producer-service — startDocumentsConversion + run', () => {
     // refusal tells the steward WHICH one to retract. A gate that changed
     // its sort key would name a different repository, and the steward would
     // retract the wrong one.
+    //
+    // The fixture's content hash is its OWN: this file does not reset the
+    // mock store between tests, so a shared hash would let an EARLIER
+    // test's repository join the offender set and decide the winner.
     for (const [key, name, created] of [
       // the NAMES and the DATES disagree on purpose: a gate that sorted by
       // name instead of age would name the other one
@@ -886,7 +967,7 @@ describe('producer-service — startDocumentsConversion + run', () => {
         name,
         domain: 'general',
         created_at: created,
-        source_documents: [{ kind: 'document', file_id: 'old-' + key, file_name: 'alpha.md', file_hash: 'HASH1' }]
+        source_documents: [{ kind: 'document', file_id: 'old-' + key, file_name: 'alpha.md', file_hash: 'HASH-OLDEST' }]
       });
     }
     await mockDb.collection('okf_repositories').save({ _key: RID, repo_id: RID, name: 'Mine', domain: 'general' });
@@ -895,7 +976,7 @@ describe('producer-service — startDocumentsConversion + run', () => {
       const fid = String(url).split('/api/files/')[1];
       return Promise.resolve({
         data: {
-          file: { file_id: fid, file_name: 'alpha.md', file_hash: 'HASH1', dataprep: { status: 'Pending' } }
+          file: { file_id: fid, file_name: 'alpha.md', file_hash: 'HASH-OLDEST', dataprep: { status: 'Pending' } }
         }
       });
     });

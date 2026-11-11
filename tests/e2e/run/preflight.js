@@ -17,18 +17,18 @@
  * Exits 0 when the runner can drive the venue, 1 with the named cause
  * otherwise.
  */
-const { chromium } = require('@playwright/test');
-const { BASE_URL } = require('../helpers/chatbot');
-const { venueLaunchArgs, venueMapping } = require('../helpers/venue-launch-args');
+const { describeRunner } = require('./install-browsers');
 
 function remedy(what) {
   const lines = [
     `  ${what}`,
     '',
     '  the runner needs:',
-    '    - a Chromium matching the installed @playwright/test',
-    '      (`npx playwright install chromium`), reachable through',
-    '      PLAYWRIGHT_BROWSERS_PATH when the browsers live outside the default cache;',
+    '    - a Chromium matching the installed @playwright/test — one command',
+    '      reconciles the checkout and the browser tree:',
+    '      `node tests/e2e/run/install-browsers.js`; the build must be',
+    '      reachable through PLAYWRIGHT_BROWSERS_PATH when the browsers',
+    '      live outside the default cache;',
     '    - that Chromium\'s shared libraries on LD_LIBRARY_PATH (a bare',
     '      container image has no libatk/libgbm);',
     '    - the Inter fonts on XDG_DATA_HOME for the pixel-measurement specs;',
@@ -38,10 +38,35 @@ function remedy(what) {
   return lines.join('\n');
 }
 
+// The Playwright a run drives is part of what the run reports: a reader
+// must be able to tell WHICH browser a result came from — the version on
+// disk and the Chromium revision it names. Loading it is a separate step so
+// a checkout without node_modules is a NAMED cause, not a stack trace: the
+// two are different findings.
+function loadRunner() {
+  const { chromium } = require('@playwright/test');
+  const { BASE_URL } = require('../helpers/chatbot');
+  const { venueLaunchArgs, venueMapping } = require('../helpers/venue-launch-args');
+  return { chromium, BASE_URL, venueLaunchArgs, venueMapping, runner: describeRunner() };
+}
+
 (async () => {
+  let loaded;
+  try {
+    loaded = loadRunner();
+  } catch (e) {
+    process.stderr.write(`pre-flight: the runner cannot load Playwright.\n${remedy(e.message.split('\n')[0])}\n`);
+    process.exit(1);
+  }
+  const { chromium, BASE_URL, venueLaunchArgs, venueMapping, runner } = loaded;
+
   const mapping = venueMapping();
   process.stdout.write(
     `pre-flight: venue ${BASE_URL}` + (mapping ? ` (mapped ${mapping.host} -> ${mapping.ip})` : '') + '\n'
+  );
+  process.stdout.write(
+    `pre-flight: runner @playwright/test ${runner.playwrightVersion} — ` +
+      `chromium ${runner.chromium}, chromium-headless-shell ${runner.chromiumHeadlessShell}\n`
   );
 
   let browser;

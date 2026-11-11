@@ -17,7 +17,7 @@ Per-epic E2E test plans for GENIE.AI Keycloak authentication and secure API acce
 - Docker Compose stack deployed and healthy (follow `00-clean-start.md` first)
 - Admin access to Keycloak (`KEYCLOAK_ADMIN_PASSWORD` from `.env`)
 - Tools: `curl`, `python3`, `jq`, `npx` (Node.js 18+)
-- Playwright: run `npm install` at project root, then `npx playwright install chromium`
+- Playwright: run `npm ci` at project root, then `node tests/e2e/run/install-browsers.js` — it reconciles the checkout and the browser tree with the `@playwright/test` the lockfile pins, and the Chromium build the suite drives is named by that version
 - Phase F runs backend-side verification without OPEA; the token-forwarding tests (F.2, F.5, F.8) require `DEPLOY_OPEA=1`
 - Phases G–K work with `DEPLOY_OPEA=0`
 - Phase J requires Keycloak service account credentials (`KC_DATAPREP_CLIENT_ID`, `KC_DATAPREP_CLIENT_SECRET`) in `.env`

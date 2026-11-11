@@ -59,8 +59,8 @@ death passed through (a signal, an OOM).
 
 | Requirement | Note |
 |---|---|
-| `npm install` at the repository root | Playwright resolves from the root `node_modules` |
-| `npx playwright install chromium` | the suite drives a real browser — the build must match the installed `@playwright/test`, and `PLAYWRIGHT_BROWSERS_PATH` must point at it when it lives outside the default cache |
+| `npm ci` at the repository root | Playwright resolves from the root `node_modules`, and `npm ci` is what puts the tree at the lockfile's versions (`npm install` is free to drift from them) |
+| `node tests/e2e/run/install-browsers.js` | reconciles the checkout and the browser tree with the pinned `@playwright/test` — the build the suite drives must be the one the lockfile pins, and `PLAYWRIGHT_BROWSERS_PATH` must point at it when it lives outside the default cache (see *The browser tree* below) |
 | the browser's shared libraries on `LD_LIBRARY_PATH` | a bare container image has no libatk/libgbm |
 | the Inter fonts on `XDG_DATA_HOME` | the pixel-measurement specs measure rendered text |
 | a reachable venue | `BASE_URL` points at the stack's edge |
@@ -76,6 +76,61 @@ anything, and stops the run with the named cause. Without it, a runner
 whose Chromium build does not match the installed `@playwright/test` turns
 220 of 242 tests into the same launch error, and the failure path files an
 issue per spec file for one missing binary.
+
+The pre-flight also **reports the runner it used** — the `@playwright/test`
+version on disk and the Chromium revision that version names — so a result
+can be read against the browser that produced it.
+
+### The browser tree
+
+The suite drives one Chromium build, and the `@playwright/test` the
+repository pins names it: the version's own `browsers.json` carries the
+revision. A tree carrying another revision fails **every** spec at launch,
+before one assertion runs — the runner looks broken and the product looks
+faulty. On 2026-11-10 exactly that happened: one missing binary was filed
+as twelve product bugs (#1779).
+
+`node tests/e2e/run/install-browsers.js` reconciles both sides, in order:
+
+1. the **checkout** matches the lockfile — `npm ci` when the versions the
+   runner loads (`@playwright/test` → `playwright` → `playwright-core`)
+   differ from the ones the lockfile pins for those same paths. A
+   checkout's `node_modules` can disagree with `package-lock.json` while
+   `node_modules/.package-lock.json` claims otherwise, and a nested install
+   is pinned by its own entry, not by a hoisted sibling's;
+2. the **browser tree** carries the revision the installed Playwright names
+   — installed by that Playwright's own installer, then **verified**: both
+   builds are asserted; the *headless shell* is the one a headless run
+   launches, and it is the one that was missing when one missing build
+   became twelve filed issues. Each is checked at the location the
+   installer named, together with the install's completion marker.
+
+   The **install** is spawned **only when a build it names is absent or
+   carries no completion marker**, so a reconciled machine downloads
+   nothing; the dry run that names the locations still runs, and the
+   verification runs either way, so a tree that was never installed still
+   fails loudly.
+
+   The install is Playwright's own `install chromium`, and it **prunes the
+   browser directories no installed Playwright claims** — your own previous
+   revision, and the versions of any project whose `playwright-core` is no
+   longer on disk. A version still installed elsewhere is claimed through
+   its link entry and survives. Give this suite its own browser root
+   anyway: a shared one is pruned by whichever project's install runs
+   last — every directory no live link entry claims goes with it, so a
+   stale revision of yours disappears the moment another project repairs.
+
+No revision number is written in the repository: it is derived from the
+installed Playwright, so a lockfile bump needs no second number to change.
+The command is idempotent.
+
+**Where the provisioning calls it.** The reconciler lives in the repository
+— that is the half that must survive a lockfile bump. The pod's own
+provisioning script (on the pod's persistent disk, outside this repository)
+calls it, so a pod recreation restores the right build instead of the one the
+image baked. The script itself is not versioned here: the pod's disk is the
+thing that carries it, and the revision it derives is always the one the
+checked-out lockfile pins.
 
 ### Venue address
 
@@ -192,10 +247,27 @@ ephemeral state.
 Two caveats the operator should know before booking a slot:
 
 - the run needs a **serial slot** on the shared stack — the phase specs
-  mutate the shared realm (the Phase-H spec rotates the realm signing keys,
-  the Phase-K spec changes the realm's token lifespan and restores it), so
-  two runs at once would fight over the same realm. The slot is booked with
-  the orchestrator; the runner's own locks are per machine;
+  mutate the shared realm (the Phase-H spec rotates the realm signing keys),
+  so two runs at once would fight over the same realm. The slot is booked
+  with the orchestrator; the runner's own locks are per machine;
+- **the Phase-K spec does not run against a shared venue** (operator
+  decision, 2026-11-10): its K.2 lowers the realm's **global** token
+  lifespan to 10s, so every session in flight — the other seats' logins
+  included — expires within seconds, and a dedicated window for that one
+  assertion costs more than the assertion (an exclusively booked venue, the
+  lifespan mutated to 10 and read back to 300). **Nothing automates the
+  exclusion**: the run executes the whole tree, and the executed-set guard
+  forbids narrowing the invocation, so the operator parks the spec by hand
+  before the run and puts it back afterwards:
+
+  ```bash
+  mv tests/e2e/epic2/k1-auth-error-display.spec.js /tmp/
+  # ... the run ...
+  mv /tmp/k1-auth-error-display.spec.js tests/e2e/epic2/
+  ```
+
+  The exclusion lasts until the spec stops mutating the realm's global
+  default — the rewrite is tracked in #1785;
 - the OKF specs skip on a core-profile venue. Pointing the run at an
   OKF-enabled venue is what exercises them.
 

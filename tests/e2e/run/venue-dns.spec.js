@@ -79,20 +79,26 @@ function inChild(script, env = {}) {
  * goes red on the resolver's mood is a flake, not a gate (the suite's
  * rule: wait for conditions, not durations).
  *
- * SIX probes, not four: the promise form is what Playwright's
+ * TEN probes, not four: the promise form is what Playwright's
  * APIRequestContext uses, and it resolves with `all: true` — a shape the
  * plain probe never asks for, so the preload's `all` branch would go
- * unpinned. The callback form has the same `all` branch, and both are
- * probed here.
+ * unpinned. Playwright asks for `all: true` TOGETHER with a family
+ * (`{ all: true, family: 4 }` and `{ all: true, family: 6 }`), so the
+ * combination is probed too: it is the shape that decides which branch
+ * of the preload answers, and a family-6 caller must never be handed
+ * the mapped IPv4. The callback form has the same branches, and both
+ * forms are probed here.
  */
 const FOUR_ENTRIES = `
 const dns = require('dns');
 const out = {};
-let pending = 8;
+let pending = 12;
 const settle = () => { if (--pending === 0) console.log(JSON.stringify(out)); };
 dns.lookup(process.env.PROBE_HOST, (e, a) => { out.lookup = e ? 'ERR:' + e.code : a; settle(); });
 dns.lookup(process.env.PROBE_HOST, { all: true }, (e, a) => { out.lookupAll = e ? 'ERR:' + e.code : a; settle(); });
 dns.lookup(process.env.PROBE_HOST, { family: 6 }, (e, a) => { out.lookup6 = e ? 'ERR:' + e.code : a; settle(); });
+dns.lookup(process.env.PROBE_HOST, { all: true, family: 4 }, (e, a) => { out.lookupAll4 = e ? 'ERR:' + e.code : a; settle(); });
+dns.lookup(process.env.PROBE_HOST, { all: true, family: 6 }, (e, a) => { out.lookupAll6 = e ? 'ERR:' + e.code : a; settle(); });
 dns.promises.lookup(process.env.PROBE_HOST).then(
   (r) => { out.promise = r.address; settle(); },
   (e) => { out.promise = 'ERR:' + e.code; settle(); }
@@ -102,8 +108,16 @@ dns.promises.lookup(process.env.PROBE_HOST, { all: true }).then(
   (e) => { out.promiseAll = 'ERR:' + e.code; settle(); }
 );
 dns.promises.lookup(process.env.PROBE_HOST, { family: 6 }).then(
-  (r) => { out.promise6 = r.address; settle(); },
+  (r) => { out.promise6 = r; settle(); },
   (e) => { out.promise6 = 'ERR:' + e.code; settle(); }
+);
+dns.promises.lookup(process.env.PROBE_HOST, { all: true, family: 4 }).then(
+  (r) => { out.promiseAll4 = r; settle(); },
+  (e) => { out.promiseAll4 = 'ERR:' + e.code; settle(); }
+);
+dns.promises.lookup(process.env.PROBE_HOST, { all: true, family: 6 }).then(
+  (r) => { out.promiseAll6 = r; settle(); },
+  (e) => { out.promiseAll6 = 'ERR:' + e.code; settle(); }
 );
 dns.resolve4(process.env.PROBE_HOST, (e, a) => { out.resolve4 = e ? 'ERR:' + e.code : a; settle(); });
 dns.resolve6(process.env.PROBE_HOST, (e, a) => { out.resolve6 = e ? 'ERR:' + e.code : a; settle(); });
@@ -150,14 +164,24 @@ test.describe("the preload maps the venue name in Node's resolver", () => {
     // answer the plain probe gets.
     expect(out.lookupAll).toEqual([{ address: VENUE_IP, family: 4 }]);
     expect(out.promiseAll).toEqual([{ address: VENUE_IP, family: 4 }]);
+    // The shape Playwright ACTUALLY calls: `dns.promises.lookup(host,
+    // { all: true, family: 4 })` and the same with family 6 — the
+    // preload's own lookup, as the runner's API helpers reach it.
+    expect(out.lookupAll4).toEqual([{ address: VENUE_IP, family: 4 }]);
+    expect(out.promiseAll4).toEqual([{ address: VENUE_IP, family: 4 }]);
     // A family-6 caller gets the RESOLVER's answer, not the mapped IPv4:
     // the venue has no AAAA record, so answering it the mapped address
-    // would be a lie about the family the caller asked for. The answer
-    // is there (the resolver's), and it is not the venue's address.
+    // would be a lie about the family the caller asked for. The check is
+    // on the CONTENT of the answer — the venue's address inside an array
+    // is as wrong as the address itself.
     expect(out.lookup6).toBeDefined();
-    expect(out.lookup6).not.toBe(VENUE_IP);
+    expect(JSON.stringify(out.lookup6)).not.toContain(VENUE_IP);
     expect(out.promise6).toBeDefined();
-    expect(out.promise6).not.toBe(VENUE_IP);
+    expect(JSON.stringify(out.promise6)).not.toContain(VENUE_IP);
+    expect(out.lookupAll6).toBeDefined();
+    expect(JSON.stringify(out.lookupAll6)).not.toContain(VENUE_IP);
+    expect(out.promiseAll6).toBeDefined();
+    expect(JSON.stringify(out.promiseAll6)).not.toContain(VENUE_IP);
   });
 
   test('a name that is not the venue is left to the resolver', () => {

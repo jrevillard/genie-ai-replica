@@ -2,6 +2,8 @@
 // SPDX-License-Identifier: Apache-2.0
 const { test, expect } = require('@playwright/test');
 const { execFileSync } = require('child_process');
+const fs = require('fs');
+const os = require('os');
 const path = require('path');
 const { classifyVenueStatus, namedFailure } = require('./preflight');
 
@@ -114,5 +116,93 @@ test.describe('the pre-flight NAMES a cause it cannot use', () => {
     expect(stderr).not.toContain('\n    at ');
     // And the run stops: the exit code says so.
     expect(code).toBe(1);
+  });
+});
+
+/**
+ * The pre-flight with a STUBBED runner: the navigation AND the close
+ * both fail.
+ *
+ * The operator must hear BOTH. The first cause is the finding; the
+ * cleanup failure says a Chromium may be left running — and the suite's
+ * cleanup rule asks for exactly that ("the default is a failing cleanup
+ * that reports exactly what it could not remove"). A cleanup failure
+ * swallowed behind the first cause is a silent leftover.
+ *
+ * The stub replaces the runner in a THROWAWAY tree: the pre-flight and
+ * the modules it loads are COPIED there at run time (the repo's own
+ * bytes, not a hand-written copy that could drift), and a fake
+ * `@playwright/test` stands in for the real one. The runner DESCRIPTOR
+ * is stubbed too, so the tree needs no browser tree and no real
+ * package chain. Nothing in the repo is touched.
+ */
+function withStubbedRunner(fn) {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'preflight-stub-'));
+  try {
+    for (const file of ['run/preflight.js', 'helpers/base-url.js', 'helpers/venue-launch-args.js']) {
+      fs.mkdirSync(path.join(root, path.dirname(file)), { recursive: true });
+      fs.copyFileSync(path.join(__dirname, '..', file), path.join(root, file));
+    }
+    // The runner descriptor, stubbed: the pre-flight reports the runner
+    // it found, and the tree has no browser tree to inspect.
+    fs.writeFileSync(
+      path.join(root, 'run', 'install-browsers.js'),
+      "module.exports = { describeRunner: () => ({ playwrightVersion: 'stub', chromium: 'stub', " +
+        "chromiumHeadlessShell: 'stub' }) };\n"
+    );
+    // The runner itself, stubbed: the navigation AND the close fail.
+    const pkg = path.join(root, 'node_modules', '@playwright', 'test');
+    fs.mkdirSync(pkg, { recursive: true });
+    fs.writeFileSync(
+      path.join(pkg, 'package.json'),
+      JSON.stringify({ name: '@playwright/test', version: '0.0.0', main: 'index.js' })
+    );
+    fs.writeFileSync(
+      path.join(pkg, 'index.js'),
+      [
+        'const chromium = {',
+        '  launch: async () => ({',
+        '    newContext: async () => ({',
+        "      newPage: async () => ({ goto: async () => { throw new Error('the stub could not open the venue'); } })",
+        '    }),',
+        "    close: async () => { throw new Error('the stub could not close'); }",
+        '  })',
+        '};',
+        'module.exports = { chromium };',
+        ''
+      ].join('\n')
+    );
+    let stderr = '';
+    let code = 0;
+    try {
+      execFileSync(process.execPath, [path.join(root, 'run', 'preflight.js')], {
+        env: { ...process.env, BASE_URL: VENUE },
+        stdio: ['ignore', 'pipe', 'pipe']
+      });
+    } catch (e) {
+      stderr = String(e.stderr || '');
+      code = e.status;
+    }
+    return fn({ stderr, code });
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+}
+
+test.describe('the pre-flight reports a FAILED CLEANUP', () => {
+  test('a close that fails is reported beside the first cause', () => {
+    withStubbedRunner(({ stderr, code }) => {
+      // The first cause stays the headline.
+      expect(stderr).toContain('pre-flight: the browser could not open the venue.');
+      expect(stderr).toContain('the stub could not open the venue');
+      // AND the cleanup failure is reported: a Chromium may be left
+      // running, and the operator has to hear it.
+      expect(stderr).toContain('pre-flight: the browser could not close.');
+      expect(stderr).toContain('the stub could not close');
+      // Both are causes, not traces.
+      expect(stderr).not.toContain('\n    at ');
+      // And the run stops.
+      expect(code).toBe(1);
+    });
   });
 });

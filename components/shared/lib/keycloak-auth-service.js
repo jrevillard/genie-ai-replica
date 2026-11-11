@@ -8,7 +8,7 @@
 // strict single-issuer pin.
 'use strict';
 
-const { jwtVerify, createRemoteJWKSet } = require('jose');
+const { jwtVerify, createRemoteJWKSet, decodeProtectedHeader } = require('jose');
 const axios = require('axios');
 const { logger } = require('./logger');
 
@@ -254,12 +254,16 @@ function publishedKeySet(inner) {
  * classified the request. A header that cannot be read counts as naming a
  * key id: the answer fails closed, and no trial runs.
  *
+ * The header is decoded by jose's own decoder — the same one that read it
+ * to decide the token's fate, so the two cannot disagree on what the
+ * header says.
+ *
  * @param {string} token - The raw JWT
  * @returns {boolean} True when the token names no key id at all
  */
 function tokenNamesNoKeyId(token) {
   try {
-    const header = JSON.parse(Buffer.from(token.split('.')[0], 'base64url').toString('utf8'));
+    const header = decodeProtectedHeader(token);
     return !Object.prototype.hasOwnProperty.call(header, 'kid');
   } catch {
     return false;
@@ -860,8 +864,9 @@ const keycloakAuthService = {
       // CALLER decides that — from the token's own header, not from how the
       // key resolver classified the request. The resolver answers the
       // named-kid case itself (the realm's outage, #1776) and refuses a key
-      // id that is not a string, so the two agree; asking the token keeps
-      // the rule true on its own, whatever the resolver does.
+      // id that is not a string BEFORE it can classify one, so its
+      // kid-less branch is reached only for a header with no `kid` property
+      // — the same answer the caller computes from the token.
       if (err.name === 'JWKSMultipleMatchingKeys' && tokenNamesNoKeyId(token)) {
         if (exp === null) {
           // The token's own defect, and the one jose would report: an

@@ -32,7 +32,10 @@ let mockAxiosGet;
 // Mock jose completely to avoid ESM issues
 jest.mock('jose', () => ({
   jwtVerify: (...args) => mockJwtVerify(...args),
-  createRemoteJWKSet: (...args) => mockCreateRemoteJWKSet(...args)
+  createRemoteJWKSet: (...args) => mockCreateRemoteJWKSet(...args),
+  // The real jose is ESM, so its decoder cannot be required here: this
+  // stand-in reads the protected header of a compact JWS the same way.
+  decodeProtectedHeader: (token) => JSON.parse(Buffer.from(token.split('.')[0], 'base64url').toString('utf8'))
 }));
 
 // Mock axios for UserInfo introspection

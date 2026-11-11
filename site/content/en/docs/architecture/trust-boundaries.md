@@ -67,7 +67,7 @@ Every service that touches a Bearer token validates it independently. There is *
 | `exp` (expiry) | yes | Rejected if past; clock skew tolerance is implementation-defined | 401, code `TOKEN_EXPIRED` |
 | `sub` (subject) | yes | Combined with `iss` as `iss#sub` for JIT user identity | Treated as new user if absent from DB |
 | `realm_access.roles` | route-dependent | Admin routes check `realm_access.roles` includes `admin` | 403, code `FORBIDDEN` |
-| Signature | yes | RSA / EC verified against Keycloak JWKS | 401, code `TOKEN_INVALID` |
+| Signature | yes | RS256 only (the verifier pins the algorithm): a token signed with another algorithm is rejected, and a realm publishing no RSA signing key is an outage | 401, code `TOKEN_INVALID` (503 for the broken realm) |
 
 ### 2.2 JWKS caching
 

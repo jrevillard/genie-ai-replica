@@ -361,7 +361,9 @@ function createJwksCache(jwksUri, ttlMs = JWKS_CACHE_TTL) {
     if (protectedHeader && Object.prototype.hasOwnProperty.call(protectedHeader, 'kid')) {
       if (typeof protectedHeader.kid !== 'string') {
         const malformed = new Error('the token names a key id that is not a string');
-        malformed.name = 'JWTInvalidKeyId';
+        // The name is the verifier's own, not jose's vocabulary: a future
+        // jose could claim `JWTInvalidKeyId` for something else.
+        malformed.name = 'MalformedKeyId';
         throw malformed;
       }
     }
@@ -437,7 +439,14 @@ function createJwksCache(jwksUri, ttlMs = JWKS_CACHE_TTL) {
         // never resolve a token naming a duplicated key id. The flag tells
         // the caller which case this is: the trial runs for a token naming
         // no key id and for nothing else.
-        err.kidLess = true;
+        //
+        // The flag is decided from the HEADER, not from the key id's type:
+        // a key id that is not a string is refused above, and deciding it
+        // here as well keeps the rule true even if that refusal is ever
+        // moved.
+        if (!protectedHeader || !Object.prototype.hasOwnProperty.call(protectedHeader, 'kid')) {
+          err.kidLess = true;
+        }
         throw err;
       }
       throw new TokenVerificationError(

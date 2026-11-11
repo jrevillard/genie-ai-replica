@@ -24,6 +24,7 @@ const test = require('node:test');
 const assert = require('node:assert/strict');
 const { generateKeyPairSync } = require('node:crypto');
 const path = require('node:path');
+const { createRequire } = require('node:module');
 const { SignJWT, jwtVerify } = require('jose');
 
 const KEYCLOAK_URL = 'http://keycloak:8080';
@@ -232,16 +233,25 @@ function loadVerifierWithJose(joseBuild) {
   const sharedLib = path.dirname(require.resolve('../../shared/lib/keycloak-auth-service.js'));
   const verifierJose = require.resolve('jose', { paths: [sharedLib] });
   const previous = require.cache[verifierJose];
+  const injected = require(joseBuild);
   require.cache[verifierJose] = {
     id: verifierJose,
     filename: verifierJose,
     loaded: true,
-    exports: require(joseBuild),
+    exports: injected,
     children: [],
     paths: []
   };
   try {
-    return loadVerifier();
+    const svc = loadVerifier();
+    // The substitution must be IN FORCE for the verifier, or the case it
+    // guards is vacuous: the shared lib's own build refuses a key id that
+    // is not a string by itself, and the test would then pass whether or
+    // not the verifier's rule existed. The module the verifier resolves is
+    // the injected build — asserted, not assumed.
+    const resolvedByVerifier = createRequire(path.join(sharedLib, 'keycloak-auth-service.js'))('jose');
+    assert.equal(resolvedByVerifier, injected, 'the verifier did not resolve the injected jose build');
+    return svc;
   } finally {
     if (previous) require.cache[verifierJose] = previous;
     else delete require.cache[verifierJose];

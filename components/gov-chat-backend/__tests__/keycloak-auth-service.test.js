@@ -945,6 +945,60 @@ describe('keycloakAuthService', () => {
       expect(mockJwtVerify).toHaveBeenCalledTimes(1);
     });
 
+    it('does not spend a signature verification on a kid-less token whose expiry is not a number', async () => {
+      // jose refuses a non-numeric expiry (a claim failure), so the token
+      // is invalid whatever key signs it: the trial must not spend a
+      // signature verification to learn that.
+      mockAmbiguousKeySet({
+        protectedHeader: { alg: 'RS256' },
+        candidates: [{ key: 'candidate-1' }, { key: 'candidate-2' }],
+        onCandidate: () => {
+          const signatureError = new Error('signature verification failed');
+          signatureError.name = 'JWSSignatureVerificationFailed';
+          throw signatureError;
+        }
+      });
+
+      const token = generateMockJwtString({ exp: '0' });
+      await expect(keycloakAuthService.verifyToken(token)).rejects.toMatchObject({
+        code: 'TOKEN_INVALID',
+        message: 'Token verification failed'
+      });
+
+      // Only the first attempt: no candidate was tried.
+      expect(mockJwtVerify).toHaveBeenCalledTimes(1);
+    });
+
+    it('treats a kid-less token whose expiry is the current second as expired', async () => {
+      // jose's own test is `exp <= now` — with no clock tolerance
+      // configured, a token whose expiry IS the current second is expired.
+      // The trial must not spend a signature verification on it.
+      const realNow = Date.now;
+      Date.now = () => 1700000000000;
+      mockAmbiguousKeySet({
+        protectedHeader: { alg: 'RS256' },
+        candidates: [{ key: 'candidate-1' }, { key: 'candidate-2' }],
+        onCandidate: () => {
+          const signatureError = new Error('signature verification failed');
+          signatureError.name = 'JWSSignatureVerificationFailed';
+          throw signatureError;
+        }
+      });
+
+      try {
+        const token = generateMockJwtString({ exp: 1700000000 });
+        await expect(keycloakAuthService.verifyToken(token)).rejects.toMatchObject({
+          code: 'TOKEN_EXPIRED',
+          message: 'Token has expired'
+        });
+
+        // Only the first attempt: no candidate was tried.
+        expect(mockJwtVerify).toHaveBeenCalledTimes(1);
+      } finally {
+        Date.now = realNow;
+      }
+    });
+
     it('does not resolve a token whose key id is not a string', async () => {
       // A key id that is not a string (a number, null) is a MALFORMED
       // token, not a token naming no key id: jose matched the candidates

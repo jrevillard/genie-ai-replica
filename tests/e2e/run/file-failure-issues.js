@@ -234,11 +234,11 @@ function namesThisFile(token, file) {
  * ~0.8 s in a checkout that carries sibling worktrees' copies) and only
  * when a bare name is actually met, which is at most once per title.
  */
-let otherTreeNames = null;
+const otherTreeNamesByRoot = new Map();
 
-function namesOutsideE2eTree(token) {
-  if (otherTreeNames === null) {
-    otherTreeNames = new Set();
+function namesOutsideE2eTree(token, root = REPO_ROOT) {
+  if (!otherTreeNamesByRoot.has(root)) {
+    const otherTreeNames = new Set();
     const walk = (dir) => {
       let entries;
       try {
@@ -256,7 +256,7 @@ function namesOutsideE2eTree(token) {
           // worktrees holds a full copy of tests/e2e under each of
           // them, and their spec names would make this tree's OWN bare
           // names look like another tree's files.
-          const rel = path.relative(REPO_ROOT, full).split(path.sep);
+          const rel = path.relative(root, full).split(path.sep);
           if (rel.length >= 2 && rel[rel.length - 2].toLowerCase() === 'tests' && rel[rel.length - 1].toLowerCase() === 'e2e') continue;
           walk(full);
         } else if (SPEC_FILE_RE.test(entry.name)) {
@@ -264,9 +264,10 @@ function namesOutsideE2eTree(token) {
         }
       }
     };
-    walk(REPO_ROOT);
+    walk(root);
+    otherTreeNamesByRoot.set(root, otherTreeNames);
   }
-  return otherTreeNames.has(token);
+  return otherTreeNamesByRoot.get(root).has(token);
 }
 
 /**
@@ -281,7 +282,7 @@ function namesOutsideE2eTree(token) {
  * The relative spelling is recognised by its FIRST segment: it is a
  * directory of the e2e tree.
  */
-function isE2ePath(token) {
+function isE2ePath(token, root = REPO_ROOT) {
   if (token.includes(`${TESTS_E2E_ROOT}/`)) return true;
   const first = token.split('/')[0];
   if (first === token) {
@@ -292,9 +293,9 @@ function isE2ePath(token) {
     // UNLESS the name is a file of ANOTHER tree: that name is not this
     // tree's, and counting it would make a title that names an e2e file
     // AND a frontend test look like a group instead of a dedication.
-    return SPEC_FILE_RE.test(token) && !namesOutsideE2eTree(token);
+    return SPEC_FILE_RE.test(token) && !namesOutsideE2eTree(token, root);
   }
-  return fs.existsSync(path.join(REPO_ROOT, TESTS_E2E_ROOT, first));
+  return fs.existsSync(path.join(root, TESTS_E2E_ROOT, first));
 }
 
 /**
@@ -306,11 +307,11 @@ function isE2ePath(token) {
  * failures — a failure on one of them still gets an issue of its own, or
  * the file shows red with nothing pointing at it.
  */
-function titleIsDedicatedTo(title, file) {
+function titleIsDedicatedTo(title, file, root = REPO_ROOT) {
   // Only the paths of the tree this path covers count: a title that
   // also names a FRONTEND test (a different tree, a different failure
   // path) is still dedicated to this e2e file.
-  const paths = specPathsIn(title).filter((token) => isE2ePath(token));
+  const paths = specPathsIn(title).filter((token) => isE2ePath(token, root));
   if (paths.length === 0) return false;
   // EVERY path the title names must name THIS file — under the
   // repository path, an absolute path or a tracker URL. A title that
@@ -350,12 +351,12 @@ function specFileMarker(file) {
  * failures, and the failure would never get an issue of its own — the
  * tracker would show the file as red with nothing pointing at it.
  */
-function findTrackedIssue(file, openIssues) {
+function findTrackedIssue(file, openIssues, root = REPO_ROOT) {
   const marker = specFileMarker(file);
   // The dedicated TITLE wins: an issue matched only by the marker is
   // the same file's issue too, but the one whose title says so is the
   // one a reader lands on.
-  const dedicated = openIssues.filter((issue) => titleIsDedicatedTo(issue.title, file));
+  const dedicated = openIssues.filter((issue) => titleIsDedicatedTo(issue.title, file, root));
   if (dedicated.length) return dedicated[0];
   return openIssues.find((issue) => (issue.description || '').includes(marker)) || null;
 }

@@ -18,6 +18,10 @@
  * otherwise.
  */
 const { describeRunner } = require('./install-browsers');
+// The mapping reader: ONE owner — the module that reads the mapping. It is
+// TOTAL (a value that cannot be read comes back as a reason, not a throw), so
+// the pre-flight names the cause instead of dying on it.
+const { safeVenueMapping } = require('../helpers/venue-launch-args');
 
 function remedy(what) {
   const lines = [
@@ -49,36 +53,8 @@ function loadRunner() {
   // The venue's edge from the credential-free module (the chat helper
   // re-exports the fixtures' credentials; the pre-flight needs neither).
   const { BASE_URL } = require('../helpers/base-url');
-  const { venueLaunchArgs, venueMapping } = require('../helpers/venue-launch-args');
-  return { chromium, BASE_URL, venueLaunchArgs, venueMapping, runner: describeRunner() };
-}
-
-/**
- * The venue's mapping, or the reason it cannot be used.
- *
- * A malformed venue address (a BASE_URL that is not a URL) makes the
- * mapping read THROW — and an unhandled throw is a stack trace, which
- * hides the cause behind a wall of frames. This is the pre-flight's whole
- * purpose: the cause must be NAMED before the run touches the venue.
- *
- * The read is a pure function of the mapping reader, so it is pinned
- * without a browser and without a venue.
- *
- * What can go wrong HERE is a malformed ADDRESS (the mapping reads the
- * host out of the venue's URL, and a URL that is not a URL throws) or a
- * malformed E2E_VENUE_IP (the mapping validates it, so a value that is
- * not an address throws here too).
- *
- * @param {Function} venueMapping - the mapping reader
- * @returns {{mapping: object|null, error: string|null}} the mapping, or
- *   the reason it is unusable
- */
-function readVenueMapping(venueMapping) {
-  try {
-    return { mapping: venueMapping(), error: null };
-  } catch (e) {
-    return { mapping: null, error: remedy(e.message.split('\n')[0]) };
-  }
+  const { venueLaunchArgs } = require('../helpers/venue-launch-args');
+  return { chromium, BASE_URL, venueLaunchArgs, runner: describeRunner() };
 }
 
 /**
@@ -117,7 +93,7 @@ async function main() {
     process.exitCode = 1;
     return;
   }
-  const { chromium, BASE_URL, venueLaunchArgs, venueMapping, runner } = loaded;
+  const { chromium, BASE_URL, venueLaunchArgs, runner } = loaded;
 
   // The mapping is read inside a try: a malformed ADDRESS (a BASE_URL
   // that is not a URL — the mapping reads the host out of it) or a
@@ -125,9 +101,9 @@ async function main() {
   // the operator as the NAMED remedy, not as an unhandled throw that
   // hides the cause behind a stack trace, and not as a browser failure
   // much later that reads like a runner problem.
-  const { mapping, error: mappingError } = readVenueMapping(venueMapping);
+  const { mapping, error: mappingError } = safeVenueMapping();
   if (mappingError) {
-    process.stderr.write(`pre-flight: the venue mapping is not usable.\n${mappingError}\n`);
+    process.stderr.write(`pre-flight: the venue mapping is not usable.\n${remedy(mappingError)}\n`);
     process.exitCode = 1;
     return;
   }
@@ -191,4 +167,4 @@ if (require.main === module) {
   main();
 }
 
-module.exports = { classifyVenueStatus, readVenueMapping };
+module.exports = { classifyVenueStatus };

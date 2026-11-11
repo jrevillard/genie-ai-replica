@@ -4,6 +4,27 @@ const { test, expect } = require('@playwright/test');
 const { venueMapping, safeVenueMapping, venueLaunchArgs } = require('./venue-launch-args');
 
 /**
+ * Run a case with a temporary environment, restored afterwards.
+ */
+const withEnv = (env, fn) => {
+  const saved = {};
+  for (const [k, v] of Object.entries(env)) {
+    saved[k] = process.env[k];
+    if (v === undefined) delete process.env[k];
+    else process.env[k] = v;
+  }
+  try {
+    return fn();
+  } finally {
+    for (const [k, v] of Object.entries(saved)) {
+      if (v === undefined) delete process.env[k];
+      else process.env[k] = v;
+    }
+  }
+};
+
+
+/**
  * Unit spec for the venue's name mapping.
  *
  * The mapping is what lets a runner OUTSIDE the cluster reach the
@@ -15,23 +36,6 @@ const { venueMapping, safeVenueMapping, venueLaunchArgs } = require('./venue-lau
  * later as a browser that will not start.
  */
 test.describe('the venue mapping names a bad value where it is read', () => {
-  const withEnv = (env, fn) => {
-    const saved = {};
-    for (const [k, v] of Object.entries(env)) {
-      saved[k] = process.env[k];
-      if (v === undefined) delete process.env[k];
-      else process.env[k] = v;
-    }
-    try {
-      return fn();
-    } finally {
-      for (const [k, v] of Object.entries(saved)) {
-        if (v === undefined) delete process.env[k];
-        else process.env[k] = v;
-      }
-    }
-  };
-
   test('no mapping at all — the runner resolves the name itself', () => {
     withEnv({ E2E_VENUE_IP: undefined, E2E_VENUE_HOST: undefined }, () => {
       expect(venueMapping()).toBe(null);
@@ -69,23 +73,6 @@ test.describe('the venue mapping names a bad value where it is read', () => {
 });
 
 test.describe('the SAFE reader turns that cause into a value', () => {
-  const withEnv = (env, fn) => {
-    const saved = {};
-    for (const [k, v] of Object.entries(env)) {
-      saved[k] = process.env[k];
-      if (v === undefined) delete process.env[k];
-      else process.env[k] = v;
-    }
-    try {
-      return fn();
-    } finally {
-      for (const [k, v] of Object.entries(saved)) {
-        if (v === undefined) delete process.env[k];
-        else process.env[k] = v;
-      }
-    }
-  };
-
   test('a bad address is a REASON, not a throw', () => {
     // The readers that must not die use this one: the DNS preload runs
     // inside every process of a run — the pre-flight among them — and a

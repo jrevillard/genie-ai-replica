@@ -19,6 +19,10 @@ describe('the stripper removes prose and keeps code', () => {
   test('a block comment is stripped', () => {
     const out = stripJsComments('const a = 1;\n/* the edge was https://localhost/ */\nconst b = 2;\n');
     expect(out).not.toContain('the edge was');
+    // The code on both sides survives — a stripper that returned nothing
+    // would pass the line above.
+    expect(out).toContain('const a = 1;');
+    expect(out).toContain('const b = 2;');
   });
 
   test('a comment inside a string is not a comment', () => {
@@ -33,6 +37,8 @@ describe('the stripper removes prose and keeps code', () => {
     // file — comments included — survives the strip.
     const out = stripJsComments("function f() { return /';/; }\n// the edge was https://localhost/\n");
     expect(out).not.toContain('the edge was');
+    // The code survives — the regex with its quote inside it.
+    expect(out).toContain("return /';/;");
   });
 
   test('a division after a member name is a division', () => {
@@ -40,6 +46,7 @@ describe('the stripper removes prose and keeps code', () => {
     // a member name, or the scanner swallows the rest of the file.
     const out = stripJsComments('function f() { obj.return / 2; }\n// the edge was https://localhost/\n');
     expect(out).not.toContain('the edge was');
+    expect(out).toContain('obj.return / 2;');
   });
 
   test('a nested template inside a template expression is code, not prose', () => {
@@ -49,6 +56,8 @@ describe('the stripper removes prose and keeps code', () => {
     // and the comments survive the strip as code.
     const out = stripJsComments('const u = `${a(`${B}/c`)}`;\n// the edge was https://localhost/\n');
     expect(out).not.toContain('the edge was');
+    // The nested template survives — code, not prose.
+    expect(out).toContain('`${a(`${B}/c`)}`');
   });
 
   test('a slash inside a regex character class does not end the literal', () => {
@@ -66,5 +75,6 @@ describe('the stripper removes prose and keeps code', () => {
   test('a division after a plain expression is a division', () => {
     const out = stripJsComments('function f() { a / b; }\n// the edge was https://localhost/\n');
     expect(out).not.toContain('the edge was');
+    expect(out).toContain('a / b;');
   });
 });

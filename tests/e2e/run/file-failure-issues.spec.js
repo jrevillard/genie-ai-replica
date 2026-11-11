@@ -86,8 +86,7 @@ test.describe('a dedicated title names ONE spec file', () => {
     );
   });
 
-  test('a title that names this file AND another one is an umbrella', () => {
-    expect(titleIsDedicatedTo(`test(e2e): ${FILE} and tests/e2e/other.spec.js are red`, FILE)).toBe(false);
+  test('an umbrella in the RELATIVE spelling is an umbrella too', () => {
     // The same umbrella in the RELATIVE spelling: the relative path of
     // another file is this tree's path too, and it must not be dropped
     // from the comparison (that would read the umbrella as a dedication).
@@ -173,11 +172,23 @@ test.describe('a match must be DEDICATED to the spec file', () => {
     // is not this tree's business. Counting it would make the title look
     // like a group, and the failure path would file a second issue for a
     // file that already has one.
-    const frontend = 'AdminDashboard.test.js';
-    const title = `test(e2e): ${FILE} and ${frontend} are red`;
-    expect(titleIsDedicatedTo(title, FILE)).toBe(true);
-    // And the frontend file on its own names nothing here.
-    expect(titleIsDedicatedTo(`test(e2e): ${frontend} is red`, FILE)).toBe(false);
+    //
+    // The other tree's file lives in a THROWAWAY tree, not in this
+    // checkout: the rule is about the names beside the tree, and a case
+    // that leaned on a file of ANOTHER component would break when that
+    // component renames it.
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'e2e-dedupe-'));
+    try {
+      const frontend = 'AdminDashboard.test.js';
+      fs.mkdirSync(path.join(root, 'components/gov-chat-frontend'), { recursive: true });
+      fs.writeFileSync(path.join(root, 'components/gov-chat-frontend', frontend), '');
+      const title = `test(e2e): ${FILE} and ${frontend} are red`;
+      expect(titleIsDedicatedTo(title, FILE, root)).toBe(true);
+      // And the frontend file on its own names nothing here.
+      expect(titleIsDedicatedTo(`test(e2e): ${frontend} is red`, FILE, root)).toBe(false);
+    } finally {
+      fs.rmSync(root, { recursive: true, force: true });
+    }
   });
 
   test('a COPY of this tree elsewhere in the checkout does not make its names another tree\'s', () => {
@@ -189,32 +200,18 @@ test.describe('a match must be DEDICATED to the spec file', () => {
     // DEDICATION to it, so the failure path would file a SECOND issue
     // for a file that already has one.
     //
-    // The rule is exercised in a checkout shaped like that one: the
-    // module is required from a synthetic tree, so its own walk sees
-    // the synthetic root.
+    // The rule is exercised in a checkout shaped like that one — a
+    // throwaway tree the rule is pointed at, with this tree's own spec
+    // and the same file inside a sibling worktree's copy of the tree.
     const root = fs.mkdtempSync(path.join(os.tmpdir(), 'e2e-dedupe-'));
     try {
-      const copy = (from, to) => {
-        fs.mkdirSync(path.dirname(to), { recursive: true });
-        fs.copyFileSync(from, to);
-      };
-      copy(path.join(__dirname, 'file-failure-issues.js'), path.join(root, 'tests/e2e/run/file-failure-issues.js'));
-      copy(
-        path.join(__dirname, '../helpers/venue-launch-args.js'),
-        path.join(root, 'tests/e2e/helpers/venue-launch-args.js')
-      );
-      copy(path.join(__dirname, '../helpers/base-url.js'), path.join(root, 'tests/e2e/helpers/base-url.js'));
-      // This tree's own spec, at the tree's ROOT (the bare spelling only
-      // names a file there), and the same file inside a sibling
-      // worktree's copy of the tree.
       fs.mkdirSync(path.join(root, 'tests/e2e'), { recursive: true });
       fs.writeFileSync(path.join(root, 'tests/e2e/thing.spec.js'), '');
       fs.mkdirSync(path.join(root, '.claude/worktrees/wt-a/tests/e2e'), { recursive: true });
       fs.writeFileSync(path.join(root, '.claude/worktrees/wt-a/tests/e2e/thing.spec.js'), '');
 
-      const inSyntheticCheckout = require(path.join(root, 'tests/e2e/run/file-failure-issues.js'));
       expect(
-        inSyntheticCheckout.titleIsDedicatedTo('test(e2e): thing.spec.js is red', 'tests/e2e/thing.spec.js')
+        titleIsDedicatedTo('test(e2e): thing.spec.js is red', 'tests/e2e/thing.spec.js', root)
       ).toBe(true);
     } finally {
       fs.rmSync(root, { recursive: true, force: true });

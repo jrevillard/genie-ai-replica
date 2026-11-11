@@ -14,8 +14,9 @@
  * The trailing slashes are stripped here, once per process: `page.url()`
  * never produces a trailing double slash, so every `${BASE_URL}/...`
  * interpolation stays well-formed even when the environment configures
- * BASE_URL with a trailing '/'. The run script normalizes through the
- * SAME function, so there is one spelling of the venue.
+ * BASE_URL with a trailing '/'. The run script reads the address this
+ * module exports, so there is one spelling of the venue — and one place
+ * that spells it.
  *
  * This module carries no credential — a spec that needs venue
  * credentials takes them from `helpers/e2e-fixtures.js` (or from the
@@ -36,4 +37,4 @@ function normalizeVenue(raw) {
 
 const BASE_URL = normalizeVenue(process.env.BASE_URL || 'https://localhost');
 
-module.exports = { BASE_URL, normalizeVenue };
+module.exports = { BASE_URL };

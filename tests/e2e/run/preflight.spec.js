@@ -1,7 +1,9 @@
 // Copyright (C) 2026 International Telecommunication Union (ITU)
 // SPDX-License-Identifier: Apache-2.0
 const { test, expect } = require('@playwright/test');
-const { classifyVenueStatus, readVenueMapping } = require('./preflight');
+const { execFileSync } = require('child_process');
+const path = require('path');
+const { classifyVenueStatus } = require('./preflight');
 
 /**
  * Unit spec for the pre-flight's diagnosis.
@@ -52,47 +54,39 @@ test.describe('the pre-flight names the finding the venue status carries', () =>
   });
 });
 
-test.describe('a venue mapping that cannot be read is a NAMED cause', () => {
-  test('a readable mapping is returned as it is', () => {
-    const mapping = { host: 'venue.example', ip: '10.0.0.1' };
-    const read = readVenueMapping(() => mapping);
-    expect(read.mapping).toBe(mapping);
-    expect(read.error).toBe(null);
-  });
-
-  test('no mapping at all is not an error — the runner resolves the name itself', () => {
-    // The mapping is OPT-IN: unset, the venue's name resolves on its own,
-    // and there is nothing to report.
-    const read = readVenueMapping(() => null);
-    expect(read.mapping).toBe(null);
-    expect(read.error).toBe(null);
-  });
-
-  test('a malformed ADDRESS is NAMED, not thrown', () => {
-    // A BASE_URL that is not a URL makes the mapping read throw (the
-    // mapping reads the host out of it). An unhandled throw is a stack
-    // trace, which hides the cause behind a wall of frames — and naming
-    // the cause is the pre-flight's whole purpose.
-    const read = readVenueMapping(() => {
-      throw new Error('Invalid URL');
-    });
-    expect(read.mapping).toBe(null);
-    expect(read.error).toContain('Invalid URL');
-    // The remedy the runner needs is in the message too.
-    expect(read.error).toContain('E2E_VENUE_IP');
-  });
-
-  test('a malformed IP is NAMED too — not carried into the browser', () => {
-    // The mapping VALIDATES the address, so a value that is not one
-    // throws here and is named — instead of reaching Chromium as
-    // `--host-resolver-rules=MAP <host> <not an address>` and being
-    // rejected there, where the failure reads like a runner problem.
-    const read = readVenueMapping(() => {
-      throw new Error('E2E_VENUE_IP is not an address: "not an address"');
-    });
-    expect(read.mapping).toBe(null);
-    expect(read.error).toContain('E2E_VENUE_IP is not an address');
-    // The remedy the runner needs is in the message too.
-    expect(read.error).toContain('E2E_VENUE_IP');
+test.describe('the pre-flight NAMES a cause it cannot use', () => {
+  test('a mapping that cannot be read is named, and the run stops with 1', () => {
+    // The pre-flight's OWN boundary: the process the run script invokes.
+    // A stubbed reader would only prove that the wrapper passes a string
+    // through — the cause the operator reads is produced by the mapping
+    // module and printed by the pre-flight, and only the process shows
+    // both.
+    //
+    // The DNS preload is loaded here too, because it runs inside every
+    // process of the run: a preload that died on the bad value would
+    // take the pre-flight down with it, and the operator would read a
+    // stack trace instead of the named cause.
+    const script = path.join(__dirname, 'preflight.js');
+    const preload = path.join(__dirname, 'venue-dns.js');
+    let stderr = '';
+    let code = 0;
+    try {
+      execFileSync(process.execPath, [script], {
+        env: {
+          ...process.env,
+          E2E_VENUE_IP: 'not an address',
+          E2E_VENUE_HOST: 'venue.example',
+          NODE_OPTIONS: `--require ${preload}`,
+        },
+        stdio: ['ignore', 'pipe', 'pipe'],
+      });
+    } catch (e) {
+      stderr = String(e.stderr || '');
+      code = e.status;
+    }
+    // The cause is NAMED, with the value that is wrong.
+    expect(stderr).toContain('E2E_VENUE_IP is not an address');
+    // And the run stops: the exit code says so.
+    expect(code).toBe(1);
   });
 });

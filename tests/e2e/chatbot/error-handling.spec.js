@@ -124,9 +124,9 @@ test.describe('RAG error handling', () => {
 
     await sendMessage(page, 'Second attempt should work');
     // A mocked answer arrives in milliseconds: the ceiling is a ceiling,
-    // not a floor. The two waits it applies (20 s in the worst case) are
-    // never both spent: the error card's 30 s wait above aborts the test
-    // there if it expires.
+    // not a floor. The three waits it applies (30 s in the worst case)
+    // are never all three spent: the error card's 30 s wait above aborts
+    // the test there if it expires.
     // A retry that HANGS fails on that wait, with the helper's own
     // message; a retry that ERRORS renders no answer bubble and fails on
     // the assertion below. The spec's own 600 s budget (above) is ONE

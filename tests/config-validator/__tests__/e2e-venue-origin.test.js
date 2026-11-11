@@ -13,7 +13,10 @@ const E2E_ROOT = path.join(ROOT, 'tests/e2e');
 // died with ERR_CONNECTION_REFUSED before its first assertion.
 //
 // The wave fixed those thirteen. This gate is what keeps the fix: the
-// EDGE may not appear anywhere else in the suite.
+// EDGE may not appear anywhere else in the JS TREE this gate reads (the
+// `.js` files under tests/e2e and playwright.config.js). The run SCRIPT
+// names its own default venue outside that tree - it is the shell that
+// starts the run, so it must say which venue it starts against.
 //
 // The rule is about the LOCAL ORIGIN — the edge the Compose stack
 // serves, in every spelling it has (https://localhost/, and

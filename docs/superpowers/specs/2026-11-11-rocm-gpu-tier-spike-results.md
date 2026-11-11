@@ -83,8 +83,34 @@ newest passing tag wins the pin.
   two passing points (0.19.1, 0.29.1); no signal it would add.
 
 **Task 5/9/11 pin: `VLLM_ROCM_IMAGE=rocm/vllm:rocm10.1.0_ubuntu24.04_py3.14-pytorch_2.13.0_vllm-0.29.0`**
-(gemma probe pending — if it fails on this tag, fall back to candidate 1
-and re-evaluate).
+— verified serving BOTH deployment models with guided JSON on gfx1151
+(see Final sizing below).
+
+### Final sizing (operator decisions, 2026-11-11 — three rounds)
+
+The ceiling moved twice as the operator measured what the shared host
+could give the GPU tier: 32 GB → 27 GB. The 8B-class pair cannot fit:
+gemma-3-4b-it's weights measured **8.58 GiB** (multimodal vision+text;
+KV pool went **negative** at 0.19 utilization → engine exit), and
+granite-4.1-8b needs ~16.5 GiB. Operator chose the model swap:
+
+| Instance | Model | util | window | weights (measured/est.) |
+|---|---|---|---|---|
+| main | `ibm-granite/granite-3.1-2b-instruct` | 0.28 | 49152 | ~4.3 GiB |
+| translation | `google/gemma-3-1b-it` | 0.12 | 8192 | ~2 GiB |
+
+- 65536 does not fit at 0.28 either: granite-3.1-2b needs **5.0 GiB KV**
+  for a 65536 window and ~4.9 GiB is available at 0.28 (engine estimate
+  at 0.25: max 45616). 49152 is the verified window with ~1 GiB KV
+  margin.
+- **Coexistence verified**: both instances healthy simultaneously,
+  translation completion + guided JSON both pass, peak GTT
+  **21,087,858,688 B (19.6 GiB)** against the 45.8 GiB aperture and the
+  27 GB operator ceiling (Jarvis stopped; GTT baseline 1.08 GiB).
+- Engine runtime overhead per instance ≈ 2 GiB beyond weights+KV —
+  budget accordingly on other hosts.
+- dataprep doc budget at 49152 ≈ 190k chars vs the 250k OKF ceiling —
+  near-zero truncation expected; check the ingestion log.
 
 ## Task 3 — TEI
 

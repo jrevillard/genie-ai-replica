@@ -105,10 +105,11 @@ BASE_URL=https://localhost npx playwright test tests/e2e/<area>/ --project=chrom
 ```
 
 `install-browsers.js` reconciles the checkout and the browser tree with the
-`@playwright/test` the lockfile pins — the Chromium build the suite drives is
-named by that version, and a tree carrying another one fails every spec at
-launch. `npm install` alone leaves the checkout free to drift from the
-lockfile; `npm ci` does not.
+`@playwright/test` the lockfile pins — a tree carrying another revision fails
+every spec at launch. `npm install` alone leaves the checkout free to drift
+from the lockfile; `npm ci` does not. The contract is in
+[`docs/e2e-tests/local-run.md`](../../docs/e2e-tests/local-run.md)
+(§ The browser tree).
 
 `BASE_URL` points at the stack's edge; it defaults to `https://localhost`.
 The specs log in through the browser (`loginViaUI`) — the realm refuses

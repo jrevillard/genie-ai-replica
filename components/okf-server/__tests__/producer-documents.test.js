@@ -55,7 +55,11 @@ function programQuery() {
     const store = (mockDb._stores && mockDb._stores.okf_repositories) || {};
     const live = store[bind && bind.repo_id];
     if (live && text && text.includes('UPDATE doc WITH { conversion')) {
-      live.conversion = Object.assign({}, live.conversion, bind.patch);
+      // The producer's AQL REPLACES the whole conversion object; the crawl
+      // path's (and the zip path's) MERGEs into it — the mock follows the
+      // same split, or a REPLACE-only regression would stay invisible here.
+      if (text.includes('MERGE(')) live.conversion = Object.assign({}, live.conversion, bind.patch);
+      else live.conversion = { ...bind.patch };
       return { all: async () => [] };
     }
     if (text && text.includes('POSITION(@hashes')) {
@@ -79,7 +83,7 @@ function programQuery() {
     }
     if (live && text && text.includes('source_documents')) {
       live.source_documents = bind.docs;
-      return { all: async () => [] };
+      return { all: async () => [live] }; // the write updated ONE document
     }
     return { all: async () => [] };
   });

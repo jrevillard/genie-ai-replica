@@ -963,7 +963,9 @@ async function startConversion({
 
 /** Terminal-state predicate used by polling UIs. */
 function isTerminal(conversion) {
-  return !!conversion && ['done', 'failed'].includes(conversion.status);
+  // The ONE terminal-state vocabulary (the writer-coverage test asserts the
+  // invariant against TERMINAL_STATES — two literals would drift apart).
+  return !!conversion && TERMINAL_STATES.includes(conversion.status);
 }
 
 module.exports = {

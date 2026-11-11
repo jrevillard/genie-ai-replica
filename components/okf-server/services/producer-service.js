@@ -143,21 +143,24 @@ async function getDb() {
  * writes anything, so a refused start can leave the repository as it found
  * it (the conversion patch REPLACES the whole record).
  * @param {string} repoId
- * @returns {Promise<object|null>} the record, or null when there is none
+ * @returns {Promise<{state: 'ok'|'absent'|'unreadable', record: object|null}>}
+ *   'ok' — the record is known (it may be null: the repository has none);
+ *   'absent' — the repository document does not exist;
+ *   'unreadable' — a fault: the record is UNKNOWN, and an unknown record
+ *   must never be overwritten.
  */
 async function readConversion(repoId) {
   try {
     const db = await getDb();
     const doc = await db.collection(COLLECTION).document(repoId);
-    return (doc && doc.conversion) || null;
+    return { state: 'ok', record: (doc && doc.conversion) || null };
   } catch (err) {
-    if (!isArangoNotFound(err)) {
-      logger.warn('conversion record unreadable — a refused start cannot restore it', {
-        repo_id: repoId,
-        error: err.message
-      });
-    }
-    return null;
+    if (isArangoNotFound(err)) return { state: 'absent', record: null };
+    logger.warn('Conversion record unreadable — a refused start cannot restore it', {
+      repo_id: repoId,
+      error: err.message
+    });
+    return { state: 'unreadable', record: null };
   }
 }
 
@@ -255,7 +258,7 @@ async function stampSources(repoId, fileIds, metaByKey = Object.create(null)) {
   }
   // The DURABLE record first — see the contract above.
   try {
-    await db.query(
+    const written = await db.query(
       `LET doc = DOCUMENT(${COLLECTION}, @repo_id)
        FILTER doc != null
        UPDATE doc WITH {
@@ -278,6 +281,16 @@ async function stampSources(repoId, fileIds, metaByKey = Object.create(null)) {
         }))
       }
     );
+    // The write updates the repository document when it exists. Zero rows
+    // means the document is gone (the repository was deleted mid-import):
+    // nothing was recorded, and the doc-repo stamps below would then point
+    // at a repository that does not exist.
+    const rows = await written.all();
+    if (!rows || rows.length === 0) {
+      logger.error('source_documents record was not written — the repository document is gone', {
+        repo_id: repoId
+      });
+    }
   } catch (err) {
     // The internal reason stays in the log — the client gets a fixed sentence.
     logger.error('source_documents record could not be written — the import was not completed', {
@@ -972,6 +985,11 @@ async function runDocumentsConversion(job) {
       stage: 'done',
       files_done: filesDone,
       files_total: file_ids.length,
+      // The conversion patch REPLACES the whole record, so the per-file
+      // outcomes have to be carried by the final patch too — otherwise the
+      // list of what happened to each document disappears when the import
+      // ends (it only lives in the progress records).
+      per_file: perFile.slice(),
       concepts_done: allDrafts.length,
       batches_done: batches,
       links: linkCount,
@@ -1066,8 +1084,11 @@ async function startDocumentsConversion({ repo_id, file_ids, requested_name, cla
   let claimed = [];
   // The conversion record as it stands BEFORE this run writes anything: a
   // refused start must leave the repository as it found it (the conversion
-  // patch REPLACES the whole record — see the catch below).
-  const previous = await readConversion(repo_id);
+  // patch REPLACES the whole record — see the catch below). An UNREADABLE
+  // record is unknown, and an unknown record is never overwritten.
+  const previousRead = await readConversion(repo_id);
+  const previous = previousRead.state === 'ok' ? previousRead.record : null;
+  const previousKnown = previousRead.state !== 'unreadable';
   try {
     // The conversion record is written FIRST, so the repository SHOWS the run
     // while the pre-flight works: the reservation now spans the pre-flight,
@@ -1177,9 +1198,16 @@ async function startDocumentsConversion({ repo_id, file_ids, requested_name, cla
     // attribute — a blind write here would destroy that writer's progress
     // record, which is the very clobber this restore exists to avoid.
     const current = await readConversion(repo_id);
-    const stillOurs = !current || (current.status === 'queued' && current.started_at === queued.started_at);
-    if (!stillOurs) {
-      logger.warn('Conversion record is owned by another writer — left untouched', { repo_id });
+    const stillOurs =
+      current.state === 'ok' &&
+      (!current.record || (current.record.status === 'queued' && current.record.started_at === queued.started_at));
+    if (!previousKnown || !stillOurs) {
+      // Either the record could not be read (unknown — a blind write could
+      // destroy it) or it belongs to another writer: leave it alone.
+      logger.warn("Conversion record is not this run's — left untouched", {
+        repo_id,
+        readable: current.state !== 'unreadable'
+      });
     } else {
       try {
         if (previous && isTerminal(previous)) {

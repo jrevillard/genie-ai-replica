@@ -158,7 +158,15 @@ function lockfileEntry(lock, name, fromRel) {
  * @returns {{versions: Object<string, string>, keys: Object<string, string>}} the pins and their keys
  */
 function pinnedVersions(repoRoot = REPO_ROOT) {
-  const lock = readJson(path.join(repoRoot, 'package-lock.json'));
+  let lock;
+  try {
+    lock = readJson(path.join(repoRoot, 'package-lock.json'));
+  } catch (e) {
+    throw new Error(
+      `the checkout carries no readable package-lock.json (${e.message}) — the runtime's pins cannot be read`,
+      { cause: e }
+    );
+  }
   const versions = {};
   const keys = {};
   let fromRel = '';
@@ -287,7 +295,7 @@ function describeRunner(repoRoot = REPO_ROOT) {
     versions = runnerVersions(repoRoot);
   } catch (e) {
     throw new Error(
-      `the checkout has no ${PINNED_PACKAGE} installed — node_modules is missing or incomplete (${e.message.split('\n')[0]})`,
+      `the runner chain is incomplete — node_modules is missing or does not carry it (${e.message.split('\n')[0]})`,
       { cause: e }
     );
   }
@@ -429,6 +437,7 @@ if (require.main === module) {
 
 module.exports = {
   browserInstallCommand,
+  defaultRun,
   describeRunner,
   installLocations,
   pinnedVersions,

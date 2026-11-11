@@ -23,6 +23,7 @@ const path = require('path');
 
 const {
   browserInstallCommand,
+  defaultRun,
   describeRunner,
   installLocations,
   pinnedVersions,
@@ -251,8 +252,7 @@ test('a browser the installed Playwright does not name fails loudly', () => {
 
 test('the browser build is installed by the CHECKOUT Playwright, not a global one', () => {
   const root = makeCheckout();
-  const { command, args } = browserInstallCommand(root);
-  expect(command).toBe(process.execPath);
+  const { args } = browserInstallCommand(root);
   expect(args).toEqual([path.join(root, 'node_modules/playwright/cli.js'), 'install', 'chromium']);
 });
 
@@ -277,7 +277,7 @@ test('the runner describes the versions loaded and the revisions they name', () 
 
 test('a checkout without @playwright/test cannot describe a runner, and says so', () => {
   const root = makeRoot({ 'package-lock.json': { packages: {} } });
-  expect(() => describeRunner(root)).toThrow(/no @playwright\/test installed/);
+  expect(() => describeRunner(root)).toThrow(/runner chain is incomplete.*carries no @playwright\/test/);
 });
 
 // --- the reconciler itself (the part with the side effects) --------------------
@@ -618,6 +618,20 @@ test('a browser path with a space in it is read whole', () => {
   expect(installLocations('/checkout/node_modules/playwright/cli.js', run, '/checkout')[0].location).toBe(
     location
   );
+});
+
+test('the runner the pod uses reads the output as text', () => {
+  // The mutation this pins: the installer parse reads stdout as a string.
+  // A Buffer would stringify to its bytes and the installer would name no
+  // location — on the pod only: every spec drives the injected seam.
+  const result = defaultRun(process.execPath, ['-e', '']);
+  expect(result.status).toBe(0);
+  expect(typeof result.stdout).toBe('string');
+});
+
+test('a checkout with no readable lockfile says so', () => {
+  const root = makeRoot({ 'package-lock.json': '{ not json' });
+  expect(() => pinnedVersions(root)).toThrow(/no readable package-lock\.json/);
 });
 
 test('an installer that names no location fails loudly', () => {

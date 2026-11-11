@@ -111,6 +111,12 @@ as twelve product bugs (#1779).
    verification runs either way, so a tree that was never installed still
    fails loudly.
 
+   The install is Playwright's own `install chromium`, and it **prunes the
+   browser directories the installed Playwright does not claim** — a
+   repairing run on a shared `PLAYWRIGHT_BROWSERS_PATH` removes the
+   browsers of the other versions cached there. Give this suite its own
+   browser root.
+
 No revision number is written in the repository: it is derived from the
 installed Playwright, so a lockfile bump needs no second number to change.
 The command is idempotent.

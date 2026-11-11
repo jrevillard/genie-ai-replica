@@ -158,43 +158,55 @@ async function waitForBotResponse(page, options = {}) {
   await expect(page.locator(BOT_BUBBLE).last()).toContainText(/\S/, { timeout });
 
   await expect
-    .poll(
-      () =>
-        page
-          .evaluate(() => {
-            const app = document.querySelector('#app');
-            const store = app && app.__vue_app__ ? app.__vue_app__.config.globalProperties.$store : null;
-            // The store's PUBLIC read path: the "conversation" module's
-            // getter returns the open conversation — its messages and the
-            // stream flag. The raw state shape is NOT a contract: the CSR
-            // refactor moved the messages under conversations[openId], and
-            // a helper reading "state.conversation.messages" threw on every
-            // poll (the three chat specs went red the day it landed).
-            const open = store && store.getters ? store.getters['conversation/openConversation'] : null;
-            // A booted app without the getter is a broken store contract,
-            // not a slow answer: say so now, in the shape the reader
-            // (streamingFlagOf) turns into a named failure, instead of
-            // polling to a cause-less timeout.
-            // NOT booted (no app, no __vue_app__) is transient — the app
-            // may still be mounting, or a reload is in flight. A BOOTED
-            // app whose store is gone is a broken contract, and so is a
-            // store without the getter.
-            if (!app || !app.__vue_app__) return { state: 'not-booted' };
-            if (!store) return { state: 'no-store' };
-            if (!open) return { state: 'no-open-conversation' };
-            // Only what the decision needs: each message's sender and
-            // streaming flag. The whole conversation would cross the wire
-            // on every poll tick — and WHICH messages are the bot's is
-            // decided here, where it is unit tested.
-            const messages = open.messages
-              ? open.messages.map((m) => ({ sender: m.sender, isStreaming: Boolean(m.isStreaming) }))
-              : [];
-            return { state: 'ok', messages };
-          })
-          .then(streamingFlagOf),
-      { timeout }
-    )
+    .poll(() => page.evaluate(readStreamingState).then(streamingFlagOf), { timeout })
     .toBe(false);
+}
+
+/**
+ * The page-side read: the open conversation's messages and their
+ * streaming flags, in the shape the decision needs.
+ *
+ * SELF-CONTAINED on purpose. Playwright sends this function to the page
+ * as SOURCE, so it may not close over anything in this module — only
+ * page globals. That is also what makes it TESTABLE: a spec builds a
+ * fake `#app` carrying a fake store and calls this very function, so the
+ * read is exercised on the same path the suite uses, not a copy of it.
+ *
+ * The store's PUBLIC read path: the "conversation" module's getter returns
+ * the open conversation — its messages and the stream flag. The raw state
+ * shape is NOT a contract: the CSR refactor moved the messages under
+ * conversations[openId], and a helper reading "state.conversation.messages"
+ * threw on every poll (the three chat specs went red the day it landed).
+ *
+ * The flag's ABSENCE crosses the wire as absence: a message with no
+ * `isStreaming` key at all is the WELCOME bubble (the app commits it
+ * without one), and it is NOT a turn. Coercing it to `false` here would
+ * say "the turn finished" — the wait would end before the answer
+ * existed, which is the defect this read exists to prevent. The value is
+ * copied as it is, so "absent" and "false" stay distinct.
+ */
+function readStreamingState() {
+  const app = document.querySelector('#app');
+  const store = app && app.__vue_app__ ? app.__vue_app__.config.globalProperties.$store : null;
+  const open = store && store.getters ? store.getters['conversation/openConversation'] : null;
+  // A booted app without the getter is a broken store contract, not a
+  // slow answer: say so now, in the shape the reader (streamingFlagOf)
+  // turns into a named failure, instead of polling to a cause-less
+  // timeout.
+  // NOT booted (no app, no __vue_app__) is transient — the app may still
+  // be mounting, or a reload is in flight. A BOOTED app whose store is
+  // gone is a broken contract, and so is a store without the getter.
+  if (!app || !app.__vue_app__) return { state: 'not-booted' };
+  if (!store) return { state: 'no-store' };
+  if (!open) return { state: 'no-open-conversation' };
+  // Only what the decision needs: each message's sender and streaming
+  // flag. The whole conversation would cross the wire on every poll tick
+  // — and WHICH messages are the bot's is decided on this side, where it
+  // is unit tested.
+  const messages = open.messages
+    ? open.messages.map((m) => ({ sender: m.sender, isStreaming: m.isStreaming }))
+    : [];
+  return { state: 'ok', messages };
 }
 
 /**
@@ -234,6 +246,10 @@ function streamingFlagOf(read) {
   // carries no flag at all: the turn has not produced an answer, so the
   // wait continues (null is not false). A message without the flag is
   // not the turn's answer.
+  //
+  // The flag's ABSENCE is the signal, so the page must not coerce it: a
+  // welcome bubble coerced to `false` here would read as "the turn
+  // finished" and end the wait before the answer existed.
   if (last === undefined || last.isStreaming === undefined) return null;
   return last.isStreaming;
 }
@@ -361,6 +377,7 @@ async function ackFeedback(page) {
 }
 
 module.exports = {
+  readStreamingState,
   streamingFlagOf,
   loginViaUI,
   navigateToChatbot,

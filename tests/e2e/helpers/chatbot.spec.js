@@ -1,7 +1,7 @@
 // Copyright (C) 2026 International Telecommunication Union (ITU)
 // SPDX-License-Identifier: Apache-2.0
 const { test, expect } = require('@playwright/test');
-const { streamingFlagOf } = require('./chatbot');
+const { readStreamingState, streamingFlagOf } = require('./chatbot');
 
 /**
  * Unit spec for the streaming-flag read — the helper's side of the store
@@ -60,5 +60,98 @@ test.describe('the streaming flag is read through the store getter', () => {
 
   test('a conversation without bot messages is empty, not broken', () => {
     expect(streamingFlagOf({ state: 'ok' })).toBe(null);
+  });
+});
+
+/**
+ * The PAGE-SIDE read — the half that was never tested, and the half the
+ * bug lived in.
+ *
+ * The decision above is pure and easy to test, but what the page HANDS
+ * OVER is a separate contract: the welcome bubble carries no `isStreaming`
+ * key at all (the app commits it without one), and the read must let that
+ * absence reach the decision as an absence. Coercing it to `false` on the
+ * page says "the turn finished" — the wait ends before the answer exists.
+ *
+ * The read runs in the browser, so it is exercised in one: a fake `#app`
+ * carrying a fake store, and the helper's own read function, called in the
+ * page. The functions here are the REAL ones — not a copy of them.
+ */
+test.describe('the page-side read keeps the flag\'s ABSENCE an absence', () => {
+  // A page whose store answers the open conversation with the given
+  // messages. The store shape is the app's: the getter
+  // 'conversation/openConversation' and the messages under it.
+  const pageWith = async (page, messages) => {
+    await page.setContent('<div id="app"></div>');
+    await page.evaluate((msgs) => {
+      const app = document.querySelector('#app');
+      app.__vue_app__ = {
+        config: {
+          globalProperties: {
+            $store: {
+              getters: { 'conversation/openConversation': { messages: msgs } },
+            },
+          },
+        },
+      };
+    }, messages);
+  };
+
+  test('a message with no flag crosses the wire with no flag', async ({ page }) => {
+    // The WELCOME bubble: the app commits it with a sender and content,
+    // and no isStreaming key.
+    await pageWith(page, [{ sender: 'bot', content: 'Welcome! How can I assist you today?' }]);
+    const read = await page.evaluate(readStreamingState);
+    expect(read.state).toBe('ok');
+    expect(read.messages).toHaveLength(1);
+    expect(read.messages[0].sender).toBe('bot');
+    // The flag is ABSENT — not false. A false here would say the turn
+    // finished, and the wait would end before the answer existed.
+    expect(read.messages[0].isStreaming).toBe(undefined);
+    // And the decision reads it as "not the turn".
+    expect(streamingFlagOf(read)).toBe(null);
+  });
+
+  test('a message that HAS the flag crosses with its value', async ({ page }) => {
+    await pageWith(page, [{ sender: 'bot', content: '', isStreaming: true }]);
+    const read = await page.evaluate(readStreamingState);
+    expect(read.messages[0].isStreaming).toBe(true);
+    expect(streamingFlagOf(read)).toBe(true);
+  });
+
+  test('a finished turn crosses with false — which is NOT the absence', async ({ page }) => {
+    await pageWith(page, [{ sender: 'bot', content: 'The answer.', isStreaming: false }]);
+    const read = await page.evaluate(readStreamingState);
+    expect(read.messages[0].isStreaming).toBe(false);
+    // The wait ends: the turn is over.
+    expect(streamingFlagOf(read)).toBe(false);
+  });
+
+  test('the welcome bubble before the turn does not end the wait', async ({ page }) => {
+    // The exact shape the defect took: the welcome bubble is the last
+    // bot message, and the turn's placeholder has not landed yet.
+    await pageWith(page, [
+      { sender: 'user', content: 'What is GENIE.AI?' },
+      { sender: 'bot', content: 'Welcome! How can I assist you today?' },
+    ]);
+    const read = await page.evaluate(readStreamingState);
+    expect(streamingFlagOf(read)).toBe(null);
+  });
+
+  test('an app that is not booted is transient, not broken', async ({ page }) => {
+    await page.setContent('<div></div>');
+    const read = await page.evaluate(readStreamingState);
+    expect(read.state).toBe('not-booted');
+    expect(streamingFlagOf(read)).toBe(null);
+  });
+
+  test('a booted app without the getter is a broken contract, named', async ({ page }) => {
+    await page.setContent('<div id="app"></div>');
+    await page.evaluate(() => {
+      document.querySelector('#app').__vue_app__ = { config: { globalProperties: { $store: {} } } };
+    });
+    const read = await page.evaluate(readStreamingState);
+    expect(read.state).toBe('no-open-conversation');
+    expect(() => streamingFlagOf(read)).toThrow(/openConversation/);
   });
 });

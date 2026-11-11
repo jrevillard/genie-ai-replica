@@ -506,6 +506,30 @@ describe('stampSourceDocument via startConversion', () => {
     });
   });
 
+  test('a doc-repo file that carries only `mimetype` is stamped with that type', async () => {
+    // The doc-repo build in the field writes `file_type`; an older one wrote
+    // `mimetype`. The SHARED coercion accepts both, so the crawl path and
+    // the import path store the same file_type for the same document — the
+    // two paths used to carry their own copy of the mapping and drift.
+    authedAxios.get.mockResolvedValueOnce({
+      status: 200,
+      data: { file: { file_name: 'crawl.md', size: 96, mimetype: 'text/markdown' } }
+    });
+    authedAxios.get.mockResolvedValueOnce({
+      status: 200,
+      headers: { 'content-length': '0' },
+      data: Readable.from([])
+    });
+    await startJob({ url: null, crawl_job_id: null });
+    await waitForTerminal();
+
+    const stamp = mockDb.query.mock.calls
+      .map((c) => (c[1] && c[1].file_id ? c[1] : null))
+      .filter(Boolean)
+      .find((b) => b.file_name === 'crawl.md');
+    expect(stamp).toMatchObject({ file_type: 'text/markdown' });
+  });
+
   test('metadata fetch failure does not fail the conversion (fail-soft)', async () => {
     // Rejection FIRST: it is consumed by the stamp's metadata fetch, which is
     // fail-soft; the stream get that follows still succeeds.

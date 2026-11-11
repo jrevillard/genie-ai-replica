@@ -136,22 +136,67 @@ function programQuery() {
       // gone. The mock states them all — a gate that dropped one is a
       // different gate, and the mock refuses to answer for it.
       const rid = /r\.repo_id\s*!=\s*@(\w+)/.exec(text);
-      if (!/r\.deleted_at\s*==\s*null/.test(text) || !/r\.lifecycle_state\s*!=\s*'retracted'/.test(text) || !rid) {
+      if (
+        !/r\.deleted_at\s*==\s*null/.test(text) ||
+        !/r\.lifecycle_state\s*!=\s*'retracted'/.test(text) ||
+        !/s\.file_hash\s*!=\s*null/.test(text) ||
+        !rid
+      ) {
         throw new Error('mock: the duplicate-content gate no longer states the filters it models');
+      }
+      // The ORDER, the LIMIT and the PROJECTION are part of the ANSWER: the
+      // gate names ONE repository — the oldest offender — and the refusal
+      // tells the steward which one to retract. A gate that changed its
+      // sort key, its limit or the fields it projects is a different
+      // answer, and the mock refuses to answer for it.
+      const order = /SORT\s+r\.(\w+)\s*(ASC|DESC)?[\s\S]*?LIMIT\s+(\d+)[\s\S]*?RETURN\s+\{([^}]*)\}/i.exec(text);
+      if (!order) {
+        throw new Error(
+          'mock: the duplicate-content gate no longer states the order, the limit and the projection it models'
+        );
+      }
+      const projected = order[4]
+        .split(',')
+        .map((f) => f.split(':')[0].trim())
+        .filter(Boolean);
+      for (const field of ['repo_id', 'name', 'dupFiles']) {
+        if (!projected.includes(field)) {
+          throw new Error(
+            `mock: the duplicate-content gate no longer projects ${field} — the refusal names the repository it must`
+          );
+        }
       }
       const wanted = bind[hashMatch[1]] || [];
       const otherRepo = bind[rid[1]];
-      const dup = Object.values(store).find(
+      // The production filter is `s.file_hash != null AND POSITION(@hashes,
+      // s.file_hash)`: POSITION answers TRUE/FALSE (returnIndex defaults to
+      // false), so the match is MEMBERSHIP — and a null hash is absent while
+      // an EMPTY-STRING hash is present.
+      const carriesWantedHash = (s) => s.file_hash != null && wanted.includes(s.file_hash);
+      const offenders = Object.values(store).filter(
         (r) =>
           r &&
           !r.deleted_at &&
           r.lifecycle_state !== 'retracted' &&
           r.repo_id !== otherRepo &&
-          (r.source_documents || []).some((s) => s.file_hash && wanted.includes(s.file_hash))
+          (r.source_documents || []).some(carriesWantedHash)
       );
+      // AQL's ASC order: null first, then booleans, numbers, strings.
+      const sortKey = order[1];
+      const descending = (order[2] || 'ASC').toUpperCase() === 'DESC';
+      offenders.sort((a, b) => {
+        const av = a[sortKey];
+        const bv = b[sortKey];
+        if (av === bv) return 0;
+        if (av === undefined || av === null) return -1;
+        if (bv === undefined || bv === null) return 1;
+        return av > bv ? 1 : -1;
+      });
+      if (descending) offenders.reverse();
+      const dup = offenders.slice(0, Number(order[3]))[0];
       if (dup) {
         const dupFiles = (dup.source_documents || [])
-          .filter((s) => s.file_hash && wanted.includes(s.file_hash))
+          .filter(carriesWantedHash)
           .map((s) => ({ file_id: s.file_id, file_name: s.file_name }));
         return { all: async () => [{ repo_id: dup.repo_id, name: dup.name, dupFiles }] };
       }
@@ -473,6 +518,54 @@ describe('producer-service — startDocumentsConversion + run', () => {
     expect(repoDoc.source_documents).toHaveLength(1); // re-stamped to THIS repo
   });
 
+  it('reads the stamped-repository existence check ONCE per stamped repository', async () => {
+    // The check is a database read, and every candidate file of a corpus
+    // carries the SAME stamp when the corpus moves from one repository to
+    // another: the check is read once per stamped repository, not once per
+    // file. (The read is memoized per stamp — a corpus of 100 files moving
+    // between repositories is ONE read, not 100.)
+    mockDocs({ f1: 'alpha.md', f2: 'beta.md' });
+    await mockDb.collection('okf_repositories').save({ _key: RID, repo_id: RID, name: 'Mine', domain: 'general' });
+    const repos = mockDb.collection('okf_repositories');
+    authedAxios.get.mockImplementation((url) => {
+      const s = String(url);
+      if (s.endsWith('/download')) {
+        const fid = s.split('/api/files/')[1].replace(/\/download$/, '');
+        return Promise.resolve({ data: Readable.from([Buffer.from('# T\n\nbody for ' + fid)]) });
+      }
+      const fid = s.split('/api/files/')[1];
+      // BOTH files carry the same stale stamp — the corpus moved away
+      return Promise.resolve({
+        data: {
+          file: {
+            file_id: fid,
+            file_name: fid + '.md',
+            size: 100,
+            okf_repo_id: 'r-gone',
+            dataprep: { status: 'Pending' }
+          }
+        }
+      });
+    });
+
+    await producer.startDocumentsConversion({
+      repo_id: RID,
+      file_ids: ['f1', 'f2'],
+      requested_name: 'x',
+      classification: 'heuristics',
+      actor: { sub: 's' }
+    });
+    await producer.live.get(RID);
+
+    // the stale stamp is self-healed: the import proceeds and re-stamps BOTH
+    const repoDoc = await repos.document(RID);
+    expect(repoDoc.conversion.status).toBe('done');
+    expect(repoDoc.source_documents).toHaveLength(2);
+    // ONE existence check for the two files that share the stamp
+    const checks = repos.document.mock.calls.filter((c) => c[0] === 'r-gone');
+    expect(checks).toHaveLength(1);
+  });
+
   it('fetches each source file metadata ONCE — the pre-flight read feeds stamp + conversion', async () => {
     // The import pipeline reads a file's metadata at THREE points (pre-flight
     // verification, source stamping, conversion) but doc-repo serves it from
@@ -776,6 +869,42 @@ describe('producer-service — startDocumentsConversion + run', () => {
     ).rejects.toMatchObject({ code: 'DUPLICATE_CONTENT', status: 409 });
   });
 
+  it('names the OLDEST offending repository when several hold the same content', async () => {
+    // The gate reports ONE repository — the oldest offender — and the
+    // refusal tells the steward WHICH one to retract. A gate that changed
+    // its sort key would name a different repository, and the steward would
+    // retract the wrong one.
+    for (const [key, name, created] of [
+      // the NAMES and the DATES disagree on purpose: a gate that sorted by
+      // name instead of age would name the other one
+      ['r-younger', 'Alpha repo', '2026-09-20T00:00:00Z'],
+      ['r-older', 'Zebra repo', '2026-09-10T00:00:00Z']
+    ]) {
+      await mockDb.collection('okf_repositories').save({
+        _key: key,
+        repo_id: key,
+        name,
+        domain: 'general',
+        created_at: created,
+        source_documents: [{ kind: 'document', file_id: 'old-' + key, file_name: 'alpha.md', file_hash: 'HASH1' }]
+      });
+    }
+    await mockDb.collection('okf_repositories').save({ _key: RID, repo_id: RID, name: 'Mine', domain: 'general' });
+    mockDocs({ f1: 'alpha.md' });
+    authedAxios.get.mockImplementationOnce((url) => {
+      const fid = String(url).split('/api/files/')[1];
+      return Promise.resolve({
+        data: {
+          file: { file_id: fid, file_name: 'alpha.md', file_hash: 'HASH1', dataprep: { status: 'Pending' } }
+        }
+      });
+    });
+
+    await expect(
+      producer.startDocumentsConversion({ repo_id: RID, file_ids: ['f1'], requested_name: 'x' })
+    ).rejects.toThrow(/already imported into OKF repository "Zebra repo"/);
+  });
+
   it('a RETRACTED repository does not block the same content — it is out of service', async () => {
     // The gate asks "does a LIVE repository already back this content?" — a
     // RETRACTED repository is out of service, so its content may be imported
@@ -1003,12 +1132,25 @@ describe('producer-service — startDocumentsConversion + run', () => {
     // the sweep is one-shot per process, so nothing else would ever close
     // it), and there the summary must be gone: the run it belonged to never
     // produced a result.
+    //
+    // `bytes_done` is the other half of the merge contract: it belongs to
+    // the CRAWL path's counters and the failed record does not set it, so a
+    // MERGE keeps it and a REPLACE would drop it. The conversion slot is
+    // shared by three writers — a blind replace would erase a writer that
+    // slipped in between.
     await mockDb.collection('okf_repositories').save({
       _key: RID,
       repo_id: RID,
       name: 'Mine',
       domain: 'general',
-      conversion: { status: 'queued', stage: 'queued', files_done: 0, files_total: 1, summary: { created: 9 } }
+      conversion: {
+        status: 'queued',
+        stage: 'queued',
+        files_done: 0,
+        files_total: 1,
+        bytes_done: 3,
+        summary: { created: 9 }
+      }
     });
     // the file must carry a hash, or the duplicate query never runs
     mockDocsWithHash('HASH-SUMMARY-1');
@@ -1020,6 +1162,9 @@ describe('producer-service — startDocumentsConversion + run', () => {
     const failed = await mockDb.collection('okf_repositories').document(RID);
     expect(failed.conversion).toMatchObject({ status: 'failed' });
     expect(failed.conversion.summary).toBeNull();
+    // the merge, not a replace: the counters the failed record does not set
+    // survive it
+    expect(failed.conversion.bytes_done).toBe(3);
   });
 
   it('a refused start does not clobber a record another writer owns', async () => {

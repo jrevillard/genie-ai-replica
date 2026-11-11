@@ -970,14 +970,17 @@ function isTerminal(conversion) {
  * the crawl failure, the documents failure, a refused start — and the copies
  * drift: the change that added `stage`/`summary` had to touch two of them in
  * lockstep, and the web client renders whichever copy wrote last. The
- * path-specific counters ride along in `extra`, which may override any field
- * of the base record except `finished_at` (the moment of the failure).
+ * path-specific counters ride along in `extra`. They CANNOT override the
+ * record's own fields: the failed record is ONE vocabulary, and a caller that
+ * passed `{ status: 'x' }` would silently defeat it — so `extra` is spread
+ * first and the vocabulary last.
  *
  * @param {Error} err the failure
  * @param {object} [extra] path-specific fields (counters, per-file list, …)
  */
 function failedConversionRecord(err, extra = {}) {
   return {
+    ...extra,
     status: 'failed',
     stage: 'failed',
     error: err.message,
@@ -985,7 +988,6 @@ function failedConversionRecord(err, extra = {}) {
     // The record is MERGED into the repository's conversion slot — the
     // previous run's summary must not survive a failure.
     summary: null,
-    ...extra,
     finished_at: new Date().toISOString()
   };
 }

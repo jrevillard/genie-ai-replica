@@ -47,7 +47,10 @@ test.describe('RAG error handling', () => {
   //     text, then the streaming flag — so 20 s;
   //   - the composer a third time: 5 s.
   //
-  // That is 95 s of waiting in the BODY.
+  // That is 95 s of waiting in the BODY, plus 105 s of ACTION ceilings
+  // — the project's 15 s actionTimeout on seven operations: the two
+  // sends' fill and press, the answer's innerText, the final fill and
+  // its inputValue.
   //
   // The budget is ONE total, shared by the hook and the body:
   // `test.describe.configure({ timeout })` bounds the test, and the hook
@@ -55,13 +58,14 @@ test.describe('RAG error handling', () => {
   // (measured on Playwright 1.62.1: a 12 s beforeEach left the body 18 s
   // of a 30 s budget).
   //
-  // The hook's own ceilings: the login is TWO attempts — the first is
-  // 30 s of navigation, 15 s for the auth redirect and 30 s for the
-  // dashboard wait; the retry is 30 s + 15 s + 15 s — so 135 s, plus the
-  // 30 s navigation to the chatbot: 165 s.
+  // The hook's own ceilings: the login is TWO attempts, and each one is
+  // a 30 s navigation, a 15 s wait for the auth redirect, three 15 s
+  // actions (the two fields and the button) and a wait for the
+  // dashboard (30 s on the first attempt, 15 s on the retry) — 225 s for
+  // the two, plus the 30 s navigation to the chatbot: 255 s.
   //
-  // 165 s + 95 s = 260 s, inside the 300 s below.
-  test.describe.configure({ timeout: 300000 });
+  // 255 s + 200 s = 455 s, inside the 600 s below.
+  test.describe.configure({ timeout: 600000 });
 
   let page;
   let context;
@@ -118,7 +122,7 @@ test.describe('RAG error handling', () => {
     // error card's 30 s wait above aborts the test there if it expires.
     // A retry that HANGS fails on that wait, with the helper's own
     // message; a retry that ERRORS renders no answer bubble and fails on
-    // the assertion below. The spec's own 300 s budget (above) is ONE
+    // the assertion below. The spec's own 600 s budget (above) is ONE
     // total for the hook and the body — see the describe comment.
     await waitForBotResponse(page, { timeout: 10000 });
     // The ANSWER, not merely a non-empty bubble: the welcome turn is a

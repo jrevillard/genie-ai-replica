@@ -198,7 +198,11 @@ describe('keycloakAuthService', () => {
 
       await keycloakAuthService.verifyToken(generateMockJwtString(mockJwtPayload));
 
-      expect(mockCreateRemoteJWKSet).toHaveBeenCalledWith(expect.objectContaining({ href: mockDiscovery.jwks_uri }));
+      const [url, options] = mockCreateRemoteJWKSet.mock.calls[0];
+      expect(String(url)).toBe(mockDiscovery.jwks_uri);
+      // The cache policy is jose's own now (the TTL and the refresh floor)
+      // — see the 'JWKS cache' block.
+      expect(options).toEqual({ cacheMaxAge: 300000, cooldownDuration: 1000 });
     });
 
     it('should throw TOKEN_INVALID for jwtVerify signature failure (revoked token scenario)', async () => {
@@ -380,12 +384,17 @@ describe('keycloakAuthService', () => {
     });
   });
 
-  describe('JWKS cache with TTL', () => {
+  describe('JWKS cache', () => {
     afterEach(() => {
       jest.restoreAllMocks();
     });
 
-    it('should reuse cached JWKS within TTL (no re-fetch)', async () => {
+    it('should create ONE remote key set per issuer and never recreate it', async () => {
+      // The cache is jose's own remote key set: ONE per issuer, never
+      // recreated. A second cache mechanism over the same dependency could
+      // only disagree with it, and the recreation (a fresh remote set starts
+      // cold — no cooldown state) is what made the refresh floor necessary
+      // in the first place (#1778).
       const mockJwksFunction = jest.fn().mockResolvedValue({ key: 'cached-key' });
       mockCreateRemoteJWKSet.mockReturnValue(mockJwksFunction);
       mockFetch.mockResolvedValue({
@@ -400,6 +409,7 @@ describe('keycloakAuthService', () => {
       // First call: initializes and caches JWKS
       await keycloakAuthService.init();
       const createRemoteCallCount = mockCreateRemoteJWKSet.mock.calls.length;
+      expect(createRemoteCallCount).toBe(1);
 
       // Second call within TTL: should reuse cache
       await keycloakAuthService.verifyToken(generateMockJwtString(mockJwtPayload));
@@ -408,64 +418,22 @@ describe('keycloakAuthService', () => {
       expect(mockCreateRemoteJWKSet.mock.calls.length).toBe(createRemoteCallCount);
     });
 
-    it('should re-fetch JWKS after TTL expires (5 minutes)', async () => {
-      // Test createJwksCache directly to verify TTL behavior
-      const nowSpy = jest.spyOn(Date, 'now');
-      const now = 1000000;
-      nowSpy.mockReturnValue(now);
-
-      let createRemoteCallCount = 0;
-      mockCreateRemoteJWKSet.mockImplementation(() => {
-        createRemoteCallCount++;
-        return jest.fn().mockResolvedValue({ key: `key-${createRemoteCallCount}` });
+    it('configures jose with the cache TTL and the refresh-floor cooldown', async () => {
+      // The TTL and the floor are jose's own knobs now: `cacheMaxAge` is
+      // when the key set is re-read, `cooldownDuration` is the floor on the
+      // reload jose performs for an unknown key id — one fetch per window
+      // per issuer, the amplification bound #1703 asked for.
+      mockFetch.mockResolvedValue({
+        ok: true,
+        json: async () => mockDiscovery
       });
 
-      // Create a JWKS cache - calls createRemoteJWKSet once during creation
-      const jwksCache = keycloakAuthService.createJwksCache('http://example.com/jwks');
-      expect(createRemoteCallCount).toBe(1);
+      await keycloakAuthService.init();
 
-      // Call within TTL - should reuse cached inner function (no additional createRemoteJWKSet call)
-      await jwksCache({ alg: 'RS256' }, 'token');
-      expect(createRemoteCallCount).toBe(1);
-
-      // Advance time past TTL (5 minutes + 1 second)
-      nowSpy.mockReturnValue(now + 301000);
-
-      // Call after TTL - should trigger re-fetch (createRemoteJWKSet called again)
-      await jwksCache({ alg: 'RS256' }, 'token');
-      expect(createRemoteCallCount).toBe(2);
-
-      nowSpy.mockRestore();
-    });
-
-    it('should force refresh JWKS when forceRefresh() is called', async () => {
-      // Test createJwksCache directly to verify forceRefresh behavior
-      const nowSpy = jest.spyOn(Date, 'now');
-      const now = 1000000;
-      nowSpy.mockReturnValue(now);
-
-      let createRemoteCallCount = 0;
-      mockCreateRemoteJWKSet.mockImplementation(() => {
-        createRemoteCallCount++;
-        return jest.fn().mockResolvedValue({ key: `key-${createRemoteCallCount}` });
-      });
-
-      // Create a JWKS cache - calls createRemoteJWKSet once during creation
-      const jwksCache = keycloakAuthService.createJwksCache('http://example.com/jwks');
-      expect(createRemoteCallCount).toBe(1);
-
-      // Call within TTL - should reuse
-      await jwksCache({ alg: 'RS256' }, 'token');
-      expect(createRemoteCallCount).toBe(1);
-
-      // Force refresh by calling forceRefresh() method
-      jwksCache.forceRefresh();
-
-      // Next call should re-fetch (createRemoteJWKSet called again)
-      await jwksCache({ alg: 'RS256' }, 'token');
-      expect(createRemoteCallCount).toBe(2);
-
-      nowSpy.mockRestore();
+      expect(mockCreateRemoteJWKSet).toHaveBeenCalledTimes(1);
+      const [url, options] = mockCreateRemoteJWKSet.mock.calls[0];
+      expect(String(url)).toBe(mockDiscovery.jwks_uri);
+      expect(options).toEqual({ cacheMaxAge: 300000, cooldownDuration: 1000 });
     });
 
     it('should maintain independent cache per issuer', async () => {
@@ -504,9 +472,12 @@ describe('keycloakAuthService', () => {
     });
   });
 
-  describe('verifyToken with force-refresh on signature failure', () => {
-    // The rotation candidate: jose's "no key matches this kid" — the key set
-    // may be stale because the realm rotated its keys.
+  describe('verifyToken key-set refresh', () => {
+    // The key-set refresh is jose's own: a token naming a key id the realm
+    // does not publish makes jose re-read the key set (once per cooldown
+    // window per issuer) and resolve the token against the fresh set. The
+    // verifier does not retry on its own — a second attempt would double
+    // the realm's fetch rate for no gain (#1778).
     const unknownKidError = () => {
       const err = new Error('no key found matching the kid');
       err.name = 'JWKSNoMatchingKey';
@@ -523,33 +494,26 @@ describe('keycloakAuthService', () => {
       });
     });
 
-    it('should force-refresh JWKS on an unknown kid (rotation candidate) and retry once', async () => {
-      mockJwtVerify
-        .mockRejectedValueOnce(unknownKidError()) // First call: kid not in the key set
-        .mockResolvedValueOnce({
-          // Second call: succeeds after refresh
-          payload: mockJwtPayload,
-          protectedHeader: { alg: 'RS256' }
-        });
-
-      mockCreateRemoteJWKSet.mockReturnValue(jest.fn());
+    it("rejects an unknown-kid token without retrying (the refresh is jose's)", async () => {
+      mockJwtVerify.mockRejectedValue(unknownKidError());
 
       const token = generateMockJwtString(mockJwtPayload);
-      const result = await keycloakAuthService.verifyToken(token);
 
-      // Should have succeeded on retry
-      expect(result).toBeDefined();
-      expect(result.iss_sub).toBe(`${mockJwtPayload.iss}#${mockJwtPayload.sub}`);
+      await expect(keycloakAuthService.verifyToken(token)).rejects.toMatchObject({
+        code: 'TOKEN_INVALID',
+        message: 'Token verification failed'
+      });
 
-      // jwtVerify should be called twice (initial + retry)
-      expect(mockJwtVerify).toHaveBeenCalledTimes(2);
+      // jwtVerify called once — the verifier does not retry; jose re-reads
+      // the key set inside its own call.
+      expect(mockJwtVerify).toHaveBeenCalledTimes(1);
     });
 
-    it('should NOT force-refresh on a resolved-kid signature failure (junk-signature flood)', async () => {
+    it('should NOT refresh on a resolved-kid signature failure (junk-signature flood)', async () => {
       // A resolved kid whose signature does not verify can never become
-      // valid through rotation. Refreshing the key set only zeroes the JWKS
-      // cache TTL, so a flood of junk-signature tokens would make every
-      // legitimate token pay a fresh JWKS fetch (#1703).
+      // valid through rotation. The key set is not re-read for it: a flood
+      // of junk-signature tokens would otherwise make every legitimate
+      // token pay a fresh JWKS fetch (#1703).
       mockJwtVerify.mockRejectedValue(new Error('signature verification failed'));
 
       const token = generateMockJwtString(mockJwtPayload);
@@ -563,9 +527,11 @@ describe('keycloakAuthService', () => {
       expect(mockJwtVerify).toHaveBeenCalledTimes(1);
     });
 
-    it('should NOT force-refresh an unknown-kid token with no exp claim (never rotatable)', async () => {
+    it('rejects an unknown-kid token with no exp claim without retrying', async () => {
       // A missing exp can never pass jose's requiredClaims ['iss','exp'], so
-      // it can never be a rotation case: fast-fail, no refresh.
+      // it can never become valid: fast-fail, no retry. Whether the key set
+      // is re-read for it is jose's decision (its cooldown window), not the
+      // verifier's — the node suite pins that half against the real library.
       mockJwtVerify.mockRejectedValue(unknownKidError());
 
       // exp: undefined → the encoded payload carries NO exp claim
@@ -577,6 +543,37 @@ describe('keycloakAuthService', () => {
       });
 
       expect(mockJwtVerify).toHaveBeenCalledTimes(1);
+    });
+
+    it('classifies a key-set fetch failure as an outage, not a bad token', async () => {
+      // The key-set leg is the verifier's own network call: its failure is
+      // the AUTH SERVICE's, never the token's (#1723). Answering 401 would
+      // send every user to the login page during an infrastructure outage.
+      const inner = jest.fn().mockRejectedValue(new Error('Expected 200 OK from the JSON Web Key Set HTTP response'));
+      mockCreateRemoteJWKSet.mockReturnValue(inner);
+      // jose resolves the key through the wrapper — the wrapper is where the
+      // network failure is classified.
+      mockJwtVerify.mockImplementation(async (token, key) => key({ alg: 'RS256' }, token));
+
+      await expect(keycloakAuthService.verifyToken(generateMockJwtString(mockJwtPayload))).rejects.toMatchObject({
+        code: 'AUTH_SERVICE_UNAVAILABLE'
+      });
+    });
+
+    it('classifies a realm that publishes no usable signing key as an outage', async () => {
+      // The published key set tells the two "no matching key" faults apart:
+      // a token naming a key id the realm does not publish (the token's
+      // fault, 401) and a realm publishing nothing usable (the realm's own
+      // broken state, 503).
+      const inner = Object.assign(jest.fn().mockRejectedValue(unknownKidError()), {
+        jwks: () => ({ keys: [{ kty: 'EC', kid: 'ec-key', alg: 'ES256', use: 'sig' }] })
+      });
+      mockCreateRemoteJWKSet.mockReturnValue(inner);
+      mockJwtVerify.mockImplementation(async (token, key) => key({ alg: 'RS256' }, token));
+
+      await expect(keycloakAuthService.verifyToken(generateMockJwtString(mockJwtPayload))).rejects.toMatchObject({
+        code: 'AUTH_SERVICE_UNAVAILABLE'
+      });
     });
 
     // Spies on the REAL shared/lib winston logger — the virtual
@@ -620,24 +617,24 @@ describe('keycloakAuthService', () => {
     });
 
     it('names the refresh floor in the log when it held the refresh back', async () => {
-      // The floor is why a rotation that lands inside the window is picked
-      // up by the NEXT refresh. Without that in the log, a burst of 401s
-      // around a key rotation is indistinguishable from a burst of junk
-      // tokens. The clock is frozen for the two calls so a stalled runner
-      // cannot push the second one past the 1000 ms window — the same
-      // wall-clock dependence the node suite's burst assertion tolerates.
+      // jose suppresses the reload-on-unknown-kid while the cached key set
+      // is inside its cooldown window: the realm may ALREADY publish the key
+      // the token names, and the next refresh observes it. Without that in
+      // the log, a burst of 401s around a key rotation is indistinguishable
+      // from a burst of junk tokens.
       const warns = captureWarns();
-      const realNow = Date.now();
-      const clockSpy = jest.spyOn(Date, 'now').mockReturnValue(realNow);
-      mockJwtVerify.mockRejectedValue(unknownKidError());
+      // The mocked key set answers with the unknown-kid error and reports
+      // itself as cooling down — the state jose is in when it suppressed
+      // the reload.
+      const inner = Object.assign(jest.fn().mockRejectedValue(unknownKidError()), { coolingDown: true });
+      mockCreateRemoteJWKSet.mockReturnValue(inner);
+      // jose resolves the key through the wrapper — the wrapper is where the
+      // floor is detected.
+      mockJwtVerify.mockImplementation(async (token, key) => key({ alg: 'RS256' }, token));
+
       const token = generateMockJwtString(mockJwtPayload);
 
       try {
-        // The first unknown-kid token consumes the refresh floor (and retries).
-        await expect(keycloakAuthService.verifyToken(token)).rejects.toMatchObject({
-          code: 'TOKEN_INVALID'
-        });
-        // The second one lands inside the floor window.
         await expect(keycloakAuthService.verifyToken(token)).rejects.toMatchObject({
           code: 'TOKEN_INVALID'
         });
@@ -646,27 +643,8 @@ describe('keycloakAuthService', () => {
         expect(logged).toContain('key-set refresh floored');
         expect(logged).not.toContain(token);
       } finally {
-        clockSpy.mockRestore();
         warns.restore();
       }
-    });
-
-    it('should reject with TOKEN_INVALID when retry also fails', async () => {
-      mockJwtVerify
-        .mockRejectedValueOnce(unknownKidError()) // First call: unknown kid
-        .mockRejectedValueOnce(unknownKidError()); // Retry: also fails
-
-      mockCreateRemoteJWKSet.mockReturnValue(jest.fn());
-
-      const token = generateMockJwtString(mockJwtPayload);
-
-      await expect(keycloakAuthService.verifyToken(token)).rejects.toMatchObject({
-        code: 'TOKEN_INVALID',
-        message: 'Token verification failed'
-      });
-
-      // jwtVerify should be called twice (initial + retry)
-      expect(mockJwtVerify).toHaveBeenCalledTimes(2);
     });
 
     it('should reject immediately with TOKEN_EXPIRED for expired token (no refresh)', async () => {
@@ -685,7 +663,7 @@ describe('keycloakAuthService', () => {
       expect(mockJwtVerify).toHaveBeenCalledTimes(1);
     });
 
-    it('should not force-refresh for expired token even on signature error', async () => {
+    it('should not retry an expired token even on signature error', async () => {
       const signatureError = new Error('Signature verification failed');
       mockJwtVerify.mockRejectedValue(signatureError);
 
@@ -705,8 +683,8 @@ describe('keycloakAuthService', () => {
       expect(mockJwtVerify).toHaveBeenCalledTimes(1);
     });
 
-    it('should not force-refresh an unknown-kid token whose exp has passed', async () => {
-      // The expiry outranks the rotation candidate: an expired token is
+    it('should not retry an unknown-kid token whose exp has passed', async () => {
+      // The expiry outranks everything else: an expired token is
       // TOKEN_EXPIRED, and the key set is left alone.
       mockJwtVerify.mockRejectedValue(unknownKidError());
 
@@ -735,55 +713,6 @@ describe('keycloakAuthService', () => {
 
       // jwtVerify should be called only once (claim errors don't trigger refresh)
       expect(mockJwtVerify).toHaveBeenCalledTimes(1);
-    });
-
-    it('should succeed on retry after force-refresh', async () => {
-      mockJwtVerify.mockRejectedValueOnce(unknownKidError()).mockResolvedValueOnce({
-        payload: mockJwtPayload,
-        protectedHeader: { alg: 'RS256' }
-      });
-
-      mockCreateRemoteJWKSet.mockReturnValue(jest.fn());
-
-      const token = generateMockJwtString(mockJwtPayload);
-      const result = await keycloakAuthService.verifyToken(token);
-
-      expect(result.iss_sub).toBe(`${mockJwtPayload.iss}#${mockJwtPayload.sub}`);
-      expect(mockJwtVerify).toHaveBeenCalledTimes(2);
-    });
-
-    it('should handle forceRefresh errors gracefully', async () => {
-      // The retry's refresh call sits INSIDE its try, as it always has: a
-      // refresh that itself throws must reach the caller as the structured
-      // TOKEN_INVALID, never as a raw error escaping verifyToken's catch
-      // block. The throw is planted on the WRAPPER's own forceRefresh (the
-      // one verifyToken actually calls), reachable through the test-only
-      // cache accessor — attaching it to the inner jose mock would never
-      // execute.
-      mockJwtVerify.mockRejectedValue(unknownKidError());
-      const token = generateMockJwtString(mockJwtPayload);
-
-      // First call: establishes the issuer's JWKS cache (and is rejected).
-      await expect(keycloakAuthService.verifyToken(token)).rejects.toMatchObject({
-        code: 'TOKEN_INVALID'
-      });
-
-      const wrapper = keycloakAuthService._getJwksCache('http://localhost:8080/realms/genie');
-      const originalForceRefresh = wrapper.forceRefresh;
-      wrapper.forceRefresh = () => {
-        throw new Error('Network error');
-      };
-
-      try {
-        // Second call: rotation candidate → forceRefresh throws → the catch
-        // wraps it as TOKEN_INVALID.
-        await expect(keycloakAuthService.verifyToken(token)).rejects.toMatchObject({
-          code: 'TOKEN_INVALID',
-          message: 'Token verification failed'
-        });
-      } finally {
-        wrapper.forceRefresh = originalForceRefresh;
-      }
     });
   });
 

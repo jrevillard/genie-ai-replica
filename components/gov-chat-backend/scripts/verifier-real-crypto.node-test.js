@@ -495,12 +495,22 @@ test('a mid-life JWKS fetch failure is an outage (AUTH_SERVICE_UNAVAILABLE), not
 
   jwksDown = true; // the auth service goes down
 
-  // An unknown kid forces the next key-set fetch (the rotation path).
-  const rotated = await sign(baseClaims(DISCOVERY_ISSUER), { partner: true });
-  await assert.rejects(
-    () => svc.verifyToken(rotated),
-    (err) => err.code === 'AUTH_SERVICE_UNAVAILABLE'
-  );
+  // The key-set refresh is floored by jose's cooldown window, which is
+  // measured from the last key-set FETCH: the clock jumps past it so the
+  // unknown-kid token makes the verifier re-read the key set, and that
+  // fetch is the one that fails.
+  const realNow = Date.now();
+  const clockSpy = Date.now;
+  Date.now = () => realNow + 60000;
+  try {
+    const rotated = await sign(baseClaims(DISCOVERY_ISSUER), { partner: true });
+    await assert.rejects(
+      () => svc.verifyToken(rotated),
+      (err) => err.code === 'AUTH_SERVICE_UNAVAILABLE'
+    );
+  } finally {
+    Date.now = clockSpy;
+  }
 });
 
 test('a junk-signature token does not re-fetch the JWKS (the cache-thrash vector)', async () => {
@@ -530,40 +540,60 @@ test('a junk-signature token does not re-fetch the JWKS (the cache-thrash vector
   assert.equal(jwksFetches(), before);
 });
 
-test('an unknown-kid token with no exp claim is fast-failed without a key-set refresh', async () => {
+test('a token that can never verify costs no key-set fetch inside the refresh-floor window', async () => {
   // #1703 addendum: a missing exp can never pass jose's requiredClaims
-  // ('iss','exp'), so it can never be a rotation case — it must not trigger a
-  // key-set refresh either.
+  // ('iss','exp'), so it can never become valid — and it must not cost the
+  // realm a key-set fetch either. The refresh is floored by jose's cooldown
+  // window, measured from the last key-set FETCH: the clock is frozen right
+  // after the warm-up, so the junk token lands inside the window whatever
+  // the runner's speed.
   const svc = loadVerifier();
   await warmCache(svc);
   const before = jwksFetches();
 
-  const claims = baseClaims(DISCOVERY_ISSUER);
-  delete claims.exp;
-  const unknownKid = await sign(claims, { partner: true });
-  await assert.rejects(
-    () => svc.verifyToken(unknownKid),
-    (err) => err.code === 'TOKEN_INVALID'
-  );
+  const realNow = Date.now();
+  const clockSpy = Date.now;
+  Date.now = () => realNow;
+  try {
+    const claims = baseClaims(DISCOVERY_ISSUER);
+    delete claims.exp;
+    const unknownKid = await sign(claims, { partner: true });
+    await assert.rejects(
+      () => svc.verifyToken(unknownKid),
+      (err) => err.code === 'TOKEN_INVALID'
+    );
+  } finally {
+    Date.now = clockSpy;
+  }
   assert.equal(jwksFetches(), before);
 });
 
-test('an unknown-kid token (rotation candidate) refreshes the key set — the price of rotation recovery', async () => {
-  // The rotation candidate KEEPS its refresh path (D3): an unknown kid may
-  // be a rotated key, and a realm that reuses a kid with new key material has
-  // no other recovery path than a refresh. The cost is one key-set fetch per
-  // unknown-kid token — the residual amplification this wave accepts
-  // deliberately (recorded in the MR body).
+test('an unknown-kid token refreshes the key set — the price of rotation recovery', async () => {
+  // The refresh KEEPS its path (D3): an unknown kid may be a rotated key, and
+  // a realm that reuses a kid with new key material has no other recovery
+  // path than a refresh. The refresh is jose's own, floored by its cooldown
+  // window — the cost is one key-set fetch per window per issuer, the
+  // residual amplification this wave accepts deliberately.
   const svc = loadVerifier();
   await warmCache(svc);
   const before = jwksFetches();
 
-  const token = await sign(baseClaims(DISCOVERY_ISSUER), { partner: true });
-  await assert.rejects(
-    () => svc.verifyToken(token),
-    (err) => err.code === 'TOKEN_INVALID'
-  );
-  assert.ok(jwksFetches() > before, 'the rotation candidate did not refresh the key set');
+  // The cooldown window is measured from the last fetch: the clock jumps
+  // past it (still inside the cache TTL) so the refresh is not floored, and
+  // a stalled runner cannot decide the outcome.
+  const realNow = Date.now();
+  const clockSpy = Date.now;
+  Date.now = () => realNow + 60000;
+  try {
+    const token = await sign(baseClaims(DISCOVERY_ISSUER), { partner: true });
+    await assert.rejects(
+      () => svc.verifyToken(token),
+      (err) => err.code === 'TOKEN_INVALID'
+    );
+  } finally {
+    Date.now = clockSpy;
+  }
+  assert.ok(jwksFetches() > before, 'the unknown-kid token did not refresh the key set');
 });
 
 test('a burst of unknown-kid tokens does not refresh the key set once per token', async () => {
@@ -575,13 +605,14 @@ test('a burst of unknown-kid tokens does not refresh the key set once per token'
   await warmCache(svc);
   const before = jwksFetches();
 
-  // The clock is frozen for the burst so a stalled runner cannot span two
-  // floor intervals: every junk token then lands inside the first one, and
-  // the count is exact. (The floor removed — the behaviour this guards
-  // against — refreshes once per token, which is 5.)
+  // The clock jumps past the cooldown window — so the FIRST junk token does
+  // refresh the key set — and is then frozen for the burst, so a stalled
+  // runner cannot span two windows: every junk token after the first lands
+  // inside the same one, and the count is exact. (The floor removed — the
+  // behaviour this guards against — refreshes once per token, which is 5.)
   const realNow = Date.now();
   const clockSpy = Date.now;
-  Date.now = () => realNow;
+  Date.now = () => realNow + 60000;
   try {
     for (let i = 0; i < 5; i++) {
       const junk = await sign(baseClaims(DISCOVERY_ISSUER), { partner: true }); // kid 'partner-key': unknown
@@ -629,47 +660,41 @@ test('a key published inside the refresh-floor window is picked up by the next r
   // A rotation that lands INSIDE that window is observed by the NEXT
   // refresh, not by the one the rotated token triggers: the rotated token
   // is rejected once, and the same token verifies once the window elapses.
-  // This is the documented cost of the bound — the token library's own
-  // cooldown has the same property, with a 30 s window instead of 1 s.
+  // The window is measured from the last key-set FETCH, so the clock is
+  // frozen BEFORE the warm-up: the window then covers the whole test, and a
+  // stalled runner cannot let it expire mid-test and turn the expected
+  // rejection into an acceptance.
   const svc = loadVerifier();
-  await warmCache(svc);
-  // An unrelated unknown-kid token consumes the refresh floor.
-  const junk = await sign(baseClaims(DISCOVERY_ISSUER), { partner: true });
-  await assert.rejects(
-    () => svc.verifyToken(junk),
-    (err) => err.code === 'TOKEN_INVALID'
-  );
-  // The realm rotates while the floor is held: it publishes the new key id.
-  publishedKeys = ROTATED_JWKS;
-  // A long expiry so the clock jump below (past any sane floor interval)
-  // cannot turn the token into an expired one.
-  const longExp = Math.floor(Date.now() / 1000) + 7200;
-  const rotated = await sign(baseClaims(DISCOVERY_ISSUER, { exp: longExp }), { rotated: true });
-  // The clock is frozen for the rejected attempt so a stalled runner cannot
-  // let the floor expire mid-test and turn the expected rejection into an
-  // acceptance.
   const realNow = Date.now();
   const clockSpy = Date.now;
   Date.now = () => realNow;
   try {
+    await warmCache(svc);
+    // An unrelated unknown-kid token lands inside the window.
+    const junk = await sign(baseClaims(DISCOVERY_ISSUER), { partner: true });
+    await assert.rejects(
+      () => svc.verifyToken(junk),
+      (err) => err.code === 'TOKEN_INVALID'
+    );
+    // The realm rotates while the window is held: it publishes the new key id.
+    publishedKeys = ROTATED_JWKS;
+    // A long expiry so the clock jump below (past any sane floor interval)
+    // cannot turn the token into an expired one.
+    const longExp = Math.floor(Date.now() / 1000) + 7200;
+    const rotated = await sign(baseClaims(DISCOVERY_ISSUER, { exp: longExp }), { rotated: true });
     await assert.rejects(
       () => svc.verifyToken(rotated),
       (err) => err.code === 'TOKEN_INVALID'
     );
+    // The clock then jumps past the floor window (the suite cannot read the
+    // constant, so it out-jumps it) but stays inside the cache TTL: the next
+    // refresh observes the rotation, with no real-time sleep.
+    Date.now = () => realNow + 60000;
+    const payload = await svc.verifyToken(rotated);
+    assert.equal(payload.sub, 'user-1');
   } finally {
     Date.now = clockSpy;
   }
-  // The clock then jumps past any sane floor interval (the suite cannot read
-  // the constant, so it out-jumps it): the next refresh observes the
-  // rotation, with no real-time sleep.
-  Date.now = () => realNow + 600000;
-  let payload;
-  try {
-    payload = await svc.verifyToken(rotated);
-  } finally {
-    Date.now = clockSpy;
-  }
-  assert.equal(payload.sub, 'user-1');
 });
 
 test('non-bare-integer KEYCLOAK_DISCOVERY_TIMEOUT_MS falls back to the 5000ms default', async () => {

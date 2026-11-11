@@ -25,35 +25,27 @@ const KEYCLOAK_REALM = process.env.KEYCLOAK_REALM;
 const KEYCLOAK_DISCOVERY_URL = process.env.KEYCLOAK_DISCOVERY_URL;
 const DISCOVERY_BASE_URL = (KEYCLOAK_DISCOVERY_URL || KEYCLOAK_URL || '').replace(/\/+$/, '');
 const INIT_RETRY_COOLDOWN = 30000; // 30 seconds between retry attempts
-const JWKS_CACHE_TTL = 300000; // 5 minutes JWKS cache TTL (NFR10)
-// Floor between FORCED key-set refreshes. A forced refresh re-fetches the
-// key set from the auth service, and reaching one takes nothing more than
-// a token naming a key id the realm does not publish — an unauthenticated
-// caller could therefore make the service hammer that endpoint.
+const JWKS_CACHE_TTL = 300000; // 5 minutes JWKS cache TTL (NFR10) — jose's `cacheMaxAge`
+// Floor on the key-set refresh jose performs when a token names a key id the
+// realm does not publish — jose's `cooldownDuration`, 1 s.
 //
-// The floor is 1 s, per issuer (every JWKS cache carries its own). What it
-// buys and what it costs are both deliberate:
+// A refresh re-fetches the key set from the auth service, and reaching one
+// takes nothing more than a token naming an unknown key id — an
+// unauthenticated caller could therefore make the service hammer that
+// endpoint. The cooldown bounds the fetch rate at one per second per issuer:
+// inside the window jose answers from the cached set instead of re-fetching.
 //
-//   - It bounds the fetch rate at one per second per issuer. Before the
-//     floor, a forced refresh threw jose's own 30 s cooldown away (a fresh
-//     remote key set starts cold — `jwksTimestamp` unset), so the realm's
-//     certificate endpoint was hit once per junk token.
+// What it costs is deliberate and unchanged by the move to jose's own cache:
+// inside the window a rotation is picked up by the NEXT refresh, not by the
+// one the rotated token triggers — the token is rejected (401) until the
+// next refresh runs. The realm's rotation recovery is never faster than the
+// refresh that observes it.
 //
-//   - Inside the window, a rotation is picked up by the NEXT refresh, not
-//     by the one the rotated token triggers: tokens naming a key id the
-//     realm has just published are rejected (401) until the next refresh
-//     runs, when an unrelated unknown-kid token consumed the floor in the
-//     preceding second. That window is the price of the bound — jose's own
-//     cooldown has the very same property, with a 30 s window instead of
-//     1 s, and the realm's rotation recovery is no faster than the refresh
-//     that observes it.
-//
-//   - Under a SUSTAINED flood — more than one unknown-kid token per second —
-//     every forced refresh stays floored and the rotation is observed only
-//     when the flood stops: the bound deliberately starves the attacker
-//     rather than the endpoint, and the same property exists in jose's own
-//     cooldown.
-const FORCED_REFRESH_MIN_INTERVAL_MS = 1000;
+// The window is measured from the last FETCH of the key set (any fetch, the
+// TTL refresh included), where the previous wrapper measured it from the last
+// FORCED refresh. The rate bound is identical; only the anchor moved, and
+// the anchor is the token library's, not ours.
+const JWKS_REFRESH_COOLDOWN_MS = 1000;
 
 /**
  * Does the fetched key set hold a key that can verify an RS256 signature?
@@ -118,15 +110,20 @@ class TokenVerificationError extends Error {
 }
 
 /**
- * Create a JWKS cache with explicit TTL.
+ * Create a JWKS cache.
  *
- * jose's createRemoteJWKSet has built-in HTTP caching based on Cache-Control headers,
- * but Keycloak 26.x may not always return explicit cache headers. This wrapper ensures
- * consistent caching behavior with an explicit 5-minute TTL.
+ * The cache is jose's own remote key set — ONE per issuer, never recreated.
+ * jose owns both halves of the policy: `cacheMaxAge` (the TTL: the set is
+ * re-fetched once it is that old) and `cooldownDuration` (the floor on the
+ * reload jose performs when a token names a key id the realm does not
+ * publish). A second cache mechanism over the same dependency — with its own
+ * TTL, its own floor and its own set recreation — could only disagree with
+ * it, and the recreation (a fresh remote set starts cold, with no cooldown
+ * state) is what made the floor necessary in the first place (#1778).
  *
  * @param {string} jwksUri - The JWKS endpoint URL
  * @param {number} ttlMs - Cache TTL in milliseconds (default: 300000 = 5 minutes)
- * @returns {Function} A callable JWKS function with attached .forceRefresh() method
+ * @returns {Function} A callable JWKS function
  *
  * The returned function has signature (protectedHeader, token) -> Promise<Key>
  * compatible with jose's jwtVerify(token, jwksFunction, options).
@@ -134,36 +131,33 @@ class TokenVerificationError extends Error {
  * @example
  * const jwksCache = createJwksCache('http://keycloak/realms/genie/protocol/openid-connect/certs');
  * const { payload } = await jwtVerify(token, jwksCache, { issuer: 'http://keycloak/realms/genie' });
- * // Later, force refresh if needed:
- * jwksCache.forceRefresh();
  */
 function createJwksCache(jwksUri, ttlMs = JWKS_CACHE_TTL) {
-  let inner = createRemoteJWKSet(new URL(jwksUri));
-  const _jwksUri = jwksUri; // Store for re-fetch
-  let createdAt = Date.now();
-  let lastForcedRefreshAt = 0;
+  const inner = createRemoteJWKSet(new URL(jwksUri), {
+    cacheMaxAge: ttlMs,
+    cooldownDuration: JWKS_REFRESH_COOLDOWN_MS
+  });
 
   /**
    * JWKS function compatible with jose's jwtVerify
    * @param {Object} protectedHeader - JWT protected header
-   * @param {Object} token - Full JWT token
+   * @param {Object} token - The JWS (its `header` holds the unprotected header)
    * @returns {Promise<Key>} Cryptographic key
    */
   async function jwksFn(protectedHeader, token) {
-    // Check TTL: if expired, re-fetch
-    if (Date.now() - createdAt > ttlMs) {
-      inner = createRemoteJWKSet(new URL(_jwksUri));
-      createdAt = Date.now();
-    }
+    // Whether the cached set is inside its cooldown window BEFORE the call:
+    // jose suppresses the reload-on-unknown-kid while it is, and only this
+    // snapshot says whether a refresh was floored (the cooldown window is
+    // closed again by the time the error comes back).
+    const coolingDown = inner.coolingDown === true;
     try {
       return await inner(protectedHeader, token);
     } catch (err) {
       // This wrapper is the ONLY network call of the verification path: a
       // failure here is the AUTH SERVICE's, never the token's. Two errors
       // from this leg are the TOKEN's: an unknown kid (JWKSNoMatchingKey —
-      // the key set may simply be stale; the caller treats it as a rotation
-      // candidate) and an ambiguous key match (JWKSMultipleMatchingKeys — a
-      // token that names no kid against a multi-key set). Everything else
+      // the key set may simply be stale; the realm may have rotated) and an
+      // ambiguous key match (JWKSMultipleMatchingKeys). Everything else
       // (a refused connection, a non-200 response, an unparsable body, a
       // timeout, a malformed key set) is an outage: it must NOT be reported
       // as a bad token, or the consumers answer 401 and send every user to
@@ -181,6 +175,13 @@ function createJwksCache(jwksUri, ttlMs = JWKS_CACHE_TTL) {
             'AUTH_SERVICE_UNAVAILABLE',
             'Authentication service is temporarily unavailable (the realm published no usable signing key)'
           );
+        }
+        if (coolingDown) {
+          // jose answered from the cached set instead of re-fetching it: the
+          // realm may ALREADY publish the key this token names, and the next
+          // refresh observes it. The flag travels with the error so the
+          // caller can say so in the log.
+          err.refreshFloored = true;
         }
         throw err;
       }
@@ -201,36 +202,12 @@ function createJwksCache(jwksUri, ttlMs = JWKS_CACHE_TTL) {
     }
   }
 
-  /**
-   * Force refresh the JWKS cache on next use
-   * Resets createdAt to 0, triggering re-fetch on next call
-   *
-   * Forced refreshes are floored (FORCED_REFRESH_MIN_INTERVAL_MS): the
-   * refresh re-fetches the key set from the auth service, and reaching one
-   * takes nothing more than a token naming a key id the realm does not
-   * publish — an unauthenticated caller could otherwise make the service
-   * hammer that endpoint.
-   *
-   * @returns {boolean} True when the refresh was scheduled, false when the
-   *   floor held it back (the caller then skips the retry — a rotation that
-   *   lands inside the window is picked up by the next refresh).
-   */
-  jwksFn.forceRefresh = function () {
-    const now = Date.now();
-    if (now - lastForcedRefreshAt < FORCED_REFRESH_MIN_INTERVAL_MS) {
-      return false;
-    }
-    lastForcedRefreshAt = now;
-    createdAt = 0;
-    return true;
-  };
-
   return jwksFn;
 }
 
 /**
  * Issuer → JWKS cache map for multi-IdP support.
- * Each value is a createJwksCache() result (callable with .forceRefresh() method).
+ * Each value is a createJwksCache() result (a callable JWKS resolver).
  * Populated lazily by ensureInitialized() from OIDC discovery documents.
  */
 const issuerMap = new Map();
@@ -589,10 +566,11 @@ const keycloakAuthService = {
       return verifiedPayload;
     };
 
-    // Two-attempt force-refresh pattern (from Architecture Decision D3)
-    // 1. Verify token with cached JWKS → fail
-    // 2. Check if token exp is still valid (not expired)
-    // 4. If no (token expired) → 401 TOKEN_EXPIRED immediately (no refresh)
+    // The key-set refresh is jose's own: a token naming a key id the realm
+    // does not publish makes jose re-read the key set (once per cooldown
+    // window per issuer) and resolve the token against the fresh set. The
+    // verifier does not retry on its own — a second attempt would double
+    // the realm's fetch rate for no gain.
 
     // The verified result is the claims payload plus the iss_sub composite
     // key consumers key users/cache entries on.
@@ -625,67 +603,33 @@ const keycloakAuthService = {
         throw new TokenVerificationError('TOKEN_INVALID', 'Token verification failed');
       }
 
-      // Generic Error (signature failure or unknown kid) → check exp for force-refresh decision
+      // Generic Error (signature failure or unknown kid) → check exp
       // jose checks signature BEFORE claims, so we must manually check exp from unverified payload.
       // Expiry outranks an algorithm mismatch: a stale junk token reports
       // TOKEN_EXPIRED (the semantically leading defect, and the client
       // action — re-authenticate — is the same either way).
       const now = Math.floor(Date.now() / 1000);
       if (unverifiedExp && unverifiedExp < now) {
-        // Token is expired → immediate TOKEN_EXPIRED (no refresh)
+        // Token is expired → immediate TOKEN_EXPIRED
         throw new TokenVerificationError('TOKEN_EXPIRED', 'Token has expired');
       }
 
       // Algorithm rejection (JOSEAlgNotAllowed — the RS256 pin refusing an
       // alg-confusion token) is deterministic: jose rejects the header before
       // any key resolution, so no key rotation can make the same token
-      // verify. It must NOT go through the force-refresh path below: forcing
-      // the refresh only zeroes the JWKS cache TTL, so sustained junk-alg
-      // traffic keeps the cache permanently invalidated, every LEGITIMATE
-      // token then pays a JWKS re-fetch, and each junk-alg token gets a
-      // second, equally-futile attempt.
+      // verify. It must NOT reach the key-set refresh: jose rejects the
+      // header before it resolves a key, so a refresh cannot make the same
+      // token verify — and every junk-alg token that triggered one would
+      // make every LEGITIMATE token pay a JWKS re-fetch.
       if (err.name === 'JOSEAlgNotAllowed') {
         throw new TokenVerificationError('TOKEN_INVALID', 'Token algorithm not allowed');
-      }
-
-      // Rotation candidate ONLY: an unknown kid (JWKSNoMatchingKey) — the
-      // key set may be stale because the realm rotated its keys. A RESOLVED
-      // kid whose signature does not verify can never become valid through
-      // rotation, so the key set is NOT refreshed for it: the refresh zeroes
-      // the cache TTL, so a flood of junk-signature tokens would otherwise
-      // re-fetch the JWKS from Keycloak on nearly every request (#1703).
-      // A token without a usable exp is not a rotation candidate either —
-      // jose's requiredClaims ('iss','exp') would reject it anyway, so it
-      // is fast-failed instead of refreshed.
-      const rotationCandidate =
-        err.name === 'JWKSNoMatchingKey' && typeof unverifiedExp === 'number' && unverifiedExp > now;
-      // The refresh call sits INSIDE the try, as it always has: a refresh
-      // that itself fails (an impossible Date.now, a future subclass) must
-      // reach the caller as the structured TOKEN_INVALID, never as a raw
-      // error escaping this catch block.
-      try {
-        if (rotationCandidate && jwks.forceRefresh()) {
-          const result = toResult(await verifyWithJwt());
-
-          logger.debug(`[KeycloakAuth] Token verified after JWKS force-refresh for ${result.iss_sub}`);
-          return result;
-        }
-      } catch (retryErr) {
-        // Retry failed → TOKEN_INVALID
-        if (retryErr instanceof TokenVerificationError) {
-          throw retryErr;
-        }
-        logger.error(`[KeycloakAuth] Token verification failed after JWKS refresh: ${retryErr.message}`);
-        throw new TokenVerificationError('TOKEN_INVALID', 'Token verification failed');
       }
 
       // The rejection names the underlying jose error: without it every
       // distinct cause (tampered signature, unknown key id, ambiguous key
       // set, wrong algorithm) reaches the operator's log as the same
-      // 'Token verification failed'. Reaching this line means the retry
-      // above did not run: the token is not a rotation candidate, or the
-      // floor held its refresh back.
-      if (rotationCandidate) {
+      // 'Token verification failed'.
+      if (err.refreshFloored) {
         // The refresh floor held the key-set refresh back. The realm may
         // ALREADY publish the key this token names — a rotation that landed
         // inside the window is observed by the next refresh, not by this
@@ -815,7 +759,7 @@ const keycloakAuthService = {
    * Create a JWKS cache with explicit TTL. Exported for testing.
    * @param {string} jwksUri - The JWKS endpoint URL
    * @param {number} ttlMs - Cache TTL in milliseconds
-   * @returns {Function} A callable JWKS function with .forceRefresh() method
+   * @returns {Function} A callable JWKS function
    */
   createJwksCache,
 

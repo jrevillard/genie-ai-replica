@@ -27,31 +27,72 @@ const PRELOAD = path.join(__dirname, 'venue-dns.js');
 const VENUE_HOST = 'venue.example';
 const VENUE_IP = '10.42.0.189';
 
-/** What the child's resolver answers for the venue host and for another one. */
-function answers(env = {}) {
-  const script = `
-const dns = require('dns');
-const out = {};
-const host = process.env.PROBE_HOST;
-dns.lookup(host, (e, a) => { out.lookup = e ? 'ERR:' + e.code : a; });
-dns.promises.lookup(host).then((r) => { out.promise = r.address; }).catch((e) => { out.promise = 'ERR:' + e.code; });
-dns.resolve4(host, (e, a) => { out.resolve4 = e ? 'ERR:' + e.code : a; });
-dns.resolve6(host, (e, a) => { out.resolve6 = e ? 'ERR:' + e.code : a; });
-setTimeout(() => console.log(JSON.stringify(out)), 300);
-`;
+/**
+ * Run a script in a child process that loads the preload the way the run
+ * does — through NODE_OPTIONS --require.
+ *
+ * The child is waited on, never timed: execFileSync returns when the
+ * child exits, and THROWS when it does not exit 0. So "the process
+ * survived the preload" is exactly "this call did not throw".
+ */
+function inChild(script, env = {}) {
   const childEnv = { ...process.env, NODE_OPTIONS: `--require ${PRELOAD}` };
   for (const [k, v] of Object.entries(env)) {
     if (v === undefined) delete childEnv[k];
     else childEnv[k] = v;
   }
-  childEnv.PROBE_HOST = env.PROBE_HOST || VENUE_HOST;
-  const out = execFileSync(process.execPath, ['-e', script], { env: childEnv, encoding: 'utf8' });
-  return JSON.parse(out.trim());
+  return execFileSync(process.execPath, ['-e', script], { env: childEnv, encoding: 'utf8' }).trim();
 }
 
-test.describe('the preload maps the venue name in Node\'s resolver', () => {
+/**
+ * The child's script: it prints when EVERY entry point has settled, and
+ * not a moment before.
+ *
+ * A fixed timer here would be a race against the host's resolver — the
+ * timer can win while the answer is still on its way, and a case that
+ * goes red on the resolver's mood is a flake, not a gate (the suite's
+ * rule: wait for conditions, not durations).
+ */
+const FOUR_ENTRIES = `
+const dns = require('dns');
+const out = {};
+let pending = 4;
+const settle = () => { if (--pending === 0) console.log(JSON.stringify(out)); };
+dns.lookup(process.env.PROBE_HOST, (e, a) => { out.lookup = e ? 'ERR:' + e.code : a; settle(); });
+dns.promises.lookup(process.env.PROBE_HOST).then(
+  (r) => { out.promise = r.address; settle(); },
+  (e) => { out.promise = 'ERR:' + e.code; settle(); }
+);
+dns.resolve4(process.env.PROBE_HOST, (e, a) => { out.resolve4 = e ? 'ERR:' + e.code : a; settle(); });
+dns.resolve6(process.env.PROBE_HOST, (e, a) => { out.resolve6 = e ? 'ERR:' + e.code : a; settle(); });
+`;
+
+/**
+ * The same, for the two entry points that a NON-venue name must reach.
+ *
+ * `resolve4`/`resolve6` are NOT used here: they query the domain server
+ * directly and never read the hosts file, so a name like 'localhost'
+ * would make them wait on the resolver's timeout — the very race this
+ * spec must not have. The two that answer from the hosts file are the
+ * two the preload patches first, and the two the API helpers use.
+ */
+const TWO_ENTRIES = `
+const dns = require('dns');
+const out = {};
+let pending = 2;
+const settle = () => { if (--pending === 0) console.log(JSON.stringify(out)); };
+dns.lookup(process.env.PROBE_HOST, (e, a) => { out.lookup = e ? 'ERR:' + e.code : a; settle(); });
+dns.promises.lookup(process.env.PROBE_HOST).then(
+  (r) => { out.promise = r.address; settle(); },
+  (e) => { out.promise = 'ERR:' + e.code; settle(); }
+);
+`;
+
+test.describe("the preload maps the venue name in Node's resolver", () => {
   test('all four entry points answer the mapped address', () => {
-    const out = answers({ E2E_VENUE_IP: VENUE_IP, E2E_VENUE_HOST: VENUE_HOST });
+    const out = JSON.parse(
+      inChild(FOUR_ENTRIES, { E2E_VENUE_IP: VENUE_IP, E2E_VENUE_HOST: VENUE_HOST, PROBE_HOST: VENUE_HOST })
+    );
     expect(out.lookup).toBe(VENUE_IP);
     // The promise form is what the API helpers use.
     expect(out.promise).toBe(VENUE_IP);
@@ -65,7 +106,9 @@ test.describe('the preload maps the venue name in Node\'s resolver', () => {
 
   test('a name that is not the venue is left to the resolver', () => {
     // The preload maps ONE name: every other lookup is the resolver's.
-    const out = answers({ E2E_VENUE_IP: VENUE_IP, E2E_VENUE_HOST: VENUE_HOST, PROBE_HOST: 'localhost' });
+    const out = JSON.parse(
+      inChild(TWO_ENTRIES, { E2E_VENUE_IP: VENUE_IP, E2E_VENUE_HOST: VENUE_HOST, PROBE_HOST: 'localhost' })
+    );
     expect(out.lookup).not.toBe(VENUE_IP);
     expect(out.promise).not.toBe(VENUE_IP);
   });
@@ -76,9 +119,15 @@ test.describe('the preload maps the venue name in Node\'s resolver', () => {
     // pre-flight down with it, and the operator would read a stack trace
     // instead of the named cause. A value that is not an address means
     // the preload simply does not map.
-    const out = answers({ E2E_VENUE_IP: 'not an address', E2E_VENUE_HOST: VENUE_HOST });
-    expect(out.lookup).not.toBe(VENUE_IP);
-    // The process is alive and answered.
-    expect(out.lookup).toBeDefined();
+    //
+    // The claim is about the PROCESS, so it is measured on the process:
+    // the child prints its marker and exits 0 — and execFileSync throws
+    // when the child dies at load. No DNS is involved, so the case has
+    // no timing to lose.
+    const out = inChild("console.log('alive')", {
+      E2E_VENUE_IP: 'not an address',
+      E2E_VENUE_HOST: VENUE_HOST
+    });
+    expect(out).toBe('alive');
   });
 });

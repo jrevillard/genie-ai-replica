@@ -164,8 +164,14 @@ async function main() {
     failure = namedFailure('the browser could not open the venue', e.message);
   }
   // The browser closes BEFORE the exit: an exit that skips a finally block
-  // would orphan a live Chromium on the machine.
-  await browser.close();
+  // would orphan a live Chromium on the machine. A close that FAILS is a
+  // cause of its own, but it must not REPLACE the cause already found —
+  // the operator needs the first one.
+  try {
+    await browser.close();
+  } catch (e) {
+    failure = failure || namedFailure('the browser could not close', e.message);
+  }
   if (failure) {
     process.stderr.write(failure);
     process.exitCode = 1;
@@ -178,7 +184,13 @@ async function main() {
 // file as a process (`node tests/e2e/run/preflight.js`), so the entry point
 // is the only way it starts.
 if (require.main === module) {
-  main();
+  // An escaping rejection must not print a stack: this module's promise
+  // to the operator is a NAMED cause, never frames. The catch is the
+  // last net under a cause that has no other home.
+  main().catch((e) => {
+    process.stderr.write(namedFailure('the pre-flight failed', e.message));
+    process.exitCode = 1;
+  });
 }
 
 module.exports = { classifyVenueStatus, namedFailure };

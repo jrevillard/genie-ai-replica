@@ -92,6 +92,24 @@ const appFilesCarrying = (needle, root) => {
     .map((f) => path.relative(root, f));
 };
 
+/**
+ * The FIRST app file that carries the endpoint, or null.
+ *
+ * The gate asks a yes/no question about the whole app tree (236 files,
+ * 4.8 MB of source), and the list version answers it by reading and
+ * stripping EVERY file. This stops at the first hit — the passing path
+ * pays for one file — and it still NAMES the file, so the failure
+ * message carries the observed value.
+ */
+const firstFileCarrying = (needle, root) => {
+  const pattern = endpointPattern(needle);
+  for (const f of jsFiles(root)) {
+    if (isTestFile(f)) continue;
+    if (pattern.test(stripJsComments(fs.readFileSync(f, 'utf8')))) return path.relative(root, f);
+  }
+  return null;
+};
+
 /** Does this module require anything? */
 const requiresSomething = (modulePath) => /require\(/.test(fs.readFileSync(modulePath, 'utf8'));
 
@@ -109,7 +127,10 @@ describe('the e2e suite intercepts the stream endpoint through the shared consta
     // the app's spelling changed and the constant did not, every stream
     // spec would silently stop intercepting and assert against the LIVE
     // backend — the #1271 failure this gate exists for.
-    expect(appFilesCarrying(STREAM_PATH, FRONTEND_SRC)).not.toEqual([]);
+    // The app must call the endpoint the constant names. The predicate
+    // stops at the FIRST file that carries it, so the passing path reads
+    // one file instead of the whole app tree.
+    expect(firstFileCarrying(STREAM_PATH, FRONTEND_SRC)).not.toBe(null);
   });
 
   test('the anchor reads the APP, not the e2e tree', () => {

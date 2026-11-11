@@ -14,6 +14,10 @@ const { isExpectedAbsence } = require('../../../shared/lib/arango-absence');
 // Re-exported for real (pure function, no deps): the GDPR erasure tombstone
 // digest shared by keycloak-proxy-service and user-provisioning-service.
 const { erasureTombstoneKey } = require('../../../shared/lib/erasure-tombstone');
+// Re-exported for real (pure function, no deps): human-readable byte
+// formatting and the arangojs figures() decode shared by the admin stats
+// and backup services.
+const { formatSize, readCollectionUsage } = require('../../../shared/lib/format-utils');
 
 module.exports = {
   logger: {
@@ -29,6 +33,8 @@ module.exports = {
   reconfigureLogger: jest.fn(),
   parsePositiveInt,
   erasureTombstoneKey,
+  formatSize,
+  readCollectionUsage,
   spanAttrs,
   tracingBaggage
 };

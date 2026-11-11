@@ -40,7 +40,7 @@ const { authedAxios } = require('./service-token');
 const { ingestRepoConcepts, buildMegaConcept } = require('./ingest-service');
 const { withSpan } = require('../shared-lib/tracing');
 const { slugify: slugSSOT } = require('./slug');
-const { fetchDocMeta } = require('./doc-repo-client');
+const { fetchDocMeta, docRepoFileFields } = require('./doc-repo-client');
 
 const COLLECTION = 'okf_repositories';
 
@@ -253,10 +253,7 @@ async function stampSourceDocument(repoId, { file_id, url, crawl_job_id }) {
       {
         repo_id: repoId,
         file_id,
-        file_name: f.file_name || null,
-        size_bytes: Number.isFinite(f.size) ? f.size : Number.isFinite(f.size_bytes) ? f.size_bytes : null,
-        file_type: f.file_type || f.type || null,
-        uploaded_date: f.uploaded_date || null,
+        ...docRepoFileFields(f),
         url: url || null,
         crawl_job_id: crawl_job_id || null,
         generated_at: new Date().toISOString()
@@ -819,17 +816,14 @@ async function runConversion(job) {
     logger.error(
       `Crawl conversion FAILED repo=${repo_id} code=${err.code || '-'} at_bytes=${bytesDone} pages=${pagesDone} error=${err.message}`
     );
-    await patchConversion(repo_id, {
-      status: 'failed',
-      stage: 'failed',
-      error: err.message,
-      code: err.code || 'CONVERSION_FAILED',
-      summary: null, // the record is merged — the previous run's summary must not survive
-      bytes_done: bytesDone,
-      pages_done: pagesDone,
-      batches_done: batchesDone,
-      finished_at: new Date().toISOString()
-    });
+    await patchConversion(
+      repo_id,
+      failedConversionRecord(err, {
+        bytes_done: bytesDone,
+        pages_done: pagesDone,
+        batches_done: batchesDone
+      })
+    );
     throw err;
   } finally {
     if (tmpPath) {
@@ -971,9 +965,38 @@ function isTerminal(conversion) {
   return !!conversion && TERMINAL_STATES.includes(conversion.status);
 }
 
+/**
+ * The ONE failed-conversion record vocabulary. Three writers spell it out —
+ * the crawl failure, the documents failure, a refused start — and the copies
+ * drift: the change that added `stage`/`summary` had to touch two of them in
+ * lockstep, and the web client renders whichever copy wrote last. The
+ * path-specific counters ride along in `extra`, which may override any field
+ * of the base record except `finished_at` (the moment of the failure).
+ *
+ * @param {Error} err the failure
+ * @param {object} [extra] path-specific fields (counters, per-file list, …)
+ */
+function failedConversionRecord(err, extra = {}) {
+  return {
+    status: 'failed',
+    stage: 'failed',
+    error: err.message,
+    code: err.code || 'CONVERSION_FAILED',
+    // The record is MERGED into the repository's conversion slot — the
+    // previous run's summary must not survive a failure.
+    summary: null,
+    ...extra,
+    finished_at: new Date().toISOString()
+  };
+}
+
 module.exports = {
   startConversion,
   isTerminal,
+  // The ONE failed-record vocabulary — the crawl path, the documents path and
+  // a refused start all write it (the documents producer imports it from
+  // here: this service owns the conversion slot).
+  failedConversionRecord,
   sanitizeCrawlBody,
   maxSourceBytesFromEnv,
   MODE_A_SOURCE_LIMIT_BYTES,

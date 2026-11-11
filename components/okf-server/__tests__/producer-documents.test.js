@@ -322,9 +322,11 @@ describe('producer-service — xlsx converter (FR-42: dictionary + row-groups)',
 // ── the conversion run (mocked doc-repo + ingest) ───────────────────────────
 
 describe('producer-service — startDocumentsConversion + run', () => {
-  function mockDocs(files) {
+  function mockDocs(files, hash) {
     // files: { file_id: file_name } — ONE implementation keyed by URL (a
     // second mockDoc() would REPLACE the implementation, clobbering the first).
+    // `hash`: the content hash the duplicate-content gate reads (optional —
+    // a test that never reaches the gate does not need one).
     authedAxios.get.mockImplementation((url) => {
       const s = String(url);
       if (s.endsWith('/download')) {
@@ -333,49 +335,37 @@ describe('producer-service — startDocumentsConversion + run', () => {
       }
       const fid = s.split('/api/files/')[1];
       const fn = files[fid] || fid + '.md';
-      return Promise.resolve({
-        data: { file: { file_id: fid, file_name: fn, size: 100, dataprep: { status: 'Pending' } } }
-      });
+      const file = { file_id: fid, file_name: fn, size: 100, dataprep: { status: 'Pending' } };
+      if (hash) file.file_hash = hash;
+      return Promise.resolve({ data: { file } });
     });
   }
 
   /** A doc-repo metadata mock that also carries a content hash — the
    * duplicate-content gate needs one to read. */
   function mockDocsWithHash(hash) {
-    authedAxios.get.mockImplementation((url) => {
-      const s = String(url);
-      if (s.endsWith('/download')) {
-        const fid = s.split('/api/files/')[1].replace(/\/download$/, '');
-        return Promise.resolve({ data: Readable.from([Buffer.from('# T\n\nbody for ' + fid)]) });
-      }
-      return Promise.resolve({
-        data: {
-          file: {
-            file_id: s.split('/api/files/')[1],
-            file_name: 'alpha.md',
-            size: 100,
-            file_hash: hash,
-            dataprep: { status: 'Pending' }
-          }
-        }
-      });
-    });
+    mockDocs({ f1: 'alpha.md' }, hash);
   }
 
-  /** Make the next duplicate-content query fail — the pre-flight's
+  /** Make the next query matching `matcher` fail — the pre-flight's
    * read-then-act gap, or a database fault. */
-  function failNextDuplicateQuery({ beforeThrow } = {}) {
+  function failNextQuery(matcher, { beforeThrow } = {}) {
     const programImpl = mockDb.query.getMockImplementation();
     let failOnce = true;
     mockDb.query.mockImplementation(async (q, bind) => {
       const text = typeof q === 'string' ? q : q && q.query;
-      if (failOnce && text && text.includes('POSITION(@hashes')) {
+      if (failOnce && text && matcher(text)) {
         failOnce = false;
         if (beforeThrow) beforeThrow();
         throw new Error('db down');
       }
       return programImpl(q, bind);
     });
+  }
+
+  /** Make the next duplicate-content query fail. */
+  function failNextDuplicateQuery(opts) {
+    failNextQuery((text) => text.includes('POSITION(@hashes'), opts);
   }
 
   it('validates: empty / duplicate / too many file_ids', async () => {
@@ -867,16 +857,7 @@ describe('producer-service — startDocumentsConversion + run', () => {
     // every other guard is concerned — so the import must not report success.
     await mockDb.collection('okf_repositories').save({ _key: RID, repo_id: RID, name: 'Mine', domain: 'general' });
     mockDocs({ f1: 'alpha.md' });
-    const programImpl = mockDb.query.getMockImplementation();
-    let failed = false;
-    mockDb.query.mockImplementation(async (q, bind) => {
-      const text = typeof q === 'string' ? q : q && q.query;
-      if (!failed && text && text.includes('source_documents') && !text.includes('POSITION(@hashes')) {
-        failed = true;
-        throw new Error('db down');
-      }
-      return programImpl(q, bind);
-    });
+    failNextQuery((text) => text.includes('source_documents') && !text.includes('POSITION(@hashes'));
 
     await expect(
       producer.startDocumentsConversion({ repo_id: RID, file_ids: ['f1'], requested_name: 'x' })
@@ -911,6 +892,51 @@ describe('producer-service — startDocumentsConversion + run', () => {
     ).rejects.toThrow(/db down/);
     const repo = await mockDb.collection('okf_repositories').document(RID);
     expect(repo.conversion).toMatchObject({ status: 'done', summary: { created: 1 } });
+  });
+
+  it("a FAILED record carries no summary — the previous run's summary must not survive", async () => {
+    // The conversion record is MERGED, so a failed record that does not
+    // clear the summary KEEPS the previous run's — the web client then reads
+    // "import failed" beside the counts of a run that succeeded. The failed
+    // record is the one place that must say "no result".
+    await mockDb.collection('okf_repositories').save({
+      _key: RID,
+      repo_id: RID,
+      name: 'Mine',
+      domain: 'general',
+      conversion: { status: 'done', stage: 'done', files_done: 1, files_total: 1, summary: { created: 1 } }
+    });
+    mockDocsWithHash('HASH-SUMMARY-1');
+    failNextDuplicateQuery();
+
+    await expect(
+      producer.startDocumentsConversion({ repo_id: RID, file_ids: ['f1'], requested_name: 'x' })
+    ).rejects.toThrow(/db down/);
+    const repo = await mockDb.collection('okf_repositories').document(RID);
+    // The prior record was TERMINAL, so it is RESTORED — its summary is the
+    // truth about that run and must stay. The failed-record vocabulary (the
+    // summary: null) applies to a record that REPLACES a result, not to one
+    // that restores it.
+    expect(repo.conversion).toMatchObject({ status: 'done', summary: { created: 1 } });
+
+    // A NON-terminal prior record is CLOSED as failed — there the summary
+    // must be gone: the run it belonged to never produced a result.
+    await mockDb.collection('okf_repositories').save({
+      _key: RID,
+      repo_id: RID,
+      name: 'Mine',
+      domain: 'general',
+      conversion: { status: 'queued', stage: 'queued', files_done: 0, files_total: 1, summary: { created: 9 } }
+    });
+    mockDocsWithHash('HASH-SUMMARY-2');
+    failNextDuplicateQuery();
+
+    await expect(
+      producer.startDocumentsConversion({ repo_id: RID, file_ids: ['f1'], requested_name: 'x' })
+    ).rejects.toThrow(/db down/);
+    const failed = await mockDb.collection('okf_repositories').document(RID);
+    expect(failed.conversion).toMatchObject({ status: 'failed' });
+    expect(failed.conversion.summary).toBeNull();
   });
 
   it('a refused start closes a NON-terminal prior record as failed (it owns no worker)', async () => {
@@ -1274,6 +1300,31 @@ describe('doc-repo-client — fetchDocMeta (the ONE doc-repo metadata fetch + en
   test('degrades to {} on an empty response (never throws)', async () => {
     authedAxios.get.mockResolvedValueOnce({});
     await expect(docRepoClient.fetchDocMeta('f-1')).resolves.toEqual({});
+  });
+
+  test('maps the doc-repo file into the OKF fields ONCE (the shared coercion)', () => {
+    // The importer and the crawl stamper both stamp a doc-repo file's fields
+    // onto the repository document, and their two copies of the coercion
+    // drifted (one accepted a `mimetype` fallback the other did not). One
+    // mapping, both callers.
+    expect(docRepoClient.docRepoFileFields({ file_name: 'a.pdf', file_type: 'application/pdf', size: 12 })).toEqual({
+      file_name: 'a.pdf',
+      file_type: 'application/pdf',
+      size_bytes: 12,
+      uploaded_date: null
+    });
+    // The fallbacks: `type` for a build that names it that, `mimetype` for
+    // one that names it that, and `size_bytes` for one that names THAT.
+    expect(docRepoClient.docRepoFileFields({ type: 'text/plain' }).file_type).toBe('text/plain');
+    expect(docRepoClient.docRepoFileFields({ mimetype: 'text/markdown' }).file_type).toBe('text/markdown');
+    expect(docRepoClient.docRepoFileFields({ size_bytes: 7 }).size_bytes).toBe(7);
+    // A file that carries none of them: nulls, never a crash.
+    expect(docRepoClient.docRepoFileFields({})).toEqual({
+      file_name: null,
+      file_type: null,
+      size_bytes: null,
+      uploaded_date: null
+    });
   });
 });
 

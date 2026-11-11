@@ -27,7 +27,7 @@ const { isArangoNotFound } = require('./arango-errors');
 const { ingestRepoConcepts } = require('./ingest-service');
 const { withSpan } = require('../shared-lib/tracing');
 const crawlConversion = require('./crawl-conversion-service');
-const { fetchDocMeta } = require('./doc-repo-client');
+const { fetchDocMeta, docRepoFileFields } = require('./doc-repo-client');
 const { convertXlsx, slugify } = require('./converters/xlsxSheetConverter');
 // FR-42 for CSV (David 2026-10-12): the SAME dictionary + row-group shape as
 // xlsx, plus LLM topics summarised from the dictionary columns. Async (one
@@ -261,10 +261,7 @@ async function recordSourceDocuments(repoId, fileIds, metaByKey = Object.create(
       const f = await sourceMeta(metaByKey, file_id);
       meta = {
         file_id,
-        file_name: f.file_name || null,
-        file_type: f.file_type || f.type || f.mimetype || null,
-        size_bytes: Number.isFinite(f.size) ? f.size : Number.isFinite(f.size_bytes) ? f.size_bytes : null,
-        uploaded_date: f.uploaded_date || null,
+        ...docRepoFileFields(f),
         file_hash: f.file_hash || null, // content key for the DUPLICATE_CONTENT gate
         dataprep_status: (f.dataprep && f.dataprep.status) || null,
         is_bundle: f.is_bundle === true
@@ -1084,15 +1081,7 @@ async function runDocumentsConversion(job) {
     );
   } catch (err) {
     logger.error(`Documents conversion FAILED repo=${repo_id} code=${err.code || '-'}: ${err.message}`);
-    await patchConversion(repo_id, {
-      status: 'failed',
-      stage: 'failed',
-      error: err.message,
-      code: err.code || 'CONVERSION_FAILED',
-      summary: null, // the record is merged — the previous run's summary must not survive
-      per_file: perFile.slice(),
-      finished_at: new Date().toISOString()
-    });
+    await patchConversion(repo_id, crawlConversion.failedConversionRecord(err, { per_file: perFile.slice() }));
     throw err;
   }
 }
@@ -1225,6 +1214,13 @@ async function startDocumentsConversion({ repo_id, file_ids, requested_name, cla
     claimed = claimed.concat(claimContent(repo_id, 'hash', candidateHashes));
     if (candidateHashes.length > 0) {
       const dupRows = await db.query(
+        // "LIVE" here means "SERVING this content": a RETRACTED repository is
+        // out of service, so its content may be imported elsewhere. The
+        // file-deletion check (backing-file-service) asks a different question
+        // — "does another repository still OWN this file" — and there a
+        // retracted repository still counts, because it can be re-published
+        // and its sources must survive. The two filters answer two questions
+        // and must not be unified.
         `FOR r IN ${COLLECTION}
            FILTER r.deleted_at == null AND r.repo_id != @rid AND r.lifecycle_state != 'retracted'
            LET dupFiles = (
@@ -1271,18 +1267,12 @@ async function startDocumentsConversion({ repo_id, file_ids, requested_name, cla
     const close =
       previous && crawlConversion.isTerminal(previous)
         ? previous
-        : {
-            status: 'failed',
-            stage: 'failed',
-            error: err.message,
-            code: err.code || 'CONVERSION_FAILED',
-            summary: null, // the record is merged — the previous run's summary must not survive
+        : crawlConversion.failedConversionRecord(err, {
             files_done: 0,
             files_total: file_ids.length,
             per_file: [],
-            started_at: queued.started_at,
-            finished_at: new Date().toISOString()
-          };
+            started_at: queued.started_at
+          });
     try {
       // ONE atomic statement: the record is written only while it is still
       // THIS run's. The conversion record is a shared slot — the zip-ingest

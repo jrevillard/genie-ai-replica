@@ -1,0 +1,61 @@
+# ROCm overlay for the GPU service tier (docker-compose.yaml, single-server).
+#
+# Layer it ON TOP of the base files — base files are never edited:
+#   docker compose --env-file env.strixhalo \
+#     -f docker-compose.yaml -f docker-compose.rocm.yaml \
+#     --profile opea --profile gpu-models up -d
+#
+# `-f` order matters: this file must come last. Only the keys a ROCm host
+# needs change: the image pins (env.strixhalo), GPU device access for the
+# two vLLM instances, and neutralization of the NVIDIA env var — compose
+# merges `environment:` BY KEY, so omitting NVIDIA_VISIBLE_DEVICES would
+# NOT remove it from the base definition; it is set to `void` instead,
+# which ROCm containers ignore and which claims no GPU even on an NVIDIA
+# host. Everything else (command flags, healthchecks, networks, profiles,
+# swarm placement) merges from the base files.
+#
+# The TEI services run the CPU image (the ROCm TEI build fails on gfx1151;
+# see the spike results) and therefore need NO device access.
+#
+# Later vendor paths (e.g. Apple Metal) follow this same shape: one
+# overlay file + one sizing env file, base untouched.
+
+services:
+  vllm:
+    image: ${VLLM_ROCM_IMAGE}
+    environment:
+      - HUGGING_FACE_HUB_TOKEN=${HUGGING_FACE_HUB_TOKEN}
+      - NVIDIA_VISIBLE_DEVICES=void
+    devices:
+      - /dev/kfd:/dev/kfd
+      - /dev/dri:/dev/dri
+    group_add:
+      - "${RENDER_GID:-990}" # render — GID is distro-specific; measure with `getent group render`
+      - "${VIDEO_GID:-44}"   # video
+
+  vllm-translation-guardrail:
+    image: ${VLLM_ROCM_IMAGE}
+    environment:
+      - HUGGING_FACE_HUB_TOKEN=${HUGGING_FACE_HUB_TOKEN}
+      - NVIDIA_VISIBLE_DEVICES=void
+    devices:
+      - /dev/kfd:/dev/kfd
+      - /dev/dri:/dev/dri
+    group_add:
+      - "${RENDER_GID:-990}" # render
+      - "${VIDEO_GID:-44}"   # video
+
+  tei:
+    image: ${TEI_ROCM_EMBEDDING_IMAGE}
+    environment:
+      - HUGGING_FACE_HUB_TOKEN=${HUGGING_FACE_HUB_TOKEN}
+      - RUST_BACKTRACE=${RUST_BACKTRACE:-}
+      - NVIDIA_VISIBLE_DEVICES=void
+      - TEI_EMBEDDING_AUTO_TRUNCATE=${TEI_EMBEDDING_AUTO_TRUNCATE:-false}
+
+  tei_reranker:
+    image: ${TEI_ROCM_RERANKING_IMAGE}
+    environment:
+      - HUGGING_FACE_HUB_TOKEN=${HUGGING_FACE_HUB_TOKEN}
+      - RUST_BACKTRACE=${RUST_BACKTRACE:-}
+      - NVIDIA_VISIBLE_DEVICES=void

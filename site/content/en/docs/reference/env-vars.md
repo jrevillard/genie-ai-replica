@@ -159,11 +159,11 @@ node) — see [GPU Deployment → ROCm](/docs/deploy/gpu/).
 
 | Variable | env.t4 default | env.rtx6000 default | env.strixhalo default | Notes |
 |---|---|---|---|---|
-| `VLLM_GPU_UTILIZATION` | `0.4` | `0.55` | `0.42` | Fraction of GPU memory vLLM pre-allocates (on ROCm: of the 45.8 GiB GTT aperture) |
-| `VLLM_MAX_MODEL_LEN` | `2048` | `65536` | `16384` | Context length — the vLLM-side memory knob (`--max-model-len`). Dataprep does NOT read it: it discovers the served window at runtime from `VLLM_ENDPOINT` (see `DATAPREP_MAX_MODEL_LEN`). The shipped Strix Halo values target a shared host (32 GB coexistence ceiling); a mostly-dedicated host fits 0.55/49152, and 65536 does NOT fit at 0.55 (engine estimate 54064) |
+| `VLLM_GPU_UTILIZATION` | `0.4` | `0.55` | `0.28` | Fraction of GPU memory vLLM pre-allocates (on ROCm: of the 45.8 GiB GTT aperture) |
+| `VLLM_MAX_MODEL_LEN` | `2048` | `65536` | `49152` | Context length — the vLLM-side memory knob (`--max-model-len`). Dataprep does NOT read it: it discovers the served window at runtime from `VLLM_ENDPOINT` (see `DATAPREP_MAX_MODEL_LEN`). The shipped Strix Halo values target a shared host (27 GB ceiling, granite-3.1-2b main model); the 8B-class models on a mostly-dedicated host fit 0.55/49152, and 65536 does NOT fit at 0.55 (engine estimate 54064) |
 | `VLLM_MAX_NUM_SEQS` | `16` | `16` | `16` | Max concurrent sequences |
 | `VLLM_DTYPE` | `half` | _(unset, defaults in docker-compose)_ | `half` | Compute dtype |
-| `VLLM_TRANSLATION_GPU_UTILIZATION` | `0.3` | `0.4` | `0.19` | |
+| `VLLM_TRANSLATION_GPU_UTILIZATION` | `0.3` | `0.4` | `0.12` | |
 | `VLLM_TRANSLATION_MAX_MODEL_LEN` | `2048` | `8192` | `8192` | |
 | `VLLM_TRANSLATION_MAX_NUM_SEQS` | `16` | `32` | `16` | |
 | `VLLM_TRANSLATION_DTYPE` | `half` | _(unset)_ | `auto` | |
@@ -178,8 +178,8 @@ group GIDs and shared-host port plan. Values exactly as shipped:
 | `VLLM_ROCM_IMAGE` | `rocm/vllm:rocm10.1.0_ubuntu24.04_py3.14-pytorch_2.13.0_vllm-0.29.0` | vLLM ROCm 10.1 build (0.29.x) — both vLLM instances |
 | `TEI_ROCM_EMBEDDING_IMAGE` | `ghcr.io/huggingface/text-embeddings-inference:cpu-1.9.3` | CPU image — the ROCm TEI build fails on gfx1151 |
 | `TEI_ROCM_RERANKING_IMAGE` | `ghcr.io/huggingface/text-embeddings-inference:cpu-1.9.3` | CPU image (same) |
-| `VLLM_LLM_MODEL_ID` | `ibm-granite/granite-4.1-8b` | Spike-sized main LLM |
-| `VLLM_TRANSLATION_MODEL_ID` | `google/gemma-3-4b-it` | Spike-sized translation LLM |
+| `VLLM_LLM_MODEL_ID` | `ibm-granite/granite-3.1-2b-instruct` | Spike-sized main LLM (fits the 27 GB shared-host ceiling) |
+| `VLLM_TRANSLATION_MODEL_ID` | `google/gemma-3-1b-it` | Spike-sized translation LLM |
 | `DOCLING_DEVICE` | `cpu` | No docling ROCm support on the ROCm path |
 | `NGINX_HTTP_PORT` | `8180` | Shared-host port plan (reference machine) |
 | `NGINX_HTTPS_PORT` | `8443` | |

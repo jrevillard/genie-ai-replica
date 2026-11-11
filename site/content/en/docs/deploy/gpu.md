@@ -207,25 +207,29 @@ There is no discrete VRAM: vLLM claims fractions of the **GTT aperture** —
 measured 45.8 GiB (`rocm-smi --showmeminfo gtt`) — which is carved from the
 91 GB system RAM, so GPU-tier claims add to the host's RAM pressure. The
 shipped `env.strixhalo` sizing targets a **shared** host: total GPU-tier
-claims plus the desktop GTT baseline and runtime overhead must stay under
-32 GB (operator decision 2026-11-11).
+claims plus the GTT baseline and runtime overhead must stay under the
+operator's ceiling, **27 GB** (decision 2026-11-11; the first sizing round
+proved the 8B-class pair cannot fit — gemma-3-4b-it's weights alone
+measure 8.58 GiB).
 
 | Variable | `env.strixhalo` | Note |
 |---|---|---|
-| `VLLM_GPU_UTILIZATION` | `0.42` | 19.2 GiB claim (~16.5 GiB weights + ~2.7 GiB KV) |
-| `VLLM_MAX_MODEL_LEN` | `16384` | the window the 0.42 claim supports on a shared host |
+| `VLLM_GPU_UTILIZATION` | `0.28` | ~12.8 GiB claim (~4.3 GiB weights + ~3.8 GiB KV + runtime overhead) |
+| `VLLM_MAX_MODEL_LEN` | `49152` | the verified window at 0.28 (a 65536 window needs 5.0 GiB KV and does not fit there) |
 | `VLLM_MAX_NUM_SEQS` | `16` | |
 | `VLLM_DTYPE` | `half` | |
-| `VLLM_TRANSLATION_GPU_UTILIZATION` | `0.19` | gemma-3-4b-it — the floor that fits the weights + an 8192 KV window |
+| `VLLM_TRANSLATION_GPU_UTILIZATION` | `0.12` | gemma-3-1b-it (~2 GiB weights + an 8192 KV window, with margin) |
 | `VLLM_TRANSLATION_MAX_MODEL_LEN` | `8192` | |
 | `VLLM_TRANSLATION_MAX_NUM_SEQS` | `16` | |
 | `VLLM_TRANSLATION_DTYPE` | `auto` | |
 
-Larger windows need a **mostly-dedicated** host: `0.55` / `49152` fits the
-45.8 GiB aperture with neighbors stopped (~39 GB peak; ~16.5 GiB weights +
-8.25 GiB KV). Window sizing here is hardware math, not a tuning
-preference: at 0.55 a 65536 window needs ~10 GiB KV and does **not** fit —
-the engine's own estimate for that split was 54064.
+Coexistence verified: both instances healthy together, peak GTT
+**19.6 GiB** against the 27 GB budget. The 8B-class models
+(granite-4.1-8b + gemma-3-4b-it) need a **mostly-dedicated** host: `0.55`
+/ `49152` fits the 45.8 GiB aperture with neighbors stopped (~39 GB peak;
+~16.5 GiB weights + 8.25 GiB KV). Window sizing here is hardware math,
+not a tuning preference: at 0.55 a 65536 window needs ~10 GiB KV and does
+**not** fit — the engine's own estimate for that split was 54064.
 
 ### Why TEI runs on CPU
 
@@ -244,7 +248,7 @@ entrypoint flags work unchanged on the CPU image.
 # 2. Model endpoints (single-server venue)
 docker compose exec vllm curl -s http://localhost:8000/health
 docker compose exec vllm curl -s http://localhost:8000/v1/models
-# → ['ibm-granite/granite-4.1-8b']
+# → ['ibm-granite/granite-3.1-2b-instruct']
 
 # 3. Guided JSON — a chat completion with
 #    response_format={"type":"json_object"} must return valid JSON

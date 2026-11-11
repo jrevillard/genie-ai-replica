@@ -733,22 +733,28 @@ from the 91 GB system RAM — GPU claims add to host RAM pressure, and the
 TEI services claim nothing at all (CPU).
 
 **What fits on the aperture** (shipped `env.strixhalo` sizing targets a
-**shared** host — GPU-tier claims + the desktop GTT baseline + runtime
-overhead must stay under 32 GB, operator decision 2026-11-11):
+**shared** host — GPU-tier claims + the GTT baseline + runtime overhead
+must stay under the operator's 27 GB ceiling, decision 2026-11-11; the
+8B-class pair cannot fit — gemma-3-4b-it's weights alone measure
+8.58 GiB):
 
 | Instance | Model | Claim | Window |
 |---|---|---|---|
-| Main vLLM | `ibm-granite/granite-4.1-8b` (half) | 0.42 (19.2 GiB: ~16.5 GiB weights + ~2.7 GiB KV) | **16384** |
-| Translation vLLM | `google/gemma-3-4b-it` | 0.19 (the floor that fits the weights + an 8192 KV window) | 8192 |
+| Main vLLM | `ibm-granite/granite-3.1-2b-instruct` (half) | 0.28 (~12.8 GiB: ~4.3 GiB weights + ~3.8 GiB KV + overhead) | **49152** |
+| Translation vLLM | `google/gemma-3-1b-it` | 0.12 (~5.5 GiB: ~2 GiB weights + an 8192 KV window, with margin) | 8192 |
 | TEI embedding / reranker | `BAAI/bge-large-en-v1.5` / `BAAI/bge-reranker-v2-m3` | **CPU** (zero GTT) | — |
+
+Coexistence verified: peak GTT 19.6 GiB with both instances healthy.
 
 Notes:
 
-- Larger windows need a **mostly-dedicated** host: 0.55 / **49152** fits
-  the 45.8 GiB aperture with neighbors stopped (~39 GB peak). **65536
-  does NOT fit** even there — it needs ~10 GiB KV at 0.55; the engine's
-  own estimate for that split was max 54064. Window sizing here is
-  hardware math, not a tuning preference.
+- The 8B-class models (granite-4.1-8b + gemma-3-4b-it) need a
+  **mostly-dedicated** host: 0.55 / **49152** fits the 45.8 GiB aperture
+  with neighbors stopped (~39 GB peak). **65536 does NOT fit** even
+  there — it needs ~10 GiB KV at 0.55; the engine's own estimate for
+  that split was max 54064. At 0.28 a 65536 window needs 5.0 GiB KV
+  against ~4.9 available. Window sizing here is hardware math, not a
+  tuning preference.
 - Guided JSON (`response_format={"type":"json_object"}`) verified on the
   ROCm vLLM image — the labeling role keeps its model requirement.
 - The TEI ROCm image fails on gfx1151 (Instinct-only kernels); the CPU
@@ -756,14 +762,14 @@ Notes:
 
 ```bash
 # Strix Halo (values ship in env.strixhalo, used with the ROCm overlays)
-VLLM_LLM_MODEL_ID=ibm-granite/granite-4.1-8b
-VLLM_GPU_UTILIZATION=0.42
-VLLM_MAX_MODEL_LEN=16384
+VLLM_LLM_MODEL_ID=ibm-granite/granite-3.1-2b-instruct
+VLLM_GPU_UTILIZATION=0.28
+VLLM_MAX_MODEL_LEN=49152
 VLLM_MAX_NUM_SEQS=16
 VLLM_DTYPE=half
 
-VLLM_TRANSLATION_MODEL_ID=google/gemma-3-4b-it
-VLLM_TRANSLATION_GPU_UTILIZATION=0.19
+VLLM_TRANSLATION_MODEL_ID=google/gemma-3-1b-it
+VLLM_TRANSLATION_GPU_UTILIZATION=0.12
 VLLM_TRANSLATION_MAX_MODEL_LEN=8192
 VLLM_TRANSLATION_MAX_NUM_SEQS=16
 VLLM_TRANSLATION_DTYPE=auto

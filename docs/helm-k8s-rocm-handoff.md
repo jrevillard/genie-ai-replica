@@ -59,21 +59,22 @@ Why these:
 
 | Variable | Value |
 |---|---|
-| `VLLM_GPU_UTILIZATION` | `0.42` (19.2 GiB claim: ~16.5 GiB weights + ~2.7 GiB KV) |
-| `VLLM_MAX_MODEL_LEN` | `16384` |
+| `VLLM_GPU_UTILIZATION` | `0.28` (~12.8 GiB claim: ~4.3 GiB weights + ~3.8 GiB KV + runtime overhead) |
+| `VLLM_MAX_MODEL_LEN` | `49152` |
 | `VLLM_MAX_NUM_SEQS` | `16` |
 | `VLLM_DTYPE` | `half` |
-| `VLLM_TRANSLATION_GPU_UTILIZATION` | `0.19` (the floor that fits gemma-3-4b-it weights + an 8192 KV window) |
+| `VLLM_TRANSLATION_GPU_UTILIZATION` | `0.12` (gemma-3-1b-it: ~2 GiB weights + an 8192 KV window, with margin) |
 | `VLLM_TRANSLATION_MAX_MODEL_LEN` | `8192` |
 | `VLLM_TRANSLATION_MAX_NUM_SEQS` | `16` |
 | `VLLM_TRANSLATION_DTYPE` | `auto` |
-| `VLLM_LLM_MODEL_ID` | `ibm-granite/granite-4.1-8b` |
-| `VLLM_TRANSLATION_MODEL_ID` | `google/gemma-3-4b-it` |
+| `VLLM_LLM_MODEL_ID` | `ibm-granite/granite-3.1-2b-instruct` |
+| `VLLM_TRANSLATION_MODEL_ID` | `google/gemma-3-1b-it` |
 | `DOCLING_DEVICE` | `cpu` (no docling ROCm support) |
 
-The shipped values target a **shared host**: total GPU-tier claims plus a
-~4.75 GB desktop GTT baseline plus ~1.85 GB runtime overhead must stay
-under 32 GB (operator decision 2026-11-11). Larger windows need a
+The shipped values target a **shared host**: total GPU-tier claims plus
+the GTT baseline plus runtime overhead must stay under the operator's
+**27 GB** ceiling (decision 2026-11-11; the 8B-class pair cannot fit —
+gemma-3-4b-it's weights alone measure 8.58 GiB). The 8B-class models on a
 mostly-dedicated host: 0.55 / 49152 fits the 45.8 GiB aperture with
 neighbors stopped (~39 GB peak). **65536 does NOT fit** even there: it
 needs ~10 GiB KV at 0.55, and the engine's own estimate for that split
@@ -122,9 +123,9 @@ exactly this work. Suggested sequence:
    GPU resource + render/video groups; `rocminfo` must list `gfx1151`
    (AMD RYZEN AI MAX+ 395 w/ Radeon 8060S).
 4. Deploy the charts with `values-rocm.yaml`; watch the vLLM pod pull and
-   load granite-4.1-8b (`/health`, then `/v1/models`). First load
-   downloads ~26 GB from Hugging Face (`HUGGING_FACE_HUB_TOKEN`
-   required; gemma-3-4b-it is license-gated on the same token).
+   load granite-3.1-2b-instruct (`/health`, then `/v1/models`). First
+   load downloads ~4 GB from Hugging Face (`HUGGING_FACE_HUB_TOKEN`
+   required; gemma-3-1b-it is license-gated on the same token).
 5. Verify guided JSON: one chat completion with
    `response_format={"type":"json_object"}` must return valid JSON.
 6. Verify the TEI CPU pods: `/embed` returns vectors for bge-large,

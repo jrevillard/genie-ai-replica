@@ -128,9 +128,11 @@ the knobs to lower.
   a provider whose `/v1/models` carries no `max_model_len`.
 - GPU-profile env files: `env.t4` (T4, 2048 window), `env.rtx6000`
   (RTX 6000 ADA, 65536) and `env.strixhalo` (AMD Strix Halo / gfx1151 —
-  used with the `docker-compose.rocm*.yaml` overlays; ships **16384** on
-  a shared host under a 32 GB coexistence ceiling; 0.55/49152 is the
-  mostly-dedicated-host window and 65536 does not fit that 45.8 GiB GTT
+  used with the `docker-compose.rocm*.yaml` overlays; ships **49152**
+  on a shared host under the operator's 27 GB ceiling with the 2B-class
+  models (granite-3.1-2b @ 0.28, gemma-3-1b-it @ 0.12); the 8B-class
+  models need a mostly-dedicated host at 0.55/49152, and 65536 does not
+  fit that 45.8 GiB GTT
   aperture). Same budget derivation on all three.
 - The ceiling is enforced on **every** write path: the import splits (or
   rejects), the Studio editor refuses the save (409, nothing written), and

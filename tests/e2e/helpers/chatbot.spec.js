@@ -14,16 +14,19 @@ const { readStreamingState, streamingFlagOf, botStreamingFlag } = require('./cha
  * accident live.
  */
 test.describe('the streaming flag is read through the store getter', () => {
-  test('a store without the open conversation is a broken contract, named', () => {
+  test('a store without the getter is a broken contract, named', () => {
     // Not a slow answer: the wait must fail NOW, with the cause in the
     // message, instead of polling to a cause-less timeout.
-    expect(() => streamingFlagOf({ state: 'no-open-conversation' })).toThrow(
-      /conversation\/openConversation/
-    );
+    expect(() => streamingFlagOf({ state: 'no-getter' })).toThrow(/conversation\/openConversation/);
     // NOT booted is transient: the wait continues.
     expect(streamingFlagOf({ state: 'not-booted' })).toBe(null);
     // A BOOTED app without a store is broken, and says so.
     expect(() => streamingFlagOf({ state: 'no-store' })).toThrow(/no store/);
+    // A getter that returns NOTHING is not a broken contract: no
+    // conversation is open yet, so the turn has no answer — the wait
+    // continues. Reporting it as a missing getter named a cause the
+    // operator cannot act on.
+    expect(streamingFlagOf({ state: 'no-open-conversation' })).toBe(null);
   });
 
   test('no bot message yet is NOT "not streaming" — the wait continues', () => {
@@ -185,7 +188,22 @@ test.describe('the page-side read keeps the flag\'s ABSENCE an absence', () => {
       document.querySelector('#app').__vue_app__ = { config: { globalProperties: { $store: {} } } };
     });
     const read = await page.evaluate(readStreamingState);
-    expect(read.state).toBe('no-open-conversation');
+    // The store has NO getters at all: the getter is MISSING, which is
+    // the broken contract — not a conversation that is not open.
+    expect(read.state).toBe('no-getter');
     expect(() => streamingFlagOf(read)).toThrow(/openConversation/);
+  });
+
+  test('a getter that returns nothing means no conversation is open yet', async ({ page }) => {
+    await page.setContent('<div id="app"></div>');
+    await page.evaluate(() => {
+      document.querySelector('#app').__vue_app__ = {
+        config: { globalProperties: { $store: { getters: { 'conversation/openConversation': undefined } } } }
+      };
+    });
+    const read = await page.evaluate(readStreamingState);
+    expect(read.state).toBe('no-open-conversation');
+    // Not a broken contract: the wait continues.
+    expect(streamingFlagOf(read)).toBe(null);
   });
 });

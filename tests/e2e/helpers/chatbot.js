@@ -203,7 +203,14 @@ async function botStreamingFlag(page) {
 function readStreamingState() {
   const app = document.querySelector('#app');
   const store = app && app.__vue_app__ ? app.__vue_app__.config.globalProperties.$store : null;
-  const open = store && store.getters ? store.getters['conversation/openConversation'] : null;
+  const getters = store ? store.getters : null;
+  // The getter's EXISTENCE and its VALUE are two different findings: a
+  // store without the getter is a broken contract, while a getter that
+  // returns nothing means no conversation is OPEN yet — a normal state
+  // (the app may still open one), not a broken one. Reporting the
+  // second as the first would name a cause the operator cannot act on.
+  const hasGetter = !!(getters && 'conversation/openConversation' in getters);
+  const open = hasGetter ? getters['conversation/openConversation'] : null;
   // A booted app without the getter is a broken store contract, not a
   // slow answer: say so now, in the shape the reader (streamingFlagOf)
   // turns into a named failure, instead of polling to a cause-less
@@ -213,6 +220,7 @@ function readStreamingState() {
   // gone is a broken contract, and so is a store without the getter.
   if (!app || !app.__vue_app__) return { state: 'not-booted' };
   if (!store) return { state: 'no-store' };
+  if (!hasGetter) return { state: 'no-getter' };
   if (!open) return { state: 'no-open-conversation' };
   // Only what the decision needs: each message's sender and streaming
   // flag. The whole conversation would cross the wire on every poll tick
@@ -245,6 +253,12 @@ function streamingFlagOf(read) {
   if (read && read.state === 'not-booted') {
     // NOT booted is transient — the app may still be mounting (a reload
     // mid-wait). The wait continues.
+    return null;
+  }
+  if (read && read.state === 'no-open-conversation') {
+    // The getter exists and returns NOTHING: no conversation is open
+    // yet. That is not a broken contract — the turn has no answer to
+    // give, so the wait continues.
     return null;
   }
   if (!read || read.state !== 'ok') {

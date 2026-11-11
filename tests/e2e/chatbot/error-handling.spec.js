@@ -125,6 +125,14 @@ test.describe('RAG error handling', () => {
     // message; a retry that ERRORS renders no answer bubble and fails on
     // the assertion below. The spec's own 600 s budget (above) is ONE
     // total for the hook and the body — see the describe comment.
+    // The new turn must EXIST before the flag wait: the FAILED turn's
+    // message carries isStreaming === false (the app clears the flag when
+    // a turn fails), so a flag wait that starts before the retry's turn
+    // is committed can bind to THAT message and return early — a red
+    // flake, never a false green (the answer assertion below would
+    // catch it). The answer is awaited first, and the flag wait then
+    // confirms that the stream ended.
+    await expect.poll(() => getLastBotMessage(page), { timeout: 10000 }).toContain(RECOVERED_ANSWER);
     await waitForBotResponse(page, { timeout: 10000 });
     // The ANSWER, not merely a non-empty bubble: the welcome turn is a
     // bot bubble too, so "not empty" would pass on a retry that never

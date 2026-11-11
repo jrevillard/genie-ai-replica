@@ -1362,11 +1362,11 @@ describe('AdminDashboard', () => {
 
     it('shows the Measuring fallback on boot, before any measurement lands', () => {
       // REVIEW round-4 coverage: the boot state renders "Measuring…", never
-      // a fabricated figure. REVIEW T2: the note renders through the shared
-      // AdminStatePanel (its DsStateDisplay stub carries the message prop);
-      // the suite's translate resolves the default text.
+      // a fabricated figure. REVIEW T2: pinned on the loading panel's own
+      // handle (the wrapper carries test-id through to the primitive).
       const wrapper = createAdminDashboardWrapper();
-      expect(wrapper.text()).toContain('Measuring…');
+      expect(wrapper.find('[data-test-id="health-measuring"]').exists()).toBe(true);
+      expect(wrapper.find('[data-test-id="usage-measuring"]').exists()).toBe(true);
     });
 
     it('renders an ISO scan stamp localized and passes human strings through', () => {

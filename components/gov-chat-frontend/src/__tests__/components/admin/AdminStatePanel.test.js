@@ -15,17 +15,19 @@ describe('AdminStatePanel', () => {
 
     expect(wrapper.find('[data-test-id="health-error"]').exists()).toBe(true);
     expect(wrapper.text()).toContain('System health is unavailable right now.');
-    // No retry affordance without retryTestId — the error is a dead end
-    // unless the caller wires one.
+    // No retry affordance without `retryable` — the error is a dead end
+    // unless the caller wires one. The WIRING prop is retryable; the test
+    // id is a passive attribute and must never gate behavior.
     expect(wrapper.find('button').exists()).toBe(false);
   });
 
-  it('renders the retry button with its own test-id and emits retry', async () => {
+  it('renders the retry affordance from `retryable`, emitting retry on click', async () => {
     const wrapper = mount(AdminStatePanel, {
       props: {
         type: 'error',
         message: 'Security data is unavailable right now.',
         testId: 'security-error',
+        retryable: true,
         retryTestId: 'security-retry',
         retryLabel: 'Retry'
       }
@@ -34,6 +36,26 @@ describe('AdminStatePanel', () => {
     const button = wrapper.find('[data-test-id="security-retry"]');
     expect(button.exists()).toBe(true);
     expect(button.text()).toBe('Retry');
+
+    await button.trigger('click');
+    expect(wrapper.emitted('retry')).toHaveLength(1);
+  });
+
+  it('renders a retryable button even without a test id (the id is passive)', async () => {
+    // The contract inversion guard: a future call site that forgets
+    // retry-test-id still gets a working Retry button.
+    const wrapper = mount(AdminStatePanel, {
+      props: {
+        type: 'error',
+        message: 'Database statistics are unavailable right now.',
+        retryable: true,
+        retryLabel: 'Retry'
+      }
+    });
+
+    const button = wrapper.find('button');
+    expect(button.exists()).toBe(true);
+    expect(button.attributes('data-test-id')).toBeUndefined();
 
     await button.trigger('click');
     expect(wrapper.emitted('retry')).toHaveLength(1);
@@ -49,17 +71,5 @@ describe('AdminStatePanel', () => {
 
     expect(wrapper.text()).toContain('Measuring…');
     expect(wrapper.find('button').exists()).toBe(false);
-  });
-
-  it('rejects an unknown type', () => {
-    const spy = jest.spyOn(console, 'warn').mockImplementation(() => {});
-    mount(AdminStatePanel, {
-      props: {
-        type: 'spinner',
-        message: 'x'
-      }
-    });
-    expect(spy).toHaveBeenCalled();
-    spy.mockRestore();
   });
 });

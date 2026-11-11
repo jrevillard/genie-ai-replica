@@ -1,6 +1,6 @@
 <template>
   <DsStateDisplay :type="type" :message="message" :data-test-id="testId">
-    <template v-if="retryTestId" #action>
+    <template v-if="retryable" #action>
       <DsButton variant="secondary" small :data-test-id="retryTestId" @click="$emit('retry')">
         {{ retryLabel }}
       </DsButton>
@@ -24,15 +24,24 @@ import DsButton from '../ds/Button.vue';
  * It is admin-scoped on purpose: the panel composes the dashboard's
  * translate() output into DS primitives and adds nothing a DS primitive
  * should own.
+ *
+ * The Retry affordance is gated on `retryable`, NOT on the test handle:
+ * a data-test-id is an inert attribute (E2E-TESTING.md) and must never be
+ * load-bearing for behavior. The wrapper renders only `message` — the
+ * DsStateDisplay default slot is intentionally not forwarded, so a caller
+ * passing slot content gets a dev-time warning instead of a silently
+ * empty panel.
  */
 export default {
   name: 'AdminStatePanel',
   components: { DsStateDisplay, DsButton },
   props: {
+    // Passed straight through to DsStateDisplay — the primitive owns the
+    // type vocabulary and validates it; a second validator here would be a
+    // second list to keep in sync.
     type: {
       type: String,
-      required: true,
-      validator: (v) => ['error', 'loading', 'empty'].includes(v)
+      required: true
     },
     message: {
       type: String,
@@ -41,6 +50,10 @@ export default {
     testId: {
       type: String,
       default: undefined
+    },
+    retryable: {
+      type: Boolean,
+      default: false
     },
     retryTestId: {
       type: String,
@@ -51,6 +64,18 @@ export default {
       default: undefined
     }
   },
-  emits: ['retry']
+  emits: ['retry'],
+  created() {
+    if (this.retryable && !this.retryLabel && process.env.NODE_ENV !== 'production') {
+      // An unlabeled button is a blank pill for sighted users and silence
+      // for screen readers — make the missing label loud in dev.
+      console.warn('[AdminStatePanel] retryable is set but retryLabel is missing — the button would render unlabeled.');
+    }
+    if (this.$slots.default && process.env.NODE_ENV !== 'production') {
+      console.warn(
+        '[AdminStatePanel] renders only `message` — default-slot content is discarded. Pass the text via the message prop.'
+      );
+    }
+  }
 };
 </script>

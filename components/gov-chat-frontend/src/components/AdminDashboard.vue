@@ -94,6 +94,7 @@
                     type="error"
                     :message="translate('admin.health.unavailable', 'System health is unavailable right now.')"
                     test-id="health-error"
+                    retryable
                     retry-test-id="health-retry"
                     :retry-label="translate('admin.retry', 'Retry')"
                     @retry="loadSystemHealth"
@@ -109,7 +110,12 @@
                       <span>{{ translate(`admin.services.${service.id}`, service.name) }}</span>
                     </div>
                   </div>
-                  <AdminStatePanel v-else type="loading" :message="translate('admin.measuring', 'Measuring…')" />
+                  <AdminStatePanel
+                    v-else
+                    type="loading"
+                    :message="translate('admin.measuring', 'Measuring…')"
+                    test-id="health-measuring"
+                  />
                 </div>
 
                 <div v-if="activeTab === 'overview'" class="dashboard-card">
@@ -126,6 +132,7 @@
                     type="error"
                     :message="translate('admin.resources.unavailable', 'Resource usage is unavailable right now.')"
                     test-id="usage-error"
+                    retryable
                     retry-test-id="usage-retry"
                     :retry-label="translate('admin.retry', 'Retry')"
                     @retry="loadSystemHealth"
@@ -152,7 +159,12 @@
                       </div>
                     </div>
                   </div>
-                  <AdminStatePanel v-else type="loading" :message="translate('admin.measuring', 'Measuring…')" />
+                  <AdminStatePanel
+                    v-else
+                    type="loading"
+                    :message="translate('admin.measuring', 'Measuring…')"
+                    test-id="usage-measuring"
+                  />
                 </div>
 
                 <div v-if="activeTab === 'hierarchy'" class="dashboard-card" style="grid-column: span 2">
@@ -287,6 +299,7 @@
                                 'Translations could not be loaded. Editing the translations and saving stay disabled until they load.'
                               )
                             "
+                            retryable
                             retry-test-id="hierarchy-translations-retry"
                             :retry-label="translate('admin.hierarchy.retryTranslations', 'Retry')"
                             @retry="retryHierarchyTranslations"
@@ -704,6 +717,7 @@
                     type="error"
                     :message="translate('admin.dbStats.unavailable', 'Database statistics are unavailable right now.')"
                     test-id="db-stats-error"
+                    retryable
                     retry-test-id="db-stats-retry"
                     :retry-label="translate('admin.retry', 'Retry')"
                     @retry="loadDatabaseStats"
@@ -718,7 +732,12 @@
                       {{ dbStats.totalTables }}
                     </div>
                   </div>
-                  <AdminStatePanel v-else type="loading" :message="translate('admin.measuring', 'Measuring…')" />
+                  <AdminStatePanel
+                    v-else
+                    type="loading"
+                    :message="translate('admin.measuring', 'Measuring…')"
+                    test-id="db-stats-measuring"
+                  />
                 </div>
 
                 <div v-if="activeTab === 'logs'" class="dashboard-card" style="grid-column: span 2">
@@ -937,6 +956,7 @@
                     type="error"
                     :message="translate('admin.security.unavailable', 'Security data is unavailable right now.')"
                     test-id="security-error"
+                    retryable
                     retry-test-id="security-retry"
                     :retry-label="translate('admin.retry', 'Retry')"
                     @retry="retrySecurity"

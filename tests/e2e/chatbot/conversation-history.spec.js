@@ -8,9 +8,25 @@ const {
   saveChat,
   BASE_URL
 } = require('../helpers/chatbot');
-const { getSessionToken, getSessionTokenViaUI, request, SESSION_MINT_TIMEOUT_MS } = require('../helpers/auth');
+const {
+  getSessionToken,
+  getSessionTokenViaUI,
+  describeUnauthorized,
+  mapWithConcurrency,
+  request,
+  SESSION_MINT_TIMEOUT_MS,
+  SWEEP_DELETE_CONCURRENCY,
+  SWEEP_MAX_DELETES,
+  SWEEP_MAX_LIST_PAGES
+} = require('../helpers/auth');
 
 const API_TIMEOUT_MS = 30000;
+
+// The page size the cleanup sweep lists the conversation population with.
+// The endpoint accepts up to 100, and the sweep enumerates two pages — a
+// window of 200 conversations. The delete budget is a separate cap
+// (SWEEP_MAX_DELETES).
+const LIST_PAGE_SIZE = 100;
 
 const MOCKED_ANSWER = 'Mocked answer for the history test.';
 
@@ -48,11 +64,14 @@ test.describe('Conversation history persistence', () => {
   // Direct access grants are disabled on the realm by design, so the
   // cleanup session logs in through the browser like the tests do and
   // reuses that session's token for the API deletes. The sweep is by the
-  // suite's title prefix, not just the ids captured in-flight — a test
+  // suite's title prefix — and the ids captured in-flight are its FALLBACK
+  // for the case where not one page of the list could be read: a test
   // that failed between its save and its bookkeeping must not leak the
   // conversation it already persisted.
   test.afterAll(async ({ browser }) => {
-    // The cleanup's mint + list + delete sweep outlives the 60s hook default.
+    // The cleanup's mint + list + delete sweep outlives the 60s hook
+    // default. The budget that covers it, the wave width and the delete
+    // cap are documented in helpers/auth.js.
     test.setTimeout(SESSION_MINT_TIMEOUT_MS);
 
     // A failing cleanup FAILS: a conversation left behind poisons later
@@ -62,51 +81,152 @@ test.describe('Conversation history persistence', () => {
       throw new Error(`cleanup login failed — the suite's conversations were not swept: ${e.message}`);
     });
 
-    let targets;
+    // The list is paginated, and its search matches a SUPERSET of the
+    // suite's own conversations: the endpoint filters LIKE over title OR
+    // lastMessage OR category, while the sweep deletes the conversations
+    // whose TITLE starts with 'E2E '. One page is therefore not the
+    // population, and the sweep cannot tell "the conversations beyond the
+    // page are not mine" from "the conversations beyond the page are mine
+    // and were not removed" — the second one is a leftover. Enumerate the
+    // pages the budget allows.
+    const conversations = [];
+    let total;
     let listFailure = null;
-    // searchTerm narrows the list to the suite's own titles (the route's
-    // default page is 20 — old leftovers would rotate off it unfiltered).
-    const listRes = await request('GET', `${BASE_URL}/api/chat/conversations?searchTerm=E2E&limit=50`, {
-      headers: { Authorization: `Bearer ${token}` }
-    }).catch((e) => {
-      listFailure = e.message;
-      return null;
-    });
-    if (listRes && listRes.status === 200) {
-      const list = listRes.data.conversations || listRes.data;
-      targets = (Array.isArray(list) ? list : []).filter((c) => c.title?.startsWith('E2E ')).map((c) => c._key || c.id);
-    } else {
-      listFailure = listFailure || `list returned ${listRes ? listRes.status : 'no response'}`;
-      // Fall back to the ids captured in-flight so the deletes still run,
-      // but the unenumerated leftovers still fail the cleanup below.
-      targets = [...createdConversationIds];
-    }
-
-    const undeleted = [];
-    for (const convId of targets) {
+    let exhausted = false;
+    let pagesRead = 0;
+    for (let offset = 0; offset < SWEEP_MAX_LIST_PAGES * LIST_PAGE_SIZE; offset += LIST_PAGE_SIZE) {
+      let listRes;
       try {
-        const res = await request('DELETE', `${BASE_URL}/api/chat/conversations/${convId}`, {
-          headers: { Authorization: `Bearer ${token}` }
-        });
-        if (res.status < 200 || res.status >= 300) {
-          undeleted.push({ id: convId, cause: `DELETE returned ${res.status}` });
-        }
-      } catch (err) {
-        undeleted.push({ id: convId, cause: err.message });
+        listRes = await request(
+          'GET',
+          `${BASE_URL}/api/chat/conversations?searchTerm=E2E&limit=${LIST_PAGE_SIZE}&offset=${offset}`,
+          { headers: { Authorization: `Bearer ${token}` } }
+        );
+      } catch (e) {
+        listFailure = `offset ${offset} failed: ${e.message}`;
+        break;
+      }
+      if (listRes.status !== 200) {
+        listFailure = `offset ${offset} returned HTTP ${listRes.status}`;
+        break;
+      }
+      const list = listRes.data?.conversations || listRes.data;
+      if (!Array.isArray(list)) {
+        // A response without the array is a changed contract, not an
+        // empty population: reading it as empty would end the sweep with
+        // a green report and the suite's conversations still in place.
+        listFailure = `offset ${offset} carried no conversation array (the response shape changed)`;
+        break;
+      }
+      conversations.push(...list);
+      pagesRead++;
+      // The population is the same on every page: keep the first count
+      // that arrives, so a page without a pagination object does not
+      // erase what the previous page established.
+      if (total === undefined) {
+        total = listRes.data?.pagination?.total;
+      }
+      if (list.length < LIST_PAGE_SIZE) {
+        exhausted = true;
+        break;
       }
     }
+
+    // Two populations, and the report must not conflate them: the
+    // POPULATION is every conversation the endpoint matched (the LIKE
+    // set), the suite's OWN is the E2E-titled ones inside it — only
+    // those are the sweep's to remove.
+    //
+    // The ids captured in-flight are the fallback when NOT ONE page
+    // could be read: the deletes still run, and the failure is reported
+    // below. A later page that fails must NOT discard the pages that
+    // succeeded — those conversations are known, and leaving them behind
+    // is the leftover this sweep exists to prevent.
+    const own = pagesRead > 0
+      ? conversations.filter((c) => c.title?.startsWith('E2E ')).map((c) => c._key || c.id)
+      : [...createdConversationIds];
+    const populationKnown = total !== undefined;
+    const enumeratedAll = populationKnown ? conversations.length >= total : exhausted;
+
+    const deleteSet = own.slice(0, SWEEP_MAX_DELETES);
+    const beyondBudget = own.length - deleteSet.length;
+
+    // The deletes run in bounded-parallel waves: a sequential sweep of a
+    // full page costs 50 × 30 s — more than the hook's budget and more
+    // than the realm's access-token lifespan, so the tail of it would run
+    // on an expired token. The width and the arithmetic live in
+    // helpers/auth.js (SWEEP_DELETE_CONCURRENCY).
+    const undeleted = (
+      await mapWithConcurrency(deleteSet, SWEEP_DELETE_CONCURRENCY, async (convId) => {
+        try {
+          const res = await request('DELETE', `${BASE_URL}/api/chat/conversations/${convId}`, {
+            headers: { Authorization: `Bearer ${token}` }
+          });
+          if (res.status < 200 || res.status >= 300) {
+            return {
+              id: convId,
+              cause:
+                res.status === 401
+                  ? `DELETE returned ${describeUnauthorized(res, token)}`
+                  : `DELETE returned ${res.status}`
+            };
+          }
+          return null;
+        } catch (err) {
+          return { id: convId, cause: err.message };
+        }
+      })
+    ).filter(Boolean);
+
+    // Every failure condition is reported: the first throw used to hide
+    // the others (the enumeration failure hid the failed deletes), so a
+    // run could name one leftover and pass over the rest.
+    const problems = [];
     if (listFailure) {
-      throw new Error(
-        `cleanup could not enumerate leftover conversations (${listFailure}) — ` +
-          `${targets.length} in-flight ids were deleted, but any conversation saved by a failed ` +
-          `test and missed by the bookkeeping stays behind`
-      );
+      problems.push(`the conversation list could not be read — ${listFailure}`);
     }
     if (undeleted.length > 0) {
-      throw new Error(
-        `cleanup deleted ${targets.length - undeleted.length} of ${targets.length} conversations — ` +
-          `leftover: ${undeleted.map((u) => `${u.id} (${u.cause})`).join(', ')}`
+      problems.push(
+        `${undeleted.length} of ${deleteSet.length} conversations were not deleted — leftover: ` +
+          `${undeleted.map((u) => `${u.id} (${u.cause})`).join(', ')}`
       );
+    }
+    if (beyondBudget > 0) {
+      problems.push(
+        `${beyondBudget} conversations are beyond the sweep's delete budget (${SWEEP_MAX_DELETES} per ` +
+          `run) — they stay behind until a later run removes them`
+      );
+    }
+    if (!enumeratedAll) {
+      // What the sweep knows depends on the branch: either the POPULATION
+      // exceeds the window it enumerated, or the population's size is
+      // unknown. Either way the sweep cannot account for everything it
+      // may own — and it says so, rather than naming a leftover it has
+      // not established.
+      problems.push(
+        populationKnown
+          ? `the sweep did not enumerate the whole population — a suite conversation beyond the ` +
+            `last enumerated page, if any, was not removed`
+          : pagesRead > 0
+            ? `the population size is unknown — the sweep read full pages, so a suite conversation ` +
+                `beyond the last enumerated page, if any, was not removed`
+            : `the population size is unknown and the sweep read NOTHING — only the conversations ` +
+                `captured in flight were removed, and any other suite conversation may remain`
+      );
+    }
+    if (problems.length > 0) {
+      // The scope must not claim a subset relation between two different
+      // populations: when NOT ONE page could be read, `own` holds the
+      // ids the tests captured in flight — the suite's own, but not a
+      // subset of what was read.
+      const scope = populationKnown
+        ? `population: ${total} matching conversations, ${conversations.length} read, ` +
+          `${own.length} of them the suite's own`
+        : pagesRead > 0
+          ? `population unknown, ${conversations.length} matching conversations read, ` +
+            `${own.length} of them the suite's own`
+          : `population unknown, nothing read, ${own.length} of the suite's own captured in flight`;
+      throw new Error(`cleanup: ${problems.length} problem(s) — ${scope} — ${problems.join(' | ')}`);
     }
   });
 

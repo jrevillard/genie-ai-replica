@@ -171,7 +171,7 @@ Values from Tasks 2–3 (sizing-overlay pattern of `env.rtx6000`): `VLLM_GPU_UTI
 
 - [ ] **Step 2: Write `docker-compose.rocm.yaml`**
 
-For each of `vllm`, `vllm-translation-guardrail`, `tei`, `tei_reranker` restate ONLY: `image: ${VLLM_ROCM_IMAGE}` / TEI vars, full `environment:` list (sequences replace wholesale — keep `HUGGING_FACE_HUB_TOKEN`, drop `NVIDIA_VISIBLE_DEVICES`), `devices:` + `group_add:` from Task 4, and `healthcheck.start_period` only if Task 3 measured slower starts. Overlay header comment: base files untouched, `-f` order matters.
+For each of `vllm`, `vllm-translation-guardrail`, `tei`, `tei_reranker` restate ONLY: `image: ${VLLM_ROCM_IMAGE}` / TEI vars, the `environment:` list with one addition — `NVIDIA_VISIBLE_DEVICES=void` (compose merges environment BY KEY, so omitting the var is not enough; `void` neutralizes it — ROCm containers ignore it and it claims no GPU even on an NVIDIA host), `devices:` + `group_add:` from Task 4, and `healthcheck.start_period` only if Task 3 measured slower starts. Overlay header comment: base files untouched, `-f` order matters.
 
 - [ ] **Step 3: Assert the merged config**
 
@@ -179,7 +179,8 @@ For each of `vllm`, `vllm-translation-guardrail`, `tei`, `tei_reranker` restate 
 docker compose --env-file .env --env-file env.strixhalo \
   -f docker-compose.yaml -f docker-compose.rocm.yaml \
   --profile opea --profile gpu-models config > /tmp/rocm-merged.yaml
-grep -c "NVIDIA_VISIBLE_DEVICES" /tmp/rocm-merged.yaml        # expected: 0 in the 4 gpu services
+grep -c "NVIDIA_VISIBLE_DEVICES=all" /tmp/rocm-merged.yaml    # expected: 0 in the 4 gpu services
+grep -c "NVIDIA_VISIBLE_DEVICES=void" /tmp/rocm-merged.yaml   # expected: 4 (neutralized by the overlay)
 grep -A2 "^  vllm:" /tmp/rocm-merged.yaml | grep "image:"     # expected: winner tag var resolved
 grep -c "/dev/kfd" /tmp/rocm-merged.yaml                      # expected: 4 (vllm, translation, tei, tei_reranker)
 grep -c "DOCLING_DEVICE" /tmp/rocm-merged.yaml                # expected: 1, value cpu

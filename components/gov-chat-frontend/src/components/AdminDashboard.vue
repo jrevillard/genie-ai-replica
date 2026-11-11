@@ -1,5 +1,5 @@
 <template>
-  <div class="admin-page">
+  <div class="admin-page genie-living-intelligence">
     <div class="admin-dashboard" data-test-id="admin-dashboard">
       <div class="dashboard">
         <div class="main">

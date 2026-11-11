@@ -836,6 +836,36 @@ describe('keycloakAuthService', () => {
       });
     }
 
+    it("logs the realm's candidate count when the trial cap truncates the candidates", async () => {
+      // A realm publishing more candidate keys than the cap is a realm to
+      // clean up, not a token to guess at: the token is rejected, and the
+      // log names the realm\'s key set as the reason instead of leaving the
+      // operator with a bare rejection.
+      const warns = captureWarns();
+      const ambiguous = ambiguousKeysError([
+        { key: 'candidate-1' },
+        { key: 'candidate-2' },
+        { key: 'candidate-3' },
+        { key: 'candidate-4' }
+      ]);
+      mockJwtVerify.mockRejectedValueOnce(ambiguous).mockImplementation(async () => {
+        const signatureError = new Error('signature verification failed');
+        signatureError.name = 'JWSSignatureVerificationFailed';
+        throw signatureError;
+      });
+
+      try {
+        await expect(keycloakAuthService.verifyToken(generateMockJwtString(mockJwtPayload))).rejects.toMatchObject({
+          code: 'TOKEN_INVALID'
+        });
+
+        const logged = warns.lines();
+        expect(logged).toContain('more candidate keys than the trial cap');
+      } finally {
+        warns.restore();
+      }
+    });
+
     it('does not spend a signature verification on an expired kid-less token', async () => {
       // The trial costs one verification per candidate. An expired token can
       // never verify — jose checks the signature BEFORE the claims — so it

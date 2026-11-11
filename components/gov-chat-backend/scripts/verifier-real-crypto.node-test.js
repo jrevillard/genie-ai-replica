@@ -51,6 +51,13 @@ const { publicKey: rotatedPublicKey, privateKey: rotatedPrivateKey } = generateK
   publicKeyEncoding: { type: 'spki', format: 'jwk' },
   privateKeyEncoding: { type: 'pkcs8', format: 'jwk' }
 });
+// A FOURTH pair: the candidate trial is bounded at three, so a token signed
+// with this key can only be resolved by a realm publishing fewer keys.
+const { publicKey: fourthPublicKey, privateKey: fourthPrivateKey } = generateKeyPairSync('rsa', {
+  modulusLength: 2048,
+  publicKeyEncoding: { type: 'spki', format: 'jwk' },
+  privateKeyEncoding: { type: 'pkcs8', format: 'jwk' }
+});
 // An EC pair stands for a realm that publishes an EC signing key only. The
 // verifier accepts RS256 only, so such a key set holds nothing usable.
 const { publicKey: ecPublicKey } = generateKeyPairSync('ec', {
@@ -514,6 +521,26 @@ test('a kid-less token that no published candidate signs is a bad token, not an 
   const svc = loadVerifier();
   // a key the realm does not publish
   const kidless = await sign(baseClaims(DISCOVERY_ISSUER), { key: rotatedPrivateKey, kid: undefined });
+  await assert.rejects(
+    () => svc.verifyToken(kidless),
+    (err) => err.code === 'TOKEN_INVALID'
+  );
+});
+
+test('a realm publishing more candidate keys than the trial cap cannot resolve a kid-less token', async () => {
+  // The trial is bounded (three candidates): a realm that publishes more
+  // signing keys than the cap is a realm to clean up, not a token to guess
+  // at. The token here is signed by the FOURTH published key — without the
+  // cap it would verify, so this test IS the cap.
+  const svc = loadVerifier();
+  publishedKeys = {
+    keys: [
+      ...JWKS.keys,
+      { ...rotatedPublicKey, kid: 'third-key', alg: 'RS256', use: 'sig' },
+      { ...fourthPublicKey, kid: 'fourth-key', alg: 'RS256', use: 'sig' }
+    ]
+  };
+  const kidless = await sign(baseClaims(DISCOVERY_ISSUER), { key: fourthPrivateKey, kid: undefined });
   await assert.rejects(
     () => svc.verifyToken(kidless),
     (err) => err.code === 'TOKEN_INVALID'

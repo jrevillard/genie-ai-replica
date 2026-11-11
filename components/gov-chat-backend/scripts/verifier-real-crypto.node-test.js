@@ -23,6 +23,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const { generateKeyPairSync } = require('node:crypto');
+const path = require('node:path');
 const { SignJWT, jwtVerify } = require('jose');
 
 const KEYCLOAK_URL = 'http://keycloak:8080';
@@ -218,6 +219,33 @@ function loadVerifier(env) {
   // does not apply to `node --test`.
   // eslint-disable-next-line local/no-runtime-unresolvable-shared-path
   return require('../../shared/lib/keycloak-auth-service.js');
+}
+
+// The verifier resolves 'jose' from the shared lib's own node_modules — the
+// build the document-repository image ships (6.2.17). The backend and OKF
+// images ship the shared lib WITHOUT it and resolve their own build
+// instead (6.2.5 / 6.2.8), and the builds disagree on a key id that is not
+// a string. Point the verifier at another build to run a case under it:
+// the module cache entry the verifier will ask for is replaced for the
+// duration of the call.
+function loadVerifierWithJose(joseBuild) {
+  const sharedLib = path.dirname(require.resolve('../../shared/lib/keycloak-auth-service.js'));
+  const verifierJose = require.resolve('jose', { paths: [sharedLib] });
+  const previous = require.cache[verifierJose];
+  require.cache[verifierJose] = {
+    id: verifierJose,
+    filename: verifierJose,
+    loaded: true,
+    exports: require(joseBuild),
+    children: [],
+    paths: []
+  };
+  try {
+    return loadVerifier();
+  } finally {
+    if (previous) require.cache[verifierJose] = previous;
+    else delete require.cache[verifierJose];
+  }
 }
 
 function baseClaims(iss, extra = {}) {
@@ -531,9 +559,17 @@ test('a token whose key id is not a string is a bad token, not a candidate trial
   // A key id that is not a string (a number) is a MALFORMED token, not a
   // token naming no key id: a realm's key id is a string, so resolving the
   // token against the published candidates would accept a token the realm
-  // never issued. The trial applies ONLY to a token that names NO key id —
-  // so this one is rejected, like any other bad token.
-  const svc = loadVerifier();
+  // never issued. The trial applies ONLY to a token that names NO key id.
+  //
+  // The case runs under the BACKEND image's jose build (6.2.5) against a
+  // realm publishing a SINGLE signing key — the common deployment. There,
+  // jose matches every published key when the key id is not a string, so a
+  // one-key realm resolves the token without the verifier ever seeing an
+  // error: only the verifier's own rule refuses it. Under the shared lib's
+  // build (6.2.17) jose refuses such a key id itself, and the test would
+  // pass whether or not the rule existed.
+  const svc = loadVerifierWithJose('../node_modules/jose');
+  publishedKeys = { keys: [JWKS.keys[0]] };
   const malformed = await sign(baseClaims(DISCOVERY_ISSUER), { kid: 123 });
   await assert.rejects(
     () => svc.verifyToken(malformed),

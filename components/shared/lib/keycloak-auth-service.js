@@ -222,18 +222,15 @@ const MAX_CANDIDATE_KEYS = 3;
  * here. A JSON-serialized JWT would carry an unprotected header and change
  * that; the compact check is what keeps the two in step.
  *
- * The value is returned AS IT IS — a header may carry a key id that is not
- * a string (a number, null), and that is a malformed token, not a token
- * naming no key id. The two must not be confused: the trial resolves a
- * token naming NO key id, and only that one.
+ * A key id that is not a string is refused by the key resolver before this
+ * is asked, so the value here is always a string when the token names one.
  *
  * @param {Object|undefined} protectedHeader - The token's protected header
- * @returns {*} The key id, when the token names one — undefined when it
- *   names none
+ * @returns {string|undefined} The key id, when the token names one
  */
 function effectiveKid(protectedHeader) {
-  if (!protectedHeader || !Object.prototype.hasOwnProperty.call(protectedHeader, 'kid')) return undefined;
-  return protectedHeader.kid;
+  const kid = protectedHeader && protectedHeader.kid;
+  return typeof kid === 'string' ? kid : undefined;
 }
 
 /**
@@ -352,6 +349,22 @@ function createJwksCache(jwksUri, ttlMs = JWKS_CACHE_TTL) {
    * @returns {Promise<Key>} Cryptographic key
    */
   async function jwksFn(protectedHeader, token) {
+    // A key id that is not a string is a MALFORMED token, and the verifier
+    // refuses it BEFORE jose sees it. RFC 7515 §4.1.4 types the key id as a
+    // string, so a realm never issues such a token — and jose's own builds
+    // disagree on what one means: the older ones match EVERY published key
+    // when the key id is not a string (so a realm publishing a single
+    // signing key resolves the token without the verifier ever seeing an
+    // error), the newer one matches NONE. Deciding here makes the answer
+    // the same on every service: a token the realm never issued does not
+    // authenticate.
+    if (protectedHeader && Object.prototype.hasOwnProperty.call(protectedHeader, 'kid')) {
+      if (typeof protectedHeader.kid !== 'string') {
+        const malformed = new Error('the token names a key id that is not a string');
+        malformed.name = 'JWTInvalidKeyId';
+        throw malformed;
+      }
+    }
     // Whether the cached set is inside its cooldown window BEFORE the call:
     // jose suppresses the reload-on-unknown-kid while it is, and only this
     // snapshot says whether a refresh was floored (the cooldown window is
@@ -398,7 +411,7 @@ function createJwksCache(jwksUri, ttlMs = JWKS_CACHE_TTL) {
         // id more than once — an outage, #1776) and a token that names none
         // (the published candidates can resolve it — #1767).
         const kid = effectiveKid(protectedHeader);
-        if (typeof kid === 'string') {
+        if (kid !== undefined) {
           // jose matches the candidates by that EXACT key id, so more than
           // one candidate means the realm published that key id more than
           // once — the realm's own broken state, the same class as a realm
@@ -421,16 +434,10 @@ function createJwksCache(jwksUri, ttlMs = JWKS_CACHE_TTL) {
         // candidates can resolve it. The error carries them; the caller
         // tries them (#1767). ONLY a kid-less ambiguity reaches the caller
         // — the named-kid case above is answered here, so the trial can
-        // never resolve a token naming a duplicated key id.
-        //
-        // A token naming a key id that is NOT a string (a number, null) is
-        // neither case: jose matched the candidates without comparing that
-        // key id, so the trial could resolve a token the realm never
-        // issued. The flag tells the caller which case this is — the trial
-        // runs for a token naming no key id and for nothing else.
-        if (kid === undefined) {
-          err.kidLess = true;
-        }
+        // never resolve a token naming a duplicated key id. The flag tells
+        // the caller which case this is: the trial runs for a token naming
+        // no key id and for nothing else.
+        err.kidLess = true;
         throw err;
       }
       throw new TokenVerificationError(
@@ -840,14 +847,16 @@ const keycloakAuthService = {
       // a claim failure is the token's own defect whatever key it names.
       let failure = err;
       // The trial costs one signature verification per candidate, so it
-      // never runs for a token that cannot be valid anyway: an expired
-      // token is decided from the unverified payload (jose checks the
-      // signature BEFORE the claims, so the manual check is what keeps an
-      // expired junk token from costing a verification), and so is a token
-      // whose expiry jose will reject anyway — jose requires the `exp`
-      // claim (`requiredClaims`) and refuses a non-numeric one, so a token
-      // without a numeric expiry is invalid whatever key signs it.
-      const expired = unverifiedExp && unverifiedExp < Math.floor(Date.now() / 1000);
+      // never runs for a token that cannot be valid anyway. Two cases, both
+      // decided from the unverified payload (jose checks the signature
+      // BEFORE the claims, so the manual check is what keeps a junk token
+      // from costing a verification):
+      //   - an expired token — jose's own test is `exp <= now` (no clock
+      //     tolerance here), so the same comparison is used here;
+      //   - a token whose expiry jose will refuse anyway — jose requires
+      //     the `exp` claim (`requiredClaims`) and refuses one that is not
+      //     a number, so such a token is invalid whatever key signs it.
+      const expired = typeof unverifiedExp === 'number' && unverifiedExp <= Math.floor(Date.now() / 1000);
       const expiryUsable = typeof unverifiedExp === 'number';
       // The trial applies ONLY to a token that names NO key id: the key
       // resolver answers the named-kid case itself (the realm's outage,
@@ -855,29 +864,39 @@ const keycloakAuthService = {
       // branch and is never resolved by trying one of the duplicates. The
       // resolver flags the case it could not answer itself — a token
       // naming no key id — and only that one carries the flag.
-      if (err.name === 'JWKSMultipleMatchingKeys' && err.kidLess === true && !expired && expiryUsable) {
-        const trial = await tryCandidateKeys(err, token, jwtOptions);
-        if (trial.ok) {
-          const result = toResult(trial.payload);
-          if (debugEnabled()) {
-            logger.debug(`[KeycloakAuth] Token verified against a published candidate key for ${result.iss_sub}`);
-          }
-          return result;
-        }
-        if (trial.truncated) {
-          // The realm published more candidates than the trial may try:
-          // the token is not resolved by guessing, and the operator is told
-          // why. This line IS the explanation — the generic rejection line
-          // below would only repeat it.
-          logRejection(
-            unverifiedIss,
-            `${err.name}:trial-truncated`,
-            () =>
-              `[KeycloakAuth] Token verification failed (JWKSMultipleMatchingKeys): the realm published more candidate keys than the trial cap (${MAX_CANDIDATE_KEYS} tried) — the token could not be resolved`
-          );
+      if (err.name === 'JWKSMultipleMatchingKeys' && err.kidLess === true) {
+        if (!expiryUsable) {
+          // The token's own defect, and the one jose would report: an
+          // expiry that is not a number. Decided here so the trial spends
+          // no signature verification on a token that cannot be accepted
+          // whatever key signs it. It is a claim failure, like every other
+          // claim failure, and is reported as one.
           throw new TokenVerificationError('TOKEN_INVALID', 'Token verification failed');
         }
-        failure = trial.error || err;
+        if (!expired) {
+          const trial = await tryCandidateKeys(err, token, jwtOptions);
+          if (trial.ok) {
+            const result = toResult(trial.payload);
+            if (debugEnabled()) {
+              logger.debug(`[KeycloakAuth] Token verified against a published candidate key for ${result.iss_sub}`);
+            }
+            return result;
+          }
+          if (trial.truncated) {
+            // The realm published more candidates than the trial may try:
+            // the token is not resolved by guessing, and the operator is told
+            // why. This line IS the explanation — the generic rejection line
+            // below would only repeat it.
+            logRejection(
+              unverifiedIss,
+              `${err.name}:trial-truncated`,
+              () =>
+                `[KeycloakAuth] Token verification failed (JWKSMultipleMatchingKeys): the realm published more candidate keys than the trial cap (${MAX_CANDIDATE_KEYS} tried) — the token could not be resolved`
+            );
+            throw new TokenVerificationError('TOKEN_INVALID', 'Token verification failed');
+          }
+          failure = trial.error || err;
+        }
       }
 
       // JWTExpired → immediate TOKEN_EXPIRED (no refresh attempt)

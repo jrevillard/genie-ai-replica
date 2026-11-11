@@ -47,6 +47,29 @@ const JWKS_CACHE_TTL = 300000; // 5 minutes JWKS cache TTL (NFR10) — jose's `c
 // the anchor is the token library's, not ours.
 const JWKS_REFRESH_COOLDOWN_MS = 1000;
 
+// How long a rejected token's cause keeps its WARN slot (#1769).
+//
+// The token is caller-controlled and unauthenticated: a rejected token used
+// to cost one WARN line, so a scanner posting garbage bearer tokens
+// produced one log line per request — the same amplification class #1703
+// was filed for on the JWKS-fetch side, moved from HTTP calls to log bytes.
+// The cost lands on the log pipeline (the OTel collector -> VictoriaLogs
+// leg) and on the operator: the auth log ends up dominated by client
+// behaviour, and the interesting lines (a realm outage, a key rotation) are
+// buried in it.
+//
+// The policy: the FIRST rejection of each distinct cause in a window is a
+// WARN; the repeats are DEBUG (off at the default log level, so they cost
+// nothing). The bucket is per ISSUER as well as per cause — a broken realm
+// must not mute another realm's warnings.
+const REJECTION_LOG_WINDOW_MS = 60000;
+
+/**
+ * The per-issuer, per-cause log buckets of the rejection policy.
+ * Keyed by `${issuer} ${cause}` → { windowStart, suppressed }.
+ */
+const rejectionLogBuckets = new Map();
+
 /**
  * Does the fetched key set hold a key that can verify an RS256 signature?
  *
@@ -95,6 +118,37 @@ try {
   }
 } catch {
   logger.warn('[KeycloakAuth] Invalid JSON in KEYCLOAK_ADDITIONAL_REALMS, ignoring');
+}
+
+/**
+ * Log a rejected token without letting the caller turn the log into a flood.
+ *
+ * The first rejection of each distinct cause in a window is a WARN; the
+ * repeats are DEBUG, and the next WARN says how many were suppressed. The
+ * cause has its own bucket — the "key-set refresh floored" line keeps a WARN
+ * slot of its own, because a rotation losing one refresh is a service-side
+ * event, not client noise, and must stay visible at WARN.
+ *
+ * @param {string} issuer - The issuer the token named (the bucket is per issuer)
+ * @param {string} cause - The distinct cause of the rejection (the bucket is per cause)
+ * @param {string} line - The log line to write
+ */
+function logRejection(issuer, cause, line) {
+  const key = `${issuer} ${cause}`;
+  const now = Date.now();
+  const bucket = rejectionLogBuckets.get(key);
+  if (!bucket || now - bucket.windowStart >= REJECTION_LOG_WINDOW_MS) {
+    const suppressed = bucket ? bucket.suppressed : 0;
+    rejectionLogBuckets.set(key, { windowStart: now, suppressed: 0 });
+    const tail =
+      suppressed > 0
+        ? ` — ${suppressed} further rejection(s) with this cause were suppressed since the last warning`
+        : '';
+    logger.warn(`${line}${tail}`);
+  } else {
+    bucket.suppressed += 1;
+    logger.debug(line);
+  }
 }
 
 /**
@@ -260,13 +314,12 @@ function createJwksCache(jwksUri, ttlMs = JWKS_CACHE_TTL) {
             'Authentication service is temporarily unavailable (the realm published no usable signing key)'
           );
         }
-        if (coolingDown) {
-          // jose answered from the cached set instead of re-fetching it: the
-          // realm may ALREADY publish the key this token names, and the next
-          // refresh observes it. The flag travels with the error so the
-          // caller can say so in the log.
-          err.refreshFloored = true;
-        }
+        // jose answered from the cached set instead of re-fetching it: the
+        // realm may ALREADY publish the key this token names, and the next
+        // refresh observes it. The flag travels with the error so the
+        // caller can say so in the log. It is set on EVERY call — a stale
+        // flag from an earlier rejection would misreport this one.
+        err.refreshFloored = coolingDown;
         throw err;
       }
       if (err && err.name === 'JWKSMultipleMatchingKeys') {
@@ -714,8 +767,10 @@ const keycloakAuthService = {
           return result;
         }
         if (trial.truncated) {
-          logger.warn(
-            `[KeycloakAuth] Token verification failed: the realm published more candidate keys than the trial cap (${MAX_CANDIDATE_KEYS} tried) — the token could not be resolved`
+          logRejection(
+            unverifiedIss,
+            'JWKSMultipleMatchingKeys:trial-truncated',
+            `[KeycloakAuth] Token verification failed (JWKSMultipleMatchingKeys): the realm published more candidate keys than the trial cap (${MAX_CANDIDATE_KEYS} tried) — the token could not be resolved`
           );
         }
         failure = trial.error || err;
@@ -762,18 +817,28 @@ const keycloakAuthService = {
       // The rejection names the underlying jose error: without it every
       // distinct cause (tampered signature, unknown key id, ambiguous key
       // set, wrong algorithm) reaches the operator's log as the same
-      // 'Token verification failed'.
+      // 'Token verification failed'. The line is rate-limited per issuer and
+      // per cause: a rejected token is caller-controlled, so one WARN per
+      // rejection is a flood the caller can produce (#1769).
       if (failure.refreshFloored) {
         // The refresh floor held the key-set refresh back. The realm may
         // ALREADY publish the key this token names — a rotation that landed
         // inside the window is observed by the next refresh, not by this
         // one. Saying so keeps a burst of 401s around a key rotation
-        // distinguishable from a burst of junk tokens.
-        logger.warn(
+        // distinguishable from a burst of junk tokens. It keeps a WARN slot
+        // of its own: the rotation losing a refresh is a service-side
+        // event, not client noise.
+        logRejection(
+          unverifiedIss,
+          `${failure.name}:refresh-floored`,
           `[KeycloakAuth] Token verification failed (${failure.name}): key-set refresh floored — rotation recovery deferred to the next refresh`
         );
       } else {
-        logger.warn(`[KeycloakAuth] Token verification failed (${failure.name || 'Error'}): ${failure.message}`);
+        logRejection(
+          unverifiedIss,
+          failure.name || 'Error',
+          `[KeycloakAuth] Token verification failed (${failure.name || 'Error'}): ${failure.message}`
+        );
       }
 
       throw new TokenVerificationError('TOKEN_INVALID', 'Token verification failed');
@@ -841,7 +906,15 @@ const keycloakAuthService = {
       // destructively on a confirmed disable (soft-deletes the account), so
       // an uncorroborated 403 stays ambiguous, like an uncorroborated 401.
       if (error.response && error.response.status === 403) {
-        logger.warn('[KeycloakAuth] Keycloak UserInfo returned 403 — ambiguous, treating as null');
+        // Rate-limited like the rejection line: this diagnostic answers once
+        // per REJECTED token (the caller asks Keycloak whether the user
+        // behind a rejected token was disabled), so a flood of garbage
+        // tokens would otherwise produce one line per request (#1769).
+        logRejection(
+          issuer,
+          'UserInfo 403 (ambiguous)',
+          '[KeycloakAuth] Keycloak UserInfo returned 403 — ambiguous, treating as null'
+        );
         return null;
       }
       // 401 is ambiguous: an expired token and a disabled user both answer
@@ -874,7 +947,14 @@ const keycloakAuthService = {
                 .replace(/[\u0000-\u001F\u007F-\u009F\u2028\u2029]/g, '')
                 .slice(0, 200)})`
             : '';
-        logger.warn(`[KeycloakAuth] Keycloak UserInfo returned 401 — ambiguous, treating as null${headerNote}`);
+        // Rate-limited like the rejection line: this diagnostic answers once
+        // per REJECTED token, so a flood of garbage tokens would otherwise
+        // produce one line per request (#1769).
+        logRejection(
+          issuer,
+          'UserInfo 401 (ambiguous)',
+          `[KeycloakAuth] Keycloak UserInfo returned 401 — ambiguous, treating as null${headerNote}`
+        );
         return null;
       }
       // Network errors: timeouts are transient (warn), unexpected errors are severe (error)
@@ -906,6 +986,7 @@ const keycloakAuthService = {
     initFailedAt = 0;
     initFailureReason = null;
     initialized = false;
+    rejectionLogBuckets.clear();
   },
 
   /**

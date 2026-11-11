@@ -485,10 +485,12 @@ describe('keycloakAuthService', () => {
     };
 
     beforeEach(() => {
-      // Reset mocks
+      // Reset mocks — global.fetch too: the verifier fetches the discovery
+      // document through the global, so a mock that is not installed there
+      // would silently serve the default document to every init.
       mockCreateRemoteJWKSet = jest.fn().mockReturnValue(jest.fn());
       mockJwtVerify = jest.fn();
-      mockFetch = jest.fn().mockResolvedValue({
+      mockFetch = global.fetch = jest.fn().mockResolvedValue({
         ok: true,
         json: async () => mockDiscovery
       });
@@ -772,6 +774,142 @@ describe('keycloakAuthService', () => {
       await expect(keycloakAuthService.verifyToken(generateMockJwtString(mockJwtPayload))).rejects.toMatchObject({
         code: 'AUTH_SERVICE_UNAVAILABLE'
       });
+    });
+
+    // Spies on the REAL shared/lib winston logger — the virtual
+    // '../shared-lib' mock covers only the barrel, so the verifier's log
+    // lines are visible here and nowhere else. Silences the transport and
+    // restores the spy even when the assertions fail, so a failing test
+    // cannot leak the mock into its neighbours.
+    function captureDebugs() {
+      const loggerModule = require('../../shared/lib/logger');
+      const debugSpy = jest.spyOn(loggerModule.logger, 'debug').mockImplementation(() => {});
+      return {
+        lines: () => debugSpy.mock.calls.map(([msg]) => String(msg)).join('\n'),
+        restore: () => debugSpy.mockRestore()
+      };
+    }
+
+    it('logs the first rejection of a cause at WARN and the repeats at DEBUG', async () => {
+      // A rejected token is caller-controlled and unauthenticated: one WARN
+      // line per rejection is a log flood the caller can produce (#1769).
+      // The first rejection of a cause in a window is a WARN, the repeats
+      // are DEBUG (off at the default log level).
+      const warns = captureWarns();
+      const debugs = captureDebugs();
+      mockJwtVerify.mockRejectedValue(unknownKidError());
+      const token = generateMockJwtString({ exp: undefined });
+
+      try {
+        for (let i = 0; i < 3; i++) {
+          await expect(keycloakAuthService.verifyToken(token)).rejects.toMatchObject({
+            code: 'TOKEN_INVALID'
+          });
+        }
+
+        expect(warns.lines().split('\n').filter(Boolean)).toHaveLength(1);
+        expect(debugs.lines().split('\n').filter(Boolean)).toHaveLength(2);
+      } finally {
+        warns.restore();
+        debugs.restore();
+      }
+    });
+
+    it('reports how many rejections were suppressed since the last warning', async () => {
+      // The suppressed count is what keeps the bound from hiding the
+      // volume: the operator sees "3 rejections" instead of three lines.
+      const warns = captureWarns();
+      const realNow = Date.now();
+      const clockSpy = jest.spyOn(Date, 'now').mockReturnValue(realNow);
+      mockJwtVerify.mockRejectedValue(unknownKidError());
+      const token = generateMockJwtString({ exp: undefined });
+
+      try {
+        for (let i = 0; i < 3; i++) {
+          await expect(keycloakAuthService.verifyToken(token)).rejects.toMatchObject({
+            code: 'TOKEN_INVALID'
+          });
+        }
+        // The window elapses: the next rejection opens a new one and says
+        // how many were suppressed since the last warning.
+        clockSpy.mockReturnValue(realNow + 60000);
+        await expect(keycloakAuthService.verifyToken(token)).rejects.toMatchObject({
+          code: 'TOKEN_INVALID'
+        });
+
+        expect(warns.lines()).toContain('2 further rejection(s) with this cause were suppressed');
+      } finally {
+        clockSpy.mockRestore();
+        warns.restore();
+      }
+    });
+
+    it('keeps the floored-refresh line in a WARN slot of its own', async () => {
+      // The floored line is a service-side event (a rotation losing one
+      // refresh), so it must not be swallowed by the bucket of the
+      // rejections around it: it keeps its own WARN slot.
+      const warns = captureWarns();
+      let cooling = true;
+      const inner = jest.fn().mockRejectedValue(unknownKidError());
+      Object.defineProperty(inner, 'coolingDown', { get: () => cooling, configurable: true });
+      mockCreateRemoteJWKSet.mockReturnValue(inner);
+      mockJwtVerify.mockImplementation(async (token, key) => key({ alg: 'RS256' }, token));
+      const token = generateMockJwtString(mockJwtPayload);
+
+      try {
+        // Floored: the realm may already publish the key this token names.
+        await expect(keycloakAuthService.verifyToken(token)).rejects.toMatchObject({
+          code: 'TOKEN_INVALID'
+        });
+        // Not floored: the key set was re-read and the key is simply not
+        // published — a different cause, a different bucket.
+        cooling = false;
+        await expect(keycloakAuthService.verifyToken(token)).rejects.toMatchObject({
+          code: 'TOKEN_INVALID'
+        });
+
+        const lines = warns.lines().split('\n').filter(Boolean);
+        expect(lines).toHaveLength(2);
+        expect(lines.join('\n')).toContain('key-set refresh floored');
+      } finally {
+        warns.restore();
+      }
+    });
+
+    it("does not let one issuer mute another issuer's warnings", async () => {
+      // The bucket is per issuer as well as per cause: a broken realm must
+      // not mute another realm's warnings.
+      const warns = captureWarns();
+      const discovery1 = {
+        issuer: 'http://localhost:8080/realms/genie',
+        jwks_uri: 'http://localhost:8080/realms/genie/protocol/openid-connect/certs'
+      };
+      const discovery2 = {
+        issuer: 'http://localhost:8080/realms/genie2',
+        jwks_uri: 'http://localhost:8080/realms/genie2/protocol/openid-connect/certs'
+      };
+      mockFetch
+        .mockResolvedValueOnce({ ok: true, json: async () => discovery1 })
+        .mockResolvedValueOnce({ ok: true, json: async () => discovery2 });
+      mockJwtVerify.mockRejectedValue(unknownKidError());
+
+      try {
+        await keycloakAuthService.init('http://localhost:8080/realms/genie');
+        await keycloakAuthService.init('http://localhost:8080/realms/genie2');
+
+        await expect(
+          keycloakAuthService.verifyToken(generateMockJwtString({ ...mockJwtPayload, iss: discovery1.issuer }))
+        ).rejects.toMatchObject({ code: 'TOKEN_INVALID' });
+        await expect(
+          keycloakAuthService.verifyToken(generateMockJwtString({ ...mockJwtPayload, iss: discovery2.issuer }))
+        ).rejects.toMatchObject({ code: 'TOKEN_INVALID' });
+
+        // One WARN per issuer: the second realm's rejection is not muted by
+        // the first realm's.
+        expect(warns.lines().split('\n').filter(Boolean)).toHaveLength(2);
+      } finally {
+        warns.restore();
+      }
     });
 
     it('should reject with TOKEN_INVALID on JWTClaimValidationFailed (iss mismatch)', async () => {

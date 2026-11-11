@@ -853,9 +853,9 @@
                   <div v-if="searchResults && searchResults.length > 0" class="logs-summary">
                     <h3 class="summary-title">
                       <span class="status-indicator info"></span>
-                      {{ translate('admin.searchResults', 'Latest Search Results') }}
+                      {{ translate('admin.logsSection.searchResults', 'Latest Search Results') }}
                       <span class="results-count">
-                        ({{ searchResults.length }} {{ translate('admin.entriesFound', 'entries found') }})
+                        ({{ searchResults.length }} {{ translate('admin.logsSection.entriesFound', 'entries found') }})
                       </span>
                     </h3>
                     <div class="log-summary-table">
@@ -887,7 +887,7 @@
                       </table>
                       <div v-if="searchResults.length > 5" class="view-more-logs">
                         <DsButton variant="secondary" :small="true" @click="searchLogs">
-                          {{ translate('admin.viewAllResults', 'View All Results') }}
+                          {{ translate('admin.logsSection.viewAllResults', 'View All Results') }}
                         </DsButton>
                       </div>
                     </div>
@@ -1542,7 +1542,7 @@
                         variant="ghost"
                         :small="true"
                         class="search-clear-btn"
-                        :aria-label="translate('admin.clearSearch', 'Clear search')"
+                        :aria-label="translate('admin.userManagementSection.clearSearch', 'Clear search')"
                         @click="resetUserSearch"
                       >
                         <svg
@@ -1637,10 +1637,15 @@
                             {{ translate('admin.userManagementSection.searchingUsers', 'Searching for users...') }}
                           </div>
                           <div v-else-if="userSearchResults !== null">
-                            {{ translate('admin.noUsersFound', 'No users found matching your search criteria.') }}
+                            {{
+                              translate(
+                                'admin.userManagementSection.noUsersFound',
+                                'No users found matching your search criteria.'
+                              )
+                            }}
                           </div>
                           <div v-else>
-                            {{ translate('admin.noUsers', 'No users available.') }}
+                            {{ translate('admin.userManagementSection.noUsers', 'No users available.') }}
                           </div>
                         </td>
                       </tr>
@@ -2725,7 +2730,10 @@ export default {
           // treat it exactly like a rejection (review H1).
           this.healthLoadError = true;
           this.resetHealthSurfaces();
-          this.showNotification('Failed to parse system health data', 'error');
+          this.showNotification(
+            this.translate('admin.health.parseFailed', 'Failed to parse system health data'),
+            'error'
+          );
         }
       } catch (error) {
         console.error('Error loading system health:', error);
@@ -2735,7 +2743,7 @@ export default {
         // retry affordance.
         this.healthLoadError = true;
         this.resetHealthSurfaces();
-        this.showNotification('Failed to load system health data', 'error');
+        this.showNotification(this.translate('admin.health.loadFailed', 'Failed to load system health data'), 'error');
       } finally {
         this.isLoading = false;
       }
@@ -2770,7 +2778,7 @@ export default {
         }
       } catch (error) {
         console.error('Error loading logs:', error);
-        this.showNotification('Failed to load logs', 'error');
+        this.showNotification(this.translate('admin.logsLoadFailed', 'Failed to load logs'), 'error');
       } finally {
         this.isLoading = false;
       }
@@ -3209,7 +3217,10 @@ export default {
         }
       } catch (error) {
         console.error('Error searching users:', error);
-        this.showNotification(this.translate('admin.userSearch.error', 'Error searching users'), 'error');
+        this.showNotification(
+          this.translate('admin.userManagementSection.userSearch.error', 'Error searching users'),
+          'error'
+        );
         this.userSearchResults = [];
         this.userSearchTotal = 0;
       } finally {
@@ -4016,7 +4027,7 @@ export default {
                   '{count} ingested/ingesting file(s) will be SKIPPED — retract them first to delete them.'
                 ).replace('{count}', String(blockedIds.size))
               : ''),
-          confirmText: this.translate('admin.documents.delete', 'Delete'),
+          confirmText: this.translate('common.delete', 'Delete'),
           cancelText: this.translate('common.cancel', 'Cancel'),
           onConfirm: async () => {
             this.isLoading = true;

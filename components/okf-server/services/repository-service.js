@@ -166,6 +166,12 @@ function decodeCursor(cursor) {
  * name of the wrong TYPE is its own error — the Joi layer rejects it at the
  * route, so only an internal caller reaches it, and "a name of only spaces"
  * would send it looking for whitespace in a number.
+ *
+ * WHY A REFUSAL AND NOT A DERIVED NAME: the boundaries that HAVE a default
+ * derive one — the convert endpoints and the clone fall back to the source's
+ * name (#1699). The registry write boundary has no default to fall back to:
+ * a repository created here IS the name the steward will read in the list, so
+ * a blank one is refused rather than invented.
  * @param {string} name
  * @param {'create'|'update'} op the operation, for the operations counter
  */

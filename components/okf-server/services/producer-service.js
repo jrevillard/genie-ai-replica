@@ -245,9 +245,12 @@ async function sourceMeta(cache, file_id) {
  * this list, so an erased hash would let the same content land in another
  * repository.
  *
- * RETENTION: the list only grows. It never forgets what the repository
- * backed — that is the point of the gate — so a retracted source stays listed
- * (with its content hash) until the repository is deleted.
+ * RETENTION: the list only grows — an import never forgets what the
+ * repository backed, so the entries stay listed (with their content hash)
+ * until the repository is deleted. What the GATE consults is the OTHER
+ * repository's lifecycle, not these entries: a retracted repository does not
+ * block a duplicate import (the content is out of service), while a live one
+ * keeps its sources listed and blocking.
  */
 async function recordSourceDocuments(repoId, fileIds, metaByKey = Object.create(null)) {
   const db = await getDb();
@@ -1170,6 +1173,10 @@ async function startDocumentsConversion({ repo_id, file_ids, requested_name, cla
 
     const db = await getDb();
     const candidateHashes = []; // the content hashes — the gate matches on them
+    // The stamped-repository existence check is MEMOIZED: every candidate
+    // file carries the same stamp when a corpus moves from one repository to
+    // another, and the check is a database read per file.
+    const stampedRepoExists = new Map();
     for (const file_id of file_ids) {
       let meta;
       try {
@@ -1190,11 +1197,14 @@ async function startDocumentsConversion({ repo_id, file_ids, requested_name, cla
       }
       const stamped = meta && meta.okf_repo_id;
       if (stamped && stamped !== repo_id) {
-        let exists;
-        try {
-          exists = !!(await db.collection(COLLECTION).document(stamped));
-        } catch {
-          exists = false; // tombstoned/gone → stale stamp, import proceeds
+        let exists = stampedRepoExists.get(stamped);
+        if (exists === undefined) {
+          try {
+            exists = !!(await db.collection(COLLECTION).document(stamped));
+          } catch {
+            exists = false; // tombstoned/gone → stale stamp, import proceeds
+          }
+          stampedRepoExists.set(stamped, exists);
         }
         if (exists) {
           throw Object.assign(

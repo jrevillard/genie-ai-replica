@@ -39,3 +39,85 @@ pins and numbers — never invent new ones.
 | `rocm10.1.0_ubuntu24.04_py3.14-pytorch_2.13.0_vllm-0.29.0` | 0.29.0 | version parity with NVIDIA pin `v0.29.0`; gfx support unstated |
 
 Candidate order for Task 2: gfx1151-dedicated → rdna → rocm10.1.0.
+
+## Candidate matrix (Task 2 — in progress)
+
+The `rocm/vllm` tags are BUILDER images: their default CMD reinstalls a
+gfx-tuned vLLM wheel from `rocm.frameworks.amd.com`; there is no serving
+entrypoint. Production form: one-time derivation (`docker run` default CMD
+→ `docker commit` → serve from the committed image), recorded per
+candidate below. Serving from the builder image directly would re-run the
+pip install on every container start.
+
+### Candidate 1 — `rocm/vllm:rocm7.13.0_gfx1151_..._vllm_0.19.1`
+
+- Derived local image: `rocm-vllm-gfx1151-ready:0.19.1`
+- granite-4.1-8b @ `--gpu_memory_utilization 0.55 --max_model_len 49152
+  --max_num_seqs 16 --dtype half --enforce-eager`:
+  - `/health` OK; `/v1/models` → `['ibm-granite/granite-4.1-8b']`
+  - completion: `'OK'`, finish `stop`, 3.3 s wall
+  - guided JSON (`response_format: json_object`): valid JSON returned,
+    2.5 s wall → **dataprep requirement met**
+- Memory finding (first attempt, 65536 window): 0.55 × 45.8 GiB leaves
+  8.25 GiB KV; a 65536 window needs ~10 GiB (engine estimate: max
+  54064). **The 65536 window does not fit this iGPU at 0.55** — window
+  sizing is a hardware-math conclusion, not a tuning preference.
+- Coexistence budget (GTT 45.8 GiB, ~4.4 GiB baseline): main + translation
+  claims must stay ≤ ~41 GiB.
+
+Pending: gemma-3-4b-it probe (operator HF token, license-gated);
+candidates 2/3 (rdna 0.23, rocm10.1.0 vLLM 0.29.0) for version parity —
+newest passing tag wins the pin.
+
+### Candidate 3 — `rocm/vllm:rocm10.1.0_ubuntu24.04_py3.14-pytorch_2.13.0_vllm-0.29.0` — **WINNER (pending gemma)**
+
+- vLLM `0.29.1.dev0+g98dff2a81.rocm101`, torch 2.13.0+rocm10.1.0
+  preinstalled; default CMD is `/bin/bash` — **a plain serving
+  environment, no wheel-install derivation needed** (unlike candidate 1).
+- granite-4.1-8b @ 0.55 / 49152 / half / eager: `/health` OK, completion
+  OK, guided JSON valid.
+- Version parity with the NVIDIA pin (`vllm/vllm-openai:v0.29.0` ≈
+  0.29.x) — same flag surface and guided-JSON behavior dataprep validated
+  against on NVIDIA.
+- Candidate 2 (`rocm7.14.1_rdna_..._vllm_0.23.0`) skipped: bracketed by
+  two passing points (0.19.1, 0.29.1); no signal it would add.
+
+**Task 5/9/11 pin: `VLLM_ROCM_IMAGE=rocm/vllm:rocm10.1.0_ubuntu24.04_py3.14-pytorch_2.13.0_vllm-0.29.0`**
+(gemma probe pending — if it fails on this tag, fall back to candidate 1
+and re-evaluate).
+
+## Task 3 — TEI
+
+- Official TEI ROCm image: `ghcr.io/huggingface/text-embeddings-inference:rocm-latest`
+  — docs scope it to Instinct MI200/MI300 (gfx9); gfx1151 explicitly
+  "work in progress". iGPU attempt then CPU fallback
+  (`cpu-<ver>` tag) per design.
+- **iGPU attempt FAILED** as the docs warned: python backend starts, first
+  embed kills it (`Server error: transport error` → backend terminated →
+  "Model backend is not healthy"). gfx1151 kernels absent.
+- **DECISION — CPU fallback wins**: `ghcr.io/huggingface/text-embeddings-inference:cpu-1.9.3`
+  for BOTH `tei` and `tei_reranker`.
+  - bge-large-en-v1.5: `/health` OK, `/embed` returns vectors.
+  - bge-reranker-v2-m3: `/health` OK, `/rerank` scores correctly
+    (relevant 1.0 vs irrelevant 0.0).
+  - Zero GTT claims (GTT unchanged while running) — the whole 45.8 GiB
+    aperture stays available to the two vLLM instances. 32 CPU cores are
+    ample for bge-scale models.
+  - Base compose entrypoint flags (`--json-output --auto-truncate
+    --max-batch-tokens`) work unchanged on the CPU image — the overlay
+    need only restate `image` + environment, not the entrypoint.
+
+## Task 4 — Passthrough verdicts
+
+- **Compose: WORKS.** `devices: [/dev/kfd, /dev/dri]` + `group_add: [990, 44]`
+  (render, video) — verified by every vLLM/TEI spike container above.
+- **Swarm: DOES NOT pass `devices:`** — `docker stack deploy` of a
+  rocminfo probe shows `SWARM-GPU-MISSING` (Docker 29.8.2, single-node
+  swarm initialized 2026-11-11 with operator consent). **Caveat path per
+  design**: the swarm-deployed ROCm GPU tier runs via the standalone
+  GPU-node compose stack (Task 9 overlay) on the ROCm node; docs say so.
+- Host port plan for the ROCm venues on THIS machine (audit 2026-11-11;
+  neighbors occupy 80, 443, 8080, 8025, 8530, 8765–8767, 8790, 9100–9102,
+  11434, 21115–21119, 24224–24288, 33306…): **NGINX_HTTP_PORT=8180,
+  NGINX_HTTPS_PORT=8443, ARANGO_PORT=18529** in `env.strixhalo`.
+

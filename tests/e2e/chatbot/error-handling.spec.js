@@ -43,16 +43,22 @@ test.describe('RAG error handling', () => {
   //   - the navbar's offline state (expect's default): 15 s;
   //   - the composer again: 5 s;
   //   - sendMessage #2 waits for the composer again: 10 s;
-  //   - the retry's answer: TWO successive 10 s waits — the bubble's
-  //     text, then the streaming flag — so 20 s;
+  //   - the retry's answer: THREE successive 10 s waits — the answer
+  //     poll, the bubble's text, then the streaming flag — so 30 s;
   //   - the composer a third time: 5 s.
   //
-  // That is 95 s of waiting in the BODY, plus 105 s of ceilings on
-  // seven operations: five actions at the project's 15 s actionTimeout
-  // (the two sends' fill and press, the final fill) and two getters at
-  // the same 15 s (the answer's innerText and the inputValue) — the
-  // runner makes actionTimeout the context's default timeout, so those
-  // two follow it (and setting it to 0 would leave them unbounded).
+  // That is 105 s of waiting in the BODY, plus 120 s of ceilings on
+  // eight operations: five actions at the project's 15 s actionTimeout
+  // (the two sends' fill and press, the final fill) and three getters at
+  // the same 15 s (the answer's innerText — read twice, by the poll and
+  // by the assertion — and the inputValue) — the runner makes
+  // actionTimeout the context's default timeout, so those three follow
+  // it (and setting it to 0 would leave them unbounded).
+  //
+  // The retry waits for its OWN answer before the flag wait: the failed
+  // turn's message carries isStreaming === false, so a flag wait that
+  // started before the retry's turn was committed could bind to THAT
+  // message and return early.
   //
   // The budget is ONE total, shared by the hook and the body:
   // `test.describe.configure({ timeout })` bounds the test, and the hook
@@ -66,7 +72,7 @@ test.describe('RAG error handling', () => {
   // dashboard (30 s on the first attempt, 15 s on the retry) — 225 s for
   // the two, plus the 30 s navigation to the chatbot: 255 s.
   //
-  // 255 s + 200 s = 455 s, inside the 600 s below.
+  // 255 s + 225 s = 480 s, inside the 600 s below.
   test.describe.configure({ timeout: 600000 });
 
   let page;

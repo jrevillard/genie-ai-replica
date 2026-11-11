@@ -15,8 +15,11 @@
  * never produces a trailing double slash, so every `${BASE_URL}/...`
  * interpolation stays well-formed even when the environment configures
  * BASE_URL with a trailing '/'. The run script reads the address this
- * module exports, so there is one spelling of the venue — and one place
- * that spells it.
+ * module exports, so there is one spelling of the venue IN THE JS TREE —
+ * and one place that spells it. The run SCRIPT names its own default
+ * venue (`DEFAULT_VENUE` in `run/run-local-e2e.sh`): it is the shell
+ * that starts the run, so it must say which venue it starts against, and
+ * that name is outside the JS tree the venue-origin gate reads.
  *
  * This module carries no credential — a spec that needs venue
  * credentials takes them from `helpers/e2e-fixtures.js` (or from the

@@ -240,9 +240,11 @@ function readStreamingState() {
  * decides what it MEANS. Two contracts live here, and both are easy to
  * break by accident:
  *
- * - a store that does not expose the open conversation is a BROKEN store
+ * - a store that does not expose the getter at all is a BROKEN store
  *   contract, not a slow answer: it fails now, by name, instead of
- *   polling to a cause-less timeout;
+ *   polling to a cause-less timeout. A getter that EXISTS and returns
+ *   nothing is a different finding — no conversation is open yet — and
+ *   the wait continues;
  * - no bot message yet is NOT "not streaming" — the turn has not
  *   produced one, so the wait continues (null is not false).
  *

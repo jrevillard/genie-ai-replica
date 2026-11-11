@@ -34,6 +34,19 @@ describe('the throwaway tree', () => {
     expect(fs.existsSync(root)).toBe(false);
   });
 
+  test('an async callback that REJECTS leaves no tree behind', async () => {
+    let root = null;
+    await expect(
+      withTree('temp-tree-', {}, async (tree) => {
+        root = tree;
+        await new Promise((resolve) => setTimeout(resolve, 10));
+        throw new Error('boom');
+      })
+    ).rejects.toThrow('boom');
+    // The tree is gone: the rejection path removes it too.
+    expect(fs.existsSync(root)).toBe(false);
+  });
+
   test('a failing callback leaves no tree behind', () => {
     let root = null;
     expect(() =>

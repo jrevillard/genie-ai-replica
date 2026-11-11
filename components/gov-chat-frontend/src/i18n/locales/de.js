@@ -269,9 +269,13 @@ export default {
       loadFailed: 'Systemzustandsdaten konnten nicht geladen werden.',
       unavailable: 'Der Systemzustand ist derzeit nicht verfügbar.'
     },
-    logsTab: {
-      loadFailed: 'Protokolle konnten nicht geladen werden.'
-    },
+    logsLoadFailed: 'Protokolle konnten nicht geladen werden.',
+    clearSearch: 'Suche löschen',
+    entriesFound: 'Ergebnisse gefunden',
+    noUsers: 'Keine Benutzer verfügbar.',
+    noUsersFound: 'Keine Benutzer entsprechen Ihren Suchkriterien.',
+    searchResults: 'Neueste Suchergebnisse',
+    viewAllResults: 'Alle Ergebnisse anzeigen',
     dbStats: {
       unavailable: 'Die Datenbankstatistiken sind derzeit nicht verfügbar.'
     },
@@ -344,6 +348,7 @@ export default {
         loading: 'Diagnose wird durchgeführt...'
       },
       runSecurityScan: {
+        error: 'Sicherheitsscan konnte nicht ausgeführt werden',
         success: 'Sicherheitsscan erfolgreich abgeschlossen',
         loading: 'Sicherheitsscan wird durchgeführt...',
         refreshFailed: 'Der Scan ist abgeschlossen, aber das Aktualisieren der Ergebnisse schlug fehl'
@@ -506,6 +511,7 @@ export default {
       duplicateLangError: 'Doppelte Sprachen in den Übersetzungen gefunden. Bitte entfernen Sie sie.'
     },
     documents: {
+      delete: 'Löschen',
       viewDocuments: 'Dokumente',
       viewArtifacts: 'Artefakte',
       deleteRefuseBundle:
@@ -1447,6 +1453,7 @@ export default {
       "Seien Sie ein freundlicher lokaler Begleiter. Seien Sie höflich, hilfsbereit und kennen Sie sich mit der lokalen Kultur und dem Alltag aus. WICHTIG: Erinnern Sie den Nutzer daran, dass Sie zwar über alles sprechen können, Ihre Stärke aber darin liegt, ihn durch öffentliche Dienste wie Ausweise, Steuern und Unternehmensanmeldungen zu führen. REGEL: Beziehen Sie sich stets mit dem Namen 'Genie AI' auf die Anwendung."
   },
   common: {
+    close: 'Schließen',
     cancel: 'Abbrechen',
     create: 'Erstellen',
     save: 'Speichern',
@@ -1493,6 +1500,12 @@ export default {
     alt: 'Hochladen'
   },
   details: {
+    downloading: 'Wird heruntergeladen...',
+    sourceUrl: 'Quell-URL',
+    downloadFile: 'Datei herunterladen',
+    viewCrawled: 'Generiertes Markdown anzeigen',
+    viewFileContent: 'Datei anzeigen',
+    visitSource: 'Original-Website besuchen',
     bundleBadge: 'Vom OKF-Lebenszyklus verwaltet',
     crawl: {
       seconds: 'Sekunden',
@@ -1525,6 +1538,7 @@ export default {
     uploadDate: 'Hochladedatum',
     hash: 'SHA256-Hash',
     tabs: {
+      crawlLog: 'Crawl-Protokoll',
       dashboard: 'Dashboard',
       details: 'Details',
       ingestionLog: 'Aufnahmeprotokoll',
@@ -1538,6 +1552,7 @@ export default {
         'Schrittweiser Fortschritt der Vorbereitung dieser Datei auf KI-Antworten: Chunking, Labelling, Embedding und Indexierung. Fehler hier zeigen genau an, wo der Ingest-Vorgang angehalten wurde.'
     },
     log: {
+      killCrawl: 'Task beenden',
       killActions: 'Abbruch-Aktionen:',
       killDocument: 'Dieses Dokument abbrechen',
       killProcess: 'Aufnahmeprozess abbrechen',
@@ -1574,10 +1589,14 @@ export default {
       downloadComplete: 'Download abgeschlossen.',
       loadFailed: 'Datei konnte nicht geladen werden.',
       killFailed: 'Aufnahme konnte nicht beendet werden:',
+      crawlLogError: 'Crawl-Protokolle konnten nicht abgerufen werden.',
+      killCrawlError: 'Stoppsignal konnte nicht gesendet werden.',
+      killCrawlSuccess: 'Stoppsignal gesendet.',
       killDocSent: 'Abbruchanforderung für dieses Dokument wurde gesendet.',
       killProcSent: 'Abbruchanforderung für den Aufnahmeprozess wurde gesendet.'
     },
     confirm: {
+      killCrawlTitle: 'Crawl beenden',
       ingest: 'Möchten Sie diese Datei wirklich aufnehmen? Dies startet die Datenverarbeitungspipeline.',
       retract: 'Möchten Sie diese Datei wirklich zurückziehen?',
       delete: 'Möchten Sie diese Datei wirklich dauerhaft löschen? Diese Aktion kann nicht rückgängig gemacht werden.',

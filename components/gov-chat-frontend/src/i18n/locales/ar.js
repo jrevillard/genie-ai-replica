@@ -269,9 +269,13 @@ export default {
       loadFailed: 'فشل تحميل بيانات حالة النظام.',
       unavailable: 'حالة النظام غير متاحة الآن.'
     },
-    logsTab: {
-      loadFailed: 'فشل تحميل السجلات.'
-    },
+    logsLoadFailed: 'فشل تحميل السجلات.',
+    clearSearch: 'مسح البحث',
+    entriesFound: 'نتيجة موجودة',
+    noUsers: 'لا يوجد مستخدمون متاحون.',
+    noUsersFound: 'لا يوجد مستخدمون يطابقون معايير البحث الخاصة بك.',
+    searchResults: 'أحدث نتائج البحث',
+    viewAllResults: 'عرض جميع النتائج',
     dbStats: {
       unavailable: 'إحصاءات قاعدة البيانات غير متاحة الآن.'
     },
@@ -344,6 +348,7 @@ export default {
         loading: 'جاري تشغيل التشخيص...'
       },
       runSecurityScan: {
+        error: 'فشل تشغيل الفحص الأمني',
         success: 'تم إكمال فحص الأمان بنجاح',
         loading: 'جاري تشغيل فحص الأمان...',
         refreshFailed: 'اكتمل الفحص لكن فشل تحديث النتائج'
@@ -502,6 +507,7 @@ export default {
       duplicateLangError: 'تم العثور على لغات مكررة في الترجمات. يرجى إزالتها.'
     },
     documents: {
+      delete: 'حذف',
       viewDocuments: 'المستندات',
       viewArtifacts: 'المخرجات',
       deleteRefuseBundle: '{count} من مخرجات OKF يديرها دورة حياة المستودع ولا يمكن حذفها من هنا.',
@@ -1424,6 +1430,7 @@ export default {
       "تصرف كرفيق محلي ودود. كن مهذبًا ومتعاونًا وأظهر معرفة ممتازة بالثقافة المحلية والحياة اليومية. هام: ذكّر المستخدم بأنه، رغم إمكانية الحديث عن كل المواضيع، تتمثل قوتك الرئيسية في مساعدته في المعاملات الرسمية مثل بطاقات الهوية والضرائب وتسجيل الشركات. قاعدة: أشر دائمًا إلى التطبيق باسم 'Genie AI'."
   },
   common: {
+    close: 'إغلاق',
     cancel: 'إلغاء',
     create: 'إنشاء',
     save: 'حفظ',
@@ -1470,6 +1477,12 @@ export default {
     alt: 'تحميل'
   },
   details: {
+    downloading: 'جارٍ التنزيل...',
+    sourceUrl: 'عنوان URL المصدر',
+    downloadFile: 'تنزيل الملف',
+    viewCrawled: 'عرض ملف Markdown المُنشأ',
+    viewFileContent: 'عرض الملف',
+    visitSource: 'زيارة الموقع الأصلي',
     bundleBadge: 'يديره دورة حياة OKF',
     crawl: {
       seconds: 'ثوانٍ',
@@ -1502,6 +1515,7 @@ export default {
     uploadDate: 'تاريخ الرفع',
     hash: 'تجزئة SHA256',
     tabs: {
+      crawlLog: 'سجل الزحف',
       dashboard: 'لوحة التحكم',
       details: 'التفاصيل',
       ingestionLog: 'سجل الاستيعاب',
@@ -1515,6 +1529,7 @@ export default {
         'التقدم مرحلة بمرحلة لإعداد هذا الملف لإجابات الذكاء الاصطناعي: التقسيم، التصنيف، التضمين والفهرسة. تُظهر الأخطاء هنا بالضبط أين توقفت عملية ingest.'
     },
     log: {
+      killCrawl: 'إيقاف المهمة',
       killActions: 'إجراءات الإنهاء:',
       killDocument: 'إنهاء هذا المستند',
       killProcess: 'إنهاء عملية الاستيعاب',
@@ -1551,10 +1566,14 @@ export default {
       downloadComplete: 'اكتمل التنزيل.',
       loadFailed: 'تعذر تحميل الملف.',
       killFailed: 'فشل إيقاف الاستيعاب:',
+      crawlLogError: 'فشل جلب سجلات الزحف.',
+      killCrawlError: 'فشل إرسال إشارة الإيقاف.',
+      killCrawlSuccess: 'تم إرسال إشارة الإيقاف.',
       killDocSent: 'تم إرسال طلب إنهاء لهذا المستند.',
       killProcSent: 'تم إرسال طلب إنهاء لعملية الاستيعاب.'
     },
     confirm: {
+      killCrawlTitle: 'إيقاف مهمة الزحف',
       ingest: 'هل أنت متأكد أنك تريد استيعاب هذا الملف؟ سيبدأ هذا عملية معالجة البيانات.',
       retract: 'هل أنت متأكد أنك تريد سحب هذا الملف؟',
       delete: 'هل أنت متأكد أنك تريد حذف هذا الملف نهائيًا؟ لا يمكن التراجع عن هذا الإجراء.',

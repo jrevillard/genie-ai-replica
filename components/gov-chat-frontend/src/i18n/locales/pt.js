@@ -269,9 +269,13 @@ export default {
       loadFailed: 'Falha ao carregar os dados do estado do sistema.',
       unavailable: 'O estado do sistema está indisponível neste momento.'
     },
-    logsTab: {
-      loadFailed: 'Falha ao carregar os Logs.'
-    },
+    logsLoadFailed: 'Falha ao carregar os Logs.',
+    clearSearch: 'Limpar pesquisa',
+    entriesFound: 'resultados encontrados',
+    noUsers: 'Nenhum usuário disponível.',
+    noUsersFound: 'Nenhum usuário corresponde aos seus critérios de pesquisa.',
+    searchResults: 'Resultados mais recentes da pesquisa',
+    viewAllResults: 'Ver todos os resultados',
     dbStats: {
       unavailable: 'As estatísticas da base de dados estão indisponíveis neste momento.'
     },
@@ -344,6 +348,7 @@ export default {
         loading: 'Executando diagnósticos...'
       },
       runSecurityScan: {
+        error: 'Falha ao executar a verificação de segurança',
         success: 'Varredura de segurança concluída com sucesso',
         loading: 'Executando varredura de segurança...',
         refreshFailed: 'A verificação terminou, mas a atualização dos resultados falhou'
@@ -506,6 +511,7 @@ export default {
       duplicateLangError: 'Idiomas duplicados encontrados nas traduções. Por favor, remova-os.'
     },
     documents: {
+      delete: 'Excluir',
       viewDocuments: 'Documentos',
       viewArtifacts: 'Artefatos',
       deleteRefuseBundle:
@@ -1445,6 +1451,7 @@ export default {
       "Atue como um companheiro local simpático. Seja educado, prestativo e mostre bom conhecimento da cultura local e do dia a dia. IMPORTANTE: Lembre o usuário que, embora possa conversar sobre qualquer assunto, sua principal força é ajudá-lo a navegar serviços públicos como documentos de identidade, impostos e registro de empresas. REGRA: Sempre se refira à aplicação como 'Genie AI'."
   },
   common: {
+    close: 'Fechar',
     cancel: 'Cancelar',
     create: 'Criar',
     save: 'Salvar',
@@ -1491,6 +1498,12 @@ export default {
     alt: 'Carregar'
   },
   details: {
+    downloading: 'A descarregar...',
+    sourceUrl: 'URL de origem',
+    downloadFile: 'Descarregar ficheiro',
+    viewCrawled: 'Ver o Markdown gerado',
+    viewFileContent: 'Ver ficheiro',
+    visitSource: 'Visitar o site original',
     bundleBadge: 'Gerido pelo ciclo de vida do OKF',
     crawl: {
       seconds: 'segundos',
@@ -1523,6 +1536,7 @@ export default {
     uploadDate: 'Data de Carregamento',
     hash: 'Hash SHA256',
     tabs: {
+      crawlLog: 'Log de rastreamento',
       dashboard: 'Painel',
       details: 'Detalhes',
       ingestionLog: 'Log de Ingestão',
@@ -1536,6 +1550,7 @@ export default {
         'Progresso etapa por etapa da preparação deste arquivo para respostas de IA: divisão em blocos (chunking), rotulagem, geração de embeddings e indexação. Os erros aqui mostram exatamente onde ingest parou.'
     },
     log: {
+      killCrawl: 'Interromper tarefa',
       killActions: 'Ações de Interrupção:',
       killDocument: 'Interromper Este Documento',
       killProcess: 'Interromper Processo de Ingestão',
@@ -1572,10 +1587,14 @@ export default {
       downloadComplete: 'Download concluído.',
       loadFailed: 'Não foi possível carregar o ficheiro.',
       killFailed: 'Falha ao interromper a ingestão:',
+      crawlLogError: 'Falha ao buscar os registros de rastreamento.',
+      killCrawlError: 'Falha ao enviar o sinal de interrupção.',
+      killCrawlSuccess: 'Sinal de interrupção enviado.',
       killDocSent: 'Pedido de interrupção para este documento enviado.',
       killProcSent: 'Pedido de interrupção para o processo de ingestão enviado.'
     },
     confirm: {
+      killCrawlTitle: 'Interromper o crawl',
       ingest: 'Tem a certeza que quer ingerir este ficheiro? Isto iniciará o pipeline de processamento de dados.',
       retract: 'Tem a certeza de que quer retirar este ficheiro?',
       delete: 'Tem a certeza de que quer eliminar permanentemente este ficheiro? Esta ação não pode ser anulada.',

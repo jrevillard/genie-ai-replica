@@ -269,9 +269,13 @@ export default {
       loadFailed: 'Imeshindwa kupakia data ya hali ya mfumo',
       unavailable: 'Hali ya mfumo haipatikani kwa sasa.'
     },
-    logsTab: {
-      loadFailed: 'Imeshindwa kupakia kumbukumbu'
-    },
+    logsLoadFailed: 'Imeshindwa kupakia kumbukumbu',
+    clearSearch: 'Futa utafutaji',
+    entriesFound: 'vimepatikana',
+    noUsers: 'Hakuna watumiaji.',
+    noUsersFound: 'Hakuna watumiaji wanaolingana na vigezo vyako vya utafutaji.',
+    searchResults: 'Matokeo ya hivi karibuni ya utafutaji',
+    viewAllResults: 'Tazama matokeo yote',
     dbStats: {
       unavailable: 'Takwimu za hifadhidata hazipatikani kwa sasa.'
     },
@@ -344,6 +348,7 @@ export default {
         loading: 'Inafanya uchunguzi...'
       },
       runSecurityScan: {
+        error: 'Imeshindwa kuendesha uchambuzi wa usalama',
         success: 'Ukaguzi wa usalama umekamilika',
         loading: 'Inafanya ukaguzi wa usalama...',
         refreshFailed: 'Uchanganuzi umekamilika, lakini kuburudisha matokeo kumeshindikana'
@@ -504,6 +509,7 @@ export default {
       duplicateLangError: 'Lugha zinazojirudia zimepatikana kwenye tafsiri. Tafadhali ziondoe.'
     },
     documents: {
+      delete: 'Futa',
       viewDocuments: 'Nyaraka',
       viewArtifacts: 'Vipakiti',
       deleteRefuseBundle:
@@ -1435,6 +1441,7 @@ export default {
       "Fanya kazi kama mwenzako wa karibu na mtaa. Kuwa na adabu, msaidizi, na mwenye maarifa ya utamaduni wa eneo na maisha ya kila siku. MUHIMU: Mkumbushe mtumiaji kwamba ingawa mnaweza kuzungumza chochote, uwezo wako mkuu ni kumsaidia kupata huduma za umma kama vitambulisho, kodi na usajili wa biashara. KANUNI: Mwabudu kila wakati programu kwa jina la 'Genie AI'."
   },
   common: {
+    close: 'Funga',
     cancel: 'Ghairi',
     create: 'Unda',
     save: 'Hifadhi',
@@ -1481,6 +1488,12 @@ export default {
     alt: 'Pakia'
   },
   details: {
+    downloading: 'Inapakia...',
+    sourceUrl: 'URL ya chanzo',
+    downloadFile: 'Pakua faili',
+    viewCrawled: 'Angalia Markdown iliyotengenezwa',
+    viewFileContent: 'Tazama faili',
+    visitSource: 'Tembelea tovuti ya asili',
     bundleBadge: 'Inatendewa na mzunguko wa maisha wa OKF',
     crawl: {
       seconds: 'sekunde',
@@ -1513,6 +1526,7 @@ export default {
     uploadDate: 'Tarehe ya Kupakia',
     hash: 'Hashi ya SHA256',
     tabs: {
+      crawlLog: 'Kumbukumbu ya crawl',
       dashboard: 'Dashibodi',
       details: 'Maelezo',
       ingestionLog: 'Kumbukumbu ya Uchakataji',
@@ -1526,6 +1540,7 @@ export default {
         'Maendeleo ya hatua kwa hatua ya kuandaa faili hili kwa majibu ya AI: ugawaji wa vipande (chunking), kuweka lebo, uwekaji wa vipachiko (embedding) na uorodheshaji. Makosa hapa yanaonyesha mahali husika ambapo ingest ilisimama.'
     },
     log: {
+      killCrawl: 'Simamisha kazi',
       killActions: 'Vitendo vya Kusitisha:',
       killDocument: 'Sitisha Hati Hii',
       killProcess: 'Sitisha Mchakato wa Uchakataji',
@@ -1562,10 +1577,14 @@ export default {
       downloadComplete: 'Upakuaji umekamilika.',
       loadFailed: 'Haikuweza kupakia faili.',
       killFailed: 'Imeshindwa kusimamisha uchakataji:',
+      crawlLogError: 'Imeshindwa kupata kumbukumbu ya crawl.',
+      killCrawlError: 'Imeshindwa kutuma ishara ya kusimamisha.',
+      killCrawlSuccess: 'Ishara ya kusimamisha imetumwa.',
       killDocSent: 'Ombi la kusitisha hati hii limetumwa.',
       killProcSent: 'Ombi la kusitisha mchakato wa uchakataji limetumwa.'
     },
     confirm: {
+      killCrawlTitle: 'Simamisha kazi ya crawl',
       ingest: 'Una uhakika unataka kuchakata faili hii? Hii itaanza mchakato wa data.',
       retract: 'Una uhakika unataka kuondoa faili hii?',
       delete: 'Una uhakika unataka kufuta faili hii kabisa? Kitendo hiki hakiwezi kutenduliwa.',

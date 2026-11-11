@@ -269,9 +269,13 @@ export default {
       loadFailed: 'Error al cargar los datos del estado del sistema.',
       unavailable: 'El estado del sistema no está disponible ahora mismo.'
     },
-    logsTab: {
-      loadFailed: 'Error al cargar los registros.'
-    },
+    logsLoadFailed: 'Error al cargar los registros.',
+    clearSearch: 'Borrar la búsqueda',
+    entriesFound: 'resultados encontrados',
+    noUsers: 'No hay usuarios disponibles.',
+    noUsersFound: 'No hay usuarios que coincidan con sus criterios de búsqueda.',
+    searchResults: 'Últimos resultados de búsqueda',
+    viewAllResults: 'Ver todos los resultados',
     dbStats: {
       unavailable: 'Las estadísticas de la base de datos no están disponibles ahora mismo.'
     },
@@ -343,6 +347,7 @@ export default {
         loading: 'Ejecutando diagnósticos...'
       },
       runSecurityScan: {
+        error: 'Error al ejecutar el análisis de seguridad',
         success: 'Escaneo de seguridad completado con éxito',
         loading: 'Ejecutando escaneo de seguridad...',
         refreshFailed: 'El análisis terminó, pero la actualización de los resultados falló'
@@ -505,6 +510,7 @@ export default {
       duplicateLangError: 'Se encontraron idiomas duplicados en las traducciones. Por favor, elimínelos.'
     },
     documents: {
+      delete: 'Eliminar',
       viewDocuments: 'Documentos',
       viewArtifacts: 'Artefactos',
       deleteRefuseBundle:
@@ -1442,6 +1448,7 @@ export default {
       "Actúe como un compañero local amable. Sea cortés, servicial y demuestre un buen conocimiento de la cultura local y la vida cotidiana. IMPORTANTE: Recuerde al usuario que, aunque puede conversar de todo, su principal fortaleza es ayudarle a gestionar trámites públicos como documentos de identidad, impuestos y registro de empresas. REGLA: Refiérase siempre a la aplicación como 'Genie AI'."
   },
   common: {
+    close: 'Cerrar',
     cancel: 'Cancelar',
     create: 'Crear',
     save: 'Guardar',
@@ -1488,6 +1495,12 @@ export default {
     alt: 'Subir'
   },
   details: {
+    downloading: 'Descargando...',
+    sourceUrl: 'URL de origen',
+    downloadFile: 'Descargar archivo',
+    viewCrawled: 'Ver el Markdown generado',
+    viewFileContent: 'Ver archivo',
+    visitSource: 'Visitar el sitio original',
     bundleBadge: 'Gestionado por el ciclo de vida de OKF',
     crawl: {
       seconds: 'segundos',
@@ -1520,6 +1533,7 @@ export default {
     uploadDate: 'Fecha de subida',
     hash: 'Hash SHA256',
     tabs: {
+      crawlLog: 'Registro de rastreo',
       dashboard: 'Panel de Control',
       details: 'Detalles',
       ingestionLog: 'Registro de Ingestión',
@@ -1533,6 +1547,7 @@ export default {
         'Progreso fase por fase de la preparación de este archivo para respuestas de IA: división en fragmentos (chunking), etiquetado, generación de incrustaciones (embedding) e indexación. Los errores aquí muestran exactamente dónde se detuvo ingest.'
     },
     log: {
+      killCrawl: 'Detener tarea',
       killActions: 'Acciones de Detención:',
       killDocument: 'Detener este Documento',
       killProcess: 'Detener Proceso de Ingestión',
@@ -1569,10 +1584,14 @@ export default {
       downloadComplete: 'Descarga completada.',
       loadFailed: 'No se pudo cargar el archivo.',
       killFailed: 'Error al detener la ingestión:',
+      crawlLogError: 'Error al obtener los registros de rastreo.',
+      killCrawlError: 'Error al enviar la señal de parada.',
+      killCrawlSuccess: 'Señal de parada enviada.',
       killDocSent: 'Se ha enviado la solicitud de detención para este documento.',
       killProcSent: 'Se ha enviado la solicitud de detención para el proceso de ingestión.'
     },
     confirm: {
+      killCrawlTitle: 'Detener el rastreo',
       ingest: '¿Está seguro de que desea ingerir este archivo? Esto iniciará el proceso de tratamiento de datos.',
       retract: '¿Está seguro de que desea retractar este archivo?',
       delete: '¿Está seguro de que desea eliminar permanentemente este archivo? Esta acción no se puede deshacer.',

@@ -2773,7 +2773,7 @@ export default {
         }
       } catch (error) {
         console.error('Error loading logs:', error);
-        this.showNotification(this.translate('admin.logsTab.loadFailed', 'Failed to load logs'), 'error');
+        this.showNotification(this.translate('admin.logsLoadFailed', 'Failed to load logs'), 'error');
       } finally {
         this.isLoading = false;
       }
@@ -3212,7 +3212,10 @@ export default {
         }
       } catch (error) {
         console.error('Error searching users:', error);
-        this.showNotification(this.translate('admin.userSearch.error', 'Error searching users'), 'error');
+        this.showNotification(
+          this.translate('admin.userManagementSection.userSearch.error', 'Error searching users'),
+          'error'
+        );
         this.userSearchResults = [];
         this.userSearchTotal = 0;
       } finally {

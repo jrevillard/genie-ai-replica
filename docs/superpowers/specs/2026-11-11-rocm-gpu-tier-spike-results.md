@@ -113,9 +113,12 @@ and re-evaluate).
   (render, video) — verified by every vLLM/TEI spike container above.
 - **Swarm: DOES NOT pass `devices:`** — `docker stack deploy` of a
   rocminfo probe shows `SWARM-GPU-MISSING` (Docker 29.8.2, single-node
-  swarm initialized 2026-11-11 with operator consent). **Caveat path per
-  design**: the swarm-deployed ROCm GPU tier runs via the standalone
-  GPU-node compose stack (Task 9 overlay) on the ROCm node; docs say so.
+  swarm initialized 2026-11-11 with operator consent), and the compose-
+  rendered long-form devices are outright rejected
+  (`services.*.devices.0: must be a string`). **Caveat path per design,
+  doubly confirmed**: the swarm-deployed ROCm GPU tier runs via the
+  standalone GPU-node compose stack (Task 9 overlay) on the ROCm node;
+  docs say so.
 - Host port plan for the ROCm venues on THIS machine (audit 2026-11-11;
   neighbors occupy 80, 443, 8080, 8025, 8530, 8765–8767, 8790, 9100–9102,
   11434, 21115–21119, 24224–24288, 33306…): **NGINX_HTTP_PORT=8180,

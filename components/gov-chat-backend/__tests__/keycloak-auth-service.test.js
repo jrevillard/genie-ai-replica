@@ -1093,6 +1093,35 @@ describe('keycloakAuthService', () => {
         debugSpy.mockRestore();
       }
     });
+
+    it('verifies a token with a logger that can neither answer the level check nor take a debug line', async () => {
+      // The other half of the same guard: a logger with no `debug` method at
+      // all. The verifier must skip the line, not call it — a call into a
+      // missing method throws, and the throw is caught by the catch-all
+      // below, which would turn a VALID token into a rejected one.
+      const loggerModule = require('../../shared/lib/logger');
+      const hadOwnLevelCheck = Object.prototype.hasOwnProperty.call(loggerModule.logger, 'isDebugEnabled');
+      const savedLevelCheck = loggerModule.logger.isDebugEnabled;
+      const hadOwnDebug = Object.prototype.hasOwnProperty.call(loggerModule.logger, 'debug');
+      const savedDebug = loggerModule.logger.debug;
+      loggerModule.logger.isDebugEnabled = undefined;
+      loggerModule.logger.debug = undefined;
+      mockJwtVerify.mockResolvedValue({
+        payload: mockJwtPayload,
+        protectedHeader: { alg: 'RS256' }
+      });
+
+      try {
+        const result = await keycloakAuthService.verifyToken(generateMockJwtString(mockJwtPayload));
+
+        expect(result.realm_access).toBeDefined();
+      } finally {
+        if (hadOwnLevelCheck) loggerModule.logger.isDebugEnabled = savedLevelCheck;
+        else delete loggerModule.logger.isDebugEnabled;
+        if (hadOwnDebug) loggerModule.logger.debug = savedDebug;
+        else delete loggerModule.logger.debug;
+      }
+    });
   });
 
   describe('multi-realm initialization', () => {

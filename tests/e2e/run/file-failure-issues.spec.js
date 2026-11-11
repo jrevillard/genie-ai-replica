@@ -9,6 +9,8 @@ const {
   specPathsIn,
   titleIsDedicatedTo,
   trackerReason,
+  groupFailuresByFile,
+  issueBody,
 } = require('./file-failure-issues');
 
 const FILE = 'tests/e2e/theme-runtime-config.spec.js';
@@ -234,6 +236,33 @@ test.describe('a match must be DEDICATED to the spec file', () => {
     expect(titleIsDedicatedTo('test(e2e): renamed-away.spec.js is red', renamed)).toBe(true);
     // And it must not swallow a file it does not name.
     expect(titleIsDedicatedTo('test(e2e): renamed-away.spec.js is red', FILE)).toBe(false);
+  });
+});
+
+test.describe('one issue per failing spec FILE', () => {
+  test('two failures in the same file are one issue with two entries', () => {
+    // The file is the unit an owner fixes: a file-level title keeps the
+    // dedupe stable across runs, and the failing TESTS are the entries
+    // inside it.
+    const failed = [
+      { file: 'tests/e2e/a.spec.js', title: 'a › first', test: { results: [{ error: { message: 'boom' } }] } },
+      { file: 'tests/e2e/a.spec.js', title: 'a › second', test: { results: [{ error: { message: 'bang' } }] } },
+      { file: 'tests/e2e/b.spec.js', title: 'b › third', test: { results: [{ error: { message: 'snap' } }] } },
+    ];
+    const byFile = groupFailuresByFile(failed);
+    expect(byFile.size).toBe(2);
+    expect(byFile.get('tests/e2e/a.spec.js').map((f) => f.title)).toEqual(['a › first', 'a › second']);
+    expect(byFile.get('tests/e2e/b.spec.js').map((f) => f.title)).toEqual(['b › third']);
+  });
+
+  test('the filed body carries the marker the dedupe reads back', () => {
+    // ONE spelling, used both to write the marker and to read it back:
+    // a drift between the two would silently degrade the dedupe to
+    // title-only.
+    const body = issueBody('tests/e2e/a.spec.js', [{ title: 'a › first', error: 'boom' }], 'https://venue.example:4443', '2026-11-11T00:00:00Z');
+    expect(body).toContain('- spec file: `tests/e2e/a.spec.js`');
+    // And the failure it files is in the body.
+    expect(body).toContain('a › first');
   });
 });
 

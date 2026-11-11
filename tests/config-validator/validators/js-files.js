@@ -44,6 +44,48 @@ const jsFiles = (root) =>
  * opening brace. The braces are counted, and the strings inside (a
  * nested template among them) are skipped whole.
  */
+/**
+ * The end of a block comment that starts at `from` — the index of its
+ * closing marker (a star followed by a slash), or -1 when the comment is
+ * not closed.
+ *
+ * A closing marker inside a QUOTED string does not end the comment: the
+ * string is part of the comment's text, and the comment ends at the
+ * marker that follows it. Only the double quote and the backtick open
+ * such a string — an apostrophe in prose must not, or every comment
+ * that says "it's" would swallow the file.
+ *
+ * When no marker follows outside a quoted string, the FIRST marker wins
+ * (what a JavaScript parser does): a comment with an odd number of
+ * double quotes in its prose must not swallow the code after it.
+ */
+function blockCommentEnd(source, from) {
+  // What a JavaScript parser does: the comment ends at the FIRST
+  // marker, whatever the prose says.
+  const firstMarker = source.indexOf('*/', from);
+  let quote = null;
+  for (let i = from; i < source.length; i++) {
+    const ch = source[i];
+    if (quote) {
+      if (ch === '\\') {
+        i++;
+        continue;
+      }
+      if (ch === quote) quote = null;
+      continue;
+    }
+    if (ch === '"' || ch === '`') {
+      quote = ch;
+      continue;
+    }
+    if (ch === '*' && source[i + 1] === '/') return i;
+  }
+  // No marker outside a quoted string: the first one wins (the parser's
+  // rule), so a comment with an odd number of double quotes in its prose
+  // does not swallow the code after it.
+  return firstMarker;
+}
+
 const skipTemplateExpression = (source, start) => {
   let depth = 0;
   let i = start;
@@ -155,7 +197,12 @@ const stripJsComments = (source) => {
         continue;
       }
       if (source[i + 1] === '*') {
-        const end = source.indexOf('*/', i + 2);
+        // The comment ends at the first `*/` that is NOT inside a quoted
+        // string: a comment that QUOTES the sequence (a glob — `/* the
+        // globs are "**/*" */`) ends at the `*/` inside the quotes, and
+        // the leftover opens a string state that swallows the code after
+        // it — an origin the gate then does not see.
+        const end = blockCommentEnd(source, i + 2);
         i = end === -1 ? source.length : end + 1;
         continue;
       }

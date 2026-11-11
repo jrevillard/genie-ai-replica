@@ -145,6 +145,19 @@ test.describe('runRouteHandler', () => {
     ).rejects.toThrow('route.fetch: Request context disposed.');
   });
 
+  test('rethrows a plain error that QUOTES the PROTOCOL wording — the wording is not the signal', async () => {
+    // The OTHER wording the guard's own doc names ("has been closed"),
+    // without the class. A guard that reads the message instead of the
+    // class swallows this one — and this spec is what makes that
+    // visible.
+    const { page } = pageState({ pageClosed: true });
+    await expect(
+      runOnce(page, async () => {
+        throw new Error('Target page, context or browser has been closed');
+      })
+    ).rejects.toThrow('Target page, context or browser has been closed');
+  });
+
   test('rethrows a mock defect with its own message — the target is alive', async () => {
     const { page } = pageState();
     await expect(

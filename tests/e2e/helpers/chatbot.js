@@ -157,9 +157,24 @@ async function waitForBotResponse(page, options = {}) {
 
   await expect(page.locator(BOT_BUBBLE).last()).toContainText(/\S/, { timeout });
 
-  await expect
-    .poll(() => page.evaluate(readStreamingState).then(streamingFlagOf), { timeout })
-    .toBe(false);
+  await expect.poll(() => botStreamingFlag(page), { timeout }).toBe(false);
+}
+
+/**
+ * The turn's streaming flag, read from the page.
+ *
+ * The WIRING between the wait and the page-side read is what #1738 was
+ * about: the read used to ask the store for a path the frontend no
+ * longer exposes. It is a function of its own so that a spec can drive
+ * it — the wait is the only thing that used it, and nothing could test
+ * it there.
+ *
+ * @param {object} page - the Playwright page
+ * @returns {Promise<boolean|null>} the flag: true while the turn streams,
+ *   false when it is over, null when the page is not ready to say
+ */
+async function botStreamingFlag(page) {
+  return page.evaluate(readStreamingState).then(streamingFlagOf);
 }
 
 /**
@@ -379,6 +394,7 @@ async function ackFeedback(page) {
 module.exports = {
   readStreamingState,
   streamingFlagOf,
+  botStreamingFlag,
   loginViaUI,
   navigateToChatbot,
   sendMessage,

@@ -72,6 +72,15 @@ describe('the stripper removes prose and keeps code', () => {
     expect(out).toContain('const re = /[A-Za-z0-9_./-]+/;');
   });
 
+  test('a closing marker inside a quoted string does not end the comment', () => {
+    // A comment that QUOTES the closing marker (a glob) ends at the
+    // marker inside the quotes: the leftover opens a string state, and
+    // the code after it — an origin the venue gate must SEE — is
+    // swallowed as prose.
+    const out = stripJsComments('/* the globs are "**/*" */\nconst EDGE = "https://localhost:4443";\n');
+    expect(out).toContain('https://localhost:4443');
+  });
+
   test('a division after a plain expression is a division', () => {
     const out = stripJsComments('function f() { a / b; }\n// the edge was https://localhost/\n');
     expect(out).not.toContain('the edge was');

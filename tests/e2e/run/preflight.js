@@ -58,6 +58,17 @@ function loadRunner() {
 }
 
 /**
+ * The pre-flight's NAMED cause for a failure it cannot recover from:
+ * the headline, then the remedy the operator needs.
+ *
+ * The remedy is part of the message: a cause without it tells the
+ * operator WHAT happened and nothing about what to do about it.
+ */
+function namedFailure(headline, cause) {
+  return `pre-flight: ${headline}.\n${remedy(String(cause).split('\n')[0])}\n`;
+}
+
+/**
  * What the venue's answer at the root MEANS.
  *
  * THREE findings, not one: no answer at all, a 5xx (the deployment is
@@ -89,7 +100,7 @@ async function main() {
   try {
     loaded = loadRunner();
   } catch (e) {
-    process.stderr.write(`pre-flight: the runner cannot load Playwright.\n${remedy(e.message.split('\n')[0])}\n`);
+    process.stderr.write(namedFailure('the runner cannot load Playwright', e.message));
     process.exitCode = 1;
     return;
   }
@@ -103,7 +114,7 @@ async function main() {
   // much later that reads like a runner problem.
   const { mapping, error: mappingError } = safeVenueMapping();
   if (mappingError) {
-    process.stderr.write(`pre-flight: the venue mapping is not usable.\n${remedy(mappingError)}\n`);
+    process.stderr.write(namedFailure('the venue mapping is not usable', mappingError));
     process.exitCode = 1;
     return;
   }
@@ -119,7 +130,7 @@ async function main() {
   try {
     browser = await chromium.launch({ args: venueLaunchArgs() });
   } catch (e) {
-    process.stderr.write(`pre-flight: the browser did not launch.\n${remedy(e.message.split('\n')[0])}\n`);
+    process.stderr.write(namedFailure('the browser did not launch', e.message));
     process.exitCode = 1;
     return;
   }
@@ -167,4 +178,4 @@ if (require.main === module) {
   main();
 }
 
-module.exports = { classifyVenueStatus };
+module.exports = { classifyVenueStatus, namedFailure };

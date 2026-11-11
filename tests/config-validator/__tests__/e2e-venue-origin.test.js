@@ -55,14 +55,22 @@ const MOCK_ORIGINS = [];
 // refactor into a red gate).
 const DEFINING_MODULE = require.resolve('../../e2e/helpers/base-url');
 
+// The suite's OTHER owner of the edge: playwright.config.js sets the
+// baseURL. It is watched with the tree, because a second definition
+// there would break every spec at once — and the wave changed that file
+// (it reads the published address now), so the gate must watch the file
+// it changed.
+const CONFIG_FILE = path.join(ROOT, 'playwright.config.js');
+
+/** The files the gate watches. */
+const WATCHED = [...jsFiles(E2E_ROOT), CONFIG_FILE];
+
 /**
  * The files that read the venue from the environment — the edge's
  * definition, wherever it is.
  */
-const baseUrlReaders = (root) =>
-  jsFiles(root)
-    .filter((f) => READS_EDGE.test(stripJsComments(fs.readFileSync(f, 'utf8'))))
-    .map((f) => path.relative(root, f));
+const baseUrlReaders = (files) =>
+  files.filter((f) => READS_EDGE.test(stripJsComments(fs.readFileSync(f, 'utf8')))).map((f) => path.relative(ROOT, f));
 
 /**
  * The spellings of the edge's read: the property
@@ -80,8 +88,8 @@ const baseUrlReaders = (root) =>
 const READS_EDGE =
   /process\.env\.BASE_URL\b|process\.env\s*\[\s*['"]BASE_URL['"]\s*\]|\{\s*BASE_URL\s*[:=,}][^=,\n]*=\s*process\.env/;
 
-const offenders = (root, allowed = MOCK_ORIGINS) =>
-  jsFiles(root)
+const offenders = (files, allowed = MOCK_ORIGINS) =>
+  files
     .filter((f) => path.resolve(f) !== path.resolve(DEFINING_MODULE))
     .filter((f) => {
       const origins = stripJsComments(fs.readFileSync(f, 'utf8')).match(LOCAL_ORIGIN) || [];
@@ -93,7 +101,7 @@ const offenders = (root, allowed = MOCK_ORIGINS) =>
 
 describe('the e2e suite names the venue it was given, and names it once', () => {
   test('no file but the definition carries the venue edge', () => {
-    expect(offenders(E2E_ROOT)).toEqual([]);
+    expect(offenders(WATCHED)).toEqual([]);
   });
 
   test('the edge is defined ONCE — one module reads the environment', () => {
@@ -109,7 +117,7 @@ describe('the e2e suite names the venue it was given, and names it once', () => 
     // The gate scans the e2e tree, so `playwright.config.js` is not among
     // the readers it counts — the config is a suite-wide setting, not a
     // spec.
-    expect(baseUrlReaders(E2E_ROOT)).toEqual([path.relative(E2E_ROOT, DEFINING_MODULE)]);
+    expect(baseUrlReaders(WATCHED)).toEqual([path.relative(ROOT, DEFINING_MODULE)]);
   });
 
   test('every reader of the environment is reported, not only the first', () => {
@@ -127,7 +135,11 @@ describe('the e2e suite names the venue it was given, and names it once', () => 
         'param.spec.js': 'function f({ BASE_URL }) {\n  return 1;\n}\nconst y = process.env;\n'
       },
       (tree) => {
-        expect(baseUrlReaders(tree).sort()).toEqual(['a.spec.js', 'b.spec.js', 'c.spec.js', 'd.spec.js']);
+        expect(
+          baseUrlReaders(jsFiles(tree))
+            .map((f) => path.basename(f))
+            .sort()
+        ).toEqual(['a.spec.js', 'b.spec.js', 'c.spec.js', 'd.spec.js']);
       }
     );
   });
@@ -176,7 +188,9 @@ describe('the e2e suite names the venue it was given, and names it once', () => 
       );
       fs.writeFileSync(path.join(tree, 'lookalike-dash.spec.js'), "await page.goto('https://localhost-evil/');\n");
       fs.writeFileSync(path.join(tree, 'lookalike-ip.spec.js'), "await page.goto('http://127.0.0.10/');\n");
-      const strays = offenders(tree, ['http://127.0.0.1:9000', 'http://localhost:8123']).map((f) => path.basename(f));
+      const strays = offenders(jsFiles(tree), ['http://127.0.0.1:9000', 'http://localhost:8123']).map((f) =>
+        path.basename(f)
+      );
       expect(strays.sort()).toEqual([
         'api.spec.js',
         'bare-k8s.spec.js',

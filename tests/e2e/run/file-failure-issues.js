@@ -380,6 +380,24 @@ function reproduceCommand(venue) {
 /**
  * The issue body of a spec file nobody tracks yet.
  */
+/**
+ * The failures grouped by the spec FILE they belong to.
+ *
+ * One issue per spec FILE: the file is the unit an owner fixes, and a
+ * file-level title keeps the dedupe stable across runs. Two failures in
+ * the same file are ONE issue with two entries.
+ */
+function groupFailuresByFile(failed) {
+  const byFile = new Map();
+  for (const entry of failed) {
+    const list = byFile.get(entry.file) || [];
+    const result = (entry.test.results || [])[entry.test.results.length - 1];
+    list.push({ title: entry.title, error: errorText(result) });
+    byFile.set(entry.file, list);
+  }
+  return byFile;
+}
+
 function issueBody(file, failures, venue, runStamp) {
   return [
     'Filed by the local e2e run (`tests/e2e/run/run-local-e2e.sh`).',
@@ -544,15 +562,7 @@ function main() {
     return;
   }
 
-  // One issue per spec FILE: the file is the unit an owner fixes, and a
-  // file-level title keeps the dedupe stable across runs.
-  const byFile = new Map();
-  for (const entry of failed) {
-    const list = byFile.get(entry.file) || [];
-    const result = (entry.test.results || [])[entry.test.results.length - 1];
-    list.push({ title: entry.title, error: errorText(result) });
-    byFile.set(entry.file, list);
-  }
+  const byFile = groupFailuresByFile(failed);
 
   process.stdout.write(`\nfailing spec files: ${byFile.size}\n`);
   if (!fileIssues) {
@@ -632,4 +642,11 @@ if (require.main === module) {
 
 // Exposed for the unit spec: the dedupe rule and the refusal wording are
 // behaviour, and behaviour is tested, not trusted.
-module.exports = { findTrackedIssue, specPathsIn, titleIsDedicatedTo, trackerReason };
+module.exports = {
+  findTrackedIssue,
+  specPathsIn,
+  titleIsDedicatedTo,
+  trackerReason,
+  groupFailuresByFile,
+  issueBody,
+};

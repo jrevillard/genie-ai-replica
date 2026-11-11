@@ -1,7 +1,7 @@
 // Copyright (C) 2026 International Telecommunication Union (ITU)
 // SPDX-License-Identifier: Apache-2.0
 const { test, expect } = require('@playwright/test');
-const { readStreamingState, streamingFlagOf } = require('./chatbot');
+const { readStreamingState, streamingFlagOf, botStreamingFlag } = require('./chatbot');
 
 /**
  * Unit spec for the streaming-flag read — the helper's side of the store
@@ -96,6 +96,40 @@ test.describe('the page-side read keeps the flag\'s ABSENCE an absence', () => {
       };
     }, messages);
   };
+
+  test('the WAIT reads the flag through this read — not the old store path', async ({ page }) => {
+    // The wiring is what #1738 was about: the wait used to ask the store
+    // for a path the frontend no longer exposes, and nothing could see
+    // it, because the wait only runs against a live venue.
+    //
+    // The fake store carries BOTH shapes, and they answer DIFFERENTLY:
+    // the getter the frontend exposes now (a welcome bubble with no
+    // flag — "not the turn"), and the state path it used to expose (a
+    // message that carries the flag — "the turn is over"). A reader that
+    // asks the wrong one is therefore visible.
+    await page.setContent('<div id="app"></div>');
+    await page.evaluate(() => {
+      const app = document.querySelector('#app');
+      app.__vue_app__ = {
+        config: {
+          globalProperties: {
+            $store: {
+              getters: {
+                'conversation/openConversation': { messages: [{ sender: 'bot', content: 'Welcome!' }] },
+              },
+              state: {
+                conversation: { messages: [{ sender: 'bot', content: 'Welcome!', isStreaming: false }] },
+              },
+            },
+          },
+        },
+      };
+    });
+    // The wait's own reader, driven in the browser: the welcome bubble
+    // carries no flag, so the answer is "not the turn" (null) — the
+    // wait must NOT end there.
+    expect(await botStreamingFlag(page)).toBe(null);
+  });
 
   test('a message with no flag crosses the wire with no flag', async ({ page }) => {
     // The WELCOME bubble: the app commits it with a sender and content,

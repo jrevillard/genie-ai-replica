@@ -112,10 +112,11 @@ as twelve product bugs (#1779).
    fails loudly.
 
    The install is Playwright's own `install chromium`, and it **prunes the
-   browser directories the installed Playwright does not claim** — a
-   repairing run on a shared `PLAYWRIGHT_BROWSERS_PATH` removes the
-   browsers of the other versions cached there. Give this suite its own
-   browser root.
+   browser directories no installed Playwright claims** — your own previous
+   revision, and the versions of any project whose `playwright-core` is no
+   longer on disk. A version still installed elsewhere is claimed through
+   its link entry and survives. Give this suite its own browser root
+   anyway: a shared one is pruned by whoever repairs it last.
 
 No revision number is written in the repository: it is derived from the
 installed Playwright, so a lockfile bump needs no second number to change.

@@ -252,7 +252,10 @@ test('a browser the installed Playwright does not name fails loudly', () => {
 
 test('the browser build is installed by the CHECKOUT Playwright, not a global one', () => {
   const root = makeCheckout();
-  const { args } = browserInstallCommand(root);
+  const { command, args } = browserInstallCommand(root);
+  // The interpreter matters: the CLI is a script, and running it through
+  // anything else (npx, a hardcoded node) changes what is spawned.
+  expect(command).toBe(process.execPath);
   expect(args).toEqual([path.join(root, 'node_modules/playwright/cli.js'), 'install', 'chromium']);
 });
 
@@ -621,9 +624,10 @@ test('a browser path with a space in it is read whole', () => {
 });
 
 test('the runner the pod uses reads the output as text', () => {
-  // The mutation this pins: the installer parse reads stdout as a string.
-  // A Buffer would stringify to its bytes and the installer would name no
-  // location — on the pod only: every spec drives the injected seam.
+  // The mutation this pins: the runner hands its callers TEXT. Every spec
+  // drives the injected seam, so the runner the pod actually uses is
+  // otherwise unchecked — and a Buffer is not what the other callers of
+  // this runner expect.
   const result = defaultRun(process.execPath, ['-e', '']);
   expect(result.status).toBe(0);
   expect(typeof result.stdout).toBe('string');

@@ -199,7 +199,10 @@ test.describe('a match must be DEDICATED to the spec file', () => {
         fs.copyFileSync(from, to);
       };
       copy(path.join(__dirname, 'file-failure-issues.js'), path.join(root, 'tests/e2e/run/file-failure-issues.js'));
-      copy(path.join(__dirname, '../helpers/venue-launch-args.js'), path.join(root, 'tests/e2e/helpers/venue-launch-args.js'));
+      copy(
+        path.join(__dirname, '../helpers/venue-launch-args.js'),
+        path.join(root, 'tests/e2e/helpers/venue-launch-args.js')
+      );
       copy(path.join(__dirname, '../helpers/base-url.js'), path.join(root, 'tests/e2e/helpers/base-url.js'));
       // This tree's own spec, at the tree's ROOT (the bare spelling only
       // names a file there), and the same file inside a sibling

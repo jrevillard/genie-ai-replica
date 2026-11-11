@@ -199,14 +199,16 @@ async function sourceMeta(cache, file_id) {
  *
  * The two stamps have DIFFERENT contracts. The repo-doc write is the DURABLE
  * record of what this repository backs — the DUPLICATE_CONTENT gate (issue
- * #1744) and the SOURCES-BUSY lifecycle gate read it — so it is FATAL: if it
- * cannot be written, the repository does not own its sources as far as every
- * other guard is concerned, and the import must not report success. It is
- * written FIRST, so a failure leaves nothing stamped anywhere: the per-file
- * doc-repo stamps below would otherwise leave the files owned by a repository
- * that does not list them, and no gate would see the content again. The
- * per-file doc-repo stamps stay fail-soft: the conversion reports them, it
- * does not die for them.
+ * #1744) and the SOURCES-BUSY lifecycle gate read it — so a FAILED write is
+ * FATAL: the repository does not own its sources as far as every other guard
+ * is concerned, and the import must not report success. It is written FIRST,
+ * so a failure leaves nothing stamped anywhere: the per-file doc-repo stamps
+ * below would otherwise leave the files owned by a repository that does not
+ * list them, and no gate would see the content again. (A missing repository
+ * DOCUMENT is a different case: the write is a no-op, and the import's
+ * sources stay unowned by a repository that does not exist — the doc-repo
+ * stamps then self-heal as stale.) The per-file doc-repo stamps stay
+ * fail-soft: the conversion reports them, it does not die for them.
  *
  * metaByKey carries the import pre-flight's per-file doc-repo metadata,
  * suppressing the per-file GET; when it does not carry the file, the GET
@@ -324,8 +326,9 @@ async function stampSources(repoId, fileIds, metaByKey = Object.create(null)) {
  * D4 (W4 story 2, 2026-11-04): re-propagate the repo's restriction snapshot
  * onto every stamped source file AFTER the import — the Access-panel toggle
  * (PUT /:repo_id/access) calls this on every flip so a repo restricted mid-
- * life does not leave its sources downloadable. Best-effort per file (same
- * contract as stampSources): the toggle itself has already succeeded and a
+ * life does not leave its sources downloadable. Best-effort per file (the
+ * per-file half of stampSources' contract): the toggle itself has already
+ * succeeded and a
  * doc-repo hiccup must never undo it — the caller audits the result so a
  * stale snapshot is VISIBLE (named drift risk of the snapshot mechanism).
  * A source doc that is already gone (repo delete hard-purges backing files)
@@ -1085,10 +1088,17 @@ async function startDocumentsConversion({ repo_id, file_ids, requested_name, cla
         meta = await fetchDocMeta(file_id);
         metaByKey[file_id] = meta;
       } catch (err) {
-        throw Object.assign(
-          new Error(`source document ${file_id} could not be verified in the document repository: ${err.message}`),
-          { code: 'SOURCE_UNVERIFIABLE', status: 502 }
-        );
+        // The internal reason stays in the log — the client gets a fixed
+        // sentence naming the document, not the upstream error text.
+        logger.warn('Source document could not be verified in the document repository', {
+          repo_id,
+          file_id,
+          error: err.message
+        });
+        throw Object.assign(new Error(`source document ${file_id} could not be verified in the document repository`), {
+          code: 'SOURCE_UNVERIFIABLE',
+          status: 502
+        });
       }
       const stamped = meta && meta.okf_repo_id;
       if (stamped && stamped !== repo_id) {
@@ -1160,26 +1170,38 @@ async function startDocumentsConversion({ repo_id, file_ids, requested_name, cla
     // record with no worker. It is written BEFORE the reservation is
     // released — this patch REPLACES the whole conversion object, so a write
     // landing after a concurrent start's own record would clobber it.
-    try {
-      if (previous && isTerminal(previous)) {
-        await patchConversion(repo_id, previous);
-      } else {
-        await patchConversion(repo_id, {
-          status: 'failed',
-          error: err.message,
-          code: err.code || 'CONVERSION_FAILED',
-          files_done: 0,
-          files_total: file_ids.length,
-          per_file: [],
-          started_at: queued.started_at,
-          finished_at: new Date().toISOString()
+    //
+    // COMPARE-AND-SET: the record is written only while it is still THIS
+    // run's ('queued', with this run's started_at). The zip-ingest path does
+    // NOT take the conversion reservation and MERGEs into the same
+    // attribute — a blind write here would destroy that writer's progress
+    // record, which is the very clobber this restore exists to avoid.
+    const current = await readConversion(repo_id);
+    const stillOurs = !current || (current.status === 'queued' && current.started_at === queued.started_at);
+    if (!stillOurs) {
+      logger.warn('Conversion record is owned by another writer — left untouched', { repo_id });
+    } else {
+      try {
+        if (previous && isTerminal(previous)) {
+          await patchConversion(repo_id, previous);
+        } else {
+          await patchConversion(repo_id, {
+            status: 'failed',
+            error: err.message,
+            code: err.code || 'CONVERSION_FAILED',
+            files_done: 0,
+            files_total: file_ids.length,
+            per_file: [],
+            started_at: queued.started_at,
+            finished_at: new Date().toISOString()
+          });
+        }
+      } catch (patchErr) {
+        logger.warn('Failed-start record could not be written (non-fatal)', {
+          repo_id,
+          error: patchErr.message
         });
       }
-    } catch (patchErr) {
-      logger.warn('Failed-start record could not be written (non-fatal)', {
-        repo_id,
-        error: patchErr.message
-      });
     }
     // The reservation must not outlive a failed start — the repo is free again.
     releaseContent(repo_id, claimed);
@@ -1218,9 +1240,10 @@ async function startDocumentsConversion({ repo_id, file_ids, requested_name, cla
   return queued;
 }
 
-function isTerminal(conversion) {
-  return !!conversion && ['done', 'failed'].includes(conversion.status);
-}
+// The terminal-state vocabulary belongs to the shared conversion service —
+// one list, one place (the crawl and the documents paths agree on what
+// "finished" means).
+const { isTerminal } = crawlConversion;
 
 module.exports = {
   startDocumentsConversion,

@@ -911,6 +911,108 @@ describe('producer-service — startDocumentsConversion + run', () => {
     ).rejects.toThrow(/db down/);
     const repo = await mockDb.collection('okf_repositories').document(RID);
     expect(repo.conversion).toMatchObject({ status: 'done', summary: { created: 1 } });
+    // the content claim is released with the failed start
+    expect(producer.contentClaims.size).toBe(0);
+  });
+
+  it('a refused start closes a NON-terminal prior record as failed (it owns no worker)', async () => {
+    // A prior 'queued' record (an interrupted run) is not a healthy result:
+    // the sweep is one-shot per process, so nothing else would ever close it.
+    await mockDb.collection('okf_repositories').save({
+      _key: RID,
+      repo_id: RID,
+      name: 'Mine',
+      domain: 'general',
+      conversion: { status: 'queued', stage: 'queued', files_done: 0, files_total: 3 }
+    });
+    mockDocs({ f1: 'alpha.md' });
+    const programImpl = mockDb.query.getMockImplementation();
+    let failOnce = true;
+    mockDb.query.mockImplementation(async (q, bind) => {
+      const text = typeof q === 'string' ? q : q && q.query;
+      if (failOnce && text && text.includes('POSITION(@hashes')) {
+        failOnce = false;
+        throw new Error('db down');
+      }
+      return programImpl(q, bind);
+    });
+    // the file must carry a hash, or the duplicate query never runs
+    authedAxios.get.mockImplementation((url) => {
+      const s = String(url);
+      if (s.endsWith('/download')) {
+        const fid = s.split('/api/files/')[1].replace(/\/download$/, '');
+        return Promise.resolve({ data: Readable.from([Buffer.from('# T\n\nbody for ' + fid)]) });
+      }
+      return Promise.resolve({
+        data: {
+          file: {
+            file_id: s.split('/api/files/')[1],
+            file_name: 'alpha.md',
+            file_hash: 'HASH-QUEUED-1',
+            dataprep: { status: 'Pending' }
+          }
+        }
+      });
+    });
+
+    await expect(
+      producer.startDocumentsConversion({ repo_id: RID, file_ids: ['f1'], requested_name: 'x' })
+    ).rejects.toThrow(/db down/);
+    const repo = await mockDb.collection('okf_repositories').document(RID);
+    expect(repo.conversion).toMatchObject({ status: 'failed' });
+  });
+
+  it('a refused start does not clobber a record another writer owns', async () => {
+    // The zip-ingest path does NOT take the conversion reservation and
+    // MERGEs into the same attribute: the restore must leave that writer's
+    // record alone.
+    await mockDb.collection('okf_repositories').save({
+      _key: RID,
+      repo_id: RID,
+      name: 'Mine',
+      domain: 'general',
+      conversion: { status: 'done', stage: 'done', files_done: 1, files_total: 1 }
+    });
+    mockDocs({ f1: 'alpha.md' });
+    authedAxios.get.mockImplementation((url) => {
+      const s = String(url);
+      if (s.endsWith('/download')) {
+        const fid = s.split('/api/files/')[1].replace(/\/download$/, '');
+        return Promise.resolve({ data: Readable.from([Buffer.from('# T\n\nbody for ' + fid)]) });
+      }
+      return Promise.resolve({
+        data: {
+          file: {
+            file_id: s.split('/api/files/')[1],
+            file_name: 'alpha.md',
+            file_hash: 'HASH-ZIP-1',
+            dataprep: { status: 'Pending' }
+          }
+        }
+      });
+    });
+    const programImpl = mockDb.query.getMockImplementation();
+    let failOnce = true;
+    let zipMerged = false;
+    mockDb.query.mockImplementation(async (q, bind) => {
+      const text = typeof q === 'string' ? q : q && q.query;
+      if (failOnce && text && text.includes('POSITION(@hashes')) {
+        failOnce = false;
+        // the other writer takes the record while this run is in its pre-flight
+        const store = mockDb._stores.okf_repositories;
+        store[RID].conversion = Object.assign({}, store[RID].conversion, { status: 'adding', pages_done: 2 });
+        zipMerged = true;
+        throw new Error('db down');
+      }
+      return programImpl(q, bind);
+    });
+
+    await expect(
+      producer.startDocumentsConversion({ repo_id: RID, file_ids: ['f1'], requested_name: 'x' })
+    ).rejects.toThrow(/db down/);
+    expect(zipMerged).toBe(true);
+    const repo = await mockDb.collection('okf_repositories').document(RID);
+    expect(repo.conversion).toMatchObject({ status: 'adding', pages_done: 2 });
   });
 
   it('allows re-importing the same content into the SAME repository (idempotent)', async () => {

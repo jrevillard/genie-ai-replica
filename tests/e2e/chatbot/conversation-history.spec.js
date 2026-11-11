@@ -11,8 +11,8 @@ const {
 const {
   getSessionToken,
   getSessionTokenViaUI,
+  describeUnauthorized,
   mapWithConcurrency,
-  parseJwtClaims,
   request,
   SESSION_MINT_TIMEOUT_MS,
   SWEEP_DELETE_CONCURRENCY,
@@ -23,8 +23,9 @@ const {
 const API_TIMEOUT_MS = 30000;
 
 // The page size the cleanup sweep lists the conversation population with.
-// The endpoint accepts up to 100, so one page covers the whole window the
-// sweep enumerates. The delete budget is a separate cap (SWEEP_MAX_DELETES).
+// The endpoint accepts up to 100, and the sweep enumerates two pages — a
+// window of 200 conversations. The delete budget is a separate cap
+// (SWEEP_MAX_DELETES).
 const LIST_PAGE_SIZE = 100;
 
 const MOCKED_ANSWER = 'Mocked answer for the history test.';
@@ -78,12 +79,6 @@ test.describe('Conversation history persistence', () => {
     const token = await getSessionTokenViaUI({ browser }).catch((e) => {
       throw new Error(`cleanup login failed — the suite's conversations were not swept: ${e.message}`);
     });
-
-    // The token's real expiry, read from the token itself: the sweep's
-    // budget assumes a realm lifespan the repo does not pin, and a 401 in
-    // the report must name the cause instead of leaving the operator to
-    // guess which layer expired.
-    const tokenExpiry = new Date(parseJwtClaims(token).exp * 1000).toISOString();
 
     // The list is paginated, and its search matches a SUPERSET of the
     // suite's own conversations: the endpoint filters LIKE over title OR
@@ -165,7 +160,7 @@ test.describe('Conversation history persistence', () => {
               id: convId,
               cause:
                 res.status === 401
-                  ? `DELETE returned 401 (the access token expired at ${tokenExpiry})`
+                  ? `DELETE returned ${describeUnauthorized(res, token)}`
                   : `DELETE returned ${res.status}`
             };
           }

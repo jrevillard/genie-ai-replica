@@ -60,8 +60,15 @@ test.describe.serial('Phase K: Auth Error Display', () => {
       try {
         adminTokenForCleanup = await getAdminToken();
       } catch (e) {
+        // Name what stayed behind: the report's header says every
+        // leftover is named, and a mint that fails skips BOTH cleanups.
+        const skipped = [];
+        if (originalLifespan) skipped.push('the accessTokenLifespan restore');
+        if (noRolesUserId) skipped.push(`the no-roles user ${noRolesUserId} delete`);
         failures.push({
-          message: `the master-realm admin token could not be minted — no cleanup ran: ${e.message}`,
+          message:
+            `the master-realm admin token could not be minted — ${skipped.length} cleanup(s) did not ` +
+            `run: ${skipped.join(', ')}. Cause: ${e.message}`,
           cause: e
         });
       }

@@ -61,10 +61,31 @@ async function pinLocale(context, locale = 'en') {
         { cause: e }
       );
     }
-    // Read the value back from the app's OWN origin — the probe page is
-    // on it, and its localStorage is the storage the app reads at
-    // document start.
-    const stored = await probe.evaluate(() => window.localStorage.getItem('userLocale'));
+    // The read must cover the APP's origin: the init script writes
+    // `userLocale` on EVERY origin the context visits, so a probe served
+    // from another one (a redirect to a CDN) would read that origin's
+    // storage and prove nothing about the app's.
+    const appOrigin = new URL(BASE_URL).origin;
+    const probeOrigin = new URL(probe.url()).origin;
+    if (probeOrigin !== appOrigin) {
+      throw new Error(
+        `the locale pin could not be proven — the probe landed on ${probeOrigin}, not the app's ` +
+          `origin ${appOrigin}, and the init script writes on every origin the context visits`
+      );
+    }
+
+    // Read the value back from the app's own storage — the one the app
+    // reads at document start. A storage that refuses the read is a
+    // failed proof, not a raw driver error: the message names it.
+    let stored;
+    try {
+      stored = await probe.evaluate(() => window.localStorage.getItem('userLocale'));
+    } catch (e) {
+      throw new Error(
+        `the locale pin could not be proven — the storage of ${appOrigin} could not be read: ${e.message}`,
+        { cause: e }
+      );
+    }
     if (stored !== locale) {
       throw new Error(
         `the locale pin did not land — localStorage.userLocale is ` +

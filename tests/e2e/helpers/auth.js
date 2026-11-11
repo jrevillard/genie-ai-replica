@@ -228,13 +228,16 @@ const SESSION_MINT_TIMEOUT_MS = 360000;
  *
  *  - the HOOK's budget (360 s) counts everything, including the login
  *    that mints the token (≈135 s on a stalled stack);
- *  - the TOKEN's life (the realm's `accessTokenLifespan` — 300 s on the
- *    venue, and a value the repo does not pin: `deploy/ansible` leaves
- *    it optional, and the k1 spec sets the realm to 10 s for the length
- *    of its own run) starts when the token is ISSUED — during the OIDC
- *    code exchange inside the login redirect, BEFORE the mint returns.
- *    The window the sweep works in is therefore 300 s MINUS the gap
- *    between the issuance and the mint returning.
+ *  - the TOKEN's life (the realm's `accessTokenLifespan` — 300 s, the
+ *    shipped default: `docker-compose.yaml` pins
+ *    `KEYCLOAK_ACCESS_TOKEN_LIFESPAN:-300` and `configs/keycloak/
+ *    genie-realm.yaml` feeds it into the realm; `deploy/ansible` leaves
+ *    its own variable optional, so a deployment CAN run another value,
+ *    and the k1 spec sets the realm to 10 s for the length of its own
+ *    run) starts when the token is ISSUED — during the OIDC code
+ *    exchange inside the login redirect, BEFORE the mint returns. The
+ *    window the sweep works in is therefore 300 s MINUS the gap between
+ *    the issuance and the mint returning.
  *
  * After the mint the sweep lists the population (≤ 2 pages at the 30 s
  * request cap = 60 s) and deletes the suite's own files (50 deletes in
@@ -271,9 +274,13 @@ const SWEEP_DELETE_CONCURRENCY = 10;
  * conversation list matches LIKE over title OR lastMessage OR category.
  * A sweep that stops at the first page therefore cannot tell "the files
  * beyond the page are not mine" from "the files beyond the page are mine
- * and were not removed" — and the second one is a leftover. Two pages
- * cover a population of 100, twice the delete budget below; beyond that
- * the sweep says it could not enumerate the whole population.
+ * and were not removed" — and the second one is a leftover.
+ *
+ * Two pages are what the sweep enumerates: 100 files for the doc-repo
+ * sweep (its endpoint caps `limit` at 50) and 200 conversations for the
+ * chat sweep (its endpoint accepts 100). The delete budget below is a
+ * separate cap. Beyond the two pages the sweep says it could not
+ * enumerate the whole population.
  */
 const SWEEP_MAX_LIST_PAGES = 2;
 
@@ -286,6 +293,44 @@ const SWEEP_MAX_LIST_PAGES = 2;
  * leftover is reported, never dropped.
  */
 const SWEEP_MAX_DELETES = 50;
+
+/**
+ * The token's expiry, for a failure report that names the cause.
+ *
+ * Never throws: a token that is not a JWT, or one without an `exp`
+ * claim, has no expiry to report — and a diagnostic must not take the
+ * cleanup down before a single delete has run. The reason it could not
+ * be read travels IN the label, so nothing is swallowed.
+ *
+ * @param {string} token - the access token the sweep holds
+ * @returns {string} the expiry as an ISO timestamp, or why it is unknown
+ */
+function tokenExpiryLabel(token) {
+  try {
+    const exp = parseJwtClaims(token).exp;
+    return exp ? new Date(exp * 1000).toISOString() : 'unknown (the token carries no exp claim)';
+  } catch (e) {
+    return `unknown (the token could not be read: ${e.message})`;
+  }
+}
+
+/**
+ * Describe a 401 from an authenticated endpoint.
+ *
+ * The verdict is the SERVER's, not the sweep's: both endpoints answer
+ * `TOKEN_EXPIRED` and `TOKEN_INVALID` with the same status, and a
+ * rotated signing key answers the latter. Calling that an expiry sends
+ * the operator after the wrong layer.
+ *
+ * @param {{status: number, data: object}} res - the request helper's response
+ * @param {string} token - the access token the sweep holds
+ * @returns {string} the description for the failure report
+ */
+function describeUnauthorized(res, token) {
+  const verdict = res.data?.error;
+  const expiry = verdict === 'TOKEN_EXPIRED' ? ` — the access token expired at ${tokenExpiryLabel(token)}` : '';
+  return `HTTP 401 (the endpoint answered ${verdict ?? 'no error code'}${expiry})`;
+}
 
 /**
  * Map `fn` over `items`, at most `limit` calls in flight at a time. The
@@ -383,6 +428,8 @@ module.exports = {
   parseJwtClaims,
   request,
   mapWithConcurrency,
+  tokenExpiryLabel,
+  describeUnauthorized,
   SESSION_MINT_TIMEOUT_MS,
   SWEEP_DELETE_CONCURRENCY,
   SWEEP_MAX_LIST_PAGES,

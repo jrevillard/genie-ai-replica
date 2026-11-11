@@ -1,9 +1,9 @@
 const { expect } = require('@playwright/test');
 const { loginViaUI, BASE_URL, TEST_ADMIN_USER } = require('./chatbot');
 const {
+  describeUnauthorized,
   getSessionTokenViaUI,
   mapWithConcurrency,
-  parseJwtClaims,
   request,
   SWEEP_DELETE_CONCURRENCY,
   SWEEP_MAX_DELETES,
@@ -226,12 +226,6 @@ async function deleteAllTestDocuments(prefix = 'test-document', { browser } = {}
     throw new Error(`cleanup: login failed — no test document was deleted: ${e.message}`, { cause: e });
   }
 
-  // The token's real expiry, read from the token itself: the sweep's
-  // budget assumes a realm lifespan the repo does not pin, and a 401 in
-  // the report must name the cause instead of leaving the operator to
-  // guess which layer expired.
-  const tokenExpiry = new Date(parseJwtClaims(token).exp * 1000).toISOString();
-
   // The list is paginated, and its search matches a SUPERSET of the
   // suite's own files: the endpoint filters CONTAINS(LOWER(file_name)) OR
   // CONTAINS(LOWER(source_url)), while the sweep deletes the files whose
@@ -299,7 +293,7 @@ async function deleteAllTestDocuments(prefix = 'test-document', { browser } = {}
         });
         if (res.status < 200 || res.status >= 300) {
           return res.status === 401
-            ? `${f.file_name}: HTTP 401 (the access token expired at ${tokenExpiry})`
+            ? `${f.file_name}: ${describeUnauthorized(res, token)}`
             : `${f.file_name}: HTTP ${res.status}`;
         }
         return null;

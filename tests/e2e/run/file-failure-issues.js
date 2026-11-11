@@ -38,7 +38,6 @@ const REPO_ROOT = path.resolve(__dirname, '..', '..', '..');
 // evidence this path files from.
 const DEFAULT_REPORT_PATH = path.join(REPO_ROOT, 'reports', 'playwright-report.json');
 
-const TESTS_E2E_ROOT = 'tests/e2e';
 const { VENUE_IP_ENV, VENUE_HOST_ENV } = require('../helpers/venue-launch-args');
 // The venue's edge: ONE definition, credential-free — the same address the
 // run used, so the issue's reproduce command reproduces the run.
@@ -187,25 +186,30 @@ function fetchOpenIssues() {
 }
 
 /**
- * Does this text mention the spec file's path?
- *
- * The path is matched as a PATH TOKEN — a maximal run of path characters —
- * so it is found whether the issue names the file by its repository path or
- * by an absolute path or a URL that ends with it. A token that ends with
- * the file's path but whose PREFIX is itself inside the e2e tree is a
- * DIFFERENT file that happens to carry this one's path as its tail
- * (`tests/e2e/helpers/tests/e2e/theme-runtime-config.spec.js` is not the
- * file `tests/e2e/theme-runtime-config.spec.js`): such a token is refused,
- * or one file's issue swallows another's failure.
+ * The spec paths a text names — the tokens that end in a spec file
+ * extension.
  */
-function mentionsPath(text, file) {
-  const tokens = text.match(/[A-Za-z0-9_./-]+/g) || [];
-  return tokens.some((token) => {
-    if (token === file) return true;
-    if (!token.endsWith(`/${file}`)) return false;
-    const prefix = token.slice(0, token.length - file.length - 1);
-    return !(prefix === TESTS_E2E_ROOT || prefix.includes(`${TESTS_E2E_ROOT}/`));
-  });
+function specPathsIn(text) {
+  const tokens = String(text || '').match(/[A-Za-z0-9_./-]*\.(?:spec|test)\.[cm]?[jt]sx?/g) || [];
+  return tokens.map((token) => token.replace(/^\.\//, ''));
+}
+
+/**
+ * Is this issue DEDICATED to the file — does its title name that file and
+ * no other?
+ *
+ * A title that names SEVERAL spec files tracks a GROUP: the wave issue
+ * that touched a dozen of them. Such an issue must not absorb their
+ * failures — a failure on one of them still gets an issue of its own, or
+ * the file shows red with nothing pointing at it.
+ *
+ * The paths are compared as WHOLE PATHS, not as mentions: a title that
+ * names `tests/e2e/helpers/tests/e2e/a.spec.js` is about a DIFFERENT
+ * file that happens to carry this one's path as its tail.
+ */
+function titleIsDedicatedTo(title, file) {
+  const paths = specPathsIn(title);
+  return paths.length === 1 && paths[0] === file;
 }
 
 /**
@@ -226,23 +230,24 @@ function specFileMarker(file) {
  * issue.
  *
  * A match must be DEDICATED to the file, and there are exactly two places
- * where the script writes such a dedication:
+ * where such a dedication can be found:
  *
- * - the TITLE carries the path — the dedicated issue this script files;
+ * - the TITLE names that file and no other — the dedicated issue this
+ *   script files, and the dedicated issue a human filed;
  * - the DESCRIPTION carries the marker this script writes
  *   ("- spec file: `path`") — the same dedicated issue.
  *
- * A path that appears in a description WITHOUT the marker is NOT a match:
- * an umbrella issue that LISTS several spec paths (a wave that touched a
- * dozen of them) would otherwise absorb every one of their failures, and
- * the failure would never get an issue of its own — the tracker would show
- * the file as red with nothing pointing at it.
+ * A path that appears in either place WITHOUT being dedicated is NOT a
+ * match: an umbrella issue that LISTS several spec paths (a wave that
+ * touched a dozen of them) would otherwise absorb every one of their
+ * failures, and the failure would never get an issue of its own — the
+ * tracker would show the file as red with nothing pointing at it.
  */
 function findTrackedIssue(file, openIssues) {
   const marker = specFileMarker(file);
   const matches = openIssues.filter(
     (issue) =>
-      mentionsPath(issue.title || '', file) || (issue.description || '').includes(marker)
+      titleIsDedicatedTo(issue.title, file) || (issue.description || '').includes(marker)
   );
   return matches[0] || null;
 }
@@ -518,4 +523,4 @@ if (require.main === module) {
 
 // Exposed for the unit spec: the dedupe rule and the refusal wording are
 // behaviour, and behaviour is tested, not trusted.
-module.exports = { findTrackedIssue, mentionsPath, trackerReason };
+module.exports = { findTrackedIssue, specPathsIn, titleIsDedicatedTo, trackerReason };

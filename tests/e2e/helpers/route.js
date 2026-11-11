@@ -78,8 +78,7 @@ function isTargetGone(page) {
  * - the error's `name` is `'Error'`;
  * - its `constructor.name` is `'TargetClosedError2'` — the CLIENT bundle
  *   carries its own copy of Playwright's class and the bundler renames
- *   the second one, so the client-side class arrives renamed;
- * - the protocol-side error keeps the original name, `'TargetClosedError'`.
+ *   the second one, so the client-side class arrives renamed.
  *
  * So the class FAMILY covers every shape the handler meets, and the
  * message is not consulted at all: a version bump that rewords the
@@ -87,6 +86,12 @@ function isTargetGone(page) {
  * mock defect that merely QUOTES the race's wording ("Request context
  * disposed", "has been closed") is not swallowed — the wording was
  * never the signal.
+ *
+ * The NAME arm is the defensive half: an error that carries only
+ * Playwright's name and no class is tolerated too. The shipped client
+ * always delivers the class, so that shape does not occur today — the
+ * arm costs one comparison and cannot swallow a mock defect, because a
+ * defect does not carry Playwright's class name.
  */
 const TARGET_CLOSED_CLASS = /^TargetClosedError\d*$/;
 

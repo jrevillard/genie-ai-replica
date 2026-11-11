@@ -40,13 +40,19 @@ cd "$REPO_ROOT"
 # reads belongs to it. Point BASE_URL anywhere else and the run asks for
 # credentials instead of guessing.
 DEFAULT_VENUE="https://genieai-forge.local:4443"
-# The venue address is NORMALIZED once, here: https://x:4443, https://x:4443/
-# and https://x:4443// are the same venue. Before this normalization the
-# lock key stripped the slashes itself while the credential auto-read
-# compared the RAW address against the default venue — so a trailing slash
-# made the auto-read miss the shared stack's secret and ask for
-# credentials the run already had. One spelling now feeds both.
-BASE_URL="$(printf '%s' "${BASE_URL:-$DEFAULT_VENUE}" | sed 's#/*$##')"
+# The venue address is NORMALIZED once, by the SAME function the specs
+# read (helpers/base-url.js): https://x:4443, https://x:4443/ and
+# https://x:4443// are the same venue. Before this normalization the lock
+# key stripped the slashes itself while the credential auto-read compared
+# the RAW address against the default venue — so a trailing slash made
+# the auto-read miss the shared stack's secret and ask for credentials
+# the run already had. One spelling now feeds both, and the rule is unit
+# tested where it lives.
+if ! command -v node >/dev/null 2>&1; then
+  echo "ERROR: 'node' is not installed - the venue address cannot be normalized." >&2
+  exit 2
+fi
+BASE_URL="$(node -p "require('${REPO_ROOT}/tests/e2e/helpers/base-url').normalizeVenue(process.env.BASE_URL || '${DEFAULT_VENUE}')")"
 export BASE_URL
 NAMESPACE="${E2E_NAMESPACE:-genieai}"
 

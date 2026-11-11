@@ -17,7 +17,8 @@ const { runPostOnlyRouteHandler, runRouteHandler } = require('./route');
 //     in-process specs red;
 //   - reading the MESSAGE instead of the class (the wording branch this
 //     guard used to carry) turns the "wording is not the signal" spec
-//     red — it tolerates a plain error that merely quotes the race;
+//     red — a branch that matches the race's wording tolerates a plain
+//     error that merely quotes it;
 //   - snapshotting the target state BEFORE awaiting the handler (an
 //     ordering bug) turns the mid-flight-close spec red — the mutable
 //     double is what makes that mutation observable.
@@ -99,10 +100,12 @@ test.describe('runRouteHandler', () => {
     ).resolves.toBeUndefined();
   });
 
-  test('tolerates the protocol shape of the race — the NAME survives', async () => {
-    // The protocol-side error keeps Playwright's own name. This fixture
-    // matches the NAME branch alone — its class is a plain Error — so
-    // dropping that branch turns this red.
+  test('tolerates an error that carries the NAME only — the defensive arm', async () => {
+    // The shipped client always delivers the CLASS (measured: the
+    // constructor is 'TargetClosedError2'), so an error with the name and
+    // no class does not occur today. The NAME arm is the defensive half
+    // — and it is the ONLY fixture that pins it, so dropping that arm
+    // turns this red.
     const { page } = pageState({ contextClosed: true });
     await expect(
       runOnce(page, async () => {
@@ -140,18 +143,6 @@ test.describe('runRouteHandler', () => {
         throw new Error('route.fetch: Request context disposed.');
       })
     ).rejects.toThrow('route.fetch: Request context disposed.');
-  });
-
-  test('rethrows a mock defect that carries the disposed wording — the target is alive', async () => {
-    // The same two halves, on the pipeline wording: the wording alone is
-    // not the verdict. A defect on a live target must surface, whatever
-    // its text says.
-    const { page } = pageState();
-    await expect(
-      runOnce(page, async () => {
-        throw new Error('route.fulfill: Request context disposed.');
-      })
-    ).rejects.toThrow('route.fulfill: Request context disposed.');
   });
 
   test('rethrows a mock defect with its own message — the target is alive', async () => {

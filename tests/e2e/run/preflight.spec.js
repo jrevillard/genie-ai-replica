@@ -39,6 +39,13 @@ test.describe('the pre-flight names the finding the venue status carries', () =>
     expect(message).toContain('HTTP 404');
   });
 
+  test('a status that is not a failure has no diagnosis', () => {
+    // The pre-flight only asks about a failed navigation. A "cause" for a
+    // 200 would be a lie waiting for a caller that asks.
+    expect(classifyVenueStatus(200, VENUE)).toBe(null);
+    expect(classifyVenueStatus(302, VENUE)).toBe(null);
+  });
+
   test('the venue address is in the message', () => {
     expect(classifyVenueStatus(404, VENUE)).toContain(VENUE);
     expect(classifyVenueStatus(0, VENUE)).toContain(VENUE);

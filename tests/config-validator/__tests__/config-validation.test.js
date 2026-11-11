@@ -2745,6 +2745,8 @@ describe('e2e merge-train changes filters (#1264)', () => {
       'tests/e2e/documents/search.spec.js',
       'tests/e2e/documents/upload.spec.js',
       'tests/e2e/helpers/auth.spec.js',
+      'tests/e2e/helpers/base-url.spec.js',
+      'tests/e2e/helpers/chatbot.spec.js',
       'tests/e2e/helpers/keycloak-admin.spec.js',
       'tests/e2e/helpers/route.spec.js',
       'tests/e2e/helpers/venue-profile.spec.js',

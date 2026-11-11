@@ -125,10 +125,11 @@ prints the outcome — every skipped spec with its reason — and files a
 profile and the runtime skips: [`docs/e2e-tests/local-run.md`](../../docs/e2e-tests/local-run.md).
 
 The executed set is pinned by `tests/config-validator/`: the guard derives
-the run's invocation from the run script (never a second hand-maintained
-list) and requires it to cover **every** spec file in the tree. Adding a spec
-is free — the tree is the set; narrowing the invocation is what fails the
-guard.
+the run's invocation from the run script and requires it to cover **every**
+spec file in the tree. Narrowing the invocation is what fails the guard.
+A NEW spec file is not free, though: the derivation's exact pin in
+`tests/config-validator/__tests__/config-validation.test.js` lists the
+expected set, so a new spec file adds one line there.
 
 A spec that needs a surface the venue does not expose **skips with a
 reason** — see `helpers/venue-profile.js`. The reason is read from the

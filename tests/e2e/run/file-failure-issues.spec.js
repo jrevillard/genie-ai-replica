@@ -1,7 +1,12 @@
 // Copyright (C) 2026 International Telecommunication Union (ITU)
 // SPDX-License-Identifier: Apache-2.0
 const { test, expect } = require('@playwright/test');
-const { findTrackedIssue, mentionsPath, trackerReason } = require('./file-failure-issues');
+const {
+  findTrackedIssue,
+  specPathsIn,
+  titleIsDedicatedTo,
+  trackerReason,
+} = require('./file-failure-issues');
 
 const FILE = 'tests/e2e/theme-runtime-config.spec.js';
 
@@ -13,34 +18,32 @@ const FILE = 'tests/e2e/theme-runtime-config.spec.js';
  * is already tracked) is exactly the tracker damage this path exists to
  * prevent, so both directions are pinned here.
  */
-test.describe('the dedupe reads a spec path as a PATH TOKEN', () => {
-  test('the repository path matches', () => {
-    expect(mentionsPath(`see ${FILE} for the assertions`, FILE)).toBe(true);
-    expect(mentionsPath(`\`tests/e2e/theme-runtime-config.spec.js\` is red`, FILE)).toBe(true);
+test.describe('a dedicated title names ONE spec file', () => {
+  test('the paths in a title are the spec paths it names', () => {
+    expect(specPathsIn(`see ${FILE} for the assertions`)).toEqual([FILE]);
+    expect(specPathsIn('components/gov-chat-frontend/src/App.vue')).toEqual([]);
   });
 
-  test('an absolute path matches', () => {
-    expect(mentionsPath(`/home/jerome/git_projects/ITU/genie-ai/${FILE}`, FILE)).toBe(true);
+  test('a title that names this file alone is dedicated to it', () => {
+    expect(titleIsDedicatedTo(`test(e2e): ${FILE} is red on the local run`, FILE)).toBe(true);
   });
 
-  test('a URL that ends with the path matches', () => {
-    expect(mentionsPath(`https://gitlab.example/un/itu/genie-ai/-/blob/main/${FILE}`, FILE)).toBe(true);
+  test('a title that names SEVERAL spec files is an umbrella, not a dedication', () => {
+    // The wave issue that touched a dozen of them names them all: it
+    // tracks a GROUP, and a failure on one of them must still get its own
+    // issue.
+    const umbrella = `test(e2e): ${FILE} and tests/e2e/other.spec.js are red`;
+    expect(titleIsDedicatedTo(umbrella, FILE)).toBe(false);
   });
 
-  test('a path that is only the TAIL of another e2e file does NOT match', () => {
+  test('a path that is only the TAIL of another e2e file does not match', () => {
     // tests/e2e/helpers/tests/e2e/theme-runtime-config.spec.js is a
     // different file that happens to carry this one's path as its tail.
-    expect(mentionsPath('tests/e2e/helpers/tests/e2e/theme-runtime-config.spec.js', FILE)).toBe(false);
+    expect(titleIsDedicatedTo('tests/e2e/helpers/tests/e2e/theme-runtime-config.spec.js', FILE)).toBe(false);
   });
 
-  test('the e2e root itself as the prefix does NOT match either', () => {
-    // tests/e2e/tests/e2e/theme-runtime-config.spec.js: the prefix is the
-    // e2e root exactly, with no trailing separator to key the refusal on.
-    expect(mentionsPath('tests/e2e/tests/e2e/theme-runtime-config.spec.js', FILE)).toBe(false);
-  });
-
-  test('an unrelated path does not match', () => {
-    expect(mentionsPath('components/gov-chat-frontend/src/App.vue', FILE)).toBe(false);
+  test('a title that names no spec file is dedicated to nothing', () => {
+    expect(titleIsDedicatedTo('the e2e suite is red', FILE)).toBe(false);
   });
 });
 
@@ -62,6 +65,16 @@ test.describe('a match must be DEDICATED to the spec file', () => {
     const umbrella = {
       title: '13 spec files hardcode https://localhost',
       description: `The wave touched ${FILE} and twelve other files.`,
+    };
+    expect(findTrackedIssue(FILE, [umbrella])).toBe(null);
+  });
+
+  test('an umbrella that LISTS the paths in its TITLE does not absorb the failure either', () => {
+    // The title names several spec files: that is a group, not a
+    // dedication. The file's own failure still needs its own issue.
+    const umbrella = {
+      title: `test(e2e): ${FILE} and tests/e2e/other.spec.js are red`,
+      description: '',
     };
     expect(findTrackedIssue(FILE, [umbrella])).toBe(null);
   });

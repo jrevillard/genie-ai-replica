@@ -160,32 +160,59 @@ async function waitForBotResponse(page, options = {}) {
   await expect
     .poll(
       () =>
-        page.evaluate(() => {
-          const app = document.querySelector('#app');
-          const store = app && app.__vue_app__ ? app.__vue_app__.config.globalProperties.$store : null;
-          // The store's PUBLIC read path: the "conversation" module's
-          // getter returns the open conversation — its messages and the
-          // stream flag. The raw state shape is NOT a contract: the CSR
-          // refactor moved the messages under conversations[openId], and
-          // a helper reading "state.conversation.messages" threw on every
-          // poll (the three chat specs went red the day it landed).
-          const open = store && store.getters ? store.getters['conversation/openConversation'] : null;
-          // A booted app without the getter is a broken store contract,
-          // not a slow answer: fail now with the path in the message
-          // instead of polling to a cause-less timeout.
-          if (store && !open) {
-            throw new Error('conversation/openConversation getter missing or returned nothing');
-          }
-          const messages = open && open.messages ? open.messages : [];
-          const bots = messages.filter((m) => m.sender === 'bot');
-          const last = bots[bots.length - 1];
-          // No bot message yet: the turn has not produced one, so the
-          // wait continues (null is not false).
-          return last ? Boolean(last.isStreaming) : null;
-        }),
+        page
+          .evaluate(() => {
+            const app = document.querySelector('#app');
+            const store = app && app.__vue_app__ ? app.__vue_app__.config.globalProperties.$store : null;
+            // The store's PUBLIC read path: the "conversation" module's
+            // getter returns the open conversation — its messages and the
+            // stream flag. The raw state shape is NOT a contract: the CSR
+            // refactor moved the messages under conversations[openId], and
+            // a helper reading "state.conversation.messages" threw on every
+            // poll (the three chat specs went red the day it landed).
+            const open = store && store.getters ? store.getters['conversation/openConversation'] : null;
+            // A booted app without the getter is a broken store contract,
+            // not a slow answer: say so now, in the shape the reader
+            // (streamingFlagOf) turns into a named failure, instead of
+            // polling to a cause-less timeout.
+            if (!store) return { state: 'no-store' };
+            if (!open) return { state: 'no-open-conversation' };
+            return { state: 'ok', open };
+          })
+          .then(streamingFlagOf),
       { timeout }
     )
     .toBe(false);
+}
+
+/**
+ * The streaming flag of the last bot message, from a read of the store's
+ * public getter.
+ *
+ * Pure, and OUT of the page: the page hands over what it read, this
+ * decides what it MEANS. Two contracts live here, and both are easy to
+ * break by accident:
+ *
+ * - a store that does not expose the open conversation is a BROKEN store
+ *   contract, not a slow answer: it fails now, by name, instead of
+ *   polling to a cause-less timeout;
+ * - no bot message yet is NOT "not streaming" — the turn has not
+ *   produced one, so the wait continues (null is not false).
+ *
+ * @param {{state: string, open?: object}} read - what the page read
+ * @returns {boolean|null} the flag, or null while the turn has no answer
+ */
+function streamingFlagOf(read) {
+  if (!read || read.state !== 'ok') {
+    throw new Error(
+      `the store does not expose the open conversation (${read && read.state}) — ` +
+        'a booted app without the conversation/openConversation getter is a broken store contract'
+    );
+  }
+  const messages = read.open && read.open.messages ? read.open.messages : [];
+  const bots = messages.filter((m) => m.sender === 'bot');
+  const last = bots[bots.length - 1];
+  return last ? Boolean(last.isStreaming) : null;
 }
 
 /**
@@ -319,6 +346,7 @@ async function ackFeedback(page) {
 }
 
 module.exports = {
+  streamingFlagOf,
   loginViaUI,
   navigateToChatbot,
   sendMessage,

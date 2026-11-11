@@ -41,6 +41,23 @@ function fakeTransport(answers) {
     const answer = answers.shift();
     if (!answer) return Promise.reject(new Error(`fake transport: no answer for ${method} ${path}`));
     if (answer.throws) return Promise.reject(answer.throws);
+    // The real transport (helpers/auth.js) parses the body as JSON
+    // unless the caller asks for it raw, and REJECTS a non-JSON body.
+    // The fake does the same, so a probe that forgets `raw: true` fails
+    // the way the venue would fail — instead of quietly reading a body
+    // the real transport would have refused.
+    if (!(options && options.raw) && typeof answer.data === 'string') {
+      try {
+        return Promise.resolve({ status: answer.status, data: JSON.parse(answer.data), headers: {} });
+      } catch {
+        const error = new Error(
+          `${method} ${path} returned a non-JSON body (HTTP ${answer.status}): ${answer.data.slice(0, 200)}`
+        );
+        error.nonJsonBody = true;
+        error.status = answer.status;
+        return Promise.reject(error);
+      }
+    }
     return Promise.resolve({ status: answer.status, data: answer.data, headers: {} });
   };
   return calls;
@@ -147,17 +164,6 @@ test.describe('the OKF probe reads the venue like the frontend reads it', () => 
     expect(await profile.okfEnabled()).toBe(true);
     expect(await profile.okfEnabled()).toBe(true);
     expect(calls.length).toBe(1);
-  });
-
-  test('the runtime config is read RAW — it is a script, not JSON', async () => {
-    // The transport's `raw: true` is what makes the body arrive as TEXT:
-    // the runtime config is a JavaScript file the probe EVALUATES. The
-    // fake answers with the body either way, so only the flag tells a
-    // dropped `raw` apart from the real transport's parsed body.
-    const calls = fakeTransport([{ status: 200, data: 'window.APP_CONFIG = {\n  okfEnabled: "1",\n};\n' }]);
-    const profile = freshProfile();
-    expect(await profile.okfEnabled()).toBe(true);
-    expect(calls[0].options).toEqual({ raw: true });
   });
 });
 

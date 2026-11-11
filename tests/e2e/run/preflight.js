@@ -51,11 +51,16 @@ function remedy(what) {
  *
  * @param {number} status - the status the root answered with (0 = none)
  * @param {string} venue - the address the run pointed at
- * @returns {string} the diagnosis, in the operator's words
+ * @returns {string|null} the diagnosis, or null when the status is not a
+ *   failure
  */
 function classifyVenueStatus(status, venue) {
   if (status === 0) return `no response arrived at ${venue} — the venue did not answer at all.`;
   if (status >= 500) return `the venue answered HTTP ${status} at ${venue} — the deployment is down.`;
+  // A status that is NOT a failure has no diagnosis: the caller only
+  // asks about a failed navigation, and a "cause" for a 200 would be a
+  // lie waiting for a caller that asks.
+  if (status < 400) return null;
   return (
     `the venue answered HTTP ${status} at ${venue} — the address is not the app's edge, or the ` +
     'venue refuses an anonymous request to it (a broken realm answers 4xx at the edge too).'

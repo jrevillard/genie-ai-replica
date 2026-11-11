@@ -208,6 +208,9 @@ function specPathsIn(text) {
  */
 function namesThisFile(token, file) {
   if (token === file) return true;
+  // The path relative to the e2e tree: 'helpers/a.spec.js'.
+  const relative = file.startsWith(`${TESTS_E2E_ROOT}/`) ? file.slice(TESTS_E2E_ROOT.length + 1) : null;
+  if (relative && token === relative) return true;
   if (!token.endsWith(`/${file}`)) return false;
   const prefix = token.slice(0, token.length - file.length - 1);
   return !(prefix === TESTS_E2E_ROOT || prefix.includes(`${TESTS_E2E_ROOT}/`));
@@ -223,7 +226,13 @@ function namesThisFile(token, file) {
  * the file shows red with nothing pointing at it.
  */
 function titleIsDedicatedTo(title, file) {
-  const paths = specPathsIn(title);
+  // Only the paths of the tree this path covers count: a title that
+  // also names a FRONTEND test (a different tree, a different failure
+  // path) is still dedicated to this e2e file.
+  const relative = file.startsWith(`${TESTS_E2E_ROOT}/`) ? file.slice(TESTS_E2E_ROOT.length + 1) : null;
+  const paths = specPathsIn(title).filter(
+    (token) => token.includes(`${TESTS_E2E_ROOT}/`) || token === relative
+  );
   if (paths.length === 0) return false;
   // EVERY path the title names must name THIS file — under the
   // repository path, an absolute path or a tracker URL. A title that

@@ -65,6 +65,24 @@ test.describe('a dedicated title names ONE spec file', () => {
     ).toBe(true);
   });
 
+  test('a title that also names a FRONTEND test is still dedicated', () => {
+    // The failure path covers the e2e tree: a frontend test is another
+    // tree, another failure path — its mention says nothing about this
+    // file, and reading it as an umbrella would file a duplicate.
+    expect(
+      titleIsDedicatedTo(
+        `test(e2e): ${FILE} is red (frontend: components/gov-chat-frontend/src/__tests__/chatbotService.test.js)`,
+        FILE
+      )
+    ).toBe(true);
+  });
+
+  test('the path relative to the e2e tree names the file too', () => {
+    expect(titleIsDedicatedTo('test(e2e): helpers/chatbot.spec.js is red', 'tests/e2e/helpers/chatbot.spec.js')).toBe(
+      true
+    );
+  });
+
   test('a title that names this file AND another one is an umbrella', () => {
     expect(titleIsDedicatedTo(`test(e2e): ${FILE} and tests/e2e/other.spec.js are red`, FILE)).toBe(false);
   });

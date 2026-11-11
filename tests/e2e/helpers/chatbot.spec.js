@@ -20,9 +20,8 @@ test.describe('the streaming flag is read through the store getter', () => {
     expect(() => streamingFlagOf({ state: 'no-open-conversation' })).toThrow(
       /conversation\/openConversation/
     );
-    // Two causes, two messages: an app that is not booted and a booted
-    // app whose store lost the getter are different findings.
-    expect(() => streamingFlagOf({ state: 'no-store' })).toThrow(/not booted/);
+    // NOT booted is transient: the wait continues.
+    expect(streamingFlagOf({ state: 'no-store' })).toBe(null);
   });
 
   test('no bot message yet is NOT "not streaming" — the wait continues', () => {

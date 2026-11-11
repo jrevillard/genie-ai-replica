@@ -83,8 +83,10 @@ const isTestFile = (file) => {
 
 /**
  * The app's own files that carry the endpoint — the app's source is the
- * authority on what it calls. Its test files are excluded: a fixture
- * that kept the old spelling would keep the anchor alive.
+ * authority on what it calls — read from .js files only, so a frontend
+ * that moved the call into another extension would red the gate,
+ * loudly. Its test files are excluded: a fixture that kept the old
+ * spelling would keep the anchor alive.
  */
 /**
  * The endpoint as a PATTERN: the path must END there. A plain substring

@@ -29,7 +29,12 @@ const E2E_ROOT = path.join(ROOT, 'tests/e2e');
 // The match is on CODE, not on prose: a comment that names the edge is
 // documentation. The scanner (validators/js-files.js) strips comments
 // before the match — the same convention the handle-locators gate uses.
-const LOCAL_ORIGIN = /https?:\/\/(?:localhost|127\.0\.0\.1)(?::\d+)?/gi;
+// The local origins the repo runs against: the Compose stack
+// (localhost), the loopback, and the two k8s venues — the shared forge
+// edge (genieai-forge.local) and the deployment edge (genieai.local).
+// A spec that hardcodes ANY of them names one venue instead of the one
+// it was given, and dies before its first assertion everywhere else.
+const LOCAL_ORIGIN = /https?:\/\/(?:localhost|127\.0\.0\.1|genieai(?:-forge)?\.local)(?::\d+)?/gi;
 
 // The local origins the suite may drive on purpose: a mocked identity
 // provider, a local stub. One per line, with the reason.
@@ -46,8 +51,15 @@ const DEFINING_MODULE = require.resolve('../../e2e/helpers/base-url');
  */
 const baseUrlReaders = (root) =>
   jsFiles(root)
-    .filter((f) => stripJsComments(fs.readFileSync(f, 'utf8')).includes('process.env.BASE_URL'))
+    .filter((f) => READS_EDGE.test(stripJsComments(fs.readFileSync(f, 'utf8'))))
     .map((f) => path.relative(root, f));
+
+/**
+ * The two spellings of the edge's read: the property
+ * (`process.env.BASE_URL`) and the destructuring
+ * (`const { BASE_URL } = process.env`).
+ */
+const READS_EDGE = /process\.env\.BASE_URL|\{\s*BASE_URL\s*\}\s*=\s*process\.env/;
 
 const offenders = (root, allowed = MOCK_ORIGINS) =>
   jsFiles(root)
@@ -78,7 +90,9 @@ describe('the e2e suite names the venue it was given, and names it once', () => 
     try {
       fs.writeFileSync(path.join(tree, 'a.spec.js'), "const BASE_URL = process.env.BASE_URL || 'x';\n");
       fs.writeFileSync(path.join(tree, 'b.spec.js'), 'const EDGE = process.env.BASE_URL;\n');
-      expect(baseUrlReaders(tree).sort()).toEqual(['a.spec.js', 'b.spec.js']);
+      // The destructuring spelling is a read too.
+      fs.writeFileSync(path.join(tree, 'c.spec.js'), 'const { BASE_URL } = process.env;\n');
+      expect(baseUrlReaders(tree).sort()).toEqual(['a.spec.js', 'b.spec.js', 'c.spec.js']);
     } finally {
       fs.rmSync(tree, { recursive: true, force: true });
     }
@@ -106,8 +120,19 @@ describe('the e2e suite names the venue it was given, and names it once', () => 
       // edge, and the suite may drive such a host on purpose.
       fs.writeFileSync(path.join(tree, 'mock-idp.spec.js'), "await page.goto('http://127.0.0.1:9000/oidc');\n");
       fs.writeFileSync(path.join(tree, 'mock-server.spec.js'), "await page.goto('http://localhost:8123/');\n");
+      // The venues this repo actually runs against: the shared forge
+      // edge and the deployment edge.
+      fs.writeFileSync(path.join(tree, 'forge.spec.js'), "await page.goto('https://genieai-forge.local:4443/');\n");
+      fs.writeFileSync(path.join(tree, 'k8s.spec.js'), "await page.goto('https://genieai.local:4443/');\n");
       const strays = offenders(tree, ['http://127.0.0.1:9000', 'http://localhost:8123']).map((f) => path.basename(f));
-      expect(strays.sort()).toEqual(['api.spec.js', 'compared.spec.js', 'navigation.spec.js', 'ported.spec.js']);
+      expect(strays.sort()).toEqual([
+        'api.spec.js',
+        'compared.spec.js',
+        'forge.spec.js',
+        'k8s.spec.js',
+        'navigation.spec.js',
+        'ported.spec.js'
+      ]);
     } finally {
       fs.rmSync(tree, { recursive: true, force: true });
     }

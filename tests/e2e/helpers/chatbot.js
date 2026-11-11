@@ -210,14 +210,17 @@ async function waitForBotResponse(page, options = {}) {
  * @returns {boolean|null} the flag, or null while the turn has no answer
  */
 function streamingFlagOf(read) {
+  if (read && read.state === 'no-store') {
+    // NOT booted is transient — the app may still be mounting (a reload
+    // mid-wait). The wait continues; only a BOOTED app whose store lost
+    // the getter is a broken contract.
+    return null;
+  }
   if (!read || read.state !== 'ok') {
-    // Two causes, two messages: an app that is not booted at all and a
-    // booted app whose store lost the getter are different findings.
-    const cause =
-      read && read.state === 'no-store'
-        ? 'the app is not booted — there is no store to read'
-        : 'the store does not expose the conversation/openConversation getter';
-    throw new Error(`${cause} — that is a broken store contract, not a slow answer`);
+    throw new Error(
+      'the store does not expose the conversation/openConversation getter — ' +
+        'that is a broken store contract, not a slow answer'
+    );
   }
   const messages = read.messages || [];
   const bots = messages.filter((m) => m.sender === 'bot');

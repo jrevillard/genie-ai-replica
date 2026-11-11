@@ -43,6 +43,7 @@ const stripJsComments = (source) => {
   let out = '';
   let state = null; // null | "'" | '"' | '`' | '/'
   let prevSignificant = ''; // last non-whitespace character kept
+  let prevWord = ''; // the last identifier read
   for (let i = 0; i < source.length; i++) {
     const ch = source[i];
     if (state && state !== '/') {
@@ -71,6 +72,7 @@ const stripJsComments = (source) => {
       state = ch;
       out += ch;
       prevSignificant = ch;
+      prevWord = '';
       continue;
     }
     if (ch === '/') {
@@ -84,7 +86,16 @@ const stripJsComments = (source) => {
         i = end === -1 ? source.length : end + 1;
         continue;
       }
-      const regexStart = '(,=:[!&|?{};+-*%~^<>'.includes(prevSignificant) || prevSignificant === '';
+      // A regex literal can follow a keyword too: `return /…/` is a
+      // regex, not a division — reading it as division flips the scanner
+      // into string state and the rest of the file (comments included)
+      // survives the strip.
+      const regexStart =
+        '(,=:[!&|?{};+-*%~^<>'.includes(prevSignificant) ||
+        prevSignificant === '' ||
+        ['return', 'typeof', 'case', 'in', 'of', 'new', 'delete', 'void', 'do', 'else', 'yield', 'await'].includes(
+          prevWord
+        );
       if (regexStart && source[i + 1] !== '=') {
         state = '/';
         out += ch;
@@ -96,6 +107,13 @@ const stripJsComments = (source) => {
     }
     out += ch;
     if (!/\s/.test(ch)) prevSignificant = ch;
+    if (/[A-Za-z0-9_$]/.test(ch)) {
+      prevWord += ch;
+    } else if (!/\s/.test(ch)) {
+      // Whitespace keeps the word (a keyword may be followed by a
+      // space); anything else ends it.
+      prevWord = '';
+    }
   }
   return out;
 };

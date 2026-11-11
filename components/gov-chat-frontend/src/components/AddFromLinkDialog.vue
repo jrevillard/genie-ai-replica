@@ -1,7 +1,7 @@
 <template>
   <Teleport to="body">
-    <div class="dialog-backdrop" @click="$emit('close')"></div>
-    <div class="dialog-container">
+    <div class="dialog-backdrop genie-living-intelligence" @click="$emit('close')"></div>
+    <div class="dialog-container genie-living-intelligence">
       <div class="dialog-header">
         <h2 class="dialog-title">
           {{ translate('admin.documents.addLink', 'Add from Link') }}

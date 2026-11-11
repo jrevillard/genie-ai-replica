@@ -1,7 +1,7 @@
 <template>
   <Teleport to="body">
-    <div class="dialog-backdrop" data-test-id="dialog-backdrop" @click="$emit('close')"></div>
-    <div class="dialog-container">
+    <div class="dialog-backdrop genie-living-intelligence" data-test-id="dialog-backdrop" @click="$emit('close')"></div>
+    <div class="dialog-container genie-living-intelligence">
       <DsSpinner v-if="isLoading || isFetchingData || isDownloading" overlay size="lg">
         <span v-if="!isDownloading">{{ translate('details.loading', 'Loading File Details...') }}</span>
 

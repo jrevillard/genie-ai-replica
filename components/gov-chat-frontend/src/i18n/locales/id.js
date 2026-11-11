@@ -265,7 +265,12 @@ export default {
       unavailable: 'Penggunaan sumber daya tidak tersedia saat ini.'
     },
     health: {
+      parseFailed: 'Gagal memproses data kesehatan sistem.',
+      loadFailed: 'Gagal memuat data kesehatan sistem.',
       unavailable: 'Kesehatan sistem tidak tersedia saat ini.'
+    },
+    logsTab: {
+      loadFailed: 'Gagal memuat log.'
     },
     dbStats: {
       unavailable: 'Statistik basis data tidak tersedia saat ini.'
@@ -1557,6 +1562,10 @@ export default {
       ingestSaving: 'Menyimpan metadata sebelum pemrosesan...',
       ingestSaveFailed: 'Gagal menyimpan metadata. Pemrosesan dibatalkan.',
       logError: 'Gagal mengambil log pemrosesan.',
+      popupBlocked: 'Popup diblokir. Izinkan popup untuk situs ini.',
+      downloadComplete: 'Unduhan selesai.',
+      loadFailed: 'Tidak dapat memuat file.',
+      killFailed: 'Gagal menghentikan ingest:',
       killDocSent: 'Permintaan penghentian untuk dokumen ini telah dikirim.',
       killProcSent: 'Permintaan penghentian untuk proses pemrosesan telah dikirim.'
     },

@@ -2725,7 +2725,10 @@ export default {
           // treat it exactly like a rejection (review H1).
           this.healthLoadError = true;
           this.resetHealthSurfaces();
-          this.showNotification('Failed to parse system health data', 'error');
+          this.showNotification(
+            this.translate('admin.health.parseFailed', 'Failed to parse system health data'),
+            'error'
+          );
         }
       } catch (error) {
         console.error('Error loading system health:', error);
@@ -2735,7 +2738,7 @@ export default {
         // retry affordance.
         this.healthLoadError = true;
         this.resetHealthSurfaces();
-        this.showNotification('Failed to load system health data', 'error');
+        this.showNotification(this.translate('admin.health.loadFailed', 'Failed to load system health data'), 'error');
       } finally {
         this.isLoading = false;
       }
@@ -2770,7 +2773,7 @@ export default {
         }
       } catch (error) {
         console.error('Error loading logs:', error);
-        this.showNotification('Failed to load logs', 'error');
+        this.showNotification(this.translate('admin.logsTab.loadFailed', 'Failed to load logs'), 'error');
       } finally {
         this.isLoading = false;
       }

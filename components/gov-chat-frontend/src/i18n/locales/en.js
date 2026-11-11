@@ -265,7 +265,12 @@ export default {
       unavailable: 'Resource usage is unavailable right now.'
     },
     health: {
+      parseFailed: 'Failed to parse system health data',
+      loadFailed: 'Failed to load system health data',
       unavailable: 'System health is unavailable right now.'
+    },
+    logsTab: {
+      loadFailed: 'Failed to load logs'
     },
     dbStats: {
       unavailable: 'Database statistics are unavailable right now.'
@@ -1550,6 +1555,10 @@ export default {
       ingestSaving: 'Saving metadata before ingestion...',
       ingestSaveFailed: 'Failed to save metadata. Ingestion cancelled.',
       logError: 'Failed to fetch ingestion logs.',
+      popupBlocked: 'Popup blocked. Please allow popups for this site.',
+      downloadComplete: 'Download complete.',
+      loadFailed: 'Could not load file.',
+      killFailed: 'Failed to kill ingestion:',
       killDocSent: 'Kill request for this document has been sent.',
       killProcSent: 'Kill request for the ingestion process has been sent.'
     },

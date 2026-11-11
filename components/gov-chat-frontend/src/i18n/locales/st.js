@@ -265,7 +265,12 @@ export default {
       unavailable: 'Tšebeliso ya mehlodi ha e fumanehe hona joale.'
     },
     health: {
+      parseFailed: 'Ho hlolehile ho hlalosa lintlha tsa bophelo ba sistimi',
+      loadFailed: 'Ho hlolehile ho kenya lintlha tsa bophelo ba sistimi',
       unavailable: 'Bophelo ba sistimi ha bo fumanehe hona joale.'
+    },
+    logsTab: {
+      loadFailed: 'Ho hlolehile ho kenya Lilog'
     },
     dbStats: {
       unavailable: 'Lipalo-palo tsa polokelo ya data ha li fumanehe hona joale.'
@@ -1563,6 +1568,10 @@ export default {
       ingestSaving: 'E boloka metadata pele e kengwa...',
       ingestSaveFailed: 'Ho hlolehile ho boloka metadata. Kentsho e hlakotswe.',
       logError: 'Ho hlolehile ho latedisa lilog tsa ho kenya.',
+      popupBlocked: 'Fensetere e thibilwe. Ka kopo lumella difensetere tsa pop-up bakeng sa saite ena.',
+      downloadComplete: 'Ho jarolla ho phethetse.',
+      loadFailed: 'Ha e kgone ho kenya faele.',
+      killFailed: 'Ho hlolehile ho emisa ho kenya:',
       killDocSent: 'Kopo ya ho bolaya bakeng sa tokomane ena e rometswe.',
       killProcSent: 'Kopo ya ho bolaya bakeng sa tshebetso ya ho kenya e rometswe.'
     },

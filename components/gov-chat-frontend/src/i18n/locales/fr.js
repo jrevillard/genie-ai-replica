@@ -265,7 +265,12 @@ export default {
       unavailable: "L'utilisation des ressources est indisponible pour le moment."
     },
     health: {
+      parseFailed: "Échec de l'analyse des données d'état du système.",
+      loadFailed: "Échec du chargement des données d'état du système.",
       unavailable: "L'état du système est indisponible pour le moment."
+    },
+    logsTab: {
+      loadFailed: 'Échec du chargement des journaux.'
     },
     dbStats: {
       unavailable: 'Les statistiques de la base de données sont indisponibles pour le moment.'
@@ -1567,6 +1572,10 @@ export default {
       ingestSaving: 'Enregistrement des métadonnées avant ingestion...',
       ingestSaveFailed: "Échec de l'enregistrement des métadonnées. Ingestion annulée.",
       logError: "Échec de la récupération des journaux d'ingestion.",
+      popupBlocked: 'Fenêtre pop-up bloquée. Veuillez autoriser les fenêtres pop-up pour ce site.',
+      downloadComplete: 'Téléchargement terminé.',
+      loadFailed: 'Impossible de charger le fichier.',
+      killFailed: "Échec de l'arrêt de l'ingestion :",
       killDocSent: "La demande d'arrêt pour ce document a été envoyée.",
       killProcSent: "La demande d'arrêt pour le processus d'ingestion a été envoyée."
     },

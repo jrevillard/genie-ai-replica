@@ -265,7 +265,12 @@ export default {
       unavailable: '资源使用情况当前不可用。'
     },
     health: {
+      parseFailed: '解析系统健康数据失败。',
+      loadFailed: '加载系统健康数据失败。',
       unavailable: '系统健康状态当前不可用。'
+    },
+    logsTab: {
+      loadFailed: '加载日志失败。'
     },
     dbStats: {
       unavailable: '数据库统计信息当前不可用。'
@@ -1519,6 +1524,10 @@ export default {
       ingestSaving: '提取前正在保存元数据...',
       ingestSaveFailed: '保存元数据失败。提取已取消。',
       logError: '获取提取日志失败。',
+      popupBlocked: '弹窗被阻止。请允许此网站弹出窗口。',
+      downloadComplete: '下载完成。',
+      loadFailed: '无法加载文件。',
+      killFailed: '终止提取失败：',
       killDocSent: '已发送此文档的终止请求。',
       killProcSent: '已发送提取过程的终止请求。'
     },

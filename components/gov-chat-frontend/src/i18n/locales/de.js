@@ -265,7 +265,12 @@ export default {
       unavailable: 'Die Ressourcennutzung ist derzeit nicht verfügbar.'
     },
     health: {
+      parseFailed: 'Systemzustandsdaten konnten nicht ausgewertet werden.',
+      loadFailed: 'Systemzustandsdaten konnten nicht geladen werden.',
       unavailable: 'Der Systemzustand ist derzeit nicht verfügbar.'
+    },
+    logsTab: {
+      loadFailed: 'Protokolle konnten nicht geladen werden.'
     },
     dbStats: {
       unavailable: 'Die Datenbankstatistiken sind derzeit nicht verfügbar.'
@@ -1565,6 +1570,10 @@ export default {
       ingestSaving: 'Speichere Metadaten vor der Aufnahme...',
       ingestSaveFailed: 'Metadaten konnten nicht gespeichert werden. Aufnahme abgebrochen.',
       logError: 'Fehler beim Abrufen der Aufnahmeprotokolle.',
+      popupBlocked: 'Pop-up blockiert. Bitte erlauben Sie Pop-ups für diese Website.',
+      downloadComplete: 'Download abgeschlossen.',
+      loadFailed: 'Datei konnte nicht geladen werden.',
+      killFailed: 'Aufnahme konnte nicht beendet werden:',
       killDocSent: 'Abbruchanforderung für dieses Dokument wurde gesendet.',
       killProcSent: 'Abbruchanforderung für den Aufnahmeprozess wurde gesendet.'
     },

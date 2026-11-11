@@ -265,7 +265,12 @@ export default {
       unavailable: 'A utilização de recursos está indisponível neste momento.'
     },
     health: {
+      parseFailed: 'Falha ao analisar os dados do estado do sistema.',
+      loadFailed: 'Falha ao carregar os dados do estado do sistema.',
       unavailable: 'O estado do sistema está indisponível neste momento.'
+    },
+    logsTab: {
+      loadFailed: 'Falha ao carregar os Logs.'
     },
     dbStats: {
       unavailable: 'As estatísticas da base de dados estão indisponíveis neste momento.'
@@ -1563,6 +1568,10 @@ export default {
       ingestSaving: 'A guardar metadados antes da ingestão...',
       ingestSaveFailed: 'Falha ao guardar metadados. Ingestão cancelada.',
       logError: 'Falha ao obter os logs de ingestão.',
+      popupBlocked: 'Janela pop-up bloqueada. Autorize as janelas pop-up para este site.',
+      downloadComplete: 'Download concluído.',
+      loadFailed: 'Não foi possível carregar o ficheiro.',
+      killFailed: 'Falha ao interromper a ingestão:',
       killDocSent: 'Pedido de interrupção para este documento enviado.',
       killProcSent: 'Pedido de interrupção para o processo de ingestão enviado.'
     },

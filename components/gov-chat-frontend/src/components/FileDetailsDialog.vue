@@ -1342,7 +1342,10 @@ export default {
             </html>
           `);
         } else {
-          this.showNotification('Popup blocked. Please allow popups for this site.', 'error');
+          this.showNotification(
+            this.translate('details.notifications.popupBlocked', 'Popup blocked. Please allow popups for this site.'),
+            'error'
+          );
           return;
         }
       }
@@ -1407,7 +1410,10 @@ export default {
             xhr.send();
           });
 
-          this.showNotification('Download complete.', 'success');
+          this.showNotification(
+            this.translate('details.notifications.downloadComplete', 'Download complete.'),
+            'success'
+          );
         } else {
           // --- FETCH VIEW (Tab Navigation) ---
           const response = await fetch(this.fileViewUrl, {
@@ -1443,7 +1449,10 @@ export default {
             </div>
           `;
         }
-        this.showNotification('Could not load file. ' + error.message, 'error');
+        this.showNotification(
+          this.translate('details.notifications.loadFailed', 'Could not load file.') + ' ' + error.message,
+          'error'
+        );
       } finally {
         this.isDownloading = false;
         this.downloadProgress = 0;
@@ -1674,7 +1683,10 @@ export default {
         // Refresh logs to see the rollback progress
         setTimeout(() => this.fetchIngestionLogs(), 2000);
       } catch (error) {
-        this.showNotification('Failed to kill ingestion: ' + error.message, 'error');
+        this.showNotification(
+          this.translate('details.notifications.killFailed', 'Failed to kill ingestion:') + ' ' + error.message,
+          'error'
+        );
       } finally {
         this.isLogLoading = false;
       }

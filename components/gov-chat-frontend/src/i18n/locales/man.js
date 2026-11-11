@@ -265,7 +265,12 @@ export default {
       unavailable: 'Risoosi baara-coko mang benta to saaying-saaying'
     },
     health: {
+      parseFailed: 'Filiyata data Kendeya sistemoo mambaca to.',
+      loadFailed: 'Filiyata data Kendeya sistemoo luka to.',
       unavailable: 'Sistemoo Kendeya coko mang benta to saaying-saaying'
+    },
+    logsTab: {
+      loadFailed: 'Filiyata log looti to.'
     },
     dbStats: {
       unavailable: 'Detabeesi kijeraalu mang benta to saaying-saaying'
@@ -1541,6 +1546,10 @@ export default {
       ingestSaving: 'A ka metadeta mara folo ka dung...',
       ingestSaveFailed: 'Filiyata metadeta mara to. Dung ti baara.',
       logError: 'Filiyata dung log looti to.',
+      popupBlocked: 'Pop-up kiyata. Ibay dii pop-up bo sitio kadai le.',
+      downloadComplete: 'Download benta.',
+      loadFailed: 'Filiyata fayil luka.',
+      killFailed: 'Filiyata dung faha:',
       killDocSent: 'Nying dokuuma faha kilaa kiyata.',
       killProcSent: 'Dung lataramoo faha kilaa kiyata.'
     },

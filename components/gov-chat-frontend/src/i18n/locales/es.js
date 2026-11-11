@@ -265,7 +265,12 @@ export default {
       unavailable: 'El uso de recursos no está disponible ahora mismo.'
     },
     health: {
+      parseFailed: 'Error al analizar los datos del estado del sistema.',
+      loadFailed: 'Error al cargar los datos del estado del sistema.',
       unavailable: 'El estado del sistema no está disponible ahora mismo.'
+    },
+    logsTab: {
+      loadFailed: 'Error al cargar los registros.'
     },
     dbStats: {
       unavailable: 'Las estadísticas de la base de datos no están disponibles ahora mismo.'
@@ -1560,6 +1565,10 @@ export default {
       ingestSaving: 'Guardando metadatos antes de la ingestión...',
       ingestSaveFailed: 'Error al guardar metadatos. Ingestión cancelada.',
       logError: 'Error al obtener los registros de ingestión.',
+      popupBlocked: 'Ventana emergente bloqueada. Permita las ventanas emergentes para este sitio.',
+      downloadComplete: 'Descarga completada.',
+      loadFailed: 'No se pudo cargar el archivo.',
+      killFailed: 'Error al detener la ingestión:',
       killDocSent: 'Se ha enviado la solicitud de detención para este documento.',
       killProcSent: 'Se ha enviado la solicitud de detención para el proceso de ingestión.'
     },

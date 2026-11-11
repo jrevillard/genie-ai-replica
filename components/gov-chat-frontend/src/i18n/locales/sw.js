@@ -265,7 +265,12 @@ export default {
       unavailable: 'Matumizi ya rasilimali hayapatikani kwa sasa.'
     },
     health: {
+      parseFailed: 'Imeshindwa kuchambua data ya hali ya mfumo',
+      loadFailed: 'Imeshindwa kupakia data ya hali ya mfumo',
       unavailable: 'Hali ya mfumo haipatikani kwa sasa.'
+    },
+    logsTab: {
+      loadFailed: 'Imeshindwa kupakia kumbukumbu'
     },
     dbStats: {
       unavailable: 'Takwimu za hifadhidata hazipatikani kwa sasa.'
@@ -1553,6 +1558,10 @@ export default {
       ingestSaving: 'Inahifadhi metadata kabla ya uchakataji...',
       ingestSaveFailed: 'Imeshindwa kuhifadhi metadata. Uchakataji umesitishwa.',
       logError: 'Imeshindwa kupata kumbukumbu za uchakataji.',
+      popupBlocked: 'Dirisha limezuiwa. Tafadhali ruhusa madirisha ya pop-up kwa tovuti hii.',
+      downloadComplete: 'Upakuaji umekamilika.',
+      loadFailed: 'Haikuweza kupakia faili.',
+      killFailed: 'Imeshindwa kusimamisha uchakataji:',
       killDocSent: 'Ombi la kusitisha hati hii limetumwa.',
       killProcSent: 'Ombi la kusitisha mchakato wa uchakataji limetumwa.'
     },

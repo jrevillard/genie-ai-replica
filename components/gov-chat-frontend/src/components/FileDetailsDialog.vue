@@ -1,7 +1,7 @@
 <template>
   <Teleport to="body">
     <div class="dialog-backdrop genie-living-intelligence" data-test-id="dialog-backdrop" @click="$emit('close')"></div>
-    <div class="dialog-container genie-living-intelligence">
+    <div class="dialog-container genie-living-intelligence" data-test-id="file-details-dialog">
       <DsSpinner v-if="isLoading || isFetchingData || isDownloading" overlay size="lg">
         <span v-if="!isDownloading">{{ translate('details.loading', 'Loading File Details...') }}</span>
 
@@ -28,6 +28,7 @@
           <DsButton
             variant="ghost"
             class="dialog-close-btn"
+            data-test-id="file-details-dialog-close"
             :aria-label="translate('details.close', 'Close')"
             @click="$emit('close')"
           >

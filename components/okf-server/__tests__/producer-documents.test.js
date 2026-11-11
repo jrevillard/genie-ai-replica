@@ -422,6 +422,63 @@ describe('producer-service — startDocumentsConversion + run', () => {
     expect(second).toMatchObject({ code: 'CONVERSION_IN_FLIGHT', status: 409 });
   });
 
+  it('refuses a racing second start BEFORE the pre-flight — the loser pays no doc-repo round trip (#1775)', async () => {
+    // The conversion reservation is claimed BEFORE the import pre-flight, so
+    // the loser of a race is refused WITHOUT paying the pre-flight (up to
+    // OKF_MAX_IMPORT_FILES doc-repo metadata GETs + the duplicate query).
+    // The first import is parked inside its metadata GET — the window is
+    // open deterministically, no timing, no polling.
+    await mockDb.collection('okf_repositories').save({ _key: RID, repo_id: RID, name: 'Mine', domain: 'general' });
+    const metaOf = (fid) => ({
+      data: { file: { file_id: fid, file_name: 'alpha.md', size: 100, dataprep: { status: 'Pending' } } }
+    });
+    let parked = false;
+    let metaStarted;
+    const metaStart = new Promise((resolve) => {
+      metaStarted = resolve;
+    });
+    let releaseMeta;
+    const held = new Promise((resolve) => {
+      releaseMeta = resolve;
+    });
+    authedAxios.get.mockImplementation(async (url) => {
+      const s = String(url);
+      if (s.endsWith('/download')) {
+        const fid = s.split('/api/files/')[1].replace(/\/download$/, '');
+        return { data: Readable.from([Buffer.from('# T\n\nbody for ' + fid)]) };
+      }
+      const fid = s.split('/api/files/')[1];
+      if (!parked) {
+        parked = true;
+        metaStarted();
+        await held;
+      }
+      return metaOf(fid);
+    });
+
+    const first = producer.startDocumentsConversion({ repo_id: RID, file_ids: ['f1'], requested_name: 'x' });
+    await metaStart; // the first import is parked inside its pre-flight
+    const metaGets = () => authedAxios.get.mock.calls.filter((c) => !String(c[0]).endsWith('/download')).length;
+    const metaGetsBefore = metaGets();
+    const second = await producer
+      .startDocumentsConversion({ repo_id: RID, file_ids: ['f1'], requested_name: 'x' })
+      .catch((err) => err);
+    const metaGetsAfter = metaGets();
+    releaseMeta();
+    await first;
+    await producer.live.get(RID);
+    authedAxios.get.mockImplementation((url) => {
+      const s = String(url);
+      if (s.endsWith('/download')) {
+        const fid = s.split('/api/files/')[1].replace(/\/download$/, '');
+        return Promise.resolve({ data: Readable.from([Buffer.from('# T\n\nbody for ' + fid)]) });
+      }
+      return Promise.resolve(metaOf(s.split('/api/files/')[1]));
+    });
+    expect(second).toMatchObject({ code: 'CONVERSION_IN_FLIGHT', status: 409 });
+    expect(metaGetsAfter).toBe(metaGetsBefore); // the loser paid NO pre-flight
+  });
+
   it('a FAILED start writes the terminal record while the reservation is still held, then releases it', async () => {
     // The write-before-release ordering is the point of the failed-start
     // record: the producer's patch REPLACES the conversion object, so a
@@ -649,6 +706,76 @@ describe('producer-service — startDocumentsConversion + run', () => {
     await expect(
       producer.startDocumentsConversion({ repo_id: RID, file_ids: ['f1'], requested_name: 'x' })
     ).rejects.toMatchObject({ code: 'DUPLICATE_CONTENT', status: 409 });
+  });
+
+  it('refuses a CONCURRENT import of the same content into a DIFFERENT repository (#1744)', async () => {
+    // The DUPLICATE_CONTENT gate READS the other repositories' stamped
+    // sources, and this run's own stamp lands LATER — so two concurrent runs
+    // into two different repositories both read the pre-stamp state, both
+    // passed the gate, and the same content landed in two live repositories.
+    // The content claim is what closes that window: the first import is
+    // parked inside its stamping (its claim is still held), so the second
+    // run is refused BEFORE it writes anything.
+    const RID2 = '88888888-8888-4888-8888-888888888888';
+    await mockDb.collection('okf_repositories').save({ _key: RID, repo_id: RID, name: 'Mine', domain: 'general' });
+    await mockDb.collection('okf_repositories').save({ _key: RID2, repo_id: RID2, name: 'Other', domain: 'social' });
+    const metaOf = (fid) => ({
+      data: {
+        file: {
+          file_id: fid,
+          file_name: 'alpha.md',
+          size: 100,
+          file_hash: 'HASH-CONCURRENT-1',
+          dataprep: { status: 'Pending' }
+        }
+      }
+    });
+    authedAxios.get.mockImplementation((url) => {
+      const s = String(url);
+      if (s.endsWith('/download')) {
+        const fid = s.split('/api/files/')[1].replace(/\/download$/, '');
+        return Promise.resolve({ data: Readable.from([Buffer.from('# T\n\nbody for ' + fid)]) });
+      }
+      return Promise.resolve(metaOf(s.split('/api/files/')[1]));
+    });
+    let parked = false;
+    let stampStarted;
+    const stamping = new Promise((resolve) => {
+      stampStarted = resolve;
+    });
+    let releaseStamp;
+    const held = new Promise((resolve) => {
+      releaseStamp = resolve;
+    });
+    authedAxios.patch.mockImplementation(async () => {
+      if (!parked) {
+        parked = true;
+        stampStarted();
+        await held;
+      }
+      return { status: 200 };
+    });
+
+    const first = producer.startDocumentsConversion({ repo_id: RID, file_ids: ['f1'], requested_name: 'x' });
+    await stamping; // the first import is parked inside its stamping stage — its claim is held
+    const second = await producer
+      .startDocumentsConversion({ repo_id: RID2, file_ids: ['f1'], requested_name: 'y' })
+      .catch((err) => err);
+    releaseStamp();
+    await first;
+    await producer.live.get(RID);
+    authedAxios.patch.mockImplementation(async () => ({ status: 200 }));
+
+    expect(second).toMatchObject({ code: 'DUPLICATE_CONTENT', status: 409 });
+    // The loser wrote NOTHING: no source stamp, and no conversion record (a
+    // pre-flight refusal is not a conversion).
+    const loser = await mockDb.collection('okf_repositories').document(RID2);
+    expect(loser.source_documents).toBeUndefined();
+    expect(loser.conversion).toBeUndefined();
+    // The winner kept its content.
+    const winner = await mockDb.collection('okf_repositories').document(RID);
+    expect(winner.source_documents).toHaveLength(1);
+    expect(winner.source_documents[0].file_hash).toBe('HASH-CONCURRENT-1');
   });
 
   it('allows re-importing the same content into the SAME repository (idempotent)', async () => {

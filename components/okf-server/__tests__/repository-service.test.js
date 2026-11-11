@@ -71,6 +71,17 @@ describe('repository-service', () => {
       await repoService.remove(r1.repo_id, ACTOR);
       await expect(repoService.create(validCreateInput(), ACTOR)).resolves.toBeTruthy();
     });
+
+    test('refuses a name of only spaces (issue #1774 — a blank name is no name)', async () => {
+      // The Joi schema validates SHAPE, not naming (min(1) accepts '   '), so
+      // the naming rule is enforced at the write boundary: the repository is
+      // REFUSED, never stored under a blank name.
+      await expect(repoService.create(validCreateInput({ name: '   ' }), ACTOR)).rejects.toMatchObject({
+        code: 'VALIDATION_ERROR',
+        status: 400
+      });
+      expect(Object.keys(db._stores.okf_repositories || {})).toHaveLength(0); // nothing stored
+    });
   });
 
   describe('getById', () => {
@@ -753,6 +764,14 @@ describe('cloneRepository (Story 4.8 — D-V5)', () => {
     expect(clone.domain).toBe('smoke');
     expect(clone.cloned_from).toEqual({ repo_id: src.repo_id, version: null });
     expect(clone.copied_concepts).toBe(3);
+  });
+
+  test('refuses a clone name of only spaces (issue #1774 — the clone writes through create())', async () => {
+    const { src } = await seedSource();
+    await expect(repoService.cloneRepository(src.repo_id, { name: '   ' }, ACTOR)).rejects.toMatchObject({
+      code: 'VALIDATION_ERROR',
+      status: 400
+    });
   });
 
   test('cloned_from.version = the source CURRENT version (never-minted → null)', async () => {

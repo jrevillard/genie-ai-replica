@@ -60,6 +60,68 @@ const MIN_SEGMENT_CHARS = 200; // smaller sections merge into the previous one
 // through a check-then-set window and import the corpus twice.
 const live = crawlConversion.live;
 
+// ── the CONTENT claim (issue #1744) ─────────────────────────────────────────
+// The DUPLICATE_CONTENT gate READS what another repository already holds, so
+// it is a check-then-act: the importing run writes its own source_documents
+// only LATER (stampSources), so two runs importing the same corpus into two
+// DIFFERENT repositories both read the pre-stamp state and both passed the
+// gate — the same content landed in two live repositories. The per-repo
+// reservation above does not cover it (different repo ids).
+//
+// The claim is what closes that window: the candidate files and their
+// content hashes are claimed SYNCHRONOUSLY (check and set with no await in
+// between, so a second run cannot slip through the gap) BEFORE the duplicate
+// query, and released once the sources are stamped — from then on the
+// stamped source_documents are what the gate reads.
+//
+// In-process, like the conversion registry above and the job registry
+// (job-registry.js): okf-server runs as a single replica (compose: one
+// container; swarm: replicas=${OKF_ENABLED:-0}), so the registry spans
+// every import this service can run.
+const contentClaims = new Map(); // claim key -> owning repo_id
+
+/**
+ * Claim the candidate files + their content hashes for one import.
+ * Synchronous on purpose: the check and the set must not be separated by an
+ * await, or a concurrent run could slip in between and claim the same
+ * content.
+ * @param {string} repoId the importing repository
+ * @param {string[]} fileIds the candidate source documents
+ * @param {string[]} hashes the candidate content hashes
+ * @returns {string[]} the claim keys (handed back to releaseContent)
+ */
+function claimContent(repoId, fileIds, hashes) {
+  const keys = [];
+  for (const file_id of fileIds) keys.push(`file:${file_id}`);
+  for (const hash of hashes) keys.push(`hash:${hash}`);
+  for (const key of keys) {
+    const owner = contentClaims.get(key);
+    if (owner !== undefined) {
+      throw Object.assign(
+        new Error(
+          `the same content is already being imported into OKF repository ${owner} — wait for that import to finish`
+        ),
+        { code: 'DUPLICATE_CONTENT', status: 409 }
+      );
+    }
+  }
+  for (const key of keys) contentClaims.set(key, repoId);
+  return keys;
+}
+
+/**
+ * Release a claim — ONLY the owner's claim: a late release must never drop
+ * another import's claim.
+ * @param {string} repoId the importing repository
+ * @param {string[]|null} keys the keys returned by claimContent
+ */
+function releaseContent(repoId, keys) {
+  if (!keys) return;
+  for (const key of keys) {
+    if (contentClaims.get(key) === repoId) contentClaims.delete(key);
+  }
+}
+
 async function getDb() {
   return dbService.getConnection();
 }
@@ -902,6 +964,20 @@ async function startDocumentsConversion({ repo_id, file_ids, requested_name, cla
     throw Object.assign(new Error('file_ids contains duplicates'), { code: 'VALIDATION_ERROR', status: 400 });
   }
 
+  // ONE conversion per repo at a time, whichever path started it — claimed
+  // synchronously by the one shared guard implementation (issue #1684), so
+  // the repo is invisible to a second start for the whole of the awaited
+  // window below (the pre-flight + the queued patch + the per-file source
+  // stamping).
+  //
+  // The claim is taken BEFORE the import pre-flight (issue #1775): the
+  // pre-flight costs up to OKF_MAX_IMPORT_FILES doc-repo metadata GETs plus
+  // the duplicate query, and a racing start used to pay all of it before it
+  // was refused. The cheap shape validations above still come first, so a
+  // malformed request keeps its own VALIDATION_ERROR.
+  await crawlConversion.sweepInterruptedOnce();
+  const settleInFlight = crawlConversion.reserveConversion(repo_id);
+
   // Idempotency contract (story 7.7): a document stamped by a DIFFERENT,
   // still-existing OKF repository is a 409 — the UI badge is advisory only.
   // A stamp whose repo no longer exists is STALE and self-heals (restamped
@@ -910,77 +986,92 @@ async function startDocumentsConversion({ repo_id, file_ids, requested_name, cla
   // CONTENT in a DIFFERENT file — doc-repo stores every file's SHA-256, and
   // a candidate whose hash already backs a LIVE repository is refused, so
   // re-uploaded copies of one corpus can never fork the knowledge base.
-  const db = await getDb();
-  const candidateHashes = [];
+  //
   // ONE metadata fetch per file: this pre-flight read is the import's single
   // doc-repo metadata round trip — it rides on to stamping (metaByKey) and
   // the conversion (job.source_metas). The cache is null-prototype: a plain
   // object resolves a prototype-named file id to an INHERITED value (issue
   // #1685).
   const metaByKey = Object.create(null);
-  for (const file_id of file_ids) {
-    let meta;
-    try {
-      meta = await fetchDocMeta(file_id);
-      metaByKey[file_id] = meta;
-    } catch (err) {
-      throw Object.assign(
-        new Error(`source document ${file_id} could not be verified in the document repository: ${err.message}`),
-        { code: 'SOURCE_UNVERIFIABLE', status: 502 }
-      );
-    }
-    const stamped = meta && meta.okf_repo_id;
-    if (stamped && stamped !== repo_id) {
-      let exists;
+  // The content claim (issue #1744) — released on every path below.
+  let claimed = null;
+  try {
+    const db = await getDb();
+    const candidateHashes = [];
+    for (const file_id of file_ids) {
+      let meta;
       try {
-        exists = !!(await db.collection(COLLECTION).document(stamped));
-      } catch {
-        exists = false; // tombstoned/gone → stale stamp, import proceeds
-      }
-      if (exists) {
+        meta = await fetchDocMeta(file_id);
+        metaByKey[file_id] = meta;
+      } catch (err) {
         throw Object.assign(
-          new Error(`document "${meta.file_name || file_id}" is already the source of OKF repository ${stamped}`),
-          { code: 'DOCUMENT_IN_ANOTHER_REPO', status: 409 }
+          new Error(`source document ${file_id} could not be verified in the document repository: ${err.message}`),
+          { code: 'SOURCE_UNVERIFIABLE', status: 502 }
+        );
+      }
+      const stamped = meta && meta.okf_repo_id;
+      if (stamped && stamped !== repo_id) {
+        let exists;
+        try {
+          exists = !!(await db.collection(COLLECTION).document(stamped));
+        } catch {
+          exists = false; // tombstoned/gone → stale stamp, import proceeds
+        }
+        if (exists) {
+          throw Object.assign(
+            new Error(`document "${meta.file_name || file_id}" is already the source of OKF repository ${stamped}`),
+            { code: 'DOCUMENT_IN_ANOTHER_REPO', status: 409 }
+          );
+        }
+      }
+      if (meta && meta.file_hash) {
+        candidateHashes.push({ file_id, hash: meta.file_hash, name: meta.file_name || file_id });
+      }
+    }
+    // The content is CLAIMED before the duplicate query (issue #1744): the
+    // query reads the OTHER repositories' stamped sources, and this run's own
+    // stamp only lands later — so without the claim two concurrent runs into
+    // two DIFFERENT repositories both pass the query and the same content
+    // ends up in two live repositories.
+    claimed = claimContent(
+      repo_id,
+      file_ids,
+      candidateHashes.map((c) => c.hash)
+    );
+    if (candidateHashes.length > 0) {
+      const dupRows = await db.query(
+        `FOR r IN ${COLLECTION}
+           FILTER r.deleted_at == null AND r.repo_id != @rid
+           LET dupFiles = (
+             FOR s IN (r.source_documents || [])
+               FILTER s.file_hash != null AND POSITION(@hashes, s.file_hash)
+               RETURN {file_id: s.file_id, file_name: s.file_name}
+           )
+           FILTER LENGTH(dupFiles) > 0
+           SORT r.created_at
+           LIMIT 1
+           RETURN {repo_id: r.repo_id, name: r.name, dupFiles}`,
+        { rid: repo_id, hashes: candidateHashes.map((c) => c.hash) }
+      );
+      const dup = (await dupRows.all())[0];
+      if (dup) {
+        const names = dup.dupFiles.map((d) => d.file_name || d.file_id).join(', ');
+        throw Object.assign(
+          new Error(
+            `the same content is already imported into OKF repository "${dup.name}" (files: ${names}) — retract or delete that repository before importing these documents`
+          ),
+          { code: 'DUPLICATE_CONTENT', status: 409 }
         );
       }
     }
-    if (meta && meta.file_hash) {
-      candidateHashes.push({ file_id, hash: meta.file_hash, name: meta.file_name || file_id });
-    }
+  } catch (err) {
+    // The pre-flight never started a conversion: the repo is free again and
+    // NO conversion record is written (a record would describe a run that had
+    // no worker).
+    releaseContent(repo_id, claimed);
+    crawlConversion.releaseConversion(repo_id, settleInFlight);
+    throw err;
   }
-  if (candidateHashes.length > 0) {
-    const dupRows = await db.query(
-      `FOR r IN ${COLLECTION}
-         FILTER r.deleted_at == null AND r.repo_id != @rid
-         LET dupFiles = (
-           FOR s IN (r.source_documents || [])
-             FILTER s.file_hash != null AND POSITION(@hashes, s.file_hash)
-             RETURN {file_id: s.file_id, file_name: s.file_name}
-         )
-         FILTER LENGTH(dupFiles) > 0
-         SORT r.created_at
-         LIMIT 1
-         RETURN {repo_id: r.repo_id, name: r.name, dupFiles}`,
-      { rid: repo_id, hashes: candidateHashes.map((c) => c.hash) }
-    );
-    const dup = (await dupRows.all())[0];
-    if (dup) {
-      const names = dup.dupFiles.map((d) => d.file_name || d.file_id).join(', ');
-      throw Object.assign(
-        new Error(
-          `the same content is already imported into OKF repository "${dup.name}" (files: ${names}) — retract or delete that repository before importing these documents`
-        ),
-        { code: 'DUPLICATE_CONTENT', status: 409 }
-      );
-    }
-  }
-
-  await crawlConversion.sweepInterruptedOnce();
-  // ONE conversion per repo at a time, whichever path started it — claimed
-  // synchronously by the one shared guard implementation (issue #1684), so
-  // the repo is invisible to a second start for the whole of the awaited
-  // window below (the queued patch + the per-file source stamping).
-  const settleInFlight = crawlConversion.reserveConversion(repo_id);
 
   const queued = {
     status: 'queued',
@@ -1018,9 +1109,13 @@ async function startDocumentsConversion({ repo_id, file_ids, requested_name, cla
       });
     }
     // The reservation must not outlive a failed start — the repo is free again.
+    releaseContent(repo_id, claimed);
     crawlConversion.releaseConversion(repo_id, settleInFlight);
     throw err;
   }
+  // The sources are stamped: from here on the DUPLICATE_CONTENT gate reads
+  // this repository's own content, so the claim has done its job.
+  releaseContent(repo_id, claimed);
 
   const job = { repo_id, file_ids, source_metas: metaByKey, requested_name, classification, actor: actor || null };
   const runner = (async () => {

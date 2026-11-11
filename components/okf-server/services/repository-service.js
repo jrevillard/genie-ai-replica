@@ -24,6 +24,10 @@ const piiService = require('./pii-service');
 const { retractRepoGraph } = require('./graph-retract-service');
 const backingFileService = require('./backing-file-service');
 const { workingGraphName } = require('./graph-lifecycle-service');
+// The naming SSOT (issue #1774): intentName is THE rule for "is this a
+// name?" — a string of only spaces is no name. The convert endpoints already
+// apply it; the write boundary applies it to every repository name.
+const { intentName } = require('./slug');
 
 const COLLECTION = 'okf_repositories';
 
@@ -183,6 +187,16 @@ async function create(input, actor, opts = {}) {
     }
     if (opts.cloned_from != null && typeof opts.cloned_from.repo_id !== 'string') {
       throw new RepoError('VALIDATION_ERROR', 'cloned_from.repo_id must be a string', 400);
+    }
+    // A name of only spaces is NO name (issue #1774). The naming SSOT is
+    // intentName (services/slug.js) — the same rule the convert endpoints
+    // apply. The Joi schema validates SHAPE, not naming (min(1) accepts
+    // '   '), so the rule is enforced here, at the write boundary: a
+    // repository is REFUSED, never stored under a blank name and never
+    // silently renamed.
+    if (!intentName(input.name)) {
+      recordOp('create', 'validation');
+      throw new RepoError('VALIDATION_ERROR', 'a name of only spaces is no name', 400);
     }
     logger.info('Creating OKF repository', { name: input.name, domain: input.domain });
     const db = await getDb();
@@ -650,6 +664,14 @@ async function update(repo_id, patch, actor) {
         );
       }
       recordOp('update', 'frontmatter_maintenance');
+    }
+
+    // A rename to a name of only spaces is NO name (issue #1774) — the same
+    // SSOT (intentName), the same refusal. A patch WITHOUT a name is not a
+    // rename and is untouched.
+    if (Object.prototype.hasOwnProperty.call(patch, 'name') && !intentName(patch.name)) {
+      recordOp('update', 'validation');
+      throw new RepoError('VALIDATION_ERROR', 'a name of only spaces is no name', 400);
     }
 
     // If renaming, reject collision with another LIVE repo in the same domain.

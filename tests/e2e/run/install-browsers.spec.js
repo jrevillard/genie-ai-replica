@@ -462,6 +462,25 @@ test('the runner reported is the @playwright/test of the chain, not another link
   expect(describeRunner(root).playwrightVersion).toBe(FIXTURE_VERSION);
 });
 
+test('the lockfile walk does not read a pin from a node_modules level either', () => {
+  // The mutation this pins: the walk must not read a pin planted at
+  // node_modules/node_modules — the level Node never searches — where it
+  // would be NEARER than the hoisted pin and win the comparison.
+  const root = makeRoot({
+    'package-lock.json': {
+      packages: {
+        '': { name: 'genie-ai' },
+        'node_modules/@playwright/test': { version: FIXTURE_VERSION },
+        'node_modules/playwright': { version: FIXTURE_VERSION },
+        'node_modules/playwright-core': { version: FIXTURE_VERSION },
+        'node_modules/node_modules/playwright': { version: '9.9.9-planted' }
+      }
+    },
+    ...chainFiles(FIXTURE_VERSION, FIXTURE_VERSION)
+  });
+  expect(pinnedVersions(root).versions.playwright).toBe(FIXTURE_VERSION);
+});
+
 test('the chain is the ROOT project\'s — the suite project does not own the runtime', () => {
   // The mutation this pins: the chain starts at the repository root, where
   // the lockfile that pins it lives. A copy under tests/e2e/node_modules
@@ -578,6 +597,27 @@ test('the installer locations are read from the installer itself', () => {
   const cli = path.join(root, 'node_modules/playwright/cli.js');
   const locations = installLocations(cli, run, root);
   expect(locations.map((l) => l.name)).toEqual(['chromium', 'ffmpeg', 'chromium-headless-shell']);
+  expect(locations.map((l) => l.location)).toEqual([
+    path.join(root, 'browsers', `chromium-${FIXTURE_CHROMIUM}`),
+    path.join(root, 'browsers', `ffmpeg-${FIXTURE_FFMPEG}`),
+    path.join(root, 'browsers', `chromium_headless_shell-${FIXTURE_SHELL}`)
+  ]);
+});
+
+test('a browser path with a space in it is read whole', () => {
+  // The mutation this pins: a location captured up to the first blank is
+  // truncated, and the verification then looks for a build at a path that
+  // does not exist — a reconciled machine reported as broken.
+  const location = '/opt/my browsers/chromium-4711';
+  const run = () => ({
+    status: 0,
+    // The padding the installer prints around the path is not part of it.
+    stdout: `Chrome (playwright chromium v4711)\n  Install location:    ${location}   \n`,
+    stderr: ''
+  });
+  expect(installLocations('/checkout/node_modules/playwright/cli.js', run, '/checkout')[0].location).toBe(
+    location
+  );
 });
 
 test('an installer that names no location fails loudly', () => {

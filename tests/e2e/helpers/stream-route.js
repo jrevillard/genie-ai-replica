@@ -7,9 +7,12 @@
  * ONE definition, and no credential in it. Two reasons:
  *
  * - a spec that intercepts the stream and needs nothing else (the quick
- *   help scope spec) requires THIS module, so it never pulls the chat
- *   helper — which re-exports the fixtures' credentials — into a file
- *   that has no business importing them (tests/e2e/CLAUDE.md § Fixtures);
+ *   help scope spec) requires THIS module, so it does not import the
+ *   chat helper — which re-exports the fixtures' credentials — into a
+ *   file that has no business importing them (tests/e2e/CLAUDE.md §
+ *   Fixtures). The credential module may still be in the process graph
+ *   through another helper; what this module removes is the DIRECT
+ *   import of a credential-bearing helper;
  * - the config-validator gate reads the endpoint from here, so the gate
  *   watches the LIVE value instead of scraping the source text for a
  *   declaration whose spelling it would have to guess.

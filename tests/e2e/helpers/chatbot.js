@@ -177,7 +177,13 @@ async function waitForBotResponse(page, options = {}) {
             // polling to a cause-less timeout.
             if (!store) return { state: 'no-store' };
             if (!open) return { state: 'no-open-conversation' };
-            return { state: 'ok', open };
+            // Only what the decision needs: the streaming flag of each
+            // bot message. The whole conversation would cross the wire on
+            // every poll tick.
+            const bots = open.messages
+              ? open.messages.filter((m) => m.sender === 'bot').map((m) => Boolean(m.isStreaming))
+              : [];
+            return { state: 'ok', bots };
           })
           .then(streamingFlagOf),
       { timeout }
@@ -199,20 +205,24 @@ async function waitForBotResponse(page, options = {}) {
  * - no bot message yet is NOT "not streaming" — the turn has not
  *   produced one, so the wait continues (null is not false).
  *
- * @param {{state: string, open?: object}} read - what the page read
+ * @param {{state: string, bots?: boolean[]}} read - what the page read
  * @returns {boolean|null} the flag, or null while the turn has no answer
  */
 function streamingFlagOf(read) {
   if (!read || read.state !== 'ok') {
-    throw new Error(
-      `the store does not expose the open conversation (${read && read.state}) — ` +
-        'a booted app without the conversation/openConversation getter is a broken store contract'
-    );
+    // Two causes, two messages: an app that is not booted at all and a
+    // booted app whose store lost the getter are different findings.
+    const cause =
+      read && read.state === 'no-store'
+        ? 'the app is not booted — there is no store to read'
+        : 'the store does not expose the conversation/openConversation getter';
+    throw new Error(`${cause} — that is a broken store contract, not a slow answer`);
   }
-  const messages = read.open && read.open.messages ? read.open.messages : [];
-  const bots = messages.filter((m) => m.sender === 'bot');
+  const bots = read.bots || [];
   const last = bots[bots.length - 1];
-  return last ? Boolean(last.isStreaming) : null;
+  // No bot message yet: the turn has not produced one, so the wait
+  // continues (null is not false).
+  return last === undefined ? null : last;
 }
 
 /**
@@ -315,10 +325,11 @@ async function mockChatStream(page, chunks, metadata) {
  * same endpoint, the same POST-only interception, the same CORS header a
  * cross-origin reader needs.
  */
-async function mockStreamError(page, status = 503) {
+async function mockStreamError(page) {
   // Registration-invariant like the SSE body: build the wire bytes once.
-  // The body is the app's own error shape — every 5xx reaches the same
-  // branch, so the mock does not need a knob for it.
+  // The answer is the app's own error shape — every 5xx reaches the same
+  // branch, so the mock carries no knob for it.
+  const status = 503;
   const body = JSON.stringify({
     error: 'SERVICE_UNAVAILABLE',
     message: 'RAG pipeline is temporarily unavailable',

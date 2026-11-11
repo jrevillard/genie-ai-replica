@@ -36,6 +36,25 @@ test.describe('a dedicated title names ONE spec file', () => {
     expect(titleIsDedicatedTo(umbrella, FILE)).toBe(false);
   });
 
+  test('an absolute path or a tracker URL names the same file', () => {
+    // The title may name the file the way a human writes it: an
+    // absolute path, or the file's URL in a tracker link. Both END with
+    // the repository path — the same file, named differently.
+    expect(
+      titleIsDedicatedTo(`test(e2e): /home/dev/genie-ai/${FILE} is red`, FILE)
+    ).toBe(true);
+    expect(
+      titleIsDedicatedTo(
+        `test(e2e): https://gitlab.example/un/itu/genie-ai/-/blob/main/${FILE} is red`,
+        FILE
+      )
+    ).toBe(true);
+  });
+
+  test('a title that names the same file twice is still dedicated to it', () => {
+    expect(titleIsDedicatedTo(`test(e2e): ${FILE} — ${FILE} again`, FILE)).toBe(true);
+  });
+
   test('a path that is only the TAIL of another e2e file does not match', () => {
     // tests/e2e/helpers/tests/e2e/theme-runtime-config.spec.js is a
     // different file that happens to carry this one's path as its tail.

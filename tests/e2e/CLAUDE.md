@@ -127,9 +127,12 @@ profile and the runtime skips: [`docs/e2e-tests/local-run.md`](../../docs/e2e-te
 The executed set is pinned by `tests/config-validator/`: the guard derives
 the run's invocation from the run script and requires it to cover **every**
 spec file in the tree. Narrowing the invocation is what fails the guard.
-A NEW spec file is not free, though: the derivation's exact pin in
+A NEW spec file under one of the CI's executed globs (`admin/`,
+`chatbot/`, `documents/`, `helpers/`, `theme-runtime-config.spec.js`) is
+not free, though: the derivation's exact pin in
 `tests/config-validator/__tests__/config-validation.test.js` lists the
-expected set, so a new spec file adds one line there.
+expected set, so such a spec file adds one line there. A spec outside
+those globs needs none — the local run executes the whole tree.
 
 A spec that needs a surface the venue does not expose **skips with a
 reason** — see `helpers/venue-profile.js`. The reason is read from the

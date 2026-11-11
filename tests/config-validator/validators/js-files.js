@@ -35,8 +35,10 @@ const jsFiles = (root) =>
 // one after an identifier/`)`/`]` is division — a quote inside the regex
 // therefore cannot flip the scanner into string state.
 //
-// (The same scanner as the sibling handle-locators gate, shared so the
-// gates that watch the e2e tree agree on what "the code" means.)
+// (The same algorithm as the sibling handle-locators gate's own copy, so
+// the gates that watch the e2e tree agree on what "the code" means. The
+// sibling keeps its copy for now — consolidating the two is a separate
+// cleanup, in the wave that owns that file.)
 const stripJsComments = (source) => {
   let out = '';
   let state = null; // null | "'" | '"' | '`' | '/'

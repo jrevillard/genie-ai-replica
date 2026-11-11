@@ -20,32 +20,26 @@ test.describe('the streaming flag is read through the store getter', () => {
     expect(() => streamingFlagOf({ state: 'no-open-conversation' })).toThrow(
       /conversation\/openConversation/
     );
-    expect(() => streamingFlagOf({ state: 'no-store' })).toThrow(/does not expose the open conversation/);
+    // Two causes, two messages: an app that is not booted and a booted
+    // app whose store lost the getter are different findings.
+    expect(() => streamingFlagOf({ state: 'no-store' })).toThrow(/not booted/);
   });
 
   test('no bot message yet is NOT "not streaming" — the wait continues', () => {
     // null is not false: a turn that has not produced an answer must keep
     // the wait alive. Treating it as false would end the wait on an
     // empty conversation.
-    expect(streamingFlagOf({ state: 'ok', open: { messages: [] } })).toBe(null);
-    expect(streamingFlagOf({ state: 'ok', open: { messages: [{ sender: 'user', text: 'hi' }] } })).toBe(null);
+    expect(streamingFlagOf({ state: 'ok', bots: [] })).toBe(null);
   });
 
   test('the LAST bot message decides the flag', () => {
-    const open = {
-      messages: [
-        { sender: 'bot', text: 'first', isStreaming: true },
-        { sender: 'user', text: 'again' },
-        { sender: 'bot', text: 'second', isStreaming: false },
-      ],
-    };
-    expect(streamingFlagOf({ state: 'ok', open })).toBe(false);
-    expect(streamingFlagOf({ state: 'ok', open: { messages: [{ sender: 'bot', text: 'x', isStreaming: true }] } })).toBe(
-      true
-    );
+    // The page sends the bot messages' flags in order; the last one is
+    // the turn that is still open.
+    expect(streamingFlagOf({ state: 'ok', bots: [true, false] })).toBe(false);
+    expect(streamingFlagOf({ state: 'ok', bots: [true] })).toBe(true);
   });
 
-  test('a conversation without messages is empty, not broken', () => {
-    expect(streamingFlagOf({ state: 'ok', open: {} })).toBe(null);
+  test('a conversation without bot messages is empty, not broken', () => {
+    expect(streamingFlagOf({ state: 'ok' })).toBe(null);
   });
 });

@@ -39,6 +39,9 @@ const REPO_ROOT = path.resolve(__dirname, '..', '..', '..');
 const DEFAULT_REPORT_PATH = path.join(REPO_ROOT, 'reports', 'playwright-report.json');
 
 const { VENUE_IP_ENV, VENUE_HOST_ENV } = require('../helpers/venue-launch-args');
+// The e2e tree's root: a path whose prefix is INSIDE it is a different
+// file that happens to carry another one's path as its tail.
+const TESTS_E2E_ROOT = 'tests/e2e';
 // The venue's edge: ONE definition, credential-free — the same address the
 // run used, so the issue's reproduce command reproduces the run.
 const { BASE_URL } = require('../helpers/base-url');
@@ -195,6 +198,22 @@ function specPathsIn(text) {
 }
 
 /**
+ * Does this token name THIS file?
+ *
+ * The token is compared as a path: it is the file's repository path, or
+ * a path that ENDS with it (an absolute path, or the file's URL in a
+ * tracker link) — but not a path whose prefix is inside the e2e tree:
+ * `tests/e2e/helpers/tests/e2e/a.spec.js` is a DIFFERENT file that
+ * happens to carry this one's path as its tail.
+ */
+function namesThisFile(token, file) {
+  if (token === file) return true;
+  if (!token.endsWith(`/${file}`)) return false;
+  const prefix = token.slice(0, token.length - file.length - 1);
+  return !(prefix === TESTS_E2E_ROOT || prefix.includes(`${TESTS_E2E_ROOT}/`));
+}
+
+/**
  * Is this issue DEDICATED to the file — does its title name that file and
  * no other?
  *
@@ -202,14 +221,10 @@ function specPathsIn(text) {
  * that touched a dozen of them. Such an issue must not absorb their
  * failures — a failure on one of them still gets an issue of its own, or
  * the file shows red with nothing pointing at it.
- *
- * The paths are compared as WHOLE PATHS, not as mentions: a title that
- * names `tests/e2e/helpers/tests/e2e/a.spec.js` is about a DIFFERENT
- * file that happens to carry this one's path as its tail.
  */
 function titleIsDedicatedTo(title, file) {
-  const paths = specPathsIn(title);
-  return paths.length === 1 && paths[0] === file;
+  const paths = [...new Set(specPathsIn(title))];
+  return paths.length === 1 && namesThisFile(paths[0], file);
 }
 
 /**

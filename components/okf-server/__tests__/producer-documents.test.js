@@ -858,6 +858,59 @@ describe('producer-service — startDocumentsConversion + run', () => {
     const repo = await mockDb.collection('okf_repositories').document(RID);
     expect(repo.source_documents).toBeUndefined();
     expect(repo.conversion).toMatchObject({ status: 'failed', code: 'SOURCE_STAMP_FAILED' });
+    // Nothing was stamped outside either: the durable record is written
+    // FIRST, so a failed write leaves the files owned by nobody — a
+    // half-stamped repository would be invisible to the duplicate gate.
+    const stamps = authedAxios.patch.mock.calls.filter((c) => String(c[0]).includes('/api/files/'));
+    expect(stamps).toHaveLength(0);
+  });
+
+  it('a refused start leaves a healthy repository conversion record untouched', async () => {
+    // The conversion patch REPLACES the whole record, so a refused import
+    // must not overwrite a healthy 'done': the web client renders a failed
+    // record as "import failed — delete the repository", which would be a lie
+    // about a healthy repository.
+    await mockDb.collection('okf_repositories').save({
+      _key: RID,
+      repo_id: RID,
+      name: 'Mine',
+      domain: 'general',
+      conversion: { status: 'done', stage: 'done', files_done: 1, files_total: 1, summary: { created: 1 } }
+    });
+    mockDocs({ f1: 'alpha.md' });
+    authedAxios.get.mockImplementation((url) => {
+      const s = String(url);
+      if (s.endsWith('/download')) {
+        const fid = s.split('/api/files/')[1].replace(/\/download$/, '');
+        return Promise.resolve({ data: Readable.from([Buffer.from('# T\n\nbody for ' + fid)]) });
+      }
+      return Promise.resolve({
+        data: {
+          file: {
+            file_id: s.split('/api/files/')[1],
+            file_name: 'alpha.md',
+            file_hash: 'HASH-HEALTHY-1',
+            dataprep: { status: 'Pending' }
+          }
+        }
+      });
+    });
+    const programImpl = mockDb.query.getMockImplementation();
+    let failOnce = true;
+    mockDb.query.mockImplementation(async (q, bind) => {
+      const text = typeof q === 'string' ? q : q && q.query;
+      if (failOnce && text && text.includes('POSITION(@hashes')) {
+        failOnce = false;
+        throw new Error('db down');
+      }
+      return programImpl(q, bind);
+    });
+
+    await expect(
+      producer.startDocumentsConversion({ repo_id: RID, file_ids: ['f1'], requested_name: 'x' })
+    ).rejects.toThrow(/db down/);
+    const repo = await mockDb.collection('okf_repositories').document(RID);
+    expect(repo.conversion).toMatchObject({ status: 'done', summary: { created: 1 } });
   });
 
   it('allows re-importing the same content into the SAME repository (idempotent)', async () => {

@@ -81,6 +81,28 @@ describe('the stripper removes prose and keeps code', () => {
     expect(out).toContain('https://localhost:4443');
   });
 
+  test('an apostrophe in prose does not open a quoted string', () => {
+    // Only the double quote and the backtick open one. An apostrophe
+    // would leave the scanner inside a string for the rest of the
+    // comment — and the code after it would be swallowed as prose, so
+    // the venue gate would NOT see an origin in that file.
+    const out = stripJsComments('/* don\'t say "**/*" here */\nconst EDGE = "https://localhost:4443";\n');
+    expect(out).toContain('https://localhost:4443');
+  });
+
+  test('a backtick in a comment opens a quoted string too', () => {
+    const out = stripJsComments('/* the glob is `**/*` */\nconst EDGE = "https://localhost:4443";\n');
+    expect(out).toContain('https://localhost:4443');
+  });
+
+  test('a comment with an odd number of double quotes still ends at the first marker', () => {
+    // The parser's rule is the fallback: a comment whose prose has an
+    // odd quote must not swallow the code after it — the code is what
+    // the gate reads.
+    const out = stripJsComments('/* he said "hello */\nconst EDGE = "https://localhost:4443";\n');
+    expect(out).toContain('https://localhost:4443');
+  });
+
   test('a division after a plain expression is a division', () => {
     const out = stripJsComments('function f() { a / b; }\n// the edge was https://localhost/\n');
     expect(out).not.toContain('the edge was');

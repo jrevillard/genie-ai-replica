@@ -99,6 +99,13 @@ const offenders = (files, allowed = MOCK_ORIGINS) =>
     .map((f) => path.relative(ROOT, f));
 
 describe('the e2e suite names the venue it was given, and names it once', () => {
+  test("the suite's config is watched with the tree", () => {
+    // The watched SET is part of the contract: the config is the suite's
+    // other owner of the edge, and a watch that dropped it would let a
+    // second definition back in — silently.
+    expect(WATCHED).toContain(CONFIG_FILE);
+  });
+
   test('no file but the definition carries the venue edge', () => {
     expect(offenders(WATCHED)).toEqual([]);
   });
@@ -113,9 +120,9 @@ describe('the e2e suite names the venue it was given, and names it once', () => 
     // invisible to the edge match above (a spec that builds its URL from
     // a variable breaks just as hard).
     //
-    // The gate scans the e2e tree, so `playwright.config.js` is not among
-    // the readers it counts — the config is a suite-wide setting, not a
-    // spec.
+    // The config is watched too: it is the suite's other owner of the
+    // edge, and the gate counts the readers of the tree AND of the
+    // config.
     expect(baseUrlReaders(WATCHED)).toEqual([path.relative(ROOT, DEFINING_MODULE)]);
   });
 

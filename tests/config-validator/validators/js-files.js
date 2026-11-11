@@ -197,11 +197,12 @@ const stripJsComments = (source) => {
         continue;
       }
       if (source[i + 1] === '*') {
-        // The comment ends at the first `*/` that is NOT inside a quoted
-        // string: a comment that QUOTES the sequence (a glob — `/* the
-        // globs are "**/*" */`) ends at the `*/` inside the quotes, and
-        // the leftover opens a string state that swallows the code after
-        // it — an origin the gate then does not see.
+        // The comment ends at the marker that is NOT inside a quoted
+        // string. It USED to end at the first marker, so a comment that
+        // QUOTES the sequence (a glob — `/* the globs are "**/*" */`) ended
+        // at the marker inside the quotes, and the leftover opened a
+        // string state that swallowed the code after it — an origin the
+        // gate then did not see.
         const end = blockCommentEnd(source, i + 2);
         i = end === -1 ? source.length : end + 1;
         continue;

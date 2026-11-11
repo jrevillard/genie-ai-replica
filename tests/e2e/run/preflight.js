@@ -154,18 +154,20 @@ async function main() {
     // re-encode the threshold.
     const diagnosis = classifyVenueStatus(status, BASE_URL);
     if (diagnosis) {
-      failure = diagnosis;
+      failure = `pre-flight: ${diagnosis}\n`;
     } else {
       process.stdout.write(`pre-flight: the browser reached the venue (HTTP ${status}).\n`);
     }
   } catch (e) {
-    failure = `the browser could not open the venue.\n${remedy(e.message.split('\n')[0])}`;
+    // The SAME formatter as the other causes: the headline, then the
+    // remedy.
+    failure = namedFailure('the browser could not open the venue', e.message);
   }
   // The browser closes BEFORE the exit: an exit that skips a finally block
   // would orphan a live Chromium on the machine.
   await browser.close();
   if (failure) {
-    process.stderr.write(`pre-flight: ${failure}\n`);
+    process.stderr.write(failure);
     process.exitCode = 1;
   }
 }

@@ -84,7 +84,7 @@ Cache policy:
 - **Cache TTL** — 5 minutes. The key set is re-read once it is that old, whatever the traffic.
 - **Refresh under failure** — JWKS HTTP errors do not invalidate the cache, but a request whose refresh fails is answered 5xx: the cached keys are kept, not used for that request. The cached keys keep serving until the cache TTL is reached.
 - **A broken realm** — a realm that publishes no usable signing key, or publishes the same key id twice, is reported as an outage (503), not as a rejected token.
-- **A token that names no key id** — RFC 7515 makes `kid` optional, so a token may carry none. Such a token is verified against the published candidate keys, at most three of them; the first one whose signature matches wins. A realm publishing more candidates than that cap does not get its token guessed at: the token is rejected (401) and the log names the realm's key set as the reason.
+- **A token that names no key id** — RFC 7515 makes `kid` optional, so a token may carry none. Such a token is verified against the published candidate keys, at most three of them; the first one whose signature matches wins. When the realm publishes more candidates than that cap, the trial stops after three: a token that none of the three tried could resolve is rejected (401), and the log names the realm's key set as the reason. A token signed by one of the three tried is still accepted.
 
 > **Verify JWKS is reachable from each service.** If a service is deployed with the wrong `KEYCLOAK_URL` (e.g. `http://keycloak:8080` instead of the public `https://.../auth`), it cannot fetch the JWKS and every request 401s.
 

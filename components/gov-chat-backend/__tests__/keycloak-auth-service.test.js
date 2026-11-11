@@ -1066,6 +1066,33 @@ describe('keycloakAuthService', () => {
       // jwtVerify should be called only once (claim errors don't trigger refresh)
       expect(mockJwtVerify).toHaveBeenCalledTimes(1);
     });
+
+    it('hands the success line to a logger that cannot answer the level check', async () => {
+      // A consumer's test double may expose `debug` without the level check
+      // the shared winston logger carries. The verifier must still hand the
+      // line over — whether it is written is the logger's business, not the
+      // verifier's. A verifier that skipped the call would swallow the line
+      // for every such consumer, silently.
+      const loggerModule = require('../../shared/lib/logger');
+      const hadOwnLevelCheck = Object.prototype.hasOwnProperty.call(loggerModule.logger, 'isDebugEnabled');
+      const savedLevelCheck = loggerModule.logger.isDebugEnabled;
+      const debugSpy = jest.spyOn(loggerModule.logger, 'debug').mockImplementation(() => {});
+      loggerModule.logger.isDebugEnabled = undefined;
+      mockJwtVerify.mockResolvedValue({
+        payload: mockJwtPayload,
+        protectedHeader: { alg: 'RS256' }
+      });
+
+      try {
+        await keycloakAuthService.verifyToken(generateMockJwtString(mockJwtPayload));
+
+        expect(debugSpy).toHaveBeenCalledWith(expect.stringContaining('Token verified for'));
+      } finally {
+        if (hadOwnLevelCheck) loggerModule.logger.isDebugEnabled = savedLevelCheck;
+        else delete loggerModule.logger.isDebugEnabled;
+        debugSpy.mockRestore();
+      }
+    });
   });
 
   describe('multi-realm initialization', () => {

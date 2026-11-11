@@ -143,7 +143,9 @@ try {
  * not implement the level check — and a rejected token must never fail on
  * the way to its log line.
  *
- * @returns {boolean} True when the debug level would write the line
+ * @returns {boolean} True when a DEBUG line may be written — the level check
+ *   answers when the logger has one; when it has none, the logger is asked
+ *   to log and its transport decides whether the line is written.
  */
 function debugEnabled() {
   if (typeof logger.isDebugEnabled === 'function') return logger.isDebugEnabled();

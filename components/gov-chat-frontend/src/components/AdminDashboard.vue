@@ -17,7 +17,7 @@
               <div class="stat-value" data-test-id="stat-system-uptime-value">{{ uptimeLabel }}</div>
               <div v-if="trend('uptime', true)" class="stat-trend" :class="trend('uptime', true).className">
                 <span>{{ trend('uptime', true).arrow }} {{ trend('uptime', true).value }}</span>
-                {{ translate('admin.fromLastMonth', 'from last month') }}
+                {{ ' ' }}{{ translate('admin.fromLastMonth', 'from last month') }}
               </div>
             </div>
             <div class="stat-card stat-card--response" data-test-id="stat-avg-response-time">
@@ -31,7 +31,7 @@
                 :class="trend('responseTime', false).className"
               >
                 <span>{{ trend('responseTime', false).arrow }} {{ trend('responseTime', false).value }}</span>
-                {{ translate('admin.fromLastMonth', 'from last month') }}
+                {{ ' ' }}{{ translate('admin.fromLastMonth', 'from last month') }}
               </div>
             </div>
             <div class="stat-card stat-card--errors" data-test-id="stat-error-rate">
@@ -41,7 +41,7 @@
               <div class="stat-value" data-test-id="stat-error-rate-value">{{ errorRateLabel }}</div>
               <div v-if="trend('errorRate', false)" class="stat-trend" :class="trend('errorRate', false).className">
                 <span>{{ trend('errorRate', false).arrow }} {{ trend('errorRate', false).value }}</span>
-                {{ translate('admin.fromLastMonth', 'from last month') }}
+                {{ ' ' }}{{ translate('admin.fromLastMonth', 'from last month') }}
               </div>
             </div>
             <div class="stat-card stat-card--users" data-test-id="stat-monthly-active-users">
@@ -53,7 +53,7 @@
               </div>
               <div v-if="trend('activeUsers', true)" class="stat-trend" :class="trend('activeUsers', true).className">
                 <span>{{ trend('activeUsers', true).arrow }} {{ trend('activeUsers', true).value }}</span>
-                {{ translate('admin.fromLastMonth', 'from last month') }}
+                {{ ' ' }}{{ translate('admin.fromLastMonth', 'from last month') }}
               </div>
             </div>
           </div>

@@ -847,7 +847,10 @@ describe('keycloakAuthService', () => {
     it('counts only the signing keys the realm published under one key id', async () => {
       // The number the operator reads is the number of CANDIDATES the
       // ambiguity really had: a key the verifier could never use (an EC
-      // key, a key that forbids verification) is not a signing key.
+      // key, a key that forbids verification) is not a signing key. The
+      // filter is deliberately looser than jose's own — a key_ops list that
+      // repeats an operation is refused by jose and accepted here — so the
+      // count can over-report but never under-report.
       const ambiguous = new Error('multiple matching keys');
       ambiguous.name = 'JWKSMultipleMatchingKeys';
       const inner = Object.assign(jest.fn().mockRejectedValue(ambiguous), {
@@ -856,7 +859,8 @@ describe('keycloakAuthService', () => {
             { kid: 'dup', kty: 'RSA', alg: 'RS256', use: 'sig' },
             { kid: 'dup', kty: 'RSA', alg: 'RS256', use: 'sig' },
             { kid: 'dup', kty: 'EC', alg: 'ES256', use: 'sig' },
-            { kid: 'dup', kty: 'RSA', alg: 'RS256', use: 'sig', key_ops: ['sign'] }
+            { kid: 'dup', kty: 'RSA', alg: 'RS256', use: 'sig', key_ops: ['sign'] },
+            { kid: 'dup', kty: 'RSA', alg: 'RS256', use: 'sig', key_ops: ['verify', 'verify'] }
           ]
         })
       });
@@ -865,7 +869,7 @@ describe('keycloakAuthService', () => {
 
       await expect(keycloakAuthService.verifyToken(generateMockJwtString(mockJwtPayload))).rejects.toMatchObject({
         code: 'AUTH_SERVICE_UNAVAILABLE',
-        message: expect.stringContaining('2 signing keys')
+        message: expect.stringContaining('published 3 signing keys')
       });
     });
 

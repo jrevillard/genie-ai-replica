@@ -91,8 +91,9 @@ const rejectionLogBuckets = new Map();
  * outage (a bad token where jose would say "no usable key"), never invent
  * one — so a healthy key set is never misread as a broken realm. Tightening
  * it toward jose would flip that direction: any token that reaches this
- * check with a key set jose itself would refuse (an `ext: false` key, a
- * non-unique key_ops list) would be answered 503 instead of 401.
+ * check with a key set jose itself would refuse (a key whose `ext` is not
+ * a boolean, a key_ops list that repeats an operation) would be answered
+ * 503 instead of 401.
  */
 function keySetHasUsableKey(jwks) {
   if (!jwks || !Array.isArray(jwks.keys)) return true;

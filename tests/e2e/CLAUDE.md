@@ -116,6 +116,16 @@ The specs log in through the browser (`loginViaUI`) — the realm refuses
 direct access grants, so a minted token gives an API call a token, not a
 page a session.
 
+**One spelling of the edge — in the JS tree.** The published address
+lives in ONE module (`helpers/base-url.js`), and the venue-origin gate
+(`tests/config-validator/`) fails any file in the tree but that one that
+carries a local origin or reads the environment. The gate reads the JS
+tree; the run SCRIPT (`run/run-local-e2e.sh`) names its own default venue
+(`DEFAULT_VENUE`) — it is the shell that starts the run, so it must say
+which venue it starts against — and that name is outside the gate's
+reach. The claim is therefore about the JS tree, not about every file
+under `tests/e2e/`.
+
 ## The executed set
 
 The suite has **no CI door** (operator decision, 2026-11-10: this suite gets

@@ -217,6 +217,50 @@ function namesThisFile(token, file) {
 }
 
 /**
+ * The spec-file names that live OUTSIDE the e2e tree.
+ *
+ * A bare file name in a title is ambiguous: it may name a file of the
+ * e2e tree, or a file of another tree (a frontend unit test, a
+ * config-validator case). The second reading must not be mistaken for
+ * the first: a title that names an e2e spec AND a frontend test by its
+ * bare name would stop being DEDICATED to the e2e file — and the
+ * failure path would file a second issue for a file that already has
+ * one.
+ *
+ * The set is built ONCE (the walk costs ~0.1 s) and only when a bare
+ * name is actually met, which is at most once per title.
+ */
+let otherTreeNames = null;
+
+function namesOutsideE2eTree(token) {
+  if (otherTreeNames === null) {
+    otherTreeNames = new Set();
+    const walk = (dir) => {
+      let entries;
+      try {
+        entries = fs.readdirSync(dir, { withFileTypes: true });
+      } catch {
+        return;
+      }
+      for (const entry of entries) {
+        if (entry.name === 'node_modules' || entry.name === '.git') continue;
+        const full = path.join(dir, entry.name);
+        if (entry.isDirectory()) {
+          // The e2e tree is this tree's own business; only the OTHER
+          // trees' names can make a bare name ambiguous.
+          if (path.relative(REPO_ROOT, full) === TESTS_E2E_ROOT) continue;
+          walk(full);
+        } else if (/\.(?:spec|test)\.[cm]?[jt]sx?$/.test(entry.name)) {
+          otherTreeNames.add(entry.name);
+        }
+      }
+    };
+    walk(REPO_ROOT);
+  }
+  return otherTreeNames.has(token);
+}
+
+/**
  * Does this path token name a file of the e2e tree?
  *
  * The tokens come from a title, so they may be written three ways: the
@@ -231,10 +275,16 @@ function namesThisFile(token, file) {
 function isE2ePath(token) {
   if (token.includes(`${TESTS_E2E_ROOT}/`)) return true;
   const first = token.split('/')[0];
-  // A bare spec file name is this tree's path — whether it still
-  // exists or not: a file that was RENAMED must not drop out of the
-  // comparison (that would turn a multi-file title into a dedication).
-  if (first === token) return /\.(?:spec|test)\.[cm]?[jt]sx?$/.test(token);
+  if (first === token) {
+    // A bare spec file name is this tree's path — whether it still
+    // exists or not: a file that was RENAMED must not drop out of the
+    // comparison (that would turn a multi-file title into a dedication).
+    //
+    // UNLESS the name is a file of ANOTHER tree: that name is not this
+    // tree's, and counting it would make a title that names an e2e file
+    // AND a frontend test look like a group instead of a dedication.
+    return /\.(?:spec|test)\.[cm]?[jt]sx?$/.test(token) && !namesOutsideE2eTree(token);
+  }
   return fs.existsSync(path.join(REPO_ROOT, TESTS_E2E_ROOT, first));
 }
 

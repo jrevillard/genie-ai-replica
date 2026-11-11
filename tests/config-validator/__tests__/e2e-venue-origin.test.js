@@ -65,12 +65,20 @@ const baseUrlReaders = (root) =>
     .map((f) => path.relative(root, f));
 
 /**
- * The two spellings of the edge's read: the property
- * (`process.env.BASE_URL`) and the destructuring
- * (`const { BASE_URL } = process.env`).
+ * The spellings of the edge's read: the property
+ * (`process.env.BASE_URL`), the bracket form (`process.env['BASE_URL']`)
+ * and the destructuring (`const { BASE_URL } = process.env`).
+ *
+ * The destructuring's gap stops at a COMMA and at a NEWLINE: the gap is
+ * what stands between the closing brace and the `= process.env`, and a
+ * gap that crosses a line (or a comma) can reach an UNRELATED
+ * `process.env` — a function parameter named `BASE_URL` followed by any
+ * later `= process.env` would then read as a read of the environment.
+ * The gate reports every reader, so a false positive there is a file
+ * that is wrongly named.
  */
 const READS_EDGE =
-  /process\.env\.BASE_URL\b|process\.env\s*\[\s*['"]BASE_URL['"]\s*\]|\{\s*BASE_URL\s*[:=,}][^=]*=\s*process\.env/;
+  /process\.env\.BASE_URL\b|process\.env\s*\[\s*['"]BASE_URL['"]\s*\]|\{\s*BASE_URL\s*[:=,}][^=,\n]*=\s*process\.env/;
 
 const offenders = (root, allowed = MOCK_ORIGINS) =>
   jsFiles(root)
@@ -89,9 +97,11 @@ describe('the e2e suite names the venue it was given, and names it once', () => 
   });
 
   test('the edge is defined ONCE — one module reads the environment', () => {
-    // Before the wave, five files read the environment and each carried
-    // its own default — that IS the drift this gate is for, and it is
-    // invisible to the edge match above (a spec that builds its URL
+    // Before the wave, THREE files read the environment — measured with
+    // this very matcher over the wave's base tree: `chatbot.js`,
+    // `chat-composer.spec.js` and `theme-runtime-config.spec.js`. Two of
+    // them carried their own default, so the edge could drift. That drift
+    // is invisible to the edge match above (a spec that builds its URL
     // from a variable breaks just as hard).
     expect(baseUrlReaders(E2E_ROOT)).toEqual([path.relative(E2E_ROOT, DEFINING_MODULE)]);
   });
@@ -105,6 +115,12 @@ describe('the e2e suite names the venue it was given, and names it once', () => 
       fs.writeFileSync(path.join(tree, 'c.spec.js'), 'const { BASE_URL } = process.env;\n');
       // The RENAMED destructuring is a read too.
       fs.writeFileSync(path.join(tree, 'd.spec.js'), 'const { BASE_URL: EDGE } = process.env;\n');
+      // A function PARAMETER named BASE_URL is not a read of the
+      // environment — and a later `= process.env` must not make it one.
+      fs.writeFileSync(
+        path.join(tree, 'param.spec.js'),
+        'function f({ BASE_URL }) {\n  return 1;\n}\nconst y = process.env;\n'
+      );
       expect(baseUrlReaders(tree).sort()).toEqual(['a.spec.js', 'b.spec.js', 'c.spec.js', 'd.spec.js']);
     } finally {
       fs.rmSync(tree, { recursive: true, force: true });
@@ -119,7 +135,10 @@ describe('the e2e suite names the venue it was given, and names it once', () => 
     // URL comparison and an API call — plus the PORTED spelling of the
     // edge (https://localhost:443/ is the Compose stack's own address).
     // A comment that NAMES the edge is prose, not code, so it is not an
-    // offender — and neither is a mock origin the suite may drive.
+    // offender — and neither is a mock origin the suite may drive, nor a
+    // host that merely STARTS with a local origin
+    // (`localhost.example.com`, `localhost-evil`, `127.0.0.10`): the
+    // boundary is the HOST's, so those are other hosts.
     const tree = fs.mkdtempSync(path.join(os.tmpdir(), 'venue-origin-gate-'));
     try {
       fs.writeFileSync(path.join(tree, 'navigation.spec.js'), "await page.goto('https://localhost/');\n");
@@ -140,6 +159,18 @@ describe('the e2e suite names the venue it was given, and names it once', () => 
       // edge and the deployment edge.
       fs.writeFileSync(path.join(tree, 'forge.spec.js'), "await page.goto('https://genieai-forge.local:4443/');\n");
       fs.writeFileSync(path.join(tree, 'k8s.spec.js'), "await page.goto('https://genieai.local:4443/');\n");
+      // The NEGATIVE half of the boundary: a host that merely STARTS
+      // with a local origin is ANOTHER host, and the gate must not
+      // claim it. These files are written but NOT listed among the
+      // expected offenders — the assertion is an exact equality on the
+      // offender list, so a file that must not be an offender pins
+      // itself by being absent.
+      fs.writeFileSync(
+        path.join(tree, 'lookalike-dot.spec.js'),
+        "await page.goto('https://localhost.example.com/');\n"
+      );
+      fs.writeFileSync(path.join(tree, 'lookalike-dash.spec.js'), "await page.goto('https://localhost-evil/');\n");
+      fs.writeFileSync(path.join(tree, 'lookalike-ip.spec.js'), "await page.goto('http://127.0.0.10/');\n");
       const strays = offenders(tree, ['http://127.0.0.1:9000', 'http://localhost:8123']).map((f) => path.basename(f));
       expect(strays.sort()).toEqual([
         'api.spec.js',

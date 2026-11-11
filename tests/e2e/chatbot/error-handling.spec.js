@@ -32,14 +32,25 @@ const RECOVERED_ANSWER = 'Recovered answer after the error.';
 test.describe('RAG error handling', () => {
   // This spec's OWN budget. The project's 60 s is too small for what it
   // asserts on purpose: the waits below are ceilings, and a loaded
-  // venue spends them slowly. The arithmetic of the ceilings — the error
-  // card 30 s, the navbar status 15 s (expect's default), the composer
-  // 5 s, the retry's two successive 10 s waits (20 s), the composer
-  // again 5 s — is 75 s of waiting in the body, plus the login and the
-  // navigation in the beforeEach. A budget that cannot cover its own
+  // venue spends them slowly. A budget that cannot cover its own
   // ceilings would abort the test with a generic timeout instead of the
   // assertion that names the cause.
-  test.describe.configure({ timeout: 120000 });
+  //
+  // The ceilings of the BODY, in the order they are waited:
+  //
+  //   - sendMessage #1 waits for the composer: 10 s;
+  //   - the error card: 30 s;
+  //   - the navbar's offline state (expect's default): 15 s;
+  //   - the composer again: 5 s;
+  //   - sendMessage #2 waits for the composer again: 10 s;
+  //   - the retry's answer: TWO successive 10 s waits — the bubble's
+  //     text, then the streaming flag — so 20 s;
+  //   - the composer a third time: 5 s.
+  //
+  // That is 95 s of waiting, and the beforeEach adds the login (up to
+  // 30 s + 15 s) and the navigation (30 s). The budget covers the sum:
+  // 180 s.
+  test.describe.configure({ timeout: 180000 });
 
   let page;
   let context;

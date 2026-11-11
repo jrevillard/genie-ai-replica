@@ -68,11 +68,11 @@ test.describe('a venue mapping that cannot be read is a NAMED cause', () => {
     expect(read.error).toBe(null);
   });
 
-  test('a malformed mapping is NAMED, not thrown', () => {
-    // A BASE_URL that is not a URL makes the mapping read throw. An
-    // unhandled throw is a stack trace, which hides the cause behind a
-    // wall of frames — and naming the cause is the pre-flight's whole
-    // purpose.
+  test('a malformed ADDRESS is NAMED, not thrown', () => {
+    // A BASE_URL that is not a URL makes the mapping read throw (the
+    // mapping reads the host out of it). An unhandled throw is a stack
+    // trace, which hides the cause behind a wall of frames — and naming
+    // the cause is the pre-flight's whole purpose.
     const read = readVenueMapping(() => {
       throw new Error('Invalid URL');
     });
@@ -80,5 +80,16 @@ test.describe('a venue mapping that cannot be read is a NAMED cause', () => {
     expect(read.error).toContain('Invalid URL');
     // The remedy the runner needs is in the message too.
     expect(read.error).toContain('E2E_VENUE_IP');
+  });
+
+  test('a malformed IP is NOT a failure HERE — it is carried as it is', () => {
+    // The mapping reader validates nothing: a value that is not an
+    // address is carried through, and the run fails LATER — at the
+    // browser's launch, with the remedy already printed. The pre-flight
+    // must not claim otherwise.
+    const mapping = { host: 'venue.example', ip: 'not an address' };
+    const read = readVenueMapping(() => mapping);
+    expect(read.mapping).toBe(mapping);
+    expect(read.error).toBe(null);
   });
 });

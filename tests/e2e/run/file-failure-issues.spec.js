@@ -164,6 +164,19 @@ test.describe('a match must be DEDICATED to the spec file', () => {
     expect(findTrackedIssue(FILE, [byTitle, byMarker])).toBe(byTitle);
   });
 
+  test('a bare name of ANOTHER tree\'s file is not this tree\'s path', () => {
+    // A title that names an e2e spec AND a frontend unit test by its
+    // bare name is still a DEDICATION to the e2e file: the frontend test
+    // is not this tree's business. Counting it would make the title look
+    // like a group, and the failure path would file a second issue for a
+    // file that already has one.
+    const frontend = 'AdminDashboard.test.js';
+    const title = `test(e2e): ${FILE} and ${frontend} are red`;
+    expect(titleIsDedicatedTo(title, FILE)).toBe(true);
+    // And the frontend file on its own names nothing here.
+    expect(titleIsDedicatedTo(`test(e2e): ${frontend} is red`, FILE)).toBe(false);
+  });
+
   test('a bare spec file name is this tree\'s path even when the file is gone', () => {
     // A RENAMED file must not drop out of the comparison: a title that
     // names several spec files is a group, not a dedication, and the

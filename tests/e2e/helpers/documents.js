@@ -3,11 +3,17 @@ const { loginViaUI, BASE_URL, TEST_ADMIN_USER } = require('./chatbot');
 const {
   getSessionTokenViaUI,
   mapWithConcurrency,
+  parseJwtClaims,
   request,
   SWEEP_DELETE_CONCURRENCY,
   SWEEP_MAX_DELETES,
   SWEEP_MAX_LIST_PAGES
 } = require('./auth');
+
+// The page size the cleanup sweep lists the population with. The endpoint
+// validates `limit <= 50`, so this is also its maximum — and the "last
+// page" test below compares against it.
+const PAGE_SIZE = 50;
 
 /**
  * Login and navigate to Document Management tab in Admin Dashboard.
@@ -111,18 +117,16 @@ function matchesStatus(file, status) {
  * @param {import('@playwright/test').Page} page
  * @param {import('@playwright/test').Response} filesResponse
  * @param {object} [options]
- * @param {string} [options.status] - The status the table filters on.
- *        Without it the table lists the whole payload; with it the table
- *        lists the payload's documents of that status, and comparing the
- *        rows with the WHOLE payload could only hold on a page whose
+ * @param {string} [options.status='all'] - The status the table filters
+ *        on. 'all' is the table's own "no filter" selection: the table
+ *        then lists the whole payload. With a status, the table lists
+ *        the payload's documents of that status, and comparing the rows
+ *        with the WHOLE payload could only hold on a page whose
  *        documents all carry that status.
  */
-async function waitForTableRowsSettled(page, filesResponse, { status } = {}) {
+async function waitForTableRowsSettled(page, filesResponse, { status = 'all' } = {}) {
   const payload = (await filesResponse.json()).data || [];
-  const expectedNames = payload
-    .filter((f) => (status === undefined ? true : matchesStatus(f, status)))
-    .map((f) => f.file_name)
-    .sort();
+  const expectedNames = payload.filter((f) => matchesStatus(f, status)).map((f) => f.file_name).sort();
   await expect
     .poll(async () => (await getDocumentTableRows(page)).map((r) => r.fileName).sort(), {
       timeout: 10000,
@@ -207,10 +211,8 @@ async function getDocumentTableRows(page) {
  * the worker's browser instead of launching a throwaway one. The sweep
  * outlives the 60s hook default — callers must set
  * `test.setTimeout(SESSION_MINT_TIMEOUT_MS)` as the first line of the hook
- * (see tests/e2e/helpers/auth.js). That budget covers the sweep: the mint
- * (≈135s on a stalled stack) plus the pages plus the bounded-parallel delete
- * waves, and the token the sweep holds outlives it too — the realm issues
- * it for 300s.
+ * (see tests/e2e/helpers/auth.js). The budget that covers the sweep, the
+ * wave width and the delete cap are documented there.
  * @param {string} [prefix] - File-name prefix to delete
  * @param {object} [options]
  * @param {import('@playwright/test').Browser} [options.browser] - Reuse this
@@ -224,11 +226,17 @@ async function deleteAllTestDocuments(prefix = 'test-document', { browser } = {}
     throw new Error(`cleanup: login failed — no test document was deleted: ${e.message}`, { cause: e });
   }
 
+  // The token's real expiry, read from the token itself: the sweep's
+  // budget assumes a realm lifespan the repo does not pin, and a 401 in
+  // the report must name the cause instead of leaving the operator to
+  // guess which layer expired.
+  const tokenExpiry = new Date(parseJwtClaims(token).exp * 1000).toISOString();
+
   // The list is paginated, and its search matches a SUPERSET of the
   // suite's own files: the endpoint filters CONTAINS(LOWER(file_name)) OR
   // CONTAINS(LOWER(source_url)), while the sweep deletes the files whose
-  // NAME starts with the prefix. One page (the endpoint validates
-  // limit <= 50) is therefore not the population, and the sweep cannot
+  // NAME starts with the prefix. One page is therefore not the
+  // population, and the sweep cannot
   // tell "the files beyond the page are not mine" from "the files beyond
   // the page are mine and were not removed" — the second one is a
   // leftover. Enumerate the pages the budget allows.
@@ -241,7 +249,7 @@ async function deleteAllTestDocuments(prefix = 'test-document', { browser } = {}
     try {
       listRes = await request(
         'GET',
-        `/api/files?limit=50&page=${page}&search=${encodeURIComponent(prefix)}`,
+        `/api/files?limit=${PAGE_SIZE}&page=${page}&search=${encodeURIComponent(prefix)}`,
         { headers: { Authorization: `Bearer ${token}` } }
       );
     } catch (e) {
@@ -260,29 +268,28 @@ async function deleteAllTestDocuments(prefix = 'test-document', { browser } = {}
     if (total === undefined) {
       total = listRes.data?.pagination?.totalFiles;
     }
-    if (pageFiles.length < 50) {
+    if (pageFiles.length < PAGE_SIZE) {
       exhausted = true;
       break;
     }
   }
 
-  // Two populations, and the report must not conflate them: the POPULATION
-  // is every file the endpoint matched (the CONTAINS set), the DELETE SET
-  // is the suite's own files inside it (the prefix-matching ones). Only
-  // the delete set is the sweep's to remove.
-  const testFiles = files.filter((f) => f.file_name && f.file_name.startsWith(prefix));
+  // Two populations, and the report must not conflate them: the
+  // POPULATION is every file the endpoint matched (the CONTAINS set),
+  // the suite's OWN is the prefix-matching ones inside it — only those
+  // are the sweep's to remove.
+  const own = files.filter((f) => f.file_name && f.file_name.startsWith(prefix));
   const populationKnown = total !== undefined;
   const enumeratedAll = populationKnown ? files.length >= total : exhausted;
 
-  const deleteSet = testFiles.slice(0, SWEEP_MAX_DELETES);
-  const beyondBudget = testFiles.length - deleteSet.length;
+  const deleteSet = own.slice(0, SWEEP_MAX_DELETES);
+  const beyondBudget = own.length - deleteSet.length;
 
-  // The deletes run in bounded-parallel waves. Every one of them is
-  // capped at the 30 s request timeout, so a sequential sweep of a full
-  // page costs 50 × 30 s — more than the hook's budget AND more than the
-  // realm's access-token lifespan, and the tail of it would run on an
-  // expired token. The wave width is bounded by SWEEP_DELETE_CONCURRENCY
-  // so the sweep still fits both.
+  // The deletes run in bounded-parallel waves: a sequential sweep of a
+  // full page costs 50 × 30 s — more than the hook's budget and more than
+  // the realm's access-token lifespan, so the tail of it would run on an
+  // expired token. The width and the arithmetic live in helpers/auth.js
+  // (SWEEP_DELETE_CONCURRENCY).
   const failures = (
     await mapWithConcurrency(deleteSet, SWEEP_DELETE_CONCURRENCY, async (f) => {
       const file_id = f.file_id || f._key || f.id;
@@ -291,7 +298,9 @@ async function deleteAllTestDocuments(prefix = 'test-document', { browser } = {}
           headers: { Authorization: `Bearer ${token}` },
         });
         if (res.status < 200 || res.status >= 300) {
-          return `${f.file_name}: HTTP ${res.status}`;
+          return res.status === 401
+            ? `${f.file_name}: HTTP 401 (the access token expired at ${tokenExpiry})`
+            : `${f.file_name}: HTTP ${res.status}`;
         }
         return null;
       } catch (e) {
@@ -324,17 +333,16 @@ async function deleteAllTestDocuments(prefix = 'test-document', { browser } = {}
     // enumerated — not that a suite file lies beyond it. Say that.
     problems.push(
       populationKnown
-        ? `the population is ${total} matching files and the sweep enumerated ${files.length} of ` +
-            `them — a prefix-matching file beyond the last enumerated page, if any, was not removed`
-        : `the sweep enumerated ${files.length} matching files in full pages — the population may be ` +
-            `larger, and a prefix-matching file beyond the last enumerated page, if any, was not removed`
+        ? `the sweep did not enumerate the whole population — a prefix-matching file beyond the ` +
+            `last enumerated page, if any, was not removed`
+        : `the population size is unknown — the sweep read full pages, so a prefix-matching file ` +
+            `beyond the last enumerated page, if any, was not removed`
     );
   }
   if (problems.length > 0) {
     const scope = populationKnown
-      ? `the population holds ${total} matching files, of which ${testFiles.length} were enumerated as ` +
-        `the suite's own`
-      : `the population is unknown (${files.length} matching files were enumerated)`;
+      ? `population: ${total} matching files, ${files.length} read, ${own.length} of them the suite's own`
+      : `population unknown, ${files.length} matching files read`;
     throw new Error(`cleanup: ${problems.length} problem(s) — ${scope} — ${problems.join(' | ')}`);
   }
 }

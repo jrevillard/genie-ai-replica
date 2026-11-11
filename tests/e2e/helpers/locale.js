@@ -16,8 +16,8 @@
 // the write would therefore leave the app on navigator.language, and the
 // spec would assert locale behaviour it never pinned — a mismatch
 // nothing attributes. So the pin is PROVEN, not assumed: a probe page
-// loads the edge with the init script in place and the stored value is
-// read back from the context's storage. A pin that did not land fails
+// loads the edge with the init script in place, and the stored value is
+// read back from the app's own storage. A pin that did not land fails
 // the spec here, before its first assertion can misattribute the cause.
 
 const { BASE_URL } = require('./chatbot');
@@ -61,11 +61,14 @@ async function pinLocale(context, locale = 'en') {
         { cause: e }
       );
     }
-    const stored = await readPinnedLocale(context);
+    // Read the value back from the app's OWN origin — the probe page is
+    // on it, and its localStorage is the storage the app reads at
+    // document start.
+    const stored = await probe.evaluate(() => window.localStorage.getItem('userLocale'));
     if (stored !== locale) {
       throw new Error(
         `the locale pin did not land — localStorage.userLocale is ` +
-          `${stored === undefined ? 'absent' : `'${stored}'`} on ${BASE_URL}. A storage that ` +
+          `${stored == null ? 'absent' : `'${stored}'`} on ${BASE_URL}. A storage that ` +
           `refuses the write leaves the app on navigator.language, and the spec would assert ` +
           `locale behaviour it never pinned.`
       );
@@ -73,27 +76,6 @@ async function pinLocale(context, locale = 'en') {
   } finally {
     await probe.close();
   }
-}
-
-/**
- * Read the locale the init script stored, from the context's storage
- * snapshot — the value the app itself reads, not the init script's own
- * account of it.
- *
- * The proof covers the origin the app is served from (BASE_URL's). The
- * init script itself runs on EVERY origin of the context, so the pin
- * lands wherever the spec navigates; what the read-back certifies is
- * that this context's storage accepts the write at all.
- *
- * @param {import('@playwright/test').BrowserContext} context
- * @returns {Promise<string|undefined>} the stored locale, or undefined
- */
-async function readPinnedLocale(context) {
-  const state = await context.storageState();
-  const origin = new URL(BASE_URL).origin;
-  const entry = state.origins.find((o) => o.origin === origin);
-  const stored = entry?.localStorage.find((e) => e.name === 'userLocale');
-  return stored?.value;
 }
 
 module.exports = { pinLocale };

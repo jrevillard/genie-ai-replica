@@ -12,6 +12,7 @@ const {
   getSessionToken,
   getSessionTokenViaUI,
   mapWithConcurrency,
+  parseJwtClaims,
   request,
   SESSION_MINT_TIMEOUT_MS,
   SWEEP_DELETE_CONCURRENCY,
@@ -22,9 +23,9 @@ const {
 const API_TIMEOUT_MS = 30000;
 
 // The page size the cleanup sweep lists the conversation population with.
-// The endpoint accepts up to 100; 50 keeps the page inside the delete
-// budget the sweep's helper is sized for.
-const LIST_PAGE_SIZE = 50;
+// The endpoint accepts up to 100, so one page covers the whole window the
+// sweep enumerates. The delete budget is a separate cap (SWEEP_MAX_DELETES).
+const LIST_PAGE_SIZE = 100;
 
 const MOCKED_ANSWER = 'Mocked answer for the history test.';
 
@@ -66,10 +67,9 @@ test.describe('Conversation history persistence', () => {
   // that failed between its save and its bookkeeping must not leak the
   // conversation it already persisted.
   test.afterAll(async ({ browser }) => {
-    // The cleanup's mint + list + delete sweep outlives the 60s hook default.
-    // The budget covers it: the mint (≈135s on a stalled stack) plus the
-    // pages plus the bounded-parallel delete waves, and the token the sweep
-    // holds outlives it too — the realm issues it for 300s.
+    // The cleanup's mint + list + delete sweep outlives the 60s hook
+    // default. The budget that covers it, the wave width and the delete
+    // cap are documented in helpers/auth.js.
     test.setTimeout(SESSION_MINT_TIMEOUT_MS);
 
     // A failing cleanup FAILS: a conversation left behind poisons later
@@ -78,6 +78,12 @@ test.describe('Conversation history persistence', () => {
     const token = await getSessionTokenViaUI({ browser }).catch((e) => {
       throw new Error(`cleanup login failed — the suite's conversations were not swept: ${e.message}`);
     });
+
+    // The token's real expiry, read from the token itself: the sweep's
+    // budget assumes a realm lifespan the repo does not pin, and a 401 in
+    // the report must name the cause instead of leaving the operator to
+    // guess which layer expired.
+    const tokenExpiry = new Date(parseJwtClaims(token).exp * 1000).toISOString();
 
     // The list is paginated, and its search matches a SUPERSET of the
     // suite's own conversations: the endpoint filters LIKE over title OR
@@ -126,37 +132,42 @@ test.describe('Conversation history persistence', () => {
 
     // Two populations, and the report must not conflate them: the
     // POPULATION is every conversation the endpoint matched (the LIKE
-    // set), the DELETE SET is the suite's own inside it (the E2E-titled
-    // ones). Only the delete set is the sweep's to remove.
-    const targets = conversations
-      .filter((c) => c.title?.startsWith('E2E '))
-      .map((c) => c._key || c.id);
+    // set), the suite's OWN is the E2E-titled ones inside it — only
+    // those are the sweep's to remove.
+    //
+    // The ids captured in-flight are the fallback when NOT ONE page
+    // could be read: the deletes still run, and the failure is reported
+    // below. A later page that fails must NOT discard the pages that
+    // succeeded — those conversations are known, and leaving them behind
+    // is the leftover this sweep exists to prevent.
+    const own = pagesRead > 0
+      ? conversations.filter((c) => c.title?.startsWith('E2E ')).map((c) => c._key || c.id)
+      : [...createdConversationIds];
     const populationKnown = total !== undefined;
     const enumeratedAll = populationKnown ? conversations.length >= total : exhausted;
 
-    // The ids captured in-flight are the fallback when NOT ONE page could
-    // be read: the deletes still run, and the failure is reported below.
-    // A later page that fails must NOT discard the pages that succeeded
-    // — those conversations are known, and leaving them behind is the
-    // leftover this sweep exists to prevent.
-    const deleteSet = pagesRead > 0 ? targets : [...createdConversationIds];
-    const attempted = deleteSet.slice(0, SWEEP_MAX_DELETES);
-    const beyondBudget = Math.max(0, deleteSet.length - SWEEP_MAX_DELETES);
+    const deleteSet = own.slice(0, SWEEP_MAX_DELETES);
+    const beyondBudget = own.length - deleteSet.length;
 
-    // The deletes run in bounded-parallel waves: each one is capped at the
-    // 30 s request timeout, so a sequential sweep of a full page costs
-    // 50 × 30 s — more than the hook's budget and more than the realm's
-    // access-token lifespan, and the tail of it would run on an expired
-    // token. The wave width is bounded by SWEEP_DELETE_CONCURRENCY so the
-    // sweep still fits both.
+    // The deletes run in bounded-parallel waves: a sequential sweep of a
+    // full page costs 50 × 30 s — more than the hook's budget and more
+    // than the realm's access-token lifespan, so the tail of it would run
+    // on an expired token. The width and the arithmetic live in
+    // helpers/auth.js (SWEEP_DELETE_CONCURRENCY).
     const undeleted = (
-      await mapWithConcurrency(attempted, SWEEP_DELETE_CONCURRENCY, async (convId) => {
+      await mapWithConcurrency(deleteSet, SWEEP_DELETE_CONCURRENCY, async (convId) => {
         try {
           const res = await request('DELETE', `${BASE_URL}/api/chat/conversations/${convId}`, {
             headers: { Authorization: `Bearer ${token}` }
           });
           if (res.status < 200 || res.status >= 300) {
-            return { id: convId, cause: `DELETE returned ${res.status}` };
+            return {
+              id: convId,
+              cause:
+                res.status === 401
+                  ? `DELETE returned 401 (the access token expired at ${tokenExpiry})`
+                  : `DELETE returned ${res.status}`
+            };
           }
           return null;
         } catch (err) {
@@ -174,7 +185,7 @@ test.describe('Conversation history persistence', () => {
     }
     if (undeleted.length > 0) {
       problems.push(
-        `${undeleted.length} of ${attempted.length} conversations were not deleted — leftover: ` +
+        `${undeleted.length} of ${deleteSet.length} conversations were not deleted — leftover: ` +
           `${undeleted.map((u) => `${u.id} (${u.cause})`).join(', ')}`
       );
     }
@@ -189,19 +200,17 @@ test.describe('Conversation history persistence', () => {
       // enumerated — not that a suite conversation lies beyond it. Say that.
       problems.push(
         populationKnown
-          ? `the population is ${total} matching conversations and the sweep enumerated ` +
-            `${conversations.length} of them — a suite conversation beyond the last enumerated page, ` +
-            `if any, was not removed`
-          : `the sweep enumerated ${conversations.length} matching conversations in full pages — the ` +
-            `population may be larger, and a suite conversation beyond the last enumerated page, if any, ` +
-            `was not removed`
+          ? `the sweep did not enumerate the whole population — a suite conversation beyond the ` +
+            `last enumerated page, if any, was not removed`
+          : `the population size is unknown — the sweep read full pages, so a suite conversation ` +
+            `beyond the last enumerated page, if any, was not removed`
       );
     }
     if (problems.length > 0) {
       const scope = populationKnown
-        ? `the population holds ${total} matching conversations, of which ${deleteSet.length} were ` +
-          `enumerated as the suite's own`
-        : `the population is unknown (${conversations.length} matching conversations were enumerated)`;
+        ? `population: ${total} matching conversations, ${conversations.length} read, ` +
+          `${own.length} of them the suite's own`
+        : `population unknown, ${conversations.length} matching conversations read`;
       throw new Error(`cleanup: ${problems.length} problem(s) — ${scope} — ${problems.join(' | ')}`);
     }
   });

@@ -1,6 +1,6 @@
 <template>
   <div class="dialog-backdrop" @click="$emit('close')"></div>
-  <div class="dialog-container">
+  <div class="dialog-container" data-test-id="upload-files-dialog">
     <div class="dialog-header">
       <h2 class="dialog-title">
         {{ translate('uploadDialog.title', 'Upload Files') }}
@@ -8,6 +8,7 @@
       <DsButton
         variant="ghost"
         class="dialog-close-btn"
+        data-test-id="upload-files-dialog-close"
         :aria-label="translate('details.close', 'Close')"
         @click="$emit('close')"
       >

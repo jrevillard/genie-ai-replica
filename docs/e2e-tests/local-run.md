@@ -232,17 +232,27 @@ ephemeral state.
 Two caveats the operator should know before booking a slot:
 
 - the run needs a **serial slot** on the shared stack — the phase specs
-  mutate the shared realm (the Phase-H spec rotates the realm signing keys,
-  the Phase-K spec changes the realm's token lifespan and restores it), so
-  two runs at once would fight over the same realm. The slot is booked with
-  the orchestrator; the runner's own locks are per machine;
+  mutate the shared realm (the Phase-H spec rotates the realm signing keys),
+  so two runs at once would fight over the same realm. The slot is booked
+  with the orchestrator; the runner's own locks are per machine;
 - **the Phase-K spec does not run against a shared venue** (operator
-  decision, 2026-11-10): its K.2 lowers the realm's token lifespan to 10s,
-  which breaks every other seat's logins for as long as it holds, and a
-  dedicated window for one assertion costs more than the assertion. The
-  spec is parked out of the tree for such a run until #1714 rewrites it to
-  expire a token without touching the realm's global default. The other
-  phase specs keep running;
+  decision, 2026-11-10): its K.2 lowers the realm's **global** token
+  lifespan to 10s, so every session in flight — the other seats' logins
+  included — expires within seconds, and a dedicated window for that one
+  assertion costs more than the assertion (an exclusively booked venue, the
+  lifespan mutated to 10 and read back to 300). **Nothing automates the
+  exclusion**: the run executes the whole tree, and the executed-set guard
+  forbids narrowing the invocation, so the operator parks the spec by hand
+  before the run and puts it back afterwards:
+
+  ```bash
+  mv tests/e2e/epic2/k1-auth-error-display.spec.js /tmp/
+  # ... the run ...
+  mv /tmp/k1-auth-error-display.spec.js tests/e2e/epic2/
+  ```
+
+  The exclusion lasts until the spec stops mutating the realm's global
+  default — the rewrite is tracked in #1785;
 - the OKF specs skip on a core-profile venue. Pointing the run at an
   OKF-enabled venue is what exercises them.
 

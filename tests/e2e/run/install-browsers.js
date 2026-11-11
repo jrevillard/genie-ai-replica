@@ -40,13 +40,15 @@ const path = require('path');
 const { spawnSync } = require('child_process');
 
 const REPO_ROOT = path.resolve(__dirname, '..', '..', '..');
-const PINNED_PACKAGE = '@playwright/test';
 
 // The chain the RUNNER loads: @playwright/test -> playwright ->
 // playwright-core. Every version and every revision is read through it —
 // a checkout whose node_modules disagrees with the lockfile must not be
 // able to make this script read one package and install another.
 const RUNNER_CHAIN = ['@playwright/test', 'playwright', 'playwright-core'];
+
+// The package the lockfile pins the runner on — the chain's first member.
+const PINNED_PACKAGE = RUNNER_CHAIN[0];
 
 // The two builds a Chromium run needs: the browser itself, and the headless
 // shell a headless launch uses. They are SEPARATE downloads — the tree that
@@ -110,8 +112,11 @@ function resolvePackage(name, repoRoot = REPO_ROOT) {
 function resolveInNodeModules(name, fromDir, repoRoot) {
   let dir = fromDir;
   for (;;) {
-    const candidate = path.join(dir, 'node_modules', name, 'package.json');
-    if (fs.existsSync(candidate)) return candidate;
+    // Node never looks INSIDE a node_modules directory for another one.
+    if (path.basename(dir) !== 'node_modules') {
+      const candidate = path.join(dir, 'node_modules', name, 'package.json');
+      if (fs.existsSync(candidate)) return candidate;
+    }
     if (dir === repoRoot) return null;
     const parent = path.dirname(dir);
     if (parent === dir) return null;
@@ -133,8 +138,12 @@ function resolveInNodeModules(name, fromDir, repoRoot) {
 function lockfileEntry(lock, name, fromRel) {
   let dir = fromRel;
   for (;;) {
-    const key = (dir ? `${dir}/` : '') + `node_modules/${name}`;
-    if (lock.packages && lock.packages[key]) return { key, entry: lock.packages[key] };
+    // The same shape as the disk walk: a node_modules level is not probed
+    // for another one.
+    if (path.posix.basename(dir) !== 'node_modules') {
+      const key = (dir ? `${dir}/` : '') + `node_modules/${name}`;
+      if (lock.packages && lock.packages[key]) return { key, entry: lock.packages[key] };
+    }
     if (!dir) return null;
     dir = path.posix.dirname(dir) === '.' ? '' : path.posix.dirname(dir);
   }
@@ -224,7 +233,7 @@ function requiredBrowserRevisions(repoRoot = REPO_ROOT) {
  */
 function browserInstallCommand(repoRoot = REPO_ROOT) {
   const cli = path.join(path.dirname(resolvePackage('playwright', repoRoot)), 'cli.js');
-  return { command: process.execPath, args: [cli, 'install', 'chromium'] };
+  return { command: process.execPath, cli, args: [cli, 'install', 'chromium'] };
 }
 
 /**
@@ -250,7 +259,10 @@ function installLocations(cliPath, run, repoRoot = REPO_ROOT) {
   const locations = [];
   const pattern = /\(playwright ([^\s)]+) v(\d+)\)\s*\n\s*Install location:\s*(\S+)/g;
   for (const match of String(result.stdout || '').matchAll(pattern)) {
-    locations.push({ name: match[1], revision: match[2], location: match[3] });
+    // The revision the installer names is the one the browsers.json names
+    // (both come from the same package), so the pin is reported once, from
+    // the pin — and the location only answers "where".
+    locations.push({ name: match[1], location: match[3] });
   }
   if (!locations.length) {
     throw new Error('the Playwright installer named no install location — its output is not the one this script reads');
@@ -314,8 +326,8 @@ function reconcile(repoRoot = REPO_ROOT, io = {}) {
   // The versions the run will USE: refreshed after a repair, so the summary
   // names the runtime that is on disk, not the one that was replaced.
   let versions = loaded ? loaded.versions : null;
-  const stale = () => !versions || RUNNER_CHAIN.some((name) => versions[name] !== pinned[name]);
-  if (stale()) {
+  const stale = !versions || RUNNER_CHAIN.some((name) => versions[name] !== pinned[name]);
+  if (stale) {
     process.stdout.write(
       `install-browsers: the checkout's runner chain does not match the lockfile ` +
         `(${RUNNER_CHAIN.map((name) => `${name} ${versions ? versions[name] : 'nothing'}`).join(', ')} vs ` +
@@ -349,8 +361,7 @@ function reconcile(repoRoot = REPO_ROOT, io = {}) {
     }
   }
 
-  const { command, args } = browserInstallCommand(repoRoot);
-  const cliPath = args[0];
+  const { command, cli: cliPath, args } = browserInstallCommand(repoRoot);
   if (!exists(cliPath)) {
     throw new Error(`the checkout's Playwright CLI is not there: ${cliPath}`);
   }
@@ -395,7 +406,7 @@ if (require.main === module) {
         `chromium-headless-shell ${chromiumHeadlessShell}\n`
     );
     for (const entry of locations) {
-      process.stdout.write(`install-browsers: ${entry.name} ${entry.revision} at ${entry.location}\n`);
+      process.stdout.write(`install-browsers: ${entry.name} at ${entry.location}\n`);
     }
   } catch (e) {
     process.stderr.write(`install-browsers: ${e.message}\n`);
@@ -404,7 +415,6 @@ if (require.main === module) {
 }
 
 module.exports = {
-  REPO_ROOT,
   RUNNER_CHAIN,
   browserInstallCommand,
   describeRunner,

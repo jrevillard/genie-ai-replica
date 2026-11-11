@@ -75,23 +75,29 @@ const browsersJson = (chromium, shell) => ({
  * @param {Object} [options] the versions to install
  * @returns {string} the root
  */
+const chainFiles = (version, coreVersion) => ({
+  'node_modules/@playwright/test/package.json': { name: '@playwright/test', version },
+  'node_modules/playwright/package.json': { name: 'playwright', version },
+  'node_modules/playwright/cli.js': '// the CLI of the fixture',
+  'node_modules/playwright-core/package.json': { name: 'playwright-core', version: coreVersion },
+  'node_modules/playwright-core/browsers.json': browsersJson(FIXTURE_CHROMIUM, FIXTURE_SHELL)
+});
+
+const lockfile = (version) => ({
+  packages: {
+    '': { name: 'genie-ai' },
+    'node_modules/@playwright/test': { version },
+    'node_modules/playwright': { version },
+    'node_modules/playwright-core': { version }
+  }
+});
+
 const makeCheckout = (options = {}) => {
-  const version = options.version || FIXTURE_VERSION;
+  const version = FIXTURE_VERSION;
   const coreVersion = options.coreVersion || version;
   return makeRoot({
-    'package-lock.json': {
-      packages: {
-        '': { name: 'genie-ai' },
-        'node_modules/@playwright/test': { version },
-        'node_modules/playwright': { version },
-        'node_modules/playwright-core': { version }
-      }
-    },
-    'node_modules/@playwright/test/package.json': { name: '@playwright/test', version },
-    'node_modules/playwright/package.json': { name: 'playwright', version },
-    'node_modules/playwright/cli.js': '// the CLI of the fixture',
-    'node_modules/playwright-core/package.json': { name: 'playwright-core', version: coreVersion },
-    'node_modules/playwright-core/browsers.json': browsersJson(FIXTURE_CHROMIUM, FIXTURE_SHELL)
+    'package-lock.json': lockfile(version),
+    ...chainFiles(version, coreVersion)
   });
 };
 
@@ -270,7 +276,7 @@ test('a checkout without @playwright/test cannot describe a runner, and says so'
  */
 const fakeRun = (options = {}) => {
   const calls = [];
-  const locations = options.locations || [
+  const locations = [
     { name: 'chromium', revision: FIXTURE_CHROMIUM, location: '/browsers/chromium-4711' },
     { name: 'chromium-headless-shell', revision: FIXTURE_SHELL, location: '/browsers/chromium_headless_shell-4712' }
   ];
@@ -358,6 +364,24 @@ test('the chain is resolved on the disk, not from a stale resolution cache', () 
   expect(resolvePackage('playwright', root)).toBe(path.join(nested, 'package.json'));
 });
 
+test('the walk does not escape ABOVE the checkout', () => {
+  // The mutation this pins: without the checkout boundary the walk climbs
+  // into an ancestor directory and resolves a copy the lockfile does not
+  // pin — the reconciler would report success on a checkout it never
+  // touched.
+  const root = makeCheckout();
+  const ancestor = path.dirname(root);
+  const decoy = path.join(ancestor, 'node_modules/@playwright/test');
+  fs.mkdirSync(decoy, { recursive: true });
+  fs.writeFileSync(path.join(decoy, 'package.json'), JSON.stringify({ name: '@playwright/test', version: '9.9.9-ancestor' }));
+  try {
+    fs.rmSync(path.join(root, 'node_modules/@playwright/test'), { recursive: true, force: true });
+    expect(() => resolvePackage('@playwright/test', root)).toThrow(/carries no @playwright\/test/);
+  } finally {
+    fs.rmSync(decoy, { recursive: true, force: true });
+  }
+});
+
 test('the chain is the ROOT project\'s — the suite project does not own the runtime', () => {
   // The mutation this pins: the chain starts at the repository root, where
   // the lockfile that pins it lives. A copy under tests/e2e/node_modules
@@ -394,24 +418,9 @@ test('a repaired checkout reports the runtime npm ci installed, not the one it r
 test('a checkout with no node_modules at all is repaired and reported', () => {
   // The pod-recreation case: the checkout has nothing installed, npm ci
   // installs it, and the summary names what is now on disk.
-  const root = makeRoot({
-    'package-lock.json': {
-      packages: {
-        '': { name: 'genie-ai' },
-        'node_modules/@playwright/test': { version: FIXTURE_VERSION },
-        'node_modules/playwright': { version: FIXTURE_VERSION },
-        'node_modules/playwright-core': { version: FIXTURE_VERSION }
-      }
-    }
-  });
+  const root = makeRoot({ 'package-lock.json': lockfile(FIXTURE_VERSION) });
   const install = () => {
-    for (const [rel, content] of Object.entries({
-      'node_modules/@playwright/test/package.json': { name: '@playwright/test', version: FIXTURE_VERSION },
-      'node_modules/playwright/package.json': { name: 'playwright', version: FIXTURE_VERSION },
-      'node_modules/playwright/cli.js': '// the CLI of the fixture',
-      'node_modules/playwright-core/package.json': { name: 'playwright-core', version: FIXTURE_VERSION },
-      'node_modules/playwright-core/browsers.json': browsersJson(FIXTURE_CHROMIUM, FIXTURE_SHELL)
-    })) {
+    for (const [rel, content] of Object.entries(chainFiles(FIXTURE_VERSION, FIXTURE_VERSION))) {
       const file = path.join(root, rel);
       fs.mkdirSync(path.dirname(file), { recursive: true });
       fs.writeFileSync(file, typeof content === 'string' ? content : JSON.stringify(content));

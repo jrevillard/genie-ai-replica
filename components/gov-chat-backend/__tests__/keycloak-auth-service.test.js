@@ -34,8 +34,15 @@ jest.mock('jose', () => ({
   jwtVerify: (...args) => mockJwtVerify(...args),
   createRemoteJWKSet: (...args) => mockCreateRemoteJWKSet(...args),
   // The real jose is ESM, so its decoder cannot be required here: this
-  // stand-in reads the protected header of a compact JWS the same way.
-  decodeProtectedHeader: (token) => JSON.parse(Buffer.from(token.split('.')[0], 'base64url').toString('utf8'))
+  // stand-in reads the protected header of a compact JWS the same way —
+  // and refuses a header that is not a plain object, as jose does.
+  decodeProtectedHeader: (token) => {
+    const header = JSON.parse(Buffer.from(token.split('.')[0], 'base64url').toString('utf8'));
+    if (typeof header !== 'object' || header === null || Array.isArray(header)) {
+      throw new TypeError('Invalid Compact JWS');
+    }
+    return header;
+  }
 }));
 
 // Mock axios for UserInfo introspection

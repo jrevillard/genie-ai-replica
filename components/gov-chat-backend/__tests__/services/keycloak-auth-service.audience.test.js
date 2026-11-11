@@ -13,7 +13,15 @@
 const mockJwtVerify = jest.fn();
 jest.mock('jose', () => ({
   createRemoteJWKSet: jest.fn(() => jest.fn()),
-  jwtVerify: mockJwtVerify
+  jwtVerify: mockJwtVerify,
+  // The verifier reads a token's protected header with jose's own decoder.
+  decodeProtectedHeader: (token) => {
+    const header = JSON.parse(Buffer.from(token.split('.')[0], 'base64url').toString('utf8'));
+    if (typeof header !== 'object' || header === null || Array.isArray(header)) {
+      throw new TypeError('Invalid Compact JWS');
+    }
+    return header;
+  }
 }));
 
 jest.mock(

@@ -87,7 +87,7 @@ Cache policy:
 - **A token that names no key id** — RFC 7515 makes `kid` optional, so a token may carry none. Such a token is verified against the published candidate keys, at most three of them; the first one whose signature matches wins. When the realm publishes more candidates than that cap, the trial stops after three: a token that none of the three tried could resolve is rejected (401), and the log names the realm's key set as the reason. A token signed by one of the three tried is still accepted.
 - **A key id that is not a string** — RFC 7515 types `kid` as a string, so a token carrying a number or `null` there is malformed, not a token that names no key id. It is rejected without being resolved against the published keys: under some builds of the token library a key id that is not a string matches every published key, so resolving it would accept a token whose key binding the realm never expressed.
 
-> **Verify JWKS is reachable from each service.** If a service is deployed with the wrong `KEYCLOAK_URL` (e.g. `http://keycloak:8080` instead of the public `https://.../auth`), it cannot fetch the JWKS and every request 401s.
+> **Verify JWKS is reachable from each service.** If a service is deployed with the wrong `KEYCLOAK_URL` (e.g. `http://keycloak:8080` instead of the public `https://.../auth`), it cannot fetch the JWKS and every request answers 503 `AUTH_SERVICE_UNAVAILABLE`.
 
 ### 2.3 Why per-service validation?
 
@@ -263,7 +263,7 @@ graph LR
 | **Clock skew** | NTP on all nodes; tokens include `exp` and `nbf`; services reject out-of-window tokens. |
 | **Replay (stolen short-lived access_token)** | Short token lifetime (default 5 minutes). High-value operations can be rate-limited at the service level (Kong applies coarse limits; per-endpoint limits live in the backend). |
 | **Service account secret leak** | Dataprep's `KC_DATAPREP_CLIENT_SECRET` is scoped to ingestion only; rotate via Keycloak admin. The leak does not give user impersonation. |
-| **JWT algorithm confusion (alg=none)** | All services require the alg to match Keycloak's configured signing algorithm and reject `none`. |
+| **JWT algorithm confusion (alg=none)** | All services accept RS256 only and reject `none` and every other algorithm. A realm configured to sign access tokens with another algorithm (e.g. PS256) stops verifying. |
 | **Path traversal / open redirect on the OIDC callback** | `KEYCLOAK_VALID_REDIRECT_URIS` whitelist; OIDC redirect URI strictly validated. |
 
 ---

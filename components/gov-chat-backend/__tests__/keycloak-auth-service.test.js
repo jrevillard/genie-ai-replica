@@ -436,6 +436,28 @@ describe('keycloakAuthService', () => {
       expect(options).toEqual({ cacheMaxAge: 300000, cooldownDuration: 1000 });
     });
 
+    it('keeps the key set of an already-registered issuer on a re-init', async () => {
+      // ONE key set per issuer, never recreated (#1778): a second init for
+      // an issuer that is already registered must not throw away the
+      // cached keys and the refresh floor that goes with them.
+      mockFetch.mockResolvedValue({
+        ok: true,
+        json: async () => mockDiscovery
+      });
+      mockJwtVerify.mockResolvedValue({
+        payload: mockJwtPayload,
+        protectedHeader: { alg: 'RS256' }
+      });
+
+      await keycloakAuthService.init();
+      const first = keycloakAuthService._getJwksCache(mockDiscovery.issuer);
+
+      await keycloakAuthService.init();
+
+      expect(mockCreateRemoteJWKSet).toHaveBeenCalledTimes(1);
+      expect(keycloakAuthService._getJwksCache(mockDiscovery.issuer)).toBe(first);
+    });
+
     it('should maintain independent cache per issuer', async () => {
       const discovery1 = {
         issuer: 'http://localhost:8080/realms/genie',
@@ -769,20 +791,29 @@ describe('keycloakAuthService', () => {
       });
     });
 
-    it('does not run the candidate trial for a token that names a key id', async () => {
+    it('never resolves a token that names a key id by trying the candidates', async () => {
       // The trial resolves a token that names NO key id. A token naming one
-      // the realm published twice is the realm's own outage (#1776) — it is
-      // never resolved by trying one of the duplicates.
+      // the realm published twice is the realm's own outage (#1776), and it
+      // is never resolved by trying one of the duplicates: the wrapper
+      // answers 503 before the trial is ever reached.
       const ambiguous = new Error('multiple matching keys');
       ambiguous.name = 'JWKSMultipleMatchingKeys';
-      ambiguous.kidNamed = 'dup';
-      mockJwtVerify.mockRejectedValue(ambiguous);
+      const inner = Object.assign(jest.fn().mockRejectedValue(ambiguous), {
+        jwks: () => ({
+          keys: [
+            { kid: 'dup', kty: 'RSA', alg: 'RS256', use: 'sig' },
+            { kid: 'dup', kty: 'RSA', alg: 'RS256', use: 'sig' }
+          ]
+        })
+      });
+      mockCreateRemoteJWKSet.mockReturnValue(inner);
+      mockJwtVerify.mockImplementation(async (token, key) => key({ alg: 'RS256', kid: 'dup' }, token));
 
       await expect(keycloakAuthService.verifyToken(generateMockJwtString(mockJwtPayload))).rejects.toMatchObject({
-        code: 'TOKEN_INVALID'
+        code: 'AUTH_SERVICE_UNAVAILABLE'
       });
 
-      // The trial never ran: jwtVerify was called once (the first attempt).
+      // No candidate was tried: the verdict was the realm's, not the token's.
       expect(mockJwtVerify).toHaveBeenCalledTimes(1);
     });
 

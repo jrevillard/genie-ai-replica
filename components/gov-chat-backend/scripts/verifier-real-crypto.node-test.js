@@ -554,8 +554,13 @@ test('a mid-life JWKS fetch failure is an outage (AUTH_SERVICE_UNAVAILABLE), not
 test('the key set is re-read after the cache TTL expires', async () => {
   // The cache TTL is jose's `cacheMaxAge` (5 minutes): a key set older than
   // that is re-read even when no token names an unknown key id — the realm
-  // may have rotated in the meantime. The clock jumps past the TTL and the
-  // realm publishes a new key set: the next verification must see it.
+  // may have rotated in the meantime.
+  //
+  // The realm publishes the SAME key id with NEW material (a rotation that
+  // reuses the id), and the token is signed with the new material: the key
+  // id resolves in the stale set too, so the unknown-kid refresh path is
+  // never reached, and the token verifies ONLY against the fresh key set.
+  // The re-read that made it verify is therefore the TTL's.
   const svc = loadVerifier();
   await warmCache(svc);
   const before = jwksFetches();
@@ -564,9 +569,14 @@ test('the key set is re-read after the cache TTL expires', async () => {
   const clockSpy = Date.now;
   Date.now = () => realNow + 600000; // 10 minutes: past the 5-minute TTL
   try {
-    publishedKeys = ROTATED_JWKS;
-    const token = await sign(baseClaims(DISCOVERY_ISSUER));
-    await svc.verifyToken(token);
+    publishedKeys = {
+      keys: [{ ...rotatedPublicKey, kid: 'test-key', alg: 'RS256', use: 'sig' }]
+    };
+    const token = await new SignJWT(baseClaims(DISCOVERY_ISSUER))
+      .setProtectedHeader({ alg: 'RS256', kid: 'test-key' })
+      .sign(rotatedPrivateKey);
+    const payload = await svc.verifyToken(token);
+    assert.equal(payload.sub, 'user-1');
     assert.equal(jwksFetches(), before + 1, 'the expired key set was not re-read');
   } finally {
     Date.now = clockSpy;

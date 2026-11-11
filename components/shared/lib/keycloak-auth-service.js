@@ -96,13 +96,26 @@ const rejectionLogBuckets = new Map();
  */
 function keySetHasUsableKey(jwks) {
   if (!jwks || !Array.isArray(jwks.keys)) return true;
-  return jwks.keys.some(
-    (jwk) =>
-      jwk &&
-      jwk.kty === 'RSA' &&
-      (!jwk.alg || jwk.alg === 'RS256') &&
-      (!jwk.use || jwk.use === 'sig') &&
-      (!Array.isArray(jwk.key_ops) || jwk.key_ops.includes('verify'))
+  return jwks.keys.some(isUsableSigningKey);
+}
+
+/**
+ * Could this published key verify an RS256 signature?
+ *
+ * The same filter jose applies to its candidates (RS256 only: kty, alg,
+ * use, key_ops), so a count of them is a count of the keys the verifier
+ * could actually have used.
+ *
+ * @param {Object|undefined} jwk - A published key
+ * @returns {boolean} True when the key could verify an RS256 signature
+ */
+function isUsableSigningKey(jwk) {
+  return Boolean(
+    jwk &&
+    jwk.kty === 'RSA' &&
+    (!jwk.alg || jwk.alg === 'RS256') &&
+    (!jwk.use || jwk.use === 'sig') &&
+    (!Array.isArray(jwk.key_ops) || jwk.key_ops.includes('verify'))
   );
 }
 
@@ -150,7 +163,10 @@ function logRejection(issuer, cause, buildLine) {
     logger.warn(`${buildLine()}${tail}`);
   } else {
     bucket.suppressed += 1;
-    if (logger.isDebugEnabled()) {
+    // The debug level is asked of the logger only when it can answer: a
+    // consumer's test double may not implement it, and a rejected token
+    // must never fail on the way to its log line.
+    if (typeof logger.isDebugEnabled === 'function' && logger.isDebugEnabled()) {
       logger.debug(buildLine());
     }
   }
@@ -171,8 +187,9 @@ class TokenVerificationError extends Error {
 // How many published candidate keys the kid-less token trial tries (#1767).
 // The candidate count is the REALM's (Keycloak keeps retired keys published),
 // so the trial is bounded rather than exhaustive: a realm publishing more
-// candidates than this is a realm to clean up, not a token to guess at —
-// the truncation is logged instead of being reported as a bad token.
+// candidates than this is a realm to clean up, not a token to guess at. The
+// truncation is logged with that reason, and the token is still rejected as
+// invalid — the log names the realm's key set, the client still gets its 401.
 const MAX_CANDIDATE_KEYS = 3;
 
 /**
@@ -194,15 +211,19 @@ function effectiveKid(protectedHeader) {
 }
 
 /**
- * How many published keys share one key id.
+ * How many published SIGNING keys share one key id.
+ *
+ * Only the keys the verifier could have used are counted (the same filter
+ * jose applies), so the number the operator sees is the number of
+ * candidates the ambiguity really had.
  *
  * @param {Object|undefined} jwks - The published key set (jose's `jwks()`)
  * @param {string} kid - The key id to count
- * @returns {number} The number of published keys carrying that key id
+ * @returns {number} The number of published signing keys carrying that key id
  */
 function countKeysWithKid(jwks, kid) {
   if (!jwks || !Array.isArray(jwks.keys)) return 0;
-  return jwks.keys.filter((jwk) => jwk && jwk.kid === kid).length;
+  return jwks.keys.filter((jwk) => jwk && jwk.kid === kid && isUsableSigningKey(jwk)).length;
 }
 
 /**
@@ -477,7 +498,7 @@ async function init(idpUrl) {
   // already registered KEEPS its key set — a re-init must not throw away
   // the cached keys, and the refresh floor that goes with them. (A changed
   // certificates URL is a deployment change: the process restarts.)
-  const registeredJwks = issuerMap.get(pinnedIssuer || doc.issuer) || issuerMap.get(doc.issuer);
+  const registeredJwks = issuerMap.get(pinnedIssuer || doc.issuer);
   const effectiveJwks =
     registeredJwks || (jwksOverride ? createJwksCache(jwksOverride) : createJwksCache(doc.jwks_uri));
 

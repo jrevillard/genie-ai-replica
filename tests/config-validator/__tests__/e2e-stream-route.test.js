@@ -95,11 +95,14 @@ const appFilesCarrying = (needle, root) => {
 /**
  * The FIRST app file that carries the endpoint, or null.
  *
- * The gate asks a yes/no question about the whole app tree (236 files,
- * 4.8 MB of source), and the list version answers it by reading and
- * stripping EVERY file. This stops at the first hit — the passing path
- * pays for one file — and it still NAMES the file, so the failure
- * message carries the observed value.
+ * The gate asks a yes/no question about the whole app tree (236 files),
+ * and the list version answers it by reading and stripping EVERY file.
+ * This stops at the first hit: the passing path pays for one file.
+ *
+ * The failure names no file — the list version named none either (the
+ * list was EMPTY, which is the failure). What the gate proves is that
+ * the app still calls the endpoint; what it does not prove is which
+ * file calls it.
  */
 const firstFileCarrying = (needle, root) => {
   const pattern = endpointPattern(needle);

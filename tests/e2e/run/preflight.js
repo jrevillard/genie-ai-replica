@@ -106,12 +106,13 @@ async function main() {
   }
   const { chromium, BASE_URL, venueLaunchArgs, runner } = loaded;
 
-  // The mapping is read inside a try: a malformed ADDRESS (a BASE_URL
-  // that is not a URL — the mapping reads the host out of it) or a
-  // malformed E2E_VENUE_IP (a value that is not an address) must reach
-  // the operator as the NAMED remedy, not as an unhandled throw that
-  // hides the cause behind a stack trace, and not as a browser failure
-  // much later that reads like a runner problem.
+  // The mapping is read through the TOTAL reader (the mapping module's
+  // own): a malformed ADDRESS (a BASE_URL that is not a URL — the
+  // mapping reads the host out of it) or a malformed E2E_VENUE_IP (a
+  // value that is not an address) must reach the operator as the NAMED
+  // remedy, not as an unhandled throw that hides the cause behind a
+  // stack trace, and not as a browser failure much later that reads
+  // like a runner problem.
   const { mapping, error: mappingError } = safeVenueMapping();
   if (mappingError) {
     process.stderr.write(namedFailure('the venue mapping is not usable', mappingError));

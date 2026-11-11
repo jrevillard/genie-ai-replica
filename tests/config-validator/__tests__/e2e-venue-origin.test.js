@@ -1,6 +1,5 @@
 const path = require('path');
 const fs = require('fs');
-const os = require('os');
 
 const { jsFiles, stripJsComments } = require('../validators/js-files');
 const { withTree } = require('../validators/temp-tree');
@@ -156,53 +155,52 @@ describe('the e2e suite names the venue it was given, and names it once', () => 
     // host that merely STARTS with a local origin
     // (`localhost.example.com`, `localhost-evil`, `127.0.0.10`): the
     // boundary is the HOST's, so those are other hosts.
-    const tree = fs.mkdtempSync(path.join(os.tmpdir(), 'venue-origin-gate-'));
-    try {
-      fs.writeFileSync(path.join(tree, 'navigation.spec.js'), "await page.goto('https://localhost/');\n");
-      fs.writeFileSync(path.join(tree, 'compared.spec.js'), "expect(url).toBe('http://127.0.0.1/');\n");
-      fs.writeFileSync(path.join(tree, 'ported.spec.js'), "await page.goto('https://localhost:443/');\n");
-      fs.writeFileSync(path.join(tree, 'api.spec.js'), "await apiContext.post('https://localhost/auth/x');\n");
-      // The slashless spellings: a bare address, with no trailing slash.
-      fs.writeFileSync(path.join(tree, 'bare.spec.js'), "await page.goto('https://localhost');\n");
-      fs.writeFileSync(path.join(tree, 'bare-k8s.spec.js'), "await page.goto('https://genieai.local');\n");
-      fs.writeFileSync(path.join(tree, 'prose.spec.js'), '// the old suite navigated to https://localhost/\n');
-      fs.writeFileSync(path.join(tree, 'clean.spec.js'), 'await page.goto(`${BASE_URL}/dashboard`);\n');
-      // A mocked identity provider or a local mock server is on its own
-      // PORT: the rule must let it through — that is not the Compose
-      // edge, and the suite may drive such a host on purpose.
-      fs.writeFileSync(path.join(tree, 'mock-idp.spec.js'), "await page.goto('http://127.0.0.1:9000/oidc');\n");
-      fs.writeFileSync(path.join(tree, 'mock-server.spec.js'), "await page.goto('http://localhost:8123/');\n");
-      // The venues this repo actually runs against: the shared forge
-      // edge and the deployment edge.
-      fs.writeFileSync(path.join(tree, 'forge.spec.js'), "await page.goto('https://genieai-forge.local:4443/');\n");
-      fs.writeFileSync(path.join(tree, 'k8s.spec.js'), "await page.goto('https://genieai.local:4443/');\n");
-      // The NEGATIVE half of the boundary: a host that merely STARTS
-      // with a local origin is ANOTHER host, and the gate must not
-      // claim it. These files are written but NOT listed among the
-      // expected offenders — the assertion is an exact equality on the
-      // offender list, so a file that must not be an offender pins
-      // itself by being absent.
-      fs.writeFileSync(
-        path.join(tree, 'lookalike-dot.spec.js'),
-        "await page.goto('https://localhost.example.com/');\n"
-      );
-      fs.writeFileSync(path.join(tree, 'lookalike-dash.spec.js'), "await page.goto('https://localhost-evil/');\n");
-      fs.writeFileSync(path.join(tree, 'lookalike-ip.spec.js'), "await page.goto('http://127.0.0.10/');\n");
-      const strays = offenders(jsFiles(tree), ['http://127.0.0.1:9000', 'http://localhost:8123']).map((f) =>
-        path.basename(f)
-      );
-      expect(strays.sort()).toEqual([
-        'api.spec.js',
-        'bare-k8s.spec.js',
-        'bare.spec.js',
-        'compared.spec.js',
-        'forge.spec.js',
-        'k8s.spec.js',
-        'navigation.spec.js',
-        'ported.spec.js'
-      ]);
-    } finally {
-      fs.rmSync(tree, { recursive: true, force: true });
-    }
+    withTree(
+      'venue-origin-gate-',
+      {
+        'navigation.spec.js': "await page.goto('https://localhost/');\n",
+        'compared.spec.js': "expect(url).toBe('http://127.0.0.1/');\n",
+        'ported.spec.js': "await page.goto('https://localhost:443/');\n",
+        'api.spec.js': "await apiContext.post('https://localhost/auth/x');\n",
+        // The slashless spellings: a bare address, with no trailing slash.
+        'bare.spec.js': "await page.goto('https://localhost');\n",
+        'bare-k8s.spec.js': "await page.goto('https://genieai.local');\n",
+        'prose.spec.js': '// the old suite navigated to https://localhost/\n',
+        'clean.spec.js': 'await page.goto(`${BASE_URL}/dashboard`);\n',
+        // A mocked identity provider or a local mock server is on its own
+        // PORT: the rule must let it through — that is not the Compose
+        // edge, and the suite may drive such a host on purpose.
+        'mock-idp.spec.js': "await page.goto('http://127.0.0.1:9000/oidc');\n",
+        'mock-server.spec.js': "await page.goto('http://localhost:8123/');\n",
+        // The venues this repo actually runs against: the shared forge
+        // edge and the deployment edge.
+        'forge.spec.js': "await page.goto('https://genieai-forge.local:4443/');\n",
+        'k8s.spec.js': "await page.goto('https://genieai.local:4443/');\n",
+        // The NEGATIVE half of the boundary: a host that merely STARTS
+        // with a local origin is ANOTHER host, and the gate must not
+        // claim it. These files are written but NOT listed among the
+        // expected offenders — the assertion is an exact equality on the
+        // offender list, so a file that must not be an offender pins
+        // itself by being absent.
+        'lookalike-dot.spec.js': "await page.goto('https://localhost.example.com/');\n",
+        'lookalike-dash.spec.js': "await page.goto('https://localhost-evil/');\n",
+        'lookalike-ip.spec.js': "await page.goto('http://127.0.0.10/');\n"
+      },
+      (tree) => {
+        const strays = offenders(jsFiles(tree), ['http://127.0.0.1:9000', 'http://localhost:8123']).map((f) =>
+          path.basename(f)
+        );
+        expect(strays.sort()).toEqual([
+          'api.spec.js',
+          'bare-k8s.spec.js',
+          'bare.spec.js',
+          'compared.spec.js',
+          'forge.spec.js',
+          'k8s.spec.js',
+          'navigation.spec.js',
+          'ported.spec.js'
+        ]);
+      }
+    );
   });
 });

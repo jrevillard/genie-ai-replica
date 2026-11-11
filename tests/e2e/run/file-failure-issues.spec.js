@@ -181,7 +181,10 @@ test.describe('a match must be DEDICATED to the spec file', () => {
     // component renames it.
     const root = fs.mkdtempSync(path.join(os.tmpdir(), 'e2e-dedupe-'));
     try {
-      const frontend = 'AdminDashboard.test.js';
+      // A name NO file in this checkout carries: a name that also exists
+      // here would make the case pass whatever root the walk used, and
+      // the root is the thing the case is about.
+      const frontend = 'SomeOtherTreeOnly.test.js';
       fs.mkdirSync(path.join(root, 'components/gov-chat-frontend'), { recursive: true });
       fs.writeFileSync(path.join(root, 'components/gov-chat-frontend', frontend), '');
       const title = `test(e2e): ${FILE} and ${frontend} are red`;

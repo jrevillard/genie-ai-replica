@@ -351,12 +351,12 @@ function specFileMarker(file) {
  * failures, and the failure would never get an issue of its own — the
  * tracker would show the file as red with nothing pointing at it.
  */
-function findTrackedIssue(file, openIssues, root = REPO_ROOT) {
+function findTrackedIssue(file, openIssues) {
   const marker = specFileMarker(file);
   // The dedicated TITLE wins: an issue matched only by the marker is
   // the same file's issue too, but the one whose title says so is the
   // one a reader lands on.
-  const dedicated = openIssues.filter((issue) => titleIsDedicatedTo(issue.title, file, root));
+  const dedicated = openIssues.filter((issue) => titleIsDedicatedTo(issue.title, file));
   if (dedicated.length) return dedicated[0];
   return openIssues.find((issue) => (issue.description || '').includes(marker)) || null;
 }

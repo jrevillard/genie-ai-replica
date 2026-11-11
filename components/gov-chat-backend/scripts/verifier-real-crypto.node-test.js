@@ -551,6 +551,28 @@ test('a mid-life JWKS fetch failure is an outage (AUTH_SERVICE_UNAVAILABLE), not
   }
 });
 
+test('the key set is re-read after the cache TTL expires', async () => {
+  // The cache TTL is jose's `cacheMaxAge` (5 minutes): a key set older than
+  // that is re-read even when no token names an unknown key id — the realm
+  // may have rotated in the meantime. The clock jumps past the TTL and the
+  // realm publishes a new key set: the next verification must see it.
+  const svc = loadVerifier();
+  await warmCache(svc);
+  const before = jwksFetches();
+
+  const realNow = Date.now();
+  const clockSpy = Date.now;
+  Date.now = () => realNow + 600000; // 10 minutes: past the 5-minute TTL
+  try {
+    publishedKeys = ROTATED_JWKS;
+    const token = await sign(baseClaims(DISCOVERY_ISSUER));
+    await svc.verifyToken(token);
+    assert.equal(jwksFetches(), before + 1, 'the expired key set was not re-read');
+  } finally {
+    Date.now = clockSpy;
+  }
+});
+
 test('a junk-signature token does not re-fetch the JWKS (the cache-thrash vector)', async () => {
   // #1703: the force-refresh carve-out fired on EVERY junk-signature token,
   // zeroing the JWKS cache TTL — the key set was re-fetched from Keycloak on

@@ -752,6 +752,60 @@ describe('keycloakAuthService', () => {
       });
     });
 
+    it('reports the duplicate key id as an outage even when the published key set cannot be read', async () => {
+      // The verdict does not depend on reading the published key set: jose
+      // matched the candidates by that EXACT key id, so more than one
+      // candidate means the realm published that id more than once. A jose
+      // that did not expose the published set would otherwise turn the
+      // outage back into a 401.
+      const ambiguous = new Error('multiple matching keys');
+      ambiguous.name = 'JWKSMultipleMatchingKeys';
+      const inner = jest.fn().mockRejectedValue(ambiguous); // no published-set accessor
+      mockCreateRemoteJWKSet.mockReturnValue(inner);
+      mockJwtVerify.mockImplementation(async (token, key) => key({ alg: 'RS256', kid: 'dup' }, token));
+
+      await expect(keycloakAuthService.verifyToken(generateMockJwtString(mockJwtPayload))).rejects.toMatchObject({
+        code: 'AUTH_SERVICE_UNAVAILABLE'
+      });
+    });
+
+    it('does not run the candidate trial for a token that names a key id', async () => {
+      // The trial resolves a token that names NO key id. A token naming one
+      // the realm published twice is the realm's own outage (#1776) — it is
+      // never resolved by trying one of the duplicates.
+      const ambiguous = new Error('multiple matching keys');
+      ambiguous.name = 'JWKSMultipleMatchingKeys';
+      ambiguous.kidNamed = 'dup';
+      mockJwtVerify.mockRejectedValue(ambiguous);
+
+      await expect(keycloakAuthService.verifyToken(generateMockJwtString(mockJwtPayload))).rejects.toMatchObject({
+        code: 'TOKEN_INVALID'
+      });
+
+      // The trial never ran: jwtVerify was called once (the first attempt).
+      expect(mockJwtVerify).toHaveBeenCalledTimes(1);
+    });
+
+    it('does not spend a signature verification on an expired kid-less token', async () => {
+      // The trial costs one verification per candidate. An expired token can
+      // never verify — jose checks the signature BEFORE the claims — so it
+      // is decided from the unverified payload and the trial never runs.
+      const ambiguous = new Error('multiple matching keys');
+      ambiguous.name = 'JWKSMultipleMatchingKeys';
+      ambiguous[Symbol.asyncIterator] = async function* () {
+        yield { key: 'candidate-1' };
+      };
+      mockJwtVerify.mockRejectedValue(ambiguous);
+
+      const token = generateMockJwtString({ exp: Math.floor(Date.now() / 1000) - 3600 });
+      await expect(keycloakAuthService.verifyToken(token)).rejects.toMatchObject({
+        code: 'TOKEN_EXPIRED',
+        message: 'Token has expired'
+      });
+
+      expect(mockJwtVerify).toHaveBeenCalledTimes(1);
+    });
+
     it('reports a realm that publishes the same key id twice as an outage', async () => {
       // A realm that publishes the SAME key id twice (a misconfigured
       // rotation, or imported JWKs carrying an operator-chosen id) makes
@@ -790,11 +844,12 @@ describe('keycloakAuthService', () => {
       };
     }
 
-    it('logs the first rejection of a cause at WARN and the repeats at DEBUG', async () => {
+    it('logs the first rejection of a cause at WARN and nothing more at the default log level', async () => {
       // A rejected token is caller-controlled and unauthenticated: one WARN
       // line per rejection is a log flood the caller can produce (#1769).
-      // The first rejection of a cause in a window is a WARN, the repeats
-      // are DEBUG (off at the default log level).
+      // The first rejection of a cause in a window is a WARN; the repeats
+      // are DEBUG, and at the default log level they are not even written —
+      // the line is not built either, so a flood costs no work per request.
       const warns = captureWarns();
       const debugs = captureDebugs();
       mockJwtVerify.mockRejectedValue(unknownKidError());
@@ -808,8 +863,36 @@ describe('keycloakAuthService', () => {
         }
 
         expect(warns.lines().split('\n').filter(Boolean)).toHaveLength(1);
+        expect(debugs.lines().split('\n').filter(Boolean)).toHaveLength(0);
+      } finally {
+        warns.restore();
+        debugs.restore();
+      }
+    });
+
+    it('logs the repeats at DEBUG when the debug level is on', async () => {
+      // The repeats are DEBUG lines: an operator who turns the debug level
+      // on sees every rejection, and the flood is bounded by the WARN slot
+      // the cause keeps.
+      const warns = captureWarns();
+      const debugs = captureDebugs();
+      const loggerModule = require('../../shared/lib/logger');
+      const level = loggerModule.logger.level;
+      loggerModule.logger.level = 'debug';
+      mockJwtVerify.mockRejectedValue(unknownKidError());
+      const token = generateMockJwtString({ exp: undefined });
+
+      try {
+        for (let i = 0; i < 3; i++) {
+          await expect(keycloakAuthService.verifyToken(token)).rejects.toMatchObject({
+            code: 'TOKEN_INVALID'
+          });
+        }
+
+        expect(warns.lines().split('\n').filter(Boolean)).toHaveLength(1);
         expect(debugs.lines().split('\n').filter(Boolean)).toHaveLength(2);
       } finally {
+        loggerModule.logger.level = level;
         warns.restore();
         debugs.restore();
       }

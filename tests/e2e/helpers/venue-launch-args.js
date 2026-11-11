@@ -55,6 +55,27 @@ function venueMapping() {
 }
 
 /**
+ * The venue mapping in force, or the reason it cannot be read — WITHOUT
+ * throwing.
+ *
+ * `venueMapping` throws when the configured value is not an address: the
+ * bad value is named where it is read. The readers that must NOT die use
+ * this one instead — the DNS preload, which runs inside EVERY process of
+ * a run (the pre-flight among them: a preload that died would take the
+ * pre-flight down with it, and the operator would read a stack trace
+ * instead of the named cause), and the run script's own shell line.
+ *
+ * @returns {{mapping: {host: string, ip: string}|null, error: string|null}}
+ */
+function safeVenueMapping() {
+  try {
+    return { mapping: venueMapping(), error: null };
+  } catch (e) {
+    return { mapping: null, error: e.message.split('\n')[0] };
+  }
+}
+
+/**
  * The Chromium arguments that carry the venue mapping into the browser.
  * @returns {string[]} the arguments (empty when no mapping is in force)
  */
@@ -63,4 +84,4 @@ function venueLaunchArgs() {
   return mapping ? [`--host-resolver-rules=MAP ${mapping.host} ${mapping.ip}`] : [];
 }
 
-module.exports = { venueMapping, venueLaunchArgs, VENUE_IP_ENV, VENUE_HOST_ENV };
+module.exports = { venueMapping, safeVenueMapping, venueLaunchArgs, VENUE_IP_ENV, VENUE_HOST_ENV };

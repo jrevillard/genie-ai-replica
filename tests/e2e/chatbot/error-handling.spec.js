@@ -88,8 +88,8 @@ test.describe('RAG error handling', () => {
   });
 
   test('displays error message when backend returns error', async () => {
-    // The backend answers the stream with a server error; only the
-    // status matters here, and the helper's default IS that status.
+    // The backend answers the stream with a server error; the mock
+    // answers 503, and only the status matters here.
     await mockStreamError(page);
 
     await sendMessage(page, 'First attempt will fail');
@@ -118,10 +118,9 @@ test.describe('RAG error handling', () => {
 
     await sendMessage(page, 'Second attempt should work');
     // A mocked answer arrives in milliseconds: the ceiling is a ceiling,
-    // not a floor. waitForBotResponse applies it to TWO successive waits
-    // (the bubble's text, then the streaming flag), so 10 s is 20 s in
-    // the worst case — and the two ceilings are never both spent: the
-    // error card's 30 s wait above aborts the test there if it expires.
+    // not a floor. The two waits it applies (20 s in the worst case) are
+    // never both spent: the error card's 30 s wait above aborts the test
+    // there if it expires.
     // A retry that HANGS fails on that wait, with the helper's own
     // message; a retry that ERRORS renders no answer bubble and fails on
     // the assertion below. The spec's own 600 s budget (above) is ONE

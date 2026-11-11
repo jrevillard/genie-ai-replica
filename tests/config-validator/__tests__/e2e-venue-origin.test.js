@@ -3,6 +3,7 @@ const fs = require('fs');
 const os = require('os');
 
 const { jsFiles, stripJsComments } = require('../validators/js-files');
+const { withTree } = require('../validators/temp-tree');
 
 const ROOT = path.resolve(__dirname, '../../..');
 const E2E_ROOT = path.join(ROOT, 'tests/e2e');
@@ -23,8 +24,7 @@ const E2E_ROOT = path.join(ROOT, 'tests/e2e');
 //
 // A spec that drives a MOCK on a local origin (a mocked identity
 // provider, a stub server) goes there on purpose: it lists that origin
-// below, and the rule lets it through. The list is empty today — every
-// local origin in the tree is the edge itself.
+// below, and the rule lets it through.
 //
 // The match is on CODE, not on prose: a comment that names the edge is
 // documentation. The scanner (validators/js-files.js) strips comments
@@ -113,24 +113,23 @@ describe('the e2e suite names the venue it was given, and names it once', () => 
   });
 
   test('every reader of the environment is reported, not only the first', () => {
-    const tree = fs.mkdtempSync(path.join(os.tmpdir(), 'venue-readers-gate-'));
-    try {
-      fs.writeFileSync(path.join(tree, 'a.spec.js'), "const BASE_URL = process.env.BASE_URL || 'x';\n");
-      fs.writeFileSync(path.join(tree, 'b.spec.js'), 'const EDGE = process.env.BASE_URL;\n');
-      // The destructuring spelling is a read too.
-      fs.writeFileSync(path.join(tree, 'c.spec.js'), 'const { BASE_URL } = process.env;\n');
-      // The RENAMED destructuring is a read too.
-      fs.writeFileSync(path.join(tree, 'd.spec.js'), 'const { BASE_URL: EDGE } = process.env;\n');
-      // A function PARAMETER named BASE_URL is not a read of the
-      // environment — and a later `= process.env` must not make it one.
-      fs.writeFileSync(
-        path.join(tree, 'param.spec.js'),
-        'function f({ BASE_URL }) {\n  return 1;\n}\nconst y = process.env;\n'
-      );
-      expect(baseUrlReaders(tree).sort()).toEqual(['a.spec.js', 'b.spec.js', 'c.spec.js', 'd.spec.js']);
-    } finally {
-      fs.rmSync(tree, { recursive: true, force: true });
-    }
+    withTree(
+      'venue-readers-gate-',
+      {
+        'a.spec.js': "const BASE_URL = process.env.BASE_URL || 'x';\n",
+        'b.spec.js': 'const EDGE = process.env.BASE_URL;\n',
+        // The destructuring spelling is a read too.
+        'c.spec.js': 'const { BASE_URL } = process.env;\n',
+        // The RENAMED destructuring is a read too.
+        'd.spec.js': 'const { BASE_URL: EDGE } = process.env;\n',
+        // A function PARAMETER named BASE_URL is not a read of the
+        // environment — and a later `= process.env` must not make it one.
+        'param.spec.js': 'function f({ BASE_URL }) {\n  return 1;\n}\nconst y = process.env;\n'
+      },
+      (tree) => {
+        expect(baseUrlReaders(tree).sort()).toEqual(['a.spec.js', 'b.spec.js', 'c.spec.js', 'd.spec.js']);
+      }
+    );
   });
 
   test('every spelling that breaks a run is an offender', () => {

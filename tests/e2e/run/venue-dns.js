@@ -23,9 +23,15 @@
  */
 const dns = require('dns');
 const net = require('net');
-const { venueMapping } = require('../helpers/venue-launch-args');
+const { safeVenueMapping } = require('../helpers/venue-launch-args');
 
-const mapping = venueMapping();
+// The mapping is read through the SAFE reader: this preload runs inside
+// EVERY process of a run, the pre-flight among them. A mapping that
+// cannot be read is the PRE-FLIGHT's finding to name — a preload that
+// died here would take the pre-flight down with it, and the operator
+// would read a stack trace instead of the named cause. An unusable
+// mapping simply means this preload does not map anything.
+const { mapping } = safeVenueMapping();
 
 /** The address family the mapped address actually belongs to. */
 function familyOf(address) {

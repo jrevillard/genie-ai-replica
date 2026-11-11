@@ -1,8 +1,8 @@
 const path = require('path');
 const fs = require('fs');
-const os = require('os');
 
 const { jsFiles, stripJsComments } = require('../validators/js-files');
+const { withTree } = require('../validators/temp-tree');
 const { STREAM_PATH } = require('../../e2e/helpers/stream-route');
 
 const ROOT = path.resolve(__dirname, '../../..');
@@ -57,22 +57,10 @@ const filesCarrying = (root, needle) => {
  * carrying the definition (excluded) and specs re-typing the endpoint
  * (reported).
  */
-const withTree = (endpoint, files) => {
-  const tree = fs.mkdtempSync(path.join(os.tmpdir(), 'stream-route-gate-'));
-  try {
-    const defining = path.join(tree, CONTRACT_RELATIVE);
-    fs.mkdirSync(path.dirname(defining), { recursive: true });
-    fs.writeFileSync(defining, `const STREAM_PATH = '${endpoint}';\n`);
-    for (const [name, source] of Object.entries(files)) {
-      const full = path.join(tree, name);
-      fs.mkdirSync(path.dirname(full), { recursive: true });
-      fs.writeFileSync(full, source);
-    }
-    return filesCarrying(tree, endpoint).map((f) => path.basename(f));
-  } finally {
-    fs.rmSync(tree, { recursive: true, force: true });
-  }
-};
+const withContractTree = (endpoint, files) =>
+  withTree('stream-route-gate-', { [CONTRACT_RELATIVE]: `const STREAM_PATH = '${endpoint}';\n`, ...files }, (tree) =>
+    filesCarrying(tree, endpoint).map((f) => path.basename(f))
+  );
 
 /** Is this file one of the app's tests? A fixture that kept the old
  * spelling would keep the anchor alive. */
@@ -128,16 +116,18 @@ describe('the e2e suite intercepts the stream endpoint through the shared consta
     // The anchor's own rule: the app's client counts, its test files do
     // not (a fixture that kept the old spelling would keep the anchor
     // alive), and a tree that does not carry the path reports nothing.
-    const tree = fs.mkdtempSync(path.join(os.tmpdir(), 'stream-anchor-gate-'));
-    try {
-      fs.writeFileSync(path.join(tree, 'client.js'), `const url = \`\${baseUrl}${STREAM_PATH}\`;\n`);
-      fs.writeFileSync(path.join(tree, 'client.spec.js'), `const url = '${STREAM_PATH}';\n`);
-      fs.writeFileSync(path.join(tree, 'other.js'), 'const url = 1;\n');
-      expect(appFilesCarrying(STREAM_PATH, tree)).toEqual(['client.js']);
-      expect(appFilesCarrying('/nothing/carries/this', tree)).toEqual([]);
-    } finally {
-      fs.rmSync(tree, { recursive: true, force: true });
-    }
+    withTree(
+      'stream-anchor-gate-',
+      {
+        'client.js': `const url = \`\${baseUrl}${STREAM_PATH}\`;\n`,
+        'client.spec.js': `const url = '${STREAM_PATH}';\n`,
+        'other.js': 'const url = 1;\n'
+      },
+      (tree) => {
+        expect(appFilesCarrying(STREAM_PATH, tree)).toEqual(['client.js']);
+        expect(appFilesCarrying('/nothing/carries/this', tree)).toEqual([]);
+      }
+    );
   });
 
   test('the contract module stays dependency-free', () => {
@@ -148,15 +138,14 @@ describe('the e2e suite intercepts the stream endpoint through the shared consta
   });
 
   test('the dependency-free rule reads the module it is given', () => {
-    const tree = fs.mkdtempSync(path.join(os.tmpdir(), 'stream-free-gate-'));
-    try {
-      fs.writeFileSync(path.join(tree, 'plain.js'), 'const A = 1;\n');
-      fs.writeFileSync(path.join(tree, 'needy.js'), "const B = require('./x');\n");
-      expect(requiresSomething(path.join(tree, 'plain.js'))).toBe(false);
-      expect(requiresSomething(path.join(tree, 'needy.js'))).toBe(true);
-    } finally {
-      fs.rmSync(tree, { recursive: true, force: true });
-    }
+    withTree(
+      'stream-free-gate-',
+      { 'plain.js': 'const A = 1;\n', 'needy.js': "const B = require('./x');\n" },
+      (tree) => {
+        expect(requiresSomething(path.join(tree, 'plain.js'))).toBe(false);
+        expect(requiresSomething(path.join(tree, 'needy.js'))).toBe(true);
+      }
+    );
   });
 
   test('no other e2e file carries the endpoint string in any spelling', () => {
@@ -169,7 +158,7 @@ describe('the e2e suite intercepts the stream endpoint through the shared consta
     // tree is no gate. The endpoint is read from the source, so the
     // degenerate case is reachable by a rename — and the guard is what
     // keeps it from reporting files that carry no path at all.
-    const strays = withTree('/', {
+    const strays = withContractTree('/', {
       'with-path.js': "await page.goto('/somewhere');\n",
       'without-path.js': 'const x = 1;\n'
     });
@@ -185,7 +174,7 @@ describe('the e2e suite intercepts the stream endpoint through the shared consta
     // (a copy inside node_modules is not a drift this gate is for, and
     // the exclusion is pinned here, so deleting the filter turns this
     // red).
-    const strays = withTree(STREAM_PATH, {
+    const strays = withContractTree(STREAM_PATH, {
       'spec.js': `await page.route('**${STREAM_PATH}**', () => {});\n`,
       'slashless.js': `await page.route('**${STREAM_PATH.replace(/^\//, '')}**', () => {});\n`,
       'prose.js': `// the old suite intercepted ${STREAM_PATH}\n`,

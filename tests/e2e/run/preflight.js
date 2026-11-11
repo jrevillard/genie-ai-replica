@@ -18,20 +18,6 @@
  * otherwise.
  */
 const { describeRunner } = require('./install-browsers');
-const fs = require('fs');
-
-// Both channels are written SYNCHRONOUSLY: a write to a pipe is
-// asynchronous on macOS, so `process.exit` right after it can drop the
-// line — and the pre-flight's whole output is the diagnosis the operator
-// needs. On Linux a pipe write is synchronous already; this makes the
-// output the same on every host.
-function out(text) {
-  fs.writeSync(1, text);
-}
-
-function err(text) {
-  fs.writeSync(2, text);
-}
 
 function remedy(what) {
   const lines = [
@@ -127,8 +113,9 @@ async function main() {
   try {
     loaded = loadRunner();
   } catch (e) {
-    err(`pre-flight: the runner cannot load Playwright.\n${remedy(e.message.split('\n')[0])}\n`);
-    process.exit(1);
+    process.stderr.write(`pre-flight: the runner cannot load Playwright.\n${remedy(e.message.split('\n')[0])}\n`);
+    process.exitCode = 1;
+    return;
   }
   const { chromium, BASE_URL, venueLaunchArgs, venueMapping, runner } = loaded;
 
@@ -140,13 +127,14 @@ async function main() {
   // much later that reads like a runner problem.
   const { mapping, error: mappingError } = readVenueMapping(venueMapping);
   if (mappingError) {
-    err(`pre-flight: the venue mapping is not usable.\n${mappingError}\n`);
-    process.exit(1);
+    process.stderr.write(`pre-flight: the venue mapping is not usable.\n${mappingError}\n`);
+    process.exitCode = 1;
+    return;
   }
-  out(
+  process.stdout.write(
     `pre-flight: venue ${BASE_URL}` + (mapping ? ` (mapped ${mapping.host} -> ${mapping.ip})` : '') + '\n'
   );
-  out(
+  process.stdout.write(
     `pre-flight: runner @playwright/test ${runner.playwrightVersion} — ` +
       `chromium ${runner.chromium}, chromium-headless-shell ${runner.chromiumHeadlessShell}\n`
   );
@@ -155,8 +143,9 @@ async function main() {
   try {
     browser = await chromium.launch({ args: venueLaunchArgs() });
   } catch (e) {
-    err(`pre-flight: the browser did not launch.\n${remedy(e.message.split('\n')[0])}\n`);
-    process.exit(1);
+    process.stderr.write(`pre-flight: the browser did not launch.\n${remedy(e.message.split('\n')[0])}\n`);
+    process.exitCode = 1;
+    return;
   }
 
   let failure = null;
@@ -171,20 +160,25 @@ async function main() {
     // run proceed would fail every spec on navigation and the failure path
     // would file one issue per spec file for a RUNNER-CONFIG cause — the
     // flood this pre-flight exists to stop.
-    if (!status || status >= 400) {
-      failure = classifyVenueStatus(status, BASE_URL);
+    //
+    // The classifier decides: it returns the finding for a status that is
+    // one, and null for a status that is not a failure. The caller does not
+    // re-encode the threshold.
+    const diagnosis = classifyVenueStatus(status, BASE_URL);
+    if (diagnosis) {
+      failure = diagnosis;
     } else {
-      out(`pre-flight: the browser reached the venue (HTTP ${status}).\n`);
+      process.stdout.write(`pre-flight: the browser reached the venue (HTTP ${status}).\n`);
     }
   } catch (e) {
     failure = `the browser could not open the venue.\n${remedy(e.message.split('\n')[0])}`;
   }
-  // The browser closes BEFORE the exit: process.exit skips a finally block,
-  // and every failed pre-flight would orphan a live Chromium on the machine.
+  // The browser closes BEFORE the exit: an exit that skips a finally block
+  // would orphan a live Chromium on the machine.
   await browser.close();
   if (failure) {
-    err(`pre-flight: ${failure}\n`);
-    process.exit(1);
+    process.stderr.write(`pre-flight: ${failure}\n`);
+    process.exitCode = 1;
   }
 }
 

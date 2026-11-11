@@ -42,6 +42,9 @@ const { VENUE_IP_ENV, VENUE_HOST_ENV } = require('../helpers/venue-launch-args')
 // The e2e tree's root: a path whose prefix is INSIDE it is a different
 // file that happens to carry another one's path as its tail.
 const TESTS_E2E_ROOT = 'tests/e2e';
+// The shape of a spec file's NAME, one place: the report's suite titles
+// carry it, the walk looks for it, and the bare-name rule recognises it.
+const SPEC_FILE_RE = /\.(?:spec|test)\.[cm]?[jt]sx?$/;
 // The venue's edge: ONE definition, credential-free — the same address the
 // run used, so the issue's reproduce command reproduces the run.
 const { BASE_URL } = require('../helpers/base-url');
@@ -110,7 +113,7 @@ function collectTests(suites, inheritedFile, describePath = [], out = []) {
     const file = suite.file || inheritedFile;
     // The file-level suite carries the spec file's own path as its title;
     // that is not a describe block, and repeating it would read as one.
-    const isFileSuite = suite.title && /\.(?:spec|test)\.[cm]?[jt]sx?$/.test(suite.title);
+    const isFileSuite = suite.title && SPEC_FILE_RE.test(suite.title);
     const titlePath = suite.title && !isFileSuite ? [...describePath, suite.title] : describePath;
     for (const spec of suite.specs || []) {
       for (const test of spec.tests || []) {
@@ -256,7 +259,7 @@ function namesOutsideE2eTree(token) {
           const rel = path.relative(REPO_ROOT, full).split(path.sep);
           if (rel.length >= 2 && rel[rel.length - 2].toLowerCase() === 'tests' && rel[rel.length - 1].toLowerCase() === 'e2e') continue;
           walk(full);
-        } else if (/\.(?:spec|test)\.[cm]?[jt]sx?$/.test(entry.name)) {
+        } else if (SPEC_FILE_RE.test(entry.name)) {
           otherTreeNames.add(entry.name);
         }
       }
@@ -289,7 +292,7 @@ function isE2ePath(token) {
     // UNLESS the name is a file of ANOTHER tree: that name is not this
     // tree's, and counting it would make a title that names an e2e file
     // AND a frontend test look like a group instead of a dedication.
-    return /\.(?:spec|test)\.[cm]?[jt]sx?$/.test(token) && !namesOutsideE2eTree(token);
+    return SPEC_FILE_RE.test(token) && !namesOutsideE2eTree(token);
   }
   return fs.existsSync(path.join(REPO_ROOT, TESTS_E2E_ROOT, first));
 }
@@ -349,14 +352,12 @@ function specFileMarker(file) {
  */
 function findTrackedIssue(file, openIssues) {
   const marker = specFileMarker(file);
-  const matches = openIssues.filter(
-    (issue) =>
-      titleIsDedicatedTo(issue.title, file) || (issue.description || '').includes(marker)
-  );
   // The dedicated TITLE wins: an issue matched only by the marker is
   // the same file's issue too, but the one whose title says so is the
   // one a reader lands on.
-  return matches.find((issue) => titleIsDedicatedTo(issue.title, file)) || matches[0] || null;
+  const dedicated = openIssues.filter((issue) => titleIsDedicatedTo(issue.title, file));
+  if (dedicated.length) return dedicated[0];
+  return openIssues.find((issue) => (issue.description || '').includes(marker)) || null;
 }
 
 /**

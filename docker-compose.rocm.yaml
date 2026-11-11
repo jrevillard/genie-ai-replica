@@ -23,6 +23,19 @@
 services:
   vllm:
     image: ${VLLM_ROCM_IMAGE}
+    # The ROCm image has no serving entrypoint (default CMD is /bin/bash),
+    # so the base file's `command: > --model ...` form cannot run there.
+    # Restated as an explicit `vllm serve` invocation with IDENTICAL
+    # flags — flag drift is caught by the Task-5 merged-config assertions.
+    command: >
+      vllm serve
+      --model ${VLLM_LLM_MODEL_ID:-meta-llama/Meta-Llama-3.1-8B-Instruct}
+      --gpu_memory_utilization ${VLLM_GPU_UTILIZATION:-0.55}
+      --served-model-name ${VLLM_LLM_MODEL_ID:-meta-llama/Meta-Llama-3.1-8B-Instruct}
+      --max_model_len ${VLLM_MAX_MODEL_LEN:-65536}
+      --max_num_seqs ${VLLM_MAX_NUM_SEQS:-16}
+      --dtype=${VLLM_DTYPE:-half}
+      --enforce-eager
     environment:
       - HUGGING_FACE_HUB_TOKEN=${HUGGING_FACE_HUB_TOKEN}
       - NVIDIA_VISIBLE_DEVICES=void
@@ -35,6 +48,17 @@ services:
 
   vllm-translation-guardrail:
     image: ${VLLM_ROCM_IMAGE}
+    command: >
+      vllm serve
+      --model ${VLLM_TRANSLATION_MODEL_ID:-google/gemma-3-4b-it}
+      --gpu_memory_utilization ${VLLM_TRANSLATION_GPU_UTILIZATION:-0.3}
+      --served-model-name ${VLLM_TRANSLATION_MODEL_ID:-google/gemma-3-4b-it}
+      --max_model_len ${VLLM_TRANSLATION_MAX_MODEL_LEN:-2048}
+      --dtype=${VLLM_TRANSLATION_DTYPE:-auto}
+      --port ${VLLM_TRANSLATION_SERVICE_PORT:-9031}
+      --no-enable-chunked-prefill
+      --max-num-seqs ${VLLM_TRANSLATION_MAX_NUM_SEQS:-16}
+      --chat-template-content-format openai
     environment:
       - HUGGING_FACE_HUB_TOKEN=${HUGGING_FACE_HUB_TOKEN}
       - NVIDIA_VISIBLE_DEVICES=void
@@ -59,3 +83,16 @@ services:
       - HUGGING_FACE_HUB_TOKEN=${HUGGING_FACE_HUB_TOKEN}
       - RUST_BACKTRACE=${RUST_BACKTRACE:-}
       - NVIDIA_VISIBLE_DEVICES=void
+
+  # Shared-host accommodation: the Docker daemon's fluentd log driver
+  # sends container stdout to HOST port 24224, and exactly one collector
+  # can bind it. On a host that already runs another GENIE stack, that
+  # port belongs to the first stack's collector — the ROCm venue drops
+  # the host publish with the `!override` tag (ports sequences CONCATENATE
+  # on merge otherwise). The in-app OTLP exporters reach this collector
+  # over the overlay network on 4318, so traces and metrics are
+  # unaffected; only container-stdout log forwarding continues to flow
+  # to the host's 24224 holder. On a dedicated ROCm host, remove this
+  # restatement and the base binding applies.
+  otel-collector:
+    ports: !override []

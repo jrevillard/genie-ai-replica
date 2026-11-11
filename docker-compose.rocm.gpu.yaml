@@ -19,6 +19,18 @@
 services:
   vllm-llm:
     image: ${VLLM_ROCM_IMAGE}
+    # The ROCm image has no serving entrypoint (default CMD is /bin/bash);
+    # the base file's `command: > --model ...` form cannot run there.
+    # Restated as an explicit `vllm serve` invocation with IDENTICAL flags.
+    command: >
+      vllm serve
+      --model ${VLLM_LLM_MODEL_ID:-ibm-granite/granite-3.3-2b-instruct}
+      --gpu_memory_utilization ${VLLM_GPU_UTILIZATION:-0.55}
+      --served-model-name ${VLLM_LLM_MODEL_ID:-ibm-granite/granite-3.3-2b-instruct}
+      --max_model_len ${VLLM_MAX_MODEL_LEN:-65536}
+      --max_num_seqs ${VLLM_MAX_NUM_SEQS:-16}
+      --dtype=${VLLM_DTYPE:-half}
+      --enforce-eager
     environment:
       - HUGGING_FACE_HUB_TOKEN=${HUGGING_FACE_HUB_TOKEN}
       - NVIDIA_VISIBLE_DEVICES=void
@@ -31,6 +43,17 @@ services:
 
   vllm-translation:
     image: ${VLLM_ROCM_IMAGE}
+    command: >
+      vllm serve
+      --model ${VLLM_TRANSLATION_MODEL_ID:-google/gemma-3-4b-it}
+      --gpu_memory_utilization ${VLLM_TRANSLATION_GPU_UTILIZATION:-0.3}
+      --served-model-name ${VLLM_TRANSLATION_MODEL_ID:-google/gemma-3-4b-it}
+      --max_model_len ${VLLM_TRANSLATION_MAX_MODEL_LEN:-8192}
+      --dtype=${VLLM_TRANSLATION_DTYPE:-auto}
+      --port 8000
+      --no-enable-chunked-prefill
+      --max-num-seqs ${VLLM_TRANSLATION_MAX_NUM_SEQS:-16}
+      --chat-template-content-format openai
     environment:
       - HUGGING_FACE_HUB_TOKEN=${HUGGING_FACE_HUB_TOKEN}
       - NVIDIA_VISIBLE_DEVICES=void

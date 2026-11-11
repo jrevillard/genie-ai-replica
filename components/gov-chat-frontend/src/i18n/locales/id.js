@@ -270,12 +270,6 @@ export default {
       unavailable: 'Kesehatan sistem tidak tersedia saat ini.'
     },
     logsLoadFailed: 'Gagal memuat log.',
-    clearSearch: 'Hapus pencarian',
-    entriesFound: 'entri ditemukan',
-    noUsers: 'Tidak ada pengguna.',
-    noUsersFound: 'Tidak ada pengguna yang cocok dengan kriteria pencarian Anda.',
-    searchResults: 'Hasil Pencarian Terbaru',
-    viewAllResults: 'Lihat Semua Hasil',
     dbStats: {
       unavailable: 'Statistik basis data tidak tersedia saat ini.'
     },
@@ -510,7 +504,6 @@ export default {
       duplicateLangError: 'Ditemukan bahasa duplikat dalam terjemahan. Harap hapus.'
     },
     documents: {
-      delete: 'Hapus',
       viewDocuments: 'Dokumen',
       viewArtifacts: 'Artefak',
       deleteRefuseBundle: '{count} artefak OKF dikelola oleh siklus hidup repositori dan tidak dapat dihapus di sini.',
@@ -1496,7 +1489,6 @@ export default {
     sourceUrl: 'URL Sumber',
     downloadFile: 'Unduh File',
     viewCrawled: 'Lihat Markdown yang Dihasilkan',
-    viewFileContent: 'Lihat File',
     visitSource: 'Kunjungi Situs Asli',
     bundleBadge: 'Dikelola oleh siklus hidup OKF',
     crawl: {

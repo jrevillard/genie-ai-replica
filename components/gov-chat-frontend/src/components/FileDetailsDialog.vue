@@ -156,7 +156,7 @@
                       ? translate('details.downloadFile', 'Download File')
                       : crawlJob
                         ? translate('details.viewCrawled', 'View Generated Markdown')
-                        : translate('details.viewFileContent', 'View File')
+                        : translate('details.viewFile', 'View File')
                   }}
                   <span v-if="file.file_size > 20 * 1024 * 1024" class="external-icon">⭳</span>
                   <span v-else class="external-icon">↗</span>
@@ -315,7 +315,7 @@
               </DsButton>
 
               <DsButton v-if="crawlJob && crawlJob.status === 'Crawling'" variant="danger" @click="handleKillCrawl">
-                {{ translate('details.log.killCrawl', 'Kill Crawl Task') }}
+                {{ translate('details.log.killCrawl', 'Kill Task') }}
               </DsButton>
             </div>
 
@@ -1450,7 +1450,7 @@ export default {
           `;
         }
         this.showNotification(
-          this.translate('details.notifications.loadFailed', 'Could not load file.') + ' ' + error.message,
+          this.translate('details.notifications.loadFailed', 'Could not load file.') + ` Error: ${error.message}`,
           'error'
         );
       } finally {
@@ -1684,7 +1684,7 @@ export default {
         setTimeout(() => this.fetchIngestionLogs(), 2000);
       } catch (error) {
         this.showNotification(
-          this.translate('details.notifications.killFailed', 'Failed to kill ingestion:') + ' ' + error.message,
+          this.translate('details.notifications.killFailed', 'Failed to kill ingestion:') + ` Error: ${error.message}`,
           'error'
         );
       } finally {

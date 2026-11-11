@@ -270,12 +270,6 @@ export default {
       unavailable: 'System health is unavailable right now.'
     },
     logsLoadFailed: 'Failed to load logs',
-    clearSearch: 'Clear search',
-    entriesFound: 'entries found',
-    noUsers: 'No users available.',
-    noUsersFound: 'No users found matching your search criteria.',
-    searchResults: 'Latest Search Results',
-    viewAllResults: 'View All Results',
     dbStats: {
       unavailable: 'Database statistics are unavailable right now.'
     },
@@ -508,7 +502,6 @@ export default {
       duplicateLangError: 'Duplicate languages found in translations. Please remove them.'
     },
     documents: {
-      delete: 'Delete',
       viewDocuments: 'Documents',
       viewArtifacts: 'Artifacts',
       deleteRefuseBundle: '{count} OKF artifact(s) are managed by the repository lifecycle and cannot be deleted here.',
@@ -1489,7 +1482,6 @@ export default {
     sourceUrl: 'Source URL',
     downloadFile: 'Download File',
     viewCrawled: 'View Generated Markdown',
-    viewFileContent: 'View File',
     visitSource: 'Visit Original Website',
     bundleBadge: 'Managed by the OKF lifecycle',
     crawl: {

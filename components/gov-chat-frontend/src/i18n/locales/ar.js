@@ -270,12 +270,6 @@ export default {
       unavailable: 'حالة النظام غير متاحة الآن.'
     },
     logsLoadFailed: 'فشل تحميل السجلات.',
-    clearSearch: 'مسح البحث',
-    entriesFound: 'نتيجة موجودة',
-    noUsers: 'لا يوجد مستخدمون متاحون.',
-    noUsersFound: 'لا يوجد مستخدمون يطابقون معايير البحث الخاصة بك.',
-    searchResults: 'أحدث نتائج البحث',
-    viewAllResults: 'عرض جميع النتائج',
     dbStats: {
       unavailable: 'إحصاءات قاعدة البيانات غير متاحة الآن.'
     },
@@ -507,7 +501,6 @@ export default {
       duplicateLangError: 'تم العثور على لغات مكررة في الترجمات. يرجى إزالتها.'
     },
     documents: {
-      delete: 'حذف',
       viewDocuments: 'المستندات',
       viewArtifacts: 'المخرجات',
       deleteRefuseBundle: '{count} من مخرجات OKF يديرها دورة حياة المستودع ولا يمكن حذفها من هنا.',
@@ -1481,7 +1474,6 @@ export default {
     sourceUrl: 'عنوان URL المصدر',
     downloadFile: 'تنزيل الملف',
     viewCrawled: 'عرض ملف Markdown المُنشأ',
-    viewFileContent: 'عرض الملف',
     visitSource: 'زيارة الموقع الأصلي',
     bundleBadge: 'يديره دورة حياة OKF',
     crawl: {

@@ -270,12 +270,6 @@ export default {
       unavailable: 'El estado del sistema no está disponible ahora mismo.'
     },
     logsLoadFailed: 'Error al cargar los registros.',
-    clearSearch: 'Borrar la búsqueda',
-    entriesFound: 'resultados encontrados',
-    noUsers: 'No hay usuarios disponibles.',
-    noUsersFound: 'No hay usuarios que coincidan con sus criterios de búsqueda.',
-    searchResults: 'Últimos resultados de búsqueda',
-    viewAllResults: 'Ver todos los resultados',
     dbStats: {
       unavailable: 'Las estadísticas de la base de datos no están disponibles ahora mismo.'
     },
@@ -510,7 +504,6 @@ export default {
       duplicateLangError: 'Se encontraron idiomas duplicados en las traducciones. Por favor, elimínelos.'
     },
     documents: {
-      delete: 'Eliminar',
       viewDocuments: 'Documentos',
       viewArtifacts: 'Artefactos',
       deleteRefuseBundle:
@@ -1499,7 +1492,6 @@ export default {
     sourceUrl: 'URL de origen',
     downloadFile: 'Descargar archivo',
     viewCrawled: 'Ver el Markdown generado',
-    viewFileContent: 'Ver archivo',
     visitSource: 'Visitar el sitio original',
     bundleBadge: 'Gestionado por el ciclo de vida de OKF',
     crawl: {

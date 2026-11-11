@@ -1,60 +1,51 @@
 // The admin surfaces' i18n contract — the same bar as
-// okf-surface-i18n-contract.test.js, held by the same mechanism: every
-// catalogue key referenced through a LITERAL translate()/$t() call in the
-// admin dashboard and its file dialog MUST exist in the shipped en
-// catalogue. Before this test, a key renamed in the component but not in
-// the 14 locale files rendered the English fallback in every locale with
-// the whole suite green (review round, P1). localeConsistency keeps the
-// other 13 locales key-identical to en, so owning en owns all.
+// okf-surface-i18n-contract.test.js, held by the same mechanism (shared:
+// helpers/i18nKeys.js): every catalogue key referenced through a LITERAL
+// translate()/$t() call in the admin dashboard and its file dialog MUST
+// exist in the shipped en catalogue. Before this test existed, a key renamed
+// in the component but not in the 14 locale files rendered the English
+// fallback in every locale with the whole suite green (review round, P1 —
+// the first run of this suite exposed 22 such keys and this wave catalogued
+// them). localeConsistency keeps the other 13 locales key-identical to en,
+// so owning en owns all.
 //
-// Literals ending in '.' or '_' are DYNAMIC PREFIXES — validated as
-// prefixes, not leaves. Keys that arrive in a variable (the hierarchy
-// title/message ternaries) are invisible to this scan by construction;
+// The extraction is prefix-free on purpose: these surfaces may reference
+// admin.*, details.*, common.* and okf.* alike — the whole-surface contract
+// is the point. Keys that arrive in a variable (the hierarchy title/message
+// ternaries) are invisible to a literal scan by construction;
 // localeConsistency's DYNAMIC_COMPILED_KEYS list carries those.
 
-const fs = require('fs');
 const path = require('path');
 
-const { flattenKeys, deepGet } = require('./helpers/i18nKeys');
+const { deepGet, filesUnder, extractLiteralKeys } = require('./helpers/i18nKeys');
 
 const SRC = path.join(__dirname, '..', '..');
 const en = require('../i18n/locales/en.js').default;
 
 const SURFACES = ['src/components/AdminDashboard.vue', 'src/components/FileDetailsDialog.vue'];
 
-const files = SURFACES.map((s) => path.join(SRC, s)).filter((f) => fs.existsSync(f));
+const files = filesUnder(SRC, SURFACES[0])
+  .concat(filesUnder(SRC, SURFACES[1]))
+  .filter((f, i, a) => a.indexOf(f) === i);
 
-const literal = new Map();
-for (const f of files) {
-  const t = fs.readFileSync(f, 'utf8');
-  t.split(/\r?\n/).forEach((line, i) => {
-    for (const m of line.matchAll(/(?:translate|\$t)\(\s*['"`]([A-Za-z][A-Za-z0-9_.]*)['"`]/g)) {
-      if (!literal.has(m[1])) literal.set(m[1], `${path.relative(SRC, f)}:${i + 1}`);
-    }
-  });
-}
+const literal = extractLiteralKeys(files, /(?:translate|\$t)\(\s*['"`]([A-Za-z][A-Za-z0-9_.]*)['"`]/, SRC);
 const used = [...literal.keys()].sort();
-const leaves = used.filter((k) => !/[._]$/.test(k));
-const prefixes = used.filter((k) => /[._]$/.test(k));
-
-const allLeaves = flattenKeys(en, '');
 
 describe('Admin surfaces i18n contract (dashboard + FileDetailsDialog)', () => {
   test('the extraction is not vacuous — both surfaces are scanned and reference the catalogue', () => {
     expect(files).toHaveLength(2);
-    expect(used.length).toBeGreaterThanOrEqual(150);
+    // PINNED EXACT, not a floor: okf-laberrors-contract.test.js replaced its
+    // >=N floor with a pinned count after its documented failure (#84209 —
+    // "the old >=20 floor still passed when the set dropped 21→20"). A key
+    // dropped from a surface must be a conscious bump of this number, not a
+    // silently shrinking guard.
+    expect(used.length).toBe(284);
   });
 
-  test.each(leaves)('%s exists in the shipped en catalogue as a non-empty string', (key) => {
+  test.each(used)('%s exists in the shipped en catalogue as a non-empty string', (key) => {
     const v = deepGet(en, key);
-    expect(typeof v).toBe('string');
-    expect(v.length).toBeGreaterThan(0);
-  });
-
-  (prefixes.length ? test.each : test.skip.each)(prefixes)(
-    '%s is a dynamic prefix — at least one catalogue leaf lives under it',
-    (key) => {
-      expect(allLeaves.some((l) => l.startsWith(key))).toBe(true);
+    if (typeof v !== 'string' || v.length === 0) {
+      throw new Error(`"${key}" (referenced at ${literal.get(key)}) is not a non-empty catalogue string`);
     }
-  );
+  });
 });

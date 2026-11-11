@@ -270,12 +270,6 @@ export default {
       unavailable: '系统健康状态当前不可用。'
     },
     logsLoadFailed: '加载日志失败。',
-    clearSearch: '清除搜索',
-    entriesFound: '条结果',
-    noUsers: '暂无用户。',
-    noUsersFound: '没有符合搜索条件的用户。',
-    searchResults: '最新搜索结果',
-    viewAllResults: '查看全部结果',
     dbStats: {
       unavailable: '数据库统计信息当前不可用。'
     },
@@ -503,7 +497,6 @@ export default {
       duplicateLangError: '翻译中发现重复语言。请移除它们。'
     },
     documents: {
-      delete: '删除',
       viewDocuments: '文档',
       viewArtifacts: '构件',
       deleteRefuseBundle: '{count} 个 OKF 构件由知识库生命周期管理，无法在此删除。',
@@ -1460,7 +1453,6 @@ export default {
     sourceUrl: '来源网址',
     downloadFile: '下载文件',
     viewCrawled: '查看生成的 Markdown',
-    viewFileContent: '查看文件',
     visitSource: '访问原始网站',
     bundleBadge: '由 OKF 生命周期管理',
     crawl: {

@@ -270,12 +270,6 @@ export default {
       unavailable: 'Состояние системы сейчас недоступно.'
     },
     logsLoadFailed: 'Не удалось загрузить журналы.',
-    clearSearch: 'Очистить поиск',
-    entriesFound: 'найдено',
-    noUsers: 'Нет доступных пользователей.',
-    noUsersFound: 'Нет пользователей, соответствующих критериям поиска.',
-    searchResults: 'Последние результаты поиска',
-    viewAllResults: 'Показать все результаты',
     dbStats: {
       unavailable: 'Статистика базы данных сейчас недоступна.'
     },
@@ -509,7 +503,6 @@ export default {
       duplicateLangError: 'В переводах найдены дублирующиеся языки. Пожалуйста, удалите их.'
     },
     documents: {
-      delete: 'Удалить',
       viewDocuments: 'Документы',
       viewArtifacts: 'Артефакты',
       deleteRefuseBundle:
@@ -1494,7 +1487,6 @@ export default {
     sourceUrl: 'Исходный URL',
     downloadFile: 'Скачать файл',
     viewCrawled: 'Показать сгенерированный Markdown',
-    viewFileContent: 'Показать файл',
     visitSource: 'Перейти на исходный сайт',
     bundleBadge: 'Управляется жизненным циклом OKF',
     crawl: {

@@ -270,12 +270,6 @@ export default {
       unavailable: 'Bophelo ba sistimi ha bo fumanehe hona joale.'
     },
     logsLoadFailed: 'Ho hlolehile ho kenya Lilog',
-    clearSearch: 'Tlosa patlo',
-    entriesFound: 'tse fumaneheng',
-    noUsers: 'Ha ho basebelisi.',
-    noUsersFound: 'Ha ho na basebelisi ba lumellanang le litlhoko tsa hau tsa patlo.',
-    searchResults: 'Liphetho tsa kajeno tsa patlo',
-    viewAllResults: 'Bona liphetho tsohle',
     dbStats: {
       unavailable: 'Lipalo-palo tsa polokelo ya data ha li fumanehe hona joale.'
     },
@@ -510,7 +504,6 @@ export default {
       duplicateLangError: 'Dipuo tse peli tse tshwanang di fumanwe diphetolelong. Ka kopo, di tlose.'
     },
     documents: {
-      delete: 'Hlakola',
       viewDocuments: 'Litokomane',
       viewArtifacts: 'Lihlahloa',
       deleteRefuseBundle:
@@ -1502,7 +1495,6 @@ export default {
     sourceUrl: 'URL ya mohloli',
     downloadFile: 'Jarolla faele',
     viewCrawled: 'Bona Markdown e entsoeng',
-    viewFileContent: 'Bona faele',
     visitSource: 'Ketela sebaka sa pele',
     bundleBadge: 'Lauloa ke bophelo ba OKF',
     crawl: {

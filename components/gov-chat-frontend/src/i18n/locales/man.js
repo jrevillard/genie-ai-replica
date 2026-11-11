@@ -270,12 +270,6 @@ export default {
       unavailable: 'Sistemoo Kendeya coko mang benta to saaying-saaying'
     },
     logsLoadFailed: 'Filiyata log looti to.',
-    clearSearch: 'Hapata bota',
-    entriesFound: 'mo sota',
-    noUsers: 'Moo kibaroo mang benta.',
-    noUsersFound: 'Moo kibaroo mang sota.',
-    searchResults: 'Hapata beteyata',
-    viewAllResults: 'Beteyata bee kita',
     dbStats: {
       unavailable: 'Detabeesi kijeraalu mang benta to saaying-saaying'
     },
@@ -506,7 +500,6 @@ export default {
       duplicateLangError: 'Kango kilin-kilin naata tradiksion to. A bong banta.'
     },
     documents: {
-      delete: 'A kuntu',
       viewDocuments: 'Peba ko',
       viewArtifacts: 'Artefek',
       deleteRefuseBundle:
@@ -1480,7 +1473,6 @@ export default {
     sourceUrl: 'URL asali',
     downloadFile: 'Fayil luka',
     viewCrawled: 'Markdown damina kita',
-    viewFileContent: 'Fayil kita',
     visitSource: 'Sitio asali kita',
     bundleBadge: 'Ta goll l jehe ayr daa ny rea er OKF',
     crawl: {

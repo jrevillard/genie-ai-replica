@@ -270,12 +270,6 @@ export default {
       unavailable: 'সিস্টেমের অবস্থা এই মুহূর্তে অনুপলব্ধ।'
     },
     logsLoadFailed: 'লগ লোড করতে ব্যর্থ।',
-    clearSearch: 'সার্চ মুছুন',
-    entriesFound: 'টি ফলাফল পাওয়া গেছে',
-    noUsers: 'কোনো ব্যবহারকারী নেই।',
-    noUsersFound: 'আপনার সার্চ মাপকাঠির সাথে মেলে এমন কোনো ব্যবহারকারী নেই।',
-    searchResults: 'সর্বশেষ সার্চ ফলাফল',
-    viewAllResults: 'সব ফলাফল দেখুন',
     dbStats: {
       unavailable: 'ডাটাবেস পরিসংখ্যান এই মুহূর্তে অনুপলব্ধ।'
     },
@@ -510,7 +504,6 @@ export default {
       duplicateLangError: 'অনুবাদে ডুপ্লিকেট ভাষা পাওয়া গেছে। অনুগ্রহ করে সেগুলি সরিয়ে দিন।'
     },
     documents: {
-      delete: 'মুছুন',
       viewDocuments: 'নথিপত্র',
       viewArtifacts: 'আর্টিফ্যাক্ট',
       deleteRefuseBundle: '{count}টি OKF আর্টিফ্যাক্ট রিপোজিটরির জীবনচক্র দ্বারা পরিচালিত এবং এখানে মুছে ফেলা যায় না।',
@@ -1490,7 +1483,6 @@ export default {
     sourceUrl: 'সোর্স URL',
     downloadFile: 'ফাইল ডাউনলোড করুন',
     viewCrawled: 'তৈরি করা মার্কডাউন দেখুন',
-    viewFileContent: 'ফাইল দেখুন',
     visitSource: 'মূল ওয়েবসাইট দেখুন',
     bundleBadge: 'OKF জীবনচক্র দ্বারা পরিচালিত',
     crawl: {

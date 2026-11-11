@@ -270,12 +270,6 @@ export default {
       unavailable: 'สถานะระบบไม่พร้อมใช้งานในขณะนี้'
     },
     logsLoadFailed: 'ไม่สามารถโหลดบันทึกได้',
-    clearSearch: 'ล้างการค้นหา',
-    entriesFound: 'รายการที่พบ',
-    noUsers: 'ไม่มีผู้ใช้',
-    noUsersFound: 'ไม่มีผู้ใช้ที่ตรงกับเงื่อนไขการค้นหาของคุณ',
-    searchResults: 'ผลการค้นหาล่าสุด',
-    viewAllResults: 'ดูผลลัพธ์ทั้งหมด',
     dbStats: {
       unavailable: 'สถิติฐานข้อมูลไม่พร้อมใช้งานในขณะนี้'
     },
@@ -507,7 +501,6 @@ export default {
       duplicateLangError: 'พบภาษาซ้ำในการแปล โปรดลบออก'
     },
     documents: {
-      delete: 'ลบ',
       viewDocuments: 'เอกสาร',
       viewArtifacts: 'สิ่งประดิษฐ์',
       deleteRefuseBundle:
@@ -1482,7 +1475,6 @@ export default {
     sourceUrl: 'URL ต้นทาง',
     downloadFile: 'ดาวน์โหลดไฟล์',
     viewCrawled: 'ดู Markdown ที่สร้างขึ้น',
-    viewFileContent: 'ดูไฟล์',
     visitSource: 'เยี่ยมชมเว็บไซต์ต้นทาง',
     bundleBadge: 'จัดการโดยวงจรชีวิตของ OKF',
     crawl: {

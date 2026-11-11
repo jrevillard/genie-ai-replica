@@ -270,12 +270,6 @@ export default {
       unavailable: 'Hali ya mfumo haipatikani kwa sasa.'
     },
     logsLoadFailed: 'Imeshindwa kupakia kumbukumbu',
-    clearSearch: 'Futa utafutaji',
-    entriesFound: 'vimepatikana',
-    noUsers: 'Hakuna watumiaji.',
-    noUsersFound: 'Hakuna watumiaji wanaolingana na vigezo vyako vya utafutaji.',
-    searchResults: 'Matokeo ya hivi karibuni ya utafutaji',
-    viewAllResults: 'Tazama matokeo yote',
     dbStats: {
       unavailable: 'Takwimu za hifadhidata hazipatikani kwa sasa.'
     },
@@ -509,7 +503,6 @@ export default {
       duplicateLangError: 'Lugha zinazojirudia zimepatikana kwenye tafsiri. Tafadhali ziondoe.'
     },
     documents: {
-      delete: 'Futa',
       viewDocuments: 'Nyaraka',
       viewArtifacts: 'Vipakiti',
       deleteRefuseBundle:
@@ -1492,7 +1485,6 @@ export default {
     sourceUrl: 'URL ya chanzo',
     downloadFile: 'Pakua faili',
     viewCrawled: 'Angalia Markdown iliyotengenezwa',
-    viewFileContent: 'Tazama faili',
     visitSource: 'Tembelea tovuti ya asili',
     bundleBadge: 'Inatendewa na mzunguko wa maisha wa OKF',
     crawl: {

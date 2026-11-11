@@ -270,12 +270,6 @@ export default {
       unavailable: 'Der Systemzustand ist derzeit nicht verfügbar.'
     },
     logsLoadFailed: 'Protokolle konnten nicht geladen werden.',
-    clearSearch: 'Suche löschen',
-    entriesFound: 'Ergebnisse gefunden',
-    noUsers: 'Keine Benutzer verfügbar.',
-    noUsersFound: 'Keine Benutzer entsprechen Ihren Suchkriterien.',
-    searchResults: 'Neueste Suchergebnisse',
-    viewAllResults: 'Alle Ergebnisse anzeigen',
     dbStats: {
       unavailable: 'Die Datenbankstatistiken sind derzeit nicht verfügbar.'
     },
@@ -511,7 +505,6 @@ export default {
       duplicateLangError: 'Doppelte Sprachen in den Übersetzungen gefunden. Bitte entfernen Sie sie.'
     },
     documents: {
-      delete: 'Löschen',
       viewDocuments: 'Dokumente',
       viewArtifacts: 'Artefakte',
       deleteRefuseBundle:
@@ -1504,7 +1497,6 @@ export default {
     sourceUrl: 'Quell-URL',
     downloadFile: 'Datei herunterladen',
     viewCrawled: 'Generiertes Markdown anzeigen',
-    viewFileContent: 'Datei anzeigen',
     visitSource: 'Original-Website besuchen',
     bundleBadge: 'Vom OKF-Lebenszyklus verwaltet',
     crawl: {

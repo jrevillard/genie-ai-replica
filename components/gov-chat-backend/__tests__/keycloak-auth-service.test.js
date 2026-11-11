@@ -698,6 +698,82 @@ describe('keycloakAuthService', () => {
       expect(mockJwtVerify).toHaveBeenCalledTimes(1);
     });
 
+    it('resolves a kid-less token against a published candidate key', async () => {
+      // RFC 7515 §4.1.4 makes the key id OPTIONAL: a token that names none
+      // against a multi-key set is not a bad token, it is a token jose
+      // cannot resolve by key id alone. The published candidates resolve
+      // it — the first one whose signature verifies wins.
+      const candidates = [{ key: 'candidate-1' }, { key: 'candidate-2' }];
+      const ambiguous = new Error('multiple matching keys');
+      ambiguous.name = 'JWKSMultipleMatchingKeys';
+      ambiguous[Symbol.asyncIterator] = async function* () {
+        yield* candidates;
+      };
+
+      mockJwtVerify.mockRejectedValueOnce(ambiguous).mockImplementation(async (token, key) => {
+        if (key === candidates[1]) {
+          return { payload: mockJwtPayload, protectedHeader: { alg: 'RS256' } };
+        }
+        const signatureError = new Error('signature verification failed');
+        signatureError.name = 'JWSSignatureVerificationFailed';
+        throw signatureError;
+      });
+
+      const token = generateMockJwtString(mockJwtPayload);
+      const result = await keycloakAuthService.verifyToken(token);
+
+      expect(result.iss_sub).toBe(`${mockJwtPayload.iss}#${mockJwtPayload.sub}`);
+      // The first attempt, then one attempt per candidate tried.
+      expect(mockJwtVerify).toHaveBeenCalledTimes(3);
+    });
+
+    it('rejects a kid-less token no published candidate verifies', async () => {
+      // The opposite case: the token names no key id and none of the
+      // published candidates signs it. It stays a bad token — a kid-less
+      // token is never ACCEPTED without a signature that verifies.
+      const ambiguous = new Error('multiple matching keys');
+      ambiguous.name = 'JWKSMultipleMatchingKeys';
+      ambiguous[Symbol.asyncIterator] = async function* () {
+        yield { key: 'candidate-1' };
+        yield { key: 'candidate-2' };
+      };
+
+      mockJwtVerify.mockRejectedValueOnce(ambiguous).mockImplementation(async () => {
+        const signatureError = new Error('signature verification failed');
+        signatureError.name = 'JWSSignatureVerificationFailed';
+        throw signatureError;
+      });
+
+      await expect(keycloakAuthService.verifyToken(generateMockJwtString(mockJwtPayload))).rejects.toMatchObject({
+        code: 'TOKEN_INVALID',
+        message: 'Token verification failed'
+      });
+    });
+
+    it('reports a realm that publishes the same key id twice as an outage', async () => {
+      // A realm that publishes the SAME key id twice (a misconfigured
+      // rotation, or imported JWKs carrying an operator-chosen id) makes
+      // every token naming that id resolve to two candidates. The fault is
+      // the realm's own state: it is an outage (503), so the operator is
+      // told — not a 401 that signs every user out.
+      const ambiguous = new Error('multiple matching keys');
+      ambiguous.name = 'JWKSMultipleMatchingKeys';
+      const inner = Object.assign(jest.fn().mockRejectedValue(ambiguous), {
+        jwks: () => ({
+          keys: [
+            { kid: 'dup', kty: 'RSA', alg: 'RS256', use: 'sig' },
+            { kid: 'dup', kty: 'RSA', alg: 'RS256', use: 'sig' }
+          ]
+        })
+      });
+      mockCreateRemoteJWKSet.mockReturnValue(inner);
+      mockJwtVerify.mockImplementation(async (token, key) => key({ alg: 'RS256', kid: 'dup' }, token));
+
+      await expect(keycloakAuthService.verifyToken(generateMockJwtString(mockJwtPayload))).rejects.toMatchObject({
+        code: 'AUTH_SERVICE_UNAVAILABLE'
+      });
+    });
+
     it('should reject with TOKEN_INVALID on JWTClaimValidationFailed (iss mismatch)', async () => {
       const claimError = new Error('iss claim validation failed');
       claimError.name = 'JWTClaimValidationFailed';

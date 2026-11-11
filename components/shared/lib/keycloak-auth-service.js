@@ -109,6 +109,90 @@ class TokenVerificationError extends Error {
   }
 }
 
+// How many published candidate keys the kid-less token trial tries (#1767).
+// The candidate count is the REALM's (Keycloak keeps retired keys published),
+// so the trial is bounded rather than exhaustive: a realm publishing more
+// candidates than this is a realm to clean up, not a token to guess at —
+// the truncation is logged instead of being reported as a bad token.
+const MAX_CANDIDATE_KEYS = 3;
+
+/**
+ * The key id the token names, or undefined when it names none.
+ *
+ * jose merges the protected and the unprotected header before it matches a
+ * key (`{ ...protectedHeader, ...token?.header }`), and the UNPROTECTED key
+ * id wins. The same merge is applied here, so the two never disagree about
+ * which key id a token names.
+ *
+ * @param {Object|undefined} protectedHeader - The token's protected header
+ * @param {Object|undefined} token - The JWS (its `header` holds the unprotected header)
+ * @returns {string|undefined} The key id, when the token names one
+ */
+function effectiveKid(protectedHeader, token) {
+  const kid = { ...(protectedHeader || {}), ...(token && token.header) }.kid;
+  return typeof kid === 'string' ? kid : undefined;
+}
+
+/**
+ * How many published keys share one key id.
+ *
+ * @param {Object|undefined} jwks - The published key set (jose's `jwks()`)
+ * @param {string} kid - The key id to count
+ * @returns {number} The number of published keys carrying that key id
+ */
+function countKeysWithKid(jwks, kid) {
+  if (!jwks || !Array.isArray(jwks.keys)) return 0;
+  return jwks.keys.filter((jwk) => jwk && jwk.kid === kid).length;
+}
+
+/**
+ * Try the published candidate keys of an ambiguous token (#1767).
+ *
+ * RFC 7515 §4.1.4 makes the key id OPTIONAL: a token that names none
+ * against a multi-key set is not a bad token, it is a token jose cannot
+ * resolve by key id alone. jose hands the candidates over with the error;
+ * this tries them, at most MAX_CANDIDATE_KEYS of them, and the first one
+ * whose signature verifies wins.
+ *
+ * Only a SIGNATURE failure moves on to the next candidate: a claim failure
+ * (expired, wrong issuer, wrong audience) is the token's own defect, and no
+ * other key can repair it.
+ *
+ * @param {Error} err - The JWKSMultipleMatchingKeys error (it carries the candidates)
+ * @param {string} token - The raw JWT
+ * @param {Object} jwtOptions - The same verification options the first attempt used
+ * @returns {Promise<Object>} `{ ok, payload, error, tried, truncated }` — `error`
+ *   is the failure that decides the rejection (the last signature failure, or
+ *   the token's own defect), `truncated` says the realm published more
+ *   candidates than the trial may try.
+ */
+async function tryCandidateKeys(err, token, jwtOptions) {
+  const failed = { ok: false, payload: null, error: null, tried: 0, truncated: false };
+  if (!err || typeof err[Symbol.asyncIterator] !== 'function') return failed;
+
+  let lastError = null;
+  for await (const candidate of err) {
+    if (failed.tried >= MAX_CANDIDATE_KEYS) {
+      // More candidates than the trial may try: the token is NOT resolved by
+      // guessing — the realm's key set is too wide to pick from.
+      return { ...failed, error: lastError, truncated: true };
+    }
+    failed.tried += 1;
+    try {
+      const { payload } = await jwtVerify(token, candidate, jwtOptions);
+      return { ok: true, payload, error: null, tried: failed.tried, truncated: false };
+    } catch (candidateError) {
+      if (candidateError.name !== 'JWSSignatureVerificationFailed') {
+        // The token's own defect (expiry, claims, algorithm) — no other
+        // candidate can repair it.
+        return { ...failed, error: candidateError };
+      }
+      lastError = candidateError;
+    }
+  }
+  return { ...failed, error: lastError };
+}
+
 /**
  * Create a JWKS cache.
  *
@@ -186,13 +270,39 @@ function createJwksCache(jwksUri, ttlMs = JWKS_CACHE_TTL) {
         throw err;
       }
       if (err && err.name === 'JWKSMultipleMatchingKeys') {
-        // jose raises this when a key resolves to MORE THAN ONE candidate:
-        // a token that names no key id against a multi-key set, or a token
-        // whose kid appears twice in the published set (a misconfigured
-        // rotation). Either way the ambiguity is resolvable only by the
-        // caller — the token cannot be verified unambiguously, so it stays
-        // a token-side rejection. (The realm in scope — Keycloak — always
-        // publishes a key id, and never duplicates one.)
+        // jose raises this when a key resolves to MORE THAN ONE candidate.
+        // Two different faults land here, and the token's own key id tells
+        // them apart:
+        //
+        //  - the token names a key id: jose matched the candidates by that
+        //    EXACT id, so more than one candidate means the realm published
+        //    that key id more than once (a misconfigured rotation, or
+        //    imported JWKs carrying an operator-chosen id). The realm's own
+        //    state is broken — the same class as a realm publishing no
+        //    usable key at all, and the same answer: an outage, so the
+        //    operator is told instead of every user being signed out by a
+        //    401 they cannot act on (#1776).
+        //  - the token names NO key id: RFC 7515 §4.1.4 makes the key id
+        //    OPTIONAL, so the ambiguity is the token's, and the published
+        //    candidates can resolve it. The error carries them; the caller
+        //    tries them (#1767).
+        const kid = effectiveKid(protectedHeader, token);
+        if (kid !== undefined) {
+          // The published key set proves the duplicate — the same place the
+          // empty / EC-only / no-verify-op shapes are detected.
+          const published = typeof inner.jwks === 'function' ? inner.jwks() : undefined;
+          const duplicates = countKeysWithKid(published, kid);
+          if (duplicates > 1) {
+            throw new TokenVerificationError(
+              'AUTH_SERVICE_UNAVAILABLE',
+              `Authentication service is temporarily unavailable (the realm published ${duplicates} signing keys under one key id)`
+            );
+          }
+        }
+        // No duplicate in the published set (or it cannot be read): the
+        // token-side reading is kept — the token is rejected, and the
+        // candidate trial below only applies to a token that names NO key
+        // id.
         throw err;
       }
       throw new TokenVerificationError(
@@ -542,20 +652,23 @@ const keycloakAuthService = {
       throw new TokenVerificationError('TOKEN_INVALID', 'Unknown issuer');
     }
 
+    // Opt-in audience binding (RFC 8707): when the caller supplies
+    // an `audience`, jose additionally validates the token's `aud` claim.
+    // Omitted → no audience check (the historical resource-server behavior —
+    // see the azp note below; pinned by keycloak-auth-service.audience.test.js).
+    // The options are built once and shared with the candidate trial, so
+    // both attempts verify the token under the SAME contract.
+    const jwtOptions = {
+      issuer: unverifiedIss,
+      algorithms: ['RS256'],
+      requiredClaims: ['iss', 'exp']
+    };
+    if (opts && opts.audience) {
+      jwtOptions.audience = opts.audience;
+    }
+
     // Helper function to verify token with JWT
     const verifyWithJwt = async () => {
-      // Opt-in audience binding (RFC 8707): when the caller supplies
-      // an `audience`, jose additionally validates the token's `aud` claim.
-      // Omitted → no audience check (the historical resource-server behavior —
-      // see the azp note below; pinned by keycloak-auth-service.audience.test.js).
-      const jwtOptions = {
-        issuer: unverifiedIss,
-        algorithms: ['RS256'],
-        requiredClaims: ['iss', 'exp']
-      };
-      if (opts && opts.audience) {
-        jwtOptions.audience = opts.audience;
-      }
       const { payload: verifiedPayload } = await jwtVerify(token, jwks, jwtOptions);
 
       // Note: we do NOT validate azp (authorized party). Any client within
@@ -587,17 +700,38 @@ const keycloakAuthService = {
         throw err;
       }
 
+      // The token named NO key id against a multi-key set: RFC 7515 §4.1.4
+      // makes the key id OPTIONAL, so the ambiguity is the token's, and the
+      // published candidates can resolve it. The trial is bounded (a hard
+      // cap), and only a signature failure moves on to the next candidate —
+      // a claim failure is the token's own defect whatever key it names.
+      let failure = err;
+      if (err.name === 'JWKSMultipleMatchingKeys') {
+        const trial = await tryCandidateKeys(err, token, jwtOptions);
+        if (trial.ok) {
+          const result = toResult(trial.payload);
+          logger.debug(`[KeycloakAuth] Token verified against a published candidate key for ${result.iss_sub}`);
+          return result;
+        }
+        if (trial.truncated) {
+          logger.warn(
+            `[KeycloakAuth] Token verification failed: the realm published more candidate keys than the trial cap (${MAX_CANDIDATE_KEYS} tried) — the token could not be resolved`
+          );
+        }
+        failure = trial.error || err;
+      }
+
       // JWTExpired → immediate TOKEN_EXPIRED (no refresh attempt)
-      if (err.name === 'JWTExpired') {
+      if (failure.name === 'JWTExpired') {
         throw new TokenVerificationError('TOKEN_EXPIRED', 'Token has expired');
       }
 
       // JWTClaimValidationFailed → TOKEN_INVALID (claim issues are NOT key rotation problems)
-      if (err.name === 'JWTClaimValidationFailed') {
-        if (err.claim === 'iss') {
+      if (failure.name === 'JWTClaimValidationFailed') {
+        if (failure.claim === 'iss') {
           throw new TokenVerificationError('TOKEN_INVALID', 'Token issuer validation failed');
         }
-        if (err.claim === 'aud') {
+        if (failure.claim === 'aud') {
           throw new TokenVerificationError('TOKEN_INVALID', 'Token audience validation failed');
         }
         throw new TokenVerificationError('TOKEN_INVALID', 'Token verification failed');
@@ -621,7 +755,7 @@ const keycloakAuthService = {
       // header before it resolves a key, so a refresh cannot make the same
       // token verify — and every junk-alg token that triggered one would
       // make every LEGITIMATE token pay a JWKS re-fetch.
-      if (err.name === 'JOSEAlgNotAllowed') {
+      if (failure.name === 'JOSEAlgNotAllowed') {
         throw new TokenVerificationError('TOKEN_INVALID', 'Token algorithm not allowed');
       }
 
@@ -629,17 +763,17 @@ const keycloakAuthService = {
       // distinct cause (tampered signature, unknown key id, ambiguous key
       // set, wrong algorithm) reaches the operator's log as the same
       // 'Token verification failed'.
-      if (err.refreshFloored) {
+      if (failure.refreshFloored) {
         // The refresh floor held the key-set refresh back. The realm may
         // ALREADY publish the key this token names — a rotation that landed
         // inside the window is observed by the next refresh, not by this
         // one. Saying so keeps a burst of 401s around a key rotation
         // distinguishable from a burst of junk tokens.
         logger.warn(
-          `[KeycloakAuth] Token verification failed (${err.name}): key-set refresh floored — rotation recovery deferred to the next refresh`
+          `[KeycloakAuth] Token verification failed (${failure.name}): key-set refresh floored — rotation recovery deferred to the next refresh`
         );
       } else {
-        logger.warn(`[KeycloakAuth] Token verification failed (${err.name || 'Error'}): ${err.message}`);
+        logger.warn(`[KeycloakAuth] Token verification failed (${failure.name || 'Error'}): ${failure.message}`);
       }
 
       throw new TokenVerificationError('TOKEN_INVALID', 'Token verification failed');

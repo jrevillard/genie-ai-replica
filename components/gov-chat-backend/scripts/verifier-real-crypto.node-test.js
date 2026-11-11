@@ -71,6 +71,15 @@ const JWKS = {
 const ROTATED_JWKS = {
   keys: [...JWKS.keys, { ...rotatedPublicKey, kid: 'rotated-key', alg: 'RS256', use: 'sig' }]
 };
+// A realm publishing the SAME key id twice (a misconfigured rotation, or
+// imported JWKs carrying an operator-chosen id): every token naming that id
+// resolves to two candidates, and the fault is the realm's own state.
+const DUPLICATE_KID_JWKS = {
+  keys: [
+    { ...publicKey, kid: 'test-key', alg: 'RS256', use: 'sig' },
+    { ...rotatedPublicKey, kid: 'test-key', alg: 'RS256', use: 'sig' }
+  ]
+};
 // A realm publishing an EC signing key only — nothing the verifier (RS256
 // only) could ever use.
 const EC_ONLY_JWKS = { keys: [{ ...ecPublicKey, kid: 'ec-key', alg: 'ES256', use: 'sig' }] };
@@ -469,18 +478,47 @@ test('KEYCLOAK_DISCOVERY_URL moves the discovery leg; the issuer surface is unch
   );
 });
 
-test('a kid-less token against a multi-key set is a bad token, not an outage', async () => {
-  // jose raises JWKSMultipleMatchingKeys when the token names NO key id and
-  // the key set holds several keys. That is a TOKEN-side ambiguity: it must
-  // not be classified as an outage, or an unauthenticated caller could make
-  // the service answer 503 at will.
+test('a kid-less token resolves against a published candidate key', async () => {
+  // RFC 7515 §4.1.4 makes the key id OPTIONAL: a token that names none
+  // against a multi-key set is not a bad token, it is a token jose cannot
+  // resolve by key id alone. The published candidates resolve it — the first
+  // one whose signature verifies wins.
   const svc = loadVerifier();
   const kidless = await new SignJWT(baseClaims(DISCOVERY_ISSUER))
     .setProtectedHeader({ alg: 'RS256' }) // alg, but NO key id
     .sign(privateKey);
+  const payload = await svc.verifyToken(kidless);
+  assert.equal(payload.sub, 'user-1');
+  assert.equal(payload.iss_sub, `${DISCOVERY_ISSUER}#user-1`);
+});
+
+test('a kid-less token that no published candidate signs is a bad token, not an outage', async () => {
+  // The opposite case: the token names no key id and none of the published
+  // candidates signs it. It stays a bad token (401) — a kid-less token is
+  // never ACCEPTED without a signature that verifies, and an unresolvable
+  // token is never reported as an outage.
+  const svc = loadVerifier();
+  const kidless = await new SignJWT(baseClaims(DISCOVERY_ISSUER))
+    .setProtectedHeader({ alg: 'RS256' })
+    .sign(rotatedPrivateKey); // a key the realm does not publish
   await assert.rejects(
     () => svc.verifyToken(kidless),
     (err) => err.code === 'TOKEN_INVALID'
+  );
+});
+
+test('a realm that publishes the same key id twice is an outage, not a bad token', async () => {
+  // A realm publishing the SAME key id twice (a misconfigured rotation, or
+  // imported JWKs carrying an operator-chosen id) makes every token naming
+  // that id resolve to two candidates. The fault is the realm's own state:
+  // it is an outage (503), so the operator is told — not a 401 that sends
+  // every user to the login page.
+  const svc = loadVerifier();
+  publishedKeys = DUPLICATE_KID_JWKS;
+  const token = await sign(baseClaims(DISCOVERY_ISSUER));
+  await assert.rejects(
+    () => svc.verifyToken(token),
+    (err) => err.code === 'AUTH_SERVICE_UNAVAILABLE'
   );
 });
 

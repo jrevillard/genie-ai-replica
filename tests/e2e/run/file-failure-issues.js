@@ -254,7 +254,7 @@ function namesOutsideE2eTree(token) {
           // them, and their spec names would make this tree's OWN bare
           // names look like another tree's files.
           const rel = path.relative(REPO_ROOT, full).split(path.sep);
-          if (rel.length >= 2 && rel[rel.length - 2] === 'tests' && rel[rel.length - 1] === 'e2e') continue;
+          if (rel.length >= 2 && rel[rel.length - 2].toLowerCase() === 'tests' && rel[rel.length - 1].toLowerCase() === 'e2e') continue;
           walk(full);
         } else if (/\.(?:spec|test)\.[cm]?[jt]sx?$/.test(entry.name)) {
           otherTreeNames.add(entry.name);

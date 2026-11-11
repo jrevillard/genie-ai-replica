@@ -47,10 +47,12 @@ test.describe('RAG error handling', () => {
   //     text, then the streaming flag — so 20 s;
   //   - the composer a third time: 5 s.
   //
-  // That is 95 s of waiting in the BODY, plus 105 s of ACTION ceilings
-  // — the project's 15 s actionTimeout on seven operations: the two
-  // sends' fill and press, the answer's innerText, the final fill and
-  // its inputValue.
+  // That is 95 s of waiting in the BODY, plus 105 s of ceilings on
+  // seven operations: five actions at the project's 15 s actionTimeout
+  // (the two sends' fill and press, the final fill) and two getters at
+  // the same 15 s (the answer's innerText and the inputValue) — the
+  // runner makes actionTimeout the context's default timeout, so those
+  // two follow it (and setting it to 0 would leave them unbounded).
   //
   // The budget is ONE total, shared by the hook and the body:
   // `test.describe.configure({ timeout })` bounds the test, and the hook

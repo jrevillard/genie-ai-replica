@@ -84,7 +84,7 @@ function inChild(script, env = {}) {
  * goes red on the resolver's mood is a flake, not a gate (the suite's
  * rule: wait for conditions, not durations).
  *
- * FOURTEEN probes, not four: the promise form is what Playwright's
+ * FIFTEEN probes, not four: the promise form is what Playwright's
  * APIRequestContext uses, and it resolves with `all: true` — a shape the
  * plain probe never asks for, so the preload's `all` branch would go
  * unpinned. Playwright asks for `all: true` TOGETHER with a family
@@ -97,7 +97,7 @@ function inChild(script, env = {}) {
 const FOUR_ENTRIES = `
 const dns = require('dns');
 const out = {};
-let pending = 14;
+let pending = 15;
 const settle = () => { if (--pending === 0) console.log(JSON.stringify(out)); };
 dns.lookup(process.env.PROBE_HOST, (e, a) => { out.lookup = e ? 'ERR:' + e.code : a; settle(); });
 dns.lookup(process.env.PROBE_HOST, { all: true }, (e, a) => { out.lookupAll = e ? 'ERR:' + e.code : a; settle(); });
@@ -125,6 +125,7 @@ dns.promises.lookup(process.env.PROBE_HOST, { all: true, family: 6 }).then(
   (e) => { out.promiseAll6 = 'ERR:' + e.code; settle(); }
 );
 dns.resolve4(process.env.PROBE_HOST, (e, a) => { out.resolve4 = e ? 'ERR:' + e.code : a; settle(); });
+dns.resolve4(process.env.PROBE_HOST, { ttl: true }, (e, a) => { out.resolve4Ttl = e ? 'ERR:' + e.code : a; settle(); });
 dns.resolve6(process.env.PROBE_HOST, (e, a) => { out.resolve6 = e ? 'ERR:' + e.code : a; settle(); });
 dns.lookup(process.env.PROBE_HOST, 6, (e, a) => { out.cbNumeric6 = e ? 'ERR:' + e.code : a; settle(); });
 dns.promises.lookup(process.env.PROBE_HOST, 6).then(
@@ -165,6 +166,9 @@ test.describe("the preload maps the venue name in Node's resolver", () => {
     expect(out.promise).toBe(VENUE_IP);
     // The direct record query.
     expect(out.resolve4).toEqual([VENUE_IP]);
+    // The `ttl: true` shape is a DIFFERENT shape: a caller that asks
+    // for the TTL gets [{address, ttl}], not a bare address.
+    expect(out.resolve4Ttl).toEqual([{ address: VENUE_IP, ttl: 0 }]);
     // The venue has no AAAA record: the IPv6 answer is empty, so the
     // caller stays on the IPv4 path instead of waiting for a resolution
     // that cannot succeed.

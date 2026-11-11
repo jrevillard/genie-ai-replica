@@ -594,6 +594,7 @@
                             v-for="doc in sortedAndFilteredDocuments"
                             :key="doc._key"
                             class="document-row"
+                            data-test-id="document-row"
                             @click="viewDocumentDetails(doc.file_id)"
                           >
                             <td @click.stop>

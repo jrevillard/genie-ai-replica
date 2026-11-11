@@ -10,7 +10,7 @@
           </div>
 
           <div class="quick-stats">
-            <div class="stat-card" data-test-id="stat-system-uptime">
+            <div class="stat-card stat-card--uptime" data-test-id="stat-system-uptime">
               <div class="stat-title">
                 {{ translate('admin.systemUptime', 'System Uptime') }}
               </div>
@@ -20,7 +20,7 @@
                 {{ translate('admin.fromLastMonth', 'from last month') }}
               </div>
             </div>
-            <div class="stat-card" data-test-id="stat-avg-response-time">
+            <div class="stat-card stat-card--response" data-test-id="stat-avg-response-time">
               <div class="stat-title">
                 {{ translate('admin.avgResponseTime', 'Average Response Time') }}
               </div>
@@ -34,7 +34,7 @@
                 {{ translate('admin.fromLastMonth', 'from last month') }}
               </div>
             </div>
-            <div class="stat-card" data-test-id="stat-error-rate">
+            <div class="stat-card stat-card--errors" data-test-id="stat-error-rate">
               <div class="stat-title">
                 {{ translate('admin.errorRate', 'Error Rate') }}
               </div>
@@ -44,7 +44,7 @@
                 {{ translate('admin.fromLastMonth', 'from last month') }}
               </div>
             </div>
-            <div class="stat-card" data-test-id="stat-monthly-active-users">
+            <div class="stat-card stat-card--users" data-test-id="stat-monthly-active-users">
               <div class="stat-title">
                 {{ translate('admin.monthlyActiveUsers', 'Monthly Active Users (MAU)') }}
               </div>

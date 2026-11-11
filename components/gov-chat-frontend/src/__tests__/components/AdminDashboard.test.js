@@ -363,6 +363,18 @@ describe('AdminDashboard', () => {
       expect(wrapper.find('.admin-page').classes()).toContain('genie-living-intelligence');
     });
 
+    it('each overview tile carries its hue modifier (Phase V2)', () => {
+      // The layer paints per-metric washes off these modifiers (uptime=success,
+      // response=info, errors=danger, users=accent). A rename here silently
+      // flattens the tile row back to one shared chrome — the pin makes that
+      // a red test, not a quiet regression.
+      const wrapper = createAdminDashboardWrapper();
+      expect(wrapper.find('[data-test-id="stat-system-uptime"]').classes()).toContain('stat-card--uptime');
+      expect(wrapper.find('[data-test-id="stat-avg-response-time"]').classes()).toContain('stat-card--response');
+      expect(wrapper.find('[data-test-id="stat-error-rate"]').classes()).toContain('stat-card--errors');
+      expect(wrapper.find('[data-test-id="stat-monthly-active-users"]').classes()).toContain('stat-card--users');
+    });
+
     it('renders the overview tab by default', () => {
       const wrapper = createAdminDashboardWrapper();
       expect(wrapper.find('[data-test-id="admin-dashboard"]').exists()).toBe(true);

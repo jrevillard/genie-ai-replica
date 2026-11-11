@@ -88,10 +88,11 @@ function inChild(script, env = {}) {
 const FOUR_ENTRIES = `
 const dns = require('dns');
 const out = {};
-let pending = 6;
+let pending = 8;
 const settle = () => { if (--pending === 0) console.log(JSON.stringify(out)); };
 dns.lookup(process.env.PROBE_HOST, (e, a) => { out.lookup = e ? 'ERR:' + e.code : a; settle(); });
 dns.lookup(process.env.PROBE_HOST, { all: true }, (e, a) => { out.lookupAll = e ? 'ERR:' + e.code : a; settle(); });
+dns.lookup(process.env.PROBE_HOST, { family: 6 }, (e, a) => { out.lookup6 = e ? 'ERR:' + e.code : a; settle(); });
 dns.promises.lookup(process.env.PROBE_HOST).then(
   (r) => { out.promise = r.address; settle(); },
   (e) => { out.promise = 'ERR:' + e.code; settle(); }
@@ -99,6 +100,10 @@ dns.promises.lookup(process.env.PROBE_HOST).then(
 dns.promises.lookup(process.env.PROBE_HOST, { all: true }).then(
   (r) => { out.promiseAll = r; settle(); },
   (e) => { out.promiseAll = 'ERR:' + e.code; settle(); }
+);
+dns.promises.lookup(process.env.PROBE_HOST, { family: 6 }).then(
+  (r) => { out.promise6 = r.address; settle(); },
+  (e) => { out.promise6 = 'ERR:' + e.code; settle(); }
 );
 dns.resolve4(process.env.PROBE_HOST, (e, a) => { out.resolve4 = e ? 'ERR:' + e.code : a; settle(); });
 dns.resolve6(process.env.PROBE_HOST, (e, a) => { out.resolve6 = e ? 'ERR:' + e.code : a; settle(); });
@@ -111,7 +116,8 @@ dns.resolve6(process.env.PROBE_HOST, (e, a) => { out.resolve6 = e ? 'ERR:' + e.c
  * directly and never read the hosts file, so a name like 'localhost'
  * would make them wait on the resolver's timeout — the very race this
  * spec must not have. The two that answer from the hosts file are the
- * two the preload patches first, and the two the API helpers use.
+ * two the preload patches first: the promise form is the one the API
+ * helpers use, the callback form is patched for the other callers.
  */
 const TWO_ENTRIES = `
 const dns = require('dns');
@@ -144,6 +150,14 @@ test.describe("the preload maps the venue name in Node's resolver", () => {
     // answer the plain probe gets.
     expect(out.lookupAll).toEqual([{ address: VENUE_IP, family: 4 }]);
     expect(out.promiseAll).toEqual([{ address: VENUE_IP, family: 4 }]);
+    // A family-6 caller gets the RESOLVER's answer, not the mapped IPv4:
+    // the venue has no AAAA record, so answering it the mapped address
+    // would be a lie about the family the caller asked for. The answer
+    // is there (the resolver's), and it is not the venue's address.
+    expect(out.lookup6).toBeDefined();
+    expect(out.lookup6).not.toBe(VENUE_IP);
+    expect(out.promise6).toBeDefined();
+    expect(out.promise6).not.toBe(VENUE_IP);
   });
 
   test('a name that is not the venue is left to the resolver', () => {
@@ -159,13 +173,14 @@ test.describe("the preload maps the venue name in Node's resolver", () => {
     // The preload runs inside EVERY process of a run, the pre-flight
     // among them: a preload that died on a bad value would take the
     // pre-flight down with it, and the operator would read a stack trace
-    // instead of the named cause. A value that is not an address means
-    // the preload simply does not map.
+    // instead of the named cause.
     //
     // The claim is about the PROCESS, so it is measured on the process:
     // the child prints its marker and exits 0 — and execFileSync throws
     // when the child dies at load. No DNS is involved, so the case has
-    // no timing to lose.
+    // no timing to lose. (That an unusable value maps NOTHING is the
+    // mapping module's own contract, checked where the value is read —
+    // `helpers/venue-launch-args.spec.js`.)
     const out = inChild("console.log('alive')", {
       E2E_VENUE_IP: 'not an address',
       E2E_VENUE_HOST: VENUE_HOST

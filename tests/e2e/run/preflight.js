@@ -164,16 +164,22 @@ async function main() {
     failure = namedFailure('the browser could not open the venue', e.message);
   }
   // The browser closes BEFORE the exit: an exit that skips a finally block
-  // would orphan a live Chromium on the machine. A close that FAILS is a
-  // cause of its own, but it must not REPLACE the cause already found —
-  // the operator needs the first one.
+  // would orphan a live Chromium on the machine. A close that FAILS is
+  // reported in its own right — the operator must hear that a Chromium
+  // may be left running — and it never REPLACES the cause already found:
+  // the first cause stays the headline.
+  let cleanupFailure = null;
   try {
     await browser.close();
   } catch (e) {
-    failure = failure || namedFailure('the browser could not close', e.message);
+    cleanupFailure = e;
   }
   if (failure) {
     process.stderr.write(failure);
+    process.exitCode = 1;
+  }
+  if (cleanupFailure) {
+    process.stderr.write(namedFailure('the browser could not close', cleanupFailure.message));
     process.exitCode = 1;
   }
 }
@@ -184,13 +190,13 @@ async function main() {
 // file as a process (`node tests/e2e/run/preflight.js`), so the entry point
 // is the only way it starts.
 if (require.main === module) {
-  // An escaping rejection must not print a stack: this module's promise
-  // to the operator is a NAMED cause, never frames. The catch is the
-  // last net under a cause that has no other home.
-  main().catch((e) => {
-    process.stderr.write(namedFailure('the pre-flight failed', e.message));
-    process.exitCode = 1;
-  });
+  // No catch here, on purpose: every await in main() is guarded (the
+  // launch, the navigation, the close), so nothing escapes it, and a
+  // rejection that DID escape would be an internal bug — a stack is the
+  // honest output for that, and node exits 1 on it. A catch here would
+  // rewrite an internal failure into a named cause and hide the frames
+  // that say where it came from.
+  main();
 }
 
 module.exports = { classifyVenueStatus, namedFailure };

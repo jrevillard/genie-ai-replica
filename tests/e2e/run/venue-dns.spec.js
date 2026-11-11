@@ -84,7 +84,7 @@ function inChild(script, env = {}) {
  * goes red on the resolver's mood is a flake, not a gate (the suite's
  * rule: wait for conditions, not durations).
  *
- * TWELVE probes, not four: the promise form is what Playwright's
+ * FOURTEEN probes, not four: the promise form is what Playwright's
  * APIRequestContext uses, and it resolves with `all: true` — a shape the
  * plain probe never asks for, so the preload's `all` branch would go
  * unpinned. Playwright asks for `all: true` TOGETHER with a family
@@ -97,7 +97,7 @@ function inChild(script, env = {}) {
 const FOUR_ENTRIES = `
 const dns = require('dns');
 const out = {};
-let pending = 12;
+let pending = 14;
 const settle = () => { if (--pending === 0) console.log(JSON.stringify(out)); };
 dns.lookup(process.env.PROBE_HOST, (e, a) => { out.lookup = e ? 'ERR:' + e.code : a; settle(); });
 dns.lookup(process.env.PROBE_HOST, { all: true }, (e, a) => { out.lookupAll = e ? 'ERR:' + e.code : a; settle(); });
@@ -126,6 +126,11 @@ dns.promises.lookup(process.env.PROBE_HOST, { all: true, family: 6 }).then(
 );
 dns.resolve4(process.env.PROBE_HOST, (e, a) => { out.resolve4 = e ? 'ERR:' + e.code : a; settle(); });
 dns.resolve6(process.env.PROBE_HOST, (e, a) => { out.resolve6 = e ? 'ERR:' + e.code : a; settle(); });
+dns.lookup(process.env.PROBE_HOST, 6, (e, a) => { out.cbNumeric6 = e ? 'ERR:' + e.code : a; settle(); });
+dns.promises.lookup(process.env.PROBE_HOST, 6).then(
+  (r) => { out.promiseNumeric6 = r; settle(); },
+  (e) => { out.promiseNumeric6 = 'ERR:' + e.code; settle(); }
+);
 `;
 
 /**
@@ -176,17 +181,30 @@ test.describe("the preload maps the venue name in Node's resolver", () => {
     expect(out.promiseAll4).toEqual([{ address: VENUE_IP, family: 4 }]);
     // A family-6 caller gets the RESOLVER's answer, not the mapped IPv4:
     // the venue has no AAAA record, so answering it the mapped address
-    // would be a lie about the family the caller asked for. The check is
-    // on the CONTENT of the answer — the venue's address inside an array
-    // is as wrong as the address itself.
-    expect(out.lookup6).toBeDefined();
-    expect(JSON.stringify(out.lookup6)).not.toContain(VENUE_IP);
-    expect(out.promise6).toBeDefined();
-    expect(JSON.stringify(out.promise6)).not.toContain(VENUE_IP);
-    expect(out.lookupAll6).toBeDefined();
-    expect(JSON.stringify(out.lookupAll6)).not.toContain(VENUE_IP);
-    expect(out.promiseAll6).toBeDefined();
-    expect(JSON.stringify(out.promiseAll6)).not.toContain(VENUE_IP);
+    // would be a lie about the family the caller asked for.
+    //
+    // Two checks, because the contract has two clauses. The answer must
+    // not carry the venue's address — and it must not carry ANY IPv4: a
+    // fabricated address of another kind is just as wrong a family-6
+    // answer as the mapped one, and the check is on the CONTENT of the
+    // answer (the venue's address inside an array is as wrong as the
+    // address itself).
+    const noIPv4 = /\d+\.\d+\.\d+\.\d+/;
+    for (const answer of [out.lookup6, out.promise6, out.lookupAll6, out.promiseAll6]) {
+      expect(answer).toBeDefined();
+      expect(JSON.stringify(answer)).not.toContain(VENUE_IP);
+      expect(JSON.stringify(answer)).not.toMatch(noIPv4);
+    }
+    // The NUMERIC family convention is a calling convention of its own:
+    // `dns.lookup(host, 6, cb)` says the family as a number, and the
+    // preload recognises it. A caller in that shape must get the
+    // resolver's answer too.
+    expect(out.cbNumeric6).toBeDefined();
+    expect(JSON.stringify(out.cbNumeric6)).not.toContain(VENUE_IP);
+    expect(JSON.stringify(out.cbNumeric6)).not.toMatch(noIPv4);
+    expect(out.promiseNumeric6).toBeDefined();
+    expect(JSON.stringify(out.promiseNumeric6)).not.toContain(VENUE_IP);
+    expect(JSON.stringify(out.promiseNumeric6)).not.toMatch(noIPv4);
   });
 
   test('a name that is not the venue is left to the resolver', () => {

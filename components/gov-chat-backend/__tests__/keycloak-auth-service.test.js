@@ -222,11 +222,10 @@ describe('keycloakAuthService', () => {
 
       await keycloakAuthService.verifyToken(generateMockJwtString(mockJwtPayload));
 
-      const [url, options] = mockCreateRemoteJWKSet.mock.calls[0];
+      const [url] = mockCreateRemoteJWKSet.mock.calls[0];
       expect(String(url)).toBe(mockDiscovery.jwks_uri);
-      // The cache policy is jose's own now (the TTL and the refresh floor)
-      // — see the 'JWKS cache' block.
-      expect(options).toEqual({ cacheMaxAge: 300000, cooldownDuration: 1000 });
+      // The cache policy (the TTL and the refresh floor) is jose's own now
+      // — it is asserted once, in the 'JWKS cache' block.
     });
 
     it('should throw TOKEN_INVALID for jwtVerify signature failure (revoked token scenario)', async () => {
@@ -889,7 +888,10 @@ describe('keycloakAuthService', () => {
       expect(mockJwtVerify).toHaveBeenCalledTimes(1);
     });
 
-    it('does not spend a signature verification on a kid-less token whose expiry jose refuses', async () => {
+    it.each([
+      ['expiry claim is missing', undefined],
+      ['expiry claim is present but not a number', '0']
+    ])('does not spend a signature verification on a kid-less token whose %s', async (_case, exp) => {
       // jose REQUIRES the expiry claim (`requiredClaims`) and refuses one
       // that is not a number, so a token without a numeric expiry is
       // invalid whatever key signs it. The trial must not spend a
@@ -902,7 +904,7 @@ describe('keycloakAuthService', () => {
         }
       });
 
-      const token = generateMockJwtString({ exp: undefined });
+      const token = generateMockJwtString({ exp });
       await expect(keycloakAuthService.verifyToken(token)).rejects.toMatchObject({
         code: 'TOKEN_INVALID',
         message: 'Token verification failed'
@@ -912,27 +914,30 @@ describe('keycloakAuthService', () => {
       expect(mockJwtVerify).toHaveBeenCalledTimes(1);
     });
 
-    it('does not spend a signature verification on a kid-less token whose expiry claim is present but not a number', async () => {
-      // jose refuses a non-numeric expiry (a claim failure), so the token
-      // is invalid whatever key signs it: the trial must not spend a
-      // signature verification to learn that. The claim is PRESENT here —
-      // the missing-claim case is covered by the test above.
+    it('stops the trial at the first candidate whose claims fail', async () => {
+      // A claim failure is the token's own defect — no other candidate can
+      // repair it — so the trial must not spend a verification on the rest.
       mockAmbiguousKeySet({
         protectedHeader: { alg: 'RS256' },
         candidates: candidates(2),
         onCandidate: () => {
-          throw signatureFailureError();
+          const claimError = new Error('audience validation failed');
+          claimError.name = 'JWTClaimValidationFailed';
+          claimError.claim = 'aud';
+          throw claimError;
         }
       });
 
-      const token = generateMockJwtString({ exp: '0' });
-      await expect(keycloakAuthService.verifyToken(token)).rejects.toMatchObject({
+      await expect(
+        keycloakAuthService.verifyToken(generateMockJwtString(mockJwtPayload), { audience: 'genie-app' })
+      ).rejects.toMatchObject({
         code: 'TOKEN_INVALID',
-        message: 'Token verification failed'
+        message: 'Token audience validation failed'
       });
 
-      // Only the first attempt: no candidate was tried.
-      expect(mockJwtVerify).toHaveBeenCalledTimes(1);
+      // The first attempt, then ONE candidate: the claim failure ended the
+      // trial.
+      expect(mockJwtVerify).toHaveBeenCalledTimes(2);
     });
 
     it('treats a kid-less token whose expiry is the current second as expired', async () => {
@@ -1067,6 +1072,32 @@ describe('keycloakAuthService', () => {
         });
 
         expect(warns.lines()).toContain('2 further rejection(s) with this cause were suppressed');
+      } finally {
+        clockSpy.mockRestore();
+        warns.restore();
+      }
+    });
+
+    it('keeps a rejection suppressed for the whole minute', async () => {
+      // The bound is "one WARN per cause per minute per issuer": a window
+      // shorter than that would let a caller produce a WARN per request.
+      const warns = captureWarns();
+      const realNow = Date.now();
+      const clockSpy = jest.spyOn(Date, 'now').mockReturnValue(realNow);
+      mockJwtVerify.mockRejectedValue(unknownKidError());
+      const token = generateMockJwtString({ exp: undefined });
+
+      try {
+        await expect(keycloakAuthService.verifyToken(token)).rejects.toMatchObject({
+          code: 'TOKEN_INVALID'
+        });
+        // Just short of the window: the repeat is still suppressed.
+        clockSpy.mockReturnValue(realNow + 59999);
+        await expect(keycloakAuthService.verifyToken(token)).rejects.toMatchObject({
+          code: 'TOKEN_INVALID'
+        });
+
+        expect(warns.lines().split('\n').filter(Boolean)).toHaveLength(1);
       } finally {
         clockSpy.mockRestore();
         warns.restore();

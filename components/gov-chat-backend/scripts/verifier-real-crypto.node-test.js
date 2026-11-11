@@ -544,6 +544,17 @@ test('a kid-less token resolves against a published candidate key', async () => 
   assert.equal(payload.iss_sub, `${DISCOVERY_ISSUER}#user-1`);
 });
 
+test('a kid-less token signed by the second published key resolves against it', async () => {
+  // The trial tries the candidates IN TURN: a candidate whose signature does
+  // not verify is not the token's end — the next published key may be the
+  // one that signed it. Only a CLAIM failure ends the trial.
+  const svc = loadVerifier();
+  const kidless = await sign(baseClaims(DISCOVERY_ISSUER), { key: partnerPrivateKey, kid: undefined });
+  const payload = await svc.verifyToken(kidless);
+  assert.equal(payload.sub, 'user-1');
+  assert.equal(payload.iss_sub, `${DISCOVERY_ISSUER}#user-1`);
+});
+
 test('a kid-less token that no published candidate signs is a bad token, not an outage', async () => {
   // The opposite case: the token names no key id and none of the published
   // candidates signs it. It stays a bad token (401) — a kid-less token is

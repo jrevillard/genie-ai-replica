@@ -8,7 +8,7 @@ aliases:
 mode: how-to
 persona: deployer
 owner: "docs-stewards"
-last_reviewed: 2026-09-18
+last_reviewed: 2026-11-11
 ---
 
 This guide covers local single-node deployment with `docker compose up`. For
@@ -59,7 +59,9 @@ re-owned before the backend starts (the Ansible path converges it via
 its migration tasks instead).
 
 - **Docker Engine 23+** with Compose v2 (`docker compose` subcommand)
-- **NVIDIA Container Toolkit** (only if using `--profile opea` with GPU)
+- **NVIDIA Container Toolkit** (only if using `--profile opea` with an
+  NVIDIA GPU; on an AMD ROCm host no toolkit is needed — see
+  [GPU Deployment → ROCm](/docs/deploy/gpu/))
 - **Hugging Face API token** (only if using `--profile opea` — set
   `HUGGING_FACE_HUB_TOKEN` in `.env`)
 
@@ -342,6 +344,22 @@ docker compose --env-file .env --env-file env.rtx6000 \
 ```
 
 See [GPU Deployment](/docs/deploy/gpu/) for variable details.
+
+For an **AMD ROCm host** (Strix Halo / gfx1151 iGPU class): layer the ROCm
+overlay with `-f` (the overlay file must come last; the base files are
+never edited) and use `env.strixhalo` for sizing. No NVIDIA toolkit is
+needed — the overlay passes `/dev/kfd` + `/dev/dri` and the host's
+`render`/`video` GIDs directly:
+
+```bash
+docker compose --env-file .env --env-file env.strixhalo \
+  -f docker-compose.yaml -f docker-compose.rocm.yaml \
+  --profile opea --profile gpu-models up -d
+```
+
+Use this when the GPU tier should run on the local AMD iGPU instead of an
+NVIDIA card. Hardware prerequisites, image pins, sizing values and the
+swarm caveat: [GPU Deployment → ROCm](/docs/deploy/gpu/).
 
 ### 6e. Remote GPU node (optional)
 

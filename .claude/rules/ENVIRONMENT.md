@@ -126,6 +126,12 @@ the knobs to lower.
   Dataprep does **not** read it — it discovers the served window at runtime
   from `VLLM_ENDPOINT` (issue #1182). `DATAPREP_MAX_MODEL_LEN` is the lever on
   a provider whose `/v1/models` carries no `max_model_len`.
+- GPU-profile env files: `env.t4` (T4, 2048 window), `env.rtx6000`
+  (RTX 6000 ADA, 65536) and `env.strixhalo` (AMD Strix Halo / gfx1151 —
+  used with the `docker-compose.rocm*.yaml` overlays; ships **16384** on
+  a shared host under a 32 GB coexistence ceiling; 0.55/49152 is the
+  mostly-dedicated-host window and 65536 does not fit that 45.8 GiB GTT
+  aperture). Same budget derivation on all three.
 - The ceiling is enforced on **every** write path: the import splits (or
   rejects), the Studio editor refuses the save (409, nothing written), and
   the publish gate refuses **before** minting a version. For an over-ceiling

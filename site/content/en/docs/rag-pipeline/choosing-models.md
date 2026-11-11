@@ -5,7 +5,7 @@ weight: 7
 mode: reference
 persona: developer
 owner: docs-stewards
-last_reviewed: 2026-09-29
+last_reviewed: 2026-11-11
 aliases:
   - /docs/rag/choosing-models/
 ---
@@ -721,6 +721,55 @@ NVIDIA_VISIBLE_DEVICES=1
 | GPU Server | 48GB+ | Main inference, labeling, graph | Llama 3.1 70B-AWQ or Qwen 2.5 14B |
 | GPU Server | 16GB+ | Translation, embeddings, reranking | TranslateGemma 4B + bge-m3 |
 | App Server | CPU only | Backend, frontend, Kong, ArangoDB | N/A |
+
+### Profile E: AMD Strix Halo iGPU (45.8 GiB GTT, unified memory) — measured
+
+Measured on the reference machine (Ryzen AI MAX+ 395, Radeon 8060S iGPU,
+`gfx1151`, 91 GB unified LPDDR5X; deployment via the ROCm compose overlays
+— see the ROCm section of [GPU Deployment](/docs/deploy/gpu/)). Unified
+memory changes the math: vLLM claims fractions of the **GTT aperture**
+(45.8 GiB, measured via `rocm-smi --showmeminfo gtt`), which is carved
+from the 91 GB system RAM — GPU claims add to host RAM pressure, and the
+TEI services claim nothing at all (CPU).
+
+**What fits on the aperture** (shipped `env.strixhalo` sizing targets a
+**shared** host — GPU-tier claims + the desktop GTT baseline + runtime
+overhead must stay under 32 GB, operator decision 2026-11-11):
+
+| Instance | Model | Claim | Window |
+|---|---|---|---|
+| Main vLLM | `ibm-granite/granite-4.1-8b` (half) | 0.42 (19.2 GiB: ~16.5 GiB weights + ~2.7 GiB KV) | **16384** |
+| Translation vLLM | `google/gemma-3-4b-it` | 0.19 (the floor that fits the weights + an 8192 KV window) | 8192 |
+| TEI embedding / reranker | `BAAI/bge-large-en-v1.5` / `BAAI/bge-reranker-v2-m3` | **CPU** (zero GTT) | — |
+
+Notes:
+
+- Larger windows need a **mostly-dedicated** host: 0.55 / **49152** fits
+  the 45.8 GiB aperture with neighbors stopped (~39 GB peak). **65536
+  does NOT fit** even there — it needs ~10 GiB KV at 0.55; the engine's
+  own estimate for that split was max 54064. Window sizing here is
+  hardware math, not a tuning preference.
+- Guided JSON (`response_format={"type":"json_object"}`) verified on the
+  ROCm vLLM image — the labeling role keeps its model requirement.
+- The TEI ROCm image fails on gfx1151 (Instinct-only kernels); the CPU
+  image serves both bge-scale models fine on 32 cores.
+
+```bash
+# Strix Halo (values ship in env.strixhalo, used with the ROCm overlays)
+VLLM_LLM_MODEL_ID=ibm-granite/granite-4.1-8b
+VLLM_GPU_UTILIZATION=0.42
+VLLM_MAX_MODEL_LEN=16384
+VLLM_MAX_NUM_SEQS=16
+VLLM_DTYPE=half
+
+VLLM_TRANSLATION_MODEL_ID=google/gemma-3-4b-it
+VLLM_TRANSLATION_GPU_UTILIZATION=0.19
+VLLM_TRANSLATION_MAX_MODEL_LEN=8192
+VLLM_TRANSLATION_MAX_NUM_SEQS=16
+VLLM_TRANSLATION_DTYPE=auto
+
+DOCLING_DEVICE=cpu
+```
 
 ### Other Notable Hardware
 

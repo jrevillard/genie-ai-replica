@@ -5,7 +5,7 @@ description: "Every supported env-var with default, scope, and the container tha
 mode: reference
 persona: mixed
 owner: docs-stewards
-last_reviewed: 2026-09-29
+last_reviewed: 2026-11-11
 ---
 
 ## Purpose
@@ -148,19 +148,46 @@ to reproduce here — see `docker-compose.yaml` for the canonical values.
 
 ## GPU profile overlays
 
-`env.t4` and `env.rtx6000` overlay these on top of `env` to set GPU-memory
-utilization and model-length limits per profile. They are read via
-`docker compose --env-file .env --env-file env.<profile> up -d`.
+`env.t4` and `env.rtx6000` (NVIDIA) and `env.strixhalo` (AMD ROCm / Strix
+Halo) overlay these on top of `env` to set GPU-memory utilization and
+model-length limits per profile. The NVIDIA profiles are read via
+`docker compose --env-file .env --env-file env.<profile> up -d`;
+`env.strixhalo` is read together with the ROCm overlay
+(`-f docker-compose.yaml -f docker-compose.rocm.yaml`, or
+`-f docker-compose.gpu.yaml -f docker-compose.rocm.gpu.yaml` on a GPU
+node) — see [GPU Deployment → ROCm](/docs/deploy/gpu/).
 
-| Variable | env.t4 default | env.rtx6000 default | Notes |
-|---|---|---|---|
-| `VLLM_GPU_UTILIZATION` | `0.4` | `0.55` | Fraction of GPU memory vLLM pre-allocates |
-| `VLLM_MAX_MODEL_LEN` | `2048` | `65536` | Context length — the vLLM-side memory knob (`--max-model-len`). Dataprep does NOT read it: it discovers the served window at runtime from `VLLM_ENDPOINT` (see `DATAPREP_MAX_MODEL_LEN`) |
-| `VLLM_MAX_NUM_SEQS` | `16` | `16` | Max concurrent sequences |
-| `VLLM_DTYPE` | `half` | _(unset, defaults in docker-compose)_ | Compute dtype |
-| `VLLM_TRANSLATION_GPU_UTILIZATION` | `0.3` | `0.4` | |
-| `VLLM_TRANSLATION_MAX_MODEL_LEN` | `2048` | `8192` | |
-| `VLLM_TRANSLATION_MAX_NUM_SEQS` | `16` | `32` | |
+| Variable | env.t4 default | env.rtx6000 default | env.strixhalo default | Notes |
+|---|---|---|---|---|
+| `VLLM_GPU_UTILIZATION` | `0.4` | `0.55` | `0.42` | Fraction of GPU memory vLLM pre-allocates (on ROCm: of the 45.8 GiB GTT aperture) |
+| `VLLM_MAX_MODEL_LEN` | `2048` | `65536` | `16384` | Context length — the vLLM-side memory knob (`--max-model-len`). Dataprep does NOT read it: it discovers the served window at runtime from `VLLM_ENDPOINT` (see `DATAPREP_MAX_MODEL_LEN`). The shipped Strix Halo values target a shared host (32 GB coexistence ceiling); a mostly-dedicated host fits 0.55/49152, and 65536 does NOT fit at 0.55 (engine estimate 54064) |
+| `VLLM_MAX_NUM_SEQS` | `16` | `16` | `16` | Max concurrent sequences |
+| `VLLM_DTYPE` | `half` | _(unset, defaults in docker-compose)_ | `half` | Compute dtype |
+| `VLLM_TRANSLATION_GPU_UTILIZATION` | `0.3` | `0.4` | `0.19` | |
+| `VLLM_TRANSLATION_MAX_MODEL_LEN` | `2048` | `8192` | `8192` | |
+| `VLLM_TRANSLATION_MAX_NUM_SEQS` | `16` | `32` | `16` | |
+| `VLLM_TRANSLATION_DTYPE` | `half` | _(unset)_ | `auto` | |
+
+### ROCm-only variables (env.strixhalo)
+
+`env.strixhalo` additionally carries the image pins, model IDs, device
+group GIDs and shared-host port plan. Values exactly as shipped:
+
+| Variable | env.strixhalo value | Notes |
+|---|---|---|
+| `VLLM_ROCM_IMAGE` | `rocm/vllm:rocm10.1.0_ubuntu24.04_py3.14-pytorch_2.13.0_vllm-0.29.0` | vLLM ROCm 10.1 build (0.29.x) — both vLLM instances |
+| `TEI_ROCM_EMBEDDING_IMAGE` | `ghcr.io/huggingface/text-embeddings-inference:cpu-1.9.3` | CPU image — the ROCm TEI build fails on gfx1151 |
+| `TEI_ROCM_RERANKING_IMAGE` | `ghcr.io/huggingface/text-embeddings-inference:cpu-1.9.3` | CPU image (same) |
+| `VLLM_LLM_MODEL_ID` | `ibm-granite/granite-4.1-8b` | Spike-sized main LLM |
+| `VLLM_TRANSLATION_MODEL_ID` | `google/gemma-3-4b-it` | Spike-sized translation LLM |
+| `DOCLING_DEVICE` | `cpu` | No docling ROCm support on the ROCm path |
+| `NGINX_HTTP_PORT` | `8180` | Shared-host port plan (reference machine) |
+| `NGINX_HTTPS_PORT` | `8443` | |
+| `ARANGO_PORT` | `18529` | |
+| `GPU_HTTP_PORT` | `8181` | GPU-node venue (split topology) |
+| `GPU_HTTPS_PORT` | `18443` | |
+| `RENDER_GID` | `990` | Distro-specific — `getent group render` |
+| `VIDEO_GID` | `44` | Distro-specific — `getent group video` |
 
 ## Validation
 

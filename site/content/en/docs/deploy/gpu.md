@@ -1,6 +1,6 @@
 ---
 title: "GPU Deployment"
-description: "GPU deployment profiles for GENIE.AI (T4, RTX 6000, A40) with model-memory sizing and verification steps."
+description: "GPU deployment profiles for GENIE.AI (NVIDIA: T4, RTX 6000, A40; AMD ROCm: Strix Halo) with model-memory sizing and verification steps."
 weight: 4
 section: "deploy"
 aliases:
@@ -11,10 +11,11 @@ owner: "docs-stewards"
 last_reviewed: 2026-11-17
 ---
 
-This guide covers how to deploy GENIE.AI's AI layer on NVIDIA GPUs: choosing
-the right profile (T4 / RTX 6000 / A40), understanding the variables in
-`env.t4` and `env.rtx6000`, sizing VRAM, and verifying the stack after
-deployment.
+This guide covers how to deploy GENIE.AI's AI layer on GPUs: choosing the
+right NVIDIA profile (T4 / RTX 6000 / A40), understanding the variables in
+`env.t4` and `env.rtx6000`, sizing VRAM, verifying the stack after
+deployment — and the AMD ROCm path (Strix Halo iGPU) via compose overlays
+and `env.strixhalo`.
 
 For full end-to-end installation see
 [Install Guide](/docs/deploy/install-guide/) (single-node) or
@@ -138,6 +139,132 @@ docker stack deploy -c docker-compose.resolved.yaml genieai
 
 This uses the compose defaults (e.g. `VLLM_GPU_UTILIZATION=0.55`,
 `VLLM_MAX_MODEL_LEN=65536`, `VLLM_DTYPE=half`).
+
+## ROCm (AMD Strix Halo / gfx1151)
+
+The AMD path deploys the same four GPU-tier services (two vLLM instances +
+two TEI instances) on an AMD Radeon iGPU through compose **overlay files** —
+the base files and the NVIDIA path are never edited. Values below were
+measured on the reference machine: AMD Ryzen AI MAX+ 395 "Strix Halo",
+Radeon 8060S iGPU, `gfx1151`, 91 GB unified LPDDR5X.
+
+### Host prerequisites
+
+- **In-tree `amdgpu` kernel driver** with `/dev/kfd` and
+  `/dev/dri/renderD128` present. **No host ROCm userland is needed** — the
+  containers carry it. **No NVIDIA Container Toolkit either.**
+- **Device group access**: the overlay passes the host's `render` + `video`
+  GIDs into the containers (`RENDER_GID` / `VIDEO_GID` in `env.strixhalo` —
+  distro-specific; measure with `getent group render video`. 990 / 44 on
+  the reference Ubuntu host).
+- Verify the GPU is visible from a container:
+
+```bash
+docker run --rm --device=/dev/kfd --device=/dev/dri \
+  --group-add 990 --group-add 44 \
+  rocm/rocm-terminal:latest rocminfo
+# Look for: gfx1151 (AMD RYZEN AI MAX+ 395 w/ Radeon 8060S)
+```
+
+### Image pins (carried by `env.strixhalo`)
+
+| Variable | Image | Why |
+|---|---|---|
+| `VLLM_ROCM_IMAGE` | `rocm/vllm:rocm10.1.0_ubuntu24.04_py3.14-pytorch_2.13.0_vllm-0.29.0` | ROCm 10.1 build of vLLM 0.29.x — version parity with the NVIDIA pin (`vllm/vllm-openai:v0.29.0`); guided JSON verified (dataprep requirement) |
+| `TEI_ROCM_EMBEDDING_IMAGE` | `ghcr.io/huggingface/text-embeddings-inference:cpu-1.9.3` | TEI CPU fallback — see below |
+| `TEI_ROCM_RERANKING_IMAGE` | `ghcr.io/huggingface/text-embeddings-inference:cpu-1.9.3` | TEI CPU fallback — see below |
+
+### Overlay invocations
+
+The overlays layer on top of the untouched base files with `-f`, and the
+ROCm file must come **last** (verbatim from the overlay headers):
+
+```bash
+# Single-server: main stack, GPU tier on the local iGPU
+docker compose --env-file env.strixhalo \
+  -f docker-compose.yaml -f docker-compose.rocm.yaml \
+  --profile opea --profile gpu-models up -d
+
+# Split topology: standalone GPU-node stack on the ROCm node
+docker compose --env-file env.strixhalo \
+  -f docker-compose.gpu.yaml -f docker-compose.rocm.gpu.yaml up -d
+```
+
+`HUGGING_FACE_HUB_TOKEN` must reach the containers — set it in the
+environment or put `--env-file .env` ahead of `--env-file env.strixhalo`.
+The overlays restate only what a ROCm host needs: the image pins, GPU
+device access (`devices: /dev/kfd + /dev/dri` with `group_add`) and
+`NVIDIA_VISIBLE_DEVICES=void` (compose merges `environment:` by key, so
+omitting the var would NOT remove it; `void` claims no GPU and is ignored
+by ROCm containers). Everything else merges from the base files. The TEI
+services need no device access (CPU image). For the Ansible path,
+`deploy/ansible/deploy-gpu-rocm.yml` +
+`group_vars/rocm_gpu_api/vars.yml` drive the same GPU-node stack.
+
+### Window / memory sizing
+
+There is no discrete VRAM: vLLM claims fractions of the **GTT aperture** —
+measured 45.8 GiB (`rocm-smi --showmeminfo gtt`) — which is carved from the
+91 GB system RAM, so GPU-tier claims add to the host's RAM pressure. The
+shipped `env.strixhalo` sizing targets a **shared** host: total GPU-tier
+claims plus the desktop GTT baseline and runtime overhead must stay under
+32 GB (operator decision 2026-11-11).
+
+| Variable | `env.strixhalo` | Note |
+|---|---|---|
+| `VLLM_GPU_UTILIZATION` | `0.42` | 19.2 GiB claim (~16.5 GiB weights + ~2.7 GiB KV) |
+| `VLLM_MAX_MODEL_LEN` | `16384` | the window the 0.42 claim supports on a shared host |
+| `VLLM_MAX_NUM_SEQS` | `16` | |
+| `VLLM_DTYPE` | `half` | |
+| `VLLM_TRANSLATION_GPU_UTILIZATION` | `0.19` | gemma-3-4b-it — the floor that fits the weights + an 8192 KV window |
+| `VLLM_TRANSLATION_MAX_MODEL_LEN` | `8192` | |
+| `VLLM_TRANSLATION_MAX_NUM_SEQS` | `16` | |
+| `VLLM_TRANSLATION_DTYPE` | `auto` | |
+
+Larger windows need a **mostly-dedicated** host: `0.55` / `49152` fits the
+45.8 GiB aperture with neighbors stopped (~39 GB peak; ~16.5 GiB weights +
+8.25 GiB KV). Window sizing here is hardware math, not a tuning
+preference: at 0.55 a 65536 window needs ~10 GiB KV and does **not** fit —
+the engine's own estimate for that split was 54064.
+
+### Why TEI runs on CPU
+
+The official TEI ROCm image (`text-embeddings-inference:rocm-latest`)
+targets Instinct dGPUs (gfx9); on gfx1151 the backend dies on the first
+embed request. The CPU image serves `bge-large-en-v1.5` and
+`bge-reranker-v2-m3` fine on 32 cores and claims **zero GTT** — the whole
+aperture stays available to the two vLLM instances. The base compose TEI
+entrypoint flags work unchanged on the CPU image.
+
+### Verifying the ROCm GPU stack
+
+```bash
+# 1. Device visible (see host prerequisites above — rocminfo lists gfx1151)
+
+# 2. Model endpoints (single-server venue)
+docker compose exec vllm curl -s http://localhost:8000/health
+docker compose exec vllm curl -s http://localhost:8000/v1/models
+# → ['ibm-granite/granite-4.1-8b']
+
+# 3. Guided JSON — a chat completion with
+#    response_format={"type":"json_object"} must return valid JSON
+#    (dataprep chunk labeling depends on it)
+
+# 4. GTT usage
+docker run --rm --device=/dev/kfd --device=/dev/dri \
+  --group-add 990 --group-add 44 \
+  rocm/rocm-terminal:latest rocm-smi --showmeminfo gtt
+```
+
+### Swarm caveat
+
+`docker stack deploy` does **not** pass compose `devices:` — the short form
+is silently dropped and the long form is rejected
+(`services.*.devices.0: must be a string`). The swarm-deployed ROCm GPU
+tier therefore routes via the standalone GPU-node compose stack (second
+invocation above) on the ROCm node, wired to the app stack with the
+remote-GPU pattern — see
+[Docker Swarm Setup](/docs/deploy/docker-swarm-setup/).
 
 ## Verifying the GPU stack
 

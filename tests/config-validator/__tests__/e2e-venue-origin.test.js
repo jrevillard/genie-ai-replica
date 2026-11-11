@@ -34,7 +34,15 @@ const E2E_ROOT = path.join(ROOT, 'tests/e2e');
 // edge (genieai-forge.local) and the deployment edge (genieai.local).
 // A spec that hardcodes ANY of them names one venue instead of the one
 // it was given, and dies before its first assertion everywhere else.
-const LOCAL_ORIGIN = /https?:\/\/(?:localhost|127\.0\.0\.1|genieai(?:-forge)?\.local)(?::\d+)?(?=[/:]|$)/gi;
+//
+// The boundary is the HOST's: the origin must not be followed by another
+// host character (a letter, a digit, a dot or a dash), so
+// `https://localhost` matches — the spelling with no trailing slash, the
+// one a bare address carries — while `https://localhost.example.com`
+// and `https://localhostevil` do not: those are other hosts. A lookahead
+// for `/`, `:` or the end of the string misses the first case, because a
+// string literal carries a closing quote after the host.
+const LOCAL_ORIGIN = /https?:\/\/(?:localhost|127\.0\.0\.1|genieai(?:-forge)?\.local)(?::\d+)?(?![A-Za-z0-9.-])/gi;
 
 // The local origins the suite may drive on purpose: a mocked identity
 // provider, a local stub. One per line, with the reason. It is EMPTY on
@@ -118,6 +126,9 @@ describe('the e2e suite names the venue it was given, and names it once', () => 
       fs.writeFileSync(path.join(tree, 'compared.spec.js'), "expect(url).toBe('http://127.0.0.1/');\n");
       fs.writeFileSync(path.join(tree, 'ported.spec.js'), "await page.goto('https://localhost:443/');\n");
       fs.writeFileSync(path.join(tree, 'api.spec.js'), "await apiContext.post('https://localhost/auth/x');\n");
+      // The slashless spellings: a bare address, with no trailing slash.
+      fs.writeFileSync(path.join(tree, 'bare.spec.js'), "await page.goto('https://localhost');\n");
+      fs.writeFileSync(path.join(tree, 'bare-k8s.spec.js'), "await page.goto('https://genieai.local');\n");
       fs.writeFileSync(path.join(tree, 'prose.spec.js'), '// the old suite navigated to https://localhost/\n');
       fs.writeFileSync(path.join(tree, 'clean.spec.js'), 'await page.goto(`${BASE_URL}/dashboard`);\n');
       // A mocked identity provider or a local mock server is on its own
@@ -132,6 +143,8 @@ describe('the e2e suite names the venue it was given, and names it once', () => 
       const strays = offenders(tree, ['http://127.0.0.1:9000', 'http://localhost:8123']).map((f) => path.basename(f));
       expect(strays.sort()).toEqual([
         'api.spec.js',
+        'bare-k8s.spec.js',
+        'bare.spec.js',
         'compared.spec.js',
         'forge.spec.js',
         'k8s.spec.js',

@@ -150,6 +150,37 @@ test.describe('a match must be DEDICATED to the spec file', () => {
     // TypeError in the path matcher, not a verdict).
     expect(findTrackedIssue(FILE, [{ description: '' }])).toBe(null);
   });
+
+  test('the issue whose TITLE is dedicated wins over one matched by the marker', () => {
+    // Both are the file's issue — the marker match names it in the
+    // description, the dedicated match in the title. The one a reader
+    // lands on is the dedicated one, so that is the one the dedupe must
+    // return: a filing that lands on the marker match leaves the
+    // dedicated issue open and the file pointing at the other one.
+    const byMarker = { title: 'local e2e run failures', description: `- spec file: \`${FILE}\`` };
+    const byTitle = { title: `test(e2e): ${FILE} is red`, description: '' };
+    expect(findTrackedIssue(FILE, [byMarker, byTitle])).toBe(byTitle);
+    // The order does not decide it either way.
+    expect(findTrackedIssue(FILE, [byTitle, byMarker])).toBe(byTitle);
+  });
+
+  test('a bare spec file name is this tree\'s path even when the file is gone', () => {
+    // A RENAMED file must not drop out of the comparison: a title that
+    // names several spec files is a group, not a dedication, and the
+    // renamed file's bare name must still count as one of them —
+    // otherwise one multi-file title turns into a dedication to a file
+    // that is not in it.
+    //
+    // The BARE spelling is the one that decides it: a token that carries
+    // the tree's root ('tests/e2e/...') is recognised by the root alone,
+    // whether the file exists or not. The bare name is recognised by its
+    // OWN shape — it names a spec file — so a file that was renamed
+    // away still counts.
+    const renamed = 'tests/e2e/renamed-away.spec.js';
+    expect(titleIsDedicatedTo('test(e2e): renamed-away.spec.js is red', renamed)).toBe(true);
+    // And it must not swallow a file it does not name.
+    expect(titleIsDedicatedTo('test(e2e): renamed-away.spec.js is red', FILE)).toBe(false);
+  });
 });
 
 test.describe('the tracker refusal names the tracker, not the command', () => {

@@ -52,8 +52,15 @@ describe('the stripper removes prose and keeps code', () => {
   });
 
   test('a slash inside a regex character class does not end the literal', () => {
-    const out = stripJsComments('const re = /[A-Za-z0-9_./-]*\\./;\n// the edge was https://localhost/\n');
+    // The class holds a slash ([A-Za-z0-9_./-]): a literal that ends there
+    // would leave the scanner in the wrong state, and the comment below
+    // would survive as CODE — so this input is the one that separates
+    // the stripper that tracks the class from the one that does not.
+    const out = stripJsComments('const re = /[A-Za-z0-9_./-]+/;\n// the edge was https://localhost/\n');
     expect(out).not.toContain('the edge was');
+    // The code before the comment is untouched — a stripper that merely
+    // dropped the comment would pass the line above.
+    expect(out).toContain('const re = /[A-Za-z0-9_./-]+/;');
   });
 
   test('a division after a plain expression is a division', () => {

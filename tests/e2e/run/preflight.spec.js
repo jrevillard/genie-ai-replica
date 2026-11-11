@@ -1,7 +1,7 @@
 // Copyright (C) 2026 International Telecommunication Union (ITU)
 // SPDX-License-Identifier: Apache-2.0
 const { test, expect } = require('@playwright/test');
-const { classifyVenueStatus } = require('./preflight');
+const { classifyVenueStatus, readVenueMapping } = require('./preflight');
 
 /**
  * Unit spec for the pre-flight's diagnosis.
@@ -49,5 +49,36 @@ test.describe('the pre-flight names the finding the venue status carries', () =>
   test('the venue address is in the message', () => {
     expect(classifyVenueStatus(404, VENUE)).toContain(VENUE);
     expect(classifyVenueStatus(0, VENUE)).toContain(VENUE);
+  });
+});
+
+test.describe('a venue mapping that cannot be read is a NAMED cause', () => {
+  test('a readable mapping is returned as it is', () => {
+    const mapping = { host: 'venue.example', ip: '10.0.0.1' };
+    const read = readVenueMapping(() => mapping);
+    expect(read.mapping).toBe(mapping);
+    expect(read.error).toBe(null);
+  });
+
+  test('no mapping at all is not an error — the runner resolves the name itself', () => {
+    // The mapping is OPT-IN: unset, the venue's name resolves on its own,
+    // and there is nothing to report.
+    const read = readVenueMapping(() => null);
+    expect(read.mapping).toBe(null);
+    expect(read.error).toBe(null);
+  });
+
+  test('a malformed mapping is NAMED, not thrown', () => {
+    // A BASE_URL that is not a URL makes the mapping read throw. An
+    // unhandled throw is a stack trace, which hides the cause behind a
+    // wall of frames — and naming the cause is the pre-flight's whole
+    // purpose.
+    const read = readVenueMapping(() => {
+      throw new Error('Invalid URL');
+    });
+    expect(read.mapping).toBe(null);
+    expect(read.error).toContain('Invalid URL');
+    // The remedy the runner needs is in the message too.
+    expect(read.error).toContain('E2E_VENUE_IP');
   });
 });

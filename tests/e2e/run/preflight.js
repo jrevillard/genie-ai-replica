@@ -53,6 +53,29 @@ function loadRunner() {
 }
 
 /**
+ * The venue's mapping, or the reason it cannot be used.
+ *
+ * A malformed venue address (a BASE_URL that is not a URL) makes the
+ * mapping read THROW — and an unhandled throw is a stack trace, which
+ * hides the cause behind a wall of frames. This is the pre-flight's whole
+ * purpose: the cause must be NAMED before the run touches the venue.
+ *
+ * The read is a pure function of the mapping reader, so it is pinned
+ * without a browser and without a venue.
+ *
+ * @param {Function} venueMapping - the mapping reader
+ * @returns {{mapping: object|null, error: string|null}} the mapping, or
+ *   the reason it is unusable
+ */
+function readVenueMapping(venueMapping) {
+  try {
+    return { mapping: venueMapping(), error: null };
+  } catch (e) {
+    return { mapping: null, error: remedy(e.message.split('\n')[0]) };
+  }
+}
+
+/**
  * What the venue's answer at the root MEANS.
  *
  * THREE findings, not one: no answer at all, a 5xx (the deployment is
@@ -93,11 +116,9 @@ async function main() {
   // that is not a host, a mapping that does not parse) must reach the
   // operator as the NAMED remedy, not as an unhandled throw that hides
   // the cause behind a stack trace.
-  let mapping;
-  try {
-    mapping = venueMapping();
-  } catch (e) {
-    process.stderr.write(`pre-flight: the venue mapping is not usable.\n${remedy(e.message.split('\n')[0])}\n`);
+  const { mapping, error: mappingError } = readVenueMapping(venueMapping);
+  if (mappingError) {
+    process.stderr.write(`pre-flight: the venue mapping is not usable.\n${mappingError}\n`);
     process.exit(1);
   }
   process.stdout.write(
@@ -154,4 +175,4 @@ if (require.main === module) {
   main();
 }
 
-module.exports = { classifyVenueStatus };
+module.exports = { classifyVenueStatus, readVenueMapping };

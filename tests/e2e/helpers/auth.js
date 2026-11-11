@@ -340,11 +340,13 @@ function describeUnauthorized(res, token) {
  *
  * Safe by construction: a call that THROWS does not abandon the rest of
  * the items — every item is attempted, and the lowest-indexed failure
- * is rethrown once the whole batch has run. A worker that died on its
- * first item would otherwise leave the remaining items untouched, and
- * the sweep would report a partial deletion as a complete one. The
- * failure that is rethrown must not depend on which call rejected
- * FIRST: the index decides, not the clock.
+ * is rethrown once the whole batch has run. Without the per-item catch
+ * a worker's rejection would propagate through `Promise.all` and abort
+ * the batch, and the items the other workers had not reached would
+ * never run. The two sweeps do not rely on the rethrow — they catch
+ * inside the mapper so they can name each failure — but the guarantee
+ * is the helper's, and the failure that is rethrown must not depend on
+ * which call rejected FIRST: the index decides, not the clock.
  *
  * @param {Array} items - the items to map
  * @param {number} limit - the maximum number of calls in flight

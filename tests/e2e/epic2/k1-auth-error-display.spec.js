@@ -16,11 +16,12 @@ test.describe.serial('Phase K: Auth Error Display', () => {
   let adminToken;
   let noRolesUserId;
   let originalLifespan;
-  // Whether the realm's lifespan was actually changed. K.2 sets it and
-  // K.3 puts it back; if K.1 fails first, `describe.serial` skips both
-  // and the realm was never mutated — a restore then would rewrite a
-  // deployment that was never touched, and its failure would report a
-  // leftover that does not exist.
+  // Whether a lifespan mutation was ATTEMPTED. K.2 sets it and K.3 puts
+  // it back; if K.1 fails first, `describe.serial` skips both and the
+  // realm was never touched — a restore then would rewrite a deployment
+  // that was never changed. The flag is set BEFORE the request, so it
+  // means "the realm MAY have been changed": a request that times out
+  // may still have mutated it, and the restore must then run.
   let lifespanMutated = false;
   const NOROLES_USERNAME = 'noroles-user-e2e';
   const NOROLES_PASSWORD = 'TestPass123!';
@@ -93,8 +94,9 @@ test.describe.serial('Phase K: Auth Error Display', () => {
         // the realm at its 10s lifespan, poisoning every suite after.
         failures.push({
           message:
-            `accessTokenLifespan restore failed — the genie realm is left at a mutated lifespan that ` +
-            `every later suite inherits. Restore it manually, then re-run. Cause: ${e.message}`,
+            `accessTokenLifespan restore failed — the genie realm MAY be left at a mutated lifespan ` +
+            `that every later suite inherits. If it is, restore it manually, then re-run. ` +
+            `Cause: ${e.message}`,
           cause: e
         });
       }

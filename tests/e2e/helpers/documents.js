@@ -238,6 +238,7 @@ async function deleteAllTestDocuments(prefix = 'test-document', { browser } = {}
   let total;
   let listFailure = null;
   let exhausted = false;
+  let pagesRead = 0;
   for (let page = 1; page <= SWEEP_MAX_LIST_PAGES; page++) {
     let listRes;
     try {
@@ -263,6 +264,7 @@ async function deleteAllTestDocuments(prefix = 'test-document', { browser } = {}
       break;
     }
     files.push(...pageFiles);
+    pagesRead++;
     // The population is the same on every page: keep the first count
     // that arrives, so a page without a pagination object does not erase
     // what the previous page established.
@@ -336,8 +338,11 @@ async function deleteAllTestDocuments(prefix = 'test-document', { browser } = {}
       populationKnown
         ? `the sweep did not enumerate the whole population — a prefix-matching file beyond the ` +
             `last enumerated page, if any, was not removed`
-        : `the population size is unknown — the sweep read full pages, so a prefix-matching file ` +
-            `beyond the last enumerated page, if any, was not removed`
+        : pagesRead > 0
+          ? `the population size is unknown — the sweep read full pages, so a prefix-matching file ` +
+              `beyond the last enumerated page, if any, was not removed`
+          : `the population size is unknown and the sweep read NOTHING — no prefix-matching file ` +
+              `can be accounted for, and any of them may remain`
     );
   }
   if (problems.length > 0) {

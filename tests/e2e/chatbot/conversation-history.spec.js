@@ -203,16 +203,25 @@ test.describe('Conversation history persistence', () => {
         populationKnown
           ? `the sweep did not enumerate the whole population — a suite conversation beyond the ` +
             `last enumerated page, if any, was not removed`
-          : `the population size is unknown — the sweep read full pages, so a suite conversation ` +
-            `beyond the last enumerated page, if any, was not removed`
+          : pagesRead > 0
+            ? `the population size is unknown — the sweep read full pages, so a suite conversation ` +
+                `beyond the last enumerated page, if any, was not removed`
+            : `the population size is unknown and the sweep read NOTHING — no suite conversation ` +
+                `can be accounted for, and any of them may remain`
       );
     }
     if (problems.length > 0) {
+      // The scope must not claim a subset relation between two different
+      // populations: when NOT ONE page could be read, `own` holds the
+      // ids the tests captured in flight — the suite's own, but not a
+      // subset of what was read.
       const scope = populationKnown
         ? `population: ${total} matching conversations, ${conversations.length} read, ` +
           `${own.length} of them the suite's own`
-        : `population unknown, ${conversations.length} matching conversations read, ` +
-          `${own.length} of them the suite's own`;
+        : pagesRead > 0
+          ? `population unknown, ${conversations.length} matching conversations read, ` +
+            `${own.length} of them the suite's own`
+          : `population unknown, nothing read, ${own.length} of the suite's own captured in flight`;
       throw new Error(`cleanup: ${problems.length} problem(s) — ${scope} — ${problems.join(' | ')}`);
     }
   });

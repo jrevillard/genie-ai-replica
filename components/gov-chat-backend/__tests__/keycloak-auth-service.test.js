@@ -51,6 +51,30 @@ const mockDiscovery = {
   jwks_uri: 'http://localhost:8080/realms/genie/protocol/openid-connect/certs'
 };
 
+// The discovery document of another realm: the issuer and its certificates
+// URL follow the realm name, so the shape is derived rather than copied.
+const discoveryFor = (realm) => ({
+  issuer: `http://localhost:8080/realms/${realm}`,
+  jwks_uri: `http://localhost:8080/realms/${realm}/protocol/openid-connect/certs`
+});
+
+// The mocked jwtVerify resolves the key the way jose does — through the
+// wrapper — so the wrapper's own classification is exercised. The verifier
+// calls it with the key resolver; the trial calls it with a CANDIDATE key.
+const resolveThroughKey = (protectedHeader) =>
+  mockJwtVerify.mockImplementation(async (token, key) => key(protectedHeader, token));
+
+// A candidate whose signature does not verify: the trial's "try the next
+// one" signal. The error NAME is the contract the verifier compares.
+const signatureFailureError = () => {
+  const err = new Error('signature verification failed');
+  err.name = 'JWSSignatureVerificationFailed';
+  return err;
+};
+
+// The published candidate keys of an ambiguous key set.
+const candidates = (count) => Array.from({ length: count }, (_, i) => ({ key: `candidate-${i + 1}` }));
+
 describe('keycloakAuthService', () => {
   beforeEach(() => {
     keycloakAuthService._resetForTesting();
@@ -459,14 +483,8 @@ describe('keycloakAuthService', () => {
     });
 
     it('should maintain independent cache per issuer', async () => {
-      const discovery1 = {
-        issuer: 'http://localhost:8080/realms/genie',
-        jwks_uri: 'http://localhost:8080/realms/genie/protocol/openid-connect/certs'
-      };
-      const discovery2 = {
-        issuer: 'http://localhost:8080/realms/genie2',
-        jwks_uri: 'http://localhost:8080/realms/genie2/protocol/openid-connect/certs'
-      };
+      const discovery1 = discoveryFor('genie');
+      const discovery2 = discoveryFor('genie2');
 
       mockFetch
         .mockResolvedValueOnce({ ok: true, json: async () => discovery1 })
@@ -604,7 +622,7 @@ describe('keycloakAuthService', () => {
         jwks: () => ({ keys: [{ kty: 'EC', kid: 'ec-key', alg: 'ES256', use: 'sig' }] })
       });
       mockCreateRemoteJWKSet.mockReturnValue(inner);
-      mockJwtVerify.mockImplementation(async (token, key) => key({ alg: 'RS256' }, token));
+      resolveThroughKey({ alg: 'RS256' });
 
       await expect(keycloakAuthService.verifyToken(generateMockJwtString(mockJwtPayload))).rejects.toMatchObject({
         code: 'AUTH_SERVICE_UNAVAILABLE'
@@ -627,11 +645,6 @@ describe('keycloakAuthService', () => {
 
     const captureWarns = () => captureLogs('warn');
     const captureDebugs = () => captureLogs('debug');
-
-    // The mocked jwtVerify resolves the key the way jose does — through the
-    // wrapper — so the wrapper's own classification is exercised.
-    const resolveThroughKey = (protectedHeader) =>
-      mockJwtVerify.mockImplementation(async (token, key) => key(protectedHeader, token));
 
     // The AMBIGUITY is raised by the key resolver too, the way jose raises
     // it: the mock calls the resolver the verifier owns, so the resolver
@@ -689,7 +702,7 @@ describe('keycloakAuthService', () => {
       mockCreateRemoteJWKSet.mockReturnValue(inner);
       // jose resolves the key through the wrapper — the wrapper is where the
       // floor is detected.
-      mockJwtVerify.mockImplementation(async (token, key) => key({ alg: 'RS256' }, token));
+      resolveThroughKey({ alg: 'RS256' });
 
       const token = generateMockJwtString(mockJwtPayload);
 
@@ -762,18 +775,16 @@ describe('keycloakAuthService', () => {
       // against a multi-key set is not a bad token, it is a token jose
       // cannot resolve by key id alone. The published candidates resolve
       // it — the first one whose signature verifies wins.
-      const candidates = [{ key: 'candidate-1' }, { key: 'candidate-2' }];
+      const published = candidates(2);
 
       mockAmbiguousKeySet({
         protectedHeader: { alg: 'RS256' },
-        candidates,
+        candidates: published,
         onCandidate: (candidate) => {
-          if (candidate === candidates[1]) {
+          if (candidate === published[1]) {
             return { payload: mockJwtPayload, protectedHeader: { alg: 'RS256' } };
           }
-          const signatureError = new Error('signature verification failed');
-          signatureError.name = 'JWSSignatureVerificationFailed';
-          throw signatureError;
+          throw signatureFailureError();
         }
       });
 
@@ -791,11 +802,9 @@ describe('keycloakAuthService', () => {
       // token is never ACCEPTED without a signature that verifies.
       mockAmbiguousKeySet({
         protectedHeader: { alg: 'RS256' },
-        candidates: [{ key: 'candidate-1' }, { key: 'candidate-2' }],
+        candidates: candidates(2),
         onCandidate: () => {
-          const signatureError = new Error('signature verification failed');
-          signatureError.name = 'JWSSignatureVerificationFailed';
-          throw signatureError;
+          throw signatureFailureError();
         }
       });
 
@@ -805,63 +814,27 @@ describe('keycloakAuthService', () => {
       });
     });
 
-    // The three shapes of the same fault: a realm that published one key id
-    // more than once. The verdict never depends on reading the published key
-    // set — jose matched the candidates by that EXACT key id, so more than
-    // one candidate means the realm published that id more than once. A jose
-    // that did not expose the published set would otherwise turn the outage
-    // back into a 401.
-    const DUPLICATE_KEY_ID_CASES = [
-      {
-        name: 'the published key set cannot be read',
-        publishedKeys: null,
-        expectedMessage: 'more than one signing key'
-      },
-      {
-        name: 'two signing keys share the key id',
-        publishedKeys: [
-          { kid: 'dup', kty: 'RSA', alg: 'RS256', use: 'sig' },
-          { kid: 'dup', kty: 'RSA', alg: 'RS256', use: 'sig' }
-        ],
-        expectedMessage: 'published 2 signing keys'
-      },
-      {
-        // The number the operator reads is the number of CANDIDATES the
-        // ambiguity really had: a key the verifier could never use (an EC
-        // key, a key that forbids verification) is not a signing key. The
-        // filter is deliberately looser than jose's own — a key_ops list that
-        // repeats an operation is refused by jose and accepted here — so the
-        // count can over-report but never under-report.
-        name: 'only the keys that could verify are counted',
-        publishedKeys: [
-          { kid: 'dup', kty: 'RSA', alg: 'RS256', use: 'sig' },
-          { kid: 'dup', kty: 'RSA', alg: 'RS256', use: 'sig' },
-          { kid: 'dup', kty: 'EC', alg: 'ES256', use: 'sig' },
-          { kid: 'dup', kty: 'RSA', alg: 'RS256', use: 'sig', key_ops: ['sign'] },
-          { kid: 'dup', kty: 'RSA', alg: 'RS256', use: 'sig', key_ops: ['verify', 'verify'] }
-        ],
-        expectedMessage: 'published 3 signing keys'
-      }
-    ];
-    for (const { name, publishedKeys, expectedMessage } of DUPLICATE_KEY_ID_CASES) {
-      it(`reports a realm that published the same key id twice as an outage (${name})`, async () => {
-        const ambiguous = ambiguousKeysError();
-        const inner = jest.fn().mockRejectedValue(ambiguous);
-        if (publishedKeys) {
-          Object.assign(inner, { jwks: () => ({ keys: publishedKeys }) });
-        }
-        mockCreateRemoteJWKSet.mockReturnValue(inner);
-        resolveThroughKey({ alg: 'RS256', kid: 'dup' });
+    // A realm that published one key id more than once: every token naming
+    // that id matches two candidates and is rejected as a bad token — a 401
+    // that sends every user to the login page, with nothing anywhere
+    // reporting that the realm itself was misconfigured. The verdict does
+    // not depend on reading the published key set: jose matched the
+    // candidates by that EXACT key id, so more than one candidate means the
+    // realm published that id more than once.
+    it('reports a realm that published the same key id twice as an outage', async () => {
+      const ambiguous = ambiguousKeysError();
+      const inner = jest.fn().mockRejectedValue(ambiguous);
+      mockCreateRemoteJWKSet.mockReturnValue(inner);
+      resolveThroughKey({ alg: 'RS256', kid: 'dup' });
 
-        await expect(keycloakAuthService.verifyToken(generateMockJwtString(mockJwtPayload))).rejects.toMatchObject({
-          code: 'AUTH_SERVICE_UNAVAILABLE',
-          message: expect.stringContaining(expectedMessage)
-        });
-
-        // No candidate was tried: the verdict was the realm's, not the token's.
-        expect(mockJwtVerify).toHaveBeenCalledTimes(1);
+      await expect(keycloakAuthService.verifyToken(generateMockJwtString(mockJwtPayload))).rejects.toMatchObject({
+        code: 'AUTH_SERVICE_UNAVAILABLE',
+        message: expect.stringContaining('more than one signing key under one key id')
       });
-    }
+
+      // No candidate was tried: the verdict was the realm's, not the token's.
+      expect(mockJwtVerify).toHaveBeenCalledTimes(1);
+    });
 
     it("logs the realm's candidate count when the trial cap truncates the candidates", async () => {
       // A realm publishing more candidate keys than the cap is a realm to
@@ -871,11 +844,9 @@ describe('keycloakAuthService', () => {
       const warns = captureWarns();
       mockAmbiguousKeySet({
         protectedHeader: { alg: 'RS256' },
-        candidates: [{ key: 'candidate-1' }, { key: 'candidate-2' }, { key: 'candidate-3' }, { key: 'candidate-4' }],
+        candidates: candidates(4),
         onCandidate: () => {
-          const signatureError = new Error('signature verification failed');
-          signatureError.name = 'JWSSignatureVerificationFailed';
-          throw signatureError;
+          throw signatureFailureError();
         }
       });
 
@@ -903,11 +874,9 @@ describe('keycloakAuthService', () => {
       // is decided from the unverified payload and the trial never runs.
       mockAmbiguousKeySet({
         protectedHeader: { alg: 'RS256' },
-        candidates: [{ key: 'candidate-1' }],
+        candidates: candidates(1),
         onCandidate: () => {
-          const signatureError = new Error('signature verification failed');
-          signatureError.name = 'JWSSignatureVerificationFailed';
-          throw signatureError;
+          throw signatureFailureError();
         }
       });
 
@@ -927,11 +896,9 @@ describe('keycloakAuthService', () => {
       // signature verification to learn that.
       mockAmbiguousKeySet({
         protectedHeader: { alg: 'RS256' },
-        candidates: [{ key: 'candidate-1' }, { key: 'candidate-2' }],
+        candidates: candidates(2),
         onCandidate: () => {
-          const signatureError = new Error('signature verification failed');
-          signatureError.name = 'JWSSignatureVerificationFailed';
-          throw signatureError;
+          throw signatureFailureError();
         }
       });
 
@@ -952,11 +919,9 @@ describe('keycloakAuthService', () => {
       // the missing-claim case is covered by the test above.
       mockAmbiguousKeySet({
         protectedHeader: { alg: 'RS256' },
-        candidates: [{ key: 'candidate-1' }, { key: 'candidate-2' }],
+        candidates: candidates(2),
         onCandidate: () => {
-          const signatureError = new Error('signature verification failed');
-          signatureError.name = 'JWSSignatureVerificationFailed';
-          throw signatureError;
+          throw signatureFailureError();
         }
       });
 
@@ -978,11 +943,9 @@ describe('keycloakAuthService', () => {
       nowSpy.mockReturnValue(1700000000000);
       mockAmbiguousKeySet({
         protectedHeader: { alg: 'RS256' },
-        candidates: [{ key: 'candidate-1' }, { key: 'candidate-2' }],
+        candidates: candidates(2),
         onCandidate: () => {
-          const signatureError = new Error('signature verification failed');
-          signatureError.name = 'JWSSignatureVerificationFailed';
-          throw signatureError;
+          throw signatureFailureError();
         }
       });
 
@@ -1007,11 +970,9 @@ describe('keycloakAuthService', () => {
       // would accept a token the realm never issued. It stays a bad token.
       mockAmbiguousKeySet({
         protectedHeader: { alg: 'RS256', kid: 123 },
-        candidates: [{ key: 'candidate-1' }, { key: 'candidate-2' }],
+        candidates: candidates(2),
         onCandidate: () => {
-          const signatureError = new Error('signature verification failed');
-          signatureError.name = 'JWSSignatureVerificationFailed';
-          throw signatureError;
+          throw signatureFailureError();
         }
       });
 
@@ -1121,7 +1082,7 @@ describe('keycloakAuthService', () => {
       const inner = jest.fn().mockRejectedValue(unknownKidError());
       Object.defineProperty(inner, 'coolingDown', { get: () => cooling, configurable: true });
       mockCreateRemoteJWKSet.mockReturnValue(inner);
-      mockJwtVerify.mockImplementation(async (token, key) => key({ alg: 'RS256' }, token));
+      resolveThroughKey({ alg: 'RS256' });
       const token = generateMockJwtString(mockJwtPayload);
 
       try {
@@ -1148,14 +1109,8 @@ describe('keycloakAuthService', () => {
       // The bucket is per issuer as well as per cause: a broken realm must
       // not mute another realm's warnings.
       const warns = captureWarns();
-      const discovery1 = {
-        issuer: 'http://localhost:8080/realms/genie',
-        jwks_uri: 'http://localhost:8080/realms/genie/protocol/openid-connect/certs'
-      };
-      const discovery2 = {
-        issuer: 'http://localhost:8080/realms/genie2',
-        jwks_uri: 'http://localhost:8080/realms/genie2/protocol/openid-connect/certs'
-      };
+      const discovery1 = discoveryFor('genie');
+      const discovery2 = discoveryFor('genie2');
       mockFetch
         .mockResolvedValueOnce({ ok: true, json: async () => discovery1 })
         .mockResolvedValueOnce({ ok: true, json: async () => discovery2 });
@@ -1255,14 +1210,8 @@ describe('keycloakAuthService', () => {
   });
 
   describe('multi-realm initialization', () => {
-    const discovery1 = {
-      issuer: 'http://localhost:8080/realms/genie',
-      jwks_uri: 'http://localhost:8080/realms/genie/protocol/openid-connect/certs'
-    };
-    const discovery2 = {
-      issuer: 'http://localhost:8080/realms/partner',
-      jwks_uri: 'http://localhost:8080/realms/partner/protocol/openid-connect/certs'
-    };
+    const discovery1 = discoveryFor('genie');
+    const discovery2 = discoveryFor('partner');
 
     it('should initialize multiple realms by calling init() with different URLs', async () => {
       mockFetch
@@ -1308,14 +1257,8 @@ describe('keycloakAuthService', () => {
   });
 
   describe('user isolation across realms', () => {
-    const discovery1 = {
-      issuer: 'http://localhost:8080/realms/genie',
-      jwks_uri: 'http://localhost:8080/realms/genie/protocol/openid-connect/certs'
-    };
-    const discovery2 = {
-      issuer: 'http://localhost:8080/realms/partner',
-      jwks_uri: 'http://localhost:8080/realms/partner/protocol/openid-connect/certs'
-    };
+    const discovery1 = discoveryFor('genie');
+    const discovery2 = discoveryFor('partner');
 
     it('should produce different iss_sub for same sub across realms', async () => {
       mockFetch
@@ -1344,14 +1287,8 @@ describe('keycloakAuthService', () => {
   });
 
   describe('role isolation across realms', () => {
-    const discovery1 = {
-      issuer: 'http://localhost:8080/realms/genie',
-      jwks_uri: 'http://localhost:8080/realms/genie/protocol/openid-connect/certs'
-    };
-    const discovery2 = {
-      issuer: 'http://localhost:8080/realms/partner',
-      jwks_uri: 'http://localhost:8080/realms/partner/protocol/openid-connect/certs'
-    };
+    const discovery1 = discoveryFor('genie');
+    const discovery2 = discoveryFor('partner');
 
     it('should preserve realm_access roles independently per realm', async () => {
       mockFetch

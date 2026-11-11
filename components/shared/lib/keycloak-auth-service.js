@@ -245,26 +245,6 @@ function publishedKeySet(inner) {
 }
 
 /**
- * How many published SIGNING keys share one key id.
- *
- * Only the keys the verifier could have used are counted (the same filter
- * jose applies), so the number the operator sees is the number of
- * candidates the ambiguity really had.
- *
- * @param {Object|undefined} jwks - The published key set (jose's `jwks()`)
- * @param {string} kid - The key id to count
- * @returns {number} The number of published signing keys carrying that key id
- */
-function countKeysWithKid(jwks, kid) {
-  if (!jwks || !Array.isArray(jwks.keys)) return 0;
-  let count = 0;
-  for (const jwk of jwks.keys) {
-    if (jwk && jwk.kid === kid && isUsableSigningKey(jwk)) count += 1;
-  }
-  return count;
-}
-
-/**
  * Try the published candidate keys of an ambiguous token (#1767).
  *
  * RFC 7515 §4.1.4 makes the key id OPTIONAL: a token that names none
@@ -326,7 +306,6 @@ async function tryCandidateKeys(err, token, jwtOptions) {
  * state) is what made the floor necessary in the first place (#1778).
  *
  * @param {string} jwksUri - The JWKS endpoint URL
- * @param {number} ttlMs - Cache TTL in milliseconds (default: 300000 = 5 minutes)
  * @returns {Function} A callable JWKS function
  *
  * The returned function has signature (protectedHeader, token) -> Promise<Key>
@@ -336,9 +315,9 @@ async function tryCandidateKeys(err, token, jwtOptions) {
  * const jwksCache = createJwksCache('http://keycloak/realms/genie/protocol/openid-connect/certs');
  * const { payload } = await jwtVerify(token, jwksCache, { issuer: 'http://keycloak/realms/genie' });
  */
-function createJwksCache(jwksUri, ttlMs = JWKS_CACHE_TTL) {
+function createJwksCache(jwksUri) {
   const inner = createRemoteJWKSet(new URL(jwksUri), {
-    cacheMaxAge: ttlMs,
+    cacheMaxAge: JWKS_CACHE_TTL,
     cooldownDuration: JWKS_REFRESH_COOLDOWN_MS
   });
 
@@ -419,35 +398,22 @@ function createJwksCache(jwksUri, ttlMs = JWKS_CACHE_TTL) {
           // once — the realm's own broken state, the same class as a realm
           // publishing no usable key at all, and the same answer: an
           // outage, so the operator is told instead of every user being
-          // signed out by a 401 they cannot act on (#1776). The published
-          // key set gives the count for the operator; the verdict does not
-          // depend on reading it.
-          const published = publishedKeySet(inner);
-          const duplicates = countKeysWithKid(published, kid);
+          // signed out by a 401 they cannot act on (#1776). jose matched the
+          // candidates by that EXACT key id, so the ambiguity IS the
+          // proof: the published key set is not read, and nothing the
+          // realm publishes can make this verdict a 401 instead.
           throw new TokenVerificationError(
             'AUTH_SERVICE_UNAVAILABLE',
-            `Authentication service is temporarily unavailable (the realm published ${
-              duplicates > 1 ? `${duplicates} signing keys` : 'more than one signing key'
-            } under one key id)`
+            'Authentication service is temporarily unavailable (the realm published more than one signing key under one key id)'
           );
         }
         // The token names NO key id: RFC 7515 §4.1.4 makes the key id
         // OPTIONAL, so the ambiguity is the token's, and the published
         // candidates can resolve it. The error carries them; the caller
         // tries them (#1767). ONLY a kid-less ambiguity reaches the caller
-        // — the named-kid case above is answered here, so the trial can
-        // never resolve a token naming a duplicated key id. The flag tells
-        // the caller which case this is: the trial runs for a token naming
-        // no key id and for nothing else.
-        //
-        // The flag is decided from the HEADER, not from the key id's type:
-        // a key id that is not a string is refused above, and deciding it
-        // here as well keeps the rule true even if that refusal is ever
-        // moved. It is defence in depth, not a second guard with a test of
-        // its own — the refusal above is the one the suites pin.
-        if (!protectedHeader || !Object.prototype.hasOwnProperty.call(protectedHeader, 'kid')) {
-          err.kidLess = true;
-        }
+        // — the named-kid case above is answered here, and a key id that is
+        // not a string is refused before jose sees it, so the trial can
+        // never resolve a token naming a duplicated key id.
         throw err;
       }
       throw new TokenVerificationError(
@@ -866,16 +832,16 @@ const keycloakAuthService = {
       //   - a token whose expiry jose will refuse anyway — jose requires
       //     the `exp` claim (`requiredClaims`) and refuses one that is not
       //     a number, so such a token is invalid whatever key signs it.
-      const expired = typeof unverifiedExp === 'number' && unverifiedExp <= Math.floor(Date.now() / 1000);
-      const expiryUsable = typeof unverifiedExp === 'number';
+      const exp = typeof unverifiedExp === 'number' ? unverifiedExp : null;
+      const expired = exp !== null && exp <= Math.floor(Date.now() / 1000);
       // The trial applies ONLY to a token that names NO key id: the key
       // resolver answers the named-kid case itself (the realm's outage,
-      // #1776), so a token naming a duplicated key id never reaches this
-      // branch and is never resolved by trying one of the duplicates. The
-      // resolver flags the case it could not answer itself — a token
-      // naming no key id — and only that one carries the flag.
-      if (err.name === 'JWKSMultipleMatchingKeys' && err.kidLess === true) {
-        if (!expiryUsable) {
+      // #1776) and refuses a key id that is not a string, so a token
+      // naming a duplicated key id never reaches this branch and is never
+      // resolved by trying one of the duplicates. Every ambiguity that
+      // reaches it is a kid-less one.
+      if (err.name === 'JWKSMultipleMatchingKeys') {
+        if (exp === null) {
           // The token's own defect, and the one jose would report: an
           // expiry that is not a number. Decided here so the trial spends
           // no signature verification on a token that cannot be accepted
@@ -1101,14 +1067,6 @@ const keycloakAuthService = {
   },
 
   TokenVerificationError,
-
-  /**
-   * Create a JWKS cache with explicit TTL. Exported for testing.
-   * @param {string} jwksUri - The JWKS endpoint URL
-   * @param {number} ttlMs - Cache TTL in milliseconds
-   * @returns {Function} A callable JWKS function
-   */
-  createJwksCache,
 
   /**
    * Reset internal state. Only for testing.

@@ -36,30 +36,23 @@ const JWKS_URI = `${DISCOVERY_ISSUER}/protocol/openid-connect/certs`;
 // would from a live Keycloak certs endpoint). A SECOND pair stands in for an
 // additional ("partner") realm — different keys, so a cross-realm clobber of
 // a map entry cannot accidentally still verify.
-const { publicKey, privateKey } = generateKeyPairSync('rsa', {
-  modulusLength: 2048,
-  publicKeyEncoding: { type: 'spki', format: 'jwk' },
-  privateKeyEncoding: { type: 'pkcs8', format: 'jwk' }
-});
-const { publicKey: partnerPublicKey, privateKey: partnerPrivateKey } = generateKeyPairSync('rsa', {
-  modulusLength: 2048,
-  publicKeyEncoding: { type: 'spki', format: 'jwk' },
-  privateKeyEncoding: { type: 'pkcs8', format: 'jwk' }
-});
+// Every RSA pair is generated the same way — the JWKS documents they end up
+// in are only comparable if the encoding is identical.
+const rsaPair = () =>
+  generateKeyPairSync('rsa', {
+    modulusLength: 2048,
+    publicKeyEncoding: { type: 'spki', format: 'jwk' },
+    privateKeyEncoding: { type: 'pkcs8', format: 'jwk' }
+  });
+
+const { publicKey, privateKey } = rsaPair();
+const { publicKey: partnerPublicKey, privateKey: partnerPrivateKey } = rsaPair();
 // A THIRD pair stands for the realm's key AFTER a rotation: the realm
 // publishes it under a new key id while the old ones stay published.
-const { publicKey: rotatedPublicKey, privateKey: rotatedPrivateKey } = generateKeyPairSync('rsa', {
-  modulusLength: 2048,
-  publicKeyEncoding: { type: 'spki', format: 'jwk' },
-  privateKeyEncoding: { type: 'pkcs8', format: 'jwk' }
-});
+const { publicKey: rotatedPublicKey, privateKey: rotatedPrivateKey } = rsaPair();
 // A FOURTH pair: the candidate trial is bounded at three, so a token signed
 // with this key can only be resolved by a realm publishing fewer keys.
-const { publicKey: fourthPublicKey, privateKey: fourthPrivateKey } = generateKeyPairSync('rsa', {
-  modulusLength: 2048,
-  publicKeyEncoding: { type: 'spki', format: 'jwk' },
-  privateKeyEncoding: { type: 'pkcs8', format: 'jwk' }
-});
+const { publicKey: fourthPublicKey, privateKey: fourthPrivateKey } = rsaPair();
 // An EC pair stands for a realm that publishes an EC signing key only. The
 // verifier accepts RS256 only, so such a key set holds nothing usable.
 const { publicKey: ecPublicKey } = generateKeyPairSync('ec', {

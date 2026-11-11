@@ -131,6 +131,52 @@ in passing. **Out of fence, flagged:** H4 (UnifiedAnalytics renders random demo
 data) — David ruled the charts untouchable; the wave that fixes H4 must be
 scoped explicitly.
 
+### David's re-direction (2026-11-11, after P1) — the GOAL is the look
+
+David: *"The purpose of this workplan is to enhance the UX in the Admin
+Dashboard and it's related dialogs etc. to match the color schemes and the
+bright lively look and feel of the main UI outside of the Admin Dashboard."*
+The T/H/T2a/P1 waves delivered honesty, structure and i18n — **nothing
+substantial toward the look**. The measured gap (2026-11-11):
+
+- The "bright lively" energy of the main UI **is the Living-Intelligence
+  layer** (`src/styles/genie-visual-effects.css`): hero banner artwork, the
+  welcome mesh, the corner network, quick-help card tints, `color-mix()`
+  frost borders, deco waves, the brand-wordmark gradient. It is gated
+  `.genie-living-intelligence` **scoped to DashboardView.vue only** — the
+  admin route (`router.js:40`, root `.admin-page`) never receives it.
+- The admin surface is NOT missing tokens: AdminDashboard.vue carries 345
+  `var(--…)` usages vs 31 hex literals; FileDetailsDialog 210 vs 14. The
+  flatness is **absence of the layer + a flat card vocabulary**, not a
+  token debt. (The dialogs still carry ~30 inline `style="…"` attributes —
+  that part IS cleanup-able.)
+- Wave process amended: **trivial MRs are mine to merge** (David's explicit
+  grant) — pipeline-green + suite-green + local-build-deployed + no
+  architectural risk; substantial ones still wait for David. The session's
+  permission layer blocks the merge API call (`[Merge Without Review]`),
+  so until a permission rule exists, "mine to merge" executes as:
+  everything push-ready and merge-attempted, and the refusal surfaced.
+
+### Phase V — the admin surface adopts the main UI's look (the remaining work)
+
+Six waves, in the order that delivers the visible delta soonest. Every wave
+rides the Visual-Fidelity loop (capture script extended to the admin route +
+open dialogs; measure, mutation-test every assertion, never judge by eye)
+and the standing local-build deploy + smoke checklist.
+
+| Wave | What | The visible delta |
+|---|---|---|
+| **V1 — admit the layer to the admin route** | the Living-Intelligence layer reaches the admin shell: `.genie-living-intelligence` (or a scoped admin variant with its own strength profile — this is a data surface, not the welcome page) on `.admin-page`; the header's `System Administration` gets the brand-wordmark gradient treatment (the ungated identity block already exists); the tab strip gets a lively active-tab treatment (accent wash/underline) instead of the flat strip; page background admits the mesh/corner-network motifs at data-surface strength. **The single biggest step toward the goal** | the admin page stops looking like a settings screen and starts looking like the same product as the welcome/chat page |
+| **V2 — the overview tiles come alive** | the four `stat-card`s (uptime, response, error rate, MAU) adopt the layer's card vocabulary — quick-help-style tints, top-lit wash, `--gli-frost-border` — at data-surface strength; trend arrows get accent/success/danger colouring; the service-status cards and AdminStatePanel states inherit the same surface treatment (honest states stay honest — this is chrome, not data) | the dashboard's first screen reads as the lively one, not the grey one |
+| **V3 — the data tabs' panels** | documents / database / logs / security / users / hierarchy: section headers, DsCard variant selection (flat grey → elevated/outline where density allows), accent-tinted hover washes on rows/tiles, the db-stats + ingestion-log panels' chrome. Tables keep their data density — the treatment is on the containers, not the rows' typography | every tab shares the shell's energy without losing operational density |
+| **V4 — the dialogs, restyled in place** | FileDetailsDialog (the hand-rolled one — Visual Fidelity doc forbids re-delegating it to DsModal, so restyle in place), LogSearchDialog, AddFromLinkDialog, OperationResultsModal, UploadFilesDialog, ConfirmDialog, QueryInspector: header treatments, frost borders, DS-primitive button/pill consistency, and the **~30 inline `style="…"` attributes retired to token-based scoped CSS** | the dialogs stop feeling like a different app |
+| **V5 — dark-mode parity** | the layer's dark profile (`--gli-deco-strength: 0.53`, frost 27 %) verified across every admin tab + dialog; the dark-banner-artwork gap (documented in the frontend CLAUDE.md) does not apply to admin chrome — but every V1–V4 treatment is checked in dark | the admin surface is correct in both themes, first time |
+| **V6 — finishing chrome** | chart-adjacent card chrome (the charts themselves stay as T1 shipped them — their internals are out of this fence); scrollbar/selection/focus treatments; the admin loading splash aligned with the app splash; final capture suite + a screenshot diff page for David's review | polish and the reviewable before/after |
+
+Not in Phase V: UnifiedAnalytics and the chart components as surfaces (the
+fence stands); the OKF Studio tab's inner surfaces (own initiative's look,
+already DS-native); any backend change.
+
 ## Phase C — CSR waves resume (after Phase U)
 
 - **W6 — artifacts view** — **MERGED to main 2026-11-06** (MR !780, via merge

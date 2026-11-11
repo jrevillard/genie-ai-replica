@@ -102,9 +102,11 @@ function keySetHasUsableKey(jwks) {
 /**
  * Could this published key verify an RS256 signature?
  *
- * The same filter jose applies to its candidates (RS256 only: kty, alg,
- * use, key_ops), so a count of them is a count of the keys the verifier
- * could actually have used.
+ * The same RS256-only filter `keySetHasUsableKey` uses — deliberately
+ * LOOSER than jose's own candidate filter (see that docstring): it ignores
+ * jose's `ext` check and its key_ops uniqueness/type strictness. A count
+ * of these is therefore a count of the keys the verifier could have used,
+ * never fewer.
  *
  * @param {Object|undefined} jwk - A published key
  * @returns {boolean} True when the key could verify an RS256 signature

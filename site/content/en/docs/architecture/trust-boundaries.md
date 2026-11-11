@@ -82,7 +82,7 @@ Cache policy:
 - **Cache miss** → service fetches the JWKS over HTTPS, caches keys keyed by `kid`.
 - **Cache hit but unknown `kid`** (e.g. Keycloak rotated the signing key) → service refreshes the JWKS. The refresh is floored to one per second per issuer, so junk tokens cannot make the service hammer the realm's certificate endpoint; a rotation that lands inside that window is observed by the NEXT refresh.
 - **Cache TTL** — 5 minutes. The key set is re-read once it is that old, whatever the traffic.
-- **Refresh under failure** — JWKS HTTP errors do not invalidate the cache; the service keeps validating against the cached keys, and surfaces the failure as 5xx when a refresh is due.
+- **Refresh under failure** — JWKS HTTP errors do not invalidate the cache, but a request whose refresh fails is answered 5xx: the cached keys are kept, not used for that request. The cached keys keep serving until the cache TTL is reached.
 - **A broken realm** — a realm that publishes no usable signing key, or publishes the same key id twice, is reported as an outage (503), not as a rejected token.
 
 > **Verify JWKS is reachable from each service.** If a service is deployed with the wrong `KEYCLOAK_URL` (e.g. `http://keycloak:8080` instead of the public `https://.../auth`), it cannot fetch the JWKS and every request 401s.

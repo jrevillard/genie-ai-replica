@@ -791,32 +791,6 @@ describe('keycloakAuthService', () => {
       });
     });
 
-    it('never resolves a token that names a key id by trying the candidates', async () => {
-      // The trial resolves a token that names NO key id. A token naming one
-      // the realm published twice is the realm's own outage (#1776), and it
-      // is never resolved by trying one of the duplicates: the wrapper
-      // answers 503 before the trial is ever reached.
-      const ambiguous = new Error('multiple matching keys');
-      ambiguous.name = 'JWKSMultipleMatchingKeys';
-      const inner = Object.assign(jest.fn().mockRejectedValue(ambiguous), {
-        jwks: () => ({
-          keys: [
-            { kid: 'dup', kty: 'RSA', alg: 'RS256', use: 'sig' },
-            { kid: 'dup', kty: 'RSA', alg: 'RS256', use: 'sig' }
-          ]
-        })
-      });
-      mockCreateRemoteJWKSet.mockReturnValue(inner);
-      mockJwtVerify.mockImplementation(async (token, key) => key({ alg: 'RS256', kid: 'dup' }, token));
-
-      await expect(keycloakAuthService.verifyToken(generateMockJwtString(mockJwtPayload))).rejects.toMatchObject({
-        code: 'AUTH_SERVICE_UNAVAILABLE'
-      });
-
-      // No candidate was tried: the verdict was the realm's, not the token's.
-      expect(mockJwtVerify).toHaveBeenCalledTimes(1);
-    });
-
     it('does not spend a signature verification on an expired kid-less token', async () => {
       // The trial costs one verification per candidate. An expired token can
       // never verify — jose checks the signature BEFORE the claims — so it
@@ -843,8 +817,14 @@ describe('keycloakAuthService', () => {
       // every token naming that id resolve to two candidates. The fault is
       // the realm's own state: it is an outage (503), so the operator is
       // told — not a 401 that signs every user out.
+      //
+      // The mocked ambiguity carries CANDIDATES, so the trial could run if
+      // the guard broke: the call count below proves it did not.
       const ambiguous = new Error('multiple matching keys');
       ambiguous.name = 'JWKSMultipleMatchingKeys';
+      ambiguous[Symbol.asyncIterator] = async function* () {
+        yield { key: 'candidate-1' };
+      };
       const inner = Object.assign(jest.fn().mockRejectedValue(ambiguous), {
         jwks: () => ({
           keys: [
@@ -858,6 +838,34 @@ describe('keycloakAuthService', () => {
 
       await expect(keycloakAuthService.verifyToken(generateMockJwtString(mockJwtPayload))).rejects.toMatchObject({
         code: 'AUTH_SERVICE_UNAVAILABLE'
+      });
+
+      // No candidate was tried: the verdict was the realm's, not the token's.
+      expect(mockJwtVerify).toHaveBeenCalledTimes(1);
+    });
+
+    it('counts only the signing keys the realm published under one key id', async () => {
+      // The number the operator reads is the number of CANDIDATES the
+      // ambiguity really had: a key the verifier could never use (an EC
+      // key, a key that forbids verification) is not a signing key.
+      const ambiguous = new Error('multiple matching keys');
+      ambiguous.name = 'JWKSMultipleMatchingKeys';
+      const inner = Object.assign(jest.fn().mockRejectedValue(ambiguous), {
+        jwks: () => ({
+          keys: [
+            { kid: 'dup', kty: 'RSA', alg: 'RS256', use: 'sig' },
+            { kid: 'dup', kty: 'RSA', alg: 'RS256', use: 'sig' },
+            { kid: 'dup', kty: 'EC', alg: 'ES256', use: 'sig' },
+            { kid: 'dup', kty: 'RSA', alg: 'RS256', use: 'sig', key_ops: ['sign'] }
+          ]
+        })
+      });
+      mockCreateRemoteJWKSet.mockReturnValue(inner);
+      mockJwtVerify.mockImplementation(async (token, key) => key({ alg: 'RS256', kid: 'dup' }, token));
+
+      await expect(keycloakAuthService.verifyToken(generateMockJwtString(mockJwtPayload))).rejects.toMatchObject({
+        code: 'AUTH_SERVICE_UNAVAILABLE',
+        message: expect.stringContaining('2 signing keys')
       });
     });
 

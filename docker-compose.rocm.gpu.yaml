@@ -1,0 +1,79 @@
+# ROCm overlay for the standalone GPU-node stack (docker-compose.gpu.yaml).
+#
+# Layer it ON TOP of the base file — the base file is never edited:
+#   docker compose --env-file env.strixhalo \
+#     -f docker-compose.gpu.yaml -f docker-compose.rocm.gpu.yaml up -d
+#
+# `-f` order matters: this file must come last. Only the keys a ROCm host
+# needs change: image pins (env.strixhalo), GPU device access for the two
+# vLLM instances, neutralization of the NVIDIA env var (compose merges
+# `environment:` BY KEY — `void` is ignored by ROCm containers and claims
+# no GPU even on an NVIDIA host), and two venue accommodations commented
+# below. Everything else merges from the base file.
+#
+# The TEI services run the CPU image (the ROCm TEI build fails on gfx1151;
+# see the spike results) and need NO device access. docling-serve stays
+# CPU (the ROCm path has no docling GPU support; DOCLING_DEVICE=cpu in
+# env.strixhalo governs dataprep's callers).
+
+services:
+  vllm-llm:
+    image: ${VLLM_ROCM_IMAGE}
+    environment:
+      - HUGGING_FACE_HUB_TOKEN=${HUGGING_FACE_HUB_TOKEN}
+      - NVIDIA_VISIBLE_DEVICES=void
+    devices:
+      - /dev/kfd:/dev/kfd
+      - /dev/dri:/dev/dri
+    group_add:
+      - "${RENDER_GID:-990}" # render — distro-specific; `getent group render`
+      - "${VIDEO_GID:-44}"   # video
+
+  vllm-translation:
+    image: ${VLLM_ROCM_IMAGE}
+    environment:
+      - HUGGING_FACE_HUB_TOKEN=${HUGGING_FACE_HUB_TOKEN}
+      - NVIDIA_VISIBLE_DEVICES=void
+    devices:
+      - /dev/kfd:/dev/kfd
+      - /dev/dri:/dev/dri
+    group_add:
+      - "${RENDER_GID:-990}" # render
+      - "${VIDEO_GID:-44}"   # video
+    # Venue accommodation pending MR !853 (the base file's healthcheck
+    # probes 5001 while the service serves 8000 — the static NVIDIA stack
+    # cannot converge; the ansible-rendered template already probes 8000).
+    # DROP this restatement once !853 merges.
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 300s
+
+  tei-embedding:
+    image: ${TEI_ROCM_EMBEDDING_IMAGE}
+    environment:
+      - HUGGING_FACE_HUB_TOKEN=${HUGGING_FACE_HUB_TOKEN}
+      - RUST_BACKTRACE=${RUST_BACKTRACE:-}
+      - NVIDIA_VISIBLE_DEVICES=void
+
+  tei-reranker:
+    image: ${TEI_ROCM_RERANKING_IMAGE}
+    environment:
+      - HUGGING_FACE_HUB_TOKEN=${HUGGING_FACE_HUB_TOKEN}
+      - RUST_BACKTRACE=${RUST_BACKTRACE:-}
+      - NVIDIA_VISIBLE_DEVICES=void
+
+  docling-serve:
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=void
+
+  nginx-gpu:
+    ports:
+      # Venue accommodation: the base file hardcodes host port 80 for the
+      # plain-HTTP listener, which clashes on hosts that already publish
+      # 80. Parameterize both listeners; env.strixhalo / group_vars pick
+      # free ports.
+      - "${GPU_HTTPS_PORT:-443}:443"
+      - "${GPU_HTTP_PORT:-80}:80"

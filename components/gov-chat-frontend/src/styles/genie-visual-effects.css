@@ -732,3 +732,86 @@ html[data-visual='on'] .genie-living-intelligence .admin-dashboard .tabs-card {
     var(--shadow-sm),
     0 1px 0 color-mix(in srgb, var(--accent) 18%, transparent) inset;
 }
+
+/*
+ * V2 — the four overview tiles carry their own hue, the way the welcome
+ * screen's quick-help cards carry per-button tints. Semantic mapping:
+ * uptime = success, response = info, error rate = danger, MAU = accent.
+ * The wash stays a top-lit breath (the tile keeps most of its surface);
+ * the title picks the hue up at readable strength; the values stay
+ * --fg. Layer off = one flat tile row again.
+ */
+html[data-visual='on'] .genie-living-intelligence .admin-dashboard .stat-card--uptime {
+  background-image: linear-gradient(180deg, color-mix(in srgb, var(--success) 9%, var(--surface)), var(--surface) 34%);
+}
+
+html[data-visual='on'] .genie-living-intelligence .admin-dashboard .stat-card--response {
+  background-image: linear-gradient(180deg, color-mix(in srgb, var(--info) 9%, var(--surface)), var(--surface) 34%);
+}
+
+html[data-visual='on'] .genie-living-intelligence .admin-dashboard .stat-card--errors {
+  background-image: linear-gradient(180deg, color-mix(in srgb, var(--danger) 8%, var(--surface)), var(--surface) 34%);
+}
+
+html[data-visual='on'] .genie-living-intelligence .admin-dashboard .stat-card--users {
+  background-image: linear-gradient(180deg, color-mix(in srgb, var(--accent) 10%, var(--surface)), var(--surface) 34%);
+}
+
+html[data-visual='on'] .genie-living-intelligence .admin-dashboard .stat-card--uptime .stat-title {
+  color: color-mix(in srgb, var(--success) 65%, var(--muted));
+}
+
+html[data-visual='on'] .genie-living-intelligence .admin-dashboard .stat-card--response .stat-title {
+  color: color-mix(in srgb, var(--info) 65%, var(--muted));
+}
+
+html[data-visual='on'] .genie-living-intelligence .admin-dashboard .stat-card--errors .stat-title {
+  color: color-mix(in srgb, var(--danger) 65%, var(--muted));
+}
+
+html[data-visual='on'] .genie-living-intelligence .admin-dashboard .stat-card--users .stat-title {
+  color: color-mix(in srgb, var(--accent) 70%, var(--muted));
+}
+
+/*
+ * V3 — the data tabs' panels: headers in the display family (the same
+ * voice as the page title), interactive rows and tiles answer the
+ * pointer with the accent wash, and the action cards lift the way the
+ * document items do. Density is untouched: no rule here touches
+ * typography size, spacing or the tables' cells — the treatments are
+ * colour only.
+ */
+
+/* Section + card headers get the display family. */
+html[data-visual='on'] .genie-living-intelligence .admin-dashboard .card-title,
+html[data-visual='on'] .genie-living-intelligence .admin-dashboard .section-title {
+  font-family: var(--font-display);
+  letter-spacing: -0.01em;
+}
+
+/* Clickable action tiles (backup / optimize) lift on hover. */
+html[data-visual='on'] .genie-living-intelligence .admin-dashboard .db-action-card {
+  transition:
+    transform 0.15s ease,
+    border-color 0.15s ease,
+    background-color 0.15s ease;
+}
+
+html[data-visual='on'] .genie-living-intelligence .admin-dashboard .db-action-card:hover {
+  border-color: color-mix(in srgb, var(--accent) 35%, var(--border));
+  background-color: color-mix(in srgb, var(--accent) 6%, var(--surface));
+  transform: translateY(-1px);
+}
+
+/* Hierarchy rows answer the pointer. */
+html[data-visual='on'] .genie-living-intelligence .admin-dashboard .hierarchy-item {
+  transition: background-color 0.15s ease;
+}
+
+html[data-visual='on'] .genie-living-intelligence .admin-dashboard .hierarchy-item:hover {
+  background-color: color-mix(in srgb, var(--accent) 6%, transparent);
+}
+
+/* The reduced-motion universal rule in this file already kills the
+   transform transition; the colour transitions collapse to instant
+   changes, which is the correct reduced-motion behaviour. */

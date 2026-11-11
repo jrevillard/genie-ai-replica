@@ -113,16 +113,20 @@ flagged before touching):
 | Wave | What | Status |
 |---|---|---|
 | **T1 — chart theming** | the five analytics charts consume resolved DS tokens (light/dark correct across theme switches; no ApexCharts hardcoded palette) | **MERGED to main** (MR **!842**, merge commit `7f22a1310`, David's merge train 2026-11-10). BMAD bookkeeping rides the H1 MR per the no-standalone-docs-MR rule |
-| **H1 — the dashboard stops lying** | fabricated boot defaults removed (99.98% uptime, 245 ms, 1,247 MAU, 42.3 GB DB, "2 days ago" scan stamp, hardcoded service statuses) → null-until-measured + tri-state cards (DsStateDisplay error+Retry / Measuring… / real data); swallowed failures surfaced (loadSystemHealth resets every surface, loadDatabaseStats treats figure-less payloads as failures, loadSecurityDetails rethrows instead of returning a fabricated clean bill, runSecurityScan no longer stamps "Just now" over a failed refresh, LogSearchDialog reports its own failure via a second emit argument); 8 new i18n keys × 14 locales | **this MR** (branch `worktree-admin-ux-h1-honest-services`, two commits: `2f2dfbf74` + review-round `3a80cc701`) |
+| **H1 — the dashboard stops lying** | fabricated boot defaults removed (99.98% uptime, 245 ms, 1,247 MAU, 42.3 GB DB, "2 days ago" scan stamp, hardcoded service statuses) → null-until-measured + tri-state cards (DsStateDisplay error+Retry / Measuring… / real data); swallowed failures surfaced (loadSystemHealth resets every surface, loadDatabaseStats treats figure-less payloads as failures, loadSecurityDetails rethrows instead of returning a fabricated clean bill, runSecurityScan no longer stamps "Just now" over a failed refresh, LogSearchDialog reports its own failure via a second emit argument); 9 new i18n keys × 14 locales | **MERGED to main** (MR **!845**, David's merge train, `a96ba311d`, squash `9d5ea0805`). Branch `feat/admin-ux-h1-honest-services`, 4 commits — three review rounds + a 4-agent simplify pass. Deployed to the local build PRE-merge; David's visual review exposed two backend bugs the honest render had been masking — **#1761** (Database tab "NaN GB") and **#1762** (Backup 500 at corpus scale), fixed in this MR |
+| **H2 — the two Database-tab bugs the honest render exposed** | #1761: `admin-dashboard-service.getDatabaseStats` misread the driver's `collection.figures()` shape (flat `figures.size`/`figures.count` are always undefined → the total summed to NaN → `"NaN GB"`); reads `figures.figures.documentsSize`/`alive`, human-formats bytes, and a non-finite total now FAILS the payload instead of rendering. #1762: `database-operations-service.backupDatabase` stringified each collection's ENTIRE array (and loaded it whole) — a 46,938-doc collection crossed V8's string cap and 500'd after 34s; now streams per-document through a backpressure-aware write, removes the partial file on mid-backup failure, and never destroys a completed backup when a late step (stat/compress/cleanup) fails | **this MR** (`feat/admin-ux-db-fixes`, closes #1761 + #1762) — both issues scheduled next sweep (David), pulled forward the same day |
 
-Diagnosis worth keeping: the H1 review found the **backend already honest** —
-`/admin/system-health` returns nulls on VL outage by design, `/admin/database/stats`
-is wired to a service that throws, `/admin/security-metrics` serves the real scan
-store. Every finding was a frontend boot-lie or a swallowed failure; zero backend
-changes. The dead `lastScan` key (the loader writes `lastSecurityScan`) was fixed
-in passing. **Out of fence, flagged for the MR description:** H4 (UnifiedAnalytics
-renders random demo data) — David ruled the charts untouchable; the wave that
-fixes H4 must be scoped explicitly.
+Diagnosis worth keeping — amended by the merge review: the H1 review found the
+**backend delivery already honest** (`/admin/system-health` nulls on VL outage by
+design, `/admin/security-metrics` serves the real scan store; every review finding
+was a frontend boot-lie or a swallowed failure) — but honest DELIVERY still
+carried a dishonest VALUE: a driver-shape misread produced `"NaN GB"` inside a
+valid 200, masked since forever by the fabricated tile. Lesson for the next
+waves: honest rendering surfaces upstream garbage; shape guards don't validate
+values. The dead `lastScan` key (the loader writes `lastSecurityScan`) was fixed
+in passing. **Out of fence, flagged:** H4 (UnifiedAnalytics renders random demo
+data) — David ruled the charts untouchable; the wave that fixes H4 must be
+scoped explicitly.
 
 ## Phase C — CSR waves resume (after Phase U)
 

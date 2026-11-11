@@ -52,7 +52,21 @@ test.describe('a dedicated title names ONE spec file', () => {
   });
 
   test('a title that names the same file twice is still dedicated to it', () => {
+    // The SAME token twice, and the file under TWO spellings: both name
+    // this one file, so both are a dedication — the title is judged per
+    // FILE, not per token.
     expect(titleIsDedicatedTo(`test(e2e): ${FILE} — ${FILE} again`, FILE)).toBe(true);
+    expect(titleIsDedicatedTo(`test(e2e): ${FILE} — /home/dev/genie-ai/${FILE}`, FILE)).toBe(true);
+    expect(
+      titleIsDedicatedTo(
+        `test(e2e): ${FILE} — https://gitlab.example/un/itu/genie-ai/-/blob/main/${FILE}`,
+        FILE
+      )
+    ).toBe(true);
+  });
+
+  test('a title that names this file AND another one is an umbrella', () => {
+    expect(titleIsDedicatedTo(`test(e2e): ${FILE} and tests/e2e/other.spec.js are red`, FILE)).toBe(false);
   });
 
   test('a path that is only the TAIL of another e2e file does not match', () => {

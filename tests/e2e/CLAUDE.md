@@ -132,7 +132,9 @@ A NEW spec file under one of the CI's executed globs (`admin/`,
 not free, though: the derivation's exact pin in
 `tests/config-validator/__tests__/config-validation.test.js` lists the
 expected set, so such a spec file adds one line there. A spec outside
-those globs needs none — the local run executes the whole tree.
+those globs needs none — the local run executes the whole tree. The
+list above MIRRORS the CI invocation (the config-validator derives it
+from `.gitlab-ci.yml`): a change to the CI's globs moves both.
 
 A spec that needs a surface the venue does not expose **skips with a
 reason** — see `helpers/venue-profile.js`. The reason is read from the

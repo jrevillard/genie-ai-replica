@@ -29,14 +29,25 @@ test.describe('the streaming flag is read through the store getter', () => {
     // null is not false: a turn that has not produced an answer must keep
     // the wait alive. Treating it as false would end the wait on an
     // empty conversation.
-    expect(streamingFlagOf({ state: 'ok', bots: [] })).toBe(null);
+    expect(streamingFlagOf({ state: 'ok', messages: [] })).toBe(null);
+    // A user message is not a bot message: the wait continues.
+    expect(streamingFlagOf({ state: 'ok', messages: [{ sender: 'user', isStreaming: false }] })).toBe(null);
   });
 
   test('the LAST bot message decides the flag', () => {
-    // The page sends the bot messages' flags in order; the last one is
+    // The page sends each message's sender and flag; the LAST BOT one is
     // the turn that is still open.
-    expect(streamingFlagOf({ state: 'ok', bots: [true, false] })).toBe(false);
-    expect(streamingFlagOf({ state: 'ok', bots: [true] })).toBe(true);
+    expect(
+      streamingFlagOf({
+        state: 'ok',
+        messages: [
+          { sender: 'bot', isStreaming: true },
+          { sender: 'user', isStreaming: false },
+          { sender: 'bot', isStreaming: false },
+        ],
+      })
+    ).toBe(false);
+    expect(streamingFlagOf({ state: 'ok', messages: [{ sender: 'bot', isStreaming: true }] })).toBe(true);
   });
 
   test('a conversation without bot messages is empty, not broken', () => {

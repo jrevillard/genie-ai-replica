@@ -177,13 +177,14 @@ async function waitForBotResponse(page, options = {}) {
             // polling to a cause-less timeout.
             if (!store) return { state: 'no-store' };
             if (!open) return { state: 'no-open-conversation' };
-            // Only what the decision needs: the streaming flag of each
-            // bot message. The whole conversation would cross the wire on
-            // every poll tick.
-            const bots = open.messages
-              ? open.messages.filter((m) => m.sender === 'bot').map((m) => Boolean(m.isStreaming))
+            // Only what the decision needs: each message's sender and
+            // streaming flag. The whole conversation would cross the wire
+            // on every poll tick — and WHICH messages are the bot's is
+            // decided here, where it is unit tested.
+            const messages = open.messages
+              ? open.messages.map((m) => ({ sender: m.sender, isStreaming: Boolean(m.isStreaming) }))
               : [];
-            return { state: 'ok', bots };
+            return { state: 'ok', messages };
           })
           .then(streamingFlagOf),
       { timeout }
@@ -205,7 +206,7 @@ async function waitForBotResponse(page, options = {}) {
  * - no bot message yet is NOT "not streaming" — the turn has not
  *   produced one, so the wait continues (null is not false).
  *
- * @param {{state: string, bots?: boolean[]}} read - what the page read
+ * @param {{state: string, messages?: object[]}} read - what the page read
  * @returns {boolean|null} the flag, or null while the turn has no answer
  */
 function streamingFlagOf(read) {
@@ -218,11 +219,12 @@ function streamingFlagOf(read) {
         : 'the store does not expose the conversation/openConversation getter';
     throw new Error(`${cause} — that is a broken store contract, not a slow answer`);
   }
-  const bots = read.bots || [];
+  const messages = read.messages || [];
+  const bots = messages.filter((m) => m.sender === 'bot');
   const last = bots[bots.length - 1];
   // No bot message yet: the turn has not produced one, so the wait
   // continues (null is not false).
-  return last === undefined ? null : last;
+  return last === undefined ? null : last.isStreaming;
 }
 
 /**
@@ -329,7 +331,6 @@ async function mockStreamError(page) {
   // Registration-invariant like the SSE body: build the wire bytes once.
   // The answer is the app's own error shape — every 5xx reaches the same
   // branch, so the mock carries no knob for it.
-  const status = 503;
   const body = JSON.stringify({
     error: 'SERVICE_UNAVAILABLE',
     message: 'RAG pipeline is temporarily unavailable',
@@ -337,7 +338,7 @@ async function mockStreamError(page) {
   await page.route(
     STREAM_ROUTE,
     runPostOnlyRouteHandler(page, async (route) => {
-      await route.fulfill({ status, contentType: 'application/json', headers: CORS_HEADERS, body });
+      await route.fulfill({ status: 503, contentType: 'application/json', headers: CORS_HEADERS, body });
     })
   );
 }

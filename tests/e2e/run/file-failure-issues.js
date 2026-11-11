@@ -223,8 +223,13 @@ function namesThisFile(token, file) {
  * the file shows red with nothing pointing at it.
  */
 function titleIsDedicatedTo(title, file) {
-  const paths = [...new Set(specPathsIn(title))];
-  return paths.length === 1 && namesThisFile(paths[0], file);
+  const paths = specPathsIn(title);
+  if (paths.length === 0) return false;
+  // EVERY path the title names must name THIS file — under the
+  // repository path, an absolute path or a tracker URL. A title that
+  // names another file as well is an umbrella, whatever it says about
+  // this one.
+  return paths.every((path) => namesThisFile(path, file));
 }
 
 /**

@@ -73,7 +73,7 @@ const signatureFailureError = () => {
 };
 
 // The published candidate keys of an ambiguous key set.
-const candidates = (count) => Array.from({ length: count }, (_, i) => ({ key: `candidate-${i + 1}` }));
+const publishedCandidates = (count) => Array.from({ length: count }, (_, i) => ({ key: `candidate-${i + 1}` }));
 
 describe('keycloakAuthService', () => {
   beforeEach(() => {
@@ -774,7 +774,7 @@ describe('keycloakAuthService', () => {
       // against a multi-key set is not a bad token, it is a token jose
       // cannot resolve by key id alone. The published candidates resolve
       // it — the first one whose signature verifies wins.
-      const published = candidates(2);
+      const published = publishedCandidates(2);
 
       mockAmbiguousKeySet({
         protectedHeader: { alg: 'RS256' },
@@ -787,7 +787,7 @@ describe('keycloakAuthService', () => {
         }
       });
 
-      const token = generateMockJwtString(mockJwtPayload);
+      const token = generateMockJwtString(mockJwtPayload, { alg: 'RS256', typ: 'JWT' });
       const result = await keycloakAuthService.verifyToken(token);
 
       expect(result.iss_sub).toBe(`${mockJwtPayload.iss}#${mockJwtPayload.sub}`);
@@ -801,13 +801,15 @@ describe('keycloakAuthService', () => {
       // token is never ACCEPTED without a signature that verifies.
       mockAmbiguousKeySet({
         protectedHeader: { alg: 'RS256' },
-        candidates: candidates(2),
+        candidates: publishedCandidates(2),
         onCandidate: () => {
           throw signatureFailureError();
         }
       });
 
-      await expect(keycloakAuthService.verifyToken(generateMockJwtString(mockJwtPayload))).rejects.toMatchObject({
+      await expect(
+        keycloakAuthService.verifyToken(generateMockJwtString(mockJwtPayload, { alg: 'RS256', typ: 'JWT' }))
+      ).rejects.toMatchObject({
         code: 'TOKEN_INVALID',
         message: 'Token verification failed'
       });
@@ -826,7 +828,9 @@ describe('keycloakAuthService', () => {
       mockCreateRemoteJWKSet.mockReturnValue(inner);
       resolveThroughKey({ alg: 'RS256', kid: 'dup' });
 
-      await expect(keycloakAuthService.verifyToken(generateMockJwtString(mockJwtPayload))).rejects.toMatchObject({
+      await expect(
+        keycloakAuthService.verifyToken(generateMockJwtString(mockJwtPayload, { alg: 'RS256', kid: 'dup', typ: 'JWT' }))
+      ).rejects.toMatchObject({
         code: 'AUTH_SERVICE_UNAVAILABLE',
         message: expect.stringContaining('more than one signing key under one key id')
       });
@@ -843,14 +847,16 @@ describe('keycloakAuthService', () => {
       const warns = captureWarns();
       mockAmbiguousKeySet({
         protectedHeader: { alg: 'RS256' },
-        candidates: candidates(4),
+        candidates: publishedCandidates(4),
         onCandidate: () => {
           throw signatureFailureError();
         }
       });
 
       try {
-        await expect(keycloakAuthService.verifyToken(generateMockJwtString(mockJwtPayload))).rejects.toMatchObject({
+        await expect(
+          keycloakAuthService.verifyToken(generateMockJwtString(mockJwtPayload, { alg: 'RS256', typ: 'JWT' }))
+        ).rejects.toMatchObject({
           code: 'TOKEN_INVALID'
         });
 
@@ -873,13 +879,13 @@ describe('keycloakAuthService', () => {
       // is decided from the unverified payload and the trial never runs.
       mockAmbiguousKeySet({
         protectedHeader: { alg: 'RS256' },
-        candidates: candidates(1),
+        candidates: publishedCandidates(1),
         onCandidate: () => {
           throw signatureFailureError();
         }
       });
 
-      const token = generateMockJwtString({ exp: Math.floor(Date.now() / 1000) - 3600 });
+      const token = generateMockJwtString({ exp: Math.floor(Date.now() / 1000) - 3600 }, { alg: 'RS256', typ: 'JWT' });
       await expect(keycloakAuthService.verifyToken(token)).rejects.toMatchObject({
         code: 'TOKEN_EXPIRED',
         message: 'Token has expired'
@@ -898,13 +904,13 @@ describe('keycloakAuthService', () => {
       // signature verification to learn that.
       mockAmbiguousKeySet({
         protectedHeader: { alg: 'RS256' },
-        candidates: candidates(2),
+        candidates: publishedCandidates(2),
         onCandidate: () => {
           throw signatureFailureError();
         }
       });
 
-      const token = generateMockJwtString({ exp });
+      const token = generateMockJwtString({ exp }, { alg: 'RS256', typ: 'JWT' });
       await expect(keycloakAuthService.verifyToken(token)).rejects.toMatchObject({
         code: 'TOKEN_INVALID',
         message: 'Token verification failed'
@@ -919,7 +925,7 @@ describe('keycloakAuthService', () => {
       // repair it — so the trial must not spend a verification on the rest.
       mockAmbiguousKeySet({
         protectedHeader: { alg: 'RS256' },
-        candidates: candidates(2),
+        candidates: publishedCandidates(2),
         onCandidate: () => {
           const claimError = new Error('audience validation failed');
           claimError.name = 'JWTClaimValidationFailed';
@@ -929,7 +935,9 @@ describe('keycloakAuthService', () => {
       });
 
       await expect(
-        keycloakAuthService.verifyToken(generateMockJwtString(mockJwtPayload), { audience: 'genie-app' })
+        keycloakAuthService.verifyToken(generateMockJwtString(mockJwtPayload, { alg: 'RS256', typ: 'JWT' }), {
+          audience: 'genie-app'
+        })
       ).rejects.toMatchObject({
         code: 'TOKEN_INVALID',
         message: 'Token audience validation failed'
@@ -948,14 +956,14 @@ describe('keycloakAuthService', () => {
       nowSpy.mockReturnValue(1700000000000);
       mockAmbiguousKeySet({
         protectedHeader: { alg: 'RS256' },
-        candidates: candidates(2),
+        candidates: publishedCandidates(2),
         onCandidate: () => {
           throw signatureFailureError();
         }
       });
 
       try {
-        const token = generateMockJwtString({ exp: 1700000000 });
+        const token = generateMockJwtString({ exp: 1700000000 }, { alg: 'RS256', typ: 'JWT' });
         await expect(keycloakAuthService.verifyToken(token)).rejects.toMatchObject({
           code: 'TOKEN_EXPIRED',
           message: 'Token has expired'
@@ -968,6 +976,28 @@ describe('keycloakAuthService', () => {
       }
     });
 
+    it('never runs the candidate trial for a token that names a key id', async () => {
+      // The CALLER's own rule, independent of the key resolver: a token
+      // whose header names a key id is never resolved against the published
+      // candidates. The ambiguity is injected straight into the verification
+      // here — the resolver answers the named-key-id case itself, and this
+      // test is about the caller's decision.
+      const ambiguous = ambiguousKeysError(publishedCandidates(2));
+      mockJwtVerify.mockRejectedValueOnce(ambiguous).mockImplementation(async () => {
+        throw signatureFailureError();
+      });
+
+      // The mock token names a key id.
+      const token = generateMockJwtString(mockJwtPayload);
+      await expect(keycloakAuthService.verifyToken(token)).rejects.toMatchObject({
+        code: 'TOKEN_INVALID',
+        message: 'Token verification failed'
+      });
+
+      // Only the first attempt: the trial never ran.
+      expect(mockJwtVerify).toHaveBeenCalledTimes(1);
+    });
+
     it('does not resolve a token whose key id is not a string', async () => {
       // A key id that is not a string (a number, null) is a MALFORMED
       // token, not a token naming no key id: jose matched the candidates
@@ -975,13 +1005,15 @@ describe('keycloakAuthService', () => {
       // would accept a token the realm never issued. It stays a bad token.
       mockAmbiguousKeySet({
         protectedHeader: { alg: 'RS256', kid: 123 },
-        candidates: candidates(2),
+        candidates: publishedCandidates(2),
         onCandidate: () => {
           throw signatureFailureError();
         }
       });
 
-      await expect(keycloakAuthService.verifyToken(generateMockJwtString(mockJwtPayload))).rejects.toMatchObject({
+      await expect(
+        keycloakAuthService.verifyToken(generateMockJwtString(mockJwtPayload, { alg: 'RS256', kid: 123, typ: 'JWT' }))
+      ).rejects.toMatchObject({
         code: 'TOKEN_INVALID',
         message: 'Token verification failed'
       });

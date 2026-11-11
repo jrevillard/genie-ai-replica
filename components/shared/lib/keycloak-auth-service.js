@@ -245,6 +245,28 @@ function publishedKeySet(inner) {
 }
 
 /**
+ * Does the token name NO key id?
+ *
+ * RFC 7515 §4.1.4 makes the key id optional, and the candidate trial
+ * resolves ONLY a token that names none. The answer is read from the
+ * token's own protected header — the header the token carries, not the one
+ * the key resolver reports — so it does not depend on how that resolver
+ * classified the request. A header that cannot be read counts as naming a
+ * key id: the answer fails closed, and no trial runs.
+ *
+ * @param {string} token - The raw JWT
+ * @returns {boolean} True when the token names no key id at all
+ */
+function tokenNamesNoKeyId(token) {
+  try {
+    const header = JSON.parse(Buffer.from(token.split('.')[0], 'base64url').toString('utf8'));
+    return !Object.prototype.hasOwnProperty.call(header, 'kid');
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Try the published candidate keys of an ambiguous token (#1767).
  *
  * RFC 7515 §4.1.4 makes the key id OPTIONAL: a token that names none
@@ -834,13 +856,13 @@ const keycloakAuthService = {
       //     a number, so such a token is invalid whatever key signs it.
       const exp = typeof unverifiedExp === 'number' ? unverifiedExp : null;
       const expired = exp !== null && exp <= Math.floor(Date.now() / 1000);
-      // The trial applies ONLY to a token that names NO key id: the key
-      // resolver answers the named-kid case itself (the realm's outage,
-      // #1776) and refuses a key id that is not a string, so a token
-      // naming a duplicated key id never reaches this branch and is never
-      // resolved by trying one of the duplicates. Every ambiguity that
-      // reaches it is a kid-less one.
-      if (err.name === 'JWKSMultipleMatchingKeys') {
+      // The trial applies ONLY to a token that names NO key id, and the
+      // CALLER decides that — from the token's own header, not from how the
+      // key resolver classified the request. The resolver answers the
+      // named-kid case itself (the realm's outage, #1776) and refuses a key
+      // id that is not a string, so the two agree; asking the token keeps
+      // the rule true on its own, whatever the resolver does.
+      if (err.name === 'JWKSMultipleMatchingKeys' && tokenNamesNoKeyId(token)) {
         if (exp === null) {
           // The token's own defect, and the one jose would report: an
           // expiry that is not a number. Decided here so the trial spends

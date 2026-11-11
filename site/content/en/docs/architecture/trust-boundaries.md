@@ -63,7 +63,7 @@ Every service that touches a Bearer token validates it independently. There is *
 | Claim | Required | Where it's checked | Failure → |
 |-------|----------|---------------------|-----------|
 | `iss` (issuer) | yes | Must equal Keycloak's issuer (derived from `KEYCLOAK_URL` + realm path) | 401, code `TOKEN_INVALID` |
-| `aud` (audience) | yes | Must include this service's expected audience (per-client in Keycloak) | 401, code `TOKEN_INVALID` |
+| `aud` (audience) | opt-in | Checked only where the service asks for it (RFC 8707): the OKF server binds `OKF_AUDIENCE` when it is set, the backend and the document repository accept any audience of the trusted issuer | 401, code `TOKEN_INVALID` |
 | `exp` (expiry) | yes | Rejected if past; clock skew tolerance is implementation-defined | 401, code `TOKEN_EXPIRED` |
 | `sub` (subject) | yes | Combined with `iss` as `iss#sub` for JIT user identity | Treated as new user if absent from DB |
 | `realm_access.roles` | route-dependent | Admin routes check `realm_access.roles` includes `admin` | 403, code `FORBIDDEN` |

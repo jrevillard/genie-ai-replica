@@ -245,23 +245,24 @@ const SESSION_MINT_TIMEOUT_MS = 360000;
  * 300 s with ~90 s left for that gap. With the login counted, 135 + 60
  * + 150 = 345 s, inside the hook's 360 s.
  *
- * The wave width is bounded by the DATA TIER, and the engine decides
- * how:
+ * The wave width is bounded by the BUDGET and by what a shared stack
+ * can take. The engine says how the contention behaves, and both
+ * engines are in the field:
  *
- *  - RocksDB — the venue's deployment passes `--server.storage-engine=
- *    rocksdb` — takes its locks per DOCUMENT: concurrent deletes of
- *    distinct documents do not conflict, and a conflict surfaces as a
+ *  - RocksDB — the DEFAULT since ArangoDB 3.4, and what the venue's
+ *    deployment passes explicitly (`--server.storage-engine=rocksdb`) —
+ *    takes its locks per DOCUMENT: concurrent deletes of distinct
+ *    documents do not conflict, and a conflict surfaces as a
  *    write-write conflict (error 1200; 1201 is "datfile sealed");
- *  - MMFiles — the compose deployment, ArangoDB 3.12's default engine,
- *    which `docker-compose.yaml` does not override — takes the write
- *    lock per COLLECTION. The conversation delete opens a write
- *    transaction over six collections (chat-history-service.js), so a
- *    wave of concurrent deletes serialises on that lock and the waits
- *    grow with the wave width until the transaction lock timeout
+ *  - MMFiles — only where a deployment selects it explicitly — takes
+ *    the write lock per COLLECTION. The conversation delete opens a
+ *    write transaction over six collections (chat-history-service.js),
+ *    so a wave of concurrent deletes serialises on that lock and the
+ *    waits grow with the wave width until the transaction lock timeout
  *    surfaces.
  *
- * Ten at a time keeps the serialised writes landing inside the 30 s
- * request cap on the stricter engine.
+ * Ten at a time is what the budget above is sized for, and it keeps the
+ * fan-out a modest load on a shared stack — on either engine.
  */
 const SWEEP_DELETE_CONCURRENCY = 10;
 
@@ -338,10 +339,12 @@ function describeUnauthorized(res, token) {
  * whatever order the calls completed in.
  *
  * Safe by construction: a call that THROWS does not abandon the rest of
- * the items — every item is attempted, and the first failure is
- * rethrown once the whole batch has run. A worker that died on its
+ * the items — every item is attempted, and the lowest-indexed failure
+ * is rethrown once the whole batch has run. A worker that died on its
  * first item would otherwise leave the remaining items untouched, and
- * the sweep would report a partial deletion as a complete one.
+ * the sweep would report a partial deletion as a complete one. The
+ * failure that is rethrown must not depend on which call rejected
+ * FIRST: the index decides, not the clock.
  *
  * @param {Array} items - the items to map
  * @param {number} limit - the maximum number of calls in flight
@@ -364,6 +367,9 @@ async function mapWithConcurrency(items, limit, fn) {
   });
   await Promise.all(workers);
   if (failures.length > 0) {
+    // The lowest index, not the first to reject: the same input must
+    // raise the same error whatever order the calls completed in.
+    failures.sort((a, b) => a.index - b.index);
     throw failures[0].error;
   }
   return results;
@@ -428,7 +434,6 @@ module.exports = {
   parseJwtClaims,
   request,
   mapWithConcurrency,
-  tokenExpiryLabel,
   describeUnauthorized,
   SESSION_MINT_TIMEOUT_MS,
   SWEEP_DELETE_CONCURRENCY,

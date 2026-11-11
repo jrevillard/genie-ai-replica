@@ -110,8 +110,14 @@ test.describe('Conversation history persistence', () => {
         break;
       }
       const list = listRes.data?.conversations || listRes.data;
-      const listed = Array.isArray(list) ? list : [];
-      conversations.push(...listed);
+      if (!Array.isArray(list)) {
+        // A response without the array is a changed contract, not an
+        // empty population: reading it as empty would end the sweep with
+        // a green report and the suite's conversations still in place.
+        listFailure = `offset ${offset} carried no conversation array (the response shape changed)`;
+        break;
+      }
+      conversations.push(...list);
       pagesRead++;
       // The population is the same on every page: keep the first count
       // that arrives, so a page without a pagination object does not
@@ -119,7 +125,7 @@ test.describe('Conversation history persistence', () => {
       if (total === undefined) {
         total = listRes.data?.pagination?.total;
       }
-      if (listed.length < LIST_PAGE_SIZE) {
+      if (list.length < LIST_PAGE_SIZE) {
         exhausted = true;
         break;
       }
@@ -190,7 +196,7 @@ test.describe('Conversation history persistence', () => {
           `run) — they stay behind until a later run removes them`
       );
     }
-    if (!enumeratedAll && !listFailure) {
+    if (!enumeratedAll) {
       // What the sweep knows is that the POPULATION exceeds the window it
       // enumerated — not that a suite conversation lies beyond it. Say that.
       problems.push(
@@ -205,7 +211,8 @@ test.describe('Conversation history persistence', () => {
       const scope = populationKnown
         ? `population: ${total} matching conversations, ${conversations.length} read, ` +
           `${own.length} of them the suite's own`
-        : `population unknown, ${conversations.length} matching conversations read`;
+        : `population unknown, ${conversations.length} matching conversations read, ` +
+          `${own.length} of them the suite's own`;
       throw new Error(`cleanup: ${problems.length} problem(s) — ${scope} — ${problems.join(' | ')}`);
     }
   });

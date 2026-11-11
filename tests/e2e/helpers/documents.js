@@ -10,9 +10,9 @@ const {
   SWEEP_MAX_LIST_PAGES
 } = require('./auth');
 
-// The page size the cleanup sweep lists the population with. The endpoint
-// validates `limit <= 50`, so this is also its maximum — and the "last
-// page" test below compares against it.
+// The page size the cleanup sweep lists the population with. The
+// endpoint validates `limit <= 50`, so this is also its maximum, and
+// the sweep recognises the last page by a page shorter than this.
 const PAGE_SIZE = 50;
 
 /**
@@ -254,7 +254,14 @@ async function deleteAllTestDocuments(prefix = 'test-document', { browser } = {}
       listFailure = `page ${page} returned HTTP ${listRes.status}`;
       break;
     }
-    const pageFiles = listRes.data?.data || [];
+    const pageFiles = listRes.data?.data;
+    if (!Array.isArray(pageFiles)) {
+      // A response without the array is a changed contract, not an empty
+      // population: reading it as empty would end the sweep with a green
+      // report and the suite's documents still in place.
+      listFailure = `page ${page} carried no file array (the response shape changed)`;
+      break;
+    }
     files.push(...pageFiles);
     // The population is the same on every page: keep the first count
     // that arrives, so a page without a pagination object does not erase
@@ -322,7 +329,7 @@ async function deleteAllTestDocuments(prefix = 'test-document', { browser } = {}
         `per run) — they stay behind until a later run removes them`
     );
   }
-  if (!enumeratedAll && !listFailure) {
+  if (!enumeratedAll) {
     // What the sweep knows is that the POPULATION exceeds the window it
     // enumerated — not that a suite file lies beyond it. Say that.
     problems.push(
@@ -336,7 +343,7 @@ async function deleteAllTestDocuments(prefix = 'test-document', { browser } = {}
   if (problems.length > 0) {
     const scope = populationKnown
       ? `population: ${total} matching files, ${files.length} read, ${own.length} of them the suite's own`
-      : `population unknown, ${files.length} matching files read`;
+      : `population unknown, ${files.length} matching files read, ${own.length} of them the suite's own`;
     throw new Error(`cleanup: ${problems.length} problem(s) — ${scope} — ${problems.join(' | ')}`);
   }
 }

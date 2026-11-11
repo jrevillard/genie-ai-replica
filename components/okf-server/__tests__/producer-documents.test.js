@@ -903,24 +903,7 @@ describe('producer-service — startDocumentsConversion + run', () => {
       domain: 'general',
       conversion: { status: 'done', stage: 'done', files_done: 1, files_total: 1, summary: { created: 1 } }
     });
-    mockDocs({ f1: 'alpha.md' });
-    authedAxios.get.mockImplementation((url) => {
-      const s = String(url);
-      if (s.endsWith('/download')) {
-        const fid = s.split('/api/files/')[1].replace(/\/download$/, '');
-        return Promise.resolve({ data: Readable.from([Buffer.from('# T\n\nbody for ' + fid)]) });
-      }
-      return Promise.resolve({
-        data: {
-          file: {
-            file_id: s.split('/api/files/')[1],
-            file_name: 'alpha.md',
-            file_hash: 'HASH-HEALTHY-1',
-            dataprep: { status: 'Pending' }
-          }
-        }
-      });
-    });
+    mockDocsWithHash('HASH-HEALTHY-1');
     failNextDuplicateQuery();
 
     await expect(
@@ -940,26 +923,9 @@ describe('producer-service — startDocumentsConversion + run', () => {
       domain: 'general',
       conversion: { status: 'queued', stage: 'queued', files_done: 0, files_total: 3 }
     });
-    mockDocs({ f1: 'alpha.md' });
-    failNextDuplicateQuery();
     // the file must carry a hash, or the duplicate query never runs
-    authedAxios.get.mockImplementation((url) => {
-      const s = String(url);
-      if (s.endsWith('/download')) {
-        const fid = s.split('/api/files/')[1].replace(/\/download$/, '');
-        return Promise.resolve({ data: Readable.from([Buffer.from('# T\n\nbody for ' + fid)]) });
-      }
-      return Promise.resolve({
-        data: {
-          file: {
-            file_id: s.split('/api/files/')[1],
-            file_name: 'alpha.md',
-            file_hash: 'HASH-QUEUED-1',
-            dataprep: { status: 'Pending' }
-          }
-        }
-      });
-    });
+    mockDocsWithHash('HASH-QUEUED-1');
+    failNextDuplicateQuery();
 
     await expect(
       producer.startDocumentsConversion({ repo_id: RID, file_ids: ['f1'], requested_name: 'x' })
@@ -979,24 +945,7 @@ describe('producer-service — startDocumentsConversion + run', () => {
       domain: 'general',
       conversion: { status: 'done', stage: 'done', files_done: 1, files_total: 1 }
     });
-    mockDocs({ f1: 'alpha.md' });
-    authedAxios.get.mockImplementation((url) => {
-      const s = String(url);
-      if (s.endsWith('/download')) {
-        const fid = s.split('/api/files/')[1].replace(/\/download$/, '');
-        return Promise.resolve({ data: Readable.from([Buffer.from('# T\n\nbody for ' + fid)]) });
-      }
-      return Promise.resolve({
-        data: {
-          file: {
-            file_id: s.split('/api/files/')[1],
-            file_name: 'alpha.md',
-            file_hash: 'HASH-ZIP-1',
-            dataprep: { status: 'Pending' }
-          }
-        }
-      });
-    });
+    mockDocsWithHash('HASH-ZIP-1');
     let zipMerged = false;
     failNextDuplicateQuery({
       beforeThrow: () => {

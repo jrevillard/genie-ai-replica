@@ -170,13 +170,11 @@ function decodeCursor(cursor) {
  * @param {'create'|'update'} op the operation, for the operations counter
  */
 function assertValidName(name, op) {
-  if (typeof name !== 'string') {
+  const message =
+    typeof name !== 'string' ? 'name must be a string' : intentName(name) ? null : 'a name of only spaces is no name';
+  if (message) {
     recordOp(op, 'validation');
-    throw new RepoError('VALIDATION_ERROR', 'name must be a string', 400);
-  }
-  if (!intentName(name)) {
-    recordOp(op, 'validation');
-    throw new RepoError('VALIDATION_ERROR', 'a name of only spaces is no name', 400);
+    throw new RepoError('VALIDATION_ERROR', message, 400);
   }
 }
 

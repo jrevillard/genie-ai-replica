@@ -1169,7 +1169,7 @@ async function startDocumentsConversion({ repo_id, file_ids, requested_name, cla
     claimed = claimContent(repo_id, 'file', file_ids);
 
     const db = await getDb();
-    const candidateHashes = [];
+    const candidateHashes = []; // the content hashes — the gate matches on them
     for (const file_id of file_ids) {
       let meta;
       try {
@@ -1204,7 +1204,7 @@ async function startDocumentsConversion({ repo_id, file_ids, requested_name, cla
         }
       }
       if (meta && meta.file_hash) {
-        candidateHashes.push({ file_id, hash: meta.file_hash, name: meta.file_name || file_id });
+        candidateHashes.push(meta.file_hash);
       }
     }
     // The CONTENT is claimed too, now that the hashes are known (issue
@@ -1212,13 +1212,7 @@ async function startDocumentsConversion({ repo_id, file_ids, requested_name, cla
     // sources, and this run's own stamp only lands later — so without the
     // claim two concurrent runs into two DIFFERENT repositories both pass the
     // query and the same content ends up in two live repositories.
-    claimed = claimed.concat(
-      claimContent(
-        repo_id,
-        'hash',
-        candidateHashes.map((c) => c.hash)
-      )
-    );
+    claimed = claimed.concat(claimContent(repo_id, 'hash', candidateHashes));
     if (candidateHashes.length > 0) {
       const dupRows = await db.query(
         `FOR r IN ${COLLECTION}
@@ -1232,7 +1226,7 @@ async function startDocumentsConversion({ repo_id, file_ids, requested_name, cla
            SORT r.created_at
            LIMIT 1
            RETURN {repo_id: r.repo_id, name: r.name, dupFiles}`,
-        { rid: repo_id, hashes: candidateHashes.map((c) => c.hash) }
+        { rid: repo_id, hashes: candidateHashes }
       );
       const dup = (await dupRows.all())[0];
       if (dup) {
@@ -1264,13 +1258,6 @@ async function startDocumentsConversion({ repo_id, file_ids, requested_name, cla
     // NOT take the conversion reservation and MERGEs into the same
     // attribute — a blind write here would destroy that writer's progress
     // record, which is the very clobber this restore exists to avoid.
-    // A healthy repository keeps its completed record: the record it had
-    // before this run is restored, not overwritten with 'failed' (the web
-    // client renders a failed record as "import failed — delete the
-    // repository", which would be a lie about a healthy repository). With no
-    // prior terminal record, the record is closed as failed — the sweep is
-    // one-shot per process, so nothing else would ever close a queued record
-    // with no worker.
     const close =
       previous && crawlConversion.isTerminal(previous)
         ? previous

@@ -93,6 +93,11 @@ describe('the stripper removes prose and keeps code', () => {
   test('a backtick in a comment opens a quoted string too', () => {
     const out = stripJsComments('/* the glob is `**/*` */\nconst EDGE = "https://localhost:4443";\n');
     expect(out).toContain('https://localhost:4443');
+    // And the comment ended at the RIGHT marker: a scanner that ended it
+    // inside the backticks would leave the rest of the comment in the
+    // output — and the code would still be there, so the line above
+    // would pass.
+    expect(out).not.toContain('*/');
   });
 
   test('a comment with an odd number of double quotes still ends at the first marker', () => {

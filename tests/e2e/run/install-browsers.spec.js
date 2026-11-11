@@ -596,9 +596,13 @@ test('an npm that cannot be started is named, not reported as an exit code', () 
 
 test('the installer locations are read from the installer itself', () => {
   const root = makeCheckout();
-  const { run } = fakeRun(root);
+  const { run, calls } = fakeRun(root);
   const cli = path.join(root, 'node_modules/playwright/cli.js');
   const locations = installLocations(cli, run, root);
+  // The dry run runs through this interpreter, like the install does: the
+  // CLI is a script, and running it through anything else (npx, a
+  // hardcoded node) changes what is spawned.
+  expect(calls[0].command).toBe(process.execPath);
   expect(locations.map((l) => l.name)).toEqual(['chromium', 'ffmpeg', 'chromium-headless-shell']);
   expect(locations.map((l) => l.location)).toEqual([
     path.join(root, 'browsers', `chromium-${FIXTURE_CHROMIUM}`),
@@ -624,10 +628,11 @@ test('a browser path with a space in it is read whole', () => {
 });
 
 test('the runner the pod uses reads the output as text', () => {
-  // The mutation this pins: the runner hands its callers TEXT. Every spec
-  // drives the injected seam, so the runner the pod actually uses is
-  // otherwise unchecked — and a Buffer is not what the other callers of
-  // this runner expect.
+  // The mutation this pins: the runner hands its callers TEXT, as its
+  // JSDoc declares. Every spec drives the injected seam, so the runner
+  // the pod actually uses is otherwise unchecked. The parse in
+  // installLocations would survive a Buffer (`String(Buffer)` decodes
+  // UTF-8), so this pins the declared type, not a crash.
   const result = defaultRun(process.execPath, ['-e', '']);
   expect(result.status).toBe(0);
   expect(typeof result.stdout).toBe('string');

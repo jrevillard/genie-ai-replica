@@ -116,7 +116,9 @@ as twelve product bugs (#1779).
    revision, and the versions of any project whose `playwright-core` is no
    longer on disk. A version still installed elsewhere is claimed through
    its link entry and survives. Give this suite its own browser root
-   anyway: a shared one is pruned by whoever repairs it last.
+   anyway: a shared one is pruned by whichever project's install runs
+   last — every directory no live link entry claims goes with it, so a
+   stale revision of yours disappears the moment another project repairs.
 
 No revision number is written in the repository: it is derived from the
 installed Playwright, so a lockfile bump needs no second number to change.

@@ -24,7 +24,23 @@ const GPU_RANGES = {
     type: 'enum',
     values: ['fp8', 'auto', 'fp16', 'bf16'],
     optional: true
-  }
+  },
+  // ROCm (Strix Halo) profile overlay extras
+  DOCLING_DEVICE: {
+    type: 'enum',
+    values: ['cpu', 'cuda'],
+    optional: true
+  },
+  RENDER_GID: { type: 'int', min: 1, max: 65535, optional: true },
+  VIDEO_GID: { type: 'int', min: 1, max: 65535, optional: true },
+  NGINX_HTTP_PORT: { type: 'int', min: 1, max: 65535, optional: true },
+  NGINX_HTTPS_PORT: { type: 'int', min: 1, max: 65535, optional: true },
+  ARANGO_PORT: { type: 'int', min: 1, max: 65535, optional: true },
+  // Image pins (string-typed: registry refs, range-checked only for presence
+  // by the profile guard — no value validation here)
+  VLLM_ROCM_IMAGE: { type: 'string', optional: true },
+  TEI_ROCM_EMBEDDING_IMAGE: { type: 'string', optional: true },
+  TEI_ROCM_RERANKING_IMAGE: { type: 'string', optional: true }
 };
 
 /**
@@ -47,7 +63,9 @@ function parseGpuProfile(profilePath) {
     ? 'T4 (16GB VRAM)'
     : profilePath.endsWith('env.rtx6000')
       ? 'RTX6000 ADA (24GB VRAM)'
-      : 'Unknown';
+      : profilePath.endsWith('env.strixhalo')
+        ? 'STRIX HALO (iGPU unified memory)'
+        : 'Unknown';
 
   for (const line of lines) {
     const trimmed = line.trim();

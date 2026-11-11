@@ -945,10 +945,11 @@ describe('keycloakAuthService', () => {
       expect(mockJwtVerify).toHaveBeenCalledTimes(1);
     });
 
-    it('does not spend a signature verification on a kid-less token whose expiry is not a number', async () => {
+    it('does not spend a signature verification on a kid-less token whose expiry claim is present but not a number', async () => {
       // jose refuses a non-numeric expiry (a claim failure), so the token
       // is invalid whatever key signs it: the trial must not spend a
-      // signature verification to learn that.
+      // signature verification to learn that. The claim is PRESENT here —
+      // the missing-claim case is covered by the test above.
       mockAmbiguousKeySet({
         protectedHeader: { alg: 'RS256' },
         candidates: [{ key: 'candidate-1' }, { key: 'candidate-2' }],
@@ -973,8 +974,8 @@ describe('keycloakAuthService', () => {
       // jose's own test is `exp <= now` — with no clock tolerance
       // configured, a token whose expiry IS the current second is expired.
       // The trial must not spend a signature verification on it.
-      const realNow = Date.now;
-      Date.now = () => 1700000000000;
+      const nowSpy = jest.spyOn(Date, 'now');
+      nowSpy.mockReturnValue(1700000000000);
       mockAmbiguousKeySet({
         protectedHeader: { alg: 'RS256' },
         candidates: [{ key: 'candidate-1' }, { key: 'candidate-2' }],
@@ -995,7 +996,7 @@ describe('keycloakAuthService', () => {
         // Only the first attempt: no candidate was tried.
         expect(mockJwtVerify).toHaveBeenCalledTimes(1);
       } finally {
-        Date.now = realNow;
+        nowSpy.mockRestore();
       }
     });
 

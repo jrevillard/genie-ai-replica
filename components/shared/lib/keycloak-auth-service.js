@@ -443,7 +443,8 @@ function createJwksCache(jwksUri, ttlMs = JWKS_CACHE_TTL) {
         // The flag is decided from the HEADER, not from the key id's type:
         // a key id that is not a string is refused above, and deciding it
         // here as well keeps the rule true even if that refusal is ever
-        // moved.
+        // moved. It is defence in depth, not a second guard with a test of
+        // its own — the refusal above is the one the suites pin.
         if (!protectedHeader || !Object.prototype.hasOwnProperty.call(protectedHeader, 'kid')) {
           err.kidLess = true;
         }

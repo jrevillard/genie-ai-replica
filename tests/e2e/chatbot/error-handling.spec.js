@@ -50,9 +50,11 @@ test.describe('RAG error handling', () => {
   // That is 95 s of waiting in the BODY. The beforeEach adds the login
   // (up to 30 s + a 15 s retry) and the navigation (30 s) — 75 s more.
   //
-  // The budget covers the BODY's sum: the hook has its own budget, and
-  // `test.describe.configure({ timeout })` reaches it (measured: the hook
-  // reads the same 180 s).
+  // The budget is ONE total, shared by the hook and the body:
+  // `test.describe.configure({ timeout })` bounds the test, and the hook
+  // spends from that same total — it does not get an allowance of its own
+  // (measured on Playwright 1.62.1: a 12 s beforeEach left the body 18 s
+  // of a 30 s budget). 95 s + 75 s = 170 s, inside the 180 s below.
   test.describe.configure({ timeout: 180000 });
 
   let page;
@@ -110,7 +112,7 @@ test.describe('RAG error handling', () => {
     // error card's 30 s wait above aborts the test there if it expires.
     // A retry that HANGS fails on that wait, with the helper's own
     // message; a retry that ERRORS renders no answer bubble and fails on
-    // the assertion below. The spec's own timeout (120 s, above) covers
+    // the assertion below. The spec's own budget (180 s, above) covers
     // the sum of these ceilings plus the beforeEach's login.
     await waitForBotResponse(page, { timeout: 10000 });
     // The ANSWER, not merely a non-empty bubble: the welcome turn is a

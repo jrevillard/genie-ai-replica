@@ -190,13 +190,20 @@ async function main() {
 // file as a process (`node tests/e2e/run/preflight.js`), so the entry point
 // is the only way it starts.
 if (require.main === module) {
-  // No catch here, on purpose: every await in main() is guarded (the
-  // launch, the navigation, the close), so nothing escapes it, and a
-  // rejection that DID escape would be an internal bug — a stack is the
-  // honest output for that, and node exits 1 on it. A catch here would
-  // rewrite an internal failure into a named cause and hide the frames
-  // that say where it came from.
-  main();
+  // The exit code is OURS, not node's default: the run script forwards
+  // NODE_OPTIONS, and an inherited `--unhandled-rejections=warn` would
+  // turn an escaping rejection into exit 0 — the run would continue past
+  // a broken pre-flight.
+  //
+  // The FRAMES are the honest output: every await in main() is guarded
+  // (the launch, the navigation, the close), so a rejection that escapes
+  // is an internal bug, not a finding — and it is NOT rewritten into a
+  // named cause, which would be the suite's forbidden "degrade a
+  // failure into a fallback path".
+  main().catch((e) => {
+    process.stderr.write(String((e && e.stack) || e) + '\n');
+    process.exitCode = 1;
+  });
 }
 
 module.exports = { classifyVenueStatus, namedFailure };

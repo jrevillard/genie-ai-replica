@@ -79,7 +79,7 @@ function inChild(script, env = {}) {
  * goes red on the resolver's mood is a flake, not a gate (the suite's
  * rule: wait for conditions, not durations).
  *
- * TEN probes, not four: the promise form is what Playwright's
+ * TWELVE probes, not four: the promise form is what Playwright's
  * APIRequestContext uses, and it resolves with `all: true` — a shape the
  * plain probe never asks for, so the preload's `all` branch would go
  * unpinned. Playwright asks for `all: true` TOGETHER with a family

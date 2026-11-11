@@ -122,7 +122,8 @@ function claimContent(repoId, kind, values) {
 /**
  * Drop every claim. TEST SUITE ONLY (the registry is private): a test that
  * aborts between a claim and its release would otherwise leave the content
- * claimed for the rest of the process.
+ * claimed for the rest of the process. The `__` prefix marks the export as
+ * a test seam, not API.
  */
 function resetContentClaims() {
   contentClaims.clear();
@@ -822,7 +823,10 @@ async function runDocumentsConversion(job) {
         // per-file catch (every file reported CONVERSION_FAILED).
         const f = await sourceMeta(job.source_metas, file_id);
         meta.file_name = f.file_name || file_id;
-        meta.file_type = f.file_type || f.type || f.mimetype || null;
+        // The doc-repo field coercion is SHARED (doc-repo-client): the
+        // importer, the crawl stamper and this conversion all read the same
+        // doc-repo file, and a per-caller copy of the mapping drifts.
+        meta.file_type = docRepoFileFields(f).file_type;
         const size = Number.isFinite(f.size) ? f.size : null;
         if (size && size > cap) {
           throw Object.assign(new Error(`document too large (${size} > ${cap}) — raise OKF_MAX_CRAWL_SOURCE_MB`), {
@@ -1335,8 +1339,9 @@ module.exports = {
   // that could wipe it would silently re-open the window it closes. The
   // reset below is the only seam, and it exists for the test suite: a test
   // that aborts between the claim and its release would otherwise leave the
-  // content claimed for the rest of the process.
-  resetContentClaims,
+  // content claimed for the rest of the process. The `__` prefix marks it
+  // as a test seam (the convention of ragas-suite-service's __testRunInFlight).
+  __resetContentClaims: resetContentClaims,
   // D4: the restricted-snapshot stamp + the Access-toggle propagation
   stampSources,
   propagateRestrictedToSources,

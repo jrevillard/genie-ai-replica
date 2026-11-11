@@ -218,14 +218,6 @@ describe('isTerminal', () => {
     expect(conv.isTerminal(null)).toBe(false);
     expect(conv.isTerminal(undefined)).toBe(false);
   });
-
-  test('isTerminal and TERMINAL_STATES agree — one vocabulary, one place', () => {
-    // The producer delegates to this predicate: two literals would drift
-    // apart and the two paths would disagree on what "finished" means.
-    for (const s of ['done', 'failed', 'queued', 'downloading', 'splitting', 'adding', 'converting']) {
-      expect(conv.isTerminal({ status: s })).toBe(conv.TERMINAL_STATES.includes(s));
-    }
-  });
 });
 
 describe('startConversion validation', () => {

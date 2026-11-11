@@ -47,8 +47,15 @@ const XLSX = require('xlsx');
 const RID = '77777777-7777-4777-8777-777777777777';
 
 function programQuery() {
-  // The conversion-record patches ride raw AQL — the mock applies them to the
-  // STORE (document() hands back copies, so mutations must hit the store
+  // The mock MODELS the production AQL — it does not answer for it. Each
+  // branch below dispatches on the STATEMENT's shape and then RE-READS the
+  // predicates it answers from the AQL itself: a production change that
+  // drops one of them is a DIFFERENT statement, and the mock says so
+  // (it throws) instead of quietly answering the old question. Without
+  // that, a mutated AQL passes the suite on the mock's own belief.
+  //
+  // The writes ride raw AQL — the mock applies them to the STORE
+  // (document() hands back copies, so mutations must hit the store
   // object) so assertions can read repoDoc.conversion / source_documents.
   mockDb.query.mockImplementation(async (q, bind) => {
     const text = typeof q === 'string' ? q : q && q.query;
@@ -63,35 +70,83 @@ function programQuery() {
     }
     const store = (mockDb._stores && mockDb._stores.okf_repositories) || {};
     const live = store[bind && bind.repo_id];
-    if (live && text && text.includes('UPDATE doc WITH { conversion')) {
-      // An ArangoDB UPDATE MERGES the nested `conversion` object by default
-      // (the record is a shared slot) — the mock follows the database, not a
-      // guess, or the assertions would prove a fiction.
-      const old = live.conversion;
-      if (text.includes('@startedAt')) {
-        // the CONDITIONAL close: it applies only while the record is still
-        // this run's ('queued' with this run's started_at)
-        if (!old || old.status !== 'queued' || old.started_at !== bind.startedAt) {
-          return { all: async () => [] };
+
+    // ── the conversion-record write ─────────────────────────────────────
+    if (text && /UPDATE\s+doc\s+WITH\s*\{\s*conversion:/.test(text)) {
+      const old = live && live.conversion;
+      if (text.includes('RETURN 1')) {
+        // The CONDITIONAL close (closeConversionIfOwned): it writes only
+        // while the record is still THIS run's. Both halves of that guard
+        // are read out of the statement — a close that stopped stating
+        // them is a different statement, and the mock refuses to answer
+        // for it.
+        const cas = /doc\.conversion\.status\s*==\s*'queued'\s*&&\s*doc\.conversion\.started_at\s*==\s*@(\w+)/.exec(
+          text
+        );
+        if (!cas) {
+          throw new Error(
+            "mock: the conditional close no longer states the 'queued' status + started_at guard it models"
+          );
+        }
+        const startedAt = bind[cas[1]];
+        if (!old || old.status !== 'queued' || old.started_at !== startedAt) {
+          return { all: async () => [] }; // the FILTER matched no row
         }
         live.conversion = Object.assign({}, live.conversion, bind.patch);
         return { all: async () => [1] };
       }
+      // The queued write hands back the record it replaced (RETURN OLD).
+      // An ArangoDB UPDATE MERGES the nested `conversion` object by default
+      // (the record is a shared slot) — the mock follows the database, not a
+      // guess, or the assertions would prove a fiction.
+      if (!live) return { all: async () => [] }; // the document is gone: no row matched
       live.conversion = Object.assign({}, live.conversion, bind.patch);
-      // the queued write hands back the record it replaced (RETURN OLD)
       if (text.includes('RETURN OLD')) return { all: async () => [old === undefined ? null : old] };
       return { all: async () => [] };
     }
-    if (text && text.includes('POSITION(@hashes')) {
-      // DUPLICATE_CONTENT gate: first LIVE other-repo whose source_documents
-      // carries one of the candidate content hashes.
-      const wanted = (bind && bind.hashes) || [];
+
+    // ── the durable source_documents write ──────────────────────────────
+    if (text && /UPDATE\s+doc\s+WITH\s*\{[\s\S]*?source_documents\s*:/.test(text)) {
+      if (!/FILTER\s+doc\s*!=\s*null/.test(text)) {
+        throw new Error('mock: the durable write no longer states the missing-document filter it models');
+      }
+      const keptFilter = /FILTER\s+s\.file_id\s+NOT\s+IN\s+@(\w+)/.exec(text);
+      const appended = /source_documents\s*:\s*APPEND\(\s*\w+\s*,\s*@(\w+)\s*\)/.exec(text);
+      if (!keptFilter || !appended) {
+        throw new Error(
+          'mock: the durable write no longer upserts per file (FILTER s.file_id NOT IN @x + APPEND(kept, @docs))'
+        );
+      }
+      if (!live) return { all: async () => [] }; // the document is gone: no row matched
+      const fileIds = bind[keptFilter[1]] || [];
+      const docs = bind[appended[1]] || [];
+      // the durable list is upserted per file: the entries of the OTHER
+      // files stay, the ones this import carries are replaced
+      const kept = (live.source_documents || []).filter((s) => !fileIds.includes(s.file_id));
+      live.source_documents = kept.concat(docs);
+      return { all: async () => [1] }; // the write updated ONE document
+    }
+
+    // ── the DUPLICATE_CONTENT gate ──────────────────────────────────────
+    const hashMatch = /POSITION\(\s*@(\w+)\s*,\s*s\.file_hash\s*\)/.exec(text || '');
+    if (hashMatch) {
+      // The gate's own filters decide what counts as a duplicate: the
+      // importing repository is exempt, a RETRACTED repository is out of
+      // service (its content may be imported elsewhere), a deleted one is
+      // gone. The mock states them all — a gate that dropped one is a
+      // different gate, and the mock refuses to answer for it.
+      const rid = /r\.repo_id\s*!=\s*@(\w+)/.exec(text);
+      if (!/r\.deleted_at\s*==\s*null/.test(text) || !/r\.lifecycle_state\s*!=\s*'retracted'/.test(text) || !rid) {
+        throw new Error('mock: the duplicate-content gate no longer states the filters it models');
+      }
+      const wanted = bind[hashMatch[1]] || [];
+      const otherRepo = bind[rid[1]];
       const dup = Object.values(store).find(
         (r) =>
           r &&
           !r.deleted_at &&
           r.lifecycle_state !== 'retracted' &&
-          r.repo_id !== bind.rid &&
+          r.repo_id !== otherRepo &&
           (r.source_documents || []).some((s) => s.file_hash && wanted.includes(s.file_hash))
       );
       if (dup) {
@@ -102,17 +157,7 @@ function programQuery() {
       }
       return { all: async () => [] };
     }
-    if (live && text && text.includes('source_documents')) {
-      if (text.includes('APPEND(') && text.includes('NOT IN @file_ids')) {
-        // the durable list is upserted per file: the entries of the OTHER
-        // files stay, the ones this import carries are replaced
-        const kept = (live.source_documents || []).filter((s) => !bind.file_ids.includes(s.file_id));
-        live.source_documents = kept.concat(bind.docs);
-      } else {
-        live.source_documents = bind.docs;
-      }
-      return { all: async () => [1] }; // the write updated ONE document
-    }
+
     return { all: async () => [] };
   });
 }
@@ -128,7 +173,7 @@ beforeEach(async () => {
   // The content claim registry (issue #1744) is cleared for the same reason
   // the conversion registry is: a test that aborts between the claim and its
   // release would otherwise leave the content claimed for the whole process.
-  producer.resetContentClaims();
+  producer.__resetContentClaims();
   programQuery();
 });
 
@@ -326,7 +371,10 @@ describe('producer-service — startDocumentsConversion + run', () => {
     // files: { file_id: file_name } — ONE implementation keyed by URL (a
     // second mockDoc() would REPLACE the implementation, clobbering the first).
     // `hash`: the content hash the duplicate-content gate reads (optional —
-    // a test that never reaches the gate does not need one).
+    // a test that never reaches the gate does not need one). A per-file map
+    // ({ file_id: hash }) gives DIFFERENT files different content — the
+    // shape a test needs when it must tell the file claim from the hash
+    // claim.
     authedAxios.get.mockImplementation((url) => {
       const s = String(url);
       if (s.endsWith('/download')) {
@@ -336,7 +384,8 @@ describe('producer-service — startDocumentsConversion + run', () => {
       const fid = s.split('/api/files/')[1];
       const fn = files[fid] || fid + '.md';
       const file = { file_id: fid, file_name: fn, size: 100, dataprep: { status: 'Pending' } };
-      if (hash) file.file_hash = hash;
+      const h = hash && typeof hash === 'object' ? hash[fid] : hash;
+      if (h) file.file_hash = h;
       return Promise.resolve({ data: { file } });
     });
   }
@@ -446,13 +495,20 @@ describe('producer-service — startDocumentsConversion + run', () => {
     expect(stamps).toHaveLength(2); // okf_repo_id still stamped on every file
   });
 
-  it('refuses a SECOND start for the same repo while the first is still stamping its sources', async () => {
+  it('refuses a SECOND start for the same repo while the first is still stamping — and the loser pays NO pre-flight round trip (#1775)', async () => {
     // ONE conversion per repo. The guard's window: the check and the runner's
     // registration are separated by the queued patch + the per-file source
     // stamping (one doc-repo PATCH per file). A second start that slipped
     // through that window imported the corpus twice (issue #1684). The stamp
     // is HELD here, so the window is open deterministically — no timing, no
     // polling.
+    //
+    // The reservation is claimed BEFORE the import pre-flight (issue #1775):
+    // the loser is refused WITHOUT paying the pre-flight (up to
+    // OKF_MAX_IMPORT_FILES doc-repo metadata GETs + the duplicate query). The
+    // GET count is the assertion that separates the two guards — the
+    // reservation refuses the loser, and it refuses it before the pre-flight,
+    // so the loser costs the document repository NOTHING.
     mockDocs({ f1: 'alpha.md' });
     await mockDb.collection('okf_repositories').save({ _key: RID, repo_id: RID, name: 'Mine', domain: 'general' });
     let parked = false;
@@ -475,71 +531,18 @@ describe('producer-service — startDocumentsConversion + run', () => {
 
     const first = producer.startDocumentsConversion({ repo_id: RID, file_ids: ['f1'], requested_name: 'x' });
     await stamping; // the first import is parked inside its stamping stage
-    const second = await producer
-      .startDocumentsConversion({ repo_id: RID, file_ids: ['f1'], requested_name: 'x' })
-      .catch((err) => err);
-    releaseStamp();
-    await first;
-    await producer.live.get(RID);
-    // Restore the module's default stamp mock — clearAllMocks() clears the
-    // CALL history but keeps the implementation.
-    authedAxios.patch.mockImplementation(async () => ({ status: 200 }));
-    expect(second).toMatchObject({ code: 'CONVERSION_IN_FLIGHT', status: 409 });
-  });
-
-  it('refuses a racing second start BEFORE the pre-flight — the loser pays no doc-repo round trip (#1775)', async () => {
-    // The conversion reservation is claimed BEFORE the import pre-flight, so
-    // the loser of a race is refused WITHOUT paying the pre-flight (up to
-    // OKF_MAX_IMPORT_FILES doc-repo metadata GETs + the duplicate query).
-    // The first import is parked inside its metadata GET — the window is
-    // open deterministically, no timing, no polling.
-    await mockDb.collection('okf_repositories').save({ _key: RID, repo_id: RID, name: 'Mine', domain: 'general' });
-    const metaOf = (fid) => ({
-      data: { file: { file_id: fid, file_name: 'alpha.md', size: 100, dataprep: { status: 'Pending' } } }
-    });
-    let parked = false;
-    let metaStarted;
-    const metaStart = new Promise((resolve) => {
-      metaStarted = resolve;
-    });
-    let releaseMeta;
-    const held = new Promise((resolve) => {
-      releaseMeta = resolve;
-    });
-    authedAxios.get.mockImplementation(async (url) => {
-      const s = String(url);
-      if (s.endsWith('/download')) {
-        const fid = s.split('/api/files/')[1].replace(/\/download$/, '');
-        return { data: Readable.from([Buffer.from('# T\n\nbody for ' + fid)]) };
-      }
-      const fid = s.split('/api/files/')[1];
-      if (!parked) {
-        parked = true;
-        metaStarted();
-        await held;
-      }
-      return metaOf(fid);
-    });
-
-    const first = producer.startDocumentsConversion({ repo_id: RID, file_ids: ['f1'], requested_name: 'x' });
-    await metaStart; // the first import is parked inside its pre-flight
     const metaGets = () => authedAxios.get.mock.calls.filter((c) => !String(c[0]).endsWith('/download')).length;
     const metaGetsBefore = metaGets();
     const second = await producer
       .startDocumentsConversion({ repo_id: RID, file_ids: ['f1'], requested_name: 'x' })
       .catch((err) => err);
     const metaGetsAfter = metaGets();
-    releaseMeta();
+    releaseStamp();
     await first;
     await producer.live.get(RID);
-    authedAxios.get.mockImplementation((url) => {
-      const s = String(url);
-      if (s.endsWith('/download')) {
-        const fid = s.split('/api/files/')[1].replace(/\/download$/, '');
-        return Promise.resolve({ data: Readable.from([Buffer.from('# T\n\nbody for ' + fid)]) });
-      }
-      return Promise.resolve(metaOf(s.split('/api/files/')[1]));
-    });
+    // Restore the module's default stamp mock — clearAllMocks() clears the
+    // CALL history but keeps the implementation.
+    authedAxios.patch.mockImplementation(async () => ({ status: 200 }));
     expect(second).toMatchObject({ code: 'CONVERSION_IN_FLIGHT', status: 409 });
     expect(metaGetsAfter).toBe(metaGetsBefore); // the loser paid NO pre-flight
   });
@@ -773,7 +776,33 @@ describe('producer-service — startDocumentsConversion + run', () => {
     ).rejects.toMatchObject({ code: 'DUPLICATE_CONTENT', status: 409 });
   });
 
-  it('refuses a CONCURRENT import of the same content into a DIFFERENT repository (#1744)', async () => {
+  it('a RETRACTED repository does not block the same content — it is out of service', async () => {
+    // The gate asks "does a LIVE repository already back this content?" — a
+    // RETRACTED repository is out of service, so its content may be imported
+    // elsewhere. (The file-deletion check asks a different question — "does
+    // another repository still OWN this file" — and there a retracted
+    // repository still counts. The two filters answer two questions and
+    // must not be unified.)
+    await mockDb.collection('okf_repositories').save({
+      _key: 'r-retracted',
+      repo_id: 'r-retracted',
+      name: 'Retracted repo',
+      domain: 'general',
+      created_at: '2026-09-14T00:00:01Z',
+      lifecycle_state: 'retracted',
+      source_documents: [{ kind: 'document', file_id: 'old-1', file_name: 'alpha.md', file_hash: 'HASH-RETRACTED' }]
+    });
+    await mockDb.collection('okf_repositories').save({ _key: RID, repo_id: RID, name: 'Mine', domain: 'general' });
+    mockDocs({ f1: 'alpha.md' }, 'HASH-RETRACTED');
+    await expect(
+      producer.startDocumentsConversion({ repo_id: RID, file_ids: ['f1'], requested_name: 'x' })
+    ).resolves.toMatchObject({ status: 'queued' });
+    await producer.live.get(RID);
+    const repo = await mockDb.collection('okf_repositories').document(RID);
+    expect(repo.source_documents).toHaveLength(1);
+  });
+
+  it('refuses a CONCURRENT import of the same CONTENT into a DIFFERENT repository — the HASH claim refuses it (#1744)', async () => {
     // The DUPLICATE_CONTENT gate READS the other repositories' stamped
     // sources, and this run's own stamp lands LATER — so two concurrent runs
     // into two different repositories both read the pre-stamp state, both
@@ -781,10 +810,15 @@ describe('producer-service — startDocumentsConversion + run', () => {
     // The content claim is what closes that window: the first import is
     // parked inside its stamping (its claim is still held), so the second
     // run is refused BEFORE it writes anything.
+    //
+    // The two runs carry DIFFERENT file ids with the SAME content hash — so
+    // the file claim cannot explain the refusal: only the HASH claim can.
+    // The refusal says so (DUPLICATE_CONTENT_IN_FLIGHT, not the durable
+    // gate's DUPLICATE_CONTENT): the claim fired before the duplicate query.
     const RID2 = '88888888-8888-4888-8888-888888888888';
     await mockDb.collection('okf_repositories').save({ _key: RID, repo_id: RID, name: 'Mine', domain: 'general' });
     await mockDb.collection('okf_repositories').save({ _key: RID2, repo_id: RID2, name: 'Other', domain: 'social' });
-    mockDocsWithHash('HASH-CONCURRENT-1');
+    mockDocs({ f1: 'alpha.md', f2: 'beta.md' }, 'HASH-CONCURRENT-1');
     let parked = false;
     let stampStarted;
     const stamping = new Promise((resolve) => {
@@ -806,7 +840,7 @@ describe('producer-service — startDocumentsConversion + run', () => {
     const first = producer.startDocumentsConversion({ repo_id: RID, file_ids: ['f1'], requested_name: 'x' });
     await stamping; // the first import is parked inside its stamping stage — its claim is held
     const second = await producer
-      .startDocumentsConversion({ repo_id: RID2, file_ids: ['f1'], requested_name: 'y' })
+      .startDocumentsConversion({ repo_id: RID2, file_ids: ['f2'], requested_name: 'y' })
       .catch((err) => err);
     releaseStamp();
     await first;
@@ -823,6 +857,53 @@ describe('producer-service — startDocumentsConversion + run', () => {
     const winner = await mockDb.collection('okf_repositories').document(RID);
     expect(winner.source_documents).toHaveLength(1);
     expect(winner.source_documents[0].file_hash).toBe('HASH-CONCURRENT-1');
+  });
+
+  it('refuses a CONCURRENT import of the same FILE into a DIFFERENT repository — the FILE claim refuses it, before any round trip (#1744)', async () => {
+    // The other half of the claim: the same SOURCE DOCUMENT backing two
+    // repositories is refused too — and the refusal happens BEFORE the
+    // pre-flight, so the loser costs the document repository nothing. The
+    // GET count is what separates this claim from the hash claim above
+    // (which fires after the pre-flight, once the hash is known).
+    const RID2 = '88888888-8888-4888-8888-888888888888';
+    await mockDb.collection('okf_repositories').save({ _key: RID, repo_id: RID, name: 'Mine', domain: 'general' });
+    await mockDb.collection('okf_repositories').save({ _key: RID2, repo_id: RID2, name: 'Other', domain: 'social' });
+    mockDocsWithHash('HASH-CONCURRENT-2');
+    let parked = false;
+    let stampStarted;
+    const stamping = new Promise((resolve) => {
+      stampStarted = resolve;
+    });
+    let releaseStamp;
+    const held = new Promise((resolve) => {
+      releaseStamp = resolve;
+    });
+    authedAxios.patch.mockImplementation(async () => {
+      if (!parked) {
+        parked = true;
+        stampStarted();
+        await held;
+      }
+      return { status: 200 };
+    });
+
+    const first = producer.startDocumentsConversion({ repo_id: RID, file_ids: ['f1'], requested_name: 'x' });
+    await stamping; // the first import is parked inside its stamping stage — its claim is held
+    const metaGets = () => authedAxios.get.mock.calls.filter((c) => !String(c[0]).endsWith('/download')).length;
+    const metaGetsBefore = metaGets();
+    const second = await producer
+      .startDocumentsConversion({ repo_id: RID2, file_ids: ['f1'], requested_name: 'y' })
+      .catch((err) => err);
+    const metaGetsAfter = metaGets();
+    releaseStamp();
+    await first;
+    await producer.live.get(RID);
+    authedAxios.patch.mockImplementation(async () => ({ status: 200 }));
+
+    expect(second).toMatchObject({ code: 'DUPLICATE_CONTENT_IN_FLIGHT', status: 409 });
+    expect(metaGetsAfter).toBe(metaGetsBefore); // the file claim fired BEFORE the pre-flight
+    const loser = await mockDb.collection('okf_repositories').document(RID2);
+    expect(loser.source_documents).toBeUndefined();
   });
 
   it('releases the content claim when a start fails — the next import of the same content is not refused', async () => {
@@ -849,6 +930,24 @@ describe('producer-service — startDocumentsConversion + run', () => {
     await producer.live.get(RID2);
     const repo2 = await mockDb.collection('okf_repositories').document(RID2);
     expect(repo2.source_documents).toHaveLength(1);
+  });
+
+  it('releases the content claim after a SUCCESSFUL import — the durable gate takes over from it', async () => {
+    // The claim covers the CONCURRENT window; the durable record covers
+    // everything after. So once the import is done, the next import of the
+    // same content is refused by the DURABLE gate (DUPLICATE_CONTENT) — not
+    // by a claim that was never released (DUPLICATE_CONTENT_IN_FLIGHT).
+    // The code says which guard refused it.
+    const RID2 = '88888888-8888-4888-8888-888888888888';
+    await mockDb.collection('okf_repositories').save({ _key: RID, repo_id: RID, name: 'Mine', domain: 'general' });
+    await mockDb.collection('okf_repositories').save({ _key: RID2, repo_id: RID2, name: 'Other', domain: 'social' });
+    mockDocsWithHash('HASH-RELEASE-2');
+    await producer.startDocumentsConversion({ repo_id: RID, file_ids: ['f1'], requested_name: 'x' });
+    await producer.live.get(RID);
+
+    await expect(
+      producer.startDocumentsConversion({ repo_id: RID2, file_ids: ['f1'], requested_name: 'y' })
+    ).rejects.toMatchObject({ code: 'DUPLICATE_CONTENT', status: 409 });
   });
 
   it('fails the start when the durable source_documents record cannot be written', async () => {
@@ -899,28 +998,11 @@ describe('producer-service — startDocumentsConversion + run', () => {
     // clear the summary KEEPS the previous run's — the web client then reads
     // "import failed" beside the counts of a run that succeeded. The failed
     // record is the one place that must say "no result".
-    await mockDb.collection('okf_repositories').save({
-      _key: RID,
-      repo_id: RID,
-      name: 'Mine',
-      domain: 'general',
-      conversion: { status: 'done', stage: 'done', files_done: 1, files_total: 1, summary: { created: 1 } }
-    });
-    mockDocsWithHash('HASH-SUMMARY-1');
-    failNextDuplicateQuery();
-
-    await expect(
-      producer.startDocumentsConversion({ repo_id: RID, file_ids: ['f1'], requested_name: 'x' })
-    ).rejects.toThrow(/db down/);
-    const repo = await mockDb.collection('okf_repositories').document(RID);
-    // The prior record was TERMINAL, so it is RESTORED — its summary is the
-    // truth about that run and must stay. The failed-record vocabulary (the
-    // summary: null) applies to a record that REPLACES a result, not to one
-    // that restores it.
-    expect(repo.conversion).toMatchObject({ status: 'done', summary: { created: 1 } });
-
-    // A NON-terminal prior record is CLOSED as failed — there the summary
-    // must be gone: the run it belonged to never produced a result.
+    //
+    // A NON-terminal prior record is CLOSED as failed (an interrupted run —
+    // the sweep is one-shot per process, so nothing else would ever close
+    // it), and there the summary must be gone: the run it belonged to never
+    // produced a result.
     await mockDb.collection('okf_repositories').save({
       _key: RID,
       repo_id: RID,
@@ -928,7 +1010,8 @@ describe('producer-service — startDocumentsConversion + run', () => {
       domain: 'general',
       conversion: { status: 'queued', stage: 'queued', files_done: 0, files_total: 1, summary: { created: 9 } }
     });
-    mockDocsWithHash('HASH-SUMMARY-2');
+    // the file must carry a hash, or the duplicate query never runs
+    mockDocsWithHash('HASH-SUMMARY-1');
     failNextDuplicateQuery();
 
     await expect(
@@ -937,27 +1020,6 @@ describe('producer-service — startDocumentsConversion + run', () => {
     const failed = await mockDb.collection('okf_repositories').document(RID);
     expect(failed.conversion).toMatchObject({ status: 'failed' });
     expect(failed.conversion.summary).toBeNull();
-  });
-
-  it('a refused start closes a NON-terminal prior record as failed (it owns no worker)', async () => {
-    // A prior 'queued' record (an interrupted run) is not a healthy result:
-    // the sweep is one-shot per process, so nothing else would ever close it.
-    await mockDb.collection('okf_repositories').save({
-      _key: RID,
-      repo_id: RID,
-      name: 'Mine',
-      domain: 'general',
-      conversion: { status: 'queued', stage: 'queued', files_done: 0, files_total: 3 }
-    });
-    // the file must carry a hash, or the duplicate query never runs
-    mockDocsWithHash('HASH-QUEUED-1');
-    failNextDuplicateQuery();
-
-    await expect(
-      producer.startDocumentsConversion({ repo_id: RID, file_ids: ['f1'], requested_name: 'x' })
-    ).rejects.toThrow(/db down/);
-    const repo = await mockDb.collection('okf_repositories').document(RID);
-    expect(repo.conversion).toMatchObject({ status: 'failed' });
   });
 
   it('a refused start does not clobber a record another writer owns', async () => {
@@ -1302,7 +1364,7 @@ describe('doc-repo-client — fetchDocMeta (the ONE doc-repo metadata fetch + en
     await expect(docRepoClient.fetchDocMeta('f-1')).resolves.toEqual({});
   });
 
-  test('maps the doc-repo file into the OKF fields ONCE (the shared coercion)', () => {
+  test('maps the doc-repo file into the OKF fields (the shared coercion)', () => {
     // The importer and the crawl stamper both stamp a doc-repo file's fields
     // onto the repository document, and their two copies of the coercion
     // drifted (one accepted a `mimetype` fallback the other did not). One
@@ -1398,8 +1460,14 @@ describe('producer-service — D4 restricted-snapshot stamp (stampSources)', () 
     mockCollection.document.mockImplementationOnce(async () => {
       throw new Error('doc read failed');
     });
-    await expect(producer.stampSources(R2, ['f1'])).resolves.toBeDefined();
-    mockCollection.document.mockImplementation(realDocument);
+    try {
+      await expect(producer.stampSources(R2, ['f1'])).resolves.toBeDefined();
+    } finally {
+      // the ONCE implementation is consumed by the read above, but a FAILED
+      // assertion would leave it armed for the next test.
+      mockCollection.document.mockReset();
+      mockCollection.document.mockImplementation(realDocument);
+    }
     expect(authedAxios.patch).toHaveBeenCalledWith(
       expect.anything(),
       { okf_repo_id: R2, okf_restricted: false },
@@ -1427,13 +1495,18 @@ describe('producer-service — D4 restricted-snapshot stamp (stampSources)', () 
   it('a repository that no longer exists fails the import — nothing is stamped anywhere', async () => {
     // the durable record could not be written (the repository document is
     // gone): the import must not report success, and the per-file stamps
-    // must not point at a repository that does not exist
+    // must not point at a repository that does not exist.
+    //
+    // Driven through the IMPORT ENTRY POINT: the caller sees a 404 with a
+    // code, not an internal helper's exception.
     authedAxios.get.mockResolvedValue({ data: { file: { file_id: 'f1', file_name: 'a.md' } } });
-    await expect(producer.stampSources(R2 + '-ghost', ['f1'])).rejects.toMatchObject({
-      code: 'SOURCE_REPO_VANISHED',
-      status: 404
-    });
-    expect(authedAxios.patch).not.toHaveBeenCalled();
+    await expect(
+      producer.startDocumentsConversion({ repo_id: R2 + '-ghost', file_ids: ['f1'], requested_name: 'x' })
+    ).rejects.toMatchObject({ code: 'SOURCE_REPO_VANISHED', status: 404 });
+    // no per-file stamp: the files are owned by nobody, not by a repository
+    // that does not exist.
+    const stamps = authedAxios.patch.mock.calls.filter((c) => String(c[0]).includes('/api/files/'));
+    expect(stamps).toHaveLength(0);
   });
 });
 

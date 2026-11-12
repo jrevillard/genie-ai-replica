@@ -1,4 +1,5 @@
 realm: $(env:KC_REALM)
+displayName: NAAT Administrator
 enabled: true
 # TLS is handled by NGINX (reverse proxy) — Keycloak receives plain HTTP internally
 sslRequired: none

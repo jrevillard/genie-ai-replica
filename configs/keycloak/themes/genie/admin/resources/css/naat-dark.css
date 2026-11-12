@@ -1,8 +1,8 @@
-/* GENIE.AI Keycloak Admin Console Theme — Dark Mode (Complete PF5 override)
+/* NAAT Keycloak Admin Console Theme — Dark Mode (Complete PF5 override)
  * Activated by upstream keycloak.v2 darkMode=true via pf-v5-theme-dark class on <html>
  *
  * DS token mapping (dark — improved contrast WCAG AA):
- *   accent  = oklch(62% 0.17 265) ≈ #537feb
+ *   accent  = oklch(62% 0.17 265) ≈ #7AB648
  *   fg      = oklch(95% 0.005 250) ≈ #eceff2
  *   muted   = oklch(73% 0.015 240) ≈ #a0a9b0
  *   muted-soft = oklch(62% 0.012 240) ≈ #80878d
@@ -13,19 +13,19 @@
 
 .pf-v5-theme-dark {
   /* ── Primary (DS dark accent) ── */
-  --pf-v5-global--primary-color--100: #537feb;
-  --pf-v5-global--primary-color--200: #3c6ae2;
-  --pf-v5-global--primary-color--300: #6a92ed;
+  --pf-v5-global--primary-color--100: #7AB648;
+  --pf-v5-global--primary-color--200: #609E2F;
+  --pf-v5-global--primary-color--300: #4C8B27;
   --pf-v5-global--primary-color--400: #eceff2;
-  --pf-v5-global--primary-color--500: #537feb;
-  --pf-v5-global--primary-color--dark-100: #537feb;
-  --pf-v5-global--primary-color--light-100: #537feb;
+  --pf-v5-global--primary-color--500: #7AB648;
+  --pf-v5-global--primary-color--dark-100: #7AB648;
+  --pf-v5-global--primary-color--light-100: #7AB648;
 
   /* ── Active color ── */
-  --pf-v5-global--active-color--100: #537feb;
-  --pf-v5-global--active-color--200: rgba(83, 127, 235, 0.15);
-  --pf-v5-global--active-color--300: #3c6ae2;
-  --pf-v5-global--active-color--400: #6a92ed;
+  --pf-v5-global--active-color--100: #7AB648;
+  --pf-v5-global--active-color--200: rgba(96, 158, 47, 0.15);
+  --pf-v5-global--active-color--300: #609E2F;
+  --pf-v5-global--active-color--400: #4C8B27;
 
   /* ── Background (DS dark bg / surface / bg-tertiary) ── */
   --pf-v5-global--BackgroundColor--100: #05080a;
@@ -33,10 +33,10 @@
   --pf-v5-global--BackgroundColor--200: #13161a;
   --pf-v5-global--BackgroundColor--300: #20252a;
   --pf-v5-global--BackgroundColor--400: #474e55;
-  --pf-v5-global--BackgroundColor--dark-100: #537feb;
-  --pf-v5-global--BackgroundColor--dark-200: #3c6ae2;
-  --pf-v5-global--BackgroundColor--dark-300: #6a92ed;
-  --pf-v5-global--BackgroundColor--dark-400: #6a92ed;
+  --pf-v5-global--BackgroundColor--dark-100: #7AB648;
+  --pf-v5-global--BackgroundColor--dark-200: #609E2F;
+  --pf-v5-global--BackgroundColor--dark-300: #4C8B27;
+  --pf-v5-global--BackgroundColor--dark-400: #4C8B27;
   --pf-v5-global--BackgroundColor--light-100: #05080a;
   --pf-v5-global--BackgroundColor--light-200: #13161a;
   --pf-v5-global--BackgroundColor--light-300: #20252a;
@@ -61,13 +61,13 @@
   --pf-v5-global--BorderColor--light-100: #474e55;
 
   /* ── Link (DS dark accent) ── */
-  --pf-v5-global--link--Color: #537feb;
-  --pf-v5-global--link--Color--hover: #3c6ae2;
+  --pf-v5-global--link--Color: #7AB648;
+  --pf-v5-global--link--Color--hover: #609E2F;
   --pf-v5-global--link--Color--visited: #a18fff;
-  --pf-v5-global--link--Color--dark: #537feb;
-  --pf-v5-global--link--Color--dark--hover: #3c6ae2;
-  --pf-v5-global--link--Color--light: #537feb;
-  --pf-v5-global--link--Color--light--hover: #3c6ae2;
+  --pf-v5-global--link--Color--dark: #7AB648;
+  --pf-v5-global--link--Color--dark--hover: #609E2F;
+  --pf-v5-global--link--Color--light: #7AB648;
+  --pf-v5-global--link--Color--light--hover: #609E2F;
 
   /* ── Status (same hex — already aligned) ── */
   --pf-v5-global--success-color--100: #10b981;
@@ -80,7 +80,7 @@
 
   /* ── Info (DS dark info) ── */
   --pf-v5-global--info-color--100: #37a8ec;
-  --pf-v5-global--info-color--200: #6a92ed;
+  --pf-v5-global--info-color--200: #4C8B27;
 
   /* ── Disabled ── */
   --pf-v5-global--disabled-color--100: #80878d;
@@ -144,9 +144,9 @@
 .pf-v5-theme-dark .pf-v5-c-page {
   background-color: #05080a;
   background-image:
-    radial-gradient(70% 60% at 76% 38%, rgba(83, 127, 235, 0.22), rgba(83, 127, 235, 0) 70%),
-    radial-gradient(55% 50% at 10% 90%, rgba(148, 108, 255, 0.16), rgba(148, 108, 255, 0) 70%),
-    linear-gradient(180deg, #0a1020 0%, #05080a 100%);
+    radial-gradient(70% 60% at 76% 38%, rgba(96, 158, 47, 0.22), rgba(96, 158, 47, 0) 70%),
+    radial-gradient(55% 50% at 10% 90%, rgba(201, 162, 39, 0.16), rgba(201, 162, 39, 0) 70%),
+    linear-gradient(180deg, #0a140a 0%, #050a05 100%);
 }
 
 /* The wave band — the crest of the Living Intelligence artwork. On the
@@ -174,7 +174,7 @@
    every state, so overriding them where the link resolves them
    covers the resting, hovered and expanded states alike. ── */
 .pf-v5-theme-dark .pf-v5-c-nav__link {
-  --pf-v5-c-nav__link--m-current--BackgroundColor: rgba(83, 127, 235, 0.15);
+  --pf-v5-c-nav__link--m-current--BackgroundColor: rgba(96, 158, 47, 0.15);
   --pf-v5-c-nav__link--m-current--Color: #eceff2;
 }
 
@@ -182,7 +182,7 @@
    rides its top edge — accent edge, rounded corners, one soft
    shadow. ── */
 .pf-v5-theme-dark .pf-v5-c-table {
-  border-top: 4px solid #537feb;
+  border-top: 4px solid #7AB648;
   border-radius: 14px 14px 0 0;
   box-shadow: 0 16px 40px rgba(0, 0, 0, 0.55);
 }

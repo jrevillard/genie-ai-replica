@@ -175,10 +175,11 @@
         instead of its own mark. A child theme keeps the plain image.
       -->
       <div id="kc-header-wrapper"
-              class="pf-v5-c-brand"><#if isBaseTheme><picture><source srcset="${url.resourcesPath}/img/logo.webp" type="image/webp"></#if><img src="${url.resourcesPath}/img/logo.png" alt="GENIE.AI"><#if isBaseTheme></picture></#if></div>
+              class="pf-v5-c-brand"><img class="kc-naat-art" src="${url.resourcesPath}/img/naat-art.png" alt=""></div>
     </header>
     <main class="${properties.kcLoginMain!}">
       <div class="${properties.kcLoginMainHeader!}">
+        <img class="kc-card-brand" src="${url.resourcesPath}/img/naat-brand.png" alt="NAAT Administrator">
         <h1 class="${properties.kcLoginMainTitle!}" id="kc-page-title"><#nested "header"></h1>
         <#if realm.internationalizationEnabled  && locale.supported?size gt 1>
         <div class="${properties.kcLoginMainHeaderUtilities!}">

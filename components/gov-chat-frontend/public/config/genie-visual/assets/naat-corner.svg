@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="580" height="920" viewBox="0 0 580 920" fill="none">
+<defs>
+<linearGradient id="flow" x1="540" y1="0" x2="270" y2="760" gradientUnits="userSpaceOnUse">
+<stop stop-color="#8CC63F"/><stop offset=".48" stop-color="#609E2F"/><stop offset=".85" stop-color="#2F6B1E"/>
+</linearGradient>
+<radialGradient id="orb"><stop stop-color="#DFF3D0"/><stop offset=".3" stop-color="#8CC63F"/><stop offset="1" stop-color="#609E2F" stop-opacity="0"/></radialGradient>
+</defs>
+<path d="M520 0c0 260-90 420-250 470S60 640 60 920" stroke="url(#flow)" stroke-width="2.5" fill="none"/>
+<path d="M580 90c-30 190-110 300-230 350" stroke="#C9A227" stroke-opacity="0.35" stroke-width="1.5" fill="none"/>
+<circle cx="520" cy="10" r="26" fill="url(#orb)"/>
+<circle cx="300" cy="452" r="20" fill="url(#orb)"/>
+<circle cx="72" cy="800" r="22" fill="url(#orb)"/>
+<path d="M420 240l10 18 18 10-18 10-10 18-10-18-18-10 18-10Z" fill="none" stroke="#C9A227" stroke-opacity="0.4" stroke-width="1.5"/>
+<path d="M160 620l10 18 18 10-18 10-10 18-10-18-18-10 18-10Z" fill="none" stroke="#609E2F" stroke-opacity="0.4" stroke-width="1.5"/>
+</svg>

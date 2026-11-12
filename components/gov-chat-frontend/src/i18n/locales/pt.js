@@ -2138,6 +2138,16 @@ export default {
         modeCHint: 'História 10.6 — em breve',
         title: 'Dividir novamente a partir da origem'
       },
+      rename: {
+        body: 'Renomear também renomeia os grafos do espaço de trabalho do repositório (`OKF_<name>_v<N>`); o conteúdo, as versões e o registo de auditoria ficam intactos.',
+        cancel: 'Cancelar',
+        confirm: 'Renomear',
+        conflict: 'Esse nome já é usado por outro repositório neste domínio.',
+        failed: 'Falha ao renomear',
+        nameLabel: 'Nome do repositório',
+        namePlaceholder: 'Nome do repositório',
+        title: 'Renomear repositório'
+      },
       save: 'Salvar',
       saved: 'Salvo',
       saving: 'Salvando…',

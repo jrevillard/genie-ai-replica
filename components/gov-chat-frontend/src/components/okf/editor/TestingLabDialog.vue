@@ -40,6 +40,7 @@
 -->
 <template>
   <DsDialog
+    class="genie-living-intelligence"
     :visible="visible"
     :title="translate('okf.testingLab.title', 'Testing Lab')"
     size="auto"
@@ -1334,6 +1335,7 @@
            the × button only ARMS the confirmation; the delete fires solely
            from the dialog's Confirm. Names the suite + the consequence. -->
       <DsDialog
+        class="genie-living-intelligence"
         :visible="deleteConfirm !== null"
         :title="translate('okf.testingLab.suites.deleteConfirmTitle', 'Delete this suite?')"
         size="sm"

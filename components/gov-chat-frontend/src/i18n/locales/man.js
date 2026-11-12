@@ -2098,6 +2098,16 @@ export default {
         modeCHint: 'Bwebwenato 10.6 — etooj wōt enaj itok',
         title: 'Bar ajeje jān jikin eo'
       },
+      rename: {
+        body: 'Re-ennym yn stashys chammah as graffyn yn ynnyd-obbee echey (`OKF_<name>_v<N>`); yn scoilt, ny llyncur as yn raad ard-scrutaght cha nel ad caghlit.',
+        cancel: 'Cur sheese',
+        confirm: 'Ree-ennym',
+        conflict: 'Ta yn ennym shoh ymmydit hannah ec stashys elley ’sy cheim shoh.',
+        failed: 'Ree-ennym er failleil',
+        nameLabel: 'Ennym yn stashys',
+        namePlaceholder: 'Ennym yn stashys',
+        title: 'Ree-ennym yn stashys'
+      },
       save: 'A mara',
       saved: 'A marata',
       saving: 'A bering mara…',

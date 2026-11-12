@@ -105,6 +105,7 @@
          the SAME list the wizard's Validate step renders, read in place.
          Read-only: a dialog that only looks. -->
     <DsDialog
+      class="genie-living-intelligence"
       :visible="issuesRepo !== null"
       :title="issuesDialogTitle"
       size="md"

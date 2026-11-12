@@ -5,6 +5,7 @@
 -->
 <template>
   <DsDialog
+    class="genie-living-intelligence"
     :visible="visible"
     :title="translate('okf.curator.labels.title', 'Adjust labels')"
     size="md"

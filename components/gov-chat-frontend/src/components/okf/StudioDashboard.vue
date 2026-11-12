@@ -195,6 +195,7 @@
 
     <!-- Publish confirm: mints vN+1 + supersedes the previous bundle zip. -->
     <DsDialog
+      class="genie-living-intelligence"
       :visible="publishAsk !== null"
       :title="translate('okf.dashboard.publish.title', 'Publish')"
       size="sm"
@@ -236,6 +237,7 @@
     </DsDialog>
 
     <DsDialog
+      class="genie-living-intelligence"
       :visible="deleteAsk !== null"
       :title="translate('okf.dashboard.delete.title', 'Delete repository')"
       size="sm"
@@ -278,6 +280,7 @@
       immediately; bundle zip + version history stay. Repo returns to In Review
       for corrections; publish (mints vN+1) + Ingest to serve again. -->
     <DsDialog
+      class="genie-living-intelligence"
       :visible="unpublishAsk !== null"
       :title="translate('okf.dashboard.unpublish.title', 'Unpublish')"
       size="sm"
@@ -297,6 +300,7 @@
       that field is a settle-time snapshot and is wiped to [] the moment the
       drain arms, so it would show a stale or zero number. -->
     <DsDialog
+      class="genie-living-intelligence"
       :visible="reingestAsk !== null"
       :title="translate('okf.dashboard.reingest.title', 'Re-ingest failed concepts')"
       size="sm"
@@ -317,6 +321,7 @@
     </DsDialog>
 
     <DsDialog
+      class="genie-living-intelligence"
       :visible="bulkOpen"
       :title="translate('okf.dashboard.bulk.title', 'Publish selected repositories')"
       size="md"

@@ -8,6 +8,7 @@
 -->
 <template>
   <DsDialog
+    class="genie-living-intelligence"
     :visible="visible"
     :title="translate('okf.editor.addConcept.title', 'Add concept file')"
     size="md"

@@ -2145,6 +2145,16 @@ export default {
         modeCHint: 'Story 10.6 — bientôt disponible',
         title: 'Redécouper depuis la source'
       },
+      rename: {
+        body: 'Renommer renomme aussi les graphes de l’espace de travail du dépôt (`OKF_<name>_v<N>`) ; le contenu, les versions et la piste d’audit restent inchangés.',
+        cancel: 'Annuler',
+        confirm: 'Renommer',
+        conflict: 'Ce nom est déjà utilisé par un autre dépôt dans ce domaine.',
+        failed: 'Échec du renommage',
+        nameLabel: 'Nom du dépôt',
+        namePlaceholder: 'Nom du dépôt',
+        title: 'Renommer le dépôt'
+      },
       save: 'Enregistrer',
       saved: 'Enregistré',
       saving: 'Enregistrement…',

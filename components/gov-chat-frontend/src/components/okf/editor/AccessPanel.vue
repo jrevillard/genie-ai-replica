@@ -158,6 +158,7 @@
 
     <!-- USER PICKER — server-side search + checkboxes + grant-by-search. -->
     <DsDialog
+      class="genie-living-intelligence"
       :visible="pickerOpen"
       :title="translate('okf.editor.access.pickerTitle', 'Grant query access')"
       size="lg"

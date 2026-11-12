@@ -179,6 +179,7 @@
     />
 
     <DsDialog
+      class="genie-living-intelligence"
       :visible="publishOpen"
       :title="translate('okf.shell.publish.title', 'Publish')"
       size="sm"
@@ -225,6 +226,7 @@
     </DsDialog>
 
     <DsDialog
+      class="genie-living-intelligence"
       :visible="deleteOpen"
       :title="translate('okf.shell.delete.title', 'Delete repository')"
       size="sm"

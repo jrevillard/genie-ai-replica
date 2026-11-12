@@ -503,12 +503,11 @@ async function effectiveRealmRoles(adminToken, realm, userId) {
  * check the login-visible state, assign the roles.
  * @param {string} adminToken - Keycloak admin access token
  * @param {string} realm - Realm name
- * @param {object} userData - { username, email, password, firstName?, lastName?, realmRoles? }
+ * @param {object} userData - { username, email, password, firstName?, lastName?, realmRoles?, attributes? }
  * @returns {Promise<string>} The user UUID
  */
 async function convergeUser(adminToken, realm, userData) {
   const { username, email, password } = userData;
-
   const res = await adminRequest(
     'POST',
     `/auth/admin/realms/${realm}/users`,
@@ -603,7 +602,7 @@ async function convergeUser(adminToken, realm, userData) {
     // partial-update trap — a lone-attributes PUT wiped the fixture's
     // names and fired VERIFY_PROFILE on the next login). The PUT carries
     // the FULL payload: the profile fields plus the attributes.
-    await adminRequest(
+    const attrRes = await adminRequest(
       'PUT',
       `/auth/admin/realms/${realm}/users/${user.id}`,
       adminToken,
@@ -617,6 +616,28 @@ async function convergeUser(adminToken, realm, userData) {
         attributes: userData.attributes
       }
     );
+    if (attrRes.status !== 204) {
+      // The write is the WHOLE POINT of this branch — a silent failure
+      // would provision an account without the grant and surface as a
+      // 403 far from the cause (the harness's seed create). Same verdict
+      // shape as the password convergence below.
+      failWithStatus(
+        `Failed to converge the attributes of ${username}: HTTP ${attrRes.status} ${bodyText(attrRes)}`,
+        attrRes.status
+      );
+    }
+    // The PUT touched enabled/emailVerified (the full payload), so the
+    // health check below must read the account AS CONVERGED, not the
+    // pre-PUT snapshot — a carried-over disabled account the PUT just
+    // healed would otherwise fail its own provisioning.
+    const converged = await findUsers(adminToken, realm, 'username', username);
+    if (!converged[0]) {
+      throw new Error(
+        `Cannot re-read ${username} after the attribute convergence: the exact lookup answered empty — ` +
+          `${ACCOUNT_VANISHED}; re-run the provisioning`
+      );
+    }
+    user = converged[0];
   }
 
   if (status === 409 && password) {
@@ -649,8 +670,10 @@ async function convergeUser(adminToken, realm, userData) {
   }
 
   // Fixture health — the login-visible state the browser session depends
-  // on (the exact-match lookup already carries it, so no extra read is
-  // needed). The email is deliberately NOT part of it: an account created
+  // on (read from the post-convergence snapshot: the attribute PUT above
+  // re-reads the account it just wrote; without convergence this is the
+  // exact-match lookup's own read). The email is deliberately NOT part of
+  // it: an account created
   // before the fixtures module existed carries the previous address, and
   // the login reads the username, not the email.
   const healthy = user.enabled === true && user.emailVerified === true;
@@ -693,7 +716,7 @@ async function convergeUser(adminToken, realm, userData) {
  *
  * @param {string} adminToken - Keycloak admin access token
  * @param {string} realm - Realm name
- * @param {object} userData - { username, email, password, firstName?, lastName?, realmRoles? }
+ * @param {object} userData - { username, email, password, firstName?, lastName?, realmRoles?, attributes? }
  * @returns {Promise<string>} The user UUID
  */
 async function ensureUser(adminToken, realm, userData) {

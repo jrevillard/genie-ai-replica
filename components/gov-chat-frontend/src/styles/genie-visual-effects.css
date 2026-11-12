@@ -922,8 +922,10 @@ html[data-visual='on'] .genie-living-intelligence .admin-dashboard .main::-webki
  * :hover border-color at higher specificity) and the keyboard ring the V6
  * pattern gives every decorated interactive surface. Colour and shadow
  * only; layer off = the studio paints exactly as it did. The studio's
- * DsModal dialogs stay ungated per the V4 ruling (the primitive serves the
- * whole app — ConceptBrowserDialog included).
+ * dialogs are gated per INSTANCE since the interview ruling of 2026-11-12
+ * (V4 extended: the primitive stays ungated; each admin dialog instance
+ * opts in by carrying the gate class itself — ConceptBrowserDialog
+ * included).
  */
 
 html[data-visual='on'] .genie-living-intelligence .admin-dashboard .okf-dashboard__card {
@@ -955,7 +957,9 @@ html[data-visual='on'] .genie-living-intelligence .admin-dashboard .okf-dashboar
  * accent up. Colour and shadow only; layer off = these surfaces paint
  * exactly as they did. The wizard's DsDialog-based dialogs (AddConcept,
  * Rename, Resplit, Versions, Logs) and OkfSourceDialog's DsDialog siblings
- * stay DS-native per the V4 ruling — the primitive serves the whole app.
+ * are gated per INSTANCE (the interview ruling of 2026-11-12 extending V4:
+ * the primitive stays ungated; the instance opts in by carrying the gate
+ * class — see the corrected X2 block below).
  */
 
 html[data-visual='on'] .genie-living-intelligence .admin-dashboard .okf-wizard__rail--left,
@@ -970,15 +974,6 @@ html[data-visual='on'] .genie-living-intelligence .admin-dashboard .okf-wizard__
 html[data-visual='on'] .genie-living-intelligence .admin-dashboard .okf-wizard__step-counter {
   color: color-mix(in srgb, var(--accent) 70%, var(--muted));
 }
-
-/*
- * X2 (Phase X, 2026-11-12) — the Testing Lab joins by the same extension:
- * the four lab panes (.okf-headtest__pane - head, test, suites, ragas) and
- * the RAGAS panel root (.okf-ragas) join the chrome rule; the ragas pane
- * header joins the display-family rule. The lab's DsDialog shell and its
- * DsTabs strip stay DS-native per the V4 ruling (primitives serve the
- * whole app) - the lab's CONTENT carries the layer.
- */
 
 /*
  * X3 (Phase X, 2026-11-12) — document-management internals: the view
@@ -1005,17 +1000,20 @@ html[data-visual='on'] .genie-living-intelligence .admin-dashboard tr.document-r
 }
 
 /*
- * X2, corrected (the review caught the original): the Testing Lab renders
- * inside DsDialog -> DsModal, which TELEPORTS to body - the panes are
- * never under .admin-dashboard, so the first cut of these rules could not
- * match anything. The mechanism now is the INSTANCE GATE (David's ruling,
- * extending V4): an admin-launched DsDialog instance carries
- * class="genie-living-intelligence", which falls through to the
- * teleported .ds-modal-backdrop root; these rules key on that backdrop -
- * the dialog's PANEL gets the V4 dialog treatment (frost + top-lit wash)
- * and the lab's panes and ragas header get the surface recipes. The
+ * X2 (Phase X, 2026-11-12) — the Testing Lab: the dialog shell and its
+ * content. The lab renders inside DsDialog -> DsModal, which TELEPORTS to
+ * body — the panes are never under .admin-dashboard, so these rules key on
+ * the INSTANCE GATE (David's ruling, extending V4): an admin-launched
+ * DsDialog instance carries class="genie-living-intelligence", which
+ * DsModal binds onto the teleported .ds-modal-backdrop root (a Teleport
+ * root does not forward fallthrough attrs on its own — Modal.vue does it
+ * explicitly). The dialog's PANEL gets the V4 dialog treatment (frost +
+ * top-lit wash), the four lab panes (.okf-headtest__pane - head, test,
+ * suites, ragas) and the RAGAS panel root (.okf-ragas) get the surface
+ * chrome, and the ragas pane header joins the display-family rule. The
  * primitive stays ungated: a DsDialog without the class paints exactly as
- * it did (chat included).
+ * it did (chat included). The first cut of these rules was admin-scoped
+ * and could not match anything — the review caught it.
  */
 
 html[data-visual='on'] .ds-modal-backdrop.genie-living-intelligence .ds-modal {

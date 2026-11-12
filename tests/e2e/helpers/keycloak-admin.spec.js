@@ -11,7 +11,7 @@ const {
   getRealmSettings,
   updateRealmSettings,
   deleteUser,
-  enableDirectAccessGrants,
+  enableDirectAccessGrants
 } = require('./keycloak-admin');
 
 /**
@@ -35,7 +35,11 @@ function fakeRequest(method, path, options = {}) {
   for (const [m, pattern, answer] of routes) {
     if (m === method && pattern.test(path)) {
       if (answer.throws) return Promise.reject(answer.throws);
-      return Promise.resolve({ status: answer.status, data: answer.data, headers: answer.headers });
+      // A stateful route derives its answer from the call log — the
+      // same-URL-twice sequences (lookup before/after a convergence PUT)
+      // answer differently without a mutable route table.
+      const resolved = answer.compute ? answer.compute(calls) : answer;
+      return Promise.resolve({ status: resolved.status, data: resolved.data, headers: resolved.headers });
     }
   }
   return Promise.reject(new Error(`fake transport: no route for ${method} ${path}`));
@@ -54,7 +58,7 @@ if (!ADMIN_FIXTURE) {
 const ADMIN_USER = {
   username: ADMIN_FIXTURE.username,
   email: ADMIN_FIXTURE.email,
-  password: ADMIN_FIXTURE.password,
+  password: ADMIN_FIXTURE.password
 };
 
 const REALM = 'genie';
@@ -124,14 +128,14 @@ test.describe('assignRealmRoles resolves roles through the single-role endpoint'
   test('resolves the role by exact name and posts its id', async () => {
     routes = [
       ['GET', ROLE_PATH('admin'), { status: 200, data: { id: 'role-id-1', name: 'admin' } }],
-      ['POST', ROLE_MAPPINGS_PATH, { status: 204, data: null }],
+      ['POST', ROLE_MAPPINGS_PATH, { status: 204, data: null }]
     ];
 
     await assignRealmRoles('tok', REALM, 'user-1', ['admin']);
 
     expect(calls).toEqual([
       `GET /auth/admin/realms/${REALM}/roles/admin`,
-      `POST /auth/admin/realms/${REALM}/users/user-1/role-mappings/realm`,
+      `POST /auth/admin/realms/${REALM}/users/user-1/role-mappings/realm`
     ]);
   });
 
@@ -141,7 +145,7 @@ test.describe('assignRealmRoles resolves roles through the single-role endpoint'
     // would otherwise hand back as a role.
     routes = [
       ['GET', ROLE_PATH('ghost'), { status: 404, data: { error: 'Role not found' } }],
-      ['GET', REALM_PATH, { status: 200, data: { realm: REALM } }],
+      ['GET', REALM_PATH, { status: 200, data: { realm: REALM } }]
     ];
 
     await expect(assignRealmRoles('tok', REALM, 'user-1', ['ghost'])).rejects.toThrow(
@@ -153,7 +157,7 @@ test.describe('assignRealmRoles resolves roles through the single-role endpoint'
   test('a 404 on a realm that does not exist fails loudly instead of blaming the role', async () => {
     routes = [
       ['GET', ROLE_PATH('admin'), { status: 404, data: null }],
-      ['GET', REALM_PATH, { status: 404, data: null }],
+      ['GET', REALM_PATH, { status: 404, data: null }]
     ];
 
     await expect(assignRealmRoles('tok', REALM, 'user-1', ['admin'])).rejects.toThrow(/The realm genie does not exist/);
@@ -163,7 +167,7 @@ test.describe('assignRealmRoles resolves roles through the single-role endpoint'
   test('a realm read that the admin API refuses is not reported as a missing realm', async () => {
     routes = [
       ['GET', ROLE_PATH('admin'), { status: 404, data: null }],
-      ['GET', REALM_PATH, { status: 401, data: { error: 'HTTP 401 Unauthorized' } }],
+      ['GET', REALM_PATH, { status: 401, data: { error: 'HTTP 401 Unauthorized' } }]
     ];
 
     await expect(assignRealmRoles('tok', REALM, 'user-1', ['admin'])).rejects.toThrow(
@@ -293,7 +297,7 @@ test.describe('removeRealmRoles', () => {
   test('removes an existing role mapping and reports the removed name', async () => {
     routes = [
       ['GET', ROLE_PATH('admin'), { status: 200, data: { id: 'role-id-1', name: 'admin' } }],
-      ['DELETE', ROLE_MAPPINGS_PATH, { status: 204, data: null }],
+      ['DELETE', ROLE_MAPPINGS_PATH, { status: 204, data: null }]
     ];
 
     const removed = await removeRealmRoles('tok', REALM, 'user-1', ['admin']);
@@ -301,14 +305,14 @@ test.describe('removeRealmRoles', () => {
     expect(removed).toEqual(['admin']);
     expect(calls).toEqual([
       `GET /auth/admin/realms/${REALM}/roles/admin`,
-      `DELETE /auth/admin/realms/${REALM}/users/user-1/role-mappings/realm`,
+      `DELETE /auth/admin/realms/${REALM}/users/user-1/role-mappings/realm`
     ]);
   });
 
   test('a role the realm does not carry is skipped without a DELETE', async () => {
     routes = [
       ['GET', ROLE_PATH('ghost'), { status: 404, data: null }],
-      ['GET', REALM_PATH, { status: 200, data: { realm: REALM } }],
+      ['GET', REALM_PATH, { status: 200, data: { realm: REALM } }]
     ];
 
     const removed = await removeRealmRoles('tok', REALM, 'user-1', ['ghost']);
@@ -322,7 +326,7 @@ test.describe('removeRealmRoles', () => {
     // the transient verdict, like every other write in the module.
     routes = [
       ['GET', ROLE_PATH('admin'), { status: 200, data: { id: 'role-id-1', name: 'admin' } }],
-      ['DELETE', ROLE_MAPPINGS_PATH, { throws: new Error('socket hang up') }],
+      ['DELETE', ROLE_MAPPINGS_PATH, { throws: new Error('socket hang up') }]
     ];
 
     const caught = await rejection(removeRealmRoles('tok', REALM, 'user-1', ['admin']));
@@ -334,7 +338,7 @@ test.describe('removeRealmRoles', () => {
   test('a realm that does not exist leaves nothing to remove', async () => {
     routes = [
       ['GET', ROLE_PATH('admin'), { status: 404, data: null }],
-      ['GET', REALM_PATH, { status: 404, data: null }],
+      ['GET', REALM_PATH, { status: 404, data: null }]
     ];
 
     const removed = await removeRealmRoles('tok', REALM, 'user-1', ['admin']);
@@ -355,10 +359,10 @@ test.describe('effectiveRealmRoles reads the role MAPPINGS, not the realm role l
           status: 200,
           data: [
             { id: 'r1', name: 'admin' },
-            { id: 'r2', name: 'default-roles-genie' },
-          ],
-        },
-      ],
+            { id: 'r2', name: 'default-roles-genie' }
+          ]
+        }
+      ]
     ];
 
     const effective = await effectiveRealmRoles('tok', REALM, 'user-1');
@@ -371,12 +375,11 @@ test.describe('effectiveRealmRoles reads the role MAPPINGS, not the realm role l
 });
 
 test.describe('convergeUser diagnoses a 409 whose username lookup misses', () => {
-
   test('an account owning the fixture email is named as an email conflict', async () => {
     routes = [
       POST_USERS_409,
       USERNAME_LOOKUP_MISS,
-      ...EMAIL_PROBE([{ username: 'someone-else', email: ADMIN_FIXTURE.email }]),
+      ...EMAIL_PROBE([{ username: 'someone-else', email: ADMIN_FIXTURE.email }])
     ];
 
     await expect(convergeUser('tok', REALM, ADMIN_USER)).rejects.toThrow(
@@ -436,7 +439,7 @@ test.describe('convergeUser diagnoses a 409 whose username lookup misses', () =>
     routes = [
       POST_USERS_409,
       USERNAME_LOOKUP_MISS,
-      ['GET', EMAIL_LOOKUP, { throws: new Error('connection reset by peer') }],
+      ['GET', EMAIL_LOOKUP, { throws: new Error('connection reset by peer') }]
     ];
 
     let caught;
@@ -512,7 +515,7 @@ test.describe('convergeUser diagnoses a password reset on a vanished account', (
     routes = [
       ['POST', USERS_PATH, { status: 409, data: null }],
       HEALTHY_LOOKUP,
-      ['PUT', RESET_PASSWORD_PATH, { status: 404, data: null }],
+      ['PUT', RESET_PASSWORD_PATH, { status: 404, data: null }]
     ];
 
     let caught;
@@ -533,7 +536,7 @@ test.describe('createUser diagnoses a 409 whose username lookup misses', () => {
     routes = [
       POST_USERS_409,
       USERNAME_LOOKUP_MISS,
-      ...EMAIL_PROBE([{ username: 'someone-else', email: ADMIN_FIXTURE.email }]),
+      ...EMAIL_PROBE([{ username: 'someone-else', email: ADMIN_FIXTURE.email }])
     ];
 
     await expect(createUser('tok', REALM, ADMIN_USER)).rejects.toThrow(
@@ -590,7 +593,7 @@ test.describe('createUser diagnoses a 409 whose username lookup misses', () => {
     // 201 create has no conflict to explain, and probing would invent one.
     routes = [
       ['POST', USERS_PATH, { status: 201, data: null }],
-      ['GET', USERNAME_LOOKUP, { status: 200, data: [] }],
+      ['GET', USERNAME_LOOKUP, { status: 200, data: [] }]
     ];
 
     let caught;
@@ -613,7 +616,7 @@ test.describe('createUser is the create-only path: no password convergence, no h
       ['POST', USERS_PATH, { status: 201, data: null }],
       HEALTHY_LOOKUP,
       ['GET', ROLE_PATH('admin'), { status: 200, data: { id: 'role-id-1', name: 'admin' } }],
-      ['POST', ROLE_MAPPINGS_PATH, { status: 204, data: null }],
+      ['POST', ROLE_MAPPINGS_PATH, { status: 204, data: null }]
     ];
 
     const id = await createUser('tok', REALM, { ...ADMIN_USER, realmRoles: ['admin'] });
@@ -626,7 +629,7 @@ test.describe('createUser is the create-only path: no password convergence, no h
       `POST /auth/admin/realms/${REALM}/users`,
       `GET /auth/admin/realms/${REALM}/users?username=${ADMIN_FIXTURE.username}&exact=true`,
       `GET /auth/admin/realms/${REALM}/roles/admin`,
-      `POST /auth/admin/realms/${REALM}/users/user-1/role-mappings/realm`,
+      `POST /auth/admin/realms/${REALM}/users/user-1/role-mappings/realm`
     ]);
   });
 
@@ -641,7 +644,7 @@ test.describe('createUser is the create-only path: no password convergence, no h
       POST_USERS_409,
       LOOKUP({ ...HEALTHY_USER(), enabled: false, emailVerified: false }),
       ['GET', ROLE_PATH('admin'), { status: 200, data: { id: 'role-id-1', name: 'admin' } }],
-      ['POST', ROLE_MAPPINGS_PATH, { status: 204, data: null }],
+      ['POST', ROLE_MAPPINGS_PATH, { status: 204, data: null }]
     ];
 
     const id = await createUser('tok', REALM, { ...ADMIN_USER, realmRoles: ['admin'] });
@@ -655,7 +658,7 @@ test.describe('createUser is the create-only path: no password convergence, no h
       `POST /auth/admin/realms/${REALM}/users`,
       `GET /auth/admin/realms/${REALM}/users?username=${ADMIN_FIXTURE.username}&exact=true`,
       `GET /auth/admin/realms/${REALM}/roles/admin`,
-      `POST /auth/admin/realms/${REALM}/users/user-1/role-mappings/realm`,
+      `POST /auth/admin/realms/${REALM}/users/user-1/role-mappings/realm`
     ]);
   });
 
@@ -683,7 +686,7 @@ test.describe('convergeUser on a fresh create and on an existing account', () =>
       ['POST', USERS_PATH, { status: 201, data: null }],
       HEALTHY_LOOKUP,
       ['GET', ROLE_PATH('admin'), { status: 200, data: { id: 'role-id-1', name: 'admin' } }],
-      ['POST', ROLE_MAPPINGS_PATH, { status: 204, data: null }],
+      ['POST', ROLE_MAPPINGS_PATH, { status: 204, data: null }]
     ];
 
     const id = await convergeUser('tok', REALM, { ...ADMIN_USER, realmRoles: ['admin'] });
@@ -695,7 +698,7 @@ test.describe('convergeUser on a fresh create and on an existing account', () =>
       `POST /auth/admin/realms/${REALM}/users`,
       `GET /auth/admin/realms/${REALM}/users?username=${ADMIN_FIXTURE.username}&exact=true`,
       `GET /auth/admin/realms/${REALM}/roles/admin`,
-      `POST /auth/admin/realms/${REALM}/users/user-1/role-mappings/realm`,
+      `POST /auth/admin/realms/${REALM}/users/user-1/role-mappings/realm`
     ]);
   });
 
@@ -705,10 +708,7 @@ test.describe('convergeUser on a fresh create and on an existing account', () =>
     // a 201 whose resolved account is unhealthy must refuse exactly like
     // the 409 path, or a realm-mangled account provisions silently and
     // dies minutes later at login.
-    routes = [
-      ['POST', USERS_PATH, { status: 201, data: null }],
-      LOOKUP({ ...HEALTHY_USER(), emailVerified: false }),
-    ];
+    routes = [['POST', USERS_PATH, { status: 201, data: null }], LOOKUP({ ...HEALTHY_USER(), emailVerified: false })];
 
     const caught = await rejection(convergeUser('tok', REALM, ADMIN_USER));
 
@@ -727,7 +727,7 @@ test.describe('convergeUser on a fresh create and on an existing account', () =>
       HEALTHY_LOOKUP,
       ['PUT', RESET_PASSWORD_PATH, { status: 204, data: null }],
       ['GET', ROLE_PATH('admin'), { status: 200, data: { id: 'role-id-1', name: 'admin' } }],
-      ['POST', ROLE_MAPPINGS_PATH, { status: 204, data: null }],
+      ['POST', ROLE_MAPPINGS_PATH, { status: 204, data: null }]
     ];
 
     const id = await convergeUser('tok', REALM, { ...ADMIN_USER, realmRoles: ['admin'] });
@@ -753,7 +753,7 @@ test.describe('convergeUser on a fresh create and on an existing account', () =>
     routes = [
       POST_USERS_409,
       LOOKUP({ ...HEALTHY_USER(), requiredActions: ['VERIFY_EMAIL'] }),
-      ['PUT', RESET_PASSWORD_PATH, { status: 204, data: null }],
+      ['PUT', RESET_PASSWORD_PATH, { status: 204, data: null }]
     ];
 
     const caught = await rejection(convergeUser('tok', REALM, ADMIN_USER));
@@ -773,7 +773,7 @@ test.describe('convergeUser on a fresh create and on an existing account', () =>
     routes = [
       POST_USERS_409,
       LOOKUP({ ...HEALTHY_USER(), enabled: false }),
-      ['PUT', RESET_PASSWORD_PATH, { status: 204, data: null }],
+      ['PUT', RESET_PASSWORD_PATH, { status: 204, data: null }]
     ];
 
     const caught = await rejection(convergeUser('tok', REALM, ADMIN_USER));
@@ -781,6 +781,78 @@ test.describe('convergeUser on a fresh create and on an existing account', () =>
     expect(caught.message).toMatch(/not fixture-healthy/);
     expect(caught.message).toMatch(/enabled=false/);
     expect(calls.some((call) => call.includes('reset-password'))).toBe(true);
+    expect(calls.some((call) => call.includes('role-mappings'))).toBe(false);
+  });
+
+  test('a 409 whose fixture declares attributes converges the FULL payload, then health-checks the CONVERGED account', async () => {
+    // The attribute convergence PUT replaces the user's whole attributes
+    // map, and Keycloak CLEARS every profile field the payload omits — so
+    // the PUT must carry the full payload. Its write is the point of the
+    // branch: the health check after it must read the account AS CONVERGED
+    // (a second lookup), not the pre-PUT snapshot — a carried-over
+    // disabled account the PUT just healed would otherwise fail its own
+    // provisioning. The attributes come from the fixture module itself, so
+    // a fixture change moves the spec with it.
+    const lookupCalls = () =>
+      calls.filter((call) => call.startsWith('GET /auth/admin/realms/genie/users?username=testadmin')).length;
+    routes = [
+      POST_USERS_409,
+      // The pre-PUT lookup answers with the carried-over DISABLED account;
+      // every lookup from the second one on answers with the healed one.
+      // (Route order note: this entry must be the only username-lookup
+      // route — the plain LOOKUP route would always match first and the
+      // healed answer would never be served.)
+      [
+        'GET',
+        USERNAME_LOOKUP,
+        {
+          compute: () => ({
+            status: 200,
+            data: [lookupCalls() >= 2 ? HEALTHY_USER() : { ...HEALTHY_USER(), enabled: false }]
+          })
+        }
+      ],
+      ['PUT', USER_PATH, { status: 204, data: null }],
+      ['PUT', RESET_PASSWORD_PATH, { status: 204, data: null }],
+      ['GET', ROLE_PATH('admin'), { status: 200, data: { id: 'role-id-1', name: 'admin' } }],
+      ['POST', ROLE_MAPPINGS_PATH, { status: 204, data: null }]
+    ];
+
+    const id = await convergeUser('tok', REALM, {
+      ...ADMIN_USER,
+      realmRoles: ['admin'],
+      attributes: ADMIN_FIXTURE.attributes
+    });
+
+    expect(id).toBe('user-1');
+    const putIndex = calls.findIndex((call) => call.startsWith('PUT /auth/admin/realms/genie/users/user-1'));
+    expect(putIndex).toBeGreaterThan(-1);
+    expect(bodies[putIndex]).toEqual({
+      firstName: ADMIN_FIXTURE.username,
+      lastName: 'Test',
+      email: ADMIN_FIXTURE.email,
+      enabled: true,
+      emailVerified: true,
+      attributes: ADMIN_FIXTURE.attributes
+    });
+    // The pre-PUT lookup and the post-PUT re-read: both must have run.
+    expect(lookupCalls()).toBeGreaterThanOrEqual(2);
+  });
+
+  test('a failed attribute convergence refuses the provisioning, naming the write', async () => {
+    // The write is the whole point of the branch: a swallowed failure
+    // would provision an account without the grant and surface as a 403
+    // far from the cause (the harness's seed create).
+    routes = [
+      POST_USERS_409,
+      HEALTHY_LOOKUP,
+      ['PUT', USER_PATH, { status: 400, data: { errorMessage: 'invalid attributes' } }]
+    ];
+
+    const caught = await rejection(convergeUser('tok', REALM, { ...ADMIN_USER, attributes: ADMIN_FIXTURE.attributes }));
+
+    expect(caught.message).toMatch(/Failed to converge the attributes/);
+    expect(caught.message).toMatch(/HTTP 400/);
     expect(calls.some((call) => call.includes('role-mappings'))).toBe(false);
   });
 });
@@ -795,7 +867,7 @@ test.describe('convergeUser keeps a transport break retryable', () => {
       HEALTHY_LOOKUP,
       ['PUT', RESET_PASSWORD_PATH, { status: 204, data: null }],
       ['GET', ROLE_PATH('admin'), { status: 200, data: { id: 'role-id-1', name: 'admin' } }],
-      ['POST', ROLE_MAPPINGS_PATH, { throws: new Error('socket hang up') }],
+      ['POST', ROLE_MAPPINGS_PATH, { throws: new Error('socket hang up') }]
     ];
 
     const caught = await rejection(convergeUser('tok', REALM, { ...ADMIN_USER, realmRoles: ['admin'] }));
@@ -813,7 +885,7 @@ test.describe('convergeUser keeps a transport break retryable', () => {
     routes = [
       ['POST', USERS_PATH, { status: 409, data: null }],
       HEALTHY_LOOKUP,
-      ['PUT', RESET_PASSWORD_PATH, { throws: new Error('socket hang up') }],
+      ['PUT', RESET_PASSWORD_PATH, { throws: new Error('socket hang up') }]
     ];
 
     const caught = await rejection(convergeUser('tok', REALM, ADMIN_USER));
@@ -832,22 +904,22 @@ test.describe('rotateRealmKeys reads the new key id from the Location header', (
       name: 'rsa-generated',
       providerId: 'rsa-generated',
       providerType: 'org.keycloak.keys.KeyProvider',
-      config: { priority: ['0'], enabled: ['true'], active: ['true'] },
+      config: { priority: ['0'], enabled: ['true'], active: ['true'] }
     },
     {
       id: 'old-key-2',
       name: 'rsa-generated-rotated-1',
       providerId: 'rsa-generated',
       providerType: 'org.keycloak.keys.KeyProvider',
-      config: { priority: ['100'], enabled: ['true'], active: ['false'] },
-    },
+      config: { priority: ['100'], enabled: ['true'], active: ['false'] }
+    }
   ];
 
   // The two reads every rotation performs before the create: the realm's
   // id and the existing key providers.
   const BASE_ROUTES = [
     ['GET', REALM_PATH, { status: 200, data: { id: 'realm-uuid' } }],
-    ['GET', COMPONENTS_PATH, { status: 200, data: OLD_KEYS }],
+    ['GET', COMPONENTS_PATH, { status: 200, data: OLD_KEYS }]
   ];
 
   test('returns the id parsed from the Location header, not the empty body', async () => {
@@ -859,10 +931,10 @@ test.describe('rotateRealmKeys reads the new key id from the Location header', (
         {
           status: 201,
           data: null,
-          headers: { location: `/auth/admin/realms/${REALM}/components/new-key-id` },
-        },
+          headers: { location: `/auth/admin/realms/${REALM}/components/new-key-id` }
+        }
       ],
-      ['PUT', /\/auth\/admin\/realms\/genie\/components\/old-key-[12]$/, { status: 204, data: null }],
+      ['PUT', /\/auth\/admin\/realms\/genie\/components\/old-key-[12]$/, { status: 204, data: null }]
     ];
 
     const result = await rotateRealmKeys('tok', REALM);
@@ -899,7 +971,7 @@ test.describe('rotateRealmKeys reads the new key id from the Location header', (
     // TypeError with no named verdict.
     routes = [
       ['GET', REALM_PATH, { status: 200, data: { id: 'realm-uuid' } }],
-      ['GET', COMPONENTS_PATH, { status: 401, data: { error: 'HTTP 401 Unauthorized' } }],
+      ['GET', COMPONENTS_PATH, { status: 401, data: { error: 'HTTP 401 Unauthorized' } }]
     ];
 
     let caught;
@@ -931,7 +1003,7 @@ test.describe('rotateRealmKeys reads the new key id from the Location header', (
     // the create proceed and demote nothing — a half-rotation.
     routes = [
       ['GET', REALM_PATH, { status: 200, data: { id: 'realm-uuid' } }],
-      ['GET', COMPONENTS_PATH, { status: 200, data: { error: 'not a list' } }],
+      ['GET', COMPONENTS_PATH, { status: 200, data: { error: 'not a list' } }]
     ];
 
     let caught;
@@ -957,10 +1029,10 @@ test.describe('rotateRealmKeys reads the new key id from the Location header', (
         {
           status: 201,
           data: null,
-          headers: { location: `/auth/admin/realms/${REALM}/components/new-key-id` },
-        },
+          headers: { location: `/auth/admin/realms/${REALM}/components/new-key-id` }
+        }
       ],
-      ['PUT', /\/auth\/admin\/realms\/genie\/components\/old-key-1$/, { status: 403, data: null }],
+      ['PUT', /\/auth\/admin\/realms\/genie\/components\/old-key-1$/, { status: 403, data: null }]
     ];
 
     let caught;
@@ -985,9 +1057,9 @@ test.describe('rotateRealmKeys reads the new key id from the Location header', (
       [
         'POST',
         COMPONENTS_PATH,
-        { status: 201, data: null, headers: { location: `/auth/admin/realms/${REALM}/components/new-key-id` } },
+        { status: 201, data: null, headers: { location: `/auth/admin/realms/${REALM}/components/new-key-id` } }
       ],
-      ['PUT', /\/auth\/admin\/realms\/genie\/components\/old-key-1$/, { throws: new Error('connection reset by peer') }],
+      ['PUT', /\/auth\/admin\/realms\/genie\/components\/old-key-1$/, { throws: new Error('connection reset by peer') }]
     ];
 
     let caught;
@@ -1008,7 +1080,11 @@ test.describe('rotateRealmKeys reads the new key id from the Location header', (
     // URL only: reading its last segment would mint the id 'components'.
     routes = [
       ...BASE_ROUTES,
-      ['POST', COMPONENTS_PATH, { status: 201, data: null, headers: { location: `/auth/admin/realms/${REALM}/components/` } }],
+      [
+        'POST',
+        COMPONENTS_PATH,
+        { status: 201, data: null, headers: { location: `/auth/admin/realms/${REALM}/components/` } }
+      ]
     ];
 
     let caught;
@@ -1040,29 +1116,29 @@ test.describe('rotateRealmKeys rotates the RSA signing keys only', () => {
       name: 'rsa-generated',
       providerId: 'rsa-generated',
       providerType: 'org.keycloak.keys.KeyProvider',
-      config: { priority: ['100'] },
+      config: { priority: ['100'] }
     },
     {
       id: 'rsa-encryption-id',
       name: 'rsa-enc-generated',
       providerId: 'rsa-enc-generated',
       providerType: 'org.keycloak.keys.KeyProvider',
-      config: { priority: ['100'], algorithm: ['RSA-OAEP'] },
+      config: { priority: ['100'], algorithm: ['RSA-OAEP'] }
     },
     {
       id: 'hmac-id',
       name: 'hmac-generated-hs512',
       providerId: 'hmac-generated',
       providerType: 'org.keycloak.keys.KeyProvider',
-      config: { priority: ['100'], algorithm: ['HS512'] },
+      config: { priority: ['100'], algorithm: ['HS512'] }
     },
     {
       id: 'aes-id',
       name: 'aes-generated',
       providerId: 'aes-generated',
       providerType: 'org.keycloak.keys.KeyProvider',
-      config: { priority: ['100'] },
-    },
+      config: { priority: ['100'] }
+    }
   ];
 
   // The key a rotation mints: the same shape the helper POSTs.
@@ -1071,13 +1147,13 @@ test.describe('rotateRealmKeys rotates the RSA signing keys only', () => {
     name: 'rsa-generated-rotated-1700000000000',
     providerId: 'rsa-generated',
     providerType: 'org.keycloak.keys.KeyProvider',
-    config: { priority: ['101'], enabled: ['true'], active: ['true'], keySize: ['2048'] },
+    config: { priority: ['101'], enabled: ['true'], active: ['true'], keySize: ['2048'] }
   };
 
   const CREATED_KEY = {
     status: 201,
     data: null,
-    headers: { location: `/auth/admin/realms/${REALM}/components/new-key-id` },
+    headers: { location: `/auth/admin/realms/${REALM}/components/new-key-id` }
   };
 
   test('demotes the RSA signing key and leaves the encryption, HMAC and AES providers alone', async () => {
@@ -1085,7 +1161,7 @@ test.describe('rotateRealmKeys rotates the RSA signing keys only', () => {
       REALM_ROUTE,
       ['GET', COMPONENTS_PATH, { status: 200, data: REALM_KEYS }],
       ['POST', COMPONENTS_PATH, CREATED_KEY],
-      ['PUT', new RegExp(`/auth/admin/realms/${REALM}/components/rsa-signing-id$`), { status: 204, data: null }],
+      ['PUT', new RegExp(`/auth/admin/realms/${REALM}/components/rsa-signing-id$`), { status: 204, data: null }]
     ];
 
     const result = await rotateRealmKeys('tok', REALM);
@@ -1109,13 +1185,10 @@ test.describe('rotateRealmKeys rotates the RSA signing keys only', () => {
         COMPONENTS_PATH,
         {
           status: 200,
-          data: [
-            { ...REALM_KEYS[0], config: { ...REALM_KEYS[0].config, active: ['false'] } },
-            ROTATED_KEY,
-          ],
-        },
+          data: [{ ...REALM_KEYS[0], config: { ...REALM_KEYS[0].config, active: ['false'] } }, ROTATED_KEY]
+        }
       ],
-      ['PUT', new RegExp(`/auth/admin/realms/${REALM}/components/rsa-signing-id$`), { status: 204, data: null }],
+      ['PUT', new RegExp(`/auth/admin/realms/${REALM}/components/rsa-signing-id$`), { status: 204, data: null }]
     ];
 
     const result = await rotateRealmKeys('tok', REALM);
@@ -1148,17 +1221,17 @@ test.describe('rotateRealmKeys rotates the RSA signing keys only', () => {
               name: 'rsa-generated-rotated-1700000000000',
               providerId: 'rsa-generated',
               providerType: 'org.keycloak.keys.KeyProvider',
-              config: { priority: ['101'], enabled: ['true'], active: ['false'], keySize: ['2048'] },
-            },
-          ],
-        },
+              config: { priority: ['101'], enabled: ['true'], active: ['false'], keySize: ['2048'] }
+            }
+          ]
+        }
       ],
       ['POST', COMPONENTS_PATH, CREATED_KEY],
       [
         'PUT',
         new RegExp(`/auth/admin/realms/${REALM}/components/(rsa-signing-id|passive-rotated-id)$`),
-        { status: 204, data: null },
-      ],
+        { status: 204, data: null }
+      ]
     ];
 
     const result = await rotateRealmKeys('tok', REALM);
@@ -1179,13 +1252,10 @@ test.describe('rotateRealmKeys rotates the RSA signing keys only', () => {
         COMPONENTS_PATH,
         {
           status: 200,
-          data: [
-            REALM_KEYS[0],
-            { ...ROTATED_KEY, config: { priority: ['101'], enabled: ['true'], keySize: ['2048'] } },
-          ],
-        },
+          data: [REALM_KEYS[0], { ...ROTATED_KEY, config: { priority: ['101'], enabled: ['true'], keySize: ['2048'] } }]
+        }
       ],
-      ['PUT', new RegExp(`/auth/admin/realms/${REALM}/components/rsa-signing-id$`), { status: 204, data: null }],
+      ['PUT', new RegExp(`/auth/admin/realms/${REALM}/components/rsa-signing-id$`), { status: 204, data: null }]
     ];
 
     const result = await rotateRealmKeys('tok', REALM);
@@ -1202,18 +1272,15 @@ test.describe('rotateRealmKeys rotates the RSA signing keys only', () => {
         COMPONENTS_PATH,
         {
           status: 200,
-          data: [
-            REALM_KEYS[0],
-            { ...ROTATED_KEY, config: { priority: ['101'], enabled: ['false'], active: ['true'] } },
-          ],
-        },
+          data: [REALM_KEYS[0], { ...ROTATED_KEY, config: { priority: ['101'], enabled: ['false'], active: ['true'] } }]
+        }
       ],
       ['POST', COMPONENTS_PATH, CREATED_KEY],
       [
         'PUT',
         new RegExp(`/auth/admin/realms/${REALM}/components/(rsa-signing-id|rotated-key-id)$`),
-        { status: 204, data: null },
-      ],
+        { status: 204, data: null }
+      ]
     ];
 
     const result = await rotateRealmKeys('tok', REALM);
@@ -1242,13 +1309,13 @@ test.describe('rotateRealmKeys rotates the RSA signing keys only', () => {
               ...ROTATED_KEY,
               id: 'rotated-encryption-id',
               name: 'rsa-generated-rotated-backup',
-              providerId: 'rsa-enc-generated',
-            },
-          ],
-        },
+              providerId: 'rsa-enc-generated'
+            }
+          ]
+        }
       ],
       ['POST', COMPONENTS_PATH, CREATED_KEY],
-      ['PUT', new RegExp(`/auth/admin/realms/${REALM}/components/rsa-signing-id$`), { status: 204, data: null }],
+      ['PUT', new RegExp(`/auth/admin/realms/${REALM}/components/rsa-signing-id$`), { status: 204, data: null }]
     ];
 
     const result = await rotateRealmKeys('tok', REALM);
@@ -1270,11 +1337,11 @@ test.describe('rotateRealmKeys rotates the RSA signing keys only', () => {
         COMPONENTS_PATH,
         {
           status: 200,
-          data: [{ ...REALM_KEYS[0], config: { priority: ['100'], active: [null] } }],
-        },
+          data: [{ ...REALM_KEYS[0], config: { priority: ['100'], active: [null] } }]
+        }
       ],
       ['POST', COMPONENTS_PATH, CREATED_KEY],
-      ['PUT', new RegExp(`/auth/admin/realms/${REALM}/components/rsa-signing-id$`), { status: 204, data: null }],
+      ['PUT', new RegExp(`/auth/admin/realms/${REALM}/components/rsa-signing-id$`), { status: 204, data: null }]
     ];
 
     const result = await rotateRealmKeys('tok', REALM);
@@ -1288,9 +1355,7 @@ test.describe('the realm settings helpers report a failure with the module verdi
   test('a realm read the admin API refuses names the read', async () => {
     routes = [['GET', REALM_PATH, { status: 401, data: { error: 'HTTP 401 Unauthorized' } }]];
 
-    await expect(getRealmSettings('tok', REALM)).rejects.toThrow(
-      /Cannot read the realm settings of genie: HTTP 401/
-    );
+    await expect(getRealmSettings('tok', REALM)).rejects.toThrow(/Cannot read the realm settings of genie: HTTP 401/);
   });
 
   test('a realm read whose body carries no representation fails loudly', async () => {
@@ -1400,7 +1465,7 @@ test.describe('enableDirectAccessGrants reads the client list like every other r
   test('a transport break while enabling ROPC names the enablement', async () => {
     routes = [
       ['GET', CLIENTS_PATH, { status: 200, data: [{ id: 'client-1', directAccessGrantsEnabled: false }] }],
-      ['PUT', CLIENT_UPDATE_PATH, { throws: new Error('socket hang up') }],
+      ['PUT', CLIENT_UPDATE_PATH, { throws: new Error('socket hang up') }]
     ];
 
     const caught = await rejection(enableDirectAccessGrants('tok', 'genie2', 'genie-app'));
@@ -1414,15 +1479,19 @@ test.describe('enableDirectAccessGrants reads the client list like every other r
     // representation it read, or the enablement would wipe the client's
     // other settings.
     routes = [
-      ['GET', CLIENTS_PATH, { status: 200, data: [{ id: 'client-1', secret: 's3cret', directAccessGrantsEnabled: false }] }],
-      ['PUT', CLIENT_UPDATE_PATH, { status: 204, data: null }],
+      [
+        'GET',
+        CLIENTS_PATH,
+        { status: 200, data: [{ id: 'client-1', secret: 's3cret', directAccessGrantsEnabled: false }] }
+      ],
+      ['PUT', CLIENT_UPDATE_PATH, { status: 204, data: null }]
     ];
 
     await enableDirectAccessGrants('tok', 'genie2', 'genie-app');
 
     expect(calls).toEqual([
       `GET /auth/admin/realms/genie2/clients?clientId=genie-app`,
-      `PUT /auth/admin/realms/genie2/clients/client-1`,
+      `PUT /auth/admin/realms/genie2/clients/client-1`
     ]);
     // Keycloak replaces the client wholesale: the whole representation it
     // read travels back, with the grant flipped on.

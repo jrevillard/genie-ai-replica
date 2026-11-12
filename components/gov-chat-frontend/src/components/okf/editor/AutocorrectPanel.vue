@@ -209,6 +209,10 @@ export default {
     // as DOM attributes).
     dialogBindings() {
       return {
+        // The instance gate (see genie-visual-effects.css X2): this admin
+        // dialog opts in to the living-intelligence layer; DsModal binds
+        // the class onto the teleported backdrop.
+        class: 'genie-living-intelligence',
         visible: this.visible,
         title: this.translate('okf.editor.autocorrect.title', 'Autocorrect (frontmatter only)'),
         size: 'lg',

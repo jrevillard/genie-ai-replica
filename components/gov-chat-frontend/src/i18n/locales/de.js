@@ -2144,6 +2144,16 @@ export default {
         modeCHint: 'Story 10.6 — in Kürze verfügbar',
         title: 'Aus Quelle neu aufteilen'
       },
+      rename: {
+        body: 'Das Umbenennen benennt auch die Workspace-Graphen des Repositorys um (`OKF_<name>_v<N>`); Inhalte, Versionen und der Audit-Trail bleiben unverändert.',
+        cancel: 'Abbrechen',
+        confirm: 'Umbenennen',
+        conflict: 'Dieser Name wird bereits von einem anderen Repository in dieser Domäne verwendet.',
+        failed: 'Umbenennen fehlgeschlagen',
+        nameLabel: 'Repository-Name',
+        namePlaceholder: 'Repository-Name',
+        title: 'Repository umbenennen'
+      },
       save: 'Speichern',
       saved: 'Gespeichert',
       saving: 'Wird gespeichert…',

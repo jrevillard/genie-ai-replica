@@ -120,14 +120,7 @@ const audit = (label) => {
     await page.waitForSelector('[data-testid="quick-help-overlay"]', { timeout: 30000 });
     await page.waitForSelector('[data-test-id="splash-screen"]', { state: 'detached', timeout: 15000 });
 
-    await page.goto(new URL('/admin', BASE_URL).toString(), {
-      waitUntil: 'domcontentloaded'
-    });
-    await page.waitForSelector('[data-test-id="admin-dashboard"]', { timeout: 30000 });
-    // The route's loading spinner (DsSpinner fixed) covers the dashboard
-    // until the initial loads settle. A capture under it photographs the
-    // loading state, not the tab panel; gone is the condition.
-    await page.waitForSelector('.ds-spinner-wrapper--fixed', { state: 'detached', timeout: 30000 });
+    await gotoAdminReady(page);
 
     const pre = await page.evaluate(audit, 'pre');
     if (pre.dataVisual !== 'on') {
@@ -474,11 +467,7 @@ const audit = (label) => {
     await page.route('**/config/genie-ai-config.json', (route) =>
       route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(offConfig) })
     );
-    await page.goto(new URL('/admin', BASE_URL).toString(), {
-      waitUntil: 'domcontentloaded'
-    });
-    await page.waitForSelector('[data-test-id="admin-dashboard"]', { timeout: 30000 });
-    await page.waitForSelector('.ds-spinner-wrapper--fixed', { state: 'detached', timeout: 30000 });
+    await gotoAdminReady(page);
 
     const off = await page.evaluate(audit, 'layer-off-overview');
     if (off.dataVisual !== 'off') {

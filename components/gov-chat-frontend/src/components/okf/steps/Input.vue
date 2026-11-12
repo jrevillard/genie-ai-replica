@@ -158,7 +158,6 @@
       :visible="editOpen"
       :title="editTitle"
       size="xl"
-      scrollable
       @close="editOpen = false"
     >
       <OkfConceptEditor

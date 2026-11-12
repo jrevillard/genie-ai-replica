@@ -1,17 +1,29 @@
 <template>
-  <DsDialog :visible="visible" title="Rename repository" size="sm" @close="$emit('close')">
-    <p v-if="repo" class="okf-rename__hint">
-      Renaming also renames the repository's workspace graphs (<code>OKF_&lt;name&gt;_v&lt;N&gt;</code>); content,
-      versions and the audit trail are untouched.
-    </p>
-    <DsFormGroup label="Repository name" input-id="okf-rename-input">
-      <DsInput id="okf-rename-input" v-model="name" placeholder="Repository name" @keyup.enter="save" />
+  <DsDialog
+    class="genie-living-intelligence"
+    :visible="visible"
+    :title="translate('okf.editor.rename.title', 'Rename repository')"
+    size="sm"
+    @close="$emit('close')"
+  >
+    <p v-if="repo" class="okf-rename__hint">{{ bodyHint }}</p>
+    <DsFormGroup :label="translate('okf.editor.rename.nameLabel', 'Repository name')" input-id="okf-rename-input">
+      <DsInput
+        id="okf-rename-input"
+        v-model="name"
+        :placeholder="translate('okf.editor.rename.namePlaceholder', 'Repository name')"
+        @keyup.enter="save"
+      />
       <p v-if="error" class="okf-rename__error">{{ error }}</p>
     </DsFormGroup>
     <template #footer>
       <div class="okf-rename__footer">
-        <DsButton variant="secondary" small @click="$emit('close')">Cancel</DsButton>
-        <DsButton variant="primary" small :disabled="saveDisabled" @click="save">Rename</DsButton>
+        <DsButton variant="secondary" small @click="$emit('close')">
+          {{ translate('okf.editor.rename.cancel', 'Cancel') }}
+        </DsButton>
+        <DsButton variant="primary" small :disabled="saveDisabled" @click="save">
+          {{ translate('okf.editor.rename.confirm', 'Rename') }}
+        </DsButton>
       </div>
     </template>
   </DsDialog>
@@ -42,6 +54,15 @@ export default {
     };
   },
   computed: {
+    // The hint's fallback carries `<name>`/`<N>` — raw `<` in a template
+    // text node breaks the Vue template parser, so the translate call
+    // lives here, not inline.
+    bodyHint() {
+      return this.translate(
+        'okf.editor.rename.body',
+        'Renaming also renames the repository’s workspace graphs (`OKF_<name>_v<N>`); content, versions and the audit trail are untouched.'
+      );
+    },
     saveDisabled() {
       const next = (this.name || '').trim();
       return !next || next === (this.repo && this.repo.name) || this.busy;
@@ -69,8 +90,11 @@ export default {
         const status = err && err.status;
         this.error =
           status === 409
-            ? 'That name is already used by another repository in this domain.'
-            : (err && err.message) || 'Rename failed';
+            ? this.translate(
+                'okf.editor.rename.conflict',
+                'That name is already used by another repository in this domain.'
+              )
+            : (err && err.message) || this.translate('okf.editor.rename.failed', 'Rename failed');
       } finally {
         this.busy = false;
       }

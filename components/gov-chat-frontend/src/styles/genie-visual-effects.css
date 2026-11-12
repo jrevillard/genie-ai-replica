@@ -703,7 +703,13 @@ html[data-visual='on'] .genie-living-intelligence .admin-dashboard .tabs-card,
 html[data-visual='on'] .genie-living-intelligence .admin-dashboard .dashboard-card,
 html[data-visual='on'] .genie-living-intelligence .admin-dashboard .okf-dashboard__card,
 html[data-visual='on'] .genie-living-intelligence .admin-dashboard .okf-studio-tab__retrieval,
-html[data-visual='on'] .genie-living-intelligence .admin-dashboard .okf-studio-tab__debt {
+html[data-visual='on'] .genie-living-intelligence .admin-dashboard .okf-studio-tab__debt,
+html[data-visual='on'] .genie-living-intelligence .admin-dashboard .okf-wizard__step,
+html[data-visual='on'] .genie-living-intelligence .admin-dashboard .okf-shell,
+html[data-visual='on'] .genie-living-intelligence .admin-dashboard .okf-ce,
+html[data-visual='on'] .genie-living-intelligence .admin-dashboard .okf-fmp,
+html[data-visual='on'] .genie-living-intelligence .admin-dashboard .okf-artifacts,
+html[data-visual='on'] .genie-living-intelligence .admin-dashboard .okf-src {
   border: 1px solid var(--gli-frost-border);
   background-image: linear-gradient(180deg, color-mix(in srgb, var(--accent) 5%, var(--surface)), var(--surface) 34%);
 }
@@ -789,7 +795,8 @@ html[data-visual='on'] .genie-living-intelligence .admin-dashboard .stat-card--u
 /* Section + card headers get the display family. */
 html[data-visual='on'] .genie-living-intelligence .admin-dashboard .card-title,
 html[data-visual='on'] .genie-living-intelligence .admin-dashboard .section-title,
-html[data-visual='on'] .genie-living-intelligence .admin-dashboard .okf-dashboard__lane-header h4 {
+html[data-visual='on'] .genie-living-intelligence .admin-dashboard .okf-dashboard__lane-header h4,
+html[data-visual='on'] .genie-living-intelligence .admin-dashboard .okf-artifacts__header {
   font-family: var(--font-display);
   letter-spacing: -0.01em;
 }
@@ -915,8 +922,10 @@ html[data-visual='on'] .genie-living-intelligence .admin-dashboard .main::-webki
  * :hover border-color at higher specificity) and the keyboard ring the V6
  * pattern gives every decorated interactive surface. Colour and shadow
  * only; layer off = the studio paints exactly as it did. The studio's
- * DsModal dialogs stay ungated per the V4 ruling (the primitive serves the
- * whole app — ConceptBrowserDialog included).
+ * dialogs are gated per INSTANCE since the interview ruling of 2026-11-12
+ * (V4 extended: the primitive stays ungated; each admin dialog instance
+ * opts in by carrying the gate class itself — ConceptBrowserDialog
+ * included).
  */
 
 html[data-visual='on'] .genie-living-intelligence .admin-dashboard .okf-dashboard__card {
@@ -934,4 +943,91 @@ html[data-visual='on'] .genie-living-intelligence .admin-dashboard .okf-dashboar
 html[data-visual='on'] .genie-living-intelligence .admin-dashboard .okf-dashboard__card:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 1px;
+}
+
+/*
+ * X1 (Phase X, 2026-11-12) — the wizard and editor interiors join the
+ * decorated card family by EXTENDING the shared recipes above (the chrome
+ * rule now carries the wizard's step section, the editor frame, the
+ * concept editor, the frontmatter panel, the artifacts view and the
+ * source dialog; the artifacts header joins the display-family rule).
+ * What remains wizard-specific is the rail/footer chrome: the step rails
+ * read as part of the decorated frame (the tabs-card inset pattern), the
+ * footer carries the same accent top edge, and the step counter picks the
+ * accent up. Colour and shadow only; layer off = these surfaces paint
+ * exactly as they did. The wizard's DsDialog-based dialogs (AddConcept,
+ * Rename, Resplit, Versions, Logs) and OkfSourceDialog's DsDialog siblings
+ * are gated per INSTANCE (the interview ruling of 2026-11-12 extending V4:
+ * the primitive stays ungated; the instance opts in by carrying the gate
+ * class — see the corrected X2 block below).
+ */
+
+html[data-visual='on'] .genie-living-intelligence .admin-dashboard .okf-wizard__rail--left,
+html[data-visual='on'] .genie-living-intelligence .admin-dashboard .okf-wizard__rail--right {
+  box-shadow: 0 1px 0 color-mix(in srgb, var(--accent) 14%, transparent) inset;
+}
+
+html[data-visual='on'] .genie-living-intelligence .admin-dashboard .okf-wizard__footer {
+  box-shadow: 0 1px 0 color-mix(in srgb, var(--accent) 16%, transparent) inset;
+}
+
+html[data-visual='on'] .genie-living-intelligence .admin-dashboard .okf-wizard__step-counter {
+  color: color-mix(in srgb, var(--accent) 70%, var(--muted));
+}
+
+/*
+ * X3 (Phase X, 2026-11-12) — document-management internals: the view
+ * toggle strip reads as decorated chrome (the tabs-card inset pattern)
+ * and the file rows answer the pointer with the V3 wash (the same recipe
+ * the hierarchy rows use; the app's own hover background is replaced by
+ * the token-derived wash at higher specificity — same semantics, better
+ * recipe). The parked-OKF banner keeps its semantic warning colour: a
+ * status surface is not decoration territory.
+ */
+
+html[data-visual='on'] .genie-living-intelligence .admin-dashboard .admin-documents__view-toggle {
+  box-shadow: 0 1px 0 color-mix(in srgb, var(--accent) 16%, transparent) inset;
+}
+
+html[data-visual='on'] .genie-living-intelligence .admin-dashboard tr.document-row {
+  transition: background-color 0.15s ease;
+}
+
+html[data-visual='on'] .genie-living-intelligence .admin-dashboard tr.document-row:hover {
+  /* The hierarchy-row recipe verbatim (6% into transparent + the ease) —
+     the comment once claimed parity the values did not carry. */
+  background-color: color-mix(in srgb, var(--accent) 6%, transparent);
+}
+
+/*
+ * X2 (Phase X, 2026-11-12) — the Testing Lab: the dialog shell and its
+ * content. The lab renders inside DsDialog -> DsModal, which TELEPORTS to
+ * body — the panes are never under .admin-dashboard, so these rules key on
+ * the INSTANCE GATE (David's ruling, extending V4): an admin-launched
+ * DsDialog instance carries class="genie-living-intelligence", which
+ * DsModal binds onto the teleported .ds-modal-backdrop root (a Teleport
+ * root does not forward fallthrough attrs on its own — Modal.vue does it
+ * explicitly). The dialog's PANEL gets the V4 dialog treatment (frost +
+ * top-lit wash), the four lab panes (.okf-headtest__pane - head, test,
+ * suites, ragas) and the RAGAS panel root (.okf-ragas) get the surface
+ * chrome, and the ragas pane header joins the display-family rule. The
+ * primitive stays ungated: a DsDialog without the class paints exactly as
+ * it did (chat included). The first cut of these rules was admin-scoped
+ * and could not match anything — the review caught it.
+ */
+
+html[data-visual='on'] .ds-modal-backdrop.genie-living-intelligence .ds-modal {
+  border: 1px solid var(--gli-frost-border);
+  background-image: linear-gradient(180deg, color-mix(in srgb, var(--accent) 5%, var(--surface)), var(--surface) 34%);
+}
+
+html[data-visual='on'] .ds-modal-backdrop.genie-living-intelligence .okf-headtest__pane,
+html[data-visual='on'] .ds-modal-backdrop.genie-living-intelligence .okf-ragas {
+  border: 1px solid var(--gli-frost-border);
+  background-image: linear-gradient(180deg, color-mix(in srgb, var(--accent) 4%, var(--surface)), var(--surface) 30%);
+}
+
+html[data-visual='on'] .ds-modal-backdrop.genie-living-intelligence .okf-ragas__pane-head {
+  font-family: var(--font-display);
+  letter-spacing: -0.01em;
 }

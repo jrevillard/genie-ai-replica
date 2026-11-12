@@ -14,6 +14,7 @@
   desktop, stacked with a Back-to-list affordance on narrow viewports. -->
 <template>
   <DsDialog
+    class="genie-living-intelligence"
     :visible="visible"
     :title="translate('chatbot.okfBrowser.title', 'Browse repository')"
     size="lg"

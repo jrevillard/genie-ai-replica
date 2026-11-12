@@ -2072,6 +2072,16 @@ export default {
         modeCHint: '用户故事 10.6 — 即将推出',
         title: '从源文件重新切分'
       },
+      rename: {
+        body: '重命名同时会重命名仓库的工作区图（`OKF_<name>_v<N>`）；内容、版本和审计记录不受影响。',
+        cancel: '取消',
+        confirm: '重命名',
+        conflict: '该名称已被此域中的另一个仓库使用。',
+        failed: '重命名失败',
+        nameLabel: '仓库名称',
+        namePlaceholder: '仓库名称',
+        title: '重命名仓库'
+      },
       save: '保存',
       saved: '已保存',
       saving: '保存中…',

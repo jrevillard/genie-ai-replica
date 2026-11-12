@@ -9,6 +9,7 @@
 -->
 <template>
   <DsDialog
+    class="genie-living-intelligence"
     :visible="visible"
     :title="translate('okf.versions.title', 'Versions')"
     size="lg"

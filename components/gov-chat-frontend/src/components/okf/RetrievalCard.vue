@@ -205,6 +205,7 @@
     <!-- BEFORE → AFTER: the posture is global and live within 30s, so the
          change is confirmed, never applied silently. -->
     <DsDialog
+      class="genie-living-intelligence"
       :visible="confirmOpen"
       :title="translate('okf.retrieval.confirmTitle', 'Change the retrieval posture?')"
       size="sm"

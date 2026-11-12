@@ -815,6 +815,7 @@
          run is never deletable (its button is disabled; the server still
          refuses with 409 as the backstop). -->
     <DsDialog
+      class="genie-living-intelligence"
       :visible="runDeleteAsk !== null"
       :title="translate('okf.ragas.runDelete.title', 'Delete run')"
       size="sm"
@@ -839,6 +840,7 @@
          answers and confound the comparison). The result is a separate run
          row that names its judge. -->
     <DsDialog
+      class="genie-living-intelligence"
       :visible="rescoreAsk !== null"
       :title="translate('okf.ragas.rescore.title', 'Re-score with a judge')"
       size="sm"

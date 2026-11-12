@@ -3002,6 +3002,16 @@ export default {
         modeCHint: 'Story 10.6 — coming soon',
         title: 'Re-split from source'
       },
+      rename: {
+        body: 'Renaming also renames the repository’s workspace graphs (`OKF_<name>_v<N>`); content, versions and the audit trail are untouched.',
+        cancel: 'Cancel',
+        confirm: 'Rename',
+        conflict: 'That name is already used by another repository in this domain.',
+        failed: 'Rename failed',
+        nameLabel: 'Repository name',
+        namePlaceholder: 'Repository name',
+        title: 'Rename repository'
+      },
       save: 'Save',
       saved: 'Saved',
       saving: 'Saving…',

@@ -20,6 +20,7 @@
 -->
 <template>
   <DsDialog
+    class="genie-living-intelligence"
     :visible="visible"
     :title="translate('okf.ragas.guide.title', 'RAGAS benchmarking guide')"
     size="xl"

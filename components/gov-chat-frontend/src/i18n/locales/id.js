@@ -2128,6 +2128,16 @@ export default {
         modeCHint: 'Story 10.6 — segera hadir',
         title: 'Bagi ulang dari sumber'
       },
+      rename: {
+        body: 'Mengganti nama juga mengganti nama graf ruang kerja repositori (`OKF_<name>_v<N>`); konten, versi, dan jejak audit tidak berubah.',
+        cancel: 'Batal',
+        confirm: 'Ganti nama',
+        conflict: 'Nama itu sudah digunakan oleh repositori lain di domain ini.',
+        failed: 'Ganti nama gagal',
+        nameLabel: 'Nama repositori',
+        namePlaceholder: 'Nama repositori',
+        title: 'Ganti nama repositori'
+      },
       save: 'Simpan',
       saved: 'Tersimpan',
       saving: 'Menyimpan…',

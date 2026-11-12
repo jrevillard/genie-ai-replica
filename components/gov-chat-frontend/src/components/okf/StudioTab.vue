@@ -25,10 +25,20 @@
     <OkfNarrative kind="intro" />
 
     <nav class="okf-studio-tab__view-toggle" aria-label="View">
-      <DsButton :variant="view === 'dashboard' ? 'primary' : 'secondary'" small @click="view = 'dashboard'">
+      <DsButton
+        :variant="view === 'dashboard' ? 'primary' : 'secondary'"
+        small
+        data-test-id="studio-view-dashboard"
+        @click="view = 'dashboard'"
+      >
         {{ translate('okf.studio.view.dashboard', 'Dashboard') }}
       </DsButton>
-      <DsButton :variant="view === 'wizard' ? 'primary' : 'secondary'" small @click="openWizard">
+      <DsButton
+        :variant="view === 'wizard' ? 'primary' : 'secondary'"
+        small
+        data-test-id="studio-view-wizard"
+        @click="openWizard"
+      >
         {{ translate('okf.studio.view.wizard', 'Wizard') }}
       </DsButton>
     </nav>

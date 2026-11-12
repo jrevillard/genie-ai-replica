@@ -982,3 +982,21 @@ html[data-visual='on'] .genie-living-intelligence .admin-dashboard .okf-wizard__
  * DsTabs strip stay DS-native per the V4 ruling (primitives serve the
  * whole app) - the lab's CONTENT carries the layer.
  */
+
+/*
+ * X3 (Phase X, 2026-11-12) — document-management internals: the view
+ * toggle strip reads as decorated chrome (the tabs-card inset pattern)
+ * and the file rows answer the pointer with the V3 wash (the same recipe
+ * the hierarchy rows use; the app's own hover background is replaced by
+ * the token-derived wash at higher specificity — same semantics, better
+ * recipe). The parked-OKF banner keeps its semantic warning colour: a
+ * status surface is not decoration territory.
+ */
+
+html[data-visual='on'] .genie-living-intelligence .admin-dashboard .admin-documents__view-toggle {
+  box-shadow: 0 1px 0 color-mix(in srgb, var(--accent) 16%, transparent) inset;
+}
+
+html[data-visual='on'] .genie-living-intelligence .admin-dashboard tr.document-row:hover {
+  background-color: color-mix(in srgb, var(--accent) 7%, var(--surface));
+}

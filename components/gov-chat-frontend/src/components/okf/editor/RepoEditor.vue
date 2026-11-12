@@ -350,6 +350,7 @@
     <p v-if="sourceNote" class="okf-re__source-note" role="status">{{ sourceNote }}</p>
 
     <DsDialog
+      class="genie-living-intelligence"
       :visible="deleteAsk !== null"
       :title="translate('okf.editor.delete.title', 'Delete file')"
       size="sm"
@@ -371,6 +372,7 @@
     <!-- REPO BULK PII (David, 2026-09-12): confirmation for the header-bar
          Redact-all / Remove-all / Accept-all decision. -->
     <DsDialog
+      class="genie-living-intelligence"
       :visible="piiBulkAsk !== null"
       :title="piiBulkTitle"
       size="sm"

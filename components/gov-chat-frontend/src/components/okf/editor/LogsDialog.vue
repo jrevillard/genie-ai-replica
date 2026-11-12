@@ -7,6 +7,7 @@
   Shared by the editor shell (single implementation). -->
 <template>
   <DsDialog
+    class="genie-living-intelligence"
     :visible="visible"
     :title="translate('okf.logs.title', 'Activity log')"
     size="lg"

@@ -82,6 +82,7 @@
     <OkfStudioDashboard v-if="view === 'dashboard'" @resume="onResume" @new="onNew" />
 
     <DsDialog
+      class="genie-living-intelligence"
       :visible="createOpen"
       :title="translate('okf.create.title', 'New OKF repository')"
       size="sm"
@@ -210,6 +211,7 @@
     />
 
     <DsDialog
+      class="genie-living-intelligence"
       :visible="helpOpen"
       :title="translate('okf.studio.helpTitle', 'About OKF Studio')"
       :actions="[{ key: 'close', label: translate('common.close', 'Close'), variant: 'primary' }]"

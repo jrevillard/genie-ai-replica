@@ -1,5 +1,11 @@
 <template>
-  <DsDialog :visible="visible" title="Rename repository" size="sm" @close="$emit('close')">
+  <DsDialog
+    class="genie-living-intelligence"
+    :visible="visible"
+    title="Rename repository"
+    size="sm"
+    @close="$emit('close')"
+  >
     <p v-if="repo" class="okf-rename__hint">
       Renaming also renames the repository's workspace graphs (<code>OKF_&lt;name&gt;_v&lt;N&gt;</code>); content,
       versions and the audit trail are untouched.

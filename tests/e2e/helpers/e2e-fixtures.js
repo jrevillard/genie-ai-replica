@@ -28,7 +28,8 @@ const E2E_FIXTURES = [
     firstName: 'Test',
     lastName: 'Admin',
     password: 'TestAdmin123!',
-    realmRoles: ['admin']
+    realmRoles: ['admin', 'tools-admin'],
+    attributes: { okf_scopes: ['okf:t:general:admin'] }
   },
   {
     // No realm role: the non-admin half of the requireAdmin contract.

@@ -71,6 +71,16 @@ const TABS = [
   'models'
 ];
 
+// The dashboard's readiness contract, stated ONCE: the route's loading
+// spinner covers the dashboard until the initial loads settle. Every
+// /admin (re)entry waits here — three copies of this sequence drifted
+// once already.
+async function gotoAdminReady(page) {
+  await page.goto(new URL('/admin', BASE_URL).toString(), { waitUntil: 'domcontentloaded' });
+  await page.waitForSelector('[data-test-id="admin-dashboard"]', { timeout: 30000 });
+  await page.waitForSelector('.ds-spinner-wrapper--fixed', { state: 'detached', timeout: 30000 });
+}
+
 const audit = (label) => {
   const root = document.documentElement;
   const page = document.querySelector('.admin-page');
@@ -330,7 +340,9 @@ const audit = (label) => {
           });
           if (!res.ok) throw new Error(`seed create failed: HTTP ${res.status} ${(await res.text()).slice(0, 200)}`);
           const j = await res.json();
-          return j && (j.repo_id || (j.repo && j.repo.repo_id)) || null;
+          const id = j && (j.repo_id || (j.repo && j.repo.repo_id));
+          if (!id) throw new Error(`seed create returned no repo_id (2xx body: ${JSON.stringify(j).slice(0, 200)})`);
+          return id;
         },
         {
           bearer,
@@ -348,7 +360,7 @@ const audit = (label) => {
       // a management route (default-deny). The editor/lab captures SKIP
       // with that reason; every OTHER seed failure is a real failure and
       // still throws.
-      if (!/FORBIDDEN_SCOPE|HTTP 403/.test(err.message)) throw err;
+      if (!/FORBIDDEN_SCOPE/.test(err.message)) throw err;
       console.log(
         `${theme} interior-editor/lab: SKIPPED — the venue refuses repo ` +
           `creation to the test fixture (no okf scopes; management routes ` +
@@ -363,52 +375,81 @@ const audit = (label) => {
 
     if (repoId) {
       try {
-      // The dashboard mounted BEFORE the seed existed — reload the route so
-      // the lane list includes it, then navigate back in.
-      await page.goto(new URL('/admin', process.env.BASE_URL || 'https://localhost').toString(), {
-        waitUntil: 'domcontentloaded'
-      });
-      await page.waitForSelector('[data-test-id="admin-dashboard"]', { timeout: 30000 });
-      await page.waitForSelector('.ds-spinner-wrapper--fixed', { state: 'detached', timeout: 30000 });
-      await page.click('[data-test-id="ds-tab-studio"]');
-      await page.waitForSelector('[data-test-id="ds-tab-studio"].ds-tabs__btn--active', { timeout: 10000 });
-      await page.waitForSelector(seededCard, { timeout: 20000 });
-      await page.click(seededCard);
-      await page.waitForSelector('.okf-shell', { timeout: 20000 });
-      const editorData = await page.evaluate(audit, 'editor');
-      const editorName = `${theme}-interior-editor`;
-      const editorFile = path.join(OUT_DIR, `${editorName}.png`);
-      await page.screenshot({ path: editorFile, fullPage: false, animations: 'disabled' });
-      fs.writeFileSync(path.join(OUT_DIR, `${editorName}.audit.json`), JSON.stringify(editorData, null, 2));
-      results[editorName] = editorFile;
-      console.log(`${editorName}: ${editorFile}`);
+        // The dashboard mounted BEFORE the seed existed — reload the route so
+        // the lane list includes it, then navigate back in.
+        await gotoAdminReady(page);
+        await page.click('[data-test-id="ds-tab-studio"]');
+        await page.waitForSelector('[data-test-id="ds-tab-studio"].ds-tabs__btn--active', { timeout: 10000 });
+        await page.waitForSelector(seededCard, { timeout: 20000 });
+        await page.click(seededCard);
+        // onResume lands the repo on the WIZARD sub-tab (the intended
+        // landing); the editor frame is the shell's other sub-tab — the
+        // DsTabs primitive's own handles switch to it.
+        await page.click('[data-test-id="ds-tab-editor"]');
+        await page.waitForSelector('.okf-shell', { timeout: 20000 });
+        // The X1 chrome asserted, not just photographed: the editor frame's
+        // top-lit wash is a background-image gradient — the same computed
+        // proof the page-title rule uses.
+        const shellChrome = await page.evaluate(() => {
+          const el = document.querySelector('.okf-shell');
+          return el ? /gradient/i.test(getComputedStyle(el).backgroundImage) : false;
+        });
+        if (!shellChrome) {
+          throw new Error(
+            `capture-admin ${theme} editor: .okf-shell carries no gradient ` +
+              `background-image — the X1 chrome is not painting.`
+          );
+        }
+        const editorData = await page.evaluate(audit, 'editor');
+        const editorName = `${theme}-interior-editor`;
+        const editorFile = path.join(OUT_DIR, `${editorName}.png`);
+        await page.screenshot({ path: editorFile, fullPage: false, animations: 'disabled' });
+        fs.writeFileSync(path.join(OUT_DIR, `${editorName}.audit.json`), JSON.stringify(editorData, null, 2));
+        results[editorName] = editorFile;
+        console.log(`${editorName}: ${editorFile}`);
 
-      await page.click('[data-test-id="repo-editor-lab-open"]');
-      await page.waitForSelector('.okf-headtest__tabs', { timeout: 20000 });
-      const labData = await page.evaluate(audit, 'lab');
-      const labName = `${theme}-interior-lab`;
-      const labFile = path.join(OUT_DIR, `${labName}.png`);
-      await page.screenshot({ path: labFile, fullPage: false, animations: 'disabled' });
-      fs.writeFileSync(path.join(OUT_DIR, `${labName}.audit.json`), JSON.stringify(labData, null, 2));
-      results[labName] = labFile;
-      console.log(`${labName}: ${labFile}`);
+        await page.click('[data-test-id="repo-editor-lab-open"]');
+        await page.waitForSelector('.okf-headtest__tabs', { timeout: 20000 });
+        // The lab's pane chrome paints through the INSTANCE GATE (the
+        // teleported backdrop carries the class) — asserted, or a silent
+        // unpainted lab would photograph as green.
+        const labChrome = await page.evaluate(() => {
+          const el = document.querySelector('.okf-headtest__pane');
+          return el ? /gradient/i.test(getComputedStyle(el).backgroundImage) : false;
+        });
+        if (!labChrome) {
+          throw new Error(
+            `capture-admin ${theme} lab: .okf-headtest__pane carries no ` +
+              `gradient background-image — the instance gate is not ` +
+              `reaching the teleported dialog.`
+          );
+        }
+        const labData = await page.evaluate(audit, 'lab');
+        const labName = `${theme}-interior-lab`;
+        const labFile = path.join(OUT_DIR, `${labName}.png`);
+        await page.screenshot({ path: labFile, fullPage: false, animations: 'disabled' });
+        fs.writeFileSync(path.join(OUT_DIR, `${labName}.audit.json`), JSON.stringify(labData, null, 2));
+        results[labName] = labFile;
+        console.log(`${labName}: ${labFile}`);
 
-      await page.click('[data-test-id="ds-modal-close"]');
-      await page.waitForSelector('.okf-headtest__tabs', { state: 'detached', timeout: 10000 });
-    } finally {
-      await page.evaluate(
-        async ({ bearer: b, id }) => {
-          const res = await fetch(`/api/okf/repos/${encodeURIComponent(id)}`, {
-            method: 'DELETE',
-            headers: { Authorization: `Bearer ${b}` }
-          });
-          if (!res.ok && res.status !== 404) {
-            throw new Error(`seed cleanup FAILED: HTTP ${res.status} for ${id} — the leftover repo must be removed by hand`);
-          }
-        },
-        { bearer, id: repoId }
-      );
-    }
+        await page.click('[data-test-id="ds-modal-close"]');
+        await page.waitForSelector('.okf-headtest__tabs', { state: 'detached', timeout: 10000 });
+      } finally {
+        await page.evaluate(
+          async ({ bearer: b, id }) => {
+            const res = await fetch(`/api/okf/repos/${encodeURIComponent(id)}`, {
+              method: 'DELETE',
+              headers: { Authorization: `Bearer ${b}` }
+            });
+            if (!res.ok && res.status !== 404) {
+              throw new Error(
+                `seed cleanup FAILED: HTTP ${res.status} for ${id} — the leftover repo must be removed by hand`
+              );
+            }
+          },
+          { bearer, id: repoId }
+        );
+      }
     }
 
     // -- the layer-off variant ---------------------------------------------

@@ -1370,7 +1370,7 @@ export default {
     unsavedChanges:
       'Vous avez des modifications non enregistrées. Êtes-vous sûr de vouloir commencer une nouvelle discussion ?',
     whatCanIHelp: "Comment {brandwordmark} peut-il vous aider aujourd'hui ?",
-    quickHelpSubtitle: 'Votre portail vers des services publics intelligents.',
+    quickHelpSubtitle: 'Posez des questions sur le Coran, le Hadith, la Tafsir, le Fiqh et plus encore.',
 
     queryContext: 'Contexte de la requête',
     contextAdded: 'Contexte ajouté à votre requête',

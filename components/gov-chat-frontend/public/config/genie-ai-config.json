@@ -340,26 +340,31 @@
     "theme"
   ],
   "app": {
-    "title": "GENIE.AI",
+    "title": "NAAT Administrator",
     "icon": {
       "type": "file",
-      "value": "/config/logo-genie-ai.jpeg"
+      "value": "/config/naat-logo-mark.svg"
     },
     "splash": {
       "type": "file",
-      "value": "/config/splash-living-intelligence.png"
+      "value": "/config/splash-naat.png"
     }
   },
   "theme": {
-    "brandColor": "#4071cb",
+    "brandColor": "#609E2F",
     "visual": {
       "enabled": true,
       "assets": {
-        "hero": "/config/genie-visual/assets/genie-hero-transparent.png",
-        "waves": "/config/genie-visual/assets/genie-bottom-waves.svg",
-        "mesh": "/config/genie-visual/assets/genie-dot-mesh.svg",
-        "corner": "/config/genie-visual/assets/genie-corner-network.svg"
+        "hero": "/config/genie-visual/assets/naat-hero.svg",
+        "waves": "/config/genie-visual/assets/naat-bottom-waves.svg",
+        "mesh": "/config/genie-visual/assets/naat-dot-mesh.svg",
+        "corner": "/config/genie-visual/assets/naat-corner.svg"
       }
+    },
+    "bg": "#f6f8f3",
+    "navbar": {
+      "background": "#3E7A23",
+      "text": "#ffffff"
     }
   },
   "features": {

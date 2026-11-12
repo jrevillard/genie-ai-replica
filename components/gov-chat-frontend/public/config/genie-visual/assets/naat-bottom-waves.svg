@@ -1,0 +1,19 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1800" height="520" viewBox="0 0 1800 520" fill="none">
+<defs>
+<linearGradient id="w1" x1="0" y1="520" x2="1800" y2="300" gradientUnits="userSpaceOnUse">
+<stop stop-color="#2F6B1E" stop-opacity=".05"/><stop offset=".4" stop-color="#609E2F" stop-opacity=".32"/>
+<stop offset=".78" stop-color="#3E7A23" stop-opacity=".44"/><stop offset="1" stop-color="#7AB648" stop-opacity=".25"/>
+</linearGradient>
+<linearGradient id="w2" x1="100" y1="440" x2="1700" y2="380" gradientUnits="userSpaceOnUse">
+<stop stop-color="#609E2F" stop-opacity="0"/><stop offset=".5" stop-color="#8CC63F" stop-opacity=".28"/>
+<stop offset="1" stop-color="#C9A227" stop-opacity=".20"/>
+</linearGradient>
+<linearGradient id="w3" x1="0" y1="500" x2="1800" y2="460" gradientUnits="userSpaceOnUse">
+<stop stop-color="#C9A227" stop-opacity=".04"/><stop offset=".6" stop-color="#609E2F" stop-opacity=".22"/>
+<stop offset="1" stop-color="#2F6B1E" stop-opacity=".30"/>
+</linearGradient>
+</defs>
+<path d="M0 430C300 370 600 350 900 390s700 130 900 60v160H0Z" fill="url(#w1)"/>
+<path d="M0 480c350-70 700-60 1000-10s600 60 800 10v120H0Z" fill="url(#w2)"/>
+<path d="M0 505c400-40 800-30 1200 5s450 30 600 10v60H0Z" fill="url(#w3)"/>
+</svg>

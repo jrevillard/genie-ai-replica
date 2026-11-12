@@ -1366,7 +1366,7 @@ export default {
     clearContext: 'Hlakola nalane mme o qale moqoqo o motjha',
     unsavedChanges: 'O na le diphetoho tse sa bolokoang. Na o na le bonnete ba hore o batla ho qala moqoqo o motjha?',
     whatCanIHelp: 'Joang {brandwordmark} e ka thusa kajeno?',
-    quickHelpSubtitle: 'Khoo ea hao ho ea litshebeletso tsa sebohofengi tse ntle tsa bohlale.',
+    quickHelpSubtitle: 'Boithopo ka al-Qur’an, al-Hadith, al-Tafsir, al-Fiqh le likatšo e fela.',
 
     queryContext: 'Mongolo wa Potso',
     contextAdded: 'Tlhaloso e ekeditswe potsong ya hao',

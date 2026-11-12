@@ -251,3 +251,6 @@ sealed-secrets-key*.json
 flux-git-auth.json
 # Operator-provided HuggingFace PATs (local file, never committed)
 HF-Tokens.txt
+
+# local ansible-rendered GPU-node smoke configs (deploy-time artifacts)
+configs/nginx-gpu/

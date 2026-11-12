@@ -700,7 +700,10 @@ html[data-visual='on'] .genie-living-intelligence .admin-dashboard > .dashboard 
    fading into the surface within a third of the card's height. */
 html[data-visual='on'] .genie-living-intelligence .admin-dashboard .stat-card,
 html[data-visual='on'] .genie-living-intelligence .admin-dashboard .tabs-card,
-html[data-visual='on'] .genie-living-intelligence .admin-dashboard .dashboard-card {
+html[data-visual='on'] .genie-living-intelligence .admin-dashboard .dashboard-card,
+html[data-visual='on'] .genie-living-intelligence .admin-dashboard .okf-dashboard__card,
+html[data-visual='on'] .genie-living-intelligence .admin-dashboard .okf-studio-tab__retrieval,
+html[data-visual='on'] .genie-living-intelligence .admin-dashboard .okf-studio-tab__debt {
   border: 1px solid var(--gli-frost-border);
   background-image: linear-gradient(180deg, color-mix(in srgb, var(--accent) 5%, var(--surface)), var(--surface) 34%);
 }
@@ -709,7 +712,8 @@ html[data-visual='on'] .genie-living-intelligence .admin-dashboard .dashboard-ca
    the welcome heading and the navbar name, theme-adaptive via the same
    tokens, with the accent fallback for renderers without clip. Gated:
    identity is the brand's own class; this is decoration. */
-html[data-visual='on'] .genie-living-intelligence .admin-dashboard .page-title {
+html[data-visual='on'] .genie-living-intelligence .admin-dashboard .page-title,
+html[data-visual='on'] .genie-living-intelligence .admin-dashboard .okf-studio-tab__title {
   font-family: var(--font-display);
   letter-spacing: -0.02em;
   background-image: linear-gradient(
@@ -784,7 +788,8 @@ html[data-visual='on'] .genie-living-intelligence .admin-dashboard .stat-card--u
 
 /* Section + card headers get the display family. */
 html[data-visual='on'] .genie-living-intelligence .admin-dashboard .card-title,
-html[data-visual='on'] .genie-living-intelligence .admin-dashboard .section-title {
+html[data-visual='on'] .genie-living-intelligence .admin-dashboard .section-title,
+html[data-visual='on'] .genie-living-intelligence .admin-dashboard .okf-dashboard__lane-header h4 {
   font-family: var(--font-display);
   letter-spacing: -0.01em;
 }
@@ -896,4 +901,37 @@ html[data-visual='on'] .genie-living-intelligence .admin-dashboard .main::-webki
 
 html[data-visual='on'] .genie-living-intelligence .admin-dashboard .main::-webkit-scrollbar-track {
   background: transparent;
+}
+
+/*
+ * W1 (Phase W, 2026-11-12) — the OKF Studio tab's inner surfaces join the
+ * decorated card family by EXTENDING the shared recipes above (the chrome
+ * rule now carries the swimlane cards and the two expert panels; the studio
+ * title shares the page-title ramp and the V3 display-family rule covers
+ * the lane headers) — one recipe per treatment, no studio-private copies.
+ * What remains studio-specific is the INTERACTION layer: the repo cards'
+ * hover lift must keep the card's own designed accent hover border (the
+ * base rule's border shorthand would otherwise out-cascade the app's
+ * :hover border-color at higher specificity) and the keyboard ring the V6
+ * pattern gives every decorated interactive surface. Colour and shadow
+ * only; layer off = the studio paints exactly as it did. The studio's
+ * DsModal dialogs stay ungated per the V4 ruling (the primitive serves the
+ * whole app — ConceptBrowserDialog included).
+ */
+
+html[data-visual='on'] .genie-living-intelligence .admin-dashboard .okf-dashboard__card {
+  transition:
+    transform 0.15s ease,
+    box-shadow 0.15s ease;
+}
+
+html[data-visual='on'] .genie-living-intelligence .admin-dashboard .okf-dashboard__card:hover {
+  transform: translateY(-1px);
+  border-color: var(--accent);
+  box-shadow: var(--shadow-md);
+}
+
+html[data-visual='on'] .genie-living-intelligence .admin-dashboard .okf-dashboard__card:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
 }

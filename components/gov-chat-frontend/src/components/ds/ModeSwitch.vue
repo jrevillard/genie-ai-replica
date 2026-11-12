@@ -8,8 +8,8 @@
     <button
       type="button"
       class="ds-mode-switch__btn"
-      :class="{ 'ds-mode-switch__btn--active': mode === 'basic' }"
-      :aria-pressed="mode === 'basic'"
+      :class="{ 'ds-mode-switch__btn--active': localMode === 'basic' }"
+      :aria-pressed="localMode === 'basic'"
       @click="set('basic')"
     >
       {{ basicLabel }}
@@ -17,8 +17,8 @@
     <button
       type="button"
       class="ds-mode-switch__btn"
-      :class="{ 'ds-mode-switch__btn--active': mode === 'expert' }"
-      :aria-pressed="mode === 'expert'"
+      :class="{ 'ds-mode-switch__btn--active': localMode === 'expert' }"
+      :aria-pressed="localMode === 'expert'"
       @click="set('expert')"
     >
       {{ expertLabel }}
@@ -97,9 +97,15 @@ export default {
   font-weight: 500;
 }
 .ds-mode-switch__btn--active {
-  background: var(--surface);
+  /* The toggle must READ as toggled (David, 2026-11-12: the surface+shadow
+     pill was too subtle against the near-identical track). The accent-muted
+     fill + accent ring pairing is the same one the help button's hover
+     sanctions; tokens flip it correctly in both themes. No weight change —
+     a semibold active label resizes both pills on every flip and shifts
+     the Expert click target. */
+  background: var(--accent-muted);
   color: var(--accent);
-  box-shadow: var(--shadow-sm);
+  box-shadow: inset 0 0 0 1px var(--accent);
 }
 .ds-mode-switch__help {
   border: 0;

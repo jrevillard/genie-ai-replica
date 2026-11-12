@@ -35,12 +35,19 @@
  *
  * Usage:
  *   NODE_PATH=<repo>/node_modules BASE_URL=https://localhost node tests/e2e/capture-admin.js [--theme light|dark]
+ *
+ * BASE_URL names the venue, as it does for the whole suite: the address
+ * itself comes from the ONE definition (helpers/base-url.js).
  */
 const fs = require('fs');
 const path = require('path');
 const { chromium } = require('playwright');
 const { loginViaUI, TEST_ADMIN_USER } = require('./helpers/chatbot');
 const { venueLaunchArgs } = require('./helpers/venue-launch-args');
+// The venue's edge: ONE definition, the credential-free module — this
+// script reads the edge and no credential, and a second copy of the
+// address here would be a second definition of the venue.
+const { BASE_URL } = require('./helpers/base-url');
 
 const OUT_DIR = path.join(__dirname, '..', '..', 'artifacts', 'admin-look');
 const VIEWPORT = { width: 1775, height: 886 }; // the reference viewport
@@ -103,7 +110,7 @@ const audit = (label) => {
     await page.waitForSelector('[data-testid="quick-help-overlay"]', { timeout: 30000 });
     await page.waitForSelector('[data-test-id="splash-screen"]', { state: 'detached', timeout: 15000 });
 
-    await page.goto(new URL('/admin', process.env.BASE_URL || 'https://localhost').toString(), {
+    await page.goto(new URL('/admin', BASE_URL).toString(), {
       waitUntil: 'domcontentloaded'
     });
     await page.waitForSelector('[data-test-id="admin-dashboard"]', { timeout: 30000 });
@@ -286,7 +293,7 @@ const audit = (label) => {
     await page.route('**/config/genie-ai-config.json', (route) =>
       route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(offConfig) })
     );
-    await page.goto(new URL('/admin', process.env.BASE_URL || 'https://localhost').toString(), {
+    await page.goto(new URL('/admin', BASE_URL).toString(), {
       waitUntil: 'domcontentloaded'
     });
     await page.waitForSelector('[data-test-id="admin-dashboard"]', { timeout: 30000 });

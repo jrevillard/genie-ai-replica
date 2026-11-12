@@ -38,8 +38,16 @@ const REPO_ROOT = path.resolve(__dirname, '..', '..', '..');
 // evidence this path files from.
 const DEFAULT_REPORT_PATH = path.join(REPO_ROOT, 'reports', 'playwright-report.json');
 
-const TESTS_E2E_ROOT = 'tests/e2e';
 const { VENUE_IP_ENV, VENUE_HOST_ENV } = require('../helpers/venue-launch-args');
+// The e2e tree's root: a path whose prefix is INSIDE it is a different
+// file that happens to carry another one's path as its tail.
+const TESTS_E2E_ROOT = 'tests/e2e';
+// The shape of a spec file's NAME, one place: the report's suite titles
+// carry it, the walk looks for it, and the bare-name rule recognises it.
+const SPEC_FILE_RE = /\.(?:spec|test)\.[cm]?[jt]sx?$/;
+// The venue's edge: ONE definition, credential-free — the same address the
+// run used, so the issue's reproduce command reproduces the run.
+const { BASE_URL } = require('../helpers/base-url');
 const GITLAB_HOST = process.env.GITLAB_HOST || 'opensource.unicc.org';
 const GITLAB_PROJECT_ID = process.env.GITLAB_PROJECT_ID || '90';
 
@@ -105,7 +113,7 @@ function collectTests(suites, inheritedFile, describePath = [], out = []) {
     const file = suite.file || inheritedFile;
     // The file-level suite carries the spec file's own path as its title;
     // that is not a describe block, and repeating it would read as one.
-    const isFileSuite = suite.title && /\.(?:spec|test)\.[cm]?[jt]sx?$/.test(suite.title);
+    const isFileSuite = suite.title && SPEC_FILE_RE.test(suite.title);
     const titlePath = suite.title && !isFileSuite ? [...describePath, suite.title] : describePath;
     for (const spec of suite.specs || []) {
       for (const test of spec.tests || []) {
@@ -158,8 +166,8 @@ function glab(args) {
  * of its own bookkeeping (it would leave the failures unfiled, which is the
  * silence this path exists to end). The issue LIST is a plain paginated
  * read, and the matching happens locally: an issue that already tracks a
- * spec file mentions the file's repository path in its title or in its
- * description.
+ * spec file carries the file's repository path in its title, or the
+ * script's own "- spec file: `path`" marker in its description.
  *
  * A failed READ is fatal (unlike a failed write): without the open-issue
  * list every failing file would get a NEW issue, and a flood is exactly
@@ -184,25 +192,142 @@ function fetchOpenIssues() {
 }
 
 /**
- * Does this text mention the spec file's path?
- *
- * The path is matched as a PATH TOKEN — a maximal run of path characters —
- * so it is found whether the issue names the file by its repository path or
- * by an absolute path or a URL that ends with it. A token that ends with
- * the file's path but whose PREFIX is itself inside the e2e tree is a
- * DIFFERENT file that happens to carry this one's path as its tail
- * (`tests/e2e/helpers/tests/e2e/theme-runtime-config.spec.js` is not the
- * file `tests/e2e/theme-runtime-config.spec.js`): such a token is refused,
- * or one file's issue swallows another's failure.
+ * The spec paths a text names — the tokens that end in a spec file
+ * extension.
  */
-function mentionsPath(text, file) {
-  const tokens = text.match(/[A-Za-z0-9_./-]+/g) || [];
-  return tokens.some((token) => {
-    if (token === file) return true;
-    if (!token.endsWith(`/${file}`)) return false;
-    const prefix = token.slice(0, token.length - file.length - 1);
-    return !(prefix === TESTS_E2E_ROOT || prefix.includes(`${TESTS_E2E_ROOT}/`));
-  });
+function specPathsIn(text) {
+  const tokens = String(text || '').match(/[A-Za-z0-9_./-]*\.(?:spec|test)\.[cm]?[jt]sx?/g) || [];
+  return tokens.map((token) => token.replace(/^\.\//, ''));
+}
+
+/**
+ * Does this token name THIS file?
+ *
+ * The token is compared as a path: it is the file's repository path, or
+ * a path that ENDS with it (an absolute path, or the file's URL in a
+ * tracker link) — but not a path whose prefix is inside the e2e tree:
+ * `tests/e2e/helpers/tests/e2e/a.spec.js` is a DIFFERENT file that
+ * happens to carry this one's path as its tail.
+ */
+function namesThisFile(token, file) {
+  if (token === file) return true;
+  // The path relative to the e2e tree: 'helpers/a.spec.js'.
+  const relative = file.startsWith(`${TESTS_E2E_ROOT}/`) ? file.slice(TESTS_E2E_ROOT.length + 1) : null;
+  if (relative && token === relative) return true;
+  if (!token.endsWith(`/${file}`)) return false;
+  const prefix = token.slice(0, token.length - file.length - 1);
+  return !(prefix === TESTS_E2E_ROOT || prefix.includes(`${TESTS_E2E_ROOT}/`));
+}
+
+/**
+ * The spec-file names that live OUTSIDE the e2e tree.
+ *
+ * A bare file name in a title is ambiguous: it may name a file of the
+ * e2e tree, or a file of another tree (a frontend unit test, a
+ * config-validator case). The second reading must not be mistaken for
+ * the first: a title that names an e2e spec AND a frontend test by its
+ * bare name would stop being DEDICATED to the e2e file — and the
+ * failure path would file a second issue for a file that already has
+ * one.
+ *
+ * The set is built ONCE (the walk costs ~0.1 s in a branch worktree and
+ * ~0.8 s in a checkout that carries sibling worktrees' copies) and only
+ * when a bare name is actually met, which is at most once per title.
+ */
+const otherTreeNamesByRoot = new Map();
+
+function namesOutsideE2eTree(token, root = REPO_ROOT) {
+  if (!otherTreeNamesByRoot.has(root)) {
+    const otherTreeNames = new Set();
+    const walk = (dir) => {
+      let entries;
+      try {
+        entries = fs.readdirSync(dir, { withFileTypes: true });
+      } catch {
+        return;
+      }
+      for (const entry of entries) {
+        if (entry.name === 'node_modules' || entry.name === '.git') continue;
+        const full = path.join(dir, entry.name);
+        if (entry.isDirectory()) {
+          // The e2e tree is this tree's own business; only the OTHER
+          // trees' names can make a bare name ambiguous. EVERY copy of
+          // it is this tree's business — a checkout that carries sibling
+          // worktrees holds a full copy of tests/e2e under each of
+          // them, and their spec names would make this tree's OWN bare
+          // names look like another tree's files.
+          const rel = path.relative(root, full).split(path.sep);
+          if (rel.length >= 2 && rel[rel.length - 2].toLowerCase() === 'tests' && rel[rel.length - 1].toLowerCase() === 'e2e') continue;
+          walk(full);
+        } else if (SPEC_FILE_RE.test(entry.name)) {
+          otherTreeNames.add(entry.name);
+        }
+      }
+    };
+    walk(root);
+    otherTreeNamesByRoot.set(root, otherTreeNames);
+  }
+  return otherTreeNamesByRoot.get(root).has(token);
+}
+
+/**
+ * Does this path token name a file of the e2e tree?
+ *
+ * The tokens come from a title, so they may be written three ways: the
+ * repository path, an absolute path or a tracker URL (all of which carry
+ * the tree's root), or relative to the tree's root ('helpers/a.spec.js').
+ * A path of ANOTHER tree (a frontend unit test) is not this tree's
+ * business — the failure path does not file it.
+ *
+ * The relative spelling is recognised by its FIRST segment: it is a
+ * directory of the e2e tree.
+ */
+function isE2ePath(token, root = REPO_ROOT) {
+  if (token.includes(`${TESTS_E2E_ROOT}/`)) return true;
+  const first = token.split('/')[0];
+  if (first === token) {
+    // A bare spec file name is this tree's path — whether it still
+    // exists or not: a file that was RENAMED must not drop out of the
+    // comparison (that would turn a multi-file title into a dedication).
+    //
+    // UNLESS the name is a file of ANOTHER tree: that name is not this
+    // tree's, and counting it would make a title that names an e2e file
+    // AND a frontend test look like a group instead of a dedication.
+    return SPEC_FILE_RE.test(token) && !namesOutsideE2eTree(token, root);
+  }
+  return fs.existsSync(path.join(root, TESTS_E2E_ROOT, first));
+}
+
+/**
+ * Is this issue DEDICATED to the file — does its title name that file and
+ * no other?
+ *
+ * A title that names SEVERAL spec files tracks a GROUP: the wave issue
+ * that touched a dozen of them. Such an issue must not absorb their
+ * failures — a failure on one of them still gets an issue of its own, or
+ * the file shows red with nothing pointing at it.
+ */
+function titleIsDedicatedTo(title, file, root = REPO_ROOT) {
+  // Only the paths of the tree this path covers count: a title that
+  // also names a FRONTEND test (a different tree, a different failure
+  // path) is still dedicated to this e2e file.
+  const paths = specPathsIn(title).filter((token) => isE2ePath(token, root));
+  if (paths.length === 0) return false;
+  // EVERY path the title names must name THIS file — under the
+  // repository path, an absolute path or a tracker URL. A title that
+  // names another file as well is an umbrella, whatever it says about
+  // this one.
+  return paths.every((path) => namesThisFile(path, file));
+}
+
+/**
+ * The marker this script writes in an issue body to bind that issue to
+ * one spec file. ONE spelling, used both to write it and to read it back:
+ * a drift between the two would silently degrade the dedupe to
+ * title-only.
+ */
+function specFileMarker(file) {
+  return `- spec file: \`${file}\``;
 }
 
 /**
@@ -210,17 +335,30 @@ function mentionsPath(text, file) {
  *
  * An issue that already tracks the failure must NOT be duplicated: the run
  * comments on it instead, and a spec file nobody tracks yet gets its own
- * issue. The file's own dedicated issue (the one this script files, whose
- * title carries the path) wins over an umbrella that merely mentions the
- * file.
+ * issue.
+ *
+ * A match must be DEDICATED to the file, and there are exactly two places
+ * where such a dedication can be found:
+ *
+ * - the TITLE names that file and no other — the dedicated issue this
+ *   script files, and the dedicated issue a human filed;
+ * - the DESCRIPTION carries the marker this script writes
+ *   ("- spec file: `path`") — the same dedicated issue.
+ *
+ * A path that appears in either place WITHOUT being dedicated is NOT a
+ * match: an umbrella issue that LISTS several spec paths (a wave that
+ * touched a dozen of them) would otherwise absorb every one of their
+ * failures, and the failure would never get an issue of its own — the
+ * tracker would show the file as red with nothing pointing at it.
  */
 function findTrackedIssue(file, openIssues) {
-  const matches = openIssues.filter((issue) =>
-    mentionsPath(`${issue.title}\n${issue.description || ''}`, file)
-  );
-  if (matches.length === 0) return null;
-  const dedicated = matches.find((issue) => mentionsPath(issue.title, file));
-  return dedicated || matches[0];
+  const marker = specFileMarker(file);
+  // The dedicated TITLE wins: an issue matched only by the marker is
+  // the same file's issue too, but the one whose title says so is the
+  // one a reader lands on.
+  const dedicated = openIssues.filter((issue) => titleIsDedicatedTo(issue.title, file));
+  if (dedicated.length) return dedicated[0];
+  return openIssues.find((issue) => (issue.description || '').includes(marker)) || null;
 }
 
 /**
@@ -242,6 +380,24 @@ function reproduceCommand(venue) {
 /**
  * The issue body of a spec file nobody tracks yet.
  */
+/**
+ * The failures grouped by the spec FILE they belong to.
+ *
+ * One issue per spec FILE: the file is the unit an owner fixes, and a
+ * file-level title keeps the dedupe stable across runs. Two failures in
+ * the same file are ONE issue with two entries.
+ */
+function groupFailuresByFile(failed) {
+  const byFile = new Map();
+  for (const entry of failed) {
+    const list = byFile.get(entry.file) || [];
+    const result = (entry.test.results || [])[entry.test.results.length - 1];
+    list.push({ title: entry.title, error: errorText(result) });
+    byFile.set(entry.file, list);
+  }
+  return byFile;
+}
+
 function issueBody(file, failures, venue, runStamp) {
   return [
     'Filed by the local e2e run (`tests/e2e/run/run-local-e2e.sh`).',
@@ -254,7 +410,7 @@ function issueBody(file, failures, venue, runStamp) {
         ]
       : []),
     `- run: ${runStamp}`,
-    `- spec file: \`${file}\``,
+    specFileMarker(file),
     `- failing tests: ${failures.length}`,
     '',
     '## Failures',
@@ -369,7 +525,7 @@ function main() {
   // hand re-run in a fresh shell (no BASE_URL exported) would otherwise
   // file issues naming https://localhost with a reproduce command that
   // reproduces nothing.
-  const venue = venueValue || process.env.BASE_URL || 'https://localhost';
+  const venue = venueValue || BASE_URL;
   const runStamp = report.stats && report.stats.startTime ? report.stats.startTime : new Date().toISOString();
 
   const tests = collectTests(report.suites);
@@ -406,15 +562,7 @@ function main() {
     return;
   }
 
-  // One issue per spec FILE: the file is the unit an owner fixes, and a
-  // file-level title keeps the dedupe stable across runs.
-  const byFile = new Map();
-  for (const entry of failed) {
-    const list = byFile.get(entry.file) || [];
-    const result = (entry.test.results || [])[entry.test.results.length - 1];
-    list.push({ title: entry.title, error: errorText(result) });
-    byFile.set(entry.file, list);
-  }
+  const byFile = groupFailuresByFile(failed);
 
   process.stdout.write(`\nfailing spec files: ${byFile.size}\n`);
   if (!fileIssues) {
@@ -494,4 +642,11 @@ if (require.main === module) {
 
 // Exposed for the unit spec: the dedupe rule and the refusal wording are
 // behaviour, and behaviour is tested, not trusted.
-module.exports = { mentionsPath, trackerReason };
+module.exports = {
+  findTrackedIssue,
+  specPathsIn,
+  titleIsDedicatedTo,
+  trackerReason,
+  groupFailuresByFile,
+  issueBody,
+};

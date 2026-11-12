@@ -36,11 +36,28 @@ function fakeTransport(answers) {
   // The realm probes authenticate with an admin token; the fake transport
   // answers the API calls, so the mint is faked with it.
   auth.getAdminToken = async () => 'fake-admin-token';
-  auth.request = (method, path) => {
-    calls.push(`${method} ${path}`);
+  auth.request = (method, path, options) => {
+    calls.push({ method, path, options });
     const answer = answers.shift();
     if (!answer) return Promise.reject(new Error(`fake transport: no answer for ${method} ${path}`));
     if (answer.throws) return Promise.reject(answer.throws);
+    // The real transport (helpers/auth.js) parses the body as JSON
+    // unless the caller asks for it raw, and REJECTS a non-JSON body.
+    // The fake does the same, so a probe that forgets `raw: true` fails
+    // the way the venue would fail — instead of quietly reading a body
+    // the real transport would have refused.
+    if (!(options && options.raw) && typeof answer.data === 'string') {
+      try {
+        return Promise.resolve({ status: answer.status, data: JSON.parse(answer.data), headers: {} });
+      } catch {
+        const error = new Error(
+          `${method} ${path} returned a non-JSON body (HTTP ${answer.status}): ${answer.data.slice(0, 200)}`
+        );
+        error.nonJsonBody = true;
+        error.status = answer.status;
+        return Promise.reject(error);
+      }
+    }
     return Promise.resolve({ status: answer.status, data: answer.data, headers: {} });
   };
   return calls;

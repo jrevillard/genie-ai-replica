@@ -56,6 +56,9 @@
 const { test, expect } = require('@playwright/test');
 const { openWelcomeScreen } = require('../helpers/welcome');
 const { runRouteHandler } = require('../helpers/route');
+// The stream interception contract — no credential in it, so this spec
+// (which needs neither) never imports the credential module.
+const { STREAM_ROUTE, sseFulfill } = require('../helpers/stream-route');
 
 // The live hierarchy this spec serves. The category 'Civil Registry' exists and
 // names itself in ENGLISH; 'Taxes & Revenue' does not exist at all.
@@ -170,20 +173,23 @@ const STUB_BUTTONS = [
  * deployment's, untouched.
  */
 async function stubConfiguration(page) {
-  await page.route('**/config/genie-ai-config.json', async (route) => {
-    const response = await route.fetch();
-    const body = await response.json();
-    body.features = body.features || {};
-    body.features.chat = body.features.chat || {};
-    body.features.chat.quickHelp = body.features.chat.quickHelp || {};
-    body.features.chat.quickHelp.buttons = STUB_BUTTONS;
-    // Fulfil WITHOUT `response`: passing it would inherit the served
-    // document's `Content-Length` — a length that no longer matches the
-    // modified body, and Chromium's handling of the stale one is not
-    // ours to bet the spec on. `json` alone sets the status (200), the
-    // content type and a recomputed length.
-    await route.fulfill({ json: body });
-  });
+  await page.route(
+    '**/config/genie-ai-config.json',
+    runRouteHandler(page, async (route) => {
+      const response = await route.fetch();
+      const body = await response.json();
+      body.features = body.features || {};
+      body.features.chat = body.features.chat || {};
+      body.features.chat.quickHelp = body.features.chat.quickHelp || {};
+      body.features.chat.quickHelp.buttons = STUB_BUTTONS;
+      // Fulfil WITHOUT `response`: passing it would inherit the served
+      // document's `Content-Length` — a length that no longer matches the
+      // modified body, and Chromium's handling of the stale one is not
+      // ours to bet the spec on. `json` alone sets the status (200), the
+      // content type and a recomputed length.
+      await route.fulfill({ json: body });
+    })
+  );
 }
 
 /**
@@ -242,10 +248,16 @@ async function openWelcome(browser, { holdHierarchy = false } = {}) {
  */
 async function watchQueries(page) {
   let streamed = false;
-  await page.route('**/queries/stream**', async (route) => {
-    streamed = true;
-    await route.fulfill({ status: 200, contentType: 'text/event-stream', body: '' });
-  });
+  await page.route(
+    STREAM_ROUTE,
+    runRouteHandler(page, async (route) => {
+      streamed = true;
+      // The body stays empty on purpose: the watcher only records that a
+      // query went out, and a done frame would complete the turn and
+      // change what the spec observes.
+      await sseFulfill(route, '');
+    })
+  );
   return () => streamed;
 }
 

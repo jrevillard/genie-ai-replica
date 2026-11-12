@@ -38,7 +38,10 @@
  */
 const vm = require('vm');
 const auth = require('./auth');
-const { BASE_URL } = require('./chatbot');
+// The venue's edge from the credential-free module: import the module that
+// defines what you use — the chat helper this used to import is a module
+// this probe has no use for.
+const { BASE_URL } = require('./base-url');
 
 const RUNTIME_CONFIG_PATH = '/runtime/config.js';
 

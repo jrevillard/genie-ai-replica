@@ -12,17 +12,12 @@
  */
 
 const mockJwtVerify = jest.fn();
+// The shared jose mock (the decoder it provides is jose's own contract).
+const mockJose = require('../mocks/jose');
 jest.mock('jose', () => ({
+  ...mockJose,
   createRemoteJWKSet: jest.fn(() => jest.fn()),
-  jwtVerify: mockJwtVerify,
-  // The verifier reads a token's protected header with jose's own decoder.
-  decodeProtectedHeader: (token) => {
-    const header = JSON.parse(Buffer.from(token.split('.')[0], 'base64url').toString('utf8'));
-    if (typeof header !== 'object' || header === null || Array.isArray(header)) {
-      throw new TypeError('Invalid Compact JWS');
-    }
-    return header;
-  }
+  jwtVerify: mockJwtVerify
 }));
 
 // shared-lib only exists at Docker build time (same pattern as other backend tests).

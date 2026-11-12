@@ -29,20 +29,16 @@ let mockCreateRemoteJWKSet;
 let mockFetch;
 let mockAxiosGet;
 
+// The shared jose mock (the decoder it provides is jose's own contract).
+const mockJose = require('./mocks/jose');
+
 // Mock jose completely to avoid ESM issues
 jest.mock('jose', () => ({
   jwtVerify: (...args) => mockJwtVerify(...args),
   createRemoteJWKSet: (...args) => mockCreateRemoteJWKSet(...args),
-  // The real jose is ESM, so its decoder cannot be required here: this
-  // stand-in reads the protected header of a compact JWS the same way —
-  // and refuses a header that is not a plain object, as jose does.
-  decodeProtectedHeader: (token) => {
-    const header = JSON.parse(Buffer.from(token.split('.')[0], 'base64url').toString('utf8'));
-    if (typeof header !== 'object' || header === null || Array.isArray(header)) {
-      throw new TypeError('Invalid Compact JWS');
-    }
-    return header;
-  }
+  // The real jose is ESM, so its decoder cannot be required here: the
+  // shared mock's decoder reads the protected header the same way.
+  decodeProtectedHeader: mockJose.decodeProtectedHeader
 }));
 
 // Mock axios for UserInfo introspection

@@ -355,7 +355,7 @@
     "visual": {
       "enabled": true,
       "assets": {
-        "hero": "/config/genie-visual/assets/naat-hero.svg",
+        "hero": "/config/genie-visual/assets/naat-hero.png",
         "waves": "/config/genie-visual/assets/naat-bottom-waves.svg",
         "mesh": "/config/genie-visual/assets/naat-dot-mesh.svg",
         "corner": "/config/genie-visual/assets/naat-corner.svg"

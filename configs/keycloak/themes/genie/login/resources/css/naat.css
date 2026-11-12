@@ -1,9 +1,9 @@
-/* GENIE.AI Keycloak Login Theme — Light Mode (PatternFly v5 variable overrides)
+/* NAAT Keycloak Login Theme — Light Mode (PatternFly v5 variable overrides)
  * Aligned with the GENIE.AI Design System tokens.
  * Hex values are pre-converted from OKLch since PatternFly does not support oklch().
  *
  * DS token mapping:
- *   accent  = oklch(42% 0.18 265) ≈ #4071cb
+ *   accent  = oklch(42% 0.18 265) ≈ #3E7A23
  *   fg      = oklch(22% 0.02 240)  ≈ #344049
  *   muted   = oklch(50% 0.018 240) ≈ #818b91
  *   border  = oklch(82% 0.012 240) ≈ #bdc5cb
@@ -13,8 +13,8 @@
 
 :root {
   /* Primary (DS accent) */
-  --pf-v5-global--primary-color--100: #4071cb;
-  --pf-v5-global--primary-color--200: #355fac;
+  --pf-v5-global--primary-color--100: #3E7A23;
+  --pf-v5-global--primary-color--200: #2F6B1E;
 
   /* Background (DS bg / surface) */
   --pf-v5-global--BackgroundColor--100: #f9fbfd;
@@ -39,24 +39,24 @@
   --pf-v5-global--info-color--100: #61b8ed;
 
   /* Link */
-  --pf-v5-global--link--Color: #4071cb;
-  --pf-v5-global--link--Color--hover: #355fac;
+  --pf-v5-global--link--Color: #3E7A23;
+  --pf-v5-global--link--Color--hover: #2F6B1E;
 
   /* Component-level overrides — buttons, forms, inputs */
-  --pf-v5-c-button--m-primary--BackgroundColor: #4071cb;
-  --pf-v5-c-button--m-primary--hover--BackgroundColor: #355fac;
-  --pf-v5-c-button--m-primary--active--BackgroundColor: #2a5da8;
-  --pf-v5-c-button--m-secondary--BorderColor: #4071cb;
-  --pf-v5-c-button--m-secondary--Color: #4071cb;
+  --pf-v5-c-button--m-primary--BackgroundColor: #3E7A23;
+  --pf-v5-c-button--m-primary--hover--BackgroundColor: #2F6B1E;
+  --pf-v5-c-button--m-primary--active--BackgroundColor: #2F6B1E;
+  --pf-v5-c-button--m-secondary--BorderColor: #3E7A23;
+  --pf-v5-c-button--m-secondary--Color: #3E7A23;
 
   --pf-v5-c-form-control--BackgroundColor: #ffffff;
   --pf-v5-c-form-control--BorderColor: #bdc5cb;
   --pf-v5-c-form-control--Color: #344049;
-  --pf-v5-c-form-control--focus--BorderColor: #4071cb;
-  --pf-v5-c-form-control--focus--BoxShadowColor: rgba(64, 113, 203, 0.25);
+  --pf-v5-c-form-control--focus--BorderColor: #3E7A23;
+  --pf-v5-c-form-control--focus--BoxShadowColor: rgba(62, 122, 35, 0.25);
 
   /* Login-specific */
-  --pf-v5-c-login__main-header--BorderTopColor: #4071cb;
+  --pf-v5-c-login__main-header--BorderTopColor: #3E7A23;
   --pf-v5-c-login__main-body--BackgroundColor: #ffffff;
   --pf-v5-c-login__main-header--BackgroundColor: #f9fbfd;
 
@@ -69,7 +69,7 @@
    pseudo-element below; this colour is what the page shows past it, when
    the viewport is overscrolled. */
 body#keycloak-bg {
-  background-color: #f4f7fd;
+  background-color: #f2f6ee;
 }
 
 /* The ground and the wave band are painted on the body's pseudo-elements:
@@ -81,8 +81,8 @@ body.kc-theme-genie#keycloak-bg::before {
   inset: 0;
   z-index: -2;
   background-image:
-    radial-gradient(70% 60% at 76% 38%, rgba(64, 113, 203, 0.18), rgba(64, 113, 203, 0) 70%),
-    radial-gradient(55% 50% at 10% 90%, rgba(120, 92, 214, 0.12), rgba(120, 92, 214, 0) 70%),
+    radial-gradient(70% 60% at 76% 38%, rgba(62, 122, 35, 0.18), rgba(62, 122, 35, 0) 70%),
+    radial-gradient(55% 50% at 10% 90%, rgba(201, 162, 39, 0.12), rgba(201, 162, 39, 0) 70%),
     linear-gradient(180deg, #f9fbfd 0%, #eef2fb 100%);
 }
 
@@ -111,14 +111,16 @@ body.kc-theme-genie#keycloak-bg::after {
   }
 }
 
-/* Header brand — the artwork is the brand mark, centred in the column. */
+/* Header brand panel — the Noor artwork (scholar at the glowing book)
+   fills the panel. The small lockup sits inside the form card, above the
+   page title. */
 #kc-header-wrapper {
   display: flex;
   flex-direction: column;
   align-items: center;
 }
 
-#kc-header-wrapper img {
+#kc-header-wrapper img.kc-naat-art {
   display: block;
   width: 420px;
   max-width: 100%;
@@ -126,10 +128,18 @@ body.kc-theme-genie#keycloak-bg::after {
   margin-bottom: 0;
 }
 
+.kc-card-brand {
+  display: block;
+  width: 220px;
+  max-width: 100%;
+  height: auto;
+  margin-bottom: 6px;
+}
+
 /* Form card — the DS surface treatment: accent edge on top, rounded
    corners, one soft shadow. */
 .pf-v5-c-login__main {
-  border-top: 4px solid #4071cb;
+  border-top: 4px solid #3E7A23;
   border-radius: 14px;
   box-shadow: 0 16px 40px rgba(20, 30, 60, 0.14);
 }

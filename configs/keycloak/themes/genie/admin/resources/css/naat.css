@@ -1,8 +1,8 @@
-/* GENIE.AI Keycloak Admin Console Theme — Light Mode (Complete PF5 color override)
+/* NAAT Keycloak Admin Console Theme — Light Mode (Complete PF5 color override)
  * Same color system as account console for consistency.
  *
  * DS token mapping:
- *   accent  = oklch(42% 0.18 265) ≈ #4071cb
+ *   accent  = oklch(42% 0.18 265) ≈ #3E7A23
  *   fg      = oklch(22% 0.02 240)  ≈ #344049
  *   muted   = oklch(50% 0.018 240) ≈ #818b91
  *   border  = oklch(82% 0.012 240) ≈ #bdc5cb
@@ -12,18 +12,18 @@
 
 :root {
   /* ── Primary (DS accent) ── */
-  --pf-v5-global--primary-color--100: #4071cb;
-  --pf-v5-global--primary-color--200: #355fac;
-  --pf-v5-global--primary-color--300: #355fac;
+  --pf-v5-global--primary-color--100: #3E7A23;
+  --pf-v5-global--primary-color--200: #2F6B1E;
+  --pf-v5-global--primary-color--300: #2F6B1E;
   --pf-v5-global--primary-color--400: #f9fbfd;
-  --pf-v5-global--primary-color--500: #355fac;
-  --pf-v5-global--primary-color--dark-100: #4071cb;
-  --pf-v5-global--primary-color--light-100: #4071cb;
+  --pf-v5-global--primary-color--500: #2F6B1E;
+  --pf-v5-global--primary-color--dark-100: #3E7A23;
+  --pf-v5-global--primary-color--light-100: #3E7A23;
 
   /* ── Active color ── */
-  --pf-v5-global--active-color--100: #4071cb;
-  --pf-v5-global--active-color--200: rgba(64, 113, 203, 0.12);
-  --pf-v5-global--active-color--300: #355fac;
+  --pf-v5-global--active-color--100: #3E7A23;
+  --pf-v5-global--active-color--200: rgba(62, 122, 35, 0.12);
+  --pf-v5-global--active-color--300: #2F6B1E;
   --pf-v5-global--active-color--400: #6694ea;
 
   /* ── Background (DS bg / surface / bg-tertiary) ── */
@@ -32,10 +32,10 @@
   --pf-v5-global--BackgroundColor--200: #ffffff;
   --pf-v5-global--BackgroundColor--300: #f1f4f7;
   --pf-v5-global--BackgroundColor--400: #bdc5cb;
-  --pf-v5-global--BackgroundColor--dark-100: #4071cb;
-  --pf-v5-global--BackgroundColor--dark-200: #355fac;
-  --pf-v5-global--BackgroundColor--dark-300: #355fac;
-  --pf-v5-global--BackgroundColor--dark-400: #355fac;
+  --pf-v5-global--BackgroundColor--dark-100: #3E7A23;
+  --pf-v5-global--BackgroundColor--dark-200: #2F6B1E;
+  --pf-v5-global--BackgroundColor--dark-300: #2F6B1E;
+  --pf-v5-global--BackgroundColor--dark-400: #2F6B1E;
   --pf-v5-global--BackgroundColor--light-100: #ffffff;
   --pf-v5-global--BackgroundColor--light-200: #f9fbfd;
   --pf-v5-global--BackgroundColor--light-300: #f1f4f7;
@@ -60,13 +60,13 @@
   --pf-v5-global--BorderColor--light-100: #bdc5cb;
 
   /* ── Link (DS accent) ── */
-  --pf-v5-global--link--Color: #4071cb;
-  --pf-v5-global--link--Color--hover: #355fac;
+  --pf-v5-global--link--Color: #3E7A23;
+  --pf-v5-global--link--Color--hover: #2F6B1E;
   --pf-v5-global--link--Color--visited: #7c6bc4;
-  --pf-v5-global--link--Color--dark: #4071cb;
-  --pf-v5-global--link--Color--dark--hover: #355fac;
-  --pf-v5-global--link--Color--light: #4071cb;
-  --pf-v5-global--link--Color--light--hover: #355fac;
+  --pf-v5-global--link--Color--dark: #3E7A23;
+  --pf-v5-global--link--Color--dark--hover: #2F6B1E;
+  --pf-v5-global--link--Color--light: #3E7A23;
+  --pf-v5-global--link--Color--light--hover: #2F6B1E;
 
   /* ── Status (DS tokens — already aligned) ── */
   --pf-v5-global--success-color--100: #10b981;
@@ -79,7 +79,7 @@
 
   /* ── Info (DS info) ── */
   --pf-v5-global--info-color--100: #61b8ed;
-  --pf-v5-global--info-color--200: #355fac;
+  --pf-v5-global--info-color--200: #2F6B1E;
 
   /* ── Disabled (DS muted-soft) ── */
   --pf-v5-global--disabled-color--100: #aaafb2;
@@ -143,10 +143,10 @@
 /* The ground the content sits on — the same washes the login page
    shows, behind the white panels. */
 .pf-v5-c-page {
-  background-color: #f4f7fd;
+  background-color: #f2f6ee
   background-image:
-    radial-gradient(70% 60% at 76% 38%, rgba(64, 113, 203, 0.18), rgba(64, 113, 203, 0) 70%),
-    radial-gradient(55% 50% at 10% 90%, rgba(120, 92, 214, 0.12), rgba(120, 92, 214, 0) 70%),
+    radial-gradient(70% 60% at 76% 38%, rgba(62, 122, 35, 0.18), rgba(62, 122, 35, 0) 70%),
+    radial-gradient(55% 50% at 10% 90%, rgba(201, 162, 39, 0.12), rgba(201, 162, 39, 0) 70%),
     linear-gradient(180deg, #f9fbfd 0%, #eef2fb 100%);
 }
 
@@ -192,7 +192,7 @@
    rides its top edge — accent edge, rounded corners, one soft
    shadow. ── */
 .pf-v5-c-table {
-  border-top: 4px solid #4071cb;
+  border-top: 4px solid #3E7A23;
   border-radius: 14px 14px 0 0;
   box-shadow: 0 16px 40px rgba(20, 30, 60, 0.14);
 }

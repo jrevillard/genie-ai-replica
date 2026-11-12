@@ -1,5 +1,13 @@
 const { defineConfig } = require('@playwright/test');
 require('dotenv').config();
+// The venue's edge, the ONE definition (tests/e2e/helpers/base-url.js):
+// the config's own default would be a second copy of the fact, and no
+// mechanism keeps the two equal. The module is dependency-free and
+// credential-free, so the config may require it.
+const { BASE_URL } = require('./tests/e2e/helpers/base-url');
+// The BROWSER half of the venue-name mapping: a runner that cannot
+// resolve the venue name needs it mapped in Chromium too (empty unless
+// E2E_VENUE_IP is set).
 const { venueLaunchArgs } = require('./tests/e2e/helpers/venue-launch-args');
 
 module.exports = defineConfig({
@@ -28,7 +36,7 @@ module.exports = defineConfig({
     ['json', { outputFile: 'reports/playwright-report.json' }],
   ],
   use: {
-    baseURL: process.env.BASE_URL || 'https://localhost',
+    baseURL: BASE_URL,
     ignoreHTTPSErrors: true,
     bypassCSP: true,
     actionTimeout: 15000,

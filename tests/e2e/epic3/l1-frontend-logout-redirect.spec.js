@@ -1,4 +1,5 @@
 const { test, expect } = require('@playwright/test');
+const { BASE_URL } = require('../helpers/base-url');
 const { TEST_USER } = require('../helpers/e2e-fixtures');
 
 // Test L.1 — Frontend Logout Redirect
@@ -13,7 +14,7 @@ test('clicks logout button and redirects to Keycloak login page', async ({ brows
   const page = await context.newPage();
 
   // Step 1: Navigate to app root — should redirect to Keycloak
-  await page.goto('https://localhost/', {
+  await page.goto(`${BASE_URL}/`, {
     waitUntil: 'networkidle',
     timeout: 30000,
   });
@@ -39,7 +40,7 @@ test('clicks logout button and redirects to Keycloak login page', async ({ brows
   await page.waitForURL(
     (url) => {
       const urlStr = url.toString();
-      return urlStr.includes('dashboard') || urlStr === 'https://localhost/';
+      return urlStr.includes('dashboard') || urlStr === `${BASE_URL}/`;
     },
     { timeout: 30000 },
   );

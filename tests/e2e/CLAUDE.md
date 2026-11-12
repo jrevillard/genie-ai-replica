@@ -116,6 +116,16 @@ The specs log in through the browser (`loginViaUI`) — the realm refuses
 direct access grants, so a minted token gives an API call a token, not a
 page a session.
 
+**One spelling of the edge — in the JS tree.** The published address
+lives in ONE module (`helpers/base-url.js`), and the venue-origin gate
+(`tests/config-validator/`) fails any file in the tree but that one that
+carries a local origin or reads the environment. The gate reads the JS
+tree; the run SCRIPT (`run/run-local-e2e.sh`) names its own default venue
+(`DEFAULT_VENUE`) — it is the shell that starts the run, so it must say
+which venue it starts against — and that name is outside the gate's
+reach. The claim is therefore about the JS tree, not about every file
+under `tests/e2e/`.
+
 ## The executed set
 
 The suite has **no CI door** (operator decision, 2026-11-10: this suite gets
@@ -132,10 +142,16 @@ prints the outcome — every skipped spec with its reason — and files a
 profile and the runtime skips: [`docs/e2e-tests/local-run.md`](../../docs/e2e-tests/local-run.md).
 
 The executed set is pinned by `tests/config-validator/`: the guard derives
-the run's invocation from the run script (never a second hand-maintained
-list) and requires it to cover **every** spec file in the tree. Adding a spec
-is free — the tree is the set; narrowing the invocation is what fails the
-guard.
+the run's invocation from the run script and requires it to cover **every**
+spec file in the tree. Narrowing the invocation is what fails the guard.
+A NEW spec file under one of the CI's executed globs (`admin/`,
+`chatbot/`, `documents/`, `helpers/`, `theme-runtime-config.spec.js`) is
+not free, though: the derivation's exact pin in
+`tests/config-validator/__tests__/config-validation.test.js` lists the
+expected set, so such a spec file adds one line there. A spec outside
+those globs needs none — the local run executes the whole tree. The
+list above MIRRORS the CI invocation (the config-validator derives it
+from `.gitlab-ci.yml`): a change to the CI's globs moves both.
 
 A spec that needs a surface the venue does not expose **skips with a
 reason** — see `helpers/venue-profile.js`. The reason is read from the

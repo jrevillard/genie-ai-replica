@@ -4,7 +4,7 @@
 // and each one carries a mutation check recorded beside it.
 const { test, expect } = require('@playwright/test');
 const { openWelcomeScreen, contrastRatio } = require('./helpers/welcome');
-const { mockChatStream, sseBody, ackFeedback, BOT_BUBBLE } = require('./helpers/chatbot');
+const { mockChatStream, sseBody, sseFulfill, ackFeedback, BOT_BUBBLE, NAV_STATUS, STREAM_ROUTE, STREAM_PATH } = require('./helpers/chatbot');
 const { runPostOnlyRouteHandler, runRouteHandler } = require('./helpers/route');
 const { QUICK_HELP_ITEM } = require('./helpers/layout');
 
@@ -217,10 +217,13 @@ test.describe('Conversation — sources', () => {
     // Bearer auth — the card must open through the authenticated
     // viewbrowser flow, not a bare anchor.
     let viewFetch = null;
-    await page.route('**/api/files/doc-1/viewbrowser', async (route) => {
-      viewFetch = { auth: route.request().headers()['authorization'] };
-      return route.fulfill({ status: 200, contentType: 'application/pdf', body: '%PDF-fake' });
-    });
+    await page.route(
+      '**/api/files/doc-1/viewbrowser',
+      runRouteHandler(page, async (route) => {
+        viewFetch = { auth: route.request().headers()['authorization'] };
+        await route.fulfill({ status: 200, contentType: 'application/pdf', body: '%PDF-fake' });
+      })
+    );
     await page.locator('[data-testid^="answer-source-card-"]').click();
     // Opening the card fetches the document.
     await expect.poll(() => viewFetch !== null, { timeout: 15000 }).toBe(true);
@@ -316,13 +319,17 @@ test.describe('Conversation — warning and error', () => {
     const { ctx, page } = await openWelcomeScreen(browser, { viewport: { width: 1440, height: 900 }, theme: 'light' });
     // Sabotage the stream call for the first attempt only.
     let aborted = false;
-    await page.route('**/queries/stream**', async (route) => {
-      if (route.request().method() === 'POST' && !aborted) {
-        aborted = true;
-        return route.abort();
-      }
-      return route.continue();
-    });
+    await page.route(
+      STREAM_ROUTE,
+      runPostOnlyRouteHandler(page, async (route) => {
+        if (!aborted) {
+          aborted = true;
+          await route.abort();
+          return;
+        }
+        await route.continue();
+      })
+    );
     await page.locator('[data-testid="welcome-composer"] textarea').fill('What is GENIE.AI?');
     await page.locator('[data-testid="welcome-composer"] textarea').press('Enter');
     await page.waitForSelector('[data-testid="answer-error"]', { timeout: 30000 });
@@ -341,14 +348,14 @@ test.describe('Conversation — status pill', () => {
     browser
   }) => {
     const { ctx, page } = await openWelcomeScreen(browser, { viewport: { width: 1440, height: 900 }, theme: 'light' });
-    const pill = page.locator('[data-testid="nav-status"]');
+    const pill = page.locator(NAV_STATUS);
     await expect(pill).toHaveAttribute('data-status', 'online');
     expect(await pill.getAttribute('role'), 'the pill is announced as a status region').toBe('status');
     const pillFont = await pill.evaluate((el) => parseFloat(getComputedStyle(el).fontSize));
     expect(pillFont, 'the pill label is body-legible, not a footnote').toBeGreaterThanOrEqual(12);
     // A failed turn flips the pill to its offline explanation.
     await page.route(
-      '**/queries/stream**',
+      STREAM_ROUTE,
       runRouteHandler(page, async (route) => {
         await route.abort();
       })
@@ -455,7 +462,7 @@ test.describe('Conversation — answer card', () => {
       releaseStream = resolve;
     });
     await page.route(
-      '**/queries/stream**',
+      STREAM_ROUTE,
       runPostOnlyRouteHandler(page, async (route) => {
         const resp = await route.fetch();
         const body = await resp.text();
@@ -535,14 +542,10 @@ test.describe('Conversation — surface invariants', () => {
     await ackFeedback(page);
     const body = sseBody(['The answer completes in the background.']);
     await page.route(
-      '**/queries/stream**',
+      STREAM_ROUTE,
       runPostOnlyRouteHandler(page, async (route) => {
         await streamReleased;
-        await route.fulfill({
-          status: 200,
-          contentType: 'text/event-stream',
-          body
-        });
+        await sseFulfill(route, body);
       })
     );
     await page.locator('[data-testid="welcome-composer"] textarea').fill('What is GENIE.AI?');
@@ -553,15 +556,26 @@ test.describe('Conversation — surface invariants', () => {
     // mounted instance is the one the click reaches.
     await page.locator('[data-test-id^="nav-icon-btn-settings"]').locator('visible=true').first().click();
     expect(await page.locator('[role="dialog"]').count(), 'navigation is never blocked').toBe(0);
+    // Wait for the Settings navigation to commit before going on: the
+    // steps below depend on which page the app is on, not on a click
+    // that may still be in flight.
+    await page.waitForURL('**/settings', { timeout: 15000 });
     // Release the stream while the chat view is unmounted: the store
     // must keep consuming it.
     releaseStream();
-    await page.waitForResponse((r) => r.url().includes('/queries/stream') && r.status() === 200, { timeout: 15000 });
-    // Back through the router (history back is an in-app navigation, not
-    // a reload): the conversation is intact and the answer completed in
-    // the background — the wait below holds until the released stream's
-    // frame has been consumed and rendered.
-    await page.goBack();
+    await page.waitForResponse((r) => r.url().includes(STREAM_PATH) && r.status() === 200, { timeout: 15000 });
+    // Return the way the user returns: through the app's own navigation
+    // (the navbar brand link), NOT through the browser's history back.
+    // The history stack still carries the login flow's cross-document
+    // /callback entry, so a history back can land on it — a full document
+    // reload the spec does not control, and the conversation then comes
+    // back only as fresh as the last persisted payload (#1734). The
+    // contract under test is the app's: leaving the chat view and coming
+    // back inside the app keeps the conversation and the answer completes
+    // in the background — the wait below holds until the released
+    // stream's frame has been consumed and rendered.
+    await page.locator('[data-test-id="nav-brand-name"]').click();
+    await page.waitForURL('**/dashboard', { timeout: 15000 });
     await page.waitForSelector(BOT_BUBBLE, { timeout: 30000 });
     await expect(page.locator('[data-testid="chat-message-user"]').last()).toContainText('What is GENIE.AI?');
     await expect(page.locator(BOT_BUBBLE).last()).toContainText(
@@ -579,13 +593,13 @@ test.describe('Conversation — surface invariants', () => {
     // A stream that never responds: the reload kills the pending fetch,
     // and rehydration must render the interrupted turn through the
     // retry affordance — not as a spinner, not as a missing turn.
-    await page.route('**/queries/stream**', async (route) => {
-      if (route.request().method() === 'POST') {
-        // Hang the request on purpose; the context close cleans it up.
+    await page.route(
+      STREAM_ROUTE,
+      runPostOnlyRouteHandler(page, async () => {
+        // Hang the POST on purpose; the context close cleans it up.
         await new Promise(() => {});
-      }
-      await route.continue();
-    });
+      })
+    );
     await page.locator('[data-testid="welcome-composer"] textarea').fill('What is GENIE.AI?');
     await page.locator('[data-testid="welcome-composer"] textarea').press('Enter');
     await page.waitForSelector('[data-testid="chat-message-bot"] [data-testid="streaming-indicator"]', { timeout: 15000 });

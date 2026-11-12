@@ -10,11 +10,10 @@ const {
   TEST_PLAIN_USER,
 } = require('./e2e-fixtures');
 const { runPostOnlyRouteHandler } = require('./route');
-
-// Normalized once: page.url() never produces a trailing double slash,
-// so every `${BASE_URL}/...` interpolation stays well-formed even when
-// the environment configures BASE_URL with a trailing '/'.
-const BASE_URL = (process.env.BASE_URL || 'https://localhost').replace(/\/+$/, '');
+// The venue's edge lives in its own module (helpers/base-url.js): a spec
+// that needs the edge but no credential requires it from there, so the
+// two credential import paths are never mixed in one file.
+const { BASE_URL } = require('./base-url');
 
 // The handles the chat surface declares. A row's handle carries its
 // sender (`chat-message-bot` / `chat-message-user`), so a spec never
@@ -23,6 +22,14 @@ const BASE_URL = (process.env.BASE_URL || 'https://localhost').replace(/\/+$/, '
 // re-typing them.
 const MESSAGE_ROW = '[data-testid^="chat-message-"]';
 const BOT_BUBBLE = '[data-testid="chat-message-bot"] [data-testid="message-bubble-bot"]';
+const NAV_STATUS = '[data-testid="nav-status"]';
+
+// The stream interception contract lives in its own module
+// (helpers/stream-route.js): the endpoint, the interception glob and the
+// SSE envelope — no credential in it, so a spec that intercepts the
+// stream and needs nothing else never imports the credential module.
+// Re-exported here for the specs that already import the login helpers.
+const { CORS_HEADERS, STREAM_PATH, STREAM_ROUTE, sseBody, sseFulfill } = require('./stream-route');
 
 // The wait from the submit click to the dashboard: the identity provider
 // deciding to issue a code, then the app exchanging it. On an idle stack the
@@ -150,23 +157,136 @@ async function waitForBotResponse(page, options = {}) {
 
   await expect(page.locator(BOT_BUBBLE).last()).toContainText(/\S/, { timeout });
 
-  await expect
-    .poll(
-      () =>
-        page.evaluate(() => {
-          const app = document.querySelector('#app');
-          const store = app && app.__vue_app__ ? app.__vue_app__.config.globalProperties.$store : null;
-          const messages =
-            store && store.state && store.state.conversation ? store.state.conversation.messages : [];
-          const bots = messages.filter((m) => m.sender === 'bot');
-          const last = bots[bots.length - 1];
-          // No bot message yet: the turn has not produced one, so the
-          // wait continues (null is not false).
-          return last ? Boolean(last.isStreaming) : null;
-        }),
-      { timeout }
-    )
-    .toBe(false);
+  await expect.poll(() => botStreamingFlag(page), { timeout }).toBe(false);
+}
+
+/**
+ * The turn's streaming flag, read from the page.
+ *
+ * The WIRING between the wait and the page-side read is what #1738 was
+ * about: the read used to ask the store for a path the frontend no
+ * longer exposes. It is a function of its own so that a spec can drive
+ * it — the wait is the only thing that used it, and nothing could test
+ * it there.
+ *
+ * @param {object} page - the Playwright page
+ * @returns {Promise<boolean|null>} the flag: true while the turn streams,
+ *   false when it is over, null when the page is not ready to say
+ */
+async function botStreamingFlag(page) {
+  return page.evaluate(readStreamingState).then(streamingFlagOf);
+}
+
+/**
+ * The page-side read: the open conversation's messages and their
+ * streaming flags, in the shape the decision needs.
+ *
+ * SELF-CONTAINED on purpose. Playwright sends this function to the page
+ * as SOURCE, so it may not close over anything in this module — only
+ * page globals. That is also what makes it TESTABLE: a spec builds a
+ * fake `#app` carrying a fake store and calls this very function, so the
+ * read is exercised on the same path the suite uses, not a copy of it.
+ *
+ * The store's PUBLIC read path: the "conversation" module's getter returns
+ * the open conversation — its messages and the stream flag. The raw state
+ * shape is NOT a contract: the CSR refactor moved the messages under
+ * conversations[openId], and a helper reading "state.conversation.messages"
+ * threw on every poll (the three chat specs went red the day it landed).
+ *
+ * The flag's ABSENCE crosses the wire as absence: a message with no
+ * `isStreaming` key at all is the WELCOME bubble (the app commits it
+ * without one), and it is NOT a turn. Coercing it to `false` here would
+ * say "the turn finished" — the wait would end before the answer
+ * existed, which is the defect this read exists to prevent. The value is
+ * copied as it is, so "absent" and "false" stay distinct.
+ */
+function readStreamingState() {
+  const app = document.querySelector('#app');
+  const store = app && app.__vue_app__ ? app.__vue_app__.config.globalProperties.$store : null;
+  const getters = store ? store.getters : null;
+  // The getter's EXISTENCE and its VALUE are two different findings: a
+  // store without the getter is a broken contract, while a getter that
+  // returns nothing means no conversation is OPEN yet — a normal state
+  // (the app may still open one), not a broken one. Reporting the
+  // second as the first would name a cause the operator cannot act on.
+  const hasGetter = !!(getters && 'conversation/openConversation' in getters);
+  const open = hasGetter ? getters['conversation/openConversation'] : null;
+  // A booted app without the getter is a broken store contract, not a
+  // slow answer: say so now, in the shape the reader (streamingFlagOf)
+  // turns into a named failure, instead of polling to a cause-less
+  // timeout.
+  // NOT booted (no app, no __vue_app__) is transient — the app may still
+  // be mounting, or a reload is in flight. A BOOTED app whose store is
+  // gone is a broken contract, and so is a store without the getter.
+  if (!app || !app.__vue_app__) return { state: 'not-booted' };
+  if (!store) return { state: 'no-store' };
+  if (!hasGetter) return { state: 'no-getter' };
+  if (!open) return { state: 'no-open-conversation' };
+  // Only what the decision needs: each message's sender and streaming
+  // flag. The whole conversation would cross the wire on every poll tick
+  // — and WHICH messages are the bot's is decided on this side, where it
+  // is unit tested.
+  const messages = open.messages
+    ? open.messages.map((m) => ({ sender: m.sender, isStreaming: m.isStreaming }))
+    : [];
+  return { state: 'ok', messages };
+}
+
+/**
+ * The streaming flag of the last bot message, from a read of the store's
+ * public getter.
+ *
+ * Pure, and OUT of the page: the page hands over what it read, this
+ * decides what it MEANS. Every case the read can report is named here,
+ * because each is easy to break by accident:
+ *
+ * - NOT BOOTED is transient, not broken: the app may still be mounting,
+ *   or a reload is in flight — the wait continues;
+ * - a BOOTED app whose store is gone is a broken contract: it fails now,
+ *   by name ("the app is booted but has no store");
+ * - a store that does not expose the getter at all is a broken contract
+ *   too: it fails now, by name, instead of polling to a cause-less
+ *   timeout;
+ * - a getter that EXISTS and returns nothing is a different finding — no
+ *   conversation is open yet — and the wait continues;
+ * - no bot message yet is NOT "not streaming" — the turn has not
+ *   produced one, so the wait continues (null is not false).
+ *
+ * @param {{state: string, messages?: object[]}} read - what the page read
+ * @returns {boolean|null} the flag, or null while the turn has no answer
+ */
+function streamingFlagOf(read) {
+  if (read && read.state === 'not-booted') {
+    // NOT booted is transient — the app may still be mounting (a reload
+    // mid-wait). The wait continues.
+    return null;
+  }
+  if (read && read.state === 'no-open-conversation') {
+    // The getter exists and returns NOTHING: no conversation is open
+    // yet. That is not a broken contract — the turn has no answer to
+    // give, so the wait continues.
+    return null;
+  }
+  if (!read || read.state !== 'ok') {
+    const cause =
+      read && read.state === 'no-store'
+        ? 'the app is booted but has no store'
+        : 'the store does not expose the conversation/openConversation getter';
+    throw new Error(`${cause} — that is a broken store contract, not a slow answer`);
+  }
+  const messages = read.messages || [];
+  const bots = messages.filter((m) => m.sender === 'bot');
+  const last = bots[bots.length - 1];
+  // No bot message yet — or the last one is the WELCOME bubble, which
+  // carries no flag at all: the turn has not produced an answer, so the
+  // wait continues (null is not false). A message without the flag is
+  // not the turn's answer.
+  //
+  // The flag's ABSENCE is the signal, so the page must not coerce it: a
+  // welcome bubble coerced to `false` here would read as "the turn
+  // finished" and end the wait before the answer existed.
+  if (last === undefined || last.isStreaming === undefined) return null;
+  return last.isStreaming;
 }
 
 /**
@@ -236,19 +356,6 @@ async function waitForBotMessage(page, text, { timeout = 30000 } = {}) {
   await expect(page.locator(BOT_BUBBLE).last()).toContainText(text, { timeout });
 }
 
-/**
- * Build the SSE body the specs mock the answer stream with: `data: ` frames,
- * one JSON payload per line, ending with a done frame — the app's wire
- * contract, in one place. `metadata`, when given, travels as its own frame
- * before the done frame (an is_grounded flag, source_documents, ...). The
- * done frame's queryId is recorded on the finished message by the store;
- * the value itself is never asserted.
- */
-function sseBody(chunks, metadata) {
-  const frames = chunks.map((c) => `data: ${JSON.stringify({ type: 'chunk', content: c })}`);
-  if (metadata) frames.push(`data: ${JSON.stringify({ type: 'metadata', ...metadata })}`);
-  return [...frames, '', `data: ${JSON.stringify({ type: 'done', queryId: 'mock-query-1' })}`, ''].join('\n');
-}
 
 /**
  * Mock the chat answer stream. `chunks` arrive as chunk frames; `metadata`,
@@ -261,9 +368,31 @@ async function mockChatStream(page, chunks, metadata) {
   // every call site, so build the wire bytes once, not per interception.
   const body = sseBody(chunks, metadata);
   await page.route(
-    '**/queries/stream**',
+    STREAM_ROUTE,
     runPostOnlyRouteHandler(page, async (route) => {
-      await route.fulfill({ status: 200, contentType: 'text/event-stream', body });
+      await sseFulfill(route, body);
+    })
+  );
+}
+
+/**
+ * Mock a FAILED stream: the app must render the error card for a non-2xx
+ * answer. Beside `mockChatStream` because it is the same contract — the
+ * same endpoint, the same POST-only interception, the same CORS header a
+ * cross-origin reader needs.
+ */
+async function mockStreamError(page) {
+  // Registration-invariant like the SSE body: build the wire bytes once.
+  // The answer is the app's own error shape — every 5xx reaches the same
+  // branch, so the mock carries no knob for it.
+  const body = JSON.stringify({
+    error: 'SERVICE_UNAVAILABLE',
+    message: 'RAG pipeline is temporarily unavailable',
+  });
+  await page.route(
+    STREAM_ROUTE,
+    runPostOnlyRouteHandler(page, async (route) => {
+      await route.fulfill({ status: 503, contentType: 'application/json', headers: CORS_HEADERS, body });
     })
   );
 }
@@ -283,13 +412,18 @@ async function ackFeedback(page) {
 }
 
 module.exports = {
+  readStreamingState,
+  streamingFlagOf,
+  botStreamingFlag,
   loginViaUI,
   navigateToChatbot,
   sendMessage,
   waitForBotResponse,
   waitForBotMessage,
   sseBody,
+  sseFulfill,
   mockChatStream,
+  mockStreamError,
   ackFeedback,
   getMessages,
   getLastBotMessage,
@@ -299,5 +433,8 @@ module.exports = {
   TEST_PLAIN_USER,
   BASE_URL,
   MESSAGE_ROW,
-  BOT_BUBBLE
+  BOT_BUBBLE,
+  NAV_STATUS,
+  STREAM_PATH,
+  STREAM_ROUTE
 };

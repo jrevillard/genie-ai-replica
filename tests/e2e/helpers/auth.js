@@ -1,6 +1,9 @@
 const https = require('https');
 const { chromium } = require('@playwright/test');
-const { loginViaUI, TEST_USER, BASE_URL } = require('./chatbot');
+const { loginViaUI, TEST_USER } = require('./chatbot');
+// The venue's edge comes from the credential-free module: this file needs
+// the edge and no credential, and the edge has one definition.
+const { BASE_URL } = require('./base-url');
 const { venueLaunchArgs } = require('./venue-launch-args');
 
 /**

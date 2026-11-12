@@ -18,6 +18,10 @@
  * otherwise.
  */
 const { describeRunner } = require('./install-browsers');
+// The mapping reader: ONE owner — the module that reads the mapping. It is
+// TOTAL (a value that cannot be read comes back as a reason, not a throw), so
+// the pre-flight names the cause instead of dying on it.
+const { safeVenueMapping } = require('../helpers/venue-launch-args');
 
 function remedy(what) {
   const lines = [
@@ -33,7 +37,8 @@ function remedy(what) {
     '      container image has no libatk/libgbm);',
     '    - the Inter fonts on XDG_DATA_HOME for the pixel-measurement specs;',
     '    - a resolvable venue name — or E2E_VENUE_IP for one the runner',
-    '      cannot resolve.',
+    '      cannot resolve; E2E_VENUE_IP must be an IPv4 or IPv6 address;',
+    '    - a venue address that is a URL (BASE_URL).',
   ];
   return lines.join('\n');
 }
@@ -45,22 +50,75 @@ function remedy(what) {
 // two are different findings.
 function loadRunner() {
   const { chromium } = require('@playwright/test');
-  const { BASE_URL } = require('../helpers/chatbot');
-  const { venueLaunchArgs, venueMapping } = require('../helpers/venue-launch-args');
-  return { chromium, BASE_URL, venueLaunchArgs, venueMapping, runner: describeRunner() };
+  // The venue's edge from the credential-free module (the chat helper
+  // re-exports the fixtures' credentials; the pre-flight needs neither).
+  const { BASE_URL } = require('../helpers/base-url');
+  const { venueLaunchArgs } = require('../helpers/venue-launch-args');
+  return { chromium, BASE_URL, venueLaunchArgs, runner: describeRunner() };
 }
 
-(async () => {
+/**
+ * The pre-flight's NAMED cause for a failure it cannot recover from:
+ * the headline, then the remedy the operator needs.
+ *
+ * The remedy is part of the message: a cause without it tells the
+ * operator WHAT happened and nothing about what to do about it.
+ */
+function namedFailure(headline, cause) {
+  return `pre-flight: ${headline}.\n${remedy(String(cause).split('\n')[0])}\n`;
+}
+
+/**
+ * What the venue's answer at the root MEANS.
+ *
+ * THREE findings, not one: no answer at all, a 5xx (the deployment is
+ * down), and a 4xx (the edge refused — wrong address, or a realm that
+ * refuses an anonymous request: a broken realm answers 4xx at the edge
+ * too). The message is the operator's first clue, so each finding says
+ * itself.
+ *
+ * @param {number} status - the status the root answered with (0 = none)
+ * @param {string} venue - the address the run pointed at
+ * @returns {string|null} the diagnosis, or null when the status is not a
+ *   failure
+ */
+function classifyVenueStatus(status, venue) {
+  if (status === 0) return `no response arrived at ${venue} — the venue did not answer at all.`;
+  if (status >= 500) return `the venue answered HTTP ${status} at ${venue} — the deployment is down.`;
+  // A status that is NOT a failure has no diagnosis: the caller only
+  // asks about a failed navigation, and a "cause" for a 200 would be a
+  // lie waiting for a caller that asks.
+  if (status < 400) return null;
+  return (
+    `the venue answered HTTP ${status} at ${venue} — the address is not the app's edge, or the ` +
+    'venue refuses an anonymous request to it (a broken realm answers 4xx at the edge too).'
+  );
+}
+
+async function main() {
   let loaded;
   try {
     loaded = loadRunner();
   } catch (e) {
-    process.stderr.write(`pre-flight: the runner cannot load Playwright.\n${remedy(e.message.split('\n')[0])}\n`);
-    process.exit(1);
+    process.stderr.write(namedFailure('the runner cannot load Playwright', e.message));
+    process.exitCode = 1;
+    return;
   }
-  const { chromium, BASE_URL, venueLaunchArgs, venueMapping, runner } = loaded;
+  const { chromium, BASE_URL, venueLaunchArgs, runner } = loaded;
 
-  const mapping = venueMapping();
+  // The mapping is read through the TOTAL reader (the mapping module's
+  // own): a malformed ADDRESS (a BASE_URL that is not a URL — the
+  // mapping reads the host out of it) or a malformed E2E_VENUE_IP (a
+  // value that is not an address) must reach the operator as the NAMED
+  // remedy, not as an unhandled throw that hides the cause behind a
+  // stack trace, and not as a browser failure much later that reads
+  // like a runner problem.
+  const { mapping, error: mappingError } = safeVenueMapping();
+  if (mappingError) {
+    process.stderr.write(namedFailure('the venue mapping is not usable', mappingError));
+    process.exitCode = 1;
+    return;
+  }
   process.stdout.write(
     `pre-flight: venue ${BASE_URL}` + (mapping ? ` (mapped ${mapping.host} -> ${mapping.ip})` : '') + '\n'
   );
@@ -73,8 +131,9 @@ function loadRunner() {
   try {
     browser = await chromium.launch({ args: venueLaunchArgs() });
   } catch (e) {
-    process.stderr.write(`pre-flight: the browser did not launch.\n${remedy(e.message.split('\n')[0])}\n`);
-    process.exit(1);
+    process.stderr.write(namedFailure('the browser did not launch', e.message));
+    process.exitCode = 1;
+    return;
   }
 
   let failure = null;
@@ -83,23 +142,68 @@ function loadRunner() {
     const page = await context.newPage();
     const response = await page.goto(BASE_URL, { waitUntil: 'domcontentloaded', timeout: 45000 });
     const status = response ? response.status() : 0;
-    // ANY 4xx at the venue ROOT is a misconfigured BASE_URL, not a surface
-    // the app serves: letting the run proceed would fail every spec on
-    // navigation and the failure path would file one issue per spec file
-    // for a RUNNER-CONFIG cause — the flood this pre-flight exists to stop.
-    if (!status || status >= 400) {
-      failure = `the venue answered HTTP ${status} at ${BASE_URL} — the address is not the app's edge.`;
+    // NO answer, a 4xx or a 5xx at the venue ROOT stops the run: it is not
+    // a surface the app serves to an anonymous browser, and each of the
+    // three is a DIFFERENT finding (see classifyVenueStatus). Letting the
+    // run proceed would fail every spec on navigation and the failure path
+    // would file one issue per spec file for a RUNNER-CONFIG cause — the
+    // flood this pre-flight exists to stop.
+    //
+    // The classifier decides: it returns the finding for a status that is
+    // one, and null for a status that is not a failure. The caller does not
+    // re-encode the threshold.
+    const diagnosis = classifyVenueStatus(status, BASE_URL);
+    if (diagnosis) {
+      failure = `pre-flight: ${diagnosis}\n`;
     } else {
       process.stdout.write(`pre-flight: the browser reached the venue (HTTP ${status}).\n`);
     }
   } catch (e) {
-    failure = `the browser could not open the venue.\n${remedy(e.message.split('\n')[0])}`;
+    // The SAME formatter as the other causes: the headline, then the
+    // remedy.
+    failure = namedFailure('the browser could not open the venue', e.message);
   }
-  // The browser closes BEFORE the exit: process.exit skips a finally block,
-  // and every failed pre-flight would orphan a live Chromium on the machine.
-  await browser.close();
+  // The browser closes BEFORE the exit: an exit that skips a finally block
+  // would orphan a live Chromium on the machine. A close that FAILS is
+  // reported in its own right — the operator must hear that a Chromium
+  // may be left running — and it never REPLACES the cause already found:
+  // the first cause stays the headline.
+  let cleanupFailure = null;
+  try {
+    await browser.close();
+  } catch (e) {
+    cleanupFailure = e;
+  }
   if (failure) {
-    process.stderr.write(`pre-flight: ${failure}\n`);
-    process.exit(1);
+    process.stderr.write(failure);
+    process.exitCode = 1;
   }
-})();
+  if (cleanupFailure) {
+    process.stderr.write(namedFailure('the browser could not close', cleanupFailure.message));
+    process.exitCode = 1;
+  }
+}
+
+// The pre-flight RUNS when it is the entry point — and only then: the
+// diagnosis below is a pure function, and its spec must be able to read it
+// without a browser. The run script and the failure path both invoke this
+// file as a process (`node tests/e2e/run/preflight.js`), so the entry point
+// is the only way it starts.
+if (require.main === module) {
+  // The exit code is OURS, not node's default: the run script forwards
+  // NODE_OPTIONS, and an inherited `--unhandled-rejections=warn` would
+  // turn an escaping rejection into exit 0 — the run would continue past
+  // a broken pre-flight.
+  //
+  // The FRAMES are the honest output: every await in main() is guarded
+  // (the launch, the navigation, the close), so a rejection that escapes
+  // is an internal bug, not a finding — and it is NOT rewritten into a
+  // named cause, which would be the suite's forbidden "degrade a
+  // failure into a fallback path".
+  main().catch((e) => {
+    process.stderr.write(String((e && e.stack) || e) + '\n');
+    process.exitCode = 1;
+  });
+}
+
+module.exports = { classifyVenueStatus, namedFailure };

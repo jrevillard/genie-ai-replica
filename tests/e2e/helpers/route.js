@@ -29,13 +29,13 @@
  *   It also fires when the browser process dies — though Playwright
  *   usually delivers the close events before an in-flight route call
  *   rejects, so by then the state half is often already true too; a
- *   crashed browser fails the spec on its other awaits either way.
+ *   crashed browser fails the spec on its other awaits either way. The
+ *   error is recognised by its CLASS (`isTargetClosedError`).
  *
  * Only their conjunction is the named race. The error check reads the
- * constructor name and the message (the message form is the same
- * discrimination `chatbot/error-handling.spec.js` has always used); if a
- * Playwright upgrade changed both, the race would surface as a loud
- * teardown failure — the acceptable direction to fail in.
+ * name and the constructor; if a Playwright upgrade changed both, the
+ * race would surface as a loud teardown failure — the acceptable
+ * direction to fail in.
  *
  * The state half relies on an ordering Playwright's client guarantees:
  * `Page._onClose` sets `_closed` BEFORE emitting the close event whose
@@ -69,11 +69,37 @@ function isTargetGone(page) {
  * True when the error is Playwright's target-closed error — the shape
  * both of its client-side close event and of the protocol answer a dead
  * target produces.
+ *
+ * The CLASS is the signal, and it is the whole signal. Measured on the
+ * shipped playwright-core 1.62.1 — an in-flight `route.fetch()` whose
+ * context is closed, and a `page.goto` / `page.click` on a closed
+ * target:
+ *
+ * - the error's `name` is `'Error'`;
+ * - its `constructor.name` is `'TargetClosedError2'` — the CLIENT bundle
+ *   carries its own copy of Playwright's class and the bundler renames
+ *   the second one, so the client-side class arrives renamed.
+ *
+ * So the class FAMILY covers every shape the handler meets, and the
+ * message is not consulted at all: a version bump that rewords the
+ * message cannot turn the race back into a loud teardown failure, and a
+ * mock defect that merely QUOTES the race's wording ("Request context
+ * disposed", "has been closed") is not swallowed — the wording was
+ * never the signal.
+ *
+ * The NAME arm is the defensive half: an error that carries only
+ * Playwright's name and no class is tolerated too. The shipped client
+ * always delivers the class, so that shape does not occur today — the
+ * arm costs one comparison and cannot swallow a mock defect, because a
+ * defect does not carry Playwright's class name.
  */
+const TARGET_CLOSED_CLASS = /^TargetClosedError\d*$/;
+
 function isTargetClosedError(error) {
   if (!error) return false;
-  if (error.constructor && error.constructor.name === 'TargetClosedError') return true;
-  return typeof error.message === 'string' && /has been closed/i.test(error.message);
+  if (typeof error.name === 'string' && TARGET_CLOSED_CLASS.test(error.name)) return true;
+  if (error.constructor && TARGET_CLOSED_CLASS.test(error.constructor.name)) return true;
+  return false;
 }
 
 /**

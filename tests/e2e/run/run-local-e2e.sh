@@ -40,7 +40,24 @@ cd "$REPO_ROOT"
 # reads belongs to it. Point BASE_URL anywhere else and the run asks for
 # credentials instead of guessing.
 DEFAULT_VENUE="https://genieai-forge.local:4443"
-BASE_URL="${BASE_URL:-$DEFAULT_VENUE}"
+# The venue address is NORMALIZED once, by the SAME function the specs
+# read (helpers/base-url.js): https://x:4443, https://x:4443/ and
+# https://x:4443// are the same venue. Before this normalization the lock
+# key stripped the slashes itself while the credential auto-read compared
+# the RAW address against the default venue — so a trailing slash made
+# the auto-read miss the shared stack's secret and ask for credentials
+# the run already had. One spelling now feeds both, and the rule is unit
+# tested where it lives.
+if ! command -v node >/dev/null 2>&1; then
+  echo "ERROR: 'node' is not installed - the venue address cannot be normalized." >&2
+  exit 2
+fi
+# The default goes into the ENVIRONMENT first, and the module's own
+# exported address is read back: the module stays the one place that
+# normalizes an address, and the shell stops quoting a JS source string
+# with a value of its own.
+export BASE_URL="${BASE_URL:-$DEFAULT_VENUE}"
+BASE_URL="$(node -p "require('${REPO_ROOT}/tests/e2e/helpers/base-url').BASE_URL")"
 export BASE_URL
 NAMESPACE="${E2E_NAMESPACE:-genieai}"
 
@@ -68,9 +85,9 @@ for tool in flock md5sum; do
   fi
 done
 CHECKOUT_LOCK="${E2E_RUN_LOCK:-$REPO_ROOT/.e2e-run.lock}"
-# The venue key is the NORMALIZED address: https://x:4443, https://x:4443/ and
-# https://x:4443// are the same venue and must not take three locks.
-VENUE_KEY="$(printf '%s' "$BASE_URL" | sed 's#/*$##' | md5sum | cut -c1-12)"
+# The venue key is the NORMALIZED address (normalized above): one venue, one
+# lock.
+VENUE_KEY="$(printf '%s' "$BASE_URL" | md5sum | cut -c1-12)"
 VENUE_LOCK="${E2E_VENUE_LOCK:-/tmp/genieai-e2e-$VENUE_KEY.lock}"
 
 exec 9>"$CHECKOUT_LOCK"
@@ -119,7 +136,10 @@ fi
 # into the browser.
 if [ -n "${E2E_VENUE_IP:-}" ]; then
   # One owner of the "which host is the venue" rule: the mapping module.
-  E2E_VENUE_HOST="${E2E_VENUE_HOST:-$(node -p "require('$REPO_ROOT/tests/e2e/helpers/venue-launch-args').venueMapping().host")}"
+  # It is read through the SAFE reader: a mapping that cannot be read is
+  # the pre-flight's finding to NAME, and a raw stack trace here would
+  # replace that diagnosis with a wall of frames.
+  E2E_VENUE_HOST="${E2E_VENUE_HOST:-$(node -p "require('$REPO_ROOT/tests/e2e/helpers/venue-launch-args').safeVenueMapping().mapping?.host || ''")}"
   export E2E_VENUE_HOST
   export NODE_OPTIONS="--require $REPO_ROOT/tests/e2e/run/venue-dns.js${NODE_OPTIONS:+ $NODE_OPTIONS}"
   echo "venue mapping: $E2E_VENUE_HOST -> $E2E_VENUE_IP"

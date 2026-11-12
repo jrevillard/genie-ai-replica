@@ -1,7 +1,17 @@
 // Copyright (C) 2026 International Telecommunication Union (ITU)
 // SPDX-License-Identifier: Apache-2.0
 const { test, expect } = require('@playwright/test');
-const { mentionsPath, trackerReason } = require('./file-failure-issues');
+const fs = require('fs');
+const os = require('os');
+const path = require('path');
+const {
+  findTrackedIssue,
+  specPathsIn,
+  titleIsDedicatedTo,
+  trackerReason,
+  groupFailuresByFile,
+  issueBody,
+} = require('./file-failure-issues');
 
 const FILE = 'tests/e2e/theme-runtime-config.spec.js';
 
@@ -13,34 +23,249 @@ const FILE = 'tests/e2e/theme-runtime-config.spec.js';
  * is already tracked) is exactly the tracker damage this path exists to
  * prevent, so both directions are pinned here.
  */
-test.describe('the dedupe reads a spec path as a PATH TOKEN', () => {
-  test('the repository path matches', () => {
-    expect(mentionsPath(`see ${FILE} for the assertions`, FILE)).toBe(true);
-    expect(mentionsPath(`\`tests/e2e/theme-runtime-config.spec.js\` is red`, FILE)).toBe(true);
+test.describe('a dedicated title names ONE spec file', () => {
+  test('the paths in a title are the spec paths it names', () => {
+    expect(specPathsIn(`see ${FILE} for the assertions`)).toEqual([FILE]);
+    expect(specPathsIn('components/gov-chat-frontend/src/App.vue')).toEqual([]);
   });
 
-  test('an absolute path matches', () => {
-    expect(mentionsPath(`/home/jerome/git_projects/ITU/genie-ai/${FILE}`, FILE)).toBe(true);
+  test('a title that names this file alone is dedicated to it', () => {
+    expect(titleIsDedicatedTo(`test(e2e): ${FILE} is red on the local run`, FILE)).toBe(true);
   });
 
-  test('a URL that ends with the path matches', () => {
-    expect(mentionsPath(`https://gitlab.example/un/itu/genie-ai/-/blob/main/${FILE}`, FILE)).toBe(true);
+  test('a title that names SEVERAL spec files is an umbrella, not a dedication', () => {
+    // The wave issue that touched a dozen of them names them all: it
+    // tracks a GROUP, and a failure on one of them must still get its own
+    // issue.
+    const umbrella = `test(e2e): ${FILE} and tests/e2e/other.spec.js are red`;
+    expect(titleIsDedicatedTo(umbrella, FILE)).toBe(false);
   });
 
-  test('a path that is only the TAIL of another e2e file does NOT match', () => {
+  test('an absolute path or a tracker URL names the same file', () => {
+    // The title may name the file the way a human writes it: an
+    // absolute path, or the file's URL in a tracker link. Both END with
+    // the repository path — the same file, named differently.
+    expect(
+      titleIsDedicatedTo(`test(e2e): /home/dev/genie-ai/${FILE} is red`, FILE)
+    ).toBe(true);
+    expect(
+      titleIsDedicatedTo(
+        `test(e2e): https://gitlab.example/un/itu/genie-ai/-/blob/main/${FILE} is red`,
+        FILE
+      )
+    ).toBe(true);
+  });
+
+  test('a title that names the same file twice is still dedicated to it', () => {
+    // The SAME token twice, and the file under TWO spellings: both name
+    // this one file, so both are a dedication — the title is judged per
+    // FILE, not per token.
+    expect(titleIsDedicatedTo(`test(e2e): ${FILE} — ${FILE} again`, FILE)).toBe(true);
+    expect(titleIsDedicatedTo(`test(e2e): ${FILE} — /home/dev/genie-ai/${FILE}`, FILE)).toBe(true);
+    expect(
+      titleIsDedicatedTo(
+        `test(e2e): ${FILE} — https://gitlab.example/un/itu/genie-ai/-/blob/main/${FILE}`,
+        FILE
+      )
+    ).toBe(true);
+  });
+
+  test('a title that also names a FRONTEND test is still dedicated', () => {
+    // The failure path covers the e2e tree: a frontend test is another
+    // tree, another failure path — its mention says nothing about this
+    // file, and reading it as an umbrella would file a duplicate.
+    expect(
+      titleIsDedicatedTo(
+        `test(e2e): ${FILE} is red (frontend: components/gov-chat-frontend/src/__tests__/chatbotService.test.js)`,
+        FILE
+      )
+    ).toBe(true);
+  });
+
+  test('the path relative to the e2e tree names the file too', () => {
+    expect(titleIsDedicatedTo('test(e2e): helpers/chatbot.spec.js is red', 'tests/e2e/helpers/chatbot.spec.js')).toBe(
+      true
+    );
+  });
+
+  test('an umbrella in the RELATIVE spelling is an umbrella too', () => {
+    // The same umbrella in the RELATIVE spelling: the relative path of
+    // another file is this tree's path too, and it must not be dropped
+    // from the comparison (that would read the umbrella as a dedication).
+    expect(
+      titleIsDedicatedTo(
+        'test(e2e): helpers/chatbot.spec.js and helpers/other.spec.js are red',
+        'tests/e2e/helpers/chatbot.spec.js'
+      )
+    ).toBe(false);
+  });
+
+  test('a path that is only the TAIL of another e2e file does not match', () => {
     // tests/e2e/helpers/tests/e2e/theme-runtime-config.spec.js is a
     // different file that happens to carry this one's path as its tail.
-    expect(mentionsPath('tests/e2e/helpers/tests/e2e/theme-runtime-config.spec.js', FILE)).toBe(false);
+    expect(titleIsDedicatedTo('tests/e2e/helpers/tests/e2e/theme-runtime-config.spec.js', FILE)).toBe(false);
   });
 
-  test('the e2e root itself as the prefix does NOT match either', () => {
-    // tests/e2e/tests/e2e/theme-runtime-config.spec.js: the prefix is the
-    // e2e root exactly, with no trailing separator to key the refusal on.
-    expect(mentionsPath('tests/e2e/tests/e2e/theme-runtime-config.spec.js', FILE)).toBe(false);
+  test('a title that names no spec file is dedicated to nothing', () => {
+    expect(titleIsDedicatedTo('the e2e suite is red', FILE)).toBe(false);
+  });
+});
+
+test.describe('a match must be DEDICATED to the spec file', () => {
+  test('the dedicated issue whose title carries the path matches', () => {
+    const issue = { title: `test(e2e): ${FILE} is red`, description: '' };
+    expect(findTrackedIssue(FILE, [issue])).toBe(issue);
   });
 
-  test('an unrelated path does not match', () => {
-    expect(mentionsPath('components/gov-chat-frontend/src/App.vue', FILE)).toBe(false);
+  test("the script's own marker in the description matches", () => {
+    const issue = { title: 'local e2e run failures', description: `- spec file: \`${FILE}\`` };
+    expect(findTrackedIssue(FILE, [issue])).toBe(issue);
+  });
+
+  test('an umbrella that only LISTS the path does not absorb the failure', () => {
+    // The wave issue that touched a dozen spec files names them in its
+    // description. Absorbing their failures would leave a red file with no
+    // issue of its own — the tracker noise this path exists to end.
+    const umbrella = {
+      title: '13 spec files hardcode the Compose edge',
+      description: `The wave touched ${FILE} and twelve other files.`,
+    };
+    expect(findTrackedIssue(FILE, [umbrella])).toBe(null);
+  });
+
+  test('an umbrella that LISTS the paths in its TITLE does not absorb the failure either', () => {
+    // The title names several spec files: that is a group, not a
+    // dedication. The file's own failure still needs its own issue.
+    const umbrella = {
+      title: `test(e2e): ${FILE} and tests/e2e/other.spec.js are red`,
+      description: '',
+    };
+    expect(findTrackedIssue(FILE, [umbrella])).toBe(null);
+  });
+
+  test("another file's marker does not match", () => {
+    const issue = { title: 'local e2e run failures', description: '- spec file: `tests/e2e/other.spec.js`' };
+    expect(findTrackedIssue(FILE, [issue])).toBe(null);
+  });
+
+  test('an issue without a title does not take the filing loop down', () => {
+    // The tracker's issues always carry a title; a malformed one must not
+    // throw out of the per-file error handling (an undefined title is a
+    // TypeError in the path matcher, not a verdict).
+    expect(findTrackedIssue(FILE, [{ description: '' }])).toBe(null);
+  });
+
+  test('the issue whose TITLE is dedicated wins over one matched by the marker', () => {
+    // Both are the file's issue — the marker match names it in the
+    // description, the dedicated match in the title. The one a reader
+    // lands on is the dedicated one, so that is the one the dedupe must
+    // return: a filing that lands on the marker match leaves the
+    // dedicated issue open and the file pointing at the other one.
+    const byMarker = { title: 'local e2e run failures', description: `- spec file: \`${FILE}\`` };
+    const byTitle = { title: `test(e2e): ${FILE} is red`, description: '' };
+    expect(findTrackedIssue(FILE, [byMarker, byTitle])).toBe(byTitle);
+    // The order does not decide it either way.
+    expect(findTrackedIssue(FILE, [byTitle, byMarker])).toBe(byTitle);
+  });
+
+  test('a bare name of ANOTHER tree\'s file is not this tree\'s path', () => {
+    // A title that names an e2e spec AND a frontend unit test by its
+    // bare name is still a DEDICATION to the e2e file: the frontend test
+    // is not this tree's business. Counting it would make the title look
+    // like a group, and the failure path would file a second issue for a
+    // file that already has one.
+    //
+    // The other tree's file lives in a THROWAWAY tree, not in this
+    // checkout: the rule is about the names beside the tree, and a case
+    // that leaned on a file of ANOTHER component would break when that
+    // component renames it.
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'e2e-dedupe-'));
+    try {
+      // A name NO file in this checkout carries: a name that also exists
+      // here would make the case pass whatever root the walk used, and
+      // the root is the thing the case is about.
+      const frontend = 'SomeOtherTreeOnly.test.js';
+      fs.mkdirSync(path.join(root, 'components/gov-chat-frontend'), { recursive: true });
+      fs.writeFileSync(path.join(root, 'components/gov-chat-frontend', frontend), '');
+      const title = `test(e2e): ${FILE} and ${frontend} are red`;
+      expect(titleIsDedicatedTo(title, FILE, root)).toBe(true);
+      // And the frontend file on its own names nothing here.
+      expect(titleIsDedicatedTo(`test(e2e): ${frontend} is red`, FILE, root)).toBe(false);
+    } finally {
+      fs.rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  test('a COPY of this tree elsewhere in the checkout does not make its names another tree\'s', () => {
+    // The operator's checkout carries sibling worktrees, and each of them
+    // holds a full copy of tests/e2e. Those copies are THIS tree's own
+    // business: if their spec names counted as "another tree's files",
+    // this tree's bare names would stop naming this tree — and a title
+    // that names one of them by its bare name would no longer be a
+    // DEDICATION to it, so the failure path would file a SECOND issue
+    // for a file that already has one.
+    //
+    // The rule is exercised in a checkout shaped like that one — a
+    // throwaway tree the rule is pointed at, with this tree's own spec
+    // and the same file inside a sibling worktree's copy of the tree.
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'e2e-dedupe-'));
+    try {
+      fs.mkdirSync(path.join(root, 'tests/e2e'), { recursive: true });
+      fs.writeFileSync(path.join(root, 'tests/e2e/thing.spec.js'), '');
+      fs.mkdirSync(path.join(root, '.claude/worktrees/wt-a/tests/e2e'), { recursive: true });
+      fs.writeFileSync(path.join(root, '.claude/worktrees/wt-a/tests/e2e/thing.spec.js'), '');
+
+      expect(
+        titleIsDedicatedTo('test(e2e): thing.spec.js is red', 'tests/e2e/thing.spec.js', root)
+      ).toBe(true);
+    } finally {
+      fs.rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  test('a bare spec file name is this tree\'s path even when the file is gone', () => {
+    // A RENAMED file must not drop out of the comparison: a title that
+    // names several spec files is a group, not a dedication, and the
+    // renamed file's bare name must still count as one of them —
+    // otherwise one multi-file title turns into a dedication to a file
+    // that is not in it.
+    //
+    // The BARE spelling is the one that decides it: a token that carries
+    // the tree's root ('tests/e2e/...') is recognised by the root alone,
+    // whether the file exists or not. The bare name is recognised by its
+    // OWN shape — it names a spec file — so a file that was renamed
+    // away still counts.
+    const renamed = 'tests/e2e/renamed-away.spec.js';
+    expect(titleIsDedicatedTo('test(e2e): renamed-away.spec.js is red', renamed)).toBe(true);
+    // And it must not swallow a file it does not name.
+    expect(titleIsDedicatedTo('test(e2e): renamed-away.spec.js is red', FILE)).toBe(false);
+  });
+});
+
+test.describe('one issue per failing spec FILE', () => {
+  test('two failures in the same file are one issue with two entries', () => {
+    // The file is the unit an owner fixes: a file-level title keeps the
+    // dedupe stable across runs, and the failing TESTS are the entries
+    // inside it.
+    const failed = [
+      { file: 'tests/e2e/a.spec.js', title: 'a › first', test: { results: [{ error: { message: 'boom' } }] } },
+      { file: 'tests/e2e/a.spec.js', title: 'a › second', test: { results: [{ error: { message: 'bang' } }] } },
+      { file: 'tests/e2e/b.spec.js', title: 'b › third', test: { results: [{ error: { message: 'snap' } }] } },
+    ];
+    const byFile = groupFailuresByFile(failed);
+    expect(byFile.size).toBe(2);
+    expect(byFile.get('tests/e2e/a.spec.js').map((f) => f.title)).toEqual(['a › first', 'a › second']);
+    expect(byFile.get('tests/e2e/b.spec.js').map((f) => f.title)).toEqual(['b › third']);
+  });
+
+  test('the filed body carries the marker the dedupe reads back', () => {
+    // ONE spelling, used both to write the marker and to read it back:
+    // a drift between the two would silently degrade the dedupe to
+    // title-only.
+    const body = issueBody('tests/e2e/a.spec.js', [{ title: 'a › first', error: 'boom' }], 'https://venue.example:4443', '2026-11-11T00:00:00Z');
+    expect(body).toContain('- spec file: `tests/e2e/a.spec.js`');
+    // And the failure it files is in the body.
+    expect(body).toContain('a › first');
   });
 });
 

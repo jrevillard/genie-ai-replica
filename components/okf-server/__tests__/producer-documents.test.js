@@ -145,6 +145,28 @@ function programQuery() {
       ) {
         throw new Error('mock: the duplicate-content gate no longer states the filters it models');
       }
+      // The mock models ONE gate: the repository collection, the source
+      // list, and the EXACT filter terms it re-implements in JS. A statement
+      // that scans something else, or that carries a term the mock does not
+      // know, is a DIFFERENT gate — the mock refuses to answer for it
+      // instead of answering from its own belief (an extra term would
+      // exclude repositories the mock still reports).
+      const outerCollection = /FOR\s+r\s+IN\s+(\w+)/.exec(text);
+      if (!outerCollection || outerCollection[1] !== 'okf_repositories') {
+        throw new Error('mock: the duplicate-content gate no longer scans the repository collection it models');
+      }
+      const innerPath = /FOR\s+s\s+IN\s*\(\s*r\.(\w+)/.exec(text);
+      if (!innerPath || innerPath[1] !== 'source_documents') {
+        throw new Error('mock: the duplicate-content gate no longer scans the source list it models');
+      }
+      const outerFilter = /FILTER\s+(r\.[^\n]+)/.exec(text);
+      if (!outerFilter || outerFilter[1].split(/\s+AND\s+/).length !== 3) {
+        throw new Error('mock: the duplicate-content gate no longer states the filter terms it models');
+      }
+      const innerFilter = /FILTER\s+(s\.[^\n]+)/.exec(text);
+      if (!innerFilter || innerFilter[1].split(/\s+AND\s+/).length !== 2) {
+        throw new Error('mock: the duplicate-content gate no longer states the hash terms it models');
+      }
       // The ORDER, the LIMIT and the PROJECTION are part of the ANSWER: the
       // gate names ONE repository — the oldest offender — and the refusal
       // tells the steward which one to retract. A gate that changed its
@@ -257,6 +279,11 @@ beforeEach(async () => {
   // the conversion registry is: a test that aborts between the claim and its
   // release would otherwise leave the content claimed for the whole process.
   producer.__resetContentClaims();
+  // The mock STORE is reset too: a repository saved by an earlier test must
+  // not join this test's answers (the duplicate gate reads every live
+  // repository). Without it, a test's result depends on the order the
+  // runner happens to use.
+  mockDb._reset();
   programQuery();
 });
 
@@ -290,11 +317,32 @@ describe('the mock refuses to answer for a gate that lost a stated predicate', (
 
   it.each([
     ['the retracted exemption', GATE_AQL.replace(" AND r.lifecycle_state != 'retracted'", ''), /filters it models/],
+    ['the deleted filter', GATE_AQL.replace('r.deleted_at == null AND ', ''), /filters it models/],
+    ['the importing repository exemption', GATE_AQL.replace('r.repo_id != @rid AND ', ''), /filters it models/],
+    ['the null-hash filter', GATE_AQL.replace('s.file_hash != null AND ', ''), /filters it models/],
     ['the length filter', GATE_AQL.replace('FILTER LENGTH(dupFiles) > 0', ''), /filters it models/],
     ['the order', GATE_AQL.replace('SORT r.created_at', ''), /order, the limit and the projection/],
     ['the limit', GATE_AQL.replace('LIMIT 1', ''), /order, the limit and the projection/],
     ['the projected name', GATE_AQL.replace('name: r.name, ', ''), /no longer projects name/],
-    ['the projected file name', GATE_AQL.replace(', file_name: s.file_name', ''), /no longer projects file_name/]
+    ['the projected repo id', GATE_AQL.replace('repo_id: r.repo_id, ', ''), /no longer projects repo_id/],
+    ['the projected file name', GATE_AQL.replace(', file_name: s.file_name', ''), /no longer projects file_name/],
+    ['the projected file id', GATE_AQL.replace('file_id: s.file_id, ', ''), /no longer projects file_id/],
+    [
+      'the scanned collection',
+      GATE_AQL.replace('FOR r IN okf_repositories', 'FOR r IN other_things'),
+      /collection it models/
+    ],
+    ['the scanned source list', GATE_AQL.replace('r.source_documents', 'r.sources'), /source list it models/],
+    [
+      'an added filter term',
+      GATE_AQL.replace('r.deleted_at == null AND', "r.deleted_at == null AND r.domain == 'social' AND"),
+      /filter terms it models/
+    ],
+    [
+      'an added hash term',
+      GATE_AQL.replace('s.file_hash != null AND', 's.file_hash != null AND s.size > 0 AND'),
+      /hash terms it models/
+    ]
   ])('refuses a gate that lost %s', async (_what, statement, message) => {
     await expect(mockDb.query(statement, bind)).rejects.toThrow(message);
   });
@@ -302,6 +350,67 @@ describe('the mock refuses to answer for a gate that lost a stated predicate', (
   it('answers for the statement it models', async () => {
     const cursor = await mockDb.query(GATE_AQL, bind);
     await expect(cursor.all()).resolves.toEqual([]);
+  });
+
+  it('follows the projection SOURCE, not the projected field NAME', async () => {
+    // The mock resolves the projected values from the SOURCE the statement
+    // names. That resolution IS the mock's headline capability: a mock that
+    // answered from the field NAME would report the repository's name where
+    // the statement asks for its creation date — and the round's whole hole
+    // (a projection that reads another attribute) would reopen, green.
+    await mockDb.collection('okf_repositories').save({
+      _key: 'r-src',
+      repo_id: 'r-src',
+      name: 'Named repo',
+      domain: 'general',
+      created_at: '2026-09-10T00:00:00Z',
+      source_documents: [{ kind: 'document', file_id: 'old-1', file_name: 'alpha.md', file_hash: 'HASH-SRC' }]
+    });
+    const statement = GATE_AQL.replace('name: r.name,', 'name: r.created_at,').replace(
+      'file_name: s.file_name',
+      'file_name: s.kind'
+    );
+    const cursor = await mockDb.query(statement, { rid: RID, hashes: ['HASH-SRC'] });
+    const rows = await cursor.all();
+    expect(rows[0].name).toBe('2026-09-10T00:00:00Z'); // the SOURCE, not the repository's name
+    expect(rows[0].dupFiles[0].file_name).toBe('document'); // the SOURCE, not the file's name
+  });
+
+  it('models the statement production actually issues', async () => {
+    // The modelled statement is a hand-copy: when production's AQL changes
+    // shape, the copy would drift and the doctored table would keep
+    // describing a statement nobody runs. This compares the copy with the
+    // statement the service issued.
+    await mockDb.collection('okf_repositories').save({ _key: RID, repo_id: RID, name: 'Mine', domain: 'general' });
+    authedAxios.get.mockImplementation((url) => {
+      const s = String(url);
+      if (s.endsWith('/download')) {
+        const fid = s.split('/api/files/')[1].replace(/\/download$/, '');
+        return Promise.resolve({ data: Readable.from([Buffer.from('# T\n\nbody for ' + fid)]) });
+      }
+      const fid = s.split('/api/files/')[1];
+      // the file carries a hash: the gate is only queried when there is a
+      // candidate hash to match
+      return Promise.resolve({
+        data: {
+          file: {
+            file_id: fid,
+            file_name: 'alpha.md',
+            size: 100,
+            file_hash: 'HASH-DRIFT',
+            dataprep: { status: 'Pending' }
+          }
+        }
+      });
+    });
+    await producer.startDocumentsConversion({ repo_id: RID, file_ids: ['f1'], requested_name: 'x' }).catch(() => {});
+
+    const issued = mockDb.query.mock.calls
+      .map((c) => (typeof c[0] === 'string' ? c[0] : c[0] && c[0].query))
+      .find((q) => typeof q === 'string' && q.includes('POSITION(@hashes'));
+    expect(issued).toBeDefined();
+    const norm = (s) => s.replace(/\s+/g, ' ').trim();
+    expect(norm(issued)).toBe(norm(GATE_AQL));
   });
 });
 
@@ -983,7 +1092,7 @@ describe('producer-service — startDocumentsConversion + run', () => {
 
     await expect(
       producer.startDocumentsConversion({ repo_id: RID, file_ids: ['f1'], requested_name: 'x' })
-    ).rejects.toThrow(/already imported into OKF repository "Zebra repo"/);
+    ).rejects.toThrow(/already imported into OKF repository "Zebra repo" \(files: alpha\.md\)/);
   });
 
   it('a RETRACTED repository does not block the same content — it is out of service', async () => {
@@ -1434,6 +1543,9 @@ describe('producer-service — startDocumentsConversion + run', () => {
   // DISABLED for the whole repository — which is exactly how a 41/41 stamp
   // failure went unnoticed. One aggregated ERROR, not 41 WARNs.
   it('reports a TOTAL stamp failure as one error (a 100% rate disables the duplicate guard)', async () => {
+    // the repository is its own fixture: the store is reset between tests,
+    // so a test that needs one saves one
+    await mockDb.collection('okf_repositories').save({ _key: RID, repo_id: RID, name: 'Mine', domain: 'general' });
     logger.error.mockClear();
     logger.warn.mockClear();
     authedAxios.patch.mockRejectedValue(new Error('403 FORBIDDEN'));

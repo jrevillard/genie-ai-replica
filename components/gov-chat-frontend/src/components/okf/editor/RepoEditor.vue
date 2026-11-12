@@ -173,7 +173,12 @@
            the vectorized head is what the tags become at publish; the CTA
            opens the Testing Lab to test it against competing repositories. -->
       <div v-if="repoId" class="okf-re__head-badge">
-        <button type="button" class="okf-re__head-badge-btn" @click="headTestOpen = true">
+        <button
+          type="button"
+          class="okf-re__head-badge-btn"
+          data-test-id="repo-editor-lab-open"
+          @click="headTestOpen = true"
+        >
           <span :class="['okf-re__head-dot', 'okf-re__head-dot--' + headStatus]" />
           {{ headBadgeText }}
           <span class="okf-re__head-cta">{{ translate('okf.testingLab.cta', 'Testing Lab') }} →</span>

@@ -6,7 +6,13 @@
           <slot name="header">
             <h2 v-if="title">{{ isTranslationKey ? $t(title) : title }}</h2>
           </slot>
-          <DsButton variant="ghost" class="ds-modal__close" aria-label="Close" @click="$emit('close')">
+          <DsButton
+            variant="ghost"
+            class="ds-modal__close"
+            data-test-id="ds-modal-close"
+            aria-label="Close"
+            @click="$emit('close')"
+          >
             &times;
           </DsButton>
         </div>

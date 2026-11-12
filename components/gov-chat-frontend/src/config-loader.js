@@ -112,6 +112,22 @@ const validateQuickHelpButtons = (data) => {
       );
     }
     seen.set(id, index);
+    // The optional serviceLabels array narrows a button's scope beneath its
+    // category: each entry names a service label the live hierarchy must
+    // carry — the component checks that against the tree at render (a label
+    // the hierarchy does not carry breaks the card, the same way an unknown
+    // category does). Here we pin only the SHAPE, so a malformed value is
+    // refused at boot/build instead of reaching the wire as a broken scope.
+    const labels = button?.serviceLabels;
+    if (labels != null) {
+      const wellFormed =
+        Array.isArray(labels) && labels.every((label) => typeof label === 'string' && label.trim() !== '');
+      if (!wellFormed) {
+        throw new Error(
+          `genie-ai-config.json: Quick Help button #${index} ("${id}") carries a malformed "serviceLabels" — it must be an array of non-blank strings when present, each entry naming a service in the knowledge hierarchy (e.g. ["Sunni"] under "Hadith").`
+        );
+      }
+    }
     // The "hidden" flag's shape is a property of the document, so the
     // report lives at configuration-resolution time (#1361): one warning
     // per malformed flag per session, named by the button's id — not one

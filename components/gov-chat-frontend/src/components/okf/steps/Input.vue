@@ -153,7 +153,13 @@
     <!-- Click-to-edit (D5): a saved concept is never a dead end. readOnly is
          threaded (audit A7-3): a serving repo's steward must retract before
          editing — the dialog's Save/autosave otherwise stayed live. -->
-    <DsDialog :visible="editOpen" :title="editTitle" size="xl" scrollable @close="editOpen = false">
+    <DsDialog
+      class="genie-living-intelligence"
+      :visible="editOpen"
+      :title="editTitle"
+      size="xl"
+      @close="editOpen = false"
+    >
       <OkfConceptEditor
         v-if="editOpen && editConceptId"
         :repo-id="repoId"
@@ -171,6 +177,7 @@
          the delete request is in flight — dismissing mid-delete no longer
          leaves the deletion running behind a closed dialog. -->
     <DsDialog
+      class="genie-living-intelligence"
       :visible="deleteAsk !== null"
       :title="translate('okf.steps.input.deleteTitle', 'Delete topic')"
       size="sm"
@@ -192,6 +199,7 @@
          entities, zero requests, zero audit rows). Same confirm + action +
          refresh contract as RepoEditor, reusing its i18n keys. -->
     <DsDialog
+      class="genie-living-intelligence"
       :visible="piiBulkAsk !== null"
       :title="piiBulkTitle"
       size="sm"

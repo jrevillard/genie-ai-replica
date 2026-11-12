@@ -9,6 +9,7 @@
 -->
 <template>
   <DsDialog
+    class="genie-living-intelligence"
     :visible="visible"
     :title="translate('okf.editor.resplit.title', 'Re-split from source')"
     size="md"

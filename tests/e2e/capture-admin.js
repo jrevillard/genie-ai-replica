@@ -71,6 +71,16 @@ const TABS = [
   'models'
 ];
 
+// The dashboard's readiness contract, stated ONCE: the route's loading
+// spinner covers the dashboard until the initial loads settle. Every
+// /admin (re)entry waits here — three copies of this sequence drifted
+// once already.
+async function gotoAdminReady(page) {
+  await page.goto(new URL('/admin', BASE_URL).toString(), { waitUntil: 'domcontentloaded' });
+  await page.waitForSelector('[data-test-id="admin-dashboard"]', { timeout: 30000 });
+  await page.waitForSelector('.ds-spinner-wrapper--fixed', { state: 'detached', timeout: 30000 });
+}
+
 const audit = (label) => {
   const root = document.documentElement;
   const page = document.querySelector('.admin-page');
@@ -110,14 +120,7 @@ const audit = (label) => {
     await page.waitForSelector('[data-testid="quick-help-overlay"]', { timeout: 30000 });
     await page.waitForSelector('[data-test-id="splash-screen"]', { state: 'detached', timeout: 15000 });
 
-    await page.goto(new URL('/admin', BASE_URL).toString(), {
-      waitUntil: 'domcontentloaded'
-    });
-    await page.waitForSelector('[data-test-id="admin-dashboard"]', { timeout: 30000 });
-    // The route's loading spinner (DsSpinner fixed) covers the dashboard
-    // until the initial loads settle. A capture under it photographs the
-    // loading state, not the tab panel; gone is the condition.
-    await page.waitForSelector('.ds-spinner-wrapper--fixed', { state: 'detached', timeout: 30000 });
+    await gotoAdminReady(page);
 
     const pre = await page.evaluate(audit, 'pre');
     if (pre.dataVisual !== 'on') {
@@ -271,6 +274,177 @@ const audit = (label) => {
       await page.waitForSelector(d.dialogSel, { state: 'detached', timeout: 10000 });
     }
 
+    // -- the phase X interiors ---------------------------------------------
+    // The interiors live on the STUDIO tab; the dialog loop left the logs
+    // tab active, and the studio surfaces mount only when the tab is
+    // active (v-if) — navigate first, wait the tab's own active state.
+    await page.click('[data-test-id="ds-tab-studio"]');
+    await page.waitForSelector('[data-test-id="ds-tab-studio"].ds-tabs__btn--active', {
+      timeout: 10000
+    });
+
+    // The wizard: the studio view toggle's declared handles land on the
+    // step shell — every step renders inside .okf-wizard__step, so one
+    // capture covers the ten-step shell.
+    await page.click('[data-test-id="studio-view-wizard"]');
+    await page.waitForSelector('.okf-wizard__step', { timeout: 15000 });
+    const wizardData = await page.evaluate(audit, 'wizard');
+    if (!wizardData.pageTitleGradient) {
+      throw new Error(
+        `capture-admin ${theme} wizard: .page-title has no gradient ` +
+          `background-image — the brand ramp is not painting.`
+      );
+    }
+    const wizardName = `${theme}-interior-wizard`;
+    const wizardFile = path.join(OUT_DIR, `${wizardName}.png`);
+    await page.screenshot({ path: wizardFile, fullPage: false, animations: 'disabled' });
+    fs.writeFileSync(path.join(OUT_DIR, `${wizardName}.audit.json`), JSON.stringify(wizardData, null, 2));
+    results[wizardName] = wizardFile;
+    console.log(`${wizardName}: ${wizardFile}`);
+
+    // The editor + lab: need an OPENED repository — venue state, checked
+    // loudly like the document rows. The dashboard repo cards carry
+    // okf-studio-repo-<id> handles; the first opens the editor shell (an
+    // async chunk — the wait is the shell's own class). The lab opens from
+    // the editor's declared CTA; the DsModal close handle (the primitive's
+    // own, added this phase) closes it, and the pane tree unmounts with the
+    // dialog.
+    // The editor + lab need an OPENED repository — FIXED, ISOLATED SEED
+    // DATA: the harness seeds its own DRAFT repo (unique name per run) via
+    // the same API the studio's create dialog uses, captures, and deletes
+    // it in a finally (a failing capture still removes the seed; a failed
+    // delete fails the run naming the leftover). The bearer rides the
+    // page's own session (the oidc user in sessionStorage — the same store
+    // the raw-fetch open paths read).
+    const bearer = await page.evaluate(() => {
+      const key = Object.keys(sessionStorage).find((k) => k.startsWith('oidc.user:'));
+      return key ? JSON.parse(sessionStorage.getItem(key)).access_token : null;
+    });
+    if (!bearer) throw new Error('capture-admin: no oidc token in sessionStorage — the login did not persist a user.');
+    const seedName = `capture-seed-${Date.now()}`;
+    let repoId = null;
+    try {
+      repoId = await page.evaluate(
+        async ({ bearer, body }) => {
+          const res = await fetch('/api/okf/repos', {
+            method: 'POST',
+            headers: { Authorization: `Bearer ${bearer}`, 'Content-Type': 'application/json' },
+            body: JSON.stringify(body)
+          });
+          if (!res.ok) throw new Error(`seed create failed: HTTP ${res.status} ${(await res.text()).slice(0, 200)}`);
+          const j = await res.json();
+          const id = j && (j.repo_id || (j.repo && j.repo.repo_id));
+          if (!id) throw new Error(`seed create returned no repo_id (2xx body: ${JSON.stringify(j).slice(0, 200)})`);
+          return id;
+        },
+        {
+          bearer,
+          body: {
+            name: seedName,
+            domain: 'general',
+            acl: { required_scopes: ['okf:t:general:admin'] },
+            lifecycle_state: 'draft'
+          }
+        }
+      );
+    } catch (err) {
+      // The venue-skip pattern: a 403 FORBIDDEN_SCOPE is the venue's own
+      // answer — the test fixture holds no okf scopes, and repo creation is
+      // a management route (default-deny). The editor/lab captures SKIP
+      // with that reason; every OTHER seed failure is a real failure and
+      // still throws.
+      if (!/FORBIDDEN_SCOPE/.test(err.message)) throw err;
+      console.log(
+        `${theme} interior-editor/lab: SKIPPED — the venue refuses repo ` +
+          `creation to the test fixture (no okf scopes; management routes ` +
+          `are default-deny). Grant the fixture okf scopes to enable ` +
+          `these captures.`
+      );
+    }
+    // The named skip above already recorded its reason; the editor/lab
+    // block below runs only on a successful seed — the layer-off capture
+    // after it always runs.
+    const seededCard = `[data-test-id="okf-studio-repo-${repoId}"]`;
+
+    if (repoId) {
+      try {
+        // The dashboard mounted BEFORE the seed existed — reload the route so
+        // the lane list includes it, then navigate back in.
+        await gotoAdminReady(page);
+        await page.click('[data-test-id="ds-tab-studio"]');
+        await page.waitForSelector('[data-test-id="ds-tab-studio"].ds-tabs__btn--active', { timeout: 10000 });
+        await page.waitForSelector(seededCard, { timeout: 20000 });
+        await page.click(seededCard);
+        // onResume lands the repo on the WIZARD sub-tab (the intended
+        // landing); the editor frame is the shell's other sub-tab — the
+        // DsTabs primitive's own handles switch to it.
+        await page.click('[data-test-id="ds-tab-editor"]');
+        await page.waitForSelector('.okf-shell', { timeout: 20000 });
+        // The X1 chrome asserted, not just photographed: the editor frame's
+        // top-lit wash is a background-image gradient — the same computed
+        // proof the page-title rule uses.
+        const shellChrome = await page.evaluate(() => {
+          const el = document.querySelector('.okf-shell');
+          return el ? /gradient/i.test(getComputedStyle(el).backgroundImage) : false;
+        });
+        if (!shellChrome) {
+          throw new Error(
+            `capture-admin ${theme} editor: .okf-shell carries no gradient ` +
+              `background-image — the X1 chrome is not painting.`
+          );
+        }
+        const editorData = await page.evaluate(audit, 'editor');
+        const editorName = `${theme}-interior-editor`;
+        const editorFile = path.join(OUT_DIR, `${editorName}.png`);
+        await page.screenshot({ path: editorFile, fullPage: false, animations: 'disabled' });
+        fs.writeFileSync(path.join(OUT_DIR, `${editorName}.audit.json`), JSON.stringify(editorData, null, 2));
+        results[editorName] = editorFile;
+        console.log(`${editorName}: ${editorFile}`);
+
+        await page.click('[data-test-id="repo-editor-lab-open"]');
+        await page.waitForSelector('.okf-headtest__tabs', { timeout: 20000 });
+        // The lab's pane chrome paints through the INSTANCE GATE (the
+        // teleported backdrop carries the class) — asserted, or a silent
+        // unpainted lab would photograph as green.
+        const labChrome = await page.evaluate(() => {
+          const el = document.querySelector('.okf-headtest__pane');
+          return el ? /gradient/i.test(getComputedStyle(el).backgroundImage) : false;
+        });
+        if (!labChrome) {
+          throw new Error(
+            `capture-admin ${theme} lab: .okf-headtest__pane carries no ` +
+              `gradient background-image — the instance gate is not ` +
+              `reaching the teleported dialog.`
+          );
+        }
+        const labData = await page.evaluate(audit, 'lab');
+        const labName = `${theme}-interior-lab`;
+        const labFile = path.join(OUT_DIR, `${labName}.png`);
+        await page.screenshot({ path: labFile, fullPage: false, animations: 'disabled' });
+        fs.writeFileSync(path.join(OUT_DIR, `${labName}.audit.json`), JSON.stringify(labData, null, 2));
+        results[labName] = labFile;
+        console.log(`${labName}: ${labFile}`);
+
+        await page.click('[data-test-id="ds-modal-close"]');
+        await page.waitForSelector('.okf-headtest__tabs', { state: 'detached', timeout: 10000 });
+      } finally {
+        await page.evaluate(
+          async ({ bearer: b, id }) => {
+            const res = await fetch(`/api/okf/repos/${encodeURIComponent(id)}`, {
+              method: 'DELETE',
+              headers: { Authorization: `Bearer ${b}` }
+            });
+            if (!res.ok && res.status !== 404) {
+              throw new Error(
+                `seed cleanup FAILED: HTTP ${res.status} for ${id} — the leftover repo must be removed by hand`
+              );
+            }
+          },
+          { bearer, id: repoId }
+        );
+      }
+    }
+
     // -- the layer-off variant ---------------------------------------------
     // The additive-layer contract's other half: with theme.visual disabled,
     // the route paints NO decorations while its markup (the static gate
@@ -293,11 +467,7 @@ const audit = (label) => {
     await page.route('**/config/genie-ai-config.json', (route) =>
       route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(offConfig) })
     );
-    await page.goto(new URL('/admin', BASE_URL).toString(), {
-      waitUntil: 'domcontentloaded'
-    });
-    await page.waitForSelector('[data-test-id="admin-dashboard"]', { timeout: 30000 });
-    await page.waitForSelector('.ds-spinner-wrapper--fixed', { state: 'detached', timeout: 30000 });
+    await gotoAdminReady(page);
 
     const off = await page.evaluate(audit, 'layer-off-overview');
     if (off.dataVisual !== 'off') {

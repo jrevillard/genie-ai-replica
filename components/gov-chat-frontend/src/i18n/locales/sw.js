@@ -2122,6 +2122,16 @@ export default {
         modeCHint: 'Kisa cha 10.6 — kinakuja hivi karibuni',
         title: 'Gawanya upya kutoka chanzo'
       },
+      rename: {
+        body: 'Kubadilisha jina pia hubadilisha majina ya grafu za nafasi ya kazi za hazina (`OKF_<name>_v<N>`); maudhui, matoleo na rekodi ya ukaguzi hazibadiliki.',
+        cancel: 'Ghairi',
+        confirm: 'Badilisha jina',
+        conflict: 'Jina hili limechukuliwa tayari na hazina nyingine katika kikoa hiki.',
+        failed: 'Kubadilisha jina kumeshindikana',
+        nameLabel: 'Jina la hazina',
+        namePlaceholder: 'Jina la hazina',
+        title: 'Badilisha jina la hazina'
+      },
       save: 'Hifadhi',
       saved: 'Imehifadhiwa',
       saving: 'Inahifadhi…',

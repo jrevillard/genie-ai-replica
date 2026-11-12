@@ -2134,6 +2134,16 @@ export default {
         modeCHint: 'Pale ea 10.6 — e tla haufinyane',
         title: 'Arola hape ho tsoa mohloling'
       },
+      rename: {
+        body: 'Ho fetola lebitso ho fetola hape lebitso la li-graph tsa sebaka sa mosebetsi sa polokelo (`OKF_<name>_v<N>`); seo ka kahare, mekhoa ea pele le paka ea tlhahlobo ha e fetoha.',
+        cancel: 'Khansela',
+        confirm: 'Fetola lebitso',
+        conflict: 'Lebitso lena le sebeditsoe ke polokelo e nngwe domeneng ee.',
+        failed: 'Ho fetola lebitso ho hlolehile',
+        nameLabel: 'Lebitso la polokelo',
+        namePlaceholder: 'Lebitso la polokelo',
+        title: 'Fetola lebitso la polokelo'
+      },
       save: 'Boloka',
       saved: 'Bolokiloe',
       saving: 'Ho boloka…',

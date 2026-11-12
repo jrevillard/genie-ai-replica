@@ -41,9 +41,7 @@ function isTransientStatus(status) {
  * @throws {Error} The error — transient when the status is transient
  */
 function failWithStatus(message, status, options) {
-  const error = isTransientStatus(status)
-    ? transientError(message, options)
-    : new Error(message, options);
+  const error = isTransientStatus(status) ? transientError(message, options) : new Error(message, options);
   error.httpStatus = status;
   throw error;
 }
@@ -103,11 +101,11 @@ function bodyText(res) {
 // read site can silently fall through.
 const ARRAY_SHAPE = {
   ok: (data) => Array.isArray(data),
-  complaint: 'with a non-array payload',
+  complaint: 'with a non-array payload'
 };
 const REPRESENTATION_SHAPE = {
   ok: (data) => Boolean(data) && typeof data === 'object' && Boolean(data.id),
-  complaint: 'without a usable representation',
+  complaint: 'without a usable representation'
 };
 
 /**
@@ -143,7 +141,7 @@ async function adminRequest(method, path, adminToken, what, body) {
   try {
     return await request(method, path, {
       headers: { Authorization: `Bearer ${adminToken}` },
-      body,
+      body
     });
   } catch (err) {
     throw requestFailure(err, what);
@@ -276,7 +274,7 @@ async function findRealmRole(adminToken, realm, roleName) {
       absentStatus: 404,
       // A 200 with no usable representation is a broken answer, not a role:
       // the callers index role.id on it.
-      shape: REPRESENTATION_SHAPE,
+      shape: REPRESENTATION_SHAPE
     }
   );
   if (res === null) return null;
@@ -307,7 +305,7 @@ async function resolveRealmRoles(adminToken, realm, roleNames) {
     // Keycloak's own — an expired admin token answers 401, and that must
     // not be reported as a missing realm.
     const realmRes = await readAdminApi(adminToken, `/auth/admin/realms/${realm}`, `the realm ${realm}`, {
-      absentStatus: 404,
+      absentStatus: 404
     });
     if (realmRes === null) {
       // The realm itself is gone. The caller decides what that means: the
@@ -333,7 +331,7 @@ async function assignRealmRoles(adminToken, realm, userId, roleNames) {
   const {
     roles: rolesToAssign,
     missing: missingRoles,
-    realmMissing,
+    realmMissing
   } = await resolveRealmRoles(adminToken, realm, roleNames);
   if (realmMissing) {
     throw new Error(`The realm ${realm} does not exist — the venue is not provisioned`);
@@ -386,10 +384,10 @@ async function createUser(adminToken, realm, userData) {
             {
               type: 'password',
               value: userData.password,
-              temporary: false,
-            },
+              temporary: false
+            }
           ]
-        : undefined,
+        : undefined
     }
   );
 
@@ -505,12 +503,11 @@ async function effectiveRealmRoles(adminToken, realm, userId) {
  * check the login-visible state, assign the roles.
  * @param {string} adminToken - Keycloak admin access token
  * @param {string} realm - Realm name
- * @param {object} userData - { username, email, password, firstName?, lastName?, realmRoles? }
+ * @param {object} userData - { username, email, password, firstName?, lastName?, realmRoles?, attributes? }
  * @returns {Promise<string>} The user UUID
  */
 async function convergeUser(adminToken, realm, userData) {
   const { username, email, password } = userData;
-
   const res = await adminRequest(
     'POST',
     `/auth/admin/realms/${realm}/users`,
@@ -524,6 +521,7 @@ async function convergeUser(adminToken, realm, userData) {
       enabled: true,
       emailVerified: true,
       credentials: password ? [{ type: 'password', value: password, temporary: false }] : undefined,
+      attributes: userData.attributes || undefined
     }
   );
 
@@ -584,7 +582,9 @@ async function convergeUser(adminToken, realm, userData) {
         // deadline-based retry exists to save. The probe's verdict already
         // names the operation — it is kept whole, with the diagnosis step
         // added after it, so no verdict is stitched inside another.
-        throw transientError(`${probeErr.message} (while running the email-ownership probe of ${email})`, { cause: probeErr });
+        throw transientError(`${probeErr.message} (while running the email-ownership probe of ${email})`, {
+          cause: probeErr
+        });
       }
       if (owners.length > 0) {
         throw new Error(EMAIL_CONFLICT_VERDICT(err.message, owners[0].username, email), { cause: err });
@@ -592,6 +592,52 @@ async function convergeUser(adminToken, realm, userData) {
       throw new Error(ACCOUNT_VANISHED_VERDICT(err.message, username, email), { cause: err });
     }
     throw err;
+  }
+
+  if (status === 409 && userData.attributes) {
+    // Converge the attributes: an account carried over from an earlier
+    // fixture revision predates any attribute this revision declares. The
+    // PUT's attributes map REPLACES the user's attributes map, and the
+    // profile fields the payload omits are CLEARED (the Keycloak
+    // partial-update trap — a lone-attributes PUT wiped the fixture's
+    // names and fired VERIFY_PROFILE on the next login). The PUT carries
+    // the FULL payload: the profile fields plus the attributes.
+    const attrRes = await adminRequest(
+      'PUT',
+      `/auth/admin/realms/${realm}/users/${user.id}`,
+      adminToken,
+      `the attribute convergence of ${username} (${user.id})`,
+      {
+        firstName: userData.firstName || username,
+        lastName: userData.lastName || 'Test',
+        email,
+        enabled: true,
+        emailVerified: true,
+        attributes: userData.attributes
+      }
+    );
+    if (attrRes.status !== 204) {
+      // The write is the WHOLE POINT of this branch — a silent failure
+      // would provision an account without the grant and surface as a
+      // 403 far from the cause (the harness's seed create). Same verdict
+      // shape as the password convergence below.
+      failWithStatus(
+        `Failed to converge the attributes of ${username}: HTTP ${attrRes.status} ${bodyText(attrRes)}`,
+        attrRes.status
+      );
+    }
+    // The PUT touched enabled/emailVerified (the full payload), so the
+    // health check below must read the account AS CONVERGED, not the
+    // pre-PUT snapshot — a carried-over disabled account the PUT just
+    // healed would otherwise fail its own provisioning.
+    const converged = await findUsers(adminToken, realm, 'username', username);
+    if (!converged[0]) {
+      throw new Error(
+        `Cannot re-read ${username} after the attribute convergence: the exact lookup answered empty — ` +
+          `${ACCOUNT_VANISHED}; re-run the provisioning`
+      );
+    }
+    user = converged[0];
   }
 
   if (status === 409 && password) {
@@ -624,8 +670,10 @@ async function convergeUser(adminToken, realm, userData) {
   }
 
   // Fixture health — the login-visible state the browser session depends
-  // on (the exact-match lookup already carries it, so no extra read is
-  // needed). The email is deliberately NOT part of it: an account created
+  // on (read from the post-convergence snapshot: the attribute PUT above
+  // re-reads the account it just wrote; without convergence this is the
+  // exact-match lookup's own read). The email is deliberately NOT part of
+  // it: an account created
   // before the fixtures module existed carries the previous address, and
   // the login reads the username, not the email.
   const healthy = user.enabled === true && user.emailVerified === true;
@@ -668,7 +716,7 @@ async function convergeUser(adminToken, realm, userData) {
  *
  * @param {string} adminToken - Keycloak admin access token
  * @param {string} realm - Realm name
- * @param {object} userData - { username, email, password, firstName?, lastName?, realmRoles? }
+ * @param {object} userData - { username, email, password, firstName?, lastName?, realmRoles?, attributes? }
  * @returns {Promise<string>} The user UUID
  */
 async function ensureUser(adminToken, realm, userData) {
@@ -777,8 +825,8 @@ async function createRotatedKey(adminToken, realm, realmId) {
         priority: ['101'],
         enabled: ['true'],
         active: ['true'],
-        keySize: ['2048'],
-      },
+        keySize: ['2048']
+      }
     }
   );
 
@@ -838,10 +886,7 @@ async function rotateRealmKeys(adminToken, realm) {
   // demote the realm's real signer.
   const reusableKey = existingKeys.find(
     (k) =>
-      typeof k.name === 'string' &&
-      k.name.startsWith(ROTATED_KEY_NAME_PREFIX) &&
-      isRsaSigningKey(k) &&
-      isActiveKey(k)
+      typeof k.name === 'string' && k.name.startsWith(ROTATED_KEY_NAME_PREFIX) && isRsaSigningKey(k) && isActiveKey(k)
   );
 
   const newKeyId = reusableKey ? reusableKey.id : await createRotatedKey(adminToken, realm, realmId);
@@ -896,7 +941,7 @@ async function getRealmSettings(adminToken, realm) {
   // rotation parents the new key on it) — a 200 without one is a broken
   // answer, not a realm.
   const res = await readAdminApi(adminToken, `/auth/admin/realms/${realm}`, `the realm settings of ${realm}`, {
-    shape: REPRESENTATION_SHAPE,
+    shape: REPRESENTATION_SHAPE
   });
   return res.data;
 }
@@ -1003,5 +1048,5 @@ module.exports = {
   getRealmSettings,
   updateRealmSettings,
   deleteUser,
-  enableDirectAccessGrants,
+  enableDirectAccessGrants
 };

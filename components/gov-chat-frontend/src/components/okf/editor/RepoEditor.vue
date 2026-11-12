@@ -173,7 +173,12 @@
            the vectorized head is what the tags become at publish; the CTA
            opens the Testing Lab to test it against competing repositories. -->
       <div v-if="repoId" class="okf-re__head-badge">
-        <button type="button" class="okf-re__head-badge-btn" @click="headTestOpen = true">
+        <button
+          type="button"
+          class="okf-re__head-badge-btn"
+          data-test-id="repo-editor-lab-open"
+          @click="headTestOpen = true"
+        >
           <span :class="['okf-re__head-dot', 'okf-re__head-dot--' + headStatus]" />
           {{ headBadgeText }}
           <span class="okf-re__head-cta">{{ translate('okf.testingLab.cta', 'Testing Lab') }} →</span>
@@ -345,6 +350,7 @@
     <p v-if="sourceNote" class="okf-re__source-note" role="status">{{ sourceNote }}</p>
 
     <DsDialog
+      class="genie-living-intelligence"
       :visible="deleteAsk !== null"
       :title="translate('okf.editor.delete.title', 'Delete file')"
       size="sm"
@@ -366,6 +372,7 @@
     <!-- REPO BULK PII (David, 2026-09-12): confirmation for the header-bar
          Redact-all / Remove-all / Accept-all decision. -->
     <DsDialog
+      class="genie-living-intelligence"
       :visible="piiBulkAsk !== null"
       :title="piiBulkTitle"
       size="sm"

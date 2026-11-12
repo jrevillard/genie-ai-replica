@@ -1363,7 +1363,7 @@ export default {
     clearContext: 'Limpiar contexto e iniciar una nueva conversación',
     unsavedChanges: 'Tiene cambios no guardados. ¿Está seguro de que desea iniciar un nuevo chat?',
     whatCanIHelp: '¿Cómo puede {brandwordmark} ayudarle hoy?',
-    quickHelpSubtitle: 'Tu puerta de entrada a los servicios públicos inteligentes.',
+    quickHelpSubtitle: 'Pregunta sobre el Corán, los Hadith, la Tafsir, el Fiqh y más.',
 
     queryContext: 'Contexto de Consulta',
     contextAdded: 'Contexto agregado a su consulta',

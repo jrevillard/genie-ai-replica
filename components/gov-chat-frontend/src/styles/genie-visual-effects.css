@@ -709,7 +709,9 @@ html[data-visual='on'] .genie-living-intelligence .admin-dashboard .okf-shell,
 html[data-visual='on'] .genie-living-intelligence .admin-dashboard .okf-ce,
 html[data-visual='on'] .genie-living-intelligence .admin-dashboard .okf-fmp,
 html[data-visual='on'] .genie-living-intelligence .admin-dashboard .okf-artifacts,
-html[data-visual='on'] .genie-living-intelligence .admin-dashboard .okf-src {
+html[data-visual='on'] .genie-living-intelligence .admin-dashboard .okf-src,
+html[data-visual='on'] .genie-living-intelligence .admin-dashboard .okf-headtest__pane,
+html[data-visual='on'] .genie-living-intelligence .admin-dashboard .okf-ragas {
   border: 1px solid var(--gli-frost-border);
   background-image: linear-gradient(180deg, color-mix(in srgb, var(--accent) 5%, var(--surface)), var(--surface) 34%);
 }
@@ -796,7 +798,8 @@ html[data-visual='on'] .genie-living-intelligence .admin-dashboard .stat-card--u
 html[data-visual='on'] .genie-living-intelligence .admin-dashboard .card-title,
 html[data-visual='on'] .genie-living-intelligence .admin-dashboard .section-title,
 html[data-visual='on'] .genie-living-intelligence .admin-dashboard .okf-dashboard__lane-header h4,
-html[data-visual='on'] .genie-living-intelligence .admin-dashboard .okf-artifacts__header {
+html[data-visual='on'] .genie-living-intelligence .admin-dashboard .okf-artifacts__header,
+html[data-visual='on'] .genie-living-intelligence .admin-dashboard .okf-ragas__pane-head {
   font-family: var(--font-display);
   letter-spacing: -0.01em;
 }
@@ -970,3 +973,12 @@ html[data-visual='on'] .genie-living-intelligence .admin-dashboard .okf-wizard__
 html[data-visual='on'] .genie-living-intelligence .admin-dashboard .okf-wizard__step-counter {
   color: color-mix(in srgb, var(--accent) 70%, var(--muted));
 }
+
+/*
+ * X2 (Phase X, 2026-11-12) — the Testing Lab joins by the same extension:
+ * the four lab panes (.okf-headtest__pane - head, test, suites, ragas) and
+ * the RAGAS panel root (.okf-ragas) join the chrome rule; the ragas pane
+ * header joins the display-family rule. The lab's DsDialog shell and its
+ * DsTabs strip stay DS-native per the V4 ruling (primitives serve the
+ * whole app) - the lab's CONTENT carries the layer.
+ */

@@ -4308,3 +4308,44 @@ describe('parseGitlabCiJobChanges', () => {
     expect(parsed.get('job-a')).toEqual(['tests/a/**/*']);
   });
 });
+
+// --- The root Playwright config has a lint home (#1716) ---
+// The suite's own Playwright config sits at the repository ROOT, outside the
+// tree `eslint .` covers from tests/e2e/. An undeclared binding there (a
+// config-level function, a global-setup hook) surfaced only at suite
+// runtime, and an edit to the file never triggered the lint job — the #1632
+// defect class stayed open in the suite's own configuration.
+//
+// The gate is the SAME one (tests/e2e/eslint.config.js), run from the
+// repository root because ESLint's base path is the working directory: a
+// file above tests/e2e/ is out of reach from there.
+//
+// Three facts make the coverage real and each can rot on its own: the lint
+// job's changes filter lists the file (so an edit to it runs the gate at
+// all), the job's script runs the gate, and the gate names the root file
+// and the e2e config (so it cannot drift into covering something else).
+describe('the root Playwright config has a lint home (#1716)', () => {
+  const ciFile = path.join(ROOT, '.gitlab-ci.yml');
+  let lintJob;
+  let lintChanges;
+
+  beforeAll(() => {
+    lintJob = gitlabSection(fs.readFileSync(ciFile, 'utf-8'), 'lint:e2e');
+    lintChanges = parseGitlabCiJobChanges(ciFile, ['lint:e2e']).get('lint:e2e');
+  });
+
+  test('an edit to the root config triggers the lint job', () => {
+    expect(lintChanges).toContain('playwright.config.js');
+  });
+
+  test('the lint job runs the gate', () => {
+    expect(lintJob).toContain('npm run lint:playwright-config');
+  });
+
+  test('the gate names the root config and the e2e eslint config', () => {
+    const scripts = JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf-8')).scripts;
+    expect(scripts['lint:playwright-config']).toBeDefined();
+    expect(scripts['lint:playwright-config']).toContain('playwright.config.js');
+    expect(scripts['lint:playwright-config']).toContain('tests/e2e/eslint.config.js');
+  });
+});

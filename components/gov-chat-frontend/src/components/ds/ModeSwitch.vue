@@ -100,11 +100,12 @@ export default {
   /* The toggle must READ as toggled (David, 2026-11-12: the surface+shadow
      pill was too subtle against the near-identical track). The accent-muted
      fill + accent ring pairing is the same one the help button's hover
-     sanctions; tokens flip it correctly in both themes. */
+     sanctions; tokens flip it correctly in both themes. No weight change —
+     a semibold active label resizes both pills on every flip and shifts
+     the Expert click target. */
   background: var(--accent-muted);
   color: var(--accent);
   box-shadow: inset 0 0 0 1px var(--accent);
-  font-weight: 600;
 }
 .ds-mode-switch__help {
   border: 0;

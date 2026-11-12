@@ -44,12 +44,16 @@ describe('DsModeSwitch', () => {
 
   test('the active rule paints the accent, not a surface shadow (the source contract)', () => {
     // jsdom computes no scoped-CSS paint, so the style contract is pinned at
-    // the source: the --active rule must derive from the accent tokens —
+    // the source: the --active RULE must derive from the accent tokens —
     // --accent-muted fill + an accent ring — never the old surface+shadow.
-    const rule = SOURCE.slice(SOURCE.indexOf('.ds-mode-switch__btn--active'));
+    // Anchored on the rule opener (with the brace): the bare class string
+    // also occurs in the template's bindings, and anchoring there sweeps
+    // the whole file tail instead of the rule.
+    const rule = SOURCE.slice(SOURCE.indexOf('.ds-mode-switch__btn--active {'));
     expect(rule).toContain('var(--accent-muted)');
     expect(rule).toContain('inset 0 0 0 1px var(--accent)');
     expect(rule).not.toContain('var(--shadow-sm)');
     expect(rule).not.toContain('background: var(--surface);');
+    expect(rule).not.toContain('font-weight: 600');
   });
 });

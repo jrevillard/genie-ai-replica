@@ -46,6 +46,30 @@ const XLSX = require('xlsx');
 
 const RID = '77777777-7777-4777-8777-777777777777';
 
+/**
+ * ArangoDB 3.12's UPDATE merges RECURSIVELY (mergeObjects defaults to
+ * true): an object value is merged key by key, an array REPLACES, and a null
+ * is a VALUE (keepNull defaults to true — nullMeansRemove is false). The
+ * mock follows the database here, not a guess: a top-level merge would make
+ * every assertion about a nested field (the conversion record's `summary`)
+ * be made against a database that does not exist.
+ */
+function arangoMerge(target, patch) {
+  const out = Object.assign({}, target);
+  for (const [key, value] of Object.entries(patch || {})) {
+    const current = out[key];
+    const bothObjects =
+      value &&
+      typeof value === 'object' &&
+      !Array.isArray(value) &&
+      current &&
+      typeof current === 'object' &&
+      !Array.isArray(current);
+    out[key] = bothObjects ? arangoMerge(current, value) : value;
+  }
+  return out;
+}
+
 function programQuery() {
   // The mock MODELS the production AQL — it does not answer for it. Each
   // branch below dispatches on the STATEMENT's shape and then RE-READS the
@@ -92,7 +116,7 @@ function programQuery() {
         if (!old || old.status !== 'queued' || old.started_at !== startedAt) {
           return { all: async () => [] }; // the FILTER matched no row
         }
-        live.conversion = Object.assign({}, live.conversion, bind.patch);
+        live.conversion = arangoMerge(live.conversion, bind.patch);
         return { all: async () => [1] };
       }
       // The queued write hands back the record it replaced (RETURN OLD).
@@ -100,7 +124,7 @@ function programQuery() {
       // (the record is a shared slot) — the mock follows the database, not a
       // guess, or the assertions would prove a fiction.
       if (!live) return { all: async () => [] }; // the document is gone: no row matched
-      live.conversion = Object.assign({}, live.conversion, bind.patch);
+      live.conversion = arangoMerge(live.conversion, bind.patch);
       if (text.includes('RETURN OLD')) return { all: async () => [old === undefined ? null : old] };
       return { all: async () => [] };
     }
@@ -1291,10 +1315,11 @@ describe('producer-service — startDocumentsConversion + run', () => {
   });
 
   it('a refused start leaves a healthy repository conversion record untouched', async () => {
-    // The conversion patch REPLACES the whole record, so a refused import
-    // must not overwrite a healthy 'done': the web client renders a failed
-    // record as "import failed — delete the repository", which would be a lie
-    // about a healthy repository.
+    // The conversion record is MERGED, and a refused start RESTORES the
+    // record it found, so a healthy 'done' must not be overwritten with
+    // 'failed': the web client renders a failed record as
+    // "import failed — delete the repository", which would be a lie about a
+    // healthy repository.
     await mockDb.collection('okf_repositories').save({
       _key: RID,
       repo_id: RID,

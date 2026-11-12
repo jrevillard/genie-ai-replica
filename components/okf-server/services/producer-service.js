@@ -51,9 +51,9 @@ const MIN_SEGMENT_CHARS = 200; // smaller sections merge into the previous one
 // requires the crawl service (the crawl service must NOT require the
 // producer — that direction is circular), so this is the one place both
 // paths can share. It matters: a crawl conversion and a documents conversion
-// write the SAME repo.conversion record (the crawl merges its patch, the
-// producer replaces it), so running both on one repo leaves a record that
-// describes neither run (issue #1684).
+// write the SAME repo.conversion record (the crawl MERGES its patch, and so
+// does the producer's UPDATE — recursively on ArangoDB 3.12), so running both
+// on one repo leaves a record that describes neither run (issue #1684).
 //
 // The RESERVATION is the guard: the entry is claimed synchronously, BEFORE
 // the awaited stages below, so a second start for the same repo cannot slip
@@ -1253,10 +1253,14 @@ async function startDocumentsConversion({ repo_id, file_ids, requested_name, cla
   } catch (err) {
     // A refused start must leave the repository as it found it. The
     // conversion record is merged, so a prior TERMINAL record
-    // — a healthy 'done' with its summary — is RESTORED instead of being
-    // overwritten with 'failed': the web client renders a failed record as
+    // — a healthy 'done' with its summary, or an earlier 'failed' with its
+    // error — is RESTORED instead of being overwritten with 'failed': the
+    // web client renders a failed record as
     // "import failed — delete the repository", which would be a lie about a
-    // healthy repository. With no prior terminal record, the record is
+    // healthy repository. (A prior 'failed' is restored too: the repository
+    // is left exactly as it was found, and the reason THIS start was
+    // refused travels with the response, not with the record.) With no prior
+    // terminal record, the record is
     // closed as failed: the interrupted-conversion sweep is one-shot per
     // process and has already run, so nothing else would ever close a queued
     // record with no worker. It is written BEFORE the reservation is

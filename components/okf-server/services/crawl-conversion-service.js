@@ -170,6 +170,12 @@ function maxSourceBytesFromEnv() {
  * Lazy (first startConversion call) — the DB connection is not up at require
  * time. In-process `live` runners are never touched (a restarted process has
  * an empty registry by definition).
+ *
+ * The record it writes is the ONE failed-record vocabulary
+ * (failedConversionRecord): status, stage, error, code and `summary: null` —
+ * a failed record carries no result, so the previous run's counts must not
+ * survive beside the failure. The sweep is ONE AQL statement and cannot call
+ * the helper, so its fields are spelled out here.
  */
 async function sweepInterruptedOnce() {
   if (swept) return;
@@ -186,6 +192,8 @@ async function sweepInterruptedOnce() {
           status: 'failed',
           stage: 'failed',
           error: 'interrupted by server restart — start the conversion again',
+          code: 'CONVERSION_FAILED',
+          summary: null,
           finished_at: DATE_ISO8601(DATE_NOW())
         })} IN ${COLLECTION}
     `,

@@ -972,6 +972,37 @@ describe('ingestService curation provenance (D-G #985)', () => {
     }
   });
 
+  test('a FAILED zip record carries no summary — the ONE failed-record vocabulary', async () => {
+    // The zip close writes the failed-record vocabulary: a failed record
+    // carries no result, so the previous run's summary must not survive
+    // beside the failure — the Studio would read "import failed" next to the
+    // counts of a run that succeeded.
+    const parseErr = Object.assign(new Error('Malformed frontmatter: bad yaml'), {
+      code: 'PARSE_ERROR',
+      status: 400
+    });
+    parserService.parseConcept.mockRejectedValueOnce(parseErr);
+    const AdmZip = require('adm-zip');
+    const zip = new AdmZip();
+    zip.addFile('broken.md', Buffer.from('---\ntitle: Broken\n---\nbody'));
+    const summary = await ingestService.ingestRepoConcepts(REPO, { zip: zip.toBuffer().toString('base64') }, ACTOR);
+    if (summary._curationDone) await summary._curationDone;
+    expect(summary.enqueue_errors.length).toBeGreaterThan(0);
+
+    const { __mockDb } = require('../shared-lib/db-connection-service');
+    const failed = __mockDb.query.mock.calls.filter(([text, bind]) => {
+      if (typeof text !== 'string' || !text.includes('conversion: MERGE')) return false;
+      return bind && bind.p && bind.p.status === 'failed';
+    });
+    expect(failed.length).toBeGreaterThanOrEqual(1);
+    expect(failed[failed.length - 1][1].p).toMatchObject({
+      status: 'failed',
+      stage: 'failed',
+      code: 'CONVERSION_FAILED',
+      summary: null
+    });
+  });
+
   test('a zip conversion-record write failure is non-fatal (the import continues)', async () => {
     // zipConvWrite is best-effort dashboard state — a storage hiccup writing
     // it must degrade to a logged warning, never fail the import.

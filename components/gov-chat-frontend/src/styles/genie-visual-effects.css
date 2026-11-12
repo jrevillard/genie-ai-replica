@@ -538,32 +538,32 @@ html[data-visual='on'] .genie-living-intelligence.gli-no-waves .quick-help-overl
  * deep and cannot. So the navbar's tokens stay the light ramp across
  * both themes (the ramp is the same family regardless of theme), and
  * the heading's tokens get a lifted dark ramp for the panel surface
- * that the light ramp's violet end would not clear at 3:1.
+ * that the light ramp's gold end would not clear at 3:1.
  *
  * background-clip: text is what keeps the mark resolution-independent -
  * it is live type, not an image, so it re-rasterises at any zoom. The
  * color fallback covers a renderer that honours neither background-clip
  * nor -webkit-text-fill-color; without it the name would be invisible.
  *
- * The magenta stop of the light ramp was lifted from #a036f7 to
- * #9b2ce6 — same hue (≈272° violet, within 1°), ~16 % darker. The
- * previous value measured 2.83:1 against the rendered surface (its
- * anti-aliased glyphs), under the 3:1 large-text floor the heading
- * relies on. Pure-CSS contrast is 4.82:1, so the floor failure was
- * visual (rendered average), not arithmetic — the lifted value clears
- * 5.3:1 against pure white and the same hue preserves the designer's
- * blue→violet family.
+ * NAAT ramp (2026-11-12): the light ramp reads deep green → brand
+ * green → antique gold. The gold end is darkened from the brand gold
+ * #C9A227 to #A9861D for the same reason the old violet stop was once
+ * lifted: #C9A227 sits near 2.1:1 on the white panel — under the 3:1
+ * large-text floor the heading relies on — while #A9861D clears ~3.4:1
+ * and keeps the gold family. The dark ramp lifts all three stops for
+ * the deep panel surface; bright green and gold clear the floor there
+ * without adjustment.
  */
 :root {
-  --brand-mark-from: #2e79fc;
-  --brand-mark-mid: #755cf8;
-  --brand-mark-to: #9b2ce6;
+  --brand-mark-from: #3e7a23;
+  --brand-mark-mid: #609e2f;
+  --brand-mark-to: #a9861d;
 
   /* The navbar's ramp is the same in both themes: a literal triplet so
      that the dark block's heading override below cannot reach it. */
-  --brand-mark-navbar-from: #2e79fc;
-  --brand-mark-navbar-mid: #755cf8;
-  --brand-mark-navbar-to: #9b2ce6;
+  --brand-mark-navbar-from: #3e7a23;
+  --brand-mark-navbar-mid: #609e2f;
+  --brand-mark-navbar-to: #a9861d;
 }
 
 /*
@@ -581,9 +581,9 @@ html[data-visual='on'] .genie-living-intelligence.gli-no-waves .quick-help-overl
 html[data-theme='dark'],
 html.dark-mode,
 body.dark-mode {
-  --brand-mark-from: #58bcff;
-  --brand-mark-mid: #a48bff;
-  --brand-mark-to: #ec82ff;
+  --brand-mark-from: #7ab648;
+  --brand-mark-mid: #8cc63f;
+  --brand-mark-to: #e3b93e;
 }
 
 .brand-wordmark {

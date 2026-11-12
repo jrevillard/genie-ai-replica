@@ -25,9 +25,9 @@ const path = require('path');
 jest.mock('jose', () => ({
   jwtVerify: jest.fn(),
   createRemoteJWKSet: jest.fn(),
-  // The verifier also destructures jose's decoder at module load; without
-  // it the verifier would fail closed (reject every kid-less token) in
-  // any suite that reuses this stub.
+  // The verifier also destructures jose's decoder at module load, so the
+  // stub carries it: the destructure must not be silently incomplete.
+  // This suite never verifies a token, so the stub is never called.
   decodeProtectedHeader: jest.fn()
 }));
 

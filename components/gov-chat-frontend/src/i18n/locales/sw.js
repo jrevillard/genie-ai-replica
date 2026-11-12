@@ -1356,7 +1356,7 @@ export default {
     clearContext: 'Futa muktadha na anza mazungumzo mapya',
     unsavedChanges: 'Una mabadiliko ambayo hayajahifadhiwa. Una uhakika unataka kuanza mazungumzo mapya?',
     whatCanIHelp: 'Jinsi {brandwordmark} inaweza kukusaidia leo?',
-    quickHelpSubtitle: 'Lango lako kwenye huduma za umma zenye akili.',
+    quickHelpSubtitle: 'Tafakari Quran, Hadith, Tafsir, Fiqh na mengi zaidi.',
 
     queryContext: 'Muktadha wa Hoja',
     contextAdded: 'Muktadha umeongezwa kwenye swali lako',

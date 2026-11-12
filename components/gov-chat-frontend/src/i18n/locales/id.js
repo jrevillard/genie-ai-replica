@@ -1360,7 +1360,7 @@ export default {
     clearContext: 'Hapus konteks dan mulai percakapan baru',
     unsavedChanges: 'Anda memiliki perubahan yang belum disimpan. Apakah Anda yakin ingin memulai obrolan baru?',
     whatCanIHelp: 'Bagaimana {brandwordmark} dapat membantu Anda hari ini?',
-    quickHelpSubtitle: 'Gerbang Anda menuju layanan publik yang cerdas.',
+    quickHelpSubtitle: 'Tanyakan tentang Al-Qur’an, Hadits, Tafsir, Fiqh, dan lainnya.',
 
     queryContext: 'Konteks Pertanyaan',
     contextAdded: 'Konteks ditambahkan ke pertanyaan Anda',

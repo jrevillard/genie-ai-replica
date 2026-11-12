@@ -223,6 +223,16 @@ async function loadConfig() {
     if (appleTouch) appleTouch.href = iconPath;
   }
 
+  // The browser tab follows the configured app title. The HTML shell's
+  // <title> is baked at build time from the package name, which is a repo
+  // fact, not a deployment fact — a deployment that renames the app in
+  // config (e.g. NAAT Administrator) would otherwise keep tabbing as the
+  // package name. The config fallback keeps a config without app.title
+  // (defaults fill it in above, so this is belt-and-braces) untouched.
+  if (config.app?.title) {
+    document.title = config.app.title;
+  }
+
   return config;
 }
 

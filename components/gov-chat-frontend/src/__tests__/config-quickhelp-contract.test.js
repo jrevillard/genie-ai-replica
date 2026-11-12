@@ -71,4 +71,48 @@ describe('Quick Help button contract across every shipped configuration', () => 
       }
     }
   );
+
+  // The optional serviceLabels array (the category→service narrowing) is
+  // shape-pinned by the SAME exported validator, so these synthetic cases
+  // keep the runtime gate and this build gate one copy of the rule: a
+  // well-formed array passes, anything else is refused at boot and would
+  // fail this suite on a shipped file.
+  describe('serviceLabels shape rule', () => {
+    const doc = (serviceLabels) => ({
+      features: {
+        chat: {
+          quickHelp: {
+            buttons: [
+              {
+                id: 'probe',
+                title: { en: 'Probe' },
+                icon: { type: 'file', value: '/config/quickhelp/probe.svg' },
+                category: 'Hadith',
+                styles: { backgroundColor: '#fff', hoverColor: '#fff', outlineColor: '#fff' },
+                ...(serviceLabels === undefined ? {} : { serviceLabels })
+              }
+            ]
+          }
+        }
+      }
+    });
+
+    it('accepts an absent serviceLabels', () => {
+      expect(() => validateQuickHelpButtons(doc(undefined))).not.toThrow();
+    });
+
+    it('accepts an array of non-blank strings', () => {
+      expect(() => validateQuickHelpButtons(doc(['Sunni']))).not.toThrow();
+      expect(() => validateQuickHelpButtons(doc(['Indonesia — MUI', 'Sunni']))).not.toThrow();
+    });
+
+    it.each([
+      ['a bare string', 'Sunni'],
+      ['an entry that is not a string', [42]],
+      ['a blank-string entry', ['  ']],
+      ['an empty-string entry', ['']]
+    ])('refuses %s', (_label, value) => {
+      expect(() => validateQuickHelpButtons(doc(value))).toThrow(/serviceLabels/);
+    });
+  });
 });

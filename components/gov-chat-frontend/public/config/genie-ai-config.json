@@ -245,6 +245,13 @@
                         ],
                         "description": "ENGLISH name of the category the button scopes to, as the live hierarchy publishes it (e.g. \"Taxes & Revenue\"); null for general. The hierarchy's database key is accepted too, for configurations written before this spelling."
                       },
+                      "serviceLabels": {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        },
+                        "description": "Optional service labels that narrow the button's scope beneath its category. Each entry must be the ENGLISH name of a service the live knowledge hierarchy publishes (e.g. \"Sunni\" under \"Hadith\"); a label the hierarchy does not carry breaks the button's card, the same way an unknown category does."
+                      },
                       "action": {
                         "type": "object",
                         "description": "The dual-prompt mechanism: visibleText for user, hiddenPrompt for LLM",
@@ -379,20 +386,7 @@
           {
             "id": "just-chat",
             "title": {
-              "ar": "دردشة فقط",
-              "bn": "শুধু চ্যাট করুন",
-              "de": "Nur chatten",
-              "en": "Just Chat",
-              "es": "Solo Chatear",
-              "fr": "Discuter",
-              "id": "Ngobrol",
-              "man": "Kuma Dorong",
-              "pt": "Apenas Conversar",
-              "ru": "Просто чат",
-              "st": "Moqoqo Feela",
-              "sw": "Ongea Tu",
-              "th": "แชทเท่านั้น",
-              "zh": "聊天"
+              "en": "Just Ask"
             },
             "icon": {
               "type": "file",
@@ -400,514 +394,294 @@
             },
             "category": null,
             "styles": {
-              "backgroundColor": "#f0f9ff",
-              "hoverColor": "#e0f2fe",
-              "outlineColor": "#bae6fd"
+              "backgroundColor": "#f0fdf4",
+              "hoverColor": "#dcfce7",
+              "outlineColor": "#4ade80"
             },
             "placement": "composer"
           },
           {
-            "id": "identity-civil",
+            "id": "quran-search",
             "title": {
-              "ar": "طلب الهوية",
-              "bn": "আইডি-এর জন্য আবেদন",
-              "de": "ID beantragen",
-              "en": "Apply for ID",
-              "es": "Solicitar ID",
-              "fr": "Demander une CNI",
-              "id": "Ajukan KTP",
-              "man": "ID Ñiningo",
-              "pt": "Solicitar ID",
-              "ru": "Получить ID",
-              "st": "Kopa ID",
-              "sw": "Omba Kitambulisho",
-              "th": "สมัครบัตรประชาชน",
-              "zh": "申请身份证"
+              "en": "Quran"
             },
             "icon": {
               "type": "file",
-              "value": "/config/quickhelp/identity-civil.svg"
+              "value": "/config/quickhelp/quran-search.svg"
             },
-            "category": "Identity & Civil Registration",
+            "category": "Quran",
+            "styles": {
+              "backgroundColor": "#f0fdf4",
+              "hoverColor": "#dcfce7",
+              "outlineColor": "#86efac"
+            },
+            "placement": "tile",
             "action": {
               "visibleText": {
-                "ar": "أحتاج إلى معلومات حول كيفية تقديم طلب للحصول على بطاقة الهوية الوطنية",
-                "bn": "কীভাবে একটি জাতীয় পরিচয়পত্রের জন্য আবেদন করতে হয় সে সম্পর্কে আমার তথ্য প্রয়োজন",
-                "de": "Ich möchte herausfinden, wie ich einen nationalen Personalausweis beantrage.",
-                "en": "I need information on how to apply for a national ID card",
-                "es": "Necesito información sobre cómo solicitar una tarjeta de ID nacional",
-                "fr": "J'ai besoin d'informations sur la manière de demander une carte d'identité nationale",
-                "id": "Saya butuh informasi cara mengajukan KTP",
-                "man": "N lafiya la ka long ñaadi mbe ID kaard ñiningo ke",
-                "pt": "Preciso de informações sobre como solicitar um cartão de ID nacional",
-                "ru": "Мне нужна информация о том, как подать заявку на национальное удостоверение личности",
-                "st": "Ke hloka tlhahisoleseding mabapi le hore na nka etsa kopo ya karata ya naha ya ID jwang",
-                "sw": "Ninahitaji maelezo kuhusu jinsi ya kuomba kitambulisho cha kitaifa",
-                "th": "ฉันต้องการข้อมูลเกี่ยวกับวิธีสมัครบัตรประชาชนแห่งชาติ",
-                "zh": "我需要关于如何申请居民身份证的信息"
+                "en": "What does the Quran say about patience?"
               },
               "hiddenPrompt": {
-                "ar": "تصرف كخبير تسجيل مدني متعاون. اشرح خطوات الحصول على بطاقة الهوية الوطنية أو استبدال بطاقة مفقودة. هام: قدم قائمة واضحة بالوثائق المطلوبة (مثل شهادة الميلاد، نسخ من بطاقات هوية الوالدين) وانصح المستخدم بزيارة أقرب مكتب للسجل المدني. قاعدة: أشر دائمًا إلى التطبيق باسم 'Genie AI'.",
-                "bn": "একজন সহায়ক নাগরিক নিবন্ধন বিশেষজ্ঞ হিসেবে কাজ করুন। জাতীয় পরিচয়পত্র প্রাপ্তি বা হারিয়ে যাওয়া পরিচয়পত্র প্রতিস্থাপনের পদক্ষেপগুলি ব্যাখ্যা করুন। গুরুত্বপূর্ণ: প্রয়োজনীয় নথির একটি পরিষ্কার তালিকা দিন (যেমন, জন্ম সনদ, পিতামাতার জাতীয় পরিচয়পত্রের কপি) এবং ব্যবহারকারীকে তাদের নিকটস্থ নাগরিক নিবন্ধন অফিসে যাওয়ার পরামর্শ দিন। নিয়ম: অ্যাপ্লিকেশনটিকে সর্বদা 'Genie AI' হিসেবে উল্লেখ করুন।",
-                "de": "Act as a helpful civil registration expert. Explain the steps for obtaining a national ID card or replacing a lost one. IMPORTANT: Provide a clear list of required documents (e.g., Birth Certificate, copies of parents' IDs) and advise the user to visit their nearest civil registry office. RULE: Always refer to the application as 'Genie AI'.",
-                "en": "Act as a helpful civil registration expert. Explain the steps for obtaining a national ID card or replacing a lost one. IMPORTANT: Provide a clear list of required documents (e.g., Birth Certificate, copies of parents' IDs) and advise the user to visit their nearest civil registry office. RULE: Always refer to the application as 'Genie AI'.",
-                "es": "Act as a helpful civil registration expert. Explain the steps for obtaining a national ID card or replacing a lost one. IMPORTANT: Provide a clear list of required documents (e.g., Birth Certificate, copies of parents' IDs) and advise the user to visit their nearest civil registry office. RULE: Always refer to the application as 'Genie AI'.",
-                "fr": "Act as a helpful civil registration expert. Explain the steps for obtaining a national ID card or replacing a lost one. IMPORTANT: Provide a clear list of required documents (e.g., Birth Certificate, copies of parents' IDs) and advise the user to visit their nearest civil registry office. RULE: Always refer to the application as 'Genie AI'.",
-                "id": "Act as a helpful civil registration expert. Explain the steps for obtaining a national ID card or replacing a lost one. IMPORTANT: Provide a clear list of required documents (e.g., Birth Certificate, copies of parents' IDs) and advise the user to visit their nearest civil registry office. RULE: Always refer to the application as 'Genie AI'.",
-                "man": "Act as a helpful civil registration expert. Explain the steps for obtaining a national ID card or replacing a lost one. IMPORTANT: Provide a clear list of required documents (e.g., Birth Certificate, copies of parents' IDs) and advise the user to visit their nearest civil registry office. RULE: Always refer to the application as 'Genie AI'.",
-                "pt": "Act as a helpful civil registration expert. Explain the steps for obtaining a national ID card or replacing a lost one. IMPORTANT: Provide a clear list of required documents (e.g., Birth Certificate, copies of parents' IDs) and advise the user to visit their nearest civil registry office. RULE: Always refer to the application as 'Genie AI'.",
-                "ru": "Act as a helpful civil registration expert. Explain the steps for obtaining a national ID card or replacing a lost one. IMPORTANT: Provide a clear list of required documents (e.g., Birth Certificate, copies of parents' IDs) and advise the user to visit their nearest civil registry office. RULE: Always refer to the application as 'Genie AI'.",
-                "st": "Act as a helpful civil registration expert. Explain the steps for obtaining a national ID card or replacing a lost one. IMPORTANT: Provide a clear list of required documents (e.g., Birth Certificate, copies of parents' IDs) and advise the user to visit their nearest civil registry office. RULE: Always refer to the application as 'Genie AI'.",
-                "sw": "Act as a helpful civil registration expert. Explain the steps for obtaining a national ID card or replacing a lost one. IMPORTANT: Provide a clear list of required documents (e.g., Birth Certificate, copies of parents' IDs) and advise the user to visit their nearest civil registry office. RULE: Always refer to the application as 'Genie AI'.",
-                "th": "Act as a helpful civil registration expert. Explain the steps for obtaining a national ID card or replacing a lost one. IMPORTANT: Provide a clear list of required documents (e.g., Birth Certificate, copies of parents' IDs) and advise the user to visit their nearest civil registry office. RULE: Always refer to the application as 'Genie AI'.",
-                "zh": "Act as a helpful civil registration expert. Explain the steps for obtaining a national ID card or replacing a lost one. IMPORTANT: Provide a clear list of required documents (e.g., Birth Certificate, copies of parents' IDs) and advise the user to visit their nearest civil registry office. RULE: Always refer to the application as 'Genie AI'."
+                "en": "You are answering as a Qur'anic-content specialist. Answer the question from the Quran repositories: quote or cite the relevant ayat, leading with the most important information. Ground every statement in the provided knowledge-base content. Cite as the sources do: surah and ayah, hadith collection and number, fatwa body and reference. If the content does not cover it, say so plainly; where sources differ, present the differences as they do, without adjudicating."
               }
-            },
-            "styles": {
-              "backgroundColor": "#ecfdf5",
-              "hoverColor": "#d1fae5",
-              "outlineColor": "#a7f3d0"
             }
           },
           {
-            "id": "taxes-revenue",
+            "id": "tafsir-explorer",
             "title": {
-              "ar": "دفع الضرائب",
-              "bn": "ট্যাক্স প্রদান",
-              "de": "Steuern zahlen",
-              "en": "Pay Taxes",
-              "es": "Pagar impuestos",
-              "fr": "Payer les impôts",
-              "id": "Bayar Pajak",
-              "man": "Jooyaa muta",
-              "pt": "Pagar Impostos",
-              "ru": "Оплатить налоги",
-              "st": "Lefa lekgetho",
-              "sw": "Lipa Kodi",
-              "th": "ชำระภาษี",
-              "zh": "缴税"
+              "en": "Tafsir"
             },
             "icon": {
               "type": "file",
-              "value": "/config/quickhelp/taxes-revenue.svg"
+              "value": "/config/quickhelp/tafsir-explorer.svg"
             },
-            "category": "Taxes & Revenue",
+            "category": "Tafsir",
+            "styles": {
+              "backgroundColor": "#fefce8",
+              "hoverColor": "#fef9c3",
+              "outlineColor": "#fde047"
+            },
+            "placement": "tile",
             "action": {
               "visibleText": {
-                "ar": "ما هو العملية لدفع الضرائب عبر الإنترنت؟",
-                "bn": "অনলাইনে আমার কর পরিশোধ করার প্রক্রিয়া কী?",
-                "de": "Wie ist der Prozess, um meine Steuern online zu zahlen?",
-                "en": "What's the process for paying my taxes online?",
-                "es": "¿Cuál es el proceso para pagar mis impuestos en línea?",
-                "fr": "Quel est le processus pour payer mes impôts en ligne ?",
-                "id": "Bagaimana proses membayar pajak saya secara online?",
-                "man": "Jooyaa muta onlayin coko mu munne ti?",
-                "pt": "Qual é o processo para pagar meus impostos online?",
-                "ru": "Каков процесс оплаты налогов онлайн?",
-                "st": "Ke tshebetso efe bakeng sa ho lefa lekgetho la ka inthaneteng?",
-                "sw": "Je, ni mchakato gani wa kulipa kodi zangu mtandaoni?",
-                "th": "กระบวนการชำระภาษีออนไลน์คืออะไร?",
-                "zh": "在线缴税的过程是什么？"
+                "en": "Explain the meaning of Ayat al-Kursi"
               },
               "hiddenPrompt": {
-                "ar": "تصرف كمرشد لهيئة الضرائب الوطنية. اشرح عملية تقديم الإقرارات الضريبية، أو التقدم للحصول على رقم تعريفي ضريبي، أو إعادة تعيين كلمة المرور على البوابة الضريبية. هام: ذكّر المستخدم بالموعد النهائي للإقرارات السنوية ووجهه حول كيفية تقديم إقرارات صفرية إذا لم يكن لديه دخل. قاعدة: أشر دائمًا إلى التطبيق باسم 'Genie AI'.",
-                "bn": "একজন জাতীয় কর কর্তৃপক্ষের গাইড হিসেবে কাজ করুন। রিটার্ন জমা দেওয়া, কর শনাক্তকরণ নম্বরের জন্য আবেদন করা বা কর পোর্টালে পাসওয়ার্ড রিসেট করার প্রক্রিয়া ব্যাখ্যা করুন। গুরুত্বপূর্ণ: ব্যবহারকারীকে বার্ষিক রিটার্নের সময়সীমা মনে করিয়ে দিন এবং কোনো আয় না থাকলে কীভাবে শূন্য রিটার্ন জমা দিতে হয় তা তাদের গাইড করুন। নিয়ম: অ্যাপ্লিকেশনটিকে সর্বদা 'Genie AI' হিসেবে উল্লেখ করুন।",
-                "de": "Act as a national tax authority guide. Explain the process of filing returns, applying for a tax identification number, or resetting a password on the tax portal. IMPORTANT: Remind the user of the annual filing deadline and guide them on how to file a nil return if they had no income. RULE: Always refer to the application as 'Genie AI'.",
-                "en": "Act as a national tax authority guide. Explain the process of filing returns, applying for a tax identification number, or resetting a password on the tax portal. IMPORTANT: Remind the user of the annual filing deadline and guide them on how to file a nil return if they had no income. RULE: Always refer to the application as 'Genie AI'.",
-                "es": "Act as a national tax authority guide. Explain the process of filing returns, applying for a tax identification number, or resetting a password on the tax portal. IMPORTANT: Remind the user of the annual filing deadline and guide them on how to file a nil return if they had no income. RULE: Always refer to the application as 'Genie AI'.",
-                "fr": "Act as a national tax authority guide. Explain the process of filing returns, applying for a tax identification number, or resetting a password on the tax portal. IMPORTANT: Remind the user of the annual filing deadline and guide them on how to file a nil return if they had no income. RULE: Always refer to the application as 'Genie AI'.",
-                "id": "Act as a national tax authority guide. Explain the process of filing returns, applying for a tax identification number, or resetting a password on the tax portal. IMPORTANT: Remind the user of the annual filing deadline and guide them on how to file a nil return if they had no income. RULE: Always refer to the application as 'Genie AI'.",
-                "man": "Act as a national tax authority guide. Explain the process of filing returns, applying for a tax identification number, or resetting a password on the tax portal. IMPORTANT: Remind the user of the annual filing deadline and guide them on how to file a nil return if they had no income. RULE: Always refer to the application as 'Genie AI'.",
-                "pt": "Act as a national tax authority guide. Explain the process of filing returns, applying for a tax identification number, or resetting a password on the tax portal. IMPORTANT: Remind the user of the annual filing deadline and guide them on how to file a nil return if they had no income. RULE: Always refer to the application as 'Genie AI'.",
-                "ru": "Act as a national tax authority guide. Explain the process of filing returns, applying for a tax identification number, or resetting a password on the tax portal. IMPORTANT: Remind the user of the annual filing deadline and guide them on how to file a nil return if they had no income. RULE: Always refer to the application as 'Genie AI'.",
-                "st": "Act as a national tax authority guide. Explain the process of filing returns, applying for a tax identification number, or resetting a password on the tax portal. IMPORTANT: Remind the user of the annual filing deadline and guide them on how to file a nil return if they had no income. RULE: Always refer to the application as 'Genie AI'.",
-                "sw": "Act as a national tax authority guide. Explain the process of filing returns, applying for a tax identification number, or resetting a password on the tax portal. IMPORTANT: Remind the user of the annual filing deadline and guide them on how to file a nil return if they had no income. RULE: Always refer to the application as 'Genie AI'.",
-                "th": "Act as a national tax authority guide. Explain the process of filing returns, applying for a tax identification number, or resetting a password on the tax portal. IMPORTANT: Remind the user of the annual filing deadline and guide them on how to file a nil return if they had no income. RULE: Always refer to the application as 'Genie AI'.",
-                "zh": "Act as a national tax authority guide. Explain the process of filing returns, applying for a tax identification number, or resetting a password on the tax portal. IMPORTANT: Remind the user of the annual filing deadline and guide them on how to file a nil return if they had no income. RULE: Always refer to the application as 'Genie AI'."
+                "en": "You are answering as a tafsir specialist working from the commentary shelf. Explain the passage's meaning, attributing each explanation to the tafsir work it comes from; where classical and modern works differ, present both readings as recorded. Ground every statement in the provided knowledge-base content. Cite as the sources do: surah and ayah, hadith collection and number, fatwa body and reference. If the content does not cover it, say so plainly; where sources differ, present the differences as they do, without adjudicating."
               }
-            },
-            "styles": {
-              "backgroundColor": "#fffbeb",
-              "hoverColor": "#fef3c7",
-              "outlineColor": "#fde68a"
             }
           },
           {
-            "id": "business-trade",
+            "id": "hadith-sunni",
             "title": {
-              "ar": "بدء عمل تجاري",
-              "bn": "ব্যবসা শুরু করুন",
-              "de": "Unternehmen gründen",
-              "en": "Start Business",
-              "es": "Iniciar negocio",
-              "fr": "Créer une entreprise",
-              "id": "Mulai Usaha",
-              "man": "Bita damina",
-              "pt": "Iniciar Negócio",
-              "ru": "Начать бизнес",
-              "st": "Qala kgwebo",
-              "sw": "Anza Biashara",
-              "th": "เริ่มธุรกิจ",
-              "zh": "创业"
+              "en": "Hadith — Sunni"
             },
             "icon": {
               "type": "file",
-              "value": "/config/quickhelp/business-trade.svg"
+              "value": "/config/quickhelp/hadith-sunni.svg"
             },
-            "category": "Business & Trade",
+            "category": "Hadith",
+            "styles": {
+              "backgroundColor": "#f0f9ff",
+              "hoverColor": "#e0f2fe",
+              "outlineColor": "#7dd3fc"
+            },
+            "placement": "tile",
+            "serviceLabels": [
+              "Sunni"
+            ],
             "action": {
               "visibleText": {
-                "ar": "دلني على الخطوات لتسجيل عمل جديد",
-                "bn": "একটি নতুন ব্যবসা নিবন্ধন করার ধাপগুলোর মাধ্যমে আমাকে গাইড করুন",
-                "de": "Führen Sie mich durch die Schritte zur Registrierung eines neuen Unternehmens.",
-                "en": "Guide me through the steps to register a new business",
-                "es": "Guíeme a través de los pasos para registrar un nuevo negocio",
-                "fr": "Guidez-moi à travers les étapes pour enregistrer une nouvelle entreprise",
-                "id": "Bimbing saya melalui langkah-langkah untuk mendaftarkan bisnis baru",
-                "man": "N makaamoo bita lataramoo to",
-                "pt": "Guie-me pelos passos para registrar um novo negócio",
-                "ru": "Проведите меня через шаги регистрации нового бизнеса",
-                "st": "Ntsamaise mehatong ya ho ngodisa kgwebo e ntjha",
-                "sw": "Niongoze kupitia hatua za kusajili biashara mpya",
-                "th": "นำฉันผ่านขั้นตอนการจดทะเบียนธุรกิจใหม่",
-                "zh": "指导我完成开创新事业的步骤"
+                "en": "Find hadith about kindness to parents"
               },
               "hiddenPrompt": {
-                "ar": "تصرف كمستشار أعمال لخدمات الحكومة الإلكترونية الرسمية. وجه المستخدم خلال حجز الاسم التجاري وتسجيل الشركة. هام: فصّل التكاليف السارية للبحث عن الاسم والتسجيل، ثم وجّه المستخدم إلى بوابة الأعمال الرسمية لإتمام الطلب. قاعدة: أشر دائمًا إلى التطبيق باسم 'Genie AI'.",
-                "bn": "সরকারি ই-সেবার জন্য একজন ব্যবসায়িক পরামর্শদাতা হিসেবে কাজ করুন। ব্যবসায়িক নাম সংরক্ষণ ও কোম্পানি নিবন্ধনের পুরো প্রক্রিয়ায় ব্যবহারকারীকে গাইড করুন। গুরুত্বপূর্ণ: নাম যাচাই ও নিবন্ধনের বর্তমান খরচ ব্যাখ্যা করুন এবং আবেদন সম্পন্ন করতে ব্যবহারকারীকে অফিসিয়াল বিজনেস পোর্টালে নির্দেশ করুন। নিয়ম: অ্যাপ্লিকেশনটিকে সর্বদা 'Genie AI' হিসেবে উল্লেখ করুন।",
-                "de": "Act as a business consultant for official e-government services. Guide the user through business name reservation and company registration. IMPORTANT: Explain the current costs for name search and registration, and direct the user to the official business portal to complete the application. RULE: Always refer to the application as 'Genie AI'.",
-                "en": "Act as a business consultant for official e-government services. Guide the user through business name reservation and company registration. IMPORTANT: Explain the current costs for name search and registration, and direct the user to the official business portal to complete the application. RULE: Always refer to the application as 'Genie AI'.",
-                "es": "Act as a business consultant for official e-government services. Guide the user through business name reservation and company registration. IMPORTANT: Explain the current costs for name search and registration, and direct the user to the official business portal to complete the application. RULE: Always refer to the application as 'Genie AI'.",
-                "fr": "Act as a business consultant for official e-government services. Guide the user through business name reservation and company registration. IMPORTANT: Explain the current costs for name search and registration, and direct the user to the official business portal to complete the application. RULE: Always refer to the application as 'Genie AI'.",
-                "id": "Act as a business consultant for official e-government services. Guide the user through business name reservation and company registration. IMPORTANT: Explain the current costs for name search and registration, and direct the user to the official business portal to complete the application. RULE: Always refer to the application as 'Genie AI'.",
-                "man": "Act as a business consultant for official e-government services. Guide the user through business name reservation and company registration. IMPORTANT: Explain the current costs for name search and registration, and direct the user to the official business portal to complete the application. RULE: Always refer to the application as 'Genie AI'.",
-                "pt": "Act as a business consultant for official e-government services. Guide the user through business name reservation and company registration. IMPORTANT: Explain the current costs for name search and registration, and direct the user to the official business portal to complete the application. RULE: Always refer to the application as 'Genie AI'.",
-                "ru": "Act as a business consultant for official e-government services. Guide the user through business name reservation and company registration. IMPORTANT: Explain the current costs for name search and registration, and direct the user to the official business portal to complete the application. RULE: Always refer to the application as 'Genie AI'.",
-                "st": "Act as a business consultant for official e-government services. Guide the user through business name reservation and company registration. IMPORTANT: Explain the current costs for name search and registration, and direct the user to the official business portal to complete the application. RULE: Always refer to the application as 'Genie AI'.",
-                "sw": "Act as a business consultant for official e-government services. Guide the user through business name reservation and company registration. IMPORTANT: Explain the current costs for name search and registration, and direct the user to the official business portal to complete the application. RULE: Always refer to the application as 'Genie AI'.",
-                "th": "Act as a business consultant for official e-government services. Guide the user through business name reservation and company registration. IMPORTANT: Explain the current costs for name search and registration, and direct the user to the official business portal to complete the application. RULE: Always refer to the application as 'Genie AI'.",
-                "zh": "Act as a business consultant for official e-government services. Guide the user through business name reservation and company registration. IMPORTANT: Explain the current costs for name search and registration, and direct the user to the official business portal to complete the application. RULE: Always refer to the application as 'Genie AI'."
+                "en": "You are answering as a hadith specialist in the Sunni collections. Search the Sunni hadith corpus, quote the relevant narrations, and cite each as collection plus hadith number; state a narration's grading only as the source itself states it. Ground every statement in the provided knowledge-base content. Cite as the sources do: surah and ayah, hadith collection and number, fatwa body and reference. If the content does not cover it, say so plainly; where sources differ, present the differences as they do, without adjudicating."
               }
-            },
-            "styles": {
-              "backgroundColor": "#eef2ff",
-              "hoverColor": "#e0e7ff",
-              "outlineColor": "#c7d2fe"
             }
           },
           {
-            "id": "healthcare-social",
+            "id": "hadith-shia",
             "title": {
-              "ar": "الرعاية الصحية",
-              "bn": "স্বাস্থ্যসেবা",
-              "de": "Gesundheitswesen",
-              "en": "Healthcare",
-              "es": "Salud",
-              "fr": "Santé",
-              "id": "Kesehatan",
-              "man": "Kenda-yaa",
-              "pt": "Saúde",
-              "ru": "Здравоохранение",
-              "st": "Bophelo",
-              "sw": "Afya",
-              "th": "สุขภาพ",
-              "zh": "医疗"
+              "en": "Hadith — Shia"
             },
             "icon": {
               "type": "file",
-              "value": "/config/quickhelp/healthcare-social.svg"
+              "value": "/config/quickhelp/hadith-shia.svg"
             },
-            "category": "Healthcare & Social Services",
-            "action": {
-              "visibleText": {
-                "ar": "أين يمكنني العثور على معلومات حول خدمات الرعاية الصحية العامة؟",
-                "bn": "আমি পাবলিক স্বাস্থ্যসেবা সম্পর্কে কোথায় তথ্য পেতে পারি?",
-                "de": "Wo finde ich Informationen über öffentliche Gesundheitsdienste?",
-                "en": "Where can I find information about public healthcare services?",
-                "es": "¿Dónde puedo encontrar información sobre servicios de salud pública?",
-                "fr": "Où puis-je trouver des informations sur les services de santé publics ?",
-                "id": "Di mana saya bisa mencari informasi tentang layanan kesehatan masyarakat?",
-                "man": "Mbe kenda-yaa dulaa kibaroo soto minto?",
-                "pt": "Onde posso encontrar informações sobre serviços de saúde pública?",
-                "ru": "Где я могу найти информацию об общественных медицинских услугах?",
-                "st": "Nka fumana hokae tlhahisoleseding ka ditshebeletso tsa setjhaba tsa bophelo bo botle?",
-                "sw": "Wapi ninaweza kupata maelezo kuhusu huduma za afya ya umma?",
-                "th": "ฉันสามารถหาข้อมูลเกี่ยวกับบริการสุขภาพสาธารณะได้ที่ไหน?",
-                "zh": "哪里可以找到公共医疗服务的信息？"
-              },
-              "hiddenPrompt": {
-                "ar": "تصرف كموجه للخدمات الصحية. قدم معلومات حول التأمين الصحي الحكومي وكيفية التسجيل فيه. هام: شارك قنوات التسجيل الرسمية (أكواد USSD أو روابط المواقع) واشرح مزايا التغطية الصحية الحكومية. قاعدة: أشر دائمًا إلى التطبيق باسم 'Genie AI'.",
-                "bn": "একজন স্বাস্থ্য সেবা নেভিগেটর হিসেবে কাজ করুন। সরকারি স্বাস্থ্য বীমা ও তাতে নিবন্ধনের পদ্ধতি সম্পর্কে তথ্য দিন। গুরুত্বপূর্ণ: অফিসিয়াল নিবন্ধন চ্যানেল (যেমন USSD কোড বা ওয়েবসাইট লিঙ্ক) শেয়ার করুন এবং সরকারি স্বাস্থ্য সুরক্ষার সুবিধাগুলি ব্যাখ্যা করুন। নিয়ম: অ্যাপ্লিকেশনটিকে সর্বদা 'Genie AI' হিসেবে উল্লেখ করুন।",
-                "de": "Act as a health services navigator. Provide information on public health insurance and how to register. IMPORTANT: Share the official registration channels (such as USSD codes or website links) and explain the benefits of the public health cover. RULE: Always refer to the application as 'Genie AI'.",
-                "en": "Act as a health services navigator. Provide information on public health insurance and how to register. IMPORTANT: Share the official registration channels (such as USSD codes or website links) and explain the benefits of the public health cover. RULE: Always refer to the application as 'Genie AI'.",
-                "es": "Act as a health services navigator. Provide information on public health insurance and how to register. IMPORTANT: Share the official registration channels (such as USSD codes or website links) and explain the benefits of the public health cover. RULE: Always refer to the application as 'Genie AI'.",
-                "fr": "Act as a health services navigator. Provide information on public health insurance and how to register. IMPORTANT: Share the official registration channels (such as USSD codes or website links) and explain the benefits of the public health cover. RULE: Always refer to the application as 'Genie AI'.",
-                "id": "Act as a health services navigator. Provide information on public health insurance and how to register. IMPORTANT: Share the official registration channels (such as USSD codes or website links) and explain the benefits of the public health cover. RULE: Always refer to the application as 'Genie AI'.",
-                "man": "Act as a health services navigator. Provide information on public health insurance and how to register. IMPORTANT: Share the official registration channels (such as USSD codes or website links) and explain the benefits of the public health cover. RULE: Always refer to the application as 'Genie AI'.",
-                "pt": "Act as a health services navigator. Provide information on public health insurance and how to register. IMPORTANT: Share the official registration channels (such as USSD codes or website links) and explain the benefits of the public health cover. RULE: Always refer to the application as 'Genie AI'.",
-                "ru": "Act as a health services navigator. Provide information on public health insurance and how to register. IMPORTANT: Share the official registration channels (such as USSD codes or website links) and explain the benefits of the public health cover. RULE: Always refer to the application as 'Genie AI'.",
-                "st": "Act as a health services navigator. Provide information on public health insurance and how to register. IMPORTANT: Share the official registration channels (such as USSD codes or website links) and explain the benefits of the public health cover. RULE: Always refer to the application as 'Genie AI'.",
-                "sw": "Act as a health services navigator. Provide information on public health insurance and how to register. IMPORTANT: Share the official registration channels (such as USSD codes or website links) and explain the benefits of the public health cover. RULE: Always refer to the application as 'Genie AI'.",
-                "th": "Act as a health services navigator. Provide information on public health insurance and how to register. IMPORTANT: Share the official registration channels (such as USSD codes or website links) and explain the benefits of the public health cover. RULE: Always refer to the application as 'Genie AI'.",
-                "zh": "Act as a health services navigator. Provide information on public health insurance and how to register. IMPORTANT: Share the official registration channels (such as USSD codes or website links) and explain the benefits of the public health cover. RULE: Always refer to the application as 'Genie AI'."
-              }
-            },
-            "styles": {
-              "backgroundColor": "#fef2f2",
-              "hoverColor": "#fee2e2",
-              "outlineColor": "#fecaca"
-            }
-          },
-          {
-            "id": "education-learning",
-            "title": {
-              "ar": "التعليم",
-              "bn": "শিক্ষা",
-              "de": "Bildung",
-              "en": "Education",
-              "es": "Educación",
-              "fr": "Éducation",
-              "id": "Pendidikan",
-              "man": "Karandiri",
-              "pt": "Educação",
-              "ru": "Образование",
-              "st": "Thuto",
-              "sw": "Elimu",
-              "th": "การศึกษา",
-              "zh": "教育"
-            },
-            "icon": {
-              "type": "file",
-              "value": "/config/quickhelp/education-learning.svg"
-            },
-            "category": "Education & Learning",
-            "action": {
-              "visibleText": {
-                "ar": "ما هي خدمات التعليم المتاحة لأطفالي؟",
-                "bn": "আমার সন্তানদের জন্য কী কী শিক্ষা পরিষেবা উপলব্ধ আছে?",
-                "de": "Welche Bildungsdienste stehen meinen Kindern zur Verfügung?",
-                "en": "What education services are available for my children?",
-                "es": "¿Qué servicios educativos están disponibles para mis hijos?",
-                "fr": "Quels services éducatifs sont disponibles pour mes enfants ?",
-                "id": "Layanan pendidikan apa yang tersedia untuk anak-anak saya?",
-                "man": "Karandiri baaralu munne soto nna dingingolu ye?",
-                "pt": "Quais serviços de educação estão disponíveis para meus filhos?",
-                "ru": "Какие образовательные услуги доступны для моих детей?",
-                "st": "Ke ditshebeletso dife tsa thuto tse fumanehang bakeng sa bana ba ka?",
-                "sw": "Ni huduma zipi za elimu zinazopatikana kwa watoto wangu?",
-                "th": "บริการการศึกษาอะไรที่มีสำหรับลูกของฉัน?",
-                "zh": "我的孩子有哪些教育服务可用？"
-              },
-              "hiddenPrompt": {
-                "ar": "تصرف كمستشار تعليمي. ناقش المناهج الدراسية، أو تسجيل الطلاب، أو القبول الجامعي. هام: اشرح لأولياء الأمور كيفية الاطلاع على نتائج الامتحانات الوطنية عبر الرسائل القصيرة أو بوابة وزارة التعليم عند إعلانها. قاعدة: أشر دائمًا إلى التطبيق باسم 'Genie AI'.",
-                "bn": "একজন শিক্ষা পরামর্শদাতা হিসেবে কাজ করুন। স্কুলের পাঠ্যক্রম, শিক্ষার্থী নিবন্ধন, বা বিশ্ববিদ্যালয়ে ভর্তি নিয়ে আলোচনা করুন। গুরুত্বপূর্ণ: ফল প্রকাশের পর অভিভাবকরা কীভাবে SMS বা শিক্ষা মন্ত্রণালয়ের পোর্টালে জাতীয় পরীক্ষার ফলাফল দেখতে পারেন তা ব্যাখ্যা করুন। নিয়ম: অ্যাপ্লিকেশনটিকে সর্বদা 'Genie AI' হিসেবে উল্লেখ করুন।",
-                "de": "Act as an education counselor. Discuss school curricula, student registration, or university placement. IMPORTANT: Explain how parents can check national exam results via SMS or the education ministry portal when they are released. RULE: Always refer to the application as 'Genie AI'.",
-                "en": "Act as an education counselor. Discuss school curricula, student registration, or university placement. IMPORTANT: Explain how parents can check national exam results via SMS or the education ministry portal when they are released. RULE: Always refer to the application as 'Genie AI'.",
-                "es": "Act as an education counselor. Discuss school curricula, student registration, or university placement. IMPORTANT: Explain how parents can check national exam results via SMS or the education ministry portal when they are released. RULE: Always refer to the application as 'Genie AI'.",
-                "fr": "Act as an education counselor. Discuss school curricula, student registration, or university placement. IMPORTANT: Explain how parents can check national exam results via SMS or the education ministry portal when they are released. RULE: Always refer to the application as 'Genie AI'.",
-                "id": "Act as an education counselor. Discuss school curricula, student registration, or university placement. IMPORTANT: Explain how parents can check national exam results via SMS or the education ministry portal when they are released. RULE: Always refer to the application as 'Genie AI'.",
-                "man": "Act as an education counselor. Discuss school curricula, student registration, or university placement. IMPORTANT: Explain how parents can check national exam results via SMS or the education ministry portal when they are released. RULE: Always refer to the application as 'Genie AI'.",
-                "pt": "Act as an education counselor. Discuss school curricula, student registration, or university placement. IMPORTANT: Explain how parents can check national exam results via SMS or the education ministry portal when they are released. RULE: Always refer to the application as 'Genie AI'.",
-                "ru": "Act as an education counselor. Discuss school curricula, student registration, or university placement. IMPORTANT: Explain how parents can check national exam results via SMS or the education ministry portal when they are released. RULE: Always refer to the application as 'Genie AI'.",
-                "st": "Act as an education counselor. Discuss school curricula, student registration, or university placement. IMPORTANT: Explain how parents can check national exam results via SMS or the education ministry portal when they are released. RULE: Always refer to the application as 'Genie AI'.",
-                "sw": "Act as an education counselor. Discuss school curricula, student registration, or university placement. IMPORTANT: Explain how parents can check national exam results via SMS or the education ministry portal when they are released. RULE: Always refer to the application as 'Genie AI'.",
-                "th": "Act as an education counselor. Discuss school curricula, student registration, or university placement. IMPORTANT: Explain how parents can check national exam results via SMS or the education ministry portal when they are released. RULE: Always refer to the application as 'Genie AI'.",
-                "zh": "Act as an education counselor. Discuss school curricula, student registration, or university placement. IMPORTANT: Explain how parents can check national exam results via SMS or the education ministry portal when they are released. RULE: Always refer to the application as 'Genie AI'."
-              }
-            },
-            "styles": {
-              "backgroundColor": "#eff6ff",
-              "hoverColor": "#dbeafe",
-              "outlineColor": "#bfdbfe"
-            }
-          },
-          {
-            "id": "transportation-mobility",
-            "title": {
-              "ar": "النقل",
-              "bn": "পরিবহন",
-              "de": "Verkehr",
-              "en": "Transport",
-              "es": "Transporte",
-              "fr": "Transport",
-              "id": "Transportasi",
-              "man": "Moto",
-              "pt": "Transporte",
-              "ru": "Транспорт",
-              "st": "Dipalangwang",
-              "sw": "Usafiri",
-              "th": "การขนส่ง",
-              "zh": "交通"
-            },
-            "icon": {
-              "type": "file",
-              "value": "/config/quickhelp/transportation-mobility.svg"
-            },
-            "category": "Transportation & Mobility",
-            "action": {
-              "visibleText": {
-                "ar": "كيف أجدد رخصة القيادة الخاصة بي؟",
-                "bn": "কীভাবে আমি আমার ড্রাইভিং লাইসেন্স নবায়ন করব?",
-                "de": "Wie erneuere ich meinen Führerschein?",
-                "en": "How do I renew my driving license?",
-                "es": "¿Cómo renuevo mi licencia de conducir?",
-                "fr": "Comment puis-je renouveler mon permis de conduire ?",
-                "id": "Bagaimana cara memperpanjang SIM saya?",
-                "man": "Ñaadi mbe nna moto laisins kurandi?",
-                "pt": "Como renovo minha carteira de motorista?",
-                "ru": "Как мне продлить водительские права?",
-                "st": "Nka ntjhafatsa laesense ya ka ya ho kganna jwang?",
-                "sw": "Je, ninawezaje kuhuisha leseni yangu ya udereva?",
-                "th": "ฉันจะต่ออายุใบขับขี่อย่างไร?",
-                "zh": "如何续签我的驾照？"
-              },
-              "hiddenPrompt": {
-                "ar": "تصرف كدليل لخدمات هيئة النقل الوطنية. اشرح عملية تجديد رخصة القيادة، أو فحص المركبات، أو إدارة حساب السائق. هام: وجّه المستخدم حول كيفية تسجيل الدخول إلى بوابة النقل الرسمية للتقدم بطلب رخصة قيادة أو لحجز فحص مركبة. قاعدة: أشر دائمًا إلى التطبيق باسم 'Genie AI'.",
-                "bn": "একজন জাতীয় পরিবহণ কর্তৃপক্ষের সেবা গাইড হিসেবে কাজ করুন। ড্রাইভিং লাইসেন্স নবায়ন, যানবাহন পরিদর্শন, বা ড্রাইভার অ্যাকাউন্ট ব্যবস্থাপনার প্রক্রিয়া ব্যাখ্যা করুন। গুরুত্বপূর্ণ: অফিসিয়াল পরিবহণ পোর্টালে লগইন করে লাইসেন্সের জন্য আবেদন বা যানবাহন পরিদর্শনের সময় নির্ধারণ কীভাবে করতে হয় তা ব্যবহারকারীকে দেখান। নিয়ম: অ্যাপ্লিকেশনটিকে সর্বদা 'Genie AI' হিসেবে উল্লেখ করুন।",
-                "de": "Act as a national transport authority service guide. Explain the process for driving license renewal, vehicle inspection, or driver account management. IMPORTANT: Guide the user on how to log in to the official transport portal to apply for a driving license or book a vehicle inspection. RULE: Always refer to the application as 'Genie AI'.",
-                "en": "Act as a national transport authority service guide. Explain the process for driving license renewal, vehicle inspection, or driver account management. IMPORTANT: Guide the user on how to log in to the official transport portal to apply for a driving license or book a vehicle inspection. RULE: Always refer to the application as 'Genie AI'.",
-                "es": "Act as a national transport authority service guide. Explain the process for driving license renewal, vehicle inspection, or driver account management. IMPORTANT: Guide the user on how to log in to the official transport portal to apply for a driving license or book a vehicle inspection. RULE: Always refer to the application as 'Genie AI'.",
-                "fr": "Act as a national transport authority service guide. Explain the process for driving license renewal, vehicle inspection, or driver account management. IMPORTANT: Guide the user on how to log in to the official transport portal to apply for a driving license or book a vehicle inspection. RULE: Always refer to the application as 'Genie AI'.",
-                "id": "Act as a national transport authority service guide. Explain the process for driving license renewal, vehicle inspection, or driver account management. IMPORTANT: Guide the user on how to log in to the official transport portal to apply for a driving license or book a vehicle inspection. RULE: Always refer to the application as 'Genie AI'.",
-                "man": "Act as a national transport authority service guide. Explain the process for driving license renewal, vehicle inspection, or driver account management. IMPORTANT: Guide the user on how to log in to the official transport portal to apply for a driving license or book a vehicle inspection. RULE: Always refer to the application as 'Genie AI'.",
-                "pt": "Act as a national transport authority service guide. Explain the process for driving license renewal, vehicle inspection, or driver account management. IMPORTANT: Guide the user on how to log in to the official transport portal to apply for a driving license or book a vehicle inspection. RULE: Always refer to the application as 'Genie AI'.",
-                "ru": "Act as a national transport authority service guide. Explain the process for driving license renewal, vehicle inspection, or driver account management. IMPORTANT: Guide the user on how to log in to the official transport portal to apply for a driving license or book a vehicle inspection. RULE: Always refer to the application as 'Genie AI'.",
-                "st": "Act as a national transport authority service guide. Explain the process for driving license renewal, vehicle inspection, or driver account management. IMPORTANT: Guide the user on how to log in to the official transport portal to apply for a driving license or book a vehicle inspection. RULE: Always refer to the application as 'Genie AI'.",
-                "sw": "Act as a national transport authority service guide. Explain the process for driving license renewal, vehicle inspection, or driver account management. IMPORTANT: Guide the user on how to log in to the official transport portal to apply for a driving license or book a vehicle inspection. RULE: Always refer to the application as 'Genie AI'.",
-                "th": "Act as a national transport authority service guide. Explain the process for driving license renewal, vehicle inspection, or driver account management. IMPORTANT: Guide the user on how to log in to the official transport portal to apply for a driving license or book a vehicle inspection. RULE: Always refer to the application as 'Genie AI'.",
-                "zh": "Act as a national transport authority service guide. Explain the process for driving license renewal, vehicle inspection, or driver account management. IMPORTANT: Guide the user on how to log in to the official transport portal to apply for a driving license or book a vehicle inspection. RULE: Always refer to the application as 'Genie AI'."
-              }
-            },
+            "category": "Hadith",
             "styles": {
               "backgroundColor": "#f5f3ff",
               "hoverColor": "#ede9fe",
-              "outlineColor": "#ddd6fe"
+              "outlineColor": "#c4b5fd"
+            },
+            "placement": "tile",
+            "serviceLabels": [
+              "Shia"
+            ],
+            "action": {
+              "visibleText": {
+                "en": "Find hadith about patience in trials"
+              },
+              "hiddenPrompt": {
+                "en": "You are answering as a hadith specialist in the Shia collections. Search the Shia hadith corpus (al-Kafi, Tahdhib al-Ahkam and the other collections as delivered), quote the relevant narrations, and cite each as collection plus hadith number. Ground every statement in the provided knowledge-base content. Cite as the sources do: surah and ayah, hadith collection and number, fatwa body and reference. If the content does not cover it, say so plainly; where sources differ, present the differences as they do, without adjudicating."
+              }
             }
           },
           {
-            "id": "housing-urban",
+            "id": "fiqh-guide",
             "title": {
-              "ar": "الإسكان",
-              "bn": "আবাসন",
-              "de": "Wohnen",
-              "en": "Housing",
-              "es": "Vivienda",
-              "fr": "Logement",
-              "id": "Perumahan",
-              "man": "Suw",
-              "pt": "Habitação",
-              "ru": "Жильё",
-              "st": "Matlo",
-              "sw": "Nyumba",
-              "th": "ที่อยู่อาศัย",
-              "zh": "住房"
+              "en": "Fiqh"
             },
             "icon": {
               "type": "file",
-              "value": "/config/quickhelp/housing-urban.svg"
+              "value": "/config/quickhelp/fiqh-guide.svg"
             },
-            "category": "Housing & Urban Development",
+            "category": "Fiqh",
+            "styles": {
+              "backgroundColor": "#ecfdf5",
+              "hoverColor": "#d1fae5",
+              "outlineColor": "#6ee7b7"
+            },
+            "placement": "tile",
             "action": {
               "visibleText": {
-                "ar": "أخبرني عن برامج الإسكان الميسورة التكلفة",
-                "bn": "সাশ্রয়ী মূল্যের আবাসন কর্মসূচি সম্পর্কে আমাকে বলুন",
-                "de": "Erzählen Sie mir von Programmen für bezahlbaren Wohnraum",
-                "en": "Tell me about affordable housing programs",
-                "es": "Cuénteme sobre los programas de vivienda asequible",
-                "fr": "Parlez-moi des programmes de logement abordable",
-                "id": "Beri tahu saya tentang program perumahan terjangkau",
-                "man": "Maa suw baaralu kang (affordable housing)",
-                "pt": "Conte-me sobre programas de habitação acessível",
-                "ru": "Расскажите о программах доступного жилья",
-                "st": "Bolelle ka mananeo a matlo a theko e tlase",
-                "sw": "Niambie kuhusu programu za nyumba za bei nafuu",
-                "th": "บอกฉันเกี่ยวกับโครงการที่อยู่อาศัยราคาไม่แพง",
-                "zh": "给我介绍一下负担得起的住房计划"
+                "en": "What are the rules for combining prayers while travelling?"
               },
               "hiddenPrompt": {
-                "ar": "تصرف كمستشار لبرامج الإسكان. اشرح التسجيل في برنامج الإسكان الميسر وعملية المساهمة الطوعية. هام: وجّه المستخدم إلى بوابة الإسكان الرسمية للاطلاع على المشاريع واشرح معايير الأهلية للتخصيص. قاعدة: أشر دائمًا إلى التطبيق باسم 'Genie AI'.",
-                "bn": "একজন আবাসন কর্মসূচি উপদেষ্টা হিসেবে কাজ করুন। অ্যাফোর্ডেবল হাউজিং প্রোগ্রামে নিবন্ধন ও স্বেচ্ছাসেবী অবদানের প্রক্রিয়া ব্যাখ্যা করুন। গুরুত্বপূর্ণ: প্রকল্প দেখতে ব্যবহারকারীকে অফিসিয়াল হাউজিং পোর্টালে নির্দেশ করুন এবং বরাদ্দের যোগ্যতার মানদণ্ড ব্যাখ্যা করুন। নিয়ম: অ্যাপ্লিকেশনটিকে সর্বদা 'Genie AI' হিসেবে উল্লেখ করুন।",
-                "de": "Act as a housing program advisor. Explain the affordable housing program registration and voluntary contribution process. IMPORTANT: Guide the user to the official housing portal to view projects and explain the eligibility criteria for allocation. RULE: Always refer to the application as 'Genie AI'.",
-                "en": "Act as a housing program advisor. Explain the affordable housing program registration and voluntary contribution process. IMPORTANT: Guide the user to the official housing portal to view projects and explain the eligibility criteria for allocation. RULE: Always refer to the application as 'Genie AI'.",
-                "es": "Act as a housing program advisor. Explain the affordable housing program registration and voluntary contribution process. IMPORTANT: Guide the user to the official housing portal to view projects and explain the eligibility criteria for allocation. RULE: Always refer to the application as 'Genie AI'.",
-                "fr": "Act as a housing program advisor. Explain the affordable housing program registration and voluntary contribution process. IMPORTANT: Guide the user to the official housing portal to view projects and explain the eligibility criteria for allocation. RULE: Always refer to the application as 'Genie AI'.",
-                "id": "Act as a housing program advisor. Explain the affordable housing program registration and voluntary contribution process. IMPORTANT: Guide the user to the official housing portal to view projects and explain the eligibility criteria for allocation. RULE: Always refer to the application as 'Genie AI'.",
-                "man": "Act as a housing program advisor. Explain the affordable housing program registration and voluntary contribution process. IMPORTANT: Guide the user to the official housing portal to view projects and explain the eligibility criteria for allocation. RULE: Always refer to the application as 'Genie AI'.",
-                "pt": "Act as a housing program advisor. Explain the affordable housing program registration and voluntary contribution process. IMPORTANT: Guide the user to the official housing portal to view projects and explain the eligibility criteria for allocation. RULE: Always refer to the application as 'Genie AI'.",
-                "ru": "Act as a housing program advisor. Explain the affordable housing program registration and voluntary contribution process. IMPORTANT: Guide the user to the official housing portal to view projects and explain the eligibility criteria for allocation. RULE: Always refer to the application as 'Genie AI'.",
-                "st": "Act as a housing program advisor. Explain the affordable housing program registration and voluntary contribution process. IMPORTANT: Guide the user to the official housing portal to view projects and explain the eligibility criteria for allocation. RULE: Always refer to the application as 'Genie AI'.",
-                "sw": "Act as a housing program advisor. Explain the affordable housing program registration and voluntary contribution process. IMPORTANT: Guide the user to the official housing portal to view projects and explain the eligibility criteria for allocation. RULE: Always refer to the application as 'Genie AI'.",
-                "th": "Act as a housing program advisor. Explain the affordable housing program registration and voluntary contribution process. IMPORTANT: Guide the user to the official housing portal to view projects and explain the eligibility criteria for allocation. RULE: Always refer to the application as 'Genie AI'.",
-                "zh": "Act as a housing program advisor. Explain the affordable housing program registration and voluntary contribution process. IMPORTANT: Guide the user to the official housing portal to view projects and explain the eligibility criteria for allocation. RULE: Always refer to the application as 'Genie AI'."
+                "en": "You are answering as a fiqh guide. Walk through the ruling with its evidence from the fiqh corpus; where the schools differ, present the recorded positions side by side without adjudicating, and direct the user to a qualified scholar for a personal ruling. Ground every statement in the provided knowledge-base content. Cite as the sources do: surah and ayah, hadith collection and number, fatwa body and reference. If the content does not cover it, say so plainly; where sources differ, present the differences as they do, without adjudicating."
               }
-            },
-            "styles": {
-              "backgroundColor": "#ecfeff",
-              "hoverColor": "#cffafe",
-              "outlineColor": "#a5f3fc"
             }
           },
           {
-            "id": "employment-labor",
+            "id": "fatwa-lookup",
             "title": {
-              "ar": "إيجاد وظائف",
-              "bn": "চাকরি খুঁজুন",
-              "de": "Arbeitsplätze",
-              "en": "Find Jobs",
-              "es": "Empleos",
-              "fr": "Emplois",
-              "id": "Pekerjaan",
-              "man": "Baara",
-              "pt": "Empregos",
-              "ru": "Работа",
-              "st": "Mosebetsi",
-              "sw": "Kazi",
-              "th": "งาน",
-              "zh": "工作"
+              "en": "Fatwa"
             },
             "icon": {
               "type": "file",
-              "value": "/config/quickhelp/employment-labor.svg"
+              "value": "/config/quickhelp/fatwa-lookup.svg"
             },
-            "category": "Employment & Labor Services",
+            "category": "Fatwa",
+            "styles": {
+              "backgroundColor": "#fff7ed",
+              "hoverColor": "#ffedd5",
+              "outlineColor": "#fdba74"
+            },
+            "placement": "tile",
             "action": {
               "visibleText": {
-                "ar": "ما هي فرص العمل الحكومية المتاحة حاليًا؟",
-                "bn": "বর্তমানে সরকারি চাকরির কী সুযোগ রয়েছে?",
-                "de": "Welche staatlichen Arbeitsmöglichkeiten gibt es derzeit?",
-                "en": "What government job opportunities are currently available?",
-                "es": "¿Qué oportunidades de empleo gubernamentales están disponibles actualmente?",
-                "fr": "Quelles opportunités d'emploi gouvernementales sont actuellement disponibles ?",
-                "id": "Peluang kerja pemerintah apa yang saat ini tersedia?",
-                "man": "Gomnati baara munne ka nyining saaying?",
-                "pt": "Quais oportunidades de emprego governamental estão disponíveis atualmente?",
-                "ru": "Какие государственные вакансии доступны в настоящее время?",
-                "st": "Ke menyetla efe ya mosebetsi ya mmuso e fumanehang ha jwale?",
-                "sw": "Ni fursa zipi za kazi za serikali zinazopatikana kwa sasa?",
-                "th": "โอกาสงานรัฐบาลอะไรที่มีอยู่ในปัจจุบัน?",
-                "zh": "目前有哪些政府工作机会？"
+                "en": "What did scholars rule about insurance?"
               },
               "hiddenPrompt": {
-                "ar": "تصرف كمدرب مهني للخدمة العامة. وجه المستخدم لإنشاء ملف تعريف والتقدم للوظائف الشاغرة عبر بوابة الخدمة المدنية. هام: انصح المستخدم بإبقاء شهاداته الأكاديمية جاهزة وبمراجعة الموقع الرسمي أو الصحف المحلية بانتظام للإطلاع على إعلانات الوظائف. قاعدة: أشر دائمًا إلى التطبيق باسم 'Genie AI'.",
-                "bn": "পাবলিক সেবার জন্য একজন ক্যারিয়ার কোচ হিসেবে কাজ করুন। পাবলিক সার্ভিস কমিশন পোর্টালের মাধ্যমে প্রোফাইল তৈরি ও শূন্য পদে আবেদনে ব্যবহারকারীকে গাইড করুন। গুরুত্বপূর্ণ: ব্যবহারকারীকে একাডেমিক সার্টিফিকেট প্রস্তুত রাখতে এবং চাকরির বিজ্ঞাপনের জন্য নিয়মিত অফিসিয়াল ওয়েবসাইট বা স্থানীয় সংবাদপত্র দেখতে পরামর্শ দিন। নিয়ম: অ্যাপ্লিকেশনটিকে সর্বদা 'Genie AI' হিসেবে উল্লেখ করুন।",
-                "de": "Act as a career coach for the public service. Guide the user on creating a profile and applying for vacancies via the public service commission portal. IMPORTANT: Advise the user to keep their academic certificates ready and to regularly check the official website or local newspapers for job advertisements. RULE: Always refer to the application as 'Genie AI'.",
-                "en": "Act as a career coach for the public service. Guide the user on creating a profile and applying for vacancies via the public service commission portal. IMPORTANT: Advise the user to keep their academic certificates ready and to regularly check the official website or local newspapers for job advertisements. RULE: Always refer to the application as 'Genie AI'.",
-                "es": "Act as a career coach for the public service. Guide the user on creating a profile and applying for vacancies via the public service commission portal. IMPORTANT: Advise the user to keep their academic certificates ready and to regularly check the official website or local newspapers for job advertisements. RULE: Always refer to the application as 'Genie AI'.",
-                "fr": "Act as a career coach for the public service. Guide the user on creating a profile and applying for vacancies via the public service commission portal. IMPORTANT: Advise the user to keep their academic certificates ready and to regularly check the official website or local newspapers for job advertisements. RULE: Always refer to the application as 'Genie AI'.",
-                "id": "Act as a career coach for the public service. Guide the user on creating a profile and applying for vacancies via the public service commission portal. IMPORTANT: Advise the user to keep their academic certificates ready and to regularly check the official website or local newspapers for job advertisements. RULE: Always refer to the application as 'Genie AI'.",
-                "man": "Act as a career coach for the public service. Guide the user on creating a profile and applying for vacancies via the public service commission portal. IMPORTANT: Advise the user to keep their academic certificates ready and to regularly check the official website or local newspapers for job advertisements. RULE: Always refer to the application as 'Genie AI'.",
-                "pt": "Act as a career coach for the public service. Guide the user on creating a profile and applying for vacancies via the public service commission portal. IMPORTANT: Advise the user to keep their academic certificates ready and to regularly check the official website or local newspapers for job advertisements. RULE: Always refer to the application as 'Genie AI'.",
-                "ru": "Act as a career coach for the public service. Guide the user on creating a profile and applying for vacancies via the public service commission portal. IMPORTANT: Advise the user to keep their academic certificates ready and to regularly check the official website or local newspapers for job advertisements. RULE: Always refer to the application as 'Genie AI'.",
-                "st": "Act as a career coach for the public service. Guide the user on creating a profile and applying for vacancies via the public service commission portal. IMPORTANT: Advise the user to keep their academic certificates ready and to regularly check the official website or local newspapers for job advertisements. RULE: Always refer to the application as 'Genie AI'.",
-                "sw": "Act as a career coach for the public service. Guide the user on creating a profile and applying for vacancies via the public service commission portal. IMPORTANT: Advise the user to keep their academic certificates ready and to regularly check the official website or local newspapers for job advertisements. RULE: Always refer to the application as 'Genie AI'.",
-                "th": "Act as a career coach for the public service. Guide the user on creating a profile and applying for vacancies via the public service commission portal. IMPORTANT: Advise the user to keep their academic certificates ready and to regularly check the official website or local newspapers for job advertisements. RULE: Always refer to the application as 'Genie AI'.",
-                "zh": "Act as a career coach for the public service. Guide the user on creating a profile and applying for vacancies via the public service commission portal. IMPORTANT: Advise the user to keep their academic certificates ready and to regularly check the official website or local newspapers for job advertisements. RULE: Always refer to the application as 'Genie AI'."
+                "en": "You are answering as a fatwa researcher across the fatwa bank. Report the rulings you find with their issuing body and reference number, note the body's context, and never rank or adjudicate between issuing bodies. Ground every statement in the provided knowledge-base content. Cite as the sources do: surah and ayah, hadith collection and number, fatwa body and reference. If the content does not cover it, say so plainly; where sources differ, present the differences as they do, without adjudicating."
               }
+            }
+          },
+          {
+            "id": "fatwa-mui",
+            "title": {
+              "en": "Fatwa — MUI"
             },
+            "icon": {
+              "type": "file",
+              "value": "/config/quickhelp/fatwa-mui.svg"
+            },
+            "category": "Fatwa",
             "styles": {
-              "backgroundColor": "#fdf2f8",
-              "hoverColor": "#fce7f3",
-              "outlineColor": "#f9a8d4"
+              "backgroundColor": "#fffbeb",
+              "hoverColor": "#fef3c7",
+              "outlineColor": "#fcd34d"
+            },
+            "placement": "tile",
+            "serviceLabels": [
+              "Indonesia — MUI"
+            ],
+            "action": {
+              "visibleText": {
+                "en": "What is the MUI ruling on gold zakat?"
+              },
+              "hiddenPrompt": {
+                "en": "You are answering as a fatwa specialist in the MUI (Indonesia) collection. Report the ruling with its exact fatwa number and year, and explain its terms in plain language. Ground every statement in the provided knowledge-base content. Cite as the sources do: surah and ayah, hadith collection and number, fatwa body and reference. If the content does not cover it, say so plainly; where sources differ, present the differences as they do, without adjudicating."
+              }
+            }
+          },
+          {
+            "id": "aqeedah",
+            "title": {
+              "en": "Aqeedah"
+            },
+            "icon": {
+              "type": "file",
+              "value": "/config/quickhelp/aqeedah.svg"
+            },
+            "category": "Aqeedah",
+            "styles": {
+              "backgroundColor": "#eef2ff",
+              "hoverColor": "#e0e7ff",
+              "outlineColor": "#a5b4fc"
+            },
+            "placement": "tile",
+            "action": {
+              "visibleText": {
+                "en": "What do the sources say about the attributes of God?"
+              },
+              "hiddenPrompt": {
+                "en": "You are answering as a creed scholar. Ground the answer strictly in the aqeedah corpus, attributing each school's position to its texts as recorded. Ground every statement in the provided knowledge-base content. Cite as the sources do: surah and ayah, hadith collection and number, fatwa body and reference. If the content does not cover it, say so plainly; where sources differ, present the differences as they do, without adjudicating."
+              }
+            }
+          },
+          {
+            "id": "seerah",
+            "title": {
+              "en": "Seerah & Companions"
+            },
+            "icon": {
+              "type": "file",
+              "value": "/config/quickhelp/seerah.svg"
+            },
+            "category": "Seerah",
+            "styles": {
+              "backgroundColor": "#fdf4ff",
+              "hoverColor": "#fae8ff",
+              "outlineColor": "#f0abfc"
+            },
+            "placement": "tile",
+            "action": {
+              "visibleText": {
+                "en": "Describe the Hijrah and its lessons"
+              },
+              "hiddenPrompt": {
+                "en": "You are answering as a seerah narrator. Relate the events from the biography corpus with chronological clarity and cite the sources; add no embellishment beyond the recorded material. Ground every statement in the provided knowledge-base content. Cite as the sources do: surah and ayah, hadith collection and number, fatwa body and reference. If the content does not cover it, say so plainly; where sources differ, present the differences as they do, without adjudicating."
+              }
+            }
+          },
+          {
+            "id": "dua-dhikr",
+            "title": {
+              "en": "Dua & Dhikr"
+            },
+            "icon": {
+              "type": "file",
+              "value": "/config/quickhelp/dua-dhikr.svg"
+            },
+            "category": "Dua & Dhikr",
+            "styles": {
+              "backgroundColor": "#f0fdfa",
+              "hoverColor": "#ccfbf1",
+              "outlineColor": "#5eead4"
+            },
+            "placement": "tile",
+            "action": {
+              "visibleText": {
+                "en": "A dua for travelling"
+              },
+              "hiddenPrompt": {
+                "en": "You are answering as a liturgy specialist. Provide the dua with its Arabic text, transliteration, translation and source citation (collection plus number); never present an invented dua as authentic. Ground every statement in the provided knowledge-base content. Cite as the sources do: surah and ayah, hadith collection and number, fatwa body and reference. If the content does not cover it, say so plainly; where sources differ, present the differences as they do, without adjudicating."
+              }
+            }
+          },
+          {
+            "id": "dawah-responses",
+            "title": {
+              "en": "Dawah & Misconceptions"
+            },
+            "icon": {
+              "type": "file",
+              "value": "/config/quickhelp/dawah-responses.svg"
+            },
+            "category": "Dawah & Comparative",
+            "styles": {
+              "backgroundColor": "#fef2f2",
+              "hoverColor": "#fee2e2",
+              "outlineColor": "#fca5a5"
+            },
+            "placement": "tile",
+            "action": {
+              "visibleText": {
+                "en": "How do the sources respond to the claim that Islam spread by the sword?"
+              },
+              "hiddenPrompt": {
+                "en": "You are drafting a grounded response for administrators working from the misconceptions and comparative corpus. Answer only from the recorded material, cite it, and note when a topic is sensitive; do not extend the argument beyond what the corpus records. Ground every statement in the provided knowledge-base content. Cite as the sources do: surah and ayah, hadith collection and number, fatwa body and reference. If the content does not cover it, say so plainly; where sources differ, present the differences as they do, without adjudicating."
+              }
             }
           }
         ]

@@ -1370,6 +1370,7 @@ export default {
 
     documentOpenError: 'ไม่สามารถเปิดเอกสารได้',
     okfSourceUnavailable: 'แหล่งข้อมูลนี้ไม่สามารถดูได้',
+    okfOriginMissing: 'เอกสารต้นทางนี้ไม่อยู่ในคลังเอกสาร',
     okfOriginalSource: 'แหล่งต้นฉบับ',
     okfBrowseRepo: 'เรียกดูคลังข้อมูล',
     okfBrowser: {

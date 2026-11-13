@@ -53,6 +53,12 @@ jest.mock('../services/pii-service', () => ({
   repoBulkAction: jest.fn().mockResolvedValue({ ok: true }),
   acknowledgePii: jest.fn().mockResolvedValue({ ok: true, acknowledged: true })
 }));
+jest.mock('../services/doc-repo-client', () => ({
+  fetchDocMeta: jest.fn().mockResolvedValue({}),
+  // #1827: the origin-availability stamp reads the status primitive.
+  fetchDocMetaStatus: jest.fn().mockResolvedValue('present'),
+  docRepoFileFields: jest.fn((f) => f)
+}));
 jest.mock('../services/concept-meta-service', () => {
   const base = {
     countByIndexStatus: jest.fn().mockResolvedValue(0),
@@ -1654,5 +1660,111 @@ describe('repository-controller — #1817 resolveConceptRepo per-candidate gates
     expect(next).not.toHaveBeenCalled();
     expect(res.statusCode).toBe(200);
     expect(res.body.repo_id).toBe('r-open');
+  });
+});
+
+// ===========================================================================
+// #1827 (dangling origin links): the citizen card stamps `missing: true` on
+// source entries doc-repo answers 404 for — a definitive verdict only.
+// Transient failures leave rows unmarked (an outage never purges working
+// links), the verdict is cached per file id, and the steward arm skips the
+// stamp entirely.
+// ===========================================================================
+describe('repository-controller — #1817/#1827 origin-availability stamp on the CAP-2 card', () => {
+  const conceptMetaService = require('../services/concept-meta-service');
+  const docRepoClient = require('../services/doc-repo-client');
+  const servingRepo = (over = {}) => ({
+    repo_id: 'r1',
+    name: 'R',
+    lifecycle_state: 'publish',
+    ingested_at: '2026-11-04T00:00:00Z',
+    ...over
+  });
+
+  beforeEach(() => {
+    docRepoClient.fetchDocMetaStatus.mockReset();
+    docRepoClient.fetchDocMetaStatus.mockResolvedValue('present');
+    conceptMetaService.getConceptMeta.mockReset();
+    // A FRESH cache per test — the map is module-level by design (one
+    // doc-repo read per file id per TTL window), so the suite clears it.
+    controller.originAvailabilityCache.clear();
+  });
+
+  it('a 404-marked origin goes out missing:true; a present one stays clean', async () => {
+    docRepoClient.fetchDocMetaStatus.mockImplementation(async (fid) => (fid === 'gone-file' ? 'missing' : 'present'));
+    conceptMetaService.getConceptMeta.mockResolvedValueOnce({
+      concept_id: 'c1',
+      body: '# body',
+      sources: [
+        { kind: 'document', file_id: 'gone-file', file_name: 'Removed.pdf' },
+        { kind: 'document', file_id: 'live-file', file_name: 'Present.pdf' }
+      ]
+    });
+    repoService.getById.mockResolvedValueOnce(servingRepo());
+    const { res, next } = await drive(controller.getConcept, { okfIsSuperAdmin: false, okfScopes: [] });
+    expect(next).not.toHaveBeenCalled();
+    expect(res.statusCode).toBe(200);
+    const byId = Object.fromEntries(res.body.sources.map((s) => [s.file_id, s]));
+    expect(byId['gone-file'].missing).toBe(true);
+    expect(byId['live-file'].missing).toBeUndefined();
+  });
+
+  it('a transient verdict leaves the row unmarked (no verdict, no cache)', async () => {
+    docRepoClient.fetchDocMetaStatus.mockResolvedValue('transient');
+    conceptMetaService.getConceptMeta.mockResolvedValueOnce({
+      concept_id: 'c1',
+      body: '# body',
+      sources: [{ kind: 'document', file_id: 'flaky-file', file_name: 'Flaky.pdf' }]
+    });
+    repoService.getById.mockResolvedValueOnce(servingRepo());
+    const { res, next } = await drive(controller.getConcept, { okfIsSuperAdmin: false, okfScopes: [] });
+    expect(next).not.toHaveBeenCalled();
+    expect(res.body.sources[0].missing).toBeUndefined();
+    // The second read re-checks: transient verdicts are never cached.
+    conceptMetaService.getConceptMeta.mockResolvedValueOnce({
+      concept_id: 'c1',
+      body: '# body',
+      sources: [{ kind: 'document', file_id: 'flaky-file', file_name: 'Flaky.pdf' }]
+    });
+    repoService.getById.mockResolvedValueOnce(servingRepo());
+    await drive(controller.getConcept, { okfIsSuperAdmin: false, okfScopes: [] });
+    expect(docRepoClient.fetchDocMetaStatus).toHaveBeenCalledTimes(2);
+  });
+
+  it('the verdict is cached per file id within the TTL (one doc-repo read for two cards)', async () => {
+    docRepoClient.fetchDocMetaStatus.mockResolvedValueOnce('missing').mockResolvedValue('present');
+    const conceptRow = {
+      concept_id: 'c1',
+      body: '# body',
+      sources: [{ kind: 'document', file_id: 'cached-file', file_name: 'Cached.pdf' }]
+    };
+    conceptMetaService.getConceptMeta.mockResolvedValueOnce({ ...conceptRow });
+    repoService.getById.mockResolvedValueOnce(servingRepo());
+    await drive(controller.getConcept, { okfIsSuperAdmin: false, okfScopes: [] });
+    conceptMetaService.getConceptMeta.mockResolvedValueOnce({ ...conceptRow });
+    repoService.getById.mockResolvedValueOnce(servingRepo());
+    const { res } = await drive(controller.getConcept, { okfIsSuperAdmin: false, okfScopes: [] });
+    expect(docRepoClient.fetchDocMetaStatus).toHaveBeenCalledTimes(1);
+    // The cached verdict still stamps the second card.
+    expect(res.body.sources[0].missing).toBe(true);
+  });
+
+  it('the steward arm stamps too (stewards click the same origin links — live-caught #1827)', async () => {
+    docRepoClient.fetchDocMetaStatus.mockResolvedValue('missing');
+    conceptMetaService.getConceptMeta.mockResolvedValueOnce({
+      concept_id: 'c1',
+      body: '# body',
+      sources: [{ kind: 'document', file_id: 'gone-file', file_name: 'Gone.pdf' }]
+    });
+    repoService.getById.mockResolvedValueOnce(servingRepo({ lifecycle_state: 'draft' }));
+    const { res, next } = await drive(controller.getConcept, { okfIsSuperAdmin: true, okfScopes: [] });
+    expect(next).not.toHaveBeenCalled();
+    expect(res.statusCode).toBe(200);
+    // The full steward row carries the stamp — the superadmin's own chat
+    // surface renders the same origin links as a citizen's.
+    expect(docRepoClient.fetchDocMetaStatus).toHaveBeenCalledWith('gone-file');
+    expect(res.body.sources[0].missing).toBe(true);
+    // ...and the steward-only ceiling field still rides (the composition).
+    expect(res.body.max_doc_chars).toBeDefined();
   });
 });

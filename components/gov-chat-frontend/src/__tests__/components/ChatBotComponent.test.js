@@ -6236,6 +6236,52 @@ describe('CAP-4 origin rows rendering', () => {
 });
 
 // ===========================================================================
+// #1827 (dangling origin links): an origin whose doc-repo file is gone
+// (the card's `missing: true` stamp) renders the MUTED FACT — a span, the
+// file name and the localized "not in the document repository" note — never
+// a button. The present sibling keeps its working link.
+// ===========================================================================
+describe('#1827 missing origin rows rendering', () => {
+  it('a missing origin is a muted fact; the present sibling keeps its button', async () => {
+    const wrapper = createChatBotWrapper();
+    const vm = wrapper.vm;
+    vm.$store.commit('conversation/appendUserMessage', { sender: 'user', content: 'q', isSaved: false });
+    vm.$store.commit('conversation/appendBotMessage', {
+      sender: 'bot',
+      content: 'a',
+      queryId: 'q1',
+      isSaved: false,
+      isGrounded: true,
+      sourcesOpen: true,
+      sources: [
+        {
+          id: 'alpha_concept',
+          title: 'Alpha Concept',
+          source: 'okf-concept',
+          repoId: 'repo-1',
+          okfSources: [
+            { kind: 'document', file_id: 'gone-file', file_name: 'Removed.pdf', missing: true },
+            { kind: 'document', file_id: 'live-file', file_name: 'Present.pdf' }
+          ]
+        }
+      ]
+    });
+    await wrapper.vm.$nextTick();
+    const muted = wrapper.find('[data-testid="answer-source-origin-missing-0-0"]');
+    expect(muted.exists()).toBe(true);
+    expect(muted.element.tagName).toBe('SPAN');
+    expect(muted.text()).toContain('Removed.pdf');
+    expect(muted.text()).toContain(enChatbot.okfOriginMissing);
+    // the present sibling keeps the clickable row
+    const live = wrapper.find('[data-testid="answer-source-origin-0-1"]');
+    expect(live.exists()).toBe(true);
+    expect(live.element.tagName).toBe('BUTTON');
+    expect(live.text()).toContain('Present.pdf');
+    wrapper.unmount();
+  });
+});
+
+// ===========================================================================
 // W9 (concept tree browse): the browse affordance on WORKING okf-concept
 // cards — repo identity present — in the answer-card grid. A pre-CAP-1 row
 // (no repoId) and a legacy document get NO affordance (never a dead entry);

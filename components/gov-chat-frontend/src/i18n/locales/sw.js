@@ -1380,6 +1380,7 @@ export default {
 
     documentOpenError: 'Imeshindwa kufungua hati',
     okfSourceUnavailable: 'Chanzo hiki hakipatiki kutazamwa.',
+    okfOriginMissing: 'Hati hii ya chanzo haipo kwenye hazina ya hati.',
     okfOriginalSource: 'Chanzo asili',
     okfBrowseRepo: 'Vinjari ghala',
     okfBrowser: {

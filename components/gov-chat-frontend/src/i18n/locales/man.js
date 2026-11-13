@@ -1368,6 +1368,7 @@ export default {
 
     documentOpenError: 'Cha dooarsh yn docamad',
     okfSourceUnavailable: 'Cha nel y bun shoh ry-akin dy fakin.',
+    okfOriginMissing: 'Cha nel y docymad bunneydagh shoh ayns y stor docymadyn.',
     okfOriginalSource: 'Bun chibsagh',
     okfBrowseRepo: 'Browse y repository',
     okfBrowser: {

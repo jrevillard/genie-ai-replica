@@ -34,7 +34,7 @@
 
 const { test, expect } = require('@playwright/test');
 const { loginViaUI, BASE_URL, TEST_ADMIN_USER, LOGIN_BUDGET_TIMEOUT_MS } = require('../helpers/chatbot');
-const { okfEnabled, okfParkedReason } = require('../helpers/venue-profile');
+const { okfEnabled, okfParkedReason, skipUnlessVenue } = require('../helpers/venue-profile');
 
 /** The artifacts the interception serves. Two of them: one complete, one
  *  without a bundle_version (the version must read "unknown", not a
@@ -75,9 +75,7 @@ test.describe('the OKF artifacts view', () => {
   // surface that never appears. It SKIPS WITH A REASON instead (#1742), and
   // the reason is the venue's own profile — read from the runtime config
   // the frontend itself reads — not a guess.
-  test.beforeEach(async () => {
-    test.skip(!(await okfEnabled()), await okfParkedReason());
-  });
+  test.beforeEach(skipUnlessVenue(test, okfEnabled, okfParkedReason));
 
   /**
    * Log in as the admin, intercept the two reads the surface performs, and

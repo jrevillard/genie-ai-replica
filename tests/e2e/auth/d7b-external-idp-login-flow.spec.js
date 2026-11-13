@@ -1,11 +1,11 @@
 const { test, expect } = require('@playwright/test');
 const { BASE_URL } = require('../helpers/base-url');
-const { hasIdentityProvider, missingIdentityProviderReason } = require('../helpers/venue-profile');
+const { hasIdentityProvider, missingIdentityProviderReason, skipUnlessVenue } = require('../helpers/venue-profile');
 
 const REALM = process.env.KEYCLOAK_REALM || 'genie';
 
 // Test D.7b — Full External IdP Login Flow
-// Prerequisite: Phase D Steps 1-5 in epic1-keycloak-foundation.md
+// Prerequisite: Phase D Steps 1-5 (docs/e2e-tests/suite-map.md § The acceptance phases)
 // (create external-idp realm, broker client, add IdP to genie realm)
 // If the external IdP is not configured, this test SKIPS WITH A REASON that
 // names the missing prerequisite — never a silent skip, and never a failure
@@ -45,12 +45,15 @@ async function brokerLogin(page) {
   }
 }
 
-test('completes full external IdP brokered login flow', async ({ browser }) => {
-  // The venue profile decides: the brokered login is an external-IdP
-  // surface, and a deployment without a brokered identity provider does
-  // not answer it.
-  test.skip(!(await hasIdentityProvider(REALM)), missingIdentityProviderReason(REALM));
+// The venue profile decides: the brokered login is an external-IdP
+// surface, and a deployment without a brokered identity provider does not
+// answer it — the spec SKIPS WITH A REASON instead (#1742). The wiring is
+// the shared registrar's (#1773), stated once.
+test.beforeEach(
+  skipUnlessVenue(test, () => hasIdentityProvider(REALM), () => missingIdentityProviderReason(REALM))
+);
 
+test('completes full external IdP brokered login flow', async ({ browser }) => {
   const context = await browser.newContext({
     ignoreHTTPSErrors: true,
     bypassCSP: true,
@@ -194,7 +197,7 @@ test('completes full external IdP brokered login flow', async ({ browser }) => {
         `  Final URL: ${errorUrl}\n` +
         `  Page body (first 500 chars): ${errorBody}\n` +
         (restoreFailure ? `  ${restoreFailure}\n` : '') +
-        `  Hint: Run Phase D Steps 1-5 in docs/e2e-tests/epic1-keycloak-foundation.md first`,
+        `  Hint: Run Phase D Steps 1-5 (docs/e2e-tests/suite-map.md § The acceptance phases) first`,
       { cause: error },
     );
   }

@@ -22,6 +22,7 @@
 // ignore layer and straight into this gate.
 
 const { execFileSync } = require('child_process');
+const { escapeRegExp } = require('../validators/js-files');
 const path = require('path');
 
 const { parseGitlabCiJobChanges } = require('../validators/parse-compose');
@@ -88,8 +89,6 @@ const NOT_COPIES = [
 // A glob that must match none of the copy shapes — it guards against a
 // fnmatch implementation that matches everything.
 const CONTROL_GLOB = '**/* - CopyX*';
-
-const escapeRegExp = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
 // A copy marker at the end of a path component; after it the component may
 // carry the disambiguating number a second duplicate gets and/or an

@@ -1,6 +1,7 @@
 // Copyright (C) 2026 International Telecommunication Union (ITU)
 // SPDX-License-Identifier: Apache-2.0
 const { test, expect } = require('@playwright/test');
+const { execFileSync } = require('child_process');
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
@@ -233,15 +234,36 @@ test.describe('a match must be DEDICATED to the spec file', () => {
     // otherwise one multi-file title turns into a dedication to a file
     // that is not in it.
     //
-    // The BARE spelling is the one that decides it: a token that carries
-    // the tree's root ('tests/e2e/...') is recognised by the root alone,
-    // whether the file exists or not. The bare name is recognised by its
-    // OWN shape — it names a spec file — so a file that was renamed
-    // away still counts.
-    const renamed = 'tests/e2e/renamed-away.spec.js';
-    expect(titleIsDedicatedTo('test(e2e): renamed-away.spec.js is red', renamed)).toBe(true);
-    // And it must not swallow a file it does not name.
-    expect(titleIsDedicatedTo('test(e2e): renamed-away.spec.js is red', FILE)).toBe(false);
+    // The rule reads the tree's OWN names (#1802): the files it has now,
+    // plus the ones it HAS HAD — "had" is the tree's git history. The
+    // case runs in a throwaway GIT repo so it owns that history: a spec
+    // the tree carried and then renamed away. (This checkout's real
+    // history would do, but the case must not depend on which files THIS
+    // tree happens to have renamed.)
+    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'e2e-dedupe-'));
+    const git = (...args) =>
+      execFileSync(
+        'git',
+        ['-C', root, '-c', 'user.email=e2e-dedupe@example.invalid', '-c', 'user.name=e2e-dedupe', ...args],
+        { encoding: 'utf-8' }
+      );
+    try {
+      fs.mkdirSync(path.join(root, 'tests/e2e'), { recursive: true });
+      fs.writeFileSync(path.join(root, 'tests/e2e/renamed-away.spec.js'), '');
+      git('init', '-q');
+      git('add', 'tests/e2e/renamed-away.spec.js');
+      git('commit', '-q', '-m', 'the tree once carried this spec');
+      fs.rmSync(path.join(root, 'tests/e2e/renamed-away.spec.js'));
+      git('add', '-A');
+      git('commit', '-q', '-m', 'the spec was renamed away');
+      // The file is gone; its bare name is still this tree's.
+      const renamed = 'tests/e2e/renamed-away.spec.js';
+      expect(titleIsDedicatedTo('test(e2e): renamed-away.spec.js is red', renamed, root)).toBe(true);
+      // And it must not swallow a file it does not name.
+      expect(titleIsDedicatedTo('test(e2e): renamed-away.spec.js is red', FILE, root)).toBe(false);
+    } finally {
+      fs.rmSync(root, { recursive: true, force: true });
+    }
   });
 });
 

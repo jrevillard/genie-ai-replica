@@ -322,6 +322,15 @@ async function writeRepoConceptEdges(repo_id, concept_id, ctx = {}) {
     let written = 0;
     for (const link of links) {
       const target = normalizeConceptId(link.to_concept_id);
+      // #1666: a self-target (a link to the concept's own id) is skipped like
+      // writeRepoAuthorLinks skips it — a self-loop in _LINKS_TO is a
+      // meaningless edge that pollutes traversal and degree counts. Both
+      // writers must agree.
+      if (target === cid) {
+        dropped.push(link.to_concept_id);
+        logger.info('Edge write: self-target dropped', { repo_id, from: cid, to: link.to_concept_id });
+        continue;
+      }
       if (!repoConceptIds.has(target)) {
         dropped.push(link.to_concept_id);
         logger.info('Edge write: cross-repo/missing target dropped (G22)', {

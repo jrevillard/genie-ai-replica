@@ -2718,9 +2718,9 @@ curl -sk "https://localhost/api/me" -H "Authorization: Bearer $USER_TOKEN" -o /d
 
 ## Test results summary
 
-Per-phase record tables. The A–E rows keep the result of the run that
-retired the epic plans; the L–N rows are the session-lifecycle record —
-fill them in as a phase is executed.
+Per-phase record table — fill in a row as its phase is executed. The A–E
+rows keep the result of the run that retired the epic plans; the L–N rows
+are the session-lifecycle record.
 
 
 | Phase | Test | Result | Notes |
@@ -2756,8 +2756,6 @@ fill them in as a phase is executed.
 | E.5 | Network isolation: full auth cycle | | Manual —requires deployed stack + network disconnect |
 
 
-| Phase | Test | Result | Notes |
-|-------|------|--------|-------|
 | L.1 | Frontend logout redirect to Keycloak | | |
 | L.2 | localStorage cleanup after logout | | |
 | L.3 | Vuex state cleared after logout | | |

@@ -215,18 +215,24 @@ function missingIdentityProviderReason(realm) {
  * The `testApi` argument is the spec's own `test` object — passed
  * explicitly so the unit spec can observe the wiring with a fake.
  *
+ * Registered as a spec's FIRST beforeAll, this hook is also the mint
+ * guard: `test.skip()` inside a hook skips the whole group, and
+ * Playwright does not run the hooks that follow a skipped hook (pinned
+ * in venue-profile.spec.js) — so the guarded setup after it never runs
+ * on a parked venue, and a skipped spec leaves no user behind.
+ *
  * @param {object} testApi - the Playwright `test` object the spec uses
  * @param {Function} probe - the venue probe (`okfEnabled`, `realmExists`,
  *   `hasIdentityProvider`, or a closure over one); falsy = the venue
  *   lacks the surface
- * @param {Function|string} reason - the skip reason: a function (sync or
- *   async, called at hook time) or a plain string
- * @returns {Function} the beforeEach hook
+ * @param {Function} reason - the skip reason, called at hook time (sync
+ *   or async); it lands on the tests as the skip annotation the failure
+ *   path prints
+ * @returns {Function} the hook (beforeEach or first beforeAll)
  */
 function skipUnlessVenue(testApi, probe, reason) {
   return async () => {
-    const why = typeof reason === 'function' ? await reason() : reason;
-    testApi.skip(!(await probe()), why);
+    testApi.skip(!(await probe()), await reason());
   };
 }
 

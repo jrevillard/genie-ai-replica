@@ -50,18 +50,40 @@ test.describe('the document status predicate', () => {
     expect(source).toContain('process.features.require_module');
   });
 
-  test('the predicate consumes the shared vocabulary by require, not a private copy', () => {
-    // The shared identity is STRUCTURAL, and a behaviour assertion alone
-    // cannot see it: if the helper drifted back to a private
-    // `toLowerCase().trim()` copy (or its require moved to a vendored
-    // duplicate), every behaviour case above would stay green. Pin the
-    // two drift directions directly: the require of the shared module
-    // must be present, and no private normalisation may be spelled
-    // beside it (#1804 review of #1781).
+  test('the predicate IS the shared vocabulary, on behaviour, across a sample', () => {
+    // Property-style: for every sampled document and selection the
+    // predicate answers exactly what the shared vocabulary's rule
+    // answers — the two cannot drift apart while this holds, and it
+    // survives any refactor of how the helper reaches the module. A
+    // dead require beside a private copy is caught by the tripwire
+    // below, not here.
+    const { normalizeStatus } = require('../../../components/gov-chat-frontend/src/utils/documentStatus');
+    const statuses = [
+      'all',
+      'Ingested',
+      'ingested ',
+      ' PENDING',
+      'Pending',
+      'Ingestion Error',
+      '',
+      'killed',
+      undefined,
+    ];
+    const docs = [file('Ingested'), file('pending'), { file_name: 'no-block.pdf' }, file(undefined)];
+    for (const doc of docs) {
+      for (const selection of statuses) {
+        const expected =
+          normalizeStatus(selection) === 'all' ||
+          (Boolean(doc.dataprep) && normalizeStatus(doc.dataprep.status) === normalizeStatus(selection));
+        expect(matchesStatus(doc, selection)).toBe(expected);
+      }
+    }
+  });
+
+  test('no private normalisation is spelled beside the shared require', () => {
+    // Tripwire for the drift the property test cannot see: a dead
+    // require of the shared module with a hand-rolled copy beside it.
     const source = fs.readFileSync(require.resolve('./documents'), 'utf8');
-    expect(source).toContain(
-      "require('../../../components/gov-chat-frontend/src/utils/documentStatus')"
-    );
     expect(source).not.toMatch(/toLowerCase\(\)\.trim\(\)/);
   });
 });

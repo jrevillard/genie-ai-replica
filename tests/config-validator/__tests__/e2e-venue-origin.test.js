@@ -50,9 +50,8 @@ const LOCAL_ORIGIN = /https?:\/\/(?:localhost|127\.0\.0\.1|genieai(?:-forge)?\.l
 // provider, a local stub. ONE ENTRY PER FILE — an entry allows its origin
 // in ITS file only, so a hardcoded loopback anywhere else still fails the
 // gate (a global allowance would readmit the hardcoded-venue bug class
-// the gate exists to catch). A plain-string entry (as the synthetic-tree
-// probes below pass) is a GLOBAL allowance, for a tree the ROOT-relative
-// scoping cannot address.
+// the gate exists to catch). Synthetic-tree probes compute each file's
+// ROOT-relative path the same way offenders() does.
 const MOCK_ORIGINS = [
   {
     // The transport owner test (#1804) drives its own local TLS server
@@ -105,14 +104,9 @@ const offenders = (files, allowed = MOCK_ORIGINS) =>
   files
     .filter((f) => path.resolve(f) !== path.resolve(DEFINING_MODULE))
     .filter((f) => {
-      // The allowance an entry grants is scoped to its own file (a
-      // {file, origin} entry), except for the plain-string entries the
-      // synthetic-tree probes pass — a global allowance for a tree the
-      // ROOT-relative scoping cannot address.
+      // The allowance an entry grants is scoped to its own file.
       const rel = path.relative(ROOT, f);
-      const allowedHere = allowed
-        .filter((entry) => typeof entry === 'string' || entry.file === rel)
-        .map((entry) => (typeof entry === 'string' ? entry : entry.origin));
+      const allowedHere = allowed.filter((entry) => entry.file === rel).map((entry) => entry.origin);
       const origins = stripJsComments(fs.readFileSync(f, 'utf8')).match(LOCAL_ORIGIN) || [];
       // Every local origin the file names must be one the suite may
       // drive on purpose — in THIS file.
@@ -241,9 +235,11 @@ describe('the e2e suite names the venue it was given, and names it once', () => 
         'lookalike-ip.spec.js': "await page.goto('http://127.0.0.10/');\n"
       },
       (tree) => {
-        const strays = offenders(jsFiles(tree), ['http://127.0.0.1:9000', 'http://localhost:8123']).map((f) =>
-          path.basename(f)
-        );
+        const rel = (name) => path.relative(ROOT, path.join(tree, name));
+        const strays = offenders(jsFiles(tree), [
+          { file: rel('mock-idp.spec.js'), origin: 'http://127.0.0.1:9000' },
+          { file: rel('mock-server.spec.js'), origin: 'http://localhost:8123' }
+        ]).map((f) => path.basename(f));
         expect(strays.sort()).toEqual([
           'api.spec.js',
           'bare-k8s.spec.js',

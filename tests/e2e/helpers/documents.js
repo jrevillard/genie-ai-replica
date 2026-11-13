@@ -111,13 +111,10 @@ async function waitForDocumentInTable(page, fileName, options = {}) {
  * payload is the WHOLE page and the table renders the payload's subset of
  * the selected status.
  *
- * The normalisation is the SHARED vocabulary's (#1781): the frontend's
- * `components/gov-chat-frontend/src/utils/documentStatus.js` owns it, the
- * admin filter applies the same `normalizeStatus`, and this predicate
- * derives from the same module — one rule, three consumers, no mirror to
- * go stale. The module is ESM and dependency-free; the e2e suite is
- * CommonJS, and Node's CommonJS-require-of-an-ES-module (Node >= 22.12) is the bridge
- * (the e2e runner is on Node 22+; verified in #1781).
+ * The normalisation is the SHARED vocabulary's (#1781): this predicate
+ * derives from the same `normalizeStatus` the require at the top of this
+ * file loads and the admin filter applies — one rule, three consumers,
+ * no mirror to go stale (the bridge and its floor are documented there).
  *
  * @param {object} file - one document of the /api/files payload
  * @param {string} status - the selected status

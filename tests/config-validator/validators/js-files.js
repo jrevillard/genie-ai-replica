@@ -5,10 +5,14 @@ const path = require('path');
 
 /**
  * The shape of a spec file's NAME (#1800): the one spelling of "a
- * spec/test file" the gates that must agree with each other share — the
- * executed-set derivation, the stream-route gate's test-file exclusion,
- * and any future consumer in this package. Anchored at the end, so it
- * tests a path's tail or a bare file name equally.
+ * spec/test file" the gates of THIS package that must agree with each
+ * other share — the executed-set derivation, the stream-route gate's
+ * test-file exclusion, and any future consumer here. Anchored at the
+ * end, so it tests a path's tail or a bare file name equally. The
+ * failure-path dedupe in tests/e2e (a SEPARATE package) carries the
+ * deliberate sibling copy (`SPEC_FILE_RE` in run/file-failure-issues.js)
+ * — sharing the constant would invert the dependency direction; if one
+ * changes, change both.
  */
 const SPEC_FILE_RE = /\.(?:spec|test)\.[cm]?[jt]sx?$/;
 

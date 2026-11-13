@@ -227,11 +227,10 @@ test.describe('the venue-skip wiring (#1773)', () => {
     expect(testApi.calls).toEqual([{ condition: false, description: 'unused' }]);
   });
 
-  test('skipUnlessVenue awaits an async reason and accepts a plain string', async () => {
+  test('skipUnlessVenue awaits an async reason', async () => {
     const testApi = fakeTest();
     await freshProfile().skipUnlessVenue(testApi, async () => false, async () => 'async reason')();
-    await freshProfile().skipUnlessVenue(testApi, async () => false, 'plain reason')();
-    expect(testApi.calls.map((c) => c.description)).toEqual(['async reason', 'plain reason']);
+    expect(testApi.calls.map((c) => c.description)).toEqual(['async reason']);
   });
 
   test('skipUnlessVenue passes the probe verdict through, not its inverse', async () => {

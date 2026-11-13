@@ -30,23 +30,20 @@ test.describe.serial('Phase I: Multi-Realm Configuration', () => {
   const TEST_USER = { username: 'testuser2', password: 'TestPass123!', email: 'testuser2@genie2.local' };
 
   // The venue profile decides: a deployment that exposes no second realm
-  // cannot answer a multi-realm request, so the test below SKIPS WITH A
-  // REASON instead of failing on a realm that was never provisioned
-  // (#1742). The wiring is the shared registrar's (#1773), stated once —
-  // the reason is the venue's own profile, read from the realm inventory.
-  test.beforeEach(
-    skipUnlessVenue(test, () => realmExists(TEST_REALM), () => missingRealmReason(TEST_REALM))
+  // cannot answer a multi-realm request, so the tests SKIPS WITH A REASON
+  // instead of failing on a realm that was never provisioned (#1742).
+  // The registrar is wired ONCE into both hooks — and because it hooks
+  // first, a skip stops the group: the mint below never runs on a venue
+  // without the realm.
+  const needsSecondRealm = skipUnlessVenue(
+    test,
+    () => realmExists(TEST_REALM),
+    () => missingRealmReason(TEST_REALM)
   );
+  test.beforeEach(needsSecondRealm);
+  test.beforeAll(needsSecondRealm);
 
-  // The second realm is absent: the tests skip, and the hooks after a
-  // skipped hook do not run (pinned in the helper's unit spec) — the
-  // setup below never mints into a realm that does not exist. The guard
-  // is the registrar's (#1773), stated once.
-  test.beforeAll(
-    skipUnlessVenue(test, () => realmExists(TEST_REALM), () => missingRealmReason(TEST_REALM))
-  );
-
-  test.beforeAll(async () => {
+  test.beforeAll(async ({ browser }) => {
     test.setTimeout(SESSION_MINT_TIMEOUT_MS);
 
     adminToken = await getAdminToken();
@@ -56,11 +53,8 @@ test.describe.serial('Phase I: Multi-Realm Configuration', () => {
     await enableDirectAccessGrants(adminToken, TEST_REALM, 'genie-app');
 
     // Primary-realm token from a browser login session — minted once,
-    // like the sibling suites. The helper launches its own throwaway
-    // browser when none is handed in (this hook takes no fixtures:
-    // Playwright requires a hook's first positional parameter to be a
-    // destructuring pattern, so a guard wrapper cannot forward one).
-    genie1Token = await getSessionTokenViaUI();
+    // like the sibling suites (through the worker's own browser).
+    genie1Token = await getSessionTokenViaUI({ browser });
 
     // Create test user in genie2 (realm should already exist from Phase
     // 0.6; createUser tolerates a 409 from a previous run)

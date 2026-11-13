@@ -47,11 +47,9 @@ test.describe('the RAGAS guide explains the output, and a re-score is a tracked 
   let adminToken;
   let userId;
 
-  // The OKF pillar parked means every test below skips — and a skipped
-  // spec must leave no user behind in the venue's realm: the guard is
-  // the registrar's (#1773), stated once, and Playwright does not run
-  // the hooks that follow a skipped hook (pinned in the helper's unit
-  // spec), so the mint below never runs on a parked venue.
+  // The venue-skip guard (#1742, wired by skipUnlessVenue): when it
+  // skips, the mint below never runs — Playwright does not run the hooks
+  // that follow a skipped hook.
   test.beforeAll(skipUnlessVenue(test, okfEnabled, okfParkedReason));
 
   test.beforeAll(async () => {

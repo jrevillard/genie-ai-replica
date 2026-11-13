@@ -4439,7 +4439,8 @@ describe('the root Playwright config has a lint home (#1716)', () => {
     const pkg = JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf-8'));
     const entry = (pkg['lint-staged'] || {})['playwright.config.js'];
     expect(entry).toBeDefined();
-    expect(entry.join(' ')).toContain('--max-warnings 0');
-    expect(entry.join(' ')).toContain('--config tests/e2e/eslint.config.js');
+    const cmd = entry.join(' ');
+    expect(cmd).toContain('--max-warnings 0');
+    expect(cmd).toContain('--config tests/e2e/eslint.config.js');
   });
 });

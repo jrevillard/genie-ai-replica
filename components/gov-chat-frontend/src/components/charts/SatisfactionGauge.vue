@@ -2,7 +2,7 @@
 <template>
   <div class="gauge-wrapper">
     <!-- Chart container -->
-    <div ref="chart" class="chart-container">
+    <div ref="chart" class="chart-container" data-test-id="analytics-gauge">
       <!-- ApexCharts radial bar for satisfaction gauge -->
       <apexchart
         v-if="!loading && !error && chartOptions"
@@ -32,11 +32,20 @@
     </div>
 
     <!-- Historical trends section -->
-    <div v-if="!loading && !error && computedHistoricalData.length > 0" class="historical-trends">
+    <div
+      v-if="!loading && !error && computedHistoricalData.length > 0"
+      class="historical-trends"
+      data-test-id="analytics-gauge-trends"
+    >
       <h3>
         {{ translate('analytics.gauge.historical', 'Historical Trends') }}
       </h3>
-      <div v-for="(item, index) in translatedHistoricalData" :key="index" class="trend-item">
+      <div
+        v-for="(item, index) in translatedHistoricalData"
+        :key="index"
+        class="trend-item"
+        :data-test-id="`analytics-gauge-trend-${item.periodKey}`"
+      >
         <span class="label">{{ item.label }}</span>
         <span class="value">{{ item.value.toFixed(2) }}%</span>
         <div class="progress" :style="{ width: `${item.value}%` }"></div>
@@ -55,7 +64,7 @@
     </div>
 
     <!-- Target indicator -->
-    <div v-if="!loading && !error" class="target-indicator">
+    <div v-if="!loading && !error" class="target-indicator" data-test-id="analytics-gauge-target">
       <span>{{ translate('analytics.gauge.target', 'Target') }}: {{ actualTarget }}%</span>
     </div>
 
@@ -175,6 +184,10 @@ export default {
     translatedHistoricalData() {
       return this.computedHistoricalData.map((item) => ({
         ...item,
+        // The untranslated period key rides along as periodKey: the e2e
+        // suite keys the trend row's test handle on it (E2E-TESTING.md) —
+        // a handle must not be built from the locale's display text.
+        periodKey: item.label,
         label: translatePeriodLabel(item.label, this.$i18n)
       }));
     },

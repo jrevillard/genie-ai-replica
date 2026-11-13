@@ -219,6 +219,7 @@
                               <DsButton
                                 variant="ghost"
                                 :aria-label="translate('admin.hierarchy.editCategory', 'Edit Category')"
+                                :data-test-id="`hierarchy-edit-category-${category._key}`"
                                 @click="showEditForm(category)"
                               >
                                 ✏️
@@ -310,6 +311,7 @@
                             <DsSelect
                               v-model="translation.lang"
                               class="translation-lang-select"
+                              :data-test-id="`hierarchy-translation-lang-${index}`"
                               :placeholder="translate('admin.hierarchy.selectLang', 'Select Language')"
                               :disabled="translationsLoadFailed"
                             >
@@ -321,6 +323,7 @@
                               v-model="translation.text"
                               type="text"
                               class="translation-text-input"
+                              :data-test-id="`hierarchy-translation-text-${index}`"
                               :placeholder="translate('admin.hierarchy.translationPlaceholder', 'Enter translation')"
                               :disabled="translationsLoadFailed"
                             />
@@ -338,6 +341,7 @@
                           <DsButton
                             variant="secondary"
                             :small="true"
+                            data-test-id="hierarchy-translation-add"
                             :disabled="translationsLoadFailed"
                             @click="addTranslationRow"
                           >
@@ -348,6 +352,7 @@
                       <div class="form-actions">
                         <DsButton
                           variant="primary"
+                          data-test-id="hierarchy-save"
                           :disabled="
                             !hierarchyForm.nameEN ||
                             isSavingHierarchyItem ||

@@ -36,9 +36,11 @@ classified.
 
 | Spec | Classes used | Residual |
 |---|---|---|
+| `analytics-satisfaction.spec.js` | handle (SVG `text` tails rooted at `analytics-gauge`/`analytics-heatmap`, `hasText` narrowing) | — |
 | `authz.spec.js` | handle | — |
 | `data-wiring.spec.js` | handle | — |
 | `failure-states.spec.js` | handle | — |
+| `hierarchy-translations-failure.spec.js` | handle | — |
 | `logs-view.spec.js` | handle | — |
 
 The handles these specs read (`stat-*`, `logs-*`, `admin-documents-*`,
@@ -106,6 +108,8 @@ without handles.
 | `ragas-guide-errors.spec.js` | handle (`okf-studio-card-*`, `ragas-guide-toggle`, `[role="dialog"]`, `ds-tab-*`, `ragas-guide-pane`) | — (converted #1828) |
 | `ragas-judge-selector.spec.js` | handle (`okf-studio-card-*`, `ragas-panel`, `okf-models-url-cell`) | — (converted #1828; the `select`/`option` tails are rooted at `ragas-panel`) |
 | `ragas-rescore-tracking.spec.js` | handle (`okf-studio-card-*`, `ragas-run-history`, `data-state` status pills, `ragas-run-key`, `ragas-run-progress`, `[role="dialog"]`) | — (converted #1828) |
+| `studio-draft-notice.spec.js` | handle | — |
+| `wizard-split-note.spec.js` | handle | — |
 
 The ragas family WAS the heaviest structural coupling in the suite (~30
 class-selector hits across three specs); #1828 converted it onto

@@ -83,9 +83,11 @@ one reads a missing directory as an accident.
 
 | Spec | Phase/story | What it drives | Profile | Helpers |
 |------|-------------|----------------|---------|---------|
+| `analytics-satisfaction.spec.js` | — | the analytics satisfaction charts render the injected payloads with the active locale's labels | core | `auth`, `chatbot` |
 | `authz.spec.js` | — | admin surface authorization: navbar gating + backend 403 | core | `auth`, `chatbot` |
 | `data-wiring.spec.js` | — | overview stat tiles/health/resources render from the system-health payload | core | `auth`, `chatbot` |
 | `failure-states.spec.js` | — | admin API failures render the visible error notification and recover | core | `auth`, `chatbot` |
+| `hierarchy-translations-failure.spec.js` | — | the hierarchy form's failed-translations dead-end: notice, disabled controls, Retry recovery | core | `auth`, `chatbot` |
 | `logs-view.spec.js` | — | the Logs tab renders the VL-backed roll-up rows | core | `auth`, `chatbot` |
 
 ## `okf/` — the OKF pillar
@@ -97,6 +99,8 @@ one reads a missing directory as an accident.
 | `ragas-guide-errors.spec.js` | — | the RAGAS guide error surfaces | OKF | `auth`, `base-url`, `keycloak-admin`, `locale`, `venue-profile` |
 | `ragas-judge-selector.spec.js` | — | the RAGAS judge model selector | OKF | `auth`, `base-url`, `keycloak-admin`, `venue-profile` |
 | `ragas-rescore-tracking.spec.js` | — | RAGAS rescore tracking | OKF | `auth`, `base-url`, `keycloak-admin`, `locale`, `venue-profile` |
+| `studio-draft-notice.spec.js` | — | the Studio's session-wide degraded-draft banner (#1531) | OKF | `chatbot`, `venue-profile` |
+| `wizard-split-note.spec.js` | — | the wizard's split-report note, rendered from the server's answer (#1591) | OKF | `chatbot`, `venue-profile` |
 
 OKF specs skip **with a reason** on a venue whose runtime config does not
 expose the pillar — see [local-run.md](local-run.md).

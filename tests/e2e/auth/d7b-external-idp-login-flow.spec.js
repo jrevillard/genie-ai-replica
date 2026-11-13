@@ -27,13 +27,9 @@ async function brokerLogin(page) {
   await page.waitForURL(
     (url) => {
       const urlStr = url.toString();
-      return (
-        urlStr.includes('realms/external-idp') ||
-        urlStr.includes('/callback') ||
-        urlStr.includes('/dashboard')
-      );
+      return urlStr.includes('realms/external-idp') || urlStr.includes('/callback') || urlStr.includes('/dashboard');
     },
-    { timeout: 30000 },
+    { timeout: 30000 }
   );
 
   // If we landed on the external-idp login page, fill credentials and submit
@@ -50,30 +46,52 @@ async function brokerLogin(page) {
 // answer it — the spec SKIPS WITH A REASON instead (#1742). The wiring is
 // the shared registrar's (#1773), stated once.
 test.beforeEach(
-  skipUnlessVenue(test, () => hasIdentityProvider(REALM), () => missingIdentityProviderReason(REALM))
+  skipUnlessVenue(
+    test,
+    () => hasIdentityProvider(REALM),
+    () => missingIdentityProviderReason(REALM)
+  )
 );
 
 test('completes full external IdP brokered login flow', async ({ browser }) => {
   const context = await browser.newContext({
     ignoreHTTPSErrors: true,
-    bypassCSP: true,
+    bypassCSP: true
   });
   const page = await context.newPage();
   const apiContext = context.request;
 
   // Get admin token for realm configuration changes
-  const adminTokenRes = await apiContext.post(
-    `${BASE_URL}/auth/realms/master/protocol/openid-connect/token`,
-    {
-      data: new URLSearchParams({
-        client_id: 'admin-cli',
-        username: 'admin',
-        password: process.env.KEYCLOAK_ADMIN_PASSWORD,
-        grant_type: 'password',
-      }),
-      ignoreHTTPSErrors: true,
-    },
-  );
+  const adminTokenRes = await apiContext.post(`${BASE_URL}/auth/realms/master/protocol/openid-connect/token`, {
+    data: new URLSearchParams({
+      client_id: 'admin-cli',
+      username: 'admin',
+      password: process.env.KEYCLOAK_ADMIN_PASSWORD,
+      grant_type: 'password'
+    }),
+    ignoreHTTPSErrors: true
+  });
+  // The mint carries the same verdict discipline as the restore below
+  // (#1713): apiContext returns a response on non-2xx instead of throwing,
+  // so the status is checked explicitly. An unchecked mint surfaces an
+  // expired/wrong admin password as a confusing downstream error — a
+  // `Bearer undefined` header on every later call — instead of the mint
+  // failure that is the actual cause.
+  if (!adminTokenRes.ok()) {
+    let mintBody;
+    try {
+      mintBody = JSON.stringify(await adminTokenRes.json()).substring(0, 300);
+    } catch (bodyError) {
+      mintBody = `unavailable (body read failed: ${bodyError.message})`;
+    }
+    const error = new Error(
+      `Admin token mint failed — every later realm call would run without a token. ` +
+        `HTTP ${adminTokenRes.status()}. Body: ${mintBody}. ` +
+        `Check KEYCLOAK_ADMIN_PASSWORD for the venue's master realm.`
+    );
+    error.isMintFailure = true;
+    throw error;
+  }
   const adminToken = (await adminTokenRes.json()).access_token;
   const authHeaders = { Authorization: `Bearer ${adminToken}`, 'Content-Type': 'application/json' };
 
@@ -89,10 +107,37 @@ test('completes full external IdP brokered login flow', async ({ browser }) => {
     // works normally. In the test environment (no SMTP), Keycloak shows a "Failed to send
     // email" page that blocks the broker flow. We disable the required action for the
     // duration of this test. It will be restored by keycloak-config-cli on next deploy.
-    await apiContext.put(
+    //
+    // The MUTATE side carries the same verdict discipline as the restore side
+    // (#1713): apiContext returns a response on non-2xx instead of throwing, so
+    // the status is checked explicitly. A silent disable failure (a 401 from an
+    // expired token, the 404 of an unregistered action) leaves VERIFY_EMAIL
+    // ENABLED, the brokered login then hits the wrong page, and a flow-failure
+    // envelope would diagnose URL/body/hint without ever naming the real
+    // cause — while the inner finally "restores" a flag that was never
+    // disabled. A failed disable means nothing was mutated, so it throws
+    // BEFORE the flow starts: no restore is owed.
+    const disableRes = await apiContext.put(
       `${BASE_URL}/auth/admin/realms/genie/authentication/required-actions/VERIFY_EMAIL`,
-      { headers: authHeaders, data: { enabled: false }, ignoreHTTPSErrors: true },
+      { headers: authHeaders, data: { enabled: false }, ignoreHTTPSErrors: true }
     );
+    if (!disableRes.ok()) {
+      let disableBody;
+      try {
+        disableBody = JSON.stringify(await disableRes.json()).substring(0, 300);
+      } catch (bodyError) {
+        disableBody = `unavailable (body read failed: ${bodyError.message})`;
+      }
+      const error = new Error(
+        `VERIFY_EMAIL disable failed — the required action stays ENABLED and the ` +
+          `brokered login below would fail on the email-verification page instead of ` +
+          `the flow under test, a cause the flow-failure envelope cannot name. ` +
+          `Nothing was mutated, so no restore is owed. HTTP ${disableRes.status()}. ` +
+          `Body: ${disableBody}.`
+      );
+      error.isDisableFailure = true;
+      throw error;
+    }
 
     try {
       // Step 2: Perform broker login (no VERIFY_EMAIL will be triggered)
@@ -105,38 +150,34 @@ test('completes full external IdP brokered login flow', async ({ browser }) => {
           const urlStr = url.toString();
           return urlStr.includes('/callback') || urlStr.includes('/dashboard');
         },
-        { timeout: 30000 },
+        { timeout: 30000 }
       );
 
       // If we landed on /callback, wait for the Vue app to process the auth code
       // and redirect to the dashboard (the handleCallback action does the code exchange)
       if (page.url().includes('/callback')) {
-        await page.waitForURL(
-          (url) => !url.toString().includes('/callback'),
-          { timeout: 30000 },
-        );
+        await page.waitForURL((url) => !url.toString().includes('/callback'), { timeout: 30000 });
       }
 
       // Step 4: Verify we are back on the app as an authenticated user
       const finalUrl = page.url();
       expect(
         finalUrl.includes('dashboard'),
-        `Expected final URL to contain 'dashboard', got: ${finalUrl}. External IdP broker flow failed.`,
+        `Expected final URL to contain 'dashboard', got: ${finalUrl}. External IdP broker flow failed.`
       ).toBeTruthy();
 
       // Step 5: Verify the token was issued by the genie realm (not the external IdP realm)
       const bodyText = await page.evaluate(() => document.body.innerText.substring(0, 200));
       expect(
         bodyText.includes('GENIE.AI'),
-        `Expected page body to contain 'GENIE.AI'. External IdP broker flow failed. Got: ${bodyText}`,
+        `Expected page body to contain 'GENIE.AI'. External IdP broker flow failed. Got: ${bodyText}`
       ).toBeTruthy();
 
       // Step 6: Verify authenticated state — login button should not be visible
       const loginButton = page.locator('#kc-login');
-      await expect(
-        loginButton,
-        'Login button should not be visible after successful authentication',
-      ).not.toBeVisible({ timeout: 15000 });
+      await expect(loginButton, 'Login button should not be visible after successful authentication').not.toBeVisible({
+        timeout: 15000
+      });
     } finally {
       // Step 7: Re-enable VERIFY_EMAIL required action.
       // Note: Keycloak 26 removes (unregisters) the action when disabled,
@@ -150,7 +191,7 @@ test('completes full external IdP brokered login flow', async ({ browser }) => {
       try {
         const restoreRes = await apiContext.put(
           `${BASE_URL}/auth/admin/realms/genie/authentication/required-actions/VERIFY_EMAIL`,
-          { headers: authHeaders, data: { enabled: true }, ignoreHTTPSErrors: true },
+          { headers: authHeaders, data: { enabled: true }, ignoreHTTPSErrors: true }
         );
         if (!restoreRes.ok()) {
           restoreStatus = `HTTP ${restoreRes.status()}`;
@@ -181,6 +222,19 @@ test('completes full external IdP brokered login flow', async ({ browser }) => {
       await context.close();
       throw error;
     }
+    if (error.isMintFailure) {
+      // Same pass-through: the mint message names the credential cause; the
+      // flow envelope's URL/body/hint describe a page that was never opened.
+      await context.close();
+      throw error;
+    }
+    if (error.isDisableFailure) {
+      // Same verdict pass-through as isRestoreFailure: the disable message
+      // names the real cause, and the URL/body/hint envelope does not apply
+      // (the flow never started — the page is still the login redirect).
+      await context.close();
+      throw error;
+    }
     const errorUrl = page.url();
     let errorBody;
     try {
@@ -198,7 +252,7 @@ test('completes full external IdP brokered login flow', async ({ browser }) => {
         `  Page body (first 500 chars): ${errorBody}\n` +
         (restoreFailure ? `  ${restoreFailure}\n` : '') +
         `  Hint: Run Phase D Steps 1-5 (docs/e2e-tests/suite-map.md § The acceptance phases) first`,
-      { cause: error },
+      { cause: error }
     );
   }
 });

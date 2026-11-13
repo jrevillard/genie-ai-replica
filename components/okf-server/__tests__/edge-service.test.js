@@ -169,6 +169,35 @@ describe('edgeService.writeRepoConceptEdges (Story 2.9.3)', () => {
     expect(edges[0]._to).not.toMatch(/other_repo_concept/);
   });
 
+  test('#1666: a SELF-target is dropped, never materialized as a self-loop — both writers agree', async () => {
+    // writeRepoAuthorLinks has skipped target === cid all along ("self-loop");
+    // writeRepoConceptEdges materialized it — a meaningless _from == _to edge
+    // that pollutes traversal and degree counts. The parsers agree: dropped.
+    programQueries(
+      [
+        metaRow({
+          links: [
+            { to_concept_id: 'service_directory', label: 'Myself' }, // self
+            { to_concept_id: 'index', label: 'Ok' }
+          ]
+        })
+      ],
+      inRepo('service_directory', 'index')
+    );
+    const result = await edgeService.writeRepoConceptEdges(REPO, 'service_directory', {});
+    expect(result.written).toBe(1);
+    expect(result.dropped).toEqual(['service_directory']);
+    expect(logger.info).toHaveBeenCalledWith(
+      'Edge write: self-target dropped',
+      expect.objectContaining({ from: 'service_directory', to: 'service_directory' })
+    );
+    const edges = Object.values(mockDb._stores[`${GRAPH}_LINKS_TO`] || {});
+    expect(edges).toHaveLength(1);
+    for (const e of edges) {
+      expect(e._from).not.toBe(e._to); // no self-loop survives
+    }
+  });
+
   test("replace-on-reingest: the concept's OLD outgoing edges are removed before the new ones", async () => {
     // Pre-seed one existing edge from this concept (a link that was removed in v2).
     await mockDb.collection(`${GRAPH}_LINKS_TO`).save({

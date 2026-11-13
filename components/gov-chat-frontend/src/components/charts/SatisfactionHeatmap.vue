@@ -1,6 +1,6 @@
 <!-- SatisfactionHeatmap.vue - Updated to use external data for date range consistency -->
 <template>
-  <div class="heatmap-wrapper">
+  <div class="heatmap-wrapper" data-test-id="analytics-heatmap">
     <div ref="chart" class="chart-container">
       <apexchart
         v-if="!loading && !error && !noData && chartOptions"

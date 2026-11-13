@@ -48,7 +48,10 @@ module.exports = [
     // invocation's cwd; what breaks instead is the --config path in
     // lint:playwright-config and the read path of the pin that reads
     // this file, and until those are re-spelled the gate exits 2 and
-    // the suite fails.
+    // the suite fails. The '../../' spellings here and in the Node-only
+    // entry match in NO wired invocation today (measured) — kept
+    // deliberately as the only guard if ESLint's pattern anchoring ever
+    // moves from cwd-relative to config-relative.
     ignores: ['playwright.config.js', '../../playwright.config.js'],
     languageOptions: {
       ecmaVersion: 'latest',

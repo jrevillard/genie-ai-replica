@@ -4402,7 +4402,7 @@ describe('the root Playwright config has a lint home (#1716)', () => {
     // carries no inline `//` outside comments).
     const source = fs
       .readFileSync(path.join(ROOT, 'tests/e2e/eslint.config.js'), 'utf-8')
-      .replace(/\/\*[\s\S]*?\*\//g, ' ')
+      .replace(/(^|\n)\s*\/\*[\s\S]*?\*\//g, '$1')
       .split('\n')
       .filter((line) => !line.trim().startsWith('//'))
       .join('')
@@ -4424,7 +4424,11 @@ describe('the root Playwright config has a lint home (#1716)', () => {
     // cover the command, not the target file. The target is one small
     // file; the suppression is forbidden outright.
     const source = fs.readFileSync(path.join(ROOT, 'playwright.config.js'), 'utf-8');
-    expect(source).not.toContain('eslint-disable');
+    // 'no-undef' rather than 'eslint-disable': the file-level config
+    // comment spelling (eslint no-undef: "off") carries no 'disable' and
+    // was measured to silence the gate the same way; the target has no
+    // legitimate mention of the rule name (grep: zero).
+    expect(source).not.toContain('no-undef');
   });
 
   test('the gate names the root config and the e2e eslint config', () => {
@@ -4437,20 +4441,18 @@ describe('the root Playwright config has a lint home (#1716)', () => {
     // --rule override (no-undef off beats any config), a second --config
     // (CLI last-wins replaces the gate's config), and
     // --no-error-on-unmatched-pattern (turns the structural no-match
-    // exit 2 into a green pass). Measured non-suppressor: --quiet does
-    // NOT bypass --max-warnings 0 (exit code counts unfiltered results;
-    // --quiet filters display only), so its absence is not pinned.
+    // The script is pinned by EXACT equality, not by enumerated flags.
+    // The enumeration was measured incomplete: --stdin (empty stdin in
+    // every non-interactive run), --global (CLI-injected globals silence
+    // no-undef for a named binding), --version/--help and the utility
+    // modes each exit 0 without linting. Any appended, dropped or
+    // reordered token now fails this pin — the same conscious-update
+    // trade-off as the :fix delegation pin below.
     const scripts = JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf-8')).scripts;
     const gateScript = scripts['lint:playwright-config'];
-    expect(gateScript).toBeDefined();
-    expect(gateScript).toContain('--max-warnings 0');
-    expect(gateScript).not.toContain('--no-warn');
-    expect(gateScript).not.toContain('--no-ignore');
-    expect(gateScript).not.toContain('--rule');
-    expect(gateScript).not.toContain('--no-error-on-unmatched-pattern');
-    expect(gateScript.match(/--config/g) || []).toHaveLength(1);
-    expect(gateScript).toContain('playwright.config.js');
-    expect(gateScript).toContain('tests/e2e/eslint.config.js');
+    expect(gateScript).toBe(
+      'tests/e2e/node_modules/.bin/eslint --max-warnings 0 --config tests/e2e/eslint.config.js playwright.config.js'
+    );
     // The fix variant must stay a delegation to the pinned gate — a
     // typoed copy of the command would drift from it with nothing
     // forcing the two back together.
@@ -4461,18 +4463,16 @@ describe('the root Playwright config has a lint home (#1716)', () => {
     // The gate's lint-staged entry is the commit-time half of its home:
     // without it a locally committed edit to the root config ships
     // unlinted until the MR pipeline — the same gap shape the CI wiring
-    // closes. The entry must exist and run the same gate: the flag that
-    // converts its own silencing modes and the explicit --config the root
-    // invocation needs (no eslint.config.js exists above the repository
-    // root, so the tree-relative spelling used for tests/e2e/** exits 2).
+    // closes. Exact equality, same reasoning as the gate script above:
+    // the explicit --config is load-bearing (no eslint.config.js exists
+    // above the repository root, so the tree-relative spelling used for
+    // tests/e2e/** exits 2 for this file), and enumerated absences were
+    // measured incomplete.
     const pkg = JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf-8'));
     const entry = (pkg['lint-staged'] || {})['playwright.config.js'];
     expect(entry).toBeDefined();
-    const cmd = entry.join(' ');
-    expect(cmd).toContain('--max-warnings 0');
-    expect(cmd).toContain('--config tests/e2e/eslint.config.js');
-    expect(cmd).not.toContain('--rule');
-    expect(cmd).not.toContain('--no-error-on-unmatched-pattern');
-    expect(cmd.match(/--config/g) || []).toHaveLength(1);
+    expect(entry.join(' ')).toBe(
+      'tests/e2e/node_modules/.bin/eslint --max-warnings 0 --config tests/e2e/eslint.config.js --fix'
+    );
   });
 });

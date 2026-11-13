@@ -1,6 +1,8 @@
 const path = require('path');
 const fs = require('fs');
-const os = require('os');
+
+const { jsFiles } = require('../validators/js-files');
+const { withTree } = require('../validators/temp-tree');
 
 const ROOT = path.resolve(__dirname, '../../..');
 const E2E_ROOT = path.join(ROOT, 'tests/e2e');
@@ -47,7 +49,7 @@ const GRANDFATHERED_FILES = [
 // and passed indirectly escapes this net — in the scanned files every
 // locator call takes its selector literally.
 const LOCATOR_CALL =
-  /(?:locator|querySelector|querySelectorAll|waitForSelector|click|dblclick|tap|hover|check|uncheck|dragAndDrop|setInputFiles|frameLocator|\$\$?eval|\$\$?|page\.(?:fill|type|press)|frame\.(?:fill|type|press))\(\s*/;
+  /(?:locator|querySelector|querySelectorAll|waitForSelector|click|dblclick|tap|hover|check|uncheck|dragAndDrop|setInputFiles|frameLocator|\$\$?eval|\$\$?|(?:page|frame)\.(?:fill|type|press))\(\s*/;
 
 // Inside a locator argument the string IS a CSS selector, so every
 // dot-name in it is a class segment (`'.chat-message.bot'` is two) —
@@ -67,28 +69,35 @@ const CLASS_SELECTOR = /\.([a-zA-Z][a-zA-Z0-9_-]*)(?![a-zA-Z0-9_-])/g;
 // not reach; the gate is a heuristic net, not a parser.
 const CLASS_ATTR_SELECTOR = /\[class[*~^$]?=\s*(['"])([a-zA-Z][a-zA-Z0-9_-]*)\1/;
 
+// Quoted selector strings, in all three quote spellings, extracted from
+// locator-style calls — the ONE net both scanners read. The argument
+// scan is anchored on the call opening before the quote, so a `.js`
+// extension or a `.padEnd(4)` inside an unrelated template string is
+// not a locator and does not trip the gate. Compiled once; each file's
+// stripped source runs through it a single time.
+const SELECTOR_STRING_CALL = new RegExp(LOCATOR_CALL.source + /(['"`])(?:\\.|(?!\1)[^\\])*\1/.source, 'g');
+const selectorStringsIn = function* (source) {
+  for (const call of source.matchAll(SELECTOR_STRING_CALL)) {
+    // Cut the call prefix off: the scans below must see only the
+    // selector string, so an engine marker (`text=`) anchors on the
+    // selector's own start, not on the word that opened the call.
+    const raw = call[0].slice(call[0].search(/['"`]/) + 1);
+    // Every attribute value is blanked, so a dot inside `[data-x="a.b"]`
+    // stays data — the class-matching attribute selectors are the one
+    // consumer reading the RAW string (their value IS the coupling).
+    yield { quoted: call[0], raw, blanked: raw.replace(/=("[^"]*"|'[^']*')/g, '=""') };
+  }
+};
+
 const classSelectorsIn = (source) => {
   const found = [];
-  // Quoted strings, in all three spellings, with their contents. The
-  // argument scan is anchored on the call opening before the quote, so a
-  // `.js` extension or a `.padEnd(4)` inside an unrelated template
-  // string is not a locator and does not trip the gate.
-  for (const call of source.matchAll(new RegExp(LOCATOR_CALL.source + /(['"`])(?:\\.|(?!\1)[^\\])*\1/.source, 'g'))) {
-    // Cut the call prefix off: the scan below must see only the selector
-    // string, so an engine marker (`text=`) anchors on the selector's
-    // own start, not on the word that opened the call.
-    const selector = call[0].slice(call[0].search(/['"`]/) + 1);
-    // The class-matching attribute selectors are read on the RAW string
-    // (their value is the class coupling); every other attribute value
-    // is blanked before the class scan, so a dot inside `[data-x="a.b"]`
-    // stays data.
-    const classAttr = selector.match(CLASS_ATTR_SELECTOR);
+  for (const { quoted, raw, blanked } of selectorStringsIn(source)) {
+    const classAttr = raw.match(CLASS_ATTR_SELECTOR);
     if (classAttr) {
-      found.push({ className: classAttr[2], quoted: call[0] });
+      found.push({ className: classAttr[2], quoted });
     }
-    const blanked = selector.replace(/=("[^"]*"|'[^']*')/g, '=""');
     for (const m of blanked.matchAll(CLASS_SELECTOR)) {
-      found.push({ className: m[1], quoted: call[0] });
+      found.push({ className: m[1], quoted });
     }
   }
   return found;
@@ -129,16 +138,15 @@ const textSelectorsIn = (source) => {
       quoted: m[0].slice(0, 60)
     });
   }
-  for (const call of source.matchAll(new RegExp(LOCATOR_CALL.source + /(['"`])(?:\\.|(?!\1)[^\\])*\1/.source, 'g'))) {
-    // Same cut as the class scan: the engine regex anchors on the
-    // selector string, so `click('text=...')` matches at `^`.
-    const selector = call[0].slice(call[0].search(/['"`]/) + 1).replace(/=("[^"]*"|'[^']*')/g, '=""');
-    const engine = selector.match(TEXT_ENGINE);
+  for (const { quoted, blanked } of selectorStringsIn(source)) {
+    // The engine regex anchors on the blanked selector string, so
+    // `click('text=...')` matches at `^`.
+    const engine = blanked.match(TEXT_ENGINE);
     if (engine) {
       // The text= alternative captures its token separately: the anchor
       // before it (a `(` in a nested engine call) is context, not part
       // of the marker.
-      found.push({ marker: (engine[1] || engine[0]).trim(), quoted: call[0] });
+      found.push({ marker: (engine[1] || engine[0]).trim(), quoted });
     }
   }
   return found;
@@ -217,18 +225,15 @@ const stripComments = (source) => {
 };
 
 // Walk a tree and return every offender a scanned file carries. `dir`
-// is scanned recursively for .js files; `exemptRel` lists the paths
-// (relative to `relBase`) that stay grandfathered. The real gate call
-// passes the suite root and the repo root; the simulated-tree tests
-// pass a temp dir for both, which is how a NEW file is proven covered
-// without writing one into the real tree.
-const findOffenders = (dir, exemptRel, relBase) => {
+// is scanned recursively for .js files (dependency trees pruned by the
+// shared jsFiles walker); `exemptRel` lists the paths (relative to
+// `relBase`) that stay grandfathered. The real gate call passes the
+// suite root and the repo root; the simulated-tree tests pass a temp
+// dir for both, which is how a NEW file is proven covered without
+// writing one into the real tree.
+const findOffenders = (dir, exemptRel, relBase = dir) => {
   const offenders = [];
-  const files = fs
-    .readdirSync(dir, { recursive: true })
-    .filter((f) => f.endsWith('.js') && !f.split(path.sep).includes('node_modules'))
-    .map((f) => path.join(dir, f))
-    .sort();
+  const files = jsFiles(dir).sort();
   for (const file of files) {
     const rel = path.relative(relBase, file);
     if (exemptRel.includes(rel)) continue; // grandfathered — see the list above
@@ -386,54 +391,54 @@ describe('the e2e suite locates application elements by declared handle', () => 
   });
 
   describe('default-on semantics (simulated tree)', () => {
-    let tmp;
-    beforeEach(() => {
-      tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'e2e-handle-gate-'));
-    });
-    afterEach(() => {
-      fs.rmSync(tmp, { recursive: true, force: true });
-    });
-
     test('a NEW spec file with a class locator is an offender without being listed', () => {
-      fs.writeFileSync(path.join(tmp, 'new.spec.js'), "await page.locator('.fresh-class').count();");
-      const offenders = findOffenders(tmp, [], tmp);
-      expect(offenders.length).toBe(1);
-      expect(offenders[0]).toContain('new.spec.js');
-      expect(offenders[0]).toContain('.fresh-class');
+      withTree('e2e-handle-gate-', { 'new.spec.js': "await page.locator('.fresh-class').count();" }, (root) => {
+        const offenders = findOffenders(root, []);
+        expect(offenders.length).toBe(1);
+        expect(offenders[0]).toContain('new.spec.js');
+        expect(offenders[0]).toContain('.fresh-class');
+      });
     });
 
     test('a grandfathered file is not scanned', () => {
-      fs.writeFileSync(path.join(tmp, 'old.js'), "await page.locator('.old-class').count();");
-      expect(findOffenders(tmp, ['old.js'], tmp)).toEqual([]);
+      withTree('e2e-handle-gate-', { 'old.js': "await page.locator('.old-class').count();" }, (root) => {
+        expect(findOffenders(root, ['old.js'])).toEqual([]);
+      });
     });
 
     test('a text API in a new file is an offender', () => {
-      fs.writeFileSync(path.join(tmp, 'new.spec.js'), "await expect(page.getByText('Save')).toBeVisible();");
-      const offenders = findOffenders(tmp, [], tmp);
-      expect(offenders.length).toBe(1);
-      expect(offenders[0]).toContain('getByText(');
+      withTree('e2e-handle-gate-', { 'new.spec.js': "await expect(page.getByText('Save')).toBeVisible();" }, (root) => {
+        const offenders = findOffenders(root, []);
+        expect(offenders.length).toBe(1);
+        expect(offenders[0]).toContain('getByText(');
+      });
     });
 
     test('a file using only declared handles produces no offender', () => {
-      fs.writeFileSync(path.join(tmp, 'clean.spec.js'), 'await page.locator(\'[data-testid="ok-grid"]\').count();');
-      expect(findOffenders(tmp, [], tmp)).toEqual([]);
+      withTree(
+        'e2e-handle-gate-',
+        { 'clean.spec.js': 'await page.locator(\'[data-testid="ok-grid"]\').count();' },
+        (root) => {
+          expect(findOffenders(root, [])).toEqual([]);
+        }
+      );
     });
 
     test('a subdirectory file is covered too', () => {
-      fs.mkdirSync(path.join(tmp, 'area'));
-      fs.writeFileSync(path.join(tmp, 'area', 'deep.spec.js'), "page.waitForSelector('.spinner');");
-      const offenders = findOffenders(tmp, [], tmp);
-      expect(offenders.length).toBe(1);
-      expect(offenders[0]).toContain(path.join('area', 'deep.spec.js'));
+      withTree('e2e-handle-gate-', { 'area/deep.spec.js': "page.waitForSelector('.spinner');" }, (root) => {
+        const offenders = findOffenders(root, []);
+        expect(offenders.length).toBe(1);
+        expect(offenders[0]).toContain(path.join('area', 'deep.spec.js'));
+      });
     });
 
     test('an installed dependency tree is not scanned', () => {
-      // CI runs `npm ci` inside tests/e2e/: without the skip, the gate
+      // CI runs `npm ci` inside tests/e2e/: without the prune, the gate
       // regex-scans the whole dependency tree (and any bundled example
-      // locator in it) on every run.
-      fs.mkdirSync(path.join(tmp, 'node_modules', 'pkg'), { recursive: true });
-      fs.writeFileSync(path.join(tmp, 'node_modules', 'pkg', 'index.js'), "page.locator('.bundled-class');");
-      expect(findOffenders(tmp, [], tmp)).toEqual([]);
+      // locator in it) on every run. The prune lives in jsFiles.
+      withTree('e2e-handle-gate-', { 'node_modules/pkg/index.js': "page.locator('.bundled-class');" }, (root) => {
+        expect(findOffenders(root, [])).toEqual([]);
+      });
     });
   });
 });

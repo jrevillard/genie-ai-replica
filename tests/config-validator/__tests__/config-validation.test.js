@@ -4344,12 +4344,13 @@ describe('the root Playwright config has a lint home (#1716)', () => {
   });
 
   test('the lint job runs the gate from the repository root', () => {
-    // The gate's config entries anchor to the invocation's cwd: from
-    // tests/e2e/ the root config sits outside the base path and the run
-    // dies loudly (exit 2), but an ignore-pattern match passes as a
-    // warning with exit 0 — coverage would die silently there. The gate's
-    // own --max-warnings 0 turns that warning into exit 1, and the `cd` is
-    // the load-bearing half of the command, so the full line is pinned,
+    // The gate's config entries anchor to the invocation's cwd. Measured
+    // on ESLint 10.14: from tests/e2e/ the root config sits outside the
+    // base path and is reported as a warning — exit 0 bare, exit 1 with
+    // the gate's --max-warnings 0; an ignore-pattern match behaves the
+    // same way. The only flag-independent failure is a target that
+    // matches nothing at all (exit 2): the pinned command's relative
+    // path from a different cwd. So the `cd` is pinned — the full line,
     // not the npm script name alone.
     expect(lintJob).toContain('cd ${CI_PROJECT_DIR} && npm run lint:playwright-config');
   });
@@ -4383,8 +4384,17 @@ describe('the root Playwright config has a lint home (#1716)', () => {
   });
 
   test('the gate names the root config and the e2e eslint config', () => {
+    // The script carries the targets AND the flag that makes its own
+    // silencing modes fail: --max-warnings 0 turns the warning-based
+    // modes (outside-base-path, ignore-excluded) into exit 1. Dropping it
+    // reverts the gate to exit 0 while nothing is linted, so the flag is
+    // pinned present and the suppressors that would defeat it (each a
+    // one-token edit no other pin sees) are pinned absent.
     const scripts = JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf-8')).scripts;
     expect(scripts['lint:playwright-config']).toBeDefined();
+    expect(scripts['lint:playwright-config']).toContain('--max-warnings 0');
+    expect(scripts['lint:playwright-config']).not.toContain('--no-warn');
+    expect(scripts['lint:playwright-config']).not.toContain('--no-ignore');
     expect(scripts['lint:playwright-config']).toContain('playwright.config.js');
     expect(scripts['lint:playwright-config']).toContain('tests/e2e/eslint.config.js');
   });

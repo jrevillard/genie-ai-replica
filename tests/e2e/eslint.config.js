@@ -35,15 +35,19 @@ module.exports = [
     // only: a browser global there is a ReferenceError at config load, so
     // it takes the Node-only entry below instead of this one (#1716).
     // Measured on ESLint 10.14: with an explicit --config the entries
-    // anchor to the invocation's cwd, and a file outside it is rejected
-    // with exit 2; a file matched but ignore-excluded is a warning with
-    // exit 0 — the gate's --max-warnings 0 turns that warning into exit 1,
-    // so a silencing refactor (a hoisted global ignore, a base-path drift)
-    // fails CI instead of passing green while nothing is linted. Moving
-    // this config FILE changes nothing about what the entries match — they
-    // anchor to the invocation's cwd; what breaks instead is the --config
-    // path in lint:playwright-config and the read path of the pin that
-    // reads this file, and until those are re-spelled the gate exits 2 and
+    // anchor to the invocation's cwd. Both silencing modes are
+    // warning-based and die only through the gate's --max-warnings 0:
+    // a file outside the base path is reported as a warning (exit 0
+    // bare, exit 1 with the flag), and so is a file matched but
+    // ignore-excluded. Exit 2 is the structural mode: a target that
+    // matches nothing at all (the pinned command's relative path from a
+    // different cwd). A silencing refactor (a hoisted global ignore, a
+    // base-path drift, or dropping the flag) therefore fails CI instead
+    // of passing green while nothing is linted. Moving this config FILE
+    // changes nothing about what the entries match — they anchor to the
+    // invocation's cwd; what breaks instead is the --config path in
+    // lint:playwright-config and the read path of the pin that reads
+    // this file, and until those are re-spelled the gate exits 2 and
     // the suite fails.
     ignores: ['playwright.config.js', '../../playwright.config.js'],
     languageOptions: {

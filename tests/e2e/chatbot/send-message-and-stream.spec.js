@@ -2,6 +2,7 @@ const { test, expect } = require('@playwright/test');
 const {
   loginViaUI,
   navigateToChatbot,
+  LOGIN_BUDGET_TIMEOUT_MS,
   sendMessage,
   waitForBotResponse,
   getMessages,
@@ -10,6 +11,11 @@ const {
 } = require('../helpers/chatbot');
 
 test.describe('Chatbot message sending and SSE streaming', () => {
+  // The beforeEach logs in through the browser and navigates — the
+  // budget is the login's own ceiling, derived once beside loginViaUI
+  // (#1798).
+  test.describe.configure({ timeout: LOGIN_BUDGET_TIMEOUT_MS });
+
   let page;
   let context;
 

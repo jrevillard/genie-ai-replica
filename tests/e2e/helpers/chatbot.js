@@ -46,6 +46,19 @@ const AUTH_BUDGET_MS = 30000;
 // that cannot report why it failed is no better than one that failed.
 const AUTH_RETRY_BUDGET_MS = 15000;
 
+// The per-test ceiling a spec that logs in through the browser needs:
+// loginViaUI's two attempts cost up to ≈135 s on a stalled stack
+// (attempt 1: 30 s navigation + 15 s redirect + 30 s dashboard wait;
+// attempt 2: 30 + 15 + 15), and navigateToChatbot adds 30 s — past the
+// project's 60 s default, where the test dies BEFORE this helper can
+// print its own two-attempt diagnosis (#1798). 300 s covers the
+// worst-case hook with the test body's own budget still ahead of it.
+// Apply with test.describe.configure({ timeout: LOGIN_BUDGET_TIMEOUT_MS })
+// in the describes that log in (or test.setTimeout at describe scope,
+// the conversation-history spelling). ONE owner of the derivation: when
+// the login's arithmetic changes, this constant moves with it.
+const LOGIN_BUDGET_TIMEOUT_MS = 300000;
+
 /**
  * Authenticate via page-level login (Keycloak redirect flow).
  *
@@ -417,6 +430,7 @@ module.exports = {
   botStreamingFlag,
   loginViaUI,
   navigateToChatbot,
+  LOGIN_BUDGET_TIMEOUT_MS,
   sendMessage,
   waitForBotResponse,
   waitForBotMessage,

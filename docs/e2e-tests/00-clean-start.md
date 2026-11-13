@@ -77,15 +77,36 @@ Images are built automatically via `build:` directives in `docker-compose.yaml` 
 Wait for all services to become healthy. This may take 2-5 minutes depending on image build time.
 
 ```bash
-# Wait at least 120 seconds for all services to stabilize
-# ArangoDB can take up to 150s to pass healthchecks (start_period + retries)
-# The backend waits for ArangoDB via its entrypoint script (up to 60s)
-echo "Waiting 120 seconds for services to stabilize..."
-sleep 120
+# Bounded readiness wait (Rule: Determinism — no fixed sleeps): poll the
+# observable condition — all SIX core services reporting (healthy) —
+# every 5 s with a hard 300 s bound. ArangoDB can take up to 150s to
+# pass its healthcheck (start_period + retries); the backend waits for
+# ArangoDB via its entrypoint script (up to 60s). The count is matched
+# against the expected 6 on purpose: an empty `docker compose ps` (the
+# stack not up, the wrong project directory, a compose error) must read
+# as NOT READY, never as a vacuous pass. The bound is an epoch
+# timestamp, not bash's $SECONDS, so the loop bounds in any POSIX shell.
+# On timeout the phase FAILS and names what compose answered.
+CORE_SERVICES='frontend|backend|keycloak|arango-vector-db|nginx|kong'
+CORE_COUNT=6
+deadline=$(($(date +%s) + 300))
+while :; do
+  PS="$(docker compose ps --all --format '{{.Service}} {{.Status}}')"
+  HEALTHY="$(echo "$PS" | grep -E "^(${CORE_SERVICES}) " | grep -c '(healthy)' || true)"
+  [ "$HEALTHY" -eq "$CORE_COUNT" ] && break
+  if [ "$(date +%s)" -ge "$deadline" ]; then
+    echo "FATAL: ${HEALTHY}/${CORE_COUNT} core services healthy after 300s. docker compose ps answered:"
+    echo "$PS"
+    exit 1
+  fi
+  echo "not ready yet: ${HEALTHY}/${CORE_COUNT} healthy"
+  sleep 5
+done
+echo "All ${CORE_COUNT} core services healthy."
 ```
 
 ```bash
-# Check service status — all should show "running" or "healthy"
+# Check service status — all should show "healthy"
 docker compose ps
 
 # Detailed per-service check
@@ -93,7 +114,7 @@ echo "=== Service Health ==="
 docker compose ps --format "table {{.Service}}\t{{.Status}}" | grep -E "frontend|backend|keycloak|arango-vector-db|nginx|kong"
 ```
 
-**Expected**: All services show `running` or `healthy`.
+**Expected**: All services show `healthy`.
 
 ### 0.5 Verify Individual Services
 
@@ -204,8 +225,21 @@ docker compose restart backend
 # Reload Kong DNS cache (Kong caches the old backend container IP after restart)
 docker exec $(docker ps --filter name=kong --format '{{.ID}}' | head -1) kong reload
 
-echo "Waiting 30 seconds for backend to reinitialize with additional realms..."
-sleep 30
+# Bounded readiness wait (Rule: Determinism — no fixed sleeps): poll the
+# observable condition — the backend answering /api/health with 200 —
+# every 3 s with a hard 60 s bound (an epoch timestamp, not bash's
+# $SECONDS, so the loop bounds in any POSIX shell). On timeout the phase
+# FAILS with the last observed status.
+deadline=$(($(date +%s) + 60))
+while :; do
+  STATUS="$(curl -sk -o /dev/null -w '%{http_code}' https://localhost/api/health)"
+  [ "$STATUS" = "200" ] && break
+  if [ "$(date +%s)" -ge "$deadline" ]; then
+    echo "FATAL: /api/health did not return 200 within 60s (last: HTTP $STATUS)"
+    exit 1
+  fi
+  sleep 3
+done
 curl -sk https://localhost/api/health -o /dev/null -w "Backend: HTTP %{http_code}\n"
 # Expected: 200
 ```

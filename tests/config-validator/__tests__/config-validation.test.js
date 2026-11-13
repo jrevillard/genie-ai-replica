@@ -2745,8 +2745,11 @@ describe('e2e merge-train changes filters (#1264)', () => {
       'tests/e2e/documents/search.spec.js',
       'tests/e2e/documents/upload.spec.js',
       'tests/e2e/helpers/auth.spec.js',
+      'tests/e2e/helpers/base-url.spec.js',
+      'tests/e2e/helpers/chatbot.spec.js',
       'tests/e2e/helpers/keycloak-admin.spec.js',
       'tests/e2e/helpers/route.spec.js',
+      'tests/e2e/helpers/venue-launch-args.spec.js',
       'tests/e2e/helpers/venue-profile.spec.js',
       'tests/e2e/theme-runtime-config.spec.js'
     ]);
@@ -3537,7 +3540,11 @@ describe('the venue-fixture provisioning in .e2e_web_base', () => {
     // the parity role had no consumer) and no other fixture has a
     // consumer to justify a role either.
     expect(E2E_FIXTURES.filter((f) => 'realmRoles' in f).map((f) => f.username)).toEqual(['testadmin']);
-    expect(E2E_FIXTURES.find((f) => f.username === 'testadmin').realmRoles).toEqual(['admin']);
+    // admin: the ADMIN_ONLY document surfaces. tools-admin: the okf
+    // management routes are default-deny on the realm role too (beside
+    // the okf_scopes claim) — the capture harness seeds its repo as
+    // testadmin, so the role is part of the fixture contract.
+    expect(E2E_FIXTURES.find((f) => f.username === 'testadmin').realmRoles).toEqual(['admin', 'tools-admin']);
   });
 
   test('the venue credentials are derived, never re-sourced', () => {

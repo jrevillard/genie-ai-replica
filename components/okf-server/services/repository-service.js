@@ -24,6 +24,10 @@ const piiService = require('./pii-service');
 const { retractRepoGraph } = require('./graph-retract-service');
 const backingFileService = require('./backing-file-service');
 const { workingGraphName } = require('./graph-lifecycle-service');
+// The naming SSOT (issue #1774): intentName is THE rule for "is this a
+// name?" — a string of only spaces is no name. The convert endpoints already
+// apply it; the write boundary applies it to every repository name.
+const { intentName } = require('./slug');
 
 const COLLECTION = 'okf_repositories';
 
@@ -154,6 +158,33 @@ function decodeCursor(cursor) {
 }
 
 /**
+ * The naming rule at the write boundary (issue #1774): a name of only spaces
+ * is NO name. The naming SSOT is intentName (services/slug.js) — the same
+ * rule the convert endpoints apply. The Joi schema validates SHAPE, not
+ * naming (min(1) accepts '   '), so the rule is enforced here: a repository
+ * is REFUSED, never stored under a blank name and never silently renamed. A
+ * name of the wrong TYPE is its own error — the Joi layer rejects it at the
+ * route, so only an internal caller reaches it, and "a name of only spaces"
+ * would send it looking for whitespace in a number.
+ *
+ * WHY A REFUSAL AND NOT A DERIVED NAME: the boundaries that HAVE a default
+ * derive one — the convert endpoints and the clone fall back to the source's
+ * name (#1699). The registry write boundary has no default to fall back to:
+ * a repository created here IS the name the steward will read in the list, so
+ * a blank one is refused rather than invented.
+ * @param {string} name
+ * @param {'create'|'update'} op the operation, for the operations counter
+ */
+function assertValidName(name, op) {
+  const message =
+    typeof name !== 'string' ? 'name must be a string' : intentName(name) ? null : 'a name of only spaces is no name';
+  if (message) {
+    recordOp(op, 'validation');
+    throw new RepoError('VALIDATION_ERROR', message, 400);
+  }
+}
+
+/**
  * Create a repository: mint repo_id, reserve graph_name=OKF_{repo_id}, bind domain.
  * Uniqueness on (name, domain) is DB-ENFORCED (unique index on [name,domain,deleted_at]);
  * the app-layer check is a clean-error fast path, and save() catches the unique-violation
@@ -184,6 +215,7 @@ async function create(input, actor, opts = {}) {
     if (opts.cloned_from != null && typeof opts.cloned_from.repo_id !== 'string') {
       throw new RepoError('VALIDATION_ERROR', 'cloned_from.repo_id must be a string', 400);
     }
+    assertValidName(input.name, 'create');
     logger.info('Creating OKF repository', { name: input.name, domain: input.domain });
     const db = await getDb();
 
@@ -306,7 +338,9 @@ async function cloneRepository(source_id, input, actor) {
     // named at the Joi max would otherwise derive a 209-char name past it).
     const derivedName = String(source.name || '').slice(0, 190) + ' (clone)';
     const target = {
-      name: (input && input.name) || derivedName,
+      // A blank name is no name (#1699): the clone keeps the derived default
+      // instead of being refused — the same rule the convert endpoints apply.
+      name: intentName(input && input.name) || derivedName,
       domain: (input && input.domain) || source.domain,
       acl: (input && input.acl) || source.acl || {}
     };
@@ -626,6 +660,15 @@ async function update(repo_id, patch, actor) {
     if (!existing || existing.deleted_at) {
       recordOp('update', 'not_found');
       throw new RepoError('REPO_NOT_FOUND', `Repository ${repo_id} not found`, 404);
+    }
+
+    // A rename to a name of only spaces is NO name (issue #1774) — the same
+    // SSOT (intentName), the same refusal. A patch WITHOUT a name is not a
+    // rename and is untouched. The check sits BEFORE the serving-repo
+    // read-only gate, so the same malformed request gets the same answer
+    // whatever the repository's lifecycle state is.
+    if (Object.prototype.hasOwnProperty.call(patch, 'name')) {
+      assertValidName(patch.name, 'update');
     }
 
     // SERVING MAINTENANCE (1-8g-q, David 2026-10-11: "I see it as a

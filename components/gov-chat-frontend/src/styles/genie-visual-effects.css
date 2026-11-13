@@ -640,3 +640,394 @@ html[data-visual='on'] .genie-living-intelligence .chatbot-container {
 html[data-visual='on'] .genie-living-intelligence .chatbot-container .chat-window {
   background: transparent;
 }
+
+/*
+ * The admin route (Phase V — David, 2026-11-11: "the Admin Dashboard and
+ * its related dialogs … match the color schemes and the bright lively look
+ * and feel of the main UI").
+ *
+ * The admin surface already carries the design tokens; what it never had
+ * is this layer. These rules bring the same vocabulary the welcome and
+ * chat surfaces wear — the brand ramp on the page title, frost borders
+ * and a top-lit wash on the card chrome, the corner network and a soft
+ * accent ambient behind the header — at DATA-SURFACE strength: the admin
+ * page is a working screen, so the motifs sit behind the chrome and stay
+ * out of the tables' way. Everything derives from tokens via color-mix();
+ * layer off = the admin route paints exactly as it did.
+ *
+ * Stacking: .admin-dashboard isolates and paints the motifs on ::before
+ * at z-index 0; .dashboard (its only child) sits at z-index 1, so no
+ * app rule needs a layer compensation.
+ */
+html[data-visual='on'] .genie-living-intelligence .admin-dashboard {
+  position: relative;
+  isolation: isolate;
+}
+
+html[data-visual='on'] .genie-living-intelligence .admin-dashboard::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  /* A soft accent ambient rising behind the header and the tile row —
+     the welcome mesh's energy at operating strength. The corner network
+     anchors top-right on the same pseudo, sized like the chat sidebar's
+     narrow band so it clears the tab rack's first row. */
+  background-image:
+    radial-gradient(
+      1100px 240px at 50% -60px,
+      color-mix(in srgb, var(--accent) calc(13% * var(--gli-deco-strength)), transparent),
+      transparent 72%
+    ),
+    var(--visual-corner, none);
+  background-position:
+    center top,
+    right -30px top -20px;
+  background-size:
+    100% 100%,
+    min(30%, 300px) min(45vh, 420px);
+  background-repeat: no-repeat, no-repeat;
+}
+
+html[data-visual='on'] .genie-living-intelligence .admin-dashboard > .dashboard {
+  position: relative;
+  z-index: 1;
+}
+
+/* Card chrome: the frost border every decorated card wears, plus the
+   quick-help row's top-lit wash — a pale accent breath at the top edge
+   fading into the surface within a third of the card's height. */
+html[data-visual='on'] .genie-living-intelligence .admin-dashboard .stat-card,
+html[data-visual='on'] .genie-living-intelligence .admin-dashboard .tabs-card,
+html[data-visual='on'] .genie-living-intelligence .admin-dashboard .dashboard-card,
+html[data-visual='on'] .genie-living-intelligence .admin-dashboard .okf-dashboard__card,
+html[data-visual='on'] .genie-living-intelligence .admin-dashboard .okf-studio-tab__retrieval,
+html[data-visual='on'] .genie-living-intelligence .admin-dashboard .okf-studio-tab__debt,
+html[data-visual='on'] .genie-living-intelligence .admin-dashboard .okf-wizard__step,
+html[data-visual='on'] .genie-living-intelligence .admin-dashboard .okf-shell,
+html[data-visual='on'] .genie-living-intelligence .admin-dashboard .okf-ce,
+html[data-visual='on'] .genie-living-intelligence .admin-dashboard .okf-fmp,
+html[data-visual='on'] .genie-living-intelligence .admin-dashboard .okf-artifacts,
+html[data-visual='on'] .genie-living-intelligence .admin-dashboard .okf-src {
+  border: 1px solid var(--gli-frost-border);
+  background-image: linear-gradient(180deg, color-mix(in srgb, var(--accent) 5%, var(--surface)), var(--surface) 34%);
+}
+
+/* The page title wears the brand ramp — the same live-type gradient as
+   the welcome heading and the navbar name, theme-adaptive via the same
+   tokens, with the accent fallback for renderers without clip. Gated:
+   identity is the brand's own class; this is decoration. */
+html[data-visual='on'] .genie-living-intelligence .admin-dashboard .page-title,
+html[data-visual='on'] .genie-living-intelligence .admin-dashboard .okf-studio-tab__title {
+  font-family: var(--font-display);
+  letter-spacing: -0.02em;
+  background-image: linear-gradient(
+    100deg,
+    var(--brand-mark-from) 5%,
+    var(--brand-mark-mid) 62%,
+    var(--brand-mark-to) 100%
+  );
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  color: var(--accent);
+}
+
+/* The rack row reads as part of the decorated chrome rather than a grey
+   strip glued to the cards: a whisper of accent light along its top
+   edge, inside the DS primitive's own active-tab underline. */
+html[data-visual='on'] .genie-living-intelligence .admin-dashboard .tabs-card {
+  box-shadow:
+    var(--shadow-sm),
+    0 1px 0 color-mix(in srgb, var(--accent) 18%, transparent) inset;
+}
+
+/*
+ * V2 — the four overview tiles carry their own hue, the way the welcome
+ * screen's quick-help cards carry per-button tints. Semantic mapping:
+ * uptime = success, response = info, error rate = danger, MAU = accent.
+ * The wash stays a top-lit breath (the tile keeps most of its surface);
+ * the title picks the hue up at readable strength; the values stay
+ * --fg. Layer off = one flat tile row again.
+ */
+html[data-visual='on'] .genie-living-intelligence .admin-dashboard .stat-card--uptime {
+  background-image: linear-gradient(180deg, color-mix(in srgb, var(--success) 9%, var(--surface)), var(--surface) 34%);
+}
+
+html[data-visual='on'] .genie-living-intelligence .admin-dashboard .stat-card--response {
+  background-image: linear-gradient(180deg, color-mix(in srgb, var(--info) 9%, var(--surface)), var(--surface) 34%);
+}
+
+html[data-visual='on'] .genie-living-intelligence .admin-dashboard .stat-card--errors {
+  background-image: linear-gradient(180deg, color-mix(in srgb, var(--danger) 8%, var(--surface)), var(--surface) 34%);
+}
+
+html[data-visual='on'] .genie-living-intelligence .admin-dashboard .stat-card--users {
+  background-image: linear-gradient(180deg, color-mix(in srgb, var(--accent) 10%, var(--surface)), var(--surface) 34%);
+}
+
+html[data-visual='on'] .genie-living-intelligence .admin-dashboard .stat-card--uptime .stat-title {
+  color: color-mix(in srgb, var(--success) 65%, var(--muted));
+}
+
+html[data-visual='on'] .genie-living-intelligence .admin-dashboard .stat-card--response .stat-title {
+  color: color-mix(in srgb, var(--info) 65%, var(--muted));
+}
+
+html[data-visual='on'] .genie-living-intelligence .admin-dashboard .stat-card--errors .stat-title {
+  color: color-mix(in srgb, var(--danger) 65%, var(--muted));
+}
+
+html[data-visual='on'] .genie-living-intelligence .admin-dashboard .stat-card--users .stat-title {
+  color: color-mix(in srgb, var(--accent) 70%, var(--muted));
+}
+
+/*
+ * V3 — the data tabs' panels: headers in the display family (the same
+ * voice as the page title), interactive rows and tiles answer the
+ * pointer with the accent wash, and the action cards lift the way the
+ * document items do. Density is untouched: no rule here touches
+ * typography size, spacing or the tables' cells — the treatments are
+ * colour only.
+ */
+
+/* Section + card headers get the display family. */
+html[data-visual='on'] .genie-living-intelligence .admin-dashboard .card-title,
+html[data-visual='on'] .genie-living-intelligence .admin-dashboard .section-title,
+html[data-visual='on'] .genie-living-intelligence .admin-dashboard .okf-dashboard__lane-header h4,
+html[data-visual='on'] .genie-living-intelligence .admin-dashboard .okf-artifacts__header {
+  font-family: var(--font-display);
+  letter-spacing: -0.01em;
+}
+
+/* Clickable action tiles (backup / optimize) lift on hover. */
+html[data-visual='on'] .genie-living-intelligence .admin-dashboard .db-action-card {
+  transition:
+    transform 0.15s ease,
+    border-color 0.15s ease,
+    background-color 0.15s ease;
+}
+
+html[data-visual='on'] .genie-living-intelligence .admin-dashboard .db-action-card:hover {
+  border-color: color-mix(in srgb, var(--accent) 35%, var(--border));
+  background-color: color-mix(in srgb, var(--accent) 6%, var(--surface));
+  transform: translateY(-1px);
+}
+
+/* Hierarchy rows answer the pointer. */
+html[data-visual='on'] .genie-living-intelligence .admin-dashboard .hierarchy-item {
+  transition: background-color 0.15s ease;
+}
+
+html[data-visual='on'] .genie-living-intelligence .admin-dashboard .hierarchy-item:hover {
+  background-color: color-mix(in srgb, var(--accent) 6%, transparent);
+}
+
+/* The reduced-motion universal rule in this file already kills the
+   transform transition; the colour transitions collapse to instant
+   changes, which is the correct reduced-motion behaviour. */
+
+/*
+ * V4 — the admin dialogs.
+ *
+ * Two shapes, two gates:
+ *  - FileDetailsDialog and AddFromLinkDialog TELEPORT to body (multi-root:
+ *    backdrop + container), so the gate class rides on each root itself —
+ *    the components are admin-launched only, so no other surface is
+ *    touched (DsModal itself is deliberately NOT gated: it serves the
+ *    whole app).
+ *  - LogSearchDialog, OperationResultsModal and UploadFilesDialog render
+ *    in place inside the admin route, so .admin-page's gate already
+ *    reaches them.
+ *
+ * The treatment is the same vocabulary as the shell: frost border and
+ * top-lit wash on the container, display-family titles, and a backdrop
+ * tinted a whisper of accent instead of flat black. DsModal (the
+ * ConfirmDialog's shell) keeps the DS primitive's own paint — a small
+ * confirm dialog gains nothing from decoration.
+ */
+html[data-visual='on'] .dialog-container.genie-living-intelligence {
+  border: 1px solid var(--gli-frost-border);
+  background-image: linear-gradient(180deg, color-mix(in srgb, var(--accent) 5%, var(--surface)), var(--surface) 28%);
+  box-shadow:
+    var(--shadow-lg),
+    0 1px 0 color-mix(in srgb, var(--accent) 16%, transparent) inset;
+}
+
+html[data-visual='on'] .dialog-container.genie-living-intelligence .dialog-title {
+  font-family: var(--font-display);
+  letter-spacing: -0.01em;
+}
+
+html[data-visual='on'] .dialog-backdrop.genie-living-intelligence {
+  background: color-mix(in srgb, var(--accent) 7%, var(--overlay-bg));
+}
+
+/* The in-place dialogs, reached through .admin-page's gate. */
+html[data-visual='on'] .genie-living-intelligence .admin-dashboard .modal .modal-content,
+html[data-visual='on'] .genie-living-intelligence .admin-dashboard .dialog-container {
+  border: 1px solid var(--gli-frost-border);
+  background-image: linear-gradient(180deg, color-mix(in srgb, var(--accent) 5%, var(--surface)), var(--surface) 28%);
+}
+
+html[data-visual='on'] .genie-living-intelligence .admin-dashboard .modal-title,
+html[data-visual='on'] .genie-living-intelligence .admin-dashboard .dialog-title {
+  font-family: var(--font-display);
+  letter-spacing: -0.01em;
+}
+
+/*
+ * V6 — finishing chrome. The same keyboard-and-pointer polish the
+ * decorated surfaces carry: visible focus in the accent, text selection
+ * tinted, and the admin pane's scrollbar reading as part of the chrome
+ * instead of the browser default.
+ */
+html[data-visual='on'] .genie-living-intelligence .admin-dashboard .db-action-card:focus-visible,
+html[data-visual='on'] .genie-living-intelligence .admin-dashboard .hierarchy-item:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+html[data-visual='on'] .genie-living-intelligence .admin-dashboard ::selection {
+  background: color-mix(in srgb, var(--accent) 22%, transparent);
+}
+
+html[data-visual='on'] .genie-living-intelligence .admin-dashboard .main {
+  scrollbar-color: color-mix(in srgb, var(--accent) 30%, var(--border)) transparent;
+}
+
+html[data-visual='on'] .genie-living-intelligence .admin-dashboard .main::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--accent) 30%, var(--border));
+  border-radius: var(--radius-sm);
+}
+
+html[data-visual='on'] .genie-living-intelligence .admin-dashboard .main::-webkit-scrollbar-thumb:hover {
+  background: color-mix(in srgb, var(--accent) 45%, var(--border));
+}
+
+html[data-visual='on'] .genie-living-intelligence .admin-dashboard .main::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/*
+ * W1 (Phase W, 2026-11-12) — the OKF Studio tab's inner surfaces join the
+ * decorated card family by EXTENDING the shared recipes above (the chrome
+ * rule now carries the swimlane cards and the two expert panels; the studio
+ * title shares the page-title ramp and the V3 display-family rule covers
+ * the lane headers) — one recipe per treatment, no studio-private copies.
+ * What remains studio-specific is the INTERACTION layer: the repo cards'
+ * hover lift must keep the card's own designed accent hover border (the
+ * base rule's border shorthand would otherwise out-cascade the app's
+ * :hover border-color at higher specificity) and the keyboard ring the V6
+ * pattern gives every decorated interactive surface. Colour and shadow
+ * only; layer off = the studio paints exactly as it did. The studio's
+ * dialogs are gated per INSTANCE since the interview ruling of 2026-11-12
+ * (V4 extended: the primitive stays ungated; each admin dialog instance
+ * opts in by carrying the gate class itself — ConceptBrowserDialog
+ * included).
+ */
+
+html[data-visual='on'] .genie-living-intelligence .admin-dashboard .okf-dashboard__card {
+  transition:
+    transform 0.15s ease,
+    box-shadow 0.15s ease;
+}
+
+html[data-visual='on'] .genie-living-intelligence .admin-dashboard .okf-dashboard__card:hover {
+  transform: translateY(-1px);
+  border-color: var(--accent);
+  box-shadow: var(--shadow-md);
+}
+
+html[data-visual='on'] .genie-living-intelligence .admin-dashboard .okf-dashboard__card:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+/*
+ * X1 (Phase X, 2026-11-12) — the wizard and editor interiors join the
+ * decorated card family by EXTENDING the shared recipes above (the chrome
+ * rule now carries the wizard's step section, the editor frame, the
+ * concept editor, the frontmatter panel, the artifacts view and the
+ * source dialog; the artifacts header joins the display-family rule).
+ * What remains wizard-specific is the rail/footer chrome: the step rails
+ * read as part of the decorated frame (the tabs-card inset pattern), the
+ * footer carries the same accent top edge, and the step counter picks the
+ * accent up. Colour and shadow only; layer off = these surfaces paint
+ * exactly as they did. The wizard's DsDialog-based dialogs (AddConcept,
+ * Rename, Resplit, Versions, Logs) and OkfSourceDialog's DsDialog siblings
+ * are gated per INSTANCE (the interview ruling of 2026-11-12 extending V4:
+ * the primitive stays ungated; the instance opts in by carrying the gate
+ * class — see the corrected X2 block below).
+ */
+
+html[data-visual='on'] .genie-living-intelligence .admin-dashboard .okf-wizard__rail--left,
+html[data-visual='on'] .genie-living-intelligence .admin-dashboard .okf-wizard__rail--right {
+  box-shadow: 0 1px 0 color-mix(in srgb, var(--accent) 14%, transparent) inset;
+}
+
+html[data-visual='on'] .genie-living-intelligence .admin-dashboard .okf-wizard__footer {
+  box-shadow: 0 1px 0 color-mix(in srgb, var(--accent) 16%, transparent) inset;
+}
+
+html[data-visual='on'] .genie-living-intelligence .admin-dashboard .okf-wizard__step-counter {
+  color: color-mix(in srgb, var(--accent) 70%, var(--muted));
+}
+
+/*
+ * X3 (Phase X, 2026-11-12) — document-management internals: the view
+ * toggle strip reads as decorated chrome (the tabs-card inset pattern)
+ * and the file rows answer the pointer with the V3 wash (the same recipe
+ * the hierarchy rows use; the app's own hover background is replaced by
+ * the token-derived wash at higher specificity — same semantics, better
+ * recipe). The parked-OKF banner keeps its semantic warning colour: a
+ * status surface is not decoration territory.
+ */
+
+html[data-visual='on'] .genie-living-intelligence .admin-dashboard .admin-documents__view-toggle {
+  box-shadow: 0 1px 0 color-mix(in srgb, var(--accent) 16%, transparent) inset;
+}
+
+html[data-visual='on'] .genie-living-intelligence .admin-dashboard tr.document-row {
+  transition: background-color 0.15s ease;
+}
+
+html[data-visual='on'] .genie-living-intelligence .admin-dashboard tr.document-row:hover {
+  /* The hierarchy-row recipe verbatim (6% into transparent + the ease) —
+     the comment once claimed parity the values did not carry. */
+  background-color: color-mix(in srgb, var(--accent) 6%, transparent);
+}
+
+/*
+ * X2 (Phase X, 2026-11-12) — the Testing Lab: the dialog shell and its
+ * content. The lab renders inside DsDialog -> DsModal, which TELEPORTS to
+ * body — the panes are never under .admin-dashboard, so these rules key on
+ * the INSTANCE GATE (David's ruling, extending V4): an admin-launched
+ * DsDialog instance carries class="genie-living-intelligence", which
+ * DsModal binds onto the teleported .ds-modal-backdrop root (a Teleport
+ * root does not forward fallthrough attrs on its own — Modal.vue does it
+ * explicitly). The dialog's PANEL gets the V4 dialog treatment (frost +
+ * top-lit wash), the four lab panes (.okf-headtest__pane - head, test,
+ * suites, ragas) and the RAGAS panel root (.okf-ragas) get the surface
+ * chrome, and the ragas pane header joins the display-family rule. The
+ * primitive stays ungated: a DsDialog without the class paints exactly as
+ * it did (chat included). The first cut of these rules was admin-scoped
+ * and could not match anything — the review caught it.
+ */
+
+html[data-visual='on'] .ds-modal-backdrop.genie-living-intelligence .ds-modal {
+  border: 1px solid var(--gli-frost-border);
+  background-image: linear-gradient(180deg, color-mix(in srgb, var(--accent) 5%, var(--surface)), var(--surface) 34%);
+}
+
+html[data-visual='on'] .ds-modal-backdrop.genie-living-intelligence .okf-headtest__pane,
+html[data-visual='on'] .ds-modal-backdrop.genie-living-intelligence .okf-ragas {
+  border: 1px solid var(--gli-frost-border);
+  background-image: linear-gradient(180deg, color-mix(in srgb, var(--accent) 4%, var(--surface)), var(--surface) 30%);
+}
+
+html[data-visual='on'] .ds-modal-backdrop.genie-living-intelligence .okf-ragas__pane-head {
+  font-family: var(--font-display);
+  letter-spacing: -0.01em;
+}

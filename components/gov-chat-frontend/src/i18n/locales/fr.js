@@ -265,8 +265,11 @@ export default {
       unavailable: "L'utilisation des ressources est indisponible pour le moment."
     },
     health: {
+      parseFailed: "Échec de l'analyse des données d'état du système.",
+      loadFailed: "Échec du chargement des données d'état du système.",
       unavailable: "L'état du système est indisponible pour le moment."
     },
+    logsLoadFailed: 'Échec du chargement des journaux.',
     dbStats: {
       unavailable: 'Les statistiques de la base de données sont indisponibles pour le moment.'
     },
@@ -339,6 +342,7 @@ export default {
         loading: 'Exécution des diagnostics...'
       },
       runSecurityScan: {
+        error: "Échec du lancement de l'analyse de sécurité",
         success: 'Analyse de sécurité terminée avec succès',
         loading: "Exécution de l'analyse de sécurité...",
         refreshFailed: "L'analyse est terminée, mais l'actualisation des résultats a échoué"
@@ -1444,6 +1448,7 @@ export default {
       "Agissez en tant que compagnon local chaleureux. Soyez poli, serviable et démontrez une excellente connaissance de la culture locale et de la vie quotidienne. IMPORTANT : Rappelez à l'utilisateur que, même si vous pouvez échanger sur tous les sujets, votre spécialité consiste à l'accompagner dans les démarches administratives telles que les pièces d'identité, les impôts et l'immatriculation d'entreprises. RÈGLE : Désignez toujours l'application sous le nom de « Genie AI »."
   },
   common: {
+    close: 'Fermer',
     cancel: 'Annuler',
     create: 'Créer',
     save: 'Enregistrer',
@@ -1490,6 +1495,11 @@ export default {
     alt: 'Télécharger'
   },
   details: {
+    downloading: 'Téléchargement...',
+    sourceUrl: 'URL de la source',
+    downloadFile: 'Télécharger le fichier',
+    viewCrawled: 'Voir le Markdown généré',
+    visitSource: "Visiter le site d'origine",
     bundleBadge: 'Géré par le cycle de vie OKF',
     crawl: {
       seconds: 'secondes',
@@ -1522,6 +1532,7 @@ export default {
     uploadDate: 'Date de téléchargement',
     hash: 'Hachage SHA256',
     tabs: {
+      crawlLog: 'Journal du crawl',
       dashboard: 'Tableau de bord',
       details: 'Détails',
       ingestionLog: "Journal d'ingestion",
@@ -1535,6 +1546,7 @@ export default {
         "Progression étape par étape de la préparation de ce fichier pour les réponses de l'IA : découpage, étiquetage, plongement et indexation. Les erreurs ici indiquent exactement où l'action ingest s'est arrêtée."
     },
     log: {
+      killCrawl: 'Arrêter la tâche',
       killActions: "Actions d'arrêt :",
       killDocument: 'Arrêter ce document',
       killProcess: "Arrêter le processus d'ingestion",
@@ -1567,10 +1579,18 @@ export default {
       ingestSaving: 'Enregistrement des métadonnées avant ingestion...',
       ingestSaveFailed: "Échec de l'enregistrement des métadonnées. Ingestion annulée.",
       logError: "Échec de la récupération des journaux d'ingestion.",
+      popupBlocked: 'Fenêtre pop-up bloquée. Veuillez autoriser les fenêtres pop-up pour ce site.',
+      downloadComplete: 'Téléchargement terminé.',
+      loadFailed: 'Impossible de charger le fichier.',
+      killFailed: "Échec de l'arrêt de l'ingestion :",
+      crawlLogError: 'Échec de la récupération des journaux de crawl.',
+      killCrawlError: "Échec de l'envoi du signal d'arrêt.",
+      killCrawlSuccess: "Signal d'arrêt envoyé.",
       killDocSent: "La demande d'arrêt pour ce document a été envoyée.",
       killProcSent: "La demande d'arrêt pour le processus d'ingestion a été envoyée."
     },
     confirm: {
+      killCrawlTitle: 'Arrêter le crawl',
       ingest: 'Êtes-vous sûr de vouloir ingérer ce fichier ? Cela lancera le pipeline de traitement des données.',
       retract: 'Êtes-vous sûr de vouloir rétracter ce fichier ?',
       delete: 'Êtes-vous sûr de vouloir supprimer définitivement ce fichier ? Cette action est irréversible.',
@@ -2124,6 +2144,16 @@ export default {
         modeC: "Utiliser l'extraction de sujets par LLM",
         modeCHint: 'Story 10.6 — bientôt disponible',
         title: 'Redécouper depuis la source'
+      },
+      rename: {
+        body: 'Renommer renomme aussi les graphes de l’espace de travail du dépôt (`OKF_<name>_v<N>`) ; le contenu, les versions et la piste d’audit restent inchangés.',
+        cancel: 'Annuler',
+        confirm: 'Renommer',
+        conflict: 'Ce nom est déjà utilisé par un autre dépôt dans ce domaine.',
+        failed: 'Échec du renommage',
+        nameLabel: 'Nom du dépôt',
+        namePlaceholder: 'Nom du dépôt',
+        title: 'Renommer le dépôt'
       },
       save: 'Enregistrer',
       saved: 'Enregistré',

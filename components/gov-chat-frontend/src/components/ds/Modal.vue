@@ -1,12 +1,18 @@
 <template>
   <Teleport to="body">
-    <div v-if="visible" class="ds-modal-backdrop" @click.self="$emit('close')">
+    <div v-if="visible" class="ds-modal-backdrop" v-bind="$attrs" @click.self="$emit('close')">
       <div ref="dialog" class="ds-modal" :class="classes" role="dialog" aria-modal="true">
         <div class="ds-modal__header">
           <slot name="header">
             <h2 v-if="title">{{ isTranslationKey ? $t(title) : title }}</h2>
           </slot>
-          <DsButton variant="ghost" class="ds-modal__close" aria-label="Close" @click="$emit('close')">
+          <DsButton
+            variant="ghost"
+            class="ds-modal__close"
+            data-test-id="ds-modal-close"
+            aria-label="Close"
+            @click="$emit('close')"
+          >
             &times;
           </DsButton>
         </div>
@@ -31,6 +37,12 @@ const SIZES = ['sm', 'md', 'lg', 'xl', 'auto'];
 export default {
   name: 'DsModal',
   components: { DsButton },
+  // The template's root is a <Teleport> — Vue does NOT forward fallthrough
+  // attrs (a caller's class among them) onto anything rendered inside it.
+  // Without this, a caller's `class` is silently dropped and never reaches
+  // the backdrop. Disabled so $attrs can be bound onto the REAL rendered
+  // root (the .ds-modal-backdrop div) explicitly.
+  inheritAttrs: false,
   props: {
     visible: {
       type: Boolean,

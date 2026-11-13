@@ -353,6 +353,28 @@ describe('AdminDashboard', () => {
       expect(wrapper.find('[data-test-id="admin-dashboard"]').exists()).toBe(true);
     });
 
+    it('the admin route joins the living-intelligence layer (Phase V)', () => {
+      // The visual layer gates on .genie-living-intelligence — DashboardView
+      // carries it on the welcome/chat route; the admin route must carry it
+      // too, or the decorated chrome (brand-ramp title, frost cards, corner
+      // network) never renders there. Layer-off stays a no-op by the same
+      // html[data-visual] gate the rest of the layer uses.
+      const wrapper = createAdminDashboardWrapper();
+      expect(wrapper.find('.admin-page').classes()).toContain('genie-living-intelligence');
+    });
+
+    it('each overview tile carries its hue modifier (Phase V2)', () => {
+      // The layer paints per-metric washes off these modifiers (uptime=success,
+      // response=info, errors=danger, users=accent). A rename here silently
+      // flattens the tile row back to one shared chrome — the pin makes that
+      // a red test, not a quiet regression.
+      const wrapper = createAdminDashboardWrapper();
+      expect(wrapper.find('[data-test-id="stat-system-uptime"]').classes()).toContain('stat-card--uptime');
+      expect(wrapper.find('[data-test-id="stat-avg-response-time"]').classes()).toContain('stat-card--response');
+      expect(wrapper.find('[data-test-id="stat-error-rate"]').classes()).toContain('stat-card--errors');
+      expect(wrapper.find('[data-test-id="stat-monthly-active-users"]').classes()).toContain('stat-card--users');
+    });
+
     it('renders the overview tab by default', () => {
       const wrapper = createAdminDashboardWrapper();
       expect(wrapper.find('[data-test-id="admin-dashboard"]').exists()).toBe(true);
@@ -1362,9 +1384,11 @@ describe('AdminDashboard', () => {
 
     it('shows the Measuring fallback on boot, before any measurement lands', () => {
       // REVIEW round-4 coverage: the boot state renders "Measuring…", never
-      // a fabricated figure.
+      // a fabricated figure. REVIEW T2: pinned on the loading panel's own
+      // handle (the wrapper carries test-id through to the primitive).
       const wrapper = createAdminDashboardWrapper();
-      expect(wrapper.find('.measuring-note').exists()).toBe(true);
+      expect(wrapper.find('[data-test-id="health-measuring"]').exists()).toBe(true);
+      expect(wrapper.find('[data-test-id="usage-measuring"]').exists()).toBe(true);
     });
 
     it('renders an ISO scan stamp localized and passes human strings through', () => {

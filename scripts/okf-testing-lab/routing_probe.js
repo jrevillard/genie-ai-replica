@@ -27,7 +27,7 @@ function arango(q) {
         host: 'localhost',
         port: 8529,
         path: '/_db/genie-ai/_api/cursor',
-        headers: { 'Content-Type': 'application/json', Authorization: auth, 'Content-Length': d.length }
+        headers: { 'Content-Type': 'application/json', Authorization: auth, 'Content-Length': Buffer.byteLength(d) }
       },
       (resp) => {
         let s = '';
@@ -49,7 +49,11 @@ function embed(text) {
       hostname: 'ai.assembly.govstack.global',
       port: 444,
       path: '/embed',
-      headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + KEY, 'Content-Length': data.length },
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: 'Bearer ' + KEY,
+        'Content-Length': Buffer.byteLength(data)
+      },
       rejectUnauthorized: false
     };
     const r = https.request(opt, (resp) => {
@@ -88,8 +92,6 @@ async function probe(coll, emb) {
         return { g, n: r.length, top: r[0] || 0 };
       })
     );
-    const all = [];
-    for (const { g, n, top } of rows) for (let i = 0; i < n; i++) {}
     // merged top-40
     const merged = [];
     for (const { g, n, top } of rows) {

@@ -25,24 +25,39 @@
     <OkfNarrative kind="intro" />
 
     <nav class="okf-studio-tab__view-toggle" aria-label="View">
-      <DsButton :variant="view === 'dashboard' ? 'primary' : 'secondary'" small @click="view = 'dashboard'">
+      <DsButton
+        :variant="view === 'dashboard' ? 'primary' : 'secondary'"
+        small
+        data-test-id="studio-view-dashboard"
+        @click="view = 'dashboard'"
+      >
         {{ translate('okf.studio.view.dashboard', 'Dashboard') }}
       </DsButton>
-      <DsButton :variant="view === 'wizard' ? 'primary' : 'secondary'" small @click="openWizard">
+      <DsButton
+        :variant="view === 'wizard' ? 'primary' : 'secondary'"
+        small
+        data-test-id="studio-view-wizard"
+        @click="openWizard"
+      >
         {{ translate('okf.studio.view.wizard', 'Wizard') }}
       </DsButton>
     </nav>
 
     <!-- Story 10.7 (#995): the live retrieval posture — GLOBAL governance,
          so it sits above the per-repo kanban: it is what every query on
-         every repository is grounded by. Read-only for non-admins (the
-         posture must be visible to everyone), editable for tools-admin. -->
-    <OkfRetrievalCard v-if="view === 'dashboard'" class="okf-studio-tab__retrieval" />
+         every repository is grounded by. Read-only for non-admins, editable
+         for tools-admin. EXPERT-ONLY (David, 2026-11-12, supersedes the
+         Story-10.7 "visible to everyone" disposition): Basic shows the
+         swimlane board only; the posture is an expert surface, arriving with
+         the subject-area filter and search. -->
+    <OkfRetrievalCard v-if="view === 'dashboard' && isExpert" class="okf-studio-tab__retrieval" />
     <!-- #948 (the narrowed Story 10.4): the cross-repo conformance-debt card.
          READ-ONLY — a row click opens that repo via the same resume path the
          dashboard uses; it never acts on the debt (the disposition's cap:
-         the per-repo popups stay the remediation surface). -->
-    <OkfConformanceDebtPanel v-if="view === 'dashboard'" class="okf-studio-tab__debt" @open="onResume" />
+         the per-repo popups stay the remediation surface). EXPERT-ONLY
+         (David, 2026-11-12) — same Basic/Expert split as the posture card
+         above. -->
+    <OkfConformanceDebtPanel v-if="view === 'dashboard' && isExpert" class="okf-studio-tab__debt" @open="onResume" />
     <!-- The degraded-draft notice lives at the TAB level: the zip-import
          path lands on the dashboard without ever entering the wizard, so a
          wizard-only surface would stay quiet for it. The live region exists
@@ -67,6 +82,7 @@
     <OkfStudioDashboard v-if="view === 'dashboard'" @resume="onResume" @new="onNew" />
 
     <DsDialog
+      class="genie-living-intelligence"
       :visible="createOpen"
       :title="translate('okf.create.title', 'New OKF repository')"
       size="sm"
@@ -195,6 +211,7 @@
     />
 
     <DsDialog
+      class="genie-living-intelligence"
       :visible="helpOpen"
       :title="translate('okf.studio.helpTitle', 'About OKF Studio')"
       :actions="[{ key: 'close', label: translate('common.close', 'Close'), variant: 'primary' }]"

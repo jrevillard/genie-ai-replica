@@ -979,13 +979,33 @@ async function _ingestWithCap(repo_id, input, actor, maxConcepts = maxConceptsFr
     }
   }
 
-  const closeZipRecord = () =>
-    zipConvWrite({
-      status: summary.enqueue_errors.length > 0 ? 'failed' : 'done',
-      stage: summary.enqueue_errors.length > 0 ? 'failed' : 'done',
-      pages_done: zipDone,
-      finished_at: new Date().toISOString()
-    });
+  // The close writes the ONE failed-record vocabulary: a FAILED record
+  // carries no result, so the previous run's summary must not survive beside
+  // the failure (the Studio would read "import failed" next to the counts of
+  // a run that succeeded). The vocabulary lives in crawl-conversion-service,
+  // which requires THIS module — so it is required lazily, at call time, to
+  // keep the dependency one-way.
+  const closeZipRecord = () => {
+    const failed = summary.enqueue_errors.length > 0;
+    if (!failed) {
+      return zipConvWrite({
+        status: 'done',
+        stage: 'done',
+        pages_done: zipDone,
+        finished_at: new Date().toISOString()
+      });
+    }
+    const { failedConversionRecord } = require('./crawl-conversion-service');
+    const first = summary.enqueue_errors[0] || {};
+    return zipConvWrite(
+      failedConversionRecord(
+        Object.assign(new Error(`enqueue failed: ${first.stage || 'unknown'} ${first.concept_id || ''}`.trim()), {
+          code: 'CONVERSION_FAILED'
+        }),
+        { pages_done: zipDone }
+      )
+    );
+  };
   // ZIP CONVERSION RECORD CLOSE — AFTER the curation pass, so the dashboard
   // card does not flip to completed while labels are still landing (live:
   // the card cleared seconds before curation finished, 2026-09-08). With

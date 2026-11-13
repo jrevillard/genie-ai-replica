@@ -162,4 +162,33 @@ describe('DsModal', () => {
       wrapper.unmount();
     });
   });
+
+  describe('Fallthrough attrs (Teleport root)', () => {
+    // The template root is a <Teleport>, which Vue does not forward
+    // fallthrough attrs through — without the explicit $attrs binding on
+    // the backdrop, a caller's class (the living-intelligence instance
+    // gate) is silently dropped. This is the regression that shipped the
+    // dropped class once; keep it pinned.
+    it('renders a caller class onto the teleported backdrop', async () => {
+      const wrapper = mount(DsModal, {
+        props: { visible: false },
+        attrs: { class: 'genie-living-intelligence' },
+        attachTo: document.body
+      });
+      await wrapper.setProps({ visible: true });
+      await wrapper.vm.$nextTick();
+      const backdrop = getBody().querySelector('.ds-modal-backdrop');
+      expect(backdrop).not.toBeNull();
+      expect(backdrop.classList).toContain('genie-living-intelligence');
+      wrapper.unmount();
+    });
+
+    it('leaves the backdrop class untouched without caller attrs', async () => {
+      const wrapper = await mountAndOpen();
+      const backdrop = getBody().querySelector('.ds-modal-backdrop');
+      expect(backdrop).not.toBeNull();
+      expect(backdrop.className).toBe('ds-modal-backdrop');
+      wrapper.unmount();
+    });
+  });
 });

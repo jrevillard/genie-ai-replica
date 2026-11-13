@@ -265,8 +265,11 @@ export default {
       unavailable: '资源使用情况当前不可用。'
     },
     health: {
+      parseFailed: '解析系统健康数据失败。',
+      loadFailed: '加载系统健康数据失败。',
       unavailable: '系统健康状态当前不可用。'
     },
+    logsLoadFailed: '加载日志失败。',
     dbStats: {
       unavailable: '数据库统计信息当前不可用。'
     },
@@ -339,6 +342,7 @@ export default {
         loading: '正在运行诊断...'
       },
       runSecurityScan: {
+        error: '运行安全扫描失败',
         success: '安全扫描成功完成',
         loading: '正在运行安全扫描...',
         refreshFailed: '扫描已完成，但刷新结果失败'
@@ -1398,6 +1402,7 @@ export default {
       '请扮演一位友好的本地伙伴。礼貌、乐于助人，并熟悉当地文化和日常生活。重要：提醒用户，虽然您可以畅谈任何话题，但您的专长是帮助其办理身份证件、税务和企业注册等公共服务事务。规则：始终以“Genie AI”称呼本应用。'
   },
   common: {
+    close: '关闭',
     cancel: '取消',
     create: '创建',
     save: '保存',
@@ -1444,6 +1449,11 @@ export default {
     alt: '上传'
   },
   details: {
+    downloading: '下载中...',
+    sourceUrl: '来源网址',
+    downloadFile: '下载文件',
+    viewCrawled: '查看生成的 Markdown',
+    visitSource: '访问原始网站',
     bundleBadge: '由 OKF 生命周期管理',
     crawl: {
       seconds: '秒',
@@ -1476,6 +1486,7 @@ export default {
     uploadDate: '上传日期',
     hash: 'SHA256 哈希值',
     tabs: {
+      crawlLog: '抓取日志',
       dashboard: '仪表板',
       details: '详情',
       ingestionLog: '提取日志',
@@ -1487,6 +1498,7 @@ export default {
         '为 AI 回答准备该文件的分阶段进度：分块（chunking）、标注、向量化（embedding）与索引编制。此处的错误会精确指示 ingest 停止的位置。'
     },
     log: {
+      killCrawl: '终止任务',
       killActions: '终止操作:',
       killDocument: '终止此文档',
       killProcess: '终止提取过程',
@@ -1519,10 +1531,18 @@ export default {
       ingestSaving: '提取前正在保存元数据...',
       ingestSaveFailed: '保存元数据失败。提取已取消。',
       logError: '获取提取日志失败。',
+      popupBlocked: '弹窗被阻止。请允许此网站弹出窗口。',
+      downloadComplete: '下载完成。',
+      loadFailed: '无法加载文件。',
+      killFailed: '终止提取失败：',
+      crawlLogError: '获取抓取日志失败。',
+      killCrawlError: '发送终止信号失败。',
+      killCrawlSuccess: '已发送终止信号。',
       killDocSent: '已发送此文档的终止请求。',
       killProcSent: '已发送提取过程的终止请求。'
     },
     confirm: {
+      killCrawlTitle: '终止抓取任务',
       ingest: '您确定要提取此文件吗？这将启动数据处理流程。',
       retract: '您确定要撤回此文件吗？',
       delete: '您确定要永久删除此文件吗？此操作无法撤销。',
@@ -2051,6 +2071,16 @@ export default {
         modeC: '使用 LLM 进行主题提取',
         modeCHint: '用户故事 10.6 — 即将推出',
         title: '从源文件重新切分'
+      },
+      rename: {
+        body: '重命名同时会重命名仓库的工作区图（`OKF_<name>_v<N>`）；内容、版本和审计记录不受影响。',
+        cancel: '取消',
+        confirm: '重命名',
+        conflict: '该名称已被此域中的另一个仓库使用。',
+        failed: '重命名失败',
+        nameLabel: '仓库名称',
+        namePlaceholder: '仓库名称',
+        title: '重命名仓库'
       },
       save: '保存',
       saved: '已保存',

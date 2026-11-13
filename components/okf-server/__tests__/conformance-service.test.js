@@ -178,7 +178,9 @@ describe('conformance-service — getRepoMetrics (DB)', () => {
     await getRepoMetrics('r1');
     const arg = db.query.mock.calls[0][0];
     const aql = typeof arg === 'string' ? arg : String(arg.query);
-    expect(aql).toMatch(/pii_hit_count:\s*SUM\(/);
+    // #1648 renamed the aggregate (COLLECT AGGREGATE pii_hits = SUM(...)) —
+    // the pin guards the COMPUTED discriminator, not the output field name.
+    expect(aql).toMatch(/pii_hits\s*=\s*SUM\(/);
     // The discriminator must be the resolution record: pii_state reads 'clean'
     // both before and after a bulk accept, so filtering on it is meaningless.
     // The findings side reads the OCCURRENCES array — pii-service persists a

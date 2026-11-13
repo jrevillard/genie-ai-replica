@@ -125,6 +125,7 @@
 
     <DsDialog
       v-if="expert"
+      class="genie-living-intelligence"
       :visible="frontmatterDialog"
       :title="editFrontmatterTitle"
       size="lg"

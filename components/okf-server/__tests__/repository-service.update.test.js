@@ -95,6 +95,33 @@ describe('repository-service.update — the rename path (born-right graph carry)
   });
 });
 
+describe('repository-service.update — a blank name is no name (issue #1774)', () => {
+  test('refuses a rename to a name of only spaces', async () => {
+    seedRepo();
+    await expect(repoService.update(RID, { name: '   ' }, { sub: 'steward-1' })).rejects.toMatchObject({
+      code: 'VALIDATION_ERROR',
+      status: 400
+    });
+    // the stored name is untouched and no graph move happened
+    expect(mockDb._stores.okf_repositories[RID].name).toBe('Old Name');
+    expect(renameForRepoNameChange).not.toHaveBeenCalled();
+  });
+
+  test('refuses a blank rename on a SERVING repository too — the name check comes first', async () => {
+    // The name check sits BEFORE the serving-repo read-only gate, so the
+    // same malformed request gets the same answer whatever the repository's
+    // lifecycle state is: a name of only spaces is a validation error, not
+    // a read-only conflict.
+    seedRepo({ ingested_at: '2026-09-14T00:00:00.000Z' });
+    await expect(repoService.update(RID, { name: '   ' }, { sub: 'steward-1' })).rejects.toMatchObject({
+      code: 'VALIDATION_ERROR',
+      status: 400
+    });
+    expect(mockDb._stores.okf_repositories[RID].name).toBe('Old Name');
+    expect(renameForRepoNameChange).not.toHaveBeenCalled();
+  });
+});
+
 describe('repository-service.update — studio_step resume pointer (3.4 Amendment A, A4)', () => {
   test('persists an integer step 0-9', async () => {
     seedRepo();

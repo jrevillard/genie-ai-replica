@@ -33,9 +33,12 @@ module.exports = [
     files: ['**/*.js'],
     // The suite's own Playwright config at the repository ROOT runs in Node
     // only: a browser global there is a ReferenceError at config load, so
-    // it takes the Node-only entry below instead of this one (#1716). Both
-    // spellings cover the two base paths the gate runs from — tests/e2e/
-    // for `eslint .`, the repository root for lint:playwright-config.
+    // it takes the Node-only entry below instead of this one (#1716). The
+    // two spellings are base-path robustness, not two reachable paths:
+    // `eslint .` from tests/e2e/ never reaches the root file, and
+    // lint:playwright-config runs from the repository root, where the bare
+    // spelling matches. Keeping both keeps the entry correct if either
+    // invocation's base path ever changes.
     ignores: ['playwright.config.js', '../../playwright.config.js'],
     languageOptions: {
       ecmaVersion: 'latest',

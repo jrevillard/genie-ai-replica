@@ -4333,8 +4333,9 @@ describe('the root Playwright config has a lint home (#1716)', () => {
 
   beforeAll(() => {
     lintJob = gitlabSection(fs.readFileSync(ciFile, 'utf-8'), 'lint:e2e');
-    lintChanges = parseGitlabCiJobChanges(ciFile, ['lint:e2e']).get('lint:e2e');
-    validateChanges = parseGitlabCiJobChanges(ciFile, ['config:validate']).get('config:validate');
+    const changes = parseGitlabCiJobChanges(ciFile, ['lint:e2e', 'config:validate']);
+    lintChanges = changes.get('lint:e2e');
+    validateChanges = changes.get('config:validate');
   });
 
   test('an edit to the root config triggers the lint job', () => {
@@ -4424,30 +4425,28 @@ describe('the root Playwright config has a lint home (#1716)', () => {
     // cover the command, not the target file. The target is one small
     // file; the suppression is forbidden outright.
     const source = fs.readFileSync(path.join(ROOT, 'playwright.config.js'), 'utf-8');
-    // 'no-undef' rather than 'eslint-disable': the file-level config
-    // comment spelling (eslint no-undef: "off") carries no 'disable' and
-    // was measured to silence the gate the same way; the target has no
-    // legitimate mention of the rule name (grep: zero).
+    // Two spellings, two greps: 'eslint-disable' misses the file-level
+    // config comment (eslint no-undef: "off" — no 'disable' in it, and
+    // measured to silence the gate the same way); 'no-undef' misses the
+    // blanket spellings (eslint-disable with no rule name). The target
+    // has no legitimate mention of either (grep: zero).
+    expect(source).not.toContain('eslint-disable');
     expect(source).not.toContain('no-undef');
   });
 
   test('the gate names the root config and the e2e eslint config', () => {
     // The script carries the targets AND the flag that makes its own
-    // silencing modes fail: --max-warnings 0 turns the warning-based
-    // modes (outside-base-path, ignore-excluded) into exit 1. Dropping it
-    // reverts the gate to exit 0 while nothing is linted, so the flag is
-    // pinned present and the one-token suppressors that would defeat it
-    // are pinned absent: the no-warn/ignore pair (warnings vanish), a
-    // --rule override (no-undef off beats any config), a second --config
-    // (CLI last-wins replaces the gate's config), and
-    // --no-error-on-unmatched-pattern (turns the structural no-match
+    // silencing modes fail — the exit-mode taxonomy is stated once, on
+    // the cwd pin above.
+    //
     // The script is pinned by EXACT equality, not by enumerated flags.
-    // The enumeration was measured incomplete: --stdin (empty stdin in
-    // every non-interactive run), --global (CLI-injected globals silence
+    // Enumeration was measured incomplete: --stdin (empty stdin in every
+    // non-interactive run), --global (CLI-injected globals silence
     // no-undef for a named binding), --version/--help and the utility
-    // modes each exit 0 without linting. Any appended, dropped or
-    // reordered token now fails this pin — the same conscious-update
-    // trade-off as the :fix delegation pin below.
+    // modes each exit 0 without linting — none caught by a per-flag
+    // absent list. Any appended, dropped or reordered token now fails
+    // this pin — the same conscious-update trade-off as the :fix
+    // delegation pin below.
     const scripts = JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf-8')).scripts;
     const gateScript = scripts['lint:playwright-config'];
     expect(gateScript).toBe(
@@ -4470,7 +4469,6 @@ describe('the root Playwright config has a lint home (#1716)', () => {
     // measured incomplete.
     const pkg = JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf-8'));
     const entry = (pkg['lint-staged'] || {})['playwright.config.js'];
-    expect(entry).toBeDefined();
     expect(entry.join(' ')).toBe(
       'tests/e2e/node_modules/.bin/eslint --max-warnings 0 --config tests/e2e/eslint.config.js --fix'
     );

@@ -23,8 +23,9 @@ Phase traceability survives the reorganization in two places:
 
 The rule for new work: **one spec, one place, one axis**. A new spec goes
 under its area's directory. A spec whose area is unclear becomes a
-follow-up issue with `status::backlog` — the worked precedent is
-*Root — pinned exception*, the procedure is in *Keeping the map true* —
+follow-up issue with `status::backlog` (the worked precedent was the
+*Root — pinned exception*: a spec the CI pinned at the tree root until
+#1823 moved the pin with the file) —
 never a root-level file and never a revival of a phase directory. Feature
 specs serve no acceptance phase; their Phase/story entry is `—`.
 
@@ -110,19 +111,14 @@ expose the pillar — see [local-run.md](local-run.md).
 | `resizable-sidebars.spec.js` | — | the shared edge handle: drag, collapse, restore, the clamp | core | `chatbot`, `welcome`, `layout` |
 | `responsive-layout.spec.js` | — | the quick-help grid column invariant across viewports | core | `chatbot`, `welcome`, `layout` |
 | `welcome-banner.spec.js` | — | the welcome banner scrim: alpha floor, wordmark contrast | core | `welcome` |
-
-## Root — pinned exception
-
-| Spec | Phase/story | What it drives | Profile | Helpers |
-|------|-------------|----------------|---------|---------|
 | `theme-runtime-config.spec.js` | — | cache-header contract for the runtime theme config (`/config/theme-variables.css`, `/runtime/config.js`, `@theme_fallback`) | core | `cache-headers`, `base-url` |
 
-It sits at the tree root because the dormant CI invocation
-(`.gitlab-ci.yml` → `e2e:playwright`) and its changes-anchor name it
-**verbatim** — the one file whose move would edit that frozen file. Its
-natural home under the axis is `theme/` (it is the sibling contract of
-`theme/living-intelligence.spec.js`); it moves when that CI file is next
-edited for real, not before. Follow-up: #1823.
+`theme-runtime-config.spec.js` was the one exception to the axis — held at
+the tree root because the dormant CI invocation (`.gitlab-ci.yml` →
+`e2e:playwright`) and its changes-anchor named it **verbatim** — until its
+pin was moved with it (#1823). It is the sibling contract of
+`living-intelligence.spec.js` (both are the cache-header contracts for
+operator-editable `/config/` assets) and lives here since.
 
 ## `helpers/` and `run/` — unit specs of the suite's own modules
 
@@ -154,10 +150,10 @@ already enforce:
   map (a spec file added under one of the CI's executed globs adds one line
   to the validator's exact list);
 - **anchor coverage** holds for the directories the train invocation
-  covers (`chatbot/`, `documents/`, `admin/`, `helpers/`, plus the pinned
-  root spec by name) — a spec executed by the train stays
+  covers (`chatbot/`, `documents/`, `admin/`, `helpers/`, `theme/`) — a
+  spec executed by the train stays
   train-triggerable without an anchor edit. Every other directory is NOT
-  anchor-covered: `okf/` by deliberate exclusion, `auth/`, `theme/` and
+  anchor-covered: `okf/` by deliberate exclusion, `auth/` and
   `run/` because the dormant train invocation never named them — a spec
   added there does not trigger the dormant e2e job. The merge-train
   changes guard in `tests/config-validator/` pins the executed set and

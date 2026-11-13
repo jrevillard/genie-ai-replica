@@ -1091,7 +1091,7 @@ workflow:
     # to the executed-spec set pinned in tests/config-validator (the pin
     # lists the specs the invocation executes; a spec that drifts out of the
     # invocation is not covered by it).
-    - BASE_URL="${E2E_BASE_URL}" npx playwright test tests/e2e/chatbot/ tests/e2e/documents/ tests/e2e/admin/ tests/e2e/theme-runtime-config.spec.js tests/e2e/helpers/ --project=chromium
+    - BASE_URL="${E2E_BASE_URL}" npx playwright test tests/e2e/chatbot/ tests/e2e/documents/ tests/e2e/admin/ tests/e2e/theme/ tests/e2e/helpers/ --project=chromium
   after_script:
     - mkdir -p e2e-logs
     - docker compose -p "ci-${CI_PIPELINE_ID}" logs > e2e-logs/docker-compose.log 2>&1 || true
@@ -3949,7 +3949,7 @@ test:flutter:
 # the trees compiled into the pulled candidate images — are a deliberate
 # exception, tracked in #1283):
 #   - e2e:playwright runs tests/e2e/chatbot/, tests/e2e/documents/,
-#     tests/e2e/admin/ and tests/e2e/theme-runtime-config.spec.js; it reads
+#     tests/e2e/admin/ and tests/e2e/theme/theme-runtime-config.spec.js; it reads
 #     tests/e2e/helpers/ and tests/e2e/fixtures/ at runtime, and is
 #     installed/configured from package.json, package-lock.json and
 #     playwright.config.js (see .e2e_web_base before_script + cache keys).
@@ -3978,7 +3978,7 @@ test:flutter:
   - tests/e2e/helpers/**/*
   - tests/e2e/provision-e2e-fixtures.js
   - tests/e2e/fixtures/**/*
-  - tests/e2e/theme-runtime-config.spec.js
+  - tests/e2e/theme/**/*
   - playwright.config.js
   - package.json
   - package-lock.json

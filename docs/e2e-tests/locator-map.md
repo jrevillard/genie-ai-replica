@@ -112,15 +112,15 @@ class-selector hits across three specs, all on the OKF Studio dashboard,
 the DS modal/tab primitives and the RAGAS panes. Any DS restyle or OKF
 panel rename breaks all three.
 
-### `theme/` and the root — handle-based
+### `theme/` — handle-based
 
 | Spec | Classes used | Residual |
 |---|---|---|
 | `living-intelligence.spec.js` | none (cache-header level) | — |
+| `theme-runtime-config.spec.js` | none (cache-header level) | — |
 | `resizable-sidebars.spec.js` | handle | — |
 | `responsive-layout.spec.js` | handle | — |
 | `welcome-banner.spec.js` | handle (via `helpers/welcome.js`) | — |
-| `theme-runtime-config.spec.js` | none (cache-header level) | — |
 
 ### Capture scripts
 

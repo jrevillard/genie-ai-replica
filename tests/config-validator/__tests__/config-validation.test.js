@@ -2439,7 +2439,7 @@ describe('e2e merge-train changes filters (#1264)', () => {
       'tests/e2e/chatbot/**/*',
       'tests/e2e/documents/**/*',
       'tests/e2e/helpers/**/*',
-      'tests/e2e/theme-runtime-config.spec.js'
+      'tests/e2e/theme/**/*'
     ]);
     return targets;
   };
@@ -2753,7 +2753,11 @@ describe('e2e merge-train changes filters (#1264)', () => {
       'tests/e2e/helpers/route.spec.js',
       'tests/e2e/helpers/venue-launch-args.spec.js',
       'tests/e2e/helpers/venue-profile.spec.js',
-      'tests/e2e/theme-runtime-config.spec.js'
+      'tests/e2e/theme/living-intelligence.spec.js',
+      'tests/e2e/theme/resizable-sidebars.spec.js',
+      'tests/e2e/theme/responsive-layout.spec.js',
+      'tests/e2e/theme/theme-runtime-config.spec.js',
+      'tests/e2e/theme/welcome-banner.spec.js'
     ]);
   });
 

@@ -147,7 +147,6 @@ a new spec goes: the map's one-spec-one-place-one-axis rule.
 | `admin/` | Admin dashboard specs |
 | `okf/` | OKF pillar specs |
 | `theme/` | Frontend shell & visual-layer specs |
-| `theme-runtime-config.spec.js` | Pinned at the tree root (see the map's *Root — pinned exception*) |
 | `helpers/` | Shared auth/login, chat, documents, locale, Keycloak admin, cache-header and welcome helpers (helper unit specs live here too — e.g. `helpers/auth.spec.js`) |
 | `helpers/venue-profile.js` | What the venue actually exposes (OKF pillar, realms, identity providers) — the source of every runtime skip's reason |
 | `run/` | The local run: the runner script, the venue-name mapping and the failure path (their unit spec lives here too) |
@@ -210,7 +209,7 @@ The executed set is pinned by `tests/config-validator/`: the guard derives
 the run's invocation from the run script and requires it to cover **every**
 spec file in the tree. Narrowing the invocation is what fails the guard.
 A NEW spec file under one of the CI's executed globs (`admin/`,
-`chatbot/`, `documents/`, `helpers/`, `theme-runtime-config.spec.js`) is
+`chatbot/`, `documents/`, `helpers/`, `theme/`) is
 not free, though: the derivation's exact pin in
 `tests/config-validator/__tests__/config-validation.test.js` lists the
 expected set, so such a spec file adds one line there. A spec outside

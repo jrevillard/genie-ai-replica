@@ -64,7 +64,7 @@ test('clears legacy localStorage items after logout', async ({ browser }) => {
   ).toBeTruthy();
 
   // Step 5: Click the logout button
-  const logoutButton = page.getByRole('button', { name: 'Log out' });
+  const logoutButton = page.locator('[data-test-id="nav-icon-btn-logout"]');
   await expect(logoutButton, 'Logout button should be visible').toBeVisible({ timeout: 10000 });
 
   await logoutButton.click();

@@ -347,7 +347,7 @@ async function saveChat(page, title) {
   await button.click();
 
   // Wait for save dialog
-  const titleInput = page.locator('#chatTitle');
+  const titleInput = page.locator('[data-testid="chat-title"]');
   await expect(titleInput).toBeVisible({ timeout: 5000 });
   await titleInput.fill(title);
 

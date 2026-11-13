@@ -59,7 +59,7 @@ test('clicks logout button and redirects to Keycloak login page', async ({ brows
   ).toBeTruthy();
 
   // Step 6: Click the logout button (NavBarComponent desktop logout button)
-  const logoutButton = page.getByRole('button', { name: 'Log out' });
+  const logoutButton = page.locator('[data-test-id="nav-icon-btn-logout"]');
   await expect(logoutButton, 'Logout button should be visible after login').toBeVisible({ timeout: 10000 });
   await logoutButton.click();
 

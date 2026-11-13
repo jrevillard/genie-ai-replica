@@ -278,7 +278,8 @@ Two caveats the operator should know before booking a slot:
 The run of 2026-11-10 (forge venue, chart 0.2.171, `genieai-forge.local:4443`):
 **242 tests — 212 passed, 13 failed, 17 skipped.** Spec paths below are
 shown at their current (post-#1741 reorganization) home; the run itself
-recorded them as `epic1/…` and `epic3/…`.
+recorded the pre-reorganization paths (`epic1/…`, `epic3/…`, root-level,
+and `chatbot/…` for the specs that did not move).
 
 | Spec | Failures | Why it is red | Fix |
 |---|---|---|---|

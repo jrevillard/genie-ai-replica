@@ -87,7 +87,7 @@ one reads a missing directory as an accident.
 | `authz.spec.js` | — | admin surface authorization: navbar gating + backend 403 | core | `auth`, `chatbot` |
 | `data-wiring.spec.js` | — | overview stat tiles/health/resources render from the system-health payload | core | `auth`, `chatbot` |
 | `failure-states.spec.js` | — | admin API failures render the visible error notification and recover | core | `auth`, `chatbot` |
-| `hierarchy-translations-failure.spec.js` | — | the hierarchy form's failed-translations dead-end: notice, disabled controls, Retry recovery | core | `auth`, `chatbot` |
+| `hierarchy-translations-failure.spec.js` | — | the hierarchy form's failed-translations dead-end: notice, disabled controls, Retry recovery | core | `chatbot` |
 | `logs-view.spec.js` | — | the Logs tab renders the VL-backed roll-up rows | core | `auth`, `chatbot` |
 
 ## `okf/` — the OKF pillar

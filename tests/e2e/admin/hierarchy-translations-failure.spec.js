@@ -1,4 +1,5 @@
 const { test, expect } = require('@playwright/test');
+const { runRouteHandler } = require('../helpers/route');
 const { loginViaUI, BASE_URL, TEST_ADMIN_USER, LOGIN_BUDGET_TIMEOUT_MS } = require('../helpers/chatbot');
 
 /**
@@ -66,11 +67,22 @@ async function openEditForm(page, translationsStatus, translationsBody) {
   // venue's own runtime config — every other value (the OIDC origin, the
   // client id) stays the venue's — so the form's language set is the
   // deployment-independent fixture this spec's payload assumes.
-  await page.route('**/runtime/config.js', async (route) => {
-    const response = await route.fetch();
-    const body = (await response.text()).replace(/availableLocales:\s*"[^"]*"/, 'availableLocales: "en,es"');
-    await route.fulfill({ response, body });
-  });
+  await page.route(
+    '**/runtime/config.js',
+    runRouteHandler(page, async (route) => {
+      const response = await route.fetch();
+      const body = await response.text();
+      // The whitelist key is the fixture this spec builds on: a body that
+      // no longer carries it is config-format drift, and the spec must say
+      // so instead of silently degrading to venue-dependent pass/fail.
+      if (!/availableLocales:\s*"[^"]*"/.test(body)) {
+        throw new Error(
+          'the venue runtime config carries no availableLocales key — the rewrite this spec makes has no anchor'
+        );
+      }
+      await route.fulfill({ response, body: body.replace(/availableLocales:\s*"[^"]*"/, 'availableLocales: "en,es"') });
+    })
+  );
   await page.route('**/api/service-categories/categories/detailed*', (route) =>
     route.fulfill({
       status: 200,

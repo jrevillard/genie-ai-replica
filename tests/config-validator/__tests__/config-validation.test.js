@@ -18,6 +18,7 @@ const { parseEnvTemplateImageVars } = require('../validators/parse-env-template'
 const { extractCiShellBlocks } = require('../validators/extract-ci-shell');
 const { validateRetrieverEnvCoverage } = require('../validators/validate-retriever-env');
 const { validateFeatureFlags, OPEA_VAR_NAMES } = require('../validators/validate-features');
+const { SPEC_FILE_RE } = require('../validators/js-files');
 const {
   validateHardwareProfile,
   validateProfileConsistency,
@@ -46,14 +47,17 @@ const ENV_TEMPLATE_FILE = path.join(ROOT, 'deploy/ansible/templates/env.j2');
 const SHARED_FACTS_FILE = path.join(ROOT, 'deploy/ansible/tasks/deploy-shared-facts.yml');
 
 // The extension shape set Playwright's default testMatch accepts — one
-// fragment shared by the executed-spec selection, the walk's JS-file gate
-// and the import-path pin so the three cannot drift.
+// fragment shared by the walk's JS-file gate and the import-path pin so
+// the two cannot drift. The spec/test SUFFIX itself is the shared
+// SPEC_FILE_RE (#1800): validators/js-files.js owns the spelling, so this
+// derivation and the stream-route gate cannot disagree about what a test
+// file is.
 const JS_EXT_SRC = '[cm]?[jt]sx?';
 
 // Pure selection of the executed files from a directory listing — the
 // units below pin the boundary and the testMatch shapes on synthetic
 // listings, the real-tree pin anchors them to the actual invocation.
-const EXECUTED_SPEC_RE = new RegExp('\\.(?:spec|test)\\.' + JS_EXT_SRC + '$');
+const EXECUTED_SPEC_RE = SPEC_FILE_RE;
 const WALKABLE_FILE_RE = new RegExp('\\.(?:' + JS_EXT_SRC + ')$');
 
 // The e2e tree root. Module scope because two guards read it: the CI

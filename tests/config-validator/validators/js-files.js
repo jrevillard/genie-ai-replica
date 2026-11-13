@@ -4,6 +4,27 @@ const fs = require('fs');
 const path = require('path');
 
 /**
+ * The shape of a spec file's NAME (#1800): the one spelling of "a
+ * spec/test file" the gates that must agree with each other share — the
+ * executed-set derivation, the stream-route gate's test-file exclusion,
+ * and any future consumer in this package. Anchored at the end, so it
+ * tests a path's tail or a bare file name equally.
+ */
+const SPEC_FILE_RE = /\.(?:spec|test)\.[cm]?[jt]sx?$/;
+
+/**
+ * Escape regex special characters in a string interpolated into a RegExp
+ * source (#1800) — the metacharacter set spelled once, so a forgotten one
+ * is fixed once. The gates build patterns from paths and markers read off
+ * the tree; the production twin of this helper lives in
+ * `components/shared/lib/aql-to-sql.js`, which keeps its own copy with its
+ * own regression tests (a test gate does not execute production source).
+ * @param {string} value - the literal to embed in a RegExp source
+ * @returns {string} the escaped literal
+ */
+const escapeRegExp = (value) => value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+/**
  * Every .js file under a root, with the dependency tree pruned.
  *
  * The tree under tests/e2e holds hundreds of .js files inside
@@ -34,11 +55,6 @@ const jsFiles = (root) =>
 // slash after `(,=:[!&|?{};` or line start or an operator is a regex,
 // one after an identifier/`)`/`]` is division — a quote inside the regex
 // therefore cannot flip the scanner into string state.
-//
-// (The sibling handle-locators gate keeps its own copy of this scanner:
-// this one knows a regex may follow a keyword, the sibling's does not.
-// Consolidating the two is a separate cleanup, in the wave that owns that
-// file.)
 /**
  * The end of a template's ${...} expression, given the position of its
  * opening brace. The braces are counted, and the strings inside (a
@@ -251,4 +267,4 @@ const stripJsComments = (source) => {
   return out;
 };
 
-module.exports = { jsFiles, stripJsComments };
+module.exports = { jsFiles, stripJsComments, SPEC_FILE_RE, escapeRegExp };

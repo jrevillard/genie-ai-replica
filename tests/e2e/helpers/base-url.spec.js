@@ -43,12 +43,14 @@ function addressIn(configured) {
  * The module's load failure for a configured address, or null when the
  * module loads.
  *
- * The module refuses an address that is not an http(s) URL with a host
- * (#1805) — a scheme-less value like `localhost:3000` parses with an
- * EMPTY host, the venue mapping would map an empty host, and the browser
- * would navigate to an address that means nothing. The refusal happens
- * where the address is READ, so the case is exercised the same way the
- * address is: in a child process, whose stderr carries the named cause.
+ * The module refuses an address that is not an http(s) origin with a
+ * host (#1805) — a scheme-less value like `localhost:3000` parses with
+ * an EMPTY host, the venue mapping would map an empty host, and the
+ * browser would navigate to an address that means nothing. The refusal
+ * happens where the address is READ, so the case is exercised the same
+ * way the address is: in a child process, whose stderr carries the
+ * named cause. The refusal tests assert a fragment of THAT cause, so a
+ * module that fails to load at all cannot pass for a named refusal.
  */
 function addressErrorIn(configured) {
   const env = { ...process.env, BASE_URL: configured };
@@ -78,33 +80,55 @@ test.describe('the venue address has one spelling', () => {
     expect(address.startsWith('https://')).toBe(true);
     expect(address.endsWith('/')).toBe(false);
   });
+
+  test('the published value is the CANONICAL origin', () => {
+    // WHATWG-tolerated spellings must not publish a second name for the
+    // same venue: the module returns the parsed origin, not the raw
+    // string — one host casing, one slash count.
+    expect(addressIn('https://EXAMPLE.com:4443//')).toBe('https://example.com:4443');
+    expect(addressIn('https://example.com/')).toBe('https://example.com');
+  });
 });
 
-test.describe('the venue address must be an http(s) URL with a host', () => {
+test.describe('the venue address must be an http(s) origin with a host', () => {
+  const REFUSAL = 'http(s) origin with a host';
+
   test('a scheme-less address is refused, naming the value', () => {
     // `localhost:3000` parses with protocol `localhost:` and an EMPTY
     // host — exactly the value the venue mapping would map into nothing.
     const error = addressErrorIn('localhost:3000');
     expect(error).not.toBe(null);
     expect(error).toContain('localhost:3000');
-    expect(error).toContain('http(s) URL with a host');
+    expect(error).toContain(REFUSAL);
   });
 
   test('an unparseable address is refused', () => {
-    expect(addressErrorIn('not a venue address')).not.toBe(null);
+    const error = addressErrorIn('not a venue address');
+    expect(error).toContain(REFUSAL);
   });
 
   test('a non-http scheme is refused', () => {
     // A host with the wrong scheme is not a venue edge either.
-    expect(addressErrorIn('ftp://example.com')).not.toBe(null);
+    expect(addressErrorIn('ftp://example.com')).toContain(REFUSAL);
   });
 
   test('a plain host name is refused', () => {
     // No scheme at all: `new URL` throws.
-    expect(addressErrorIn('example.com')).not.toBe(null);
+    expect(addressErrorIn('example.com')).toContain(REFUSAL);
   });
 
-  test('an http URL with a host still passes', () => {
+  test('a path, a query, a hash and credentials are refused', () => {
+    // BASE_URL is the venue ORIGIN: every `${BASE_URL}/...`
+    // interpolation and the venue lock key are built on it, so an
+    // address that carries more than scheme/host/port is not the edge
+    // the module promises — and the refusal names it, like #1805.
+    expect(addressErrorIn('https://example.com:4443/k8s-path/')).toContain(REFUSAL);
+    expect(addressErrorIn('https://example.com:4443?x=1')).toContain(REFUSAL);
+    expect(addressErrorIn('https://example.com:4443#fragment')).toContain(REFUSAL);
+    expect(addressErrorIn('https://user@example.com:4443/')).toContain(REFUSAL);
+  });
+
+  test('an http origin still passes', () => {
     expect(addressIn('http://example.com:8080/')).toBe('http://example.com:8080');
     expect(addressIn('https://example.com:4443//')).toBe('https://example.com:4443');
   });

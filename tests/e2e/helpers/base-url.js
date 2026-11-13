@@ -28,44 +28,59 @@
  * That is why the edge lives in its own module: every spec may require it,
  * whichever credential path it takes.
  *
- * The address must be an http(s) URL with a host. A scheme-less value
- * (`localhost:3000`) parses with an EMPTY host — the venue mapping would
- * map an empty host, and the browser would navigate to an address that
- * means nothing (#1805). The module refuses such a value AT THE POINT IT
- * IS READ, naming the value it refused: every process that requires this
- * module fails at load with the named cause — the pre-flight included,
- * and a direct `npx playwright test` too, which never runs the
- * pre-flight at all.
+ * The address must be an http(s) ORIGIN — scheme, host and port, and
+ * nothing else. A scheme-less value (`localhost:3000`) parses with an
+ * EMPTY host — the venue mapping would map an empty host, and the
+ * browser would navigate to an address that means nothing (#1805); a
+ * value carrying a path, query, hash or credentials is not the venue's
+ * edge either, and every `${BASE_URL}/...` interpolation would be built
+ * on an address that is not the origin the venue serves. The module
+ * refuses such a value AT THE POINT IT IS READ, naming the value it
+ * refused: every process that requires this module fails at load with
+ * the named cause — the pre-flight included, and a direct
+ * `npx playwright test` too, which never runs the pre-flight at all.
+ *
+ * What the module publishes is the PARSED origin — one canonical
+ * spelling — so WHATWG-tolerated spellings (`https:host:4443` without
+ * the slashes, an upper-cased host) cannot publish a second name for
+ * the same venue.
  */
 /**
- * The venue address, normalized: the trailing slashes are stripped, and
- * a value that is not an http(s) URL with a host is refused.
+ * The venue origin, canonical: a value that is not an http(s) origin
+ * with a host is refused.
  *
  * @param {string} raw - the address as configured
- * @returns {string} the normalized address
- * @throws {Error} when the address is not an http(s) URL with a host —
- *   the message names the value it refused
+ * @returns {string} the canonical origin (scheme, host, port)
+ * @throws {Error} when the address is not an http(s) origin with a
+ *   host — the message names the value it refused
  */
 function normalizeVenue(raw) {
   const value = String(raw || '').replace(/\/+$/, '');
-  if (value) {
-    let parsed = null;
-    try {
-      parsed = new URL(value);
-    } catch {
-      // not a URL at all — the refusal below names the value
-    }
-    const httpOrHttps = parsed && (parsed.protocol === 'http:' || parsed.protocol === 'https:');
-    if (!httpOrHttps || !parsed.hostname) {
-      throw new Error(
-        `the venue address is not an http(s) URL with a host: ${JSON.stringify(String(raw))} — ` +
-          'a scheme-less value like "localhost:3000" parses with an EMPTY host, the venue mapping would ' +
-          'map an empty host, and the browser would navigate to an address that means nothing. ' +
-          'Name the scheme and the host (e.g. "https://genieai-forge.local:4443").'
-      );
-    }
+  let parsed = null;
+  try {
+    parsed = new URL(value);
+  } catch {
+    // not a URL at all — the refusal below names the value
   }
-  return value;
+  const isOrigin =
+    parsed &&
+    (parsed.protocol === 'http:' || parsed.protocol === 'https:') &&
+    parsed.hostname &&
+    (parsed.pathname === '' || parsed.pathname === '/') &&
+    !parsed.search &&
+    !parsed.hash &&
+    !parsed.username &&
+    !parsed.password;
+  if (!isOrigin) {
+    throw new Error(
+      `the venue address is not an http(s) origin with a host: ${JSON.stringify(String(raw))} — ` +
+        'a scheme-less value like "localhost:3000" parses with an EMPTY host, the venue mapping would ' +
+        'map an empty host, and the browser would navigate to an address that means nothing (#1805). ' +
+        'BASE_URL must be the venue ORIGIN — scheme, host and port only; no path, query, hash or ' +
+        'credentials (e.g. "https://genieai-forge.local:4443").'
+    );
+  }
+  return parsed.origin;
 }
 
 const BASE_URL = normalizeVenue(process.env.BASE_URL || 'https://localhost');

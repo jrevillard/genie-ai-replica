@@ -64,10 +64,13 @@ const withContractTree = (endpoint, files) =>
 
 /** The call SITE the gate anchors on: the app's own stream client
  * module — the file the gate's contract names as the authority on what
- * the app calls. Anchoring on the whole tree proved only that SOME file
- * carried the endpoint, so a stale copy elsewhere satisfied the gate
- * while the real client had drifted (#1809); anchored on the call site,
- * the gate proves the file that calls it still calls it. */
+ * the app calls. Anchoring on the whole tree as a bare existence check
+ * proved only that SOME file carried the endpoint, so a stale copy
+ * elsewhere satisfied the gate while the real client had drifted
+ * (#1809). The gate therefore reads the whole tree and requires the
+ * endpoint to appear in EXACTLY the call site: a stale copy elsewhere,
+ * a second unwatched caller, and a client that drifted off the path
+ * are all the same red. */
 const CLIENT_MODULE = path.join(FRONTEND_SRC, 'services', 'chatbotService.js');
 const CLIENT_RELATIVE = path.relative(FRONTEND_SRC, CLIENT_MODULE);
 
@@ -79,13 +82,25 @@ const CLIENT_RELATIVE = path.relative(FRONTEND_SRC, CLIENT_MODULE);
  */
 const endpointPattern = (needle) => new RegExp(needle.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '(?![A-Za-z0-9_./-])');
 
+/** Is this file one of the app's tests? A fixture that kept the old
+ * spelling would keep the anchor alive. */
+const isTestFile = (file) => {
+  const parts = file.split(path.sep);
+  return parts.includes('__tests__') || /\.(spec|test)\.[cm]?[jt]sx?$/.test(parts[parts.length - 1]);
+};
+
 /**
- * Does the call site carry the endpoint? Read over the given root, so
- * the same predicate reads the real frontend tree and a throwaway
- * mutation tree: the call site sits at the same relative place in both.
+ * The app's .js files that carry the endpoint — read over the given
+ * root, so the same scan reads the real frontend tree and a throwaway
+ * mutation tree. The call site sits at the same relative place in both.
  */
-const clientModuleCarries = (needle, root) =>
-  endpointPattern(needle).test(stripJsComments(fs.readFileSync(path.join(root, CLIENT_RELATIVE), 'utf8')));
+const appFilesCarrying = (needle, root) => {
+  const pattern = endpointPattern(needle);
+  return jsFiles(root)
+    .filter((f) => !isTestFile(f))
+    .filter((f) => pattern.test(stripJsComments(fs.readFileSync(f, 'utf8'))))
+    .map((f) => path.relative(root, f));
+};
 
 /** Does this module require anything? */
 const requiresSomething = (modulePath) => /require\(/.test(fs.readFileSync(modulePath, 'utf8'));
@@ -100,26 +115,32 @@ describe('the e2e suite intercepts the stream endpoint through the shared consta
 
   test('the call site is where the gate says it is', () => {
     // The anchor names the app's stream client module; if the frontend
-    // moved the call, this fails with the file it did not find — the
+    // moved the call, this fails NAMING the file it did not find — the
     // anchor moves WITH the call, in this file, never silently.
-    expect(fs.existsSync(CLIENT_MODULE)).toBe(true);
+    if (!fs.existsSync(CLIENT_MODULE)) {
+      throw new Error(`the anchor's call site is missing: ${CLIENT_MODULE}`);
+    }
   });
 
-  test('the constant is the path the app calls', () => {
+  test('the constant is the path the app calls — from the call site, only', () => {
     // The e2e constant is the SUFFIX the app's stream client builds
     // (`${baseUrl}/queries/stream`) and the interception glob matches. If
     // the app's spelling changed and the constant did not, every stream
     // spec would silently stop intercepting and assert against the LIVE
     // backend — the #1271 failure this gate exists for.
-    // The CALL SITE must still call the endpoint the constant names.
-    expect(clientModuleCarries(STREAM_PATH, FRONTEND_SRC)).toBe(true);
+    // The endpoint must appear in EXACTLY the call site: the set
+    // equality is what turns a stale copy elsewhere (#1809), a second
+    // unwatched caller, and a client that drifted off the path into the
+    // same red.
+    expect(appFilesCarrying(STREAM_PATH, FRONTEND_SRC)).toEqual([CLIENT_RELATIVE]);
   });
 
   test('a stale copy elsewhere does not satisfy the anchor', () => {
     // The mutation the anchor exists to catch (#1809): the client moves
     // off the endpoint AND a stale copy of the old path survives in
-    // another file. A tree-wide anchor goes green on the stale copy; the
-    // call-site anchor reads the client module only, and stays red.
+    // another file. A bare existence check goes green on the stale
+    // copy; the set is then NOT the call site alone, and the equality
+    // above reds.
     withTree(
       'stream-call-site-',
       {
@@ -127,16 +148,16 @@ describe('the e2e suite intercepts the stream endpoint through the shared consta
         'services/other.js': `const legacy = '${STREAM_PATH}';\n`
       },
       (tree) => {
-        expect(clientModuleCarries(STREAM_PATH, tree)).toBe(false);
+        expect(appFilesCarrying(STREAM_PATH, tree)).toEqual(['services/other.js']);
       }
     );
-    // The inverse pins the predicate itself: a tree whose call site
-    // carries the endpoint reads true.
+    // The inverse pins the scan itself: a tree whose call site carries
+    // the endpoint reads exactly the call site.
     withTree(
       'stream-call-site-live-',
       { [CLIENT_RELATIVE]: `const url = \`\${baseUrl}${STREAM_PATH}\`;\n` },
       (tree) => {
-        expect(clientModuleCarries(STREAM_PATH, tree)).toBe(true);
+        expect(appFilesCarrying(STREAM_PATH, tree)).toEqual([CLIENT_RELATIVE]);
       }
     );
   });

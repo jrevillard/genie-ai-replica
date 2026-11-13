@@ -37,13 +37,18 @@ const E2E_ROOT = path.join(ROOT, 'tests/e2e');
 // A spec that hardcodes ANY of them names one venue instead of the one
 // it was given, and dies before its first assertion everywhere else.
 //
-// The boundary is the HOST's: the origin must not be followed by another
-// host character (a letter, a digit, a dot or a dash), so
-// `https://localhost` matches — the spelling with no trailing slash, the
-// one a bare address carries — while `https://localhost.example.com`
-// and `https://localhostevil` do not: those are other hosts. A lookahead
-// for `/`, `:` or the end of the string misses the first case, because a
-// string literal carries a closing quote after the host.
+// The boundary is the HOST's: the origin must not be continued by another
+// host character (a letter, a digit or a dash), nor by a dot that starts
+// ANOTHER label — `https://localhost` matches (the spelling with no
+// trailing slash, the one a bare address carries), while
+// `https://localhost.example.com` and `https://localhostevil` do not:
+// those are other hosts. A dot that does NOT continue a host — the
+// rooted-FQDN trailing dot (`https://localhost./` is the same host),
+// one the previous lookahead `[A-Za-z0-9.-]` wrongly treated as a
+// continuation and let through — belongs to the host, so it matches.
+// A lookahead for `/`, `:` or the end of the string misses the bare
+// case, because a string literal carries a closing quote after the
+// host.
 //
 // The private ranges are in the list because a venue is also named by
 // its ADDRESS: the shared k8s venues sit on private addresses (RFC1918
@@ -55,7 +60,7 @@ const E2E_ROOT = path.join(ROOT, 'tests/e2e');
 // — a lookalike the negative half pins — into the list, and the pinned
 // negative half must stay out.
 const LOCAL_ORIGIN =
-  /https?:\/\/(?:localhost|127\.0\.0\.1|genieai(?:-forge)?\.local|10\.\d{1,3}\.\d{1,3}\.\d{1,3}|172\.(?:1[6-9]|2\d|3[01])\.\d{1,3}\.\d{1,3}|192\.168\.\d{1,3}\.\d{1,3}|169\.254\.\d{1,3}\.\d{1,3})(?::\d+)?(?![A-Za-z0-9.-])/gi;
+  /https?:\/\/(?:localhost|127\.0\.0\.1|genieai(?:-forge)?\.local|10\.\d{1,3}\.\d{1,3}\.\d{1,3}|172\.(?:1[6-9]|2\d|3[01])\.\d{1,3}\.\d{1,3}|192\.168\.\d{1,3}\.\d{1,3}|169\.254\.\d{1,3}\.\d{1,3})(?::\d+)?(?![A-Za-z0-9-]|\.[A-Za-z0-9])/gi;
 
 // The local origins the suite may drive on purpose: a mocked identity
 // provider, a local stub. One per line, with the reason. It is EMPTY on
@@ -206,6 +211,13 @@ describe('the e2e suite names the venue it was given, and names it once', () => 
         'docker-range.spec.js': "await page.goto('https://172.20.0.5/');\n",
         'link-local.spec.js': "await page.goto('http://169.254.1.1/');\n",
         'home-range.spec.js': "await page.goto('http://192.168.1.10:3000/');\n",
+        // The ROOTED-FQDN spelling: a trailing dot is the DNS root, not
+        // another label — `https://localhost./` is the same host as
+        // `https://localhost/`, and an earlier lookahead let that
+        // spelling through on every host in the list.
+        'rooted-localhost.spec.js': "await page.goto('https://localhost./');\n",
+        'rooted-forge.spec.js': "await page.goto('https://genieai-forge.local.:4443/');\n",
+        'rooted-private.spec.js': "await page.goto('https://10.42.0.189./');\n",
         // The NEGATIVE half of the boundary: a host that merely STARTS
         // with a local origin is ANOTHER host, and the gate must not
         // claim it. These files are written but NOT listed among the
@@ -237,7 +249,10 @@ describe('the e2e suite names the venue it was given, and names it once', () => 
           'link-local.spec.js',
           'navigation.spec.js',
           'ported.spec.js',
-          'private-address.spec.js'
+          'private-address.spec.js',
+          'rooted-forge.spec.js',
+          'rooted-localhost.spec.js',
+          'rooted-private.spec.js'
         ]);
       }
     );

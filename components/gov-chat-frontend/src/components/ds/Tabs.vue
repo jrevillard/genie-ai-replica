@@ -6,6 +6,7 @@
         :key="tab.value ?? index"
         :class="['ds-tabs__btn', { 'ds-tabs__btn--active': modelValue === (tab.value ?? index) }]"
         :data-test-id="`ds-tab-${tab.value ?? index}`"
+        :data-state="modelValue === (tab.value ?? index) ? 'active' : undefined"
         @click="select(tab.value ?? index)"
       >
         <slot name="tab" :tab="tab" :index="index" :active="modelValue === (tab.value ?? index)">

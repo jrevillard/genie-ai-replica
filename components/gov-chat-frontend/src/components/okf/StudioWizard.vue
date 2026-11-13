@@ -61,7 +61,7 @@
 
       <OkfNarrative :kind="'step' + activeStep" />
 
-      <section class="okf-wizard__step" :aria-label="stepLabel(activeStep)">
+      <section class="okf-wizard__step" :aria-label="stepLabel(activeStep)" data-test-id="okf-studio-wizard-step">
         <component
           :is="stepComponents[activeStep]"
           ref="activeStep"

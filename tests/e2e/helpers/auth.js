@@ -235,9 +235,8 @@ const SESSION_MINT_TIMEOUT_MS = 360000;
  *    shipped default: `docker-compose.yaml` pins
  *    `KEYCLOAK_ACCESS_TOKEN_LIFESPAN:-300` and `configs/keycloak/
  *    genie-realm.yaml` feeds it into the realm; `deploy/ansible` leaves
- *    its own variable optional, so a deployment CAN run another value,
- *    and the k1 spec sets the realm to 10 s for the length of its own
- *    run) starts when the token is ISSUED — during the OIDC code
+ *    its own variable optional, so a deployment CAN run another value)
+ *    starts when the token is ISSUED — during the OIDC code
  *    exchange inside the login redirect, BEFORE the mint returns. The
  *    window the sweep works in is therefore 300 s MINUS the gap between
  *    the issuance and the mint returning.

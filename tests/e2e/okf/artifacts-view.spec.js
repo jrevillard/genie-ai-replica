@@ -33,7 +33,7 @@
 //     --config=D:/ITU-Gitlab/playwright.config.js tests/e2e/okf/artifacts-view.spec.js
 
 const { test, expect } = require('@playwright/test');
-const { loginViaUI, BASE_URL, TEST_ADMIN_USER } = require('../helpers/chatbot');
+const { loginViaUI, BASE_URL, TEST_ADMIN_USER, LOGIN_BUDGET_TIMEOUT_MS } = require('../helpers/chatbot');
 const { okfEnabled, okfParkedReason } = require('../helpers/venue-profile');
 
 /** The artifacts the interception serves. Two of them: one complete, one
@@ -65,6 +65,10 @@ test.describe('the OKF artifacts view', () => {
   // The labels under test are translated (admin.documents.status*); pin the
   // locale so the exact wording is fixed.
   test.use({ locale: 'en-US' });
+
+  // The view opens behind a browser login — the budget is the login's
+  // own ceiling, derived once beside loginViaUI (#1798).
+  test.describe.configure({ timeout: LOGIN_BUDGET_TIMEOUT_MS });
 
   // The artifacts view is an OKF surface: a deployment whose OKF pillar is
   // parked does not render it, and this spec would fail looking for a

@@ -9,9 +9,11 @@ const {
   createUser,
   rotateRealmKeys,
   getRealmSettings,
-  updateRealmSettings,
   deleteUser,
-  enableDirectAccessGrants
+  enableDirectAccessGrants,
+  findClient,
+  createClient,
+  deleteClient
 } = require('./keycloak-admin');
 
 /**
@@ -1351,7 +1353,7 @@ test.describe('rotateRealmKeys rotates the RSA signing keys only', () => {
   });
 });
 
-test.describe('the realm settings helpers report a failure with the module verdict', () => {
+test.describe('getRealmSettings reports a failure with the module verdict', () => {
   test('a realm read the admin API refuses names the read', async () => {
     routes = [['GET', REALM_PATH, { status: 401, data: { error: 'HTTP 401 Unauthorized' } }]];
 
@@ -1378,49 +1380,6 @@ test.describe('the realm settings helpers report a failure with the module verdi
     expect(caught.message).toMatch(/Cannot reach the Keycloak admin API for the realm settings of genie/);
   });
 
-  test('a refused realm update names the update and carries the status', async () => {
-    routes = [['PUT', REALM_PATH, { status: 409, data: { errorMessage: 'Conflict' } }]];
-
-    const caught = await rejection(updateRealmSettings('tok', REALM, { accessTokenLifespan: '10' }));
-
-    expect(caught.httpStatus).toBe(409);
-    expect(caught.message).toMatch(/Failed to update the realm settings of genie: HTTP 409/);
-  });
-
-  test('a realm update the admin API fails with a 5xx is transient', async () => {
-    routes = [['PUT', REALM_PATH, { status: 503, data: null }]];
-
-    const caught = await rejection(updateRealmSettings('tok', REALM, { accessTokenLifespan: '10' }));
-
-    expect(caught.transient).toBe(true);
-    expect(caught.httpStatus).toBe(503);
-  });
-
-  test('a transport break on a realm update names the update', async () => {
-    routes = [['PUT', REALM_PATH, { throws: new Error('connection reset by peer') }]];
-
-    const caught = await rejection(updateRealmSettings('tok', REALM, { accessTokenLifespan: '10' }));
-
-    expect(caught.transient).toBe(true);
-    expect(caught.message).toMatch(/Cannot reach the Keycloak admin API for the realm settings update of genie/);
-  });
-
-  test('a refused deletion names the user and carries the status', async () => {
-    routes = [['DELETE', USER_PATH, { status: 500, data: null }]];
-
-    const caught = await rejection(deleteUser('tok', REALM, 'user-1'));
-
-    expect(caught.transient).toBe(true);
-    expect(caught.httpStatus).toBe(500);
-    expect(caught.message).toMatch(/Failed to delete user user-1: HTTP 500/);
-  });
-
-  test('a user that is already gone is the end state every caller wants', async () => {
-    routes = [['DELETE', USER_PATH, { status: 404, data: null }]];
-
-    await expect(deleteUser('tok', REALM, 'user-1')).resolves.toBeUndefined();
-  });
-
   test('an answered but unusable reply is not a transport break, and the verdict does not rewrite it', async () => {
     // The transport owns the error it throws: the verdict must not write
     // into it. A verdict that rewrote the transport's message would leave
@@ -1435,6 +1394,24 @@ test.describe('the realm settings helpers report a failure with the module verdi
     );
     expect(notJson.message).toContain('non-JSON body (HTTP 403)');
     expect(notJson.message).not.toContain('The Keycloak admin API did not answer');
+  });
+});
+
+test.describe('deleteUser reports a failure with the module verdict', () => {
+  test('a refused deletion names the user and carries the status', async () => {
+    routes = [['DELETE', USER_PATH, { status: 500, data: null }]];
+
+    const caught = await rejection(deleteUser('tok', REALM, 'user-1'));
+
+    expect(caught.transient).toBe(true);
+    expect(caught.httpStatus).toBe(500);
+    expect(caught.message).toMatch(/Failed to delete user user-1: HTTP 500/);
+  });
+
+  test('a user that is already gone is the end state every caller wants', async () => {
+    routes = [['DELETE', USER_PATH, { status: 404, data: null }]];
+
+    await expect(deleteUser('tok', REALM, 'user-1')).resolves.toBeUndefined();
   });
 });
 
@@ -1504,5 +1481,56 @@ test.describe('enableDirectAccessGrants reads the client list like every other r
     await enableDirectAccessGrants('tok', 'genie2', 'genie-app');
 
     expect(calls).toEqual([`GET /auth/admin/realms/genie2/clients?clientId=genie-app`]);
+  });
+});
+
+test.describe('the client helpers behind the K.2 expiry client', () => {
+  const CLIENT_LOOKUP = new RegExp(`/auth/admin/realms/${REALM}/clients\\?clientId=e2e-expiry$`);
+  const CLIENT_CREATE_PATH = new RegExp(`/auth/admin/realms/${REALM}/clients$`);
+  const CLIENT_PATH = new RegExp(`/auth/admin/realms/${REALM}/clients/client-1$`);
+
+  test('findClient returns the representation on a hit and null on a miss', async () => {
+    routes = [['GET', CLIENT_LOOKUP, { status: 200, data: [{ id: 'client-1', clientId: 'e2e-expiry' }] }]];
+    const found = await findClient('tok', REALM, 'e2e-expiry');
+    expect(found.id).toBe('client-1');
+
+    routes = [['GET', CLIENT_LOOKUP, { status: 200, data: [] }]];
+    expect(await findClient('tok', REALM, 'e2e-expiry')).toBeNull();
+  });
+
+  test('createClient posts the representation verbatim and accepts 201', async () => {
+    routes = [['POST', CLIENT_CREATE_PATH, { status: 201, data: null }]];
+    const representation = {
+      clientId: 'e2e-expiry',
+      secret: 's3cret',
+      serviceAccountsEnabled: true,
+      attributes: { 'access.token.lifespan': '10' }
+    };
+    await createClient('tok', REALM, representation);
+    expect(calls).toEqual([`POST /auth/admin/realms/${REALM}/clients`]);
+    expect(bodies[0]).toEqual(representation);
+  });
+
+  test('createClient names the refused create in its verdict', async () => {
+    routes = [['POST', CLIENT_CREATE_PATH, { status: 409, data: null }]];
+    const err = await rejection(createClient('tok', REALM, { clientId: 'e2e-expiry' }));
+    expect(err.message).toContain('Failed to create client e2e-expiry');
+    expect(err.message).toContain('HTTP 409');
+  });
+
+  test('deleteClient accepts 204 and tolerates 404', async () => {
+    routes = [['DELETE', CLIENT_PATH, { status: 204, data: null }]];
+    await deleteClient('tok', REALM, 'client-1', 'e2e-expiry');
+    expect(calls).toEqual([`DELETE /auth/admin/realms/${REALM}/clients/client-1`]);
+
+    routes = [['DELETE', CLIENT_PATH, { status: 404, data: null }]];
+    await deleteClient('tok', REALM, 'client-1', 'e2e-expiry');
+  });
+
+  test('deleteClient names the refused delete in its verdict', async () => {
+    routes = [['DELETE', CLIENT_PATH, { status: 500, data: null }]];
+    const err = await rejection(deleteClient('tok', REALM, 'client-1', 'e2e-expiry'));
+    expect(err.message).toContain('Failed to delete client e2e-expiry');
+    expect(err.message).toContain('HTTP 500');
   });
 });

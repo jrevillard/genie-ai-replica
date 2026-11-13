@@ -41,7 +41,7 @@
 // evaluate rather than in two.
 
 const { test, expect } = require('@playwright/test');
-const { loginViaUI, navigateToChatbot } = require('../helpers/chatbot');
+const { loginViaUI, navigateToChatbot, LOGIN_BUDGET_TIMEOUT_MS } = require('../helpers/chatbot');
 const { openWelcomeScreen, LAYER_STATE_BIND } = require('../helpers/welcome');
 const {
   waitForWidthSettled,
@@ -178,6 +178,10 @@ function assertNoOverlap(m) {
 }
 
 test.describe('Responsive layout (quick-help grid + sidebar policy)', () => {
+  // The beforeEach logs in through the browser — the budget is the
+  // login's own ceiling, derived once beside loginViaUI (#1798).
+  test.describe.configure({ timeout: LOGIN_BUDGET_TIMEOUT_MS });
+
   test.beforeEach(async ({ page }) => {
     await loginViaUI(page);
     // Force the left sidebar open at narrow viewports too — the
@@ -287,6 +291,10 @@ async function readWelcomePanel(page) {
 }
 
 test.describe('Welcome panel does not scroll horizontally', () => {
+  // openWelcomeScreen logs in through the browser — the budget is the
+  // login's own ceiling, derived once beside loginViaUI (#1798).
+  test.describe.configure({ timeout: LOGIN_BUDGET_TIMEOUT_MS });
+
   for (const vp of WELCOME_OVERFLOW_VIEWPORTS) {
     for (const theme of WELCOME_OVERFLOW_THEMES) {
       test(`${vp}px @${theme}: overlay overflow-x is 'hidden' or 'clip', and the wave adds no width`, async ({

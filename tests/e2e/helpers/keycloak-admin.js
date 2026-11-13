@@ -947,27 +947,6 @@ async function getRealmSettings(adminToken, realm) {
 }
 
 /**
- * Update realm settings (partial update).
- * @param {string} adminToken - Keycloak admin access token
- * @param {string} realm - Realm name
- * @param {object} settings - Settings to update (e.g., { accessTokenLifespan: '10' })
- * @returns {Promise<void>}
- */
-async function updateRealmSettings(adminToken, realm, settings) {
-  const res = await adminRequest(
-    'PUT',
-    `/auth/admin/realms/${realm}`,
-    adminToken,
-    `the realm settings update of ${realm}`,
-    settings
-  );
-
-  if (res.status !== 204) {
-    failWithStatus(`Failed to update the realm settings of ${realm}: HTTP ${res.status} ${bodyText(res)}`, res.status);
-  }
-}
-
-/**
  * Delete a user from a realm.
  * @param {string} adminToken - Keycloak admin access token
  * @param {string} realm - Realm name
@@ -991,6 +970,76 @@ async function deleteUser(adminToken, realm, userId) {
 }
 
 /**
+ * The clients of a realm matching ONE client id exactly.
+ * @param {string} adminToken - Keycloak admin access token
+ * @param {string} realm - Realm name
+ * @param {string} clientId - Exact client id (e.g. 'e2e-k1-token-expiry')
+ * @returns {Promise<object|null>} The client representation, or null when
+ *   the realm carries no client of that id
+ */
+async function findClient(adminToken, realm, clientId) {
+  const res = await readAdminApi(
+    adminToken,
+    `/auth/admin/realms/${realm}/clients?clientId=${encodeURIComponent(clientId)}`,
+    `the client ${clientId} of ${realm}`,
+    { shape: ARRAY_SHAPE }
+  );
+  return res.data.length > 0 ? res.data[0] : null;
+}
+
+/**
+ * Create a client from a full representation.
+ * @param {string} adminToken - Keycloak admin access token
+ * @param {string} realm - Realm name
+ * @param {object} representation - The client representation (must carry
+ *   clientId); its `secret`, when present, becomes the client's secret
+ *   verbatim
+ * @returns {Promise<void>}
+ */
+async function createClient(adminToken, realm, representation) {
+  const res = await adminRequest(
+    'POST',
+    `/auth/admin/realms/${realm}/clients`,
+    adminToken,
+    `the creation of client ${representation.clientId}`,
+    representation
+  );
+
+  if (res.status !== 201) {
+    failWithStatus(
+      `Failed to create client ${representation.clientId}: HTTP ${res.status} ${bodyText(res)}`,
+      res.status
+    );
+  }
+}
+
+/**
+ * Delete a client.
+ * @param {string} adminToken - Keycloak admin access token
+ * @param {string} realm - Realm name
+ * @param {string} clientUuid - The client's UUID (the representation's id)
+ * @param {string} clientId - The client id, for the verdict's wording
+ * @returns {Promise<void>}
+ */
+async function deleteClient(adminToken, realm, clientUuid, clientId) {
+  const res = await adminRequest(
+    'DELETE',
+    `/auth/admin/realms/${realm}/clients/${clientUuid}`,
+    adminToken,
+    `the deletion of client ${clientId || clientUuid}`
+  );
+
+  // 404 means the client is already gone — that IS the end state every
+  // caller wants (no test client left behind), same contract as deleteUser.
+  if (res.status !== 204 && res.status !== 404) {
+    failWithStatus(
+      `Failed to delete client ${clientId || clientUuid}: HTTP ${res.status} ${bodyText(res)}`,
+      res.status
+    );
+  }
+}
+
+/**
  * Enable ROPC (direct access grants) on a client, preserving the rest of
  * its representation. The primary `genie` realm refuses ROPC by design —
  * only ever call this for a test-only realm (e.g. `genie2`) whose specs
@@ -1005,20 +1054,14 @@ async function enableDirectAccessGrants(adminToken, realm, clientId) {
     throw new Error('enableDirectAccessGrants must never target the primary realm — ROPC is disabled there by design');
   }
 
-  const searchRes = await readAdminApi(
-    adminToken,
-    `/auth/admin/realms/${realm}/clients?clientId=${encodeURIComponent(clientId)}`,
-    `the client ${clientId} of ${realm}`,
-    { shape: ARRAY_SHAPE }
-  );
-
-  // An empty list is the admin API's way of saying the realm carries no
-  // client of that name — not an outage, and not a broken answer.
-  if (searchRes.data.length === 0) {
+  // One exact-match client search, owned by findClient: an absent client
+  // resolves null here (the admin API's way of saying the realm carries
+  // no client of that name — not an outage, not a broken answer).
+  const client = await findClient(adminToken, realm, clientId);
+  if (!client) {
     throw new Error(`Client ${clientId} not found in realm ${realm}`);
   }
 
-  const client = searchRes.data[0];
   if (client.directAccessGrantsEnabled) return;
 
   const res = await adminRequest(
@@ -1046,7 +1089,10 @@ module.exports = {
   effectiveRealmRoles,
   rotateRealmKeys,
   getRealmSettings,
-  updateRealmSettings,
   deleteUser,
-  enableDirectAccessGrants
+  enableDirectAccessGrants,
+  findUsers,
+  findClient,
+  createClient,
+  deleteClient
 };

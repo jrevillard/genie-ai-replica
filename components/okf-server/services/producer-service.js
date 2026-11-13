@@ -27,7 +27,7 @@ const { isArangoNotFound } = require('./arango-errors');
 const { ingestRepoConcepts } = require('./ingest-service');
 const { withSpan } = require('../shared-lib/tracing');
 const crawlConversion = require('./crawl-conversion-service');
-const { fetchDocMeta } = require('./doc-repo-client');
+const { fetchDocMeta, docRepoFileFields } = require('./doc-repo-client');
 const { convertXlsx, slugify } = require('./converters/xlsxSheetConverter');
 // FR-42 for CSV (David 2026-10-12): the SAME dictionary + row-group shape as
 // xlsx, plus LLM topics summarised from the dictionary columns. Async (one
@@ -51,17 +51,152 @@ const MIN_SEGMENT_CHARS = 200; // smaller sections merge into the previous one
 // requires the crawl service (the crawl service must NOT require the
 // producer — that direction is circular), so this is the one place both
 // paths can share. It matters: a crawl conversion and a documents conversion
-// write the SAME repo.conversion record (the crawl merges its patch, the
-// producer replaces it), so running both on one repo leaves a record that
-// describes neither run (issue #1684).
+// write the SAME repo.conversion record (the crawl MERGES its patch, and so
+// does the producer's UPDATE — recursively on ArangoDB 3.12), so running both
+// on one repo leaves a record that describes neither run (issue #1684).
 //
 // The RESERVATION is the guard: the entry is claimed synchronously, BEFORE
 // the awaited stages below, so a second start for the same repo cannot slip
 // through a check-then-set window and import the corpus twice.
 const live = crawlConversion.live;
 
+// ── the CONTENT claim (issue #1744) ─────────────────────────────────────────
+// The DUPLICATE_CONTENT gate READS what another repository already holds, so
+// it is a check-then-act: the importing run writes its own source_documents
+// only LATER (stampSources), so two runs importing the same corpus into two
+// DIFFERENT repositories both read the pre-stamp state and both passed the
+// gate — the same content landed in two live repositories. The per-repo
+// reservation above does not cover it (different repo ids).
+//
+// The claim is what closes that window: the candidate files and their
+// content hashes are claimed SYNCHRONOUSLY (check and set with no await in
+// between, so a second run cannot slip through the gap) BEFORE the duplicate
+// query, and released once the sources are stamped — from then on the
+// stamped source_documents are what the gate reads.
+//
+// In-process, like the conversion registry above and the job registry
+// (job-registry.js): okf-server runs as a single replica (compose: one
+// container; swarm: replicas=${OKF_ENABLED:-0}), so the registry spans
+// every import this service can run.
+const contentClaims = new Map(); // claim key -> owning repo_id
+
+/**
+ * Claim the candidate files + their content hashes for one import.
+ * Synchronous on purpose: the check and the set must not be separated by an
+ * await, or a concurrent run could slip in between and claim the same
+ * content.
+ *
+ * The rule matches the durable gate's: the same content may not back a
+ * DIFFERENT live repository. The target repository is exempt (its own
+ * content is its own), exactly as the gate exempts it — so the two guards
+ * agree on what "the same content" means.
+ *
+ * @param {string} repoId the importing repository
+ * @param {'file'|'hash'} kind the key namespace
+ * @param {string[]} values the candidate file ids or content hashes
+ * @returns {string[]} the claim keys (handed back to releaseContent)
+ */
+function claimContent(repoId, kind, values) {
+  const keys = values.map((value) => `${kind}:${value}`);
+  for (const key of keys) {
+    const owner = contentClaims.get(key);
+    if (owner !== undefined && owner !== repoId) {
+      logger.warn('Content claim refused — the same content is in flight into another repository', {
+        repo_id: repoId,
+        claimed_by: owner
+      });
+      // Its own code: DUPLICATE_CONTENT means "already imported — retract or
+      // delete that repository", and that remedy is WRONG for a run that is
+      // still in flight. The message says "in flight" so the web client
+      // shows its wait-for-the-run advice instead.
+      throw Object.assign(
+        new Error('the same content is in flight into another OKF repository — wait for that import to finish'),
+        { code: 'DUPLICATE_CONTENT_IN_FLIGHT', status: 409 }
+      );
+    }
+  }
+  for (const key of keys) contentClaims.set(key, repoId);
+  return keys;
+}
+
+/**
+ * Drop every claim. TEST SUITE ONLY (the registry is private): a test that
+ * aborts between a claim and its release would otherwise leave the content
+ * claimed for the rest of the process. The `__` prefix marks the export as
+ * a test seam, not API.
+ */
+function resetContentClaims() {
+  contentClaims.clear();
+}
+
+/**
+ * Release a claim — ONLY the owner's claim: a late release must never drop
+ * another import's claim.
+ * @param {string} repoId the importing repository
+ * @param {string[]|null} keys the keys returned by claimContent
+ */
+function releaseContent(repoId, keys) {
+  if (!keys) return;
+  for (const key of keys) {
+    if (contentClaims.get(key) === repoId) contentClaims.delete(key);
+  }
+}
+
 async function getDb() {
   return dbService.getConnection();
+}
+
+/**
+ * Write the conversion record and hand back the record it REPLACED (AQL
+ * RETURN OLD): the snapshot a refused start restores comes from the write
+ * itself — no extra read, and exactly the record at the moment we took over.
+ * (An ArangoDB UPDATE MERGES the nested `conversion` object by default — the
+ * record is a SHARED slot: the crawl path and the zip path write their own
+ * fields into it — so a write carries the fields it sets, not a replacement
+ * of the whole record.)
+ * @param {string} repoId
+ * @param {object} patch the conversion record to write
+ * @returns {Promise<object|null>} the previous record, or null when there was none
+ */
+async function patchConversionReturningOld(repoId, patch) {
+  const db = await getDb();
+  const cursor = await db.query(
+    `LET doc = DOCUMENT(${COLLECTION}, @repo_id)
+     FILTER doc != null
+     UPDATE doc WITH { conversion: @patch, updated_at: @now } IN ${COLLECTION}
+     RETURN OLD.conversion`,
+    { repo_id: repoId, patch, now: new Date().toISOString() }
+  );
+  const rows = await cursor.all();
+  const previous = rows && rows[0];
+  return previous === undefined ? null : previous;
+}
+
+/**
+ * Close a refused start — ONE atomic statement: the record is written only
+ * while it is still THIS run's ('queued' with this run's started_at). The
+ * conversion record is a SHARED slot — the zip-ingest path (which takes no
+ * reservation) writes its own fields into it — so a read-then-write would
+ * clobber a writer that slipped in between.
+ * @param {string} repoId
+ * @param {string} startedAt the started_at of the run that owns the record
+ * @param {object} patch the record to write
+ * @param {boolean|null} restore replace the conversion object rather than merging it (null merges)
+ * @returns {Promise<boolean>} true when the record was written
+ */
+async function closeConversionIfOwned(repoId, startedAt, patch, restore) {
+  const db = await getDb();
+  const cursor = await db.query(
+    `LET doc = DOCUMENT(${COLLECTION}, @repo_id)
+     FILTER doc != null
+     FILTER doc.conversion != null && doc.conversion.status == 'queued' && doc.conversion.started_at == @startedAt
+     UPDATE doc WITH { conversion: @patch, updated_at: @now } IN ${COLLECTION}
+     OPTIONS { mergeObjects: @mergeObjects }
+     RETURN 1`,
+    { repo_id: repoId, patch, now: new Date().toISOString(), startedAt, mergeObjects: !restore }
+  );
+  const rows = await cursor.all();
+  return !!(rows && rows.length);
 }
 
 async function patchConversion(repoId, patch) {
@@ -95,17 +230,128 @@ async function sourceMeta(cache, file_id) {
   return cached || (await fetchDocMeta(file_id));
 }
 
-/** Stamp the repo doc with source_documents[] (kind 'document' — never collides
- * with the crawl 'source_document' stamp) and stamp okf_repo_id onto each
- * source file's doc-repo metadata (Story 3.6's additive field) so the UI can
- * gate "already in an OKF repo". Stamps are fail-soft: the conversion reports
- * them, it does not die for them. metaByKey carries the import pre-flight's
- * per-file doc-repo metadata, suppressing the per-file GET; when it does not
- * carry the file, the GET remains the fallback. The cache is read with an
- * OWN-property lookup and defaults to a null-prototype object, so a
- * prototype-named file id can never resolve to an inherited value (issue
- * #1685). */
-async function stampSources(repoId, fileIds, metaByKey = Object.create(null)) {
+/**
+ * Record the repository's source documents — the DURABLE record of what this
+ * repository backs. The DUPLICATE_CONTENT gate (issue #1744) and the
+ * SOURCES-BUSY lifecycle gate read it, so a FAILED write is FATAL: the
+ * repository does not own its sources as far as every other guard is
+ * concerned, and the import must not report success. It is written FIRST, so
+ * a failure leaves nothing stamped anywhere: the per-file doc-repo stamps
+ * would otherwise leave the files owned by a repository that does not list
+ * them, and no gate would see the content again. (A missing repository
+ * DOCUMENT is a different case: the write matches no row, and the import
+ * fails rather than stamping files for a repository that does not exist.)
+ *
+ * The list is UPSERTED per file: an entry for a file this import carries is
+ * replaced, the entries of the OTHER files stay. A second import into the
+ * same repository must not erase the first one's sources — the gate reads
+ * this list, so an erased hash would let the same content land in another
+ * repository.
+ *
+ * RETENTION: the list only grows — an import never forgets what the
+ * repository backed, so the entries stay listed (with their content hash)
+ * until the repository is deleted. What the GATE consults is the OTHER
+ * repository's lifecycle, not these entries: a retracted repository does not
+ * block a duplicate import (the content is out of service), while a live one
+ * keeps its sources listed and blocking.
+ */
+async function recordSourceDocuments(repoId, fileIds, metaByKey = Object.create(null)) {
+  const db = await getDb();
+  const metas = [];
+  for (const file_id of fileIds) {
+    let meta = { file_id, file_name: null, file_type: null, size_bytes: null, uploaded_date: null };
+    try {
+      const f = await sourceMeta(metaByKey, file_id);
+      meta = {
+        file_id,
+        ...docRepoFileFields(f),
+        file_hash: f.file_hash || null, // content key for the DUPLICATE_CONTENT gate
+        dataprep_status: (f.dataprep && f.dataprep.status) || null,
+        is_bundle: f.is_bundle === true
+      };
+    } catch (err) {
+      logger.warn('Source-doc meta fetch failed (non-fatal)', { file_id, error: err.message });
+    }
+    metas.push(meta);
+  }
+  try {
+    const written = await db.query(
+      `LET doc = DOCUMENT(${COLLECTION}, @repo_id)
+       FILTER doc != null
+       LET kept = (
+         FOR s IN (doc.source_documents || [])
+           FILTER s.file_id NOT IN @file_ids
+           RETURN s
+       )
+       UPDATE doc WITH {
+         source_documents: APPEND(kept, @docs),
+         updated_at: @now
+       } IN ${COLLECTION}
+       RETURN 1`,
+      {
+        repo_id: repoId,
+        now: new Date().toISOString(),
+        file_ids: fileIds,
+        docs: metas.map((m) => ({
+          kind: 'document',
+          file_id: m.file_id,
+          file_name: m.file_name,
+          file_type: m.file_type,
+          size_bytes: m.size_bytes,
+          uploaded_date: m.uploaded_date,
+          file_hash: m.file_hash || null,
+          import_state: 'imported',
+          retracted_at: null
+        }))
+      }
+    );
+    // The write updates the repository document when it exists. Zero rows
+    // means the document is gone (the repository was deleted mid-import):
+    // nothing was recorded, and the doc-repo stamps would then point at a
+    // repository that does not exist.
+    const rows = await written.all();
+    if (!rows || rows.length === 0) {
+      // The repository document is gone: nothing was recorded, and the
+      // per-file stamps would point at a repository that does not exist.
+      logger.error('source_documents record was not written — the repository document is gone', {
+        repo_id: repoId
+      });
+      throw Object.assign(new Error('the repository no longer exists — the import was not completed'), {
+        code: 'SOURCE_REPO_VANISHED',
+        status: 404
+      });
+    }
+  } catch (err) {
+    // The vanished-repository error carries its own message — it is not a
+    // write failure, and the client must be able to tell them apart.
+    if (err && (err.code === 'SOURCE_STAMP_FAILED' || err.code === 'SOURCE_REPO_VANISHED')) throw err;
+    // The internal reason stays in the log — the client gets a fixed sentence.
+    logger.error('source_documents record could not be written — the import was not completed', {
+      repo_id: repoId,
+      error: err.message
+    });
+    throw Object.assign(
+      new Error("the repository's source documents could not be recorded — the import was not completed"),
+      { code: 'SOURCE_STAMP_FAILED', status: 500 }
+    );
+  }
+  return metas;
+}
+
+/**
+ * Stamp okf_repo_id onto each source file's doc-repo metadata (Story 3.6's
+ * additive field) so the UI can gate "already in an OKF repo". These stamps
+ * are FAIL-SOFT: the conversion reports them, it does not die for them.
+ * metaByKey carries the import pre-flight's per-file doc-repo metadata,
+ * suppressing the per-file GET; when it does not carry the file, the GET
+ * remains the fallback. The cache is read with an OWN-property lookup and
+ * defaults to a null-prototype object, so a prototype-named file id can
+ * never resolve to an inherited value (issue #1685).
+ *
+ * @param {string} repoId
+ * @param {object[]} metas the recorded source entries
+ */
+async function stampSourceFiles(repoId, metas) {
   const db = await getDb();
   // D4 (W4 story 2, 2026-11-04): stamp the repo's 6-1c restriction beside the
   // repo id so doc-repo's serve paths can refuse locally (no okf-server
@@ -123,35 +369,17 @@ async function stampSources(repoId, fileIds, metaByKey = Object.create(null)) {
       });
     }
   }
-  const metas = [];
   let stampFailures = 0;
-  for (const file_id of fileIds) {
-    let meta = { file_id, file_name: null, file_type: null, size_bytes: null, uploaded_date: null };
-    try {
-      const f = await sourceMeta(metaByKey, file_id);
-      meta = {
-        file_id,
-        file_name: f.file_name || null,
-        file_type: f.file_type || f.type || f.mimetype || null,
-        size_bytes: Number.isFinite(f.size) ? f.size : Number.isFinite(f.size_bytes) ? f.size_bytes : null,
-        uploaded_date: f.uploaded_date || null,
-        file_hash: f.file_hash || null, // content key for the DUPLICATE_CONTENT gate
-        dataprep_status: (f.dataprep && f.dataprep.status) || null,
-        is_bundle: f.is_bundle === true
-      };
-    } catch (err) {
-      logger.warn('Source-doc meta fetch failed (non-fatal)', { file_id, error: err.message });
-    }
-    metas.push(meta);
+  for (const meta of metas) {
     try {
       await authedAxios.patch(
-        `${config.documentRepository.url}/api/files/${encodeURIComponent(file_id)}`,
+        `${config.documentRepository.url}/api/files/${encodeURIComponent(meta.file_id)}`,
         { okf_repo_id: repoId, okf_restricted: restricted },
         { timeout: 10000 }
       );
     } catch (err) {
       stampFailures += 1;
-      logger.warn('okf_repo_id stamp failed (non-fatal)', { file_id, error: err.message });
+      logger.warn('okf_repo_id stamp failed (non-fatal)', { file_id: meta.file_id, error: err.message });
     }
   }
   // A stamp failure is per-file and non-fatal (the import must complete), but a
@@ -161,42 +389,22 @@ async function stampSources(repoId, fileIds, metaByKey = Object.create(null)) {
   // the stamp is sent with the okf-service token). Say so ONCE, loudly, instead
   // of one WARN per file that reads as noise nobody can aggregate.
   if (stampFailures > 0) {
-    logger[stampFailures === fileIds.length ? 'error' : 'warn'](
-      `okf_repo_id stamp: ${stampFailures}/${fileIds.length} source file(s) NOT stamped — ` +
-        (stampFailures === fileIds.length
+    logger[stampFailures === metas.length ? 'error' : 'warn'](
+      `okf_repo_id stamp: ${stampFailures}/${metas.length} source file(s) NOT stamped — ` +
+        (stampFailures === metas.length
           ? 'EVERY file failed, so this repository is not protected against a duplicate import. ' +
             'Check that doc-repo PATCH /api/files/:id permits the okf-service role AND its update schema accepts okf_repo_id.'
           : 'some files are not protected against a duplicate import.'),
-      { repo_id: repoId, stamp_failures: stampFailures, files: fileIds.length }
+      { repo_id: repoId, stamp_failures: stampFailures, files: metas.length }
     );
   }
-  try {
-    await db.query(
-      `LET doc = DOCUMENT(${COLLECTION}, @repo_id)
-       FILTER doc != null
-       UPDATE doc WITH {
-         source_documents: @docs,
-         updated_at: @now
-       } IN ${COLLECTION}`,
-      {
-        repo_id: repoId,
-        now: new Date().toISOString(),
-        docs: metas.map((m) => ({
-          kind: 'document',
-          file_id: m.file_id,
-          file_name: m.file_name,
-          file_type: m.file_type,
-          size_bytes: m.size_bytes,
-          uploaded_date: m.uploaded_date,
-          file_hash: m.file_hash || null,
-          import_state: 'imported',
-          retracted_at: null
-        }))
-      }
-    );
-  } catch (err) {
-    logger.warn('source_documents stamp failed (non-fatal)', { repo_id: repoId, error: err.message });
-  }
+}
+
+/** Stamp the repository's sources: the durable record first (fatal), then
+ * the per-file document-repository stamps (fail-soft). */
+async function stampSources(repoId, fileIds, metaByKey = Object.create(null)) {
+  const metas = await recordSourceDocuments(repoId, fileIds, metaByKey);
+  await stampSourceFiles(repoId, metas);
   return metas;
 }
 
@@ -204,8 +412,9 @@ async function stampSources(repoId, fileIds, metaByKey = Object.create(null)) {
  * D4 (W4 story 2, 2026-11-04): re-propagate the repo's restriction snapshot
  * onto every stamped source file AFTER the import — the Access-panel toggle
  * (PUT /:repo_id/access) calls this on every flip so a repo restricted mid-
- * life does not leave its sources downloadable. Best-effort per file (same
- * contract as stampSources): the toggle itself has already succeeded and a
+ * life does not leave its sources downloadable. Best-effort per file (the
+ * per-file half of stampSources' contract): the toggle itself has already
+ * succeeded and a
  * doc-repo hiccup must never undo it — the caller audits the result so a
  * stale snapshot is VISIBLE (named drift risk of the snapshot mechanism).
  * A source doc that is already gone (repo delete hard-purges backing files)
@@ -616,7 +825,10 @@ async function runDocumentsConversion(job) {
         // per-file catch (every file reported CONVERSION_FAILED).
         const f = await sourceMeta(job.source_metas, file_id);
         meta.file_name = f.file_name || file_id;
-        meta.file_type = f.file_type || f.type || f.mimetype || null;
+        // The doc-repo field coercion is SHARED (doc-repo-client): the
+        // importer, the crawl stamper and this conversion all read the same
+        // doc-repo file, and a per-caller copy of the mapping drifts.
+        meta.file_type = docRepoFileFields(f).file_type;
         const size = Number.isFinite(f.size) ? f.size : null;
         if (size && size > cap) {
           throw Object.assign(new Error(`document too large (${size} > ${cap}) — raise OKF_MAX_CRAWL_SOURCE_MB`), {
@@ -849,6 +1061,7 @@ async function runDocumentsConversion(job) {
       stage: 'done',
       files_done: filesDone,
       files_total: file_ids.length,
+      per_file: perFile.slice(),
       concepts_done: allDrafts.length,
       batches_done: batches,
       links: linkCount,
@@ -874,13 +1087,7 @@ async function runDocumentsConversion(job) {
     );
   } catch (err) {
     logger.error(`Documents conversion FAILED repo=${repo_id} code=${err.code || '-'}: ${err.message}`);
-    await patchConversion(repo_id, {
-      status: 'failed',
-      error: err.message,
-      code: err.code || 'CONVERSION_FAILED',
-      per_file: perFile.slice(),
-      finished_at: new Date().toISOString()
-    });
+    await patchConversion(repo_id, crawlConversion.failedConversionRecord(err, { per_file: perFile.slice() }));
     throw err;
   }
 }
@@ -902,6 +1109,20 @@ async function startDocumentsConversion({ repo_id, file_ids, requested_name, cla
     throw Object.assign(new Error('file_ids contains duplicates'), { code: 'VALIDATION_ERROR', status: 400 });
   }
 
+  // ONE conversion per repo at a time, whichever path started it — claimed
+  // synchronously by the one shared guard implementation (issue #1684), so
+  // the repo is invisible to a second start for the whole of the awaited
+  // window below (the pre-flight + the queued patch + the per-file source
+  // stamping).
+  //
+  // The claim is taken BEFORE the import pre-flight (issue #1775): the
+  // pre-flight costs up to OKF_MAX_IMPORT_FILES doc-repo metadata GETs plus
+  // the duplicate query, and a racing start used to pay all of it before it
+  // was refused. The cheap shape validations above still come first, so a
+  // malformed request keeps its own VALIDATION_ERROR.
+  await crawlConversion.sweepInterruptedOnce();
+  const settleInFlight = crawlConversion.reserveConversion(repo_id);
+
   // Idempotency contract (story 7.7): a document stamped by a DIFFERENT,
   // still-existing OKF repository is a 409 — the UI badge is advisory only.
   // A stamp whose repo no longer exists is STALE and self-heals (restamped
@@ -910,78 +1131,12 @@ async function startDocumentsConversion({ repo_id, file_ids, requested_name, cla
   // CONTENT in a DIFFERENT file — doc-repo stores every file's SHA-256, and
   // a candidate whose hash already backs a LIVE repository is refused, so
   // re-uploaded copies of one corpus can never fork the knowledge base.
-  const db = await getDb();
-  const candidateHashes = [];
+  //
   // ONE metadata fetch per file: this pre-flight read is the import's single
   // doc-repo metadata round trip — it rides on to stamping (metaByKey) and
   // the conversion (job.source_metas). The cache is null-prototype: a plain
   // object resolves a prototype-named file id to an INHERITED value (issue
   // #1685).
-  const metaByKey = Object.create(null);
-  for (const file_id of file_ids) {
-    let meta;
-    try {
-      meta = await fetchDocMeta(file_id);
-      metaByKey[file_id] = meta;
-    } catch (err) {
-      throw Object.assign(
-        new Error(`source document ${file_id} could not be verified in the document repository: ${err.message}`),
-        { code: 'SOURCE_UNVERIFIABLE', status: 502 }
-      );
-    }
-    const stamped = meta && meta.okf_repo_id;
-    if (stamped && stamped !== repo_id) {
-      let exists;
-      try {
-        exists = !!(await db.collection(COLLECTION).document(stamped));
-      } catch {
-        exists = false; // tombstoned/gone → stale stamp, import proceeds
-      }
-      if (exists) {
-        throw Object.assign(
-          new Error(`document "${meta.file_name || file_id}" is already the source of OKF repository ${stamped}`),
-          { code: 'DOCUMENT_IN_ANOTHER_REPO', status: 409 }
-        );
-      }
-    }
-    if (meta && meta.file_hash) {
-      candidateHashes.push({ file_id, hash: meta.file_hash, name: meta.file_name || file_id });
-    }
-  }
-  if (candidateHashes.length > 0) {
-    const dupRows = await db.query(
-      `FOR r IN ${COLLECTION}
-         FILTER r.deleted_at == null AND r.repo_id != @rid
-         LET dupFiles = (
-           FOR s IN (r.source_documents || [])
-             FILTER s.file_hash != null AND POSITION(@hashes, s.file_hash)
-             RETURN {file_id: s.file_id, file_name: s.file_name}
-         )
-         FILTER LENGTH(dupFiles) > 0
-         SORT r.created_at
-         LIMIT 1
-         RETURN {repo_id: r.repo_id, name: r.name, dupFiles}`,
-      { rid: repo_id, hashes: candidateHashes.map((c) => c.hash) }
-    );
-    const dup = (await dupRows.all())[0];
-    if (dup) {
-      const names = dup.dupFiles.map((d) => d.file_name || d.file_id).join(', ');
-      throw Object.assign(
-        new Error(
-          `the same content is already imported into OKF repository "${dup.name}" (files: ${names}) — retract or delete that repository before importing these documents`
-        ),
-        { code: 'DUPLICATE_CONTENT', status: 409 }
-      );
-    }
-  }
-
-  await crawlConversion.sweepInterruptedOnce();
-  // ONE conversion per repo at a time, whichever path started it — claimed
-  // synchronously by the one shared guard implementation (issue #1684), so
-  // the repo is invisible to a second start for the whole of the awaited
-  // window below (the queued patch + the per-file source stamping).
-  const settleInFlight = crawlConversion.reserveConversion(repo_id);
-
   const queued = {
     status: 'queued',
     stage: 'queued',
@@ -990,37 +1145,167 @@ async function startDocumentsConversion({ repo_id, file_ids, requested_name, cla
     error: null,
     started_at: new Date().toISOString()
   };
+  const metaByKey = Object.create(null);
+  // The content claim (issue #1744) — released on every path below.
+  let claimed = [];
+  // The conversion record as it stands BEFORE this run writes anything (the
+  // queued write below hands it back): a refused start must leave the
+  // repository as it found it.
+  let previous = null;
   try {
-    await patchConversion(repo_id, queued);
+    // The conversion record is written FIRST, so the repository SHOWS the run
+    // while the pre-flight works: the reservation now spans the pre-flight,
+    // and a lock with no visible owner is a lock nobody can explain (#1775).
+    // The write hands back the record it replaced: a refused start restores
+    // exactly that one (see the catch below).
+    previous = await patchConversionReturningOld(repo_id, queued);
+
+    // The FILES are claimed BEFORE the pre-flight: the claim is what closes
+    // the duplicate-content window, and claiming the files first also keeps
+    // a refused RETRY (the web client retries an in-flight answer) from
+    // paying the pre-flight again.
+    claimed = claimContent(repo_id, 'file', file_ids);
+
+    const db = await getDb();
+    const candidateHashes = []; // the content hashes — the gate matches on them
+    // The stamped-repository existence check is MEMOIZED: every candidate
+    // file carries the same stamp when a corpus moves from one repository to
+    // another, and the check is a database read per file.
+    const stampedRepoExists = new Map();
+    for (const file_id of file_ids) {
+      let meta;
+      try {
+        meta = await fetchDocMeta(file_id);
+        metaByKey[file_id] = meta;
+      } catch (err) {
+        // The internal reason stays in the log — the client gets a fixed
+        // sentence naming the document, not the upstream error text.
+        logger.warn('Source document could not be verified in the document repository', {
+          repo_id,
+          file_id,
+          error: err.message
+        });
+        throw Object.assign(new Error(`source document ${file_id} could not be verified in the document repository`), {
+          code: 'SOURCE_UNVERIFIABLE',
+          status: 502
+        });
+      }
+      const stamped = meta && meta.okf_repo_id;
+      if (stamped && stamped !== repo_id) {
+        let exists = stampedRepoExists.get(stamped);
+        if (exists === undefined) {
+          try {
+            exists = !!(await db.collection(COLLECTION).document(stamped));
+          } catch {
+            exists = false; // tombstoned/gone → stale stamp, import proceeds
+          }
+          stampedRepoExists.set(stamped, exists);
+        }
+        if (exists) {
+          throw Object.assign(
+            new Error(`document "${meta.file_name || file_id}" is already the source of OKF repository ${stamped}`),
+            { code: 'DOCUMENT_IN_ANOTHER_REPO', status: 409 }
+          );
+        }
+      }
+      if (meta && meta.file_hash) {
+        candidateHashes.push(meta.file_hash);
+      }
+    }
+    // The CONTENT is claimed too, now that the hashes are known (issue
+    // #1744): the duplicate query reads the OTHER repositories' stamped
+    // sources, and this run's own stamp only lands later — so without the
+    // claim two concurrent runs into two DIFFERENT repositories both pass the
+    // query and the same content ends up in two live repositories.
+    claimed = claimed.concat(claimContent(repo_id, 'hash', candidateHashes));
+    if (candidateHashes.length > 0) {
+      const dupRows = await db.query(
+        // "LIVE" here means "SERVING this content": a RETRACTED repository is
+        // out of service, so its content may be imported elsewhere. The
+        // file-deletion check (backing-file-service) asks a different question
+        // — "does another repository still OWN this file" — and there a
+        // retracted repository still counts, because it can be re-published
+        // and its sources must survive. The two filters answer two questions
+        // and must not be unified.
+        `FOR r IN ${COLLECTION}
+           FILTER r.deleted_at == null AND r.repo_id != @rid AND r.lifecycle_state != 'retracted'
+           LET dupFiles = (
+             FOR s IN (r.source_documents || [])
+               FILTER s.file_hash != null AND POSITION(@hashes, s.file_hash)
+               RETURN {file_id: s.file_id, file_name: s.file_name}
+           )
+           FILTER LENGTH(dupFiles) > 0
+           SORT r.created_at
+           LIMIT 1
+           RETURN {repo_id: r.repo_id, name: r.name, dupFiles}`,
+        { rid: repo_id, hashes: candidateHashes }
+      );
+      const dup = (await dupRows.all())[0];
+      if (dup) {
+        const names = dup.dupFiles.map((d) => d.file_name || d.file_id).join(', ');
+        throw Object.assign(
+          new Error(
+            `the same content is already imported into OKF repository "${dup.name}" (files: ${names}) — delete that repository before importing these documents`
+          ),
+          { code: 'DUPLICATE_CONTENT', status: 409 }
+        );
+      }
+    }
     await stampSources(repo_id, file_ids, metaByKey);
   } catch (err) {
-    // The conversion record must not claim a queued run that has no worker:
-    // the interrupted-conversion sweep is one-shot per process and has
-    // already run, so nothing else would ever close this record. It is
-    // written BEFORE the reservation is released — this patch REPLACES the
-    // whole conversion object, so a write landing after a concurrent start's
-    // own record would clobber it.
+    // A refused start restores a prior TERMINAL conversion record — a healthy
+    // 'done' with its summary, or an earlier 'failed' with its error — rather
+    // than overwriting it with this refusal. The web client renders a failed
+    // record as "import failed — delete the repository", which would be a lie
+    // about a healthy repository. The conversion is restored while updated_at
+    // changes; the reason for this refusal travels with the response. With no
+    // prior terminal record, the record is closed as failed: the
+    // interrupted-conversion sweep is one-shot per
+    // process and has already run, so nothing else would ever close a queued
+    // record with no worker. It is written BEFORE the reservation is
+    // released — a write landing after a concurrent start's own record
+    // would clobber it.
+    //
+    // COMPARE-AND-SET: the record is written only while it is still THIS
+    // run's ('queued', with this run's started_at). The zip-ingest path does
+    // NOT take the conversion reservation and MERGEs into the same
+    // attribute — a blind write here would destroy that writer's progress
+    // record, which is the very clobber this restore exists to avoid.
+    const restore = previous && crawlConversion.isTerminal(previous);
+    const close = restore
+      ? previous
+      : crawlConversion.failedConversionRecord(err, {
+          files_done: 0,
+          files_total: file_ids.length,
+          per_file: [],
+          started_at: queued.started_at
+        });
     try {
-      await patchConversion(repo_id, {
-        status: 'failed',
-        error: err.message,
-        code: err.code || 'CONVERSION_FAILED',
-        files_done: 0,
-        files_total: file_ids.length,
-        per_file: [],
-        started_at: queued.started_at,
-        finished_at: new Date().toISOString()
-      });
+      // ONE atomic statement: the record is written only while it is still
+      // THIS run's. The conversion record is a shared slot — the zip-ingest
+      // path (which takes no reservation) writes its own fields into it — so
+      // a blind write would clobber that writer.
+      const written = await closeConversionIfOwned(repo_id, queued.started_at, close, restore);
+      if (!written) {
+        logger.warn("Conversion record is not this run's — left untouched", { repo_id });
+      }
     } catch (patchErr) {
-      logger.warn('Failed-start record could not be written (non-fatal)', {
+      // The request is already an error; this is the SECOND failure — the
+      // repository keeps a 'queued' record it never closes, which blocks its
+      // transitions. It must not be a quiet warning.
+      logger.error('Failed-start record could not be written — the repository keeps a queued conversion', {
         repo_id,
         error: patchErr.message
       });
     }
     // The reservation must not outlive a failed start — the repo is free again.
+    releaseContent(repo_id, claimed);
     crawlConversion.releaseConversion(repo_id, settleInFlight);
     throw err;
   }
+  // The sources are stamped: from here on the DUPLICATE_CONTENT gate reads
+  // this repository's own content, so the claim has done its job.
+  releaseContent(repo_id, claimed);
 
   const job = { repo_id, file_ids, source_metas: metaByKey, requested_name, classification, actor: actor || null };
   const runner = (async () => {
@@ -1050,14 +1335,16 @@ async function startDocumentsConversion({ repo_id, file_ids, requested_name, cla
   return queued;
 }
 
-function isTerminal(conversion) {
-  return !!conversion && ['done', 'failed'].includes(conversion.status);
-}
-
 module.exports = {
   startDocumentsConversion,
-  isTerminal,
   live, // the SHARED conversion registry (documents + crawl), see crawl-conversion-service
+  // The content claim registry (issue #1744) stays PRIVATE — a consumer
+  // that could wipe it would silently re-open the window it closes. The
+  // reset below is the only seam, and it exists for the test suite: a test
+  // that aborts between the claim and its release would otherwise leave the
+  // content claimed for the rest of the process. The `__` prefix marks it
+  // as a test seam (the convention of ragas-suite-service's __testRunInFlight).
+  __resetContentClaims: resetContentClaims,
   // D4: the restricted-snapshot stamp + the Access-toggle propagation
   stampSources,
   propagateRestrictedToSources,

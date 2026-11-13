@@ -51,6 +51,16 @@ servingReads.get('/repos/:repo_id/concepts/:concept_id', require('../controllers
 // from the index too. The payload stays bounded (offset/limit, clamp
 // 1..500) — the full corpus never ships in one response.
 servingReads.get('/repos/:repo_id/concept-tree', require('../controllers/repository-controller').getConceptTree);
+// #1817 (saved-conversation OKF restore, 2026-11-13): the PRE-CAP-1 citation
+// resolver is a serving read like the two above — a restored conversation
+// repairs a legacy row's lost repo identity under the same default-open
+// posture as the concept GET it enables. Registered HERE per this file's own
+// rule; the per-candidate fences (6-1c restricted + publication + meta-row
+// existence) live INSIDE resolveConceptRepo with getConcept's composition, so
+// a restricted or non-serving twin never resolves for a citizen, and no
+// candidate surviving every gate answers 404 (foreign and fenced
+// indistinguishable).
+servingReads.get('/concepts/resolve-repo', require('../controllers/repository-controller').resolveConceptRepo);
 router.use(servingReads);
 
 router.use(requireScope('read'));

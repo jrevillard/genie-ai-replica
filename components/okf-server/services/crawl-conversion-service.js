@@ -40,7 +40,7 @@ const { authedAxios } = require('./service-token');
 const { ingestRepoConcepts, buildMegaConcept } = require('./ingest-service');
 const { withSpan } = require('../shared-lib/tracing');
 const { slugify: slugSSOT } = require('./slug');
-const { fetchDocMeta } = require('./doc-repo-client');
+const { fetchDocMeta, docRepoFileFields } = require('./doc-repo-client');
 
 const COLLECTION = 'okf_repositories';
 
@@ -109,9 +109,9 @@ const TERMINAL_STATES = ['done', 'failed'];
  * registry). This is the SHARED registry: the documents importer registers
  * its conversion here too (producer-service re-exports this same Map as
  * `producer.live`), so ONE repo is converted at a time whichever path
- * started it (the two paths write the same repo.conversion record — the crawl
- * merges its patch, the producer replaces it — so running both on one repo
- * leaves a record describing neither run).
+ * started it (the two paths write the same repo.conversion record — an
+ * ArangoDB UPDATE merges into it, so both paths' fields end up in one slot —
+ * so running both on one repo leaves a record describing neither run).
  *
  * The RESERVATION is the guard — it is claimed synchronously, before the
  * awaited stages below, so a second start for the same repo cannot slip
@@ -167,9 +167,15 @@ function maxSourceBytesFromEnv() {
 
 /**
  * One-time sweep: jobs interrupted by a server restart are marked failed.
- * Lazy (first startConversion call) — the DB connection is not up at require
- * time. In-process `live` runners are never touched (a restarted process has
- * an empty registry by definition).
+ * Called at startup or lazily on the first startConversion call; the DB
+ * connection is not up at require time. In-process `live` runners are never
+ * touched (a restarted process has an empty registry by definition).
+ *
+ * The record it writes is the ONE failed-record vocabulary
+ * (failedConversionRecord): status, stage, error, code and `summary: null` —
+ * a failed record carries no result, so the previous run's counts must not
+ * survive beside the failure. The sweep is ONE AQL statement and cannot call
+ * the helper, so its fields are spelled out here.
  */
 async function sweepInterruptedOnce() {
   if (swept) return;
@@ -184,7 +190,10 @@ async function sweepInterruptedOnce() {
           && r.conversion.status NOT IN @terminal
         UPDATE r WITH { conversion: MERGE(r.conversion, {
           status: 'failed',
+          stage: 'failed',
           error: 'interrupted by server restart — start the conversion again',
+          code: 'CONVERSION_FAILED',
+          summary: null,
           finished_at: DATE_ISO8601(DATE_NOW())
         })} IN ${COLLECTION}
     `,
@@ -252,10 +261,7 @@ async function stampSourceDocument(repoId, { file_id, url, crawl_job_id }) {
       {
         repo_id: repoId,
         file_id,
-        file_name: f.file_name || null,
-        size_bytes: Number.isFinite(f.size) ? f.size : Number.isFinite(f.size_bytes) ? f.size_bytes : null,
-        file_type: f.file_type || f.type || null,
-        uploaded_date: f.uploaded_date || null,
+        ...docRepoFileFields(f),
         url: url || null,
         crawl_job_id: crawl_job_id || null,
         generated_at: new Date().toISOString()
@@ -818,15 +824,14 @@ async function runConversion(job) {
     logger.error(
       `Crawl conversion FAILED repo=${repo_id} code=${err.code || '-'} at_bytes=${bytesDone} pages=${pagesDone} error=${err.message}`
     );
-    await patchConversion(repo_id, {
-      status: 'failed',
-      error: err.message,
-      code: err.code || 'CONVERSION_FAILED',
-      bytes_done: bytesDone,
-      pages_done: pagesDone,
-      batches_done: batchesDone,
-      finished_at: new Date().toISOString()
-    });
+    await patchConversion(
+      repo_id,
+      failedConversionRecord(err, {
+        bytes_done: bytesDone,
+        pages_done: pagesDone,
+        batches_done: batchesDone
+      })
+    );
     throw err;
   } finally {
     if (tmpPath) {
@@ -963,12 +968,45 @@ async function startConversion({
 
 /** Terminal-state predicate used by polling UIs. */
 function isTerminal(conversion) {
-  return !!conversion && ['done', 'failed'].includes(conversion.status);
+  // The ONE terminal-state vocabulary (the writer-coverage test asserts the
+  // invariant against TERMINAL_STATES — two literals would drift apart).
+  return !!conversion && TERMINAL_STATES.includes(conversion.status);
+}
+
+/**
+ * The ONE failed-conversion record vocabulary. Three writers spell it out —
+ * the crawl failure, the documents failure, a refused start — and the copies
+ * drift: the change that added `stage`/`summary` had to touch two of them in
+ * lockstep, and the web client renders whichever copy wrote last. The
+ * path-specific counters ride along in `extra`. They CANNOT override the
+ * record's own fields: the failed record is ONE vocabulary, and a caller that
+ * passed `{ status: 'x' }` would silently defeat it — so `extra` is spread
+ * first and the vocabulary last.
+ *
+ * @param {Error} err the failure
+ * @param {object} [extra] path-specific fields (counters, per-file list, …)
+ */
+function failedConversionRecord(err, extra = {}) {
+  return {
+    ...extra,
+    status: 'failed',
+    stage: 'failed',
+    error: err.message,
+    code: err.code || 'CONVERSION_FAILED',
+    // The record is MERGED into the repository's conversion slot — the
+    // previous run's summary must not survive a failure.
+    summary: null,
+    finished_at: new Date().toISOString()
+  };
 }
 
 module.exports = {
   startConversion,
   isTerminal,
+  // The ONE failed-record vocabulary — the crawl path, the documents path and
+  // a refused start all write it (the documents producer imports it from
+  // here: this service owns the conversion slot).
+  failedConversionRecord,
   sanitizeCrawlBody,
   maxSourceBytesFromEnv,
   MODE_A_SOURCE_LIMIT_BYTES,

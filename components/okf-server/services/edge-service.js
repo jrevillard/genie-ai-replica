@@ -65,9 +65,12 @@ async function getDb() {
 }
 
 /** REVIEW FIX (P1, 2026-08-17): canonical concept_id — a `concepts/` prefix is
- * a legacy artifact that leaks in from subdirectory bundles; the worker and the
- * link targets use the bare form. Normalize so the G22 set and the meta read
- * compare like-for-like (never silently drop edges). */
+ * a LEGACY artifact (pre-2026-08-30 subdirectory bundles; the writers have
+ * produced bare ids since). Kept as the cheap strip on LINK TARGETS read out
+ * of stored meta docs — old bundles' persisted links may still carry it —
+ * but NOT as a query shape: the stored-id dual-form query arms were removed
+ * (#1667, measured 0 prefixed rows in 9,515); a legacy prefixed ROW is the
+ * operator migration's job (scripts/okf-testing-lab/normalize-concept-ids.js). */
 function normalizeConceptId(id) {
   const s = String(id || '');
   return s.replace(/^concepts\//, '');
@@ -198,16 +201,19 @@ async function writeRepoConceptEdges(repo_id, concept_id, ctx = {}) {
     const dropped = [];
     const cid = normalizeConceptId(concept_id);
 
-    // 1. The concept's persisted links (from the 4b meta doc). The meta read
-    // matches BOTH the bare and the `concepts/`-prefixed stored form so a
-    // subdirectory bundle never turns into a silent no-op.
+    // 1. The concept's persisted links (from the 4b meta doc). ONE form:
+    // #1667 measured the live corpus (9,515 rows, zero prefixed; the
+    // 2026-08-30 zip-intake basename rule killed the prefix at the source),
+    // so the read is the normalized id alone — a legacy prefixed row is the
+    // operator migration's job (scripts/okf-testing-lab/normalize-concept-ids.js),
+    // not a query arm every reader must remember.
     let meta;
     try {
       const rows = await (
         await db.query(
-          'FOR m IN okf_concepts_meta FILTER m.repo_id == @repo_id AND (m.concept_id == @cid OR m.concept_id == @prefixed) LIMIT 1 ' +
+          'FOR m IN okf_concepts_meta FILTER m.repo_id == @repo_id AND m.concept_id == @cid LIMIT 1 ' +
             'RETURN KEEP(m, ["concept_id", "title", "labels", "links", "bundle_version", "is_index"])',
-          { repo_id, cid, prefixed: `concepts/${cid}` }
+          { repo_id, cid }
         )
       ).all();
       meta = rows[0] || null;
@@ -217,9 +223,8 @@ async function writeRepoConceptEdges(repo_id, concept_id, ctx = {}) {
     }
     const links = Array.isArray(meta && meta.links) ? meta.links.filter((l) => l && l.to_concept_id) : [];
 
-    // 2. The repo's concept-id set — the within-repo boundary (G22). Normalized
-    // so prefixed stored ids match bare link targets. PROBED on the
-    // (repo_id, concept_id) unique index, for the link targets ONLY: the
+    // 2. The repo's concept-id set — the within-repo boundary (G22). PROBED on
+    // the (repo_id, concept_id) unique index, for the link targets ONLY: the
     // whole-set read made an N-concept drain pay N x N row reads.
     // One query for all the targets — a nested FOR over the candidate list,
     // each candidate a seek on the unique index. Measured on this collection
@@ -228,22 +233,21 @@ async function writeRepoConceptEdges(repo_id, concept_id, ctx = {}) {
     // repo_id index and pays one full-document lookup per repo row, while the
     // per-candidate seek stays covering at every size measured. Row reads
     // scale with the links and the round trips stay at one per concept.
+    // ONE candidate per target (#1667): the doubled bare+prefixed list
+    // defended a stored form the writers stopped producing on 2026-08-30
+    // (zip intake basenames) and the live corpus no longer carries; a
+    // legacy prefixed ROW is the operator migration's job.
     const targetIds = [...new Set(links.map((l) => normalizeConceptId(l.to_concept_id)))];
     let repoConceptIds = new Set();
     try {
       if (targetIds.length > 0) {
-        // Both stored forms of every target: bare, and `concepts/`-prefixed (a
-        // subdirectory bundle stores the prefixed form).
-        const candidates = targetIds.flatMap((t) => [t, `concepts/${t}`]);
         const rows = await (
           await db.query(
             'FOR c IN @candidates FOR m IN okf_concepts_meta FILTER m.repo_id == @repo_id AND m.concept_id == c RETURN m.concept_id',
-            { repo_id, candidates }
+            { repo_id, candidates: targetIds }
           )
         ).all();
-        // RETURN m.concept_id yields bare strings; each hit is one of the
-        // candidates, whose normalized form IS the target that produced it —
-        // the normalized id is what the boundary check below compares against.
+        // RETURN m.concept_id yields the stored (bare) strings.
         repoConceptIds = new Set(rows.map(normalizeConceptId));
       }
     } catch (err) {
@@ -322,6 +326,15 @@ async function writeRepoConceptEdges(repo_id, concept_id, ctx = {}) {
     let written = 0;
     for (const link of links) {
       const target = normalizeConceptId(link.to_concept_id);
+      // #1666: a self-target (a link to the concept's own id) is skipped like
+      // writeRepoAuthorLinks skips it — a self-loop in _LINKS_TO is a
+      // meaningless edge that pollutes traversal and degree counts. Both
+      // writers must agree.
+      if (target === cid) {
+        dropped.push(link.to_concept_id);
+        logger.info('Edge write: self-target dropped', { repo_id, from: cid, to: link.to_concept_id });
+        continue;
+      }
       if (!repoConceptIds.has(target)) {
         dropped.push(link.to_concept_id);
         logger.info('Edge write: cross-repo/missing target dropped (G22)', {

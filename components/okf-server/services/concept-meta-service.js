@@ -631,6 +631,28 @@ async function getConceptMetaFromAnyRepo(concept_id) {
 }
 
 /**
+ * EVERY repo_id whose meta rows hold concept_id — the #1817 restore resolver's
+ * candidate list. getConceptMetaFromAnyRepo folds ambiguity to null, which is
+ * right for dataprep completion but wrong here: a RESTRICTED twin must not
+ * hide a visible repo that legitimately holds the concept — the caller
+ * (resolveConceptRepo) filters candidates by the per-repo fences, so it needs
+ * all of them. Order is irrelevant; the visibility filter decides.
+ */
+async function listReposForConcept(concept_id) {
+  if (!concept_id) return [];
+  const db = await getDb();
+  const rows = await (
+    await db.query(
+      'FOR m IN okf_concepts_meta FILTER m.concept_id == @cid COLLECT repo_id = m.repo_id RETURN repo_id',
+      {
+        cid: concept_id
+      }
+    )
+  ).all();
+  return rows || [];
+}
+
+/**
  * W8 (EPIC-8 slice 1): purge the repo's concept-keyed ingestion_log rows on
  * repo DELETE. dataprep's _write_ingestion_log keys per-concept progress rows
  * on file_id == concept_id (content-only chunking has no files doc, so
@@ -988,7 +1010,11 @@ async function runLlmSummary(prompt, { timeoutMs = 5000 } = {}) {
       max_tokens: 200,
       temperature: 0.0
     },
-    timeoutMs: chatTimeoutMs
+    timeoutMs: chatTimeoutMs,
+    // THIS SINGLE CALL may not hold the wire past this best-effort
+    // summary's own budget (#1725: a 5s sync GET held ~155s of rungs) — a
+    // summary that would starve stays null, per the best-effort contract.
+    budgetMs: chatTimeoutMs
   });
   return (r.data?.choices?.[0]?.message?.content || '').trim() || null;
 }
@@ -1519,6 +1545,7 @@ module.exports = {
   upsertConceptMeta,
   getConceptMeta,
   getConceptMetaFromAnyRepo,
+  listReposForConcept,
   purgeConceptIngestionLogs,
   listConceptsMeta,
   listConceptTree,

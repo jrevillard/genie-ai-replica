@@ -220,6 +220,26 @@ describe('isTerminal', () => {
   });
 });
 
+describe('failedConversionRecord — the ONE failed-record vocabulary', () => {
+  test("the path-specific counters ride along, and they cannot override the record's own fields", () => {
+    // Three writers write the failed record (the crawl failure, the
+    // documents failure, a refused start). The counters are theirs; the
+    // vocabulary is the service's. A caller that passed `{ status: 'x' }`
+    // would silently defeat it — so the vocabulary is spread LAST.
+    const err = Object.assign(new Error('boom'), { code: 'SOURCE_STAMP_FAILED' });
+    const record = conv.failedConversionRecord(err, { bytes_done: 3, status: 'x', summary: { created: 9 } });
+    expect(record).toMatchObject({
+      status: 'failed',
+      stage: 'failed',
+      error: 'boom',
+      code: 'SOURCE_STAMP_FAILED',
+      summary: null,
+      bytes_done: 3
+    });
+    expect(record.finished_at).toEqual(expect.any(String));
+  });
+});
+
 describe('startConversion validation', () => {
   test('requires repo_id and file_id', async () => {
     await expect(conv.startConversion({ file_id: 'f1', split_mode: 'B' })).rejects.toMatchObject({
@@ -504,6 +524,30 @@ describe('stampSourceDocument via startConversion', () => {
       file_type: 'md',
       uploaded_date: '2026-09-02T10:00:00Z'
     });
+  });
+
+  test('a doc-repo file that carries only `mimetype` is stamped with that type', async () => {
+    // The doc-repo build in the field writes `file_type`; an older one wrote
+    // `mimetype`. The SHARED coercion accepts both, so the crawl path and
+    // the import path store the same file_type for the same document — the
+    // two paths used to carry their own copy of the mapping and drift.
+    authedAxios.get.mockResolvedValueOnce({
+      status: 200,
+      data: { file: { file_name: 'crawl.md', size: 96, mimetype: 'text/markdown' } }
+    });
+    authedAxios.get.mockResolvedValueOnce({
+      status: 200,
+      headers: { 'content-length': '0' },
+      data: Readable.from([])
+    });
+    await startJob({ url: null, crawl_job_id: null });
+    await waitForTerminal();
+
+    const stamp = mockDb.query.mock.calls
+      .map((c) => (c[1] && c[1].file_id ? c[1] : null))
+      .filter(Boolean)
+      .find((b) => b.file_name === 'crawl.md');
+    expect(stamp).toMatchObject({ file_type: 'text/markdown' });
   });
 
   test('metadata fetch failure does not fail the conversion (fail-soft)', async () => {

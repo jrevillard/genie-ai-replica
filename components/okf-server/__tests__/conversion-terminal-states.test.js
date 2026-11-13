@@ -135,6 +135,28 @@ describe('conversion sweep vocabulary', () => {
       return fresh;
     };
 
+    it('writes the failed-record vocabulary — a failed record carries NO summary', async () => {
+      // The sweep is ONE AQL statement and cannot call failedConversionRecord,
+      // so it spells the vocabulary's fields out. A failed record carries no
+      // result: without `summary: null` the previous run's counts survive
+      // beside the failure and the Studio reads "import failed" next to them.
+      const captured = [];
+      const db = {
+        query: jest.fn(async (aql, bind) => {
+          captured.push({ aql, bind });
+          return { all: async () => [] };
+        }),
+        collection: jest.fn(() => ({ document: jest.fn(async () => ({})), update: jest.fn() }))
+      };
+
+      await withMockedDb(db);
+
+      const { aql } = captured[0];
+      expect(aql).toMatch(/summary: null/);
+      expect(aql).toMatch(/code: 'CONVERSION_FAILED'/);
+      expect(aql).toMatch(/status: 'failed'/);
+    });
+
     it('selects by exclusion (NOT IN terminal), never by enumerating active states', async () => {
       const captured = [];
       const db = {

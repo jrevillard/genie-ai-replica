@@ -23,6 +23,8 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const { generateKeyPairSync } = require('node:crypto');
+const path = require('node:path');
+const { createRequire } = require('node:module');
 const { SignJWT, jwtVerify } = require('jose');
 
 const KEYCLOAK_URL = 'http://keycloak:8080';
@@ -34,23 +36,23 @@ const JWKS_URI = `${DISCOVERY_ISSUER}/protocol/openid-connect/certs`;
 // would from a live Keycloak certs endpoint). A SECOND pair stands in for an
 // additional ("partner") realm — different keys, so a cross-realm clobber of
 // a map entry cannot accidentally still verify.
-const { publicKey, privateKey } = generateKeyPairSync('rsa', {
-  modulusLength: 2048,
-  publicKeyEncoding: { type: 'spki', format: 'jwk' },
-  privateKeyEncoding: { type: 'pkcs8', format: 'jwk' }
-});
-const { publicKey: partnerPublicKey, privateKey: partnerPrivateKey } = generateKeyPairSync('rsa', {
-  modulusLength: 2048,
-  publicKeyEncoding: { type: 'spki', format: 'jwk' },
-  privateKeyEncoding: { type: 'pkcs8', format: 'jwk' }
-});
+// Every RSA pair is generated the same way — the JWKS documents they end up
+// in are only comparable if the encoding is identical.
+const rsaPair = () =>
+  generateKeyPairSync('rsa', {
+    modulusLength: 2048,
+    publicKeyEncoding: { type: 'spki', format: 'jwk' },
+    privateKeyEncoding: { type: 'pkcs8', format: 'jwk' }
+  });
+
+const { publicKey, privateKey } = rsaPair();
+const { publicKey: partnerPublicKey, privateKey: partnerPrivateKey } = rsaPair();
 // A THIRD pair stands for the realm's key AFTER a rotation: the realm
 // publishes it under a new key id while the old ones stay published.
-const { publicKey: rotatedPublicKey, privateKey: rotatedPrivateKey } = generateKeyPairSync('rsa', {
-  modulusLength: 2048,
-  publicKeyEncoding: { type: 'spki', format: 'jwk' },
-  privateKeyEncoding: { type: 'pkcs8', format: 'jwk' }
-});
+const { publicKey: rotatedPublicKey, privateKey: rotatedPrivateKey } = rsaPair();
+// A FOURTH pair: the candidate trial is bounded at three, so a token signed
+// with this key can only be resolved by a realm publishing fewer keys.
+const { publicKey: fourthPublicKey, privateKey: fourthPrivateKey } = rsaPair();
 // An EC pair stands for a realm that publishes an EC signing key only. The
 // verifier accepts RS256 only, so such a key set holds nothing usable.
 const { publicKey: ecPublicKey } = generateKeyPairSync('ec', {
@@ -70,6 +72,15 @@ const JWKS = {
 // The key set after a rotation: the same two keys plus the new one.
 const ROTATED_JWKS = {
   keys: [...JWKS.keys, { ...rotatedPublicKey, kid: 'rotated-key', alg: 'RS256', use: 'sig' }]
+};
+// A realm publishing the SAME key id twice (a misconfigured rotation, or
+// imported JWKs carrying an operator-chosen id): every token naming that id
+// resolves to two candidates, and the fault is the realm's own state.
+const DUPLICATE_KID_JWKS = {
+  keys: [
+    { ...publicKey, kid: 'test-key', alg: 'RS256', use: 'sig' },
+    { ...rotatedPublicKey, kid: 'test-key', alg: 'RS256', use: 'sig' }
+  ]
 };
 // A realm publishing an EC signing key only — nothing the verifier (RS256
 // only) could ever use.
@@ -204,6 +215,42 @@ function loadVerifier(env) {
   return require('../../shared/lib/keycloak-auth-service.js');
 }
 
+// The verifier resolves 'jose' from the shared lib's own node_modules — the
+// build the document-repository image ships (6.2.17). The backend and OKF
+// images ship the shared lib WITHOUT it and resolve their own build
+// instead (6.2.5 / 6.2.8), and the builds disagree on a key id that is not
+// a string. Point the verifier at another build to run a case under it:
+// the module cache entry the verifier will ask for is replaced for the
+// duration of the call.
+function loadVerifierWithJose(joseBuild) {
+  const sharedLib = path.dirname(require.resolve('../../shared/lib/keycloak-auth-service.js'));
+  const verifierJose = require.resolve('jose', { paths: [sharedLib] });
+  const previous = require.cache[verifierJose];
+  const injected = require(joseBuild);
+  require.cache[verifierJose] = {
+    id: verifierJose,
+    filename: verifierJose,
+    loaded: true,
+    exports: injected,
+    children: [],
+    paths: []
+  };
+  try {
+    const svc = loadVerifier();
+    // The substitution must be IN FORCE for the verifier, or the case it
+    // guards is vacuous: the shared lib's own build refuses a key id that
+    // is not a string by itself, and the test would then pass whether or
+    // not the verifier's rule existed. The module the verifier resolves is
+    // the injected build — asserted, not assumed.
+    const resolvedByVerifier = createRequire(path.join(sharedLib, 'keycloak-auth-service.js'))('jose');
+    assert.equal(resolvedByVerifier, injected, 'the verifier did not resolve the injected jose build');
+    return svc;
+  } finally {
+    if (previous) require.cache[verifierJose] = previous;
+    else delete require.cache[verifierJose];
+  }
+}
+
 function baseClaims(iss, extra = {}) {
   return {
     sub: 'user-1',
@@ -215,10 +262,26 @@ function baseClaims(iss, extra = {}) {
 }
 
 const sign = async (claims, opts = {}) => {
-  const key = opts.rotated ? rotatedPrivateKey : opts.partner ? partnerPrivateKey : privateKey;
-  const kid = opts.rotated ? 'rotated-key' : opts.partner ? 'partner-key' : 'test-key';
+  const key = opts.key || (opts.rotated ? rotatedPrivateKey : opts.partner ? partnerPrivateKey : privateKey);
+  const defaultKid = opts.rotated ? 'rotated-key' : opts.partner ? 'partner-key' : 'test-key';
+  // `kid: undefined` means NO key id (RFC 7515 §4.1.4 makes it optional).
+  const kid = 'kid' in opts ? opts.kid : defaultKid;
   return new SignJWT(claims).setProtectedHeader({ alg: 'RS256', kid }).sign(key);
 };
+
+// (R5) the clock override, in one place: the refresh floor and the cache TTL
+// are measured against the clock, so a stalled runner must not decide an
+// outcome.
+async function withClock(offsetMs, fn) {
+  const realNow = Date.now();
+  const clockSpy = Date.now;
+  Date.now = () => realNow + offsetMs;
+  try {
+    return await fn();
+  } finally {
+    Date.now = clockSpy;
+  }
+}
 
 test('azp tolerance: a valid token with a foreign azp verifies (no authorized-party check)', async () => {
   // Service accounts (dataprep-service, okf-service) carry an azp that
@@ -469,18 +532,97 @@ test('KEYCLOAK_DISCOVERY_URL moves the discovery leg; the issuer surface is unch
   );
 });
 
-test('a kid-less token against a multi-key set is a bad token, not an outage', async () => {
-  // jose raises JWKSMultipleMatchingKeys when the token names NO key id and
-  // the key set holds several keys. That is a TOKEN-side ambiguity: it must
-  // not be classified as an outage, or an unauthenticated caller could make
-  // the service answer 503 at will.
+test('a kid-less token resolves against a published candidate key', async () => {
+  // RFC 7515 §4.1.4 makes the key id OPTIONAL: a token that names none
+  // against a multi-key set is not a bad token, it is a token jose cannot
+  // resolve by key id alone. The published candidates resolve it — the first
+  // one whose signature verifies wins.
   const svc = loadVerifier();
-  const kidless = await new SignJWT(baseClaims(DISCOVERY_ISSUER))
-    .setProtectedHeader({ alg: 'RS256' }) // alg, but NO key id
-    .sign(privateKey);
+  const kidless = await sign(baseClaims(DISCOVERY_ISSUER), { kid: undefined }); // alg, but NO key id
+  const payload = await svc.verifyToken(kidless);
+  assert.equal(payload.sub, 'user-1');
+  assert.equal(payload.iss_sub, `${DISCOVERY_ISSUER}#user-1`);
+});
+
+test('a kid-less token signed by the second published key resolves against it', async () => {
+  // The trial tries the candidates IN TURN: a candidate whose signature does
+  // not verify is not the token's end — the next published key may be the
+  // one that signed it. Only a CLAIM failure ends the trial.
+  const svc = loadVerifier();
+  const kidless = await sign(baseClaims(DISCOVERY_ISSUER), { key: partnerPrivateKey, kid: undefined });
+  const payload = await svc.verifyToken(kidless);
+  assert.equal(payload.sub, 'user-1');
+  assert.equal(payload.iss_sub, `${DISCOVERY_ISSUER}#user-1`);
+});
+
+test('a kid-less token that no published candidate signs is a bad token, not an outage', async () => {
+  // The opposite case: the token names no key id and none of the published
+  // candidates signs it. It stays a bad token (401) — a kid-less token is
+  // never ACCEPTED without a signature that verifies, and an unresolvable
+  // token is never reported as an outage.
+  const svc = loadVerifier();
+  // a key the realm does not publish
+  const kidless = await sign(baseClaims(DISCOVERY_ISSUER), { key: rotatedPrivateKey, kid: undefined });
   await assert.rejects(
     () => svc.verifyToken(kidless),
     (err) => err.code === 'TOKEN_INVALID'
+  );
+});
+
+test('a token whose key id is not a string is a bad token, not a candidate trial', async () => {
+  // A key id that is not a string (a number) is a MALFORMED token, not a
+  // token naming no key id: a realm's key id is a string, so resolving the
+  // token against the published candidates would accept a token the realm
+  // never issued. The trial applies ONLY to a token that names NO key id.
+  //
+  // The case runs under the BACKEND image's jose build (6.2.5) against a
+  // realm publishing a SINGLE signing key — the common deployment. There,
+  // jose matches every published key when the key id is not a string, so a
+  // one-key realm resolves the token without the verifier ever seeing an
+  // error: only the verifier's own rule refuses it. Under the shared lib's
+  // build (6.2.17) jose refuses such a key id itself, and the test would
+  // pass whether or not the rule existed.
+  const svc = loadVerifierWithJose('../node_modules/jose');
+  publishedKeys = { keys: [JWKS.keys[0]] };
+  const malformed = await sign(baseClaims(DISCOVERY_ISSUER), { kid: 123 });
+  await assert.rejects(
+    () => svc.verifyToken(malformed),
+    (err) => err.code === 'TOKEN_INVALID'
+  );
+});
+
+test('a realm publishing more candidate keys than the trial cap cannot resolve a kid-less token', async () => {
+  // The trial is bounded (three candidates): a realm that publishes more
+  // signing keys than the cap is a realm to clean up, not a token to guess
+  // at. The token here is signed by the FOURTH published key — without the
+  // cap it would verify, so this test IS the cap.
+  const svc = loadVerifier();
+  publishedKeys = {
+    keys: [
+      ...JWKS.keys,
+      { ...rotatedPublicKey, kid: 'third-key', alg: 'RS256', use: 'sig' },
+      { ...fourthPublicKey, kid: 'fourth-key', alg: 'RS256', use: 'sig' }
+    ]
+  };
+  const kidless = await sign(baseClaims(DISCOVERY_ISSUER), { key: fourthPrivateKey, kid: undefined });
+  await assert.rejects(
+    () => svc.verifyToken(kidless),
+    (err) => err.code === 'TOKEN_INVALID'
+  );
+});
+
+test('a realm that publishes the same key id twice is an outage, not a bad token', async () => {
+  // A realm publishing the SAME key id twice (a misconfigured rotation, or
+  // imported JWKs carrying an operator-chosen id) makes every token naming
+  // that id resolve to two candidates. The fault is the realm's own state:
+  // it is an outage (503), so the operator is told — not a 401 that sends
+  // every user to the login page.
+  const svc = loadVerifier();
+  publishedKeys = DUPLICATE_KID_JWKS;
+  const token = await sign(baseClaims(DISCOVERY_ISSUER));
+  await assert.rejects(
+    () => svc.verifyToken(token),
+    (err) => err.code === 'AUTH_SERVICE_UNAVAILABLE'
   );
 });
 
@@ -495,12 +637,43 @@ test('a mid-life JWKS fetch failure is an outage (AUTH_SERVICE_UNAVAILABLE), not
 
   jwksDown = true; // the auth service goes down
 
-  // An unknown kid forces the next key-set fetch (the rotation path).
-  const rotated = await sign(baseClaims(DISCOVERY_ISSUER), { partner: true });
-  await assert.rejects(
-    () => svc.verifyToken(rotated),
-    (err) => err.code === 'AUTH_SERVICE_UNAVAILABLE'
-  );
+  // The key-set refresh is floored by jose's cooldown window, which is
+  // measured from the last key-set FETCH: the clock jumps past it so the
+  // unknown-kid token makes the verifier re-read the key set, and that
+  // fetch is the one that fails.
+  await withClock(60000, async () => {
+    const rotated = await sign(baseClaims(DISCOVERY_ISSUER), { partner: true });
+    await assert.rejects(
+      () => svc.verifyToken(rotated),
+      (err) => err.code === 'AUTH_SERVICE_UNAVAILABLE'
+    );
+  });
+});
+
+test('the key set is re-read after the cache TTL expires', async () => {
+  // The cache TTL is jose's `cacheMaxAge` (5 minutes): a key set older than
+  // that is re-read even when no token names an unknown key id — the realm
+  // may have rotated in the meantime.
+  //
+  // The realm publishes the SAME key id with NEW material (a rotation that
+  // reuses the id), and the token is signed with the new material: the key
+  // id resolves in the stale set too, so the unknown-kid refresh path is
+  // never reached, and the token verifies ONLY against the fresh key set.
+  // The re-read that made it verify is therefore the TTL's.
+  const svc = loadVerifier();
+  await warmCache(svc);
+  const before = jwksFetches();
+
+  await withClock(600000, async () => {
+    // 10 minutes: past the 5-minute TTL
+    publishedKeys = {
+      keys: [{ ...rotatedPublicKey, kid: 'test-key', alg: 'RS256', use: 'sig' }]
+    };
+    const token = await sign(baseClaims(DISCOVERY_ISSUER), { key: rotatedPrivateKey, kid: 'test-key' });
+    const payload = await svc.verifyToken(token);
+    assert.equal(payload.sub, 'user-1');
+    assert.equal(jwksFetches(), before + 1, 'the expired key set was not re-read');
+  });
 });
 
 test('a junk-signature token does not re-fetch the JWKS (the cache-thrash vector)', async () => {
@@ -530,40 +703,50 @@ test('a junk-signature token does not re-fetch the JWKS (the cache-thrash vector
   assert.equal(jwksFetches(), before);
 });
 
-test('an unknown-kid token with no exp claim is fast-failed without a key-set refresh', async () => {
+test('a token that can never verify costs no key-set fetch inside the refresh-floor window', async () => {
   // #1703 addendum: a missing exp can never pass jose's requiredClaims
-  // ('iss','exp'), so it can never be a rotation case — it must not trigger a
-  // key-set refresh either.
+  // ('iss','exp'), so it can never become valid — and it must not cost the
+  // realm a key-set fetch either. The refresh is floored by jose's cooldown
+  // window, measured from the last key-set FETCH: the clock is frozen right
+  // after the warm-up, so the junk token lands inside the window whatever
+  // the runner's speed.
   const svc = loadVerifier();
   await warmCache(svc);
   const before = jwksFetches();
 
-  const claims = baseClaims(DISCOVERY_ISSUER);
-  delete claims.exp;
-  const unknownKid = await sign(claims, { partner: true });
-  await assert.rejects(
-    () => svc.verifyToken(unknownKid),
-    (err) => err.code === 'TOKEN_INVALID'
-  );
+  await withClock(0, async () => {
+    const claims = baseClaims(DISCOVERY_ISSUER);
+    delete claims.exp;
+    const unknownKid = await sign(claims, { partner: true });
+    await assert.rejects(
+      () => svc.verifyToken(unknownKid),
+      (err) => err.code === 'TOKEN_INVALID'
+    );
+  });
   assert.equal(jwksFetches(), before);
 });
 
-test('an unknown-kid token (rotation candidate) refreshes the key set — the price of rotation recovery', async () => {
-  // The rotation candidate KEEPS its refresh path (D3): an unknown kid may
-  // be a rotated key, and a realm that reuses a kid with new key material has
-  // no other recovery path than a refresh. The cost is one key-set fetch per
-  // unknown-kid token — the residual amplification this wave accepts
-  // deliberately (recorded in the MR body).
+test('an unknown-kid token refreshes the key set — the price of rotation recovery', async () => {
+  // The refresh KEEPS its path (D3): an unknown kid may be a rotated key, and
+  // a realm that reuses a kid with new key material has no other recovery
+  // path than a refresh. The refresh is jose's own, floored by its cooldown
+  // window — the cost is one key-set fetch per window per issuer, the
+  // residual amplification this wave accepts deliberately.
   const svc = loadVerifier();
   await warmCache(svc);
   const before = jwksFetches();
 
-  const token = await sign(baseClaims(DISCOVERY_ISSUER), { partner: true });
-  await assert.rejects(
-    () => svc.verifyToken(token),
-    (err) => err.code === 'TOKEN_INVALID'
-  );
-  assert.ok(jwksFetches() > before, 'the rotation candidate did not refresh the key set');
+  // The cooldown window is measured from the last fetch: the clock jumps
+  // past it (still inside the cache TTL) so the refresh is not floored, and
+  // a stalled runner cannot decide the outcome.
+  await withClock(60000, async () => {
+    const token = await sign(baseClaims(DISCOVERY_ISSUER), { partner: true });
+    await assert.rejects(
+      () => svc.verifyToken(token),
+      (err) => err.code === 'TOKEN_INVALID'
+    );
+  });
+  assert.ok(jwksFetches() > before, 'the unknown-kid token did not refresh the key set');
 });
 
 test('a burst of unknown-kid tokens does not refresh the key set once per token', async () => {
@@ -575,14 +758,12 @@ test('a burst of unknown-kid tokens does not refresh the key set once per token'
   await warmCache(svc);
   const before = jwksFetches();
 
-  // The clock is frozen for the burst so a stalled runner cannot span two
-  // floor intervals: every junk token then lands inside the first one, and
-  // the count is exact. (The floor removed — the behaviour this guards
-  // against — refreshes once per token, which is 5.)
-  const realNow = Date.now();
-  const clockSpy = Date.now;
-  Date.now = () => realNow;
-  try {
+  // The clock jumps past the cooldown window — so the FIRST junk token does
+  // refresh the key set — and is then frozen for the burst, so a stalled
+  // runner cannot span two windows: every junk token after the first lands
+  // inside the same one, and the count is exact. (The floor removed — the
+  // behaviour this guards against — refreshes once per token, which is 5.)
+  await withClock(60000, async () => {
     for (let i = 0; i < 5; i++) {
       const junk = await sign(baseClaims(DISCOVERY_ISSUER), { partner: true }); // kid 'partner-key': unknown
       await assert.rejects(
@@ -590,9 +771,7 @@ test('a burst of unknown-kid tokens does not refresh the key set once per token'
         (err) => err.code === 'TOKEN_INVALID'
       );
     }
-  } finally {
-    Date.now = clockSpy;
-  }
+  });
   assert.equal(jwksFetches(), before + 1, 'the burst refreshed the key set more than once');
 });
 
@@ -629,47 +808,37 @@ test('a key published inside the refresh-floor window is picked up by the next r
   // A rotation that lands INSIDE that window is observed by the NEXT
   // refresh, not by the one the rotated token triggers: the rotated token
   // is rejected once, and the same token verifies once the window elapses.
-  // This is the documented cost of the bound — the token library's own
-  // cooldown has the same property, with a 30 s window instead of 1 s.
+  // The window is measured from the last key-set FETCH, so the clock is
+  // frozen BEFORE the warm-up: the window then covers the whole test, and a
+  // stalled runner cannot let it expire mid-test and turn the expected
+  // rejection into an acceptance.
   const svc = loadVerifier();
-  await warmCache(svc);
-  // An unrelated unknown-kid token consumes the refresh floor.
-  const junk = await sign(baseClaims(DISCOVERY_ISSUER), { partner: true });
-  await assert.rejects(
-    () => svc.verifyToken(junk),
-    (err) => err.code === 'TOKEN_INVALID'
-  );
-  // The realm rotates while the floor is held: it publishes the new key id.
-  publishedKeys = ROTATED_JWKS;
-  // A long expiry so the clock jump below (past any sane floor interval)
-  // cannot turn the token into an expired one.
-  const longExp = Math.floor(Date.now() / 1000) + 7200;
-  const rotated = await sign(baseClaims(DISCOVERY_ISSUER, { exp: longExp }), { rotated: true });
-  // The clock is frozen for the rejected attempt so a stalled runner cannot
-  // let the floor expire mid-test and turn the expected rejection into an
-  // acceptance.
-  const realNow = Date.now();
-  const clockSpy = Date.now;
-  Date.now = () => realNow;
-  try {
+  await withClock(0, async () => {
+    await warmCache(svc);
+    // An unrelated unknown-kid token lands inside the window.
+    const junk = await sign(baseClaims(DISCOVERY_ISSUER), { partner: true });
+    await assert.rejects(
+      () => svc.verifyToken(junk),
+      (err) => err.code === 'TOKEN_INVALID'
+    );
+    // The realm rotates while the window is held: it publishes the new key id.
+    publishedKeys = ROTATED_JWKS;
+    // A long expiry so the clock jump below (past any sane floor interval)
+    // cannot turn the token into an expired one.
+    const longExp = Math.floor(Date.now() / 1000) + 7200;
+    const rotated = await sign(baseClaims(DISCOVERY_ISSUER, { exp: longExp }), { rotated: true });
     await assert.rejects(
       () => svc.verifyToken(rotated),
       (err) => err.code === 'TOKEN_INVALID'
     );
-  } finally {
-    Date.now = clockSpy;
-  }
-  // The clock then jumps past any sane floor interval (the suite cannot read
-  // the constant, so it out-jumps it): the next refresh observes the
-  // rotation, with no real-time sleep.
-  Date.now = () => realNow + 600000;
-  let payload;
-  try {
-    payload = await svc.verifyToken(rotated);
-  } finally {
-    Date.now = clockSpy;
-  }
-  assert.equal(payload.sub, 'user-1');
+    // The clock then jumps past the floor window (the suite cannot read the
+    // constant, so it out-jumps it) but stays inside the cache TTL: the next
+    // refresh observes the rotation, with no real-time sleep.
+    await withClock(60000, async () => {
+      const payload = await svc.verifyToken(rotated);
+      assert.equal(payload.sub, 'user-1');
+    });
+  });
 });
 
 test('non-bare-integer KEYCLOAK_DISCOVERY_TIMEOUT_MS falls back to the 5000ms default', async () => {

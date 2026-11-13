@@ -4,7 +4,7 @@
 
 **Browser test** (automated via Playwright):
 ```bash
-npx playwright test tests/e2e/epic1/a1-login-redirect.spec.js
+npx playwright test tests/e2e/auth/a1-login-redirect.spec.js
 ```
 **Expected**: `{ redirected: true }`
 
@@ -12,7 +12,7 @@ npx playwright test tests/e2e/epic1/a1-login-redirect.spec.js
 
 **Browser test** (automated via Playwright):
 ```bash
-npx playwright test tests/e2e/epic1/a2-full-login-flow.spec.js
+npx playwright test tests/e2e/auth/a2-full-login-flow.spec.js
 ```
 **Expected**: URL is `https://localhost/dashboard`, body contains "GENIE.AI"
 
@@ -20,7 +20,7 @@ npx playwright test tests/e2e/epic1/a2-full-login-flow.spec.js
 
 **Browser test** (automated via Playwright):
 ```bash
-npx playwright test tests/e2e/epic1/a3-legacy-routes-redirect.spec.js
+npx playwright test tests/e2e/auth/a3-legacy-routes-redirect.spec.js
 ```
 **Expected**: All three redirect to Keycloak (`true`)
 
@@ -360,7 +360,7 @@ curl -sk "https://localhost/auth/realms/genie/.well-known/openid-configuration" 
 
 **Browser test** (automated via Playwright):
 ```bash
-npx playwright test tests/e2e/epic1/d7a-external-idp-button.spec.js
+npx playwright test tests/e2e/auth/d7a-external-idp-button.spec.js
 ```
 **Expected**: `{ hasExternalIdp: true }`
 
@@ -368,7 +368,7 @@ npx playwright test tests/e2e/epic1/d7a-external-idp-button.spec.js
 
 **Browser test** (automated via Playwright):
 ```bash
-npx playwright test tests/e2e/epic1/d7b-external-idp-login-flow.spec.js
+npx playwright test tests/e2e/auth/d7b-external-idp-login-flow.spec.js
 ```
 **Expected**: `hasDashboard: true`, URL is `https://localhost/dashboard`, body contains "GENIE.AI"
 

@@ -1,4 +1,4 @@
-// tests/e2e/chat-composer.spec.js
+// tests/e2e/chatbot/chat-composer.spec.js
 //
 // The chat composer's behaviour after the welcome-screen + chat-view
 // composer consolidation. Three things the spec must show together:
@@ -45,10 +45,10 @@
 const { test, expect } = require('@playwright/test');
 const fs = require('fs');
 const path = require('path');
-const { openWelcomeScreen } = require('./helpers/welcome');
-const { QUICK_HELP_GRID_ITEM } = require('./helpers/layout');
+const { openWelcomeScreen } = require('../helpers/welcome');
+const { QUICK_HELP_GRID_ITEM } = require('../helpers/layout');
 
-const { BASE_URL } = require('./helpers/base-url');
+const { BASE_URL } = require('../helpers/base-url');
 
 /*
  * The app's locale files, read from disk rather than listed here.
@@ -58,7 +58,7 @@ const { BASE_URL } = require('./helpers/base-url');
  * escape the placeholder gate silently, which is the one thing the
  * gate is for.
  */
-const LOCALES_DIR = path.join(__dirname, '..', '..', 'components', 'gov-chat-frontend', 'src', 'i18n', 'locales');
+const LOCALES_DIR = path.join(__dirname, '..', '..', '..', 'components', 'gov-chat-frontend', 'src', 'i18n', 'locales');
 const SHIPPED_LOCALES = 14;
 
 function localeCodes() {

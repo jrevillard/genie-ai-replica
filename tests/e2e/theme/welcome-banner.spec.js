@@ -1,4 +1,4 @@
-// tests/e2e/welcome-banner.spec.js
+// tests/e2e/theme/welcome-banner.spec.js
 //
 // Welcome banner invariants for the translucent scrim.
 //
@@ -80,7 +80,7 @@
 // over different axes — the locale and the layer — and for the same reason.
 
 const { test, expect } = require('@playwright/test');
-const { openWelcomeScreen, readVisualLayerState, capturePixels, lum, WCAG_BIND } = require('./helpers/welcome');
+const { openWelcomeScreen, readVisualLayerState, capturePixels, lum, WCAG_BIND } = require('../helpers/welcome');
 
 /*
  * The measured floors.

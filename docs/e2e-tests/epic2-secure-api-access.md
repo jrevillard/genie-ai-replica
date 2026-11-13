@@ -621,7 +621,7 @@ This test requires Playwright with HTTPS context (see Phase 0, Test Tools).
 
 **Browser test** (automated via Playwright):
 ```bash
-npx playwright test tests/e2e/epic2/g1-swagger-authorize.spec.js
+npx playwright test tests/e2e/auth/g1-swagger-authorize.spec.js
 ```
 
 **Expected**:
@@ -640,7 +640,7 @@ Validate the end-to-end flow: click authorize -> login to Keycloak -> token retu
 
 **Browser test** (automated via Playwright):
 ```bash
-npx playwright test tests/e2e/epic2/g1-swagger-authorize.spec.js
+npx playwright test tests/e2e/auth/g1-swagger-authorize.spec.js
 ```
 
 **Expected**:
@@ -657,7 +657,7 @@ Verify that after authentication, Swagger UI can successfully call protected end
 
 **Browser test** (automated via Playwright):
 ```bash
-npx playwright test tests/e2e/epic2/g1-swagger-authorize.spec.js
+npx playwright test tests/e2e/auth/g1-swagger-authorize.spec.js
 ```
 
 **Expected**:
@@ -786,7 +786,7 @@ curl -sk "https://localhost/auth/admin/realms/genie/users?username=testuser&exac
 
 ## Phase H: JWKS Force-Refresh (Story 2-2)
 
-**Playwright spec**: `npx playwright test tests/e2e/epic2/h1-jwks-force-refresh.spec.js`
+**Playwright spec**: `npx playwright test tests/e2e/auth/h1-jwks-force-refresh.spec.js`
 
 Validates that the backend force-refreshes its JWKS cache when token signature validation fails but the token is not expired. The middleware implements a two-attempt pattern: (1) verify with cached keys → fail, (2) force-refresh JWKS → retry → succeed.
 
@@ -920,14 +920,14 @@ curl -sk "https://localhost/api/me" \
 
 **Browser test** (automated via Playwright):
 ```bash
-npx playwright test tests/e2e/epic2/h1-jwks-force-refresh.spec.js
+npx playwright test tests/e2e/auth/h1-jwks-force-refresh.spec.js
 ```
 
 ---
 
 ## Phase I: Multi-Realm Configuration (Story 2-9)
 
-**Playwright spec**: `npx playwright test tests/e2e/epic2/i1-multi-realm.spec.js`
+**Playwright spec**: `npx playwright test tests/e2e/auth/i1-multi-realm.spec.js`
 
 Validates that the backend can validate tokens from multiple Keycloak realms simultaneously, maintaining separate user identities via the `{iss}#{sub}` composite key in ArangoDB.
 
@@ -1170,7 +1170,7 @@ curl -sk "https://localhost/api/me" \
 
 **Browser test** (automated via Playwright):
 ```bash
-npx playwright test tests/e2e/epic2/k1-auth-error-display.spec.js
+npx playwright test tests/e2e/auth/k1-auth-error-display.spec.js
 ```
 
 ### Test K.2 — TOKEN_EXPIRED (Short-Lived Token)

@@ -115,7 +115,9 @@ describe('the e2e suite names the venue it was given, and names it once', () => 
 
   test('the edge is defined ONCE — one module reads the environment', () => {
     // Before the wave, FOUR files read the environment — five read sites
-    // — measured over the wave's base tree (`fa192ab7`):
+    // — measured over the wave's base tree (`fa192ab7`; the composer spec
+    // it cites now lives at `tests/e2e/chatbot/chat-composer.spec.js`
+    // after the #1741 reorganization):
     // `playwright.config.js` (1), `tests/e2e/chat-composer.spec.js` (1),
     // `tests/e2e/helpers/chatbot.js` (1) and
     // `tests/e2e/theme-runtime-config.spec.js` (2). Every one of them

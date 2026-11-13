@@ -4375,7 +4375,7 @@ describe('the root Playwright config has a lint home (#1716)', () => {
       .readFileSync(path.join(ROOT, 'tests/e2e/eslint.config.js'), 'utf-8')
       .split('\n')
       .filter((line) => !line.trim().startsWith('//'))
-      .join('\n')
+      .join('')
       .replace(/\s+/g, '');
     const scopedExclusion = "files:['**/*.js'],ignores:['playwright.config.js','../../playwright.config.js'],";
     expect(source).toContain(scopedExclusion);
@@ -4391,11 +4391,12 @@ describe('the root Playwright config has a lint home (#1716)', () => {
     // pinned present and the suppressors that would defeat it (each a
     // one-token edit no other pin sees) are pinned absent.
     const scripts = JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf-8')).scripts;
-    expect(scripts['lint:playwright-config']).toBeDefined();
-    expect(scripts['lint:playwright-config']).toContain('--max-warnings 0');
-    expect(scripts['lint:playwright-config']).not.toContain('--no-warn');
-    expect(scripts['lint:playwright-config']).not.toContain('--no-ignore');
-    expect(scripts['lint:playwright-config']).toContain('playwright.config.js');
-    expect(scripts['lint:playwright-config']).toContain('tests/e2e/eslint.config.js');
+    const gateScript = scripts['lint:playwright-config'];
+    expect(gateScript).toBeDefined();
+    expect(gateScript).toContain('--max-warnings 0');
+    expect(gateScript).not.toContain('--no-warn');
+    expect(gateScript).not.toContain('--no-ignore');
+    expect(gateScript).toContain('playwright.config.js');
+    expect(gateScript).toContain('tests/e2e/eslint.config.js');
   });
 });

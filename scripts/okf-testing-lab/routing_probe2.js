@@ -19,7 +19,7 @@ function arango(q) {
         host: 'localhost',
         port: 8529,
         path: '/_db/genie-ai/_api/cursor',
-        headers: { 'Content-Type': 'application/json', Authorization: auth, 'Content-Length': d.length }
+        headers: { 'Content-Type': 'application/json', Authorization: auth, 'Content-Length': Buffer.byteLength(d) }
       },
       (resp) => {
         let s = '';

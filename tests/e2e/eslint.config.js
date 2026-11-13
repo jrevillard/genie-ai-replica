@@ -35,16 +35,16 @@ module.exports = [
     // only: a browser global there is a ReferenceError at config load, so
     // it takes the Node-only entry below instead of this one (#1716).
     // Measured on ESLint 10.14: with an explicit --config the entries
-    // anchor to the invocation's cwd, and a file outside it is ignored
-    // with a warning and exit 0 — so the gate covers the root file only
-    // while it runs from the repository root (the CI job's `cd` is pinned
-    // by the contract test in tests/config-validator). From tests/e2e/ the
-    // coverage would die silently, and a pin reading only this file's text
-    // cannot see it. Moving this config FILE changes nothing about what
-    // the entries match — they anchor to the invocation's cwd; what breaks
-    // instead is the --config path in lint:playwright-config and the read
-    // path of the pin that reads this file, and until those are re-spelled
-    // the gate exits 2 and the suite fails.
+    // anchor to the invocation's cwd, and a file outside it is rejected
+    // with exit 2; a file matched but ignore-excluded is a warning with
+    // exit 0 — the gate's --max-warnings 0 turns that warning into exit 1,
+    // so a silencing refactor (a hoisted global ignore, a base-path drift)
+    // fails CI instead of passing green while nothing is linted. Moving
+    // this config FILE changes nothing about what the entries match — they
+    // anchor to the invocation's cwd; what breaks instead is the --config
+    // path in lint:playwright-config and the read path of the pin that
+    // reads this file, and until those are re-spelled the gate exits 2 and
+    // the suite fails.
     ignores: ['playwright.config.js', '../../playwright.config.js'],
     languageOptions: {
       ecmaVersion: 'latest',

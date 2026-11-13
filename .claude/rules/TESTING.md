@@ -39,7 +39,8 @@ cd components/okf-server && npm ci
 # Config validator
 cd tests/config-validator && npm ci
 
-# E2E suite (ESLint only — the Playwright runtime itself resolves from the root node_modules)
+# E2E suite (ESLint only — the Playwright runtime itself resolves from the root node_modules);
+# ALSO required by tests/config-validator's suite: the #1716 behavioral probe runs this eslint binary
 cd tests/e2e && npm ci
 
 # OPEA overlay (Python venv recommended — uv per project convention)

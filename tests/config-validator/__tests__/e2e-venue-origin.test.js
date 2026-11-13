@@ -38,17 +38,22 @@ const E2E_ROOT = path.join(ROOT, 'tests/e2e');
 // it was given, and dies before its first assertion everywhere else.
 //
 // The boundary is the HOST's: the origin must not be continued by another
-// host character (a letter, a digit or a dash), nor by a dot that starts
-// ANOTHER label — `https://localhost` matches (the spelling with no
-// trailing slash, the one a bare address carries), while
-// `https://localhost.example.com` and `https://localhostevil` do not:
-// those are other hosts. A dot that does NOT continue a host — the
-// rooted-FQDN trailing dot (`https://localhost./` is the same host),
-// one the previous lookahead `[A-Za-z0-9.-]` wrongly treated as a
-// continuation and let through — belongs to the host, so it matches.
-// A lookahead for `/`, `:` or the end of the string misses the bare
-// case, because a string literal carries a closing quote after the
-// host.
+// host character (a letter, a digit, an underscore or a dash), nor by a
+// dot that starts ANOTHER label — `https://localhost` matches (the
+// spelling with no trailing slash, the one a bare address carries),
+// while `https://localhost.example.com`, `https://localhostevil` and
+// `https://localhost_evil` do not: those are other hosts. A dot that
+// does NOT continue a host — the rooted-FQDN trailing dot
+// (`https://localhost./` is the same host), one the previous lookahead
+// `[A-Za-z0-9.-]` wrongly treated as a continuation and let through —
+// belongs to the host, so it matches. A lookahead for `/`, `:` or the
+// end of the string misses the bare case, because a string literal
+// carries a closing quote after the host. The class enumerates the
+// OPEN-ENDED set of host-continuation characters, which is why DNS
+// oddities keep landing as one more character here; the planned
+// inversion for the next touch of this predicate is a POSITIVE
+// terminator boundary enumerating the CLOSED set of what ends a host
+// in JS source (port colon, path slash, quotes, end).
 //
 // The private ranges are in the list because a venue is also named by
 // its ADDRESS: the shared k8s venues sit on private addresses (RFC1918
@@ -60,7 +65,7 @@ const E2E_ROOT = path.join(ROOT, 'tests/e2e');
 // — a lookalike the negative half pins — into the list, and the pinned
 // negative half must stay out.
 const LOCAL_ORIGIN =
-  /https?:\/\/(?:localhost|127\.0\.0\.1|genieai(?:-forge)?\.local|10\.\d{1,3}\.\d{1,3}\.\d{1,3}|172\.(?:1[6-9]|2\d|3[01])\.\d{1,3}\.\d{1,3}|192\.168\.\d{1,3}\.\d{1,3}|169\.254\.\d{1,3}\.\d{1,3})(?::\d+)?(?![A-Za-z0-9-]|\.[A-Za-z0-9])/gi;
+  /https?:\/\/(?:localhost|127\.0\.0\.1|genieai(?:-forge)?\.local|10\.\d{1,3}\.\d{1,3}\.\d{1,3}|172\.(?:1[6-9]|2\d|3[01])\.\d{1,3}\.\d{1,3}|192\.168\.\d{1,3}\.\d{1,3}|169\.254\.\d{1,3}\.\d{1,3})(?::\d+)?(?![A-Za-z0-9_-]|\.[A-Za-z0-9_-])/gi;
 
 // The local origins the suite may drive on purpose: a mocked identity
 // provider, a local stub. One per line, with the reason. It is EMPTY on
@@ -204,17 +209,14 @@ describe('the e2e suite names the venue it was given, and names it once', () => 
         // edge and the deployment edge.
         'forge.spec.js': "await page.goto('https://genieai-forge.local:4443/');\n",
         'k8s.spec.js': "await page.goto('https://genieai.local:4443/');\n",
-        // The venue ADDRESS: a private-IP literal is the same offender —
-        // a spec that hardcodes the deployment's address dies on every
-        // other venue before its first assertion (#1801).
+        // The venue ADDRESS (#1801): a private-IP literal is the same
+        // offender class.
         'private-address.spec.js': "await page.goto('https://10.42.0.189:4443/');\n",
         'docker-range.spec.js': "await page.goto('https://172.20.0.5/');\n",
         'link-local.spec.js': "await page.goto('http://169.254.1.1/');\n",
         'home-range.spec.js': "await page.goto('http://192.168.1.10:3000/');\n",
         // The ROOTED-FQDN spelling: a trailing dot is the DNS root, not
-        // another label — `https://localhost./` is the same host as
-        // `https://localhost/`, and an earlier lookahead let that
-        // spelling through on every host in the list.
+        // another label — the same host, so an offender.
         'rooted-localhost.spec.js': "await page.goto('https://localhost./');\n",
         'rooted-forge.spec.js': "await page.goto('https://genieai-forge.local.:4443/');\n",
         'rooted-private.spec.js': "await page.goto('https://10.42.0.189./');\n",
@@ -228,10 +230,13 @@ describe('the e2e suite names the venue it was given, and names it once', () => 
         'lookalike-dash.spec.js': "await page.goto('https://localhost-evil/');\n",
         'lookalike-ip.spec.js': "await page.goto('http://127.0.0.10/');\n",
         // The private ranges have lookalikes too: an address outside the
-        // RFC1918 block (`172.1.x.x` is public space) and a private
-        // address that is a SUBDOMAIN of another host must stay out.
+        // RFC1918 block, a private address that is a SUBDOMAIN of
+        // another host, and underscore/dash-led continuations of the
+        // pinned hosts must stay out.
         'lookalike-172.spec.js': "await page.goto('https://172.1.0.5/');\n",
-        'lookalike-private-host.spec.js': "await page.goto('https://10.42.0.189.example.com/');\n"
+        'lookalike-private-host.spec.js': "await page.goto('https://10.42.0.189.example.com/');\n",
+        'lookalike-underscore.spec.js': "await page.goto('https://localhost_evil/');\n",
+        'lookalike-underscore-label.spec.js': "await page.goto('https://localhost._evil.x/');\n"
       },
       (tree) => {
         const strays = offenders(jsFiles(tree), ['http://127.0.0.1:9000', 'http://localhost:8123']).map((f) =>

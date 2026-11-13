@@ -192,13 +192,10 @@ test.describe('runRouteHandler', () => {
   });
 
   test('rethrows when the browser process died — not the named race', async () => {
-    // A browser crash produces the target-closed error; real Playwright
-    // usually delivers the close events first, so the conjunction swallows
-    // the crash like the named race and the spec fails on its other
-    // awaits. This spec models the narrow window BEFORE close-event
-    // delivery with a double whose flags stay false — a state real
-    // Playwright does not reliably produce (#1627), not a protection the
-    // guard buys on a dead browser.
+    // Models the narrow window BEFORE close-event delivery with a double
+    // whose flags stay false — a state real Playwright does not reliably
+    // produce (#1627); the why this window matters lives once, in the
+    // helper's own header (route.js).
     const { page } = pageState();
     await expect(
       runOnce(page, async () => {

@@ -29,21 +29,19 @@
  * whichever credential path it takes.
  *
  * The address must be an http(s) ORIGIN — scheme, host and port, and
- * nothing else. A scheme-less value (`localhost:3000`) parses with an
- * EMPTY host — the venue mapping would map an empty host, and the
- * browser would navigate to an address that means nothing (#1805); a
- * value carrying a path, query, hash or credentials is not the venue's
- * edge either, and every `${BASE_URL}/...` interpolation would be built
- * on an address that is not the origin the venue serves. The module
- * refuses such a value AT THE POINT IT IS READ, naming the value it
- * refused: every process that requires this module fails at load with
- * the named cause — the pre-flight included, and a direct
- * `npx playwright test` too, which never runs the pre-flight at all.
+ * nothing else. A value that is not — a scheme-less address
+ * (`localhost:3000`), or one carrying a path, query, hash or
+ * credentials — is refused AT THE POINT IT IS READ, naming the value
+ * and the rule; the refusal message carries the full why, so every
+ * process that requires this module fails at load with the named
+ * cause — the pre-flight included, and a direct `npx playwright test`
+ * too, which never runs the pre-flight at all.
  *
  * What the module publishes is the PARSED origin — one canonical
  * spelling — so WHATWG-tolerated spellings (`https:host:4443` without
  * the slashes, an upper-cased host) cannot publish a second name for
- * the same venue.
+ * the same venue. An IPv6 literal passes this module, but the
+ * venue-origin gate does not watch that spelling yet (#1840).
  */
 /**
  * The venue origin, canonical: a value that is not an http(s) origin
@@ -52,7 +50,7 @@
  * @param {string} raw - the address as configured
  * @returns {string} the canonical origin (scheme, host, port)
  * @throws {Error} when the address is not an http(s) origin with a
- *   host — the message names the value it refused
+ *   host — the message names the value and carries the rule
  */
 function normalizeVenue(raw) {
   const value = String(raw || '').replace(/\/+$/, '');

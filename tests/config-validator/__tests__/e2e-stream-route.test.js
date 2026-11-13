@@ -64,15 +64,16 @@ const withContractTree = (endpoint, files) =>
 
 /** The call SITE the gate anchors on: the app's own stream client
  * module — the file the gate's contract names as the authority on what
- * the app calls. Anchoring on the whole tree as a bare existence check
- * proved only that SOME file carried the endpoint, so a stale copy
- * elsewhere satisfied the gate while the real client had drifted
- * (#1809). The gate therefore reads the whole tree and requires the
- * endpoint to appear in EXACTLY the call site: a stale copy elsewhere,
- * a second unwatched caller, and a client that drifted off the path
- * are all the same red. */
-const CLIENT_MODULE = path.join(FRONTEND_SRC, 'services', 'chatbotService.js');
-const CLIENT_RELATIVE = path.relative(FRONTEND_SRC, CLIENT_MODULE);
+ * the app calls. A bare existence check over the tree proved only that
+ * SOME file carried the endpoint, so a stale copy elsewhere satisfied
+ * the gate while the real client had drifted (#1809). The scan below
+ * therefore requires the endpoint to appear in EXACTLY the call site:
+ * a stale copy elsewhere, a second unwatched caller, and a client that
+ * drifted off the path are all the same red. The scan is the app's .js
+ * files (jsFiles); a caller in another extension is a gate edit, not a
+ * silent pass-through. */
+const CLIENT_RELATIVE = 'services/chatbotService.js';
+const CLIENT_MODULE = path.join(FRONTEND_SRC, CLIENT_RELATIVE);
 
 /**
  * The endpoint as a PATTERN: the path must END there. A plain substring
@@ -93,12 +94,21 @@ const isTestFile = (file) => {
  * The app's .js files that carry the endpoint — read over the given
  * root, so the same scan reads the real frontend tree and a throwaway
  * mutation tree. The call site sits at the same relative place in both.
+ * Files whose RAW source carries neither the needle nor a block-comment
+ * opener cannot gain the needle from comment stripping (stripping only
+ * deletes block comments and rewrites line comments as a newline), so
+ * they skip the strip — the scan cost drops without changing any
+ * verdict.
  */
 const appFilesCarrying = (needle, root) => {
   const pattern = endpointPattern(needle);
   return jsFiles(root)
     .filter((f) => !isTestFile(f))
-    .filter((f) => pattern.test(stripJsComments(fs.readFileSync(f, 'utf8'))))
+    .filter((f) => {
+      const raw = fs.readFileSync(f, 'utf8');
+      if (!raw.includes(needle) && !raw.includes('/*')) return false;
+      return pattern.test(stripJsComments(raw));
+    })
     .map((f) => path.relative(root, f));
 };
 
@@ -128,19 +138,16 @@ describe('the e2e suite intercepts the stream endpoint through the shared consta
     // the app's spelling changed and the constant did not, every stream
     // spec would silently stop intercepting and assert against the LIVE
     // backend — the #1271 failure this gate exists for.
-    // The endpoint must appear in EXACTLY the call site: the set
-    // equality is what turns a stale copy elsewhere (#1809), a second
-    // unwatched caller, and a client that drifted off the path into the
-    // same red.
     expect(appFilesCarrying(STREAM_PATH, FRONTEND_SRC)).toEqual([CLIENT_RELATIVE]);
   });
 
   test('a stale copy elsewhere does not satisfy the anchor', () => {
     // The mutation the anchor exists to catch (#1809): the client moves
     // off the endpoint AND a stale copy of the old path survives in
-    // another file. A bare existence check goes green on the stale
-    // copy; the set is then NOT the call site alone, and the equality
-    // above reds.
+    // another file — the set is then NOT the call site alone, and the
+    // equality above reds. (The scan inventing nothing is pinned by the
+    // real-tree equality plus this tree: a healthy call site reads
+    // exactly the call site there.)
     withTree(
       'stream-call-site-',
       {
@@ -149,15 +156,6 @@ describe('the e2e suite intercepts the stream endpoint through the shared consta
       },
       (tree) => {
         expect(appFilesCarrying(STREAM_PATH, tree)).toEqual(['services/other.js']);
-      }
-    );
-    // The inverse pins the scan itself: a tree whose call site carries
-    // the endpoint reads exactly the call site.
-    withTree(
-      'stream-call-site-live-',
-      { [CLIENT_RELATIVE]: `const url = \`\${baseUrl}${STREAM_PATH}\`;\n` },
-      (tree) => {
-        expect(appFilesCarrying(STREAM_PATH, tree)).toEqual([CLIENT_RELATIVE]);
       }
     );
   });

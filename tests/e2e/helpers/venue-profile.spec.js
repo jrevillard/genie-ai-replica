@@ -41,23 +41,13 @@ function fakeTransport(answers) {
     const answer = answers.shift();
     if (!answer) return Promise.reject(new Error(`fake transport: no answer for ${method} ${path}`));
     if (answer.throws) return Promise.reject(answer.throws);
-    // The real transport (helpers/auth.js) parses the body as JSON
-    // unless the caller asks for it raw, and REJECTS a non-JSON body.
-    // The fake does the same, so a probe that forgets `raw: true` fails
-    // the way the venue would fail — instead of quietly reading a body
-    // the real transport would have refused.
-    if (!(options && options.raw) && typeof answer.data === 'string') {
-      try {
-        return Promise.resolve({ status: answer.status, data: JSON.parse(answer.data), headers: {} });
-      } catch {
-        const error = new Error(
-          `${method} ${path} returned a non-JSON body (HTTP ${answer.status}): ${answer.data.slice(0, 200)}`
-        );
-        error.nonJsonBody = true;
-        error.status = answer.status;
-        return Promise.reject(error);
-      }
-    }
+    // A plain stub: it hands back exactly the answer it was given. The
+    // real transport's response contract — JSON parsing, the raw escape
+    // hatch, the non-JSON rejection — is owned by helpers/auth-request
+    // .spec.js at the transport's own boundary (#1804); this fake does
+    // not re-implement it. The probes under test already pass the right
+    // shape (raw text for the runtime config, arrays/null for the admin
+    // API), so a probe reading the wrong shape fails on its own reads.
     return Promise.resolve({ status: answer.status, data: answer.data, headers: {} });
   };
   return calls;

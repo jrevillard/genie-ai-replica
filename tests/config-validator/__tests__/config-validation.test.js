@@ -4369,6 +4369,9 @@ describe('the root Playwright config has a lint home (#1716)', () => {
     expect(validateChanges).toContain('playwright.config.js');
     expect(validateChanges).toContain('package.json');
     expect(validateChanges).toContain('components/shared/eslint-rules-base.js');
+    // The hook entry itself: dropping it stops the hook pin from running
+    // on hook-only MRs — the same decay shape as dropping a file entry.
+    expect(validateChanges).toContain('.husky/pre-commit');
     // The pre-existing suite glob is load-bearing for the pins too: the
     // eslint-config source read, the suppression pin and the sibling-gate
     // pin all read files under tests/e2e/ — dropping the glob stops the
@@ -4564,7 +4567,10 @@ describe('the root Playwright config has a lint home (#1716)', () => {
     const hook = fs.readFileSync(path.join(ROOT, '.husky/pre-commit'), 'utf-8');
     expect(hook).toContain('npx lint-staged');
     expect(hook).toContain('install_if_needed "tests/e2e"');
-    expect(hook).toMatch(/tests\/e2e\/|playwright\.config\.js/);
+    // The detection LINE, not the comment above it: the hook's own
+    // comment names both paths and would satisfy a loose match while the
+    // detection line is deleted (mutation-tested).
+    expect(hook).toMatch(/has_e2e=.*tests\/e2e\//);
     const pkg = JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf-8'));
     const entry = (pkg['lint-staged'] || {})['playwright.config.js'];
     // Present before the join: a deleted key would otherwise fail with a

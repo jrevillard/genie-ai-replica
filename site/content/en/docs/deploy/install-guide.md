@@ -556,6 +556,8 @@ For tuning guidance see
 | `KEYCLOAK_LOCALE` | string | no | _unset (fallback: `en` from realm) | Default login locale. If set, overrides the realm `defaultLocale`. Commented in `env` — uncomment to change. |
 | `KEYCLOAK_SUPPORTED_LOCALES` | string | no | `["ar","de","en","es","fr","pt","ru","th","zh-Hans"]` | JSON array of supported login locales. See [Restrict active locales](/docs/configure/locale-whitelist/) for the canonical reference. |
 | `KEYCLOAK_ACCESS_TOKEN_LIFESPAN` | number | no | `300` | Access-token TTL (seconds) |
+| `KEYCLOAK_SSO_SESSION_IDLE_TIMEOUT` | number | no | `28800` | SSO session idle TTL (seconds) — silent renewal dies past this idle; unset leaves Keycloak's 30-minute default |
+| `KEYCLOAK_SSO_SESSION_MAX_LIFESPAN` | number | no | `604800` | SSO session maximum TTL (seconds) — the hard re-login wall; unset leaves Keycloak's 10-hour default |
 | `GENIE_ADMIN_EMAIL` | string | no | (unset) | Initial admin email |
 | `GENIE_ADMIN_USERNAME` | string | no | `genie-admin` | Initial admin username |
 | `GENIE_ADMIN_PASSWORD` | secret | yes | `<set-me>` | Initial admin password |
@@ -749,6 +751,7 @@ applied by `keycloak-config`. Common post-deploy knobs:
 | `KEYCLOAK_VERIFY_EMAIL` | Require email verification on signup (default `true`) |
 | `KEYCLOAK_REGISTRATION_ENABLED` | Allow self-registration (default `true`; set `false` to invite-only) |
 | `KEYCLOAK_ACCESS_TOKEN_LIFESPAN` | Access-token TTL in seconds (default 300) |
+| `KEYCLOAK_SSO_SESSION_IDLE_TIMEOUT` / `KEYCLOAK_SSO_SESSION_MAX_LIFESPAN` | SSO session idle / maximum TTL in seconds (defaults 28800 / 604800 — 8 h idle, 7 d hard wall) |
 | `GENIE_ADMIN_USERNAME` / `GENIE_ADMIN_PASSWORD` | Seeded `genie-admin` user credentials (change after first login) |
 | `KEYCLOAK_ADDITIONAL_REALMS` | JSON array of additional realms to bootstrap alongside `genie` |
 

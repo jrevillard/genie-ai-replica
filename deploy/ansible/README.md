@@ -413,6 +413,8 @@ Every variable below is emitted by `env.j2` with the value in the "Default" colu
 | `config_bootstrap_allow_rebrand` | `false` | no | Allow a branch whose `app.title` differs from the one the host serves. The guard compares the branch with the copy the host still serves — the copy the mirror is about to replace — so a rename committed in the repository blocks the deploy until the flag is set: set it to `true`, deploy (every node takes the new title), then set it back to `false`. Leaving it on disables the re-brand guard for later branches too |
 | `config_bootstrap_theme_entrypoints` | `[login, account, admin, email]` | no | The theme subtrees the deployment's theme must carry. Narrow it for a theme that serves only some of the realm's screens |
 | `keycloak_access_token_lifespan` | — | no | Access token lifespan (e.g. `300` seconds, `5m`) |
+| `keycloak_sso_session_idle_timeout` | — | no | SSO session idle lifespan in seconds; after this much idle time the browser session dies and the next page load requires a full re-login (#1834). Compose default `28800` (8 h); unset leaves Keycloak's built-in 30-minute default in force |
+| `keycloak_sso_session_max_lifespan` | — | no | SSO session maximum lifespan in seconds — the hard wall after which every user logs in again regardless of activity (#1834). Compose default `604800` (7 d); unset leaves Keycloak's built-in 10-hour default in force |
 | `keycloak_registration_enabled` | — | no | Enable user self-registration (`true`/`false`) |
 | `keycloak_verify_email` | — | no | Require email verification for new users |
 | `keycloak_reset_password` | — | no | Allow users to reset their password |

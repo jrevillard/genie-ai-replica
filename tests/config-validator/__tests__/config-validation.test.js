@@ -4362,9 +4362,13 @@ describe('the root Playwright config has a lint home (#1716)', () => {
     // gate from playwright.config.js or package.json would skip every
     // pin that guards them (tests/e2e/eslint.config.js is already covered
     // by the job's tests/e2e glob, which the handle-locator gate added
-    // for the same reason). Both files must instantiate the job too.
+    // for the same reason). Both files must instantiate the job too —
+    // and so must the shared-rules file, the third file that can silence
+    // the gate: its entry was added for exactly this reason and can rot
+    // the same way.
     expect(validateChanges).toContain('playwright.config.js');
     expect(validateChanges).toContain('package.json');
+    expect(validateChanges).toContain('components/shared/eslint-rules-base.js');
   });
 
   test('the lint job runs the gate from the repository root', () => {

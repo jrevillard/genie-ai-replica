@@ -4485,6 +4485,13 @@ describe('the root Playwright config has a lint home (#1716)', () => {
     expect(scripts['lint:fix'].startsWith('npm run lint:playwright-config:fix && ')).toBe(true);
   });
 
+  // The probe's mkdtemp dirs, removed after the suite (same convention
+  // as writeTempCi below).
+  const probeDirs = [];
+  afterAll(() => {
+    for (const dir of probeDirs) fs.rmSync(dir, { recursive: true, force: true });
+  });
+
   test('the gate actually fires on an undeclared global (behavioral control)', () => {
     // The string pins assert configuration; this probe asserts the
     // OUTCOME with the real binary: a copy of the root config carrying an
@@ -4497,6 +4504,7 @@ describe('the root Playwright config has a lint home (#1716)', () => {
     // cwd, so a file named playwright.config.js there takes the
     // Node-only entry — the exact runtime shape of the root config.
     const probe = fs.mkdtempSync(path.join(os.tmpdir(), 'gate-probe-'));
+    probeDirs.push(probe);
     const rootConfig = fs.readFileSync(path.join(ROOT, 'playwright.config.js'), 'utf-8');
     fs.writeFileSync(path.join(probe, 'playwright.config.js'), rootConfig + '\nconst probeGlobal = window.location;\n');
     let failure;
@@ -4510,6 +4518,11 @@ describe('the root Playwright config has a lint home (#1716)', () => {
       failure = e;
     }
     expect(failure).toBeDefined();
+    // An ENOENT (tests/e2e deps not installed on a dev checkout) surfaces
+    // as status null with a code — name the remedy instead of rendering
+    // "expected null to be 1". CI installs the deps (config:validate's
+    // before_script), so only dev checkouts can take this branch.
+    expect(failure.code).not.toBe('ENOENT');
     expect(failure.status).toBe(1);
     expect(`${failure.stdout}${failure.stderr}`).toContain('no-undef');
   });

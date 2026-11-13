@@ -1,7 +1,7 @@
 // tests/e2e/theme/living-intelligence.spec.js
 const { test, expect } = require('@playwright/test');
 const { expectRevalidated } = require('../helpers/cache-headers');
-const { loginViaUI } = require('../helpers/chatbot');
+const { loginViaUI, LOGIN_BUDGET_TIMEOUT_MS } = require('../helpers/chatbot');
 
 // The decorative layer is configuration, and its assets live in the
 // bind-mounted /config/ directory, so they must be revalidated like the
@@ -14,6 +14,10 @@ const { loginViaUI } = require('../helpers/chatbot');
 // helper so the contract diverges in one place rather than per spec.
 
 test.describe('Living Intelligence visual layer', () => {
+  // The login test logs in through the browser — the budget is the
+  // login's own ceiling, derived once beside loginViaUI (#1798).
+  test.describe.configure({ timeout: LOGIN_BUDGET_TIMEOUT_MS });
+
   test('the decoration assets are served from /config/ and revalidated', async ({ request }) => {
     for (const asset of [
       '/config/genie-visual/assets/genie-hero-transparent.png',

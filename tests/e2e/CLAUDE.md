@@ -71,6 +71,58 @@ page.locator('.stat-card .stat-value')
 If the element you need carries no handle, add one to the component that
 renders it (`data-test-id="..."`) — an inert attribute, no behaviour change.
 
+### The handle naming contract
+
+A new handle is **kebab-case, page-scoped**: `<page>-<thing>` —
+`document-name`, `upload-file-input`, `quick-help-grid`. The prefix names
+the surface that renders the element, not the test that reads it. A
+shared DS primitive that declares its own handle uses the `ds-` prefix
+(`ds-status-tag`) — but prefer the page-scoped handle on the page's own
+element (a wrapping cell, a container) over adding one inside a shared
+component: the page keeps ownership, the component stays unannotated.
+
+The **attribute spelling follows the component**: the chat surfaces carry
+`data-testid`, the admin and OKF surfaces carry `data-test-id` (the two
+spellings predate the contract; a spec uses the spelling of the component
+it addresses — see `.claude/rules/E2E-TESTING.md`). A handle that exists
+already is never renamed — a rename breaks every spec reading it and
+needs its own migration issue.
+
+### What else is accepted, and what is not
+
+| Class | Form | Verdict |
+|---|---|---|
+| **Handle** | `[data-test-id="..."]` / `[data-testid="..."]` | the rule |
+| **Role** | `getByRole('button', { name })` | accepted fallback — survives any redesign, but its name is copy: allowed with eyes open, and a copy change is a visible test failure |
+| **Text discriminator** | `.filter({ hasText })` / `locator(sel, { hasText })` | accepted when it narrows a set a handle already resolved — the text should be the test's own seed data, not design copy |
+| **Handle-rooted structure** | `row.locator('td')`, `dialog.getByRole(...)` | accepted — a structural tail rooted at a declared handle |
+| **Structural** | class selectors anywhere | **forbidden** — gate-enforced (see below) |
+| **Text selection** | `getByText` / `getByLabel` / `getByPlaceholder`, `text=`, `:has-text()` in a selector string | **forbidden** in scanned files — breaks on any copy change |
+
+### The gate
+
+The handle-locator gate
+(`tests/config-validator/__tests__/e2e-handle-locators.test.js`) is
+**default-on**: every `.js` file under `tests/e2e/` is scanned for class
+selectors and text-selection APIs, and a file is exempt only while it is
+listed in `GRANDFATHERED_FILES` — each entry carrying its reason and the
+derived issue that owns its migration. A NEW spec lands inside the gate
+automatically; a file leaves the list in the MR that converts it. The
+locator classification of every spec — and the exempt inventory with its
+reasons — lives in the [locator map](../../docs/e2e-tests/locator-map.md).
+
+**Third-party surfaces are exempt by nature**: the Keycloak login page
+renders the upstream theme's own IDs (`#username`, `#password`,
+`#kc-login`), and the Swagger UI page is a third-party bundle that
+declares no handles at all — no handle contract can reach either. Their
+specs stay as they are; the map records them.
+
+To convert a grandfathered file: add the missing handles to the frontend,
+move the file's locators onto them, drop the file from
+`GRANDFATHERED_FILES`, and mutation-prove the migration — rename one
+handle in the component, watch the spec fail, restore it, watch it pass.
+A conversion without the red is a claim, not a proof.
+
 ## Execution order and phase conventions
 
 The three execution-order conventions — Test Step Format, Variable Naming, URL

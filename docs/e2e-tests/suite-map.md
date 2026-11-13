@@ -164,7 +164,9 @@ already enforce:
   the coverage demand;
 - the **handle-locator gate** and the **fixture-password scan** carry the
   per-file lists they need and were updated by the same MR that moved the
-  files (#1741).
+  files (#1741) — the gate went default-on with explicit exemptions in
+  #1822, whose [locator map](locator-map.md) classifies every spec's
+  element selection.
 
 When you move or add a spec: move it into its area directory, update this
 map's row, and let the validator suite tell you which pin lists followed.

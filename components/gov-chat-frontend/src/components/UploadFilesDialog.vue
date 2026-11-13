@@ -43,6 +43,7 @@
           type="file"
           multiple
           hidden
+          data-test-id="upload-file-input"
           :accept="allowedExtensions.join(',')"
           @change="handleFileSelect"
         />
@@ -73,7 +74,7 @@
 
       <div v-if="files.length > 0" class="file-list-container">
         <ul class="file-list">
-          <li v-for="(file, index) in files" :key="index" class="file-item">
+          <li v-for="(file, index) in files" :key="index" class="file-item" data-test-id="upload-file-item">
             <span class="file-name">{{ file.name }}</span>
             <span class="file-size">{{ formatFileSize(file.size) }}</span>
             <DsButton variant="ghost" class="remove-file-btn" small @click="removeFile(index)">
@@ -83,7 +84,7 @@
         </ul>
       </div>
 
-      <div v-if="errorMessage" class="error-message">{{ errorMessage }}</div>
+      <div v-if="errorMessage" class="error-message" data-test-id="upload-error-message">{{ errorMessage }}</div>
     </div>
 
     <div class="dialog-footer">

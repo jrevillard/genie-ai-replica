@@ -70,8 +70,8 @@ const withContractTree = (endpoint, files) =>
  * therefore requires the endpoint to appear in EXACTLY the call site:
  * a stale copy elsewhere, a second unwatched caller, and a client that
  * drifted off the path are all the same red. The scan is the app's .js
- * files (jsFiles); a caller in another extension is a gate edit, not a
- * silent pass-through. */
+ * files (jsFiles); a caller in another extension is outside this scan —
+ * supporting one is a gate edit. */
 const CLIENT_RELATIVE = 'services/chatbotService.js';
 const CLIENT_MODULE = path.join(FRONTEND_SRC, CLIENT_RELATIVE);
 
@@ -146,8 +146,8 @@ describe('the e2e suite intercepts the stream endpoint through the shared consta
     // off the endpoint AND a stale copy of the old path survives in
     // another file — the set is then NOT the call site alone, and the
     // equality above reds. (The scan inventing nothing is pinned by the
-    // real-tree equality plus this tree: a healthy call site reads
-    // exactly the call site there.)
+    // real-tree equality, which reads exactly the call site, plus this
+    // tree, which reads exactly the stale file.)
     withTree(
       'stream-call-site-',
       {

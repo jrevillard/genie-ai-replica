@@ -236,7 +236,8 @@ describe('the e2e suite names the venue it was given, and names it once', () => 
         'lookalike-172.spec.js': "await page.goto('https://172.1.0.5/');\n",
         'lookalike-private-host.spec.js': "await page.goto('https://10.42.0.189.example.com/');\n",
         'lookalike-underscore.spec.js': "await page.goto('https://localhost_evil/');\n",
-        'lookalike-underscore-label.spec.js': "await page.goto('https://localhost._evil.x/');\n"
+        'lookalike-underscore-label.spec.js': "await page.goto('https://localhost._evil.x/');\n",
+        'lookalike-dash-label.spec.js': "await page.goto('https://localhost.-evil.x/');\n"
       },
       (tree) => {
         const strays = offenders(jsFiles(tree), ['http://127.0.0.1:9000', 'http://localhost:8123']).map((f) =>

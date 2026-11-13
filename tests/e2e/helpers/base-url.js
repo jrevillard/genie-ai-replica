@@ -80,6 +80,13 @@ function normalizeVenue(raw) {
   return parsed.origin;
 }
 
-const BASE_URL = normalizeVenue(process.env.BASE_URL || 'https://localhost');
+// UNSET means the default venue; an explicitly EMPTY address is a
+// misconfiguration and is refused like any other non-origin value —
+// `||` would swallow it into the default silently, which is exactly
+// the #1805 diagnostic class (a run against the wrong venue reads
+// like a broken runner). The run script maps blank to the default
+// itself (`${BASE_URL:-…}`), so the module only sees '' on a direct
+// run — the path with no other named-cause check.
+const BASE_URL = normalizeVenue(process.env.BASE_URL === undefined ? 'https://localhost' : process.env.BASE_URL);
 
 module.exports = { BASE_URL };

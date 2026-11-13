@@ -89,6 +89,15 @@ test.describe('the venue address has one spelling', () => {
 test.describe('the venue address must be an http(s) origin with a host', () => {
   const REFUSAL = 'http(s) origin with a host';
 
+  test('an explicitly empty address is refused, not swallowed into the default', () => {
+    // UNSET falls back to the default; EMPTY is a misconfiguration —
+    // `||` would publish the default venue silently, and the run would
+    // read like a broken runner instead of naming the cause (#1805).
+    const error = addressErrorIn('');
+    expect(error).toContain('""');
+    expect(error).toContain(REFUSAL);
+  });
+
   test('a scheme-less address is refused, naming the value', () => {
     // `localhost:3000` parses with protocol `localhost:` and an EMPTY
     // host — the case the refusal exists for.

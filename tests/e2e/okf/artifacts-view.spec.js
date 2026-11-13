@@ -166,9 +166,10 @@ test.describe('the OKF artifacts view', () => {
     await openArtifacts(page);
     const view = page.locator('[data-test-id="okf-artifacts-view"]');
     await expect(view).toBeVisible();
-    // No delete/remove control anywhere in the view, for any state.
+    // No delete/remove control anywhere in the view, for any state — the
+    // role form is the one count (the bare-tag copy read the same set and
+    // added a second way to pass; #1829).
     await expect(view.getByRole('button', { name: /delete|remove/i })).toHaveCount(0);
-    await expect(view.locator('button').filter({ hasText: /delete|remove/i })).toHaveCount(0);
   });
 
   test('the deep link opens the artifacts view directly', async ({ page }) => {

@@ -62,6 +62,11 @@ const store = createStore({
 // The open conversation rehydrates before anything renders and persists
 // (debounced) as it changes.
 rehydrateConversation(store.state.conversation);
+// #1817: the rehydrated entry runs the same okf repair the saved-conversation
+// load runs — the graft fixes translated rows whose raw entries carry the
+// identity; the legacy arm resolves pre-CAP-1 rows live. Non-blocking by
+// contract (every failure degrades that row to its honest unavailable card).
+store.dispatch('conversation/repairRestoredOkfIdentity').catch(() => {});
 subscribeConversation(store);
 
 export default store;

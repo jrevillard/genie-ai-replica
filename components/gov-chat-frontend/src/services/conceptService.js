@@ -98,6 +98,30 @@ const conceptService = {
     return res && res.data ? res.data : { ok: true };
   },
 
+  /**
+   * #1817 (saved-conversation OKF restore) — resolve a PRE-CAP-1 citation
+   * row's lost repo identity: one concept_id in, the caller-visible holding
+   * repo out ({ repo_id, bundle_version }). null when no visible repo holds
+   * the concept (404 is the anti-enumeration refusal — restricted / draft /
+   * absent are indistinguishable), so the caller keeps the honest
+   * "unavailable" card instead of an error.
+   */
+  async resolveRepo(conceptId) {
+    if (!conceptId) return null;
+    try {
+      // silent: true — the 404 refusal is an expected, handled outcome (the
+      // restored row renders "unavailable"), never a global error toast.
+      const res = await httpService.get('/okf/concepts/resolve-repo', {
+        params: { concept_id: conceptId },
+        silent: true
+      });
+      return res && res.data ? res.data : null;
+    } catch (err) {
+      if (err && (err.status === 404 || err.status === 501)) return null;
+      throw err;
+    }
+  },
+
   async validate(_repoId, _conceptId) {
     throw notReady('okf.validation.run.notReady');
   },

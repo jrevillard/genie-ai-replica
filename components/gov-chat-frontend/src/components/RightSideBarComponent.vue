@@ -62,18 +62,33 @@
                    ORIGINATED from — the same secondary origin rows as the
                    answer cards. Never rendered without resolved sources. -->
               <div v-if="isOkfConceptSource(doc) && doc.okfSources && doc.okfSources.length" class="document-origins">
-                <button
-                  v-for="(o, oi) in doc.okfSources"
-                  :key="`${oi}-${o.file_id || o.resource}`"
-                  type="button"
-                  class="document-origin"
-                  :data-testid="`document-origin-${oi}`"
-                  @click.stop="openOriginDocument(o)"
-                >
-                  <FileText :size="12" aria-hidden="true" />
-                  <span class="document-origin__label">{{ originLabel(o) }}</span>
-                  <ExternalLink :size="12" aria-hidden="true" />
-                </button>
+                <!-- #1827: an origin doc-repo answers 404 for is a FACT, not
+                     a click — the muted row names it, the working file keeps
+                     its link. -->
+                <template v-for="(o, oi) in doc.okfSources" :key="`${oi}-${o.file_id || o.resource}`">
+                  <span
+                    v-if="o.missing"
+                    class="document-origin document-origin--missing"
+                    :data-testid="`document-origin-missing-${oi}`"
+                  >
+                    <FileText :size="12" aria-hidden="true" />
+                    <span class="document-origin__label">{{ originLabel(o) }}</span>
+                    <span class="document-origin__missing-note">
+                      {{ $t('chatbot.okfOriginMissing') }}
+                    </span>
+                  </span>
+                  <button
+                    v-else
+                    type="button"
+                    class="document-origin"
+                    :data-testid="`document-origin-${oi}`"
+                    @click.stop="openOriginDocument(o)"
+                  >
+                    <FileText :size="12" aria-hidden="true" />
+                    <span class="document-origin__label">{{ originLabel(o) }}</span>
+                    <ExternalLink :size="12" aria-hidden="true" />
+                  </button>
+                </template>
               </div>
               <!-- W9 (concept tree browse): the browse affordance on a
                    WORKING okf-concept card — one dialog (owned by the parent)
@@ -658,6 +673,25 @@ export default {
 .document-origin:hover {
   color: var(--accent);
   background: var(--surface);
+}
+
+/* #1827: an origin whose file is gone is a fact, not a click — muted, no
+   hover affordance, the missing note rides the label. */
+.document-origin--missing {
+  cursor: default;
+  flex-wrap: wrap;
+}
+
+.document-origin--missing:hover {
+  color: var(--muted);
+  background: transparent;
+}
+
+.document-origin__missing-note {
+  color: var(--muted);
+  font-size: var(--text-xs);
+  opacity: 0.85;
+  flex: 1 1 100%;
 }
 
 .document-origin__label {

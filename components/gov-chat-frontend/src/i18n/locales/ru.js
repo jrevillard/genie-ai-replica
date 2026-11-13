@@ -1382,6 +1382,7 @@ export default {
 
     documentOpenError: 'Не удалось открыть документ',
     okfSourceUnavailable: 'Этот источник недоступен для просмотра.',
+    okfOriginMissing: 'Этого исходного документа нет в репозитории документов.',
     okfOriginalSource: 'Первоисточник',
     okfBrowseRepo: 'Обзор репозитория',
     okfBrowser: {

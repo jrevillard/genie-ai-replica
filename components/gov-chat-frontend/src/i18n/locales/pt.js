@@ -1390,6 +1390,7 @@ export default {
 
     documentOpenError: 'Não foi possível abrir o documento',
     okfSourceUnavailable: 'Esta fonte não está disponível para visualização.',
+    okfOriginMissing: 'Este documento de origem não está no repositório de documentos.',
     okfOriginalSource: 'Fonte original',
     okfBrowseRepo: 'Explorar o repositório',
     okfBrowser: {

@@ -1348,6 +1348,7 @@ export default {
 
     documentOpenError: '无法打开文档',
     okfSourceUnavailable: '该来源暂不可查看。',
+    okfOriginMissing: '该来源文档不在文档存储库中。',
     okfOriginalSource: '原始来源',
     okfBrowseRepo: '浏览知识库',
     okfBrowser: {

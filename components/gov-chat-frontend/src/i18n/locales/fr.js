@@ -1394,6 +1394,7 @@ export default {
 
     documentOpenError: 'Impossible de consulter le document',
     okfSourceUnavailable: 'Cette source n’est pas disponible pour consultation.',
+    okfOriginMissing: 'Ce document source ne se trouve pas dans le dépôt de documents.',
     okfOriginalSource: 'Source originale',
     okfBrowseRepo: 'Parcourir le dépôt',
     okfBrowser: {

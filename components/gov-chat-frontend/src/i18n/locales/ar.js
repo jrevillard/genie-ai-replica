@@ -1369,6 +1369,7 @@ export default {
 
     documentOpenError: 'تعذر فتح المستند',
     okfSourceUnavailable: 'هذا المصدر غير متاح للعرض.',
+    okfOriginMissing: 'هذا المستند المصدر غير موجود في مستودع المستندات.',
     okfOriginalSource: 'المصدر الأصلي',
     okfBrowseRepo: 'استعراض المستودع',
     okfBrowser: {

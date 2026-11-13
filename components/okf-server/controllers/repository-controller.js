@@ -1157,6 +1157,7 @@ async function stampOriginAvailability(concept) {
   const sources = Array.isArray(concept.sources) ? concept.sources : [];
   const ids = [...new Set(sources.filter((s) => s && s.file_id).map((s) => s.file_id))];
   const now = Date.now();
+  let missingCount = 0;
   for (const fileId of ids) {
     let verdict;
     const cached = originAvailabilityCache.get(fileId);
@@ -1165,16 +1166,33 @@ async function stampOriginAvailability(concept) {
     } else {
       try {
         verdict = await docRepoClient.fetchDocMetaStatus(fileId);
-      } catch {
-        verdict = 'transient'; // the stamp never throws into the serving read
+      } catch (err) {
+        // The stamp never throws into the serving read; a failed check is
+        // transient by definition (named, so an outage is visible in logs
+        // instead of silently unstamped).
+        logger.warn('okf.origin_availability.check_failed', {
+          file_id: fileId,
+          reason: (err && err.code) || (err && err.message) || 'unknown'
+        });
+        verdict = 'transient';
       }
       if (verdict !== 'transient') originAvailabilityCache.set(fileId, { verdict, at: now });
     }
     if (verdict === 'missing') {
+      missingCount += 1;
       for (const s of sources) {
         if (s && s.file_id === fileId) s.missing = true;
       }
     }
+  }
+  if (missingCount > 0) {
+    // One line per concept card: the dangling-reference count is the signal
+    // an operator greps for after a corpus rebuild (verbose-logging rule).
+    logger.info('okf.origin_availability.stamped', {
+      concept_id: concept.concept_id,
+      checked: ids.length,
+      missing: missingCount
+    });
   }
 }
 

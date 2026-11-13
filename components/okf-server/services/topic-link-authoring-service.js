@@ -257,8 +257,9 @@ async function callVllm(messages, { timeoutMs = TIMEOUT_MS } = {}) {
       response_format: { type: 'json_object' }
     },
     timeoutMs: chatTimeoutMs,
-    // The ladder may not hold the wire past what this call's budget has
-    // left (#1725).
+    // THIS SINGLE CALL may not hold the wire past the budget it was
+    // granted (#1725); the outer retry loop re-grants per attempt, so this
+    // is per-call, not per-phase.
     budgetMs: chatTimeoutMs
   });
   return (r.data?.choices?.[0]?.message?.content || '').trim();

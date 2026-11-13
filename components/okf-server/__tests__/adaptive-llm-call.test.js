@@ -235,12 +235,22 @@ describe('adaptiveChatCompletion', () => {
 
   // #1725 — the caller's wall-clock budget. The budget-aware callers
   // (frontmatter, curation, concept-meta summary, topic links) already
-  // track remainingMs via resolveCallModel; the ladder must never hold the
-  // wire past it. Date.now is scripted so the rung arithmetic is exact.
+  // track remainingMs (resolveCallModel / resolveDeploymentModel); the
+  // ladder must never hold the wire past it. Date.now is scripted so the
+  // rung arithmetic is exact — and the timeline is the production one: the
+  // FIRST scripted value anchors the deadline at the function's ENTRY,
+  // each later value is the clock reading at a rung check (the elapsed
+  // gap is attempt 1's real cost).
   describe('budgetMs — the caller-declared wall-clock budget', () => {
     const nowSpy = (values) => {
       const spy = jest.spyOn(Date, 'now');
       for (const v of values) spy.mockReturnValueOnce(v);
+      // An exhausted script falls back to the REAL clock silently — a
+      // future call-count change would then flip which assertion the
+      // epoch-sized number satisfies. Fail loudly instead.
+      spy.mockImplementation(() => {
+        throw new Error('Date.now scripted past its timeline — extend the values');
+      });
       return spy;
     };
 
@@ -264,7 +274,7 @@ describe('adaptiveChatCompletion', () => {
     });
 
     test('a rung CLAMPS to the remaining budget instead of the doubled clock', async () => {
-      nowSpy([0, 1000]); // deadline = 100000; remaining 99000 after attempt 1
+      nowSpy([0, 1000, 101000]); // entry 0; check1 at 1000; check2 at 101000
       axios.post
         .mockResolvedValueOnce(ok('', { finish: 'length', reasoning: 1499, completion: 1500 }))
         .mockResolvedValueOnce(ok('', { finish: 'length', reasoning: 5999, completion: 6000 }));
@@ -281,6 +291,25 @@ describe('adaptiveChatCompletion', () => {
       expect(lastCall()[2].timeout).toBe(99000);
       expect(body.max_tokens).toBe(6000);
       expect(r.data.choices[0].finish_reason).toBe('length');
+    });
+
+    test('a non-finite budgetMs is no budget — axios would silently drop a NaN timeout', async () => {
+      // The vllm-model-cache precedent: a NaN clock hangs the request
+      // instead of failing on its budget, so a non-finite grant is treated
+      // as no grant at all (the climb stays ceiling-bounded).
+      axios.post
+        .mockResolvedValueOnce(ok('', { finish: 'length', reasoning: 1499, completion: 1500 }))
+        .mockResolvedValueOnce(ok('{"a":1}'));
+      const body = { model: 'm', messages: [], max_tokens: 1500 };
+      const r = await adaptiveChatCompletion({
+        url: ENDPOINT,
+        headers: HEADERS,
+        body,
+        timeoutMs: 60000,
+        budgetMs: NaN
+      });
+      expect(r.data.choices[0].message.content).toBe('{"a":1}');
+      expect(lastCall()[2].timeout).toBe(120000); // the plain doubled clock — no budget arithmetic ran
     });
 
     test('the budget bounds the WHOLE ladder: rungs stop when the clock runs out', async () => {

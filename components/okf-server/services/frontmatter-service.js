@@ -420,8 +420,10 @@ async function vllmChatCompletions(systemAndUserMessages, opts = {}) {
       headers,
       body,
       timeoutMs: chatTimeoutMs,
-      // The ladder may not hold the wire past what this call's phase budget
-      // has left (#1725).
+      // THIS SINGLE CALL may not hold the wire past the budget it was
+      // granted (#1725). Per-call, not per-phase: the outer withVllmRetry
+      // re-grants the remainingMs on each of its own retries — a phase
+      // deadline across those retries is a separate, larger mechanism.
       budgetMs: chatTimeoutMs,
       disableThinking: viaOverride
     });

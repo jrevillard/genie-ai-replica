@@ -4238,6 +4238,14 @@ config:validate:
         - "**/*copy)*"
         - "**/Copy of *"
         - ".gitignore"
+        # The #1716 lint-home pins read the root Playwright config (the
+        # suppression pin) and the root package.json scripts (the gate and
+        # hook pins): an MR that silences the gate from either file must
+        # run those pins in its own pipeline, not as a red main pipeline
+        # after the merge. tests/e2e/eslint.config.js is already covered
+        # by the tests/e2e glob above.
+        - "playwright.config.js"
+        - "package.json"
         - "tests/fixtures/config/**/*"
         - "api-gateway-solution/new-config/**/*"
         - "components/gov-chat-frontend/public/config/genie-ai-config*.json"

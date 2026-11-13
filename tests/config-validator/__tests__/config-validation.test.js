@@ -4329,10 +4329,12 @@ describe('the root Playwright config has a lint home (#1716)', () => {
   const ciFile = path.join(ROOT, '.gitlab-ci.yml');
   let lintJob;
   let lintChanges;
+  let validateChanges;
 
   beforeAll(() => {
     lintJob = gitlabSection(fs.readFileSync(ciFile, 'utf-8'), 'lint:e2e');
     lintChanges = parseGitlabCiJobChanges(ciFile, ['lint:e2e']).get('lint:e2e');
+    validateChanges = parseGitlabCiJobChanges(ciFile, ['config:validate']).get('config:validate');
   });
 
   test('an edit to the root config triggers the lint job', () => {
@@ -4341,6 +4343,17 @@ describe('the root Playwright config has a lint home (#1716)', () => {
     // trigger means the next edit skips the gate that covers it.
     expect(lintChanges).toContain('playwright.config.js');
     expect(lintChanges).toContain('package.json');
+  });
+
+  test('an edit to the pinned files runs the pins (config:validate)', () => {
+    // The pin suite lives in the config-validator, whose CI job does not
+    // trigger on the pinned files by default: an MR that silences the
+    // gate from playwright.config.js or package.json would skip every
+    // pin that guards them (tests/e2e/eslint.config.js is already covered
+    // by the job's tests/e2e glob, which the handle-locator gate added
+    // for the same reason). Both files must instantiate the job too.
+    expect(validateChanges).toContain('playwright.config.js');
+    expect(validateChanges).toContain('package.json');
   });
 
   test('the lint job runs the gate from the repository root', () => {
@@ -4382,11 +4395,14 @@ describe('the root Playwright config has a lint home (#1716)', () => {
     // occurrence, the merged pool's, and the file's references to the root
     // config are pinned to exactly four: the two spellings in each of the
     // two entries.
-    // Full-line comments are stripped before compaction (the exclusion's
-    // measured-mechanism comment sits between the two pinned lines); the
-    // file carries no inline `//` outside those comments.
+    // Comments are stripped before compaction (the exclusion's
+    // measured-mechanism comment sits between the two pinned lines), both
+    // syntaxes: block comments first — a `/* */` mentioning a pinned
+    // literal must not skew a count — then full-line `//` (the file
+    // carries no inline `//` outside comments).
     const source = fs
       .readFileSync(path.join(ROOT, 'tests/e2e/eslint.config.js'), 'utf-8')
+      .replace(/\/\*[\s\S]*?\*\//g, ' ')
       .split('\n')
       .filter((line) => !line.trim().startsWith('//'))
       .join('')
@@ -4416,16 +4432,29 @@ describe('the root Playwright config has a lint home (#1716)', () => {
     // silencing modes fail: --max-warnings 0 turns the warning-based
     // modes (outside-base-path, ignore-excluded) into exit 1. Dropping it
     // reverts the gate to exit 0 while nothing is linted, so the flag is
-    // pinned present and the suppressors that would defeat it (each a
-    // one-token edit no other pin sees) are pinned absent.
+    // pinned present and the one-token suppressors that would defeat it
+    // are pinned absent: the no-warn/ignore pair (warnings vanish), a
+    // --rule override (no-undef off beats any config), a second --config
+    // (CLI last-wins replaces the gate's config), and
+    // --no-error-on-unmatched-pattern (turns the structural no-match
+    // exit 2 into a green pass). Measured non-suppressor: --quiet does
+    // NOT bypass --max-warnings 0 (exit code counts unfiltered results;
+    // --quiet filters display only), so its absence is not pinned.
     const scripts = JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf-8')).scripts;
     const gateScript = scripts['lint:playwright-config'];
     expect(gateScript).toBeDefined();
     expect(gateScript).toContain('--max-warnings 0');
     expect(gateScript).not.toContain('--no-warn');
     expect(gateScript).not.toContain('--no-ignore');
+    expect(gateScript).not.toContain('--rule');
+    expect(gateScript).not.toContain('--no-error-on-unmatched-pattern');
+    expect(gateScript.match(/--config/g) || []).toHaveLength(1);
     expect(gateScript).toContain('playwright.config.js');
     expect(gateScript).toContain('tests/e2e/eslint.config.js');
+    // The fix variant must stay a delegation to the pinned gate — a
+    // typoed copy of the command would drift from it with nothing
+    // forcing the two back together.
+    expect(scripts['lint:playwright-config:fix']).toBe('npm run lint:playwright-config -- --fix');
   });
 
   test('the commit-time hook covers the root config (#1716 review)', () => {
@@ -4442,5 +4471,8 @@ describe('the root Playwright config has a lint home (#1716)', () => {
     const cmd = entry.join(' ');
     expect(cmd).toContain('--max-warnings 0');
     expect(cmd).toContain('--config tests/e2e/eslint.config.js');
+    expect(cmd).not.toContain('--rule');
+    expect(cmd).not.toContain('--no-error-on-unmatched-pattern');
+    expect(cmd.match(/--config/g) || []).toHaveLength(1);
   });
 });

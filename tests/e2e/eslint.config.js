@@ -27,12 +27,49 @@ const sharedRules = require('../../components/shared/eslint-rules-base');
 module.exports = [
   js.configs.recommended,
   {
+    // Node + browser runtime: the suite and helpers — the evaluate bodies
+    // are inline in the same file, so both pools apply (see the boundary
+    // note above).
+    files: ['**/*.js'],
+    // The suite's own Playwright config at the repository ROOT runs in Node
+    // only: a browser global there is a ReferenceError at config load, so
+    // it takes the Node-only entry below instead of this one (#1716).
+    // Measured on ESLint 10.14: with an explicit --config the entries
+    // anchor to the invocation's cwd. Both silencing modes are
+    // warning-based and die only through the gate's --max-warnings 0:
+    // a file outside the base path is reported as a warning (exit 0
+    // bare, exit 1 with the flag), and so is a file matched but
+    // ignore-excluded. Exit 2 is the structural mode: a target that
+    // matches nothing at all (the pinned command's relative path from a
+    // different cwd). A silencing refactor (a hoisted global ignore, a
+    // base-path drift, or dropping the flag) therefore fails CI instead
+    // of passing green while nothing is linted. Moving this config FILE
+    // changes nothing about what the entries match — they anchor to the
+    // invocation's cwd; what breaks instead is the --config path in
+    // lint:playwright-config and the read path of the pin that reads
+    // this file, and until those are re-spelled the gate exits 2 and
+    // the suite fails.
+    ignores: ['playwright.config.js'],
     languageOptions: {
       ecmaVersion: 'latest',
       sourceType: 'script',
       globals: {
         ...globals.node,
         ...globals.browser
+      }
+    },
+    rules: {
+      ...sharedRules
+    }
+  },
+  {
+    // Node-only runtime: the suite's Playwright config (see above).
+    files: ['playwright.config.js'],
+    languageOptions: {
+      ecmaVersion: 'latest',
+      sourceType: 'script',
+      globals: {
+        ...globals.node
       }
     },
     rules: {

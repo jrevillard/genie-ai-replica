@@ -103,11 +103,10 @@ function keySetHasUsableKey(jwks) {
 /**
  * Could this published key verify an RS256 signature?
  *
- * The same RS256-only filter `keySetHasUsableKey` uses — deliberately
+ * The same RS256-only filter `keySetHasUsableKey` applies — deliberately
  * LOOSER than jose's own candidate filter (see that docstring): it ignores
- * jose's `ext` check and its key_ops uniqueness/type strictness. A count
- * of these is therefore a count of the keys the verifier could have used,
- * never fewer.
+ * jose's `ext` check and its key_ops uniqueness/type strictness, so it
+ * never refuses a published key jose would accept.
  *
  * @param {Object|undefined} jwk - A published key
  * @returns {boolean} True when the key could verify an RS256 signature
@@ -211,38 +210,6 @@ class TokenVerificationError extends Error {
 // truncation is logged with that reason, and the token is still rejected as
 // invalid — the log names the realm's key set, the client still gets its 401.
 const MAX_CANDIDATE_KEYS = 3;
-
-/**
- * The key id the token names, or undefined when it names none.
- *
- * The verifier accepts COMPACT JWTs only (three dot-separated parts, checked
- * before anything else), and a compact JWT's only header is its protected
- * one — so the protected header IS the whole header, and jose's own merge
- * (`{ ...protectedHeader, ...token?.header }`) resolves to the same key id
- * here. A JSON-serialized JWT would carry an unprotected header and change
- * that; the compact check is what keeps the two in step.
- *
- * A key id that is not a string is refused by the key resolver before this
- * is asked, so the value here is always a string when the token names one.
- *
- * @param {Object|undefined} protectedHeader - The token's protected header
- * @returns {string|undefined} The key id, when the token names one
- */
-function effectiveKid(protectedHeader) {
-  const kid = protectedHeader && protectedHeader.kid;
-  return typeof kid === 'string' ? kid : undefined;
-}
-
-/**
- * The published key set, as jose exposes it.
- *
- * @param {Function} inner - jose's remote key set
- * @returns {Object|undefined} The published key set, or undefined when the
- *   remote set does not expose one
- */
-function publishedKeySet(inner) {
-  return typeof inner.jwks === 'function' ? inner.jwks() : undefined;
-}
 
 /**
  * Does the token name NO key id?
@@ -396,7 +363,7 @@ function createJwksCache(jwksUri) {
         // fault). The published key set tells them apart: no usable key
         // means the realm's own state is broken, which is an outage, not a
         // rejected token.
-        const published = publishedKeySet(inner);
+        const published = typeof inner.jwks === 'function' ? inner.jwks() : undefined;
         if (!keySetHasUsableKey(published)) {
           throw new TokenVerificationError(
             'AUTH_SERVICE_UNAVAILABLE',
@@ -417,7 +384,7 @@ function createJwksCache(jwksUri) {
         // them apart: a token that names a key id (the realm published that
         // id more than once — an outage, #1776) and a token that names none
         // (the published candidates can resolve it — #1767).
-        const kid = effectiveKid(protectedHeader);
+        const kid = protectedHeader && protectedHeader.kid;
         if (kid !== undefined) {
           // jose matches the candidates by that EXACT key id, so more than
           // one candidate means the realm published that key id more than

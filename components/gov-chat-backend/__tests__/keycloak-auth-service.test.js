@@ -1028,11 +1028,6 @@ describe('keycloakAuthService', () => {
       expect(mockJwtVerify).toHaveBeenCalledTimes(1);
     });
 
-    // Spies on the REAL shared/lib winston logger — the virtual
-    // '../shared-lib' mock covers only the barrel, so the verifier's log
-    // lines are visible here and nowhere else. Silences the transport and
-    // restores the spy even when the assertions fail, so a failing test
-    // cannot leak the mock into its neighbours.
     it('logs the first rejection of a cause at WARN and nothing more at the default log level', async () => {
       // A rejected token is caller-controlled and unauthenticated: one WARN
       // line per rejection is a log flood the caller can produce (#1769).

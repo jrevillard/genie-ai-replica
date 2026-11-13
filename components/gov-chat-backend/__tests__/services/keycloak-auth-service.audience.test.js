@@ -11,10 +11,8 @@
  */
 
 const mockJwtVerify = jest.fn();
-// The shared jose mock (the decoder it provides is jose's own contract).
-const mockJose = require('../mocks/jose');
 jest.mock('jose', () => ({
-  ...mockJose,
+  decodeProtectedHeader: require('../mocks/jose').decodeProtectedHeader,
   createRemoteJWKSet: jest.fn(() => jest.fn()),
   jwtVerify: mockJwtVerify
 }));

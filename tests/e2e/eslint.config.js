@@ -33,14 +33,16 @@ module.exports = [
     files: ['**/*.js'],
     // The suite's own Playwright config at the repository ROOT runs in Node
     // only: a browser global there is a ReferenceError at config load, so
-    // it takes the Node-only entry below instead of this one (#1716). The
-    // two spellings are base-path robustness, not two reachable paths:
-    // `eslint .` from tests/e2e/ never reaches the root file, and
-    // lint:playwright-config runs from the repository root, where the bare
-    // spelling matches. A base-path change in either invocation needs a
-    // conscious edit to these entries — the Node-only entry's files list
-    // and this exclusion move together, and the contract pin in
-    // tests/config-validator fails the suite until both are updated.
+    // it takes the Node-only entry below instead of this one (#1716).
+    // Measured on ESLint 10.14: with an explicit --config the entries
+    // anchor to the invocation's cwd, and a file outside it is ignored
+    // with a warning and exit 0 — so the gate covers the root file only
+    // while it runs from the repository root (the CI job's `cd` is pinned
+    // by the contract test in tests/config-validator). From tests/e2e/ the
+    // coverage would die silently, and a pin reading only this file's text
+    // cannot see it. Moving this config FILE itself re-anchors both
+    // entries, and that same pin fails the suite until they are re-spelled
+    // together.
     ignores: ['playwright.config.js', '../../playwright.config.js'],
     languageOptions: {
       ecmaVersion: 'latest',

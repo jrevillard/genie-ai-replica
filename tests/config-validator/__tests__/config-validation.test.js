@@ -4338,8 +4338,13 @@ describe('the root Playwright config has a lint home (#1716)', () => {
     expect(lintChanges).toContain('playwright.config.js');
   });
 
-  test('the lint job runs the gate', () => {
-    expect(lintJob).toContain('npm run lint:playwright-config');
+  test('the lint job runs the gate from the repository root', () => {
+    // The gate's config entries anchor to the invocation's cwd: from
+    // tests/e2e/ the root config sits outside the base path and is ignored
+    // with a warning and exit 0 — coverage would die silently. The `cd` is
+    // the load-bearing half of the command, so the full line is pinned,
+    // not the npm script name alone.
+    expect(lintJob).toContain('cd ${CI_PROJECT_DIR} && npm run lint:playwright-config');
   });
 
   test('the gate gives the root config Node-only globals (#1716 review)', () => {

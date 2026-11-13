@@ -1390,6 +1390,9 @@ export default {
       downloadFailed: 'Download failed.',
       showMore: 'Show more',
       backToList: 'Back to list',
+      back: 'Back',
+      forward: 'Forward',
+      selectHint: 'Select a concept from the tree to read it here.',
       colConcept: 'Concept'
     },
     feedbackSubmitted: 'Feedback saved',

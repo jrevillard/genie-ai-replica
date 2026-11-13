@@ -1397,6 +1397,9 @@ export default {
       downloadFailed: 'Upakuaji umeshindikana.',
       showMore: 'Onyesha zaidi',
       backToList: 'Rudi kwenye orodha',
+      back: 'Nyuma',
+      forward: 'Mbele',
+      selectHint: 'Chagua dhana kutoka kwenye mti kuisoma hapa.',
       colConcept: 'Dhana'
     },
     feedbackSubmitted: 'Mrejesho umehifadhiwa',

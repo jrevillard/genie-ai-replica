@@ -1401,6 +1401,9 @@ export default {
       downloadFailed: 'Unduhan gagal.',
       showMore: 'Tampilkan lebih banyak',
       backToList: 'Kembali ke daftar',
+      back: 'Kembali',
+      forward: 'Maju',
+      selectHint: 'Pilih konsep dari pohon untuk membacanya di sini.',
       colConcept: 'Konsep'
     },
     feedbackSubmitted: 'Umpan balik tersimpan',

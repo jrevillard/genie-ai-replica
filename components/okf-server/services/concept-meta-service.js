@@ -595,19 +595,26 @@ async function listConceptTree(repo_id, opts = {}) {
             // Batched join: ONE edges scan for the whole page (index-served on
             // from_concept_id once ensured), collected per from — never a
             // correlated subquery per row (the >300 s Bali failure mode).
+            // is_index/index_status ride the projection since #1836: the
+            // browser's tree (the editor's OkfConceptList) needs the root
+            // signal + status dots; both fields already live on the meta row,
+            // so this stays a projection change, not a join change.
             `LET ids = (${PAGEQ} RETURN m.concept_id)
              LET grouped = (FOR e IN \`${edgeName}\` FILTER e.source == 'author' AND e.from_concept_id IN ids COLLECT from = e.from_concept_id INTO hits RETURN { from, tos: hits[*].e.to_concept_id })
              ${PAGEQ} LET g = FIRST(FOR x IN grouped FILTER x.from == m.concept_id RETURN x)
-             RETURN { concept_id: m.concept_id, title: m.title, links: g ? g.tos : [] }`,
+             RETURN { concept_id: m.concept_id, title: m.title, is_index: m.is_index, index_status: m.index_status, links: g ? g.tos : [] }`,
             { rid: repo_id, offset, limit }
           )
         ).all()
       : await (
-          await db.query(`${PAGEQ} RETURN { concept_id: m.concept_id, title: m.title, links: [] }`, {
-            rid: repo_id,
-            offset,
-            limit
-          })
+          await db.query(
+            `${PAGEQ} RETURN { concept_id: m.concept_id, title: m.title, is_index: m.is_index, index_status: m.index_status, links: [] }`,
+            {
+              rid: repo_id,
+              offset,
+              limit
+            }
+          )
         ).all();
     span.setAttribute('okf.tree.returned', (rows || []).length);
     return { total, offset, limit, concepts: rows || [] };

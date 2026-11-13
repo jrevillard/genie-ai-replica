@@ -515,6 +515,41 @@ converted text; only the original files are gone. The stranded
 `fix/issue-1568-smoke-graph-name` branch (2 finished commits, never MR'd)
 surfaced in the same housekeeping sweep → MR **!875**.
 
+## The immediate work plan (David's orders, 2026-11-14)
+
+Ordered queue. Jerome's in-flight work (e.g. !878 k3s stability) is OFF this
+plan entirely — standing rule, saved to memory. #1827's open data decision is
+DAVID's review (data curation is never Claude's scope); the packet went to
+him 2026-11-14.
+
+1. **#1836 — OKF repository browser UX redo** (IN FLIGHT). David's order
+   2026-11-14: the W9 browser fails the UX standard — the left pane MUST use
+   the editor/wizard tree view (the W9 flat-list IA decision is REVERSED),
+   back/forward history over clicked content, the rendered markdown stays in
+   view while the tree is clicked/scrolled, and the living-intelligence
+   scheme. Worktree `browser-ux-1836`, branch
+   `feat/issue-1836-browser-ux`; story written from the recon report;
+   ship via MR, deploy to the local build before merge.
+2. **admin-ux residue cleanup** — `.claude/worktrees/admin-ux-t2-shells` +
+   branch `feat/admin-ux-x-all-screens` are merged residue (!863 landed the
+   wave; branch-parent tree hash `4b4a7977b` proven identical). The removal
+   was permission-denied for the agent (git-destructive class) — David's
+   command: `git worktree remove --force .claude/worktrees/admin-ux-t2-shells`
+   + `git branch -D feat/admin-ux-x-all-screens` from `D:\ITU-Gitlab`, or his
+   explicit permission for the agent to retry.
+3. **#1816** — the outer retry loop re-grants the full LLM budget per
+   attempt: !866's ladder needs ONE absolute deadline per phase, not a full
+   re-grant per attempt. The remaining half of the #1725 lineage.
+4. **TZ-offset deferred-work item** — dataprep persists true-UTC timestamps;
+   doc-repo's probe evidence carries the local-time offset (an hour-skewed
+   audit trail). Fix = `TZ=UTC` on the doc-repo compose service (one line) +
+   the gotcha note in DEBUGGING-TRACING.md. Rides #1816's MR.
+5. **#1819** — the test mock's conditional-conversion replace branch stores
+   the patch by reference (a mutation can leak across assertions).
+6. **THEN #1577** — the curator-initiated split (the ceiling initiative's
+   deferred half): the story is BUILT only when the plan above is done
+   (David's explicit sequencing).
+
 ## Standing rules that carry over
 
 - `feedback_approved-plan-is-not-execution-authority`: the plan is adapted on

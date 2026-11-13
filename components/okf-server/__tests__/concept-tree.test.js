@@ -40,7 +40,8 @@ function seedConcepts(repoId, n) {
       repo_id: repoId,
       concept_id: `c${i}`,
       title: `T${String(n - i).padStart(3, '0')}`,
-      is_index: i === 0
+      is_index: i === 0,
+      index_status: i === 0 ? 'indexed' : 'parsed'
     });
   }
 }
@@ -75,6 +76,8 @@ function programTreeQuery() {
           meta.map((row) => ({
             concept_id: row.concept_id,
             title: row.title,
+            is_index: row.is_index,
+            index_status: row.index_status,
             links: edges
               .filter((e) => e.from_concept_id === row.concept_id && e.source === 'author')
               .map((e) => e.to_concept_id)
@@ -82,7 +85,14 @@ function programTreeQuery() {
       };
     }
     return {
-      all: async () => meta.map((row) => ({ concept_id: row.concept_id, title: row.title, links: [] }))
+      all: async () =>
+        meta.map((row) => ({
+          concept_id: row.concept_id,
+          title: row.title,
+          is_index: row.is_index,
+          index_status: row.index_status,
+          links: []
+        }))
     };
   });
 }
@@ -97,7 +107,7 @@ describe('concept-meta-service.listConceptTree (W9 tree index)', () => {
     mockDb.query.mockImplementation(async () => ({ all: async () => [] }));
   });
 
-  test('shape: {total, offset, limit, concepts:[{concept_id,title,links}]} — nothing else', async () => {
+  test('shape: {total, offset, limit, concepts:[{concept_id,title,is_index,index_status,links}]} — nothing else', async () => {
     seedConcepts('r1', 3);
     const page = await conceptMeta.listConceptTree('r1', { limit: 2, offset: 1 });
     expect(page).toEqual({
@@ -105,8 +115,8 @@ describe('concept-meta-service.listConceptTree (W9 tree index)', () => {
       offset: 1,
       limit: 2,
       concepts: [
-        { concept_id: 'c1', title: 'T002', links: [] },
-        { concept_id: 'c0', title: 'T003', links: [] }
+        { concept_id: 'c1', title: 'T002', is_index: false, index_status: 'parsed', links: [] },
+        { concept_id: 'c0', title: 'T003', is_index: true, index_status: 'indexed', links: [] }
       ]
     });
   });

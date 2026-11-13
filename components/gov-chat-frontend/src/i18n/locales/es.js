@@ -1404,6 +1404,9 @@ export default {
       downloadFailed: 'La descarga falló.',
       showMore: 'Mostrar más',
       backToList: 'Volver a la lista',
+      back: 'Atrás',
+      forward: 'Adelante',
+      selectHint: 'Selecciona un concepto del árbol para leerlo aquí.',
       colConcept: 'Concepto'
     },
     feedbackSubmitted: 'Feedback guardado',

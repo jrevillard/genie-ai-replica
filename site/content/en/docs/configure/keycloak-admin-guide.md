@@ -492,10 +492,10 @@ The realm defaults are configured via `genie-realm.yaml` and applied by `keycloa
 | Setting | Env var | Default | Notes |
 |---|---|---|---|
 | Access token lifespan (seconds) | `KEYCLOAK_ACCESS_TOKEN_LIFESPAN` | `300` (5 min) | JWT expiry. Also bounds how long the browser's cross-tab renew handoff (`localStorage`, `genie.renew.user`) keeps a renewed token set at rest — see [Auth Flow](/docs/frontend/auth-flow/). It does NOT bound a stolen refresh token: that one lasts with the SSO session (rows below). |
-| SSO Session Max | (admin console: **Realm Settings → Sessions**) | 10 hours (Keycloak default) | Maximum session duration |
-| SSO Session Idle | (admin console) | 30 minutes (Keycloak default) | Idle expiration |
+| SSO Session Max | `KEYCLOAK_SSO_SESSION_MAX_LIFESPAN` | `604800` (7 days) | Maximum session duration — the hard wall after which every user logs in again regardless of activity. Unset leaves Keycloak's built-in 10-hour default in force. This row bounds the refresh-token exposure: a stolen refresh token lives as long as the SSO session |
+| SSO Session Idle | `KEYCLOAK_SSO_SESSION_IDLE_TIMEOUT` | `28800` (8 h) | Idle expiration — silent renewal dies once the session has been idle past this, and the next page load bounces through a full re-login (#1834). Unset leaves Keycloak's built-in 30-minute default in force |
 
-Short access token lifetimes reduce the window for token theft. Long SSO sessions keep users signed in — and they are also what a stolen refresh token lives on, so the SSO session rows below bound the refresh-token exposure, not the access-token lifespan. Tune in **Realm Settings → Sessions** (SSO) and **Realm Settings → Tokens** (access token) — the env var only applies on next keycloak-config deploy.
+Short access token lifetimes reduce the window for token theft. Long SSO sessions keep users signed in — and they are also what a stolen refresh token lives on, so the SSO session rows above bound the refresh-token exposure, not the access-token lifespan. Tune in **Realm Settings → Sessions** (SSO) and **Realm Settings → Tokens** (access token), or via the env vars — the env var only applies on next keycloak-config deploy.
 
 ### 7.3 Audit trail
 

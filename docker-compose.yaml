@@ -2905,6 +2905,11 @@ services:
       - KEYCLOAK_LOCALE=${KEYCLOAK_LOCALE:-en}
       - KEYCLOAK_SUPPORTED_LOCALES=${KEYCLOAK_SUPPORTED_LOCALES:-["ar","de","en","es","fr","pt","ru","th","zh-Hans"]}
       - KEYCLOAK_ACCESS_TOKEN_LIFESPAN=${KEYCLOAK_ACCESS_TOKEN_LIFESPAN:-300}
+      # SSO session lifespans (#1834): Keycloak's defaults (idle 30 min, max
+      # 10 h) expired the browser session under the user — a hard refresh after
+      # idle bounced through full LOGIN. Workday defaults: idle 8 h, max 7 d.
+      - KEYCLOAK_SSO_SESSION_IDLE_TIMEOUT=${KEYCLOAK_SSO_SESSION_IDLE_TIMEOUT:-28800}
+      - KEYCLOAK_SSO_SESSION_MAX_LIFESPAN=${KEYCLOAK_SSO_SESSION_MAX_LIFESPAN:-604800}
       # SMTP (reuses EMAIL_* — required because realm smtpServer overrides server-level KC_SMTP_*)
       - EMAIL_HOST=${EMAIL_HOST:-}
       - EMAIL_PORT=${EMAIL_PORT:-587}

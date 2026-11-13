@@ -21,20 +21,10 @@ const E2E_ROOT = path.join(ROOT, 'tests/e2e');
 const GRANDFATHERED_FILES = [
   // Third-party Swagger UI DOM (the swagger-ui bundle): it declares no
   // test handles and this repo cannot add any — structural selection is
-  // the only option on that page. Decision: #1831.
-  'tests/e2e/auth/g1-swagger-authorize.spec.js',
-  // Screenshot capture script (not a spec). Its remaining class
-  // locators are DS state qualifiers, several anchored on declared
-  // handles already; they migrate with the okf-ragas family: #1828.
-  'tests/e2e/capture-admin.js',
-  // OKF ragas family: class selectors on the Studio dashboard cards,
-  // the DS modal/tab primitives and the RAGAS panes. Migration: #1828.
-  'tests/e2e/okf/ragas-guide-errors.spec.js',
-  'tests/e2e/okf/ragas-judge-selector.spec.js',
-  'tests/e2e/okf/ragas-rescore-tracking.spec.js',
-  // concept-ceiling: two .ds-pill--warning state lookups inside the
-  // declared concept-ceiling advisory handle. Migration: #1829.
-  'tests/e2e/okf/concept-ceiling.spec.js'
+  // the only option on that page. DECIDED (#1831): the exemption stands
+  // permanently — third-party DOM is outside the handle contract by
+  // nature, and the DOM assertions ARE the G.1 acceptance.
+  'tests/e2e/auth/g1-swagger-authorize.spec.js'
 ];
 
 // Locator-style APIs a class selector can travel through: the locator

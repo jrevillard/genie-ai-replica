@@ -12,8 +12,9 @@ and half the suite (`epic1/`, `epic2/`, `epic3/`, `okf/`, the root-level
 specs) was outside it, visibly red, and invisible to the repository. The
 phase directories and the loose root specs have since been rehomed on
 the feature axis — `okf/` was already one and is unchanged, and
-`theme-runtime-config.spec.js` alone stays pinned at the tree root
-([suite-map.md](suite-map.md)).
+`theme-runtime-config.spec.js` — the last root-level holdout, pinned
+there by the dormant CI invocation — moved into `theme/` when its pin
+moved (#1823, [suite-map.md](suite-map.md)).
 
 ## The command
 
@@ -160,8 +161,7 @@ A runner whose Chromium cannot load its shared libraries needs them on
 
 **The whole tree.** Every spec under `tests/e2e/` runs — the feature
 directories `auth/`, `chatbot/`, `documents/`, `admin/`, `okf/`, `theme/`,
-the `helpers/` and `run/` unit specs, and the pinned root-level
-`theme-runtime-config.spec.js`. What each directory holds, and which
+and the `helpers/` and `run/` unit specs. What each directory holds, and which
 acceptance phase each spec serves: [`suite-map.md`](suite-map.md).
 
 The set is **pinned** by `tests/config-validator/` (the guard *the local e2e

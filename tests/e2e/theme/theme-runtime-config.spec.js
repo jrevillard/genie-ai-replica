@@ -1,6 +1,6 @@
 const { test, expect } = require('@playwright/test');
-const { expectRevalidated } = require('./helpers/cache-headers');
-const { BASE_URL } = require('./helpers/base-url');
+const { expectRevalidated } = require('../helpers/cache-headers');
+const { BASE_URL } = require('../helpers/base-url');
 
 // Cache-header contract for the runtime theme configuration.
 //

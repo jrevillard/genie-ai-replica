@@ -42,7 +42,12 @@
         <p v-if="reposInLane(lane.key).length === 0" class="okf-dashboard__empty">
           {{ translate('okf.dashboard.laneEmpty.' + lane.key, lane.emptyText) }}
         </p>
-        <div v-for="r in reposInLane(lane.key)" :key="r.repo_id" class="okf-dashboard__card-wrap">
+        <div
+          v-for="r in reposInLane(lane.key)"
+          :key="r.repo_id"
+          class="okf-dashboard__card-wrap"
+          :data-test-id="`okf-studio-card-${r.repo_id}`"
+        >
           <button
             type="button"
             class="okf-dashboard__card"

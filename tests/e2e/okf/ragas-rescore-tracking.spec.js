@@ -92,7 +92,10 @@ test.describe('the RAGAS guide explains the output, and a re-score is a tracked 
     await expect(studioTab, 'the OKF Studio tab must be reachable').toBeVisible({ timeout: 20000 });
     await studioTab.click();
 
-    const card = page.locator('.okf-dashboard__card-wrap', { hasText: REPO_NAME }).first();
+    const card = page
+      .locator('[data-test-id^="okf-studio-card-"]')
+      .filter({ hasText: REPO_NAME })
+      .first();
     await expect(card, `the ${REPO_NAME} repo card must be listed`).toBeVisible({ timeout: 20000 });
     const testingLab = card.getByRole('button', { name: /Testing Lab/i }).first();
     await expect(testingLab, 'the Testing Lab button must be on the card').toBeVisible({ timeout: 20000 });
@@ -103,7 +106,7 @@ test.describe('the RAGAS guide explains the output, and a re-score is a tracked 
     await expect(ragasTab, 'the RAGAS Benchmarks tab must be present').toBeVisible({ timeout: 20000 });
     await ragasTab.click();
 
-    const guideButton = page.locator('.okf-ragas__help-toggle').first();
+    const guideButton = page.locator('[data-test-id="ragas-guide-toggle"]');
     await expect(guideButton, 'the Guide button must be in the RAGAS panel').toBeVisible({ timeout: 20000 });
     await guideButton.click();
 
@@ -111,14 +114,14 @@ test.describe('the RAGAS guide explains the output, and a re-score is a tracked 
     // still open behind it and is ALSO a role="dialog" — and it carries
     // its own tables, so an unscoped `table tbody tr` counts the wrong rows.
     const guide = page
-      .locator('.ds-modal')
+      .locator('[role="dialog"]')
       .filter({ has: page.getByRole('heading', { name: /RAGAS benchmarking guide/i }) })
       .first();
     await expect(guide, 'the guide dialog must open').toBeVisible({ timeout: 20000 });
 
     // ---- A. the READ chapter's output table ----
     const readTab = guide
-      .locator('.ds-tabs__btn')
+      .locator('[data-test-id^="ds-tab-"]')
       .filter({ hasText: /read the results/i })
       .first();
     await expect(readTab, 'the guide must have a read-the-results chapter').toBeVisible({ timeout: 20000 });
@@ -127,7 +130,7 @@ test.describe('the RAGAS guide explains the output, and a re-score is a tracked 
     // The guide keeps EVERY chapter in the DOM (v-show), so a table count
     // must be scoped to the VISIBLE pane — the errors chapter's five rows
     // are still in the document.
-    const guideRows = guide.locator('.okf-guide__pane:visible table tbody tr');
+    const guideRows = guide.locator('[data-test-id="ragas-guide-pane"]:visible table tbody tr');
     await expect(guideRows, 'the output must be a table').toHaveCount(6);
 
     const guideText = await guide.evaluate((el) => el.innerText);
@@ -151,21 +154,21 @@ test.describe('the RAGAS guide explains the output, and a re-score is a tracked 
 
     // ---- B. a re-score is TRACKED and CANCELLABLE ----
     // The history lists the runs; the newest DONE one can be re-scored.
-    const historyRows = page.locator('.okf-ragas__section table tbody tr');
+    const historyRows = page.locator('[data-test-id="ragas-run-history"] table tbody tr');
     await expect(historyRows.first(), 'the run history must list the runs').toBeVisible({ timeout: 20000 });
 
     // Find the newest row whose status pill says 'done' and click ITS
     // Re-score button — not the first row's, which may be a cancelled run.
-    const doneRow = historyRows.filter({ has: page.locator('.ds-pill', { hasText: /^done$/i }) }).first();
+    const doneRow = historyRows.filter({ has: page.locator('[data-state="done"]') }).first();
     await expect(doneRow, 'a finished run must be in the history').toBeVisible({ timeout: 20000 });
-    const sourceKey = (await doneRow.locator('.okf-ragas__run-key').innerText()).trim();
+    const sourceKey = (await doneRow.locator('[data-test-id="ragas-run-key"]').innerText()).trim();
 
     const rescoreButton = doneRow.getByRole('button', { name: /^Re-score$/ }).first();
     await expect(rescoreButton, 'a finished run must offer Re-score').toBeEnabled({ timeout: 20000 });
     await rescoreButton.click();
 
     const rescoreDialog = page
-      .locator('.ds-modal')
+      .locator('[role="dialog"]')
       .filter({ has: page.getByRole('heading', { name: /re-score with a judge/i }) })
       .first();
     await expect(rescoreDialog, 'the re-score dialog must open').toBeVisible({ timeout: 20000 });
@@ -183,7 +186,7 @@ test.describe('the RAGAS guide explains the output, and a re-score is a tracked 
     // The re-score is a RUN: a progress bar and a Cancel button.
     const cancelRun = page.getByRole('button', { name: /cancel run/i }).first();
     await expect(cancelRun, 'the re-score must offer a Cancel run button').toBeVisible({ timeout: 20000 });
-    await expect(page.locator('.okf-ragas__progress'), 'the re-score must show a progress bar').toBeVisible({
+    await expect(page.locator('[data-test-id="ragas-run-progress"]'), 'the re-score must show a progress bar').toBeVisible({
       timeout: 20000
     });
 
@@ -200,7 +203,7 @@ test.describe('the RAGAS guide explains the output, and a re-score is a tracked 
     // The row lands 'cancelled' — never 'failed', and it does not vanish.
     const cancelledRow = historyRows.filter({ hasText: /re-scored from/i }).first();
     await expect(cancelledRow, 'the cancelled re-score must stay in the history').toBeVisible({ timeout: 30000 });
-    await expect(cancelledRow.locator('.ds-pill').first(), 'the cancelled re-score must read cancelled').toContainText(
+    await expect(cancelledRow.locator('[data-state]'), 'the cancelled re-score must read cancelled').toContainText(
       /cancelled/i,
       { timeout: 30000 }
     );

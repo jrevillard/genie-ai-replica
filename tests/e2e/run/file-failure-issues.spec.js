@@ -16,7 +16,7 @@ const {
   venueAvailabilityReport,
 } = require('./file-failure-issues');
 
-const FILE = 'tests/e2e/theme-runtime-config.spec.js';
+const FILE = 'tests/e2e/theme/theme-runtime-config.spec.js';
 
 /**
  * Unit spec for the failure path's dedupe rule.

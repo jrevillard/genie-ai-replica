@@ -90,7 +90,10 @@ test.describe('the RAGAS model selection is in the UI', () => {
     await studioTab.click();
 
     // 3. the repo card -> Testing Lab (the dialog that carries the Benchmarks tab)
-    const card = page.locator('.okf-dashboard__card-wrap', { hasText: REPO_NAME }).first();
+    const card = page
+      .locator('[data-test-id^="okf-studio-card-"]')
+      .filter({ hasText: REPO_NAME })
+      .first();
     await expect(card, `the ${REPO_NAME} repo card must be listed`).toBeVisible({ timeout: 20000 });
     const testingLab = card.getByRole('button', { name: /Testing Lab/i }).first();
     await expect(testingLab, 'the Testing Lab button must be on the card').toBeVisible({ timeout: 20000 });
@@ -104,7 +107,9 @@ test.describe('the RAGAS model selection is in the UI', () => {
     // 5. THE ASSERTION — the judge dropdown, with the env default among its
     // options, in BOTH the generation form and the benchmark-run form.
     // David 2026-10-25: "put it back for both generation and benchmark, run".
-    const judgeSelects = page.locator('select').filter({ has: page.locator('option[value="__env__"]') });
+    const judgeSelects = page
+      .locator('[data-test-id="ragas-panel"] select')
+      .filter({ has: page.locator('option[value="__env__"]') });
     await expect(
       judgeSelects,
       'the judge/model selector must be rendered in BOTH the generation and the run form'
@@ -150,7 +155,7 @@ test.describe('the RAGAS model selection is in the UI', () => {
     // BLANK tab produces (the #78684 bug rendered nothing at all), so the
     // pre-fix mutant passed. The teeth are POSITIVE: at least one rendered
     // configuration row must exist.
-    const modelRows = page.locator('tr', { has: page.locator('td.okf-models__cell-url') });
+    const modelRows = page.locator('tr', { has: page.locator('[data-test-id="okf-models-url-cell"]') });
     await expect(
       modelRows,
       'the Models tab must list the configured models — ≥1 rendered configuration row'

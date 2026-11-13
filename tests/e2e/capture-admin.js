@@ -17,7 +17,8 @@
  *     (computed, resolved — the layer's paint, not the source's promise)
  *   - each open dialog's container carries the gate class (the V4
  *     teleported-dialog contract)
- *   - the clicked tab is the ACTIVE tab (the DS primitive's own class) —
+ *   - the clicked tab is the ACTIVE tab (the DS primitive's own
+ *     data-state) —
  *     a panel capture mislabelled by a click that did not take is evidence
  *     of nothing
  *   - the layer-off capture pins dataVisual === 'off' with the static gate
@@ -57,7 +58,7 @@ const THEMES = process.argv.includes('--theme')
 
 // The rack order is the tabs array's order (DsTabs keys by index — the tab
 // objects carry `id`, not `value`). ds-tab-N is the DS primitive's own
-// handle; ds-tabs__btn--active is its own active state.
+// handle; data-state=active is its own active state.
 const TABS = [
   'overview',
   'hierarchy',
@@ -78,13 +79,16 @@ const TABS = [
 async function gotoAdminReady(page) {
   await page.goto(new URL('/admin', BASE_URL).toString(), { waitUntil: 'domcontentloaded' });
   await page.waitForSelector('[data-test-id="admin-dashboard"]', { timeout: 30000 });
-  await page.waitForSelector('.ds-spinner-wrapper--fixed', { state: 'detached', timeout: 30000 });
+  await page.waitForSelector('[data-test-id="admin-page"] [data-test-id="ds-spinner"]', {
+    state: 'detached',
+    timeout: 30000
+  });
 }
 
 const audit = (label) => {
   const root = document.documentElement;
-  const page = document.querySelector('.admin-page');
-  const title = document.querySelector('.page-title');
+  const page = document.querySelector('[data-test-id="admin-page"]');
+  const title = document.querySelector('[data-test-id="admin-page-title"]');
   const uptimeTile = document.querySelector('[data-test-id="stat-system-uptime"]');
   const titleStyle = title ? getComputedStyle(title) : null;
   const tileStyle = uptimeTile ? getComputedStyle(uptimeTile) : null;
@@ -151,7 +155,7 @@ const audit = (label) => {
         );
       }
       await page.click(tabSel);
-      const activeSel = `[data-test-id="ds-tab-${tab}"].ds-tabs__btn--active`;
+      const activeSel = `[data-test-id="ds-tab-${tab}"][data-state="active"]`;
       await page.waitForSelector(activeSel, { timeout: 10000 });
 
       const data = await page.evaluate(audit, `${tab}`);
@@ -222,7 +226,7 @@ const audit = (label) => {
 
     for (const d of dialogs) {
       await page.click(`[data-test-id="ds-tab-${d.tab}"]`);
-      await page.waitForSelector(`[data-test-id="ds-tab-${d.tab}"].ds-tabs__btn--active`, {
+      await page.waitForSelector(`[data-test-id="ds-tab-${d.tab}"][data-state="active"]`, {
         timeout: 10000
       });
       if (d.needsRows) {
@@ -279,15 +283,15 @@ const audit = (label) => {
     // tab active, and the studio surfaces mount only when the tab is
     // active (v-if) — navigate first, wait the tab's own active state.
     await page.click('[data-test-id="ds-tab-studio"]');
-    await page.waitForSelector('[data-test-id="ds-tab-studio"].ds-tabs__btn--active', {
+    await page.waitForSelector('[data-test-id="ds-tab-studio"][data-state="active"]', {
       timeout: 10000
     });
 
     // The wizard: the studio view toggle's declared handles land on the
-    // step shell — every step renders inside .okf-wizard__step, so one
+    // step shell — every step renders inside the wizard-step shell, so one
     // capture covers the ten-step shell.
     await page.click('[data-test-id="studio-view-wizard"]');
-    await page.waitForSelector('.okf-wizard__step', { timeout: 15000 });
+    await page.waitForSelector('[data-test-id="okf-studio-wizard-step"]', { timeout: 15000 });
     const wizardData = await page.evaluate(audit, 'wizard');
     if (!wizardData.pageTitleGradient) {
       throw new Error(
@@ -372,19 +376,19 @@ const audit = (label) => {
         // the lane list includes it, then navigate back in.
         await gotoAdminReady(page);
         await page.click('[data-test-id="ds-tab-studio"]');
-        await page.waitForSelector('[data-test-id="ds-tab-studio"].ds-tabs__btn--active', { timeout: 10000 });
+        await page.waitForSelector('[data-test-id="ds-tab-studio"][data-state="active"]', { timeout: 10000 });
         await page.waitForSelector(seededCard, { timeout: 20000 });
         await page.click(seededCard);
         // onResume lands the repo on the WIZARD sub-tab (the intended
         // landing); the editor frame is the shell's other sub-tab — the
         // DsTabs primitive's own handles switch to it.
         await page.click('[data-test-id="ds-tab-editor"]');
-        await page.waitForSelector('.okf-shell', { timeout: 20000 });
+        await page.waitForSelector('[data-test-id="okf-editor-shell"]', { timeout: 20000 });
         // The X1 chrome asserted, not just photographed: the editor frame's
         // top-lit wash is a background-image gradient — the same computed
         // proof the page-title rule uses.
         const shellChrome = await page.evaluate(() => {
-          const el = document.querySelector('.okf-shell');
+          const el = document.querySelector('[data-test-id="okf-editor-shell"]');
           return el ? /gradient/i.test(getComputedStyle(el).backgroundImage) : false;
         });
         if (!shellChrome) {
@@ -402,12 +406,12 @@ const audit = (label) => {
         console.log(`${editorName}: ${editorFile}`);
 
         await page.click('[data-test-id="repo-editor-lab-open"]');
-        await page.waitForSelector('.okf-headtest__tabs', { timeout: 20000 });
+        await page.waitForSelector('[data-test-id="okf-lab-tabs"]', { timeout: 20000 });
         // The lab's pane chrome paints through the INSTANCE GATE (the
         // teleported backdrop carries the class) — asserted, or a silent
         // unpainted lab would photograph as green.
         const labChrome = await page.evaluate(() => {
-          const el = document.querySelector('.okf-headtest__pane');
+          const el = document.querySelector('[data-test-id="okf-lab-pane-head"]');
           return el ? /gradient/i.test(getComputedStyle(el).backgroundImage) : false;
         });
         if (!labChrome) {
@@ -426,7 +430,7 @@ const audit = (label) => {
         console.log(`${labName}: ${labFile}`);
 
         await page.click('[data-test-id="ds-modal-close"]');
-        await page.waitForSelector('.okf-headtest__tabs', { state: 'detached', timeout: 10000 });
+        await page.waitForSelector('[data-test-id="okf-lab-tabs"]', { state: 'detached', timeout: 10000 });
       } finally {
         await page.evaluate(
           async ({ bearer: b, id }) => {

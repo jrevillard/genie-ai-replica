@@ -6,7 +6,7 @@
   version, bundle zip chip, contextual actions, Versions dialog one click
   away. Sub-tabs: Wizard | Editor (Editor default). -->
 <template>
-  <div class="okf-shell">
+  <div class="okf-shell" data-test-id="okf-editor-shell">
     <header class="okf-shell__header">
       <DsButton variant="ghost" small @click="$emit('back')">
         ← {{ translate('okf.shell.back', 'Studio dashboard') }}

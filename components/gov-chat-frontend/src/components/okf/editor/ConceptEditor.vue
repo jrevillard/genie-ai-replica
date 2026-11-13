@@ -298,7 +298,7 @@
            number is the SERVER's ceiling (it rides the concept read), so the
            advice here cannot contradict the refusal that follows. -->
       <div v-if="maxDocChars" class="okf-ce__ceiling" data-test-id="concept-ceiling">
-        <DsPill :variant="overCeiling ? 'warning' : 'neutral'" :data-state="overCeiling ? 'warning' : undefined">
+        <DsPill :variant="overCeiling ? 'warning' : 'neutral'">
           {{ ceilingLabel }}
         </DsPill>
         <span v-if="overCeiling" class="okf-ce__ceiling-note">

@@ -23,9 +23,9 @@ Phase traceability survives the reorganization in two places:
 
 The rule for new work: **one spec, one place, one axis**. A new spec goes
 under its area's directory. A spec whose area is unclear becomes a
-follow-up issue with `status::backlog` (the worked precedent was the
-*Root — pinned exception*: a spec the CI pinned at the tree root until
-#1823 moved the pin with the file) —
+follow-up issue with `status::backlog` (the worked precedent: a spec
+the CI pinned at the tree root until #1823 moved the pin with the
+file) —
 never a root-level file and never a revival of a phase directory. Feature
 specs serve no acceptance phase; their Phase/story entry is `—`.
 

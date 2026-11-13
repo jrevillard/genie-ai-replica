@@ -4,9 +4,9 @@
       <button
         v-for="(tab, index) in tabs"
         :key="tab.value ?? index"
-        :class="['ds-tabs__btn', { 'ds-tabs__btn--active': modelValue === (tab.value ?? index) }]"
+        :class="['ds-tabs__btn', { 'ds-tabs__btn--active': isActive(tab, index) }]"
         :data-test-id="`ds-tab-${tab.value ?? index}`"
-        :data-state="modelValue === (tab.value ?? index) ? 'active' : undefined"
+        :data-state="isActive(tab, index) ? 'active' : undefined"
         @click="select(tab.value ?? index)"
       >
         <slot name="tab" :tab="tab" :index="index" :active="modelValue === (tab.value ?? index)">
@@ -39,6 +39,9 @@ export default {
   },
   emits: ['update:modelValue'],
   methods: {
+    isActive(tab, index) {
+      return this.modelValue === (tab.value ?? index);
+    },
     select(value) {
       this.$emit('update:modelValue', value);
     }

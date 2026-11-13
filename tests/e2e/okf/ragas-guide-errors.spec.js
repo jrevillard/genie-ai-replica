@@ -110,7 +110,7 @@ test.describe('the RAGAS guide documents what each error state does to the resul
     await expect(ragasTab, 'the RAGAS Benchmarks tab must be present').toBeVisible({ timeout: 20000 });
     await ragasTab.click();
 
-    const guideButton = page.locator('[data-test-id="ragas-guide-toggle"]').first();
+    const guideButton = page.locator('[data-test-id="ragas-guide-toggle"]');
     await expect(guideButton, 'the Guide button must be in the RAGAS panel').toBeVisible({ timeout: 20000 });
     await guideButton.click();
 

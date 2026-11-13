@@ -3949,9 +3949,7 @@ test:flutter:
 # the trees compiled into the pulled candidate images — are a deliberate
 # exception, tracked in #1283):
 #   - e2e:playwright runs tests/e2e/chatbot/, tests/e2e/documents/,
-#     tests/e2e/admin/, the whole tests/e2e/theme/ directory (five specs:
-#     living-intelligence, resizable-sidebars, responsive-layout,
-#     welcome-banner, theme-runtime-config), runs
+#     tests/e2e/admin/ and the whole tests/e2e/theme/ directory, runs
 #     tests/e2e/provision-e2e-fixtures.js, and reads tests/e2e/helpers/
 #     and tests/e2e/fixtures/ at runtime, and is
 #     installed/configured from package.json, package-lock.json and

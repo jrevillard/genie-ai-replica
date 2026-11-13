@@ -22,6 +22,12 @@ const { chromium } = require('playwright');
 const { loginViaUI } = require('./helpers/chatbot');
 const { waitForBannerSettled } = require('./helpers/welcome');
 const { venueLaunchArgs } = require('./helpers/venue-launch-args');
+const {
+  SIDEBAR_LEFT,
+  SIDEBAR_RIGHT,
+  SIDEBAR_HANDLE_BUTTON_LEFT,
+  SIDEBAR_HANDLE_BUTTON_RIGHT
+} = require('./helpers/layout');
 
 const OUT_DIR = path.join(__dirname, '..', '..', 'artifacts', 'living-intelligence');
 // Four viewports: 1775×886 is the reference and 1920×960 is what the user
@@ -305,8 +311,8 @@ const audit = () => {
           // "Collapse" / "Réduire" in the user's locale — no "sidebar"
           // word — so any aria-label pattern that demands the word
           // never matches. Use the declared handles instead.
-          const left = await page.$('[data-testid="sidebar-left"] [data-testid="sidebar-handle-button-left"]');
-          const right = await page.$('[data-testid="sidebar-right"] [data-testid="sidebar-handle-button-right"]');
+          const left = await page.$(`${SIDEBAR_LEFT} ${SIDEBAR_HANDLE_BUTTON_LEFT}`);
+          const right = await page.$(`${SIDEBAR_RIGHT} ${SIDEBAR_HANDLE_BUTTON_RIGHT}`);
           const wantBoth = sidebar.collapsed === 'both';
           if (wantBoth && (!left || !right)) {
             throw new Error(

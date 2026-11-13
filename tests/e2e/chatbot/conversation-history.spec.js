@@ -7,6 +7,7 @@ const {
   waitForBotMessage,
   mockChatStream,
   saveChat,
+  CHAT_TITLE_INPUT,
   BASE_URL
 } = require('../helpers/chatbot');
 const {
@@ -244,7 +245,7 @@ test.describe('Conversation history persistence', () => {
     await saveChat(page, chatTitle);
 
     // Wait for save to complete (dialog closes)
-    await expect(page.locator('[data-testid="chat-title"]')).toBeHidden({ timeout: 10000 });
+    await expect(page.locator(CHAT_TITLE_INPUT)).toBeHidden({ timeout: 10000 });
 
     // Reload the page
     await page.reload({ waitUntil: 'networkidle', timeout: 30000 });
@@ -311,7 +312,7 @@ test.describe('Conversation history persistence', () => {
 
     // Save the conversation
     await saveChat(page, chatTitle);
-    await expect(page.locator('[data-testid="chat-title"]')).toBeHidden({ timeout: 10000 });
+    await expect(page.locator(CHAT_TITLE_INPUT)).toBeHidden({ timeout: 10000 });
 
     // Get the saved conversation via API, with the page session's token
     const token = await getSessionToken(page);

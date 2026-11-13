@@ -23,6 +23,7 @@ const { BASE_URL } = require('./base-url');
 const MESSAGE_ROW = '[data-testid^="chat-message-"]';
 const BOT_BUBBLE = '[data-testid="chat-message-bot"] [data-testid="message-bubble-bot"]';
 const NAV_STATUS = '[data-testid="nav-status"]';
+const CHAT_TITLE_INPUT = '[data-testid="chat-title"]';
 
 // The stream interception contract lives in its own module
 // (helpers/stream-route.js): the endpoint, the interception glob and the
@@ -347,7 +348,7 @@ async function saveChat(page, title) {
   await button.click();
 
   // Wait for save dialog
-  const titleInput = page.locator('[data-testid="chat-title"]');
+  const titleInput = page.locator(CHAT_TITLE_INPUT);
   await expect(titleInput).toBeVisible({ timeout: 5000 });
   await titleInput.fill(title);
 
@@ -425,6 +426,7 @@ async function ackFeedback(page) {
 }
 
 module.exports = {
+  CHAT_TITLE_INPUT,
   readStreamingState,
   streamingFlagOf,
   botStreamingFlag,

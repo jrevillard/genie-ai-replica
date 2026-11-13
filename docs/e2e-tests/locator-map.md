@@ -163,21 +163,12 @@ Risk = the probability a design-side change breaks the spec, weighted by
 the coupling surface.
 
 All seven entries are done, shipped by the #1822 migration wave:
-
-1. **okf-ragas family** (#1828) — converted onto page-scoped handles;
-   the gate scans the three specs.
-2. **capture-admin.js** (#1828) — converted with the family (the
-   living-intelligence gate-class reads stay class reads: the class IS
-   the audited contract).
-3. **okf leftovers** (#1829) — the ceiling pill declares
-   `data-state=warning`; the delete count collapsed onto the role form.
-4. **chatbot leftovers** (#1830) — `chat-title` declared on the save-chat
-   input; spec + helper read it.
-5. **auth-swagger** (#1831) — DECIDED: the exemption stands permanently.
-6. **auth-logout role locators** (#1832) — `nav-icon-btn-logout` was
-   already declared; the three specs read the handle.
-7. **auth-keycloak IDs** (#1833) — DECIDED: the exemption stands
-   permanently.
+the okf-ragas family and capture-admin converted onto page-scoped
+handles (#1828), the okf leftovers onto a `data-state` pill attribute
+and the role-form count (#1829), `chat-title` declared and read by spec
+and helper (#1830), the three logout specs reading the already-declared
+navbar handle (#1832). The two third-party exemptions stand permanently,
+decided with their sections above (#1831, #1833).
 
 ## Keeping the map true
 

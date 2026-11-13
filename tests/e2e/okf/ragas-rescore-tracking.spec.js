@@ -106,7 +106,7 @@ test.describe('the RAGAS guide explains the output, and a re-score is a tracked 
     await expect(ragasTab, 'the RAGAS Benchmarks tab must be present').toBeVisible({ timeout: 20000 });
     await ragasTab.click();
 
-    const guideButton = page.locator('[data-test-id="ragas-guide-toggle"]').first();
+    const guideButton = page.locator('[data-test-id="ragas-guide-toggle"]');
     await expect(guideButton, 'the Guide button must be in the RAGAS panel').toBeVisible({ timeout: 20000 });
     await guideButton.click();
 
@@ -203,7 +203,7 @@ test.describe('the RAGAS guide explains the output, and a re-score is a tracked 
     // The row lands 'cancelled' — never 'failed', and it does not vanish.
     const cancelledRow = historyRows.filter({ hasText: /re-scored from/i }).first();
     await expect(cancelledRow, 'the cancelled re-score must stay in the history').toBeVisible({ timeout: 30000 });
-    await expect(cancelledRow.locator('[data-state]').first(), 'the cancelled re-score must read cancelled').toContainText(
+    await expect(cancelledRow.locator('[data-state]'), 'the cancelled re-score must read cancelled').toContainText(
       /cancelled/i,
       { timeout: 30000 }
     );

@@ -4486,7 +4486,7 @@ describe('the root Playwright config has a lint home (#1716)', () => {
   });
 
   // The probe's mkdtemp dirs, removed after the suite (same convention
-  // as writeTempCi below).
+  // as writeTempCi above).
   const probeDirs = [];
   afterAll(() => {
     for (const dir of probeDirs) fs.rmSync(dir, { recursive: true, force: true });

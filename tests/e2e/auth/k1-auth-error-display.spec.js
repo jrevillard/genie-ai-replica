@@ -215,14 +215,23 @@ test.describe.serial('Phase K: Auth Error Display', () => {
     ).toBeLessThanOrEqual(EXPIRY_LIFESPAN_SECONDS + 5);
 
     // Wait for the token's OWN expiry: a bounded wait-for-condition on
-    // the exp claim, not a fixed sleep. The bound sits a margin beyond
-    // the asserted lifespan; a clock that never reaches exp fails here.
+    // the exp claim, not a fixed sleep. The bound counts POLLS, not a
+    // clock delta: a clock that jumps backward can defeat any timestamp
+    // comparison, but it cannot make extra polls appear — so the bound
+    // is the one shape a stuck clock cannot escape. It covers the
+    // asserted lifespan plus a 5s margin.
     const expiresAtMs = claims.exp * 1000;
-    const boundMs = expiresAtMs + 5000;
-    while (Date.now() < expiresAtMs && Date.now() < boundMs) {
-      await new Promise((resolve) => setTimeout(resolve, 500));
+    const pollMs = 500;
+    const maxPolls = Math.ceil((EXPIRY_LIFESPAN_SECONDS * 1000 + 5000) / pollMs);
+    for (let polls = 0; Date.now() < expiresAtMs; polls += 1) {
+      if (polls >= maxPolls) {
+        throw new Error(
+          `the clock did not reach the token's exp (${new Date(expiresAtMs).toISOString()}) within ` +
+            `${maxPolls * pollMs}ms of bounded polling`
+        );
+      }
+      await new Promise((resolve) => setTimeout(resolve, pollMs));
     }
-    expect(Date.now(), 'the clock never reached the token expiry').toBeGreaterThanOrEqual(expiresAtMs);
 
     // ONE call, with the expired token. No fresh-token call precedes it:
     // the backend provisions a user document on a VERIFIED token, and

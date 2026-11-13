@@ -9,7 +9,6 @@ const {
   createUser,
   rotateRealmKeys,
   getRealmSettings,
-  updateRealmSettings,
   deleteUser,
   enableDirectAccessGrants,
   findClient,
@@ -1354,7 +1353,7 @@ test.describe('rotateRealmKeys rotates the RSA signing keys only', () => {
   });
 });
 
-test.describe('the realm settings helpers report a failure with the module verdict', () => {
+test.describe('getRealmSettings reports a failure with the module verdict', () => {
   test('a realm read the admin API refuses names the read', async () => {
     routes = [['GET', REALM_PATH, { status: 401, data: { error: 'HTTP 401 Unauthorized' } }]];
 
@@ -1379,33 +1378,6 @@ test.describe('the realm settings helpers report a failure with the module verdi
 
     expect(caught.transient).toBe(true);
     expect(caught.message).toMatch(/Cannot reach the Keycloak admin API for the realm settings of genie/);
-  });
-
-  test('a refused realm update names the update and carries the status', async () => {
-    routes = [['PUT', REALM_PATH, { status: 409, data: { errorMessage: 'Conflict' } }]];
-
-    const caught = await rejection(updateRealmSettings('tok', REALM, { accessTokenLifespan: '10' }));
-
-    expect(caught.httpStatus).toBe(409);
-    expect(caught.message).toMatch(/Failed to update the realm settings of genie: HTTP 409/);
-  });
-
-  test('a realm update the admin API fails with a 5xx is transient', async () => {
-    routes = [['PUT', REALM_PATH, { status: 503, data: null }]];
-
-    const caught = await rejection(updateRealmSettings('tok', REALM, { accessTokenLifespan: '10' }));
-
-    expect(caught.transient).toBe(true);
-    expect(caught.httpStatus).toBe(503);
-  });
-
-  test('a transport break on a realm update names the update', async () => {
-    routes = [['PUT', REALM_PATH, { throws: new Error('connection reset by peer') }]];
-
-    const caught = await rejection(updateRealmSettings('tok', REALM, { accessTokenLifespan: '10' }));
-
-    expect(caught.transient).toBe(true);
-    expect(caught.message).toMatch(/Cannot reach the Keycloak admin API for the realm settings update of genie/);
   });
 
   test('a refused deletion names the user and carries the status', async () => {

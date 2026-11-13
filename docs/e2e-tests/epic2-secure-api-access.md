@@ -1208,9 +1208,13 @@ payload = sys.stdin.read().strip().split('.')[1]
 payload += '=' * (-len(payload) % 4)
 print(json.loads(base64.urlsafe_b64decode(payload))['exp'])
 ")
-deadline=$((SECONDS + 30))
+deadline=$(($(date +%s) + 30))
+# The exp claim must have PARSED: an empty TOKEN_EXP (the mint above
+# failed, or the body was not a JWT) must fail the phase HERE, not skip
+# the wait silently and continue with a still-valid token.
+[ -n "$TOKEN_EXP" ] || { echo "FATAL: could not read the exp claim from EXPIRED_TOKEN — the mint above failed or returned a non-JWT body"; exit 1; }
 while [ "$(date +%s)" -lt "$TOKEN_EXP" ]; do
-  if [ "$SECONDS" -ge "$deadline" ]; then
+  if [ "$(date +%s)" -ge "$deadline" ]; then
     echo "FATAL: the clock did not reach the token's exp ($TOKEN_EXP) within 30s"
     exit 1
   fi
@@ -1282,10 +1286,11 @@ docker compose stop keycloak
 
 # Bounded wait (Rule: Determinism — no fixed sleeps): poll the
 # observable condition — the keycloak container reporting exited — every
-# 2 s with a hard 30 s bound.
-deadline=$((SECONDS + 30))
+# 2 s with a hard 30 s bound (an epoch timestamp, not bash's $SECONDS,
+# so the loop bounds in any POSIX shell).
+deadline=$(($(date +%s) + 30))
 while [ "$(docker compose ps --all keycloak --format '{{.State}}')" != "exited" ]; do
-  if [ "$SECONDS" -ge "$deadline" ]; then
+  if [ "$(date +%s)" -ge "$deadline" ]; then
     echo "FATAL: keycloak did not stop within 30s (state: $(docker compose ps --all keycloak --format '{{.State}}'))"
     exit 1
   fi
@@ -1313,10 +1318,11 @@ docker compose start keycloak
 # Bounded wait (Rule: Determinism — no fixed sleeps): poll the
 # observable condition — the keycloak container reporting (healthy) —
 # every 5 s with a hard 120 s bound (the recovery the removed fixed
-# sleep priced at 60-90 s).
-deadline=$((SECONDS + 120))
+# sleep priced at 60-90 s; an epoch timestamp, not bash's $SECONDS, so
+# the loop bounds in any POSIX shell).
+deadline=$(($(date +%s) + 120))
 while ! docker compose ps keycloak --format '{{.Status}}' | grep -q '(healthy)'; do
-  if [ "$SECONDS" -ge "$deadline" ]; then
+  if [ "$(date +%s)" -ge "$deadline" ]; then
     echo "FATAL: keycloak not healthy after 120s ($(docker compose ps keycloak --format '{{.Status}}'))"
     exit 1
   fi
@@ -1329,13 +1335,14 @@ docker exec $(docker ps --filter name=kong --format '{{.ID}}' | head -1) kong re
 # Bounded wait (Rule: Determinism — no fixed sleeps): poll the
 # observable condition — the edge answering the discovery request with
 # the deployment's issuer — every 3 s with a hard 60 s bound covering
-# Kong's reload settling.
-deadline=$((SECONDS + 60))
+# Kong's reload settling (an epoch timestamp, not bash's $SECONDS, so
+# the loop bounds in any POSIX shell).
+deadline=$(($(date +%s) + 60))
 while :; do
   ISSUER="$(curl -sk "https://localhost/auth/realms/genie/.well-known/openid-configuration" \
     | python3 -c "import sys,json; print(json.load(sys.stdin).get('issuer', 'NOT READY'))" 2>/dev/null || echo "NOT READY")"
   [ "$ISSUER" = "https://localhost/auth/realms/genie" ] && break
-  if [ "$SECONDS" -ge "$deadline" ]; then
+  if [ "$(date +%s)" -ge "$deadline" ]; then
     echo "FATAL: discovery did not report the genie issuer within 60s (last: $ISSUER)"
     exit 1
   fi

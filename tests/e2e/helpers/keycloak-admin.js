@@ -947,27 +947,6 @@ async function getRealmSettings(adminToken, realm) {
 }
 
 /**
- * Update realm settings (partial update).
- * @param {string} adminToken - Keycloak admin access token
- * @param {string} realm - Realm name
- * @param {object} settings - Settings to update (e.g., { accessTokenLifespan: '10' })
- * @returns {Promise<void>}
- */
-async function updateRealmSettings(adminToken, realm, settings) {
-  const res = await adminRequest(
-    'PUT',
-    `/auth/admin/realms/${realm}`,
-    adminToken,
-    `the realm settings update of ${realm}`,
-    settings
-  );
-
-  if (res.status !== 204) {
-    failWithStatus(`Failed to update the realm settings of ${realm}: HTTP ${res.status} ${bodyText(res)}`, res.status);
-  }
-}
-
-/**
  * Delete a user from a realm.
  * @param {string} adminToken - Keycloak admin access token
  * @param {string} realm - Realm name
@@ -1116,7 +1095,6 @@ module.exports = {
   effectiveRealmRoles,
   rotateRealmKeys,
   getRealmSettings,
-  updateRealmSettings,
   deleteUser,
   enableDirectAccessGrants,
   findUsers,

@@ -12,6 +12,7 @@ const {
   groupFailuresByFile,
   issueBody,
   isConnectionSignature,
+  partitionVenueNoise,
   venueAvailabilityReport,
 } = require('./file-failure-issues');
 
@@ -325,9 +326,12 @@ test.describe('a failure carrying an edge-transport signature is venue noise (#1
   });
 
   test('the partition keeps product failures fileable and moves the signature ones to the report', () => {
-    // A mixed file: one outage symptom, one real assertion failure — the
-    // real one stays fileable, the outage one does not.
-    const byFile = groupFailuresByFile([
+    // The PRODUCTION partition is what is under test here — not a
+    // re-implementation of it. A mixed file: one outage symptom, one
+    // real assertion failure — the real one stays fileable, the outage
+    // one is noise; an all-signature file drops out of the filing
+    // entirely; a clean file passes through untouched.
+    const grouped = groupFailuresByFile([
       {
         file: 'tests/e2e/welcome-banner.spec.js',
         title: 'shows the banner',
@@ -337,12 +341,30 @@ test.describe('a failure carrying an edge-transport signature is venue noise (#1
         file: 'tests/e2e/welcome-banner.spec.js',
         title: 'hides the banner',
         test: { results: [{ error: { message: 'expect(received).toBe(expected)', stack: '' } }] }
+      },
+      {
+        file: 'tests/e2e/resizable-sidebars.spec.js',
+        title: 'dies with the edge',
+        test: { results: [{ error: { message: 'page.goto: net::ERR_CONNECTION_RESET', stack: '' } }] }
+      },
+      {
+        file: 'tests/e2e/theme-runtime-config.spec.js',
+        title: 'never touches the wire',
+        test: { results: [{ error: { message: 'expect(received).toBe(expected)', stack: '' } }] }
       }
     ]);
-    expect(byFile.get('tests/e2e/welcome-banner.spec.js').length).toBe(2);
-    const failures = byFile.get('tests/e2e/welcome-banner.spec.js');
-    expect(failures.filter(isConnectionSignature).length).toBe(1);
-    expect(failures.filter((f) => !isConnectionSignature(f)).length).toBe(1);
+
+    const { fileable, noise } = partitionVenueNoise(grouped);
+    // welcome-banner: mixed — 1 real failure fileable, 1 signature noise.
+    expect(fileable.get('tests/e2e/welcome-banner.spec.js').length).toBe(1);
+    expect(isConnectionSignature(fileable.get('tests/e2e/welcome-banner.spec.js')[0])).toBe(false);
+    expect(noise.get('tests/e2e/welcome-banner.spec.js').length).toBe(1);
+    // resizable-sidebars: all-signature — fileable NOWHERE, noise only.
+    expect(fileable.has('tests/e2e/resizable-sidebars.spec.js')).toBe(false);
+    expect(noise.get('tests/e2e/resizable-sidebars.spec.js').length).toBe(1);
+    // theme-runtime-config: no signature — passes through untouched.
+    expect(fileable.get('tests/e2e/theme-runtime-config.spec.js').length).toBe(1);
+    expect(noise.has('tests/e2e/theme-runtime-config.spec.js')).toBe(false);
   });
 
   test('the venue-availability report names the venue, the files and the verdict', () => {

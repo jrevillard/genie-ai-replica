@@ -99,6 +99,35 @@ function isConnectionSignature(failure) {
 }
 
 /**
+ * Split the grouped failures into what is FILEABLE and what is VENUE
+ * NOISE (#1783). A file whose failures are ALL connection signatures
+ * drops out of the filing entirely; a file whose other failures survive
+ * the filter stays fileable for exactly those. Pure — the same grouped
+ * input always produces the same split, and the caller owns the
+ * printing.
+ * @param {Map<string, Array<{error: string}>>} byFile - The grouped
+ *   failures (see groupFailuresByFile)
+ * @returns {{fileable: Map<string, Array<{error: string}>>, noise: Map<string, Array<{error: string}>>}}
+ */
+function partitionVenueNoise(byFile) {
+  const fileable = new Map();
+  const noise = new Map();
+  for (const [file, failures] of byFile) {
+    const connection = failures.filter(isConnectionSignature);
+    if (connection.length === 0) {
+      fileable.set(file, failures);
+      continue;
+    }
+    noise.set(file, connection);
+    const rest = failures.filter((failure) => !isConnectionSignature(failure));
+    if (rest.length > 0) {
+      fileable.set(file, rest);
+    }
+  }
+  return { fileable, noise };
+}
+
+/**
  * The ONE venue-availability report that replaces one product issue per
  * spec file for a healed mid-run outage (#1783): the venue, the
  * signature-bearing failure inventory, and the verdict. Pure string —
@@ -612,27 +641,39 @@ function main() {
     return;
   }
 
-  const byFile = groupFailuresByFile(failed);
+  // The venue must be re-probed BEFORE the failures are classified: the
+  // venue-availability report below asserts "the venue answered the
+  // re-probe", and an assertion about an observation that has not
+  // happened yet is a lie whichever way the venue answers. The probe
+  // answers "is the venue drivable NOW" — the same check the run started
+  // with — and it runs in BOTH modes: the dry run's whole value is
+  // showing what the failure path WOULD do, so its report needs the same
+  // honest observation. The documented venue-death case (the node
+  // reboots mid-run) fails every spec that navigates afterwards with
+  // ERR_CONNECTION_REFUSED, and filing one issue per spec file for that
+  // single cause is exactly the tracker noise the failure path exists to
+  // prevent.
+  try {
+    execFileSync('node', [path.join(__dirname, 'preflight.js')], {
+      stdio: 'inherit',
+      env: { ...process.env, BASE_URL: venue },
+    });
+  } catch {
+    process.stderr.write(
+      'file-failure-issues: the venue is not drivable — the failures are a venue event, ' +
+        'not per-spec findings. NOTHING is filed; re-run the suite once the venue answers.\n'
+    );
+    process.exit(1);
+  }
 
   // The healed-outage case (#1783): a venue that went away MID-RUN and
-  // came back passes the drivable re-probe below, and without the
-  // signature filter the run would file one product issue per spec file
-  // for a single venue event (the 2026-11-10 node reboot filed exactly
-  // that). Failures whose error carries an edge-transport signature are
-  // grouped into ONE venue-availability report instead; a file whose
-  // OTHER failures survive the filter still gets filed for those.
-  const venueNoise = new Map();
-  for (const [file, failures] of byFile) {
-    const connection = failures.filter(isConnectionSignature);
-    if (connection.length === 0) continue;
-    venueNoise.set(file, connection);
-    const rest = failures.filter((failure) => !isConnectionSignature(failure));
-    if (rest.length === 0) {
-      byFile.delete(file);
-    } else {
-      byFile.set(file, rest);
-    }
-  }
+  // came back passes the re-probe above, and without the signature filter
+  // the run would file one product issue per spec file for a single venue
+  // event (the 2026-11-10 node reboot filed exactly that). Failures whose
+  // error carries an edge-transport signature are grouped into ONE
+  // venue-availability report instead; a file whose OTHER failures
+  // survive the filter still gets filed for those.
+  const { fileable: byFile, noise: venueNoise } = partitionVenueNoise(groupFailuresByFile(failed));
   if (venueNoise.size > 0) {
     process.stdout.write(venueAvailabilityReport(venueNoise, venue) + '\n');
   }
@@ -652,24 +693,6 @@ function main() {
     return;
   }
 
-  // The venue must be drivable BEFORE anything is filed: the documented
-  // venue-death case (the node reboots mid-run) fails every spec that
-  // navigates afterwards with ERR_CONNECTION_REFUSED, and filing one issue
-  // per spec file for that single cause is exactly the tracker noise the
-  // failure path exists to prevent. The pre-flight answers "is the venue
-  // drivable" — the same check the run started with.
-  try {
-    execFileSync('node', [path.join(__dirname, 'preflight.js')], {
-      stdio: 'inherit',
-      env: { ...process.env, BASE_URL: venue },
-    });
-  } catch {
-    process.stderr.write(
-      'file-failure-issues: the venue is not drivable — the failures are a venue event, ' +
-        'not per-spec findings. NOTHING is filed; re-run the suite once the venue answers.\n'
-    );
-    process.exit(1);
-  }
   process.stdout.write('\nfiled:\n');
   // The failing files are grouped by the issue that already tracks them, so
   // one umbrella issue receives ONE comment for the whole run — not one per
@@ -730,5 +753,6 @@ module.exports = {
   groupFailuresByFile,
   issueBody,
   isConnectionSignature,
+  partitionVenueNoise,
   venueAvailabilityReport,
 };

@@ -287,8 +287,13 @@ test.describe('the tracker refusal names the tracker, not the command', () => {
 test.describe('a failure carrying an edge-transport signature is venue noise (#1783)', () => {
   // The observed signatures of the 2026-11-10 outage: the edge refused
   // while the k3s node rebooted and the LoadBalancer address moved.
+  // The fixture venue is an EXAMPLE address on purpose: the venue-origin
+  // gate forbids a local-origin literal anywhere in the tree but the
+  // edge's definition, and these fixtures carry a venue as DATA — the
+  // report is venue-agnostic, so the fixtures are too.
+  const VENUE = 'https://e2e-venue.example:4443';
   const OUTAGE_ERROR =
-    'Error: page.goto: net::ERR_CONNECTION_REFUSED at https://genieai-forge.local:4443/\n' +
+    'Error: page.goto: net::ERR_CONNECTION_REFUSED at https://e2e-venue.example:4443/\n' +
     '    at loginViaUI (tests/e2e/helpers/chatbot.js:50:9)';
 
   test('the refused, reset, closed and unresolved-edge signatures match', () => {
@@ -296,7 +301,7 @@ test.describe('a failure carrying an edge-transport signature is venue noise (#1
       'net::ERR_CONNECTION_REFUSED at https://venue/',
       'page.goto: net::ERR_CONNECTION_RESET',
       'net::ERR_CONNECTION_CLOSED at https://venue/',
-      'net::ERR_NAME_NOT_RESOLVED at https://genieai-forge.local:4443/'
+      'net::ERR_NAME_NOT_RESOLVED at https://e2e-venue.example:4443/'
     ]) {
       expect(isConnectionSignature({ error: signature }), signature).toBe(true);
     }
@@ -351,11 +356,11 @@ test.describe('a failure carrying an edge-transport signature is venue noise (#1
       ],
       ['tests/e2e/resizable-sidebars.spec.js', [{ error: 'net::ERR_NAME_NOT_RESOLVED' }]]
     ]);
-    const report = venueAvailabilityReport(noise, 'https://genieai-forge.local:4443');
+    const report = venueAvailabilityReport(noise, VENUE);
     expect(report).toContain('venue-availability report: 3 failure(s) across 2 spec file(s)');
     expect(report).toContain('- tests/e2e/welcome-banner.spec.js: 2 (e.g. net::ERR_CONNECTION_REFUSED)');
     expect(report).toContain('- tests/e2e/resizable-sidebars.spec.js: 1 (e.g. net::ERR_NAME_NOT_RESOLVED)');
-    expect(report).toContain('The venue answered the re-probe at https://genieai-forge.local:4443');
+    expect(report).toContain(`The venue answered the re-probe at ${VENUE}`);
     expect(report).toContain('NOT product findings');
   });
 });

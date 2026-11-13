@@ -4366,10 +4366,16 @@ describe('the root Playwright config has a lint home (#1716)', () => {
     // require, module — trips no-undef). The pin guards both edits. Also
     // ruled out: ADDING browser globals to the Node-only entry, hoisting
     // the exclusion into a top-level global-ignore entry (which excludes
-    // the file from every entry), and ADDING an override entry that turns
-    // no-undef off or re-scopes globals for the root config — the last is
-    // caught by the occurrence count below, since any entry targeting the
-    // file must spell it.
+    // the file from every entry — the gate's --max-warnings 0 turns that
+    // into exit 1), and ADDING an override entry that turns no-undef off
+    // or re-scopes globals for the root config. An appended entry can
+    // reach the root file through any shape — a broad glob, a files-less
+    // globals entry, a bare rules override — so the counts below pin the
+    // shape-bearing keys themselves: files, languageOptions and rules
+    // appear exactly twice each (the merged and Node-only entries); any
+    // appended entry carries at least one of them and breaks a count. An
+    // entry carrying NONE of the three is an ignores-only global, which
+    // the gate converts to exit 1.
     // The exclusion is therefore pinned as ONE contiguous files+ignores
     // pair — a global ignores-only entry does not carry the files: prefix
     // and cannot satisfy it — the browser spread is pinned to exactly one
@@ -4390,6 +4396,9 @@ describe('the root Playwright config has a lint home (#1716)', () => {
     expect(source).toContain("files:['playwright.config.js','../../playwright.config.js'],");
     expect(source.match(/globals\.browser/g) || []).toHaveLength(1);
     expect(source.match(/playwright\.config\.js/g) || []).toHaveLength(4);
+    expect(source.match(/files:\[/g) || []).toHaveLength(2);
+    expect(source.match(/languageOptions:/g) || []).toHaveLength(2);
+    expect(source.match(/rules:\{/g) || []).toHaveLength(2);
   });
 
   test('the root config carries no eslint-disable suppression (#1716 review)', () => {
@@ -4417,5 +4426,20 @@ describe('the root Playwright config has a lint home (#1716)', () => {
     expect(gateScript).not.toContain('--no-ignore');
     expect(gateScript).toContain('playwright.config.js');
     expect(gateScript).toContain('tests/e2e/eslint.config.js');
+  });
+
+  test('the commit-time hook covers the root config (#1716 review)', () => {
+    // The gate's lint-staged entry is the commit-time half of its home:
+    // without it a locally committed edit to the root config ships
+    // unlinted until the MR pipeline — the same gap shape the CI wiring
+    // closes. The entry must exist and run the same gate: the flag that
+    // converts its own silencing modes and the explicit --config the root
+    // invocation needs (no eslint.config.js exists above the repository
+    // root, so the tree-relative spelling used for tests/e2e/** exits 2).
+    const pkg = JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf-8'));
+    const entry = (pkg['lint-staged'] || {})['playwright.config.js'];
+    expect(entry).toBeDefined();
+    expect(entry.join(' ')).toContain('--max-warnings 0');
+    expect(entry.join(' ')).toContain('--config tests/e2e/eslint.config.js');
   });
 });

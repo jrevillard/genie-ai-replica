@@ -5,7 +5,7 @@ const { hasIdentityProvider, missingIdentityProviderReason, skipUnlessVenue } = 
 const REALM = process.env.KEYCLOAK_REALM || 'genie';
 
 // Test D.7a — External IdP Button Visible on Login Page
-// Prerequisite: Phase D Steps 1-5 in epic1-keycloak-foundation.md
+// Prerequisite: Phase D Steps 1-5 (docs/e2e-tests/suite-map.md § The acceptance phases)
 // (create external-idp realm, broker client, add IdP to genie realm)
 // If the external IdP is not configured, this test SKIPS WITH A REASON that
 // names the missing prerequisite — never a silent skip, and never a failure

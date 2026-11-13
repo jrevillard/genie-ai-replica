@@ -5,7 +5,7 @@ const { hasIdentityProvider, missingIdentityProviderReason, skipUnlessVenue } = 
 const REALM = process.env.KEYCLOAK_REALM || 'genie';
 
 // Test D.7b — Full External IdP Login Flow
-// Prerequisite: Phase D Steps 1-5 in epic1-keycloak-foundation.md
+// Prerequisite: Phase D Steps 1-5 (docs/e2e-tests/suite-map.md § The acceptance phases)
 // (create external-idp realm, broker client, add IdP to genie realm)
 // If the external IdP is not configured, this test SKIPS WITH A REASON that
 // names the missing prerequisite — never a silent skip, and never a failure
@@ -197,7 +197,7 @@ test('completes full external IdP brokered login flow', async ({ browser }) => {
         `  Final URL: ${errorUrl}\n` +
         `  Page body (first 500 chars): ${errorBody}\n` +
         (restoreFailure ? `  ${restoreFailure}\n` : '') +
-        `  Hint: Run Phase D Steps 1-5 in docs/e2e-tests/epic1-keycloak-foundation.md first`,
+        `  Hint: Run Phase D Steps 1-5 (docs/e2e-tests/suite-map.md § The acceptance phases) first`,
       { cause: error },
     );
   }

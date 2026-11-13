@@ -4,7 +4,7 @@ const { TEST_USER } = require('../helpers/e2e-fixtures');
 
 // Test L.1 — Frontend Logout Redirect
 // Complete logout flow: login, click logout button, verify redirect to Keycloak login page.
-// Source: docs/e2e-tests/epic3-session-lifecycle-gdpr.md Phase L
+// Source: docs/e2e-tests/suite-map.md § The acceptance phases, Phase L
 
 test('clicks logout button and redirects to Keycloak login page', async ({ browser }) => {
   const context = await browser.newContext({

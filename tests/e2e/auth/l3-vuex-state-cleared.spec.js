@@ -5,7 +5,7 @@ const { TEST_USER } = require('../helpers/e2e-fixtures');
 // Test L.3 — Vuex Auth State Cleared on Logout
 // Login, verify isAuthenticated is true, trigger logout, verify state is cleared.
 // The Vuex clearAuth mutation sets isAuthenticated=false, user=null, accessToken=null.
-// Source: docs/e2e-tests/epic3-session-lifecycle-gdpr.md Phase L
+// Source: docs/e2e-tests/suite-map.md § The acceptance phases, Phase L
 
 test('clears Vuex auth state after logout', async ({ browser }) => {
   const context = await browser.newContext({

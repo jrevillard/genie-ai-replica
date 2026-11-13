@@ -2750,9 +2750,11 @@ describe('e2e merge-train changes filters (#1264)', () => {
       'tests/e2e/chatbot/send-message-and-stream.spec.js',
       'tests/e2e/documents/search.spec.js',
       'tests/e2e/documents/upload.spec.js',
+      'tests/e2e/helpers/auth-request.spec.js',
       'tests/e2e/helpers/auth.spec.js',
       'tests/e2e/helpers/base-url.spec.js',
       'tests/e2e/helpers/chatbot.spec.js',
+      'tests/e2e/helpers/documents.spec.js',
       'tests/e2e/helpers/keycloak-admin.spec.js',
       'tests/e2e/helpers/route.spec.js',
       'tests/e2e/helpers/venue-launch-args.spec.js',
@@ -3589,11 +3591,13 @@ describe('the venue-fixture provisioning in .e2e_web_base', () => {
       ['docs/e2e-tests/00-clean-start.md', `"email": "${testuser.email}"`],
       // 00-clean-start.md carries the password literal too (payload
       // credentials, ROPC verification curl, credentials bullet) —
-      // #1407: it stays pinned beside the epic docs.
+      // #1407: it stays pinned beside the phase procedures. The epic
+      // docs were folded INTO the suite map (#1837), so the manual
+      // payloads of Phases A-N (B.1's ROPC verification, F.1/F.2's token
+      // mints, K.2/K.3's ephemeral users, M.10/N.x's recreates) now live
+      // — and are pinned — in ONE document.
       ['docs/e2e-tests/00-clean-start.md', testuser.password],
-      ['docs/e2e-tests/epic1-keycloak-foundation.md', testuser.password],
-      ['docs/e2e-tests/epic2-secure-api-access.md', testuser.password],
-      ['docs/e2e-tests/epic3-session-lifecycle-gdpr.md', testuser.password]
+      ['docs/e2e-tests/suite-map.md', testuser.password]
     ];
     for (const [doc, expected] of docChecks) {
       const source = fs.readFileSync(path.join(ROOT, doc), 'utf-8');

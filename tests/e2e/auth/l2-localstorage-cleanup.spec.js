@@ -5,7 +5,7 @@ const { TEST_USER } = require('../helpers/e2e-fixtures');
 // Test L.2 — localStorage Cleanup on Logout
 // Login, inject legacy localStorage items, trigger logout, verify they are removed.
 // The Vuex logout action clears 'user' and 'auth_token' from localStorage before the Keycloak signoutRedirect.
-// Source: docs/e2e-tests/epic3-session-lifecycle-gdpr.md Phase L
+// Source: docs/e2e-tests/suite-map.md § The acceptance phases, Phase L
 
 test('clears legacy localStorage items after logout', async ({ browser }) => {
   const context = await browser.newContext({

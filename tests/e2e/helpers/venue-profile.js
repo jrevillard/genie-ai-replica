@@ -197,7 +197,7 @@ async function hasIdentityProvider(realm) {
 function missingIdentityProviderReason(realm) {
   return (
     `venue profile: the realm "${realm}" carries no identity provider (Phase D steps 1-5 of ` +
-    'docs/e2e-tests/epic1-keycloak-foundation.md were not run on this venue) — this spec drives ' +
+    'docs/e2e-tests/suite-map.md § The acceptance phases were not run on this venue) — this spec drives ' +
     'the external-IdP login surface, which a deployment without a broker does not render, and ' +
     'that surface is therefore NOT exercised by this run'
   );

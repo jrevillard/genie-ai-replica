@@ -105,7 +105,7 @@ async function waitForDocumentInTable(page, fileName, options = {}) {
  * admin filter applies the same `normalizeStatus`, and this predicate
  * derives from the same module — one rule, three consumers, no mirror to
  * go stale. The module is ESM and dependency-free; the e2e suite is
- * CommonJS, and the Node ≥ 22.12 `require()` of an ES module is the bridge
+ * CommonJS, and Node's CommonJS-require-of-an-ES-module (Node >= 22.12) is the bridge
  * (the e2e runner is on Node 22+; verified in #1781).
  *
  * @param {object} file - one document of the /api/files payload

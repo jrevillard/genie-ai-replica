@@ -50,7 +50,12 @@ const LOCAL_ORIGIN = /https?:\/\/(?:localhost|127\.0\.0\.1|genieai(?:-forge)?\.l
 // provider, a local stub. One per line, with the reason. It is EMPTY on
 // purpose today — every local origin in the tree is the edge itself — and
 // it is the escape hatch a spec that needs a local mock adds to.
-const MOCK_ORIGINS = [];
+const MOCK_ORIGINS = [
+  // The transport owner test (#1804) drives its own local TLS server on
+  // an ephemeral loopback port (helpers/auth-request.spec.js) — the
+  // loopback prefix is the fixture's address, never a venue.
+  'https://127.0.0.1',
+];
 
 // The defining module, resolved — not a literal path: if the module
 // moves, the exemption follows it (a hardcoded path would turn a legal

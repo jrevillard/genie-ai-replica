@@ -278,7 +278,7 @@ test.describe.serial('Phase K: Auth Error Display', () => {
 
   test('K.4 — TOKEN_INVALID (invalid token string)', async () => {
     // NOTE: Keycloak unavailability (docker service scale keycloak=0) is tested
-    // via curl in epic2-secure-api-access.md Phase K.4 — cannot be done from Playwright.
+    // via curl in suite-map.md § The acceptance phases, Phase K.4 — cannot be done from Playwright.
     const res = await authRequest('GET', '/api/me', {
       headers: { Authorization: 'Bearer clearly-invalid-token' },
     });

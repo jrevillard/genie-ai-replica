@@ -37,4 +37,24 @@ async function fetchDocMeta(fileId, timeout = 10000) {
   return docRepoFileOf(res);
 }
 
-module.exports = { fetchDocMeta };
+/**
+ * The doc-repo file fields the OKF side stores, coerced ONCE. The importer
+ * (producer-service) and the crawl provenance stamper (crawl-conversion-
+ * service) each carried their own copy of this coercion, and they drifted:
+ * the importer accepted a `mimetype` fallback the stamper did not, so the two
+ * paths could store a different file_type for the same document.
+ *
+ * The `mimetype` fallback is the union of the two former copies: doc-repo
+ * writes `file_type` (metadataService), so it is present in practice — the
+ * fallback only matters for an older doc-repo build.
+ */
+function docRepoFileFields(f) {
+  return {
+    file_name: f.file_name || null,
+    file_type: f.file_type || f.type || f.mimetype || null,
+    size_bytes: Number.isFinite(f.size) ? f.size : Number.isFinite(f.size_bytes) ? f.size_bytes : null,
+    uploaded_date: f.uploaded_date || null
+  };
+}
+
+module.exports = { fetchDocMeta, docRepoFileFields };

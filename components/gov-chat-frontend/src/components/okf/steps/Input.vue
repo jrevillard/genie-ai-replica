@@ -102,6 +102,7 @@
           accept=".md,.markdown,.txt"
           multiple
           class="okf-step__fs-input"
+          data-test-id="okf-input-file-input"
           @change="onFsFiles"
         />
       </label>

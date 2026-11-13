@@ -9,8 +9,9 @@ specs the suite actually runs. Before this run existed, that set was a CI job
 (`e2e:playwright`) whose rule requires a merge train this GitLab instance
 never creates, so the set was a claim in a YAML file that nobody executed —
 and half the suite (`epic1/`, `epic2/`, `epic3/`, `okf/`, the root-level
-specs) was outside it, visibly red, and invisible to the repository. Those
-directories have since been rehomed on the feature axis
+specs) was outside it, visibly red, and invisible to the repository. The
+phase directories and the loose root specs have since been rehomed on
+the feature axis — `okf/` was already one and is unchanged
 ([suite-map.md](suite-map.md)).
 
 ## The command

@@ -3370,8 +3370,9 @@ describe('e2e merge-train changes filters (#1264)', () => {
 //     "not executed by construction" — the gap #1740 measured (the
 //     epic1/epic2/epic3/okf directories and the root-level specs sat
 //     outside the CI invocation, and the repo said nothing about it;
-//     those directories have since been rehomed on the feature axis —
-//     see docs/e2e-tests/suite-map.md, issue #1741);
+//     the phase directories and the loose root specs have since been
+//     rehomed on the feature axis (okf/ was already one and is
+//     unchanged) — see docs/e2e-tests/suite-map.md, issue #1741);
 //   - the invocation is DERIVED from the run script, never copied into a
 //     second hand-maintained list (the rule the CI derivation follows);
 //   - the run provisions the venue fixtures, and its failure path files a

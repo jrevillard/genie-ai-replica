@@ -1384,6 +1384,7 @@ export default {
 
     documentOpenError: 'Gagal membuka dokumen',
     okfSourceUnavailable: 'Sumber ini tidak tersedia untuk dilihat.',
+    okfOriginMissing: 'Dokumen sumber ini tidak ada di repositori dokumen.',
     okfOriginalSource: 'Sumber asli',
     okfBrowseRepo: 'Jelajahi repositori',
     okfBrowser: {

@@ -207,18 +207,38 @@
                       v-if="isOkfConceptSource(d) && d.okfSources && d.okfSources.length"
                       class="answer-source-origins"
                     >
-                      <button
-                        v-for="(o, oi) in d.okfSources"
-                        :key="o.file_id || o.resource"
-                        type="button"
-                        class="answer-source-origin"
-                        :data-testid="`answer-source-origin-${di}-${oi}`"
-                        @click="openOriginDocument(o)"
-                      >
-                        <FileText :size="12" aria-hidden="true" />
-                        <span class="answer-source-origin__label">{{ originLabel(o) }}</span>
-                        <ExternalLink :size="12" aria-hidden="true" />
-                      </button>
+                      <!-- #1827: an origin doc-repo answers 404 for is a FACT,
+                           not a click — the muted row names it, the working
+                           file keeps its link. -->
+                      <template v-for="(o, oi) in d.okfSources" :key="o.file_id || o.resource">
+                        <span
+                          v-if="o.missing"
+                          class="answer-source-origin answer-source-origin--missing"
+                          :data-testid="`answer-source-origin-missing-${di}-${oi}`"
+                        >
+                          <FileText :size="12" aria-hidden="true" />
+                          <span class="answer-source-origin__label">{{ originLabel(o) }}</span>
+                          <span class="answer-source-origin__missing-note">
+                            {{
+                              translate(
+                                'chatbot.okfOriginMissing',
+                                'This source document is not in the document repository.'
+                              )
+                            }}
+                          </span>
+                        </span>
+                        <button
+                          v-else
+                          type="button"
+                          class="answer-source-origin"
+                          :data-testid="`answer-source-origin-${di}-${oi}`"
+                          @click="openOriginDocument(o)"
+                        >
+                          <FileText :size="12" aria-hidden="true" />
+                          <span class="answer-source-origin__label">{{ originLabel(o) }}</span>
+                          <ExternalLink :size="12" aria-hidden="true" />
+                        </button>
+                      </template>
                     </div>
                     <!-- W9 (concept tree browse): the browse affordance on a
                          WORKING okf-concept card (repo identity present) — a
@@ -4032,6 +4052,25 @@ export default {
 .answer-source-origin:hover {
   color: var(--accent);
   background: var(--surface);
+}
+
+/* #1827: an origin whose file is gone is a fact, not a click — muted, no
+   hover affordance, the missing note rides under the label. */
+.answer-source-origin--missing {
+  cursor: default;
+  flex-wrap: wrap;
+}
+
+.answer-source-origin--missing:hover {
+  color: var(--muted);
+  background: transparent;
+}
+
+.answer-source-origin__missing-note {
+  color: var(--muted);
+  font-size: var(--text-xs);
+  opacity: 0.85;
+  flex: 1 1 100%;
 }
 
 .answer-source-origin__label {

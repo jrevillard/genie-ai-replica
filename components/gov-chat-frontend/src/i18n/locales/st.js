@@ -1390,6 +1390,7 @@ export default {
 
     documentOpenError: 'Ho hlolehile ho bula tokomane',
     okfSourceUnavailable: 'Mohloli ona ha o fumanehe ho shebella.',
+    okfOriginMissing: 'Tokumente ena ea mohloli ha e eo polokelong ea litokumente.',
     okfOriginalSource: 'Mohloli wa peleha',
     okfBrowseRepo: 'Sheba polokelo',
     okfBrowser: {

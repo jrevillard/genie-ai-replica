@@ -1373,6 +1373,7 @@ export default {
 
     documentOpenError: 'Could not open the document',
     okfSourceUnavailable: 'This source is not available to view.',
+    okfOriginMissing: 'This source document is not in the document repository.',
     okfOriginalSource: 'Original source',
     okfBrowseRepo: 'Browse repository',
     okfBrowser: {

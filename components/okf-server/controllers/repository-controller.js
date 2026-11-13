@@ -31,6 +31,7 @@ const { intentName, nameFromSource, slugFor } = require('../services/slug');
 const { assertWritable } = lifecycleService;
 const bundleExportService = require('../services/bundle-export-service');
 const conformanceService = require('../services/conformance-service');
+const docRepoClient = require('../services/doc-repo-client');
 const typeInference = require('../services/type-inference-service');
 const crawlConversionService = require('../services/crawl-conversion-service');
 const producerService = require('../services/producer-service'); // Story 7.7 documents import
@@ -1129,7 +1130,7 @@ function projectConceptCard(concept) {
       .map((s) => {
         if (!s || typeof s !== 'object') return null;
         const entry = {};
-        for (const f of ['kind', 'file_id', 'file_name', 'resource']) {
+        for (const f of ['kind', 'file_id', 'file_name', 'resource', 'missing']) {
           if (s[f] !== undefined) entry[f] = s[f];
         }
         return entry.file_id || entry.resource ? entry : null;
@@ -1137,6 +1138,44 @@ function projectConceptCard(concept) {
       .filter(Boolean);
   }
   return card;
+}
+
+// #1827 (dangling origin links): a concept's sources[] can outlive the
+// doc-repo files they name — a corpus rebuild deletes the files and every
+// origin link turns into a dead click with no hint the document is GONE
+// rather than restricted. The citizen card stamps `missing: true` on
+// entries doc-repo answers 404 for. One module-level cache: fileId →
+// { verdict, at }; only DEFINITIVE verdicts are cached ('transient' stays
+// uncached so an outage never purges working links), TTL 10 min so a
+// re-uploaded file heals itself.
+const ORIGIN_AVAILABILITY_TTL_MS = 10 * 60 * 1000;
+// Exported for the surface suite (a clean Map per test — the cache is
+// module-level by design, one doc-repo read per file id per TTL window).
+const originAvailabilityCache = new Map();
+
+async function stampOriginAvailability(concept) {
+  const sources = Array.isArray(concept.sources) ? concept.sources : [];
+  const ids = [...new Set(sources.filter((s) => s && s.file_id).map((s) => s.file_id))];
+  const now = Date.now();
+  for (const fileId of ids) {
+    let verdict;
+    const cached = originAvailabilityCache.get(fileId);
+    if (cached && now - cached.at < ORIGIN_AVAILABILITY_TTL_MS) {
+      verdict = cached.verdict;
+    } else {
+      try {
+        verdict = await docRepoClient.fetchDocMetaStatus(fileId);
+      } catch {
+        verdict = 'transient'; // the stamp never throws into the serving read
+      }
+      if (verdict !== 'transient') originAvailabilityCache.set(fileId, { verdict, at: now });
+    }
+    if (verdict === 'missing') {
+      for (const s of sources) {
+        if (s && s.file_id === fileId) s.missing = true;
+      }
+    }
+  }
 }
 
 async function getConcept(req, res, next) {
@@ -1171,6 +1210,13 @@ async function getConcept(req, res, next) {
     // wholesale — the PATCH is field-scoped — so nothing persists the
     // synthetic field into the stored doc); the citizen gets the CAP-2 card
     // projection, which carries no ceiling and no steward fields.
+    // #1827: the citizen card also carries the origin-availability stamp —
+    // a source entry doc-repo answers 404 for goes out as `missing: true`,
+    // so the card can say "not in the document repository" instead of
+    // offering a dead click. Stamping never throws (transient failures
+    // leave rows unmarked) and the steward arm skips it entirely (the
+    // editor's surfaces are not the citizen's origin links).
+    if (!steward) await stampOriginAvailability(concept);
     res.status(200).json(steward ? { ...concept, max_doc_chars: maxConceptDocChars() } : projectConceptCard(concept));
   } catch (err) {
     next(err);
@@ -2431,6 +2477,8 @@ async function exportRagasResultsXlsx(req, res, next) {
 
 module.exports = {
   createRepo,
+  // #1827: the surface suite clears this per test (module-level by design).
+  originAvailabilityCache,
   convertFromCrawl,
   cloneRepo,
   listRepos,

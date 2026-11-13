@@ -1378,6 +1378,7 @@ export default {
 
     documentOpenError: 'ডকুমেন্ট খোলা যায়নি',
     okfSourceUnavailable: 'এই উৎসটি দেখার জন্য উপলব্ধ নয়।',
+    okfOriginMissing: 'এই সোর্স ডকুমেন্টটি ডকুমেন্ট রিপোজিটরিতে নেই।',
     okfOriginalSource: 'মূল উৎস',
     okfBrowseRepo: 'ভাণ্ডার ব্রাউজ করুন',
     okfBrowser: {

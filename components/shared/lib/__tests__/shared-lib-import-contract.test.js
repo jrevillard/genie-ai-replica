@@ -22,7 +22,14 @@ const path = require('path');
 // package the jest runtime cannot require. The scan below LOADS every shared
 // module it checks (to inspect real exported member names), so stub `jose`
 // here; the stub never executes verifier logic, it only lets the module load.
-jest.mock('jose', () => ({ jwtVerify: jest.fn(), createRemoteJWKSet: jest.fn() }));
+jest.mock('jose', () => ({
+  jwtVerify: jest.fn(),
+  createRemoteJWKSet: jest.fn(),
+  // The verifier also destructures jose's decoder at module load, so the
+  // stub carries it: the destructure must not be silently incomplete.
+  // This suite never verifies a token, so the stub is never called.
+  decodeProtectedHeader: jest.fn()
+}));
 
 const COMPONENTS = path.resolve(__dirname, '..', '..', '..');
 const SHARED_LIB = path.join(COMPONENTS, 'shared', 'lib');

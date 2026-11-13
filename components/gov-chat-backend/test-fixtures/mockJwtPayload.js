@@ -35,13 +35,17 @@ const mockExpiredPayload = {
  * Generate a mock JWT string (3 base64url parts separated by dots)
  * This is NOT cryptographically valid — used only for testing middleware
  * token extraction and parsing logic.
+ *
+ * The header can be overridden: a token that names NO key id (RFC 7515
+ * §4.1.4 makes it optional) is `{ alg: 'RS256', typ: 'JWT' }`, and a
+ * malformed one carries a key id that is not a string.
  */
-function generateMockJwtString(payload = {}) {
+function generateMockJwtString(payload = {}, header = { alg: 'RS256', kid: 'test-key-id', typ: 'JWT' }) {
   const merged = { ...mockJwtPayload, ...payload };
-  const header = Buffer.from(JSON.stringify({ alg: 'RS256', kid: 'test-key-id', typ: 'JWT' })).toString('base64url');
+  const encodedHeader = Buffer.from(JSON.stringify(header)).toString('base64url');
   const body = Buffer.from(JSON.stringify(merged)).toString('base64url');
   const sig = Buffer.from('mock-signature').toString('base64url');
-  return `${header}.${body}.${sig}`;
+  return `${encodedHeader}.${body}.${sig}`;
 }
 
 module.exports = {

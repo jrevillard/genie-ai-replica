@@ -8,7 +8,7 @@
 // strict single-issuer pin.
 'use strict';
 
-const { jwtVerify, createRemoteJWKSet } = require('jose');
+const { jwtVerify, createRemoteJWKSet, decodeProtectedHeader } = require('jose');
 const axios = require('axios');
 const { logger } = require('./logger');
 
@@ -25,35 +25,50 @@ const KEYCLOAK_REALM = process.env.KEYCLOAK_REALM;
 const KEYCLOAK_DISCOVERY_URL = process.env.KEYCLOAK_DISCOVERY_URL;
 const DISCOVERY_BASE_URL = (KEYCLOAK_DISCOVERY_URL || KEYCLOAK_URL || '').replace(/\/+$/, '');
 const INIT_RETRY_COOLDOWN = 30000; // 30 seconds between retry attempts
-const JWKS_CACHE_TTL = 300000; // 5 minutes JWKS cache TTL (NFR10)
-// Floor between FORCED key-set refreshes. A forced refresh re-fetches the
-// key set from the auth service, and reaching one takes nothing more than
-// a token naming a key id the realm does not publish — an unauthenticated
-// caller could therefore make the service hammer that endpoint.
+const JWKS_CACHE_TTL = 300000; // 5 minutes JWKS cache TTL (NFR10) — jose's `cacheMaxAge`
+// Floor on the key-set refresh jose performs when a token names a key id the
+// realm does not publish — jose's `cooldownDuration`, 1 s.
 //
-// The floor is 1 s, per issuer (every JWKS cache carries its own). What it
-// buys and what it costs are both deliberate:
+// A refresh re-fetches the key set from the auth service, and reaching one
+// takes nothing more than a token naming an unknown key id — an
+// unauthenticated caller could therefore make the service hammer that
+// endpoint. The cooldown bounds the fetch rate at one per second per issuer:
+// inside the window jose answers from the cached set instead of re-fetching.
 //
-//   - It bounds the fetch rate at one per second per issuer. Before the
-//     floor, a forced refresh threw jose's own 30 s cooldown away (a fresh
-//     remote key set starts cold — `jwksTimestamp` unset), so the realm's
-//     certificate endpoint was hit once per junk token.
+// What it costs is deliberate and unchanged by the move to jose's own cache:
+// inside the window a rotation is picked up by the NEXT refresh, not by the
+// one the rotated token triggers — the token is rejected (401) until the
+// next refresh runs. The realm's rotation recovery is never faster than the
+// refresh that observes it.
 //
-//   - Inside the window, a rotation is picked up by the NEXT refresh, not
-//     by the one the rotated token triggers: tokens naming a key id the
-//     realm has just published are rejected (401) until the next refresh
-//     runs, when an unrelated unknown-kid token consumed the floor in the
-//     preceding second. That window is the price of the bound — jose's own
-//     cooldown has the very same property, with a 30 s window instead of
-//     1 s, and the realm's rotation recovery is no faster than the refresh
-//     that observes it.
+// The window is measured from the last FETCH of the key set (any fetch, the
+// TTL refresh included), where the previous wrapper measured it from the last
+// FORCED refresh. The rate bound is identical; only the anchor moved, and
+// the anchor is the token library's, not ours.
+const JWKS_REFRESH_COOLDOWN_MS = 1000;
+
+// How long a rejected token's cause keeps its WARN slot (#1769).
 //
-//   - Under a SUSTAINED flood — more than one unknown-kid token per second —
-//     every forced refresh stays floored and the rotation is observed only
-//     when the flood stops: the bound deliberately starves the attacker
-//     rather than the endpoint, and the same property exists in jose's own
-//     cooldown.
-const FORCED_REFRESH_MIN_INTERVAL_MS = 1000;
+// The token is caller-controlled and unauthenticated: a rejected token used
+// to cost one WARN line, so a scanner posting garbage bearer tokens
+// produced one log line per request — the same amplification class #1703
+// was filed for on the JWKS-fetch side, moved from HTTP calls to log bytes.
+// The cost lands on the log pipeline (the OTel collector -> VictoriaLogs
+// leg) and on the operator: the auth log ends up dominated by client
+// behaviour, and the interesting lines (a realm outage, a key rotation) are
+// buried in it.
+//
+// The policy: the FIRST rejection of each distinct cause in a window is a
+// WARN; the repeats are DEBUG (off at the default log level, so they cost
+// nothing). The bucket is per ISSUER as well as per cause — a broken realm
+// must not mute another realm's warnings.
+const REJECTION_LOG_WINDOW_MS = 60000;
+
+/**
+ * The per-issuer, per-cause log buckets of the rejection policy.
+ * Keyed by `${issuer} ${cause}` → { windowStart, suppressed }.
+ */
+const rejectionLogBuckets = new Map();
 
 /**
  * Does the fetched key set hold a key that can verify an RS256 signature?
@@ -76,18 +91,33 @@ const FORCED_REFRESH_MIN_INTERVAL_MS = 1000;
  * outage (a bad token where jose would say "no usable key"), never invent
  * one — so a healthy key set is never misread as a broken realm. Tightening
  * it toward jose would flip that direction: any token that reaches this
- * check with a key set jose itself would refuse (an `ext: false` key, a
- * non-unique key_ops list) would be answered 503 instead of 401.
+ * check with a key set jose itself would refuse (a key whose `ext` is not
+ * a boolean, a key_ops list that repeats an operation) would be answered
+ * 503 instead of 401.
  */
 function keySetHasUsableKey(jwks) {
   if (!jwks || !Array.isArray(jwks.keys)) return true;
-  return jwks.keys.some(
-    (jwk) =>
-      jwk &&
-      jwk.kty === 'RSA' &&
-      (!jwk.alg || jwk.alg === 'RS256') &&
-      (!jwk.use || jwk.use === 'sig') &&
-      (!Array.isArray(jwk.key_ops) || jwk.key_ops.includes('verify'))
+  return jwks.keys.some(isUsableSigningKey);
+}
+
+/**
+ * Could this published key verify an RS256 signature?
+ *
+ * The same RS256-only filter `keySetHasUsableKey` applies — deliberately
+ * LOOSER than jose's own candidate filter (see that docstring): it ignores
+ * jose's `ext` check and its key_ops uniqueness/type strictness, so it
+ * never refuses a published key jose would accept.
+ *
+ * @param {Object|undefined} jwk - A published key
+ * @returns {boolean} True when the key could verify an RS256 signature
+ */
+function isUsableSigningKey(jwk) {
+  return Boolean(
+    jwk &&
+    jwk.kty === 'RSA' &&
+    (!jwk.alg || jwk.alg === 'RS256') &&
+    (!jwk.use || jwk.use === 'sig') &&
+    (!Array.isArray(jwk.key_ops) || jwk.key_ops.includes('verify'))
   );
 }
 
@@ -106,6 +136,62 @@ try {
 }
 
 /**
+ * Would a DEBUG line be written at all?
+ *
+ * The logger is the shared winston one, but a consumer's test double may
+ * not implement the level check — and a rejected token must never fail on
+ * the way to its log line.
+ *
+ * @returns {boolean} True when a DEBUG line may be written — the level check
+ *   answers when the logger has one; when it has none, the logger is asked
+ *   to log and its transport decides whether the line is written.
+ */
+function debugEnabled() {
+  if (typeof logger.isDebugEnabled === 'function') return logger.isDebugEnabled();
+  // A logger that cannot answer is asked to log: the transport decides
+  // whether the line is written (production is winston, which filters on
+  // level; only a consumer's test double lands here). Skipping the call
+  // instead would silently swallow the line for every such consumer.
+  return typeof logger.debug === 'function';
+}
+
+/**
+ * Log a rejected token without letting the caller turn the log into a flood.
+ *
+ * The first rejection of each distinct cause in a window is a WARN; the
+ * repeats are DEBUG, and the next WARN says how many were suppressed. The
+ * cause has its own bucket — the "key-set refresh floored" line keeps a WARN
+ * slot of its own, because a rotation losing one refresh is a service-side
+ * event, not client noise, and must stay visible at WARN.
+ *
+ * @param {string} issuer - The issuer the token named (the bucket is per issuer)
+ * @param {string} cause - The distinct cause of the rejection (the bucket is per cause)
+ * @param {Function} buildLine - Builds the log line. It is a thunk because
+ *   the line is only built when it is actually written: at the default log
+ *   level the repeats are dropped by the logger, and building their text
+ *   anyway would leave the per-request cost this policy removes.
+ */
+function logRejection(issuer, cause, buildLine) {
+  const key = `${issuer} ${cause}`;
+  const now = Date.now();
+  const bucket = rejectionLogBuckets.get(key);
+  if (!bucket || now - bucket.windowStart >= REJECTION_LOG_WINDOW_MS) {
+    const suppressed = bucket ? bucket.suppressed : 0;
+    rejectionLogBuckets.set(key, { windowStart: now, suppressed: 0 });
+    const tail =
+      suppressed > 0
+        ? ` — ${suppressed} further rejection(s) with this cause were suppressed since the last warning`
+        : '';
+    logger.warn(`${buildLine()}${tail}`);
+  } else {
+    bucket.suppressed += 1;
+    if (debugEnabled()) {
+      logger.debug(buildLine());
+    }
+  }
+}
+
+/**
  * Error class for structured auth errors
  */
 class TokenVerificationError extends Error {
@@ -117,16 +203,103 @@ class TokenVerificationError extends Error {
   }
 }
 
+// How many published candidate keys the kid-less token trial tries (#1767).
+// The candidate count is the REALM's (Keycloak keeps retired keys published),
+// so the trial is bounded rather than exhaustive: a realm publishing more
+// candidates than this is a realm to clean up, not a token to guess at. The
+// truncation is logged with that reason, and the token is still rejected as
+// invalid — the log names the realm's key set, the client still gets its 401.
+const MAX_CANDIDATE_KEYS = 3;
+
 /**
- * Create a JWKS cache with explicit TTL.
+ * Does the token name NO key id?
  *
- * jose's createRemoteJWKSet has built-in HTTP caching based on Cache-Control headers,
- * but Keycloak 26.x may not always return explicit cache headers. This wrapper ensures
- * consistent caching behavior with an explicit 5-minute TTL.
+ * RFC 7515 §4.1.4 makes the key id optional, and the candidate trial
+ * resolves ONLY a token that names none. The answer is read from the
+ * token's own protected header — the header the token carries, not the one
+ * the key resolver reports — so it does not depend on how that resolver
+ * classified the request. A header that cannot be read counts as naming a
+ * key id: the answer fails closed, and no trial runs.
+ *
+ * The header is decoded by jose's own decoder — the same one that read it
+ * to decide the token's fate, so the two cannot disagree on what the
+ * header says.
+ *
+ * @param {string} token - The raw JWT
+ * @returns {boolean} True when the token names no key id at all
+ */
+function tokenNamesNoKeyId(token) {
+  try {
+    const header = decodeProtectedHeader(token);
+    return !Object.prototype.hasOwnProperty.call(header, 'kid');
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Try the published candidate keys of an ambiguous token (#1767).
+ *
+ * RFC 7515 §4.1.4 makes the key id OPTIONAL: a token that names none
+ * against a multi-key set is not a bad token, it is a token jose cannot
+ * resolve by key id alone. jose hands the candidates over with the error;
+ * this tries them, at most MAX_CANDIDATE_KEYS of them, and the first one
+ * whose signature verifies wins.
+ *
+ * Only a SIGNATURE failure moves on to the next candidate: a claim failure
+ * (expired, wrong issuer, wrong audience) is the token's own defect, and no
+ * other key can repair it.
+ *
+ * @param {Error} err - The JWKSMultipleMatchingKeys error (it carries the candidates)
+ * @param {string} token - The raw JWT
+ * @param {Object} jwtOptions - The same verification options the first attempt used
+ * @returns {Promise<Object>} `{ ok, payload, error, truncated }` — `error`
+ *   is the failure that decides the rejection (the last signature failure, or
+ *   the token's own defect), `truncated` says the realm published more
+ *   candidates than the trial may try.
+ */
+async function tryCandidateKeys(err, token, jwtOptions) {
+  const failure = { ok: false, payload: null, error: null, truncated: false };
+  if (!err || typeof err[Symbol.asyncIterator] !== 'function') return failure;
+
+  let lastError = null;
+  let tried = 0;
+  for await (const candidate of err) {
+    if (tried >= MAX_CANDIDATE_KEYS) {
+      // More candidates than the trial may try: the token is NOT resolved by
+      // guessing — the realm's key set is too wide to pick from.
+      return { ...failure, error: lastError, truncated: true };
+    }
+    tried += 1;
+    try {
+      const { payload } = await jwtVerify(token, candidate, jwtOptions);
+      return { ok: true, payload, error: null, truncated: false };
+    } catch (candidateError) {
+      if (candidateError.name !== 'JWSSignatureVerificationFailed') {
+        // The token's own defect (expiry, claims, algorithm) — no other
+        // candidate can repair it.
+        return { ...failure, error: candidateError };
+      }
+      lastError = candidateError;
+    }
+  }
+  return { ...failure, error: lastError };
+}
+
+/**
+ * Create a JWKS cache.
+ *
+ * The cache is jose's own remote key set — ONE per issuer, never recreated.
+ * jose owns both halves of the policy: `cacheMaxAge` (the TTL: the set is
+ * re-fetched once it is that old) and `cooldownDuration` (the floor on the
+ * reload jose performs when a token names a key id the realm does not
+ * publish). A second cache mechanism over the same dependency — with its own
+ * TTL, its own floor and its own set recreation — could only disagree with
+ * it, and the recreation (a fresh remote set starts cold, with no cooldown
+ * state) is what made the floor necessary in the first place (#1778).
  *
  * @param {string} jwksUri - The JWKS endpoint URL
- * @param {number} ttlMs - Cache TTL in milliseconds (default: 300000 = 5 minutes)
- * @returns {Function} A callable JWKS function with attached .forceRefresh() method
+ * @returns {Function} A callable JWKS function
  *
  * The returned function has signature (protectedHeader, token) -> Promise<Key>
  * compatible with jose's jwtVerify(token, jwksFunction, options).
@@ -134,36 +307,51 @@ class TokenVerificationError extends Error {
  * @example
  * const jwksCache = createJwksCache('http://keycloak/realms/genie/protocol/openid-connect/certs');
  * const { payload } = await jwtVerify(token, jwksCache, { issuer: 'http://keycloak/realms/genie' });
- * // Later, force refresh if needed:
- * jwksCache.forceRefresh();
  */
-function createJwksCache(jwksUri, ttlMs = JWKS_CACHE_TTL) {
-  let inner = createRemoteJWKSet(new URL(jwksUri));
-  const _jwksUri = jwksUri; // Store for re-fetch
-  let createdAt = Date.now();
-  let lastForcedRefreshAt = 0;
+function createJwksCache(jwksUri) {
+  const inner = createRemoteJWKSet(new URL(jwksUri), {
+    cacheMaxAge: JWKS_CACHE_TTL,
+    cooldownDuration: JWKS_REFRESH_COOLDOWN_MS
+  });
 
   /**
    * JWKS function compatible with jose's jwtVerify
    * @param {Object} protectedHeader - JWT protected header
-   * @param {Object} token - Full JWT token
+   * @param {Object} token - The JWS (its `header` holds the unprotected header)
    * @returns {Promise<Key>} Cryptographic key
    */
   async function jwksFn(protectedHeader, token) {
-    // Check TTL: if expired, re-fetch
-    if (Date.now() - createdAt > ttlMs) {
-      inner = createRemoteJWKSet(new URL(_jwksUri));
-      createdAt = Date.now();
+    // A key id that is not a string is a MALFORMED token, and the verifier
+    // refuses it BEFORE jose sees it. RFC 7515 §4.1.4 types the key id as a
+    // string, so a realm never issues such a token — and jose's own builds
+    // disagree on what one means: the older ones match EVERY published key
+    // when the key id is not a string (so a realm publishing a single
+    // signing key resolves the token without the verifier ever seeing an
+    // error), the newer one matches NONE. Deciding here makes the answer
+    // the same on every service: a token the realm never issued does not
+    // authenticate.
+    if (protectedHeader && Object.prototype.hasOwnProperty.call(protectedHeader, 'kid')) {
+      if (typeof protectedHeader.kid !== 'string') {
+        const malformed = new Error('the token names a key id that is not a string');
+        // The name is the verifier's own, not jose's vocabulary: a future
+        // jose could claim `JWTInvalidKeyId` for something else.
+        malformed.name = 'MalformedKeyId';
+        throw malformed;
+      }
     }
+    // Whether the cached set is inside its cooldown window BEFORE the call:
+    // jose suppresses the reload-on-unknown-kid while it is, and only this
+    // snapshot says whether a refresh was floored (the cooldown window is
+    // closed again by the time the error comes back).
+    const coolingDown = inner.coolingDown === true;
     try {
       return await inner(protectedHeader, token);
     } catch (err) {
       // This wrapper is the ONLY network call of the verification path: a
       // failure here is the AUTH SERVICE's, never the token's. Two errors
       // from this leg are the TOKEN's: an unknown kid (JWKSNoMatchingKey —
-      // the key set may simply be stale; the caller treats it as a rotation
-      // candidate) and an ambiguous key match (JWKSMultipleMatchingKeys — a
-      // token that names no kid against a multi-key set). Everything else
+      // the key set may simply be stale; the realm may have rotated) and an
+      // ambiguous key match (JWKSMultipleMatchingKeys). Everything else
       // (a refused connection, a non-200 response, an unparsable body, a
       // timeout, a malformed key set) is an outage: it must NOT be reported
       // as a bad token, or the consumers answer 401 and send every user to
@@ -182,16 +370,43 @@ function createJwksCache(jwksUri, ttlMs = JWKS_CACHE_TTL) {
             'Authentication service is temporarily unavailable (the realm published no usable signing key)'
           );
         }
+        // jose answered from the cached set instead of re-fetching it: the
+        // realm may ALREADY publish the key this token names, and the next
+        // refresh observes it. The flag travels with the error so the
+        // caller can say so in the log. It is set on EVERY call — a stale
+        // flag from an earlier rejection would misreport this one.
+        err.refreshFloored = coolingDown;
         throw err;
       }
       if (err && err.name === 'JWKSMultipleMatchingKeys') {
-        // jose raises this when a key resolves to MORE THAN ONE candidate:
-        // a token that names no key id against a multi-key set, or a token
-        // whose kid appears twice in the published set (a misconfigured
-        // rotation). Either way the ambiguity is resolvable only by the
-        // caller — the token cannot be verified unambiguously, so it stays
-        // a token-side rejection. (The realm in scope — Keycloak — always
-        // publishes a key id, and never duplicates one.)
+        // jose raises this when a key resolves to MORE THAN ONE candidate.
+        // Two different faults land here, and the token's own key id tells
+        // them apart: a token that names a key id (the realm published that
+        // id more than once — an outage, #1776) and a token that names none
+        // (the published candidates can resolve it — #1767).
+        const kid = protectedHeader && protectedHeader.kid;
+        if (kid !== undefined) {
+          // jose matches the candidates by that EXACT key id, so more than
+          // one candidate means the realm published that key id more than
+          // once — the realm's own broken state, the same class as a realm
+          // publishing no usable key at all, and the same answer: an
+          // outage, so the operator is told instead of every user being
+          // signed out by a 401 they cannot act on (#1776). jose matched the
+          // candidates by that EXACT key id, so the ambiguity IS the
+          // proof: the published key set is not read, and nothing the
+          // realm publishes can make this verdict a 401 instead.
+          throw new TokenVerificationError(
+            'AUTH_SERVICE_UNAVAILABLE',
+            'Authentication service is temporarily unavailable (the realm published more than one signing key under one key id)'
+          );
+        }
+        // The token names NO key id: RFC 7515 §4.1.4 makes the key id
+        // OPTIONAL, so the ambiguity is the token's, and the published
+        // candidates can resolve it. The error carries them; the caller
+        // tries them (#1767). ONLY a kid-less ambiguity reaches the caller
+        // — the named-kid case above is answered here, and a key id that is
+        // not a string is refused before jose sees it, so the trial can
+        // never resolve a token naming a duplicated key id.
         throw err;
       }
       throw new TokenVerificationError(
@@ -201,36 +416,18 @@ function createJwksCache(jwksUri, ttlMs = JWKS_CACHE_TTL) {
     }
   }
 
-  /**
-   * Force refresh the JWKS cache on next use
-   * Resets createdAt to 0, triggering re-fetch on next call
-   *
-   * Forced refreshes are floored (FORCED_REFRESH_MIN_INTERVAL_MS): the
-   * refresh re-fetches the key set from the auth service, and reaching one
-   * takes nothing more than a token naming a key id the realm does not
-   * publish — an unauthenticated caller could otherwise make the service
-   * hammer that endpoint.
-   *
-   * @returns {boolean} True when the refresh was scheduled, false when the
-   *   floor held it back (the caller then skips the retry — a rotation that
-   *   lands inside the window is picked up by the next refresh).
-   */
-  jwksFn.forceRefresh = function () {
-    const now = Date.now();
-    if (now - lastForcedRefreshAt < FORCED_REFRESH_MIN_INTERVAL_MS) {
-      return false;
-    }
-    lastForcedRefreshAt = now;
-    createdAt = 0;
-    return true;
-  };
+  // The bound URL travels with the cache: a re-init that KEEPS a registered
+  // issuer's key set (#1778) logs the URL that cache actually fetches, not
+  // the one the new discovery document names (they can differ — a changed
+  // certificates URL is a deployment change; see the init warn).
+  jwksFn.jwksUri = jwksUri;
 
   return jwksFn;
 }
 
 /**
  * Issuer → JWKS cache map for multi-IdP support.
- * Each value is a createJwksCache() result (callable with .forceRefresh() method).
+ * Each value is a createJwksCache() result (a callable JWKS resolver).
  * Populated lazily by ensureInitialized() from OIDC discovery documents.
  */
 const issuerMap = new Map();
@@ -327,7 +524,20 @@ async function init(idpUrl) {
   // KC_HOSTNAME — which inside service containers is often unreachable;
   // operators point KEYCLOAK_JWKS_URL at a container-reachable host). It
   // changes WHERE the keys come from, never WHO is accepted.
-  const effectiveJwks = jwksOverride ? createJwksCache(jwksOverride) : createJwksCache(doc.jwks_uri);
+  // ONE key set per issuer, never recreated (#1778): an issuer that is
+  // already registered KEEPS its key set — a re-init must not throw away
+  // the cached keys, and the refresh floor that goes with them. (A changed
+  // certificates URL is a deployment change: the process restarts.)
+  const registeredJwks = issuerMap.get(pinnedIssuer || doc.issuer);
+  const effectiveJwks =
+    registeredJwks || (jwksOverride ? createJwksCache(jwksOverride) : createJwksCache(doc.jwks_uri));
+  // The URL the EFFECTIVE cache fetches — the kept cache's bound URL when
+  // the issuer is already registered, the fresh one otherwise. Both init
+  // logs below print THIS, never the raw doc.jwks_uri: on a re-init whose
+  // discovery moved the certificates URL, the kept cache still fetches the
+  // OLD one, and a log naming the new one would send the operator chasing
+  // the wrong endpoint.
+  const effectiveJwksUri = effectiveJwks.jwksUri;
 
   if (pinnedIssuer) {
     // Strict issuer pin: the pinned issuer is the ONLY accepted issuer —
@@ -343,7 +553,7 @@ async function init(idpUrl) {
       issuerMap.set(pinnedIssuer, effectiveJwks);
       logger.info(
         `[KeycloakAuth] KEYCLOAK_EXPECTED_ISSUER pin: accepting ONLY ${pinnedIssuer}` +
-          (jwksOverride ? ` (JWKS override ${jwksOverride})` : ` (JWKS ${doc.jwks_uri})`)
+          ` (JWKS ${effectiveJwksUri}${jwksOverride ? ' (KEYCLOAK_JWKS_URL override)' : ''})`
       );
     }
   } else {
@@ -412,9 +622,21 @@ async function init(idpUrl) {
     );
   }
 
+  // Placed AFTER the registration gate: a re-init that registers nothing
+  // (the pinned-partner path, which throws above) must not tell an operator
+  // to restart — the remedy holds only for an init that actually re-registers
+  // the issuer, where the restart rebinds the key set to the new URL.
+  if (registeredJwks && effectiveJwksUri !== (jwksOverride || doc.jwks_uri)) {
+    logger.warn(
+      `[KeycloakAuth] Issuer ${pinnedIssuer || doc.issuer} is already registered: its key set stays ` +
+        `bound to ${effectiveJwksUri} while discovery now names ${jwksOverride || doc.jwks_uri} — ` +
+        'restart the process to apply the new certificates URL'
+    );
+  }
+
   const acceptedIssuers = Array.from(issuerMap.keys());
   logger.info(
-    `[KeycloakAuth] Initialized: discovery issuer=${doc.issuer}, accepted issuers=[${acceptedIssuers.join(', ')}], jwks=${doc.jwks_uri}`
+    `[KeycloakAuth] Initialized: discovery issuer=${doc.issuer}, accepted issuers=[${acceptedIssuers.join(', ')}], jwks=${effectiveJwksUri}`
   );
 
   return doc.issuer;
@@ -565,43 +787,46 @@ const keycloakAuthService = {
       throw new TokenVerificationError('TOKEN_INVALID', 'Unknown issuer');
     }
 
-    // Helper function to verify token with JWT
-    const verifyWithJwt = async () => {
-      // Opt-in audience binding (RFC 8707): when the caller supplies
-      // an `audience`, jose additionally validates the token's `aud` claim.
-      // Omitted → no audience check (the historical resource-server behavior —
-      // see the azp note below; pinned by keycloak-auth-service.audience.test.js).
-      const jwtOptions = {
-        issuer: unverifiedIss,
-        algorithms: ['RS256'],
-        requiredClaims: ['iss', 'exp']
-      };
-      if (opts && opts.audience) {
-        jwtOptions.audience = opts.audience;
-      }
-      const { payload: verifiedPayload } = await jwtVerify(token, jwks, jwtOptions);
-
-      // Note: we do NOT validate azp (authorized party). Any client within
-      // the trusted realm that obtains a valid token should be accepted by
-      // this resource server — this is standard OIDC Resource Server behavior.
-      // The token's signature, issuer, and expiration are already verified above.
-
-      return verifiedPayload;
+    // Opt-in audience binding (RFC 8707): when the caller supplies
+    // an `audience`, jose additionally validates the token's `aud` claim.
+    // Omitted → no audience check (the historical resource-server behavior —
+    // see the azp note below; pinned by keycloak-auth-service.audience.test.js).
+    // The options are built once and shared with the candidate trial, so
+    // both attempts verify the token under the SAME contract.
+    const jwtOptions = {
+      issuer: unverifiedIss,
+      algorithms: ['RS256'],
+      requiredClaims: ['iss', 'exp']
     };
+    if (opts && opts.audience) {
+      jwtOptions.audience = opts.audience;
+    }
 
-    // Two-attempt force-refresh pattern (from Architecture Decision D3)
-    // 1. Verify token with cached JWKS → fail
-    // 2. Check if token exp is still valid (not expired)
-    // 4. If no (token expired) → 401 TOKEN_EXPIRED immediately (no refresh)
+    // The key-set refresh is jose's own: a token naming a key id the realm
+    // does not publish makes jose re-read the key set (once per cooldown
+    // window per issuer) and resolve the token against the fresh set. The
+    // verifier does not retry on its own — a second attempt would double
+    // the realm's fetch rate for no gain.
 
     // The verified result is the claims payload plus the iss_sub composite
     // key consumers key users/cache entries on.
     const toResult = (payload) => ({ ...payload, iss_sub: `${payload.iss}#${payload.sub}` });
 
     try {
-      const result = toResult(await verifyWithJwt());
+      // One verification, one set of options: the key-set refresh is jose's
+      // own (it re-reads the key set inside this call), so there is no
+      // second attempt to make.
+      const { payload: verifiedPayload } = await jwtVerify(token, jwks, jwtOptions);
 
-      logger.debug(`[KeycloakAuth] Token verified for ${result.iss_sub}`);
+      // Note: we do NOT validate azp (authorized party). Any client within
+      // the trusted realm that obtains a valid token should be accepted by
+      // this resource server — this is standard OIDC Resource Server behavior.
+      // The token's signature, issuer, and expiration are already verified above.
+      const result = toResult(verifiedPayload);
+
+      if (debugEnabled()) {
+        logger.debug(`[KeycloakAuth] Token verified for ${result.iss_sub}`);
+      }
       return result;
     } catch (err) {
       // TokenVerificationError is re-thrown as-is
@@ -609,93 +834,129 @@ const keycloakAuthService = {
         throw err;
       }
 
+      // The token named NO key id against a multi-key set: RFC 7515 §4.1.4
+      // makes the key id OPTIONAL, so the ambiguity is the token's, and the
+      // published candidates can resolve it. The trial is bounded (a hard
+      // cap), and only a signature failure moves on to the next candidate —
+      // a claim failure is the token's own defect whatever key it names.
+      let failure = err;
+      // The trial costs one signature verification per candidate, so it
+      // never runs for a token that cannot be valid anyway. Two cases, both
+      // decided from the unverified payload (jose checks the signature
+      // BEFORE the claims, so the manual check is what keeps a junk token
+      // from costing a verification):
+      //   - an expired token — jose's own test is `exp <= now` (no clock
+      //     tolerance here), so the same comparison is used here;
+      //   - a token whose expiry jose will refuse anyway — jose requires
+      //     the `exp` claim (`requiredClaims`) and refuses one that is not
+      //     a number, so such a token is invalid whatever key signs it.
+      const exp = typeof unverifiedExp === 'number' ? unverifiedExp : null;
+      const expired = exp !== null && exp <= Math.floor(Date.now() / 1000);
+      // The trial applies ONLY to a token that names NO key id, and the
+      // CALLER decides that — from the token's own header, not from how the
+      // key resolver classified the request. The resolver answers the
+      // named-kid case itself (the realm's outage, #1776) and refuses a key
+      // id that is not a string BEFORE it can classify one, so its
+      // kid-less branch is reached only for a header with no `kid` property
+      // — the same answer the caller computes from the token.
+      if (err.name === 'JWKSMultipleMatchingKeys' && tokenNamesNoKeyId(token)) {
+        if (exp === null) {
+          // The token's own defect, and the one jose would report: an
+          // expiry that is not a number. Decided here so the trial spends
+          // no signature verification on a token that cannot be accepted
+          // whatever key signs it. It is a claim failure, like every other
+          // claim failure, and is reported as one.
+          throw new TokenVerificationError('TOKEN_INVALID', 'Token verification failed');
+        }
+        if (!expired) {
+          const trial = await tryCandidateKeys(err, token, jwtOptions);
+          if (trial.ok) {
+            const result = toResult(trial.payload);
+            if (debugEnabled()) {
+              logger.debug(`[KeycloakAuth] Token verified against a published candidate key for ${result.iss_sub}`);
+            }
+            return result;
+          }
+          if (trial.truncated) {
+            // The realm published more candidates than the trial may try:
+            // the token is not resolved by guessing, and the operator is told
+            // why. This line IS the explanation — the generic rejection line
+            // below would only repeat it.
+            logRejection(
+              unverifiedIss,
+              `${err.name}:trial-truncated`,
+              () =>
+                `[KeycloakAuth] Token verification failed (JWKSMultipleMatchingKeys): the realm published more candidate keys than the trial cap (${MAX_CANDIDATE_KEYS} tried) — the token could not be resolved`
+            );
+            throw new TokenVerificationError('TOKEN_INVALID', 'Token verification failed');
+          }
+          failure = trial.error || err;
+        }
+      }
+
       // JWTExpired → immediate TOKEN_EXPIRED (no refresh attempt)
-      if (err.name === 'JWTExpired') {
+      if (failure.name === 'JWTExpired') {
         throw new TokenVerificationError('TOKEN_EXPIRED', 'Token has expired');
       }
 
       // JWTClaimValidationFailed → TOKEN_INVALID (claim issues are NOT key rotation problems)
-      if (err.name === 'JWTClaimValidationFailed') {
-        if (err.claim === 'iss') {
+      if (failure.name === 'JWTClaimValidationFailed') {
+        if (failure.claim === 'iss') {
           throw new TokenVerificationError('TOKEN_INVALID', 'Token issuer validation failed');
         }
-        if (err.claim === 'aud') {
+        if (failure.claim === 'aud') {
           throw new TokenVerificationError('TOKEN_INVALID', 'Token audience validation failed');
         }
         throw new TokenVerificationError('TOKEN_INVALID', 'Token verification failed');
       }
 
-      // Generic Error (signature failure or unknown kid) → check exp for force-refresh decision
+      // Generic Error (signature failure or unknown kid) → check exp
       // jose checks signature BEFORE claims, so we must manually check exp from unverified payload.
       // Expiry outranks an algorithm mismatch: a stale junk token reports
       // TOKEN_EXPIRED (the semantically leading defect, and the client
       // action — re-authenticate — is the same either way).
-      const now = Math.floor(Date.now() / 1000);
-      if (unverifiedExp && unverifiedExp < now) {
-        // Token is expired → immediate TOKEN_EXPIRED (no refresh)
+      if (expired) {
+        // Token is expired → immediate TOKEN_EXPIRED
         throw new TokenVerificationError('TOKEN_EXPIRED', 'Token has expired');
       }
 
       // Algorithm rejection (JOSEAlgNotAllowed — the RS256 pin refusing an
       // alg-confusion token) is deterministic: jose rejects the header before
       // any key resolution, so no key rotation can make the same token
-      // verify. It must NOT go through the force-refresh path below: forcing
-      // the refresh only zeroes the JWKS cache TTL, so sustained junk-alg
-      // traffic keeps the cache permanently invalidated, every LEGITIMATE
-      // token then pays a JWKS re-fetch, and each junk-alg token gets a
-      // second, equally-futile attempt.
-      if (err.name === 'JOSEAlgNotAllowed') {
+      // verify. It must NOT reach the key-set refresh: jose rejects the
+      // header before it resolves a key, so a refresh cannot make the same
+      // token verify — and every junk-alg token that triggered one would
+      // make every LEGITIMATE token pay a JWKS re-fetch.
+      if (failure.name === 'JOSEAlgNotAllowed') {
         throw new TokenVerificationError('TOKEN_INVALID', 'Token algorithm not allowed');
-      }
-
-      // Rotation candidate ONLY: an unknown kid (JWKSNoMatchingKey) — the
-      // key set may be stale because the realm rotated its keys. A RESOLVED
-      // kid whose signature does not verify can never become valid through
-      // rotation, so the key set is NOT refreshed for it: the refresh zeroes
-      // the cache TTL, so a flood of junk-signature tokens would otherwise
-      // re-fetch the JWKS from Keycloak on nearly every request (#1703).
-      // A token without a usable exp is not a rotation candidate either —
-      // jose's requiredClaims ('iss','exp') would reject it anyway, so it
-      // is fast-failed instead of refreshed.
-      const rotationCandidate =
-        err.name === 'JWKSNoMatchingKey' && typeof unverifiedExp === 'number' && unverifiedExp > now;
-      // The refresh call sits INSIDE the try, as it always has: a refresh
-      // that itself fails (an impossible Date.now, a future subclass) must
-      // reach the caller as the structured TOKEN_INVALID, never as a raw
-      // error escaping this catch block.
-      try {
-        if (rotationCandidate && jwks.forceRefresh()) {
-          const result = toResult(await verifyWithJwt());
-
-          logger.debug(`[KeycloakAuth] Token verified after JWKS force-refresh for ${result.iss_sub}`);
-          return result;
-        }
-      } catch (retryErr) {
-        // Retry failed → TOKEN_INVALID
-        if (retryErr instanceof TokenVerificationError) {
-          throw retryErr;
-        }
-        logger.error(`[KeycloakAuth] Token verification failed after JWKS refresh: ${retryErr.message}`);
-        throw new TokenVerificationError('TOKEN_INVALID', 'Token verification failed');
       }
 
       // The rejection names the underlying jose error: without it every
       // distinct cause (tampered signature, unknown key id, ambiguous key
       // set, wrong algorithm) reaches the operator's log as the same
-      // 'Token verification failed'. Reaching this line means the retry
-      // above did not run: the token is not a rotation candidate, or the
-      // floor held its refresh back.
-      if (rotationCandidate) {
+      // 'Token verification failed'. The line is rate-limited per issuer and
+      // per cause: a rejected token is caller-controlled, so one WARN per
+      // rejection is a flood the caller can produce (#1769).
+      if (failure.refreshFloored) {
         // The refresh floor held the key-set refresh back. The realm may
         // ALREADY publish the key this token names — a rotation that landed
         // inside the window is observed by the next refresh, not by this
         // one. Saying so keeps a burst of 401s around a key rotation
-        // distinguishable from a burst of junk tokens.
-        logger.warn(
-          `[KeycloakAuth] Token verification failed (${err.name}): key-set refresh floored — rotation recovery deferred to the next refresh`
+        // distinguishable from a burst of junk tokens. It keeps a WARN slot
+        // of its own: the rotation losing a refresh is a service-side
+        // event, not client noise.
+        logRejection(
+          unverifiedIss,
+          `${failure.name}:refresh-floored`,
+          () =>
+            `[KeycloakAuth] Token verification failed (${failure.name}): key-set refresh floored — rotation recovery deferred to the next refresh`
         );
       } else {
-        logger.warn(`[KeycloakAuth] Token verification failed (${err.name || 'Error'}): ${err.message}`);
+        logRejection(
+          unverifiedIss,
+          failure.name || 'Error',
+          () => `[KeycloakAuth] Token verification failed (${failure.name || 'Error'}): ${failure.message}`
+        );
       }
 
       throw new TokenVerificationError('TOKEN_INVALID', 'Token verification failed');
@@ -763,7 +1024,15 @@ const keycloakAuthService = {
       // destructively on a confirmed disable (soft-deletes the account), so
       // an uncorroborated 403 stays ambiguous, like an uncorroborated 401.
       if (error.response && error.response.status === 403) {
-        logger.warn('[KeycloakAuth] Keycloak UserInfo returned 403 — ambiguous, treating as null');
+        // Rate-limited like the rejection line: this diagnostic answers once
+        // per REJECTED token (the caller asks Keycloak whether the user
+        // behind a rejected token was disabled), so a flood of garbage
+        // tokens would otherwise produce one line per request (#1769).
+        logRejection(
+          issuer,
+          'UserInfo 403 (ambiguous)',
+          () => '[KeycloakAuth] Keycloak UserInfo returned 403 — ambiguous, treating as null'
+        );
         return null;
       }
       // 401 is ambiguous: an expired token and a disabled user both answer
@@ -785,18 +1054,26 @@ const keycloakAuthService = {
         }
         // Still ambiguous. When a WWW-Authenticate was present but named no
         // reason we act on, log it — the generic "may be expired" alone
-        // would hide that the header simply did not match. Control
-        // characters (C0, C1, Unicode line separators) stripped and the
-        // value bounded: a challenge is server-controlled log input.
-        const headerNote =
-          typeof wwwAuthenticate === 'string'
-            ? ` (WWW-Authenticate: ${wwwAuthenticate
-                // Stripping control characters IS this regex's purpose.
-                // eslint-disable-next-line no-control-regex
-                .replace(/[\u0000-\u001F\u007F-\u009F\u2028\u2029]/g, '')
-                .slice(0, 200)})`
-            : '';
-        logger.warn(`[KeycloakAuth] Keycloak UserInfo returned 401 — ambiguous, treating as null${headerNote}`);
+        // would hide that the header simply did not match.
+        // Rate-limited like the rejection line: this diagnostic answers once
+        // per REJECTED token, so a flood of garbage tokens would otherwise
+        // produce one line per request (#1769). The challenge is sanitized
+        // INSIDE the thunk, so the work is only done when the line is
+        // actually written.
+        logRejection(issuer, 'UserInfo 401 (ambiguous)', () => {
+          // Control characters (C0, C1, Unicode line separators) stripped
+          // and the value bounded: a challenge is server-controlled log
+          // input.
+          const headerNote =
+            typeof wwwAuthenticate === 'string'
+              ? ` (WWW-Authenticate: ${wwwAuthenticate
+                  // Stripping control characters IS this regex's purpose.
+                  // eslint-disable-next-line no-control-regex
+                  .replace(/[\u0000-\u001F\u007F-\u009F\u2028\u2029]/g, '')
+                  .slice(0, 200)})`
+              : '';
+          return `[KeycloakAuth] Keycloak UserInfo returned 401 — ambiguous, treating as null${headerNote}`;
+        });
         return null;
       }
       // Network errors: timeouts are transient (warn), unexpected errors are severe (error)
@@ -812,14 +1089,6 @@ const keycloakAuthService = {
   TokenVerificationError,
 
   /**
-   * Create a JWKS cache with explicit TTL. Exported for testing.
-   * @param {string} jwksUri - The JWKS endpoint URL
-   * @param {number} ttlMs - Cache TTL in milliseconds
-   * @returns {Function} A callable JWKS function with .forceRefresh() method
-   */
-  createJwksCache,
-
-  /**
    * Reset internal state. Only for testing.
    */
   _resetForTesting() {
@@ -828,6 +1097,7 @@ const keycloakAuthService = {
     initFailedAt = 0;
     initFailureReason = null;
     initialized = false;
+    rejectionLogBuckets.clear();
   },
 
   /**

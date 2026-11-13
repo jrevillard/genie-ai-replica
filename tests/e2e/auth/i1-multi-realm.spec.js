@@ -30,7 +30,7 @@ test.describe.serial('Phase I: Multi-Realm Configuration', () => {
   const TEST_USER = { username: 'testuser2', password: 'TestPass123!', email: 'testuser2@genie2.local' };
 
   // The venue profile decides: a deployment that exposes no second realm
-  // cannot answer a multi-realm request, so the tests SKIPS WITH A REASON
+  // cannot answer a multi-realm request, so the tests SKIP WITH A REASON
   // instead of failing on a realm that was never provisioned (#1742).
   // The registrar is wired ONCE into both hooks — and because it hooks
   // first, a skip stops the group: the mint below never runs on a venue

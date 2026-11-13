@@ -538,13 +538,6 @@ async function init(idpUrl) {
   // OLD one, and a log naming the new one would send the operator chasing
   // the wrong endpoint.
   const effectiveJwksUri = effectiveJwks.jwksUri;
-  if (registeredJwks && effectiveJwksUri !== (jwksOverride || doc.jwks_uri)) {
-    logger.warn(
-      `[KeycloakAuth] Issuer ${pinnedIssuer || doc.issuer} is already registered: its key set stays ` +
-        `bound to ${effectiveJwksUri} while discovery now names ${jwksOverride || doc.jwks_uri} — ` +
-        'restart the process to apply the new certificates URL'
-    );
-  }
 
   if (pinnedIssuer) {
     // Strict issuer pin: the pinned issuer is the ONLY accepted issuer —
@@ -560,7 +553,7 @@ async function init(idpUrl) {
       issuerMap.set(pinnedIssuer, effectiveJwks);
       logger.info(
         `[KeycloakAuth] KEYCLOAK_EXPECTED_ISSUER pin: accepting ONLY ${pinnedIssuer}` +
-          (jwksOverride ? ` (JWKS override ${jwksOverride})` : ` (JWKS ${effectiveJwksUri})`)
+          ` (JWKS ${effectiveJwksUri}${jwksOverride ? ' (KEYCLOAK_JWKS_URL override)' : ''})`
       );
     }
   } else {
@@ -626,6 +619,18 @@ async function init(idpUrl) {
     throw new Error(
       `KEYCLOAK_EXPECTED_ISSUER (${pinnedIssuer}) matches no registered issuer — ` +
         `check KEYCLOAK_REALM against the discovery URL's realm`
+    );
+  }
+
+  // Placed AFTER the registration gate: a re-init that registers nothing
+  // (the pinned-partner path, which throws above) must not tell an operator
+  // to restart — the remedy holds only for an init that actually re-registers
+  // the issuer, where the restart rebinds the key set to the new URL.
+  if (registeredJwks && effectiveJwksUri !== (jwksOverride || doc.jwks_uri)) {
+    logger.warn(
+      `[KeycloakAuth] Issuer ${pinnedIssuer || doc.issuer} is already registered: its key set stays ` +
+        `bound to ${effectiveJwksUri} while discovery now names ${jwksOverride || doc.jwks_uri} — ` +
+        'restart the process to apply the new certificates URL'
     );
   }
 

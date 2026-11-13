@@ -1386,6 +1386,9 @@ export default {
       downloadFailed: 'فشل التنزيل.',
       showMore: 'عرض المزيد',
       backToList: 'العودة إلى القائمة',
+      back: 'رجوع',
+      forward: 'تقدّم',
+      selectHint: 'اختر مفهوما من الشجرة لقراءته هنا.',
       colConcept: 'المفهوم'
     },
     feedbackSubmitted: 'تم حفظ الملاحظات',

@@ -1365,6 +1365,9 @@ export default {
       downloadFailed: '下载失败。',
       showMore: '显示更多',
       backToList: '返回列表',
+      back: '后退',
+      forward: '前进',
+      selectHint: '从树中选择一个概念以在此阅读。',
       colConcept: '概念'
     },
     feedbackSubmitted: '反馈已保存',

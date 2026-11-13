@@ -34,13 +34,12 @@ test.describe('Document Upload', () => {
       const row = await waitForDocumentInTable(page, fileName);
       await expect(row).toBeVisible();
 
-      const cellText = await row.locator('td.cell-main').innerText();
+      const cellText = await row.locator('[data-test-id="document-name"]').innerText();
       expect(cellText.trim()).toContain(fileName);
 
-      const statusTag = row.locator('DsStatusTag, .status-tag, [class*="status"]');
-      const statusText = (await statusTag.isVisible())
-        ? (await statusTag.innerText()).trim()
-        : '';
+      // DsStatusTag renders unconditionally, so the status cell is always
+      // present — the status TEXT is what varies; the read is direct.
+      const statusText = (await row.locator('[data-test-id="document-status"]').innerText()).trim();
       expect(statusText.toLowerCase()).toContain('pending');
     });
   }
@@ -48,10 +47,10 @@ test.describe('Document Upload', () => {
   test('reject .exe file and display error message', async ({ page }) => {
     const dialog = await openUploadDialog(page);
 
-    const fileInput = page.locator('.drop-zone input[type="file"]');
+    const fileInput = page.locator('[data-test-id="upload-file-input"]');
     await fileInput.setInputFiles(path.join(FIXTURES_DIR, 'invalid-document.exe'));
 
-    const errorMessage = dialog.locator('.error-message');
+    const errorMessage = dialog.locator('[data-test-id="upload-error-message"]');
     await expect(errorMessage).toBeVisible({ timeout: 5000 });
     const errorText = await errorMessage.innerText();
     expect(errorText.toLowerCase()).toMatch(/not allowed|not supported|invalid/i);

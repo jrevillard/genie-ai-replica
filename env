@@ -1206,6 +1206,16 @@ KC_MOBILE_REDIRECT_SCHEME=com.<institution>.genieai
 # Raising this value extends that credential-at-rest window.
 # KEYCLOAK_ACCESS_TOKEN_LIFESPAN=300
 
+# SSO session lifespans in seconds (#1834). Keycloak's built-in defaults
+# (idle 1800 = 30 minutes, max 36000 = 10 hours) expired the browser session
+# under the user: after 30 idle minutes a hard refresh bounced through a full
+# re-login instead of renewing silently, and every session died outright at
+# 10 hours. Defaults (in docker-compose.yaml): idle 28800 = 8 hours, max
+# 604800 = 7 days. The idle timeout is what refreshes ride; the max lifespan
+# is the hard wall after which every user must log in again.
+# KEYCLOAK_SSO_SESSION_IDLE_TIMEOUT=28800
+# KEYCLOAK_SSO_SESSION_MAX_LIFESPAN=604800
+
 # =============================================================================
 # SECTION 9B: EXTERNAL IDENTITY PROVIDERS (OPTIONAL)
 # =============================================================================

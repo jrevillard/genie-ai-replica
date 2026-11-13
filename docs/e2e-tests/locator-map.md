@@ -105,7 +105,7 @@ without handles.
 | `concept-ceiling.spec.js` | handle (the ceiling pill declares `data-state=warning`, #1829) | — |
 | `ragas-guide-errors.spec.js` | handle (`okf-studio-card-*`, `ragas-guide-toggle`, `[role="dialog"]`, `ds-tab-*`, `ragas-guide-pane`) | — (converted #1828) |
 | `ragas-judge-selector.spec.js` | handle (`okf-studio-card-*`, `ragas-panel`, `okf-models-url-cell`) | — (converted #1828; the `select`/`option` tails are rooted at `ragas-panel`) |
-| `ragas-rescore-tracking.spec.js` | handle (`ragas-run-history`, `data-state` status pills, `ragas-run-key`, `ragas-run-progress`, `[role="dialog"]`) | — (converted #1828) |
+| `ragas-rescore-tracking.spec.js` | handle (`okf-studio-card-*`, `ragas-run-history`, `data-state` status pills, `ragas-run-key`, `ragas-run-progress`, `[role="dialog"]`) | — (converted #1828) |
 
 The ragas family WAS the heaviest structural coupling in the suite (~30
 class-selector hits across three specs); #1828 converted it onto

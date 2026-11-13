@@ -4360,14 +4360,22 @@ describe('the root Playwright config has a lint home (#1716)', () => {
     // must exclude it and a Node-only entry must scope it, or a browser
     // global there (a ReferenceError at config load) passes no-undef.
     // ESLint's flat config merges matching entries' globals additively, so
-    // dropping EITHER half (the exclusion from the merged pool, or the
-    // Node-only entry) silently restores the hole — and so does ADDING
-    // browser globals to the Node-only entry, or hoisting the exclusion
-    // into a top-level global-ignore entry (which excludes the file from
-    // every entry). The exclusion is therefore pinned as ONE contiguous
-    // files+ignores pair — a global ignores-only entry does not carry the
-    // files: prefix and cannot satisfy it — and the browser spread is
-    // pinned to exactly one occurrence, the merged pool's.
+    // the failure modes split: dropping the EXCLUSION silently restores
+    // the hole, while dropping the Node-only entry fails loudly (the file
+    // keeps only js.configs.recommended, and every CommonJS global —
+    // require, module — trips no-undef). The pin guards both edits. Also
+    // ruled out: ADDING browser globals to the Node-only entry, hoisting
+    // the exclusion into a top-level global-ignore entry (which excludes
+    // the file from every entry), and ADDING an override entry that turns
+    // no-undef off or re-scopes globals for the root config — the last is
+    // caught by the occurrence count below, since any entry targeting the
+    // file must spell it.
+    // The exclusion is therefore pinned as ONE contiguous files+ignores
+    // pair — a global ignores-only entry does not carry the files: prefix
+    // and cannot satisfy it — the browser spread is pinned to exactly one
+    // occurrence, the merged pool's, and the file's references to the root
+    // config are pinned to exactly four: the two spellings in each of the
+    // two entries.
     // Full-line comments are stripped before compaction (the exclusion's
     // measured-mechanism comment sits between the two pinned lines); the
     // file carries no inline `//` outside those comments.
@@ -4381,6 +4389,17 @@ describe('the root Playwright config has a lint home (#1716)', () => {
     expect(source).toContain(scopedExclusion);
     expect(source).toContain("files:['playwright.config.js','../../playwright.config.js'],");
     expect(source.match(/globals\.browser/g) || []).toHaveLength(1);
+    expect(source.match(/playwright\.config\.js/g) || []).toHaveLength(4);
+  });
+
+  test('the root config carries no eslint-disable suppression (#1716 review)', () => {
+    // A USED disable directive is not an unused one: it silences no-undef
+    // for exactly the binding the gate exists to catch, --max-warnings 0
+    // never sees it, and the wiring pins cannot — the CLI suppressor pins
+    // cover the command, not the target file. The target is one small
+    // file; the suppression is forbidden outright.
+    const source = fs.readFileSync(path.join(ROOT, 'playwright.config.js'), 'utf-8');
+    expect(source).not.toContain('eslint-disable');
   });
 
   test('the gate names the root config and the e2e eslint config', () => {

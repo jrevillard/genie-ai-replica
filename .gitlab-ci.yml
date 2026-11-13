@@ -4251,6 +4251,10 @@ config:validate:
         # by the tests/e2e glob above.
         - "playwright.config.js"
         - "package.json"
+        # The third file that can silence the gate: the shared rules are
+        # spread into both gate entries, so a no-undef override there
+        # blinds the gate without touching the other two files.
+        - "components/shared/eslint-rules-base.js"
         - "tests/fixtures/config/**/*"
         - "api-gateway-solution/new-config/**/*"
         - "components/gov-chat-frontend/public/config/genie-ai-config*.json"

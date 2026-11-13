@@ -4492,6 +4492,9 @@ describe('the root Playwright config has a lint home (#1716)', () => {
     for (const dir of probeDirs) fs.rmSync(dir, { recursive: true, force: true });
   });
 
+  // A cold eslint start can exceed jest's 5s default per test on a
+  // loaded runner — a flake whose cause would be runner latency, not a
+  // gate regression.
   test('the gate actually fires on an undeclared global (behavioral control)', () => {
     // The string pins assert configuration; this probe asserts the
     // OUTCOME with the real binary: a copy of the root config carrying an
@@ -4522,10 +4525,12 @@ describe('the root Playwright config has a lint home (#1716)', () => {
     // as status null with a code — name the remedy instead of rendering
     // "expected null to be 1". CI installs the deps (config:validate's
     // before_script), so only dev checkouts can take this branch.
-    expect(failure.code).not.toBe('ENOENT');
+    if (failure.code === 'ENOENT') {
+      throw new Error('tests/e2e deps missing on this checkout — fix: cd tests/e2e && npm ci');
+    }
     expect(failure.status).toBe(1);
     expect(`${failure.stdout}${failure.stderr}`).toContain('no-undef');
-  });
+  }, 15000);
 
   test('the commit-time hook covers the root config (#1716 review)', () => {
     // The gate's lint-staged entry is the commit-time half of its home:
@@ -4541,5 +4546,16 @@ describe('the root Playwright config has a lint home (#1716)', () => {
     expect(entry.join(' ')).toBe(
       'tests/e2e/node_modules/.bin/eslint --max-warnings 0 --config tests/e2e/eslint.config.js --fix'
     );
+  });
+
+  test('the sibling suite gate keeps its own lint script (#1716 review)', () => {
+    // The root config is not the only gate: tests/e2e's `eslint .` covers
+    // every spec and helper (the #1632 evaluate-body class). Its package
+    // script has the same silencing-by-edit vector as the root gate —
+    // repointing it at a --rule override would die green in the MR
+    // pipeline — so it is pinned by exact equality like the root script.
+    const pkg = JSON.parse(fs.readFileSync(path.join(ROOT, 'tests/e2e/package.json'), 'utf-8'));
+    expect(pkg.scripts.lint).toBe('eslint .');
+    expect(pkg.scripts['lint:fix']).toBe('eslint . --fix');
   });
 });

@@ -88,6 +88,10 @@ test.describe('the document status predicate', () => {
     // a search term) and must not false-positive this gate.
     const source = fs.readFileSync(require.resolve('./documents'), 'utf8');
     const start = source.indexOf('function matchesStatus');
+    // A negative start would make the slice vacuous (the tripwire would
+    // pass on nothing): if the anchor is lost — say the predicate became
+    // an arrow — the gate must fail loudly, not guard air.
+    expect(start).toBeGreaterThanOrEqual(0);
     const end = source.indexOf('\n}', start);
     expect(end).toBeGreaterThan(start);
     expect(source.slice(start, end)).not.toMatch(/toLowerCase\(\)\.trim\(\)/);

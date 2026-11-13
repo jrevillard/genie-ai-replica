@@ -20,10 +20,10 @@ const auth = require('./auth');
  *     the endpoint answered, it just did not answer with JSON.
  *
  * Nobody else tests this at the boundary: the venue-profile unit spec's
- * fake mirrors the contract so a probe that forgets `raw: true` fails the
- * way the venue would, and a mirror goes stale silently when the real
- * helper moves. This spec drives the REAL `request` — no fake — so the
- * contract cannot drift without a red test here.
+ * fake used to mirror the contract, but mirrors go stale silently when
+ * the real helper moves — since #1804 the fake is a plain stub and THIS
+ * spec owns the contract, driving the REAL `request` so it cannot drift
+ * without a red test here.
  *
  * The transport speaks HTTPS (`https.request`, `rejectUnauthorized:
  * false`), so the fixture is a local TLS server carrying a self-signed

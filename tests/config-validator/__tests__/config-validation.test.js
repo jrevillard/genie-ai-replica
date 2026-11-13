@@ -4317,13 +4317,14 @@ describe('parseGitlabCiJobChanges', () => {
 // defect class stayed open in the suite's own configuration.
 //
 // The gate is the SAME one (tests/e2e/eslint.config.js), run from the
-// repository root because ESLint's base path is the working directory: a
-// file above tests/e2e/ is out of reach from there.
+// repository root — the cwd-anchoring mechanism that requires that is
+// stated once, on the second test below.
 //
 // Three facts make the coverage real and each can rot on its own: the lint
 // job's changes filter lists the file (so an edit to it runs the gate at
-// all), the job's script runs the gate, and the gate names the root file
-// and the e2e config (so it cannot drift into covering something else).
+// all), the job's script runs the gate from the right directory, and the
+// gate names the root file and the e2e config (so it cannot drift into
+// covering something else).
 describe('the root Playwright config has a lint home (#1716)', () => {
   const ciFile = path.join(ROOT, '.gitlab-ci.yml');
   let lintJob;

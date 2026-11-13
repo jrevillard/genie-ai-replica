@@ -1,7 +1,7 @@
 const path = require('path');
 const fs = require('fs');
 
-const { jsFiles, stripJsComments } = require('../validators/js-files');
+const { jsFiles, stripJsComments, SPEC_FILE_RE, escapeRegExp } = require('../validators/js-files');
 const { withTree } = require('../validators/temp-tree');
 const { STREAM_PATH } = require('../../e2e/helpers/stream-route');
 
@@ -81,13 +81,16 @@ const CLIENT_MODULE = path.join(FRONTEND_SRC, CLIENT_RELATIVE);
  * '/queries/streams', so an app that drifted to the longer path would
  * still carry the short one and the anchor would stay green.
  */
-const endpointPattern = (needle) => new RegExp(needle.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '(?![A-Za-z0-9_./-])');
+const endpointPattern = (needle) => new RegExp(escapeRegExp(needle) + '(?![A-Za-z0-9_./-])');
 
 /** Is this file one of the app's tests? A fixture that kept the old
  * spelling would keep the anchor alive. */
 const isTestFile = (file) => {
   const parts = file.split(path.sep);
-  return parts.includes('__tests__') || /\.(spec|test)\.[cm]?[jt]sx?$/.test(parts[parts.length - 1]);
+  // The spec-file pattern is the SHARED one (#1800): validators/js-files.js
+  // owns the spelling, so this gate and the executed-set derivation cannot
+  // disagree about what a test file is.
+  return parts.includes('__tests__') || SPEC_FILE_RE.test(parts[parts.length - 1]);
 };
 
 /**

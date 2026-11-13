@@ -1392,6 +1392,7 @@ export default {
 
     documentOpenError: 'Dokument konnte nicht geöffnet werden',
     okfSourceUnavailable: 'Diese Quelle kann nicht angezeigt werden.',
+    okfOriginMissing: 'Dieses Quelldokument ist nicht im Dokumentrepository vorhanden.',
     okfOriginalSource: 'Originalquelle',
     okfBrowseRepo: 'Repository durchsuchen',
     okfBrowser: {

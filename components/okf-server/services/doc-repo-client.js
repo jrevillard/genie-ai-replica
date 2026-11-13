@@ -38,6 +38,26 @@ async function fetchDocMeta(fileId, timeout = 10000) {
 }
 
 /**
+ * #1827 (dangling origin links): does the file EXIST? One of
+ *   - 'present'  — doc-repo answered with the file's metadata,
+ *   - 'missing'  — doc-repo answered 404: definitive; the file is gone and
+ *                  the card may say so (never confounded with access),
+ *   - 'transient'— anything else (network error, 5xx, 403 scope refusal):
+ *                  NOT a verdict — the caller leaves the row unmarked and a
+ *                  later check retries. A gated file must never read as
+ *                  removed, and an outage must never purge working links.
+ */
+async function fetchDocMetaStatus(fileId, timeout = 2500) {
+  try {
+    await fetchDocMeta(fileId, timeout);
+    return 'present';
+  } catch (err) {
+    if (err && err.response && err.response.status === 404) return 'missing';
+    return 'transient';
+  }
+}
+
+/**
  * The doc-repo file fields the OKF side stores, coerced ONCE. The importer
  * (producer-service) and the crawl provenance stamper (crawl-conversion-
  * service) each carried their own copy of this coercion, and they drifted:
@@ -57,4 +77,4 @@ function docRepoFileFields(f) {
   };
 }
 
-module.exports = { fetchDocMeta, docRepoFileFields };
+module.exports = { fetchDocMeta, fetchDocMetaStatus, docRepoFileFields };

@@ -61,14 +61,20 @@ test('completes full external IdP brokered login flow', async ({ browser }) => {
   const page = await context.newPage();
   const apiContext = context.request;
 
-  // Get admin token for realm configuration changes
+  // Get admin token for realm configuration changes. The form body is
+  // serialized EXPLICITLY: Playwright's apiContext does not turn a
+  // URLSearchParams object into an application/x-www-form-urlencoded body
+  // (it sends the object's own serialization), and Keycloak answers 400
+  // "Missing form parameter: grant_type" — found by the mint gate below on
+  // its first live run (#1713).
   const adminTokenRes = await apiContext.post(`${BASE_URL}/auth/realms/master/protocol/openid-connect/token`, {
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
     data: new URLSearchParams({
       client_id: 'admin-cli',
       username: 'admin',
       password: process.env.KEYCLOAK_ADMIN_PASSWORD,
       grant_type: 'password'
-    }),
+    }).toString(),
     ignoreHTTPSErrors: true
   });
   // The mint carries the same verdict discipline as the restore below

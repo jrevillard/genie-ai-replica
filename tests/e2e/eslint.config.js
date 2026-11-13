@@ -40,9 +40,11 @@ module.exports = [
     // while it runs from the repository root (the CI job's `cd` is pinned
     // by the contract test in tests/config-validator). From tests/e2e/ the
     // coverage would die silently, and a pin reading only this file's text
-    // cannot see it. Moving this config FILE itself re-anchors both
-    // entries, and that same pin fails the suite until they are re-spelled
-    // together.
+    // cannot see it. Moving this config FILE changes nothing about what
+    // the entries match — they anchor to the invocation's cwd; what breaks
+    // instead is the --config path in lint:playwright-config and the read
+    // path of the pin that reads this file, and until those are re-spelled
+    // the gate exits 2 and the suite fails.
     ignores: ['playwright.config.js', '../../playwright.config.js'],
     languageOptions: {
       ecmaVersion: 'latest',

@@ -230,28 +230,6 @@ function skipUnlessVenue(testApi, probe, reason) {
   };
 }
 
-/**
- * The guarded beforeAll body (#1773): runs `body` only when the venue
- * probe holds, otherwise returns without running it. A skipped spec must
- * leave no user behind in the venue's realm — the setup that mints users
- * wraps itself in this instead of hand-writing the early-return guard.
- * The skip ANNOTATION itself still comes from `skipUnlessVenue` in a
- * beforeEach — this guard only protects the setup work.
- *
- * @param {object} testApi - the Playwright `test` object the spec uses
- * @param {Function} probe - the venue probe; falsy = the venue lacks the
- *   surface
- * @param {Function} body - the setup body; called with the beforeAll
- *   hook's fixtures argument
- * @returns {Function} the beforeAll hook
- */
-function venueSetup(testApi, probe, body) {
-  return async (fixtures) => {
-    if (!(await probe())) return;
-    await body(fixtures);
-  };
-}
-
 module.exports = {
   okfEnabled,
   okfParkedReason,
@@ -260,5 +238,4 @@ module.exports = {
   hasIdentityProvider,
   missingIdentityProviderReason,
   skipUnlessVenue,
-  venueSetup,
 };

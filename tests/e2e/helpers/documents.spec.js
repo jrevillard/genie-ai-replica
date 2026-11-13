@@ -1,6 +1,7 @@
 // Copyright (C) 2026 International Telecommunication Union (ITU)
 // SPDX-License-Identifier: Apache-2.0
 const { test, expect } = require('@playwright/test');
+const fs = require('fs');
 const { matchesStatus } = require('./documents');
 
 /**
@@ -39,17 +40,28 @@ test.describe('the document status predicate', () => {
     expect(matchesStatus(file('Ingested'), '')).toBe(false);
   });
 
-  test('the normalisation is the shared vocabulary’s, not a private copy', () => {
-    // Through the real catalogue: the module this predicate imports is
-    // the one AdminDashboard.vue imports. Requiring it directly here (a
-    // second require of the same path resolves to the SAME module
-    // instance) proves the predicate's verdict tracks the vocabulary —
-    // the mock-fallback trap the i18n wave taught: assert through the
-    // real thing, never through a stand-in.
-    const { normalizeStatus } = require('../../../components/gov-chat-frontend/src/utils/documentStatus');
-    const probe = 'Ingested';
-    expect(normalizeStatus(probe)).toBe('ingested');
-    expect(matchesStatus(file(probe), normalizeStatus(probe))).toBe(true);
-    expect(matchesStatus(file(probe), 'Ingested')).toBe(true);
+  test('the require(esm) floor is named at load, not a bare SyntaxError', () => {
+    // No behaviour test can see the guard: on a capable runner the
+    // require simply works, and on an incapable one the failure happens
+    // before any spec loads. Pin the guard's presence — without it the
+    // below-floor runner gets Node's own `Unexpected token 'export'`
+    // with nothing to act on (#1804 review of #1781).
+    const source = fs.readFileSync(require.resolve('./documents'), 'utf8');
+    expect(source).toContain('process.features.require_module');
+  });
+
+  test('the predicate consumes the shared vocabulary by require, not a private copy', () => {
+    // The shared identity is STRUCTURAL, and a behaviour assertion alone
+    // cannot see it: if the helper drifted back to a private
+    // `toLowerCase().trim()` copy (or its require moved to a vendored
+    // duplicate), every behaviour case above would stay green. Pin the
+    // two drift directions directly: the require of the shared module
+    // must be present, and no private normalisation may be spelled
+    // beside it (#1804 review of #1781).
+    const source = fs.readFileSync(require.resolve('./documents'), 'utf8');
+    expect(source).toContain(
+      "require('../../../components/gov-chat-frontend/src/utils/documentStatus')"
+    );
+    expect(source).not.toMatch(/toLowerCase\(\)\.trim\(\)/);
   });
 });

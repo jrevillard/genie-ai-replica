@@ -239,14 +239,30 @@ test.describe('the venue-skip wiring (#1773)', () => {
     await freshProfile().skipUnlessVenue(testApi, async () => 'truthy-but-not-boolean', () => 'r')();
     expect(testApi.calls[0].condition).toBe(false);
   });
+});
 
-  test('venueSetup runs the body only when the probe holds', async () => {
-    const testApi = fakeTest();
-    const ran = [];
-    const body = async (fixtures) => ran.push(fixtures);
-    await freshProfile().venueSetup(testApi, async () => false, body)('fx');
-    expect(ran).toEqual([]);
-    await freshProfile().venueSetup(testApi, async () => true, body)('fx');
-    expect(ran).toEqual(['fx']);
+test.describe('the hook-skip contract the guarded specs stand on (#1773)', () => {
+  // The guarded beforeAlls register the registrar itself as their FIRST
+  // hook: when it skips, Playwright must not run the hooks that follow —
+  // that is what keeps a skipped spec from minting a user into the
+  // venue's realm. This pins the Playwright behaviour the shape leans on
+  // (verified by hand 2026-11-13; if Playwright ever runs them, the
+  // mint-guard silently dies).
+  let bodyRan = false;
+
+  test.describe('a group whose first hook skips', () => {
+    test.beforeAll(async () => {
+      test.skip(true, 'the venue lacks the surface');
+    });
+    test.beforeAll(async () => {
+      bodyRan = true;
+    });
+    test('never runs', () => {
+      expect(1).toBe(2);
+    });
+  });
+
+  test('the hook after the skipped hook did not run', () => {
+    expect(bodyRan).toBe(false);
   });
 });

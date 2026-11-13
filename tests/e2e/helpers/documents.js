@@ -1,6 +1,17 @@
 const { expect } = require('@playwright/test');
 // The shared document-status vocabulary: the frontend owns the rule this
 // helper mirrors, so the helper IMPORTS it instead of spelling it (#1781).
+// The bridge is Node's CommonJS-require-of-an-ES-module (unflagged from
+// Node 22.12, 20.19 on the 20 line). Below that floor the require is a
+// bare SyntaxError at load with nothing to act on — so probe the
+// capability (`process.features.require_module`, the flag's own name)
+// and name the floor and the runner's version HERE (#1804 review of
+// #1781).
+if (!process.features.require_module) {
+  throw new Error(
+    `tests/e2e/helpers/documents.js needs Node >= 22.12 (the shared document-status vocabulary is an ES module, consumed through CommonJS require-of-ESM); this runner is Node ${process.versions.node}`
+  );
+}
 const { normalizeStatus } = require('../../../components/gov-chat-frontend/src/utils/documentStatus');
 const { loginViaUI, BASE_URL, TEST_ADMIN_USER } = require('./chatbot');
 const {

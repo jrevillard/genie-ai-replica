@@ -8,7 +8,7 @@ const {
   SESSION_MINT_TIMEOUT_MS,
 } = require('../helpers/auth');
 const { createUser, deleteUser, enableDirectAccessGrants } = require('../helpers/keycloak-admin');
-const { realmExists, missingRealmReason, skipUnlessVenue, venueSetup } = require('../helpers/venue-profile');
+const { realmExists, missingRealmReason, skipUnlessVenue } = require('../helpers/venue-profile');
 
 /**
  * Phase I: Multi-Realm Configuration (Story 2-9)
@@ -43,28 +43,34 @@ test.describe.serial('Phase I: Multi-Realm Configuration', () => {
     skipUnlessVenue(test, () => realmExists(TEST_REALM), () => missingRealmReason(TEST_REALM))
   );
 
-  // The second realm is absent: the tests skip, and the setup below (which
-  // mints into that realm) must not run against a realm that does not
-  // exist. The guard is venueSetup's (#1773), stated once.
+  // The second realm is absent: the tests skip, and the hooks after a
+  // skipped hook do not run (pinned in the helper's unit spec) — the
+  // setup below never mints into a realm that does not exist. The guard
+  // is the registrar's (#1773), stated once.
   test.beforeAll(
-    venueSetup(test, () => realmExists(TEST_REALM), async ({ browser }) => {
-      test.setTimeout(SESSION_MINT_TIMEOUT_MS);
-
-      adminToken = await getAdminToken();
-
-      // genie2 is test-only: enable ROPC for its direct token mints
-      // (see enableDirectAccessGrants — never on the primary realm).
-      await enableDirectAccessGrants(adminToken, TEST_REALM, 'genie-app');
-
-      // Primary-realm token from a browser login session — minted once,
-      // like the sibling suites.
-      genie1Token = await getSessionTokenViaUI({ browser });
-
-      // Create test user in genie2 (realm should already exist from Phase
-      // 0.6; createUser tolerates a 409 from a previous run)
-      await createUser(adminToken, TEST_REALM, TEST_USER);
-    })
+    skipUnlessVenue(test, () => realmExists(TEST_REALM), () => missingRealmReason(TEST_REALM))
   );
+
+  test.beforeAll(async () => {
+    test.setTimeout(SESSION_MINT_TIMEOUT_MS);
+
+    adminToken = await getAdminToken();
+
+    // genie2 is test-only: enable ROPC for its direct token mints
+    // (see enableDirectAccessGrants — never on the primary realm).
+    await enableDirectAccessGrants(adminToken, TEST_REALM, 'genie-app');
+
+    // Primary-realm token from a browser login session — minted once,
+    // like the sibling suites. The helper launches its own throwaway
+    // browser when none is handed in (this hook takes no fixtures:
+    // Playwright requires a hook's first positional parameter to be a
+    // destructuring pattern, so a guard wrapper cannot forward one).
+    genie1Token = await getSessionTokenViaUI();
+
+    // Create test user in genie2 (realm should already exist from Phase
+    // 0.6; createUser tolerates a 409 from a previous run)
+    await createUser(adminToken, TEST_REALM, TEST_USER);
+  });
 
   test.afterAll(async () => {
     // Cleanup chains up to three 30s-capped admin requests on a stalled

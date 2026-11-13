@@ -34,13 +34,7 @@ const GRANDFATHERED_FILES = [
   // concept-ceiling: two .ds-pill--warning state lookups inside the
   // declared concept-ceiling advisory handle. Derived issue from #1822
   // (okf leftovers).
-  'tests/e2e/okf/concept-ceiling.spec.js',
-  // Documents family — TRANSITIONAL entries, converted in the same MR
-  // that flips the gate to default-on (#1822): the upload spec and its
-  // helper still carry the class locators the conversion removes. These
-  // two entries leave the list in that conversion commit.
-  'tests/e2e/documents/upload.spec.js',
-  'tests/e2e/helpers/documents.js'
+  'tests/e2e/okf/concept-ceiling.spec.js'
 ];
 
 // Locator-style APIs a class selector can travel through: the locator

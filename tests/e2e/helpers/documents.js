@@ -35,7 +35,7 @@ async function navigateToDocumentManagement(page) {
   await expect(docTab).toBeVisible({ timeout: 10000 });
   await docTab.click();
 
-  await expect(page.locator('table.data-table')).toBeVisible({ timeout: 15000 });
+  await expect(page.locator('[data-test-id="document-table"]')).toBeVisible({ timeout: 15000 });
 }
 
 /**
@@ -51,7 +51,7 @@ async function openUploadDialog(page) {
   await expect(uploadBtn).toBeVisible({ timeout: 5000 });
   await uploadBtn.click();
 
-  const dialog = page.locator('.dialog-container');
+  const dialog = page.locator('[data-test-id="upload-files-dialog"]');
   await expect(dialog).toBeVisible({ timeout: 5000 });
   return dialog;
 }
@@ -61,19 +61,19 @@ async function openUploadDialog(page) {
  * Opens dialog → sets file on input → confirms upload → waits for success.
  */
 async function uploadFile(page, filePath) {
-  await openUploadDialog(page);
+  const dialog = await openUploadDialog(page);
 
-  const fileInput = page.locator('.drop-zone input[type="file"]');
+  const fileInput = page.locator('[data-test-id="upload-file-input"]');
   await fileInput.setInputFiles(filePath);
 
-  const fileItem = page.locator('.file-list .file-item');
+  const fileItem = dialog.locator('[data-test-id="upload-file-item"]');
   await expect(fileItem).toBeVisible({ timeout: 5000 });
 
-  const confirmBtn = page.locator('.dialog-footer').getByRole('button', { name: /upload/i });
+  const confirmBtn = dialog.getByRole('button', { name: /upload/i });
   await expect(confirmBtn).toBeEnabled({ timeout: 5000 });
   await confirmBtn.click();
 
-  await expect(page.locator('.dialog-container')).toBeHidden({ timeout: 15000 });
+  await expect(dialog).toBeHidden({ timeout: 15000 });
 }
 
 /**
@@ -84,7 +84,7 @@ async function waitForDocumentInTable(page, fileName, options = {}) {
   // The specs upload fixed fixture names repeatedly within one run, so a
   // name can legitimately match more than one row — assert that the file
   // appears (the first matching row), not that it appears exactly once.
-  const row = page.locator('tr.document-row').filter({ hasText: fileName }).first();
+  const row = page.locator('[data-test-id="document-row"]').filter({ hasText: fileName }).first();
   await expect(row).toBeVisible({ timeout });
   return row;
 }
@@ -139,9 +139,9 @@ async function waitForTableRowsSettled(page, filesResponse, { status = 'all' } =
  * to render the search's own response.
  */
 async function searchDocuments(page, query) {
-  // DsInput renders the passed class on the input element itself — the
-  // search field IS `input.search-input`, not a child of `.search-input`.
-  const searchInput = page.locator('input.search-input');
+  // DsInput binds unknown attrs (the declared handle here) onto the
+  // input element itself, so the locator addresses the field directly.
+  const searchInput = page.locator('[data-test-id="document-search-input"]');
   await expect(searchInput).toBeVisible({ timeout: 5000 });
   await searchInput.clear();
   // The table refreshes on a 250 ms debounce plus a fetch: wait for the
@@ -174,19 +174,19 @@ async function searchDocuments(page, query) {
  * Get all visible document table rows as data objects.
  */
 async function getDocumentTableRows(page) {
-  const rows = page.locator('tr.document-row');
+  const rows = page.locator('[data-test-id="document-row"]');
   const count = await rows.count();
   const result = [];
 
   for (let i = 0; i < count; i++) {
     const row = rows.nth(i);
-    const fileName = (await row.locator('td.cell-main').innerText()).trim();
-    const statusTag = row.locator('DsStatusTag, .status-tag, [class*="status"]');
+    const fileName = (await row.locator('[data-test-id="document-name"]').innerText()).trim();
+    const statusTag = row.locator('[data-test-id="document-status"]');
     // A row's status tag is data-driven — documents without a status render
     // none — so the branch is on the row's shape, not on timing. isVisible
     // answers false for an absent element; a broken locator fails the read.
     const status = (await statusTag.isVisible()) ? (await statusTag.innerText()).trim() : '';
-    const labelTags = row.locator('.label-tag');
+    const labelTags = row.locator('[data-test-id="document-label"]');
     const labelCount = await labelTags.count();
     const labels = [];
     for (let j = 0; j < labelCount; j++) {

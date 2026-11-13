@@ -191,6 +191,7 @@ const mutations = {
 
 import chatbotService from '../../services/chatbotService';
 import documentFileService from '../../services/documentFileService';
+import conceptService from '../../services/conceptService';
 import { fetchOkfConcept, okfConceptTitle } from '../../utils/document-opener';
 // !791's shared predicate — the fetch guard below reads it (one predicate,
 // fetch guard and card badge alike; see utils/okfCitation.js).
@@ -463,6 +464,112 @@ const actions = {
         // the resolution instead of pinning the card degraded for the session.
         commit('patchSource', [doc.id, { okfSources }]);
       }
+    }
+  },
+
+  // #1817 (saved-conversation OKF restore): a loaded conversation arrives
+  // with its per-message citations stripped (the live path writes sources at
+  // stream time; the persisted rows carry them only inside raw
+  // metadata.source_documents) and — for PRE-CAP-1 saves — with no repo
+  // identity on the okf rows at all. One action restores all three citation
+  // affordances (card open/download, reference-file links, repo browse):
+  //   1. graft the raw identity onto the translated rows (the same graft the
+  //      sessionStorage rehydrate runs — idempotent),
+  //   2. resolve the missing repo identity LIVE through okf-server
+  //      (concept_id → visible repo; the pre-CAP-1 legacy rows),
+  //   3. fetch each concept's meta through the SHARED title cache (the live
+  //      path's resolver populates it) and patch title + okfSources onto
+  //      EVERY message's sources — not just the last (patchSource only
+  //      reaches the last message; a restored transcript has many).
+  // Best-effort by construction: every resolution failure degrades that row
+  // to the honest "unavailable" card, never an error surface. Idempotent —
+  // resolved rows carry titleResolved and are skipped on re-dispatch.
+  async repairRestoredOkfIdentity({ commit, state }) {
+    const entry = state.conversations[state.openId];
+    if (!entry) return;
+    graftOkfIdentityOntoRestored(entry);
+    const okfRows = [];
+    (entry.messages || []).forEach((m) => (m.sources || []).forEach((s) => okfRows.push(s)));
+    (entry.relatedDocuments || []).forEach((s) => okfRows.push(s));
+    if (!okfRows.some((s) => s && s.source === 'okf-concept')) return;
+
+    // Phase 1 — legacy repo identity (pre-CAP-1 rows: concept_id present,
+    // repoId absent). One resolver call per distinct concept.
+    const resolveNeeded = new Map(); // conceptId -> rows to patch
+    for (const row of okfRows) {
+      if (row && row.source === 'okf-concept' && !row.repoId && row.conceptId) {
+        if (!resolveNeeded.has(row.conceptId)) resolveNeeded.set(row.conceptId, []);
+        resolveNeeded.get(row.conceptId).push(row);
+      }
+    }
+    for (const [conceptId, rows] of resolveNeeded) {
+      let resolved;
+      try {
+        resolved = await conceptService.resolveRepo(conceptId);
+      } catch {
+        // A transient resolver failure degrades to the unavailable card; the
+        // next repair dispatch (the next load) retries it. `resolved` stays
+        // undefined and the patch below is skipped.
+      }
+      if (resolved && resolved.repo_id) {
+        for (const row of rows) {
+          row.repoId = resolved.repo_id;
+          row.bundleVersion = resolved.bundle_version ?? row.bundleVersion ?? null;
+        }
+      } else if (resolved === null) {
+        // A DEFINITIVE null — the anti-enumeration answer: no visible repo
+        // holds this concept. Settle the row with the terminal marker so
+        // later dispatches never re-query it (a rejection stays retryable).
+        for (const row of rows) {
+          row.titleResolved = false;
+          row.okfSources = [];
+        }
+      }
+    }
+
+    // Phase 2 — titles + reference-source rows (okfSources) for every
+    // identity-complete row; the session cache dedupes across messages and
+    // with the live path's resolver.
+    for (const row of okfRows) {
+      if (!row || row.source !== 'okf-concept' || !row.repoId || !row.id) continue;
+      if (typeof row.titleResolved !== 'undefined') continue;
+      const cacheKey = `${row.repoId}::${row.id}`;
+      let meta = okfTitleCache.get(cacheKey);
+      let definitive = true; // a cache hit (a meta row or a pinned null) is terminal
+      if (meta === undefined) {
+        try {
+          meta = await fetchOkfConcept(row.repoId, row.id);
+          okfTitleCache.set(cacheKey, meta);
+        } catch (err) {
+          meta = null;
+          // Cache only a DEFINITIVE unavailability (restricted/retracted/
+          // deleted); a transient failure stays uncached so a later dispatch
+          // retries — the same live/transient distinction openOkfSource makes.
+          definitive = Boolean(err && err.code === 'OKF_CONCEPT_UNAVAILABLE');
+          if (definitive) okfTitleCache.set(cacheKey, null);
+        }
+      }
+      const title = meta ? okfConceptTitle(meta, row.id) : null;
+      const okfSources = meta && Array.isArray(meta.sources) ? meta.sources : [];
+      if (title) {
+        row.title = title;
+        row.titleResolved = true;
+        row.okfSources = okfSources;
+      } else if (definitive) {
+        row.titleResolved = false;
+        row.okfSources = okfSources;
+      }
+    }
+
+    // Phase 3 — write back through mutations: fresh array identities keep
+    // the render triggers alive the same way patchSource does.
+    (entry.messages || []).forEach((m, idx) => {
+      if (Array.isArray(m.sources) && m.sources.some((s) => s && s.source === 'okf-concept')) {
+        commit('setMessageProperty', [idx, 'sources', [...m.sources]]);
+      }
+    });
+    if ((entry.relatedDocuments || []).some((s) => s && s.source === 'okf-concept')) {
+      commit('setRelatedDocuments', [...entry.relatedDocuments]);
     }
   }
 };

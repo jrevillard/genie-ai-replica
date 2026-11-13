@@ -2775,6 +2775,12 @@ export default {
         // Whatever the live path sets on a message (onMetadata), the
         // reload path sets too — the restored conversation speaks the
         // same states. One commit per collection: history can be long.
+        // #1817: the LIVE citation rows ride metadata.source_documents
+        // (the stream's metadata frame), which the save persisted verbatim
+        // — rebuild each message's sources from it, so the answer card's
+        // open/download/browse survive the reload. A message without the
+        // raw rows (pre-metadata saves) simply carries no sources — the
+        // same shape it had before this rebuild existed.
         const messages = conversation.messages || [];
         const restoredMessages = messages.map((msg) => ({
           sender: msg.sender === 'user' ? 'user' : 'bot',
@@ -2785,7 +2791,11 @@ export default {
           metadata: msg.metadata || null,
           isGrounded: msg.metadata?.is_grounded,
           userFeedback: msg.metadata?.userFeedback || null,
-          isSaved: true
+          isSaved: true,
+          sources:
+            Array.isArray(msg.metadata?.source_documents) && msg.metadata.source_documents.length
+              ? translateSources(msg.metadata.source_documents)
+              : []
         }));
         if (restoredMessages.length === 0) {
           restoredMessages.push({
@@ -2797,6 +2807,12 @@ export default {
           });
         }
         this.$store.commit('conversation/setMessages', restoredMessages);
+
+        // #1817: graft the raw identity onto the rebuilt rows and repair the
+        // PRE-CAP-1 legacy rows live (concept_id → visible repo, titles,
+        // reference-source rows). Non-blocking by contract — every failure
+        // degrades that row to the honest "unavailable" card.
+        this.$store.dispatch('conversation/repairRestoredOkfIdentity').catch(() => {});
 
         let restoredContextItems = [];
         // The backend ALWAYS returns an array (`tags: []` when none were

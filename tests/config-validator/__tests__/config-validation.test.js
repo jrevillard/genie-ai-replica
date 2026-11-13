@@ -4369,6 +4369,11 @@ describe('the root Playwright config has a lint home (#1716)', () => {
     expect(validateChanges).toContain('playwright.config.js');
     expect(validateChanges).toContain('package.json');
     expect(validateChanges).toContain('components/shared/eslint-rules-base.js');
+    // The pre-existing suite glob is load-bearing for the pins too: the
+    // eslint-config source read, the suppression pin and the sibling-gate
+    // pin all read files under tests/e2e/ — dropping the glob stops the
+    // pins from instantiating on exactly those edits.
+    expect(validateChanges).toContain('tests/e2e/**/*');
   });
 
   test('the lint job runs the gate from the repository root', () => {
@@ -4408,8 +4413,11 @@ describe('the root Playwright config has a lint home (#1716)', () => {
     // pair — a global ignores-only entry does not carry the files: prefix
     // and cannot satisfy it — the browser spread is pinned to exactly one
     // occurrence, the merged pool's, and the file's references to the root
-    // config are pinned to exactly four: the two spellings in each of the
-    // two entries.
+    // config are pinned to exactly two: one spelling in each entry. (The
+    // once-present '../../' spellings were removed in loop 7: measured,
+    // ESLint never lints a file outside the base path, so a ..-escaping
+    // pattern can never match under ANY anchoring — the old guard
+    // rationale protected nothing.)
     // Comments are stripped before compaction (the exclusion's
     // measured-mechanism comment sits between the two pinned lines), all
     // three placements: block comments first — a `/* */` mentioning a
@@ -4424,11 +4432,11 @@ describe('the root Playwright config has a lint home (#1716)', () => {
       .map((line) => line.replace(/\/\/.*$/, ''))
       .join('\n')
       .replace(/\s+/g, '');
-    const scopedExclusion = "files:['**/*.js'],ignores:['playwright.config.js','../../playwright.config.js'],";
+    const scopedExclusion = "files:['**/*.js'],ignores:['playwright.config.js'],";
     expect(source).toContain(scopedExclusion);
-    expect(source).toContain("files:['playwright.config.js','../../playwright.config.js'],");
+    expect(source).toContain("files:['playwright.config.js'],");
     expect(source.match(/globals\.browser/g) || []).toHaveLength(1);
-    expect(source.match(/playwright\.config\.js/g) || []).toHaveLength(4);
+    expect(source.match(/playwright\.config\.js/g) || []).toHaveLength(2);
     expect(source.match(/files:\[/g) || []).toHaveLength(2);
     expect(source.match(/languageOptions:/g) || []).toHaveLength(2);
     expect(source.match(/rules:\{/g) || []).toHaveLength(2);
@@ -4519,7 +4527,10 @@ describe('the root Playwright config has a lint home (#1716)', () => {
       execFileSync(
         path.join(ROOT, 'tests/e2e/node_modules/.bin/eslint'),
         ['--max-warnings', '0', '--config', path.join(ROOT, 'tests/e2e/eslint.config.js'), 'playwright.config.js'],
-        { cwd: probe, encoding: 'utf-8' }
+        // Bounded below the jest timeout: the call is synchronous, so
+        // jest's own timer cannot run while a hung child blocks the
+        // worker — without this a wedged eslint would wedge the job.
+        { cwd: probe, encoding: 'utf-8', timeout: 12000 }
       );
     } catch (e) {
       failure = e;
@@ -4545,8 +4556,20 @@ describe('the root Playwright config has a lint home (#1716)', () => {
     // above the repository root, so the tree-relative spelling used for
     // tests/e2e/** exits 2 for this file), and enumerated absences were
     // measured incomplete.
+    //
+    // The hook that RUNS lint-staged is part of the same contract and has
+    // no other reader: its has_e2e detection and install keep the entry
+    // from dying on a checkout without tests/e2e deps, and it must not be
+    // removable without a red signal.
+    const hook = fs.readFileSync(path.join(ROOT, '.husky/pre-commit'), 'utf-8');
+    expect(hook).toContain('npx lint-staged');
+    expect(hook).toContain('install_if_needed "tests/e2e"');
+    expect(hook).toMatch(/tests\/e2e\/|playwright\.config\.js/);
     const pkg = JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf-8'));
     const entry = (pkg['lint-staged'] || {})['playwright.config.js'];
+    // Present before the join: a deleted key would otherwise fail with a
+    // TypeError instead of stating the contract.
+    expect(entry).toBeDefined();
     expect(entry.join(' ')).toBe(
       'tests/e2e/node_modules/.bin/eslint --max-warnings 0 --config tests/e2e/eslint.config.js --fix'
     );

@@ -4255,6 +4255,10 @@ config:validate:
         # spread into both gate entries, so a no-undef override there
         # blinds the gate without touching the other two files.
         - "components/shared/eslint-rules-base.js"
+        # The commit-time hook is the runner of the lint-staged gate the
+        # pins above guard: an MR that neuters it must run those pins in
+        # its own pipeline.
+        - ".husky/pre-commit"
         - "tests/fixtures/config/**/*"
         - "api-gateway-solution/new-config/**/*"
         - "components/gov-chat-frontend/public/config/genie-ai-config*.json"

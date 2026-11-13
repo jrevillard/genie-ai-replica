@@ -199,18 +199,26 @@ async function getRepoMetrics(repo_id) {
     // conformance / orphan / near_duplicate / citation, and no route, component
     // or service read this field. A fabricated zero is worse than an absent
     // field, so the field is gone until something defines it.
+    // #1648: the scan-time COLLECT AGGREGATE projection — the doc is never
+    // materialized into a `docs` array (the old shape built the full row
+    // list, then computed five aggregates over it: ~380 ms on Bali; the
+    // same lesson getDebtByRepos below applies first-class). Same field
+    // names, same discriminators — the shape is the contract.
     const cursor = await db.query(aql`
-      LET docs = (FOR d IN ${db.collection(COLLECTION)} FILTER d.repo_id == ${repo_id} RETURN d)
+      FOR d IN ${db.collection(COLLECTION)}
+      FILTER d.repo_id == ${repo_id}
+      COLLECT AGGREGATE
+        concept_count = COUNT(),
+        conformance_issue_count = SUM(LENGTH(d.conformance_issues || [])),
+        stale_concept_count = SUM((d.stale_after != null && d.stale_after <= ${today}) ? 1 : 0),
+        index_docs = SUM((d.concept_id == 'index') ? 1 : 0),
+        pii_hits = SUM((LENGTH(d.pii_findings.occurrences || []) > 0 && LENGTH(d.pii_resolutions || []) == 0) ? 1 : 0)
       RETURN {
-        concept_count: LENGTH(docs),
-        conformance_issue_count: SUM(FOR d IN docs RETURN LENGTH(d.conformance_issues) || 0),
-        stale_concept_count: SUM(FOR d IN docs FILTER d.stale_after != null AND d.stale_after <= ${today} RETURN 1),
-        has_reserved_index: LENGTH(FOR d IN docs FILTER d.concept_id == 'index' RETURN 1) > 0,
-        pii_hit_count: SUM(
-          FOR d IN docs
-          FILTER LENGTH(d.pii_findings.occurrences || []) > 0 && LENGTH(d.pii_resolutions || []) == 0
-          RETURN 1
-        )
+        concept_count: concept_count || 0,
+        conformance_issue_count: conformance_issue_count || 0,
+        stale_concept_count: stale_concept_count || 0,
+        has_reserved_index: index_docs > 0,
+        pii_hit_count: pii_hits || 0
       }
     `);
     const result = await cursor.all();

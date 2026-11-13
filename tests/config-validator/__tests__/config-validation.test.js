@@ -2738,9 +2738,11 @@ describe('e2e merge-train changes filters (#1264)', () => {
 
   test('derivation scans exactly the spec files the invocation executes', () => {
     expect([...EXECUTED_SPECS].sort()).toEqual([
+      'tests/e2e/admin/analytics-satisfaction.spec.js',
       'tests/e2e/admin/authz.spec.js',
       'tests/e2e/admin/data-wiring.spec.js',
       'tests/e2e/admin/failure-states.spec.js',
+      'tests/e2e/admin/hierarchy-translations-failure.spec.js',
       'tests/e2e/admin/logs-view.spec.js',
       'tests/e2e/chatbot/chat-composer.spec.js',
       'tests/e2e/chatbot/chat-conversation.spec.js',

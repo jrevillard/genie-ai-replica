@@ -1,5 +1,5 @@
 <template>
-  <div :class="classes" :style="overlayStyle">
+  <div :class="classes" :style="overlayStyle" data-test-id="ds-spinner">
     <div class="ds-spinner" :class="sizeClass"></div>
     <slot />
   </div>

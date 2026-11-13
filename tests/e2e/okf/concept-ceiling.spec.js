@@ -169,7 +169,7 @@ test.describe('the concept-document ceiling in the concept editor', () => {
     const advisory = page.locator('[data-test-id="concept-ceiling"]');
     await expect(advisory).toBeVisible({ timeout: 15000 });
     // Not yet over: the neutral state.
-    await expect(advisory.locator('.ds-pill--warning')).toHaveCount(0);
+    await expect(advisory.locator('[data-state="warning"]')).toHaveCount(0);
 
     // Type a body over the ceiling — the real interaction, through the
     // browser's input path.
@@ -178,7 +178,7 @@ test.describe('the concept-document ceiling in the concept editor', () => {
     await editor.fill('y'.repeat(CEILING + 1));
 
     // The warning is on, and the curator is told what to do.
-    await expect(advisory.locator('.ds-pill--warning')).toHaveCount(1);
+    await expect(advisory.locator('[data-state="warning"]')).toHaveCount(1);
     await expect(advisory).toContainText('Over the limit');
   });
 

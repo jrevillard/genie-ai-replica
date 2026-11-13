@@ -1,10 +1,10 @@
 <template>
-  <div class="admin-page genie-living-intelligence">
+  <div class="admin-page genie-living-intelligence" data-test-id="admin-page">
     <div class="admin-dashboard" data-test-id="admin-dashboard">
       <div class="dashboard">
         <div class="main">
           <div class="header">
-            <h1 class="page-title">
+            <h1 class="page-title" data-test-id="admin-page-title">
               {{ translate('admin.systemAdministration', 'System Administration') }}
             </h1>
           </div>

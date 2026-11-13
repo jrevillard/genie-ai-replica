@@ -1,6 +1,7 @@
 const { test, expect } = require('@playwright/test');
 const { BASE_URL } = require('../helpers/base-url');
 const { TEST_USER } = require('../helpers/e2e-fixtures');
+const { NAV_LOGOUT_BUTTON } = require('../helpers/navbar');
 
 // Test L.1 — Frontend Logout Redirect
 // Complete logout flow: login, click logout button, verify redirect to Keycloak login page.
@@ -59,7 +60,7 @@ test('clicks logout button and redirects to Keycloak login page', async ({ brows
   ).toBeTruthy();
 
   // Step 6: Click the logout button (NavBarComponent desktop logout button)
-  const logoutButton = page.getByRole('button', { name: 'Log out' });
+  const logoutButton = page.locator(NAV_LOGOUT_BUTTON);
   await expect(logoutButton, 'Logout button should be visible after login').toBeVisible({ timeout: 10000 });
   await logoutButton.click();
 

@@ -79,9 +79,9 @@
       </span>
     </p>
 
-    <DsTabs v-model="tab" :tabs="tabDefs" class="okf-headtest__tabs">
+    <DsTabs v-model="tab" :tabs="tabDefs" class="okf-headtest__tabs" data-test-id="okf-lab-tabs">
       <!-- ───────────────────────── TAB 1: HEAD ───────────────────────── -->
-      <div v-show="tab === 'head'" class="okf-headtest__pane">
+      <div v-show="tab === 'head'" class="okf-headtest__pane" data-test-id="okf-lab-pane-head">
         <template v-if="head">
           <div v-for="field in headFields" :key="field.key" class="okf-headtest__field">
             <span class="okf-headtest__field-label">{{ field.label }}</span>
@@ -141,7 +141,7 @@
       </div>
 
       <!-- ───────────────────────── TAB 2: TEST ───────────────────────── -->
-      <div v-show="tab === 'test'" class="okf-headtest__pane">
+      <div v-show="tab === 'test'" class="okf-headtest__pane" data-test-id="okf-lab-pane-test">
         <div class="okf-headtest__query-row">
           <DsInput
             v-model="query"
@@ -444,7 +444,7 @@
       </div>
 
       <!-- ─────────────────────── TAB 3: SUITES ─────────────────────── -->
-      <div v-show="tab === 'suites'" class="okf-headtest__pane">
+      <div v-show="tab === 'suites'" class="okf-headtest__pane" data-test-id="okf-lab-pane-suites">
         <!-- 1-8f: optional suite name — lands on the suite doc and renders
              in the Saved-suites table (the key stays the identity). -->
         <div class="okf-headtest__pane-actions">

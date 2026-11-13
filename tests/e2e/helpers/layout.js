@@ -4,8 +4,8 @@ const { expect } = require('@playwright/test');
 // their edge handles (strip + chevron button), and the welcome grid with
 // its tiles. A handle rename lands here once; the specs that import
 // these never re-type the attribute selector.
-const SIDEBAR_LEFT = '[data-testid="side-bar"]';
-const SIDEBAR_RIGHT = '[data-testid="sidebar"]';
+const SIDEBAR_LEFT = '[data-testid="sidebar-left"]';
+const SIDEBAR_RIGHT = '[data-testid="sidebar-right"]';
 const SIDEBAR_HANDLE_LEFT = '[data-testid="sidebar-handle-left"]';
 const SIDEBAR_HANDLE_RIGHT = '[data-testid="sidebar-handle-right"]';
 const SIDEBAR_HANDLE_BUTTON_LEFT = '[data-testid="sidebar-handle-button-left"]';

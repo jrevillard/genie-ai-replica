@@ -120,7 +120,7 @@ describe('the e2e suite names the venue it was given, and names it once', () => 
     // after the #1741 reorganization):
     // `playwright.config.js` (1), `tests/e2e/chat-composer.spec.js` (1),
     // `tests/e2e/helpers/chatbot.js` (1) and
-    // `tests/e2e/theme-runtime-config.spec.js` (2). Every one of them
+    // `tests/e2e/theme/theme-runtime-config.spec.js` (2). Every one of them
     // carried its OWN default, so the edge could drift — and the drift is
     // invisible to the edge match above (a spec that builds its URL from
     // a variable breaks just as hard).

@@ -2,7 +2,7 @@
   <aside
     ref="sideBar"
     class="side-bar"
-    data-testid="side-bar"
+    data-testid="sidebar-left"
     :class="{
       'side-bar-open': !collapsed,
       'side-bar-collapsed-state': collapsed,

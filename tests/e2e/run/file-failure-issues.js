@@ -299,54 +299,93 @@ function namesThisFile(token, file) {
 }
 
 /**
- * The spec-file names that live OUTSIDE the e2e tree.
+ * The e2e tree's OWN spec names (#1802): the files it has NOW, plus the
+ * ones it HAS HAD.
  *
- * A bare file name in a title is ambiguous: it may name a file of the
- * e2e tree, or a file of another tree (a frontend unit test, a
- * config-validator case). The second reading must not be mistaken for
- * the first: a title that names an e2e spec AND a frontend test by its
- * bare name would stop being DEDICATED to the e2e file — and the
- * failure path would file a second issue for a file that already has
- * one.
+ * A bare file name in a title names this tree's spec when it is one of
+ * these. The rule reads the tree's own names instead of the COMPLEMENT of
+ * a repo-wide walk, which is what it used to read ("does ANY file outside
+ * the tree carry this name?"): the complement's verdict depended on what
+ * sits NEXT to the repo — a file outside the tree that happens to share a
+ * spec name turned a bare-named dedication into a non-dedication, and the
+ * failure path then filed a second issue for a file that already has one
+ * — and the walk's cost grew with the checkout's shape (~0.08 s in a
+ * branch worktree, ~0.8 s in a checkout carrying sibling worktrees, each
+ * a full repo copy the walk had to traverse).
  *
- * The set is built ONCE (the walk costs ~0.1 s in a branch worktree and
- * ~0.8 s in a checkout that carries sibling worktrees' copies) and only
- * when a bare name is actually met, which is at most once per title.
+ * "Had" comes from the tree's git history: a renamed or deleted spec's
+ * bare name must stay recognised — a title naming several spec files is a
+ * GROUP, not a dedication, and a file that was renamed away must still
+ * count as one of them. A root with no git behind it (the unit spec's
+ * synthetic checkouts) has no past names — that is the definition of
+ * "had" there, not a swallowed failure.
+ *
+ * The set is built ONCE per root (the tree walk is bounded by the tree;
+ * the git call is ~50 ms on this tree's history) and only when a bare
+ * name is actually met, which is at most once per title.
  */
-const otherTreeNamesByRoot = new Map();
+const e2eSpecNamesByRoot = new Map();
 
-function namesOutsideE2eTree(token, root = REPO_ROOT) {
-  if (!otherTreeNamesByRoot.has(root)) {
-    const otherTreeNames = new Set();
-    const walk = (dir) => {
-      let entries;
-      try {
-        entries = fs.readdirSync(dir, { withFileTypes: true });
-      } catch {
-        return;
-      }
-      for (const entry of entries) {
-        if (entry.name === 'node_modules' || entry.name === '.git') continue;
-        const full = path.join(dir, entry.name);
-        if (entry.isDirectory()) {
-          // The e2e tree is this tree's own business; only the OTHER
-          // trees' names can make a bare name ambiguous. EVERY copy of
-          // it is this tree's business — a checkout that carries sibling
-          // worktrees holds a full copy of tests/e2e under each of
-          // them, and their spec names would make this tree's OWN bare
-          // names look like another tree's files.
-          const rel = path.relative(root, full).split(path.sep);
-          if (rel.length >= 2 && rel[rel.length - 2].toLowerCase() === 'tests' && rel[rel.length - 1].toLowerCase() === 'e2e') continue;
-          walk(full);
-        } else if (SPEC_FILE_RE.test(entry.name)) {
-          otherTreeNames.add(entry.name);
-        }
-      }
-    };
-    walk(root);
-    otherTreeNamesByRoot.set(root, otherTreeNames);
+function e2eOwnSpecNames(root = REPO_ROOT) {
+  if (e2eSpecNamesByRoot.has(root)) return e2eSpecNamesByRoot.get(root);
+  const names = new Set();
+  // NOW: the tree's own directory — bounded by the tree, never by the
+  // checkout around it.
+  const walk = (dir) => {
+    let entries;
+    try {
+      entries = fs.readdirSync(dir, { withFileTypes: true });
+    } catch {
+      return;
+    }
+    for (const entry of entries) {
+      if (entry.name === 'node_modules' || entry.name === '.git') continue;
+      const full = path.join(dir, entry.name);
+      if (entry.isDirectory()) walk(full);
+      else if (SPEC_FILE_RE.test(entry.name)) names.add(entry.name);
+    }
+  };
+  walk(path.join(root, TESTS_E2E_ROOT));
+  // HAD: the tree's git history, one call.
+  try {
+    const out = execFileSync(
+      'git',
+      ['-C', root, 'log', '--format=', '--name-only', '--', TESTS_E2E_ROOT],
+      // stderr is swallowed: the catch below already defines what a git
+      // failure means here (no past names), and an inherited stderr would
+      // print raw `fatal:` lines into the run output a human scans for
+      // red — on every synthetic-root case of the unit spec.
+      { encoding: 'utf-8', maxBuffer: 32 * 1024 * 1024, timeout: 30000, stdio: ['ignore', 'pipe', 'ignore'] }
+    );
+    // A shallow checkout truncates "had": a renamed spec whose rename
+    // commit is missing from the truncated history stops being
+    // recognised, and the dedupe quietly degrades toward filing a second
+    // issue for a file that already has one (#1802). Name the
+    // degradation once — the checkout can fix it with a full fetch.
+    let shallow = '';
+    try {
+      shallow = execFileSync('git', ['-C', root, 'rev-parse', '--is-shallow-repository'], {
+        encoding: 'utf-8',
+        timeout: 10000,
+        stdio: ['ignore', 'pipe', 'ignore'],
+      });
+    } catch {
+      shallow = '';
+    }
+    if (shallow.trim() === 'true') {
+      console.warn(
+        'file-failure-issues: this checkout is a SHALLOW clone — its git history is truncated, so a spec renamed or deleted before the truncation is no longer recognised by the dedupe and a multi-file title naming it can be misjudged as a dedication. A full fetch (GIT_DEPTH: 0) restores the rule.'
+      );
+    }
+    for (const line of out.split('\n')) {
+      const name = line.trim().split('/').pop();
+      if (name && SPEC_FILE_RE.test(name)) names.add(name);
+    }
+  } catch {
+    // No git behind this root — no past names to add.
   }
-  return otherTreeNamesByRoot.get(root).has(token);
+  e2eSpecNamesByRoot.set(root, names);
+  return names;
 }
 
 /**
@@ -365,14 +404,11 @@ function isE2ePath(token, root = REPO_ROOT) {
   if (token.includes(`${TESTS_E2E_ROOT}/`)) return true;
   const first = token.split('/')[0];
   if (first === token) {
-    // A bare spec file name is this tree's path — whether it still
-    // exists or not: a file that was RENAMED must not drop out of the
-    // comparison (that would turn a multi-file title into a dedication).
-    //
-    // UNLESS the name is a file of ANOTHER tree: that name is not this
-    // tree's, and counting it would make a title that names an e2e file
-    // AND a frontend test look like a group instead of a dedication.
-    return SPEC_FILE_RE.test(token) && !namesOutsideE2eTree(token, root);
+    // A bare spec file name is this tree's path when it is one of the
+    // tree's OWN names (#1802) — a file it has now, or one it has had:
+    // a file that was RENAMED must not drop out of the comparison (that
+    // would turn a multi-file title into a dedication).
+    return SPEC_FILE_RE.test(token) && e2eOwnSpecNames(root).has(token);
   }
   return fs.existsSync(path.join(root, TESTS_E2E_ROOT, first));
 }

@@ -1,17 +1,21 @@
-# E2E Test Plans
+# E2E Tests
 
-Per-epic E2E test plans for GENIE.AI Keycloak authentication and secure API access.
+The Playwright suite in `tests/e2e/` is organized on ONE axis: the
+functional area (`auth/`, `chatbot/`, `documents/`, `admin/`, `okf/`,
+`theme/`). One spec, one place — the placement rule and the decision
+record are the suite map's *The one axis* section. The map of every spec —
+its area, the acceptance phase or story it serves, its deployment profile,
+its helpers — and the acceptance phases' manual procedures (Phases A–N)
+live in ONE document: the [suite map](suite-map.md).
 
 ## Document Index
 
 | Document | Description | Test Phases |
 |----------|-------------|-------------|
 | [local-run.md](local-run.md) | The local e2e run — the one command that executes the suite, the executed set, the failure path | — |
-| [suite-map.md](suite-map.md) | The suite map — every spec file: its feature area, the phase/story it serves, its deployment profile, its helpers (#1741) | all |
+| [suite-map.md](suite-map.md) | The suite map — every spec file: area, phase/story, profile, helpers (#1741) — and the acceptance phases' manual procedures (A–N) | all |
 | [00-clean-start.md](00-clean-start.md) | Common setup: deploy stack, create test user, get tokens | Phase 0 |
-| [epic1-keycloak-foundation.md](epic1-keycloak-foundation.md) | Keycloak foundation: login redirect, JIT provisioning, external IdP | Phases A–E |
-| [epic2-secure-api-access.md](epic2-secure-api-access.md) | Secure API access: token forwarding to OPEA, Swagger OAuth2, JWKS refresh, multi-realm, OPEA continuity, error display | Phases F–K |
-| [epic3-session-lifecycle-gdpr.md](epic3-session-lifecycle-gdpr.md) | Session management, user lifecycle, GDPR erasure | Phases L–N |
+| [locator-map.md](locator-map.md) | Every spec's element selection — and the grandfathered inventory — of the handle-locator gate (#1822) | — |
 
 ## Prerequisites
 
@@ -103,5 +107,8 @@ their address is deterministic because the phase wrote it.
 ```
 Phase 0 (setup) → F (token forwarding to OPEA) → G (Swagger OAuth2) → H (JWKS refresh) → I (multi-realm) → J (OPEA continuity) → K (auth errors) → L (session management) → M (user lifecycle) → N (GDPR compliance)
 ```
+
+The procedures of Phases A–N: the suite map's [§ The acceptance
+phases](suite-map.md#the-acceptance-phases).
 
 **Important**: Phase K mutates realm settings and scales Keycloak to 0. Cleanup steps (K.5, K.6) restore state. Verify stack health before proceeding to Phase L.

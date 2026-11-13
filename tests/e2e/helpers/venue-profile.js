@@ -197,10 +197,43 @@ async function hasIdentityProvider(realm) {
 function missingIdentityProviderReason(realm) {
   return (
     `venue profile: the realm "${realm}" carries no identity provider (Phase D steps 1-5 of ` +
-    'docs/e2e-tests/epic1-keycloak-foundation.md were not run on this venue) — this spec drives ' +
+    'docs/e2e-tests/suite-map.md § The acceptance phases were not run on this venue) — this spec drives ' +
     'the external-IdP login surface, which a deployment without a broker does not render, and ' +
     'that surface is therefore NOT exercised by this run'
   );
+}
+
+/**
+ * The venue-skip hook, stated ONCE (#1773): the skip DECISION and its
+ * reason, wired into one `test.skip(...)` call. A spec whose surface the
+ * venue does not expose registers this as its beforeEach hook instead of
+ * hand-writing the two-liner — a change to the skip protocol (a new probe
+ * folded into the reason, a different hook form) then edits THIS block,
+ * not 5-8 identical copies. The skip stays a per-test annotation: the
+ * failure path reads `test.annotations` skip descriptions to print them.
+ *
+ * The `testApi` argument is the spec's own `test` object — passed
+ * explicitly so the unit spec can observe the wiring with a fake.
+ *
+ * Registered as a spec's FIRST beforeAll, this hook is also the mint
+ * guard: `test.skip()` inside a hook skips the whole group, and
+ * Playwright does not run the hooks that follow a skipped hook (pinned
+ * in venue-profile.spec.js) — so the guarded setup after it never runs
+ * on a parked venue, and a skipped spec leaves no user behind.
+ *
+ * @param {object} testApi - the Playwright `test` object the spec uses
+ * @param {Function} probe - the venue probe (`okfEnabled`, `realmExists`,
+ *   `hasIdentityProvider`, or a closure over one); falsy = the venue
+ *   lacks the surface
+ * @param {Function} reason - the skip reason, called at hook time (sync
+ *   or async); it lands on the tests as the skip annotation the failure
+ *   path prints
+ * @returns {Function} the hook (beforeEach or first beforeAll)
+ */
+function skipUnlessVenue(testApi, probe, reason) {
+  return async () => {
+    testApi.skip(!(await probe()), await reason());
+  };
 }
 
 module.exports = {
@@ -210,4 +243,5 @@ module.exports = {
   missingRealmReason,
   hasIdentityProvider,
   missingIdentityProviderReason,
+  skipUnlessVenue,
 };

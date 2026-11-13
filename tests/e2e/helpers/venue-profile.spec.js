@@ -41,23 +41,13 @@ function fakeTransport(answers) {
     const answer = answers.shift();
     if (!answer) return Promise.reject(new Error(`fake transport: no answer for ${method} ${path}`));
     if (answer.throws) return Promise.reject(answer.throws);
-    // The real transport (helpers/auth.js) parses the body as JSON
-    // unless the caller asks for it raw, and REJECTS a non-JSON body.
-    // The fake does the same, so a probe that forgets `raw: true` fails
-    // the way the venue would fail — instead of quietly reading a body
-    // the real transport would have refused.
-    if (!(options && options.raw) && typeof answer.data === 'string') {
-      try {
-        return Promise.resolve({ status: answer.status, data: JSON.parse(answer.data), headers: {} });
-      } catch {
-        const error = new Error(
-          `${method} ${path} returned a non-JSON body (HTTP ${answer.status}): ${answer.data.slice(0, 200)}`
-        );
-        error.nonJsonBody = true;
-        error.status = answer.status;
-        return Promise.reject(error);
-      }
-    }
+    // A plain stub: it hands back exactly the answer it was given. The
+    // real transport's response contract — JSON parsing, the raw escape
+    // hatch, the non-JSON rejection — is owned by helpers/auth-request
+    // .spec.js at the transport's own boundary (#1804); this fake does
+    // not re-implement it. The probes under test already pass the right
+    // shape (raw text for the runtime config, arrays/null for the admin
+    // API), so a probe reading the wrong shape fails on its own reads.
     return Promise.resolve({ status: answer.status, data: answer.data, headers: {} });
   };
   return calls;
@@ -211,5 +201,67 @@ test.describe('the realm probes read the admin API', () => {
     const reason = profile.missingIdentityProviderReason('genie');
     expect(reason).toContain('Phase D steps 1-5');
     expect(reason).toMatch(/NOT exercised/);
+  });
+});
+
+test.describe('the venue-skip wiring (#1773)', () => {
+  // A fake of the Playwright `test` object: the registrars take it as an
+  // argument exactly so this spec can observe the wiring — the assertions
+  // are about WHAT the hooks decide, not about Playwright itself.
+  const fakeTest = () => {
+    const calls = [];
+    return { calls, skip: (condition, description) => calls.push({ condition, description }) };
+  };
+
+  test('skipUnlessVenue skips with the reason when the probe fails', async () => {
+    const testApi = fakeTest();
+    const hook = freshProfile().skipUnlessVenue(testApi, async () => false, () => 'the surface is absent');
+    await hook();
+    expect(testApi.calls).toEqual([{ condition: true, description: 'the surface is absent' }]);
+  });
+
+  test('skipUnlessVenue calls skip(false) when the probe holds', async () => {
+    const testApi = fakeTest();
+    const hook = freshProfile().skipUnlessVenue(testApi, async () => true, () => 'unused');
+    await hook();
+    expect(testApi.calls).toEqual([{ condition: false, description: 'unused' }]);
+  });
+
+  test('skipUnlessVenue awaits an async reason', async () => {
+    const testApi = fakeTest();
+    await freshProfile().skipUnlessVenue(testApi, async () => false, async () => 'async reason')();
+    expect(testApi.calls.map((c) => c.description)).toEqual(['async reason']);
+  });
+
+  test('skipUnlessVenue passes the probe verdict through, not its inverse', async () => {
+    const testApi = fakeTest();
+    await freshProfile().skipUnlessVenue(testApi, async () => 'truthy-but-not-boolean', () => 'r')();
+    expect(testApi.calls[0].condition).toBe(false);
+  });
+});
+
+test.describe('the hook-skip contract the guarded specs stand on (#1773)', () => {
+  // The guarded beforeAlls register the registrar itself as their FIRST
+  // hook: when it skips, Playwright must not run the hooks that follow —
+  // that is what keeps a skipped spec from minting a user into the
+  // venue's realm. This pins the Playwright behaviour the shape leans on
+  // (verified by hand 2026-11-13; if Playwright ever runs them, the
+  // mint-guard silently dies).
+  let bodyRan = false;
+
+  test.describe('a group whose first hook skips', () => {
+    test.beforeAll(async () => {
+      test.skip(true, 'the venue lacks the surface');
+    });
+    test.beforeAll(async () => {
+      bodyRan = true;
+    });
+    test('never runs', () => {
+      expect(1).toBe(2);
+    });
+  });
+
+  test('the hook after the skipped hook did not run', () => {
+    expect(bodyRan).toBe(false);
   });
 });

@@ -8,7 +8,7 @@ const {
   SESSION_MINT_TIMEOUT_MS,
 } = require('../helpers/auth');
 const { createUser, deleteUser, enableDirectAccessGrants } = require('../helpers/keycloak-admin');
-const { realmExists, missingRealmReason } = require('../helpers/venue-profile');
+const { realmExists, missingRealmReason, skipUnlessVenue } = require('../helpers/venue-profile');
 
 /**
  * Phase I: Multi-Realm Configuration (Story 2-9)
@@ -30,21 +30,21 @@ test.describe.serial('Phase I: Multi-Realm Configuration', () => {
   const TEST_USER = { username: 'testuser2', password: 'TestPass123!', email: 'testuser2@genie2.local' };
 
   // The venue profile decides: a deployment that exposes no second realm
-  // cannot answer a multi-realm request, so the test below SKIPS WITH A
-  // REASON instead of failing on a realm that was never provisioned
-  // (#1742). The reason is the venue's own profile, read from the realm
-  // inventory — not a guess, and never a silent skip.
-  test.beforeEach(async () => {
-    test.skip(!(await realmExists(TEST_REALM)), missingRealmReason(TEST_REALM));
-  });
+  // cannot answer a multi-realm request, so the tests SKIP WITH A REASON
+  // instead of failing on a realm that was never provisioned (#1742).
+  // The registrar is wired ONCE into both hooks — and because it hooks
+  // first, a skip stops the group: the mint below never runs on a venue
+  // without the realm.
+  const needsSecondRealm = skipUnlessVenue(
+    test,
+    () => realmExists(TEST_REALM),
+    () => missingRealmReason(TEST_REALM)
+  );
+  test.beforeEach(needsSecondRealm);
+  test.beforeAll(needsSecondRealm);
 
   test.beforeAll(async ({ browser }) => {
     test.setTimeout(SESSION_MINT_TIMEOUT_MS);
-
-    // The second realm is absent: the tests skip, and the setup below
-    // (which mints into that realm) must not run against a realm that does
-    // not exist.
-    if (!(await realmExists(TEST_REALM))) return;
 
     adminToken = await getAdminToken();
 
@@ -53,7 +53,7 @@ test.describe.serial('Phase I: Multi-Realm Configuration', () => {
     await enableDirectAccessGrants(adminToken, TEST_REALM, 'genie-app');
 
     // Primary-realm token from a browser login session — minted once,
-    // like the sibling suites.
+    // like the sibling suites (through the worker's own browser).
     genie1Token = await getSessionTokenViaUI({ browser });
 
     // Create test user in genie2 (realm should already exist from Phase

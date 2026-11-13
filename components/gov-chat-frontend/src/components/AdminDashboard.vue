@@ -444,6 +444,7 @@
                           v-model="documentSearchTerm"
                           type="search"
                           class="search-input"
+                          data-test-id="document-search-input"
                           :placeholder="translate('admin.documents.searchPlaceholder', 'Search by file name...')"
                         />
                       </div>
@@ -535,7 +536,7 @@
                     </div>
 
                     <div class="table-container">
-                      <table class="data-table">
+                      <table class="data-table" data-test-id="document-table">
                         <thead>
                           <tr>
                             <th class="col-checkbox">
@@ -600,24 +601,29 @@
                             <td @click.stop>
                               <input v-model="selectedDocuments" type="checkbox" :value="doc.file_id" />
                             </td>
-                            <td class="cell-main">{{ doc.file_name }}</td>
-                            <td>
+                            <td class="cell-main" data-test-id="document-name">{{ doc.file_name }}</td>
+                            <td data-test-id="document-status">
                               <DsStatusTag :variant="getStatusVariant(doc)">
                                 {{ getDisplayStatus(doc) }}
                               </DsStatusTag>
                             </td>
                             <td>
-                              <span v-for="label in doc.labels.slice(0, 2)" :key="label" class="label-tag">
+                              <span
+                                v-for="label in doc.labels.slice(0, 2)"
+                                :key="label"
+                                class="label-tag"
+                                data-test-id="document-label"
+                              >
                                 {{ label }}
                               </span>
                               <span v-if="doc.labels.length > 2" class="label-tag-more"
                                 >+{{ doc.labels.length - 2 }}</span
                               >
                             </td>
-                            <td>
+                            <td data-test-id="document-upload-date">
                               {{ new Date(doc.upload_date).toLocaleDateString() }}
                             </td>
-                            <td>{{ formatFileSize(doc.file_size) }}</td>
+                            <td data-test-id="document-size">{{ formatFileSize(doc.file_size) }}</td>
                           </tr>
                         </tbody>
                       </table>

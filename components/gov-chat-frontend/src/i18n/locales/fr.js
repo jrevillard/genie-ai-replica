@@ -1411,6 +1411,9 @@ export default {
       downloadFailed: 'Le téléchargement a échoué.',
       showMore: 'Afficher plus',
       backToList: 'Retour à la liste',
+      back: 'Retour',
+      forward: 'Avancer',
+      selectHint: 'Sélectionnez un concept dans la vue arborescente pour le lire ici.',
       colConcept: 'Concept'
     },
     feedbackSubmitted: 'Feedback enregistré',

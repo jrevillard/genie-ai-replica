@@ -1407,6 +1407,9 @@ export default {
       downloadFailed: 'Falha ao descarregar.',
       showMore: 'Mostrar mais',
       backToList: 'Voltar à lista',
+      back: 'Voltar',
+      forward: 'Avançar',
+      selectHint: 'Selecione um conceito na árvore para lê-lo aqui.',
       colConcept: 'Conceito'
     },
     feedbackSubmitted: 'Feedback salvo',

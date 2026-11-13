@@ -323,3 +323,95 @@ describe('okf store — browser slice (W9 concept tree browse)', () => {
     expect(b.loading).toBe(false);
   });
 });
+
+describe('okf store — browser history (issue #1836: the browser has back/forward)', () => {
+  test('open seeds the history with the entry concept', async () => {
+    mockTreePage.mockImplementation(async (_r, { offset }) => page(1, offset, 1));
+    const store = buildStore();
+    await store.dispatch('okf/openConceptBrowser', { repoId: 'r1', conceptId: 'cited' });
+    const b = store.state.okf.browser;
+    expect(b.history).toEqual(['cited']);
+    expect(b.historyIndex).toBe(0);
+  });
+
+  test('a tree-row visit appends; back then a fresh visit TRUNCATES the forward tail', async () => {
+    mockTreePage.mockImplementation(async (_r, { offset }) => page(1, offset, 1));
+    mockFetchConcept.mockResolvedValue({ concept_id: 'x', title: 'X', body: 'b' });
+    const store = buildStore();
+    await store.dispatch('okf/openConceptBrowser', { repoId: 'r1', conceptId: 'a' });
+    await store.dispatch('okf/browserVisitConcept', { repoId: 'r1', conceptId: 'b' });
+    await store.dispatch('okf/browserVisitConcept', { repoId: 'r1', conceptId: 'c' });
+    let b = store.state.okf.browser;
+    expect(b.history).toEqual(['a', 'b', 'c']);
+    expect(b.historyIndex).toBe(2);
+    expect(b.selectedConceptId).toBe('c');
+    // Back twice: b, then a. Forward is possible from a.
+    await store.dispatch('okf/browserBack');
+    await store.dispatch('okf/browserBack');
+    b = store.state.okf.browser;
+    expect(b.historyIndex).toBe(0);
+    expect(b.selectedConceptId).toBe('a');
+    // A fresh visit at a — the web-history semantic: 'b'/'c' die.
+    await store.dispatch('okf/browserVisitConcept', { repoId: 'r1', conceptId: 'd' });
+    b = store.state.okf.browser;
+    expect(b.history).toEqual(['a', 'd']);
+    expect(b.historyIndex).toBe(1);
+  });
+
+  test('a repeat visit of the CURRENT entry does not grow the stack', async () => {
+    mockTreePage.mockImplementation(async (_r, { offset }) => page(1, offset, 1));
+    const store = buildStore();
+    await store.dispatch('okf/openConceptBrowser', { repoId: 'r1', conceptId: 'a' });
+    await store.dispatch('okf/browserVisitConcept', { repoId: 'r1', conceptId: 'b' });
+    await store.dispatch('okf/browserVisitConcept', { repoId: 'r1', conceptId: 'b' });
+    const b = store.state.okf.browser;
+    expect(b.history).toEqual(['a', 'b']);
+    expect(b.historyIndex).toBe(1);
+  });
+
+  test('back/forward load the entry content through the guarded hop loader; boundary calls are no-ops', async () => {
+    mockTreePage.mockImplementation(async (_r, { offset }) => page(1, offset, 1));
+    mockFetchConcept.mockResolvedValue({ concept_id: 'x', title: 'X', body: 'b' });
+    const store = buildStore();
+    await store.dispatch('okf/openConceptBrowser', { repoId: 'r1', conceptId: 'a' });
+    await store.dispatch('okf/browserVisitConcept', { repoId: 'r1', conceptId: 'b' });
+    mockFetchConcept.mockClear();
+    // At the forward boundary: a no-op (no load, no index move).
+    const fwd = await store.dispatch('okf/browserForward');
+    expect(fwd.ok).toBe(false);
+    expect(mockFetchConcept).not.toHaveBeenCalled();
+    // Back loads 'a'; then back again is a boundary no-op.
+    await store.dispatch('okf/browserBack');
+    expect(store.state.okf.browser.selectedConceptId).toBe('a');
+    expect(mockFetchConcept).toHaveBeenCalledWith('r1', 'a');
+    const back = await store.dispatch('okf/browserBack');
+    expect(back.ok).toBe(false);
+    expect(store.state.okf.browser.historyIndex).toBe(0);
+    // Forward re-enters 'b'.
+    await store.dispatch('okf/browserForward');
+    expect(store.state.okf.browser.selectedConceptId).toBe('b');
+    expect(mockFetchConcept).toHaveBeenLastCalledWith('r1', 'b');
+  });
+
+  test('a visit for a superseded repo is refused and never enters the history', async () => {
+    mockTreePage.mockImplementation(async (_r, { offset }) => page(1, offset, 1));
+    const store = buildStore();
+    await store.dispatch('okf/openConceptBrowser', { repoId: 'r1', conceptId: 'a' });
+    const res = await store.dispatch('okf/browserVisitConcept', { repoId: 'OTHER', conceptId: 'x' });
+    expect(res.ok).toBe(false);
+    expect(res.code).toBe('STALE');
+    expect(store.state.okf.browser.history).toEqual(['a']);
+  });
+
+  test('back-to-list clears the selection but the history SURVIVES (a fresh click continues the session)', async () => {
+    mockTreePage.mockImplementation(async (_r, { offset }) => page(1, offset, 1));
+    const store = buildStore();
+    await store.dispatch('okf/openConceptBrowser', { repoId: 'r1', conceptId: 'a' });
+    await store.dispatch('okf/browserVisitConcept', { repoId: 'r1', conceptId: 'b' });
+    store.commit('okf/setBrowserSelected', { conceptId: null, concept: null });
+    const b = store.state.okf.browser;
+    expect(b.selectedConceptId).toBe(null);
+    expect(b.history).toEqual(['a', 'b']);
+    expect(b.historyIndex).toBe(1);
+  });
+});

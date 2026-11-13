@@ -1409,6 +1409,9 @@ export default {
       downloadFailed: 'Download fehlgeschlagen.',
       showMore: 'Mehr anzeigen',
       backToList: 'Zurück zur Liste',
+      back: 'Zurück',
+      forward: 'Vorwärts',
+      selectHint: 'Wähle ein Konzept aus dem Baum, um es hier zu lesen.',
       colConcept: 'Konzept'
     },
     feedbackSubmitted: 'Feedback gespeichert',

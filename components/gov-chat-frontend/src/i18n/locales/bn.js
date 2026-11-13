@@ -1395,6 +1395,9 @@ export default {
       downloadFailed: 'ডাউনলোড ব্যর্থ হয়েছে।',
       showMore: 'আরও দেখান',
       backToList: 'তালিকায় ফিরে যান',
+      back: 'পিছনে',
+      forward: 'সামনে',
+      selectHint: 'এখানে পড়তে ট্রি থেকে একটি কনসেপ্ট নির্বাচন করুন।',
       colConcept: 'ধারণা'
     },
     feedbackSubmitted: 'ফিডব্যাক সংরক্ষিত হয়েছে',

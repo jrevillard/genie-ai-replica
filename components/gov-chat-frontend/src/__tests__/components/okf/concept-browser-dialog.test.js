@@ -1,13 +1,15 @@
 'use strict';
 
 /**
- * ConceptBrowserDialog (W9 — concept tree browse): the citizen modal viewer.
- * Pinned here: the CURRENT-STATE notice (browse shows what is indexed now),
- * the honest unavailable arm (fenced/absent repo), progressive list +
- * client-side filter, per-hop selection through the okf store, related
- * concepts normalized from the CAP-2 card links, the sanitized markdown
- * render, the download verb, and the windowed render ("Show more").
- * The store-side assembly/stale-guards live in okf-browser.test.js.
+ * ConceptBrowserDialog (W9 browser; REDESIGNED per issue #1836, David
+ * 2026-11-14): the citizen modal viewer. Pinned here: the CURRENT-STATE
+ * notice, the honest unavailable arm, the TREE pane (the editor's own
+ * OkfConceptList, read-only — index root + children), the back/forward
+ * HISTORY affordances, the ALWAYS-RENDERED content pane (the old v-if
+ * vanish is the defect), per-hop selection through the store's visit
+ * action, related concepts normalized from the CAP-2 card links, the
+ * sanitized markdown render, per-concept scroll memory, and the download
+ * verb. The store-side assembly/stale-guards live in okf-browser.test.js.
  */
 
 const { mount } = require('@vue/test-utils');
@@ -42,6 +44,8 @@ const BROWSER = (over = {}) => ({
   selectedConcept: null,
   selectedLoading: false,
   selectedUnavailable: false,
+  history: ['c1'],
+  historyIndex: 0,
   ...over
 });
 
@@ -73,94 +77,81 @@ beforeEach(() => {
 
 describe('ConceptBrowserDialog — current-state + unavailable arms', () => {
   it('renders the current-state notice above the content (browse is NOW, not the cited version)', () => {
-    const w = mountDialog(BROWSER({ concepts: [{ concept_id: 'c1', title: 'C1', links: [] }], total: 1 }));
+    const w = mountDialog(
+      BROWSER({
+        concepts: [{ concept_id: 'c1', title: 'C1', is_index: false, index_status: 'parsed', links: [] }],
+        total: 1
+      })
+    );
     const notice = w.find('[data-testid="okf-browser-current-notice"]');
     expect(notice.exists()).toBe(true);
     expect(notice.text()).toContain('indexed now');
   });
 
-  it('a fenced/absent repo (the 404 refusal) renders the honest unavailable notice and no list', () => {
+  it('a fenced/absent repo (the 404 refusal) renders the honest unavailable notice and no tree', () => {
     const w = mountDialog(BROWSER({ unavailable: true }));
     expect(w.find('[data-testid="okf-browser-unavailable"]').exists()).toBe(true);
-    expect(w.find('[data-testid="okf-browser-table"]').exists()).toBe(false);
-    expect(w.find('[data-testid="okf-browser-filter"]').exists()).toBe(false);
+    expect(w.find('[data-testid="okf-browser-tree"]').exists()).toBe(false);
+    expect(w.find('[data-testid="okf-browser-show-more"]').exists()).toBe(false);
   });
 });
 
-describe('ConceptBrowserDialog — list, filter, progress', () => {
-  it('renders assembled rows with the count placeholder replaced ({n})', () => {
-    const rows = Array.from({ length: 3 }, (_, i) => ({ concept_id: `c${i}`, title: `Concept ${i}`, links: [] }));
+describe('ConceptBrowserDialog — the tree pane (issue #1836: the editor tree, not a flat table)', () => {
+  const rows = [
+    { concept_id: 'index', title: 'The index', is_index: true, index_status: 'indexed', links: [] },
+    { concept_id: 'c1', title: 'Concept one', is_index: false, index_status: 'parsed', links: [] },
+    { concept_id: 'c2', title: 'Concept two', is_index: false, index_status: 'parsed', links: [] }
+  ];
+
+  it('renders the concepts through the SHARED OkfConceptList (the editor tree: index root + children)', () => {
     const w = mountDialog(BROWSER({ concepts: rows, total: 3 }));
-    expect(w.find('[data-testid="okf-browser-count"]').text()).toBe('3 concepts');
-    expect(w.findAll('.ds-table tbody tr').length).toBe(3);
-    expect(w.find('[data-testid="okf-browser-count"]').text()).not.toContain('{n}');
+    // The shared component's own contract: BEM rows, the index badge, the
+    // ROOT row's test hook (the component's hook is data-test-id, hyphenated,
+    // on the root only) — the browser is the editor's tree view verbatim.
+    expect(w.find('[data-testid="okf-browser-tree"]').exists()).toBe(true);
+    expect(w.findAll('.okf-cl__row').length).toBe(3);
+    expect(w.find('[data-test-id="okf-concept-row-index"]').exists()).toBe(true);
+    expect(w.text()).toContain('Concept one');
+    expect(w.find('.ds-table').exists()).toBe(false);
   });
 
-  it('lazy loading: Show more extends in memory first — NO page fetch while rows remain', async () => {
-    const rows = Array.from({ length: 250 }, (_, i) => ({ concept_id: `c${i}`, title: `C${i}`, links: [] }));
-    const store = fakeStore(BROWSER({ concepts: rows, total: 250 }));
+  it('a tree-row click is a FORWARD navigation: okf/browserVisitConcept (history + load)', async () => {
+    const store = fakeStore(BROWSER({ concepts: rows, total: 3 }));
     const w = mount(ConceptBrowserDialog, {
       global: { mocks: { $store: store }, stubs: { DsDialog: { template: '<div><slot /></div>' }, DsSpinner: true } },
       props: { visible: true }
     });
-    expect(w.findAll('.ds-table tbody tr').length).toBe(100);
-    await w.find('[data-testid="okf-browser-show-more"]').trigger('click');
-    expect(w.findAll('.ds-table tbody tr').length).toBe(200);
-    // David, 2026-11-08: the dialog never waits for the whole repository —
-    // in-memory extension must not fetch anything.
-    expect(store.dispatch).not.toHaveBeenCalledWith('okf/browserExtendConceptTree', expect.anything());
+    // Child rows carry no per-row hook (the component's own contract) —
+    // drive the rendered row; OkfConceptList emits the bare concept_id.
+    const childRows = w.findAll('.okf-cl__row--child');
+    expect(childRows.length).toBe(2);
+    await childRows[1].trigger('click');
+    expect(store.dispatch).toHaveBeenCalledWith('okf/browserVisitConcept', { repoId: 'repo-1', conceptId: 'c2' });
+    expect(store.dispatch).not.toHaveBeenCalledWith('okf/browserLoadConcept', expect.anything());
   });
 
-  it('lazy loading: at the loaded edge Show more fetches the NEXT page on demand, then extends', async () => {
-    const rows = Array.from({ length: 200 }, (_, i) => ({ concept_id: `c${i}`, title: `C${i}`, links: [] }));
-    const store = fakeStore(BROWSER({ concepts: rows, total: 500, treeComplete: false }));
+  it('lazy loading: Show more is the on-demand NEXT-PAGE fetch — no in-memory window anymore', async () => {
+    const loaded = Array.from({ length: 200 }, (_, i) => ({
+      concept_id: `c${i}`,
+      title: `C${i}`,
+      is_index: false,
+      index_status: 'parsed',
+      links: []
+    }));
+    const store = fakeStore(BROWSER({ concepts: loaded, total: 500, treeComplete: false }));
     const w = mount(ConceptBrowserDialog, {
       global: { mocks: { $store: store }, stubs: { DsDialog: { template: '<div><slot /></div>' }, DsSpinner: true } },
       props: { visible: true }
     });
-    // Window to the loaded edge (100 → 200): still no fetch.
-    await w.find('[data-testid="okf-browser-show-more"]').trigger('click');
-    expect(store.dispatch).not.toHaveBeenCalledWith('okf/browserExtendConceptTree', expect.anything());
-    // At the edge with pages remaining: the click IS the on-demand fetch —
-    // the component's contract ends at the dispatch (the store owns the
-    // append; pinned in okf-browser.test.js).
+    // All 200 loaded rows render (the tree is the editor's — every loaded
+    // row is visible); the affordance offers the NEXT page.
+    expect(w.findAll('.okf-cl__row').length).toBe(200);
     await w.find('[data-testid="okf-browser-show-more"]').trigger('click');
     expect(store.dispatch).toHaveBeenCalledWith('okf/browserExtendConceptTree', { repoId: 'repo-1' });
   });
 
-  it('a complete tree fully covered by the render window hides Show more entirely', () => {
-    const rows = Array.from({ length: 80 }, (_, i) => ({ concept_id: `c${i}`, title: `C${i}`, links: [] }));
-    const w = mountDialog(BROWSER({ concepts: rows, total: 80, treeComplete: true }));
-    expect(w.find('[data-testid="okf-browser-show-more"]').exists()).toBe(false);
-  });
-
-  it('the filter narrows the assembled rows client-side (title or id) and the count follows', async () => {
-    const rows = [
-      { concept_id: 'alpha', title: 'Alpha Booking', links: [] },
-      { concept_id: 'hours', title: 'Office Hours', links: [] }
-    ];
-    const w = mountDialog(BROWSER({ concepts: rows, total: 2 }));
-    expect(w.find('[data-testid="okf-browser-count"]').text()).toBe('2 concepts');
-    await w.find('[data-testid="okf-browser-filter"]').setValue('alpha');
-    expect(w.findAll('.ds-table tbody tr').length).toBe(1);
-    expect(w.text()).toContain('Alpha Booking');
-    // Review r0: while filtering, the count names the FILTERED rows — an
-    // unfiltered total above a zero-match table would read as a contradiction.
-    expect(w.find('[data-testid="okf-browser-count"]').text()).toBe('1 concepts');
-    await w.find('[data-testid="okf-browser-filter"]').setValue('zzz-no-match');
-    expect(w.find('[data-testid="okf-browser-count"]').text()).toBe('0 concepts');
-  });
-
-  it('a windowed render: 250 rows render 100 + Show more extends by 100', async () => {
-    const rows = Array.from({ length: 250 }, (_, i) => ({ concept_id: `c${i}`, title: `C${i}`, links: [] }));
-    const w = mountDialog(BROWSER({ concepts: rows, total: 250 }));
-    expect(w.findAll('.ds-table tbody tr').length).toBe(100);
-    const more = w.find('[data-testid="okf-browser-show-more"]');
-    expect(more.exists()).toBe(true);
-    await more.trigger('click');
-    expect(w.findAll('.ds-table tbody tr').length).toBe(200);
-    // When the window covers the set, the affordance is gone.
-    await w.find('[data-testid="okf-browser-show-more"]').trigger('click');
+  it('a complete tree hides Show more entirely', () => {
+    const w = mountDialog(BROWSER({ concepts: rows, total: 3, treeComplete: true }));
     expect(w.find('[data-testid="okf-browser-show-more"]').exists()).toBe(false);
   });
 
@@ -170,15 +161,95 @@ describe('ConceptBrowserDialog — list, filter, progress', () => {
   });
 });
 
-describe('ConceptBrowserDialog — per-hop selection + related concepts', () => {
-  it('a row click dispatches the per-hop CAP-2 fetch with repo + concept identity', async () => {
-    const store = fakeStore(BROWSER({ concepts: [{ concept_id: 'c2', title: 'C2', links: [] }], total: 1 }));
+describe('ConceptBrowserDialog — back/forward history (issue #1836: it is a browser)', () => {
+  it('back/forward are enabled strictly inside the visited range', () => {
+    const w = mountDialog(BROWSER({ history: ['c1', 'c2', 'c3'], historyIndex: 0, selectedConceptId: 'c1' }));
+    expect(w.find('[data-testid="okf-browser-back"]').attributes('disabled')).toBeDefined();
+    expect(w.find('[data-testid="okf-browser-forward"]').attributes('disabled')).toBeUndefined();
+    const w2 = mountDialog(
+      BROWSER({
+        history: ['c1', 'c2', 'c3'],
+        historyIndex: 1,
+        selectedConceptId: 'c2',
+        selectedConcept: { concept_id: 'c2', title: 'C2', body: 'x' }
+      })
+    );
+    expect(w2.find('[data-testid="okf-browser-back"]').attributes('disabled')).toBeUndefined();
+    expect(w2.find('[data-testid="okf-browser-forward"]').attributes('disabled')).toBeUndefined();
+    const w3 = mountDialog(
+      BROWSER({
+        history: ['c1', 'c2', 'c3'],
+        historyIndex: 2,
+        selectedConceptId: 'c3',
+        selectedConcept: { concept_id: 'c3', title: 'C3', body: 'x' }
+      })
+    );
+    expect(w3.find('[data-testid="okf-browser-back"]').attributes('disabled')).toBeUndefined();
+    expect(w3.find('[data-testid="okf-browser-forward"]').attributes('disabled')).toBeDefined();
+  });
+
+  it('back dispatches okf/browserBack (mounted mid-history, forward-boundary end)', async () => {
+    const store = fakeStore(
+      BROWSER({
+        history: ['c1', 'c2'],
+        historyIndex: 1,
+        selectedConceptId: 'c2',
+        selectedConcept: { concept_id: 'c2', title: 'C2', body: 'x' }
+      })
+    );
     const w = mount(ConceptBrowserDialog, {
       global: { mocks: { $store: store }, stubs: { DsDialog: { template: '<div><slot /></div>' }, DsSpinner: true } },
       props: { visible: true }
     });
-    await w.findAll('.ds-table tbody tr')[0].trigger('click');
-    expect(store.dispatch).toHaveBeenCalledWith('okf/browserLoadConcept', { repoId: 'repo-1', conceptId: 'c2' });
+    await w.find('[data-testid="okf-browser-back"]').trigger('click');
+    expect(store.dispatch).toHaveBeenCalledWith('okf/browserBack');
+  });
+
+  it('forward dispatches okf/browserForward (mounted at the back boundary, mid-range forward)', async () => {
+    const store = fakeStore(
+      BROWSER({
+        history: ['c1', 'c2'],
+        historyIndex: 0,
+        selectedConceptId: 'c1',
+        selectedConcept: { concept_id: 'c1', title: 'C1', body: 'x' }
+      })
+    );
+    const w = mount(ConceptBrowserDialog, {
+      global: { mocks: { $store: store }, stubs: { DsDialog: { template: '<div><slot /></div>' }, DsSpinner: true } },
+      props: { visible: true }
+    });
+    await w.find('[data-testid="okf-browser-forward"]').trigger('click');
+    expect(store.dispatch).toHaveBeenCalledWith('okf/browserForward');
+    expect(store.dispatch).not.toHaveBeenCalledWith('okf/browserBack');
+  });
+});
+
+describe('ConceptBrowserDialog — the content pane persists (issue #1836)', () => {
+  it('the detail pane EXISTS with the select hint before anything is chosen (the v-if vanish is gone)', () => {
+    const w = mountDialog(BROWSER({ selectedConceptId: null, selectedConcept: null, history: [], historyIndex: -1 }));
+    expect(w.find('[data-testid="okf-browser-detail"]').exists()).toBe(true);
+    expect(w.find('[data-testid="okf-browser-select-hint"]').exists()).toBe(true);
+  });
+
+  it('a loading hop shows the loading pane INSIDE the always-present detail', () => {
+    const w = mountDialog(BROWSER({ selectedConceptId: 'c2', selectedLoading: true }));
+    expect(w.find('[data-testid="okf-browser-detail"]').exists()).toBe(true);
+    expect(w.find('[data-testid="okf-browser-detail-loading"]').exists()).toBe(true);
+  });
+
+  it('an unavailable concept renders the honest notice, not a dead link', () => {
+    const w = mountDialog(BROWSER({ selectedConceptId: 'c9', selectedUnavailable: true }));
+    expect(w.find('[data-testid="okf-browser-concept-unavailable"]').exists()).toBe(true);
+    expect(w.find('[data-testid="okf-browser-markdown"]').exists()).toBe(false);
+  });
+
+  it('the open concept renders markdown through the sanitizer', () => {
+    const w = mountDialog(
+      BROWSER({ selectedConceptId: 'c1', selectedConcept: { concept_id: 'c1', title: 'C1', body: '# Hello' } })
+    );
+    expect(DOMPurify.sanitize).toHaveBeenCalled();
+    expect(w.find('[data-testid="okf-browser-markdown"]').exists()).toBe(true);
+    expect(w.html()).toContain('sanitized');
   });
 
   it('related concepts normalize the card links (targets stripped of .md + prefix, labels as titles, self excluded)', async () => {
@@ -205,35 +276,39 @@ describe('ConceptBrowserDialog — per-hop selection + related concepts', () => 
     expect(chips[0].attributes('data-testid')).toBe('okf-browser-hop-c2');
     expect(chips[1].text()).toContain('c3');
     await chips[0].trigger('click');
-    expect(w.vm.$store.dispatch).toHaveBeenCalledWith('okf/browserLoadConcept', { repoId: 'repo-1', conceptId: 'c2' });
+    // A hop is also a FORWARD navigation (joins the history).
+    expect(w.vm.$store.dispatch).toHaveBeenCalledWith('okf/browserVisitConcept', { repoId: 'repo-1', conceptId: 'c2' });
   });
 
-  it('the open concept renders markdown through the sanitizer', () => {
+  it('leaving a concept stores its scroll position in the component memory (never in the store)', async () => {
     const w = mountDialog(
-      BROWSER({ selectedConceptId: 'c1', selectedConcept: { concept_id: 'c1', title: 'C1', body: '# Hello' } })
+      BROWSER({ selectedConceptId: 'c1', selectedConcept: { concept_id: 'c1', title: 'C1', body: '# long' } })
     );
-    expect(DOMPurify.sanitize).toHaveBeenCalled();
-    expect(w.find('[data-testid="okf-browser-markdown"]').exists()).toBe(true);
-    expect(w.html()).toContain('sanitized');
+    const el = w.find('[data-testid="okf-browser-markdown"]').element;
+    Object.defineProperty(el, 'scrollTop', { value: 432, configurable: true, writable: true });
+    w.vm.$options.watch.selectedConceptId.call(w.vm, 'c2', 'c1');
+    expect(w.vm.scrollMemory.c1).toBe(432);
+    expect(w.vm.$store.commit).not.toHaveBeenCalled();
   });
 
-  it('an unavailable concept renders the honest notice, not a dead link', () => {
-    const w = mountDialog(BROWSER({ selectedConceptId: 'c9', selectedUnavailable: true }));
-    expect(w.find('[data-testid="okf-browser-concept-unavailable"]').exists()).toBe(true);
-    expect(w.find('[data-testid="okf-browser-markdown"]').exists()).toBe(false);
-  });
-
-  it('a loading hop shows the loading pane', () => {
-    const w = mountDialog(BROWSER({ selectedConceptId: 'c2', selectedLoading: true }));
-    expect(w.find('[data-testid="okf-browser-detail-loading"]').exists()).toBe(true);
-  });
-
-  it('Back to list clears the selection through the store', async () => {
-    const w = mountDialog(
-      BROWSER({ selectedConceptId: 'c1', selectedConcept: { concept_id: 'c1', title: 'C1', body: 'x' } })
+  it('Back to list clears the selection through the store and leaves the history alone', async () => {
+    const store = fakeStore(
+      BROWSER({
+        selectedConceptId: 'c1',
+        selectedConcept: { concept_id: 'c1', title: 'C1', body: 'x' },
+        history: ['c1'],
+        historyIndex: 0
+      })
     );
-    await w.find('[data-testid="okf-browser-back"]').trigger('click');
-    expect(w.vm.$store.commit).toHaveBeenCalledWith('okf/setBrowserSelected', { conceptId: null, concept: null });
+    const w = mount(ConceptBrowserDialog, {
+      global: { mocks: { $store: store }, stubs: { DsDialog: { template: '<div><slot /></div>' }, DsSpinner: true } },
+      props: { visible: true }
+    });
+    await w.find('[data-testid="okf-browser-back-to-list"]').trigger('click');
+    expect(store.commit).toHaveBeenCalledWith('okf/setBrowserSelected', { conceptId: null, concept: null });
+    // #1836: back-to-list is NOT a history event — no history mutation, no
+    // dispatch; re-selecting continues the same session.
+    expect(store.dispatch).not.toHaveBeenCalled();
   });
 });
 

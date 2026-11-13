@@ -1,17 +1,19 @@
 <!-- ConceptBrowserDialog.vue — W9 (concept tree browse, chat-source
-  resolution, 2026-11-08): the citizen-facing modal viewer opened from a
-  working OKF citation card in EITHER chat surface. The okf store's browser
-  slice assembles the paginated tree index progressively (the fetchConcepts
-  stale-guard pattern; ≤ 200 rows per payload, never the full corpus in one
-  response); every concept's markdown is fetched on demand through the CAP-2
-  concept route (fetchOkfConcept's honest unavailable mapping) and rendered
-  client-side with the MarkdownIt + DOMPurify pipeline — no server rendering
-  endpoint exists or is wanted. Read-only: browse + hops + download, no
-  steward tooling.
-  IA: the D8 design pass (ux-csr-w9-concept-browser.md) — progressive
-  ALPHABETICAL LIST (author edges are sparse; a flat list is what makes
-  every concept reachable) + related-concept chips as hops; two panes on
-  desktop, stacked with a Back-to-list affordance on narrow viewports. -->
+  resolution, 2026-11-08); REDESIGNED per David's order 2026-11-14 (issue
+  #1836): the left pane is the SAME tree view the OKF editor and the wizard
+  use (the shared OkfConceptList — index root + children, read-only), the
+  browser gained back/forward history over visited concepts, and the
+  content pane NEVER unmounts while the tree is clicked or scrolled (the
+  old v-if vanish is the defect this fixes). The okf store's browser slice
+  assembles the paginated tree index progressively (≤ 200 rows per payload,
+  never the full corpus in one response); every concept's markdown is
+  fetched on demand through the CAP-2 concept route (fetchOkfConcept's
+  honest unavailable mapping) and rendered client-side with the MarkdownIt
+  + DOMPurify pipeline. Read-only: browse + hops + download, no steward
+  tooling.
+  IA history: the D8 pass chose a progressive ALPHABETICAL LIST; REVERSED
+  by David 2026-11-14 (recorded in the W9 spec's change log + issue #1836).
+  Two panes on desktop, stacked with Back-to-list on narrow viewports. -->
 <template>
   <DsDialog
     class="genie-living-intelligence"
@@ -39,39 +41,27 @@
     </div>
 
     <template v-else>
-      <div class="okf-browser__toolbar">
-        <DsInput
-          v-model="filter"
-          class="okf-browser__filter"
-          type="text"
-          :placeholder="translate('chatbot.okfBrowser.filter', 'Filter concepts…')"
-          :aria-label="translate('chatbot.okfBrowser.filter', 'Filter concepts…')"
-          data-testid="okf-browser-filter"
-        />
-        <span class="okf-browser__count" data-testid="okf-browser-count">{{ countLabel }}</span>
-      </div>
       <p v-if="error" class="okf-browser__error" data-testid="okf-browser-error">{{ error }}</p>
 
-      <div class="okf-browser__panes" :class="{ 'okf-browser__panes--list-only': !selectedConceptId }">
-        <div class="okf-browser__list">
-          <DsTable
-            :columns="columns"
-            :rows="visibleRows"
-            row-key="concept_id"
+      <div class="okf-browser__panes">
+        <!-- THE TREE — the editor's and wizard's own OkfConceptList,
+             read-only (no steward verbs; the footer's disabled buttons and
+             the ingest failcard are hidden consumer-side, no shared-file
+             change). Row click = a FORWARD navigation: the visit joins the
+             history. -->
+        <div class="okf-browser__list" data-testid="okf-browser-tree">
+          <OkfConceptList
+            :concepts="concepts"
+            :selected-id="selectedConceptId"
             :loading="treeLoading && concepts.length === 0"
-            :empty-text="translate('chatbot.okfBrowser.empty', 'No concepts found.')"
-            data-testid="okf-browser-table"
-            @row-click="selectConcept"
-          >
-            <template #cell-title="{ row }">
-              <span class="okf-browser__row-title">{{ row.title || row.concept_id }}</span>
-            </template>
-          </DsTable>
+            read-only
+            @select="visitConcept"
+          />
           <!-- David, 2026-11-08: lazy loading — the dialog never waits for
-               the whole repository. Show more extends the render window
-               in memory, and when the window reaches the loaded edge it
-               fetches the NEXT page on demand (browserExtendConceptTree);
-               it disappears once the tree is complete. -->
+               the whole repository. Each Show more fetches the NEXT page
+               (browserExtendConceptTree); it disappears once the tree is
+               complete. The tree renders every loaded row (the editor's own
+               behaviour); pages accumulate only as the citizen asks. -->
           <DsButton
             v-if="showMoreVisible"
             variant="secondary"
@@ -82,14 +72,52 @@
             {{ translate('chatbot.okfBrowser.showMore', 'Show more') }}
           </DsButton>
         </div>
-        <div v-if="selectedConceptId" class="okf-browser__detail" data-testid="okf-browser-detail">
+
+        <!-- THE CONTENT PANE — always rendered (issue #1836: the markdown
+             stays in view while the tree is clicked and scrolled). Its four
+             arms live INSIDE the pane; nothing here unmounts the pane or
+             reflows the tree. -->
+        <div ref="detailPane" class="okf-browser__detail" data-testid="okf-browser-detail">
           <div class="okf-browser__detail-head">
-            <DsButton variant="ghost" class="okf-browser__back" data-testid="okf-browser-back" @click="backToList">
+            <DsButton
+              variant="ghost"
+              class="okf-browser__back-to-list"
+              data-testid="okf-browser-back-to-list"
+              @click="backToList"
+            >
               {{ translate('chatbot.okfBrowser.backToList', 'Back to list') }}
             </DsButton>
+            <div class="okf-browser__history" role="navigation">
+              <DsButton
+                variant="ghost"
+                small
+                class="okf-browser__history-btn"
+                :disabled="!canGoBack"
+                data-testid="okf-browser-back"
+                :aria-label="translate('chatbot.okfBrowser.back', 'Back')"
+                @click="goBack"
+              >
+                ◀
+              </DsButton>
+              <DsButton
+                variant="ghost"
+                small
+                class="okf-browser__history-btn"
+                :disabled="!canGoForward"
+                data-testid="okf-browser-forward"
+                :aria-label="translate('chatbot.okfBrowser.forward', 'Forward')"
+                @click="goForward"
+              >
+                ▶
+              </DsButton>
+            </div>
             <h3 class="okf-browser__detail-title" data-testid="okf-browser-detail-title">{{ selectedTitle }}</h3>
           </div>
-          <div v-if="selectedLoading" class="okf-browser__detail-loading" data-testid="okf-browser-detail-loading">
+          <!-- Empty arm: nothing selected yet — the tree is the invitation. -->
+          <div v-if="!selectedConceptId" class="okf-browser__empty" data-testid="okf-browser-select-hint">
+            {{ translate('chatbot.okfBrowser.selectHint', 'Select a concept from the tree to read it here.') }}
+          </div>
+          <div v-else-if="selectedLoading" class="okf-browser__detail-loading" data-testid="okf-browser-detail-loading">
             <DsSpinner size="md" />
           </div>
           <div
@@ -103,8 +131,14 @@
                (the OkfMarkdownEditor recipe) — sanitized below before it
                lands here. -->
           <!-- eslint-disable-next-line vue/no-v-html -->
-          <div v-else class="okf-browser__markdown" data-testid="okf-browser-markdown" v-html="renderedHtml"></div>
-          <div v-if="relatedConcepts.length" class="okf-browser__related">
+          <div
+            v-else
+            ref="markdownEl"
+            class="okf-browser__markdown"
+            data-testid="okf-browser-markdown"
+            v-html="renderedHtml"
+          ></div>
+          <div v-if="selectedConceptId && relatedConcepts.length" class="okf-browser__related">
             <h4 class="okf-browser__related-title">
               {{ translate('chatbot.okfBrowser.relatedConcepts', 'Related concepts') }}
             </h4>
@@ -115,7 +149,7 @@
                 type="button"
                 class="okf-browser__chip"
                 :data-testid="`okf-browser-hop-${r.concept_id}`"
-                @click="selectConcept(r)"
+                @click="visitConcept(r)"
               >
                 {{ r.title || r.concept_id }}
               </button>
@@ -132,20 +166,15 @@ import MarkdownIt from 'markdown-it';
 import DOMPurify from 'dompurify';
 import translateMixin from '../../mixins/translateMixin';
 import DsDialog from '../ds/Dialog.vue';
-import DsTable from '../ds/Table.vue';
 import DsButton from '../ds/Button.vue';
-import DsInput from '../ds/Input.vue';
 import DsSpinner from '../ds/Spinner.vue';
+import OkfConceptList from './editor/ConceptList.vue';
 import { downloadOkfConcept } from '../../utils/document-opener';
 import notificationService from '../../services/notificationService';
 
-// The render window: only this many filtered rows hit the DOM at once —
-// the 6k-concept index lives in memory, not in elements (D8 §7).
-const WINDOW_STEP = 100;
-
 export default {
   name: 'ConceptBrowserDialog',
-  components: { DsDialog, DsTable, DsButton, DsInput, DsSpinner },
+  components: { DsDialog, DsButton, DsSpinner, OkfConceptList },
   mixins: [translateMixin],
   props: {
     visible: { type: Boolean, default: false }
@@ -153,9 +182,11 @@ export default {
   emits: ['close'],
   data() {
     return {
-      filter: '',
-      windowSize: WINDOW_STEP,
-      columns: [{ key: 'title', label: this.translate('chatbot.okfBrowser.colConcept', 'Concept') }]
+      // Per-concept scroll memory (#1836): leaving a concept stores the
+      // markdown pane's scrollTop; returning to it (back/forward) restores
+      // where the reader was. DOM state stays in the component — the store
+      // never learns the pane's geometry.
+      scrollMemory: {}
     };
   },
   computed: {
@@ -178,17 +209,11 @@ export default {
     treeComplete() {
       return !!this.browser.treeComplete;
     },
-    treeExtending() {
-      return !!this.browser.extending;
-    },
-    moreInMemory() {
-      return this.filteredRows.length > this.visibleRows.length;
-    },
     morePages() {
       return !this.treeComplete && this.concepts.length < (this.browser.total || 0);
     },
     showMoreVisible() {
-      return this.moreInMemory || this.morePages;
+      return this.morePages;
     },
     unavailable() {
       return !!this.browser.unavailable;
@@ -208,6 +233,16 @@ export default {
     selectedUnavailable() {
       return !!this.browser.selectedUnavailable;
     },
+    // #1836 history affordances: enabled strictly inside the visited range.
+    canGoBack() {
+      const i = this.browser.historyIndex;
+      return typeof i === 'number' && i > 0;
+    },
+    canGoForward() {
+      const h = this.browser.history || [];
+      const i = this.browser.historyIndex;
+      return typeof i === 'number' && i >= 0 && i < h.length - 1;
+    },
     actions() {
       return [
         {
@@ -218,18 +253,6 @@ export default {
         },
         { key: 'close', label: this.translate('common.close', 'Close'), variant: 'primary' }
       ];
-    },
-    filteredRows() {
-      const q = this.filter.trim().toLowerCase();
-      if (!q) return this.concepts;
-      return this.concepts.filter(
-        (c) =>
-          (c.title && String(c.title).toLowerCase().includes(q)) ||
-          (c.concept_id && String(c.concept_id).toLowerCase().includes(q))
-      );
-    },
-    visibleRows() {
-      return this.filteredRows.slice(0, this.windowSize);
     },
     selectedTitle() {
       const c = this.selectedConcept;
@@ -268,23 +291,24 @@ export default {
       // sanitize (html profile). One-shot on selection — no per-keystroke
       // cadence, so the editor's chunked renderer is not needed here.
       return DOMPurify.sanitize(this.md.render(body), { USE_PROFILES: { html: true } });
-    },
-    countLabel() {
-      // While a filter is active the count names the FILTERED rows (review
-      // r0) — an unfiltered total above a zero-match table reads as a
-      // contradiction.
-      const filtering = this.filter.trim().length > 0;
-      const n = filtering ? this.filteredRows.length : this.concepts.length;
-      return this.translate('chatbot.okfBrowser.concepts', '{n} concepts').replace('{n}', String(n));
     }
   },
   watch: {
-    // A fresh open resets the filter and the render window.
-    visible(open) {
-      if (open) {
-        this.filter = '';
-        this.windowSize = WINDOW_STEP;
+    // Leaving a concept: remember where the reader was in it (#1836).
+    selectedConceptId(next, prev) {
+      if (prev && this.$refs.markdownEl) {
+        this.scrollMemory[prev] = this.$refs.markdownEl.scrollTop;
       }
+      if (!next) return;
+      // Returning to a concept whose content is already shown restores the
+      // remembered scroll after the DOM settles; a fresh concept starts at
+      // the top.
+      this.$nextTick(() => {
+        const el = this.$refs.markdownEl;
+        if (!el) return;
+        const saved = this.scrollMemory[next];
+        el.scrollTop = typeof saved === 'number' && this.selectedConceptId === next ? saved : 0;
+      });
     }
   },
   created() {
@@ -310,26 +334,34 @@ export default {
         });
       }
     },
-    /** The on-demand affordance: extend the render window in memory; when
-     * the window reaches the loaded edge and pages remain, fetch the NEXT
-     * page first (David, 2026-11-08 — the dialog never waits for the whole
-     * repository, the rest loads as the citizen asks for it). */
+    /** The on-demand affordance: fetch the NEXT page (David, 2026-11-08 —
+     * the dialog never waits for the whole repository; the rest loads as
+     * the citizen asks for it). The tree renders every loaded row. */
     async extend() {
-      if (this.moreInMemory) {
-        this.windowSize += WINDOW_STEP;
-        return;
-      }
       if (!this.morePages || !this.browser.repoId) return;
       await this.$store.dispatch('okf/browserExtendConceptTree', { repoId: this.browser.repoId });
-      this.windowSize += WINDOW_STEP;
     },
-    selectConcept(row) {
-      if (!row || !row.concept_id || !this.browser.repoId) return;
-      this.$store.dispatch('okf/browserLoadConcept', { repoId: this.browser.repoId, conceptId: row.concept_id });
+    /** FORWARD navigation (tree rows + related hops): the visit joins the
+     * history, truncating any forward tail (the store owns that semantic),
+     * and the content loads through the guarded hop loader. OkfConceptList
+     * emits the bare concept_id string; the hop chips pass a row object. */
+    visitConcept(rowOrId) {
+      const id = typeof rowOrId === 'string' ? rowOrId : rowOrId && rowOrId.concept_id;
+      if (!id || !this.browser.repoId) return;
+      this.$store.dispatch('okf/browserVisitConcept', { repoId: this.browser.repoId, conceptId: id });
+    },
+    goBack() {
+      if (!this.browser.repoId) return;
+      this.$store.dispatch('okf/browserBack');
+    },
+    goForward() {
+      if (!this.browser.repoId) return;
+      this.$store.dispatch('okf/browserForward');
     },
     backToList() {
       // Mobile: leave the detail pane (the list is the home pane when the
-      // panes stack). The selection clears; nothing is refetched.
+      // panes stack). The selection clears; the HISTORY SURVIVES — a fresh
+      // click continues the same session (issue #1836).
       this.$store.commit('okf/setBrowserSelected', { conceptId: null, concept: null });
     }
   }
@@ -347,20 +379,6 @@ export default {
   color: var(--fg);
   font-size: var(--text-sm);
 }
-.okf-browser__toolbar {
-  display: flex;
-  align-items: center;
-  gap: var(--space-sm);
-  margin-bottom: var(--space-sm);
-}
-.okf-browser__filter {
-  flex: 1 1 auto;
-}
-.okf-browser__count {
-  color: var(--muted);
-  font-size: var(--text-sm);
-  white-space: nowrap;
-}
 .okf-browser__error {
   margin: 0 0 var(--space-sm);
   font-size: var(--text-sm);
@@ -371,19 +389,39 @@ export default {
 }
 .okf-browser__panes {
   display: grid;
-  grid-template-columns: minmax(240px, 1fr) minmax(0, 1.4fr);
+  grid-template-columns: minmax(260px, 1fr) minmax(0, 1.4fr);
   gap: var(--space-md);
-  align-items: start;
+  align-items: stretch;
 }
-/* When no concept is open the list owns the full width. */
-.okf-browser__panes--list-only {
-  grid-template-columns: 1fr;
+.okf-browser__list {
+  /* The tree pane scrolls on its own — the content pane stays put while
+     the citizen walks the tree (issue #1836). */
+  min-height: 0;
+  max-height: 60vh;
+  overflow-y: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: var(--space-sm);
+  background: var(--surface);
+}
+/* The steward chrome OkfConceptList carries for the editor is noise in the
+   citizen browser: the footer's disabled Add/Re-split buttons and the
+   ingest failcard hide consumer-side — the shared component is unchanged
+   (additive-first, no shared-file edit). */
+.okf-browser__list :deep(.okf-cl__footer) {
+  display: none;
+}
+.okf-browser__list :deep(.okf-cl__failcard) {
+  display: none;
 }
 .okf-browser__detail {
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
   padding: var(--space-md);
   background: var(--surface);
+  min-height: 0;
+  max-height: 60vh;
+  overflow-y: auto;
 }
 .okf-browser__detail-head {
   display: flex;
@@ -391,14 +429,27 @@ export default {
   gap: var(--space-sm);
   margin-bottom: var(--space-sm);
 }
+.okf-browser__history {
+  display: flex;
+  gap: var(--space-xs);
+}
 .okf-browser__detail-title {
   margin: 0;
   font-size: var(--text-md);
   font-weight: 600;
   color: var(--fg);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
-.okf-browser__back {
+.okf-browser__back-to-list {
   display: none; /* desktop: both panes visible, no back needed */
+}
+.okf-browser__empty {
+  color: var(--muted);
+  font-size: var(--text-sm);
+  padding: var(--space-lg) 0;
+  text-align: center;
 }
 .okf-browser__detail-loading {
   display: flex;
@@ -453,7 +504,7 @@ export default {
   .okf-browser__panes {
     grid-template-columns: 1fr;
   }
-  .okf-browser__back {
+  .okf-browser__back-to-list {
     display: inline-flex;
   }
 }

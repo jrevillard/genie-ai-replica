@@ -148,7 +148,14 @@ function initialBrowserState() {
     selectedConceptId: null,
     selectedConcept: null,
     selectedLoading: false,
-    selectedUnavailable: false
+    selectedUnavailable: false,
+    // #1836 back/forward: the browser is a browser — history of visited
+    // concepts, most recent last; historyIndex points at the CURRENT entry.
+    // browserVisit appends (truncating any forward tail, the web-history
+    // semantic); browserGo moves the index. Seeded with startConceptId on
+    // open; cleared by every openBrowser reset.
+    history: [],
+    historyIndex: -1
   };
 }
 
@@ -372,7 +379,10 @@ const mutations = {
       ...initialBrowserState(),
       visible: true,
       repoId: repoId || null,
-      startConceptId: conceptId || null
+      startConceptId: conceptId || null,
+      // The entry concept seeds the history (issue #1836 back/forward).
+      history: conceptId ? [conceptId] : [],
+      historyIndex: conceptId ? 0 : -1
     };
   },
   closeBrowser(state) {
@@ -403,6 +413,25 @@ const mutations = {
   },
   setBrowserSelectedUnavailable(state) {
     state.browser = { ...state.browser, selectedConcept: null, selectedUnavailable: true };
+  },
+  /** #1836 — record a NEW visit: append to the history, truncating any
+   * forward tail (the web-history semantic — after back, a new click kills
+   * "forward"). A repeat of the CURRENT entry is a no-op (the click that
+   * re-selects the shown concept must not grow the stack). */
+  browserVisit(state, conceptId) {
+    const b = state.browser;
+    if (!conceptId || b.history[b.historyIndex] === conceptId) return;
+    const history = b.history.slice(0, b.historyIndex + 1).concat(conceptId);
+    state.browser = { ...b, history, historyIndex: history.length - 1 };
+  },
+  /** #1836 — move along the existing history (delta -1 back / +1 forward),
+   * clamped to the ends: a boundary call is a no-op, never a wrap. The
+   * selection follows the entry; the ACTION layer loads the content. */
+  browserGo(state, delta) {
+    const b = state.browser;
+    const next = b.historyIndex + delta;
+    if (next < 0 || next >= b.history.length) return;
+    state.browser = { ...b, historyIndex: next, selectedConceptId: b.history[next] };
   }
 };
 
@@ -2394,6 +2423,40 @@ const actions = {
       commit('setBrowser', { error: err.message || 'browserLoadConcept failed' });
       return { ok: false, code: 'FETCH_FAILED', message: err.message };
     }
+  },
+
+  /**
+   * #1836 — the ONE entry point for a forward navigation (a tree-row click,
+   * a related-concept hop): record the visit in the history (the web-history
+   * truncation semantic lives in the mutation), then load the content
+   * through the SAME guarded hop loader the open path uses.
+   */
+  browserVisitConcept({ commit, dispatch, state }, { repoId, conceptId } = {}) {
+    if (!repoId || !conceptId) return { ok: false, code: 'VALIDATION_ERROR' };
+    if (state.browser.repoId !== repoId) return { ok: false, code: 'STALE' };
+    commit('browserVisit', conceptId);
+    return dispatch('browserLoadConcept', { repoId, conceptId });
+  },
+
+  /** #1836 — one step BACK through the visited concepts; loads the entry's
+   * content through the same guarded hop loader. A boundary call is a no-op.
+   * The entry id reads from state AFTER the browserGo commit — the pre-commit
+   * snapshot carries the OLD selection and the load would overwrite the
+   * move right back. */
+  browserBack({ commit, dispatch, state }) {
+    const b = state.browser;
+    if (b.historyIndex <= 0) return { ok: false, code: 'BOUNDARY' };
+    commit('browserGo', -1);
+    return dispatch('browserLoadConcept', { repoId: state.browser.repoId, conceptId: state.browser.selectedConceptId });
+  },
+
+  /** #1836 — one step FORWARD (after a back); boundary no-op. Reads the
+   * post-commit state, same as browserBack. */
+  browserForward({ commit, dispatch, state }) {
+    const b = state.browser;
+    if (b.historyIndex >= b.history.length - 1) return { ok: false, code: 'BOUNDARY' };
+    commit('browserGo', 1);
+    return dispatch('browserLoadConcept', { repoId: state.browser.repoId, conceptId: state.browser.selectedConceptId });
   }
 };
 

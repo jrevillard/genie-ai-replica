@@ -1387,6 +1387,9 @@ export default {
       downloadFailed: 'การดาวน์โหลดล้มเหลว',
       showMore: 'แสดงเพิ่มเติม',
       backToList: 'กลับไปที่รายการ',
+      back: 'ย้อนกลับ',
+      forward: 'ไปข้างหน้า',
+      selectHint: 'เลือกแนวคิดจากมุมมองต้นไม้เพื่ออ่านที่นี่',
       colConcept: 'ความคิด'
     },
     feedbackSubmitted: 'บันทึกฟีดแบ็กแล้ว',

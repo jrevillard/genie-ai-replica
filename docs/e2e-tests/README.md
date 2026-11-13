@@ -7,6 +7,7 @@ Per-epic E2E test plans for GENIE.AI Keycloak authentication and secure API acce
 | Document | Description | Test Phases |
 |----------|-------------|-------------|
 | [local-run.md](local-run.md) | The local e2e run — the one command that executes the suite, the executed set, the failure path | — |
+| [suite-map.md](suite-map.md) | The suite map — every spec file: its feature area, the phase/story it serves, its deployment profile, its helpers (#1741) | all |
 | [00-clean-start.md](00-clean-start.md) | Common setup: deploy stack, create test user, get tokens | Phase 0 |
 | [epic1-keycloak-foundation.md](epic1-keycloak-foundation.md) | Keycloak foundation: login redirect, JIT provisioning, external IdP | Phases A–E |
 | [epic2-secure-api-access.md](epic2-secure-api-access.md) | Secure API access: token forwarding to OPEA, Swagger OAuth2, JWKS refresh, multi-realm, OPEA continuity, error display | Phases F–K |

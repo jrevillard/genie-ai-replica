@@ -2738,6 +2738,8 @@ describe('e2e merge-train changes filters (#1264)', () => {
       'tests/e2e/admin/data-wiring.spec.js',
       'tests/e2e/admin/failure-states.spec.js',
       'tests/e2e/admin/logs-view.spec.js',
+      'tests/e2e/chatbot/chat-composer.spec.js',
+      'tests/e2e/chatbot/chat-conversation.spec.js',
       'tests/e2e/chatbot/conversation-history.spec.js',
       'tests/e2e/chatbot/error-handling.spec.js',
       'tests/e2e/chatbot/quick-help-scope.spec.js',
@@ -3367,7 +3369,9 @@ describe('e2e merge-train changes filters (#1264)', () => {
 //   - the local run invokes the WHOLE tests/e2e/ tree, so no spec is
 //     "not executed by construction" — the gap #1740 measured (the
 //     epic1/epic2/epic3/okf directories and the root-level specs sat
-//     outside the CI invocation, and the repo said nothing about it);
+//     outside the CI invocation, and the repo said nothing about it;
+//     those directories have since been rehomed on the feature axis —
+//     see docs/e2e-tests/suite-map.md, issue #1741);
 //   - the invocation is DERIVED from the run script, never copied into a
 //     second hand-maintained list (the rule the CI derivation follows);
 //   - the run provisions the venue fixtures, and its failure path files a
@@ -3597,7 +3601,7 @@ describe('the venue-fixture provisioning in .e2e_web_base', () => {
     // No venue-fixture password literal may reappear beside or after the
     // fixtures module: every helper and spec directory under tests/e2e/
     // must derive its credentials from it. Explicit exclusions only:
-    // epic2's k1/i1 specs mint tokens for their own ephemeral
+    // The auth suite's k1/i1 specs (the epic2 pair) mint tokens for their own ephemeral
     // self-created users (noroles-e2e, genie2's testuser2) and
     // legitimately carry their own password literals; fixtures/ holds
     // the upload seed files. A NEW spec directory is scanned
@@ -3612,11 +3616,13 @@ describe('the venue-fixture provisioning in .e2e_web_base', () => {
       }
     };
     const exclusions = new Set([
-      // epic2's two self-created fixture users (genie2's testuser2,
-      // k1's noroles-e2e) legitimately carry their own password literals;
-      // the rest of epic2 stays scanned.
-      path.join(e2eRoot, 'epic2', 'i1-multi-realm.spec.js'),
-      path.join(e2eRoot, 'epic2', 'k1-auth-error-display.spec.js'),
+      // The two auth specs that mint tokens for their own self-created
+      // fixture users (genie2's testuser2, k1's noroles-e2e) legitimately
+      // carry their own password literals; the rest of the suite stays
+      // scanned. (These are the epic2 specs i1/k1, rehomed under auth/
+      // by the #1741 suite map.)
+      path.join(e2eRoot, 'auth', 'i1-multi-realm.spec.js'),
+      path.join(e2eRoot, 'auth', 'k1-auth-error-display.spec.js'),
       path.join(e2eRoot, 'fixtures'), // upload seed files
       path.join(e2eRoot, 'helpers', 'e2e-fixtures.js') // THE single source
     ]);
@@ -3635,7 +3641,7 @@ describe('the venue-fixture provisioning in .e2e_web_base', () => {
   // the other half ("a spec that needs credentials takes them from a
   // sanctioned path") is NOT enforceable by this check, because requiring
   // NEITHER path is legitimate — a spec may need no venue credential at
-  // all (pure UI or config specs, the ragas suite, epic2's realm-local
+  // all (pure UI or config specs, the ragas suite, the auth suite's realm-local
   // specs). Telling a credential-taking spec from a credential-free one
   // from the source alone would need a per-file classification this pin
   // deliberately does not attempt.

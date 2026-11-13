@@ -1,4 +1,4 @@
-// tests/e2e/resizable-sidebars.spec.js
+// tests/e2e/theme/resizable-sidebars.spec.js
 //
 // Behaviour of the edge handle both sidebars share: drag to resize,
 // click the chevron to collapse, double-click to restore the default
@@ -26,8 +26,8 @@
 // change cannot leave this spec asserting stale numbers.
 
 const { test, expect } = require('@playwright/test');
-const { loginViaUI, navigateToChatbot } = require('./helpers/chatbot');
-const { readVisualLayerState } = require('./helpers/welcome');
+const { loginViaUI, navigateToChatbot } = require('../helpers/chatbot');
+const { readVisualLayerState } = require('../helpers/welcome');
 // The panel and handle selectors are the shared layout constants — one
 // definition in helpers/layout.js, re-used by every sidebar spec.
 const {
@@ -39,7 +39,7 @@ const {
   SIDEBAR_HANDLE_BUTTON_LEFT: LEFT_HANDLE_BUTTON,
   SIDEBAR_HANDLE_BUTTON_RIGHT: RIGHT_HANDLE_BUTTON,
   QUICK_HELP_GRID_ITEM
-} = require('./helpers/layout');
+} = require('../helpers/layout');
 
 
 // The centre's usable minimum, from the quick-help grid's own

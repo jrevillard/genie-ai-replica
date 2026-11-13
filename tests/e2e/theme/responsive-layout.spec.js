@@ -1,4 +1,4 @@
-// tests/e2e/responsive-layout.spec.js
+// tests/e2e/theme/responsive-layout.spec.js
 //
 // Layout regression spec for the two narrow-viewport defects the
 // quick-help grid used to reproduce, regardless of the Living
@@ -41,8 +41,8 @@
 // evaluate rather than in two.
 
 const { test, expect } = require('@playwright/test');
-const { loginViaUI, navigateToChatbot } = require('./helpers/chatbot');
-const { openWelcomeScreen, LAYER_STATE_BIND } = require('./helpers/welcome');
+const { loginViaUI, navigateToChatbot } = require('../helpers/chatbot');
+const { openWelcomeScreen, LAYER_STATE_BIND } = require('../helpers/welcome');
 const {
   waitForWidthSettled,
   SIDEBAR_LEFT,
@@ -50,7 +50,7 @@ const {
   QUICK_HELP_GRID,
   QUICK_HELP_ITEM,
   QUICK_HELP_GRID_ITEM
-} = require('./helpers/layout');
+} = require('../helpers/layout');
 
 // 217 - 20 = 197 px. See the report for why this is the floor rather
 // than the unreachable target.

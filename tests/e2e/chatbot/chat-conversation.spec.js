@@ -3,10 +3,10 @@
 // Each test asserts one invariant the rendered conversation must keep,
 // and each one carries a mutation check recorded beside it.
 const { test, expect } = require('@playwright/test');
-const { openWelcomeScreen, contrastRatio } = require('./helpers/welcome');
-const { mockChatStream, sseBody, sseFulfill, ackFeedback, BOT_BUBBLE, NAV_STATUS, STREAM_ROUTE, STREAM_PATH } = require('./helpers/chatbot');
-const { runPostOnlyRouteHandler, runRouteHandler } = require('./helpers/route');
-const { QUICK_HELP_ITEM } = require('./helpers/layout');
+const { openWelcomeScreen, contrastRatio } = require('../helpers/welcome');
+const { mockChatStream, sseBody, sseFulfill, ackFeedback, BOT_BUBBLE, NAV_STATUS, STREAM_ROUTE, STREAM_PATH } = require('../helpers/chatbot');
+const { runPostOnlyRouteHandler, runRouteHandler } = require('../helpers/route');
+const { QUICK_HELP_ITEM } = require('../helpers/layout');
 
 async function askAndAnswer(page, question) {
   await page.locator('[data-testid="welcome-composer"] textarea').fill(question);

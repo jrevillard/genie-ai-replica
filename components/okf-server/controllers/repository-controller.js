@@ -1217,7 +1217,7 @@ async function resolveConceptRepo(req, res, next) {
         if (!repoDoc) continue;
         try {
           await assertRepoReadableByCaller(req, repoDoc);
-        } catch (fence) {
+        } catch {
           continue; // restricted twin this caller cannot traverse — next candidate
         }
         const steward = callerIsStewardForRepo(req, repo_id);

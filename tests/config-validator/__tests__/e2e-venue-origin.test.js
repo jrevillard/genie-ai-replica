@@ -52,8 +52,9 @@ const E2E_ROOT = path.join(ROOT, 'tests/e2e');
 // character here; the planned inversion for the next touch of this
 // predicate is a POSITIVE terminator boundary enumerating the CLOSED
 // set of what ends a host in JS source: end of string, port colon,
-// path slash, query `?`, hash `#`, the three quote characters, and a
-// dot followed by any non-label character (the rooted dot).
+// path slash, query `?`, hash `#`, the three quote characters,
+// trailing whitespace (WHATWG strips C0-control-and-space), and a dot
+// followed by any non-label character (the rooted dot).
 //
 // The private ranges are in the list because a venue is also named by
 // its ADDRESS: the shared k8s venues sit on private addresses (RFC1918

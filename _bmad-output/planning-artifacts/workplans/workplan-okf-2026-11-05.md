@@ -488,6 +488,31 @@ and **#1819** (the test mock's conditional-conversion replace branch stores
 the patch by reference). #1820's own secondary note (verify the axios-side
 clamped-token escalation arm actually fires) stays pinned in the issue.
 
+## #1827 — dangling origin links (2026-11-13, David-reported mid-merge)
+
+David clicked a batch of restored origin links: some opened, some could not
+be viewed. Investigated before any code: **65 distinct `file_id`s across 6
+repos (el-salvador v5: 50) are absent from doc-repo** — no `files` row, not
+even soft-deleted, no file on disk. The repos were converted from those
+documents while they existed; the doc-repo half was deleted afterwards
+(outside VictoriaLogs' window — who/when not reconstructible). The #1817
+fix did its job; what the dead links point at no longer exists.
+
+Shipped on `fix/issue-1827-dangling-origin-links` (MR **!874**): the CAP-2
+card projection stamps `missing: true` on source entries doc-repo answers
+404 for (`fetchDocMetaStatus` — 404 definitive, everything else transient,
+never cached); the origin row renders the localized fact (i18n ×14) as a
+span, never a button. Live-caught mid-build: the stamp initially skipped
+the steward arm and a superadmin's card showed nothing — both arms stamp
+now. Deployed + verified live pre-merge (verification note on the MR).
+
+**OPEN DATA DECISION (David's):** the links cannot be made viewable
+without the original documents — re-upload to doc-repo + a sources[] id
+migration, or a corpus re-conversion. The concept bodies still carry the
+converted text; only the original files are gone. The stranded
+`fix/issue-1568-smoke-graph-name` branch (2 finished commits, never MR'd)
+surfaced in the same housekeeping sweep → MR **!875**.
+
 ## Standing rules that carry over
 
 - `feedback_approved-plan-is-not-execution-authority`: the plan is adapted on

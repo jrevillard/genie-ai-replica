@@ -1,5 +1,6 @@
 const { test, expect } = require('@playwright/test');
 const { BASE_URL } = require('../helpers/base-url');
+const { getAdminToken } = require('../helpers/auth');
 const { hasIdentityProvider, missingIdentityProviderReason, skipUnlessVenue } = require('../helpers/venue-profile');
 
 const REALM = process.env.KEYCLOAK_REALM || 'genie';
@@ -66,59 +67,34 @@ test('completes full external IdP brokered login flow', async ({ browser }) => {
   // is the root cause, so the restore failure travels WITH it.
   let restoreFailure = null;
 
-  // The mint sits INSIDE the try (review, #1713 wave): a failure here must
-  // close the browser context through the catch below — a mint throw before
-  // the try leaked the context with its authenticated Keycloak session.
-  try {
-    // Get admin token for realm configuration changes. The form body is
-    // serialized EXPLICITLY: Playwright's apiContext does not turn a
-    // URLSearchParams object into an application/x-www-form-urlencoded body
-    // (it sends the object's own serialization), and Keycloak answers 400
-    // "Missing form parameter: grant_type" — found by the mint gate below on
-    // its first live run (#1713).
-    const adminTokenRes = await apiContext.post(`${BASE_URL}/auth/realms/master/protocol/openid-connect/token`, {
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      data: new URLSearchParams({
-        client_id: 'admin-cli',
-        username: 'admin',
-        password: process.env.KEYCLOAK_ADMIN_PASSWORD,
-        grant_type: 'password'
-      }).toString(),
-      ignoreHTTPSErrors: true
-    });
-    // The mint carries the same verdict discipline as the restore below
-    // (#1713): apiContext returns a response on non-2xx instead of throwing,
-    // so the status is checked explicitly. An unchecked mint surfaces an
-    // expired/wrong admin password as a confusing downstream error — a
-    // `Bearer undefined` header on every later call — instead of the mint
-    // failure that is the actual cause. A 200 with a non-JSON body (a proxy
-    // error page) or no access_token is the same class: every later realm
-    // call would run without a token.
-    const mintFailure = (detail) => {
-      const error = new Error(
-        `Admin token mint failed — every later realm call would run without a token. ` +
-          `HTTP ${adminTokenRes.status()}. ${detail}`
-      );
-      error.isMintFailure = true;
-      return error;
-    };
-    if (!adminTokenRes.ok()) {
-      let mintBody;
-      try {
-        mintBody = JSON.stringify(await adminTokenRes.json()).substring(0, 300);
-      } catch (bodyError) {
-        mintBody = `Body unavailable (read failed: ${bodyError.message}).`;
-      }
-      throw mintFailure(`Body: ${mintBody}. Check KEYCLOAK_ADMIN_PASSWORD for the venue's master realm.`);
+  // A verdict's response-body excerpt, stated once: a non-JSON body (a
+  // proxy error page) reads as its own failure, never as a crash.
+  const bodyOf = async (res) => {
+    try {
+      return JSON.stringify(await res.json()).substring(0, 300);
+    } catch (bodyError) {
+      return `unavailable (read failed: ${bodyError.message})`;
     }
+  };
+
+  // The mint sits INSIDE the try: a failure here must close the browser
+  // context through the catch below — a mint throw before the try leaked
+  // the context with its authenticated Keycloak session.
+  try {
+    // Get admin token for realm configuration changes — through the ONE
+    // owner of the mint (helpers/auth.js getAdminToken): the form-body
+    // serialization, the status verdict, the ADMIN_TOKEN env precedence
+    // and the no-access_token verdict are its contract, and its failures
+    // already name the cause (a wrong password surfaces as
+    // "Failed to get admin token: 400 ..."). An unchecked mint surfaces
+    // those as a confusing downstream error — a `Bearer undefined` header
+    // on every later call (#1713).
     let adminToken;
     try {
-      adminToken = (await adminTokenRes.json()).access_token;
-    } catch {
-      throw mintFailure(`The token endpoint answered a non-JSON body (a proxy error page?)`);
-    }
-    if (!adminToken) {
-      throw mintFailure(`The token answer carried no access_token.`);
+      adminToken = await getAdminToken();
+    } catch (mintError) {
+      mintError.isPassThrough = true;
+      throw mintError;
     }
     const authHeaders = { Authorization: `Bearer ${adminToken}`, 'Content-Type': 'application/json' };
 
@@ -143,20 +119,14 @@ test('completes full external IdP brokered login flow', async ({ browser }) => {
       { headers: authHeaders, data: { enabled: false }, ignoreHTTPSErrors: true }
     );
     if (!disableRes.ok()) {
-      let disableBody;
-      try {
-        disableBody = JSON.stringify(await disableRes.json()).substring(0, 300);
-      } catch (bodyError) {
-        disableBody = `unavailable (body read failed: ${bodyError.message})`;
-      }
       const error = new Error(
         `VERIFY_EMAIL disable failed — the required action stays ENABLED and the ` +
           `brokered login below would fail on the email-verification page instead of ` +
           `the flow under test, a cause the flow-failure envelope cannot name. ` +
           `Nothing was mutated, so no restore is owed. HTTP ${disableRes.status()}. ` +
-          `Body: ${disableBody}.`
+          `Body: ${await bodyOf(disableRes)}.`
       );
-      error.isDisableFailure = true;
+      error.isPassThrough = true;
       throw error;
     }
 
@@ -233,26 +203,17 @@ test('completes full external IdP brokered login flow', async ({ browser }) => {
       // throw it past the flow-diagnosis handler untouched, so it is
       // not wrapped in a URL/body/hint envelope that does not apply.
       const error = new Error(restoreFailure);
-      error.isRestoreFailure = true;
+      error.isPassThrough = true;
       throw error;
     }
 
     await context.close();
   } catch (error) {
-    if (error.isRestoreFailure) {
-      await context.close();
-      throw error;
-    }
-    if (error.isMintFailure) {
-      // Same pass-through: the mint message names the credential cause; the
-      // flow envelope's URL/body/hint describe a page that was never opened.
-      await context.close();
-      throw error;
-    }
-    if (error.isDisableFailure) {
-      // Same verdict pass-through as isRestoreFailure: the disable message
-      // names the real cause, and the URL/body/hint envelope does not apply
-      // (the flow never started — the page is still the login redirect).
+    if (error.isPassThrough) {
+      // One pass-through for all three verdict classes (mint, disable,
+      // restore): each message names its own real cause, and the flow
+      // envelope's URL/body/hint does not apply to it — the mint and
+      // disable run before the flow, and the page was never the subject.
       await context.close();
       throw error;
     }

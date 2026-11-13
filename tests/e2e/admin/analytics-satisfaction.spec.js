@@ -61,15 +61,23 @@ const HEATMAP = [
   }
 ];
 
-/** The trend rows, keyed by period key, with the en label and the exact
- *  rendered percentage (toFixed(2) + '%'). */
-const TREND_ROWS = [
-  { key: 'current', label: 'Current', value: '87.50%' },
-  { key: 'week1', label: 'Last Week', value: '82.10%' },
-  { key: 'week2', label: '2 Weeks Ago', value: '78.40%' },
-  { key: 'week3', label: '3 Weeks Ago', value: '74.90%' },
-  { key: 'week4', label: '4 Weeks Ago', value: '71.20%' }
-];
+/** The trend rows, keyed by period key: the en label is the EXPECTED
+ *  translation (the literal the locale must render), and the rendered
+ *  percentage is derived from the payload's own value through the chart's
+ *  documented formatter (toFixed(2) + '%') — one data source, so editing
+ *  the payload cannot desync the expectation. */
+const TREND_LABELS = {
+  current: 'Current',
+  week1: 'Last Week',
+  week2: '2 Weeks Ago',
+  week3: '3 Weeks Ago',
+  week4: '4 Weeks Ago'
+};
+const TREND_ROWS = GAUGE.historicalData.map((h) => ({
+  key: h.label,
+  label: TREND_LABELS[h.label],
+  value: `${h.value.toFixed(2)}%`
+}));
 
 /** Every analytics answer the page fires, dispatched by path. The loaders
  *  the satisfaction section does not need still get a well-formed answer —

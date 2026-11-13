@@ -21,25 +21,16 @@
 // as the sibling ceiling spec: the latch state on screen can only have come
 // from the intercepted draft answer, and the interception is what makes the
 // endpoint-missing state reachable on a venue whose okf-server serves drafts
-// just fine.
+// just fine. The route family and the repo-open walk are the shared Studio
+// scaffold (helpers/okf-studio.js).
 //
 // Run against an OKF-enabled venue (see helpers/venue-profile.js): on a venue
 // whose runtime config parks the pillar the spec skips ITSELF, with the
 // venue's own profile as the reason (#1742).
 
 const { test, expect } = require('@playwright/test');
-const { loginViaUI, BASE_URL } = require('../helpers/chatbot');
+const { openStudioRepo, stubStudioRepoRoutes } = require('../helpers/okf-studio');
 const { okfEnabled, okfParkedReason, skipUnlessVenue } = require('../helpers/venue-profile');
-
-/**
- * WHO LOGS IN — the deployment's own admin, the account the Studio actually
- * works with (the e2e fixture user carries no okf scope, so the Studio
- * renders empty lanes for it). Same account as the sibling ceiling spec.
- */
-const ADMIN_USER = {
-  username: process.env.GENIE_ADMIN_USERNAME || 'genie-admin',
-  password: process.env.GENIE_ADMIN_PASSWORD || ''
-};
 
 const REPO_ID = 'e2e-draft-notice-repo';
 
@@ -60,53 +51,14 @@ const NOT_READY_COPY =
   'Drafts cannot currently be stored on the server — they stay in this browser tab only and are lost if the tab is closed or reloaded. The page or the server may be out of sync.';
 
 /**
- * Register the routes the Studio path fires, with the draft answer the test
- * is named after. The wrapper is the shared one — a route handler must not
- * hand-roll its own catch (tests/e2e/CLAUDE.md).
+ * Stub the Studio routes with the draft answer the test is named after and
+ * open the repo. The draft read is THE interception — registered before the
+ * click: onResume fires it while opening the repo, and that answer is what
+ * arms (or not) the session latch.
  */
 async function openStudioWithDraftAnswer(page, draftStatus, draftBody) {
-  // The dashboard's repository list — one repo, so the resume card exists.
-  await page.route(
-    `**/api/okf/repos?*`,
-    (route) =>
-      route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify({ items: [REPO], next_cursor: null })
-      }),
-    { times: 10 }
-  );
-  // The draft read — THE interception. Registered before the click: onResume
-  // fires it while opening the repo, and that answer is what arms (or not)
-  // the session latch.
-  await page.route(
-    `**/api/okf/repos/${REPO_ID}/draft`,
-    (route) =>
-      route.fulfill({
-        status: draftStatus,
-        contentType: 'application/json',
-        body: JSON.stringify(draftBody)
-      }),
-    { times: 10 }
-  );
-  // The editor shell's concept list (fired on resume, after the draft read).
-  await page.route(
-    `**/api/okf/repos/${REPO_ID}/concepts`,
-    (route) =>
-      route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify([])
-      }),
-    { times: 10 }
-  );
-
-  await loginViaUI(page, ADMIN_USER);
-  await page.goto(`${BASE_URL}/admin?tab=studio`, { waitUntil: 'networkidle', timeout: 30000 });
-
-  const card = page.locator(`[data-test-id="okf-studio-repo-${REPO_ID}"]`);
-  await expect(card).toBeVisible({ timeout: 15000 });
-  await card.click();
+  await stubStudioRepoRoutes(page, { repoId: REPO_ID, repo: REPO, draftStatus, draftBody });
+  await openStudioRepo(page, REPO_ID);
 }
 
 test.describe('OKF Studio degraded-draft banner', () => {

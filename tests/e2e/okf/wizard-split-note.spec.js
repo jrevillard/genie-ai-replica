@@ -21,41 +21,21 @@
 //      from the intercepted server answer;
 //   3. an import answer without `split_documents` renders NO note.
 //
-// The payloads are INJECTED (page.route); the file upload uses Playwright's
-// setInputFiles with an in-memory buffer — the same measure-don't-look rule
-// as the sibling ceiling spec (no quarter-megabyte of typing).
+// The payloads are INJECTED (page.route, the shared Studio scaffold in
+// helpers/okf-studio.js); the file upload uses Playwright's setInputFiles
+// with an in-memory buffer — the same measure-don't-look rule as the
+// sibling ceiling spec (no quarter-megabyte of typing).
 //
 // Run against an OKF-enabled venue (see helpers/venue-profile.js): on a venue
 // whose runtime config parks the pillar the spec skips ITSELF, with the
 // venue's own profile as the reason (#1742).
 
 const { test, expect } = require('@playwright/test');
-const { loginViaUI, BASE_URL } = require('../helpers/chatbot');
+const { openStudioRepo, stubStudioRepoRoutes } = require('../helpers/okf-studio');
 const { okfEnabled, okfParkedReason, skipUnlessVenue } = require('../helpers/venue-profile');
-
-/**
- * WHO LOGS IN — the deployment's own admin (the account the Studio works
- * with). Same account as the sibling ceiling spec.
- */
-const ADMIN_USER = {
-  username: process.env.GENIE_ADMIN_USERNAME || 'genie-admin',
-  password: process.env.GENIE_ADMIN_PASSWORD || ''
-};
 
 const REPO_ID = 'e2e-split-note-repo';
 const FILE_NAME = 'river-report.md';
-
-/** A draft parked AT the Input step (index 2) — the wizard's mounted
- *  `activeStep = Math.min(draft.studio_step, 9)` lands there without any
- *  step clicks, which is the resume contract this spec also pins. */
-const DRAFT = {
-  repo_id: REPO_ID,
-  name: 'E2E Split Note Repo',
-  domain: '',
-  concept_count: 0,
-  studio_step: 2,
-  updated_at: 1700000000000
-};
 
 /** The stubbed repository the dashboard lists. */
 const REPO = {
@@ -66,6 +46,17 @@ const REPO = {
   version: 1
 };
 
+/** A draft parked AT the Input step (index 2) — the wizard's mounted
+ *  `activeStep = Math.min(draft.studio_step, 9)` lands there without any
+ *  step clicks, which is the resume contract this spec also pins. */
+const DRAFT = {
+  name: REPO.name,
+  domain: '',
+  concept_count: 0,
+  studio_step: 2,
+  updated_at: 1700000000000
+};
+
 /** The en locale's `okf.steps.input.splitReport` with the substitutions the
  *  spec's own split report produces. The assertion is the full sentence:
  *  file name AND part count, from the server's answer. */
@@ -74,62 +65,13 @@ function splitReportCopy(from, into) {
 }
 
 /**
- * Register the Studio routes with the import answer the test is named after,
- * log in, resume the repo, and land on the wizard's Input step. Returns
- * nothing; the caller asserts from here.
+ * Stub the Studio routes with the import answer the test is named after,
+ * log in, resume the repo, and land on the wizard's Input step. The caller
+ * asserts from here.
  */
 async function openWizardInputStep(page, importBody) {
-  // The dashboard's repository list — one repo, so the resume card exists.
-  await page.route(
-    `**/api/okf/repos?*`,
-    (route) =>
-      route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify({ items: [REPO], next_cursor: null })
-      }),
-    { times: 10 }
-  );
-  // The persisted draft — parked at the Input step.
-  await page.route(
-    `**/api/okf/repos/${REPO_ID}/draft`,
-    (route) =>
-      route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify({ repo_id: REPO_ID, draft: DRAFT })
-      }),
-    { times: 10 }
-  );
-  // The concept tree the Input step refreshes after the import.
-  await page.route(
-    `**/api/okf/repos/${REPO_ID}/concepts`,
-    (route) =>
-      route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify([])
-      }),
-    { times: 10 }
-  );
-  // THE import — the answer the test is named after.
-  await page.route(
-    `**/api/okf/repos/${REPO_ID}/import`,
-    (route) =>
-      route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify(importBody)
-      }),
-    { times: 10 }
-  );
-
-  await loginViaUI(page, ADMIN_USER);
-  await page.goto(`${BASE_URL}/admin?tab=studio`, { waitUntil: 'networkidle', timeout: 30000 });
-
-  const card = page.locator(`[data-test-id="okf-studio-repo-${REPO_ID}"]`);
-  await expect(card).toBeVisible({ timeout: 15000 });
-  await card.click();
+  await stubStudioRepoRoutes(page, { repoId: REPO_ID, repo: REPO, draftBody: DRAFT, importBody });
+  await openStudioRepo(page, REPO_ID);
 
   // The editor shell opens on the WIZARD sub-tab by default (StudioTab
   // onResume dispatches setEditorSubTab('wizard') — C1 Amendment A): no

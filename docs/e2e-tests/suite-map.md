@@ -45,7 +45,7 @@ The acceptance phases these specs serve (A–N) are the manual procedures in
 | `a2-full-login-flow.spec.js` | A.2 | full browser login: app → Keycloak → authenticated app | core | `base-url`, `e2e-fixtures` |
 | `a3-legacy-routes-redirect.spec.js` | A.3 | removed legacy auth routes (`/login`, `/register`, `/forgot-password`) behave on the Keycloak IdP | core | `base-url` |
 | `d7a-external-idp-button.spec.js` | D.7a | external-IdP button renders on the login page | external-IdP | `base-url`, `venue-profile` |
-| `d7b-external-idp-login-flow.spec.js` | D.7b | full login through the brokered external identity provider | external-IdP | `base-url`, `venue-profile` |
+| `d7b-external-idp-login-flow.spec.js` | D.7b | full login through the brokered external identity provider | external-IdP | `auth`, `base-url`, `venue-profile` |
 | `g1-swagger-authorize.spec.js` | G.1 | Swagger UI loads with the OAuth2 security scheme and its Authorize button | core | — |
 | `h1-jwks-force-refresh.spec.js` | H.1 | realm key rotation forces a JWKS refresh; sessions survive it | core | `auth`, `keycloak-admin` |
 | `i1-multi-realm.spec.js` | I.1 | a second realm (`genie2`) validates tokens through its own JWKS | multi-realm | `auth`, `keycloak-admin`, `venue-profile` |
@@ -99,8 +99,8 @@ one reads a missing directory as an accident.
 | `ragas-guide-errors.spec.js` | — | the RAGAS guide error surfaces | OKF | `auth`, `base-url`, `keycloak-admin`, `locale`, `venue-profile` |
 | `ragas-judge-selector.spec.js` | — | the RAGAS judge model selector | OKF | `auth`, `base-url`, `keycloak-admin`, `venue-profile` |
 | `ragas-rescore-tracking.spec.js` | — | RAGAS rescore tracking | OKF | `auth`, `base-url`, `keycloak-admin`, `locale`, `venue-profile` |
-| `studio-draft-notice.spec.js` | — | the Studio's session-wide degraded-draft banner (#1531) | OKF | `chatbot`, `venue-profile` |
-| `wizard-split-note.spec.js` | — | the wizard's split-report note, rendered from the server's answer (#1591) | OKF | `chatbot`, `venue-profile` |
+| `studio-draft-notice.spec.js` | — | the Studio's session-wide degraded-draft banner (#1531) | OKF | `chatbot`, `okf-studio`, `venue-profile` |
+| `wizard-split-note.spec.js` | — | the wizard's split-report note, rendered from the server's answer (#1591) | OKF | `chatbot`, `okf-studio`, `venue-profile` |
 
 OKF specs skip **with a reason** on a venue whose runtime config does not
 expose the pillar — see [local-run.md](local-run.md).

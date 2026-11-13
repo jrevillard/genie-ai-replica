@@ -37,8 +37,10 @@ module.exports = [
     // two spellings are base-path robustness, not two reachable paths:
     // `eslint .` from tests/e2e/ never reaches the root file, and
     // lint:playwright-config runs from the repository root, where the bare
-    // spelling matches. Keeping both keeps the entry correct if either
-    // invocation's base path ever changes.
+    // spelling matches. A base-path change in either invocation needs a
+    // conscious edit to these entries — the Node-only entry's files list
+    // and this exclusion move together, and the contract pin in
+    // tests/config-validator fails the suite until both are updated.
     ignores: ['playwright.config.js', '../../playwright.config.js'],
     languageOptions: {
       ecmaVersion: 'latest',

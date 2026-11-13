@@ -9,7 +9,11 @@ specs the suite actually runs. Before this run existed, that set was a CI job
 (`e2e:playwright`) whose rule requires a merge train this GitLab instance
 never creates, so the set was a claim in a YAML file that nobody executed —
 and half the suite (`epic1/`, `epic2/`, `epic3/`, `okf/`, the root-level
-specs) was outside it, visibly red, and invisible to the repository.
+specs) was outside it, visibly red, and invisible to the repository. The
+phase directories and the loose root specs have since been rehomed on
+the feature axis — `okf/` was already one and is unchanged, and
+`theme-runtime-config.spec.js` alone stays pinned at the tree root
+([suite-map.md](suite-map.md)).
 
 ## The command
 
@@ -154,11 +158,11 @@ A runner whose Chromium cannot load its shared libraries needs them on
 
 ## The executed set
 
-**The whole tree.** Every spec under `tests/e2e/` runs — `chatbot/`,
-`documents/`, `admin/`, `helpers/`, `epic1/`, `epic2/`, `epic3/`, `okf/` and
-the root-level specs (`chat-composer`, `chat-conversation`,
-`living-intelligence`, `resizable-sidebars`, `responsive-layout`,
-`theme-runtime-config`, `welcome-banner`).
+**The whole tree.** Every spec under `tests/e2e/` runs — the feature
+directories `auth/`, `chatbot/`, `documents/`, `admin/`, `okf/`, `theme/`,
+the `helpers/` and `run/` unit specs, and the pinned root-level
+`theme-runtime-config.spec.js`. What each directory holds, and which
+acceptance phase each spec serves: [`suite-map.md`](suite-map.md).
 
 The set is **pinned** by `tests/config-validator/` (the guard *the local e2e
 run defines the executed set*): the invocation is derived from the run script
@@ -179,8 +183,8 @@ never passes quietly. The reason is read from the venue itself, not guessed:
 | Specs | Surface they need | The venue's own answer |
 |---|---|---|
 | `tests/e2e/okf/` (5 specs) | the OKF Studio, the artifacts view, the RAGAS panel | `okfEnabled` in the deployment's `/runtime/config.js` — the same knob the frontend reads (`okfEnabled="0"` = pillar parked, rendered as the reason prints it) |
-| `tests/e2e/epic1/d7a-*.spec.js`, `d7b-*.spec.js` | a brokered external identity provider | the identity providers of the realm (none = Phase D steps 1–5 were not run here) |
-| `tests/e2e/epic2/i1-multi-realm.spec.js` | a second realm | the realm inventory (no `genie2` = Phase 0 step 0.6 was not run here) |
+| `tests/e2e/auth/d7a-*.spec.js`, `d7b-*.spec.js` | a brokered external identity provider | the identity providers of the realm (none = Phase D steps 1–5 were not run here) |
+| `tests/e2e/auth/i1-multi-realm.spec.js` | a second realm | the realm inventory (no `genie2` = Phase 0 step 0.6 was not run here) |
 
 A probe that cannot read the venue **fails loudly**: an unreadable venue is
 not an absent surface, and a skip built on a failed probe is the silent
@@ -261,9 +265,9 @@ Two caveats the operator should know before booking a slot:
   before the run and puts it back afterwards:
 
   ```bash
-  mv tests/e2e/epic2/k1-auth-error-display.spec.js /tmp/
+  mv tests/e2e/auth/k1-auth-error-display.spec.js /tmp/
   # ... the run ...
-  mv /tmp/k1-auth-error-display.spec.js tests/e2e/epic2/
+  mv /tmp/k1-auth-error-display.spec.js tests/e2e/auth/
   ```
 
   The exclusion lasts until the spec stops mutating the realm's global
@@ -274,12 +278,15 @@ Two caveats the operator should know before booking a slot:
 ## Known-red specs
 
 The run of 2026-11-10 (forge venue, chart 0.2.171, `genieai-forge.local:4443`):
-**242 tests — 212 passed, 13 failed, 17 skipped.**
+**242 tests — 212 passed, 13 failed, 17 skipped.** Spec paths below are
+shown at their current (post-#1741 reorganization) home; the run itself
+recorded the pre-reorganization paths (`epic1/…`, `epic3/…`, root-level,
+and `chatbot/…` for the specs that did not move).
 
 | Spec | Failures | Why it is red | Fix |
 |---|---|---|---|
-| `epic1/a1`, `a2`, `a3`, `epic3/l1`, `l2`, `l3` | 8 | the specs navigate to a literal `https://localhost/`, which answers nothing on a k8s venue | #1737 (MR !841) |
-| `chatbot/error-handling`, `chatbot/send-message-and-stream`, `chat-conversation` | 5 | `waitForBotResponse` polls a Vuex path the CSR refactor deleted — the same drift, seen as a disposed route context and a click timeout | #1738, #1758 (MR !841) |
+| `auth/a1`, `a2`, `a3`, `auth/l1`, `l2`, `l3` | 8 | the specs navigate to a literal `https://localhost/`, which answers nothing on a k8s venue | #1737 (MR !841) |
+| `chatbot/error-handling`, `chatbot/send-message-and-stream`, `chatbot/chat-conversation` | 5 | `waitForBotResponse` polls a Vuex path the CSR refactor deleted — the same drift, seen as a disposed route context and a click timeout | #1738, #1758 (MR !841) |
 
 An earlier run of the same day showed five more failures (`welcome-banner`, `resizable-sidebars`) that were **not** a spec defect: the `forge-k3s` node rebooted mid-run and the edge refused connections. On the settled stack they pass.
 

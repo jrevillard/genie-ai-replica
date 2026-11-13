@@ -13,11 +13,11 @@ const E2E_ROOT = path.join(ROOT, 'tests/e2e');
 // class locator in it, named or not, is an offender. Coverage cannot
 // lag by forgetting a name OR a file.
 const CONVERTED_FILES = [
-  'tests/e2e/chat-composer.spec.js',
-  'tests/e2e/chat-conversation.spec.js',
-  'tests/e2e/resizable-sidebars.spec.js',
-  'tests/e2e/responsive-layout.spec.js',
-  'tests/e2e/welcome-banner.spec.js',
+  'tests/e2e/chatbot/chat-composer.spec.js',
+  'tests/e2e/chatbot/chat-conversation.spec.js',
+  'tests/e2e/theme/resizable-sidebars.spec.js',
+  'tests/e2e/theme/responsive-layout.spec.js',
+  'tests/e2e/theme/welcome-banner.spec.js',
   'tests/e2e/documents/search.spec.js',
   'tests/e2e/admin/authz.spec.js',
   'tests/e2e/chatbot/error-handling.spec.js',

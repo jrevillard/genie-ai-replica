@@ -19,7 +19,7 @@ Validates logout flow, session termination, and session invalidation when a user
 
 **Browser test** (automated via Playwright):
 ```bash
-npx playwright test tests/e2e/epic3/l1-frontend-logout-redirect.spec.js
+npx playwright test tests/e2e/auth/l1-frontend-logout-redirect.spec.js
 ```
 **Expected**: URL redirects to Keycloak login page (`/auth/realms/genie/...`) after logout
 
@@ -27,7 +27,7 @@ npx playwright test tests/e2e/epic3/l1-frontend-logout-redirect.spec.js
 
 **Browser test** (automated via Playwright):
 ```bash
-npx playwright test tests/e2e/epic3/l2-localstorage-cleanup.spec.js
+npx playwright test tests/e2e/auth/l2-localstorage-cleanup.spec.js
 ```
 **Expected**: `localStorage.getItem('user') === null` && `localStorage.getItem('auth_token') === null`
 
@@ -35,7 +35,7 @@ npx playwright test tests/e2e/epic3/l2-localstorage-cleanup.spec.js
 
 **Browser test** (automated via Playwright):
 ```bash
-npx playwright test tests/e2e/epic3/l3-vuex-state-cleared.spec.js
+npx playwright test tests/e2e/auth/l3-vuex-state-cleared.spec.js
 ```
 **Expected**: After logout, user is redirected to Keycloak login (proves `isAuthenticated === false`)
 

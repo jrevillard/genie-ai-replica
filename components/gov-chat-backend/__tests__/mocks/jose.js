@@ -24,8 +24,9 @@
  * segment with whitespace, with one trailing `=`, or with non-canonical
  * trailing bits, and this mock refuses them. That direction is the safe
  * one — the mocked trial path fails closed more often. The opposite is
- * not: the mock never accepts a segment production refuses (fuzz-checked
- * against the shared lib's jose build).
+ * not: the mock never accepts a segment production refuses (checked
+ * against the shared lib's jose build; the check was a one-off review
+ * probe, not a committed test).
  */
 const decodeProtectedHeader = (token) => {
   const parts = typeof token === 'string' ? token.split('.') : [];

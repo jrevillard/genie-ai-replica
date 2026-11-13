@@ -1,7 +1,7 @@
 const path = require('path');
 const fs = require('fs');
 const os = require('os');
-const { execSync } = require('child_process');
+const { execFileSync, execSync } = require('child_process');
 const { parseEnvTemplate, getRequiredSecrets } = require('../validators/parse-env');
 const { findUnwiredDocumented, findDuplicatedDocumented } = require('../validators/unwired-documented');
 const { parseAnsibleEnvVars } = require('../validators/parse-ansible');
@@ -4346,6 +4346,16 @@ describe('the root Playwright config has a lint home (#1716)', () => {
     expect(lintChanges).toContain('package.json');
   });
 
+  test('the job still triggers on the suite tree and its shared rules', () => {
+    // The gate's two pre-existing triggers are part of the same contract:
+    // dropping the suite glob stops coverage of every spec and of the
+    // gate's own config; dropping the shared-rules entry stops coverage
+    // of the file the gate's rules come from. Same defect shape as the
+    // root-config trigger above.
+    expect(lintChanges).toContain('tests/e2e/**/*');
+    expect(lintChanges).toContain('components/shared/eslint-rules-base.js');
+  });
+
   test('an edit to the pinned files runs the pins (config:validate)', () => {
     // The pin suite lives in the config-validator, whose CI job does not
     // trigger on the pinned files by default: an MR that silences the
@@ -4397,16 +4407,18 @@ describe('the root Playwright config has a lint home (#1716)', () => {
     // config are pinned to exactly four: the two spellings in each of the
     // two entries.
     // Comments are stripped before compaction (the exclusion's
-    // measured-mechanism comment sits between the two pinned lines), both
-    // syntaxes: block comments first — a `/* */` mentioning a pinned
-    // literal must not skew a count — then full-line `//` (the file
-    // carries no inline `//` outside comments).
+    // measured-mechanism comment sits between the two pinned lines), all
+    // three placements: block comments first — a `/* */` mentioning a
+    // pinned literal must not skew a count — then full-line `//` lines,
+    // then trailing `//` tails (a trailing comment mentioning a pinned
+    // literal must not skew a count either; the file carries no `//`
+    // inside a string literal today).
     const source = fs
       .readFileSync(path.join(ROOT, 'tests/e2e/eslint.config.js'), 'utf-8')
       .replace(/(^|\n)\s*\/\*[\s\S]*?\*\//g, '$1')
       .split('\n')
-      .filter((line) => !line.trim().startsWith('//'))
-      .join('')
+      .map((line) => line.replace(/\/\/.*$/, ''))
+      .join('\n')
       .replace(/\s+/g, '');
     const scopedExclusion = "files:['**/*.js'],ignores:['playwright.config.js','../../playwright.config.js'],";
     expect(source).toContain(scopedExclusion);
@@ -4466,6 +4478,40 @@ describe('the root Playwright config has a lint home (#1716)', () => {
     // typoed copy of the command would drift from it with nothing
     // forcing the two back together.
     expect(scripts['lint:playwright-config:fix']).toBe('npm run lint:playwright-config -- --fix');
+    // The gate leads both local aggregate chains (fast feedback on the
+    // file this issue is about): dropping the prefix from either chain
+    // kills the local half of the gate with no other pin the wiser.
+    expect(scripts.lint.startsWith('npm run lint:playwright-config && ')).toBe(true);
+    expect(scripts['lint:fix'].startsWith('npm run lint:playwright-config:fix && ')).toBe(true);
+  });
+
+  test('the gate actually fires on an undeclared global (behavioral control)', () => {
+    // The string pins assert configuration; this probe asserts the
+    // OUTCOME with the real binary: a copy of the root config carrying an
+    // undeclared browser global must exit 1 with no-undef. It dies if
+    // js.configs.recommended is removed or stubbed, if no-undef is
+    // turned off anywhere, or if the Node-only entry's globals are
+    // re-scoped (by aliased spread or by hand-spelled keys) — the whole
+    // evasion class the string pins enumerate one shape at a time.
+    // cwd = the probe dir: ESLint anchors entries to the invocation's
+    // cwd, so a file named playwright.config.js there takes the
+    // Node-only entry — the exact runtime shape of the root config.
+    const probe = fs.mkdtempSync(path.join(os.tmpdir(), 'gate-probe-'));
+    const rootConfig = fs.readFileSync(path.join(ROOT, 'playwright.config.js'), 'utf-8');
+    fs.writeFileSync(path.join(probe, 'playwright.config.js'), rootConfig + '\nconst probeGlobal = window.location;\n');
+    let failure;
+    try {
+      execFileSync(
+        path.join(ROOT, 'tests/e2e/node_modules/.bin/eslint'),
+        ['--max-warnings', '0', '--config', path.join(ROOT, 'tests/e2e/eslint.config.js'), 'playwright.config.js'],
+        { cwd: probe, encoding: 'utf-8' }
+      );
+    } catch (e) {
+      failure = e;
+    }
+    expect(failure).toBeDefined();
+    expect(failure.status).toBe(1);
+    expect(`${failure.stdout}${failure.stderr}`).toContain('no-undef');
   });
 
   test('the commit-time hook covers the root config (#1716 review)', () => {

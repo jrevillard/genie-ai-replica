@@ -1,0 +1,3 @@
+/* eslint-env browser */
+function f() { return document.title; }
+f();

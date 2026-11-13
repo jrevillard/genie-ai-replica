@@ -4154,6 +4154,11 @@ config:validate:
     # "git: not found" instead of validating.
     - apk add --no-cache bash git
     - cd tests/config-validator && npm ci
+    # The #1716 behavioral probe runs the REAL gate binary (tests/e2e's
+    # pinned eslint) against a fixture: without this install the probe
+    # fails with ENOENT in the job but passes on a dev checkout that has
+    # the deps.
+    - cd ${CI_PROJECT_DIR}/tests/e2e && npm ci
     - cd ${CI_PROJECT_DIR}/api-gateway-solution/new-config && npm ci
     - cd ${CI_PROJECT_DIR}/components/gov-chat-frontend && npm ci
   script:

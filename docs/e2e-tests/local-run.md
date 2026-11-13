@@ -281,8 +281,8 @@ The run of 2026-11-10 (forge venue, chart 0.2.171, `genieai-forge.local:4443`):
 
 | Spec | Failures | Why it is red | Fix |
 |---|---|---|---|
-| `epic1/a1`, `a2`, `a3`, `epic3/l1`, `l2`, `l3` | 8 | the specs navigate to a literal `https://localhost/`, which answers nothing on a k8s venue | #1737 (MR !841) |
-| `chatbot/error-handling`, `chatbot/send-message-and-stream`, `chat-conversation` | 5 | `waitForBotResponse` polls a Vuex path the CSR refactor deleted — the same drift, seen as a disposed route context and a click timeout | #1738, #1758 (MR !841) |
+| `auth/a1`, `a2`, `a3`, `auth/l1`, `l2`, `l3` (recorded as `epic1/…`, `epic3/…` before the #1741 reorganization) | 8 | the specs navigate to a literal `https://localhost/`, which answers nothing on a k8s venue | #1737 (MR !841) |
+| `chatbot/error-handling`, `chatbot/send-message-and-stream`, `chatbot/chat-conversation` | 5 | `waitForBotResponse` polls a Vuex path the CSR refactor deleted — the same drift, seen as a disposed route context and a click timeout | #1738, #1758 (MR !841) |
 
 An earlier run of the same day showed five more failures (`welcome-banner`, `resizable-sidebars`) that were **not** a spec defect: the `forge-k3s` node rebooted mid-run and the edge refused connections. On the settled stack they pass.
 

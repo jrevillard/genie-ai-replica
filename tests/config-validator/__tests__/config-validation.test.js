@@ -4373,9 +4373,10 @@ describe('the root Playwright config has a lint home (#1716)', () => {
     // on hook-only MRs — the same decay shape as dropping a file entry.
     expect(validateChanges).toContain('.husky/pre-commit');
     // The pre-existing suite glob is load-bearing for the pins too: the
-    // eslint-config source read, the suppression pin and the sibling-gate
-    // pin all read files under tests/e2e/ — dropping the glob stops the
-    // pins from instantiating on exactly those edits.
+    // eslint-config source read, the behavioral probe (it runs the
+    // tests/e2e binary and config) and the sibling-gate pin all read or
+    // execute under tests/e2e/ — dropping the glob stops the pins from
+    // instantiating on exactly those edits.
     expect(validateChanges).toContain('tests/e2e/**/*');
   });
 

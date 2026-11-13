@@ -16,9 +16,17 @@ jest.mock('@/services/httpService', () => ({
 }));
 
 // Mock keycloakAuthService — file-level import triggers module load
+const mockSigninSilent = jest.fn();
+const mockAuthGetUser = jest.fn();
+const mockAuthLogin = jest.fn();
 jest.mock('@/services/keycloakAuthService', () => ({
   __esModule: true,
-  default: { getAccessToken: jest.fn().mockReturnValue('mock-token') }
+  default: {
+    getAccessToken: jest.fn().mockReturnValue('mock-token'),
+    signinSilent: (...args) => mockSigninSilent(...args),
+    getUser: (...args) => mockAuthGetUser(...args),
+    login: (...args) => mockAuthLogin(...args)
+  }
 }));
 
 const chatbotService = require('@/services/chatbotService').default;
@@ -310,6 +318,128 @@ describe('chatbotService', () => {
         delete window.APP_CONFIG.streamIdleTimeoutMs;
         jest.useRealTimers();
       }
+    });
+
+    // #1820 — dead SSO session on the stream path: ONE silent-refresh round
+    // trip, then the httpService escalation contract (login only when the
+    // stored user is gone/expired). Never a loop.
+    describe('#1820 dead-session recovery', () => {
+      const okResponse = () => {
+        const reader = {
+          read: jest
+            .fn()
+            .mockResolvedValueOnce({
+              done: false,
+              value: new TextEncoder().encode('data: {"type":"done","queryId":"q-9"}\n\n')
+            })
+            .mockResolvedValueOnce({ done: true })
+        };
+        return { ok: true, body: { getReader: () => reader } };
+      };
+      const unauthorized = () => ({
+        ok: false,
+        status: 401,
+        json: async () => ({ message: 'Unauthorized' })
+      });
+      const flush = async () => {
+        for (let i = 0; i < 30; i++) await Promise.resolve();
+      };
+
+      afterEach(() => {
+        mockSigninSilent.mockReset();
+        mockAuthGetUser.mockReset();
+        mockAuthLogin.mockReset();
+      });
+
+      it('refreshes once on a 401 and retries the stream with the new token', async () => {
+        const mockFetch = jest.fn().mockResolvedValueOnce(unauthorized()).mockResolvedValueOnce(okResponse());
+        global.fetch = mockFetch;
+        mockSigninSilent.mockResolvedValue({ access_token: 'fresh-token' });
+
+        const onDone = jest.fn();
+        const onError = jest.fn();
+        chatbotService.submitQueryStream({ query: 'test' }, { onDone, onError });
+        await flush();
+
+        expect(mockSigninSilent).toHaveBeenCalledTimes(1);
+        expect(mockAuthLogin).not.toHaveBeenCalled();
+        expect(mockFetch).toHaveBeenCalledTimes(2);
+        expect(mockFetch.mock.calls[1][1].headers.Authorization).toBe('Bearer fresh-token');
+        expect(onDone).toHaveBeenCalledTimes(1);
+        expect(onError).not.toHaveBeenCalled();
+      });
+
+      it('escalates to login when the refresh fails and the stored user is expired', async () => {
+        const mockFetch = jest.fn().mockResolvedValue(unauthorized());
+        global.fetch = mockFetch;
+        mockSigninSilent.mockRejectedValue(new Error('session dead'));
+        mockAuthGetUser.mockResolvedValue({ expired: true });
+
+        const onDone = jest.fn();
+        const onError = jest.fn();
+        chatbotService.submitQueryStream({ query: 'test' }, { onDone, onError });
+        await flush();
+
+        expect(mockSigninSilent).toHaveBeenCalledTimes(1);
+        expect(mockAuthLogin).toHaveBeenCalledTimes(1);
+        // The refusal still reaches the caller — the redirect IS the feedback.
+        expect(onError).toHaveBeenCalledTimes(1);
+        expect(onError.mock.calls[0][0].status).toBe(401);
+        // ONE attempt at most — no loop against a dead session.
+        expect(mockFetch).toHaveBeenCalledTimes(1);
+      });
+
+      it('does not loop when a refresh "succeeds" with a token that is already dead', async () => {
+        // Keycloak clamps a token minted inside the session's final seconds
+        // to the session end: the refresh grant SUCCEEDS, the retry 401s
+        // anyway — and the retried call must escalate, not refresh again.
+        const mockFetch = jest.fn().mockResolvedValue(unauthorized());
+        global.fetch = mockFetch;
+        mockSigninSilent.mockResolvedValue({ access_token: 'clamped-token' });
+        mockAuthGetUser.mockResolvedValue({ expired: true });
+
+        const onError = jest.fn();
+        chatbotService.submitQueryStream({ query: 'test' }, { onError });
+        await flush();
+
+        expect(mockFetch).toHaveBeenCalledTimes(2);
+        expect(mockFetch.mock.calls[1][1].headers.Authorization).toBe('Bearer clamped-token');
+        expect(mockSigninSilent).toHaveBeenCalledTimes(1);
+        expect(mockAuthLogin).toHaveBeenCalledTimes(1);
+        expect(onError).toHaveBeenCalledTimes(1);
+      });
+
+      it('does not escalate a good session: a live user is left alone', async () => {
+        const mockFetch = jest.fn().mockResolvedValue(unauthorized());
+        global.fetch = mockFetch;
+        mockSigninSilent.mockRejectedValue(new Error('transient'));
+        mockAuthGetUser.mockResolvedValue({ expired: false });
+
+        const onError = jest.fn();
+        chatbotService.submitQueryStream({ query: 'test' }, { onError });
+        await flush();
+
+        expect(mockAuthLogin).not.toHaveBeenCalled();
+        expect(onError).toHaveBeenCalledTimes(1);
+      });
+
+      it('a non-401 refusal never touches the recovery path', async () => {
+        const mockFetch = jest.fn().mockResolvedValue({
+          ok: false,
+          status: 500,
+          json: async () => ({ message: 'boom' })
+        });
+        global.fetch = mockFetch;
+
+        const onError = jest.fn();
+        chatbotService.submitQueryStream({ query: 'test' }, { onError });
+        await flush();
+
+        expect(mockSigninSilent).not.toHaveBeenCalled();
+        expect(mockAuthLogin).not.toHaveBeenCalled();
+        expect(onError).toHaveBeenCalledTimes(1);
+        expect(onError.mock.calls[0][0].status).toBe(500);
+      });
     });
 
     it('calls onChunk callback when receiving chunk data', async () => {

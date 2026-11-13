@@ -15,7 +15,7 @@ STAGED=$(git diff --cached --name-only --diff-filter=ACMR)
 has_backend=$(echo "$STAGED" | grep -q "components/gov-chat-backend/" && echo true || echo false)
 has_frontend=$(echo "$STAGED" | grep -q "components/gov-chat-frontend/" && echo true || echo false)
 has_docrepo=$(echo "$STAGED" | grep -q "components/document-repository/" && echo true || echo false)
-has_e2e=$(echo "$STAGED" | grep -qE "(^|/)(tests/e2e/|playwright\.config\.js)" && echo true || echo false)
+has_e2e=$(echo "$STAGED" | grep -qE "^(tests/e2e/|playwright\.config\.js$)" && echo true || echo false)
 has_python=$(echo "$STAGED" | grep -q "\.py$" && echo true || echo false)
 has_dart=$(echo "$STAGED" | grep -q "\.dart$" && echo true || echo false)
 

@@ -4496,9 +4496,11 @@ describe('the root Playwright config has a lint home (#1716)', () => {
     expect(scripts['lint:playwright-config:fix']).toBe('npm run lint:playwright-config -- --fix');
     // The gate leads both local aggregate chains (fast feedback on the
     // file this issue is about): dropping the prefix from either chain
-    // kills the local half of the gate with no other pin the wiser.
-    expect(scripts.lint.startsWith('npm run lint:playwright-config && ')).toBe(true);
-    expect(scripts['lint:fix'].startsWith('npm run lint:playwright-config:fix && ')).toBe(true);
+    // kills the local half of the gate with no other pin the wiser. The
+    // regex form renders the actual script on failure — a boolean assert
+    // would only say "false !== true".
+    expect(scripts.lint).toMatch(/^npm run lint:playwright-config && /);
+    expect(scripts['lint:fix']).toMatch(/^npm run lint:playwright-config:fix && /);
   });
 
   // The probe's mkdtemp dirs, removed after the suite (same convention
@@ -4534,7 +4536,7 @@ describe('the root Playwright config has a lint home (#1716)', () => {
         // Bounded below the jest timeout: the call is synchronous, so
         // jest's own timer cannot run while a hung child blocks the
         // worker — without this a wedged eslint would wedge the job.
-        { cwd: probe, encoding: 'utf-8', timeout: 12000 }
+        { cwd: probe, encoding: 'utf-8', timeout: 14000 }
       );
     } catch (e) {
       failure = e;
@@ -4546,6 +4548,12 @@ describe('the root Playwright config has a lint home (#1716)', () => {
     // before_script), so only dev checkouts can take this branch.
     if (failure.code === 'ENOENT') {
       throw new Error('tests/e2e deps missing on this checkout — fix: cd tests/e2e && npm ci');
+    }
+    // A child killed at the inner 12s bound is runner latency, not a gate
+    // regression — name it, or the assertion would render "expected null
+    // to be 1" and invite a misdiagnosis.
+    if (failure.signal === 'SIGTERM') {
+      throw new Error('eslint exceeded the probe timeout (14s) — runner latency, not a gate regression');
     }
     expect(failure.status).toBe(1);
     expect(`${failure.stdout}${failure.stderr}`).toContain('no-undef');

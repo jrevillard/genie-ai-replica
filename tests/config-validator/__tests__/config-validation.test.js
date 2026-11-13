@@ -3601,7 +3601,7 @@ describe('the venue-fixture provisioning in .e2e_web_base', () => {
     // No venue-fixture password literal may reappear beside or after the
     // fixtures module: every helper and spec directory under tests/e2e/
     // must derive its credentials from it. Explicit exclusions only:
-    // The auth suite's k1/i1 specs (the epic2 pair) mint tokens for their own ephemeral
+    // The auth suite's k1/i1 specs mint tokens for their own ephemeral
     // self-created users (noroles-e2e, genie2's testuser2) and
     // legitimately carry their own password literals; fixtures/ holds
     // the upload seed files. A NEW spec directory is scanned
@@ -3618,8 +3618,8 @@ describe('the venue-fixture provisioning in .e2e_web_base', () => {
     const exclusions = new Set([
       // These two specs legitimately carry their own password literals
       // (genie2's testuser2, k1's noroles-e2e); the rest of the suite
-      // stays scanned. The rehomed epic2 pair — see the block comment
-      // above.
+      // stays scanned. They are the epic2 specs i1/k1, rehomed under
+      // auth/ by the #1741 suite map.
       path.join(e2eRoot, 'auth', 'i1-multi-realm.spec.js'),
       path.join(e2eRoot, 'auth', 'k1-auth-error-display.spec.js'),
       path.join(e2eRoot, 'fixtures'), // upload seed files

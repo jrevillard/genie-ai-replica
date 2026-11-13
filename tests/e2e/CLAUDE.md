@@ -84,9 +84,8 @@ ONE organizational axis: every spec lives in the directory of the feature
 area it drives. The placement rule, the phase traceability and the
 per-spec detail — area, acceptance phase/story, deployment profile,
 helpers — are owned by ONE place: the suite map,
-[`docs/e2e-tests/suite-map.md`](../../docs/e2e-tests/suite-map.md). A new
-spec goes under its area's directory; if its area is unclear, the map's
-follow-up rule applies.
+[`docs/e2e-tests/suite-map.md`](../../docs/e2e-tests/suite-map.md). Where
+a new spec goes: the map's one-spec-one-place-one-axis rule.
 
 | Path | Contents |
 |------|----------|

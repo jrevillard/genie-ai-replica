@@ -22,14 +22,15 @@ Phase traceability survives the reorganization in two places:
   phase and its source document.
 
 The rule for new work: **one spec, one place, one axis**. A new spec goes
-under its area's directory. A spec whose area is unclear becomes a follow-up
-issue (see *Root — pinned exception*), never a root-level file and never a
-revival of a phase directory. Feature specs serve no acceptance phase;
-their Phase/story entry is `—`.
+under its area's directory. A spec whose area is unclear becomes a
+follow-up issue with `status::backlog` — the worked precedent is
+*Root — pinned exception*, the procedure is in *Keeping the map true* —
+never a root-level file and never a revival of a phase directory. Feature
+specs serve no acceptance phase; their Phase/story entry is `—`.
 
-Decision record: the functional axis, chosen in #1741 over keep-phase and
-split-hybrid — the phase directories were one area (auth) wearing three
-phase names, and the hybrid keeps both axes in the tree, the thing being
+Decision record: #1741 chose the functional axis over keep-phase and
+split-hybrid. The phase directories were one area (auth) wearing three
+phase names, and the hybrid keeps both axes in the tree — the thing being
 fixed.
 
 ## `auth/` — login, session lifecycle, tokens and realms
@@ -147,11 +148,17 @@ without a venue surface.
 The map is documentation of a layout whose mechanical consequences the pins
 already enforce:
 
-- the **executed set** and **anchor coverage** contracts live in
+- the **executed set** contract lives in
   [`local-run.md`](local-run.md) § *The executed set* — the validator
-  derives them from the run script and the CI invocation, never from this
+  derives it from the run script and the CI invocation, never from this
   map (a spec file added under one of the CI's executed globs adds one line
   to the validator's exact list);
+- **anchor coverage** holds for the directories the train invocation
+  covers (`chatbot/`, `documents/`, `admin/`, `helpers/`, plus the pinned
+  root spec by name) — a spec executed by the train stays
+  train-triggerable without an anchor edit; `okf/` is deliberately not
+  anchor-covered, and the merge-train changes guard in
+  `tests/config-validator/` pins all of this;
 - the **handle-locator gate** and the **fixture-password scan** carry the
   per-file lists they need and were updated by the same MR that moved the
   files (#1741).

@@ -121,7 +121,7 @@ const audit = () => {
     const overlay = document.querySelector('[data-testid="quick-help-overlay"]');
     const overlayBefore = overlay ? getComputedStyle(overlay, '::before') : null;
     const overlayAfter = overlay ? getComputedStyle(overlay, '::after') : null;
-    const sidebar = document.querySelector('[data-testid="sidebar"][data-collapsed="false"]');
+    const sidebar = document.querySelector('[data-testid="sidebar-right"][data-collapsed="false"]');
     const sidebarBefore = sidebar ? getComputedStyle(sidebar, '::before') : null;
     const heading = document.querySelector('[data-testid="quick-help-heading"]');
     const subtitle = document.querySelector('[data-testid="quick-help-subtitle"]');
@@ -305,8 +305,8 @@ const audit = () => {
           // "Collapse" / "Réduire" in the user's locale — no "sidebar"
           // word — so any aria-label pattern that demands the word
           // never matches. Use the declared handles instead.
-          const left = await page.$('[data-testid="side-bar"] [data-testid="sidebar-handle-button-left"]');
-          const right = await page.$('[data-testid="sidebar"] [data-testid="sidebar-handle-button-right"]');
+          const left = await page.$('[data-testid="sidebar-left"] [data-testid="sidebar-handle-button-left"]');
+          const right = await page.$('[data-testid="sidebar-right"] [data-testid="sidebar-handle-button-right"]');
           const wantBoth = sidebar.collapsed === 'both';
           if (wantBoth && (!left || !right)) {
             throw new Error(

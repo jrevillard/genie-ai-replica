@@ -1,7 +1,7 @@
 <template>
   <div
     class="sidebar"
-    data-testid="sidebar"
+    data-testid="sidebar-right"
     :data-collapsed="sidebarCollapsed ? 'true' : 'false'"
     :class="{ collapsed: sidebarCollapsed }"
     :style="{ '--sidebar-width': `${width}px` }"

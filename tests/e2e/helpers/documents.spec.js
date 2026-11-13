@@ -40,7 +40,7 @@ test.describe('the document status predicate', () => {
     expect(matchesStatus(file('Ingested'), '')).toBe(false);
   });
 
-  test('the require(esm) floor is named at load, not a bare SyntaxError', () => {
+  test('the require-of-ESM floor is named at load, not a bare SyntaxError', () => {
     // No behaviour test can see the guard: on a capable runner the
     // require simply works, and on an incapable one the failure happens
     // before any spec loads. Pin the guard's presence — without it the

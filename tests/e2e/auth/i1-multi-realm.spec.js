@@ -32,11 +32,6 @@ test.describe.serial('Phase I: Multi-Realm Configuration', () => {
   // The venue profile decides: a deployment that exposes no second realm
   // cannot answer a multi-realm request, so the test below SKIPS WITH A
   // REASON instead of failing on a realm that was never provisioned
-  // (#1742). The reason is the venue's own profile, read from the realm
-  // inventory — not a guess, and never a silent skip.
-  // The venue profile decides: a deployment that exposes no second realm
-  // cannot answer a multi-realm request, so the test below SKIPS WITH A
-  // REASON instead of failing on a realm that was never provisioned
   // (#1742). The wiring is the shared registrar's (#1773), stated once —
   // the reason is the venue's own profile, read from the realm inventory.
   test.beforeEach(

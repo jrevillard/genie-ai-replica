@@ -222,6 +222,10 @@ A spec that needs a surface the venue does not expose **skips with a
 reason** — see `helpers/venue-profile.js`. The reason is read from the
 venue, and a probe that cannot read the venue fails loudly: an unreadable
 venue is not an absent surface.
+Spec and helper prose is scanned code text to the config-validator gates: a
+test title or comment containing `require(`, `process.env` or a local origin
+trips a scanner — spell it without the paren (`require-of-ESM`) or in the
+gate's own allowance list.
 
 The `e2e:playwright` job still sits in `.gitlab-ci.yml` and its rule still
 requires a merge train. The file is frozen and the job does not start — it

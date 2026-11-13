@@ -9,7 +9,7 @@ const { expect } = require('@playwright/test');
 // #1781).
 if (!process.features.require_module) {
   throw new Error(
-    `tests/e2e/helpers/documents.js needs Node >= 22.12 (the shared document-status vocabulary is an ES module, consumed through CommonJS require-of-ESM); this runner is Node ${process.versions.node}`
+    `tests/e2e/helpers/documents.js needs a Node with unflagged CommonJS require of ES modules (>= 22.12, or >= 20.19 on the 20 line — the shared document-status vocabulary is an ES module); this runner is Node ${process.versions.node}`
   );
 }
 const { normalizeStatus } = require('../../../components/gov-chat-frontend/src/utils/documentStatus');

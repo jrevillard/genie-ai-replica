@@ -73,8 +73,9 @@ const CLASS_ATTR_SELECTOR = /\[class[*~^$]?=\s*(['"])([a-zA-Z][a-zA-Z0-9_-]*)\1/
 // locator-style calls — the ONE net both scanners read. The argument
 // scan is anchored on the call opening before the quote, so a `.js`
 // extension or a `.padEnd(4)` inside an unrelated template string is
-// not a locator and does not trip the gate. Compiled once; each file's
-// stripped source runs through it a single time.
+// not a locator and does not trip the gate. Compiled once at module
+// scope instead of once per scanned file (the file's source still runs
+// through the net twice per scan pair — once per scanner).
 const SELECTOR_STRING_CALL = new RegExp(LOCATOR_CALL.source + /(['"`])(?:\\.|(?!\1)[^\\])*\1/.source, 'g');
 const selectorStringsIn = function* (source) {
   for (const call of source.matchAll(SELECTOR_STRING_CALL)) {

@@ -351,6 +351,12 @@ describe('the e2e suite locates application elements by declared handle', () => 
   });
 
   test('a class-coupling attribute selector is an offender', () => {
+    // The sample carries BOTH quote spellings (the selector delimiter and
+    // the attribute value's), so neither JS quoting avoids escaping — and
+    // an escaped spelling would put a backslash into the source the
+    // scanner reads, changing what it sees. The template literal keeps
+    // the scanner's input literal.
+    // eslint-disable-next-line quotes
     const sample = `page.locator('[class*="chat-message"]')`;
     expect(classSelectorsIn(sample).map((o) => o.className)).toEqual(['chat-message']);
   });

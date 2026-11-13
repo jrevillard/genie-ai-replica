@@ -32,8 +32,7 @@
  *   swallowed like the named race; the spec fails on its other awaits
  *   either way. The error-half's crash discrimination therefore holds
  *   only in the narrow window before close-event delivery — a state
- *   real Playwright does not reliably produce, which route.spec.js
- *   models with a double whose flags stay false, not a protection the
+ *   real Playwright does not reliably produce, not a protection the
  *   guard buys on a dead browser. What the conjunction is verified to
  *   buy is the other arm: a mock defect that lands while the target is
  *   closing is rethrown, not swallowed. The error is recognised by its

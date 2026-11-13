@@ -192,10 +192,8 @@ test.describe('runRouteHandler', () => {
   });
 
   test('rethrows when the browser process died — not the named race', async () => {
-    // Models the narrow window BEFORE close-event delivery with a double
-    // whose flags stay false — a state real Playwright does not reliably
-    // produce (#1627); the why this window matters lives once, in the
-    // helper's own header (route.js).
+    // The flags-false double models the pre-close-delivery window
+    // route.js's header documents (#1627).
     const { page } = pageState();
     await expect(
       runOnce(page, async () => {

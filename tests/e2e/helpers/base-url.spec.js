@@ -99,16 +99,13 @@ test.describe('the venue address must be an http(s) origin with a host', () => {
   });
 
   test('an unparseable address is refused', () => {
+    // Both spellings die in the same place: `new URL` throws.
     expect(addressErrorIn('not a venue address')).toContain(REFUSAL);
+    expect(addressErrorIn('example.com')).toContain(REFUSAL);
   });
 
   test('a non-http scheme is refused', () => {
     expect(addressErrorIn('ftp://example.com')).toContain(REFUSAL);
-  });
-
-  test('a plain host name is refused', () => {
-    // No scheme at all: `new URL` throws.
-    expect(addressErrorIn('example.com')).toContain(REFUSAL);
   });
 
   test('a path, a query, a hash and credentials are refused', () => {

@@ -94,24 +94,14 @@ const isTestFile = (file) => {
 };
 
 /**
- * The app's .js files that carry the endpoint — read over the given
- * root, so the same scan reads the real frontend tree and a throwaway
- * mutation tree. The call site sits at the same relative place in both.
- * Files whose RAW source carries neither the needle nor a block-comment
- * opener cannot gain the needle from comment stripping (stripping only
- * deletes block comments and rewrites line comments as a newline), so
- * they skip the strip — the scan cost drops without changing any
- * verdict.
+ * The app's .js files that carry the endpoint — the same scan over the
+ * real frontend tree and a throwaway mutation tree (see filesCarrying).
  */
 const appFilesCarrying = (needle, root) => {
   const pattern = endpointPattern(needle);
   return jsFiles(root)
     .filter((f) => !isTestFile(f))
-    .filter((f) => {
-      const raw = fs.readFileSync(f, 'utf8');
-      if (!raw.includes(needle) && !raw.includes('/*')) return false;
-      return pattern.test(stripJsComments(raw));
-    })
+    .filter((f) => pattern.test(stripJsComments(fs.readFileSync(f, 'utf8'))))
     .map((f) => path.relative(root, f));
 };
 

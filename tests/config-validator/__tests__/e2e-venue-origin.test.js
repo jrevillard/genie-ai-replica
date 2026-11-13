@@ -44,16 +44,16 @@ const E2E_ROOT = path.join(ROOT, 'tests/e2e');
 // while `https://localhost.example.com`, `https://localhostevil` and
 // `https://localhost_evil` do not: those are other hosts. A dot that
 // does NOT continue a host — the rooted-FQDN trailing dot
-// (`https://localhost./` is the same host), one the previous lookahead
-// `[A-Za-z0-9.-]` wrongly treated as a continuation and let through —
-// belongs to the host, so it matches. A lookahead for `/`, `:` or the
-// end of the string misses the bare case, because a string literal
-// carries a closing quote after the host. The class enumerates the
-// OPEN-ENDED set of host-continuation characters, which is why DNS
-// oddities keep landing as one more character here; the planned
-// inversion for the next touch of this predicate is a POSITIVE
-// terminator boundary enumerating the CLOSED set of what ends a host
-// in JS source (port colon, path slash, quotes, end).
+// (`https://localhost./` is the same host) — belongs to the host, so it
+// matches. A lookahead for `/`, `:` or the end of the string misses the
+// bare case, because a string literal carries a closing quote after the
+// host. The class enumerates the OPEN-ENDED set of host-continuation
+// characters, which is why DNS oddities keep landing as one more
+// character here; the planned inversion for the next touch of this
+// predicate is a POSITIVE terminator boundary enumerating the CLOSED
+// set of what ends a host in JS source: end of string, port colon,
+// path slash, query `?`, hash `#`, the three quote characters, and a
+// dot followed by any non-label character (the rooted dot).
 //
 // The private ranges are in the list because a venue is also named by
 // its ADDRESS: the shared k8s venues sit on private addresses (RFC1918

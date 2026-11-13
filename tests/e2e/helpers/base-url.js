@@ -44,13 +44,12 @@
  * venue-origin gate does not watch that spelling yet (#1840).
  */
 /**
- * The venue origin, canonical: a value that is not an http(s) origin
- * with a host is refused.
+ * The venue origin, canonical.
  *
  * @param {string} raw - the address as configured
  * @returns {string} the canonical origin (scheme, host, port)
  * @throws {Error} when the address is not an http(s) origin with a
- *   host — the message names the value and carries the rule
+ *   host — see the module header; the message names the value
  */
 function normalizeVenue(raw) {
   const value = String(raw || '').replace(/\/+$/, '');
@@ -64,7 +63,7 @@ function normalizeVenue(raw) {
     parsed &&
     (parsed.protocol === 'http:' || parsed.protocol === 'https:') &&
     parsed.hostname &&
-    (parsed.pathname === '' || parsed.pathname === '/') &&
+    parsed.pathname === '/' &&
     !parsed.search &&
     !parsed.hash &&
     !parsed.username &&

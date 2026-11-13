@@ -130,6 +130,9 @@ async function callVllm(messages, { timeoutMs = CURATION_TIMEOUT_MS } = {}) {
     headers,
     body,
     timeoutMs: chatTimeoutMs,
+    // The ladder may not hold the wire past what this call's phase budget
+    // has left (#1725).
+    budgetMs: chatTimeoutMs,
     disableThinking: viaOverride
   });
   // DEBUG (David, 2026-09-08 "prove the LLM ran"): every call logs its

@@ -420,6 +420,9 @@ async function vllmChatCompletions(systemAndUserMessages, opts = {}) {
       headers,
       body,
       timeoutMs: chatTimeoutMs,
+      // The ladder may not hold the wire past what this call's phase budget
+      // has left (#1725).
+      budgetMs: chatTimeoutMs,
       disableThinking: viaOverride
     });
   const resp = await withVllmRetry(fn, { endpoint: url });

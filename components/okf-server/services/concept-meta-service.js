@@ -988,7 +988,11 @@ async function runLlmSummary(prompt, { timeoutMs = 5000 } = {}) {
       max_tokens: 200,
       temperature: 0.0
     },
-    timeoutMs: chatTimeoutMs
+    timeoutMs: chatTimeoutMs,
+    // The ladder may not hold the wire past this best-effort summary's own
+    // budget (#1725: a 5s sync GET held ~155s of rungs) — a summary that
+    // would starve stays null, per the best-effort contract.
+    budgetMs: chatTimeoutMs
   });
   return (r.data?.choices?.[0]?.message?.content || '').trim() || null;
 }

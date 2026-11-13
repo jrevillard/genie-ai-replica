@@ -97,6 +97,15 @@ function starvedAnswer(resp) {
  * POST {url}/v1/chat/completions with the adaptive layers above.
  * `body` is MUTATED by the retries (params dropped / budget raised) so the
  * caller's error logging reflects what was actually sent last.
+ * @param {number|null} budgetMs - the caller's TOTAL remaining wall-clock
+ *   budget for the whole call (first attempt plus every rung) — the
+ *   remainingMs the budget-aware callers already track
+ *   (modelCache.resolveCallModel). null = no declared budget: the ladder
+ *   climbs to TIMEOUT_CEILING_MS as before (async callers hand thinking
+ *   models minutes). With a budget, a rung's clock never spends past the
+ *   deadline and no rung fires that the remaining clock cannot hold — the
+ *   starvation propagates honestly instead (#1725: a 5s sync summary held
+ *   ~155s of rungs the caller never granted).
  * @returns the final axios response; re-throws the last error otherwise.
  */
 async function adaptiveChatCompletion({
@@ -105,7 +114,8 @@ async function adaptiveChatCompletion({
   body,
   timeoutMs = 60000,
   disableThinking = false,
-  disableBudgetLadder = false
+  disableBudgetLadder = false,
+  budgetMs = null
 }) {
   if (disableThinking) Object.assign(body, NO_THINK_PARAMS);
   let timeout = timeoutMs;
@@ -161,9 +171,21 @@ async function adaptiveChatCompletion({
   // tens of minutes with the caller's UI hung; report the starvation
   // honestly instead so the operator picks a model that answers.
   if (disableBudgetLadder) return resp;
+  // The deadline is the call's own start plus the caller's declared budget
+  // (see the JSDoc): every rung is checked against what is LEFT, not just
+  // scaled.
+  const deadline = budgetMs == null ? null : Date.now() + Math.max(0, budgetMs);
   while (starvedAnswer(resp) && body.max_tokens && body.max_tokens < MAX_TOKENS_CEILING) {
+    let rungClock = Math.min(TIMEOUT_CEILING_MS, timeout * TIMEOUT_SCALE);
+    if (deadline != null) {
+      const remaining = deadline - Date.now();
+      // Even the CURRENT clock does not fit what the caller has left —
+      // another attempt would be a hold the caller never granted.
+      if (remaining < timeout) break;
+      rungClock = Math.min(rungClock, remaining);
+    }
     const raised = Math.min(MAX_TOKENS_CEILING, body.max_tokens * BUDGET_SCALE);
-    timeout = Math.min(TIMEOUT_CEILING_MS, timeout * TIMEOUT_SCALE);
+    timeout = rungClock;
     logger.warn('adaptive_llm.budget_starved_retry', {
       url,
       finish_reason: 'length',
@@ -171,7 +193,8 @@ async function adaptiveChatCompletion({
       content_chars: contentOf(resp).length,
       max_tokens: body.max_tokens,
       raised_to: raised,
-      timeout_ms: timeout
+      timeout_ms: timeout,
+      budget_ms: budgetMs
     });
     body.max_tokens = raised;
     resp = await post();

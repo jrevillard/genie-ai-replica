@@ -256,7 +256,10 @@ async function callVllm(messages, { timeoutMs = TIMEOUT_MS } = {}) {
       max_tokens: MAX_TOKENS,
       response_format: { type: 'json_object' }
     },
-    timeoutMs: chatTimeoutMs
+    timeoutMs: chatTimeoutMs,
+    // The ladder may not hold the wire past what this call's budget has
+    // left (#1725).
+    budgetMs: chatTimeoutMs
   });
   return (r.data?.choices?.[0]?.message?.content || '').trim();
 }

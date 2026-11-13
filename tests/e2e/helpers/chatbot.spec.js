@@ -1,7 +1,7 @@
 // Copyright (C) 2026 International Telecommunication Union (ITU)
 // SPDX-License-Identifier: Apache-2.0
 const { test, expect } = require('@playwright/test');
-const { readStreamingState, streamingFlagOf, botStreamingFlag } = require('./chatbot');
+const { readStreamingState, streamingFlagOf, botStreamingFlag, LOGIN_BUDGET_TIMEOUT_MS } = require('./chatbot');
 
 /**
  * Unit spec for the streaming-flag read — the helper's side of the store
@@ -205,5 +205,15 @@ test.describe('the page-side read keeps the flag\'s ABSENCE an absence', () => {
     expect(read.state).toBe('no-open-conversation');
     // Not a broken contract: the wait continues.
     expect(streamingFlagOf(read)).toBe(null);
+  });
+});
+
+test.describe('the login budget the login specs consume (#1798)', () => {
+  test('LOGIN_BUDGET_TIMEOUT_MS stays at the value the six login budgets were raised to', () => {
+    // The six specs that log in through the browser scope their per-test
+    // ceiling to this constant; a silent value change would surface only
+    // as a hook timeout on a loaded venue, never as a red unit test. A
+    // deliberate change lands here — the diff makes the new value visible.
+    expect(LOGIN_BUDGET_TIMEOUT_MS).toBe(300000);
   });
 });

@@ -416,6 +416,12 @@ function createJwksCache(jwksUri) {
     }
   }
 
+  // The bound URL travels with the cache: a re-init that KEEPS a registered
+  // issuer's key set (#1778) logs the URL that cache actually fetches, not
+  // the one the new discovery document names (they can differ — a changed
+  // certificates URL is a deployment change; see the init warn).
+  jwksFn.jwksUri = jwksUri;
+
   return jwksFn;
 }
 
@@ -525,6 +531,20 @@ async function init(idpUrl) {
   const registeredJwks = issuerMap.get(pinnedIssuer || doc.issuer);
   const effectiveJwks =
     registeredJwks || (jwksOverride ? createJwksCache(jwksOverride) : createJwksCache(doc.jwks_uri));
+  // The URL the EFFECTIVE cache fetches — the kept cache's bound URL when
+  // the issuer is already registered, the fresh one otherwise. Both init
+  // logs below print THIS, never the raw doc.jwks_uri: on a re-init whose
+  // discovery moved the certificates URL, the kept cache still fetches the
+  // OLD one, and a log naming the new one would send the operator chasing
+  // the wrong endpoint.
+  const effectiveJwksUri = effectiveJwks.jwksUri;
+  if (registeredJwks && effectiveJwksUri !== (jwksOverride || doc.jwks_uri)) {
+    logger.warn(
+      `[KeycloakAuth] Issuer ${pinnedIssuer || doc.issuer} is already registered: its key set stays ` +
+        `bound to ${effectiveJwksUri} while discovery now names ${jwksOverride || doc.jwks_uri} — ` +
+        'restart the process to apply the new certificates URL'
+    );
+  }
 
   if (pinnedIssuer) {
     // Strict issuer pin: the pinned issuer is the ONLY accepted issuer —
@@ -540,7 +560,7 @@ async function init(idpUrl) {
       issuerMap.set(pinnedIssuer, effectiveJwks);
       logger.info(
         `[KeycloakAuth] KEYCLOAK_EXPECTED_ISSUER pin: accepting ONLY ${pinnedIssuer}` +
-          (jwksOverride ? ` (JWKS override ${jwksOverride})` : ` (JWKS ${doc.jwks_uri})`)
+          (jwksOverride ? ` (JWKS override ${jwksOverride})` : ` (JWKS ${effectiveJwksUri})`)
       );
     }
   } else {
@@ -611,7 +631,7 @@ async function init(idpUrl) {
 
   const acceptedIssuers = Array.from(issuerMap.keys());
   logger.info(
-    `[KeycloakAuth] Initialized: discovery issuer=${doc.issuer}, accepted issuers=[${acceptedIssuers.join(', ')}], jwks=${doc.jwks_uri}`
+    `[KeycloakAuth] Initialized: discovery issuer=${doc.issuer}, accepted issuers=[${acceptedIssuers.join(', ')}], jwks=${effectiveJwksUri}`
   );
 
   return doc.issuer;
@@ -1029,15 +1049,16 @@ const keycloakAuthService = {
         }
         // Still ambiguous. When a WWW-Authenticate was present but named no
         // reason we act on, log it — the generic "may be expired" alone
-        // would hide that the header simply did not match. Control
+        // would hide that the header simply did not match.
         // Rate-limited like the rejection line: this diagnostic answers once
         // per REJECTED token, so a flood of garbage tokens would otherwise
         // produce one line per request (#1769). The challenge is sanitized
         // INSIDE the thunk, so the work is only done when the line is
         // actually written.
         logRejection(issuer, 'UserInfo 401 (ambiguous)', () => {
-          // characters (C0, C1, Unicode line separators) stripped and the
-          // value bounded: a challenge is server-controlled log input.
+          // Control characters (C0, C1, Unicode line separators) stripped
+          // and the value bounded: a challenge is server-controlled log
+          // input.
           const headerNote =
             typeof wwwAuthenticate === 'string'
               ? ` (WWW-Authenticate: ${wwwAuthenticate

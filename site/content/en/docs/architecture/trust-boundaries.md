@@ -81,7 +81,7 @@ GET <KEYCLOAK_URL>/realms/<REALM>/protocol/openid-connect/certs
 Cache policy:
 - **Cache miss** → service fetches the JWKS over HTTPS, caches keys keyed by `kid`.
 - **Cache hit but unknown `kid`** (e.g. Keycloak rotated the signing key) → service refreshes the JWKS. The refresh is floored to one per second per issuer, so junk tokens cannot make the service hammer the realm's certificate endpoint; a rotation that lands inside that window is observed by the NEXT refresh.
-- **Cache TTL** — 5 minutes. The key set is re-read once it is that old, whatever the traffic.
+- **Cache TTL** — 5 minutes. The re-read is LAZY: it happens on the next verification after the cached set is that old, so an idle service holds its key set past the TTL and observes a rotation only when its next request arrives.
 - **Refresh under failure** — JWKS HTTP errors do not invalidate the cache, but a request whose refresh fails is answered 5xx: the cached keys are kept, not used for that request. The cached keys keep serving until the cache TTL is reached.
 - **A broken realm** — a realm that publishes no usable signing key, or publishes the same key id twice, is reported as an outage (503), not as a rejected token.
 - **A token that names no key id** — RFC 7515 makes `kid` optional, so a token may carry none. Such a token is verified against the published candidate keys, at most three of them; the first one whose signature matches wins. When the realm publishes more candidates than that cap, the trial stops after three: a token that none of the three tried could resolve is rejected (401), and the log names the realm's key set as the reason. A token signed by one of the three tried is still accepted.

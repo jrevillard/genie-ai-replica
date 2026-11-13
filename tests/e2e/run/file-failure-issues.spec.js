@@ -11,6 +11,8 @@ const {
   trackerReason,
   groupFailuresByFile,
   issueBody,
+  isConnectionSignature,
+  venueAvailabilityReport,
 } = require('./file-failure-issues');
 
 const FILE = 'tests/e2e/theme-runtime-config.spec.js';
@@ -279,5 +281,81 @@ test.describe('the tracker refusal names the tracker, not the command', () => {
   test('without stderr, the error message carries the reason', () => {
     const error = new Error('spawn glab ENOENT\nat ChildProcess');
     expect(trackerReason(error)).toBe('spawn glab ENOENT | at ChildProcess');
+  });
+});
+
+test.describe('a failure carrying an edge-transport signature is venue noise (#1783)', () => {
+  // The observed signatures of the 2026-11-10 outage: the edge refused
+  // while the k3s node rebooted and the LoadBalancer address moved.
+  const OUTAGE_ERROR =
+    'Error: page.goto: net::ERR_CONNECTION_REFUSED at https://genieai-forge.local:4443/\n' +
+    '    at loginViaUI (tests/e2e/helpers/chatbot.js:50:9)';
+
+  test('the refused, reset, closed and unresolved-edge signatures match', () => {
+    for (const signature of [
+      'net::ERR_CONNECTION_REFUSED at https://venue/',
+      'page.goto: net::ERR_CONNECTION_RESET',
+      'net::ERR_CONNECTION_CLOSED at https://venue/',
+      'net::ERR_NAME_NOT_RESOLVED at https://genieai-forge.local:4443/'
+    ]) {
+      expect(isConnectionSignature({ error: signature }), signature).toBe(true);
+    }
+  });
+
+  test('a product failure does not match — slow-venue signatures stay product findings', () => {
+    for (const error of [
+      'expect(received).toBe(expected) // Object.is equality',
+      'Test timeout of 60000ms exceeded while running "beforeEach" hook',
+      'page.goto: net::ERR_TIMED_OUT at https://venue/',
+      'page.expect(locator).toHaveText failed'
+    ]) {
+      expect(isConnectionSignature({ error }), error).toBe(false);
+    }
+  });
+
+  test('a missing or empty error carries no signature', () => {
+    expect(isConnectionSignature({ error: '' })).toBe(false);
+    expect(isConnectionSignature({})).toBe(false);
+    expect(isConnectionSignature(null)).toBe(false);
+  });
+
+  test('the partition keeps product failures fileable and moves the signature ones to the report', () => {
+    // A mixed file: one outage symptom, one real assertion failure — the
+    // real one stays fileable, the outage one does not.
+    const byFile = groupFailuresByFile([
+      {
+        file: 'tests/e2e/welcome-banner.spec.js',
+        title: 'shows the banner',
+        test: { results: [{ error: { message: OUTAGE_ERROR, stack: '' } }] }
+      },
+      {
+        file: 'tests/e2e/welcome-banner.spec.js',
+        title: 'hides the banner',
+        test: { results: [{ error: { message: 'expect(received).toBe(expected)', stack: '' } }] }
+      }
+    ]);
+    expect(byFile.get('tests/e2e/welcome-banner.spec.js').length).toBe(2);
+    const failures = byFile.get('tests/e2e/welcome-banner.spec.js');
+    expect(failures.filter(isConnectionSignature).length).toBe(1);
+    expect(failures.filter((f) => !isConnectionSignature(f)).length).toBe(1);
+  });
+
+  test('the venue-availability report names the venue, the files and the verdict', () => {
+    const noise = new Map([
+      [
+        'tests/e2e/welcome-banner.spec.js',
+        [
+          { error: OUTAGE_ERROR },
+          { error: 'net::ERR_CONNECTION_RESET' }
+        ]
+      ],
+      ['tests/e2e/resizable-sidebars.spec.js', [{ error: 'net::ERR_NAME_NOT_RESOLVED' }]]
+    ]);
+    const report = venueAvailabilityReport(noise, 'https://genieai-forge.local:4443');
+    expect(report).toContain('venue-availability report: 3 failure(s) across 2 spec file(s)');
+    expect(report).toContain('- tests/e2e/welcome-banner.spec.js: 2 (e.g. net::ERR_CONNECTION_REFUSED)');
+    expect(report).toContain('- tests/e2e/resizable-sidebars.spec.js: 1 (e.g. net::ERR_NAME_NOT_RESOLVED)');
+    expect(report).toContain('The venue answered the re-probe at https://genieai-forge.local:4443');
+    expect(report).toContain('NOT product findings');
   });
 });

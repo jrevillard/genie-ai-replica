@@ -14,6 +14,14 @@ const { loginViaUI } = require('../helpers/chatbot');
 // helper so the contract diverges in one place rather than per spec.
 
 test.describe('Living Intelligence visual layer', () => {
+  // The login test's loginViaUI costs up to ≈135 s on a stalled stack
+  // (attempt 1: 30 s navigation + 15 s redirect + 30 s dashboard wait;
+  // attempt 2: 30 + 15 + 15), past the project's 60 s default — the test
+  // is killed BEFORE the helper can print its own two-attempt diagnosis
+  // (#1798). 300 s covers the worst-case login with the body's own
+  // budget still ahead of it.
+  test.describe.configure({ timeout: 300000 });
+
   test('the decoration assets are served from /config/ and revalidated', async ({ request }) => {
     for (const asset of [
       '/config/genie-visual/assets/genie-hero-transparent.png',

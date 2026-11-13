@@ -66,6 +66,14 @@ test.describe('the OKF artifacts view', () => {
   // locale so the exact wording is fixed.
   test.use({ locale: 'en-US' });
 
+  // The view opens behind a browser login (loginViaUI, ≈135 s on a
+  // stalled stack — two attempts of 30 s navigation + 15 s redirect +
+  // 30 s/15 s dashboard wait), past the project's 60 s default — the test
+  // is killed BEFORE the helper can print its own two-attempt diagnosis
+  // (#1798). 300 s covers the worst-case login with the body's own
+  // budget still ahead of it.
+  test.describe.configure({ timeout: 300000 });
+
   // The artifacts view is an OKF surface: a deployment whose OKF pillar is
   // parked does not render it, and this spec would fail looking for a
   // surface that never appears. It SKIPS WITH A REASON instead (#1742), and

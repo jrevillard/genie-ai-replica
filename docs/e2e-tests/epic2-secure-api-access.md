@@ -1197,9 +1197,25 @@ EXPIRED_TOKEN=$(curl -sk -X POST "https://localhost/auth/realms/genie/protocol/o
   -d "client_id=genie-app" -d "username=testuser" -d "password=TestPass123!" -d "grant_type=password" \
   | python3 -c "import sys,json; print(json.load(sys.stdin)['access_token'])")
 
-# Wait for expiry
-echo "Waiting 12 seconds for token to expire..."
-sleep 12
+# Wait for the token's OWN expiry (Rule: Determinism — no fixed
+# sleeps): read the exp claim from the token itself and poll the clock
+# until it passes, bounded at 30 s. A sleep long enough for a loaded
+# host is wasted on a fast one; a sleep short enough for a fast host is
+# flaky on a loaded one.
+TOKEN_EXP=$(echo "$EXPIRED_TOKEN" | python3 -c "
+import sys, json, base64
+payload = sys.stdin.read().strip().split('.')[1]
+payload += '=' * (-len(payload) % 4)
+print(json.loads(base64.urlsafe_b64decode(payload))['exp'])
+")
+deadline=$((SECONDS + 30))
+while [ "$(date +%s)" -lt "$TOKEN_EXP" ]; do
+  if [ "$SECONDS" -ge "$deadline" ]; then
+    echo "FATAL: the clock did not reach the token's exp ($TOKEN_EXP) within 30s"
+    exit 1
+  fi
+  sleep 2
+done
 
 # Send expired token
 curl -sk "https://localhost/api/me" \
@@ -1208,7 +1224,7 @@ curl -sk "https://localhost/api/me" \
 
 **Expected**: `HTTP: 401` with `{"error": "TOKEN_EXPIRED", "message": "Token has expired"}`
 
-**Note**: Do NOT restore `accessTokenLifespan` yet — K.5 handles that. In the Playwright spec (`k1-auth-error-display.spec.js`), the deployment's lifespan is captured before any mutation; the K.3 test restores it before minting its own tokens, and `afterAll` restores it again on failure paths (skipped when the capture itself failed).
+**Note**: Do NOT restore `accessTokenLifespan` yet — K.5 handles that. The Playwright spec (`k1-auth-error-display.spec.js`) does NOT use this procedure anymore (#1785): its K.2 observes the expiry through a dedicated client whose own 10s lifespan is client-scoped, so the realm's global default stays what the deployment runs. This manual mutation is what K.5 restores.
 
 ### Test K.3 — FORBIDDEN (User Without Roles)
 
@@ -1263,8 +1279,18 @@ curl -sk "https://localhost/api/me" -H "Authorization: Bearer $USER_TOKEN" \
 
 # Step 2: Stop Keycloak and test in the SAME shell
 docker compose stop keycloak
-echo "Waiting 15 seconds for Keycloak to stop..."
-sleep 15
+
+# Bounded wait (Rule: Determinism — no fixed sleeps): poll the
+# observable condition — the keycloak container reporting exited — every
+# 2 s with a hard 30 s bound.
+deadline=$((SECONDS + 30))
+while [ "$(docker compose ps --all keycloak --format '{{.State}}')" != "exited" ]; do
+  if [ "$SECONDS" -ge "$deadline" ]; then
+    echo "FATAL: keycloak did not stop within 30s (state: $(docker compose ps --all keycloak --format '{{.State}}'))"
+    exit 1
+  fi
+  sleep 2
+done
 
 RESPONSE=$(curl -sk "https://localhost/api/me" \
   -H "Authorization: Bearer $USER_TOKEN" \
@@ -1283,13 +1309,38 @@ echo "HTTP: 200 (cached JWKS validated the token)"
 ```bash
 # Step 3: Restore Keycloak
 docker compose start keycloak
-echo "Waiting for Keycloak to recover (60-90 seconds)..."
-sleep 60
+
+# Bounded wait (Rule: Determinism — no fixed sleeps): poll the
+# observable condition — the keycloak container reporting (healthy) —
+# every 5 s with a hard 120 s bound (the recovery the removed fixed
+# sleep priced at 60-90 s).
+deadline=$((SECONDS + 120))
+while ! docker compose ps keycloak --format '{{.Status}}' | grep -q '(healthy)'; do
+  if [ "$SECONDS" -ge "$deadline" ]; then
+    echo "FATAL: keycloak not healthy after 120s ($(docker compose ps keycloak --format '{{.Status}}'))"
+    exit 1
+  fi
+  sleep 5
+done
 
 # Reload Kong DNS cache (Kong caches the old Keycloak container IP after stop/start)
 docker exec $(docker ps --filter name=kong --format '{{.ID}}' | head -1) kong reload
-echo "Waiting 10 seconds for Kong reload..."
-sleep 10
+
+# Bounded wait (Rule: Determinism — no fixed sleeps): poll the
+# observable condition — the edge answering the discovery request with
+# the deployment's issuer — every 3 s with a hard 60 s bound covering
+# Kong's reload settling.
+deadline=$((SECONDS + 60))
+while :; do
+  ISSUER="$(curl -sk "https://localhost/auth/realms/genie/.well-known/openid-configuration" \
+    | python3 -c "import sys,json; print(json.load(sys.stdin).get('issuer', 'NOT READY'))" 2>/dev/null || echo "NOT READY")"
+  [ "$ISSUER" = "https://localhost/auth/realms/genie" ] && break
+  if [ "$SECONDS" -ge "$deadline" ]; then
+    echo "FATAL: discovery did not report the genie issuer within 60s (last: $ISSUER)"
+    exit 1
+  fi
+  sleep 3
+done
 
 # Verify Keycloak is back
 curl -sk "https://localhost/auth/realms/genie/.well-known/openid-configuration" \

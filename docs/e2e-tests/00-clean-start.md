@@ -77,15 +77,32 @@ Images are built automatically via `build:` directives in `docker-compose.yaml` 
 Wait for all services to become healthy. This may take 2-5 minutes depending on image build time.
 
 ```bash
-# Wait at least 120 seconds for all services to stabilize
-# ArangoDB can take up to 150s to pass healthchecks (start_period + retries)
-# The backend waits for ArangoDB via its entrypoint script (up to 60s)
-echo "Waiting 120 seconds for services to stabilize..."
-sleep 120
+# Bounded readiness wait (Rule: Determinism — no fixed sleeps): poll the
+# observable condition — every CORE service reporting (healthy) — every
+# 5 s with a hard 300 s bound. ArangoDB can take up to 150s to pass its
+# healthcheck (start_period + retries); the backend waits for ArangoDB
+# via its entrypoint script (up to 60s). On timeout the phase FAILS and
+# names the services that never became healthy — a fixed sleep is slow
+# on a fast host and flaky on a slow one.
+CORE_SERVICES='frontend|backend|keycloak|arango-vector-db|nginx|kong'
+deadline=$((SECONDS + 300))
+while :; do
+  NOT_READY="$(docker compose ps --all --format '{{.Service}} {{.Status}}' \
+    | grep -E "^(${CORE_SERVICES}) " | grep -v '(healthy)')"
+  [ -z "$NOT_READY" ] && break
+  if [ "$SECONDS" -ge "$deadline" ]; then
+    echo "FATAL: core services not healthy after 300s:"
+    echo "$NOT_READY"
+    exit 1
+  fi
+  echo "not healthy yet: $(echo "$NOT_READY" | tr '\n' '; ')"
+  sleep 5
+done
+echo "All core services healthy."
 ```
 
 ```bash
-# Check service status — all should show "running" or "healthy"
+# Check service status — all should show "healthy"
 docker compose ps
 
 # Detailed per-service check
@@ -93,7 +110,7 @@ echo "=== Service Health ==="
 docker compose ps --format "table {{.Service}}\t{{.Status}}" | grep -E "frontend|backend|keycloak|arango-vector-db|nginx|kong"
 ```
 
-**Expected**: All services show `running` or `healthy`.
+**Expected**: All services show `healthy`.
 
 ### 0.5 Verify Individual Services
 
@@ -204,8 +221,20 @@ docker compose restart backend
 # Reload Kong DNS cache (Kong caches the old backend container IP after restart)
 docker exec $(docker ps --filter name=kong --format '{{.ID}}' | head -1) kong reload
 
-echo "Waiting 30 seconds for backend to reinitialize with additional realms..."
-sleep 30
+# Bounded readiness wait (Rule: Determinism — no fixed sleeps): poll the
+# observable condition — the backend answering /api/health with 200 —
+# every 3 s with a hard 60 s bound. On timeout the phase FAILS with the
+# last observed status.
+deadline=$((SECONDS + 60))
+while :; do
+  STATUS="$(curl -sk -o /dev/null -w '%{http_code}' https://localhost/api/health)"
+  [ "$STATUS" = "200" ] && break
+  if [ "$SECONDS" -ge "$deadline" ]; then
+    echo "FATAL: /api/health did not return 200 within 60s (last: HTTP $STATUS)"
+    exit 1
+  fi
+  sleep 3
+done
 curl -sk https://localhost/api/health -o /dev/null -w "Backend: HTTP %{http_code}\n"
 # Expected: 200
 ```

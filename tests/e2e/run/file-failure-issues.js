@@ -77,6 +77,56 @@ const TRACKER_TIMEOUT_MS = 60000;
 // push the issue body past the kernel's per-argument cap on its own.
 const MAX_ERROR_CHARS = 8000;
 
+// The transport signatures of a navigation that never reached the app:
+// the edge refused the connection (the node or the LoadBalancer was
+// gone), the connection was reset, closed mid-flight, or the venue NAME
+// stopped resolving (the node's address moved with its reboot — the
+// 2026-11-10 outage's signature was ERR_CONNECTION_REFUSED at the edge,
+// recorded in #1783). Deliberately NOT here: net::ERR_TIMED_OUT and
+// other slow-venue signatures, which a loaded-but-up venue produces for
+// real product latency. A failure carrying one of these signatures is a
+// venue-availability event, not a product finding.
+const CONNECTION_FAILURE_RE =
+  /\bnet::ERR_(?:CONNECTION_REFUSED|CONNECTION_RESET|CONNECTION_CLOSED|NAME_NOT_RESOLVED)\b/;
+
+/**
+ * Does this failure's error carry an edge-transport signature?
+ * @param {{error: string}} failure - A grouped failure (see groupFailuresByFile)
+ * @returns {boolean}
+ */
+function isConnectionSignature(failure) {
+  return CONNECTION_FAILURE_RE.test(String(failure && failure.error) || '');
+}
+
+/**
+ * The ONE venue-availability report that replaces one product issue per
+ * spec file for a healed mid-run outage (#1783): the venue, the
+ * signature-bearing failure inventory, and the verdict. Pure string —
+ * the caller prints it, the unit spec asserts it.
+ * @param {Map<string, Array<{error: string}>>} venueNoise - Per spec
+ *   file, the failures that carry a connection signature
+ * @param {string} venue - The venue address the failed run pointed at
+ * @returns {string} The report text (no trailing newline)
+ */
+function venueAvailabilityReport(venueNoise, venue) {
+  const total = [...venueNoise.values()].reduce((sum, failures) => sum + failures.length, 0);
+  const lines = [
+    '',
+    `venue-availability report: ${total} failure(s) across ${venueNoise.size} spec file(s) carry an ` +
+      'edge-transport signature — the browser never reached the app:',
+  ];
+  for (const [file, failures] of venueNoise) {
+    const signature = (String(failures[0].error).match(CONNECTION_FAILURE_RE) || ['(no signature extracted)'])[0];
+    lines.push(`  - ${file}: ${failures.length} (e.g. ${signature})`);
+  }
+  lines.push(
+    `The venue answered the re-probe at ${venue} — these look like a venue outage that healed ` +
+      'mid-run, NOT product findings: nothing is filed for them. The run is still RED; ' +
+      'check the venue events (kubectl get events -A) and re-run the suite once the venue has been stable.'
+  );
+  return lines.join('\n');
+}
+
 function fail(message) {
   process.stderr.write(`file-failure-issues: ${message}\n`);
   process.exit(1);
@@ -564,6 +614,35 @@ function main() {
 
   const byFile = groupFailuresByFile(failed);
 
+  // The healed-outage case (#1783): a venue that went away MID-RUN and
+  // came back passes the drivable re-probe below, and without the
+  // signature filter the run would file one product issue per spec file
+  // for a single venue event (the 2026-11-10 node reboot filed exactly
+  // that). Failures whose error carries an edge-transport signature are
+  // grouped into ONE venue-availability report instead; a file whose
+  // OTHER failures survive the filter still gets filed for those.
+  const venueNoise = new Map();
+  for (const [file, failures] of byFile) {
+    const connection = failures.filter(isConnectionSignature);
+    if (connection.length === 0) continue;
+    venueNoise.set(file, connection);
+    const rest = failures.filter((failure) => !isConnectionSignature(failure));
+    if (rest.length === 0) {
+      byFile.delete(file);
+    } else {
+      byFile.set(file, rest);
+    }
+  }
+  if (venueNoise.size > 0) {
+    process.stdout.write(venueAvailabilityReport(venueNoise, venue) + '\n');
+  }
+  if (byFile.size === 0) {
+    process.stdout.write(
+      '\nnothing was filed — every failure carries the venue-outage signature; the report above is the record.\n'
+    );
+    return;
+  }
+
   process.stdout.write(`\nfailing spec files: ${byFile.size}\n`);
   if (!fileIssues) {
     for (const [file, failures] of byFile) {
@@ -640,8 +719,9 @@ if (require.main === module) {
   main();
 }
 
-// Exposed for the unit spec: the dedupe rule and the refusal wording are
-// behaviour, and behaviour is tested, not trusted.
+// Exposed for the unit spec: the dedupe rule, the refusal wording and
+// the venue-outage partition are behaviour, and behaviour is tested,
+// not trusted.
 module.exports = {
   findTrackedIssue,
   specPathsIn,
@@ -649,4 +729,6 @@ module.exports = {
   trackerReason,
   groupFailuresByFile,
   issueBody,
+  isConnectionSignature,
+  venueAvailabilityReport,
 };

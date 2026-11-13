@@ -181,7 +181,7 @@ async function patchConversionReturningOld(repoId, patch) {
  * @param {string} repoId
  * @param {string} startedAt the started_at of the run that owns the record
  * @param {object} patch the record to write
- * @param {boolean} restore replace the conversion object rather than merging it
+ * @param {boolean|null} restore replace the conversion object rather than merging it (null merges)
  * @returns {Promise<boolean>} true when the record was written
  */
 async function closeConversionIfOwned(repoId, startedAt, patch, restore) {

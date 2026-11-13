@@ -50,8 +50,7 @@ const RID = '77777777-7777-4777-8777-777777777777';
  * ArangoDB 3.12's UPDATE merges RECURSIVELY (mergeObjects defaults to
  * true): an object value is merged key by key, an array REPLACES, and a null
  * is a VALUE (keepNull defaults to true, so a null is stored, not removed).
- * The
- * mock follows the database here, not a guess: a top-level merge would make
+ * The mock follows the database here, not a guess: a top-level merge would make
  * every assertion about a nested field (the conversion record's `summary`)
  * be made against a database that does not exist.
  */
@@ -1411,6 +1410,13 @@ describe('producer-service — startDocumentsConversion + run', () => {
     // The zip-ingest path does NOT take the conversion reservation and
     // MERGEs into the same attribute: the restore must leave that writer's
     // record alone.
+    //
+    // Accepted residual: a zip progress write that lands during this run's
+    // queued window WITHOUT flipping the status off 'queued' is wiped by the
+    // restore's replace — the window is one pre-flight long, only progress
+    // fields are affected, the CAS still guards the real clobber (a status
+    // change, as asserted below), and the zip writer's next merge re-writes
+    // its fields.
     await mockDb.collection('okf_repositories').save({
       _key: RID,
       repo_id: RID,

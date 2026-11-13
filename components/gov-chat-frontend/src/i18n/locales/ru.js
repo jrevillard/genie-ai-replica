@@ -1399,6 +1399,9 @@ export default {
       downloadFailed: 'Не удалось скачать.',
       showMore: 'Показать больше',
       backToList: 'К списку',
+      back: 'Назад',
+      forward: 'Вперёд',
+      selectHint: 'Выберите концепт в дереве, чтобы прочитать его здесь.',
       colConcept: 'Концепция'
     },
     feedbackSubmitted: 'Отзыв сохранён',

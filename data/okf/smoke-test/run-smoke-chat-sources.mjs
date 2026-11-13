@@ -312,9 +312,18 @@ async function main() {
     maxPage = Math.max(maxPage, rows.length);
     if (rows.length > TREE_LIMIT) fail(`concept-tree page offset=${offset} exceeded the requested bound`);
     const shapeOk = rows.every(
-      (c) => c && typeof c.concept_id === 'string' && typeof c.title === 'string' && Array.isArray(c.links)
+      (c) =>
+        c &&
+        typeof c.concept_id === 'string' &&
+        typeof c.title === 'string' &&
+        typeof c.is_index === 'boolean' &&
+        typeof c.index_status === 'string' &&
+        Array.isArray(c.links)
     );
-    if (!shapeOk) fail(`concept-tree page offset=${offset} rows lack the {concept_id,title,links} contract`);
+    if (!shapeOk)
+      fail(
+        `concept-tree page offset=${offset} rows lack the {concept_id,title,is_index,index_status,links} contract (#1836)`
+      );
     assembled = assembled.concat(rows);
     if (rows.length < TREE_LIMIT || assembled.length >= treeTotal) break;
   }
@@ -367,12 +376,16 @@ async function main() {
       `admin aggregation lists the seeded open repo (concept_count=${ownRow.concept_count}, issues=${ownRow.conformance_issue_count}, pii=${ownRow.pii_hit_count})`
     );
   } else {
-    fail(`admin conformance-debt read: status=${debtAll.status}, ownRow=${JSON.stringify(ownRow || null).slice(0, 160)}`);
+    fail(
+      `admin conformance-debt read: status=${debtAll.status}, ownRow=${JSON.stringify(ownRow || null).slice(0, 160)}`
+    );
   }
   if (ownRow && ownRow.conformance_issue_count === 0 && ownRow.pii_hit_count === 0) {
     pass('clean repo owes nothing: pii_hit_count reads the OCCURRENCES array, not the findings object');
   } else if (ownRow) {
-    fail(`clean repo reported debt it does not owe (issues=${ownRow.conformance_issue_count}, pii=${ownRow.pii_hit_count})`);
+    fail(
+      `clean repo reported debt it does not owe (issues=${ownRow.conformance_issue_count}, pii=${ownRow.pii_hit_count})`
+    );
   }
   if (ownRow && 'stale_concept_count' in ownRow && 'pii_hit_count' in ownRow && 'has_reserved_index' in ownRow) {
     pass('debt rows carry the per-repo metric vocabulary (stale_concept_count/pii_hit_count/has_reserved_index)');

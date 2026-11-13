@@ -1407,6 +1407,9 @@ export default {
       downloadFailed: 'Ho jarolla ha hlolehile.',
       showMore: 'Bontša e eng',
       backToList: 'Boela lethathamong',
+      back: 'Morao',
+      forward: 'Pele',
+      selectHint: 'Khetha kgopolo sehlareng ho e bala mona.',
       colConcept: 'Kgopolo'
     },
     feedbackSubmitted: 'Karabo e bolokiloe',

@@ -1385,6 +1385,9 @@ export default {
       downloadFailed: 'Cha dooarsh yn download.',
       showMore: 'Jeeagh ny smoo',
       backToList: 'Goll er-ash gys y rolley',
+      back: 'Ass',
+      forward: 'Ersooylt',
+      selectHint: 'Tagh concept ass y billey dy lhaih aynshoh.',
       colConcept: 'Concept'
     },
     feedbackSubmitted: 'Sauailit ynnsyn',

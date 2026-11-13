@@ -166,9 +166,12 @@ test.describe('the OKF artifacts view', () => {
     await openArtifacts(page);
     const view = page.locator('[data-test-id="okf-artifacts-view"]');
     await expect(view).toBeVisible();
-    // No delete/remove control anywhere in the view, for any state — the
-    // role form is the one count (the bare-tag copy read the same set and
-    // added a second way to pass; #1829).
+    // No delete/remove control anywhere in the view, for any state. One
+    // count, the role form (#1829): it asserts what the user can reach.
+    // Its blind spots are accepted: a hidden control (display:none /
+    // visibility:hidden) and a control whose accessible name is overridden
+    // by an aria-label do not match byRole — a visible, correctly-named
+    // delete button is the regression this guard exists for.
     await expect(view.getByRole('button', { name: /delete|remove/i })).toHaveCount(0);
   });
 

@@ -93,7 +93,7 @@ test.describe('the RAGAS guide explains the output, and a re-score is a tracked 
     await studioTab.click();
 
     const card = page
-      .locator('[data-test-id^="okf-studio-repo-card-"]')
+      .locator('[data-test-id^="okf-studio-card-"]')
       .filter({ hasText: REPO_NAME })
       .first();
     await expect(card, `the ${REPO_NAME} repo card must be listed`).toBeVisible({ timeout: 20000 });

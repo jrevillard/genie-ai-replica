@@ -46,7 +46,7 @@
           v-for="r in reposInLane(lane.key)"
           :key="r.repo_id"
           class="okf-dashboard__card-wrap"
-          :data-test-id="`okf-studio-repo-card-${r.repo_id}`"
+          :data-test-id="`okf-studio-card-${r.repo_id}`"
         >
           <button
             type="button"

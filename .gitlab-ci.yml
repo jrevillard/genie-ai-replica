@@ -3949,8 +3949,10 @@ test:flutter:
 # the trees compiled into the pulled candidate images — are a deliberate
 # exception, tracked in #1283):
 #   - e2e:playwright runs tests/e2e/chatbot/, tests/e2e/documents/,
-#     tests/e2e/admin/ and tests/e2e/theme/theme-runtime-config.spec.js; it reads
-#     tests/e2e/helpers/ and tests/e2e/fixtures/ at runtime, and is
+#     tests/e2e/admin/, the whole tests/e2e/theme/ directory (five specs:
+#     living-intelligence, resizable-sidebars, responsive-layout,
+#     welcome-banner, theme-runtime-config) and reads tests/e2e/helpers/
+#     and tests/e2e/fixtures/ at runtime, and is
 #     installed/configured from package.json, package-lock.json and
 #     playwright.config.js (see .e2e_web_base before_script + cache keys).
 #   - e2e:integration deploys the stack from docker-compose.yaml seeded by

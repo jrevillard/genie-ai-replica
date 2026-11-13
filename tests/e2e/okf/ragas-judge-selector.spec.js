@@ -91,7 +91,7 @@ test.describe('the RAGAS model selection is in the UI', () => {
 
     // 3. the repo card -> Testing Lab (the dialog that carries the Benchmarks tab)
     const card = page
-      .locator('[data-test-id^="okf-studio-repo-card-"]')
+      .locator('[data-test-id^="okf-studio-card-"]')
       .filter({ hasText: REPO_NAME })
       .first();
     await expect(card, `the ${REPO_NAME} repo card must be listed`).toBeVisible({ timeout: 20000 });

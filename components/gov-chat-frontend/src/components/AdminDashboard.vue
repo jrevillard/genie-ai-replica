@@ -1796,7 +1796,7 @@ const blankTrends = () => ({
   errorRate: null,
   activeUsers: null
 });
-import { statusKey, statusVariant, displayStatus } from '../utils/documentStatus.js';
+import { statusKey, statusVariant, displayStatus, normalizeStatus } from '../utils/documentStatus.js';
 import { themeManager } from '../utils/ThemeManager';
 
 // OKF HEAVY COMPONENTS — ASYNC (round 17, #80362): StudioTab and
@@ -2149,16 +2149,19 @@ export default {
      * Performs client-side filtering on the documents array based on the selected status.
      */
     filteredDocuments() {
-      const selectedStatus = String(this.documentFilters.status).toLowerCase().trim();
+      // The normalisation is the shared vocabulary's (#1781): the e2e
+      // hold compares the rendered rows against the payload's subset of
+      // the selected status through the SAME normalizeStatus this
+      // filter applies, so the two cannot disagree about what a row
+      // "of a status" is.
+      const selectedStatus = normalizeStatus(this.documentFilters.status);
       if (!this.documents || this.documents.length === 0) {
         return [];
       }
       if (selectedStatus === 'all') {
         return this.documents; // If 'All' is selected, return the full list
       }
-      return this.documents.filter(
-        (doc) => doc.dataprep && String(doc.dataprep.status).toLowerCase().trim() === selectedStatus
-      );
+      return this.documents.filter((doc) => doc.dataprep && normalizeStatus(doc.dataprep.status) === selectedStatus);
     },
 
     sortedAndFilteredDocuments() {

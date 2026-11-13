@@ -3264,6 +3264,13 @@ lint:e2e:
   script:
     - cd tests/e2e && npm ci
     - npm run lint
+    # The suite's own Playwright config lives at the repository ROOT, outside
+    # the linted tree: `eslint .` from tests/e2e never saw it, and an edit
+    # to it never triggered this gate — the #1632 defect class stayed open
+    # in the suite's own configuration (#1716). Same gate, same config, run
+    # from the repository root: ESLint's base path is the working
+    # directory, so a file above tests/e2e/ is out of reach from there.
+    - cd ${CI_PROJECT_DIR} && npm run lint:playwright-config
   rules:
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
       changes:
@@ -3271,6 +3278,12 @@ lint:e2e:
         # the suite's eslint.config.js requires this one shared file —
         # the gate's only dependency outside tests/e2e
         - "components/shared/eslint-rules-base.js"
+        # the suite's own Playwright config — an edit to it must re-run the
+        # gate that covers it (#1716)
+        - "playwright.config.js"
+        # the gate's command lives in the root package.json — an edit there
+        # (a typoed path, a moved config) must re-run the gate it defines
+        - "package.json"
         - ".gitlab-ci.yml"
       when: on_success
     - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH || $CI_COMMIT_BRANCH =~ /^release\/*/'
@@ -4141,6 +4154,11 @@ config:validate:
     # "git: not found" instead of validating.
     - apk add --no-cache bash git
     - cd tests/config-validator && npm ci
+    # The #1716 behavioral probe runs the REAL gate binary (tests/e2e's
+    # pinned eslint) against a fixture: without this install the probe
+    # fails with ENOENT in the job but passes on a dev checkout that has
+    # the deps.
+    - cd ${CI_PROJECT_DIR}/tests/e2e && npm ci
     - cd ${CI_PROJECT_DIR}/api-gateway-solution/new-config && npm ci
     - cd ${CI_PROJECT_DIR}/components/gov-chat-frontend && npm ci
   script:
@@ -4225,6 +4243,22 @@ config:validate:
         - "**/*copy)*"
         - "**/Copy of *"
         - ".gitignore"
+        # The #1716 lint-home pins read the root Playwright config (the
+        # suppression pin) and the root package.json scripts (the gate and
+        # hook pins): an MR that silences the gate from either file must
+        # run those pins in its own pipeline, not as a red main pipeline
+        # after the merge. tests/e2e/eslint.config.js is already covered
+        # by the tests/e2e glob above.
+        - "playwright.config.js"
+        - "package.json"
+        # The third file that can silence the gate: the shared rules are
+        # spread into both gate entries, so a no-undef override there
+        # blinds the gate without touching the other two files.
+        - "components/shared/eslint-rules-base.js"
+        # The commit-time hook is the runner of the lint-staged gate the
+        # pins above guard: an MR that neuters it must run those pins in
+        # its own pipeline.
+        - ".husky/pre-commit"
         - "tests/fixtures/config/**/*"
         - "api-gateway-solution/new-config/**/*"
         - "components/gov-chat-frontend/public/config/genie-ai-config*.json"

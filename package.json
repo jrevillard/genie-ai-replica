@@ -4,8 +4,10 @@
     "test:e2e": "npx playwright test tests/e2e/",
     "test:e2e:list": "npx playwright test tests/e2e/ --list",
     "capture:dashboard": "node tests/e2e/capture-dashboard.js",
-    "lint": "npm run lint --prefix components/gov-chat-frontend && npm run lint --prefix components/gov-chat-backend && npm run lint --prefix components/document-repository && npm run lint --prefix components/shared/lib && npm run lint --prefix components/okf-server && npm run lint --prefix tests/config-validator && npm run lint --prefix tests/e2e",
-    "lint:fix": "npm run lint:fix --prefix components/gov-chat-frontend && npm run lint:fix --prefix components/gov-chat-backend && npm run lint:fix --prefix components/document-repository && npm run lint:fix --prefix components/shared/lib && npm run lint:fix --prefix components/okf-server && npm run lint:fix --prefix tests/config-validator && npm run lint:fix --prefix tests/e2e",
+    "lint": "npm run lint:playwright-config && npm run lint --prefix components/gov-chat-frontend && npm run lint --prefix components/gov-chat-backend && npm run lint --prefix components/document-repository && npm run lint --prefix components/shared/lib && npm run lint --prefix components/okf-server && npm run lint --prefix tests/config-validator && npm run lint --prefix tests/e2e",
+    "lint:fix": "npm run lint:playwright-config:fix && npm run lint:fix --prefix components/gov-chat-frontend && npm run lint:fix --prefix components/gov-chat-backend && npm run lint:fix --prefix components/document-repository && npm run lint:fix --prefix components/shared/lib && npm run lint:fix --prefix components/okf-server && npm run lint:fix --prefix tests/config-validator && npm run lint:fix --prefix tests/e2e",
+    "lint:playwright-config": "tests/e2e/node_modules/.bin/eslint --max-warnings 0 --config tests/e2e/eslint.config.js playwright.config.js",
+    "lint:playwright-config:fix": "npm run lint:playwright-config -- --fix",
     "format": "npm run format --prefix components/gov-chat-frontend && npm run format --prefix components/gov-chat-backend && npm run format --prefix components/document-repository && npm run format --prefix components/shared/lib && npm run format --prefix components/okf-server && npm run format --prefix tests/config-validator && npm run format:scripts && npm run format:site-scripts",
     "format:check": "npm run format:check --prefix components/gov-chat-frontend && npm run format:check --prefix components/gov-chat-backend && npm run format:check --prefix components/document-repository && npm run format:check --prefix components/shared/lib && npm run format:check --prefix components/okf-server && npm run format:check --prefix tests/config-validator && npm run format:scripts:check && npm run format:site-scripts:check",
     "format:prettier": "node components/shared/lib/node_modules/prettier/bin/prettier.cjs",
@@ -47,6 +49,9 @@
     ],
     "tests/e2e/**/*.js": [
       "tests/e2e/node_modules/.bin/eslint --fix"
+    ],
+    "playwright.config.js": [
+      "tests/e2e/node_modules/.bin/eslint --max-warnings 0 --config tests/e2e/eslint.config.js --fix"
     ]
   },
   "dependencies": {

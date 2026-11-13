@@ -1,7 +1,7 @@
 const path = require('path');
 const fs = require('fs');
 const os = require('os');
-const { execSync } = require('child_process');
+const { execFileSync, execSync } = require('child_process');
 const { parseEnvTemplate, getRequiredSecrets } = require('../validators/parse-env');
 const { findUnwiredDocumented, findDuplicatedDocumented } = require('../validators/unwired-documented');
 const { parseAnsibleEnvVars } = require('../validators/parse-ansible');
@@ -4316,5 +4316,298 @@ describe('parseGitlabCiJobChanges', () => {
     ]);
     const parsed = parseGitlabCiJobChanges(file, ['job-a']);
     expect(parsed.get('job-a')).toEqual(['tests/a/**/*']);
+  });
+});
+
+// --- The root Playwright config has a lint home (#1716) ---
+// The suite's own Playwright config sits at the repository ROOT, outside the
+// tree `eslint .` covers from tests/e2e/. An undeclared binding there (a
+// config-level function, a global-setup hook) surfaced only at suite
+// runtime, and an edit to the file never triggered the lint job — the #1632
+// defect class stayed open in the suite's own configuration.
+//
+// The gate is the SAME one (tests/e2e/eslint.config.js), run from the
+// repository root — the cwd-anchoring mechanism that requires that is
+// stated once, on the second test below.
+//
+// Three facts make the coverage real and each can rot on its own: the lint
+// job's changes filter lists the file (so an edit to it runs the gate at
+// all), the job's script runs the gate from the right directory, and the
+// gate names the root file and the e2e config (so it cannot drift into
+// covering something else).
+describe('the root Playwright config has a lint home (#1716)', () => {
+  const ciFile = path.join(ROOT, '.gitlab-ci.yml');
+  let lintJob;
+  let lintChanges;
+  let validateChanges;
+
+  beforeAll(() => {
+    lintJob = gitlabSection(fs.readFileSync(ciFile, 'utf-8'), 'lint:e2e');
+    const changes = parseGitlabCiJobChanges(ciFile, ['lint:e2e', 'config:validate']);
+    lintChanges = changes.get('lint:e2e');
+    validateChanges = changes.get('config:validate');
+  });
+
+  test('an edit to the root config triggers the lint job', () => {
+    // The root config AND the root package.json (the gate's command lives
+    // there) must both instantiate the job on edit — dropping either
+    // trigger means the next edit skips the gate that covers it.
+    expect(lintChanges).toContain('playwright.config.js');
+    expect(lintChanges).toContain('package.json');
+  });
+
+  test('the job still triggers on the suite tree and its shared rules', () => {
+    // The gate's two pre-existing triggers are part of the same contract:
+    // dropping the suite glob stops coverage of every spec and of the
+    // gate's own config; dropping the shared-rules entry stops coverage
+    // of the file the gate's rules come from. Same defect shape as the
+    // root-config trigger above.
+    expect(lintChanges).toContain('tests/e2e/**/*');
+    expect(lintChanges).toContain('components/shared/eslint-rules-base.js');
+  });
+
+  test('an edit to the pinned files runs the pins (config:validate)', () => {
+    // The pin suite lives in the config-validator, whose CI job does not
+    // trigger on the pinned files by default: an MR that silences the
+    // gate from playwright.config.js or package.json would skip every
+    // pin that guards them (tests/e2e/eslint.config.js is already covered
+    // by the job's tests/e2e glob, which the handle-locator gate added
+    // for the same reason). Both files must instantiate the job too —
+    // and so must the shared-rules file, the third file that can silence
+    // the gate: its entry was added for exactly this reason and can rot
+    // the same way.
+    expect(validateChanges).toContain('playwright.config.js');
+    expect(validateChanges).toContain('package.json');
+    expect(validateChanges).toContain('components/shared/eslint-rules-base.js');
+    // The hook entry itself: dropping it stops the hook pin from running
+    // on hook-only MRs — the same decay shape as dropping a file entry.
+    expect(validateChanges).toContain('.husky/pre-commit');
+    // The pre-existing suite glob is load-bearing for the pins too: the
+    // eslint-config source read, the behavioral probe (it runs the
+    // tests/e2e binary and config) and the sibling-gate pin all read or
+    // execute under tests/e2e/ — dropping the glob stops the pins from
+    // instantiating on exactly those edits.
+    expect(validateChanges).toContain('tests/e2e/**/*');
+  });
+
+  test('the lint job runs the gate from the repository root', () => {
+    // The gate's config entries anchor to the invocation's cwd. Measured
+    // on ESLint 10.14: from tests/e2e/ the root config sits outside the
+    // base path and is reported as a warning — exit 0 bare, exit 1 with
+    // the gate's --max-warnings 0; an ignore-pattern match behaves the
+    // same way. The only flag-independent failure is a target that
+    // matches nothing at all (exit 2): the pinned command's relative
+    // path from a different cwd. So the `cd` is pinned — the full line,
+    // not the npm script name alone.
+    expect(lintJob).toContain('cd ${CI_PROJECT_DIR} && npm run lint:playwright-config');
+  });
+
+  test('the gate gives the root config Node-only globals (#1716 review)', () => {
+    // The root config runs in Node only: the merged node+browser pool entry
+    // must exclude it and a Node-only entry must scope it, or a browser
+    // global there (a ReferenceError at config load) passes no-undef.
+    // ESLint's flat config merges matching entries' globals additively, so
+    // the failure modes split: dropping the EXCLUSION silently restores
+    // the hole, while dropping the Node-only entry fails loudly (the file
+    // keeps only js.configs.recommended, and every CommonJS global —
+    // require, module — trips no-undef). The pin guards both edits. Also
+    // ruled out: ADDING browser globals to the Node-only entry, hoisting
+    // the exclusion into a top-level global-ignore entry (which excludes
+    // the file from every entry — the gate's --max-warnings 0 turns that
+    // into exit 1), and ADDING an override entry that turns no-undef off
+    // or re-scopes globals for the root config. An appended entry can
+    // reach the root file through any shape — a broad glob, a files-less
+    // globals entry, a bare rules override — so the counts below pin the
+    // shape-bearing keys themselves: files, languageOptions and rules
+    // appear exactly twice each (the merged and Node-only entries); any
+    // appended entry carries at least one of them and breaks a count. An
+    // entry carrying NONE of the three is an ignores-only global, which
+    // the gate converts to exit 1.
+    // The exclusion is therefore pinned as ONE contiguous files+ignores
+    // pair — a global ignores-only entry does not carry the files: prefix
+    // and cannot satisfy it — the browser spread is pinned to exactly one
+    // occurrence, the merged pool's, and the file's references to the root
+    // config are pinned to exactly two: one spelling in each entry. (The
+    // once-present '../../' spellings were removed in loop 7: measured,
+    // ESLint never lints a file outside the base path, so a ..-escaping
+    // pattern can never match under ANY anchoring — the old guard
+    // rationale protected nothing.)
+    // Comments are stripped before compaction (the exclusion's
+    // measured-mechanism comment sits between the two pinned lines), all
+    // three placements: block comments first — a `/* */` mentioning a
+    // pinned literal must not skew a count — then full-line `//` lines,
+    // then trailing `//` tails (a trailing comment mentioning a pinned
+    // literal must not skew a count either; the file carries no `//`
+    // inside a string literal today).
+    const source = fs
+      .readFileSync(path.join(ROOT, 'tests/e2e/eslint.config.js'), 'utf-8')
+      .replace(/(^|\n)\s*\/\*[\s\S]*?\*\//g, '$1')
+      .split('\n')
+      .map((line) => line.replace(/\/\/.*$/, ''))
+      .join('\n')
+      .replace(/\s+/g, '');
+    const scopedExclusion = "files:['**/*.js'],ignores:['playwright.config.js'],";
+    expect(source).toContain(scopedExclusion);
+    expect(source).toContain("files:['playwright.config.js'],");
+    expect(source.match(/globals\.browser/g) || []).toHaveLength(1);
+    expect(source.match(/playwright\.config\.js/g) || []).toHaveLength(2);
+    expect(source.match(/files:\[/g) || []).toHaveLength(2);
+    expect(source.match(/languageOptions:/g) || []).toHaveLength(2);
+    expect(source.match(/rules:\{/g) || []).toHaveLength(2);
+  });
+
+  test('the root config carries no eslint-disable suppression (#1716 review)', () => {
+    // A USED disable directive is not an unused one: it silences no-undef
+    // for exactly the binding the gate exists to catch, --max-warnings 0
+    // never sees it, and the wiring pins cannot — the CLI suppressor pins
+    // cover the command, not the target file. The target is one small
+    // file; the suppression is forbidden outright.
+    const source = fs.readFileSync(path.join(ROOT, 'playwright.config.js'), 'utf-8');
+    // Three directive families, three greps: 'eslint-disable' misses
+    // the file-level config comment (eslint no-undef: "off" — no
+    // 'disable' in it, and measured to silence the gate the same way);
+    // 'no-undef' misses the blanket spellings (eslint-disable with no
+    // rule name); both miss the /* global(s) <name> */ directive, which
+    // declares the binding to no-undef directly and was measured to
+    // silence the gate the same way. The third grep is a
+    // whitespace-tolerant regex, not a literal: ESLint trims the comment
+    // before parsing the directive label, so /*global*/, /*   global */
+    // and the plural /*globals*/ tag all register. The regex carries no
+    // `i` flag on purpose: ESLint parses the directive label
+    // lowercase-only, so an uppercase /* GLOBAL */ fires no-undef and
+    // needs no pin coverage. The target has no legitimate mention of any
+    // of the three (grep: zero).
+    expect(source).not.toContain('eslint-disable');
+    expect(source).not.toContain('no-undef');
+    expect(source).not.toMatch(/\/\*\s*globals?\b/);
+  });
+
+  test('the gate names the root config and the e2e eslint config', () => {
+    // The script carries the targets AND the flag that makes its own
+    // silencing modes fail — the exit-mode taxonomy is stated once, on
+    // the cwd pin above.
+    //
+    // The script is pinned by EXACT equality, not by enumerated flags.
+    // Enumeration was measured incomplete: --stdin (empty stdin in every
+    // non-interactive run), --global (CLI-injected globals silence
+    // no-undef for a named binding), --version/--help and the utility
+    // modes each exit 0 without linting — none caught by a per-flag
+    // absent list. Any appended, dropped or reordered token now fails
+    // this pin — the same conscious-update trade-off as the :fix
+    // delegation pin below.
+    const scripts = JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf-8')).scripts;
+    const gateScript = scripts['lint:playwright-config'];
+    expect(gateScript).toBe(
+      'tests/e2e/node_modules/.bin/eslint --max-warnings 0 --config tests/e2e/eslint.config.js playwright.config.js'
+    );
+    // The fix variant must stay a delegation to the pinned gate — a
+    // typoed copy of the command would drift from it with nothing
+    // forcing the two back together.
+    expect(scripts['lint:playwright-config:fix']).toBe('npm run lint:playwright-config -- --fix');
+    // The gate leads both local aggregate chains (fast feedback on the
+    // file this issue is about): dropping the prefix from either chain
+    // kills the local half of the gate with no other pin the wiser. The
+    // regex form renders the actual script on failure — a boolean assert
+    // would only say "false !== true".
+    expect(scripts.lint).toMatch(/^npm run lint:playwright-config && /);
+    expect(scripts['lint:fix']).toMatch(/^npm run lint:playwright-config:fix && /);
+  });
+
+  // The probe's mkdtemp dirs, removed after the suite (same convention
+  // as writeTempCi above).
+  const probeDirs = [];
+  afterAll(() => {
+    for (const dir of probeDirs) fs.rmSync(dir, { recursive: true, force: true });
+  });
+
+  // A cold eslint start can exceed jest's 5s default per test on a
+  // loaded runner — a flake whose cause would be runner latency, not a
+  // gate regression.
+  test('the gate actually fires on an undeclared global (behavioral control)', () => {
+    // The string pins assert configuration; this probe asserts the
+    // OUTCOME with the real binary: a copy of the root config carrying an
+    // undeclared browser global must exit 1 with no-undef. It dies if
+    // js.configs.recommended is removed or stubbed, if no-undef is
+    // turned off anywhere, or if the Node-only entry's globals are
+    // re-scoped (by aliased spread or by hand-spelled keys) — the whole
+    // evasion class the string pins enumerate one shape at a time.
+    // cwd = the probe dir: ESLint anchors entries to the invocation's
+    // cwd, so a file named playwright.config.js there takes the
+    // Node-only entry — the exact runtime shape of the root config.
+    const probe = fs.mkdtempSync(path.join(os.tmpdir(), 'gate-probe-'));
+    probeDirs.push(probe);
+    const rootConfig = fs.readFileSync(path.join(ROOT, 'playwright.config.js'), 'utf-8');
+    fs.writeFileSync(path.join(probe, 'playwright.config.js'), rootConfig + '\nconst probeGlobal = window.location;\n');
+    let failure;
+    try {
+      execFileSync(
+        path.join(ROOT, 'tests/e2e/node_modules/.bin/eslint'),
+        ['--max-warnings', '0', '--config', path.join(ROOT, 'tests/e2e/eslint.config.js'), 'playwright.config.js'],
+        // Bounded below the jest timeout: the call is synchronous, so
+        // jest's own timer cannot run while a hung child blocks the
+        // worker — without this a wedged eslint would wedge the job.
+        { cwd: probe, encoding: 'utf-8', timeout: 14000 }
+      );
+    } catch (e) {
+      failure = e;
+    }
+    expect(failure).toBeDefined();
+    // An ENOENT (tests/e2e deps not installed on a dev checkout) surfaces
+    // as status null with a code — name the remedy instead of rendering
+    // "expected null to be 1". CI installs the deps (config:validate's
+    // before_script), so only dev checkouts can take this branch.
+    if (failure.code === 'ENOENT') {
+      throw new Error('tests/e2e deps missing on this checkout — fix: cd tests/e2e && npm ci');
+    }
+    // A child killed at the inner 14s bound is runner latency, not a gate
+    // regression — name it, or the assertion would render "expected null
+    // to be 1" and invite a misdiagnosis.
+    if (failure.signal === 'SIGTERM') {
+      throw new Error('eslint exceeded the probe timeout (14s) — runner latency, not a gate regression');
+    }
+    expect(failure.status).toBe(1);
+    expect(`${failure.stdout}${failure.stderr}`).toContain('no-undef');
+  }, 15000);
+
+  test('the commit-time hook covers the root config (#1716 review)', () => {
+    // The gate's lint-staged entry is the commit-time half of its home:
+    // without it a locally committed edit to the root config ships
+    // unlinted until the MR pipeline — the same gap shape the CI wiring
+    // closes. Exact equality, same reasoning as the gate script above:
+    // the explicit --config is load-bearing (no eslint.config.js exists
+    // above the repository root, so the tree-relative spelling used for
+    // tests/e2e/** exits 2 for this file), and enumerated absences were
+    // measured incomplete.
+    //
+    // The hook that RUNS lint-staged is part of the same contract and has
+    // no other reader: its has_e2e detection and install keep the entry
+    // from dying on a checkout without tests/e2e deps, and it must not be
+    // removable without a red signal.
+    const hook = fs.readFileSync(path.join(ROOT, '.husky/pre-commit'), 'utf-8');
+    expect(hook).toContain('npx lint-staged');
+    expect(hook).toContain('install_if_needed "tests/e2e"');
+    // The detection LINE, not the comment above it: the hook's own
+    // comment names both paths and would satisfy a loose match while the
+    // detection line is deleted (mutation-tested).
+    expect(hook).toMatch(/has_e2e=.*tests\/e2e\//);
+    const pkg = JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf-8'));
+    const entry = (pkg['lint-staged'] || {})['playwright.config.js'];
+    // Present before the join: a deleted key would otherwise fail with a
+    // TypeError instead of stating the contract.
+    expect(entry).toBeDefined();
+    expect(entry.join(' ')).toBe(
+      'tests/e2e/node_modules/.bin/eslint --max-warnings 0 --config tests/e2e/eslint.config.js --fix'
+    );
+  });
+
+  test('the sibling suite gate keeps its own lint script (#1716 review)', () => {
+    // The root config is not the only gate: tests/e2e's `eslint .` covers
+    // every spec and helper (the #1632 evaluate-body class). Its package
+    // script has the same silencing-by-edit vector as the root gate —
+    // repointing it at a --rule override would die green in the MR
+    // pipeline — so it is pinned by exact equality like the root script.
+    const pkg = JSON.parse(fs.readFileSync(path.join(ROOT, 'tests/e2e/package.json'), 'utf-8'));
+    expect(pkg.scripts.lint).toBe('eslint .');
+    expect(pkg.scripts['lint:fix']).toBe('eslint . --fix');
   });
 });

@@ -156,10 +156,12 @@ already enforce:
 - **anchor coverage** holds for the directories the train invocation
   covers (`chatbot/`, `documents/`, `admin/`, `helpers/`, plus the pinned
   root spec by name) — a spec executed by the train stays
-  train-triggerable without an anchor edit; `okf/` is deliberately not
-  anchor-covered. The merge-train changes guard in
-  `tests/config-validator/` pins the executed set and the coverage
-  demand;
+  train-triggerable without an anchor edit. Every other directory is NOT
+  anchor-covered: `okf/` by deliberate exclusion, `auth/`, `theme/` and
+  `run/` because the dormant train invocation never named them — a spec
+  added there does not trigger the dormant e2e job. The merge-train
+  changes guard in `tests/config-validator/` pins the executed set and
+  the coverage demand;
 - the **handle-locator gate** and the **fixture-password scan** carry the
   per-file lists they need and were updated by the same MR that moved the
   files (#1741).

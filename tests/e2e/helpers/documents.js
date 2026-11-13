@@ -181,20 +181,24 @@ async function getDocumentTableRows(page) {
   for (let i = 0; i < count; i++) {
     const row = rows.nth(i);
     const fileName = (await row.locator('[data-test-id="document-name"]').innerText()).trim();
-    const statusTag = row.locator('[data-test-id="document-status"]');
-    // A row's status tag is data-driven — documents without a status render
-    // none — so the branch is on the row's shape, not on timing. isVisible
-    // answers false for an absent element; a broken locator fails the read.
-    const status = (await statusTag.isVisible()) ? (await statusTag.innerText()).trim() : '';
+    // DsStatusTag renders unconditionally, so the status cell is always
+    // present — the status TEXT is what varies ('' when the payload
+    // carries no status); the read is direct, and a broken locator fails
+    // it instead of silently reporting no status.
+    const status = (await row.locator('[data-test-id="document-status"]').innerText()).trim();
     const labelTags = row.locator('[data-test-id="document-label"]');
     const labelCount = await labelTags.count();
     const labels = [];
     for (let j = 0; j < labelCount; j++) {
       labels.push((await labelTags.nth(j).innerText()).trim());
     }
-    const cells = row.locator('td');
-    const date = (await cells.nth(3).innerText()).trim();
-    const size = (await cells.nth(4).innerText()).trim();
+    // The two trailing cells are handle-anchored, not indexed: the row
+    // has SIX cells (checkbox, name, status, labels, date, size) and the
+    // old nth(3)/nth(4) indexes read the LABELS and DATE cells — the
+    // exported date/size were wrong by one column since the labels
+    // column landed.
+    const date = (await row.locator('[data-test-id="document-upload-date"]').innerText()).trim();
+    const size = (await row.locator('[data-test-id="document-size"]').innerText()).trim();
 
     result.push({ fileName, status, labels, date, size });
   }

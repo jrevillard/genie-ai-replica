@@ -37,11 +37,9 @@ test.describe('Document Upload', () => {
       const cellText = await row.locator('[data-test-id="document-name"]').innerText();
       expect(cellText.trim()).toContain(fileName);
 
-      // The handle sits on the status CELL of the row: a document without
-      // a rendered status shows an empty cell, so the read below keeps the
-      // same '' fallback the old class-chain selector produced.
-      const statusTag = row.locator('[data-test-id="document-status"]');
-      const statusText = (await statusTag.isVisible()) ? (await statusTag.innerText()).trim() : '';
+      // DsStatusTag renders unconditionally, so the status cell is always
+      // present — the status TEXT is what varies; the read is direct.
+      const statusText = (await row.locator('[data-test-id="document-status"]').innerText()).trim();
       expect(statusText.toLowerCase()).toContain('pending');
     });
   }

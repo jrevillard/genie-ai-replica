@@ -620,10 +620,10 @@
                                 >+{{ doc.labels.length - 2 }}</span
                               >
                             </td>
-                            <td>
+                            <td data-test-id="document-upload-date">
                               {{ new Date(doc.upload_date).toLocaleDateString() }}
                             </td>
-                            <td>{{ formatFileSize(doc.file_size) }}</td>
+                            <td data-test-id="document-size">{{ formatFileSize(doc.file_size) }}</td>
                           </tr>
                         </tbody>
                       </table>

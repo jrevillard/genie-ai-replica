@@ -45,17 +45,21 @@ const GRANDFATHERED_FILES = [
 // passed indirectly escapes this net — in the scanned files every
 // locator call takes its selector literally.
 const LOCATOR_CALL =
-  /(?:locator|querySelector|querySelectorAll|waitForSelector|click|dblclick|tap|hover|check|uncheck|dragAndDrop|setInputFiles|frameLocator|\$\$?eval|\$\$?)\(\s*/;
+  /(?:locator|querySelector|querySelectorAll|waitForSelector|click|dblclick|tap|hover|check|uncheck|dragAndDrop|setInputFiles|frameLocator|\$\$?eval|\$\$?|page\.(?:fill|type|press)|frame\.(?:fill|type|press))\(\s*/;
 
 // Inside a locator argument the string IS a CSS selector, so every
 // dot-name in it is a class segment (`'.chat-message.bot'` is two) —
 // unlike in ordinary code, where `.padEnd` is a method call. Attribute
 // values are stripped first: a dot inside `[data-x="a.b"]` is data, not
-// a class, in either quote spelling. Class names are matched
-// case-insensitively to the HTML class attribute (a `.ChatWindow`
-// locator is as much a class coupling as a lowercase one). The trailing
-// guard keeps `.sidebar` from matching inside `.sidebar-inner`.
+// a class, in either quote spelling — EXCEPT a class-matching attribute
+// selector, whose value IS the coupling the gate exists for:
+// `[class*="chat-message"]` must not survive the blanking. Class names
+// are matched case-insensitively to the HTML class attribute (a
+// `.ChatWindow` locator is as much a class coupling as a lowercase
+// one). The trailing guard keeps `.sidebar` from matching inside
+// `.sidebar-inner`.
 const CLASS_SELECTOR = /\.([a-zA-Z][a-zA-Z0-9_-]*)(?![a-zA-Z0-9_-])/g;
+const CLASS_ATTR_SELECTOR = /\[class[*~^$]?=\s*(['"])([a-zA-Z][a-zA-Z0-9_-]*)\1/;
 
 const classSelectorsIn = (source) => {
   const found = [];
@@ -67,8 +71,17 @@ const classSelectorsIn = (source) => {
     // Cut the call prefix off: the scan below must see only the selector
     // string, so an engine marker (`text=`) anchors on the selector's
     // own start, not on the word that opened the call.
-    const selector = call[0].slice(call[0].search(/['"`]/) + 1).replace(/=("[^"]*"|'[^']*')/g, '=""');
-    for (const m of selector.matchAll(CLASS_SELECTOR)) {
+    const selector = call[0].slice(call[0].search(/['"`]/) + 1);
+    // The class-matching attribute selectors are read on the RAW string
+    // (their value is the class coupling); every other attribute value
+    // is blanked before the class scan, so a dot inside `[data-x="a.b"]`
+    // stays data.
+    const classAttr = selector.match(CLASS_ATTR_SELECTOR);
+    if (classAttr) {
+      found.push({ className: classAttr[2], quoted: call[0] });
+    }
+    const blanked = selector.replace(/=("[^"]*"|'[^']*')/g, '=""');
+    for (const m of blanked.matchAll(CLASS_SELECTOR)) {
       found.push({ className: m[1], quoted: call[0] });
     }
   }
@@ -77,23 +90,35 @@ const classSelectorsIn = (source) => {
 
 // The second rot class: text coupling. A text selector breaks on any
 // copy change — a renamed button label, a retranslated heading — and
-// the breakage is invisible at review time. Two shapes are flagged:
+// the breakage is invisible at review time. THREE shapes are flagged:
 // the text-addressing APIs (getByText/getByLabel/getByPlaceholder —
 // they couple the test to visible copy or to label/placeholder text),
-// and the text engines inside a selector string (`text=`, `:has-text()`,
-// `:text()`, `:text-is()`). NOT flagged: `getByRole(..., { name })` — a
-// role locator survives any redesign and is the accepted fallback when
-// no handle exists; and a `hasText` DISCRIMINATOR (`locator(sel, {
-// hasText })` / `.filter({ hasText })`) — it narrows a set the selector
-// already resolved, typically a declared handle plus test-seeded data,
-// so the copy it matches is the test's own, not the design's.
+// the text engines inside a selector string (`text=`, `:has-text()`,
+// `:text()`, `:text-is()`), and a `hasText` option on a locator whose
+// selector is NOT a declared handle — the contract allows a hasText
+// discriminator only on a set a handle already resolved
+// (`locator('[data-test-id="…"]', { hasText })` passes). A `.filter({
+// hasText })` is NOT flagged: it narrows whatever the chain resolved,
+// and seeing the anchor would need chain parsing — that half of the
+// rule stays by-contract, not by-gate. `getByRole(..., { name })` is
+// the accepted fallback: a role locator survives any redesign.
 const TEXT_API_CALL = /\bgetBy(?:Text|Label|Placeholder)\s*\(/g;
-const TEXT_ENGINE = /:has-text\(|:text\(|:text-is\(|(?:^|[\s>]+)text=/;
+const UNANCHORED_HASTEXT = /locator\(\s*(['"`])((?:\\.|(?!\1)[^\\])*)\1\s*,\s*(?:async\s*)?\{[^}]*\bhasText/g;
+const TEXT_ENGINE = /:has-text\(|:text\(|:text-is\(|(?:^|[\s>(])(text=)/;
 
 const textSelectorsIn = (source) => {
   const found = [];
   for (const m of source.matchAll(TEXT_API_CALL)) {
     found.push({ marker: m[0].trim(), quoted: m[0] });
+  }
+  for (const m of source.matchAll(UNANCHORED_HASTEXT)) {
+    // The accepted form: the hasText narrows a set a declared handle
+    // already resolved — the selector carries the anchor.
+    if (/^\[data-testid?=/.test(m[2])) continue;
+    found.push({
+      marker: 'hasText on an unanchored selector',
+      quoted: m[0].slice(0, 60)
+    });
   }
   for (const call of source.matchAll(new RegExp(LOCATOR_CALL.source + /(['"`])(?:\\.|(?!\1)[^\\])*\1/.source, 'g'))) {
     // Same cut as the class scan: the engine regex anchors on the
@@ -101,7 +126,10 @@ const textSelectorsIn = (source) => {
     const selector = call[0].slice(call[0].search(/['"`]/) + 1).replace(/=("[^"]*"|'[^']*')/g, '=""');
     const engine = selector.match(TEXT_ENGINE);
     if (engine) {
-      found.push({ marker: engine[0].trim(), quoted: call[0] });
+      // The text= alternative captures its token separately: the anchor
+      // before it (a `(` in a nested engine call) is context, not part
+      // of the marker.
+      found.push({ marker: (engine[1] || engine[0]).trim(), quoted: call[0] });
     }
   }
   return found;
@@ -189,7 +217,7 @@ const findOffenders = (dir, exemptRel, relBase) => {
   const offenders = [];
   const files = fs
     .readdirSync(dir, { recursive: true })
-    .filter((f) => f.endsWith('.js'))
+    .filter((f) => f.endsWith('.js') && !f.split(path.sep).includes('node_modules'))
     .map((f) => path.join(dir, f))
     .sort();
   for (const file of files) {
@@ -322,6 +350,26 @@ describe('the e2e suite locates application elements by declared handle', () => 
     expect(textSelectorsIn(sample)).toEqual([]);
   });
 
+  test('a class-coupling attribute selector is an offender', () => {
+    const sample = `page.locator('[class*="chat-message"]')`;
+    expect(classSelectorsIn(sample).map((o) => o.className)).toEqual(['chat-message']);
+  });
+
+  test('a text= nested in a layout engine call is an offender', () => {
+    const sample = "await page.click('button:right-of(text=Publish)');";
+    expect(textSelectorsIn(sample).map((o) => o.marker)).toEqual(['text=']);
+  });
+
+  test('a page-level fill with a class selector is an offender', () => {
+    const sample = "await page.fill('.legacy-search', 'hello');";
+    expect(classSelectorsIn(sample).map((o) => o.className)).toEqual(['legacy-search']);
+  });
+
+  test('a hasText option on an unanchored locator is an offender', () => {
+    const sample = "page.locator('td', { hasText: 'Pending' })";
+    expect(textSelectorsIn(sample).map((o) => o.marker)).toEqual(['hasText on an unanchored selector']);
+  });
+
   describe('default-on semantics (simulated tree)', () => {
     let tmp;
     beforeEach(() => {
@@ -362,6 +410,15 @@ describe('the e2e suite locates application elements by declared handle', () => 
       const offenders = findOffenders(tmp, [], tmp);
       expect(offenders.length).toBe(1);
       expect(offenders[0]).toContain(path.join('area', 'deep.spec.js'));
+    });
+
+    test('an installed dependency tree is not scanned', () => {
+      // CI runs `npm ci` inside tests/e2e/: without the skip, the gate
+      // regex-scans the whole dependency tree (and any bundled example
+      // locator in it) on every run.
+      fs.mkdirSync(path.join(tmp, 'node_modules', 'pkg'), { recursive: true });
+      fs.writeFileSync(path.join(tmp, 'node_modules', 'pkg', 'index.js'), "page.locator('.bundled-class');");
+      expect(findOffenders(tmp, [], tmp)).toEqual([]);
     });
   });
 });

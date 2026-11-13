@@ -24,9 +24,13 @@ a `hasText` discriminator on a handle-resolved set counts as **handle**
 
 ## The classification
 
-Counts are locator-shaped calls per spec (the unit specs of `helpers/` and
-`run/` do not select app elements and are not listed; the two capture
-scripts are, because the gate scans them).
+The gate scans **every** `.js` file under `tests/e2e/` — every helper, the
+`run/` modules, the infra scripts, the capture scripts — not only the
+specs tabulated here. The tables below cover the **app-driving specs**
+(the surface this map classifies); a helper or run module is held to the
+same gate even without a row. The unit specs of `helpers/` and `run/`
+(the suite testing its own modules) select no app elements and are not
+classified.
 
 ### `admin/` — fully handle-based
 

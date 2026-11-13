@@ -213,3 +213,50 @@ test.describe('the realm probes read the admin API', () => {
     expect(reason).toMatch(/NOT exercised/);
   });
 });
+
+test.describe('the venue-skip wiring (#1773)', () => {
+  // A fake of the Playwright `test` object: the registrars take it as an
+  // argument exactly so this spec can observe the wiring — the assertions
+  // are about WHAT the hooks decide, not about Playwright itself.
+  const fakeTest = () => {
+    const calls = [];
+    return { calls, skip: (condition, description) => calls.push({ condition, description }) };
+  };
+
+  test('skipUnlessVenue skips with the reason when the probe fails', async () => {
+    const testApi = fakeTest();
+    const hook = freshProfile().skipUnlessVenue(testApi, async () => false, () => 'the surface is absent');
+    await hook();
+    expect(testApi.calls).toEqual([{ condition: true, description: 'the surface is absent' }]);
+  });
+
+  test('skipUnlessVenue calls skip(false) when the probe holds', async () => {
+    const testApi = fakeTest();
+    const hook = freshProfile().skipUnlessVenue(testApi, async () => true, () => 'unused');
+    await hook();
+    expect(testApi.calls).toEqual([{ condition: false, description: 'unused' }]);
+  });
+
+  test('skipUnlessVenue awaits an async reason and accepts a plain string', async () => {
+    const testApi = fakeTest();
+    await freshProfile().skipUnlessVenue(testApi, async () => false, async () => 'async reason')();
+    await freshProfile().skipUnlessVenue(testApi, async () => false, 'plain reason')();
+    expect(testApi.calls.map((c) => c.description)).toEqual(['async reason', 'plain reason']);
+  });
+
+  test('skipUnlessVenue passes the probe verdict through, not its inverse', async () => {
+    const testApi = fakeTest();
+    await freshProfile().skipUnlessVenue(testApi, async () => 'truthy-but-not-boolean', () => 'r')();
+    expect(testApi.calls[0].condition).toBe(false);
+  });
+
+  test('venueSetup runs the body only when the probe holds', async () => {
+    const testApi = fakeTest();
+    const ran = [];
+    const body = async (fixtures) => ran.push(fixtures);
+    await freshProfile().venueSetup(testApi, async () => false, body)('fx');
+    expect(ran).toEqual([]);
+    await freshProfile().venueSetup(testApi, async () => true, body)('fx');
+    expect(ran).toEqual(['fx']);
+  });
+});

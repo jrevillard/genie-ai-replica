@@ -34,7 +34,7 @@
 
 const { test, expect } = require('@playwright/test');
 const { loginViaUI, BASE_URL, LOGIN_BUDGET_TIMEOUT_MS } = require('../helpers/chatbot');
-const { okfEnabled, okfParkedReason } = require('../helpers/venue-profile');
+const { okfEnabled, okfParkedReason, skipUnlessVenue } = require('../helpers/venue-profile');
 
 /**
  * WHO LOGS IN.
@@ -138,9 +138,7 @@ test.describe('the concept-document ceiling in the concept editor', () => {
   // for a surface that never appears. It SKIPS WITH A REASON instead
   // (#1742), and the reason is the venue's own profile — read from the
   // runtime config the frontend itself reads — not a guess.
-  test.beforeEach(async () => {
-    test.skip(!(await okfEnabled()), await okfParkedReason());
-  });
+  test.beforeEach(skipUnlessVenue(test, okfEnabled, okfParkedReason));
 
   test("the advisory carries the SERVER's ceiling", async ({ page }) => {
     await openEditor(page);

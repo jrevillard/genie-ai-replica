@@ -1,6 +1,6 @@
 const { test, expect } = require('@playwright/test');
 const { BASE_URL } = require('../helpers/base-url');
-const { hasIdentityProvider, missingIdentityProviderReason } = require('../helpers/venue-profile');
+const { hasIdentityProvider, missingIdentityProviderReason, skipUnlessVenue } = require('../helpers/venue-profile');
 
 const REALM = process.env.KEYCLOAK_REALM || 'genie';
 
@@ -45,12 +45,15 @@ async function brokerLogin(page) {
   }
 }
 
-test('completes full external IdP brokered login flow', async ({ browser }) => {
-  // The venue profile decides: the brokered login is an external-IdP
-  // surface, and a deployment without a brokered identity provider does
-  // not answer it.
-  test.skip(!(await hasIdentityProvider(REALM)), missingIdentityProviderReason(REALM));
+// The venue profile decides: the brokered login is an external-IdP
+// surface, and a deployment without a brokered identity provider does not
+// answer it — the spec SKIPS WITH A REASON instead (#1742). The wiring is
+// the shared registrar's (#1773), stated once.
+test.beforeEach(
+  skipUnlessVenue(test, () => hasIdentityProvider(REALM), () => missingIdentityProviderReason(REALM))
+);
 
+test('completes full external IdP brokered login flow', async ({ browser }) => {
   const context = await browser.newContext({
     ignoreHTTPSErrors: true,
     bypassCSP: true,

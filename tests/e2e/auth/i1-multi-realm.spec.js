@@ -8,7 +8,7 @@ const {
   SESSION_MINT_TIMEOUT_MS,
 } = require('../helpers/auth');
 const { createUser, deleteUser, enableDirectAccessGrants } = require('../helpers/keycloak-admin');
-const { realmExists, missingRealmReason } = require('../helpers/venue-profile');
+const { realmExists, missingRealmReason, skipUnlessVenue, venueSetup } = require('../helpers/venue-profile');
 
 /**
  * Phase I: Multi-Realm Configuration (Story 2-9)
@@ -34,32 +34,37 @@ test.describe.serial('Phase I: Multi-Realm Configuration', () => {
   // REASON instead of failing on a realm that was never provisioned
   // (#1742). The reason is the venue's own profile, read from the realm
   // inventory — not a guess, and never a silent skip.
-  test.beforeEach(async () => {
-    test.skip(!(await realmExists(TEST_REALM)), missingRealmReason(TEST_REALM));
-  });
+  // The venue profile decides: a deployment that exposes no second realm
+  // cannot answer a multi-realm request, so the test below SKIPS WITH A
+  // REASON instead of failing on a realm that was never provisioned
+  // (#1742). The wiring is the shared registrar's (#1773), stated once —
+  // the reason is the venue's own profile, read from the realm inventory.
+  test.beforeEach(
+    skipUnlessVenue(test, () => realmExists(TEST_REALM), () => missingRealmReason(TEST_REALM))
+  );
 
-  test.beforeAll(async ({ browser }) => {
-    test.setTimeout(SESSION_MINT_TIMEOUT_MS);
+  // The second realm is absent: the tests skip, and the setup below (which
+  // mints into that realm) must not run against a realm that does not
+  // exist. The guard is venueSetup's (#1773), stated once.
+  test.beforeAll(
+    venueSetup(test, () => realmExists(TEST_REALM), async ({ browser }) => {
+      test.setTimeout(SESSION_MINT_TIMEOUT_MS);
 
-    // The second realm is absent: the tests skip, and the setup below
-    // (which mints into that realm) must not run against a realm that does
-    // not exist.
-    if (!(await realmExists(TEST_REALM))) return;
+      adminToken = await getAdminToken();
 
-    adminToken = await getAdminToken();
+      // genie2 is test-only: enable ROPC for its direct token mints
+      // (see enableDirectAccessGrants — never on the primary realm).
+      await enableDirectAccessGrants(adminToken, TEST_REALM, 'genie-app');
 
-    // genie2 is test-only: enable ROPC for its direct token mints
-    // (see enableDirectAccessGrants — never on the primary realm).
-    await enableDirectAccessGrants(adminToken, TEST_REALM, 'genie-app');
+      // Primary-realm token from a browser login session — minted once,
+      // like the sibling suites.
+      genie1Token = await getSessionTokenViaUI({ browser });
 
-    // Primary-realm token from a browser login session — minted once,
-    // like the sibling suites.
-    genie1Token = await getSessionTokenViaUI({ browser });
-
-    // Create test user in genie2 (realm should already exist from Phase
-    // 0.6; createUser tolerates a 409 from a previous run)
-    await createUser(adminToken, TEST_REALM, TEST_USER);
-  });
+      // Create test user in genie2 (realm should already exist from Phase
+      // 0.6; createUser tolerates a 409 from a previous run)
+      await createUser(adminToken, TEST_REALM, TEST_USER);
+    })
+  );
 
   test.afterAll(async () => {
     // Cleanup chains up to three 30s-capped admin requests on a stalled

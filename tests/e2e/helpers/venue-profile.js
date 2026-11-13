@@ -203,6 +203,55 @@ function missingIdentityProviderReason(realm) {
   );
 }
 
+/**
+ * The venue-skip hook, stated ONCE (#1773): the skip DECISION and its
+ * reason, wired into one `test.skip(...)` call. A spec whose surface the
+ * venue does not expose registers this as its beforeEach hook instead of
+ * hand-writing the two-liner — a change to the skip protocol (a new probe
+ * folded into the reason, a different hook form) then edits THIS block,
+ * not 5-8 identical copies. The skip stays a per-test annotation: the
+ * failure path reads `test.annotations` skip descriptions to print them.
+ *
+ * The `testApi` argument is the spec's own `test` object — passed
+ * explicitly so the unit spec can observe the wiring with a fake.
+ *
+ * @param {object} testApi - the Playwright `test` object the spec uses
+ * @param {Function} probe - the venue probe (`okfEnabled`, `realmExists`,
+ *   `hasIdentityProvider`, or a closure over one); falsy = the venue
+ *   lacks the surface
+ * @param {Function|string} reason - the skip reason: a function (sync or
+ *   async, called at hook time) or a plain string
+ * @returns {Function} the beforeEach hook
+ */
+function skipUnlessVenue(testApi, probe, reason) {
+  return async () => {
+    const why = typeof reason === 'function' ? await reason() : reason;
+    testApi.skip(!(await probe()), why);
+  };
+}
+
+/**
+ * The guarded beforeAll body (#1773): runs `body` only when the venue
+ * probe holds, otherwise returns without running it. A skipped spec must
+ * leave no user behind in the venue's realm — the setup that mints users
+ * wraps itself in this instead of hand-writing the early-return guard.
+ * The skip ANNOTATION itself still comes from `skipUnlessVenue` in a
+ * beforeEach — this guard only protects the setup work.
+ *
+ * @param {object} testApi - the Playwright `test` object the spec uses
+ * @param {Function} probe - the venue probe; falsy = the venue lacks the
+ *   surface
+ * @param {Function} body - the setup body; called with the beforeAll
+ *   hook's fixtures argument
+ * @returns {Function} the beforeAll hook
+ */
+function venueSetup(testApi, probe, body) {
+  return async (fixtures) => {
+    if (!(await probe())) return;
+    await body(fixtures);
+  };
+}
+
 module.exports = {
   okfEnabled,
   okfParkedReason,
@@ -210,4 +259,6 @@ module.exports = {
   missingRealmReason,
   hasIdentityProvider,
   missingIdentityProviderReason,
+  skipUnlessVenue,
+  venueSetup,
 };

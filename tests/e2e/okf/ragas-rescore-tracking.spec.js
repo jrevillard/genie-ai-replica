@@ -24,7 +24,7 @@ const { test, expect } = require('@playwright/test');
 const { BASE_URL } = require('../helpers/base-url');
 const { getAdminToken, SESSION_MINT_TIMEOUT_MS } = require('../helpers/auth');
 const { createUser, deleteUser } = require('../helpers/keycloak-admin');
-const { okfEnabled, okfParkedReason } = require('../helpers/venue-profile');
+const { okfEnabled, okfParkedReason, skipUnlessVenue, venueSetup } = require('../helpers/venue-profile');
 const { pinLocale } = require('../helpers/locale');
 
 const REALM = process.env.KEYCLOAK_REALM || 'genie';
@@ -42,29 +42,28 @@ test.describe('the RAGAS guide explains the output, and a re-score is a tracked 
   // spec SKIPS WITH A REASON instead of failing on a surface that never
   // appears (#1742). The reason is the venue's own profile, read from the
   // runtime config the frontend itself reads.
-  test.beforeEach(async () => {
-    test.skip(!(await okfEnabled()), await okfParkedReason());
-  });
+  test.beforeEach(skipUnlessVenue(test, okfEnabled, okfParkedReason));
 
   let adminToken;
   let userId;
 
-  test.beforeAll(async () => {
-    // Minting can exceed the 60s beforeAll hook default — see SESSION_MINT_TIMEOUT_MS.
-    test.setTimeout(SESSION_MINT_TIMEOUT_MS);
+  // The OKF pillar parked means every test below skips — the setup must
+  // not mint a user into the venue's realm for a spec that did not run.
+  // The guard is venueSetup's (#1773), stated once; the body is the mint.
+  test.beforeAll(
+    venueSetup(test, okfEnabled, async () => {
+      // Minting can exceed the 60s beforeAll hook default — see SESSION_MINT_TIMEOUT_MS.
+      test.setTimeout(SESSION_MINT_TIMEOUT_MS);
 
-    // The OKF pillar parked means every test below skips — and a skipped
-    // spec must leave no user behind in the venue's realm.
-    if (!(await okfEnabled())) return;
-
-    adminToken = await getAdminToken();
-    userId = await createUser(adminToken, REALM, {
-      username: USER,
-      email: 'okf-rescore-e2e@example.invalid',
-      password: PW,
-      realmRoles: ['tools-admin']
-    });
-  });
+      adminToken = await getAdminToken();
+      userId = await createUser(adminToken, REALM, {
+        username: USER,
+        email: 'okf-rescore-e2e@example.invalid',
+        password: PW,
+        realmRoles: ['tools-admin']
+      });
+    })
+  );
 
   test.afterAll(async () => {
     if (adminToken && userId) await deleteUser(adminToken, REALM, userId);

@@ -3616,11 +3616,10 @@ describe('the venue-fixture provisioning in .e2e_web_base', () => {
       }
     };
     const exclusions = new Set([
-      // The two auth specs that mint tokens for their own self-created
-      // fixture users (genie2's testuser2, k1's noroles-e2e) legitimately
-      // carry their own password literals; the rest of the suite stays
-      // scanned. (These are the epic2 specs i1/k1, rehomed under auth/
-      // by the #1741 suite map.)
+      // These two specs legitimately carry their own password literals
+      // (genie2's testuser2, k1's noroles-e2e); the rest of the suite
+      // stays scanned. The rehomed epic2 pair — see the block comment
+      // above.
       path.join(e2eRoot, 'auth', 'i1-multi-realm.spec.js'),
       path.join(e2eRoot, 'auth', 'k1-auth-error-display.spec.js'),
       path.join(e2eRoot, 'fixtures'), // upload seed files

@@ -81,24 +81,22 @@ reference; do not duplicate or restate them here or in specs.
 ## Suite layout
 
 ONE organizational axis: every spec lives in the directory of the feature
-area it drives. The phase traceability is preserved by the phase-letter
-filename prefixes (`a1-`, `d7b-`, `g1-`, `l3-`) and by the suite map —
-[`docs/e2e-tests/suite-map.md`](../../docs/e2e-tests/suite-map.md), which
-records, for every spec file, its area, the acceptance phase/story it
-serves, the deployment profile it needs and the helpers it uses. A new
-spec goes under its area's directory (or joins the map's follow-ups if
-its area is unclear) — never at the tree root, and never under a
-phase-named directory.
+area it drives. The placement rule, the phase traceability and the
+per-spec detail — area, acceptance phase/story, deployment profile,
+helpers — are owned by ONE place: the suite map,
+[`docs/e2e-tests/suite-map.md`](../../docs/e2e-tests/suite-map.md). A new
+spec goes under its area's directory; if its area is unclear, the map's
+follow-up rule applies.
 
 | Path | Contents |
 |------|----------|
-| `auth/` | Login, session lifecycle, token and realm auth specs (phases A, D, G–L of `docs/e2e-tests/`) |
-| `chatbot/` | Chat surface specs: composer, conversation, streaming, quick help, history |
+| `auth/` | Login, session lifecycle, token and realm auth specs (the `docs/e2e-tests/` acceptance phases) |
+| `chatbot/` | Chat surface specs |
 | `documents/` | Document upload/search specs |
-| `admin/` | Admin dashboard specs (authz, data wiring, failure states, logs view) |
-| `okf/` | OKF pillar specs (Studio, artifacts view, RAGAS) |
-| `theme/` | Frontend shell & visual-layer specs (sidebars, responsive grid, welcome banner, decoration assets) |
-| `theme-runtime-config.spec.js` | Pinned at the tree root — named verbatim by the dormant CI invocation and its changes-anchor (`.gitlab-ci.yml`); moves only when that file changes. Its natural home is `theme/` (see the suite map) |
+| `admin/` | Admin dashboard specs |
+| `okf/` | OKF pillar specs |
+| `theme/` | Frontend shell & visual-layer specs |
+| `theme-runtime-config.spec.js` | Pinned at the tree root (see the map's *Root — pinned exception*) |
 | `helpers/` | Shared auth/login, chat, documents, locale, Keycloak admin, cache-header and welcome helpers (helper unit specs live here too — e.g. `helpers/auth.spec.js`) |
 | `helpers/venue-profile.js` | What the venue actually exposes (OKF pillar, realms, identity providers) — the source of every runtime skip's reason |
 | `run/` | The local run: the runner script, the venue-name mapping and the failure path (their unit spec lives here too) |

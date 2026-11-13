@@ -23,18 +23,14 @@ Phase traceability survives the reorganization in two places:
 
 The rule for new work: **one spec, one place, one axis**. A new spec goes
 under its area's directory. A spec whose area is unclear becomes a follow-up
-issue (see *Exceptions and follow-ups*), never a root-level file and never a
-revival of a phase directory.
+issue (see *Root — pinned exception*), never a root-level file and never a
+revival of a phase directory. Feature specs serve no acceptance phase;
+their Phase/story entry is `—`.
 
-Decision record: the alternatives considered in #1741 were keep-phase (the
-loose root specs move under phase dirs), move-to-functional (this choice),
-and split-hybrid (phase dirs for acceptance specs, feature dirs for the
-rest — rejected: it keeps BOTH axes in the tree, which is the problem being
-fixed). Functional won because the phase directories were already redundant
-as an axis — every phase spec is an auth/session spec, so `epic1/`–`epic3/`
-were one area wearing three phase names — while the feature axis is what
-the defect evidence demanded (an auth spec findable under `auth/`, an
-area's specs and their helpers together for a wave like #1822).
+Decision record: the functional axis, chosen in #1741 over keep-phase and
+split-hybrid — the phase directories were one area (auth) wearing three
+phase names, and the hybrid keeps both axes in the tree, the thing being
+fixed.
 
 ## `auth/` — login, session lifecycle, tokens and realms
 
@@ -69,38 +65,38 @@ one reads a missing directory as an accident.
 
 | Spec | Phase/story | What it drives | Profile | Helpers |
 |------|-------------|----------------|---------|---------|
-| `chat-composer.spec.js` | — (feature spec) | one composer instance at a time across the welcome screen/chat view; i18n keys it renders match the frontend locale files | core | `welcome`, `layout`, `base-url` |
-| `chat-conversation.spec.js` | — (feature spec) | the conversation view's V1 invariants (header, bubbles, feedback, held-release stream) | core | `welcome`, `chatbot`, `route`, `layout` |
-| `conversation-history.spec.js` | — (feature spec) | conversation history list, deletion and the cleanup sweep caps | core | `auth`, `chatbot` |
-| `error-handling.spec.js` | — (feature spec) | a failed chat turn renders the answer card's error block and recovers | core | `chatbot` |
-| `quick-help-scope.spec.js` | — (feature spec) | the Quick Help grid renders its declared scope and dead cards send nothing | core | `route`, `stream-route`, `welcome` |
-| `send-message-and-stream.spec.js` | — (feature spec) | sending a message and the SSE stream rendering | core | `chatbot` |
+| `chat-composer.spec.js` | — | one composer instance at a time across the welcome screen/chat view; i18n keys it renders match the frontend locale files | core | `welcome`, `layout`, `base-url` |
+| `chat-conversation.spec.js` | — | the conversation view's V1 invariants (header, bubbles, feedback, held-release stream) | core | `welcome`, `chatbot`, `route`, `layout` |
+| `conversation-history.spec.js` | — | conversation history list, deletion and the cleanup sweep caps | core | `auth`, `chatbot` |
+| `error-handling.spec.js` | — | a failed chat turn renders the answer card's error block and recovers | core | `chatbot` |
+| `quick-help-scope.spec.js` | — | the Quick Help grid renders its declared scope and dead cards send nothing | core | `route`, `stream-route`, `welcome` |
+| `send-message-and-stream.spec.js` | — | sending a message and the SSE stream rendering | core | `chatbot` |
 
 ## `documents/` — document management
 
 | Spec | Phase/story | What it drives | Profile | Helpers |
 |------|-------------|----------------|---------|---------|
-| `search.spec.js` | — (feature spec) | document search by partial name | core | `auth`, `documents` (+ `fixtures/` seed files) |
-| `upload.spec.js` | — (feature spec) | upload of each supported extension into the document table | core | `auth`, `documents` (+ `fixtures/` seed files) |
+| `search.spec.js` | — | document search by partial name | core | `auth`, `documents` (+ `fixtures/` seed files) |
+| `upload.spec.js` | — | upload of each supported extension into the document table | core | `auth`, `documents` (+ `fixtures/` seed files) |
 
 ## `admin/` — the admin dashboard
 
 | Spec | Phase/story | What it drives | Profile | Helpers |
 |------|-------------|----------------|---------|---------|
-| `authz.spec.js` | — (feature spec) | admin surface authorization: navbar gating + backend 403 | core | `auth`, `chatbot` |
-| `data-wiring.spec.js` | — (feature spec) | overview stat tiles/health/resources render from the system-health payload | core | `auth`, `chatbot` |
-| `failure-states.spec.js` | — (feature spec) | admin API failures render the visible error notification and recover | core | `auth`, `chatbot` |
-| `logs-view.spec.js` | — (feature spec) | the Logs tab renders the VL-backed roll-up rows | core | `auth`, `chatbot` |
+| `authz.spec.js` | — | admin surface authorization: navbar gating + backend 403 | core | `auth`, `chatbot` |
+| `data-wiring.spec.js` | — | overview stat tiles/health/resources render from the system-health payload | core | `auth`, `chatbot` |
+| `failure-states.spec.js` | — | admin API failures render the visible error notification and recover | core | `auth`, `chatbot` |
+| `logs-view.spec.js` | — | the Logs tab renders the VL-backed roll-up rows | core | `auth`, `chatbot` |
 
 ## `okf/` — the OKF pillar
 
 | Spec | Phase/story | What it drives | Profile | Helpers |
 |------|-------------|----------------|---------|---------|
-| `artifacts-view.spec.js` | — (feature spec) | the OKF artifacts view | OKF | `chatbot`, `venue-profile` |
-| `concept-ceiling.spec.js` | — (feature spec) | the concept-document size ceiling behaviour | OKF | `chatbot`, `venue-profile` |
-| `ragas-guide-errors.spec.js` | — (feature spec) | the RAGAS guide error surfaces | OKF | `auth`, `base-url`, `keycloak-admin`, `locale`, `venue-profile` |
-| `ragas-judge-selector.spec.js` | — (feature spec) | the RAGAS judge model selector | OKF | `auth`, `base-url`, `keycloak-admin`, `venue-profile` |
-| `ragas-rescore-tracking.spec.js` | — (feature spec) | RAGAS rescore tracking | OKF | `auth`, `base-url`, `keycloak-admin`, `locale`, `venue-profile` |
+| `artifacts-view.spec.js` | — | the OKF artifacts view | OKF | `chatbot`, `venue-profile` |
+| `concept-ceiling.spec.js` | — | the concept-document size ceiling behaviour | OKF | `chatbot`, `venue-profile` |
+| `ragas-guide-errors.spec.js` | — | the RAGAS guide error surfaces | OKF | `auth`, `base-url`, `keycloak-admin`, `locale`, `venue-profile` |
+| `ragas-judge-selector.spec.js` | — | the RAGAS judge model selector | OKF | `auth`, `base-url`, `keycloak-admin`, `venue-profile` |
+| `ragas-rescore-tracking.spec.js` | — | RAGAS rescore tracking | OKF | `auth`, `base-url`, `keycloak-admin`, `locale`, `venue-profile` |
 
 OKF specs skip **with a reason** on a venue whose runtime config does not
 expose the pillar — see [local-run.md](local-run.md).
@@ -109,16 +105,16 @@ expose the pillar — see [local-run.md](local-run.md).
 
 | Spec | Phase/story | What it drives | Profile | Helpers |
 |------|-------------|----------------|---------|---------|
-| `living-intelligence.spec.js` | — (feature spec) | the decoration assets are served from `/config/` and revalidated, never cached immutable | core | `cache-headers`, `chatbot` |
-| `resizable-sidebars.spec.js` | — (feature spec) | the shared edge handle: drag, collapse, restore, the clamp | core | `chatbot`, `welcome`, `layout` |
-| `responsive-layout.spec.js` | — (feature spec) | the quick-help grid column invariant across viewports | core | `chatbot`, `welcome`, `layout` |
-| `welcome-banner.spec.js` | — (feature spec) | the welcome banner scrim: alpha floor, wordmark contrast | core | `welcome` |
+| `living-intelligence.spec.js` | — | the decoration assets are served from `/config/` and revalidated, never cached immutable | core | `cache-headers`, `chatbot` |
+| `resizable-sidebars.spec.js` | — | the shared edge handle: drag, collapse, restore, the clamp | core | `chatbot`, `welcome`, `layout` |
+| `responsive-layout.spec.js` | — | the quick-help grid column invariant across viewports | core | `chatbot`, `welcome`, `layout` |
+| `welcome-banner.spec.js` | — | the welcome banner scrim: alpha floor, wordmark contrast | core | `welcome` |
 
 ## Root — pinned exception
 
 | Spec | Phase/story | What it drives | Profile | Helpers |
 |------|-------------|----------------|---------|---------|
-| `theme-runtime-config.spec.js` | — (feature spec) | cache-header contract for the runtime theme config (`/config/theme-variables.css`, `/runtime/config.js`, `@theme_fallback`) | core | `cache-headers`, `base-url` |
+| `theme-runtime-config.spec.js` | — | cache-header contract for the runtime theme config (`/config/theme-variables.css`, `/runtime/config.js`, `@theme_fallback`) | core | `cache-headers`, `base-url` |
 
 It sits at the tree root because the dormant CI invocation
 (`.gitlab-ci.yml` → `e2e:playwright`) and its changes-anchor name it
@@ -148,15 +144,14 @@ without a venue surface.
 
 ## Keeping the map true
 
-The map is documentation of a layout the pins already enforce mechanically:
+The map is documentation of a layout whose mechanical consequences the pins
+already enforce:
 
-- the **executed set** (the whole tree) is pinned by `tests/config-validator/`
-  from the run script — a spec added anywhere under `tests/e2e/` is executed,
-  and a spec file added under one of the CI's executed globs adds one line to
-  the validator's exact list;
-- the **anchor demand** requires every executed/consumed path to be covered
-  by the CI changes-anchor globs, so a spec moved into an area directory
-  stays train-triggerable without an anchor edit;
+- the **executed set** and **anchor coverage** contracts live in
+  [`local-run.md`](local-run.md) § *The executed set* — the validator
+  derives them from the run script and the CI invocation, never from this
+  map (a spec file added under one of the CI's executed globs adds one line
+  to the validator's exact list);
 - the **handle-locator gate** and the **fixture-password scan** carry the
   per-file lists they need and were updated by the same MR that moved the
   files (#1741).

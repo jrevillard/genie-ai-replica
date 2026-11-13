@@ -97,6 +97,20 @@ function starvedAnswer(resp) {
  * POST {url}/v1/chat/completions with the adaptive layers above.
  * `body` is MUTATED by the retries (params dropped / budget raised) so the
  * caller's error logging reflects what was actually sent last.
+ * @param {number|null} budgetMs - the caller's TOTAL remaining wall-clock
+ *   budget for the whole call (first attempt plus every rung) — the
+ *   remainingMs the budget-aware callers already track
+ *   (modelCache.resolveCallModel / resolveDeploymentModel). Non-finite
+ *   values are treated as null (no budget): axios silently DROPS a NaN
+ *   timeout and the request would hang instead of failing on its budget
+ *   (the same guard callBudget makes in vllm-model-cache). null = no
+ *   declared budget: the ladder climbs to TIMEOUT_CEILING_MS as before
+ *   (async callers hand thinking models minutes). With a budget, the
+ *   anchor is taken at ENTRY so the first attempt spends the budget too,
+ *   a rung's clock never spends past the deadline, and no rung fires that
+ *   the remaining clock cannot hold — the starvation propagates honestly
+ *   instead (#1725: a 5s sync summary held ~155s of rungs the caller
+ *   never granted).
  * @returns the final axios response; re-throws the last error otherwise.
  */
 async function adaptiveChatCompletion({
@@ -105,10 +119,17 @@ async function adaptiveChatCompletion({
   body,
   timeoutMs = 60000,
   disableThinking = false,
-  disableBudgetLadder = false
+  disableBudgetLadder = false,
+  budgetMs = null
 }) {
   if (disableThinking) Object.assign(body, NO_THINK_PARAMS);
   let timeout = timeoutMs;
+  // The anchor is the function's ENTRY, before the first attempt (which
+  // runs in layer 1's negotiation loop): the caller's budget covers the
+  // whole call, so attempt 1 spends it too — an anchor taken after
+  // attempt 1 would let the hold reach ~2x the declared budget.
+  const startMs = Date.now();
+  const deadline = Number.isFinite(budgetMs) ? startMs + Math.max(0, budgetMs) : null;
 
   const post = () => axios.post(url, body, { headers, timeout });
 
@@ -162,8 +183,28 @@ async function adaptiveChatCompletion({
   // honestly instead so the operator picks a model that answers.
   if (disableBudgetLadder) return resp;
   while (starvedAnswer(resp) && body.max_tokens && body.max_tokens < MAX_TOKENS_CEILING) {
+    let rungClock = Math.min(TIMEOUT_CEILING_MS, timeout * TIMEOUT_SCALE);
+    if (deadline != null) {
+      const remaining = deadline - Date.now();
+      // Even the CURRENT clock does not fit what the caller has left —
+      // another attempt would be a hold the caller never granted. Logged:
+      // an operator debugging starved 'length' rows must be able to tell
+      // "the budget gate declined the rung" from "the ladder never ran".
+      if (remaining < timeout) {
+        logger.warn('adaptive_llm.budget_blocked', {
+          url,
+          finish_reason: 'length',
+          reasoning_tokens: reasoningTokensOf(resp),
+          content_chars: contentOf(resp).length,
+          remaining_ms: remaining,
+          needed_ms: timeout
+        });
+        break;
+      }
+      rungClock = Math.min(rungClock, remaining);
+    }
     const raised = Math.min(MAX_TOKENS_CEILING, body.max_tokens * BUDGET_SCALE);
-    timeout = Math.min(TIMEOUT_CEILING_MS, timeout * TIMEOUT_SCALE);
+    timeout = rungClock;
     logger.warn('adaptive_llm.budget_starved_retry', {
       url,
       finish_reason: 'length',
@@ -171,7 +212,8 @@ async function adaptiveChatCompletion({
       content_chars: contentOf(resp).length,
       max_tokens: body.max_tokens,
       raised_to: raised,
-      timeout_ms: timeout
+      timeout_ms: timeout,
+      budget_ms: budgetMs
     });
     body.max_tokens = raised;
     resp = await post();

@@ -1,7 +1,7 @@
-// tests/e2e/living-intelligence.spec.js
+// tests/e2e/theme/living-intelligence.spec.js
 const { test, expect } = require('@playwright/test');
-const { expectRevalidated } = require('./helpers/cache-headers');
-const { loginViaUI } = require('./helpers/chatbot');
+const { expectRevalidated } = require('../helpers/cache-headers');
+const { loginViaUI } = require('../helpers/chatbot');
 
 // The decorative layer is configuration, and its assets live in the
 // bind-mounted /config/ directory, so they must be revalidated like the

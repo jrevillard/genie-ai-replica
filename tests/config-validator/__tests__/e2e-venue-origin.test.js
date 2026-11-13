@@ -54,7 +54,7 @@ const MOCK_ORIGINS = [
   // The transport owner test (#1804) drives its own local TLS server on
   // an ephemeral loopback port (helpers/auth-request.spec.js) — the
   // loopback prefix is the fixture's address, never a venue.
-  'https://127.0.0.1',
+  'https://127.0.0.1'
 ];
 
 // The defining module, resolved — not a literal path: if the module

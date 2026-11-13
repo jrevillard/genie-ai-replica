@@ -37,12 +37,14 @@ const GRANDFATHERED_FILES = [
 
 // Locator-style APIs a class selector can travel through: the locator
 // object, the DOM queries (including the $eval variants, which take a
-// selector first), the wait, the page-level $ shorthands, and the
-// action APIs whose FIRST argument is always a selector (click, hover,
-// check, ...). `fill`/`press`/`type` are deliberately absent — on a
-// locator their argument is input text, not a selector, and a '.md'
-// filename would false-positive. A selector built in a variable and
-// passed indirectly escapes this net — in the scanned files every
+// selector first), the wait, the page-level $ shorthands, the action
+// APIs whose FIRST argument is always a selector (click, hover, check,
+// ...), and the PAGE/FRAME-level fill/type/press — there the first
+// argument IS a selector, so `page.fill('.class', …)` is caught. The
+// bare LOCATOR forms (`locator.fill`, `locator.press`) stay absent: on
+// those the argument is input text or a key, not a selector, and a
+// '.md' filename would false-positive. A selector built in a variable
+// and passed indirectly escapes this net — in the scanned files every
 // locator call takes its selector literally.
 const LOCATOR_CALL =
   /(?:locator|querySelector|querySelectorAll|waitForSelector|click|dblclick|tap|hover|check|uncheck|dragAndDrop|setInputFiles|frameLocator|\$\$?eval|\$\$?|page\.(?:fill|type|press)|frame\.(?:fill|type|press))\(\s*/;
@@ -59,6 +61,10 @@ const LOCATOR_CALL =
 // one). The trailing guard keeps `.sidebar` from matching inside
 // `.sidebar-inner`.
 const CLASS_SELECTOR = /\.([a-zA-Z][a-zA-Z0-9_-]*)(?![a-zA-Z0-9_-])/g;
+// The caught spellings: quoted values ([class*="x"] and the ~=, ^=
+// and $= siblings) with no surrounding whitespace — unquoted values
+// and spaced forms ([class *= "x"]) are valid CSS the heuristic does
+// not reach; the gate is a heuristic net, not a parser.
 const CLASS_ATTR_SELECTOR = /\[class[*~^$]?=\s*(['"])([a-zA-Z][a-zA-Z0-9_-]*)\1/;
 
 const classSelectorsIn = (source) => {
@@ -103,7 +109,10 @@ const classSelectorsIn = (source) => {
 // rule stays by-contract, not by-gate. `getByRole(..., { name })` is
 // the accepted fallback: a role locator survives any redesign.
 const TEXT_API_CALL = /\bgetBy(?:Text|Label|Placeholder)\s*\(/g;
-const UNANCHORED_HASTEXT = /locator\(\s*(['"`])((?:\\.|(?!\1)[^\\])*)\1\s*,\s*(?:async\s*)?\{[^}]*\bhasText/g;
+// The [^}]* reads the FIRST property block only: a hasText sitting
+// behind a nested object in the options escapes — the same
+// by-contract-not-by-gate class as the .filter half.
+const UNANCHORED_HASTEXT = /locator\(\s*(['"`])((?:\\.|(?!\1)[^\\])*)\1\s*,\s*\{[^}]*\bhasText/g;
 const TEXT_ENGINE = /:has-text\(|:text\(|:text-is\(|(?:^|[\s>(])(text=)/;
 
 const textSelectorsIn = (source) => {

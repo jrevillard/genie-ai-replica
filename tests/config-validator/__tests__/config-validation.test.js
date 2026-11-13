@@ -4434,8 +4434,11 @@ describe('the root Playwright config has a lint home (#1716)', () => {
     // silence the gate the same way. The third grep is a
     // whitespace-tolerant regex, not a literal: ESLint trims the comment
     // before parsing the directive label, so /*global*/, /*   global */
-    // and the plural /*globals*/ tag all register. The target has no
-    // legitimate mention of any of the three (grep: zero).
+    // and the plural /*globals*/ tag all register. The regex carries no
+    // `i` flag on purpose: ESLint parses the directive label
+    // lowercase-only, so an uppercase /* GLOBAL */ fires no-undef and
+    // needs no pin coverage. The target has no legitimate mention of any
+    // of the three (grep: zero).
     expect(source).not.toContain('eslint-disable');
     expect(source).not.toContain('no-undef');
     expect(source).not.toMatch(/\/\*\s*globals?\b/);

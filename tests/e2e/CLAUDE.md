@@ -221,6 +221,13 @@ A spec that needs a surface the venue does not expose **skips with a
 reason** — see `helpers/venue-profile.js`. The reason is read from the
 venue, and a probe that cannot read the venue fails loudly: an unreadable
 venue is not an absent surface.
+The config-validator gates scan this tree as code text, with different
+rules per gate: a `require(` whose argument is not a string literal trips
+the non-literal-consumption scanner even in prose (a title saying
+`require(esm)` will) — spell it without the paren; a BASE_URL read (`process.env.BASE_URL`) and a local
+origin trip the venue-origin gate in code text and titles, but a comment
+naming them is documentation, not an offender; the origin gate's only
+allowance list is `MOCK_ORIGINS`, scoped per file.
 
 The `e2e:playwright` job still sits in `.gitlab-ci.yml` and its rule still
 requires a merge train. The file is frozen and the job does not start — it

@@ -1178,6 +1178,64 @@ async function getConcept(req, res, next) {
 }
 
 /**
+ * #1817 (saved-conversation OKF restore) — GET /api/okf/concepts/resolve-repo?concept_id=X.
+ * The repo identity a PRE-CAP-1 citation row lost: legacy persisted
+ * metadata.source_documents rows carry source/concept_id/graph_name but no
+ * repo_id, so a restored conversation could not open the concept, fetch its
+ * reference sources or browse its repo. One concept_id in, the caller-visible
+ * repo out.
+ *
+ * Serving gates are getConcept's, applied PER CANDIDATE (this handler is a
+ * SERVING READ registered on the allowScopelessWhenOpen sub-router):
+ *   - readAuthzForService — the additive open-mode verdict,
+ *   - assertRepoReadableByCaller — the 6-1c restricted fence (a fenced or
+ *     foreign twin repo is SKIPPED, not returned — listReposForConcept exists
+ *     precisely so a restricted twin cannot hide a visible holder),
+ *   - the publication gate — non-steward callers resolve only against a
+ *     retrieval-serving repo.
+ * The concept must ALSO exist in the candidate repo's meta rows (a stale row
+ * from a re-drained graph resolves to nothing). No candidate survives every
+ * gate → 404 CONCEPT_NOT_FOUND, foreign and fenced indistinguishable
+ * (anti-enumeration, same envelope as getConcept). bundle_version rides the
+ * answer so the restored row carries the full CAP-1 identity from one call.
+ */
+async function resolveConceptRepo(req, res, next) {
+  try {
+    const concept_id = String((req.query && req.query.concept_id) || '').trim();
+    if (!concept_id) {
+      return res.status(400).json({ error: 'CONCEPT_ID_REQUIRED', message: 'concept_id query parameter is required' });
+    }
+    await withSpan('okf.api.concept_repo_resolve', async (span) => {
+      span.setAttribute('okf.concept_id', concept_id);
+      const candidateRepoIds = await conceptMetaService.listReposForConcept(concept_id);
+      span.setAttribute('okf.resolve.candidates', candidateRepoIds.length);
+      for (const repo_id of candidateRepoIds) {
+        // getById with the read-side verdict: closed mode drops repos outside
+        // the caller's list ( getById → null → skip); open mode returns every
+        // existing repo, the 6-1c fence below then filters restricted ones.
+        const repoDoc = await repoService.getById(repo_id, { authz: readAuthzForService(req) });
+        if (!repoDoc) continue;
+        try {
+          await assertRepoReadableByCaller(req, repoDoc);
+        } catch {
+          continue; // restricted twin this caller cannot traverse — next candidate
+        }
+        const steward = callerIsStewardForRepo(req, repo_id);
+        if (!steward && !isServingRepo(repoDoc)) continue; // draft/retracted: not serving
+        const concept = await conceptMetaService.getConceptMeta(repo_id, concept_id);
+        if (!concept) continue; // stale meta row — the concept is not really here
+        span.setAttribute('okf.resolve.repo_id', repo_id);
+        res.status(200).json({ repo_id, bundle_version: concept.bundle_version ?? null });
+        return;
+      }
+      throw new RepoError('CONCEPT_NOT_FOUND', `Concept '${concept_id}' not found`, 404);
+    });
+  } catch (err) {
+    next(err);
+  }
+}
+
+/**
  * W9 (concept tree browse, 2026-11-08) — GET /api/okf/repos/:repo_id/concept-tree.
  * The PAGINATED tree index the citizen's modal browser walks: every concept
  * of the repo as {concept_id, title, links[]} — outgoing AUTHOR links only
@@ -2435,6 +2493,7 @@ module.exports = {
   listConcepts,
   getConcept,
   getConceptTree,
+  resolveConceptRepo,
   inspectPii,
   remediatePii,
   acceptPii,

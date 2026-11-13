@@ -25,6 +25,13 @@ jest.mock('../../utils/document-opener', () => ({
 }));
 const { fetchOkfConcept } = require('../../utils/document-opener');
 
+// #1817: the restore repair resolves a legacy row's repo through okf-server.
+jest.mock('../../services/conceptService', () => ({
+  __esModule: true,
+  default: { resolveRepo: jest.fn() }
+}));
+const conceptService = require('../../services/conceptService').default;
+
 function freshStore() {
   return createStore({
     modules: {
@@ -896,5 +903,144 @@ describe('CAP-3 okf concept sources', () => {
     ]);
     await store.dispatch('conversation/resolveOkfSourceTitles');
     expect(fetchOkfConcept).not.toHaveBeenCalled();
+  });
+
+  // #1817 — saved-conversation OKF restore: one dispatch repairs the loaded
+  // conversation's okf rows (graft + live legacy resolution + title/origins),
+  // every failure degrading to the honest unavailable card. Concept ids here
+  // are unique per test — the title cache is module-level and shared.
+  describe('#1817 repairRestoredOkfIdentity', () => {
+    beforeEach(() => {
+      // The module-level mocks accumulate calls across tests; each test
+      // asserts call COUNTS, so start every test from zero. (The title cache
+      // stays shared — every concept id in this describe is unique per test.)
+      conceptService.resolveRepo.mockClear();
+      fetchOkfConcept.mockClear();
+    });
+
+    function legacyEntryStore(conceptId) {
+      const store = freshStore();
+      store.commit('conversation/appendUserMessage', { sender: 'user', content: 'q' });
+      store.commit('conversation/appendBotMessage', { sender: 'bot', content: 'a' });
+      const row = { id: conceptId, title: conceptId, source: 'okf-concept', repoId: null, conceptId, url: '' };
+      store.commit('conversation/setMessageProperty', [1, 'sources', [{ ...row }]]);
+      store.commit('conversation/setRelatedDocuments', [{ ...row }]);
+      return store;
+    }
+
+    it('restores a pre-CAP-1 row live: resolves the repo, patches every surface, stashes origins', async () => {
+      const store = legacyEntryStore('legacy_c1');
+      conceptService.resolveRepo.mockResolvedValueOnce({ repo_id: 'repo-9', bundle_version: 4 });
+      fetchOkfConcept.mockResolvedValueOnce({
+        frontmatter: { title: 'Legacy Concept' },
+        sources: [{ file_id: 'file-7', file_name: 'origin.pdf' }]
+      });
+
+      await store.dispatch('conversation/repairRestoredOkfIdentity');
+
+      expect(conceptService.resolveRepo).toHaveBeenCalledWith('legacy_c1');
+      const open = store.getters['conversation/openConversation'];
+      for (const row of [...open.messages[1].sources, ...open.relatedDocuments]) {
+        expect(row.repoId).toBe('repo-9');
+        expect(row.bundleVersion).toBe(4);
+        expect(row.title).toBe('Legacy Concept');
+        expect(row.titleResolved).toBe(true);
+        expect(row.okfSources).toEqual([{ file_id: 'file-7', file_name: 'origin.pdf' }]);
+      }
+    });
+
+    it('an unavailable concept degrades the row honestly (no repo resolved, terminal marker)', async () => {
+      const store = legacyEntryStore('dead_c2');
+      // No visible repo holds the concept: the resolver answers the
+      // anti-enumeration null — definitive within this posture, so the row
+      // settles with the terminal marker and the concept fetch never runs.
+      conceptService.resolveRepo.mockResolvedValueOnce(null);
+
+      await store.dispatch('conversation/repairRestoredOkfIdentity');
+      const row = store.getters['conversation/openConversation'].messages[1].sources[0];
+      expect(row.repoId).toBeNull();
+      expect(row.titleResolved).toBe(false);
+      expect(row.okfSources).toEqual([]);
+      expect(fetchOkfConcept).not.toHaveBeenCalled();
+    });
+
+    it('is idempotent: a re-dispatch serves rows from the cache, not the network', async () => {
+      const store = legacyEntryStore('idem_c4');
+      conceptService.resolveRepo.mockResolvedValue({ repo_id: 'repo-4', bundle_version: null });
+      fetchOkfConcept.mockResolvedValue({ frontmatter: { title: 'Idem Concept' }, sources: [] });
+
+      await store.dispatch('conversation/repairRestoredOkfIdentity');
+      await store.dispatch('conversation/repairRestoredOkfIdentity');
+
+      expect(fetchOkfConcept).toHaveBeenCalledTimes(1);
+      const row = store.getters['conversation/openConversation'].messages[1].sources[0];
+      expect(row.repoId).toBe('repo-4');
+      expect(row.title).toBe('Idem Concept');
+      expect(row.titleResolved).toBe(true);
+    });
+
+    it('a transient resolver failure leaves the row retryable (no terminal marker)', async () => {
+      const store = legacyEntryStore('retry_c5');
+      conceptService.resolveRepo.mockRejectedValueOnce(new Error('500 — transient'));
+
+      await store.dispatch('conversation/repairRestoredOkfIdentity');
+      const row = store.getters['conversation/openConversation'].messages[1].sources[0];
+      // The repo never resolved, so the concept fetch never ran and the row
+      // carries no terminal marker — the next dispatch retries the whole arm.
+      expect(row.repoId).toBeNull();
+      expect(row.titleResolved).toBeUndefined();
+      expect(fetchOkfConcept).not.toHaveBeenCalled();
+    });
+
+    it('a conversation with no okf rows makes no service calls', async () => {
+      const store = freshStore();
+      store.commit('conversation/appendUserMessage', { sender: 'user', content: 'q' });
+      store.commit('conversation/appendBotMessage', { sender: 'bot', content: 'a' });
+      store.commit('conversation/setRelatedDocuments', [
+        { id: 'doc-9', title: 'Report.pdf', url: '/api/files/doc-9/download' }
+      ]);
+
+      await store.dispatch('conversation/repairRestoredOkfIdentity');
+
+      expect(conceptService.resolveRepo).not.toHaveBeenCalled();
+      expect(fetchOkfConcept).not.toHaveBeenCalled();
+    });
+
+    it('grafts raw identity onto a loaded row that lost its okf tag (the save-side translated shape)', async () => {
+      const store = freshStore();
+      store.commit('conversation/appendUserMessage', { sender: 'user', content: 'q' });
+      store.commit('conversation/appendBotMessage', { sender: 'bot', content: 'a' });
+      store.commit('conversation/setMessageProperty', [
+        1,
+        'sources',
+        [{ id: 'g_c3', title: 'g c3', url: '/api/files/g_c3/download' }]
+      ]);
+      store.commit('conversation/setMessageProperty', [
+        1,
+        'metadata',
+        {
+          source_documents: [
+            {
+              document_id: 'g_c3',
+              document_name: 'g c3',
+              url: '',
+              source: 'okf-concept',
+              repo_id: 'repo-3',
+              bundle_version: 1
+            }
+          ]
+        }
+      ]);
+      fetchOkfConcept.mockResolvedValue({ frontmatter: { title: 'Grafted Concept' }, sources: [] });
+
+      await store.dispatch('conversation/repairRestoredOkfIdentity');
+      const row = store.getters['conversation/openConversation'].messages[1].sources[0];
+      expect(row.source).toBe('okf-concept');
+      expect(row.repoId).toBe('repo-3');
+      expect(row.bundleVersion).toBe(1);
+      // The dead doc-repo URL the translated row carried is cleared.
+      expect(row.url).toBe('');
+      expect(row.title).toBe('Grafted Concept');
+    });
   });
 });

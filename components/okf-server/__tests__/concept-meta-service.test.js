@@ -660,6 +660,36 @@ describe('concept-meta-service.requeueRepoForRedrain (P0 empty-graph fix)', () =
   });
 });
 
+// ── #1817 (saved-conversation OKF restore): the resolver's candidate list —
+// every repo_id whose meta rows hold the concept, deduped (COLLECT) so the
+// controller applies its per-candidate gates without double-visiting a twin.
+describe('concept-meta-service.listReposForConcept (#1817 resolver candidates)', () => {
+  beforeEach(() => mockDb._reset());
+
+  it('queries okf_concepts_meta by concept_id and returns the deduped repo list', async () => {
+    const querySpy = mockDb.query;
+    querySpy.mockResolvedValueOnce({ all: async () => ['ra', 'rb'] });
+    const repos = await conceptMeta.listReposForConcept('concept_1');
+    expect(repos).toEqual(['ra', 'rb']);
+    const aqlText = String(querySpy.mock.calls.at(-1)[0]);
+    expect(aqlText).toContain('okf_concepts_meta');
+    expect(aqlText).toContain('m.concept_id == @cid');
+    expect(aqlText).toContain('COLLECT repo_id = m.repo_id');
+  });
+
+  it('a falsy concept_id never touches the DB', async () => {
+    const querySpy = mockDb.query;
+    const before = querySpy.mock.calls.length;
+    expect(await conceptMeta.listReposForConcept('')).toEqual([]);
+    expect(querySpy.mock.calls.length).toBe(before);
+  });
+
+  it('an empty result set degrades to []', async () => {
+    mockDb.query.mockResolvedValueOnce({ all: async () => [] });
+    expect(await conceptMeta.listReposForConcept('concept_2')).toEqual([]);
+  });
+});
+
 // ── CAP-1 (chat-source resolution): the ingest-arm stamp binds every row to
 // the drained version — the retrieval enrichment join reads bundle_version
 // from the meta row as FIRST-CLASS data (no graph-name parsing downstream).

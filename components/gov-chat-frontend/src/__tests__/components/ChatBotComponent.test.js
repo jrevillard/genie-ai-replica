@@ -85,6 +85,7 @@ jest.mock('../../services/notificationService', () => ({
 // joins the mocked set — the composition tests register the REAL okf module,
 // whose per-hop fetch must hit a seam mock, not httpService.
 const mockTreePage = jest.fn();
+const mockResolveRepo = jest.fn();
 const mockHopFetch = jest.fn();
 jest.mock('../../utils/document-opener', () => ({
   ...jest.requireActual('../../utils/document-opener'),
@@ -100,7 +101,8 @@ jest.mock('../../services/conceptService', () => ({
   __esModule: true,
   default: {
     ...jest.requireActual('../../services/conceptService').default,
-    getConceptTree: (...a) => mockTreePage(...a)
+    getConceptTree: (...a) => mockTreePage(...a),
+    resolveRepo: (...a) => mockResolveRepo(...a)
   }
 }));
 
@@ -738,6 +740,90 @@ describe('ChatBotComponent', () => {
       expect(msg.confidenceScore).toBe(0.87);
       expect(msg.isGrounded).toBe(true);
       expect(msg.userFeedback).toBe('up');
+    });
+  });
+
+  // #1817 — the restore rebuilds the citations the live path had: per-message
+  // sources from the persisted raw metadata, and the sidebar's identity-less
+  // okf row (the backend conversationFiles mapping carries none) grafted back
+  // to a working card — open/download, reference sources and repo browse all
+  // read the same repaired rows.
+  describe('#1817 — the restore rebuilds citations from the persisted raw metadata', () => {
+    beforeEach(() => {
+      mockResolveRepo.mockClear();
+      mockHopFetch.mockClear();
+    });
+
+    it('rebuilds per-message sources and heals the sidebar okf row in one load', async () => {
+      const chatHistoryService = require('../../services/chatHistoryService');
+      chatHistoryService.getConversation.mockResolvedValueOnce({
+        // The backend's conversationFiles snapshot: an identity-less okf row
+        // (the mapping carries no okf tag and fabricates no URL) — exactly
+        // what a saved OKF-citing conversation returns today.
+        files: [{ id: 'conc_1', documentName: 'conc 1', url: null, score: 0.9 }],
+        messages: [
+          { sender: 'user', content: 'q' },
+          {
+            sender: 'assistant',
+            content: 'a',
+            queryId: 'q-5',
+            metadata: {
+              source_documents: [
+                {
+                  document_id: 'conc_1',
+                  document_name: 'conc 1',
+                  url: '',
+                  source: 'okf-concept',
+                  repo_id: 'repo-1',
+                  graph_name: 'OKF_x_v1',
+                  score: 0.9
+                }
+              ]
+            }
+          }
+        ]
+      });
+      // The identity already rides the raw rows — the resolver is not needed.
+      mockHopFetch.mockResolvedValue({ frontmatter: { title: 'Concept One' }, sources: [] });
+
+      const wrapper = createChatBotWrapper();
+      await flushPromises();
+      await wrapper.vm.loadExistingConversation('conv-1');
+      await flushPromises();
+
+      // The message carries the rebuilt citation row, fully identified.
+      const msg = wrapper.vm.openMessages.find((m) => m.sender === 'bot' && m.content === 'a');
+      expect(msg.sources.length).toBe(1);
+      expect(msg.sources[0].source).toBe('okf-concept');
+      expect(msg.sources[0].repoId).toBe('repo-1');
+      expect(msg.sources[0].titleResolved).toBe(true);
+      expect(msg.sources[0].title).toBe('Concept One');
+      // The sidebar's identity-less snapshot row was grafted to the same card.
+      const sidebarRow = wrapper.vm.relatedDocuments.find((d) => d.id === 'conc_1');
+      expect(sidebarRow.source).toBe('okf-concept');
+      expect(sidebarRow.repoId).toBe('repo-1');
+      expect(sidebarRow.url).toBe('');
+      expect(mockResolveRepo).not.toHaveBeenCalled();
+    });
+
+    it('a message without persisted metadata carries no sources (the pre-metadata shape stays clean)', async () => {
+      const chatHistoryService = require('../../services/chatHistoryService');
+      chatHistoryService.getConversation.mockResolvedValueOnce({
+        messages: [
+          { sender: 'user', content: 'q' },
+          { sender: 'assistant', content: 'a', queryId: 'q-6', metadata: null }
+        ]
+      });
+
+      const wrapper = createChatBotWrapper();
+      await flushPromises();
+      await wrapper.vm.loadExistingConversation('conv-1');
+      await flushPromises();
+
+      const msg = wrapper.vm.openMessages.find((m) => m.sender === 'bot' && m.content === 'a');
+      expect(Array.isArray(msg.sources)).toBe(true);
+      expect(msg.sources.length).toBe(0);
+      expect(mockResolveRepo).not.toHaveBeenCalled();
     });
   });
 

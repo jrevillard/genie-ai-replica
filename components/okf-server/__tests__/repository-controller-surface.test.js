@@ -66,7 +66,9 @@ jest.mock('../services/concept-meta-service', () => {
     listConceptsMeta: jest.fn().mockResolvedValue([]),
     getRepoLinks: jest.fn().mockResolvedValue([]),
     // W9 tree index (the citizen browse).
-    listConceptTree: jest.fn().mockResolvedValue({ total: 0, offset: 0, limit: 200, concepts: [] })
+    listConceptTree: jest.fn().mockResolvedValue({ total: 0, offset: 0, limit: 200, concepts: [] }),
+    // #1817 restore resolver (per-repo candidate lookup).
+    listReposForConcept: jest.fn().mockResolvedValue([])
   };
   return { __esModule: true, default: base, ...base };
 });
@@ -1477,5 +1479,180 @@ describe('repository-controller — conformance-debt aggregation (#948)', () => 
     conformanceService.getDebtByRepos.mockRejectedValueOnce(boom);
     const { next } = await drive(controller.listConformanceDebt);
     expect(next).toHaveBeenCalledWith(boom);
+  });
+});
+
+// ===========================================================================
+// #1817 (saved-conversation OKF restore): the PRE-CAP-1 citation resolver —
+// one concept_id in, the caller-VISIBLE holding repo out. The serving gates
+// are getConcept's, applied PER CANDIDATE: readAuthzForService + the 6-1c
+// restricted fence (a fenced twin is SKIPPED, not returned — a restricted
+// repo must not hide a visible holder of the same concept) + the publication
+// gate + the meta-row existence check. No survivor → 404 CONCEPT_NOT_FOUND
+// (foreign and fenced indistinguishable).
+// ===========================================================================
+describe('repository-controller — #1817 resolveConceptRepo per-candidate gates', () => {
+  const conceptMetaService = require('../services/concept-meta-service');
+  const auditService = require('../services/audit-service');
+  const RESTRICTED = {
+    repo_id: 'r-restricted',
+    name: 'RS',
+    acl: { restricted: true, required_scopes: ['okf:t:dom:admin'] }
+  };
+  const servingRepo = (over = {}) => ({
+    repo_id: 'r-open',
+    name: 'R',
+    lifecycle_state: 'publish',
+    ingested_at: '2026-11-04T00:00:00Z',
+    ...over
+  });
+
+  beforeEach(() => {
+    conceptMetaService.listReposForConcept.mockReset().mockResolvedValue([]);
+    conceptMetaService.getConceptMeta.mockReset();
+    auditService.writeAudit.mockClear();
+  });
+
+  it('a missing concept_id is a 400, before any lookup', async () => {
+    const { res, next } = await drive(controller.resolveConceptRepo, { query: {} });
+    expect(res.statusCode).toBe(400);
+    expect(res.body.error).toBe('CONCEPT_ID_REQUIRED');
+    expect(conceptMetaService.listReposForConcept).not.toHaveBeenCalled();
+    expect(next).not.toHaveBeenCalled();
+  });
+
+  it('citizen + one visible serving repo → 200 {repo_id, bundle_version}', async () => {
+    conceptMetaService.listReposForConcept.mockResolvedValueOnce(['r-open']);
+    repoService.getById.mockResolvedValueOnce(servingRepo());
+    conceptMetaService.getConceptMeta.mockResolvedValueOnce({
+      concept_id: 'c1',
+      bundle_version: 3,
+      body: '# body',
+      last_error: 'internal-only field'
+    });
+    const { res, next } = await drive(controller.resolveConceptRepo, {
+      okfIsSuperAdmin: false,
+      okfScopes: [],
+      query: { concept_id: 'c1' }
+    });
+    expect(next).not.toHaveBeenCalled();
+    expect(res.statusCode).toBe(200);
+    expect(res.body).toEqual({ repo_id: 'r-open', bundle_version: 3 });
+    expect(conceptMetaService.listReposForConcept).toHaveBeenCalledWith('c1');
+  });
+
+  it('a RESTRICTED twin is skipped, not returned — the visible holder wins', async () => {
+    conceptMetaService.listReposForConcept.mockResolvedValueOnce(['r-restricted', 'r-open']);
+    repoService.getById
+      .mockImplementationOnce(async () => RESTRICTED)
+      .mockImplementationOnce(async () => servingRepo());
+    conceptMetaService.getConceptMeta.mockResolvedValueOnce({ concept_id: 'c1', bundle_version: null });
+    const { res, next } = await drive(controller.resolveConceptRepo, {
+      okfIsSuperAdmin: false,
+      okfScopes: [],
+      query: { concept_id: 'c1' }
+    });
+    expect(next).not.toHaveBeenCalled();
+    expect(res.statusCode).toBe(200);
+    expect(res.body).toEqual({ repo_id: 'r-open', bundle_version: null });
+    // The fence audited the denied candidate (getConcept's denial shape) —
+    // then the resolver moved on to the visible one.
+    expect(auditService.writeAudit).toHaveBeenCalledWith(
+      expect.objectContaining({ action: 'authz.denied.repo', repo_id: 'r-restricted' })
+    );
+  });
+
+  it('restricted-only candidate → 404 CONCEPT_NOT_FOUND (foreign and fenced indistinguishable)', async () => {
+    conceptMetaService.listReposForConcept.mockResolvedValueOnce(['r-restricted']);
+    repoService.getById.mockResolvedValueOnce(RESTRICTED);
+    const { res, next } = await drive(controller.resolveConceptRepo, {
+      okfIsSuperAdmin: false,
+      okfScopes: [],
+      query: { concept_id: 'c1' }
+    });
+    expect(res.json).not.toHaveBeenCalled();
+    expect(next).toHaveBeenCalled();
+    expect(next.mock.calls[0][0].code).toBe('CONCEPT_NOT_FOUND');
+    expect(next.mock.calls[0][0].status).toBe(404);
+  });
+
+  it.each([
+    ['retracted', { lifecycle_state: 'retracted' }],
+    ['draft', { lifecycle_state: 'draft' }],
+    ['published but not drained', { lifecycle_state: 'publish', ingested_at: null }]
+  ])('citizen + %s repo → skipped, 404 (the publication gate)', async (_label, over) => {
+    conceptMetaService.listReposForConcept.mockResolvedValueOnce(['r-open']);
+    repoService.getById.mockResolvedValueOnce(servingRepo(over));
+    const { res, next } = await drive(controller.resolveConceptRepo, {
+      okfIsSuperAdmin: false,
+      okfScopes: [],
+      query: { concept_id: 'c1' }
+    });
+    expect(res.json).not.toHaveBeenCalled();
+    expect(next).toHaveBeenCalled();
+    expect(next.mock.calls[0][0].code).toBe('CONCEPT_NOT_FOUND');
+    expect(next.mock.calls[0][0].status).toBe(404);
+    // The meta row was never read for a non-serving candidate.
+    expect(conceptMetaService.getConceptMeta).not.toHaveBeenCalled();
+  });
+
+  it('superadmin + draft repo → 200 (steward contract: the working set resolves too)', async () => {
+    conceptMetaService.listReposForConcept.mockResolvedValueOnce(['r-open']);
+    repoService.getById.mockResolvedValueOnce(servingRepo({ lifecycle_state: 'draft' }));
+    conceptMetaService.getConceptMeta.mockResolvedValueOnce({ concept_id: 'c1', bundle_version: 9 });
+    const { res, next } = await drive(controller.resolveConceptRepo, {
+      okfIsSuperAdmin: true,
+      okfScopes: [],
+      query: { concept_id: 'c1' }
+    });
+    expect(next).not.toHaveBeenCalled();
+    expect(res.statusCode).toBe(200);
+    expect(res.body).toEqual({ repo_id: 'r-open', bundle_version: 9 });
+  });
+
+  it('a stale meta row (the concept is not really there) is skipped → 404', async () => {
+    conceptMetaService.listReposForConcept.mockResolvedValueOnce(['r-open']);
+    repoService.getById.mockResolvedValueOnce(servingRepo());
+    conceptMetaService.getConceptMeta.mockResolvedValueOnce(null);
+    const { res, next } = await drive(controller.resolveConceptRepo, {
+      okfIsSuperAdmin: false,
+      okfScopes: [],
+      query: { concept_id: 'c1' }
+    });
+    expect(res.json).not.toHaveBeenCalled();
+    expect(next).toHaveBeenCalled();
+    expect(next.mock.calls[0][0].code).toBe('CONCEPT_NOT_FOUND');
+  });
+
+  it('no candidate at all → 404, nothing else touched', async () => {
+    conceptMetaService.listReposForConcept.mockResolvedValueOnce([]);
+    // The file-wide mocks accumulate earlier tests' calls — compare counts.
+    const getByIdBefore = repoService.getById.mock.calls.length;
+    const metaBefore = conceptMetaService.getConceptMeta.mock.calls.length;
+    const { res, next } = await drive(controller.resolveConceptRepo, {
+      okfIsSuperAdmin: false,
+      okfScopes: [],
+      query: { concept_id: 'c1' }
+    });
+    expect(res.json).not.toHaveBeenCalled();
+    expect(next).toHaveBeenCalled();
+    expect(next.mock.calls[0][0].code).toBe('CONCEPT_NOT_FOUND');
+    expect(next.mock.calls[0][0].status).toBe(404);
+    expect(repoService.getById.mock.calls.length).toBe(getByIdBefore);
+    expect(conceptMetaService.getConceptMeta.mock.calls.length).toBe(metaBefore);
+  });
+
+  it('a scoped steward resolves against a draft repo the scope names (the editor flow)', async () => {
+    conceptMetaService.listReposForConcept.mockResolvedValueOnce(['r-open']);
+    repoService.getById.mockResolvedValueOnce(servingRepo({ lifecycle_state: 'draft' }));
+    conceptMetaService.getConceptMeta.mockResolvedValueOnce({ concept_id: 'c1', bundle_version: 2 });
+    const { res, next } = await drive(controller.resolveConceptRepo, {
+      okfIsSuperAdmin: false,
+      okfScopes: ['okf:t:r-open:admin'],
+      query: { concept_id: 'c1' }
+    });
+    expect(next).not.toHaveBeenCalled();
+    expect(res.statusCode).toBe(200);
+    expect(res.body.repo_id).toBe('r-open');
   });
 });

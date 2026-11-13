@@ -449,6 +449,45 @@ one class covers all ten steps); the editor frame is `.okf-shell`
 > vue-i18n 9 → 11 migration touches every locale file and every call site
 > and cannot ride along on a feature MR).
 
+## Wave-5 follow-ups (2026-11-13, dispatched from the ready-for-dev queue)
+
+The five-item OKF wave (#1725 !866, #1717 !867, #1666 !868, #1667 !869,
+#1648 !870 — all green on the merge train, David merging) grew two
+same-day follow-ups, both dispatched live mid-wave:
+
+- **#1817 — saved conversations lose their OKF citations on reload**
+  (branch `fix/issue-1817-saved-conv-okf-identity`, MR **!872**). Reproduced
+  FIRST per David's ruling: the save is healthy (the persisted assistant row
+  carries the full CAP-1 identity in `metadata.source_documents`); the
+  restore discarded both halves. The fix rebuilds per-message sources from
+  the persisted raw metadata, grafts the raw identity onto the sidebar
+  snapshot rows, and repairs the pre-CAP-1 rows LIVE through the new
+  okf-server resolver `GET /okf/concepts/resolve-repo` (getConcept's serving
+  gates per candidate; anti-enumeration 404). All three restore modes per
+  David's second ruling: card open/download, reference-file links, repo
+  browse. The backend conversationFiles mapping is untouched (David's
+  standing warning) — the okf rows heal client-side from the message
+  metadata. Story: `_bmad-output/implementation-artifacts/w5-1817-saved-conv-okf-identity-story.md`.
+- **#1820 — a dead SSO session surfaces as processing errors, no login
+  bounce** (branch `fix/issue-1820-stream-session-expiry`, MR **!871**).
+  David hit it live mid-wave ("the local build is failing to process
+  queries"): his tab crossed Keycloak's 10-hour `ssoSessionMaxLifespan`
+  wall; the last refresh minted a token clamped to a 2-second lifetime;
+  every chat query then 401'd and the stream path — raw fetch, outside the
+  axios interceptor — never escalated to login. Fix: the interceptor's
+  refresh→retry→escalate contract applied to `submitQueryStream`. Five new
+  tests pin it (incl. the clamped-token no-loop case).
+
+Both deployed to the local build pre-merge (frontend `issue-1817` +
+`issue-1820`, okf-server `issue-1817`), marker-verified in the containers;
+#1817's reload cycle verified live in the browser (storage→restore→repair:
+identity intact, `titleResolved` set). Deferred during the wave, filed so
+they are not lost: **#1816** (the outer retry loop re-grants the full LLM
+budget per attempt — !866's ladder needs one absolute deadline per phase)
+and **#1819** (the test mock's conditional-conversion replace branch stores
+the patch by reference). #1820's own secondary note (verify the axios-side
+clamped-token escalation arm actually fires) stays pinned in the issue.
+
 ## Standing rules that carry over
 
 - `feedback_approved-plan-is-not-execution-authority`: the plan is adapted on

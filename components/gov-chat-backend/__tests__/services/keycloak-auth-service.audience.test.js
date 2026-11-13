@@ -12,6 +12,7 @@
 
 const mockJwtVerify = jest.fn();
 jest.mock('jose', () => ({
+  decodeProtectedHeader: require('../mocks/jose').decodeProtectedHeader,
   createRemoteJWKSet: jest.fn(() => jest.fn()),
   jwtVerify: mockJwtVerify
 }));

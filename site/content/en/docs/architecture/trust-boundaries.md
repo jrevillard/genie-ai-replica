@@ -63,11 +63,11 @@ Every service that touches a Bearer token validates it independently. There is *
 | Claim | Required | Where it's checked | Failure → |
 |-------|----------|---------------------|-----------|
 | `iss` (issuer) | yes | Must equal Keycloak's issuer (derived from `KEYCLOAK_URL` + realm path) | 401, code `TOKEN_INVALID` |
-| `aud` (audience) | yes | Must include this service's expected audience (per-client in Keycloak) | 401, code `TOKEN_INVALID` |
+| `aud` (audience) | opt-in | Checked only where the service asks for it (RFC 8707): the OKF server binds `OKF_AUDIENCE` when it is set, the backend and the document repository accept any audience of the trusted issuer | 401, code `TOKEN_INVALID` |
 | `exp` (expiry) | yes | Rejected if past; clock skew tolerance is implementation-defined | 401, code `TOKEN_EXPIRED` |
 | `sub` (subject) | yes | Combined with `iss` as `iss#sub` for JIT user identity | Treated as new user if absent from DB |
 | `realm_access.roles` | route-dependent | Admin routes check `realm_access.roles` includes `admin` | 403, code `FORBIDDEN` |
-| Signature | yes | RSA / EC verified against Keycloak JWKS | 401, code `TOKEN_INVALID` |
+| Signature | yes | RS256 only (the verifier pins the algorithm): a token signed with another algorithm is rejected, and a realm publishing no RSA signing key is an outage | 401, code `TOKEN_INVALID` (503 for the broken realm) |
 
 ### 2.2 JWKS caching
 
@@ -80,11 +80,14 @@ GET <KEYCLOAK_URL>/realms/<REALM>/protocol/openid-connect/certs
 
 Cache policy:
 - **Cache miss** → service fetches the JWKS over HTTPS, caches keys keyed by `kid`.
-- **Cache hit but unknown `kid`** (e.g. Keycloak rotated the signing key) → service refreshes the JWKS.
-- **Cache TTL** — implementation-specific; on the order of minutes to hours. The next miss or unknown-`kid` event triggers refresh.
-- **Refresh under failure** — JWKS HTTP errors do not invalidate the cache; the service retries the request against the cached keys until expiry, then surfaces the failure as 5xx.
+- **Cache hit but unknown `kid`** (e.g. Keycloak rotated the signing key) → service refreshes the JWKS. The refresh is floored to one per second per issuer, so junk tokens cannot make the service hammer the realm's certificate endpoint; a rotation that lands inside that window is observed by the NEXT refresh.
+- **Cache TTL** — 5 minutes. The re-read is LAZY: it happens on the next verification after the cached set is that old, so an idle service holds its key set past the TTL and observes a rotation only when its next request arrives.
+- **Refresh under failure** — JWKS HTTP errors do not invalidate the cache, but a request whose refresh fails is answered 5xx: the cached keys are kept, not used for that request. The cached keys keep serving until the cache TTL is reached.
+- **A broken realm** — a realm that publishes no usable signing key, or publishes the same key id twice, is reported as an outage (503), not as a rejected token.
+- **A token that names no key id** — RFC 7515 makes `kid` optional, so a token may carry none. Such a token is verified against the published candidate keys, at most three of them; the first one whose signature matches wins. When the realm publishes more candidates than that cap, the trial stops after three: a token that none of the three tried could resolve is rejected (401), and the log names the realm's key set as the reason. A token signed by one of the three tried is still accepted.
+- **A key id that is not a string** — RFC 7515 types `kid` as a string, so a token carrying a number or `null` there is malformed, not a token that names no key id. It is rejected without being resolved against the published keys: under some builds of the token library a key id that is not a string matches every published key, so resolving it would accept a token whose key binding the realm never expressed.
 
-> **Verify JWKS is reachable from each service.** If a service is deployed with the wrong `KEYCLOAK_URL` (e.g. `http://keycloak:8080` instead of the public `https://.../auth`), it cannot fetch the JWKS and every request 401s.
+> **Verify JWKS is reachable from each service.** If a service is deployed with the wrong `KEYCLOAK_URL` (e.g. `http://keycloak:8080` instead of the public `https://.../auth`), it cannot fetch the JWKS and every request answers 503 `AUTH_SERVICE_UNAVAILABLE`.
 
 ### 2.3 Why per-service validation?
 
@@ -260,7 +263,7 @@ graph LR
 | **Clock skew** | NTP on all nodes; tokens include `exp` and `nbf`; services reject out-of-window tokens. |
 | **Replay (stolen short-lived access_token)** | Short token lifetime (default 5 minutes). High-value operations can be rate-limited at the service level (Kong applies coarse limits; per-endpoint limits live in the backend). |
 | **Service account secret leak** | Dataprep's `KC_DATAPREP_CLIENT_SECRET` is scoped to ingestion only; rotate via Keycloak admin. The leak does not give user impersonation. |
-| **JWT algorithm confusion (alg=none)** | All services require the alg to match Keycloak's configured signing algorithm and reject `none`. |
+| **JWT algorithm confusion (alg=none)** | All services accept RS256 only and reject `none` and every other algorithm. A realm configured to sign access tokens with another algorithm (e.g. PS256) stops verifying. |
 | **Path traversal / open redirect on the OIDC callback** | `KEYCLOAK_VALID_REDIRECT_URIS` whitelist; OIDC redirect URI strictly validated. |
 
 ---

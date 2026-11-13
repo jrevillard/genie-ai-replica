@@ -99,6 +99,7 @@ a new spec goes: the map's one-spec-one-place-one-axis rule.
 | `helpers/` | Shared auth/login, chat, documents, locale, Keycloak admin, cache-header and welcome helpers (helper unit specs live here too — e.g. `helpers/auth.spec.js`) |
 | `helpers/venue-profile.js` | What the venue actually exposes (OKF pillar, realms, identity providers) — the source of every runtime skip's reason |
 | `run/` | The local run: the runner script, the venue-name mapping and the failure path (their unit spec lives here too) |
+| `capture-admin.js` | Admin-dashboard screenshot capture script (not a spec) |
 | `helpers/e2e-fixtures.js` | The venue fixture definitions (username, email, password, realm roles) |
 | `provision-e2e-fixtures.js` | Provisions those fixtures for a venue (CI e2e job and Phase 0 both run it) |
 | `fixtures/` | Fixed seed files for upload tests |

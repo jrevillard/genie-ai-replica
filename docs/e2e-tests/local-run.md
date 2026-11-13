@@ -11,7 +11,8 @@ never creates, so the set was a claim in a YAML file that nobody executed —
 and half the suite (`epic1/`, `epic2/`, `epic3/`, `okf/`, the root-level
 specs) was outside it, visibly red, and invisible to the repository. The
 phase directories and the loose root specs have since been rehomed on
-the feature axis — `okf/` was already one and is unchanged
+the feature axis — `okf/` was already one and is unchanged, and
+`theme-runtime-config.spec.js` alone stays pinned at the tree root
 ([suite-map.md](suite-map.md)).
 
 ## The command

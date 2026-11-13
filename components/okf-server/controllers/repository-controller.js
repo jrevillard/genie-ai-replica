@@ -1210,13 +1210,14 @@ async function getConcept(req, res, next) {
     // wholesale — the PATCH is field-scoped — so nothing persists the
     // synthetic field into the stored doc); the citizen gets the CAP-2 card
     // projection, which carries no ceiling and no steward fields.
-    // #1827: the citizen card also carries the origin-availability stamp —
-    // a source entry doc-repo answers 404 for goes out as `missing: true`,
-    // so the card can say "not in the document repository" instead of
-    // offering a dead click. Stamping never throws (transient failures
-    // leave rows unmarked) and the steward arm skips it entirely (the
-    // editor's surfaces are not the citizen's origin links).
-    if (!steward) await stampOriginAvailability(concept);
+    // #1827: BOTH arms carry the origin-availability stamp — a source entry
+    // doc-repo answers 404 for goes out as `missing: true`, so the card can
+    // say "not in the document repository" instead of offering a dead click.
+    // Stewards click the SAME links (the first live probe caught this: a
+    // superadmin's card skipped the stamp and the dead links looked
+    // unstamped). Stamping never throws (transient failures leave rows
+    // unmarked) and `missing` is additive on either shape.
+    await stampOriginAvailability(concept);
     res.status(200).json(steward ? { ...concept, max_doc_chars: maxConceptDocChars() } : projectConceptCard(concept));
   } catch (err) {
     next(err);

@@ -1749,17 +1749,22 @@ describe('repository-controller — #1817/#1827 origin-availability stamp on the
     expect(res.body.sources[0].missing).toBe(true);
   });
 
-  it('the steward arm never stamps (the editor is not the origin-links surface)', async () => {
+  it('the steward arm stamps too (stewards click the same origin links — live-caught #1827)', async () => {
+    docRepoClient.fetchDocMetaStatus.mockResolvedValue('missing');
     conceptMetaService.getConceptMeta.mockResolvedValueOnce({
       concept_id: 'c1',
       body: '# body',
-      sources: [{ kind: 'document', file_id: 'whatever-file', file_name: 'W.pdf' }]
+      sources: [{ kind: 'document', file_id: 'gone-file', file_name: 'Gone.pdf' }]
     });
     repoService.getById.mockResolvedValueOnce(servingRepo({ lifecycle_state: 'draft' }));
     const { res, next } = await drive(controller.getConcept, { okfIsSuperAdmin: true, okfScopes: [] });
     expect(next).not.toHaveBeenCalled();
     expect(res.statusCode).toBe(200);
-    expect(docRepoClient.fetchDocMetaStatus).not.toHaveBeenCalled();
-    expect(res.body.sources[0].missing).toBeUndefined();
+    // The full steward row carries the stamp — the superadmin's own chat
+    // surface renders the same origin links as a citizen's.
+    expect(docRepoClient.fetchDocMetaStatus).toHaveBeenCalledWith('gone-file');
+    expect(res.body.sources[0].missing).toBe(true);
+    // ...and the steward-only ceiling field still rides (the composition).
+    expect(res.body.max_doc_chars).toBeDefined();
   });
 });

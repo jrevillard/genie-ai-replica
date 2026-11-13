@@ -196,8 +196,9 @@ test.describe('runRouteHandler', () => {
     // usually delivers the close events first, so the conjunction swallows
     // the crash like the named race and the spec fails on its other
     // awaits. This spec models the narrow window BEFORE close-event
-    // delivery — the state half rejects the error there, which is the
-    // protection the header documents.
+    // delivery with a double whose flags stay false — a state real
+    // Playwright does not reliably produce (#1627), not a protection the
+    // guard buys on a dead browser.
     const { page } = pageState();
     await expect(
       runOnce(page, async () => {

@@ -26,11 +26,18 @@
  *   ends, and the state alone would swallow it;
  * - the ERROR being Playwright's target-closed error: a mock defect is
  *   never one, so an error-only check would still swallow every defect.
- *   It also fires when the browser process dies — though Playwright
- *   usually delivers the close events before an in-flight route call
- *   rejects, so by then the state half is often already true too; a
- *   crashed browser fails the spec on its other awaits either way. The
- *   error is recognised by its CLASS (`isTargetClosedError`).
+ *   A browser crash produces the same error — but real Playwright
+ *   usually delivers the close events BEFORE an in-flight route call
+ *   rejects, so by then the state half is already true and a crash is
+ *   swallowed like the named race; the spec fails on its other awaits
+ *   either way. The error-half's crash discrimination therefore holds
+ *   only in the narrow window before close-event delivery — a state
+ *   real Playwright does not reliably produce, which route.spec.js
+ *   models with a double whose flags stay false, not a protection the
+ *   guard buys on a dead browser. What the conjunction is verified to
+ *   buy is the other arm: a mock defect that lands while the target is
+ *   closing is rethrown, not swallowed. The error is recognised by its
+ *   CLASS (`isTargetClosedError`).
  *
  * Only their conjunction is the named race. The error check reads the
  * name and the constructor; if a Playwright upgrade changed both, the

@@ -44,7 +44,18 @@ const E2E_ROOT = path.join(ROOT, 'tests/e2e');
 // and `https://localhostevil` do not: those are other hosts. A lookahead
 // for `/`, `:` or the end of the string misses the first case, because a
 // string literal carries a closing quote after the host.
-const LOCAL_ORIGIN = /https?:\/\/(?:localhost|127\.0\.0\.1|genieai(?:-forge)?\.local)(?::\d+)?(?![A-Za-z0-9.-])/gi;
+//
+// The private ranges are in the list because a venue is also named by
+// its ADDRESS: the shared k8s venues sit on private addresses (RFC1918
+// and link-local), and a spec that hardcodes the deployment's address
+// (`https://10.42.0.189:4443` — #1801) passes a host-NAME list and then
+// dies with ERR_CONNECTION_REFUSED on every other venue, exactly the
+// failure class the host names are here for. `127.0.0.1` stays a
+// LITERAL on purpose: the whole loopback block would pull `127.0.0.10`
+// — a lookalike the negative half pins — into the list, and the pinned
+// negative half must stay out.
+const LOCAL_ORIGIN =
+  /https?:\/\/(?:localhost|127\.0\.0\.1|genieai(?:-forge)?\.local|10\.\d{1,3}\.\d{1,3}\.\d{1,3}|172\.(?:1[6-9]|2\d|3[01])\.\d{1,3}\.\d{1,3}|192\.168\.\d{1,3}\.\d{1,3}|169\.254\.\d{1,3}\.\d{1,3})(?::\d+)?(?![A-Za-z0-9.-])/gi;
 
 // The local origins the suite may drive on purpose: a mocked identity
 // provider, a local stub. One per line, with the reason. It is EMPTY on
@@ -188,6 +199,13 @@ describe('the e2e suite names the venue it was given, and names it once', () => 
         // edge and the deployment edge.
         'forge.spec.js': "await page.goto('https://genieai-forge.local:4443/');\n",
         'k8s.spec.js': "await page.goto('https://genieai.local:4443/');\n",
+        // The venue ADDRESS: a private-IP literal is the same offender —
+        // a spec that hardcodes the deployment's address dies on every
+        // other venue before its first assertion (#1801).
+        'private-address.spec.js': "await page.goto('https://10.42.0.189:4443/');\n",
+        'docker-range.spec.js': "await page.goto('https://172.20.0.5/');\n",
+        'link-local.spec.js': "await page.goto('http://169.254.1.1/');\n",
+        'home-range.spec.js': "await page.goto('http://192.168.1.10:3000/');\n",
         // The NEGATIVE half of the boundary: a host that merely STARTS
         // with a local origin is ANOTHER host, and the gate must not
         // claim it. These files are written but NOT listed among the
@@ -196,7 +214,12 @@ describe('the e2e suite names the venue it was given, and names it once', () => 
         // itself by being absent.
         'lookalike-dot.spec.js': "await page.goto('https://localhost.example.com/');\n",
         'lookalike-dash.spec.js': "await page.goto('https://localhost-evil/');\n",
-        'lookalike-ip.spec.js': "await page.goto('http://127.0.0.10/');\n"
+        'lookalike-ip.spec.js': "await page.goto('http://127.0.0.10/');\n",
+        // The private ranges have lookalikes too: an address outside the
+        // RFC1918 block (`172.1.x.x` is public space) and a private
+        // address that is a SUBDOMAIN of another host must stay out.
+        'lookalike-172.spec.js': "await page.goto('https://172.1.0.5/');\n",
+        'lookalike-private-host.spec.js': "await page.goto('https://10.42.0.189.example.com/');\n"
       },
       (tree) => {
         const strays = offenders(jsFiles(tree), ['http://127.0.0.1:9000', 'http://localhost:8123']).map((f) =>
@@ -207,10 +230,14 @@ describe('the e2e suite names the venue it was given, and names it once', () => 
           'bare-k8s.spec.js',
           'bare.spec.js',
           'compared.spec.js',
+          'docker-range.spec.js',
           'forge.spec.js',
+          'home-range.spec.js',
           'k8s.spec.js',
+          'link-local.spec.js',
           'navigation.spec.js',
-          'ported.spec.js'
+          'ported.spec.js',
+          'private-address.spec.js'
         ]);
       }
     );

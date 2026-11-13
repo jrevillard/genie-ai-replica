@@ -27,15 +27,45 @@
  * paths must never be mixed in one file (tests/e2e/CLAUDE.md § Fixtures).
  * That is why the edge lives in its own module: every spec may require it,
  * whichever credential path it takes.
+ *
+ * The address must be an http(s) URL with a host. A scheme-less value
+ * (`localhost:3000`) parses with an EMPTY host — the venue mapping would
+ * map an empty host, and the browser would navigate to an address that
+ * means nothing (#1805). The module refuses such a value AT THE POINT IT
+ * IS READ, naming the value it refused: every process that requires this
+ * module fails at load with the named cause — the pre-flight included,
+ * and a direct `npx playwright test` too, which never runs the
+ * pre-flight at all.
  */
 /**
- * The venue address, normalized: the trailing slashes are stripped.
+ * The venue address, normalized: the trailing slashes are stripped, and
+ * a value that is not an http(s) URL with a host is refused.
  *
  * @param {string} raw - the address as configured
  * @returns {string} the normalized address
+ * @throws {Error} when the address is not an http(s) URL with a host —
+ *   the message names the value it refused
  */
 function normalizeVenue(raw) {
-  return String(raw || '').replace(/\/+$/, '');
+  const value = String(raw || '').replace(/\/+$/, '');
+  if (value) {
+    let parsed = null;
+    try {
+      parsed = new URL(value);
+    } catch {
+      // not a URL at all — the refusal below names the value
+    }
+    const httpOrHttps = parsed && (parsed.protocol === 'http:' || parsed.protocol === 'https:');
+    if (!httpOrHttps || !parsed.hostname) {
+      throw new Error(
+        `the venue address is not an http(s) URL with a host: ${JSON.stringify(String(raw))} — ` +
+          'a scheme-less value like "localhost:3000" parses with an EMPTY host, the venue mapping would ' +
+          'map an empty host, and the browser would navigate to an address that means nothing. ' +
+          'Name the scheme and the host (e.g. "https://genieai-forge.local:4443").'
+      );
+    }
+  }
+  return value;
 }
 
 const BASE_URL = normalizeVenue(process.env.BASE_URL || 'https://localhost');

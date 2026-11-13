@@ -35,8 +35,30 @@ function addressIn(configured) {
   return execFileSync(process.execPath, ['-e', script], {
     cwd: __dirname,
     env,
-    encoding: 'utf8',
+    encoding: 'utf8'
   }).trim();
+}
+
+/**
+ * The module's load failure for a configured address, or null when the
+ * module loads.
+ *
+ * The module refuses an address that is not an http(s) URL with a host
+ * (#1805) — a scheme-less value like `localhost:3000` parses with an
+ * EMPTY host, the venue mapping would map an empty host, and the browser
+ * would navigate to an address that means nothing. The refusal happens
+ * where the address is READ, so the case is exercised the same way the
+ * address is: in a child process, whose stderr carries the named cause.
+ */
+function addressErrorIn(configured) {
+  const env = { ...process.env, BASE_URL: configured };
+  const script = "console.log(require('./base-url.js').BASE_URL)";
+  try {
+    execFileSync(process.execPath, ['-e', script], { cwd: __dirname, env, encoding: 'utf8' });
+  } catch (e) {
+    return e.stderr ? e.stderr.toString() : e.message;
+  }
+  return null;
 }
 
 test.describe('the venue address has one spelling', () => {
@@ -55,5 +77,35 @@ test.describe('the venue address has one spelling', () => {
     const address = addressIn(undefined);
     expect(address.startsWith('https://')).toBe(true);
     expect(address.endsWith('/')).toBe(false);
+  });
+});
+
+test.describe('the venue address must be an http(s) URL with a host', () => {
+  test('a scheme-less address is refused, naming the value', () => {
+    // `localhost:3000` parses with protocol `localhost:` and an EMPTY
+    // host — exactly the value the venue mapping would map into nothing.
+    const error = addressErrorIn('localhost:3000');
+    expect(error).not.toBe(null);
+    expect(error).toContain('localhost:3000');
+    expect(error).toContain('http(s) URL with a host');
+  });
+
+  test('an unparseable address is refused', () => {
+    expect(addressErrorIn('not a venue address')).not.toBe(null);
+  });
+
+  test('a non-http scheme is refused', () => {
+    // A host with the wrong scheme is not a venue edge either.
+    expect(addressErrorIn('ftp://example.com')).not.toBe(null);
+  });
+
+  test('a plain host name is refused', () => {
+    // No scheme at all: `new URL` throws.
+    expect(addressErrorIn('example.com')).not.toBe(null);
+  });
+
+  test('an http URL with a host still passes', () => {
+    expect(addressIn('http://example.com:8080/')).toBe('http://example.com:8080');
+    expect(addressIn('https://example.com:4443//')).toBe('https://example.com:4443');
   });
 });

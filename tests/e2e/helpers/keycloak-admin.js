@@ -1054,20 +1054,14 @@ async function enableDirectAccessGrants(adminToken, realm, clientId) {
     throw new Error('enableDirectAccessGrants must never target the primary realm — ROPC is disabled there by design');
   }
 
-  const searchRes = await readAdminApi(
-    adminToken,
-    `/auth/admin/realms/${realm}/clients?clientId=${encodeURIComponent(clientId)}`,
-    `the client ${clientId} of ${realm}`,
-    { shape: ARRAY_SHAPE }
-  );
-
-  // An empty list is the admin API's way of saying the realm carries no
-  // client of that name — not an outage, and not a broken answer.
-  if (searchRes.data.length === 0) {
+  // One exact-match client search, owned by findClient: an absent client
+  // resolves null here (the admin API's way of saying the realm carries
+  // no client of that name — not an outage, not a broken answer).
+  const client = await findClient(adminToken, realm, clientId);
+  if (!client) {
     throw new Error(`Client ${clientId} not found in realm ${realm}`);
   }
 
-  const client = searchRes.data[0];
   if (client.directAccessGrantsEnabled) return;
 
   const res = await adminRequest(

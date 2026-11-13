@@ -95,7 +95,7 @@ const CONNECTION_FAILURE_RE =
  * @returns {boolean}
  */
 function isConnectionSignature(failure) {
-  return CONNECTION_FAILURE_RE.test(String(failure && failure.error) || '');
+  return CONNECTION_FAILURE_RE.test(String(failure?.error));
 }
 
 /**

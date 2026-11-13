@@ -21,7 +21,6 @@ test.describe.serial('Phase K: Auth Error Display', () => {
   // (the serial suite stacks two browser logins and admin-API calls).
   test.describe.configure({ timeout: SESSION_MINT_TIMEOUT_MS });
 
-  let adminToken;
   let noRolesUserId;
   // K.2's dedicated expiry client: a CLIENT-SCOPED 10s token lifespan
   // (the 'access.token.lifespan' attribute) — the realm's global default
@@ -36,6 +35,18 @@ test.describe.serial('Phase K: Auth Error Display', () => {
   const EXPIRY_CLIENT_SECRET = randomBytes(24).toString('hex');
   const NOROLES_USERNAME = 'noroles-user-e2e';
   const NOROLES_PASSWORD = 'TestPass123!';
+
+  // Sweep the dedicated expiry client BY NAME — one contract both ends of
+  // the failure window need: K.2 clears a previous run's leftover before
+  // creating fresh, afterAll clears this run's leftover no matter how
+  // K.2 died. One copy, so a change to one end moves both. Throws on
+  // failure — the caller owns the reporting.
+  async function sweepExpiryClient(adminTokenForSweep) {
+    const stale = await findClient(adminTokenForSweep, 'genie', EXPIRY_CLIENT_ID);
+    if (stale) {
+      await deleteClient(adminTokenForSweep, 'genie', stale.id, EXPIRY_CLIENT_ID);
+    }
+  }
 
   test.afterAll(async () => {
     // Cleanup chains several 30s-capped admin requests on a stalled
@@ -76,10 +87,7 @@ test.describe.serial('Phase K: Auth Error Display', () => {
     // — the lifespan capture/restore that used to guard it is gone.
     if (adminTokenForCleanup) {
       try {
-        const stale = await findClient(adminTokenForCleanup, 'genie', EXPIRY_CLIENT_ID);
-        if (stale) {
-          await deleteClient(adminTokenForCleanup, 'genie', stale.id, EXPIRY_CLIENT_ID);
-        }
+        await sweepExpiryClient(adminTokenForCleanup);
       } catch (e) {
         failures.push({
           message:
@@ -163,19 +171,15 @@ test.describe.serial('Phase K: Auth Error Display', () => {
   });
 
   test('K.2 — TOKEN_EXPIRED (short-lived token)', async () => {
-    // Fresh admin token: the mint can be minutes old once earlier tests
-    // have run.
-    adminToken = await getAdminToken();
+    // Fresh admin token: each test mints its own — no cross-test state.
+    const adminToken = await getAdminToken();
 
     // A client a previous run's failed cleanup left behind would carry an
     // unknown state — remove it before creating fresh. The client-scoped
     // 'access.token.lifespan' attribute shortens ONLY this client's
     // tokens: the realm's global default stays what the deployment runs,
     // so the suite is safe on a shared venue (#1785).
-    const stale = await findClient(adminToken, 'genie', EXPIRY_CLIENT_ID);
-    if (stale) {
-      await deleteClient(adminToken, 'genie', stale.id, EXPIRY_CLIENT_ID);
-    }
+    await sweepExpiryClient(adminToken);
     await createClient(adminToken, 'genie', {
       clientId: EXPIRY_CLIENT_ID,
       enabled: true,
@@ -245,8 +249,8 @@ test.describe.serial('Phase K: Auth Error Display', () => {
   });
 
   test('K.3 — FORBIDDEN (user without roles)', async ({ browser }) => {
-    // Fresh admin token — the earlier mints can be minutes old by now.
-    adminToken = await getAdminToken();
+    // Fresh admin token — each test mints its own, no cross-test state.
+    const adminToken = await getAdminToken();
 
     // Create no-roles user
     noRolesUserId = await createUser(adminToken, 'genie', {

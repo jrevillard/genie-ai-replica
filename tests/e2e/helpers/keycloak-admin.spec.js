@@ -1380,22 +1380,6 @@ test.describe('getRealmSettings reports a failure with the module verdict', () =
     expect(caught.message).toMatch(/Cannot reach the Keycloak admin API for the realm settings of genie/);
   });
 
-  test('a refused deletion names the user and carries the status', async () => {
-    routes = [['DELETE', USER_PATH, { status: 500, data: null }]];
-
-    const caught = await rejection(deleteUser('tok', REALM, 'user-1'));
-
-    expect(caught.transient).toBe(true);
-    expect(caught.httpStatus).toBe(500);
-    expect(caught.message).toMatch(/Failed to delete user user-1: HTTP 500/);
-  });
-
-  test('a user that is already gone is the end state every caller wants', async () => {
-    routes = [['DELETE', USER_PATH, { status: 404, data: null }]];
-
-    await expect(deleteUser('tok', REALM, 'user-1')).resolves.toBeUndefined();
-  });
-
   test('an answered but unusable reply is not a transport break, and the verdict does not rewrite it', async () => {
     // The transport owns the error it throws: the verdict must not write
     // into it. A verdict that rewrote the transport's message would leave
@@ -1410,6 +1394,24 @@ test.describe('getRealmSettings reports a failure with the module verdict', () =
     );
     expect(notJson.message).toContain('non-JSON body (HTTP 403)');
     expect(notJson.message).not.toContain('The Keycloak admin API did not answer');
+  });
+});
+
+test.describe('deleteUser reports a failure with the module verdict', () => {
+  test('a refused deletion names the user and carries the status', async () => {
+    routes = [['DELETE', USER_PATH, { status: 500, data: null }]];
+
+    const caught = await rejection(deleteUser('tok', REALM, 'user-1'));
+
+    expect(caught.transient).toBe(true);
+    expect(caught.httpStatus).toBe(500);
+    expect(caught.message).toMatch(/Failed to delete user user-1: HTTP 500/);
+  });
+
+  test('a user that is already gone is the end state every caller wants', async () => {
+    routes = [['DELETE', USER_PATH, { status: 404, data: null }]];
+
+    await expect(deleteUser('tok', REALM, 'user-1')).resolves.toBeUndefined();
   });
 });
 

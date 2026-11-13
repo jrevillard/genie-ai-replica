@@ -41,7 +41,7 @@
 // evaluate rather than in two.
 
 const { test, expect } = require('@playwright/test');
-const { loginViaUI, navigateToChatbot } = require('../helpers/chatbot');
+const { loginViaUI, navigateToChatbot, LOGIN_BUDGET_TIMEOUT_MS } = require('../helpers/chatbot');
 const { openWelcomeScreen, LAYER_STATE_BIND } = require('../helpers/welcome');
 const {
   waitForWidthSettled,
@@ -178,13 +178,9 @@ function assertNoOverlap(m) {
 }
 
 test.describe('Responsive layout (quick-help grid + sidebar policy)', () => {
-  // The beforeEach login costs up to ≈135 s on a stalled stack (attempt 1:
-  // 30 s navigation + 15 s redirect + 30 s dashboard wait; attempt 2:
-  // 30 + 15 + 15), past the project's 60 s default — the hook is killed
-  // BEFORE loginViaUI can print its own two-attempt diagnosis (#1798).
-  // 300 s covers the worst-case hook with the test body's own budget
-  // still ahead of it.
-  test.describe.configure({ timeout: 300000 });
+  // The beforeEach logs in through the browser — the budget is the
+  // login's own ceiling, derived once beside loginViaUI (#1798).
+  test.describe.configure({ timeout: LOGIN_BUDGET_TIMEOUT_MS });
 
   test.beforeEach(async ({ page }) => {
     await loginViaUI(page);
@@ -295,11 +291,9 @@ async function readWelcomePanel(page) {
 }
 
 test.describe('Welcome panel does not scroll horizontally', () => {
-  // openWelcomeScreen logs in through the browser (loginViaUI, ≈135 s on
-  // a stalled stack — two attempts of 30 s navigation + 15 s redirect +
-  // 30 s/15 s dashboard wait), past the project's 60 s default (#1798).
-  // 300 s covers the worst-case login with the assertions still ahead.
-  test.describe.configure({ timeout: 300000 });
+  // openWelcomeScreen logs in through the browser — the budget is the
+  // login's own ceiling, derived once beside loginViaUI (#1798).
+  test.describe.configure({ timeout: LOGIN_BUDGET_TIMEOUT_MS });
 
   for (const vp of WELCOME_OVERFLOW_VIEWPORTS) {
     for (const theme of WELCOME_OVERFLOW_THEMES) {

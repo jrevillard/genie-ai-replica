@@ -2,6 +2,7 @@ const { test, expect } = require('@playwright/test');
 const {
   loginViaUI,
   navigateToChatbot,
+  LOGIN_BUDGET_TIMEOUT_MS,
   sendMessage,
   waitForBotMessage,
   mockChatStream,
@@ -31,15 +32,12 @@ const LIST_PAGE_SIZE = 100;
 const MOCKED_ANSWER = 'Mocked answer for the history test.';
 
 test.describe('Conversation history persistence', () => {
-  // Two ceilings compose, and the lower one used to win: the beforeEach
-  // login costs up to ≈135 s on a stalled stack (attempt 1: 30 s
-  // navigation + 15 s redirect + 30 s dashboard wait; attempt 2:
-  // 30 + 15 + 15) — past the project's 60 s default AND past this file's
-  // old 120 s budget, whose steps (a mocked answer on a slow stack, a
-  // reload and two API fetches) compose on top of the login (#1798).
-  // 300 s covers login plus the steps, and keeps a failure attached to
-  // its step instead of dying on the generic wall.
-  test.setTimeout(300000);
+  // Two ceilings compose: the beforeEach login (budgeted beside
+  // loginViaUI) and this file's own steps — a mocked answer on a slow
+  // stack, a reload and two API fetches (#1798). test.setTimeout is this
+  // file's spelling; a failure stays attached to its step instead of
+  // dying on the generic wall.
+  test.setTimeout(LOGIN_BUDGET_TIMEOUT_MS);
 
   let page;
   let context;

@@ -1,7 +1,7 @@
 // tests/e2e/theme/living-intelligence.spec.js
 const { test, expect } = require('@playwright/test');
 const { expectRevalidated } = require('../helpers/cache-headers');
-const { loginViaUI } = require('../helpers/chatbot');
+const { loginViaUI, LOGIN_BUDGET_TIMEOUT_MS } = require('../helpers/chatbot');
 
 // The decorative layer is configuration, and its assets live in the
 // bind-mounted /config/ directory, so they must be revalidated like the
@@ -14,13 +14,9 @@ const { loginViaUI } = require('../helpers/chatbot');
 // helper so the contract diverges in one place rather than per spec.
 
 test.describe('Living Intelligence visual layer', () => {
-  // The login test's loginViaUI costs up to ≈135 s on a stalled stack
-  // (attempt 1: 30 s navigation + 15 s redirect + 30 s dashboard wait;
-  // attempt 2: 30 + 15 + 15), past the project's 60 s default — the test
-  // is killed BEFORE the helper can print its own two-attempt diagnosis
-  // (#1798). 300 s covers the worst-case login with the body's own
-  // budget still ahead of it.
-  test.describe.configure({ timeout: 300000 });
+  // The login test logs in through the browser — the budget is the
+  // login's own ceiling, derived once beside loginViaUI (#1798).
+  test.describe.configure({ timeout: LOGIN_BUDGET_TIMEOUT_MS });
 
   test('the decoration assets are served from /config/ and revalidated', async ({ request }) => {
     for (const asset of [

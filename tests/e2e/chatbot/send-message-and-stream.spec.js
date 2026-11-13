@@ -2,6 +2,7 @@ const { test, expect } = require('@playwright/test');
 const {
   loginViaUI,
   navigateToChatbot,
+  LOGIN_BUDGET_TIMEOUT_MS,
   sendMessage,
   waitForBotResponse,
   getMessages,
@@ -10,13 +11,10 @@ const {
 } = require('../helpers/chatbot');
 
 test.describe('Chatbot message sending and SSE streaming', () => {
-  // The beforeEach login costs up to ≈135 s on a stalled stack (attempt 1:
-  // 30 s navigation + 15 s redirect + 30 s dashboard wait; attempt 2:
-  // 30 + 15 + 15) and navigateToChatbot adds 30 s — the project's 60 s
-  // default kills the hook BEFORE loginViaUI can print its own
-  // two-attempt diagnosis (#1798). 300 s covers the worst-case hook with
-  // the test body's own budget still ahead of it.
-  test.describe.configure({ timeout: 300000 });
+  // The beforeEach logs in through the browser and navigates — the
+  // budget is the login's own ceiling, derived once beside loginViaUI
+  // (#1798).
+  test.describe.configure({ timeout: LOGIN_BUDGET_TIMEOUT_MS });
 
   let page;
   let context;

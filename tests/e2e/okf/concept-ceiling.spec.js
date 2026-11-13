@@ -33,7 +33,7 @@
 //     --config=D:/ITU-Gitlab/playwright.config.js tests/e2e/okf/concept-ceiling.spec.js
 
 const { test, expect } = require('@playwright/test');
-const { loginViaUI, BASE_URL } = require('../helpers/chatbot');
+const { loginViaUI, BASE_URL, LOGIN_BUDGET_TIMEOUT_MS } = require('../helpers/chatbot');
 const { okfEnabled, okfParkedReason } = require('../helpers/venue-profile');
 
 /**
@@ -129,13 +129,9 @@ test.describe('the concept-document ceiling in the concept editor', () => {
   // so the exact wording is fixed.
   test.use({ locale: 'en-US' });
 
-  // The editor opens behind a browser login (loginViaUI, ≈135 s on a
-  // stalled stack — two attempts of 30 s navigation + 15 s redirect +
-  // 30 s/15 s dashboard wait), past the project's 60 s default — the test
-  // is killed BEFORE the helper can print its own two-attempt diagnosis
-  // (#1798). 300 s covers the worst-case login with the body's own
-  // budget still ahead of it.
-  test.describe.configure({ timeout: 300000 });
+  // The editor opens behind a browser login — the budget is the login's
+  // own ceiling, derived once beside loginViaUI (#1798).
+  test.describe.configure({ timeout: LOGIN_BUDGET_TIMEOUT_MS });
 
   // The Studio's concept editor is an OKF surface: a deployment whose OKF
   // pillar is parked does not render it, and this spec would fail looking

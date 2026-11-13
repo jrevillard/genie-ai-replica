@@ -1,5 +1,5 @@
 <template>
-  <div class="okf-ragas">
+  <div class="okf-ragas" data-test-id="ragas-panel">
     <!-- PANE HEAD — the renamed surface (David, 2026-10-17): the ⓘ glosses
          RAGAS in plain language and links to ragas.io for deeper reading;
          the Help toggle expands the every-control reference below it
@@ -19,7 +19,7 @@
         href="https://www.ragas.io/"
         :link-label="translate('okf.ragas.aboutLink', 'Read more at ragas.io')"
       />
-      <button type="button" class="okf-ragas__help-toggle" @click="showGuide = true">
+      <button type="button" class="okf-ragas__help-toggle" data-test-id="ragas-guide-toggle" @click="showGuide = true">
         {{ translate('okf.ragas.guide.open', 'Guide') }}
       </button>
       <button type="button" class="okf-ragas__help-toggle" @click="showHelp = !showHelp">
@@ -292,7 +292,7 @@
           {{ translate('okf.ragas.run.cancel', 'Cancel run') }}
         </DsButton>
       </div>
-      <div v-if="runProgress" class="okf-ragas__progress">
+      <div v-if="runProgress" class="okf-ragas__progress" data-test-id="ragas-run-progress">
         <DsProgress :value="progressPct" />
         <!-- The judge this run is ACTUALLY scoring with — the picker shows the
              selection, this is the truth (David, 2026-10-25: the two must
@@ -727,7 +727,7 @@
     </div>
 
     <!-- RUN HISTORY -->
-    <div v-if="runHistory.length" class="okf-ragas__section">
+    <div v-if="runHistory.length" class="okf-ragas__section" data-test-id="ragas-run-history">
       <h4 class="okf-headtest__pane-title">{{ translate('okf.ragas.history.title', 'Run history') }}</h4>
       <table class="okf-headtest__scores">
         <thead>
@@ -750,16 +750,18 @@
                    scored it — "rr1792843333604-268dad" means nothing to an
                    operator. The key stays, small, for support. -->
               <div class="okf-ragas__judge-name">{{ runJudgeLabel(h) }}</div>
-              <code class="okf-ragas__run-key">{{ h._key }}</code>
+              <code class="okf-ragas__run-key" data-test-id="ragas-run-key">{{ h._key }}</code>
               <div v-if="h.rescore_of" class="okf-ragas__muted">
                 {{ translate('okf.ragas.history.rescoreOf', 're-scored from {key}').replace('{key}', h.rescore_of) }}
               </div>
             </td>
             <td>{{ shortDate(h.created_at) }}</td>
             <td>
-              <DsPill :variant="h.status === 'done' ? 'success' : h.status === 'failed' ? 'danger' : 'warning'">{{
-                h.status
-              }}</DsPill>
+              <DsPill
+                :variant="h.status === 'done' ? 'success' : h.status === 'failed' ? 'danger' : 'warning'"
+                :data-state="h.status"
+                >{{ h.status }}</DsPill
+              >
             </td>
             <td v-for="m in historyMetricKeys" :key="m">
               {{ scoreText(h.summary && h.summary.metrics && h.summary.metrics[m]) }}

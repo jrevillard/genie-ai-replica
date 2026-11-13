@@ -96,7 +96,10 @@ test.describe('the RAGAS guide documents what each error state does to the resul
     await expect(studioTab, 'the OKF Studio tab must be reachable').toBeVisible({ timeout: 20000 });
     await studioTab.click();
 
-    const card = page.locator('.okf-dashboard__card-wrap', { hasText: REPO_NAME }).first();
+    const card = page
+      .locator('[data-test-id^="okf-studio-card-"]')
+      .filter({ hasText: REPO_NAME })
+      .first();
     await expect(card, `the ${REPO_NAME} repo card must be listed`).toBeVisible({ timeout: 20000 });
     const testingLab = card.getByRole('button', { name: /Testing Lab/i }).first();
     await expect(testingLab, 'the Testing Lab button must be on the card').toBeVisible({ timeout: 20000 });
@@ -107,7 +110,7 @@ test.describe('the RAGAS guide documents what each error state does to the resul
     await expect(ragasTab, 'the RAGAS Benchmarks tab must be present').toBeVisible({ timeout: 20000 });
     await ragasTab.click();
 
-    const guideButton = page.locator('.okf-ragas__help-toggle').first();
+    const guideButton = page.locator('[data-test-id="ragas-guide-toggle"]');
     await expect(guideButton, 'the Guide button must be in the RAGAS panel').toBeVisible({ timeout: 20000 });
     await guideButton.click();
 
@@ -119,13 +122,13 @@ test.describe('the RAGAS guide documents what each error state does to the resul
     //    its own tables (the entries parity table), so an unscoped
     //    `table tbody tr` would count the wrong rows.
     const dialog = page
-      .locator('.ds-modal')
+      .locator('[role="dialog"]')
       .filter({ has: page.getByRole('heading', { name: /RAGAS benchmarking guide/i }) })
       .first();
     await expect(dialog, 'the guide dialog must open').toBeVisible({ timeout: 20000 });
 
     const errorsTab = dialog
-      .locator('.ds-tabs__btn')
+      .locator('[data-test-id^="ds-tab-"]')
       .filter({ hasText: /errors/i })
       .first();
     await expect(errorsTab, 'the guide must have an errors chapter').toBeVisible({ timeout: 20000 });
@@ -136,7 +139,7 @@ test.describe('the RAGAS guide documents what each error state does to the resul
     //    Scoped to the VISIBLE pane: the guide keeps every chapter in the
     //    DOM (v-show), and the read chapter's own six-row output table is
     //    still in the document.
-    const rows = dialog.locator('.okf-guide__pane:visible table tbody tr');
+    const rows = dialog.locator('[data-test-id="ragas-guide-pane"]:visible table tbody tr');
     await expect(rows, 'the mapping must be a table, not prose').toHaveCount(6);
 
     // innerText, not textContent: the other chapters stay in the DOM

@@ -1,5 +1,5 @@
 <template>
-  <span class="ds-pill" :class="`ds-pill--${variant}`">
+  <span class="ds-pill" :class="`ds-pill--${variant}`" :data-state="variant">
     <slot />
   </span>
 </template>

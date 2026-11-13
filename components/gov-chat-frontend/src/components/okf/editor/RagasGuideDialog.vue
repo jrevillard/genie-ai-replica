@@ -33,7 +33,13 @@
     </p>
 
     <DsTabs v-model="tab" :tabs="tabDefs" fill>
-      <div v-for="ch in chapters" v-show="tab === ch.key" :key="ch.key" class="okf-guide__pane">
+      <div
+        v-for="ch in chapters"
+        v-show="tab === ch.key"
+        :key="ch.key"
+        class="okf-guide__pane"
+        data-test-id="ragas-guide-pane"
+      >
         <DsCard padding="lg" class="okf-guide__card">
           <h5 class="okf-guide__chapter-title">{{ ch.title }}</h5>
           <p class="okf-guide__chapter-intro">{{ ch.intro }}</p>

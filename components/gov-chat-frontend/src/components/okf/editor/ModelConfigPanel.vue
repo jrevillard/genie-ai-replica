@@ -247,7 +247,7 @@
         <tr v-for="c in configs" :key="c._key" :class="{ 'okf-models__row--active': c.active }">
           <td>{{ c.name }}</td>
           <td>{{ c.provider }}</td>
-          <td class="okf-models__cell-url" :title="c.base_url">{{ c.base_url }}</td>
+          <td class="okf-models__cell-url" data-test-id="okf-models-url-cell" :title="c.base_url">{{ c.base_url }}</td>
           <td class="okf-models__cell-key">{{ c.has_api_key ? c.api_key_hint : '—' }}</td>
           <td>{{ c.default_model || '—' }}</td>
           <td class="okf-models__cell-svc">

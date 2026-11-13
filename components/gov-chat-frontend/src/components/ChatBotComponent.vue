@@ -508,6 +508,7 @@
             <DsInput
               id="chatTitle"
               v-model="saveChatDialog.title"
+              data-testid="chat-title"
               type="text"
               :placeholder="translate('chatbot.chatTitlePlaceholder')"
               :disabled="isSaving"

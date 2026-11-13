@@ -53,7 +53,7 @@ The handles these specs read (`stat-*`, `logs-*`, `admin-documents-*`,
 | `error-handling.spec.js` | handle (`nav-status`, `answer-error`, `composer-field`) | — |
 | `quick-help-scope.spec.js` | handle (+ `hasText` discriminators on handles, declared `data-state` attributes) | — |
 | `send-message-and-stream.spec.js` | handle (via `BOT_BUBBLE` in `helpers/chatbot.js`) | — |
-| `conversation-history.spec.js` | handle (via helper) | `#chatTitle` ×2 — a Vue ID selector, not a declared handle; `helpers/chatbot.js:337` carries the same ID. Tracked by the chatbot-leftovers derived issue (#1830) |
+| `conversation-history.spec.js` | handle (via helper) | — (`#chatTitle` migrated onto `chat-title`, #1830) |
 
 ### `documents/` — fully handle-based (converted in #1822)
 
@@ -81,53 +81,54 @@ than the previous run and still pass.
 | `a3-legacy-routes-redirect.spec.js` | none (URL-level) | — |
 | `d7a-external-idp-button.spec.js` | structural (`#kc-login`, `#social-external-idp`) | exempt by nature |
 | `d7b-external-idp-login-flow.spec.js` | structural (`#social-external-idp`, `#kc-login`) | exempt by nature |
-| `g1-swagger-authorize.spec.js` | structural (`button.btn.authorize`, `.auth-container`) | grandfathered (third-party DOM) — #1831 |
+| `g1-swagger-authorize.spec.js` | structural (`button.btn.authorize`, `.auth-container`) | grandfathered (third-party DOM) — DECIDED #1831: exemption stands |
 | `h1-jwks-force-refresh.spec.js` | none (API-level) | — |
 | `i1-multi-realm.spec.js` | none (API-level) | — |
 | `j1-opea-continuity.spec.js` | none (API-level) | — |
 | `k1-auth-error-display.spec.js` | none (API-level) | — |
-| `l1-frontend-logout-redirect.spec.js` | structural (`#kc-login`) + role (`getByRole('button', { name: 'Log out' })`) | role accepted; ID exempt by nature |
+| `l1-frontend-logout-redirect.spec.js` | structural (`#kc-login`) + handle (`nav-icon-btn-logout`, #1832) | ID exempt by nature |
 | `l2-localstorage-cleanup.spec.js` | same as `l1` | same |
 | `l3-vuex-state-cleared.spec.js` | same as `l1` | same |
 
 `helpers/chatbot.js` (`loginViaUI`) carries the same `#kc-login` click —
 the login walk happens on the Keycloak page, so the helper inherits the
-same exemption. The `Log out` role locator is the accepted fallback, but
-its name is copy: it breaks on a logout-button rename or a locale flip.
-Bottom of the migration risk order — the auth-logout derived issue (#1832)
-owns the navbar handle decision.
+same exemption. The logout control's copy coupling is gone: the three
+logout specs read the navbar's own `nav-icon-btn-logout` handle (#1832),
+and the role locator remains the documented fallback for surfaces
+without handles.
 
-### `okf/` — one converted family, one grandfathered family
+### `okf/` — fully handle-based (converted by #1828/#1829)
 
 | Spec | Classes used | Residual |
 |---|---|---|
-| `artifacts-view.spec.js` | handle | one structural+text residual: `view.locator('button').filter({ hasText: /delete|remove/i })` count assertion — okf leftovers derived issue (#1829) |
-| `concept-ceiling.spec.js` | handle | `.ds-pill--warning` ×2 inside the declared `concept-ceiling` handle — grandfathered, okf leftovers derived issue (#1829) |
-| `ragas-guide-errors.spec.js` | structural + role (`.okf-dashboard__card-wrap`, `.okf-ragas__help-toggle`, `.ds-modal`, `.ds-tabs__btn`, `.okf-guide__pane:visible table tbody tr`) | grandfathered — okf-ragas derived issue (#1828) |
-| `ragas-judge-selector.spec.js` | structural + role (`td.okf-models__cell-url`, bare `select`/`option` paths) | grandfathered — #1828 |
-| `ragas-rescore-tracking.spec.js` | structural + role (`.okf-ragas__section table tbody tr`, `.ds-pill`, `.okf-ragas__run-key`, `.okf-ragas__progress`) | grandfathered — #1828 |
+| `artifacts-view.spec.js` | handle | — (the delete-button count collapsed onto the role form, #1829) |
+| `concept-ceiling.spec.js` | handle (the ceiling pill declares `data-state=warning`, #1829) | — |
+| `ragas-guide-errors.spec.js` | handle (`okf-studio-card-*`, `ragas-guide-toggle`, `[role="dialog"]`, `ds-tab-*`, `ragas-guide-pane`) | — (converted #1828) |
+| `ragas-judge-selector.spec.js` | handle (`okf-studio-card-*`, `ragas-panel`, `okf-models-url-cell`) | — (converted #1828; the `select`/`option` tails are rooted at `ragas-panel`) |
+| `ragas-rescore-tracking.spec.js` | handle (`okf-studio-card-*`, `ragas-run-history`, `data-state` status pills, `ragas-run-key`, `ragas-run-progress`, `[role="dialog"]`) | — (converted #1828) |
 
-The ragas family is the heaviest structural coupling in the suite: ~30
-class-selector hits across three specs, all on the OKF Studio dashboard,
-the DS modal/tab primitives and the RAGAS panes. Any DS restyle or OKF
-panel rename breaks all three.
+The ragas family WAS the heaviest structural coupling in the suite (~30
+class-selector hits across three specs); #1828 converted it onto
+page-scoped handles — the Studio dashboard cards, the RAGAS panes, the
+run-history rows, and a `data-state` variant attribute on the DsTabs
+primitive (the shape #1829 establishes for state variants).
 
-### `theme/` and the root — handle-based
+### `theme/` — handle-based
 
 | Spec | Classes used | Residual |
 |---|---|---|
 | `living-intelligence.spec.js` | none (cache-header level) | — |
+| `theme-runtime-config.spec.js` | none (cache-header level) | — |
 | `resizable-sidebars.spec.js` | handle | — |
 | `responsive-layout.spec.js` | handle | — |
 | `welcome-banner.spec.js` | handle (via `helpers/welcome.js`) | — |
-| `theme-runtime-config.spec.js` | none (cache-header level) | — |
 
 ### Capture scripts
 
 | Script | Classes used | Residual |
 |---|---|---|
 | `capture-dashboard.js` | handle | — |
-| `capture-admin.js` | structural (DS state qualifiers, several handle-anchored: `[data-test-id="ds-tab-…"].ds-tabs__btn--active`) | grandfathered — okf-ragas derived issue (#1828) |
+| `capture-admin.js` | handle (`admin-page`, `admin-page-title`, `ds-spinner`, `ds-tab-…[data-state=active]`, `okf-studio-wizard-step`, `okf-editor-shell`, `okf-lab-tabs`, `okf-lab-pane-head`) | — (converted #1828; the `genie-living-intelligence` reads stay class reads — the class IS the audited contract) |
 
 ### The mobile twin
 
@@ -148,35 +149,26 @@ Two surfaces render DOM this repo does not own:
   `loginViaUI` in `helpers/chatbot.js`) selects on that page by
   necessity. Renaming upstream IDs into theme-declared handles is
   possible in the FTL template but buys nothing while upstream keeps its
-  own IDs authoritative — tracked, not scheduled (the auth-keycloak
-  derived issue #1833 owns that decision).
+  own IDs authoritative — DECIDED #1833: the exemption stands
+  permanently; revisit only if an upstream release renames a login ID.
 - **The Swagger UI page** (`g1-swagger-authorize.spec.js`) is a
   third-party bundle that declares no test handles; `.auth-container` and
-  `button.btn.authorize` are its own DOM. Grandfathered in the gate with
-  that reason (#1831).
+  `button.btn.authorize` are its own DOM. DECIDED #1831: the exemption
+  stands permanently — the DOM assertions ARE the G.1 acceptance, and
+  this repo cannot add handles to the bundle.
 
 ## Migration list — ordered by breakage risk
 
 Risk = the probability a design-side change breaks the spec, weighted by
 the coupling surface.
 
-1. **okf-ragas family** (#1828) — ~30 structural hits across 3 specs, all
-   on DS primitives (`ds-modal`, `ds-tabs`, `ds-pill`) and OKF panels that
-   restyle often. Highest risk, largest scope.
-2. **capture-admin.js** (#1828) — DS state qualifiers on a capture
-   script; breaks the screenshot evidence flow, not a spec.
-3. **okf leftovers** (#1829) — `concept-ceiling`'s two `.ds-pill--warning`
-   lookups and `artifacts-view`'s delete-button count assertion.
-4. **chatbot leftovers** (#1830) — `#chatTitle` (spec + helper copy): a
-   Vue ID, greppable, but not a declared handle.
-5. **auth-swagger** (#1831) — third-party DOM; the migration question is
-   whether the exemption stands permanently (recommended) or the spec
-   probes Swagger's config API instead of its DOM.
-6. **auth-logout role locators** (#1832) — `getByRole('Log out')` ×3:
-   accepted today, coupled to accessible copy; a navbar handle removes
-   the copy coupling.
-7. **auth-keycloak IDs** (#1833) — upstream IDs on a surface we theme but
-   do not own; migrate only if the upstream contract ever changes.
+All seven entries are done, shipped by the #1822 migration wave:
+the okf-ragas family and capture-admin converted onto page-scoped
+handles (#1828), the okf leftovers onto a `data-state` pill attribute
+and the role-form count (#1829), `chat-title` declared and read by spec
+and helper (#1830), the three logout specs reading the already-declared
+navbar handle (#1832). The two third-party exemptions stand permanently,
+decided with their sections above (#1831, #1833).
 
 ## Keeping the map true
 

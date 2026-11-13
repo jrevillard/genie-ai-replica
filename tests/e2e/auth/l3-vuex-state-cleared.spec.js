@@ -1,6 +1,7 @@
 const { test, expect } = require('@playwright/test');
 const { BASE_URL } = require('../helpers/base-url');
 const { TEST_USER } = require('../helpers/e2e-fixtures');
+const { NAV_LOGOUT_BUTTON } = require('../helpers/navbar');
 
 // Test L.3 — Vuex Auth State Cleared on Logout
 // Login, verify isAuthenticated is true, trigger logout, verify state is cleared.
@@ -90,7 +91,7 @@ async function waitForVueApp(page) {
   ).toBeTruthy();
 
   // Step 5: Click the logout button
-  const logoutButton = page.getByRole('button', { name: 'Log out' });
+  const logoutButton = page.locator(NAV_LOGOUT_BUTTON);
   await expect(logoutButton, 'Logout button should be visible').toBeVisible({ timeout: 10000 });
   await logoutButton.click();
 

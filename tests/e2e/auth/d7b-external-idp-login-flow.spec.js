@@ -61,52 +61,67 @@ test('completes full external IdP brokered login flow', async ({ browser }) => {
   const page = await context.newPage();
   const apiContext = context.request;
 
-  // Get admin token for realm configuration changes. The form body is
-  // serialized EXPLICITLY: Playwright's apiContext does not turn a
-  // URLSearchParams object into an application/x-www-form-urlencoded body
-  // (it sends the object's own serialization), and Keycloak answers 400
-  // "Missing form parameter: grant_type" — found by the mint gate below on
-  // its first live run (#1713).
-  const adminTokenRes = await apiContext.post(`${BASE_URL}/auth/realms/master/protocol/openid-connect/token`, {
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    data: new URLSearchParams({
-      client_id: 'admin-cli',
-      username: 'admin',
-      password: process.env.KEYCLOAK_ADMIN_PASSWORD,
-      grant_type: 'password'
-    }).toString(),
-    ignoreHTTPSErrors: true
-  });
-  // The mint carries the same verdict discipline as the restore below
-  // (#1713): apiContext returns a response on non-2xx instead of throwing,
-  // so the status is checked explicitly. An unchecked mint surfaces an
-  // expired/wrong admin password as a confusing downstream error — a
-  // `Bearer undefined` header on every later call — instead of the mint
-  // failure that is the actual cause.
-  if (!adminTokenRes.ok()) {
-    let mintBody;
-    try {
-      mintBody = JSON.stringify(await adminTokenRes.json()).substring(0, 300);
-    } catch (bodyError) {
-      mintBody = `unavailable (body read failed: ${bodyError.message})`;
-    }
-    const error = new Error(
-      `Admin token mint failed — every later realm call would run without a token. ` +
-        `HTTP ${adminTokenRes.status()}. Body: ${mintBody}. ` +
-        `Check KEYCLOAK_ADMIN_PASSWORD for the venue's master realm.`
-    );
-    error.isMintFailure = true;
-    throw error;
-  }
-  const adminToken = (await adminTokenRes.json()).access_token;
-  const authHeaders = { Authorization: `Bearer ${adminToken}`, 'Content-Type': 'application/json' };
-
   // Set by the restore in the inner finally. The realm restore must not
   // throw over a flow failure that is already propagating: the flow error
   // is the root cause, so the restore failure travels WITH it.
   let restoreFailure = null;
 
+  // The mint sits INSIDE the try (review, #1713 wave): a failure here must
+  // close the browser context through the catch below — a mint throw before
+  // the try leaked the context with its authenticated Keycloak session.
   try {
+    // Get admin token for realm configuration changes. The form body is
+    // serialized EXPLICITLY: Playwright's apiContext does not turn a
+    // URLSearchParams object into an application/x-www-form-urlencoded body
+    // (it sends the object's own serialization), and Keycloak answers 400
+    // "Missing form parameter: grant_type" — found by the mint gate below on
+    // its first live run (#1713).
+    const adminTokenRes = await apiContext.post(`${BASE_URL}/auth/realms/master/protocol/openid-connect/token`, {
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      data: new URLSearchParams({
+        client_id: 'admin-cli',
+        username: 'admin',
+        password: process.env.KEYCLOAK_ADMIN_PASSWORD,
+        grant_type: 'password'
+      }).toString(),
+      ignoreHTTPSErrors: true
+    });
+    // The mint carries the same verdict discipline as the restore below
+    // (#1713): apiContext returns a response on non-2xx instead of throwing,
+    // so the status is checked explicitly. An unchecked mint surfaces an
+    // expired/wrong admin password as a confusing downstream error — a
+    // `Bearer undefined` header on every later call — instead of the mint
+    // failure that is the actual cause. A 200 with a non-JSON body (a proxy
+    // error page) or no access_token is the same class: every later realm
+    // call would run without a token.
+    const mintFailure = (detail) => {
+      const error = new Error(
+        `Admin token mint failed — every later realm call would run without a token. ` +
+          `HTTP ${adminTokenRes.status()}. ${detail}`
+      );
+      error.isMintFailure = true;
+      return error;
+    };
+    if (!adminTokenRes.ok()) {
+      let mintBody;
+      try {
+        mintBody = JSON.stringify(await adminTokenRes.json()).substring(0, 300);
+      } catch (bodyError) {
+        mintBody = `Body unavailable (read failed: ${bodyError.message}).`;
+      }
+      throw mintFailure(`Body: ${mintBody}. Check KEYCLOAK_ADMIN_PASSWORD for the venue's master realm.`);
+    }
+    let adminToken;
+    try {
+      adminToken = (await adminTokenRes.json()).access_token;
+    } catch {
+      throw mintFailure(`The token endpoint answered a non-JSON body (a proxy error page?)`);
+    }
+    if (!adminToken) {
+      throw mintFailure(`The token answer carried no access_token.`);
+    }
+    const authHeaders = { Authorization: `Bearer ${adminToken}`, 'Content-Type': 'application/json' };
+
     // Step 1: Temporarily disable the VERIFY_EMAIL required action (test environment only)
     // When verifyEmail=true on the realm, Keycloak adds VERIFY_EMAIL as a required action
     // for brokered users. In production, SMTP sends the verification email and the flow

@@ -1,5 +1,5 @@
 const { test, expect } = require('@playwright/test');
-const { loginViaUI, BASE_URL, TEST_ADMIN_USER } = require('../helpers/chatbot');
+const { loginViaUI, BASE_URL, TEST_ADMIN_USER, LOGIN_BUDGET_TIMEOUT_MS } = require('../helpers/chatbot');
 
 /**
  * The analytics page's satisfaction charts — the gauge and the heatmap —
@@ -113,9 +113,9 @@ async function openAnalyticsWithPayloads(page) {
 }
 
 test.describe('Analytics satisfaction charts', () => {
-  // The login helper's own worst case exceeds shorter ceilings (see
-  // failure-states.spec.js): give it the login budget.
-  test.setTimeout(300000);
+  // The login helper's own worst case — LOGIN_BUDGET_TIMEOUT_MS is the ONE
+  // owner of the derivation (helpers/chatbot.js).
+  test.setTimeout(LOGIN_BUDGET_TIMEOUT_MS);
 
   test('renders the gauge trends with the active locale labels and payload values', async ({ page }) => {
     await openAnalyticsWithPayloads(page);

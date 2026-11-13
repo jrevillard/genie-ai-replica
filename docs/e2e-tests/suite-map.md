@@ -83,7 +83,7 @@ one reads a missing directory as an accident.
 
 | Spec | Phase/story | What it drives | Profile | Helpers |
 |------|-------------|----------------|---------|---------|
-| `analytics-satisfaction.spec.js` | — | the analytics satisfaction charts render the injected payloads with the active locale's labels | core | `auth`, `chatbot` |
+| `analytics-satisfaction.spec.js` | — | the analytics satisfaction charts render the injected payloads with the active locale's labels | core | `chatbot` |
 | `authz.spec.js` | — | admin surface authorization: navbar gating + backend 403 | core | `auth`, `chatbot` |
 | `data-wiring.spec.js` | — | overview stat tiles/health/resources render from the system-health payload | core | `auth`, `chatbot` |
 | `failure-states.spec.js` | — | admin API failures render the visible error notification and recover | core | `auth`, `chatbot` |

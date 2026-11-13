@@ -131,14 +131,9 @@ async function openWizardInputStep(page, importBody) {
   await expect(card).toBeVisible({ timeout: 15000 });
   await card.click();
 
-  // The editor shell opens on the Editor sub-tab (UX AC5); the wizard is the
-  // sibling sub-tab. The shell mounts it hidden — clicking reveals it.
-  const wizardTab = page.locator('[data-test-id="ds-tab-wizard"]');
-  await expect(wizardTab).toBeVisible({ timeout: 15000 });
-  await wizardTab.click();
-
-  // The wizard is on the Input step — the section handle the shell declares,
-  // with the step's own aria-label naming the step.
+  // The editor shell opens on the WIZARD sub-tab by default (StudioTab
+  // onResume dispatches setEditorSubTab('wizard') — C1 Amendment A): no
+  // sub-tab click needed, the step body is the wizard's own.
   const stepSection = page.locator('[data-test-id="okf-studio-wizard-step"]');
   await expect(stepSection).toBeVisible({ timeout: 15000 });
   await expect(stepSection).toHaveAttribute('aria-label', /Input/i);

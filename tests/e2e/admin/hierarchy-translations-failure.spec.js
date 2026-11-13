@@ -1,6 +1,5 @@
 const { test, expect } = require('@playwright/test');
-const { SESSION_MINT_TIMEOUT_MS } = require('../helpers/auth');
-const { loginViaUI, BASE_URL, TEST_ADMIN_USER } = require('../helpers/chatbot');
+const { loginViaUI, BASE_URL, TEST_ADMIN_USER, LOGIN_BUDGET_TIMEOUT_MS } = require('../helpers/chatbot');
 
 /**
  * The hierarchy edit form's failed-translations dead-end (#1578, the UI
@@ -59,6 +58,19 @@ const DEAD_END_CONTROLS = [
  * translations endpoint's verdict.
  */
 async function openEditForm(page, translationsStatus, translationsBody) {
+  // The deployment's locale whitelist feeds the translation-lang select's
+  // options (languageConfig.getAvailableLanguages reads
+  // window.APP_CONFIG.availableLocales), so on a whitelisted venue the
+  // recovered row's 'es' value would have no option to land on and the
+  // select would silently hold ''. The whitelist is rewritten IN the
+  // venue's own runtime config — every other value (the OIDC origin, the
+  // client id) stays the venue's — so the form's language set is the
+  // deployment-independent fixture this spec's payload assumes.
+  await page.route('**/runtime/config.js', async (route) => {
+    const response = await route.fetch();
+    const body = (await response.text()).replace(/availableLocales:\s*"[^"]*"/, 'availableLocales: "en,es"');
+    await route.fulfill({ response, body });
+  });
   await page.route('**/api/service-categories/categories/detailed*', (route) =>
     route.fulfill({
       status: 200,
@@ -85,8 +97,9 @@ async function openEditForm(page, translationsStatus, translationsBody) {
 test.describe('Hierarchy form failed-translations dead-end', () => {
   // The login helper's own worst case (two attempts, navigation + redirect
   // waits) exceeds two minutes: a shorter ceiling would fire first and hide
-  // the helper's diagnosis behind a bare timeout (see failure-states.spec.js).
-  test.setTimeout(SESSION_MINT_TIMEOUT_MS);
+  // the helper's diagnosis behind a bare timeout. LOGIN_BUDGET_TIMEOUT_MS is
+  // the ONE owner of the derivation (helpers/chatbot.js).
+  test.setTimeout(LOGIN_BUDGET_TIMEOUT_MS);
 
   test('renders the notice, disables the controls, and recovers on Retry', async ({ page }) => {
     await openEditForm(page, 500, { error: 'INTERNAL_ERROR', message: 'translations unavailable' });

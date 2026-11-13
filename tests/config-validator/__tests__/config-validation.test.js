@@ -4425,17 +4425,20 @@ describe('the root Playwright config has a lint home (#1716)', () => {
     // cover the command, not the target file. The target is one small
     // file; the suppression is forbidden outright.
     const source = fs.readFileSync(path.join(ROOT, 'playwright.config.js'), 'utf-8');
-    // Three spellings, three greps: 'eslint-disable' misses the
-    // file-level config comment (eslint no-undef: "off" — no 'disable'
-    // in it, and measured to silence the gate the same way); 'no-undef'
-    // misses the blanket spellings (eslint-disable with no rule name);
-    // both miss the /* global <name> */ directive, which declares the
-    // binding to no-undef directly and was measured to silence the gate
-    // the same way. The target has no legitimate mention of any of the
-    // three (grep: zero).
+    // Three directive families, three greps: 'eslint-disable' misses
+    // the file-level config comment (eslint no-undef: "off" — no
+    // 'disable' in it, and measured to silence the gate the same way);
+    // 'no-undef' misses the blanket spellings (eslint-disable with no
+    // rule name); both miss the /* global(s) <name> */ directive, which
+    // declares the binding to no-undef directly and was measured to
+    // silence the gate the same way. The third grep is a
+    // whitespace-tolerant regex, not a literal: ESLint trims the comment
+    // before parsing the directive label, so /*global*/, /*   global */
+    // and the plural /*globals*/ tag all register. The target has no
+    // legitimate mention of any of the three (grep: zero).
     expect(source).not.toContain('eslint-disable');
     expect(source).not.toContain('no-undef');
-    expect(source).not.toContain('/* global');
+    expect(source).not.toMatch(/\/\*\s*globals?\b/);
   });
 
   test('the gate names the root config and the e2e eslint config', () => {

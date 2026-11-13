@@ -4549,7 +4549,7 @@ describe('the root Playwright config has a lint home (#1716)', () => {
     if (failure.code === 'ENOENT') {
       throw new Error('tests/e2e deps missing on this checkout — fix: cd tests/e2e && npm ci');
     }
-    // A child killed at the inner 12s bound is runner latency, not a gate
+    // A child killed at the inner 14s bound is runner latency, not a gate
     // regression — name it, or the assertion would render "expected null
     // to be 1" and invite a misdiagnosis.
     if (failure.signal === 'SIGTERM') {

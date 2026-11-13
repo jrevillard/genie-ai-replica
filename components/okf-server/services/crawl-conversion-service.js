@@ -167,9 +167,9 @@ function maxSourceBytesFromEnv() {
 
 /**
  * One-time sweep: jobs interrupted by a server restart are marked failed.
- * Lazy (first startConversion call) — the DB connection is not up at require
- * time. In-process `live` runners are never touched (a restarted process has
- * an empty registry by definition).
+ * Called at startup or lazily on the first startConversion call; the DB
+ * connection is not up at require time. In-process `live` runners are never
+ * touched (a restarted process has an empty registry by definition).
  *
  * The record it writes is the ONE failed-record vocabulary
  * (failedConversionRecord): status, stage, error, code and `summary: null` —

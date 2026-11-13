@@ -49,7 +49,8 @@ const RID = '77777777-7777-4777-8777-777777777777';
 /**
  * ArangoDB 3.12's UPDATE merges RECURSIVELY (mergeObjects defaults to
  * true): an object value is merged key by key, an array REPLACES, and a null
- * is a VALUE (keepNull defaults to true — nullMeansRemove is false). The
+ * is a VALUE (keepNull defaults to true, so a null is stored, not removed).
+ * The
  * mock follows the database here, not a guess: a top-level merge would make
  * every assertion about a nested field (the conversion record's `summary`)
  * be made against a database that does not exist.
@@ -69,6 +70,15 @@ function arangoMerge(target, patch) {
   }
   return out;
 }
+
+it('models recursive ArangoDB updates, including null and array replacement', () => {
+  expect(
+    arangoMerge(
+      { conversion: { status: 'queued', summary: { created: 2, errors: 1 }, per_file: ['old'] } },
+      { conversion: { summary: { errors: null }, per_file: ['new'] } }
+    )
+  ).toEqual({ conversion: { status: 'queued', summary: { created: 2, errors: null }, per_file: ['new'] } });
+});
 
 function programQuery() {
   // The mock MODELS the production AQL — it does not answer for it. Each
@@ -116,7 +126,14 @@ function programQuery() {
         if (!old || old.status !== 'queued' || old.started_at !== startedAt) {
           return { all: async () => [] }; // the FILTER matched no row
         }
-        live.conversion = arangoMerge(live.conversion, bind.patch);
+        // Production always states the mergeObjects option (replace on a
+        // restore, default merge on a failed close) — a statement without it
+        // is a different statement, and the mock refuses to answer for it.
+        const mergeOption = /OPTIONS\s*\{\s*mergeObjects:\s*@([\w]+)\s*\}/.exec(text);
+        if (!mergeOption) {
+          throw new Error('mock: the conditional close no longer states its mergeObjects option');
+        }
+        live.conversion = bind[mergeOption[1]] ? arangoMerge(live.conversion, bind.patch) : bind.patch;
         return { all: async () => [1] };
       }
       // The queued write hands back the record it replaced (RETURN OLD).
@@ -125,7 +142,12 @@ function programQuery() {
       // guess, or the assertions would prove a fiction.
       if (!live) return { all: async () => [] }; // the document is gone: no row matched
       live.conversion = arangoMerge(live.conversion, bind.patch);
-      if (text.includes('RETURN OLD')) return { all: async () => [old === undefined ? null : old] };
+      if (text.includes('RETURN OLD')) {
+        // Production hands back a server-side COPY, not a live reference —
+        // the snapshot a refused start restores must not alias the store, or
+        // a mutation of it would go unnoticed.
+        return { all: async () => [old === undefined ? null : structuredClone(old)] };
+      }
       return { all: async () => [] };
     }
 
@@ -1320,12 +1342,13 @@ describe('producer-service — startDocumentsConversion + run', () => {
     // 'failed': the web client renders a failed record as
     // "import failed — delete the repository", which would be a lie about a
     // healthy repository.
+    const previous = { status: 'done', stage: 'done', summary: { created: 1 } };
     await mockDb.collection('okf_repositories').save({
       _key: RID,
       repo_id: RID,
       name: 'Mine',
       domain: 'general',
-      conversion: { status: 'done', stage: 'done', files_done: 1, files_total: 1, summary: { created: 1 } }
+      conversion: previous
     });
     mockDocsWithHash('HASH-HEALTHY-1');
     failNextDuplicateQuery();
@@ -1334,7 +1357,7 @@ describe('producer-service — startDocumentsConversion + run', () => {
       producer.startDocumentsConversion({ repo_id: RID, file_ids: ['f1'], requested_name: 'x' })
     ).rejects.toThrow(/db down/);
     const repo = await mockDb.collection('okf_repositories').document(RID);
-    expect(repo.conversion).toMatchObject({ status: 'done', summary: { created: 1 } });
+    expect(repo.conversion).toEqual(previous);
   });
 
   it("a FAILED record carries no summary — the previous run's summary must not survive", async () => {
@@ -1364,7 +1387,8 @@ describe('producer-service — startDocumentsConversion + run', () => {
         files_done: 0,
         files_total: 1,
         bytes_done: 3,
-        summary: { created: 9 }
+        summary: { created: 9 },
+        per_file: [{ file_id: 'old' }]
       }
     });
     // the file must carry a hash, or the duplicate query never runs
@@ -1380,6 +1404,7 @@ describe('producer-service — startDocumentsConversion + run', () => {
     // the merge, not a replace: the counters the failed record does not set
     // survive it
     expect(failed.conversion.bytes_done).toBe(3);
+    expect(failed.conversion.per_file).toEqual([]);
   });
 
   it('a refused start does not clobber a record another writer owns', async () => {

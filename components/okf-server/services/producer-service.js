@@ -181,17 +181,19 @@ async function patchConversionReturningOld(repoId, patch) {
  * @param {string} repoId
  * @param {string} startedAt the started_at of the run that owns the record
  * @param {object} patch the record to write
+ * @param {boolean} restore replace the conversion object rather than merging it
  * @returns {Promise<boolean>} true when the record was written
  */
-async function closeConversionIfOwned(repoId, startedAt, patch) {
+async function closeConversionIfOwned(repoId, startedAt, patch, restore) {
   const db = await getDb();
   const cursor = await db.query(
     `LET doc = DOCUMENT(${COLLECTION}, @repo_id)
      FILTER doc != null
      FILTER doc.conversion != null && doc.conversion.status == 'queued' && doc.conversion.started_at == @startedAt
      UPDATE doc WITH { conversion: @patch, updated_at: @now } IN ${COLLECTION}
+     OPTIONS { mergeObjects: @mergeObjects }
      RETURN 1`,
-    { repo_id: repoId, patch, now: new Date().toISOString(), startedAt }
+    { repo_id: repoId, patch, now: new Date().toISOString(), startedAt, mergeObjects: !restore }
   );
   const rows = await cursor.all();
   return !!(rows && rows.length);
@@ -1251,17 +1253,14 @@ async function startDocumentsConversion({ repo_id, file_ids, requested_name, cla
     }
     await stampSources(repo_id, file_ids, metaByKey);
   } catch (err) {
-    // A refused start must leave the repository as it found it. The
-    // conversion record is merged, so a prior TERMINAL record
-    // — a healthy 'done' with its summary, or an earlier 'failed' with its
-    // error — is RESTORED instead of being overwritten with 'failed': the
-    // web client renders a failed record as
-    // "import failed — delete the repository", which would be a lie about a
-    // healthy repository. (A prior 'failed' is restored too: the repository
-    // is left exactly as it was found, and the reason THIS start was
-    // refused travels with the response, not with the record.) With no prior
-    // terminal record, the record is
-    // closed as failed: the interrupted-conversion sweep is one-shot per
+    // A refused start restores a prior TERMINAL conversion record — a healthy
+    // 'done' with its summary, or an earlier 'failed' with its error — rather
+    // than overwriting it with this refusal. The web client renders a failed
+    // record as "import failed — delete the repository", which would be a lie
+    // about a healthy repository. The conversion is restored while updated_at
+    // changes; the reason for this refusal travels with the response. With no
+    // prior terminal record, the record is closed as failed: the
+    // interrupted-conversion sweep is one-shot per
     // process and has already run, so nothing else would ever close a queued
     // record with no worker. It is written BEFORE the reservation is
     // released — a write landing after a concurrent start's own record
@@ -1272,21 +1271,21 @@ async function startDocumentsConversion({ repo_id, file_ids, requested_name, cla
     // NOT take the conversion reservation and MERGEs into the same
     // attribute — a blind write here would destroy that writer's progress
     // record, which is the very clobber this restore exists to avoid.
-    const close =
-      previous && crawlConversion.isTerminal(previous)
-        ? previous
-        : crawlConversion.failedConversionRecord(err, {
-            files_done: 0,
-            files_total: file_ids.length,
-            per_file: [],
-            started_at: queued.started_at
-          });
+    const restore = previous && crawlConversion.isTerminal(previous);
+    const close = restore
+      ? previous
+      : crawlConversion.failedConversionRecord(err, {
+          files_done: 0,
+          files_total: file_ids.length,
+          per_file: [],
+          started_at: queued.started_at
+        });
     try {
       // ONE atomic statement: the record is written only while it is still
       // THIS run's. The conversion record is a shared slot — the zip-ingest
       // path (which takes no reservation) writes its own fields into it — so
       // a blind write would clobber that writer.
-      const written = await closeConversionIfOwned(repo_id, queued.started_at, close);
+      const written = await closeConversionIfOwned(repo_id, queued.started_at, close, restore);
       if (!written) {
         logger.warn("Conversion record is not this run's — left untouched", { repo_id });
       }

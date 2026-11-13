@@ -351,8 +351,32 @@ function e2eOwnSpecNames(root = REPO_ROOT) {
     const out = execFileSync(
       'git',
       ['-C', root, 'log', '--format=', '--name-only', '--', TESTS_E2E_ROOT],
-      { encoding: 'utf-8', maxBuffer: 32 * 1024 * 1024, timeout: 30000 }
+      // stderr is swallowed: the catch below already defines what a git
+      // failure means here (no past names), and an inherited stderr would
+      // print raw `fatal:` lines into the run output a human scans for
+      // red — on every synthetic-root case of the unit spec.
+      { encoding: 'utf-8', maxBuffer: 32 * 1024 * 1024, timeout: 30000, stdio: ['ignore', 'pipe', 'ignore'] }
     );
+    // A shallow checkout truncates "had": a renamed spec whose rename
+    // commit is missing from the truncated history stops being
+    // recognised, and the dedupe quietly degrades toward filing a second
+    // issue for a file that already has one (#1802). Name the
+    // degradation once — the checkout can fix it with a full fetch.
+    let shallow = '';
+    try {
+      shallow = execFileSync('git', ['-C', root, 'rev-parse', '--is-shallow-repository'], {
+        encoding: 'utf-8',
+        timeout: 10000,
+        stdio: ['ignore', 'pipe', 'ignore'],
+      });
+    } catch {
+      shallow = '';
+    }
+    if (shallow.trim() === 'true') {
+      console.warn(
+        'file-failure-issues: this checkout is a SHALLOW clone — its git history is truncated, so a spec renamed or deleted before the truncation is no longer recognised by the dedupe and a multi-file title naming it can be misjudged as a dedication. A full fetch (GIT_DEPTH: 0) restores the rule.'
+      );
+    }
     for (const line of out.split('\n')) {
       const name = line.trim().split('/').pop();
       if (name && SPEC_FILE_RE.test(name)) names.add(name);

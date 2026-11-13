@@ -80,10 +80,16 @@ test.describe('the document status predicate', () => {
     }
   });
 
-  test('no private normalisation is spelled beside the shared require', () => {
+  test('no private normalisation is spelled inside matchesStatus', () => {
     // Tripwire for the drift the property test cannot see: a dead
-    // require of the shared module with a hand-rolled copy beside it.
+    // require of the shared module with a hand-rolled copy inside the
+    // predicate. Anchored to the predicate's own source — the whole
+    // helper file may legitimately normalise other things (a file name,
+    // a search term) and must not false-positive this gate.
     const source = fs.readFileSync(require.resolve('./documents'), 'utf8');
-    expect(source).not.toMatch(/toLowerCase\(\)\.trim\(\)/);
+    const start = source.indexOf('function matchesStatus');
+    const end = source.indexOf('\n}', start);
+    expect(end).toBeGreaterThan(start);
+    expect(source.slice(start, end)).not.toMatch(/toLowerCase\(\)\.trim\(\)/);
   });
 });

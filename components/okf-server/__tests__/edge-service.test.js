@@ -261,12 +261,17 @@ describe('edgeService.writeRepoConceptEdges (Story 2.9.3)', () => {
 describe('edgeService — review fixes (2026-08-17)', () => {
   const { writeAudit } = require('../services/audit-service');
 
-  test('P1: canonicalizes concepts/-prefixed link targets against a prefixed stored set (no silent edge loss)', async () => {
-    // Stored concept ids are `concepts/`-prefixed (subdirectory bundle); link
-    // targets are bare (parser strips ./ from the href). Both must normalize.
-    programQueries([metaRow({ links: [{ to_concept_id: 'index', label: 'Index' }] })], {
-      [REPO]: ['concepts/service_directory', 'concepts/index']
-    });
+  test('P1: a legacy concepts/-prefixed LINK TARGET still resolves against the bare store', async () => {
+    // The stored LINKS of an old (pre-2026-08-30) bundle may carry prefixed
+    // targets; the strip on the read target keeps them resolving. The
+    // STORED-ID dual-form query arm is gone (#1667 — measured 0 prefixed
+    // rows in 9,515): a legacy prefixed STORED id is the operator
+    // migration's job (scripts/okf-testing-lab/normalize-concept-ids.js),
+    // so the store here is bare.
+    programQueries(
+      [metaRow({ links: [{ to_concept_id: 'concepts/index', label: 'Index' }] })],
+      inRepo('service_directory', 'index')
+    );
     const result = await edgeService.writeRepoConceptEdges(REPO, 'service_directory', {});
     expect(result.written).toBe(1);
     expect(result.dropped).toEqual([]);
@@ -369,7 +374,7 @@ describe('edgeService.writeRepoConceptEdges — within-repo boundary read (#1179
     expect(aql).toMatch(/\bAND\b/);
     expect(aql).not.toMatch(/\bOR\b/);
     expect(bindVars.repo_id).toBe(REPO);
-    expect(bindVars.candidates).toEqual(links.flatMap((l) => [l.to_concept_id, `concepts/${l.to_concept_id}`]));
+    expect(bindVars.candidates).toEqual(links.map((l) => l.to_concept_id)); // one candidate per target — no prefixed doubling (#1667)
   });
 
   test('a link target OUTSIDE the repo is still dropped — the probe never widens the boundary', async () => {
@@ -408,6 +413,6 @@ describe('edgeService.writeRepoConceptEdges — within-repo boundary read (#1179
     await edgeService.writeRepoConceptEdges(REPO, 'service_directory', {});
     const found = probes();
     expect(found).toHaveLength(1);
-    expect(found[0][1].candidates).toEqual(['index', 'concepts/index']);
+    expect(found[0][1].candidates).toEqual(['index']);
   });
 });

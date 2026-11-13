@@ -4342,6 +4342,22 @@ describe('the root Playwright config has a lint home (#1716)', () => {
     expect(lintJob).toContain('npm run lint:playwright-config');
   });
 
+  test('the gate gives the root config Node-only globals (#1716 review)', () => {
+    // The root config runs in Node only: the merged node+browser pool entry
+    // must exclude it and a Node-only entry must scope it, or a browser
+    // global there (a ReferenceError at config load) passes no-undef. Both
+    // halves are pinned as exact entries — ESLint's flat config merges
+    // matching entries' globals additively, so dropping EITHER half (the
+    // exclusion from the merged pool, or the Node-only entry) silently
+    // restores the hole; each pin fails on exactly that edit and forces a
+    // conscious update.
+    const source = fs.readFileSync(path.join(ROOT, 'tests/e2e/eslint.config.js'), 'utf-8').replace(/\s+/g, '');
+    const nodeOnly = "files:['playwright.config.js','../../playwright.config.js'],";
+    const mergedExcludes = "ignores:['playwright.config.js','../../playwright.config.js'],";
+    expect(source).toContain(nodeOnly);
+    expect(source).toContain(mergedExcludes);
+  });
+
   test('the gate names the root config and the e2e eslint config', () => {
     const scripts = JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf-8')).scripts;
     expect(scripts['lint:playwright-config']).toBeDefined();

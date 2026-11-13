@@ -27,12 +27,36 @@ const sharedRules = require('../../components/shared/eslint-rules-base');
 module.exports = [
   js.configs.recommended,
   {
+    // Node + browser runtime: the suite and helpers — the evaluate bodies
+    // are inline in the same file, so both pools apply (see the boundary
+    // note above).
+    files: ['**/*.js'],
+    // The suite's own Playwright config at the repository ROOT runs in Node
+    // only: a browser global there is a ReferenceError at config load, so
+    // it takes the Node-only entry below instead of this one (#1716). Both
+    // spellings cover the two base paths the gate runs from — tests/e2e/
+    // for `eslint .`, the repository root for lint:playwright-config.
+    ignores: ['playwright.config.js', '../../playwright.config.js'],
     languageOptions: {
       ecmaVersion: 'latest',
       sourceType: 'script',
       globals: {
         ...globals.node,
         ...globals.browser
+      }
+    },
+    rules: {
+      ...sharedRules
+    }
+  },
+  {
+    // Node-only runtime: the suite's Playwright config (see above).
+    files: ['playwright.config.js', '../../playwright.config.js'],
+    languageOptions: {
+      ecmaVersion: 'latest',
+      sourceType: 'script',
+      globals: {
+        ...globals.node
       }
     },
     rules: {

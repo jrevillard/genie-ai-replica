@@ -1093,3 +1093,88 @@ describe('vllmChatCompletions — model-id resolution (!631 policy)', () => {
     expect(axios.post.mock.calls[0][1].model).toBe('pinned/deployment-model');
   });
 });
+
+// #1816 — the retry loop's PHASE deadline: the pre-#1816 loop re-granted the
+// FULL budget to every attempt (a flaky shared-GPU endpoint held the phase
+// ~4x the grant plus backoff). Now withUpstreamRetry fixes ONE absolute
+// deadline at entry and hands each attempt the REMAINING time as the per-call
+// budget — a budgeted phase can never outlive its grant. Driven through
+// vllmChatCompletions (the one budgeted caller riding withVllmRetry) with the
+// adaptive client SPIED (the service requires it lazily, so the spy sees
+// every attempt's budgetMs argument).
+describe('withUpstreamRetry phase deadline (#1816) — retries get the REMAINING budget, never a re-grant', () => {
+  const adaptive = require('../services/adaptive-llm-call');
+  const TRANSIENT = () =>
+    Object.assign(new Error('Request failed with status code 429'), {
+      code: 'ERR_BAD_REQUEST',
+      response: { status: 429, headers: {}, data: {} }
+    });
+
+  beforeEach(() => {
+    process.env.RAGAS_JUDGE_BASE_URL = 'https://judge.example/v1';
+    process.env.RAGAS_JUDGE_MODEL = 'judge-model-x';
+    process.env.RAGAS_JUDGE_API_KEY = 'judge-key';
+    modelCache.clearModelCache();
+  });
+
+  afterEach(() => {
+    jest.restoreAllMocks();
+    delete process.env.RAGAS_JUDGE_BASE_URL;
+    delete process.env.RAGAS_JUDGE_MODEL;
+    delete process.env.RAGAS_JUDGE_API_KEY;
+  });
+
+  it('later attempts receive a SMALLER budget than the first (remaining phase time, not the full grant)', async () => {
+    const spy = jest
+      .spyOn(adaptive, 'adaptiveChatCompletion')
+      .mockRejectedValueOnce(TRANSIENT())
+      .mockRejectedValueOnce(TRANSIENT())
+      .mockResolvedValueOnce(vllmResponse('{}'));
+    const t0 = Date.now();
+    await svc.vllmChatCompletions([{ role: 'user', content: 'hi' }], { config: null, timeoutMs: 20000 });
+    expect(spy).toHaveBeenCalledTimes(3);
+    const budgets = spy.mock.calls.map((c) => c[0].budgetMs);
+    // First attempt: the full grant (minus nothing — the env judge names its
+    // model, so no probe ran).
+    expect(budgets[0]).toBeGreaterThan(19000);
+    // Retries: strictly what the phase has left — never the grant again.
+    expect(budgets[1]).toBeLessThan(budgets[0]);
+    expect(budgets[2]).toBeLessThan(budgets[1]);
+    // And the phase never grew past the grant: total elapsed is bounded.
+    expect(Date.now() - t0).toBeLessThan(20000);
+  }, 30000);
+
+  it('a phase whose attempts eat the budget ends BEFORE the 4th attempt — the grant bounds the phase', async () => {
+    const slowTransient = async () => {
+      await new Promise((r) => setTimeout(r, 900));
+      throw TRANSIENT();
+    };
+    const spy = jest.spyOn(adaptive, 'adaptiveChatCompletion').mockImplementation(slowTransient);
+    const t0 = Date.now();
+    await expect(
+      svc.vllmChatCompletions([{ role: 'user', content: 'hi' }], { config: null, timeoutMs: 4000 })
+    ).rejects.toBeTruthy();
+    // 4000ms grant: attempt 1 (~900) + ~1000–1250 backoff + attempt 2 (~900)
+    // burns past 3000 of it — attempt 3's own ~900ms cannot fit before the
+    // deadline, so the loop ends after TWO attempts, never four. (The phase
+    // is sized so the backoff jitter cannot flip the second retry's guard.)
+    expect(spy).toHaveBeenCalledTimes(2);
+    // And the phase stayed inside the grant + the last attempt's own cap.
+    expect(Date.now() - t0).toBeLessThan(6000);
+  }, 30000);
+
+  it('a Retry-After longer than the remaining phase ends the loop instead of sleeping through it', async () => {
+    const rateLimit = Object.assign(new Error('Request failed with status code 429'), {
+      code: 'ERR_BAD_REQUEST',
+      response: { status: 429, headers: { 'retry-after': '30' }, data: {} }
+    });
+    const spy = jest.spyOn(adaptive, 'adaptiveChatCompletion').mockRejectedValue(rateLimit);
+    const t0 = Date.now();
+    await expect(
+      svc.vllmChatCompletions([{ role: 'user', content: 'hi' }], { config: null, timeoutMs: 2000 })
+    ).rejects.toBeTruthy();
+    // The 30s Retry-After cannot fit in the ~2s phase: no sleep, no retry.
+    expect(spy).toHaveBeenCalledTimes(1);
+    expect(Date.now() - t0).toBeLessThan(5000);
+  }, 30000);
+});

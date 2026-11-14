@@ -179,17 +179,33 @@ function sleep(ms) {
 // is learned once for every caller of the shared GPU node.
 const { isRetriableUpstreamError } = require('./llm-transient-errors');
 
-async function withUpstreamRetry(label, fn, ctx) {
+// #1816: below this, a retry attempt cannot do useful work (a chat call
+// needs headroom beyond the connect the transport consumes) — the loop ends
+// instead of burning a guaranteed-to-timeout attempt on the phase's dregs.
+const MIN_ATTEMPT_BUDGET_MS = 500;
+
+async function withUpstreamRetry(label, fn, ctx, opts = {}) {
   // Binary exponential backoff (David, 2026-10-23): 1s, 2s, 4s, 8s — four
   // attempts. The server's own Retry-After wins when it sends one (a rate
   // limiter that says "come back in 3s" knows better than our ladder), but
   // capped at 60s — "come back in an hour" must not park the caller an hour.
   const base = 1000;
   const max = 8000;
+  // #1816 — the phase deadline. When the caller grants a phase budget, the
+  // ABSOLUTE deadline is fixed ONCE here at entry; every attempt invokes
+  // fn(remainingMs) so the closure passes the REMAINING time down as the
+  // per-call budget. Before this, each retry re-granted the full budget:
+  // a flaky shared-GPU endpoint could hold the phase ~4x the grant plus
+  // backoff (a 5-minute grant held ~20 minutes). No phaseBudgetMs (TEI,
+  // legacy callers): fn(null), loop unchanged.
+  const deadline = Number.isFinite(opts.phaseBudgetMs) ? Date.now() + Math.max(0, opts.phaseBudgetMs) : null;
   let lastErr;
   for (let attempt = 0; attempt < 4; attempt += 1) {
+    const remaining = deadline === null ? null : Math.max(0, deadline - Date.now());
+    // A retry only fires when the phase can still fund a usable attempt.
+    if (deadline !== null && attempt > 0 && remaining < MIN_ATTEMPT_BUDGET_MS) break;
     try {
-      return await fn();
+      return await fn(remaining);
     } catch (err) {
       lastErr = err;
       if (!isRetriableUpstreamError(err) || attempt === 3) break;
@@ -198,6 +214,9 @@ async function withUpstreamRetry(label, fn, ctx) {
         (Number.isFinite(retryAfter) && retryAfter > 0
           ? Math.min(60000, retryAfter * 1000)
           : Math.min(max, base * Math.pow(2, attempt))) + Math.floor(Math.random() * 250);
+      // The sleep never eats the phase's last usable time: a delay that
+      // would leave nothing for the attempt ends the loop now (#1816).
+      if (deadline !== null && deadline - Date.now() - delay < MIN_ATTEMPT_BUDGET_MS) break;
       logger.warn(`frontmatter.${label}.retry`, {
         ...ctx,
         attempt: attempt + 1,
@@ -212,8 +231,8 @@ async function withUpstreamRetry(label, fn, ctx) {
   throw lastErr;
 }
 
-const withVllmRetry = (fn, ctx) => withUpstreamRetry('vllm', fn, ctx);
-const withTeiRetry = (fn, ctx) => withUpstreamRetry('tei', fn, ctx);
+const withVllmRetry = (fn, ctx, opts) => withUpstreamRetry('vllm', fn, ctx, opts);
+const withTeiRetry = (fn, ctx, opts) => withUpstreamRetry('tei', fn, ctx, opts);
 
 // ---------- LLM call (vLLM OpenAI surface, via axios — Node has no openai SDK) ----------
 
@@ -414,20 +433,22 @@ async function vllmChatCompletions(systemAndUserMessages, opts = {}) {
     response_format: { type: 'json_object' }
   };
   const url = require('./llm-url').openAiChatUrl(host);
-  const fn = () =>
+  const fn = (remainingMs) =>
     require('./adaptive-llm-call').adaptiveChatCompletion({
       url,
       headers,
       body,
       timeoutMs: chatTimeoutMs,
       // THIS SINGLE CALL may not hold the wire past the budget it was
-      // granted (#1725). Per-call, not per-phase: the outer withVllmRetry
-      // re-grants the remainingMs on each of its own retries — a phase
-      // deadline across those retries is a separate, larger mechanism.
-      budgetMs: chatTimeoutMs,
+      // granted (#1725). #1816: the phase deadline now lives in
+      // withVllmRetry — the closure receives the REMAINING phase budget
+      // per attempt and passes it down, so a flaky endpoint holds the
+      // phase at most ONE chatTimeoutMs total, never the old 4x re-grant.
+      // No deadline (null): fall back to the full grant, as before.
+      budgetMs: Number.isFinite(remainingMs) ? remainingMs : chatTimeoutMs,
       disableThinking: viaOverride
     });
-  const resp = await withVllmRetry(fn, { endpoint: url });
+  const resp = await withVllmRetry(fn, { endpoint: url }, { phaseBudgetMs: chatTimeoutMs });
   // The SERVED model rides the response (the server names what it ran — a
   // gateway may alias the requested id), so callers can log provenance
   // without a second probe (a minutes-long thinking-model call can outlive

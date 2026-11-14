@@ -178,6 +178,28 @@ npx playwright test tests/e2e/ --project=chromium
 PLAYWRIGHT_STATUS=$?
 set -e
 
+# --- the outcome, and the failure path ---------------------------------------
+# The report moves to a per-run name BEFORE anything else reads or fails:
+# any later Playwright invocation in this checkout (`--list`, a single
+# spec) writes the fixed path again, and every consumer — the failure path
+# AND the posture gate below — must work from the report of THIS run. A
+# posture-violating run exits at the gate without filing; its red-run
+# evidence is the per-run file the gate's message names, not the fixed
+# path the next run would clear.
+RUN_REPORT="reports/playwright-report-run-$(date -u +%Y%m%dT%H%M%SZ).json"
+if [ -f reports/playwright-report.json ]; then
+  mv reports/playwright-report.json "$RUN_REPORT"
+  echo "report: $RUN_REPORT"
+else
+  # NO fallback to the fixed path: it holds whatever the last Playwright
+  # invocation in this checkout wrote (a developer's single spec, a --list
+  # run) - filing from it would file ANOTHER run's failures, and a run that
+  # never wrote a report is a broken run, not a green one.
+  echo "ERROR: the suite wrote no report (playwright exit $PLAYWRIGHT_STATUS) -" >&2
+  echo "       this run's outcome cannot be read, and nothing is filed." >&2
+  exit 4
+fi
+
 # --- the post-run ROPC posture gate (#1727) ---------------------------------
 # The venue's auth posture is part of this run's outcome: a run that leaves
 # genie/genie-app accepting password grants fails HERE even when every spec
@@ -191,26 +213,9 @@ echo "post-run ROPC posture gate"
 if ! node "$REPO_ROOT/tests/e2e/run/check-ropc-posture.js"; then
   echo "ERROR: the post-run ROPC posture gate FAILED — its own output above names the real cause" >&2
   echo "       (a widened auth surface is one of them; a broken gate or venue is another)." >&2
+  echo "       this run's red-run evidence is preserved at $RUN_REPORT — file it with:" >&2
+  echo "       node tests/e2e/run/file-failure-issues.js --report $RUN_REPORT --venue \$BASE_URL --file-issues" >&2
   exit 5
-fi
-
-# --- the outcome, and the failure path ---------------------------------------
-# The report moves to a per-run name before it is read: any later
-# Playwright invocation in this checkout (`--list`, a single spec) writes
-# the fixed path again, and the failure path must file from the report of
-# THIS run.
-RUN_REPORT="reports/playwright-report-run-$(date -u +%Y%m%dT%H%M%SZ).json"
-if [ -f reports/playwright-report.json ]; then
-  mv reports/playwright-report.json "$RUN_REPORT"
-  echo "report: $RUN_REPORT"
-else
-  # NO fallback to the fixed path: it holds whatever the last Playwright
-  # invocation in this checkout wrote (a developer's single spec, a --list
-  # run) - filing from it would file ANOTHER run's failures, and a run that
-  # never wrote a report is a broken run, not a green one.
-  echo "ERROR: the suite wrote no report (playwright exit $PLAYWRIGHT_STATUS) -" >&2
-  echo "       this run's outcome cannot be read, and nothing is filed." >&2
-  exit 4
 fi
 
 FILE_FLAG="--file-issues"

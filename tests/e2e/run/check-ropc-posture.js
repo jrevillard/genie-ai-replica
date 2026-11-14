@@ -40,5 +40,8 @@ const CLIENT = process.env.ROPC_POSTURE_CLIENT || 'genie-app';
   console.log(`ROPC posture: ${CLIENT}@${REALM} carries no direct access grants — OK`);
 })().catch((e) => {
   console.error(`ROPC posture gate FAILED: ${e.message}`);
-  process.exit(3);
+  // Exit 1: the run wrapper maps any gate failure to ITS own code (5), so
+  // this code only surfaces on a standalone run — where it must not read
+  // as the run script's venue-lock contention (3).
+  process.exit(1);
 });

@@ -1453,9 +1453,11 @@ test.describe('enableDirectAccessGrants reads the client list like every other r
   });
 
   test('enabling ROPC puts the whole client representation with the grant flipped', async () => {
-    // Keycloak replaces the client on PUT: the update must carry the
-    // representation it read, or the enablement would wipe the client's
-    // other settings.
+    // Defensive full-representation PUT: one-field client PUTs are safe
+    // (the verified reverts use exactly one), and carrying the read
+    // representation back cannot wipe a setting whatever Keycloak's merge
+    // semantics turn out to be. The replace-with-nulls hazard lives on the
+    // required-actions endpoint (the d7b spec), not here.
     routes = [
       [
         'GET',
@@ -1471,8 +1473,7 @@ test.describe('enableDirectAccessGrants reads the client list like every other r
       `GET /auth/admin/realms/genie2/clients?clientId=genie-app`,
       `PUT /auth/admin/realms/genie2/clients/client-1`
     ]);
-    // Keycloak replaces the client wholesale: the whole representation it
-    // read travels back, with the grant flipped on.
+    // The whole representation read travels back, with the grant flipped on.
     expect(bodies[1]).toEqual({ id: 'client-1', secret: 's3cret', directAccessGrantsEnabled: true });
   });
 

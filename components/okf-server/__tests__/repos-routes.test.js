@@ -1333,7 +1333,9 @@ describe('POST /api/okf/repos/:repo_id/concepts/:concept_id/split (#1577 story 1
     expect(splitOperation.splitConcept).toHaveBeenCalledWith(
       expect.objectContaining({ repo_id: 'repoA' }),
       'c1',
-      expect.objectContaining({ sub: 'steward-1' })
+      // The service's opts contract is { actor } — actorFrom() passed FLAT
+      // was the resplit audit-actor bug class; this handler pins the shape.
+      expect.objectContaining({ actor: expect.objectContaining({ sub: 'steward-1' }) })
     );
     expect(auditService.writeAudit).toHaveBeenCalledWith(expect.objectContaining({ action: 'concept.split' }));
   });

@@ -25,7 +25,7 @@ jest.mock('../shared-lib/db-connection-service', () => ({ getConnection: jest.fn
 const ORIGINAL_CEILING = process.env.OKF_MAX_CONCEPT_DOC_CHARS;
 
 // A multi-heading body: with the env ceiling at 200 the real splitter yields
-// three parts (each heading section merges greedily under the bound).
+// THREE parts (sections merge greedily under the bound: A+B, C+D, E).
 const BODY = [
   '# Alpha',
   '',
@@ -37,7 +37,15 @@ const BODY = [
   '',
   '# Gamma',
   '',
-  'gamma paragraph with enough words to be a real section of the document.'
+  'gamma paragraph with enough words to be a real section of the document.',
+  '',
+  '# Delta',
+  '',
+  'delta paragraph with enough words to be a real section of the document.',
+  '',
+  '# Epsilon',
+  '',
+  'epsilon paragraph with enough words to be a real section of the document.'
 ].join('\n');
 
 const META_ROW = (over = {}) => ({
@@ -61,6 +69,7 @@ const META_ROW = (over = {}) => ({
 
 let upsertConceptMeta;
 let getConceptMeta;
+let deleteConceptMeta;
 let scanConcept;
 let workingGraphName;
 
@@ -70,13 +79,19 @@ beforeEach(() => {
   upsertConceptMeta = jest.fn().mockImplementation(async (_repo, parsed) => ({
     action: parsed.concept_id === 'big-concept' ? 'updated' : 'created'
   }));
-  getConceptMeta = jest.fn().mockResolvedValue(META_ROW());
+  // Default: only the ORIGINAL concept row exists; the -part-N ids are free
+  // (the collision pre-check probes them before any write).
+  getConceptMeta = jest
+    .fn()
+    .mockImplementation(async (_repo, concept_id) => (concept_id === 'big-concept' ? META_ROW() : null));
+  deleteConceptMeta = jest.fn().mockResolvedValue({});
   scanConcept = jest.fn().mockResolvedValue({ pii_state: 'clean', occurrences: [] });
   workingGraphName = jest.fn(() => 'OKF_r1_v3');
 
   jest.doMock('../services/concept-meta-service', () => ({
     getConceptMeta: (...a) => getConceptMeta(...a),
     upsertConceptMeta: (...a) => upsertConceptMeta(...a),
+    deleteConceptMeta: (...a) => deleteConceptMeta(...a),
     contentHash: (s) => `hash:${String(s).length}`
   }));
   jest.doMock('../services/graph-lifecycle-service', () => ({
@@ -100,11 +115,15 @@ describe('splitConcept — CAP-1: the lossless, ceiling-bounded split', () => {
     expect(result.parts.length).toBeGreaterThan(1);
     for (const p of result.parts) expect(p.chars).toBeLessThanOrEqual(200);
     // The one invariant the whole initiative exists for: nothing lost, nothing
-    // added. The parts are contiguous line ranges — re-joined with the
-    // document's OWN line ending they reproduce the body exactly (the newline
-    // between parts is the document's, not an addition).
-    const upserts = upsertConceptMeta.mock.calls.map((c) => c[1]);
-    expect(upserts.map((u) => u.body).join('\n')).toBe(BODY);
+    // added. The parts are contiguous line ranges — re-joined in FORWARD part
+    // order (result.parts is forward-ordered; the WRITE order underneath is
+    // deliberately not) with the document's OWN line ending they reproduce the
+    // body exactly (the newline between parts is the document's, not an
+    // addition).
+    const bodiesById = Object.fromEntries(
+      upsertConceptMeta.mock.calls.map((c) => [c[1].concept_id, c[1].body])
+    );
+    expect(result.parts.map((p) => bodiesById[p.concept_id]).join('\n')).toBe(BODY);
     const sum = result.parts.reduce((a, p) => a + p.chars, 0) + (result.parts.length - 1);
     expect(sum).toBe(BODY.length);
   });
@@ -117,31 +136,54 @@ describe('splitConcept — CAP-1: the lossless, ceiling-bounded split', () => {
     result.parts.slice(1).forEach((p, i) => {
       expect(p.concept_id).toBe(`big-concept-part-${i + 2}`);
     });
-    const upserts = upsertConceptMeta.mock.calls.map((c) => c[1]);
-    expect(upserts[0].frontmatter.title).toBe('Big Concept');
-    expect(upserts[1].frontmatter.title).toBe('Big Concept — part 2');
+    const byId = Object.fromEntries(upsertConceptMeta.mock.calls.map((c) => [c[1].concept_id, c[1]]));
+    expect(byId['big-concept'].frontmatter.title).toBe('Big Concept');
+    expect(byId['big-concept-part-2'].frontmatter.title).toBe('Big Concept — part 2');
     // The path suffix is partPath's own convention: ZERO-based index in, so
     // part 2 (i=1) is `-part-2.md` — the LIVE smoke caught an off-by-one
-    // here (-part-3) that the id/title assertions alone let through.
-    expect(upserts[0].path).toBe('docs/big-concept.md');
-    upserts.slice(1).forEach((u, i) => {
-      expect(u.path).toBe(`docs/big-concept-part-${i + 2}.md`);
-    });
+    // here (-part-3) that the id/title assertions alone let through. Ids and
+    // paths must never disagree across parts.
+    expect(byId['big-concept'].path).toBe('docs/big-concept.md');
+    for (const u of Object.values(byId)) {
+      if (u.concept_id === 'big-concept') continue;
+      expect(u.path).toBe(`docs/${u.concept_id}.md`);
+    }
   });
 
-  test('every row is born-right: index_status parsed, the CURRENT graph name, bundle + labels carried', async () => {
+  test('the writes run parts 2..N FIRST and the part-1 overwrite LAST — a mid-loop failure can never truncate the original', async () => {
+    await svc().splitConcept({ repo_id: 'r1', lifecycle_state: 'draft' }, 'big-concept', {});
+    const writtenIds = upsertConceptMeta.mock.calls.map((c) => c[1].concept_id);
+    expect(writtenIds[writtenIds.length - 1]).toBe('big-concept'); // the overwrite is the FINAL write
+    // every non-final write is a fresh -part-N row, in DESCENDING part order
+    const partIds = writtenIds.slice(0, -1);
+    for (const id of partIds) expect(id).not.toBe('big-concept');
+    const nums = partIds.map((id) => Number(id.match(/-part-(\d+)$/)[1]));
+    expect(nums).toEqual([...nums].sort((a, b) => b - a));
+  });
+
+  test('every row is born-right: index_status parsed, the CURRENT graph name, bundle + labels carried, claim stamps RESET', async () => {
     await svc().splitConcept({ repo_id: 'r1', lifecycle_state: 'draft' }, 'big-concept', {});
     for (const call of upsertConceptMeta.mock.calls) {
       const opts = call[2];
       expect(opts.graph_name).toBe('OKF_r1_v3'); // workingGraphName(repo), not the row's stale value
       expect(opts.bundle_version).toBe(4);
       expect(opts.ingest_labels).toEqual(['acl:open']);
+      // Born-right means CLAIMABLE: a previously FAILED row's backoff park
+      // and spent attempt budget must not survive the split (the #1020 reset
+      // contract — the claim query gates on these).
+      expect(opts.patch).toEqual({
+        next_attempt_after: null,
+        worker_claimed_at: null,
+        ingest_attempts: 0,
+        reindex_retry: 0,
+        last_error: null
+      });
     }
     // Part 1 carries the row's own metadata through the update...
-    const first = upsertConceptMeta.mock.calls[0][1];
-    expect(first.links).toEqual(META_ROW().links);
+    const lastCall = upsertConceptMeta.mock.calls[upsertConceptMeta.mock.calls.length - 1];
+    expect(lastCall[1].links).toEqual(META_ROW().links);
     // ...and parts 2..N carry sources[] UNCHANGED — provenance is not partitioned.
-    for (const call of upsertConceptMeta.mock.calls.slice(1)) {
+    for (const call of upsertConceptMeta.mock.calls.slice(0, -1)) {
       expect(call[1].sources).toEqual(META_ROW().sources);
     }
   });
@@ -152,10 +194,13 @@ describe('splitConcept — CAP-1: the lossless, ceiling-bounded split', () => {
     expect(result.updated).toBe(1);
     expect(result.ceiling).toBe(200);
     expect(scanConcept).toHaveBeenCalledTimes(result.parts.length);
-    // The scan sees each part's OWN content (frontmatter + body) — exactly
-    // what the upsert wrote for that part, never the whole concept.
-    const upserts = upsertConceptMeta.mock.calls.map((c) => c[1]);
-    expect(scanConcept.mock.calls[1]).toEqual(['r1', 'big-concept-part-2', upserts[1].frontmatter, upserts[1].body]);
+    // The scans see each part's OWN content (frontmatter + body) — exactly
+    // what the upsert wrote for that part, never the whole concept. (The
+    // scan pool makes completion order irrelevant; assert the SET.)
+    const scanned = scanConcept.mock.calls.map((c) => [c[1], c[3]]); // [concept_id, body]
+    for (const call of upsertConceptMeta.mock.calls) {
+      expect(scanned).toContainEqual([call[1].concept_id, call[1].body]);
+    }
   });
 });
 
@@ -220,6 +265,54 @@ describe('splitConcept — CAP-2: honest refusals, zero partial state', () => {
       status: 404
     });
   });
+
+  test('an unrelated concept already holding a -part-N id → 409 PART_ID_CONFLICT, ZERO rows written', async () => {
+    // A real `foo-part-2.md` in the corpus yields exactly such a row — the
+    // split must never silently overwrite it (the upsert WOULD: same repo_id
+    // + concept_id hits the update path).
+    getConceptMeta.mockImplementation(async (_repo, concept_id) =>
+      concept_id === 'big-concept' || concept_id === 'big-concept-part-2' ? META_ROW() : null
+    );
+    await expect(
+      svc().splitConcept({ repo_id: 'r1', lifecycle_state: 'draft' }, 'big-concept', {})
+    ).rejects.toMatchObject({
+      code: 'PART_ID_CONFLICT',
+      status: 409
+    });
+    await expect(
+      svc().splitConcept({ repo_id: 'r1', lifecycle_state: 'draft' }, 'big-concept', {})
+    ).rejects.toMatchObject({
+      message: expect.stringMatching(/big-concept-part-2/)
+    });
+    expect(upsertConceptMeta).not.toHaveBeenCalled();
+    expect(deleteConceptMeta).not.toHaveBeenCalled();
+  });
+
+  test('a mid-write failure ROLLS BACK the created rows and never truncates the original (SPLIT_WRITE_FAILED 500)', async () => {
+    // The write order is parts 2..N DESCENDING then part 1: part-3 succeeds,
+    // part-2 fails — the original row must never have been touched, and the
+    // rollback must remove the row created before the failure.
+    upsertConceptMeta.mockImplementation(async (_repo, parsed) => {
+      if (parsed.concept_id !== 'big-concept' && /part-2$/.test(parsed.concept_id)) {
+        throw new Error('arango transient');
+      }
+      return { action: parsed.concept_id === 'big-concept' ? 'updated' : 'created' };
+    });
+    await expect(
+      svc().splitConcept({ repo_id: 'r1', lifecycle_state: 'draft' }, 'big-concept', {})
+    ).rejects.toMatchObject({
+      code: 'SPLIT_WRITE_FAILED',
+      status: 500
+    });
+    // The part-1 overwrite NEVER ran (it is the last write; the failure beat it).
+    const upsertedIds = upsertConceptMeta.mock.calls.map((c) => c[1].concept_id);
+    expect(upsertedIds).not.toContain('big-concept');
+    // The row created before the failure was rolled back.
+    expect(deleteConceptMeta).toHaveBeenCalledTimes(1);
+    expect(deleteConceptMeta.mock.calls[0]).toEqual(['r1', 'big-concept-part-3']);
+    // The PII scans never ran on a rolled-back split.
+    expect(scanConcept).not.toHaveBeenCalled();
+  });
 });
 
 describe('splitConcept controller — CAP-4: the write surface holds', () => {
@@ -265,11 +358,16 @@ describe('splitConcept controller — CAP-4: the write surface holds', () => {
   }
 
   test('a draft repo splits and answers ok with the summary + audit record', async () => {
+    const op = svc();
+    const spy = jest.spyOn(op, 'splitConcept');
     const { res, nextErr } = await call();
     expect(nextErr).toBeNull();
     expect(res.statusCode).toBe(200);
     expect(res.body.ok).toBe(true);
     expect(res.body.parts.length).toBeGreaterThan(1);
+    // The service's opts contract is { actor } — actorFrom() passed FLAT was
+    // the resplit audit-actor bug class; this handler must not repeat it.
+    expect(spy.mock.calls[0][2]).toEqual({ actor: expect.objectContaining({ sub: 'steward-1' }) });
     expect(auditService.writeAudit).toHaveBeenCalledWith(
       expect.objectContaining({ action: 'concept.split', actor: 'steward-1', repo_id: 'r1' })
     );

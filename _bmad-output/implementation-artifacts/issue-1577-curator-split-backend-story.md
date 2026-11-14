@@ -111,9 +111,45 @@ repository-controller, repos-routes, actorFrom paths). Results:
    while the service reads `opts.actor` → inner audit actor always null.
    Surfaced in the MR description; ride-along fix NOT in scope here.
 
-Post-change gates still owed on the final diff: `/security-review` +
-`/code-review` (high) → every finding dispositioned (FIXED /
-FALSE-POSITIVE / RISK-ACCEPTED-by-David).
+Post-change gates on the final diff (commit da2c5127d + the fix commit):
+
+- **`/security-review` (re-run on the diff): NO FINDINGS.** Ten surfaces
+  examined and clean: route scope chain (requireRepoScope admin bound to the
+  repo_id param; read scope cannot reach), fence order (getById authz →
+  assertWritable → service; refusals pre-write), AQL binding (firstExample +
+  bound params; no interpolation), partPath/partConceptId composition (stored
+  values, never filesystem), cross-repo isolation (every touch scoped by the
+  authorized repo_id), actor handling (actorFrom feeds audit/log only), data
+  exposure (answer + audit carry counts/ids, never bodies), alternate paths
+  (only the controller consumes the service), secrets (none), smoke script
+  (not shipped runtime; docker-cp'd, precedent run-smoke-ceiling).
+- **`/code-review` (high): 8 findings — ALL DISPOSITIONED FIXED** in commit
+  3d3d4a02a (off-by-one, already found by the live smoke) + the fix commit:
+  1. mid-loop failure could permanently truncate the concept (part 1's
+     overwrite ran FIRST) → FIXED: writes reordered parts 2..N then the
+     part-1 overwrite LAST (one atomic final write); any failure rolls the
+     created rows back (deleteConceptMeta) and rethrows SPLIT_WRITE_FAILED
+     500 naming any orphan rows; the original is never truncated.
+  2. silent overwrite of an unrelated `foo-part-N` row → FIXED: collision
+     pre-check before any write → 409 PART_ID_CONFLICT naming the rows.
+  3. part 1 inherited stale claim stamps (next_attempt_after,
+     worker_claimed_at, ingest_attempts, reindex_retry, last_error) → FIXED:
+     DRAIN_RESET patch on every upsert (the #1020 reset contract).
+  4. 200 sequential PII scans in-request → FIXED: bounded pool (SCAN_POOL 4).
+  5. actor contract mismatch (service logged opts.actor, controller passed
+     actorFrom flat → log actor always null) → FIXED: controller passes
+     `{ actor: actorFrom(req) }`; pinned in both test suites (the flat-shape
+     route assertion was itself the bug class — updated).
+  6. partConceptId (1-based) vs partPath (0-based) adjacent-call trap →
+     FIXED: partConceptId is now ZERO-based like partPath; both called with
+     the same loop index; unit suite pins id/path agreement.
+  7. smoke CRLF blind spot in the rejoin → FIXED: the separator derives from
+     the seeded body (same rule as the splitter).
+  8. partPath imported from the heavy ingest-service re-export → FIXED:
+     imported from concept-splitter (its home); ingest-service keeps its
+     re-export for existing consumers.
+  Suite after fixes: 2331/2331 (+16 over the story baseline: 3 new service
+  pins — write order, collision, rollback — and the updated route pin).
 
 npm audit (pre-existing, ZERO new dependencies added by this change):
 okf-server 57 advisories (44 moderate, 12 high, 1 critical — transitive

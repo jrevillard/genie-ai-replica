@@ -19,9 +19,10 @@
 //
 //   4. REFUSALS ARE HONEST AND WRITE NOTHING. A within-ceiling concept →
 //      400 CONCEPT_WITHIN_CEILING; an unsplittable body (one line over the
-//      ceiling) → 409 CONCEPT_TOO_LARGE naming size/ceiling/remedy — in both
-//      cases the corpus is unchanged. A SERVING repository refuses the split
-//      with 409 REPO_READ_ONLY.
+//      ceiling) → 409 CONCEPT_TOO_LARGE naming size/ceiling/remedy; a -part-N
+//      id already held by an UNRELATED concept → 409 PART_ID_CONFLICT (never a
+//      silent overwrite) — in all cases the corpus is unchanged. A SERVING
+//      repository refuses the split with 409 REPO_READ_ONLY.
 //
 // Run INSIDE the okf-server container (same procedure as run-smoke-ceiling.js):
 //   docker cp data/okf/smoke-test/run-smoke-split.js <container>:/app/
@@ -196,6 +197,10 @@ async function main() {
     : fail('  ceiling echo: ' + JSON.stringify(split.body.ceiling));
 
   // Rejoin THROUGH THE API: part 1 keeps 'legacy-big', parts 2..N -part-N.
+  // The parts are contiguous ranges of the ORIGINAL document — re-joined with
+  // the document's OWN line ending (CRLF corpora included, the same rule the
+  // splitter applies) they must reproduce it byte-for-byte.
+  const eol = bigBody.includes('\r\n') ? '\r\n' : '\n';
   let rejoined = '';
   let maxChars = 0;
   for (let i = 0; i < parts.length; i += 1) {
@@ -203,10 +208,10 @@ async function main() {
     const got = await call('GET', `/api/okf/repos/${REPO_ID}/concepts/${encodeURIComponent(pid)}`);
     if (got.status !== 200 || typeof got.body.body !== 'string') {
       fail('  part ' + pid + ' GET → ' + got.status + ' ' + JSON.stringify(got.body).slice(0, 120));
-      rejoined += '\n';
+      rejoined += eol;
       continue;
     }
-    rejoined += (i > 0 ? '\n' : '') + got.body.body;
+    rejoined += (i > 0 ? eol : '') + got.body.body;
     maxChars = Math.max(maxChars, got.body.body.length);
   }
   rejoined === bigBody
@@ -294,6 +299,40 @@ async function main() {
   countAfter === countUnsplit
     ? pass('  the refused split wrote NOTHING (' + countAfter + ' rows before and after)')
     : fail('  the refused split CHANGED the corpus: ' + countUnsplit + ' → ' + countAfter);
+
+  // A DECOY holding a -part-N id: the split must refuse (409 PART_ID_CONFLICT)
+  // rather than silently overwrite the unrelated row — the import derives ids
+  // from path slugs, so a real foo-part-2.md in a corpus yields exactly this
+  // collision.
+  const twoBody = sections.join('\n\n'); // same over-ceiling shape as legacy-big
+  await conceptMetaService.upsertConceptMeta(REPO_ID, {
+    concept_id: 'legacy-two',
+    path: 'docs/legacy-two.md',
+    frontmatter: { type: 'topic', title: 'Legacy two' },
+    body: twoBody,
+    sources: []
+  });
+  const decoyBody = '# A distinct concept that merely bears a part-shaped id\n\nIts own content.\n';
+  await conceptMetaService.upsertConceptMeta(REPO_ID, {
+    concept_id: 'legacy-two-part-2',
+    path: 'docs/legacy-two-part-2.md',
+    frontmatter: { type: 'topic', title: 'A distinct concept' },
+    body: decoyBody,
+    sources: []
+  });
+  const countConflict = (await rows(REPO_ID)).length;
+  const conflict = await call('POST', `/api/okf/repos/${REPO_ID}/concepts/legacy-two/split`, {});
+  conflict.status === 409 && conflict.body && conflict.body.error === 'PART_ID_CONFLICT'
+    ? pass('a -part-N id held by an unrelated concept → 409 PART_ID_CONFLICT')
+    : fail('conflict split → ' + conflict.status + ' ' + JSON.stringify(conflict.body).slice(0, 250));
+  const decoyAfter = await call('GET', `/api/okf/repos/${REPO_ID}/concepts/legacy-two-part-2`);
+  decoyAfter.body && decoyAfter.body.body === decoyBody
+    ? pass('  the refused split did NOT touch the decoy (byte-identical)')
+    : fail('  the decoy was OVERWRITTEN: ' + JSON.stringify(decoyAfter.body && decoyAfter.body.body).slice(0, 120));
+  const countConflictAfter = (await rows(REPO_ID)).length;
+  countConflictAfter === countConflict
+    ? pass('  the conflict refusal wrote NOTHING (' + countConflict + ' rows before and after)')
+    : fail('  the conflict refusal CHANGED the corpus: ' + countConflict + ' → ' + countConflictAfter);
 
   // ── 5. Repo 2: a SERVING repository refuses the split ─────────────────────
   // The fence (assertWritable) keys on the registry doc's ingested_at. A live

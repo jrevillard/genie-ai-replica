@@ -1812,7 +1812,10 @@ async function splitConcept(req, res, next) {
     const { repo_id, concept_id } = req.params;
     const repoDoc = await repoService.getById(repo_id, { authz: authzForService(req) });
     assertWritable(repoDoc);
-    const summary = await splitOperation.splitConcept(repoDoc, concept_id, actorFrom(req));
+    // The service's opts contract is { actor } (audit-context only, never an
+    // authz input) — actorFrom() is spread flat by mistake elsewhere (the
+    // resplit audit-actor nit); here the shape is explicit.
+    const summary = await splitOperation.splitConcept(repoDoc, concept_id, { actor: actorFrom(req) });
     // AUDIT: a split rewrites one concept into several and re-queues them for
     // the drain — a content-mutating steward action; it goes in the log.
     auditService

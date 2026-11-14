@@ -4,26 +4,29 @@ const { TEST_USER } = require('../helpers/e2e-fixtures');
 const { NAV_LOGOUT_BUTTON } = require('../helpers/navbar');
 
 // Test L.3 — Vuex Auth State Cleared on Logout
-// Login, verify isAuthenticated is true, trigger logout, verify state is cleared.
-// The Vuex clearAuth mutation sets isAuthenticated=false, user=null, accessToken=null.
+// Login, verify isAuthenticated is true, trigger logout, verify the app no
+// longer restores the session: it lands on the Keycloak login page. That
+// landing IS the Vuex-cleared proof — the navigation guard only redirects
+// unauthenticated users, and the genie_post_logout flag blocks session
+// restoration (frontend auth store).
 // Source: docs/e2e-tests/suite-map.md § The acceptance phases, Phase L
 
-test('clears Vuex auth state after logout', async ({ browser }) => {
+test('clears Vuex auth state after logout — lands on the Keycloak login page', async ({ browser }) => {
   const context = await browser.newContext({
     ignoreHTTPSErrors: true,
-    bypassCSP: true,
+    bypassCSP: true
   });
   const page = await context.newPage();
 
   // Step 1: Navigate to app root — should redirect to Keycloak
   await page.goto(`${BASE_URL}/`, {
     waitUntil: 'networkidle',
-    timeout: 30000,
+    timeout: 30000
   });
 
   // Step 2: Wait for Keycloak login page and fill credentials
   await page.waitForURL('**/protocol/openid-connect/auth**', {
-    timeout: 15000,
+    timeout: 15000
   });
 
   await page.fill('#username', TEST_USER.username);
@@ -36,17 +39,17 @@ test('clears Vuex auth state after logout', async ({ browser }) => {
       const urlStr = url.toString();
       return urlStr.includes('dashboard') || urlStr === `${BASE_URL}/`;
     },
-    { timeout: 30000 },
+    { timeout: 30000 }
   );
 
   const dashboardUrl = page.url();
   await expect(
     dashboardUrl.includes('dashboard'),
-    `Expected URL to contain 'dashboard' after login, got: ${dashboardUrl}`,
+    `Expected URL to contain 'dashboard' after login, got: ${dashboardUrl}`
   ).toBeTruthy();
 
-// Wait for Vue to mount — the store is reachable once __vue_app__ exists.
-async function waitForVueApp(page) {
+  // Step 4: Verify authenticated state via Vuex store — the store is
+  // reachable once __vue_app__ exists.
   await expect
     .poll(
       () =>
@@ -54,13 +57,9 @@ async function waitForVueApp(page) {
           const app = document.querySelector('#app');
           return Boolean(app && app.__vue_app__);
         }),
-      { timeout: 15000 },
+      { timeout: 15000 }
     )
     .toBe(true);
-}
-
-  // Step 4: Verify authenticated state via Vuex store
-  await waitForVueApp(page);
 
   const authStateBefore = await page.evaluate(() => {
     const app = document.querySelector('#app');
@@ -69,25 +68,27 @@ async function waitForVueApp(page) {
       return {
         isAuthenticated: store.getters.isAuthenticated,
         user: store.getters.currentUser,
-        accessToken: store.getters.accessToken ? 'present' : null,
+        accessToken: store.getters.accessToken ? 'present' : null
       };
     }
     return null;
   });
 
-  await expect(
-    authStateBefore !== null,
-    'Vuex store should be accessible via Vue app instance',
-  ).toBeTruthy();
+  await expect(authStateBefore !== null, 'Vuex store should be accessible via Vue app instance').toBeTruthy();
 
   await expect(
     authStateBefore.isAuthenticated === true,
-    `Expected isAuthenticated to be true after login, got: ${authStateBefore.isAuthenticated}`,
+    `Expected isAuthenticated to be true after login, got: ${authStateBefore.isAuthenticated}`
   ).toBeTruthy();
 
   await expect(
     authStateBefore.user !== null,
-    `Expected user to be non-null after login, got: ${JSON.stringify(authStateBefore.user)}`,
+    `Expected user to be non-null after login, got: ${JSON.stringify(authStateBefore.user)}`
+  ).toBeTruthy();
+
+  await expect(
+    authStateBefore.accessToken === 'present',
+    `Expected an access token after login, got: ${authStateBefore.accessToken}`
   ).toBeTruthy();
 
   // Step 5: Click the logout button
@@ -101,69 +102,36 @@ async function waitForVueApp(page) {
       const urlStr = url.toString();
       return (
         urlStr.includes('/auth/realms/genie/protocol/openid-connect/logout') ||
-        urlStr.includes('/auth/realms/genie/protocol/openid-connect/auth') ||
-        urlStr.includes('/auth/realms/genie/login')
+        urlStr.includes('/auth/realms/genie/protocol/openid-connect/auth')
       );
     },
-    { timeout: 30000 },
+    { timeout: 30000 }
   );
 
-  // Step 7: Navigate back to app to verify Vuex state is cleared
-  // After Keycloak processes logout, navigate back to check that a fresh
-  // Vue instance starts with cleared state.
+  // Step 7: Navigate back to app to verify the session is gone
+  // After Keycloak processes logout, navigate back: the L.3 contract
+  // (docs/e2e-tests/suite-map.md § Test L.3) is that the app must NOT
+  // restore the session — it lands on the Keycloak login page, exactly as
+  // it does for an unauthenticated visitor (steps 1-2). The
+  // genie_post_logout flag blocks session restoration (frontend auth
+  // store), so landing anywhere else is a cleared-state failure.
   await page.goto(`${BASE_URL}/`, {
     waitUntil: 'networkidle',
-    timeout: 30000,
+    timeout: 30000
   });
 
-  // Wait for redirect (should go to Keycloak login since session is gone)
-  await page.waitForURL(
-    (url) => {
-      const urlStr = url.toString();
-      return (
-        urlStr.includes('/auth/realms/genie/') ||
-        urlStr.includes('dashboard')
-      );
-    },
-    { timeout: 15000 },
-  );
-
-  // Step 8: Verify the redirect happened — if we end up at Keycloak login,
-  // it proves isAuthenticated is false (navigation guard redirects unauthenticated users).
-  const finalUrl = page.url();
-  const isAtKeycloak = finalUrl.includes('/auth/realms/genie/');
-
+  // Step 8: Assert the landing — the form is server-rendered by the time
+  // goto lands; the locator auto-waits the render. The login form renders
+  // only when the realm holds no live SSO session, so this is the
+  // cleared-state proof (the navigation guard only fires when
+  // isAuthenticated is false). A URL match alone could report a false
+  // pass: a surviving session (a partial logout) passes through the auth
+  // endpoint on its 302 back to the app and never renders this form. One
+  // expected landing, asserted unconditionally.
   await expect(
-    isAtKeycloak || !finalUrl.includes('dashboard'),
-    `Expected redirect to Keycloak after logout (session cleared), got: ${finalUrl}`,
-  ).toBeTruthy();
-
-  // Additionally verify Vuex state directly if still on app domain
-  if (!isAtKeycloak) {
-    await waitForVueApp(page);
-    const authStateAfter = await page.evaluate(() => {
-      const app = document.querySelector('#app');
-      if (app && app.__vue_app__) {
-        const store = app.__vue_app__.config.globalProperties.$store;
-        return {
-          isAuthenticated: store.getters.isAuthenticated,
-          user: store.getters.currentUser,
-        };
-      }
-      return null;
-    });
-
-    if (authStateAfter !== null) {
-      await expect(
-        authStateAfter.isAuthenticated === false,
-        `Expected isAuthenticated to be false after logout, got: ${authStateAfter.isAuthenticated}`,
-      ).toBeTruthy();
-      await expect(
-        authStateAfter.user === null,
-        `Expected user to be null after logout, got: ${JSON.stringify(authStateAfter.user)}`,
-      ).toBeTruthy();
-    }
-  }
+    page.locator('#username'),
+    `Expected the Keycloak login form after logout (session cleared); the browser was last at: ${page.url()}`
+  ).toBeVisible({ timeout: 15000 });
 
   await context.close();
 });

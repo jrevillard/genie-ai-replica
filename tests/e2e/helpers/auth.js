@@ -9,30 +9,57 @@ const { venueLaunchArgs } = require('./venue-launch-args');
 /**
  * The edge's own upstream-reset reply (#1847): the k8s venue's Envoy
  * occasionally answers a keep-alive race between the edge and the backend
- * with its LOCAL 503 — a plain-text body that names the reset ("upstream
- * connect error or disconnect/reset before headers. reset reason:
- * connection termination"), not a product answer. Under suite load the
- * race surfaces about once per run and is worth one re-issue: a GET is
- * idempotent, and the reset path is instantaneous — no pause is needed,
- * the next attempt targets a fresh socket. A product 503 carries a JSON
+ * by terminating the connection — either AFTER headers, as its LOCAL 503
+ * plain-text reply ("upstream connect error or disconnect/reset before
+ * headers. reset reason: connection termination"), or BEFORE them, as a
+ * raw ECONNRESET on the socket. Under suite load the race surfaces about
+ * once per run and is worth one re-issue on the idempotent methods (GET
+ * and DELETE — RFC 7231; a POST's outcome a re-send could not report
+ * honestly, and HEAD's empty-body wire contract resolves before any body
+ * gate could fire). The reset path is instantaneous: no pause, the next
+ * attempt targets a fresh socket. The signature is the STABLE prefix of
+ * Envoy's local reply — the volatile "reset reason: ..." clause is
+ * deliberately not matched, so an edge upgrade that changes only the
+ * reason wording keeps the retry working. A product 503 carries a JSON
  * body and is never retried (the response contract resolves it; the
- * caller's status guard is the verdict), and neither is a POST, whose
- * outcome a re-send could not report honestly. The bound is hard: when it
- * runs out, the LAST observed error is rethrown verbatim — a failure the
- * caller sees is never swallowed or degraded.
+ * caller's status guard is the verdict). The bound is hard: when it runs
+ * out, the LAST observed outcome is returned or rethrown verbatim — a
+ * failure the caller sees is never swallowed or degraded. Sanctioned by
+ * the operator as the deterministic answer to a genuine transient
+ * (#1847); tests/e2e/CLAUDE.md names it the one transport-level
+ * exception.
  */
 const EDGE_RESET_SIGNATURE = 'upstream connect error or disconnect/reset before headers';
 const EDGE_RESET_MAX_ATTEMPTS = 3;
+const IDEMPOTENT_METHODS = ['GET', 'DELETE'];
 
+/** The rejection arm: the non-JSON guard rejected the edge's text reply,
+ *  or the race landed before any headers (a raw ECONNRESET). */
 function isEdgeResetRetryEligible(method, error) {
-  const idempotent = method === 'GET' || method === 'HEAD';
+  if (!IDEMPOTENT_METHODS.includes(method) || !error) {
+    return false;
+  }
+  if (error.code === 'ECONNRESET') {
+    return true;
+  }
   return (
-    idempotent &&
-    error &&
     error.nonJsonBody === true &&
     error.status === 503 &&
     typeof error.message === 'string' &&
     error.message.includes(EDGE_RESET_SIGNATURE)
+  );
+}
+
+/** The resolution arm: with `options.raw` the body is the WANTED text, so
+ *  the edge's reset reply reaches the caller as a RESOLVED 503 whose data
+ *  is that text — the rejection arm never fires for that caller. */
+function isRawEdgeReset(method, res) {
+  return (
+    IDEMPOTENT_METHODS.includes(method) &&
+    !!res &&
+    res.status === 503 &&
+    typeof res.data === 'string' &&
+    res.data.includes(EDGE_RESET_SIGNATURE)
   );
 }
 
@@ -121,13 +148,23 @@ function request(method, path, options = {}) {
 
   let attemptsLeft = EDGE_RESET_MAX_ATTEMPTS;
   const run = () =>
-    attempt().catch((error) => {
-      attemptsLeft -= 1;
-      if (attemptsLeft > 0 && isEdgeResetRetryEligible(method, error)) {
-        return run();
-      }
-      throw error;
-    });
+    attempt()
+      .catch((error) => {
+        attemptsLeft -= 1;
+        if (attemptsLeft > 0 && isEdgeResetRetryEligible(method, error)) {
+          return run();
+        }
+        throw error;
+      })
+      .then((res) => {
+        if (isRawEdgeReset(method, res)) {
+          attemptsLeft -= 1;
+          if (attemptsLeft > 0) {
+            return run();
+          }
+        }
+        return res;
+      });
   return run();
 }
 

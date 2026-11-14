@@ -44,7 +44,7 @@ const TLS_OPTIONS = {
 /** Start a one-shot TLS server whose single response `responder` builds. */
 function startServer(responder) {
   return new Promise((resolve) => {
-    const server = https.createServer(TLS_OPTIONS, (req, res) => responder(req, res));
+    const server = https.createServer(TLS_OPTIONS, (req, res) => responder(res));
     server.listen(0, '127.0.0.1', () => resolve(server));
   });
 }
@@ -60,7 +60,7 @@ test.describe('the transport response contract (auth.request at its own boundary
   });
 
   test('a JSON body resolves parsed, with the status and headers', async () => {
-    server = await startServer((req, res) => {
+    server = await startServer((res) => {
       res.writeHead(200, { 'content-type': 'application/json', 'x-test-marker': 'present' });
       res.end(JSON.stringify({ realm: 'genie', enabled: true }));
     });
@@ -71,7 +71,7 @@ test.describe('the transport response contract (auth.request at its own boundary
   });
 
   test('an empty body resolves data: null — a 204-style success', async () => {
-    server = await startServer((req, res) => {
+    server = await startServer((res) => {
       res.writeHead(204);
       res.end();
     });
@@ -84,7 +84,7 @@ test.describe('the transport response contract (auth.request at its own boundary
     // The empty-body check precedes the raw check: a caller asking for
     // the body as text still gets `null` for no body, because "no
     // payload" and "an empty payload" are the same answer on the wire.
-    server = await startServer((req, res) => {
+    server = await startServer((res) => {
       res.writeHead(200, { 'content-type': 'text/plain' });
       res.end();
     });
@@ -94,7 +94,7 @@ test.describe('the transport response contract (auth.request at its own boundary
 
   test('raw: true resolves the body AS TEXT', async () => {
     const config = 'window.APP_CONFIG = {\n  okfEnabled: "0",\n};\n';
-    server = await startServer((req, res) => {
+    server = await startServer((res) => {
       res.writeHead(200, { 'content-type': 'application/javascript' });
       res.end(config);
     });
@@ -106,7 +106,7 @@ test.describe('the transport response contract (auth.request at its own boundary
   });
 
   test('a non-JSON body rejects with nonJsonBody and the status', async () => {
-    server = await startServer((req, res) => {
+    server = await startServer((res) => {
       res.writeHead(502, { 'content-type': 'text/html' });
       res.end('<html>Bad gateway</html>');
     });
@@ -141,7 +141,7 @@ test.describe('the edge upstream-reset retry (auth.request)', () => {
 
   const answerWith = (statusCode, contentType, body) => {
     hits = 0;
-    return startServer((req, res) => {
+    return startServer((res) => {
       hits += 1;
       res.writeHead(statusCode, { 'content-type': contentType });
       res.end(typeof body === 'string' ? body : JSON.stringify(body));
@@ -155,7 +155,7 @@ test.describe('the edge upstream-reset retry (auth.request)', () => {
 
   test('a GET on the edge reset is retried and recovers on the first healthy answer', async () => {
     let scriptedHits = 0;
-    server = await startServer((req, res) => {
+    server = await startServer((res) => {
       scriptedHits += 1;
       if (scriptedHits <= 2) {
         res.writeHead(503, { 'content-type': 'text/plain' });
@@ -232,5 +232,83 @@ test.describe('the edge upstream-reset retry (auth.request)', () => {
     expect(error.nonJsonBody).toBe(true);
     expect(error.status).toBe(502);
     expect(hits).toBe(1);
+  });
+
+  test('a raw:true GET on the reset reply is retried and recovers — the resolution arm', async () => {
+    // With raw:true the body IS the wanted text, so the edge's reset
+    // reply RESOLVES (status 503, data = the text) instead of rejecting:
+    // without the resolution arm the venue-profile probe would still see
+    // the once-per-run flake this retry exists to absorb.
+    let scriptedHits = 0;
+    server = await startServer((res) => {
+      scriptedHits += 1;
+      if (scriptedHits <= 2) {
+        res.writeHead(503, { 'content-type': 'text/plain' });
+        res.end(ENVOY_RESET_BODY);
+        return;
+      }
+      res.writeHead(200, { 'content-type': 'application/javascript' });
+      res.end('window.APP_CONFIG = { okfEnabled: "0" };');
+    });
+
+    const res = await auth.request('GET', urlOf(server), { raw: true });
+    expect(res.status).toBe(200);
+    expect(res.data).toBe('window.APP_CONFIG = { okfEnabled: "0" };');
+    expect(scriptedHits).toBe(3);
+  });
+
+  test('a raw:true 503 without the reset signature is answered once', async () => {
+    // The resolution arm keys on the same signature as the rejection arm:
+    // another plain-text 503 is the endpoint's own state, answered once.
+    server = await answerWith(503, 'text/plain', 'Service Unavailable');
+    const res = await auth.request('GET', urlOf(server), { raw: true });
+    expect(res.status).toBe(503);
+    expect(res.data).toBe('Service Unavailable');
+    expect(hits).toBe(1);
+  });
+
+  test('a DELETE on the edge reset is retried — RFC 7231 idempotent', async () => {
+    // The cleanup sweeps' verb: deleting is idempotent, so the same
+    // once-per-run reset must not fail a sweep wave and file a leftover
+    // the sweep actually deleted.
+    let scriptedHits = 0;
+    server = await startServer((res) => {
+      scriptedHits += 1;
+      if (scriptedHits === 1) {
+        res.writeHead(503, { 'content-type': 'text/plain' });
+        res.end(ENVOY_RESET_BODY);
+        return;
+      }
+      res.writeHead(204);
+      res.end();
+    });
+
+    const res = await auth.request('DELETE', urlOf(server));
+    expect(res.status).toBe(204);
+    expect(res.data).toBeNull();
+    expect(scriptedHits).toBe(2);
+  });
+
+  test('a connection killed before any headers (ECONNRESET) is retried', async () => {
+    // The same keep-alive race's pre-headers shape: the edge terminates
+    // the connection without answering — the client sees a plain
+    // transport error with no status and no body. An idempotent GET is
+    // safe to re-issue; the error travels verbatim when the bound runs
+    // out.
+    let scriptedHits = 0;
+    server = await startServer((res) => {
+      scriptedHits += 1;
+      if (scriptedHits === 1) {
+        res.socket.destroy();
+        return;
+      }
+      res.writeHead(200, { 'content-type': 'application/json' });
+      res.end(JSON.stringify({ recovered: true }));
+    });
+
+    const res = await auth.request('GET', urlOf(server));
+    expect(res.status).toBe(200);
+    expect(res.data).toEqual({ recovered: true });
+    expect(scriptedHits).toBe(2);
   });
 });

@@ -271,12 +271,19 @@ registry tag with `imagePullPolicy: Always`, but a pod picks up a new
 `main` only when it restarts — a wave that lands frontend test handles
 or new surfaces leaves the venue's pods serving the build from BEFORE
 the wave, and every spec asserting those handles fails with
-`element(s) not found`, three identical red runs in a row. The check:
-grep the venue's served chunks for a handle the failing spec reads —
-`curl -sk "$BASE_URL/js/"` through the chunk map in the served
-`app.<hash>.js`; a handle the checkout has and the venue does not is a
-stale venue, not a spec defect. The remedy is the lightest possible
-touch on the shared stack — a rollout restart of the stale deployment
+`element(s) not found`, three identical red runs in a row.
+
+The check — does the venue serve a handle the checkout has? The
+frontend lazy-loads its views, so a handle lives in a CHUNK, not in
+`app.<hash>.js`. Walk it: fetch `/` and read the served `js/app.<hash>
+.js` name from the HTML; fetch that bundle and extract its webpack
+chunk-hash map (the `{<id>:"<hash>", ...}` object next to the `"js/"
++` script-name template); fetch `js/<id>.<hash>.js` for each entry and
+grep for the handle the failing spec reads. A handle the checkout has
+and no chunk carries is a stale venue, not a spec defect.
+
+The remedy is the lightest possible touch on the shared stack — a
+rollout restart of the stale deployment
 (`kubectl -n genieai rollout restart deploy/genieai-...-frontend`),
 which pulls the `main` tag the declared baseline already points at —
 followed by re-running the red specs before believing anything.

@@ -59,22 +59,21 @@ const { runRouteHandler } = require('../helpers/route');
 // The stream interception contract — no credential in it, so this spec
 // (which needs neither) never imports the credential module.
 const { STREAM_ROUTE, sseFulfill } = require('../helpers/stream-route');
+const {
+  stubQuickHelpConfiguration,
+  stubQuickHelpHierarchy,
+  CIVIL_REGISTRY_HIERARCHY
+} = require('../helpers/quick-help-stubs');
 
-// The live hierarchy this spec serves. The category 'Civil Registry' exists and
-// names itself in ENGLISH; 'Taxes & Revenue' does not exist at all.
+// The live hierarchy this spec serves — the shared fixture (the category
+// 'Civil Registry' exists and names itself in ENGLISH; 'Taxes & Revenue'
+// does not exist at all).
 //
 // The cards name their category the way a CONFIGURATION does: by the
 // hierarchy's ENGLISH name — the spelling a deployment can write down. The
 // hierarchy's own key ('2') stays accepted, for configurations written
 // before that spelling was adopted.
-const HIERARCHY = [
-  {
-    catKey: '2',
-    name: 'Civil Registry',
-    nameEN: 'Civil Registry',
-    children: [{ name: 'Births', nameEN: 'Births' }]
-  }
-];
+const HIERARCHY = CIVIL_REGISTRY_HIERARCHY;
 
 // The cards this spec serves. The ids are distinct from the deployment's own
 // ('just-chat', 'identity-civil', …) so a card that leaks in from the real
@@ -167,66 +166,21 @@ const STUB_BUTTONS = [
   }
 ];
 
-/**
- * Serves the configuration, with the Quick Help cards replaced by the spec's
- * own. The rest of the served document — including its own schema — is the
- * deployment's, untouched.
- */
-async function stubConfiguration(page) {
-  await page.route(
-    '**/config/genie-ai-config.json',
-    runRouteHandler(page, async (route) => {
-      const response = await route.fetch();
-      const body = await response.json();
-      body.features = body.features || {};
-      body.features.chat = body.features.chat || {};
-      body.features.chat.quickHelp = body.features.chat.quickHelp || {};
-      body.features.chat.quickHelp.buttons = STUB_BUTTONS;
-      // Fulfil WITHOUT `response`: passing it would inherit the served
-      // document's `Content-Length` — a length that no longer matches the
-      // modified body, and Chromium's handling of the stale one is not
-      // ours to bet the spec on. `json` alone sets the status (200), the
-      // content type and a recomputed length.
-      await route.fulfill({ json: body });
-    })
-  );
-}
-
-/**
- * Serves the hierarchy. When [gate] is given, the answer is HELD until the
- * gate opens — the window in which the hierarchy is "still on its way" is
- * then real and observable, instead of a race against a fast stub.
- */
-async function stubHierarchy(page, gate = null) {
-  await page.route(
-    '**/api/service-categories/categories*',
-    runRouteHandler(page, async (route) => {
-      if (gate) {
-        await gate;
-      }
-      await route.fulfill({
-        status: 200,
-        contentType: 'application/json',
-        body: JSON.stringify(HIERARCHY)
-      });
-    })
-  );
-}
-
 async function openWelcome(browser, { holdHierarchy = false } = {}) {
   // Both stubs are installed BEFORE the login, so the first chat mount
-  // already sees them. The gate is created here and released by the
-  // caller, which is what makes the "hierarchy still on its way" window
-  // real instead of a race against a fast stub.
+  // already sees them (the shared recipe, helpers/quick-help-stubs.js).
+  // The gate is created here and released by the caller, which is what
+  // makes the "hierarchy still on its way" window real instead of a race
+  // against a fast stub.
   let release = null;
   const setupPage = async (page) => {
-    await stubConfiguration(page);
+    await stubQuickHelpConfiguration(page, STUB_BUTTONS);
     const gate = holdHierarchy
       ? new Promise((resolve) => {
           release = resolve;
         })
       : null;
-    await stubHierarchy(page, gate);
+    await stubQuickHelpHierarchy(page, HIERARCHY, gate);
   };
 
   // A held hierarchy must not be reloaded for: the reload waits for
@@ -329,7 +283,9 @@ test.describe('Quick Help scope states', () => {
     // half of the configuration to fix. A caption that always named the
     // category (or always the label) would send the operator to the wrong
     // place.
-    const gone = page.locator('[data-testid="quick-help-item"][data-state="config-error"]').filter({ hasText: 'Category gone' });
+    const gone = page
+      .locator('[data-testid="quick-help-item"][data-state="config-error"]')
+      .filter({ hasText: 'Category gone' });
     expect(await gone.count(), 'the card whose category is gone is broken').toBe(1);
 
     const goneCaption = gone.first().locator('[data-testid="quick-help-error-caption"]');
@@ -341,7 +297,9 @@ test.describe('Quick Help scope states', () => {
     // WHICH label to fix.
     expect(goneText, 'the caption does not blame a label that is still there').not.toContain('No Such Service');
 
-    const labelGone = page.locator('[data-testid="quick-help-item"][data-state="config-error"]').filter({ hasText: 'Label gone' });
+    const labelGone = page
+      .locator('[data-testid="quick-help-item"][data-state="config-error"]')
+      .filter({ hasText: 'Label gone' });
     expect(await labelGone.count(), 'the card whose label is gone is broken').toBe(1);
 
     const labelCaption = labelGone.first().locator('[data-testid="quick-help-error-caption"]');
@@ -350,10 +308,9 @@ test.describe('Quick Help scope states', () => {
     // The gone LABEL is quoted by name — that is the whole point of the
     // caption: the operator sees WHICH label to fix.
     expect(labelText, 'the caption quotes the label that is gone').toContain('No Such Service');
-    expect(
-      labelText.toLowerCase(),
-      'the caption does not blame the category — its legacy KEY resolved'
-    ).not.toContain('category');
+    expect(labelText.toLowerCase(), 'the caption does not blame the category — its legacy KEY resolved').not.toContain(
+      'category'
+    );
 
     await ctx.close();
   });

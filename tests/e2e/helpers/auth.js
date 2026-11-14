@@ -121,7 +121,11 @@ async function getAdminToken(adminPassword) {
     password
   }).toString();
 
-  const res = await request('POST', '/auth/realms/master/protocol/openid-connect/token', {
+  // The transport is read through the module object at CALL time — the
+  // codebase's substitution idiom (keycloak-admin.js, venue-profile.js) —
+  // so the no-access_token verdict below is unit-coverable offline
+  // (#1842): the same function answers at runtime, a unit spec swaps it.
+  const res = await module.exports.request('POST', '/auth/realms/master/protocol/openid-connect/token', {
     body,
     contentType: 'application/x-www-form-urlencoded'
   });

@@ -111,4 +111,4 @@ Phase 0 (setup) → F (token forwarding to OPEA) → G (Swagger OAuth2) → H (J
 The procedures of Phases A–N: the suite map's [§ The acceptance
 phases](suite-map.md#the-acceptance-phases).
 
-**Important**: Phase K mutates realm settings and scales Keycloak to 0. Cleanup steps (K.5, K.6) restore state. Verify stack health before proceeding to Phase L.
+**Important**: Phase K stops Keycloak (K.4) and sweeps test artifacts (K.5+K.6) — run those cleanup steps after Phase K before Phase L, and verify stack health before proceeding; the K.2 expiry is client-scoped and mutates no realm setting (#1835). Full procedure: [suite-map.md § Phase K](suite-map.md#phase-k-auth-error-display-story-2-6).

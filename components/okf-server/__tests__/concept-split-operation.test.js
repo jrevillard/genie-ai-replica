@@ -120,6 +120,13 @@ describe('splitConcept — CAP-1: the lossless, ceiling-bounded split', () => {
     const upserts = upsertConceptMeta.mock.calls.map((c) => c[1]);
     expect(upserts[0].frontmatter.title).toBe('Big Concept');
     expect(upserts[1].frontmatter.title).toBe('Big Concept — part 2');
+    // The path suffix is partPath's own convention: ZERO-based index in, so
+    // part 2 (i=1) is `-part-2.md` — the LIVE smoke caught an off-by-one
+    // here (-part-3) that the id/title assertions alone let through.
+    expect(upserts[0].path).toBe('docs/big-concept.md');
+    upserts.slice(1).forEach((u, i) => {
+      expect(u.path).toBe(`docs/big-concept-part-${i + 2}.md`);
+    });
   });
 
   test('every row is born-right: index_status parsed, the CURRENT graph name, bundle + labels carried', async () => {
@@ -155,7 +162,9 @@ describe('splitConcept — CAP-1: the lossless, ceiling-bounded split', () => {
 describe('splitConcept — CAP-2: honest refusals, zero partial state', () => {
   test('an unsplittable concept (one line over the ceiling) → 409 CONCEPT_TOO_LARGE, ZERO rows written', async () => {
     getConceptMeta.mockResolvedValue(META_ROW({ body: 'x'.repeat(500) }));
-    await expect(svc().splitConcept({ repo_id: 'r1', lifecycle_state: 'draft' }, 'big-concept', {})).rejects.toMatchObject({
+    await expect(
+      svc().splitConcept({ repo_id: 'r1', lifecycle_state: 'draft' }, 'big-concept', {})
+    ).rejects.toMatchObject({
       code: 'CONCEPT_TOO_LARGE',
       status: 409
     });
@@ -165,17 +174,23 @@ describe('splitConcept — CAP-2: honest refusals, zero partial state', () => {
 
   test('the 409 names the size, the ceiling and the remedy', async () => {
     getConceptMeta.mockResolvedValue(META_ROW({ body: 'x'.repeat(500) }));
-    await expect(svc().splitConcept({ repo_id: 'r1', lifecycle_state: 'draft' }, 'big-concept', {})).rejects.toMatchObject({
+    await expect(
+      svc().splitConcept({ repo_id: 'r1', lifecycle_state: 'draft' }, 'big-concept', {})
+    ).rejects.toMatchObject({
       message: expect.stringMatching(/500 characters/)
     });
-    await expect(svc().splitConcept({ repo_id: 'r1', lifecycle_state: 'draft' }, 'big-concept', {})).rejects.toMatchObject({
+    await expect(
+      svc().splitConcept({ repo_id: 'r1', lifecycle_state: 'draft' }, 'big-concept', {})
+    ).rejects.toMatchObject({
       message: expect.stringMatching(/200-character ceiling/)
     });
   });
 
   test('a within-ceiling concept is an honest 400 no-op (CONCEPT_WITHIN_CEILING), not a fake success', async () => {
     getConceptMeta.mockResolvedValue(META_ROW({ body: 'short body' }));
-    await expect(svc().splitConcept({ repo_id: 'r1', lifecycle_state: 'draft' }, 'big-concept', {})).rejects.toMatchObject({
+    await expect(
+      svc().splitConcept({ repo_id: 'r1', lifecycle_state: 'draft' }, 'big-concept', {})
+    ).rejects.toMatchObject({
       code: 'CONCEPT_WITHIN_CEILING',
       status: 400
     });
@@ -189,7 +204,9 @@ describe('splitConcept — CAP-2: honest refusals, zero partial state', () => {
     const many = Array.from({ length: 260 }, (_, i) => `w${i} x`).join('\n\n');
     process.env.OKF_MAX_CONCEPT_DOC_CHARS = '10';
     getConceptMeta.mockResolvedValue(META_ROW({ body: many }));
-    await expect(svc().splitConcept({ repo_id: 'r1', lifecycle_state: 'draft' }, 'big-concept', {})).rejects.toMatchObject({
+    await expect(
+      svc().splitConcept({ repo_id: 'r1', lifecycle_state: 'draft' }, 'big-concept', {})
+    ).rejects.toMatchObject({
       code: 'TOO_MANY_PARTS',
       status: 400
     });

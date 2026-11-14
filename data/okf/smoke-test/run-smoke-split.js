@@ -30,7 +30,6 @@
 const dbService = require('./shared-lib/db-connection-service');
 const conceptMetaService = require('./services/concept-meta-service');
 const { workingGraphName } = require('./services/graph-lifecycle-service');
-const piiService = require('./services/pii-service');
 
 const BASE = process.env.OKF_SMOKE_BASE_URL || 'http://localhost:3002';
 const TOKEN = process.env.OKF_SMOKE_TOKEN_ADMIN;
@@ -277,6 +276,11 @@ async function main() {
     : fail('  the refused split CHANGED the corpus: ' + countUnsplit + ' → ' + countAfter);
 
   // ── 5. Repo 2: a SERVING repository refuses the split ─────────────────────
+  // The fence (assertWritable) keys on the registry doc's ingested_at. A live
+  // publish sets it only when the async RAG drain settles — minutes, model
+  // services, non-deterministic. The smoke STAMPS the state directly (same
+  // trick as the legacy corpus row: fabricate the exact state the fence
+  // reads, deterministically) and asserts the fence holds against it.
   const serve = await call('POST', '/api/okf/repos', {
     name: REPO_NAME + '-serving',
     domain: DOMAIN,
@@ -300,15 +304,11 @@ async function main() {
     sImp.status === 200 || sImp.status === 201 || sImp.status === 202
       ? pass('serving-repo setup: corpus imported')
       : fail('serving-repo import → ' + sImp.status + ' ' + JSON.stringify(sImp.body));
-    await piiService.markRepoPiiScanned(SERVE_ID);
-    let r = await call('POST', `/api/okf/repos/${SERVE_ID}/lifecycle`, { action: 'submit' });
-    r.status === 200 ? pass('submit → review') : fail('submit → ' + r.status + ' ' + JSON.stringify(r.body));
-    r = await call('POST', `/api/okf/repos/${SERVE_ID}/lifecycle`, { action: 'approve' });
-    r.status === 200 ? pass('approve → approve') : fail('approve → ' + r.status + ' ' + JSON.stringify(r.body));
-    r = await call('POST', `/api/okf/repos/${SERVE_ID}/lifecycle`, { action: 'publish' });
-    r.status === 200 || r.status === 201
-      ? pass('publish → serving')
-      : fail('publish → ' + r.status + ' ' + JSON.stringify(r.body).slice(0, 200));
+    const db = await dbService.getConnection('default');
+    await db.query('FOR r IN okf_repositories FILTER r.repo_id == @r UPDATE r WITH { ingested_at: DATE_ISO8601() } IN okf_repositories', {
+      r: SERVE_ID
+    });
+    pass('serving-repo setup: ingested_at stamped (the state the write fence reads)');
 
     const ro = await call('POST', `/api/okf/repos/${SERVE_ID}/concepts/beta/split`, {});
     ro.status === 409 && ro.body && ro.body.error === 'REPO_READ_ONLY'

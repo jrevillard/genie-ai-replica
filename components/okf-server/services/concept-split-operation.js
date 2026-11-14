@@ -109,7 +109,10 @@ async function splitConcept(repoDoc, concept_id, opts = {}) {
       // Part 1 keeps the ORIGINAL concept_id — every inbound link keeps
       // resolving to a document that still exists. Parts 2..N take -part-N ids.
       concept_id: isFirst ? concept_id : partConceptId(concept_id, i + 1),
-      path: isFirst ? meta.path || '' : partPath(meta.path || `${concept_id}.md`, i + 1),
+      // partPath takes the ZERO-BASED part index (same convention as
+      // ingest-service: index 1 → -part-2.md) — the live smoke caught the
+      // off-by-one the unit suite missed (live: -part-3 path on part 2).
+      path: isFirst ? meta.path || '' : partPath(meta.path || `${concept_id}.md`, i),
       // Frontmatter carries to every part (title lineage suffixed on 2..N);
       // sources[] carried UNCHANGED to all parts — provenance is not
       // partitioned (David, 2026-11-14).

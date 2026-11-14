@@ -181,9 +181,9 @@ set -e
 # --- the outcome, and the failure path ---------------------------------------
 # The report moves to a per-run name BEFORE anything else reads or fails:
 # any later Playwright invocation in this checkout (`--list`, a single
-# spec) writes the fixed path again, and every consumer — the posture
-# gate, the failure path and the gate's own filing recipe — must work from
-# the report of THIS run. A posture-violating run exits 5 after the
+# spec) writes the fixed path again, and every consumer — the failure
+# path and the gate's own filing recipe — must work from the report of
+# THIS run. A posture-violating run exits 5 after the
 # failure path has filed what it could; the per-run file (not the fixed
 # path the next run would clear) is what everything names.
 RUN_REPORT="reports/playwright-report-run-$(date -u +%Y%m%dT%H%M%SZ).json"
@@ -236,7 +236,13 @@ if [ "$GATE_STATUS" -ne 0 ]; then
   echo "ERROR: the post-run ROPC posture gate FAILED — its own output above names the real cause" >&2
   echo "       (a widened auth surface is one of them; a broken gate or venue is another)." >&2
   if [ "$PLAYWRIGHT_STATUS" -ne 0 ]; then
-    if [ "$REPORT_STATUS" -eq 0 ]; then
+    # REPORT_STATUS=0 means the failure path PROCESSED the report; in
+    # report-only mode (E2E_FILE_ISSUES=0) it exits 0 having filed
+    # nothing — the mode decides which truth the banner states.
+    if [ "${E2E_FILE_ISSUES:-1}" = "0" ]; then
+      echo "       this run is ALSO RED (playwright exit $PLAYWRIGHT_STATUS); reported but NOT filed (E2E_FILE_ISSUES=0) — file it with:" >&2
+      echo "       node tests/e2e/run/file-failure-issues.js --report $RUN_REPORT --venue $BASE_URL --file-issues" >&2
+    elif [ "$REPORT_STATUS" -eq 0 ]; then
       echo "       this run is ALSO RED (playwright exit $PLAYWRIGHT_STATUS); its failures were filed by the failure path above." >&2
     else
       echo "       this run is ALSO RED (playwright exit $PLAYWRIGHT_STATUS); its evidence is preserved at $RUN_REPORT — file it with:" >&2

@@ -1,0 +1,31 @@
+- id: "1"
+  title: Backend split operation — route, service, drain, audit
+  description: >-
+    Additive per-concept split endpoint and service: one concept in, ceiling-bounded parts out
+    through splitConceptBody (CAP-1), 409 CONCEPT_TOO_LARGE on the unsplittable case with zero rows
+    written (CAP-2), part-1 identity + parts 2..N suffixes, every resulting row born-right for the
+    drain (constraint), admin scope + assertWritable + audit record (CAP-4). Extends the smoke
+    harness with the API leg and runs it live. Implements SPEC-okf-curator-split against
+    implementation-grounding.md; sources[] carry to all parts unchanged (David, 2026-11-14).
+  spec_checkpoint: false
+  done_checkpoint: false
+  invoke_dev_with: >-
+    The engine is splitConceptBody ONLY — segmentMarkdown's sub-200-char drop is never inherited.
+    Read every guard from implementation-grounding.md before writing code: the ceiling comes from
+    maxConceptDocChars(), refusal status 409 (the import path's 400 does not apply here), and
+    legacy resplitRepo is untouched (additive route, own result vocabulary). Verbose structured
+    logging on the new path; all DB access through the shared db driver.
+- id: "2"
+  title: Editor surface — entries, confirm preview, store, i18n
+  description: >-
+    The split affordance on BOTH editor surfaces (tree-row action + concept pane, read-only-gated;
+    David, 2026-11-14), a confirm dialog that previews the proposed seams and per-part sizes before
+    acting (CAP-3), the store action riding story 1's endpoint, i18n keys in every locale verbatim,
+    and the smoke harness's UI leg extended and run live. The same MR carries the story/spec
+    bookkeeping per the docs-merge-with-code rule.
+  spec_checkpoint: false
+  done_checkpoint: false
+  invoke_dev_with: >-
+    DS primitives and tokens only, the editor's read-only gating pattern, Options API, and the
+    existing modal precedents (OkfResplitModal's flow, the pii-bulk trio) — no new paradigms.
+    localeConsistency must stay green; the preview must render BEFORE any write happens.

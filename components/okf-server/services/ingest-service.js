@@ -186,12 +186,11 @@ function uniquifySlug(base, body, seen) {
  */
 
 /** Suffix a split part's path: `foo.md` → `foo-part-2.md`. Part 1 is unsuffixed
- * so every inbound link keeps resolving to a document that still exists. */
-function partPath(path, index) {
-  if (index === 0) return path;
-  const base = String(path || 'concept').replace(/\.md$/, '');
-  return `${base}-part-${index + 1}.md`;
-}
+ * so every inbound link keeps resolving to a document that still exists.
+ * (#1577: the definition moved verbatim to concept-splitter.js — the identity
+ * convention belongs with the lossless engine; re-exported here so every
+ * existing consumer keeps its import path.) */
+const { partPath } = require('./concept-splitter');
 
 /**
  * Split every concept document that exceeds the ceiling, in place, before the

@@ -186,4 +186,15 @@ function splitConceptBody(body, ceiling = DEFAULT_CEILING) {
   };
 }
 
-module.exports = { splitConceptBody, DEFAULT_CEILING };
+/** Suffix a split part's path: `foo.md` → `foo-part-2.md`. Part 1 is unsuffixed
+ * so every inbound link keeps resolving to a document that still exists.
+ * (#1577: moved here verbatim from ingest-service — the identity convention
+ * belongs with the lossless engine that defines the parts; ingest-service
+ * re-exports it for its existing consumers.) */
+function partPath(path, index) {
+  if (index === 0) return path;
+  const base = String(path || 'concept').replace(/\.md$/, '');
+  return `${base}-part-${index + 1}.md`;
+}
+
+module.exports = { splitConceptBody, partPath, DEFAULT_CEILING };

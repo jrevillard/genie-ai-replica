@@ -25,6 +25,10 @@ jest.mock('../services/parser-service');
 // 2026-09-09: flags must be clearable by editing), so every patch test needs
 // the mock instead of the real Presidio sidecar call.
 jest.mock('../services/pii-service');
+// #1577 story 1 — the per-concept split operation is auto-mocked: the route
+// test is an HTTP-layer concern (scope chain + pass-through shape); the
+// operation itself is unit-tested in concept-split-operation.test.js.
+jest.mock('../services/concept-split-operation');
 // ingest-service is mocked further down (line 296) — that factory is the
 // authoritative one and already includes `resplitRepo` for Story #978.
 
@@ -322,6 +326,8 @@ jest.mock('../services/version-service', () => ({
   TRIGGERS: ['manual', 'publish', 'crawl']
 }));
 const ingestService = require('../services/ingest-service');
+const splitOperation = require('../services/concept-split-operation');
+const auditService = require('../services/audit-service');
 const versionService = require('../services/version-service');
 const crawlConversionService = require('../services/crawl-conversion-service');
 
@@ -1296,6 +1302,64 @@ describe('POST /api/okf/repos/:repo_id/resplit (Story #978)', () => {
       .send({ mode: 'B', file_id: 'file-1' });
     expect(res.status).toBe(403);
     expect(ingestService.resplitRepo).not.toHaveBeenCalled();
+  });
+});
+
+describe('POST /api/okf/repos/:repo_id/concepts/:concept_id/split (#1577 story 1)', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    authzAwareServiceMock();
+  });
+
+  test('200 admin scope → forwards to the split service with the repo doc + actor, returns its summary', async () => {
+    authScoped(['okf:t1:repoA:admin']);
+    repoService.getById.mockResolvedValue({ repo_id: 'repoA', lifecycle_state: 'draft' });
+    splitOperation.splitConcept.mockResolvedValue({
+      concept_id: 'c1',
+      parts: [
+        { concept_id: 'c1', chars: 120 },
+        { concept_id: 'c1-part-2', chars: 90 }
+      ],
+      created: 1,
+      updated: 1,
+      ceiling: 250000
+    });
+    const res = await request(createApp())
+      .post('/api/okf/repos/repoA/concepts/c1/split')
+      .set('Authorization', TOKEN)
+      .send({});
+    expect(res.status).toBe(200);
+    expect(res.body).toMatchObject({ ok: true, concept_id: 'c1', created: 1, updated: 1 });
+    expect(splitOperation.splitConcept).toHaveBeenCalledWith(
+      expect.objectContaining({ repo_id: 'repoA' }),
+      'c1',
+      expect.objectContaining({ sub: 'steward-1' })
+    );
+    expect(auditService.writeAudit).toHaveBeenCalledWith(expect.objectContaining({ action: 'concept.split' }));
+  });
+
+  test('403 when read-scope only — the service is never reached', async () => {
+    authScoped(['okf:t1:repoA:read']);
+    const res = await request(createApp())
+      .post('/api/okf/repos/repoA/concepts/c1/split')
+      .set('Authorization', TOKEN)
+      .send({});
+    expect(res.status).toBe(403);
+    expect(splitOperation.splitConcept).not.toHaveBeenCalled();
+  });
+
+  test('the service’s 409 CONCEPT_TOO_LARGE reaches the client with its status', async () => {
+    authScoped(['okf:t1:repoA:admin']);
+    repoService.getById.mockResolvedValue({ repo_id: 'repoA', lifecycle_state: 'draft' });
+    splitOperation.splitConcept.mockRejectedValue(
+      Object.assign(new Error('too large'), { code: 'CONCEPT_TOO_LARGE', status: 409 })
+    );
+    const res = await request(createApp())
+      .post('/api/okf/repos/repoA/concepts/c1/split')
+      .set('Authorization', TOKEN)
+      .send({});
+    expect(res.status).toBe(409);
+    expect(res.body.error).toBe('CONCEPT_TOO_LARGE');
   });
 });
 

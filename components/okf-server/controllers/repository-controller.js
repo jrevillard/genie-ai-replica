@@ -9,6 +9,7 @@ const accessControlService = require('../services/access-control-service');
 const conceptMetaService = require('../services/concept-meta-service');
 const piiService = require('../services/pii-service');
 const ingestService = require('../services/ingest-service');
+const splitOperation = require('../services/concept-split-operation');
 const versionService = require('../services/version-service');
 const auditService = require('../services/audit-service');
 const parserService = require('../services/parser-service');
@@ -1795,6 +1796,47 @@ async function resplitRepo(req, res, next) {
 }
 
 /**
+ * CURATOR-INITIATED CONCEPT SPLIT (#1577 story 1) — the ceiling initiative's
+ * deferred half. Splits ONE concept into ceiling-bounded parts through the
+ * ONE lossless engine (concept-splitter), part 1 keeping the concept_id, all
+ * resulting rows born-right for the drain.
+ *
+ * Gate order mirrors resplit: requireRepoScope (route, admin) → getById
+ * (404 foreign, anti-enumeration) → assertWritable (draft repos only).
+ * The 409 CONCEPT_TOO_LARGE / 400 CONCEPT_WITHIN_CEILING / 400 TOO_MANY_PARTS
+ * refusals come from the service (SplitOperationError + ConceptTooLargeError
+ * carry their own status; the error middleware maps err.status).
+ */
+async function splitConcept(req, res, next) {
+  try {
+    const { repo_id, concept_id } = req.params;
+    const repoDoc = await repoService.getById(repo_id, { authz: authzForService(req) });
+    assertWritable(repoDoc);
+    const summary = await splitOperation.splitConcept(repoDoc, concept_id, actorFrom(req));
+    // AUDIT: a split rewrites one concept into several and re-queues them for
+    // the drain — a content-mutating steward action; it goes in the log.
+    auditService
+      .writeAudit({
+        action: 'concept.split',
+        actor: actorFrom(req).sub,
+        actor_name: actorFrom(req).name,
+        repo_id,
+        source_ip: req.ip,
+        description:
+          `Split concept ${concept_id} into ${summary.parts.length} ceiling-bounded part(s) ` +
+          `(${summary.created} created, ${summary.updated} updated)`,
+        details: { concept_id, ...summary }
+      })
+      .catch(() => {
+        /* best-effort */
+      });
+    res.status(200).json({ ok: true, ...summary });
+  } catch (err) {
+    next(err);
+  }
+}
+
+/**
  * RE-INGEST FAILED CONCEPTS (David, 2026-10-14). Serves BOTH routes:
  *   POST /:repo_id/reingest-failed                  (all failed concepts)
  *   POST /:repo_id/concepts/:concept_id/reingest    (one concept)
@@ -2579,6 +2621,7 @@ module.exports = {
   discoverFromManifests,
   patchConcept,
   resplitRepo,
+  splitConcept,
   reingestFailed,
   autocorrectRepo,
   transitionLifecycle,

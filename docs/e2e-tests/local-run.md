@@ -199,21 +199,27 @@ never means "nothing ran"** — the report names what did not run and why.
 
 ## The post-run ROPC posture gate
 
-After the suite, the run asserts the venue's auth posture: `genie/genie-app`
-carries NO direct access grants (`tests/e2e/run/check-ropc-posture.js`, reading
-the assertion that lives in `helpers/keycloak-admin.js` — the posture's single
-home, #1727). A run that leaves the venue wider than it found it fails **with
-exit 5, loudly**, even with every spec green: the two scripts that legitimately
-flip the grant on a real venue (`data/okf/smoke-test/mint-tokens.mjs`, the
-rag-benchmarks anchor wrapper) each carry a verified revert, and a revert that
-fails to land is what this gate catches. Two obligations, neither dropping the
+After the suite, the run asserts the venue's auth posture: the primary realm
+carries NO direct access grants on ANY of its clients
+(`tests/e2e/run/check-ropc-posture.js`, reading the assertion that lives in
+`helpers/keycloak-admin.js` — the posture's single home, #1727; swept
+realm-wide by #1846). A run that leaves the venue wider than it found it fails
+**with exit 5, loudly**, even with every spec green: the two scripts that
+legitimately flip the grant on a real venue (`data/okf/smoke-test/mint-tokens.mjs`,
+the rag-benchmarks anchor wrapper) each carry a verified revert, and a revert
+that fails to land is what this gate catches — on the default pair or on any
+pair the script's own overrides named. Two obligations, neither dropping the
 other: the gate's verdict is RECORDED first, the failure path still files a red
-run's issues, and the gate's exit 5 is the last word. The gate checks the pair
-`ROPC_POSTURE_REALM` / `ROPC_POSTURE_CLIENT` name (defaults `genie` /
-`genie-app`) — an overridden eval set (`EVAL_KC_REALM` / `EVAL_KC_CLIENT_ID`)
-must be mirrored there, or the gate checks a pair nobody flipped. A non-zero
-gate exit with no widened surface behind it means the gate itself could not
-run: its output names the real cause. On a venue fresh from the MANUAL
+run's issues, and the gate's exit 5 is the last word. The gate sweeps the
+realms `ROPC_POSTURE_REALMS` names, comma-separated (default `genie`) —
+two standing postures stay out of the verdict, because their grants are
+the provisioned state and not a run's doing: the test-only realm
+(`genie2`) and Keycloak's built-in clients (their grant defaults are the
+server's — `admin-cli` answers ROPC=true out of the box, unpinned by the
+realm export; pinning it is tracked separately) — and an overridden eval
+client needs no mirror convention. A non-zero gate exit with no widened surface behind it
+means the gate itself could not run: its output names the real cause. On a
+venue fresh from the MANUAL
 acceptance phases — whose Phase 0 prep (`00-clean-start.md` § 0.7) enables a
 test-only ROPC the manual mints rely on — a gate failure is the honest signal
 to revert that temp ROPC.

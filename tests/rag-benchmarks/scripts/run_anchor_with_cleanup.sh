@@ -140,14 +140,14 @@ cleanup() {
     exit 9
 }
 # The posture this window temporarily widens is asserted in ONE place —
-# tests/e2e/helpers/keycloak-admin.js `assertDirectAccessGrantsDisabled` —
+# tests/e2e/helpers/keycloak-admin.js `assertNoDirectAccessGrants` —
 # and gated after every local e2e run (tests/e2e/run/check-ropc-posture.js):
-# a revert that fails to land fails THAT gate loudly — but the gate checks
-# the pair ROPC_POSTURE_REALM/ROPC_POSTURE_CLIENT name (default
-# genie/genie-app), so an EVAL_KC_REALM/EVAL_KC_CLIENT_ID override here must
-# be mirrored there, or the gate checks a pair nobody flipped. This script is a
-# different runtime (bash on a swarm node, not the e2e tree), so it carries
-# its own signal-safe trap below instead of importing the helper.
+# the gate sweeps EVERY client of the realm, so an EVAL_KC_REALM /
+# EVAL_KC_CLIENT_ID override here needs no mirror anywhere — a revert that
+# fails to land fails THAT gate loudly wherever the pair landed (#1846).
+# This script is a different runtime (bash on a swarm node, not the e2e
+# tree), so it carries its own signal-safe trap below instead of importing
+# the helper.
 trap cleanup EXIT INT TERM
 
 CLIENT_UUID=$(curl -sk -m 30 -H @"$HDR" \

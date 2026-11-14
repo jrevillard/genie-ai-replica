@@ -103,6 +103,30 @@ const ARRAY_SHAPE = {
   ok: (data) => Array.isArray(data),
   complaint: 'with a non-array payload'
 };
+
+// The ROPC posture sweep (#1846) reads the realm's client list with an
+// explicit page size and refuses to answer clean at the boundary: a list
+// of exactly this many clients is a TRUNCATED read, and a truncated read
+// cannot carry a clean verdict. Genie's realm carries ~10 clients; the
+// boundary exists so a widened realm widens the sweep deliberately.
+const SWEEP_PAGE_MAX = 500;
+
+// Keycloak provisions these built-in clients into EVERY realm, and their
+// standing grant flags are the SERVER's defaults (measured on the shared
+// venue: admin-cli answers directAccessGrantsEnabled=true out of the box,
+// and the realm export does not pin it) — not anything a run wrote. A
+// built-in's grant is therefore standing state exactly like the test-only
+// realm's: indistinguishable from a leftover and owned by the venue's
+// contract, so the sweep exempts the fixed set and asserts every client
+// the deployment actually declares.
+const KEYCLOAK_BUILTIN_CLIENTS = new Set([
+  'account',
+  'account-console',
+  'admin-cli',
+  'broker',
+  'realm-management',
+  'security-admin-console'
+]);
 const REPRESENTATION_SHAPE = {
   ok: (data) => Boolean(data) && typeof data === 'object' && Boolean(data.id),
   complaint: 'without a usable representation'
@@ -1081,35 +1105,61 @@ async function enableDirectAccessGrants(adminToken, realm, clientId) {
 }
 
 /**
- * THE audited posture assertion (#1727): the named client of the named
- * realm carries NO direct access grants (ROPC). This module is the
- * posture's single home — the two scripts that legitimately flip the
- * grant on a real venue (`data/okf/smoke-test/mint-tokens.mjs`, the
- * rag-benchmarks anchor wrapper) each revert with their own verified
+ * THE audited posture assertion (#1727, swept realm-wide by #1846): EVERY
+ * client of the named realm carries NO direct access grants (ROPC). This
+ * module is the posture's single home — the two scripts that legitimately
+ * flip the grant on a real venue (`data/okf/smoke-test/mint-tokens.mjs`,
+ * the rag-benchmarks anchor wrapper) each revert with their own verified
  * arm and cannot import a JS helper; a future script that forgets its
- * revert is what the post-run gate
+ * revert — on the default pair or on any pair it named through its own
+ * overrides — is what the post-run gate
  * (`tests/e2e/run/check-ropc-posture.js`, wired into `run-local-e2e.sh`)
- * catches through this assertion.
+ * catches through this assertion. The sweep is list-based, so an
+ * overridden eval client needs no mirror convention: any leftover the
+ * run leaves on the realm is visible wherever it landed. Two standing
+ * states are exempt, because their grants are the provisioned posture,
+ * not a run's doing: Keycloak's built-in clients (their grant defaults
+ * are the server's, unpinned by the realm export) and the test-only
+ * realms the gate does not name.
  *
  * A client that does not exist cannot leak a grant: absence holds the
- * posture. A client WITH the grant throws — naming the violation, the
- * client's uuid (the revert call's own address) and the revert recipe.
+ * posture. A client WITH the grant throws — naming the violation, each
+ * offender's uuid (the revert call's own address) and the revert recipe.
+ * A realm that does not exist is NOT a clean posture: the read fails
+ * loudly (the gate must not green a venue that lost its primary realm).
+ * The list read is paged (`max=${SWEEP_PAGE_MAX}`) and refuses to answer
+ * clean at the boundary — a realm that grew past the page is a
+ * deliberate widening of the sweep, never a silently truncated check.
  * @param {string} adminToken - Keycloak admin access token
- * @param {string} realm - Realm name
- * @param {string} clientId - Client ID (e.g. 'genie-app')
+ * @param {string} realm - Realm name (e.g. 'genie')
  * @returns {Promise<void>}
  */
-async function assertDirectAccessGrantsDisabled(adminToken, realm, clientId) {
-  // One exact-match client search, owned by findClient: an absent client
-  // resolves null here (not an outage, not a broken answer).
-  const client = await findClient(adminToken, realm, clientId);
-  if (!client) return;
-  if (client.directAccessGrantsEnabled) {
+async function assertNoDirectAccessGrants(adminToken, realm) {
+  const res = await readAdminApi(
+    adminToken,
+    `/auth/admin/realms/${realm}/clients?max=${SWEEP_PAGE_MAX}`,
+    `the client list of realm ${realm}`,
+    { shape: ARRAY_SHAPE }
+  );
+  if (res.data.length >= SWEEP_PAGE_MAX) {
     throw new Error(
-      `ROPC POSTURE VIOLATION: ${clientId} in realm ${realm} carries directAccessGrantsEnabled=true ` +
-        `(client uuid ${client.id}) — a run flipped the grant and did not revert it, and the venue now ` +
-        `accepts password grants on this client. Revert it through the admin API with the grant set ` +
-        `back to false — the one-field PUT the two legitimate flippers use in their verified reverts ` +
+      `The client list of realm ${realm} answered at the ${SWEEP_PAGE_MAX}-entry sweep boundary — ` +
+        `the sweep refuses to answer clean past it. Raise the boundary deliberately in ` +
+        `tests/e2e/helpers/keycloak-admin.js if the realm legitimately grew that wide.`
+    );
+  }
+  const flipped = res.data.filter(
+    (client) => client.directAccessGrantsEnabled === true && !KEYCLOAK_BUILTIN_CLIENTS.has(client.clientId)
+  );
+  if (flipped.length > 0) {
+    const offenders = flipped
+      .map((client) => `${client.clientId || '(unnamed client)'} (client uuid ${client.id})`)
+      .join(', ');
+    throw new Error(
+      `ROPC POSTURE VIOLATION: realm ${realm} carries directAccessGrantsEnabled=true on ${offenders} ` +
+        `— a run flipped the grant and did not revert it, and the venue now accepts password grants ` +
+        `on this client. Revert it through the admin API with the grant set back to false — the ` +
+        `one-field PUT the two legitimate flippers use in their verified reverts ` +
         `(data/okf/smoke-test/mint-tokens.mjs, tests/rag-benchmarks/scripts/run_anchor_with_cleanup.sh). ` +
         `One-field PUTs are safe on CLIENTS; the replace-with-nulls hazard this suite documents lives ` +
         `on the required-actions endpoint (see the d7b spec), not here.`
@@ -1128,7 +1178,7 @@ module.exports = {
   getRealmSettings,
   deleteUser,
   enableDirectAccessGrants,
-  assertDirectAccessGrantsDisabled,
+  assertNoDirectAccessGrants,
   findUsers,
   findClient,
   createClient,

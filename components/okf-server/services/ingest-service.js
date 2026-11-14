@@ -436,20 +436,11 @@ function _logLaneCapacity(repoId, conceptCount) {
   return lanes;
 }
 
-/** Fixed-size worker pool over items, preserving RESULT positions. */
-async function _pool(items, concurrency, worker) {
-  const results = new Array(items.length);
-  let next = 0;
-  const runners = Array.from({ length: Math.min(Math.max(concurrency, 1), items.length) }, async () => {
-    for (;;) {
-      const i = next++;
-      if (i >= items.length) return;
-      results[i] = await worker(items[i], i);
-    }
-  });
-  await Promise.all(runners);
-  return results;
-}
+/** Fixed-size worker pool over items, preserving RESULT positions. The ONE
+ * implementation lives in run-pool.js (2026-11-14: three copies of this idiom
+ * existed across the component; this alias keeps the import-path callers and
+ * the _pool export unchanged). */
+const _pool = require('./run-pool').runPool;
 
 /**
  * The per-concept import pipeline (4a parse → 4b upsert → 4c conformance →

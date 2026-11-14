@@ -22,57 +22,32 @@
 // (deleteConceptMeta, best-effort) and rethrows, leaving the corpus exactly
 // as it was.
 
-const { splitConceptBody, partPath } = require('./concept-splitter');
-const { maxConceptDocChars, ConceptTooLargeError } = require('./concept-ceiling');
+const { logger } = require('../shared-lib/logger');
+const { splitConceptBody, partPath, MAX_PARTS } = require('./concept-splitter');
+const { maxConceptDocChars, conceptTooLargeError } = require('./concept-ceiling');
 const { workingGraphName } = require('./graph-lifecycle-service');
+const { runPool } = require('./run-pool');
 
-// The per-split part cap (the MAX_SEGMENTS_PER_FILE precedent): greedyMerge
-// fills parts to the ceiling, so a sane body yields ceil(size/ceiling)+seam
-// parts — a count beyond this means the ceiling is wrong for the content and
-// the curator needs an honest refusal, not a silently huge write.
-const MAX_PARTS = 200;
-
-// The PII re-scan pool (the scans are independent per part): the import path
-// runs concepts across lanes, so a split at the part cap must not hold one
-// request for 200 sequential sidecar roundtrips.
+// The PII re-scan pool width (the scans are independent per part): the import
+// path runs concepts across lanes, so a split at the part cap must not hold
+// one request for 200 sequential sidecar roundtrips.
 const SCAN_POOL = 4;
 
-// Born-right means CLAIMABLE immediately, not just index_status 'parsed':
-// a previously FAILED row carries a backoff park (next_attempt_after up to 6h)
-// and an attempt budget near the reaper cap — the split resets both, exactly
-// the #1020 reset patchConceptMeta applies on a hash change. (The claim query
-// gates on worker_claimed_at and next_attempt_after; ingest_attempts feeds the
-// dead-letter cap.)
-const DRAIN_RESET = {
-  next_attempt_after: null,
-  worker_claimed_at: null,
-  ingest_attempts: 0,
-  reindex_retry: 0,
-  last_error: null
-};
-
-class SplitOperationError extends Error {
-  constructor(code, message, status = 400) {
-    super(message);
-    this.name = 'SplitOperationError';
-    this.code = code;
-    this.status = status;
-  }
-}
-
-/** The concept_id analog of partPath, SAME ZERO-BASED convention: index 0 →
- * the original id (part 1 keeps it — inbound links keep resolving to a live
- * document), index 1 → `foo-part-2`. The two helpers are always called with
- * the same loop index so ids and paths can never disagree again (the live
- * smoke caught exactly that disagreement when the conventions were mixed). */
+// The concept_id analog of partPath, SAME ZERO-BASED convention: index 0 →
+// the original id (part 1 keeps it — inbound links keep resolving to a live
+// document), index 1 → `foo-part-2`. All three part helpers take the same
+// loop index, so ids, paths and titles can never disagree (the live smoke
+// caught exactly that disagreement when the conventions were mixed).
 function partConceptId(concept_id, index) {
   return index === 0 ? concept_id : `${concept_id}-part-${index + 1}`;
 }
 
 /** The human-legible title for parts 2..N: an explicit suffix beats the
- * path-derived fallback the upsert would otherwise use. */
+ * path-derived fallback the upsert would otherwise use. Same zero-based loop
+ * index as the other helpers; the RENDERED suffix is 1-based ("— part 2"),
+ * matching the -part-2 identity convention inbound links rely on. */
 function partTitle(title, index) {
-  return `${title || ''} — part ${index}`.trim();
+  return `${title || ''} — part ${index + 1}`.trim();
 }
 
 /**
@@ -85,7 +60,7 @@ function partTitle(title, index) {
  * @returns {Promise<{concept_id, parts: Array<{concept_id, chars}>, created, updated, ceiling}>}
  * @throws SplitOperationError 404 CONCEPT_NOT_FOUND / 400 CONCEPT_WITHIN_CEILING /
  *   400 TOO_MANY_PARTS / 409 PART_ID_CONFLICT; ConceptTooLargeError 409 (the
- *   shared ceiling refusal)
+ *   shared ceiling refusal, via the shared factory)
  */
 async function splitConcept(repoDoc, concept_id, opts = {}) {
   if (!repoDoc || !repoDoc.repo_id || !concept_id) {
@@ -102,13 +77,19 @@ async function splitConcept(repoDoc, concept_id, opts = {}) {
   const body = typeof meta.body === 'string' ? meta.body : '';
   const result = splitConceptBody(body, ceiling);
   if (result.unsplittable) {
-    // The shared ceiling refusal (409): names size, ceiling and remedy. ZERO
-    // rows written — the concept is left exactly as it was.
-    throw new ConceptTooLargeError(
-      `concept ${concept_id} is ${body.length} characters and its largest unbreakable section exceeds the ` +
-        `${ceiling}-character ceiling (no heading, paragraph or line boundary fits inside it) — ` +
-        `shorten the source content for this concept, or raise OKF_MAX_CONCEPT_DOC_CHARS`
-    );
+    // The SHARED ceiling refusal (409), through the shared factory: the
+    // import path, the editor save, the publish gate and this split all
+    // answer the same question with the same message shape. ZERO rows
+    // written — the concept is left exactly as it was.
+    throw conceptTooLargeError({
+      label: concept_id,
+      chars: body.length,
+      ceiling,
+      remedy:
+        'Shorten the source content for this concept (its largest unbreakable section has no heading, ' +
+        'paragraph or line boundary that fits), or raise OKF_MAX_CONCEPT_DOC_CHARS if the served ' +
+        "model's context window allows a larger document."
+    });
   }
   if (result.parts.length <= 1) {
     // The body already fits: an honest no-op, not a fake success.
@@ -125,16 +106,13 @@ async function splitConcept(repoDoc, concept_id, opts = {}) {
     );
   }
 
-  // Collision pre-check BEFORE any write: a repo can legitimately hold an
-  // unrelated concept whose id happens to be one of this split's part ids
-  // (the import derives ids from path slugs, so a real `foo-part-2.md` yields
-  // exactly `foo-part-2`). Upserting blindly would SILENTLY OVERWRITE it.
-  // The split refuses instead and names the rows to resolve first.
-  const collisions = [];
-  for (let i = 1; i < result.parts.length; i += 1) {
-    const existing = await metaService.getConceptMeta(repo_id, partConceptId(concept_id, i));
-    if (existing) collisions.push(partConceptId(concept_id, i));
-  }
+  // Collision pre-check BEFORE any write, ONE batched existence query: a repo
+  // can legitimately hold an unrelated concept whose id happens to be one of
+  // this split's part ids (the import derives ids from path slugs, so a real
+  // `foo-part-2.md` yields exactly `foo-part-2`). Upserting blindly would
+  // SILENTLY OVERWRITE it — the split refuses instead and names the rows.
+  const partIds = result.parts.map((_, i) => partConceptId(concept_id, i)).slice(1);
+  const collisions = (await metaService.conceptIdsExist(repo_id, partIds)).sort();
   if (collisions.length) {
     throw new SplitOperationError(
       'PART_ID_CONFLICT',
@@ -146,51 +124,43 @@ async function splitConcept(repoDoc, concept_id, opts = {}) {
 
   const graphName = workingGraphName(repoDoc); // born-right: rows drain into the SAME graph dataprep writes
   const title = meta.title || concept_id;
-  const buildParsed = (i) => {
-    const isFirst = i === 0;
-    return {
-      concept_id: partConceptId(concept_id, i),
-      path: isFirst ? meta.path || '' : partPath(meta.path || `${concept_id}.md`, i),
-      // Frontmatter carries to every part (title lineage suffixed on 2..N);
-      // sources[] carried UNCHANGED to all parts — provenance is not
-      // partitioned (David, 2026-11-14).
-      frontmatter: isFirst ? meta.frontmatter || {} : { ...(meta.frontmatter || {}), title: partTitle(title, i + 1) },
-      body: result.parts[i],
-      links: meta.links,
-      sources: meta.sources,
-      status: meta.lifecycle_status, // never downgrade a row's lifecycle below what it held
-      trust_tier: meta.trust_tier
-    };
-  };
+  // Claim-stamp reset on a content change is owned by the ONE update path
+  // (concept-meta-service applyUpdate, the #1020 contract) — every
+  // hash-changing update inherits it; this caller carries no patch.
+  const parsedParts = result.parts.map((_, i) => ({
+    concept_id: partConceptId(concept_id, i),
+    path: i === 0 ? meta.path || '' : partPath(meta.path || `${concept_id}.md`, i),
+    // Frontmatter carries to every part (title lineage suffixed on 2..N);
+    // sources[] carried UNCHANGED to all parts — provenance is not
+    // partitioned (David, 2026-11-14).
+    frontmatter: i === 0 ? meta.frontmatter || {} : { ...(meta.frontmatter || {}), title: partTitle(title, i) },
+    body: result.parts[i],
+    links: meta.links,
+    sources: meta.sources,
+    status: meta.lifecycle_status, // never downgrade a row's lifecycle below what it held
+    trust_tier: meta.trust_tier
+  }));
   const upsertOpts = {
     graph_name: graphName, // born-right: index_status 'parsed' + the current graph, drains immediately
     bundle_version: meta.bundle_version,
-    ingest_labels: meta.ingest_labels,
-    patch: { ...DRAIN_RESET } // born-right rows are CLAIMABLE (see DRAIN_RESET)
+    ingest_labels: meta.ingest_labels
   };
 
   const parts = [];
-  const parsedParts = [];
   const createdIds = [];
-  let updated;
+  let updated; // set to 1 by the final (part-1) write; any earlier failure throws
   try {
     // Parts 2..N first (fresh rows after the collision pre-check), the
     // part-1 overwrite LAST — see the zero-partial-state note at the top.
-    // The parts ARRAY below is assembled in forward order regardless.
-    const written = [];
-    for (let i = result.parts.length - 1; i >= 1; i -= 1) {
-      const parsed = buildParsed(i);
-      await metaService.upsertConceptMeta(repo_id, parsed, upsertOpts);
-      createdIds.push(parsed.concept_id);
-      written[i] = parsed;
+    // parsedParts is forward-ordered; the WRITE order below is not.
+    for (let i = parsedParts.length - 1; i >= 1; i -= 1) {
+      await metaService.upsertConceptMeta(repo_id, parsedParts[i], upsertOpts);
+      createdIds.push(parsedParts[i].concept_id);
     }
-    const first = buildParsed(0);
-    await metaService.upsertConceptMeta(repo_id, first, upsertOpts);
+    await metaService.upsertConceptMeta(repo_id, parsedParts[0], upsertOpts);
     updated = 1;
-    written[0] = first;
-    for (let i = 0; i < written.length; i += 1) {
-      parts.push({ concept_id: written[i].concept_id, chars: result.parts[i].length });
-      parsedParts.push(written[i]);
+    for (let i = 0; i < parsedParts.length; i += 1) {
+      parts.push({ concept_id: parsedParts[i].concept_id, chars: result.parts[i].length });
     }
   } catch (err) {
     // Rollback: remove the rows this operation created; the ORIGINAL row was
@@ -203,14 +173,14 @@ async function splitConcept(repoDoc, concept_id, opts = {}) {
         await metaService.deleteConceptMeta(repo_id, cid);
       } catch (delErr) {
         orphans.push(cid);
-        require('../shared-lib/logger').logger.error('concept.split rollback delete failed', {
+        logger.error('concept.split rollback delete failed', {
           repo_id,
           concept_id: cid,
           error: delErr.message
         });
       }
     }
-    require('../shared-lib/logger').logger.error('concept.split rolled back after a write failure', {
+    logger.error('concept.split rolled back after a write failure', {
       repo_id,
       concept_id,
       rolled_back: createdIds.length - orphans.length,
@@ -230,27 +200,21 @@ async function splitConcept(repoDoc, concept_id, opts = {}) {
   // PII re-scan per resulting part (the ingest path's per-fragment cost — the
   // scan WRITES the rows' pii_state from the part's content; fail-closed
   // 'error' blocks publish later, an unexpected throw is isolated exactly
-  // like the import's [4d]). The scans are independent — bounded pool.
+  // like the import's [4d]). The scans are independent — THE shared pool.
   const piiService = require('./pii-service');
-  const scanQueue = [...parsedParts];
-  const scanWorkers = Array.from({ length: Math.min(SCAN_POOL, scanQueue.length) }, async () => {
-    for (;;) {
-      const parsed = scanQueue.shift();
-      if (!parsed) return;
-      try {
-        await piiService.scanConcept(repo_id, parsed.concept_id, parsed.frontmatter, parsed.body);
-      } catch (err) {
-        require('../shared-lib/logger').logger.error('concept.split PII scan threw (isolated)', {
-          repo_id,
-          concept_id: parsed.concept_id,
-          error: err.message
-        });
-      }
+  await runPool(parsedParts, SCAN_POOL, async (parsed) => {
+    try {
+      await piiService.scanConcept(repo_id, parsed.concept_id, parsed.frontmatter, parsed.body);
+    } catch (err) {
+      logger.error('concept.split PII scan threw (isolated)', {
+        repo_id,
+        concept_id: parsed.concept_id,
+        error: err.message
+      });
     }
   });
-  await Promise.all(scanWorkers);
 
-  require('../shared-lib/logger').logger.info('concept.split done', {
+  logger.info('concept.split done', {
     repo_id,
     concept_id,
     actor: opts.actor || null,
@@ -262,4 +226,13 @@ async function splitConcept(repoDoc, concept_id, opts = {}) {
   return { concept_id, parts, created, updated, ceiling };
 }
 
-module.exports = { splitConcept, partConceptId, partTitle, MAX_PARTS, SCAN_POOL, DRAIN_RESET, SplitOperationError };
+class SplitOperationError extends Error {
+  constructor(code, message, status = 400) {
+    super(message);
+    this.name = 'SplitOperationError';
+    this.code = code;
+    this.status = status;
+  }
+}
+
+module.exports = { splitConcept };

@@ -69,6 +69,7 @@ const META_ROW = (over = {}) => ({
 
 let upsertConceptMeta;
 let getConceptMeta;
+let conceptIdsExist;
 let deleteConceptMeta;
 let scanConcept;
 let workingGraphName;
@@ -79,11 +80,12 @@ beforeEach(() => {
   upsertConceptMeta = jest.fn().mockImplementation(async (_repo, parsed) => ({
     action: parsed.concept_id === 'big-concept' ? 'updated' : 'created'
   }));
-  // Default: only the ORIGINAL concept row exists; the -part-N ids are free
-  // (the collision pre-check probes them before any write).
+  // Default: only the ORIGINAL concept row exists; the -part-N ids are free.
   getConceptMeta = jest
     .fn()
     .mockImplementation(async (_repo, concept_id) => (concept_id === 'big-concept' ? META_ROW() : null));
+  // The collision pre-check's ONE batched existence query — nothing collides.
+  conceptIdsExist = jest.fn().mockResolvedValue([]);
   deleteConceptMeta = jest.fn().mockResolvedValue({});
   scanConcept = jest.fn().mockResolvedValue({ pii_state: 'clean', occurrences: [] });
   workingGraphName = jest.fn(() => 'OKF_r1_v3');
@@ -92,6 +94,7 @@ beforeEach(() => {
     getConceptMeta: (...a) => getConceptMeta(...a),
     upsertConceptMeta: (...a) => upsertConceptMeta(...a),
     deleteConceptMeta: (...a) => deleteConceptMeta(...a),
+    conceptIdsExist: (...a) => conceptIdsExist(...a),
     contentHash: (s) => `hash:${String(s).length}`
   }));
   jest.doMock('../services/graph-lifecycle-service', () => ({
@@ -159,23 +162,18 @@ describe('splitConcept — CAP-1: the lossless, ceiling-bounded split', () => {
     expect(nums).toEqual([...nums].sort((a, b) => b - a));
   });
 
-  test('every row is born-right: index_status parsed, the CURRENT graph name, bundle + labels carried, claim stamps RESET', async () => {
+  test('every row is born-right: index_status parsed, the CURRENT graph name, bundle + labels carried', async () => {
     await svc().splitConcept({ repo_id: 'r1', lifecycle_state: 'draft' }, 'big-concept', {});
     for (const call of upsertConceptMeta.mock.calls) {
       const opts = call[2];
       expect(opts.graph_name).toBe('OKF_r1_v3'); // workingGraphName(repo), not the row's stale value
       expect(opts.bundle_version).toBe(4);
       expect(opts.ingest_labels).toEqual(['acl:open']);
-      // Born-right means CLAIMABLE: a previously FAILED row's backoff park
-      // and spent attempt budget must not survive the split (the #1020 reset
-      // contract — the claim query gates on these).
-      expect(opts.patch).toEqual({
-        next_attempt_after: null,
-        worker_claimed_at: null,
-        ingest_attempts: 0,
-        reindex_retry: 0,
-        last_error: null
-      });
+      // The caller carries NO claim-reset patch: the reset on a content
+      // change is owned by the ONE update path (applyUpdate, the #1020
+      // contract) — pinned in the concept-meta-service suite, not re-carried
+      // (and re-drifted) here.
+      expect(opts.patch).toBeUndefined();
     }
     // Part 1 carries the row's own metadata through the update...
     const lastCall = upsertConceptMeta.mock.calls[upsertConceptMeta.mock.calls.length - 1];
@@ -267,16 +265,16 @@ describe('splitConcept — CAP-2: honest refusals, zero partial state', () => {
   test('an unrelated concept already holding a -part-N id → 409 PART_ID_CONFLICT, ZERO rows written', async () => {
     // A real `foo-part-2.md` in the corpus yields exactly such a row — the
     // split must never silently overwrite it (the upsert WOULD: same repo_id
-    // + concept_id hits the update path).
-    getConceptMeta.mockImplementation(async (_repo, concept_id) =>
-      concept_id === 'big-concept' || concept_id === 'big-concept-part-2' ? META_ROW() : null
-    );
+    // + concept_id hits the update path). The pre-check is ONE batched
+    // existence query over the planned part ids.
+    conceptIdsExist.mockResolvedValue(['big-concept-part-2']);
     await expect(
       svc().splitConcept({ repo_id: 'r1', lifecycle_state: 'draft' }, 'big-concept', {})
     ).rejects.toMatchObject({
       code: 'PART_ID_CONFLICT',
       status: 409
     });
+    expect(conceptIdsExist).toHaveBeenCalledWith('r1', expect.arrayContaining(['big-concept-part-2']));
     await expect(
       svc().splitConcept({ repo_id: 'r1', lifecycle_state: 'draft' }, 'big-concept', {})
     ).rejects.toMatchObject({

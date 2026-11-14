@@ -197,4 +197,11 @@ function partPath(path, index) {
   return `${base}-part-${index + 1}.md`;
 }
 
-module.exports = { splitConceptBody, partPath, DEFAULT_CEILING };
+// THE per-document part cap — ONE definition for every splitter consumer
+// (2026-11-14, the /simplify reuse round: producer-service's segmentation cap
+// and the split operation's part cap were two copies of the same literal,
+// able to drift silently). producer-service imports this as
+// MAX_SEGMENTS_PER_FILE; the split operation uses it as its TOO_MANY_PARTS cap.
+const MAX_PARTS = 200;
+
+module.exports = { splitConceptBody, partPath, MAX_PARTS, DEFAULT_CEILING };

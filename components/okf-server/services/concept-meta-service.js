@@ -38,6 +38,23 @@ const COLLECTION = 'okf_concepts_meta';
 
 const LIFECYCLE_STATUSES = require('./okf-vocabulary').STATUS_VALUES;
 
+// THE canonical drain-claim reset (the #1020 contract, one spelling instead
+// of four): a row whose CONTENT changed must be CLAIMABLE NOW — a stale
+// backoff park (§5.5 up to 15 min, §5.9 defer up to 6 h) would hide the new
+// content from every lane until the park expired, a stale claim would age it
+// toward the reaper, and a spent attempt budget (reaper cap 8) would
+// dead-letter content that was never tried in its new form. All five fields
+// belong to the NEW drain cycle, not the parked one. The AQL requeues
+// (requeueRepoForRedrain / requeueFailedForReingest) spell the same set; this
+// constant is the reference definition for update paths.
+const DRAIN_CLAIM_RESET = {
+  next_attempt_after: null,
+  worker_claimed_at: null,
+  ingest_attempts: 0,
+  reindex_retry: 0,
+  last_error: null
+};
+
 const meter = getMeter();
 const opsCounter = meter.createCounter('okf_concepts_meta_operations_total', {
   description: 'OKF concepts-meta UPSERT operations (create/update)'
@@ -232,6 +249,14 @@ async function applyUpdate(col, existing, repo_id, conceptId, parsed, opts, mini
     if (existing.index_status === 'rejected' && patch.index_status === 'parsed' && !contentChanged) {
       delete patch.index_status;
     }
+    // THE claim-stamp reset lives HERE, in the ONE update path that computes
+    // contentChanged (2026-11-14, the /simplify altitude round): every
+    // hash-changing full update — re-import, split, any future write path —
+    // inherits the #1020 contract without hand-building a patch. (Before this,
+    // the import path reset NOTHING on a re-imported modified concept and
+    // patchConceptMeta reset only 2 of the 5 fields — the exact hazard its own
+    // rationale warns about.)
+    if (contentChanged) Object.assign(patch, DRAIN_CLAIM_RESET);
   }
   patch.updated_at = nowIso();
   try {
@@ -716,6 +741,27 @@ async function deleteConceptMeta(repo_id, concept_id) {
   return doc;
 }
 
+/** Which of `concept_ids` exist in the repo — existence ONLY, one roundtrip
+ * (the split's collision pre-check used to pay one FULL-document
+ * getConceptMeta per part: up to 199 sequential roundtrips shipping up to
+ * 250k-char bodies to answer a boolean). The W9 batched-join precedent.
+ * @param {string} repo_id
+ * @param {string[]} concept_ids
+ * @returns {Promise<string[]>} the ids that exist (subset, order unspecified)
+ */
+async function conceptIdsExist(repo_id, concept_ids) {
+  if (!repo_id || !Array.isArray(concept_ids) || concept_ids.length === 0) return [];
+  const db = await getDb();
+  return (
+    await db.query(
+      `FOR m IN okf_concepts_meta
+       FILTER m.repo_id == @rid AND m.concept_id IN @ids
+       RETURN m.concept_id`,
+      { rid: repo_id, ids: concept_ids }
+    )
+  ).all();
+}
+
 /** THE CONCEPT-DOCUMENT CEILING — the repo's over-ceiling concepts.
  *
  * The publish gate's backstop (the plan's §7): "no oversized concept may
@@ -1152,12 +1198,12 @@ async function patchConceptMeta(repo_id, concept_id, parsed) {
     // leave index_status alone — preserving 'indexed' when only frontmatter
     // (e.g. labels) changed avoids re-embedding unnecessarily.
     index_status: hashChanged ? 'parsed' : existing.index_status,
-    // REVIEW FIX #9 (#1020): a content change must be claimable NOW — a
-    // stale park (§5.5 backoff up to 15 min, §5.9 defer up to 6 h) would
-    // hide the edited concept from every lane until the park expired, and
-    // a stale claim would age it toward the reaper. Both belong to the NEW
-    // drain cycle, not the parked one.
-    ...(hashChanged ? { next_attempt_after: null, worker_claimed_at: null } : {}),
+    // REVIEW FIX #9 (#1020), widened to the canonical five-field reset
+    // (2026-11-14): a stale park OR claim OR spent attempt budget belongs to
+    // the OLD drain cycle — the reaper keys on ingest_attempts >= 8, so a
+    // hash-changing edit that left the budget spent would dead-letter content
+    // that was never tried in its new form. See DRAIN_CLAIM_RESET.
+    ...(hashChanged ? DRAIN_CLAIM_RESET : {}),
     updated_at: nowIso()
   };
 
@@ -1552,6 +1598,8 @@ module.exports = {
   upsertConceptMeta,
   getConceptMeta,
   getConceptMetaFromAnyRepo,
+  conceptIdsExist,
+  DRAIN_CLAIM_RESET,
   listReposForConcept,
   purgeConceptIngestionLogs,
   listConceptsMeta,

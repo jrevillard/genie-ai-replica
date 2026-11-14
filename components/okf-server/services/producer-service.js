@@ -42,7 +42,10 @@ const { authorRepoTopicLinks, enabled: topicLinkAuthoringEnabled } = topicLinkAu
 const COLLECTION = 'okf_repositories';
 
 const MAX_FILES = Math.max(1, parseInt(process.env.OKF_MAX_IMPORT_FILES, 10) || 100);
-const MAX_SEGMENTS_PER_FILE = 200;
+// THE one per-document part cap (concept-splitter owns the definition — the
+// split operation's TOO_MANY_PARTS cap is the same number; two copies of the
+// literal could drift silently).
+const MAX_SEGMENTS_PER_FILE = require('./concept-splitter').MAX_PARTS;
 const MIN_SEGMENT_CHARS = 200; // smaller sections merge into the previous one
 
 // The SHARED conversion registry — ONE in-flight conversion per repo_id,

@@ -193,6 +193,18 @@ fallback the suite forbids.
 The run's output lists every skipped spec with its reason, so **a green run
 never means "nothing ran"** — the report names what did not run and why.
 
+## The post-run ROPC posture gate
+
+After the failure path, the run asserts the venue's auth posture: `genie/genie-app`
+carries NO direct access grants (`tests/e2e/run/check-ropc-posture.js`, reading the
+assertion that lives in `helpers/keycloak-admin.js` — the posture's single home,
+#1727). A run that leaves the venue wider than it found it fails **here, loudly**,
+even with every spec green: the two scripts that legitimately flip the grant on a
+real venue (`data/okf/smoke-test/mint-tokens.mjs`, the rag-benchmarks anchor
+wrapper) each carry a verified revert, and a revert that fails to land is what
+this gate catches. `ROPC_POSTURE_REALM` / `ROPC_POSTURE_CLIENT` name the checked
+pair for a venue whose names differ.
+
 ## The failure path
 
 A red run must not stay a silent red (#1736). The run ends with

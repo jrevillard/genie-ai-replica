@@ -1080,6 +1080,43 @@ async function enableDirectAccessGrants(adminToken, realm, clientId) {
   }
 }
 
+/**
+ * THE audited posture assertion (#1727): the named client of the named
+ * realm carries NO direct access grants (ROPC). This module is the
+ * posture's single home — the two scripts that legitimately flip the
+ * grant on a real venue (`data/okf/smoke-test/mint-tokens.mjs`, the
+ * rag-benchmarks anchor wrapper) each revert with their own verified
+ * arm and cannot import a JS helper; a future script that forgets its
+ * revert is what the post-run gate
+ * (`tests/e2e/run/check-ropc-posture.js`, wired into `run-local-e2e.sh`)
+ * catches through this assertion.
+ *
+ * A client that does not exist cannot leak a grant: absence holds the
+ * posture. A client WITH the grant throws — naming the violation, the
+ * client's uuid (the revert call's own address) and the revert recipe.
+ * @param {string} adminToken - Keycloak admin access token
+ * @param {string} realm - Realm name
+ * @param {string} clientId - Client ID (e.g. 'genie-app')
+ * @returns {Promise<void>}
+ */
+async function assertDirectAccessGrantsDisabled(adminToken, realm, clientId) {
+  // One exact-match client search, owned by findClient: an absent client
+  // resolves null here (not an outage, not a broken answer).
+  const client = await findClient(adminToken, realm, clientId);
+  if (!client) return;
+  if (client.directAccessGrantsEnabled) {
+    throw new Error(
+      `ROPC POSTURE VIOLATION: ${clientId} in realm ${realm} carries directAccessGrantsEnabled=true ` +
+        `(client uuid ${client.id}) — a run flipped the grant and did not revert it, and the venue now ` +
+        `accepts password grants on this client. Revert it through the admin API: read the client and ` +
+        `PUT it back with directAccessGrantsEnabled=false — the WHOLE representation it reads, not a ` +
+        `one-field body (Keycloak replaces the client on PUT; see enableDirectAccessGrants in this ` +
+        `module). The two scripts that flip the grant legitimately each carry a verified revert: ` +
+        `data/okf/smoke-test/mint-tokens.mjs and tests/rag-benchmarks/scripts/run_anchor_with_cleanup.sh.`
+    );
+  }
+}
+
 module.exports = {
   createUser,
   ensureUser,
@@ -1091,6 +1128,7 @@ module.exports = {
   getRealmSettings,
   deleteUser,
   enableDirectAccessGrants,
+  assertDirectAccessGrantsDisabled,
   findUsers,
   findClient,
   createClient,

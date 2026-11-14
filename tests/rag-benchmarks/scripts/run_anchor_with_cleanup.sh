@@ -139,6 +139,12 @@ cleanup() {
     echo "FAILED to disable ROPC — DISABLE MANUALLY: $EVAL_KC_URL/admin/realms/$EVAL_KC_REALM_S/clients/$CLIENT_UUID" >&2
     exit 9
 }
+# The posture this window temporarily widens is asserted in ONE place —
+# tests/e2e/helpers/keycloak-admin.js `assertDirectAccessGrantsDisabled` —
+# and gated after every local e2e run (tests/e2e/run/check-ropc-posture.js):
+# a revert that fails to land fails THAT gate loudly. This script is a
+# different runtime (bash on a swarm node, not the e2e tree), so it carries
+# its own signal-safe trap below instead of importing the helper.
 trap cleanup EXIT INT TERM
 
 CLIENT_UUID=$(curl -sk -m 30 -H @"$HDR" \

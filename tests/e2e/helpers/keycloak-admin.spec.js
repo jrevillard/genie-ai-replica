@@ -11,6 +11,7 @@ const {
   getRealmSettings,
   deleteUser,
   enableDirectAccessGrants,
+  assertDirectAccessGrantsDisabled,
   findClient,
   createClient,
   deleteClient
@@ -1532,5 +1533,32 @@ test.describe('the client helpers behind the K.2 expiry client', () => {
     const err = await rejection(deleteClient('tok', REALM, 'client-1', 'e2e-expiry'));
     expect(err.message).toContain('Failed to delete client e2e-expiry');
     expect(err.message).toContain('HTTP 500');
+  });
+});
+
+test.describe('assertDirectAccessGrantsDisabled — the ROPC posture (#1727)', () => {
+  const CLIENTS_PATH = new RegExp('/auth/admin/realms/genie/clients\\?clientId=genie-app');
+
+  test('a client without the grant holds the posture, silently', async () => {
+    routes = [['GET', CLIENTS_PATH, { status: 200, data: [{ id: 'client-1', directAccessGrantsEnabled: false }] }]];
+
+    await expect(assertDirectAccessGrantsDisabled('tok', 'genie', 'genie-app')).resolves.toBeUndefined();
+    expect(calls).toEqual(['GET /auth/admin/realms/genie/clients?clientId=genie-app']);
+  });
+
+  test('an absent client cannot leak a grant — the posture holds', async () => {
+    routes = [['GET', CLIENTS_PATH, { status: 200, data: [] }]];
+
+    await expect(assertDirectAccessGrantsDisabled('tok', 'genie', 'genie-app')).resolves.toBeUndefined();
+  });
+
+  test('a flipped grant throws, naming the client uuid and the full-representation revert', async () => {
+    routes = [['GET', CLIENTS_PATH, { status: 200, data: [{ id: 'client-1', directAccessGrantsEnabled: true }] }]];
+
+    await expect(assertDirectAccessGrantsDisabled('tok', 'genie', 'genie-app')).rejects.toThrow(
+      /ROPC POSTURE VIOLATION[\s\S]*client uuid client-1[\s\S]*WHOLE representation/
+    );
+    // The gate reads: it never writes.
+    expect(calls).toEqual(['GET /auth/admin/realms/genie/clients?clientId=genie-app']);
   });
 });

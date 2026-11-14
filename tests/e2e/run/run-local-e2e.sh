@@ -210,4 +210,15 @@ elif [ "$REPORT_STATUS" -ne 0 ]; then
   exit "$REPORT_STATUS"
 fi
 
+# --- the post-run ROPC posture gate (#1727) ---------------------------------
+# The venue's auth posture is part of this run's outcome: a run that leaves
+# genie/genie-app accepting password grants fails HERE even when every spec
+# was green. The assertion is the helper's own (single home); the gate is
+# this run's obligation because this run books the venue.
+echo "post-run ROPC posture gate"
+if ! node "$REPO_ROOT/tests/e2e/run/check-ropc-posture.js"; then
+  echo "ERROR: the venue keeps a widened auth surface — the run FAILS on the posture gate." >&2
+  exit 3
+fi
+
 exit "$PLAYWRIGHT_STATUS"

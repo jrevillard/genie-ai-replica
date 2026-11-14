@@ -93,6 +93,12 @@ await fetch(`${AUTH}/admin/realms/genie/users/${adminUser.id}/reset-password`, {
 });
 
 // ROPC window → mint → revert (asserted)
+// The posture this window temporarily widens is asserted in ONE place —
+// tests/e2e/helpers/keycloak-admin.js `assertDirectAccessGrantsDisabled` —
+// and gated after every local e2e run (tests/e2e/run/check-ropc-posture.js):
+// a revert that fails to land fails THAT gate loudly. This script is a
+// different runtime (a smoke .mjs, not the e2e tree), so it carries its own
+// verified revert below instead of importing the helper.
 const uuid = (await j(`${AUTH}/admin/realms/genie/clients?clientId=genie-app`, { headers: H }))[0].id;
 await fetch(`${AUTH}/admin/realms/genie/clients/${uuid}`, { method: 'PUT', headers: H, body: JSON.stringify({ directAccessGrantsEnabled: true }) });
 const mint = async (u, p) =>

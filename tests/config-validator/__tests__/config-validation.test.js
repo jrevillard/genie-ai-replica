@@ -2515,14 +2515,15 @@ describe('e2e merge-train changes filters (#1264)', () => {
     return null;
   };
 
-  // Anchor-style entry covering a resolved path: a file directly under
-  // tests/e2e is listed exactly (the anchor lists such files verbatim),
-  // anything deeper becomes its directory glob. Both callers pre-filter to
-  // strict descendants of tests/e2e, so the root itself never reaches here.
-  const toAnchorPath = (resolvedPath, isDir) => {
+  // Anchor-style entry covering a resolved path: a file directly under the
+  // ROOT is listed exactly (the anchor lists such files verbatim), anything
+  // deeper becomes its directory glob. In-tree paths pass the suite tree
+  // (tests/e2e); the out-of-tree emissions (#1843) pass the checkout root —
+  // one shape rule, two roots.
+  const toAnchorPath = (resolvedPath, isDir, root = TESTS_E2E_ROOT) => {
     if (isDir) return `${resolvedPath}/**/*`;
     const dir = path.posix.dirname(resolvedPath);
-    return dir === TESTS_E2E_ROOT ? resolvedPath : `${dir}/**/*`;
+    return dir === root ? resolvedPath : `${dir}/**/*`;
   };
 
   // Anchor coverage is prefix-based, not verbatim: `X/**/*` covers any
@@ -2634,15 +2635,16 @@ describe('e2e merge-train changes filters (#1264)', () => {
     // The suite-tree boundary, string-level so the synthetic IO seams
     // classify identically to the real one.
     const inTree = (p) => p.startsWith(`${TESTS_E2E_ROOT}/`);
-    // Anchor-style entry for an emitted path: in-tree paths go through
-    // toAnchorPath (a file directly under tests/e2e is listed exactly);
-    // out-of-tree, a file directly at the checkout root is verbatim too
-    // (the anchor lists such files exactly — '.gitlab-ci.yml'), anything
-    // deeper becomes its directory glob.
-    const anchorPathFor = (resolvedPath, isDir) => {
-      if (inTree(resolvedPath)) return toAnchorPath(resolvedPath, isDir);
-      if (isDir) return `${resolvedPath}/**/*`;
-      return path.posix.dirname(resolvedPath) === '.' ? resolvedPath : `${path.posix.dirname(resolvedPath)}/**/*`;
+    // One classification for both consumption shapes: in-tree candidates
+    // glob AND are walked; out-of-tree ones are emitted against the
+    // checkout root, never walked.
+    const record = (resolved, isDir, walk) => {
+      if (inTree(resolved)) {
+        globs.add(toAnchorPath(resolved, isDir));
+        if (walk) visitFile(resolved);
+      } else {
+        outOfTreeGlobs.add(toAnchorPath(resolved, isDir, '.'));
+      }
     };
     // One enqueue path for both consumption shapes: the visited set (the
     // sources map) doubles as the cycle guard, and the read happens once.
@@ -2668,28 +2670,18 @@ describe('e2e merge-train changes filters (#1264)', () => {
       for (const match of source.matchAll(specifierRe)) {
         const resolved = resolveSpecifier(dir, UNESCAPE(match[1]), io);
         if (!resolved) continue;
-        if (inTree(resolved)) {
-          globs.add(toAnchorPath(resolved, false));
-          visitFile(resolved);
-        } else {
-          outOfTreeGlobs.add(anchorPathFor(resolved, false));
-        }
+        record(resolved, false, true);
       }
       for (const match of source.matchAll(joinRe)) {
         const segments = [...match[1].matchAll(segmentRe)].map((m) => UNESCAPE(m[0]));
         const resolved = path.posix.normalize(path.posix.join(dir, ...segments));
         const st = io.stat(resolved);
         if (!st) continue;
-        if (inTree(resolved)) {
-          globs.add(toAnchorPath(resolved, st.isDirectory()));
-          // A join that lands on a FILE is consumption like a require — its
-          // own requires must be walked and it must face the #1325 detector
-          // like any other consumed file. (The fixtures joins resolve to the
-          // directory and stop here.)
-          if (st.isFile()) visitFile(resolved);
-        } else {
-          outOfTreeGlobs.add(anchorPathFor(resolved, st.isDirectory()));
-        }
+        // A join that lands on a FILE is consumption like a require — its
+        // own requires must be walked and it must face the #1325 detector
+        // like any other consumed file. (The fixtures joins resolve to the
+        // directory and stop here.)
+        record(resolved, st.isDirectory(), st.isFile());
       }
     }
     return {
@@ -3548,12 +3540,11 @@ describe('e2e merge-train changes filters (#1264)', () => {
   // closes, in its only legitimate direction.
   test('the anchor is exactly the justified union — no stale entries', () => {
     const anchorPaths = [...filters.get(ANCHOR)].sort();
-    const requiredOutOfTree = DERIVED_OUT_OF_TREE.filter(
-      (p) => !isCovered([...EXECUTED_GLOBS, ...DERIVED_CONSUMED, ...STACK_INPUT_PATHS], p)
-    );
-    const justified = [
-      ...new Set([...EXECUTED_GLOBS, ...DERIVED_CONSUMED, ...requiredOutOfTree, ...STACK_INPUT_PATHS])
-    ].sort();
+    // The three other classes, spelled once: the pruning's coverage
+    // reference and the union's base are the same set.
+    const coveredElsewhere = [...EXECUTED_GLOBS, ...DERIVED_CONSUMED, ...STACK_INPUT_PATHS];
+    const requiredOutOfTree = DERIVED_OUT_OF_TREE.filter((p) => !isCovered(coveredElsewhere, p));
+    const justified = [...new Set([...coveredElsewhere, ...requiredOutOfTree])].sort();
     expect(anchorPaths).toEqual(justified);
   });
 

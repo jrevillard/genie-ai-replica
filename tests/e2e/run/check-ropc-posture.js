@@ -37,13 +37,23 @@ const REALMS = (process.env.ROPC_POSTURE_REALMS || 'genie')
   .map((realm) => realm.trim())
   .filter(Boolean);
 
-// The pre-#1846 pair override names a client the sweep no longer takes:
-// a value left behind must not silently degrade into the default sweep.
-const LEGACY_VARS = ['ROPC_POSTURE_REALM', 'ROPC_POSTURE_CLIENT'].filter((v) => process.env[v] !== undefined);
-if (LEGACY_VARS.length > 0) {
+// The pre-#1846 REALM variable carried realm meaning the sweep must keep:
+// honor it as a swept realm for this run (deprecated). The pre-rename
+// CLIENT variable is genuinely subsumed — the sweep checks every client
+// of the realm — so a value left behind warns instead of degrading into
+// an unchecked intent.
+if (process.env.ROPC_POSTURE_REALM !== undefined) {
+  const legacyRealm = process.env.ROPC_POSTURE_REALM.trim();
+  if (legacyRealm && !REALMS.includes(legacyRealm)) REALMS.push(legacyRealm);
   console.error(
-    `WARNING: ${LEGACY_VARS.join(' and ')} no longer read — the gate sweeps realms now (#1846); ` +
-      `set ROPC_POSTURE_REALMS (comma-separated) instead.`
+    `WARNING: ROPC_POSTURE_REALM is deprecated — honored as a swept realm for this run; ` +
+      `set ROPC_POSTURE_REALMS (comma-separated) instead (#1846).`
+  );
+}
+if (process.env.ROPC_POSTURE_CLIENT !== undefined) {
+  console.error(
+    `WARNING: ROPC_POSTURE_CLIENT no longer read — the gate sweeps every client of the realm(s) ` +
+      `now (#1846), so a pair override needs no mirror.`
   );
 }
 
@@ -55,6 +65,16 @@ if (REALMS.length === 0) {
   );
   process.exit(1);
 }
+
+const failGate = (message) => {
+  // The caller supplies the separator: a single-line failure reads
+  // "FAILED: <message>", a multi-realm list reads "FAILED:\n<lines>".
+  console.error(`ROPC posture gate FAILED:${message}`);
+  // Exit 1: the run wrapper maps any gate failure to ITS own code (5), so
+  // this code only surfaces on a standalone run — where it must not read
+  // as the run script's venue-lock contention (3).
+  process.exit(1);
+};
 
 (async () => {
   const token = await getAdminToken();
@@ -71,17 +91,7 @@ if (REALMS.length === 0) {
       failures.push(e.message);
     }
   }
-  if (failures.length > 0) {
-    console.error(`ROPC posture gate FAILED:\n${failures.join('\n')}`);
-    // Exit 1: the run wrapper maps any gate failure to ITS own code (5), so
-    // this code only surfaces on a standalone run — where it must not read
-    // as the run script's venue-lock contention (3).
-    process.exit(1);
-  }
+  if (failures.length > 0) failGate(`\n${failures.join('\n')}`);
 })().catch((e) => {
-  console.error(`ROPC posture gate FAILED: ${e.message}`);
-  // Exit 1: the run wrapper maps any gate failure to ITS own code (5), so
-  // this code only surfaces on a standalone run — where it must not read
-  // as the run script's venue-lock contention (3).
-  process.exit(1);
+  failGate(` ${e.message}`);
 });

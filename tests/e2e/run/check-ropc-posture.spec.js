@@ -55,8 +55,11 @@ test.describe('the posture gate refuses to green an unchecked venue', () => {
 
   test('the pre-rename pair variables warn instead of degrading silently', () => {
     const { stderr } = runGate({ ROPC_POSTURE_REALM: 'genie', ROPC_POSTURE_CLIENT: 'genie-app' });
-    // The warning names the rename and the replacement — a caller still
-    // carrying the old pair must be able to diagnose from the message.
+    // The REALM variable's intent survives (honored as a swept realm for
+    // the run); the CLIENT variable is genuinely subsumed by the sweep.
+    // Both name the replacement — a caller still carrying the old pair
+    // must be able to diagnose from the messages.
+    expect(stderr).toContain('honored as a swept realm');
     expect(stderr).toContain('no longer read');
     expect(stderr).toContain('ROPC_POSTURE_REALMS');
   });

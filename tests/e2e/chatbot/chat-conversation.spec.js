@@ -15,6 +15,7 @@ const {
   STREAM_PATH
 } = require('../helpers/chatbot');
 const { runPostOnlyRouteHandler, runRouteHandler } = require('../helpers/route');
+const { stubQuickHelpConfiguration, stubQuickHelpHierarchy } = require('../helpers/quick-help-stubs');
 const { QUICK_HELP_ITEM } = require('../helpers/layout');
 
 async function askAndAnswer(page, question) {
@@ -536,8 +537,8 @@ test.describe('Conversation — surface invariants', () => {
   // The header names the QuickHelp option that opened the chat.
   //
   // The option the click uses is the spec's OWN card: the configuration
-  // and the hierarchy are both served by this spec (the recipe of the
-  // sibling quick-help-scope.spec.js), because a venue's runtime config
+  // and the hierarchy are both served by this spec (the shared recipe in
+  // helpers/quick-help-stubs.js), because a venue's runtime config
   // carries whatever its deployment seeded — the hardcoded 'Apply for
   // ID' this test once assumed is a seed artifact, absent from the
   // repo's own seed data, and the grid on a differently-seeded venue
@@ -590,31 +591,8 @@ test.describe('Conversation — surface invariants', () => {
       // Both stubs are installed BEFORE the login, so the first chat
       // mount already sees them.
       setupPage: async (page) => {
-        await page.route(
-          '**/config/genie-ai-config.json',
-          runRouteHandler(page, async (route) => {
-            const response = await route.fetch();
-            const body = await response.json();
-            body.features = body.features || {};
-            body.features.chat = body.features.chat || {};
-            body.features.chat.quickHelp = body.features.chat.quickHelp || {};
-            body.features.chat.quickHelp.buttons = HEADER_SCOPE_BUTTONS;
-            // Fulfil WITHOUT `response`: passing it would inherit the
-            // served document's `Content-Length` — a length that no
-            // longer matches the modified body.
-            await route.fulfill({ json: body });
-          })
-        );
-        await page.route(
-          '**/api/service-categories/categories*',
-          runRouteHandler(page, async (route) => {
-            await route.fulfill({
-              status: 200,
-              contentType: 'application/json',
-              body: JSON.stringify(HEADER_SCOPE_HIERARCHY)
-            });
-          })
-        );
+        await stubQuickHelpConfiguration(page, HEADER_SCOPE_BUTTONS);
+        await stubQuickHelpHierarchy(page, HEADER_SCOPE_HIERARCHY);
       }
     });
     // The config has been read and applied — the grid can be clicked.

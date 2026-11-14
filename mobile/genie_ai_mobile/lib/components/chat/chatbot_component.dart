@@ -83,6 +83,9 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
   String _conversationTitle = "New Chat";
   List<Map<String, dynamic>> _messages = [];
   List<Map<String, dynamic>> get messages => _messages;
+  // Monotonic suffix for the ids this state generates (the user send's
+  // bubble-handle discriminator): the millisecond alone can repeat.
+  int _sendSeq = 0;
   bool _isLoading = false;
   bool _isStreaming = false;
   StreamSubscription<String>? _streamSubscription;
@@ -1118,10 +1121,10 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
 
     final userMessage = {
       // The bubble test handle's discriminator (message-bubble-user-<id>):
-      // generated the same way the streaming placeholder's id is, so
-      // every transcript entry carries one and the handle never falls
-      // back to a position.
-      'id': 'user_${DateTime.now().millisecondsSinceEpoch}',
+      // millisecond + a per-state send counter — the counter keeps two
+      // sends in the same millisecond (a quick-help auto-send racing a
+      // manual one) from colliding on one sibling key.
+      'id': 'user_${DateTime.now().millisecondsSinceEpoch}_${_sendSeq++}',
       'role': 'user',
       'content': text.trim(),
       'actualContent': hiddenPrompt ?? text.trim(),
@@ -1463,7 +1466,13 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
       final bool translationFailed = isTranslationFailed(metadata);
 
       final assistantMessage = {
-        'id': response['queryId'],
+        // The bubble handle's discriminator: the queryId when the answer
+        // carries one, a generated id otherwise — a null here would make
+        // the handle collide with the next id-less entry (the feedback
+        // path already treats a missing queryId as a recognized state).
+        'id':
+            response['queryId'] ??
+            'assistant_${DateTime.now().millisecondsSinceEpoch}',
         'queryId': response['queryId'],
         'role': 'assistant',
         'content': response['response'] ?? tr('chatbot.noResponse'),
@@ -2489,13 +2498,20 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
                           ? Alignment.centerRight
                           : Alignment.centerLeft,
                       child: Container(
-                        // The test handles the web declares on the same
-                        // surface (message-bubble-bot / message-bubble-user),
-                        // discriminated by the message's own id — the
-                        // list carries one bubble per message, so the
-                        // keys stay unique among siblings.
+                        // The bubble test handle, named after the web's
+                        // message-bubble-bot / message-bubble-user. Flutter
+                        // keys must be unique among siblings, so — unlike
+                        // the web's constant attribute — the handle carries
+                        // the message's own id as its discriminator (the
+                        // handle contract's list rule); the stable forms a
+                        // spec can address are the server ids of a restored
+                        // transcript and the welcome bubble's 'welcome'. A
+                        // message whose id is missing falls back to its
+                        // position: no two entries in one list can share
+                        // it, which is what keeps the build from crashing
+                        // on a transcript the backend served without ids.
                         key: ValueKey(
-                          'message-bubble-${isUser ? 'user' : 'bot'}-${msg['id']}',
+                          'message-bubble-${isUser ? 'user' : 'bot'}-${msg['id'] ?? index}',
                         ),
                         margin: const EdgeInsets.symmetric(
                           vertical: DsSpacing.sm,

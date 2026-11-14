@@ -7,8 +7,8 @@
  * so the Studio renders empty lanes for it), the `/admin?tab=studio`
  * dashboard, and the repo card click. The contract lived inline in
  * concept-ceiling.spec.js first, then twice more with the wave's two new
- * specs; this module is its one home. The ceiling spec predates it and
- * still carries its own copy — migrating it is its own follow-up.
+ * specs; this module is its one home, and all three specs are its callers
+ * (#1841 migrated the ceiling spec onto it).
  *
  * The specs own their FIXTURES (the repo/draft/import payloads and the
  * assertions); this module owns the transport-shaped scaffolding around
@@ -40,7 +40,9 @@ function okfAdminUser() {
  *                                  under test — the envelope is a
  *                                  success-shape detail).
  *   - `…/api/okf/repos/<id>/concepts` the concept tree the Input step
- *                                     refreshes — empty.
+ *                                     refreshes — empty, or `conceptsBody`
+ *                                     when given (the concept-ceiling spec's
+ *                                     list needs a row to click).
  *   - `…/api/okf/repos/<id>/import` the import POST, only when `importBody`
  *                                   is given (the wizard split-note spec).
  *
@@ -53,9 +55,11 @@ function okfAdminUser() {
  * @param {object} p.repo the repository object the dashboard lists
  * @param {number} [p.draftStatus=200] the draft read's verdict
  * @param {object|null} [p.draftBody=null] the draft read's body
+ * @param {Array} [p.conceptsBody=[]] the concepts list's rows (a spec that
+ *   opens a concept needs at least one, carrying `concept_id`)
  * @param {object|null} [p.importBody=null] when given, the import POST's answer
  */
-async function stubStudioRepoRoutes(page, { repoId, repo, draftStatus = 200, draftBody = null, importBody = null }) {
+async function stubStudioRepoRoutes(page, { repoId, repo, draftStatus = 200, draftBody = null, conceptsBody = [], importBody = null }) {
   await page.route('**/api/okf/repos?*', (route) =>
     route.fulfill({
       status: 200,
@@ -74,7 +78,7 @@ async function stubStudioRepoRoutes(page, { repoId, repo, draftStatus = 200, dra
     route.fulfill({
       status: 200,
       contentType: 'application/json',
-      body: JSON.stringify([])
+      body: JSON.stringify(conceptsBody)
     })
   );
   if (importBody !== null) {

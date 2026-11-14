@@ -8,8 +8,7 @@ const { NAV_LOGOUT_BUTTON } = require('../helpers/navbar');
 // longer restores the session: it lands on the Keycloak login page. That
 // landing IS the Vuex-cleared proof — the navigation guard only redirects
 // unauthenticated users, and the genie_post_logout flag blocks session
-// restoration (frontend auth store). The Vuex clearAuth mutation sets
-// isAuthenticated=false, user=null, accessToken=null.
+// restoration (frontend auth store).
 // Source: docs/e2e-tests/suite-map.md § The acceptance phases, Phase L
 
 test('clears Vuex auth state after logout — lands on the Keycloak login page', async ({ browser }) => {
@@ -49,22 +48,18 @@ test('clears Vuex auth state after logout — lands on the Keycloak login page',
     `Expected URL to contain 'dashboard' after login, got: ${dashboardUrl}`
   ).toBeTruthy();
 
-  // Wait for Vue to mount — the store is reachable once __vue_app__ exists.
-  async function waitForVueApp(page) {
-    await expect
-      .poll(
-        () =>
-          page.evaluate(() => {
-            const app = document.querySelector('#app');
-            return Boolean(app && app.__vue_app__);
-          }),
-        { timeout: 15000 }
-      )
-      .toBe(true);
-  }
-
-  // Step 4: Verify authenticated state via Vuex store
-  await waitForVueApp(page);
+  // Step 4: Verify authenticated state via Vuex store — the store is
+  // reachable once __vue_app__ exists.
+  await expect
+    .poll(
+      () =>
+        page.evaluate(() => {
+          const app = document.querySelector('#app');
+          return Boolean(app && app.__vue_app__);
+        }),
+      { timeout: 15000 }
+    )
+    .toBe(true);
 
   const authStateBefore = await page.evaluate(() => {
     const app = document.querySelector('#app');
@@ -125,18 +120,13 @@ test('clears Vuex auth state after logout — lands on the Keycloak login page',
     timeout: 30000
   });
 
-  // Wait for the redirect to the Keycloak login page
-  await page.waitForURL((url) => url.toString().includes('/auth/realms/genie/protocol/openid-connect/auth'), {
-    timeout: 15000
-  });
-
-  // Step 8: Assert the STABLE landing — the login form renders only when
-  // the realm holds no live SSO session, so this is the cleared-state
-  // proof (the navigation guard only fires when isAuthenticated is
-  // false). A URL match alone could report a false pass: a surviving
-  // session (a partial logout) passes through the auth endpoint on its
-  // 302 back to the app and never renders this form. One expected
-  // landing, asserted unconditionally.
+  // Step 8: Assert the landing (the locator auto-waits across the
+  // redirect) — the login form renders only when the realm holds no live
+  // SSO session, so this is the cleared-state proof (the navigation guard
+  // only fires when isAuthenticated is false). A URL match alone could
+  // report a false pass: a surviving session (a partial logout) passes
+  // through the auth endpoint on its 302 back to the app and never
+  // renders this form. One expected landing, asserted unconditionally.
   await expect(
     page.locator('#username'),
     `Expected the Keycloak login form after logout (session cleared); the browser was last at: ${page.url()}`

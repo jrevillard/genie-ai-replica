@@ -66,11 +66,9 @@ behaviour keeps the spec green.
    ```
 
    A descendant selector is fine as long as it is rooted at a handle. A
-   role locator (`getByRole('button', { name })`) is a **tolerated
-   fallback** in the Playwright suite: it survives any redesign, but its
-   name is copy — a copy change is a visible test failure — and the
-   suite's locator gate accepts it on that basis (the locator table in
-   `tests/e2e/CLAUDE.md`). Prefer the handle.
+   role locator (`getByRole('button', { name })`) is an **accepted
+   fallback** in the Playwright suite (the locator table in
+   `tests/e2e/CLAUDE.md`); its name is copy, so prefer the handle.
 
 3. **Assert behaviour, not presentation.** A handle tells you WHERE; the
    assertion still states the behaviour — the rendered value, the visible

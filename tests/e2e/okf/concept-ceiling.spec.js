@@ -33,7 +33,8 @@
 //     --config=D:/ITU-Gitlab/playwright.config.js tests/e2e/okf/concept-ceiling.spec.js
 
 const { test, expect } = require('@playwright/test');
-const { loginViaUI, BASE_URL, LOGIN_BUDGET_TIMEOUT_MS } = require('../helpers/chatbot');
+const { LOGIN_BUDGET_TIMEOUT_MS } = require('../helpers/chatbot');
+const { openStudioRepo, stubStudioRepoRoutes } = require('../helpers/okf-studio');
 const { okfEnabled, okfParkedReason, skipUnlessVenue } = require('../helpers/venue-profile');
 
 /**
@@ -42,17 +43,35 @@ const { okfEnabled, okfParkedReason, skipUnlessVenue } = require('../helpers/ven
  * The Studio's repository list is scope-gated by okf-server ("OKF authz
  * denied: no okf scope"), and the e2e fixture user (`testadmin`) carries the
  * `admin` REALM role but no `okf_scopes` attribute — so the Studio renders
- * EMPTY lanes for it and this spec has nothing to drive.
- *
- * The account the Studio actually works with is the deployment's own admin
- * (`genie-admin`), which carries the `okf:*:*:admin` wildcard. Its
- * credentials come from the environment (the local build's `.env` carries
- * them; the Playwright config loads dotenv from the CWD, so running from
- * the build tree picks them up).
+ * EMPTY lanes for it and this spec has nothing to drive. The deployment's
+ * own admin (`genie-admin`) carries the `okf:*:*:admin` wildcard: the
+ * shared scaffold's `openStudioRepo` logs in as it (helpers/okf-studio.js,
+ * #1841 — the credential block and the open-a-repo walk live there now).
  */
-const ADMIN_USER = {
-  username: process.env.GENIE_ADMIN_USERNAME || 'genie-admin',
-  password: process.env.GENIE_ADMIN_PASSWORD || ''
+const REPO_ID = 'e2e-concept-ceiling-repo';
+
+/** The stubbed repository the dashboard lists. */
+const REPO = {
+  repo_id: REPO_ID,
+  name: 'E2E Concept Ceiling Repo',
+  lifecycle_state: 'draft',
+  concept_count: 1,
+  version: 1
+};
+
+/** The concepts list the Studio's tree renders — one row, so the editor has
+ *  a concept to open (the read below is intercepted; WHICH concept the row
+ *  names is irrelevant). */
+const CONCEPTS = [{ concept_id: 'alpha', title: 'Alpha', is_index: false }];
+
+/** A draft the editor resumes without complaint (the wizard step the shell
+ *  opens on is irrelevant: this spec clicks the Editor sub-tab itself). */
+const DRAFT = {
+  name: REPO.name,
+  domain: '',
+  concept_count: 1,
+  studio_step: 0,
+  updated_at: 1700000000000
 };
 
 /** The ceiling the stubbed server enforces. Small, so the over-ceiling state
@@ -78,10 +97,14 @@ const CONCEPT = {
 async function openEditor(page) {
   const patches = [];
 
+  // The Studio's transport-shaped scaffolding (repos list, draft, concepts
+  // list) is the shared helper's; this spec's fixture rides `conceptsBody`.
+  await stubStudioRepoRoutes(page, { repoId: REPO_ID, repo: REPO, draftBody: DRAFT, conceptsBody: CONCEPTS });
+
   // The concept read — intercepted so the ceiling and the body are known.
   // The pattern matches ANY concept id (the LIST is a different URL — it has
-  // no trailing segment — so it is not intercepted, and the real repository's
-  // own concepts are what the curator sees in the tree).
+  // no trailing segment — so it is not intercepted, and the stubbed list is
+  // what the curator sees in the tree).
   await page.route('**/api/okf/repos/*/concepts/*', (route) => {
     if (route.request().method() === 'PATCH') {
       patches.push(route.request().postData());
@@ -101,20 +124,14 @@ async function openEditor(page) {
     });
   });
 
-  await loginViaUI(page, ADMIN_USER);
-  await page.goto(`${BASE_URL}/admin?tab=studio`, { waitUntil: 'networkidle', timeout: 30000 });
-
-  // The studio's repository list → the first repository card.
-  const card = page.locator('[data-test-id^="okf-studio-repo-"]').first();
-  await expect(card).toBeVisible({ timeout: 15000 });
-  await card.click();
+  await openStudioRepo(page, REPO_ID);
 
   // The repo editor's "Editor" sub-tab → the concept list.
   const editorTab = page.locator('[data-test-id="ds-tab-editor"]');
   await expect(editorTab).toBeVisible({ timeout: 15000 });
   await editorTab.click();
 
-  // The concept list → the first concept (WHICH concept is irrelevant: the
+  // The concept list → the stubbed concept (WHICH concept is irrelevant: the
   // read is intercepted, so the editor always opens the stub).
   const row = page.locator('[data-test-id^="okf-concept-row-"]').first();
   await expect(row).toBeVisible({ timeout: 15000 });

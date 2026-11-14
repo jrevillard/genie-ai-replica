@@ -91,7 +91,7 @@ Multi-phase procedure in `docs/e2e-tests/`:
 3. Execute all phases per their respective docs — mix of manual commands + Playwright
 4. Each phase has prerequisites and cleanup steps — follow strictly, do not skip
 
-**Important**: Phase K mutates realm settings. Cleanup steps K.5+K.6 MUST run after Phase K before proceeding to Phase L.
+**Important**: Phase K stops Keycloak (K.4) and sweeps test artifacts (K.5+K.6) — run those cleanup steps after Phase K before Phase L; the K.2 expiry is client-scoped and mutates no realm setting (#1835). Full procedure: `docs/e2e-tests/suite-map.md` § Phase K.
 
 **The suite has no CI door** (operator decision, 2026-11-10: no CI resources
 for the Playwright suite — it runs locally, regularly). The executed set is

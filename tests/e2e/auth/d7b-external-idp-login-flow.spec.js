@@ -103,31 +103,77 @@ test('completes full external IdP brokered login flow', async ({ browser }) => {
     // for brokered users. In production, SMTP sends the verification email and the flow
     // works normally. In the test environment (no SMTP), Keycloak shows a "Failed to send
     // email" page that blocks the broker flow. We disable the required action for the
-    // duration of this test. It will be restored by keycloak-config-cli on next deploy.
+    // duration of this test.
+    //
+    // Keycloak 26.8's PUT on a required action does NOT merge the body with
+    // the stored row: a partial body (`{enabled: false}` alone) rewrites the
+    // row with the omitted fields nulled, so the action's alias disappears
+    // and every later read 404s — the row is silently destroyed, and the
+    // realm files declare no requiredActions, so keycloak-config-cli never
+    // re-creates it. Every mutation here therefore PUTs the FULL
+    // representation, read from the venue moments before: disable writes
+    // back the observed row with enabled=false, the restore writes the
+    // observed row back verbatim, and the restore READS THE STATE BACK
+    // rather than assuming the PUT converged. Nothing here delegates to a
+    // deploy.
     //
     // The MUTATE side carries the same verdict discipline as the restore side
     // (#1713): apiContext returns a response on non-2xx instead of throwing, so
-    // the status is checked explicitly. A silent disable failure (a 401 from an
-    // expired token, the 404 of an unregistered action) leaves VERIFY_EMAIL
-    // ENABLED, the brokered login then hits the wrong page, and a flow-failure
-    // envelope would diagnose URL/body/hint without ever naming the real
-    // cause — while the inner finally "restores" a flag that was never
-    // disabled. A failed disable means nothing was mutated, so it throws
-    // BEFORE the flow starts: no restore is owed.
-    const disableRes = await apiContext.put(
-      `${BASE_URL}/auth/admin/realms/genie/authentication/required-actions/VERIFY_EMAIL`,
-      { headers: authHeaders, data: { enabled: false }, ignoreHTTPSErrors: true }
-    );
-    if (!disableRes.ok()) {
+    // the status is checked explicitly. The READ is a venue probe: an unreadable
+    // venue is UNKNOWN, which is not the same as "the action is absent" — it
+    // fails loudly with the status. An action the realm carries DISABLED, or
+    // does not carry at all, already satisfies the precondition (no verification
+    // page will appear), so no disable — and no restore — is owed. A disable
+    // that fails means nothing was mutated, so it throws BEFORE the flow starts.
+    // The venue the profile gate probed is the venue these admin URLs
+    // address: REALM flows through, or a KEYCLOAK_REALM=<other> venue
+    // would have the disable dance toggle the WRONG realm's row.
+    const requiredActionUrl = `${BASE_URL}/auth/admin/realms/${REALM}/authentication/required-actions/VERIFY_EMAIL`;
+    const readRes = await apiContext.get(requiredActionUrl, { headers: authHeaders, ignoreHTTPSErrors: true });
+    if (!readRes.ok() && readRes.status() !== 404) {
       const error = new Error(
-        `VERIFY_EMAIL disable failed — the required action stays ENABLED and the ` +
-          `brokered login below would fail on the email-verification page instead of ` +
-          `the flow under test, a cause the flow-failure envelope cannot name. ` +
-          `Nothing was mutated, so no restore is owed. HTTP ${disableRes.status()}. ` +
-          `Body: ${await bodyOf(disableRes)}.`
+        `VERIFY_EMAIL pre-test read failed — the venue state is UNKNOWN, which is not the ` +
+          `same as "the action is absent". HTTP ${readRes.status()}. Body: ${await bodyOf(readRes)}.`
       );
       error.isPassThrough = true;
       throw error;
+    }
+    // A 200 whose body is not JSON (a proxy error page) must land in THIS
+    // verdict — a bare .json() throw would fall into the flow-failure
+    // envelope below and diagnose a flow that never started.
+    let preTestAction = null;
+    if (readRes.status() !== 404) {
+      try {
+        preTestAction = await readRes.json();
+      } catch (bodyError) {
+        const error = new Error(
+          `VERIFY_EMAIL pre-test read returned HTTP ${readRes.status()} with a body that is not JSON ` +
+            `(a proxy error page answers like this) — the venue state is UNKNOWN, which is not the ` +
+            `same as "the action is absent". Body read failed: ${bodyError.message}.`
+        );
+        error.isPassThrough = true;
+        throw error;
+      }
+    }
+    // No disabledHere flag: a failed disable throws BEFORE the try below is
+    // entered, so the finally only ever runs with the disable either done or
+    // not owed — the observed pre-test state itself is the restore's gate.
+    if (preTestAction && preTestAction.enabled) {
+      const disableRes = await apiContext.put(
+        requiredActionUrl,
+        { headers: authHeaders, data: { ...preTestAction, enabled: false }, ignoreHTTPSErrors: true }
+      );
+      if (!disableRes.ok()) {
+        const error = new Error(
+          `VERIFY_EMAIL disable failed — the required action stays ENABLED and the ` +
+            `brokered login below would fail on the email-verification page instead of ` +
+            `the flow under test, a cause the flow-failure envelope cannot name. ` +
+            `Nothing was mutated, so no restore is owed. HTTP ${disableRes.status()}. ` +
+            `Body: ${await bodyOf(disableRes)}.`
+        );
+        error.isPassThrough = true;
+        throw error;
+      }
     }
 
     try {
@@ -170,31 +216,43 @@ test('completes full external IdP brokered login flow', async ({ browser }) => {
         timeout: 15000
       });
     } finally {
-      // Step 7: Re-enable VERIFY_EMAIL required action.
-      // Note: Keycloak 26 removes (unregisters) the action when disabled,
-      // so the restore PUT can 404 — and apiContext returns a response on
-      // non-2xx instead of throwing, so the status is checked explicitly.
-      // It will be fully restored by keycloak-config-cli on next deploy.
-      // No throw here even when the restore fails: a ThrowStatement inside
-      // a finally block supersedes the flow's own pending result, so the
-      // restore verdict is recorded and raised after the block instead.
-      let restoreStatus = null;
-      try {
-        const restoreRes = await apiContext.put(
-          `${BASE_URL}/auth/admin/realms/genie/authentication/required-actions/VERIFY_EMAIL`,
-          { headers: authHeaders, data: { enabled: true }, ignoreHTTPSErrors: true }
-        );
-        if (!restoreRes.ok()) {
-          restoreStatus = `HTTP ${restoreRes.status()}`;
+      // Step 7: Converge VERIFY_EMAIL back to the pre-test state this spec
+      // read. Only a disable THIS test performed is owed a restore: an
+      // action the realm carried disabled, or carried not at all, is
+      // already the state the realm keeps. The PUT carries the FULL
+      // pre-test representation verbatim (see the mutate-side note: a
+      // partial body nulls the omitted fields), and the converged state is
+      // READ BACK — a restore that merely fires a PUT and moves on can
+      // leave the row destroyed while reporting success. No throw here
+      // even when the restore fails: a ThrowStatement inside a finally
+      // block supersedes the flow's own pending result, so the restore
+      // verdict is recorded and raised after the block instead.
+      if (preTestAction && preTestAction.enabled) {
+        let restoreStatus = null;
+        try {
+          const restoreRes = await apiContext.put(
+            requiredActionUrl,
+            { headers: authHeaders, data: preTestAction, ignoreHTTPSErrors: true }
+          );
+          if (!restoreRes.ok()) {
+            restoreStatus = `HTTP ${restoreRes.status()}`;
+          }
+          if (restoreStatus === null) {
+            const verifyRes = await apiContext.get(requiredActionUrl, { headers: authHeaders, ignoreHTTPSErrors: true });
+            const state = verifyRes.ok() ? await verifyRes.json() : null;
+            if (!state || state.enabled !== preTestAction.enabled) {
+              restoreStatus = `the realm reports ${JSON.stringify(state)} after the restore`;
+            }
+          }
+        } catch (restoreError) {
+          restoreStatus = restoreError.message;
         }
-      } catch (restoreError) {
-        restoreStatus = restoreError.message;
-      }
-      if (restoreStatus !== null) {
-        restoreFailure =
-          `VERIFY_EMAIL restore failed — the genie realm keeps VERIFY_EMAIL disabled ` +
-          `(brokered logins skip email verification) until keycloak-config-cli ` +
-          `re-runs on the next deploy. Restore error: ${restoreStatus}`;
+        if (restoreStatus !== null) {
+          restoreFailure =
+            `VERIFY_EMAIL restore failed — the realm does not carry VERIFY_EMAIL in its ` +
+            `pre-test state (registered=${Boolean(preTestAction)}, enabled=${Boolean(preTestAction && preTestAction.enabled)}), ` +
+            `so brokered users keep skipping email verification. Restore error: ${restoreStatus}`;
+        }
       }
     }
 

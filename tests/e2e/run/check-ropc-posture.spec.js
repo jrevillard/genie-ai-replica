@@ -20,8 +20,11 @@ const script = path.join(__dirname, 'check-ropc-posture.js');
 const runGate = (extraEnv) => {
   const env = { ...process.env };
   // A credential left in the driver's shell must not change which
-  // failure the child reaches.
+  // failure the child reaches. ADMIN_TOKEN is the documented password
+  // bypass (helpers/auth reads it FIRST) — a token here would send the
+  // child to the venue instead of the credential error.
   delete env.KEYCLOAK_ADMIN_PASSWORD;
+  delete env.ADMIN_TOKEN;
   delete env.ROPC_POSTURE_REALM;
   delete env.ROPC_POSTURE_CLIENT;
   delete env.ROPC_POSTURE_REALMS;
@@ -67,5 +70,8 @@ test.describe('the posture gate refuses to green an unchecked venue', () => {
     expect(stderr).toContain('KEYCLOAK_ADMIN_PASSWORD');
     expect(stderr).not.toContain('parsed to no realm');
     expect(stderr).not.toContain('no longer read');
+    // And it got no further than the credential check: a venue call's
+    // verdict names the client list it could not read — none may appear.
+    expect(stderr).not.toContain('client list');
   });
 });

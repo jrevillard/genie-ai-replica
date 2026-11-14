@@ -4379,15 +4379,27 @@ config:api-client:
     # The spec extraction executes only swagger-jsdoc (swagger-definition.js
     # and swagger-schemas.js have no npm requires of their own), so instead
     # of a full backend npm ci (~500 MB of runtime deps) install that one
-    # package at the version the backend pins, into a --omit=dev root
-    # install (a plain named install also reifies this repo's root
-    # package.json dev tree — Playwright included). Node resolves the
-    # require from the backend dir up to this root-level node_modules.
+    # package at the version the backend pins. The install runs in an
+    # ISOLATED prefix that carries no package.json, so npm resolves ONLY
+    # the named package — a named install against the project dir reads
+    # the root manifest and reifies its dev tree, and the root's floating
+    # @playwright/test range has already resolved a half-published release
+    # whose playwright-core was absent from the registry (#1561), failing
+    # the job on a registry state no manifest of this repo controls.
     - SWAGGER_JSDOC_VERSION=$(node -p "require('./components/gov-chat-backend/package.json').dependencies['swagger-jsdoc']")
     # node -p prints the literal "undefined" (exit 0) for a moved dependency,
     # so the guard must compare the string, not test emptiness.
     - '[ "$SWAGGER_JSDOC_VERSION" != "undefined" ] || { echo "swagger-jsdoc is no longer a production dependency of components/gov-chat-backend — the version pin cannot be resolved"; exit 1; }'
-    - npm install --omit=dev --no-save --no-package-lock --prefix ${CI_PROJECT_DIR} "swagger-jsdoc@${SWAGGER_JSDOC_VERSION}"
+    - npm install --no-save --no-package-lock --prefix ${CI_PROJECT_DIR}/.api-spec-tools "swagger-jsdoc@${SWAGGER_JSDOC_VERSION}"
+    # The extraction's require resolves by walking up from the backend dir
+    # to the project root's node_modules; the symlink puts the isolated
+    # copy on that path. Node resolves modules through the symlink's
+    # realpath, so the package's own dependencies resolve from the
+    # isolated prefix too — the walk-up never sees a second copy. The dir
+    # stays OUTSIDE the cached .openapi-tools/ (whose cache key carries
+    # the wrapper version only): a stale copy would serve a swagger-jsdoc
+    # version the backend no longer pins to the drift gate.
+    - mkdir -p ${CI_PROJECT_DIR}/node_modules && ln -sfn ${CI_PROJECT_DIR}/.api-spec-tools/node_modules/swagger-jsdoc ${CI_PROJECT_DIR}/node_modules/swagger-jsdoc
   script:
     - npm run api-client:check
   cache:

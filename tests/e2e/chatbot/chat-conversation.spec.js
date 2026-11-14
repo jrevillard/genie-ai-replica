@@ -4,8 +4,22 @@
 // and each one carries a mutation check recorded beside it.
 const { test, expect } = require('@playwright/test');
 const { openWelcomeScreen, contrastRatio } = require('../helpers/welcome');
-const { mockChatStream, sseBody, sseFulfill, ackFeedback, BOT_BUBBLE, NAV_STATUS, STREAM_ROUTE, STREAM_PATH } = require('../helpers/chatbot');
+const {
+  mockChatStream,
+  sseBody,
+  sseFulfill,
+  ackFeedback,
+  BOT_BUBBLE,
+  NAV_STATUS,
+  STREAM_ROUTE,
+  STREAM_PATH
+} = require('../helpers/chatbot');
 const { runPostOnlyRouteHandler, runRouteHandler } = require('../helpers/route');
+const {
+  stubQuickHelpConfiguration,
+  stubQuickHelpHierarchy,
+  CIVIL_REGISTRY_HIERARCHY
+} = require('../helpers/quick-help-stubs');
 const { QUICK_HELP_ITEM } = require('../helpers/layout');
 
 async function askAndAnswer(page, question) {
@@ -28,7 +42,9 @@ test.describe('Conversation V1', () => {
     // different action, not a fourth member of the row.
     const closeOutside = await page.evaluate(
       () =>
-        !document.querySelector('[data-testid="conversation-header-close"]').closest('[data-testid="conversation-header-actions"]')
+        !document
+          .querySelector('[data-testid="conversation-header-close"]')
+          .closest('[data-testid="conversation-header-actions"]')
     );
     expect(closeOutside, 'the close cross sits outside the save/export cluster').toBe(true);
     await page.locator('[data-testid="conversation-header-close"]').click();
@@ -50,7 +66,9 @@ test.describe('Conversation V1', () => {
     await expect
       .poll(
         () =>
-          page.evaluate(() => getComputedStyle(document.querySelector('[data-test-id="chatbot-container"]'), '::after').content),
+          page.evaluate(
+            () => getComputedStyle(document.querySelector('[data-test-id="chatbot-container"]'), '::after').content
+          ),
         { timeout: 5000 }
       )
       .not.toBe('none');
@@ -69,7 +87,9 @@ test.describe('Conversation V1', () => {
     await expect
       .poll(
         () =>
-          page.evaluate(() => getComputedStyle(document.querySelector('[data-test-id="chatbot-container"]'), '::after').bottom),
+          page.evaluate(
+            () => getComputedStyle(document.querySelector('[data-test-id="chatbot-container"]'), '::after').bottom
+          ),
         { timeout: 5000 }
       )
       .toBe(before.bottom);
@@ -101,9 +121,7 @@ test.describe('Conversation V1', () => {
     await page.evaluate(() => document.documentElement.setAttribute('data-visual', 'off'));
     // Layer-off re-renders through Vue — wait for the header box to
     // settle before reading all three boxes.
-    await expect
-      .poll(async () => (await boxes()).header, { timeout: 5000 })
-      .toEqual(on.header);
+    await expect.poll(async () => (await boxes()).header, { timeout: 5000 }).toEqual(on.header);
     const off = await boxes();
     expect(off.input, 'the composer box does not move with the layer off').toEqual(on.input);
     expect(off.window, 'the message window box does not move with the layer off').toEqual(on.window);
@@ -208,7 +226,10 @@ test.describe('Conversation — sources', () => {
       page.evaluate(() => {
         const s = document.querySelector('[data-testid="answer-sources"]');
         const cards = s.querySelectorAll('[data-testid^="answer-source-card-"]');
-        return { n: cards.length, open: getComputedStyle(s.querySelector('[data-testid="answer-sources-list"]')).display !== 'none' };
+        return {
+          n: cards.length,
+          open: getComputedStyle(s.querySelector('[data-testid="answer-sources-list"]')).display !== 'none'
+        };
       });
     const open = await state();
     expect(open.n, 'sources render as cards').toBeGreaterThan(0);
@@ -259,9 +280,7 @@ test.describe('Conversation — actions', () => {
     await expect(page.locator('[data-test-id="notification-success"]'), 'the rating confirms itself').toBeVisible();
     await page.locator('[data-testid="answer-copy"]').click();
     // The clipboard write trails the click — wait for the text to land.
-    await expect
-      .poll(() => page.evaluate(() => navigator.clipboard.readText()), { timeout: 5000 })
-      .not.toBe('');
+    await expect.poll(() => page.evaluate(() => navigator.clipboard.readText()), { timeout: 5000 }).not.toBe('');
     // The button acknowledges the copy with a check mark, then reverts.
     const copiedIcon = await page.evaluate(
       () => document.querySelector('[data-testid="answer-copy"] svg')?.getAttribute('class') || ''
@@ -475,7 +494,9 @@ test.describe('Conversation — answer card', () => {
     // The card exists immediately (the thinking frame), before the answer
     // text — the indicator itself is the arrival signal (the greeting card
     // would otherwise win the race).
-    await page.waitForSelector('[data-testid="chat-message-bot"] [data-testid="streaming-indicator"]', { timeout: 15000 });
+    await page.waitForSelector('[data-testid="chat-message-bot"] [data-testid="streaming-indicator"]', {
+      timeout: 15000
+    });
     const early = await page.evaluate(() => {
       const cards = document.querySelectorAll('[data-testid="answer-card"]');
       const card = cards[cards.length - 1];
@@ -518,10 +539,69 @@ test.describe('Conversation — surface invariants', () => {
   });
 
   // The header names the QuickHelp option that opened the chat.
+  //
+  // The option the click uses is the spec's OWN card: the configuration
+  // and the hierarchy are both served by this spec (the shared recipe in
+  // helpers/quick-help-stubs.js), because a venue's runtime config
+  // carries whatever its deployment seeded — the hardcoded 'Apply for
+  // ID' this test once assumed is a seed artifact, absent from the
+  // repo's own seed data, and the grid on a differently-seeded venue
+  // never renders it (#1826). The stubbed document keeps its own schema,
+  // so the frontend's Ajv validation still runs on it.
+  const HEADER_SCOPE_TITLE = 'Registry Help';
+  const HEADER_SCOPE_BUTTONS = [
+    {
+      // The composer entry is the signal that the configuration has been
+      // read and applied: the composer appears only after the config's
+      // buttons are known. The id is distinct from every deployment's
+      // own ids, so a card that leaks in from the real configuration can
+      // never be mistaken for one of these.
+      id: 'e2e-header-composer',
+      title: { en: 'Just Chat' },
+      icon: { type: 'file', value: '/config/quickhelp/just-chat.svg' },
+      category: null,
+      placement: 'composer',
+      styles: { backgroundColor: '#fff', hoverColor: '#eee', outlineColor: '#ccc' }
+    },
+    {
+      // The scoped card: its category names in the served hierarchy, so
+      // the card is healthy — the click installs the chip and opens the
+      // conversation titled with the card's own title.
+      id: 'e2e-header-scope',
+      title: { en: HEADER_SCOPE_TITLE },
+      icon: { type: 'file', value: '/config/quickhelp/identity-civil.svg' },
+      category: 'Civil Registry',
+      serviceLabels: ['Births'],
+      action: {
+        visibleText: { en: 'Tell me about births' },
+        hiddenPrompt: { en: 'Tell me about births' }
+      },
+      styles: { backgroundColor: '#fff', hoverColor: '#eee', outlineColor: '#ccc' }
+    }
+  ];
+  // The shared hierarchy fixture — the names the card's scope asserts
+  // against are the ones it carries.
+  const HEADER_SCOPE_HIERARCHY = CIVIL_REGISTRY_HIERARCHY;
+
   test('the header title reflects the QuickHelp option that opened the chat', async ({ browser }) => {
-    const { ctx, page } = await openWelcomeScreen(browser, { viewport: { width: 1440, height: 900 }, theme: 'light' });
-    await page.locator(QUICK_HELP_ITEM).filter({ hasText: 'Apply for ID' }).click();
-    await expect(page.locator('[data-testid="conversation-header-title"]')).toHaveText(/Apply for ID/i);
+    const { ctx, page } = await openWelcomeScreen(browser, {
+      viewport: { width: 1440, height: 900 },
+      theme: 'light',
+      // Both stubs are installed BEFORE the login, so the first chat
+      // mount already sees them.
+      setupPage: async (page) => {
+        await stubQuickHelpConfiguration(page, HEADER_SCOPE_BUTTONS);
+        await stubQuickHelpHierarchy(page, HEADER_SCOPE_HIERARCHY);
+      }
+    });
+    // The config has been read and applied — the grid can be clicked.
+    await page.waitForSelector('[data-testid="welcome-composer"]', { timeout: 15000 });
+    // The card's hidden prompt auto-sends: the answer is stubbed, so the
+    // turn completes locally instead of spending the venue's LLM on an
+    // invariant it has no part in.
+    await mockChatStream(page, ['Stubbed answer.']);
+    await page.locator(QUICK_HELP_ITEM).filter({ hasText: HEADER_SCOPE_TITLE }).click();
+    await expect(page.locator('[data-testid="conversation-header-title"]')).toHaveText(HEADER_SCOPE_TITLE);
     // The option is a knowledge domain — its chip is shown as context.
     expect(await page.locator('[data-testid="context-panel"]').count(), 'the domain chip is shown').toBe(1);
     await ctx.close();
@@ -551,7 +631,9 @@ test.describe('Conversation — surface invariants', () => {
     await page.locator('[data-testid="welcome-composer"] textarea').fill('What is GENIE.AI?');
     await page.locator('[data-testid="welcome-composer"] textarea').press('Enter');
     // Leave while the answer is still streaming.
-    await page.waitForSelector('[data-testid="chat-message-bot"] [data-testid="streaming-indicator"]', { timeout: 15000 });
+    await page.waitForSelector('[data-testid="chat-message-bot"] [data-testid="streaming-indicator"]', {
+      timeout: 15000
+    });
     // The Settings entry twice over (mobile + desktop nav); either
     // mounted instance is the one the click reaches.
     await page.locator('[data-test-id^="nav-icon-btn-settings"]').locator('visible=true').first().click();
@@ -578,9 +660,7 @@ test.describe('Conversation — surface invariants', () => {
     await page.waitForURL('**/dashboard', { timeout: 15000 });
     await page.waitForSelector(BOT_BUBBLE, { timeout: 30000 });
     await expect(page.locator('[data-testid="chat-message-user"]').last()).toContainText('What is GENIE.AI?');
-    await expect(page.locator(BOT_BUBBLE).last()).toContainText(
-      'The answer completes in the background.'
-    );
+    await expect(page.locator(BOT_BUBBLE).last()).toContainText('The answer completes in the background.');
     // The transcript must be the VIEW, not merely present in the DOM
     // behind the welcome overlay: the overlay covers the conversation.
     await expect(page.locator('[data-testid="quick-help-overlay"]')).toHaveCount(0);
@@ -602,7 +682,9 @@ test.describe('Conversation — surface invariants', () => {
     );
     await page.locator('[data-testid="welcome-composer"] textarea').fill('What is GENIE.AI?');
     await page.locator('[data-testid="welcome-composer"] textarea').press('Enter');
-    await page.waitForSelector('[data-testid="chat-message-bot"] [data-testid="streaming-indicator"]', { timeout: 15000 });
+    await page.waitForSelector('[data-testid="chat-message-bot"] [data-testid="streaming-indicator"]', {
+      timeout: 15000
+    });
     // The turn survives only through the persisted payload — wait for the
     // write, not for the render (the debounce trails the first frame).
     await page.waitForFunction(

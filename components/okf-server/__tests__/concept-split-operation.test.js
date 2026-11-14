@@ -120,9 +120,7 @@ describe('splitConcept — CAP-1: the lossless, ceiling-bounded split', () => {
     // deliberately not) with the document's OWN line ending they reproduce the
     // body exactly (the newline between parts is the document's, not an
     // addition).
-    const bodiesById = Object.fromEntries(
-      upsertConceptMeta.mock.calls.map((c) => [c[1].concept_id, c[1].body])
-    );
+    const bodiesById = Object.fromEntries(upsertConceptMeta.mock.calls.map((c) => [c[1].concept_id, c[1].body]));
     expect(result.parts.map((p) => bodiesById[p.concept_id]).join('\n')).toBe(BODY);
     const sum = result.parts.reduce((a, p) => a + p.chars, 0) + (result.parts.length - 1);
     expect(sum).toBe(BODY.length);

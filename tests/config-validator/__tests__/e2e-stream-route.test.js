@@ -62,6 +62,27 @@ const withContractTree = (endpoint, files) =>
     filesCarrying(tree, endpoint).map((f) => path.basename(f))
   );
 
+/** The call SITE the gate anchors on: the app's own stream client
+ * module — the file the gate's contract names as the authority on what
+ * the app calls. A bare existence check over the tree proved only that
+ * SOME file carried the endpoint, so a stale copy elsewhere satisfied
+ * the gate while the real client had drifted (#1809). The scan below
+ * therefore requires the endpoint to appear in EXACTLY the call site:
+ * a stale copy elsewhere, a second unwatched caller, and a client that
+ * drifted off the path are all the same red. The scan is the app's .js
+ * files (jsFiles); a caller in another extension is outside this scan —
+ * supporting one is a gate edit. */
+const CLIENT_RELATIVE = 'services/chatbotService.js';
+const CLIENT_MODULE = path.join(FRONTEND_SRC, CLIENT_RELATIVE);
+
+/**
+ * The endpoint as a PATTERN: the path must END there. A plain substring
+ * match is too loose — '/queries/stream' is a prefix of
+ * '/queries/streams', so an app that drifted to the longer path would
+ * still carry the short one and the anchor would stay green.
+ */
+const endpointPattern = (needle) => new RegExp(escapeRegExp(needle) + '(?![A-Za-z0-9_./-])');
+
 /** Is this file one of the app's tests? A fixture that kept the old
  * spelling would keep the anchor alive. */
 const isTestFile = (file) => {
@@ -73,47 +94,15 @@ const isTestFile = (file) => {
 };
 
 /**
- * The app's own files that carry the endpoint — the app's source is the
- * authority on what it calls — read from .js files only, so a frontend
- * that moved the call into another extension would red the gate,
- * loudly. Its test files are excluded: a fixture that kept the old
- * spelling would keep the anchor alive.
+ * The app's .js files that carry the endpoint — the same scan over the
+ * real frontend tree and a throwaway mutation tree (see filesCarrying).
  */
-/**
- * The endpoint as a PATTERN: the path must END there. A plain substring
- * match is too loose — '/queries/stream' is a prefix of
- * '/queries/streams', so an app that drifted to the longer path would
- * still carry the short one and the anchor would stay green.
- */
-const endpointPattern = (needle) => new RegExp(escapeRegExp(needle) + '(?![A-Za-z0-9_./-])');
-
 const appFilesCarrying = (needle, root) => {
   const pattern = endpointPattern(needle);
   return jsFiles(root)
     .filter((f) => !isTestFile(f))
     .filter((f) => pattern.test(stripJsComments(fs.readFileSync(f, 'utf8'))))
     .map((f) => path.relative(root, f));
-};
-
-/**
- * The FIRST app file that carries the endpoint, or null.
- *
- * The gate asks a yes/no question about the whole app tree (236 files),
- * and the list version answers it by reading and stripping EVERY file.
- * This stops at the first hit: the passing path pays for one file.
- *
- * The failure names no file — the list version named none either (the
- * list was EMPTY, which is the failure). What the gate proves is that
- * the app still calls the endpoint; what it does not prove is which
- * file calls it.
- */
-const firstFileCarrying = (needle, root) => {
-  const pattern = endpointPattern(needle);
-  for (const f of jsFiles(root)) {
-    if (isTestFile(f)) continue;
-    if (pattern.test(stripJsComments(fs.readFileSync(f, 'utf8')))) return path.relative(root, f);
-  }
-  return null;
 };
 
 /** Does this module require anything? */
@@ -127,32 +116,39 @@ describe('the e2e suite intercepts the stream endpoint through the shared consta
     expect(STREAM_PATH.length).toBeGreaterThan(1);
   });
 
-  test('the constant is the path the app calls', () => {
+  test('the call site is where the gate says it is', () => {
+    // The anchor names the app's stream client module; if the frontend
+    // moved the call, this fails NAMING the file it did not find — the
+    // anchor moves WITH the call, in this file, never silently.
+    if (!fs.existsSync(CLIENT_MODULE)) {
+      throw new Error(`the anchor's call site is missing: ${CLIENT_MODULE}`);
+    }
+  });
+
+  test('the constant is the path the app calls — from the call site, only', () => {
     // The e2e constant is the SUFFIX the app's stream client builds
     // (`${baseUrl}/queries/stream`) and the interception glob matches. If
     // the app's spelling changed and the constant did not, every stream
     // spec would silently stop intercepting and assert against the LIVE
     // backend — the #1271 failure this gate exists for.
-    // The app must call the endpoint the constant names. The predicate
-    // stops at the FIRST file that carries it, so the passing path reads
-    // one file instead of the whole app tree.
-    expect(firstFileCarrying(STREAM_PATH, FRONTEND_SRC)).not.toBe(null);
+    expect(appFilesCarrying(STREAM_PATH, FRONTEND_SRC)).toEqual([CLIENT_RELATIVE]);
   });
 
-  test('the anchor reads the APP, not the e2e tree', () => {
-    // The anchor's own rule: the app's client counts, its test files do
-    // not (a fixture that kept the old spelling would keep the anchor
-    // alive), and a tree that does not carry the path reports nothing.
+  test('a stale copy elsewhere does not satisfy the anchor', () => {
+    // The mutation the anchor exists to catch (#1809): the client moves
+    // off the endpoint AND a stale copy of the old path survives in
+    // another file — the set is then NOT the call site alone, and the
+    // equality above reds. (The scan inventing nothing is pinned by the
+    // real-tree equality, which reads exactly the call site, plus this
+    // tree, which reads exactly the stale file.)
     withTree(
-      'stream-anchor-gate-',
+      'stream-call-site-',
       {
-        'client.js': `const url = \`\${baseUrl}${STREAM_PATH}\`;\n`,
-        'client.spec.js': `const url = '${STREAM_PATH}';\n`,
-        'other.js': 'const url = 1;\n'
+        [CLIENT_RELATIVE]: 'const url = baseUrl + "/queries/stream-v2";\n',
+        'services/other.js': `const legacy = '${STREAM_PATH}';\n`
       },
       (tree) => {
-        expect(appFilesCarrying(STREAM_PATH, tree)).toEqual(['client.js']);
-        expect(appFilesCarrying('/nothing/carries/this', tree)).toEqual([]);
+        expect(appFilesCarrying(STREAM_PATH, tree)).toEqual(['services/other.js']);
       }
     );
   });

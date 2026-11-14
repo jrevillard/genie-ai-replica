@@ -35,8 +35,28 @@ function addressIn(configured) {
   return execFileSync(process.execPath, ['-e', script], {
     cwd: __dirname,
     env,
-    encoding: 'utf8',
+    encoding: 'utf8'
   }).trim();
+}
+
+/**
+ * The module's load failure for a configured address, or null when the
+ * module loads.
+ *
+ * The module refuses a non-origin address at load (#1805 — the why
+ * lives in the refusal message and the module header); the case runs
+ * the same way the address is read — in a child process, whose stderr
+ * carries the named cause. The refusal tests assert a fragment of THAT
+ * cause, so a module that fails to load at all cannot pass for a
+ * named refusal.
+ */
+function addressErrorIn(configured) {
+  try {
+    addressIn(configured);
+  } catch (e) {
+    return e.stderr ? e.stderr.toString() : e.message;
+  }
+  return null;
 }
 
 test.describe('the venue address has one spelling', () => {
@@ -55,5 +75,58 @@ test.describe('the venue address has one spelling', () => {
     const address = addressIn(undefined);
     expect(address.startsWith('https://')).toBe(true);
     expect(address.endsWith('/')).toBe(false);
+  });
+
+  test('the published value is the CANONICAL origin', () => {
+    // WHATWG-tolerated spellings must not publish a second name for the
+    // same venue: the module returns the parsed origin, not the raw
+    // string — one host casing, one slash count.
+    expect(addressIn('https://EXAMPLE.com:4443//')).toBe('https://example.com:4443');
+    expect(addressIn('https://example.com/')).toBe('https://example.com');
+  });
+});
+
+test.describe('the venue address must be an http(s) origin with a host', () => {
+  const REFUSAL = 'http(s) origin with a host';
+
+  test('an explicitly empty address is refused, not swallowed into the default', () => {
+    // UNSET falls back to the default; EMPTY is a misconfiguration —
+    // `||` would publish the default venue silently, and the run would
+    // read like a broken runner instead of naming the cause (#1805).
+    const error = addressErrorIn('');
+    expect(error).toContain('""');
+    expect(error).toContain(REFUSAL);
+  });
+
+  test('a scheme-less address is refused, naming the value', () => {
+    // `localhost:3000` parses with protocol `localhost:` and an EMPTY
+    // host — the case the refusal exists for.
+    const error = addressErrorIn('localhost:3000');
+    expect(error).not.toBe(null);
+    expect(error).toContain('localhost:3000');
+    expect(error).toContain(REFUSAL);
+  });
+
+  test('an unparseable address is refused', () => {
+    // Both spellings die in the same place: `new URL` throws.
+    expect(addressErrorIn('not a venue address')).toContain(REFUSAL);
+    expect(addressErrorIn('example.com')).toContain(REFUSAL);
+  });
+
+  test('a non-http scheme is refused', () => {
+    expect(addressErrorIn('ftp://example.com')).toContain(REFUSAL);
+  });
+
+  test('a path, a query, a hash and credentials are refused', () => {
+    // BASE_URL is the venue ORIGIN — the interpolation base every
+    // `${BASE_URL}/...` is built on; the refusal message owns the why.
+    expect(addressErrorIn('https://example.com:4443/k8s-path/')).toContain(REFUSAL);
+    expect(addressErrorIn('https://example.com:4443?x=1')).toContain(REFUSAL);
+    expect(addressErrorIn('https://example.com:4443#fragment')).toContain(REFUSAL);
+    expect(addressErrorIn('https://user@example.com:4443/')).toContain(REFUSAL);
+  });
+
+  test('an http origin still passes', () => {
+    expect(addressIn('http://example.com:8080/')).toBe('http://example.com:8080');
   });
 });

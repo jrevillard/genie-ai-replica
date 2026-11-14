@@ -27,17 +27,66 @@
  * paths must never be mixed in one file (tests/e2e/CLAUDE.md § Fixtures).
  * That is why the edge lives in its own module: every spec may require it,
  * whichever credential path it takes.
+ *
+ * The address must be an http(s) ORIGIN — scheme, host and port, and
+ * nothing else. A value that is not — a scheme-less address
+ * (`localhost:3000`), or one carrying a path, query, hash or
+ * credentials — is refused AT THE POINT IT IS READ, naming the value
+ * and the rule; the refusal message carries the full why, so every
+ * process that requires this module fails at load with the named
+ * cause — the pre-flight included, and a direct `npx playwright test`
+ * too, which never runs the pre-flight at all.
+ *
+ * What the module publishes is the PARSED origin — one canonical
+ * spelling — so WHATWG-tolerated spellings (`https:host:4443` without
+ * the slashes, an upper-cased host) cannot publish a second name for
+ * the same venue. An IPv6 literal passes this module, but the
+ * venue-origin gate does not watch that spelling yet (#1840).
  */
 /**
- * The venue address, normalized: the trailing slashes are stripped.
+ * The venue origin, canonical.
  *
  * @param {string} raw - the address as configured
- * @returns {string} the normalized address
+ * @returns {string} the canonical origin (scheme, host, port)
+ * @throws {Error} when the address is not an http(s) origin with a
+ *   host — see the module header; the message names the value
  */
 function normalizeVenue(raw) {
-  return String(raw || '').replace(/\/+$/, '');
+  const value = String(raw || '').replace(/\/+$/, '');
+  let parsed = null;
+  try {
+    parsed = new URL(value);
+  } catch {
+    // not a URL at all — the refusal below names the value
+  }
+  const isOrigin =
+    parsed &&
+    (parsed.protocol === 'http:' || parsed.protocol === 'https:') &&
+    parsed.hostname &&
+    parsed.pathname === '/' &&
+    !parsed.search &&
+    !parsed.hash &&
+    !parsed.username &&
+    !parsed.password;
+  if (!isOrigin) {
+    throw new Error(
+      `the venue address is not an http(s) origin with a host: ${JSON.stringify(String(raw))} — ` +
+        'a scheme-less value like "localhost:3000" parses with an EMPTY host, the venue mapping would ' +
+        'map an empty host, and the browser would navigate to an address that means nothing (#1805). ' +
+        'BASE_URL must be the venue ORIGIN — scheme, host and port only; no path, query, hash or ' +
+        'credentials (e.g. "https://genieai-forge.local:4443").'
+    );
+  }
+  return parsed.origin;
 }
 
-const BASE_URL = normalizeVenue(process.env.BASE_URL || 'https://localhost');
+// UNSET means the default venue; an explicitly EMPTY address is a
+// misconfiguration and is refused like any other non-origin value —
+// `||` would swallow it into the default silently, which is exactly
+// the #1805 diagnostic class (a run against the wrong venue reads
+// like a broken runner). The run script maps blank to the default
+// itself (`${BASE_URL:-…}`), so the module only sees '' on a direct
+// run — the path with no other named-cause check.
+const BASE_URL = normalizeVenue(process.env.BASE_URL === undefined ? 'https://localhost' : process.env.BASE_URL);
 
 module.exports = { BASE_URL };

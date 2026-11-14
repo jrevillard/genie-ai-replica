@@ -23,11 +23,21 @@
 #                            from when the credentials are auto-read
 #                            (default: genieai).
 #   E2E_FILE_ISSUES          0 reports the failures without filing issues.
+#   ROPC_POSTURE_REALM       the realm the post-run posture gate checks
+#                            (default: genie). Set IN TANDEM with
+#                            ROPC_POSTURE_CLIENT when a script flipped a
+#                            non-default pair (e.g. the anchor wrapper's
+#                            EVAL_KC_REALM/EVAL_KC_CLIENT_ID).
+#   ROPC_POSTURE_CLIENT      the client the post-run posture gate checks
+#                            (default: genie-app).
 #
 # The run ends with the failure path: a red run files one status::backlog
 # issue per failing spec file (tests/e2e/run/file-failure-issues.js), and the
 # run's outcome — counts, skipped specs with their reasons, failures — is
-# printed whether the suite is green or red.
+# printed whether the suite is green or red. After the suite the post-run
+# ROPC posture gate records its verdict, the failure path files a red
+# run's issues, and a widened venue is the run's exit (5) — the gate's
+# word is the LAST word, whatever the specs said.
 
 set -euo pipefail
 
@@ -169,10 +179,13 @@ PLAYWRIGHT_STATUS=$?
 set -e
 
 # --- the outcome, and the failure path ---------------------------------------
-# The report moves to a per-run name before it is read: any later
-# Playwright invocation in this checkout (`--list`, a single spec) writes
-# the fixed path again, and the failure path must file from the report of
-# THIS run.
+# The report moves to a per-run name BEFORE anything else reads or fails:
+# any later Playwright invocation in this checkout (`--list`, a single
+# spec) writes the fixed path again, and every consumer — the failure
+# path and the gate's own filing recipe — must work from the report of
+# THIS run. A posture-violating run exits 5 after the
+# failure path has filed what it could; the per-run file (not the fixed
+# path the next run would clear) is what everything names.
 RUN_REPORT="reports/playwright-report-run-$(date -u +%Y%m%dT%H%M%SZ).json"
 if [ -f reports/playwright-report.json ]; then
   mv reports/playwright-report.json "$RUN_REPORT"
@@ -187,6 +200,28 @@ else
   exit 4
 fi
 
+# --- the post-run ROPC posture gate (#1727) ---------------------------------
+# The venue's auth posture is part of this run's outcome: a run that leaves
+# genie/genie-app accepting password grants fails the RUN even when every
+# spec was green. The gate RECORDS its verdict here; the failure path runs
+# next (a red run files its issues whatever the posture said); the gate's
+# exit 5 is the exit's last word. One exception sits ABOVE it: a run
+# crashed too hard to write a report exits 4 before the gate — its venue
+# state persists, so the NEXT run's gate catches any leftover.
+# The assertion is the helper's own (single home); the gate is this run's
+# obligation because this run books the venue. Exit 5 is this gate's own
+# code — 3 is venue-lock contention, and a posture violation must not read
+# as a transient contention retry.
+echo "post-run ROPC posture gate"
+GATE_STATUS=0
+if ! node "$REPO_ROOT/tests/e2e/run/check-ropc-posture.js"; then
+  GATE_STATUS=5
+fi
+
+# The failure path runs BEFORE the gate's verdict becomes the exit: a red
+# run files its failures whatever the posture said — two obligations, and
+# neither drops the other (the gate's verdict is the LAST word: its exit
+# code wins below).
 FILE_FLAG="--file-issues"
 if [ "${E2E_FILE_ISSUES:-1}" = "0" ]; then
   FILE_FLAG=""
@@ -195,6 +230,27 @@ set +e
 node tests/e2e/run/file-failure-issues.js --report "$RUN_REPORT" --venue "$BASE_URL" ${FILE_FLAG}
 REPORT_STATUS=$?
 set -e
+
+if [ "$GATE_STATUS" -ne 0 ]; then
+  echo
+  echo "ERROR: the post-run ROPC posture gate FAILED — its own output above names the real cause" >&2
+  echo "       (a widened auth surface is one of them; a broken gate or venue is another)." >&2
+  if [ "$PLAYWRIGHT_STATUS" -ne 0 ]; then
+    # REPORT_STATUS=0 means the failure path PROCESSED the report; in
+    # report-only mode (E2E_FILE_ISSUES=0) it exits 0 having filed
+    # nothing — the mode decides which truth the banner states.
+    if [ "${E2E_FILE_ISSUES:-1}" = "0" ]; then
+      echo "       this run is ALSO RED (playwright exit $PLAYWRIGHT_STATUS); reported but NOT filed (E2E_FILE_ISSUES=0) — file it with:" >&2
+      echo "       node tests/e2e/run/file-failure-issues.js --report $RUN_REPORT --venue $BASE_URL --file-issues" >&2
+    elif [ "$REPORT_STATUS" -eq 0 ]; then
+      echo "       this run is ALSO RED (playwright exit $PLAYWRIGHT_STATUS); its failures were filed by the failure path above." >&2
+    else
+      echo "       this run is ALSO RED (playwright exit $PLAYWRIGHT_STATUS); its evidence is preserved at $RUN_REPORT — file it with:" >&2
+      echo "       node tests/e2e/run/file-failure-issues.js --report $RUN_REPORT --venue $BASE_URL --file-issues" >&2
+    fi
+  fi
+  exit 5
+fi
 
 if [ "$PLAYWRIGHT_STATUS" -ne 0 ] && [ "$REPORT_STATUS" -ne 0 ]; then
   echo

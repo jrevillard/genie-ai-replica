@@ -19,6 +19,22 @@
 const { runRouteHandler } = require('./route');
 
 /**
+ * The hierarchy both Quick Help specs serve: one category ('Civil
+ * Registry', naming itself in ENGLISH — the spelling a configuration
+ * writes) carrying the 'Births' label the scoped cards declare. The two
+ * specs' fixtures assert against the same names, so the tree lives here
+ * beside the stubs that serve it rather than as two synchronized copies.
+ */
+const CIVIL_REGISTRY_HIERARCHY = [
+  {
+    catKey: '2',
+    name: 'Civil Registry',
+    nameEN: 'Civil Registry',
+    children: [{ name: 'Births', nameEN: 'Births' }]
+  }
+];
+
+/**
  * Serves the configuration, with the Quick Help cards replaced by [buttons]
  * — the spec's own. The rest of the served document — including its own
  * schema — is the deployment's, untouched.
@@ -64,4 +80,8 @@ async function stubQuickHelpHierarchy(page, hierarchy, gate = null) {
   );
 }
 
-module.exports = { stubQuickHelpConfiguration, stubQuickHelpHierarchy };
+module.exports = {
+  stubQuickHelpConfiguration,
+  stubQuickHelpHierarchy,
+  CIVIL_REGISTRY_HIERARCHY
+};

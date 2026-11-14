@@ -15,7 +15,11 @@ const {
   STREAM_PATH
 } = require('../helpers/chatbot');
 const { runPostOnlyRouteHandler, runRouteHandler } = require('../helpers/route');
-const { stubQuickHelpConfiguration, stubQuickHelpHierarchy } = require('../helpers/quick-help-stubs');
+const {
+  stubQuickHelpConfiguration,
+  stubQuickHelpHierarchy,
+  CIVIL_REGISTRY_HIERARCHY
+} = require('../helpers/quick-help-stubs');
 const { QUICK_HELP_ITEM } = require('../helpers/layout');
 
 async function askAndAnswer(page, question) {
@@ -575,14 +579,9 @@ test.describe('Conversation — surface invariants', () => {
       styles: { backgroundColor: '#fff', hoverColor: '#eee', outlineColor: '#ccc' }
     }
   ];
-  const HEADER_SCOPE_HIERARCHY = [
-    {
-      catKey: '2',
-      name: 'Civil Registry',
-      nameEN: 'Civil Registry',
-      children: [{ name: 'Births', nameEN: 'Births' }]
-    }
-  ];
+  // The shared hierarchy fixture — the names the card's scope asserts
+  // against are the ones it carries.
+  const HEADER_SCOPE_HIERARCHY = CIVIL_REGISTRY_HIERARCHY;
 
   test('the header title reflects the QuickHelp option that opened the chat', async ({ browser }) => {
     const { ctx, page } = await openWelcomeScreen(browser, {
@@ -600,12 +599,7 @@ test.describe('Conversation — surface invariants', () => {
     // The card's hidden prompt auto-sends: the answer is stubbed, so the
     // turn completes locally instead of spending the venue's LLM on an
     // invariant it has no part in.
-    await page.route(
-      STREAM_ROUTE,
-      runPostOnlyRouteHandler(page, async (route) => {
-        await sseFulfill(route, sseBody(['Stubbed answer.']));
-      })
-    );
+    await mockChatStream(page, ['Stubbed answer.']);
     await page.locator(QUICK_HELP_ITEM).filter({ hasText: HEADER_SCOPE_TITLE }).click();
     await expect(page.locator('[data-testid="conversation-header-title"]')).toHaveText(HEADER_SCOPE_TITLE);
     // The option is a knowledge domain — its chip is shown as context.

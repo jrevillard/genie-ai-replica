@@ -278,17 +278,23 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
     _ensureEnTree();
     _titleController.text = _conversationTitle;
 
-    _messages.add({
-      // The bubble test handle's discriminator (message-bubble-bot-welcome):
-      // at most one welcome bubble exists at a time.
-      'id': 'welcome',
-      'role': 'assistant',
-      'content': _welcomeMessage,
-      'timestamp': DateTime.now().toIso8601String(),
-      'isSaved': true,
-    });
+    _messages.add(_buildWelcomeMessage());
     _lastSavedMessageCount = 1;
   }
+
+  /// The transcript's opening bubble. ONE literal for both add sites (the
+  /// state's init and the reset path): the bubble test handle's
+  /// discriminator (message-bubble-bot-welcome) rides on the id, and a
+  /// field added at one site only would silently drop the handle at the
+  /// other. At most one welcome bubble exists at a time, so the id stays
+  /// stable across resets.
+  Map<String, dynamic> _buildWelcomeMessage() => {
+    'id': 'welcome',
+    'role': 'assistant',
+    'content': _welcomeMessage,
+    'timestamp': DateTime.now().toIso8601String(),
+    'isSaved': true,
+  };
 
   @override
   void dispose() {
@@ -1069,16 +1075,7 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
     widget.onRelatedDocumentsUpdate([]);
     _inputController.clear();
 
-    _messages.add({
-      // The bubble test handle's discriminator (message-bubble-bot-welcome):
-      // the reset replaces the transcript, so at most one welcome bubble
-      // exists at a time and the id stays stable across resets.
-      'id': 'welcome',
-      'role': 'assistant',
-      'content': _welcomeMessage,
-      'timestamp': DateTime.now().toIso8601String(),
-      'isSaved': true,
-    });
+    _messages.add(_buildWelcomeMessage());
     _lastSavedMessageCount = 1;
     _updateQuickHelpVisibility();
   }
@@ -1215,6 +1212,8 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
     // this one.
     bool answerTranslationFailed = false;
 
+    // The millisecond alone suffices (no send counter needed): only one
+    // streaming placeholder exists at a time and it mutates in place.
     final String streamingId =
         'stream_${DateTime.now().millisecondsSinceEpoch}';
     setState(() {
@@ -1472,6 +1471,8 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
         // path already treats a missing queryId as a recognized state).
         'id':
             response['queryId'] ??
+            // No send counter (unlike the user id): the awaited round
+            // trip serializes the adds, so two cannot share a millisecond.
             'assistant_${DateTime.now().millisecondsSinceEpoch}',
         'queryId': response['queryId'],
         'role': 'assistant',

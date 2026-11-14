@@ -13,6 +13,12 @@ const path = require('path');
  * deliberate sibling copy (`SPEC_FILE_RE` in run/file-failure-issues.js)
  * — sharing the constant would invert the dependency direction; if one
  * changes, change both.
+ *
+ * The shape mirrors Playwright's default testMatch
+ * `*.(spec|test).?(c|m)[jt]s?(x)` for the installed runner generation; the
+ * config-validation suite pins the installed Playwright to the verified
+ * range (#1392, #1511), so a bump past it forces a conscious re-check of
+ * this spelling against the new default.
  */
 const SPEC_FILE_RE = /\.(?:spec|test)\.[cm]?[jt]sx?$/;
 

@@ -29,8 +29,10 @@ module.exports = [
   {
     // Node + browser runtime: the suite and helpers — the evaluate bodies
     // are inline in the same file, so both pools apply (see the boundary
-    // note above).
-    files: ['**/*.js'],
+    // note above). The glob carries .mjs/.cjs too (#1821): an ESM or CJS
+    // file landing in the tree must take the merged pool, not probe browser
+    // globals against no-undef alone.
+    files: ['**/*.js', '**/*.mjs', '**/*.cjs'],
     // The suite's own Playwright config at the repository ROOT runs in Node
     // only: a browser global there is a ReferenceError at config load, so
     // it takes the Node-only entry below instead of this one (#1716).

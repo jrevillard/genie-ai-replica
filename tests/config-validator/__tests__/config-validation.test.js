@@ -82,6 +82,12 @@ const TESTS_E2E_ROOT = 'tests/e2e';
 // executed set never narrower than the runner's. The `g` flag the runner
 // adds is dead weight for a boolean .test and carries a lastIndex trap on
 // a precompiled regex — 'i' alone matches identically.
+//
+// This mirror — and the default-testMatch shape EXECUTED_SPEC_RE spells —
+// was verified against the runner's 1.51 source (#1511) and is pinned to
+// that range by the installed-version pin in the scan-target selection
+// units (#1392): a bump past the range fails there, forcing a conscious
+// re-verification of both mirrors against the new runner.
 const scanTargets = (files, executedGlobs) => {
   const matchers = executedGlobs.map((entry) => new RegExp(entry.replace(/\/\*\*\/\*$/, '/'), 'i'));
   return files.filter((f) => EXECUTED_SPEC_RE.test(f)).filter((f) => matchers.some((re) => re.test(f)));
@@ -2581,8 +2587,10 @@ describe('e2e merge-train changes filters (#1264)', () => {
     // `, 'segment'` pairs. A join carrying a non-literal argument is not
     // matched at all (the detector below gates it); an inline comment
     // inside the call likewise. Chains anchored on __filename or
-    // import.meta.url are not derived — no spec uses them; they belong to
-    // the same documented-limits family.
+    // import.meta.url are not derived — no spec uses them; the detector
+    // below fails loudly on an identifier-anchored join that carries no
+    // same-file __dirname const initializer (#1393), so introducing one is
+    // a deliberate change, never a silent coverage loss.
     const joinRe = new RegExp(
       'path\\.(?:join|resolve)' +
         GAP_SRC +
@@ -2672,6 +2680,43 @@ describe('e2e merge-train changes filters (#1264)', () => {
   // anchors the end, so `require('../x' + y)` cannot pass as a literal
   // prefix match.
   const LITERAL_ARG = new RegExp('^\\s*(' + LIT_SRC + ')\\s*\\)');
+  // A join anchored on a bare identifier (#1393) — `path.join(FIXTURES_DIR,
+  // 'x')` — matches neither the derivation (its joinRe is __dirname-anchored)
+  // nor the __dirname checks above, so a constant hoisted out of the walked
+  // tree (defined from an env value, or imported from another module) would
+  // let the directory's glob silently leave the anchor. Policy: the anchor
+  // must resolve, in the SAME file, to a __dirname-rooted chain — a
+  // `const NAME = path.join(__dirname, ...)` initializer, itself possibly
+  // built on an earlier such const (resolved transitively, cycle-guarded).
+  // A resolvable anchor is quiet: its directory glob is already derived
+  // through the initializer's own __dirname join, and computed segments
+  // beneath that contained base stay covered by the glob (an out-of-tree
+  // resolve is dropped by the containment seam, the same as the
+  // initializer's). An anchor that resolves to nothing same-file is a
+  // finding — the hoist must be a deliberate test change, like every other
+  // non-literal shape.
+  const resolveConstAnchor = (source, name) => {
+    const seen = new Set();
+    let current = name;
+    while (current && !seen.has(current)) {
+      seen.add(current);
+      const initRe = new RegExp(
+        '\\bconst\\s+' +
+          current +
+          '\\s*=\\s*path\\.(?:join|resolve)' +
+          GAP_SRC +
+          '\\(' +
+          GAP_SRC +
+          '(__dirname|[A-Za-z_$][\\w$]*)'
+      );
+      const match = initRe.exec(source);
+      if (!match) return false;
+      current = match[1] === '__dirname' ? null : match[1];
+    }
+    // The loop exits with current === null only through __dirname; a cycle
+    // or a resolution that never lands on __dirname leaves it set.
+    return current === null;
+  };
   const findNonLiteralConsumption = (source) => {
     const findings = [];
     const interpolated = (literal) => literal.startsWith('`') && literal.includes('${');
@@ -2698,6 +2743,20 @@ describe('e2e merge-train changes filters (#1264)', () => {
         rest = rest.slice(segment[0].length);
       }
       if (!/^\s*\)/.test(rest)) findings.push('non-literal segment in a path.join(__dirname, ...) call');
+    }
+    // Variable-anchored joins (#1393): any path.join/resolve whose FIRST
+    // argument is a bare identifier must carry a same-file __dirname-rooted
+    // const initializer (see resolveConstAnchor). __dirname itself belongs
+    // to the family above; a string-literal anchor matches nothing here and
+    // stays outside this policy.
+    const identAnchorRe = new RegExp(
+      'path\\.(?:join|resolve)' + GAP_SRC + '\\(' + GAP_SRC + '([A-Za-z_$][\\w$]*)',
+      'g'
+    );
+    for (const match of source.matchAll(identAnchorRe)) {
+      if (match[1] === '__dirname') continue;
+      if (resolveConstAnchor(source, match[1])) continue;
+      findings.push('join anchored on an identifier without a same-file __dirname initializer');
     }
     return findings;
   };
@@ -2788,6 +2847,66 @@ describe('e2e merge-train changes filters (#1264)', () => {
     expect(findings).toEqual([]);
   });
 
+  // Synthetic units for the variable-anchor policy (#1393): the real-tree
+  // gate above proves absence, not detection — these pin the resolver's
+  // accept and reject sides on sources that cannot exist on the tree.
+  const UNRESOLVABLE = 'join anchored on an identifier without a same-file __dirname initializer';
+  describe('variable-anchored joins (#1393)', () => {
+    test('a same-file __dirname-rooted const anchor is accepted', () => {
+      expect(
+        findNonLiteralConsumption(
+          [
+            "const FIXTURES_DIR = path.join(__dirname, '..', 'fixtures');",
+            'upload(page, path.join(FIXTURES_DIR, name));'
+          ].join('\n')
+        )
+      ).toEqual([]);
+    });
+
+    test('an anchor chained on another same-file const resolves', () => {
+      expect(
+        findNonLiteralConsumption(
+          [
+            "const ROOT_DIR = path.join(__dirname, '..');",
+            "const FIXTURES_DIR = path.join(ROOT_DIR, 'fixtures');",
+            'upload(page, path.join(FIXTURES_DIR, name));'
+          ].join('\n')
+        )
+      ).toEqual([]);
+    });
+
+    test.each([
+      [
+        'an env-anchored constant',
+        ["const OUT_DIR = path.join(process.env.OUT_DIR, 'shots');", 'write(path.join(OUT_DIR, name), data);']
+      ],
+      [
+        'an imported constant',
+        ["const { FIXTURES_DIR } = require('../helpers/paths');", 'upload(page, path.join(FIXTURES_DIR, name));']
+      ],
+      ['a bare unbound identifier', ['write(path.join(SOME_DIR, name), data);']]
+    ])('%s is a finding', (_label, lines) => {
+      // The wording is not the contract; every flagged call anchors on the
+      // same unresolved family. The env case yields two — the
+      // initializer's own call anchors on `process`, unresolvable too.
+      const findings = findNonLiteralConsumption(lines.join('\n'));
+      expect(findings.length).toBeGreaterThan(0);
+      expect(new Set(findings)).toEqual(new Set([UNRESOLVABLE]));
+    });
+
+    test('a cyclic anchor chain fails every call it anchors', () => {
+      const findings = findNonLiteralConsumption(
+        ['const A = path.join(B, x);', 'const B = path.join(A, y);', 'write(path.join(A, name), data);'].join('\n')
+      );
+      expect(findings).toHaveLength(3);
+      expect(new Set(findings)).toEqual(new Set([UNRESOLVABLE]));
+    });
+
+    test('__dirname anchors stay with the existing family, not this one', () => {
+      expect(findNonLiteralConsumption("write(path.join(__dirname, 'x'), data);")).toEqual([]);
+    });
+  });
+
   // The derivation assumes Playwright's default testMatch (which shapes
   // execute) and relies on testDir pointing at the tree the invocation
   // targets. If the config ever pins its own testMatch or moves testDir,
@@ -2875,6 +2994,32 @@ describe('e2e merge-train changes filters (#1264)', () => {
       expect(scanTargets(['tests/e2e/helpers/tests/e2e/chatbot/x.spec.js'], GLOBS)).toEqual([
         'tests/e2e/helpers/tests/e2e/chatbot/x.spec.js'
       ]);
+    });
+
+    // The runner-version floor and ceiling the mirrors assume (#1511,
+    // #1392). scanTargets mirrors the runner's forceRegExp arg matching and
+    // EXECUTED_SPEC_RE mirrors Playwright's default testMatch shape; both
+    // were verified against the 1.51 runner source. A MAJOR bump may change
+    // either silently — the config pin above asserts only that no explicit
+    // testMatch overrides the default, so a CHANGED default passes it — and
+    // a Playwright upgrade is the one drift vector that moves the runner
+    // under both mirrors at once. The installed version is therefore pinned
+    // to the range the mirrors were verified against: crossing it fails
+    // here and forces a conscious re-verification. Read from the committed
+    // lockfile — this suite must stay dependency-free (the config:validate
+    // job installs only this component's node_modules), so the range check
+    // is spelled by hand.
+    test('the installed Playwright is inside the range the mirrors were verified against', () => {
+      const lock = JSON.parse(fs.readFileSync(path.join(ROOT, 'package-lock.json'), 'utf-8'));
+      const entry = lock.packages && lock.packages['node_modules/@playwright/test'];
+      // A missing entry would make the range checks below vacuous — the
+      // pin fails on the relocation itself instead of passing on nothing.
+      expect(entry).toBeDefined();
+      const version = entry.version;
+      expect(version).toMatch(/^\d+\.\d+\.\d+$/);
+      const [major, minor] = version.split('.').map(Number);
+      expect(major).toBe(1);
+      expect(minor).toBeGreaterThanOrEqual(51);
     });
   });
 
@@ -3174,6 +3319,9 @@ describe('e2e merge-train changes filters (#1264)', () => {
       ['block comment inside a require call', 'const h = require /* note */ (dynamicName);'],
       ['interpolated backtick join segment', 'const d = path.join(__dirname, `../${locale}`);'],
       ['call argument after a literal join segment', "const d = path.join(__dirname, '..', dirName());"],
+      // Variable-anchored joins moved to the flagged family in #1393: an
+      // anchor with no same-file __dirname initializer is a finding.
+      ['join on a variable anchor', 'const f = path.join(FIXTURES_DIR, fileName);'],
       // Over-capture is deliberate: a string merely mentioning a call shape
       // reads as consumption — loud is the safe direction for a trigger guard.
       ['string mentioning a require call', "const s = 'call require(x) later';"]
@@ -3187,7 +3335,6 @@ describe('e2e merge-train changes filters (#1264)', () => {
       ['package require', "const p = require('@playwright/test');"],
       ['backtick require without interpolation', 'const h = require(`../helpers/auth`);'],
       ['literal join', "const d = path.join(__dirname, '..', 'fixtures');"],
-      ['join on a variable anchor', 'const f = path.join(FIXTURES_DIR, fileName);'],
       ['require with a paren inside the literal', "const h = require('./a(1)b.js');"],
       ['join with a paren inside a literal segment', "const d = path.join(__dirname, 'doc(v2)');"],
       ['apostrophe inside a double-quoted require', 'const h = require("./user\'s-data.js");'],
@@ -4460,7 +4607,7 @@ describe('the root Playwright config has a lint home (#1716)', () => {
       .map((line) => line.replace(/\/\/.*$/, ''))
       .join('\n')
       .replace(/\s+/g, '');
-    const scopedExclusion = "files:['**/*.js'],ignores:['playwright.config.js'],";
+    const scopedExclusion = "files:['**/*.js','**/*.mjs','**/*.cjs'],ignores:['playwright.config.js'],";
     expect(source).toContain(scopedExclusion);
     expect(source).toContain("files:['playwright.config.js'],");
     expect(source.match(/globals\.browser/g) || []).toHaveLength(1);
@@ -4539,19 +4686,33 @@ describe('the root Playwright config has a lint home (#1716)', () => {
   // gate regression.
   test('the gate actually fires on an undeclared global (behavioral control)', () => {
     // The string pins assert configuration; this probe asserts the
-    // OUTCOME with the real binary: a copy of the root config carrying an
-    // undeclared browser global must exit 1 with no-undef. It dies if
-    // js.configs.recommended is removed or stubbed, if no-undef is
-    // turned off anywhere, or if the Node-only entry's globals are
-    // re-scoped (by aliased spread or by hand-spelled keys) — the whole
-    // evasion class the string pins enumerate one shape at a time.
+    // OUTCOME with the real binary: a file the Node-only entry covers
+    // must fail no-undef on the browser globals it does not declare.
+    // The probe file is the probe line ONLY — a copy of the real root
+    // config would carry CommonJS globals whose undeclared names fire
+    // no-undef for the WRONG reason, masking the probed names (measured
+    // in #1824's mutation: a hand-spelled entry that replaced the Node
+    // spread with browser keys exited 1 on `require`, not on the probe).
+    // It names all THREE browser globals of the pinned spread (window,
+    // document, getComputedStyle — #1824), so a hand-spelled re-scope
+    // that covers all of them resolves the line, exits 0, and fails this
+    // probe — the issue's exact evasion shape is caught, not silently
+    // green. A spelling omitting a probed name still fires here (loud)
+    // while the hole it opens stays sampled only on the probed names —
+    // the boundary the issue records as the occurrence-pin philosophy's
+    // own.
+    // It dies if js.configs.recommended is removed or stubbed, if no-undef
+    // is turned off anywhere, or if the probed browser globals are
+    // hand-declared in the Node-only entry.
     // cwd = the probe dir: ESLint anchors entries to the invocation's
     // cwd, so a file named playwright.config.js there takes the
     // Node-only entry — the exact runtime shape of the root config.
     const probe = fs.mkdtempSync(path.join(os.tmpdir(), 'gate-probe-'));
     probeDirs.push(probe);
-    const rootConfig = fs.readFileSync(path.join(ROOT, 'playwright.config.js'), 'utf-8');
-    fs.writeFileSync(path.join(probe, 'playwright.config.js'), rootConfig + '\nconst probeGlobal = window.location;\n');
+    fs.writeFileSync(
+      path.join(probe, 'playwright.config.js'),
+      'const probeGlobal = [window.location, document.title, getComputedStyle(document.body)];\n'
+    );
     let failure;
     try {
       execFileSync(

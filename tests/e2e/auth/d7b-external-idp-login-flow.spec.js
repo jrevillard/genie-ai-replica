@@ -155,7 +155,9 @@ test('completes full external IdP brokered login flow', async ({ browser }) => {
         throw error;
       }
     }
-    let disabledHere = false;
+    // No disabledHere flag: a failed disable throws BEFORE the try below is
+    // entered, so the finally only ever runs with the disable either done or
+    // not owed — the observed pre-test state itself is the restore's gate.
     if (preTestAction && preTestAction.enabled) {
       const disableRes = await apiContext.put(
         requiredActionUrl,
@@ -172,7 +174,6 @@ test('completes full external IdP brokered login flow', async ({ browser }) => {
         error.isPassThrough = true;
         throw error;
       }
-      disabledHere = true;
     }
 
     try {
@@ -226,7 +227,7 @@ test('completes full external IdP brokered login flow', async ({ browser }) => {
       // even when the restore fails: a ThrowStatement inside a finally
       // block supersedes the flow's own pending result, so the restore
       // verdict is recorded and raised after the block instead.
-      if (disabledHere) {
+      if (preTestAction && preTestAction.enabled) {
         let restoreStatus = null;
         try {
           const restoreRes = await apiContext.put(
@@ -248,7 +249,7 @@ test('completes full external IdP brokered login flow', async ({ browser }) => {
         }
         if (restoreStatus !== null) {
           restoreFailure =
-            `VERIFY_EMAIL restore failed — the genie realm does not carry VERIFY_EMAIL in its ` +
+            `VERIFY_EMAIL restore failed — the realm does not carry VERIFY_EMAIL in its ` +
             `pre-test state (registered=${Boolean(preTestAction)}, enabled=${Boolean(preTestAction && preTestAction.enabled)}), ` +
             `so brokered users keep skipping email verification. Restore error: ${restoreStatus}`;
         }

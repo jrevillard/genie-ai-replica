@@ -71,10 +71,10 @@ test.describe("getAdminToken's no-access_token verdict", () => {
     auth.request = realRequest;
     // Both env inputs are restored: workers=1 means every later spec file
     // in this process inherits what this describe leaves behind.
-    if (saved.ADMIN_TOKEN === undefined) delete process.env.ADMIN_TOKEN;
-    else process.env.ADMIN_TOKEN = saved.ADMIN_TOKEN;
-    if (saved.KEYCLOAK_ADMIN_PASSWORD === undefined) delete process.env.KEYCLOAK_ADMIN_PASSWORD;
-    else process.env.KEYCLOAK_ADMIN_PASSWORD = saved.KEYCLOAK_ADMIN_PASSWORD;
+    for (const name of ['ADMIN_TOKEN', 'KEYCLOAK_ADMIN_PASSWORD']) {
+      if (saved[name] === undefined) delete process.env[name];
+      else process.env[name] = saved[name];
+    }
   });
 
   test('a 200 with an empty body names the missing access_token', async () => {

@@ -212,14 +212,15 @@ fi
 # code — 3 is venue-lock contention, and a posture violation must not read
 # as a transient contention retry.
 echo "post-run ROPC posture gate"
+GATE_STATUS=0
 if ! node "$REPO_ROOT/tests/e2e/run/check-ropc-posture.js"; then
-  echo "ERROR: the post-run ROPC posture gate FAILED — its own output above names the real cause" >&2
-  echo "       (a widened auth surface is one of them; a broken gate or venue is another)." >&2
-  echo "       this run's red-run evidence is preserved at $RUN_REPORT — file it with:" >&2
-  echo "       node tests/e2e/run/file-failure-issues.js --report $RUN_REPORT --venue $BASE_URL --file-issues" >&2
-  exit 5
+  GATE_STATUS=5
 fi
 
+# The failure path runs BEFORE the gate's verdict becomes the exit: a red
+# run files its failures whatever the posture said — two obligations, and
+# neither drops the other (the gate's verdict is the LAST word: its exit
+# code wins below).
 FILE_FLAG="--file-issues"
 if [ "${E2E_FILE_ISSUES:-1}" = "0" ]; then
   FILE_FLAG=""
@@ -228,6 +229,17 @@ set +e
 node tests/e2e/run/file-failure-issues.js --report "$RUN_REPORT" --venue "$BASE_URL" ${FILE_FLAG}
 REPORT_STATUS=$?
 set -e
+
+if [ "$GATE_STATUS" -ne 0 ]; then
+  echo
+  echo "ERROR: the post-run ROPC posture gate FAILED — its own output above names the real cause" >&2
+  echo "       (a widened auth surface is one of them; a broken gate or venue is another)." >&2
+  if [ "$PLAYWRIGHT_STATUS" -ne 0 ]; then
+    echo "       this run is ALSO RED (playwright exit $PLAYWRIGHT_STATUS); its evidence is preserved at $RUN_REPORT — file it with:" >&2
+    echo "       node tests/e2e/run/file-failure-issues.js --report $RUN_REPORT --venue $BASE_URL --file-issues" >&2
+  fi
+  exit 5
+fi
 
 if [ "$PLAYWRIGHT_STATUS" -ne 0 ] && [ "$REPORT_STATUS" -ne 0 ]; then
   echo

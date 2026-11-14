@@ -44,9 +44,10 @@ One command, from the repository root. It:
    and reads it from there — any later Playwright invocation in the checkout
    (`--list`, a single spec) writes the fixed path again, and the failure
    path must file from **this** run's report;
-7. runs the **post-run ROPC posture gate** (below) — the venue must not
-   keep a widened auth surface, whatever the specs said;
-8. reports the outcome and runs the **failure path** (below).
+7. runs the **post-run ROPC posture gate** (below) and records its verdict —
+   the venue must not keep a widened auth surface, whatever the specs said;
+8. reports the outcome and runs the **failure path** (below); the gate's
+   verdict is the exit's last word (exit 5 wins over the suite's own status).
 
 Two **locks** are taken first, one per checkout and one per venue: they stop
 two runs on the same machine from resetting the venue fixtures' passwords
@@ -198,22 +199,24 @@ never means "nothing ran"** — the report names what did not run and why.
 
 ## The post-run ROPC posture gate
 
-After the suite — before the failure path, so every exit carries it — the run
-asserts the venue's auth posture: `genie/genie-app` carries NO direct access
-grants (`tests/e2e/run/check-ropc-posture.js`, reading the assertion that lives
-in `helpers/keycloak-admin.js` — the posture's single home, #1727). A run that
-leaves the venue wider than it found it fails **with exit 5, loudly**, even with
-every spec green: the two scripts that legitimately flip the grant on a real
-venue (`data/okf/smoke-test/mint-tokens.mjs`, the rag-benchmarks anchor wrapper)
-each carry a verified revert, and a revert that fails to land is what this gate
-catches. The gate checks the pair `ROPC_POSTURE_REALM` / `ROPC_POSTURE_CLIENT`
-name (defaults `genie` / `genie-app`) — an overridden eval set
-(`EVAL_KC_REALM` / `EVAL_KC_CLIENT_ID`) must be mirrored there, or the gate
-checks a pair nobody flipped. A non-zero gate exit with no widened surface
-behind it means the gate itself could not run: its output names the real cause.
-On a venue fresh from the MANUAL acceptance phases — whose Phase 0 prep
-(`00-clean-start.md` § 0.7) enables a test-only ROPC the manual mints rely on —
-a gate failure is the honest signal to revert that temp ROPC.
+After the suite, the run asserts the venue's auth posture: `genie/genie-app`
+carries NO direct access grants (`tests/e2e/run/check-ropc-posture.js`, reading
+the assertion that lives in `helpers/keycloak-admin.js` — the posture's single
+home, #1727). A run that leaves the venue wider than it found it fails **with
+exit 5, loudly**, even with every spec green: the two scripts that legitimately
+flip the grant on a real venue (`data/okf/smoke-test/mint-tokens.mjs`, the
+rag-benchmarks anchor wrapper) each carry a verified revert, and a revert that
+fails to land is what this gate catches. Two obligations, neither dropping the
+other: the gate's verdict is RECORDED first, the failure path still files a red
+run's issues, and the gate's exit 5 is the last word. The gate checks the pair
+`ROPC_POSTURE_REALM` / `ROPC_POSTURE_CLIENT` name (defaults `genie` /
+`genie-app`) — an overridden eval set (`EVAL_KC_REALM` / `EVAL_KC_CLIENT_ID`)
+must be mirrored there, or the gate checks a pair nobody flipped. A non-zero
+gate exit with no widened surface behind it means the gate itself could not
+run: its output names the real cause. On a venue fresh from the MANUAL
+acceptance phases — whose Phase 0 prep (`00-clean-start.md` § 0.7) enables a
+test-only ROPC the manual mints rely on — a gate failure is the honest signal
+to revert that temp ROPC.
 
 ## The failure path
 

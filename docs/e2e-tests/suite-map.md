@@ -95,7 +95,7 @@ one reads a missing directory as an accident.
 | Spec | Phase/story | What it drives | Profile | Helpers |
 |------|-------------|----------------|---------|---------|
 | `artifacts-view.spec.js` | — | the OKF artifacts view | OKF | `chatbot`, `venue-profile` |
-| `concept-ceiling.spec.js` | — | the concept-document size ceiling behaviour | OKF | `chatbot`, `venue-profile` |
+| `concept-ceiling.spec.js` | — | the concept-document size ceiling behaviour | OKF | `chatbot`, `okf-studio`, `venue-profile` |
 | `ragas-guide-errors.spec.js` | — | the RAGAS guide error surfaces | OKF | `auth`, `base-url`, `keycloak-admin`, `locale`, `venue-profile` |
 | `ragas-judge-selector.spec.js` | — | the RAGAS judge model selector | OKF | `auth`, `base-url`, `keycloak-admin`, `venue-profile` |
 | `ragas-rescore-tracking.spec.js` | — | RAGAS rescore tracking | OKF | `auth`, `base-url`, `keycloak-admin`, `locale`, `venue-profile` |
@@ -187,9 +187,10 @@ prefix lives on the spec's file name).
 Run the phases in order — the full sequence, the per-phase prerequisites
 and the step/variable conventions: [README.md](README.md). Stop
 conditions: a failed step is diagnosed before the next phase runs; Phase K
-mutates realm settings and scales Keycloak to 0 (its K.5 + K.6 steps
-restore it); Phase N is destructive (it erases the user) — always run its
-N.6 cleanup at the end.
+no longer mutates realm settings (#1835 — K.2's expiry is client-scoped)
+but still scales Keycloak to 0 (its K.4 step; K.5 + K.6 restore it); Phase
+N is destructive (it erases the user) — always run its N.6 cleanup at the
+end.
 
 ---
 
@@ -1867,26 +1868,48 @@ npx playwright test tests/e2e/auth/k1-auth-error-display.spec.js
 
 ### Test K.2 — TOKEN_EXPIRED (Short-Lived Token)
 
-Reduce the realm's `accessTokenLifespan` to 10 seconds, get a fresh token, wait for expiry, then verify the backend returns `TOKEN_EXPIRED`.
+Observe expiry through a **dedicated client** whose own 10-second token lifespan is CLIENT-scoped (the `access.token.lifespan` client attribute) — the realm's global `accessTokenLifespan` stays what the deployment runs, so every session in flight on a shared venue survives this test (#1835; the same mechanism the Playwright spec adopted in #1785).
 
 ```bash
-# Save original lifespan
-ORIG_LIFESPAN=$(curl -sk "https://localhost/auth/admin/realms/genie" \
-  -H "Authorization: Bearer $TOKEN" | jq -r '.accessTokenLifespan')
-echo "Original accessTokenLifespan: $ORIG_LIFESPAN"
+# Sweep a previous run's leftover client, then create the dedicated
+# expiry client: confidential, service-account backed, ROPC off, with a
+# client-scoped 10s access-token lifespan. The secret is random per run:
+# a committed one would make a leftover client mintable by anyone who
+# reads this file.
+EXPIRY_CLIENT_ID="e2e-k1-token-expiry"
+STALE_UUID=$(curl -sk "https://localhost/auth/admin/realms/genie/clients?clientId=${EXPIRY_CLIENT_ID}" \
+  -H "Authorization: Bearer $TOKEN" | python3 -c "
+import sys, json
+c = json.load(sys.stdin)
+print(c[0]['id'] if c else '')
+")
+[ -z "$STALE_UUID" ] || curl -sk -X DELETE "https://localhost/auth/admin/realms/genie/clients/${STALE_UUID}" \
+  -H "Authorization: Bearer $TOKEN" -w "\nswept stale client: HTTP %{http_code}\n"
 
-# Set to 10 seconds
-curl -sk -X PUT "https://localhost/auth/admin/realms/genie" \
-  -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
-  -d '{"accessTokenLifespan": "10"}' -w "\nHTTP: %{http_code}\n"
+EXPIRY_CLIENT_SECRET=$(python3 -c "import secrets; print(secrets.token_hex(24))")
+curl -sk -X POST "https://localhost/auth/admin/realms/genie/clients" \
+  -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" -d "{
+    \"clientId\": \"${EXPIRY_CLIENT_ID}\",
+    \"enabled\": true,
+    \"protocol\": \"openid-connect\",
+    \"publicClient\": false,
+    \"serviceAccountsEnabled\": true,
+    \"standardFlowEnabled\": false,
+    \"directAccessGrantsEnabled\": false,
+    \"secret\": \"${EXPIRY_CLIENT_SECRET}\",
+    \"attributes\": {\"access.token.lifespan\": \"10\"}
+  }" -w "\nHTTP: %{http_code}\n"
 ```
 
-**Expected**: `HTTP: 204`
+**Expected**: sweep delete `HTTP: 404` (nothing to sweep) or `204`; client create `HTTP: 201`
 
 ```bash
-# Get fresh token (expires in 10s)
+# Mint the short-lived token with client_credentials: the service
+# account needs neither a user nor a browser session, and the mint
+# cannot collide with another seat's session on a shared venue.
 EXPIRED_TOKEN=$(curl -sk -X POST "https://localhost/auth/realms/genie/protocol/openid-connect/token" \
-  -d "client_id=genie-app" -d "username=testuser" -d "password=TestPass123!" -d "grant_type=password" \
+  -d "client_id=${EXPIRY_CLIENT_ID}" -d "client_secret=${EXPIRY_CLIENT_SECRET}" \
+  -d "grant_type=client_credentials" \
   | python3 -c "import sys,json; print(json.load(sys.stdin)['access_token'])")
 
 # Wait for the token's OWN expiry (Rule: Determinism — no fixed
@@ -1919,8 +1942,6 @@ curl -sk "https://localhost/api/me" \
 ```
 
 **Expected**: `HTTP: 401` with `{"error": "TOKEN_EXPIRED", "message": "Token has expired"}`
-
-**Note**: Do NOT restore `accessTokenLifespan` yet — K.5 handles that. The Playwright spec (`k1-auth-error-display.spec.js`) does NOT use this procedure anymore (#1785): its K.2 observes the expiry through a dedicated client whose own 10s lifespan is client-scoped, so the realm's global default stays what the deployment runs. This manual mutation is what K.5 restores.
 
 ### Test K.3 — FORBIDDEN (User Without Roles)
 
@@ -2048,16 +2069,33 @@ curl -sk "https://localhost/auth/realms/genie/.well-known/openid-configuration" 
 
 **Expected**: `Keycloak issuer: https://localhost/auth/realms/genie`
 
-### Test K.5 — Restore Realm Settings
+### Test K.5 — Sweep the Expiry Client
+
+K.2 no longer mutates realm settings, so nothing realm-global needs restoring: K.5 deletes the dedicated expiry client (and the service-account user its creation spawned), converging the realm to its pre-K state.
 
 ```bash
-# Restore original accessTokenLifespan
-curl -sk -X PUT "https://localhost/auth/admin/realms/genie" \
-  -H "Authorization: Bearer $TOKEN" -H "Content-Type: application/json" \
-  -d "{\"accessTokenLifespan\": \"$ORIG_LIFESPAN\"}" -w "\nHTTP: %{http_code}\n"
+# Delete the expiry client by name
+EXPIRY_UUID=$(curl -sk "https://localhost/auth/admin/realms/genie/clients?clientId=e2e-k1-token-expiry" \
+  -H "Authorization: Bearer $TOKEN" | python3 -c "
+import sys, json
+c = json.load(sys.stdin)
+print(c[0]['id'] if c else '')
+")
+[ -n "$EXPIRY_UUID" ] && curl -sk -X DELETE "https://localhost/auth/admin/realms/genie/clients/${EXPIRY_UUID}" \
+  -H "Authorization: Bearer $TOKEN" -w "\nHTTP: %{http_code}\n" || echo "no expiry client to sweep — OK"
+
+# Delete the service-account user the client's creation spawned
+SA_USER_ID=$(curl -sk "https://localhost/auth/admin/realms/genie/users?username=service-account-e2e-k1-token-expiry&exact=true" \
+  -H "Authorization: Bearer $TOKEN" | python3 -c "
+import sys, json
+u = json.load(sys.stdin)
+print(u[0]['id'] if u else '')
+")
+[ -n "$SA_USER_ID" ] && curl -sk -X DELETE "https://localhost/auth/admin/realms/genie/users/${SA_USER_ID}" \
+  -H "Authorization: Bearer $TOKEN" -w "\nHTTP: %{http_code}\n" || echo "no service-account user to sweep — OK"
 ```
 
-**Expected**: `HTTP: 204`
+**Expected**: deletes `HTTP: 204`; a missing entity reports "nothing to sweep — OK" (the sweep is idempotent)
 
 ### Test K.6 — Cleanup: Delete No-Roles Test User
 

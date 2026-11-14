@@ -125,7 +125,10 @@ test('completes full external IdP brokered login flow', async ({ browser }) => {
     // does not carry at all, already satisfies the precondition (no verification
     // page will appear), so no disable — and no restore — is owed. A disable
     // that fails means nothing was mutated, so it throws BEFORE the flow starts.
-    const requiredActionUrl = `${BASE_URL}/auth/admin/realms/genie/authentication/required-actions/VERIFY_EMAIL`;
+    // The venue the profile gate probed is the venue these admin URLs
+    // address: REALM flows through, or a KEYCLOAK_REALM=<other> venue
+    // would have the disable dance toggle the WRONG realm's row.
+    const requiredActionUrl = `${BASE_URL}/auth/admin/realms/${REALM}/authentication/required-actions/VERIFY_EMAIL`;
     const readRes = await apiContext.get(requiredActionUrl, { headers: authHeaders, ignoreHTTPSErrors: true });
     if (!readRes.ok() && readRes.status() !== 404) {
       const error = new Error(
@@ -135,7 +138,23 @@ test('completes full external IdP brokered login flow', async ({ browser }) => {
       error.isPassThrough = true;
       throw error;
     }
-    const preTestAction = readRes.status() === 404 ? null : await readRes.json();
+    // A 200 whose body is not JSON (a proxy error page) must land in THIS
+    // verdict — a bare .json() throw would fall into the flow-failure
+    // envelope below and diagnose a flow that never started.
+    let preTestAction = null;
+    if (readRes.status() !== 404) {
+      try {
+        preTestAction = await readRes.json();
+      } catch (bodyError) {
+        const error = new Error(
+          `VERIFY_EMAIL pre-test read returned HTTP ${readRes.status()} with a body that is not JSON ` +
+            `(a proxy error page answers like this) — the venue state is UNKNOWN, which is not the ` +
+            `same as "the action is absent". Body read failed: ${bodyError.message}.`
+        );
+        error.isPassThrough = true;
+        throw error;
+      }
+    }
     let disabledHere = false;
     if (preTestAction && preTestAction.enabled) {
       const disableRes = await apiContext.put(

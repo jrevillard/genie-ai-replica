@@ -1108,11 +1108,11 @@ async function assertDirectAccessGrantsDisabled(adminToken, realm, clientId) {
     throw new Error(
       `ROPC POSTURE VIOLATION: ${clientId} in realm ${realm} carries directAccessGrantsEnabled=true ` +
         `(client uuid ${client.id}) — a run flipped the grant and did not revert it, and the venue now ` +
-        `accepts password grants on this client. Revert it through the admin API: read the client and ` +
-        `PUT it back with directAccessGrantsEnabled=false — the WHOLE representation it reads, not a ` +
-        `one-field body (Keycloak replaces the client on PUT; see enableDirectAccessGrants in this ` +
-        `module). The two scripts that flip the grant legitimately each carry a verified revert: ` +
-        `data/okf/smoke-test/mint-tokens.mjs and tests/rag-benchmarks/scripts/run_anchor_with_cleanup.sh.`
+        `accepts password grants on this client. Revert it through the admin API with the grant set ` +
+        `back to false — the one-field PUT the two legitimate flippers use in their verified reverts ` +
+        `(data/okf/smoke-test/mint-tokens.mjs, tests/rag-benchmarks/scripts/run_anchor_with_cleanup.sh). ` +
+        `One-field PUTs are safe on CLIENTS; the replace-with-nulls hazard this suite documents lives ` +
+        `on the required-actions endpoint (see the d7b spec), not here.`
     );
   }
 }

@@ -1552,11 +1552,11 @@ test.describe('assertDirectAccessGrantsDisabled — the ROPC posture (#1727)', (
     await expect(assertDirectAccessGrantsDisabled('tok', 'genie', 'genie-app')).resolves.toBeUndefined();
   });
 
-  test('a flipped grant throws, naming the client uuid and the full-representation revert', async () => {
+  test('a flipped grant throws, naming the client uuid and the verified one-field revert', async () => {
     routes = [['GET', CLIENTS_PATH, { status: 200, data: [{ id: 'client-1', directAccessGrantsEnabled: true }] }]];
 
     await expect(assertDirectAccessGrantsDisabled('tok', 'genie', 'genie-app')).rejects.toThrow(
-      /ROPC POSTURE VIOLATION[\s\S]*client uuid client-1[\s\S]*WHOLE representation/
+      /ROPC POSTURE VIOLATION[\s\S]*client uuid client-1[\s\S]*one-field PUT/
     );
     // The gate reads: it never writes.
     expect(calls).toEqual(['GET /auth/admin/realms/genie/clients?clientId=genie-app']);

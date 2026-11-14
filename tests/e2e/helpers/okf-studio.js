@@ -74,7 +74,12 @@ async function stubStudioRepoRoutes(page, { repoId, repo, draftStatus = 200, dra
       body: draftStatus === 200 ? JSON.stringify({ repo_id: repoId, draft: draftBody }) : JSON.stringify(draftBody)
     })
   );
-  await page.route(`**/api/okf/repos/${repoId}/concepts`, (route) =>
+  // The concepts fetch always carries a query string (the store pages it:
+  // `?limit=200&offset=0`), and a Playwright glob must consume the WHOLE
+  // URL — the pattern needs the `*` or the stub is dead and the real
+  // okf-server answers instead (a 404 the frontend maps to an empty list:
+  // a silently dead stub, exactly the degrade this suite forbids).
+  await page.route(`**/api/okf/repos/${repoId}/concepts*`, (route) =>
     route.fulfill({
       status: 200,
       contentType: 'application/json',

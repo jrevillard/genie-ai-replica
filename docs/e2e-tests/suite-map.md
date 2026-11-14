@@ -187,10 +187,11 @@ prefix lives on the spec's file name).
 Run the phases in order — the full sequence, the per-phase prerequisites
 and the step/variable conventions: [README.md](README.md). Stop
 conditions: a failed step is diagnosed before the next phase runs; Phase K
-no longer mutates realm settings (#1835 — K.2's expiry is client-scoped)
-but still scales Keycloak to 0 (its K.4 step; K.5 + K.6 restore it); Phase
-N is destructive (it erases the user) — always run its N.6 cleanup at the
-end.
+no longer mutates realm settings (#1835 — K.2's expiry is client-scoped);
+K.4 stops Keycloak with `docker compose stop keycloak` and its own Step 3
+restarts it — an abort mid-K.4 must be followed by that restart, K.5 +
+K.6 sweep only the phase's test artifacts; Phase N is destructive (it
+erases the user) — always run its N.6 cleanup at the end.
 
 ---
 
@@ -1847,6 +1848,7 @@ Validates that authentication and authorization errors are returned with correct
 
 - Phase 0 complete (`$TOKEN` and `$USER_TOKEN` available)
 - Keycloak admin access for realm configuration changes
+- The manual phases' own token mints (K.3, K.4) assume the venue prep of Phase 0 — including the test-only ROPC `00-clean-start.md` § 0.7 enables on genie-app. The local e2e run's post-run posture gate (#1727) asserts the suite's opposite venue contract (grants off): a gate failure on a venue fresh from manual testing is the signal to revert § 0.7's temp ROPC.
 
 ### Test K.1 — TOKEN_INVALID (Modified Token)
 
@@ -1877,14 +1879,28 @@ Observe expiry through a **dedicated client** whose own 10-second token lifespan
 # a committed one would make a leftover client mintable by anyone who
 # reads this file.
 EXPIRY_CLIENT_ID="e2e-k1-token-expiry"
-STALE_UUID=$(curl -sk "https://localhost/auth/admin/realms/genie/clients?clientId=${EXPIRY_CLIENT_ID}" \
-  -H "Authorization: Bearer $TOKEN" | python3 -c "
-import sys, json
-c = json.load(sys.stdin)
-print(c[0]['id'] if c else '')
+# The sweep's own lookup verdict is checked: a non-200 (a 401 from an
+# expired $TOKEN, an outage) must fail the phase HERE, not read as
+# "nothing to sweep" (Rule: Determinism — a sweep that cannot read the
+# venue is not an empty one).
+SWEEP_CODE=$(curl -sk -o /tmp/k2-sweep.json -w "%{http_code}" \
+  "https://localhost/auth/admin/realms/genie/clients?clientId=${EXPIRY_CLIENT_ID}" \
+  -H "Authorization: Bearer $TOKEN")
+[ "$SWEEP_CODE" = "200" ] || { echo "FATAL: the sweep lookup answered HTTP $SWEEP_CODE — an expired \$TOKEN or an outage reads the same as an empty venue"; exit 1; }
+STALE_UUID=$(python3 -c "
+import json
+c = json.load(open('/tmp/k2-sweep.json'))
+print(c[0]['id'] if isinstance(c, list) and c else '')
 ")
-[ -z "$STALE_UUID" ] || curl -sk -X DELETE "https://localhost/auth/admin/realms/genie/clients/${STALE_UUID}" \
-  -H "Authorization: Bearer $TOKEN" -w "\nswept stale client: HTTP %{http_code}\n"
+if [ -n "$STALE_UUID" ]; then
+  DEL_CODE=$(curl -sk -o /dev/null -w "%{http_code}" -X DELETE \
+    "https://localhost/auth/admin/realms/genie/clients/${STALE_UUID}" \
+    -H "Authorization: Bearer $TOKEN")
+  [ "$DEL_CODE" = "204" ] || { echo "FATAL: the stale expiry client delete answered HTTP $DEL_CODE"; exit 1; }
+  echo "swept stale expiry client (HTTP 204)"
+else
+  echo "no stale expiry client — OK"
+fi
 
 EXPIRY_CLIENT_SECRET=$(python3 -c "import secrets; print(secrets.token_hex(24))")
 curl -sk -X POST "https://localhost/auth/admin/realms/genie/clients" \
@@ -1901,7 +1917,7 @@ curl -sk -X POST "https://localhost/auth/admin/realms/genie/clients" \
   }" -w "\nHTTP: %{http_code}\n"
 ```
 
-**Expected**: sweep delete `HTTP: 404` (nothing to sweep) or `204`; client create `HTTP: 201`
+**Expected**: the sweep prints `no stale expiry client — OK` on a clean venue, or `swept stale expiry client (HTTP 204)` when a leftover existed; client create `HTTP: 201`
 
 ```bash
 # Mint the short-lived token with client_credentials: the service
@@ -2071,31 +2087,51 @@ curl -sk "https://localhost/auth/realms/genie/.well-known/openid-configuration" 
 
 ### Test K.5 — Sweep the Expiry Client
 
-K.2 no longer mutates realm settings, so nothing realm-global needs restoring: K.5 deletes the dedicated expiry client (and the service-account user its creation spawned), converging the realm to its pre-K state.
+K.2 no longer mutates realm settings, so nothing realm-global needs restoring: K.5 deletes the dedicated expiry client (and the service-account user its creation spawned), converging the realm to its pre-K state. Each lookup's own verdict is checked — a non-200 (an expired `$TOKEN`, an outage) must fail the phase HERE, not read as "nothing to sweep" (Rule: Determinism — a sweep that cannot read the venue is not an empty one).
 
 ```bash
 # Delete the expiry client by name
-EXPIRY_UUID=$(curl -sk "https://localhost/auth/admin/realms/genie/clients?clientId=e2e-k1-token-expiry" \
-  -H "Authorization: Bearer $TOKEN" | python3 -c "
-import sys, json
-c = json.load(sys.stdin)
-print(c[0]['id'] if c else '')
+K5_CODE=$(curl -sk -o /tmp/k5-client.json -w "%{http_code}" \
+  "https://localhost/auth/admin/realms/genie/clients?clientId=e2e-k1-token-expiry" \
+  -H "Authorization: Bearer $TOKEN")
+[ "$K5_CODE" = "200" ] || { echo "FATAL: the K.5 client lookup answered HTTP $K5_CODE — an expired \$TOKEN or an outage reads the same as an empty venue"; exit 1; }
+EXPIRY_UUID=$(python3 -c "
+import json
+c = json.load(open('/tmp/k5-client.json'))
+print(c[0]['id'] if isinstance(c, list) and c else '')
 ")
-[ -n "$EXPIRY_UUID" ] && curl -sk -X DELETE "https://localhost/auth/admin/realms/genie/clients/${EXPIRY_UUID}" \
-  -H "Authorization: Bearer $TOKEN" -w "\nHTTP: %{http_code}\n" || echo "no expiry client to sweep — OK"
+if [ -n "$EXPIRY_UUID" ]; then
+  K5_DEL=$(curl -sk -o /dev/null -w "%{http_code}" -X DELETE \
+    "https://localhost/auth/admin/realms/genie/clients/${EXPIRY_UUID}" \
+    -H "Authorization: Bearer $TOKEN")
+  [ "$K5_DEL" = "204" ] || { echo "FATAL: the expiry client delete answered HTTP $K5_DEL"; exit 1; }
+  echo "swept expiry client (HTTP 204)"
+else
+  echo "no expiry client to sweep — OK"
+fi
 
 # Delete the service-account user the client's creation spawned
-SA_USER_ID=$(curl -sk "https://localhost/auth/admin/realms/genie/users?username=service-account-e2e-k1-token-expiry&exact=true" \
-  -H "Authorization: Bearer $TOKEN" | python3 -c "
-import sys, json
-u = json.load(sys.stdin)
-print(u[0]['id'] if u else '')
+K5_SA=$(curl -sk -o /tmp/k5-sa.json -w "%{http_code}" \
+  "https://localhost/auth/admin/realms/genie/users?username=service-account-e2e-k1-token-expiry&exact=true" \
+  -H "Authorization: Bearer $TOKEN")
+[ "$K5_SA" = "200" ] || { echo "FATAL: the K.5 service-account lookup answered HTTP $K5_SA"; exit 1; }
+SA_USER_ID=$(python3 -c "
+import json
+u = json.load(open('/tmp/k5-sa.json'))
+print(u[0]['id'] if isinstance(u, list) and u else '')
 ")
-[ -n "$SA_USER_ID" ] && curl -sk -X DELETE "https://localhost/auth/admin/realms/genie/users/${SA_USER_ID}" \
-  -H "Authorization: Bearer $TOKEN" -w "\nHTTP: %{http_code}\n" || echo "no service-account user to sweep — OK"
+if [ -n "$SA_USER_ID" ]; then
+  K5_SA_DEL=$(curl -sk -o /dev/null -w "%{http_code}" -X DELETE \
+    "https://localhost/auth/admin/realms/genie/users/${SA_USER_ID}" \
+    -H "Authorization: Bearer $TOKEN")
+  [ "$K5_SA_DEL" = "204" ] || { echo "FATAL: the service-account delete answered HTTP $K5_SA_DEL"; exit 1; }
+  echo "swept service-account user (HTTP 204)"
+else
+  echo "no service-account user to sweep — OK"
+fi
 ```
 
-**Expected**: deletes `HTTP: 204`; a missing entity reports "nothing to sweep — OK" (the sweep is idempotent)
+**Expected**: each sweep prints `no … to sweep — OK` on a clean venue, or `swept … (HTTP 204)` when a leftover existed
 
 ### Test K.6 — Cleanup: Delete No-Roles Test User
 

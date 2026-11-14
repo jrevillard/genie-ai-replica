@@ -64,13 +64,17 @@ test.describe('the master-realm admin credential', () => {
 // see it) is owned by auth-request.spec.js and deliberately not mirrored
 // here — a mirror would go stale silently when the real helper moves.
 test.describe("getAdminToken's no-access_token verdict", () => {
-  const savedPassword = process.env.KEYCLOAK_ADMIN_PASSWORD;
+  const saved = { ADMIN_TOKEN: process.env.ADMIN_TOKEN, KEYCLOAK_ADMIN_PASSWORD: process.env.KEYCLOAK_ADMIN_PASSWORD };
   const realRequest = auth.request;
 
   test.afterEach(() => {
     auth.request = realRequest;
-    if (savedPassword === undefined) delete process.env.KEYCLOAK_ADMIN_PASSWORD;
-    else process.env.KEYCLOAK_ADMIN_PASSWORD = savedPassword;
+    // Both env inputs are restored: workers=1 means every later spec file
+    // in this process inherits what this describe leaves behind.
+    if (saved.ADMIN_TOKEN === undefined) delete process.env.ADMIN_TOKEN;
+    else process.env.ADMIN_TOKEN = saved.ADMIN_TOKEN;
+    if (saved.KEYCLOAK_ADMIN_PASSWORD === undefined) delete process.env.KEYCLOAK_ADMIN_PASSWORD;
+    else process.env.KEYCLOAK_ADMIN_PASSWORD = saved.KEYCLOAK_ADMIN_PASSWORD;
   });
 
   test('a 200 with an empty body names the missing access_token', async () => {

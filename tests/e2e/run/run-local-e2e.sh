@@ -23,11 +23,21 @@
 #                            from when the credentials are auto-read
 #                            (default: genieai).
 #   E2E_FILE_ISSUES          0 reports the failures without filing issues.
+#   ROPC_POSTURE_REALM       the realm the post-run posture gate checks
+#                            (default: genie). Set IN TANDEM with
+#                            ROPC_POSTURE_CLIENT when a script flipped a
+#                            non-default pair (e.g. the anchor wrapper's
+#                            EVAL_KC_REALM/EVAL_KC_CLIENT_ID).
+#   ROPC_POSTURE_CLIENT      the client the post-run posture gate checks
+#                            (default: genie-app).
 #
 # The run ends with the failure path: a red run files one status::backlog
 # issue per failing spec file (tests/e2e/run/file-failure-issues.js), and the
 # run's outcome — counts, skipped specs with their reasons, failures — is
-# printed whether the suite is green or red.
+# printed whether the suite is green or red. After the suite (before the
+# failure path, so EVERY exit carries it) the post-run ROPC posture gate
+# runs: a venue left accepting password grants fails the run with exit 5,
+# whatever the specs said.
 
 set -euo pipefail
 
@@ -168,6 +178,22 @@ npx playwright test tests/e2e/ --project=chromium
 PLAYWRIGHT_STATUS=$?
 set -e
 
+# --- the post-run ROPC posture gate (#1727) ---------------------------------
+# The venue's auth posture is part of this run's outcome: a run that leaves
+# genie/genie-app accepting password grants fails HERE even when every spec
+# was green — and before the failure path, so every exit below carries the
+# verdict (the runs most likely to leave state behind are the crashed ones).
+# The assertion is the helper's own (single home); the gate is this run's
+# obligation because this run books the venue. Exit 5 is this gate's own
+# code — 3 is venue-lock contention, and a posture violation must not read
+# as a transient contention retry.
+echo "post-run ROPC posture gate"
+if ! node "$REPO_ROOT/tests/e2e/run/check-ropc-posture.js"; then
+  echo "ERROR: the post-run ROPC posture gate FAILED — its own output above names the real cause" >&2
+  echo "       (a widened auth surface is one of them; a broken gate or venue is another)." >&2
+  exit 5
+fi
+
 # --- the outcome, and the failure path ---------------------------------------
 # The report moves to a per-run name before it is read: any later
 # Playwright invocation in this checkout (`--list`, a single spec) writes
@@ -208,17 +234,6 @@ elif [ "$REPORT_STATUS" -ne 0 ]; then
   echo
   echo "the suite is green but the failure path failed (exit $REPORT_STATUS) - the run's outcome is not trustworthy"
   exit "$REPORT_STATUS"
-fi
-
-# --- the post-run ROPC posture gate (#1727) ---------------------------------
-# The venue's auth posture is part of this run's outcome: a run that leaves
-# genie/genie-app accepting password grants fails HERE even when every spec
-# was green. The assertion is the helper's own (single home); the gate is
-# this run's obligation because this run books the venue.
-echo "post-run ROPC posture gate"
-if ! node "$REPO_ROOT/tests/e2e/run/check-ropc-posture.js"; then
-  echo "ERROR: the venue keeps a widened auth surface — the run FAILS on the posture gate." >&2
-  exit 3
 fi
 
 exit "$PLAYWRIGHT_STATUS"

@@ -14,10 +14,13 @@
  *
  * `run-local-e2e.sh` runs it AFTER the suite: a run that leaves the venue
  * wider than it found it fails, loudly — even when every spec is green.
- * The same two scripts that legitimately flip the grant
+ * The two scripts that legitimately flip the grant
  * (`data/okf/smoke-test/mint-tokens.mjs`, the rag-benchmarks anchor
- * wrapper) are covered by it too: they run against the venue this run
- * books, and a leftover from ANY of them lands here.
+ * wrapper) run against the venue this run books, and a leftover from them
+ * lands here — as long as they ran on the DEFAULT pair: the anchor wrapper
+ * honors EVAL_KC_REALM / EVAL_KC_CLIENT_ID, so an overridden eval set must
+ * set ROPC_POSTURE_REALM / ROPC_POSTURE_CLIENT in tandem, or the gate
+ * checks a pair nobody flipped and the widened surface stays open.
  *
  * Reads `BASE_URL` (through helpers/auth, the one edge definition) and
  * the Keycloak admin password the run script exports. `ROPC_POSTURE_REALM`

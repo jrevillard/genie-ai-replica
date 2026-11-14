@@ -284,7 +284,7 @@ and no chunk carries is a stale venue, not a spec defect.
 
 The remedy is the lightest possible touch on the shared stack — a
 rollout restart of the stale deployment
-(`kubectl -n genieai rollout restart deploy/genieai-...-frontend`),
+(`kubectl -n genieai rollout restart deploy/genieai-genieai-umbrella-frontend`),
 which pulls the `main` tag the declared baseline already points at —
 followed by re-running the red specs before believing anything.
 

@@ -7,31 +7,35 @@ const { BASE_URL } = require('./base-url');
 const { venueLaunchArgs } = require('./venue-launch-args');
 
 /**
- * The edge's own upstream-reset reply (#1847): the k8s venue's Envoy
- * occasionally answers a keep-alive race between the edge and the backend
- * by terminating the connection — either AFTER headers, as its LOCAL 503
- * plain-text reply ("upstream connect error or disconnect/reset before
- * headers. reset reason: connection termination"), or BEFORE them, as a
- * raw ECONNRESET on the socket. Under suite load the race surfaces about
- * once per run and is worth one re-issue on the idempotent methods (GET
- * and DELETE — RFC 7231; a POST's outcome a re-send could not report
- * honestly, and HEAD's empty-body wire contract resolves before any body
- * gate could fire). The reset path is instantaneous: no pause, the next
- * attempt targets a fresh socket. The signature is the STABLE prefix of
- * Envoy's local reply — the volatile "reset reason: ..." clause is
- * deliberately not matched, so an edge upgrade that changes only the
- * reason wording keeps the retry working. A product 503 carries a JSON
- * body and is never retried (the response contract resolves it; the
- * caller's status guard is the verdict). The bound is hard: when it runs
- * out, the LAST observed outcome is returned or rethrown verbatim — a
- * failure the caller sees is never swallowed or degraded. Sanctioned by
- * the operator as the deterministic answer to a genuine transient
- * (#1847); tests/e2e/CLAUDE.md names it the one transport-level
- * exception.
+ * The edge's upstream-reset retry (#1847, operator-sanctioned — the one
+ * transport-level exception tests/e2e/CLAUDE.md names): the k8s venue's
+ * Envoy answers a keep-alive race about once per suite load — after
+ * headers with its LOCAL plain-text 503, before them with a raw
+ * ECONNRESET — and the idempotent methods are worth a bounded re-issue.
+ * The full contract (the RFC 7231 method set, the stable reply signature,
+ * no pause, the verbatim last outcome, product JSON 503s never retried)
+ * is owned by this file's spec, auth-request.spec.js, over the real
+ * transport.
  */
 const EDGE_RESET_SIGNATURE = 'upstream connect error or disconnect/reset before headers';
 const EDGE_RESET_MAX_ATTEMPTS = 3;
-const IDEMPOTENT_METHODS = ['GET', 'DELETE'];
+// RFC 7231 idempotent methods: a re-sent request lands in the same state.
+// POST is excluded — its outcome a re-send could not report honestly — and
+// HEAD's empty-body wire contract resolves before any body gate could fire.
+const IDEMPOTENT_METHODS = ['GET', 'DELETE', 'PUT'];
+
+/** The edge's reset reply on the wire: a 503 whose body carries the STABLE
+ *  prefix of Envoy's local reply (the volatile "reset reason: ..." clause
+ *  is deliberately not matched). Both arms of the gate read the reply
+ *  through this ONE predicate, so widening one arm cannot leave the other
+ *  behind. */
+function isEdgeResetReply(status, bodyText) {
+  return (
+    status === 503 &&
+    typeof bodyText === 'string' &&
+    bodyText.includes(EDGE_RESET_SIGNATURE)
+  );
+}
 
 /** The rejection arm: the non-JSON guard rejected the edge's text reply,
  *  or the race landed before any headers (a raw ECONNRESET). */
@@ -42,25 +46,14 @@ function isEdgeResetRetryEligible(method, error) {
   if (error.code === 'ECONNRESET') {
     return true;
   }
-  return (
-    error.nonJsonBody === true &&
-    error.status === 503 &&
-    typeof error.message === 'string' &&
-    error.message.includes(EDGE_RESET_SIGNATURE)
-  );
+  return error.nonJsonBody === true && isEdgeResetReply(error.status, error.message);
 }
 
 /** The resolution arm: with `options.raw` the body is the WANTED text, so
  *  the edge's reset reply reaches the caller as a RESOLVED 503 whose data
  *  is that text — the rejection arm never fires for that caller. */
 function isRawEdgeReset(method, res) {
-  return (
-    IDEMPOTENT_METHODS.includes(method) &&
-    !!res &&
-    res.status === 503 &&
-    typeof res.data === 'string' &&
-    res.data.includes(EDGE_RESET_SIGNATURE)
-  );
+  return IDEMPOTENT_METHODS.includes(method) && isEdgeResetReply(res.status, res.data);
 }
 
 /**
@@ -71,8 +64,8 @@ function isRawEdgeReset(method, res) {
  * @returns {Promise<{status: number, data: object, headers: object}>}
  */
 function request(method, path, options = {}) {
+  const url = new URL(path, BASE_URL);
   const attempt = () => new Promise((resolve, reject) => {
-    const url = new URL(path, BASE_URL);
     const reqOptions = {
       hostname: url.hostname,
       port: url.port || 443,
@@ -146,6 +139,12 @@ function request(method, path, options = {}) {
     req.end();
   });
 
+  // A non-idempotent method can never retry: hand it the bare transport —
+  // the gate's method set already says no, but the short-circuit makes the
+  // POST contract visible in code, not only in two predicates.
+  if (!IDEMPOTENT_METHODS.includes(method)) {
+    return attempt();
+  }
   let attemptsLeft = EDGE_RESET_MAX_ATTEMPTS;
   const run = () =>
     attempt()

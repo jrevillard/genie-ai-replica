@@ -110,6 +110,23 @@ const ARRAY_SHAPE = {
 // cannot carry a clean verdict. Genie's realm carries ~10 clients; the
 // boundary exists so a widened realm widens the sweep deliberately.
 const SWEEP_PAGE_MAX = 500;
+
+// Keycloak provisions these built-in clients into EVERY realm, and their
+// standing grant flags are the SERVER's defaults (measured on the shared
+// venue: admin-cli answers directAccessGrantsEnabled=true out of the box,
+// and the realm export does not pin it) — not anything a run wrote. A
+// built-in's grant is therefore standing state exactly like the test-only
+// realm's: indistinguishable from a leftover and owned by the venue's
+// contract, so the sweep exempts the fixed set and asserts every client
+// the deployment actually declares.
+const KEYCLOAK_BUILTIN_CLIENTS = new Set([
+  'account',
+  'account-console',
+  'admin-cli',
+  'broker',
+  'realm-management',
+  'security-admin-console'
+]);
 const REPRESENTATION_SHAPE = {
   ok: (data) => Boolean(data) && typeof data === 'object' && Boolean(data.id),
   complaint: 'without a usable representation'
@@ -1099,7 +1116,11 @@ async function enableDirectAccessGrants(adminToken, realm, clientId) {
  * (`tests/e2e/run/check-ropc-posture.js`, wired into `run-local-e2e.sh`)
  * catches through this assertion. The sweep is list-based, so an
  * overridden eval client needs no mirror convention: any leftover the
- * run leaves on the realm is visible wherever it landed.
+ * run leaves on the realm is visible wherever it landed. Two standing
+ * states are exempt, because their grants are the provisioned posture,
+ * not a run's doing: Keycloak's built-in clients (their grant defaults
+ * are the server's, unpinned by the realm export) and the test-only
+ * realms the gate does not name.
  *
  * A client that does not exist cannot leak a grant: absence holds the
  * posture. A client WITH the grant throws — naming the violation, each
@@ -1127,7 +1148,9 @@ async function assertNoDirectAccessGrants(adminToken, realm) {
         `tests/e2e/helpers/keycloak-admin.js if the realm legitimately grew that wide.`
     );
   }
-  const flipped = res.data.filter((client) => client.directAccessGrantsEnabled === true);
+  const flipped = res.data.filter(
+    (client) => client.directAccessGrantsEnabled === true && !KEYCLOAK_BUILTIN_CLIENTS.has(client.clientId)
+  );
   if (flipped.length > 0) {
     const offenders = flipped
       .map((client) => `${client.clientId || '(unnamed client)'} (client uuid ${client.id})`)

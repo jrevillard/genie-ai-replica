@@ -17,9 +17,11 @@
  * pair: a script that flips a non-default pair (the rag-benchmarks
  * anchor wrapper honors `EVAL_KC_REALM` / `EVAL_KC_CLIENT_ID`) leaves its
  * leftover on the same realm, where the sweep sees it — no mirror
- * convention to maintain. A realm whose standing posture legitimately
- * carries ROPC (the test-only `genie2`) stays out of the sweep: it is
- * not a leftover when the grant is the provisioned state.
+ * convention to maintain. Two standing postures stay out of the verdict:
+ * the test-only realm (`genie2` — a grant there is the provisioned state,
+ * not a leftover) and Keycloak's built-in clients (their grant defaults
+ * are the server's; measured on the venue: `admin-cli` answers ROPC=true
+ * out of the box, unpinned by the realm export).
  *
  * Reads `BASE_URL` (through helpers/auth, the one edge definition) and
  * the Keycloak admin password the run script exports. `ROPC_POSTURE_REALMS`
@@ -35,11 +37,44 @@ const REALMS = (process.env.ROPC_POSTURE_REALMS || 'genie')
   .map((realm) => realm.trim())
   .filter(Boolean);
 
+// The pre-#1846 pair override names a client the sweep no longer takes:
+// a value left behind must not silently degrade into the default sweep.
+const LEGACY_VARS = ['ROPC_POSTURE_REALM', 'ROPC_POSTURE_CLIENT'].filter((v) => process.env[v] !== undefined);
+if (LEGACY_VARS.length > 0) {
+  console.error(
+    `WARNING: ${LEGACY_VARS.join(' and ')} no longer read — the gate sweeps realms now (#1846); ` +
+      `set ROPC_POSTURE_REALMS (comma-separated) instead.`
+  );
+}
+
+// A parse that yields no realm would green an UNCHECKED venue — the
+// vacuous pass the suite's determinism rule forbids. Fail loud instead.
+if (REALMS.length === 0) {
+  console.error(
+    `ROPC posture gate FAILED: ROPC_POSTURE_REALMS="${process.env.ROPC_POSTURE_REALMS}" parsed to no realm — refusing to green an unchecked venue.`
+  );
+  process.exit(1);
+}
+
 (async () => {
   const token = await getAdminToken();
+  // Every realm reports: a failure in one realm must not hide another
+  // realm's offender from the remedy.
+  const failures = [];
   for (const realm of REALMS) {
-    await assertNoDirectAccessGrants(token, realm);
-    console.log(`ROPC posture: realm ${realm} carries no direct access grants — OK`);
+    try {
+      await assertNoDirectAccessGrants(token, realm);
+      console.log(`ROPC posture: realm ${realm} carries no direct access grants — OK`);
+    } catch (e) {
+      failures.push(`realm ${realm}: ${e.message}`);
+    }
+  }
+  if (failures.length > 0) {
+    console.error(`ROPC posture gate FAILED:\n${failures.join('\n')}`);
+    // Exit 1: the run wrapper maps any gate failure to ITS own code (5), so
+    // this code only surfaces on a standalone run — where it must not read
+    // as the run script's venue-lock contention (3).
+    process.exit(1);
   }
 })().catch((e) => {
   console.error(`ROPC posture gate FAILED: ${e.message}`);

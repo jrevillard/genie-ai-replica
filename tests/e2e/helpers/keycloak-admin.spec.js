@@ -1585,6 +1585,31 @@ test.describe('assertNoDirectAccessGrants — the ROPC posture sweep (#1727, #18
     expect(calls).toEqual(['GET /auth/admin/realms/genie/clients?max=500']);
   });
 
+  test('a built-in client carrying the grant is skipped — its standing state is the server default, not a run', async () => {
+    // Measured on the live venue (#1846 review): Keycloak provisions
+    // admin-cli into EVERY realm with directAccessGrantsEnabled=true, and
+    // the realm export does not pin it — the sweep must not red a venue on
+    // provisioned state. A built-in's grant is the standing state exactly
+    // like genie2's: indistinguishable from a leftover, owned by the
+    // venue's contract, not by this gate.
+    routes = [
+      [
+        'GET',
+        CLIENTS_LIST,
+        {
+          status: 200,
+          data: [
+            { id: 'b-1', clientId: 'admin-cli', directAccessGrantsEnabled: true },
+            { id: 'client-1', clientId: 'genie-app', directAccessGrantsEnabled: false }
+          ]
+        }
+      ]
+    ];
+
+    await expect(assertNoDirectAccessGrants('tok', 'genie')).resolves.toBeUndefined();
+    expect(calls).toEqual(['GET /auth/admin/realms/genie/clients?max=500']);
+  });
+
   test('an absent realm fails loudly — a venue without its primary realm is not a clean posture', async () => {
     routes = [['GET', CLIENTS_LIST, { status: 404, data: null }]];
 

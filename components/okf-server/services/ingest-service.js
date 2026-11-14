@@ -186,12 +186,11 @@ function uniquifySlug(base, body, seen) {
  */
 
 /** Suffix a split part's path: `foo.md` → `foo-part-2.md`. Part 1 is unsuffixed
- * so every inbound link keeps resolving to a document that still exists. */
-function partPath(path, index) {
-  if (index === 0) return path;
-  const base = String(path || 'concept').replace(/\.md$/, '');
-  return `${base}-part-${index + 1}.md`;
-}
+ * so every inbound link keeps resolving to a document that still exists.
+ * (#1577: the definition moved verbatim to concept-splitter.js — the identity
+ * convention belongs with the lossless engine; re-exported here so every
+ * existing consumer keeps its import path.) */
+const { partPath } = require('./concept-splitter');
 
 /**
  * Split every concept document that exceeds the ceiling, in place, before the
@@ -437,20 +436,11 @@ function _logLaneCapacity(repoId, conceptCount) {
   return lanes;
 }
 
-/** Fixed-size worker pool over items, preserving RESULT positions. */
-async function _pool(items, concurrency, worker) {
-  const results = new Array(items.length);
-  let next = 0;
-  const runners = Array.from({ length: Math.min(Math.max(concurrency, 1), items.length) }, async () => {
-    for (;;) {
-      const i = next++;
-      if (i >= items.length) return;
-      results[i] = await worker(items[i], i);
-    }
-  });
-  await Promise.all(runners);
-  return results;
-}
+/** Fixed-size worker pool over items, preserving RESULT positions. The ONE
+ * implementation lives in run-pool.js (2026-11-14: three copies of this idiom
+ * existed across the component; this alias keeps the import-path callers and
+ * the _pool export unchanged). */
+const _pool = require('./run-pool').runPool;
 
 /**
  * The per-concept import pipeline (4a parse → 4b upsert → 4c conformance →

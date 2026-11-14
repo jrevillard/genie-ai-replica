@@ -409,6 +409,13 @@ router.post('/:repo_id/concepts/:concept_id/links', requireRepoScope('repo_id', 
 // linked doc-repo file. Admin-scope. Returns the same shape as /import.
 router.post('/:repo_id/resplit', requireRepoScope('repo_id', 'admin'), ctrl.resplitRepo);
 
+// #1577 story 1 — the CURATOR-INITIATED PER-CONCEPT split (the ceiling
+// initiative's deferred half): one concept in, ceiling-bounded lossless parts
+// out, part 1 keeping the concept_id, every part born-right for the drain.
+// Admin-scope, draft repos only (the controller's assertWritable). The 409
+// CONCEPT_TOO_LARGE / 400 refusals carry their own status from the service.
+router.post('/:repo_id/concepts/:concept_id/split', requireRepoScope('repo_id', 'admin'), ctrl.splitConcept);
+
 // Story #978 — Editor "Autocorrect" action. Scans all concepts and applies
 // frontmatter-only autocorrect rules. Admin-scope. dry_run=true returns the
 // planned changes without applying; dry_run=false applies atomically.

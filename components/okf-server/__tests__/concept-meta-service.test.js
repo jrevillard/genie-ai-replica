@@ -962,9 +962,13 @@ describe('listConceptsMeta pagination (live-500 regression 2026-09-12)', () => {
   });
 });
 
-// ── Review fix #9 (#1020): a content change must be claimable NOW ──
+// ── Review fix #9 (#1020), widened to the canonical five-field reset
+// (2026-11-14): a hash-changing edit must leave NOTHING of the old drain
+// cycle — park, claim, spent attempts, retry counter, last error. The reaper
+// keys on ingest_attempts >= 8, so a spent budget surviving a content change
+// would dead-letter content that was never tried in its new form.
 describe('patchConceptMeta — stale park cleared on content change', () => {
-  it('a hash change resets to parsed AND clears next_attempt_after + the claim', async () => {
+  it('a hash change resets to parsed AND clears the full claim set (DRAIN_CLAIM_RESET)', async () => {
     await mockDb.collection('okf_concepts_meta').save({
       _key: 'r1|concepts/parked',
       repo_id: 'r1',
@@ -972,7 +976,10 @@ describe('patchConceptMeta — stale park cleared on content change', () => {
       content_hash: 'oldhash',
       index_status: 'parsed',
       next_attempt_after: new Date(Date.now() + 3600000).toISOString(), // parked §5.5/§5.9
-      worker_claimed_at: '2026-09-26T00:00:00.000Z'
+      worker_claimed_at: '2026-09-26T00:00:00.000Z',
+      ingest_attempts: 7, // one away from the reaper cap (8)
+      reindex_retry: 3,
+      last_error: 'dataprep 500'
     });
     await conceptMeta.patchConceptMeta('r1', 'concepts/parked', {
       body: '# changed body',
@@ -982,6 +989,9 @@ describe('patchConceptMeta — stale park cleared on content change', () => {
     expect(doc.index_status).toBe('parsed'); // re-index path
     expect(doc.next_attempt_after).toBeNull(); // claimable NOW (was parked +1h)
     expect(doc.worker_claimed_at).toBeNull(); // no stale claim toward the reaper
+    expect(doc.ingest_attempts).toBe(0); // a full budget for the NEW content
+    expect(doc.reindex_retry).toBe(0);
+    expect(doc.last_error).toBeNull();
   });
 
   it('an UNCHANGED body (frontmatter-only edit) leaves the park untouched', async () => {
@@ -1000,6 +1010,94 @@ describe('patchConceptMeta — stale park cleared on content change', () => {
     });
     const doc = await mockDb.collection('okf_concepts_meta').document('r1|concepts/untouched');
     expect(doc.next_attempt_after).toBe(parked); // park still governs
+  });
+});
+
+// The claim-stamp reset lives in the ONE update path that computes
+// contentChanged (applyUpdate) — every hash-changing FULL upsert (re-import,
+// split, any future write path) inherits the #1020 contract; before
+// 2026-11-14 the import path reset NOTHING on a re-imported modified concept.
+describe('upsertConceptMeta — the claim reset on ANY hash-changing update', () => {
+  it('a full upsert of MODIFIED content resets the full claim set on the updated row', async () => {
+    await mockDb.collection('okf_concepts_meta').save({
+      _key: 'r1|concepts/reimported',
+      repo_id: 'r1',
+      concept_id: 'concepts/reimported',
+      content_hash: 'oldhash',
+      index_status: 'failed',
+      next_attempt_after: new Date(Date.now() + 21600000).toISOString(), // §5.9 defer up to 6 h
+      worker_claimed_at: '2026-11-14T00:00:00.000Z',
+      ingest_attempts: 8, // AT the reaper cap
+      reindex_retry: 2,
+      last_error: 'embed timeout'
+    });
+    await conceptMeta.upsertConceptMeta('r1', {
+      concept_id: 'concepts/reimported',
+      path: 'concepts/reimported.md',
+      frontmatter: { type: 'topic', title: 'Reimported', sources: [] },
+      body: '# changed content\n\nA different body than the parked row held.'
+    });
+    const doc = await mockDb.collection('okf_concepts_meta').document('r1|concepts/reimported');
+    expect(doc.index_status).toBe('parsed'); // contentChanged → re-index path
+    expect(doc.next_attempt_after).toBeNull();
+    expect(doc.worker_claimed_at).toBeNull();
+    expect(doc.ingest_attempts).toBe(0);
+    expect(doc.reindex_retry).toBe(0);
+    expect(doc.last_error).toBeNull();
+  });
+
+  it('an upsert of IDENTICAL content (dedup case) does NOT touch the claim stamps', async () => {
+    const body = '# same content';
+    const fm = { type: 'topic', title: 'Samey' }; // same conformance frontmatter too
+    const hash = conceptMeta.contentHash(body);
+    await mockDb.collection('okf_concepts_meta').save({
+      _key: 'r1|concepts/samey',
+      repo_id: 'r1',
+      concept_id: 'concepts/samey',
+      content_hash: hash,
+      frontmatter: fm,
+      index_status: 'indexed',
+      next_attempt_after: 'unchanged-park',
+      ingest_attempts: 5
+    });
+    await conceptMeta.upsertConceptMeta('r1', {
+      concept_id: 'concepts/samey',
+      path: 'concepts/samey.md',
+      frontmatter: { ...fm, sources: [] },
+      body
+    });
+    const doc = await mockDb.collection('okf_concepts_meta').document('r1|concepts/samey');
+    expect(doc.index_status).toBe('indexed'); // unchanged content keeps its state
+    expect(doc.next_attempt_after).toBe('unchanged-park');
+    expect(doc.ingest_attempts).toBe(5);
+  });
+});
+
+// The split's collision pre-check: ONE batched existence query instead of
+// one FULL-document fetch per part id (the W9 batched-join precedent).
+// Pinned AQL-shape style (the requeue tests' pattern): capture the query
+// text + binds, assert the single roundtrip and the bound filter.
+describe('conceptIdsExist — batched existence', () => {
+  it('queries repo+ids existence in ONE roundtrip and returns the surviving ids', async () => {
+    const calls = [];
+    mockDb.query.mockImplementation(async (q, b) => {
+      calls.push({ q: String(q), b });
+      return { all: async () => (b.ids || []).filter((id) => id === 'a') };
+    });
+    await expect(conceptMeta.conceptIdsExist('r1', ['a', 'b', 'c'])).resolves.toEqual(['a']);
+    expect(calls.length).toBe(1); // ONE roundtrip, not one per id
+    expect(calls[0].q).toContain('okf_concepts_meta');
+    expect(calls[0].q).toContain('m.repo_id == @rid');
+    expect(calls[0].q).toContain('m.concept_id IN @ids');
+    expect(calls[0].b).toEqual({ rid: 'r1', ids: ['a', 'b', 'c'] });
+  });
+
+  it('answers [] for an empty/absent id list or repo without querying', async () => {
+    mockDb.query.mockImplementation(async () => {
+      throw new Error('must not query');
+    });
+    await expect(conceptMeta.conceptIdsExist('r1', [])).resolves.toEqual([]);
+    await expect(conceptMeta.conceptIdsExist(null, ['a'])).resolves.toEqual([]);
   });
 });
 

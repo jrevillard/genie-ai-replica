@@ -186,4 +186,22 @@ function splitConceptBody(body, ceiling = DEFAULT_CEILING) {
   };
 }
 
-module.exports = { splitConceptBody, DEFAULT_CEILING };
+/** Suffix a split part's path: `foo.md` → `foo-part-2.md`. Part 1 is unsuffixed
+ * so every inbound link keeps resolving to a document that still exists.
+ * (#1577: moved here verbatim from ingest-service — the identity convention
+ * belongs with the lossless engine that defines the parts; ingest-service
+ * re-exports it for its existing consumers.) */
+function partPath(path, index) {
+  if (index === 0) return path;
+  const base = String(path || 'concept').replace(/\.md$/, '');
+  return `${base}-part-${index + 1}.md`;
+}
+
+// THE per-document part cap — ONE definition for every splitter consumer
+// (2026-11-14, the /simplify reuse round: producer-service's segmentation cap
+// and the split operation's part cap were two copies of the same literal,
+// able to drift silently). producer-service imports this as
+// MAX_SEGMENTS_PER_FILE; the split operation uses it as its TOO_MANY_PARTS cap.
+const MAX_PARTS = 200;
+
+module.exports = { splitConceptBody, partPath, MAX_PARTS, DEFAULT_CEILING };

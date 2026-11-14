@@ -204,7 +204,9 @@ fi
 # The venue's auth posture is part of this run's outcome: a run that leaves
 # genie/genie-app accepting password grants fails HERE even when every spec
 # was green — and before the failure path, so every exit below carries the
-# verdict (the runs most likely to leave state behind are the crashed ones).
+# verdict. One exception sits ABOVE it: a run crashed too hard to write a
+# report exits 4 before the gate — its venue state persists, so the NEXT
+# run's gate catches any leftover it left behind.
 # The assertion is the helper's own (single home); the gate is this run's
 # obligation because this run books the venue. Exit 5 is this gate's own
 # code — 3 is venue-lock contention, and a posture violation must not read
@@ -214,7 +216,7 @@ if ! node "$REPO_ROOT/tests/e2e/run/check-ropc-posture.js"; then
   echo "ERROR: the post-run ROPC posture gate FAILED — its own output above names the real cause" >&2
   echo "       (a widened auth surface is one of them; a broken gate or venue is another)." >&2
   echo "       this run's red-run evidence is preserved at $RUN_REPORT — file it with:" >&2
-  echo "       node tests/e2e/run/file-failure-issues.js --report $RUN_REPORT --venue \$BASE_URL --file-issues" >&2
+  echo "       node tests/e2e/run/file-failure-issues.js --report $RUN_REPORT --venue $BASE_URL --file-issues" >&2
   exit 5
 fi
 

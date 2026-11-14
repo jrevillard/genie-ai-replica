@@ -1840,7 +1840,7 @@ echo "$RESPONSE" | jq 'has("iss") or has("sub") or has("iss_sub") or has("realm_
 
 ## Phase K: Auth Error Display (Story 2-6)
 
-**This phase mutates Keycloak realm settings and stops the Keycloak service. Cleanup steps (K.5, K.6) restore state. Verify stack health before proceeding to Phase L.**
+**This phase no longer mutates Keycloak realm settings (its K.2 expiry is client-scoped, #1835), but K.4 stops Keycloak — its own Step 3 restarts it, so an abort mid-K.4 must be followed by that restart; K.5+K.6 sweep the phase's test artifacts and MUST run after the phase. Verify stack health before proceeding to Phase L.**
 
 Validates that authentication and authorization errors are returned with correct error codes and user-friendly messages.
 
@@ -2148,7 +2148,7 @@ curl -sk -X DELETE "https://localhost/auth/admin/realms/genie/users/${NOROLES_US
 
 ---
 
-**Phase K complete.** All realm settings restored, test user cleaned up. Stack is ready for Phase L. Verify:
+**Phase K complete.** Expiry client, service account and no-roles user swept — the realm converges to its pre-K state. Stack is ready for Phase L. Verify:
 
 ```bash
 docker compose ps

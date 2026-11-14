@@ -111,4 +111,4 @@ Phase 0 (setup) → F (token forwarding to OPEA) → G (Swagger OAuth2) → H (J
 The procedures of Phases A–N: the suite map's [§ The acceptance
 phases](suite-map.md#the-acceptance-phases).
 
-**Important**: Phase K no longer mutates realm settings (its K.2 expiry is client-scoped, #1835), but K.4 stops Keycloak — its own Step 3 restarts it, so an abort mid-K.4 must be followed by that restart; K.5+K.6 sweep the phase's test artifacts and MUST run after Phase K before proceeding to Phase L. Verify stack health before proceeding to Phase L.
+**Important**: Phase K no longer mutates realm settings (its K.2 expiry is client-scoped, #1835), but K.4 stops Keycloak — its own Step 3 restarts it, so an abort mid-K.4 must be followed by that restart; K.5+K.6 sweep the phase's test artifacts and MUST run after Phase K; verify stack health before proceeding to Phase L.

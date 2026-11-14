@@ -44,7 +44,9 @@ One command, from the repository root. It:
    and reads it from there — any later Playwright invocation in the checkout
    (`--list`, a single spec) writes the fixed path again, and the failure
    path must file from **this** run's report;
-7. reports the outcome and runs the **failure path** (below).
+7. runs the **post-run ROPC posture gate** (below) — the venue must not
+   keep a widened auth surface, whatever the specs said;
+8. reports the outcome and runs the **failure path** (below).
 
 Two **locks** are taken first, one per checkout and one per venue: they stop
 two runs on the same machine from resetting the venue fixtures' passwords

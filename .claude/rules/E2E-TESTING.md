@@ -62,11 +62,15 @@ behaviour keeps the spec green.
    page.locator('[data-test-id="logs-warnings-card"] [data-test-id="log-row-wired-keycloak"]')
    // no — presentation, locale, or structure
    page.locator('.stat-card .stat-value')
-   page.getByRole('button', { name: 'Administration' })
    page.locator('tbody tr:nth-child(2)')
    ```
 
-   A descendant selector is fine as long as it is rooted at a handle.
+   A descendant selector is fine as long as it is rooted at a handle. A
+   role locator (`getByRole('button', { name })`) is a **tolerated
+   fallback** in the Playwright suite: it survives any redesign, but its
+   name is copy — a copy change is a visible test failure — and the
+   suite's locator gate accepts it on that basis (the locator table in
+   `tests/e2e/CLAUDE.md`). Prefer the handle.
 
 3. **Assert behaviour, not presentation.** A handle tells you WHERE; the
    assertion still states the behaviour — the rendered value, the visible

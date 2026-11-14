@@ -31,12 +31,30 @@ in the error (never silently tolerated).
   requires BOTH the target being gone AND the error being Playwright's
   target-closed error, and rethrows everything else. Route mocks use the
   wrapper; they do not hand-roll their own catch.
+  `expect.soft` is a swallow too: it records the failure and lets the test
+  keep running against a premise that already failed, so later steps pass
+  or fail for the wrong reason. One expected fact, one hard `expect()`.
+- **No conditional skip on runtime state.** A `test.skip()` or an early
+  `return` decided by what the run itself produced (a page rendered or not,
+  a request answered or not, a value computed in the body) is a fallback
+  branch wearing a skip: the expected state is fixed, and not reaching it
+  is a FAIL carrying the observed state. The one sanctioned skip is the
+  venue capability check — `helpers/venue-profile.js` reads what the venue
+  exposes before the test's own state exists, and skips with that reason.
 - **Wait for conditions, not durations.** No `waitForTimeout`, no fixed `sleep`:
   a fixed sleep is slow on a fast machine and flaky on a slow one. Wait on the
   observable condition (`waitForSelector`, `expect.poll`, `waitForURL`,
   `waitForResponse`) with a hard `timeout`; a wait that expires is a failure,
   never followed by "continue anyway". If no observable condition exists, the
   test (or the app under test) needs one — a sleep is not the fix.
+- **No wall-clock expectations.** An expected value derived from `Date.now()`
+  or `new Date()` is not known — the machine's clock and timezone decide it,
+  so the assertion is true here and false somewhere else. Expected values
+  come from injected or fixed inputs (fixed seed strings, `page.clock`);
+  when the app renders a time, assert a timezone-pinned rendering or a
+  relationship the spec controls — never the wall clock's own output.
+  Seeding unique names and deadline bookkeeping for bounded waits read the
+  clock and assert nothing; they stay legitimate.
 - **Fixed, isolated seed data.** Each test creates the state it needs with known
   values and unique keys (usernames, file names, conversation titles), and removes
   it deterministically. No reliance on order of execution, on data left by a

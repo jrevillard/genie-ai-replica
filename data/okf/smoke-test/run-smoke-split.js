@@ -82,6 +82,27 @@ function done() {
   process.exit(failures === 0 ? 0 : 1);
 }
 
+// Purge one of THIS harness's repos: delete → retract → delete → (if the
+// blocker is the FABRICATED ingested_at stamp, which a draft-state repo
+// cannot retract away) unstamp → delete. The unstamp branch only fires on
+// repos whose ingested_at was fabricated by phase 5 — a real serving repo
+// leaves through retract, never through the unstamp.
+async function purgeRepo(repoId) {
+  let d = await call('DELETE', `/api/okf/repos/${repoId}`);
+  if (d.status === 409) {
+    await call('POST', `/api/okf/repos/${repoId}/lifecycle`, { action: 'retract' });
+    d = await call('DELETE', `/api/okf/repos/${repoId}`);
+  }
+  if (d.status === 409) {
+    const db = await dbService.getConnection('default');
+    await db.query('FOR r IN okf_repositories FILTER r.repo_id == @r UPDATE r WITH { ingested_at: null } IN okf_repositories', {
+      r: repoId
+    });
+    d = await call('DELETE', `/api/okf/repos/${repoId}`);
+  }
+  return d;
+}
+
 async function main() {
   if (!TOKEN) {
     console.error('OKF_SMOKE_TOKEN_ADMIN required');
@@ -91,15 +112,14 @@ async function main() {
   console.log('');
 
   // ── 0. Cleanup prior runs (name AND domain, per #1596) ───────────────────
+  // BOTH names this harness creates: the main repo and the serving-fence
+  // repo (REPO_NAME + '-serving') — a leftover serving repo 409s the create.
   try {
     const stale = await call('GET', '/api/okf/repos?lifecycle=all');
     for (const it of (stale.body && (stale.body.items || stale.body.repos)) || []) {
-      if (it.name !== REPO_NAME || it.domain !== DOMAIN) continue;
-      let d = await call('DELETE', `/api/okf/repos/${it.repo_id}`);
-      if (d.status === 409) {
-        await call('POST', `/api/okf/repos/${it.repo_id}/lifecycle`, { action: 'retract' });
-        d = await call('DELETE', `/api/okf/repos/${it.repo_id}`);
-      }
+      const wanted = it.name === REPO_NAME || it.name === REPO_NAME + '-serving';
+      if (!wanted || it.domain !== DOMAIN) continue;
+      const d = await purgeRepo(it.repo_id);
       console.log('cleanup: ' + it.repo_id + ' → ' + d.status);
     }
   } catch {
@@ -305,9 +325,10 @@ async function main() {
       ? pass('serving-repo setup: corpus imported')
       : fail('serving-repo import → ' + sImp.status + ' ' + JSON.stringify(sImp.body));
     const db = await dbService.getConnection('default');
-    await db.query('FOR r IN okf_repositories FILTER r.repo_id == @r UPDATE r WITH { ingested_at: DATE_ISO8601() } IN okf_repositories', {
-      r: SERVE_ID
-    });
+    await db.query(
+      'FOR r IN okf_repositories FILTER r.repo_id == @r UPDATE r WITH { ingested_at: @now } IN okf_repositories',
+      { r: SERVE_ID, now: new Date().toISOString() }
+    );
     pass('serving-repo setup: ingested_at stamped (the state the write fence reads)');
 
     const ro = await call('POST', `/api/okf/repos/${SERVE_ID}/concepts/beta/split`, {});
@@ -326,11 +347,7 @@ async function main() {
     ['serving repo', SERVE_ID]
   ]) {
     if (!id) continue;
-    let d = await call('DELETE', `/api/okf/repos/${id}`);
-    if (d.status === 409) {
-      await call('POST', `/api/okf/repos/${id}/lifecycle`, { action: 'retract' });
-      d = await call('DELETE', `/api/okf/repos/${id}`);
-    }
+    const d = await purgeRepo(id);
     d.status === 200 || d.status === 202 || d.status === 204
       ? pass('cleanup: ' + label + ' removed (' + d.status + ')')
       : fail('cleanup: ' + label + ' delete → ' + d.status + ' ' + JSON.stringify(d.body).slice(0, 200));

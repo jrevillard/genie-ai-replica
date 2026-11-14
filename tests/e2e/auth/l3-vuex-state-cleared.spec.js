@@ -120,13 +120,14 @@ test('clears Vuex auth state after logout — lands on the Keycloak login page',
     timeout: 30000
   });
 
-  // Step 8: Assert the landing (the locator auto-waits across the
-  // redirect) — the login form renders only when the realm holds no live
-  // SSO session, so this is the cleared-state proof (the navigation guard
-  // only fires when isAuthenticated is false). A URL match alone could
-  // report a false pass: a surviving session (a partial logout) passes
-  // through the auth endpoint on its 302 back to the app and never
-  // renders this form. One expected landing, asserted unconditionally.
+  // Step 8: Assert the landing — the form is server-rendered by the time
+  // goto lands; the locator auto-waits the render. The login form renders
+  // only when the realm holds no live SSO session, so this is the
+  // cleared-state proof (the navigation guard only fires when
+  // isAuthenticated is false). A URL match alone could report a false
+  // pass: a surviving session (a partial logout) passes through the auth
+  // endpoint on its 302 back to the app and never renders this form. One
+  // expected landing, asserted unconditionally.
   await expect(
     page.locator('#username'),
     `Expected the Keycloak login form after logout (session cleared); the browser was last at: ${page.url()}`

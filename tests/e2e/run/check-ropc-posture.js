@@ -66,7 +66,9 @@ if (REALMS.length === 0) {
       await assertNoDirectAccessGrants(token, realm);
       console.log(`ROPC posture: realm ${realm} carries no direct access grants — OK`);
     } catch (e) {
-      failures.push(`realm ${realm}: ${e.message}`);
+      // The helper's messages already name their realm — a bare push
+      // keeps a violation line from reading "realm genie: ... realm genie".
+      failures.push(e.message);
     }
   }
   if (failures.length > 0) {

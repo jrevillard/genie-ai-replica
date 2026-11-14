@@ -211,10 +211,13 @@ that fails to land is what this gate catches — on the default pair or on any
 pair the script's own overrides named. Two obligations, neither dropping the
 other: the gate's verdict is RECORDED first, the failure path still files a red
 run's issues, and the gate's exit 5 is the last word. The gate sweeps the
-realms `ROPC_POSTURE_REALMS` names, comma-separated (default `genie`) — a
-realm whose standing posture legitimately carries ROPC (the test-only
-`genie2`) stays out of the sweep, and an overridden eval client needs no
-mirror convention. A non-zero gate exit with no widened surface behind it
+realms `ROPC_POSTURE_REALMS` names, comma-separated (default `genie`) —
+two standing postures stay out of the verdict, because their grants are
+the provisioned state and not a run's doing: the test-only realm
+(`genie2`) and Keycloak's built-in clients (their grant defaults are the
+server's — `admin-cli` answers ROPC=true out of the box, unpinned by the
+realm export; pinning it is tracked separately) — and an overridden eval
+client needs no mirror convention. A non-zero gate exit with no widened surface behind it
 means the gate itself could not run: its output names the real cause. On a
 venue fresh from the MANUAL
 acceptance phases — whose Phase 0 prep (`00-clean-start.md` § 0.7) enables a

@@ -22,18 +22,32 @@ in the error (never silently tolerated).
   Soft guards (`if (await locator.isVisible().catch(() => false)) ...`) are forbidden.
 - **No swallowing.** No `.catch(() => {})`, no bare `catch` that continues, no
   try/except that degrades to a fallback path. Helpers must not absorb a failure a
-  spec should see. Two narrow exceptions: cleanup code (the default is a
+  spec should see. Three narrow exceptions: cleanup code (the default is a
   failing cleanup that reports exactly what it could not remove; warn-and-continue
   is permitted only for a leftover state the next test's seed provably makes
-  impossible, and the warning must name the leftover state), and the
+  impossible, and the warning must name the leftover state); the
   browser-target-closed teardown race in route handlers — tolerated ONLY by
   `helpers/route.js` (`runRouteHandler`/`runPostOnlyRouteHandler`), which
   requires BOTH the target being gone AND the error being Playwright's
-  target-closed error, and rethrows everything else. Route mocks use the
-  wrapper; they do not hand-roll their own catch.
+  target-closed error, and rethrows everything else; and the transport-level
+  edge-reset retry in `helpers/auth.js` `request()` (#1847) — see the next
+  bullet. Route mocks use the wrapper; they do not hand-roll their own catch.
   `expect.soft` is a swallow too: it records the failure and lets the test
   keep running against a premise that already failed, so later steps pass
   or fail for the wrong reason. One expected fact, one hard `expect()`.
+- **The one sanctioned transport-level retry.** `helpers/auth.js`'s `request()`
+  re-issues the edge's own upstream-reset failure on the idempotent methods
+  (#1847 — operator-sanctioned as the deterministic answer to a genuine
+  transient): the k8s venue's Envoy answers a keep-alive race with a plain-text
+  503 carrying its reset text, or kills the connection outright (in practice
+  the race arrives pre-headers — Node cannot distinguish a mid-body reset,
+  which an idempotent re-issue also survives) — about once per suite load;
+  that is a transport artifact outside any spec's subject, not a product
+  verdict. The retry is bounded (three attempts), sleeps never, keys on the
+  edge's stable reply signature (and on the reset error code), and returns or
+  rethrows the LAST observed outcome verbatim. It does not license retries
+  anywhere else: no spec adds a retry loop, and Playwright's `retries: 0` stays
+  untouched.
 - **No conditional skip on runtime state.** A `test.skip()` or an early
   `return` decided by what the run itself produced (a page rendered or not,
   a request answered or not, a value computed in the body) is a fallback

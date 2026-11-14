@@ -2546,6 +2546,12 @@ describe('e2e merge-train changes filters (#1264)', () => {
   // comment; every call-shape regex below uses this fragment in those
   // gaps, so a commented call is matched (or flagged) like a plain one.
   const GAP_SRC = '(?:\\s|\\/\\*[\\s\\S]*?\\*\\/)*';
+  // The shared head of every join-call regex below (the derivation's
+  // joinRe spells it inline for historical reasons): path.join/resolve,
+  // any spacing, the open paren, any spacing — a spacing-tolerance tweak
+  // lands here once, and the detectors cannot disagree about what a join
+  // call looks like.
+  const JOIN_HEAD = 'path\\.(?:join|resolve)' + GAP_SRC + '\\(' + GAP_SRC;
   // Node resolves the STRING VALUE, not the source text: escapes written in
   // the literal ('./it\'s.js') are already resolved before require runs.
   const UNESCAPE = (literal) => literal.slice(1, -1).replace(/\\(.)/g, '$1');
@@ -2699,7 +2705,9 @@ describe('e2e merge-train changes filters (#1264)', () => {
   // justification classes (the stack-input entries), never by this
   // derivation. An anchor that resolves to nothing same-file is a
   // finding — the hoist must be a deliberate test change, like every
-  // other non-literal shape.
+  // other non-literal shape. The message is the single UNRESOLVABLE
+  // const below, so the detector and its pins cannot drift apart.
+  const UNRESOLVABLE = 'join anchored on an identifier without a same-file __dirname initializer';
   const resolveConstAnchor = (source, name, seen = new Set()) => {
     // Cycle guard shared across the recursion (A built on B built on A).
     if (seen.has(name)) return false;
@@ -2711,15 +2719,14 @@ describe('e2e merge-train changes filters (#1264)', () => {
     // counts, whatever it initializes. The textual heuristic cannot see
     // block scoping; one name, one definition is the policy the gate
     // enforces.
-    const defCount = [...source.matchAll(new RegExp('\\bconst\\s+' + name + '\\s*=', 'g'))].length;
+    const constDefSrc = '\\bconst\\s+' + name + '\\s*=';
+    const defCount = [...source.matchAll(new RegExp(constDefSrc, 'g'))].length;
     if (defCount !== 1) return false;
     // One identifier branch — no __dirname literal alternative: the
     // alternative would prefix-match a LONGER identifier (`__dirnameExtra`
     // consuming as `__dirname`, #1393 review) and false-accept in the
     // silent direction. The class matches `__dirname` whole like any name.
-    const initRe = new RegExp(
-      '\\bconst\\s+' + name + '\\s*=\\s*path\\.(?:join|resolve)' + GAP_SRC + '\\(' + GAP_SRC + '([A-Za-z_$][\\w$]*)'
-    );
+    const initRe = new RegExp(constDefSrc + '\\s*' + JOIN_HEAD + '([A-Za-z_$][\\w$]*)');
     const match = initRe.exec(source);
     // The single definition must be a path.join/resolve call whose anchor
     // is __dirname — or another name that itself resolves down to one.
@@ -2745,10 +2752,7 @@ describe('e2e merge-train changes filters (#1264)', () => {
     // The boundary after __dirname keeps an extended spelling
     // (`__dirnameExtra`) from prefix-matching the family — the trap the
     // #1393 review caught on the resolver side applies here too.
-    const dirnameStartRe = new RegExp(
-      'path\\.(?:join|resolve)' + GAP_SRC + '\\(' + GAP_SRC + '__dirname(?![\\w$])',
-      'g'
-    );
+    const dirnameStartRe = new RegExp(JOIN_HEAD + '__dirname(?![\\w$])', 'g');
     const SEGMENT = new RegExp('^\\s*,\\s*(' + LIT_SRC + ')');
     for (const match of source.matchAll(dirnameStartRe)) {
       let rest = source.slice(match.index + match[0].length);
@@ -2764,14 +2768,11 @@ describe('e2e merge-train changes filters (#1264)', () => {
     // const initializer (see resolveConstAnchor). __dirname itself belongs
     // to the family above; a string-literal anchor matches nothing here and
     // stays outside this policy.
-    const identAnchorRe = new RegExp(
-      'path\\.(?:join|resolve)' + GAP_SRC + '\\(' + GAP_SRC + '([A-Za-z_$][\\w$]*)',
-      'g'
-    );
+    const identAnchorRe = new RegExp(JOIN_HEAD + '([A-Za-z_$][\\w$]*)', 'g');
     for (const match of source.matchAll(identAnchorRe)) {
       if (match[1] === '__dirname') continue;
       if (resolveConstAnchor(source, match[1])) continue;
-      findings.push('join anchored on an identifier without a same-file __dirname initializer');
+      findings.push(UNRESOLVABLE);
     }
     return findings;
   };
@@ -2865,7 +2866,6 @@ describe('e2e merge-train changes filters (#1264)', () => {
   // Synthetic units for the variable-anchor policy (#1393): the real-tree
   // gate above proves absence, not detection — these pin the resolver's
   // accept and reject sides on sources that cannot exist on the tree.
-  const UNRESOLVABLE = 'join anchored on an identifier without a same-file __dirname initializer';
   describe('variable-anchored joins (#1393)', () => {
     test('a same-file __dirname-rooted const anchor is accepted', () => {
       expect(
@@ -2905,7 +2905,6 @@ describe('e2e merge-train changes filters (#1264)', () => {
       // same unresolved family. The env case yields two — the
       // initializer's own call anchors on `process`, unresolvable too.
       const findings = findNonLiteralConsumption(lines.join('\n'));
-      expect(findings.length).toBeGreaterThan(0);
       expect(new Set(findings)).toEqual(new Set([UNRESOLVABLE]));
     });
 
@@ -2925,7 +2924,6 @@ describe('e2e merge-train changes filters (#1264)', () => {
           '\n'
         )
       );
-      expect(findings.length).toBeGreaterThan(0);
       expect(new Set(findings)).toEqual(new Set([UNRESOLVABLE]));
     });
 
@@ -2939,7 +2937,6 @@ describe('e2e merge-train changes filters (#1264)', () => {
           'upload(page, path.join(FIXTURES_DIR, name));'
         ].join('\n')
       );
-      expect(findings.length).toBeGreaterThan(0);
       expect(new Set(findings)).toEqual(new Set([UNRESOLVABLE]));
     });
 

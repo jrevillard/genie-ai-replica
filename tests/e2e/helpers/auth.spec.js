@@ -32,10 +32,10 @@ test.describe('the master-realm admin credential', () => {
   const saved = { ADMIN_TOKEN: process.env.ADMIN_TOKEN, KEYCLOAK_ADMIN_PASSWORD: process.env.KEYCLOAK_ADMIN_PASSWORD };
 
   test.afterEach(() => {
-    if (saved.ADMIN_TOKEN === undefined) delete process.env.ADMIN_TOKEN;
-    else process.env.ADMIN_TOKEN = saved.ADMIN_TOKEN;
-    if (saved.KEYCLOAK_ADMIN_PASSWORD === undefined) delete process.env.KEYCLOAK_ADMIN_PASSWORD;
-    else process.env.KEYCLOAK_ADMIN_PASSWORD = saved.KEYCLOAK_ADMIN_PASSWORD;
+    for (const name of ['ADMIN_TOKEN', 'KEYCLOAK_ADMIN_PASSWORD']) {
+      if (saved[name] === undefined) delete process.env[name];
+      else process.env[name] = saved[name];
+    }
   });
 
   test('ADMIN_TOKEN wins over the environment password, without a round trip', async () => {

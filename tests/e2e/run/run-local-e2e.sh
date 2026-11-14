@@ -34,10 +34,10 @@
 # The run ends with the failure path: a red run files one status::backlog
 # issue per failing spec file (tests/e2e/run/file-failure-issues.js), and the
 # run's outcome — counts, skipped specs with their reasons, failures — is
-# printed whether the suite is green or red. After the suite (before the
-# failure path, so EVERY exit carries it) the post-run ROPC posture gate
-# runs: a venue left accepting password grants fails the run with exit 5,
-# whatever the specs said.
+# printed whether the suite is green or red. After the suite the post-run
+# ROPC posture gate records its verdict, the failure path files a red
+# run's issues, and a widened venue is the run's exit (5) — the gate's
+# word is the LAST word, whatever the specs said.
 
 set -euo pipefail
 
@@ -181,11 +181,11 @@ set -e
 # --- the outcome, and the failure path ---------------------------------------
 # The report moves to a per-run name BEFORE anything else reads or fails:
 # any later Playwright invocation in this checkout (`--list`, a single
-# spec) writes the fixed path again, and every consumer — the failure path
-# AND the posture gate below — must work from the report of THIS run. A
-# posture-violating run exits at the gate without filing; its red-run
-# evidence is the per-run file the gate's message names, not the fixed
-# path the next run would clear.
+# spec) writes the fixed path again, and every consumer — the posture
+# gate, the failure path and the gate's own filing recipe — must work from
+# the report of THIS run. A posture-violating run exits 5 after the
+# failure path has filed what it could; the per-run file (not the fixed
+# path the next run would clear) is what everything names.
 RUN_REPORT="reports/playwright-report-run-$(date -u +%Y%m%dT%H%M%SZ).json"
 if [ -f reports/playwright-report.json ]; then
   mv reports/playwright-report.json "$RUN_REPORT"
@@ -202,11 +202,12 @@ fi
 
 # --- the post-run ROPC posture gate (#1727) ---------------------------------
 # The venue's auth posture is part of this run's outcome: a run that leaves
-# genie/genie-app accepting password grants fails HERE even when every spec
-# was green — and before the failure path, so every exit below carries the
-# verdict. One exception sits ABOVE it: a run crashed too hard to write a
-# report exits 4 before the gate — its venue state persists, so the NEXT
-# run's gate catches any leftover it left behind.
+# genie/genie-app accepting password grants fails the RUN even when every
+# spec was green. The gate RECORDS its verdict here; the failure path runs
+# next (a red run files its issues whatever the posture said); the gate's
+# exit 5 is the exit's last word. One exception sits ABOVE it: a run
+# crashed too hard to write a report exits 4 before the gate — its venue
+# state persists, so the NEXT run's gate catches any leftover.
 # The assertion is the helper's own (single home); the gate is this run's
 # obligation because this run books the venue. Exit 5 is this gate's own
 # code — 3 is venue-lock contention, and a posture violation must not read
@@ -235,8 +236,12 @@ if [ "$GATE_STATUS" -ne 0 ]; then
   echo "ERROR: the post-run ROPC posture gate FAILED — its own output above names the real cause" >&2
   echo "       (a widened auth surface is one of them; a broken gate or venue is another)." >&2
   if [ "$PLAYWRIGHT_STATUS" -ne 0 ]; then
-    echo "       this run is ALSO RED (playwright exit $PLAYWRIGHT_STATUS); its evidence is preserved at $RUN_REPORT — file it with:" >&2
-    echo "       node tests/e2e/run/file-failure-issues.js --report $RUN_REPORT --venue $BASE_URL --file-issues" >&2
+    if [ "$REPORT_STATUS" -eq 0 ]; then
+      echo "       this run is ALSO RED (playwright exit $PLAYWRIGHT_STATUS); its failures were filed by the failure path above." >&2
+    else
+      echo "       this run is ALSO RED (playwright exit $PLAYWRIGHT_STATUS); its evidence is preserved at $RUN_REPORT — file it with:" >&2
+      echo "       node tests/e2e/run/file-failure-issues.js --report $RUN_REPORT --venue $BASE_URL --file-issues" >&2
+    fi
   fi
   exit 5
 fi

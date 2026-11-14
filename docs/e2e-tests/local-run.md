@@ -271,6 +271,29 @@ kubectl get events -A --field-selector reason=NodeReady --sort-by=.lastTimestamp
 kubectl -n genieai get events --sort-by=.lastTimestamp | tail
 ```
 
+A **stale venue build** produces the same confusion from the opposite
+direction (#1844/#1845): every deployment tracks the mutable `main`
+registry tag with `imagePullPolicy: Always`, but a pod picks up a new
+`main` only when it restarts — a wave that lands frontend test handles
+or new surfaces leaves the venue's pods serving the build from BEFORE
+the wave, and every spec asserting those handles fails with
+`element(s) not found`, three identical red runs in a row.
+
+The check — does the venue serve a handle the checkout has? The
+frontend lazy-loads its views, so a handle lives in a CHUNK, not in the
+main bundle. Walk it: fetch `/` and read the served `js/app.<hash>.js`
+name from the HTML; fetch that bundle and extract its webpack
+chunk-hash map (the `{<id>:"<hash>", ...}` object beside the `"js/"+`
+script-name template); fetch `js/<id>.<hash>.js` for each entry and
+grep for the handle the failing spec reads. A handle the checkout has
+and no chunk carries is a stale venue, not a spec defect.
+
+The remedy is the lightest possible touch on the shared stack — a
+rollout restart of the stale deployment
+(`kubectl -n genieai rollout restart deploy/genieai-genieai-umbrella-frontend`),
+which pulls the `main` tag the declared baseline already points at —
+followed by re-running the red specs before believing anything.
+
 ## Shared-stack discipline
 
 The run drives a **shared** stack (namespace `genieai`, chart

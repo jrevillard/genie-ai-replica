@@ -64,6 +64,18 @@ test.describe('the posture gate refuses to green an unchecked venue', () => {
     expect(stderr).toContain('ROPC_POSTURE_REALMS');
   });
 
+  test('the legacy REALM value is HONORED — it rescues a vacuous ROPC_POSTURE_REALMS parse', () => {
+    // The honor is behavior, not just a warning: a parse that yields no
+    // realm with the legacy realm set must reach the venue call (here, the
+    // credential error it cannot pass without credentials), not the
+    // vacuous-green guard. Delete the honoring push and this pin reds —
+    // the parse would fire the refusing-to-green exit instead.
+    const { stderr, code } = runGate({ ROPC_POSTURE_REALMS: ' , ', ROPC_POSTURE_REALM: 'genie2' });
+    expect(code).toBe(1);
+    expect(stderr).toContain('KEYCLOAK_ADMIN_PASSWORD');
+    expect(stderr).not.toContain('parsed to no realm');
+  });
+
   test('clean env reaches the credential check, not a realm error', () => {
     // The default sweep is 'genie': with the realm parsing passed, the
     // first thing the gate cannot do here is fetch the admin token —

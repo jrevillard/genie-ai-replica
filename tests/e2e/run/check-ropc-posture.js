@@ -57,24 +57,24 @@ if (process.env.ROPC_POSTURE_CLIENT !== undefined) {
   );
 }
 
-// A parse that yields no realm would green an UNCHECKED venue — the
-// vacuous pass the suite's determinism rule forbids. Fail loud instead.
-if (REALMS.length === 0) {
-  console.error(
-    `ROPC posture gate FAILED: ROPC_POSTURE_REALMS="${process.env.ROPC_POSTURE_REALMS}" parsed to no realm — refusing to green an unchecked venue.`
-  );
-  process.exit(1);
-}
-
+// The gate's one failure shape: the message carries the remedy, the exit
+// code is the gate's own (the run wrapper maps any gate failure to ITS
+// own code, 5, so this code only surfaces on a standalone run — where it
+// must not read as the run script's venue-lock contention, 3).
 const failGate = (message) => {
   // The caller supplies the separator: a single-line failure reads
   // "FAILED: <message>", a multi-realm list reads "FAILED:\n<lines>".
   console.error(`ROPC posture gate FAILED:${message}`);
-  // Exit 1: the run wrapper maps any gate failure to ITS own code (5), so
-  // this code only surfaces on a standalone run — where it must not read
-  // as the run script's venue-lock contention (3).
   process.exit(1);
 };
+
+// A parse that yields no realm would green an UNCHECKED venue — the
+// vacuous pass the suite's determinism rule forbids. Fail loud instead.
+if (REALMS.length === 0) {
+  failGate(
+    ` ROPC_POSTURE_REALMS="${process.env.ROPC_POSTURE_REALMS}" parsed to no realm — refusing to green an unchecked venue.`
+  );
+}
 
 (async () => {
   const token = await getAdminToken();

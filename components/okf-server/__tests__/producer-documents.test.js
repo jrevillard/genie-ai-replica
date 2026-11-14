@@ -132,7 +132,11 @@ function programQuery() {
         if (!mergeOption) {
           throw new Error('mock: the conditional close no longer states its mergeObjects option');
         }
-        live.conversion = bind[mergeOption[1]] ? arangoMerge(live.conversion, bind.patch) : bind.patch;
+        // #1819: the replace branch stores a SERIALIZED COPY, like
+        // production's UPDATE does — the patch by reference would alias the
+        // producer's close/previous object, and any later mock write merged
+        // into live.conversion would mutate it silently.
+        live.conversion = bind[mergeOption[1]] ? arangoMerge(live.conversion, bind.patch) : structuredClone(bind.patch);
         return { all: async () => [1] };
       }
       // The queued write hands back the record it replaced (RETURN OLD).

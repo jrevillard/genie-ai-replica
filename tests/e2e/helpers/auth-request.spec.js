@@ -44,7 +44,7 @@ const TLS_OPTIONS = {
 /** Start a one-shot TLS server whose single response `responder` builds. */
 function startServer(responder) {
   return new Promise((resolve) => {
-    const server = https.createServer(TLS_OPTIONS, (req, res) => responder(res));
+    const server = https.createServer(TLS_OPTIONS, (req, res) => responder(req, res));
     server.listen(0, '127.0.0.1', () => resolve(server));
   });
 }
@@ -60,7 +60,7 @@ test.describe('the transport response contract (auth.request at its own boundary
   });
 
   test('a JSON body resolves parsed, with the status and headers', async () => {
-    server = await startServer((res) => {
+    server = await startServer((req, res) => {
       res.writeHead(200, { 'content-type': 'application/json', 'x-test-marker': 'present' });
       res.end(JSON.stringify({ realm: 'genie', enabled: true }));
     });
@@ -71,7 +71,7 @@ test.describe('the transport response contract (auth.request at its own boundary
   });
 
   test('an empty body resolves data: null — a 204-style success', async () => {
-    server = await startServer((res) => {
+    server = await startServer((req, res) => {
       res.writeHead(204);
       res.end();
     });
@@ -84,7 +84,7 @@ test.describe('the transport response contract (auth.request at its own boundary
     // The empty-body check precedes the raw check: a caller asking for
     // the body as text still gets `null` for no body, because "no
     // payload" and "an empty payload" are the same answer on the wire.
-    server = await startServer((res) => {
+    server = await startServer((req, res) => {
       res.writeHead(200, { 'content-type': 'text/plain' });
       res.end();
     });
@@ -94,7 +94,7 @@ test.describe('the transport response contract (auth.request at its own boundary
 
   test('raw: true resolves the body AS TEXT', async () => {
     const config = 'window.APP_CONFIG = {\n  okfEnabled: "0",\n};\n';
-    server = await startServer((res) => {
+    server = await startServer((req, res) => {
       res.writeHead(200, { 'content-type': 'application/javascript' });
       res.end(config);
     });
@@ -106,7 +106,7 @@ test.describe('the transport response contract (auth.request at its own boundary
   });
 
   test('a non-JSON body rejects with nonJsonBody and the status', async () => {
-    server = await startServer((res) => {
+    server = await startServer((req, res) => {
       res.writeHead(502, { 'content-type': 'text/html' });
       res.end('<html>Bad gateway</html>');
     });
@@ -119,5 +119,118 @@ test.describe('the transport response contract (auth.request at its own boundary
     expect(error.status).toBe(502);
     expect(error.message).toContain('HTTP 502');
     expect(error.message).toContain('<html>Bad gateway</html>');
+  });
+});
+
+// The edge's own upstream-reset reply (#1847): the k8s venue's Envoy
+// occasionally answers a keep-alive race with its LOCAL 503 — a plain-text
+// body ("upstream connect error or disconnect/reset before headers. reset
+// reason: connection termination"), not a product answer. The request
+// helper retries THAT exact signature on idempotent methods, without a
+// pause (the reset path is instantaneous; the next attempt targets a fresh
+// socket), within a hard bound, rethrowing the last observed error when
+// the bound runs out. A product 503 carries a JSON body — it resolves like
+// every other response and no caller's status guard sees a retry behind
+// it. This spec drives the REAL transport over the TLS fixture, so the
+// retry verdict cannot drift from the response contract above.
+test.describe('the edge upstream-reset retry (auth.request)', () => {
+  const ENVOY_RESET_BODY =
+    'upstream connect error or disconnect/reset before headers. reset reason: connection termination';
+  let server;
+  let hits;
+
+  const answerWith = (statusCode, contentType, body) => {
+    hits = 0;
+    return startServer((req, res) => {
+      hits += 1;
+      res.writeHead(statusCode, { 'content-type': contentType });
+      res.end(typeof body === 'string' ? body : JSON.stringify(body));
+    });
+  };
+
+  test.afterEach(async () => {
+    if (server) await new Promise((resolve) => server.close(resolve));
+    server = null;
+  });
+
+  test('a GET on the edge reset is retried and recovers on the first healthy answer', async () => {
+    let scriptedHits = 0;
+    server = await startServer((req, res) => {
+      scriptedHits += 1;
+      if (scriptedHits <= 2) {
+        res.writeHead(503, { 'content-type': 'text/plain' });
+        res.end(ENVOY_RESET_BODY);
+        return;
+      }
+      res.writeHead(200, { 'content-type': 'application/json' });
+      res.end(JSON.stringify({ name: 'Test User', role: 'user', emailVerified: true }));
+    });
+
+    const res = await auth.request('GET', urlOf(server));
+    expect(res.status).toBe(200);
+    expect(res.data).toHaveProperty('name', 'Test User');
+    // Two resets consumed before the healthy answer: exactly the bound's
+    // first two retries.
+    expect(scriptedHits).toBe(3);
+  });
+
+  test('the bound holds and the LAST observed reset is rethrown verbatim', async () => {
+    server = await answerWith(503, 'text/plain', ENVOY_RESET_BODY);
+    const error = await auth.request('GET', urlOf(server)).catch((e) => e);
+    expect(error).toBeInstanceOf(Error);
+    expect(error.status).toBe(503);
+    expect(error.nonJsonBody).toBe(true);
+    expect(error.message).toContain('upstream connect error or disconnect/reset before headers');
+    // One original attempt plus the bound's retries — no unbounded loop.
+    expect(hits).toBe(3);
+  });
+
+  test('a product 503 — a JSON body — resolves once and is never retried', async () => {
+    server = await answerWith(503, 'application/json', {
+      error: 'VL_UNREACHABLE',
+      message: 'the product answers 503 with a body'
+    });
+    const res = await auth.request('GET', urlOf(server));
+    // The response contract is untouched: a JSON body resolves, whatever
+    // its status — the caller's status guard is the verdict.
+    expect(res.status).toBe(503);
+    expect(res.data).toHaveProperty('error', 'VL_UNREACHABLE');
+    expect(hits).toBe(1);
+  });
+
+  test('a POST on the edge reset is never retried — only idempotent methods are', async () => {
+    server = await answerWith(503, 'text/plain', ENVOY_RESET_BODY);
+    const error = await auth.request('POST', urlOf(server), {
+      body: { grant_type: 'password' }
+    }).catch((e) => e);
+    expect(error).toBeInstanceOf(Error);
+    expect(error.status).toBe(503);
+    // A POST whose outcome is ambiguous must not be re-sent: one attempt,
+    // the caller sees the failure.
+    expect(hits).toBe(1);
+  });
+
+  test('a plain-text 503 without the reset signature is answered once', async () => {
+    // The signature IS the trigger: another plain-text 503 (a proxy's own
+    // "Service Unavailable", say) is an endpoint state a retry verdict has
+    // no business deciding — one attempt, the caller sees it.
+    server = await answerWith(503, 'text/plain', 'Service Unavailable');
+    const error = await auth.request('GET', urlOf(server)).catch((e) => e);
+    expect(error).toBeInstanceOf(Error);
+    expect(error.nonJsonBody).toBe(true);
+    expect(error.status).toBe(503);
+    expect(hits).toBe(1);
+  });
+
+  test('a 502 carrying the reset text is answered once — the status gate is exact', async () => {
+    // The reset signature at another status is a different verdict (a
+    // 502 Bad Gateway is not the keep-alive race): the gate matches BOTH
+    // the signature and the status, so a loosening of either turns red.
+    server = await answerWith(502, 'text/plain', ENVOY_RESET_BODY);
+    const error = await auth.request('GET', urlOf(server)).catch((e) => e);
+    expect(error).toBeInstanceOf(Error);
+    expect(error.nonJsonBody).toBe(true);
+    expect(error.status).toBe(502);
+    expect(hits).toBe(1);
   });
 });

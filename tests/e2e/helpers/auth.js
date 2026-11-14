@@ -7,6 +7,36 @@ const { BASE_URL } = require('./base-url');
 const { venueLaunchArgs } = require('./venue-launch-args');
 
 /**
+ * The edge's own upstream-reset reply (#1847): the k8s venue's Envoy
+ * occasionally answers a keep-alive race between the edge and the backend
+ * with its LOCAL 503 — a plain-text body that names the reset ("upstream
+ * connect error or disconnect/reset before headers. reset reason:
+ * connection termination"), not a product answer. Under suite load the
+ * race surfaces about once per run and is worth one re-issue: a GET is
+ * idempotent, and the reset path is instantaneous — no pause is needed,
+ * the next attempt targets a fresh socket. A product 503 carries a JSON
+ * body and is never retried (the response contract resolves it; the
+ * caller's status guard is the verdict), and neither is a POST, whose
+ * outcome a re-send could not report honestly. The bound is hard: when it
+ * runs out, the LAST observed error is rethrown verbatim — a failure the
+ * caller sees is never swallowed or degraded.
+ */
+const EDGE_RESET_SIGNATURE = 'upstream connect error or disconnect/reset before headers';
+const EDGE_RESET_MAX_ATTEMPTS = 3;
+
+function isEdgeResetRetryEligible(method, error) {
+  const idempotent = method === 'GET' || method === 'HEAD';
+  return (
+    idempotent &&
+    error &&
+    error.nonJsonBody === true &&
+    error.status === 503 &&
+    typeof error.message === 'string' &&
+    error.message.includes(EDGE_RESET_SIGNATURE)
+  );
+}
+
+/**
  * Make an HTTPS request ignoring self-signed certificate errors.
  * @param {string} method - HTTP method
  * @param {string} path - URL path
@@ -14,7 +44,7 @@ const { venueLaunchArgs } = require('./venue-launch-args');
  * @returns {Promise<{status: number, data: object, headers: object}>}
  */
 function request(method, path, options = {}) {
-  return new Promise((resolve, reject) => {
+  const attempt = () => new Promise((resolve, reject) => {
     const url = new URL(path, BASE_URL);
     const reqOptions = {
       hostname: url.hostname,
@@ -88,6 +118,17 @@ function request(method, path, options = {}) {
     }
     req.end();
   });
+
+  let attemptsLeft = EDGE_RESET_MAX_ATTEMPTS;
+  const run = () =>
+    attempt().catch((error) => {
+      attemptsLeft -= 1;
+      if (attemptsLeft > 0 && isEdgeResetRetryEligible(method, error)) {
+        return run();
+      }
+      throw error;
+    });
+  return run();
 }
 
 /**

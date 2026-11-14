@@ -83,6 +83,9 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
   String _conversationTitle = "New Chat";
   List<Map<String, dynamic>> _messages = [];
   List<Map<String, dynamic>> get messages => _messages;
+  // Monotonic suffix for the ids this state generates (the user send's
+  // bubble-handle discriminator): the millisecond alone can repeat.
+  int _sendSeq = 0;
   bool _isLoading = false;
   bool _isStreaming = false;
   StreamSubscription<String>? _streamSubscription;
@@ -275,14 +278,23 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
     _ensureEnTree();
     _titleController.text = _conversationTitle;
 
-    _messages.add({
-      'role': 'assistant',
-      'content': _welcomeMessage,
-      'timestamp': DateTime.now().toIso8601String(),
-      'isSaved': true,
-    });
+    _messages.add(_buildWelcomeMessage());
     _lastSavedMessageCount = 1;
   }
+
+  /// The transcript's opening bubble. ONE literal for both add sites (the
+  /// state's init and the reset path): the bubble test handle's
+  /// discriminator (message-bubble-bot-welcome) rides on the id, and a
+  /// field added at one site only would silently drop the handle at the
+  /// other. At most one welcome bubble exists at a time, so the id stays
+  /// stable across resets.
+  Map<String, dynamic> _buildWelcomeMessage() => {
+    'id': 'welcome',
+    'role': 'assistant',
+    'content': _welcomeMessage,
+    'timestamp': DateTime.now().toIso8601String(),
+    'isSaved': true,
+  };
 
   @override
   void dispose() {
@@ -1063,12 +1075,7 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
     widget.onRelatedDocumentsUpdate([]);
     _inputController.clear();
 
-    _messages.add({
-      'role': 'assistant',
-      'content': _welcomeMessage,
-      'timestamp': DateTime.now().toIso8601String(),
-      'isSaved': true,
-    });
+    _messages.add(_buildWelcomeMessage());
     _lastSavedMessageCount = 1;
     _updateQuickHelpVisibility();
   }
@@ -1110,6 +1117,11 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
     }
 
     final userMessage = {
+      // The bubble test handle's discriminator (message-bubble-user-<id>):
+      // millisecond + a per-state send counter — the counter keeps two
+      // sends in the same millisecond (a quick-help auto-send racing a
+      // manual one) from colliding on one sibling key.
+      'id': 'user_${DateTime.now().millisecondsSinceEpoch}_${_sendSeq++}',
       'role': 'user',
       'content': text.trim(),
       'actualContent': hiddenPrompt ?? text.trim(),
@@ -1200,6 +1212,8 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
     // this one.
     bool answerTranslationFailed = false;
 
+    // The millisecond alone suffices (no send counter needed): only one
+    // streaming placeholder exists at a time and it mutates in place.
     final String streamingId =
         'stream_${DateTime.now().millisecondsSinceEpoch}';
     setState(() {
@@ -1451,7 +1465,15 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
       final bool translationFailed = isTranslationFailed(metadata);
 
       final assistantMessage = {
-        'id': response['queryId'],
+        // The bubble handle's discriminator: the queryId when the answer
+        // carries one, a generated id otherwise — a null here would make
+        // the handle collide with the next id-less entry (the feedback
+        // path already treats a missing queryId as a recognized state).
+        'id':
+            response['queryId'] ??
+            // No send counter (unlike the user id): the awaited round
+            // trip serializes the adds, so two cannot share a millisecond.
+            'assistant_${DateTime.now().millisecondsSinceEpoch}',
         'queryId': response['queryId'],
         'role': 'assistant',
         'content': response['response'] ?? tr('chatbot.noResponse'),
@@ -2448,6 +2470,9 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
                     if (index == _messages.length &&
                         (_isLoading || _isStreaming)) {
                       return Padding(
+                        // The test handle the web declares on the same
+                        // surface (streaming-indicator).
+                        key: const ValueKey('streaming-indicator'),
                         padding: const EdgeInsets.symmetric(
                           vertical: DsSpacing.md,
                         ),
@@ -2474,6 +2499,21 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
                           ? Alignment.centerRight
                           : Alignment.centerLeft,
                       child: Container(
+                        // The bubble test handle, named after the web's
+                        // message-bubble-bot / message-bubble-user. Flutter
+                        // keys must be unique among siblings, so — unlike
+                        // the web's constant attribute — the handle carries
+                        // the message's own id as its discriminator (the
+                        // handle contract's list rule); the stable forms a
+                        // spec can address are the server ids of a restored
+                        // transcript and the welcome bubble's 'welcome'. A
+                        // message whose id is missing falls back to its
+                        // position: no two entries in one list can share
+                        // it, which is what keeps the build from crashing
+                        // on a transcript the backend served without ids.
+                        key: ValueKey(
+                          'message-bubble-${isUser ? 'user' : 'bot'}-${msg['id'] ?? index}',
+                        ),
                         margin: const EdgeInsets.symmetric(
                           vertical: DsSpacing.sm,
                         ),
@@ -2680,6 +2720,10 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
                       children: [
                         Expanded(
                           child: TextField(
+                            // The test handle the web declares on the same
+                            // surface (composer-field): a patrol spec
+                            // addresses the composer only through it.
+                            key: const ValueKey('composer-field'),
                             controller: _inputController,
                             focusNode: _inputFocusNode,
                             style: TextStyle(color: tokens.fg),
@@ -2731,6 +2775,9 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
               (broken.isNotEmpty || gridButtons.isNotEmpty) &&
               _treeSettled)
             Container(
+              // The test handle the web declares on the same surface
+              // (quick-help-overlay).
+              key: const ValueKey('quick-help-overlay'),
               color: tokens.bg,
               padding: const EdgeInsets.symmetric(
                 horizontal: DsSpacing.md,
@@ -2822,6 +2869,14 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
                                     button['styles'] as QuickHelpCardStyles;
 
                                 return Material(
+                                  // The test handle the web declares on the
+                                  // same surface (quick-help-item),
+                                  // discriminated by the button's own id —
+                                  // the grid carries one tile per button, so
+                                  // the keys stay unique among siblings.
+                                  key: ValueKey(
+                                    'quick-help-item-${button['id']}',
+                                  ),
                                   color: Colors.transparent,
                                   child: InkWell(
                                     borderRadius: BorderRadius.circular(

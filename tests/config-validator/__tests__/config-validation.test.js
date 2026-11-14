@@ -18,6 +18,7 @@ const { parseEnvTemplateImageVars } = require('../validators/parse-env-template'
 const { extractCiShellBlocks } = require('../validators/extract-ci-shell');
 const { validateRetrieverEnvCoverage } = require('../validators/validate-retriever-env');
 const { validateFeatureFlags, OPEA_VAR_NAMES } = require('../validators/validate-features');
+const { SPEC_FILE_RE } = require('../validators/js-files');
 const {
   validateHardwareProfile,
   validateProfileConsistency,
@@ -46,14 +47,17 @@ const ENV_TEMPLATE_FILE = path.join(ROOT, 'deploy/ansible/templates/env.j2');
 const SHARED_FACTS_FILE = path.join(ROOT, 'deploy/ansible/tasks/deploy-shared-facts.yml');
 
 // The extension shape set Playwright's default testMatch accepts — one
-// fragment shared by the executed-spec selection, the walk's JS-file gate
-// and the import-path pin so the three cannot drift.
+// fragment shared by the walk's JS-file gate and the import-path pin so
+// the two cannot drift. The spec/test SUFFIX itself is the shared
+// SPEC_FILE_RE (#1800): validators/js-files.js owns the spelling, so this
+// derivation and the stream-route gate cannot disagree about what a test
+// file is.
 const JS_EXT_SRC = '[cm]?[jt]sx?';
 
 // Pure selection of the executed files from a directory listing — the
 // units below pin the boundary and the testMatch shapes on synthetic
 // listings, the real-tree pin anchors them to the actual invocation.
-const EXECUTED_SPEC_RE = new RegExp('\\.(?:spec|test)\\.' + JS_EXT_SRC + '$');
+const EXECUTED_SPEC_RE = SPEC_FILE_RE;
 const WALKABLE_FILE_RE = new RegExp('\\.(?:' + JS_EXT_SRC + ')$');
 
 // The e2e tree root. Module scope because two guards read it: the CI
@@ -2734,9 +2738,11 @@ describe('e2e merge-train changes filters (#1264)', () => {
 
   test('derivation scans exactly the spec files the invocation executes', () => {
     expect([...EXECUTED_SPECS].sort()).toEqual([
+      'tests/e2e/admin/analytics-satisfaction.spec.js',
       'tests/e2e/admin/authz.spec.js',
       'tests/e2e/admin/data-wiring.spec.js',
       'tests/e2e/admin/failure-states.spec.js',
+      'tests/e2e/admin/hierarchy-translations-failure.spec.js',
       'tests/e2e/admin/logs-view.spec.js',
       'tests/e2e/chatbot/chat-composer.spec.js',
       'tests/e2e/chatbot/chat-conversation.spec.js',
@@ -2746,9 +2752,11 @@ describe('e2e merge-train changes filters (#1264)', () => {
       'tests/e2e/chatbot/send-message-and-stream.spec.js',
       'tests/e2e/documents/search.spec.js',
       'tests/e2e/documents/upload.spec.js',
+      'tests/e2e/helpers/auth-request.spec.js',
       'tests/e2e/helpers/auth.spec.js',
       'tests/e2e/helpers/base-url.spec.js',
       'tests/e2e/helpers/chatbot.spec.js',
+      'tests/e2e/helpers/documents.spec.js',
       'tests/e2e/helpers/keycloak-admin.spec.js',
       'tests/e2e/helpers/route.spec.js',
       'tests/e2e/helpers/venue-launch-args.spec.js',
@@ -3589,11 +3597,13 @@ describe('the venue-fixture provisioning in .e2e_web_base', () => {
       ['docs/e2e-tests/00-clean-start.md', `"email": "${testuser.email}"`],
       // 00-clean-start.md carries the password literal too (payload
       // credentials, ROPC verification curl, credentials bullet) —
-      // #1407: it stays pinned beside the epic docs.
+      // #1407: it stays pinned beside the phase procedures. The epic
+      // docs were folded INTO the suite map (#1837), so the manual
+      // payloads of Phases A-N (B.1's ROPC verification, F.1/F.2's token
+      // mints, K.2/K.3's ephemeral users, M.10/N.x's recreates) now live
+      // — and are pinned — in ONE document.
       ['docs/e2e-tests/00-clean-start.md', testuser.password],
-      ['docs/e2e-tests/epic1-keycloak-foundation.md', testuser.password],
-      ['docs/e2e-tests/epic2-secure-api-access.md', testuser.password],
-      ['docs/e2e-tests/epic3-session-lifecycle-gdpr.md', testuser.password]
+      ['docs/e2e-tests/suite-map.md', testuser.password]
     ];
     for (const [doc, expected] of docChecks) {
       const source = fs.readFileSync(path.join(ROOT, doc), 'utf-8');

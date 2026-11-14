@@ -69,10 +69,20 @@ const LOCAL_ORIGIN =
   /https?:\/\/(?:localhost|127\.0\.0\.1|genieai(?:-forge)?\.local|10\.\d{1,3}\.\d{1,3}\.\d{1,3}|172\.(?:1[6-9]|2\d|3[01])\.\d{1,3}\.\d{1,3}|192\.168\.\d{1,3}\.\d{1,3}|169\.254\.\d{1,3}\.\d{1,3})(?::\d+)?(?![A-Za-z0-9_-]|\.[A-Za-z0-9_-])/gi;
 
 // The local origins the suite may drive on purpose: a mocked identity
-// provider, a local stub. One per line, with the reason. It is EMPTY on
-// purpose today — every local origin in the tree is the edge itself — and
-// it is the escape hatch a spec that needs a local mock adds to.
-const MOCK_ORIGINS = [];
+// provider, a local stub. ONE ENTRY PER FILE — an entry allows its origin
+// in ITS file only, so a hardcoded loopback anywhere else still fails the
+// gate (a global allowance would readmit the hardcoded-venue bug class
+// the gate exists to catch). Synthetic-tree probes compute each file's
+// ROOT-relative path the same way offenders() does.
+const MOCK_ORIGINS = [
+  {
+    // The transport owner test (#1804) drives its own local TLS server
+    // on an ephemeral loopback port (helpers/auth-request.spec.js) — the
+    // loopback prefix is the fixture's address, never a venue.
+    file: 'tests/e2e/helpers/auth-request.spec.js',
+    origin: 'https://127.0.0.1'
+  }
+];
 
 // The defining module, resolved — not a literal path: if the module
 // moves, the exemption follows it (a hardcoded path would turn a legal
@@ -116,10 +126,13 @@ const offenders = (files, allowed = MOCK_ORIGINS) =>
   files
     .filter((f) => path.resolve(f) !== path.resolve(DEFINING_MODULE))
     .filter((f) => {
+      // The allowance an entry grants is scoped to its own file.
+      const rel = path.relative(ROOT, f);
+      const allowedHere = allowed.filter((entry) => entry.file === rel).map((entry) => entry.origin);
       const origins = stripJsComments(fs.readFileSync(f, 'utf8')).match(LOCAL_ORIGIN) || [];
       // Every local origin the file names must be one the suite may
-      // drive on purpose.
-      return origins.some((origin) => !allowed.includes(origin));
+      // drive on purpose — in THIS file.
+      return origins.some((origin) => !allowedHere.includes(origin));
     })
     .map((f) => path.relative(ROOT, f));
 
@@ -133,6 +146,29 @@ describe('the e2e suite names the venue it was given, and names it once', () => 
 
   test('no file but the definition carries the venue edge', () => {
     expect(offenders(WATCHED)).toEqual([]);
+  });
+
+  test('a per-file allowance scopes its origin to its own file', () => {
+    // The same hardcoded loopback in TWO files, an allowance for ONE of
+    // them: the allowed file passes, the other stays an offender — the
+    // allowance is scoped to its own file, never a licence for the
+    // loopback everywhere (#1804 review). On a throwaway tree, like the
+    // boundary probe below.
+    withTree(
+      'venue-origin-scope-',
+      {
+        'allowed.spec.js': "await page.goto('https://127.0.0.1:8443/probe');\n",
+        'other.spec.js': "await page.goto('https://127.0.0.1:8443/probe');\n"
+      },
+      (tree) => {
+        const allowance = {
+          file: path.relative(ROOT, path.join(tree, 'allowed.spec.js')),
+          origin: 'https://127.0.0.1:8443'
+        };
+        const strays = offenders(jsFiles(tree), [allowance]).map((f) => path.basename(f));
+        expect(strays.sort()).toEqual(['other.spec.js']);
+      }
+    );
   });
 
   test('the edge is defined ONCE — one module reads the environment', () => {
@@ -241,9 +277,11 @@ describe('the e2e suite names the venue it was given, and names it once', () => 
         'lookalike-dash-label.spec.js': "await page.goto('https://localhost.-evil.x/');\n"
       },
       (tree) => {
-        const strays = offenders(jsFiles(tree), ['http://127.0.0.1:9000', 'http://localhost:8123']).map((f) =>
-          path.basename(f)
-        );
+        const rel = (name) => path.relative(ROOT, path.join(tree, name));
+        const strays = offenders(jsFiles(tree), [
+          { file: rel('mock-idp.spec.js'), origin: 'http://127.0.0.1:9000' },
+          { file: rel('mock-server.spec.js'), origin: 'http://localhost:8123' }
+        ]).map((f) => path.basename(f));
         expect(strays.sort()).toEqual([
           'api.spec.js',
           'bare-k8s.spec.js',

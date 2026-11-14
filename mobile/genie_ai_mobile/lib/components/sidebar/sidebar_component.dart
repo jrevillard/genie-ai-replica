@@ -175,6 +175,10 @@ class _SidebarComponentState extends State<SidebarComponent>
     // FIX: Replaced Container with Material to provide a valid render surface
     // for InkWells and avoid the "render box never laid out" hit test error.
     return Material(
+      // The test handle the web declares on the same surface
+      // (sidebar-left). One instance is mounted at a time: the panel on
+      // wide screens, the drawer on narrow ones share this content root.
+      key: const ValueKey('sidebar-left'),
       color: tokens.bg,
       child: Column(
         children: [

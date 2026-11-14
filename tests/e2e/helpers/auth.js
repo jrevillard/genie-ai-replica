@@ -29,7 +29,7 @@ function request(method, path, options = {}) {
       // body — Keycloak's DELETE on the role-mappings collection — leaves
       // that body in the socket: the NEXT request on the same connection
       // is then read as a malformed one and answers 400 Bad Request.
-      agent: false,
+      agent: false
     };
 
     const req = https.request(reqOptions, (res) => {
@@ -118,16 +118,25 @@ async function getAdminToken(adminPassword) {
     client_id: 'admin-cli',
     grant_type: 'password',
     username: 'admin',
-    password,
+    password
   }).toString();
 
   const res = await request('POST', '/auth/realms/master/protocol/openid-connect/token', {
     body,
-    contentType: 'application/x-www-form-urlencoded',
+    contentType: 'application/x-www-form-urlencoded'
   });
 
   if (res.status !== 200) {
     throw new Error(`Failed to get admin token: ${res.status} ${JSON.stringify(res.data)}`);
+  }
+  // A 200 without a token is the same failure class: every later realm
+  // call would run without a token (a `Bearer undefined` header). A proxy
+  // error page shaped as JSON answers like this.
+  if (!res.data || !res.data.access_token) {
+    throw new Error(
+      `Failed to get admin token: the endpoint answered 200 without an access_token ` +
+        `${JSON.stringify(res.data).substring(0, 300)}`
+    );
   }
   return res.data.access_token;
 }
@@ -168,12 +177,12 @@ async function getUserToken(username, password, options = {}) {
     client_id: clientId,
     grant_type: 'password',
     username,
-    password,
+    password
   }).toString();
 
   const res = await request('POST', `/auth/realms/${encodeURIComponent(realm)}/protocol/openid-connect/token`, {
     body,
-    contentType: 'application/x-www-form-urlencoded',
+    contentType: 'application/x-www-form-urlencoded'
   });
 
   if (res.status !== 200) {
@@ -444,5 +453,5 @@ module.exports = {
   SESSION_MINT_TIMEOUT_MS,
   SWEEP_DELETE_CONCURRENCY,
   SWEEP_MAX_LIST_PAGES,
-  SWEEP_MAX_DELETES,
+  SWEEP_MAX_DELETES
 };

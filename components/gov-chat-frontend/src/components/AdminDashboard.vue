@@ -219,6 +219,7 @@
                               <DsButton
                                 variant="ghost"
                                 :aria-label="translate('admin.hierarchy.editCategory', 'Edit Category')"
+                                :data-test-id="`hierarchy-edit-category-${category._key}`"
                                 @click="showEditForm(category)"
                               >
                                 ✏️
@@ -310,6 +311,7 @@
                             <DsSelect
                               v-model="translation.lang"
                               class="translation-lang-select"
+                              :data-test-id="`hierarchy-translation-lang-${index}`"
                               :placeholder="translate('admin.hierarchy.selectLang', 'Select Language')"
                               :disabled="translationsLoadFailed"
                             >
@@ -321,6 +323,7 @@
                               v-model="translation.text"
                               type="text"
                               class="translation-text-input"
+                              :data-test-id="`hierarchy-translation-text-${index}`"
                               :placeholder="translate('admin.hierarchy.translationPlaceholder', 'Enter translation')"
                               :disabled="translationsLoadFailed"
                             />
@@ -338,6 +341,7 @@
                           <DsButton
                             variant="secondary"
                             :small="true"
+                            data-test-id="hierarchy-translation-add"
                             :disabled="translationsLoadFailed"
                             @click="addTranslationRow"
                           >
@@ -348,6 +352,7 @@
                       <div class="form-actions">
                         <DsButton
                           variant="primary"
+                          data-test-id="hierarchy-save"
                           :disabled="
                             !hierarchyForm.nameEN ||
                             isSavingHierarchyItem ||
@@ -1796,7 +1801,7 @@ const blankTrends = () => ({
   errorRate: null,
   activeUsers: null
 });
-import { statusKey, statusVariant, displayStatus } from '../utils/documentStatus.js';
+import { statusKey, statusVariant, displayStatus, normalizeStatus } from '../utils/documentStatus.js';
 import { themeManager } from '../utils/ThemeManager';
 
 // OKF HEAVY COMPONENTS — ASYNC (round 17, #80362): StudioTab and
@@ -2149,16 +2154,19 @@ export default {
      * Performs client-side filtering on the documents array based on the selected status.
      */
     filteredDocuments() {
-      const selectedStatus = String(this.documentFilters.status).toLowerCase().trim();
+      // The normalisation is the shared vocabulary's (#1781): the e2e
+      // hold compares the rendered rows against the payload's subset of
+      // the selected status through the SAME normalizeStatus this
+      // filter applies, so the two cannot disagree about what a row
+      // "of a status" is.
+      const selectedStatus = normalizeStatus(this.documentFilters.status);
       if (!this.documents || this.documents.length === 0) {
         return [];
       }
       if (selectedStatus === 'all') {
         return this.documents; // If 'All' is selected, return the full list
       }
-      return this.documents.filter(
-        (doc) => doc.dataprep && String(doc.dataprep.status).toLowerCase().trim() === selectedStatus
-      );
+      return this.documents.filter((doc) => doc.dataprep && normalizeStatus(doc.dataprep.status) === selectedStatus);
     },
 
     sortedAndFilteredDocuments() {

@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:math';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/services.dart';
@@ -393,6 +394,10 @@ class _RightSidebarComponentState extends ConsumerState<RightSidebarComponent> {
     bool isDark,
   ) {
     return Material(
+      // The test handle the web declares on the same surface
+      // (sidebar-right). One instance is mounted at a time: the panel on
+      // wide screens, the drawer on narrow ones share this content root.
+      key: const ValueKey('sidebar-right'),
       color: tokens.bg,
       child: Container(
         decoration: BoxDecoration(

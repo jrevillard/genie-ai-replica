@@ -1,7 +1,7 @@
 const path = require('path');
 const fs = require('fs');
 
-const { jsFiles } = require('../validators/js-files');
+const { jsFiles, stripJsComments } = require('../validators/js-files');
 const { withTree } = require('../validators/temp-tree');
 
 const ROOT = path.resolve(__dirname, '../../..');
@@ -143,92 +143,18 @@ const textSelectorsIn = (source) => {
   return found;
 };
 
-// Comments are prose about the code, not the code: a comment that names
-// the class the handle replaced must not fail the gate. One pass over
-// the whole source — string state (including multi-line template
-// literals) must survive across lines, or a `//` inside a backtick
-// template would cut real locator code as a comment. A `//` inside a
-// string (a URL) is not a comment, so the scanner skips those. A `/`
-// that OPENS a regex literal is not a comment either: the classic
-// heuristic (JSLint's) says a slash after `(,=:[!&|?{};` or line start
-// or an operator is a regex, one after an identifier/`)`/`]` is
-// division — a quote inside the regex therefore cannot flip the
-// scanner into string state.
-const stripComments = (source) => {
-  let out = '';
-  let state = null; // null | "'" | '"' | '`' | '/'
-  let prevSignificant = ''; // last non-whitespace character kept
-  for (let i = 0; i < source.length; i++) {
-    const ch = source[i];
-    if (state && state !== '/') {
-      out += ch;
-      if (ch === '\\') {
-        out += source[i + 1] || '';
-        i++;
-      } else if (ch === state) {
-        state = null;
-      }
-      continue;
-    }
-    if (state === '/') {
-      // Inside a regex literal: a `\` escapes the next character.
-      out += ch;
-      if (ch === '\\') {
-        out += source[i + 1] || '';
-        i++;
-      } else if (ch === '/') {
-        state = null;
-        prevSignificant = ch;
-      }
-      continue;
-    }
-    if (ch === "'" || ch === '"' || ch === '`') {
-      state = ch;
-      out += ch;
-      prevSignificant = ch;
-      continue;
-    }
-    if (ch === '/') {
-      if (source[i + 1] === '/') {
-        while (i < source.length && source[i] !== '\n') i++;
-        out += '\n';
-        continue;
-      }
-      if (source[i + 1] === '*') {
-        const end = source.indexOf('*/', i + 2);
-        i = end === -1 ? source.length : end + 1;
-        continue;
-      }
-      const regexStart = '(,=:[!&|?{};+-*%~^<>'.includes(prevSignificant) || prevSignificant === '';
-      if (regexStart && source[i + 1] !== '=') {
-        state = '/';
-        out += ch;
-        continue;
-      }
-      out += ch;
-      prevSignificant = ch;
-      continue;
-    }
-    out += ch;
-    if (!/\s/.test(ch)) prevSignificant = ch;
-  }
-  return out;
-};
-
-// Walk a tree and return every offender a scanned file carries. `dir`
-// is scanned recursively for .js files (dependency trees pruned by the
-// shared jsFiles walker); `exemptRel` lists the paths (relative to
-// `relBase`) that stay grandfathered. The real gate call passes the
-// suite root and the repo root; the simulated-tree tests pass a temp
-// dir for both, which is how a NEW file is proven covered without
-// writing one into the real tree.
+// The scanner is the SHARED one (#1800): validators/js-files.js owns the
+// comment stripper this gate reads the tree through — the stronger copy
+// (it knows a regex may follow a keyword, and a character class may hold
+// a slash), and the one the other gates already use. A fix to the
+// scanner is made once, where every gate sees it.
 const findOffenders = (dir, exemptRel, relBase = dir) => {
   const offenders = [];
   const files = jsFiles(dir).sort();
   for (const file of files) {
     const rel = path.relative(relBase, file);
     if (exemptRel.includes(rel)) continue; // grandfathered — see the list above
-    const source = stripComments(fs.readFileSync(file, 'utf8'));
+    const source = stripJsComments(fs.readFileSync(file, 'utf8'));
     for (const { className, quoted } of classSelectorsIn(source)) {
       offenders.push(
         `${rel}: ".${className}" in ${quoted} — use the declared ` + 'data-testid / data-test-id handle instead'
@@ -300,7 +226,7 @@ describe('the e2e suite locates application elements by declared handle', () => 
 
   test('a class locator after a // inside a template literal is an offender', () => {
     const sample = "const s = `x // `;\nawait page.click('.chat-composer');";
-    expect(classSelectorsIn(stripComments(sample)).map((o) => o.className)).toEqual(['chat-composer']);
+    expect(classSelectorsIn(stripJsComments(sample)).map((o) => o.className)).toEqual(['chat-composer']);
   });
 
   test('a quote inside a regex literal does not corrupt the stripper', () => {
@@ -312,7 +238,7 @@ describe('the e2e suite locates application elements by declared handle', () => 
       "// a prose citation: page.locator('.old-class') is gone",
       "await page.click('.chat-composer');"
     ].join('\n');
-    expect(classSelectorsIn(stripComments(sample)).map((o) => o.className)).toEqual(['chat-composer']);
+    expect(classSelectorsIn(stripJsComments(sample)).map((o) => o.className)).toEqual(['chat-composer']);
   });
 
   test('a $eval selector is an offender', () => {

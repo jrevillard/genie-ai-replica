@@ -1,4 +1,18 @@
 const { expect } = require('@playwright/test');
+// The shared document-status vocabulary: the frontend owns the rule this
+// helper mirrors, so the helper IMPORTS it instead of spelling it (#1781).
+// The bridge is Node's CommonJS-require-of-an-ES-module (unflagged from
+// Node 22.12, 20.19 on the 20 line). Below that floor the require is a
+// bare SyntaxError at load with nothing to act on — so probe the
+// capability (`process.features.require_module`, the flag's own name)
+// and name the floor and the runner's version HERE (#1804 review of
+// #1781).
+if (!process.features.require_module) {
+  throw new Error(
+    `tests/e2e/helpers/documents.js needs a Node with unflagged CommonJS require of ES modules (>= 22.12, or >= 20.19 on the 20 line — the shared document-status vocabulary is an ES module); this runner is Node ${process.versions.node}`
+  );
+}
+const { normalizeStatus } = require('../../../components/gov-chat-frontend/src/utils/documentStatus');
 const { loginViaUI, BASE_URL, TEST_ADMIN_USER } = require('./chatbot');
 const {
   describeUnauthorized,
@@ -92,19 +106,24 @@ async function waitForDocumentInTable(page, fileName, options = {}) {
 /**
  * The status predicate the admin table applies CLIENT-SIDE
  * (AdminDashboard.vue `filteredDocuments`): 'all' lists every document,
- * and any other selection lists the documents whose dataprep status —
- * lowercased and trimmed — equals it. The list request carries NO status
- * parameter, so the response payload is the WHOLE page and the table
- * renders the payload's subset of the selected status.
+ * and any other selection lists the documents whose dataprep status equals
+ * it. The list request carries NO status parameter, so the response
+ * payload is the WHOLE page and the table renders the payload's subset of
+ * the selected status.
+ *
+ * The normalisation is the SHARED vocabulary's (#1781): this predicate
+ * derives from the same `normalizeStatus` the require at the top of this
+ * file loads and the admin filter applies — one rule, three consumers,
+ * no mirror to go stale (the bridge and its floor are documented there).
  *
  * @param {object} file - one document of the /api/files payload
  * @param {string} status - the selected status
  * @returns {boolean} whether the table would list the document
  */
 function matchesStatus(file, status) {
-  const wanted = String(status).toLowerCase().trim();
+  const wanted = normalizeStatus(status);
   if (wanted === 'all') return true;
-  return Boolean(file.dataprep) && String(file.dataprep.status).toLowerCase().trim() === wanted;
+  return Boolean(file.dataprep) && normalizeStatus(file.dataprep.status) === wanted;
 }
 
 /**
@@ -369,4 +388,5 @@ module.exports = {
   waitForTableRowsSettled,
   getDocumentTableRows,
   deleteAllTestDocuments,
+  matchesStatus,
 };

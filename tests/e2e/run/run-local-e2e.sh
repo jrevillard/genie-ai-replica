@@ -23,13 +23,11 @@
 #                            from when the credentials are auto-read
 #                            (default: genieai).
 #   E2E_FILE_ISSUES          0 reports the failures without filing issues.
-#   ROPC_POSTURE_REALM       the realm the post-run posture gate checks
-#                            (default: genie). Set IN TANDEM with
-#                            ROPC_POSTURE_CLIENT when a script flipped a
-#                            non-default pair (e.g. the anchor wrapper's
-#                            EVAL_KC_REALM/EVAL_KC_CLIENT_ID).
-#   ROPC_POSTURE_CLIENT      the client the post-run posture gate checks
-#                            (default: genie-app).
+#   ROPC_POSTURE_REALMS      the realms the post-run posture gate sweeps,
+#                            comma-separated (default: genie). The gate
+#                            checks EVERY client of each swept realm, so a
+#                            script's non-default pair needs no mirror here
+#                            (#1846).
 #
 # The run ends with the failure path: a red run files one status::backlog
 # issue per failing spec file (tests/e2e/run/file-failure-issues.js), and the
@@ -202,7 +200,8 @@ fi
 
 # --- the post-run ROPC posture gate (#1727) ---------------------------------
 # The venue's auth posture is part of this run's outcome: a run that leaves
-# genie/genie-app accepting password grants fails the RUN even when every
+# genie (or whatever ROPC_POSTURE_REALMS names) accepting password grants
+# fails the RUN even when every
 # spec was green. The gate RECORDS its verdict here; the failure path runs
 # next (a red run files its issues whatever the posture said); the gate's
 # exit 5 is the exit's last word. One exception sits ABOVE it: a run

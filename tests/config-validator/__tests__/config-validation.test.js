@@ -2379,6 +2379,7 @@ describe('e2e merge-train changes filters (#1264)', () => {
   let EXECUTED_GLOBS;
   let EXECUTED_SPECS;
   let DERIVED_CONSUMED;
+  let DERIVED_OUT_OF_TREE;
   let CONSUMED_FILES;
 
   beforeAll(() => {
@@ -2389,7 +2390,11 @@ describe('e2e merge-train changes filters (#1264)', () => {
     // invocations of the pipeline.
     EXECUTED_GLOBS = executedPaths();
     EXECUTED_SPECS = specFilesUnderExecuted(EXECUTED_GLOBS);
-    ({ globs: DERIVED_CONSUMED, files: CONSUMED_FILES } = deriveConsumed(
+    ({
+      globs: DERIVED_CONSUMED,
+      outOfTreeGlobs: DERIVED_OUT_OF_TREE,
+      files: CONSUMED_FILES
+    } = deriveConsumed(
       EXECUTED_SPECS.map((file) => ({
         file,
         source: fs.readFileSync(path.join(ROOT, file), 'utf-8')
@@ -2468,18 +2473,19 @@ describe('e2e merge-train changes filters (#1264)', () => {
   // resolving to the tests/e2e root itself; none exist in the tree.
   // (TESTS_E2E_ROOT is at module scope — the local-run guard reads it too.)
 
-  // Containment + existence + file reads in one seam. Both derivation shapes
-  // drop anything that leaves tests/e2e (a traversal, a cross-tree import) or
-  // does not exist on disk — the regexes over-capture and the filesystem
-  // arbitrates. The transitive walk needs to read helper sources, so the
-  // whole IO surface is one injectable object: the derivation units pin the
-  // walk on synthetic two-directory chains that cannot exist on the real
-  // tree. stat returns the stat or null, read throws outside tests/e2e —
-  // containment is part of BOTH halves' contract; read returns the file
-  // text.
+  // Containment + existence + file reads in one seam. Existence arbitrates
+  // repo-wide (#1843): an out-of-tree resolve must be SEEN exactly like an
+  // in-tree one (its glob emitted, never silently swallowed), so the stat
+  // answers for any path inside the checkout and nulls anything that does
+  // not exist or escapes it — the regexes over-capture and the filesystem
+  // arbitrates. The WALK stays contained: the transitive walk needs to read
+  // helper sources, and the read throws outside tests/e2e — containment is
+  // the read half's contract. The whole IO surface is one injectable
+  // object: the derivation units pin the walk on synthetic two-directory
+  // chains that cannot exist on the real tree.
   const REAL_IO = {
     stat: (candidate) => {
-      if (!candidate.startsWith(`${TESTS_E2E_ROOT}/`)) return null;
+      if (candidate.startsWith('..') || path.posix.isAbsolute(candidate)) return null;
       try {
         return fs.statSync(path.join(ROOT, candidate));
       } catch {
@@ -2509,14 +2515,15 @@ describe('e2e merge-train changes filters (#1264)', () => {
     return null;
   };
 
-  // Anchor-style entry covering a resolved path: a file directly under
-  // tests/e2e is listed exactly (the anchor lists such files verbatim),
-  // anything deeper becomes its directory glob. Both callers pre-filter to
-  // strict descendants of tests/e2e, so the root itself never reaches here.
-  const toAnchorPath = (resolvedPath, isDir) => {
+  // Anchor-style entry covering a resolved path: a file directly under the
+  // ROOT is listed exactly (the anchor lists such files verbatim), anything
+  // deeper becomes its directory glob. In-tree paths pass the suite tree
+  // (tests/e2e); the out-of-tree emissions (#1843) pass the checkout root —
+  // one shape rule, two roots.
+  const toAnchorPath = (resolvedPath, isDir, root = TESTS_E2E_ROOT) => {
     if (isDir) return `${resolvedPath}/**/*`;
     const dir = path.posix.dirname(resolvedPath);
-    return dir === TESTS_E2E_ROOT ? resolvedPath : `${dir}/**/*`;
+    return dir === root ? resolvedPath : `${dir}/**/*`;
   };
 
   // Anchor coverage is prefix-based, not verbatim: `X/**/*` covers any
@@ -2565,8 +2572,12 @@ describe('e2e merge-train changes filters (#1264)', () => {
   // the cycle guard. Two consumption shapes per file: relative require/
   // import specifiers and path.join(__dirname, ...) / path.resolve(
   // __dirname, ...) string-literal segment chains (both built on LIT_SRC
-  // above). Candidates are dropped unless they resolve inside tests/e2e to
-  // something that exists on disk — the regexes over-capture (comments
+  // above). In-tree candidates glob AND are walked; out-of-tree candidates
+  // (#1843) that exist on disk are EMITTED — `outOfTreeGlobs`, the marking
+  // the containment seam used to swallow silently — but never walked: an
+  // out-of-tree file's own requires are the component tree's business,
+  // never the suite anchor's. Anything that does not exist, or resolves
+  // beyond the checkout, is dropped — the regexes over-capture (comments
   // naming real files, dead references) and the filesystem arbitrates.
   // Over-capture is the conservative direction for a trigger guard: more
   // anchor coverage, never a silent loss of coverage, and it fails the
@@ -2614,8 +2625,27 @@ describe('e2e merge-train changes filters (#1264)', () => {
     );
     const segmentRe = new RegExp(LIT_SRC, 'g');
     const globs = new Set();
+    // The out-of-tree emissions (#1843), kept apart from the in-tree globs:
+    // the marking is the value — the guard's pins treat the two sets
+    // differently (out-of-tree entries covered by another justification
+    // class need no anchor entry of their own).
+    const outOfTreeGlobs = new Set();
     const sources = new Map();
     const queue = [];
+    // The suite-tree boundary, string-level so the synthetic IO seams
+    // classify identically to the real one.
+    const inTree = (p) => p.startsWith(`${TESTS_E2E_ROOT}/`);
+    // One classification for both consumption shapes: in-tree candidates
+    // glob AND are walked; out-of-tree ones are emitted against the
+    // checkout root, never walked.
+    const record = (resolved, isDir, walk) => {
+      if (inTree(resolved)) {
+        globs.add(toAnchorPath(resolved, isDir));
+        if (walk) visitFile(resolved);
+      } else {
+        outOfTreeGlobs.add(toAnchorPath(resolved, isDir, '.'));
+      }
+    };
     // One enqueue path for both consumption shapes: the visited set (the
     // sources map) doubles as the cycle guard, and the read happens once.
     // Non-JS consumed files (a JSON fixture a require or join lands on)
@@ -2640,24 +2670,23 @@ describe('e2e merge-train changes filters (#1264)', () => {
       for (const match of source.matchAll(specifierRe)) {
         const resolved = resolveSpecifier(dir, UNESCAPE(match[1]), io);
         if (!resolved) continue;
-        globs.add(toAnchorPath(resolved, false));
-        visitFile(resolved);
+        record(resolved, false, true);
       }
       for (const match of source.matchAll(joinRe)) {
         const segments = [...match[1].matchAll(segmentRe)].map((m) => UNESCAPE(m[0]));
         const resolved = path.posix.normalize(path.posix.join(dir, ...segments));
         const st = io.stat(resolved);
         if (!st) continue;
-        globs.add(toAnchorPath(resolved, st.isDirectory()));
         // A join that lands on a FILE is consumption like a require — its
         // own requires must be walked and it must face the #1325 detector
         // like any other consumed file. (The fixtures joins resolve to the
         // directory and stop here.)
-        if (st.isFile()) visitFile(resolved);
+        record(resolved, st.isDirectory(), st.isFile());
       }
     }
     return {
       globs: [...globs].sort(),
+      outOfTreeGlobs: [...outOfTreeGlobs].sort(),
       files: [...sources].map(([file, source]) => ({ file, source }))
     };
   };
@@ -2805,7 +2834,12 @@ describe('e2e merge-train changes filters (#1264)', () => {
     const uncovered = [
       ...EXECUTED_GLOBS,
       ...EXECUTED_SPECS.map((f) => toAnchorPath(f, false)),
-      ...DERIVED_CONSUMED
+      ...DERIVED_CONSUMED,
+      // The out-of-tree emissions demand anchor coverage like any other
+      // consumed path (#1843): covered today by the stack-input globs, but
+      // a consumption landing OUTSIDE every listed glob fails here — the
+      // exact class this guard exists to close.
+      ...DERIVED_OUT_OF_TREE
     ].filter((p) => !isCovered(anchorPaths, p));
     // The diff names every uncovered path, not just the first.
     expect(uncovered).toEqual([]);
@@ -3160,8 +3194,13 @@ describe('e2e merge-train changes filters (#1264)', () => {
     // tree never exercises (every cross-require stays inside helpers/), so
     // the gates live on synthetic trees instead of waiting for a real
     // refactor to make them reachable.
-    const memIo = (tree) => ({
-      stat: (candidate) => (tree[candidate] ? { isFile: () => true, isDirectory: () => false } : null),
+    const memIo = (tree, dirs = []) => ({
+      stat: (candidate) =>
+        dirs.includes(candidate)
+          ? { isFile: () => false, isDirectory: () => true }
+          : tree[candidate]
+            ? { isFile: () => true, isDirectory: () => false }
+            : null,
       read: (file) => {
         if (!tree[file]) throw new Error(`read outside the synthetic tree: ${file}`);
         return tree[file];
@@ -3208,6 +3247,65 @@ describe('e2e merge-train changes filters (#1264)', () => {
       expect(
         deriveFrom('tests/e2e/documents/x.spec.js', "const d = path.resolve(__dirname, '..', 'fixtures');")
       ).toEqual(['tests/e2e/fixtures/**/*']);
+    });
+
+    test('a join resolving outside tests/e2e is emitted as an out-of-tree glob (#1843)', () => {
+      // The chat-composer shape: a __dirname chain that traverses out of
+      // the suite tree. The containment seam used to drop the resolve
+      // silently — the consumption was anchored only when a stack-input
+      // glob happened to carry it. The emission marks it, and the guard's
+      // forward/reverse pins decide the anchor coverage.
+      const derived = deriveConsumed(
+        [
+          {
+            file: 'tests/e2e/chatbot/x.spec.js',
+            source: "const d = path.join(__dirname, '..', '..', '..', 'components', 'ui', 'locales');"
+          }
+        ],
+        memIo({}, ['components/ui/locales'])
+      );
+      expect(derived.globs).toEqual([]);
+      expect(derived.outOfTreeGlobs).toEqual(['components/ui/locales/**/*']);
+    });
+
+    test('an out-of-tree consumption is emitted but NOT walked (#1843)', () => {
+      // The emission covers the consumed path; the walk does not descend
+      // into it — an out-of-tree file's own requires are the component
+      // tree's business, never the suite anchor's.
+      const tree = {
+        'tests/e2e/chatbot/x.spec.js': "const s = require('../../../components/ui/help.js');",
+        'components/ui/help.js': "const deep = require('./deeper.js');",
+        'components/ui/deeper.js': 'module.exports = {};'
+      };
+      const derived = deriveConsumed(
+        [{ file: 'tests/e2e/chatbot/x.spec.js', source: tree['tests/e2e/chatbot/x.spec.js'] }],
+        memIo(tree)
+      );
+      expect(derived.globs).toEqual([]);
+      expect(derived.outOfTreeGlobs).toEqual(['components/ui/**/*']);
+      expect(derived.files.map((f) => f.file)).toEqual(['tests/e2e/chatbot/x.spec.js']);
+    });
+
+    test('a resolve escaping the checkout is dropped — nothing outside the repo can be anchored', () => {
+      const derived = deriveConsumed(
+        [
+          {
+            file: 'tests/e2e/chatbot/x.spec.js',
+            source: "const d = path.join(__dirname, '..', '..', '..', '..', 'etc', 'passwd');"
+          }
+        ],
+        memIo({})
+      );
+      expect(derived.globs).toEqual([]);
+      expect(derived.outOfTreeGlobs).toEqual([]);
+    });
+
+    test('the real seam stats the whole repo but reads only the suite tree (#1843)', () => {
+      // The seam extension: existence arbitrates repo-wide, the walk stays
+      // contained — a read outside tests/e2e still throws.
+      expect(REAL_IO.stat('components/gov-chat-frontend/package.json')).not.toBeNull();
+      expect(REAL_IO.stat('../outside-the-repo')).toBeNull();
+      expect(() => REAL_IO.read('components/gov-chat-frontend/package.json')).toThrow(/read outside/);
     });
 
     test('a join with space after the paren, double quotes or backticks still matches', () => {
@@ -3424,16 +3522,43 @@ describe('e2e merge-train changes filters (#1264)', () => {
   // entry nothing justifies stay green — a purged or renamed spec tree with
   // a surviving anchor bullet instantiates e2e:integration + e2e:playwright
   // on every train touching the path, which then run nothing relevant.
-  // The anchor must be EXACTLY the union of the three justification classes
-  // (executed globs, derived consumed globs, stack inputs) — no extra
-  // entry. Combined with the forward check, that closes both drift
-  // directions; the exact equality also pins STACK_INPUT_PATHS as the
-  // exhaustive hand-list, so a deliberate anchor addition outside the
-  // derived classes must land in that list (and justify itself) here.
+  // The anchor must be EXACTLY the union of the four justification classes
+  // (executed globs, derived consumed globs, the REQUIRED derived
+  // out-of-tree emissions (#1843), stack inputs) — no extra entry.
+  // Combined with the forward check, that closes both drift directions;
+  // the exact equality also pins STACK_INPUT_PATHS as the exhaustive
+  // hand-list, so a deliberate anchor addition outside the derived classes
+  // must land in that list (and justify itself) here.
+  //
+  // The pruning rule for the fourth class: an out-of-tree emission ALREADY
+  // covered by the other three classes adds no coverage — the coverage
+  // relation is prefix-based — so it is pruned from the union instead of
+  // being listed redundantly beside the glob that carries it. An emission
+  // nothing else covers is REQUIRED here: the exact equality fails until
+  // it lands in the anchor, which is the loud, conscious step a new
+  // out-of-tree consumption has to take — the silent-skip class #1843
+  // closes, in its only legitimate direction.
   test('the anchor is exactly the justified union — no stale entries', () => {
     const anchorPaths = [...filters.get(ANCHOR)].sort();
-    const justified = [...new Set([...EXECUTED_GLOBS, ...DERIVED_CONSUMED, ...STACK_INPUT_PATHS])].sort();
+    // The three other classes, spelled once: the pruning's coverage
+    // reference and the union's base are the same set.
+    const coveredElsewhere = [...EXECUTED_GLOBS, ...DERIVED_CONSUMED, ...STACK_INPUT_PATHS];
+    const requiredOutOfTree = DERIVED_OUT_OF_TREE.filter((p) => !isCovered(coveredElsewhere, p));
+    const justified = [...new Set([...coveredElsewhere, ...requiredOutOfTree])].sort();
     expect(anchorPaths).toEqual(justified);
+  });
+
+  // The mutation gate for the emission itself: a scanner branch that stops
+  // matching (the locales join, the cross-tree require) fails here before
+  // the reverse pin above can pass vacuously. Both entries are covered by
+  // the frontend stack input — which is why they are PRUNED from the anchor
+  // union, not why they are missing: delete the stack input and the reverse
+  // pin demands both in the anchor.
+  test('the derived out-of-tree emissions are exactly these (#1843)', () => {
+    expect(DERIVED_OUT_OF_TREE).toEqual([
+      'components/gov-chat-frontend/src/i18n/locales/**/*',
+      'components/gov-chat-frontend/src/utils/**/*'
+    ]);
   });
 
   // The e2e stack pulls the keycloak-config candidate image whose build job

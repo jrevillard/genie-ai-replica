@@ -11,7 +11,7 @@ const {
   getRealmSettings,
   deleteUser,
   enableDirectAccessGrants,
-  assertDirectAccessGrantsDisabled,
+  assertNoDirectAccessGrants,
   findClient,
   createClient,
   deleteClient
@@ -1537,29 +1537,106 @@ test.describe('the client helpers behind the K.2 expiry client', () => {
   });
 });
 
-test.describe('assertDirectAccessGrantsDisabled — the ROPC posture (#1727)', () => {
-  const CLIENTS_PATH = new RegExp('/auth/admin/realms/genie/clients\\?clientId=genie-app');
+test.describe('assertNoDirectAccessGrants — the ROPC posture sweep (#1727, #1846)', () => {
+  const CLIENTS_LIST = new RegExp('/auth/admin/realms/genie/clients\\?max=500$');
 
-  test('a client without the grant holds the posture, silently', async () => {
-    routes = [['GET', CLIENTS_PATH, { status: 200, data: [{ id: 'client-1', directAccessGrantsEnabled: false }] }]];
+  test('the sweep reads the whole client list once — not a pair search', async () => {
+    // The #1846 gap: a gate that searches ONE pair passes while another
+    // client of the same realm carries the grant. The sweep reads the
+    // realm's client list — the call log below is the mutation gate: a
+    // regression to a pair search names a different endpoint.
+    routes = [
+      [
+        'GET',
+        CLIENTS_LIST,
+        {
+          status: 200,
+          data: [
+            { id: 'client-1', clientId: 'genie-app', directAccessGrantsEnabled: false },
+            { id: 'client-2', clientId: 'another-client' }
+          ]
+        }
+      ]
+    ];
 
-    await expect(assertDirectAccessGrantsDisabled('tok', 'genie', 'genie-app')).resolves.toBeUndefined();
-    expect(calls).toEqual(['GET /auth/admin/realms/genie/clients?clientId=genie-app']);
+    await expect(assertNoDirectAccessGrants('tok', 'genie')).resolves.toBeUndefined();
+    expect(calls).toEqual(['GET /auth/admin/realms/genie/clients?max=500']);
   });
 
-  test('an absent client cannot leak a grant — the posture holds', async () => {
-    routes = [['GET', CLIENTS_PATH, { status: 200, data: [] }]];
+  test('a grant on ANY client throws, naming realm, client, uuid and the verified one-field revert', async () => {
+    routes = [
+      [
+        'GET',
+        CLIENTS_LIST,
+        {
+          status: 200,
+          data: [
+            { id: 'client-1', clientId: 'genie-app', directAccessGrantsEnabled: false },
+            { id: 'client-9', clientId: 'someone-else', directAccessGrantsEnabled: true }
+          ]
+        }
+      ]
+    ];
 
-    await expect(assertDirectAccessGrantsDisabled('tok', 'genie', 'genie-app')).resolves.toBeUndefined();
-  });
-
-  test('a flipped grant throws, naming the client uuid and the verified one-field revert', async () => {
-    routes = [['GET', CLIENTS_PATH, { status: 200, data: [{ id: 'client-1', directAccessGrantsEnabled: true }] }]];
-
-    await expect(assertDirectAccessGrantsDisabled('tok', 'genie', 'genie-app')).rejects.toThrow(
-      /ROPC POSTURE VIOLATION[\s\S]*client uuid client-1[\s\S]*one-field PUT/
+    await expect(assertNoDirectAccessGrants('tok', 'genie')).rejects.toThrow(
+      /ROPC POSTURE VIOLATION[\s\S]*realm genie[\s\S]*someone-else \(client uuid client-9\)[\s\S]*one-field PUT/
     );
     // The gate reads: it never writes.
-    expect(calls).toEqual(['GET /auth/admin/realms/genie/clients?clientId=genie-app']);
+    expect(calls).toEqual(['GET /auth/admin/realms/genie/clients?max=500']);
+  });
+
+  test('a built-in client carrying the grant is skipped — its standing state is the server default, not a run', async () => {
+    // Measured on the live venue (#1846 review): Keycloak provisions
+    // admin-cli into EVERY realm with directAccessGrantsEnabled=true, and
+    // the realm export does not pin it — the sweep must not red a venue on
+    // provisioned state. A built-in's grant is the standing state exactly
+    // like genie2's: indistinguishable from a leftover, owned by the
+    // venue's contract, not by this gate.
+    routes = [
+      [
+        'GET',
+        CLIENTS_LIST,
+        {
+          status: 200,
+          data: [
+            { id: 'b-1', clientId: 'admin-cli', directAccessGrantsEnabled: true },
+            { id: 'client-1', clientId: 'genie-app', directAccessGrantsEnabled: false }
+          ]
+        }
+      ]
+    ];
+
+    await expect(assertNoDirectAccessGrants('tok', 'genie')).resolves.toBeUndefined();
+    expect(calls).toEqual(['GET /auth/admin/realms/genie/clients?max=500']);
+  });
+
+  test('an absent realm fails loudly — a venue without its primary realm is not a clean posture', async () => {
+    routes = [['GET', CLIENTS_LIST, { status: 404, data: null }]];
+
+    const caught = await rejection(assertNoDirectAccessGrants('tok', 'genie'));
+
+    expect(caught.message).toMatch(/Cannot read the client list of realm genie: HTTP 404/);
+    expect(caught.transient).toBeUndefined();
+  });
+
+  test('a client list at the sweep boundary refuses to answer clean', async () => {
+    routes = [
+      [
+        'GET',
+        CLIENTS_LIST,
+        { status: 200, data: Array.from({ length: 500 }, (_, i) => ({ id: `c-${i}`, clientId: `client-${i}` })) }
+      ]
+    ];
+
+    await expect(assertNoDirectAccessGrants('tok', 'genie')).rejects.toThrow(/sweep boundary/);
+  });
+
+  test('an outage is transient, not a posture verdict', async () => {
+    routes = [['GET', CLIENTS_LIST, { status: 500, data: null }]];
+
+    const caught = await rejection(assertNoDirectAccessGrants('tok', 'genie'));
+
+    expect(caught.transient).toBe(true);
+    expect(caught.message).toMatch(/Cannot read the client list of realm genie: HTTP 500/);
   });
 });

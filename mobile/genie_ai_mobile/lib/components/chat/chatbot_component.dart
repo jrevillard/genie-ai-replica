@@ -276,6 +276,9 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
     _titleController.text = _conversationTitle;
 
     _messages.add({
+      // The bubble test handle's discriminator (message-bubble-bot-welcome):
+      // at most one welcome bubble exists at a time.
+      'id': 'welcome',
       'role': 'assistant',
       'content': _welcomeMessage,
       'timestamp': DateTime.now().toIso8601String(),
@@ -1064,6 +1067,10 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
     _inputController.clear();
 
     _messages.add({
+      // The bubble test handle's discriminator (message-bubble-bot-welcome):
+      // the reset replaces the transcript, so at most one welcome bubble
+      // exists at a time and the id stays stable across resets.
+      'id': 'welcome',
       'role': 'assistant',
       'content': _welcomeMessage,
       'timestamp': DateTime.now().toIso8601String(),
@@ -1110,6 +1117,11 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
     }
 
     final userMessage = {
+      // The bubble test handle's discriminator (message-bubble-user-<id>):
+      // generated the same way the streaming placeholder's id is, so
+      // every transcript entry carries one and the handle never falls
+      // back to a position.
+      'id': 'user_${DateTime.now().millisecondsSinceEpoch}',
       'role': 'user',
       'content': text.trim(),
       'actualContent': hiddenPrompt ?? text.trim(),
@@ -2448,6 +2460,9 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
                     if (index == _messages.length &&
                         (_isLoading || _isStreaming)) {
                       return Padding(
+                        // The test handle the web declares on the same
+                        // surface (streaming-indicator).
+                        key: const ValueKey('streaming-indicator'),
                         padding: const EdgeInsets.symmetric(
                           vertical: DsSpacing.md,
                         ),
@@ -2474,6 +2489,14 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
                           ? Alignment.centerRight
                           : Alignment.centerLeft,
                       child: Container(
+                        // The test handles the web declares on the same
+                        // surface (message-bubble-bot / message-bubble-user),
+                        // discriminated by the message's own id — the
+                        // list carries one bubble per message, so the
+                        // keys stay unique among siblings.
+                        key: ValueKey(
+                          'message-bubble-${isUser ? 'user' : 'bot'}-${msg['id']}',
+                        ),
                         margin: const EdgeInsets.symmetric(
                           vertical: DsSpacing.sm,
                         ),
@@ -2680,6 +2703,10 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
                       children: [
                         Expanded(
                           child: TextField(
+                            // The test handle the web declares on the same
+                            // surface (composer-field): a patrol spec
+                            // addresses the composer only through it.
+                            key: const ValueKey('composer-field'),
                             controller: _inputController,
                             focusNode: _inputFocusNode,
                             style: TextStyle(color: tokens.fg),
@@ -2731,6 +2758,9 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
               (broken.isNotEmpty || gridButtons.isNotEmpty) &&
               _treeSettled)
             Container(
+              // The test handle the web declares on the same surface
+              // (quick-help-overlay).
+              key: const ValueKey('quick-help-overlay'),
               color: tokens.bg,
               padding: const EdgeInsets.symmetric(
                 horizontal: DsSpacing.md,
@@ -2822,6 +2852,14 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
                                     button['styles'] as QuickHelpCardStyles;
 
                                 return Material(
+                                  // The test handle the web declares on the
+                                  // same surface (quick-help-item),
+                                  // discriminated by the button's own id —
+                                  // the grid carries one tile per button, so
+                                  // the keys stay unique among siblings.
+                                  key: ValueKey(
+                                    'quick-help-item-${button['id']}',
+                                  ),
                                   color: Colors.transparent,
                                   child: InkWell(
                                     borderRadius: BorderRadius.circular(

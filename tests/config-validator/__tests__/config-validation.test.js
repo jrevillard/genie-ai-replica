@@ -85,9 +85,10 @@ const TESTS_E2E_ROOT = 'tests/e2e';
 //
 // This mirror — and the default-testMatch shape EXECUTED_SPEC_RE spells —
 // was verified against the runner's 1.51 source (#1511) and is pinned to
-// that range by the installed-version pin in the scan-target selection
-// units (#1392): a bump past the range fails there, forcing a conscious
-// re-verification of both mirrors against the new runner.
+// that major range by the installed-version pin in the scan-target
+// selection units (#1392): floor 1.51, ceiling the 2.x boundary — a bump
+// past it fails there, forcing a conscious re-verification of both
+// mirrors against the new runner.
 const scanTargets = (files, executedGlobs) => {
   const matchers = executedGlobs.map((entry) => new RegExp(entry.replace(/\/\*\*\/\*$/, '/'), 'i'));
   return files.filter((f) => EXECUTED_SPEC_RE.test(f)).filter((f) => matchers.some((re) => re.test(f)));
@@ -2688,34 +2689,42 @@ describe('e2e merge-train changes filters (#1264)', () => {
   // must resolve, in the SAME file, to a __dirname-rooted chain — a
   // `const NAME = path.join(__dirname, ...)` initializer, itself possibly
   // built on an earlier such const (resolved transitively, cycle-guarded).
-  // A resolvable anchor is quiet: its directory glob is already derived
-  // through the initializer's own __dirname join, and computed segments
-  // beneath that contained base stay covered by the glob (an out-of-tree
-  // resolve is dropped by the containment seam, the same as the
-  // initializer's). An anchor that resolves to nothing same-file is a
-  // finding — the hoist must be a deliberate test change, like every other
-  // non-literal shape.
-  const resolveConstAnchor = (source, name) => {
-    const seen = new Set();
-    let current = name;
-    while (current && !seen.has(current)) {
-      seen.add(current);
-      const initRe = new RegExp(
-        '\\bconst\\s+' +
-          current +
-          '\\s*=\\s*path\\.(?:join|resolve)' +
-          GAP_SRC +
-          '\\(' +
-          GAP_SRC +
-          '(__dirname|[A-Za-z_$][\\w$]*)'
-      );
-      const match = initRe.exec(source);
-      if (!match) return false;
-      current = match[1] === '__dirname' ? null : match[1];
-    }
-    // The loop exits with current === null only through __dirname; a cycle
-    // or a resolution that never lands on __dirname leaves it set.
-    return current === null;
+  // A resolvable anchor is quiet: for an IN-TREE base the derivation
+  // already reaches its directory through the initializer's own __dirname
+  // join, and computed segments beneath that base stay covered by the
+  // glob. A base that RESOLVES OUTSIDE tests/e2e is dropped by the
+  // containment seam exactly like its initializer's own join — the same
+  // boundary every literal __dirname join has today — and that
+  // out-of-tree consumption is covered (or not) by the anchor's OTHER
+  // justification classes (the stack-input entries), never by this
+  // derivation. An anchor that resolves to nothing same-file is a
+  // finding — the hoist must be a deliberate test change, like every
+  // other non-literal shape.
+  const resolveConstAnchor = (source, name, seen = new Set()) => {
+    // Cycle guard shared across the recursion (A built on B built on A).
+    if (seen.has(name)) return false;
+    seen.add(name);
+    // A REDEFINITION of the name fails it outright (#1393 review): a
+    // literal original with a later env-anchored shadow (`const X =
+    // process.env.X`) is exactly the drift shape, and the shadow's
+    // initializer never matches a join shape — so every `const NAME =`
+    // counts, whatever it initializes. The textual heuristic cannot see
+    // block scoping; one name, one definition is the policy the gate
+    // enforces.
+    const defCount = [...source.matchAll(new RegExp('\\bconst\\s+' + name + '\\s*=', 'g'))].length;
+    if (defCount !== 1) return false;
+    // One identifier branch — no __dirname literal alternative: the
+    // alternative would prefix-match a LONGER identifier (`__dirnameExtra`
+    // consuming as `__dirname`, #1393 review) and false-accept in the
+    // silent direction. The class matches `__dirname` whole like any name.
+    const initRe = new RegExp(
+      '\\bconst\\s+' + name + '\\s*=\\s*path\\.(?:join|resolve)' + GAP_SRC + '\\(' + GAP_SRC + '([A-Za-z_$][\\w$]*)'
+    );
+    const match = initRe.exec(source);
+    // The single definition must be a path.join/resolve call whose anchor
+    // is __dirname — or another name that itself resolves down to one.
+    if (!match) return false;
+    return match[1] === '__dirname' || resolveConstAnchor(source, match[1], seen);
   };
   const findNonLiteralConsumption = (source) => {
     const findings = [];
@@ -2733,7 +2742,13 @@ describe('e2e merge-train changes filters (#1264)', () => {
         findings.push('non-literal specifier in a require/import call');
       }
     }
-    const dirnameStartRe = new RegExp('path\\.(?:join|resolve)' + GAP_SRC + '\\(' + GAP_SRC + '__dirname', 'g');
+    // The boundary after __dirname keeps an extended spelling
+    // (`__dirnameExtra`) from prefix-matching the family — the trap the
+    // #1393 review caught on the resolver side applies here too.
+    const dirnameStartRe = new RegExp(
+      'path\\.(?:join|resolve)' + GAP_SRC + '\\(' + GAP_SRC + '__dirname(?![\\w$])',
+      'g'
+    );
     const SEGMENT = new RegExp('^\\s*,\\s*(' + LIT_SRC + ')');
     for (const match of source.matchAll(dirnameStartRe)) {
       let rest = source.slice(match.index + match[0].length);
@@ -2902,6 +2917,32 @@ describe('e2e merge-train changes filters (#1264)', () => {
       expect(new Set(findings)).toEqual(new Set([UNRESOLVABLE]));
     });
 
+    test('an identifier extending the __dirname spelling is not read as __dirname', () => {
+      // The prefix trap (#1393 review): an `__dirnameExtra` anchor must not
+      // resolve through the `__dirname` prefix of its spelling.
+      const findings = findNonLiteralConsumption(
+        ['const __dirnameBase = path.join(__dirnameExtra, x);', 'write(path.join(__dirnameBase, name), data);'].join(
+          '\n'
+        )
+      );
+      expect(findings.length).toBeGreaterThan(0);
+      expect(new Set(findings)).toEqual(new Set([UNRESOLVABLE]));
+    });
+
+    test('a shadowed redefinition fails the anchor', () => {
+      // The literal original with a later env-anchored shadow (#1393
+      // review): one name, one definition — the shadow is a finding.
+      const findings = findNonLiteralConsumption(
+        [
+          "const FIXTURES_DIR = path.join(__dirname, 'fixtures');",
+          'const FIXTURES_DIR = process.env.FIXTURES_DIR;',
+          'upload(page, path.join(FIXTURES_DIR, name));'
+        ].join('\n')
+      );
+      expect(findings.length).toBeGreaterThan(0);
+      expect(new Set(findings)).toEqual(new Set([UNRESOLVABLE]));
+    });
+
     test('__dirname anchors stay with the existing family, not this one', () => {
       expect(findNonLiteralConsumption("write(path.join(__dirname, 'x'), data);")).toEqual([]);
     });
@@ -2996,19 +3037,23 @@ describe('e2e merge-train changes filters (#1264)', () => {
       ]);
     });
 
-    // The runner-version floor and ceiling the mirrors assume (#1511,
-    // #1392). scanTargets mirrors the runner's forceRegExp arg matching and
+    // The runner-version range the mirrors assume (#1511, #1392).
+    // scanTargets mirrors the runner's forceRegExp arg matching and
     // EXECUTED_SPEC_RE mirrors Playwright's default testMatch shape; both
     // were verified against the 1.51 runner source. A MAJOR bump may change
     // either silently — the config pin above asserts only that no explicit
     // testMatch overrides the default, so a CHANGED default passes it — and
     // a Playwright upgrade is the one drift vector that moves the runner
-    // under both mirrors at once. The installed version is therefore pinned
-    // to the range the mirrors were verified against: crossing it fails
-    // here and forces a conscious re-verification. Read from the committed
-    // lockfile — this suite must stay dependency-free (the config:validate
-    // job installs only this component's node_modules), so the range check
-    // is spelled by hand.
+    // under both mirrors at once. The pin is deliberately COARSE, the
+    // option both issues name: the floor is 1.51 (verified) and the ceiling
+    // is the major boundary (`major === 1` fails a 2.x bump — the drift
+    // vector both issues state). A minor bump inside major 1 passes BY
+    // DESIGN: the lockfile pins the exact version and a bump is a reviewed
+    // dependency change, while a major jump is where arg-selection or
+    // default-testMatch semantics move. Read from the committed lockfile —
+    // this suite must stay dependency-free (the config:validate job
+    // installs only this component's node_modules), so the range check is
+    // spelled by hand.
     test('the installed Playwright is inside the range the mirrors were verified against', () => {
       const lock = JSON.parse(fs.readFileSync(path.join(ROOT, 'package-lock.json'), 'utf-8'));
       const entry = lock.packages && lock.packages['node_modules/@playwright/test'];

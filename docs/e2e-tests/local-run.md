@@ -274,11 +274,11 @@ the wave, and every spec asserting those handles fails with
 `element(s) not found`, three identical red runs in a row.
 
 The check — does the venue serve a handle the checkout has? The
-frontend lazy-loads its views, so a handle lives in a CHUNK, not in
-`app.<hash>.js`. Walk it: fetch `/` and read the served `js/app.<hash>
-.js` name from the HTML; fetch that bundle and extract its webpack
-chunk-hash map (the `{<id>:"<hash>", ...}` object next to the `"js/"
-+` script-name template); fetch `js/<id>.<hash>.js` for each entry and
+frontend lazy-loads its views, so a handle lives in a CHUNK, not in the
+main bundle. Walk it: fetch `/` and read the served `js/app.<hash>.js`
+name from the HTML; fetch that bundle and extract its webpack
+chunk-hash map (the `{<id>:"<hash>", ...}` object beside the `"js/"+`
+script-name template); fetch `js/<id>.<hash>.js` for each entry and
 grep for the handle the failing spec reads. A handle the checkout has
 and no chunk carries is a stale venue, not a spec defect.
 

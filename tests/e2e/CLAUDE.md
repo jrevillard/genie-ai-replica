@@ -36,12 +36,13 @@ in the error (never silently tolerated).
   re-issues the edge's own upstream-reset failure on the idempotent methods
   (#1847 — operator-sanctioned as the deterministic answer to a genuine
   transient): the k8s venue's Envoy answers a keep-alive race with a plain-text
-  503 carrying its reset text — or a raw connection reset — about once per
-  suite load; that is a transport artifact outside any spec's subject, not a
-  product verdict. The retry is bounded (three attempts), sleeps never, keys on
-  the edge's stable reply signature, and returns or rethrows the LAST observed
-  outcome verbatim. It does not license retries anywhere else: no spec adds a
-  retry loop, and Playwright's `retries: 0` stays untouched.
+  503 carrying its reset text — or, before any headers, with a raw connection
+  reset — about once per suite load; that is a transport artifact outside any
+  spec's subject, not a product verdict. The retry is bounded (three attempts),
+  sleeps never, keys on the edge's stable reply signature (and on the reset
+  error code for the pre-headers shape), and returns or rethrows the LAST
+  observed outcome verbatim. It does not license retries anywhere else: no spec
+  adds a retry loop, and Playwright's `retries: 0` stays untouched.
 - **Wait for conditions, not durations.** No `waitForTimeout`, no fixed `sleep`:
   a fixed sleep is slow on a fast machine and flaky on a slow one. Wait on the
   observable condition (`waitForSelector`, `expect.poll`, `waitForURL`,

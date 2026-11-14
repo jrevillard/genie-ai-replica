@@ -311,4 +311,19 @@ test.describe('the edge upstream-reset retry (auth.request)', () => {
     expect(res.data).toEqual({ recovered: true });
     expect(scriptedHits).toBe(2);
   });
+
+  test('the resolution arm honours the same bound — exhaustion returns the 503 verbatim', async () => {
+    // The bound's arm for raw:true exhaustion: a probe whose venue keeps
+    // answering the reset gets the LAST observed 503 back — resolved, not
+    // swallowed — after exactly the bound's attempts. The decrement in
+    // the resolution arm is what keeps this finite; a regression that
+    // drops it turns this test's fixture into an unbounded loop, and no
+    // other test would notice (the recovery test still lands on attempt
+    // 3's success; the rejection-arm bound test never enters this arm).
+    server = await answerWith(503, 'text/plain', ENVOY_RESET_BODY);
+    const res = await auth.request('GET', urlOf(server), { raw: true });
+    expect(res.status).toBe(503);
+    expect(res.data).toContain('upstream connect error or disconnect/reset before headers');
+    expect(hits).toBe(3);
+  });
 });

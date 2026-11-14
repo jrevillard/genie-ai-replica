@@ -7,6 +7,68 @@ const { BASE_URL } = require('./base-url');
 const { venueLaunchArgs } = require('./venue-launch-args');
 
 /**
+ * The edge's upstream-reset retry (#1847, operator-sanctioned — the one
+ * transport-level exception tests/e2e/CLAUDE.md names): the k8s venue's
+ * Envoy answers a keep-alive race about once per suite load — after
+ * headers with its LOCAL plain-text 503, before them with a raw
+ * ECONNRESET — and the idempotent methods are worth a bounded re-issue.
+ * The full contract (the RFC 7231 method set, the stable reply signature,
+ * no pause, the verbatim last outcome, product JSON 503s never retried)
+ * is owned by this file's spec, auth-request.spec.js, over the real
+ * transport.
+ */
+const EDGE_RESET_SIGNATURE = 'upstream connect error or disconnect/reset before headers';
+const EDGE_RESET_MAX_ATTEMPTS = 3;
+// The methods this suite actually drives, filtered to RFC 7231 idempotency:
+// a re-sent request lands in the same state. POST is excluded — its outcome
+// a re-send could not report honestly — and HEAD is excluded on both arms
+// (its empty-body wire contract resolves before any body gate could fire,
+// and it takes the bare-transport short-circuit below). OPTIONS and TRACE
+// are idempotent but have no caller in this tree.
+const IDEMPOTENT_METHODS = ['GET', 'DELETE', 'PUT'];
+
+/** The edge's reset reply on the wire: a 503 whose body carries the STABLE
+ *  prefix of Envoy's local reply (the volatile "reset reason: ..." clause
+ *  is deliberately not matched). Both arms of the gate read the reply
+ *  through this ONE predicate, so widening one arm cannot leave the other
+ *  behind. */
+function isEdgeResetReply(status, bodyText) {
+  return (
+    status === 503 &&
+    typeof bodyText === 'string' &&
+    bodyText.includes(EDGE_RESET_SIGNATURE)
+  );
+}
+
+/** The rejection arm: the non-JSON guard rejected the edge's text reply,
+ *  or the race landed before any headers (a raw ECONNRESET — Node does
+ *  not distinguish a mid-body reset, which an idempotent re-issue also
+ *  survives; the bound and the verbatim rethrow keep either shape
+ *  honest). */
+function isEdgeResetRetryEligible(method, error) {
+  if (!IDEMPOTENT_METHODS.includes(method) || !error) {
+    return false;
+  }
+  if (error.code === 'ECONNRESET') {
+    return true;
+  }
+  return error.nonJsonBody === true && isEdgeResetReply(error.status, error.bodyText);
+}
+
+/** The resolution arm: with `options.raw` the body is the WANTED text, so
+ *  the edge's reset reply reaches the caller as a RESOLVED 503 whose data
+ *  is that text — the rejection arm never fires for that caller. A JSON
+ *  content type is the endpoint's OWN verdict (a product envelope can
+ *  quote the reset text verbatim) and is never retried. */
+function isRawEdgeReset(method, res) {
+  return (
+    IDEMPOTENT_METHODS.includes(method) &&
+    isEdgeResetReply(res.status, res.data) &&
+    !/json/i.test(String((res.headers && res.headers['content-type']) || ''))
+  );
+}
+
+/**
  * Make an HTTPS request ignoring self-signed certificate errors.
  * @param {string} method - HTTP method
  * @param {string} path - URL path
@@ -14,7 +76,11 @@ const { venueLaunchArgs } = require('./venue-launch-args');
  * @returns {Promise<{status: number, data: object, headers: object}>}
  */
 function request(method, path, options = {}) {
-  return new Promise((resolve, reject) => {
+  const attempt = () => new Promise((resolve, reject) => {
+    // Parsed INSIDE the executor: a path the URL parser refuses must
+    // reject the promise — the helper's contract is to always return one
+    // — not throw synchronously out of the call frame before a handler
+    // could attach.
     const url = new URL(path, BASE_URL);
     const reqOptions = {
       hostname: url.hostname,
@@ -64,9 +130,12 @@ function request(method, path, options = {}) {
           // status travels with the error: the retry verdict follows the
           // server's state (a 5xx is an outage a retry may survive), not
           // the content type. A rejection without a status is a transport
-          // failure.
+          // failure. The FULL body travels beside the message: the gate
+          // reads bodyText, so a future rewording of this message's prose
+          // cannot break the retry verdict.
           error.nonJsonBody = true;
           error.status = res.statusCode;
+          error.bodyText = body;
           reject(error);
         }
       });
@@ -88,6 +157,33 @@ function request(method, path, options = {}) {
     }
     req.end();
   });
+
+  // A non-idempotent method can never retry: hand it the bare transport —
+  // the gate's method set already says no, but the short-circuit makes the
+  // POST contract visible in code, not only in two predicates.
+  if (!IDEMPOTENT_METHODS.includes(method)) {
+    return attempt();
+  }
+  let attemptsLeft = EDGE_RESET_MAX_ATTEMPTS;
+  const run = () =>
+    attempt()
+      .catch((error) => {
+        attemptsLeft -= 1;
+        if (attemptsLeft > 0 && isEdgeResetRetryEligible(method, error)) {
+          return run();
+        }
+        throw error;
+      })
+      .then((res) => {
+        if (isRawEdgeReset(method, res)) {
+          attemptsLeft -= 1;
+          if (attemptsLeft > 0) {
+            return run();
+          }
+        }
+        return res;
+      });
+  return run();
 }
 
 /**

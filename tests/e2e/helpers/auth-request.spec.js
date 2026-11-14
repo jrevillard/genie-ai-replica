@@ -334,4 +334,39 @@ test.describe('the edge upstream-reset retry (auth.request)', () => {
     expect(res.data).toContain('upstream connect error or disconnect/reset before headers');
     expect(hits).toBe(3);
   });
+
+  test('the pre-headers shape honours the bound — the LAST reset error travels verbatim', async () => {
+    // The ECONNRESET arm's exhaustion: every attempt's connection is
+    // killed, and the LAST transport error reaches the caller with its
+    // code intact — a synthesized or wrapped error here would be a gate
+    // that reports something other than what the wire did.
+    server = await script(DESTROY_SOCKET);
+    const error = await auth.request('GET', urlOf(server)).catch((e) => e);
+    expect(error).toBeInstanceOf(Error);
+    expect(error.code).toBe('ECONNRESET');
+    expect(hits).toBe(3);
+  });
+
+  test('a raw:true 503 whose JSON body embeds the reset text is answered once', async () => {
+    // A product 503 envelope can QUOTE the edge's reset text verbatim —
+    // a proxied upstream error travels embedded in a body. The content
+    // type is the discriminator: a JSON body is the endpoint's own
+    // verdict, whatever it quotes, and is never retried.
+    server = await script((res) => {
+      res.writeHead(503, { 'content-type': 'application/json' });
+      res.end(JSON.stringify({ error: 'upstream_down', message: ENVOY_RESET_BODY }));
+    });
+    const res = await auth.request('GET', urlOf(server), { raw: true });
+    expect(res.status).toBe(503);
+    expect(res.data).toContain('upstream connect error or disconnect/reset before headers');
+    expect(hits).toBe(1);
+  });
+
+  test('an invalid path rejects — the helper always returns a promise', async () => {
+    // The promise contract: a caller that chains .catch (or awaits) sees
+    // the failure as a rejection, not as a synchronous throw escaping the
+    // call frame before any handler could attach. (A URL the WHATWG
+    // parser refuses — a space in the host — is the smallest such input.)
+    await expect(auth.request('GET', 'https://exa mple.com/')).rejects.toThrow();
+  });
 });

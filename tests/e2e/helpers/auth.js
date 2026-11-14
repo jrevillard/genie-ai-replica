@@ -19,9 +19,12 @@ const { venueLaunchArgs } = require('./venue-launch-args');
  */
 const EDGE_RESET_SIGNATURE = 'upstream connect error or disconnect/reset before headers';
 const EDGE_RESET_MAX_ATTEMPTS = 3;
-// RFC 7231 idempotent methods: a re-sent request lands in the same state.
-// POST is excluded — its outcome a re-send could not report honestly — and
-// HEAD's empty-body wire contract resolves before any body gate could fire.
+// The methods this suite actually drives, filtered to RFC 7231 idempotency:
+// a re-sent request lands in the same state. POST is excluded — its outcome
+// a re-send could not report honestly — and HEAD is excluded on both arms
+// (its empty-body wire contract resolves before any body gate could fire,
+// and it takes the bare-transport short-circuit below). OPTIONS and TRACE
+// are idempotent but have no caller in this tree.
 const IDEMPOTENT_METHODS = ['GET', 'DELETE', 'PUT'];
 
 /** The edge's reset reply on the wire: a 503 whose body carries the STABLE
@@ -38,7 +41,10 @@ function isEdgeResetReply(status, bodyText) {
 }
 
 /** The rejection arm: the non-JSON guard rejected the edge's text reply,
- *  or the race landed before any headers (a raw ECONNRESET). */
+ *  or the race landed before any headers (a raw ECONNRESET — Node does
+ *  not distinguish a mid-body reset, which an idempotent re-issue also
+ *  survives; the bound and the verbatim rethrow keep either shape
+ *  honest). */
 function isEdgeResetRetryEligible(method, error) {
   if (!IDEMPOTENT_METHODS.includes(method) || !error) {
     return false;
@@ -46,14 +52,20 @@ function isEdgeResetRetryEligible(method, error) {
   if (error.code === 'ECONNRESET') {
     return true;
   }
-  return error.nonJsonBody === true && isEdgeResetReply(error.status, error.message);
+  return error.nonJsonBody === true && isEdgeResetReply(error.status, error.bodyText);
 }
 
 /** The resolution arm: with `options.raw` the body is the WANTED text, so
  *  the edge's reset reply reaches the caller as a RESOLVED 503 whose data
- *  is that text — the rejection arm never fires for that caller. */
+ *  is that text — the rejection arm never fires for that caller. A JSON
+ *  content type is the endpoint's OWN verdict (a product envelope can
+ *  quote the reset text verbatim) and is never retried. */
 function isRawEdgeReset(method, res) {
-  return IDEMPOTENT_METHODS.includes(method) && isEdgeResetReply(res.status, res.data);
+  return (
+    IDEMPOTENT_METHODS.includes(method) &&
+    isEdgeResetReply(res.status, res.data) &&
+    !/json/i.test(String((res.headers && res.headers['content-type']) || ''))
+  );
 }
 
 /**
@@ -64,8 +76,12 @@ function isRawEdgeReset(method, res) {
  * @returns {Promise<{status: number, data: object, headers: object}>}
  */
 function request(method, path, options = {}) {
-  const url = new URL(path, BASE_URL);
   const attempt = () => new Promise((resolve, reject) => {
+    // Parsed INSIDE the executor: a path the URL parser refuses must
+    // reject the promise — the helper's contract is to always return one
+    // — not throw synchronously out of the call frame before a handler
+    // could attach.
+    const url = new URL(path, BASE_URL);
     const reqOptions = {
       hostname: url.hostname,
       port: url.port || 443,
@@ -114,9 +130,12 @@ function request(method, path, options = {}) {
           // status travels with the error: the retry verdict follows the
           // server's state (a 5xx is an outage a retry may survive), not
           // the content type. A rejection without a status is a transport
-          // failure.
+          // failure. The FULL body travels beside the message: the gate
+          // reads bodyText, so a future rewording of this message's prose
+          // cannot break the retry verdict.
           error.nonJsonBody = true;
           error.status = res.statusCode;
+          error.bodyText = body;
           reject(error);
         }
       });

@@ -160,7 +160,7 @@ test.describe('the edge upstream-reset retry (auth.request)', () => {
 
   /** A scripted server: one responder per attempt, the last one repeating.
    *  The scenario reads off the call site — `script(RESET_503, RESET_503,
-   *  JSON_OK(...))` IS the test's story — and `hits` is the single
+   *  JSON_REPLY(...))` IS the test's story — and `hits` is the single
    *  attempt counter. */
   const script = (...steps) => {
     hits = 0;

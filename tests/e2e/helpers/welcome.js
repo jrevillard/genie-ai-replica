@@ -122,7 +122,8 @@ async function waitForBannerSettled(page) {
  * on its first capture of a page.
  *
  * Returns { ctx, page } — the caller closes ctx when it is done. Prefer
- * withWelcomeSession, which owns that close guarantee in its own finally.
+ * withWelcomeSession, which owns that close guarantee in its own control
+ * flow.
  * The open path holds the same guarantee for itself: a throw after the
  * context exists (a login that fails, a wait that expires) closes the
  * context before rethrowing, so a failed open cannot leak it.

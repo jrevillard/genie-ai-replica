@@ -142,7 +142,7 @@ function venueAvailabilityReport(venueNoise, venue) {
   const lines = [
     '',
     `venue-availability report: ${total} failure(s) across ${venueNoise.size} spec file(s) carry an ` +
-      'edge-transport signature — the browser never reached the app:',
+      'edge-transport signature — the browser never reached the app:'
   ];
   for (const [file, failures] of venueNoise) {
     const signature = (String(failures[0].error).match(CONNECTION_FAILURE_RE) || ['(no signature extracted)'])[0];
@@ -233,7 +233,7 @@ function glab(args) {
   return execFileSync('glab', ['api', '--hostname', GITLAB_HOST, ...args], {
     encoding: 'utf-8',
     maxBuffer: 32 * 1024 * 1024,
-    timeout: TRACKER_TIMEOUT_MS,
+    timeout: TRACKER_TIMEOUT_MS
   });
 }
 
@@ -257,9 +257,7 @@ function fetchOpenIssues() {
   for (let page = 1; page <= 20; page += 1) {
     let batch;
     try {
-      batch = JSON.parse(
-        glab([`projects/${GITLAB_PROJECT_ID}/issues?state=opened&per_page=100&page=${page}`])
-      );
+      batch = JSON.parse(glab([`projects/${GITLAB_PROJECT_ID}/issues?state=opened&per_page=100&page=${page}`]));
     } catch (e) {
       fail(`the tracker could not be read: ${e.message}`);
     }
@@ -367,7 +365,7 @@ function e2eOwnSpecNames(root = REPO_ROOT) {
       shallow = execFileSync('git', ['-C', root, 'rev-parse', '--is-shallow-repository'], {
         encoding: 'utf-8',
         timeout: 10000,
-        stdio: ['ignore', 'pipe', 'ignore'],
+        stdio: ['ignore', 'pipe', 'ignore']
       });
     } catch {
       shallow = '';
@@ -513,7 +511,23 @@ function groupFailuresByFile(failed) {
   return byFile;
 }
 
-function issueBody(file, failures, venue, runStamp) {
+/**
+ * The venue build line, from the sha the run's pre-flight handed over
+ * (#1851): an issue that does not name the served build is one an
+ * operator cannot diagnose in one read — a stale venue fails specs for
+ * product-reasons that read like test defects.
+ *
+ * @param {string|undefined} venueBuildGitSha - the E2E_VENUE_BUILD_GIT_SHA
+ *   the run script exported (empty/absent = the run carried no marker)
+ * @returns {string} the body line
+ */
+function venueBuildLine(venueBuildGitSha) {
+  return venueBuildGitSha
+    ? `- venue build: \`${venueBuildGitSha}\``
+    : '- venue build: unknown — the run carried no build marker (a venue predating the #1851 contract, or the probe could not read it)';
+}
+
+function issueBody(file, failures, venue, runStamp, venueBuildGitSha) {
   return [
     'Filed by the local e2e run (`tests/e2e/run/run-local-e2e.sh`).',
     '',
@@ -521,23 +535,19 @@ function issueBody(file, failures, venue, runStamp) {
     ...(process.env[VENUE_IP_ENV]
       ? [
           `- the runner resolved the venue name to ` +
-            `\`${process.env[VENUE_HOST_ENV] || '(the BASE_URL host)'}\` = \`${process.env[VENUE_IP_ENV]}\``,
+            `\`${process.env[VENUE_HOST_ENV] || '(the BASE_URL host)'}\` = \`${process.env[VENUE_IP_ENV]}\``
         ]
       : []),
+    venueBuildLine(venueBuildGitSha),
     `- run: ${runStamp}`,
     specFileMarker(file),
     `- failing tests: ${failures.length}`,
     '',
     '## Failures',
     '',
-    ...failures.slice(0, MAX_FAILURES_PER_ISSUE).flatMap((failure) => [
-      `### ${failure.title}`,
-      '',
-      '```',
-      failure.error,
-      '```',
-      '',
-    ]),
+    ...failures
+      .slice(0, MAX_FAILURES_PER_ISSUE)
+      .flatMap((failure) => [`### ${failure.title}`, '', '```', failure.error, '```', '']),
     ...(failures.length > MAX_FAILURES_PER_ISSUE
       ? [`(${failures.length - MAX_FAILURES_PER_ISSUE} more failures omitted.)`, '']
       : []),
@@ -548,14 +558,14 @@ function issueBody(file, failures, venue, runStamp) {
     '```',
     '',
     'The failure output is in this issue; the run also writes a JSON and a JUnit report',
-    'under `reports/` on the machine that ran it.',
+    'under `reports/` on the machine that ran it.'
   ].join('\n');
 }
 
 /**
  * The comment posted on an issue that already tracks the failure.
  */
-function commentBody(files, venue, runStamp) {
+function commentBody(files, venue, runStamp, venueBuildGitSha) {
   // One argv element carries the whole comment, so the cap is the COMMENT's
   // budget, not each file's — an umbrella issue tracking many files must not
   // push the body past the kernel's per-argument cap either.
@@ -563,6 +573,7 @@ function commentBody(files, venue, runStamp) {
   return [
     `The local e2e run is still red on ${files.length} spec file(s) this issue covers ` +
       `(${runStamp}, venue \`${venue}\`).`,
+    venueBuildLine(venueBuildGitSha),
     '',
     ...files.flatMap((entry) => {
       const taken = entry.failures.slice(0, Math.max(0, budget));
@@ -573,9 +584,9 @@ function commentBody(files, venue, runStamp) {
         ...taken.flatMap((failure) => [`**${failure.title}**`, '```', failure.error, '```', '']),
         ...(entry.failures.length > taken.length
           ? [`(${entry.failures.length - taken.length} more failures omitted.)`, '']
-          : []),
+          : [])
       ];
-    }),
+    })
   ].join('\n');
 }
 
@@ -601,9 +612,9 @@ function createIssue(file, failures, venue, runStamp) {
       '-f',
       `title=${title}`,
       '-f',
-      `description=${issueBody(file, failures, venue, runStamp)}`,
+      `description=${issueBody(file, failures, venue, runStamp, process.env.E2E_VENUE_BUILD_GIT_SHA)}`,
       '-f',
-      `labels=${LABELS.join(',')}`,
+      `labels=${LABELS.join(',')}`
     ])
   );
   process.stdout.write(`  #${created.iid} (created) ${title}\n`);
@@ -616,7 +627,7 @@ function commentOnIssue(issue, files, venue, runStamp) {
     'POST',
     `projects/${GITLAB_PROJECT_ID}/issues/${issue.iid}/notes`,
     '-f',
-    `body=${commentBody(files, venue, runStamp)}`,
+    `body=${commentBody(files, venue, runStamp, process.env.E2E_VENUE_BUILD_GIT_SHA)}`
   ]);
   process.stdout.write(`  #${issue.iid} (commented) ${issue.title}\n`);
 }
@@ -692,7 +703,7 @@ function main() {
   try {
     execFileSync('node', [path.join(__dirname, 'preflight.js')], {
       stdio: 'inherit',
-      env: { ...process.env, BASE_URL: venue },
+      env: { ...process.env, BASE_URL: venue }
     });
   } catch {
     process.stderr.write(
@@ -790,5 +801,5 @@ module.exports = {
   issueBody,
   isConnectionSignature,
   partitionVenueNoise,
-  venueAvailabilityReport,
+  venueAvailabilityReport
 };

@@ -99,9 +99,9 @@ test.describe('the pre-flight NAMES a cause it cannot use', () => {
           ...process.env,
           E2E_VENUE_IP: 'not an address',
           E2E_VENUE_HOST: 'venue.example',
-          NODE_OPTIONS: `--require ${preload}`,
+          NODE_OPTIONS: `--require ${preload}`
         },
-        stdio: ['ignore', 'pipe', 'pipe'],
+        stdio: ['ignore', 'pipe', 'pipe']
       });
     } catch (e) {
       stderr = String(e.stderr || '');
@@ -184,7 +184,13 @@ function withStubbedRunner(fn, venueAnswers = 'no') {
       execFileSync(process.execPath, [path.join(root, 'run', 'preflight.js')], {
         // The mapping is the case's business, not the developer's shell:
         // an ambient E2E_VENUE_IP (or an invalid one) would hijack it.
-        env: { ...process.env, BASE_URL: VENUE, E2E_VENUE_IP: '', E2E_VENUE_HOST: '', STUB_VENUE_ANSWERS: venueAnswers },
+        env: {
+          ...process.env,
+          BASE_URL: VENUE,
+          E2E_VENUE_IP: '',
+          E2E_VENUE_HOST: '',
+          STUB_VENUE_ANSWERS: venueAnswers
+        },
         stdio: ['ignore', 'pipe', 'pipe']
       });
     } catch (e) {
@@ -225,15 +231,88 @@ test.describe('the pre-flight reports a FAILED CLEANUP', () => {
     // failed, so the exit code belongs to the CLEANUP. A cleanup that
     // left the run at 0 would let the suite start against a browser
     // nobody closed.
-    withStubbedRunner(
-      ({ stderr, code }) => {
-        expect(stderr).toContain('pre-flight: the browser could not close.');
-        expect(stderr).toContain('the stub could not close');
-        // There was no other cause: the venue answered.
-        expect(stderr).not.toContain('pre-flight: the browser could not open the venue.');
-        expect(code).toBe(1);
-      },
-      'yes'
-    );
+    withStubbedRunner(({ stderr, code }) => {
+      expect(stderr).toContain('pre-flight: the browser could not close.');
+      expect(stderr).toContain('the stub could not close');
+      // There was no other cause: the venue answered.
+      expect(stderr).not.toContain('pre-flight: the browser could not open the venue.');
+      expect(code).toBe(1);
+    }, 'yes');
+  });
+});
+
+/**
+ * The venue build marker (#1851): the run must expose WHICH BUILD the
+ * venue serves, so a stale venue cannot file misleading spec-defect
+ * issues. The frontend image bakes `/build-info.json` (`{git_sha}`) at
+ * build time; the pre-flight reads it. Both helpers are pure — the spec
+ * runs without a browser and without a venue.
+ */
+const { parseBuildMarker, describeBuildFreshness } = require('./preflight');
+
+test.describe('the venue build marker parser (#1851)', () => {
+  test('a marker the contract wrote parses to its git sha', () => {
+    const parsed = parseBuildMarker(200, 'application/json', '{"git_sha":"abc1234"}');
+    expect(parsed).toEqual({ kind: 'ok', gitSha: 'abc1234' });
+  });
+
+  test('the SPA fallback is a venue that predates the marker contract', () => {
+    // try_files serves index.html (200, text/html) for any path the dist
+    // does not hold — a frontend built before #1851 answers exactly so.
+    // That is the PRE-CONTRACT state: loudly named, not a crash and not
+    // a failure the run must stop for.
+    const parsed = parseBuildMarker(200, 'text/html', '<!doctype html><html>...the app...</html>');
+    expect(parsed.kind).toBe('missing');
+  });
+
+  test('a non-200 with a non-JSON body is still the missing marker', () => {
+    expect(parseBuildMarker(404, 'text/html', 'nope').kind).toBe('missing');
+    expect(parseBuildMarker(503, 'text/plain', 'down').kind).toBe('missing');
+  });
+
+  test('a marker present but malformed stops the run as a contract violation', () => {
+    // A venue that SERVES the path but carries no readable git_sha has
+    // the contract and broke it — that is a deployment defect the run
+    // must name, not a freshness fact to shrug at.
+    const noField = parseBuildMarker(200, 'application/json', '{"built":"yesterday"}');
+    expect(noField.kind).toBe('malformed');
+    expect(noField.reason).toContain('git_sha');
+
+    const wrongType = parseBuildMarker(200, 'application/json', '{"git_sha":42}');
+    expect(wrongType.kind).toBe('malformed');
+
+    const empty = parseBuildMarker(200, 'application/json', '{"git_sha":""}');
+    expect(empty.kind).toBe('malformed');
+
+    // A JSON content type over an EMPTY body (or an unparseable one) is
+    // the contract in transit, not the contract's absence — the path is
+    // served, so the venue OWNS the marker; a broken one stops the run.
+    const blank = parseBuildMarker(200, 'application/json', '');
+    expect(blank.kind).toBe('malformed');
+    expect(blank.reason).toContain('JSON');
+  });
+});
+
+test.describe('the venue build freshness verdict (#1851)', () => {
+  test('a marker equal to the checkout HEAD is fresh', () => {
+    const line = describeBuildFreshness('abc1234', 'abc1234');
+    expect(line).toContain('fresh');
+    expect(line).toContain('abc1234');
+  });
+
+  test('a marker behind the checkout HEAD is STALE, naming both shas', () => {
+    const line = describeBuildFreshness('old1111', 'new2222');
+    expect(line).toContain('STALE');
+    expect(line).toContain('old1111');
+    expect(line).toContain('new2222');
+    // The remedy pointer: an operator reading the line must know where
+    // the documented stale-venue remedy lives.
+    expect(line).toContain('docs/e2e-tests/local-run.md');
+  });
+
+  test('an unreadable checkout HEAD is its own verdict, not a crash', () => {
+    const line = describeBuildFreshness('abc1234', null);
+    expect(line).toContain('unknown');
+    expect(line).toContain('abc1234');
   });
 });

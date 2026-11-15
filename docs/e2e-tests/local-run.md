@@ -300,6 +300,31 @@ rollout restart of the stale deployment
 which pulls the `main` tag the declared baseline already points at —
 followed by re-running the red specs before believing anything.
 
+### The build marker and the pre-flight probe (#1851)
+
+Since #1851 the run answers "which build did I exercise?" itself. The
+frontend image bakes **`/build-info.json`** — `{"git_sha": "<full commit
+sha>"}` — at build time (CI passes `GIT_SHA=$CI_COMMIT_SHA`; a build
+that skips it carries `"unknown"`). The pre-flight reads it through the
+same browser context that checked reachability, and every run prints the
+verdict as a `venue build:` line:
+
+- **fresh** — the marker equals the checkout's `HEAD`;
+- **STALE** — the marker names another sha: the line carries BOTH shas
+  and the remedy pointer above; the run continues, but every red below
+  reads against the named build, not the checkout's;
+- **predates the contract** — no readable `/build-info.json` (the SPA
+  fallback answers): a frontend built before #1851. Freshness is
+  undetectable there; the chunk walk above is still the tool;
+- **BROKEN** — the path is served but carries no readable `git_sha`:
+  the venue HAS the contract and violated it. This one stops the run,
+  like an unreachable venue — it is a deployment defect, not a
+  freshness fact.
+
+The failure path (`file-failure-issues.js`) embeds the marker in EVERY
+issue it files (`venue build: <sha>`), so a stale venue cannot file a
+misleading spec-defect issue without naming its build.
+
 ## Shared-stack discipline
 
 The run drives a **shared** stack (namespace `genieai`, chart

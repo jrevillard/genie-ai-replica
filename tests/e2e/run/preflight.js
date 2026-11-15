@@ -33,12 +33,12 @@ function remedy(what) {
     '      `node tests/e2e/run/install-browsers.js`; the build must be',
     '      reachable through PLAYWRIGHT_BROWSERS_PATH when the browsers',
     '      live outside the default cache;',
-    '    - that Chromium\'s shared libraries on LD_LIBRARY_PATH (a bare',
+    "    - that Chromium's shared libraries on LD_LIBRARY_PATH (a bare",
     '      container image has no libatk/libgbm);',
     '    - the Inter fonts on XDG_DATA_HOME for the pixel-measurement specs;',
     '    - a resolvable venue name — or E2E_VENUE_IP for one the runner',
     '      cannot resolve; E2E_VENUE_IP must be an IPv4 or IPv6 address;',
-    '    - a venue address that is a URL (BASE_URL).',
+    '    - a venue address that is a URL (BASE_URL).'
   ];
   return lines.join('\n');
 }
@@ -157,6 +157,31 @@ async function main() {
       failure = `pre-flight: ${diagnosis}\n`;
     } else {
       process.stdout.write(`pre-flight: the browser reached the venue (HTTP ${status}).\n`);
+      // The venue build marker (#1851): the run must say WHICH BUILD the
+      // venue serves, so a stale venue cannot file misleading
+      // spec-defect issues. A BROKEN marker (the contract served and
+      // violated) is a deployment defect: the run stops, like the
+      // unreachable venue above. A MISSING marker (an older frontend)
+      // or a freshness mismatch is named loudly and the run continues.
+      const marker = await probeVenueBuild(context, BASE_URL);
+      process.stdout.write(`pre-flight: ${marker.line}\n`);
+      if (marker.malformed) {
+        failure = `pre-flight: ${marker.line}\n`;
+      }
+      // The failure path (#1851: file-failure-issues.js) embeds the served
+      // build in every issue it files — the caller hands over a FILE to
+      // write the sha into (an env var cannot cross back out of this
+      // process). Only an `ok` marker writes a sha; every other outcome
+      // writes the empty string, which the failure path reports as
+      // unknown. A write that fails must not dim the pre-flight's own
+      // findings — it is reported and the run proceeds.
+      if (process.env.E2E_VENUE_BUILD_FILE) {
+        try {
+          require('fs').writeFileSync(process.env.E2E_VENUE_BUILD_FILE, marker.gitSha || '');
+        } catch (e) {
+          process.stdout.write(`pre-flight: the venue build could not be handed to the run (${e.message}).\n`);
+        }
+      }
     }
   } catch (e) {
     // The SAME formatter as the other causes: the headline, then the
@@ -206,4 +231,132 @@ if (require.main === module) {
   });
 }
 
-module.exports = { classifyVenueStatus, namedFailure };
+/**
+ * The venue build marker probe (#1851): read `/build-info.json` through
+ * the same browser context the reachability check used (the venue's TLS
+ * and DNS mapping already settled), parse it against the contract, and
+ * return the line the pre-flight prints. `malformed` is the only
+ * outcome that stops the run (see parseBuildMarker).
+ *
+ * @param {import('@playwright/test').BrowserContext} context
+ * @param {string} baseUrl - the venue's edge address
+ * @returns {Promise<{line: string, malformed: boolean}>}
+ */
+async function probeVenueBuild(context, baseUrl) {
+  let status;
+  let contentType;
+  let bodyText;
+  try {
+    const markerRes = await context.request.get(`${baseUrl}/build-info.json`);
+    status = markerRes.status();
+    contentType = markerRes.headers()['content-type'] || '';
+    bodyText = await markerRes.text();
+  } catch (e) {
+    // A probe that cannot even complete is a freshness fact, not a
+    // reachability fact (the venue itself was just reached): name it and
+    // go on — the run's value does not hinge on the marker.
+    return {
+      line: `venue build: unreadable (the marker probe failed: ${e.message}) — of unknown freshness`,
+      malformed: false
+    };
+  }
+  const parsed = parseBuildMarker(status, contentType, bodyText);
+  if (parsed.kind === 'missing') {
+    return {
+      line:
+        'venue build: the venue predates the build-marker contract (no readable /build-info.json — ' +
+        'the SPA fallback answered) — freshness undetectable here; every red below reads against an unknown build',
+      malformed: false
+    };
+  }
+  if (parsed.kind === 'malformed') {
+    return {
+      line: `venue build: the marker contract is BROKEN — ${parsed.reason} (HTTP ${status} at /build-info.json)`,
+      malformed: true
+    };
+  }
+  let headSha;
+  try {
+    headSha = require('child_process')
+      .execSync('git rev-parse HEAD', { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] })
+      .trim();
+  } catch {
+    headSha = null;
+  }
+  return {
+    line: `venue build: ${describeBuildFreshness(parsed.gitSha, headSha)}`,
+    malformed: false,
+    gitSha: parsed.gitSha
+  };
+}
+
+/**
+ * The venue build marker's contract (#1851): the frontend image bakes
+ * `/build-info.json` — `{"git_sha": "<sha>"}` — at build time, and the
+ * pre-flight reads it so the run EXPOSES which build the venue serves.
+ * A stale venue fails specs for product-reasons that read like test
+ * defects (the W14/W15 trap); a run that names the served build cannot
+ * file that misleading issue.
+ *
+ * THREE findings, not one — the same discipline as the venue status
+ * above:
+ *  - `ok` — the marker parsed; the freshness verdict follows;
+ *  - `missing` — no readable marker at the path: the venue's frontend
+ *    predates the marker contract (the SPA fallback answers the probe).
+ *    Loudly named, not a stop: an older frontend is a legitimate state
+ *    until its next rebuild, and the marker arrives with it;
+ *  - `malformed` — the path IS served but carries no readable
+ *    `git_sha`: the venue HAS the contract and broke it. That is a
+ *    deployment defect the run stops for.
+ *
+ * @param {number} status - the HTTP status the probe answered
+ * @param {string} contentType - the response's content type
+ * @param {string} bodyText - the response body as text
+ * @returns {{kind: 'ok', gitSha: string} | {kind: 'missing'} | {kind: 'malformed', reason: string}}
+ */
+function parseBuildMarker(status, contentType, bodyText) {
+  if (status < 200 || status >= 300 || !/json/i.test(String(contentType || ''))) {
+    return { kind: 'missing' };
+  }
+  let parsed;
+  try {
+    parsed = JSON.parse(bodyText);
+  } catch (e) {
+    // A JSON content type with an unparseable body is the contract
+    // breaking down in transit, not the contract's absence.
+    return { kind: 'malformed', reason: `the marker body is not valid JSON: ${e.message}` };
+  }
+  if (!parsed || typeof parsed !== 'object' || typeof parsed.git_sha !== 'string' || parsed.git_sha === '') {
+    return { kind: 'malformed', reason: 'the marker carries no git_sha string' };
+  }
+  return { kind: 'ok', gitSha: parsed.git_sha };
+}
+
+/**
+ * The freshness verdict, as one line the operator reads next to the
+ * venue's address: the marker's sha against the checkout's HEAD. A
+ * mismatch is STALE — named, with both shas and the remedy pointer; the
+ * run does NOT stop for it (a venue may legitimately serve a different
+ * build than the checkout — a release branch, a deploy in flight), but
+ * every red below it now reads against the served build, not against
+ * the checkout's.
+ *
+ * @param {string} gitSha - the marker's git sha
+ * @param {string|null} headSha - the checkout's HEAD, or null when it
+ *   could not be read
+ * @returns {string} the freshness line
+ */
+function describeBuildFreshness(gitSha, headSha) {
+  if (!headSha) {
+    return `of unknown freshness (serves ${gitSha}; the checkout's HEAD could not be read)`;
+  }
+  if (gitSha === headSha) {
+    return `fresh — the venue serves the checkout's build (${gitSha})`;
+  }
+  return (
+    `STALE — the venue serves ${gitSha}, the checkout is ${headSha}: every red below is suspect ` +
+    'until the venue serves this build (the stale-venue remedy: docs/e2e-tests/local-run.md)'
+  );
+}
+
+module.exports = { classifyVenueStatus, namedFailure, parseBuildMarker, describeBuildFreshness };

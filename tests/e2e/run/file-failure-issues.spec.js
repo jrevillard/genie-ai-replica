@@ -14,7 +14,7 @@ const {
   issueBody,
   isConnectionSignature,
   partitionVenueNoise,
-  venueAvailabilityReport,
+  venueAvailabilityReport
 } = require('./file-failure-issues');
 
 const FILE = 'tests/e2e/theme/theme-runtime-config.spec.js';
@@ -49,14 +49,9 @@ test.describe('a dedicated title names ONE spec file', () => {
     // The title may name the file the way a human writes it: an
     // absolute path, or the file's URL in a tracker link. Both END with
     // the repository path — the same file, named differently.
+    expect(titleIsDedicatedTo(`test(e2e): /home/dev/genie-ai/${FILE} is red`, FILE)).toBe(true);
     expect(
-      titleIsDedicatedTo(`test(e2e): /home/dev/genie-ai/${FILE} is red`, FILE)
-    ).toBe(true);
-    expect(
-      titleIsDedicatedTo(
-        `test(e2e): https://gitlab.example/un/itu/genie-ai/-/blob/main/${FILE} is red`,
-        FILE
-      )
+      titleIsDedicatedTo(`test(e2e): https://gitlab.example/un/itu/genie-ai/-/blob/main/${FILE} is red`, FILE)
     ).toBe(true);
   });
 
@@ -67,10 +62,7 @@ test.describe('a dedicated title names ONE spec file', () => {
     expect(titleIsDedicatedTo(`test(e2e): ${FILE} — ${FILE} again`, FILE)).toBe(true);
     expect(titleIsDedicatedTo(`test(e2e): ${FILE} — /home/dev/genie-ai/${FILE}`, FILE)).toBe(true);
     expect(
-      titleIsDedicatedTo(
-        `test(e2e): ${FILE} — https://gitlab.example/un/itu/genie-ai/-/blob/main/${FILE}`,
-        FILE
-      )
+      titleIsDedicatedTo(`test(e2e): ${FILE} — https://gitlab.example/un/itu/genie-ai/-/blob/main/${FILE}`, FILE)
     ).toBe(true);
   });
 
@@ -132,7 +124,7 @@ test.describe('a match must be DEDICATED to the spec file', () => {
     // issue of its own — the tracker noise this path exists to end.
     const umbrella = {
       title: '13 spec files hardcode the Compose edge',
-      description: `The wave touched ${FILE} and twelve other files.`,
+      description: `The wave touched ${FILE} and twelve other files.`
     };
     expect(findTrackedIssue(FILE, [umbrella])).toBe(null);
   });
@@ -142,7 +134,7 @@ test.describe('a match must be DEDICATED to the spec file', () => {
     // dedication. The file's own failure still needs its own issue.
     const umbrella = {
       title: `test(e2e): ${FILE} and tests/e2e/other.spec.js are red`,
-      description: '',
+      description: ''
     };
     expect(findTrackedIssue(FILE, [umbrella])).toBe(null);
   });
@@ -172,7 +164,7 @@ test.describe('a match must be DEDICATED to the spec file', () => {
     expect(findTrackedIssue(FILE, [byTitle, byMarker])).toBe(byTitle);
   });
 
-  test('a bare name of ANOTHER tree\'s file is not this tree\'s path', () => {
+  test("a bare name of ANOTHER tree's file is not this tree's path", () => {
     // A title that names an e2e spec AND a frontend unit test by its
     // bare name is still a DEDICATION to the e2e file: the frontend test
     // is not this tree's business. Counting it would make the title look
@@ -200,7 +192,7 @@ test.describe('a match must be DEDICATED to the spec file', () => {
     }
   });
 
-  test('a COPY of this tree elsewhere in the checkout does not make its names another tree\'s', () => {
+  test("a COPY of this tree elsewhere in the checkout does not make its names another tree's", () => {
     // The operator's checkout carries sibling worktrees, and each of them
     // holds a full copy of tests/e2e. Those copies are THIS tree's own
     // business: if their spec names counted as "another tree's files",
@@ -219,15 +211,13 @@ test.describe('a match must be DEDICATED to the spec file', () => {
       fs.mkdirSync(path.join(root, '.claude/worktrees/wt-a/tests/e2e'), { recursive: true });
       fs.writeFileSync(path.join(root, '.claude/worktrees/wt-a/tests/e2e/thing.spec.js'), '');
 
-      expect(
-        titleIsDedicatedTo('test(e2e): thing.spec.js is red', 'tests/e2e/thing.spec.js', root)
-      ).toBe(true);
+      expect(titleIsDedicatedTo('test(e2e): thing.spec.js is red', 'tests/e2e/thing.spec.js', root)).toBe(true);
     } finally {
       fs.rmSync(root, { recursive: true, force: true });
     }
   });
 
-  test('a bare spec file name is this tree\'s path even when the file is gone', () => {
+  test("a bare spec file name is this tree's path even when the file is gone", () => {
     // A RENAMED file must not drop out of the comparison: a title that
     // names several spec files is a group, not a dedication, and the
     // renamed file's bare name must still count as one of them —
@@ -275,7 +265,7 @@ test.describe('one issue per failing spec FILE', () => {
     const failed = [
       { file: 'tests/e2e/a.spec.js', title: 'a › first', test: { results: [{ error: { message: 'boom' } }] } },
       { file: 'tests/e2e/a.spec.js', title: 'a › second', test: { results: [{ error: { message: 'bang' } }] } },
-      { file: 'tests/e2e/b.spec.js', title: 'b › third', test: { results: [{ error: { message: 'snap' } }] } },
+      { file: 'tests/e2e/b.spec.js', title: 'b › third', test: { results: [{ error: { message: 'snap' } }] } }
     ];
     const byFile = groupFailuresByFile(failed);
     expect(byFile.size).toBe(2);
@@ -287,7 +277,12 @@ test.describe('one issue per failing spec FILE', () => {
     // ONE spelling, used both to write the marker and to read it back:
     // a drift between the two would silently degrade the dedupe to
     // title-only.
-    const body = issueBody('tests/e2e/a.spec.js', [{ title: 'a › first', error: 'boom' }], 'https://venue.example:4443', '2026-11-11T00:00:00Z');
+    const body = issueBody(
+      'tests/e2e/a.spec.js',
+      [{ title: 'a › first', error: 'boom' }],
+      'https://venue.example:4443',
+      '2026-11-11T00:00:00Z'
+    );
     expect(body).toContain('- spec file: `tests/e2e/a.spec.js`');
     // And the failure it files is in the body.
     expect(body).toContain('a › first');
@@ -391,13 +386,7 @@ test.describe('a failure carrying an edge-transport signature is venue noise (#1
 
   test('the venue-availability report names the venue, the files and the verdict', () => {
     const noise = new Map([
-      [
-        'tests/e2e/welcome-banner.spec.js',
-        [
-          { error: OUTAGE_ERROR },
-          { error: 'net::ERR_CONNECTION_RESET' }
-        ]
-      ],
+      ['tests/e2e/welcome-banner.spec.js', [{ error: OUTAGE_ERROR }, { error: 'net::ERR_CONNECTION_RESET' }]],
       ['tests/e2e/resizable-sidebars.spec.js', [{ error: 'net::ERR_NAME_NOT_RESOLVED' }]]
     ]);
     const report = venueAvailabilityReport(noise, VENUE);
@@ -406,5 +395,32 @@ test.describe('a failure carrying an edge-transport signature is venue noise (#1
     expect(report).toContain('- tests/e2e/resizable-sidebars.spec.js: 1 (e.g. net::ERR_NAME_NOT_RESOLVED)');
     expect(report).toContain(`The venue answered the re-probe at ${VENUE}`);
     expect(report).toContain('NOT product findings');
+  });
+});
+
+test.describe('the filed body names the venue build (#1851)', () => {
+  // The stale-venue trap: a venue serving an old build fails specs for
+  // product-reasons that read like test defects. An issue that does not
+  // name the served build is one an operator cannot diagnose in one read.
+  test('a run that carried the marker names the sha it exercised', () => {
+    const body = issueBody(
+      'tests/e2e/a.spec.js',
+      [{ title: 'a › first', error: 'boom' }],
+      'https://venue.example:4443',
+      '2026-11-11T00:00:00Z',
+      'abc1234def'
+    );
+    expect(body).toContain('- venue build: `abc1234def`');
+  });
+
+  test('a run without a marker says so, unknown — not a fabricated sha', () => {
+    const body = issueBody(
+      'tests/e2e/a.spec.js',
+      [{ title: 'a › first', error: 'boom' }],
+      'https://venue.example:4443',
+      '2026-11-11T00:00:00Z'
+    );
+    expect(body).toContain('- venue build: unknown');
+    expect(body).not.toMatch(/venue build: `[0-9a-f]{7,}`/);
   });
 });

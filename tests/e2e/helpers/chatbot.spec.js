@@ -237,9 +237,13 @@ test.describe('the last bot message metadata responseTime is read through the sa
     expect(lastBotResponseTimeOf(read)).toBeUndefined();
   });
 
-  test('a bot-less transcript (welcome turn only) reports undefined', () => {
-    const read = { state: 'ok', messages: [] };
+  test('a welcome-only transcript (a bot row carrying no metadata) reports undefined', () => {
+    // The welcome bubble IS a bot message — its row carries no
+    // responseTime key at all, which is the undefined case, distinct
+    // from an empty transcript (no bot row: also undefined).
+    const read = { state: 'ok', messages: [{ sender: 'bot', isStreaming: undefined, responseTime: undefined }] };
     expect(lastBotResponseTimeOf(read)).toBeUndefined();
+    expect(lastBotResponseTimeOf({ state: 'ok', messages: [] })).toBeUndefined();
   });
 
   test('a broken store contract is NOT_READABLE — the caller reports it by name', () => {

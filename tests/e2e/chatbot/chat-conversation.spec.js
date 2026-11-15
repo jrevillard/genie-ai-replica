@@ -596,7 +596,7 @@ test.describe('Conversation — surface invariants', () => {
     // The card's hidden prompt auto-sends: the answer is stubbed, so the
     // turn completes locally instead of spending the venue's LLM on an
     // invariant it has no part in. The capture rides the shared
-    // interception (helpers/stream-route.js): the scoped payload is the
+    // interception (helpers/stream-capture.js): the scoped payload is the
     // contract this test names alongside the header — a chip plus a
     // header without the scope on the wire would be a scope that only
     // decorates.

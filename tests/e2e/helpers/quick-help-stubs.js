@@ -34,6 +34,14 @@ const { runRouteHandler } = require('./route');
 function quickHelpButton(overrides = {}) {
   const { title, icon, ...rest } = overrides;
   const titleMap = title === undefined ? { en: 'Just Chat' } : typeof title === 'string' ? { en: title } : title;
+  if (titleMap === null || (typeof titleMap !== 'string' && typeof titleMap !== 'object')) {
+    // A malformed title lands on the card verbatim and the app refuses
+    // the whole served document at boot — a six-spec blast radius with
+    // the failure far from the fixture. Fail HERE, at the factory.
+    throw new TypeError(
+      `quickHelpButton: title must be a string or a locale map (got ${titleMap === null ? 'null' : typeof titleMap})`
+    );
+  }
   // [icon] is a path (the file-type icon every shipped card uses) or a
   // full icon object — never a bare string on the CARD: the served
   // schema requires the object, and the app refuses a document that
@@ -44,6 +52,13 @@ function quickHelpButton(overrides = {}) {
       : typeof icon === 'string'
         ? { type: 'file', value: icon }
         : icon;
+  if (typeof iconMap !== 'object' || !('type' in iconMap) || !('value' in iconMap)) {
+    // Same contract-guard as the title: a schema-invalid icon is a boot
+    // refusal at the app, not a fixture error. Fail HERE.
+    throw new TypeError(
+      `quickHelpButton: icon must be a path string or an object carrying type and value (got ${JSON.stringify(icon)})`
+    );
+  }
   return {
     id: undefined,
     title: titleMap,

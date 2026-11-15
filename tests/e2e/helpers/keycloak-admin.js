@@ -1068,26 +1068,36 @@ async function deleteClient(adminToken, realm, clientUuid, clientId) {
  * The verdict wording of one direction of the ROPC flip: what the admin API
  * call is named as in transport errors, how a refused PUT is reported, and
  * the loud-probe message when the read-back contradicts the 204 (#1879 —
- * "a 204 proves nothing on its own").
+ * "a 204 proves nothing on its own"). The probe message interpolates the
+ * observed value, never an assumed one: the probe fires on any value other
+ * than the expected side, and the determinism rules put the ACTUAL observed
+ * value in the error.
  */
 const ROPC_FLIP = {
   enable: {
     what: (clientId, realm) => `the ROPC enablement of ${clientId} in realm ${realm}`,
     refused: (clientId, res) =>
       `Failed to enable direct access grants on ${clientId}: HTTP ${res.status} ${bodyText(res)}`,
-    probeMiss: (clientId, realm) =>
+    probeMiss: (clientId, realm, observed) =>
       `ROPC enablement did not land on ${clientId} in realm ${realm} — the PUT answered 204 but the ` +
-      `client still reads back directAccessGrantsEnabled=false. The grant stays off: fix the ` +
-      `enablement before the spec mints a ROPC token against a client that still refuses it.`
+      `client still reads back directAccessGrantsEnabled=${observed}. The grant stays off: fix the ` +
+      `enablement before the spec mints a ROPC token against a client that still refuses it.`,
+    vanished: (clientId, realm) =>
+      `ROPC enablement unverifiable on ${clientId} in realm ${realm} — the client vanished between ` +
+      `the enablement PUT and the read-back. Left alone, the spec's ROPC token mint would fail ` +
+      `minutes later with a cryptic password-grant refusal; the miss is named here instead, where ` +
+      `the enablement that did not land is the cause.`
   },
   disable: {
     what: (clientId, realm) => `the ROPC revert of ${clientId} in realm ${realm}`,
     refused: (clientId, res) =>
       `Failed to disable direct access grants on ${clientId}: HTTP ${res.status} ${bodyText(res)}`,
-    probeMiss: (clientId, realm) =>
+    probeMiss: (clientId, realm, observed) =>
       `ROPC NOT reverted on ${clientId} in realm ${realm} — the PUT answered 204 but the client ` +
-      `still reads back directAccessGrantsEnabled=true. The grant stays on: fix the revert before ` +
-      `the venue keeps accepting password grants on this client.`
+      `still reads back directAccessGrantsEnabled=${observed}. The grant stays on: fix the revert ` +
+      `before the venue keeps accepting password grants on this client.`
+    // No vanished arm: a client gone between the PUT and the read-back
+    // holds the revert's posture by absence — nothing leaks a grant.
   }
 };
 
@@ -1098,7 +1108,12 @@ const ROPC_FLIP = {
  * client back and refuse to resolve while the grant reads anything but
  * `expected` — the loud probe both directions carry, so neither a venue
  * left accepting password grants (#1879) nor an enablement a Keycloak
- * silently ignored (#1886) can pass unnoticed.
+ * silently ignored (#1886) can pass unnoticed. Asymmetric on absence, the
+ * way the two directions' goals are asymmetric: for the revert a vanished
+ * client holds the posture by absence (nothing leaks a grant), while for
+ * the enablement a vanished client means the landing cannot be verified —
+ * and the spec's token mint would inherit exactly the cryptic failure the
+ * probe exists to name here.
  * @param {string} adminToken - Keycloak admin access token
  * @param {string} realm - Realm name
  * @param {string} clientId - Client ID (e.g. 'genie-app')
@@ -1108,6 +1123,9 @@ const ROPC_FLIP = {
 async function flipDirectAccessGrants(adminToken, realm, clientId, verb) {
   const expected = verb === 'enable';
   const wording = ROPC_FLIP[verb];
+  if (!wording) {
+    throw new Error(`flipDirectAccessGrants: unknown direction '${verb}' — expected 'enable' or 'disable'`);
+  }
 
   // One exact-match client search, owned by findClient: an absent client
   // resolves null here (the admin API's way of saying the realm carries
@@ -1133,11 +1151,13 @@ async function flipDirectAccessGrants(adminToken, realm, clientId, verb) {
 
   // The loud probe: a 204 proves nothing on its own — the venue is only
   // clean when a fresh read answers the grant sits at the expected side.
-  // A client that vanished between the PUT and the read-back holds the
-  // posture by absence — nothing to flip, nothing to verify.
   const after = await findClient(adminToken, realm, clientId);
-  if (after && after.directAccessGrantsEnabled !== expected) {
-    throw new Error(wording.probeMiss(clientId, realm));
+  if (after) {
+    if (after.directAccessGrantsEnabled !== expected) {
+      throw new Error(wording.probeMiss(clientId, realm, after.directAccessGrantsEnabled));
+    }
+  } else if (expected) {
+    throw new Error(wording.vanished(clientId, realm));
   }
 }
 

@@ -123,6 +123,9 @@ async function waitForBannerSettled(page) {
  *
  * Returns { ctx, page } — the caller closes ctx when it is done. Prefer
  * withWelcomeSession, which owns that close guarantee in its own finally.
+ * The open path holds the same guarantee for itself: a throw after the
+ * context exists (a login that fails, a wait that expires) closes the
+ * context before rethrowing, so a failed open cannot leak it.
  */
 async function openWelcomeScreen(browser, { viewport, theme, locale, setupPage, reload = true } = {}) {
   const ctx = await browser.newContext({
@@ -130,28 +133,36 @@ async function openWelcomeScreen(browser, { viewport, theme, locale, setupPage, 
     colorScheme: theme || 'light',
     ignoreHTTPSErrors: true
   });
-  const page = await ctx.newPage();
-  if (setupPage) {
-    await setupPage(page);
-  }
-  await loginViaUI(page);
-  if (locale) {
-    await page.evaluate((l) => localStorage.setItem('userLocale', l), locale);
-  }
-  await page.evaluate(() => localStorage.setItem('sidebarOpen', 'true'));
-  // The splash is a full-screen overlay (z-index 30000, opaque
-  // background) and it shows on the first authenticated load of a
-  // session — the login above already triggered it. It has to be gone
-  // before a single pixel is sampled, or the sampler reads the splash
-  // image instead of the scrim. A reload skips it (the session flag is
-  // set) and leaves the page ready to sample.
-  await page.waitForSelector('[data-testid="quick-help-banner"]', { timeout: 15000 });
-  if (reload) {
-    await page.reload({ waitUntil: 'networkidle', timeout: 30000 });
+  try {
+    const page = await ctx.newPage();
+    if (setupPage) {
+      await setupPage(page);
+    }
+    await loginViaUI(page);
+    if (locale) {
+      await page.evaluate((l) => localStorage.setItem('userLocale', l), locale);
+    }
+    await page.evaluate(() => localStorage.setItem('sidebarOpen', 'true'));
+    // The splash is a full-screen overlay (z-index 30000, opaque
+    // background) and it shows on the first authenticated load of a
+    // session — the login above already triggered it. It has to be gone
+    // before a single pixel is sampled, or the sampler reads the splash
+    // image instead of the scrim. A reload skips it (the session flag is
+    // set) and leaves the page ready to sample.
     await page.waitForSelector('[data-testid="quick-help-banner"]', { timeout: 15000 });
+    if (reload) {
+      await page.reload({ waitUntil: 'networkidle', timeout: 30000 });
+      await page.waitForSelector('[data-testid="quick-help-banner"]', { timeout: 15000 });
+    }
+    await waitForBannerEntrance(page);
+    return { ctx, page };
+  } catch (e) {
+    // Loud cleanup, same contract as the call-site finally: a close that
+    // itself fails supersedes the open error (that failure is the one the
+    // caller needs to see), never a swallow.
+    await ctx.close();
+    throw e;
   }
-  await waitForBannerEntrance(page);
-  return { ctx, page };
 }
 
 /**

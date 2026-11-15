@@ -64,7 +64,7 @@ test.describe('the fixture-card factory produces schema-valid cards', () => {
     expect(card.action).toBe(action);
   });
 
-  test('the composer entry the scope spec serves is byte-equal to the card it replaced', () => {
+  test('the composer entry the scope spec serves is deep-equal to the card it replaced', () => {
     // The regression case: the literal this factory replaced, compared
     // whole — not field by field.
     expect(quickHelpButton({ id: 'e2e-composer', placement: 'composer' })).toEqual({
@@ -75,5 +75,35 @@ test.describe('the fixture-card factory produces schema-valid cards', () => {
       placement: 'composer',
       styles: { backgroundColor: '#fff', hoverColor: '#eee', outlineColor: '#ccc' }
     });
+  });
+
+  // The guards: a malformed override must fail AT THE FACTORY with its
+  // named TypeError, not land on the card and become an app boot refusal
+  // six specs away.
+  const expectRejected = (overrides, what) =>
+    expect(() => quickHelpButton({ id: 'e2e-x', ...overrides })).toThrow(what);
+
+  test('a null title is rejected by name', () => {
+    expectRejected({ title: null }, 'title must be a string or a locale map (got null)');
+  });
+
+  test('a number title is rejected by name', () => {
+    expectRejected({ title: 42 }, 'title must be a string or a locale map (got number)');
+  });
+
+  test('an array title is rejected by name', () => {
+    expectRejected({ title: ['Just Chat'] }, 'title must be a string or a locale map (got array)');
+  });
+
+  test('an icon object missing type is rejected by name', () => {
+    expectRejected({ icon: { value: '/config/quickhelp/just-chat.svg' } }, 'icon must be a path string');
+  });
+
+  test('an icon object missing value is rejected by name', () => {
+    expectRejected({ icon: { type: 'file' } }, 'icon must be a path string');
+  });
+
+  test('a null icon is rejected by name, not by a bare V8 TypeError', () => {
+    expectRejected({ icon: null }, 'icon must be a path string');
   });
 });

@@ -15,6 +15,7 @@ const {
   getSessionToken,
   getSessionTokenViaUI,
   describeUnauthorized,
+  dedupeByIds,
   mapWithConcurrency,
   request,
   SESSION_MINT_TIMEOUT_MS,
@@ -163,9 +164,18 @@ test.describe('Conversation history persistence', () => {
     // below. A later page that fails must NOT discard the pages that
     // succeeded — those conversations are known, and leaving them behind
     // is the leftover this sweep exists to prevent.
+    //
+    // The delete set holds each conversation ONCE: dedupeByIds drops the
+    // rows pagination drift listed twice (why: dedupeByIds in
+    // helpers/auth.js, #1864/#1893). ONE id reader for the dedupe and the
+    // emitted set — the two must key on the same field.
+    const conversationIdOf = (c) => c._key || c.id;
     const own =
       pagesRead > 0
-        ? conversations.filter((c) => c.title?.startsWith('E2E ')).map((c) => c._key || c.id)
+        ? dedupeByIds(
+            conversations.filter((c) => c.title?.startsWith('E2E ')),
+            conversationIdOf
+          ).map(conversationIdOf)
         : [...createdConversationIds];
     const populationKnown = total !== undefined;
     const enumeratedAll = populationKnown ? conversations.length >= total : exhausted;
@@ -173,11 +183,12 @@ test.describe('Conversation history persistence', () => {
     const deleteSet = own.slice(0, SWEEP_MAX_DELETES);
     const beyondBudget = own.length - deleteSet.length;
 
-    // The deletes run in bounded-parallel waves: a sequential sweep of a
-    // full page costs 50 × 30 s — more than the hook's budget and more
-    // than the realm's access-token lifespan, so the tail of it would run
-    // on an expired token. The width and the arithmetic live in
-    // helpers/auth.js (SWEEP_DELETE_CONCURRENCY).
+    // The deletes run in bounded-parallel waves: a sequential delete phase
+    // costs up to SWEEP_MAX_DELETES × API_TIMEOUT_MS — more than the
+    // hook's budget and more than the realm's access-token lifespan, so
+    // the tail of it would run on an expired token. The width and the
+    // budget arithmetic live in helpers/auth.js (SWEEP_DELETE_CONCURRENCY,
+    // SWEEP_MAX_DELETES).
     const undeleted = (
       await mapWithConcurrency(deleteSet, SWEEP_DELETE_CONCURRENCY, async (convId) => {
         try {

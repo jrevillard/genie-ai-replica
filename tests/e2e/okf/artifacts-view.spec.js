@@ -35,6 +35,7 @@
 const { test, expect } = require('@playwright/test');
 const { loginViaUI, BASE_URL, TEST_ADMIN_USER, LOGIN_BUDGET_TIMEOUT_MS } = require('../helpers/chatbot');
 const { okfEnabled, okfParkedReason, skipUnlessVenue } = require('../helpers/venue-profile');
+const { pinEnglish } = require('../helpers/locale');
 
 /** The artifacts the interception serves. Two of them: one complete, one
  *  without a bundle_version (the version must read "unknown", not a
@@ -62,10 +63,6 @@ const ARTIFACTS = [
 const REPOS = [{ repo_id: 'repo-kenya', name: 'Kenya Government Services' }];
 
 test.describe('the OKF artifacts view', () => {
-  // The labels under test are translated (admin.documents.status*); pin the
-  // locale so the exact wording is fixed.
-  test.use({ locale: 'en-US' });
-
   // The view opens behind a browser login — the budget is the login's
   // own ceiling, derived once beside loginViaUI (#1798).
   test.describe.configure({ timeout: LOGIN_BUDGET_TIMEOUT_MS });
@@ -77,6 +74,9 @@ test.describe('the OKF artifacts view', () => {
   // the frontend itself reads — not a guess.
   test.beforeEach(skipUnlessVenue(test, okfEnabled, okfParkedReason));
 
+  // The labels under test are translated (admin.documents.status*);
+  // pinLocale fixes the exact wording. Why: helpers/locale.js.
+  test.beforeEach(pinEnglish);
   /**
    * Log in as the admin, intercept the two reads the surface performs, and
    * open the artifacts view. Returns the captured `is_bundle` request

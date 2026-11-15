@@ -1,6 +1,7 @@
 const { test, expect } = require('@playwright/test');
 const { expectRevalidated } = require('../helpers/cache-headers');
 const { BASE_URL } = require('../helpers/base-url');
+const { KEYCLOAK_GENIE_AUTH_PATH } = require('../helpers/keycloak-landing');
 
 // Cache-header contract for the runtime theme configuration.
 //
@@ -87,7 +88,7 @@ test.describe('Keycloak runtime theme mount', () => {
     // the redirect URI is accepted via the client's KC_PUBLIC_ORIGIN/* wildcard.
     const challenge = 'a'.repeat(43);
     const response = await request.get(
-      `/auth/realms/genie/protocol/openid-connect/auth` +
+      KEYCLOAK_GENIE_AUTH_PATH +
         `?client_id=genie-app&response_type=code&scope=openid` +
         `&redirect_uri=${encodeURIComponent(`${BASE_URL}/callback`)}` +
         `&code_challenge=${challenge}&code_challenge_method=S256`

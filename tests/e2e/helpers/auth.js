@@ -476,6 +476,30 @@ function describeUnauthorized(res, token) {
 }
 
 /**
+ * Deduplicate the sweep's candidate rows by id: pagination drift can list
+ * the same row on two page reads, and a duplicated entry in the delete
+ * set runs a second DELETE against an id the sweep already converged (the
+ * endpoint answers 404 for the removed resource) — turning a clean state
+ * into a spurious cleanup failure (#1864, #1893). A row whose id cannot
+ * be derived cannot be deduped — each such row stands alone, and its
+ * delete fails loud on the missing id.
+ *
+ * @param {Array<object>} rows the sweep's candidate rows
+ * @param {(row: object) => string|number|undefined|null} idOf the row's id reader
+ * @returns {Array<object>} the rows with repeated ids dropped (first wins)
+ */
+function dedupeByIds(rows, idOf) {
+  const seenIds = new Set();
+  return rows.filter((row) => {
+    const id = idOf(row);
+    if (id === undefined || id === null) return true;
+    if (seenIds.has(id)) return false;
+    seenIds.add(id);
+    return true;
+  });
+}
+
+/**
  * Map `fn` over `items`, at most `limit` calls in flight at a time. The
  * results keep the input order, so a failure report reads the same way
  * whatever order the calls completed in.
@@ -626,6 +650,7 @@ module.exports = {
   parseJwtClaims,
   request,
   mapWithConcurrency,
+  dedupeByIds,
   describeUnauthorized,
   SESSION_MINT_TIMEOUT_MS,
   SWEEP_DELETE_CONCURRENCY,

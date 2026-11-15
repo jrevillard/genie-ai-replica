@@ -1,6 +1,7 @@
 const { test, expect } = require('@playwright/test');
 const { SESSION_MINT_TIMEOUT_MS } = require('../helpers/auth');
 const { loginViaUI, BASE_URL, TEST_ADMIN_USER } = require('../helpers/chatbot');
+const { pinEnglish } = require('../helpers/locale');
 
 /**
  * Overview data wiring: the stat tiles, health services and resource usage
@@ -28,10 +29,10 @@ test.describe('Admin overview data wiring', () => {
   // first and hide the helper's diagnosis behind a bare timeout.
   test.setTimeout(SESSION_MINT_TIMEOUT_MS);
   // Pin the locale: monthlyActiveUsers renders through
-  // toLocaleString(), whose grouping separator follows the browser
-  // locale ("1,234" en-US vs "1.234" de-DE).
-  test.use({ locale: 'en-US' });
-
+  // formatValue(...).toLocaleString(), whose grouping separator follows
+  // the APP's resolved locale — the pin sets localStorage.userLocale, the
+  // chain's first stop ("1,234" en vs "1.234" de). Why: helpers/locale.js.
+  test.beforeEach(pinEnglish);
   async function loginWithWiredPayload(page, payload) {
     await loginViaUI(page, TEST_ADMIN_USER);
     await page.route('**/api/admin/system-health', (route) =>

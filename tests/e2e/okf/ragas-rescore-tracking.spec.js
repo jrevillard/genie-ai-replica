@@ -26,6 +26,7 @@ const { getAdminToken, SESSION_MINT_TIMEOUT_MS } = require('../helpers/auth');
 const { createUser, deleteUser } = require('../helpers/keycloak-admin');
 const { okfEnabled, okfParkedReason, skipUnlessVenue } = require('../helpers/venue-profile');
 const { pinLocale } = require('../helpers/locale');
+const { KEYCLOAK_AUTH_ENDPOINT_GLOB } = require('../helpers/keycloak-landing');
 
 const REALM = process.env.KEYCLOAK_REALM || 'genie';
 const REPO_NAME = process.env.OKF_SMOKE_REPO_NAME || 'El Salvador';
@@ -79,7 +80,7 @@ test.describe('the RAGAS guide explains the output, and a re-score is a tracked 
 
     // 1. log in through Keycloak
     await page.goto(`${BASE_URL}/`, { waitUntil: 'domcontentloaded', timeout: 30000 });
-    await page.waitForURL('**/protocol/openid-connect/auth**', { timeout: 20000 });
+    await page.waitForURL(KEYCLOAK_AUTH_ENDPOINT_GLOB, { timeout: 20000 });
     await page.fill('#username', USER);
     await page.fill('#password', PW);
     await page.click('#kc-login');

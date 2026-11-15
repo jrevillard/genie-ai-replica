@@ -37,6 +37,7 @@ const { LOGIN_BUDGET_TIMEOUT_MS } = require('../helpers/chatbot');
 const { openStudioRepo, stubStudioRepoRoutes } = require('../helpers/okf-studio');
 const { runRouteHandler } = require('../helpers/route');
 const { okfEnabled, okfParkedReason, skipUnlessVenue } = require('../helpers/venue-profile');
+const { pinEnglish } = require('../helpers/locale');
 
 /**
  * WHO LOGS IN.
@@ -152,10 +153,6 @@ async function openEditor(page) {
 }
 
 test.describe('the concept-document ceiling in the concept editor', () => {
-  // The advisory's label is translated (okf.editor.ceiling); pin the locale
-  // so the exact wording is fixed.
-  test.use({ locale: 'en-US' });
-
   // The editor opens behind a browser login — the budget is the login's
   // own ceiling, derived once beside loginViaUI (#1798).
   test.describe.configure({ timeout: LOGIN_BUDGET_TIMEOUT_MS });
@@ -167,6 +164,9 @@ test.describe('the concept-document ceiling in the concept editor', () => {
   // runtime config the frontend itself reads — not a guess.
   test.beforeEach(skipUnlessVenue(test, okfEnabled, okfParkedReason));
 
+  // The advisory's label is translated (okf.editor.ceiling); pinLocale
+  // fixes the exact wording. Why: helpers/locale.js.
+  test.beforeEach(pinEnglish);
   test("the advisory carries the SERVER's ceiling", async ({ page }) => {
     await openEditor(page);
 
@@ -349,10 +349,12 @@ async function openSplitDialog(page, preview) {
 }
 
 test.describe('the split affordance in the concept editor (#1577 story 2)', () => {
-  test.use({ locale: 'en-US' });
   test.describe.configure({ timeout: LOGIN_BUDGET_TIMEOUT_MS });
   test.beforeEach(skipUnlessVenue(test, okfEnabled, okfParkedReason));
 
+  // The split dialog's copy is translated; pinLocale fixes the exact
+  // wording. Why: helpers/locale.js.
+  test.beforeEach(pinEnglish);
   test('the dialog renders the seam preview BEFORE any write', async ({ page }) => {
     const { previews, splits } = await openSplitDialog(page, { status: 200, body: SPLIT_PLAN });
 

@@ -55,6 +55,7 @@
         :selected-id="editConceptId"
         :label-options="labelOptions"
         :read-only="readOnly"
+        :show-split="false"
         @select="onConceptSelect"
         @add="addOpen = true"
         @delete="onDeleteAsk"

@@ -1,43 +1,29 @@
 const { test, expect } = require('@playwright/test');
 const { BASE_URL } = require('../helpers/base-url');
-const { TEST_USER } = require('../helpers/e2e-fixtures');
+const { loginViaUI, LOGIN_BUDGET_TIMEOUT_MS } = require('../helpers/chatbot');
 const { NAV_LOGOUT_BUTTON } = require('../helpers/navbar');
-const { KEYCLOAK_AUTH_ENDPOINT_GLOB, waitForRealmAuthEndpoint } = require('../helpers/keycloak-landing');
+const { waitForRealmAuthEndpoint } = require('../helpers/keycloak-landing');
 
 // Test L.2 — localStorage Cleanup on Logout
-// Login, inject legacy localStorage items, trigger logout, verify they are removed.
+// Login (through loginViaUI — the suite's one login path, #1854), inject
+// legacy localStorage items, trigger logout, verify they are removed.
 // The Vuex logout action clears 'user' and 'auth_token' from localStorage before the Keycloak signoutRedirect.
 // Source: docs/e2e-tests/suite-map.md § The acceptance phases, Phase L
 
 test('clears legacy localStorage items after logout', async ({ browser }) => {
+  // #1798 — the budget's derivation lives on LOGIN_BUDGET_TIMEOUT_MS.
+  test.setTimeout(LOGIN_BUDGET_TIMEOUT_MS);
   const context = await browser.newContext({
     ignoreHTTPSErrors: true,
     bypassCSP: true,
   });
   const page = await context.newPage();
 
-  // Step 1: Navigate to app root — should redirect to Keycloak
-  await page.goto(`${BASE_URL}/`, {
-    waitUntil: 'networkidle',
-    timeout: 30000,
-  });
+  // Step 1: Log in through the browser — the Keycloak redirect flow is
+  // the helper's (retry-once budget included), not this spec's subject.
+  await loginViaUI(page);
 
-  // Step 2: Wait for Keycloak login page and fill credentials
-  await page.waitForURL(KEYCLOAK_AUTH_ENDPOINT_GLOB, {
-    timeout: 15000,
-  });
-
-  await page.fill('#username', TEST_USER.username);
-  await page.fill('#password', TEST_USER.password);
-  await page.click('#kc-login');
-
-  // Step 3: Wait for redirect back to the app — the dashboard, exactly:
-  // the login is requested from '/' (whose redirect target is
-  // /dashboard), so that is the one expected landing; a login flow that
-  // parks anywhere else fails here.
-  await page.waitForURL(`${BASE_URL}/dashboard`, { timeout: 30000 });
-
-  // Step 4: Inject legacy localStorage items that the logout action should clean up
+  // Step 2: Inject legacy localStorage items that the logout action should clean up
   await page.evaluate(() => {
     localStorage.setItem('user', '{"email":"test@test.com"}');
     localStorage.setItem('auth_token', 'fake-token');
@@ -56,20 +42,19 @@ test('clears legacy localStorage items after logout', async ({ browser }) => {
     `Expected 'auth_token' to be set in localStorage before logout, got: ${tokenBefore}`,
   ).toBeTruthy();
 
-  // Step 5: Click the logout button
+  // Step 3: Click the logout button
   const logoutButton = page.locator(NAV_LOGOUT_BUTTON);
   await expect(logoutButton, 'Logout button should be visible').toBeVisible({ timeout: 10000 });
 
   await logoutButton.click();
 
-  // Step 6: Settle on the realm after the logout click (the two chain
-  // endpoints — see helpers/keycloak-landing.js). 'dashboard' is not an
-  // outcome here: it matches the no-navigation state a failed logout
-  // leaves the browser in, which would pass the wait without any logout
-  // having happened.
+  // Step 4: Settle on the realm (the two chain endpoints — see
+  // helpers/keycloak-landing.js). 'dashboard' is not an outcome here: it
+  // matches the no-navigation state a failed logout leaves the browser
+  // in, which would pass the wait without any logout having happened.
   await waitForRealmAuthEndpoint(page);
 
-  // Step 7: Read the app-origin localStorage after the logout. The read is
+  // Step 5: Read the app-origin localStorage after the logout. The read is
   // atomic with an origin guard: after a destroyed realm session the
   // unauthenticated app immediately bounces to Keycloak, so a late
   // evaluate would run on the Keycloak origin — where both keys are always

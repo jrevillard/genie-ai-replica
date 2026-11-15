@@ -11,6 +11,7 @@ const {
   getRealmSettings,
   deleteUser,
   enableDirectAccessGrants,
+  disableDirectAccessGrants,
   assertNoDirectAccessGrants,
   findClient,
   createClient,
@@ -1486,6 +1487,84 @@ test.describe('enableDirectAccessGrants reads the client list like every other r
   });
 });
 
+test.describe('disableDirectAccessGrants — the verified ROPC revert (#1879)', () => {
+  const CLIENTS_PATH = new RegExp('/auth/admin/realms/genie2/clients\\?clientId=genie-app');
+  const CLIENT_UPDATE_PATH = new RegExp('/auth/admin/realms/genie2/clients/client-1$');
+
+  test('a realm that carries no client of that name says so', async () => {
+    routes = [['GET', CLIENTS_PATH, { status: 200, data: [] }]];
+
+    await expect(disableDirectAccessGrants('tok', 'genie2', 'genie-app')).rejects.toThrow(
+      'Client genie-app not found in realm genie2'
+    );
+  });
+
+  test('a transport break while reverting ROPC names the revert', async () => {
+    routes = [
+      ['GET', CLIENTS_PATH, { status: 200, data: [{ id: 'client-1', directAccessGrantsEnabled: true }] }],
+      ['PUT', CLIENT_UPDATE_PATH, { throws: new Error('socket hang up') }]
+    ];
+
+    const caught = await rejection(disableDirectAccessGrants('tok', 'genie2', 'genie-app'));
+
+    expect(caught.transient).toBe(true);
+    expect(caught.message).toMatch(/Cannot reach the Keycloak admin API for the ROPC revert of genie-app/);
+  });
+
+  test('reverting puts the whole representation with the grant flipped, then reads the state back', async () => {
+    routes = [
+      [
+        'GET',
+        CLIENTS_PATH,
+        {
+          // The same-URL-twice sequence: the lookup before the PUT answers
+          // a live grant, the read-back after it answers the reverted one.
+          compute: (log) =>
+            log.some((entry) => entry.startsWith('PUT'))
+              ? { status: 200, data: [{ id: 'client-1', secret: 's3cret', directAccessGrantsEnabled: false }] }
+              : { status: 200, data: [{ id: 'client-1', secret: 's3cret', directAccessGrantsEnabled: true }] }
+        }
+      ],
+      ['PUT', CLIENT_UPDATE_PATH, { status: 204, data: null }]
+    ];
+
+    await disableDirectAccessGrants('tok', 'genie2', 'genie-app');
+
+    expect(calls).toEqual([
+      `GET /auth/admin/realms/genie2/clients?clientId=genie-app`,
+      `PUT /auth/admin/realms/genie2/clients/client-1`,
+      `GET /auth/admin/realms/genie2/clients?clientId=genie-app`
+    ]);
+    // The whole representation read travels back, with the grant flipped off.
+    expect(bodies[1]).toEqual({ id: 'client-1', secret: 's3cret', directAccessGrantsEnabled: false });
+  });
+
+  test('an already-disabled client is left untouched', async () => {
+    routes = [['GET', CLIENTS_PATH, { status: 200, data: [{ id: 'client-1', directAccessGrantsEnabled: false }] }]];
+
+    await disableDirectAccessGrants('tok', 'genie2', 'genie-app');
+
+    expect(calls).toEqual([`GET /auth/admin/realms/genie2/clients?clientId=genie-app`]);
+  });
+
+  test('a read-back that still shows the grant is a loud failure', async () => {
+    // The verified-revert contract (the mint-tokens.mjs shape, one home
+    // here): a 204 from the PUT proves nothing — the revert resolves only
+    // when the realm READS BACK with the grant off. A 204 the server
+    // silently ignored leaves the venue accepting password grants; that
+    // is the leak #1879 documents, asserted as a failure.
+    routes = [
+      ['GET', CLIENTS_PATH, { status: 200, data: [{ id: 'client-1', directAccessGrantsEnabled: true }] }],
+      ['PUT', CLIENT_UPDATE_PATH, { status: 204, data: null }]
+    ];
+
+    const caught = await rejection(disableDirectAccessGrants('tok', 'genie2', 'genie-app'));
+
+    expect(caught.message).toMatch(/ROPC NOT reverted on genie-app in realm genie2/);
+    expect(caught.message).toMatch(/directAccessGrantsEnabled=true/);
+  });
+});
+
 test.describe('the client helpers behind the K.2 expiry client', () => {
   const CLIENT_LOOKUP = new RegExp(`/auth/admin/realms/${REALM}/clients\\?clientId=e2e-expiry$`);
   const CLIENT_CREATE_PATH = new RegExp(`/auth/admin/realms/${REALM}/clients$`);
@@ -1585,13 +1664,38 @@ test.describe('assertNoDirectAccessGrants — the ROPC posture sweep (#1727, #18
     expect(calls).toEqual(['GET /auth/admin/realms/genie/clients?max=500']);
   });
 
-  test('a built-in client carrying the grant is skipped — its standing state is the server default, not a run', async () => {
-    // Measured on the live venue (#1846 review): Keycloak provisions
-    // admin-cli into EVERY realm with directAccessGrantsEnabled=true, and
-    // the realm export does not pin it — the sweep must not red a venue on
-    // provisioned state. A built-in's grant is the standing state exactly
-    // like genie2's: indistinguishable from a leftover, owned by the
-    // venue's contract, not by this gate.
+  test('the two undeclarable built-ins stay exempt — their grant is a server default the export cannot pin', async () => {
+    // #1849 pinned the four declarable built-ins in the realm export
+    // (admin-cli included — Keycloak's own default there is TRUE), and
+    // the sweep no longer exempts them. realm-management and
+    // security-admin-console remain exempt: kcc cannot update a built-in
+    // whose authentication-flow bindings Keycloak reserves (HTTP 403,
+    // measured with kcc 6.5.0-26 on Keycloak 26.8.0), so the export
+    // cannot pin them and their grants stay server defaults.
+    routes = [
+      [
+        'GET',
+        CLIENTS_LIST,
+        {
+          status: 200,
+          data: [
+            { id: 'b-1', clientId: 'realm-management', directAccessGrantsEnabled: true },
+            { id: 'b-2', clientId: 'security-admin-console', directAccessGrantsEnabled: true },
+            { id: 'client-1', clientId: 'genie-app', directAccessGrantsEnabled: false }
+          ]
+        }
+      ]
+    ];
+
+    await expect(assertNoDirectAccessGrants('tok', 'genie')).resolves.toBeUndefined();
+    expect(calls).toEqual(['GET /auth/admin/realms/genie/clients?max=500']);
+  });
+
+  test('a pinned built-in carrying the grant is a violation — the export owns it now', async () => {
+    // admin-cli was the standing-true client (#1849 evidence); the realm
+    // export pins it false and the sweep asserts it like any declared
+    // client. A venue that lost the pin (a Keycloak re-provision without
+    // a convergence run) reds here, naming the client to re-converge.
     routes = [
       [
         'GET',
@@ -1606,8 +1710,9 @@ test.describe('assertNoDirectAccessGrants — the ROPC posture sweep (#1727, #18
       ]
     ];
 
-    await expect(assertNoDirectAccessGrants('tok', 'genie')).resolves.toBeUndefined();
-    expect(calls).toEqual(['GET /auth/admin/realms/genie/clients?max=500']);
+    await expect(assertNoDirectAccessGrants('tok', 'genie')).rejects.toThrow(
+      /ROPC POSTURE VIOLATION[\s\S]*admin-cli/
+    );
   });
 
   test('an absent realm fails loudly — a venue without its primary realm is not a clean posture', async () => {

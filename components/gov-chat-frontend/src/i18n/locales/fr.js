@@ -2091,6 +2091,7 @@ export default {
         label: 'Concepts',
         loading: 'Chargement…',
         resplit: 'Re-diviser',
+        split: 'Diviser ce concept',
         flagged: 'signalé',
         flaggedTip:
           "Concepts avec des entités signalées — ouvrez chacun d'eux, supprimez ou modifiez l'entité, enregistrez (la réanalyse s'effectue automatiquement) ; ou acquittez-les lors de l'action publish.",
@@ -2148,6 +2149,22 @@ export default {
         modeC: "Utiliser l'extraction de sujets par LLM",
         modeCHint: 'Story 10.6 — bientôt disponible',
         title: 'Redécouper depuis la source'
+      },
+      split: {
+        title: 'Diviser le concept',
+        open: 'Diviser le concept',
+        body: 'Le serveur propose la manière de diviser ce concept selon des jointures sans perte. Rien n’est écrit tant que vous ne confirmez pas.',
+        ceiling: 'Plafond : {ceiling} caractères',
+        parts: 'Parties proposées',
+        partChars: '{chars} caractères',
+        confirm: 'Diviser',
+        working: 'Division…',
+        refused: 'Le serveur a refusé la division :',
+        previewFailed: 'Impossible de charger la prévisualisation de la division — rien n’a encore été proposé.',
+        failed: 'La division a échoué — rien n’a été modifié.',
+        done: 'Divisé en {n} partie(s) : {created} créées, {updated} mises à jour.',
+        dirty:
+          'Vous avez des modifications non enregistrées dans ce concept — la division s’applique au corps ENREGISTRÉ ; confirmer abandonne le brouillon.'
       },
       rename: {
         body: 'Renommer renomme aussi les graphes de l’espace de travail du dépôt (`OKF_<name>_v<N>`) ; le contenu, les versions et la piste d’audit restent inchangés.',

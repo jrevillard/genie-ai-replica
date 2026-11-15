@@ -1,15 +1,12 @@
 const { test, expect } = require('@playwright/test');
 const { BASE_URL } = require('../helpers/base-url');
-const { TEST_USER } = require('../helpers/e2e-fixtures');
+const { loginViaUI, LOGIN_BUDGET_TIMEOUT_MS } = require('../helpers/chatbot');
 const { NAV_LOGOUT_BUTTON } = require('../helpers/navbar');
-const {
-  KEYCLOAK_AUTH_ENDPOINT_GLOB,
-  waitForRealmAuthEndpoint,
-  expectKeycloakLoginForm,
-} = require('../helpers/keycloak-landing');
+const { waitForRealmAuthEndpoint, expectKeycloakLoginForm } = require('../helpers/keycloak-landing');
 
 // Test L.3 — Vuex Auth State Cleared on Logout
-// Login, verify isAuthenticated is true, trigger logout, verify the app no
+// Login (through loginViaUI — the suite's one login path, #1854), verify
+// isAuthenticated is true, trigger logout, verify the app no
 // longer restores the session: it lands on the Keycloak login page. That
 // landing IS the Vuex-cleared proof — the navigation guard only redirects
 // unauthenticated users, and the genie_post_logout flag blocks session
@@ -17,34 +14,19 @@ const {
 // Source: docs/e2e-tests/suite-map.md § The acceptance phases, Phase L
 
 test('clears Vuex auth state after logout — lands on the Keycloak login page', async ({ browser }) => {
+  // #1798 — the budget's derivation lives on LOGIN_BUDGET_TIMEOUT_MS.
+  test.setTimeout(LOGIN_BUDGET_TIMEOUT_MS);
   const context = await browser.newContext({
     ignoreHTTPSErrors: true,
     bypassCSP: true
   });
   const page = await context.newPage();
 
-  // Step 1: Navigate to app root — should redirect to Keycloak
-  await page.goto(`${BASE_URL}/`, {
-    waitUntil: 'networkidle',
-    timeout: 30000
-  });
+  // Step 1: Log in through the browser — the Keycloak redirect flow is
+  // the helper's (retry-once budget included), not this spec's subject.
+  await loginViaUI(page);
 
-  // Step 2: Wait for Keycloak login page and fill credentials
-  await page.waitForURL(KEYCLOAK_AUTH_ENDPOINT_GLOB, {
-    timeout: 15000
-  });
-
-  await page.fill('#username', TEST_USER.username);
-  await page.fill('#password', TEST_USER.password);
-  await page.click('#kc-login');
-
-  // Step 3: Wait for redirect back to the app — the dashboard, exactly:
-  // the login is requested from '/' (whose redirect target is
-  // /dashboard), so that is the one expected landing; a login flow that
-  // parks anywhere else fails here.
-  await page.waitForURL(`${BASE_URL}/dashboard`, { timeout: 30000 });
-
-  // Step 4: Verify authenticated state via Vuex store — the store is
+  // Step 2: Verify authenticated state via Vuex store — the store is
   // reachable once __vue_app__ exists.
   await expect
     .poll(
@@ -87,16 +69,16 @@ test('clears Vuex auth state after logout — lands on the Keycloak login page',
     `Expected an access token after login, got: ${authStateBefore.accessToken}`
   ).toBeTruthy();
 
-  // Step 5: Click the logout button
+  // Step 3: Click the logout button
   const logoutButton = page.locator(NAV_LOGOUT_BUTTON);
   await expect(logoutButton, 'Logout button should be visible').toBeVisible({ timeout: 10000 });
   await logoutButton.click();
 
-  // Step 6: Settle on the realm (the two chain endpoints — see
+  // Step 4: Settle on the realm (the two chain endpoints — see
   // helpers/keycloak-landing.js).
   await waitForRealmAuthEndpoint(page);
 
-  // Step 7: Navigate back to app to verify the session is gone
+  // Step 5: Navigate back to app to verify the session is gone
   // After Keycloak processes logout, navigate back: the L.3 contract
   // (docs/e2e-tests/suite-map.md § Test L.3) is that the app must NOT
   // restore the session — it lands on the Keycloak login page, exactly as
@@ -108,7 +90,7 @@ test('clears Vuex auth state after logout — lands on the Keycloak login page',
     timeout: 30000
   });
 
-  // Step 8: The landing-form proof (helpers/keycloak-landing.js) — the
+  // Step 6: The landing-form proof (helpers/keycloak-landing.js) — the
   // form renders only while the realm holds no live SSO session, so this
   // is the cleared-state proof: the navigation guard only fires when
   // isAuthenticated is false, and a surviving session never renders it.

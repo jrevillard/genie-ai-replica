@@ -416,6 +416,17 @@ router.post('/:repo_id/resplit', requireRepoScope('repo_id', 'admin'), ctrl.resp
 // CONCEPT_TOO_LARGE / 400 refusals carry their own status from the service.
 router.post('/:repo_id/concepts/:concept_id/split', requireRepoScope('repo_id', 'admin'), ctrl.splitConcept);
 
+// #1577 story 2 — the SPLIT PREVIEW (CAP-3 "legible before"): the SAME
+// preflight the POST runs, minus the write. Admin-scope (it names part ids
+// and sizes the citizen surface has no business enumerating); the getById
+// read fence applies, NO assertWritable — a preview writes nothing. Zero
+// writes, zero audit (nothing happened to audit).
+router.get(
+  '/:repo_id/concepts/:concept_id/split-preview',
+  requireRepoScope('repo_id', 'admin'),
+  ctrl.previewConceptSplit
+);
+
 // Story #978 — Editor "Autocorrect" action. Scans all concepts and applies
 // frontmatter-only autocorrect rules. Admin-scope. dry_run=true returns the
 // planned changes without applying; dry_run=false applies atomically.

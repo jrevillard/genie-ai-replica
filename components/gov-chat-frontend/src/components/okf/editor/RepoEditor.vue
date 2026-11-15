@@ -31,6 +31,7 @@
         @label="onTreeLabel"
         @pii-bulk="onPiiBulkAsk"
         @reingest="onReingestConcept"
+        @split="onSplitAsk"
       />
       <!-- Story 6-1c (2026-10-17, David): the Access Control panel lives in
            the LEFT rail, directly under the Concepts panel — the right rail
@@ -112,6 +113,7 @@
             :label-options="labelOptions"
             :repo-tag-summary="repoTagSummary"
             @saved="onConceptSaved"
+            @split="onSplitAsk"
           />
         </template>
         <p v-else class="okf-re__placeholder">
@@ -390,6 +392,18 @@
       @close="resplitOpen = false"
       @done="onResplitDone"
     />
+    <!-- #1577 story 2: the split CONFIRM dialog — the seam preview renders
+         BEFORE any write (CAP-3); the store action refreshes the tree and
+         the done handler reselects part 1 (it kept the original id). The
+         dirty hint tells the curator the split works on the SAVED body. -->
+    <OkfSplitPreviewModal
+      :visible="splitTarget !== null"
+      :repo-id="repoId"
+      :concept-id="splitTarget"
+      :dirty-hint="paneDirty()"
+      @close="splitTarget = null"
+      @done="onSplitDone"
+    />
     <OkfAutocorrectPanel
       :visible="autocorrectOpen"
       :repo-id="repoId"
@@ -406,6 +420,7 @@ import { toEpochMs } from '../piiReview.js';
 import serviceTreeService from '../../../services/serviceTreeService';
 import conceptService from '../../../services/conceptService';
 import repoOkfService from '../../../services/repoOkfService';
+import notificationService from '../../../services/notificationService';
 import DsButton from '../../ds/Button.vue';
 import DsFormGroup from '../../ds/FormGroup.vue';
 import DsInput from '../../ds/Input.vue';
@@ -415,6 +430,7 @@ import DsInfoTip from '../../ds/InfoTip.vue';
 import OkfConceptList from './ConceptList.vue';
 import OkfConceptEditor from './ConceptEditor.vue';
 import OkfResplitModal from './ResplitModal.vue';
+import OkfSplitPreviewModal from './SplitPreviewModal.vue';
 import OkfAddConceptModal from './AddConceptModal.vue';
 import OkfSourceDialog from '../wizard/OkfSourceDialog.vue';
 import OkfRepoGraphView from './RepoGraphView.vue';
@@ -430,6 +446,10 @@ import OkfPiiRepoRescan from './PiiRepoRescan.vue';
 import { bulkPiiFailureMessage } from '../steps/failureMessages';
 
 const TYPE_OPTIONS = ['topic', 'entity', 'process', 'event', 'source'].map((t) => ({ value: t, label: t }));
+// #1577 story 2: the success-toast fallback, hoisted so the translate() key
+// stays on ONE line (the i18n contract test's per-line extractor — see
+// ceilingOverNote in ConceptEditor.vue for the full story).
+const SPLIT_DONE_FALLBACK = 'Split into {n} part(s): {created} created, {updated} updated.';
 
 export default {
   name: 'OkfRepoEditor',
@@ -444,6 +464,7 @@ export default {
     OkfConceptList,
     OkfConceptEditor,
     OkfResplitModal,
+    OkfSplitPreviewModal,
     OkfAddConceptModal,
     OkfSourceDialog,
     OkfRepoGraphView,
@@ -490,6 +511,9 @@ export default {
       labelBounded: true,
       centerView: 'files',
       resplitOpen: false,
+      // #1577 story 2: the concept_id the split dialog is open for — null
+      // when closed (the dialog's visible derives from it).
+      splitTarget: null,
       addOpen: false,
       deleteAsk: null,
       // REPO BULK PII (David, 2026-09-12): 'redact'|'remove'|'accept' while
@@ -1222,6 +1246,40 @@ export default {
       this.$emit('resplit-done');
       this.onSelect(null);
       this.$store.commit('okf/setSelectedConcept', null);
+    },
+    // ── PER-CONCEPT SPLIT (#1577 story 2) ──────────────────────────────────
+    // Both entries (tree-row glyph, pane button beside the ceiling advisory)
+    // land here, each emitting the concept_id STRING. readOnly never opens
+    // the dialog: the affordances are hidden on the surfaces, and this is
+    // the belt to those braces.
+    onSplitAsk(conceptId) {
+      if (!conceptId || this.readOnly) return;
+      this.metaError = '';
+      this.splitTarget = conceptId;
+    },
+    // The center pane's DIRTY state (a debounced autosave draft may differ
+    // from the SAVED body the split divides). Read at render time — the
+    // binding re-evaluates when the dialog opens.
+    paneDirty() {
+      const ed = this.$refs.conceptEditor;
+      return !!(ed && ed.dirty);
+    },
+    // The write landed (the store action already refreshed the tree). Part 1
+    // kept the ORIGINAL concept_id, so selecting it selects part 1; the
+    // reload-key bump remounts the center pane so a still-open editor re-reads
+    // the post-split body instead of its stale pre-split draft.
+    onSplitDone(summary) {
+      const splitId = this.splitTarget;
+      this.splitTarget = null;
+      this.conceptReloadKey += 1;
+      this.onSelect(splitId);
+      const parts = summary && Array.isArray(summary.parts) ? summary.parts.length : 0;
+      notificationService.success(
+        this.translate('okf.editor.split.done', SPLIT_DONE_FALLBACK)
+          .replace('{n}', String(parts))
+          .replace('{created}', String((summary && summary.created) || 0))
+          .replace('{updated}', String((summary && summary.updated) || 0))
+      );
     },
     onAutocorrectApplied() {
       // The chunked apply PATCHes concepts directly (conceptService.update),

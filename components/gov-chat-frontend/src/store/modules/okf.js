@@ -1143,6 +1143,29 @@ const actions = {
   },
 
   /**
+   * #1577 story 2 — split ONE concept into ceiling-bounded lossless parts
+   * (the story-1 POST) and refresh the tree afterwards: part 1 keeps the
+   * original concept_id, parts 2..N arrive as -part-N siblings. Never
+   * throws — {ok, code?, message?, ...summary}; the confirm dialog renders
+   * a refusal message verbatim and stays open on it.
+   */
+  async splitConcept({ commit, dispatch }, { repoId, conceptId, actor } = {}) {
+    if (!repoId || !conceptId) return { ok: false, code: 'VALIDATION_ERROR' };
+    try {
+      const summary = await repoOkfService.splitConcept(repoId, conceptId, actor || {});
+      await dispatch('fetchConcepts', repoId);
+      return { ok: true, ...summary };
+    } catch (err) {
+      commit('setError', err.message || 'splitConcept failed');
+      return {
+        ok: false,
+        code: (err && ((err.data && err.data.error) || err.code)) || 'SPLIT_FAILED',
+        message: err && err.message
+      };
+    }
+  },
+
+  /**
    * Frontmatter autocorrect. dryRun=true (default) → { changes, warnings }
    * preview only; dryRun=false applies. Always refetches when applying so the
    * rows reflect the written frontmatter.

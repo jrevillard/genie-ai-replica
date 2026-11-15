@@ -1365,6 +1365,101 @@ describe('POST /api/okf/repos/:repo_id/concepts/:concept_id/split (#1577 story 1
   });
 });
 
+describe('GET /api/okf/repos/:repo_id/concepts/:concept_id/split-preview (#1577 story 2)', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    authzAwareServiceMock();
+  });
+
+  test('200 admin scope → answers the plan; the read fence runs; NO audit row (nothing happened)', async () => {
+    authScoped(['okf:t1:repoA:admin']);
+    repoService.getById.mockResolvedValue({ repo_id: 'repoA', lifecycle_state: 'draft' });
+    splitOperation.previewConceptSplit.mockResolvedValue({
+      ok: true,
+      plan: {
+        concept_id: 'c1',
+        parts: [
+          { concept_id: 'c1', path: 'docs/c1.md', title: 'C1', chars: 120 },
+          { concept_id: 'c1-part-2', path: 'docs/c1-part-2.md', title: 'C1 — part 2', chars: 90 }
+        ],
+        ceiling: 250000,
+        body_chars: 210
+      }
+    });
+    const res = await request(createApp())
+      .get('/api/okf/repos/repoA/concepts/c1/split-preview')
+      .set('Authorization', TOKEN);
+    expect(res.status).toBe(200);
+    // EXACT key-set assertion: the answer carries ONLY the legible plan
+    // fields. A future `...plan` spread would leak the write-path payload
+    // (bodies, _meta) and fail here loudly.
+    expect(res.body).toEqual({
+      ok: true,
+      concept_id: 'c1',
+      parts: [
+        { concept_id: 'c1', path: 'docs/c1.md', title: 'C1', chars: 120 },
+        { concept_id: 'c1-part-2', path: 'docs/c1-part-2.md', title: 'C1 — part 2', chars: 90 }
+      ],
+      ceiling: 250000,
+      body_chars: 210
+    });
+    expect(res.body.bodies).toBeUndefined();
+    expect(res.body._meta).toBeUndefined();
+    // The getById read fence ran with the CALLER's authz (anti-enumeration
+    // 404 for a foreign repo) and the handler is read-only by construction.
+    expect(repoService.getById).toHaveBeenCalledWith('repoA', expect.anything());
+    expect(auditService.writeAudit).not.toHaveBeenCalled();
+  });
+
+  test('a typed refusal maps to its own status with the house error envelope', async () => {
+    authScoped(['okf:t1:repoA:admin']);
+    repoService.getById.mockResolvedValue({ repo_id: 'repoA', lifecycle_state: 'draft' });
+    splitOperation.previewConceptSplit.mockResolvedValue({
+      ok: false,
+      code: 'PART_ID_CONFLICT',
+      message: 'splitting concept c1 would overwrite existing concept(s) c1-part-2 — rename or delete them first',
+      status: 409
+    });
+    const res = await request(createApp())
+      .get('/api/okf/repos/repoA/concepts/c1/split-preview')
+      .set('Authorization', TOKEN);
+    expect(res.status).toBe(409);
+    expect(res.body).toMatchObject({
+      ok: false,
+      error: 'PART_ID_CONFLICT',
+      message: expect.stringContaining('c1-part-2')
+    });
+  });
+
+  test('a SERVING repo still answers the preview — NO assertWritable on a read-only endpoint', async () => {
+    // The WRITE split refuses a serving repo (assertWritable → 409); the
+    // preview writes nothing, so the write fence must not gate it (the UI
+    // hides the affordance on its own). lifecycleService is NOT mocked in
+    // this file — assertWritable here is the REAL fence, and it would 409
+    // this call if the preview wrongly ran it.
+    authScoped(['okf:t1:repoA:admin']);
+    repoService.getById.mockResolvedValue({ repo_id: 'repoA', ingested_at: '2026-11-14T00:00:00Z' });
+    splitOperation.previewConceptSplit.mockResolvedValue({
+      ok: true,
+      plan: { concept_id: 'c1', parts: [{ concept_id: 'c1', path: 'c1.md', title: 'C1', chars: 10 }], ceiling: 250000 }
+    });
+    const res = await request(createApp())
+      .get('/api/okf/repos/repoA/concepts/c1/split-preview')
+      .set('Authorization', TOKEN);
+    expect(res.status).toBe(200);
+    expect(res.body.ok).toBe(true);
+  });
+
+  test('403 when read-scope only — the preview service is never reached', async () => {
+    authScoped(['okf:t1:repoA:read']);
+    const res = await request(createApp())
+      .get('/api/okf/repos/repoA/concepts/c1/split-preview')
+      .set('Authorization', TOKEN);
+    expect(res.status).toBe(403);
+    expect(splitOperation.previewConceptSplit).not.toHaveBeenCalled();
+  });
+});
+
 describe('POST /api/okf/repos/:repo_id/autocorrect (Story #978)', () => {
   beforeEach(() => {
     jest.clearAllMocks();

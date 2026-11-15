@@ -2085,6 +2085,7 @@ export default {
         label: 'Conceptos',
         loading: 'Cargando…',
         resplit: 'Re-dividir',
+        split: 'Dividir este concepto',
         flagged: 'marcado',
         flaggedTip:
           'Conceptos con entidades marcadas — abra cada uno, elimine o modifique la entidad y guarde (se vuelve a analizar automáticamente); o acéptelas al hacer publish.',
@@ -2143,6 +2144,22 @@ export default {
         modeC: 'Utilizar extracción de temas por LLM',
         modeCHint: 'Historia 10.6 — próximamente',
         title: 'Volver a dividir desde el origen'
+      },
+      split: {
+        title: 'Dividir concepto',
+        open: 'Dividir concepto',
+        body: 'El servidor propone cómo dividir este concepto por uniones sin pérdidas. No se escribe nada hasta que usted confirme.',
+        ceiling: 'Límite: {ceiling} caracteres',
+        parts: 'Partes propuestas',
+        partChars: '{chars} caracteres',
+        confirm: 'Dividir',
+        working: 'Dividiendo…',
+        refused: 'El servidor rechazó la división:',
+        previewFailed: 'No se pudo cargar la vista previa de la división — aún no se ha propuesto nada.',
+        failed: 'La división falló — no se cambió nada.',
+        done: 'Dividido en {n} parte(s): {created} creadas, {updated} actualizadas.',
+        dirty:
+          'Tiene cambios sin guardar en este concepto — la división funciona sobre el cuerpo GUARDADO; confirmar descarta el borrador.'
       },
       rename: {
         body: 'Al renombrar también se renombran los grafos del espacio de trabajo del repositorio (`OKF_<name>_v<N>`); el contenido, las versiones y el registro de auditoría quedan intactos.',

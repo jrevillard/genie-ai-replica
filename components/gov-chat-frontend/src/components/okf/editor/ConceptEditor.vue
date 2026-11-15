@@ -304,6 +304,21 @@
         <span v-if="overCeiling" class="okf-ce__ceiling-note">
           {{ ceilingOverNote }}
         </span>
+        <!-- #1577 story 2: the SPLIT affordance beside the advisory — the
+             ceiling refusal's advice ("split it into smaller concepts")
+             finally has a button behind it, exactly where the curator reads
+             the rule. HIDDEN on a read-only (serving) repo — the same gating
+             as the tree's delete (the dialog it opens previews before it
+             writes, CAP-3). -->
+        <DsButton
+          v-if="!readOnly && loadedConceptId"
+          variant="secondary"
+          small
+          data-test-id="okf-concept-split"
+          @click="$emit('split', loadedConceptId)"
+        >
+          {{ translate('okf.editor.split.open', 'Split concept') }}
+        </DsButton>
       </div>
     </template>
   </div>
@@ -379,7 +394,7 @@ export default {
     // mistaken for this concept's (empty) frontmatter. Empty = no tags.
     repoTagSummary: { type: String, default: '' }
   },
-  emits: ['saved'],
+  emits: ['saved', 'split'],
   data() {
     return {
       // RENDERED default (David, 2026-11-07, #1634): the curator opens a

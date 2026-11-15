@@ -61,8 +61,14 @@
         </div>
         <div v-if="sourceDoc.url" class="expanded-source__row">
           <span class="expanded-source__label">{{ translate('okf.shell.crawlSeed', 'Crawl seed') }}</span>
+          <!-- Baseline F-1 (security review, 2026-11-15): source_document.url
+               is caller-supplied provenance — it renders as an anchor ONLY
+               through the isExternalUrl http(s) allow-list; anything else
+               falls back to plain text, so a `javascript:` scheme stamped by
+               an older server can never execute here. -->
           <span>
-            <a :href="sourceDoc.url" target="_blank" rel="noopener">{{ sourceDoc.url }}</a>
+            <a v-if="crawlSeedIsSafe" :href="sourceDoc.url" target="_blank" rel="noopener">{{ sourceDoc.url }}</a>
+            <span v-else class="expanded-source__url-text">{{ sourceDoc.url }}</span>
           </span>
         </div>
       </div>
@@ -265,6 +271,7 @@ import OkfLogsDialog from './LogsDialog.vue';
 import OkfPiiReviewSummary from './PiiReviewSummary.vue';
 import BuildProgressCard from './BuildProgressCard.vue';
 import okfRepoOps from '../../../services/okfRepoOps';
+import { isExternalUrl } from '../../../utils/document-opener';
 
 const STATE_LABELS = {
   publish: 'Published',
@@ -410,6 +417,14 @@ export default {
     },
     sourceDoc() {
       return this.repo.source_document || null;
+    },
+    // Baseline F-1 (security review, 2026-11-15): the crawl-seed url renders
+    // as an anchor only through the http(s) allow-list — the same predicate
+    // every other stored-URL renderer uses (document-opener.js). A value a
+    // pre-fix server stamped (or anything a future stamp misses) falls back
+    // to plain text.
+    crawlSeedIsSafe() {
+      return isExternalUrl(this.sourceDoc && this.sourceDoc.url);
     },
     sourceTooltip() {
       const d = this.sourceDoc || {};

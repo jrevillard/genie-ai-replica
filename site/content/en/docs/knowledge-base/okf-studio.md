@@ -143,9 +143,11 @@ Three panes, both splitters draggable (double-click resets, arrow keys
 nudge):
 
 - **Left** — the **concept list** (filter, add concept, add sources, per-file
-  re-split, per-concept label, delete, re-ingest failed) and, under it, the
-  **Access Control** panel (restriction toggle and grants — see
-  [Access control](/docs/knowledge-base/access-control/)).
+  re-split, per-concept label, delete, re-ingest failed, per-concept split)
+  and, under it, the **Access Control** panel (restriction toggle and grants
+  — see [Access control](/docs/knowledge-base/access-control/)). The split
+  action opens a seam preview — per-part ids and sizes against the ceiling —
+  and confirms before anything is written.
 - **Center** — **Files** | **Graph** toggle. The concept editor shows source
   and rendered views with debounced save; the graph view draws the
   repository's link structure (clicking a node selects the concept). Any

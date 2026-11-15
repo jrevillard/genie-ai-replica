@@ -279,6 +279,63 @@ const repoOkfService = {
   },
 
   /**
+   * #1577 story 2 — SPLIT PREVIEW: the SAME server preflight the POST runs,
+   * minus the write. Resolves {ok:true, concept_id, parts:[{concept_id, path,
+   * title, chars}], ceiling, body_chars} for a plan, or {ok:false, code,
+   * message, serverRefusal} — serverRefusal=true when the answer came from
+   * the SERVER (its `error` code; the message is the server's own words and
+   * the dialog renders it verbatim), false for a transport failure (code
+   * PREVIEW_FAILED/PREVIEW_EMPTY; the dialog shows its own honest error
+   * line). NEVER throws — the dialog keeps confirm disabled until a plan is
+   * on screen (CAP-3 "legible before"). The ORIGIN classification lives here,
+   * not in the dialog: a new server refusal code can never be mis-rendered
+   * as a transport failure by a stale client-side vocabulary.
+   * silent: a refusal is the dialog's own content — the global toast would
+   * duplicate it.
+   */
+  async splitPreview(repoId, conceptId) {
+    try {
+      const res = await httpService.get(
+        `/okf/repos/${encodeURIComponent(repoId)}/concepts/${encodeURIComponent(conceptId)}/split-preview`,
+        {},
+        { silent: true }
+      );
+      return res && res.data ? res.data : { ok: false, code: 'PREVIEW_EMPTY', message: 'Empty preview answer' };
+    } catch (err) {
+      // httpService rejects SERVER answers carrying their body (data.error =
+      // the typed refusal code); transport failures have no data — the two
+      // origins are distinguishable exactly here, at the one place that sees
+      // the rejection's shape.
+      const serverCode = err && err.data && err.data.error;
+      return {
+        ok: false,
+        code: serverCode || (err && err.code) || 'PREVIEW_FAILED',
+        message: (err && err.message) || 'The split preview could not be loaded',
+        serverRefusal: !!serverCode
+      };
+    }
+  },
+
+  /**
+   * #1577 story 2 — the CONFIRM leg: POST the split (the story-1 route;
+   * no options in the first cut — the ceiling is the only target).
+   * silent: a write refusal (409 PART_ID_CONFLICT after a preview race, …)
+   * is rendered verbatim IN the dialog — the global toast would duplicate it.
+   * Throws on non-2xx; the store action owns the catch.
+   */
+  async splitConcept(repoId, conceptId, actor = {}) {
+    const res = await httpService.post(
+      `/okf/repos/${encodeURIComponent(repoId)}/concepts/${encodeURIComponent(conceptId)}/split`,
+      {},
+      {
+        headers: actor && actor.sub ? { 'x-actor-sub': actor.sub } : {},
+        silent: true
+      }
+    );
+    return res && res.data ? res.data : { ok: true };
+  },
+
+  /**
    * Story #978 — Editor: frontmatter-only autocorrect. dry_run=true (the
    * server default) proposes without applying; dry_run=false applies
    * atomically. D-L/D-B (coordinator, 8f46b3345): mode 'llm'|'hybrid'

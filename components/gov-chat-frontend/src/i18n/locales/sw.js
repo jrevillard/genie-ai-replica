@@ -2068,6 +2068,7 @@ export default {
         label: 'Dhana',
         loading: 'Inapakia…',
         resplit: 'Gawanya tena',
+        split: 'Gawanya dhana hii',
         flagged: 'imetiwa alama',
         flaggedTip:
           'Dhana zenye vitambulisho vilivyowekewa alama — fungua kila moja, ondoa au rekebisha kitambulisho, kisha hifadhi (huchanganua tena kiotomatiki); au zikubali wakati wa kufanya publish.',
@@ -2125,6 +2126,22 @@ export default {
         modeC: 'Tumia unyambuaji mada wa LLM',
         modeCHint: 'Kisa cha 10.6 — kinakuja hivi karibuni',
         title: 'Gawanya upya kutoka chanzo'
+      },
+      split: {
+        title: 'Gawanya dhana',
+        open: 'Gawanya dhana',
+        body: 'Seva inapendekeza jinsi dhana hii itakavyogawanyika kwenye viungo visivyopoteza chochote. Hakuna kilichoandikwa hadi uthibitishe.',
+        ceiling: 'Kikomo: {ceiling} herufi',
+        parts: 'Sehemu zilizopendekezwa',
+        partChars: '{chars} herufi',
+        confirm: 'Gawanya',
+        working: 'Inagawanya…',
+        refused: 'Seva imekataa utenganishaji:',
+        previewFailed: 'Imeshindwa kupakia hakiki ya utenganishaji — bado hakuna kilichopendekezwa.',
+        failed: 'Utenganishaji umeshindikana — hakuna kilichobadilishwa.',
+        done: 'Imegawanyika sehemu {n}: {created} zimeundwa, {updated} zimesasishwa.',
+        dirty:
+          'Una mabadiliko yasiyohifadhiwa katika dhana hii — utenganishaji unafanya kazi na mwili ULIOWEKWA; kuthibitisha kunatupa rasimu.'
       },
       rename: {
         body: 'Kubadilisha jina pia hubadilisha majina ya grafu za nafasi ya kazi za hazina (`OKF_<name>_v<N>`); maudhui, matoleo na rekodi ya ukaguzi hazibadiliki.',

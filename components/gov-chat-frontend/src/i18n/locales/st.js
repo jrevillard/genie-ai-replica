@@ -2081,6 +2081,7 @@ export default {
         label: 'Maikutlo',
         loading: 'Ho kenya…',
         resplit: 'Khaola hape',
+        split: 'Arola maikutlo ona',
         flagged: 'E tšoailoeng',
         flaggedTip:
           "Mehopolo e nang le mekhatlo e tšoailoeng — bula e 'ngoe le e 'ngoe, tlosa kapa u fetole mokhatlo, boloka (e hlahloba hape ka bo eona); kapa u li hlokomele ha u etsa publish.",
@@ -2137,6 +2138,22 @@ export default {
         modeC: 'Sebelisa tlhahiso ea lihlooho tsa LLM',
         modeCHint: 'Pale ea 10.6 — e tla haufinyane',
         title: 'Arola hape ho tsoa mohloling'
+      },
+      split: {
+        title: 'Arola maikutlo',
+        open: 'Arola maikutlo',
+        body: 'Sena se hlahisa mokhoa oa ho arola maikutlo ana mathehong se sa lahleheng. Ha ho ngotsoe letho pele oa netefatsa.',
+        ceiling: 'Moeli: {ceiling} litso',
+        parts: 'Makarolo a hlahisoang',
+        partChars: '{chars} litso',
+        confirm: 'Arola',
+        working: 'E arola…',
+        refused: 'Sene se hana ho arola:',
+        previewFailed: 'Ha ea khona ho fetola pono ea karohano — ho ne ho se na seo se hlahisitsoeng.',
+        failed: 'Karohano e hlolehile — ha ho fetohu letho.',
+        done: 'Ho arohane makarolo a {n}: e thehiloe {created}, e nchafatsoa {updated}.',
+        dirty:
+          'Ho na le liphetoho tsa sa bolokiloeng conseneng — karohano e sebetsa ka mmele o bolokiloeng; ho netefatsa ho lahla peeletso.'
       },
       rename: {
         body: 'Ho fetola lebitso ho fetola hape lebitso la li-graph tsa sebaka sa mosebetsi sa polokelo (`OKF_<name>_v<N>`); seo ka kahare, mekhoa ea pele le paka ea tlhahlobo ha e fetoha.',

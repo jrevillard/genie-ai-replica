@@ -236,3 +236,57 @@ describe('repoOkfService.list — {items} unwrap (dashboard regression)', () => 
     expect(await repoOkfService.list()).toEqual([]);
   });
 });
+
+// #1577 story 2 — the split client: preview (never throws, silent) + the
+// confirm POST riding the story-1 route.
+describe('repoOkfService.splitPreview / splitConcept (#1577 story 2)', () => {
+  beforeEach(() => jest.clearAllMocks());
+
+  it('splitPreview GETs the split-preview route (no /api prefix) and resolves the body', async () => {
+    mockGet.mockResolvedValue({
+      data: {
+        ok: true,
+        concept_id: 'big',
+        parts: [{ concept_id: 'big', path: 'docs/big.md', title: 'Big', chars: 120 }],
+        ceiling: 250000,
+        body_chars: 210
+      }
+    });
+    const out = await repoOkfService.splitPreview('r-1', 'big');
+    expect(mockGet.mock.calls[0][0]).toBe('/okf/repos/r-1/concepts/big/split-preview');
+    expect(mockGet.mock.calls[0][2]).toMatchObject({ silent: true }); // the dialog owns refusals
+    expect(out).toMatchObject({ ok: true, ceiling: 250000, parts: expect.any(Array) });
+  });
+
+  it('splitPreview maps a typed refusal to {ok:false, code, message, serverRefusal} without throwing', async () => {
+    mockGet.mockRejectedValue({
+      status: 409,
+      data: { error: 'PART_ID_CONFLICT', message: 'would overwrite existing concept(s) big-part-2' },
+      message: 'would overwrite existing concept(s) big-part-2'
+    });
+    const out = await repoOkfService.splitPreview('r-1', 'big');
+    expect(out).toMatchObject({
+      ok: false,
+      code: 'PART_ID_CONFLICT',
+      message: expect.stringContaining('big-part-2'),
+      serverRefusal: true // the dialog renders the message verbatim, whatever the code
+    });
+  });
+
+  it('splitPreview maps a transport failure to an honest failure shape (NOT a server refusal)', async () => {
+    mockGet.mockRejectedValue({ status: 0, message: 'Network error. Please check your connection.' });
+    const out = await repoOkfService.splitPreview('r-1', 'big');
+    expect(out.ok).toBe(false);
+    expect(out.message).toContain('Network error');
+    expect(out.serverRefusal).toBeFalsy(); // the dialog's own error line, never "the server said"
+  });
+
+  it('splitConcept POSTs the story-1 split route (no /api prefix)', async () => {
+    mockPost.mockResolvedValue({ data: { ok: true, concept_id: 'big', created: 1, updated: 1 } });
+    const out = await repoOkfService.splitConcept('r-1', 'big', { sub: 'steward-1' });
+    expect(mockPost.mock.calls[0][0]).toBe('/okf/repos/r-1/concepts/big/split');
+    expect(mockPost.mock.calls[0][1]).toEqual({});
+    expect(mockPost.mock.calls[0][2]).toMatchObject({ silent: true });
+    expect(out).toMatchObject({ ok: true, created: 1 });
+  });
+});

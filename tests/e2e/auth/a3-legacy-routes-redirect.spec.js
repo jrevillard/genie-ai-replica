@@ -3,14 +3,19 @@ const { BASE_URL } = require('../helpers/base-url');
 
 // Test A.3 — Legacy Routes Redirect
 // Verifies that legacy auth routes (/login, /register, /forgot-password)
-// are handled gracefully. These routes were removed in Story 1-11.
-// They should redirect to Keycloak (same as any protected route) or show a 404.
+// are handled deterministically. These routes were removed in Story 1-11:
+// the router's catch-all redirects them to /dashboard, and the navigation
+// guard — /dashboard requires authentication — sends the unauthenticated
+// visitor to the Keycloak auth endpoint. A fresh browser context carries no
+// SSO session, so that login page IS the one expected landing; the suite's
+// determinism contract (tests/e2e/CLAUDE.md) forbids accepting it as one
+// outcome among three.
 // Source: e2e-test-plan-external-idp.md Phase A.3
 
 const LEGACY_ROUTES = ['/login', '/register', '/forgot-password'];
 
 for (const path of LEGACY_ROUTES) {
-  test(`legacy route ${path} redirects to Keycloak login`, async ({ browser }) => {
+  test(`legacy route ${path} redirects to the Keycloak login page`, async ({ browser }) => {
     const context = await browser.newContext({
       ignoreHTTPSErrors: true,
       bypassCSP: true,
@@ -22,45 +27,24 @@ for (const path of LEGACY_ROUTES) {
       timeout: 30000,
     });
 
-    // Wait for any client-side redirects to settle
-    await page.waitForURL(
-      (url) => {
-        const urlStr = url.toString();
-        return (
-          urlStr.includes('/auth/realms/genie/') ||
-          urlStr.includes('dashboard') ||
-          urlStr === `${BASE_URL}/` ||
-          urlStr === BASE_URL
-        );
-      },
-      { timeout: 15000 },
-    ); // If no redirect happens, the assertion below will catch it
+    // The OIDC login redirect is the fixed outcome: SPA catch-all ->
+    // /dashboard -> navigation guard -> Keycloak auth endpoint. Assert that
+    // exact endpoint — no alternative landing is accepted, so a routing
+    // regression that parks a legacy route anywhere else fails here.
+    await page.waitForURL('**/protocol/openid-connect/auth**', {
+      timeout: 15000,
+    });
 
-    const currentUrl = page.url();
-
-    // The SPA handles routing client-side. Legacy auth routes no longer exist
-    // as pages, so the OIDC layer should trigger a redirect to Keycloak.
-    // Verify the app does not crash and we end up on a valid page.
-    const redirectedToKeycloak = currentUrl.includes('/auth/realms/genie/');
-    const onAppRoot = currentUrl === `${BASE_URL}/` || currentUrl === BASE_URL;
-    const onDashboard = currentUrl.includes('dashboard');
-
-    // At minimum, the app must not crash. Acceptable outcomes:
-    // 1. Redirected to Keycloak login (most likely — OIDC intercept triggers)
-    // 2. Redirected back to app root or dashboard (if OIDC catches the route)
-    const isValidOutcome = redirectedToKeycloak || onAppRoot || onDashboard;
-
+    // The login form is the landing proof (the L3 form proof,
+    // l3-vuex-state-cleared.spec.js): it renders only while the realm holds
+    // no live SSO session for this browser, so it pins both the destination
+    // and the unauthenticated state the redirect exists to produce. It also
+    // replaces the old body-length probe — an nginx 404 page is non-empty
+    // too, so text presence proves nothing.
     await expect(
-      isValidOutcome,
-      `Expected ${path} to redirect to Keycloak, app root, or dashboard, got: ${currentUrl}`,
-    ).toBeTruthy();
-
-    // Verify the page is not an error/crash page by checking for basic content
-    const bodyText = await page.evaluate(() => document.body.innerText.substring(0, 100));
-    await expect(
-      bodyText.length > 0,
-      'Expected non-empty page body (app should not crash)',
-    ).toBeTruthy();
+      page.locator('#username'),
+      `Expected the Keycloak login form after visiting ${path}; the browser was last at: ${page.url()}`,
+    ).toBeVisible({ timeout: 15000 });
 
     await context.close();
   });

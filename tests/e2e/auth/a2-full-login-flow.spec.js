@@ -57,12 +57,11 @@ test('completes full login flow from app to Keycloak and back', async ({ browser
     `Expected URL to contain 'dashboard', got: ${finalUrl}`,
   ).toBeTruthy();
 
-  // Verify the page body contains the app content (not a login page)
-  const bodyText = await page.evaluate(() => document.body.innerText.substring(0, 200));
-  await expect(
-    bodyText.includes('GENIE.AI'),
-    `Expected page body to contain 'GENIE.AI', got: ${bodyText}`,
-  ).toBeTruthy();
+  // The dashboard URL is the authenticated-state pin: /dashboard carries
+  // meta.requiresAuth and the navigation guard only lets an authenticated
+  // session through (src/router.js), so landing there already proves the
+  // login completed — a brand-substring body check added nothing (the
+  // brand text also renders pre-auth).
 
   await context.close();
 });

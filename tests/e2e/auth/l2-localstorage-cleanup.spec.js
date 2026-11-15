@@ -70,13 +70,17 @@ test('clears legacy localStorage items after logout', async ({ browser }) => {
 
   await logoutButton.click();
 
-  // Step 6: Wait for navigation to complete (redirect to Keycloak or back to app)
+  // Step 6: Wait for the Keycloak logout redirect — the realm endpoints
+  // only, the same two the l3 spec waits for. 'dashboard' is not an
+  // outcome here: it matches the no-navigation state a failed logout
+  // leaves the browser in, which would pass the wait without any logout
+  // having happened.
   await page.waitForURL(
     (url) => {
       const urlStr = url.toString();
       return (
-        urlStr.includes('/auth/realms/genie/') ||
-        urlStr.includes('dashboard')
+        urlStr.includes('/auth/realms/genie/protocol/openid-connect/logout') ||
+        urlStr.includes('/auth/realms/genie/protocol/openid-connect/auth')
       );
     },
     { timeout: 30000 },

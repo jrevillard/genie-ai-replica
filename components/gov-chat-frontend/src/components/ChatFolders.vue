@@ -113,6 +113,7 @@
           padding="md"
           :hoverable="true"
           class="chat-item"
+          data-testid="chat-history-item"
           @click="openChat(conversation._key)"
         >
           <div class="chat-icon">

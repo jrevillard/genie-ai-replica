@@ -598,12 +598,29 @@ test.describe('Conversation — surface invariants', () => {
     await page.waitForSelector('[data-testid="welcome-composer"]', { timeout: 15000 });
     // The card's hidden prompt auto-sends: the answer is stubbed, so the
     // turn completes locally instead of spending the venue's LLM on an
-    // invariant it has no part in.
-    await mockChatStream(page, ['Stubbed answer.']);
+    // invariant it has no part in. The capture rides the interception:
+    // the scoped payload is the contract this test names alongside the
+    // header — a chip plus a header without the scope on the wire would
+    // be a scope that only decorates.
+    const bodies = [];
+    await page.route(
+      STREAM_ROUTE,
+      runPostOnlyRouteHandler(page, async (route) => {
+        bodies.push(route.request().postDataJSON());
+        await sseFulfill(route, sseBody(['Stubbed answer.']));
+      })
+    );
     await page.locator(QUICK_HELP_ITEM).filter({ hasText: HEADER_SCOPE_TITLE }).click();
     await expect(page.locator('[data-testid="conversation-header-title"]')).toHaveText(HEADER_SCOPE_TITLE);
     // The option is a knowledge domain — its chip is shown as context.
     expect(await page.locator('[data-testid="context-panel"]').count(), 'the domain chip is shown').toBe(1);
+    // And the send carries the scope the card declared — the same wire
+    // contract the scope spec owns, asserted at this entry path too: the
+    // ENGLISH category label and the declared labels.
+    expect(bodies, 'the scoped card sends exactly one query').toHaveLength(1);
+    expect(bodies[0].contextOption).toBe('conversation-with-context-labels');
+    expect(bodies[0].context.categoryLabel).toBe('Civil Registry');
+    expect(bodies[0].context.serviceLabels).toEqual(['Births']);
     await ctx.close();
   });
 

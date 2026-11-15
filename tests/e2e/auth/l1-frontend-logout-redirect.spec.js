@@ -1,70 +1,38 @@
 const { test, expect } = require('@playwright/test');
-const { BASE_URL } = require('../helpers/base-url');
-const { TEST_USER } = require('../helpers/e2e-fixtures');
+const { loginViaUI, LOGIN_BUDGET_TIMEOUT_MS } = require('../helpers/chatbot');
 const { NAV_LOGOUT_BUTTON } = require('../helpers/navbar');
 
 // Test L.1 — Frontend Logout Redirect
-// Complete logout flow: login, click logout button, verify redirect to Keycloak login page.
+// Complete logout flow: login (through loginViaUI — the suite's one login
+// path, #1854), click logout button, verify redirect to Keycloak login page.
 // Source: docs/e2e-tests/suite-map.md § The acceptance phases, Phase L
 
 test('clicks logout button and redirects to Keycloak login page', async ({ browser }) => {
+  // #1798 — the budget's derivation lives on LOGIN_BUDGET_TIMEOUT_MS.
+  test.setTimeout(LOGIN_BUDGET_TIMEOUT_MS);
   const context = await browser.newContext({
     ignoreHTTPSErrors: true,
     bypassCSP: true,
   });
   const page = await context.newPage();
 
-  // Step 1: Navigate to app root — should redirect to Keycloak
-  await page.goto(`${BASE_URL}/`, {
-    waitUntil: 'networkidle',
-    timeout: 30000,
-  });
+  // Step 1: Log in through the browser — the Keycloak redirect flow is
+  // the helper's (retry-once budget included), not this spec's subject.
+  await loginViaUI(page);
 
-  // Step 2: Wait for Keycloak login page
-  await page.waitForURL('**/protocol/openid-connect/auth**', {
-    timeout: 15000,
-  });
-
-  // Verify we are on the Keycloak login page
-  const loginUrl = page.url();
-  await expect(
-    loginUrl.includes('/auth/realms/genie/'),
-    `Expected Keycloak login URL, got: ${loginUrl}`,
-  ).toBeTruthy();
-
-  // Step 3: Fill credentials and submit
-  await page.fill('#username', TEST_USER.username);
-  await page.fill('#password', TEST_USER.password);
-  await page.click('#kc-login');
-
-  // Step 4: Wait for redirect back to the app (dashboard)
-  await page.waitForURL(
-    (url) => {
-      const urlStr = url.toString();
-      return urlStr.includes('dashboard') || urlStr === `${BASE_URL}/`;
-    },
-    { timeout: 30000 },
-  );
-
-  const dashboardUrl = page.url();
-  await expect(
-    dashboardUrl.includes('dashboard'),
-    `Expected URL to contain 'dashboard' after login, got: ${dashboardUrl}`,
-  ).toBeTruthy();
-
-  // Step 5: Verify authenticated state — app content should be visible
+  // Step 2: Verify authenticated state — app content should be visible
   const bodyText = await page.evaluate(() => document.body.innerText.substring(0, 200));
   await expect(
     bodyText.includes('GENIE.AI'),
     `Expected page body to contain 'GENIE.AI', got: ${bodyText}`,
   ).toBeTruthy();
 
-  // Step 6: Click the logout button (NavBarComponent desktop logout button)
+  // Step 3: Click the logout button (NavBarComponent desktop logout button)
   const logoutButton = page.locator(NAV_LOGOUT_BUTTON);
   await expect(logoutButton, 'Logout button should be visible after login').toBeVisible({ timeout: 10000 });
   await logoutButton.click();
 
-  // Step 7: Wait for redirect to Keycloak — either the logout endpoint
+  // Step 4: Wait for redirect to Keycloak — either the logout endpoint
   // (signoutRedirect via oidc-client-ts) or back to the login auth endpoint
   // after Keycloak processes the logout and redirects to post_logout_redirect_uri.
   await page.waitForURL(

@@ -30,24 +30,43 @@ in the error (never silently tolerated).
   `helpers/route.js` (`runRouteHandler`/`runPostOnlyRouteHandler`), which
   requires BOTH the target being gone AND the error being Playwright's
   target-closed error, and rethrows everything else; and the transport-level
-  edge-reset retry in `helpers/auth.js` `request()` (#1847) — see the next
-  bullet. Route mocks use the wrapper; they do not hand-roll their own catch.
-  `expect.soft` is a swallow too: it records the failure and lets the test
-  keep running against a premise that already failed, so later steps pass
-  or fail for the wrong reason. One expected fact, one hard `expect()`.
-- **The one sanctioned transport-level retry.** `helpers/auth.js`'s `request()`
-  re-issues the edge's own upstream-reset failure on the idempotent methods
-  (#1847 — operator-sanctioned as the deterministic answer to a genuine
-  transient): the k8s venue's Envoy answers a keep-alive race with a plain-text
-  503 carrying its reset text, or kills the connection outright (in practice
-  the race arrives pre-headers — Node cannot distinguish a mid-body reset,
-  which an idempotent re-issue also survives) — about once per suite load;
-  that is a transport artifact outside any spec's subject, not a product
-  verdict. The retry is bounded (three attempts), sleeps never, keys on the
-  edge's stable reply signature (and on the reset error code), and returns or
-  rethrows the LAST observed outcome verbatim. It does not license retries
-  anywhere else: no spec adds a retry loop, and Playwright's `retries: 0` stays
-  untouched.
+  edge-reset retry in `helpers/auth.js` `request()` (#1847) — the first
+  entry of the retry inventory below. Route mocks use the wrapper; they do
+  not hand-roll their own catch. `expect.soft` is a swallow too: it records
+  the failure and lets the test keep running against a premise that already
+  failed, so later steps pass or fail for the wrong reason. One expected
+  fact, one hard `expect()`.
+- **The sanctioned retry inventory (#1878).** A retry is a determinism
+  hazard: it exists only where it is sanctioned HERE, with its contract
+  spelled out. Every entry keys on a condition, is bounded, and fails loud
+  on its last observed outcome — never a silent give-up. The inventory:
+  1. `helpers/auth.js`'s `request()` — the edge's own upstream-reset failure
+     re-issued on the idempotent methods (#1847 — operator-sanctioned as the
+     deterministic answer to a genuine transient): the k8s venue's Envoy
+     answers a keep-alive race with a plain-text 503 carrying its reset
+     text, or kills the connection outright (in practice the race arrives
+     pre-headers — Node cannot distinguish a mid-body reset, which an
+     idempotent re-issue also survives) — about once per suite load; that
+     is a transport artifact outside any spec's subject, not a product
+     verdict. Bounded (three attempts), sleeps never, keys on the edge's
+     stable reply signature (and on the reset error code), returns or
+     rethrows the LAST observed outcome verbatim.
+  2. `helpers/chatbot.js`'s `loginViaUI()` — one retry of the whole
+     Keycloak redirect flow (budgets 30 s then 15 s), the operator's
+     sanctioned slow-IdP tolerance (2026-11-14): a slow identity provider
+     under load must not fail a test that has nothing to do with
+     authentication. Keys on the flow's own failure; the thrown error
+     names both attempts.
+  3. `helpers/keycloak-admin.js`'s `ensureUser()` — the whole user
+     convergence (create, password, roles) retried while Keycloak answers
+     transiently (#1878): typed transient only (408/425/429, 5xx, transport
+     timeout), a 30 s deadline, a growing pause between attempts capped at
+     the deadline, a permanent error thrown at once, expiry loud with the
+     last observed error. Provisioning infra, not an assertion path — the
+     retry never covers a spec's own verdict.
+  This list is exhaustive. A new retry surface needs an operator ruling
+  recorded here first; no spec adds a retry loop, and Playwright's
+  `retries: 0` stays untouched.
 - **No conditional skip on runtime state.** A `test.skip()` or an early
   `return` decided by what the run itself produced (a page rendered or not,
   a request answered or not, a value computed in the body) is a fallback

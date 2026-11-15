@@ -1,51 +1,28 @@
 const { test, expect } = require('@playwright/test');
 const { BASE_URL } = require('../helpers/base-url');
-const { TEST_USER } = require('../helpers/e2e-fixtures');
+const { loginViaUI, LOGIN_BUDGET_TIMEOUT_MS } = require('../helpers/chatbot');
 const { NAV_LOGOUT_BUTTON } = require('../helpers/navbar');
 
 // Test L.2 — localStorage Cleanup on Logout
-// Login, inject legacy localStorage items, trigger logout, verify they are removed.
+// Login (through loginViaUI — the suite's one login path, #1854), inject
+// legacy localStorage items, trigger logout, verify they are removed.
 // The Vuex logout action clears 'user' and 'auth_token' from localStorage before the Keycloak signoutRedirect.
 // Source: docs/e2e-tests/suite-map.md § The acceptance phases, Phase L
 
 test('clears legacy localStorage items after logout', async ({ browser }) => {
+  // #1798 — the budget's derivation lives on LOGIN_BUDGET_TIMEOUT_MS.
+  test.setTimeout(LOGIN_BUDGET_TIMEOUT_MS);
   const context = await browser.newContext({
     ignoreHTTPSErrors: true,
     bypassCSP: true,
   });
   const page = await context.newPage();
 
-  // Step 1: Navigate to app root — should redirect to Keycloak
-  await page.goto(`${BASE_URL}/`, {
-    waitUntil: 'networkidle',
-    timeout: 30000,
-  });
+  // Step 1: Log in through the browser — the Keycloak redirect flow is
+  // the helper's (retry-once budget included), not this spec's subject.
+  await loginViaUI(page);
 
-  // Step 2: Wait for Keycloak login page and fill credentials
-  await page.waitForURL('**/protocol/openid-connect/auth**', {
-    timeout: 15000,
-  });
-
-  await page.fill('#username', TEST_USER.username);
-  await page.fill('#password', TEST_USER.password);
-  await page.click('#kc-login');
-
-  // Step 3: Wait for redirect back to the app (dashboard)
-  await page.waitForURL(
-    (url) => {
-      const urlStr = url.toString();
-      return urlStr.includes('dashboard') || urlStr === `${BASE_URL}/`;
-    },
-    { timeout: 30000 },
-  );
-
-  const dashboardUrl = page.url();
-  await expect(
-    dashboardUrl.includes('dashboard'),
-    `Expected URL to contain 'dashboard' after login, got: ${dashboardUrl}`,
-  ).toBeTruthy();
-
-  // Step 4: Inject legacy localStorage items that the logout action should clean up
+  // Step 2: Inject legacy localStorage items that the logout action should clean up
   await page.evaluate(() => {
     localStorage.setItem('user', '{"email":"test@test.com"}');
     localStorage.setItem('auth_token', 'fake-token');
@@ -64,13 +41,13 @@ test('clears legacy localStorage items after logout', async ({ browser }) => {
     `Expected 'auth_token' to be set in localStorage before logout, got: ${tokenBefore}`,
   ).toBeTruthy();
 
-  // Step 5: Click the logout button
+  // Step 3: Click the logout button
   const logoutButton = page.locator(NAV_LOGOUT_BUTTON);
   await expect(logoutButton, 'Logout button should be visible').toBeVisible({ timeout: 10000 });
 
   await logoutButton.click();
 
-  // Step 6: Wait for navigation to complete (redirect to Keycloak or back to app)
+  // Step 4: Wait for navigation to complete (redirect to Keycloak or back to app)
   await page.waitForURL(
     (url) => {
       const urlStr = url.toString();
@@ -82,7 +59,7 @@ test('clears legacy localStorage items after logout', async ({ browser }) => {
     { timeout: 30000 },
   );
 
-  // Step 7: Navigate back to app origin and check localStorage
+  // Step 5: Navigate back to app origin and check localStorage
   // Use about:blank to reset, then navigate to app origin
   await page.goto('about:blank');
   await page.goto(`${BASE_URL}/`, { waitUntil: 'commit', timeout: 15000 });

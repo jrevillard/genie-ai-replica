@@ -158,23 +158,25 @@ async function measureLayout(page) {
 
 function assertNoOverlap(m) {
   expect(m.leftRect, 'left sidebar should be measurable').not.toBeNull();
+  // The right sidebar is rendered at every viewport this spec visits:
+  // collapsed or off-canvas it stays in the DOM and measurable (the
+  // narrow-viewport policy translates it, it never display:nones it), so
+  // its rect is pinned like the others and the overlap check below cannot
+  // be silently skipped by a sidebar that stopped rendering.
+  expect(m.rightRect, 'right sidebar should be measurable').not.toBeNull();
   expect(m.centreRect, 'centre should be measurable').not.toBeNull();
   // The two sidebars' bounding rects must not intersect the centre's
   // bounding rect. Off-canvas rects extend past the viewport, which is
   // fine — they don't overlap the (always in-viewport) centre. The
   // intersection check works regardless of where the rectangles live.
-  if (m.leftRect) {
-    expect(
-      !boxesOverlap(m.leftRect, m.centreRect),
-      `left sidebar (left=${m.leftRect.left}, right=${m.leftRect.right}) must not overlap centre (left=${m.centreRect.left}, right=${m.centreRect.right})`
-    ).toBe(true);
-  }
-  if (m.rightRect) {
-    expect(
-      !boxesOverlap(m.rightRect, m.centreRect),
-      `right sidebar (left=${m.rightRect.left}, right=${m.rightRect.right}) must not overlap centre (left=${m.centreRect.left}, right=${m.centreRect.right})`
-    ).toBe(true);
-  }
+  expect(
+    !boxesOverlap(m.leftRect, m.centreRect),
+    `left sidebar (left=${m.leftRect.left}, right=${m.leftRect.right}) must not overlap centre (left=${m.centreRect.left}, right=${m.centreRect.right})`
+  ).toBe(true);
+  expect(
+    !boxesOverlap(m.rightRect, m.centreRect),
+    `right sidebar (left=${m.rightRect.left}, right=${m.rightRect.right}) must not overlap centre (left=${m.centreRect.left}, right=${m.centreRect.right})`
+  ).toBe(true);
 }
 
 test.describe('Responsive layout (quick-help grid + sidebar policy)', () => {

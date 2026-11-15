@@ -15,8 +15,8 @@ const {
   getSessionToken,
   getSessionTokenViaUI,
   describeUnauthorized,
-  mapWithConcurrency,
   dedupeByIds,
+  mapWithConcurrency,
   request,
   SESSION_MINT_TIMEOUT_MS,
   SWEEP_DELETE_CONCURRENCY,
@@ -164,6 +164,7 @@ test.describe('Conversation history persistence', () => {
     // below. A later page that fails must NOT discard the pages that
     // succeeded — those conversations are known, and leaving them behind
     // is the leftover this sweep exists to prevent.
+    //
     // The delete set holds each conversation ONCE: dedupeByIds drops the
     // rows pagination drift listed twice (why: dedupeByIds in
     // helpers/auth.js, #1864/#1893).

@@ -17,8 +17,8 @@ const { loginViaUI, BASE_URL, TEST_ADMIN_USER } = require('./chatbot');
 const {
   describeUnauthorized,
   getSessionTokenViaUI,
-  mapWithConcurrency,
   dedupeByIds,
+  mapWithConcurrency,
   request,
   SWEEP_DELETE_CONCURRENCY,
   SWEEP_DOCS_MAX_DELETES,

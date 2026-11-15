@@ -747,8 +747,7 @@ test.describe('Resizable sidebars behind one handle', () => {
           afterWidth: parseFloat(after.width) || 0,
           afterHeight: parseFloat(after.height) || 0,
           panelClientWidth: overlay.clientWidth,
-          scrollWidth: overlay.scrollWidth,
-          clientWidth: overlay.clientWidth
+          scrollWidth: overlay.scrollWidth
         };
       });
       expect(c.none, `the welcome overlay should be readable at ${wide}px`).toBe(false);
@@ -780,8 +779,8 @@ test.describe('Resizable sidebars behind one handle', () => {
       expect(
         c.scrollWidth,
         `at viewport ${wide}, overlay.scrollWidth (${c.scrollWidth}px) must be <= ` +
-          `overlay.clientWidth (${c.clientWidth}px); overflow=${c.scrollWidth - c.clientWidth}px`
-      ).toBeLessThanOrEqual(c.clientWidth);
+          `overlay.clientWidth (${c.panelClientWidth}px); overflow=${c.scrollWidth - c.panelClientWidth}px`
+      ).toBeLessThanOrEqual(c.panelClientWidth);
     }
   });
 

@@ -1324,7 +1324,6 @@ test.describe('Welcome banner invariants', () => {
               `step, inside the ${HIERARCHY_LUMINANCE_STEP * 100}% band the two have to stay apart by. ` +
               `The subtitle reads as a second heading rather than as text under one`
           ).toBeGreaterThanOrEqual(HIERARCHY_LUMINANCE_STEP);
-
         } finally {
           await ctx.close();
         }
@@ -1441,7 +1440,6 @@ test.describe('Welcome banner invariants', () => {
                 `${(textWidth + m.padLeft + m.padRight).toFixed(1)}px — the veil is wrapped ` +
                 `around the banner, not around the text`
             ).toBeLessThanOrEqual(1);
-
           } finally {
             await ctx.close();
           }
@@ -1614,7 +1612,6 @@ test.describe('Welcome banner invariants', () => {
                 `fixed-position descendants — ${offOwn.fixedInOverlay} are inside it and would be ` +
                 `captured by the containment`
             ).toBe(0);
-
           } finally {
             await ctx.close();
           }

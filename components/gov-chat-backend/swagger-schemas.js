@@ -100,7 +100,6 @@ module.exports = {
     type: 'object',
     properties: {
       catKey: { type: 'string' },
-      catCode: { type: 'string', nullable: true },
       name: {
         type: 'string',
         nullable: true,

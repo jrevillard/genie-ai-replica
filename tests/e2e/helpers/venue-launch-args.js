@@ -44,13 +44,9 @@ function venueMapping() {
   const ip = process.env[VENUE_IP_ENV];
   if (!ip) return null;
   if (!net.isIP(ip)) {
-    throw new Error(
-      `${VENUE_IP_ENV} is not an address: ${JSON.stringify(ip)} — it must be an IPv4 or IPv6 address.`
-    );
+    throw new Error(`${VENUE_IP_ENV} is not an address: ${JSON.stringify(ip)} — it must be an IPv4 or IPv6 address.`);
   }
-  const host =
-    process.env[VENUE_HOST_ENV] ||
-    new URL(BASE_URL).hostname;
+  const host = process.env[VENUE_HOST_ENV] || new URL(BASE_URL).hostname;
   return { host, ip };
 }
 

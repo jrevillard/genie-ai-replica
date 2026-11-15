@@ -1710,9 +1710,7 @@ test.describe('assertNoDirectAccessGrants — the ROPC posture sweep (#1727, #18
       ]
     ];
 
-    await expect(assertNoDirectAccessGrants('tok', 'genie')).rejects.toThrow(
-      /ROPC POSTURE VIOLATION[\s\S]*admin-cli/
-    );
+    await expect(assertNoDirectAccessGrants('tok', 'genie')).rejects.toThrow(/ROPC POSTURE VIOLATION[\s\S]*admin-cli/);
   });
 
   test('an absent realm fails loudly — a venue without its primary realm is not a clean posture', async () => {

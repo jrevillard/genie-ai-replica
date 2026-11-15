@@ -38,7 +38,7 @@ const auth = require('./auth');
 
 const TLS_OPTIONS = {
   key: fs.readFileSync(path.join(__dirname, 'test-tls-key.pem')),
-  cert: fs.readFileSync(path.join(__dirname, 'test-tls-cert.pem')),
+  cert: fs.readFileSync(path.join(__dirname, 'test-tls-cert.pem'))
 };
 
 /** Start a one-shot TLS server whose single response `responder` builds. */
@@ -212,9 +212,11 @@ test.describe('the edge upstream-reset retry (auth.request)', () => {
 
   test('a POST on the edge reset is never retried — only idempotent methods are', async () => {
     server = await script(RESET_503);
-    const error = await auth.request('POST', urlOf(server), {
-      body: { grant_type: 'password' }
-    }).catch((e) => e);
+    const error = await auth
+      .request('POST', urlOf(server), {
+        body: { grant_type: 'password' }
+      })
+      .catch((e) => e);
     expect(error).toBeInstanceOf(Error);
     expect(error.status).toBe(503);
     // A POST whose outcome is ambiguous must not be re-sent: one attempt,

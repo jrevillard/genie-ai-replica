@@ -13,7 +13,7 @@ test('clicks logout button and redirects to Keycloak login page', async ({ brows
   test.setTimeout(LOGIN_BUDGET_TIMEOUT_MS);
   const context = await browser.newContext({
     ignoreHTTPSErrors: true,
-    bypassCSP: true,
+    bypassCSP: true
   });
   const page = await context.newPage();
 
@@ -39,7 +39,7 @@ test('clicks logout button and redirects to Keycloak login page', async ({ brows
   // into the app and never renders it).
   await expectKeycloakLoginForm(
     page,
-    `Expected the Keycloak login form after logout (session cleared); the browser was last at: ${page.url()}`,
+    `Expected the Keycloak login form after logout (session cleared); the browser was last at: ${page.url()}`
   );
 
   await context.close();

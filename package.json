@@ -8,13 +8,15 @@
     "lint:fix": "npm run lint:playwright-config:fix && npm run lint:fix --prefix components/gov-chat-frontend && npm run lint:fix --prefix components/gov-chat-backend && npm run lint:fix --prefix components/document-repository && npm run lint:fix --prefix components/shared/lib && npm run lint:fix --prefix components/okf-server && npm run lint:fix --prefix tests/config-validator && npm run lint:fix --prefix tests/e2e",
     "lint:playwright-config": "tests/e2e/node_modules/.bin/eslint --max-warnings 0 --config tests/e2e/eslint.config.js playwright.config.js",
     "lint:playwright-config:fix": "npm run lint:playwright-config -- --fix",
-    "format": "npm run format --prefix components/gov-chat-frontend && npm run format --prefix components/gov-chat-backend && npm run format --prefix components/document-repository && npm run format --prefix components/shared/lib && npm run format --prefix components/okf-server && npm run format --prefix tests/config-validator && npm run format:scripts && npm run format:site-scripts",
-    "format:check": "npm run format:check --prefix components/gov-chat-frontend && npm run format:check --prefix components/gov-chat-backend && npm run format:check --prefix components/document-repository && npm run format:check --prefix components/shared/lib && npm run format:check --prefix components/okf-server && npm run format:check --prefix tests/config-validator && npm run format:scripts:check && npm run format:site-scripts:check",
+    "format": "npm run format --prefix components/gov-chat-frontend && npm run format --prefix components/gov-chat-backend && npm run format --prefix components/document-repository && npm run format --prefix components/shared/lib && npm run format --prefix components/okf-server && npm run format --prefix tests/config-validator && npm run format:scripts && npm run format:site-scripts && npm run format:e2e",
+    "format:check": "npm run format:check --prefix components/gov-chat-frontend && npm run format:check --prefix components/gov-chat-backend && npm run format:check --prefix components/document-repository && npm run format:check --prefix components/shared/lib && npm run format:check --prefix components/okf-server && npm run format:check --prefix tests/config-validator && npm run format:scripts:check && npm run format:site-scripts:check && npm run format:e2e:check",
     "format:prettier": "node components/shared/lib/node_modules/prettier/bin/prettier.cjs",
     "format:scripts": "npm run format:prettier -- --write \"scripts/**/*.{js,cjs}\"",
     "format:scripts:check": "npm run format:prettier -- --check \"scripts/**/*.{js,cjs}\"",
     "format:site-scripts": "npm run format:prettier -- --write \"site/scripts/**/*.mjs\"",
     "format:site-scripts:check": "npm run format:prettier -- --check \"site/scripts/**/*.mjs\"",
+    "format:e2e": "npm run format:prettier -- --write \"tests/e2e/**/*.js\"",
+    "format:e2e:check": "npm run format:prettier -- --check \"tests/e2e/**/*.js\"",
     "lint:py": "ruff check genie-ai-overlay/",
     "lint:py:fix": "ruff check --fix genie-ai-overlay/",
     "format:py": "ruff format genie-ai-overlay/",
@@ -48,7 +50,8 @@
       "components/document-repository/node_modules/.bin/prettier --write"
     ],
     "tests/e2e/**/*.js": [
-      "tests/e2e/node_modules/.bin/eslint --fix"
+      "tests/e2e/node_modules/.bin/eslint --fix",
+      "components/shared/lib/node_modules/.bin/prettier --write"
     ],
     "playwright.config.js": [
       "tests/e2e/node_modules/.bin/eslint --max-warnings 0 --config tests/e2e/eslint.config.js --fix"

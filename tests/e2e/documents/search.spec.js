@@ -7,7 +7,7 @@ const {
   searchDocuments,
   waitForTableRowsSettled,
   getDocumentTableRows,
-  deleteAllTestDocuments,
+  deleteAllTestDocuments
 } = require('../helpers/documents');
 const { SESSION_MINT_TIMEOUT_MS } = require('../helpers/auth');
 

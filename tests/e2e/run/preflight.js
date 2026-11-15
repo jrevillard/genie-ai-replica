@@ -33,12 +33,12 @@ function remedy(what) {
     '      `node tests/e2e/run/install-browsers.js`; the build must be',
     '      reachable through PLAYWRIGHT_BROWSERS_PATH when the browsers',
     '      live outside the default cache;',
-    '    - that Chromium\'s shared libraries on LD_LIBRARY_PATH (a bare',
+    "    - that Chromium's shared libraries on LD_LIBRARY_PATH (a bare",
     '      container image has no libatk/libgbm);',
     '    - the Inter fonts on XDG_DATA_HOME for the pixel-measurement specs;',
     '    - a resolvable venue name — or E2E_VENUE_IP for one the runner',
     '      cannot resolve; E2E_VENUE_IP must be an IPv4 or IPv6 address;',
-    '    - a venue address that is a URL (BASE_URL).',
+    '    - a venue address that is a URL (BASE_URL).'
   ];
   return lines.join('\n');
 }

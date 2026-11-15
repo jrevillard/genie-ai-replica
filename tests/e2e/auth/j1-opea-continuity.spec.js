@@ -16,7 +16,7 @@ test.describe('Phase J: OPEA Continuity', () => {
 
   test('J.1 — OPEA callback returns sanitized profile via Bearer token', async () => {
     const res = await authRequest('GET', '/api/me/context', {
-      headers: { Authorization: `Bearer ${userToken}` },
+      headers: { Authorization: `Bearer ${userToken}` }
     });
     expect(res.status).toBe(200);
     expect(res.data).toHaveProperty('name');
@@ -34,14 +34,14 @@ test.describe('Phase J: OPEA Continuity', () => {
 
     // Wrong token
     const res2 = await authRequest('GET', '/api/me/context', {
-      headers: { Authorization: 'Bearer invalid-token' },
+      headers: { Authorization: 'Bearer invalid-token' }
     });
     expect(res2.status).toBe(401);
   });
 
   test('J.3 — no Keycloak artifacts leak to OPEA', async () => {
     const res = await authRequest('GET', '/api/me/context', {
-      headers: { Authorization: `Bearer ${userToken}` },
+      headers: { Authorization: `Bearer ${userToken}` }
     });
     expect(res.status).toBe(200);
 

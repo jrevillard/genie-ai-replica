@@ -59,7 +59,10 @@ function okfAdminUser() {
  *   opens a concept needs at least one, carrying `concept_id`)
  * @param {object|null} [p.importBody=null] when given, the import POST's answer
  */
-async function stubStudioRepoRoutes(page, { repoId, repo, draftStatus = 200, draftBody = null, conceptsBody = [], importBody = null }) {
+async function stubStudioRepoRoutes(
+  page,
+  { repoId, repo, draftStatus = 200, draftBody = null, conceptsBody = [], importBody = null }
+) {
   await page.route('**/api/okf/repos?*', (route) =>
     route.fulfill({
       status: 200,

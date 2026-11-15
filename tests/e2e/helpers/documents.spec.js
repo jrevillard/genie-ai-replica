@@ -67,7 +67,7 @@ test.describe('the document status predicate', () => {
       'Ingestion Error',
       '',
       'killed',
-      undefined,
+      undefined
     ];
     const docs = [file('Ingested'), file('pending'), { file_name: 'no-block.pdf' }, file(undefined)];
     for (const doc of docs) {

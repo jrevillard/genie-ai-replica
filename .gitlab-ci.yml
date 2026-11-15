@@ -3252,18 +3252,27 @@ lint:config-validator:
     - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH || $CI_COMMIT_BRANCH =~ /^release\/*/'
       when: on_success
 
-# ESLint gate over the Playwright suite. The suite's specs and helpers
-# lived outside every lint pass, so an undeclared binding inside a
+# ESLint + Prettier gates over the Playwright suite. The suite's specs and
+# helpers lived outside every lint pass, so an undeclared binding inside a
 # page.evaluate argument only surfaced as a ReferenceError minutes into
 # a venue run — `no-undef` turns that whole class into a seconds-fast
-# lint failure. Stays outside .lint_component: the package ships lint
-# scripts only, no Prettier gate (the existing files were never
-# prettier-formatted; reformatting them is not this change's scope).
+# lint failure. Stays outside .lint_component: it runs the suite's own
+# lint script plus the root prettier gate over the tree, not a component's
+# own lint/format scripts. The Prettier binary is shared-lib's pinned one
+# (the repo-root `format:e2e:check` npm script resolves the same), so the
+# job installs shared/lib first — the same prerequisite lint:site-scripts
+# carries (#1853).
 lint:e2e:
   extends: .lint_node
   script:
-    - cd tests/e2e && npm ci
+    # Every cd is ABSOLUTE (CI_PROJECT_DIR): script lines share one shell,
+    # and a relative cd would resolve from wherever the previous line left
+    # the working directory — measured in the first run of this gate, where
+    # `cd components/shared/lib` after `cd tests/e2e` failed silently and
+    # the job died three lines later on the missing binary.
+    - cd ${CI_PROJECT_DIR}/tests/e2e && npm ci
     - npm run lint
+    - cd ${CI_PROJECT_DIR}/components/shared/lib && npm ci
     # The suite's own Playwright config lives at the repository ROOT, outside
     # the linted tree: `eslint .` from tests/e2e never saw it, and an edit
     # to it never triggered this gate — the #1632 defect class stayed open
@@ -3271,6 +3280,10 @@ lint:e2e:
     # from the repository root: ESLint's base path is the working
     # directory, so a file above tests/e2e/ is out of reach from there.
     - cd ${CI_PROJECT_DIR} && npm run lint:playwright-config
+    # The suite's Prettier gate (#1853): the same root script a developer
+    # runs locally, over the whole tests/e2e tree, with shared-lib's
+    # pinned binary.
+    - cd ${CI_PROJECT_DIR} && npm run format:e2e:check
   rules:
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
       changes:
@@ -3284,6 +3297,11 @@ lint:e2e:
         # the gate's command lives in the root package.json — an edit there
         # (a typoed path, a moved config) must re-run the gate it defines
         - "package.json"
+        # the Prettier binary this gate runs is shared-lib's pin — a re-pin
+        # there must re-check the tree even when it did not change itself
+        # (the same dependency lint:site-scripts carries)
+        - "components/shared/lib/package.json"
+        - "components/shared/lib/package-lock.json"
         - ".gitlab-ci.yml"
       when: on_success
     - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH || $CI_COMMIT_BRANCH =~ /^release\/*/'

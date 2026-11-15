@@ -142,7 +142,7 @@ function venueAvailabilityReport(venueNoise, venue) {
   const lines = [
     '',
     `venue-availability report: ${total} failure(s) across ${venueNoise.size} spec file(s) carry an ` +
-      'edge-transport signature — the browser never reached the app:',
+      'edge-transport signature — the browser never reached the app:'
   ];
   for (const [file, failures] of venueNoise) {
     const signature = (String(failures[0].error).match(CONNECTION_FAILURE_RE) || ['(no signature extracted)'])[0];
@@ -176,6 +176,17 @@ function readReport(reportPath) {
   }
   if (!report || !Array.isArray(report.suites)) {
     fail(`the JSON report at ${reportPath} carries no suites — it is not a Playwright report`);
+  }
+  // The run stamp filed with every issue comes from stats.startTime — the
+  // moment the red run STARTED, not the moment this filing ran. A report
+  // without it would otherwise get a fabricated wall-clock stamp, and the
+  // issue would misattribute the run it names (Playwright's json reporter
+  // always writes stats; one that did not is not a report this path reads).
+  if (!report.stats || typeof report.stats.startTime !== 'string') {
+    fail(
+      `the JSON report at ${reportPath} carries no stats.startTime — it is not a report the ` +
+        'failure path can stamp a filed issue with'
+    );
   }
   return report;
 }
@@ -233,7 +244,7 @@ function glab(args) {
   return execFileSync('glab', ['api', '--hostname', GITLAB_HOST, ...args], {
     encoding: 'utf-8',
     maxBuffer: 32 * 1024 * 1024,
-    timeout: TRACKER_TIMEOUT_MS,
+    timeout: TRACKER_TIMEOUT_MS
   });
 }
 
@@ -254,18 +265,31 @@ function glab(args) {
  */
 function fetchOpenIssues() {
   const issues = [];
+  let capped = true;
   for (let page = 1; page <= 20; page += 1) {
     let batch;
     try {
-      batch = JSON.parse(
-        glab([`projects/${GITLAB_PROJECT_ID}/issues?state=opened&per_page=100&page=${page}`])
-      );
+      batch = JSON.parse(glab([`projects/${GITLAB_PROJECT_ID}/issues?state=opened&per_page=100&page=${page}`]));
     } catch (e) {
       fail(`the tracker could not be read: ${e.message}`);
     }
     if (!Array.isArray(batch)) fail('the tracker answered with something that is not an issue list');
     issues.push(...batch);
-    if (batch.length < 100) break;
+    if (batch.length < 100) {
+      capped = false;
+      break;
+    }
+  }
+  if (capped) {
+    // The cap ended the read, not a short batch: issues past page 20 are
+    // invisible to the dedupe, and a failure on one of them gets a SECOND
+    // issue — the flood this path exists to prevent. Warn and include what
+    // was read; the run stays loud about the degraded dedupe.
+    console.warn(
+      'file-failure-issues: the open-issue list hit the 20-page cap (2000 issues) — issues past it ' +
+        'are invisible to the dedupe and a failure on an already-tracked file can be filed a second ' +
+        'time. Close or mark stale issues, or raise the cap.'
+    );
   }
   return issues;
 }
@@ -351,11 +375,11 @@ function e2eOwnSpecNames(root = REPO_ROOT) {
     const out = execFileSync(
       'git',
       ['-C', root, 'log', '--format=', '--name-only', '--', TESTS_E2E_ROOT],
-      // stderr is swallowed: the catch below already defines what a git
-      // failure means here (no past names), and an inherited stderr would
-      // print raw `fatal:` lines into the run output a human scans for
-      // red — on every synthetic-root case of the unit spec.
-      { encoding: 'utf-8', maxBuffer: 32 * 1024 * 1024, timeout: 30000, stdio: ['ignore', 'pipe', 'ignore'] }
+      // stderr is captured, not inherited: the catch below reads it to tell
+      // the two failure arms apart, and an inherited stderr would print raw
+      // `fatal:` lines into the run output a human scans for red — on every
+      // synthetic-root case of the unit spec.
+      { encoding: 'utf-8', maxBuffer: 32 * 1024 * 1024, timeout: 30000, stdio: ['ignore', 'pipe', 'pipe'] }
     );
     // A shallow checkout truncates "had": a renamed spec whose rename
     // commit is missing from the truncated history stops being
@@ -367,7 +391,7 @@ function e2eOwnSpecNames(root = REPO_ROOT) {
       shallow = execFileSync('git', ['-C', root, 'rev-parse', '--is-shallow-repository'], {
         encoding: 'utf-8',
         timeout: 10000,
-        stdio: ['ignore', 'pipe', 'ignore'],
+        stdio: ['ignore', 'pipe', 'ignore']
       });
     } catch {
       shallow = '';
@@ -381,8 +405,23 @@ function e2eOwnSpecNames(root = REPO_ROOT) {
       const name = line.trim().split('/').pop();
       if (name && SPEC_FILE_RE.test(name)) names.add(name);
     }
-  } catch {
-    // No git behind this root — no past names to add.
+  } catch (e) {
+    // Two arms, told apart by what git itself said:
+    // - a root with NO git behind it (the unit spec's synthetic checkouts)
+    //   has no past names — that is the definition of "had" there, not a
+    //   swallowed failure, and it stays silent;
+    // - a root whose git call FAILED (an absent binary, a timeout, a
+    //   permissions error) silently empties its "had" set, so it is named:
+    //   a spec renamed in the unread history can then be misjudged as
+    //   another file's dedication, filing a second issue for a file that
+    //   already has one. The read above still contributes what it read.
+    const stderr = String(e.stderr || '').trim();
+    if (!/not a git repository/i.test(stderr)) {
+      console.warn(
+        `file-failure-issues: the git history of ${root} could not be read — a spec renamed or deleted ` +
+          `in the unread history is no longer recognised by the dedupe (${firstErrorReason(e)})`
+      );
+    }
   }
   e2eSpecNamesByRoot.set(root, names);
   return names;
@@ -521,7 +560,7 @@ function issueBody(file, failures, venue, runStamp) {
     ...(process.env[VENUE_IP_ENV]
       ? [
           `- the runner resolved the venue name to ` +
-            `\`${process.env[VENUE_HOST_ENV] || '(the BASE_URL host)'}\` = \`${process.env[VENUE_IP_ENV]}\``,
+            `\`${process.env[VENUE_HOST_ENV] || '(the BASE_URL host)'}\` = \`${process.env[VENUE_IP_ENV]}\``
         ]
       : []),
     `- run: ${runStamp}`,
@@ -530,14 +569,9 @@ function issueBody(file, failures, venue, runStamp) {
     '',
     '## Failures',
     '',
-    ...failures.slice(0, MAX_FAILURES_PER_ISSUE).flatMap((failure) => [
-      `### ${failure.title}`,
-      '',
-      '```',
-      failure.error,
-      '```',
-      '',
-    ]),
+    ...failures
+      .slice(0, MAX_FAILURES_PER_ISSUE)
+      .flatMap((failure) => [`### ${failure.title}`, '', '```', failure.error, '```', '']),
     ...(failures.length > MAX_FAILURES_PER_ISSUE
       ? [`(${failures.length - MAX_FAILURES_PER_ISSUE} more failures omitted.)`, '']
       : []),
@@ -548,7 +582,7 @@ function issueBody(file, failures, venue, runStamp) {
     '```',
     '',
     'The failure output is in this issue; the run also writes a JSON and a JUnit report',
-    'under `reports/` on the machine that ran it.',
+    'under `reports/` on the machine that ran it.'
   ].join('\n');
 }
 
@@ -573,18 +607,19 @@ function commentBody(files, venue, runStamp) {
         ...taken.flatMap((failure) => [`**${failure.title}**`, '```', failure.error, '```', '']),
         ...(entry.failures.length > taken.length
           ? [`(${entry.failures.length - taken.length} more failures omitted.)`, '']
-          : []),
+          : [])
       ];
-    }),
+    })
   ].join('\n');
 }
 
 /**
- * Why the tracker refused. The tracker's own message is the first line of
- * the glab process's stderr; the command that failed is in the error's
- * message and is not useful to a reader.
+ * Why a child-process call failed, in one line. The tool's own message is
+ * the first non-empty line of its stderr (glab's refusal, git's failure);
+ * the command that failed is in the error's message and is not useful to a
+ * reader. Shared by the tracker calls and the git-history read.
  */
-function trackerReason(error) {
+function firstErrorReason(error) {
   const stderr = (error.stderr || '').trim();
   const firstStderrLine = stderr.split('\n').find((line) => line.trim().length > 0);
   if (firstStderrLine) return firstStderrLine.trim();
@@ -603,7 +638,7 @@ function createIssue(file, failures, venue, runStamp) {
       '-f',
       `description=${issueBody(file, failures, venue, runStamp)}`,
       '-f',
-      `labels=${LABELS.join(',')}`,
+      `labels=${LABELS.join(',')}`
     ])
   );
   process.stdout.write(`  #${created.iid} (created) ${title}\n`);
@@ -616,9 +651,61 @@ function commentOnIssue(issue, files, venue, runStamp) {
     'POST',
     `projects/${GITLAB_PROJECT_ID}/issues/${issue.iid}/notes`,
     '-f',
-    `body=${commentBody(files, venue, runStamp)}`,
+    `body=${commentBody(files, venue, runStamp)}`
   ]);
   process.stdout.write(`  #${issue.iid} (commented) ${issue.title}\n`);
+}
+
+/**
+ * File the failing files against the tracker — the loop whose loudness the
+ * run depends on.
+ *
+ * The contract: one tracker error never takes the filing down. A file whose
+ * create fails is reported and the remaining files are still attempted; an
+ * issue whose comment fails puts every file it covers into the errors; the
+ * errors come back so the caller can refuse the exit code. A swallow here
+ * would leave a red run that the tracker never hears about — the silence
+ * this path exists to end.
+ *
+ * `clients` injects the tracker calls (the same dependency-injection shape
+ * as the backend's createApp pattern: production passes nothing and gets
+ * the real glab clients; the unit spec passes fakes to pin the contract).
+ */
+function fileTrackedFailures(byFile, openIssues, venue, runStamp, clients = {}) {
+  const create = clients.createIssue || createIssue;
+  const comment = clients.commentOnIssue || commentOnIssue;
+  // The failing files are grouped by the issue that already tracks them, so
+  // one umbrella issue receives ONE comment for the whole run — not one per
+  // file. A file nobody tracks yet gets its own issue.
+  const byIssue = new Map();
+  const errors = [];
+  for (const [file, failures] of byFile) {
+    const tracked = findTrackedIssue(file, openIssues);
+    try {
+      if (!tracked) {
+        create(file, failures, venue, runStamp);
+        continue;
+      }
+      const entry = byIssue.get(tracked.iid) || { issue: tracked, files: [] };
+      entry.files.push({ file, failures });
+      byIssue.set(tracked.iid, entry);
+    } catch (e) {
+      // One tracker error must not swallow the remaining failures.
+      errors.push(`${file}: ${firstErrorReason(e)}`);
+      process.stdout.write(`  ! ${file} could not be filed: ${firstErrorReason(e)}\n`);
+    }
+  }
+  for (const { issue, files } of byIssue.values()) {
+    try {
+      comment(issue, files, venue, runStamp);
+    } catch (e) {
+      for (const entry of files) {
+        errors.push(`${entry.file}: ${firstErrorReason(e)}`);
+      }
+      process.stdout.write(`  ! #${issue.iid} could not be commented: ${firstErrorReason(e)}\n`);
+    }
+  }
+  return errors;
 }
 
 function main() {
@@ -641,7 +728,9 @@ function main() {
   // file issues naming https://localhost with a reproduce command that
   // reproduces nothing.
   const venue = venueValue || BASE_URL;
-  const runStamp = report.stats && report.stats.startTime ? report.stats.startTime : new Date().toISOString();
+  // Validated by readReport: the stamp is the run's own start, never this
+  // filing's wall clock.
+  const runStamp = report.stats.startTime;
 
   const tests = collectTests(report.suites);
   // A run that executed NOTHING is not a green run — it is a run that did
@@ -658,7 +747,7 @@ function main() {
   const skipped = tests.filter((entry) => entry.test.status === 'skipped');
   const failed = tests.filter((entry) => entry.test.status === 'unexpected');
 
-  const stats = report.stats || {};
+  const stats = report.stats;
   process.stdout.write(`\ne2e run: ${venue} (${runStamp})\n`);
   process.stdout.write(
     `tests: ${tests.length}  passed: ${stats.expected || 0}  failed: ${failed.length}  ` +
@@ -692,7 +781,7 @@ function main() {
   try {
     execFileSync('node', [path.join(__dirname, 'preflight.js')], {
       stdio: 'inherit',
-      env: { ...process.env, BASE_URL: venue },
+      env: { ...process.env, BASE_URL: venue }
     });
   } catch {
     process.stderr.write(
@@ -730,38 +819,8 @@ function main() {
   }
 
   process.stdout.write('\nfiled:\n');
-  // The failing files are grouped by the issue that already tracks them, so
-  // one umbrella issue receives ONE comment for the whole run — not one per
-  // file. A file nobody tracks yet gets its own issue.
   const openIssues = fetchOpenIssues();
-  const byIssue = new Map();
-  const errors = [];
-  for (const [file, failures] of byFile) {
-    const tracked = findTrackedIssue(file, openIssues);
-    try {
-      if (!tracked) {
-        createIssue(file, failures, venue, runStamp);
-        continue;
-      }
-      const entry = byIssue.get(tracked.iid) || { issue: tracked, files: [] };
-      entry.files.push({ file, failures });
-      byIssue.set(tracked.iid, entry);
-    } catch (e) {
-      // One tracker error must not swallow the remaining failures.
-      errors.push(`${file}: ${trackerReason(e)}`);
-      process.stdout.write(`  ! ${file} could not be filed: ${trackerReason(e)}\n`);
-    }
-  }
-  for (const { issue, files } of byIssue.values()) {
-    try {
-      commentOnIssue(issue, files, venue, runStamp);
-    } catch (e) {
-      for (const entry of files) {
-        errors.push(`${entry.file}: ${trackerReason(e)}`);
-      }
-      process.stdout.write(`  ! #${issue.iid} could not be commented: ${trackerReason(e)}\n`);
-    }
-  }
+  const errors = fileTrackedFailures(byFile, openIssues, venue, runStamp);
 
   if (errors.length > 0) {
     process.stderr.write(
@@ -778,17 +837,18 @@ if (require.main === module) {
   main();
 }
 
-// Exposed for the unit spec: the dedupe rule, the refusal wording and
-// the venue-outage partition are behaviour, and behaviour is tested,
-// not trusted.
+// Exposed for the unit spec: the dedupe rule, the refusal wording, the
+// venue-outage partition and the filing loop's loudness contract are
+// behaviour, and behaviour is tested, not trusted.
 module.exports = {
   findTrackedIssue,
   specPathsIn,
   titleIsDedicatedTo,
-  trackerReason,
+  firstErrorReason,
   groupFailuresByFile,
   issueBody,
   isConnectionSignature,
   partitionVenueNoise,
   venueAvailabilityReport,
+  fileTrackedFailures
 };

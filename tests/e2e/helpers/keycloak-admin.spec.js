@@ -1612,6 +1612,50 @@ test.describe('disableDirectAccessGrants — the verified ROPC revert (#1879)', 
     expect(caught.message).toMatch(/ROPC NOT reverted on genie-app in realm genie2/);
     expect(caught.message).toMatch(/directAccessGrantsEnabled=true/);
   });
+
+  test('a read-back whose representation omits the grant reports the observed value, not an assumed one', async () => {
+    // The probe fires on any value other than the expected side — including
+    // an absent field — and the verdict interpolates what the read-back
+    // actually answered. An arm reading back the literal `true` cannot tell
+    // the interpolated message from the old hardcoded one; a missing field
+    // can: the verdict has to say `undefined`, the exact observation.
+    routes = [
+      ['GET', CLIENTS_PATH, { status: 200, data: [{ id: 'client-1' }] }],
+      ['PUT', CLIENT_UPDATE_PATH, { status: 204, data: null }]
+    ];
+
+    const caught = await rejection(disableDirectAccessGrants('tok', 'genie2', 'genie-app'));
+
+    expect(caught.message).toMatch(/directAccessGrantsEnabled=undefined/);
+  });
+
+  test('a client that vanishes between the PUT and the read-back holds the revert by absence', async () => {
+    // The revert's documented asymmetry (#1879): absence verifies the
+    // posture — nothing leaks a grant — so the vanish resolves instead of
+    // failing. Pins the contract against a future "symmetrize" edit; the
+    // enable direction's opposite contract is pinned in its own describe.
+    routes = [
+      [
+        'GET',
+        CLIENTS_PATH,
+        {
+          compute: (log) =>
+            log.some((entry) => entry.startsWith('PUT'))
+              ? { status: 200, data: [] }
+              : { status: 200, data: [{ id: 'client-1', directAccessGrantsEnabled: true }] }
+        }
+      ],
+      ['PUT', CLIENT_UPDATE_PATH, { status: 204, data: null }]
+    ];
+
+    await disableDirectAccessGrants('tok', 'genie2', 'genie-app');
+
+    expect(calls).toEqual([
+      `GET /auth/admin/realms/genie2/clients?clientId=genie-app`,
+      `PUT /auth/admin/realms/genie2/clients/client-1`,
+      `GET /auth/admin/realms/genie2/clients?clientId=genie-app`
+    ]);
+  });
 });
 
 test.describe('the client helpers behind the K.2 expiry client', () => {

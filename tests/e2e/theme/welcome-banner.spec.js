@@ -307,9 +307,8 @@ async function assertAdoptedLocale(page, where, locale) {
   const adopted = await page.evaluate(() => document.documentElement.lang);
   expect(
     adopted,
-    `${where} the app did not adopt the seeded locale '${locale}' — ` +
-      `<html lang> reads '${adopted}', so every measurement in this session ` +
-      `is the fallback's, not '${locale}'s, and passes vacuously`
+    `${where}: <html lang> reads '${adopted}', not the seeded '${locale}' — ` +
+      `every measurement in this session is the fallback's and passes vacuously`
   ).toBe(locale);
 }
 

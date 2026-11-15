@@ -1464,7 +1464,7 @@ test.describe('enableDirectAccessGrants reads the client list like every other r
 
     const caught = await rejection(enableDirectAccessGrants('tok', 'genie2', 'genie-app'));
 
-    expect(caught.message).toMatch(/Failed to enable direct access grants on genie-app: HTTP 403/);
+    expect(caught.message).toMatch(/Failed to enable direct access grants on genie-app in realm genie2: HTTP 403/);
     expect(caught.message).toContain('forbidden');
     // failWithStatus classifies the status and carries it: a 4xx is
     // permanent (the caller cannot retry its way out), and the classification
@@ -1608,7 +1608,7 @@ test.describe('disableDirectAccessGrants — the verified ROPC revert (#1879)', 
 
     const caught = await rejection(disableDirectAccessGrants('tok', 'genie2', 'genie-app'));
 
-    expect(caught.message).toMatch(/Failed to disable direct access grants on genie-app: HTTP 409/);
+    expect(caught.message).toMatch(/Failed to disable direct access grants on genie-app in realm genie2: HTTP 409/);
     expect(caught.message).toContain('conflict');
     // Same classification pin as the enable arm: 4xx is permanent.
     expect(caught.httpStatus).toBe(409);

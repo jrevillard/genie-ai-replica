@@ -157,19 +157,20 @@ async function openWelcomeScreen(browser, { viewport, theme, locale, setupPage, 
     await waitForBannerEntrance(page);
     return { ctx, page };
   } catch (e) {
-    // Loud cleanup, same contract as the call-site finally — with the
-    // cause kept: the close's own failure, if any, travels WITH the open
-    // error that caused the unwind, never instead of it (a close that
-    // erased the login failure would leave the runner diagnosing the
-    // teardown instead of the cause).
+    // Loud cleanup, same verdict rule as the body path in
+    // withWelcomeSession — with the cause kept: the close's own failure,
+    // if any, travels WITH the open error that caused the unwind, never
+    // instead of it (a close that erased the login failure would leave
+    // the runner diagnosing the teardown instead of the cause).
     try {
       await ctx.close();
     } catch (closeFailure) {
-      throw new Error(
-        `closing the welcome session's context failed too: ${closeFailure.message} — ` +
-          `the open failure that caused the unwind: ${e.message}`,
-        { cause: closeFailure }
-      );
+      // The OPEN error is the verdict — it keeps its type, stack and any
+      // verdict flags (.transient, .httpStatus) it carried; the teardown
+      // failure joins the message, it does not replace the failure that
+      // caused the unwind.
+      e.message = `${e.message} — additionally, closing the session's context failed: ${closeFailure.message}`;
+      throw e;
     }
     throw e;
   }
@@ -183,9 +184,10 @@ async function openWelcomeScreen(browser, { viewport, theme, locale, setupPage, 
  * against — close skipped when an assert throws mid-body — is one
  * forgotten wrapper away every time a loop copies the shape by hand. The
  * helper makes the guarantee unforgetable: the session is closed in this
- * function's own finally, whatever `fn` throws, and the cleanup stays
- * loud — a close that itself fails surfaces that failure (superseding a
- * body error, exactly as the inline shape always did), never a swallow.
+ * function's own control flow, whatever `fn` throws, and the cleanup
+ * stays loud without stealing the verdict — a close that itself fails
+ * joins the body error's message (which keeps its type, stack and verdict
+ * flags), it never replaces the failure that caused the unwind.
  *
  *   await withWelcomeSession(browser, { theme: 'dark' }, async (page) => {
  *     // assertions against the settled welcome screen
@@ -194,7 +196,7 @@ async function openWelcomeScreen(browser, { viewport, theme, locale, setupPage, 
  * `fn` receives the session's page and its resolution is passed through,
  * so a spec can return a measured value from the session. The context
  * itself stays private to the helper — the close is the helper's own
- * guarantee, and a caller that could reach ctx could fight the finally.
+ * guarantee, and a caller that could reach ctx could fight the cleanup.
  * @param {import('@playwright/test').Browser} browser
  * @param {Parameters<openWelcomeScreen>[1]} opts - Forwarded to
  *   openWelcomeScreen verbatim
@@ -204,9 +206,19 @@ async function openWelcomeScreen(browser, { viewport, theme, locale, setupPage, 
 async function withWelcomeSession(browser, opts, fn) {
   const { ctx, page } = await openWelcomeScreen(browser, opts);
   try {
-    return await fn(page);
-  } finally {
+    const result = await fn(page);
     await ctx.close();
+    return result;
+  } catch (bodyError) {
+    try {
+      await ctx.close();
+    } catch (closeFailure) {
+      // Same verdict rule as the open path: the BODY error is what the
+      // runner needs to see; the teardown failure joins its message.
+      bodyError.message = `${bodyError.message} — additionally, closing the session's context failed: ${closeFailure.message}`;
+      throw bodyError;
+    }
+    throw bodyError;
   }
 }
 

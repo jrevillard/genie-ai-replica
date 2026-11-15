@@ -1076,8 +1076,8 @@ async function deleteClient(adminToken, realm, clientUuid, clientId) {
 const ROPC_FLIP = {
   enable: {
     what: (clientId, realm) => `the ROPC enablement of ${clientId} in realm ${realm}`,
-    refused: (clientId, res) =>
-      `Failed to enable direct access grants on ${clientId}: HTTP ${res.status} ${bodyText(res)}`,
+    refused: (clientId, realm, res) =>
+      `Failed to enable direct access grants on ${clientId} in realm ${realm}: HTTP ${res.status} ${bodyText(res)}`,
     probeMiss: (clientId, realm, observed) =>
       `ROPC enablement did not land on ${clientId} in realm ${realm} — the PUT answered 204 but the ` +
       `client still reads back directAccessGrantsEnabled=${observed}, not the expected true. Fix the ` +
@@ -1090,8 +1090,8 @@ const ROPC_FLIP = {
   },
   disable: {
     what: (clientId, realm) => `the ROPC revert of ${clientId} in realm ${realm}`,
-    refused: (clientId, res) =>
-      `Failed to disable direct access grants on ${clientId}: HTTP ${res.status} ${bodyText(res)}`,
+    refused: (clientId, realm, res) =>
+      `Failed to disable direct access grants on ${clientId} in realm ${realm}: HTTP ${res.status} ${bodyText(res)}`,
     probeMiss: (clientId, realm, observed) =>
       `ROPC NOT reverted on ${clientId} in realm ${realm} — the PUT answered 204 but the client ` +
       `still reads back directAccessGrantsEnabled=${observed}, not the expected false. Fix the revert ` +
@@ -1149,7 +1149,7 @@ async function flipDirectAccessGrants(adminToken, realm, clientId, verb) {
   );
 
   if (res.status !== 204) {
-    failWithStatus(wording.refused(clientId, res), res.status);
+    failWithStatus(wording.refused(clientId, realm, res), res.status);
   }
 
   // The loud probe: a 204 proves nothing on its own — the venue is only

@@ -25,6 +25,17 @@ const {
 
 const API_TIMEOUT_MS = 30000;
 
+/**
+ * The list endpoint's ONE wire shape, read once: { conversations: [...] }.
+ * A response without the array is a changed contract, named as such —
+ * reading it as empty would turn a shape change into a silent no-find.
+ */
+function conversationListFrom(parsedBody) {
+  const conversations = parsedBody?.conversations;
+  expect(Array.isArray(conversations), 'the list wire shape is { conversations: [...] }').toBe(true);
+  return conversations;
+}
+
 // The page size the cleanup sweep lists the conversation population with.
 // The endpoint accepts up to 100, and the sweep enumerates two pages — a
 // window of 200 conversations. The delete budget is a separate cap
@@ -278,8 +289,7 @@ test.describe('Conversation history persistence', () => {
 
     expect(conversationsResponse.status).toBe(200);
 
-    const conversations = JSON.parse(conversationsResponse.body).conversations;
-    expect(Array.isArray(conversations), 'the list wire shape is { conversations: [...] }').toBe(true);
+    const conversations = conversationListFrom(JSON.parse(conversationsResponse.body));
 
     // Find our saved conversation
     const saved = conversations.find((c) => c.title === chatTitle || c.title?.includes(chatTitle));
@@ -341,8 +351,7 @@ test.describe('Conversation history persistence', () => {
 
     expect(response.status).toBe(200);
 
-    const conversations = JSON.parse(response.body).conversations;
-    expect(Array.isArray(conversations), 'the list wire shape is { conversations: [...] }').toBe(true);
+    expect(conversationListFrom(JSON.parse(response.body)).length).toBeGreaterThanOrEqual(0);
   });
 
   test('messages are restored in correct order when loading a saved conversation', async () => {
@@ -370,7 +379,7 @@ test.describe('Conversation history persistence', () => {
       { baseUrl: BASE_URL, token, timeout: API_TIMEOUT_MS }
     );
 
-    const conversations = convResponse.conversations;
+    const conversations = conversationListFrom(convResponse);
     const savedConv = conversations.find((c) => c.title === chatTitle || c.title?.includes(chatTitle));
     expect(savedConv).toBeTruthy();
 

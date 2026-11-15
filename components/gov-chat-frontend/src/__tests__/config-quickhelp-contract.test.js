@@ -118,7 +118,10 @@ describe('Quick Help button contract across every shipped configuration', () => 
   // placement on just-chat: a composer-placed entry has no mobile grid
   // surface, so the mobile Just Chat entry stays a tile.)
   it('web: the just-chat entry is the composer, and the schema declares the placement enum', () => {
-    const source = SOURCES[0];
+    // By LABEL, not by index: a source inserted at 0 or a reorder must
+    // not silently walk the wrong platform's files.
+    const source = SOURCES.find((s) => s.label.startsWith('web'));
+    expect(source).toBeTruthy();
 
     // One assertion per clause across the whole source, with the
     // offending file named in the collected values: the web composer is

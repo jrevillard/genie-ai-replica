@@ -46,10 +46,11 @@ function sseBody(chunks, metadata) {
 /**
  * The SSE envelope every mocked stream answer shares: 200, the event
  * stream content type, the CORS header. `mockChatStream`, the
- * held-release test in chatbot/chat-conversation.spec.js and the query watcher
- * in chatbot/quick-help-scope.spec.js hand the same envelope different
- * bodies; stating it once is what keeps a wire-contract change a
- * one-file edit.
+ * held-release tests in chatbot/chat-conversation.spec.js and the
+ * capture helper (helpers/stream-capture.js, which the query watcher in
+ * chatbot/quick-help-scope.spec.js composes) hand the same envelope
+ * different bodies; stating it once is what keeps a wire-contract change
+ * a one-file edit.
  */
 function sseFulfill(route, body) {
   return route.fulfill({ status: 200, contentType: 'text/event-stream', headers: CORS_HEADERS, body });

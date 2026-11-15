@@ -32,14 +32,24 @@ const { runRouteHandler } = require('./route');
  * locale map; every other override lands on the card verbatim.
  */
 function quickHelpButton(overrides = {}) {
-  const { title, icon, ...rest } = overrides;
+  const { id, title, icon, ...rest } = overrides;
+  // [id] is the one schema-required field with no derivable default —
+  // each fixture names its own so a leaked deployment card can never be
+  // mistaken for a spec's. A missing or non-string id would ride the
+  // card verbatim and the app would refuse the whole served document at
+  // boot (the config-error screen): fail HERE, at the factory.
+  if (typeof id !== 'string' || !id.trim()) {
+    throw new TypeError(
+      `quickHelpButton: id must be a non-blank string (got ${id === undefined ? 'undefined' : JSON.stringify(id)})`
+    );
+  }
   const titleMap = title === undefined ? { en: 'Just Chat' } : typeof title === 'string' ? { en: title } : title;
-  const titleIsString = typeof titleMap === 'string';
   const titleIsMap = titleMap !== null && typeof titleMap === 'object' && !Array.isArray(titleMap);
-  if (!titleIsString && !titleIsMap) {
+  if (!titleIsMap) {
     // A malformed title lands on the card verbatim and the app refuses
     // the whole served document at boot — a six-spec blast radius with
-    // the failure far from the fixture. Fail HERE, at the factory.
+    // the failure far from the fixture. Fail HERE, at the factory. (A
+    // string title never reaches this guard: it was wrapped above.)
     const got = titleMap === null ? 'null' : Array.isArray(titleMap) ? 'array' : typeof titleMap;
     throw new TypeError(`quickHelpButton: title must be a string or a locale map (got ${got})`);
   }
@@ -63,7 +73,7 @@ function quickHelpButton(overrides = {}) {
     );
   }
   return {
-    id: undefined,
+    id,
     title: titleMap,
     icon: iconMap,
     category: null,

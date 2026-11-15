@@ -2,6 +2,8 @@ const { test, expect } = require('@playwright/test');
 const { BASE_URL } = require('../helpers/base-url');
 const { getAdminToken } = require('../helpers/auth');
 const { hasIdentityProvider, missingIdentityProviderReason, skipUnlessVenue } = require('../helpers/venue-profile');
+const { NAV_LOGOUT_BUTTON } = require('../helpers/navbar');
+const { KEYCLOAK_AUTH_ENDPOINT_GLOB } = require('../helpers/keycloak-landing');
 
 const REALM = process.env.KEYCLOAK_REALM || 'genie';
 
@@ -14,32 +16,26 @@ const REALM = process.env.KEYCLOAK_REALM || 'genie';
 // Source: e2e-test-plan-external-idp.md Phase D, Step 7b
 
 /**
- * Performs the full External IdP broker login: navigate to app, click IdP link,
- * login at external IdP (if login page is shown), and wait for the broker
- * redirect chain to settle.
+ * Performs the full External IdP broker login: navigate to app, click IdP
+ * link, login at the external IdP (the fixed first landing), and submit.
  */
 async function brokerLogin(page) {
   await page.goto(`${BASE_URL}/`, { waitUntil: 'networkidle', timeout: 30000 });
-  await page.waitForURL('**/protocol/openid-connect/auth**', { timeout: 15000 });
+  await page.waitForURL(KEYCLOAK_AUTH_ENDPOINT_GLOB, { timeout: 15000 });
   await page.locator('#social-external-idp').click({ timeout: 10000 });
 
-  // Wait for the redirect chain to reach a known landing state
-  // (external-idp login, or the broker exchange landing on callback/dashboard)
-  await page.waitForURL(
-    (url) => {
-      const urlStr = url.toString();
-      return urlStr.includes('realms/external-idp') || urlStr.includes('/callback') || urlStr.includes('/dashboard');
-    },
-    { timeout: 30000 }
-  );
-
-  // If we landed on the external-idp login page, fill credentials and submit
-  const currentUrl = page.url();
-  if (currentUrl.includes('realms/external-idp')) {
-    await page.fill('#username', 'external-test-user');
-    await page.fill('#password', 'External123!');
-    await page.click('#kc-login');
-  }
+  // The broker redirect has ONE expected first landing: the external-idp
+  // realm's own login page (the venue profile above guarantees the broker
+  // exists; the fresh context carries no IdP session). Wait for that exact
+  // landing, then always fill credentials — no conditional branch on which
+  // state the browser happens to be observed in (tests/e2e/CLAUDE.md: no
+  // fallback branches).
+  await page.waitForURL((url) => url.toString().includes('realms/external-idp'), {
+    timeout: 30000,
+  });
+  await page.fill('#username', 'external-test-user');
+  await page.fill('#password', 'External123!');
+  await page.click('#kc-login');
 }
 
 // The venue profile decides: the brokered login is an external-IdP
@@ -180,41 +176,34 @@ test('completes full external IdP brokered login flow', async ({ browser }) => {
       // Step 2: Perform broker login (no VERIFY_EMAIL will be triggered)
       await brokerLogin(page);
 
-      // Step 3: Wait for the full broker redirect chain to complete
-      // The flow is: external-idp -> broker exchange -> genie realm callback -> app dashboard
-      await page.waitForURL(
-        (url) => {
-          const urlStr = url.toString();
-          return urlStr.includes('/callback') || urlStr.includes('/dashboard');
-        },
-        { timeout: 30000 }
-      );
-
-      // If we landed on /callback, wait for the Vue app to process the auth code
-      // and redirect to the dashboard (the handleCallback action does the code exchange)
-      if (page.url().includes('/callback')) {
-        await page.waitForURL((url) => !url.toString().includes('/callback'), { timeout: 30000 });
-      }
-
-      // Step 4: Verify we are back on the app as an authenticated user
-      const finalUrl = page.url();
-      expect(
-        finalUrl.includes('dashboard'),
-        `Expected final URL to contain 'dashboard', got: ${finalUrl}. External IdP broker flow failed.`
-      ).toBeTruthy();
-
-      // Step 5: Verify the token was issued by the genie realm (not the external IdP realm)
-      const bodyText = await page.evaluate(() => document.body.innerText.substring(0, 200));
-      expect(
-        bodyText.includes('GENIE.AI'),
-        `Expected page body to contain 'GENIE.AI'. External IdP broker flow failed. Got: ${bodyText}`
-      ).toBeTruthy();
-
-      // Step 6: Verify authenticated state — login button should not be visible
-      const loginButton = page.locator('#kc-login');
-      await expect(loginButton, 'Login button should not be visible after successful authentication').not.toBeVisible({
-        timeout: 15000
+      // Step 3: The broker exchange is a fixed chain with two hops: the
+      // external realm sends the browser back to the genie realm's broker
+      // endpoint (/auth/realms/genie/broker/external-idp/endpoint), which
+      // issues the genie realm's own OIDC redirect to the app's /callback
+      // route (the oidc client's redirect_uri), and the app processes the
+      // code there (handleCallback) before routing onward. Wait for the
+      // callback hop, then for the exact landing — never branch on which
+      // hop the browser happens to be observed at (tests/e2e/CLAUDE.md:
+      // no fallback branches).
+      await page.waitForURL((url) => url.toString().includes('/callback'), {
+        timeout: 30000
       });
+
+      // Step 4: The chain lands on the dashboard, exactly: CallbackView
+      // replaces to the returnUrl the login carried ('/dashboard' — this
+      // flow entered at '/'). One expected landing, asserted exactly; a
+      // partial broker flow that parks the browser anywhere else — on the
+      // callback included — fails here.
+      await page.waitForURL(`${BASE_URL}/dashboard`, { timeout: 30000 });
+
+      // Step 5: Authenticated-shell proof: the logout button renders only
+      // inside App.vue's authenticated gate — see the note beside
+      // NAV_LOGOUT_BUTTON in helpers/navbar.js.
+      const logoutButton = page.locator(NAV_LOGOUT_BUTTON);
+      await expect(
+        logoutButton,
+        'Expected the authenticated shell (logout button visible) after the brokered login'
+      ).toBeVisible({ timeout: 15000 });
     } finally {
       // Step 7: Converge VERIFY_EMAIL back to the pre-test state this spec
       // read. Only a disable THIS test performed is owed a restore: an

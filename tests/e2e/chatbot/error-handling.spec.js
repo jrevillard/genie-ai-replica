@@ -8,7 +8,7 @@ const {
   mockChatStream,
   mockStreamError,
   NAV_STATUS,
-  STREAM_ROUTE,
+  STREAM_ROUTE
 } = require('../helpers/chatbot');
 
 // The answer the mocked retry serves — the same string the assertion
@@ -81,7 +81,7 @@ test.describe('RAG error handling', () => {
   test.beforeEach(async ({ browser }) => {
     context = await browser.newContext({
       ignoreHTTPSErrors: true,
-      bypassCSP: true,
+      bypassCSP: true
     });
     page = await context.newPage();
 

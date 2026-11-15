@@ -5,9 +5,15 @@ const {
   getSessionTokenViaUI,
   request: authRequest,
   parseJwtClaims,
-  SESSION_MINT_TIMEOUT_MS,
+  SESSION_MINT_TIMEOUT_MS
 } = require('../helpers/auth');
-const { createUser, deleteUser, enableDirectAccessGrants, disableDirectAccessGrants, findClient } = require('../helpers/keycloak-admin');
+const {
+  createUser,
+  deleteUser,
+  enableDirectAccessGrants,
+  disableDirectAccessGrants,
+  findClient
+} = require('../helpers/keycloak-admin');
 const { realmExists, missingRealmReason, skipUnlessVenue } = require('../helpers/venue-profile');
 
 /**
@@ -98,7 +104,7 @@ test.describe.serial('Phase I: Multi-Realm Configuration', () => {
     const searchRes = await authRequest(
       'GET',
       `/auth/admin/realms/${TEST_REALM}/users?username=${TEST_USER.username}`,
-      { headers: { Authorization: `Bearer ${token}` } },
+      { headers: { Authorization: `Bearer ${token}` } }
     );
     if (searchRes.data && searchRes.data.length > 0) {
       await deleteUser(token, TEST_REALM, searchRes.data[0].id);
@@ -115,7 +121,7 @@ test.describe.serial('Phase I: Multi-Realm Configuration', () => {
 
     // Assert: backend accepts the token (proves multi-realm JWKS initialization worked)
     const res = await authRequest('GET', '/api/me', {
-      headers: { Authorization: `Bearer ${genie2Token}` },
+      headers: { Authorization: `Bearer ${genie2Token}` }
     });
     expect(res.status, 'Backend must accept genie2 tokens').toBe(200);
   });
@@ -139,10 +145,10 @@ test.describe.serial('Phase I: Multi-Realm Configuration', () => {
     const genie2Token = await getUserToken(TEST_USER.username, TEST_USER.password, { realm: TEST_REALM });
 
     const res1 = await authRequest('GET', '/api/me', {
-      headers: { Authorization: `Bearer ${genie1Token}` },
+      headers: { Authorization: `Bearer ${genie1Token}` }
     });
     const res2 = await authRequest('GET', '/api/me', {
-      headers: { Authorization: `Bearer ${genie2Token}` },
+      headers: { Authorization: `Bearer ${genie2Token}` }
     });
 
     // Assert: both tokens accepted

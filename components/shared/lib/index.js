@@ -10,6 +10,7 @@ const meltModule = require('./melt'); // MELT hexagonal seam (port + adapters + 
 const spanAttrs = require('./span-attrs'); // OTel span-attribute vocabulary, mirroring the OPEA overlay
 const tracingBaggage = require('./tracing-baggage'); // Propagator factory + baggage scope helper
 const { formatSize, readCollectionUsage } = require('./format-utils'); // human-readable byte formatting + arangojs figures() decode
+const { createClientCredentialsMinter } = require('./client-credentials'); // ONE client_credentials minter (#1168) — cache/single-flight/failover core
 
 module.exports = {
   logger: loggerModule.logger, // Export the Winston logger instance
@@ -25,5 +26,6 @@ module.exports = {
   spanAttrs,
   tracingBaggage,
   formatSize,
-  readCollectionUsage
+  readCollectionUsage,
+  createClientCredentialsMinter
 };

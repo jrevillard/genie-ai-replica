@@ -18,6 +18,10 @@ const { erasureTombstoneKey } = require('../../../shared/lib/erasure-tombstone')
 // formatting and the arangojs figures() decode shared by the admin stats
 // and backup services.
 const { formatSize, readCollectionUsage } = require('../../../shared/lib/format-utils');
+// Re-exported for real (#1168): the client-credentials minter factory is
+// pure — the proxy tests exercise the actual minting core through it while
+// the mock keeps isolating db/logger.
+const { createClientCredentialsMinter } = require('../../../shared/lib/client-credentials');
 
 module.exports = {
   logger: {
@@ -35,6 +39,7 @@ module.exports = {
   erasureTombstoneKey,
   formatSize,
   readCollectionUsage,
+  createClientCredentialsMinter,
   spanAttrs,
   tracingBaggage
 };

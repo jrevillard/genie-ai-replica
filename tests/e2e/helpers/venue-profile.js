@@ -88,15 +88,13 @@ async function okfProfile() {
     );
   }
   if (!config || typeof config !== 'object') {
-    throw new Error(
-      'the venue runtime config leaves no window.APP_CONFIG — the venue profile is UNKNOWN'
-    );
+    throw new Error('the venue runtime config leaves no window.APP_CONFIG — the venue profile is UNKNOWN');
   }
   // Strict equality, exactly like okfFlag.js: only the string '1' enables
   // the Studio; a numeric 1 is a different writer and must not enable it.
   okfCache = {
     enabled: config.okfEnabled === '1',
-    value: config.okfEnabled === undefined ? '' : JSON.stringify(config.okfEnabled),
+    value: config.okfEnabled === undefined ? '' : JSON.stringify(config.okfEnabled)
   };
   return okfCache;
 }
@@ -118,9 +116,7 @@ async function okfEnabled() {
  */
 async function okfParkedReason() {
   const { value } = await okfProfile();
-  const what = value
-    ? `okfEnabled=${value}`
-    : 'the runtime config carries no okfEnabled knob';
+  const what = value ? `okfEnabled=${value}` : 'the runtime config carries no okfEnabled knob';
   return (
     `venue profile: the OKF pillar is parked (${what} in ${BASE_URL}${RUNTIME_CONFIG_PATH}) — ` +
     'this spec drives an OKF surface, which a core-profile deployment does not render, ' +
@@ -136,16 +132,14 @@ async function okfParkedReason() {
 async function realmExists(realm) {
   if (realmCache.has(realm)) return realmCache.get(realm);
   const res = await auth.request('GET', `/auth/admin/realms/${encodeURIComponent(realm)}`, {
-    headers: { Authorization: `Bearer ${await auth.getAdminToken()}` },
+    headers: { Authorization: `Bearer ${await auth.getAdminToken()}` }
   });
   if (res.status === 404) {
     realmCache.set(realm, false);
     return false;
   }
   if (res.status !== 200) {
-    throw new Error(
-      `the venue answered HTTP ${res.status} for realm "${realm}" — the venue profile is UNKNOWN`
-    );
+    throw new Error(`the venue answered HTTP ${res.status} for realm "${realm}" — the venue profile is UNKNOWN`);
   }
   realmCache.set(realm, true);
   return true;
@@ -172,11 +166,9 @@ function missingRealmReason(realm) {
  */
 async function hasIdentityProvider(realm) {
   if (identityProviderCache.has(realm)) return identityProviderCache.get(realm);
-  const res = await auth.request(
-    'GET',
-    `/auth/admin/realms/${encodeURIComponent(realm)}/identity-provider/instances`,
-    { headers: { Authorization: `Bearer ${await auth.getAdminToken()}` } }
-  );
+  const res = await auth.request('GET', `/auth/admin/realms/${encodeURIComponent(realm)}/identity-provider/instances`, {
+    headers: { Authorization: `Bearer ${await auth.getAdminToken()}` }
+  });
   if (res.status !== 200) {
     throw new Error(
       `the venue answered HTTP ${res.status} for the identity providers of realm "${realm}" — ` +
@@ -243,5 +235,5 @@ module.exports = {
   missingRealmReason,
   hasIdentityProvider,
   missingIdentityProviderReason,
-  skipUnlessVenue,
+  skipUnlessVenue
 };

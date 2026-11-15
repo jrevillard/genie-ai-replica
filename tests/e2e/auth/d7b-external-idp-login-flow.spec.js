@@ -31,7 +31,7 @@ async function brokerLogin(page) {
   // state the browser happens to be observed in (tests/e2e/CLAUDE.md: no
   // fallback branches).
   await page.waitForURL((url) => url.toString().includes('realms/external-idp'), {
-    timeout: 30000,
+    timeout: 30000
   });
   await page.fill('#username', 'external-test-user');
   await page.fill('#password', 'External123!');
@@ -155,10 +155,11 @@ test('completes full external IdP brokered login flow', async ({ browser }) => {
     // entered, so the finally only ever runs with the disable either done or
     // not owed — the observed pre-test state itself is the restore's gate.
     if (preTestAction && preTestAction.enabled) {
-      const disableRes = await apiContext.put(
-        requiredActionUrl,
-        { headers: authHeaders, data: { ...preTestAction, enabled: false }, ignoreHTTPSErrors: true }
-      );
+      const disableRes = await apiContext.put(requiredActionUrl, {
+        headers: authHeaders,
+        data: { ...preTestAction, enabled: false },
+        ignoreHTTPSErrors: true
+      });
       if (!disableRes.ok()) {
         const error = new Error(
           `VERIFY_EMAIL disable failed — the required action stays ENABLED and the ` +
@@ -219,15 +220,19 @@ test('completes full external IdP brokered login flow', async ({ browser }) => {
       if (preTestAction && preTestAction.enabled) {
         let restoreStatus = null;
         try {
-          const restoreRes = await apiContext.put(
-            requiredActionUrl,
-            { headers: authHeaders, data: preTestAction, ignoreHTTPSErrors: true }
-          );
+          const restoreRes = await apiContext.put(requiredActionUrl, {
+            headers: authHeaders,
+            data: preTestAction,
+            ignoreHTTPSErrors: true
+          });
           if (!restoreRes.ok()) {
             restoreStatus = `HTTP ${restoreRes.status()}`;
           }
           if (restoreStatus === null) {
-            const verifyRes = await apiContext.get(requiredActionUrl, { headers: authHeaders, ignoreHTTPSErrors: true });
+            const verifyRes = await apiContext.get(requiredActionUrl, {
+              headers: authHeaders,
+              ignoreHTTPSErrors: true
+            });
             const state = verifyRes.ok() ? await verifyRes.json() : null;
             if (!state || state.enabled !== preTestAction.enabled) {
               restoreStatus = `the realm reports ${JSON.stringify(state)} after the restore`;

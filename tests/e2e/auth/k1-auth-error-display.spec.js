@@ -5,7 +5,7 @@ const {
   getSessionTokenViaUI,
   parseJwtClaims,
   request: authRequest,
-  SESSION_MINT_TIMEOUT_MS,
+  SESSION_MINT_TIMEOUT_MS
 } = require('../helpers/auth');
 const {
   createUser,
@@ -164,7 +164,7 @@ test.describe.serial('Phase K: Auth Error Display', () => {
     const modifiedToken = tokenParts.join('.');
 
     const res = await authRequest('GET', '/api/me', {
-      headers: { Authorization: `Bearer ${modifiedToken}` },
+      headers: { Authorization: `Bearer ${modifiedToken}` }
     });
     expect(res.status).toBe(401);
     expect(res.data.error).toBe('TOKEN_INVALID');
@@ -189,7 +189,7 @@ test.describe.serial('Phase K: Auth Error Display', () => {
       standardFlowEnabled: false,
       directAccessGrantsEnabled: false,
       secret: EXPIRY_CLIENT_SECRET,
-      attributes: { 'access.token.lifespan': String(EXPIRY_LIFESPAN_SECONDS) },
+      attributes: { 'access.token.lifespan': String(EXPIRY_LIFESPAN_SECONDS) }
     });
 
     // Mint the short-lived token with client_credentials: the service
@@ -199,9 +199,9 @@ test.describe.serial('Phase K: Auth Error Display', () => {
       body: new URLSearchParams({
         client_id: EXPIRY_CLIENT_ID,
         client_secret: EXPIRY_CLIENT_SECRET,
-        grant_type: 'client_credentials',
+        grant_type: 'client_credentials'
       }).toString(),
-      contentType: 'application/x-www-form-urlencoded',
+      contentType: 'application/x-www-form-urlencoded'
     });
     expect(mintRes.status, `the client_credentials mint failed: ${JSON.stringify(mintRes.data)}`).toBe(200);
     const shortToken = mintRes.data.access_token;
@@ -242,7 +242,7 @@ test.describe.serial('Phase K: Auth Error Display', () => {
     // the expired path answers BEFORE provisioning — the venue keeps no
     // trace of this token.
     const res = await authRequest('GET', '/api/me', {
-      headers: { Authorization: `Bearer ${shortToken}` },
+      headers: { Authorization: `Bearer ${shortToken}` }
     });
     expect(res.status).toBe(401);
     expect(res.data.error).toBe('TOKEN_EXPIRED');
@@ -257,7 +257,7 @@ test.describe.serial('Phase K: Auth Error Display', () => {
       username: NOROLES_USERNAME,
       password: NOROLES_PASSWORD,
       email: 'noroles-e2e@genie.local',
-      realmRoles: [], // No roles
+      realmRoles: [] // No roles
     });
 
     // Get token for no-roles user via a browser login session — the realm
@@ -265,12 +265,12 @@ test.describe.serial('Phase K: Auth Error Display', () => {
     // the admin endpoint below is).
     const noRolesToken = await getSessionTokenViaUI({
       browser,
-      user: { username: NOROLES_USERNAME, password: NOROLES_PASSWORD },
+      user: { username: NOROLES_USERNAME, password: NOROLES_PASSWORD }
     });
 
     // Attempt admin endpoint
     const res = await authRequest('GET', '/api/admin/users', {
-      headers: { Authorization: `Bearer ${noRolesToken}` },
+      headers: { Authorization: `Bearer ${noRolesToken}` }
     });
     expect(res.status).toBe(403);
     expect(res.data.error).toBe('FORBIDDEN');
@@ -280,10 +280,9 @@ test.describe.serial('Phase K: Auth Error Display', () => {
     // NOTE: Keycloak unavailability (docker service scale keycloak=0) is tested
     // via curl in suite-map.md § The acceptance phases, Phase K.4 — cannot be done from Playwright.
     const res = await authRequest('GET', '/api/me', {
-      headers: { Authorization: 'Bearer clearly-invalid-token' },
+      headers: { Authorization: 'Bearer clearly-invalid-token' }
     });
     expect(res.status).toBe(401);
     expect(res.data.error).toBe('TOKEN_INVALID');
   });
-
 });

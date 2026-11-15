@@ -1,5 +1,10 @@
 const { test, expect } = require('@playwright/test');
-const { getAdminToken, getSessionTokenViaUI, request: authRequest, SESSION_MINT_TIMEOUT_MS } = require('../helpers/auth');
+const {
+  getAdminToken,
+  getSessionTokenViaUI,
+  request: authRequest,
+  SESSION_MINT_TIMEOUT_MS
+} = require('../helpers/auth');
 const { rotateRealmKeys } = require('../helpers/keycloak-admin');
 
 const REALM = 'genie';
@@ -7,7 +12,7 @@ const REALM = 'genie';
 // The key providers of the realm, as the components API answers them.
 async function readKeyProviders(adminToken) {
   const res = await authRequest('GET', `/auth/admin/realms/${REALM}/components?type=org.keycloak.keys.KeyProvider`, {
-    headers: { Authorization: `Bearer ${adminToken}` },
+    headers: { Authorization: `Bearer ${adminToken}` }
   });
   expect(res.status).toBe(200);
   return res.data;
@@ -43,7 +48,7 @@ test.describe('Phase H: JWKS Force-Refresh', () => {
 
   test('H.1 — valid token passes with cached JWKS', async () => {
     const res = await authRequest('GET', '/api/me', {
-      headers: { Authorization: `Bearer ${userToken}` },
+      headers: { Authorization: `Bearer ${userToken}` }
     });
     expect(res.status).toBe(200);
   });
@@ -76,7 +81,7 @@ test.describe('Phase H: JWKS Force-Refresh', () => {
   test('H.3 — old token succeeds via force-refresh after key rotation', async () => {
     // Use the SAME token from beforeAll (signed with old key)
     const res = await authRequest('GET', '/api/me', {
-      headers: { Authorization: `Bearer ${userToken}` },
+      headers: { Authorization: `Bearer ${userToken}` }
     });
     // Backend should force-refresh JWKS and validate the token
     expect(res.status).toBe(200);
@@ -85,7 +90,7 @@ test.describe('Phase H: JWKS Force-Refresh', () => {
   test('H.4 — corrupted token is rejected without retry', async () => {
     const corruptedToken = userToken.slice(0, -5) + 'XXXXX';
     const res = await authRequest('GET', '/api/me', {
-      headers: { Authorization: `Bearer ${corruptedToken}` },
+      headers: { Authorization: `Bearer ${corruptedToken}` }
     });
     expect(res.status).toBe(401);
   });

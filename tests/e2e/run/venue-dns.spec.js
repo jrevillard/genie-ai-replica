@@ -65,9 +65,12 @@ function inChild(script, env = {}) {
     // The bound was reached — the child is killed, and the cause is the
     // bound, not the child's own error.
     if (e.code === 'ETIMEDOUT') {
-      throw new Error(`the child did not answer within ${CHILD_BOUND_MS} ms — it is waiting on an answer that never came`, {
-        cause: e
-      });
+      throw new Error(
+        `the child did not answer within ${CHILD_BOUND_MS} ms — it is waiting on an answer that never came`,
+        {
+          cause: e
+        }
+      );
     }
     // A child that DIED (the preload threw at load) keeps its own error:
     // that error is the finding.

@@ -15,7 +15,7 @@ test('clears legacy localStorage items after logout', async ({ browser }) => {
   test.setTimeout(LOGIN_BUDGET_TIMEOUT_MS);
   const context = await browser.newContext({
     ignoreHTTPSErrors: true,
-    bypassCSP: true,
+    bypassCSP: true
   });
   const page = await context.newPage();
 
@@ -35,11 +35,11 @@ test('clears legacy localStorage items after logout', async ({ browser }) => {
 
   await expect(
     userBefore !== null,
-    `Expected 'user' to be set in localStorage before logout, got: ${userBefore}`,
+    `Expected 'user' to be set in localStorage before logout, got: ${userBefore}`
   ).toBeTruthy();
   await expect(
     tokenBefore !== null,
-    `Expected 'auth_token' to be set in localStorage before logout, got: ${tokenBefore}`,
+    `Expected 'auth_token' to be set in localStorage before logout, got: ${tokenBefore}`
   ).toBeTruthy();
 
   // Step 3: Click the logout button
@@ -65,22 +65,22 @@ test('clears legacy localStorage items after logout', async ({ browser }) => {
   const storageAfter = await page.evaluate((origin) => {
     if (location.origin !== origin) {
       throw new Error(
-        `localStorage read lost the auth-redirect race: the page is on ${location.origin}, expected ${origin}`,
+        `localStorage read lost the auth-redirect race: the page is on ${location.origin}, expected ${origin}`
       );
     }
     return {
       user: localStorage.getItem('user'),
-      token: localStorage.getItem('auth_token'),
+      token: localStorage.getItem('auth_token')
     };
   }, BASE_URL);
 
   await expect(
     storageAfter.user === null,
-    `Expected 'user' to be null after logout, got: ${storageAfter.user}`,
+    `Expected 'user' to be null after logout, got: ${storageAfter.user}`
   ).toBeTruthy();
   await expect(
     storageAfter.token === null,
-    `Expected 'auth_token' to be null after logout, got: ${storageAfter.token}`,
+    `Expected 'auth_token' to be null after logout, got: ${storageAfter.token}`
   ).toBeTruthy();
 
   await context.close();

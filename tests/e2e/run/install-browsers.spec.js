@@ -150,8 +150,10 @@ const makeNestedCheckout = () =>
       name: 'playwright-core',
       version: FIXTURE_VERSION
     },
-    'node_modules/@playwright/test/node_modules/playwright/node_modules/playwright-core/browsers.json':
-      browsersJson(FIXTURE_CHROMIUM, FIXTURE_SHELL)
+    'node_modules/@playwright/test/node_modules/playwright/node_modules/playwright-core/browsers.json': browsersJson(
+      FIXTURE_CHROMIUM,
+      FIXTURE_SHELL
+    )
   });
 
 test.afterAll(() => {
@@ -179,10 +181,7 @@ test("the runner's chain is resolved the way the runner resolves it", () => {
     path.join(root, 'node_modules/@playwright/test/node_modules/playwright/package.json')
   );
   expect(resolvePackage('playwright-core', root)).toBe(
-    path.join(
-      root,
-      'node_modules/@playwright/test/node_modules/playwright/node_modules/playwright-core/package.json'
-    )
+    path.join(root, 'node_modules/@playwright/test/node_modules/playwright/node_modules/playwright-core/package.json')
   );
 });
 
@@ -230,7 +229,7 @@ test('the revisions come from the resolved playwright-core browsers.json', () =>
   });
 });
 
-test('a NESTED chain names its own revisions, not the hoisted sibling\'s', () => {
+test("a NESTED chain names its own revisions, not the hoisted sibling's", () => {
   const root = makeNestedCheckout();
   expect(requiredBrowserRevisions(root)).toEqual({
     chromium: FIXTURE_CHROMIUM,
@@ -411,7 +410,10 @@ test('the chain is resolved on the disk, not from a stale resolution cache', () 
   fs.rmSync(path.join(root, 'node_modules/playwright'), { recursive: true, force: true });
   const nested = path.join(root, 'node_modules/@playwright/test/node_modules/playwright');
   fs.mkdirSync(nested, { recursive: true });
-  fs.writeFileSync(path.join(nested, 'package.json'), JSON.stringify({ name: 'playwright', version: '2.0.0-restored' }));
+  fs.writeFileSync(
+    path.join(nested, 'package.json'),
+    JSON.stringify({ name: 'playwright', version: '2.0.0-restored' })
+  );
   expect(resolvePackage('playwright', root)).toBe(path.join(nested, 'package.json'));
 });
 
@@ -424,7 +426,10 @@ test('the walk does not escape ABOVE the checkout', () => {
   const ancestor = path.dirname(root);
   const decoy = path.join(ancestor, 'node_modules/@playwright/test');
   fs.mkdirSync(decoy, { recursive: true });
-  fs.writeFileSync(path.join(decoy, 'package.json'), JSON.stringify({ name: '@playwright/test', version: '9.9.9-ancestor' }));
+  fs.writeFileSync(
+    path.join(decoy, 'package.json'),
+    JSON.stringify({ name: '@playwright/test', version: '9.9.9-ancestor' })
+  );
   try {
     fs.rmSync(path.join(root, 'node_modules/@playwright/test'), { recursive: true, force: true });
     expect(() => resolvePackage('@playwright/test', root)).toThrow(/carries no @playwright\/test/);
@@ -484,7 +489,7 @@ test('the lockfile walk does not read a pin from a node_modules level either', (
   expect(pinnedVersions(root).versions.playwright).toBe(FIXTURE_VERSION);
 });
 
-test('the chain is the ROOT project\'s — the suite project does not own the runtime', () => {
+test("the chain is the ROOT project's — the suite project does not own the runtime", () => {
   // The mutation this pins: the chain starts at the repository root, where
   // the lockfile that pins it lives. A copy under tests/e2e/node_modules
   // (the suite project's own tree) is not the runtime the root's lockfile
@@ -493,10 +498,11 @@ test('the chain is the ROOT project\'s — the suite project does not own the ru
   const root = makeCheckout();
   const stray = path.join(root, 'tests/e2e/node_modules/@playwright/test');
   fs.mkdirSync(stray, { recursive: true });
-  fs.writeFileSync(path.join(stray, 'package.json'), JSON.stringify({ name: '@playwright/test', version: '9.9.9-stray' }));
-  expect(resolvePackage('@playwright/test', root)).toBe(
-    path.join(root, 'node_modules/@playwright/test/package.json')
+  fs.writeFileSync(
+    path.join(stray, 'package.json'),
+    JSON.stringify({ name: '@playwright/test', version: '9.9.9-stray' })
   );
+  expect(resolvePackage('@playwright/test', root)).toBe(path.join(root, 'node_modules/@playwright/test/package.json'));
   expect(runnerVersions(root)['@playwright/test']).toBe(FIXTURE_VERSION);
 });
 
@@ -622,9 +628,7 @@ test('a browser path with a space in it is read whole', () => {
     stdout: `Chrome (playwright chromium v4711)\n  Install location:    ${location}   \n`,
     stderr: ''
   });
-  expect(installLocations('/checkout/node_modules/playwright/cli.js', run, '/checkout')[0].location).toBe(
-    location
-  );
+  expect(installLocations('/checkout/node_modules/playwright/cli.js', run, '/checkout')[0].location).toBe(location);
 });
 
 test('the runner the pod uses reads the output as text', () => {
@@ -649,4 +653,3 @@ test('an installer that names no location fails loudly', () => {
     /named no install location/
   );
 });
-

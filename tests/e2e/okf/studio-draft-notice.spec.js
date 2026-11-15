@@ -62,6 +62,10 @@ async function openStudioWithDraftAnswer(page, draftStatus, draftBody) {
 }
 
 test.describe('OKF Studio degraded-draft banner', () => {
+  // Asserts the banner's exact English copy — pin the locale (the sibling
+  // ceiling spec pins the same way; why the pin exists: helpers/locale.js).
+  test.use({ locale: 'en-US' });
+
   test.beforeEach(
     skipUnlessVenue(
       test,

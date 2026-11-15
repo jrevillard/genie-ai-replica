@@ -118,17 +118,27 @@ echo "slot: acquired (checkout $CHECKOUT_LOCK, venue $VENUE_LOCK)"
 # shared stack's secret (the password lives in the cluster, never in the
 # repository — see .claude/rules/DEMO-SEEDING.md for the same convention).
 if [ -z "${ADMIN_TOKEN:-}" ] && [ -z "${KEYCLOAK_ADMIN_PASSWORD:-}" ]; then
-  if [ "$BASE_URL" = "$DEFAULT_VENUE" ] && command -v kubectl >/dev/null 2>&1 &&
-    kubectl -n "$NAMESPACE" get secret keycloak-admin-credentials >/dev/null 2>&1; then
-    KEYCLOAK_ADMIN_PASSWORD="$(kubectl -n "$NAMESPACE" get secret keycloak-admin-credentials \
-      -o go-template='{{ index .data "password" | base64decode }}')"
-    if [ -z "$KEYCLOAK_ADMIN_PASSWORD" ] || [ "$KEYCLOAK_ADMIN_PASSWORD" = "<no value>" ]; then
-      echo "ERROR: the keycloak-admin-credentials secret in namespace $NAMESPACE carries no 'password' key." >&2
-      echo "       The auto-read exported no usable credential - set KEYCLOAK_ADMIN_PASSWORD explicitly." >&2
+  if [ "$BASE_URL" = "$DEFAULT_VENUE" ] && command -v kubectl >/dev/null 2>&1; then
+    # The read's stderr is INHERITED: when kubectl fails, its own error
+    # lands in the run output verbatim, and the else arm names it as the
+    # cause. Before #1883 the probe discarded that error and every broken
+    # cluster, missing namespace and denied RBAC was misattributed to
+    # "no Keycloak admin credentials".
+    if KEYCLOAK_ADMIN_PASSWORD="$(kubectl -n "$NAMESPACE" get secret keycloak-admin-credentials \
+      -o go-template='{{ index .data "password" | base64decode }}')"; then
+      if [ -z "$KEYCLOAK_ADMIN_PASSWORD" ] || [ "$KEYCLOAK_ADMIN_PASSWORD" = "<no value>" ]; then
+        echo "ERROR: the keycloak-admin-credentials secret in namespace $NAMESPACE carries no 'password' key." >&2
+        echo "       The auto-read exported no usable credential - set KEYCLOAK_ADMIN_PASSWORD explicitly." >&2
+        exit 2
+      fi
+      export KEYCLOAK_ADMIN_PASSWORD
+      echo "admin credentials: the shared stack's keycloak-admin-credentials secret (namespace $NAMESPACE)"
+    else
+      echo "ERROR: the kubectl read of namespace $NAMESPACE's keycloak-admin-credentials secret failed" >&2
+      echo "       (see kubectl's error above - cluster reachability, namespace or RBAC)." >&2
+      echo "       Set KEYCLOAK_ADMIN_PASSWORD (or ADMIN_TOKEN) to bypass the secret auto-read." >&2
       exit 2
     fi
-    export KEYCLOAK_ADMIN_PASSWORD
-    echo "admin credentials: the shared stack's keycloak-admin-credentials secret (namespace $NAMESPACE)"
   else
     echo "ERROR: no Keycloak admin credentials for $BASE_URL." >&2
     echo "       Set KEYCLOAK_ADMIN_PASSWORD (or ADMIN_TOKEN). The secret auto-read only serves" >&2

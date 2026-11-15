@@ -19,7 +19,7 @@ const METRICS = {
   systemUptime: 87.65,
   avgResponseTime: 321,
   errorRate: 2.5,
-  monthlyActiveUsers: 1234,
+  monthlyActiveUsers: 1234
 };
 
 test.describe('Admin overview data wiring', () => {
@@ -38,8 +38,8 @@ test.describe('Admin overview data wiring', () => {
       route.fulfill({
         status: 200,
         contentType: 'application/json',
-        body: JSON.stringify(payload),
-      }),
+        body: JSON.stringify(payload)
+      })
     );
     await page.goto(`${BASE_URL}/admin`, { waitUntil: 'networkidle' });
   }
@@ -48,7 +48,7 @@ test.describe('Admin overview data wiring', () => {
     await loginWithWiredPayload(page, {
       metrics: METRICS,
       healthServices: [],
-      resourceUsage: {},
+      resourceUsage: {}
     });
 
     // Exact text, tile by tile. The assertion targets the VALUE element
@@ -68,9 +68,9 @@ test.describe('Admin overview data wiring', () => {
       metrics: METRICS,
       healthServices: [
         { id: 'wiredAlpha', name: 'Wired Service Alpha', status: 'good' },
-        { id: 'wiredBeta', name: 'Wired Service Beta', status: 'warning' },
+        { id: 'wiredBeta', name: 'Wired Service Beta', status: 'warning' }
       ],
-      resourceUsage: { cpu: 42, memory: 67 },
+      resourceUsage: { cpu: 42, memory: 67 }
     });
 
     // Health rows carry the per-service status class and the service

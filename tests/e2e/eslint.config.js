@@ -18,8 +18,9 @@
 // gate's target is the #1632 class: a binding declared NOWHERE, which
 // no-undef still catches from the merged pool.
 //
-// Stylistic rules stay out: the suite has no Prettier gate, so
-// formatting rules would only fight the existing files.
+// Stylistic rules stay out: formatting is the Prettier gate's business
+// (format:e2e — root package.json, lint:e2e in CI, #1853), not this
+// config's.
 const js = require('@eslint/js');
 const globals = require('globals');
 const sharedRules = require('../../components/shared/eslint-rules-base');

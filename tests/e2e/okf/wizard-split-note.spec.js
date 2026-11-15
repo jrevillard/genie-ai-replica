@@ -82,6 +82,10 @@ async function openWizardInputStep(page, importBody) {
 }
 
 test.describe('OKF wizard split report note', () => {
+  // Asserts the note's exact sentence (splitReportCopy) — pin the locale
+  // (the sibling ceiling spec pins the same way; why: helpers/locale.js).
+  test.use({ locale: 'en-US' });
+
   test.beforeEach(
     skipUnlessVenue(
       test,

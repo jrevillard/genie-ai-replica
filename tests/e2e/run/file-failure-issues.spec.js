@@ -9,12 +9,13 @@ const {
   findTrackedIssue,
   specPathsIn,
   titleIsDedicatedTo,
-  trackerReason,
+  firstErrorReason,
   groupFailuresByFile,
   issueBody,
   isConnectionSignature,
   partitionVenueNoise,
   venueAvailabilityReport,
+  fileTrackedFailures
 } = require('./file-failure-issues');
 
 const FILE = 'tests/e2e/theme/theme-runtime-config.spec.js';
@@ -49,14 +50,9 @@ test.describe('a dedicated title names ONE spec file', () => {
     // The title may name the file the way a human writes it: an
     // absolute path, or the file's URL in a tracker link. Both END with
     // the repository path — the same file, named differently.
+    expect(titleIsDedicatedTo(`test(e2e): /home/dev/genie-ai/${FILE} is red`, FILE)).toBe(true);
     expect(
-      titleIsDedicatedTo(`test(e2e): /home/dev/genie-ai/${FILE} is red`, FILE)
-    ).toBe(true);
-    expect(
-      titleIsDedicatedTo(
-        `test(e2e): https://gitlab.example/un/itu/genie-ai/-/blob/main/${FILE} is red`,
-        FILE
-      )
+      titleIsDedicatedTo(`test(e2e): https://gitlab.example/un/itu/genie-ai/-/blob/main/${FILE} is red`, FILE)
     ).toBe(true);
   });
 
@@ -67,10 +63,7 @@ test.describe('a dedicated title names ONE spec file', () => {
     expect(titleIsDedicatedTo(`test(e2e): ${FILE} — ${FILE} again`, FILE)).toBe(true);
     expect(titleIsDedicatedTo(`test(e2e): ${FILE} — /home/dev/genie-ai/${FILE}`, FILE)).toBe(true);
     expect(
-      titleIsDedicatedTo(
-        `test(e2e): ${FILE} — https://gitlab.example/un/itu/genie-ai/-/blob/main/${FILE}`,
-        FILE
-      )
+      titleIsDedicatedTo(`test(e2e): ${FILE} — https://gitlab.example/un/itu/genie-ai/-/blob/main/${FILE}`, FILE)
     ).toBe(true);
   });
 
@@ -132,7 +125,7 @@ test.describe('a match must be DEDICATED to the spec file', () => {
     // issue of its own — the tracker noise this path exists to end.
     const umbrella = {
       title: '13 spec files hardcode the Compose edge',
-      description: `The wave touched ${FILE} and twelve other files.`,
+      description: `The wave touched ${FILE} and twelve other files.`
     };
     expect(findTrackedIssue(FILE, [umbrella])).toBe(null);
   });
@@ -142,7 +135,7 @@ test.describe('a match must be DEDICATED to the spec file', () => {
     // dedication. The file's own failure still needs its own issue.
     const umbrella = {
       title: `test(e2e): ${FILE} and tests/e2e/other.spec.js are red`,
-      description: '',
+      description: ''
     };
     expect(findTrackedIssue(FILE, [umbrella])).toBe(null);
   });
@@ -172,7 +165,7 @@ test.describe('a match must be DEDICATED to the spec file', () => {
     expect(findTrackedIssue(FILE, [byTitle, byMarker])).toBe(byTitle);
   });
 
-  test('a bare name of ANOTHER tree\'s file is not this tree\'s path', () => {
+  test("a bare name of ANOTHER tree's file is not this tree's path", () => {
     // A title that names an e2e spec AND a frontend unit test by its
     // bare name is still a DEDICATION to the e2e file: the frontend test
     // is not this tree's business. Counting it would make the title look
@@ -200,7 +193,7 @@ test.describe('a match must be DEDICATED to the spec file', () => {
     }
   });
 
-  test('a COPY of this tree elsewhere in the checkout does not make its names another tree\'s', () => {
+  test("a COPY of this tree elsewhere in the checkout does not make its names another tree's", () => {
     // The operator's checkout carries sibling worktrees, and each of them
     // holds a full copy of tests/e2e. Those copies are THIS tree's own
     // business: if their spec names counted as "another tree's files",
@@ -219,15 +212,13 @@ test.describe('a match must be DEDICATED to the spec file', () => {
       fs.mkdirSync(path.join(root, '.claude/worktrees/wt-a/tests/e2e'), { recursive: true });
       fs.writeFileSync(path.join(root, '.claude/worktrees/wt-a/tests/e2e/thing.spec.js'), '');
 
-      expect(
-        titleIsDedicatedTo('test(e2e): thing.spec.js is red', 'tests/e2e/thing.spec.js', root)
-      ).toBe(true);
+      expect(titleIsDedicatedTo('test(e2e): thing.spec.js is red', 'tests/e2e/thing.spec.js', root)).toBe(true);
     } finally {
       fs.rmSync(root, { recursive: true, force: true });
     }
   });
 
-  test('a bare spec file name is this tree\'s path even when the file is gone', () => {
+  test("a bare spec file name is this tree's path even when the file is gone", () => {
     // A RENAMED file must not drop out of the comparison: a title that
     // names several spec files is a group, not a dedication, and the
     // renamed file's bare name must still count as one of them —
@@ -275,7 +266,7 @@ test.describe('one issue per failing spec FILE', () => {
     const failed = [
       { file: 'tests/e2e/a.spec.js', title: 'a › first', test: { results: [{ error: { message: 'boom' } }] } },
       { file: 'tests/e2e/a.spec.js', title: 'a › second', test: { results: [{ error: { message: 'bang' } }] } },
-      { file: 'tests/e2e/b.spec.js', title: 'b › third', test: { results: [{ error: { message: 'snap' } }] } },
+      { file: 'tests/e2e/b.spec.js', title: 'b › third', test: { results: [{ error: { message: 'snap' } }] } }
     ];
     const byFile = groupFailuresByFile(failed);
     expect(byFile.size).toBe(2);
@@ -287,7 +278,12 @@ test.describe('one issue per failing spec FILE', () => {
     // ONE spelling, used both to write the marker and to read it back:
     // a drift between the two would silently degrade the dedupe to
     // title-only.
-    const body = issueBody('tests/e2e/a.spec.js', [{ title: 'a › first', error: 'boom' }], 'https://venue.example:4443', '2026-11-11T00:00:00Z');
+    const body = issueBody(
+      'tests/e2e/a.spec.js',
+      [{ title: 'a › first', error: 'boom' }],
+      'https://venue.example:4443',
+      '2026-11-11T00:00:00Z'
+    );
     expect(body).toContain('- spec file: `tests/e2e/a.spec.js`');
     // And the failure it files is in the body.
     expect(body).toContain('a › first');
@@ -298,12 +294,12 @@ test.describe('the tracker refusal names the tracker, not the command', () => {
   test('the first stderr line is the tracker message', () => {
     const error = new Error('Command failed: glab api projects/90/issues -f title=<the whole body>');
     error.stderr = 'glab: 404 Not found (HTTP 404)\n';
-    expect(trackerReason(error)).toBe('glab: 404 Not found (HTTP 404)');
+    expect(firstErrorReason(error)).toBe('glab: 404 Not found (HTTP 404)');
   });
 
   test('without stderr, the error message carries the reason', () => {
     const error = new Error('spawn glab ENOENT\nat ChildProcess');
-    expect(trackerReason(error)).toBe('spawn glab ENOENT | at ChildProcess');
+    expect(firstErrorReason(error)).toBe('spawn glab ENOENT | at ChildProcess');
   });
 });
 
@@ -391,13 +387,7 @@ test.describe('a failure carrying an edge-transport signature is venue noise (#1
 
   test('the venue-availability report names the venue, the files and the verdict', () => {
     const noise = new Map([
-      [
-        'tests/e2e/welcome-banner.spec.js',
-        [
-          { error: OUTAGE_ERROR },
-          { error: 'net::ERR_CONNECTION_RESET' }
-        ]
-      ],
+      ['tests/e2e/welcome-banner.spec.js', [{ error: OUTAGE_ERROR }, { error: 'net::ERR_CONNECTION_RESET' }]],
       ['tests/e2e/resizable-sidebars.spec.js', [{ error: 'net::ERR_NAME_NOT_RESOLVED' }]]
     ]);
     const report = venueAvailabilityReport(noise, VENUE);
@@ -406,5 +396,77 @@ test.describe('a failure carrying an edge-transport signature is venue noise (#1
     expect(report).toContain('- tests/e2e/resizable-sidebars.spec.js: 1 (e.g. net::ERR_NAME_NOT_RESOLVED)');
     expect(report).toContain(`The venue answered the re-probe at ${VENUE}`);
     expect(report).toContain('NOT product findings');
+  });
+});
+
+test.describe('the filing loop stays loud when the tracker refuses (#1883)', () => {
+  // The filing loop's loudness contract: one tracker error never takes the
+  // filing down — the failing file is reported, the remaining files are
+  // still attempted, and the errors come back so the run can refuse the
+  // exit code. A swallow-and-exit-0 regression here is the exact silence
+  // the failure path exists to end, so the contract is pinned with fake
+  // clients (the same injection seam production leaves on its defaults).
+
+  const byFile = new Map([
+    ['tests/e2e/a.spec.js', [{ title: 'a › first', error: 'boom' }]],
+    ['tests/e2e/b.spec.js', [{ title: 'b › second', error: 'bang' }]]
+  ]);
+  const VENUE = 'https://e2e-venue.example:4443';
+  const STAMP = '2026-11-15T00:00:00Z';
+
+  function trackerError() {
+    const error = new Error('Command failed: glab api projects/90/issues');
+    error.stderr = 'glab: 404 Not found (HTTP 404)\n';
+    return error;
+  }
+
+  test('a file nobody tracks yet gets its own create, and a clean run returns no errors', () => {
+    const created = [];
+    const commented = [];
+    const errors = fileTrackedFailures(byFile, [], VENUE, STAMP, {
+      createIssue: (file) => created.push(file),
+      commentOnIssue: (issue, files) => commented.push(files.map((f) => f.file))
+    });
+    expect(created).toEqual(['tests/e2e/a.spec.js', 'tests/e2e/b.spec.js']);
+    expect(commented).toEqual([]);
+    expect(errors).toEqual([]);
+  });
+
+  test('a tracked file is grouped under its issue — one comment, no create', () => {
+    const tracked = { iid: 7, title: `test(e2e): tests/e2e/a.spec.js is red`, description: '' };
+    const created = [];
+    const comments = [];
+    fileTrackedFailures(byFile, [tracked], VENUE, STAMP, {
+      createIssue: (file) => created.push(file),
+      commentOnIssue: (issue, files) => comments.push({ iid: issue.iid, files: files.map((f) => f.file) })
+    });
+    expect(created).toEqual(['tests/e2e/b.spec.js']);
+    expect(comments).toEqual([{ iid: 7, files: ['tests/e2e/a.spec.js'] }]);
+  });
+
+  test('a create failure is reported and the remaining files are still attempted', () => {
+    const created = [];
+    const errors = fileTrackedFailures(byFile, [], VENUE, STAMP, {
+      createIssue: (file) => {
+        if (file === 'tests/e2e/a.spec.js') throw trackerError();
+        created.push(file);
+      },
+      commentOnIssue: () => {}
+    });
+    // The refused file is named, with the tracker's own reason.
+    expect(errors).toEqual(['tests/e2e/a.spec.js: glab: 404 Not found (HTTP 404)']);
+    // The file AFTER the refused one still got its create.
+    expect(created).toEqual(['tests/e2e/b.spec.js']);
+  });
+
+  test('a failed comment puts every file it covers into the errors', () => {
+    const tracked = { iid: 7, title: `test(e2e): tests/e2e/a.spec.js is red`, description: '' };
+    const errors = fileTrackedFailures(byFile, [tracked], VENUE, STAMP, {
+      createIssue: () => {},
+      commentOnIssue: () => {
+        throw trackerError();
+      }
+    });
+    expect(errors).toEqual(['tests/e2e/a.spec.js: glab: 404 Not found (HTTP 404)']);
   });
 });

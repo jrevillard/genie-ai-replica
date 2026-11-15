@@ -57,7 +57,7 @@ const { test, expect } = require('@playwright/test');
 const { openWelcomeScreen } = require('../helpers/welcome');
 // The stream interception contract — no credential in it, so this spec
 // (which needs neither) never imports the credential module.
-const { captureStreamPosts } = require('../helpers/stream-route');
+const { captureStreamPosts } = require('../helpers/stream-capture');
 const {
   quickHelpButton,
   stubQuickHelpConfiguration,

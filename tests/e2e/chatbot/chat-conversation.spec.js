@@ -15,7 +15,7 @@ const {
   STREAM_PATH
 } = require('../helpers/chatbot');
 const { runPostOnlyRouteHandler, runRouteHandler } = require('../helpers/route');
-const { captureStreamPosts } = require('../helpers/stream-route');
+const { captureStreamPosts } = require('../helpers/stream-capture');
 const {
   quickHelpButton,
   stubQuickHelpConfiguration,

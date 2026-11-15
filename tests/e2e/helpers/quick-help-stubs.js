@@ -19,6 +19,32 @@
 const { runRouteHandler } = require('./route');
 
 /**
+ * One builder for the fixture cards the Quick Help specs serve — the
+ * same shape fields (icon, styles, the null-category default) written
+ * once, with each spec passing only what makes ITS fixture distinct
+ * (id, title, scope, action). These literals were copied across three
+ * specs before this factory existed, which is exactly the drift this
+ * module's own header records; a shape change is now a one-file edit.
+ * The stubbed configuration still runs the frontend's Ajv validation,
+ * so a shape drift fails loud here instead of rendering somewhere.
+ *
+ * [overrides.title] is a display string (wrapped as { en }) or a
+ * locale map; every other override lands on the card verbatim.
+ */
+function quickHelpButton(overrides = {}) {
+  const { title, ...rest } = overrides;
+  const titleMap = title === undefined ? { en: 'Just Chat' } : typeof title === 'string' ? { en: title } : title;
+  return {
+    id: undefined,
+    title: titleMap,
+    icon: { type: 'file', value: '/config/quickhelp/just-chat.svg' },
+    category: null,
+    styles: { backgroundColor: '#fff', hoverColor: '#eee', outlineColor: '#ccc' },
+    ...rest
+  };
+}
+
+/**
  * The hierarchy both Quick Help specs serve: one category ('Civil
  * Registry', naming itself in ENGLISH — the spelling a configuration
  * writes) carrying the 'Births' label the scoped cards declare. The two
@@ -81,6 +107,7 @@ async function stubQuickHelpHierarchy(page, hierarchy, gate = null) {
 }
 
 module.exports = {
+  quickHelpButton,
   stubQuickHelpConfiguration,
   stubQuickHelpHierarchy,
   CIVIL_REGISTRY_HIERARCHY

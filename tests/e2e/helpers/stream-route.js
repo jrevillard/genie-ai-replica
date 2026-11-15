@@ -27,6 +27,11 @@
 const STREAM_PATH = '/queries/stream';
 const STREAM_ROUTE = `**${STREAM_PATH}**`;
 
+// The POST-only wrapper (helpers/route.js — credential-free like this
+// module): every interception of the stream route goes through it, so a
+// stray GET reaches the network instead of a CORS-less 200 from the mock.
+const { runPostOnlyRouteHandler } = require('./route');
+
 // The CORS header a cross-origin reader needs to read ANY mocked
 // answer: without it the browser drops the fulfilment and the app reads
 // a transport failure instead of the mocked bytes (#1587). One
@@ -55,4 +60,27 @@ function sseFulfill(route, body) {
   return route.fulfill({ status: 200, contentType: 'text/event-stream', headers: CORS_HEADERS, body });
 }
 
-module.exports = { CORS_HEADERS, STREAM_PATH, STREAM_ROUTE, sseBody, sseFulfill };
+/**
+ * Intercept the stream route and CAPTURE what goes out over it: each
+ * request's parsed POST body lands in `bodies` (in send order), and
+ * `queried()` says whether any request was captured. The response is
+ * [body] — '' leaves the turn open (the watcher contract), an sseBody()
+ * completes it. One spelling for every capture site, so the sync-then-
+ * read discipline documented beside the assertions cannot drift from the
+ * capture mechanics.
+ */
+async function captureStreamPosts(page, body) {
+  const bodies = [];
+  let captured = false;
+  await page.route(
+    STREAM_ROUTE,
+    runPostOnlyRouteHandler(page, async (route) => {
+      captured = true;
+      bodies.push(route.request().postDataJSON());
+      await sseFulfill(route, body);
+    })
+  );
+  return { queried: () => captured, bodies };
+}
+
+module.exports = { CORS_HEADERS, STREAM_PATH, STREAM_ROUTE, sseBody, sseFulfill, captureStreamPosts };

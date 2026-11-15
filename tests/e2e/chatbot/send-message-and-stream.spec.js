@@ -6,7 +6,11 @@ const {
   sendMessage,
   waitForBotResponse,
   getMessages,
-  getLastBotMessage
+  getLastBotMessage,
+  readStreamingState,
+  lastBotResponseTimeOf,
+  NOT_READABLE,
+  USER_BUBBLE
 } = require('../helpers/chatbot');
 
 test.describe('Chatbot message sending and SSE streaming', () => {
@@ -40,7 +44,7 @@ test.describe('Chatbot message sending and SSE streaming', () => {
 
     // The exact echo, not a probe: the bubble carries the whole question,
     // untruncated, and the fresh chat renders exactly one user turn.
-    const userBubble = page.locator('[data-testid="chat-message-user"] [data-testid="message-bubble-user"]');
+    const userBubble = page.locator(USER_BUBBLE);
     await expect(userBubble).toHaveCount(1);
     await expect(userBubble).toHaveText(userText, { timeout: 10000 });
   });
@@ -73,20 +77,21 @@ test.describe('Chatbot message sending and SSE streaming', () => {
     // The real stream's metadata reached the app: the backend ALWAYS
     // emits a metadata frame on a completed turn (its own responseTime —
     // query-routes.js writes it even when chatqna sent none), and the
-    // store commits it onto the turn. Read it from the store's public
-    // getter, the same path the streaming-flag read uses. The turn's
-    // presence alone proves nothing — the streaming placeholder mounts
-    // with a metadata object already on it — so the CONTRACT is the
-    // frame's own field: a numeric responseTime only a metadata frame
-    // can deliver.
-    const responseTime = await page.evaluate(() => {
-      const app = document.querySelector('#app');
-      const store = app && app.__vue_app__ ? app.__vue_app__.config.globalProperties.$store : null;
-      const open = store && store.getters ? store.getters['conversation/openConversation'] : null;
-      const bots = open && open.messages ? open.messages.filter((m) => m.sender === 'bot') : [];
-      const last = bots[bots.length - 1];
-      return last ? last.metadata?.responseTime : undefined;
-    });
+    // store commits it onto the turn. Read it through the helper's store
+    // read (the same wiring the streaming-flag wait uses, unit-tested
+    // against the page-side read), and decide on the mapped value. The
+    // turn's presence alone proves nothing — the streaming placeholder
+    // mounts with a metadata object already on it — so the CONTRACT is
+    // the frame's own field: a numeric responseTime only a metadata
+    // frame can deliver.
+    const read = await page.evaluate(readStreamingState);
+    const responseTime = lastBotResponseTimeOf(read);
+    if (responseTime === NOT_READABLE) {
+      // The read could not see a completed turn at all — a broken store
+      // contract or a missing getter, the same named causes the flag
+      // reader reports, not a slow answer to wait out.
+      throw new Error(`the store read could not see the completed turn: ${read && read.state}`);
+    }
     expect(
       typeof responseTime,
       `the backend's responseTime rode the metadata frame (got ${JSON.stringify(responseTime)})`

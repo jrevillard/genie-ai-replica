@@ -35,6 +35,18 @@ const SOURCES = [
 
 const readJson = (file) => JSON.parse(fs.readFileSync(file, 'utf8'));
 
+// The shipped variant names of one platform source, in stable order —
+// the listing rule written once (glob, sort), read by every test below.
+const shippedFiles = (source) =>
+  fs
+    .readdirSync(source.dir)
+    .filter((name) => source.pattern.test(name))
+    .sort();
+
+// The quickHelp buttons of one served document — the walk both placement
+// tests share.
+const buttonsOf = (cfg) => cfg?.features?.chat?.quickHelp?.buttons || [];
+
 const assertFileHonoursContract = (dir, name) => {
   try {
     validateQuickHelpButtons(readJson(path.join(dir, name)));
@@ -61,12 +73,7 @@ describe('Quick Help button contract across every shipped configuration', () => 
   it.each(SOURCES.map((source) => [source.label, source]))(
     '%s: every button carries a unique non-blank string id',
     (_label, source) => {
-      const files = fs
-        .readdirSync(source.dir)
-        .filter((name) => source.pattern.test(name))
-        .sort();
-
-      for (const name of files) {
+      for (const name of shippedFiles(source)) {
         assertFileHonoursContract(source.dir, name);
       }
     }
@@ -86,19 +93,13 @@ describe('Quick Help button contract across every shipped configuration', () => 
   it.each(SOURCES.map((source) => [source.label, source]))(
     '%s: every declared placement is a declared vocabulary value',
     (_label, source) => {
-      const files = fs
-        .readdirSync(source.dir)
-        .filter((name) => source.pattern.test(name))
-        .sort();
-
       // One assertion for the whole source: the failure names every
       // offending button. A value outside the vocabulary silently renders
       // a tile on the web and vanishes from the mobile grid, with no
       // error anywhere — the readers compare strictly.
       const offenders = [];
-      for (const name of files) {
-        const buttons = readJson(path.join(source.dir, name))?.features?.chat?.quickHelp?.buttons || [];
-        for (const button of buttons) {
+      for (const name of shippedFiles(source)) {
+        for (const button of buttonsOf(readJson(path.join(source.dir, name)))) {
           if (button.placement === undefined) continue;
           if (!PLACEMENT_VALUES.includes(button.placement)) {
             offenders.push(`${name}:${button.id} = ${JSON.stringify(button.placement)}`);
@@ -118,10 +119,6 @@ describe('Quick Help button contract across every shipped configuration', () => 
   // surface, so the mobile Just Chat entry stays a tile.)
   it('web: the just-chat entry is the composer, and the schema declares the placement enum', () => {
     const source = SOURCES[0];
-    const files = fs
-      .readdirSync(source.dir)
-      .filter((name) => source.pattern.test(name))
-      .sort();
 
     // One assertion per clause across the whole source, with the
     // offending file named in the collected values: the web composer is
@@ -133,10 +130,9 @@ describe('Quick Help button contract across every shipped configuration', () => 
     const missingSchema = [];
     const schemaWithoutEnum = [];
 
-    for (const name of files) {
+    for (const name of shippedFiles(source)) {
       const cfg = readJson(path.join(source.dir, name));
-      const buttons = cfg?.features?.chat?.quickHelp?.buttons || [];
-      const justChat = buttons.find((b) => b.id === 'just-chat');
+      const justChat = buttonsOf(cfg).find((b) => b.id === 'just-chat');
       if (!justChat) {
         missingEntry.push(name);
         continue;

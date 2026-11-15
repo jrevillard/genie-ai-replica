@@ -339,8 +339,9 @@ const SESSION_MINT_TIMEOUT_MS = 420000;
  *
  * The sweep must fit TWO limits, and they are not the same clock:
  *
- *  - the HOOK's budget (360 s) counts everything, including the login
- *    that mints the token (≈135 s on a stalled stack);
+ *  - the HOOK's budget (420 s, SESSION_MINT_TIMEOUT_MS) counts
+ *    everything, including the login that mints the token (≈135 s on a
+ *    stalled stack);
  *  - the TOKEN's life (the realm's `accessTokenLifespan` — 300 s, the
  *    shipped default: `docker-compose.yaml` pins
  *    `KEYCLOAK_ACCESS_TOKEN_LIFESPAN:-300` and `configs/keycloak/
@@ -361,6 +362,13 @@ const SESSION_MINT_TIMEOUT_MS = 420000;
  * token's 300 s with ~60 s left for that gap. With the login counted,
  * 135 + 60 + 180 = 375 s, inside the hook's 420 s
  * (SESSION_MINT_TIMEOUT_MS).
+ *
+ * The arithmetic counts ONE attempt per call: the idempotent legs also
+ * carry the sanctioned edge-reset retry (#1847, up to 3 attempts × 30 s
+ * each), so a reset landing inside the sweep window can stretch it past
+ * these bounds — the margins above (~60 s on the token, 45 s on the
+ * hook) are what absorbs it, and the sweep reports a token-expiry 401
+ * by name if they ever do not.
  *
  * The wave width is bounded by the BUDGET and by what a shared stack
  * can take. The engine says how the contention behaves, and both

@@ -191,12 +191,11 @@ async function sweepDeleteOneFile(request, file, token) {
         // the token can lapse between the first DELETE and the retract
         // (#1864 review). The detailOf line names the leg for the other
         // statuses.
+        if (retractRes.status === 401) {
+          return `${file.file_name}: ${describeUnauthorized(retractRes, token)} (on the retract after a STILL_SERVING refusal)`;
+        }
         const detail = detailOf(retractRes);
-        const failure =
-          retractRes.status === 401
-            ? `${describeUnauthorized(retractRes, token)} (on the retract after a STILL_SERVING refusal)`
-            : `retract failed before delete (HTTP ${retractRes.status}${describeCode(retractRes)}${detail ? ` — ${detail}` : ''})`;
-        return `${file.file_name}: ${failure}`;
+        return `${file.file_name}: retract failed before delete (HTTP ${retractRes.status}${describeCode(retractRes)}${detail ? ` — ${detail}` : ''})`;
       }
       res = await attempt();
     }

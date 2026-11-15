@@ -217,7 +217,8 @@ the provisioned state and not a run's doing: the test-only realm
 (`genie2`) and the two built-in clients the realm export cannot pin
 (`realm-management`, `security-admin-console` — Keycloak reserves a
 built-in's authentication-flow bindings, so the convergence import
-cannot declare them; their grants stay server defaults). Every OTHER
+cannot declare them; their grants stay server defaults, read back
+false). Every OTHER
 built-in is pinned false by the export (#1849 — `admin-cli` used to
 answer ROPC=true out of the box) and the gate asserts it like any
 declared client: a venue whose convergence has not yet applied the pin

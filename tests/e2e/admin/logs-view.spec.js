@@ -21,10 +21,7 @@ test.describe('Admin logs view', () => {
 
   // Pin the locale: the empty row's text is translated
   // (admin.logsSection.noWarningLogs), so its exact wording follows the
-  // app's resolved locale — pinned below, before the first navigation.
-  // The copy under test is translated: pin the app's PRIMARY locale
-  // source (localStorage.userLocale — helpers/locale.js proves the pin
-  // landed) before the first navigation.
+  // app's resolved locale. Why: helpers/locale.js.
   test.beforeEach(async ({ page }) => {
     await pinLocale(page.context(), 'en');
   });

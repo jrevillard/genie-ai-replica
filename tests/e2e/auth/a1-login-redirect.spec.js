@@ -1,6 +1,6 @@
 const { test, expect } = require('@playwright/test');
 const { BASE_URL } = require('../helpers/base-url');
-const { KEYCLOAK_AUTH_ENDPOINT_GLOB } = require('../helpers/keycloak-landing');
+const { KEYCLOAK_AUTH_ENDPOINT_GLOB, KEYCLOAK_GENIE_AUTH_PATH } = require('../helpers/keycloak-landing');
 
 // Test A.1 — Redirect to Keycloak
 // Verifies that navigating to the app root redirects to the Keycloak login page.
@@ -27,7 +27,7 @@ test('redirects to Keycloak login page when accessing app root', async ({ browse
 
   // Verify URL contains the Keycloak genie realm auth path
   await expect(
-    currentUrl.includes('/auth/realms/genie/protocol/openid-connect/auth'),
+    currentUrl.includes(KEYCLOAK_GENIE_AUTH_PATH),
     `Expected URL to contain Keycloak auth path, got: ${currentUrl}`
   ).toBeTruthy();
 

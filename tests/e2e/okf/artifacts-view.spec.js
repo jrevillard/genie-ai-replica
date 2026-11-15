@@ -63,9 +63,6 @@ const ARTIFACTS = [
 const REPOS = [{ repo_id: 'repo-kenya', name: 'Kenya Government Services' }];
 
 test.describe('the OKF artifacts view', () => {
-  // The labels under test are translated (admin.documents.status*); the
-  // exact wording must be fixed.
-
   // The view opens behind a browser login — the budget is the login's
   // own ceiling, derived once beside loginViaUI (#1798).
   test.describe.configure({ timeout: LOGIN_BUDGET_TIMEOUT_MS });
@@ -77,13 +74,11 @@ test.describe('the OKF artifacts view', () => {
   // the frontend itself reads — not a guess.
   test.beforeEach(skipUnlessVenue(test, okfEnabled, okfParkedReason));
 
-  // The copy under test is translated: pin the app's PRIMARY locale
-  // source (localStorage.userLocale — helpers/locale.js proves the pin
-  // landed) before the first navigation.
+  // The labels under test are translated (admin.documents.status*);
+  // pinLocale fixes the exact wording. Why: helpers/locale.js.
   test.beforeEach(async ({ page }) => {
     await pinLocale(page.context(), 'en');
   });
-
   /**
    * Log in as the admin, intercept the two reads the surface performs, and
    * open the artifacts view. Returns the captured `is_bundle` request

@@ -15,6 +15,11 @@ const { expect } = require('@playwright/test');
 // this endpoint's render.
 const KEYCLOAK_AUTH_ENDPOINT_GLOB = '**/protocol/openid-connect/auth**';
 
+// The CONCRETE realm auth path (the genie realm's) — the string the glob
+// resolves to on this deployment, and the one an assertion on the landed
+// URL spells. The glob and this path change together; both live here.
+const KEYCLOAK_GENIE_AUTH_PATH = '/auth/realms/genie/protocol/openid-connect/auth';
+
 // The login/logout redirect chain reaches the realm through exactly two
 // endpoints: the logout endpoint (signoutRedirect via oidc-client-ts) and
 // the auth endpoint that renders the login page. A settle wait keyed on
@@ -26,7 +31,7 @@ async function waitForRealmAuthEndpoint(page, timeout = 30000) {
       const urlStr = url.toString();
       return (
         urlStr.includes('/auth/realms/genie/protocol/openid-connect/logout') ||
-        urlStr.includes('/auth/realms/genie/protocol/openid-connect/auth')
+        urlStr.includes(KEYCLOAK_GENIE_AUTH_PATH)
       );
     },
     { timeout }
@@ -45,6 +50,7 @@ async function expectKeycloakLoginForm(page, message) {
 
 module.exports = {
   KEYCLOAK_AUTH_ENDPOINT_GLOB,
+  KEYCLOAK_GENIE_AUTH_PATH,
   waitForRealmAuthEndpoint,
   expectKeycloakLoginForm
 };

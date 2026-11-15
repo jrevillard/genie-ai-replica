@@ -31,10 +31,7 @@ test.describe('Admin overview data wiring', () => {
   // Pin the locale: monthlyActiveUsers renders through
   // formatValue(...).toLocaleString(), whose grouping separator follows
   // the APP's resolved locale — the pin sets localStorage.userLocale, the
-  // resolution chain's first stop ("1,234" en vs "1.234" de).
-  // The copy under test is translated: pin the app's PRIMARY locale
-  // source (localStorage.userLocale — helpers/locale.js proves the pin
-  // landed) before the first navigation.
+  // chain's first stop ("1,234" en vs "1.234" de). Why: helpers/locale.js.
   test.beforeEach(async ({ page }) => {
     await pinLocale(page.context(), 'en');
   });

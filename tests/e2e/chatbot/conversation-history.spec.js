@@ -16,6 +16,7 @@ const {
   getSessionTokenViaUI,
   describeUnauthorized,
   mapWithConcurrency,
+  dedupeByIds,
   request,
   SESSION_MINT_TIMEOUT_MS,
   SWEEP_DELETE_CONCURRENCY,
@@ -163,27 +164,15 @@ test.describe('Conversation history persistence', () => {
     // below. A later page that fails must NOT discard the pages that
     // succeeded — those conversations are known, and leaving them behind
     // is the leftover this sweep exists to prevent.
-    // Pagination drift can list the same conversation on two page reads;
-    // the delete set holds each conversation ONCE — a duplicated entry
-    // would run a second DELETE against a conversation the sweep already
-    // converged (the endpoint answers 404 for the removed id) and turn a
-    // clean state into a spurious cleanup failure (#1893, mirroring the
-    // documents sweep's seenIds filter from #1864). A row with no id at
-    // all cannot be deduped — each such row stands alone (and its delete
-    // fails loud on the missing id).
-    const seenIds = new Set();
+    // The delete set holds each conversation ONCE: dedupeByIds drops the
+    // rows pagination drift listed twice (why: dedupeByIds in
+    // helpers/auth.js, #1864/#1893).
     const own =
       pagesRead > 0
-        ? conversations
-            .filter((c) => c.title?.startsWith('E2E '))
-            .filter((c) => {
-              const id = c._key || c.id;
-              if (id === undefined || id === null) return true;
-              if (seenIds.has(id)) return false;
-              seenIds.add(id);
-              return true;
-            })
-            .map((c) => c._key || c.id)
+        ? dedupeByIds(
+            conversations.filter((c) => c.title?.startsWith('E2E ')),
+            (c) => c._key || c.id
+          ).map((c) => c._key || c.id)
         : [...createdConversationIds];
     const populationKnown = total !== undefined;
     const enumeratedAll = populationKnown ? conversations.length >= total : exhausted;

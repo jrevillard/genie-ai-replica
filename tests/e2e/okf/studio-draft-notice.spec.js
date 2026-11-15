@@ -63,8 +63,6 @@ async function openStudioWithDraftAnswer(page, draftStatus, draftBody) {
 }
 
 test.describe('OKF Studio degraded-draft banner', () => {
-  // Asserts the banner's exact English copy (the sibling ceiling spec
-  // pins the same way; why the pin exists: helpers/locale.js).
   test.beforeEach(
     skipUnlessVenue(
       test,
@@ -73,13 +71,11 @@ test.describe('OKF Studio degraded-draft banner', () => {
     )
   );
 
-  // The copy under test is translated: pin the app's PRIMARY locale
-  // source (localStorage.userLocale — helpers/locale.js proves the pin
-  // landed) before the first navigation.
+  // Asserts the banner's exact English copy — pinned like the sibling
+  // ceiling spec. Why: helpers/locale.js.
   test.beforeEach(async ({ page }) => {
     await pinLocale(page.context(), 'en');
   });
-
   test('renders the degraded-draft banner when the draft endpoint is not served', async ({ page }) => {
     // A 404 WITHOUT the backend's REPO_NOT_FOUND code: this server build
     // does not serve drafts. Any other code would be the repo-gone answer,

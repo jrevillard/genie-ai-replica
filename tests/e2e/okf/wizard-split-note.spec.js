@@ -83,8 +83,6 @@ async function openWizardInputStep(page, importBody) {
 }
 
 test.describe('OKF wizard split report note', () => {
-  // Asserts the note's exact sentence (splitReportCopy) (the sibling
-  // ceiling spec pins the same way; why: helpers/locale.js).
   test.beforeEach(
     skipUnlessVenue(
       test,
@@ -93,13 +91,11 @@ test.describe('OKF wizard split report note', () => {
     )
   );
 
-  // The copy under test is translated: pin the app's PRIMARY locale
-  // source (localStorage.userLocale — helpers/locale.js proves the pin
-  // landed) before the first navigation.
+  // Asserts the note's exact sentence (splitReportCopy) — pinned like the
+  // sibling ceiling spec. Why: helpers/locale.js.
   test.beforeEach(async ({ page }) => {
     await pinLocale(page.context(), 'en');
   });
-
   test('names the file and the part count when the server splits the document', async ({ page }) => {
     await openWizardInputStep(page, {
       ok: true,

@@ -167,13 +167,15 @@ test.describe('Conversation history persistence', () => {
     //
     // The delete set holds each conversation ONCE: dedupeByIds drops the
     // rows pagination drift listed twice (why: dedupeByIds in
-    // helpers/auth.js, #1864/#1893).
+    // helpers/auth.js, #1864/#1893). ONE id reader for the dedupe and the
+    // emitted set — the two must key on the same field.
+    const conversationIdOf = (c) => c._key || c.id;
     const own =
       pagesRead > 0
         ? dedupeByIds(
             conversations.filter((c) => c.title?.startsWith('E2E ')),
-            (c) => c._key || c.id
-          ).map((c) => c._key || c.id)
+            conversationIdOf
+          ).map(conversationIdOf)
         : [...createdConversationIds];
     const populationKnown = total !== undefined;
     const enumeratedAll = populationKnown ? conversations.length >= total : exhausted;

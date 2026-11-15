@@ -99,4 +99,12 @@ async function pinLocale(context, locale = 'en') {
   }
 }
 
-module.exports = { pinLocale };
+// The ready beforeEach for a fixture-page spec that asserts English copy:
+// ONE spelling of "pin before the first navigation" — the spec-specific
+// WHY lives in the comment beside each hook. Specs that make their own
+// context call pinLocale directly (the RAGAS spelling).
+const pinEnglish = async ({ page }) => {
+  await pinLocale(page.context(), 'en');
+};
+
+module.exports = { pinLocale, pinEnglish };

@@ -35,7 +35,7 @@
 const { test, expect } = require('@playwright/test');
 const { loginViaUI, BASE_URL, TEST_ADMIN_USER, LOGIN_BUDGET_TIMEOUT_MS } = require('../helpers/chatbot');
 const { okfEnabled, okfParkedReason, skipUnlessVenue } = require('../helpers/venue-profile');
-const { pinLocale } = require('../helpers/locale');
+const { pinEnglish } = require('../helpers/locale');
 
 /** The artifacts the interception serves. Two of them: one complete, one
  *  without a bundle_version (the version must read "unknown", not a
@@ -76,9 +76,7 @@ test.describe('the OKF artifacts view', () => {
 
   // The labels under test are translated (admin.documents.status*);
   // pinLocale fixes the exact wording. Why: helpers/locale.js.
-  test.beforeEach(async ({ page }) => {
-    await pinLocale(page.context(), 'en');
-  });
+  test.beforeEach(pinEnglish);
   /**
    * Log in as the admin, intercept the two reads the surface performs, and
    * open the artifacts view. Returns the captured `is_bundle` request

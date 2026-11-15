@@ -37,7 +37,7 @@ const { LOGIN_BUDGET_TIMEOUT_MS } = require('../helpers/chatbot');
 const { openStudioRepo, stubStudioRepoRoutes } = require('../helpers/okf-studio');
 const { runRouteHandler } = require('../helpers/route');
 const { okfEnabled, okfParkedReason, skipUnlessVenue } = require('../helpers/venue-profile');
-const { pinLocale } = require('../helpers/locale');
+const { pinEnglish } = require('../helpers/locale');
 
 /**
  * WHO LOGS IN.
@@ -166,9 +166,7 @@ test.describe('the concept-document ceiling in the concept editor', () => {
 
   // The advisory's label is translated (okf.editor.ceiling); pinLocale
   // fixes the exact wording. Why: helpers/locale.js.
-  test.beforeEach(async ({ page }) => {
-    await pinLocale(page.context(), 'en');
-  });
+  test.beforeEach(pinEnglish);
   test("the advisory carries the SERVER's ceiling", async ({ page }) => {
     await openEditor(page);
 
@@ -356,9 +354,7 @@ test.describe('the split affordance in the concept editor (#1577 story 2)', () =
 
   // The split dialog's copy is translated; pinLocale fixes the exact
   // wording. Why: helpers/locale.js.
-  test.beforeEach(async ({ page }) => {
-    await pinLocale(page.context(), 'en');
-  });
+  test.beforeEach(pinEnglish);
   test('the dialog renders the seam preview BEFORE any write', async ({ page }) => {
     const { previews, splits } = await openSplitDialog(page, { status: 200, body: SPLIT_PLAN });
 

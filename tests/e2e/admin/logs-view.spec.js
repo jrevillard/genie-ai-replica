@@ -1,7 +1,7 @@
 const { test, expect } = require('@playwright/test');
 const { SESSION_MINT_TIMEOUT_MS } = require('../helpers/auth');
 const { loginViaUI, BASE_URL, TEST_ADMIN_USER } = require('../helpers/chatbot');
-const { pinLocale } = require('../helpers/locale');
+const { pinEnglish } = require('../helpers/locale');
 
 /**
  * Admin logs view: the Logs tab drives /api/admin/logs/summary (the
@@ -22,9 +22,7 @@ test.describe('Admin logs view', () => {
   // Pin the locale: the empty row's text is translated
   // (admin.logsSection.noWarningLogs), so its exact wording follows the
   // app's resolved locale. Why: helpers/locale.js.
-  test.beforeEach(async ({ page }) => {
-    await pinLocale(page.context(), 'en');
-  });
+  test.beforeEach(pinEnglish);
   /**
    * Login, install the summary interception, open /admin. Returns
    * {calls} — the counter guards the assertions against a vacuous pass:

@@ -1,4 +1,5 @@
 const { test, expect } = require('@playwright/test');
+const { KEYCLOAK_AUTH_ENDPOINT_SUFFIX } = require('../helpers/keycloak-landing');
 
 test.describe('Swagger UI OAuth2', () => {
   test.use({ ignoreHTTPSErrors: true });
@@ -17,7 +18,7 @@ test.describe('Swagger UI OAuth2', () => {
     expect(keycloakScheme.type).toBe('oauth2');
     expect(keycloakScheme.flows, 'securitySchemes.KeycloakOAuth2.flows should exist').toBeDefined();
     expect(keycloakScheme.flows.authorizationCode, 'Authorization Code flow should be configured').toBeDefined();
-    expect(keycloakScheme.flows.authorizationCode.authorizationUrl).toContain('/protocol/openid-connect/auth');
+    expect(keycloakScheme.flows.authorizationCode.authorizationUrl).toContain(KEYCLOAK_AUTH_ENDPOINT_SUFFIX);
     expect(keycloakScheme.flows.authorizationCode.scopes).toHaveProperty('openid');
     expect(keycloakScheme.flows.authorizationCode.scopes).toHaveProperty('profile');
   });

@@ -33,7 +33,7 @@
 const { test, expect } = require('@playwright/test');
 const { openStudioRepo, stubStudioRepoRoutes } = require('../helpers/okf-studio');
 const { okfEnabled, okfParkedReason, skipUnlessVenue } = require('../helpers/venue-profile');
-const { pinLocale } = require('../helpers/locale');
+const { pinEnglish } = require('../helpers/locale');
 
 const REPO_ID = 'e2e-split-note-repo';
 const FILE_NAME = 'river-report.md';
@@ -93,9 +93,7 @@ test.describe('OKF wizard split report note', () => {
 
   // Asserts the note's exact sentence (splitReportCopy) — pinned like the
   // sibling ceiling spec. Why: helpers/locale.js.
-  test.beforeEach(async ({ page }) => {
-    await pinLocale(page.context(), 'en');
-  });
+  test.beforeEach(pinEnglish);
   test('names the file and the part count when the server splits the document', async ({ page }) => {
     await openWizardInputStep(page, {
       ok: true,

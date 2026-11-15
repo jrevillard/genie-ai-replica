@@ -778,13 +778,16 @@ test.describe('Resizable sidebars behind one handle', () => {
         if (!overlay) return null;
         return { scrollWidth: overlay.scrollWidth, clientWidth: overlay.clientWidth };
       });
-      if (sw) {
-        expect(
-          sw.scrollWidth,
-          `at viewport ${wide}, overlay.scrollWidth (${sw.scrollWidth}px) must be <= ` +
-            `overlay.clientWidth (${sw.clientWidth}px); overflow=${sw.scrollWidth - sw.clientWidth}px`
-        ).toBeLessThanOrEqual(sw.clientWidth);
-      }
+      // Pinned, not guarded: an `if (sw)` around the assert would silently
+      // vacate the no-scrollbar claim the day the query stops finding the
+      // overlay (the read above pins the same element, but a future reorder
+      // must turn that into a red here, not into a skip).
+      expect(sw, `the welcome overlay should be readable at ${wide}px (scrollWidth read)`).not.toBeNull();
+      expect(
+        sw.scrollWidth,
+        `at viewport ${wide}, overlay.scrollWidth (${sw.scrollWidth}px) must be <= ` +
+          `overlay.clientWidth (${sw.clientWidth}px); overflow=${sw.scrollWidth - sw.clientWidth}px`
+      ).toBeLessThanOrEqual(sw.clientWidth);
     }
   });
 

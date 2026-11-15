@@ -27,6 +27,17 @@ test.describe('Living Intelligence visual layer', () => {
     ]) {
       const response = await request.get(asset);
       expectRevalidated(response, asset);
+      // The header contract cannot tell a live asset from a zero-byte file —
+      // a truncated or emptied asset revalidates exactly like the real one.
+      // Pin the body: every shipped decoration asset carries content (the
+      // hero additionally gets the DOM-level pin in the test below).
+      const body = await response.body();
+      expect(
+        body.length,
+        `${asset} served an empty body with valid revalidation headers — ` +
+          `a zero-byte file passes the header contract, so the content itself ` +
+          `is pinned here`
+      ).toBeGreaterThan(0);
     }
   });
 

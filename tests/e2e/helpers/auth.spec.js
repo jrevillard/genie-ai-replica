@@ -159,8 +159,10 @@ test.describe('dedupeByIds', () => {
   });
 
   test('dedupes within one page and across pages alike — the Set spans the whole array', () => {
+    // 'b' duplicates WITHIN the first page, 'a' ACROSS the two pages —
+    // both dimensions exercise the same whole-array Set.
     const pages = [
-      [{ id: 'a' }, { id: 'b' }],
+      [{ id: 'a' }, { id: 'b' }, { id: 'b' }],
       [{ id: 'a' }, { id: 'c' }]
     ];
     const flat = pages.flat();

@@ -508,7 +508,6 @@ class ServiceCategoryService {
         )
         RETURN {
           catKey: category._key,
-          catCode: category.catCode,
           name: categoryName,
           nameEN: categoryNameEN,
           children: services
@@ -620,7 +619,6 @@ class ServiceCategoryService {
               )
               RETURN {
                   catKey: category._key,
-                  catCode: category.catCode,
                   name: categoryTranslation,
                   nameEN: categoryNameEN,
                   children: services
@@ -680,7 +678,6 @@ class ServiceCategoryService {
         FILTER category != null
         RETURN {
           catKey: category._key,
-          catCode: category.catCode,
           name: categoryTranslation,
           children: services
         }
@@ -730,6 +727,20 @@ class ServiceCategoryService {
             REMOVE trans IN serviceTranslations
       `);
 
+      // Delete the services' translation-graph edges (#1185) — BEFORE the
+      // services themselves are removed, so the edges' `_from` anchors are
+      // still resolvable: the graph must not keep links to translation
+      // documents this delete removes.
+      logger.info(`Deleting service translation edges for category ${categoryKey}`);
+      await this.db.query(aql`
+        FOR edge IN categoryServices
+          FILTER edge._from == ${`serviceCategories/${categoryKey}`}
+          LET service = DOCUMENT(edge._to)
+          FOR tedge IN serviceTranslationsEdge
+            FILTER tedge._from == service._id
+            REMOVE tedge IN serviceTranslationsEdge
+      `);
+
       // Delete all services and edges
       logger.info(`Deleting services and edges for category ${categoryKey}`);
       await this.db.query(aql`
@@ -746,6 +757,16 @@ class ServiceCategoryService {
         FOR trans IN serviceCategoryTranslations
           FILTER trans.serviceCategoryId == ${categoryKey}
           REMOVE trans IN serviceCategoryTranslations
+      `);
+
+      // Delete the category's own translation edges (#1185): the graph
+      // must not keep links to the category translation documents just
+      // removed above.
+      logger.info(`Deleting category translation edges for ${categoryKey}`);
+      await this.db.query(aql`
+        FOR edge IN serviceCategoryTranslationsEdge
+          FILTER edge._from == ${`serviceCategories/${categoryKey}`}
+          REMOVE edge IN serviceCategoryTranslationsEdge
       `);
 
       // Delete the category itself
@@ -784,6 +805,16 @@ class ServiceCategoryService {
         REMOVE trans IN serviceTranslations
     `);
       logger.info(`Deleted translations for service ${serviceKey}`);
+
+      // 1b. Delete the translation-graph edges pointing at this service's
+      // translations (#1185): the graph must not keep links to the
+      // translation documents step 1 just removed.
+      await this.db.query(aql`
+      FOR edge IN serviceTranslationsEdge
+        FILTER edge._from == ${'services/' + serviceKey}
+        REMOVE edge IN serviceTranslationsEdge
+    `);
+      logger.info(`Deleted translation edges for service ${serviceKey}`);
 
       // 2. Delete the edge connecting the category to this service
       await this.db.query(aql`
@@ -851,7 +882,20 @@ class ServiceCategoryService {
                 FILTER LOWER(catTrans.languageCode) == LOWER(${upperLocale})
                 RETURN catTrans.translation
             )
-            SORT service.order ASC
+            // ONE ordering contract (#1184): the categoryServices edge is
+            // the only writer of a service's order (the API write path
+            // sets it there — see createServiceWithTranslations); a
+            // service document carries no order of its own. Sorting on the
+            // edge keeps this endpoint's per-category order identical to
+            // the tree endpoints' instead of sorting on a field only the
+            // seed script writes (null on API-created services, which
+            // ArangoDB sorts before every number).
+            LET serviceEdge = FIRST(
+              FOR e IN categoryServices
+                FILTER e._to == service._id
+                RETURN e
+            )
+            SORT serviceEdge.order ASC
             RETURN {
               type: 'service',
               key: service._key,

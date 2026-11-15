@@ -7,7 +7,7 @@ const {
   parseJwtClaims,
   SESSION_MINT_TIMEOUT_MS,
 } = require('../helpers/auth');
-const { createUser, deleteUser, enableDirectAccessGrants } = require('../helpers/keycloak-admin');
+const { createUser, deleteUser, enableDirectAccessGrants, disableDirectAccessGrants, findClient } = require('../helpers/keycloak-admin');
 const { realmExists, missingRealmReason, skipUnlessVenue } = require('../helpers/venue-profile');
 
 /**
@@ -26,6 +26,14 @@ test.describe.serial('Phase I: Multi-Realm Configuration', () => {
 
   let adminToken;
   let genie1Token;
+  // The grant state this run FOUND on genie-app — recorded before the
+  // enable so the afterAll restores the found posture, not an assumed
+  // OFF. Phase 0.6 provisions the grant ON (the manual Phase I curl
+  // procedures mint through it after a run), so an unconditional disable
+  // would leave the venue narrower than the run found it. Defaulting to
+  // true is the conservative arm: a beforeAll that dies before the probe
+  // leaves the grant untouched.
+  let foundRopc = true;
   const TEST_REALM = 'genie2';
   const TEST_USER = { username: 'testuser2', password: 'TestPass123!', email: 'testuser2@genie2.local' };
 
@@ -48,8 +56,11 @@ test.describe.serial('Phase I: Multi-Realm Configuration', () => {
 
     adminToken = await getAdminToken();
 
-    // genie2 is test-only: enable ROPC for its direct token mints
-    // (see enableDirectAccessGrants — never on the primary realm).
+    // Record the grant state the run found, THEN enable ROPC for its
+    // direct token mints (genie2 is test-only; never the primary realm —
+    // see enableDirectAccessGrants).
+    const foundClient = await findClient(adminToken, TEST_REALM, 'genie-app');
+    foundRopc = Boolean(foundClient && foundClient.directAccessGrantsEnabled);
     await enableDirectAccessGrants(adminToken, TEST_REALM, 'genie-app');
 
     // Primary-realm token from a browser login session — minted once,
@@ -71,10 +82,19 @@ test.describe.serial('Phase I: Multi-Realm Configuration', () => {
     // exist.
     if (!(await realmExists(TEST_REALM))) return;
 
+    const token = await getAdminToken();
+
+    // Restore the grant state the run found — see foundRopc above for
+    // why the arm keys on what the venue was provisioned with. The
+    // revert is the verified one (reads the client back, so a grant
+    // surviving the PUT is a loud failure, never a silent leave).
+    if (!foundRopc) {
+      await disableDirectAccessGrants(token, TEST_REALM, 'genie-app');
+    }
+
     // Cleanup: delete test user only (realm lifecycle is managed by Phase 0).
     // A failed delete fails the suite and names the leftover: the account
     // stays in genie2 until the next run's createUser (409-tolerant) reuses it.
-    const token = await getAdminToken();
     const searchRes = await authRequest(
       'GET',
       `/auth/admin/realms/${TEST_REALM}/users?username=${TEST_USER.username}`,

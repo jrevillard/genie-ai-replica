@@ -19,9 +19,14 @@
  * leftover on the same realm, where the sweep sees it — no mirror
  * convention to maintain. Two standing postures stay out of the verdict:
  * the test-only realm (`genie2` — a grant there is the provisioned state,
- * not a leftover) and Keycloak's built-in clients (their grant defaults
- * are the server's; measured on the venue: `admin-cli` answers ROPC=true
- * out of the box, unpinned by the realm export).
+ * not a leftover) and the two built-in clients the realm export cannot
+ * pin (`realm-management`, `security-admin-console` — Keycloak reserves a
+ * built-in's authentication-flow bindings, so the convergence import
+ * cannot declare them; their grants stay server defaults, read back
+ * false). Every OTHER built-in is pinned false by the export (#1849 —
+ * `admin-cli`'s server default there is TRUE), so the sweep asserts it
+ * like any declared client: a venue whose convergence has not yet
+ * applied the pin reds on `admin-cli` until its next convergence run.
  *
  * Reads `BASE_URL` (through helpers/auth, the one edge definition) and
  * the Keycloak admin password the run script exports. `ROPC_POSTURE_REALMS`

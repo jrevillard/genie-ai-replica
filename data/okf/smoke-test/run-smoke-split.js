@@ -1,7 +1,14 @@
-// OKF PER-CONCEPT SPLIT smoke (#1577 story 1, 2026-11-14):
+// OKF PER-CONCEPT SPLIT smoke (#1577 story 1, 2026-11-14; story 2 adds the
+// split-preview leg, 2026-11-15):
 //   "A steward can split an oversized concept into lossless parts over the API."
 //
 // Properties proven LIVE against a running deployment:
+//
+//   0. THE PREVIEW (story 2) SHOWS THE PLAN BEFORE ANY WRITE. GET
+//      /concepts/:id/split-preview answers the same seams the POST produces
+//      (part ids, sizes, the ceiling), writes nothing, and refuses the same
+//      way the write refuses (WITHIN_CEILING / CONCEPT_TOO_LARGE /
+//      PART_ID_CONFLICT).
 //
 //   1. THE SPLIT WORKS AND IS LOSSLESS. POST /concepts/:id/split on an
 //      oversized seeded concept → 200; the parts' bodies fetched back through
@@ -176,6 +183,43 @@ async function main() {
   const beforeRows = await rows(REPO_ID);
   const countBefore = beforeRows.length;
 
+  // ── 1b. THE PREVIEW (#1577 story 2): the plan, BEFORE any write ───────────
+  // The preview runs the SAME preflight the POST runs, minus the write: the
+  // dialog's plan must equal what the confirm produces, and a preview must
+  // leave the corpus untouched.
+  const preview = await call('GET', `/api/okf/repos/${REPO_ID}/concepts/legacy-big/split-preview`);
+  if (preview.status !== 200 || !preview.body || !preview.body.ok) {
+    fail('preview → ' + preview.status + ' ' + JSON.stringify(preview.body).slice(0, 250) + ' (expected 200 ok)');
+    return done();
+  }
+  const planned = preview.body.parts || [];
+  planned.length > 1
+    ? pass('preview → 200 ok: ' + planned.length + ' parts planned')
+    : fail('preview planned ' + planned.length + ' parts — expected more than one');
+  planned[0] && planned[0].concept_id === 'legacy-big'
+    ? pass('  the plan keeps part 1 on the original id')
+    : fail('  the plan moved part 1: ' + JSON.stringify(planned[0]));
+  // Guarded on a non-empty plan: the identity/size checks below are
+  // meaningless (and vacuously green, or -Infinity in the message) on an
+  // empty array — that state already failed the parts-count assert above.
+  if (planned.length > 0) {
+    planned
+      .slice(1)
+      .every((p, i) => p.concept_id === 'legacy-big-part-' + (i + 2))
+      ? pass('  parts 2..N carry the -part-N ids')
+      : fail('  part ids drifted: ' + JSON.stringify(planned.map((p) => p.concept_id)));
+    planned.every((p) => typeof p.chars === 'number' && p.chars <= CEILING)
+      ? pass('  every planned part fits the ceiling (largest ' + Math.max.apply(null, planned.map((p) => p.chars)) + ')')
+      : fail('  a planned part exceeds the ceiling: ' + JSON.stringify(planned));
+  }
+  preview.body.ceiling === CEILING
+    ? pass('  the plan carries the ceiling (' + CEILING + ')')
+    : fail('  the plan ceiling echo: ' + JSON.stringify(preview.body.ceiling));
+  const countAfterPreview = (await rows(REPO_ID)).length;
+  countAfterPreview === countBefore
+    ? pass('  the preview wrote NOTHING (' + countBefore + ' rows before and after)')
+    : fail('  the preview CHANGED the corpus: ' + countBefore + ' → ' + countAfterPreview);
+
   // ── 2. THE SPLIT: 200, lossless, ceiling-bounded ─────────────────────────
   const repoDoc = (await aql('FOR r IN okf_repositories FILTER r.repo_id == @r RETURN r', { r: REPO_ID }))[0];
   const expectedGraph = workingGraphName(repoDoc);
@@ -189,6 +233,9 @@ async function main() {
   parts.length > 1
     ? pass('split → 200 ok: ' + parts.length + ' parts (created ' + split.body.created + ', updated ' + split.body.updated + ')')
     : fail('split produced ' + parts.length + ' parts — expected more than one');
+  parts.length === planned.length
+    ? pass('  the confirm produced exactly what the preview planned (' + planned.length + ' parts)')
+    : fail('  the confirm DIFFERED from the preview: planned ' + planned.length + ', produced ' + parts.length);
   split.body.created === parts.length - 1 && split.body.updated === 1
     ? pass('  the summary counts part 1 as updated and the rest as created')
     : fail('  summary counts: created ' + split.body.created + ', updated ' + split.body.updated);
@@ -261,6 +308,13 @@ async function main() {
     : fail('  corpus size ' + countBefore + ' → ' + afterRows.length + ' (expected +' + (parts.length - 1) + ')');
 
   // ── 4. Honest refusals on repo 1 ──────────────────────────────────────────
+  // The PREVIEW refuses the same way the write does — the dialog's states
+  // are the write's refusals, one vocabulary (story 2's "one refusal source").
+  const withinPreview = await call('GET', `/api/okf/repos/${REPO_ID}/concepts/alpha/split-preview`);
+  withinPreview.status === 400 && withinPreview.body && withinPreview.body.error === 'CONCEPT_WITHIN_CEILING'
+    ? pass('preview of a within-ceiling concept → 400 CONCEPT_WITHIN_CEILING')
+    : fail('within-ceiling preview → ' + withinPreview.status + ' ' + JSON.stringify(withinPreview.body).slice(0, 200));
+
   const within = await call('POST', `/api/okf/repos/${REPO_ID}/concepts/alpha/split`, {});
   within.status === 400 && within.body && within.body.error === 'CONCEPT_WITHIN_CEILING'
     ? pass('a within-ceiling concept → 400 CONCEPT_WITHIN_CEILING')
@@ -279,6 +333,11 @@ async function main() {
     sources: []
   });
   const countUnsplit = (await rows(REPO_ID)).length;
+  // The preview refuses the unsplittable body with the SAME 409 the write answers.
+  const unsplittablePreview = await call('GET', `/api/okf/repos/${REPO_ID}/concepts/legacy-oneline/split-preview`);
+  unsplittablePreview.status === 409 && unsplittablePreview.body && unsplittablePreview.body.error === 'CONCEPT_TOO_LARGE'
+    ? pass('preview of an unsplittable body → 409 CONCEPT_TOO_LARGE')
+    : fail('unsplittable preview → ' + unsplittablePreview.status + ' ' + JSON.stringify(unsplittablePreview.body).slice(0, 200));
   const refused = await call('POST', `/api/okf/repos/${REPO_ID}/concepts/legacy-oneline/split`, {});
   if (refused.status === 409 && refused.body && refused.body.error === 'CONCEPT_TOO_LARGE') {
     pass('an unsplittable body → 409 CONCEPT_TOO_LARGE');
@@ -321,6 +380,15 @@ async function main() {
     sources: []
   });
   const countConflict = (await rows(REPO_ID)).length;
+  // The preview lists the SAME collision the write refuses on — the dialog
+  // shows the colliding ids before the curator commits to anything.
+  const conflictPreview = await call('GET', `/api/okf/repos/${REPO_ID}/concepts/legacy-two/split-preview`);
+  conflictPreview.status === 409 && conflictPreview.body && conflictPreview.body.error === 'PART_ID_CONFLICT'
+    ? pass('preview of a colliding split → 409 PART_ID_CONFLICT')
+    : fail('conflict preview → ' + conflictPreview.status + ' ' + JSON.stringify(conflictPreview.body).slice(0, 250));
+  conflictPreview.body && String(conflictPreview.body.message || '').indexOf('legacy-two-part-2') !== -1
+    ? pass('  the preview names the colliding id (legacy-two-part-2)')
+    : fail('  the preview does not name the collision: ' + JSON.stringify(conflictPreview.body && conflictPreview.body.message).slice(0, 200));
   const conflict = await call('POST', `/api/okf/repos/${REPO_ID}/concepts/legacy-two/split`, {});
   conflict.status === 409 && conflict.body && conflict.body.error === 'PART_ID_CONFLICT'
     ? pass('a -part-N id held by an unrelated concept → 409 PART_ID_CONFLICT')

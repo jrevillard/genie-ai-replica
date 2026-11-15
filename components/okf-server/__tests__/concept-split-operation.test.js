@@ -311,6 +311,127 @@ describe('splitConcept — CAP-2: honest refusals, zero partial state', () => {
   });
 });
 
+describe('previewConceptSplit — the preflight both surfaces run (#1577 story 2)', () => {
+  test('the plan carries the per-part identity, path, title and size — and the ceiling', async () => {
+    const out = await svc().previewConceptSplit({ repo_id: 'r1', lifecycle_state: 'draft' }, 'big-concept');
+    expect(out.ok).toBe(true);
+    const { plan } = out;
+    expect(plan.ceiling).toBe(200);
+    expect(plan.body_chars).toBe(BODY.length);
+    expect(plan.parts.length).toBeGreaterThan(1);
+    // Part 1 keeps the ORIGINAL id and path (inbound links keep resolving);
+    // parts 2..N take the -part-N ids/paths and the suffixed titles — the
+    // SAME helpers the write uses, so the preview cannot drift from what
+    // the confirm writes.
+    expect(plan.parts[0]).toMatchObject({
+      concept_id: 'big-concept',
+      path: 'docs/big-concept.md',
+      title: 'Big Concept'
+    });
+    for (let i = 1; i < plan.parts.length; i += 1) {
+      expect(plan.parts[i].concept_id).toBe(`big-concept-part-${i + 1}`);
+      expect(plan.parts[i].path).toBe(`docs/big-concept-part-${i + 1}.md`);
+      expect(plan.parts[i].title).toBe(`Big Concept — part ${i + 1}`);
+    }
+    for (const p of plan.parts) {
+      expect(p.chars).toBeLessThanOrEqual(200);
+      expect(typeof p.chars).toBe('number');
+    }
+    // The char counts sum to the body (the lossless invariant, previewed).
+    const sum = plan.parts.reduce((a, p) => a + p.chars, 0) + (plan.parts.length - 1);
+    expect(sum).toBe(BODY.length);
+  });
+
+  test('a preview WRITES NOTHING — no upsert, no delete, no PII scan', async () => {
+    await svc().previewConceptSplit({ repo_id: 'r1', lifecycle_state: 'draft' }, 'big-concept');
+    expect(upsertConceptMeta).not.toHaveBeenCalled();
+    expect(deleteConceptMeta).not.toHaveBeenCalled();
+    expect(scanConcept).not.toHaveBeenCalled();
+  });
+
+  test('a within-ceiling concept answers the typed refusal (nothing to split)', async () => {
+    getConceptMeta.mockResolvedValue(META_ROW({ body: 'short body' }));
+    const out = await svc().previewConceptSplit({ repo_id: 'r1', lifecycle_state: 'draft' }, 'big-concept');
+    expect(out).toMatchObject({ ok: false, code: 'CONCEPT_WITHIN_CEILING', status: 400 });
+    expect(out.message).toMatch(/within the 200-character ceiling/);
+    expect(upsertConceptMeta).not.toHaveBeenCalled();
+  });
+
+  test('an unsplittable body answers the shared 409 refusal with size, ceiling and remedy', async () => {
+    getConceptMeta.mockResolvedValue(META_ROW({ body: 'x'.repeat(500) }));
+    const out = await svc().previewConceptSplit({ repo_id: 'r1', lifecycle_state: 'draft' }, 'big-concept');
+    expect(out).toMatchObject({ ok: false, code: 'CONCEPT_TOO_LARGE', status: 409 });
+    expect(out.message).toMatch(/500 characters/);
+    expect(out.message).toMatch(/200-character ceiling/);
+    expect(out.details).toMatchObject({ label: 'big-concept', chars: 500, ceiling: 200 });
+  });
+
+  test('a split beyond the part cap answers 400 TOO_MANY_PARTS', async () => {
+    const many = Array.from({ length: 260 }, (_, i) => `w${i} x`).join('\n\n');
+    process.env.OKF_MAX_CONCEPT_DOC_CHARS = '10';
+    getConceptMeta.mockResolvedValue(META_ROW({ body: many }));
+    const out = await svc().previewConceptSplit({ repo_id: 'r1', lifecycle_state: 'draft' }, 'big-concept');
+    expect(out).toMatchObject({ ok: false, code: 'TOO_MANY_PARTS', status: 400 });
+    expect(upsertConceptMeta).not.toHaveBeenCalled();
+  });
+
+  test('a -part-N id held by an unrelated concept answers 409 PART_ID_CONFLICT naming the rows', async () => {
+    conceptIdsExist.mockResolvedValue(['big-concept-part-2']);
+    const out = await svc().previewConceptSplit({ repo_id: 'r1', lifecycle_state: 'draft' }, 'big-concept');
+    expect(out).toMatchObject({ ok: false, code: 'PART_ID_CONFLICT', status: 409 });
+    expect(out.message).toMatch(/big-concept-part-2/);
+    expect(conceptIdsExist).toHaveBeenCalledWith('r1', expect.arrayContaining(['big-concept-part-2']));
+  });
+
+  test('a missing concept answers 404 CONCEPT_NOT_FOUND', async () => {
+    getConceptMeta.mockResolvedValue(null);
+    const out = await svc().previewConceptSplit({ repo_id: 'r1', lifecycle_state: 'draft' }, 'ghost');
+    expect(out).toMatchObject({ ok: false, code: 'CONCEPT_NOT_FOUND', status: 404 });
+  });
+
+  test('ONE refusal source: the write throws exactly what the preview returned', async () => {
+    // Every refusal state: the preview's code AND message equal the write's
+    // thrown code AND message — the dialog's preview and the POST's refusal
+    // cannot disagree, because they are the same computation.
+    const cases = [
+      META_ROW({ body: 'short body' }),
+      META_ROW({ body: 'x'.repeat(500) }),
+      META_ROW({ body: Array.from({ length: 260 }, (_, i) => `w${i} x`).join('\n\n') })
+    ];
+    for (const [idx, row] of cases.entries()) {
+      if (idx === 2) process.env.OKF_MAX_CONCEPT_DOC_CHARS = '10';
+      getConceptMeta.mockResolvedValue(row);
+      const preview = await svc().previewConceptSplit({ repo_id: 'r1' }, 'big-concept');
+      expect(preview.ok).toBe(false);
+      await expect(svc().splitConcept({ repo_id: 'r1' }, 'big-concept', {})).rejects.toMatchObject({
+        code: preview.code,
+        message: preview.message,
+        status: preview.status
+      });
+    }
+    // The conflict state too.
+    process.env.OKF_MAX_CONCEPT_DOC_CHARS = '200';
+    getConceptMeta.mockResolvedValue(META_ROW());
+    conceptIdsExist.mockResolvedValue(['big-concept-part-2']);
+    const preview = await svc().previewConceptSplit({ repo_id: 'r1' }, 'big-concept');
+    expect(preview.code).toBe('PART_ID_CONFLICT');
+    await expect(svc().splitConcept({ repo_id: 'r1' }, 'big-concept', {})).rejects.toMatchObject({
+      code: preview.code,
+      message: preview.message,
+      status: preview.status
+    });
+  });
+
+  test('the write re-throws the REAL ConceptTooLargeError class from the shared factory', async () => {
+    getConceptMeta.mockResolvedValue(META_ROW({ body: 'x'.repeat(500) }));
+    await expect(svc().splitConcept({ repo_id: 'r1' }, 'big-concept', {})).rejects.toMatchObject({
+      name: 'ConceptTooLargeError',
+      code: 'CONCEPT_TOO_LARGE',
+      status: 409
+    });
+  });
+});
+
 describe('splitConcept controller — CAP-4: the write surface holds', () => {
   let splitConceptHandler;
   let repoService;

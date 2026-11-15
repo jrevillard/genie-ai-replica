@@ -35,6 +35,7 @@
 const { test, expect } = require('@playwright/test');
 const { LOGIN_BUDGET_TIMEOUT_MS } = require('../helpers/chatbot');
 const { openStudioRepo, stubStudioRepoRoutes } = require('../helpers/okf-studio');
+const { runRouteHandler } = require('../helpers/route');
 const { okfEnabled, okfParkedReason, skipUnlessVenue } = require('../helpers/venue-profile');
 
 /**
@@ -218,5 +219,162 @@ test.describe('the concept-document ceiling in the concept editor', () => {
     await expect(status).toContainText(`${CEILING}-character ceiling`);
     // The generic wording is the WRONG advice for this refusal.
     await expect(status).not.toContainText('retry');
+  });
+});
+
+// ── #1577 story 2 — the split affordance (CAP-3 "legible before") ───────────
+//
+// The claims this describe proves, in a real browser:
+//
+//   1. the split dialog renders the SERVER's seam preview — per-part ids and
+//      sizes plus the ceiling — BEFORE any write: a preview issues ZERO split
+//      POSTs;
+//   2. confirming POSTs the split once and closes the dialog;
+//   3. a typed refusal renders the SERVER's message verbatim with confirm
+//      disabled — the corpus never changes from a refused preview.
+//
+// The preview and the write are INJECTED (page.route), the same
+// measure-don't-look rule as the ceiling describe above: what the dialog
+// shows can only have come from the intercepted preview.
+
+/** The INJECTED split plan — the preview endpoint's answer. Part 1 keeps the
+ *  original id (CAP-1's identity contract); part 2 takes the -part-2 suffix. */
+const SPLIT_PLAN = {
+  ok: true,
+  concept_id: CONCEPT_ID,
+  ceiling: CEILING,
+  body_chars: 140,
+  parts: [
+    { concept_id: CONCEPT_ID, path: `${CONCEPT_ID}.md`, title: 'Alpha', chars: 90 },
+    {
+      concept_id: `${CONCEPT_ID}-part-2`,
+      path: `${CONCEPT_ID}-part-2.md`,
+      title: 'Alpha — part 2',
+      chars: 50
+    }
+  ]
+};
+
+/**
+ * Stub the split surface for one test: the preview GET answers `preview`
+ * (either {status: 200, body} or an HTTP refusal {status, error, message});
+ * the split POST captures every write and answers the story-1 summary.
+ */
+async function stubSplitRoutes(page, preview) {
+  const previews = [];
+  const splits = [];
+  await page.route(
+    '**/api/okf/repos/*/concepts/*/split-preview',
+    runRouteHandler(page, (route) => {
+      previews.push(route.request().url());
+      if (preview.status !== 200) {
+        return route.fulfill({
+          status: preview.status,
+          contentType: 'application/json',
+          body: JSON.stringify({ ok: false, error: preview.error, message: preview.message })
+        });
+      }
+      return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(preview.body) });
+    })
+  );
+  await page.route(
+    '**/api/okf/repos/*/concepts/*/split',
+    runRouteHandler(page, (route) => {
+      splits.push(route.request().url());
+      return route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify({ ok: true, concept_id: CONCEPT_ID, parts: SPLIT_PLAN.parts, created: 1, updated: 1 })
+      });
+    })
+  );
+  return { previews, splits };
+}
+
+/**
+ * Open the editor (the ceiling describe's own walk), then open the split
+ * dialog from the TREE ROW. Hover first: the row actions render on hover
+ * only, so the split glyph is invisible until the row is hovered.
+ */
+async function openSplitDialog(page, preview) {
+  const captured = await stubSplitRoutes(page, preview);
+  await stubStudioRepoRoutes(page, { repoId: REPO_ID, repo: REPO, draftBody: DRAFT, conceptsBody: CONCEPTS });
+  await page.route(
+    '**/api/okf/repos/*/concepts/*',
+    runRouteHandler(page, (route) => {
+      if (route.request().method() === 'PATCH') {
+        return route.fulfill({ status: 409, contentType: 'application/json', body: JSON.stringify({}) });
+      }
+      return route.fulfill({
+        status: 200,
+        contentType: 'application/json',
+        body: JSON.stringify(CONCEPT)
+      });
+    })
+  );
+
+  await openStudioRepo(page, REPO_ID);
+  const editorTab = page.locator('[data-test-id="ds-tab-editor"]');
+  await expect(editorTab).toBeVisible({ timeout: 15000 });
+  await editorTab.click();
+  const row = page.locator(`[data-test-id="okf-concept-row-${CONCEPT_ID}"]`);
+  await expect(row).toBeVisible({ timeout: 15000 });
+  await row.hover();
+  await row.locator('[data-test-id="okf-concept-split"]').click();
+  await expect(page.locator('[data-test-id="okf-split-preview"]')).toBeVisible({ timeout: 15000 });
+  return captured;
+}
+
+test.describe('the split affordance in the concept editor (#1577 story 2)', () => {
+  test.use({ locale: 'en-US' });
+  test.describe.configure({ timeout: LOGIN_BUDGET_TIMEOUT_MS });
+  test.beforeEach(skipUnlessVenue(test, okfEnabled, okfParkedReason));
+
+  test('the dialog renders the seam preview BEFORE any write', async ({ page }) => {
+    const { previews, splits } = await openSplitDialog(page, { status: 200, body: SPLIT_PLAN });
+
+    // The plan landed (the rows exist only once the preview fetch resolved).
+    const rows = page.locator('[data-test-id="okf-split-part-row"]');
+    await expect(rows).toHaveCount(2, { timeout: 15000 });
+    await expect(rows.nth(0)).toContainText(CONCEPT_ID); // part 1 keeps the id
+    await expect(rows.nth(1)).toContainText(`${CONCEPT_ID}-part-2`); // part 2 takes the suffix
+    await expect(page.locator('[data-test-id="okf-split-preview"]')).toContainText(String(CEILING));
+    // The preview ran exactly once — it is what the dialog shows.
+    await expect(previews.length).toBe(1);
+
+    // Confirm armed on a landed plan...
+    await expect(page.locator('[data-test-id="okf-split-confirm"]')).toBeEnabled();
+    // ...and THE CAP-3 pin: a preview is not a write — the POST never ran.
+    await expect(splits.length).toBe(0);
+  });
+
+  test('confirming POSTs the split once and closes the dialog', async ({ page }) => {
+    const { splits } = await openSplitDialog(page, { status: 200, body: SPLIT_PLAN });
+
+    await page.locator('[data-test-id="okf-split-confirm"]').click();
+
+    // THE write ran exactly once...
+    await expect.poll(() => splits.length, { timeout: 15000 }).toBe(1);
+    // ...and the dialog closed on success.
+    await expect(page.locator('[data-test-id="okf-split-preview"]')).toBeHidden({ timeout: 15000 });
+  });
+
+  test('a typed refusal renders the SERVER message verbatim and confirm stays disabled', async ({ page }) => {
+    const { previews, splits } = await openSplitDialog(page, {
+      status: 409,
+      error: 'PART_ID_CONFLICT',
+      message:
+        'splitting concept "alpha" would overwrite existing concept(s) alpha-part-2 — rename or delete them first, then split again'
+    });
+
+    await expect(previews.length).toBe(1);
+    const refusal = page.locator('[data-test-id="okf-split-refusal"]');
+    await expect(refusal).toBeVisible({ timeout: 15000 });
+    // The refusal names the colliding id AND the remedy — the server's words.
+    await expect(refusal).toContainText('alpha-part-2');
+    await expect(refusal).toContainText('rename or delete them first');
+    await expect(page.locator('[data-test-id="okf-split-confirm"]')).toBeDisabled();
+    // The corpus never changes from a refused preview.
+    await expect(splits.length).toBe(0);
   });
 });

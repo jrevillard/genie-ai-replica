@@ -128,4 +128,7 @@ the knobs to lower.
   a provider whose `/v1/models` carries no `max_model_len`.
 - The ceiling is enforced on **every** write path: the import splits (or
   rejects), the Studio editor refuses the save (409, nothing written), and
-  the publish gate refuses **before** minting a version.
+  the publish gate refuses **before** minting a version. For an over-ceiling
+  concept the Studio editor now offers the **split affordance** (concept-tree
+  row and pane, beside the ceiling advisory) as the remedy: a seam preview
+  from the same engine, confirmed before anything is written.

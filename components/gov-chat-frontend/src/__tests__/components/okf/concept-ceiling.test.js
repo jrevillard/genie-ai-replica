@@ -64,10 +64,10 @@ function fakeStore({ concept = {}, patchResult = { ok: true } } = {}) {
   return store;
 }
 
-async function mountEditor(store) {
+async function mountEditor(store, extraProps = {}) {
   const wrapper = mount(OkfConceptEditor, {
     global: { mocks: { $store: store } },
-    props: { repoId: 'r-1', conceptId: 'c-1' }
+    props: { repoId: 'r-1', conceptId: 'c-1', ...extraProps }
   });
   await flushPromises();
   await wrapper.vm.$nextTick();
@@ -119,6 +119,25 @@ describe('the concept-document ceiling — the editor advisory', () => {
     await wrapper.vm.$nextTick();
     expect(wrapper.vm.bodyChars).toBe('short body'.length);
     expect(wrapper.vm.overCeiling).toBe(false);
+  });
+
+  // #1577 story 2 — the pane's split affordance lives exactly where the
+  // curator reads the rule: beside the ceiling advisory.
+  test('the split affordance renders beside the advisory and emits the loaded concept id', async () => {
+    const wrapper = await mountEditor(fakeStore({ concept: { max_doc_chars: CEILING } }));
+    const advisory = wrapper.find('[data-test-id="concept-ceiling"]');
+    expect(advisory.exists()).toBe(true);
+    const split = advisory.find('[data-test-id="okf-concept-split"]');
+    expect(split.exists()).toBe(true);
+    await split.trigger('click');
+    expect(wrapper.emitted('split')).toEqual([['c-1']]);
+  });
+
+  test('a read-only (serving) repo shows NO pane split affordance', async () => {
+    const wrapper = await mountEditor(fakeStore({ concept: { max_doc_chars: CEILING } }), { readOnly: true });
+    // The advisory itself may still render (it is information, not an
+    // affordance); the split button must not.
+    expect(wrapper.find('[data-test-id="okf-concept-split"]').exists()).toBe(false);
   });
 });
 

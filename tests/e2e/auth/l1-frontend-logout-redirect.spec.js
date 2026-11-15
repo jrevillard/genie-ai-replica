@@ -2,6 +2,11 @@ const { test, expect } = require('@playwright/test');
 const { BASE_URL } = require('../helpers/base-url');
 const { TEST_USER } = require('../helpers/e2e-fixtures');
 const { NAV_LOGOUT_BUTTON } = require('../helpers/navbar');
+const {
+  KEYCLOAK_AUTH_ENDPOINT_GLOB,
+  waitForRealmAuthEndpoint,
+  expectKeycloakLoginForm,
+} = require('../helpers/keycloak-landing');
 
 // Test L.1 — Frontend Logout Redirect
 // Complete logout flow: login, click logout button, verify redirect to Keycloak login page.
@@ -21,7 +26,7 @@ test('clicks logout button and redirects to Keycloak login page', async ({ brows
   });
 
   // Step 2: Wait for Keycloak login page
-  await page.waitForURL('**/protocol/openid-connect/auth**', {
+  await page.waitForURL(KEYCLOAK_AUTH_ENDPOINT_GLOB, {
     timeout: 15000,
   });
 
@@ -53,41 +58,23 @@ test('clicks logout button and redirects to Keycloak login page', async ({ brows
   ).toBeTruthy();
 
   // Step 5: Click the logout button (NavBarComponent desktop logout button).
-  // The button renders only inside the authenticated shell (App.vue renders
-  // the navbar only for isAuthenticated && currentUser), so its visibility is
-  // the authenticated-state pin — no brand-substring check beside it.
+  // Its visibility is the authenticated-state pin: it renders only inside
+  // the authenticated shell — see the note beside NAV_LOGOUT_BUTTON in
+  // helpers/navbar.js.
   const logoutButton = page.locator(NAV_LOGOUT_BUTTON);
   await expect(logoutButton, 'Logout button should be visible after login').toBeVisible({ timeout: 10000 });
   await logoutButton.click();
 
-  // Step 6: Wait for the Keycloak logout redirect chain to reach the realm —
-  // the logout endpoint (signoutRedirect via oidc-client-ts) and, once the
-  // realm session is destroyed, the auth endpoint that renders the login
-  // page (the same two endpoints the l3 spec waits for). Nothing in the
-  // app, Keycloak or the docs produces /auth/realms/genie/login — that
-  // alternative matched nothing and only weakened the wait.
-  await page.waitForURL(
-    (url) => {
-      const urlStr = url.toString();
-      return (
-        urlStr.includes('/auth/realms/genie/protocol/openid-connect/logout') ||
-        urlStr.includes('/auth/realms/genie/protocol/openid-connect/auth')
-      );
-    },
-    { timeout: 30000 },
-  );
+  // Step 6: Settle on the realm (helpers/keycloak-landing.js)…
+  await waitForRealmAuthEndpoint(page);
 
-  // Step 7: The landing-form proof (the l3 spec's corrected step 8): the
-  // Keycloak login form renders only while the realm holds no live SSO
-  // session, so it is the proof the logout completed. A partial logout —
-  // a surviving SSO session — bounces through the auth endpoint straight
-  // back into the app and never renders this form; a realm-path URL match
-  // alone cannot tell the two apart. One expected landing, asserted
-  // unconditionally.
-  await expect(
-    page.locator('#username'),
+  // Step 7: …and prove the landing (the form renders only while the realm
+  // holds no live SSO session — a partial logout bounces back into the app
+  // and never renders it).
+  await expectKeycloakLoginForm(
+    page,
     `Expected the Keycloak login form after logout (session cleared); the browser was last at: ${page.url()}`,
-  ).toBeVisible({ timeout: 15000 });
+  );
 
   await context.close();
 });

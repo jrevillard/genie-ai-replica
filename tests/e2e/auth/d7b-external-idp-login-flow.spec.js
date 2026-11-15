@@ -180,29 +180,24 @@ test('completes full external IdP brokered login flow', async ({ browser }) => {
       // endpoint (/auth/realms/genie/broker/external-idp/endpoint), which
       // issues the genie realm's own OIDC redirect to the app's /callback
       // route (the oidc client's redirect_uri), and the app processes the
-      // code there (handleCallback) before routing onward. Wait for each
-      // hop in order — never branch on which hop the browser happens to be
-      // observed at (tests/e2e/CLAUDE.md: no fallback branches).
+      // code there (handleCallback) before routing onward. Wait for the
+      // callback hop, then for the exact landing — never branch on which
+      // hop the browser happens to be observed at (tests/e2e/CLAUDE.md:
+      // no fallback branches).
       await page.waitForURL((url) => url.toString().includes('/callback'), {
-        timeout: 30000
-      });
-      await page.waitForURL((url) => !url.toString().includes('/callback'), {
         timeout: 30000
       });
 
       // Step 4: The chain lands on the dashboard, exactly: CallbackView
       // replaces to the returnUrl the login carried ('/dashboard' — this
       // flow entered at '/'). One expected landing, asserted exactly; a
-      // partial broker flow that parks the browser anywhere else fails here.
+      // partial broker flow that parks the browser anywhere else — on the
+      // callback included — fails here.
       await page.waitForURL(`${BASE_URL}/dashboard`, { timeout: 30000 });
 
-      // Step 5: Authenticated-shell proof: the navbar renders only inside
-      // App.vue's authenticated gate (isAuthenticated && currentUser), so a
-      // visible logout button proves the brokered session actually rendered
-      // the app — a URL match alone would not. (The previous '#kc-login
-      // not visible' check was vacuous: the Vue app never renders that id;
-      // it lives only on the Keycloak login page, which the step-4 landing
-      // already left behind.)
+      // Step 5: Authenticated-shell proof: the logout button renders only
+      // inside App.vue's authenticated gate — see the note beside
+      // NAV_LOGOUT_BUTTON in helpers/navbar.js.
       const logoutButton = page.locator(NAV_LOGOUT_BUTTON);
       await expect(
         logoutButton,

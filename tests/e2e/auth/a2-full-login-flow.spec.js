@@ -38,36 +38,22 @@ test('completes full login flow from app to Keycloak and back', async ({ browser
   await page.fill('#password', TEST_USER.password);
   await page.click('#kc-login');
 
-  // Step 4: Wait for redirect back to the app
-  await page.waitForURL(`${BASE_URL}/**`, {
+  // Step 4: Wait for redirect back to the app — the dashboard, exactly:
+  // the login is requested from '/' (whose redirect target is
+  // /dashboard), and CallbackView replaces to that same returnUrl. One
+  // expected landing; a login flow that parks anywhere else fails here.
+  await page.waitForURL(`${BASE_URL}/dashboard`, {
     timeout: 30000,
   });
 
-  // Step 5: Verify authenticated state — wait for navigation to settle
-  await page.waitForURL(
-    (url) => {
-      const urlStr = url.toString();
-      return urlStr.includes('dashboard') || urlStr === `${BASE_URL}/`;
-    },
-    { timeout: 30000 },
-  );
-
-  const finalUrl = page.url();
-  await expect(
-    finalUrl.includes('dashboard'),
-    `Expected URL to contain 'dashboard', got: ${finalUrl}`,
-  ).toBeTruthy();
-
-  // Authenticated-shell proof: the navbar renders only inside App.vue's
-  // authenticated gate (isAuthenticated && currentUser), so a visible
-  // logout button proves the authenticated UI actually rendered. The URL
-  // pin above proves the router guard admitted a session; this proves the
-  // shell behind it is alive (the deleted brand-substring check was this
-  // same proof, keyed on copy text instead of a declared handle).
+  // Authenticated-shell proof: the logout button renders only inside
+  // App.vue's authenticated gate — see the note beside NAV_LOGOUT_BUTTON
+  // in helpers/navbar.js. The exact-URL pin above proves the router guard
+  // admitted a session; this proves the shell behind it actually rendered.
   const logoutButton = page.locator(NAV_LOGOUT_BUTTON);
   await expect(
     logoutButton,
-    `Expected the authenticated shell (logout button visible) on the dashboard; got URL: ${finalUrl}`,
+    `Expected the authenticated shell (logout button visible) on the dashboard; got URL: ${page.url()}`,
   ).toBeVisible({ timeout: 10000 });
 
   await context.close();

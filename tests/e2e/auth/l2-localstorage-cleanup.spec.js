@@ -2,6 +2,7 @@ const { test, expect } = require('@playwright/test');
 const { BASE_URL } = require('../helpers/base-url');
 const { TEST_USER } = require('../helpers/e2e-fixtures');
 const { NAV_LOGOUT_BUTTON } = require('../helpers/navbar');
+const { waitForRealmAuthEndpoint } = require('../helpers/keycloak-landing');
 
 // Test L.2 — localStorage Cleanup on Logout
 // Login, inject legacy localStorage items, trigger logout, verify they are removed.
@@ -70,21 +71,12 @@ test('clears legacy localStorage items after logout', async ({ browser }) => {
 
   await logoutButton.click();
 
-  // Step 6: Wait for the Keycloak logout redirect — the realm endpoints
-  // only, the same two the l3 spec waits for. 'dashboard' is not an
+  // Step 6: Settle on the realm after the logout click (the two chain
+  // endpoints — see helpers/keycloak-landing.js). 'dashboard' is not an
   // outcome here: it matches the no-navigation state a failed logout
   // leaves the browser in, which would pass the wait without any logout
   // having happened.
-  await page.waitForURL(
-    (url) => {
-      const urlStr = url.toString();
-      return (
-        urlStr.includes('/auth/realms/genie/protocol/openid-connect/logout') ||
-        urlStr.includes('/auth/realms/genie/protocol/openid-connect/auth')
-      );
-    },
-    { timeout: 30000 },
-  );
+  await waitForRealmAuthEndpoint(page);
 
   // Step 7: Read the app-origin localStorage after the logout. The read is
   // atomic with an origin guard: after a destroyed realm session the
@@ -94,7 +86,6 @@ test('clears legacy localStorage items after logout', async ({ browser }) => {
   // One evaluate checks its own origin first and throws if it lost the
   // race; the reads below therefore ran where they claim to have.
   await page.goto(`${BASE_URL}/`, { waitUntil: 'commit', timeout: 15000 });
-  const expectedOrigin = new URL(BASE_URL).origin;
   const storageAfter = await page.evaluate((origin) => {
     if (location.origin !== origin) {
       throw new Error(
@@ -105,7 +96,7 @@ test('clears legacy localStorage items after logout', async ({ browser }) => {
       user: localStorage.getItem('user'),
       token: localStorage.getItem('auth_token'),
     };
-  }, expectedOrigin);
+  }, BASE_URL);
 
   await expect(
     storageAfter.user === null,

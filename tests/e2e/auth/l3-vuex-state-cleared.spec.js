@@ -2,6 +2,11 @@ const { test, expect } = require('@playwright/test');
 const { BASE_URL } = require('../helpers/base-url');
 const { TEST_USER } = require('../helpers/e2e-fixtures');
 const { NAV_LOGOUT_BUTTON } = require('../helpers/navbar');
+const {
+  KEYCLOAK_AUTH_ENDPOINT_GLOB,
+  waitForRealmAuthEndpoint,
+  expectKeycloakLoginForm,
+} = require('../helpers/keycloak-landing');
 
 // Test L.3 — Vuex Auth State Cleared on Logout
 // Login, verify isAuthenticated is true, trigger logout, verify the app no
@@ -25,7 +30,7 @@ test('clears Vuex auth state after logout — lands on the Keycloak login page',
   });
 
   // Step 2: Wait for Keycloak login page and fill credentials
-  await page.waitForURL('**/protocol/openid-connect/auth**', {
+  await page.waitForURL(KEYCLOAK_AUTH_ENDPOINT_GLOB, {
     timeout: 15000
   });
 
@@ -33,20 +38,11 @@ test('clears Vuex auth state after logout — lands on the Keycloak login page',
   await page.fill('#password', TEST_USER.password);
   await page.click('#kc-login');
 
-  // Step 3: Wait for redirect back to the app (dashboard)
-  await page.waitForURL(
-    (url) => {
-      const urlStr = url.toString();
-      return urlStr.includes('dashboard') || urlStr === `${BASE_URL}/`;
-    },
-    { timeout: 30000 }
-  );
-
-  const dashboardUrl = page.url();
-  await expect(
-    dashboardUrl.includes('dashboard'),
-    `Expected URL to contain 'dashboard' after login, got: ${dashboardUrl}`
-  ).toBeTruthy();
+  // Step 3: Wait for redirect back to the app — the dashboard, exactly:
+  // the login is requested from '/' (whose redirect target is
+  // /dashboard), so that is the one expected landing; a login flow that
+  // parks anywhere else fails here.
+  await page.waitForURL(`${BASE_URL}/dashboard`, { timeout: 30000 });
 
   // Step 4: Verify authenticated state via Vuex store — the store is
   // reachable once __vue_app__ exists.
@@ -96,17 +92,9 @@ test('clears Vuex auth state after logout — lands on the Keycloak login page',
   await expect(logoutButton, 'Logout button should be visible').toBeVisible({ timeout: 10000 });
   await logoutButton.click();
 
-  // Step 6: Wait for redirect to Keycloak
-  await page.waitForURL(
-    (url) => {
-      const urlStr = url.toString();
-      return (
-        urlStr.includes('/auth/realms/genie/protocol/openid-connect/logout') ||
-        urlStr.includes('/auth/realms/genie/protocol/openid-connect/auth')
-      );
-    },
-    { timeout: 30000 }
-  );
+  // Step 6: Settle on the realm (the two chain endpoints — see
+  // helpers/keycloak-landing.js).
+  await waitForRealmAuthEndpoint(page);
 
   // Step 7: Navigate back to app to verify the session is gone
   // After Keycloak processes logout, navigate back: the L.3 contract
@@ -120,18 +108,14 @@ test('clears Vuex auth state after logout — lands on the Keycloak login page',
     timeout: 30000
   });
 
-  // Step 8: Assert the landing — the form is server-rendered by the time
-  // goto lands; the locator auto-waits the render. The login form renders
-  // only when the realm holds no live SSO session, so this is the
-  // cleared-state proof (the navigation guard only fires when
-  // isAuthenticated is false). A URL match alone could report a false
-  // pass: a surviving session (a partial logout) passes through the auth
-  // endpoint on its 302 back to the app and never renders this form. One
-  // expected landing, asserted unconditionally.
-  await expect(
-    page.locator('#username'),
+  // Step 8: The landing-form proof (helpers/keycloak-landing.js) — the
+  // form renders only while the realm holds no live SSO session, so this
+  // is the cleared-state proof: the navigation guard only fires when
+  // isAuthenticated is false, and a surviving session never renders it.
+  await expectKeycloakLoginForm(
+    page,
     `Expected the Keycloak login form after logout (session cleared); the browser was last at: ${page.url()}`
-  ).toBeVisible({ timeout: 15000 });
+  );
 
   await context.close();
 });

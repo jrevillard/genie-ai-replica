@@ -329,9 +329,9 @@ async function getSessionToken(page) {
 // SWEEP_DOCS_MAX_DELETES owns the delete-budget arithmetic): 135 s login
 // + 60 s list + 180 s deletes = 375 s, so 420 s leaves margin without
 // loosening the sweep's own token-window bound. Apply with
-// test.describe.configure({
-// timeout: ... }) for the tests and test.setTimeout(...) inside
-// beforeAll — hooks read the project timeout, not the suite timeout.
+// `test.describe.configure({ timeout: ... })` for the tests and
+// test.setTimeout(...) inside beforeAll — hooks read the project
+// timeout, not the suite timeout.
 const SESSION_MINT_TIMEOUT_MS = 420000;
 
 /**

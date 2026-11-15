@@ -51,8 +51,8 @@ test.describe('Admin logs view', () => {
           warnings: summaryPayload.warnings,
           services: [],
           date: new Date().toISOString().split('T')[0],
-          degraded: false,
-        }),
+          degraded: false
+        })
       });
     });
     // The Logs tab also fires the raw /api/admin/logs read; mock it so
@@ -61,8 +61,8 @@ test.describe('Admin logs view', () => {
       route.fulfill({
         status: 200,
         contentType: 'application/json',
-        body: JSON.stringify({ logs: [], total: 0, limit: 20, offset: 0 }),
-      }),
+        body: JSON.stringify({ logs: [], total: 0, limit: 20, offset: 0 })
+      })
     );
     await page.goto(`${BASE_URL}/admin`, { waitUntil: 'networkidle' });
     // The admin sections are sidebar links (not buttons), so the anchor
@@ -76,8 +76,8 @@ test.describe('Admin logs view', () => {
       errors: [],
       warnings: [
         { type: 'auth', service: 'wired-keycloak', count: 3 },
-        { type: 'database', service: 'wired-arangodb', count: 7 },
-      ],
+        { type: 'database', service: 'wired-arangodb', count: 7 }
+      ]
     });
 
     // Scoped to the warnings card: the component assigns the errors and
@@ -102,11 +102,13 @@ test.describe('Admin logs view', () => {
     // the invalid-response branch renders the same empty row for both.
     const summary = await loginAdminWithSummary(page, {
       errors: [{ type: 'auth', service: 'wired-keycloak', count: 3 }],
-      warnings: [],
+      warnings: []
     });
 
     const errorsCard = page.locator('[data-test-id="logs-errors-card"]');
-    await expect(errorsCard.locator('[data-test-id="log-row-errors-auth-wired-keycloak"]')).toHaveText(/wired-keycloak/);
+    await expect(errorsCard.locator('[data-test-id="log-row-errors-auth-wired-keycloak"]')).toHaveText(
+      /wired-keycloak/
+    );
 
     // Both roll-up tables render their own empty row; scope to the
     // warnings card anchor (the table this spec's payload drives). The

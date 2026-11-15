@@ -18,6 +18,10 @@
 // not drain at all — the winner is cached so refreshes skip dead endpoints).
 
 const axios = require('axios');
+// The DEEP shared-lib spelling (Docker-resolved; the barrel would drag
+// shared/lib's whole world — validator, geoip-lite — which okf-server does
+// not ship). See components/CLAUDE.md § deep imports.
+const { createClientCredentialsMinter } = require('../shared-lib/client-credentials');
 const { logger } = require('../shared-lib/logger');
 
 const BUFFER_SECONDS = 30;
@@ -27,11 +31,8 @@ const KC_REALM = () => process.env.KEYCLOAK_REALM || 'genie';
 const CLIENT_ID = () => process.env.KC_OKF_SERVER_CLIENT_ID || 'okf-server';
 const CLIENT_SECRET = () => process.env.KC_OKF_SERVER_CLIENT_SECRET || '';
 
-let _cachedToken = null;
-let _tokenExpiry = 0;
-let _mintPromise = null;
+let _minter = null; // created lazily so the first call sees the settled env
 let _warnedUnconfigured = false;
-let _tokenEndpoint = null; // the endpoint that last minted successfully (failover memory)
 
 function tokenEndpointCandidates() {
   // MINT-FIRST-PUBLIC (#1636, 2026-11-07): the mint host stamps iss into the
@@ -55,8 +56,52 @@ function tokenEndpointCandidates() {
 }
 
 function tokenEndpoint() {
-  // Documented precedence (first candidate); mintToken failovers across all.
+  // Documented precedence (first candidate); the minter failovers across all.
   return tokenEndpointCandidates()[0];
+}
+
+/** The raw mint transport, kept on axios verbatim: the timeout is 5 s here
+ * (not the shared default's 10 s), and the https endpoints honor the
+ * deployment's skip-verify escape hatches (NODE_TLS_REJECT_UNAUTHORIZED=0 /
+ * KEYCLOAK_SSL_SKIP_VERIFY=1) through an agent — behavior the plain-fetch
+ * default transport does not carry. */
+async function mintWithAxios(endpoint) {
+  const body = new URLSearchParams({
+    grant_type: 'client_credentials',
+    client_id: CLIENT_ID(),
+    client_secret: CLIENT_SECRET()
+  });
+  const https = endpoint.startsWith('https');
+  const resp = await axios.post(endpoint, body, {
+    timeout: 5000,
+    ...(https && (process.env.NODE_TLS_REJECT_UNAUTHORIZED === '0' || process.env.KEYCLOAK_SSL_SKIP_VERIFY === '1')
+      ? { httpsAgent: new (require('https').Agent)({ rejectUnauthorized: false }) }
+      : {})
+  });
+  const data = resp.data || {};
+  if (!data.access_token) {
+    throw new Error('response missing access_token');
+  }
+  return data;
+}
+
+/** The ONE minter (#1168): cache + single-flight + endpoint failover live in
+ * shared-lib; this file keeps only its transport, its env contract and its
+ * egress policy. Created lazily so the first call reads the settled env
+ * (the historical test-friendly pattern); _resetForTesting drops it. */
+function minter() {
+  if (!_minter) {
+    _minter = createClientCredentialsMinter({
+      clientId: CLIENT_ID(),
+      clientSecret: CLIENT_SECRET(),
+      tokenEndpoints: tokenEndpointCandidates(),
+      bufferSeconds: BUFFER_SECONDS,
+      timeoutMs: 5000,
+      mintAt: mintWithAxios,
+      logger
+    });
+  }
+  return _minter;
 }
 
 /** True when the client credentials env is absent — calls proceed WITHOUT a
@@ -74,61 +119,14 @@ function isUnconfigured() {
   return false;
 }
 
-async function mintToken() {
-  const body = new URLSearchParams({
-    grant_type: 'client_credentials',
-    client_id: CLIENT_ID(),
-    client_secret: CLIENT_SECRET()
-  });
-  // Try the last-known-good endpoint FIRST (if any), then the candidates in
-  // precedence order. Every failure is COLLECTED into the thrown message —
-  // the Winston console formatter strips metadata fields, so the diagnosis
-  // must be self-describing (live-caught: a bare "token request failed" hid
-  // WHICH endpoint was unreachable for a day).
-  const candidates = [...new Set([_tokenEndpoint, ...tokenEndpointCandidates()].filter(Boolean))];
-  const failures = [];
-  for (const endpoint of candidates) {
-    const https = endpoint.startsWith('https');
-    try {
-      const resp = await axios.post(endpoint, body, {
-        timeout: 5000,
-        ...(https && (process.env.NODE_TLS_REJECT_UNAUTHORIZED === '0' || process.env.KEYCLOAK_SSL_SKIP_VERIFY === '1')
-          ? { httpsAgent: new (require('https').Agent)({ rejectUnauthorized: false }) }
-          : {})
-      });
-      const data = resp.data || {};
-      if (!data.access_token) {
-        throw new Error('response missing access_token');
-      }
-      _cachedToken = data.access_token;
-      _tokenExpiry = Date.now() + (data.expires_in || 300) * 1000;
-      _tokenEndpoint = endpoint;
-      logger.info('okf-server service-account token minted', {
-        client_id: CLIENT_ID(),
-        expires_in: data.expires_in,
-        endpoint
-      });
-      return _cachedToken;
-    } catch (err) {
-      failures.push(`${endpoint} (${err.message})`);
-    }
-  }
-  throw new Error(`Service-account token request failed for ${failures.length} endpoint(s): ${failures.join('; ')}`);
-}
-
 /**
- * Get a valid service-account token (cached; single-flight refresh).
+ * Get a valid service-account token (cached with expiry + buffer; single-flight
+ * refresh; endpoint failover with winner memory — all in the shared minter).
  * @returns {Promise<string|null>} null when unconfigured (caller proceeds unauthenticated).
  */
 async function getServiceToken() {
   if (isUnconfigured()) return null;
-  if (_cachedToken && Date.now() < _tokenExpiry - BUFFER_SECONDS * 1000) return _cachedToken;
-  if (!_mintPromise) {
-    _mintPromise = mintToken().finally(() => {
-      _mintPromise = null;
-    });
-  }
-  return _mintPromise;
+  return minter().getToken();
 }
 
 /** Authenticated axios surface for okf-server → internal services HTTP
@@ -237,16 +235,14 @@ const authedAxios = {
 
 /** Drop the cached token (401-retry path: the cached token was rejected). */
 function _clearTokenCache() {
-  _cachedToken = null;
-  _tokenExpiry = 0;
+  if (_minter) _minter.invalidate();
 }
 
-/** Test hook: drop the cache. */
+/** Test hook: drop the cache AND the lazily-built minter (the next call
+ * re-reads the env — the historical test pattern). */
 function _resetForTesting() {
-  _clearTokenCache();
-  _mintPromise = null;
+  _minter = null;
   _warnedUnconfigured = false;
-  _tokenEndpoint = null;
 }
 
 module.exports = { getServiceToken, authedAxios, tokenEndpoint, _assertAllowedUrl: assertAllowedUrl, _resetForTesting };

@@ -333,7 +333,9 @@ const audit = () => {
           // landing is observed, not timed. A click that widens nothing
           // fails here instead of writing a misnamed capture.
           const overlayWidth = () =>
-            page.evaluate(() => document.querySelector('[data-testid="quick-help-overlay"]').getBoundingClientRect().width);
+            page.evaluate(
+              () => document.querySelector('[data-testid="quick-help-overlay"]').getBoundingClientRect().width
+            );
           const waitWiderThan = (prev) =>
             page.waitForFunction(
               (w) => document.querySelector('[data-testid="quick-help-overlay"]').getBoundingClientRect().width > w + 1,

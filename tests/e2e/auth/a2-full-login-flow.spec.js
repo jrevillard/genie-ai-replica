@@ -12,27 +12,24 @@ const { KEYCLOAK_AUTH_ENDPOINT_GLOB } = require('../helpers/keycloak-landing');
 test('completes full login flow from app to Keycloak and back', async ({ browser }) => {
   const context = await browser.newContext({
     ignoreHTTPSErrors: true,
-    bypassCSP: true,
+    bypassCSP: true
   });
   const page = await context.newPage();
 
   // Step 1: Navigate to app root — should redirect to Keycloak
   await page.goto(`${BASE_URL}/`, {
     waitUntil: 'networkidle',
-    timeout: 30000,
+    timeout: 30000
   });
 
   // Step 2: Wait for Keycloak login page
   await page.waitForURL(KEYCLOAK_AUTH_ENDPOINT_GLOB, {
-    timeout: 15000,
+    timeout: 15000
   });
 
   // Verify we are on the Keycloak login page
   const loginUrl = page.url();
-  await expect(
-    loginUrl.includes('/auth/realms/genie/'),
-    `Expected Keycloak login URL, got: ${loginUrl}`,
-  ).toBeTruthy();
+  await expect(loginUrl.includes('/auth/realms/genie/'), `Expected Keycloak login URL, got: ${loginUrl}`).toBeTruthy();
 
   // Step 3: Fill credentials and submit
   await page.fill('#username', TEST_USER.username);
@@ -44,7 +41,7 @@ test('completes full login flow from app to Keycloak and back', async ({ browser
   // /dashboard), and CallbackView replaces to that same returnUrl. One
   // expected landing; a login flow that parks anywhere else fails here.
   await page.waitForURL(`${BASE_URL}/dashboard`, {
-    timeout: 30000,
+    timeout: 30000
   });
 
   // Authenticated-shell proof: the logout button renders only inside
@@ -54,7 +51,7 @@ test('completes full login flow from app to Keycloak and back', async ({ browser
   const logoutButton = page.locator(NAV_LOGOUT_BUTTON);
   await expect(
     logoutButton,
-    `Expected the authenticated shell (logout button visible) on the dashboard; got URL: ${page.url()}`,
+    `Expected the authenticated shell (logout button visible) on the dashboard; got URL: ${page.url()}`
   ).toBeVisible({ timeout: 10000 });
 
   await context.close();

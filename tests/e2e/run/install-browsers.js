@@ -92,7 +92,9 @@ function resolvePackage(name, repoRoot = REPO_ROOT) {
   for (const candidate of RUNNER_CHAIN) {
     const file = resolveInNodeModules(candidate, dir, repoRoot);
     if (!file) {
-      throw new Error(`the checkout carries no ${candidate} — node_modules is missing or does not carry the runner's chain`);
+      throw new Error(
+        `the checkout carries no ${candidate} — node_modules is missing or does not carry the runner's chain`
+      );
     }
     if (candidate === name) return file;
     dir = path.dirname(file);
@@ -173,7 +175,9 @@ function pinnedVersions(repoRoot = REPO_ROOT) {
   for (const name of RUNNER_CHAIN) {
     const found = lockfileEntry(lock, name, fromRel);
     if (!found || !found.entry.version) {
-      throw new Error(`package-lock.json pins no ${name} (the walk from ${fromRel || 'the checkout root'} found no entry) — this is not the lockfile of this checkout`);
+      throw new Error(
+        `package-lock.json pins no ${name} (the walk from ${fromRel || 'the checkout root'} found no entry) — this is not the lockfile of this checkout`
+      );
     }
     versions[name] = found.entry.version;
     keys[name] = found.key;
@@ -223,7 +227,9 @@ function requiredBrowserRevisions(repoRoot = REPO_ROOT) {
   const revisionOf = (name) => {
     const browser = (spec.browsers || []).find((b) => b.name === name);
     if (!browser || !browser.revision) {
-      throw new Error(`the installed Playwright names no '${name}' browser — its browsers.json is not the one of this checkout`);
+      throw new Error(
+        `the installed Playwright names no '${name}' browser — its browsers.json is not the one of this checkout`
+      );
     }
     return browser.revision;
   };
@@ -383,8 +389,7 @@ function reconcile(repoRoot = REPO_ROOT, io = {}) {
   // checks — so the process is spawned only when something is missing (and
   // the tree is checked again afterwards either way).
   const complete = locations.every(
-    (entry) =>
-      fs.existsSync(entry.location) && fs.existsSync(path.join(entry.location, INSTALL_MARKER))
+    (entry) => fs.existsSync(entry.location) && fs.existsSync(path.join(entry.location, INSTALL_MARKER))
   );
   if (!complete) {
     const install = run(command, args, { cwd: repoRoot, stdio: 'inherit' });

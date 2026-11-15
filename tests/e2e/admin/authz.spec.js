@@ -43,7 +43,7 @@ function probeSystemHealth(page) {
     const response = await route.fetch();
     state.records.push({
       status: response.status(),
-      text: await response.text(),
+      text: await response.text()
     });
     await route.fulfill({ response });
   });
@@ -54,12 +54,7 @@ function probeSystemHealth(page) {
 // listed rather than counted with a prefix selector: the value elements
 // carry their own `stat-*-value` handles, so a prefix match would
 // resolve to eight elements.
-const STAT_TILES = [
-  'stat-system-uptime',
-  'stat-avg-response-time',
-  'stat-error-rate',
-  'stat-monthly-active-users',
-];
+const STAT_TILES = ['stat-system-uptime', 'stat-avg-response-time', 'stat-error-rate', 'stat-monthly-active-users'];
 
 test.describe('Admin route authorization', () => {
   // The login helper's own worst case (two attempts, navigation +

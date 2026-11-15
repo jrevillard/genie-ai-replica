@@ -11,15 +11,13 @@ test.describe('getUserToken primary-realm guard', () => {
   test('rejects a missing realm with a message naming the requirement', async () => {
     // Covers a spec copying the call pattern without the realm override —
     // the original trap — and any falsy realm read from an unset env var.
-    await expect(getUserToken('user', 'password')).rejects.toThrow(
-      /realm is required[\s\S]*enableDirectAccessGrants/
-    );
+    await expect(getUserToken('user', 'password')).rejects.toThrow(/realm is required[\s\S]*enableDirectAccessGrants/);
   });
 
   test('rejects the primary realm with the design decision named', async () => {
-    await expect(
-      getUserToken('user', 'password', { realm: 'genie' })
-    ).rejects.toThrow(/refuses ROPC by design[\s\S]*getSessionTokenViaUI/);
+    await expect(getUserToken('user', 'password', { realm: 'genie' })).rejects.toThrow(
+      /refuses ROPC by design[\s\S]*getSessionTokenViaUI/
+    );
   });
 });
 
@@ -92,8 +90,57 @@ test.describe("getAdminToken's no-access_token verdict", () => {
       data: { error: 'upstream unreachable', message: 'the proxy answered in its place' },
       headers: {}
     });
-    await expect(getAdminToken()).rejects.toThrow(
-      /answered 200 without an access_token[\s\S]*upstream unreachable/
-    );
+    await expect(getAdminToken()).rejects.toThrow(/answered 200 without an access_token[\s\S]*upstream unreachable/);
+  });
+});
+
+// The throwaway session's error-priority contract (#1883), driven through
+// the pure decision the helper ends with. The browser-side half (context
+// closed before the browser, both closes attempted) is exercised on the
+// venue by every spec that mints through getSessionTokenViaUI; what no
+// venue run can show is the ERROR-PRIORITY decision — which failure is
+// thrown, and what rides along as the cause — so that contract is pinned
+// here, offline.
+test.describe("getSessionTokenViaUI's error-priority contract", () => {
+  // Identity, not message equality: `toThrow(errorInstance)` compares the
+  // message only, and the contract is about WHICH object is thrown — so
+  // every case catches and pins the thrown object with `toBe`. Each case
+  // builds its own error instances: the fourth case mutates its login
+  // error's `cause`, and a shared instance would leak that mutation into
+  // the other cases.
+  const errorOf = (fn) => {
+    try {
+      fn();
+    } catch (e) {
+      return e;
+    }
+    return null;
+  };
+
+  test('a clean run returns the token', () => {
+    expect(auth.resolveSessionOutcome(null, null, 'the-token')).toBe('the-token');
+  });
+
+  test('a teardown failure on a login that SUCCEEDED is thrown, token discarded', () => {
+    // The cleanup fails loudly — returning the token over a silently
+    // broken teardown would hide the leak the failure reports.
+    const teardown = new Error('context.close exploded');
+    expect(errorOf(() => auth.resolveSessionOutcome(null, teardown, 'the-token'))).toBe(teardown);
+  });
+
+  test('a login failure is thrown as-is when the teardown held', () => {
+    const login = new Error('the Keycloak redirect never completed');
+    expect(errorOf(() => auth.resolveSessionOutcome(login, null, null))).toBe(login);
+  });
+
+  test('a teardown failure rides along as the login failure’s cause', () => {
+    // The PRIMARY error is the login failure — the operator reads the
+    // login problem, the teardown error is attached as its cause, and the
+    // thrown error is the SAME object the login threw (identity kept).
+    const login = new Error('the Keycloak redirect never completed');
+    const teardown = new Error('context.close exploded');
+    const thrown = errorOf(() => auth.resolveSessionOutcome(login, teardown, null));
+    expect(thrown).toBe(login);
+    expect(thrown.cause).toBe(teardown);
   });
 });

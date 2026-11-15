@@ -9,12 +9,13 @@ const {
   findTrackedIssue,
   specPathsIn,
   titleIsDedicatedTo,
-  trackerReason,
+  firstErrorReason,
   groupFailuresByFile,
   issueBody,
   isConnectionSignature,
   partitionVenueNoise,
-  venueAvailabilityReport
+  venueAvailabilityReport,
+  fileTrackedFailures
 } = require('./file-failure-issues');
 
 const FILE = 'tests/e2e/theme/theme-runtime-config.spec.js';
@@ -293,12 +294,12 @@ test.describe('the tracker refusal names the tracker, not the command', () => {
   test('the first stderr line is the tracker message', () => {
     const error = new Error('Command failed: glab api projects/90/issues -f title=<the whole body>');
     error.stderr = 'glab: 404 Not found (HTTP 404)\n';
-    expect(trackerReason(error)).toBe('glab: 404 Not found (HTTP 404)');
+    expect(firstErrorReason(error)).toBe('glab: 404 Not found (HTTP 404)');
   });
 
   test('without stderr, the error message carries the reason', () => {
     const error = new Error('spawn glab ENOENT\nat ChildProcess');
-    expect(trackerReason(error)).toBe('spawn glab ENOENT | at ChildProcess');
+    expect(firstErrorReason(error)).toBe('spawn glab ENOENT | at ChildProcess');
   });
 });
 
@@ -422,5 +423,76 @@ test.describe('the filed body names the venue build (#1851)', () => {
     );
     expect(body).toContain('- venue build: unknown');
     expect(body).not.toMatch(/venue build: `[0-9a-f]{7,}`/);
+  });
+});
+test.describe('the filing loop stays loud when the tracker refuses (#1883)', () => {
+  // The filing loop's loudness contract: one tracker error never takes the
+  // filing down — the failing file is reported, the remaining files are
+  // still attempted, and the errors come back so the run can refuse the
+  // exit code. A swallow-and-exit-0 regression here is the exact silence
+  // the failure path exists to end, so the contract is pinned with fake
+  // clients (the same injection seam production leaves on its defaults).
+
+  const byFile = new Map([
+    ['tests/e2e/a.spec.js', [{ title: 'a › first', error: 'boom' }]],
+    ['tests/e2e/b.spec.js', [{ title: 'b › second', error: 'bang' }]]
+  ]);
+  const VENUE = 'https://e2e-venue.example:4443';
+  const STAMP = '2026-11-15T00:00:00Z';
+
+  function trackerError() {
+    const error = new Error('Command failed: glab api projects/90/issues');
+    error.stderr = 'glab: 404 Not found (HTTP 404)\n';
+    return error;
+  }
+
+  test('a file nobody tracks yet gets its own create, and a clean run returns no errors', () => {
+    const created = [];
+    const commented = [];
+    const errors = fileTrackedFailures(byFile, [], VENUE, STAMP, {
+      createIssue: (file) => created.push(file),
+      commentOnIssue: (issue, files) => commented.push(files.map((f) => f.file))
+    });
+    expect(created).toEqual(['tests/e2e/a.spec.js', 'tests/e2e/b.spec.js']);
+    expect(commented).toEqual([]);
+    expect(errors).toEqual([]);
+  });
+
+  test('a tracked file is grouped under its issue — one comment, no create', () => {
+    const tracked = { iid: 7, title: `test(e2e): tests/e2e/a.spec.js is red`, description: '' };
+    const created = [];
+    const comments = [];
+    fileTrackedFailures(byFile, [tracked], VENUE, STAMP, {
+      createIssue: (file) => created.push(file),
+      commentOnIssue: (issue, files) => comments.push({ iid: issue.iid, files: files.map((f) => f.file) })
+    });
+    expect(created).toEqual(['tests/e2e/b.spec.js']);
+    expect(comments).toEqual([{ iid: 7, files: ['tests/e2e/a.spec.js'] }]);
+  });
+
+  test('a create failure is reported and the remaining files are still attempted', () => {
+    const created = [];
+    const errors = fileTrackedFailures(byFile, [], VENUE, STAMP, {
+      createIssue: (file) => {
+        if (file === 'tests/e2e/a.spec.js') throw trackerError();
+        created.push(file);
+      },
+      commentOnIssue: () => {}
+    });
+    // The refused file is named, with the tracker's own reason.
+    expect(errors).toEqual(['tests/e2e/a.spec.js: glab: 404 Not found (HTTP 404)']);
+    // The file AFTER the refused one still got its create.
+    expect(created).toEqual(['tests/e2e/b.spec.js']);
+  });
+
+  test('a failed comment puts every file it covers into the errors', () => {
+    const tracked = { iid: 7, title: `test(e2e): tests/e2e/a.spec.js is red`, description: '' };
+    const errors = fileTrackedFailures(byFile, [tracked], VENUE, STAMP, {
+      createIssue: () => {},
+      commentOnIssue: () => {
+        throw trackerError();
+      }
+    });
+    expect(errors).toEqual(['tests/e2e/a.spec.js: glab: 404 Not found (HTTP 404)']);
   });
 });

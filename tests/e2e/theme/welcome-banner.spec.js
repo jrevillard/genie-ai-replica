@@ -477,9 +477,14 @@ async function scrimTopEdge(page) {
   });
   if (!box) return { ok: false, why: 'no banner box' };
 
-  const HIDE_TEXT = '[data-testid="quick-help-heading"],[data-testid="quick-help-subtitle"]{visibility:hidden !important;}';
+  const HIDE_TEXT =
+    '[data-testid="quick-help-heading"],[data-testid="quick-help-subtitle"]{visibility:hidden !important;}';
   const withScrim = await capturePixels(page, box, HIDE_TEXT);
-  const withoutScrim = await capturePixels(page, box, `${HIDE_TEXT}[data-testid="quick-help-content"]{visibility:hidden !important;}`);
+  const withoutScrim = await capturePixels(
+    page,
+    box,
+    `${HIDE_TEXT}[data-testid="quick-help-content"]{visibility:hidden !important;}`
+  );
 
   return await page.evaluate(
     async ({ withScrim, withoutScrim, wcag }) => {

@@ -41,6 +41,10 @@ if [ "$has_docrepo" = true ]; then install_if_needed "components/document-reposi
 # committing either without its deps fails the lint-staged entry with an
 # obscure ENOENT instead of a lint result.
 if [ "$has_e2e" = true ]; then install_if_needed "tests/e2e"; fi
+# The suite's lint-staged entry formats with the shared-lib prettier (the
+# same binary the format:e2e gate runs) — the tree carries no prettier of
+# its own, so the commit needs shared/lib's node_modules too (#1853 review).
+if [ "$has_e2e" = true ]; then install_if_needed "components/shared/lib"; fi
 
 # ---------------------------------------------------------------------------
 # Run lint-staged (JS/Vue: eslint + prettier)

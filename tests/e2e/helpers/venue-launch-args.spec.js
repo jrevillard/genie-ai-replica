@@ -23,7 +23,6 @@ const withEnv = (env, fn) => {
   }
 };
 
-
 /**
  * Unit spec for the venue's name mapping.
  *

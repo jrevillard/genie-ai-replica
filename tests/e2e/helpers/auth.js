@@ -535,6 +535,9 @@ async function mapWithConcurrency(items, limit, fn) {
 async function getSessionTokenViaUI({ browser, user } = {}) {
   let ownBrowser = null;
   let context = null;
+  let token = null;
+  let loginError = null;
+  let teardownError = null;
   try {
     // The throwaway browser carries the venue mapping (empty unless
     // E2E_VENUE_IP is set): Chromium resolves hostnames with its own stack,
@@ -544,11 +547,53 @@ async function getSessionTokenViaUI({ browser, user } = {}) {
     context = await (browser || ownBrowser).newContext({ ignoreHTTPSErrors: true });
     const page = await context.newPage();
     await loginViaUI(page, user || TEST_USER);
-    return await getSessionToken(page);
+    token = await getSessionToken(page);
+  } catch (e) {
+    loginError = e;
   } finally {
-    if (ownBrowser) await ownBrowser.close();
-    else if (context) await context.close();
+    // The context closes BEFORE the browser (a browser-close failure must
+    // not skip the context close and leak it). The teardown failure is only
+    // COLLECTED here: a throw inside a finally supersedes whatever the try
+    // decided (eslint no-unsafe-finally), so the decision below — after the
+    // finally — throws the login failure as the primary error with the
+    // teardown error attached as its cause (#1883), and a teardown failure
+    // on a login that succeeded is still thrown: the throwaway session's
+    // cleanup fails loudly, never silently.
+    if (context) {
+      try {
+        await context.close();
+      } catch (e) {
+        teardownError = e;
+      }
+    }
+    if (ownBrowser) {
+      try {
+        await ownBrowser.close();
+      } catch (e) {
+        if (!teardownError) teardownError = e;
+      }
+    }
   }
+  // The decision lives in resolveSessionOutcome (below) — the contract is
+  // pinned there, this call site just hands it the three facts.
+  return resolveSessionOutcome(loginError, teardownError, token);
+}
+
+/**
+ * The throwaway session's error-priority contract (#1883): the LOGIN
+ * failure is the primary error — a teardown failure rides along as its
+ * cause; a teardown failure on a login that SUCCEEDED is still thrown (the
+ * minted token is discarded rather than returned over a loudly-failing
+ * cleanup); a clean run returns the token. Exported for the unit spec: the
+ * contract is behaviour, and behaviour is tested, not trusted.
+ */
+function resolveSessionOutcome(loginError, teardownError, token) {
+  if (loginError) {
+    if (teardownError) loginError.cause = teardownError;
+    throw loginError;
+  }
+  if (teardownError) throw teardownError;
+  return token;
 }
 
 /**
@@ -577,6 +622,7 @@ module.exports = {
   getUserToken,
   getSessionToken,
   getSessionTokenViaUI,
+  resolveSessionOutcome,
   parseJwtClaims,
   request,
   mapWithConcurrency,

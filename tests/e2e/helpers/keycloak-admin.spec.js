@@ -1664,13 +1664,38 @@ test.describe('assertNoDirectAccessGrants — the ROPC posture sweep (#1727, #18
     expect(calls).toEqual(['GET /auth/admin/realms/genie/clients?max=500']);
   });
 
-  test('a built-in client carrying the grant is skipped — its standing state is the server default, not a run', async () => {
-    // Measured on the live venue (#1846 review): Keycloak provisions
-    // admin-cli into EVERY realm with directAccessGrantsEnabled=true, and
-    // the realm export does not pin it — the sweep must not red a venue on
-    // provisioned state. A built-in's grant is the standing state exactly
-    // like genie2's: indistinguishable from a leftover, owned by the
-    // venue's contract, not by this gate.
+  test('the two undeclarable built-ins stay exempt — their grant is a server default the export cannot pin', async () => {
+    // #1849 pinned the four declarable built-ins in the realm export
+    // (admin-cli included — Keycloak's own default there is TRUE), and
+    // the sweep no longer exempts them. realm-management and
+    // security-admin-console remain exempt: kcc cannot update a built-in
+    // whose authentication-flow bindings Keycloak reserves (HTTP 403,
+    // measured with kcc 6.5.0-26 on Keycloak 26.8.0), so the export
+    // cannot pin them and their grants stay server defaults.
+    routes = [
+      [
+        'GET',
+        CLIENTS_LIST,
+        {
+          status: 200,
+          data: [
+            { id: 'b-1', clientId: 'realm-management', directAccessGrantsEnabled: true },
+            { id: 'b-2', clientId: 'security-admin-console', directAccessGrantsEnabled: true },
+            { id: 'client-1', clientId: 'genie-app', directAccessGrantsEnabled: false }
+          ]
+        }
+      ]
+    ];
+
+    await expect(assertNoDirectAccessGrants('tok', 'genie')).resolves.toBeUndefined();
+    expect(calls).toEqual(['GET /auth/admin/realms/genie/clients?max=500']);
+  });
+
+  test('a pinned built-in carrying the grant is a violation — the export owns it now', async () => {
+    // admin-cli was the standing-true client (#1849 evidence); the realm
+    // export pins it false and the sweep asserts it like any declared
+    // client. A venue that lost the pin (a Keycloak re-provision without
+    // a convergence run) reds here, naming the client to re-converge.
     routes = [
       [
         'GET',
@@ -1685,8 +1710,9 @@ test.describe('assertNoDirectAccessGrants — the ROPC posture sweep (#1727, #18
       ]
     ];
 
-    await expect(assertNoDirectAccessGrants('tok', 'genie')).resolves.toBeUndefined();
-    expect(calls).toEqual(['GET /auth/admin/realms/genie/clients?max=500']);
+    await expect(assertNoDirectAccessGrants('tok', 'genie')).rejects.toThrow(
+      /ROPC POSTURE VIOLATION[\s\S]*admin-cli/
+    );
   });
 
   test('an absent realm fails loudly — a venue without its primary realm is not a clean posture', async () => {

@@ -111,22 +111,19 @@ const ARRAY_SHAPE = {
 // boundary exists so a widened realm widens the sweep deliberately.
 const SWEEP_PAGE_MAX = 500;
 
-// Keycloak provisions these built-in clients into EVERY realm, and their
-// standing grant flags are the SERVER's defaults (measured on the shared
-// venue: admin-cli answers directAccessGrantsEnabled=true out of the box,
-// and the realm export does not pin it) — not anything a run wrote. A
-// built-in's grant is therefore standing state exactly like the test-only
-// realm's: indistinguishable from a leftover and owned by the venue's
-// contract, so the sweep exempts the fixed set and asserts every client
-// the deployment actually declares.
-const KEYCLOAK_BUILTIN_CLIENTS = new Set([
-  'account',
-  'account-console',
-  'admin-cli',
-  'broker',
-  'realm-management',
-  'security-admin-console'
-]);
+// The ONLY built-in clients the sweep still exempts (#1849): the two the
+// realm export cannot pin. Keycloak reserves a built-in's
+// authentication-flow bindings — kcc's client update trips them and the
+// server answers HTTP 403 (measured with kcc 6.5.0-26 on Keycloak
+// 26.8.0) — so declaring realm-management or security-admin-console in
+// configs/keycloak/genie-realm.yaml fails the whole convergence import.
+// Their grants stay at Keycloak's default (false, read back on the
+// verification realm). Every OTHER built-in is pinned false by the
+// export (admin-cli's server default there is TRUE) and the sweep
+// asserts it like any declared client: a venue that lost the pin — a
+// Keycloak re-provision without a convergence run — reds here, naming
+// the client to re-converge.
+const KEYCLOAK_BUILTIN_CLIENTS = new Set(['realm-management', 'security-admin-console']);
 const REPRESENTATION_SHAPE = {
   ok: (data) => Boolean(data) && typeof data === 'object' && Boolean(data.id),
   complaint: 'without a usable representation'
@@ -1171,9 +1168,10 @@ async function disableDirectAccessGrants(adminToken, realm, clientId) {
  * overridden eval client needs no mirror convention: any leftover the
  * run leaves on the realm is visible wherever it landed. Two standing
  * states are exempt, because their grants are the provisioned posture,
- * not a run's doing: Keycloak's built-in clients (their grant defaults
- * are the server's, unpinned by the realm export) and the test-only
- * realms the gate does not name.
+ * not a run's doing: the two built-in clients the realm export cannot
+ * pin (`realm-management`, `security-admin-console` — see
+ * KEYCLOAK_BUILTIN_CLIENTS) and the test-only realms the gate does not
+ * name.
  *
  * A client that does not exist cannot leak a grant: absence holds the
  * posture. A client WITH the grant throws — naming the violation, each

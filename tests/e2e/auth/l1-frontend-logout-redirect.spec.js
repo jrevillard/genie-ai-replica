@@ -8,9 +8,8 @@ const { NAV_LOGOUT_BUTTON } = require('../helpers/navbar');
 // Source: docs/e2e-tests/suite-map.md § The acceptance phases, Phase L
 
 test('clicks logout button and redirects to Keycloak login page', async ({ browser }) => {
-  // loginViaUI's two attempts cost up to ≈135 s on a stalled stack —
-  // past the project default (#1798). LOGIN_BUDGET_TIMEOUT_MS owns the
-  // derivation; this file only applies it.
+  // loginViaUI's worst case is past the project default (#1798); the
+  // constant owns that derivation.
   test.setTimeout(LOGIN_BUDGET_TIMEOUT_MS);
   const context = await browser.newContext({
     ignoreHTTPSErrors: true,

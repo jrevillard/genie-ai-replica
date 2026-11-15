@@ -260,11 +260,13 @@ test.describe('Quick Help scope states', () => {
     await broken.first().click();
 
     // The refusal is synchronous — nothing waits on the click, so these
-    // are instant negative checks: at click time no turn is mounted and
-    // nothing is on the query path. A send that escaped the synchronous
-    // refusal after this instant is the send-time guard's subject (the
-    // test below), not this one's. (A bounded window cannot be built
-    // from Playwright's primitives here: expect.poll and every
+    // are negative checks read at refusal time (the count's own auto-retry
+    // bounds a late-mounted turn): no turn is mounted and nothing is on
+    // the query path. A send that escaped the synchronous refusal after
+    // this instant is the send-time guard's subject, owned by the Jest
+    // suite ("a scoped button sends nothing when the tree is not there to
+    // name its category"), not by this spec. (A bounded window cannot be
+    // built from Playwright's primitives here: expect.poll and every
     // toPass/waitForLoadState shape resolves immediately on an already
     // stable negative — reviewed 2026-11-15.)
     await expect(page.locator('[data-testid="user-avatar"]')).toHaveCount(0);

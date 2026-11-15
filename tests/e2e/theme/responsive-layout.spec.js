@@ -315,8 +315,8 @@ test.describe('Welcome panel does not scroll horizontally', () => {
             viewport: { width: vp, height: 800 },
             theme
             // The banner's box reaches its final width once the entrance
-            // animation and the compositing gate inside openWelcomeScreen
-            // pass — no fixed settle window is needed for this read.
+            // animation openWelcomeScreen waits for passes — no fixed
+            // settle window is needed for this read.
           },
           async ({ page }) => {
             const m = await readWelcomePanel(page);

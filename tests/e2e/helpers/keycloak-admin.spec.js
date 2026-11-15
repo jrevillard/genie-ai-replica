@@ -1453,6 +1453,21 @@ test.describe('enableDirectAccessGrants reads the client list like every other r
     expect(caught.message).toMatch(/Cannot reach the Keycloak admin API for the ROPC enablement of genie-app/);
   });
 
+  test('a refused enable PUT reports the status and the body verbatim', async () => {
+    // The refused verdict is table-driven now (ROPC_FLIP.refused) — pinned
+    // so a wording-table drift ships red here instead of surfacing as
+    // whatever string a real venue's 403 prints.
+    routes = [
+      ['GET', CLIENTS_PATH, { status: 200, data: [{ id: 'client-1', directAccessGrantsEnabled: false }] }],
+      ['PUT', CLIENT_UPDATE_PATH, { status: 403, data: { error: 'forbidden' } }]
+    ];
+
+    const caught = await rejection(enableDirectAccessGrants('tok', 'genie2', 'genie-app'));
+
+    expect(caught.message).toMatch(/Failed to enable direct access grants on genie-app: HTTP 403/);
+    expect(caught.message).toContain('forbidden');
+  });
+
   test('enabling ROPC puts the whole client representation with the grant flipped, then reads the state back', async () => {
     // Defensive full-representation PUT: one-field client PUTs are safe
     // (the verified reverts use exactly one), and carrying the read
@@ -1575,6 +1590,21 @@ test.describe('disableDirectAccessGrants — the verified ROPC revert (#1879)', 
 
     expect(caught.transient).toBe(true);
     expect(caught.message).toMatch(/Cannot reach the Keycloak admin API for the ROPC revert of genie-app/);
+  });
+
+  test('a refused revert PUT reports the status and the body verbatim', async () => {
+    // The refused verdict is table-driven now (ROPC_FLIP.refused) — pinned
+    // so a wording-table drift ships red here instead of surfacing as
+    // whatever string a real venue's 409 prints.
+    routes = [
+      ['GET', CLIENTS_PATH, { status: 200, data: [{ id: 'client-1', directAccessGrantsEnabled: true }] }],
+      ['PUT', CLIENT_UPDATE_PATH, { status: 409, data: { error: 'conflict' } }]
+    ];
+
+    const caught = await rejection(disableDirectAccessGrants('tok', 'genie2', 'genie-app'));
+
+    expect(caught.message).toMatch(/Failed to disable direct access grants on genie-app: HTTP 409/);
+    expect(caught.message).toContain('conflict');
   });
 
   test('reverting puts the whole representation with the grant flipped, then reads the state back', async () => {

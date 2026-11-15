@@ -157,10 +157,20 @@ async function openWelcomeScreen(browser, { viewport, theme, locale, setupPage, 
     await waitForBannerEntrance(page);
     return { ctx, page };
   } catch (e) {
-    // Loud cleanup, same contract as the call-site finally: a close that
-    // itself fails supersedes the open error (that failure is the one the
-    // caller needs to see), never a swallow.
-    await ctx.close();
+    // Loud cleanup, same contract as the call-site finally — with the
+    // cause kept: the close's own failure, if any, travels WITH the open
+    // error that caused the unwind, never instead of it (a close that
+    // erased the login failure would leave the runner diagnosing the
+    // teardown instead of the cause).
+    try {
+      await ctx.close();
+    } catch (closeFailure) {
+      throw new Error(
+        `closing the welcome session's context failed too: ${closeFailure.message} — ` +
+          `the open failure that caused the unwind: ${e.message}`,
+        { cause: closeFailure }
+      );
+    }
     throw e;
   }
 }

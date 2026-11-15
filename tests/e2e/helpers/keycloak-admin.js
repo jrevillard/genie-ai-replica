@@ -1080,8 +1080,8 @@ const ROPC_FLIP = {
       `Failed to enable direct access grants on ${clientId}: HTTP ${res.status} ${bodyText(res)}`,
     probeMiss: (clientId, realm, observed) =>
       `ROPC enablement did not land on ${clientId} in realm ${realm} — the PUT answered 204 but the ` +
-      `client still reads back directAccessGrantsEnabled=${observed}. The grant stays off: fix the ` +
-      `enablement before the spec mints a ROPC token against a client that still refuses it.`,
+      `client still reads back directAccessGrantsEnabled=${observed}, not the expected true. Fix the ` +
+      `enablement before the spec mints a ROPC token against a client that may still refuse it.`,
     vanished: (clientId, realm) =>
       `ROPC enablement unverifiable on ${clientId} in realm ${realm} — the client vanished between ` +
       `the enablement PUT and the read-back. Left alone, the spec's ROPC token mint would fail ` +
@@ -1094,7 +1094,7 @@ const ROPC_FLIP = {
       `Failed to disable direct access grants on ${clientId}: HTTP ${res.status} ${bodyText(res)}`,
     probeMiss: (clientId, realm, observed) =>
       `ROPC NOT reverted on ${clientId} in realm ${realm} — the PUT answered 204 but the client ` +
-      `still reads back directAccessGrantsEnabled=${observed}. The grant stays on: fix the revert ` +
+      `still reads back directAccessGrantsEnabled=${observed}, not the expected false. Fix the revert ` +
       `before the venue keeps accepting password grants on this client.`
     // No vanished arm: a client gone between the PUT and the read-back
     // holds the revert's posture by absence — nothing leaks a grant.
@@ -1122,10 +1122,13 @@ const ROPC_FLIP = {
  */
 async function flipDirectAccessGrants(adminToken, realm, clientId, verb) {
   const expected = verb === 'enable';
-  const wording = ROPC_FLIP[verb];
-  if (!wording) {
+  // Own-property read: a bare ROPC_FLIP[verb] resolves the prototype
+  // chain, so 'constructor' (or 'toString') would pass a truthiness guard
+  // and die later on wording.what instead of here, at the actual mistake.
+  if (!Object.prototype.hasOwnProperty.call(ROPC_FLIP, verb)) {
     throw new Error(`flipDirectAccessGrants: unknown direction '${verb}' — expected 'enable' or 'disable'`);
   }
+  const wording = ROPC_FLIP[verb];
 
   // One exact-match client search, owned by findClient: an absent client
   // resolves null here (the admin API's way of saying the realm carries

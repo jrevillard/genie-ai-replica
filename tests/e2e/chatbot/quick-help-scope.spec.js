@@ -259,12 +259,14 @@ test.describe('Quick Help scope states', () => {
     const watcher = await watchQueries(page);
     await broken.first().click();
 
-    // The refusal is synchronous — nothing waits on the click. The
-    // network idles only once every escaped send WOULD have gone out
-    // (and been captured by the watcher): idling is the bounded window
-    // that turns the negative below from an instant check into a settled
-    // one, with no fixed sleep.
-    await page.waitForLoadState('networkidle', { timeout: 15000 });
+    // The refusal is synchronous — nothing waits on the click, so these
+    // are instant negative checks: at click time no turn is mounted and
+    // nothing is on the query path. A send that escaped the synchronous
+    // refusal after this instant is the send-time guard's subject (the
+    // test below), not this one's. (A bounded window cannot be built
+    // from Playwright's primitives here: expect.poll and every
+    // toPass/waitForLoadState shape resolves immediately on an already
+    // stable negative — reviewed 2026-11-15.)
     await expect(page.locator('[data-testid="user-avatar"]')).toHaveCount(0);
     expect(watcher.queried(), 'a broken card must not reach the query path').toBe(false);
     expect(watcher.bodies, 'no request body reached the query path').toEqual([]);

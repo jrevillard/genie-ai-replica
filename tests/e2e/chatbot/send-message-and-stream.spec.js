@@ -74,20 +74,22 @@ test.describe('Chatbot message sending and SSE streaming', () => {
     // emits a metadata frame on a completed turn (its own responseTime —
     // query-routes.js writes it even when chatqna sent none), and the
     // store commits it onto the turn. Read it from the store's public
-    // getter, the same path the streaming-flag read uses.
-    const metadata = await page.evaluate(() => {
+    // getter, the same path the streaming-flag read uses. The turn's
+    // presence alone proves nothing — the streaming placeholder mounts
+    // with a metadata object already on it — so the CONTRACT is the
+    // frame's own field: a numeric responseTime only a metadata frame
+    // can deliver.
+    const responseTime = await page.evaluate(() => {
       const app = document.querySelector('#app');
       const store = app && app.__vue_app__ ? app.__vue_app__.config.globalProperties.$store : null;
       const open = store && store.getters ? store.getters['conversation/openConversation'] : null;
       const bots = open && open.messages ? open.messages.filter((m) => m.sender === 'bot') : [];
       const last = bots[bots.length - 1];
-      return last ? { hasMetadata: !!last.metadata, responseTime: last.metadata?.responseTime } : null;
+      return last ? last.metadata?.responseTime : undefined;
     });
-    expect(metadata, 'the completed turn is in the store').not.toBeNull();
-    expect(metadata.hasMetadata, 'the turn carries the stream metadata').toBe(true);
     expect(
-      typeof metadata.responseTime,
-      `the backend's responseTime rode the metadata frame (got ${JSON.stringify(metadata.responseTime)})`
+      typeof responseTime,
+      `the backend's responseTime rode the metadata frame (got ${JSON.stringify(responseTime)})`
     ).toBe('number');
   });
 });

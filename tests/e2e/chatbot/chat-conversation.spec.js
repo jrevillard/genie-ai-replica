@@ -616,8 +616,11 @@ test.describe('Conversation — surface invariants', () => {
     expect(await page.locator('[data-testid="context-panel"]').count(), 'the domain chip is shown').toBe(1);
     // And the send carries the scope the card declared — the same wire
     // contract the scope spec owns, asserted at this entry path too: the
-    // ENGLISH category label and the declared labels.
-    expect(bodies, 'the scoped card sends exactly one query').toHaveLength(1);
+    // ENGLISH category label and the declared labels. The capture lands
+    // in the route handler (the Node side), which trails the click —
+    // sync on the count before reading, the same settled-then-read shape
+    // the scope spec uses.
+    await expect.poll(() => bodies.length, { timeout: 15000 }).toBe(1);
     expect(bodies[0].contextOption).toBe('conversation-with-context-labels');
     expect(bodies[0].context.categoryLabel).toBe('Civil Registry');
     expect(bodies[0].context.serviceLabels).toEqual(['Births']);

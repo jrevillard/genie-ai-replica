@@ -152,7 +152,9 @@ describe('Quick Help button contract across every shipped configuration', () => 
         missingSchema.push(name);
       } else if (
         !Array.isArray(placementSchema.enum) ||
-        !placementSchema.enum.every((v) => PLACEMENT_VALUES.includes(v))
+        // BOTH values must be declared: a one-value enum would Ajv-reject
+        // a document that uses the other one at boot.
+        !PLACEMENT_VALUES.every((v) => placementSchema.enum.includes(v))
       ) {
         schemaWithoutEnum.push(`${name} = ${JSON.stringify(placementSchema.enum)}`);
       }

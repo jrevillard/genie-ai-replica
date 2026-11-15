@@ -287,28 +287,39 @@ test.describe('Conversation history persistence', () => {
     }
 
     // The RESTORATION the title claims, through the UI: the saved chat
-    // appears in the left sidebar's Saved Chats list, and opening it
-    // renders the persisted turns. The API witness above proves the
-    // bytes persisted; these two steps prove the product surfaces them.
+    // appears in the left sidebar's Saved Chats list, and OPENING it from
+    // there renders the persisted turns. The session rehydration would
+    // otherwise make the row click a no-op — the reloaded page still
+    // holds the saved conversation as its open one, and the
+    // load-conversation guard swallows a click whose id is already open —
+    // so the saved chat is closed FIRST (a just-saved conversation is
+    // clean: the close runs without a prompt) and the click below opens
+    // it from the list for real, through loadExistingConversation.
+    await page.locator('[data-testid="conversation-header-close"]').click();
+    await expect(page.locator('[data-testid="quick-help-overlay"]')).toBeVisible({ timeout: 15000 });
+
     await page.locator('[data-test-id="ds-tab-history"]').click();
 
     const row = page.locator('[data-testid="chat-history-item"]').filter({ hasText: chatTitle });
     await expect(row, 'the saved chat is listed after the reload').toBeVisible({ timeout: 15000 });
     await row.click();
 
-    // The welcome overlay leaves (a conversation is open) and the
-    // transcript renders the exact restoration: the welcome turn the app
-    // mounts with every conversation, then the user's question verbatim,
-    // then the mocked answer. Three rows, in that order — nothing more.
+    // The sidebar-open path renders EXACTLY the persisted turns: the
+    // welcome turn is skipped by the save (a bot turn without a queryId
+    // is not storable) and prepended only for a conversation with zero
+    // persisted messages, so two rows — the user's question verbatim,
+    // then the mocked answer. Nothing more.
     const rows = page.locator('[data-testid^="chat-message-"]');
-    await expect(rows, 'the restored transcript').toHaveCount(3, { timeout: 15000 });
+    await expect(rows, 'the restored transcript').toHaveCount(2, { timeout: 15000 });
     await expect(page.locator('[data-testid="quick-help-overlay"]')).toHaveCount(0);
-    expect(await rows.nth(0).getAttribute('data-testid'), 'the first row is the welcome turn').toBe('chat-message-bot');
+    expect(await rows.nth(0).getAttribute('data-testid'), 'the first row is the restored user turn').toBe(
+      'chat-message-user'
+    );
     await expect(
-      rows.nth(1).locator('[data-testid="message-bubble-user"]'),
+      rows.nth(0).locator('[data-testid="message-bubble-user"]'),
       'the user turn is restored verbatim'
     ).toHaveText(userText);
-    await expect(rows.nth(2).locator('[data-testid="message-bubble-bot"]')).toContainText(MOCKED_ANSWER);
+    await expect(rows.nth(1).locator('[data-testid="message-bubble-bot"]')).toContainText(MOCKED_ANSWER);
   });
 
   test('list conversations endpoint returns conversations for authenticated user', async () => {

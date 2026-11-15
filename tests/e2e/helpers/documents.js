@@ -127,6 +127,69 @@ function matchesStatus(file, status) {
 }
 
 /**
+ * The response's own error code, when the body carries one — the
+ * repository maps its refusals to codes (STILL_SERVING, CRAWL_ACTIVE,
+ * BUNDLE_PROTECTED) that name the remedy; a bare status does not.
+ */
+function describeCode(res) {
+  return res.data && res.data.code ? ` (${res.data.code})` : '';
+}
+
+/**
+ * One per-file sweep delete: a bare DELETE, and — when the repository
+ * refuses with 409 STILL_SERVING — the remedy that response itself
+ * prescribes, retract-then-delete (#1864). Before #1864 the sweep issued
+ * the bare DELETE only, so a leftover that had reached a serving state
+ * (`ingested`, `ingesting`, `ingested with warnings` — the delete guard
+ * in document-repository's fileService) failed every later afterAll
+ * identically with a bare `HTTP 409`: cleanup loud but structurally
+ * unable to converge.
+ *
+ * The remedy keys on the response's CODE, not on 409 alone: a
+ * CRAWL_ACTIVE 409 means "retry shortly" (kill-before-delete in
+ * progress), not "retract first", and retracting an actively crawling
+ * file is not the sweep's call — it stays a reported failure.
+ *
+ * The transport (`request`) is injected by parameter: it belongs to
+ * helpers/auth.js, and the unit spec (documents.spec.js) scripts it —
+ * the call sequence IS the contract under test.
+ *
+ * @param {Function} request - the auth helper's `request` transport
+ * @param {object} file - one entry of the /api/files payload
+ * @param {string} token - the sweep's bearer token
+ * @returns {Promise<string|null>} the failure string, or null on success
+ */
+async function sweepDeleteOneFile(request, file, token) {
+  const file_id = file.file_id || file._key || file.id;
+  const headers = { Authorization: `Bearer ${token}` };
+  const attempt = () => request('DELETE', `/api/files/${file_id}`, { headers });
+  try {
+    let res = await attempt();
+    if (res.status === 409 && res.data && res.data.code === 'STILL_SERVING') {
+      const retractRes = await request('POST', `/api/files/${file_id}/retract`, { headers });
+      if (retractRes.status < 200 || retractRes.status >= 300) {
+        // The body's message carries the retract remedy when the
+        // repository wrote one; the error field is the fallback class
+        // label. Either beats a bare status for the operator.
+        const detail = (retractRes.data && (retractRes.data.message || retractRes.data.error)) || '';
+        return `${file.file_name}: retract failed before delete (HTTP ${retractRes.status}${describeCode(retractRes)}${detail ? ` — ${detail}` : ''})`;
+      }
+      res = await attempt();
+    }
+    if (res.status < 200 || res.status >= 300) {
+      if (res.status === 401) {
+        return `${file.file_name}: ${describeUnauthorized(res, token)}`;
+      }
+      const detail = (res.data && (res.data.message || res.data.error)) || '';
+      return `${file.file_name}: HTTP ${res.status}${describeCode(res)}${detail ? ` — ${detail}` : ''}`;
+    }
+    return null;
+  } catch (e) {
+    return `${file.file_name}: ${e.message}`;
+  }
+}
+
+/**
  * Hold until the rendered document table rows ARE the payload of a
  * /api/files response. getDocumentTableRows reads once, without
  * retrying — a response the table has not painted is not a settled
@@ -318,20 +381,10 @@ async function deleteAllTestDocuments(prefix = 'test-document', { browser } = {}
   // (SWEEP_DELETE_CONCURRENCY).
   const failures = (
     await mapWithConcurrency(deleteSet, SWEEP_DELETE_CONCURRENCY, async (f) => {
-      const file_id = f.file_id || f._key || f.id;
-      try {
-        const res = await request('DELETE', `/api/files/${file_id}`, {
-          headers: { Authorization: `Bearer ${token}` },
-        });
-        if (res.status < 200 || res.status >= 300) {
-          return res.status === 401
-            ? `${f.file_name}: ${describeUnauthorized(res, token)}`
-            : `${f.file_name}: HTTP ${res.status}`;
-        }
-        return null;
-      } catch (e) {
-        return `${f.file_name}: ${e.message}`;
-      }
+      // The whole per-file sequence — the delete and its STILL_SERVING
+      // remedy — lives in sweepDeleteOneFile, so the unit spec can script
+      // the transport and pin the call order (#1864).
+      return sweepDeleteOneFile(request, f, token);
     })
   ).filter(Boolean);
 
@@ -388,5 +441,6 @@ module.exports = {
   waitForTableRowsSettled,
   getDocumentTableRows,
   deleteAllTestDocuments,
+  sweepDeleteOneFile,
   matchesStatus,
 };

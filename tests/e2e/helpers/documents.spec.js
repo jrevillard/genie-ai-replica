@@ -67,7 +67,7 @@ test.describe('the document status predicate', () => {
       'Ingestion Error',
       '',
       'killed',
-      undefined,
+      undefined
     ];
     const docs = [file('Ingested'), file('pending'), { file_name: 'no-block.pdf' }, file(undefined)];
     for (const doc of docs) {
@@ -138,9 +138,9 @@ test.describe('the sweep per-file delete (retract-then-delete, #1864)', () => {
       success: false,
       code,
       error: 'File is still serving the corpus',
-      message: `File f123 is still serving the corpus (dataprep status: ingested) — retract it before deleting`,
+      message: `File f123 is still serving the corpus (dataprep status: ingested) — retract it before deleting`
     },
-    headers: {},
+    headers: {}
   });
 
   test('a clean delete is one DELETE and no retract', async () => {
@@ -153,20 +153,20 @@ test.describe('the sweep per-file delete (retract-then-delete, #1864)', () => {
     const t = scriptedTransport([
       serving(),
       { status: 200, data: { success: true, message: 'File retracted successfully' }, headers: {} },
-      { status: 200, data: { success: true }, headers: {} },
+      { status: 200, data: { success: true }, headers: {} }
     ]);
     expect(await sweepDeleteOneFile(t.request, file, 'tok')).toBeNull();
     expect(t.calls).toEqual([
       ['DELETE', '/api/files/f123'],
       ['POST', '/api/files/f123/retract'],
-      ['DELETE', '/api/files/f123'],
+      ['DELETE', '/api/files/f123']
     ]);
   });
 
   test('a failed retract names the retract step and never re-attempts the delete', async () => {
     const t = scriptedTransport([
       serving(),
-      { status: 500, data: { success: false, error: 'Dataprep retract failed' }, headers: {} },
+      { status: 500, data: { success: false, error: 'Dataprep retract failed' }, headers: {} }
     ]);
     const failure = await sweepDeleteOneFile(t.request, file, 'tok');
     expect(failure).toBe(
@@ -174,16 +174,12 @@ test.describe('the sweep per-file delete (retract-then-delete, #1864)', () => {
     );
     expect(t.calls).toEqual([
       ['DELETE', '/api/files/f123'],
-      ['POST', '/api/files/f123/retract'],
+      ['POST', '/api/files/f123/retract']
     ]);
   });
 
   test('a delete that still refuses after a successful retract carries the refusal', async () => {
-    const t = scriptedTransport([
-      serving(),
-      { status: 200, data: { success: true }, headers: {} },
-      serving(),
-    ]);
+    const t = scriptedTransport([serving(), { status: 200, data: { success: true }, headers: {} }, serving()]);
     const failure = await sweepDeleteOneFile(t.request, file, 'tok');
     // The refusal surfaces the server's own remedy text (the body's
     // message), not just the status — the whole point of #1864's minimum
@@ -195,7 +191,7 @@ test.describe('the sweep per-file delete (retract-then-delete, #1864)', () => {
     expect(t.calls).toEqual([
       ['DELETE', '/api/files/f123'],
       ['POST', '/api/files/f123/retract'],
-      ['DELETE', '/api/files/f123'],
+      ['DELETE', '/api/files/f123']
     ]);
   });
 

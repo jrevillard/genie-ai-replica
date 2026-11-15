@@ -71,4 +71,96 @@ describe('Quick Help button contract across every shipped configuration', () => 
       }
     }
   );
+
+  // The placement vocabulary, on both platforms: the field a button
+  // declares decides WHERE it renders — a tile in the welcome grid or
+  // the composer entry that replaces the Just Chat action. Both readers
+  // compare STRICTLY (`placement === 'composer'`): a misspelled or
+  // non-string value silently renders a tile on the web and DROPS the
+  // card on mobile (a composer-placed entry has no mobile grid surface),
+  // with no error anywhere — so the shipped files may only carry the two
+  // declared values. A placement a deployment never declared (the field
+  // is optional; absence is the tile default) asserts nothing here.
+  const PLACEMENT_VALUES = ['tile', 'composer'];
+
+  it.each(SOURCES.map((source) => [source.label, source]))(
+    '%s: every declared placement is a declared vocabulary value',
+    (_label, source) => {
+      const files = fs
+        .readdirSync(source.dir)
+        .filter((name) => source.pattern.test(name))
+        .sort();
+
+      // One assertion for the whole source: the failure names every
+      // offending button. A value outside the vocabulary silently renders
+      // a tile on the web and vanishes from the mobile grid, with no
+      // error anywhere — the readers compare strictly.
+      const offenders = [];
+      for (const name of files) {
+        const buttons = readJson(path.join(source.dir, name))?.features?.chat?.quickHelp?.buttons || [];
+        for (const button of buttons) {
+          if (button.placement === undefined) continue;
+          if (!PLACEMENT_VALUES.includes(button.placement)) {
+            offenders.push(`${name}:${button.id} = ${JSON.stringify(button.placement)}`);
+          }
+        }
+      }
+      expect(offenders).toEqual([]);
+    }
+  );
+
+  // The web's composer entry: the shipped web configurations point the
+  // just-chat button at the composer, and the served document's own
+  // schema declares the field with the two-value enum — without the
+  // schema clause a config carrying the field would fail the frontend's
+  // Ajv validation at boot. (The mobile files deliberately declare NO
+  // placement on just-chat: a composer-placed entry has no mobile grid
+  // surface, so the mobile Just Chat entry stays a tile.)
+  it('web: the just-chat entry is the composer, and the schema declares the placement enum', () => {
+    const source = SOURCES[0];
+    const files = fs
+      .readdirSync(source.dir)
+      .filter((name) => source.pattern.test(name))
+      .sort();
+
+    // One assertion per clause across the whole source, with the
+    // offending file named in the collected values: the web composer is
+    // the just-chat entry, and a config carrying a placement field
+    // without the schema's two-value enum fails the frontend's Ajv
+    // validation at boot.
+    const missingEntry = [];
+    const wrongPlacement = [];
+    const missingSchema = [];
+    const schemaWithoutEnum = [];
+
+    for (const name of files) {
+      const cfg = readJson(path.join(source.dir, name));
+      const buttons = cfg?.features?.chat?.quickHelp?.buttons || [];
+      const justChat = buttons.find((b) => b.id === 'just-chat');
+      if (!justChat) {
+        missingEntry.push(name);
+        continue;
+      }
+      if (justChat.placement !== 'composer') {
+        wrongPlacement.push(`${name} = ${JSON.stringify(justChat.placement)}`);
+      }
+
+      const placementSchema =
+        cfg?.properties?.features?.properties?.chat?.properties?.quickHelp?.properties?.buttons?.items?.properties
+          ?.placement;
+      if (!placementSchema) {
+        missingSchema.push(name);
+      } else if (
+        !Array.isArray(placementSchema.enum) ||
+        !placementSchema.enum.every((v) => PLACEMENT_VALUES.includes(v))
+      ) {
+        schemaWithoutEnum.push(`${name} = ${JSON.stringify(placementSchema.enum)}`);
+      }
+    }
+
+    expect(missingEntry).toEqual([]);
+    expect(wrongPlacement).toEqual([]);
+    expect(missingSchema).toEqual([]);
+    expect(schemaWithoutEnum).toEqual([]);
+  });
 });

@@ -145,9 +145,10 @@ test.describe('Conversation history persistence', () => {
     // below. A later page that fails must NOT discard the pages that
     // succeeded — those conversations are known, and leaving them behind
     // is the leftover this sweep exists to prevent.
-    const own = pagesRead > 0
-      ? conversations.filter((c) => c.title?.startsWith('E2E ')).map((c) => c._key || c.id)
-      : [...createdConversationIds];
+    const own =
+      pagesRead > 0
+        ? conversations.filter((c) => c.title?.startsWith('E2E ')).map((c) => c._key || c.id)
+        : [...createdConversationIds];
     const populationKnown = total !== undefined;
     const enumeratedAll = populationKnown ? conversations.length >= total : exhausted;
 
@@ -209,12 +210,12 @@ test.describe('Conversation history persistence', () => {
       problems.push(
         populationKnown
           ? `the sweep did not enumerate the whole population — a suite conversation beyond the ` +
-            `last enumerated page, if any, was not removed`
+              `last enumerated page, if any, was not removed`
           : pagesRead > 0
             ? `the population size is unknown — the sweep read full pages, so a suite conversation ` +
-                `beyond the last enumerated page, if any, was not removed`
+              `beyond the last enumerated page, if any, was not removed`
             : `the population size is unknown and the sweep read NOTHING — only the conversations ` +
-                `captured in flight were removed, and any other suite conversation may remain`
+              `captured in flight were removed, and any other suite conversation may remain`
       );
     }
     if (problems.length > 0) {
@@ -253,7 +254,9 @@ test.describe('Conversation history persistence', () => {
     // Navigate to chatbot to load saved chats
     await navigateToChatbot(page);
 
-    // Verify via the chat history API, with the token the page session holds
+    // The persistence WITNESS, via the chat history API with the token
+    // the page session holds. The wire shape is ONE: the endpoint serves
+    // { conversations: [...] } (chat-history-routes.js → getUserConversations).
     const token = await getSessionToken(page);
     const conversationsResponse = await page.evaluate(
       async (args) => {
@@ -268,9 +271,8 @@ test.describe('Conversation history persistence', () => {
 
     expect(conversationsResponse.status).toBe(200);
 
-    const parsed = JSON.parse(conversationsResponse.body);
-    const conversations = parsed.conversations || parsed;
-    expect(Array.isArray(conversations)).toBeTruthy();
+    const conversations = JSON.parse(conversationsResponse.body).conversations;
+    expect(Array.isArray(conversations), 'the list wire shape is { conversations: [...] }').toBe(true);
 
     // Find our saved conversation
     const saved = conversations.find((c) => c.title === chatTitle || c.title?.includes(chatTitle));
@@ -279,6 +281,29 @@ test.describe('Conversation history persistence', () => {
     if (saved?._key || saved?.id) {
       createdConversationIds.push(saved._key || saved.id);
     }
+
+    // The RESTORATION the title claims, through the UI: the saved chat
+    // appears in the left sidebar's Saved Chats list, and opening it
+    // renders the persisted turns. The API witness above proves the
+    // bytes persisted; these two steps prove the product surfaces them.
+    await page.locator('[data-test-id="ds-tab-history"]').click();
+
+    const row = page.locator('[data-testid="chat-history-item"]').filter({ hasText: chatTitle });
+    await expect(row, 'the saved chat is listed after the reload').toBeVisible({ timeout: 15000 });
+    await row.click();
+
+    // The welcome overlay leaves (a conversation is open) and both turns
+    // render restored: the user's question and the mocked answer, in order.
+    await expect(page.locator('[data-testid="quick-help-overlay"]')).toHaveCount(0);
+    await expect(
+      page.locator('[data-testid="chat-message-user"] [data-testid="message-bubble-user"]'),
+      'the user turn is restored verbatim'
+    ).toHaveText(userText, { timeout: 15000 });
+    const restoredMessages = page.locator('[data-testid="chat-message-bot"]');
+    await expect(restoredMessages.last()).toContainText(MOCKED_ANSWER);
+    // Exactly one turn per side: this test saved one completed turn.
+    expect(await page.locator('[data-testid="chat-message-user"]').count(), 'one user turn restored').toBe(1);
+    expect(await restoredMessages.count(), 'one bot turn restored').toBe(1);
   });
 
   test('list conversations endpoint returns conversations for authenticated user', async () => {
@@ -297,9 +322,8 @@ test.describe('Conversation history persistence', () => {
 
     expect(response.status).toBe(200);
 
-    const body = JSON.parse(response.body);
-    const conversations = body.conversations || body;
-    expect(Array.isArray(conversations)).toBeTruthy();
+    const conversations = JSON.parse(response.body).conversations;
+    expect(Array.isArray(conversations), 'the list wire shape is { conversations: [...] }').toBe(true);
   });
 
   test('messages are restored in correct order when loading a saved conversation', async () => {
@@ -327,7 +351,7 @@ test.describe('Conversation history persistence', () => {
       { baseUrl: BASE_URL, token, timeout: API_TIMEOUT_MS }
     );
 
-    const conversations = convResponse.conversations || convResponse;
+    const conversations = convResponse.conversations;
     const savedConv = conversations.find((c) => c.title === chatTitle || c.title?.includes(chatTitle));
     expect(savedConv).toBeTruthy();
 
@@ -347,22 +371,21 @@ test.describe('Conversation history persistence', () => {
       { baseUrl: BASE_URL, token, convId: savedConv._key || savedConv.id, timeout: API_TIMEOUT_MS }
     );
 
-    // Verify messages exist
-    const messages = fullConv.messages || fullConv.data?.messages || [];
-    expect(messages.length).toBeGreaterThanOrEqual(1);
+    // Verify messages exist. The wire shape is ONE: the detail endpoint
+    // serves { messages: [...] }, and each message carries `sender`
+    // ('user' | 'assistant' — the save path's vocabulary, component
+    // saveChat; there is no `role` field on a message document).
+    const messages = fullConv.messages;
+    expect(Array.isArray(messages), 'the detail wire shape is { messages: [...] }').toBe(true);
 
     // Verify order: the turn was complete on screen before the save (the
     // mocked answer text was asserted), so both sides must have persisted —
     // a one-sided save is exactly the defect this spec exists to catch.
     expect(messages.length, 'both turns persisted').toBeGreaterThanOrEqual(2);
-    const firstUserIdx = messages.findIndex((m) => m.role === 'user' || m.sender === 'user');
-    const firstBotIdx = messages.findIndex(
-      (m) => m.role === 'assistant' || m.sender === 'assistant' || m.sender === 'bot'
-    );
+    const firstUserIdx = messages.findIndex((m) => m.sender === 'user');
+    const firstBotIdx = messages.findIndex((m) => m.sender === 'assistant');
     expect(firstUserIdx, 'the user turn persisted').toBeGreaterThanOrEqual(0);
-    // The API persists the assistant turn with sender 'assistant'; the UI
-    // spells the same side 'bot' — match both.
-    expect(firstBotIdx, 'the bot turn persisted').toBeGreaterThanOrEqual(0);
+    expect(firstBotIdx, 'the assistant turn persisted').toBeGreaterThanOrEqual(0);
     expect(firstUserIdx).toBeLessThan(firstBotIdx);
   });
 });

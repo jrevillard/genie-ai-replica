@@ -198,21 +198,24 @@ async function openWelcome(browser, { holdHierarchy = false } = {}) {
 }
 
 /**
- * Watches the query path. Returns a getter that says whether a query went out.
+ * Watches the query path and CAPTURES what went out over it: each
+ * request's parsed POST body lands in `bodies` (in send order), and
+ * `queried()` says whether any query went out. The response body stays
+ * empty on purpose — a done frame would complete the turn and change
+ * what the spec observes.
  */
 async function watchQueries(page) {
+  const bodies = [];
   let streamed = false;
   await page.route(
     STREAM_ROUTE,
     runRouteHandler(page, async (route) => {
       streamed = true;
-      // The body stays empty on purpose: the watcher only records that a
-      // query went out, and a done frame would complete the turn and
-      // change what the spec observes.
+      bodies.push(route.request().postDataJSON());
       await sseFulfill(route, '');
     })
   );
-  return () => streamed;
+  return { queried: () => streamed, bodies };
 }
 
 test.describe('Quick Help scope states', () => {
@@ -253,16 +256,18 @@ test.describe('Quick Help scope states', () => {
     expect((await caption.innerText()).trim().length).toBeGreaterThan(0);
 
     // And the click sends NOTHING: no turn, no user message.
-    const streamed = await watchQueries(page);
+    const watcher = await watchQueries(page);
     await broken.first().click();
 
-    // The refusal is synchronous — nothing waits on the click, so these
-    // are instant negative checks: at click time no turn is mounted and
-    // nothing is on the query path. A send that escaped the synchronous
-    // refusal after this instant is the send-time guard's subject (the
-    // test below), not this one's.
+    // The refusal is synchronous — nothing waits on the click. The
+    // network idles only once every escaped send WOULD have gone out
+    // (and been captured by the watcher): idling is the bounded window
+    // that turns the negative below from an instant check into a settled
+    // one, with no fixed sleep.
+    await page.waitForLoadState('networkidle', { timeout: 15000 });
     await expect(page.locator('[data-testid="user-avatar"]')).toHaveCount(0);
-    expect(streamed(), 'a broken card must not reach the query path').toBe(false);
+    expect(watcher.queried(), 'a broken card must not reach the query path').toBe(false);
+    expect(watcher.bodies, 'no request body reached the query path').toEqual([]);
 
     // The tile guard refuses BEFORE anything is installed: no context item
     // appears, and the welcome screen (which only renders while NO context
@@ -354,11 +359,32 @@ test.describe('Quick Help scope states', () => {
       'a card whose scope names fine is not an error card'
     ).toBe(0);
 
-    const streamed = await watchQueries(page);
+    const watcher = await watchQueries(page);
     await healthy.first().click();
 
     // A healthy card DOES reach the query path.
-    await expect.poll(() => streamed(), { timeout: 15000 }).toBe(true);
+    await expect.poll(() => watcher.queried(), { timeout: 15000 }).toBe(true);
+
+    // And the query carries the card's SCOPE — the contract the watcher
+    // above only counts. Jest owns the assembly (ChatBotComponent.test.js);
+    // this is the assembled query over the real route: the scoping fields
+    // exactly as the fixture declares them, the scoped context option,
+    // and the dual-prompt turn (visible text displayed, hidden prompt
+    // sent — equal here, so the user turn carries it either way). The
+    // exactly-one send is the tile's own: one click, one auto-send, and
+    // the empty-body fulfill answers it without a retry.
+    expect(watcher.bodies, 'the healthy card sends exactly one query').toHaveLength(1);
+    const body = watcher.bodies[0];
+    expect(body.contextOption, 'the scoped send declares the label-filtered context option').toBe(
+      'conversation-with-context-labels'
+    );
+    expect(body.context.categoryLabel, 'the ENGLISH category label reaches the query').toBe('Civil Registry');
+    expect(body.context.serviceLabels, 'the declared labels reach the query').toEqual(['Births']);
+    expect(body.userQuestion, 'the visible text is what the user asked').toBe('Tell me about births');
+    expect(
+      body.messages.at(-1),
+      'the turn rides the messages array, its last user entry the prompt the LLM answers'
+    ).toEqual({ role: 'user', content: 'Tell me about births' });
 
     await ctx.close();
   });

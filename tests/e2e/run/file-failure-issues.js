@@ -419,7 +419,7 @@ function e2eOwnSpecNames(root = REPO_ROOT) {
     if (!/not a git repository/i.test(stderr)) {
       console.warn(
         `file-failure-issues: the git history of ${root} could not be read — a spec renamed or deleted ` +
-          `in the unread history is no longer recognised by the dedupe (${trackerReason(e)})`
+          `in the unread history is no longer recognised by the dedupe (${firstErrorReason(e)})`
       );
     }
   }
@@ -614,11 +614,12 @@ function commentBody(files, venue, runStamp) {
 }
 
 /**
- * Why the tracker refused. The tracker's own message is the first line of
- * the glab process's stderr; the command that failed is in the error's
- * message and is not useful to a reader.
+ * Why a child-process call failed, in one line. The tool's own message is
+ * the first non-empty line of its stderr (glab's refusal, git's failure);
+ * the command that failed is in the error's message and is not useful to a
+ * reader. Shared by the tracker calls and the git-history read.
  */
-function trackerReason(error) {
+function firstErrorReason(error) {
   const stderr = (error.stderr || '').trim();
   const firstStderrLine = stderr.split('\n').find((line) => line.trim().length > 0);
   if (firstStderrLine) return firstStderrLine.trim();
@@ -690,8 +691,8 @@ function fileTrackedFailures(byFile, openIssues, venue, runStamp, clients = {}) 
       byIssue.set(tracked.iid, entry);
     } catch (e) {
       // One tracker error must not swallow the remaining failures.
-      errors.push(`${file}: ${trackerReason(e)}`);
-      process.stdout.write(`  ! ${file} could not be filed: ${trackerReason(e)}\n`);
+      errors.push(`${file}: ${firstErrorReason(e)}`);
+      process.stdout.write(`  ! ${file} could not be filed: ${firstErrorReason(e)}\n`);
     }
   }
   for (const { issue, files } of byIssue.values()) {
@@ -699,9 +700,9 @@ function fileTrackedFailures(byFile, openIssues, venue, runStamp, clients = {}) 
       comment(issue, files, venue, runStamp);
     } catch (e) {
       for (const entry of files) {
-        errors.push(`${entry.file}: ${trackerReason(e)}`);
+        errors.push(`${entry.file}: ${firstErrorReason(e)}`);
       }
-      process.stdout.write(`  ! #${issue.iid} could not be commented: ${trackerReason(e)}\n`);
+      process.stdout.write(`  ! #${issue.iid} could not be commented: ${firstErrorReason(e)}\n`);
     }
   }
   return errors;
@@ -843,7 +844,7 @@ module.exports = {
   findTrackedIssue,
   specPathsIn,
   titleIsDedicatedTo,
-  trackerReason,
+  firstErrorReason,
   groupFailuresByFile,
   issueBody,
   isConnectionSignature,

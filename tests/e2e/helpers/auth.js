@@ -498,6 +498,23 @@ async function mapWithConcurrency(items, limit, fn) {
  *        TEST_USER.
  * @returns {Promise<string>} Access token string
  */
+/**
+ * The throwaway session's error-priority contract (#1883): the LOGIN
+ * failure is the primary error — a teardown failure rides along as its
+ * cause; a teardown failure on a login that SUCCEEDED is still thrown (the
+ * minted token is discarded rather than returned over a loudly-failing
+ * cleanup); a clean run returns the token. Exported for the unit spec: the
+ * contract is behaviour, and behaviour is tested, not trusted.
+ */
+function resolveSessionOutcome(loginError, teardownError, token) {
+  if (loginError) {
+    if (teardownError) loginError.cause = teardownError;
+    throw loginError;
+  }
+  if (teardownError) throw teardownError;
+  return token;
+}
+
 async function getSessionTokenViaUI({ browser, user } = {}) {
   let ownBrowser = null;
   let context = null;
@@ -540,12 +557,9 @@ async function getSessionTokenViaUI({ browser, user } = {}) {
       }
     }
   }
-  if (loginError) {
-    if (teardownError) loginError.cause = teardownError;
-    throw loginError;
-  }
-  if (teardownError) throw teardownError;
-  return token;
+  // The decision lives in resolveSessionOutcome (above) — the contract is
+  // pinned there, this call site just hands it the three facts.
+  return resolveSessionOutcome(loginError, teardownError, token);
 }
 
 /**
@@ -574,6 +588,7 @@ module.exports = {
   getUserToken,
   getSessionToken,
   getSessionTokenViaUI,
+  resolveSessionOutcome,
   parseJwtClaims,
   request,
   mapWithConcurrency,

@@ -93,3 +93,43 @@ test.describe("getAdminToken's no-access_token verdict", () => {
     await expect(getAdminToken()).rejects.toThrow(/answered 200 without an access_token[\s\S]*upstream unreachable/);
   });
 });
+
+// The throwaway session's error-priority contract (#1883), driven through
+// the pure decision the helper ends with. The browser-side half (context
+// closed before the browser, both closes attempted) is exercised on the
+// venue by every spec that mints through getSessionTokenViaUI; what no
+// venue run can show is the ERROR-PRIORITY decision — which failure is
+// thrown, and what rides along as the cause — so that contract is pinned
+// here, offline.
+test.describe("getSessionTokenViaUI's error-priority contract", () => {
+  const LOGIN_FAILURE = new Error('the Keycloak redirect never completed');
+  const TEARDOWN_FAILURE = new Error('context.close exploded');
+
+  test('a clean run returns the token', () => {
+    expect(auth.resolveSessionOutcome(null, null, 'the-token')).toBe('the-token');
+  });
+
+  test('a teardown failure on a login that SUCCEEDED is thrown, token discarded', () => {
+    // The cleanup fails loudly — returning the token over a silently
+    // broken teardown would hide the leak the failure reports.
+    expect(() => auth.resolveSessionOutcome(null, TEARDOWN_FAILURE, 'the-token')).toThrow(TEARDOWN_FAILURE);
+  });
+
+  test('a login failure is thrown as-is when the teardown held', () => {
+    expect(() => auth.resolveSessionOutcome(LOGIN_FAILURE, null, null)).toThrow(LOGIN_FAILURE);
+  });
+
+  test('a teardown failure rides along as the login failure’s cause', () => {
+    // The PRIMARY error is the login failure — the operator reads the
+    // login problem, the teardown error is attached as its cause, and the
+    // thrown error is the SAME object the login threw (identity kept).
+    let thrown = null;
+    try {
+      auth.resolveSessionOutcome(LOGIN_FAILURE, TEARDOWN_FAILURE, null);
+    } catch (e) {
+      thrown = e;
+    }
+    expect(thrown).toBe(LOGIN_FAILURE);
+    expect(thrown.cause).toBe(TEARDOWN_FAILURE);
+  });
+});

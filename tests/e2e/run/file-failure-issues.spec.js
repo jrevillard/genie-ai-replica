@@ -9,7 +9,7 @@ const {
   findTrackedIssue,
   specPathsIn,
   titleIsDedicatedTo,
-  trackerReason,
+  firstErrorReason,
   groupFailuresByFile,
   issueBody,
   isConnectionSignature,
@@ -294,12 +294,12 @@ test.describe('the tracker refusal names the tracker, not the command', () => {
   test('the first stderr line is the tracker message', () => {
     const error = new Error('Command failed: glab api projects/90/issues -f title=<the whole body>');
     error.stderr = 'glab: 404 Not found (HTTP 404)\n';
-    expect(trackerReason(error)).toBe('glab: 404 Not found (HTTP 404)');
+    expect(firstErrorReason(error)).toBe('glab: 404 Not found (HTTP 404)');
   });
 
   test('without stderr, the error message carries the reason', () => {
     const error = new Error('spawn glab ENOENT\nat ChildProcess');
-    expect(trackerReason(error)).toBe('spawn glab ENOENT | at ChildProcess');
+    expect(firstErrorReason(error)).toBe('spawn glab ENOENT | at ChildProcess');
   });
 });
 

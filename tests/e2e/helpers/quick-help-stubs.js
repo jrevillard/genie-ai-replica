@@ -32,12 +32,22 @@ const { runRouteHandler } = require('./route');
  * locale map; every other override lands on the card verbatim.
  */
 function quickHelpButton(overrides = {}) {
-  const { title, ...rest } = overrides;
+  const { title, icon, ...rest } = overrides;
   const titleMap = title === undefined ? { en: 'Just Chat' } : typeof title === 'string' ? { en: title } : title;
+  // [icon] is a path (the file-type icon every shipped card uses) or a
+  // full icon object — never a bare string on the CARD: the served
+  // schema requires the object, and the app refuses a document that
+  // violates it at boot (the config-error screen).
+  const iconMap =
+    icon === undefined
+      ? { type: 'file', value: '/config/quickhelp/just-chat.svg' }
+      : typeof icon === 'string'
+        ? { type: 'file', value: icon }
+        : icon;
   return {
     id: undefined,
     title: titleMap,
-    icon: { type: 'file', value: '/config/quickhelp/just-chat.svg' },
+    icon: iconMap,
     category: null,
     styles: { backgroundColor: '#fff', hoverColor: '#eee', outlineColor: '#ccc' },
     ...rest

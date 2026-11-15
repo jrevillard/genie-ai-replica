@@ -1,6 +1,8 @@
 const { test, expect } = require('@playwright/test');
 const { BASE_URL } = require('../helpers/base-url');
 const { TEST_USER } = require('../helpers/e2e-fixtures');
+const { NAV_LOGOUT_BUTTON } = require('../helpers/navbar');
+const { KEYCLOAK_AUTH_ENDPOINT_GLOB } = require('../helpers/keycloak-landing');
 
 // Test A.2 — Full Login Flow
 // Complete login flow: navigate to app, get redirected to Keycloak,
@@ -21,7 +23,7 @@ test('completes full login flow from app to Keycloak and back', async ({ browser
   });
 
   // Step 2: Wait for Keycloak login page
-  await page.waitForURL('**/protocol/openid-connect/auth**', {
+  await page.waitForURL(KEYCLOAK_AUTH_ENDPOINT_GLOB, {
     timeout: 15000,
   });
 
@@ -37,32 +39,23 @@ test('completes full login flow from app to Keycloak and back', async ({ browser
   await page.fill('#password', TEST_USER.password);
   await page.click('#kc-login');
 
-  // Step 4: Wait for redirect back to the app
-  await page.waitForURL(`${BASE_URL}/**`, {
+  // Step 4: Wait for redirect back to the app — the dashboard, exactly:
+  // the login is requested from '/' (whose redirect target is
+  // /dashboard), and CallbackView replaces to that same returnUrl. One
+  // expected landing; a login flow that parks anywhere else fails here.
+  await page.waitForURL(`${BASE_URL}/dashboard`, {
     timeout: 30000,
   });
 
-  // Step 5: Verify authenticated state — wait for navigation to settle
-  await page.waitForURL(
-    (url) => {
-      const urlStr = url.toString();
-      return urlStr.includes('dashboard') || urlStr === `${BASE_URL}/`;
-    },
-    { timeout: 30000 },
-  );
-
-  const finalUrl = page.url();
+  // Authenticated-shell proof: the logout button renders only inside
+  // App.vue's authenticated gate — see the note beside NAV_LOGOUT_BUTTON
+  // in helpers/navbar.js. The exact-URL pin above proves the router guard
+  // admitted a session; this proves the shell behind it actually rendered.
+  const logoutButton = page.locator(NAV_LOGOUT_BUTTON);
   await expect(
-    finalUrl.includes('dashboard'),
-    `Expected URL to contain 'dashboard', got: ${finalUrl}`,
-  ).toBeTruthy();
-
-  // Verify the page body contains the app content (not a login page)
-  const bodyText = await page.evaluate(() => document.body.innerText.substring(0, 200));
-  await expect(
-    bodyText.includes('GENIE.AI'),
-    `Expected page body to contain 'GENIE.AI', got: ${bodyText}`,
-  ).toBeTruthy();
+    logoutButton,
+    `Expected the authenticated shell (logout button visible) on the dashboard; got URL: ${page.url()}`,
+  ).toBeVisible({ timeout: 10000 });
 
   await context.close();
 });

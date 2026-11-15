@@ -729,8 +729,35 @@ describe('ServiceCategoryService', () => {
 
       const result = await service.deleteCategory('cat-1');
       expect(result._key).toBe('cat-1');
-      expect(mockDb.query).toHaveBeenCalledTimes(3);
+      // 5 queries: the services' translation-edge cleanup, the service
+      // translations, the services+categoryServices edges, the category
+      // translations, the category's own translation edges (#1185).
+      expect(mockDb.query).toHaveBeenCalledTimes(5);
       expect(mockServiceCategories.remove).toHaveBeenCalledWith('cat-1');
+    });
+
+    it("removes the translation-graph edges (#1185) — the services' edges BEFORE the services vanish", async () => {
+      mockDb.query.mockResolvedValue(createMockCursor([]));
+      mockServiceCategories.remove.mockResolvedValue({ _key: 'cat-1' });
+
+      await service.deleteCategory('cat-1');
+
+      const texts = mockDb.query.mock.calls.map((c) => c[0].strings.join(''));
+      const serviceEdgeIdx = texts.findIndex((t) => t.includes('serviceTranslationsEdge'));
+      const servicesRemovalIdx = texts.findIndex(
+        (t) => t.includes('REMOVE edge IN categoryServices') && t.includes('IN services')
+      );
+      const categoryEdgeIdx = texts.findIndex((t) => t.includes('serviceCategoryTranslationsEdge'));
+      // Both edge collections get their cleanup query.
+      expect(serviceEdgeIdx).toBeGreaterThanOrEqual(0);
+      expect(categoryEdgeIdx).toBeGreaterThanOrEqual(0);
+      // The ordering that matters for correctness: the services' edges are
+      // removed while the services still exist (the `_from` anchors resolve);
+      // after the services are gone, DOCUMENT(edge._to) is null and the
+      // anchors would be lost.
+      expect(serviceEdgeIdx).toBeLessThan(servicesRemovalIdx);
+      // And the category's own edges are cleaned before the category goes.
+      expect(mockServiceCategories.remove).toHaveBeenCalled();
     });
 
     it('should throw Error when categoryKey is missing', async () => {
@@ -745,8 +772,27 @@ describe('ServiceCategoryService', () => {
 
       const result = await service.deleteService('svc-1');
       expect(result).toEqual({ _key: 'svc-1', status: 'deleted' });
-      expect(mockDb.query).toHaveBeenCalledTimes(2);
+      // 3 queries: the translations, their graph edges (#1185), the
+      // categoryServices edge.
+      expect(mockDb.query).toHaveBeenCalledTimes(3);
       expect(mockServices.remove).toHaveBeenCalledWith('svc-1');
+    });
+
+    it('removes the serviceTranslationsEdge documents pointing at the deleted translations (#1185)', async () => {
+      mockDb.query.mockResolvedValue(createMockCursor([]));
+      mockServices.remove.mockResolvedValue({ _key: 'svc-1' });
+
+      await service.deleteService('svc-1');
+
+      const cleanupCall = mockDb.query.mock.calls
+        .map((c) => c[0])
+        .find((q) => q.strings.join('').includes('serviceTranslationsEdge'));
+      // The cleanup query exists, is anchored on the service being deleted
+      // (the bind value, not the template text), and removes from the edge
+      // collection — not a translation sweep in disguise.
+      expect(cleanupCall).toBeTruthy();
+      expect(cleanupCall.strings.join('')).toContain('REMOVE edge IN serviceTranslationsEdge');
+      expect(cleanupCall.values).toContain('services/svc-1');
     });
 
     it('should throw Error when serviceKey is missing', async () => {
@@ -775,6 +821,50 @@ describe('ServiceCategoryService', () => {
         // an id that never existed.
         expect(e.cause).toMatchObject({ errorNum: 1202 });
       }
+    });
+  });
+
+  describe('the projections never publish catCode (#1184)', () => {
+    // The write path never sets `catCode` and no consumer reads it (the
+    // seed script is its only writer) — the projections stopped publishing
+    // a field the API cannot produce. The unit surface is the QUERY TEXT:
+    // the projection lives in the AQL, so the pinned fact is `catCode` no
+    // longer appearing in it while `catKey` still does (non-vacuous).
+    const textOf = (i) => mockDb.query.mock.calls[i][0].strings.join('');
+
+    it('getAllCategoriesWithServices drops catCode from the projection', async () => {
+      mockDb.query.mockResolvedValue(createMockCursor([]));
+      await service.getAllCategoriesWithServices('en');
+      const text = textOf(0);
+      expect(text).toContain('catKey');
+      expect(text).not.toContain('catCode');
+    });
+
+    it('getAdminAllCategoriesWithServices drops catCode from the projection', async () => {
+      mockDb.query.mockResolvedValue(createMockCursor([]));
+      await service.getAdminAllCategoriesWithServices('en');
+      const text = textOf(0);
+      expect(text).toContain('catKey');
+      expect(text).not.toContain('catCode');
+    });
+
+    it('getCategoryWithServices drops catCode from the projection', async () => {
+      mockDb.query.mockResolvedValue(createMockCursor([{ catKey: 'cat-1', name: 'Taxes', children: [] }]));
+      await service.getCategoryWithServices('cat-1', 'en');
+      const text = textOf(0);
+      expect(text).toContain('catKey');
+      expect(text).not.toContain('catCode');
+    });
+
+    it('searchCategoriesAndServices sorts services on the categoryServices edge order', async () => {
+      mockDb.query.mockResolvedValue(createMockCursor([{ categories: [], services: [] }]));
+      await service.searchCategoriesAndServices('tax', 'en');
+      const text = textOf(0);
+      // ONE ordering contract: the edge is the only order writer — the
+      // service document's (seed-only, null on API-created services) order
+      // field must not sort this endpoint.
+      expect(text).toContain('serviceEdge.order');
+      expect(text).not.toContain('service.order');
     });
   });
 

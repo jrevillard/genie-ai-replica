@@ -1453,7 +1453,27 @@ test.describe('enableDirectAccessGrants reads the client list like every other r
     expect(caught.message).toMatch(/Cannot reach the Keycloak admin API for the ROPC enablement of genie-app/);
   });
 
-  test('enabling ROPC puts the whole client representation with the grant flipped', async () => {
+  test('a refused enable PUT reports the status and the body verbatim', async () => {
+    // The refused verdict is table-driven now (ROPC_FLIP.refused) — pinned
+    // so a wording-table drift ships red here instead of surfacing as
+    // whatever string a real venue's 403 prints.
+    routes = [
+      ['GET', CLIENTS_PATH, { status: 200, data: [{ id: 'client-1', directAccessGrantsEnabled: false }] }],
+      ['PUT', CLIENT_UPDATE_PATH, { status: 403, data: { error: 'forbidden' } }]
+    ];
+
+    const caught = await rejection(enableDirectAccessGrants('tok', 'genie2', 'genie-app'));
+
+    expect(caught.message).toMatch(/Failed to enable direct access grants on genie-app in realm genie2: HTTP 403/);
+    expect(caught.message).toContain('forbidden');
+    // failWithStatus classifies the status and carries it: a 4xx is
+    // permanent (the caller cannot retry its way out), and the classification
+    // is part of the verdict's contract, not an implementation detail.
+    expect(caught.httpStatus).toBe(403);
+    expect(caught.transient).toBeFalsy();
+  });
+
+  test('enabling ROPC puts the whole client representation with the grant flipped, then reads the state back', async () => {
     // Defensive full-representation PUT: one-field client PUTs are safe
     // (the verified reverts use exactly one), and carrying the read
     // representation back cannot wipe a setting whatever Keycloak's merge
@@ -1463,7 +1483,14 @@ test.describe('enableDirectAccessGrants reads the client list like every other r
       [
         'GET',
         CLIENTS_PATH,
-        { status: 200, data: [{ id: 'client-1', secret: 's3cret', directAccessGrantsEnabled: false }] }
+        {
+          // The same-URL-twice sequence: the lookup before the PUT answers
+          // no grant, the read-back after it answers the enabled one.
+          compute: (log) =>
+            log.some((entry) => entry.startsWith('PUT'))
+              ? { status: 200, data: [{ id: 'client-1', secret: 's3cret', directAccessGrantsEnabled: true }] }
+              : { status: 200, data: [{ id: 'client-1', secret: 's3cret', directAccessGrantsEnabled: false }] }
+        }
       ],
       ['PUT', CLIENT_UPDATE_PATH, { status: 204, data: null }]
     ];
@@ -1472,7 +1499,8 @@ test.describe('enableDirectAccessGrants reads the client list like every other r
 
     expect(calls).toEqual([
       `GET /auth/admin/realms/genie2/clients?clientId=genie-app`,
-      `PUT /auth/admin/realms/genie2/clients/client-1`
+      `PUT /auth/admin/realms/genie2/clients/client-1`,
+      `GET /auth/admin/realms/genie2/clients?clientId=genie-app`
     ]);
     // The whole representation read travels back, with the grant flipped on.
     expect(bodies[1]).toEqual({ id: 'client-1', secret: 's3cret', directAccessGrantsEnabled: true });
@@ -1484,6 +1512,64 @@ test.describe('enableDirectAccessGrants reads the client list like every other r
     await enableDirectAccessGrants('tok', 'genie2', 'genie-app');
 
     expect(calls).toEqual([`GET /auth/admin/realms/genie2/clients?clientId=genie-app`]);
+  });
+
+  test('a read-back that still shows the grant off is a loud failure', async () => {
+    // The flip-and-verify contract, enable direction (#1886): a 204 from
+    // the PUT proves nothing — the enable resolves only when the realm
+    // READS BACK with the grant on. A Keycloak that silently ignores the
+    // enablement leaves the spec minutes from a cryptic ROPC-refused
+    // token-mint failure; that miss is asserted here, at the helper.
+    routes = [
+      ['GET', CLIENTS_PATH, { status: 200, data: [{ id: 'client-1', directAccessGrantsEnabled: false }] }],
+      ['PUT', CLIENT_UPDATE_PATH, { status: 204, data: null }]
+    ];
+
+    const caught = await rejection(enableDirectAccessGrants('tok', 'genie2', 'genie-app'));
+
+    expect(caught.message).toMatch(/ROPC enablement did not land on genie-app in realm genie2/);
+    expect(caught.message).toMatch(/directAccessGrantsEnabled=false/);
+  });
+
+  test('a read-back whose representation omits the grant reports the observed value, not an assumed one', async () => {
+    // The enable-direction mirror of the disable describe's pin: the verdict
+    // interpolates what the read-back actually answered, and an arm reading
+    // back the literal `false` cannot tell the interpolated message from a
+    // hardcoded one. A missing field can — the verdict has to say
+    // `undefined`, the exact observation.
+    routes = [
+      ['GET', CLIENTS_PATH, { status: 200, data: [{ id: 'client-1' }] }],
+      ['PUT', CLIENT_UPDATE_PATH, { status: 204, data: null }]
+    ];
+
+    const caught = await rejection(enableDirectAccessGrants('tok', 'genie2', 'genie-app'));
+
+    expect(caught.message).toMatch(/ROPC enablement did not land on genie-app in realm genie2/);
+    expect(caught.message).toMatch(/directAccessGrantsEnabled=undefined/);
+  });
+
+  test('a client that vanishes between the PUT and the read-back is a loud failure, not a verified enable', async () => {
+    // Asymmetric with the revert on purpose: for the enable, absence means
+    // the landing cannot be verified — and the spec's token mint would fail
+    // minutes later with the cryptic refusal the probe exists to name here.
+    routes = [
+      [
+        'GET',
+        CLIENTS_PATH,
+        {
+          compute: (log) =>
+            log.some((entry) => entry.startsWith('PUT'))
+              ? { status: 200, data: [] }
+              : { status: 200, data: [{ id: 'client-1', directAccessGrantsEnabled: false }] }
+        }
+      ],
+      ['PUT', CLIENT_UPDATE_PATH, { status: 204, data: null }]
+    ];
+
+    const caught = await rejection(enableDirectAccessGrants('tok', 'genie2', 'genie-app'));
+
+    expect(caught.message).toMatch(/ROPC enablement unverifiable on genie-app in realm genie2/);
+    expect(caught.message).toMatch(/vanished between\s*the enablement PUT and the read-back/);
   });
 });
 
@@ -1509,6 +1595,24 @@ test.describe('disableDirectAccessGrants — the verified ROPC revert (#1879)', 
 
     expect(caught.transient).toBe(true);
     expect(caught.message).toMatch(/Cannot reach the Keycloak admin API for the ROPC revert of genie-app/);
+  });
+
+  test('a refused revert PUT reports the status and the body verbatim', async () => {
+    // The refused verdict is table-driven now (ROPC_FLIP.refused) — pinned
+    // so a wording-table drift ships red here instead of surfacing as
+    // whatever string a real venue's 409 prints.
+    routes = [
+      ['GET', CLIENTS_PATH, { status: 200, data: [{ id: 'client-1', directAccessGrantsEnabled: true }] }],
+      ['PUT', CLIENT_UPDATE_PATH, { status: 409, data: { error: 'conflict' } }]
+    ];
+
+    const caught = await rejection(disableDirectAccessGrants('tok', 'genie2', 'genie-app'));
+
+    expect(caught.message).toMatch(/Failed to disable direct access grants on genie-app in realm genie2: HTTP 409/);
+    expect(caught.message).toContain('conflict');
+    // Same classification pin as the enable arm: 4xx is permanent.
+    expect(caught.httpStatus).toBe(409);
+    expect(caught.transient).toBeFalsy();
   });
 
   test('reverting puts the whole representation with the grant flipped, then reads the state back', async () => {
@@ -1562,6 +1666,51 @@ test.describe('disableDirectAccessGrants — the verified ROPC revert (#1879)', 
 
     expect(caught.message).toMatch(/ROPC NOT reverted on genie-app in realm genie2/);
     expect(caught.message).toMatch(/directAccessGrantsEnabled=true/);
+  });
+
+  test('a read-back whose representation omits the grant reports the observed value, not an assumed one', async () => {
+    // The probe fires on any value other than the expected side — including
+    // an absent field — and the verdict interpolates what the read-back
+    // actually answered. An arm reading back the literal `true` cannot tell
+    // the interpolated message from the old hardcoded one; a missing field
+    // can: the verdict has to say `undefined`, the exact observation.
+    routes = [
+      ['GET', CLIENTS_PATH, { status: 200, data: [{ id: 'client-1' }] }],
+      ['PUT', CLIENT_UPDATE_PATH, { status: 204, data: null }]
+    ];
+
+    const caught = await rejection(disableDirectAccessGrants('tok', 'genie2', 'genie-app'));
+
+    expect(caught.message).toMatch(/ROPC NOT reverted on genie-app in realm genie2/);
+    expect(caught.message).toMatch(/directAccessGrantsEnabled=undefined/);
+  });
+
+  test('a client that vanishes between the PUT and the read-back holds the revert by absence', async () => {
+    // The revert's documented asymmetry (#1879): absence verifies the
+    // posture — nothing leaks a grant — so the vanish resolves instead of
+    // failing. Pins the contract against a future "symmetrize" edit; the
+    // enable direction's opposite contract is pinned in its own describe.
+    routes = [
+      [
+        'GET',
+        CLIENTS_PATH,
+        {
+          compute: (log) =>
+            log.some((entry) => entry.startsWith('PUT'))
+              ? { status: 200, data: [] }
+              : { status: 200, data: [{ id: 'client-1', directAccessGrantsEnabled: true }] }
+        }
+      ],
+      ['PUT', CLIENT_UPDATE_PATH, { status: 204, data: null }]
+    ];
+
+    await disableDirectAccessGrants('tok', 'genie2', 'genie-app');
+
+    expect(calls).toEqual([
+      `GET /auth/admin/realms/genie2/clients?clientId=genie-app`,
+      `PUT /auth/admin/realms/genie2/clients/client-1`,
+      `GET /auth/admin/realms/genie2/clients?clientId=genie-app`
+    ]);
   });
 });
 

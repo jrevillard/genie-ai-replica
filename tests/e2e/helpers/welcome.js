@@ -121,7 +121,12 @@ async function waitForBannerSettled(page) {
  * settled frame: capturePixels gates on it (waitForCompositingSettled)
  * on its first capture of a page.
  *
- * Returns { ctx, page } — the caller closes ctx when it is done.
+ * Returns { ctx, page } — the caller closes ctx when it is done. Prefer
+ * withWelcomeSession, which owns that close guarantee in its own control
+ * flow.
+ * The open path holds the same guarantee for itself: a throw after the
+ * context exists (a login that fails, a wait that expires) closes the
+ * context before rethrowing, so a failed open cannot leak it.
  */
 async function openWelcomeScreen(browser, { viewport, theme, locale, setupPage, reload = true } = {}) {
   const ctx = await browser.newContext({
@@ -129,28 +134,106 @@ async function openWelcomeScreen(browser, { viewport, theme, locale, setupPage, 
     colorScheme: theme || 'light',
     ignoreHTTPSErrors: true
   });
-  const page = await ctx.newPage();
-  if (setupPage) {
-    await setupPage(page);
-  }
-  await loginViaUI(page);
-  if (locale) {
-    await page.evaluate((l) => localStorage.setItem('userLocale', l), locale);
-  }
-  await page.evaluate(() => localStorage.setItem('sidebarOpen', 'true'));
-  // The splash is a full-screen overlay (z-index 30000, opaque
-  // background) and it shows on the first authenticated load of a
-  // session — the login above already triggered it. It has to be gone
-  // before a single pixel is sampled, or the sampler reads the splash
-  // image instead of the scrim. A reload skips it (the session flag is
-  // set) and leaves the page ready to sample.
-  await page.waitForSelector('[data-testid="quick-help-banner"]', { timeout: 15000 });
-  if (reload) {
-    await page.reload({ waitUntil: 'networkidle', timeout: 30000 });
+  try {
+    const page = await ctx.newPage();
+    if (setupPage) {
+      await setupPage(page);
+    }
+    await loginViaUI(page);
+    if (locale) {
+      await page.evaluate((l) => localStorage.setItem('userLocale', l), locale);
+    }
+    await page.evaluate(() => localStorage.setItem('sidebarOpen', 'true'));
+    // The splash is a full-screen overlay (z-index 30000, opaque
+    // background) and it shows on the first authenticated load of a
+    // session — the login above already triggered it. It has to be gone
+    // before a single pixel is sampled, or the sampler reads the splash
+    // image instead of the scrim. A reload skips it (the session flag is
+    // set) and leaves the page ready to sample.
     await page.waitForSelector('[data-testid="quick-help-banner"]', { timeout: 15000 });
+    if (reload) {
+      await page.reload({ waitUntil: 'networkidle', timeout: 30000 });
+      await page.waitForSelector('[data-testid="quick-help-banner"]', { timeout: 15000 });
+    }
+    await waitForBannerEntrance(page);
+    return { ctx, page };
+  } catch (e) {
+    // Loud cleanup, same verdict rule as the body path in
+    // withWelcomeSession — with the cause kept: the close's own failure,
+    // if any, travels WITH the open error that caused the unwind, never
+    // instead of it (a close that erased the login failure would leave
+    // the runner diagnosing the teardown instead of the cause).
+    await closeLoudly(ctx, e);
+    throw e;
   }
-  await waitForBannerEntrance(page);
-  return { ctx, page };
+}
+
+/**
+ * Close a welcome session's context, loud but never verdict-stealing: a
+ * close that itself fails joins the GIVEN failure's message (which keeps
+ * its type, stack and any verdict flags) instead of replacing it. One
+ * spelling for both cleanup sites — the open path and the body path
+ * report the same teardown-failure shape.
+ * @param {import('@playwright/test').BrowserContext} ctx
+ * @param {Error} failure - The error that caused the unwind; its message
+ *   is adorned with the close failure, and it stays the caller's verdict
+ */
+async function closeLoudly(ctx, failure) {
+  try {
+    await ctx.close();
+  } catch (closeFailure) {
+    failure.message = `${failure.message} — additionally, closing the session's context failed: ${closeFailure.message}`;
+  }
+}
+
+/**
+ * Open a welcome session, run `fn`, and guarantee the close.
+ *
+ * The close guarantee lives here, not at the call site (#1888): the leak
+ * the inline `try { ... } finally { await ctx.close(); }` shape guards
+ * against — close skipped when an assert throws mid-body — is one
+ * forgotten wrapper away every time a loop copies the shape by hand. The
+ * helper makes the guarantee unforgetable: the session is closed in this
+ * function's own control flow, whatever `fn` throws, and the cleanup
+ * stays loud without stealing the verdict — a close that itself fails
+ * joins the body error's message (which keeps its type, stack and verdict
+ * flags), it never replaces the failure that caused the unwind.
+ *
+ *   await withWelcomeSession(browser, { theme: 'dark' }, async (page) => {
+ *     // assertions against the settled welcome screen
+ *   });
+ *
+ * `fn` receives the session's page and its resolution is passed through,
+ * so a spec can return a measured value from the session — unless the
+ * session's own close fails after `fn` succeeded, in which case that
+ * teardown failure throws and the measurement is lost with it (loud, and
+ * the verdict names the teardown, not a body failure). The context
+ * itself stays private to the helper — the close is the helper's own
+ * guarantee, and a caller that could reach ctx could fight the cleanup.
+ * @param {import('@playwright/test').Browser} browser
+ * @param {Parameters<openWelcomeScreen>[1]} opts - Forwarded to
+ *   openWelcomeScreen verbatim
+ * @param {(page: import('@playwright/test').Page) => Promise<*>} fn
+ * @returns {Promise<*>} Whatever `fn` resolved to — when the close after
+ *   a successful `fn` itself fails, that teardown error throws instead
+ */
+async function withWelcomeSession(browser, opts, fn) {
+  const { ctx, page } = await openWelcomeScreen(browser, opts);
+  let result;
+  try {
+    result = await fn(page);
+  } catch (bodyError) {
+    // The body failed — the close's own failure, if any, joins the BODY
+    // error's message (which keeps its type, stack and verdict flags), it
+    // never replaces the failure that caused the unwind.
+    await closeLoudly(ctx, bodyError);
+    throw bodyError;
+  }
+  // fn succeeded — a close failure here is a TEARDOWN failure and is
+  // rethrown as itself: adorning it as a body failure would invent a
+  // session-body verdict that never happened.
+  await ctx.close();
+  return result;
 }
 
 /**
@@ -297,6 +380,7 @@ const LAYER_STATE_BIND = `return (${visualLayerState.toString()});`;
 
 module.exports = {
   openWelcomeScreen,
+  withWelcomeSession,
   waitForBannerSettled,
   readVisualLayerState,
   capturePixels,

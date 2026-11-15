@@ -42,7 +42,7 @@
 
 const { test, expect } = require('@playwright/test');
 const { loginViaUI, navigateToChatbot, LOGIN_BUDGET_TIMEOUT_MS } = require('../helpers/chatbot');
-const { openWelcomeScreen, LAYER_STATE_BIND } = require('../helpers/welcome');
+const { withWelcomeSession, LAYER_STATE_BIND } = require('../helpers/welcome');
 const {
   waitForWidthSettled,
   SIDEBAR_LEFT,
@@ -309,44 +309,45 @@ test.describe('Welcome panel does not scroll horizontally', () => {
       test(`${vp}px @${theme}: overlay overflow-x is 'hidden' or 'clip', and the wave adds no width`, async ({
         browser
       }) => {
-        const { ctx, page } = await openWelcomeScreen(browser, {
-          viewport: { width: vp, height: 800 },
-          theme
-          // The banner's box reaches its final width once the entrance
-          // animation and the compositing gate inside openWelcomeScreen
-          // pass — no fixed settle window is needed for this read.
-        });
-        try {
-          const m = await readWelcomePanel(page);
-          expect(m.hasOverlay, 'welcome overlay should be present in the DOM').toBe(true);
-          expect(m.visualOn, 'data-visual="on" must be set for the wave layer to render').toBe(true);
-          expect(m.gliOn, 'the dashboard wrapper must be an ancestor of the panel for the wave layer').toBe(true);
+        await withWelcomeSession(
+          browser,
+          {
+            viewport: { width: vp, height: 800 },
+            theme
+            // The banner's box reaches its final width once the entrance
+            // animation openWelcomeScreen waits for passes — no fixed
+            // settle window is needed for this read.
+          },
+          async (page) => {
+            const m = await readWelcomePanel(page);
+            expect(m.hasOverlay, 'welcome overlay should be present in the DOM').toBe(true);
+            expect(m.visualOn, 'data-visual="on" must be set for the wave layer to render').toBe(true);
+            expect(m.gliOn, 'the dashboard wrapper must be an ancestor of the panel for the wave layer').toBe(true);
 
-          // 1. the property that decides whether the panel draws a
-          //    horizontal scrollbar.
-          expect(m.overflowX, 'overlay should be readable').not.toBeNull();
-          expect(
-            m.overflowX,
-            `overlay computed overflow-x must be 'hidden' or 'clip' (the property that decides ` +
-              `whether the panel draws a horizontal scrollbar). Got '${m.overflowX}' at ` +
-              `viewport ${vp}px (${theme}). Setting it back to 'auto' (the previous default after ` +
-              `overflow-y: auto) would draw the very scrollbar the brief rules out.`
-          ).toMatch(/^(hidden|clip)$/);
+            // 1. the property that decides whether the panel draws a
+            //    horizontal scrollbar.
+            expect(m.overflowX, 'overlay should be readable').not.toBeNull();
+            expect(
+              m.overflowX,
+              `overlay computed overflow-x must be 'hidden' or 'clip' (the property that decides ` +
+                `whether the panel draws a horizontal scrollbar). Got '${m.overflowX}' at ` +
+                `viewport ${vp}px (${theme}). Setting it back to 'auto' (the previous default after ` +
+                `overflow-y: auto) would draw the very scrollbar the brief rules out.`
+            ).toMatch(/^(hidden|clip)$/);
 
-          // 2. and with the banner out of the way, the wave band itself
-          //    contributes nothing past the panel's content box.
-          expect(m.scrollWidth, 'overlay should be readable').not.toBeNull();
-          const overflow = m.scrollWidth - m.clientWidth;
-          expect(
-            m.scrollWidth,
-            `with banner hidden, overlay scrollWidth (${m.scrollWidth}px) must be <= ` +
-              `clientWidth (${m.clientWidth}px) at viewport ${vp}px (${theme}); ` +
-              `wave-only horizontal overflow=${overflow}px ` +
-              `(the brief measured +24 here when the ::after box was sized to clientWidth + 2*--space-lg)`
-          ).toBeLessThanOrEqual(m.clientWidth);
-        } finally {
-          await ctx.close();
-        }
+            // 2. and with the banner out of the way, the wave band itself
+            //    contributes nothing past the panel's content box.
+            expect(m.scrollWidth, 'overlay should be readable').not.toBeNull();
+            const overflow = m.scrollWidth - m.clientWidth;
+            expect(
+              m.scrollWidth,
+              `with banner hidden, overlay scrollWidth (${m.scrollWidth}px) must be <= ` +
+                `clientWidth (${m.clientWidth}px) at viewport ${vp}px (${theme}); ` +
+                `wave-only horizontal overflow=${overflow}px ` +
+                `(the brief measured +24 here when the ::after box was sized to clientWidth + 2*--space-lg)`
+            ).toBeLessThanOrEqual(m.clientWidth);
+          }
+        );
       });
     }
   }

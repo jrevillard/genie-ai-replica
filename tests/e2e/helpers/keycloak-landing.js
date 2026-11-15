@@ -13,8 +13,10 @@ const { expect } = require('@playwright/test');
 
 // The auth endpoint's path suffix — the ONE owner of the endpoint string.
 // The login page IS this endpoint's render; the glob and the concrete
-// realm path below are both derived from it, so a realm rename or an
-// endpoint change lands here once.
+// realm path below are both derived from it, so an AUTH-ENDPOINT change
+// lands here once. (The realm PREFIX is spelled separately — in the genie
+// path below and in the logout literal inside the settle predicate; a
+// realm rename touches those spellings too.)
 const KEYCLOAK_AUTH_ENDPOINT_SUFFIX = '/protocol/openid-connect/auth';
 const KEYCLOAK_AUTH_ENDPOINT_GLOB = `**${KEYCLOAK_AUTH_ENDPOINT_SUFFIX}**`;
 

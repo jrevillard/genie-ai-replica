@@ -62,6 +62,12 @@ async function openStudioWithDraftAnswer(page, draftStatus, draftBody) {
 }
 
 test.describe('OKF Studio degraded-draft banner', () => {
+  // The spec asserts the banner's exact English copy, so the locale must
+  // be PINNED — the app resolves it from navigator.language when
+  // localStorage holds no preference, and this spec's pages come from the
+  // default fixtures (the sibling ceiling spec pins the same way).
+  test.use({ locale: 'en-US' });
+
   test.beforeEach(
     skipUnlessVenue(
       test,

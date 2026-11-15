@@ -82,6 +82,13 @@ async function openWizardInputStep(page, importBody) {
 }
 
 test.describe('OKF wizard split report note', () => {
+  // The spec asserts the note's exact English sentence (splitReportCopy),
+  // so the locale must be PINNED — the app resolves it from
+  // navigator.language when localStorage holds no preference, and this
+  // spec's pages come from the default fixtures (the sibling ceiling spec
+  // pins the same way).
+  test.use({ locale: 'en-US' });
+
   test.beforeEach(
     skipUnlessVenue(
       test,

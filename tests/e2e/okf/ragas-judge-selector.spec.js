@@ -24,6 +24,7 @@ const { test, expect } = require('@playwright/test');
 const { BASE_URL } = require('../helpers/base-url');
 const { getAdminToken, SESSION_MINT_TIMEOUT_MS } = require('../helpers/auth');
 const { createUser, deleteUser } = require('../helpers/keycloak-admin');
+const { pinLocale } = require('../helpers/locale');
 const { okfEnabled, okfParkedReason, skipUnlessVenue } = require('../helpers/venue-profile');
 
 const REALM = process.env.KEYCLOAK_REALM || 'genie';
@@ -72,6 +73,10 @@ test.describe('the RAGAS model selection is in the UI', () => {
     browser
   }) => {
     const context = await browser.newContext({ ignoreHTTPSErrors: true, bypassCSP: true });
+    // The walk below reads rendered English copy (the role names), so the
+    // locale must be PINNED — the app resolves it from navigator.language
+    // when localStorage holds no preference.
+    await pinLocale(context, 'en');
     const page = await context.newPage();
 
     // 1. log in through Keycloak
@@ -89,10 +94,7 @@ test.describe('the RAGAS model selection is in the UI', () => {
     await studioTab.click();
 
     // 3. the repo card -> Testing Lab (the dialog that carries the Benchmarks tab)
-    const card = page
-      .locator('[data-test-id^="okf-studio-card-"]')
-      .filter({ hasText: REPO_NAME })
-      .first();
+    const card = page.locator('[data-test-id^="okf-studio-card-"]').filter({ hasText: REPO_NAME }).first();
     await expect(card, `the ${REPO_NAME} repo card must be listed`).toBeVisible({ timeout: 20000 });
     const testingLab = card.getByRole('button', { name: /Testing Lab/i }).first();
     await expect(testingLab, 'the Testing Lab button must be on the card').toBeVisible({ timeout: 20000 });
@@ -131,6 +133,8 @@ test.describe('the RAGAS model selection is in the UI', () => {
 
   test('the admin Models tab lists the configured models — the same envelope feeds it', async ({ browser }) => {
     const context = await browser.newContext({ ignoreHTTPSErrors: true, bypassCSP: true });
+    // Same copy-sensitive walk as the first test — same pin.
+    await pinLocale(context, 'en');
     const page = await context.newPage();
 
     await page.goto(`${BASE_URL}/`, { waitUntil: 'domcontentloaded', timeout: 30000 });

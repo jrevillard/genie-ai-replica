@@ -1,5 +1,6 @@
 const { test, expect } = require('@playwright/test');
 const { BASE_URL } = require('../helpers/base-url');
+const { KEYCLOAK_AUTH_ENDPOINT_GLOB } = require('../helpers/keycloak-landing');
 
 // Test A.1 — Redirect to Keycloak
 // Verifies that navigating to the app root redirects to the Keycloak login page.
@@ -18,7 +19,7 @@ test('redirects to Keycloak login page when accessing app root', async ({ browse
   });
 
   // Wait for redirect to Keycloak OIDC authorization endpoint
-  await page.waitForURL('**/protocol/openid-connect/auth**', {
+  await page.waitForURL(KEYCLOAK_AUTH_ENDPOINT_GLOB, {
     timeout: 15000
   });
 

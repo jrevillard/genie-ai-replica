@@ -163,9 +163,27 @@ test.describe('Conversation history persistence', () => {
     // below. A later page that fails must NOT discard the pages that
     // succeeded — those conversations are known, and leaving them behind
     // is the leftover this sweep exists to prevent.
+    // Pagination drift can list the same conversation on two page reads;
+    // the delete set holds each conversation ONCE — a duplicated entry
+    // would run a second DELETE against a conversation the sweep already
+    // converged (the endpoint answers 404 for the removed id) and turn a
+    // clean state into a spurious cleanup failure (#1893, mirroring the
+    // documents sweep's seenIds filter from #1864). A row with no id at
+    // all cannot be deduped — each such row stands alone (and its delete
+    // fails loud on the missing id).
+    const seenIds = new Set();
     const own =
       pagesRead > 0
-        ? conversations.filter((c) => c.title?.startsWith('E2E ')).map((c) => c._key || c.id)
+        ? conversations
+            .filter((c) => c.title?.startsWith('E2E '))
+            .filter((c) => {
+              const id = c._key || c.id;
+              if (id === undefined || id === null) return true;
+              if (seenIds.has(id)) return false;
+              seenIds.add(id);
+              return true;
+            })
+            .map((c) => c._key || c.id)
         : [...createdConversationIds];
     const populationKnown = total !== undefined;
     const enumeratedAll = populationKnown ? conversations.length >= total : exhausted;
@@ -173,11 +191,12 @@ test.describe('Conversation history persistence', () => {
     const deleteSet = own.slice(0, SWEEP_MAX_DELETES);
     const beyondBudget = own.length - deleteSet.length;
 
-    // The deletes run in bounded-parallel waves: a sequential sweep of a
-    // full page costs 50 × 30 s — more than the hook's budget and more
-    // than the realm's access-token lifespan, so the tail of it would run
-    // on an expired token. The width and the arithmetic live in
-    // helpers/auth.js (SWEEP_DELETE_CONCURRENCY).
+    // The deletes run in bounded-parallel waves: a sequential delete phase
+    // costs up to SWEEP_MAX_DELETES × API_TIMEOUT_MS — more than the
+    // hook's budget and more than the realm's access-token lifespan, so
+    // the tail of it would run on an expired token. The width and the
+    // budget arithmetic live in helpers/auth.js (SWEEP_DELETE_CONCURRENCY,
+    // SWEEP_MAX_DELETES).
     const undeleted = (
       await mapWithConcurrency(deleteSet, SWEEP_DELETE_CONCURRENCY, async (convId) => {
         try {

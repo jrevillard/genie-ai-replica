@@ -35,6 +35,7 @@
 const { test, expect } = require('@playwright/test');
 const { loginViaUI, BASE_URL, TEST_ADMIN_USER, LOGIN_BUDGET_TIMEOUT_MS } = require('../helpers/chatbot');
 const { okfEnabled, okfParkedReason, skipUnlessVenue } = require('../helpers/venue-profile');
+const { pinLocale } = require('../helpers/locale');
 
 /** The artifacts the interception serves. Two of them: one complete, one
  *  without a bundle_version (the version must read "unknown", not a
@@ -62,9 +63,8 @@ const ARTIFACTS = [
 const REPOS = [{ repo_id: 'repo-kenya', name: 'Kenya Government Services' }];
 
 test.describe('the OKF artifacts view', () => {
-  // The labels under test are translated (admin.documents.status*); pin the
-  // locale so the exact wording is fixed.
-  test.use({ locale: 'en-US' });
+  // The labels under test are translated (admin.documents.status*); the
+  // exact wording must be fixed.
 
   // The view opens behind a browser login — the budget is the login's
   // own ceiling, derived once beside loginViaUI (#1798).
@@ -76,6 +76,13 @@ test.describe('the OKF artifacts view', () => {
   // the reason is the venue's own profile — read from the runtime config
   // the frontend itself reads — not a guess.
   test.beforeEach(skipUnlessVenue(test, okfEnabled, okfParkedReason));
+
+  // The copy under test is translated: pin the app's PRIMARY locale
+  // source (localStorage.userLocale — helpers/locale.js proves the pin
+  // landed) before the first navigation.
+  test.beforeEach(async ({ page }) => {
+    await pinLocale(page.context(), 'en');
+  });
 
   /**
    * Log in as the admin, intercept the two reads the surface performs, and

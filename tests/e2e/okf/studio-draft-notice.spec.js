@@ -31,6 +31,7 @@
 const { test, expect } = require('@playwright/test');
 const { openStudioRepo, stubStudioRepoRoutes } = require('../helpers/okf-studio');
 const { okfEnabled, okfParkedReason, skipUnlessVenue } = require('../helpers/venue-profile');
+const { pinLocale } = require('../helpers/locale');
 
 const REPO_ID = 'e2e-draft-notice-repo';
 
@@ -62,10 +63,8 @@ async function openStudioWithDraftAnswer(page, draftStatus, draftBody) {
 }
 
 test.describe('OKF Studio degraded-draft banner', () => {
-  // Asserts the banner's exact English copy — pin the locale (the sibling
-  // ceiling spec pins the same way; why the pin exists: helpers/locale.js).
-  test.use({ locale: 'en-US' });
-
+  // Asserts the banner's exact English copy (the sibling ceiling spec
+  // pins the same way; why the pin exists: helpers/locale.js).
   test.beforeEach(
     skipUnlessVenue(
       test,
@@ -73,6 +72,13 @@ test.describe('OKF Studio degraded-draft banner', () => {
       () => okfParkedReason()
     )
   );
+
+  // The copy under test is translated: pin the app's PRIMARY locale
+  // source (localStorage.userLocale — helpers/locale.js proves the pin
+  // landed) before the first navigation.
+  test.beforeEach(async ({ page }) => {
+    await pinLocale(page.context(), 'en');
+  });
 
   test('renders the degraded-draft banner when the draft endpoint is not served', async ({ page }) => {
     // A 404 WITHOUT the backend's REPO_NOT_FOUND code: this server build

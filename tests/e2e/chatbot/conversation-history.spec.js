@@ -47,7 +47,11 @@ test.describe('Conversation history persistence', () => {
   test.beforeEach(async ({ browser }) => {
     context = await browser.newContext({
       ignoreHTTPSErrors: true,
-      bypassCSP: true
+      bypassCSP: true,
+      // 1440 keeps the left sidebar in flow (it collapses below 1400):
+      // the restore test drives the Saved Chats list there, and at the
+      // default 1280 the tab it needs sits outside the viewport.
+      viewport: { width: 1440, height: 900 }
     });
     page = await context.newPage();
 

@@ -60,8 +60,12 @@ async function navigateToDocumentManagement(page) {
 async function openUploadDialog(page) {
   // The upload button lives in the documents card's action bar
   // (.card-actions), not in .filter-bar — the filter bar holds only the
-  // search and status controls.
-  const uploadBtn = page.getByRole('button', { name: /Upload Files/i });
+  // search and status controls. The button declares the handle
+  // (`documents-upload-files`, AdminDashboard.vue): the handle is the
+  // locator (#1865) — its name is i18n copy (`translate('admin.
+  // documents.uploadFiles', …)`), and a non-English venue broke the
+  // old role locator before its first assertion.
+  const uploadBtn = page.locator('[data-test-id="documents-upload-files"]');
   await expect(uploadBtn).toBeVisible({ timeout: 5000 });
   await uploadBtn.click();
 
@@ -83,7 +87,12 @@ async function uploadFile(page, filePath) {
   const fileItem = dialog.locator('[data-test-id="upload-file-item"]');
   await expect(fileItem).toBeVisible({ timeout: 5000 });
 
-  const confirmBtn = dialog.getByRole('button', { name: /upload/i });
+  // The confirm button carries the handle the component declares now
+  // (UploadFilesDialog.vue footer, #1865): its old role locator matched
+  // i18n copy (`Upload {count} File(s)`, templated), and `/upload/i`
+  // also matched the `Uploading...` progress text — two buttons for one
+  // locator, resolved by copy. The handle is one, always.
+  const confirmBtn = dialog.locator('[data-test-id="upload-files-dialog-confirm"]');
   await expect(confirmBtn).toBeEnabled({ timeout: 5000 });
   await confirmBtn.click();
 

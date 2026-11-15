@@ -1065,10 +1065,90 @@ async function deleteClient(adminToken, realm, clientUuid, clientId) {
 }
 
 /**
+ * The verdict wording of one direction of the ROPC flip: what the admin API
+ * call is named as in transport errors, how a refused PUT is reported, and
+ * the loud-probe message when the read-back contradicts the 204 (#1879 —
+ * "a 204 proves nothing on its own").
+ */
+const ROPC_FLIP = {
+  enable: {
+    what: (clientId, realm) => `the ROPC enablement of ${clientId} in realm ${realm}`,
+    refused: (clientId, res) =>
+      `Failed to enable direct access grants on ${clientId}: HTTP ${res.status} ${bodyText(res)}`,
+    probeMiss: (clientId, realm) =>
+      `ROPC enablement did not land on ${clientId} in realm ${realm} — the PUT answered 204 but the ` +
+      `client still reads back directAccessGrantsEnabled=false. The grant stays off: fix the ` +
+      `enablement before the spec mints a ROPC token against a client that still refuses it.`
+  },
+  disable: {
+    what: (clientId, realm) => `the ROPC revert of ${clientId} in realm ${realm}`,
+    refused: (clientId, res) =>
+      `Failed to disable direct access grants on ${clientId}: HTTP ${res.status} ${bodyText(res)}`,
+    probeMiss: (clientId, realm) =>
+      `ROPC NOT reverted on ${clientId} in realm ${realm} — the PUT answered 204 but the client ` +
+      `still reads back directAccessGrantsEnabled=true. The grant stays on: fix the revert before ` +
+      `the venue keeps accepting password grants on this client.`
+  }
+};
+
+/**
+ * The flip-and-verify core behind enableDirectAccessGrants and
+ * disableDirectAccessGrants: PUT the full representation with the grant
+ * moved to the direction's expected side, assert the 204, then read the
+ * client back and refuse to resolve while the grant reads anything but
+ * `expected` — the loud probe both directions carry, so neither a venue
+ * left accepting password grants (#1879) nor an enablement a Keycloak
+ * silently ignored (#1886) can pass unnoticed.
+ * @param {string} adminToken - Keycloak admin access token
+ * @param {string} realm - Realm name
+ * @param {string} clientId - Client ID (e.g. 'genie-app')
+ * @param {'enable'|'disable'} verb - The flip direction
+ * @returns {Promise<void>}
+ */
+async function flipDirectAccessGrants(adminToken, realm, clientId, verb) {
+  const expected = verb === 'enable';
+  const wording = ROPC_FLIP[verb];
+
+  // One exact-match client search, owned by findClient: an absent client
+  // resolves null here (the admin API's way of saying the realm carries
+  // no client of that name — not an outage, not a broken answer).
+  const client = await findClient(adminToken, realm, clientId);
+  if (!client) {
+    throw new Error(`Client ${clientId} not found in realm ${realm}`);
+  }
+
+  if (client.directAccessGrantsEnabled === expected) return;
+
+  const res = await adminRequest(
+    'PUT',
+    `/auth/admin/realms/${realm}/clients/${client.id}`,
+    adminToken,
+    wording.what(clientId, realm),
+    { ...client, directAccessGrantsEnabled: expected }
+  );
+
+  if (res.status !== 204) {
+    failWithStatus(wording.refused(clientId, res), res.status);
+  }
+
+  // The loud probe: a 204 proves nothing on its own — the venue is only
+  // clean when a fresh read answers the grant sits at the expected side.
+  // A client that vanished between the PUT and the read-back holds the
+  // posture by absence — nothing to flip, nothing to verify.
+  const after = await findClient(adminToken, realm, clientId);
+  if (after && after.directAccessGrantsEnabled !== expected) {
+    throw new Error(wording.probeMiss(clientId, realm));
+  }
+}
+
+/**
  * Enable ROPC (direct access grants) on a client, preserving the rest of
- * its representation. The primary `genie` realm refuses ROPC by design —
- * only ever call this for a test-only realm (e.g. `genie2`) whose specs
- * mint tokens directly and have no UI login posture.
+ * its representation, then verify: the call resolves only when a fresh
+ * read answers the grant is on (the flip-and-verify core, #1886 — the
+ * same verified shape the revert has carried since #1879). The primary
+ * `genie` realm refuses ROPC by design — only ever call this for a
+ * test-only realm (e.g. `genie2`) whose specs mint tokens directly and
+ * have no UI login posture.
  * @param {string} adminToken - Keycloak admin access token
  * @param {string} realm - Realm name
  * @param {string} clientId - Client ID (e.g. 'genie-app')
@@ -1079,79 +1159,23 @@ async function enableDirectAccessGrants(adminToken, realm, clientId) {
     throw new Error('enableDirectAccessGrants must never target the primary realm — ROPC is disabled there by design');
   }
 
-  // One exact-match client search, owned by findClient: an absent client
-  // resolves null here (the admin API's way of saying the realm carries
-  // no client of that name — not an outage, not a broken answer).
-  const client = await findClient(adminToken, realm, clientId);
-  if (!client) {
-    throw new Error(`Client ${clientId} not found in realm ${realm}`);
-  }
-
-  if (client.directAccessGrantsEnabled) return;
-
-  const res = await adminRequest(
-    'PUT',
-    `/auth/admin/realms/${realm}/clients/${client.id}`,
-    adminToken,
-    `the ROPC enablement of ${clientId} in realm ${realm}`,
-    { ...client, directAccessGrantsEnabled: true }
-  );
-
-  if (res.status !== 204) {
-    failWithStatus(
-      `Failed to enable direct access grants on ${clientId}: HTTP ${res.status} ${bodyText(res)}`,
-      res.status
-    );
-  }
+  await flipDirectAccessGrants(adminToken, realm, clientId, 'enable');
 }
 
 /**
  * Disable ROPC (direct access grants) on a client — the VERIFIED revert
- * every run that flips the grant owes the venue (#1879). Mirrors
- * enableDirectAccessGrants, then reads the client back and refuses to
- * resolve while the grant survives: a cleanup that cannot prove its own
- * effect is exactly the silent leave #1879 documents (the verified
- * shape data/okf/smoke-test/mint-tokens.mjs uses, homed here so every
- * spec reverts through it). A client that vanished between the PUT and
- * the read-back holds the posture by absence — nothing to revert.
+ * every run that flips the grant owes the venue (#1879). Reads the client
+ * back and refuses to resolve while the grant survives: a cleanup that
+ * cannot prove its own effect is exactly the silent leave #1879 documents
+ * (the verified shape data/okf/smoke-test/mint-tokens.mjs uses, homed here
+ * so every spec reverts through it).
  * @param {string} adminToken - Keycloak admin access token
  * @param {string} realm - Realm name
  * @param {string} clientId - Client ID (e.g. 'genie-app')
  * @returns {Promise<void>}
  */
 async function disableDirectAccessGrants(adminToken, realm, clientId) {
-  const client = await findClient(adminToken, realm, clientId);
-  if (!client) {
-    throw new Error(`Client ${clientId} not found in realm ${realm}`);
-  }
-
-  if (!client.directAccessGrantsEnabled) return;
-
-  const res = await adminRequest(
-    'PUT',
-    `/auth/admin/realms/${realm}/clients/${client.id}`,
-    adminToken,
-    `the ROPC revert of ${clientId} in realm ${realm}`,
-    { ...client, directAccessGrantsEnabled: false }
-  );
-
-  if (res.status !== 204) {
-    failWithStatus(
-      `Failed to disable direct access grants on ${clientId}: HTTP ${res.status} ${bodyText(res)}`,
-      res.status
-    );
-  }
-
-  // The loud probe: a 204 proves nothing on its own — the venue is only
-  // clean when a fresh read answers the grant is off.
-  const after = await findClient(adminToken, realm, clientId);
-  if (after && after.directAccessGrantsEnabled) {
-    throw new Error(
-      `ROPC NOT reverted on ${clientId} in realm ${realm} — the PUT answered 204 but the client ` +
-        `still reads back directAccessGrantsEnabled=true. The grant stays on: fix the revert before ` +
-        `the venue keeps accepting password grants on this client.`
-    );
-  }
+  await flipDirectAccessGrants(adminToken, realm, clientId, 'disable');
 }
 
 /**

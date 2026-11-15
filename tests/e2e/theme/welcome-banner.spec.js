@@ -80,7 +80,8 @@
 // over different axes — the locale and the layer — and for the same reason.
 
 const { test, expect } = require('@playwright/test');
-const { openWelcomeScreen, readVisualLayerState, capturePixels, lum, WCAG_BIND } = require('../helpers/welcome');
+const { withWelcomeSession, readVisualLayerState, capturePixels, lum, WCAG_BIND } = require('../helpers/welcome');
+const { assertAdoptedLocale } = require('../helpers/locale');
 
 /*
  * The measured floors.
@@ -295,22 +296,6 @@ const LAYER_OFF_VIEWPORTS = VIEWPORTS.filter((vp) => vp.label === '1440' || vp.l
  */
 const LAYER_OFF_LOCALES = ['fr', 'id', 'man'];
 const ONE_LINE_WITH_LAYER_OFF = ['fr', 'id'];
-
-// The locale sweeps' premise, asserted once per session: the app ADOPTED the
-// seeded locale. main.js's detectInitialLocale silently falls back to 'en'
-// when the saved locale is not in the deployment's active set (the
-// VUE_APP_AVAILABLE_LOCALES whitelist), and every measurement of a session
-// that fell back reads the fallback locale's page and passes vacuously.
-// main.js writes the adopted locale to <html lang> at boot, so that
-// attribute is the pin — one home, before anything is measured.
-async function assertAdoptedLocale(page, where, locale) {
-  const adopted = await page.evaluate(() => document.documentElement.lang);
-  expect(
-    adopted,
-    `${where}: <html lang> reads '${adopted}', not the seeded '${locale}' — ` +
-      `every measurement in this session is the fallback's and passes vacuously`
-  ).toBe(locale);
-}
 
 // Assertion 1: the scrim's alpha, read off the resolved custom property and
 // cross-checked against the colour the element actually paints with.
@@ -1113,11 +1098,7 @@ test.describe('Welcome banner invariants', () => {
   test('1. the scrim alpha is at or above its theme floor and is the alpha it paints with', async ({ browser }) => {
     for (const vp of VIEWPORTS) {
       for (const theme of ['light', 'dark']) {
-        const { ctx, page } = await openWelcomeScreen(browser, {
-          viewport: { width: vp.width, height: 800 },
-          theme
-        });
-        try {
+        await withWelcomeSession(browser, { viewport: { width: vp.width, height: 800 }, theme }, async ({ page }) => {
           const floor = SCRIM_ALPHA[theme];
           const a = await scrimAlpha(page);
           expect(a.ok, `${vp.label}/${theme} scrim alpha readable`).toBe(true);
@@ -1140,9 +1121,7 @@ test.describe('Welcome banner invariants', () => {
             `${vp.label}/${theme} the token is ${a.raw} but the scrim paints ${a.used} — ` +
               `the background is not reading the alpha it declares`
           ).toBeLessThan(0.01);
-        } finally {
-          await ctx.close();
-        }
+        });
       }
     }
   });
@@ -1150,11 +1129,7 @@ test.describe('Welcome banner invariants', () => {
   test("2. the wordmark's worst RENDERED local contrast clears 3:1", async ({ browser }) => {
     for (const vp of VIEWPORTS) {
       for (const theme of ['light', 'dark']) {
-        const { ctx, page } = await openWelcomeScreen(browser, {
-          viewport: { width: vp.width, height: 800 },
-          theme
-        });
-        try {
+        await withWelcomeSession(browser, { viewport: { width: vp.width, height: 800 }, theme }, async ({ page }) => {
           const c = await wordmarkContrast(page);
           expect(c.ok, `${vp.label}/${theme} wordmark measured (${c.why || 'ok'})`).toBe(true);
           expect(
@@ -1169,9 +1144,7 @@ test.describe('Welcome banner invariants', () => {
               `ink=${JSON.stringify(c.ink)} on backdrop=${JSON.stringify(c.bg)} ` +
               `over ${c.core} glyph pixels`
           ).toBeGreaterThanOrEqual(WORDMARK_CONTRAST_FLOOR);
-        } finally {
-          await ctx.close();
-        }
+        });
       }
     }
   });
@@ -1184,11 +1157,7 @@ test.describe('Welcome banner invariants', () => {
   }) => {
     for (const vp of VIEWPORTS) {
       for (const theme of ['light', 'dark']) {
-        const { ctx, page } = await openWelcomeScreen(browser, {
-          viewport: { width: vp.width, height: 800 },
-          theme
-        });
-        try {
+        await withWelcomeSession(browser, { viewport: { width: vp.width, height: 800 }, theme }, async ({ page }) => {
           const where = `${vp.label}/${theme}`;
           const a = SCRIM_ALPHA[theme];
 
@@ -1329,9 +1298,7 @@ test.describe('Welcome banner invariants', () => {
               `step, inside the ${HIERARCHY_LUMINANCE_STEP * 100}% band the two have to stay apart by. ` +
               `The subtitle reads as a second heading rather than as text under one`
           ).toBeGreaterThanOrEqual(HIERARCHY_LUMINANCE_STEP);
-        } finally {
-          await ctx.close();
-        }
+        });
       }
     }
   });
@@ -1339,11 +1306,7 @@ test.describe('Welcome banner invariants', () => {
   test('5. the banner box holds the ink band and stays full-bleed', async ({ browser }) => {
     for (const vp of VIEWPORTS) {
       for (const theme of ['light', 'dark']) {
-        const { ctx, page } = await openWelcomeScreen(browser, {
-          viewport: { width: vp.width, height: 800 },
-          theme
-        });
-        try {
+        await withWelcomeSession(browser, { viewport: { width: vp.width, height: 800 }, theme }, async ({ page }) => {
           const m = await boxGeometry(page);
           expect(m, `${vp.label}/${theme} banner measurement`).not.toBeNull();
           expect(
@@ -1360,9 +1323,7 @@ test.describe('Welcome banner invariants', () => {
             m.overflow,
             `${vp.label}/${theme} the panel overflows the viewport by ${m.overflow}px`
           ).toBeLessThanOrEqual(0);
-        } finally {
-          await ctx.close();
-        }
+        });
       }
     }
   });
@@ -1394,60 +1355,57 @@ test.describe('Welcome banner invariants', () => {
     for (const vp of VIEWPORTS) {
       for (const theme of ['light', 'dark']) {
         for (const locale of GEOMETRY_LOCALES) {
-          const { ctx, page } = await openWelcomeScreen(browser, {
-            viewport: { width: vp.width, height: 800 },
-            theme,
-            locale
-          });
-          try {
-            const where = `${vp.label}/${theme}/${locale}`;
-            await assertAdoptedLocale(page, where, locale);
-            const m = await veilGeometry(page);
-            expect(m, `${where} the veil's geometry read`).not.toBeNull();
+          await withWelcomeSession(
+            browser,
+            { viewport: { width: vp.width, height: 800 }, theme, locale },
+            async ({ page }) => {
+              const where = `${vp.label}/${theme}/${locale}`;
+              await assertAdoptedLocale(page, where, locale);
+              const m = await veilGeometry(page);
+              expect(m, `${where} the veil's geometry read`).not.toBeNull();
 
-            // (7a) One line. The title's contents occupy one line box, and
-            // the heading's box is that line and no more.
-            expect(
-              m.lineTops,
-              `${where} the title occupies ${m.lineTops} line boxes — it measures ` +
-                `${m.titleUnwrapped.toFixed(1)}px unwrapped and the veil has ` +
-                `${m.available.toFixed(1)}px (a ${m.veilWidth.toFixed(1)}px box less ` +
-                `${m.padLeft.toFixed(0)}px of padding a side). It has wrapped, and the veil ` +
-                `around it has become a band across the panel`
-            ).toBe(1);
-            expect(
-              Math.abs(m.headingHeight - m.lineHeight),
-              `${where} the heading's box is ${m.headingHeight.toFixed(1)}px tall against a ` +
-                `${m.lineHeight.toFixed(2)}px line box (${m.fontSize.toFixed(2)}px type) — the ` +
-                `title is not on one line`
-            ).toBeLessThanOrEqual(1);
+              // (7a) One line. The title's contents occupy one line box, and
+              // the heading's box is that line and no more.
+              expect(
+                m.lineTops,
+                `${where} the title occupies ${m.lineTops} line boxes — it measures ` +
+                  `${m.titleUnwrapped.toFixed(1)}px unwrapped and the veil has ` +
+                  `${m.available.toFixed(1)}px (a ${m.veilWidth.toFixed(1)}px box less ` +
+                  `${m.padLeft.toFixed(0)}px of padding a side). It has wrapped, and the veil ` +
+                  `around it has become a band across the panel`
+              ).toBe(1);
+              expect(
+                Math.abs(m.headingHeight - m.lineHeight),
+                `${where} the heading's box is ${m.headingHeight.toFixed(1)}px tall against a ` +
+                  `${m.lineHeight.toFixed(2)}px line box (${m.fontSize.toFixed(2)}px type) — the ` +
+                  `title is not on one line`
+              ).toBeLessThanOrEqual(1);
 
-            // (7b) The title fits the space, measured unwrapped. Read as
-            // rendered this cannot fail: a wrapped title measures its
-            // longest line, which by construction fits the box it wrapped
-            // into.
-            expect(
-              m.titleUnwrapped - m.available,
-              `${where} the title measures ${m.titleUnwrapped.toFixed(1)}px unwrapped and the ` +
-                `veil's content box is ${m.available.toFixed(1)}px — ` +
-                `${(m.titleUnwrapped - m.available).toFixed(1)}px wider than it has`
-            ).toBeLessThanOrEqual(1);
+              // (7b) The title fits the space, measured unwrapped. Read as
+              // rendered this cannot fail: a wrapped title measures its
+              // longest line, which by construction fits the box it wrapped
+              // into.
+              expect(
+                m.titleUnwrapped - m.available,
+                `${where} the title measures ${m.titleUnwrapped.toFixed(1)}px unwrapped and the ` +
+                  `veil's content box is ${m.available.toFixed(1)}px — ` +
+                  `${(m.titleUnwrapped - m.available).toFixed(1)}px wider than it has`
+              ).toBeLessThanOrEqual(1);
 
-            // (7c) The veil is the widest text inside it plus the padding it
-            // carries on both sides. The same claim assertion 4 makes, run
-            // here in the locales where the title is not the widest child.
-            const textWidth = Math.max(m.titleWidth, m.subtitleWidth);
-            expect(
-              Math.abs(m.veilWidth - (textWidth + m.padLeft + m.padRight)),
-              `${where} the veil's box is ${m.veilWidth.toFixed(1)}px wide but its widest text ` +
-                `(title ${m.titleWidth.toFixed(1)}px, subtitle ${m.subtitleWidth.toFixed(1)}px) ` +
-                `plus its ${(m.padLeft + m.padRight).toFixed(0)}px of padding is ` +
-                `${(textWidth + m.padLeft + m.padRight).toFixed(1)}px — the veil is wrapped ` +
-                `around the banner, not around the text`
-            ).toBeLessThanOrEqual(1);
-          } finally {
-            await ctx.close();
-          }
+              // (7c) The veil is the widest text inside it plus the padding it
+              // carries on both sides. The same claim assertion 4 makes, run
+              // here in the locales where the title is not the widest child.
+              const textWidth = Math.max(m.titleWidth, m.subtitleWidth);
+              expect(
+                Math.abs(m.veilWidth - (textWidth + m.padLeft + m.padRight)),
+                `${where} the veil's box is ${m.veilWidth.toFixed(1)}px wide but its widest text ` +
+                  `(title ${m.titleWidth.toFixed(1)}px, subtitle ${m.subtitleWidth.toFixed(1)}px) ` +
+                  `plus its ${(m.padLeft + m.padRight).toFixed(0)}px of padding is ` +
+                  `${(textWidth + m.padLeft + m.padRight).toFixed(1)}px — the veil is wrapped ` +
+                  `around the banner, not around the text`
+              ).toBeLessThanOrEqual(1);
+            }
+          );
         }
       }
     }
@@ -1479,147 +1437,144 @@ test.describe('Welcome banner invariants', () => {
     for (const vp of LAYER_OFF_VIEWPORTS) {
       for (const theme of ['light', 'dark']) {
         for (const locale of LAYER_OFF_LOCALES) {
-          const { ctx, page } = await openWelcomeScreen(browser, {
-            viewport: { width: vp.width, height: 800 },
-            theme,
-            locale
-          });
-          try {
-            const where = `${vp.label}/${theme}/${locale}`;
-            await assertAdoptedLocale(page, where, locale);
-            // The title's own state in one string, so every message below can
-            // name what the difference costs instead of only what it is.
-            const as = (g) =>
-              `${g.lineTops} line box${g.lineTops === 1 ? '' : 'es'}, a ` +
-              `${g.headingHeight.toFixed(1)}px box at ${g.fontSize.toFixed(2)}px type`;
+          await withWelcomeSession(
+            browser,
+            { viewport: { width: vp.width, height: 800 }, theme, locale },
+            async ({ page }) => {
+              const where = `${vp.label}/${theme}/${locale}`;
+              await assertAdoptedLocale(page, where, locale);
+              // The title's own state in one string, so every message below can
+              // name what the difference costs instead of only what it is.
+              const as = (g) =>
+                `${g.lineTops} line box${g.lineTops === 1 ? '' : 'es'}, a ` +
+                `${g.headingHeight.toFixed(1)}px box at ${g.fontSize.toFixed(2)}px type`;
 
-            const shipped = await readVisualLayerState(page);
-            expect(shipped.visualOn, `${where} the first reading is not with the layer on`).toBe(true);
-            expect(
-              shipped.gliOn,
-              `${where} the panel is not inside the dashboard wrapper, so the layer never applied to it`
-            ).toBe(true);
-            const on = await veilGeometry(page);
-            const onOwn = await panelOwnership(page);
-            expect(on, `${where} the veil's geometry read with the layer on`).not.toBeNull();
-            expect(onOwn, `${where} the panel's ownership read with the layer on`).not.toBeNull();
-
-            // The app's own switch. src/config-loader.js writes exactly this
-            // attribute on exactly this node when the runtime config carries no
-            // `theme.visual` or an `enabled: false`, so this is the shipped
-            // "layer off" state and not a test-only one. There is no control in
-            // the UI that produces it any other way.
-            await page.evaluate(() => {
-              document.documentElement.dataset.visual = 'off';
-            });
-            const switched = await readVisualLayerState(page);
-            expect(switched.visualOn, `${where} the layer did not go off`).toBe(false);
-
-            // No settle pause here: every value below is read through
-            // getComputedStyle or getBoundingClientRect, which force the style
-            // and layout flush the attribute write invalidated. A pause would
-            // only widen the window the banner's 650ms entrance sits in.
-            const off = await veilGeometry(page);
-            const offOwn = await panelOwnership(page);
-            expect(off, `${where} the veil's geometry read with the layer off`).not.toBeNull();
-            expect(offOwn, `${where} the panel's ownership read with the layer off`).not.toBeNull();
-
-            // (8a) The query fires with the layer off. The two tokens say it
-            // fired; the title's own box says what not firing cost, so the
-            // failure reads as the defect and not as a property mismatch.
-            expect(
-              offOwn.veilPadToken,
-              `${where} with the layer OFF --qh-veil-pad resolves to ${offOwn.veilPadToken}, against ` +
-                `${onOwn.veilPadToken} with it on: the panel is not a query container, so the app's own ` +
-                `narrow-panel query never matched. The veil carries ${offOwn.paddingLeft}px of padding ` +
-                `instead of ${onOwn.paddingLeft}px, and the title occupies ${as(off)} instead of ${as(on)}`
-            ).toBe(onOwn.veilPadToken);
-            expect(
-              offOwn.headingScaleToken,
-              `${where} with the layer OFF --qh-heading-scale resolves to ${offOwn.headingScaleToken}, against ` +
-                `${onOwn.headingScaleToken} with it on, for the reason the message above gives: the title ` +
-                `occupies ${as(off)} with the layer off and ${as(on)} with it on`
-            ).toBe(onOwn.headingScaleToken);
-
-            // (8b) The container itself, which is what 8a is a consequence of.
-            // Asserted as the value the app declares rather than as an equality,
-            // because the equality is already 8a's: this is the mechanism, and
-            // a layout that reads right by some other route is not what is
-            // being claimed.
-            expect(
-              offOwn.containerType,
-              `${where} the panel's own computed container-type reads ` +
-                `${offOwn.containerType || '(empty)'} with the layer off and ${onOwn.containerType} with it ` +
-                `on — the container the app's narrow-panel query runs against is being declared by the ` +
-                `decorative layer, so switching the layer off switches the app's layout off with it`
-            ).toBe('inline-size');
-
-            // (8c) The geometry those tokens drive is the same either way. The
-            // values are read off the rendered element, not off the tokens, so
-            // a token that is resolved but ignored fails here.
-            expect(
-              Math.abs(offOwn.paddingLeft - onOwn.paddingLeft),
-              `${where} the veil's resolved padding is ${offOwn.paddingLeft}px a side with the layer off ` +
-                `and ${onOwn.paddingLeft}px with it on`
-            ).toBeLessThanOrEqual(0.01);
-            expect(
-              Math.abs(offOwn.fontSize - onOwn.fontSize),
-              `${where} the heading's resolved type is ${offOwn.fontSize}px with the layer off and ` +
-                `${onOwn.fontSize}px with it on`
-            ).toBeLessThanOrEqual(0.01);
-
-            // (8d) And the consequence, in the locale the app's own panel
-            // reaches with the layer off — see ONE_LINE_WITH_LAYER_OFF.
-            if (ONE_LINE_WITH_LAYER_OFF.includes(locale)) {
+              const shipped = await readVisualLayerState(page);
+              expect(shipped.visualOn, `${where} the first reading is not with the layer on`).toBe(true);
               expect(
-                off.lineTops,
-                `${where} with the layer OFF the title occupies ${as(off)} — it measures ` +
-                  `${off.titleUnwrapped.toFixed(1)}px unwrapped and the veil has ` +
-                  `${off.available.toFixed(1)}px (a ${off.veilWidth.toFixed(1)}px box less ` +
-                  `${off.padLeft.toFixed(0)}px of padding a side)`
-              ).toBe(1);
+                shipped.gliOn,
+                `${where} the panel is not inside the dashboard wrapper, so the layer never applied to it`
+              ).toBe(true);
+              const on = await veilGeometry(page);
+              const onOwn = await panelOwnership(page);
+              expect(on, `${where} the veil's geometry read with the layer on`).not.toBeNull();
+              expect(onOwn, `${where} the panel's ownership read with the layer on`).not.toBeNull();
+
+              // The app's own switch. src/config-loader.js writes exactly this
+              // attribute on exactly this node when the runtime config carries no
+              // `theme.visual` or an `enabled: false`, so this is the shipped
+              // "layer off" state and not a test-only one. There is no control in
+              // the UI that produces it any other way.
+              await page.evaluate(() => {
+                document.documentElement.dataset.visual = 'off';
+              });
+              const switched = await readVisualLayerState(page);
+              expect(switched.visualOn, `${where} the layer did not go off`).toBe(false);
+
+              // No settle pause here: every value below is read through
+              // getComputedStyle or getBoundingClientRect, which force the style
+              // and layout flush the attribute write invalidated. A pause would
+              // only widen the window the banner's 650ms entrance sits in.
+              const off = await veilGeometry(page);
+              const offOwn = await panelOwnership(page);
+              expect(off, `${where} the veil's geometry read with the layer off`).not.toBeNull();
+              expect(offOwn, `${where} the panel's ownership read with the layer off`).not.toBeNull();
+
+              // (8a) The query fires with the layer off. The two tokens say it
+              // fired; the title's own box says what not firing cost, so the
+              // failure reads as the defect and not as a property mismatch.
               expect(
-                Math.abs(off.headingHeight - off.lineHeight),
-                `${where} with the layer OFF the heading's box is ${off.headingHeight.toFixed(1)}px ` +
-                  `against a ${off.lineHeight.toFixed(2)}px line box (${off.fontSize.toFixed(2)}px type)`
-              ).toBeLessThanOrEqual(1);
+                offOwn.veilPadToken,
+                `${where} with the layer OFF --qh-veil-pad resolves to ${offOwn.veilPadToken}, against ` +
+                  `${onOwn.veilPadToken} with it on: the panel is not a query container, so the app's own ` +
+                  `narrow-panel query never matched. The veil carries ${offOwn.paddingLeft}px of padding ` +
+                  `instead of ${onOwn.paddingLeft}px, and the title occupies ${as(off)} instead of ${as(on)}`
+              ).toBe(onOwn.veilPadToken);
+              expect(
+                offOwn.headingScaleToken,
+                `${where} with the layer OFF --qh-heading-scale resolves to ${offOwn.headingScaleToken}, against ` +
+                  `${onOwn.headingScaleToken} with it on, for the reason the message above gives: the title ` +
+                  `occupies ${as(off)} with the layer off and ${as(on)} with it on`
+              ).toBe(onOwn.headingScaleToken);
+
+              // (8b) The container itself, which is what 8a is a consequence of.
+              // Asserted as the value the app declares rather than as an equality,
+              // because the equality is already 8a's: this is the mechanism, and
+              // a layout that reads right by some other route is not what is
+              // being claimed.
+              expect(
+                offOwn.containerType,
+                `${where} the panel's own computed container-type reads ` +
+                  `${offOwn.containerType || '(empty)'} with the layer off and ${onOwn.containerType} with it ` +
+                  `on — the container the app's narrow-panel query runs against is being declared by the ` +
+                  `decorative layer, so switching the layer off switches the app's layout off with it`
+              ).toBe('inline-size');
+
+              // (8c) The geometry those tokens drive is the same either way. The
+              // values are read off the rendered element, not off the tokens, so
+              // a token that is resolved but ignored fails here.
+              expect(
+                Math.abs(offOwn.paddingLeft - onOwn.paddingLeft),
+                `${where} the veil's resolved padding is ${offOwn.paddingLeft}px a side with the layer off ` +
+                  `and ${onOwn.paddingLeft}px with it on`
+              ).toBeLessThanOrEqual(0.01);
+              expect(
+                Math.abs(offOwn.fontSize - onOwn.fontSize),
+                `${where} the heading's resolved type is ${offOwn.fontSize}px with the layer off and ` +
+                  `${onOwn.fontSize}px with it on`
+              ).toBeLessThanOrEqual(0.01);
+
+              // (8d) And the consequence, in the locale the app's own panel
+              // reaches with the layer off — see ONE_LINE_WITH_LAYER_OFF.
+              if (ONE_LINE_WITH_LAYER_OFF.includes(locale)) {
+                expect(
+                  off.lineTops,
+                  `${where} with the layer OFF the title occupies ${as(off)} — it measures ` +
+                    `${off.titleUnwrapped.toFixed(1)}px unwrapped and the veil has ` +
+                    `${off.available.toFixed(1)}px (a ${off.veilWidth.toFixed(1)}px box less ` +
+                    `${off.padLeft.toFixed(0)}px of padding a side)`
+                ).toBe(1);
+                expect(
+                  Math.abs(off.headingHeight - off.lineHeight),
+                  `${where} with the layer OFF the heading's box is ${off.headingHeight.toFixed(1)}px ` +
+                    `against a ${off.lineHeight.toFixed(2)}px line box (${off.fontSize.toFixed(2)}px type)`
+                ).toBeLessThanOrEqual(1);
+              }
+
+              // (8e) The heading's own typography, which the app declares rather
+              // than inherits from the layer. Read after the consequence above so
+              // a regression is reported as the title that changed width rather
+              // than as the property that changed with it: the narrow-panel scale
+              // is calibrated against this heading's measured width, so a title
+              // that moves when the layer goes off is a title the scale was never
+              // measured against, and the fit 8d checks is then a property of the
+              // layer rather than of the app.
+              expect(
+                offOwn.fontFamily,
+                `${where} the heading's font-family with the layer off is ${offOwn.fontFamily}, against ` +
+                  `${onOwn.fontFamily} with it on — the title measures ${on.titleUnwrapped.toFixed(1)}px ` +
+                  `with the layer on and ${off.titleUnwrapped.toFixed(1)}px with it off`
+              ).toBe(onOwn.fontFamily);
+              expect(
+                offOwn.letterSpacing,
+                `${where} the heading's tracking with the layer off is ${offOwn.letterSpacing}, against ` +
+                  `${onOwn.letterSpacing} with it on — 0.025em of it is 29.4 px off the French title and ` +
+                  `26.5 px off the Indonesian one at the narrow panel's 22.08 px type, and this title ` +
+                  `measures ${on.titleUnwrapped.toFixed(1)}px with the layer on against ` +
+                  `${off.titleUnwrapped.toFixed(1)}px with it off`
+              ).toBe(onOwn.letterSpacing);
+
+              // (8f) The price of declaring the container: a layout container is
+              // the containing block for fixed-position descendants, so anything
+              // fixed inside the panel would be captured by the containment.
+              expect(
+                offOwn.fixedInOverlay,
+                `${where} the panel is a layout container, so it becomes the containing block for ` +
+                  `fixed-position descendants — ${offOwn.fixedInOverlay} are inside it and would be ` +
+                  `captured by the containment`
+              ).toBe(0);
             }
-
-            // (8e) The heading's own typography, which the app declares rather
-            // than inherits from the layer. Read after the consequence above so
-            // a regression is reported as the title that changed width rather
-            // than as the property that changed with it: the narrow-panel scale
-            // is calibrated against this heading's measured width, so a title
-            // that moves when the layer goes off is a title the scale was never
-            // measured against, and the fit 8d checks is then a property of the
-            // layer rather than of the app.
-            expect(
-              offOwn.fontFamily,
-              `${where} the heading's font-family with the layer off is ${offOwn.fontFamily}, against ` +
-                `${onOwn.fontFamily} with it on — the title measures ${on.titleUnwrapped.toFixed(1)}px ` +
-                `with the layer on and ${off.titleUnwrapped.toFixed(1)}px with it off`
-            ).toBe(onOwn.fontFamily);
-            expect(
-              offOwn.letterSpacing,
-              `${where} the heading's tracking with the layer off is ${offOwn.letterSpacing}, against ` +
-                `${onOwn.letterSpacing} with it on — 0.025em of it is 29.4 px off the French title and ` +
-                `26.5 px off the Indonesian one at the narrow panel's 22.08 px type, and this title ` +
-                `measures ${on.titleUnwrapped.toFixed(1)}px with the layer on against ` +
-                `${off.titleUnwrapped.toFixed(1)}px with it off`
-            ).toBe(onOwn.letterSpacing);
-
-            // (8f) The price of declaring the container: a layout container is
-            // the containing block for fixed-position descendants, so anything
-            // fixed inside the panel would be captured by the containment.
-            expect(
-              offOwn.fixedInOverlay,
-              `${where} the panel is a layout container, so it becomes the containing block for ` +
-                `fixed-position descendants — ${offOwn.fixedInOverlay} are inside it and would be ` +
-                `captured by the containment`
-            ).toBe(0);
-          } finally {
-            await ctx.close();
-          }
+          );
         }
       }
     }

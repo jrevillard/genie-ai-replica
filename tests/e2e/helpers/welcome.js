@@ -121,7 +121,8 @@ async function waitForBannerSettled(page) {
  * settled frame: capturePixels gates on it (waitForCompositingSettled)
  * on its first capture of a page.
  *
- * Returns { ctx, page } — the caller closes ctx when it is done.
+ * Returns { ctx, page } — the caller closes ctx when it is done. Prefer
+ * withWelcomeSession, which owns that close guarantee in its own finally.
  */
 async function openWelcomeScreen(browser, { viewport, theme, locale, setupPage, reload = true } = {}) {
   const ctx = await browser.newContext({
@@ -151,6 +152,40 @@ async function openWelcomeScreen(browser, { viewport, theme, locale, setupPage, 
   }
   await waitForBannerEntrance(page);
   return { ctx, page };
+}
+
+/**
+ * Open a welcome session, run `fn`, and guarantee the close.
+ *
+ * The close guarantee lives here, not at the call site (#1888): the leak
+ * the inline `try { ... } finally { await ctx.close(); }` shape guards
+ * against — close skipped when an assert throws mid-body — is one
+ * forgotten wrapper away every time a loop copies the shape by hand. The
+ * helper makes the guarantee unforgetable: the session is closed in this
+ * function's own finally, whatever `fn` throws, and the cleanup stays
+ * loud — a close that itself fails surfaces that failure (superseding a
+ * body error, exactly as the inline shape always did), never a swallow.
+ *
+ *   await withWelcomeSession(browser, { theme: 'dark' }, async ({ page }) => {
+ *     // assertions against the settled welcome screen
+ *   });
+ *
+ * `fn` receives { ctx, page } — the same pair openWelcomeScreen returns —
+ * and its resolution is passed through, so a spec can return a measured
+ * value from the session.
+ * @param {import('@playwright/test').Browser} browser
+ * @param {Parameters<openWelcomeScreen>[1]} opts - Forwarded to
+ *   openWelcomeScreen verbatim
+ * @param {(session: { ctx: import('@playwright/test').BrowserContext, page: import('@playwright/test').Page }) => Promise<*>} fn
+ * @returns {Promise<*>} Whatever `fn` resolved to
+ */
+async function withWelcomeSession(browser, opts, fn) {
+  const { ctx, page } = await openWelcomeScreen(browser, opts);
+  try {
+    return await fn({ ctx, page });
+  } finally {
+    await ctx.close();
+  }
 }
 
 /**
@@ -297,6 +332,7 @@ const LAYER_STATE_BIND = `return (${visualLayerState.toString()});`;
 
 module.exports = {
   openWelcomeScreen,
+  withWelcomeSession,
   waitForBannerSettled,
   readVisualLayerState,
   capturePixels,

@@ -152,8 +152,11 @@ describe('Quick Help button contract across every shipped configuration', () => 
         missingSchema.push(name);
       } else if (
         !Array.isArray(placementSchema.enum) ||
-        // BOTH values must be declared: a one-value enum would Ajv-reject
-        // a document that uses the other one at boot.
+        // EXACTLY the two declared values: a one-value enum would
+        // Ajv-reject a document that uses the other one at boot, and a
+        // superset value would pass validation while both readers render
+        // it as a plain tile (they compare strictly).
+        placementSchema.enum.length !== PLACEMENT_VALUES.length ||
         !PLACEMENT_VALUES.every((v) => placementSchema.enum.includes(v))
       ) {
         schemaWithoutEnum.push(`${name} = ${JSON.stringify(placementSchema.enum)}`);

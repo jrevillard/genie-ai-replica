@@ -296,18 +296,22 @@ test.describe('Conversation history persistence', () => {
     await expect(row, 'the saved chat is listed after the reload').toBeVisible({ timeout: 15000 });
     await row.click();
 
-    // The welcome overlay leaves (a conversation is open) and both turns
-    // render restored: the user's question and the mocked answer, in order.
+    // The welcome overlay leaves (a conversation is open) and the
+    // transcript renders the exact restoration: the welcome turn the app
+    // mounts with every conversation, then the user's question verbatim,
+    // then the mocked answer. Three rows, in that order — nothing more.
+    const rows = page.locator('[data-testid^="chat-message-"]');
+    await expect(rows, 'the restored transcript').toHaveCount(3, { timeout: 15000 });
     await expect(page.locator('[data-testid="quick-help-overlay"]')).toHaveCount(0);
+    expect(
+      await rows.nth(0).getAttribute('data-testid'),
+      'the first row is the welcome turn'
+    ).toBe('chat-message-bot');
     await expect(
-      page.locator('[data-testid="chat-message-user"] [data-testid="message-bubble-user"]'),
+      rows.nth(1).locator('[data-testid="message-bubble-user"]'),
       'the user turn is restored verbatim'
-    ).toHaveText(userText, { timeout: 15000 });
-    const restoredMessages = page.locator('[data-testid="chat-message-bot"]');
-    await expect(restoredMessages.last()).toContainText(MOCKED_ANSWER);
-    // Exactly one turn per side: this test saved one completed turn.
-    expect(await page.locator('[data-testid="chat-message-user"]').count(), 'one user turn restored').toBe(1);
-    expect(await restoredMessages.count(), 'one bot turn restored').toBe(1);
+    ).toHaveText(userText);
+    await expect(rows.nth(2).locator('[data-testid="message-bubble-bot"]')).toContainText(MOCKED_ANSWER);
   });
 
   test('list conversations endpoint returns conversations for authenticated user', async () => {

@@ -746,7 +746,9 @@ test.describe('Resizable sidebars behind one handle', () => {
           none: false,
           afterWidth: parseFloat(after.width) || 0,
           afterHeight: parseFloat(after.height) || 0,
-          panelClientWidth: overlay.clientWidth
+          panelClientWidth: overlay.clientWidth,
+          scrollWidth: overlay.scrollWidth,
+          clientWidth: overlay.clientWidth
         };
       });
       expect(c.none, `the welcome overlay should be readable at ${wide}px`).toBe(false);
@@ -772,22 +774,14 @@ test.describe('Resizable sidebars behind one handle', () => {
       // And no horizontal scrollbar: the banner is NOT hidden for this
       // read, so it also proves the panel absorbs the banner's own bleed at
       // a wide viewport — a state the wave-only read in
-      // `responsive-layout.spec.js` deliberately does not cover.
-      const sw = await page.evaluate(() => {
-        const overlay = document.querySelector('[data-testid="quick-help-overlay"]');
-        if (!overlay) return null;
-        return { scrollWidth: overlay.scrollWidth, clientWidth: overlay.clientWidth };
-      });
-      // Pinned, not guarded: an `if (sw)` around the assert would silently
-      // vacate the no-scrollbar claim the day the query stops finding the
-      // overlay (the read above pins the same element, but a future reorder
-      // must turn that into a red here, not into a skip).
-      expect(sw, `the welcome overlay should be readable at ${wide}px (scrollWidth read)`).not.toBeNull();
+      // `responsive-layout.spec.js` deliberately does not cover. The
+      // measurability is pinned by the c.none assert above (same read, same
+      // element), so this assert runs unconditionally.
       expect(
-        sw.scrollWidth,
-        `at viewport ${wide}, overlay.scrollWidth (${sw.scrollWidth}px) must be <= ` +
-          `overlay.clientWidth (${sw.clientWidth}px); overflow=${sw.scrollWidth - sw.clientWidth}px`
-      ).toBeLessThanOrEqual(sw.clientWidth);
+        c.scrollWidth,
+        `at viewport ${wide}, overlay.scrollWidth (${c.scrollWidth}px) must be <= ` +
+          `overlay.clientWidth (${c.clientWidth}px); overflow=${c.scrollWidth - c.clientWidth}px`
+      ).toBeLessThanOrEqual(c.clientWidth);
     }
   });
 

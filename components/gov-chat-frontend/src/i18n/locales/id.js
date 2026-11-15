@@ -2075,6 +2075,7 @@ export default {
         label: 'Konsep',
         loading: 'Memuat…',
         resplit: 'Pisahkan ulang',
+        split: 'Pisahkan konsep ini',
         flagged: 'ditandai',
         flaggedTip:
           'Konsep dengan entitas yang ditandai — buka masing-masing, hapus atau ubah entitas, simpan (memindai ulang secara otomatis); atau konfirmasikan saat publish.',
@@ -2131,6 +2132,22 @@ export default {
         modeC: 'Gunakan ekstraksi topik LLM',
         modeCHint: 'Story 10.6 — segera hadir',
         title: 'Bagi ulang dari sumber'
+      },
+      split: {
+        title: 'Pisahkan konsep',
+        open: 'Pisahkan konsep',
+        body: 'Server mengusulkan cara membagi konsep ini di sepanjang sambungan tanpa kehilangan. Tidak ada yang ditulis sampai Anda mengonfirmasi.',
+        ceiling: 'Batas atas: {ceiling} karakter',
+        parts: 'Bagian yang diusulkan',
+        partChars: '{chars} karakter',
+        confirm: 'Pisahkan',
+        working: 'Memisahkan…',
+        refused: 'Server menolak pemisahan:',
+        previewFailed: 'Pratinjau pemisahan tidak dapat dimuat — belum ada yang diusulkan.',
+        failed: 'Pemisahan gagal — tidak ada yang berubah.',
+        done: 'Dipisahkan menjadi {n} bagian: {created} dibuat, {updated} diperbarui.',
+        dirty:
+          'Anda memiliki suntingan yang belum disimpan pada konsep ini — pemisahan bekerja pada isi yang TERSIMPAN; mengonfirmasi membuang draf.'
       },
       rename: {
         body: 'Mengganti nama juga mengganti nama graf ruang kerja repositori (`OKF_<name>_v<N>`); konten, versi, dan jejak audit tidak berubah.',

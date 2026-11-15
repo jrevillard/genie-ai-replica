@@ -132,6 +132,22 @@
               >
                 ↻
               </button>
+              <!-- #1577 story 2: the SPLIT affordance — the CONCEPT_TOO_LARGE
+                   refusal's advice ("split it into smaller concepts") finally
+                   has a button behind it. Opens the seam-preview dialog; the
+                   readOnly span above already gates it like delete. Hidden
+                   entirely on hosts with no split dialog (the wizard's
+                   workbench mounts this list without one). -->
+              <button
+                v-if="showSplit"
+                type="button"
+                class="okf-cl__action okf-cl__action--split"
+                data-test-id="okf-concept-split"
+                :title="translate('okf.editor.concepts.split', 'Split this concept')"
+                @click.stop="$emit('split', node.concept_id)"
+              >
+                ÷
+              </button>
               <button
                 type="button"
                 class="okf-cl__action okf-cl__action--label"
@@ -166,6 +182,7 @@
               <div
                 class="okf-cl__row okf-cl__row--child"
                 :class="{ 'okf-cl__row--selected': child.concept_id === selectedId }"
+                :data-test-id="`okf-concept-row-${child.concept_id}`"
                 role="button"
                 tabindex="0"
                 @click="$emit('select', child.concept_id)"
@@ -211,6 +228,17 @@
                     @click.stop="$emit('reingest', child)"
                   >
                     ↻
+                  </button>
+                  <!-- #1577 story 2: the split affordance, same as the root rows. -->
+                  <button
+                    v-if="showSplit"
+                    type="button"
+                    class="okf-cl__action okf-cl__action--split"
+                    data-test-id="okf-concept-split"
+                    :title="translate('okf.editor.concepts.split', 'Split this concept')"
+                    @click.stop="$emit('split', child.concept_id)"
+                  >
+                    ÷
                   </button>
                   <button
                     type="button"
@@ -356,9 +384,13 @@ export default {
     readOnly: { type: Boolean, default: false },
     // 3.10 T-editor (D6): show the "+ From documents" feeder (editor parity —
     // the wizard's workbench has its own feeder row and omits this).
-    showAddSource: { type: Boolean, default: false }
+    showAddSource: { type: Boolean, default: false },
+    // #1577 story 2: the split glyph is only live where a split dialog is
+    // wired — the editor mounts one, the wizard's workbench does not, so it
+    // hides the glyph instead of rendering a button that emits into the void.
+    showSplit: { type: Boolean, default: true }
   },
-  emits: ['select', 'resplit', 'add', 'delete', 'label', 'pii-bulk', 'open-source', 'add-source', 'reingest'],
+  emits: ['select', 'resplit', 'add', 'delete', 'label', 'pii-bulk', 'open-source', 'add-source', 'reingest', 'split'],
   data() {
     return {
       filter: '',
@@ -738,6 +770,11 @@ export default {
 .okf-cl__action--reingest:hover {
   color: var(--accent);
   text-decoration: underline;
+}
+/* #1577 story 2: the split glyph — a preparation, not a destruction; the
+   accent colour matches the re-ingest affordance beside it. */
+.okf-cl__action--split {
+  color: var(--accent);
 }
 .okf-cl__action-glyph {
   font-size: var(--text-sm);

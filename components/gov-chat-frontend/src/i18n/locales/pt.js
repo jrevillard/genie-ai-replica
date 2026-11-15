@@ -2083,6 +2083,7 @@ export default {
         label: 'Conceitos',
         loading: 'Carregando…',
         resplit: 'Re-dividir',
+        split: 'Dividir este conceito',
         flagged: 'sinalizado',
         flaggedTip:
           'Conceitos com entidades sinalizadas — abra cada um, remova ou altere a entidade, salve (a nova verificação é feita automaticamente); ou reconheça-as ao executar publish.',
@@ -2141,6 +2142,22 @@ export default {
         modeC: 'Usar extração de tópicos por LLM',
         modeCHint: 'História 10.6 — em breve',
         title: 'Dividir novamente a partir da origem'
+      },
+      split: {
+        title: 'Dividir conceito',
+        open: 'Dividir conceito',
+        body: 'O servidor propõe como dividir este conceito ao longo de junções sem perdas. Nada é escrito até que você confirme.',
+        ceiling: 'Teto: {ceiling} caracteres',
+        parts: 'Partes propostas',
+        partChars: '{chars} caracteres',
+        confirm: 'Dividir',
+        working: 'Dividindo…',
+        refused: 'O servidor recusou a divisão:',
+        previewFailed: 'Não foi possível carregar a pré-visualização da divisão — nada foi proposto ainda.',
+        failed: 'A divisão falhou — nada foi alterado.',
+        done: 'Dividido em {n} parte(s): {created} criadas, {updated} atualizadas.',
+        dirty:
+          'Você tem edições não salvas neste conceito — a divisão trabalha sobre o corpo SALVO; confirmar descarta o rascunho.'
       },
       rename: {
         body: 'Renomear também renomeia os grafos do espaço de trabalho do repositório (`OKF_<name>_v<N>`); o conteúdo, as versões e o registo de auditoria ficam intactos.',

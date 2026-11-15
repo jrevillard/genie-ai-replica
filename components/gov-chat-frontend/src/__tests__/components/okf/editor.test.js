@@ -5,8 +5,21 @@
  * ResplitModal / RepoEditorShell default sub-tab).
  */
 
-const { mount } = require('@vue/test-utils');
+const { mount, flushPromises } = require('@vue/test-utils');
 const { gateStoreDispatch } = require('../../helpers/gatedStore');
+
+// The split done-toast goes through the event bus — mocked so the wiring
+// pin can assert the SUBSTITUTED string (no literal placeholders).
+jest.mock('@/services/notificationService', () => ({
+  __esModule: true,
+  default: {
+    show: jest.fn(),
+    success: jest.fn(),
+    error: jest.fn(),
+    info: jest.fn(),
+    warning: jest.fn()
+  }
+}));
 
 // Subject Areas load from the Knowledge Hierarchy via okfRepoOps — the
 // dashboard's domain-filter regression test pins that contract with a
@@ -326,13 +339,239 @@ describe('OkfResplitModal', () => {
   });
 });
 
+// ── #1577 story 2 — the per-concept split affordances ───────────────────────
+
+describe('OkfConceptList — the tree-row split affordance', () => {
+  // An index root + one child: the split glyph must exist on BOTH row kinds.
+  const rows = [
+    { concept_id: 'c-1', title: 'Page one', index_status: 'indexed' },
+    { concept_id: 'c-2', title: 'Page two', index_status: 'failed', is_index: true }
+  ];
+
+  it('offers the split glyph on both root and child rows and emits the concept_id string', async () => {
+    const wrapper = mountWith(OkfConceptList, fakeStore(), { concepts: rows });
+    const splitButtons = wrapper.findAll('[data-test-id="okf-concept-split"]');
+    expect(splitButtons).toHaveLength(2); // root (index row c-2) + child (c-1)
+    await splitButtons[0].trigger('click');
+    const emitted = wrapper.emitted('split');
+    expect(emitted).toHaveLength(1);
+    // The STRING contract (matching ConceptEditor's pane entry) — RepoEditor
+    // consumes it directly, no node unwrapping.
+    expect(emitted[0][0]).toBe('c-2');
+  });
+
+  it('hides the split affordance on a read-only (serving) repo — the same gating as delete', () => {
+    const wrapper = mountWith(OkfConceptList, fakeStore(), { concepts: rows, readOnly: true });
+    expect(wrapper.findAll('[data-test-id="okf-concept-split"]')).toHaveLength(0);
+    expect(wrapper.findAll('.okf-cl__action--danger')).toHaveLength(0); // the gate it shares
+  });
+
+  it('showSplit=false hides the glyph (the wizard workbench mounts no split dialog)', () => {
+    const wrapper = mountWith(OkfConceptList, fakeStore(), { concepts: rows, showSplit: false });
+    expect(wrapper.findAll('[data-test-id="okf-concept-split"]')).toHaveLength(0);
+  });
+});
+
+const OkfSplitPreviewModal = require('@/components/okf/editor/SplitPreviewModal.vue').default;
+const mockSplitPreviewSvc = require('@/services/repoOkfService').default.splitPreview;
+const mockSplitConceptSvc = require('@/services/repoOkfService').default.splitConcept;
+
+describe('OkfSplitPreviewModal — CAP-3 legible before', () => {
+  const PLAN = {
+    ok: true,
+    concept_id: 'big',
+    ceiling: 250000,
+    body_chars: 300000,
+    parts: [
+      { concept_id: 'big', path: 'docs/big.md', title: 'Big', chars: 250000 },
+      { concept_id: 'big-part-2', path: 'docs/big-part-2.md', title: 'Big — part 2', chars: 50000 }
+    ]
+  };
+
+  function modalStore(dispatchResult) {
+    const store = fakeStore();
+    const original = store.dispatch;
+    store.dispatch = (type, payload) => {
+      if (type === 'okf/splitConcept') {
+        store.dispatched.push({ type, payload });
+        return Promise.resolve(dispatchResult || { ok: true });
+      }
+      return original(type, payload);
+    };
+    return store;
+  }
+
+  async function mountModal(store, props) {
+    const wrapper = mountWith(
+      OkfSplitPreviewModal,
+      store,
+      { visible: true, repoId: 'r-1', conceptId: 'big', ...props },
+      { teleport: true }
+    );
+    await wrapper.vm.$nextTick();
+    await flushPromises();
+    return wrapper;
+  }
+
+  it('renders the seam preview BEFORE any write — plan rows, ceiling, confirm armed, nothing dispatched', async () => {
+    mockSplitPreviewSvc.mockResolvedValueOnce(PLAN);
+    const store = modalStore();
+    const wrapper = await mountModal(store);
+    const rows = wrapper.findAll('[data-test-id="okf-split-part-row"]');
+    expect(rows).toHaveLength(2);
+    expect(rows[0].text()).toContain('big');
+    expect(rows[1].text()).toContain('big-part-2');
+    expect(wrapper.find('[data-test-id="okf-split-preview"]').text()).toContain('250000'); // the ceiling line
+    const confirm = wrapper.find('[data-test-id="okf-split-confirm"]');
+    expect(confirm.attributes('disabled')).toBeUndefined(); // armed
+    // THE CAP-3 pin: a preview is not a write — the store saw nothing.
+    expect(store.dispatched.filter((d) => d.type === 'okf/splitConcept')).toHaveLength(0);
+    expect(mockSplitConceptSvc).not.toHaveBeenCalled();
+    wrapper.unmount();
+  });
+
+  it('a typed refusal renders the server message verbatim and confirm stays disabled', async () => {
+    mockSplitPreviewSvc.mockResolvedValueOnce({
+      ok: false,
+      code: 'PART_ID_CONFLICT',
+      serverRefusal: true, // the service classifies the origin; the dialog renders verbatim
+      message: 'splitting concept big would overwrite existing concept(s) big-part-2 — rename or delete them first'
+    });
+    const store = modalStore();
+    const wrapper = await mountModal(store);
+    expect(wrapper.find('[data-test-id="okf-split-refusal"]').text()).toContain('big-part-2');
+    expect(wrapper.find('[data-test-id="okf-split-preview"]').text()).toContain('rename or delete them first');
+    expect(wrapper.find('[data-test-id="okf-split-confirm"]').attributes('disabled')).toBeDefined();
+    wrapper.unmount();
+  });
+
+  it('a transport failure renders the error line — never a half-informed confirm', async () => {
+    mockSplitPreviewSvc.mockResolvedValueOnce({ ok: false, code: 'PREVIEW_FAILED', message: 'Network error' });
+    const store = modalStore();
+    const wrapper = await mountModal(store);
+    expect(wrapper.find('[data-test-id="okf-split-error"]').exists()).toBe(true);
+    expect(wrapper.find('[data-test-id="okf-split-confirm"]').attributes('disabled')).toBeDefined();
+    wrapper.unmount();
+  });
+
+  it('a server refusal with a code this dialog has never heard of STILL renders verbatim — the vocabulary lives in the service, not here', async () => {
+    // The drift pin: a NEW server refusal code (added to concept-split-operation.js
+    // next quarter) arrives flagged serverRefusal by the service — the dialog must
+    // render the server's words, not fall back to the generic transport line.
+    mockSplitPreviewSvc.mockResolvedValueOnce({
+      ok: false,
+      code: 'SOME_FUTURE_REFUSAL_CODE',
+      serverRefusal: true,
+      message: 'the server explains exactly what went wrong'
+    });
+    const store = modalStore();
+    const wrapper = await mountModal(store);
+    expect(wrapper.find('[data-test-id="okf-split-refusal"]').exists()).toBe(true);
+    expect(wrapper.find('[data-test-id="okf-split-refusal"]').text()).toContain(
+      'the server explains exactly what went wrong'
+    );
+    expect(wrapper.find('[data-test-id="okf-split-error"]').exists()).toBe(false);
+    wrapper.unmount();
+  });
+
+  it('confirm dispatches okf/splitConcept and emits done + close', async () => {
+    mockSplitPreviewSvc.mockResolvedValueOnce(PLAN);
+    const store = modalStore({ ok: true, concept_id: 'big', parts: PLAN.parts, created: 1, updated: 1 });
+    const wrapper = await mountModal(store);
+    await wrapper.find('[data-test-id="okf-split-confirm"]').trigger('click');
+    await wrapper.vm.$nextTick();
+    const dispatched = store.dispatched.find((d) => d.type === 'okf/splitConcept');
+    expect(dispatched).toBeTruthy();
+    expect(dispatched.payload).toMatchObject({ repoId: 'r-1', conceptId: 'big' });
+    expect(wrapper.emitted('done')).toHaveLength(1);
+    expect(wrapper.emitted('close')).toHaveLength(1);
+    wrapper.unmount();
+  });
+
+  it('a WRITE refusal re-runs the preview — the FRESH state renders, the stale plan never stays armed', async () => {
+    mockSplitPreviewSvc.mockResolvedValueOnce(PLAN); // the open preview
+    mockSplitPreviewSvc.mockResolvedValueOnce({
+      // the re-preview after the refusal: the -part-N row appeared, so the
+      // FRESH answer is the conflict — not the stale armed plan
+      ok: false,
+      code: 'PART_ID_CONFLICT',
+      serverRefusal: true,
+      message: 'splitting concept big would overwrite existing concept(s) big-part-2 — rename or delete them first'
+    });
+    const store = modalStore({ ok: false, code: 'PART_ID_CONFLICT', message: 'stale write message' });
+    const wrapper = await mountModal(store);
+    await wrapper.find('[data-test-id="okf-split-confirm"]').trigger('click');
+    await flushPromises();
+    // The FRESH preview's refusal renders (not the write's stale message)...
+    expect(wrapper.find('[data-test-id="okf-split-refusal"]').text()).toContain('rename or delete them first');
+    // ...and the stale plan is gone: confirm is disarmed.
+    expect(wrapper.vm.plan).toBeNull();
+    expect(wrapper.find('[data-test-id="okf-split-confirm"]').attributes('disabled')).toBeDefined();
+    expect(wrapper.emitted('close')).toBeUndefined(); // stays open
+    wrapper.unmount();
+  });
+
+  it('a stale preview answer never overwrites a newer open (open A → close → open B)', async () => {
+    let resolveA;
+    mockSplitPreviewSvc.mockImplementationOnce(
+      () =>
+        new Promise((r) => {
+          resolveA = () => r(PLAN);
+        })
+    ); // A: hangs
+    mockSplitPreviewSvc.mockResolvedValueOnce({
+      ok: true,
+      concept_id: 'b',
+      ceiling: 250000,
+      parts: [{ concept_id: 'b', path: 'docs/b.md', title: 'B', chars: 7 }]
+    }); // B: fast
+    const store = modalStore();
+    const wrapper = mountWith(
+      OkfSplitPreviewModal,
+      store,
+      { visible: false, repoId: 'r-1', conceptId: 'a' },
+      { teleport: true }
+    );
+    await wrapper.setProps({ visible: true }); // open A — the fetch hangs
+    await flushPromises();
+    expect(wrapper.vm.plan).toBeNull(); // A has not landed
+    await wrapper.setProps({ visible: false }); // close
+    await wrapper.setProps({ visible: true, conceptId: 'b' }); // open B
+    await flushPromises();
+    expect(wrapper.vm.plan.parts[0].concept_id).toBe('b');
+    resolveA(); // A lands LATE
+    await flushPromises();
+    // A's stale plan must NOT overwrite B's — confirm stays on B's seams.
+    expect(wrapper.vm.plan.parts[0].concept_id).toBe('b');
+    wrapper.unmount();
+  });
+
+  it('the dirty hint renders before the confirm when threaded', async () => {
+    mockSplitPreviewSvc.mockResolvedValueOnce(PLAN);
+    const store = modalStore();
+    const wrapper = await mountModal(store, { dirtyHint: true });
+    const hint = wrapper.find('[data-test-id="okf-split-dirty"]');
+    expect(hint.exists()).toBe(true);
+    expect(hint.text()).toContain('SAVED body');
+    wrapper.unmount();
+  });
+});
+
 const { shallowMount } = require('@vue/test-utils');
 const { createStore } = require('vuex');
 const okfModule = require('@/store/modules/okf').default;
 // Services mocked at module level — the real Vuex store's actions call them.
 jest.mock('@/services/repoOkfService', () => ({
   __esModule: true,
-  default: { list: jest.fn().mockResolvedValue([]), get: jest.fn(), getMetrics: jest.fn() }
+  default: {
+    list: jest.fn().mockResolvedValue([]),
+    get: jest.fn(),
+    getMetrics: jest.fn(),
+    // #1577 story 2 — the split dialog's client. Defaults answer a preview
+    // failure; each test overrides with mockResolvedValueOnce.
+    splitPreview: jest.fn().mockResolvedValue({ ok: false, code: 'PREVIEW_FAILED', message: '' }),
+    splitConcept: jest.fn().mockResolvedValue({ ok: true })
+  }
 }));
 jest.mock('@/services/conceptService', () => ({
   __esModule: true,
@@ -489,21 +728,32 @@ describe('OkfRepoEditor — cross-repo stale-selection guard', () => {
     });
   }
 
-  function mountEditorFor(repoId) {
+  // ONE scaffold for the full editor mount: the stub list lives HERE only.
+  // Stubbing MORE children is always safe (silence, not behavior change);
+  // pass { store } to share a store you pre-seeded, { extraStubs } to add.
+  function mountEditorFor(repoId, { store, extraStubs = {} } = {}) {
     return mount(OkfRepoEditorFull, {
       global: {
-        plugins: [buildStore()],
+        plugins: [store || buildStore()],
         stubs: {
           OkfConceptList: true,
           OkfRepoGraphView: true,
           OkfAddConceptModal: true,
           OkfResplitModal: true,
           OkfAutocorrectPanel: true,
+          OkfSourceDialog: true,
+          OkfTestingLabDialog: true,
+          OkfAccessPanel: true,
+          OkfPiiRepoRescan: true,
+          FrontmatterPanel: true,
           DsDialog: true,
           DsButton: true,
           DsFormGroup: true,
           DsInput: true,
-          DsSelect: true
+          DsSelect: true,
+          DsProgress: true,
+          DsInfoTip: true,
+          ...extraStubs
         }
       },
       props: { repoId }
@@ -516,24 +766,7 @@ describe('OkfRepoEditor — cross-repo stale-selection guard', () => {
     const store = buildStore();
     // selection left over from repo A sits in the store BEFORE the switch
     store.commit('okf/setSelectedConcept', 'c-a');
-    const wrapper = mount(OkfRepoEditorFull, {
-      global: {
-        plugins: [store],
-        stubs: {
-          OkfConceptList: true,
-          OkfRepoGraphView: true,
-          OkfAddConceptModal: true,
-          OkfResplitModal: true,
-          OkfAutocorrectPanel: true,
-          DsDialog: true,
-          DsButton: true,
-          DsFormGroup: true,
-          DsInput: true,
-          DsSelect: true
-        }
-      },
-      props: { repoId: 'r-b' }
-    });
+    const wrapper = mountEditorFor('r-b', { store });
     await new Promise((r) => setTimeout(r, 0));
     await wrapper.vm.$nextTick();
     await new Promise((r) => setTimeout(r, 0));
@@ -554,6 +787,102 @@ describe('OkfRepoEditor — cross-repo stale-selection guard', () => {
     await wrapper.vm.$nextTick();
     expect(wrapper.findComponent({ name: 'OkfConceptEditor' }).exists()).toBe(false);
     expect(wrapper.text()).toContain('Select a concept');
+    wrapper.unmount();
+  });
+
+  // ── #1577 story 2 — the split wiring (review verification gaps) ──────────
+  // (1) the pane entry opens the dialog with the emitted concept id;
+  // (2) the done handler fires the success toast with the placeholders
+  //     SUBSTITUTED and selects part 1 (it kept the original id).
+
+  it('the pane split entry opens the split dialog with the emitted concept id', async () => {
+    mockListForRepo.mockResolvedValue([{ concept_id: 'c-b', title: 'B1', is_index: true }]);
+    mockConceptGetSvc.mockResolvedValue({ ok: true, concept: { concept_id: 'c-b', body: '# B1' } });
+    const wrapper = mountEditorFor('r-1');
+    await flushPromises();
+    const editor = wrapper.findComponent({ name: 'OkfConceptEditor' });
+    expect(editor.exists()).toBe(true);
+    // THE pane path: ConceptEditor emits the concept_id STRING, the parent
+    // opens the dialog on it.
+    editor.vm.$emit('split', 'c-b');
+    await wrapper.vm.$nextTick();
+    const modal = wrapper.findComponent({ name: 'OkfSplitPreviewModal' });
+    expect(modal.exists()).toBe(true);
+    expect(modal.props('visible')).toBe(true);
+    expect(modal.props('conceptId')).toBe('c-b');
+    wrapper.unmount();
+  });
+
+  it('the done handler toasts the SUBSTITUTED counts and selects part 1 (the original id)', async () => {
+    const notificationService = require('@/services/notificationService').default;
+    mockListForRepo.mockResolvedValue([{ concept_id: 'c-b', title: 'B1', is_index: true }]);
+    mockConceptGetSvc.mockResolvedValue({ ok: true, concept: { concept_id: 'c-b', body: '# B1' } });
+    const wrapper = mountEditorFor('r-1');
+    await flushPromises();
+    const editor = wrapper.findComponent({ name: 'OkfConceptEditor' });
+    editor.vm.$emit('split', 'c-b');
+    await wrapper.vm.$nextTick();
+    const modal = wrapper.findComponent({ name: 'OkfSplitPreviewModal' });
+    modal.vm.$emit('done', {
+      concept_id: 'c-b',
+      parts: [
+        { concept_id: 'c-b', chars: 1 },
+        { concept_id: 'c-b-part-2', chars: 1 },
+        { concept_id: 'c-b-part-3', chars: 1 }
+      ],
+      created: 2,
+      updated: 1
+    });
+    await wrapper.vm.$nextTick();
+    const toast = notificationService.success.mock.calls[0][0];
+    expect(toast).toContain('3'); // {n} — the part count
+    expect(toast).toContain('2'); // {created}
+    expect(toast).toContain('1'); // {updated}
+    expect(toast).not.toContain('{n}');
+    expect(toast).not.toContain('{created}');
+    expect(toast).not.toContain('{updated}');
+    // Part 1 keeps the ORIGINAL id — the selection lands on it.
+    expect(wrapper.vm.selectedId).toBe('c-b');
+    expect(modal.props('visible')).toBe(false); // the dialog closed
+    wrapper.unmount();
+  });
+});
+
+// ── Baseline F-1 — the crawl-seed render gate (RepoEditorShell) ─────────────
+// source_document.url is caller-supplied provenance: it renders as an anchor
+// ONLY through the isExternalUrl http(s) allow-list; anything else falls back
+// to plain text, so a javascript: scheme can never execute here.
+const OkfRepoEditorShellForSeed = require('@/components/okf/editor/RepoEditorShell.vue').default;
+
+describe('OkfRepoEditorShell — the crawl-seed render gate (baseline F-1)', () => {
+  function mountShellWithSeed(url) {
+    const realStore = createStore({
+      modules: { okf: { ...okfModule, state: () => JSON.parse(JSON.stringify(okfModule.state())) } }
+    });
+    realStore.commit('okf/upsertRepo', {
+      repo_id: 'r-1',
+      name: 'Repo One',
+      lifecycle_state: 'draft',
+      source_document: { file_name: 'crawl.md', url }
+    });
+    return shallowMount(OkfRepoEditorShellForSeed, {
+      global: { plugins: [realStore] },
+      props: { repoId: 'r-1', draft: null }
+    });
+  }
+
+  it('a javascript: seed url renders as PLAIN TEXT — never an anchor', () => {
+    const wrapper = mountShellWithSeed('javascript:alert(1)');
+    const plain = wrapper.find('.expanded-source__url-text');
+    expect(plain.exists()).toBe(true);
+    expect(plain.text()).toBe('javascript:alert(1)');
+    expect(wrapper.find('a[href="javascript:alert(1)"]').exists()).toBe(false);
+    wrapper.unmount();
+  });
+
+  it('an https seed url renders as an anchor', () => {
+    const wrapper = mountShellWithSeed('https://ok.example/x');
+    expect(wrapper.find('a[href="https://ok.example/x"]').exists()).toBe(true);
     wrapper.unmount();
   });
 });

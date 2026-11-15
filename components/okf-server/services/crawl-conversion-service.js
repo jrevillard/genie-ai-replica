@@ -225,6 +225,23 @@ async function patchConversion(repoId, patch) {
 }
 
 /**
+ * Baseline F-1 (security review, 2026-11-15): the crawl-seed url is
+ * CALLER-SUPPLIED and the editor renders `source_document.url` as a raw
+ * `:href` anchor — a `javascript:` (or any non-http) scheme stamped here
+ * would be a stored-XSS payload against every steward who opens the repo.
+ * Only a lowercase http(s) URL may ever be stamped; anything else is
+ * stripped to null so the stored value cannot carry an executable scheme.
+ * CASE-SENSITIVE on purpose: the frontend's isExternalUrl render gate is
+ * case-sensitive too (startsWith 'http://'/'https://'), and two gates that
+ * disagreed on case would let the stamp admit what the render then demotes
+ * to plain text — one allow-list, one casing.
+ */
+function safeSourceUrl(url) {
+  const s = typeof url === 'string' ? url.trim() : '';
+  return /^https?:\/\//.test(s) ? s : null;
+}
+
+/**
  * SOURCE PROVENANCE (David, 2026-09-02): a repo created from a doc-repo
  * document must SHOW that document in the editor — stamp its details on the
  * repo doc at conversion start (fail-soft: a lookup failure leaves the id
@@ -262,7 +279,7 @@ async function stampSourceDocument(repoId, { file_id, url, crawl_job_id }) {
         repo_id: repoId,
         file_id,
         ...docRepoFileFields(f),
-        url: url || null,
+        url: safeSourceUrl(url),
         crawl_job_id: crawl_job_id || null,
         generated_at: new Date().toISOString()
       }

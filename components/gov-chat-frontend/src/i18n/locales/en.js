@@ -2915,7 +2915,8 @@ export default {
         piiTipBare: 'Flagged entities — open, review, then save to re-scan.',
         sourceLabel: 'Source document',
         sourceView: 'Open the source document',
-        resplit: 'Re-split'
+        resplit: 'Re-split',
+        split: 'Split this concept'
       },
       actions: {
         bulkPii: 'Applying the bulk PII action',
@@ -3005,6 +3006,22 @@ export default {
         modeC: 'Use LLM topic extraction',
         modeCHint: 'Story 10.6 — coming soon',
         title: 'Re-split from source'
+      },
+      split: {
+        title: 'Split concept',
+        open: 'Split concept',
+        body: 'The server proposes how this concept divides along lossless seams. Nothing is written until you confirm.',
+        ceiling: 'Ceiling: {ceiling} characters',
+        parts: 'Proposed parts',
+        partChars: '{chars} characters',
+        confirm: 'Split',
+        working: 'Splitting…',
+        refused: 'The server refused the split:',
+        previewFailed: 'Could not load the split preview — nothing has been proposed yet.',
+        failed: 'The split failed — nothing was changed.',
+        done: 'Split into {n} part(s): {created} created, {updated} updated.',
+        dirty:
+          'You have unsaved edits in this concept — the split works on the SAVED body; confirming discards the draft.'
       },
       rename: {
         body: 'Renaming also renames the repository’s workspace graphs (`OKF_<name>_v<N>`); content, versions and the audit trail are untouched.',

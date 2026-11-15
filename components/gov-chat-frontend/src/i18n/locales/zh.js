@@ -2019,6 +2019,7 @@ export default {
         label: '概念',
         loading: '加载中…',
         resplit: '重新拆分',
+        split: '拆分此概念',
         flagged: '已标记',
         flaggedTip:
           '包含标记实体的概念 — 逐一打开并删除或修改该实体后保存（将自动重新扫描）；或在 publish 时予以确认。',
@@ -2075,6 +2076,21 @@ export default {
         modeC: '使用 LLM 进行主题提取',
         modeCHint: '用户故事 10.6 — 即将推出',
         title: '从源文件重新切分'
+      },
+      split: {
+        title: '拆分概念',
+        open: '拆分概念',
+        body: '服务器将提出按无损接缝拆分此概念的方式。在您确认之前不会写入任何内容。',
+        ceiling: '上限：{ceiling} 个字符',
+        parts: '建议的分区',
+        partChars: '{chars} 个字符',
+        confirm: '拆分',
+        working: '正在拆分…',
+        refused: '服务器拒绝了拆分：',
+        previewFailed: '无法加载拆分预览——尚未提出任何方案。',
+        failed: '拆分失败——未更改任何内容。',
+        done: '已拆分为 {n} 个部分：新建 {created} 个，更新 {updated} 个。',
+        dirty: '此概念中有未保存的编辑——拆分作用于已保存的正文；确认将放弃草稿。'
       },
       rename: {
         body: '重命名同时会重命名仓库的工作区图（`OKF_<name>_v<N>`）；内容、版本和审计记录不受影响。',

@@ -2089,6 +2089,7 @@ export default {
         label: 'Konzepte',
         loading: 'Wird geladen…',
         resplit: 'Neu teilen',
+        split: 'Dieses Konzept teilen',
         flagged: 'markiert',
         flaggedTip:
           'Konzepte mit markierten Entitäten — jedes öffnen, Entität entfernen oder anpassen, speichern (wird automatisch neu gescannt); oder beim publish bestätigen.',
@@ -2147,6 +2148,22 @@ export default {
         modeC: 'LLM-Themenextraktion verwenden',
         modeCHint: 'Story 10.6 — in Kürze verfügbar',
         title: 'Aus Quelle neu aufteilen'
+      },
+      split: {
+        title: 'Konzept teilen',
+        open: 'Konzept teilen',
+        body: 'Der Server schlägt vor, wie sich dieses Konzept entlang verlustfreier Nähte teilen lässt. Bis Sie bestätigen, wird nichts geschrieben.',
+        ceiling: 'Obergrenze: {ceiling} Zeichen',
+        parts: 'Vorgeschlagene Teile',
+        partChars: '{chars} Zeichen',
+        confirm: 'Teilen',
+        working: 'Wird geteilt…',
+        refused: 'Der Server hat die Aufteilung abgelehnt:',
+        previewFailed: 'Die Teilen-Vorschau konnte nicht geladen werden — noch wurde nichts vorgeschlagen.',
+        failed: 'Die Aufteilung ist fehlgeschlagen — es wurde nichts geändert.',
+        done: 'In {n} Teil(e) aufgeteilt: {created} erstellt, {updated} aktualisiert.',
+        dirty:
+          'Sie haben ungespeicherte Änderungen in diesem Konzept — das Teilen arbeitet mit dem GESPEICHERTEN Stand; beim Bestätigen wird der Entwurf verworfen.'
       },
       rename: {
         body: 'Das Umbenennen benennt auch die Workspace-Graphen des Repositorys um (`OKF_<name>_v<N>`); Inhalte, Versionen und der Audit-Trail bleiben unverändert.',

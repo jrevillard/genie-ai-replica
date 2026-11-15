@@ -20,6 +20,8 @@ const mockPatchConcept = jest.fn();
 const mockPatchBody = jest.fn();
 const mockResplit = jest.fn();
 const mockAutocorrect = jest.fn();
+const mockSplitConcept = jest.fn();
+const mockSplitPreview = jest.fn();
 
 jest.mock('@/services/conceptService', () => ({
   __esModule: true,
@@ -36,6 +38,8 @@ jest.mock('@/services/repoOkfService', () => ({
     patchConcept: (...a) => mockPatchConcept(...a),
     patchConceptBody: (...a) => mockPatchBody(...a),
     resplit: (...a) => mockResplit(...a),
+    splitConcept: (...a) => mockSplitConcept(...a),
+    splitPreview: (...a) => mockSplitPreview(...a),
     autocorrect: (...a) => mockAutocorrect(...a),
     list: (...a) => mockList(...a),
     get: (...a) => mockGet(...a),
@@ -346,6 +350,54 @@ describe('okf store — editor actions (Story #978)', () => {
       expect(mockListForRepo).not.toHaveBeenCalled();
       await store.dispatch('okf/autocorrectRepo', { repoId: 'r-1', dryRun: false });
       expect(mockListForRepo).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  // #1577 story 2 — splitConcept: the store contract the confirm dialog
+  // rides ({ok, code?, message?, ...summary}, never throws, tree refresh).
+  describe('splitConcept (#1577 story 2)', () => {
+    it('splits, refreshes the concept list and answers the summary', async () => {
+      mockSplitConcept.mockResolvedValue({
+        concept_id: 'big',
+        parts: [
+          { concept_id: 'big', chars: 120 },
+          { concept_id: 'big-part-2', chars: 90 }
+        ],
+        created: 1,
+        updated: 1,
+        ceiling: 250000
+      });
+      mockListForRepo.mockResolvedValueOnce(CONCEPTS);
+      const store = buildStore();
+      const result = await store.dispatch('okf/splitConcept', { repoId: 'r-1', conceptId: 'big' });
+      expect(result.ok).toBe(true);
+      expect(result.created).toBe(1);
+      expect(result.parts).toHaveLength(2);
+      expect(mockSplitConcept).toHaveBeenCalledWith('r-1', 'big', {});
+      expect(mockListForRepo).toHaveBeenCalled(); // the tree refresh
+    });
+
+    it('surfaces a refusal without throwing, with the code and message', async () => {
+      mockSplitConcept.mockRejectedValue({
+        status: 409,
+        data: { error: 'PART_ID_CONFLICT', message: 'would overwrite existing concept(s) big-part-2' },
+        message: 'would overwrite existing concept(s) big-part-2'
+      });
+      const store = buildStore();
+      const result = await store.dispatch('okf/splitConcept', { repoId: 'r-1', conceptId: 'big' });
+      expect(result).toMatchObject({
+        ok: false,
+        code: 'PART_ID_CONFLICT',
+        message: 'would overwrite existing concept(s) big-part-2'
+      });
+      expect(mockListForRepo).not.toHaveBeenCalled(); // a refusal refetches nothing
+    });
+
+    it('validation guards a missing conceptId', async () => {
+      const store = buildStore();
+      const result = await store.dispatch('okf/splitConcept', { repoId: 'r-1' });
+      expect(result).toMatchObject({ ok: false, code: 'VALIDATION_ERROR' });
+      expect(mockSplitConcept).not.toHaveBeenCalled();
     });
   });
 

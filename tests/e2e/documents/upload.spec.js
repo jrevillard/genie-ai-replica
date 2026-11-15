@@ -53,6 +53,12 @@ test.describe('Document Upload', () => {
     const errorMessage = dialog.locator('[data-test-id="upload-error-message"]');
     await expect(errorMessage).toBeVisible({ timeout: 5000 });
     const errorText = await errorMessage.innerText();
-    expect(errorText.toLowerCase()).toMatch(/not allowed|not supported|invalid/i);
+    // The rejection copy IS the subject (#1865): the .exe fixture can
+    // only take the typeNotAllowed branch, and the copy must carry the
+    // offending extension. The old three-way alternation
+    // (`not allowed|not supported|invalid`) also matched the shortcut
+    // branch and kept passing when the copy dropped the extension — a
+    // wrong-branch regression was green.
+    expect(errorText).toMatch(/^File type "\.exe" is not allowed\.$/);
   });
 });

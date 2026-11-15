@@ -167,8 +167,22 @@ fi
 # Can this machine drive a browser against the venue at all? A broken runner
 # and a broken product look the same in a report, and only one of them is a
 # finding. The pre-flight stops the run before it touches the venue.
+#
+# The venue build marker (#1851): the pre-flight reads /build-info.json and
+# hands the served build's git sha over through a scratch file (an env var
+# cannot cross back out of a child process). The failure path reads the
+# exported value and writes it into EVERY issue it files — a stale venue
+# cannot file a misleading spec-defect issue without naming its build.
 echo "pre-flight"
-node tests/e2e/run/preflight.js
+E2E_VENUE_BUILD_FILE="$(mktemp)"
+# The preflight may exit nonzero (an unreachable venue, a BROKEN marker) and
+# set -e aborts here — the scratch file must not ghost in /tmp (scoped review
+# of #1851).
+trap 'rm -f "$E2E_VENUE_BUILD_FILE"' EXIT
+E2E_VENUE_BUILD_FILE="$E2E_VENUE_BUILD_FILE" node tests/e2e/run/preflight.js
+E2E_VENUE_BUILD_GIT_SHA="$(cat "$E2E_VENUE_BUILD_FILE" 2>/dev/null || true)"
+rm -f "$E2E_VENUE_BUILD_FILE"
+export E2E_VENUE_BUILD_GIT_SHA
 
 # --- the venue fixtures ------------------------------------------------------
 echo "provisioning the venue fixtures"

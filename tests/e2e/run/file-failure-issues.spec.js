@@ -399,6 +399,32 @@ test.describe('a failure carrying an edge-transport signature is venue noise (#1
   });
 });
 
+test.describe('the filed body names the venue build (#1851)', () => {
+  // The stale-venue trap: a venue serving an old build fails specs for
+  // product-reasons that read like test defects. An issue that does not
+  // name the served build is one an operator cannot diagnose in one read.
+  test('a run that carried the marker names the sha it exercised', () => {
+    const body = issueBody(
+      'tests/e2e/a.spec.js',
+      [{ title: 'a › first', error: 'boom' }],
+      'https://venue.example:4443',
+      '2026-11-11T00:00:00Z',
+      'abc1234def'
+    );
+    expect(body).toContain('- venue build: `abc1234def`');
+  });
+
+  test('a run without a marker says so, unknown — not a fabricated sha', () => {
+    const body = issueBody(
+      'tests/e2e/a.spec.js',
+      [{ title: 'a › first', error: 'boom' }],
+      'https://venue.example:4443',
+      '2026-11-11T00:00:00Z'
+    );
+    expect(body).toContain('- venue build: unknown');
+    expect(body).not.toMatch(/venue build: `[0-9a-f]{7,}`/);
+  });
+});
 test.describe('the filing loop stays loud when the tracker refuses (#1883)', () => {
   // The filing loop's loudness contract: one tracker error never takes the
   // filing down — the failing file is reported, the remaining files are

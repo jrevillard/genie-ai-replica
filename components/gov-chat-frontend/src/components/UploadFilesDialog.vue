@@ -91,7 +91,15 @@
       <DsButton variant="secondary" @click="$emit('close')">
         {{ translate('common.cancel', 'Cancel') }}
       </DsButton>
-      <DsButton variant="primary" :disabled="files.length === 0 || isUploading" @click="handleUpload">
+      <!-- #1865: the confirm button declares its test handle — the e2e
+           helper must not locate it by copy (`Upload {count} File(s)` is
+           templated i18n; the Uploading... state shares the old substring). -->
+      <DsButton
+        variant="primary"
+        data-test-id="upload-files-dialog-confirm"
+        :disabled="files.length === 0 || isUploading"
+        @click="handleUpload"
+      >
         <span v-if="isUploading">{{ translate('uploadDialog.uploading', 'Uploading...') }}</span>
         <span v-else>
           {{ translate('uploadDialog.buttonUpload', `Upload {count} File(s)`).replace('{count}', files.length) }}

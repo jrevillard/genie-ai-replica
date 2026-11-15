@@ -20,7 +20,7 @@ const {
   mapWithConcurrency,
   request,
   SWEEP_DELETE_CONCURRENCY,
-  SWEEP_MAX_DELETES,
+  SWEEP_DOCS_MAX_DELETES,
   SWEEP_MAX_LIST_PAGES
 } = require('./auth');
 
@@ -132,7 +132,8 @@ function matchesStatus(file, status) {
  * BUNDLE_PROTECTED) that name the remedy; a bare status does not.
  */
 function describeCode(res) {
-  return res.data && res.data.code ? ` (${res.data.code})` : '';
+  const data = (res && res.data) || {};
+  return data.code ? ` (${data.code})` : '';
 }
 
 /**
@@ -151,6 +152,34 @@ function detailOf(res) {
     out += `${out ? ' — ' : ''}details: ${JSON.stringify(data.details).slice(0, 200)}`;
   }
   return out;
+}
+
+/**
+ * The id a /api/files payload entry addresses its file by. ONE home for
+ * the fallback chain — the pagination-drift dedupe keys on the same id
+ * the delete targets, so the two cannot silently diverge (#1864 quality
+ * review). A row carrying none of the three fields resolves to
+ * undefined; its delete fails loud on the missing id, as before.
+ */
+function fileIdOf(file) {
+  return file.file_id || file._key || file.id;
+}
+
+/**
+ * The failure line for one non-2xx response, shared by the sweep's two
+ * legs so the status/code/detail formatting is written once: a 401 keeps
+ * the token-expiry diagnosis (the retract caller names its leg via
+ * `legNote`), anything else reads `HTTP <status> (<code>) — <detail>`,
+ * wrapped in the retract caller's `wrap` prefix. Byte-identical outputs
+ * are pinned by documents.spec.js.
+ */
+function describeFailure(res, token, { legNote = '', wrap = '' } = {}) {
+  if (res.status === 401) {
+    return `${describeUnauthorized(res, token)}${legNote ? ` (on the ${legNote})` : ''}`;
+  }
+  const detail = detailOf(res);
+  const body = `HTTP ${res.status}${describeCode(res)}${detail ? ` — ${detail}` : ''}`;
+  return wrap ? `${wrap}${body})` : body;
 }
 
 /**
@@ -178,7 +207,7 @@ function detailOf(res) {
  * @returns {Promise<string|null>} the failure string, or null on success
  */
 async function sweepDeleteOneFile(request, file, token) {
-  const file_id = file.file_id || file._key || file.id;
+  const file_id = fileIdOf(file);
   const headers = { Authorization: `Bearer ${token}` };
   const attempt = () => request('DELETE', `/api/files/${file_id}`, { headers });
   try {
@@ -189,22 +218,17 @@ async function sweepDeleteOneFile(request, file, token) {
         // A 401 on this leg is the same token-expiry diagnosis the delete
         // legs produce (verdict + expiry label), not a generic detail —
         // the token can lapse between the first DELETE and the retract
-        // (#1864 review). The detailOf line names the leg for the other
+        // (#1864 review). describeFailure names the leg for the other
         // statuses.
-        if (retractRes.status === 401) {
-          return `${file.file_name}: ${describeUnauthorized(retractRes, token)} (on the retract after a STILL_SERVING refusal)`;
-        }
-        const detail = detailOf(retractRes);
-        return `${file.file_name}: retract failed before delete (HTTP ${retractRes.status}${describeCode(retractRes)}${detail ? ` — ${detail}` : ''})`;
+        return `${file.file_name}: ${describeFailure(retractRes, token, {
+          legNote: 'retract after a STILL_SERVING refusal',
+          wrap: 'retract failed before delete ('
+        })}`;
       }
       res = await attempt();
     }
     if (res.status < 200 || res.status >= 300) {
-      if (res.status === 401) {
-        return `${file.file_name}: ${describeUnauthorized(res, token)}`;
-      }
-      const detail = detailOf(res);
-      return `${file.file_name}: HTTP ${res.status}${describeCode(res)}${detail ? ` — ${detail}` : ''}`;
+      return `${file.file_name}: ${describeFailure(res, token)}`;
     }
     return null;
   } catch (e) {
@@ -408,20 +432,20 @@ async function deleteAllTestDocuments(prefix = 'test-document', { browser } = {}
   // row stands alone (and its delete fails loud on the missing id).
   const seenIds = new Set();
   const ownUnique = own.filter((f) => {
-    const id = f.file_id || f._key || f.id;
+    const id = fileIdOf(f);
     if (id === undefined || id === null) return true;
     if (seenIds.has(id)) return false;
     seenIds.add(id);
     return true;
   });
 
-  const deleteSet = ownUnique.slice(0, SWEEP_MAX_DELETES);
+  const deleteSet = ownUnique.slice(0, SWEEP_DOCS_MAX_DELETES);
   const beyondBudget = ownUnique.length - deleteSet.length;
 
   // The deletes run in bounded-parallel waves: with the STILL_SERVING
   // remedy a serving file costs up to three calls (DELETE, retract,
   // DELETE), so the wave and budget arithmetic lives in helpers/auth.js
-  // and must account for all three (#1864).
+  // (SWEEP_DOCS_MAX_DELETES) and must account for all three (#1864).
   const failures = (
     await mapWithConcurrency(deleteSet, SWEEP_DELETE_CONCURRENCY, async (f) => {
       // The whole per-file sequence — the delete and its STILL_SERVING
@@ -446,7 +470,7 @@ async function deleteAllTestDocuments(prefix = 'test-document', { browser } = {}
   }
   if (beyondBudget > 0) {
     problems.push(
-      `${beyondBudget} test documents are beyond the sweep's delete budget (${SWEEP_MAX_DELETES} ` +
+      `${beyondBudget} test documents are beyond the sweep's delete budget (${SWEEP_DOCS_MAX_DELETES} ` +
         `per run) — they stay behind until a later run removes them`
     );
   }

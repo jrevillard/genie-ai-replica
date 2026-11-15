@@ -2,16 +2,21 @@
   OkfConceptEditor.vue — Story #978 Studio editor center pane.
 
   Loads the selected concept's full meta row (frontmatter + body), composes it
-  into markdown, and edits it in a DsOkfMarkdownEditor with a Source | Rendered
-  toggle (Source default). Save is debounced (1.5s after the last keystroke);
-  the Save button forces it. Emits 'saved' with the server result so the
-  parent can refresh the row.
+  into markdown, and edits it in a DsOkfMarkdownEditor with a Source | Split |
+  Rendered toggle (Rendered default since #1634). Save is debounced (1.5s after
+  the last keystroke); the Save button forces it. Emits 'saved' with the server
+  result so the parent can refresh the row.
 -->
 <template>
   <div class="okf-ce" data-test-id="okf-concept-editor">
     <div class="okf-ce__toolbar">
       <div class="okf-ce__view-toggle" role="tablist" :aria-label="translate('okf.editor.viewToggle', 'Editor view')">
-        <DsButton :variant="view === 'source' ? 'primary' : 'secondary'" small @click="view = 'source'">
+        <DsButton
+          :variant="view === 'source' ? 'primary' : 'secondary'"
+          small
+          data-test-id="okf-concept-view-source"
+          @click="view = 'source'"
+        >
           {{ translate('okf.editor.view.source', 'Source') }}
         </DsButton>
         <!-- THREE real modes (David, 2026-09-06): the old Source|Rendered

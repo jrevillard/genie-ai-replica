@@ -139,6 +139,15 @@ async function openEditor(page) {
   await row.click();
 
   await expect(page.locator('[data-test-id="okf-concept-editor"]')).toBeVisible({ timeout: 15000 });
+
+  // The editor opens RENDERED by default since #1634 (the raw textarea is
+  // v-if'd out in the preview view — #1884). These tests' subject is the RAW
+  // body (the advisory's character count, the typed over-ceiling text), so
+  // the walk switches to Source mode through the toggle handle the component
+  // now declares.
+  await page.locator('[data-test-id="okf-concept-view-source"]').click();
+  await expect(page.locator('[data-test-id="okf-md-body"]')).toBeVisible({ timeout: 15000 });
+
   return patches;
 }
 
@@ -174,9 +183,11 @@ test.describe('the concept-document ceiling in the concept editor', () => {
     expect(body.length, "the stub body must be the editor's body").toBeGreaterThan(0);
 
     // The number on screen is the SERVER's ceiling (the injected
-    // `max_doc_chars`) and the body's own length.
-    await expect(advisory).toContainText(String(CEILING));
-    await expect(advisory).toHaveText(`${body.length} / ${CEILING} characters`);
+    // `max_doc_chars`) and the body's own length, pinned EXACTLY on the
+    // advisory's status pill (`[data-state]`, the DsPill the count is
+    // rendered in) — the advisory also carries the #1577 split affordance
+    // beside it, so the whole-container text is no longer the count alone.
+    await expect(advisory.locator('[data-state]')).toHaveText(`${body.length} / ${CEILING} characters`);
   });
 
   test('going OVER the ceiling turns the warning on BEFORE the save is refused', async ({ page }) => {
@@ -188,10 +199,9 @@ test.describe('the concept-document ceiling in the concept editor', () => {
     await expect(advisory.locator('[data-state="warning"]')).toHaveCount(0);
 
     // Type a body over the ceiling — the real interaction, through the
-    // browser's input path.
-    const editor = page.locator('[data-test-id="okf-md-body"]');
-    await expect(editor).toBeVisible({ timeout: 15000 });
-    await editor.fill('y'.repeat(CEILING + 1));
+    // browser's input path (the walk's own wait gates the editor's
+    // presence; fill() auto-waits on top of it).
+    await page.locator('[data-test-id="okf-md-body"]').fill('y'.repeat(CEILING + 1));
 
     // The warning is on, and the curator is told what to do.
     await expect(advisory.locator('[data-state="warning"]')).toHaveCount(1);
@@ -201,18 +211,31 @@ test.describe('the concept-document ceiling in the concept editor', () => {
   test('a refused save shows the SERVER\'s message, not "retry"', async ({ page }) => {
     const patches = await openEditor(page);
 
-    const editor = page.locator('[data-test-id="okf-md-body"]');
-    await expect(editor).toBeVisible({ timeout: 15000 });
-    await editor.fill('z'.repeat(50));
+    // The text this test types — ONE constant, filled and asserted, so the
+    // #1877 stale-body check below can never drift from what was typed.
+    const EDITED_BODY = 'z'.repeat(50);
+    await page.locator('[data-test-id="okf-md-body"]').fill(EDITED_BODY);
 
     // Force the save (the autosave is debounced; the button is explicit).
     const save = page.locator('[data-test-id="okf-concept-save"]');
     await expect(save).toBeEnabled({ timeout: 15000 });
     await save.click();
 
-    // The PATCH really went out — the assertion below is about what the
+    // The PATCH really went out — the assertions below are about what the
     // curator SEES because of it.
     await expect.poll(() => patches.length, { timeout: 15000 }).toBeGreaterThan(0);
+
+    // AND the save carries THE EDITED TEXT (#1877): a positive PATCH count
+    // proves nothing about WHAT was saved — a stale-body regression (the
+    // editor PATCHing the pre-edit text while rendering the edited text)
+    // must fail here, not pass. The editor's content at save time is the
+    // filled body, so every captured PATCH — the `{ body }` write of an
+    // unchanged frontmatter or the `{ markdown }` write of a full page —
+    // must carry exactly it.
+    const stale = patches
+      .map((raw) => JSON.parse(raw))
+      .filter((payload) => (payload.body ?? payload.markdown) !== EDITED_BODY);
+    expect(stale, 'every PATCH must carry the edited body, not the pre-edit one').toEqual([]);
 
     const status = page.locator('[data-test-id="okf-concept-save-status"]');
     await expect(status).toContainText('101 characters', { timeout: 15000 });

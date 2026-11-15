@@ -159,6 +159,16 @@ test.describe('the RAGAS guide explains the output, and a re-score is a tracked 
     await expect(doneRow, 'a finished run must be in the history').toBeVisible({ timeout: 20000 });
     const sourceKey = (await doneRow.locator('[data-test-id="ragas-run-key"]').innerText()).trim();
 
+    // The keys the history carries BEFORE this test acts (#1876): a
+    // lineage row that is already there belongs to an earlier execution
+    // of this suite (the previous execution left a cancelled row re-scored
+    // from the same source run), and must never be mistaken for this
+    // run's row — it would satisfy both the lineage marker and the
+    // source-key text, and every verdict below would read off it.
+    const knownKeys = new Set(
+      (await historyRows.locator('[data-test-id="ragas-run-key"]').allInnerTexts()).map((k) => k.trim())
+    );
+
     const rescoreButton = doneRow.getByRole('button', { name: /^Re-score$/ }).first();
     await expect(rescoreButton, 'a finished run must offer Re-score').toBeEnabled({ timeout: 20000 });
     await rescoreButton.click();
@@ -189,24 +199,36 @@ test.describe('the RAGAS guide explains the output, and a re-score is a tracked 
       timeout: 20000
     });
 
-    // And it is TRACKED — a row for the new run appears in the history,
-    // with the lineage back to the source run.
-    const newRow = historyRows.filter({ hasText: /re-scored from/i }).first();
-    await expect(newRow, 'the new re-score must appear in the run history').toBeVisible({ timeout: 30000 });
+    // And it is TRACKED — a row for THIS run appears in the history, with
+    // the lineage back to the source run. The row is identified by a key
+    // that did NOT exist before the submit: a marker-only `.first()` would
+    // bind the leftover row from the previous execution the instant it is
+    // visible (its lineage names the same source run), and the cancel
+    // verdict below would pass against a row this test never started
+    // (#1876).
+    let newKey = null;
+    await expect
+      .poll(
+        async () => {
+          const keys = (await historyRows.locator('[data-test-id="ragas-run-key"]').allInnerTexts()).map((k) =>
+            k.trim()
+          );
+          newKey = keys.find((k) => !knownKeys.has(k)) || null;
+          return newKey;
+        },
+        { timeout: 30000, message: 'the new re-score must appear in the run history with a fresh key' }
+      )
+      .not.toBeNull();
+    const newRow = historyRows.filter({ hasText: newKey });
     await expect(newRow, 'the new row must name the source run').toContainText(sourceKey);
-    // The new run's OWN key — unique per run — is what the cancel verdict
-    // below binds to (#1876): a marker-only `.first()` can bind a stale
-    // re-score row left behind by an earlier execution of this suite, and
-    // read the verdict off the wrong row.
-    const newKey = (await newRow.locator('[data-test-id="ragas-run-key"]').innerText()).trim();
     await page.screenshot({ path: 'test-results/ragas-rescore-running.png', fullPage: false });
 
     // ---- C. and it can be STOPPED ----
     await cancelRun.click();
 
     // OUR row lands 'cancelled' — never 'failed', and it does not vanish.
-    // The row is pinned to its own key, so leftovers from earlier runs of
-    // this suite cannot carry the verdict (#1876).
+    // The row is bound by its own fresh key, so leftovers from earlier runs
+    // of this suite cannot carry the verdict (#1876).
     const cancelledRow = historyRows.filter({ hasText: newKey });
     await expect(cancelledRow, 'the cancelled re-score must stay in the history').toHaveCount(1, { timeout: 30000 });
     await expect(cancelledRow, 'the cancelled row must keep its lineage to the source run').toContainText(sourceKey);

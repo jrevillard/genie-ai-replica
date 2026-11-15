@@ -213,9 +213,12 @@ test.describe('the concept-document ceiling in the concept editor', () => {
   test('a refused save shows the SERVER\'s message, not "retry"', async ({ page }) => {
     const patches = await openEditor(page);
 
+    // The text this test types — ONE constant, filled and asserted, so the
+    // #1877 stale-body check below can never drift from what was typed.
+    const EDITED_BODY = 'z'.repeat(50);
     const editor = page.locator('[data-test-id="okf-md-body"]');
     await expect(editor).toBeVisible({ timeout: 15000 });
-    await editor.fill('z'.repeat(50));
+    await editor.fill(EDITED_BODY);
 
     // Force the save (the autosave is debounced; the button is explicit).
     const save = page.locator('[data-test-id="okf-concept-save"]');
@@ -233,7 +236,6 @@ test.describe('the concept-document ceiling in the concept editor', () => {
     // filled body, so every captured PATCH — the `{ body }` write of an
     // unchanged frontmatter or the `{ markdown }` write of a full page —
     // must carry exactly it.
-    const EDITED_BODY = 'z'.repeat(50);
     const stale = patches
       .map((raw) => JSON.parse(raw))
       .filter((payload) => (payload.body ?? payload.markdown) !== EDITED_BODY);

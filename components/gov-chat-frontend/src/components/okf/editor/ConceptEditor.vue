@@ -2,10 +2,10 @@
   OkfConceptEditor.vue — Story #978 Studio editor center pane.
 
   Loads the selected concept's full meta row (frontmatter + body), composes it
-  into markdown, and edits it in a DsOkfMarkdownEditor with a Source | Rendered
-  toggle (Source default). Save is debounced (1.5s after the last keystroke);
-  the Save button forces it. Emits 'saved' with the server result so the
-  parent can refresh the row.
+  into markdown, and edits it in a DsOkfMarkdownEditor with a Source | Split |
+  Rendered toggle (Rendered default since #1634). Save is debounced (1.5s after
+  the last keystroke); the Save button forces it. Emits 'saved' with the server
+  result so the parent can refresh the row.
 -->
 <template>
   <div class="okf-ce" data-test-id="okf-concept-editor">

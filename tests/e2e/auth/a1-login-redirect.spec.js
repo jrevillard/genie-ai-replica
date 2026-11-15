@@ -8,18 +8,18 @@ const { BASE_URL } = require('../helpers/base-url');
 test('redirects to Keycloak login page when accessing app root', async ({ browser }) => {
   const context = await browser.newContext({
     ignoreHTTPSErrors: true,
-    bypassCSP: true,
+    bypassCSP: true
   });
   const page = await context.newPage();
 
   await page.goto(`${BASE_URL}/`, {
     waitUntil: 'networkidle',
-    timeout: 30000,
+    timeout: 30000
   });
 
   // Wait for redirect to Keycloak OIDC authorization endpoint
   await page.waitForURL('**/protocol/openid-connect/auth**', {
-    timeout: 15000,
+    timeout: 15000
   });
 
   const currentUrl = page.url();
@@ -27,7 +27,7 @@ test('redirects to Keycloak login page when accessing app root', async ({ browse
   // Verify URL contains the Keycloak genie realm auth path
   await expect(
     currentUrl.includes('/auth/realms/genie/protocol/openid-connect/auth'),
-    `Expected URL to contain Keycloak auth path, got: ${currentUrl}`,
+    `Expected URL to contain Keycloak auth path, got: ${currentUrl}`
   ).toBeTruthy();
 
   // Verify Keycloak login form elements are present

@@ -11,15 +11,13 @@ test.describe('getUserToken primary-realm guard', () => {
   test('rejects a missing realm with a message naming the requirement', async () => {
     // Covers a spec copying the call pattern without the realm override —
     // the original trap — and any falsy realm read from an unset env var.
-    await expect(getUserToken('user', 'password')).rejects.toThrow(
-      /realm is required[\s\S]*enableDirectAccessGrants/
-    );
+    await expect(getUserToken('user', 'password')).rejects.toThrow(/realm is required[\s\S]*enableDirectAccessGrants/);
   });
 
   test('rejects the primary realm with the design decision named', async () => {
-    await expect(
-      getUserToken('user', 'password', { realm: 'genie' })
-    ).rejects.toThrow(/refuses ROPC by design[\s\S]*getSessionTokenViaUI/);
+    await expect(getUserToken('user', 'password', { realm: 'genie' })).rejects.toThrow(
+      /refuses ROPC by design[\s\S]*getSessionTokenViaUI/
+    );
   });
 });
 
@@ -92,8 +90,6 @@ test.describe("getAdminToken's no-access_token verdict", () => {
       data: { error: 'upstream unreachable', message: 'the proxy answered in its place' },
       headers: {}
     });
-    await expect(getAdminToken()).rejects.toThrow(
-      /answered 200 without an access_token[\s\S]*upstream unreachable/
-    );
+    await expect(getAdminToken()).rejects.toThrow(/answered 200 without an access_token[\s\S]*upstream unreachable/);
   });
 });

@@ -1,9 +1,6 @@
 const { test } = require('@playwright/test');
 const { BASE_URL } = require('../helpers/base-url');
-const {
-  KEYCLOAK_AUTH_ENDPOINT_GLOB,
-  expectKeycloakLoginForm,
-} = require('../helpers/keycloak-landing');
+const { KEYCLOAK_AUTH_ENDPOINT_GLOB, expectKeycloakLoginForm } = require('../helpers/keycloak-landing');
 
 // Test A.3 — Legacy Routes Redirect
 // Verifies that legacy auth routes (/login, /register, /forgot-password)
@@ -22,20 +19,20 @@ for (const path of LEGACY_ROUTES) {
   test(`legacy route ${path} redirects to the Keycloak login page`, async ({ browser }) => {
     const context = await browser.newContext({
       ignoreHTTPSErrors: true,
-      bypassCSP: true,
+      bypassCSP: true
     });
     const page = await context.newPage();
 
     await page.goto(`${BASE_URL}${path}`, {
       waitUntil: 'networkidle',
-      timeout: 30000,
+      timeout: 30000
     });
 
     // The exact auth endpoint is the fixed landing — a routing regression
     // that parks a legacy route anywhere else fails here (the chain that
     // produces it is narrated in this file's header).
     await page.waitForURL(KEYCLOAK_AUTH_ENDPOINT_GLOB, {
-      timeout: 15000,
+      timeout: 15000
     });
 
     // The login form is the landing proof (helpers/keycloak-landing.js):
@@ -44,7 +41,7 @@ for (const path of LEGACY_ROUTES) {
     // state the redirect exists to produce.
     await expectKeycloakLoginForm(
       page,
-      `Expected the Keycloak login form after visiting ${path}; the browser was last at: ${page.url()}`,
+      `Expected the Keycloak login form after visiting ${path}; the browser was last at: ${page.url()}`
     );
 
     await context.close();

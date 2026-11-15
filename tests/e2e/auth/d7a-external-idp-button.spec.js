@@ -17,25 +17,29 @@ const REALM = process.env.KEYCLOAK_REALM || 'genie';
 // spec SKIPS WITH A REASON instead (#1742). The wiring is the shared
 // registrar's (#1773), stated once.
 test.beforeEach(
-  skipUnlessVenue(test, () => hasIdentityProvider(REALM), () => missingIdentityProviderReason(REALM))
+  skipUnlessVenue(
+    test,
+    () => hasIdentityProvider(REALM),
+    () => missingIdentityProviderReason(REALM)
+  )
 );
 
 test('external IdP button is visible on Keycloak login page', async ({ browser }) => {
   const context = await browser.newContext({
     ignoreHTTPSErrors: true,
-    bypassCSP: true,
+    bypassCSP: true
   });
   const page = await context.newPage();
 
   // Navigate to app root — will redirect to Keycloak login
   await page.goto(`${BASE_URL}/`, {
     waitUntil: 'networkidle',
-    timeout: 30000,
+    timeout: 30000
   });
 
   // Wait for Keycloak login page
   await page.waitForURL('**/protocol/openid-connect/auth**', {
-    timeout: 15000,
+    timeout: 15000
   });
 
   // Wait for Keycloak login page to fully render (social providers section loads after form)
@@ -45,8 +49,8 @@ test('external IdP button is visible on Keycloak login page', async ({ browser }
   const links = await page.evaluate(() =>
     Array.from(document.querySelectorAll('a')).map((a) => ({
       text: a.textContent.trim(),
-      href: a.href,
-    })),
+      href: a.href
+    }))
   );
 
   // Look for the external IdP link by display text
@@ -54,7 +58,7 @@ test('external IdP button is visible on Keycloak login page', async ({ browser }
 
   expect(
     hasExternalIdpLink,
-    `Expected to find an 'External IdP' link on the login page. External IdP not configured? Run Phase D Steps 1-5 first. Found links: ${JSON.stringify(links)}`,
+    `Expected to find an 'External IdP' link on the login page. External IdP not configured? Run Phase D Steps 1-5 first. Found links: ${JSON.stringify(links)}`
   ).toBeTruthy();
 
   // Also verify the social login link element exists (Keycloak uses id="social-external-idp")
@@ -65,7 +69,7 @@ test('external IdP button is visible on Keycloak login page', async ({ browser }
   const socialLinkHref = await socialLink.getAttribute('href');
   expect(
     socialLinkHref.includes('broker/external-idp/login'),
-    `Expected broker URL to contain 'broker/external-idp/login', got: ${socialLinkHref}`,
+    `Expected broker URL to contain 'broker/external-idp/login', got: ${socialLinkHref}`
   ).toBeTruthy();
 
   await context.close();

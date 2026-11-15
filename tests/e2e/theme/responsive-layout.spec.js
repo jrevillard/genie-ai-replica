@@ -109,42 +109,45 @@ async function measureLayout(page) {
     };
   }, QUICK_HELP_GRID);
 
-  const layout = await page.evaluate(({ wrapSel, centreSel, leftSel, rightSel, gridSel, itemSel }) => {
-    const wrap = document.querySelector(wrapSel);
-    const centre = document.querySelector(centreSel);
-    const left = document.querySelector(leftSel);
-    const right = document.querySelector(rightSel);
-    const grid = document.querySelector(gridSel);
-    const items = grid ? Array.from(grid.querySelectorAll(itemSel)) : [];
-    const distinctLefts = new Set(items.map((it) => Math.round(it.getBoundingClientRect().left)));
-    const cardWidths = items.map((it) => Math.round(it.getBoundingClientRect().width));
-    const lr = left && left.getBoundingClientRect();
-    const rr = right && right.getBoundingClientRect();
-    const cr = centre && centre.getBoundingClientRect();
-    const gr = grid && grid.getBoundingClientRect();
-    return {
-      viewport: window.innerWidth,
-      scrollWidth: document.documentElement.scrollWidth,
-      wrapWidth: wrap ? Math.round(wrap.getBoundingClientRect().width) : null,
-      centreWidth: cr ? Math.round(cr.width) : null,
-      centreLeft: cr ? Math.round(cr.left) : null,
-      centreRight: cr ? Math.round(cr.right) : null,
-      centreRect: cr ? { left: Math.round(cr.left), right: Math.round(cr.right), width: Math.round(cr.width) } : null,
-      gridWidth: gr ? Math.round(gr.width) : null,
-      leftRect: lr ? { left: Math.round(lr.left), right: Math.round(lr.right), width: Math.round(lr.width) } : null,
-      rightRect: rr ? { left: Math.round(rr.left), right: Math.round(rr.right), width: Math.round(rr.width) } : null,
-      columnCount: distinctLefts.size,
-      cardWidths,
-      cardMin: Math.min(...(cardWidths.length ? cardWidths : [0]))
-    };
-  }, {
-    wrapSel: '[data-test-id="main-container"]',
-    centreSel: '[data-test-id="chatbot-container"]',
-    leftSel: SIDEBAR_LEFT,
-    rightSel: SIDEBAR_RIGHT,
-    gridSel: QUICK_HELP_GRID,
-    itemSel: QUICK_HELP_ITEM
-  });
+  const layout = await page.evaluate(
+    ({ wrapSel, centreSel, leftSel, rightSel, gridSel, itemSel }) => {
+      const wrap = document.querySelector(wrapSel);
+      const centre = document.querySelector(centreSel);
+      const left = document.querySelector(leftSel);
+      const right = document.querySelector(rightSel);
+      const grid = document.querySelector(gridSel);
+      const items = grid ? Array.from(grid.querySelectorAll(itemSel)) : [];
+      const distinctLefts = new Set(items.map((it) => Math.round(it.getBoundingClientRect().left)));
+      const cardWidths = items.map((it) => Math.round(it.getBoundingClientRect().width));
+      const lr = left && left.getBoundingClientRect();
+      const rr = right && right.getBoundingClientRect();
+      const cr = centre && centre.getBoundingClientRect();
+      const gr = grid && grid.getBoundingClientRect();
+      return {
+        viewport: window.innerWidth,
+        scrollWidth: document.documentElement.scrollWidth,
+        wrapWidth: wrap ? Math.round(wrap.getBoundingClientRect().width) : null,
+        centreWidth: cr ? Math.round(cr.width) : null,
+        centreLeft: cr ? Math.round(cr.left) : null,
+        centreRight: cr ? Math.round(cr.right) : null,
+        centreRect: cr ? { left: Math.round(cr.left), right: Math.round(cr.right), width: Math.round(cr.width) } : null,
+        gridWidth: gr ? Math.round(gr.width) : null,
+        leftRect: lr ? { left: Math.round(lr.left), right: Math.round(lr.right), width: Math.round(lr.width) } : null,
+        rightRect: rr ? { left: Math.round(rr.left), right: Math.round(rr.right), width: Math.round(rr.width) } : null,
+        columnCount: distinctLefts.size,
+        cardWidths,
+        cardMin: Math.min(...(cardWidths.length ? cardWidths : [0]))
+      };
+    },
+    {
+      wrapSel: '[data-test-id="main-container"]',
+      centreSel: '[data-test-id="chatbot-container"]',
+      leftSel: SIDEBAR_LEFT,
+      rightSel: SIDEBAR_RIGHT,
+      gridSel: QUICK_HELP_GRID,
+      itemSel: QUICK_HELP_ITEM
+    }
+  );
 
   // Derived: the column-count the invariant says we should have.
   // clamp(1, floor((P + G) / (M + G)), 4).
@@ -316,14 +319,8 @@ test.describe('Welcome panel does not scroll horizontally', () => {
         try {
           const m = await readWelcomePanel(page);
           expect(m.hasOverlay, 'welcome overlay should be present in the DOM').toBe(true);
-          expect(
-            m.visualOn,
-            'data-visual="on" must be set for the wave layer to render'
-          ).toBe(true);
-          expect(
-            m.gliOn,
-            'the dashboard wrapper must be an ancestor of the panel for the wave layer'
-          ).toBe(true);
+          expect(m.visualOn, 'data-visual="on" must be set for the wave layer to render').toBe(true);
+          expect(m.gliOn, 'the dashboard wrapper must be an ancestor of the panel for the wave layer').toBe(true);
 
           // 1. the property that decides whether the panel draws a
           //    horizontal scrollbar.

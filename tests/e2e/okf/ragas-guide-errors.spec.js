@@ -95,10 +95,7 @@ test.describe('the RAGAS guide documents what each error state does to the resul
     await expect(studioTab, 'the OKF Studio tab must be reachable').toBeVisible({ timeout: 20000 });
     await studioTab.click();
 
-    const card = page
-      .locator('[data-test-id^="okf-studio-card-"]')
-      .filter({ hasText: REPO_NAME })
-      .first();
+    const card = page.locator('[data-test-id^="okf-studio-card-"]').filter({ hasText: REPO_NAME }).first();
     await expect(card, `the ${REPO_NAME} repo card must be listed`).toBeVisible({ timeout: 20000 });
     const testingLab = card.getByRole('button', { name: /Testing Lab/i }).first();
     await expect(testingLab, 'the Testing Lab button must be on the card').toBeVisible({ timeout: 20000 });

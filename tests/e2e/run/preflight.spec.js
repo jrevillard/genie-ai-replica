@@ -99,9 +99,9 @@ test.describe('the pre-flight NAMES a cause it cannot use', () => {
           ...process.env,
           E2E_VENUE_IP: 'not an address',
           E2E_VENUE_HOST: 'venue.example',
-          NODE_OPTIONS: `--require ${preload}`,
+          NODE_OPTIONS: `--require ${preload}`
         },
-        stdio: ['ignore', 'pipe', 'pipe'],
+        stdio: ['ignore', 'pipe', 'pipe']
       });
     } catch (e) {
       stderr = String(e.stderr || '');
@@ -184,7 +184,13 @@ function withStubbedRunner(fn, venueAnswers = 'no') {
       execFileSync(process.execPath, [path.join(root, 'run', 'preflight.js')], {
         // The mapping is the case's business, not the developer's shell:
         // an ambient E2E_VENUE_IP (or an invalid one) would hijack it.
-        env: { ...process.env, BASE_URL: VENUE, E2E_VENUE_IP: '', E2E_VENUE_HOST: '', STUB_VENUE_ANSWERS: venueAnswers },
+        env: {
+          ...process.env,
+          BASE_URL: VENUE,
+          E2E_VENUE_IP: '',
+          E2E_VENUE_HOST: '',
+          STUB_VENUE_ANSWERS: venueAnswers
+        },
         stdio: ['ignore', 'pipe', 'pipe']
       });
     } catch (e) {
@@ -225,15 +231,12 @@ test.describe('the pre-flight reports a FAILED CLEANUP', () => {
     // failed, so the exit code belongs to the CLEANUP. A cleanup that
     // left the run at 0 would let the suite start against a browser
     // nobody closed.
-    withStubbedRunner(
-      ({ stderr, code }) => {
-        expect(stderr).toContain('pre-flight: the browser could not close.');
-        expect(stderr).toContain('the stub could not close');
-        // There was no other cause: the venue answered.
-        expect(stderr).not.toContain('pre-flight: the browser could not open the venue.');
-        expect(code).toBe(1);
-      },
-      'yes'
-    );
+    withStubbedRunner(({ stderr, code }) => {
+      expect(stderr).toContain('pre-flight: the browser could not close.');
+      expect(stderr).toContain('the stub could not close');
+      // There was no other cause: the venue answered.
+      expect(stderr).not.toContain('pre-flight: the browser could not open the venue.');
+      expect(code).toBe(1);
+    }, 'yes');
   });
 });

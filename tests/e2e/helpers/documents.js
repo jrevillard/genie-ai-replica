@@ -38,7 +38,7 @@ async function navigateToDocumentManagement(page) {
   await loginViaUI(page, TEST_ADMIN_USER);
   await page.goto(`${BASE_URL}/admin`, {
     waitUntil: 'networkidle',
-    timeout: 30000,
+    timeout: 30000
   });
 
   // UX-1 (#1512) replaced the sidebar nav rail with the tab rack: the
@@ -145,10 +145,13 @@ function matchesStatus(file, status) {
  */
 async function waitForTableRowsSettled(page, filesResponse, { status = 'all' } = {}) {
   const payload = (await filesResponse.json()).data || [];
-  const expectedNames = payload.filter((f) => matchesStatus(f, status)).map((f) => f.file_name).sort();
+  const expectedNames = payload
+    .filter((f) => matchesStatus(f, status))
+    .map((f) => f.file_name)
+    .sort();
   await expect
     .poll(async () => (await getDocumentTableRows(page)).map((r) => r.fileName).sort(), {
-      timeout: 10000,
+      timeout: 10000
     })
     .toEqual(expectedNames);
 }
@@ -172,16 +175,19 @@ async function searchDocuments(page, query) {
   // background refresh or another control's request (including the
   // clear's own, whose search param differs) cannot answer for this
   // search. A missed response fails here: the request IS the search.
-  const filesResponsePromise = page.waitForResponse((r) => {
-    if (!r.url().includes('/api/files')) return false;
-    const match = r.url().match(/[?&]search=([^&]*)/);
-    // `+` is a space in query-string form encoding; decode it before
-    // comparing, or a two-word query never matches its own response.
-    const decoded = match ? decodeURIComponent(match[1].replace(/\+/g, '%20')) : '';
-    return decoded === (query || '');
-  }, {
-    timeout: 5000,
-  });
+  const filesResponsePromise = page.waitForResponse(
+    (r) => {
+      if (!r.url().includes('/api/files')) return false;
+      const match = r.url().match(/[?&]search=([^&]*)/);
+      // `+` is a space in query-string form encoding; decode it before
+      // comparing, or a two-word query never matches its own response.
+      const decoded = match ? decodeURIComponent(match[1].replace(/\+/g, '%20')) : '';
+      return decoded === (query || '');
+    },
+    {
+      timeout: 5000
+    }
+  );
   if (query) {
     await searchInput.fill(query);
   }
@@ -321,7 +327,7 @@ async function deleteAllTestDocuments(prefix = 'test-document', { browser } = {}
       const file_id = f.file_id || f._key || f.id;
       try {
         const res = await request('DELETE', `/api/files/${file_id}`, {
-          headers: { Authorization: `Bearer ${token}` },
+          headers: { Authorization: `Bearer ${token}` }
         });
         if (res.status < 200 || res.status >= 300) {
           return res.status === 401
@@ -366,9 +372,9 @@ async function deleteAllTestDocuments(prefix = 'test-document', { browser } = {}
             `last enumerated page, if any, was not removed`
         : pagesRead > 0
           ? `the population size is unknown — the sweep read full pages, so a prefix-matching file ` +
-              `beyond the last enumerated page, if any, was not removed`
+            `beyond the last enumerated page, if any, was not removed`
           : `the population size is unknown and the sweep read NOTHING — no prefix-matching file ` +
-              `can be accounted for, and any of them may remain`
+            `can be accounted for, and any of them may remain`
     );
   }
   if (problems.length > 0) {
@@ -388,5 +394,5 @@ module.exports = {
   waitForTableRowsSettled,
   getDocumentTableRows,
   deleteAllTestDocuments,
-  matchesStatus,
+  matchesStatus
 };

@@ -102,17 +102,15 @@ test.describe('the OKF probe reads the venue like the frontend reads it', () => 
     fakeTransport([
       {
         status: 200,
-        data: '// okfEnabled: "1" turns the Studio on\nwindow.APP_CONFIG = {\n  okfEnabled: "0",\n};\n',
-      },
+        data: '// okfEnabled: "1" turns the Studio on\nwindow.APP_CONFIG = {\n  okfEnabled: "0",\n};\n'
+      }
     ]);
     const profile = freshProfile();
     expect(await profile.okfEnabled()).toBe(false);
   });
 
   test('a foreign key that merely contains the name is not the knob', async () => {
-    fakeTransport([
-      { status: 200, data: 'window.APP_CONFIG = {\n  notOkfEnabled: "1",\n  okfEnabled: "0",\n};\n' },
-    ]);
+    fakeTransport([{ status: 200, data: 'window.APP_CONFIG = {\n  notOkfEnabled: "1",\n  okfEnabled: "0",\n};\n' }]);
     const profile = freshProfile();
     expect(await profile.okfEnabled()).toBe(false);
   });
@@ -138,7 +136,7 @@ test.describe('the OKF probe reads the venue like the frontend reads it', () => 
   test('a failed probe is not cached: the next read sees the venue again', async () => {
     const calls = fakeTransport([
       { throws: new Error('connection reset') },
-      { status: 200, data: 'window.APP_CONFIG = {\n  okfEnabled: "0",\n};\n' },
+      { status: 200, data: 'window.APP_CONFIG = {\n  okfEnabled: "0",\n};\n' }
     ]);
     const profile = freshProfile();
     await expect(profile.okfEnabled()).rejects.toThrow(/connection reset/);
@@ -215,27 +213,43 @@ test.describe('the venue-skip wiring (#1773)', () => {
 
   test('skipUnlessVenue skips with the reason when the probe fails', async () => {
     const testApi = fakeTest();
-    const hook = freshProfile().skipUnlessVenue(testApi, async () => false, () => 'the surface is absent');
+    const hook = freshProfile().skipUnlessVenue(
+      testApi,
+      async () => false,
+      () => 'the surface is absent'
+    );
     await hook();
     expect(testApi.calls).toEqual([{ condition: true, description: 'the surface is absent' }]);
   });
 
   test('skipUnlessVenue calls skip(false) when the probe holds', async () => {
     const testApi = fakeTest();
-    const hook = freshProfile().skipUnlessVenue(testApi, async () => true, () => 'unused');
+    const hook = freshProfile().skipUnlessVenue(
+      testApi,
+      async () => true,
+      () => 'unused'
+    );
     await hook();
     expect(testApi.calls).toEqual([{ condition: false, description: 'unused' }]);
   });
 
   test('skipUnlessVenue awaits an async reason', async () => {
     const testApi = fakeTest();
-    await freshProfile().skipUnlessVenue(testApi, async () => false, async () => 'async reason')();
+    await freshProfile().skipUnlessVenue(
+      testApi,
+      async () => false,
+      async () => 'async reason'
+    )();
     expect(testApi.calls.map((c) => c.description)).toEqual(['async reason']);
   });
 
   test('skipUnlessVenue passes the probe verdict through, not its inverse', async () => {
     const testApi = fakeTest();
-    await freshProfile().skipUnlessVenue(testApi, async () => 'truthy-but-not-boolean', () => 'r')();
+    await freshProfile().skipUnlessVenue(
+      testApi,
+      async () => 'truthy-but-not-boolean',
+      () => 'r'
+    )();
     expect(testApi.calls[0].condition).toBe(false);
   });
 });

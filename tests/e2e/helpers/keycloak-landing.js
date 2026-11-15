@@ -29,7 +29,7 @@ async function waitForRealmAuthEndpoint(page, timeout = 30000) {
         urlStr.includes('/auth/realms/genie/protocol/openid-connect/auth')
       );
     },
-    { timeout },
+    { timeout }
   );
 }
 
@@ -46,5 +46,5 @@ async function expectKeycloakLoginForm(page, message) {
 module.exports = {
   KEYCLOAK_AUTH_ENDPOINT_GLOB,
   waitForRealmAuthEndpoint,
-  expectKeycloakLoginForm,
+  expectKeycloakLoginForm
 };

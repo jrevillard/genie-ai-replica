@@ -41,7 +41,6 @@ const {
   QUICK_HELP_GRID_ITEM
 } = require('../helpers/layout');
 
-
 // The centre's usable minimum, from the quick-help grid's own
 // arithmetic: two cards of 217 px plus one 32 px gap = 466 px, so 480
 // px is the next whole number above it. Mirrors CENTRE_MIN_WIDTH in
@@ -242,16 +241,19 @@ test.describe('Resizable sidebars behind one handle', () => {
       await expect(strip).toHaveAttribute('aria-valuenow', /\d+/);
       await expect(page.locator(buttonSel)).toHaveJSProperty('tagName', 'BUTTON');
 
-      const cursors = await page.evaluate(({ stripSel: s, buttonSel: bs }) => {
-        const strip = document.querySelector(s);
-        const button = document.querySelector(bs);
-        return {
-          strip: getComputedStyle(strip).cursor,
-          button: getComputedStyle(button).cursor,
-          stripTouch: getComputedStyle(strip).touchAction,
-          buttonTouch: getComputedStyle(button).touchAction
-        };
-      }, { stripSel, buttonSel });
+      const cursors = await page.evaluate(
+        ({ stripSel: s, buttonSel: bs }) => {
+          const strip = document.querySelector(s);
+          const button = document.querySelector(bs);
+          return {
+            strip: getComputedStyle(strip).cursor,
+            button: getComputedStyle(button).cursor,
+            stripTouch: getComputedStyle(strip).touchAction,
+            buttonTouch: getComputedStyle(button).touchAction
+          };
+        },
+        { stripSel, buttonSel }
+      );
       expect(cursors.strip, `${stripSel}: the strip must advertise the drag`).toBe('col-resize');
       expect(cursors.button, `${buttonSel}: the chevron must advertise the drag too, not a click`).toBe('col-resize');
       // Without `touch-action: none` the browser claims a touch drag
@@ -284,7 +286,6 @@ test.describe('Resizable sidebars behind one handle', () => {
         'sidebar-handle'
       );
     }
-
   });
 
   test('the three controls name their own side', async ({ page }) => {
@@ -497,14 +498,18 @@ test.describe('Resizable sidebars behind one handle', () => {
     await page.locator(LEFT_HANDLE_BUTTON).click();
     // The collapse persists its state; the assertion waits for the
     // write rather than assuming it has landed.
-    await expect.poll(async () => (await storedOpen(page)).left, {
-      timeout: 15000,
-    }).toBe('false');
+    await expect
+      .poll(async () => (await storedOpen(page)).left, {
+        timeout: 15000
+      })
+      .toBe('false');
 
     await page.locator(RIGHT_HANDLE_BUTTON).click();
-    await expect.poll(async () => (await storedOpen(page)).right, {
-      timeout: 15000,
-    }).toBe('false');
+    await expect
+      .poll(async () => (await storedOpen(page)).right, {
+        timeout: 15000
+      })
+      .toBe('false');
 
     await page.reload({ waitUntil: 'networkidle' });
     await page.waitForSelector('[data-testid="sidebar-handle-left"]', { timeout: 15000 });
@@ -518,10 +523,12 @@ test.describe('Resizable sidebars behind one handle', () => {
     await page.locator(RIGHT_HANDLE_BUTTON).click();
     // The expansions persist their state; wait for both writes.
     // Expanding stores "true" on both keys.
-    await expect.poll(() => storedOpen(page), { timeout: 15000 }).toEqual({
-      left: 'true',
-      right: 'true'
-    });
+    await expect
+      .poll(() => storedOpen(page), { timeout: 15000 })
+      .toEqual({
+        left: 'true',
+        right: 'true'
+      });
 
     await page.reload({ waitUntil: 'networkidle' });
     await page.waitForSelector('[data-testid="sidebar-handle-left"]', { timeout: 15000 });
@@ -671,9 +678,10 @@ test.describe('Resizable sidebars behind one handle', () => {
     await page.setViewportSize({ width: 1024, height: 800 });
     await waitForWidthSettled(page, [LEFT, RIGHT]);
 
-    const spaceLg = parseFloat(
-      await page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue('--space-lg'))
-    ) || 24;
+    const spaceLg =
+      parseFloat(
+        await page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue('--space-lg'))
+      ) || 24;
 
     const b = await page.evaluate(() => {
       const overlay = document.querySelector('[data-testid="quick-help-overlay"]');
@@ -705,10 +713,9 @@ test.describe('Resizable sidebars behind one handle', () => {
         `overlay's padding, so the intentional +48 px width no longer has padding to ` +
         `absorb it); measured right bleed = ${rightBleed}px`
     ).toBeGreaterThanOrEqual(spaceLg - 2);
-    expect(
-      leftBleed,
-      `same on the left side; measured left bleed = ${leftBleed}px`
-    ).toBeLessThanOrEqual(-(spaceLg - 2));
+    expect(leftBleed, `same on the left side; measured left bleed = ${leftBleed}px`).toBeLessThanOrEqual(
+      -(spaceLg - 2)
+    );
     // And the clipper is what keeps the bleed from becoming a scrollbar —
     // the WELCOME OVERLAY's `overflow-x`, owned by the welcome-panel
     // describe in `responsive-layout.spec.js` (8 viewports x 2 themes,
@@ -936,8 +943,7 @@ test.describe('Resizable sidebars behind one handle', () => {
       [RIGHT_HANDLE, 'right', 320]
     ]) {
       // Move away from the default so the restore is observable.
-      await dragHandle(page, handleSel, panelKey === 'left' ? 150 : -150,
-        panelKey === 'left' ? LEFT : RIGHT);
+      await dragHandle(page, handleSel, panelKey === 'left' ? 150 : -150, panelKey === 'left' ? LEFT : RIGHT);
       expect((await measure(page))[panelKey].width, `${panelKey} should have moved off its default`).not.toBe(expected);
 
       // Double-click the STRIP, off the button. `locator.dblclick()`

@@ -26,12 +26,7 @@ const COMPONENT_ERROR_TEXT = 'Failed to load system health data';
 // listed rather than counted with a prefix selector: the value elements
 // carry their own `stat-*-value` handles, so a prefix match would
 // resolve to eight elements.
-const STAT_TILES = [
-  'stat-system-uptime',
-  'stat-avg-response-time',
-  'stat-error-rate',
-  'stat-monthly-active-users',
-];
+const STAT_TILES = ['stat-system-uptime', 'stat-avg-response-time', 'stat-error-rate', 'stat-monthly-active-users'];
 
 test.describe('Admin overview failure states', () => {
   // The login helper's own worst case (two attempts, navigation +
@@ -54,8 +49,8 @@ test.describe('Admin overview failure states', () => {
       route.fulfill({
         status,
         contentType: 'application/json',
-        body: JSON.stringify({ error, message }),
-      }),
+        body: JSON.stringify({ error, message })
+      })
     );
     await page.goto(`${BASE_URL}/admin`, { waitUntil: 'domcontentloaded' });
   }
@@ -103,11 +98,11 @@ test.describe('Admin overview failure states', () => {
             systemUptime: 42.42,
             avgResponseTime: 7,
             errorRate: 0.5,
-            monthlyActiveUsers: 3,
+            monthlyActiveUsers: 3
           },
           healthServices: [],
-          resourceUsage: {},
-        }),
+          resourceUsage: {}
+        })
       });
     });
 

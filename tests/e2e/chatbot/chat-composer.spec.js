@@ -13,16 +13,17 @@
 //       1 in the chat view (0 on the welcome screen) — the two counts
 //       are the source of truth, never both 1.
 //
-//   (B) The composer IS the just-chat config entry. The runtime
-//       config carries a placement field whose only valid values
-//       are `tile` and `composer`; the spec fetches the served
-//       config and asserts `placement: "composer"` on the just-chat
-//       entry, and asserts the entry's icon src, background tint
-//       and localised title reach the rendered composer — the
-//       composer's leading `<img>` reads `/config/quickhelp/
-//       just-chat.svg`, its visible background resolves to the
-//       entry's `styles.backgroundColor`, and its accessible name
-//       is the entry's localised title.
+//   (B) The composer IS the just-chat config entry. The runtime config
+//       carries a placement field whose only valid values are `tile`
+//       and `composer`, and the grid holds exactly the tile entries —
+//       the placement filter's contract, asserted against THIS spec's
+//       own served fixture (GRID_BUTTONS below), never the deployed
+//       venue's seed content. What the SHIPPED config files declare
+//       (just-chat placement "composer", the schema's two-value enum)
+//       is pinned by the Jest suite
+//       (src/__tests__/config-quickhelp-contract.test.js); the
+//       rendered composer's tint, leading mark and accessible name are
+//       asserted below against whatever config the venue serves.
 //
 //   (C) The send pathway reproduces the previous "Just Chat"
 //       behaviour (no label filter, conversation preserved) and
@@ -37,8 +38,8 @@
 // focus) — never `dispatchEvent`, which bypasses Chromium's
 // hit-testing and focus routing.
 //
-// Mutation-test scaffolds for the three contract points (placement
-// field, send gating, single mounted composer) are exercised by
+// Mutation-test scaffolds for the contract points (placement filter,
+// send gating, single mounted composer) are exercised by
 // changing the source, running this spec, and verifying it
 // observes the change.
 
@@ -47,6 +48,7 @@ const fs = require('fs');
 const path = require('path');
 const { openWelcomeScreen } = require('../helpers/welcome');
 const { QUICK_HELP_GRID_ITEM } = require('../helpers/layout');
+const { quickHelpButton, stubQuickHelpConfiguration, stubQuickHelpHierarchy } = require('../helpers/quick-help-stubs');
 
 const { BASE_URL } = require('../helpers/base-url');
 
@@ -101,6 +103,43 @@ async function freshSignedIn(browser, viewport = { width: 1440, height: 900 }, t
   return { ctx, page };
 }
 
+/*
+ * The grid-count fixture: the configuration this spec serves itself, so
+ * the grid's count and the placement filter are asserted against a FIXED
+ * contract instead of whatever the deployed venue happened to seed (#1826
+ * — a differently-seeded venue reds a deployment-content binding for the
+ * wrong reason). The shared stub recipe serves the buttons below; the
+ * stubbed document keeps its own schema, so the frontend's Ajv
+ * validation still runs on it.
+ *
+ * One composer entry titled "Just Chat" (the id every deployment uses
+ * for it, a title match for the grid's negative below) plus eight
+ * scope-less tiles: the count the grid must hold, with none of the
+ * tiles named anything like "just chat" — so a placement filter that
+ * leaks the composer entry into the grid breaks BOTH assertions (nine
+ * tiles, one of them matching the negative).
+ */
+const GRID_BUTTONS = [
+  quickHelpButton({ id: 'just-chat', placement: 'composer' }),
+  ...[1, 2, 3, 4, 5, 6, 7, 8].map((n) => quickHelpButton({ id: `e2e-grid-tile-${n}`, title: `Grid Card ${n}` }))
+];
+
+/**
+ * Sign in and land on the dashboard with THIS spec's grid fixture served
+ * — the sibling recipe (helpers/quick-help-stubs.js), installed before
+ * the login so the first chat mount already sees it.
+ */
+async function freshSignedInWithGridFixture(browser) {
+  const { ctx, page } = await openWelcomeScreen(browser, {
+    setupPage: async (page) => {
+      await stubQuickHelpConfiguration(page, GRID_BUTTONS);
+      await stubQuickHelpHierarchy(page, []);
+    }
+  });
+  await page.waitForSelector('[data-testid="welcome-composer"]', { timeout: 15000 });
+  return { ctx, page };
+}
+
 // -------- one mounted at a time --------
 
 test.describe('chat-composer mounted state', () => {
@@ -124,7 +163,9 @@ test.describe('chat-composer mounted state', () => {
     const composerCenterY = await welcome.evaluate(
       (el) => el.getBoundingClientRect().top + el.getBoundingClientRect().height / 2
     );
-    const gridTop = await page.locator('[data-testid="quick-help-grid"]').evaluate((el) => el.getBoundingClientRect().top);
+    const gridTop = await page
+      .locator('[data-testid="quick-help-grid"]')
+      .evaluate((el) => el.getBoundingClientRect().top);
     expect(
       bannerTop < composerCenterY && composerCenterY < gridTop,
       `banner(${bannerTop}) < composer(${composerCenterY}) < grid(${gridTop})`
@@ -238,16 +279,21 @@ test.describe('composer send pathway', () => {
 // -------- grid (just-chat excluded) --------
 
 test.describe('grid after placement extraction', () => {
-  test('grid holds eight tiles; just-chat is not among them', async ({ browser }) => {
-    const { ctx, page } = await freshSignedIn(browser);
+  // The configuration is the spec's OWN fixture (see GRID_BUTTONS): the
+  // count and the negative below are the placement filter's contract,
+  // not the deployed venue's seed content.
+  test('grid holds exactly the fixture tiles; the composer entry is not among them', async ({ browser }) => {
+    const { ctx, page } = await freshSignedInWithGridFixture(browser);
     await page.goto(`${BASE_URL}/dashboard`, { waitUntil: 'networkidle', timeout: 30000 });
     await page.waitForSelector(QUICK_HELP_GRID_ITEM, { timeout: 15000 });
     // The Living Intelligence entrance animation mounts the tiles over
     // ~650 ms — the count assertion waits out the whole entrance.
     await expect(page.locator(QUICK_HELP_GRID_ITEM)).toHaveCount(8);
 
-    // The "just chat" string is the entry's localised title. A tile that
-    // still carries it would mean the placement filter bypassed the grid.
+    // The fixture's composer entry is TITLED "Just Chat" — the very text
+    // a filter bypass would leak into the grid. A tile carrying it (or
+    // any title matching it) means the placement filter bypassed the
+    // grid; the count above already broke, this names the leaked card.
     const tiles = page.locator(QUICK_HELP_GRID_ITEM);
     const justChatTexts = await tiles.evaluateAll((nodes) => nodes.map((n) => n.textContent.trim()));
     const hasJustChatTile = justChatTexts.some((t) => /just.{0,2}chat/i.test(t));
@@ -257,24 +303,17 @@ test.describe('grid after placement extraction', () => {
 });
 
 // -------- config + composer identity --------
+//
+// The deployed venue's own config content is NOT asserted here: the
+// served document belongs to the deployment (demo-seed variants and
+// customer configs replace it — #1826), so what the shipped files
+// declare is pinned by the Jest suite instead
+// (config-quickhelp-contract.test.js — just-chat placement, the schema
+// enum and the placement vocabulary, across every shipped configuration).
+// What remains below asserts the RENDERED composer, which this file's
+// sessions read through whatever config the venue serves.
 
 test.describe('config / composer identity', () => {
-  test('runtime config has placement="composer" on the just-chat entry', async ({ request }) => {
-    const r = await request.get(`${BASE_URL}/config/genie-ai-config.json`);
-    expect(r.status()).toBe(200);
-    const cfg = await r.json();
-    const buttons = cfg?.features?.chat?.quickHelp?.buttons || [];
-    const jc = buttons.find((b) => b.id === 'just-chat');
-    expect(jc, 'just-chat entry exists').toBeTruthy();
-    expect(jc.placement, `placement field on just-chat (got ${jc.placement})`).toBe('composer');
-    // Confirm the schema declared the field, otherwise the config is junk.
-    const prop =
-      cfg?.properties?.features?.properties?.chat?.properties?.quickHelp?.properties?.buttons?.items?.properties
-        ?.placement;
-    expect(prop, 'placement is in the button schema').toBeTruthy();
-    expect(prop.enum, 'placement has an enum').toEqual(expect.arrayContaining(['tile', 'composer']));
-  });
-
   test("welcome composer carries the reference's leading mark, the entry's tint and its accessible name", async ({
     browser
   }) => {
@@ -380,9 +419,12 @@ test.describe('config / composer identity', () => {
 
     const sendBtn = page.locator('[data-testid="composer-send-btn"]');
     await expect(sendBtn).toBeDisabled();
-    const sendTitle = await sendBtn.getAttribute('title');
+    // The accessible name is the aria-label — the one mechanism the
+    // accessibility tree reads; the title attribute is tooltip copy the
+    // composer also renders, and pinning either-or would accept a button
+    // whose name mechanism regressed.
     const sendLabel = await sendBtn.getAttribute('aria-label');
-    expect((sendTitle || sendLabel || '').trim().length > 0, 'send has accessible name').toBe(true);
+    expect((sendLabel || '').trim().length > 0, 'send aria-label (the accessible name)').toBe(true);
 
     // Filling the field enables the button.
     const field = page.locator('[data-testid="welcome-composer"] textarea');
@@ -477,9 +519,7 @@ test.describe('composer field', () => {
     await expect
       .poll(
         () =>
-          page.evaluate(
-            () => getComputedStyle(document.querySelector('[data-testid="welcome-composer"]')).boxShadow
-          ),
+          page.evaluate(() => getComputedStyle(document.querySelector('[data-testid="welcome-composer"]')).boxShadow),
         { timeout: 5000 }
       )
       .not.toBe('none');

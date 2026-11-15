@@ -4,11 +4,7 @@ const { expect } = require('@playwright/test');
 // (tests/e2e/provision-e2e-fixtures.js) creates, so a credential is
 // written once. Re-exported here for the specs that import credentials
 // alongside the login helpers.
-const {
-  TEST_USER,
-  TEST_ADMIN_USER,
-  TEST_PLAIN_USER,
-} = require('./e2e-fixtures');
+const { TEST_USER, TEST_ADMIN_USER, TEST_PLAIN_USER } = require('./e2e-fixtures');
 const { runPostOnlyRouteHandler } = require('./route');
 // The venue's edge lives in its own module (helpers/base-url.js): a spec
 // that needs the edge but no credential requires it from there, so the
@@ -22,6 +18,7 @@ const { BASE_URL } = require('./base-url');
 // re-typing them.
 const MESSAGE_ROW = '[data-testid^="chat-message-"]';
 const BOT_BUBBLE = '[data-testid="chat-message-bot"] [data-testid="message-bubble-bot"]';
+const USER_BUBBLE = '[data-testid="chat-message-user"] [data-testid="message-bubble-user"]';
 const NAV_STATUS = '[data-testid="nav-status"]';
 const CHAT_TITLE_INPUT = '[data-testid="chat-title"]';
 
@@ -238,12 +235,16 @@ function readStreamingState() {
   if (!store) return { state: 'no-store' };
   if (!hasGetter) return { state: 'no-getter' };
   if (!open) return { state: 'no-open-conversation' };
-  // Only what the decision needs: each message's sender and streaming
-  // flag. The whole conversation would cross the wire on every poll tick
-  // — and WHICH messages are the bot's is decided on this side, where it
-  // is unit tested.
+  // Only what the decision needs: each message's sender, streaming flag
+  // and the metadata frame's responseTime. The whole conversation would
+  // cross the wire on every poll tick — and WHICH messages are the bot's
+  // is decided on this side, where it is unit tested.
   const messages = open.messages
-    ? open.messages.map((m) => ({ sender: m.sender, isStreaming: m.isStreaming }))
+    ? open.messages.map((m) => ({
+        sender: m.sender,
+        isStreaming: m.isStreaming,
+        responseTime: m.metadata ? m.metadata.responseTime : undefined
+      }))
     : [];
   return { state: 'ok', messages };
 }
@@ -303,6 +304,43 @@ function streamingFlagOf(read) {
   // finished" and end the wait before the answer existed.
   if (last === undefined || last.isStreaming === undefined) return null;
   return last.isStreaming;
+}
+
+// The sentinel lastBotResponseTimeOf returns when the read cannot see a
+// completed turn: a broken store contract (no store, no getter) or an
+// absent read. `undefined` cannot serve — it is also what a turn whose
+// metadata frame has not landed reports, and the caller must tell a
+// broken contract apart from a value that is legitimately not there.
+const NOT_READABLE = Symbol('not-readable');
+
+/**
+ * The metadata frame's responseTime of the last bot message, from a read
+ * of the store's public getter (the same shape streamingFlagOf decides
+ * on). Pure, and OUT of the page — the same decider pattern, so the
+ * read's named causes stay decidable where they are unit tested:
+ *
+ * - NOT readable states (no store / no getter / not booted) are the
+ *   caller's to report: a broken store contract is not "no response time";
+ * - a turn with no bot answer yet, or a bot row carrying no responseTime
+ *   (the welcome bubble carries no metadata), reports `undefined` — not a
+ *   contract break. On a COMPLETED turn the frame's field is already
+ *   there: the wire delivers the metadata frame before done, and the
+ *   store commits frames in arrival order, so a cleared streaming flag
+ *   implies the metadata commit has landed. No caller needs to poll past
+ *   the flag for it.
+ *
+ * @param {{state: string, messages?: object[]}} read - what the page read
+ * @returns {number|undefined|symbol} the response time, undefined, or NOT_READABLE
+ */
+function lastBotResponseTimeOf(read) {
+  if (!read || (read.state !== 'ok' && read.state !== 'no-open-conversation')) {
+    return NOT_READABLE;
+  }
+  const messages = read.messages || [];
+  const bots = messages.filter((m) => m.sender === 'bot');
+  const last = bots[bots.length - 1];
+  if (last === undefined) return undefined;
+  return last.responseTime;
 }
 
 /**
@@ -372,7 +410,6 @@ async function waitForBotMessage(page, text, { timeout = 30000 } = {}) {
   await expect(page.locator(BOT_BUBBLE).last()).toContainText(text, { timeout });
 }
 
-
 /**
  * Mock the chat answer stream. `chunks` arrive as chunk frames; `metadata`,
  * when given, rides a metadata frame before the done frame. The interception
@@ -403,7 +440,7 @@ async function mockStreamError(page) {
   // branch, so the mock carries no knob for it.
   const body = JSON.stringify({
     error: 'SERVICE_UNAVAILABLE',
-    message: 'RAG pipeline is temporarily unavailable',
+    message: 'RAG pipeline is temporarily unavailable'
   });
   await page.route(
     STREAM_ROUTE,
@@ -431,6 +468,8 @@ module.exports = {
   CHAT_TITLE_INPUT,
   readStreamingState,
   streamingFlagOf,
+  lastBotResponseTimeOf,
+  NOT_READABLE,
   botStreamingFlag,
   loginViaUI,
   navigateToChatbot,
@@ -452,6 +491,7 @@ module.exports = {
   BASE_URL,
   MESSAGE_ROW,
   BOT_BUBBLE,
+  USER_BUBBLE,
   NAV_STATUS,
   STREAM_PATH,
   STREAM_ROUTE

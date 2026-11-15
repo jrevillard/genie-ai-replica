@@ -35,6 +35,18 @@ const SOURCES = [
 
 const readJson = (file) => JSON.parse(fs.readFileSync(file, 'utf8'));
 
+// The shipped variant names of one platform source, in stable order —
+// the listing rule written once (glob, sort), read by every test below.
+const shippedFiles = (source) =>
+  fs
+    .readdirSync(source.dir)
+    .filter((name) => source.pattern.test(name))
+    .sort();
+
+// The quickHelp buttons of one served document — the walk both placement
+// tests share.
+const buttonsOf = (cfg) => cfg?.features?.chat?.quickHelp?.buttons || [];
+
 const assertFileHonoursContract = (dir, name) => {
   try {
     validateQuickHelpButtons(readJson(path.join(dir, name)));
@@ -61,14 +73,98 @@ describe('Quick Help button contract across every shipped configuration', () => 
   it.each(SOURCES.map((source) => [source.label, source]))(
     '%s: every button carries a unique non-blank string id',
     (_label, source) => {
-      const files = fs
-        .readdirSync(source.dir)
-        .filter((name) => source.pattern.test(name))
-        .sort();
-
-      for (const name of files) {
+      for (const name of shippedFiles(source)) {
         assertFileHonoursContract(source.dir, name);
       }
     }
   );
+
+  // The placement vocabulary, on both platforms: the field a button
+  // declares decides WHERE it renders — a tile in the welcome grid or
+  // the composer entry that replaces the Just Chat action. Both readers
+  // compare STRICTLY (`placement === 'composer'`): a misspelled or
+  // non-string value silently renders a tile on the web and DROPS the
+  // card on mobile (a composer-placed entry has no mobile grid surface),
+  // with no error anywhere — so the shipped files may only carry the two
+  // declared values. A placement a deployment never declared (the field
+  // is optional; absence is the tile default) asserts nothing here.
+  const PLACEMENT_VALUES = ['tile', 'composer'];
+
+  it.each(SOURCES.map((source) => [source.label, source]))(
+    '%s: every declared placement is a declared vocabulary value',
+    (_label, source) => {
+      // One assertion for the whole source: the failure names every
+      // offending button. A value outside the vocabulary silently renders
+      // a tile on the web and vanishes from the mobile grid, with no
+      // error anywhere — the readers compare strictly.
+      const offenders = [];
+      for (const name of shippedFiles(source)) {
+        for (const button of buttonsOf(readJson(path.join(source.dir, name)))) {
+          if (button.placement === undefined) continue;
+          if (!PLACEMENT_VALUES.includes(button.placement)) {
+            offenders.push(`${name}:${button.id} = ${JSON.stringify(button.placement)}`);
+          }
+        }
+      }
+      expect(offenders).toEqual([]);
+    }
+  );
+
+  // The web's composer entry: the shipped web configurations point the
+  // just-chat button at the composer, and the served document's own
+  // schema declares the field with the two-value enum — without the
+  // schema clause a config carrying the field would fail the frontend's
+  // Ajv validation at boot. (The mobile files deliberately declare NO
+  // placement on just-chat: a composer-placed entry has no mobile grid
+  // surface, so the mobile Just Chat entry stays a tile.)
+  it('web: the just-chat entry is the composer, and the schema declares the placement enum', () => {
+    // By LABEL, not by index: a source inserted at 0 or a reorder must
+    // not silently walk the wrong platform's files.
+    const source = SOURCES.find((s) => s.label.startsWith('web'));
+    expect(source).toBeTruthy();
+
+    // One assertion per clause across the whole source, with the
+    // offending file named in the collected values: the web composer is
+    // the just-chat entry, and a config carrying a placement field
+    // without the schema's two-value enum fails the frontend's Ajv
+    // validation at boot.
+    const missingEntry = [];
+    const wrongPlacement = [];
+    const missingSchema = [];
+    const schemaWithoutEnum = [];
+
+    for (const name of shippedFiles(source)) {
+      const cfg = readJson(path.join(source.dir, name));
+      const justChat = buttonsOf(cfg).find((b) => b.id === 'just-chat');
+      if (!justChat) {
+        missingEntry.push(name);
+        continue;
+      }
+      if (justChat.placement !== 'composer') {
+        wrongPlacement.push(`${name} = ${JSON.stringify(justChat.placement)}`);
+      }
+
+      const placementSchema =
+        cfg?.properties?.features?.properties?.chat?.properties?.quickHelp?.properties?.buttons?.items?.properties
+          ?.placement;
+      if (!placementSchema) {
+        missingSchema.push(name);
+      } else if (
+        !Array.isArray(placementSchema.enum) ||
+        // EXACTLY the two declared values: a one-value enum would
+        // Ajv-reject a document that uses the other one at boot, and a
+        // superset value would pass validation while both readers render
+        // it as a plain tile (they compare strictly).
+        placementSchema.enum.length !== PLACEMENT_VALUES.length ||
+        !PLACEMENT_VALUES.every((v) => placementSchema.enum.includes(v))
+      ) {
+        schemaWithoutEnum.push(`${name} = ${JSON.stringify(placementSchema.enum)}`);
+      }
+    }
+
+    expect(missingEntry).toEqual([]);
+    expect(wrongPlacement).toEqual([]);
+    expect(missingSchema).toEqual([]);
+    expect(schemaWithoutEnum).toEqual([]);
+  });
 });

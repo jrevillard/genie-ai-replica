@@ -8,7 +8,8 @@ const {
   mockChatStream,
   saveChat,
   CHAT_TITLE_INPUT,
-  BASE_URL
+  BASE_URL,
+  MESSAGE_ROW
 } = require('../helpers/chatbot');
 const {
   getSessionToken,
@@ -23,6 +24,17 @@ const {
 } = require('../helpers/auth');
 
 const API_TIMEOUT_MS = 30000;
+
+/**
+ * The list endpoint's ONE wire shape, read once: { conversations: [...] }.
+ * A response without the array is a changed contract, named as such —
+ * reading it as empty would turn a shape change into a silent no-find.
+ */
+function conversationListFrom(parsedBody) {
+  const conversations = parsedBody?.conversations;
+  expect(Array.isArray(conversations), 'the list wire shape is { conversations: [...] }').toBe(true);
+  return conversations;
+}
 
 // The page size the cleanup sweep lists the conversation population with.
 // The endpoint accepts up to 100, and the sweep enumerates two pages — a
@@ -47,7 +59,11 @@ test.describe('Conversation history persistence', () => {
   test.beforeEach(async ({ browser }) => {
     context = await browser.newContext({
       ignoreHTTPSErrors: true,
-      bypassCSP: true
+      bypassCSP: true,
+      // 1440 keeps the left sidebar in flow (it collapses below 1400):
+      // the restore test drives the Saved Chats list there, and at the
+      // default 1280 the tab it needs sits outside the viewport.
+      viewport: { width: 1440, height: 900 }
     });
     page = await context.newPage();
 
@@ -113,7 +129,9 @@ test.describe('Conversation history persistence', () => {
         listFailure = `offset ${offset} returned HTTP ${listRes.status}`;
         break;
       }
-      const list = listRes.data?.conversations || listRes.data;
+      // ONE wire shape — the one this file's tests assert (the restored
+      // list reads parsed.conversations and requires the array): { conversations: [...] }.
+      const list = listRes.data?.conversations;
       if (!Array.isArray(list)) {
         // A response without the array is a changed contract, not an
         // empty population: reading it as empty would end the sweep with
@@ -145,9 +163,10 @@ test.describe('Conversation history persistence', () => {
     // below. A later page that fails must NOT discard the pages that
     // succeeded — those conversations are known, and leaving them behind
     // is the leftover this sweep exists to prevent.
-    const own = pagesRead > 0
-      ? conversations.filter((c) => c.title?.startsWith('E2E ')).map((c) => c._key || c.id)
-      : [...createdConversationIds];
+    const own =
+      pagesRead > 0
+        ? conversations.filter((c) => c.title?.startsWith('E2E ')).map((c) => c._key || c.id)
+        : [...createdConversationIds];
     const populationKnown = total !== undefined;
     const enumeratedAll = populationKnown ? conversations.length >= total : exhausted;
 
@@ -209,12 +228,12 @@ test.describe('Conversation history persistence', () => {
       problems.push(
         populationKnown
           ? `the sweep did not enumerate the whole population — a suite conversation beyond the ` +
-            `last enumerated page, if any, was not removed`
+              `last enumerated page, if any, was not removed`
           : pagesRead > 0
             ? `the population size is unknown — the sweep read full pages, so a suite conversation ` +
-                `beyond the last enumerated page, if any, was not removed`
+              `beyond the last enumerated page, if any, was not removed`
             : `the population size is unknown and the sweep read NOTHING — only the conversations ` +
-                `captured in flight were removed, and any other suite conversation may remain`
+              `captured in flight were removed, and any other suite conversation may remain`
       );
     }
     if (problems.length > 0) {
@@ -253,7 +272,9 @@ test.describe('Conversation history persistence', () => {
     // Navigate to chatbot to load saved chats
     await navigateToChatbot(page);
 
-    // Verify via the chat history API, with the token the page session holds
+    // The persistence WITNESS, via the chat history API with the token
+    // the page session holds. The wire shape is ONE: the endpoint serves
+    // { conversations: [...] } (chat-history-routes.js → getUserConversations).
     const token = await getSessionToken(page);
     const conversationsResponse = await page.evaluate(
       async (args) => {
@@ -268,9 +289,7 @@ test.describe('Conversation history persistence', () => {
 
     expect(conversationsResponse.status).toBe(200);
 
-    const parsed = JSON.parse(conversationsResponse.body);
-    const conversations = parsed.conversations || parsed;
-    expect(Array.isArray(conversations)).toBeTruthy();
+    const conversations = conversationListFrom(JSON.parse(conversationsResponse.body));
 
     // Find our saved conversation
     const saved = conversations.find((c) => c.title === chatTitle || c.title?.includes(chatTitle));
@@ -279,6 +298,41 @@ test.describe('Conversation history persistence', () => {
     if (saved?._key || saved?.id) {
       createdConversationIds.push(saved._key || saved.id);
     }
+
+    // The RESTORATION the title claims, through the UI: the saved chat
+    // appears in the left sidebar's Saved Chats list, and OPENING it from
+    // there renders the persisted turns. The session rehydration would
+    // otherwise make the row click a no-op — the reloaded page still
+    // holds the saved conversation as its open one, and the
+    // load-conversation guard swallows a click whose id is already open —
+    // so the saved chat is closed FIRST (a just-saved conversation is
+    // clean: the close runs without a prompt) and the click below opens
+    // it from the list for real, through loadExistingConversation.
+    await page.locator('[data-testid="conversation-header-close"]').click();
+    await expect(page.locator('[data-testid="quick-help-overlay"]')).toBeVisible({ timeout: 15000 });
+
+    await page.locator('[data-test-id="ds-tab-history"]').click();
+
+    const row = page.locator('[data-testid="chat-history-item"]').filter({ hasText: chatTitle });
+    await expect(row, 'the saved chat is listed after the reload').toBeVisible({ timeout: 15000 });
+    await row.click();
+
+    // The sidebar-open path renders EXACTLY the persisted turns: the
+    // welcome turn is skipped by the save (a bot turn without a queryId
+    // is not storable) and prepended only for a conversation with zero
+    // persisted messages, so two rows — the user's question verbatim,
+    // then the mocked answer. Nothing more.
+    const rows = page.locator(MESSAGE_ROW);
+    await expect(rows, 'the restored transcript').toHaveCount(2, { timeout: 15000 });
+    await expect(page.locator('[data-testid="quick-help-overlay"]')).toHaveCount(0);
+    expect(await rows.nth(0).getAttribute('data-testid'), 'the first row is the restored user turn').toBe(
+      'chat-message-user'
+    );
+    await expect(
+      rows.nth(0).locator('[data-testid="message-bubble-user"]'),
+      'the user turn is restored verbatim'
+    ).toHaveText(userText);
+    await expect(rows.nth(1).locator('[data-testid="message-bubble-bot"]')).toContainText(MOCKED_ANSWER);
   });
 
   test('list conversations endpoint returns conversations for authenticated user', async () => {
@@ -297,9 +351,7 @@ test.describe('Conversation history persistence', () => {
 
     expect(response.status).toBe(200);
 
-    const body = JSON.parse(response.body);
-    const conversations = body.conversations || body;
-    expect(Array.isArray(conversations)).toBeTruthy();
+    expect(conversationListFrom(JSON.parse(response.body)).length).toBeGreaterThanOrEqual(0);
   });
 
   test('messages are restored in correct order when loading a saved conversation', async () => {
@@ -327,7 +379,7 @@ test.describe('Conversation history persistence', () => {
       { baseUrl: BASE_URL, token, timeout: API_TIMEOUT_MS }
     );
 
-    const conversations = convResponse.conversations || convResponse;
+    const conversations = conversationListFrom(convResponse);
     const savedConv = conversations.find((c) => c.title === chatTitle || c.title?.includes(chatTitle));
     expect(savedConv).toBeTruthy();
 
@@ -347,22 +399,21 @@ test.describe('Conversation history persistence', () => {
       { baseUrl: BASE_URL, token, convId: savedConv._key || savedConv.id, timeout: API_TIMEOUT_MS }
     );
 
-    // Verify messages exist
-    const messages = fullConv.messages || fullConv.data?.messages || [];
-    expect(messages.length).toBeGreaterThanOrEqual(1);
+    // Verify messages exist. The wire shape is ONE: the detail endpoint
+    // serves { messages: [...] }, and each message carries `sender`
+    // ('user' | 'assistant' — the save path's vocabulary, component
+    // saveChat; there is no `role` field on a message document).
+    const messages = fullConv.messages;
+    expect(Array.isArray(messages), 'the detail wire shape is { messages: [...] }').toBe(true);
 
     // Verify order: the turn was complete on screen before the save (the
     // mocked answer text was asserted), so both sides must have persisted —
     // a one-sided save is exactly the defect this spec exists to catch.
     expect(messages.length, 'both turns persisted').toBeGreaterThanOrEqual(2);
-    const firstUserIdx = messages.findIndex((m) => m.role === 'user' || m.sender === 'user');
-    const firstBotIdx = messages.findIndex(
-      (m) => m.role === 'assistant' || m.sender === 'assistant' || m.sender === 'bot'
-    );
+    const firstUserIdx = messages.findIndex((m) => m.sender === 'user');
+    const firstBotIdx = messages.findIndex((m) => m.sender === 'assistant');
     expect(firstUserIdx, 'the user turn persisted').toBeGreaterThanOrEqual(0);
-    // The API persists the assistant turn with sender 'assistant'; the UI
-    // spells the same side 'bot' — match both.
-    expect(firstBotIdx, 'the bot turn persisted').toBeGreaterThanOrEqual(0);
+    expect(firstBotIdx, 'the assistant turn persisted').toBeGreaterThanOrEqual(0);
     expect(firstUserIdx).toBeLessThan(firstBotIdx);
   });
 });

@@ -55,11 +55,11 @@
 // nothing.
 const { test, expect } = require('@playwright/test');
 const { openWelcomeScreen } = require('../helpers/welcome');
-const { runRouteHandler } = require('../helpers/route');
 // The stream interception contract — no credential in it, so this spec
 // (which needs neither) never imports the credential module.
-const { STREAM_ROUTE, sseFulfill } = require('../helpers/stream-route');
+const { captureStreamPosts } = require('../helpers/stream-capture');
 const {
+  quickHelpButton,
   stubQuickHelpConfiguration,
   stubQuickHelpHierarchy,
   CIVIL_REGISTRY_HIERARCHY
@@ -77,29 +77,27 @@ const HIERARCHY = CIVIL_REGISTRY_HIERARCHY;
 
 // The cards this spec serves. The ids are distinct from the deployment's own
 // ('just-chat', 'identity-civil', …) so a card that leaks in from the real
-// configuration can never be mistaken for one of these.
+// configuration can never be mistaken for one of these. The shared shape
+// fields come from the quickHelpButton factory; only what makes each card
+// DISTINCT is spelled here.
 const STUB_BUTTONS = [
-  {
+  quickHelpButton({
     // The composer entry. It is not a scope — it declares none — and it
     // renders the welcome composer. It is also the spec's SIGNAL that the
     // configuration has been read and applied: the composer appears only
     // after the config's buttons are known.
     id: 'e2e-composer',
-    title: { en: 'Just Chat' },
-    icon: { type: 'file', value: '/config/quickhelp/just-chat.svg' },
-    category: null,
-    placement: 'composer',
-    styles: { backgroundColor: '#fff', hoverColor: '#eee', outlineColor: '#ccc' }
-  },
-  {
+    placement: 'composer'
+  }),
+  quickHelpButton({
     // A card whose CATEGORY names fine but whose LABEL is gone: the
     // broken-guard is the only thing that refuses it. Its category is the
     // hierarchy's own KEY — the legacy spelling — so the rendered layer
     // also proves the key resolves (its caption must not blame the
     // category; the healthy card beside it proves the NAME does).
     id: 'e2e-label-gone',
-    title: { en: 'Label gone' },
-    icon: { type: 'file', value: '/config/quickhelp/identity-civil.svg' },
+    title: 'Label gone',
+    icon: '/config/quickhelp/identity-civil.svg',
     category: '2',
     serviceLabels: ['No Such Service'],
     // The dual-prompt action is what makes the click REACH the query path
@@ -109,22 +107,20 @@ const STUB_BUTTONS = [
     action: {
       visibleText: { en: 'Tell me about the vanished label' },
       hiddenPrompt: { en: 'Tell me about the vanished label' }
-    },
-    styles: { backgroundColor: '#fff', hoverColor: '#eee', outlineColor: '#ccc' }
-  },
-  {
+    }
+  }),
+  quickHelpButton({
     // A card whose CATEGORY is gone: the hierarchy cannot name it.
     id: 'e2e-category-gone',
-    title: { en: 'Category gone' },
-    icon: { type: 'file', value: '/config/quickhelp/taxes-revenue.svg' },
+    title: 'Category gone',
+    icon: '/config/quickhelp/taxes-revenue.svg',
     category: 'Taxes & Revenue',
     action: {
       visibleText: { en: 'Tell me about the vanished category' },
       hiddenPrompt: { en: 'Tell me about the vanished category' }
-    },
-    styles: { backgroundColor: '#fff', hoverColor: '#eee', outlineColor: '#ccc' }
-  },
-  {
+    }
+  }),
+  quickHelpButton({
     // A healthy card: its category and its label both name fine. It is the
     // CONTROL — without it, a spec that stubs everything to "broken" would
     // pass even if the app rendered every card as an error.
@@ -138,17 +134,16 @@ const STUB_BUTTONS = [
     // hidden prompt installs its chip and stops there, so a control card
     // without one would prove nothing about the query path.
     id: 'e2e-healthy',
-    title: { en: 'Healthy card' },
-    icon: { type: 'file', value: '/config/quickhelp/healthcare-social.svg' },
+    title: 'Healthy card',
+    icon: '/config/quickhelp/healthcare-social.svg',
     category: 'Civil Registry',
     serviceLabels: ['Births'],
     action: {
       visibleText: { en: 'Tell me about births' },
       hiddenPrompt: { en: 'Tell me about births' }
-    },
-    styles: { backgroundColor: '#fff', hoverColor: '#eee', outlineColor: '#ccc' }
-  },
-  {
+    }
+  }),
+  quickHelpButton({
     // A card whose TITLE resolves to nothing: the locale map's only entry
     // is empty, so there is no text to show. Its SCOPE is fine — it
     // declares none — so the missing title is the only thing wrong with
@@ -159,11 +154,8 @@ const STUB_BUTTONS = [
     // and can be told apart from the others without a label to find it
     // by.
     id: 'e2e-title-missing',
-    title: { en: '' },
-    icon: { type: 'file', value: '/config/quickhelp/just-chat.svg' },
-    category: null,
-    styles: { backgroundColor: '#fff', hoverColor: '#eee', outlineColor: '#ccc' }
-  }
+    title: ''
+  })
 ];
 
 async function openWelcome(browser, { holdHierarchy = false } = {}) {
@@ -198,21 +190,13 @@ async function openWelcome(browser, { holdHierarchy = false } = {}) {
 }
 
 /**
- * Watches the query path. Returns a getter that says whether a query went out.
+ * Watches the query path. The shared capture (helpers/stream-capture.js)
+ * records that a query went out and each request's POST body; the ''
+ * body leaves the turn open on purpose — a done frame would complete the
+ * turn and change what the spec observes.
  */
-async function watchQueries(page) {
-  let streamed = false;
-  await page.route(
-    STREAM_ROUTE,
-    runRouteHandler(page, async (route) => {
-      streamed = true;
-      // The body stays empty on purpose: the watcher only records that a
-      // query went out, and a done frame would complete the turn and
-      // change what the spec observes.
-      await sseFulfill(route, '');
-    })
-  );
-  return () => streamed;
+function watchQueries(page) {
+  return captureStreamPosts(page, '');
 }
 
 test.describe('Quick Help scope states', () => {
@@ -253,16 +237,21 @@ test.describe('Quick Help scope states', () => {
     expect((await caption.innerText()).trim().length).toBeGreaterThan(0);
 
     // And the click sends NOTHING: no turn, no user message.
-    const streamed = await watchQueries(page);
+    const watcher = await watchQueries(page);
     await broken.first().click();
 
     // The refusal is synchronous — nothing waits on the click, so these
-    // are instant negative checks: at click time no turn is mounted and
-    // nothing is on the query path. A send that escaped the synchronous
-    // refusal after this instant is the send-time guard's subject (the
-    // test below), not this one's.
+    // are negative checks read at refusal time (the count's own auto-retry
+    // bounds a late-mounted turn): no turn is mounted and nothing is on
+    // the query path. A send that escaped the synchronous refusal after
+    // this instant is the send-time guard's subject, owned by the Jest
+    // suite ("a scoped button sends nothing when the tree is not there to
+    // name its category"), not by this spec. (A bounded window cannot be
+    // built from Playwright's primitives here: expect.poll and every
+    // toPass/waitForLoadState shape resolves immediately on an already
+    // stable negative — reviewed 2026-11-15.)
     await expect(page.locator('[data-testid="user-avatar"]')).toHaveCount(0);
-    expect(streamed(), 'a broken card must not reach the query path').toBe(false);
+    expect(watcher.queried(), 'a broken card must not reach the query path').toBe(false);
 
     // The tile guard refuses BEFORE anything is installed: no context item
     // appears, and the welcome screen (which only renders while NO context
@@ -354,11 +343,32 @@ test.describe('Quick Help scope states', () => {
       'a card whose scope names fine is not an error card'
     ).toBe(0);
 
-    const streamed = await watchQueries(page);
+    const watcher = await watchQueries(page);
     await healthy.first().click();
 
     // A healthy card DOES reach the query path.
-    await expect.poll(() => streamed(), { timeout: 15000 }).toBe(true);
+    await expect.poll(() => watcher.queried(), { timeout: 15000 }).toBe(true);
+
+    // And the query carries the card's SCOPE — the contract the watcher
+    // above only counts. Jest owns the assembly (ChatBotComponent.test.js);
+    // this is the assembled query over the real route: the scoping fields
+    // exactly as the fixture declares them, the scoped context option,
+    // and the dual-prompt turn (visible text displayed, hidden prompt
+    // sent — equal here, so the user turn carries it either way). The
+    // exactly-one send is the tile's own: one click, one auto-send, and
+    // the empty-body fulfill answers it without a retry.
+    expect(watcher.bodies, 'the healthy card sends exactly one query').toHaveLength(1);
+    const body = watcher.bodies[0];
+    expect(body.contextOption, 'the scoped send declares the label-filtered context option').toBe(
+      'conversation-with-context-labels'
+    );
+    expect(body.context.categoryLabel, 'the ENGLISH category label reaches the query').toBe('Civil Registry');
+    expect(body.context.serviceLabels, 'the declared labels reach the query').toEqual(['Births']);
+    expect(body.userQuestion, 'the visible text is what the user asked').toBe('Tell me about births');
+    expect(
+      body.messages.at(-1),
+      'the turn rides the messages array, its last user entry the prompt the LLM answers'
+    ).toEqual({ role: 'user', content: 'Tell me about births' });
 
     await ctx.close();
   });

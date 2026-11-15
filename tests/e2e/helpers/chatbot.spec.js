@@ -254,6 +254,15 @@ test.describe('the last bot message metadata responseTime is read through the sa
     expect(lastBotResponseTimeOf({ state: 'no-store' })).not.toBeUndefined();
   });
 
+  test('not-booted is NOT_READABLE here — the deliberate asymmetry with the flag reader is the contract', () => {
+    // streamingFlagOf treats not-booted as transient (null, the wait
+    // continues); this decider has no wait to continue, so a page that
+    // has not booted is a contract break to report, not a slow answer.
+    // Pinning it here stops a plausible "align the two deciders" edit
+    // from turning the named report into a bare assertion failure.
+    expect(lastBotResponseTimeOf({ state: 'not-booted' })).toBe(NOT_READABLE);
+  });
+
   test('an open-but-empty conversation is not a contract break', () => {
     expect(lastBotResponseTimeOf({ state: 'no-open-conversation' })).toBeUndefined();
   });

@@ -83,6 +83,13 @@ test.describe('the fixture-card factory produces schema-valid cards', () => {
   const expectRejected = (overrides, what) =>
     expect(() => quickHelpButton({ id: 'e2e-x', ...overrides })).toThrow(what);
 
+  test('a missing, non-string or blank id is rejected by name', () => {
+    // The id is the one schema-required field with no derivable default.
+    expect(() => quickHelpButton({ title: 'X' })).toThrow('id must be a non-blank string (got undefined)');
+    expect(() => quickHelpButton({ id: 42 })).toThrow('id must be a non-blank string (got 42)');
+    expect(() => quickHelpButton({ id: '   ' })).toThrow('id must be a non-blank string');
+  });
+
   test('a null title is rejected by name', () => {
     expectRejected({ title: null }, 'title must be a string or a locale map (got null)');
   });

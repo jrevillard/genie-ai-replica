@@ -1,7 +1,14 @@
 // Copyright (C) 2026 International Telecommunication Union (ITU)
 // SPDX-License-Identifier: Apache-2.0
 const { test, expect } = require('@playwright/test');
-const { readStreamingState, streamingFlagOf, botStreamingFlag, LOGIN_BUDGET_TIMEOUT_MS } = require('./chatbot');
+const {
+  readStreamingState,
+  streamingFlagOf,
+  lastBotResponseTimeOf,
+  NOT_READABLE,
+  botStreamingFlag,
+  LOGIN_BUDGET_TIMEOUT_MS
+} = require('./chatbot');
 
 /**
  * Unit spec for the streaming-flag read — the helper's side of the store
@@ -54,8 +61,8 @@ test.describe('the streaming flag is read through the store getter', () => {
         messages: [
           { sender: 'bot', isStreaming: true },
           { sender: 'user', isStreaming: false },
-          { sender: 'bot', isStreaming: false },
-        ],
+          { sender: 'bot', isStreaming: false }
+        ]
       })
     ).toBe(false);
     expect(streamingFlagOf({ state: 'ok', messages: [{ sender: 'bot', isStreaming: true }] })).toBe(true);
@@ -80,7 +87,7 @@ test.describe('the streaming flag is read through the store getter', () => {
  * carrying a fake store, and the helper's own read function, called in the
  * page. The functions here are the REAL ones — not a copy of them.
  */
-test.describe('the page-side read keeps the flag\'s ABSENCE an absence', () => {
+test.describe("the page-side read keeps the flag's ABSENCE an absence", () => {
   // A page whose store answers the open conversation with the given
   // messages. The store shape is the app's: the getter
   // 'conversation/openConversation' and the messages under it.
@@ -92,10 +99,10 @@ test.describe('the page-side read keeps the flag\'s ABSENCE an absence', () => {
         config: {
           globalProperties: {
             $store: {
-              getters: { 'conversation/openConversation': { messages: msgs } },
-            },
-          },
-        },
+              getters: { 'conversation/openConversation': { messages: msgs } }
+            }
+          }
+        }
       };
     }, messages);
   };
@@ -118,14 +125,14 @@ test.describe('the page-side read keeps the flag\'s ABSENCE an absence', () => {
           globalProperties: {
             $store: {
               getters: {
-                'conversation/openConversation': { messages: [{ sender: 'bot', content: 'Welcome!' }] },
+                'conversation/openConversation': { messages: [{ sender: 'bot', content: 'Welcome!' }] }
               },
               state: {
-                conversation: { messages: [{ sender: 'bot', content: 'Welcome!', isStreaming: false }] },
-              },
-            },
-          },
-        },
+                conversation: { messages: [{ sender: 'bot', content: 'Welcome!', isStreaming: false }] }
+              }
+            }
+          }
+        }
       };
     });
     // The wait's own reader, driven in the browser: the welcome bubble
@@ -169,7 +176,7 @@ test.describe('the page-side read keeps the flag\'s ABSENCE an absence', () => {
     // bot message, and the turn's placeholder has not landed yet.
     await pageWith(page, [
       { sender: 'user', content: 'What is GENIE.AI?' },
-      { sender: 'bot', content: 'Welcome! How can I assist you today?' },
+      { sender: 'bot', content: 'Welcome! How can I assist you today?' }
     ]);
     const read = await page.evaluate(readStreamingState);
     expect(streamingFlagOf(read)).toBe(null);
@@ -205,6 +212,59 @@ test.describe('the page-side read keeps the flag\'s ABSENCE an absence', () => {
     expect(read.state).toBe('no-open-conversation');
     // Not a broken contract: the wait continues.
     expect(streamingFlagOf(read)).toBe(null);
+  });
+});
+
+test.describe('the last bot message metadata responseTime is read through the same store getter', () => {
+  // The pure decider over the page-side read: the read carries the
+  // metadata frame's responseTime beside the sender and the flag, and
+  // the decider tells a broken store contract (NOT_READABLE — the
+  // caller's to report) apart from a turn whose metadata frame has not
+  // landed (undefined).
+  test('a completed turn whose metadata frame landed carries the numeric response time', () => {
+    const read = {
+      state: 'ok',
+      messages: [
+        { sender: 'user', isStreaming: undefined, responseTime: undefined },
+        { sender: 'bot', isStreaming: false, responseTime: 1234 }
+      ]
+    };
+    expect(lastBotResponseTimeOf(read)).toBe(1234);
+  });
+
+  test('a completed turn whose metadata frame has not landed reports undefined, not a contract break', () => {
+    const read = { state: 'ok', messages: [{ sender: 'bot', isStreaming: false, responseTime: undefined }] };
+    expect(lastBotResponseTimeOf(read)).toBeUndefined();
+  });
+
+  test('a welcome-only transcript (a bot row carrying no metadata) reports undefined', () => {
+    // The welcome bubble IS a bot message — its row carries no metadata,
+    // which reads as the undefined case, distinct from an empty
+    // transcript (no bot row: also undefined).
+    const read = { state: 'ok', messages: [{ sender: 'bot', isStreaming: undefined, responseTime: undefined }] };
+    expect(lastBotResponseTimeOf(read)).toBeUndefined();
+    expect(lastBotResponseTimeOf({ state: 'ok', messages: [] })).toBeUndefined();
+  });
+
+  test('a broken store contract is NOT_READABLE — the caller reports it by name', () => {
+    expect(lastBotResponseTimeOf({ state: 'no-store' })).toBe(NOT_READABLE);
+    expect(lastBotResponseTimeOf({ state: 'no-getter' })).toBe(NOT_READABLE);
+    expect(lastBotResponseTimeOf(null)).toBe(NOT_READABLE);
+    // An unreadable state is not `undefined`: the two must never blur.
+    expect(lastBotResponseTimeOf({ state: 'no-store' })).not.toBeUndefined();
+  });
+
+  test('not-booted is NOT_READABLE here — the deliberate asymmetry with the flag reader is the contract', () => {
+    // streamingFlagOf treats not-booted as transient (null, the wait
+    // continues); this decider has no wait to continue, so a page that
+    // has not booted is a contract break to report, not a slow answer.
+    // Pinning it here stops a plausible "align the two deciders" edit
+    // from turning the named report into a bare assertion failure.
+    expect(lastBotResponseTimeOf({ state: 'not-booted' })).toBe(NOT_READABLE);
+  });
+
+  test('an open-but-empty conversation is not a contract break', () => {
+    expect(lastBotResponseTimeOf({ state: 'no-open-conversation' })).toBeUndefined();
   });
 });
 

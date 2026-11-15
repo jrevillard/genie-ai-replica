@@ -15,7 +15,9 @@ const {
   STREAM_PATH
 } = require('../helpers/chatbot');
 const { runPostOnlyRouteHandler, runRouteHandler } = require('../helpers/route');
+const { captureStreamPosts } = require('../helpers/stream-capture');
 const {
+  quickHelpButton,
   stubQuickHelpConfiguration,
   stubQuickHelpHierarchy,
   CIVIL_REGISTRY_HIERARCHY
@@ -550,34 +552,29 @@ test.describe('Conversation — surface invariants', () => {
   // so the frontend's Ajv validation still runs on it.
   const HEADER_SCOPE_TITLE = 'Registry Help';
   const HEADER_SCOPE_BUTTONS = [
-    {
+    quickHelpButton({
       // The composer entry is the signal that the configuration has been
       // read and applied: the composer appears only after the config's
       // buttons are known. The id is distinct from every deployment's
       // own ids, so a card that leaks in from the real configuration can
       // never be mistaken for one of these.
       id: 'e2e-header-composer',
-      title: { en: 'Just Chat' },
-      icon: { type: 'file', value: '/config/quickhelp/just-chat.svg' },
-      category: null,
-      placement: 'composer',
-      styles: { backgroundColor: '#fff', hoverColor: '#eee', outlineColor: '#ccc' }
-    },
-    {
+      placement: 'composer'
+    }),
+    quickHelpButton({
       // The scoped card: its category names in the served hierarchy, so
       // the card is healthy — the click installs the chip and opens the
       // conversation titled with the card's own title.
       id: 'e2e-header-scope',
-      title: { en: HEADER_SCOPE_TITLE },
-      icon: { type: 'file', value: '/config/quickhelp/identity-civil.svg' },
+      title: HEADER_SCOPE_TITLE,
+      icon: '/config/quickhelp/identity-civil.svg',
       category: 'Civil Registry',
       serviceLabels: ['Births'],
       action: {
         visibleText: { en: 'Tell me about births' },
         hiddenPrompt: { en: 'Tell me about births' }
-      },
-      styles: { backgroundColor: '#fff', hoverColor: '#eee', outlineColor: '#ccc' }
-    }
+      }
+    })
   ];
   // The shared hierarchy fixture — the names the card's scope asserts
   // against are the ones it carries.
@@ -598,12 +595,26 @@ test.describe('Conversation — surface invariants', () => {
     await page.waitForSelector('[data-testid="welcome-composer"]', { timeout: 15000 });
     // The card's hidden prompt auto-sends: the answer is stubbed, so the
     // turn completes locally instead of spending the venue's LLM on an
-    // invariant it has no part in.
-    await mockChatStream(page, ['Stubbed answer.']);
+    // invariant it has no part in. The capture rides the shared
+    // interception (helpers/stream-capture.js): the scoped payload is the
+    // contract this test names alongside the header — a chip plus a
+    // header without the scope on the wire would be a scope that only
+    // decorates.
+    const { bodies } = await captureStreamPosts(page, sseBody(['Stubbed answer.']));
     await page.locator(QUICK_HELP_ITEM).filter({ hasText: HEADER_SCOPE_TITLE }).click();
     await expect(page.locator('[data-testid="conversation-header-title"]')).toHaveText(HEADER_SCOPE_TITLE);
     // The option is a knowledge domain — its chip is shown as context.
     expect(await page.locator('[data-testid="context-panel"]').count(), 'the domain chip is shown').toBe(1);
+    // And the send carries the scope the card declared — the same wire
+    // contract the scope spec owns, asserted at this entry path too: the
+    // ENGLISH category label and the declared labels. The capture lands
+    // in the route handler (the Node side), which trails the click —
+    // sync on the count before reading, the same settled-then-read shape
+    // the scope spec uses.
+    await expect.poll(() => bodies.length, { timeout: 15000 }).toBe(1);
+    expect(bodies[0].contextOption).toBe('conversation-with-context-labels');
+    expect(bodies[0].context.categoryLabel).toBe('Civil Registry');
+    expect(bodies[0].context.serviceLabels).toEqual(['Births']);
     await ctx.close();
   });
 

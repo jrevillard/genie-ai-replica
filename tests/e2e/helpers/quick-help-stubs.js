@@ -19,6 +19,70 @@
 const { runRouteHandler } = require('./route');
 
 /**
+ * One builder for the fixture cards the Quick Help specs serve — the
+ * same shape fields (icon, styles, the null-category default) written
+ * once, with each spec passing only what makes ITS fixture distinct
+ * (id, title, scope, action). These literals were copied across three
+ * specs before this factory existed, which is exactly the drift this
+ * module's own header records; a shape change is now a one-file edit.
+ * The stubbed configuration still runs the frontend's Ajv validation,
+ * so a shape drift fails loud here instead of rendering somewhere.
+ *
+ * [overrides.title] is a display string (wrapped as { en }) or a
+ * locale map; every other override lands on the card verbatim.
+ */
+function quickHelpButton(overrides = {}) {
+  const { id, title, icon, ...rest } = overrides;
+  // [id] is the one schema-required field with no derivable default —
+  // each fixture names its own so a leaked deployment card can never be
+  // mistaken for a spec's. A missing or non-string id would ride the
+  // card verbatim and the app would refuse the whole served document at
+  // boot (the config-error screen): fail HERE, at the factory.
+  if (typeof id !== 'string' || !id.trim()) {
+    throw new TypeError(
+      `quickHelpButton: id must be a non-blank string (got ${id === undefined ? 'undefined' : JSON.stringify(id)})`
+    );
+  }
+  const titleMap = title === undefined ? { en: 'Just Chat' } : typeof title === 'string' ? { en: title } : title;
+  const titleIsMap = titleMap !== null && typeof titleMap === 'object' && !Array.isArray(titleMap);
+  if (!titleIsMap) {
+    // A malformed title lands on the card verbatim and the app refuses
+    // the whole served document at boot — a six-spec blast radius with
+    // the failure far from the fixture. Fail HERE, at the factory. (A
+    // string title never reaches this guard: it was wrapped above.)
+    const got = titleMap === null ? 'null' : Array.isArray(titleMap) ? 'array' : typeof titleMap;
+    throw new TypeError(`quickHelpButton: title must be a string or a locale map (got ${got})`);
+  }
+  // [icon] is a path (the file-type icon every shipped card uses) or a
+  // full icon object — never a bare string on the CARD: the served
+  // schema requires the object, and the app refuses a document that
+  // violates it at boot (the config-error screen).
+  const iconMap =
+    icon === undefined
+      ? { type: 'file', value: '/config/quickhelp/just-chat.svg' }
+      : typeof icon === 'string'
+        ? { type: 'file', value: icon }
+        : icon;
+  if (iconMap === null || typeof iconMap !== 'object' || !('type' in iconMap) || !('value' in iconMap)) {
+    // Same contract-guard as the title: a schema-invalid icon is a boot
+    // refusal at the app, not a fixture error. Fail HERE (null first —
+    // typeof null is 'object', and 'type' in null throws a bare V8
+    // TypeError instead of this named one).
+    throw new TypeError(
+      `quickHelpButton: icon must be a path string or an object carrying type and value (got ${JSON.stringify(icon)})`
+    );
+  }
+  return {
+    id,
+    title: titleMap,
+    icon: iconMap,
+    category: null,
+    styles: { backgroundColor: '#fff', hoverColor: '#eee', outlineColor: '#ccc' },
+    ...rest
+  };
+}
+
+/**
  * The hierarchy both Quick Help specs serve: one category ('Civil
  * Registry', naming itself in ENGLISH — the spelling a configuration
  * writes) carrying the 'Births' label the scoped cards declare. The two
@@ -81,6 +145,7 @@ async function stubQuickHelpHierarchy(page, hierarchy, gate = null) {
 }
 
 module.exports = {
+  quickHelpButton,
   stubQuickHelpConfiguration,
   stubQuickHelpHierarchy,
   CIVIL_REGISTRY_HIERARCHY

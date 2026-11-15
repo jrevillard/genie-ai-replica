@@ -8,7 +8,8 @@ const {
   mockChatStream,
   saveChat,
   CHAT_TITLE_INPUT,
-  BASE_URL
+  BASE_URL,
+  MESSAGE_ROW
 } = require('../helpers/chatbot');
 const {
   getSessionToken,
@@ -117,7 +118,8 @@ test.describe('Conversation history persistence', () => {
         listFailure = `offset ${offset} returned HTTP ${listRes.status}`;
         break;
       }
-      const list = listRes.data?.conversations || listRes.data;
+      // ONE wire shape, the same this file's tests pin: { conversations: [...] }.
+      const list = listRes.data?.conversations;
       if (!Array.isArray(list)) {
         // A response without the array is a changed contract, not an
         // empty population: reading it as empty would end the sweep with
@@ -309,7 +311,7 @@ test.describe('Conversation history persistence', () => {
     // is not storable) and prepended only for a conversation with zero
     // persisted messages, so two rows — the user's question verbatim,
     // then the mocked answer. Nothing more.
-    const rows = page.locator('[data-testid^="chat-message-"]');
+    const rows = page.locator(MESSAGE_ROW);
     await expect(rows, 'the restored transcript').toHaveCount(2, { timeout: 15000 });
     await expect(page.locator('[data-testid="quick-help-overlay"]')).toHaveCount(0);
     expect(await rows.nth(0).getAttribute('data-testid'), 'the first row is the restored user turn').toBe(

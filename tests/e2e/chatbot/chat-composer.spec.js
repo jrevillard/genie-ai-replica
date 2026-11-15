@@ -48,7 +48,7 @@ const fs = require('fs');
 const path = require('path');
 const { openWelcomeScreen } = require('../helpers/welcome');
 const { QUICK_HELP_GRID_ITEM } = require('../helpers/layout');
-const { stubQuickHelpConfiguration, stubQuickHelpHierarchy } = require('../helpers/quick-help-stubs');
+const { quickHelpButton, stubQuickHelpConfiguration, stubQuickHelpHierarchy } = require('../helpers/quick-help-stubs');
 
 const { BASE_URL } = require('../helpers/base-url');
 
@@ -120,21 +120,8 @@ async function freshSignedIn(browser, viewport = { width: 1440, height: 900 }, t
  * tiles, one of them matching the negative).
  */
 const GRID_BUTTONS = [
-  {
-    id: 'just-chat',
-    title: { en: 'Just Chat' },
-    icon: { type: 'file', value: '/config/quickhelp/just-chat.svg' },
-    category: null,
-    placement: 'composer',
-    styles: { backgroundColor: '#fff', hoverColor: '#eee', outlineColor: '#ccc' }
-  },
-  ...[1, 2, 3, 4, 5, 6, 7, 8].map((n) => ({
-    id: `e2e-grid-tile-${n}`,
-    title: { en: `Grid Card ${n}` },
-    icon: { type: 'file', value: '/config/quickhelp/just-chat.svg' },
-    category: null,
-    styles: { backgroundColor: '#fff', hoverColor: '#eee', outlineColor: '#ccc' }
-  }))
+  quickHelpButton({ id: 'just-chat', placement: 'composer' }),
+  ...[1, 2, 3, 4, 5, 6, 7, 8].map((n) => quickHelpButton({ id: `e2e-grid-tile-${n}`, title: `Grid Card ${n}` }))
 ];
 
 /**

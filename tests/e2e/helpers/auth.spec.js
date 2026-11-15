@@ -102,8 +102,20 @@ test.describe("getAdminToken's no-access_token verdict", () => {
 // thrown, and what rides along as the cause — so that contract is pinned
 // here, offline.
 test.describe("getSessionTokenViaUI's error-priority contract", () => {
-  const LOGIN_FAILURE = new Error('the Keycloak redirect never completed');
-  const TEARDOWN_FAILURE = new Error('context.close exploded');
+  // Identity, not message equality: `toThrow(errorInstance)` compares the
+  // message only, and the contract is about WHICH object is thrown — so
+  // every case catches and pins the thrown object with `toBe`. Each case
+  // builds its own error instances: the fourth case mutates its login
+  // error's `cause`, and a shared instance would leak that mutation into
+  // the other cases.
+  const errorOf = (fn) => {
+    try {
+      fn();
+    } catch (e) {
+      return e;
+    }
+    return null;
+  };
 
   test('a clean run returns the token', () => {
     expect(auth.resolveSessionOutcome(null, null, 'the-token')).toBe('the-token');
@@ -112,24 +124,23 @@ test.describe("getSessionTokenViaUI's error-priority contract", () => {
   test('a teardown failure on a login that SUCCEEDED is thrown, token discarded', () => {
     // The cleanup fails loudly — returning the token over a silently
     // broken teardown would hide the leak the failure reports.
-    expect(() => auth.resolveSessionOutcome(null, TEARDOWN_FAILURE, 'the-token')).toThrow(TEARDOWN_FAILURE);
+    const teardown = new Error('context.close exploded');
+    expect(errorOf(() => auth.resolveSessionOutcome(null, teardown, 'the-token'))).toBe(teardown);
   });
 
   test('a login failure is thrown as-is when the teardown held', () => {
-    expect(() => auth.resolveSessionOutcome(LOGIN_FAILURE, null, null)).toThrow(LOGIN_FAILURE);
+    const login = new Error('the Keycloak redirect never completed');
+    expect(errorOf(() => auth.resolveSessionOutcome(login, null, null))).toBe(login);
   });
 
   test('a teardown failure rides along as the login failure’s cause', () => {
     // The PRIMARY error is the login failure — the operator reads the
     // login problem, the teardown error is attached as its cause, and the
     // thrown error is the SAME object the login threw (identity kept).
-    let thrown = null;
-    try {
-      auth.resolveSessionOutcome(LOGIN_FAILURE, TEARDOWN_FAILURE, null);
-    } catch (e) {
-      thrown = e;
-    }
-    expect(thrown).toBe(LOGIN_FAILURE);
-    expect(thrown.cause).toBe(TEARDOWN_FAILURE);
+    const login = new Error('the Keycloak redirect never completed');
+    const teardown = new Error('context.close exploded');
+    const thrown = errorOf(() => auth.resolveSessionOutcome(login, teardown, null));
+    expect(thrown).toBe(login);
+    expect(thrown.cause).toBe(teardown);
   });
 });

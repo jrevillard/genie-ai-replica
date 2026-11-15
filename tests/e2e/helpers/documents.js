@@ -136,6 +136,24 @@ function describeCode(res) {
 }
 
 /**
+ * The response body's own diagnostic, for a failure report: the
+ * `message` field when the repository wrote one (the retract remedy
+ * lives there), the `error` field as the fallback class label, and the
+ * `details` field — the raw upstream response doc-repo attaches to its
+ * own failures (dataprep's retract answer) — bounded so a verbose body
+ * cannot flood the report (#1864 review).
+ */
+function detailOf(res) {
+  const data = (res && res.data) || {};
+  const text = data.message || data.error;
+  let out = text || '';
+  if (data.details !== undefined && data.details !== null) {
+    out += `${out ? ' — ' : ''}details: ${JSON.stringify(data.details).slice(0, 200)}`;
+  }
+  return out;
+}
+
+/**
  * One per-file sweep delete: a bare DELETE, and — when the repository
  * refuses with 409 STILL_SERVING — the remedy that response itself
  * prescribes, retract-then-delete (#1864). Before #1864 the sweep issued
@@ -168,11 +186,17 @@ async function sweepDeleteOneFile(request, file, token) {
     if (res.status === 409 && res.data && res.data.code === 'STILL_SERVING') {
       const retractRes = await request('POST', `/api/files/${file_id}/retract`, { headers });
       if (retractRes.status < 200 || retractRes.status >= 300) {
-        // The body's message carries the retract remedy when the
-        // repository wrote one; the error field is the fallback class
-        // label. Either beats a bare status for the operator.
-        const detail = (retractRes.data && (retractRes.data.message || retractRes.data.error)) || '';
-        return `${file.file_name}: retract failed before delete (HTTP ${retractRes.status}${describeCode(retractRes)}${detail ? ` — ${detail}` : ''})`;
+        // A 401 on this leg is the same token-expiry diagnosis the delete
+        // legs produce (verdict + expiry label), not a generic detail —
+        // the token can lapse between the first DELETE and the retract
+        // (#1864 review). The detailOf line names the leg for the other
+        // statuses.
+        const detail = detailOf(retractRes);
+        const failure =
+          retractRes.status === 401
+            ? `${describeUnauthorized(retractRes, token)} (on the retract after a STILL_SERVING refusal)`
+            : `retract failed before delete (HTTP ${retractRes.status}${describeCode(retractRes)}${detail ? ` — ${detail}` : ''})`;
+        return `${file.file_name}: ${failure}`;
       }
       res = await attempt();
     }
@@ -180,7 +204,7 @@ async function sweepDeleteOneFile(request, file, token) {
       if (res.status === 401) {
         return `${file.file_name}: ${describeUnauthorized(res, token)}`;
       }
-      const detail = (res.data && (res.data.message || res.data.error)) || '';
+      const detail = detailOf(res);
       return `${file.file_name}: HTTP ${res.status}${describeCode(res)}${detail ? ` — ${detail}` : ''}`;
     }
     return null;
@@ -377,14 +401,28 @@ async function deleteAllTestDocuments(prefix = 'test-document', { browser } = {}
   const populationKnown = total !== undefined;
   const enumeratedAll = populationKnown ? files.length >= total : exhausted;
 
-  const deleteSet = own.slice(0, SWEEP_MAX_DELETES);
-  const beyondBudget = own.length - deleteSet.length;
+  // Pagination drift can list the same file on two page reads; the delete
+  // set holds each file ONCE — a duplicated entry would run a second
+  // retract against a file the sweep already converged (dataprep answers
+  // "already retracted") and turn a clean state into a spurious failure
+  // (#1864 review). A row with no id at all cannot be deduped — each such
+  // row stands alone (and its delete fails loud on the missing id).
+  const seenIds = new Set();
+  const ownUnique = own.filter((f) => {
+    const id = f.file_id || f._key || f.id;
+    if (id === undefined || id === null) return true;
+    if (seenIds.has(id)) return false;
+    seenIds.add(id);
+    return true;
+  });
 
-  // The deletes run in bounded-parallel waves: a sequential sweep of a
-  // full page costs 50 × 30 s — more than the hook's budget and more than
-  // the realm's access-token lifespan, so the tail of it would run on an
-  // expired token. The width and the arithmetic live in helpers/auth.js
-  // (SWEEP_DELETE_CONCURRENCY).
+  const deleteSet = ownUnique.slice(0, SWEEP_MAX_DELETES);
+  const beyondBudget = ownUnique.length - deleteSet.length;
+
+  // The deletes run in bounded-parallel waves: with the STILL_SERVING
+  // remedy a serving file costs up to three calls (DELETE, retract,
+  // DELETE), so the wave and budget arithmetic lives in helpers/auth.js
+  // and must account for all three (#1864).
   const failures = (
     await mapWithConcurrency(deleteSet, SWEEP_DELETE_CONCURRENCY, async (f) => {
       // The whole per-file sequence — the delete and its STILL_SERVING
@@ -432,8 +470,8 @@ async function deleteAllTestDocuments(prefix = 'test-document', { browser } = {}
   }
   if (problems.length > 0) {
     const scope = populationKnown
-      ? `population: ${total} matching files, ${files.length} read, ${own.length} of them the suite's own`
-      : `population unknown, ${files.length} matching files read, ${own.length} of them the suite's own`;
+      ? `population: ${total} matching files, ${files.length} read, ${ownUnique.length} of them the suite's own`
+      : `population unknown, ${files.length} matching files read, ${ownUnique.length} of them the suite's own`;
     throw new Error(`cleanup: ${problems.length} problem(s) — ${scope} — ${problems.join(' | ')}`);
   }
 }

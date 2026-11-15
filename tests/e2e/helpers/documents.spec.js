@@ -119,11 +119,14 @@ test.describe('the sweep per-file delete (retract-then-delete, #1864)', () => {
 
   // A transport that answers from a script in call order and fails any
   // call beyond it — the sequence IS the assertion subject, so an
-  // unexpected call must fail loud, not fall off the script.
+  // unexpected call must fail loud, not fall off the script. The OPTIONS
+  // are recorded too (#1864 review): the bearer header the sweep sends is
+  // part of the contract — a refactor that drops it stays green on
+  // method+path pins and only fails at the venue with a wave of 401s.
   function scriptedTransport(script) {
     const calls = [];
-    const request = async (method, path) => {
-      calls.push([method, path]);
+    const request = async (method, path, options) => {
+      calls.push([method, path, options]);
       if (script.length === 0) {
         throw new Error(`unexpected call ${method} ${path} — the script is exhausted`);
       }
@@ -131,6 +134,9 @@ test.describe('the sweep per-file delete (retract-then-delete, #1864)', () => {
     };
     return { request, calls };
   }
+
+  const authed = (token) => ({ headers: { Authorization: `Bearer ${token}` } });
+  const bearerCall = (method, path, token = 'tok') => [method, path, authed(token)];
 
   const serving = (code = 'STILL_SERVING') => ({
     status: 409,
@@ -143,10 +149,10 @@ test.describe('the sweep per-file delete (retract-then-delete, #1864)', () => {
     headers: {}
   });
 
-  test('a clean delete is one DELETE and no retract', async () => {
+  test('a clean delete is one DELETE and no retract, with the bearer header', async () => {
     const t = scriptedTransport([{ status: 200, data: { success: true }, headers: {} }]);
     expect(await sweepDeleteOneFile(t.request, file, 'tok')).toBeNull();
-    expect(t.calls).toEqual([['DELETE', '/api/files/f123']]);
+    expect(t.calls).toEqual([bearerCall('DELETE', '/api/files/f123')]);
   });
 
   test('a STILL_SERVING refusal retracts and deletes again, in that order', async () => {
@@ -156,10 +162,12 @@ test.describe('the sweep per-file delete (retract-then-delete, #1864)', () => {
       { status: 200, data: { success: true }, headers: {} }
     ]);
     expect(await sweepDeleteOneFile(t.request, file, 'tok')).toBeNull();
+    // Every leg carries the SAME bearer header — the retract is no
+    // anonymous call (#1864 review).
     expect(t.calls).toEqual([
-      ['DELETE', '/api/files/f123'],
-      ['POST', '/api/files/f123/retract'],
-      ['DELETE', '/api/files/f123']
+      bearerCall('DELETE', '/api/files/f123'),
+      bearerCall('POST', '/api/files/f123/retract'),
+      bearerCall('DELETE', '/api/files/f123')
     ]);
   });
 
@@ -172,10 +180,42 @@ test.describe('the sweep per-file delete (retract-then-delete, #1864)', () => {
     expect(failure).toBe(
       'test-document-leftover.pdf: retract failed before delete (HTTP 500 — Dataprep retract failed)'
     );
-    expect(t.calls).toEqual([
-      ['DELETE', '/api/files/f123'],
-      ['POST', '/api/files/f123/retract']
+    expect(t.calls).toEqual([bearerCall('DELETE', '/api/files/f123'), bearerCall('POST', '/api/files/f123/retract')]);
+  });
+
+  test('a failed retract surfaces the server details field', async () => {
+    // doc-repo's retract 500 carries the RAW dataprep answer in
+    // `details` — the actual failure reason, not just the class label
+    // (#1864 review). Bounded: a verbose body cannot flood the report.
+    const t = scriptedTransport([
+      serving(),
+      {
+        status: 500,
+        data: {
+          success: false,
+          error: 'Dataprep retract failed',
+          details: { success: false, reason: 'chunk cascade refused' }
+        },
+        headers: {}
+      }
     ]);
+    const failure = await sweepDeleteOneFile(t.request, file, 'tok');
+    expect(failure).toBe(
+      'test-document-leftover.pdf: retract failed before delete (HTTP 500 — Dataprep retract failed' +
+        ' — details: {"success":false,"reason":"chunk cascade refused"})'
+    );
+    expect(t.calls).toEqual([bearerCall('DELETE', '/api/files/f123'), bearerCall('POST', '/api/files/f123/retract')]);
+  });
+
+  test('a 401 on the retract leg keeps the token-expiry diagnosis', async () => {
+    // The token can lapse between the first DELETE and the retract; that
+    // leg owes the same verdict + expiry label the delete legs produce,
+    // with the leg named (#1864 review).
+    const t = scriptedTransport([serving(), { status: 401, data: { error: 'TOKEN_EXPIRED' }, headers: {} }]);
+    const failure = await sweepDeleteOneFile(t.request, file, 'tok');
+    expect(failure).toContain('the endpoint answered TOKEN_EXPIRED');
+    expect(failure).toContain('on the retract after a STILL_SERVING refusal');
+    expect(t.calls).toEqual([bearerCall('DELETE', '/api/files/f123'), bearerCall('POST', '/api/files/f123/retract')]);
   });
 
   test('a delete that still refuses after a successful retract carries the refusal', async () => {
@@ -189,9 +229,9 @@ test.describe('the sweep per-file delete (retract-then-delete, #1864)', () => {
         'File f123 is still serving the corpus (dataprep status: ingested) — retract it before deleting'
     );
     expect(t.calls).toEqual([
-      ['DELETE', '/api/files/f123'],
-      ['POST', '/api/files/f123/retract'],
-      ['DELETE', '/api/files/f123']
+      bearerCall('DELETE', '/api/files/f123'),
+      bearerCall('POST', '/api/files/f123/retract'),
+      bearerCall('DELETE', '/api/files/f123')
     ]);
   });
 
@@ -199,14 +239,23 @@ test.describe('the sweep per-file delete (retract-then-delete, #1864)', () => {
     const t = scriptedTransport([serving('CRAWL_ACTIVE')]);
     const failure = await sweepDeleteOneFile(t.request, file, 'tok');
     expect(failure).toMatch(/HTTP 409 \(CRAWL_ACTIVE\)/);
-    expect(t.calls).toEqual([['DELETE', '/api/files/f123']]);
+    expect(t.calls).toEqual([bearerCall('DELETE', '/api/files/f123')]);
   });
 
   test('a 401 keeps the unauthorized description, without a retract', async () => {
     const t = scriptedTransport([{ status: 401, data: { error: 'TOKEN_EXPIRED' }, headers: {} }]);
     const failure = await sweepDeleteOneFile(t.request, file, 'tok');
     expect(failure).toContain('the endpoint answered TOKEN_EXPIRED');
-    expect(t.calls).toEqual([['DELETE', '/api/files/f123']]);
+    expect(t.calls).toEqual([bearerCall('DELETE', '/api/files/f123')]);
+  });
+
+  test('a 409 with an empty body takes no retract and reads as a bare status', async () => {
+    // The transport resolves an empty body as null data; the code-keyed
+    // guard must read that as "no code", not throw (#1864 review).
+    const t = scriptedTransport([{ status: 409, data: null, headers: {} }]);
+    const failure = await sweepDeleteOneFile(t.request, file, 'tok');
+    expect(failure).toBe('test-document-leftover.pdf: HTTP 409');
+    expect(t.calls).toEqual([bearerCall('DELETE', '/api/files/f123')]);
   });
 
   test('a plain server failure names its status and the server error', async () => {

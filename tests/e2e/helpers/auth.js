@@ -33,11 +33,7 @@ const IDEMPOTENT_METHODS = ['GET', 'DELETE', 'PUT'];
  *  through this ONE predicate, so widening one arm cannot leave the other
  *  behind. */
 function isEdgeResetReply(status, bodyText) {
-  return (
-    status === 503 &&
-    typeof bodyText === 'string' &&
-    bodyText.includes(EDGE_RESET_SIGNATURE)
-  );
+  return status === 503 && typeof bodyText === 'string' && bodyText.includes(EDGE_RESET_SIGNATURE);
 }
 
 /** The rejection arm: the non-JSON guard rejected the edge's text reply,
@@ -76,87 +72,88 @@ function isRawEdgeReset(method, res) {
  * @returns {Promise<{status: number, data: object, headers: object}>}
  */
 function request(method, path, options = {}) {
-  const attempt = () => new Promise((resolve, reject) => {
-    // Parsed INSIDE the executor: a path the URL parser refuses must
-    // reject the promise — the helper's contract is to always return one
-    // — not throw synchronously out of the call frame before a handler
-    // could attach.
-    const url = new URL(path, BASE_URL);
-    const reqOptions = {
-      hostname: url.hostname,
-      port: url.port || 443,
-      path: url.pathname + url.search,
-      method,
-      rejectUnauthorized: false,
-      timeout: 30000,
-      headers: options.headers || {},
-      // One socket per request. The global agent keeps sockets alive
-      // (Node >= 19), and an endpoint that does not consume the request
-      // body — Keycloak's DELETE on the role-mappings collection — leaves
-      // that body in the socket: the NEXT request on the same connection
-      // is then read as a malformed one and answers 400 Bad Request.
-      agent: false
-    };
+  const attempt = () =>
+    new Promise((resolve, reject) => {
+      // Parsed INSIDE the executor: a path the URL parser refuses must
+      // reject the promise — the helper's contract is to always return one
+      // — not throw synchronously out of the call frame before a handler
+      // could attach.
+      const url = new URL(path, BASE_URL);
+      const reqOptions = {
+        hostname: url.hostname,
+        port: url.port || 443,
+        path: url.pathname + url.search,
+        method,
+        rejectUnauthorized: false,
+        timeout: 30000,
+        headers: options.headers || {},
+        // One socket per request. The global agent keeps sockets alive
+        // (Node >= 19), and an endpoint that does not consume the request
+        // body — Keycloak's DELETE on the role-mappings collection — leaves
+        // that body in the socket: the NEXT request on the same connection
+        // is then read as a malformed one and answers 400 Bad Request.
+        agent: false
+      };
 
-    const req = https.request(reqOptions, (res) => {
-      let body = '';
-      res.on('data', (chunk) => {
-        body += chunk;
+      const req = https.request(reqOptions, (res) => {
+        let body = '';
+        res.on('data', (chunk) => {
+          body += chunk;
+        });
+        res.on('end', () => {
+          // A non-JSON body is a broken endpoint, not a usable value: resolve
+          // with the raw text and the caller's status guard would report a
+          // misleading failure. Fail here with the observed body instead. An
+          // empty body resolves as null data — a 204-style success with no
+          // payload is not malformed.
+          if (body === '') {
+            resolve({ status: res.statusCode, data: null, headers: res.headers });
+            return;
+          }
+          // A raw read: the caller wants the body AS TEXT (the runtime
+          // config is JavaScript, not JSON). The JSON parser below must not
+          // reject it.
+          if (options.raw) {
+            resolve({ status: res.statusCode, data: body, headers: res.headers });
+            return;
+          }
+          try {
+            resolve({ status: res.statusCode, data: JSON.parse(body), headers: res.headers });
+          } catch {
+            const error = new Error(
+              `${method} ${path} returned a non-JSON body (HTTP ${res.statusCode}): ${body.slice(0, 200)}`
+            );
+            // The endpoint answered — it just did not answer with JSON. The
+            // status travels with the error: the retry verdict follows the
+            // server's state (a 5xx is an outage a retry may survive), not
+            // the content type. A rejection without a status is a transport
+            // failure. The FULL body travels beside the message: the gate
+            // reads bodyText, so a future rewording of this message's prose
+            // cannot break the retry verdict.
+            error.nonJsonBody = true;
+            error.status = res.statusCode;
+            error.bodyText = body;
+            reject(error);
+          }
+        });
       });
-      res.on('end', () => {
-        // A non-JSON body is a broken endpoint, not a usable value: resolve
-        // with the raw text and the caller's status guard would report a
-        // misleading failure. Fail here with the observed body instead. An
-        // empty body resolves as null data — a 204-style success with no
-        // payload is not malformed.
-        if (body === '') {
-          resolve({ status: res.statusCode, data: null, headers: res.headers });
-          return;
-        }
-        // A raw read: the caller wants the body AS TEXT (the runtime
-        // config is JavaScript, not JSON). The JSON parser below must not
-        // reject it.
-        if (options.raw) {
-          resolve({ status: res.statusCode, data: body, headers: res.headers });
-          return;
-        }
-        try {
-          resolve({ status: res.statusCode, data: JSON.parse(body), headers: res.headers });
-        } catch {
-          const error = new Error(
-            `${method} ${path} returned a non-JSON body (HTTP ${res.statusCode}): ${body.slice(0, 200)}`
-          );
-          // The endpoint answered — it just did not answer with JSON. The
-          // status travels with the error: the retry verdict follows the
-          // server's state (a 5xx is an outage a retry may survive), not
-          // the content type. A rejection without a status is a transport
-          // failure. The FULL body travels beside the message: the gate
-          // reads bodyText, so a future rewording of this message's prose
-          // cannot break the retry verdict.
-          error.nonJsonBody = true;
-          error.status = res.statusCode;
-          error.bodyText = body;
-          reject(error);
-        }
+
+      req.on('error', reject);
+
+      // https.request's timeout option only starts the clock — without a
+      // handler the stalled socket is never destroyed and the promise
+      // hangs past the 30s budget.
+      req.on('timeout', () => {
+        req.destroy(new Error(`Request timed out after ${reqOptions.timeout}ms: ${method} ${path}`));
       });
+
+      if (options.body) {
+        const bodyStr = typeof options.body === 'string' ? options.body : JSON.stringify(options.body);
+        req.setHeader('Content-Type', options.contentType || 'application/json');
+        req.write(bodyStr);
+      }
+      req.end();
     });
-
-    req.on('error', reject);
-
-    // https.request's timeout option only starts the clock — without a
-    // handler the stalled socket is never destroyed and the promise
-    // hangs past the 30s budget.
-    req.on('timeout', () => {
-      req.destroy(new Error(`Request timed out after ${reqOptions.timeout}ms: ${method} ${path}`));
-    });
-
-    if (options.body) {
-      const bodyStr = typeof options.body === 'string' ? options.body : JSON.stringify(options.body);
-      req.setHeader('Content-Type', options.contentType || 'application/json');
-      req.write(bodyStr);
-    }
-    req.end();
-  });
 
   // A non-idempotent method can never retry: hand it the bare transport —
   // the gate's method set already says no, but the short-circuit makes the
@@ -328,10 +325,14 @@ async function getSessionToken(page) {
 // on a stalled stack one login cycle costs ≈135s (two attempts of 30s
 // navigation + 15s redirect wait + retry budget), and a beforeAll can
 // stack admin-API requests (each at the 30s request cap) on top of it.
-// Apply with test.describe.configure({ timeout: ... }) for the tests
-// and test.setTimeout(...) inside beforeAll — hooks read the project
-// timeout, not the suite timeout.
-const SESSION_MINT_TIMEOUT_MS = 360000;
+// Sized with the documents sweep's worst case (#1864's retract remedy:
+// up to three calls per serving file — see the budget arithmetic on
+// SWEEP_DELETE_CONCURRENCY below): 135 s login + 60 s list + 180 s
+// deletes = 375 s, so 420 s leaves margin without loosening the sweep's
+// own token-window bound. Apply with test.describe.configure({
+// timeout: ... }) for the tests and test.setTimeout(...) inside
+// beforeAll — hooks read the project timeout, not the suite timeout.
+const SESSION_MINT_TIMEOUT_MS = 420000;
 
 /**
  * Ceiling for the delete fan-out of a cleanup sweep.
@@ -351,10 +352,15 @@ const SESSION_MINT_TIMEOUT_MS = 360000;
  *    the issuance and the mint returning.
  *
  * After the mint the sweep lists the population (≤ 2 pages at the 30 s
- * request cap = 60 s) and deletes the suite's own files (50 deletes in
- * waves of 10 = 5 × 30 s = 150 s): 210 s of work, inside the token's
- * 300 s with ~90 s left for that gap. With the login counted, 135 + 60
- * + 150 = 345 s, inside the hook's 360 s.
+ * request cap = 60 s) and deletes the suite's own files. Since #1864 a
+ * SERVING file costs up to THREE calls (DELETE refused 409, retract,
+ * DELETE again) — the worst-case wave is therefore 3 × 30 s = 90 s, and
+ * the budget must be sized on that wave, not on the one-call wave the
+ * pre-#1864 sweep had. At width 10 the delete budget (20, see below)
+ * costs 2 × 90 s = 180 s: 60 + 180 = 240 s of sweep work, inside the
+ * token's 300 s with ~60 s left for that gap. With the login counted,
+ * 135 + 60 + 180 = 375 s, inside the hook's 420 s
+ * (SESSION_MINT_TIMEOUT_MS).
  *
  * The wave width is bounded by the BUDGET and by what a shared stack
  * can take. The engine says how the contention behaves, and both
@@ -399,12 +405,17 @@ const SWEEP_MAX_LIST_PAGES = 2;
 /**
  * How many of the suite's own files one sweep deletes.
  *
- * 50 deletes in waves of 10 cost 5 × 30 s = 150 s, which is what the
- * budget above is sized for. A bigger delete set overruns the hook's
+ * Sized on the WORST wave, not the typical one (#1864): a serving file
+ * costs up to three calls (DELETE refused 409, retract, DELETE), so a
+ * wave of 10 costs up to 90 s. 20 deletes = 2 waves = 180 s, which is
+ * what keeps the whole sweep inside the token's 300 s (60 s of listing
+ * + 180 s of deletes + the issuance gap) — the pre-#1864 budget of 50
+ * assumed one call per file and would overrun the token exactly on the
+ * serving-heavy backlog #1864 fixes. A bigger delete set overruns the
  * budget, so the sweep deletes what fits and REPORTS the rest — a
  * leftover is reported, never dropped.
  */
-const SWEEP_MAX_DELETES = 50;
+const SWEEP_MAX_DELETES = 20;
 
 /**
  * The token's expiry, for a failure report that names the cause.

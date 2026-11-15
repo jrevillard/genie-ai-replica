@@ -1098,7 +1098,7 @@ test.describe('Welcome banner invariants', () => {
   test('1. the scrim alpha is at or above its theme floor and is the alpha it paints with', async ({ browser }) => {
     for (const vp of VIEWPORTS) {
       for (const theme of ['light', 'dark']) {
-        await withWelcomeSession(browser, { viewport: { width: vp.width, height: 800 }, theme }, async ({ page }) => {
+        await withWelcomeSession(browser, { viewport: { width: vp.width, height: 800 }, theme }, async (page) => {
           const floor = SCRIM_ALPHA[theme];
           const a = await scrimAlpha(page);
           expect(a.ok, `${vp.label}/${theme} scrim alpha readable`).toBe(true);
@@ -1129,7 +1129,7 @@ test.describe('Welcome banner invariants', () => {
   test("2. the wordmark's worst RENDERED local contrast clears 3:1", async ({ browser }) => {
     for (const vp of VIEWPORTS) {
       for (const theme of ['light', 'dark']) {
-        await withWelcomeSession(browser, { viewport: { width: vp.width, height: 800 }, theme }, async ({ page }) => {
+        await withWelcomeSession(browser, { viewport: { width: vp.width, height: 800 }, theme }, async (page) => {
           const c = await wordmarkContrast(page);
           expect(c.ok, `${vp.label}/${theme} wordmark measured (${c.why || 'ok'})`).toBe(true);
           expect(
@@ -1157,7 +1157,7 @@ test.describe('Welcome banner invariants', () => {
   }) => {
     for (const vp of VIEWPORTS) {
       for (const theme of ['light', 'dark']) {
-        await withWelcomeSession(browser, { viewport: { width: vp.width, height: 800 }, theme }, async ({ page }) => {
+        await withWelcomeSession(browser, { viewport: { width: vp.width, height: 800 }, theme }, async (page) => {
           const where = `${vp.label}/${theme}`;
           const a = SCRIM_ALPHA[theme];
 
@@ -1306,7 +1306,7 @@ test.describe('Welcome banner invariants', () => {
   test('5. the banner box holds the ink band and stays full-bleed', async ({ browser }) => {
     for (const vp of VIEWPORTS) {
       for (const theme of ['light', 'dark']) {
-        await withWelcomeSession(browser, { viewport: { width: vp.width, height: 800 }, theme }, async ({ page }) => {
+        await withWelcomeSession(browser, { viewport: { width: vp.width, height: 800 }, theme }, async (page) => {
           const m = await boxGeometry(page);
           expect(m, `${vp.label}/${theme} banner measurement`).not.toBeNull();
           expect(
@@ -1358,7 +1358,7 @@ test.describe('Welcome banner invariants', () => {
           await withWelcomeSession(
             browser,
             { viewport: { width: vp.width, height: 800 }, theme, locale },
-            async ({ page }) => {
+            async (page) => {
               const where = `${vp.label}/${theme}/${locale}`;
               await assertAdoptedLocale(page, where, locale);
               const m = await veilGeometry(page);
@@ -1440,7 +1440,7 @@ test.describe('Welcome banner invariants', () => {
           await withWelcomeSession(
             browser,
             { viewport: { width: vp.width, height: 800 }, theme, locale },
-            async ({ page }) => {
+            async (page) => {
               const where = `${vp.label}/${theme}/${locale}`;
               await assertAdoptedLocale(page, where, locale);
               // The title's own state in one string, so every message below can

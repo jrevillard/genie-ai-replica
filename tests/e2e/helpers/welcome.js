@@ -187,23 +187,24 @@ async function openWelcomeScreen(browser, { viewport, theme, locale, setupPage, 
  * loud — a close that itself fails surfaces that failure (superseding a
  * body error, exactly as the inline shape always did), never a swallow.
  *
- *   await withWelcomeSession(browser, { theme: 'dark' }, async ({ page }) => {
+ *   await withWelcomeSession(browser, { theme: 'dark' }, async (page) => {
  *     // assertions against the settled welcome screen
  *   });
  *
- * `fn` receives { ctx, page } — the same pair openWelcomeScreen returns —
- * and its resolution is passed through, so a spec can return a measured
- * value from the session.
+ * `fn` receives the session's page and its resolution is passed through,
+ * so a spec can return a measured value from the session. The context
+ * itself stays private to the helper — the close is the helper's own
+ * guarantee, and a caller that could reach ctx could fight the finally.
  * @param {import('@playwright/test').Browser} browser
  * @param {Parameters<openWelcomeScreen>[1]} opts - Forwarded to
  *   openWelcomeScreen verbatim
- * @param {(session: { ctx: import('@playwright/test').BrowserContext, page: import('@playwright/test').Page }) => Promise<*>} fn
+ * @param {(page: import('@playwright/test').Page) => Promise<*>} fn
  * @returns {Promise<*>} Whatever `fn` resolved to
  */
 async function withWelcomeSession(browser, opts, fn) {
   const { ctx, page } = await openWelcomeScreen(browser, opts);
   try {
-    return await fn({ ctx, page });
+    return await fn(page);
   } finally {
     await ctx.close();
   }

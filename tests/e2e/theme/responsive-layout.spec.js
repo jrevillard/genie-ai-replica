@@ -318,7 +318,7 @@ test.describe('Welcome panel does not scroll horizontally', () => {
             // animation openWelcomeScreen waits for passes — no fixed
             // settle window is needed for this read.
           },
-          async ({ page }) => {
+          async (page) => {
             const m = await readWelcomePanel(page);
             expect(m.hasOverlay, 'welcome overlay should be present in the DOM').toBe(true);
             expect(m.visualOn, 'data-visual="on" must be set for the wave layer to render').toBe(true);

@@ -2,6 +2,7 @@ const { test, expect } = require('@playwright/test');
 const { BASE_URL } = require('../helpers/base-url');
 const { TEST_USER } = require('../helpers/e2e-fixtures');
 const { NAV_LOGOUT_BUTTON } = require('../helpers/navbar');
+const { KEYCLOAK_AUTH_ENDPOINT_GLOB } = require('../helpers/keycloak-landing');
 
 // Test A.2 — Full Login Flow
 // Complete login flow: navigate to app, get redirected to Keycloak,
@@ -22,7 +23,7 @@ test('completes full login flow from app to Keycloak and back', async ({ browser
   });
 
   // Step 2: Wait for Keycloak login page
-  await page.waitForURL('**/protocol/openid-connect/auth**', {
+  await page.waitForURL(KEYCLOAK_AUTH_ENDPOINT_GLOB, {
     timeout: 15000,
   });
 

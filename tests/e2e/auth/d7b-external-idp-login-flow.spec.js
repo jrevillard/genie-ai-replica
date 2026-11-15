@@ -3,6 +3,7 @@ const { BASE_URL } = require('../helpers/base-url');
 const { getAdminToken } = require('../helpers/auth');
 const { hasIdentityProvider, missingIdentityProviderReason, skipUnlessVenue } = require('../helpers/venue-profile');
 const { NAV_LOGOUT_BUTTON } = require('../helpers/navbar');
+const { KEYCLOAK_AUTH_ENDPOINT_GLOB } = require('../helpers/keycloak-landing');
 
 const REALM = process.env.KEYCLOAK_REALM || 'genie';
 
@@ -20,7 +21,7 @@ const REALM = process.env.KEYCLOAK_REALM || 'genie';
  */
 async function brokerLogin(page) {
   await page.goto(`${BASE_URL}/`, { waitUntil: 'networkidle', timeout: 30000 });
-  await page.waitForURL('**/protocol/openid-connect/auth**', { timeout: 15000 });
+  await page.waitForURL(KEYCLOAK_AUTH_ENDPOINT_GLOB, { timeout: 15000 });
   await page.locator('#social-external-idp').click({ timeout: 10000 });
 
   // The broker redirect has ONE expected first landing: the external-idp

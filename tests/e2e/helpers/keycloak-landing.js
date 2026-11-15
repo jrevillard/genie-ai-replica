@@ -4,8 +4,8 @@
 // login/logout chain settle predicate, and the login-form proof shared by
 // the auth suite's specs. A spec that walks a login or logout reads its
 // landing from here instead of re-spelling the predicate — a realm rename
-// or an endpoint change lands in ONE place (the navbar.js precedent for
-// shared selector constants).
+// or an endpoint change lands here once for every spec that imports this
+// module (the navbar.js precedent for shared selector constants).
 //
 // Selectors here are third-party Keycloak markup (the upstream theme's own
 // ids), exempt from the declared-handle gate per tests/e2e/CLAUDE.md.

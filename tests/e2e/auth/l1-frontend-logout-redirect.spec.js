@@ -42,20 +42,11 @@ test('clicks logout button and redirects to Keycloak login page', async ({ brows
   await page.fill('#password', TEST_USER.password);
   await page.click('#kc-login');
 
-  // Step 4: Wait for redirect back to the app (dashboard)
-  await page.waitForURL(
-    (url) => {
-      const urlStr = url.toString();
-      return urlStr.includes('dashboard') || urlStr === `${BASE_URL}/`;
-    },
-    { timeout: 30000 },
-  );
-
-  const dashboardUrl = page.url();
-  await expect(
-    dashboardUrl.includes('dashboard'),
-    `Expected URL to contain 'dashboard' after login, got: ${dashboardUrl}`,
-  ).toBeTruthy();
+  // Step 4: Wait for redirect back to the app — the dashboard, exactly:
+  // the login is requested from '/' (whose redirect target is
+  // /dashboard), so that is the one expected landing; a login flow that
+  // parks anywhere else fails here.
+  await page.waitForURL(`${BASE_URL}/dashboard`, { timeout: 30000 });
 
   // Step 5: Click the logout button (NavBarComponent desktop logout button).
   // Its visibility is the authenticated-state pin: it renders only inside

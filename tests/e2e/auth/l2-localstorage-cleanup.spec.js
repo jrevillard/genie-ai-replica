@@ -2,7 +2,7 @@ const { test, expect } = require('@playwright/test');
 const { BASE_URL } = require('../helpers/base-url');
 const { TEST_USER } = require('../helpers/e2e-fixtures');
 const { NAV_LOGOUT_BUTTON } = require('../helpers/navbar');
-const { waitForRealmAuthEndpoint } = require('../helpers/keycloak-landing');
+const { KEYCLOAK_AUTH_ENDPOINT_GLOB, waitForRealmAuthEndpoint } = require('../helpers/keycloak-landing');
 
 // Test L.2 — localStorage Cleanup on Logout
 // Login, inject legacy localStorage items, trigger logout, verify they are removed.
@@ -23,7 +23,7 @@ test('clears legacy localStorage items after logout', async ({ browser }) => {
   });
 
   // Step 2: Wait for Keycloak login page and fill credentials
-  await page.waitForURL('**/protocol/openid-connect/auth**', {
+  await page.waitForURL(KEYCLOAK_AUTH_ENDPOINT_GLOB, {
     timeout: 15000,
   });
 
@@ -31,20 +31,11 @@ test('clears legacy localStorage items after logout', async ({ browser }) => {
   await page.fill('#password', TEST_USER.password);
   await page.click('#kc-login');
 
-  // Step 3: Wait for redirect back to the app (dashboard)
-  await page.waitForURL(
-    (url) => {
-      const urlStr = url.toString();
-      return urlStr.includes('dashboard') || urlStr === `${BASE_URL}/`;
-    },
-    { timeout: 30000 },
-  );
-
-  const dashboardUrl = page.url();
-  await expect(
-    dashboardUrl.includes('dashboard'),
-    `Expected URL to contain 'dashboard' after login, got: ${dashboardUrl}`,
-  ).toBeTruthy();
+  // Step 3: Wait for redirect back to the app — the dashboard, exactly:
+  // the login is requested from '/' (whose redirect target is
+  // /dashboard), so that is the one expected landing; a login flow that
+  // parks anywhere else fails here.
+  await page.waitForURL(`${BASE_URL}/dashboard`, { timeout: 30000 });
 
   // Step 4: Inject legacy localStorage items that the logout action should clean up
   await page.evaluate(() => {

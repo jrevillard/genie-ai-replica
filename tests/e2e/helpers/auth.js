@@ -33,11 +33,7 @@ const IDEMPOTENT_METHODS = ['GET', 'DELETE', 'PUT'];
  *  through this ONE predicate, so widening one arm cannot leave the other
  *  behind. */
 function isEdgeResetReply(status, bodyText) {
-  return (
-    status === 503 &&
-    typeof bodyText === 'string' &&
-    bodyText.includes(EDGE_RESET_SIGNATURE)
-  );
+  return status === 503 && typeof bodyText === 'string' && bodyText.includes(EDGE_RESET_SIGNATURE);
 }
 
 /** The rejection arm: the non-JSON guard rejected the edge's text reply,
@@ -76,87 +72,88 @@ function isRawEdgeReset(method, res) {
  * @returns {Promise<{status: number, data: object, headers: object}>}
  */
 function request(method, path, options = {}) {
-  const attempt = () => new Promise((resolve, reject) => {
-    // Parsed INSIDE the executor: a path the URL parser refuses must
-    // reject the promise — the helper's contract is to always return one
-    // — not throw synchronously out of the call frame before a handler
-    // could attach.
-    const url = new URL(path, BASE_URL);
-    const reqOptions = {
-      hostname: url.hostname,
-      port: url.port || 443,
-      path: url.pathname + url.search,
-      method,
-      rejectUnauthorized: false,
-      timeout: 30000,
-      headers: options.headers || {},
-      // One socket per request. The global agent keeps sockets alive
-      // (Node >= 19), and an endpoint that does not consume the request
-      // body — Keycloak's DELETE on the role-mappings collection — leaves
-      // that body in the socket: the NEXT request on the same connection
-      // is then read as a malformed one and answers 400 Bad Request.
-      agent: false
-    };
+  const attempt = () =>
+    new Promise((resolve, reject) => {
+      // Parsed INSIDE the executor: a path the URL parser refuses must
+      // reject the promise — the helper's contract is to always return one
+      // — not throw synchronously out of the call frame before a handler
+      // could attach.
+      const url = new URL(path, BASE_URL);
+      const reqOptions = {
+        hostname: url.hostname,
+        port: url.port || 443,
+        path: url.pathname + url.search,
+        method,
+        rejectUnauthorized: false,
+        timeout: 30000,
+        headers: options.headers || {},
+        // One socket per request. The global agent keeps sockets alive
+        // (Node >= 19), and an endpoint that does not consume the request
+        // body — Keycloak's DELETE on the role-mappings collection — leaves
+        // that body in the socket: the NEXT request on the same connection
+        // is then read as a malformed one and answers 400 Bad Request.
+        agent: false
+      };
 
-    const req = https.request(reqOptions, (res) => {
-      let body = '';
-      res.on('data', (chunk) => {
-        body += chunk;
+      const req = https.request(reqOptions, (res) => {
+        let body = '';
+        res.on('data', (chunk) => {
+          body += chunk;
+        });
+        res.on('end', () => {
+          // A non-JSON body is a broken endpoint, not a usable value: resolve
+          // with the raw text and the caller's status guard would report a
+          // misleading failure. Fail here with the observed body instead. An
+          // empty body resolves as null data — a 204-style success with no
+          // payload is not malformed.
+          if (body === '') {
+            resolve({ status: res.statusCode, data: null, headers: res.headers });
+            return;
+          }
+          // A raw read: the caller wants the body AS TEXT (the runtime
+          // config is JavaScript, not JSON). The JSON parser below must not
+          // reject it.
+          if (options.raw) {
+            resolve({ status: res.statusCode, data: body, headers: res.headers });
+            return;
+          }
+          try {
+            resolve({ status: res.statusCode, data: JSON.parse(body), headers: res.headers });
+          } catch {
+            const error = new Error(
+              `${method} ${path} returned a non-JSON body (HTTP ${res.statusCode}): ${body.slice(0, 200)}`
+            );
+            // The endpoint answered — it just did not answer with JSON. The
+            // status travels with the error: the retry verdict follows the
+            // server's state (a 5xx is an outage a retry may survive), not
+            // the content type. A rejection without a status is a transport
+            // failure. The FULL body travels beside the message: the gate
+            // reads bodyText, so a future rewording of this message's prose
+            // cannot break the retry verdict.
+            error.nonJsonBody = true;
+            error.status = res.statusCode;
+            error.bodyText = body;
+            reject(error);
+          }
+        });
       });
-      res.on('end', () => {
-        // A non-JSON body is a broken endpoint, not a usable value: resolve
-        // with the raw text and the caller's status guard would report a
-        // misleading failure. Fail here with the observed body instead. An
-        // empty body resolves as null data — a 204-style success with no
-        // payload is not malformed.
-        if (body === '') {
-          resolve({ status: res.statusCode, data: null, headers: res.headers });
-          return;
-        }
-        // A raw read: the caller wants the body AS TEXT (the runtime
-        // config is JavaScript, not JSON). The JSON parser below must not
-        // reject it.
-        if (options.raw) {
-          resolve({ status: res.statusCode, data: body, headers: res.headers });
-          return;
-        }
-        try {
-          resolve({ status: res.statusCode, data: JSON.parse(body), headers: res.headers });
-        } catch {
-          const error = new Error(
-            `${method} ${path} returned a non-JSON body (HTTP ${res.statusCode}): ${body.slice(0, 200)}`
-          );
-          // The endpoint answered — it just did not answer with JSON. The
-          // status travels with the error: the retry verdict follows the
-          // server's state (a 5xx is an outage a retry may survive), not
-          // the content type. A rejection without a status is a transport
-          // failure. The FULL body travels beside the message: the gate
-          // reads bodyText, so a future rewording of this message's prose
-          // cannot break the retry verdict.
-          error.nonJsonBody = true;
-          error.status = res.statusCode;
-          error.bodyText = body;
-          reject(error);
-        }
+
+      req.on('error', reject);
+
+      // https.request's timeout option only starts the clock — without a
+      // handler the stalled socket is never destroyed and the promise
+      // hangs past the 30s budget.
+      req.on('timeout', () => {
+        req.destroy(new Error(`Request timed out after ${reqOptions.timeout}ms: ${method} ${path}`));
       });
+
+      if (options.body) {
+        const bodyStr = typeof options.body === 'string' ? options.body : JSON.stringify(options.body);
+        req.setHeader('Content-Type', options.contentType || 'application/json');
+        req.write(bodyStr);
+      }
+      req.end();
     });
-
-    req.on('error', reject);
-
-    // https.request's timeout option only starts the clock — without a
-    // handler the stalled socket is never destroyed and the promise
-    // hangs past the 30s budget.
-    req.on('timeout', () => {
-      req.destroy(new Error(`Request timed out after ${reqOptions.timeout}ms: ${method} ${path}`));
-    });
-
-    if (options.body) {
-      const bodyStr = typeof options.body === 'string' ? options.body : JSON.stringify(options.body);
-      req.setHeader('Content-Type', options.contentType || 'application/json');
-      req.write(bodyStr);
-    }
-    req.end();
-  });
 
   // A non-idempotent method can never retry: hand it the bare transport —
   // the gate's method set already says no, but the short-circuit makes the
@@ -504,6 +501,9 @@ async function mapWithConcurrency(items, limit, fn) {
 async function getSessionTokenViaUI({ browser, user } = {}) {
   let ownBrowser = null;
   let context = null;
+  let token = null;
+  let loginError = null;
+  let teardownError = null;
   try {
     // The throwaway browser carries the venue mapping (empty unless
     // E2E_VENUE_IP is set): Chromium resolves hostnames with its own stack,
@@ -513,11 +513,39 @@ async function getSessionTokenViaUI({ browser, user } = {}) {
     context = await (browser || ownBrowser).newContext({ ignoreHTTPSErrors: true });
     const page = await context.newPage();
     await loginViaUI(page, user || TEST_USER);
-    return await getSessionToken(page);
+    token = await getSessionToken(page);
+  } catch (e) {
+    loginError = e;
   } finally {
-    if (ownBrowser) await ownBrowser.close();
-    else if (context) await context.close();
+    // The context closes BEFORE the browser (a browser-close failure must
+    // not skip the context close and leak it). The teardown failure is only
+    // COLLECTED here: a throw inside a finally supersedes whatever the try
+    // decided (eslint no-unsafe-finally), so the decision below — after the
+    // finally — throws the login failure as the primary error with the
+    // teardown error attached as its cause (#1883), and a teardown failure
+    // on a login that succeeded is still thrown: the throwaway session's
+    // cleanup fails loudly, never silently.
+    if (context) {
+      try {
+        await context.close();
+      } catch (e) {
+        teardownError = e;
+      }
+    }
+    if (ownBrowser) {
+      try {
+        await ownBrowser.close();
+      } catch (e) {
+        if (!teardownError) teardownError = e;
+      }
+    }
   }
+  if (loginError) {
+    if (teardownError) loginError.cause = teardownError;
+    throw loginError;
+  }
+  if (teardownError) throw teardownError;
+  return token;
 }
 
 /**

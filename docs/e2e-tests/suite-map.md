@@ -110,9 +110,9 @@ expose the pillar — see [local-run.md](local-run.md).
 | Spec | Phase/story | What it drives | Profile | Helpers |
 |------|-------------|----------------|---------|---------|
 | `living-intelligence.spec.js` | — | the decoration assets are served from `/config/` and revalidated, never cached immutable | core | `cache-headers`, `chatbot` |
-| `resizable-sidebars.spec.js` | — | the shared edge handle: drag, collapse, restore, the clamp | core | `chatbot`, `welcome`, `layout` |
+| `resizable-sidebars.spec.js` | — | the shared edge handle: drag, collapse, restore, the clamp | core | `chatbot`, `locale`, `welcome`, `layout` |
 | `responsive-layout.spec.js` | — | the quick-help grid column invariant across viewports | core | `chatbot`, `welcome`, `layout` |
-| `welcome-banner.spec.js` | — | the welcome banner scrim: alpha floor, wordmark contrast | core | `welcome` |
+| `welcome-banner.spec.js` | — | the welcome banner scrim: alpha floor, wordmark contrast | core | `locale`, `welcome` |
 | `theme-runtime-config.spec.js` | — | cache-header contract for the runtime theme config (`/config/theme-variables.css`, `/runtime/config.js`, `@theme_fallback`) | core | `cache-headers`, `base-url` |
 
 `theme-runtime-config.spec.js` was the one exception to the axis — held at

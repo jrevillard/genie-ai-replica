@@ -27,6 +27,7 @@
 
 const { test, expect } = require('@playwright/test');
 const { loginViaUI, navigateToChatbot } = require('../helpers/chatbot');
+const { assertAdoptedLocale } = require('../helpers/locale');
 const { readVisualLayerState } = require('../helpers/welcome');
 // The panel and handle selectors are the shared layout constants — one
 // definition in helpers/layout.js, re-used by every sidebar spec.
@@ -552,6 +553,12 @@ test.describe('Resizable sidebars behind one handle', () => {
       localStorage.setItem('sidebarOpenRight', 'true');
     });
     await page.reload({ waitUntil: 'networkidle' });
+    // The adoption pin (#1891): a deployment whose VUE_APP_AVAILABLE_LOCALES
+    // whitelist drops 'fr' silently falls back to 'en', whose shorter
+    // tooltips render — the overflow assert below would then measure
+    // English geometry and pass vacuously, the exact hole #1874 closed in
+    // welcome-banner. Prove the seed landed before measuring against it.
+    await assertAdoptedLocale(page, 'french tooltip overflow', 'fr');
     await page.waitForSelector('[data-test-id="nav-right"] [data-test-id^="nav-icon-btn-"]', { timeout: 15000 });
     await waitForWidthSettled(page, [LEFT, RIGHT]);
 

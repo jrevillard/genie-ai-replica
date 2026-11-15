@@ -303,10 +303,7 @@ test.describe('Conversation history persistence', () => {
     const rows = page.locator('[data-testid^="chat-message-"]');
     await expect(rows, 'the restored transcript').toHaveCount(3, { timeout: 15000 });
     await expect(page.locator('[data-testid="quick-help-overlay"]')).toHaveCount(0);
-    expect(
-      await rows.nth(0).getAttribute('data-testid'),
-      'the first row is the welcome turn'
-    ).toBe('chat-message-bot');
+    expect(await rows.nth(0).getAttribute('data-testid'), 'the first row is the welcome turn').toBe('chat-message-bot');
     await expect(
       rows.nth(1).locator('[data-testid="message-bubble-user"]'),
       'the user turn is restored verbatim'

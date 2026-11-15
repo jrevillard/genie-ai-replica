@@ -163,17 +163,26 @@ async function openWelcomeScreen(browser, { viewport, theme, locale, setupPage, 
     // if any, travels WITH the open error that caused the unwind, never
     // instead of it (a close that erased the login failure would leave
     // the runner diagnosing the teardown instead of the cause).
-    try {
-      await ctx.close();
-    } catch (closeFailure) {
-      // The OPEN error is the verdict — it keeps its type, stack and any
-      // verdict flags (.transient, .httpStatus) it carried; the teardown
-      // failure joins the message, it does not replace the failure that
-      // caused the unwind.
-      e.message = `${e.message} — additionally, closing the session's context failed: ${closeFailure.message}`;
-      throw e;
-    }
+    await closeLoudly(ctx, e);
     throw e;
+  }
+}
+
+/**
+ * Close a welcome session's context, loud but never verdict-stealing: a
+ * close that itself fails joins the GIVEN failure's message (which keeps
+ * its type, stack and any verdict flags) instead of replacing it. One
+ * spelling for both cleanup sites — the open path and the body path
+ * report the same teardown-failure shape.
+ * @param {import('@playwright/test').BrowserContext} ctx
+ * @param {Error} failure - The error that caused the unwind; its message
+ *   is adorned with the close failure, and it stays the caller's verdict
+ */
+async function closeLoudly(ctx, failure) {
+  try {
+    await ctx.close();
+  } catch (closeFailure) {
+    failure.message = `${failure.message} — additionally, closing the session's context failed: ${closeFailure.message}`;
   }
 }
 
@@ -195,14 +204,18 @@ async function openWelcomeScreen(browser, { viewport, theme, locale, setupPage, 
  *   });
  *
  * `fn` receives the session's page and its resolution is passed through,
- * so a spec can return a measured value from the session. The context
+ * so a spec can return a measured value from the session — unless the
+ * session's own close fails after `fn` succeeded, in which case that
+ * teardown failure throws and the measurement is lost with it (loud, and
+ * the verdict names the teardown, not a body failure). The context
  * itself stays private to the helper — the close is the helper's own
  * guarantee, and a caller that could reach ctx could fight the cleanup.
  * @param {import('@playwright/test').Browser} browser
  * @param {Parameters<openWelcomeScreen>[1]} opts - Forwarded to
  *   openWelcomeScreen verbatim
  * @param {(page: import('@playwright/test').Page) => Promise<*>} fn
- * @returns {Promise<*>} Whatever `fn` resolved to
+ * @returns {Promise<*>} Whatever `fn` resolved to — when the close after
+ *   a successful `fn` itself fails, that teardown error throws instead
  */
 async function withWelcomeSession(browser, opts, fn) {
   const { ctx, page } = await openWelcomeScreen(browser, opts);
@@ -213,11 +226,7 @@ async function withWelcomeSession(browser, opts, fn) {
     // The body failed — the close's own failure, if any, joins the BODY
     // error's message (which keeps its type, stack and verdict flags), it
     // never replaces the failure that caused the unwind.
-    try {
-      await ctx.close();
-    } catch (closeFailure) {
-      bodyError.message = `${bodyError.message} — additionally, closing the session's context failed: ${closeFailure.message}`;
-    }
+    await closeLoudly(ctx, bodyError);
     throw bodyError;
   }
   // fn succeeded — a close failure here is a TEARDOWN failure and is

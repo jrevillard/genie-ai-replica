@@ -1840,6 +1840,43 @@ async function splitConcept(req, res, next) {
 }
 
 /**
+ * SPLIT PREVIEW (#1577 story 2, CAP-3 "legible before") — GET
+ * /api/okf/repos/:repo_id/concepts/:concept_id/split-preview.
+ *
+ * The SAME preflight the POST runs, MINUS THE WRITE: previewConceptSplit
+ * (the one seam engine, the one ceiling) answers the proposed parts and
+ * their sizes, or the typed refusal — so the confirm dialog can show what
+ * the split will do BEFORE any write happens, and the refusals the dialog
+ * previews are the very refusals the POST would answer.
+ *
+ * Gates: admin scope on the route; the getById read fence (404 foreign,
+ * anti-enumeration); NO assertWritable — a preview writes nothing, so it is
+ * read-safe on a serving repo too (the UI hides the affordance there
+ * anyway). ZERO writes, no audit row (nothing happened to audit).
+ *
+ * The answer carries the LEGIBLE plan fields only — the write-path payload
+ * (part bodies, the meta row) never leaves the service.
+ */
+async function previewConceptSplit(req, res, next) {
+  try {
+    const { repo_id, concept_id } = req.params;
+    const repoDoc = await repoService.getById(repo_id, { authz: authzForService(req) });
+    if (!repoDoc) throw new RepoError('REPO_NOT_FOUND', `Repository ${repo_id} not found`, 404);
+    const out = await splitOperation.previewConceptSplit(repoDoc, concept_id);
+    if (!out.ok) {
+      // The typed refusal, mapped to its own status with the house error
+      // envelope ({error, message}) — the dialog renders the message
+      // verbatim and maps the code 1:1 to its state.
+      return res.status(out.status || 400).json({ ok: false, error: out.code, message: out.message });
+    }
+    const { concept_id: cid, parts, ceiling, body_chars } = out.plan;
+    res.status(200).json({ ok: true, concept_id: cid, parts, ceiling, body_chars });
+  } catch (err) {
+    next(err);
+  }
+}
+
+/**
  * RE-INGEST FAILED CONCEPTS (David, 2026-10-14). Serves BOTH routes:
  *   POST /:repo_id/reingest-failed                  (all failed concepts)
  *   POST /:repo_id/concepts/:concept_id/reingest    (one concept)
@@ -2625,6 +2662,7 @@ module.exports = {
   patchConcept,
   resplitRepo,
   splitConcept,
+  previewConceptSplit,
   reingestFailed,
   autocorrectRepo,
   transitionLifecycle,

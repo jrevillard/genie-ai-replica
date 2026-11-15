@@ -563,6 +563,53 @@ describe('stampSourceDocument via startConversion', () => {
     const terminal = await waitForTerminal();
     expect(terminal.status).toBe('done');
   });
+
+  // Baseline F-1 (security review, 2026-11-15): the crawl-seed url is
+  // caller-supplied and the editor renders source_document.url as a raw
+  // :href anchor — the stamp is the one choke point where an executable
+  // scheme can be stopped before it reaches the corpus.
+  test('stamps http/https seed urls verbatim', async () => {
+    queueMetadata();
+    authedAxios.get.mockResolvedValueOnce({
+      status: 200,
+      headers: { 'content-length': '0' },
+      data: Readable.from([])
+    });
+    await startJob({ url: 'https://crawl.example/seed' });
+    await waitForTerminal();
+
+    const stamp = mockDb.query.mock.calls
+      .map((c) => (c[1] && c[1].file_id ? c[1] : null))
+      .filter(Boolean)
+      .find((b) => b.file_name === 'crawl.md');
+    expect(stamp).toMatchObject({ url: 'https://crawl.example/seed' });
+  });
+
+  test.each([
+    ['javascript:alert(1)'],
+    ['JAVASCRIPT:alert(1)'],
+    ['HTTPS://EXAMPLE/SEED'],
+    [' data:text/html,<script>'],
+    ['vbscript:msgbox'],
+    ['file:///etc/passwd'],
+    ['#fragment-only'],
+    ['not a url at all']
+  ])('strips a non-http seed url (%s) to null before stamping', async (bad) => {
+    queueMetadata();
+    authedAxios.get.mockResolvedValueOnce({
+      status: 200,
+      headers: { 'content-length': '0' },
+      data: Readable.from([])
+    });
+    await startJob({ url: bad });
+    await waitForTerminal();
+
+    const stamp = mockDb.query.mock.calls
+      .map((c) => (c[1] && c[1].file_id ? c[1] : null))
+      .filter(Boolean)
+      .find((b) => b.file_name === 'crawl.md');
+    expect(stamp).toMatchObject({ url: null });
+  });
 });
 
 // ---- size authority: metadata size beats missing content-length -------------

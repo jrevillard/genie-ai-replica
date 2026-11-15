@@ -2045,6 +2045,7 @@ export default {
         label: 'Miroolu',
         loading: 'A bering soto…',
         resplit: 'A farra kuta',
+        split: 'Ajeje kōm̧m̧an eo',
         flagged: 'a juubeta',
         flaggedTip:
           'Kōm̦m̦an ko ewōr kakōl̦l̦e ie — kipel̦o̦k kajojo, jol̦o̦k ak ukōt men eo, kōjparok (ej make bar lale); ak kwal̦o̦k bwe kwojel̦ā ie ilo iien publish.',
@@ -2101,6 +2102,22 @@ export default {
         modeC: 'Kōjerbal LLM ñan kōkalikkar un ko',
         modeCHint: 'Bwebwenato 10.6 — etooj wōt enaj itok',
         title: 'Bar ajeje jān jikin eo'
+      },
+      split: {
+        title: 'Ajeje kōm̧m̧an eo',
+        open: 'Ajeje kōm̧m̧an eo',
+        body: 'Men in enaj kajjitọọk ajeje kōm̧m̧an eo — jab eeņōj kōm̧m̧an em̧ōj likbeb na in ba am̧ kōttōpar.',
+        ceiling: 'Kipar: {ceiling} caractairí',
+        parts: 'Ajeje ko',
+        partChars: '{chars} caractairí',
+        confirm: 'Ajeje',
+        working: 'Ej ajje…',
+        refused: 'Kōm̧m̧anej ear kọjparok ajeje eo:',
+        previewFailed: 'Jab lukkuņ kajjitọọk in ajeje eo — jab eeņōj kōņaanin.',
+        failed: 'Ajeje ear kọjparok — jab eeņōj enaaj kōṃm̧ane.',
+        done: 'Ajeje eo {n} kōm̧m̧an: {created} ko bar kōṃm̧ane, {updated} bar oktak.',
+        dirty:
+          'Aō oktak ko rej jab likbeb ilo kōm̧m̧an eo — ajeje eo enaj kōṃm̧ane kōn kōm̧m̧an eo ej likbeb; kōṇan in enaaj jab likbeb kōṃm̧ane.'
       },
       rename: {
         body: 'Re-ennym yn stashys chammah as graffyn yn ynnyd-obbee echey (`OKF_<name>_v<N>`); yn scoilt, ny llyncur as yn raad ard-scrutaght cha nel ad caghlit.',

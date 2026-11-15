@@ -64,8 +64,10 @@ const LOGIN_BUDGET_TIMEOUT_MS = 300000;
  * Authenticate via page-level login (Keycloak redirect flow).
  *
  * Retries once, because a slow identity provider under load must not fail a
- * test that has nothing to do with authentication. A genuine failure — bad
- * credentials, wrong realm — fails both passes, and the error names both.
+ * test that has nothing to do with authentication (operator-sanctioned
+ * 2026-11-14 — entry 2 of the retry inventory in tests/e2e/CLAUDE.md). A
+ * genuine failure — bad credentials, wrong realm — fails both passes, and
+ * the error names both.
  */
 async function loginViaUI(page, user = TEST_USER) {
   let firstError;

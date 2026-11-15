@@ -30,7 +30,13 @@ const GAUGE = {
   currentValue: 87.5,
   previousValue: 80.0,
   changePercentage: 2.3,
-  target: 85,
+  // #1866: a target the component's DEFAULT would never render. The
+  // gauge falls back to internalTarget 85 (`this.target || 85` in
+  // SatisfactionGauge.vue), so seeding 85 made broken target wiring
+  // indistinguishable from the injected value — the assertion read the
+  // default either way. 73 can only render if the payload reached the
+  // component.
+  target: 73,
   historicalData: [
     { label: 'current', value: 87.5, periodStart: '2026-11-01', periodEnd: '2026-11-13' },
     { label: 'week1', value: 82.1, periodStart: '2026-10-25', periodEnd: '2026-10-31' },
@@ -144,8 +150,10 @@ test.describe('Analytics satisfaction charts', () => {
       await expect(item).toContainText(row.value);
     }
 
-    // The target indicator: exact rendered copy.
-    await expect(page.locator('[data-test-id="analytics-gauge-target"]')).toHaveText('Target: 85%');
+    // The target indicator: exact rendered copy — of the INJECTED value
+    // (#1866: 73 collides with no default, so a payload that never
+    // reaches the component renders 85 and this goes red).
+    await expect(page.locator('[data-test-id="analytics-gauge-target"]')).toHaveText('Target: 73%');
 
     // The gauge's center value, inside the chart SVG: the payload's
     // currentValue through the chart's own formatter (toFixed(2) + '%').

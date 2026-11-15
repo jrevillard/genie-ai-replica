@@ -552,7 +552,23 @@ function groupFailuresByFile(failed) {
   return byFile;
 }
 
-function issueBody(file, failures, venue, runStamp) {
+/**
+ * The venue build line, from the sha the run's pre-flight handed over
+ * (#1851): an issue that does not name the served build is one an
+ * operator cannot diagnose in one read — a stale venue fails specs for
+ * product-reasons that read like test defects.
+ *
+ * @param {string|undefined} venueBuildGitSha - the E2E_VENUE_BUILD_GIT_SHA
+ *   the run script exported (empty/absent = the run carried no marker)
+ * @returns {string} the body line
+ */
+function venueBuildLine(venueBuildGitSha) {
+  return venueBuildGitSha
+    ? `- venue build: \`${venueBuildGitSha}\``
+    : '- venue build: unknown — the run carried no build marker (a venue predating the #1851 contract, or the probe could not read it)';
+}
+
+function issueBody(file, failures, venue, runStamp, venueBuildGitSha) {
   return [
     'Filed by the local e2e run (`tests/e2e/run/run-local-e2e.sh`).',
     '',
@@ -563,6 +579,7 @@ function issueBody(file, failures, venue, runStamp) {
             `\`${process.env[VENUE_HOST_ENV] || '(the BASE_URL host)'}\` = \`${process.env[VENUE_IP_ENV]}\``
         ]
       : []),
+    venueBuildLine(venueBuildGitSha),
     `- run: ${runStamp}`,
     specFileMarker(file),
     `- failing tests: ${failures.length}`,
@@ -589,7 +606,7 @@ function issueBody(file, failures, venue, runStamp) {
 /**
  * The comment posted on an issue that already tracks the failure.
  */
-function commentBody(files, venue, runStamp) {
+function commentBody(files, venue, runStamp, venueBuildGitSha) {
   // One argv element carries the whole comment, so the cap is the COMMENT's
   // budget, not each file's — an umbrella issue tracking many files must not
   // push the body past the kernel's per-argument cap either.
@@ -597,6 +614,7 @@ function commentBody(files, venue, runStamp) {
   return [
     `The local e2e run is still red on ${files.length} spec file(s) this issue covers ` +
       `(${runStamp}, venue \`${venue}\`).`,
+    venueBuildLine(venueBuildGitSha),
     '',
     ...files.flatMap((entry) => {
       const taken = entry.failures.slice(0, Math.max(0, budget));
@@ -636,7 +654,7 @@ function createIssue(file, failures, venue, runStamp) {
       '-f',
       `title=${title}`,
       '-f',
-      `description=${issueBody(file, failures, venue, runStamp)}`,
+      `description=${issueBody(file, failures, venue, runStamp, process.env.E2E_VENUE_BUILD_GIT_SHA)}`,
       '-f',
       `labels=${LABELS.join(',')}`
     ])
@@ -651,7 +669,7 @@ function commentOnIssue(issue, files, venue, runStamp) {
     'POST',
     `projects/${GITLAB_PROJECT_ID}/issues/${issue.iid}/notes`,
     '-f',
-    `body=${commentBody(files, venue, runStamp)}`
+    `body=${commentBody(files, venue, runStamp, process.env.E2E_VENUE_BUILD_GIT_SHA)}`
   ]);
   process.stdout.write(`  #${issue.iid} (commented) ${issue.title}\n`);
 }

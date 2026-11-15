@@ -1283,11 +1283,23 @@ container_scanning:
       REGISTRY_REF="$CI_REGISTRY_IMAGE/tmp/$IMAGE_NAME:${CANDIDATE_TAG}"
       CACHE_REF="$CI_REGISTRY_IMAGE/tmp/$IMAGE_NAME:cache-${CI_COMMIT_REF_SLUG}"
       echo "Building $IMAGE_NAME → ${REGISTRY_REF}"
+      # The frontend bakes a build marker (#1851): /build-info.json carries
+      # the commit the image was built from, and the e2e pre-flight reads
+      # it so a stale venue cannot file misleading spec-defect issues.
+      # Other images do not declare the ARG — buildx ignores it there, so
+      # the arg is passed only where it is consumed.
+      BUILD_ARGS=""
+      case "$DOCKERFILE" in
+        *gov-chat-frontend*)
+          BUILD_ARGS="--build-arg GIT_SHA=${CI_COMMIT_SHA:-unknown}"
+          ;;
+      esac
       docker buildx build \
         --pull \
         --push \
         -t "$REGISTRY_REF" \
         -f "$DOCKERFILE" \
+        $BUILD_ARGS \
         --cache-from "type=registry,ref=$CACHE_REF" \
         --cache-to "type=registry,ref=$CACHE_REF,mode=max" \
         "$CONTEXT"

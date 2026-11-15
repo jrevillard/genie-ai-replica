@@ -325,18 +325,23 @@ async function getSessionToken(page) {
 // on a stalled stack one login cycle costs ≈135s (two attempts of 30s
 // navigation + 15s redirect wait + retry budget), and a beforeAll can
 // stack admin-API requests (each at the 30s request cap) on top of it.
-// Apply with test.describe.configure({ timeout: ... }) for the tests
-// and test.setTimeout(...) inside beforeAll — hooks read the project
+// Sized with the documents sweep's worst case (#1864's retract remedy —
+// SWEEP_DOCS_MAX_DELETES owns the delete-budget arithmetic): 135 s login
+// + 60 s list + 180 s deletes = 375 s, so 420 s leaves margin without
+// loosening the sweep's own token-window bound. Apply with
+// `test.describe.configure({ timeout: ... })` for the tests and
+// test.setTimeout(...) inside beforeAll — hooks read the project
 // timeout, not the suite timeout.
-const SESSION_MINT_TIMEOUT_MS = 360000;
+const SESSION_MINT_TIMEOUT_MS = 420000;
 
 /**
  * Ceiling for the delete fan-out of a cleanup sweep.
  *
  * The sweep must fit TWO limits, and they are not the same clock:
  *
- *  - the HOOK's budget (360 s) counts everything, including the login
- *    that mints the token (≈135 s on a stalled stack);
+ *  - the HOOK's budget (420 s, SESSION_MINT_TIMEOUT_MS) counts
+ *    everything, including the login that mints the token (≈135 s on a
+ *    stalled stack);
  *  - the TOKEN's life (the realm's `accessTokenLifespan` — 300 s, the
  *    shipped default: `docker-compose.yaml` pins
  *    `KEYCLOAK_ACCESS_TOKEN_LIFESPAN:-300` and `configs/keycloak/
@@ -348,10 +353,22 @@ const SESSION_MINT_TIMEOUT_MS = 360000;
  *    the issuance and the mint returning.
  *
  * After the mint the sweep lists the population (≤ 2 pages at the 30 s
- * request cap = 60 s) and deletes the suite's own files (50 deletes in
- * waves of 10 = 5 × 30 s = 150 s): 210 s of work, inside the token's
- * 300 s with ~90 s left for that gap. With the login counted, 135 + 60
- * + 150 = 345 s, inside the hook's 360 s.
+ * request cap = 60 s) and deletes the suite's own files. Since #1864 a
+ * SERVING document costs up to THREE calls (DELETE refused 409, retract,
+ * DELETE again) — the worst-case wave is therefore 3 × 30 s = 90 s, and
+ * the documents budget must be sized on that wave, not on the one-call
+ * wave the conversation sweep still has. At width 10 the documents
+ * delete budget (SWEEP_DOCS_MAX_DELETES, below) costs 2 × 90 s = 180 s:
+ * 60 + 180 = 240 s of sweep work, inside the token's 300 s with ~60 s
+ * left for that gap. With the login counted, 135 + 60 + 180 = 375 s,
+ * inside the hook's 420 s (SESSION_MINT_TIMEOUT_MS).
+ *
+ * The arithmetic counts ONE attempt per call: the idempotent legs also
+ * carry the sanctioned edge-reset retry (#1847, up to 3 attempts × 30 s
+ * each), so a reset landing inside the sweep window can stretch it past
+ * these bounds — the margins above (~60 s on the token, 45 s on the
+ * hook) are what absorbs it, and the sweep reports a token-expiry 401
+ * by name if they ever do not.
  *
  * The wave width is bounded by the BUDGET and by what a shared stack
  * can take. The engine says how the contention behaves, and both
@@ -394,14 +411,31 @@ const SWEEP_DELETE_CONCURRENCY = 10;
 const SWEEP_MAX_LIST_PAGES = 2;
 
 /**
- * How many of the suite's own files one sweep deletes.
+ * How many of the suite's own CONVERSATIONS one sweep deletes.
  *
- * 50 deletes in waves of 10 cost 5 × 30 s = 150 s, which is what the
- * budget above is sized for. A bigger delete set overruns the hook's
- * budget, so the sweep deletes what fits and REPORTS the rest — a
- * leftover is reported, never dropped.
+ * One call per conversation (a bare DELETE — conversations have no
+ * dataprep state to retract): 50 deletes in waves of 10 cost
+ * 5 × 30 s = 150 s, inside both clocks with the pre-#1864 margins. The
+ * DOCUMENTS sweep has its own cap below: #1864's retract remedy gave a
+ * serving document a three-call worst case, and sizing the SHARED cap
+ * on that model would have silently halved the conversation sweep's
+ * reach (#1864 quality review).
  */
 const SWEEP_MAX_DELETES = 50;
+
+/**
+ * How many of the suite's own DOCUMENTS one sweep deletes.
+ *
+ * Sized on the WORST wave, not the typical one (#1864): a serving
+ * document costs up to three calls (DELETE refused 409, retract,
+ * DELETE again), so a wave of 10 costs up to 3 × 30 s = 90 s (the wave
+ * arithmetic lives on SWEEP_DELETE_CONCURRENCY). 20 documents = 2 waves
+ * = 180 s, which is what keeps the whole sweep inside the token's
+ * 300 s (60 s of listing + 180 s of deletes + the issuance gap). A
+ * bigger delete set overruns the budget, so the sweep deletes what fits
+ * and REPORTS the rest — a leftover is reported, never dropped.
+ */
+const SWEEP_DOCS_MAX_DELETES = 20;
 
 /**
  * The token's expiry, for a failure report that names the cause.
@@ -596,5 +630,6 @@ module.exports = {
   SESSION_MINT_TIMEOUT_MS,
   SWEEP_DELETE_CONCURRENCY,
   SWEEP_MAX_LIST_PAGES,
-  SWEEP_MAX_DELETES
+  SWEEP_MAX_DELETES,
+  SWEEP_DOCS_MAX_DELETES
 };

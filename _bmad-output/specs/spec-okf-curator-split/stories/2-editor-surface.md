@@ -141,5 +141,14 @@ context:
   modal vocabulary copy + adding the drift pin; the editor test scaffold deduplicated into ONE
   mountEditorFor), 3 skipped with reasons (shared URL predicate = #1692 scope; DsDialog :actions
   extension = a shared-primitive decision; okf.editor.split.open/.title = distinct slots).
-  Suites: okf-server 2357/2357, frontend 4540/4540. Remaining before merge: local-build deploy
-  + live smoke + the e2e venue leg.
+  Suites: okf-server 2357/2357, frontend 4540/4540. Coverage above baseline in both components.
+- Venue leg complete (2026-11-15): local build (https://localhost, okfEnabled=1) — images rebuilt
+  from this change set, markers verified in both containers, live smoke **SMOKE OK — 43/43**
+  (the preview leg included: plan shape, zero writes on preview, preview refusals 1:1 with write
+  refusals). E2E on the same venue: the NEW split describe **3/3 green** (preview before any
+  write — zero split POSTs observed; confirm-once-then-close; refusal verbatim + confirm
+  disabled). The 3 PRE-EXISTING ceiling-red tests in the same file fail on origin/main too —
+  root cause `c49c38733` (#1634, 2026-11-07): the editor opens `view: 'rendered'`, so the raw
+  `okf-md-body` textarea the tests read/fill is no longer in the DOM; verified by trace + a
+  25 s live probe (editor + advisory stable, textarea absent, no navigation). NOT this change
+  set's regression; a backlog issue (payload prepared) reports it.

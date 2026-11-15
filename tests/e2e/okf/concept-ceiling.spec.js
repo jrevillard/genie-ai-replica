@@ -183,12 +183,11 @@ test.describe('the concept-document ceiling in the concept editor', () => {
     expect(body.length, "the stub body must be the editor's body").toBeGreaterThan(0);
 
     // The number on screen is the SERVER's ceiling (the injected
-    // `max_doc_chars`) and the body's own length. The count rides the
-    // advisory's status pill (`span[data-state]`, the DsPill the count is
+    // `max_doc_chars`) and the body's own length, pinned EXACTLY on the
+    // advisory's status pill (`[data-state]`, the DsPill the count is
     // rendered in) — the advisory also carries the #1577 split affordance
     // beside it, so the whole-container text is no longer the count alone.
-    await expect(advisory).toContainText(String(CEILING));
-    await expect(advisory.locator('span[data-state]')).toHaveText(`${body.length} / ${CEILING} characters`);
+    await expect(advisory.locator('[data-state]')).toHaveText(`${body.length} / ${CEILING} characters`);
   });
 
   test('going OVER the ceiling turns the warning on BEFORE the save is refused', async ({ page }) => {
@@ -200,10 +199,9 @@ test.describe('the concept-document ceiling in the concept editor', () => {
     await expect(advisory.locator('[data-state="warning"]')).toHaveCount(0);
 
     // Type a body over the ceiling — the real interaction, through the
-    // browser's input path.
-    const editor = page.locator('[data-test-id="okf-md-body"]');
-    await expect(editor).toBeVisible({ timeout: 15000 });
-    await editor.fill('y'.repeat(CEILING + 1));
+    // browser's input path (the walk's own wait gates the editor's
+    // presence; fill() auto-waits on top of it).
+    await page.locator('[data-test-id="okf-md-body"]').fill('y'.repeat(CEILING + 1));
 
     // The warning is on, and the curator is told what to do.
     await expect(advisory.locator('[data-state="warning"]')).toHaveCount(1);
@@ -216,9 +214,7 @@ test.describe('the concept-document ceiling in the concept editor', () => {
     // The text this test types — ONE constant, filled and asserted, so the
     // #1877 stale-body check below can never drift from what was typed.
     const EDITED_BODY = 'z'.repeat(50);
-    const editor = page.locator('[data-test-id="okf-md-body"]');
-    await expect(editor).toBeVisible({ timeout: 15000 });
-    await editor.fill(EDITED_BODY);
+    await page.locator('[data-test-id="okf-md-body"]').fill(EDITED_BODY);
 
     // Force the save (the autosave is debounced; the button is explicit).
     const save = page.locator('[data-test-id="okf-concept-save"]');

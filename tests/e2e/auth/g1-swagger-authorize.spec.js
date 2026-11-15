@@ -57,8 +57,10 @@ test.describe('Swagger UI OAuth2', () => {
     // The dialog PRE-FILLS the client_id from the page's initOAuth config —
     // the deployment contract's OIDC client (compose and realm both default
     // to genie-app), pinned exactly like the realm name above.
-    const clientIdInput = authContainer.locator('input#client_id_authorizationCode');
-    await expect(clientIdInput, 'the dialog must pre-fill the deployed OIDC client id').toHaveValue('genie-app');
+    await expect(
+      authContainer.locator('input#client_id_authorizationCode'),
+      'the dialog must pre-fill the deployed OIDC client id'
+    ).toHaveValue('genie-app');
 
     // NOTE: this test pins the DECLARED contract only — the dialog and its
     // OIDC configuration. It does NOT run the authorize round-trip (Swagger →

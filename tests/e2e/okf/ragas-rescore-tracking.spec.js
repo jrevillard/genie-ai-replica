@@ -151,6 +151,10 @@ test.describe('the RAGAS guide explains the output, and a re-score is a tracked 
     // ---- B. a re-score is TRACKED and CANCELLABLE ----
     // The history lists the runs; the newest DONE one can be re-scored.
     const historyRows = page.locator('[data-test-id="ragas-run-history"] table tbody tr');
+    // Every run key on screen, trimmed — one spelling, read by the
+    // snapshot and the fresh-key poll below.
+    const runKeys = async () =>
+      (await historyRows.locator('[data-test-id="ragas-run-key"]').allInnerTexts()).map((k) => k.trim());
     await expect(historyRows.first(), 'the run history must list the runs').toBeVisible({ timeout: 20000 });
 
     // Find the newest row whose status pill says 'done' and click ITS
@@ -165,9 +169,7 @@ test.describe('the RAGAS guide explains the output, and a re-score is a tracked 
     // from the same source run), and must never be mistaken for this
     // run's row — it would satisfy both the lineage marker and the
     // source-key text, and every verdict below would read off it.
-    const knownKeys = new Set(
-      (await historyRows.locator('[data-test-id="ragas-run-key"]').allInnerTexts()).map((k) => k.trim())
-    );
+    const knownKeys = new Set(await runKeys());
 
     const rescoreButton = doneRow.getByRole('button', { name: /^Re-score$/ }).first();
     await expect(rescoreButton, 'a finished run must offer Re-score').toBeEnabled({ timeout: 20000 });
@@ -199,40 +201,32 @@ test.describe('the RAGAS guide explains the output, and a re-score is a tracked 
       timeout: 20000
     });
 
-    // And it is TRACKED — a row for THIS run appears in the history, with
-    // the lineage back to the source run. The row is identified by a key
-    // that did NOT exist before the submit: a marker-only `.first()` would
-    // bind the leftover row from the previous execution the instant it is
-    // visible (its lineage names the same source run), and the cancel
-    // verdict below would pass against a row this test never started
-    // (#1876).
+    // And it is TRACKED — a row for THIS run appears in the history. Bound
+    // by a key absent from the snapshot above — see #1876 there. `newKey`
+    // is captured by the poll's closure: reassigned every tick until the
+    // fresh key lands, then final when the poll asserts.
     let newKey = null;
     await expect
       .poll(
         async () => {
-          const keys = (await historyRows.locator('[data-test-id="ragas-run-key"]').allInnerTexts()).map((k) =>
-            k.trim()
-          );
-          newKey = keys.find((k) => !knownKeys.has(k)) || null;
+          newKey = (await runKeys()).find((k) => !knownKeys.has(k)) || null;
           return newKey;
         },
         { timeout: 30000, message: 'the new re-score must appear in the run history with a fresh key' }
       )
       .not.toBeNull();
-    const newRow = historyRows.filter({ hasText: newKey });
-    await expect(newRow, 'the new row must name the source run').toContainText(sourceKey);
+    const ourRow = historyRows.filter({ hasText: newKey });
+    await expect(ourRow, 'the new row must name the source run').toContainText(sourceKey);
     await page.screenshot({ path: 'test-results/ragas-rescore-running.png', fullPage: false });
 
     // ---- C. and it can be STOPPED ----
     await cancelRun.click();
 
-    // OUR row lands 'cancelled' — never 'failed', and it does not vanish.
-    // The row is bound by its own fresh key, so leftovers from earlier runs
-    // of this suite cannot carry the verdict (#1876).
-    const cancelledRow = historyRows.filter({ hasText: newKey });
-    await expect(cancelledRow, 'the cancelled re-score must stay in the history').toHaveCount(1, { timeout: 30000 });
-    await expect(cancelledRow, 'the cancelled row must keep its lineage to the source run').toContainText(sourceKey);
-    await expect(cancelledRow.locator('[data-state]'), 'the cancelled re-score must read cancelled').toContainText(
+    // OUR row lands 'cancelled' — never 'failed', and it does not vanish;
+    // the lineage to the source run must survive the cancel (#1876).
+    await expect(ourRow, 'the cancelled re-score must stay in the history').toHaveCount(1, { timeout: 30000 });
+    await expect(ourRow, 'the cancelled row must keep its lineage to the source run').toContainText(sourceKey);
+    await expect(ourRow.locator('[data-state]'), 'the cancelled re-score must read cancelled').toContainText(
       /cancelled/i,
       { timeout: 30000 }
     );

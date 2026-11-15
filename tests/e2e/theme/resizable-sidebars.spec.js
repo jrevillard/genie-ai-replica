@@ -746,7 +746,8 @@ test.describe('Resizable sidebars behind one handle', () => {
           none: false,
           afterWidth: parseFloat(after.width) || 0,
           afterHeight: parseFloat(after.height) || 0,
-          panelClientWidth: overlay.clientWidth
+          panelClientWidth: overlay.clientWidth,
+          scrollWidth: overlay.scrollWidth
         };
       });
       expect(c.none, `the welcome overlay should be readable at ${wide}px`).toBe(false);
@@ -772,19 +773,14 @@ test.describe('Resizable sidebars behind one handle', () => {
       // And no horizontal scrollbar: the banner is NOT hidden for this
       // read, so it also proves the panel absorbs the banner's own bleed at
       // a wide viewport — a state the wave-only read in
-      // `responsive-layout.spec.js` deliberately does not cover.
-      const sw = await page.evaluate(() => {
-        const overlay = document.querySelector('[data-testid="quick-help-overlay"]');
-        if (!overlay) return null;
-        return { scrollWidth: overlay.scrollWidth, clientWidth: overlay.clientWidth };
-      });
-      if (sw) {
-        expect(
-          sw.scrollWidth,
-          `at viewport ${wide}, overlay.scrollWidth (${sw.scrollWidth}px) must be <= ` +
-            `overlay.clientWidth (${sw.clientWidth}px); overflow=${sw.scrollWidth - sw.clientWidth}px`
-        ).toBeLessThanOrEqual(sw.clientWidth);
-      }
+      // `responsive-layout.spec.js` deliberately does not cover. The
+      // measurability is pinned by the c.none assert above (same read, same
+      // element), so this assert runs unconditionally.
+      expect(
+        c.scrollWidth,
+        `at viewport ${wide}, overlay.scrollWidth (${c.scrollWidth}px) must be <= ` +
+          `overlay.clientWidth (${c.panelClientWidth}px); overflow=${c.scrollWidth - c.panelClientWidth}px`
+      ).toBeLessThanOrEqual(c.panelClientWidth);
     }
   });
 

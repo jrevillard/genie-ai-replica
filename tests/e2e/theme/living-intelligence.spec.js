@@ -27,6 +27,20 @@ test.describe('Living Intelligence visual layer', () => {
     ]) {
       const response = await request.get(asset);
       expectRevalidated(response, asset);
+      // The header contract cannot tell a live asset from a zero-byte file —
+      // an emptied asset revalidates exactly like the real one. Pin the body
+      // non-empty. Deliberately no content hash: the assets are
+      // operator-editable (bind-mounted /config/), so any hash would fail a
+      // legitimate operator swap; and a truncated-but-non-empty file is out
+      // of this pin's reach — the hero additionally gets the DOM-level pin
+      // in the test below.
+      const body = await response.body();
+      expect(
+        body.length,
+        `${asset} served an empty body with valid revalidation headers — ` +
+          `a zero-byte file passes the header contract, so non-emptiness is ` +
+          `pinned here`
+      ).toBeGreaterThan(0);
     }
   });
 

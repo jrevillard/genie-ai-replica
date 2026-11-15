@@ -157,24 +157,30 @@ async function measureLayout(page) {
 }
 
 function assertNoOverlap(m) {
+  // Both sidebars are rendered at every viewport this spec visits: collapsed
+  // or off-canvas they stay in the DOM and keep a real box (the
+  // narrow-viewport policy translates them, it never display:nones them) —
+  // so each rect is pinned non-null AND non-degenerate. A sidebar that
+  // stopped rendering goes red here instead of silently skipping the overlap
+  // check: a display:none box is non-null but zero-sized, and a zero box
+  // intersects nothing.
   expect(m.leftRect, 'left sidebar should be measurable').not.toBeNull();
+  expect(m.rightRect, 'right sidebar should be measurable').not.toBeNull();
   expect(m.centreRect, 'centre should be measurable').not.toBeNull();
+  expect(m.leftRect.width, 'left sidebar should render a real box').toBeGreaterThan(0);
+  expect(m.rightRect.width, 'right sidebar should render a real box').toBeGreaterThan(0);
   // The two sidebars' bounding rects must not intersect the centre's
   // bounding rect. Off-canvas rects extend past the viewport, which is
   // fine — they don't overlap the (always in-viewport) centre. The
   // intersection check works regardless of where the rectangles live.
-  if (m.leftRect) {
-    expect(
-      !boxesOverlap(m.leftRect, m.centreRect),
-      `left sidebar (left=${m.leftRect.left}, right=${m.leftRect.right}) must not overlap centre (left=${m.centreRect.left}, right=${m.centreRect.right})`
-    ).toBe(true);
-  }
-  if (m.rightRect) {
-    expect(
-      !boxesOverlap(m.rightRect, m.centreRect),
-      `right sidebar (left=${m.rightRect.left}, right=${m.rightRect.right}) must not overlap centre (left=${m.centreRect.left}, right=${m.centreRect.right})`
-    ).toBe(true);
-  }
+  expect(
+    !boxesOverlap(m.leftRect, m.centreRect),
+    `left sidebar (left=${m.leftRect.left}, right=${m.leftRect.right}) must not overlap centre (left=${m.centreRect.left}, right=${m.centreRect.right})`
+  ).toBe(true);
+  expect(
+    !boxesOverlap(m.rightRect, m.centreRect),
+    `right sidebar (left=${m.rightRect.left}, right=${m.rightRect.right}) must not overlap centre (left=${m.centreRect.left}, right=${m.centreRect.right})`
+  ).toBe(true);
 }
 
 test.describe('Responsive layout (quick-help grid + sidebar policy)', () => {

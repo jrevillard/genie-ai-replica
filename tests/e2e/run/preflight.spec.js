@@ -284,6 +284,19 @@ test.describe('the venue build marker parser (#1851)', () => {
     const empty = parseBuildMarker(200, 'application/json', '{"git_sha":""}');
     expect(empty.kind).toBe('malformed');
 
+    // The sha travels into a markdown issue body in backticks (#1851
+    // scoped review): a venue-controlled value outside the sha shape —
+    // backticks, spaces, control characters — is a broken marker, not a
+    // freshness fact. 'unknown' (a build that skipped the ARG) stays ok.
+    const injected = parseBuildMarker(200, 'application/json', '{"git_sha":"abc`venue build: `evil`"}');
+    expect(injected.kind).toBe('malformed');
+    expect(injected.reason).toContain('sha-shaped');
+    expect(parseBuildMarker(200, 'application/json', '{"git_sha":"with space"}').kind).toBe('malformed');
+    expect(parseBuildMarker(200, 'application/json', '{"git_sha":"unknown"}')).toEqual({
+      kind: 'ok',
+      gitSha: 'unknown'
+    });
+
     // A JSON content type over an EMPTY body (or an unparseable one) is
     // the contract in transit, not the contract's absence — the path is
     // served, so the venue OWNS the marker; a broken one stops the run.

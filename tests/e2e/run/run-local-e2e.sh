@@ -165,6 +165,10 @@ fi
 # cannot file a misleading spec-defect issue without naming its build.
 echo "pre-flight"
 E2E_VENUE_BUILD_FILE="$(mktemp)"
+# The preflight may exit nonzero (an unreachable venue, a BROKEN marker) and
+# set -e aborts here — the scratch file must not ghost in /tmp (scoped review
+# of #1851).
+trap 'rm -f "$E2E_VENUE_BUILD_FILE"' EXIT
 E2E_VENUE_BUILD_FILE="$E2E_VENUE_BUILD_FILE" node tests/e2e/run/preflight.js
 E2E_VENUE_BUILD_GIT_SHA="$(cat "$E2E_VENUE_BUILD_FILE" 2>/dev/null || true)"
 rm -f "$E2E_VENUE_BUILD_FILE"

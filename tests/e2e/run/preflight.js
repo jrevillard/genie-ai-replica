@@ -329,6 +329,15 @@ function parseBuildMarker(status, contentType, bodyText) {
   if (!parsed || typeof parsed !== 'object' || typeof parsed.git_sha !== 'string' || parsed.git_sha === '') {
     return { kind: 'malformed', reason: 'the marker carries no git_sha string' };
   }
+  // The sha travels INTO a markdown issue body in backticks (#1851
+  // scoped review): a venue-controlled value carrying backticks, spaces
+  // or control characters could break the fence or inject text into the
+  // tracker. The contract writes a full hex sha — or "unknown" from a
+  // build that skipped the ARG — so anything outside that shape is a
+  // broken marker, not a freshness fact.
+  if (!/^(unknown|[0-9a-f]{4,64})$/.test(parsed.git_sha)) {
+    return { kind: 'malformed', reason: 'the git_sha is not a sha-shaped value' };
+  }
   return { kind: 'ok', gitSha: parsed.git_sha };
 }
 

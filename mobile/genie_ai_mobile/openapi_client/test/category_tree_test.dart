@@ -21,11 +21,6 @@ void main() {
       // TODO
     });
 
-    // String catCode
-    test('to test the property `catCode`', () async {
-      // TODO
-    });
-
     // The name the UI displays: the localized translation, or — on the PUBLIC tree — the ENGLISH one when the active locale has no translation.
     // String name
     test('to test the property `name`', () async {

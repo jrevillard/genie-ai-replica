@@ -1095,7 +1095,7 @@ const ROPC_FLIP = {
     probeMiss: (clientId, realm, observed) =>
       `ROPC NOT reverted on ${clientId} in realm ${realm} — the PUT answered 204 but the client ` +
       `still reads back directAccessGrantsEnabled=${observed}, not the expected false. Fix the revert ` +
-      `before the venue keeps accepting password grants on this client.`
+      `before the venue may keep accepting password grants on this client.`
     // No vanished arm: a client gone between the PUT and the read-back
     // holds the revert's posture by absence — nothing leaks a grant.
   }

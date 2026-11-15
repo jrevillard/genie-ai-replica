@@ -1466,6 +1466,11 @@ test.describe('enableDirectAccessGrants reads the client list like every other r
 
     expect(caught.message).toMatch(/Failed to enable direct access grants on genie-app: HTTP 403/);
     expect(caught.message).toContain('forbidden');
+    // failWithStatus classifies the status and carries it: a 4xx is
+    // permanent (the caller cannot retry its way out), and the classification
+    // is part of the verdict's contract, not an implementation detail.
+    expect(caught.httpStatus).toBe(403);
+    expect(caught.transient).toBeFalsy();
   });
 
   test('enabling ROPC puts the whole client representation with the grant flipped, then reads the state back', async () => {
@@ -1605,6 +1610,9 @@ test.describe('disableDirectAccessGrants — the verified ROPC revert (#1879)', 
 
     expect(caught.message).toMatch(/Failed to disable direct access grants on genie-app: HTTP 409/);
     expect(caught.message).toContain('conflict');
+    // Same classification pin as the enable arm: 4xx is permanent.
+    expect(caught.httpStatus).toBe(409);
+    expect(caught.transient).toBeFalsy();
   });
 
   test('reverting puts the whole representation with the grant flipped, then reads the state back', async () => {

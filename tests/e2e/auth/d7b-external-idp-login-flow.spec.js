@@ -2,6 +2,7 @@ const { test, expect } = require('@playwright/test');
 const { BASE_URL } = require('../helpers/base-url');
 const { getAdminToken } = require('../helpers/auth');
 const { hasIdentityProvider, missingIdentityProviderReason, skipUnlessVenue } = require('../helpers/venue-profile');
+const { NAV_LOGOUT_BUTTON } = require('../helpers/navbar');
 
 const REALM = process.env.KEYCLOAK_REALM || 'genie';
 
@@ -175,11 +176,13 @@ test('completes full external IdP brokered login flow', async ({ browser }) => {
       await brokerLogin(page);
 
       // Step 3: The broker exchange is a fixed chain with two hops: the
-      // external realm hands the code back on the genie realm's callback
-      // route, and the app processes the code there (handleCallback) before
-      // routing onward. Wait for each hop in order — never branch on which
-      // hop the browser happens to be observed at (tests/e2e/CLAUDE.md:
-      // no fallback branches).
+      // external realm sends the browser back to the genie realm's broker
+      // endpoint (/auth/realms/genie/broker/external-idp/endpoint), which
+      // issues the genie realm's own OIDC redirect to the app's /callback
+      // route (the oidc client's redirect_uri), and the app processes the
+      // code there (handleCallback) before routing onward. Wait for each
+      // hop in order — never branch on which hop the browser happens to be
+      // observed at (tests/e2e/CLAUDE.md: no fallback branches).
       await page.waitForURL((url) => url.toString().includes('/callback'), {
         timeout: 30000
       });
@@ -193,11 +196,18 @@ test('completes full external IdP brokered login flow', async ({ browser }) => {
       // partial broker flow that parks the browser anywhere else fails here.
       await page.waitForURL(`${BASE_URL}/dashboard`, { timeout: 30000 });
 
-      // Step 5: Verify authenticated state — login button should not be visible
-      const loginButton = page.locator('#kc-login');
-      await expect(loginButton, 'Login button should not be visible after successful authentication').not.toBeVisible({
-        timeout: 15000
-      });
+      // Step 5: Authenticated-shell proof: the navbar renders only inside
+      // App.vue's authenticated gate (isAuthenticated && currentUser), so a
+      // visible logout button proves the brokered session actually rendered
+      // the app — a URL match alone would not. (The previous '#kc-login
+      // not visible' check was vacuous: the Vue app never renders that id;
+      // it lives only on the Keycloak login page, which the step-4 landing
+      // already left behind.)
+      const logoutButton = page.locator(NAV_LOGOUT_BUTTON);
+      await expect(
+        logoutButton,
+        'Expected the authenticated shell (logout button visible) after the brokered login'
+      ).toBeVisible({ timeout: 15000 });
     } finally {
       // Step 7: Converge VERIFY_EMAIL back to the pre-test state this spec
       // read. Only a disable THIS test performed is owed a restore: an

@@ -86,22 +86,34 @@ test('clears legacy localStorage items after logout', async ({ browser }) => {
     { timeout: 30000 },
   );
 
-  // Step 7: Navigate back to app origin and check localStorage
-  // Use about:blank to reset, then navigate to app origin
-  await page.goto('about:blank');
+  // Step 7: Read the app-origin localStorage after the logout. The read is
+  // atomic with an origin guard: after a destroyed realm session the
+  // unauthenticated app immediately bounces to Keycloak, so a late
+  // evaluate would run on the Keycloak origin — where both keys are always
+  // null, a false green for exactly the defect this spec exists to catch.
+  // One evaluate checks its own origin first and throws if it lost the
+  // race; the reads below therefore ran where they claim to have.
   await page.goto(`${BASE_URL}/`, { waitUntil: 'commit', timeout: 15000 });
-
-  // Check localStorage on the app origin (before Keycloak redirect completes)
-  const userAfter = await page.evaluate(() => localStorage.getItem('user'));
-  const tokenAfter = await page.evaluate(() => localStorage.getItem('auth_token'));
+  const expectedOrigin = new URL(BASE_URL).origin;
+  const storageAfter = await page.evaluate((origin) => {
+    if (location.origin !== origin) {
+      throw new Error(
+        `localStorage read lost the auth-redirect race: the page is on ${location.origin}, expected ${origin}`,
+      );
+    }
+    return {
+      user: localStorage.getItem('user'),
+      token: localStorage.getItem('auth_token'),
+    };
+  }, expectedOrigin);
 
   await expect(
-    userAfter === null,
-    `Expected 'user' to be null after logout, got: ${userAfter}`,
+    storageAfter.user === null,
+    `Expected 'user' to be null after logout, got: ${storageAfter.user}`,
   ).toBeTruthy();
   await expect(
-    tokenAfter === null,
-    `Expected 'auth_token' to be null after logout, got: ${tokenAfter}`,
+    storageAfter.token === null,
+    `Expected 'auth_token' to be null after logout, got: ${storageAfter.token}`,
   ).toBeTruthy();
 
   await context.close();

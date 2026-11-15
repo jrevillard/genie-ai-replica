@@ -1,6 +1,7 @@
 const { test, expect } = require('@playwright/test');
 const { BASE_URL } = require('../helpers/base-url');
 const { TEST_USER } = require('../helpers/e2e-fixtures');
+const { NAV_LOGOUT_BUTTON } = require('../helpers/navbar');
 
 // Test A.2 — Full Login Flow
 // Complete login flow: navigate to app, get redirected to Keycloak,
@@ -57,11 +58,17 @@ test('completes full login flow from app to Keycloak and back', async ({ browser
     `Expected URL to contain 'dashboard', got: ${finalUrl}`,
   ).toBeTruthy();
 
-  // The dashboard URL is the authenticated-state pin: /dashboard carries
-  // meta.requiresAuth and the navigation guard only lets an authenticated
-  // session through (src/router.js), so landing there already proves the
-  // login completed — a brand-substring body check added nothing (the
-  // brand text also renders pre-auth).
+  // Authenticated-shell proof: the navbar renders only inside App.vue's
+  // authenticated gate (isAuthenticated && currentUser), so a visible
+  // logout button proves the authenticated UI actually rendered. The URL
+  // pin above proves the router guard admitted a session; this proves the
+  // shell behind it is alive (the deleted brand-substring check was this
+  // same proof, keyed on copy text instead of a declared handle).
+  const logoutButton = page.locator(NAV_LOGOUT_BUTTON);
+  await expect(
+    logoutButton,
+    `Expected the authenticated shell (logout button visible) on the dashboard; got URL: ${finalUrl}`,
+  ).toBeVisible({ timeout: 10000 });
 
   await context.close();
 });

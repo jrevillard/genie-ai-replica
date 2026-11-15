@@ -11,7 +11,12 @@
   <div class="okf-ce" data-test-id="okf-concept-editor">
     <div class="okf-ce__toolbar">
       <div class="okf-ce__view-toggle" role="tablist" :aria-label="translate('okf.editor.viewToggle', 'Editor view')">
-        <DsButton :variant="view === 'source' ? 'primary' : 'secondary'" small @click="view = 'source'">
+        <DsButton
+          :variant="view === 'source' ? 'primary' : 'secondary'"
+          small
+          data-test-id="okf-concept-view-source"
+          @click="view = 'source'"
+        >
           {{ translate('okf.editor.view.source', 'Source') }}
         </DsButton>
         <!-- THREE real modes (David, 2026-09-06): the old Source|Rendered

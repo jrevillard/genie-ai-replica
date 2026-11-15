@@ -35,7 +35,7 @@ test.describe('Swagger UI OAuth2', () => {
     await expect(authorizeBtn, 'Authorize button should be visible').toBeVisible();
   });
 
-  test('Swagger UI OAuth2 authorization flow', async ({ page }) => {
+  test('the authorize dialog exposes the genie OIDC config', async ({ page }) => {
     await page.goto('/api-docs');
     await page.waitForLoadState('networkidle');
 
@@ -54,9 +54,18 @@ test.describe('Swagger UI OAuth2', () => {
     expect(authContainerText, 'Authorization dialog should reference the genie realm').toContain('realms/genie');
     expect(authContainerText, 'Authorization dialog should show client_id field').toContain('client_id');
 
-    // NOTE: Do NOT actually complete the login flow here.
-    // The full OAuth2 redirect through Keycloak is tested separately.
-    // This test only validates that the Authorize button opens the
-    // correct dialog with the expected Keycloak OIDC configuration.
+    // The dialog PRE-FILLS the client_id from the page's initOAuth config —
+    // the deployment contract's OIDC client (compose and realm both default
+    // to genie-app), pinned exactly like the realm name above.
+    const clientIdInput = authContainer.locator('input#client_id_authorizationCode');
+    await expect(clientIdInput, 'the dialog must pre-fill the deployed OIDC client id').toHaveValue('genie-app');
+
+    // NOTE: this test pins the DECLARED contract only — the dialog and its
+    // OIDC configuration. It does NOT run the authorize round-trip (Swagger →
+    // Keycloak → code → token), and on the current k8s venue it cannot: the
+    // backend serves the OAuth2 flow URLs from KEYCLOAK_URL, which the venue
+    // points at the cluster-internal Keycloak address, so the browser cannot
+    // reach them. The round-trip spec lands once the venue serves
+    // browser-reachable URLs (#1889).
   });
 });

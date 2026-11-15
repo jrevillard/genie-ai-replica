@@ -91,10 +91,7 @@ test.describe('the RAGAS guide explains the output, and a re-score is a tracked 
     await expect(studioTab, 'the OKF Studio tab must be reachable').toBeVisible({ timeout: 20000 });
     await studioTab.click();
 
-    const card = page
-      .locator('[data-test-id^="okf-studio-card-"]')
-      .filter({ hasText: REPO_NAME })
-      .first();
+    const card = page.locator('[data-test-id^="okf-studio-card-"]').filter({ hasText: REPO_NAME }).first();
     await expect(card, `the ${REPO_NAME} repo card must be listed`).toBeVisible({ timeout: 20000 });
     const testingLab = card.getByRole('button', { name: /Testing Lab/i }).first();
     await expect(testingLab, 'the Testing Lab button must be on the card').toBeVisible({ timeout: 20000 });
@@ -185,7 +182,10 @@ test.describe('the RAGAS guide explains the output, and a re-score is a tracked 
     // The re-score is a RUN: a progress bar and a Cancel button.
     const cancelRun = page.getByRole('button', { name: /cancel run/i }).first();
     await expect(cancelRun, 'the re-score must offer a Cancel run button').toBeVisible({ timeout: 20000 });
-    await expect(page.locator('[data-test-id="ragas-run-progress"]'), 'the re-score must show a progress bar').toBeVisible({
+    await expect(
+      page.locator('[data-test-id="ragas-run-progress"]'),
+      'the re-score must show a progress bar'
+    ).toBeVisible({
       timeout: 20000
     });
 
@@ -194,14 +194,22 @@ test.describe('the RAGAS guide explains the output, and a re-score is a tracked 
     const newRow = historyRows.filter({ hasText: /re-scored from/i }).first();
     await expect(newRow, 'the new re-score must appear in the run history').toBeVisible({ timeout: 30000 });
     await expect(newRow, 'the new row must name the source run').toContainText(sourceKey);
+    // The new run's OWN key — unique per run — is what the cancel verdict
+    // below binds to (#1876): a marker-only `.first()` can bind a stale
+    // re-score row left behind by an earlier execution of this suite, and
+    // read the verdict off the wrong row.
+    const newKey = (await newRow.locator('[data-test-id="ragas-run-key"]').innerText()).trim();
     await page.screenshot({ path: 'test-results/ragas-rescore-running.png', fullPage: false });
 
     // ---- C. and it can be STOPPED ----
     await cancelRun.click();
 
-    // The row lands 'cancelled' — never 'failed', and it does not vanish.
-    const cancelledRow = historyRows.filter({ hasText: /re-scored from/i }).first();
-    await expect(cancelledRow, 'the cancelled re-score must stay in the history').toBeVisible({ timeout: 30000 });
+    // OUR row lands 'cancelled' — never 'failed', and it does not vanish.
+    // The row is pinned to its own key, so leftovers from earlier runs of
+    // this suite cannot carry the verdict (#1876).
+    const cancelledRow = historyRows.filter({ hasText: newKey });
+    await expect(cancelledRow, 'the cancelled re-score must stay in the history').toHaveCount(1, { timeout: 30000 });
+    await expect(cancelledRow, 'the cancelled row must keep its lineage to the source run').toContainText(sourceKey);
     await expect(cancelledRow.locator('[data-state]'), 'the cancelled re-score must read cancelled').toContainText(
       /cancelled/i,
       { timeout: 30000 }

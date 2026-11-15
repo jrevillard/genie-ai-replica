@@ -296,6 +296,23 @@ const LAYER_OFF_VIEWPORTS = VIEWPORTS.filter((vp) => vp.label === '1440' || vp.l
 const LAYER_OFF_LOCALES = ['fr', 'id', 'man'];
 const ONE_LINE_WITH_LAYER_OFF = ['fr', 'id'];
 
+// The locale sweeps' premise, asserted once per session: the app ADOPTED the
+// seeded locale. main.js's detectInitialLocale silently falls back to 'en'
+// when the saved locale is not in the deployment's active set (the
+// VUE_APP_AVAILABLE_LOCALES whitelist), and every measurement of a session
+// that fell back reads the fallback locale's page and passes vacuously.
+// main.js writes the adopted locale to <html lang> at boot, so that
+// attribute is the pin — one home, before anything is measured.
+async function assertAdoptedLocale(page, where, locale) {
+  const adopted = await page.evaluate(() => document.documentElement.lang);
+  expect(
+    adopted,
+    `${where} the app did not adopt the seeded locale '${locale}' — ` +
+      `<html lang> reads '${adopted}', so every measurement in this session ` +
+      `is the fallback's, not '${locale}'s, and passes vacuously`
+  ).toBe(locale);
+}
+
 // Assertion 1: the scrim's alpha, read off the resolved custom property and
 // cross-checked against the colour the element actually paints with.
 async function scrimAlpha(page) {
@@ -1381,21 +1398,7 @@ test.describe('Welcome banner invariants', () => {
           });
           try {
             const where = `${vp.label}/${theme}/${locale}`;
-            // The sweep's premise: the app ADOPTED the seeded locale.
-            // main.js's detectInitialLocale silently falls back to 'en' when
-            // the saved locale is not in the deployment's active set (the
-            // VUE_APP_AVAILABLE_LOCALES whitelist), and every measurement
-            // below would then read English geometry and pass vacuously. Pin
-            // the locale the app actually adopted — main.js writes it to
-            // <html lang> at boot — before anything is measured.
-            const adopted = await page.evaluate(() => document.documentElement.lang);
-            expect(
-              adopted,
-              `${where} the app did not adopt the seeded locale '${locale}' — ` +
-                `<html lang> reads '${adopted}', so the geometry below is the ` +
-                `fallback's, not '${locale}'s, and every assertion in this ` +
-                `session passes vacuously`
-            ).toBe(locale);
+            await assertAdoptedLocale(page, where, locale);
             const m = await veilGeometry(page);
             expect(m, `${where} the veil's geometry read`).not.toBeNull();
 
@@ -1481,15 +1484,7 @@ test.describe('Welcome banner invariants', () => {
           });
           try {
             const where = `${vp.label}/${theme}/${locale}`;
-            // Same premise as test 7's adoption pin: without it a fallback to
-            // 'en' would measure the wrong locale's page and pass vacuously.
-            const adopted = await page.evaluate(() => document.documentElement.lang);
-            expect(
-              adopted,
-              `${where} the app did not adopt the seeded locale '${locale}' — ` +
-                `<html lang> reads '${adopted}', so the equality below is ` +
-                `measured on the fallback locale's page, not '${locale}'s`
-            ).toBe(locale);
+            await assertAdoptedLocale(page, where, locale);
             // The title's own state in one string, so every message below can
             // name what the difference costs instead of only what it is.
             const as = (g) =>

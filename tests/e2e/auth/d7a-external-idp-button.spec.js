@@ -1,5 +1,6 @@
 const { test, expect } = require('@playwright/test');
 const { BASE_URL } = require('../helpers/base-url');
+const { KEYCLOAK_AUTH_ENDPOINT_GLOB } = require('../helpers/keycloak-landing');
 const { hasIdentityProvider, missingIdentityProviderReason, skipUnlessVenue } = require('../helpers/venue-profile');
 
 const REALM = process.env.KEYCLOAK_REALM || 'genie';
@@ -38,7 +39,7 @@ test('external IdP button is visible on Keycloak login page', async ({ browser }
   });
 
   // Wait for Keycloak login page
-  await page.waitForURL('**/protocol/openid-connect/auth**', {
+  await page.waitForURL(KEYCLOAK_AUTH_ENDPOINT_GLOB, {
     timeout: 15000
   });
 

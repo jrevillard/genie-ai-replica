@@ -33,6 +33,7 @@
 const { test, expect } = require('@playwright/test');
 const { openStudioRepo, stubStudioRepoRoutes } = require('../helpers/okf-studio');
 const { okfEnabled, okfParkedReason, skipUnlessVenue } = require('../helpers/venue-profile');
+const { pinEnglish } = require('../helpers/locale');
 
 const REPO_ID = 'e2e-split-note-repo';
 const FILE_NAME = 'river-report.md';
@@ -82,10 +83,6 @@ async function openWizardInputStep(page, importBody) {
 }
 
 test.describe('OKF wizard split report note', () => {
-  // Asserts the note's exact sentence (splitReportCopy) — pin the locale
-  // (the sibling ceiling spec pins the same way; why: helpers/locale.js).
-  test.use({ locale: 'en-US' });
-
   test.beforeEach(
     skipUnlessVenue(
       test,
@@ -94,6 +91,9 @@ test.describe('OKF wizard split report note', () => {
     )
   );
 
+  // Asserts the note's exact sentence (splitReportCopy) — pinned like the
+  // sibling ceiling spec. Why: helpers/locale.js.
+  test.beforeEach(pinEnglish);
   test('names the file and the part count when the server splits the document', async ({ page }) => {
     await openWizardInputStep(page, {
       ok: true,

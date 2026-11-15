@@ -17,6 +17,7 @@ const { loginViaUI, BASE_URL, TEST_ADMIN_USER } = require('./chatbot');
 const {
   describeUnauthorized,
   getSessionTokenViaUI,
+  dedupeByIds,
   mapWithConcurrency,
   request,
   SWEEP_DELETE_CONCURRENCY,
@@ -433,20 +434,10 @@ async function deleteAllTestDocuments(prefix = 'test-document', { browser } = {}
   const populationKnown = total !== undefined;
   const enumeratedAll = populationKnown ? files.length >= total : exhausted;
 
-  // Pagination drift can list the same file on two page reads; the delete
-  // set holds each file ONCE — a duplicated entry would run a second
-  // retract against a file the sweep already converged (dataprep answers
-  // "already retracted") and turn a clean state into a spurious failure
-  // (#1864 review). A row with no id at all cannot be deduped — each such
-  // row stands alone (and its delete fails loud on the missing id).
-  const seenIds = new Set();
-  const ownUnique = own.filter((f) => {
-    const id = fileIdOf(f);
-    if (id === undefined || id === null) return true;
-    if (seenIds.has(id)) return false;
-    seenIds.add(id);
-    return true;
-  });
+  // The delete set holds each file ONCE: dedupeByIds drops the rows
+  // pagination drift listed twice (why: dedupeByIds in helpers/auth.js,
+  // #1864).
+  const ownUnique = dedupeByIds(own, fileIdOf);
 
   const deleteSet = ownUnique.slice(0, SWEEP_DOCS_MAX_DELETES);
   const beyondBudget = ownUnique.length - deleteSet.length;

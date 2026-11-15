@@ -28,6 +28,7 @@ const { BASE_URL } = require('../helpers/base-url');
 const { getAdminToken, SESSION_MINT_TIMEOUT_MS } = require('../helpers/auth');
 const { createUser, deleteUser } = require('../helpers/keycloak-admin');
 const { pinLocale } = require('../helpers/locale');
+const { KEYCLOAK_AUTH_ENDPOINT_GLOB } = require('../helpers/keycloak-landing');
 const { okfEnabled, okfParkedReason, skipUnlessVenue } = require('../helpers/venue-profile');
 
 const REALM = process.env.KEYCLOAK_REALM || 'genie';
@@ -83,7 +84,7 @@ test.describe('the RAGAS guide documents what each error state does to the resul
 
     // 1. log in through Keycloak
     await page.goto(`${BASE_URL}/`, { waitUntil: 'domcontentloaded', timeout: 30000 });
-    await page.waitForURL('**/protocol/openid-connect/auth**', { timeout: 20000 });
+    await page.waitForURL(KEYCLOAK_AUTH_ENDPOINT_GLOB, { timeout: 20000 });
     await page.fill('#username', USER);
     await page.fill('#password', PW);
     await page.click('#kc-login');

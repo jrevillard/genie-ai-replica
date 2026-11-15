@@ -10,6 +10,9 @@ const { runPostOnlyRouteHandler } = require('./route');
 // that needs the edge but no credential requires it from there, so the
 // two credential import paths are never mixed in one file.
 const { BASE_URL } = require('./base-url');
+// The auth-endpoint glob, owned once (helpers/keycloak-landing.js): a realm
+// rename or an endpoint change lands there instead of in every login walker.
+const { KEYCLOAK_AUTH_ENDPOINT_GLOB } = require('./keycloak-landing');
 
 // The handles the chat surface declares. A row's handle carries its
 // sender (`chat-message-bot` / `chat-message-user`), so a spec never
@@ -104,7 +107,7 @@ async function loginAttempt(page, user, budgetMs) {
   // is then already established and there is nothing left to log in to.
   if (page.url().includes('dashboard')) return;
 
-  await page.waitForURL('**/protocol/openid-connect/auth**', {
+  await page.waitForURL(KEYCLOAK_AUTH_ENDPOINT_GLOB, {
     timeout: 15000
   });
 

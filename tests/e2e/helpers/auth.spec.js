@@ -144,3 +144,39 @@ test.describe("getSessionTokenViaUI's error-priority contract", () => {
     expect(thrown.cause).toBe(teardown);
   });
 });
+
+// The cleanup sweeps' delete sets are deduped by id (dedupeByIds):
+// pagination drift can list one row on two page reads, and a duplicated
+// entry would run a second DELETE against an id the sweep already
+// converged — turning a converged state into a spurious cleanup failure
+// (#1864, #1893). The contract is pinned HERE because a venue run can
+// never exercise it: real pagination drift is rare by construction, so
+// the sweeps' green runs take the dedupe's no-op path.
+test.describe('dedupeByIds', () => {
+  test('keeps the first occurrence and drops later duplicates, order preserved', () => {
+    const rows = [{ id: 'a' }, { id: 'b' }, { id: 'a' }, { id: 'c' }, { id: 'b' }];
+    expect(auth.dedupeByIds(rows, (r) => r.id).map((r) => r.id)).toEqual(['a', 'b', 'c']);
+  });
+
+  test('dedupes within one page and across pages alike — the Set spans the whole array', () => {
+    // Documents the PRODUCTION input shape: a sweep accumulates paginated
+    // pages into ONE array and dedupes the flat result — 'b' duplicates
+    // WITHIN a page, 'a' ACROSS pages, both through the same whole-array
+    // Set (the helper itself sees no page structure).
+    const pages = [
+      [{ id: 'a' }, { id: 'b' }, { id: 'b' }],
+      [{ id: 'a' }, { id: 'c' }]
+    ];
+    const flat = pages.flat();
+    expect(auth.dedupeByIds(flat, (r) => r.id).map((r) => r.id)).toEqual(['a', 'b', 'c']);
+  });
+
+  test('keeps rows whose id cannot be derived — each stands alone', () => {
+    // The duplicate 'a' still dedupes (first wins); only the ID-LESS rows
+    // are exempt from the Set — null and undefined ids each stand alone.
+    const rows = [{ id: 'a' }, { id: null }, { id: undefined }, { id: 'a' }];
+    const deduped = auth.dedupeByIds(rows, (r) => r.id);
+    expect(deduped).toHaveLength(3);
+    expect(deduped.filter((r) => r.id == null)).toHaveLength(2);
+  });
+});

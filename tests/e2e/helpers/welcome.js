@@ -206,21 +206,25 @@ async function openWelcomeScreen(browser, { viewport, theme, locale, setupPage, 
  */
 async function withWelcomeSession(browser, opts, fn) {
   const { ctx, page } = await openWelcomeScreen(browser, opts);
+  let result;
   try {
-    const result = await fn(page);
-    await ctx.close();
-    return result;
+    result = await fn(page);
   } catch (bodyError) {
+    // The body failed — the close's own failure, if any, joins the BODY
+    // error's message (which keeps its type, stack and verdict flags), it
+    // never replaces the failure that caused the unwind.
     try {
       await ctx.close();
     } catch (closeFailure) {
-      // Same verdict rule as the open path: the BODY error is what the
-      // runner needs to see; the teardown failure joins its message.
       bodyError.message = `${bodyError.message} — additionally, closing the session's context failed: ${closeFailure.message}`;
-      throw bodyError;
     }
     throw bodyError;
   }
+  // fn succeeded — a close failure here is a TEARDOWN failure and is
+  // rethrown as itself: adorning it as a body failure would invent a
+  // session-body verdict that never happened.
+  await ctx.close();
+  return result;
 }
 
 /**

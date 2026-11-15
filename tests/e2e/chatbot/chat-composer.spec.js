@@ -13,16 +13,17 @@
 //       1 in the chat view (0 on the welcome screen) — the two counts
 //       are the source of truth, never both 1.
 //
-//   (B) The composer IS the just-chat config entry. The runtime
-//       config carries a placement field whose only valid values
-//       are `tile` and `composer`; the spec fetches the served
-//       config and asserts `placement: "composer"` on the just-chat
-//       entry, and asserts the entry's icon src, background tint
-//       and localised title reach the rendered composer — the
-//       composer's leading `<img>` reads `/config/quickhelp/
-//       just-chat.svg`, its visible background resolves to the
-//       entry's `styles.backgroundColor`, and its accessible name
-//       is the entry's localised title.
+//   (B) The composer IS the just-chat config entry. The runtime config
+//       carries a placement field whose only valid values are `tile`
+//       and `composer`, and the grid holds exactly the tile entries —
+//       the placement filter's contract, asserted against THIS spec's
+//       own served fixture (GRID_BUTTONS below), never the deployed
+//       venue's seed content. What the SHIPPED config files declare
+//       (just-chat placement "composer", the schema's two-value enum)
+//       is pinned by the Jest suite
+//       (src/__tests__/config-quickhelp-contract.test.js); the
+//       rendered composer's tint, leading mark and accessible name are
+//       asserted below against whatever config the venue serves.
 //
 //   (C) The send pathway reproduces the previous "Just Chat"
 //       behaviour (no label filter, conversation preserved) and
@@ -37,8 +38,8 @@
 // focus) — never `dispatchEvent`, which bypasses Chromium's
 // hit-testing and focus routing.
 //
-// Mutation-test scaffolds for the three contract points (placement
-// field, send gating, single mounted composer) are exercised by
+// Mutation-test scaffolds for the contract points (placement filter,
+// send gating, single mounted composer) are exercised by
 // changing the source, running this spec, and verifying it
 // observes the change.
 

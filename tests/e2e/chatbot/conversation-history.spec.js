@@ -118,7 +118,8 @@ test.describe('Conversation history persistence', () => {
         listFailure = `offset ${offset} returned HTTP ${listRes.status}`;
         break;
       }
-      // ONE wire shape, the same this file's tests pin: { conversations: [...] }.
+      // ONE wire shape — the one this file's tests assert (the restored
+      // list reads parsed.conversations and requires the array): { conversations: [...] }.
       const list = listRes.data?.conversations;
       if (!Array.isArray(list)) {
         // A response without the array is a changed contract, not an

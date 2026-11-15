@@ -321,9 +321,13 @@ const NOT_READABLE = Symbol('not-readable');
  *
  * - NOT readable states (no store / no getter / not booted) are the
  *   caller's to report: a broken store contract is not "no response time";
- * - a completed turn whose metadata frame has not landed reports
- *   `undefined` — the frame may trail the flag clear, and a caller that
- *   needs the frame waits or fails on its own terms.
+ * - a turn with no bot answer yet, or a bot row carrying no responseTime
+ *   (the welcome bubble carries no metadata), reports `undefined` — not a
+ *   contract break. On a COMPLETED turn the frame's field is already
+ *   there: the wire delivers the metadata frame before done, and the
+ *   store commits frames in arrival order, so a cleared streaming flag
+ *   implies the metadata commit has landed. No caller needs to poll past
+ *   the flag for it.
  *
  * @param {{state: string, messages?: object[]}} read - what the page read
  * @returns {number|undefined|symbol} the response time, undefined, or NOT_READABLE

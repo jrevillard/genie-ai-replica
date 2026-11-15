@@ -190,7 +190,7 @@ async function openWelcome(browser, { holdHierarchy = false } = {}) {
 }
 
 /**
- * Watches the query path. The shared capture (helpers/stream-route.js)
+ * Watches the query path. The shared capture (helpers/stream-capture.js)
  * records that a query went out and each request's POST body; the ''
  * body leaves the turn open on purpose — a done frame would complete the
  * turn and change what the spec observes.

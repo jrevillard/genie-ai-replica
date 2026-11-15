@@ -27,6 +27,10 @@
 // facility is UNCONFIGURED and the access routes answer 503 — enforcement
 // (access-control-service) never needs Keycloak and keeps working.
 
+// The DEEP shared-lib spelling (Docker-resolved; the barrel would drag
+// shared/lib's whole world — validator, geoip-lite — which okf-server does
+// not ship). See components/CLAUDE.md § deep imports.
+const { createClientCredentialsMinter } = require('../shared-lib/client-credentials');
 const { logger } = require('../shared-lib/logger');
 
 const KEYCLOAK_URL = process.env.KEYCLOAK_URL;
@@ -37,32 +41,47 @@ const CLIENT_SECRET = process.env.KC_OKF_ACCESS_CLIENT_SECRET || '';
 const FETCH_TIMEOUT_MS = 10_000;
 const USERS_PAGE = 100; // per-page ceiling for paginated user queries
 
-let cachedToken = null;
+// ONE client-credentials minter (#1168): the old cache here held the bare
+// token STRING with no expiry — a dead token was discovered on the wire by
+// the 401 retry, one wasted roundtrip per expiry. The shared minter caches
+// with the token's own expires_in (refreshed before death) and single-flights
+// concurrent refreshes. Built LAZILY (first use) so the endpoint derives from
+// the env as it stands when the service is first exercised (the historical
+// test pattern stages env after module load).
+let _minter = null;
+function minter() {
+  if (!_minter) {
+    // The load-time consts FIRST (the require-time capture contract — one
+    // suite stages env only around the require), falling back to the env
+    // AS IT STANDS at first use (the other suite stages env per test after
+    // load; the historical mint URL was built from the same consts either
+    // way, and the fetch seam is URL-agnostic).
+    const kcUrl = KEYCLOAK_URL || process.env.KEYCLOAK_URL;
+    const kcRealm = KEYCLOAK_REALM || process.env.KEYCLOAK_REALM;
+    _minter = createClientCredentialsMinter({
+      clientId: CLIENT_ID || process.env.KC_OKF_ACCESS_CLIENT_ID || 'genie-proxy-client',
+      clientSecret: CLIENT_SECRET || process.env.KC_OKF_ACCESS_CLIENT_SECRET || '',
+      tokenEndpoints: kcUrl && kcRealm ? [`${kcUrl}/realms/${kcRealm}/protocol/openid-connect/token`] : [],
+      timeoutMs: FETCH_TIMEOUT_MS,
+      logger
+    });
+  }
+  return _minter;
+}
 
 function isConfigured() {
   return Boolean(KEYCLOAK_URL && KEYCLOAK_REALM && CLIENT_ID && CLIENT_SECRET);
 }
 
 async function getServiceAccountToken(forceRefresh = false) {
-  if (cachedToken && !forceRefresh) return cachedToken;
-  const response = await fetch(`${KEYCLOAK_URL}/realms/${KEYCLOAK_REALM}/protocol/openid-connect/token`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: new URLSearchParams({
-      grant_type: 'client_credentials',
-      client_id: CLIENT_ID,
-      client_secret: CLIENT_SECRET
-    }),
-    signal: AbortSignal.timeout(FETCH_TIMEOUT_MS)
-  });
-  if (!response.ok) {
-    const text = await response.text();
-    logger.error('OKF access: service account token failed', { status: response.status, body: text.slice(0, 300) });
-    throw Object.assign(new Error(`service account token failed: ${response.status}`), { statusCode: 502 });
+  try {
+    return await minter().getToken(forceRefresh);
+  } catch (err) {
+    // The shared minter's failure names every endpoint it tried; the
+    // route contract here stays the historical 502.
+    logger.error('OKF access: service account token failed', { error: err.message.slice(0, 300) });
+    throw Object.assign(new Error(`service account token failed: ${err.message.slice(0, 120)}`), { statusCode: 502 });
   }
-  const data = await response.json();
-  cachedToken = data.access_token;
-  return cachedToken;
 }
 
 async function adminApi(method, path, body = null, retried = false) {
@@ -74,9 +93,10 @@ async function adminApi(method, path, body = null, retried = false) {
   };
   if (body !== null) options.body = JSON.stringify(body);
   const response = await fetch(`${KEYCLOAK_URL}/admin/realms/${KEYCLOAK_REALM}${path}`, options);
-  // Token expiry between calls — one refresh retry.
+  // Token expiry between calls — one refresh retry (the minter's cache is
+  // invalidated so the replay mints fresh, not the just-rejected token).
   if (response.status === 401 && !retried) {
-    cachedToken = null;
+    minter().invalidate();
     return adminApi(method, path, body, true);
   }
   return response;
@@ -284,6 +304,6 @@ module.exports = {
   userScopes,
   setUserScopes,
   _clearTokenCache() {
-    cachedToken = null;
+    if (_minter) _minter.invalidate();
   }
 };

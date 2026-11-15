@@ -34,7 +34,10 @@ jest.mock(
       getConnection: jest.fn()
     },
     erasureTombstoneKey: require('../../shared/lib/erasure-tombstone').erasureTombstoneKey,
-    parsePositiveInt: require('../../shared/lib/validation-utils').parsePositiveInt
+    parsePositiveInt: require('../../shared/lib/validation-utils').parsePositiveInt,
+    // The REAL minter factory (#1168): pure, no deps — this suite exercises
+    // the actual minting core through it.
+    createClientCredentialsMinter: require('../../shared/lib/client-credentials').createClientCredentialsMinter
   }),
   { virtual: true }
 );
@@ -190,8 +193,12 @@ describe('keycloak-proxy-service', () => {
         text: async () => 'Invalid client'
       });
 
+      // #1168: the shared minter's failure names EVERY endpoint it tried
+      // and each one's own answer — the diagnosis must be self-describing
+      // (the old bare "Failed to obtain service account token" hid WHICH
+      // endpoint was unreachable).
       await expect(keycloakProxyService.getServiceAccountToken()).rejects.toThrow(
-        'Failed to obtain service account token'
+        /client-credentials token request failed for 1 endpoint\(s\)[\s\S]*Invalid client/
       );
     });
 

@@ -1,7 +1,7 @@
 'use strict';
 
 const { aql } = require('arangojs');
-const { logger, dbService, erasureTombstoneKey } = require('../shared-lib');
+const { logger, dbService, erasureTombstoneKey, createClientCredentialsMinter } = require('../shared-lib');
 const { NotFoundError } = require('../middleware/errors');
 const { GOV_PROFILE_SECTIONS } = require('../constants/jit-fields');
 const userProvisioningService = require('./user-provisioning-service');
@@ -9,10 +9,35 @@ const userProfileService = require('./user-profile-service');
 
 const KEYCLOAK_URL = process.env.KEYCLOAK_URL;
 const KEYCLOAK_REALM = process.env.KEYCLOAK_REALM;
-const PROXY_CLIENT_ID = process.env.KEYCLOAK_PROXY_CLIENT_ID;
-const PROXY_CLIENT_SECRET = process.env.KEYCLOAK_PROXY_CLIENT_SECRET;
 
 const FETCH_TIMEOUT_MS = 10000; // 10s timeout for Keycloak API calls
+
+// ONE client-credentials minter (#1168): the expiry-aware cache (the old
+// here-only cache held the bare token string and could not know when it
+// died — expiry was discovered on the wire by the 401 retry), single-flight
+// refresh and the collected-failure error all come from the shared core.
+// Built LAZILY (first use) so the endpoint derives from the env as it
+// stands when the service is first exercised (tests stage env after load).
+let _serviceAccountMinter = null;
+function serviceAccountMinter() {
+  if (!_serviceAccountMinter) {
+    // Read the env HERE (first use), not the load-time consts: the
+    // historical test pattern stages env after module load, and the
+    // endpoint list must reflect the env as it stands when the service is
+    // first exercised.
+    _serviceAccountMinter = createClientCredentialsMinter({
+      clientId: process.env.KEYCLOAK_PROXY_CLIENT_ID,
+      clientSecret: process.env.KEYCLOAK_PROXY_CLIENT_SECRET,
+      tokenEndpoints:
+        process.env.KEYCLOAK_URL && process.env.KEYCLOAK_REALM
+          ? [`${process.env.KEYCLOAK_URL}/realms/${process.env.KEYCLOAK_REALM}/protocol/openid-connect/token`]
+          : [],
+      timeoutMs: FETCH_TIMEOUT_MS,
+      logger
+    });
+  }
+  return _serviceAccountMinter;
+}
 
 // Gov-profile sections and email-adjacent state nulled by the GDPR erasure,
 // derived from the shared constant — a profile section added to
@@ -21,9 +46,6 @@ const FETCH_TIMEOUT_MS = 10000; // 10s timeout for Keycloak API calls
 const ERASURE_SECTION_NULLS = Object.fromEntries(
   [...GOV_PROFILE_SECTIONS, 'emailVerified', 'pendingEmailChange', 'customSettings'].map((field) => [field, null])
 );
-
-// Service account token cache (lazy refresh on 401)
-let cachedToken = null;
 
 /**
  * Keycloak Proxy Service — proxies user management operations to Keycloak
@@ -68,46 +90,18 @@ const keycloakProxyService = {
    * Clear the cached service account token (for testing)
    */
   _clearTokenCache() {
-    cachedToken = null;
+    if (_serviceAccountMinter) _serviceAccountMinter.invalidate();
   },
 
   /**
    * Get a service account access token (client credentials grant)
-   * Token is cached and lazily refreshed on 401
+   * Token is cached WITH ITS EXPIRY (the shared minter refreshes bufferSeconds
+   * before death) and lazily force-refreshed on 401
    * @param {boolean} forceRefresh - Force token re-acquisition
    * @returns {Promise<string>} Access token
    */
   async getServiceAccountToken(forceRefresh = false) {
-    if (cachedToken && !forceRefresh) {
-      return cachedToken;
-    }
-
-    const tokenUrl = `${KEYCLOAK_URL}/realms/${KEYCLOAK_REALM}/protocol/openid-connect/token`;
-
-    const response = await fetch(tokenUrl, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: new URLSearchParams({
-        grant_type: 'client_credentials',
-        client_id: PROXY_CLIENT_ID,
-        client_secret: PROXY_CLIENT_SECRET
-      }),
-      signal: AbortSignal.timeout(FETCH_TIMEOUT_MS)
-    });
-
-    if (!response.ok) {
-      const text = await response.text();
-      logger.error('[KeycloakProxy] Failed to obtain service account token', {
-        status: response.status,
-        body: text
-      });
-      throw new Error(`Failed to obtain service account token: ${response.status}`);
-    }
-
-    const data = await response.json();
-    cachedToken = data.access_token;
-    logger.info('[KeycloakProxy] Service account token obtained');
-    return cachedToken;
+    return serviceAccountMinter().getToken(forceRefresh);
   },
 
   /**

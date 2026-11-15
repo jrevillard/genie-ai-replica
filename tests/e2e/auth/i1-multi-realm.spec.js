@@ -84,13 +84,10 @@ test.describe.serial('Phase I: Multi-Realm Configuration', () => {
 
     const token = await getAdminToken();
 
-    // Restore the grant state the run FOUND (#1879): a grant the run
-    // flipped itself is reverted — the verified revert (reads the client
-    // back, so a grant surviving the PUT is a loud failure, never a
-    // silent leave) — while a grant the venue was provisioned with
-    // (Phase 0.6 sets it ON; the manual Phase I procedures mint through
-    // it) stays as found. The suite's post-run gate exempts this
-    // test-only realm either way.
+    // Restore the grant state the run found — see foundRopc above for
+    // why the arm keys on what the venue was provisioned with. The
+    // revert is the verified one (reads the client back, so a grant
+    // surviving the PUT is a loud failure, never a silent leave).
     if (!foundRopc) {
       await disableDirectAccessGrants(token, TEST_REALM, 'genie-app');
     }

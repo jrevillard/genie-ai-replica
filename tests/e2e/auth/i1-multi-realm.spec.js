@@ -7,7 +7,7 @@ const {
   parseJwtClaims,
   SESSION_MINT_TIMEOUT_MS,
 } = require('../helpers/auth');
-const { createUser, deleteUser, enableDirectAccessGrants } = require('../helpers/keycloak-admin');
+const { createUser, deleteUser, enableDirectAccessGrants, disableDirectAccessGrants } = require('../helpers/keycloak-admin');
 const { realmExists, missingRealmReason, skipUnlessVenue } = require('../helpers/venue-profile');
 
 /**
@@ -70,6 +70,15 @@ test.describe.serial('Phase I: Multi-Realm Configuration', () => {
     // clean up, and the admin calls below would hit a realm that does not
     // exist.
     if (!(await realmExists(TEST_REALM))) return;
+
+    // Revert the ROPC enablement the beforeAll flipped (#1879): the run
+    // must leave genie2 in the posture it found — the suite's own
+    // post-run gate (check-ropc-posture) exempts the test-only realm, so
+    // an unreverted grant would outlive the run silently. The revert is
+    // the verified one (disableDirectAccessGrants reads the client back),
+    // so a grant that survives the PUT is a loud failure here, never a
+    // silent leave.
+    await disableDirectAccessGrants(token, TEST_REALM, 'genie-app');
 
     // Cleanup: delete test user only (realm lifecycle is managed by Phase 0).
     // A failed delete fails the suite and names the leftover: the account

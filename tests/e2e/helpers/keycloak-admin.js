@@ -738,6 +738,10 @@ async function convergeUser(adminToken, realm, userData) {
  * grows, and the budget is a deadline — a wait that expires is a
  * failure naming the last observed error, never a silent give-up.
  *
+ * Sanctioned: entry 3 of the retry inventory in tests/e2e/CLAUDE.md
+ * (#1878 — the ruling that named this convergence retry instead of
+ * removing it). A new retry surface is a rule change, not a pattern.
+ *
  * @param {string} adminToken - Keycloak admin access token
  * @param {string} realm - Realm name
  * @param {object} userData - { username, email, password, firstName?, lastName?, realmRoles?, attributes? }
@@ -1105,6 +1109,55 @@ async function enableDirectAccessGrants(adminToken, realm, clientId) {
 }
 
 /**
+ * Disable ROPC (direct access grants) on a client — the VERIFIED revert
+ * every run that flips the grant owes the venue (#1879). Mirrors
+ * enableDirectAccessGrants, then reads the client back and refuses to
+ * resolve while the grant survives: a cleanup that cannot prove its own
+ * effect is exactly the silent leave #1879 documents (the verified
+ * shape data/okf/smoke-test/mint-tokens.mjs uses, homed here so every
+ * spec reverts through it). A client that vanished between the PUT and
+ * the read-back holds the posture by absence — nothing to revert.
+ * @param {string} adminToken - Keycloak admin access token
+ * @param {string} realm - Realm name
+ * @param {string} clientId - Client ID (e.g. 'genie-app')
+ * @returns {Promise<void>}
+ */
+async function disableDirectAccessGrants(adminToken, realm, clientId) {
+  const client = await findClient(adminToken, realm, clientId);
+  if (!client) {
+    throw new Error(`Client ${clientId} not found in realm ${realm}`);
+  }
+
+  if (!client.directAccessGrantsEnabled) return;
+
+  const res = await adminRequest(
+    'PUT',
+    `/auth/admin/realms/${realm}/clients/${client.id}`,
+    adminToken,
+    `the ROPC revert of ${clientId} in realm ${realm}`,
+    { ...client, directAccessGrantsEnabled: false }
+  );
+
+  if (res.status !== 204) {
+    failWithStatus(
+      `Failed to disable direct access grants on ${clientId}: HTTP ${res.status} ${bodyText(res)}`,
+      res.status
+    );
+  }
+
+  // The loud probe: a 204 proves nothing on its own — the venue is only
+  // clean when a fresh read answers the grant is off.
+  const after = await findClient(adminToken, realm, clientId);
+  if (after && after.directAccessGrantsEnabled) {
+    throw new Error(
+      `ROPC NOT reverted on ${clientId} in realm ${realm} — the PUT answered 204 but the client ` +
+        `still reads back directAccessGrantsEnabled=true. The grant stays on: fix the revert before ` +
+        `the venue keeps accepting password grants on this client.`
+    );
+  }
+}
+
+/**
  * THE audited posture assertion (#1727, swept realm-wide by #1846): EVERY
  * client of the named realm carries NO direct access grants (ROPC). This
  * module is the posture's single home — the two scripts that legitimately
@@ -1178,6 +1231,7 @@ module.exports = {
   getRealmSettings,
   deleteUser,
   enableDirectAccessGrants,
+  disableDirectAccessGrants,
   assertNoDirectAccessGrants,
   findUsers,
   findClient,

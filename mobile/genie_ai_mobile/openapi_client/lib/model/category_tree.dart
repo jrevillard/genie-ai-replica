@@ -14,7 +14,6 @@ class CategoryTree {
   /// Returns a new [CategoryTree] instance.
   CategoryTree({
     this.catKey,
-    this.catCode,
     this.name,
     this.nameEN,
     this.children = const [],
@@ -28,8 +27,6 @@ class CategoryTree {
   ///
   String? catKey;
 
-  String? catCode;
-
   /// The name the UI displays: the localized translation, or — on the PUBLIC tree — the ENGLISH one when the active locale has no translation.
   String? name;
 
@@ -42,7 +39,6 @@ class CategoryTree {
   @override
   bool operator ==(Object other) => identical(this, other) || other is CategoryTree &&
     other.catKey == catKey &&
-    other.catCode == catCode &&
     other.name == name &&
     other.nameEN == nameEN &&
     _deepEquality.equals(other.children, children);
@@ -51,13 +47,12 @@ class CategoryTree {
   int get hashCode =>
     // ignore: unnecessary_parenthesis
     (catKey == null ? 0 : catKey!.hashCode) +
-    (catCode == null ? 0 : catCode!.hashCode) +
     (name == null ? 0 : name!.hashCode) +
     (nameEN == null ? 0 : nameEN!.hashCode) +
     (children.hashCode);
 
   @override
-  String toString() => 'CategoryTree[catKey=$catKey, catCode=$catCode, name=$name, nameEN=$nameEN, children=$children]';
+  String toString() => 'CategoryTree[catKey=$catKey, name=$name, nameEN=$nameEN, children=$children]';
 
   Map<String, dynamic> toJson() {
     final json = <String, dynamic>{};
@@ -65,11 +60,6 @@ class CategoryTree {
       json[r'catKey'] = this.catKey;
     } else {
       json[r'catKey'] = null;
-    }
-    if (this.catCode != null) {
-      json[r'catCode'] = this.catCode;
-    } else {
-      json[r'catCode'] = null;
     }
     if (this.name != null) {
       json[r'name'] = this.name;
@@ -101,7 +91,6 @@ class CategoryTree {
 
       return CategoryTree(
         catKey: mapValueOfType<String>(json, r'catKey'),
-        catCode: mapValueOfType<String>(json, r'catCode'),
         name: mapValueOfType<String>(json, r'name'),
         nameEN: mapValueOfType<String>(json, r'nameEN'),
         children: CategoryTreeChildrenInner.listFromJson(json[r'children']),

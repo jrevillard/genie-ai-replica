@@ -3265,9 +3265,14 @@ lint:config-validator:
 lint:e2e:
   extends: .lint_node
   script:
-    - cd tests/e2e && npm ci
+    # Every cd is ABSOLUTE (CI_PROJECT_DIR): script lines share one shell,
+    # and a relative cd would resolve from wherever the previous line left
+    # the working directory — measured in the first run of this gate, where
+    # `cd components/shared/lib` after `cd tests/e2e` failed silently and
+    # the job died three lines later on the missing binary.
+    - cd ${CI_PROJECT_DIR}/tests/e2e && npm ci
     - npm run lint
-    - cd components/shared/lib && npm ci
+    - cd ${CI_PROJECT_DIR}/components/shared/lib && npm ci
     # The suite's own Playwright config lives at the repository ROOT, outside
     # the linted tree: `eslint .` from tests/e2e never saw it, and an edit
     # to it never triggered this gate — the #1632 defect class stayed open

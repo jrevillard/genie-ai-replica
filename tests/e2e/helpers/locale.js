@@ -20,6 +20,7 @@
 // read back from the app's own storage. A pin that did not land fails
 // the spec here, before its first assertion can misattribute the cause.
 
+const { expect } = require('@playwright/test');
 const { BASE_URL } = require('./chatbot');
 
 // A small static file on the edge's origin. The probe only needs a
@@ -107,4 +108,23 @@ const pinEnglish = async ({ page }) => {
   await pinLocale(page.context(), 'en');
 };
 
-module.exports = { pinLocale, pinEnglish };
+// The locale sweeps' premise, asserted once per session: the app ADOPTED the
+// seeded locale. main.js's detectInitialLocale silently falls back to 'en'
+// when the saved locale is not in the deployment's active set (the
+// VUE_APP_AVAILABLE_LOCALES whitelist), and every measurement of a session
+// that fell back reads the fallback locale's page and passes vacuously
+// (the vacuous pass #1874 closed for welcome-banner; #1891 extends the pin
+// to every locale-sweeping spec). main.js writes the adopted locale to
+// <html lang> at boot, so that attribute is the pin — one home beside
+// pinLocale (pin the seed, prove the seed, prove the adoption — one
+// concern), before anything is measured.
+async function assertAdoptedLocale(page, where, locale) {
+  const adopted = await page.evaluate(() => document.documentElement.lang);
+  expect(
+    adopted,
+    `${where}: <html lang> reads '${adopted}', not the seeded '${locale}' — ` +
+      `every measurement in this session is the fallback's and passes vacuously`
+  ).toBe(locale);
+}
+
+module.exports = { pinLocale, pinEnglish, assertAdoptedLocale };

@@ -927,13 +927,22 @@ test.describe("the venue's bundle is bound to the run's build", () => {
     // commit from the repository's history — a checkout at origin/main
     // carries no commit that is not behind its HEAD, and a spec that
     // needs one goes red exactly where the operator runs the suite.
+    //
+    // The source-tree reader is injected as TRUE on purpose: with the
+    // real reader the fake sha has no source tree, and the source-tree
+    // guard would stand in for the ancestry guard — the spec would pass
+    // with the ancestry guard deleted, and a venue that is NOT behind
+    // the checkout would be bound (a build that dropped the handle
+    // would be classified as the venue's and dropped from the filing).
     const bound = bindVenueBuild({
       runSha: OTHER_SHA,
       venueSha: OTHER_SHA,
-      ancestry: () => 'not-ancestor'
+      ancestry: () => 'not-ancestor',
+      sourceTreeExists: () => true
     });
     expect(bound.boundSha).toBe(null);
     expect(bound.note).toContain(OTHER_SHA);
+    expect(bound.note).toContain('not an ancestor');
     expect(bound.note).toContain('filed as they are');
   });
 
@@ -1219,7 +1228,9 @@ test.describe('the COMMITTED declaration is read strictly', () => {
     // the failure would be dropped from the filing.
     let pattern = null;
     const run = (_command, args) => {
-      pattern = args[args.indexOf('-E') + 1];
+      // The pattern is the argument after `-e` (git's end-of-options
+      // marker, so a handle that starts with a dash is still a pattern).
+      pattern = args[args.indexOf('-e') + 1];
       return '';
     };
     handleCommittedAtHead('some-handle', run);
@@ -1238,6 +1249,23 @@ test.describe('the COMMITTED declaration is read strictly', () => {
     // whose grep does not know it every static declaration reads as
     // "not committed" — the verdict is refused forever.
     expect(pattern).not.toMatch(/\\s/);
+  });
+
+  test("the committed read looks at the app's SOURCE files only", () => {
+    // The working-tree walk reads the app's source (.vue, .js). A
+    // handle NAMED in a non-source file (a README) is not a
+    // declaration — no build renders it — and counting it would let a
+    // handle that lives only in the working tree pass the committed
+    // gate on the strength of a mention.
+    let pathspecs = null;
+    const run = (_command, args) => {
+      pathspecs = args.slice(args.indexOf('--') + 1);
+      return '';
+    };
+    handleCommittedAtHead('some-handle', run);
+    expect(pathspecs).not.toContain('components/gov-chat-frontend/src');
+    expect(pathspecs).toContain(':(glob)components/gov-chat-frontend/src/**/*.vue');
+    expect(pathspecs).toContain(':(glob)components/gov-chat-frontend/src/**/*.js');
   });
 });
 

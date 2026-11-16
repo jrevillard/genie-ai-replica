@@ -241,6 +241,11 @@ function handleCommittedAtHead(handle, run = execFileSync) {
         'grep',
         '-q',
         '-E',
+        // `-e` ends the option list: a handle that STARTS with a dash
+        // would otherwise be read as an option, and git would exit 128
+        // — the reader would answer "the checkout could not read it"
+        // for a handle the checkout reads perfectly well.
+        '-e',
         // The attribute must not be preceded by a colon — that is what
         // separates a static binding from a dynamic one. POSIX ERE has
         // no look-behind, so the preceding character is consumed
@@ -252,7 +257,13 @@ function handleCommittedAtHead(handle, run = execFileSync) {
         `(^|[^:])data-test(id|-id)[ \t]*=[ \t]*["']${escaped}["']`,
         'HEAD',
         '--',
-        FRONTEND_SRC_REL,
+        // The SAME files the working-tree walk reads: the app's source
+        // (.vue, .js). A handle NAMED in a non-source file (a README) is
+        // not a declaration — no build renders it — and counting it
+        // would let a handle that lives only in the working tree pass
+        // this gate on the strength of a mention.
+        `:(glob)${FRONTEND_SRC_REL}/**/*.vue`,
+        `:(glob)${FRONTEND_SRC_REL}/**/*.js`,
         // The same rule the working-tree walk holds to on the EXCLUSION:
         // every directory NAMED __tests__ or __mocks__, at any depth, is
         // excluded — the two readers must not diverge on what a
@@ -317,7 +328,9 @@ function sourceTreeExistsAt(sha) {
  */
 function handleDeclaredAtBuild(sha, handle) {
   try {
-    execFileSync('git', ['grep', '-q', '-F', handle, sha, '--', FRONTEND_SRC_REL], {
+    // `-e` ends the option list (a handle that starts with a dash
+    // would otherwise be read as an option).
+    execFileSync('git', ['grep', '-q', '-F', '-e', handle, sha, '--', FRONTEND_SRC_REL], {
       cwd: REPO_ROOT,
       stdio: 'ignore'
     });
@@ -1526,7 +1539,15 @@ async function main() {
     process.stdout.write(`${line}\n`);
   }
   if (byFile.size === 0) {
-    if (venueNoise.size > 0) {
+    // Both maps can be non-empty at once: a run can fail on the venue's
+    // outage AND on the venue's stale build. The summary names both —
+    // a line that names only one of them is wrong about the other.
+    if (venueNoise.size > 0 && staleVenue.size > 0) {
+      process.stdout.write(
+        '\nnothing was filed — every failure carries the venue-outage signature or is explained by ' +
+          "the venue's stale build; the report above is the record.\n"
+      );
+    } else if (venueNoise.size > 0) {
       process.stdout.write(
         '\nnothing was filed — every failure carries the venue-outage signature; the report above is the record.\n'
       );

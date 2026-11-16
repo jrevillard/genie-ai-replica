@@ -54,7 +54,7 @@
 // caption's wording, a count of user turns) — a screenshot alone would prove
 // nothing.
 const { test, expect } = require('@playwright/test');
-const { withWelcomeSession, waitForComposerReady } = require('../helpers/welcome');
+const { withComposerSession } = require('../helpers/welcome');
 // The stream interception contract — no credential in it, so this spec
 // (which needs neither) never imports the credential module.
 const { captureStreamPosts } = require('../helpers/stream-capture');
@@ -161,7 +161,7 @@ const STUB_BUTTONS = [
 /**
  * Open the welcome session this spec serves, and run `fn` inside it.
  *
- * The close is the shared helper's own guarantee (withWelcomeSession): an
+ * The close is the shared helper's own guarantee (withComposerSession): an
  * assertion that throws cannot leak the session.
  *
  * `fn` receives the session's page and the gate's release — the release is
@@ -189,12 +189,7 @@ async function withWelcome(browser, { holdHierarchy = false } = {}, fn) {
   // A held hierarchy must not be reloaded for: the reload waits for
   // networkidle, and the held answer never settles it. A held run relies
   // on the spec's own wait — the helper's reload is skipped.
-  return withWelcomeSession(browser, { setupPage, reload: !holdHierarchy }, async (page) => {
-    // The composer appears only once the configuration's buttons are known:
-    // it is the signal that the config has been read and applied.
-    await waitForComposerReady(page);
-    return fn(page, release);
-  });
+  return withComposerSession(browser, { setupPage, reload: !holdHierarchy }, (page) => fn(page, release));
 }
 
 /**

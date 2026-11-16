@@ -46,7 +46,7 @@
 const { test, expect } = require('@playwright/test');
 const fs = require('fs');
 const path = require('path');
-const { withWelcomeSession, waitForComposerReady, DEFAULT_VIEWPORT } = require('../helpers/welcome');
+const { withComposerSession, waitForComposerReady, DEFAULT_VIEWPORT, DEFAULT_SESSION } = require('../helpers/welcome');
 const { QUICK_HELP_GRID_ITEM } = require('../helpers/layout');
 const { quickHelpButton, stubQuickHelpConfiguration, stubQuickHelpHierarchy } = require('../helpers/quick-help-stubs');
 
@@ -92,29 +92,6 @@ function composerPlaceholder(locale) {
   return own === undefined ? composerPlaceholder('en') : own;
 }
 
-// The session every composer test opens: the dashboard at the
-// composer's own resting viewport, in the light theme.
-const COMPOSER_SESSION = { viewport: DEFAULT_VIEWPORT, theme: 'light' };
-
-/**
- * Sign in and land on the dashboard — the same session the welcome
- * screen's measurements open: nothing here reads the banner's mask
- * layer, and every test below waits for the state it needs on its own.
- *
- * The close is the shared helper's own guarantee (withWelcomeSession): the
- * context, the browser login, the sidebar hint and the splash-clearing
- * reload are all the helper's, and an assertion that throws cannot leak
- * the session.
- */
-async function withSignedIn(browser, opts, fn) {
-  return withWelcomeSession(browser, opts, async (page) => {
-    // The composer appears only once the configuration's buttons are
-    // known: it is the signal that the config has been read and applied.
-    await waitForComposerReady(page);
-    return fn(page);
-  });
-}
-
 /*
  * The grid-count fixture: the configuration this spec serves itself, so
  * the grid's count and the placement filter are asserted against a FIXED
@@ -142,7 +119,7 @@ const GRID_BUTTONS = [
  * the login so the first chat mount already sees it.
  */
 async function withGridFixture(browser, fn) {
-  return withSignedIn(
+  return withComposerSession(
     browser,
     {
       setupPage: async (page) => {
@@ -158,7 +135,7 @@ async function withGridFixture(browser, fn) {
 
 test.describe('chat-composer mounted state', () => {
   test('welcome screen has exactly one composer, inside the welcome panel', async ({ browser }) => {
-    await withSignedIn(browser, COMPOSER_SESSION, async (page) => {
+    await withComposerSession(browser, DEFAULT_SESSION, async (page) => {
       // Land on the chat view fresh — the welcome screen renders first.
       await page.goto(`${BASE_URL}/dashboard`, { waitUntil: 'networkidle', timeout: 30000 });
       await page.waitForSelector('[data-testid="quick-help-banner"]', { timeout: 15000 });
@@ -192,7 +169,7 @@ test.describe('chat-composer mounted state', () => {
   });
 
   test('chat view has exactly one composer (the v-else slot)', async ({ browser }) => {
-    await withSignedIn(browser, COMPOSER_SESSION, async (page) => {
+    await withComposerSession(browser, DEFAULT_SESSION, async (page) => {
       await page.goto(`${BASE_URL}/dashboard`, { waitUntil: 'networkidle', timeout: 30000 });
       await waitForComposerReady(page);
 
@@ -219,7 +196,7 @@ test.describe('chat-composer mounted state', () => {
 
 test.describe('composer send pathway', () => {
   test('welcome composer Enter sends and switches to the chat view', async ({ browser }) => {
-    await withSignedIn(browser, COMPOSER_SESSION, async (page) => {
+    await withComposerSession(browser, DEFAULT_SESSION, async (page) => {
       await page.goto(`${BASE_URL}/dashboard`, { waitUntil: 'networkidle', timeout: 30000 });
       await waitForComposerReady(page);
 
@@ -244,7 +221,7 @@ test.describe('composer send pathway', () => {
   });
 
   test('Shift+Enter inserts a newline and does NOT send', async ({ browser }) => {
-    await withSignedIn(browser, COMPOSER_SESSION, async (page) => {
+    await withComposerSession(browser, DEFAULT_SESSION, async (page) => {
       await page.goto(`${BASE_URL}/dashboard`, { waitUntil: 'networkidle', timeout: 30000 });
       await waitForComposerReady(page);
 
@@ -272,7 +249,7 @@ test.describe('composer send pathway', () => {
   });
 
   test('Enter on an empty composer does NOT send', async ({ browser }) => {
-    await withSignedIn(browser, COMPOSER_SESSION, async (page) => {
+    await withComposerSession(browser, DEFAULT_SESSION, async (page) => {
       await page.goto(`${BASE_URL}/dashboard`, { waitUntil: 'networkidle', timeout: 30000 });
       await waitForComposerReady(page);
 
@@ -331,7 +308,7 @@ test.describe('config / composer identity', () => {
   test("welcome composer carries the reference's leading mark, the entry's tint and its accessible name", async ({
     browser
   }) => {
-    await withSignedIn(browser, COMPOSER_SESSION, async (page) => {
+    await withComposerSession(browser, DEFAULT_SESSION, async (page) => {
       await page.goto(`${BASE_URL}/dashboard`, { waitUntil: 'networkidle', timeout: 30000 });
       await waitForComposerReady(page);
       const composerRoot = page.locator('[data-testid="welcome-composer"]');
@@ -372,7 +349,7 @@ test.describe('config / composer identity', () => {
     // theme's surface tinted with the entry's colour, and the two themes
     // must land on opposite sides of mid-grey.
     for (const theme of ['light', 'dark']) {
-      await withSignedIn(browser, { ...COMPOSER_SESSION, theme }, async (page) => {
+      await withComposerSession(browser, { ...DEFAULT_SESSION, theme }, async (page) => {
         await page.goto(`${BASE_URL}/dashboard`, { waitUntil: 'networkidle', timeout: 30000 });
         await waitForComposerReady(page);
         // The background is derived from the composer's tint; wait for the
@@ -411,7 +388,7 @@ test.describe('config / composer identity', () => {
   });
 
   test('disabled attach and mic carry a "not available yet" tooltip', async ({ browser }) => {
-    await withSignedIn(browser, COMPOSER_SESSION, async (page) => {
+    await withComposerSession(browser, DEFAULT_SESSION, async (page) => {
       await page.goto(`${BASE_URL}/dashboard`, { waitUntil: 'networkidle', timeout: 30000 });
       await waitForComposerReady(page);
 
@@ -427,7 +404,7 @@ test.describe('config / composer identity', () => {
   });
 
   test('send button has an accessible name and is disabled on empty content', async ({ browser }) => {
-    await withSignedIn(browser, COMPOSER_SESSION, async (page) => {
+    await withComposerSession(browser, DEFAULT_SESSION, async (page) => {
       await page.goto(`${BASE_URL}/dashboard`, { waitUntil: 'networkidle', timeout: 30000 });
       await waitForComposerReady(page);
 
@@ -453,7 +430,7 @@ test.describe('config / composer identity', () => {
 
 test.describe('visual-layer off', () => {
   test('composer works with data-visual="off"', async ({ browser }) => {
-    await withSignedIn(browser, COMPOSER_SESSION, async (page) => {
+    await withComposerSession(browser, DEFAULT_SESSION, async (page) => {
       await page.goto(`${BASE_URL}/dashboard`, { waitUntil: 'networkidle', timeout: 30000 });
       await waitForComposerReady(page);
       // Flip the data-visual toggle off and verify nothing in the composer
@@ -483,7 +460,7 @@ test.describe('visual-layer off', () => {
 
 test.describe('composer field', () => {
   test('the field inside the pill draws no border and no background of its own', async ({ browser }) => {
-    await withSignedIn(browser, COMPOSER_SESSION, async (page) => {
+    await withComposerSession(browser, DEFAULT_SESSION, async (page) => {
       await page.goto(`${BASE_URL}/dashboard`, { waitUntil: 'networkidle', timeout: 30000 });
       await waitForComposerReady(page);
 
@@ -518,7 +495,7 @@ test.describe('composer field', () => {
   });
 
   test('the pill carries the focus ring, not the field inside it', async ({ browser }) => {
-    await withSignedIn(browser, COMPOSER_SESSION, async (page) => {
+    await withComposerSession(browser, DEFAULT_SESSION, async (page) => {
       await page.goto(`${BASE_URL}/dashboard`, { waitUntil: 'networkidle', timeout: 30000 });
       await waitForComposerReady(page);
 
@@ -672,7 +649,7 @@ async function measureWelcomeBar(page) {
 test.describe('welcome bar measure', () => {
   for (const c of MEASURE_CASES) {
     test(`bar measure, and the field grows with what is typed into it (${label(c)})`, async ({ browser }) => {
-      await withSignedIn(browser, c, async (page) => {
+      await withComposerSession(browser, c, async (page) => {
         const before = await measureWelcomeBar(page);
         expect(before.grid, 'the welcome screen has a card row').not.toBeNull();
         expect(before.bar, 'the welcome screen has a bar').not.toBeNull();
@@ -846,7 +823,7 @@ test.describe('welcome bar measure', () => {
     const measurements = {}; // measurements[locale][viewport] = { rendered, contentW, fieldH, barH }
 
     for (const vp of VIEWPORTS) {
-      await withSignedIn(browser, { viewport: { width: vp.width, height: vp.height } }, async (page) => {
+      await withComposerSession(browser, { viewport: { width: vp.width, height: vp.height } }, async (page) => {
         for (const locale of LOCALES) {
           const expected = composerPlaceholder(locale);
           await page.evaluate((l) => {

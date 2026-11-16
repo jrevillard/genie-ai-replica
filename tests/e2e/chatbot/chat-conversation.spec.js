@@ -3,7 +3,7 @@
 // Each test asserts one invariant the rendered conversation must keep,
 // and each one carries a mutation check recorded beside it.
 const { test, expect } = require('@playwright/test');
-const { withWelcomeSession, waitForComposerReady, DEFAULT_VIEWPORT, contrastRatio } = require('../helpers/welcome');
+const { withWelcomeSession, withComposerSession, DEFAULT_SESSION, contrastRatio } = require('../helpers/welcome');
 const {
   mockChatStream,
   sseBody,
@@ -24,10 +24,6 @@ const {
 } = require('../helpers/quick-help-stubs');
 const { QUICK_HELP_ITEM } = require('../helpers/layout');
 
-// The session every conversation spec opens: the dashboard at the
-// welcome screen's resting viewport, in the light theme.
-const CONVERSATION_SESSION = { viewport: DEFAULT_VIEWPORT, theme: 'light' };
-
 async function askAndAnswer(page, question) {
   await page.locator('[data-testid="welcome-composer"] textarea').fill(question);
   await page.locator('[data-testid="welcome-composer"] textarea').press('Enter');
@@ -39,7 +35,7 @@ test.describe('Conversation V1', () => {
   test('the header names the conversation and × returns to the welcome screen, keeping history', async ({
     browser
   }) => {
-    await withWelcomeSession(browser, CONVERSATION_SESSION, async (page) => {
+    await withWelcomeSession(browser, DEFAULT_SESSION, async (page) => {
       await askAndAnswer(page, 'What is GENIE.AI?');
       const title = page.locator('[data-testid="conversation-header-title"]');
       await expect(title).toBeVisible();
@@ -65,7 +61,7 @@ test.describe('Conversation V1', () => {
 
   // The wave is fixed behind the conversation.
   test('the wave is fixed behind the conversation and does not scroll with the messages', async ({ browser }) => {
-    await withWelcomeSession(browser, CONVERSATION_SESSION, async (page) => {
+    await withWelcomeSession(browser, DEFAULT_SESSION, async (page) => {
       await askAndAnswer(page, 'What is GENIE.AI?');
       // The wave's paint may trail the first frame — wait for the pseudo
       // element to paint before reading its computed styles.
@@ -137,7 +133,7 @@ test.describe('Conversation V1', () => {
   // The composer matches the dashboard bar: the attach and mic placeholders
   // are present but disabled everywhere; the field caps at five lines.
   test('the composer keeps its disabled attach and mic placeholders and grows to five lines', async ({ browser }) => {
-    await withWelcomeSession(browser, CONVERSATION_SESSION, async (page) => {
+    await withWelcomeSession(browser, DEFAULT_SESSION, async (page) => {
       await askAndAnswer(page, 'What is GENIE.AI?');
       await expect(page.locator('[data-testid="composer-attach-btn"]')).toBeDisabled();
       await expect(page.locator('[data-testid="composer-mic-btn"]')).toBeDisabled();
@@ -169,7 +165,7 @@ test.describe('Conversation V1', () => {
   test('each turn carries its avatar: the product tile for the assistant, initials for the user', async ({
     browser
   }) => {
-    await withWelcomeSession(browser, CONVERSATION_SESSION, async (page) => {
+    await withWelcomeSession(browser, DEFAULT_SESSION, async (page) => {
       await askAndAnswer(page, 'What is GENIE.AI?');
       const a = await page.evaluate(() => {
         const el = document.querySelector('[data-testid="assistant-avatar"]');
@@ -212,7 +208,7 @@ test.describe('Conversation — sources', () => {
   // real answer here is ever grounded — the UI contract under test is how a
   // grounded metadata frame renders, not the retriever.
   test('the answer card carries its own collapsible sources', async ({ browser }) => {
-    await withWelcomeSession(browser, CONVERSATION_SESSION, async (page) => {
+    await withWelcomeSession(browser, DEFAULT_SESSION, async (page) => {
       await mockChatStream(page, ['GENIE.AI answers from the library documents.'], {
         confidence_score: 0.82,
         is_grounded: true,
@@ -265,7 +261,7 @@ test.describe('Conversation — actions', () => {
   // The answer carries thumbs that record a rating and a copy that
   // fills the clipboard.
   test('the answer carries thumbs that record a rating and a copy that fills the clipboard', async ({ browser }) => {
-    await withWelcomeSession(browser, CONVERSATION_SESSION, async (page) => {
+    await withWelcomeSession(browser, DEFAULT_SESSION, async (page) => {
       await page.context().grantPermissions(['clipboard-read', 'clipboard-write']);
       // The inline thumbs post their rating to the same backend — answer it so
       // the rated state does not depend on the network.
@@ -307,7 +303,7 @@ test.describe('Conversation — actions', () => {
 test.describe('Conversation — warning and error', () => {
   // The ungrounded amber and the retryable error state live inside the card.
   test('an ungrounded answer shows the amber warning inside the card and no empty sources', async ({ browser }) => {
-    await withWelcomeSession(browser, CONVERSATION_SESSION, async (page) => {
+    await withWelcomeSession(browser, DEFAULT_SESSION, async (page) => {
       // Deterministic: the ungrounded state comes from the metadata frame, so
       // the test scripts a stream whose metadata declares is_grounded=false —
       // never a live RAG answer, which may ground either way.
@@ -341,7 +337,7 @@ test.describe('Conversation — warning and error', () => {
   });
 
   test('a failed turn shows a retry that re-sends the same query', async ({ browser }) => {
-    await withWelcomeSession(browser, CONVERSATION_SESSION, async (page) => {
+    await withWelcomeSession(browser, DEFAULT_SESSION, async (page) => {
       // Sabotage the stream call for the first attempt only.
       let aborted = false;
       await page.route(
@@ -372,7 +368,7 @@ test.describe('Conversation — status pill', () => {
   test('the navbar pill reports the online state; a failed turn flips it to an explained offline', async ({
     browser
   }) => {
-    await withWelcomeSession(browser, CONVERSATION_SESSION, async (page) => {
+    await withWelcomeSession(browser, DEFAULT_SESSION, async (page) => {
       const pill = page.locator(NAV_STATUS);
       await expect(pill).toHaveAttribute('data-status', 'online');
       expect(await pill.getAttribute('role'), 'the pill is announced as a status region').toBe('status');
@@ -397,7 +393,7 @@ test.describe('Conversation — status pill', () => {
 test.describe('Conversation — documents panel', () => {
   // The empty documents state explains itself, FAQs stay.
   test('the documents panel shows a neutral empty state and keeps the FAQs', async ({ browser }) => {
-    await withWelcomeSession(browser, CONVERSATION_SESSION, async (page) => {
+    await withWelcomeSession(browser, DEFAULT_SESSION, async (page) => {
       await page.locator('[data-testid="welcome-composer"] textarea').fill('What is GENIE.AI?');
       await page.locator('[data-testid="welcome-composer"] textarea').press('Enter');
       await page.waitForSelector('[data-testid="chat-message-bot"]', { timeout: 45000 });
@@ -423,7 +419,7 @@ test.describe('Conversation — contrast', () => {
   // The inks clear WCAG AA for body text (4.5:1): the amber
   // warning on its ground, the initials on their accent circle.
   test('the amber warning and the initials clear a 4.5:1 contrast floor', async ({ browser }) => {
-    await withWelcomeSession(browser, CONVERSATION_SESSION, async (page) => {
+    await withWelcomeSession(browser, DEFAULT_SESSION, async (page) => {
       await mockChatStream(page, ['GENIE.AI answers from its own knowledge when no document supports the point.'], {
         is_grounded: false,
         confidence_score: 0.78
@@ -476,7 +472,7 @@ test.describe('Conversation — answer card', () => {
   // The assistant answer renders inside one elevated card, from the
   // first frame of the stream.
   test('the assistant answer renders inside one elevated card, from the first frame', async ({ browser }) => {
-    await withWelcomeSession(browser, CONVERSATION_SESSION, async (page) => {
+    await withWelcomeSession(browser, DEFAULT_SESSION, async (page) => {
       // Hold the stream until the thinking frame has been read — a fixed
       // sleep is slow on a fast machine and flaky on a slow one, and the
       // release promise is the same idiom the background-completion test
@@ -537,7 +533,7 @@ test.describe('Conversation — surface invariants', () => {
   // Opening Just Chat must not fabricate a knowledge-domain chip: "Just
   // Chat" is not a context, so none is added.
   test('a Just Chat turn adds no context chip and the header stays Just Chat', async ({ browser }) => {
-    await withWelcomeSession(browser, CONVERSATION_SESSION, async (page) => {
+    await withWelcomeSession(browser, DEFAULT_SESSION, async (page) => {
       await expect(page.locator('[data-testid="conversation-header-title"]')).toHaveText(/Just Chat/i);
       await askAndAnswer(page, 'What is GENIE.AI?');
       await page.waitForSelector(BOT_BUBBLE, { timeout: 45000 });
@@ -589,10 +585,10 @@ test.describe('Conversation — surface invariants', () => {
   const HEADER_SCOPE_HIERARCHY = CIVIL_REGISTRY_HIERARCHY;
 
   test('the header title reflects the QuickHelp option that opened the chat', async ({ browser }) => {
-    await withWelcomeSession(
+    await withComposerSession(
       browser,
       {
-        ...CONVERSATION_SESSION,
+        ...DEFAULT_SESSION,
         // Both stubs are installed BEFORE the login, so the first chat
         // mount already sees them.
         setupPage: async (page) => {
@@ -602,7 +598,6 @@ test.describe('Conversation — surface invariants', () => {
       },
       async (page) => {
         // The config has been read and applied — the grid can be clicked.
-        await waitForComposerReady(page);
         // The card's hidden prompt auto-sends: the answer is stubbed, so the
         // turn completes locally instead of spending the venue's LLM on an
         // invariant it has no part in. The capture rides the shared
@@ -631,7 +626,7 @@ test.describe('Conversation — surface invariants', () => {
 
   // Leaving an unsaved chat prompts instead of silently losing it.
   test('navigating away never prompts and never loses the conversation', async ({ browser }) => {
-    await withWelcomeSession(browser, CONVERSATION_SESSION, async (page) => {
+    await withWelcomeSession(browser, DEFAULT_SESSION, async (page) => {
       // The stream stays pending until we release it, so the generation is
       // genuinely in flight while the user leaves — an instant mock would
       // finish before the navigation and prove nothing about the abort
@@ -691,7 +686,7 @@ test.describe('Conversation — surface invariants', () => {
   });
 
   test('a reload keeps the turns; an interrupted generation offers a retry', async ({ browser }) => {
-    await withWelcomeSession(browser, CONVERSATION_SESSION, async (page) => {
+    await withWelcomeSession(browser, DEFAULT_SESSION, async (page) => {
       // A stream that never responds: the reload kills the pending fetch,
       // and rehydration must render the interrupted turn through the
       // retry affordance — not as a spinner, not as a missing turn.

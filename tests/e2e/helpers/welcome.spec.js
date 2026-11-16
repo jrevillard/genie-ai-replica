@@ -75,8 +75,8 @@ function fakeBanner({
   };
   // The page's storage: the seeds write into it, and nothing reads it
   // back here.
-  const storage = { setItem() {}, getItem: () => null };
-  return { element, doc, storage, selectors };
+  const storage = { setItem() {} };
+  return { doc, storage, selectors };
 }
 
 /**
@@ -97,7 +97,7 @@ function fakeBanner({
  * (not only the condition on its own).
  */
 function fakeBrowser({ closeFails = false, lang = 'en', banner } = {}) {
-  const log = { closes: 0, pages: 0, contexts: 0 };
+  const log = { closes: 0, contexts: 0, waits: [] };
   const { doc, storage, selectors } = fakeBanner({ lang, ...banner });
   log.selectors = selectors;
   const page = {
@@ -109,7 +109,8 @@ function fakeBrowser({ closeFails = false, lang = 'en', banner } = {}) {
       // reads the fake document.
       return new Function('document', 'localStorage', 'arg', `return (${fn.toString()})(arg)`)(doc, storage, arg);
     },
-    async waitForSelector() {
+    async waitForSelector(selector) {
+      log.waits.push(selector);
       return null;
     },
     async reload() {
@@ -125,7 +126,6 @@ function fakeBrowser({ closeFails = false, lang = 'en', banner } = {}) {
   };
   const ctx = {
     async newPage() {
-      log.pages += 1;
       return page;
     },
     async close() {
@@ -157,6 +157,19 @@ test.afterEach(() => {
   chatbot.loginViaUI = realLoginViaUI;
 });
 
+/**
+ * The rejection of a promise, as a value.
+ *
+ * Every verdict arm below asserts on the error's IDENTITY (the same
+ * object the body threw), its stack and its message — one way to catch
+ * it, so the arms differ only in what they assert.
+ */
+const rejection = (promise) =>
+  promise.then(
+    () => null,
+    (e) => e
+  );
+
 test.describe('the welcome session closes itself', () => {
   test('a body that succeeds returns its value, and the context is closed once', async () => {
     const { browser, log } = fakeBrowser();
@@ -182,14 +195,11 @@ test.describe('the welcome session closes itself', () => {
     const { browser, log } = fakeBrowser();
     const bodyError = new Error('the body failed');
 
-    let caught = null;
-    try {
-      await welcome.withWelcomeSession(browser, {}, async () => {
+    const caught = await rejection(
+      welcome.withWelcomeSession(browser, {}, async () => {
         throw bodyError;
-      });
-    } catch (e) {
-      caught = e;
-    }
+      })
+    );
 
     expect(caught, 'the body failure is the verdict').toBe(bodyError);
     expect(caught.stack, "the stack is the body's own").toBe(bodyError.stack);
@@ -200,14 +210,11 @@ test.describe('the welcome session closes itself', () => {
     const { browser, log } = fakeBrowser({ closeFails: true });
     const bodyError = new Error('the body failed');
 
-    let caught = null;
-    try {
-      await welcome.withWelcomeSession(browser, {}, async () => {
+    const caught = await rejection(
+      welcome.withWelcomeSession(browser, {}, async () => {
         throw bodyError;
-      });
-    } catch (e) {
-      caught = e;
-    }
+      })
+    );
 
     expect(caught, 'the body failure is still the verdict').toBe(bodyError);
     expect(caught.message, 'the close failure joins the body failure').toContain('the body failed');
@@ -224,12 +231,7 @@ test.describe('a session that fails to open closes itself too', () => {
       throw loginError;
     };
 
-    let caught = null;
-    try {
-      await welcome.withWelcomeSession(browser, {}, async () => 'never runs');
-    } catch (e) {
-      caught = e;
-    }
+    const caught = await rejection(welcome.withWelcomeSession(browser, {}, async () => 'never runs'));
 
     expect(caught, 'the login failure is the verdict').toBe(loginError);
     expect(log.closes, 'a failed open does not leak the context').toBe(1);
@@ -242,17 +244,24 @@ test.describe('a session that fails to open closes itself too', () => {
       throw loginError;
     };
 
-    let caught = null;
-    try {
-      await welcome.withWelcomeSession(browser, {}, async () => 'never runs');
-    } catch (e) {
-      caught = e;
-    }
+    const caught = await rejection(welcome.withWelcomeSession(browser, {}, async () => 'never runs'));
 
     expect(caught, 'the open failure is still the verdict').toBe(loginError);
     expect(caught.message, 'the close failure joins the open failure').toContain('the login failed');
     expect(caught.message, 'the close failure is named').toContain('the context refused to close');
     expect(log.closes, 'the close was attempted').toBe(1);
+  });
+});
+
+test.describe('the composer session waits for the composer', () => {
+  test('it waits for the composer by its declared handle', async () => {
+    const { browser, log } = fakeBrowser();
+
+    await welcome.withComposerSession(browser, {}, async () => 'the measurement');
+
+    expect(log.waits, 'the composer is waited for by the handle the app declares').toContain(
+      '[data-testid="welcome-composer"]'
+    );
   });
 });
 

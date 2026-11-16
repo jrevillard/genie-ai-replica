@@ -32,6 +32,11 @@ const { assertAdoptedLocale } = require('./locale');
 // is measuring a different page.
 const DEFAULT_VIEWPORT = { width: 1440, height: 900 };
 
+// The session the specs open when they measure the welcome screen: the
+// resting viewport, in the light theme. One owner, so the specs and the
+// helper agree on what "the welcome screen at rest" means.
+const DEFAULT_SESSION = { viewport: DEFAULT_VIEWPORT, theme: 'light' };
+
 // Hard bounds for the two settle gates below. A gate that expires is a
 // failure, never a reason to sample a moving page.
 const ENTRANCE_TIMEOUT_MS = 15000;
@@ -157,49 +162,14 @@ async function waitForBannerSettled(page) {
 }
 
 /**
- * Open a signed-in session on the welcome screen.
+ * Open a signed-in session on the welcome screen — the open half.
  *
- * One recipe for the whole suite: the context, the browser login, the
- * sidebar hint, the navigation, and the reload that clears the splash
- * (it shows once per authenticated session) before the page is
- * sampled.
+ * INTERNAL: the only caller is withWelcomeSession, which owns the close
+ * guarantee in its own control flow. This half is not exported: a
+ * caller that reached for it would have to close the context itself,
+ * which is exactly the shape the helper exists to make unforgetable
+ * (#1888).
  *
- *   viewport  the context's window; defaults to 1440x900
- *   theme     the context's colorScheme ('light' | 'dark')
- *   locale    applied through the app's own boot path
- *             (localStorage.userLocale, read by main.js before mount)
- *             and ADOPTED — the session proves it landed before it is
- *             returned (see below); a locale without the reload that
- *             adopts it is refused
- *   setupPage an async hook run on the page BEFORE the login — the
- *             place for route stubs: the first chat mount already
- *             sees them, instead of a stub installed after the app
- *             has already fetched the real thing
- *   reload    false skips the splash-clearing reload — for a spec
- *             that HOLDS a network answer, a `waitUntil: 'networkidle'`
- *             reload would never settle. A seeded locale and a skipped
- *             reload contradict each other — the seed lands after the
- *             login and only the next boot reads it — so the pair is
- *             refused at the door rather than left to measure the
- *             fallback locale
- *
- * A seeded locale is PROVEN, not assumed: the app writes the locale it
- * adopted to <html lang> at boot, and the session asserts that attribute
- * before it returns. A deployment whose active-locale set drops the
- * seeded locale falls back to English, and a session that fell back
- * measures the fallback's page and passes vacuously.
- *
- * The banner's entrance animation is over before the screen is
- * returned (see waitForBannerEntrance) — box and geometry reads see
- * the resolved page. Pixel reads additionally see the compositor's
- * settled frame: capturePixels gates on it (waitForCompositingSettled)
- * on its first capture of a page.
- *
- * Returns { ctx, page } — INTERNAL: the only caller is withWelcomeSession,
- * which owns the close guarantee in its own control flow. This half is
- * not exported: a caller that reached for it would have to close the
- * context itself, which is exactly the shape the helper exists to make
- * unforgetable (#1888).
  * The open path holds the same guarantee for itself: a throw after the
  * context exists (a login that fails, a wait that expires) closes the
  * context before rethrowing, so a failed open cannot leak it.
@@ -259,7 +229,7 @@ async function openWelcomeScreen(browser, { viewport, theme, locale, setupPage, 
       // attribute is the pin.
       await assertAdoptedLocale(
         page,
-        `the welcome session (${locale}, ${sessionTheme}, ${sessionViewport.width}x${sessionViewport.height})`,
+        `the welcome session (${sessionTheme}, ${sessionViewport.width}x${sessionViewport.height})`,
         locale
       );
     }
@@ -295,6 +265,42 @@ async function closeLoudly(ctx, failure) {
 
 /**
  * Open a welcome session, run `fn`, and guarantee the close.
+ *
+ * One recipe for the whole suite: the context, the browser login, the
+ * sidebar hint, the navigation, and the reload that clears the splash
+ * (it shows once per authenticated session) before the page is
+ * sampled.
+ *
+ *   viewport  the context's window; defaults to 1440x900
+ *   theme     the context's colorScheme ('light' | 'dark')
+ *   locale    applied through the app's own boot path
+ *             (localStorage.userLocale, read by main.js before mount)
+ *             and ADOPTED — the session proves it landed before it is
+ *             returned (see below); a locale without the reload that
+ *             adopts it is refused
+ *   setupPage an async hook run on the page BEFORE the login — the
+ *             place for route stubs: the first chat mount already
+ *             sees them, instead of a stub installed after the app
+ *             has already fetched the real thing
+ *   reload    false skips the splash-clearing reload — for a spec
+ *             that HOLDS a network answer, a `waitUntil: 'networkidle'`
+ *             reload would never settle. A seeded locale and a skipped
+ *             reload contradict each other — the seed lands after the
+ *             login and only the next boot reads it — so the pair is
+ *             refused at the door rather than left to measure the
+ *             fallback locale
+ *
+ * A seeded locale is PROVEN, not assumed: the app writes the locale it
+ * adopted to <html lang> at boot, and the session asserts that attribute
+ * before it returns. A deployment whose active-locale set drops the
+ * seeded locale falls back to English, and a session that fell back
+ * measures the fallback's page and passes vacuously.
+ *
+ * The banner's entrance animation is over before the screen is
+ * returned (see waitForBannerEntrance) — box and geometry reads see
+ * the resolved page. Pixel reads additionally see the compositor's
+ * settled frame: capturePixels gates on it (waitForCompositingSettled)
+ * on its first capture of a page.
  *
  * The close guarantee lives here, not at the call site (#1888): the leak
  * the inline `try { ... } finally { await ctx.close(); }` shape guards
@@ -341,6 +347,30 @@ async function withWelcomeSession(browser, opts, fn) {
   // session-body verdict that never happened.
   await ctx.close();
   return result;
+}
+
+/**
+ * Open a welcome session and wait for the welcome composer.
+ *
+ * The composer is the welcome screen's own element (`welcome-composer`,
+ * inside the welcome panel — the chat view has its own `chat-composer`),
+ * and it appears only once the configuration's buttons are known: it is
+ * the signal that the config has been read and applied. A spec that
+ * measures the welcome screen, or clicks its grid, waits for that
+ * signal — one recipe, so the specs wait on the same observable with
+ * the same budget.
+ *
+ * The close is still the session helper's guarantee.
+ *
+ * @param {import('@playwright/test').Browser} browser
+ * @param {Parameters<withWelcomeSession>[1]} opts
+ * @param {(page: import('@playwright/test').Page) => Promise<*>} fn
+ */
+async function withComposerSession(browser, opts, fn) {
+  return withWelcomeSession(browser, opts, async (page) => {
+    await waitForComposerReady(page);
+    return fn(page);
+  });
 }
 
 /**
@@ -487,8 +517,9 @@ const LAYER_STATE_BIND = `return (${visualLayerState.toString()});`;
 
 module.exports = {
   withWelcomeSession,
-  waitForComposerReady,
+  withComposerSession,
   DEFAULT_VIEWPORT,
+  DEFAULT_SESSION,
   waitForBannerSettled,
   readVisualLayerState,
   capturePixels,

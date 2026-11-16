@@ -81,8 +81,9 @@ vLLM and TEI.
 
 **[ASSUMPTION]** The agentic path inherits the existing chat surfaces,
 multilingual behavior (including streaming translation when enabled) and error
-contracts. If any of these prove incompatible with an agent loop, the change
-is versioned explicitly (FR-14) rather than absorbed silently.
+contracts, plus one deliberate versioned extension: the activity-line SSE
+events (FR-30). Any further incompatibility with an agent loop is versioned
+explicitly (FR-14) rather than absorbed silently.
 
 ## 4. Scope — iteration 1
 
@@ -100,6 +101,10 @@ is versioned explicitly (FR-14) rather than absorbed silently.
 - Controlled session and audit persistence (read-only use case).
 - Deployment-level activation alongside the legacy RAG path, with rehearsed
   rollback.
+- A minimal user-visible **agent activity line** (e.g. "searching…",
+  "reading source X") streamed during agent execution — see FR-30. The
+  full rich display (expandable tool calls, Telegram-style, incl. model
+  reasoning) is an iteration-2 evolution, not delivered here.
 - The evaluation infrastructure for E01/E02 (§9).
 
 **Query-class note (research §1/§3):** the literature positions agentic
@@ -272,6 +277,15 @@ second authorization or knowledge-governance layer).
   limited to authoritative knowledge stores; future data-changing stages
   would require explicit recovery procedures. Aligned with V08.
 
+
+- **FR-30** The user sees a minimal **activity line** while the agent works:
+  tool-call lifecycle events (started/completed, operation name — not raw
+  model reasoning) carried as **new, explicitly versioned SSE event types**
+  (the first concrete instance of D04's preservation-vs-versioning
+  decision), shaped from the AG-UI tool-call lifecycle taxonomy (FR-14).
+  Frontend rendering is minimal: a status line, no expandable tool detail.
+  The events degrade gracefully — clients that ignore them behave exactly
+  as today.
 ### FG-4 — Governance, audit and compliance
 
 - **FR-17** Every agent execution records implementation, model, prompt and
@@ -404,7 +418,7 @@ Counter-metrics:
 |-------|-------------|---------------|
 | S0 — Frame | Framing document reviewed (issue #1729, rescoped 2026-11-16) | Blocking ambiguities assigned — done |
 | S1 — Research | Deep-recon: sovereign source-grounded agentic document-QA architecture; candidate runtimes (incl. DSH) assessed | Research report with cited sources — done (2026-11-16) |
-| S2 — Plan | This PRD + architecture (+ UX only if the chat surface changes) | PRD and architecture accepted |
+| S2 — Plan | This PRD + architecture + **light UX spec** (activity line — the chat surface changes minimally; operator decision 2026-11-16) | PRD, architecture and UX spec accepted |
 | S3 — Boundary | Document capability contract + its OPEA-free implementation | Contract, authorization and compatibility checks |
 | S4 — Agent | SC-01 on the selected runtime | E01/E02 against the agreed reference; bounded execution and rollback demonstrated |
 
@@ -469,9 +483,10 @@ Verification backlog (roles, not yet named assignees):
 
 1. Which deployment hosts the first end-to-end validation of the agentic path
    (no pilot designated — D05)?
-2. Does the chat surface change at all (tooltip/affordance showing "agentic"
-   mode), or is the path invisible to the user? → decides whether UX
-   artifacts are needed at S2.
+2. ~~Does the chat surface change?~~ **Resolved 2026-11-16 (operator):**
+   yes, minimally — an agent activity line (FR-30); full rich display
+   (expandable tool calls, reasoning) deferred to iteration 2. Light UX
+   spec required at S2.
 3. Contract placement (D01): new service, extension of an existing one
    (backend BFF? document-repository? OKF?), or library? Architecture doc
    decides from V02/V04 evidence.

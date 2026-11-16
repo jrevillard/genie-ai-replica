@@ -75,3 +75,27 @@ endpoints.
 ## Verification
 
 Recorded at the end of this file when the wave completes.
+
+## Verification (2026-11-16)
+
+- Code-review round (medium, full diff): 6 findings — F1 the pre-existing
+  okf-browser store test pinned the old conceptId-required contract (CI-red;
+  reshaped to the new one: no-repo refused, repo-level accepted, citation
+  unchanged); F2 the shared rig's conceptService mock lacked getConceptTree
+  (added — the tree-fetch path now runs for real); F3 the dialog's
+  chat-citation notice ("…the version that was cited") rendered on a surface
+  where nothing was cited (now conditional on the seed concept; the
+  repo-level arm shows browseNotice, derived in all 14 locales as each
+  locale's own currentNotice minus the citation clause); F4 the host-wiring
+  duplication with ChatBotComponent — SKIPPED: the fence forbids editing the
+  chat shell, so a shared helper cannot dedup it; the studio host documents
+  the parity inline; F5 the new suite leaked unmounted StudioTab instances
+  (enableAutoUnmount added); F6 the openBrowser mutation's JSDoc now names
+  both open modes.
+- Suites: okf-browser 20/20, browse-from-cards 6/6, concept-browser-dialog
+  12/12, lifecycle-ui 40/40 (incl. the two Browse tests). All 14 locales
+  parse and carry both keys.
+- Gates: prettier + eslint clean (raw) on every touched file.
+- Live: the local build's okf-server was rebuilt from the branch content and
+  the ceiling smoke passed (the !916 branch shares the tree; this MR is
+  frontend-only — the frontend container rebuild is the merge-gate deploy).

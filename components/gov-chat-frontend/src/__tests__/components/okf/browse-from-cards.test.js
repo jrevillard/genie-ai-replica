@@ -10,6 +10,13 @@
 
 // The StudioTab rig (mock battery + store + mount) is shared —
 // src/__tests__/helpers/studioTab.js.
+const { enableAutoUnmount } = require('@vue/test-utils');
+// Unmount every wrapper after each test — StudioTab registers window
+// listeners in mounted() and removes them only in beforeUnmount; leaked
+// instances would answer a later file's window events (the lifecycle-ui
+// guard, same reason).
+enableAutoUnmount(afterEach);
+
 const { buildStore, mountTab } = require('../../helpers/studioTab');
 const ConceptBrowserDialog = require('@/components/okf/ConceptBrowserDialog.vue').default;
 

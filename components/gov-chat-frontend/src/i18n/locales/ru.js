@@ -2247,6 +2247,7 @@ export default {
       card: {
         actions: 'Действия для {name}',
         browse: 'Обзор',
+        browseNotice: 'Показано то, что проиндексировано сейчас.',
         building: 'Сборка…',
         buildingAria: 'Сборка — исходный файл все еще обрабатывается',
         delete: 'Удалить',

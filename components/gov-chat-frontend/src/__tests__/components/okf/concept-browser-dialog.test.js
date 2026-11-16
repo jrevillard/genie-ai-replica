@@ -86,6 +86,17 @@ describe('ConceptBrowserDialog — current-state + unavailable arms', () => {
     const notice = w.find('[data-testid="okf-browser-current-notice"]');
     expect(notice.exists()).toBe(true);
     expect(notice.text()).toContain('indexed now');
+    // A CITATION is present: the notice may name the cited-version clause.
+    expect(notice.text()).toContain('cited');
+  });
+
+  it('a REPO-LEVEL open (nothing cited — the dashboard Browse) drops the citation clause', () => {
+    const w = mountDialog(BROWSER({ startConceptId: null }));
+    const notice = w.find('[data-testid="okf-browser-current-notice"]');
+    expect(notice.exists()).toBe(true);
+    expect(notice.text()).toContain('indexed now');
+    // No citation exists, so the notice must not assert one.
+    expect(notice.text()).not.toContain('cited');
   });
 
   it('a fenced/absent repo (the 404 refusal) renders the honest unavailable notice and no tree', () => {

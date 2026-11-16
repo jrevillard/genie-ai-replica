@@ -2244,6 +2244,7 @@ export default {
       card: {
         actions: 'Tindakan untuk {name}',
         browse: 'Jelajahi',
+        browseNotice: 'Menampilkan yang terindeks saat ini.',
         building: 'Membangun…',
         buildingAria: 'Membangun — berkas sumber masih diproses',
         delete: 'Hapus',

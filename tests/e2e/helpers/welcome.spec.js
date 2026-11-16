@@ -48,13 +48,23 @@ const chatbot = require('./chatbot');
  */
 const BANNER_HANDLE = '[data-testid="quick-help-banner"]';
 
-function fakeBanner({ width = 800, height = 120, visibility = 'visible', animations = [], mounted = true } = {}) {
+function fakeBanner({
+  width = 800,
+  height = 120,
+  visibility = 'visible',
+  animations = [],
+  mounted = true,
+  lang = 'en'
+} = {}) {
   const element = {
     getBoundingClientRect: () => ({ width, height }),
     getAnimations: () => animations
   };
   const selectors = [];
   const doc = {
+    // The locale the app adopted at boot — the app's own signal, read
+    // off the document.
+    documentElement: { lang },
     querySelector: (selector) => {
       selectors.push(selector);
       return mounted && selector === BANNER_HANDLE ? element : null;
@@ -63,7 +73,10 @@ function fakeBanner({ width = 800, height = 120, visibility = 'visible', animati
       getComputedStyle: (el) => ({ visibility: el === element ? visibility : 'hidden' })
     }
   };
-  return { element, doc, selectors };
+  // The page's storage: the seeds write into it, and nothing reads it
+  // back here.
+  const storage = { setItem() {}, getItem: () => null };
+  return { element, doc, storage, selectors };
 }
 
 /**
@@ -85,14 +98,16 @@ function fakeBanner({ width = 800, height = 120, visibility = 'visible', animati
  */
 function fakeBrowser({ closeFails = false, lang = 'en', banner } = {}) {
   const log = { closes: 0, pages: 0, contexts: 0 };
-  const { doc, selectors } = fakeBanner(banner);
+  const { doc, storage, selectors } = fakeBanner({ lang, ...banner });
   log.selectors = selectors;
   const page = {
-    async evaluate(fn) {
-      // The adoption pin reads <html lang>; the seeds write
-      // localStorage and their result is not read.
-      if (typeof fn === 'function' && /documentElement\.lang/.test(fn.toString())) return lang;
-      return undefined;
+    async evaluate(fn, arg) {
+      // The callback runs against the fake PAGE, the way the browser
+      // runs it: the adoption pin reads <html lang> off the document,
+      // the seeds write localStorage. Nothing here knows the helper's
+      // source text — a different spelling of the same read still
+      // reads the fake document.
+      return new Function('document', 'localStorage', 'arg', `return (${fn.toString()})(arg)`)(doc, storage, arg);
     },
     async waitForSelector() {
       return null;

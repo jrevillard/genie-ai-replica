@@ -3,7 +3,7 @@
 // Each test asserts one invariant the rendered conversation must keep,
 // and each one carries a mutation check recorded beside it.
 const { test, expect } = require('@playwright/test');
-const { withWelcomeSession, contrastRatio } = require('../helpers/welcome');
+const { withWelcomeSession, waitForComposerReady, DEFAULT_VIEWPORT, contrastRatio } = require('../helpers/welcome');
 const {
   mockChatStream,
   sseBody,
@@ -26,7 +26,7 @@ const { QUICK_HELP_ITEM } = require('../helpers/layout');
 
 // The session every conversation spec opens: the dashboard at the
 // welcome screen's resting viewport, in the light theme.
-const CONVERSATION_SESSION = { viewport: { width: 1440, height: 900 }, theme: 'light' };
+const CONVERSATION_SESSION = { viewport: DEFAULT_VIEWPORT, theme: 'light' };
 
 async function askAndAnswer(page, question) {
   await page.locator('[data-testid="welcome-composer"] textarea').fill(question);
@@ -592,8 +592,7 @@ test.describe('Conversation — surface invariants', () => {
     await withWelcomeSession(
       browser,
       {
-        viewport: { width: 1440, height: 900 },
-        theme: 'light',
+        ...CONVERSATION_SESSION,
         // Both stubs are installed BEFORE the login, so the first chat
         // mount already sees them.
         setupPage: async (page) => {
@@ -603,7 +602,7 @@ test.describe('Conversation — surface invariants', () => {
       },
       async (page) => {
         // The config has been read and applied — the grid can be clicked.
-        await page.waitForSelector('[data-testid="welcome-composer"]', { timeout: 15000 });
+        await waitForComposerReady(page);
         // The card's hidden prompt auto-sends: the answer is stubbed, so the
         // turn completes locally instead of spending the venue's LLM on an
         // invariant it has no part in. The capture rides the shared

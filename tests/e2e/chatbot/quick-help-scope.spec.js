@@ -54,7 +54,7 @@
 // caption's wording, a count of user turns) — a screenshot alone would prove
 // nothing.
 const { test, expect } = require('@playwright/test');
-const { withWelcomeSession } = require('../helpers/welcome');
+const { withWelcomeSession, waitForComposerReady } = require('../helpers/welcome');
 // The stream interception contract — no credential in it, so this spec
 // (which needs neither) never imports the credential module.
 const { captureStreamPosts } = require('../helpers/stream-capture');
@@ -192,7 +192,7 @@ async function withWelcome(browser, { holdHierarchy = false } = {}, fn) {
   return withWelcomeSession(browser, { setupPage, reload: !holdHierarchy }, async (page) => {
     // The composer appears only once the configuration's buttons are known:
     // it is the signal that the config has been read and applied.
-    await page.waitForSelector('[data-testid="welcome-composer"]', { timeout: 15000 });
+    await waitForComposerReady(page);
     return fn(page, release);
   });
 }

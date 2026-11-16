@@ -46,7 +46,7 @@
 const { test, expect } = require('@playwright/test');
 const fs = require('fs');
 const path = require('path');
-const { withWelcomeSession } = require('../helpers/welcome');
+const { withWelcomeSession, waitForComposerReady, DEFAULT_VIEWPORT } = require('../helpers/welcome');
 const { QUICK_HELP_GRID_ITEM } = require('../helpers/layout');
 const { quickHelpButton, stubQuickHelpConfiguration, stubQuickHelpHierarchy } = require('../helpers/quick-help-stubs');
 
@@ -94,7 +94,7 @@ function composerPlaceholder(locale) {
 
 // The session every composer test opens: the dashboard at the
 // composer's own resting viewport, in the light theme.
-const COMPOSER_SESSION = { viewport: { width: 1440, height: 900 }, theme: 'light' };
+const COMPOSER_SESSION = { viewport: DEFAULT_VIEWPORT, theme: 'light' };
 
 /**
  * Sign in and land on the dashboard — the same session the welcome
@@ -110,7 +110,7 @@ async function withSignedIn(browser, opts, fn) {
   return withWelcomeSession(browser, opts, async (page) => {
     // The composer appears only once the configuration's buttons are
     // known: it is the signal that the config has been read and applied.
-    await page.waitForSelector('[data-testid="welcome-composer"]', { timeout: 15000 });
+    await waitForComposerReady(page);
     return fn(page);
   });
 }
@@ -194,7 +194,7 @@ test.describe('chat-composer mounted state', () => {
   test('chat view has exactly one composer (the v-else slot)', async ({ browser }) => {
     await withSignedIn(browser, COMPOSER_SESSION, async (page) => {
       await page.goto(`${BASE_URL}/dashboard`, { waitUntil: 'networkidle', timeout: 30000 });
-      await page.waitForSelector('[data-testid="welcome-composer"]', { timeout: 15000 });
+      await waitForComposerReady(page);
 
       // Welcome screen → chat view: type something into the welcome composer
       // and press Enter. The composer slot is replaced by the chat-view composer.
@@ -221,7 +221,7 @@ test.describe('composer send pathway', () => {
   test('welcome composer Enter sends and switches to the chat view', async ({ browser }) => {
     await withSignedIn(browser, COMPOSER_SESSION, async (page) => {
       await page.goto(`${BASE_URL}/dashboard`, { waitUntil: 'networkidle', timeout: 30000 });
-      await page.waitForSelector('[data-testid="welcome-composer"]', { timeout: 15000 });
+      await waitForComposerReady(page);
 
       const probe = 'spec-welcome-send ' + Date.now();
       const welcomeField = page.locator('[data-testid="welcome-composer"] textarea');
@@ -246,7 +246,7 @@ test.describe('composer send pathway', () => {
   test('Shift+Enter inserts a newline and does NOT send', async ({ browser }) => {
     await withSignedIn(browser, COMPOSER_SESSION, async (page) => {
       await page.goto(`${BASE_URL}/dashboard`, { waitUntil: 'networkidle', timeout: 30000 });
-      await page.waitForSelector('[data-testid="welcome-composer"]', { timeout: 15000 });
+      await waitForComposerReady(page);
 
       const probe = 'spec-shift-' + Date.now();
       const welcomeField = page.locator('[data-testid="welcome-composer"] textarea');
@@ -274,7 +274,7 @@ test.describe('composer send pathway', () => {
   test('Enter on an empty composer does NOT send', async ({ browser }) => {
     await withSignedIn(browser, COMPOSER_SESSION, async (page) => {
       await page.goto(`${BASE_URL}/dashboard`, { waitUntil: 'networkidle', timeout: 30000 });
-      await page.waitForSelector('[data-testid="welcome-composer"]', { timeout: 15000 });
+      await waitForComposerReady(page);
 
       const welcomeField = page.locator('[data-testid="welcome-composer"] textarea');
       await welcomeField.click();
@@ -333,7 +333,7 @@ test.describe('config / composer identity', () => {
   }) => {
     await withSignedIn(browser, COMPOSER_SESSION, async (page) => {
       await page.goto(`${BASE_URL}/dashboard`, { waitUntil: 'networkidle', timeout: 30000 });
-      await page.waitForSelector('[data-testid="welcome-composer"]', { timeout: 15000 });
+      await waitForComposerReady(page);
       const composerRoot = page.locator('[data-testid="welcome-composer"]');
       // The tint lands as the composer's inline style — wait for it before
       // the raw attribute reads below.
@@ -372,9 +372,9 @@ test.describe('config / composer identity', () => {
     // theme's surface tinted with the entry's colour, and the two themes
     // must land on opposite sides of mid-grey.
     for (const theme of ['light', 'dark']) {
-      await withSignedIn(browser, { viewport: { width: 1440, height: 900 }, theme }, async (page) => {
+      await withSignedIn(browser, { ...COMPOSER_SESSION, theme }, async (page) => {
         await page.goto(`${BASE_URL}/dashboard`, { waitUntil: 'networkidle', timeout: 30000 });
-        await page.waitForSelector('[data-testid="welcome-composer"]', { timeout: 15000 });
+        await waitForComposerReady(page);
         // The background is derived from the composer's tint; wait for the
         // tint to land before reading the computed paint.
         await expect(page.locator('[data-testid="welcome-composer"]')).toHaveAttribute('style', /--composer-tint:/i);
@@ -413,7 +413,7 @@ test.describe('config / composer identity', () => {
   test('disabled attach and mic carry a "not available yet" tooltip', async ({ browser }) => {
     await withSignedIn(browser, COMPOSER_SESSION, async (page) => {
       await page.goto(`${BASE_URL}/dashboard`, { waitUntil: 'networkidle', timeout: 30000 });
-      await page.waitForSelector('[data-testid="welcome-composer"]', { timeout: 15000 });
+      await waitForComposerReady(page);
 
       const attachBtn = page.locator('[data-testid="composer-attach-btn"]');
       const micBtn = page.locator('[data-testid="composer-mic-btn"]');
@@ -429,7 +429,7 @@ test.describe('config / composer identity', () => {
   test('send button has an accessible name and is disabled on empty content', async ({ browser }) => {
     await withSignedIn(browser, COMPOSER_SESSION, async (page) => {
       await page.goto(`${BASE_URL}/dashboard`, { waitUntil: 'networkidle', timeout: 30000 });
-      await page.waitForSelector('[data-testid="welcome-composer"]', { timeout: 15000 });
+      await waitForComposerReady(page);
 
       const sendBtn = page.locator('[data-testid="composer-send-btn"]');
       await expect(sendBtn).toBeDisabled();
@@ -455,7 +455,7 @@ test.describe('visual-layer off', () => {
   test('composer works with data-visual="off"', async ({ browser }) => {
     await withSignedIn(browser, COMPOSER_SESSION, async (page) => {
       await page.goto(`${BASE_URL}/dashboard`, { waitUntil: 'networkidle', timeout: 30000 });
-      await page.waitForSelector('[data-testid="welcome-composer"]', { timeout: 15000 });
+      await waitForComposerReady(page);
       // Flip the data-visual toggle off and verify nothing in the composer
       // becomes unusable — the composer's behaviour does not depend on the
       // visual layer.
@@ -485,7 +485,7 @@ test.describe('composer field', () => {
   test('the field inside the pill draws no border and no background of its own', async ({ browser }) => {
     await withSignedIn(browser, COMPOSER_SESSION, async (page) => {
       await page.goto(`${BASE_URL}/dashboard`, { waitUntil: 'networkidle', timeout: 30000 });
-      await page.waitForSelector('[data-testid="welcome-composer"]', { timeout: 15000 });
+      await waitForComposerReady(page);
 
       // The DsInput primitive carries a border, a background and a radius.
       // Inside the composer pill they would draw a box around the text — the
@@ -520,7 +520,7 @@ test.describe('composer field', () => {
   test('the pill carries the focus ring, not the field inside it', async ({ browser }) => {
     await withSignedIn(browser, COMPOSER_SESSION, async (page) => {
       await page.goto(`${BASE_URL}/dashboard`, { waitUntil: 'networkidle', timeout: 30000 });
-      await page.waitForSelector('[data-testid="welcome-composer"]', { timeout: 15000 });
+      await waitForComposerReady(page);
 
       const field = page.locator('[data-testid="welcome-composer"] textarea');
       await field.click();
@@ -599,8 +599,8 @@ const PRIMITIVE_FIELD_FLOOR = 80;
 const MEASURE_CASES = [
   { viewport: { width: 1920, height: 1080 }, theme: 'light' },
   { viewport: { width: 1920, height: 1080 }, theme: 'dark' },
-  { viewport: { width: 1440, height: 900 }, theme: 'light' },
-  { viewport: { width: 1440, height: 900 }, theme: 'dark' }
+  { viewport: DEFAULT_VIEWPORT, theme: 'light' },
+  { viewport: DEFAULT_VIEWPORT, theme: 'dark' }
 ];
 
 const label = (c) => `${c.viewport.width}x${c.viewport.height} ${c.theme}`;

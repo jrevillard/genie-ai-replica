@@ -36,6 +36,26 @@ const DEFAULT_VIEWPORT = { width: 1440, height: 900 };
 // failure, never a reason to sample a moving page.
 const ENTRANCE_TIMEOUT_MS = 15000;
 const COMPOSITING_TIMEOUT_MS = 15000;
+// The composer is the welcome screen's own element — it mounts when the
+// configuration's buttons are known.
+const COMPOSER_READY_TIMEOUT_MS = 15000;
+
+/**
+ * Wait for the welcome composer to be mounted.
+ *
+ * The composer is the welcome screen's own element (`welcome-composer`,
+ * inside the welcome panel — the chat view has its own `chat-composer`),
+ * and it appears only once the configuration's buttons are known: it is
+ * the signal that the config has been read and applied.
+ *
+ * One recipe, so the specs that wait for it wait on the same observable
+ * with the same budget.
+ *
+ * @param {import('@playwright/test').Page} page
+ */
+async function waitForComposerReady(page) {
+  await page.waitForSelector('[data-testid="welcome-composer"]', { timeout: COMPOSER_READY_TIMEOUT_MS });
+}
 
 /**
  * Is the welcome banner laid out, visible and settled?
@@ -61,10 +81,14 @@ const COMPOSITING_TIMEOUT_MS = 15000;
 function bannerIsSettled(doc) {
   const banner = doc.querySelector('[data-testid="quick-help-banner"]');
   if (banner === null) return false;
+  // Cheapest first: getAnimations() touches no style and no layout, the
+  // box read flushes layout and the style read forces a recalc. The gate
+  // polls on every animation frame, so the two expensive reads only run
+  // once the entrance is over.
+  if (!banner.getAnimations().every((a) => a.playState !== 'running')) return false;
   const rect = banner.getBoundingClientRect();
   if (rect.width <= 0 || rect.height <= 0) return false;
-  if (doc.defaultView.getComputedStyle(banner).visibility === 'hidden') return false;
-  return banner.getAnimations().every((a) => a.playState !== 'running');
+  return doc.defaultView.getComputedStyle(banner).visibility !== 'hidden';
 }
 
 /*
@@ -463,7 +487,9 @@ const LAYER_STATE_BIND = `return (${visualLayerState.toString()});`;
 
 module.exports = {
   withWelcomeSession,
+  waitForComposerReady,
   bannerIsSettled,
+  DEFAULT_VIEWPORT,
   waitForBannerSettled,
   readVisualLayerState,
   capturePixels,

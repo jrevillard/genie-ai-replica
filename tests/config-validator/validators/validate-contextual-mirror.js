@@ -28,11 +28,7 @@ const { stripJsComments } = require('./js-files');
 /** The dataprep file that owns the budget arithmetic. */
 const DATAPREP_FILE = path.join('genie-ai-overlay', 'dataprep', 'genieai_dataprep_arangodb.py');
 /** The dataprep file that owns the chunk-size map. */
-const DATAPREP_MICROSERVICE_FILE = path.join(
-  'genie-ai-overlay',
-  'dataprep',
-  'genieai_dataprep_microservice.py'
-);
+const DATAPREP_MICROSERVICE_FILE = path.join('genie-ai-overlay', 'dataprep', 'genieai_dataprep_microservice.py');
 /** The Node mirror of that arithmetic. */
 const MIRROR_FILE = path.join('components', 'okf-server', 'services', 'contextual-budget-mirror.js');
 
@@ -44,11 +40,7 @@ const MIRROR_FILE = path.join('components', 'okf-server', 'services', 'contextua
  * comparison fails loudly instead of silently agreeing on a wrong value.
  */
 function resolvePythonLiteral(literal) {
-  return literal
-    .replace(/\\n/g, '\n')
-    .replace(/\\t/g, '\t')
-    .replace(/\\"/g, '"')
-    .replace(/\\\\/g, '\\');
+  return literal.replace(/\\n/g, '\n').replace(/\\t/g, '\t').replace(/\\"/g, '"').replace(/\\\\/g, '\\');
 }
 
 /**
@@ -216,7 +208,9 @@ function validateContextualMirror(root) {
       return;
     }
     if (pyValue !== jsValue) {
-      errors.push(`${label}: dataprep says ${pyValue}, the Node mirror says ${jsValue} — the derived ceiling would drift`);
+      errors.push(
+        `${label}: dataprep says ${pyValue}, the Node mirror says ${jsValue} — the derived ceiling would drift`
+      );
     }
   };
 
@@ -273,8 +267,14 @@ function validateContextualMirror(root) {
   } else if (jsMap.length === 0) {
     errors.push('the per-extension chunk-size map: the Node mirror no longer defines one the validator can read');
   } else {
-    const pyKeys = pyMap.map(([ext]) => ext).sort().join(',');
-    const jsKeys = jsMap.map(([ext]) => ext).sort().join(',');
+    const pyKeys = pyMap
+      .map(([ext]) => ext)
+      .sort()
+      .join(',');
+    const jsKeys = jsMap
+      .map(([ext]) => ext)
+      .sort()
+      .join(',');
     if (pyKeys !== jsKeys) {
       errors.push(
         `the per-extension chunk-size map: dataprep resolves ${pyKeys}, the Node mirror knows ${jsKeys} — a document type the mirror does not know would derive a budget from the wrong chunk size`
@@ -315,7 +315,7 @@ function validateContextualMirror(root) {
   checked.push('the fail-closed guess is not mirrored');
   if (jsNumber(mirror, 'DERIVE_FALLBACK_WINDOW') !== null) {
     errors.push(
-      'the Node mirror defines DERIVE_FALLBACK_WINDOW — dataprep\'s fail-closed guess is right for sizing a request and wrong for a write ceiling (the ladder in concept-ceiling.js owns the fallback)'
+      "the Node mirror defines DERIVE_FALLBACK_WINDOW — dataprep's fail-closed guess is right for sizing a request and wrong for a write ceiling (the ladder in concept-ceiling.js owns the fallback)"
     );
   }
 

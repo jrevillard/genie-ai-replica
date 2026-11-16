@@ -661,12 +661,9 @@ export function subscribeConversation(store) {
     timer = null;
     persistConversation(store.state.conversation);
   };
-  // The listener lives on the WINDOW because that is where the browser
-  // dispatches pagehide: the event targets the Window object and never
-  // propagates to the document, so a document-registered write-through
-  // never runs (#1907 — measured on the venue: the window listener saw
-  // the event, the document listener saw nothing, and a reload inside
-  // the debounce window read a mid-save snapshot).
+  // The listener lives on the WINDOW: pagehide is dispatched AT the
+  // Window and never propagates to the document, so a document-registered
+  // write-through never runs (#1907).
   window.addEventListener('pagehide', onPageHide);
   const unsubscribeStore = store.subscribe((mutation) => {
     if (!mutation.type.startsWith('conversation/')) return;

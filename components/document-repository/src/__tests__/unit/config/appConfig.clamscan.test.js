@@ -90,3 +90,23 @@ describe('appConfig.clamscan localFallback matrix (#1064 remote-canonical)', () 
     );
   });
 });
+
+// The compose pass-through delivers '' into the container for every knob an
+// operator leaves out of .env (`${VAR:-}`), so '' must read as UNSET across
+// the whole five-knob family — the clamEnv reader in appConfig enforces it
+// by mechanism; these pins keep it true.
+describe('appConfig.clamscan compose-empty contract (#1064)', () => {
+  afterEach(() => jest.resetModules());
+
+  it("VIRUS_SCANNING='' → scanning off (unset semantics)", () => {
+    expect(loadAppConfig({ VIRUS_SCANNING: '' }).virusScanning).toBe(false);
+  });
+
+  it("CLAMSCAN_ACTIVE='' → scanner active (unset semantics)", () => {
+    expect(loadAppConfig({ CLAMSCAN_ACTIVE: '' }).clamscan.active).toBe(true);
+  });
+
+  it("CLAMSCAN_PORT='' → code default 3310 (unset semantics)", () => {
+    expect(loadAppConfig({ CLAMSCAN_PORT: '' }).clamscan.port).toBe(3310);
+  });
+});

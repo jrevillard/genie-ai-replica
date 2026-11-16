@@ -28,6 +28,11 @@ RUN npm run build \
 # freeze wrong ownership into the image. Same tag the edge nginx uses.
 FROM nginx:1.28-alpine
 
+# Pull current Alpine security updates at build time (CVE remediation
+# playbook): the rolling base tag does not refresh on its own between
+# upstream rebuilds.
+RUN apk upgrade --no-cache
+
 WORKDIR /app
 
 COPY --from=build /app/dist /app/dist

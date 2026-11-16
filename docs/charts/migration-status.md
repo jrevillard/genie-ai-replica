@@ -3032,6 +3032,20 @@ contractual evidence — a fresh clone does not carry them.)
   for a lookup that never reached the API server (both now name the
   cause and exit with it).
 
+  The pipeline then went red on something that was NOT the change:
+  `test:python` died with a SYSTEM failure — the runner's Docker daemon
+  still had the container "marked for removal" and the job never started
+  a container, so pytest never ran (its JUnit artifacts came back empty
+  because nothing was produced). The four chart gates were green in the
+  same pipeline. The retried job passed (pipeline 18047 green), which
+  confirms the fault was the runner's, not the code's — filed as
+  **#1922** with the remedy: the test jobs carry no
+  `retry.when: [runner_system_failure, ...]`, unlike `chart:install`, so
+  an infra hiccup turns a green change red and blocks the merge gate.
+  With the pipeline green, MR !520's `security_policy_violations` cleared
+  on its own — it was the project's "pipelines must succeed" policy
+  reading a running pipeline, not a defect.
+
 ## Plan map
 
 The campaign ran as eight written plans plus three design specs. Those were

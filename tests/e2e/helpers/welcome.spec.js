@@ -319,7 +319,10 @@ test.describe('the session refuses a banner the gate rejects', () => {
   });
 
   test('a banner with no box does not open the session', async () => {
-    await refuses({ width: 0, height: 0 });
+    // Both axes: a banner that collapsed in width and one that
+    // collapsed in height are two different ways to be unmeasurable.
+    await refuses({ width: 0, height: 120 });
+    await refuses({ width: 800, height: 0 });
   });
 
   test('a hidden banner does not open the session', async () => {
@@ -336,6 +339,6 @@ test.describe('the session refuses a banner the gate rejects', () => {
     const value = await welcome.withWelcomeSession(browser, {}, async () => 'the measurement');
 
     expect(value, 'the session opened on a measurable banner').toBe('the measurement');
-    expect(log.selectors, 'the gate asked for the banner by its handle').toContain(BANNER_HANDLE);
+    expect(log.selectors, 'the gate asked for the banner by its handle, and nothing else').toEqual([BANNER_HANDLE]);
   });
 });

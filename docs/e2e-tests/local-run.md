@@ -396,7 +396,7 @@ shape the venue-outage report already has — and the run prints one
 `venue-staleness report` naming the venue, the missing handle, the file
 that declares it, and the remedy. The run stays RED.
 
-Three details the read holds to:
+Four details the read holds to:
 
 - the handle is searched for as a QUOTED value, so `upload-files-dialog`
   does not match a bundle that carries only
@@ -410,8 +410,10 @@ Three details the read holds to:
 - the walk reads the app's SOURCE files, not the files a BUILD imports: a
   handle added to a component no entry point imports yields a stale-venue
   verdict that refreshing the venue cannot cure (the component never
-  renders). Three components under the frontend's `src` are imported by
-  nothing today.
+  renders). Four components under the frontend's `src` are imported by
+  nothing today (`components/okf/LabelEditor.vue` is named only by a Jest
+  contract test, and the walk's own rule excludes the test tree). None of
+  them declares a handle today.
 
 ### The build marker and the pre-flight probe (#1851)
 

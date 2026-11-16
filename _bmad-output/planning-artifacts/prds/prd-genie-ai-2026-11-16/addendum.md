@@ -50,6 +50,18 @@ verdicts were **mechanism-level** (tool registration, streaming
 availability) and need re-evaluation at application level — riding V04/V05
 and the V06 integration test.**
 
+**D03 candidate state (authoritative detail behind PRD §10's D03 row):**
+
+| Candidate | State | Required before D03 can accept it |
+|---|---|---|
+| Custom minimal tool-calling loop | Research screening pick (57.5) — **provisional, unimplemented** (AM-2) | A GENIE implementation meeting FR-10..FR-12; G4/G5 re-evaluated at application level |
+| pydantic-ai | Runner-up (52.0) — fallback **hypothesis** (NFR-7), same-Python placement assumed | Placement decision (OQ-6); scoped swap-in spike if kept as fallback |
+| DeepSeek Harness | Ranked last **provisionally** — original embeddability premise void (AM-1: TS+Python SDKs drive the runtime as a JSON-RPC stdio subprocess, bundled runtime) | Operational assessment of the subprocess mode (lifecycle granularity, isolation, cost, published-version availability); developer preview + no security audit + zero evidenced adoption still stand |
+| OpenAI Agents SDK / LangGraph | Screened, not preferred | Not active candidates unless D03 reopens |
+
+DSH revisit trigger (AM-1-corrected): stable non-preview release + security
+audit + completed subprocess-mode operational assessment.
+
 Selection drivers for D03 (from framing + operator): plugin architecture
 (evaluating DSH specifically for this), licence compatibility (V07),
 isolation/cancellation/telemetry with GENIE's model endpoint (V06), and

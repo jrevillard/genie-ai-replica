@@ -290,7 +290,8 @@ test.describe('the seeded locale is proved, not assumed', () => {
 });
 
 /**
- * The entrance gate's own condition, pinned OFFLINE.
+ * The GATE, at the boundary that matters: the session must refuse to
+ * open on a banner nobody can measure.
  *
  * The gate owns the banner's VISIBILITY, not only its presence: a banner
  * that is mounted but hidden (or collapsed to a zero-size box) is not a
@@ -299,67 +300,38 @@ test.describe('the seeded locale is proved, not assumed', () => {
  * to enforce that, and when the reload path left the banner to this gate
  * alone, the guarantee would have gone with it — silently, because
  * nothing failed until a capture read an empty clip.
- */
-test.describe("the banner gate owns the banner's visibility", () => {
-  const settled = (options) => welcome.bannerIsSettled(fakeBanner(options).doc);
-
-  test('a banner that is not mounted is not settled', () => {
-    expect(settled({ mounted: false })).toBe(false);
-  });
-
-  test('a banner with no box is not settled', () => {
-    expect(settled({ width: 0, height: 120 })).toBe(false);
-    expect(settled({ width: 800, height: 0 })).toBe(false);
-  });
-
-  test('a hidden banner is not settled', () => {
-    expect(settled({ visibility: 'hidden' })).toBe(false);
-  });
-
-  test('a banner whose entrance animation still runs is not settled', () => {
-    expect(settled({ animations: [{ playState: 'running' }] })).toBe(false);
-  });
-
-  test('a visible, settled banner is settled', () => {
-    expect(settled({ animations: [{ playState: 'finished' }] })).toBe(true);
-  });
-
-  test('the gate reads the banner by its declared handle', () => {
-    const { doc, selectors } = fakeBanner();
-    welcome.bannerIsSettled(doc);
-    expect(selectors, 'the banner is addressed by the handle the app declares').toEqual([BANNER_HANDLE]);
-  });
-});
-
-/**
- * The GATE, not only its condition: the session must refuse to open on a
- * banner nobody can measure.
  *
- * The condition on its own is pinned above, but a gate that stopped
- * running that condition would leave those pins green — the guarantee
- * would be lost silently again, which is the exact shape the first
- * review found. These drive the real session against a page whose
- * banner fails the gate, and the session must refuse to open.
+ * These drive the real session against a page whose banner fails the
+ * gate: the session must refuse to open. (The gate's own condition is
+ * not pinned separately: that would be a private-predicate test beside
+ * the real boundary, and it would need an export no caller needs.)
  */
 test.describe('the session refuses a banner the gate rejects', () => {
-  test('a hidden banner does not open the session', async () => {
-    const { browser } = fakeBrowser({ banner: { visibility: 'hidden' } });
-
+  const refuses = async (banner) => {
+    const { browser } = fakeBrowser({ banner });
     await expect(welcome.withWelcomeSession(browser, {}, async () => 'never runs')).rejects.toThrow(
       /waitForFunction: Timeout/
     );
+  };
+
+  test('a banner that is not mounted does not open the session', async () => {
+    await refuses({ mounted: false });
   });
 
   test('a banner with no box does not open the session', async () => {
-    const { browser } = fakeBrowser({ banner: { width: 0, height: 0 } });
+    await refuses({ width: 0, height: 0 });
+  });
 
-    await expect(welcome.withWelcomeSession(browser, {}, async () => 'never runs')).rejects.toThrow(
-      /waitForFunction: Timeout/
-    );
+  test('a hidden banner does not open the session', async () => {
+    await refuses({ visibility: 'hidden' });
+  });
+
+  test('a banner whose entrance animation still runs does not open the session', async () => {
+    await refuses({ animations: [{ playState: 'running' }] });
   });
 
   test('a visible, settled banner opens the session', async () => {
-    const { browser, log } = fakeBrowser();
+    const { browser, log } = fakeBrowser({ banner: { animations: [{ playState: 'finished' }] } });
 
     const value = await welcome.withWelcomeSession(browser, {}, async () => 'the measurement');
 

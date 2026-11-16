@@ -488,7 +488,6 @@ const LAYER_STATE_BIND = `return (${visualLayerState.toString()});`;
 module.exports = {
   withWelcomeSession,
   waitForComposerReady,
-  bannerIsSettled,
   DEFAULT_VIEWPORT,
   waitForBannerSettled,
   readVisualLayerState,

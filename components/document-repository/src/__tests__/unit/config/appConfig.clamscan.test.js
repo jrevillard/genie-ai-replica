@@ -53,12 +53,11 @@ describe('appConfig.clamscan toggles', () => {
 // require time in appConfig.js. The loopback list lives in THREE hand-synced
 // places — this matrix, the appConfig IIFE, and the `is_local_host` case list
 // in scripts/clamav-node.sh — keep them in lock-step when a form is added.
+// The LOCAL-mode defaults (unset → ON, explicit 'false' → OFF) are already
+// pinned by the toggles describe above — this matrix owns only the
+// REMOTE-mode shapes and the explicit-over-mode interactions.
 describe('appConfig.clamscan localFallback matrix (#1064 remote-canonical)', () => {
   afterEach(() => jest.resetModules());
-
-  it('nothing set → local mode, fallback ON (the historical default preserved)', () => {
-    expect(loadAppConfig({}).clamscan.localFallback).toBe(true);
-  });
 
   it.each([
     ['127.0.0.1'],
@@ -83,10 +82,6 @@ describe('appConfig.clamscan localFallback matrix (#1064 remote-canonical)', () 
     expect(loadAppConfig({ CLAMSCAN_HOST: 'clamav', CLAMSCAN_LOCAL_FALLBACK: 'true' }).clamscan.localFallback).toBe(
       true
     );
-  });
-
-  it('explicit CLAMSCAN_LOCAL_FALLBACK=false wins over local mode', () => {
-    expect(loadAppConfig({ CLAMSCAN_LOCAL_FALLBACK: 'false' }).clamscan.localFallback).toBe(false);
   });
 
   it('explicit CLAMSCAN_LOCAL_FALLBACK=false wins over remote mode', () => {

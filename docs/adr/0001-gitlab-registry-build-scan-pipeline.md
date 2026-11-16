@@ -227,7 +227,8 @@ this file, rewrites image names from `tmp/<image>:<candidate>` →
 (e.g. `main-<sha>`, `v2.1.0`, `vX.Y-<sha>`).
 
 **Gate mechanism**: the blocking gate is the security approval policy
-(`.gitlab/security-policies/policy.yml`, `scan_finding` / `container_scanning`),
+(`.gitlab/security-policies/policy.yml` in the security policy project
+`un/itu/genie-ai-security-policy-project`, `scan_finding` / `container_scanning`),
 not `trivy --exit-code 1`. Scan jobs are `allow_failure: true`.
 
 **Regex**:

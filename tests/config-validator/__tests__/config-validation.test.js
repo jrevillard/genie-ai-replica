@@ -3779,8 +3779,11 @@ describe('the local e2e run defines the executed set (#1736)', () => {
     expect(failurePath).toMatch(/const runSha = runBuildSha\(reportPath\);/);
     // The venue's build is the probe's answer, not another sha: the
     // binding compares it with the run's build, and a wrong one would
-    // satisfy that comparison whatever the venue serves.
-    expect(failurePath).toMatch(/\{[^}]*sha: venueSha[^}]*\} = probeVenueBuildSha\(venue\)/);
+    // satisfy that comparison whatever the venue serves. The
+    // declaration is a `const` on purpose — a `let` would let the value
+    // be swapped between the probe and the call, and the binding would
+    // then always succeed.
+    expect(failurePath).toMatch(/const \{[^}]*sha: venueSha[^}]*\} = probeVenueBuildSha\(venue\)/);
     expect(failurePath).toMatch(/classifyVenueFailures\(venue, noiseFree, \{ runSha, venueSha \}\)/);
   });
 

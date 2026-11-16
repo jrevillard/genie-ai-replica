@@ -229,9 +229,14 @@ function handleCommittedAtHead(handle) {
         'HEAD',
         '--',
         FRONTEND_SRC_REL,
-        // The SAME rule the working-tree walk holds to: every directory
-        // NAMED __tests__ or __mocks__, at any depth, is excluded — the
-        // two readers must not diverge on what a declaration is.
+        // The same rule the working-tree walk holds to on the EXCLUSION:
+        // every directory NAMED __tests__ or __mocks__, at any depth, is
+        // excluded — the two readers must not diverge on what a
+        // declaration is. (On a DYNAMIC binding — `:data-testid="x"` —
+        // this reader is the loose one: the value is not known, so the
+        // string counts. The direction is safe: a handle counted as
+        // declared here can only make the verdict refuse, never make it
+        // fire.)
         ':(exclude,glob)**/__tests__/**',
         ':(exclude,glob)**/__mocks__/**'
       ],
@@ -480,8 +485,11 @@ function staleVenueHandles(failure, context) {
   for (const handle of locatorHandles(failure.error)) {
     if (bundleServesHandle(context.servedText, handle)) continue;
     const source = context.declared.get(handle);
-    if (!source) continue;
-    missing.push({ handle, source });
+    // Neither the venue nor the checkout has it: no build can serve it
+    // — a SPEC defect. It stays a candidate, so that a compound locator
+    // carrying it beside a stale handle is filed rather than classified:
+    // the spec defect must not disappear behind the stale one.
+    missing.push({ handle, source: source || null, specDefect: !source });
   }
   return missing;
 }
@@ -525,6 +533,17 @@ function partitionStaleVenue(byFile, context) {
       const committed = context.committedAtHead || handleCommittedAtHead;
       const verdicts = [];
       for (const candidate of candidates) {
+        if (candidate.specDefect) {
+          // No build can serve it: the spec waits for a handle nobody
+          // declares. It is a spec defect, filed as one — and the
+          // failure must not be classified as the venue's.
+          refused.push({
+            handle: candidate.handle,
+            reason: 'no build can serve it — no source declares it'
+          });
+          verdicts.push({ candidate, verdict: 'not-stale' });
+          continue;
+        }
         const declaration = committed(candidate.handle);
         if (declaration !== true) {
           // Not committed, or the checkout cannot answer: the failure is
@@ -746,6 +765,46 @@ function bindVenueBuild(options = {}) {
     };
   }
   return { boundSha: venueSha, note: null };
+}
+
+/**
+ * The stale-venue classification, as the failure path runs it: the
+ * context, the partition, and the lines the run prints.
+ *
+ * This is the seam the unit spec drives. The proof and the partition
+ * are each pinned, but the WIRING between them and the run is what
+ * decides whether the feature works at all — without a spec on this
+ * level, the whole block could be deleted and every failure would be
+ * filed as a product defect while the suite stayed green.
+ *
+ * @param {string} venue - the venue address the failed run pointed at
+ * @param {Map<string, Array<{error: string}>>} byFile - the grouped failures
+ * @param {object} [options] - the readers and the transport (injectable)
+ * @returns {Promise<{fileable: Map<string, Array<{error: string}>>, stale: Map<string, object>, refused: Array<object>, note: string|null, reports: string[]}>} the classification and the lines to print
+ */
+async function classifyVenueFailures(venue, byFile, options = {}) {
+  const context = await buildStaleVenueContext(venue, byFile, options);
+  const { fileable, stale, refused } = context.ok
+    ? partitionStaleVenue(byFile, context)
+    : { fileable: byFile, stale: new Map(), refused: [] };
+  const reports = [];
+  if (context.note) {
+    reports.push(`\n${context.note}`);
+  }
+  if (refused.length > 0) {
+    // The verdict was refused for these handles: the failures are filed
+    // as they are, and the reason is named — a silent refusal is
+    // indistinguishable from a verdict.
+    reports.push(
+      `\nthe verdict was refused for ${refused.length} handle(s) (` +
+        `${refused.map((entry) => `\`${entry.handle}\`: ${entry.reason}`).join('; ')}) — the ` +
+        'failures are filed as they are.'
+    );
+  }
+  if (stale.size > 0) {
+    reports.push(venueStalenessReport(stale, venue, context));
+  }
+  return { fileable, stale, refused, note: context.note, reports };
 }
 
 function fail(message) {
@@ -1429,29 +1488,11 @@ async function main() {
   // FILED as one. The venue's served bundle is the only thing that tells
   // the two apart.
   const runSha = runBuildSha(reportPath);
-  const staleContext = await buildStaleVenueContext(venue, noiseFree, { runSha, venueSha });
-  const {
-    fileable: byFile,
-    stale: staleVenue,
-    refused
-  } = staleContext.ok
-    ? partitionStaleVenue(noiseFree, staleContext)
-    : { fileable: noiseFree, stale: new Map(), refused: [] };
-  if (staleContext.note) {
-    process.stdout.write(`\n${staleContext.note}\n`);
-  }
-  if (refused.length > 0) {
-    // The proof could not read the venue's build: the verdict is
-    // refused, and a silent refusal would read like a proof that said
-    // no. The failures are filed as they are.
-    process.stdout.write(
-      `\nthe verdict was refused for ${refused.length} handle(s) (` +
-        `${refused.map((entry) => `\`${entry.handle}\`: ${entry.reason}`).join('; ')}) — the ` +
-        'failures are filed as they are.\n'
-    );
-  }
-  if (staleVenue.size > 0) {
-    process.stdout.write(venueStalenessReport(staleVenue, venue, staleContext) + '\n');
+  const classification = await classifyVenueFailures(venue, noiseFree, { runSha, venueSha });
+  const byFile = classification.fileable;
+  const staleVenue = classification.stale;
+  for (const line of classification.reports) {
+    process.stdout.write(`${line}\n`);
   }
   if (byFile.size === 0) {
     if (venueNoise.size > 0) {
@@ -1524,6 +1565,7 @@ module.exports = {
   sourceTreeExistsAt,
   ancestryOfHead,
   bindVenueBuild,
+  classifyVenueFailures,
   probeVenueBuildSha,
   buildStaleVenueContext,
   runBuildSha,

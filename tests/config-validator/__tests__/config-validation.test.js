@@ -3743,6 +3743,19 @@ describe('the local e2e run defines the executed set (#1736)', () => {
       .filter((f) => EXECUTED_SPEC_RE.test(f));
   });
 
+  // The failure path binds the venue's served bundle to the build the RUN
+  // exercised, and that build travels with the run's report: the runner
+  // writes it beside the report. Delete the write and every run carries no
+  // build — the verdict is always refused, every stale-venue failure is
+  // filed as a product defect, and the suite stays green. The writer and
+  // the reader must name the file the same way.
+  test('the runner writes the run\'s build beside its report', () => {
+    expect(runScript).toMatch(/\$\{RUN_REPORT%\.json\}\.build\.json/);
+    expect(runScript).toMatch(/git_sha/);
+    const failurePath = fs.readFileSync(FAILURE_PATH, 'utf-8');
+    expect(failurePath).toMatch(/\.build\.json/);
+  });
+
   // Any flag other than the project selector would shrink the executed set
   // without the path derivation noticing it (--grep, --shard, a reporter
   // that drops results). Its own test, so a violation names itself instead

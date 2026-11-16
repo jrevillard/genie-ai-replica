@@ -29,6 +29,7 @@ const {
   probeVenueBuildSha,
   bindVenueBuild,
   buildStaleVenueContext,
+  classifyVenueFailures,
   runBuildSha,
   sidecarPath
 } = require('./file-failure-issues');
@@ -626,7 +627,8 @@ test.describe('a stale venue is told apart from a product defect', () => {
     expect(staleVenueHandles(failure, STALE)).toEqual([
       {
         handle: 'chat-history-item',
-        source: 'components/gov-chat-frontend/src/components/ChatFolders.vue'
+        source: 'components/gov-chat-frontend/src/components/ChatFolders.vue',
+        specDefect: false
       }
     ]);
   });
@@ -646,9 +648,14 @@ test.describe('a stale venue is told apart from a product defect', () => {
 
   test('a handle NEITHER the venue nor the checkout has is a spec defect, not a stale venue', () => {
     // The app never declared it: the spec is wrong, and it is filed as
-    // the product finding it is.
+    // the product finding it is. It stays a CANDIDATE — a compound
+    // locator carrying it beside a stale handle must be filed, not
+    // classified: the spec defect must not disappear behind the stale
+    // one.
     const context = { servedText: '', declared: new Map() };
-    expect(staleVenueHandles({ error: HISTORY_ERROR }, context)).toEqual([]);
+    expect(staleVenueHandles({ error: HISTORY_ERROR }, context)).toEqual([
+      { handle: 'chat-history-item', source: null, specDefect: true }
+    ]);
   });
 
   test('a failure that is not a not-found is never a stale venue', () => {
@@ -1270,5 +1277,147 @@ test.describe('a declaration walk that fails degrades to filing', () => {
     expect(context.ok).toBe(false);
     expect(context.note).toContain("the checkout's declarations could not be walked");
     expect(context.note).toContain('filed as they are');
+  });
+});
+
+/**
+ * The failure path RUNS the classification.
+ *
+ * The proof and the partition are each pinned, but the WIRING between
+ * them and the run is what decides whether the feature works at all:
+ * without a spec on this level, the whole block could be deleted and
+ * every failure would be filed as a product defect while the suite
+ * stayed green.
+ */
+test.describe('the failure path runs the classification', () => {
+  const INDEX = '<html><script defer src="/js/app.aaaa1111.js"></script></html>';
+  const APP = 'i.u=e=>"js/"+e+"."+{73:"7f541a03"}[e]+".js"';
+  const transport = (bodies) => async (_method, url) => {
+    const key = Object.keys(bodies).find((candidate) => url.endsWith(candidate));
+    if (key === undefined) return { status: 404, data: 'not found' };
+    return { status: 200, data: bodies[key] };
+  };
+  // A venue that serves a bundle WITHOUT `chat-history-item` — the
+  // #1895 shape — and a real handle of the app in it (`sidebar-left`,
+  // declared by SideBarComponent.vue), so the walk reads the APP and
+  // the sanity guard passes.
+  const SERVING = transport({
+    '/': INDEX,
+    '/js/app.aaaa1111.js': APP,
+    '/js/73.7f541a03.js': '"sidebar-left"'
+  });
+  const HISTORY_NOT_FOUND = [
+    'Error: expect(locator).toBeVisible() failed',
+    '',
+    'Locator: locator(\'[data-testid="chat-history-item"]\')',
+    'Expected: visible',
+    'Error: element(s) not found'
+  ].join('\n');
+  // The readers, injected: the venue's build declares the handle (the
+  // app's build dropped it) in the product-defect case, and does not in
+  // the stale-venue case.
+  const readers = (declaredAtBuild) => ({
+    request: SERVING,
+    runSha: 'abc1234def',
+    venueSha: 'abc1234def',
+    ancestry: () => 'ancestor',
+    sourceTreeExists: () => true,
+    declaredAtBuild,
+    committedAtHead: () => true
+  });
+
+  test('a proven-stale failure is NOT filed, and the run prints the report', async () => {
+    const byFile = new Map([['tests/e2e/chatbot/conversation-history.spec.js', [{ error: HISTORY_NOT_FOUND }]]]);
+    const result = await classifyVenueFailures(
+      'https://venue.example:4443',
+      byFile,
+      readers((sha) => sha === 'HEAD')
+    );
+    expect(result.fileable.size).toBe(0);
+    expect(result.stale.size).toBe(1);
+    const printed = result.reports.join('\n');
+    expect(printed).toContain('venue-staleness report');
+    expect(printed).toContain('chat-history-item');
+    expect(printed).toContain('nothing is filed');
+  });
+
+  test('a product defect IS filed', async () => {
+    const byFile = new Map([['tests/e2e/chatbot/conversation-history.spec.js', [{ error: HISTORY_NOT_FOUND }]]]);
+    const result = await classifyVenueFailures(
+      'https://venue.example:4443',
+      byFile,
+      readers(() => true)
+    );
+    expect(result.fileable.get('tests/e2e/chatbot/conversation-history.spec.js')).toHaveLength(1);
+    expect(result.stale.size).toBe(0);
+    expect(result.reports.join('\n')).not.toContain('venue-staleness report');
+  });
+
+  test('a venue the run cannot bind leaves the failures filed, and says why', async () => {
+    const byFile = new Map([['tests/e2e/chatbot/conversation-history.spec.js', [{ error: HISTORY_NOT_FOUND }]]]);
+    const result = await classifyVenueFailures('https://venue.example:4443', byFile, {
+      ...readers(() => true),
+      venueSha: 'fedcba987'
+    });
+    expect(result.fileable.get('tests/e2e/chatbot/conversation-history.spec.js')).toHaveLength(1);
+    expect(result.note).toContain('MOVED');
+    expect(result.reports.join('\n')).toContain('MOVED');
+  });
+});
+
+/**
+ * The per-candidate committed gate, in the compound case: a locator
+ * naming a handle no commit declares beside a handle the venue's build
+ * never declared is FILED — the product defect must not be silenced by
+ * the stale one.
+ */
+test.describe('a compound locator with mixed committed answers is filed', () => {
+  const compound = [
+    'Error: expect(locator).toBeVisible() failed',
+    '',
+    'Locator: locator(\'[data-testid="test-only-handle-no-source-declares"]\').locator(\'[data-testid="chat-history-item"]\')',
+    'Error: element(s) not found'
+  ].join('\n');
+
+  test('the uncommitted handle refuses the classification and is reported', () => {
+    const context = {
+      servedText: '"some-other-handle"',
+      declared: new Map([
+        ['test-only-handle-no-source-declares', 'components/gov-chat-frontend/src/components/ChatFolders.vue'],
+        ['chat-history-item', 'components/gov-chat-frontend/src/components/ChatFolders.vue']
+      ]),
+      boundSha: 'abc1234def',
+      declaredAtBuild: (sha, handle) =>
+        sha === 'HEAD' ? true : handle === 'test-only-handle-no-source-declares' ? false : true,
+      // The first handle is declared by the working tree but by NO commit.
+      committedAtHead: (handle) => handle !== 'test-only-handle-no-source-declares'
+    };
+    const byFile = new Map([['tests/e2e/a.spec.js', [{ error: compound }]]]);
+    const { fileable, stale, refused } = partitionStaleVenue(byFile, context);
+    expect(stale.size).toBe(0);
+    expect(fileable.get('tests/e2e/a.spec.js')).toHaveLength(1);
+    expect(refused.map((entry) => entry.handle)).toEqual(['test-only-handle-no-source-declares']);
+    expect(refused[0].reason).toContain('no commit declares it');
+  });
+
+  test('a handle nobody declares is refused with its reason, and the failure is filed', () => {
+    const context = {
+      servedText: '',
+      declared: new Map(),
+      boundSha: 'abc1234def',
+      declaredAtBuild: () => false,
+      committedAtHead: () => true
+    };
+    const error = [
+      'Error: expect(locator).toBeVisible() failed',
+      '',
+      'Locator: locator(\'[data-testid="chat-history-item"]\')',
+      'Error: element(s) not found'
+    ].join('\n');
+    const byFile = new Map([['tests/e2e/a.spec.js', [{ error }]]]);
+    const { fileable, stale, refused } = partitionStaleVenue(byFile, context);
+    expect(stale.size).toBe(0);
+    expect(fileable.get('tests/e2e/a.spec.js')).toHaveLength(1);
+    expect(refused[0].reason).toContain('no build can serve it');
   });
 });

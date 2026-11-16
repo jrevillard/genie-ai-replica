@@ -139,6 +139,7 @@ without a venue surface.
 | `run/file-failure-issues.spec.js` | the failure path (issue filing from a report) | none |
 | `run/install-browsers.spec.js` | the browser-tree reconciler | none |
 | `run/preflight.spec.js` | the run pre-flight | none |
+| `run/venue-bundle.spec.js` | the venue's served-bundle read (what the venue's build carries) | none |
 | `run/venue-dns.spec.js` | the venue-name mapping preload | none |
 
 ## Keeping the map true

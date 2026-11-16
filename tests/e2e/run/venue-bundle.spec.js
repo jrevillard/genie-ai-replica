@@ -30,6 +30,15 @@ test.describe('the handles a source text declares', () => {
     expect(handlesIn('<div data-test-id="upload-files-dialog-confirm">')).toEqual(['upload-files-dialog-confirm']);
   });
 
+  test('a SPACED binding names a handle too — the two readers hold to one rule', () => {
+    // The committed reader allows whitespace around the `=` as well; the
+    // two readers must not diverge on what a declaration is, or a
+    // declaration written with spaces would stop being classified (the
+    // safe direction: it would be filed).
+    expect(handlesIn('<div data-testid = "chat-history-item">')).toEqual(['chat-history-item']);
+    expect(handlesIn('<div data-test-id  =  "upload-files-dialog-confirm">')).toEqual(['upload-files-dialog-confirm']);
+  });
+
   test('a DYNAMIC binding names no handle — its value is not known at build time', () => {
     // A dynamic value cannot be looked up in a bundle, so treating it as
     // a declaration would put a handle in the checkout's set that no

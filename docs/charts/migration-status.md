@@ -2989,10 +2989,11 @@ contractual evidence — a fresh clone does not carry them.)
   chat-helper fix as ALREADY UPSTREAM, and the branch now carries neither.
   The branch's chart work is the only thing left in it, which is what the
   branch is for.
-- **Chart 0.2.172 is LIVE on the 1.37 laptop cluster — the rebased branch
+- **Chart 0.2.173 is LIVE on the 1.37 laptop cluster — the rebased branch
   installs and the realm imports.** The upgrade ran end to end
   (`Helm upgrade succeeded for release genieai/genieai.v4 with chart
-  genieai-umbrella@0.2.172`), which means the post-upgrade convergence
+  genieai-umbrella@0.2.172`, then `genieai.v5` with 0.2.173 after the
+  review round's fixes), which means the post-upgrade convergence
   hook — the realm import — resolved every placeholder, the two new ones
   included. Read back from the LIVE realm through the Keycloak admin API
   (not from the file):
@@ -3007,7 +3008,9 @@ contractual evidence — a fresh clone does not carry them.)
   Through the Envoy edge (nodePort 30356, `Host: genieai.local`):
   `/api/health` → **200** `application/json`, `/api-docs.json` → **200**
   `application/json` carrying the OpenAPI document — the 0.2.171 routing
-  fix still holds after the rebase.
+  fix still holds after the rebase. Re-read after 0.2.173: the realm
+  still holds 28800 / 604800 (the nil-check that replaced `| default` is
+  behaviour-preserving) and both routes still answer 200.
 - **The review round over the rebase's diff found no correctness defect and
   one real gap in the CI's own floor.** The reviewer reproduced the gate's
   mutation independently (deleting the two env rows leaves the chart's

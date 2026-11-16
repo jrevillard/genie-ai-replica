@@ -1187,27 +1187,35 @@ describe('Configuration Validation Suite', () => {
       expect(composeDefaults.CONTEXTUAL_LABEL_RAW).toBe('true');
     });
 
-    test('the concept-document ceiling agrees across compose and env.j2', () => {
-      // okf-server splits a concept document above this; dataprep truncates the
-      // document context above the budget it derives from the window the
-      // endpoint serves at runtime. The two are NOT derived from one source —
-      // this one is a literal — so the invariant "they stay in step" is the
-      // operator's to keep by hand. What this test CAN assert is that both
-      // deployment surfaces state the same literal.
+    test('the concept-document ceiling is DERIVED: compose ships it EMPTY and env.j2 only emits a named pin', () => {
+      // #1205: the ceiling is derived from the serving-model window the same
+      // endpoint dataprep reads, so a deployment-surface LITERAL is no longer
+      // the source of truth — and worse, a literal default in compose would
+      // PIN every deployment (compose ALWAYS injects the variable, so the
+      // derivation would never engage, exactly the DATAPREP_CONTEXTUAL_DOC_
+      // BUDGET=0 lesson above). Compose ships '' (unset = derived); env.j2
+      // emits the variable ONLY when the deployment names it (set = pin).
+      // The constant-drift surface this used to guard moved to the mirror
+      // pin: tests/config-validator/validators/validate-contextual-mirror.js.
       const full = fs.readFileSync(COMPOSE_FILE, 'utf8');
       const okfBlock = full.slice(full.indexOf('  okf-server:'), full.indexOf('  pii-service:'));
-      const m = okfBlock.match(/- OKF_MAX_CONCEPT_DOC_CHARS=\$\{OKF_MAX_CONCEPT_DOC_CHARS:-(\d+)\}/);
-      expect(m).not.toBeNull();
+      const m = okfBlock.match(/- OKF_MAX_CONCEPT_DOC_CHARS=\$\{OKF_MAX_CONCEPT_DOC_CHARS:-\}/);
+      expect(m).not.toBeNull(); // empty default — the derivation engages by default
+      // env.j2 states the knob with an EMPTY default ('' = unset = derived to
+      // the app) — never a literal, which would pin every cloud deployment.
       expect(ansibleVars.OKF_MAX_CONCEPT_DOC_CHARS).toBeDefined();
-      expect(ansibleVars.OKF_MAX_CONCEPT_DOC_CHARS.default).toBe(m[1]);
+      expect(ansibleVars.OKF_MAX_CONCEPT_DOC_CHARS.default).toBe('');
     });
 
-    test('the ceiling is sized for the default window, not the historical 6000', () => {
+    test('the operator CAN state a ceiling pin on both surfaces (set = pin)', () => {
+      // The pin path must survive the derived contract: compose passes
+      // ${OKF_MAX_CONCEPT_DOC_CHARS} through (an operator's .env value
+      // reaches the container), and env.j2 emits a named
+      // okf_max_concept_doc_chars group_var. The smoke asserts the pin
+      // WINS on a live deployment (run-smoke-ceiling.js).
       const full = fs.readFileSync(COMPOSE_FILE, 'utf8');
       const okfBlock = full.slice(full.indexOf('  okf-server:'), full.indexOf('  pii-service:'));
-      const m = okfBlock.match(/- OKF_MAX_CONCEPT_DOC_CHARS=\$\{OKF_MAX_CONCEPT_DOC_CHARS:-(\d+)\}/);
-      // 6000 was the T4-sized literal that truncated 57% of a real corpus.
-      expect(Number(m[1])).toBeGreaterThan(200000);
+      expect(okfBlock).toMatch(/- OKF_MAX_CONCEPT_DOC_CHARS=\$\{OKF_MAX_CONCEPT_DOC_CHARS:-\}/);
     });
   });
 

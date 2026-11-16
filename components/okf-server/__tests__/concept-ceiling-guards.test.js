@@ -50,7 +50,15 @@ describe('concept-ceiling — the single authority', () => {
     const err = conceptTooLargeError({ label: 'concept "x"', chars: 300, ceiling: 250 });
     expect(err.code).toBe('CONCEPT_TOO_LARGE');
     expect(err.status).toBe(409);
-    expect(err.details).toEqual({ concept_id: 'concept "x"', chars: 300, ceiling: 250 });
+    // The ceiling's SOURCE rides the facts (#1205): since the ceiling is
+    // derived from the serving-model window, the number alone does not say
+    // which lever moves it. No env pin here → the static default.
+    expect(err.details).toEqual({
+      concept_id: 'concept "x"',
+      chars: 300,
+      ceiling: 250,
+      ceiling_source: 'static-default'
+    });
     // The message names the size, the ceiling AND the remedy — a refusal that
     // does not say what to do is a dead end.
     expect(err.message).toMatch(/300 characters/);
@@ -146,7 +154,12 @@ describe('R11 — the editor save refuses an over-ceiling body', () => {
     expect(nextErr.message).toMatch(/500 characters/);
     expect(nextErr.message).toMatch(/200-character ceiling/);
     expect(nextErr.message).toMatch(/split/i);
-    expect(nextErr.details).toEqual({ concept_id: 'concept "c1"', chars: 500, ceiling: 200 });
+    expect(nextErr.details).toEqual({
+      concept_id: 'concept "c1"',
+      chars: 500,
+      ceiling: 200,
+      ceiling_source: 'operator-pin' // the suite pins OKF_MAX_CONCEPT_DOC_CHARS
+    });
   });
 
   test('a body patch UNDER the ceiling is written', async () => {
@@ -250,7 +263,8 @@ describe('the import path — the same refusal, with the import status', () => {
     expect(err.details).toEqual({
       concept_id: 'concept "concepts/huge.md"',
       chars: 500,
-      ceiling: 200
+      ceiling: 200,
+      ceiling_source: 'operator-pin' // the suite pins OKF_MAX_CONCEPT_DOC_CHARS
     });
   });
 

@@ -59,7 +59,7 @@ const conceptMetaService = require('./concept-meta-service');
 // The concept-document ceiling — the publish gate's authority (the plan's §7).
 // One module, one number: the import path, the editor save and this gate all
 // read the SAME ceiling, so a document accepted by one is accepted by all.
-const { maxConceptDocChars } = require('./concept-ceiling');
+const { maxConceptDocChars, effectiveCeiling } = require('./concept-ceiling');
 
 const REPOS = 'okf_repositories';
 const META = 'okf_concepts_meta';
@@ -737,6 +737,9 @@ async function transition(repoId, action, actor, opts = {}) {
       // gate is the backstop that makes "no oversized concept may persist by
       // any path" true of the PUBLISH boundary too.
       const ceiling = maxConceptDocChars();
+      // The ceiling's SOURCE rides the refusal (#1205): the number alone no
+      // longer says which lever moves it.
+      const ceilingSource = effectiveCeiling().source;
       // The READ lives in concept-meta-service (the owner of the
       // `okf_concepts_meta` collection). It is called from HERE, next to the
       // concept-count check and before the mint.
@@ -754,7 +757,7 @@ async function transition(repoId, action, actor, opts = {}) {
         });
         throw new LifecycleError(
           'CONCEPT_TOO_LARGE',
-          `${oversized} concept(s) in this repository are over the ${ceiling}-character ceiling: ${named}` +
+          `${oversized} concept(s) in this repository are over the ${ceiling}-character ceiling (${ceilingSource}): ${named}` +
             (oversized > offenders.length ? `, and ${oversized - offenders.length} more` : '') +
             '. Their context is truncated at ingestion, so their deep chunks are embedded against a ' +
             'description of the start of the document. Split them into smaller concepts, or raise ' +

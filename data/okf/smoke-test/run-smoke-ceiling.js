@@ -31,7 +31,12 @@ const BASE = process.env.OKF_SMOKE_BASE_URL || 'http://localhost:3002';
 const TOKEN = process.env.OKF_SMOKE_TOKEN_ADMIN;
 const REPO_NAME = 'smoke-ceiling';
 const DOMAIN = 'smoke';
-const CEILING = Number(process.env.OKF_MAX_CONCEPT_DOC_CHARS || 250000);
+// #1205: the ceiling is DERIVED from the serving-model window — the smoke
+// reads the LIVE effective ceiling from the server's own readout (below),
+// never from env: asserting against a literal here would be a SECOND
+// derivation of the number, which is exactly what the spec forbids.
+let CEILING = null;
+let CEILING_SOURCE = null;
 
 let REPO_ID = null; // the server mints the repo_id
 let failures = 0;
@@ -85,6 +90,31 @@ async function main() {
   }
   console.log('OKF ceiling smoke — ceiling in force: ' + CEILING);
   console.log('');
+
+  // ── 0a. The READOUT: the live ceiling and WHY it is that number ───────────
+  // #1205: the ceiling is derived from the serving-model window, so the
+  // number alone no longer says which lever moves it. The readout answers
+  // both, and this smoke asserts against the LIVE effective value.
+  const readout = await call('GET', '/api/okf/admin/ceiling');
+  if (readout.status !== 200 || !readout.body || !readout.body.ceiling) {
+    fail('the ceiling readout → ' + readout.status + ' ' + JSON.stringify(readout.body).slice(0, 200));
+    return done();
+  }
+  CEILING = readout.body.ceiling;
+  CEILING_SOURCE = readout.body.source;
+  pass('the readout answers: ceiling=' + CEILING + ' source=' + CEILING_SOURCE);
+  const t = readout.body.terms || {};
+  const termsSum = t.prompt_tokens + t.batch_tokens + t.output_tokens + t.scaffold_tokens;
+  termsSum === t.reserved_tokens
+    ? pass('  the derivation terms sum correctly (' + t.reserved_tokens + ' reserved tokens)')
+    : fail('  the derivation terms do not sum: ' + JSON.stringify(t));
+  if (CEILING_SOURCE === 'discovered-from-window') {
+    readout.body.derived_ceiling === CEILING && readout.body.window_tokens > 0
+      ? pass('  the derived ceiling matches its own window (' + readout.body.window_tokens + ' tokens)')
+      : fail('  the derived ceiling contradicts its own window: ' + JSON.stringify(readout.body));
+  } else {
+    pass('  the ceiling is a FALLBACK or PIN (source ' + CEILING_SOURCE + ') — the derivation is not engaged');
+  }
 
   // ── 0. Cleanup a prior run ────────────────────────────────────────────────
   // A crashed prior run (token expiry mid-run) leaves the repo behind and
@@ -181,6 +211,11 @@ async function main() {
       ? pass('  the refusal names the ceiling (' + CEILING + '-character ceiling)')
       : fail('  the refusal does not name the ceiling: ' + msg.slice(0, 200));
     namesRemedy ? pass('  the refusal names a remedy') : fail('  the refusal names no remedy: ' + msg.slice(0, 200));
+    // #1205: the refusal names WHERE the ceiling came from — a curator must
+    // know which lever moves the number (pin / window / fallback).
+    CEILING_SOURCE && msg.indexOf('(' + CEILING_SOURCE + ')') !== -1
+      ? pass('  the refusal names the ceiling source (' + CEILING_SOURCE + ')')
+      : fail('  the refusal does not name the ceiling source: ' + msg.slice(0, 200));
   } else {
     fail(
       'an over-ceiling body → ' +

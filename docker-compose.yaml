@@ -1033,13 +1033,19 @@ services:
       # its deep chunks embedded against a description of its start (the
       # Contextual Retrieval document context is truncated to the same budget),
       # so imports split such a document rather than storing it degraded.
-      # The default is sized for the 65536-token compose window (~250k chars).
-      # It is a STATIC literal, while dataprep's document-context budget now
-      # follows the window the endpoint serves at runtime (discovered at
-      # VLLM_ENDPOINT) — so the two must be kept in step BY HAND when the
-      # served window changes. AC8 in tests/config-validator only checks that
-      # compose and env.j2 agree on the literal.
-      - OKF_MAX_CONCEPT_DOC_CHARS=${OKF_MAX_CONCEPT_DOC_CHARS:-250000}
+      # #1205: UNSET = DERIVED — okf-server derives the ceiling from the
+      # serving-model window the SAME endpoint dataprep reads (/v1/models), so
+      # the number is right on every deployment instead of right on one (#1588).
+      # SET = PIN: an explicit value wins, uncapped. The empty default is
+      # what makes "unset" mean unset — a 250000 default here would PIN every
+      # deployment and the derivation would never engage.
+      - OKF_MAX_CONCEPT_DOC_CHARS=${OKF_MAX_CONCEPT_DOC_CHARS:-}
+      # The serving-model window, STATED by the operator (0/unset = discover
+      # it from the endpoint's /v1/models — what dataprep does). The only
+      # lever on a strict OpenAI-compatible provider whose /v1/models carries
+      # no max_model_len. Read by dataprep AND okf-server, so one line tunes
+      # both worlds.
+      - DATAPREP_MAX_MODEL_LEN=${DATAPREP_MAX_MODEL_LEN:-0}
       # Lane cool-down after a dataprep 429 (slot busy): without it a saturated
       # queue hot-loops at ~1 claim/sec (incident 2026-09-28 — 434 rows bouncing
       # while one slot was held for hours during a vLLM outage). Rows never

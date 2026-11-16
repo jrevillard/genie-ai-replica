@@ -32,7 +32,7 @@
 
 const { logger } = require('../shared-lib/logger');
 const { splitConceptBody, partPath, MAX_PARTS } = require('./concept-splitter');
-const { maxConceptDocChars, conceptTooLargeError } = require('./concept-ceiling');
+const { maxConceptDocChars, conceptTooLargeError, effectiveCeiling } = require('./concept-ceiling');
 const { workingGraphName } = require('./graph-lifecycle-service');
 const { runPool } = require('./run-pool');
 
@@ -115,6 +115,9 @@ async function previewConceptSplit(repoDoc, concept_id) {
       label: concept_id,
       chars: body.length,
       ceiling,
+      // The ceiling's SOURCE rides the body too (#1205): the message names
+      // it, and a machine consumer must be able to read it.
+      ceiling_source: effectiveCeiling().source,
       remedy:
         'Shorten the source content for this concept (its largest unbreakable section has no heading, ' +
         'paragraph or line boundary that fits), or raise OKF_MAX_CONCEPT_DOC_CHARS if the served ' +

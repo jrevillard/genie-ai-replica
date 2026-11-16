@@ -251,7 +251,12 @@ async function probe(url, timeoutMs, apiKey, { quiet = false } = {}) {
           note: 'first listed model used — pin the model if that is not the chat model'
         });
       }
-      return id;
+      // The served CONTEXT WINDOW rides the SAME probe (the Python twin's
+      // "one HTTP call serves both values"): `max_model_len` is a vLLM
+      // extension to the OpenAI /v1/models payload, and the entry that
+      // carries it is the one we just read. A strict OpenAI-compatible
+      // provider omits it — the window is then unknown, not zero.
+      return { id, window: coerceWindow(entry && entry.max_model_len) };
     }
     // No inner warn line: the outer probe_failed catch below carries this
     // exact message — one incident must be one line in VL, not two.
@@ -260,6 +265,35 @@ async function probe(url, timeoutMs, apiKey, { quiet = false } = {}) {
     if (!quiet) logger.warn('vllm_model_cache.probe_failed', { url, error: e.message });
     throw probeFailure(url, e);
   }
+}
+
+/** The sanity ceiling for a probed window (tokens). The largest real models
+ * sit two orders of magnitude below this; anything bigger is a broken proxy
+ * value that would silently disable every truncation guard. Mirrors the
+ * Python twin's MAX_SANE_MODEL_WINDOW_TOKENS. */
+const MAX_SANE_MODEL_WINDOW_TOKENS = 10000000;
+
+/** Coerce a probed `max_model_len` to a usable window, or null.
+ *
+ * Some proxies serialize the field as a string or a float; others report
+ * -1 or 0 as an "unknown" sentinel. Anything that cannot serve as a context
+ * window (non-positive, non-finite, non-integral, absurdly large, garbage)
+ * is dropped — a bad payload must never poison the cache entry, and an
+ * absurdly large window would silently disable every truncation guard. */
+function coerceWindow(value) {
+  // The Python twin coerces with int(): a string of digits only — '1e15'
+  // and '3.5' are ValueError there, not a truncated prefix (parseInt would
+  // read them as 1 and 3, silently trusting a broken payload). Numbers go
+  // through the same integer gate.
+  let coerced = value;
+  if (typeof coerced === 'string') {
+    const trimmed = coerced.trim();
+    if (!/^d+$/.test(trimmed)) return null;
+    coerced = Number(trimmed);
+  }
+  if (!Number.isFinite(coerced) || !Number.isInteger(coerced)) return null;
+  if (coerced <= 0 || coerced > MAX_SANE_MODEL_WINDOW_TOKENS) return null;
+  return coerced;
 }
 
 /** The probe budget: the ENV ceiling, tightened by the caller's own budget.
@@ -287,10 +321,47 @@ function pruneOldest(set) {
 /** get_model_id twin: served id for baseUrl, TTL-cached, stale-served on
  * probe failure. When nothing ever answered, it THROWS the probe's cause
  * (a null id would hide the reason from the caller). `quiet` marks the
- * best-effort caller and is part of the probe identity (see probe). */
+ * best-effort caller and is part of the probe identity (see probe).
+ *
+ * The served CONTEXT WINDOW travels with the id (the Python twin's design:
+ * one HTTP call, two fields) — see getServedWindow. */
 async function getServedModelId(baseUrl, { timeoutMs, apiKey, quiet = false } = {}) {
+  const outcome = await sharedProbe(baseUrl, { timeoutMs, apiKey, quiet });
+  if (outcome.id !== null) return outcome.id;
+  throw outcome.err;
+}
+
+/** The served CONTEXT WINDOW (tokens) for baseUrl, TTL-cached on the SAME
+ * probe as the model id, stale-served on probe failure.
+ *
+ * Unlike the id twin this NEVER throws: "no window" is an answer the
+ * caller must handle (a strict OpenAI-compatible provider serves
+ * /v1/models without `max_model_len`, and an unreachable endpoint has no
+ * window either) — not an error. The caller decides what an unknown window
+ * means; the ceiling's fallback ladder (#1205) turns it into the static
+ * default with a loud warning.
+ *
+ * @returns {Promise<{window: number|null, stale: boolean, error: Error|null}>}
+ *   `window` null = unknown; `stale` true = served from the last-known
+ *   value after a failed probe (stale beats broken).
+ */
+async function getServedWindow(baseUrl, { timeoutMs, apiKey, quiet = true } = {}) {
+  try {
+    const outcome = await sharedProbe(baseUrl, { timeoutMs, apiKey, quiet });
+    return { window: outcome.window, stale: Boolean(outcome.stale), error: outcome.err };
+  } catch (e) {
+    // sharedProbe only throws when NOTHING was ever known and the caller
+    // asked for the loud path; the window path treats that as "unknown".
+    return { window: null, stale: false, error: e };
+  }
+}
+
+/** The shared probe chain: one probe serves the id AND the window (the
+ * Python twin's "one HTTP call serves both values"). Returns the outcome
+ * object every awaiter unwraps identically. */
+async function sharedProbe(baseUrl, { timeoutMs, apiKey, quiet = false } = {}) {
   const base = String(baseUrl || '').replace(/\/+$/, '');
-  if (!base) return null;
+  if (!base) return { id: null, window: null, stale: false, err: null };
   // Cache key = the NORMALIZED probe URL + a HASH of the credential:
   // gateways can filter /v1/models per key, so two configs on one base
   // must never resolve each other's model — and two spellings of one base
@@ -300,7 +371,9 @@ async function getServedModelId(baseUrl, { timeoutMs, apiKey, quiet = false } = 
   const modelsUrl = openAiModelsUrl(base);
   const cacheKey = `${modelsUrl}|${credentialHash(apiKey)}`;
   const entry = _cache.get(cacheKey);
-  if (entry && cacheEntryIsFresh(entry.ts)) return entry.id;
+  if (entry && cacheEntryIsFresh(entry.ts)) {
+    return { id: entry.id, window: entry.window ?? null, stale: false, err: null };
+  }
 
   // Concurrent callers share ONE probe — per probe BUDGET and probe CLASS
   // (see probe): the class in the key gives quiet and loud callers each
@@ -318,7 +391,12 @@ async function getServedModelId(baseUrl, { timeoutMs, apiKey, quiet = false } = 
   // A recent failure is remembered: answer without touching the network.
   const failed = _negative.get(probeKey);
   if (failed && negativeEntryIsLive(failed.ts)) {
-    if (entry) return entry.id; // stale beats broken
+    if (entry) {
+      // stale beats broken — the last-known id AND window, served without a
+      // new probe (the window path reads the same stale entry the id path
+      // serves, so the two can never disagree about what is known).
+      return { id: entry.id, window: entry.window ?? null, stale: true, err: null };
+    }
     // A COPY per caller: the stored stub would otherwise be thrown — and
     // travel to unrelated requests — as one shared, mutable Error whose
     // stack names the first failure's frames.
@@ -342,14 +420,14 @@ async function getServedModelId(baseUrl, { timeoutMs, apiKey, quiet = false } = 
     // nothing was ever known. The serving_stale warn and every caller's
     // served id derive from this one value, so they can never disagree.
     pending = probe(modelsUrl, timeoutMs, apiKey, { quiet })
-      .then((id) => {
+      .then((probed) => {
         // delete+set: the refreshed entry becomes the newest, so the
         // count-bounded prune drops the OLDEST one first.
         _cache.delete(cacheKey);
-        _cache.set(cacheKey, { id, ts: Date.now() });
+        _cache.set(cacheKey, { id: probed.id, window: probed.window, ts: Date.now() });
         _negative.delete(probeKey);
         _inflight.delete(probeKey);
-        return { id, err: null };
+        return { id: probed.id, window: probed.window, stale: false, err: null };
       })
       .catch((err) => {
         // Stored SANITIZED: the axios error retains the request config —
@@ -378,7 +456,15 @@ async function getServedModelId(baseUrl, { timeoutMs, apiKey, quiet = false } = 
           });
         }
         _inflight.delete(probeKey);
-        return { id: serving ? serving.id : null, err };
+        // The stale window rides the stale id: one probe, one answer, two
+        // fields — a caller reading the window after a failed probe gets the
+        // same last-known value the id path serves.
+        return {
+          id: serving ? serving.id : null,
+          window: serving ? (serving.window ?? null) : null,
+          stale: Boolean(serving),
+          err
+        };
       })
       // Prune on BOTH settle paths, after the insert: the maps never sit
       // above their bounds — an endpoint that stays down would otherwise
@@ -388,7 +474,7 @@ async function getServedModelId(baseUrl, { timeoutMs, apiKey, quiet = false } = 
     _inflight.set(probeKey, pending);
   }
   const outcome = await pending;
-  if (outcome.id !== null) return outcome.id;
+  if (outcome.id !== null) return outcome;
   // The err instance is shared by every awaiter of this one settlement —
   // transient and request-scoped, unlike the STORED stub whose per-caller
   // copy rationale sits above (the stub outlives the incident; this error
@@ -718,6 +804,7 @@ module.exports = {
   servedModelId,
   deploymentVllmBase,
   getServedModelId,
+  getServedWindow,
   optedInVllmBase,
   llmNotConfiguredError,
   requireOptedInBase,

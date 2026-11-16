@@ -102,6 +102,21 @@ if (require.main === module) {
       require('./services/pii-service')
         .sweepInterruptedScans()
         .catch((err) => logger.error('PII scan boot sweep failed (non-fatal)', { error: err.message }));
+      // #1205: the concept-document CEILING is derived from the serving-model
+      // window the same endpoint dataprep reads (/v1/models). The discovery
+      // probe is network I/O and never runs on a write path, so it is kicked
+      // here and refreshed on the cache's TTL; until the first probe
+      // settles, the ceiling falls back to its static default. Non-fatal:
+      // an endpoint that cannot be reached must not stop the server.
+      const windowRefresh = require('./services/llm-window').startWindowRefresh();
+      windowRefresh.ready
+        .then((resolved) =>
+          logger.info('OKF ceiling window resolved', {
+            window_tokens: resolved.window,
+            source: resolved.source
+          })
+        )
+        .catch((err) => logger.error('OKF ceiling window probe failed (non-fatal)', { error: err.message }));
     });
 }
 

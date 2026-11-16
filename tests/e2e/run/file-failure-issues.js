@@ -310,11 +310,30 @@ function isBehindCheckout(venueBuild, run = execFileSync) {
  */
 function declaringFile(handle, run = execFileSync) {
   try {
-    const out = run('git', ['grep', '-l', '-F', '-e', handle, 'HEAD', '--', FRONTEND_SRC_REL], {
-      cwd: REPO_ROOT,
-      encoding: 'utf-8',
-      stdio: ['ignore', 'pipe', 'ignore']
-    });
+    // The app's SOURCE files, and the test tree excluded: a handle the
+    // frontend's own Jest tree declares is not a declaration — no build
+    // renders a mock.
+    const out = run(
+      'git',
+      [
+        'grep',
+        '-l',
+        '-F',
+        '-e',
+        handle,
+        'HEAD',
+        '--',
+        `:(glob)${FRONTEND_SRC_REL}/**/*.vue`,
+        `:(glob)${FRONTEND_SRC_REL}/**/*.js`,
+        ':(exclude,glob)**/__tests__/**',
+        ':(exclude,glob)**/__mocks__/**'
+      ],
+      {
+        cwd: REPO_ROOT,
+        encoding: 'utf-8',
+        stdio: ['ignore', 'pipe', 'ignore']
+      }
+    );
     return out.split('\n')[0].replace(/^HEAD:/, '') || null;
   } catch {
     return null;

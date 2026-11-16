@@ -220,6 +220,14 @@ test.describe('the report names the CONTEXT of the red', () => {
     expect(declaringFile('test-only-handle-no-source-declares')).toBe(null);
   });
 
+  test("the frontend's OWN test tree declares no handle — its mocks are not the app", () => {
+    // The frontend's Jest tree declares handles its mocks render
+    // (`answer-source-card-0`). No build renders a mock, so naming the
+    // test file as the declaring file would send the reader to a file
+    // that is not the app.
+    expect(declaringFile('answer-source-card-0')).toBe(null);
+  });
+
   test("the handles a file waited for are the union of its failures' locators", () => {
     const failures = [
       { error: FAILURE },

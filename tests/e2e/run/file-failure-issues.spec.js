@@ -15,7 +15,12 @@ const {
   isConnectionSignature,
   partitionVenueNoise,
   venueAvailabilityReport,
-  fileTrackedFailures
+  fileTrackedFailures,
+  locatorHandles,
+  isNotFoundFailure,
+  staleVenueHandles,
+  partitionStaleVenue,
+  venueStalenessReport
 } = require('./file-failure-issues');
 
 const FILE = 'tests/e2e/theme/theme-runtime-config.spec.js';
@@ -494,5 +499,154 @@ test.describe('the filing loop stays loud when the tracker refuses (#1883)', () 
       }
     });
     expect(errors).toEqual(['tests/e2e/a.spec.js: glab: 404 Not found (HTTP 404)']);
+  });
+});
+
+/**
+ * The stale-venue classification (#1895, #1896).
+ *
+ * A spec that waits for a handle the app declares, against a venue whose
+ * build predates the declaration, fails exactly like a product defect —
+ * and was FILED as one: two product bugs that were a stale bundle. The
+ * classification is the read that tells the two apart, and it is pinned
+ * here against the real failure texts of those two reds.
+ */
+test.describe('a stale venue is told apart from a product defect', () => {
+  const HISTORY_ERROR = [
+    'Error: the saved chat is listed after the reload',
+    '',
+    'expect(locator).toBeVisible() failed',
+    '',
+    "Locator: locator('[data-testid=\"chat-history-item\"]').filter({ hasText: 'E2E Test Chat 1794810494108' })",
+    'Expected: visible',
+    'Timeout: 15000ms',
+    'Error: element(s) not found',
+    '',
+    'Call log:',
+    '  - the saved chat is listed after the reload with timeout 15000ms',
+    '',
+    '      326 |',
+    '      327 |     const row = page.locator(\'[data-testid="chat-history-item"]\').filter({ hasText: chatTitle });',
+    '    > 328 |     await expect(row).toBeHidden({ timeout: 15000 });'
+  ].join('\n');
+
+  const UPLOAD_ERROR = [
+    'Error: expect(locator).toBeEnabled() failed',
+    '',
+    'Locator: locator(\'[data-test-id="upload-files-dialog"]\').locator(\'[data-test-id="upload-files-dialog-confirm"]\')',
+    'Expected: enabled',
+    'Timeout: 5000ms',
+    'Error: element(s) not found',
+    '',
+    'Call log:',
+    '  - Expect "toBeEnabled" with timeout 5000ms'
+  ].join('\n');
+
+  const DECLARED = new Map([
+    ['chat-history-item', 'components/gov-chat-frontend/src/components/ChatFolders.vue'],
+    ['upload-files-dialog', 'components/gov-chat-frontend/src/components/UploadFilesDialog.vue'],
+    ['upload-files-dialog-confirm', 'components/gov-chat-frontend/src/components/UploadFilesDialog.vue']
+  ]);
+
+  // A venue that serves the dialog but not its confirm button — the
+  // #1896 shape exactly.
+  const STALE = { servedText: '"upload-files-dialog"', declared: DECLARED };
+
+  test('the handles a failure waits for are read from the LOCATOR line', () => {
+    expect(locatorHandles(HISTORY_ERROR)).toEqual(['chat-history-item']);
+    // The compound locator names both — the dialog the venue HAS and the
+    // confirm button it does not.
+    expect(locatorHandles(UPLOAD_ERROR)).toEqual(['upload-files-dialog', 'upload-files-dialog-confirm']);
+  });
+
+  test('a failure with no locator line names no handle', () => {
+    expect(locatorHandles('Error: something else entirely')).toEqual([]);
+  });
+
+  test('only a NOT FOUND failure is a candidate — an element that is there and misbehaves is a product defect', () => {
+    expect(isNotFoundFailure(HISTORY_ERROR)).toBe(true);
+    expect(isNotFoundFailure('Error: element is not visible')).toBe(false);
+    expect(isNotFoundFailure('Error: element is not enabled')).toBe(false);
+  });
+
+  test('a handle the venue does not serve AND the checkout declares is a stale venue', () => {
+    const failure = { error: HISTORY_ERROR };
+    expect(staleVenueHandles(failure, STALE)).toEqual([
+      {
+        handle: 'chat-history-item',
+        source: 'components/gov-chat-frontend/src/components/ChatFolders.vue'
+      }
+    ]);
+  });
+
+  test('the compound locator names the SPECIFIC missing handle — the dialog the venue HAS is not reported', () => {
+    // Reporting the outer dialog as missing would send the operator to
+    // restart a pod for a defect that is not there: the dialog WAS on
+    // screen.
+    const missing = staleVenueHandles({ error: UPLOAD_ERROR }, STALE);
+    expect(missing.map((entry) => entry.handle)).toEqual(['upload-files-dialog-confirm']);
+  });
+
+  test('a handle the VENUE SERVES is never a stale venue', () => {
+    const served = { servedText: '"chat-history-item"', declared: DECLARED };
+    expect(staleVenueHandles({ error: HISTORY_ERROR }, served)).toEqual([]);
+  });
+
+  test('a handle NEITHER the venue nor the checkout has is a spec defect, not a stale venue', () => {
+    // The app never declared it: the spec is wrong, and it is filed as
+    // the product finding it is.
+    const context = { servedText: '', declared: new Map() };
+    expect(staleVenueHandles({ error: HISTORY_ERROR }, context)).toEqual([]);
+  });
+
+  test('a failure that is not a not-found is never a stale venue', () => {
+    const failure = {
+      error: 'Error: element is not visible\n\nLocator: locator(\'[data-testid="chat-history-item"]\')'
+    };
+    expect(staleVenueHandles(failure, STALE)).toEqual([]);
+  });
+
+  test('a file whose failures are ALL stale drops out of the filing', () => {
+    const byFile = new Map([['tests/e2e/chatbot/conversation-history.spec.js', [{ error: HISTORY_ERROR }]]]);
+    const { fileable, stale } = partitionStaleVenue(byFile, STALE);
+    expect(fileable.size).toBe(0);
+    expect(stale.get('tests/e2e/chatbot/conversation-history.spec.js').failures).toHaveLength(1);
+  });
+
+  test('a file whose OTHER failures survive the split stays fileable for exactly those', () => {
+    const byFile = new Map([
+      [
+        'tests/e2e/documents/upload.spec.js',
+        [{ error: UPLOAD_ERROR }, { error: 'Error: expect(received).toBe(true) failed' }]
+      ]
+    ]);
+    const { fileable, stale } = partitionStaleVenue(byFile, STALE);
+    expect(fileable.get('tests/e2e/documents/upload.spec.js')).toHaveLength(1);
+    expect(fileable.get('tests/e2e/documents/upload.spec.js')[0].error).toContain('toBe(true)');
+    expect(stale.get('tests/e2e/documents/upload.spec.js').failures).toHaveLength(1);
+  });
+
+  test('the report names the venue, the missing handle, the file that declares it, and the remedy', () => {
+    const stale = new Map([
+      [
+        'tests/e2e/documents/upload.spec.js',
+        {
+          failures: [{ error: UPLOAD_ERROR }],
+          missing: new Map([
+            ['upload-files-dialog-confirm', 'components/gov-chat-frontend/src/components/UploadFilesDialog.vue']
+          ])
+        }
+      ]
+    ]);
+    const report = venueStalenessReport(stale, 'https://venue.example:4443');
+    expect(report).toContain('venue-staleness report');
+    expect(report).toContain('tests/e2e/documents/upload.spec.js');
+    expect(report).toContain('upload-files-dialog-confirm');
+    expect(report).toContain('components/gov-chat-frontend/src/components/UploadFilesDialog.vue');
+    expect(report).toContain('https://venue.example:4443');
+    expect(report).toContain('nothing is filed');
+    expect(report).toContain('docs/e2e-tests/local-run.md');
+    // The handle the venue DOES serve is not reported as missing.
+    expect(report).not.toContain('`upload-files-dialog`');
   });
 });

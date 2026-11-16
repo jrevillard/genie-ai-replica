@@ -243,6 +243,11 @@ A red run must not stay a silent red (#1736). The run ends with
 - adds a **comment** instead of a second issue when an open issue with that
   title already exists, so a suite that stays red does not flood the tracker.
 
+Two classes of failure are NOT filed as product findings, and both
+report instead: a venue that went away mid-run (the venue-outage
+report), and a venue serving an older frontend build than the checkout
+(the venue-staleness report — see below). Both leave the run RED.
+
 To only report, without filing: `E2E_FILE_ISSUES=0 tests/e2e/run/run-local-e2e.sh`.
 To file a past run's failures by hand, read the run's own report (the runner
 renames it — the fixed path holds whatever ran last):
@@ -294,11 +299,49 @@ script-name template); fetch `js/<id>.<hash>.js` for each entry and
 grep for the handle the failing spec reads. A handle the checkout has
 and no chunk carries is a stale venue, not a spec defect.
 
+**The run makes that walk itself** — see *A stale venue is classified,
+not filed as a product defect* below.
+
 The remedy is the lightest possible touch on the shared stack — a
 rollout restart of the stale deployment
 (`kubectl -n genieai rollout restart deploy/genieai-genieai-umbrella-frontend`),
 which pulls the `main` tag the declared baseline already points at —
 followed by re-running the red specs before believing anything.
+
+### A stale venue is classified, not filed as a product defect (#1895, #1896)
+
+Two product bugs were filed that way: a spec that waits for a handle
+the app declares, against a venue whose build predates the declaration,
+fails with `element(s) not found` — the exact signature of a defect of
+the app — and the run filed it as one. Both were a stale bundle.
+
+The run now reads the venue's SERVED bundle
+(`tests/e2e/run/venue-bundle.js`) and compares it with the checkout's
+declarations. The read is made only when a failure is a not-found, and
+it is ADDITIVE: a bundle that cannot be read leaves the failures filed
+exactly as they were, with the reason printed.
+
+| The handle the spec waits for | The verdict |
+|---|---|
+| the venue serves it | a product finding — filed as one |
+| the venue does NOT serve it, the checkout DECLARES it | a **stale venue**: not filed, reported with the remedy |
+| neither serves it, the checkout does NOT declare it | a **spec defect**: filed as the product finding it is |
+
+The failures the stale venue explains drop out of the filing — the
+shape the venue-outage report already has — and the run prints one
+`venue-staleness report` naming the venue, the missing handle, the file
+that declares it, and the remedy. The run stays RED.
+
+Two details the read holds to:
+
+- the handle is searched for as a QUOTED value, so `upload-files-dialog`
+  does not match a bundle that carries only
+  `upload-files-dialog-confirm` — the direction that would hide a stale
+  venue;
+- the walk must fetch EVERY chunk the app bundle names. A chunk that
+  cannot be read makes the walk incomplete, and an incomplete walk
+  cannot say a handle is absent.
+
 
 ### The build marker and the pre-flight probe (#1851)
 
@@ -315,7 +358,8 @@ verdict as a `venue build:` line:
   reads against the named build, not the checkout's;
 - **predates the contract** — no readable `/build-info.json` (the SPA
   fallback answers): a frontend built before #1851. Freshness is
-  undetectable there; the chunk walk above is still the tool;
+  undetectable there; the chunk walk above is still the tool, and the
+  run now makes it for the failures that need it (see below);
 - **BROKEN** — the path is served but carries no readable `git_sha`:
   the venue HAS the contract and violated it. This one stops the run,
   like an unreachable venue — it is a deployment defect, not a

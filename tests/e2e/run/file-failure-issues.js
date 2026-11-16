@@ -39,6 +39,9 @@ const REPO_ROOT = path.resolve(__dirname, '..', '..', '..');
 const DEFAULT_REPORT_PATH = path.join(REPO_ROOT, 'reports', 'playwright-report.json');
 
 const { VENUE_IP_ENV, VENUE_HOST_ENV } = require('../helpers/venue-launch-args');
+// The venue's SERVED bundle — the read that tells a stale venue from a
+// product defect (#1895, #1896).
+const { handlesIn, bundleServesHandle, checkoutDeclaredHandles, fetchVenueBundleText } = require('./venue-bundle');
 // The e2e tree's root: a path whose prefix is INSIDE it is a different
 // file that happens to carry another one's path as its tail.
 const TESTS_E2E_ROOT = 'tests/e2e';
@@ -154,6 +157,181 @@ function venueAvailabilityReport(venueNoise, venue) {
       'check the venue events (kubectl get events -A) and re-run the suite once the venue has been stable.'
   );
   return lines.join('\n');
+}
+
+/**
+ * The handles a failure's LOCATOR names.
+ *
+ * Playwright prints the locator it was waiting on in the `Locator:` line
+ * of an expect() failure — that is the element the failure is about. The
+ * code frame below it is the SPEC's own source and names other handles;
+ * only the locator line counts, or a failure would carry every handle
+ * its file mentions.
+ *
+ * @param {string} errorText - the failure's error text
+ * @returns {string[]} the handle values the locator names
+ */
+function locatorHandles(errorText) {
+  const line = String(errorText || '')
+    .split('\n')
+    .find((candidate) => candidate.trim().startsWith('Locator:'));
+  if (!line) return [];
+  return handlesIn(line);
+}
+
+/**
+ * Does this failure say the element was NOT FOUND?
+ *
+ * "element(s) not found" is the signature of a MISSING element.
+ * "element is not visible" and "element is not enabled" are the
+ * signatures of an element that IS there and misbehaves — a product
+ * finding, never a stale venue.
+ *
+ * @param {string} errorText - the failure's error text
+ * @returns {boolean} whether the element was not found
+ */
+function isNotFoundFailure(errorText) {
+  return /element\(s\) not found/.test(String(errorText || ''));
+}
+
+/**
+ * The handles this failure waits for that the VENUE DOES NOT SERVE while
+ * the CHECKOUT DECLARES them — the stale-venue signature.
+ *
+ * A handle the venue does not serve AND the checkout does not declare is
+ * a SPEC defect (the app never had it): it is not a stale venue, and it
+ * is filed as the product finding it is.
+ *
+ * @param {{error: string}} failure - the failure
+ * @param {{servedText: string, declared: Map<string, string>}} context - the venue's served bundle and the checkout's declarations
+ * @returns {Array<{handle: string, source: string}>} the missing handles, with the file that declares each
+ */
+function staleVenueHandles(failure, context) {
+  if (!isNotFoundFailure(failure?.error)) return [];
+  const missing = [];
+  for (const handle of locatorHandles(failure.error)) {
+    if (bundleServesHandle(context.servedText, handle)) continue;
+    const source = context.declared.get(handle);
+    if (!source) continue;
+    missing.push({ handle, source });
+  }
+  return missing;
+}
+
+/**
+ * Split the grouped failures into what is FILEABLE and what the STALE
+ * VENUE explains (#1895, #1896).
+ *
+ * The shape is the venue-outage partition's: a failure the venue's older
+ * build explains drops out of the filing, and a file whose OTHER
+ * failures survive the split stays fileable for exactly those.
+ *
+ * @param {Map<string, Array<{error: string}>>} byFile - the grouped failures
+ * @param {{servedText: string, declared: Map<string, string>}} context - the venue's served bundle and the checkout's declarations
+ * @returns {{fileable: Map<string, Array<{error: string}>>, stale: Map<string, {failures: Array<{error: string}>, missing: Map<string, string>}>}}
+ */
+function partitionStaleVenue(byFile, context) {
+  const fileable = new Map();
+  const stale = new Map();
+  for (const [file, failures] of byFile) {
+    const explained = [];
+    const rest = [];
+    const missing = new Map();
+    for (const failure of failures) {
+      const handles = staleVenueHandles(failure, context);
+      if (handles.length === 0) {
+        rest.push(failure);
+        continue;
+      }
+      explained.push(failure);
+      for (const { handle, source } of handles) {
+        if (!missing.has(handle)) missing.set(handle, source);
+      }
+    }
+    if (rest.length > 0) fileable.set(file, rest);
+    if (explained.length > 0) stale.set(file, { failures: explained, missing });
+  }
+  return { fileable, stale };
+}
+
+/**
+ * The ONE venue-staleness report that replaces one product issue per
+ * spec file for a venue serving an older frontend build (#1895, #1896):
+ * the venue, the missing handles, the file that declares each, and the
+ * remedy. Pure string — the caller prints it, the unit spec asserts it.
+ *
+ * @param {Map<string, {failures: Array<{error: string}>, missing: Map<string, string>}>} stale - per spec file, the venue-explained failures
+ * @param {string} venue - the venue address the failed run pointed at
+ * @returns {string} the report text (no trailing newline)
+ */
+function venueStalenessReport(stale, venue) {
+  const total = [...stale.values()].reduce((sum, entry) => sum + entry.failures.length, 0);
+  const lines = [
+    '',
+    `venue-staleness report: ${total} failure(s) across ${stale.size} spec file(s) wait for a handle ` +
+      'the VENUE DOES NOT SERVE while the checkout DECLARES it — the venue is serving an older ' +
+      'frontend build than the checkout:'
+  ];
+  for (const [file, entry] of stale) {
+    lines.push(`  - ${file}: ${entry.failures.length} failure(s)`);
+    for (const [handle, source] of entry.missing) {
+      lines.push(
+        `      handle \`${handle}\` — declared by the checkout in ${source}, absent from the venue's served bundle`
+      );
+    }
+  }
+  lines.push(
+    `The venue answered the re-probe at ${venue} — this is a STALE VENUE BUILD, not a product ` +
+      'finding: nothing is filed for these failures. The run is still RED.'
+  );
+  lines.push(
+    "Refresh the venue's frontend build (the stale-venue remedy: docs/e2e-tests/local-run.md) and " +
+      're-run the suite.'
+  );
+  return lines.join('\n');
+}
+
+/**
+ * The read that tells a stale venue from a product defect — the venue's
+ * SERVED bundle, and the checkout's declarations.
+ *
+ * The read is made only when a failure is a not-found (nothing else can
+ * be a stale venue), and it is ADDITIVE: when the bundle cannot be read,
+ * the caller files the failures exactly as it did before, with the reason
+ * printed. Nothing is ever suppressed by a read that could not be made.
+ *
+ * @param {string} venue - the venue address the failed run pointed at
+ * @param {Map<string, Array<{error: string}>>} byFile - the grouped failures
+ * @returns {Promise<{ok: boolean, servedText?: string, declared?: Map<string, string>, note?: string}>} the context, or the reason there is none
+ */
+async function buildStaleVenueContext(venue, byFile) {
+  const failures = [...byFile.values()].flat();
+  if (!failures.some((failure) => isNotFoundFailure(failure.error))) {
+    return { ok: false, note: null };
+  }
+  let servedText;
+  try {
+    servedText = await fetchVenueBundleText(venue);
+  } catch (error) {
+    return {
+      ok: false,
+      note: `the venue's served bundle could not be read (${error.message}) — the failures are filed ` + 'as they are.'
+    };
+  }
+  const declared = checkoutDeclaredHandles();
+  // The walk must have read the APP: a bundle carrying NONE of the
+  // checkout's handles is not this app, and a verdict built on it would
+  // be a guess dressed as a finding.
+  const served = [...declared.keys()].some((handle) => bundleServesHandle(servedText, handle));
+  if (!served) {
+    return {
+      ok: false,
+      note:
+        "the venue's served bundle carries none of the checkout's handles — the venue's build could " +
+        'not be read, so the failures are filed as they are.'
+    };
+  }
+  return { ok: true, servedText, declared };
 }
 
 function fail(message) {
@@ -726,7 +904,7 @@ function fileTrackedFailures(byFile, openIssues, venue, runStamp, clients = {}) 
   return errors;
 }
 
-function main() {
+async function main() {
   const fileIssues = process.argv.includes('--file-issues');
   const reportFlag = process.argv.indexOf('--report');
   const reportValue = reportFlag === -1 ? null : process.argv[reportFlag + 1];
@@ -816,14 +994,37 @@ function main() {
   // error carries an edge-transport signature are grouped into ONE
   // venue-availability report instead; a file whose OTHER failures
   // survive the filter still gets filed for those.
-  const { fileable: byFile, noise: venueNoise } = partitionVenueNoise(groupFailuresByFile(failed));
+  const { fileable: noiseFree, noise: venueNoise } = partitionVenueNoise(groupFailuresByFile(failed));
   if (venueNoise.size > 0) {
     process.stdout.write(venueAvailabilityReport(venueNoise, venue) + '\n');
   }
+  // The stale-venue read (#1895, #1896): a spec that waits for a handle
+  // the app declares, against a venue whose build predates the
+  // declaration, fails exactly like a product defect — and used to be
+  // FILED as one. The venue's served bundle is the only thing that tells
+  // the two apart.
+  const staleContext = await buildStaleVenueContext(venue, noiseFree);
+  const { fileable: byFile, stale: staleVenue } = staleContext.ok
+    ? partitionStaleVenue(noiseFree, staleContext)
+    : { fileable: noiseFree, stale: new Map() };
+  if (staleContext.note) {
+    process.stdout.write(`\n${staleContext.note}\n`);
+  }
+  if (staleVenue.size > 0) {
+    process.stdout.write(venueStalenessReport(staleVenue, venue) + '\n');
+  }
   if (byFile.size === 0) {
-    process.stdout.write(
-      '\nnothing was filed — every failure carries the venue-outage signature; the report above is the record.\n'
-    );
+    if (venueNoise.size > 0) {
+      process.stdout.write(
+        '\nnothing was filed — every failure carries the venue-outage signature; the report above is the record.\n'
+      );
+    } else if (staleVenue.size > 0) {
+      process.stdout.write(
+        "\nnothing was filed — every failure is explained by the venue's stale build; the report above is the record.\n"
+      );
+    } else {
+      process.stdout.write('\nnothing was filed.\n');
+    }
     return;
   }
 
@@ -852,7 +1053,10 @@ function main() {
 }
 
 if (require.main === module) {
-  main();
+  main().catch((error) => {
+    process.stderr.write(`file-failure-issues: ${error && error.message ? error.message : String(error)}\n`);
+    process.exit(1);
+  });
 }
 
 // Exposed for the unit spec: the dedupe rule, the refusal wording, the
@@ -868,5 +1072,10 @@ module.exports = {
   isConnectionSignature,
   partitionVenueNoise,
   venueAvailabilityReport,
-  fileTrackedFailures
+  fileTrackedFailures,
+  locatorHandles,
+  isNotFoundFailure,
+  staleVenueHandles,
+  partitionStaleVenue,
+  venueStalenessReport
 };

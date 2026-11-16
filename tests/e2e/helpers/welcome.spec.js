@@ -111,8 +111,8 @@ function fakeBrowser({ closeFails = false, lang = 'en', banner } = {}) {
       // The callback runs against the fake PAGE, the way the browser
       // runs it: the adoption pin reads <html lang> off the document,
       // the seeds write localStorage. Nothing here knows the helper's
-      // source text — a different spelling of the same read still
-      // reads the fake document.
+      // source text — the callback's own source is what runs, and the
+      // fake answers the document read in the DOM's shapes.
       return new Function('document', 'localStorage', 'arg', `return (${fn.toString()})(arg)`)(doc, storage, arg);
     },
     async waitForSelector(selector) {

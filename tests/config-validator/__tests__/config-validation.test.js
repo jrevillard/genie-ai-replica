@@ -3816,9 +3816,13 @@ describe('the local e2e run defines the executed set (#1736)', () => {
     // build. A summary that names only one of them is wrong about the
     // other — and the line is all the operator reads.
     const failurePath = fs.readFileSync(FAILURE_PATH, 'utf-8');
-    expect(failurePath).toMatch(/venueNoise\.size > 0 && staleVenue\.size > 0/);
-    // And the line it prints names both of them.
-    expect(failurePath).toMatch(/venue-outage signature or is explained by/);
+    // The pin is anchored to the BRANCH, not to the file: a summary
+    // line that names both kinds can be swapped with the outage-only
+    // one and still leave the file containing both phrases. The whole
+    // message is pinned, both halves of it.
+    expect(failurePath).toMatch(
+      /venueNoise\.size > 0 && staleVenue\.size > 0[^}]{0,400}venue-outage signature or is explained by[^}]{0,200}the venue's stale build; the report above is the record/
+    );
   });
 
   // Any flag other than the project selector would shrink the executed set

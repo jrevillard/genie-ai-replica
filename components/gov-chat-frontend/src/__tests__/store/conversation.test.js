@@ -300,27 +300,21 @@ describe('conversation persistence', () => {
   });
 
   it('flushes the write when the page hides (reload inside the debounce window)', () => {
-    const store = freshStore();
-    const unsubscribe = subscribeConversation(store);
-    store.commit('conversation/appendUserMessage', { sender: 'user', content: 'q' });
+    // The write-through must be registered on the WINDOW: pagehide is
+    // dispatched AT the Window and a non-bubbling event dispatched there
+    // never reaches document-registered listeners — measured on the venue
+    // (#1907): a window listener recorded the event while a document
+    // listener for the same event saw nothing, so the document-registered
+    // write-through never ran and a reload inside the debounce window
+    // read a mid-save snapshot. Dispatching the event HERE is what pins
+    // the registration target: a dispatch at document runs only
+    // document's listeners, so the pre-fix suite (dispatching at
+    // document, registering at document) was self-consistently wrong
+    // against the browser and never saw the defect. Mutation check:
+    // registering onPageHide on document keeps THIS red.
+    //
     // No timer advance: the pagehide handler must write through
     // synchronously or a reload within the 300 ms window drops the turn.
-    window.dispatchEvent(new Event('pagehide'));
-    const raw = JSON.parse(sessionStorage.getItem(STORAGE_KEY));
-    expect(raw.conversations.open.messages.at(-1).content).toBe('q');
-    unsubscribe();
-  });
-
-  it('receives pagehide from the WINDOW, the only target the browser dispatches it at (#1907)', () => {
-    // pagehide is dispatched AT THE WINDOW and does not propagate to the
-    // document — measured on the venue: a window listener recorded the
-    // event while a document listener registered for the same event saw
-    // nothing, so a write-through registered on document never ran and a
-    // reload inside the debounce window read a mid-save snapshot. The
-    // document-dispatched sibling test cannot catch this: dispatchEvent
-    // delivers to the target's own listeners on either registration
-    // target, hiding which object the handler is attached to. Mutation
-    // check: registering onPageHide on document keeps THIS red.
     const store = freshStore();
     const unsubscribe = subscribeConversation(store);
     store.commit('conversation/appendUserMessage', { sender: 'user', content: 'q' });

@@ -39,12 +39,14 @@ const chatbot = require('./chatbot');
  * The banner, as a fake DOM node and the fake document that holds it.
  *
  * The fake document is a FAITHFUL reader, not a stub that answers
- * anything: it answers for the banner's own handle only (a wrong handle
- * reads as absent), and it hands the element it was given to
- * getComputedStyle (an element it does not know reads as hidden). A
- * predicate that asks for the wrong element, or that reads the style of
- * the wrong one, is therefore caught here rather than passing because
- * the fake answered generously.
+ * anything: it answers for the banner's own handle (a wrong handle
+ * reads as absent), it hands the element it was given to
+ * getComputedStyle (an element it does not know reads as hidden), and
+ * it answers the locale read the way the DOM's documentElement does —
+ * `.lang` and `getAttribute('lang')`, and not in every shape a browser
+ * accepts. A predicate that asks for the wrong element, or that reads
+ * the style of the wrong one, is therefore caught here rather than
+ * passing because the fake answered generously.
  */
 const BANNER_HANDLE = '[data-testid="quick-help-banner"]';
 
@@ -112,7 +114,9 @@ function fakeBrowser({ closeFails = false, lang = 'en', banner } = {}) {
       // runs it: the adoption pin reads <html lang> off the document,
       // the seeds write localStorage. Nothing here knows the helper's
       // source text — the callback's own source is what runs, and the
-      // fake answers the document read in the DOM's shapes.
+      // fake answers the document read the way the DOM's documentElement
+      // does: `.lang` and `getAttribute('lang')`, not in every shape a
+      // browser accepts.
       return new Function('document', 'localStorage', 'arg', `return (${fn.toString()})(arg)`)(doc, storage, arg);
     },
     async waitForSelector(selector) {

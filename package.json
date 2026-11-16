@@ -60,6 +60,6 @@
   "dependencies": {
     "archiver": "^8.0.0",
     "dotenv": "^17.4.1",
-    "minimatch": "^11.0.8"
+    "minimatch": "^10.2.6"
   }
 }

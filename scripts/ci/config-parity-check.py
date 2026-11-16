@@ -195,6 +195,29 @@ SECRET = "(secret)"
 # `${NAME}` / `${NAME:-fallback}` / `${NAME-fallback}` inside a Compose value.
 _INTERP = re.compile(r"\$\{([A-Za-z_][A-Za-z0-9_]*)(?::?-([^}]*))?\}")
 
+# A Compose expression this resolver does not model.
+#
+# The regex models `${NAME}`, `${NAME:-fallback}` and `${NAME-fallback}`.
+# It does NOT model `${NAME:+word}` — the "use this word only when NAME is
+# set" operator — and it cannot model a nested default (`${A:-${B}}`),
+# because the fallback cannot span a `}`. Eleven values in docker-compose
+# use the `:+` form today (${NGINX_HTTPS_PORT:+:${NGINX_HTTPS_PORT}} in
+# eight of them, ${EMAIL_USER:+true} in two).
+#
+# What the resolver did with those: the expression SURVIVED as literal
+# text, and the gate compared that literal against the chart's value —
+# comparing a string no container ever sees. Every one of the eleven
+# happens to be allowlisted today, so nothing fires; the defect is
+# latent. The first COMPARED variable written that way would report a
+# GAP for a variable that is in fact correct, and the pressure would be
+# to silence it with a mayDiffer entry rather than to fix the resolver.
+#
+# So the resolver REFUSES instead: an unmodelled expression leaves the
+# variable out of the compared set and is reported by name. The floor
+# then notices the smaller count, and a human decides — which is the
+# only honest outcome for a value the gate cannot compute.
+UNRESOLVED = "(unresolved)"
+
 
 def env_file_defaults():
     """NAME -> value from the committed `env` template — the canonical
@@ -260,6 +283,8 @@ def compose_default(value):
             text = resolved
             continue
         break
+    if "${" in text:
+        return UNRESOLVED, False
     return text, False
 
 
@@ -391,15 +416,46 @@ def main(argv):
     values_path = DEFAULT_VALUES
     allowlist_path = DEFAULT_ALLOWLIST
     min_compared = 0
-    for arg in args[1:]:
-        if arg.startswith("--compose="):
-            compose_path = arg.split("=", 1)[1]
-        elif arg.startswith("--values="):
-            values_path = arg.split("=", 1)[1]
-        elif arg.startswith("--allowlist="):
-            allowlist_path = arg.split("=", 1)[1]
-        elif arg.startswith("--min-compared="):
-            min_compared = int(arg.split("=", 1)[1])
+    # Both spellings are accepted (`--flag=value` and `--flag value`), and
+    # an UNKNOWN flag is refused rather than ignored: the docstring
+    # advertises `--compose ...`, and the `=`-only parser silently
+    # ignored that spelling — the gate then compared the DEFAULT compose
+    # file and reported green on an input the caller never asked for.
+    # A silently-ignored argument is a false pass on the wrong input.
+    flags = {
+        "--compose": ("compose_path", str),
+        "--values": ("values_path", str),
+        "--allowlist": ("allowlist_path", str),
+        "--min-compared": ("min_compared", int),
+    }
+    scope = {
+        "compose_path": compose_path,
+        "values_path": values_path,
+        "allowlist_path": allowlist_path,
+        "min_compared": min_compared,
+    }
+    rest = args[1:]
+    index = 0
+    while index < len(rest):
+        arg = rest[index]
+        name, sep, inline = arg.partition("=")
+        if name not in flags:
+            print(f"unknown argument: {arg}\nusage: {__doc__}", file=sys.stderr)
+            return 2
+        target, caster = flags[name]
+        if sep:
+            scope[target] = caster(inline)
+        else:
+            if index + 1 >= len(rest):
+                print(f"{name} needs a value\nusage: {__doc__}", file=sys.stderr)
+                return 2
+            scope[target] = caster(rest[index + 1])
+            index += 1
+        index += 1
+    compose_path = scope["compose_path"]
+    values_path = scope["values_path"]
+    allowlist_path = scope["allowlist_path"]
+    min_compared = scope["min_compared"]
 
     with open(rendered_path) as handle:
         docs = [d for d in yaml.safe_load_all(handle) if d]
@@ -499,7 +555,7 @@ def main(argv):
                 # 1) while Compose resolves it empty is exactly the
                 # divergence this category exists to catch — and the
                 # `continue` below skipped it.
-                if value not in ("", None):
+                if value != UNRESOLVED and value not in ("", None):
                     gaps.append(
                         f"{component}.{name}: filed codeDefault, but Compose resolves "
                         f"{value!r} — a code default applies only when the variable is "
@@ -579,6 +635,22 @@ def main(argv):
                         "nobody sets is not a difference: file it under codeDefault, "
                         "which asserts the chart leaves it unset)"
                     )
+                continue
+            if value == UNRESOLVED:
+                # The Compose expression uses an operator this resolver
+                # does not model (${NAME:+word}, a nested default).
+                # Comparing the surviving literal text would compare a
+                # string no container sees, so the variable LEAVES the
+                # compared set — and the floor notices the smaller
+                # count. Placed HERE, after every category's own
+                # assertions: a mayDiffer or secretProvided entry still
+                # gets checked, because those assert on the CHART's
+                # value, not on this one.
+                unjudged.append(
+                    f"{component}.{name}: not compared — the Compose expression uses an "
+                    "operator the resolver does not model (${NAME:+word} or a nested "
+                    "default); the literal text would be compared against the chart"
+                )
                 continue
             checked += 1
             if required:

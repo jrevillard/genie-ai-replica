@@ -3046,6 +3046,57 @@ contractual evidence — a fresh clone does not carry them.)
   on its own — it was the project's "pipelines must succeed" policy
   reading a running pipeline, not a defect.
 
+- **A second review pass over the whole branch found three REAL chart
+  defects (0.2.174) — none of them from the rebase.** The reviewer ran
+  with the high effort setting over the branch's full diff; every claim
+  was re-verified against the code before anything was changed, and each
+  fix was mutation-tested.
+  - **The backend's OTLP egress was re-parented under the external-API
+    rule (0.2.174)** — `services.backend.externalApiCIDRs` scopes the
+    rule's peers to the operator's CIDRs, and the OTLP port (4318) was
+    a PORT OF THAT RULE: pinning the CIDRs — the documented way to
+    restrict that egress — closed the telemetry path, and every span
+    the backend emitted was dropped AT THE SOURCE, with no error
+    anywhere (the collector is an in-cluster pod, in none of the
+    operator's CIDRs). The OTLP port now has its own rule, the shape the
+    document-repository's has always had. Reproduced by render before
+    the fix: `egress[2] = ipBlock 203.0.113.0/24 ports [80, 443, 4318]`.
+  - **The OKF tier could not reach the models in in-cluster GPU mode
+    (0.2.174)** — `okf-server` (TEI_EMBED_HOST) and `ragas-service`
+    (RAGAS_JUDGE_BASE_URL, RAGAS_EMBED_BASE_URL) resolve to the
+    in-cluster TEI and vLLM pods, and NEITHER had an egress rule for
+    them, while the models' ingress policies admitted only
+    chatqna/retriever/dataprep. The gap was two-sided: the tier could
+    not dial the models AND the models would have refused the tier. All
+    four pairs are wired now (the tier's egress, the models' ingress).
+    The tier is dark by default and the laptop runs the external mode,
+    so nothing shipped broken — but the chart RENDERS that
+    configuration, and it rendered a broken one.
+  - **`accessTokenLifespan` was the third knob of the family the SSO
+    fix had already touched (0.2.174)** — `| default 300` rewrote an
+    operator's explicit `0` (Keycloak's "the token never expires") as
+    300, and the wrong number reached the imported realm through kcc.
+    It uses the same nil-check idiom now, and all three knobs are typed
+    in the schema.
+  - The CI's own gaps, found in the same pass: the parity FLOOR was
+    stale (fixed at 327 in the previous round — the comment claiming a
+    "+2" rise where the real transition was 335 → 327 is corrected);
+    the two render jobs that rendered with helm 3.16.3 while the
+    workstation and the other gates render with helm 4.3.0 now use the
+    workstation's helm, and the one job that INSTALLS keeps helm 3
+    because the installer in production is helm-controller, which is
+    helm 3 (measured: the two helms render this chart identically);
+    the compose resolver now REFUSES the expressions it cannot model
+    (`${VAR:+word}`, nested defaults) instead of comparing the literal
+    text against the chart — and the floor then notices the smaller
+    count; the two CIDR lists are typed, so a hostname fails at render
+    with the values path instead of at apply with a policy field; the
+    version gate's branch-pipeline path now stops at the merge-base
+    instead of comparing the last two chart commits of HEAD's history
+    (which can cross the rebase boundary); and the parity gate refuses
+    an unknown flag instead of ignoring it (`--compose PATH` was
+    silently ignored, so the gate compared the DEFAULT compose file).
+
 ## Plan map
 
 The campaign ran as eight written plans plus three design specs. Those were

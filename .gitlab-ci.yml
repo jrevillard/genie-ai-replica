@@ -4061,6 +4061,15 @@ chart:lint:
   # chart that only ever renders green on one of them is a chart
   # nobody can trust on the other. The tag is pinned (never `latest`:
   # a mutable tag changes the pipeline without a commit).
+  #
+  # Every RENDER job in the pipeline uses this helm (chart:lint,
+  # chart:parity, chart:contract, chart:crd-validate) — one render
+  # semantics everywhere, the workstation's. The one job that INSTALLS
+  # (chart:install) runs helm 3.16.3 on purpose: the installer in
+  # production is helm-controller, which is helm 3. Measured on this
+  # chart, the two render identically (helm 4 emits blank lines the
+  # other does not; nothing else differs), so the install exercises
+  # the installer's semantics on the very chart the gates validated.
   # The Kubernetes version is passed EXPLICITLY to every render and
   # lint below (--kube-version): without it helm compares the
   # chart's kubeVersion constraint against the Kubernetes version
@@ -4393,7 +4402,15 @@ chart:contract:
     # python3 + py3-yaml: the config-extraction step below parses the
     # rendered collector CR with pyyaml.
     - apk add --no-cache bash tar curl python3 py3-yaml
-    - curl -fsSL https://get.helm.sh/helm-v3.16.3-linux-amd64.tar.gz | tar -xz -C /tmp
+    # helm 4.3.0 — the SAME helm chart:lint and chart:parity render
+    # with, and the one the workstation develops against. Every RENDER
+    # in the pipeline must agree with every other render; only the
+    # INSTALL job (chart:install) runs the installer's helm, because
+    # helm-controller — what production installs through — is helm 3.
+    # Measured: 3.16.3 and 4.3.0 render THIS chart identically (helm 4
+    # emits 61 blank lines more, nothing else), so the alignment
+    # changes no job's verdict — it removes the question.
+    - curl -fsSL https://get.helm.sh/helm-v4.3.0-linux-amd64.tar.gz | tar -xz -C /tmp
     - install -m 0755 /tmp/linux-amd64/helm /usr/local/bin/helm
     - helm dependency update charts/genieai-umbrella
   script:
@@ -4616,13 +4633,14 @@ chart:parity:
     # document-repository's KEYCLOAK_REALM, the row the shared verifier
     # reads — was ALREADY counted as a gap, "absent from the chart"
     # counts as compared, so it moved the gaps, not the count).
-    # The 2026-11-16 rebase onto main took it 325 → 327: main's
+    # The 2026-11-16 rebase onto main took it 335 → 327: main's
     # compose changes added KEYCLOAK_DISCOVERY_URL to three services
     # (compared, then filed under codeDefault — unset on both surfaces,
     # so the verifier's own fallback applies) and made the ClamAV
     # knobs remote-canonical, which the chart's ClamAV tier makes
     # four mayDiffer rows. Eight reclassifications, eight fewer
-    # variables in the compared set.
+    # variables in the compared set (the 325 above was the previous
+    # FLOOR, not the count it was measured against).
     - python3 scripts/ci/config-parity-check.py /tmp/rendered.yaml --min-compared=327
   rules:
     # The gate verifies its `notRead` claims against the APPLICATION
@@ -4666,7 +4684,15 @@ chart:crd-validate:
   interruptible: true
   before_script:
     - apk add --no-cache bash curl python3 py3-yaml
-    - curl -fsSL https://get.helm.sh/helm-v3.16.3-linux-amd64.tar.gz | tar -xz -C /tmp
+    # helm 4.3.0 — the SAME helm chart:lint and chart:parity render
+    # with, and the one the workstation develops against. Every RENDER
+    # in the pipeline must agree with every other render; only the
+    # INSTALL job (chart:install) runs the installer's helm, because
+    # helm-controller — what production installs through — is helm 3.
+    # Measured: 3.16.3 and 4.3.0 render THIS chart identically (helm 4
+    # emits 61 blank lines more, nothing else), so the alignment
+    # changes no job's verdict — it removes the question.
+    - curl -fsSL https://get.helm.sh/helm-v4.3.0-linux-amd64.tar.gz | tar -xz -C /tmp
     - install -m 0755 /tmp/linux-amd64/helm /usr/local/bin/helm
     - curl -fsSL -o /tmp/kubectl https://dl.k8s.io/release/v1.33.0/bin/linux/amd64/kubectl
     - install -m 0755 /tmp/kubectl /usr/local/bin/kubectl
@@ -4783,6 +4809,14 @@ chart:install:
   interruptible: true
   before_script:
     - apk add --no-cache curl bash
+    # helm 3.16.3 — deliberately NOT the render gates' 4.3.0: this job
+    # INSTALLS the chart, and the installer in production is
+    # helm-controller, which is helm 3 (its releases are
+    # sh.helm.release.v3). An install job must exercise the installer's
+    # semantics, not the renderer's. The two helms render this chart
+    # identically today (measured), so the install is not a different
+    # chart than the gates validated — but that is a measurement, and
+    # this job is where a divergence would surface.
     - curl -fsSL https://get.helm.sh/helm-v3.16.3-linux-amd64.tar.gz | tar -xz -C /tmp
     - install -m 0755 /tmp/linux-amd64/helm /usr/local/bin/helm
     - curl -fsSL -o /tmp/kubectl https://dl.k8s.io/release/v1.33.0/bin/linux/amd64/kubectl

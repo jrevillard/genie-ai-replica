@@ -93,6 +93,23 @@ def chart_commits():
         )
         if rc == 0 and out:
             return out.split("\n")
+    # No MR base: a branch pipeline. The comparison must still stay
+    # inside THIS branch's commits. HEAD's history on a DIVERGED branch
+    # carries the shared base's commits too, and "the last two
+    # chart-touching commits of HEAD" can then be one branch commit and
+    # one from the other side — the exact laundering the MR path above
+    # exists to prevent (a bump on the other side makes an unbumped
+    # change here read as bumped). The merge-base with the default
+    # branch is the same boundary the MR path uses.
+    rc, out = git("merge-base", "HEAD", "origin/main")
+    if rc == 0 and out:
+        rc, log = git("log", "--no-merges", "--format=%H", f"{out}..HEAD", "--", *WATCHED)
+        if rc == 0 and log:
+            return log.split("\n")
+    # No merge-base either (a shallow checkout without the default
+    # branch): the last two chart commits of HEAD. Weaker, but the
+    # gate still compares two commits of THIS history rather than
+    # nothing.
     rc, out = git("log", "--no-merges", "-2", "--format=%H", "--", *WATCHED)
     return out.split("\n") if rc == 0 and out else []
 

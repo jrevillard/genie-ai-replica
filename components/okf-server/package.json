@@ -93,6 +93,7 @@
     "supertest": "^6.3.3"
   },
   "overrides": {
-    "@xmldom/xmldom": "^0.9.12"
+    "@xmldom/xmldom": "^0.9.12",
+    "qs": "^6.16.2"
   }
 }

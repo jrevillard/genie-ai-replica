@@ -358,6 +358,17 @@ counts). A loose read there can only make the venue look MORE capable
 than it is — and the direction that matters, "the venue's build does not
 declare it", is the one that licenses the verdict.
 
+The COMMITTED read and the working-tree walk count the SAME
+declarations, so the two cannot disagree on what a declaration is: a
+DYNAMIC binding (`:data-testid="x"`) is not one. Its value is not known
+at build time, no build serves it as a handle, and counting it would let
+a handle that lives only in an uncommitted edit pass the committed gate
+on the strength of an unrelated dynamic binding — the verdict would then
+fire on a build that never carried the handle, and the failure would be
+dropped from the filing. The committed read's error direction is the
+safe one: it answers "no" (or "cannot tell") whenever it finds no
+static declaration, and both REFUSE the verdict — the failure is filed.
+
 **The binding.** The bundle read happens at filing time; the failure was
 produced earlier. The verdict is only made when the venue still serves
 the build the RUN exercised: the run's own build — the sidecar the runner

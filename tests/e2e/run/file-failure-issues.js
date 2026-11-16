@@ -212,32 +212,48 @@ function isNotFoundFailure(errorText) {
  * no build, so no build can serve it, and a verdict built on it would
  * drop a failure the operator must see.
  *
+ * The reader counts a STATIC binding only — the same rule the
+ * working-tree walk holds to, so the two readers cannot disagree on
+ * what a declaration is. A DYNAMIC binding (`:data-testid="x"`) is not
+ * one: the value is not known at build time, no build serves it as a
+ * handle, and counting it would let a handle that lives only in an
+ * uncommitted edit pass this gate on the strength of an unrelated
+ * dynamic binding — the verdict would then fire on a build that never
+ * carried the handle, and the failure would be dropped from the filing.
+ *
+ * The error direction is the safe one: this reader answers "false" (or
+ * "null") whenever it cannot find a static declaration, and both
+ * REFUSE the verdict — the failure is filed. Only a "true" lets the
+ * proof run, and the proof has its own third link (the venue's build
+ * must not declare the handle either).
+ *
  * @param {string} handle - the handle value
+ * @param {Function} [run] - the git call (injectable for the unit spec)
  * @returns {true|false|null} true = the committed app declares it, false =
  *   it does not, null = the checkout could not answer
  */
-function handleCommittedAtHead(handle) {
+function handleCommittedAtHead(handle, run = execFileSync) {
   const escaped = String(handle).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   try {
-    execFileSync(
+    run(
       'git',
       [
         'grep',
         '-q',
         '-E',
-        `data-test(id|-id)\\s*=\\s*["']${escaped}["']`,
+        // The attribute must not be preceded by a colon — that is what
+        // separates a static binding from a dynamic one. POSIX ERE has
+        // no look-behind, so the preceding character is consumed
+        // instead: the line's start, or any character that is not a
+        // colon.
+        `(^|[^:])data-test(id|-id)\\s*=\\s*["']${escaped}["']`,
         'HEAD',
         '--',
         FRONTEND_SRC_REL,
         // The same rule the working-tree walk holds to on the EXCLUSION:
         // every directory NAMED __tests__ or __mocks__, at any depth, is
         // excluded — the two readers must not diverge on what a
-        // declaration is. (On a DYNAMIC binding — `:data-testid="x"` —
-        // this reader is the loose one: the value is not known, so the
-        // string counts. The direction is safe: the handle it counts as
-        // declared is then not a stale-venue candidate, so the failure
-        // is filed — a loose read can only make the verdict refuse, never
-        // make it fire.)
+        // declaration is.
         ':(exclude,glob)**/__tests__/**',
         ':(exclude,glob)**/__mocks__/**'
       ],

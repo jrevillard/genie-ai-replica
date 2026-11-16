@@ -1175,6 +1175,26 @@ test.describe('the COMMITTED declaration is read strictly', () => {
   test('a handle nothing declares is not committed', () => {
     expect(handleCommittedAtHead('test-only-handle-no-source-declares')).toBe(false);
   });
+
+  test('a DYNAMIC binding is not a declaration', () => {
+    // `:data-testid="x"` binds the attribute to a value the build does
+    // not know statically: no build serves it as a handle. Counting it
+    // would let a handle that lives only in an uncommitted edit pass
+    // this gate on the strength of an unrelated dynamic binding — the
+    // verdict would fire on a build that never carried the handle, and
+    // the failure would be dropped from the filing.
+    let pattern = null;
+    const run = (_command, args) => {
+      pattern = args[args.indexOf('-E') + 1];
+      return '';
+    };
+    handleCommittedAtHead('some-handle', run);
+    expect(pattern).not.toBeNull();
+    expect(new RegExp(pattern).test(' :data-testid="some-handle"')).toBe(false);
+    expect(new RegExp(pattern).test(' data-testid="some-handle"')).toBe(true);
+    expect(new RegExp(pattern).test(' :data-test-id="some-handle"')).toBe(false);
+    expect(new RegExp(pattern).test(' data-test-id="some-handle"')).toBe(true);
+  });
 });
 
 test.describe("the app's source must EXIST at the build", () => {

@@ -3749,7 +3749,7 @@ describe('the local e2e run defines the executed set (#1736)', () => {
   // build — the verdict is always refused, every stale-venue failure is
   // filed as a product defect, and the suite stays green. The writer and
   // the reader must name the file the same way.
-  test('the runner writes the run\'s build beside its report, under the name the failure path reads', () => {
+  test("the runner writes the run's build beside its report, under the name the failure path reads", () => {
     expect(runScript).toMatch(/\$\{RUN_REPORT%\.json\}\.build\.json/);
     expect(runScript).toMatch(/git_sha/);
     // The READER's name, derived by the failure path itself: the writer
@@ -3768,6 +3768,17 @@ describe('the local e2e run defines the executed set (#1736)', () => {
   test('the failure path calls the classification from its entry point', () => {
     const failurePath = fs.readFileSync(FAILURE_PATH, 'utf-8');
     expect(failurePath).toMatch(/await classifyVenueFailures\(/);
+  });
+
+  test('the entry point PRINTS the classification it computed', () => {
+    // The classification's content is pinned by the seam's own spec; what
+    // was missing is the write: deleting the print loop silences every
+    // staleness report and every refusal on the real path, with every
+    // suite green. The loop's body must hold the write — the pattern
+    // forbids a brace inside it, so a write outside the loop does not
+    // satisfy it.
+    const failurePath = fs.readFileSync(FAILURE_PATH, 'utf-8');
+    expect(failurePath).toMatch(/for \(const line of classification\.reports\) \{[^{}]*process\.stdout\.write\(/);
   });
 
   // Any flag other than the project selector would shrink the executed set

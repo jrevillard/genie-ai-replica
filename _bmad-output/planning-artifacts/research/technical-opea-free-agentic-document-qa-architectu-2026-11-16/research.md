@@ -203,8 +203,9 @@ JSON-RPC on stdio — a TypeScript client spawning `dsh` as a subprocess
 **as an SDK-driven subprocess**, not as an in-process library. The rank-5
 verdict rested partly on a false premise. What remains valid: developer
 preview, no security audit, zero evidenced adoption, vLLM compatibility
-untested, and the operational cost of a subprocess-per-? lifecycle (session
-management, isolation, resource footprint) is **unassessed**. The ranking is
+untested, and the operational cost of the subprocess lifecycle — including its
+granularity (per-session vs per-request spawning) — plus isolation and
+resource footprint is **unassessed**. The ranking is
 provisional pending an operational assessment of the SDK integration mode
 (lifecycle, isolation, cost, availability in the published version). This
 amendment does not recommend adopting DSH.
@@ -253,4 +254,7 @@ is recorded as unverified and never counted as an incompatibility finding
 / 1 overturned) means ranking conclusions above rest mostly on unverified
 claims; decision-critical sources are pinned to versions/commits in AM-1,
 AM-3, AM-4. Compatibility-class claims re-check 2026-12-01 (§ Staleness
-map) — unchanged.
+map) — unchanged. **Count correction:** the staleness map's "24 ledger
+claims mapped" is an off-by-one — the ledger holds **25** claims
+(2 verified + 22 unverified + 1 overturned, matching the frontmatter and
+the run memlog). A refresh must re-check 25.

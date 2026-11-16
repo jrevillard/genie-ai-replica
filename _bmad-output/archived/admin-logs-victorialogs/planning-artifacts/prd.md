@@ -10,8 +10,8 @@ owner: jrevillard (ITU)
 sources_of_truth:
   spec: _bmad-output/specs/spec-admin-logs-victorialogs-migration/SPEC.md
   architecture: _bmad-output/architecture/architecture-genieai-2026-08-31/ARCHITECTURE-SPINE.md
-  epics: _bmad-output/planning-artifacts/epics.md
-  sprint_status: _bmad-output/implementation-artifacts/sprint-status.yaml
+  epics: _bmad-output/archived/admin-logs-victorialogs/planning-artifacts/epics.md
+  sprint_status: _bmad-output/archived/admin-logs-victorialogs/implementation-artifacts/sprint-status.yaml
 ---
 
 # PRD — Admin Logs + Security-Scan → VictoriaLogs
@@ -19,6 +19,9 @@ sources_of_truth:
 > **Routing artifact only.** Source-of-truth for capability contract is the spec kernel (`_bmad-output/specs/spec-admin-logs-victorialogs-migration/SPEC.md`) and the architecture spine (`ARCHITECTURE-SPINE.md`). This PRD exists so the BMad activation scripts (`find-prd`, `bmad-sprint-planning`, `bmad-correct-course`, `bmad-retrospective`, etc.) can resolve `prd_key` and dispatch to the right artifacts.
 >
 > The umbrella branch is now `feat/admin-logs-victorialogs/prd` (renamed 2026-09-03 from `feat/admin-logs-victorialogs` to match the BMad `feat/{prd_key}/prd` branch pattern from `issue-tracking.yaml`). MR !335 continues to track the same SHA on the renamed branch.
+> [Archival resolution 2026-11-16: !335 no longer resolves on the tracker;
+> the umbrella MR of record is **!343** (merged, `feat/admin-logs-victorialogs/prd`
+> → `main`), as the frontmatter states.]
 
 ## Why
 
@@ -72,7 +75,7 @@ All resolved (Q-1..Q-4 closed; see spec `.memlog.md` entries 34–36 + sprint-st
 
 7 sub-branches × 7 sub-MRs targeting umbrella branch (`feat/admin-logs-victorialogs`). Final umbrella MR merges to main after all 7 verified + smoke-tested on release stack.
 
-Procedure: see `_bmad-output/implementation-artifacts/sprint-status.yaml` + `_bmad-output/architecture/architecture-genieai-2026-08-31/ARCHITECTURE-SPINE.md` (AD-13 merge-order gate, branch lifecycle).
+Procedure: see `_bmad-output/archived/admin-logs-victorialogs/implementation-artifacts/sprint-status.yaml` + `_bmad-output/architecture/architecture-genieai-2026-08-31/ARCHITECTURE-SPINE.md` (AD-13 merge-order gate, branch lifecycle).
 
 ## Epics (high-level)
 
@@ -84,11 +87,11 @@ Procedure: see `_bmad-output/implementation-artifacts/sprint-status.yaml` + `_bm
 - **Epic 6**: Security scanner rewire (worker_threads → VL bulk queries + dedupe)
 - **Epic 7**: Cleanup (LOG_TO_FILE guard + rollover/configure deprecation)
 
-Full story breakdown: `_bmad-output/planning-artifacts/epics.md`
+Full story breakdown: `_bmad-output/archived/admin-logs-victorialogs/planning-artifacts/epics.md`
 
 ## Tracking
 
-- Sprint status: `_bmad-output/implementation-artifacts/sprint-status.yaml`
+- Sprint status: `_bmad-output/archived/admin-logs-victorialogs/implementation-artifacts/sprint-status.yaml`
 - 41 stories across 7 epics; status transitions: backlog → in-progress → review → done
 - Merge-order gate per AD-13: epic-(N+1) blocks until epic-N green
 

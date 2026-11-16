@@ -7,47 +7,70 @@ const ROOT = path.resolve(__dirname, '../../..');
 const E2E_ROOT = path.join(ROOT, 'tests/e2e');
 const HELPER = path.join(ROOT, 'tests/e2e/helpers/welcome.js');
 
-// The welcome helper's surface, checked against its CALLERS.
-//
-// The e2e suite has no CI door (operator decision 2026-11-10): a spec
-// that destructures a name this helper no longer exports dies with a
-// TypeError at RUN time, on the venue, and nothing else notices. The
-// Playwright unit spec cannot carry this gate — it runs on the local
-// run, and the risk it guards is the one the local run cannot see. So
-// the gate lives HERE, where `config:validate` runs it on every MR.
-//
-// The names are DERIVED from the callers, not copied: the tree is
-// walked, every file that takes a name from this helper is found, and
-// the two sets must be equal. A helper export nobody takes is as much
-// a defect as a name a caller takes and the helper does not have — the
-// first is a surface nothing pins, the second is the TypeError.
-const namesTakenFromHelper = (source) => {
-  const names = new Set();
+// A binding of the helper: `const { a, b } = require('...')` or
+// `const welcome = require('...')`.
+const BINDING = /\b(?:const|let|var)\s+(\{[^}]*\}|[A-Za-z_$][A-Za-z0-9_$]*)\s*=\s*require\(\s*(['"])([^'"]+)\2\s*\)/g;
 
-  // const { a, b: c } = require('../helpers/welcome');
-  const destructured = /const\s*\{([^}]*)\}\s*=\s*require\(\s*(['"])[^'"]*helpers\/welcome\2\s*\)/g;
-  for (const match of source.matchAll(destructured)) {
-    for (const entry of match[1].split(',')) {
-      // An alias reads `exported: local` — the EXPORTED name is what
-      // the helper owes, so the left side is the one that counts.
-      const name = entry.split(':')[0].trim();
-      if (/^[A-Za-z_$][A-Za-z0-9_$]*$/.test(name)) names.add(name);
+// Another binding of the same identifier in the same file.
+const DECLARATION = /\b(?:const|let|var)\s+([A-Za-z_$][A-Za-z0-9_$]*)\s*=/g;
+
+// The names a caller takes from the helper.
+//
+// The require is RESOLVED against the requiring file, so a caller that
+// writes './welcome' (the unit spec, in the same directory) and one
+// that writes '../helpers/welcome.js' are both found — a substring
+// match on the path would miss the first and read the second.
+//
+// KNOWN LIMITS, stated rather than hidden: a caller that destructures
+// through an ALIAS of the module object (`const w = require(...);
+// const { a } = w`) is not seen, and a file that binds the helper
+// under a name it also uses for something else cannot be read
+// reliably — the second case throws instead of guessing.
+const namesTakenIn = (file, source) => {
+  const names = new Set();
+  const dir = path.dirname(file);
+  for (const match of source.matchAll(BINDING)) {
+    const specifier = match[3];
+    if (!specifier.startsWith('.')) continue;
+    const resolved = path.resolve(dir, specifier);
+    if (resolved !== HELPER && `${resolved}.js` !== HELPER) continue;
+
+    const binding = match[1];
+    if (binding.startsWith('{')) {
+      for (const entry of binding.slice(1, -1).split(',')) {
+        // An alias reads `exported: local` — the EXPORTED name is what
+        // the helper owes, so the left side is the one that counts.
+        const name = entry.split(':')[0].trim();
+        if (/^[A-Za-z_$][A-Za-z0-9_$]*$/.test(name)) names.add(name);
+      }
+    } else {
+      // The module object: every member read is a name taken. Two
+      // bindings of one identifier make the scan unreadable, so the
+      // gate refuses to guess.
+      let bindings = 0;
+      for (const declared of source.matchAll(DECLARATION)) {
+        if (declared[1] === binding) bindings += 1;
+      }
+      if (bindings > 1) {
+        throw new Error(
+          `${path.relative(ROOT, file)} binds "${binding}" more than once — the member scan cannot tell which binding is the helper`
+        );
+      }
+      const member = new RegExp(`\\b${binding}\\.([A-Za-z_$][A-Za-z0-9_$]*)`, 'g');
+      for (const hit of source.matchAll(member)) names.add(hit[1]);
     }
   }
-
-  // const welcome = require('../helpers/welcome'); welcome.NAME
-  const bound = /const\s+([A-Za-z_$][A-Za-z0-9_$]*)\s*=\s*require\(\s*(['"])[^'"]*helpers\/welcome\2\s*\)/g;
-  for (const match of source.matchAll(bound)) {
-    const member = new RegExp(`\\b${match[1]}\\.([A-Za-z_$][A-Za-z0-9_$]*)`, 'g');
-    for (const hit of source.matchAll(member)) names.add(hit[1]);
-  }
-
   return names;
 };
 
 // The helper's exported names, read from its own export block. The
 // block is read as TEXT: the helper is a Playwright module, and the
 // validator has no business loading it.
+//
+// Only the two shapes the helper uses are read — a shorthand name, or
+// a name bound to a plain identifier. Anything else is refused
+// loudly: a nested object value carries a comma, and a comma-split
+// would turn its keys into phantom exports.
 const namesExportedBy = (source) => {
   const block = source.match(/module\.exports\s*=\s*\{([\s\S]*?)\n\};/);
   if (!block) {
@@ -57,21 +80,33 @@ const namesExportedBy = (source) => {
   }
   const names = new Set();
   for (const entry of block[1].split(',')) {
-    const name = entry.split(':')[0].trim();
-    if (/^[A-Za-z_$][A-Za-z0-9_$]*$/.test(name)) names.add(name);
+    const trimmed = entry.trim();
+    const shorthand = trimmed.match(/^([A-Za-z_$][A-Za-z0-9_$]*)$/);
+    const valued = trimmed.match(/^([A-Za-z_$][A-Za-z0-9_$]*)\s*:\s*[A-Za-z_$][A-Za-z0-9_$]*$/);
+    if (shorthand) {
+      names.add(shorthand[1]);
+    } else if (valued) {
+      names.add(valued[1]);
+    } else {
+      throw new Error(`the welcome helper exports an entry this reader cannot read: ${trimmed}`);
+    }
   }
   return names;
 };
 
 describe('the e2e helper surface', () => {
   test('the welcome helper exports exactly the names its callers take', () => {
+    // The helper's path is part of this gate's contract: a renamed
+    // helper must fail here, by name, not by an opaque read error.
+    expect(fs.existsSync(HELPER)).toBe(true);
+
     const exported = namesExportedBy(stripJsComments(fs.readFileSync(HELPER, 'utf8')));
 
     const taken = new Set();
     const callers = [];
     for (const file of jsFiles(E2E_ROOT)) {
       const source = stripJsComments(fs.readFileSync(file, 'utf8'));
-      const names = namesTakenFromHelper(source);
+      const names = namesTakenIn(file, source);
       if (names.size === 0) continue;
       callers.push(path.relative(ROOT, file));
       for (const name of names) taken.add(name);
@@ -84,28 +119,62 @@ describe('the e2e helper surface', () => {
   });
 
   test('the caller-side extractor reads a destructuring', () => {
+    const file = path.join(ROOT, 'tests/e2e/chatbot/chat-composer.spec.js');
     const source = "const { withWelcomeSession, DEFAULT_SESSION } = require('../helpers/welcome');";
-    expect([...namesTakenFromHelper(source)].sort()).toEqual(['DEFAULT_SESSION', 'withWelcomeSession']);
+    expect([...namesTakenIn(file, source)].sort()).toEqual(['DEFAULT_SESSION', 'withWelcomeSession']);
+  });
+
+  test('the caller-side extractor reads a `let` destructuring', () => {
+    const file = path.join(ROOT, 'tests/e2e/chatbot/chat-composer.spec.js');
+    const source = "let { withWelcomeSession } = require('../helpers/welcome');";
+    expect([...namesTakenIn(file, source)]).toEqual(['withWelcomeSession']);
   });
 
   test('the caller-side extractor reads an alias by its EXPORTED name', () => {
+    const file = path.join(ROOT, 'tests/e2e/chatbot/chat-composer.spec.js');
     const source = "const { withWelcomeSession: welcome } = require('../helpers/welcome');";
-    expect([...namesTakenFromHelper(source)]).toEqual(['withWelcomeSession']);
+    expect([...namesTakenIn(file, source)]).toEqual(['withWelcomeSession']);
   });
 
   test('the caller-side extractor reads a name reached through the module object', () => {
+    const file = path.join(ROOT, 'tests/e2e/chatbot/chat-composer.spec.js');
     const source = "const welcome = require('../helpers/welcome');\nconst state = welcome.readVisualLayerState(page);";
-    expect([...namesTakenFromHelper(source)]).toEqual(['readVisualLayerState']);
+    expect([...namesTakenIn(file, source)]).toEqual(['readVisualLayerState']);
+  });
+
+  test('the caller-side extractor finds a caller that writes the helper by its own directory', () => {
+    const file = path.join(ROOT, 'tests/e2e/helpers/welcome.spec.js');
+    const source =
+      "const welcome = require('./welcome');\nconst session = welcome.withWelcomeSession(browser, {}, body);";
+    expect([...namesTakenIn(file, source)]).toEqual(['withWelcomeSession']);
+  });
+
+  test('the caller-side extractor reads a specifier that names the file', () => {
+    const file = path.join(ROOT, 'tests/e2e/chatbot/chat-composer.spec.js');
+    const source = "const { withWelcomeSession } = require('../helpers/welcome.js');";
+    expect([...namesTakenIn(file, source)]).toEqual(['withWelcomeSession']);
+  });
+
+  test('the caller-side extractor refuses to guess when an identifier is bound twice', () => {
+    const file = path.join(ROOT, 'tests/e2e/chatbot/chat-composer.spec.js');
+    const source =
+      "var welcome = require('../helpers/welcome');\nvar welcome = page.locator('.welcome');\nconst other = welcome.lum();";
+    expect(() => namesTakenIn(file, source)).toThrow(/binds "welcome" more than once/);
   });
 
   test('the caller-side extractor ignores a file that takes nothing from this helper', () => {
+    const file = path.join(ROOT, 'tests/e2e/chatbot/chat-composer.spec.js');
     const source =
       "const { expect } = require('@playwright/test');\nconst { withWelcomeSession } = require('./other');";
-    expect([...namesTakenFromHelper(source)]).toEqual([]);
+    expect([...namesTakenIn(file, source)]).toEqual([]);
   });
 
   test('the export-side reader fails loud when the export block is gone', () => {
     expect(() => namesExportedBy('module.exports = 1;')).toThrow(/no readable/);
+  });
+
+  test('the export-side reader fails loud on an entry it cannot read', () => {
+    expect(() => namesExportedBy('module.exports = {\n  nested: { a: 1, b: 2 }\n};')).toThrow(/cannot read/);
   });
 
   test("the export-side reader reads the helper's own exports", () => {

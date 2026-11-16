@@ -170,12 +170,12 @@ const rejection = (promise) =>
     (e) => e
   );
 
-// The module's public surface is NOT checked here: this spec runs on
-// the local run, and the risk it would guard — a caller destructuring
-// a name the module no longer exports — bites on the venue, where
-// nothing offline notices. The gate lives in the config-validator
-// (`__tests__/e2e-helper-surface.test.js`), which CI runs on every MR
-// and which derives the names from the callers themselves.
+// The module's public surface is NOT checked here: a caller
+// destructuring a name the module no longer exports dies with a
+// TypeError at RUN time, on the venue. The gate for that lives in the
+// config-validator (`__tests__/e2e-helper-surface.test.js`), which CI
+// runs on every MR and which derives the names from the callers
+// themselves.
 
 test('the session viewport is a COPY of the default viewport, not the shared object', () => {
   expect(welcome.DEFAULT_SESSION.viewport, 'the session owns its viewport').not.toBe(welcome.DEFAULT_VIEWPORT);

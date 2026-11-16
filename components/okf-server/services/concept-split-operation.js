@@ -32,7 +32,7 @@
 
 const { logger } = require('../shared-lib/logger');
 const { splitConceptBody, partPath, MAX_PARTS } = require('./concept-splitter');
-const { maxConceptDocChars, conceptTooLargeError, effectiveCeiling } = require('./concept-ceiling');
+const { conceptTooLargeError, effectiveCeiling } = require('./concept-ceiling');
 const { workingGraphName } = require('./graph-lifecycle-service');
 const { runPool } = require('./run-pool');
 
@@ -73,7 +73,7 @@ function refusal(code, message, status, details) {
  * return the resulting plan or the typed refusal WITHOUT writing anything.
  *
  * This is the whole preview endpoint's body and the write path's first half:
- * one seam engine (splitConceptBody), one ceiling (maxConceptDocChars()),
+ * one seam engine (splitConceptBody), one ceiling (effectiveCeiling()),
  * one refusal source. A preview can never mutate the corpus — there is no
  * write call anywhere under this function.
  *
@@ -101,7 +101,10 @@ async function previewConceptSplit(repoDoc, concept_id) {
     return refusal('CONCEPT_NOT_FOUND', `concept ${concept_id} not found in repo ${repo_id}`, 404);
   }
 
-  const ceiling = maxConceptDocChars();
+  // One ladder run answers both the number and the lever that moved it
+  // (#1205) — two reads were two derivations; the refusal's ceiling_source
+  // rides on the factory's own read (one mechanism for the annotation).
+  const { ceiling, source: ceilingSource } = effectiveCeiling();
   const body = typeof meta.body === 'string' ? meta.body : '';
   const result = splitConceptBody(body, ceiling);
   if (result.unsplittable) {
@@ -115,9 +118,7 @@ async function previewConceptSplit(repoDoc, concept_id) {
       label: concept_id,
       chars: body.length,
       ceiling,
-      // The ceiling's SOURCE rides the body too (#1205): the message names
-      // it, and a machine consumer must be able to read it.
-      ceiling_source: effectiveCeiling().source,
+      ceiling_source: ceilingSource,
       remedy:
         'Shorten the source content for this concept (its largest unbreakable section has no heading, ' +
         'paragraph or line boundary that fits), or raise OKF_MAX_CONCEPT_DOC_CHARS if the served ' +

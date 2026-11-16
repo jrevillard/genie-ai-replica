@@ -15,9 +15,9 @@
 // LIVE effective ceiling, read from the LIVE server — not a second
 // derivation in the smoke (which would be the drift the spec forbids).
 
-const { effectiveCeiling, CEILING_SOURCES } = require('../services/concept-ceiling');
+const { effectiveCeiling } = require('../services/concept-ceiling');
 const llmWindow = require('../services/llm-window');
-const { budgetTerms, deriveCeiling } = require('../services/contextual-budget-mirror');
+const { budgetTerms, deriveCeiling, CHARS_PER_TOKEN } = require('../services/contextual-budget-mirror');
 
 /**
  * GET /api/okf/admin/ceiling — the effective ceiling and its provenance.
@@ -46,11 +46,10 @@ async function getCeiling(req, res, next) {
         reserved_tokens: terms.total,
         chunk_chars: terms.chunkChars,
         batch_size: terms.batchSize,
-        chars_per_token: require('../services/contextual-budget-mirror').CHARS_PER_TOKEN
+        chars_per_token: CHARS_PER_TOKEN
       },
       derived_ceiling: derived ? derived.ceiling : null,
-      derived_fits: derived ? derived.fits : null,
-      sources: CEILING_SOURCES
+      derived_fits: derived ? derived.fits : null
     });
   } catch (err) {
     next(err);

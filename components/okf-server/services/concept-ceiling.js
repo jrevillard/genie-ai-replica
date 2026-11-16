@@ -52,6 +52,7 @@
 // the whole import service (and with it a cycle: ingest-service ⇄ concept-meta-
 // service). One module, one reader, one number.
 
+const { parsePositiveInt } = require('../shared-lib/validation-utils');
 const { deriveCeiling } = require('./contextual-budget-mirror');
 const llmWindow = require('./llm-window');
 const { logger } = require('../shared-lib/logger');
@@ -75,12 +76,12 @@ let lastKnownDerived = null;
 /** The windows already warned about as too small (the once-guard above). */
 const tooSmallWarned = new Set();
 
-/** Read the operator's explicit pin, or null. */
+/** Read the operator's explicit pin, or null — the shared positive-int
+ * policy, not a parallel env-int dialect. */
 function operatorPin() {
   const raw = process.env.OKF_MAX_CONCEPT_DOC_CHARS;
-  if (raw === undefined || raw === null || String(raw).trim() === '') return null;
-  const parsed = parseInt(String(raw).trim(), 10);
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : null;
+  if (raw === undefined || raw === null) return null;
+  return parsePositiveInt(String(raw).trim(), null, { min: 1 });
 }
 
 /**
@@ -90,12 +91,12 @@ function operatorPin() {
  * without reloading the module, and so a deployment that changes the
  * variable takes effect on the next read.
  *
- * @returns {{ceiling:number, source:string, window:number|null, derived:number|null}}
+ * @returns {{ceiling:number, source:string, window:number|null}}
  */
 function effectiveCeiling() {
   const pin = operatorPin();
   if (pin !== null) {
-    return { ceiling: pin, source: CEILING_SOURCES.OPERATOR_PIN, window: null, derived: null };
+    return { ceiling: pin, source: CEILING_SOURCES.OPERATOR_PIN, window: null };
   }
 
   const window = llmWindow.currentWindow();
@@ -106,8 +107,7 @@ function effectiveCeiling() {
       return {
         ceiling: derived.ceiling,
         source: CEILING_SOURCES.DERIVED,
-        window: window.window,
-        derived: derived.ceiling
+        window: window.window
       };
     }
     // The window cannot hold the reservations: dataprep serves RAW chunks
@@ -134,16 +134,14 @@ function effectiveCeiling() {
     return {
       ceiling: lastKnownDerived,
       source: CEILING_SOURCES.LAST_KNOWN,
-      window: window.window,
-      derived: lastKnownDerived
+      window: window.window
     };
   }
 
   return {
     ceiling: DEFAULT_MAX_CONCEPT_DOC_CHARS,
     source: CEILING_SOURCES.STATIC_DEFAULT,
-    window: window.window,
-    derived: null
+    window: window.window
   };
 }
 
@@ -187,10 +185,14 @@ class ConceptTooLargeError extends Error {
 /**
  * Build the refusal for one over-ceiling document.
  *
- * @param {{label: string, chars: number, ceiling: number, remedy?: string, ceiling_source?: string}} params
+ * @param {{label: string, chars: number, ceiling: number, remedy?: string}} params
+ *   `ceiling` is the number the CALLER derived (its ladder run); the SOURCE
+ *   is read here from the same effective ceiling — one mechanism for the
+ *   annotation, so a caller cannot pass a source inconsistent with the
+ *   ceiling it hands in.
  * @returns {ConceptTooLargeError}
  */
-function conceptTooLargeError({ label, chars, ceiling, remedy, ceiling_source }) {
+function conceptTooLargeError({ label, chars, ceiling, remedy }) {
   const how = `${chars} characters, over the ${ceiling}-character ceiling`;
   const fix =
     remedy ||
@@ -198,12 +200,10 @@ function conceptTooLargeError({ label, chars, ceiling, remedy, ceiling_source })
       "if the served model's context window allows a larger document.";
   // The SOURCE rides the refusal (#1205): since the ceiling is now derived,
   // the number alone does not say which lever moves it — the operator pin,
-  // the discovered window, or the static fallback. The caller may pass it
-  // (a path that already knows); otherwise it is read from the same
-  // effective ceiling the number came from — no network, no drift.
-  const source = ceiling_source || effectiveCeiling().source;
-  const details = { concept_id: label, chars, ceiling };
-  if (source) details.ceiling_source = source;
+  // the discovered window, or the static fallback. It is read from the
+  // same effective ceiling the number came from — no network, no drift.
+  const source = effectiveCeiling().source;
+  const details = { concept_id: label, chars, ceiling, ceiling_source: source };
   return new ConceptTooLargeError(`${label} is ${how} (${source}). ${fix}`, details);
 }
 
@@ -214,7 +214,6 @@ module.exports = {
   maxConceptDocChars,
   ConceptTooLargeError,
   conceptTooLargeError,
-  operatorPin,
   _resetForTesting: () => {
     lastKnownDerived = null;
     tooSmallWarned.clear();

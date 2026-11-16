@@ -38,7 +38,8 @@ const {
   getServedWindow,
   deploymentVllmBase,
   credentialForBase,
-  MAX_SANE_MODEL_WINDOW_TOKENS
+  coerceWindow,
+  ttlSeconds
 } = require('./vllm-model-cache');
 const { logger } = require('../shared-lib/logger');
 
@@ -53,38 +54,32 @@ const WINDOW_SOURCES = {
 /** The last resolved window — the synchronous view the ceiling reads. */
 const state = {
   window: null,
-  source: WINDOW_SOURCES.UNKNOWN,
-  ts: 0,
-  error: null
+  source: WINDOW_SOURCES.UNKNOWN
 };
 
 /** The operator's explicit statement of the window the endpoint serves.
  *
  * dataprep's tier 1 (DATAPREP_MAX_MODEL_LEN): 0 = discover, >0 = stated.
- * The same sanitization, including the SANITY CEILING: dataprep's
+ * The SAME sanitization the discovered tier uses (vllm-model-cache's
+ * coerceWindow, one home for the window rule): non-positive, non-integral,
+ * garbage, and the SANITY CEILING all answer null — dataprep's
  * _sanitize_window_override treats an absurd override (a typo, or a
- * chars-not-tokens value) as unset and discovers instead — an absurd
+ * chars-not-tokens value) as unset and discovers instead, and an absurd
  * stated window here would derive a ceiling of hundreds of millions of
  * characters and silently disable the guard on every write path.
  *
  * @returns {number|null}
  */
 function operatorStatedWindow() {
-  const raw = process.env.DATAPREP_MAX_MODEL_LEN;
-  if (raw === undefined || raw === null || String(raw).trim() === '') return null;
-  const parsed = parseInt(String(raw).trim(), 10);
-  if (!Number.isFinite(parsed) || parsed <= 0) return null;
-  if (parsed > MAX_SANE_MODEL_WINDOW_TOKENS) return null;
-  return parsed;
+  return coerceWindow(process.env.DATAPREP_MAX_MODEL_LEN);
 }
 
 /**
  * Resolve the window (async — network I/O; never on a write path).
  *
- * @param {{timeoutMs?:number}} [opts]
  * @returns {Promise<{window:number|null, source:string, error:Error|null}>}
  */
-async function resolveWindow({ timeoutMs } = {}) {
+async function resolveWindow() {
   const stated = operatorStatedWindow();
   if (stated !== null) {
     applyWindow(stated, WINDOW_SOURCES.OPERATOR_STATED, null);
@@ -98,18 +93,11 @@ async function resolveWindow({ timeoutMs } = {}) {
   }
 
   try {
-    const result = await getServedWindow(base, {
-      timeoutMs,
-      apiKey: credentialForBase(base),
-      quiet: true
-    });
+    const result = await getServedWindow(base, { apiKey: credentialForBase(base) });
     if (result.window !== null && result.window !== undefined) {
-      applyWindow(result.window, result.stale ? WINDOW_SOURCES.STALE : WINDOW_SOURCES.DISCOVERED, null);
-      return {
-        window: result.window,
-        source: result.stale ? WINDOW_SOURCES.STALE : WINDOW_SOURCES.DISCOVERED,
-        error: null
-      };
+      const source = result.stale ? WINDOW_SOURCES.STALE : WINDOW_SOURCES.DISCOVERED;
+      applyWindow(result.window, source, null);
+      return { window: result.window, source, error: null };
     }
     applyWindow(null, WINDOW_SOURCES.UNKNOWN, result.error || null);
     return { window: null, source: WINDOW_SOURCES.UNKNOWN, error: result.error || null };
@@ -124,8 +112,6 @@ function applyWindow(window, source, error) {
   const changed = state.window !== window || state.source !== source;
   state.window = window;
   state.source = source;
-  state.ts = Date.now();
-  state.error = error || null;
   if (!changed) return;
   if (source === WINDOW_SOURCES.DISCOVERED) {
     logger.info('ceiling.window.discovered', { window_tokens: window, source });
@@ -149,41 +135,52 @@ function applyWindow(window, source, error) {
 /**
  * The window the ceiling should use RIGHT NOW (synchronous, never network).
  *
- * @returns {{window:number|null, source:string, ts:number}}
+ * @returns {{window:number|null, source:string}}
  */
 function currentWindow() {
   // The operator's statement is read live: it costs nothing and it keeps
   // the synchronous view honest even before the first probe settles.
   const stated = operatorStatedWindow();
   if (stated !== null) {
-    return { window: stated, source: WINDOW_SOURCES.OPERATOR_STATED, ts: state.ts };
+    return { window: stated, source: WINDOW_SOURCES.OPERATOR_STATED };
   }
-  return { window: state.window, source: state.source, ts: state.ts };
+  return { window: state.window, source: state.source };
 }
 
-/** The refresh cadence: the cache's own TTL knob (MODEL_DETECT_TTL), so
- * one .env line tunes dataprep's probe, okf-server's model-id probe and
- * this refresh together. */
+/** The refresh cadence: the cache's own TTL knob (MODEL_DETECT_TTL), read
+ * by the cache's own parser — one .env line and ONE parsing rule tune
+ * dataprep's probe, okf-server's model-id probe and this refresh together.
+ * A 0-second cache means "probe every call", never "poll every 0 ms", so
+ * the interval floor stays at the house default. */
 function refreshIntervalMs() {
-  const raw = parseInt(process.env.MODEL_DETECT_TTL || '', 10);
-  const seconds = Number.isFinite(raw) && raw > 0 ? raw : 60;
-  return seconds * 1000;
+  const seconds = ttlSeconds();
+  return seconds > 0 ? seconds * 1000 : 60000;
 }
 
 /**
  * Start the background refresh: one probe now, then one per TTL.
  *
  * The first probe is AWAITED by the caller when it wants the window ready
- * before serving (the boot path does); the interval keeps it fresh.
+ * before serving (the boot path does); the interval keeps it fresh. Once
+ * the tier-1 answer (the operator's statement) is in, the interval stops:
+ * env does not change under a running container, so every later tick is a
+ * guaranteed no-op — a wake every TTL for the process lifetime buys
+ * nothing.
  *
  * @returns {{stop:()=>void, ready:Promise<{window:number|null,source:string,error:Error|null}>}}
  */
-function startWindowRefresh({ timeoutMs } = {}) {
-  const ready = resolveWindow({ timeoutMs });
+function startWindowRefresh() {
+  const ready = resolveWindow();
   const timer = setInterval(() => {
-    resolveWindow({ timeoutMs }).catch(() => {
-      /* resolveWindow never throws — it reports the failure in the state */
-    });
+    resolveWindow()
+      .then((resolved) => {
+        if (resolved.source === WINDOW_SOURCES.OPERATOR_STATED) {
+          clearInterval(timer);
+        }
+      })
+      .catch(() => {
+        /* resolveWindow never throws — it reports the failure in the state */
+      });
   }, refreshIntervalMs());
   if (typeof timer.unref === 'function') timer.unref();
   return {
@@ -196,8 +193,6 @@ function startWindowRefresh({ timeoutMs } = {}) {
 function _resetForTesting() {
   state.window = null;
   state.source = WINDOW_SOURCES.UNKNOWN;
-  state.ts = 0;
-  state.error = null;
 }
 
 /** Test hook: pretend the discovery answered with this window (the tests
@@ -205,8 +200,6 @@ function _resetForTesting() {
 function __setWindowForTesting(window, source) {
   state.window = window === undefined ? null : window;
   state.source = source || WINDOW_SOURCES.UNKNOWN;
-  state.ts = Date.now();
-  state.error = null;
 }
 
 module.exports = {

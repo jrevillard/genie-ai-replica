@@ -58,6 +58,8 @@
 // representative is generous by construction: it assumes a filename and a
 // two-label line, which is what the measured deployment carried.
 
+const { parsePositiveInt } = require('../shared-lib/validation-utils');
+
 /** dataprep: CHARS_PER_TOKEN = 4 (~4 chars/token for English prose). */
 const CHARS_PER_TOKEN = 4;
 
@@ -98,13 +100,36 @@ const CONTEXTUAL_RETRIEVAL_PROMPT_DEFAULT_CHARS = 1014;
  * (a newline between the prefix and the header). */
 const REPRESENTATIVE_SCAFFOLD_PREFIX = 'Filename: concept.md\nDocument labels: category, service';
 
-/** Read an int env var, or the default when unset/unusable. */
+/** Read an int env var, or the default when unset/unusable — the shared
+ * positive-int policy (components/shared/lib/validation-utils), not a
+ * fourth hand-rolled parse. */
 function intEnv(name, fallback) {
   const raw = process.env[name];
-  if (raw === undefined || raw === null || String(raw).trim() === '') return fallback;
-  const parsed = parseInt(String(raw).trim(), 10);
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+  if (raw === undefined || raw === null) return fallback;
+  return parsePositiveInt(String(raw).trim(), fallback, { min: 1 });
 }
+
+/** The env vars the budget terms read — the MEMO key below. Knobs change
+ * only at deployment time, but the tests move them at runtime, so the key
+ * is the VALUES: any change recomputes, everything else reuses. */
+const TERM_ENV_KEYS = [
+  'DATAPREP_LLM_LABEL_BATCH_SIZE',
+  'DATAPREP_CONTEXTUAL_MAX_TOKENS',
+  'DATAPREP_CHUNK_SIZE',
+  'DATAPREP_CHUNK_SIZE_PDF',
+  'DATAPREP_CHUNK_SIZE_DOCX',
+  'DATAPREP_CHUNK_SIZE_XLSX',
+  'DATAPREP_CHUNK_SIZE_PPTX',
+  'DATAPREP_CHUNK_SIZE_HTML',
+  'DATAPREP_CHUNK_SIZE_TXT',
+  'DATAPREP_CHUNK_SIZE_MD',
+  'CONTEXTUAL_RETRIEVAL_PROMPT'
+];
+
+/** The last computed terms and the env they were computed from. The ladder
+ * runs on every concept GET, editor save, import batch and publish gate —
+ * re-parsing a dozen env vars per call was the wasteful part. */
+let termsMemo = { key: null, terms: null };
 
 /** The batch size dataprep would use (DATAPREP_LLM_LABEL_BATCH_SIZE). */
 function labelBatchSize() {
@@ -188,13 +213,24 @@ function scaffoldTokens() {
  * @returns {{prompt:number,batch:number,output:number,scaffold:number,total:number,chunkChars:number,batchSize:number}}
  */
 function budgetTerms() {
+  const key = JSON.stringify(TERM_ENV_KEYS.map((name) => process.env[name]));
+  if (termsMemo.key === key) return termsMemo.terms;
   const batchSize = labelBatchSize();
   const chunkChars = smallestChunkSize();
   const prompt = promptTokens();
   const batch = Math.ceil(serializedBatchChars(batchSize, chunkChars) / CHARS_PER_TOKEN);
   const output = outputTokens();
   const scaffold = scaffoldTokens();
-  return { prompt, batch, output, scaffold, total: prompt + batch + output + scaffold, chunkChars, batchSize };
+  const terms = { prompt, batch, output, scaffold, total: prompt + batch + output + scaffold, chunkChars, batchSize };
+  termsMemo = { key, terms };
+  return terms;
+}
+
+/** Test hook: forget the memo (a test that swapped the module's env and
+ * wants a guaranteed-fresh computation can call it, though the env-keyed
+ * memo above already recomputes on any change). */
+function _resetTermsForTesting() {
+  termsMemo = { key: null, terms: null };
 }
 
 /**
@@ -218,22 +254,18 @@ function deriveCeiling(windowTokens) {
   return { ceiling: usableTokens * CHARS_PER_TOKEN, usableTokens, terms, fits: true };
 }
 
+// The EXPORTS are the module's real consumers: the ceiling (deriveCeiling),
+// the readout controller (budgetTerms, deriveCeiling, CHARS_PER_TOKEN) and
+// the tests. The constants above are pinned by the config-validator, which
+// parses this file's SOURCE TEXT — they are deliberately NOT exported, so
+// the module's surface stays what is actually imported.
 module.exports = {
   CHARS_PER_TOKEN,
-  CONTEXTUAL_MAX_TOKENS_DEFAULT,
-  LABEL_LLM_BATCH_SIZE_DEFAULT,
-  CHUNK_SIZE_DEFAULT,
-  CHUNK_SIZE_EXTENSIONS,
-  DOC_CONTEXT_HEADER,
-  DOC_CONTEXT_TRUNCATION_MARKER,
-  CONTEXTUAL_RETRIEVAL_PROMPT_DEFAULT_CHARS,
-  REPRESENTATIVE_SCAFFOLD_PREFIX,
   budgetTerms,
   deriveCeiling,
   labelBatchSize,
   outputTokens,
-  promptTokens,
-  scaffoldTokens,
   serializedBatchChars,
-  smallestChunkSize
+  smallestChunkSize,
+  _resetTermsForTesting
 };

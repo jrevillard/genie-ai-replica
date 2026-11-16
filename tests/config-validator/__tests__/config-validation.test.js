@@ -1199,23 +1199,17 @@ describe('Configuration Validation Suite', () => {
       // pin: tests/config-validator/validators/validate-contextual-mirror.js.
       const full = fs.readFileSync(COMPOSE_FILE, 'utf8');
       const okfBlock = full.slice(full.indexOf('  okf-server:'), full.indexOf('  pii-service:'));
+      // The single regex asserts BOTH halves of the derived contract: the
+      // empty default engages the derivation, and the ${VAR:-} pass-through
+      // is what lets an operator's .env value reach the container as a PIN
+      // (the smoke asserts the pin WINS on a live deployment —
+      // run-smoke-ceiling.js).
       const m = okfBlock.match(/- OKF_MAX_CONCEPT_DOC_CHARS=\$\{OKF_MAX_CONCEPT_DOC_CHARS:-\}/);
       expect(m).not.toBeNull(); // empty default — the derivation engages by default
       // env.j2 states the knob with an EMPTY default ('' = unset = derived to
       // the app) — never a literal, which would pin every cloud deployment.
       expect(ansibleVars.OKF_MAX_CONCEPT_DOC_CHARS).toBeDefined();
       expect(ansibleVars.OKF_MAX_CONCEPT_DOC_CHARS.default).toBe('');
-    });
-
-    test('the operator CAN state a ceiling pin on both surfaces (set = pin)', () => {
-      // The pin path must survive the derived contract: compose passes
-      // ${OKF_MAX_CONCEPT_DOC_CHARS} through (an operator's .env value
-      // reaches the container), and env.j2 emits a named
-      // okf_max_concept_doc_chars group_var. The smoke asserts the pin
-      // WINS on a live deployment (run-smoke-ceiling.js).
-      const full = fs.readFileSync(COMPOSE_FILE, 'utf8');
-      const okfBlock = full.slice(full.indexOf('  okf-server:'), full.indexOf('  pii-service:'));
-      expect(okfBlock).toMatch(/- OKF_MAX_CONCEPT_DOC_CHARS=\$\{OKF_MAX_CONCEPT_DOC_CHARS:-\}/);
     });
   });
 

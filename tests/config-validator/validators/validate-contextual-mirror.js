@@ -31,6 +31,35 @@ const DATAPREP_FILE = path.join('genie-ai-overlay', 'dataprep', 'genieai_datapre
 const DATAPREP_MICROSERVICE_FILE = path.join('genie-ai-overlay', 'dataprep', 'genieai_dataprep_microservice.py');
 /** The Node mirror of that arithmetic. */
 const MIRROR_FILE = path.join('components', 'okf-server', 'services', 'contextual-budget-mirror.js');
+/** The compose file whose dataprep and okf-server blocks both carry the
+ * mirror knobs — when dataprep's block changes a default, okf-server's copy
+ * must move with it or the mirror derives from a default dataprep does not
+ * use (#1588's class, one layer down). */
+const COMPOSE_FILE = 'docker-compose.yaml';
+/** The okf-server file that carries the window sanity ceiling
+ * (vllm-model-cache.js — NOT the budget mirror; the ceiling gates the
+ * WINDOW, which that module owns). */
+const VLLM_CACHE_FILE = path.join('components', 'okf-server', 'services', 'vllm-model-cache.js');
+/** The python twin that owns the window sanity ceiling the mirror gates
+ * with — the two worlds must agree on whether a stated window is absurd. */
+const MODEL_CACHE_FILE = path.join('genie-ai-overlay', 'core', 'model_cache.py');
+
+/** The knobs BOTH compose blocks must state with the SAME `:-default`.
+ * CONTEXTUAL_RETRIEVAL_PROMPT is deliberately included with its EMPTY
+ * default: an empty and a literal disagreeing is exactly the drift. */
+const COMPOSE_MIRROR_KNOBS = [
+  'DATAPREP_LLM_LABEL_BATCH_SIZE',
+  'DATAPREP_CONTEXTUAL_MAX_TOKENS',
+  'DATAPREP_CHUNK_SIZE',
+  'DATAPREP_CHUNK_SIZE_PDF',
+  'DATAPREP_CHUNK_SIZE_DOCX',
+  'DATAPREP_CHUNK_SIZE_XLSX',
+  'DATAPREP_CHUNK_SIZE_PPTX',
+  'DATAPREP_CHUNK_SIZE_HTML',
+  'DATAPREP_CHUNK_SIZE_TXT',
+  'DATAPREP_CHUNK_SIZE_MD',
+  'CONTEXTUAL_RETRIEVAL_PROMPT'
+];
 
 /**
  * Read a python string literal and resolve the escapes it uses.
@@ -339,12 +368,95 @@ function validateContextualMirror(root) {
     );
   }
 
+  // THE COMPOSE LAYER (checked when a compose exists — fixture trees carry
+  // only the code files): both service blocks must state the same
+  // `:-default` for every mirror knob, or a deployment that sets neither
+  // would feed dataprep and the mirror two different numbers.
+  const composePath = path.join(root, COMPOSE_FILE);
+  if (fs.existsSync(composePath)) {
+    const compose = fs.readFileSync(composePath, 'utf8');
+    const okfBlock = composeServiceBlock(compose, 'okf-server');
+    const dataprepBlock = composeServiceBlock(compose, 'dataprep-arango-service');
+    if (!okfBlock || !dataprepBlock) {
+      errors.push('the compose knob agreement could not find the okf-server / dataprep-arango-service blocks');
+    } else {
+      for (const knob of COMPOSE_MIRROR_KNOBS) {
+        checked.push(`compose default ${knob}`);
+        const okfDefault = composeKnobDefault(okfBlock, knob);
+        const dataprepDefault = composeKnobDefault(dataprepBlock, knob);
+        if (okfDefault === null || dataprepDefault === null) {
+          errors.push(
+            `compose default ${knob}: one of the two service blocks no longer states it (okf-server=${JSON.stringify(okfDefault)}, dataprep=${JSON.stringify(dataprepDefault)})`
+          );
+        } else if (okfDefault !== dataprepDefault) {
+          errors.push(
+            `compose default ${knob}: okf-server says ${JSON.stringify(okfDefault)}, dataprep says ${JSON.stringify(dataprepDefault)} — the mirror would derive from a default dataprep does not use`
+          );
+        }
+      }
+    }
+  }
+
+  // THE SANITY CEILING (checked when the python twin exists): both worlds
+  // must agree on whether a stated window is absurd — one DATAPREP_MAX_
+  // MODEL_LEN line read through two different verdicts is the drift class
+  // on the discovery lever itself. The Node side of the pin is
+  // vllm-model-cache.js, the module that owns the window rule.
+  const cachePath = path.join(root, MODEL_CACHE_FILE);
+  const vllmPath = path.join(root, VLLM_CACHE_FILE);
+  if (fs.existsSync(cachePath) && fs.existsSync(vllmPath)) {
+    const pythonCache = fs.readFileSync(cachePath, 'utf8');
+    const vllmSource = stripJsComments(fs.readFileSync(vllmPath, 'utf8'));
+    const pyMatch = pythonCache.match(/MAX_SANE_MODEL_WINDOW_TOKENS\s*=\s*([\d_]+)/);
+    const pyValue = pyMatch ? parseInt(pyMatch[1].replace(/_/g, ''), 10) : null;
+    compareInt(
+      'MAX_SANE_MODEL_WINDOW_TOKENS (the sanity ceiling pin)',
+      Number.isFinite(pyValue) ? pyValue : null,
+      jsNumber(vllmSource, 'MAX_SANE_MODEL_WINDOW_TOKENS')
+    );
+  }
+
   return { errors, checked };
+}
+
+/**
+ * The `  <service>:` … next-top-level-anchor slice of a compose file.
+ *
+ * @param {string} text the whole compose file
+ * @param {string} service the service key (two-space indent under services:)
+ * @returns {string|null} the block, or null when the service is absent
+ */
+function composeServiceBlock(text, service) {
+  const startMatch = text.match(new RegExp(`\\n  ${service}:\\n`));
+  if (!startMatch) return null;
+  const rest = text.slice(startMatch.index + 1);
+  const nextMatch = rest.match(/\n  [A-Za-z0-9_-]+:\n/);
+  return nextMatch ? rest.slice(0, nextMatch.index + 1) : rest;
+}
+
+/**
+ * The `:-default` one knob carries inside a service block. Both compose
+ * shapes are read: the list form (`- NAME=${NAME:-X}`) and the mapping
+ * form (`NAME: ${NAME:-X}`).
+ *
+ * @param {string} block the service block text
+ * @param {string} name the env knob
+ * @returns {string|null} the default as written, or null when absent
+ */
+function composeKnobDefault(block, name) {
+  const list = block.match(new RegExp(`- ${name}=\\$\\{[A-Z0-9_]+:-([^}]*)\\}`));
+  if (list) return list[1];
+  const map = block.match(new RegExp(`^\\s*${name}: \\$\\{[A-Z0-9_]+:-([^}]*)\\}`, 'm'));
+  return map ? map[1] : null;
 }
 
 module.exports = {
   validateContextualMirror,
   DATAPREP_FILE,
   DATAPREP_MICROSERVICE_FILE,
-  MIRROR_FILE
+  MIRROR_FILE,
+  COMPOSE_FILE,
+  VLLM_CACHE_FILE,
+  MODEL_CACHE_FILE,
+  COMPOSE_MIRROR_KNOBS
 };

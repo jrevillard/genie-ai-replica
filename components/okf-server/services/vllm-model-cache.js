@@ -323,17 +323,16 @@ function pruneOldest(set) {
  * (a null id would hide the reason from the caller). `quiet` marks the
  * best-effort caller and is part of the probe identity (see probe).
  *
+ * The one null-without-throw case is an EMPTY base: sharedProbe answers
+ * "nothing known" (id null, err null) there, and a null return — not a
+ * throw — is the pre-#1205 contract a base that never resolved owes its
+ * callers (throwing null bypassed every `if (!id) → discoveryError`
+ * branch with an opaque TypeError).
+ *
  * The served CONTEXT WINDOW travels with the id (the Python twin's design:
  * one HTTP call, two fields) — see getServedWindow. */
 async function getServedModelId(baseUrl, { timeoutMs, apiKey, quiet = false } = {}) {
-  const outcome = await sharedProbe(baseUrl, { timeoutMs, apiKey, quiet });
-  if (outcome.id !== null) return outcome.id;
-  // An EMPTY base answers "nothing known" (id null, err null) — that is a
-  // null return, NOT a throw: throwing null here bypassed every caller's
-  // `if (!id) → discoveryError` branch with an opaque TypeError (the
-  // pre-#1205 contract for a base that never resolved).
-  if (outcome.err) throw outcome.err;
-  return outcome.id;
+  return (await sharedProbe(baseUrl, { timeoutMs, apiKey, quiet })).id;
 }
 
 /** The served CONTEXT WINDOW (tokens) for baseUrl, TTL-cached on the SAME
@@ -802,6 +801,8 @@ function clearModelCache() {
 
 module.exports = {
   MAX_SANE_MODEL_WINDOW_TOKENS,
+  coerceWindow,
+  ttlSeconds,
   credentialForBase,
   deploymentKey,
   envPin,

@@ -93,6 +93,10 @@ describe('#1205 — the window discovery tiers', () => {
     expect(llmWindow.refreshIntervalMs()).toBe(300000);
     process.env.MODEL_DETECT_TTL = 'nonsense';
     expect(llmWindow.refreshIntervalMs()).toBe(60000);
+    // A 0-second cache means "probe every call" for the cache — it must
+    // never mean setInterval(0), which is a busy loop.
+    process.env.MODEL_DETECT_TTL = '0';
+    expect(llmWindow.refreshIntervalMs()).toBe(60000);
   });
 
   test('the background refresh resolves and can be stopped', async () => {
@@ -101,6 +105,27 @@ describe('#1205 — the window discovery tiers', () => {
     const resolved = await refresh.ready;
     expect(resolved.window).toBe(16384);
     refresh.stop();
+  });
+
+  test('a stated window STOPS the refresh (env cannot change under a running container)', async () => {
+    // Tier 1 answers without a request and can never learn anything new —
+    // a tick every TTL would be a no-op wake for the process lifetime.
+    process.env.DATAPREP_MAX_MODEL_LEN = '16384';
+    jest.useFakeTimers();
+    try {
+      const clearSpy = jest.spyOn(global, 'clearInterval');
+      const refresh = llmWindow.startWindowRefresh();
+      await refresh.ready;
+      expect(clearSpy).not.toHaveBeenCalled(); // the first resolve is not a tick
+      jest.advanceTimersByTime(llmWindow.refreshIntervalMs());
+      await Promise.resolve();
+      await Promise.resolve();
+      expect(clearSpy).toHaveBeenCalled(); // the first TICK stopped the timer
+      clearSpy.mockRestore();
+      refresh.stop();
+    } finally {
+      jest.useRealTimers();
+    }
   });
 });
 

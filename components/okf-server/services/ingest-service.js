@@ -248,7 +248,9 @@ function applyDocumentCeiling(rawInputs) {
     splits.push({ from: raw.path, into: result.parts.length, chars: body.length });
   }
 
-  return { inputs, splits };
+  // The ceiling rides the result: the split-log line below must name the SAME
+  // number the gate enforced, not a second ladder run.
+  return { inputs, splits, ceiling };
 }
 
 /** Explicit concepts[] input → parse inputs (path from explicit path, else the
@@ -746,7 +748,7 @@ async function _ingestWithCap(repo_id, input, actor, maxConcepts = maxConceptsFr
   if (ceilingResult.splits.length > 0) {
     logger.info(
       `[ingest] split ${ceilingResult.splits.length} oversized concept document(s) against the ` +
-        `${maxConceptDocChars()}-character ceiling: ` +
+        `${ceilingResult.ceiling}-character ceiling: ` +
         ceilingResult.splits.map((s) => `${s.from} (${s.chars} chars → ${s.into} parts)`).join(', ')
     );
   }

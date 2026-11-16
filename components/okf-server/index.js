@@ -109,14 +109,14 @@ if (require.main === module) {
       // settles, the ceiling falls back to its static default. Non-fatal:
       // an endpoint that cannot be reached must not stop the server.
       const windowRefresh = require('./services/llm-window').startWindowRefresh();
-      windowRefresh.ready
-        .then((resolved) =>
-          logger.info('OKF ceiling window resolved', {
-            window_tokens: resolved.window,
-            source: resolved.source
-          })
-        )
-        .catch((err) => logger.error('OKF ceiling window probe failed (non-fatal)', { error: err.message }));
+      // The SUCCESS line is applyWindow's own state-change log
+      // (ceiling.window.discovered / .overridden) — logging it again here
+      // was one incident, two lines. The boot path keeps only the failure
+      // arm: applyWindow's change-guard suppresses a cold-boot failure
+      // (state starts at unknown), so this .catch is the one honest record.
+      windowRefresh.ready.catch((err) =>
+        logger.error('OKF ceiling window probe failed (non-fatal)', { error: err.message })
+      );
     });
 }
 

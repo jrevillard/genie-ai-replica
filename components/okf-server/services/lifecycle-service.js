@@ -59,7 +59,7 @@ const conceptMetaService = require('./concept-meta-service');
 // The concept-document ceiling — the publish gate's authority (the plan's §7).
 // One module, one number: the import path, the editor save and this gate all
 // read the SAME ceiling, so a document accepted by one is accepted by all.
-const { maxConceptDocChars, effectiveCeiling } = require('./concept-ceiling');
+const { effectiveCeiling } = require('./concept-ceiling');
 
 const REPOS = 'okf_repositories';
 const META = 'okf_concepts_meta';
@@ -736,10 +736,9 @@ async function transition(repoId, action, actor, opts = {}) {
       // legacy document, or by a future path that bypasses the writer. This
       // gate is the backstop that makes "no oversized concept may persist by
       // any path" true of the PUBLISH boundary too.
-      const ceiling = maxConceptDocChars();
-      // The ceiling's SOURCE rides the refusal (#1205): the number alone no
-      // longer says which lever moves it.
-      const ceilingSource = effectiveCeiling().source;
+      // One ladder run answers both the number and the lever that moved it
+      // (#1205) — two reads two lines apart were two derivations.
+      const { ceiling, source: ceilingSource } = effectiveCeiling();
       // The READ lives in concept-meta-service (the owner of the
       // `okf_concepts_meta` collection). It is called from HERE, next to the
       // concept-count check and before the mint.

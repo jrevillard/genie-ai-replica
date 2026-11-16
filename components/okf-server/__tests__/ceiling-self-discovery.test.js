@@ -74,11 +74,13 @@ describe('#1205 — the derived ceiling', () => {
 
   test('the mirror derives the WORST-CASE budget exactly (every script safe)', () => {
     // The recorded 2026-11-06 measurement (~219 700 on this window) was
-    // dataprep's own per-document number for an ASCII corpus. A POLICY
-    // ceiling has no document, so it reserves python's ensure_ascii WORST
-    // case (every chunk char as a 6-char \uXXXX escape) — the guarantee
-    // "over the ceiling ⇒ truncated" must hold for the multilingual
-    // corpora this deployment serves, not just ASCII ones.
+    // dataprep's own per-document number for an ASCII corpus (a batch of
+    // 16 × 500 unescaped ASCII chars reserves 2106 tokens; 65536 − 254 −
+    // 2106 − 8192 − 27 = 55057 usable → 219828 chars). A POLICY ceiling has
+    // no document, so it reserves python's ensure_ascii WORST case (every
+    // chunk char as a 6-char \uXXXX escape) — the guarantee "over the
+    // ceiling ⇒ truncated" must hold for the multilingual corpora this
+    // deployment serves, not just ASCII ones.
     const terms = mirror.budgetTerms();
     expect(terms.prompt).toBe(254); // the recorded prompt reservation
     // 16 items × (24 JSON-scaffolding + 500×6 escaped chars) + 15×2 separators
@@ -89,19 +91,6 @@ describe('#1205 — the derived ceiling', () => {
     const derived = mirror.deriveCeiling(MEASURED_WINDOW);
     expect(derived.fits).toBe(true);
     expect(derived.ceiling).toBe(MEASURED_CEILING);
-  });
-
-  test('an ASCII-only reservation would derive ~219 700 — the recorded measurement, as documentation', () => {
-    //dataprep's own number for its ASCII corpus: batch of 16 × 500 ASCII
-    // chars + the JSON scaffolding, serialized with spaces and no escapes.
-    const ascii = [];
-    for (let i = 0; i < 16; i += 1) ascii.push(`{"index": ${i}, "text": "${'x'.repeat(500)}"}`);
-    const asciiChars = `[${ascii.join(', ')}]`.length;
-    const asciiTokens = Math.ceil(asciiChars / 4);
-    // 2106 tokens — the recorded batch reservation.
-    expect(asciiTokens).toBe(2106);
-    const usable = 65536 - 254 - asciiTokens - 8192 - 27;
-    expect(usable * 4).toBe(219828); // the recorded ~219 700, exact
   });
 
   test('the DEFAULT batch (4) derives the static-literal neighborhood — where 250 000 came from', () => {

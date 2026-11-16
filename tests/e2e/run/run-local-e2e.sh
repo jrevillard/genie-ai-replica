@@ -22,20 +22,21 @@
 #   E2E_NAMESPACE            the namespace the Keycloak admin secret is read
 #                            from when the credentials are auto-read
 #                            (default: genieai).
-#   E2E_FILE_ISSUES          0 reports the failures without filing issues.
 #   ROPC_POSTURE_REALMS      the realms the post-run posture gate sweeps,
 #                            comma-separated (default: genie). The gate
 #                            checks EVERY client of each swept realm, so a
 #                            script's non-default pair needs no mirror here
 #                            (#1846).
 #
-# The run ends with the failure path: a red run files one status::backlog
-# issue per failing spec file (tests/e2e/run/file-failure-issues.js), and the
-# run's outcome — counts, skipped specs with their reasons, failures — is
-# printed whether the suite is green or red. After the suite the post-run
-# ROPC posture gate records its verdict, the failure path files a red
-# run's issues, and a widened venue is the run's exit (5) — the gate's
-# word is the LAST word, whatever the specs said.
+# The run ends with the failure path: the run's outcome — counts, skipped
+# specs with their reasons, failures — and the CONTEXT of a red (the build
+# the venue serves, this checkout, the handles the specs waited for) are
+# printed whether the suite is green or red (tests/e2e/run/
+# file-failure-issues.js). The suite is launched ON DEMAND, so whoever
+# launched it sees the red and writes the issue by hand. After the suite
+# the post-run ROPC posture gate records its verdict, and a widened venue
+# is the run's exit (5) — the gate's word is the LAST word, whatever the
+# specs said.
 
 set -euo pipefail
 
@@ -191,8 +192,8 @@ node tests/e2e/provision-e2e-fixtures.js
 # --- the suite ---------------------------------------------------------------
 # The fixed report path is cleared FIRST: it holds whatever the last
 # Playwright invocation in this checkout wrote, and a suite that dies before
-# its reporter writes must not leave that stale file to be filed as THIS
-# run's outcome.
+# its reporter writes must not leave that stale file to be REPORTED as
+# THIS run's outcome.
 rm -f reports/playwright-report.json
 echo "running the whole tests/e2e/ tree"
 set +e
@@ -204,26 +205,21 @@ set -e
 # The report moves to a per-run name BEFORE anything else reads or fails:
 # any later Playwright invocation in this checkout (`--list`, a single
 # spec) writes the fixed path again, and every consumer — the failure
-# path and the gate's own filing recipe — must work from the report of
-# THIS run. A posture-violating run exits 5 after the
-# failure path has filed what it could; the per-run file (not the fixed
-# path the next run would clear) is what everything names.
+# path and the gate's own recipe — must work from the report of THIS
+# run. A posture-violating run exits 5 after the failure path has
+# reported what it could; the per-run file (not the fixed path the next
+# run would clear) is what everything names.
 RUN_REPORT="reports/playwright-report-run-$(date -u +%Y%m%dT%H%M%SZ).json"
 if [ -f reports/playwright-report.json ]; then
   mv reports/playwright-report.json "$RUN_REPORT"
   echo "report: $RUN_REPORT"
-  # The build this run exercised, BESIDE the run's own report. The failure
-  # path binds the venue's served bundle to the build that produced the
-  # failure, and a run filed BY HAND (the documented recipe) inherits no
-  # environment — the sidecar is what carries the build with the run.
-  printf '{"git_sha":"%s"}\n' "$E2E_VENUE_BUILD_GIT_SHA" > "${RUN_REPORT%.json}.build.json"
 else
   # NO fallback to the fixed path: it holds whatever the last Playwright
   # invocation in this checkout wrote (a developer's single spec, a --list
-  # run) - filing from it would file ANOTHER run's failures, and a run that
-  # never wrote a report is a broken run, not a green one.
+  # run) - reporting from it would report ANOTHER run's failures, and a
+  # run that never wrote a report is a broken run, not a green one.
   echo "ERROR: the suite wrote no report (playwright exit $PLAYWRIGHT_STATUS) -" >&2
-  echo "       this run's outcome cannot be read, and nothing is filed." >&2
+  echo "       this run's outcome cannot be read." >&2
   exit 4
 fi
 
@@ -250,12 +246,8 @@ fi
 # run files its failures whatever the posture said — two obligations, and
 # neither drops the other (the gate's verdict is the LAST word: its exit
 # code wins below).
-FILE_FLAG="--file-issues"
-if [ "${E2E_FILE_ISSUES:-1}" = "0" ]; then
-  FILE_FLAG=""
-fi
 set +e
-node tests/e2e/run/file-failure-issues.js --report "$RUN_REPORT" --venue "$BASE_URL" ${FILE_FLAG}
+node tests/e2e/run/file-failure-issues.js --report "$RUN_REPORT" --venue "$BASE_URL"
 REPORT_STATUS=$?
 set -e
 
@@ -264,17 +256,13 @@ if [ "$GATE_STATUS" -ne 0 ]; then
   echo "ERROR: the post-run ROPC posture gate FAILED — its own output above names the real cause" >&2
   echo "       (a widened auth surface is one of them; a broken gate or venue is another)." >&2
   if [ "$PLAYWRIGHT_STATUS" -ne 0 ]; then
-    # REPORT_STATUS=0 means the failure path PROCESSED the report; in
-    # report-only mode (E2E_FILE_ISSUES=0) it exits 0 having filed
-    # nothing — the mode decides which truth the banner states.
-    if [ "${E2E_FILE_ISSUES:-1}" = "0" ]; then
-      echo "       this run is ALSO RED (playwright exit $PLAYWRIGHT_STATUS); reported but NOT filed (E2E_FILE_ISSUES=0) — file it with:" >&2
-      echo "       node tests/e2e/run/file-failure-issues.js --report $RUN_REPORT --venue $BASE_URL --file-issues" >&2
-    elif [ "$REPORT_STATUS" -eq 0 ]; then
-      echo "       this run is ALSO RED (playwright exit $PLAYWRIGHT_STATUS); its failures were filed by the failure path above." >&2
+    # REPORT_STATUS=0 means the failure path PROCESSED the report: the
+    # outcome and the context of the red are printed, and the issue is
+    # written by hand from them.
+    if [ "$REPORT_STATUS" -eq 0 ]; then
+      echo "       this run is ALSO RED (playwright exit $PLAYWRIGHT_STATUS); its outcome and the context of the red are printed above — write the issue by hand" >&2
     else
-      echo "       this run is ALSO RED (playwright exit $PLAYWRIGHT_STATUS); its evidence is preserved at $RUN_REPORT — file it with:" >&2
-      echo "       node tests/e2e/run/file-failure-issues.js --report $RUN_REPORT --venue $BASE_URL --file-issues" >&2
+      echo "       this run is ALSO RED (playwright exit $PLAYWRIGHT_STATUS); its evidence is preserved at $RUN_REPORT — read it, then write the issue by hand" >&2
     fi
   fi
   exit 5
@@ -283,7 +271,7 @@ fi
 if [ "$PLAYWRIGHT_STATUS" -ne 0 ] && [ "$REPORT_STATUS" -ne 0 ]; then
   echo
   echo "the run is RED (playwright exit $PLAYWRIGHT_STATUS) AND the failure path failed (exit $REPORT_STATUS)"
-  echo "- some failures were NOT filed; the run's outcome is not trustworthy"
+  echo "- the failure path could not read the report; the run's outcome is not trustworthy"
   exit "$REPORT_STATUS"
 elif [ "$PLAYWRIGHT_STATUS" -ne 0 ]; then
   echo

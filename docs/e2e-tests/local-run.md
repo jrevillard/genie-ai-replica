@@ -74,7 +74,6 @@ process's own death passed through (a signal, an OOM).
 | the Inter fonts on `XDG_DATA_HOME` | the pixel-measurement specs measure rendered text |
 | a reachable venue | `BASE_URL` points at the stack's edge |
 | Keycloak master-realm admin | see step 1 above |
-| `glab`, authenticated to the project | the failure path reads the open-issue list before it files — a red run on a machine without it reports the failures but files nothing |
 
 ### The pre-flight
 
@@ -83,7 +82,7 @@ dies on the same message. `tests/e2e/run/preflight.js` tells them apart —
 it launches the browser and opens the venue **before** the suite touches
 anything, and stops the run with the named cause. Without it, a runner
 whose Chromium build does not match the installed `@playwright/test` turns
-220 of 242 tests into the same launch error, and the failure path files an
+220 of 242 tests into the same launch error, and the failure path reports an
 issue per spec file for one missing binary.
 
 The pre-flight also **reports the runner it used** — the `@playwright/test`
@@ -209,7 +208,7 @@ legitimately flip the grant on a real venue (`data/okf/smoke-test/mint-tokens.mj
 the rag-benchmarks anchor wrapper) each carry a verified revert, and a revert
 that fails to land is what this gate catches — on the default pair or on any
 pair the script's own overrides named. Two obligations, neither dropping the
-other: the gate's verdict is RECORDED first, the failure path still files a red
+other: the gate's verdict is RECORDED first, the failure path still reports a red
 run's issues, and the gate's exit 5 is the last word. The gate sweeps the
 realms `ROPC_POSTURE_REALMS` names, comma-separated (default `genie`) —
 two standing postures stay out of the verdict, because their grants are
@@ -236,185 +235,72 @@ A red run must not stay a silent red (#1736). The run ends with
 `tests/e2e/run/file-failure-issues.js`, which:
 
 - prints the counts, the skipped specs with their reasons, and the failures;
-- files **one issue per failing spec file** — title
-  `test(e2e): <file> is red on the local run`, labelled `status::backlog`
-  (set once, at creation, and never moved again), carrying the failing
-  tests and their logs;
-- adds a **comment** instead of a second issue when an open issue with that
-  title already exists, so a suite that stays red does not flood the tracker.
+- prints the **context of the red**: the build the venue serves, this
+  checkout's HEAD, whether the venue's build is behind it, and — per
+  failing spec file — the handles the spec waited for and the file in
+  this checkout that declares them.
 
-Two classes of failure are NOT filed as product findings, and both
-report instead: a venue that went away mid-run (the venue-outage
-report), and a venue serving an older frontend build than the checkout
-(the venue-staleness report — see below). Both leave the run RED.
+The suite is launched **on demand** — a human, or an agent asked to run it
+— so whoever launched it sees the red. The issue is written **by hand**,
+from that report. The path files nothing: its job is to make the red
+readable.
 
-To only report, without filing: `E2E_FILE_ISSUES=0 tests/e2e/run/run-local-e2e.sh`.
-To file a past run's failures by hand, read the run's own report (the runner
-renames it — the fixed path holds whatever ran last):
+To read a past run's failures (the runner renames the report — the fixed
+path holds whatever ran last):
 
 ```bash
 ls reports/playwright-report-run-*.json
 node tests/e2e/run/file-failure-issues.js --report reports/playwright-report-run-<stamp>.json \
-  --venue https://genieai-forge.local:4443 --file-issues
+  --venue https://genieai-forge.local:4443
 ```
 
-`--venue` is the address the FAILED RUN pointed at — the evidence in the
-issue and the venue-alive re-probe both key on it, not on this shell's
-`BASE_URL`.
+`--venue` is the address the FAILED RUN pointed at — the venue-alive
+re-probe keys on it, not on this shell's `BASE_URL`.
 
-The run's BUILD travels with the report: the runner writes it beside the
-report (`<report>.build.json`), and the stale-venue classification binds
-the venue's served bundle to THAT build. A report without its sidecar
-carries no build, and its failures are filed as they are.
+A run that wrote **no** report is a broken run: the runner stops there
+rather than reading the fixed path, which would be another run's report.
 
-A run that wrote **no** report is a broken run: the runner stops there and
-files nothing rather than reading the fixed path, which would be another
-run's report.
+**A red run is not automatically a finding.** Two venue events produce
+exactly the same report as a defect of the product:
 
-An issue that already tracks the failing spec file is **not** duplicated:
-the path comments on it instead (an umbrella issue that mentions the file's
-path gets one comment for the whole run, not one per file).
+- a venue that goes away mid-run — the `forge-k3s` node rebooting during
+  a run moves its address and with it the edge's LoadBalancer IP, and
+  every spec that navigates during that window fails with
+  `net::ERR_CONNECTION_REFUSED at the edge`. The path groups those
+  failures into ONE venue-availability report. Check the venue's own
+  events before reading anything into the rest:
 
-**A red run is not automatically a finding.** A venue that goes away
-mid-run — the `forge-k3s` node rebooting during a run moves its address
-and with it the edge's LoadBalancer IP, and every spec that navigates
-during that window fails with `net::ERR_CONNECTION_REFUSED at the edge` —
-produces exactly the same report as a product defect. Check the venue's
-own events before filing anything:
+  ```bash
+  kubectl get events -A --field-selector reason=NodeReady --sort-by=.lastTimestamp
+  kubectl -n genieai get events --sort-by=.lastTimestamp | tail
+  ```
+
+- a **stale venue build** (#1844/#1845, #1895, #1896): every deployment
+  tracks the mutable `main` registry tag with `imagePullPolicy: Always`,
+  but a pod picks up a new `main` only when it restarts — a wave that
+  lands frontend test handles leaves the venue's pods serving the build
+  from BEFORE the wave, and every spec asserting those handles fails with
+  `element(s) not found`.
+
+The report answers the second one in one line: **the venue's build is
+BEHIND this checkout** (the two builds are compared with `git
+merge-base --is-ancestor`). A venue behind cannot serve the handles the
+checkout declares — the remedy is a venue refresh, not a code change:
 
 ```bash
-kubectl get events -A --field-selector reason=NodeReady --sort-by=.lastTimestamp
-kubectl -n genieai get events --sort-by=.lastTimestamp | tail
+kubectl -n genieai rollout restart deploy/genieai-genieai-umbrella-frontend
 ```
 
-A **stale venue build** produces the same confusion from the opposite
-direction (#1844/#1845): every deployment tracks the mutable `main`
-registry tag with `imagePullPolicy: Always`, but a pod picks up a new
-`main` only when it restarts — a wave that lands frontend test handles
-or new surfaces leaves the venue's pods serving the build from BEFORE
-the wave, and every spec asserting those handles fails with
-`element(s) not found`, three identical red runs in a row.
+then re-run the red specs before believing anything.
 
-The check — does the venue serve a handle the checkout has? The
-frontend lazy-loads its views, so a handle lives in a CHUNK, not in the
-main bundle. Walk it: fetch `/` and read the served `js/app.<hash>.js`
-name from the HTML; fetch that bundle and extract its webpack
-chunk-hash map (the `{<id>:"<hash>", ...}` object beside the `"js/"+`
-script-name template); fetch `js/<id>.<hash>.js` for each entry and
-grep for the handle the failing spec reads. A handle the checkout has
-and no chunk carries is a stale venue — provided the venue's build does
-not declare it either (the build proof below).
-
-**The run makes that walk itself** — see *A stale venue is classified,
-not filed as a product defect* below.
-
-The remedy is the lightest possible touch on the shared stack — a
-rollout restart of the stale deployment
-(`kubectl -n genieai rollout restart deploy/genieai-genieai-umbrella-frontend`),
-which pulls the `main` tag the declared baseline already points at —
-followed by re-running the red specs before believing anything.
-
-### A stale venue is classified, not filed as a product defect (#1895, #1896)
-
-Two product bugs were filed that way: a spec that waits for a handle
-the app declares, against a venue whose build predates the declaration,
-fails with `element(s) not found` — the exact signature of a defect of
-the app — and the run filed it as one. Both were a stale bundle.
-
-The run now reads the venue's SERVED bundle
-(`tests/e2e/run/venue-bundle.js`) and compares it with the checkout's
-declarations. The read is made only when a failure is a not-found, and
-it is ADDITIVE: a bundle that cannot be read leaves the failures filed
-exactly as they were, with the reason printed.
-
-| The handle the spec waits for | The verdict |
-|---|---|
-| the venue serves it | a product finding — filed as one |
-| the venue does NOT serve it, the checkout DECLARES it | a CANDIDATE — the build proof decides |
-| the venue does NOT serve it, only the WORKING TREE declares it | a spec defect: no commit carries the declaration, so no build can serve it |
-| neither serves it, the checkout does NOT declare it STATICALLY | filed as the product finding it is — either the app never had the handle (a spec defect), or the app computes it at runtime (`:data-test-id="health-${id}"`, whose literal no build carries): neither can be proven stale |
-
-The last row is the safe direction: an undeclared handle is FILED, never
-classified as the venue's. A computed handle cannot be read out of any
-commit — the source carries the template, not the value — so the proof
-cannot be made for one, and the run says so instead of claiming the
-checkout declares nothing.
-
-**The build proof.** A candidate is a stale venue only when the app's
-source AT THE VENUE'S BUILD does not declare the handle either — read
-from that build (`git grep` at that commit), never inferred. A build
-that DID declare the handle and did not ship it is the app's own build
-dropping it: a product defect, filed as one.
-
-A build the checkout CANNOT READ — a shallow clone, an unknown sha — is
-not an answer, it is an absence of one: the verdict is refused and the
-failures are filed as they are, with the reason printed. Nothing is
-guessed from a checkout that cannot see the build.
-
-The declaration the proof reads is the COMMITTED one, and it must be a
-real binding in the app's source — the frontend's own Jest tree does not
-count. A handle that exists only in an uncommitted edit, or only in a
-test, is carried by no commit, so no build can serve it: it is a spec
-defect, filed as one, not a stale venue.
-
-The two reads are deliberately asymmetric, each at its safe side: the
-COMMITTED read is strict (a real binding, the app's test tree excluded),
-while the read AT THE VENUE'S BUILD is loose (any mention of the handle
-counts). A loose read there can only make the venue look MORE capable
-than it is — and the direction that matters, "the venue's build does not
-declare it", is the one that licenses the verdict.
-
-The COMMITTED read and the working-tree walk count the SAME
-declarations, so the two cannot disagree on what a declaration is: both
-read the app's SOURCE files (`.vue`, `.js` — a handle NAMED in a README
-is not a declaration, no build renders it), both read LINES (a binding
-whose value sits on the next line is a declaration in neither), and a
-DYNAMIC binding (`:data-testid="x"`) is not one. Its value is not known at build time, no
-build serves it as a handle, and counting it would let a handle that
-lives only in an uncommitted edit pass the committed gate on the strength
-of an unrelated dynamic binding — the verdict would then fire on a build
-that never carried the handle, and the failure would be dropped from the
-filing. The committed read's error direction is the safe one: it answers
-"no" (or "cannot tell") whenever it finds no static declaration, and both
-REFUSE the verdict — the failure is filed.
-
-**The binding.** The bundle read happens at filing time; the failure was
-produced earlier. The verdict is only made when the venue still serves
-the build the RUN exercised: the run's own build — the sidecar the runner
-writes beside the run's report — against the venue's current one.
-
-| The venue's state | The verdict |
-|---|---|
-| serves the run's build, and that build is behind the checkout | the candidate is decided by the build proof |
-| MOVED since the run | not bound: the failures are filed as they are |
-| no readable build marker | not bound: the failures are filed as they are |
-| not behind the checkout | not bound: a missing handle is not the venue's |
-| its build carries no app source tree | not bound: the proof cannot read it, so the failures are filed as they are |
-
-The failures the stale venue explains drop out of the filing — the
-shape the venue-outage report already has — and the run prints one
-`venue-staleness report` naming the venue, the missing handle, the file
-that declares it, and the remedy. The run stays RED.
-
-Four details the read holds to:
-
-- the handle is searched for as a QUOTED value, so `upload-files-dialog`
-  does not match a bundle that carries only
-  `upload-files-dialog-confirm` — the direction that would hide a stale
-  venue;
-- the walk must fetch EVERY chunk the app bundle names. A chunk that
-  cannot be read makes the walk incomplete, and an incomplete walk
-  cannot say a handle is absent;
-- a chunk the edge answers with the SPA's fallback page (HTTP 200, HTML)
-  is NOT the chunk: the walk rejects the body, for the same reason;
-- the walk reads the app's SOURCE files, not the files a BUILD imports: a
-  handle added to a component no entry point imports yields a stale-venue
-  verdict that refreshing the venue cannot cure (the component never
-  renders). Four Vue components under the frontend's `src` are imported
-  by nothing today (`components/okf/LabelEditor.vue` is named only by a
-  Jest contract test, and the walk's own rule excludes the test tree), and
-  two `.js` modules of the walk's source set are orphans as well. None of
-  them declares a handle today.
+To prove it by hand — does the venue serve the handle the checkout
+declares? The frontend lazy-loads its views, so a handle lives in a
+CHUNK, not in the main bundle. Fetch `/` and read the served
+`js/app.<hash>.js` name from the HTML; fetch that bundle and extract its
+webpack chunk-hash map (the `{<id>:"<hash>", ...}` object beside the
+`"js/"+` script-name template); fetch `js/<id>.<hash>.js` for each entry
+and grep for the handle the failing spec reads. A handle the checkout has
+and no chunk carries is a stale venue, not a spec defect.
 
 ### The build marker and the pre-flight probe (#1851)
 
@@ -431,16 +317,15 @@ verdict as a `venue build:` line:
   reads against the named build, not the checkout's;
 - **predates the contract** — no readable `/build-info.json` (the SPA
   fallback answers): a frontend built before #1851. Freshness is
-  undetectable there; the chunk walk above is still the tool, and the
-  run now makes it for the failures that need it (see below);
+  undetectable there; the chunk walk below is still the tool;
 - **BROKEN** — the path is served but carries no readable `git_sha`:
   the venue HAS the contract and violated it. This one stops the run,
   like an unreachable venue — it is a deployment defect, not a
   freshness fact.
 
-The failure path (`file-failure-issues.js`) embeds the marker in EVERY
-issue it files (`venue build: <sha>`), so a stale venue cannot file a
-misleading spec-defect issue without naming its build.
+The failure path (`file-failure-issues.js`) names the marker in its
+report (`venue build: <sha>`), so a stale venue cannot be mistaken for a
+defect of the product without the build being named.
 
 ## Shared-stack discipline
 

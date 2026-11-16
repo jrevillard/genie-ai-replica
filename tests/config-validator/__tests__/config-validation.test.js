@@ -3702,8 +3702,10 @@ describe('e2e merge-train changes filters (#1264)', () => {
 //     unchanged) — see docs/e2e-tests/suite-map.md, issue #1741);
 //   - the invocation is DERIVED from the run script, never copied into a
 //     second hand-maintained list (the rule the CI derivation follows);
-//   - the run provisions the venue fixtures, and its failure path files a
-//     status::backlog issue — a red run must not stay a silent red.
+//   - the run provisions the venue fixtures, and its failure path REPORTS
+//     the run's outcome and the context of a red — a red run must not stay
+//     a silent red. The issue itself is written by hand: the suite is
+//     launched on demand, so whoever launched it sees the red.
 describe('the local e2e run defines the executed set (#1736)', () => {
   const RUN_SCRIPT = path.join(ROOT, 'tests/e2e/run/run-local-e2e.sh');
   const FAILURE_PATH = path.join(ROOT, 'tests/e2e/run/file-failure-issues.js');
@@ -3743,88 +3745,6 @@ describe('the local e2e run defines the executed set (#1736)', () => {
       .filter((f) => EXECUTED_SPEC_RE.test(f));
   });
 
-  // The failure path binds the venue's served bundle to the build the RUN
-  // exercised, and that build travels with the run's report: the runner
-  // writes it beside the report. Delete the write and every run carries no
-  // build — the verdict is always refused, every stale-venue failure is
-  // filed as a product defect, and the suite stays green. The writer and
-  // the reader must name the file the same way.
-  test("the runner writes the run's build beside its report, under the name the failure path reads", () => {
-    expect(runScript).toMatch(/\$\{RUN_REPORT%\.json\}\.build\.json/);
-    expect(runScript).toMatch(/git_sha/);
-    // The READER's name, derived by the failure path itself: the writer
-    // and the reader must agree, or every run carries no build, the
-    // verdict is always refused, and every stale-venue failure is filed
-    // as a product defect — with the suite green.
-    const { sidecarPath } = require(path.join(ROOT, 'tests/e2e/run/file-failure-issues.js'));
-    const report = '/tmp/reports/playwright-report-run-20261116T101112Z.json';
-    expect(sidecarPath(report)).toBe(`${report.replace(/\.json$/, '')}.build.json`);
-  });
-
-  // The failure path's own wiring: the classification the whole feature
-  // is, called from the entry point. Delete the call and the run files
-  // every stale-venue failure as a product defect again — the regression
-  // this feature exists to end — with the suite green.
-  test('the failure path calls the classification from its entry point', () => {
-    const failurePath = fs.readFileSync(FAILURE_PATH, 'utf-8');
-    expect(failurePath).toMatch(/await classifyVenueFailures\(/);
-  });
-
-  test('the entry point files WHAT THE CLASSIFICATION left fileable', () => {
-    // The consumption of the verdict is load-bearing: filing the raw
-    // failures instead of the classification's fileable set files one
-    // product bug per spec file against a stale venue — the regression
-    // this change ends — while the staleness report says the opposite.
-    // Every suite stays green when it is broken.
-    const failurePath = fs.readFileSync(FAILURE_PATH, 'utf-8');
-    expect(failurePath).toMatch(/const byFile = classification\.fileable;/);
-  });
-
-  test("the entry point binds the classification to the run's build and the venue's build", () => {
-    // The arguments are load-bearing: without them the classifier has
-    // nothing to bind and refuses EVERY verdict — the failures are
-    // filed exactly as they were before this change, the regression
-    // this change ends, with every suite green.
-    const failurePath = fs.readFileSync(FAILURE_PATH, 'utf-8');
-    expect(failurePath).toMatch(/const runSha = runBuildSha\(reportPath\);/);
-    // The venue's build is the probe's answer, not another sha: the
-    // binding compares it with the run's build, and a wrong one would
-    // satisfy that comparison whatever the venue serves. The
-    // declaration is a `const` on purpose — a `let` would let the value
-    // be swapped between the probe and the call, and the binding would
-    // then always succeed.
-    expect(failurePath).toMatch(/const \{[^}]*sha: venueSha\b[^}]*\} = probeVenueBuildSha\(venue\)/);
-    expect(failurePath).toMatch(/classifyVenueFailures\(venue, noiseFree, \{ runSha, venueSha \}\)/);
-  });
-
-  test('the entry point PRINTS the classification it computed', () => {
-    // The classification's content is pinned by the seam's own spec; what
-    // was missing is the write: deleting the print loop silences every
-    // staleness report and every refusal on the real path, with every
-    // suite green. The loop's body must hold the write — the pattern
-    // forbids a brace inside it, so a write outside the loop does not
-    // satisfy it.
-    const failurePath = fs.readFileSync(FAILURE_PATH, 'utf-8');
-    expect(failurePath).toMatch(/for \(const line of classification\.reports\) \{[^{}]*process\.stdout\.write\(/);
-    // The reports must not be emptied before the print: a reassignment
-    // would silence every report with the loop still in place.
-    expect(failurePath).not.toMatch(/classification\.reports\s*=[^=]/);
-  });
-
-  test('the summary names BOTH kinds of venue failure when both are present', () => {
-    // A run can fail on the venue's outage AND on the venue's stale
-    // build. A summary that names only one of them is wrong about the
-    // other — and the line is all the operator reads.
-    const failurePath = fs.readFileSync(FAILURE_PATH, 'utf-8');
-    // The pin is anchored to the BRANCH, not to the file: a summary
-    // line that names both kinds can be swapped with the outage-only
-    // one and still leave the file containing both phrases. The whole
-    // message is pinned, both halves of it.
-    expect(failurePath).toMatch(
-      /venueNoise\.size > 0 && staleVenue\.size > 0[^}]{0,400}'[^'\n]*venue-outage signature or is explained by[^}]{0,200}"[^"\n]*the venue's stale build; the report above is the record/
-    );
-  });
-
   // Any flag other than the project selector would shrink the executed set
   // without the path derivation noticing it (--grep, --shard, a reporter
   // that drops results). Its own test, so a violation names itself instead
@@ -3852,16 +3772,6 @@ describe('the local e2e run defines the executed set (#1736)', () => {
     expect(provisioning).toBeGreaterThan(-1);
     expect(suite).toBeGreaterThan(-1);
     expect(provisioning).toBeLessThan(suite);
-  });
-
-  test('the failure path files a status::backlog issue', () => {
-    const failurePath = fs.readFileSync(FAILURE_PATH, 'utf-8');
-    // The label set the path files with — PARSED, not grepped: the string
-    // also appears in the module's comment, and a guard that a comment
-    // satisfies does not guard anything.
-    const labels = failurePath.match(/const LABELS = \[([^\]]*)\]/);
-    expect(labels).not.toBeNull();
-    expect(labels[1]).toContain("'status::backlog'");
   });
 
   test('the runner, the failure path and the config agree on the report path', () => {

@@ -176,21 +176,36 @@ const rejection = (promise) =>
  * The suite has no CI door: a spec that destructures a name this
  * module no longer exports dies with a TypeError at RUN time, on the
  * venue, and nothing else notices — the gates that run offline never
- * execute the spec's body. These are the names the chatbot specs
- * destructure from here.
+ * execute the spec's body. These are the names the callers destructure
+ * from here: the three chatbot specs, the three theme specs and the
+ * dashboard capture script.
+ *
+ * The list is the module's exports, EXACTLY: a name a caller needs
+ * that is missing here is a missing export, and an export here that no
+ * caller needs is a surface nothing pins. So the list drifts with the
+ * callers — an export added for a new caller makes this fail until
+ * the list names it.
  */
-test('every name the specs destructure from this module is exported', () => {
-  const names = [
-    'withWelcomeSession',
-    'withComposerSession',
-    'waitForComposerReady',
-    'DEFAULT_VIEWPORT',
+test('the module exports exactly the names its callers destructure', () => {
+  expect(Object.keys(welcome).sort()).toEqual([
     'DEFAULT_SESSION',
-    'contrastRatio'
-  ];
-  for (const name of names) {
-    expect(welcome[name], `${name} is exported — the specs destructure it`).toBeDefined();
-  }
+    'DEFAULT_VIEWPORT',
+    'LAYER_STATE_BIND',
+    'WCAG_BIND',
+    'capturePixels',
+    'contrastRatio',
+    'lum',
+    'readVisualLayerState',
+    'waitForBannerSettled',
+    'waitForComposerReady',
+    'withComposerSession',
+    'withWelcomeSession'
+  ]);
+});
+
+test('the session viewport is a COPY of the default viewport, not the shared object', () => {
+  expect(welcome.DEFAULT_SESSION.viewport, 'the session owns its viewport').not.toBe(welcome.DEFAULT_VIEWPORT);
+  expect(welcome.DEFAULT_SESSION.viewport, 'the copy carries the default values').toEqual(welcome.DEFAULT_VIEWPORT);
 });
 
 test.describe('the welcome session closes itself', () => {

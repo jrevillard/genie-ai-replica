@@ -36,6 +36,37 @@ const chatbot = require('./chatbot');
  */
 
 /**
+ * The banner, as a fake DOM node and the fake document that holds it.
+ *
+ * The fake document is a FAITHFUL reader, not a stub that answers
+ * anything: it answers for the banner's own handle only (a wrong handle
+ * reads as absent), and it hands the element it was given to
+ * getComputedStyle (an element it does not know reads as hidden). A
+ * predicate that asks for the wrong element, or that reads the style of
+ * the wrong one, is therefore caught here rather than passing because
+ * the fake answered generously.
+ */
+const BANNER_HANDLE = '[data-testid="quick-help-banner"]';
+
+function fakeBanner({ width = 800, height = 120, visibility = 'visible', animations = [], mounted = true } = {}) {
+  const element = {
+    getBoundingClientRect: () => ({ width, height }),
+    getAnimations: () => animations
+  };
+  const selectors = [];
+  const doc = {
+    querySelector: (selector) => {
+      selectors.push(selector);
+      return mounted && selector === BANNER_HANDLE ? element : null;
+    },
+    defaultView: {
+      getComputedStyle: (el) => ({ visibility: el === element ? visibility : 'hidden' })
+    }
+  };
+  return { element, doc, selectors };
+}
+
+/**
  * A fake browser whose context counts its closes and can refuse to
  * close. The page answers every call the open path makes — the waits
  * resolve immediately, because what is under test is the CLOSE, not
@@ -44,9 +75,18 @@ const chatbot = require('./chatbot');
  * `lang` is what the fake page reports for <html lang>: the adoption
  * pin reads it, and it is the app's own signal of the locale it
  * adopted at boot.
+ *
+ * `banner` is the page's banner, and the entrance gate is EVALUATED
+ * against it: the gate's own condition, as the page would run it. A
+ * banner that fails the gate expires the wait, the way the real wait
+ * expires — so the session refuses to open on a banner nobody can
+ * measure, and the wiring between the gate and its condition is pinned
+ * (not only the condition on its own).
  */
-function fakeBrowser({ closeFails = false, lang = 'en' } = {}) {
+function fakeBrowser({ closeFails = false, lang = 'en', banner } = {}) {
   const log = { closes: 0, pages: 0, contexts: 0 };
+  const { doc, selectors } = fakeBanner(banner);
+  log.selectors = selectors;
   const page = {
     async evaluate(fn) {
       // The adoption pin reads <html lang>; the seeds write
@@ -60,8 +100,12 @@ function fakeBrowser({ closeFails = false, lang = 'en' } = {}) {
     async reload() {
       return null;
     },
-    async waitForFunction() {
-      return undefined;
+    async waitForFunction(expression) {
+      // The gate's condition, as the page runs it: the wait resolves
+      // only when it comes true, and expires otherwise.
+      const settled = new Function('document', `return ${expression}`)(doc);
+      if (!settled) throw new Error('page.waitForFunction: Timeout 15000ms exceeded.');
+      return settled;
     }
   };
   const ctx = {
@@ -242,33 +286,69 @@ test.describe('the seeded locale is proved, not assumed', () => {
  * nothing failed until a capture read an empty clip.
  */
 test.describe("the banner gate owns the banner's visibility", () => {
-  const banner = ({ width = 800, height = 120, animations = [] } = {}) => ({
-    getBoundingClientRect: () => ({ width, height }),
-    getAnimations: () => animations
-  });
-  const doc = (element, { visibility = 'visible' } = {}) => ({
-    querySelector: () => element,
-    defaultView: { getComputedStyle: () => ({ visibility }) }
-  });
+  const settled = (options) => welcome.bannerIsSettled(fakeBanner(options).doc);
 
   test('a banner that is not mounted is not settled', () => {
-    expect(welcome.bannerIsSettled(doc(null))).toBe(false);
+    expect(settled({ mounted: false })).toBe(false);
   });
 
   test('a banner with no box is not settled', () => {
-    expect(welcome.bannerIsSettled(doc(banner({ width: 0, height: 120 })))).toBe(false);
-    expect(welcome.bannerIsSettled(doc(banner({ width: 800, height: 0 })))).toBe(false);
+    expect(settled({ width: 0, height: 120 })).toBe(false);
+    expect(settled({ width: 800, height: 0 })).toBe(false);
   });
 
   test('a hidden banner is not settled', () => {
-    expect(welcome.bannerIsSettled(doc(banner(), { visibility: 'hidden' }))).toBe(false);
+    expect(settled({ visibility: 'hidden' })).toBe(false);
   });
 
   test('a banner whose entrance animation still runs is not settled', () => {
-    expect(welcome.bannerIsSettled(doc(banner({ animations: [{ playState: 'running' }] })))).toBe(false);
+    expect(settled({ animations: [{ playState: 'running' }] })).toBe(false);
   });
 
   test('a visible, settled banner is settled', () => {
-    expect(welcome.bannerIsSettled(doc(banner({ animations: [{ playState: 'finished' }] })))).toBe(true);
+    expect(settled({ animations: [{ playState: 'finished' }] })).toBe(true);
+  });
+
+  test('the gate reads the banner by its declared handle', () => {
+    const { doc, selectors } = fakeBanner();
+    welcome.bannerIsSettled(doc);
+    expect(selectors, 'the banner is addressed by the handle the app declares').toEqual([BANNER_HANDLE]);
+  });
+});
+
+/**
+ * The GATE, not only its condition: the session must refuse to open on a
+ * banner nobody can measure.
+ *
+ * The condition on its own is pinned above, but a gate that stopped
+ * running that condition would leave those pins green — the guarantee
+ * would be lost silently again, which is the exact shape the first
+ * review found. These drive the real session against a page whose
+ * banner fails the gate, and the session must refuse to open.
+ */
+test.describe('the session refuses a banner the gate rejects', () => {
+  test('a hidden banner does not open the session', async () => {
+    const { browser } = fakeBrowser({ banner: { visibility: 'hidden' } });
+
+    await expect(welcome.withWelcomeSession(browser, {}, async () => 'never runs')).rejects.toThrow(
+      /waitForFunction: Timeout/
+    );
+  });
+
+  test('a banner with no box does not open the session', async () => {
+    const { browser } = fakeBrowser({ banner: { width: 0, height: 0 } });
+
+    await expect(welcome.withWelcomeSession(browser, {}, async () => 'never runs')).rejects.toThrow(
+      /waitForFunction: Timeout/
+    );
+  });
+
+  test('a visible, settled banner opens the session', async () => {
+    const { browser, log } = fakeBrowser();
+
+    const value = await welcome.withWelcomeSession(browser, {}, async () => 'the measurement');
+
+    expect(value, 'the session opened on a measurable banner').toBe('the measurement');
+    expect(log.selectors, 'the gate asked for the banner by its handle').toContain(BANNER_HANDLE);
   });
 });

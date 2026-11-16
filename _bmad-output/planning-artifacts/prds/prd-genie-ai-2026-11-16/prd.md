@@ -102,9 +102,11 @@ is versioned explicitly (FR-14) rather than absorbed silently.
   rollback.
 - The evaluation infrastructure for E01/E02 (§9).
 
-**Query-class note (research §1/§3):** agentic behaviour earns its cost on
-multi-hop and ambiguous queries; single-shot retrieval remains the correct
-path for single-document lookup. The activation flag (FR-15) is
+**Query-class note (research §1/§3):** the literature positions agentic
+behaviour as earning its cost on multi-hop and ambiguous queries, with
+single-shot retrieval remaining the correct path for single-document lookup.
+For GENIE these benefits are **hypotheses pending E02** (measured on our
+corpora and query mix), not findings. The activation flag (FR-15) is
 deployment-level in iteration 1; whether some requests stay on the fixed
 path within an agentic deployment is an evaluation outcome (E02 may justify
 retaining a fixed path for some requests — framing §10), not a predetermined
@@ -289,7 +291,11 @@ second authorization or knowledge-governance layer).
   the implementation are kept separate from the assessment set.
 - **FR-25** Authorization scenarios are part of the evaluation set; no
   unauthorized disclosure is accepted. Passing them is evidence for tested
-  conditions, not proof of impossibility.
+  conditions, not proof of impossibility. The evaluation set also includes
+  **hostile instructions embedded in retrieved documents and tool outputs**
+  (prompt-injection scenarios): the agent must not follow instructions
+  originating from retrieved content, and a document that attempts to steer
+  the agent counts as a finding.
 - **FR-26** Known defects in the reference are recorded and never silently
   become requirements to reproduce.
 - **FR-27** The evaluation reports retrieval quality, answer grounding,

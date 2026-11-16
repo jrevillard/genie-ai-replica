@@ -136,6 +136,7 @@ without a venue surface.
 | `helpers/route.spec.js` | the route-mock wrapper | none |
 | `helpers/venue-launch-args.spec.js` | the browser launch-args/venue-mapping helper | none |
 | `helpers/venue-profile.spec.js` | the venue-surface probe (every runtime skip's reason) | none |
+| `helpers/welcome.spec.js` | the welcome session's close verdict, its locale adoption pin, the banner gate's visibility condition and the session viewport's copy | none |
 | `run/file-failure-issues.spec.js` | the failure path (the report of a red, with its context) | none |
 | `run/install-browsers.spec.js` | the browser-tree reconciler | none |
 | `run/preflight.spec.js` | the run pre-flight | none |

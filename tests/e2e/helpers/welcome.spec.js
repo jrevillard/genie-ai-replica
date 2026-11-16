@@ -1,7 +1,7 @@
 // Copyright (C) 2026 International Telecommunication Union (ITU)
 // SPDX-License-Identifier: Apache-2.0
 const { test, expect } = require('@playwright/test');
-const welcome = require('./welcome');
+const { withWelcomeSession, withComposerSession, DEFAULT_SESSION, DEFAULT_VIEWPORT } = require('./welcome');
 const chatbot = require('./chatbot');
 
 /**
@@ -178,15 +178,15 @@ const rejection = (promise) =>
 // themselves.
 
 test('the session viewport is a COPY of the default viewport, not the shared object', () => {
-  expect(welcome.DEFAULT_SESSION.viewport, 'the session owns its viewport').not.toBe(welcome.DEFAULT_VIEWPORT);
-  expect(welcome.DEFAULT_SESSION.viewport, 'the copy carries the default values').toEqual(welcome.DEFAULT_VIEWPORT);
+  expect(DEFAULT_SESSION.viewport, 'the session owns its viewport').not.toBe(DEFAULT_VIEWPORT);
+  expect(DEFAULT_SESSION.viewport, 'the copy carries the default values').toEqual(DEFAULT_VIEWPORT);
 });
 
 test.describe('the welcome session closes itself', () => {
   test('a body that succeeds returns its value, and the context is closed once', async () => {
     const { browser, log } = fakeBrowser();
 
-    const measured = await welcome.withWelcomeSession(browser, {}, async () => 'the measurement');
+    const measured = await withWelcomeSession(browser, {}, async () => 'the measurement');
 
     expect(measured, "the body's own resolution is passed through").toBe('the measurement');
     expect(log.closes, 'the context is closed exactly once').toBe(1);
@@ -198,7 +198,7 @@ test.describe('the welcome session closes itself', () => {
     // The body's value is lost with the teardown failure — loudly, and
     // the verdict names the teardown, not a body failure that never
     // happened.
-    await expect(welcome.withWelcomeSession(browser, {}, async () => 'the measurement')).rejects.toThrow(
+    await expect(withWelcomeSession(browser, {}, async () => 'the measurement')).rejects.toThrow(
       /the context refused to close/
     );
   });
@@ -208,7 +208,7 @@ test.describe('the welcome session closes itself', () => {
     const bodyError = new Error('the body failed');
 
     const caught = await rejection(
-      welcome.withWelcomeSession(browser, {}, async () => {
+      withWelcomeSession(browser, {}, async () => {
         throw bodyError;
       })
     );
@@ -223,7 +223,7 @@ test.describe('the welcome session closes itself', () => {
     const bodyError = new Error('the body failed');
 
     const caught = await rejection(
-      welcome.withWelcomeSession(browser, {}, async () => {
+      withWelcomeSession(browser, {}, async () => {
         throw bodyError;
       })
     );
@@ -243,7 +243,7 @@ test.describe('a session that fails to open closes itself too', () => {
       throw loginError;
     };
 
-    const caught = await rejection(welcome.withWelcomeSession(browser, {}, async () => 'never runs'));
+    const caught = await rejection(withWelcomeSession(browser, {}, async () => 'never runs'));
 
     expect(caught, 'the login failure is the verdict').toBe(loginError);
     expect(log.closes, 'a failed open does not leak the context').toBe(1);
@@ -256,7 +256,7 @@ test.describe('a session that fails to open closes itself too', () => {
       throw loginError;
     };
 
-    const caught = await rejection(welcome.withWelcomeSession(browser, {}, async () => 'never runs'));
+    const caught = await rejection(withWelcomeSession(browser, {}, async () => 'never runs'));
 
     expect(caught, 'the open failure is still the verdict').toBe(loginError);
     expect(caught.message, 'the close failure joins the open failure').toContain('the login failed');
@@ -269,7 +269,7 @@ test.describe('the composer session waits for the composer', () => {
   test('it waits for the composer by its declared handle', async () => {
     const { browser, log } = fakeBrowser();
 
-    await welcome.withComposerSession(browser, {}, async () => 'the measurement');
+    await withComposerSession(browser, {}, async () => 'the measurement');
 
     expect(log.waits, 'the composer is waited for by the handle the app declares').toContain(
       '[data-testid="welcome-composer"]'
@@ -285,7 +285,7 @@ test.describe('the seeded locale is proved, not assumed', () => {
     // so the pair is a contradiction: the session must refuse it rather
     // than open on the locale it booted with.
     await expect(
-      welcome.withWelcomeSession(browser, { locale: 'fr', reload: false }, async () => 'never runs')
+      withWelcomeSession(browser, { locale: 'fr', reload: false }, async () => 'never runs')
     ).rejects.toThrow(/needs the reload that adopts it/);
     expect(log.contexts, 'no context was opened for a refused session').toBe(0);
   });
@@ -293,7 +293,7 @@ test.describe('the seeded locale is proved, not assumed', () => {
   test('a locale the app adopted is accepted', async () => {
     const { browser } = fakeBrowser({ lang: 'fr' });
 
-    const value = await welcome.withWelcomeSession(browser, { locale: 'fr' }, async () => 'the measurement');
+    const value = await withWelcomeSession(browser, { locale: 'fr' }, async () => 'the measurement');
 
     expect(value, 'the session ran on the adopted locale').toBe('the measurement');
   });
@@ -304,7 +304,7 @@ test.describe('the seeded locale is proved, not assumed', () => {
     // vacuously, so the session says so instead of measuring nothing.
     const { browser } = fakeBrowser({ lang: 'en' });
 
-    await expect(welcome.withWelcomeSession(browser, { locale: 'fr' }, async () => 'never runs')).rejects.toThrow(
+    await expect(withWelcomeSession(browser, { locale: 'fr' }, async () => 'never runs')).rejects.toThrow(
       /<html lang> reads 'en', not the seeded 'fr'/
     );
   });
@@ -330,9 +330,7 @@ test.describe('the seeded locale is proved, not assumed', () => {
 test.describe('the session refuses a banner the gate rejects', () => {
   const refuses = async (banner) => {
     const { browser } = fakeBrowser({ banner });
-    await expect(welcome.withWelcomeSession(browser, {}, async () => 'never runs')).rejects.toThrow(
-      /waitForFunction: Timeout/
-    );
+    await expect(withWelcomeSession(browser, {}, async () => 'never runs')).rejects.toThrow(/waitForFunction: Timeout/);
   };
 
   test('a banner that is not mounted does not open the session', async () => {
@@ -357,7 +355,7 @@ test.describe('the session refuses a banner the gate rejects', () => {
   test('a visible, settled banner opens the session', async () => {
     const { browser, log } = fakeBrowser({ banner: { animations: [{ playState: 'finished' }] } });
 
-    const value = await welcome.withWelcomeSession(browser, {}, async () => 'the measurement');
+    const value = await withWelcomeSession(browser, {}, async () => 'the measurement');
 
     expect(value, 'the session opened on a measurable banner').toBe('the measurement');
     expect(log.selectors, 'the gate asked for the banner by its handle, and nothing else').toEqual([BANNER_HANDLE]);

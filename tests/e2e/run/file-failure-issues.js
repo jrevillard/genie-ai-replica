@@ -2,9 +2,8 @@
 // Copyright (C) 2026 International Telecommunication Union (ITU)
 // SPDX-License-Identifier: Apache-2.0
 /**
- * The failure path: a red local run must produce a FILED issue, not a silent
- * red (#1736). A local run whose failures are only seen by the person who
- * ran it is the same silence as a red monthly pipeline nobody reads.
+ * The failure path: what a red local run means, and what its reader needs to
+ * decide it (#1736, #1895, #1896).
  *
  * This script reads the run's JSON report and:
  *
@@ -12,20 +11,23 @@
  *     reasons, and the failures. A green run must never mean "nothing ran":
  *     the skipped specs are listed, each with the venue profile that skipped
  *     it, so a run that skipped half the suite says so out loud;
- *  2. with --file-issues, files ONE issue per failing spec FILE, with the
- *     failures and their logs, labelled `status::backlog` — the label is set
- *     ONCE, at creation, and never moved afterwards (see
- *     .claude/rules/ISSUE-LABELS.md). A file that already has an open issue
- *     tracking it gets a COMMENT instead of a second issue, so a suite that
- *     stays red does not flood the tracker.
+ *  2. prints the CONTEXT of the red: the build the venue serves, this
+ *     checkout's HEAD, whether the venue's build is behind it, and — per
+ *     failing spec file — the handles the spec waited for and the file in
+ *     this checkout that declares them.
  *
- * The filing loop NEVER dies of its own bookkeeping: one tracker error must
- * not leave the remaining failures unreported (that is the silence this path
- * exists to end). The errors are collected and the script exits non-zero at
- * the end, naming what could not be filed.
+ * The suite is launched ON DEMAND — a human, or an agent asked to run it —
+ * so whoever launched it SEES the red. The script's job is therefore to make
+ * that red readable, not to file it: the issue is written by hand, by
+ * whoever reads the report.
+ *
+ * The context is what tells a stale VENUE from a defect of the product: a
+ * venue whose build is behind this checkout cannot serve the handles the
+ * checkout declares — refreshing the venue is the remedy, and no code
+ * change is the answer.
  *
  * Usage:
- *   node tests/e2e/run/file-failure-issues.js [--file-issues]
+ *   node tests/e2e/run/file-failure-issues.js
  */
 const fs = require('fs');
 const path = require('path');
@@ -35,46 +37,26 @@ const REPO_ROOT = path.resolve(__dirname, '..', '..', '..');
 // The report the run read: the runner moves the fresh report to a
 // per-run name before handing it over, so a later `playwright test --list`
 // (or any other invocation) in the same checkout cannot replace the
-// evidence this path files from.
+// evidence this path reports from.
 const DEFAULT_REPORT_PATH = path.join(REPO_ROOT, 'reports', 'playwright-report.json');
 
-const { VENUE_IP_ENV, VENUE_HOST_ENV } = require('../helpers/venue-launch-args');
-// The e2e tree's root: a path whose prefix is INSIDE it is a different
-// file that happens to carry another one's path as its tail.
-const TESTS_E2E_ROOT = 'tests/e2e';
-// The shape of a spec file's NAME, one place: the report's suite titles
-// carry it, the walk looks for it, and the bare-name rule recognises it.
-const SPEC_FILE_RE = /\.(?:spec|test)\.[cm]?[jt]sx?$/;
 // The venue's edge: ONE definition, credential-free — the same address the
-// run used, so the issue's reproduce command reproduces the run.
+// run pointed at.
 const { BASE_URL } = require('../helpers/base-url');
-const GITLAB_HOST = process.env.GITLAB_HOST || 'opensource.unicc.org';
-const GITLAB_PROJECT_ID = process.env.GITLAB_PROJECT_ID || '90';
 
-// The label set a filed failure carries. `status::backlog` is set AT CREATION
-// and never moved again; the other two say what kind of finding it is.
-const LABELS = ['status::backlog', 'type::bug', 'area::testing'];
+// The app's source: where a handle this checkout declares lives.
+const FRONTEND_SRC_REL = 'components/gov-chat-frontend/src';
+// The shape of a spec file's NAME, one place: the report's suite titles
+// carry it, and the walk looks for it.
+const SPEC_FILE_RE = /\.(?:spec|test)\.[cm]?[jt]sx?$/;
 
-// How much of a failure's log travels into the issue. Enough to act on
-// (the assertion, the observed value, the first stack frames), not the whole
-// browser trace.
+// How much of a failure's log is shown. Enough to act on (the assertion, the
+// observed value, the first stack frames), not the whole browser trace.
 const MAX_ERROR_LINES = 40;
-
-// How many failures travel into ONE issue body. A spec file with dozens of
-// failures would push the description past the kernel's per-argument cap
-// (~128 KiB), the spawn would die with E2BIG, and the file would be
-// permanently un-fileable — the cap keeps the filing possible; the count
-// line above the fold still says how many failed.
-const MAX_FAILURES_PER_ISSUE = 10;
-
-// One tracker call, in milliseconds. A wedged connection must not hang the
-// run forever with both serial-slot locks held — every other bound in the
-// runner is finite and so is this one.
-const TRACKER_TIMEOUT_MS = 60000;
 
 // A single failure's text is bounded in BOTH dimensions: the line count
 // above, and the character count here — one enormous line would otherwise
-// push the issue body past the kernel's per-argument cap on its own.
+// flood the report on its own.
 const MAX_ERROR_CHARS = 8000;
 
 // The transport signatures of a navigation that never reached the app:
@@ -99,10 +81,10 @@ function isConnectionSignature(failure) {
 }
 
 /**
- * Split the grouped failures into what is FILEABLE and what is VENUE
- * NOISE (#1783). A file whose failures are ALL connection signatures
- * drops out of the filing entirely; a file whose other failures survive
- * the filter stays fileable for exactly those. Pure — the same grouped
+ * Split the grouped failures into what is a PRODUCT finding and what is
+ * VENUE NOISE (#1783). A file whose failures are ALL connection signatures
+ * drops out of the per-spec report entirely; a file whose other failures
+ * survive the filter stays for exactly those. Pure — the same grouped
  * input always produces the same split, and the caller owns the
  * printing.
  * @param {Map<string, Array<{error: string}>>} byFile - The grouped
@@ -128,8 +110,8 @@ function partitionVenueNoise(byFile) {
 }
 
 /**
- * The ONE venue-availability report that replaces one product issue per
- * spec file for a healed mid-run outage (#1783): the venue, the
+ * The ONE venue-availability report for a healed mid-run outage (#1783):
+ * the venue, the
  * signature-bearing failure inventory, and the verdict. Pure string —
  * the caller prints it, the unit spec asserts it.
  * @param {Map<string, Array<{error: string}>>} venueNoise - Per spec
@@ -150,7 +132,7 @@ function venueAvailabilityReport(venueNoise, venue) {
   }
   lines.push(
     `The venue answered the re-probe at ${venue} — these look like a venue outage that healed ` +
-      'mid-run, NOT product findings: nothing is filed for them. The run is still RED; ' +
+      'mid-run, NOT product findings: nothing is reported per spec for them. The run is still RED; ' +
       'check the venue events (kubectl get events -A) and re-run the suite once the venue has been stable.'
   );
   return lines.join('\n');
@@ -177,15 +159,15 @@ function readReport(reportPath) {
   if (!report || !Array.isArray(report.suites)) {
     fail(`the JSON report at ${reportPath} carries no suites — it is not a Playwright report`);
   }
-  // The run stamp filed with every issue comes from stats.startTime — the
-  // moment the red run STARTED, not the moment this filing ran. A report
-  // without it would otherwise get a fabricated wall-clock stamp, and the
-  // issue would misattribute the run it names (Playwright's json reporter
+  // The run stamp comes from stats.startTime — the moment the red run
+  // STARTED, not the moment this path read the report. A report without it
+  // would otherwise get a fabricated wall-clock stamp, and the report
+  // would misattribute the run it names (Playwright's json reporter
   // always writes stats; one that did not is not a report this path reads).
   if (!report.stats || typeof report.stats.startTime !== 'string') {
     fail(
       `the JSON report at ${reportPath} carries no stats.startTime — it is not a report the ` +
-        'failure path can stamp a filed issue with'
+        'failure path can stamp the run it names with'
     );
   }
   return report;
@@ -195,8 +177,7 @@ function readReport(reportPath) {
  * Every test in the report, with the file it belongs to and the FULL title
  * path (the describe blocks plus the test title). The report carries the
  * test title alone; two tests with the same title in different describes
- * would otherwise be indistinguishable in the run output and in a filed
- * issue.
+ * would otherwise be indistinguishable in the run output.
  */
 function collectTests(suites, inheritedFile, describePath = [], out = []) {
   for (const suite of suites || []) {
@@ -217,8 +198,8 @@ function collectTests(suites, inheritedFile, describePath = [], out = []) {
 
 /**
  * The spec file's path, relative to the repository root. The report carries
- * it relative to the test directory — the tracker, the docs and the issues
- * all name spec files by their repository path.
+ * it relative to the test directory — the report and the docs name spec
+ * files by their repository path.
  */
 function repoPath(file) {
   if (!file) return '(unknown file)';
@@ -240,306 +221,204 @@ function errorText(result) {
   return lines.length > MAX_ERROR_CHARS ? `${lines.slice(0, MAX_ERROR_CHARS)}\n(truncated)` : lines;
 }
 
-function glab(args) {
-  return execFileSync('glab', ['api', '--hostname', GITLAB_HOST, ...args], {
-    encoding: 'utf-8',
-    maxBuffer: 32 * 1024 * 1024,
-    timeout: TRACKER_TIMEOUT_MS
-  });
+/**
+ * The handle values a text declares, in both attribute spellings.
+ *
+ * The value is matched as a QUOTED literal, so `upload-files-dialog` does
+ * not match a text that carries only `upload-files-dialog-confirm`.
+ */
+const HANDLE_RE = /data-test(?:id|-id)[ \t]*=[ \t]*["']([^"']+)["']/g;
+
+function handlesIn(text) {
+  const handles = [];
+  for (const match of String(text || '').matchAll(HANDLE_RE)) handles.push(match[1]);
+  return handles;
 }
 
 /**
- * The project's open issues, fetched ONCE.
+ * The handles a failure's LOCATOR names.
  *
- * The tracker rate-limits its search endpoint hard, and a run with thirty
- * failing spec files would hit that limit — the failure path must not die
- * of its own bookkeeping (it would leave the failures unfiled, which is the
- * silence this path exists to end). The issue LIST is a plain paginated
- * read, and the matching happens locally: an issue that already tracks a
- * spec file carries the file's repository path in its title, or the
- * script's own "- spec file: `path`" marker in its description.
+ * Playwright prints the locator it was waiting on in the `Locator:` line
+ * of an expect() failure — that is the element the failure is about. The
+ * code frame below it is the SPEC's own source and names other handles;
+ * only the locator line counts, or a failure would carry every handle its
+ * file mentions.
  *
- * A failed READ is fatal (unlike a failed write): without the open-issue
- * list every failing file would get a NEW issue, and a flood is exactly
- * what this path exists to prevent.
+ * The attribute spelling (`[data-testid="x"]`) and Playwright's own
+ * `getByTestId('x')` name the SAME handle in two spellings; both are read.
+ *
+ * @param {string} errorText - the failure's error text
+ * @returns {string[]} the handle values the locator names
  */
-function fetchOpenIssues() {
-  const issues = [];
-  let capped = true;
-  for (let page = 1; page <= 20; page += 1) {
-    let batch;
-    try {
-      batch = JSON.parse(glab([`projects/${GITLAB_PROJECT_ID}/issues?state=opened&per_page=100&page=${page}`]));
-    } catch (e) {
-      fail(`the tracker could not be read: ${e.message}`);
-    }
-    if (!Array.isArray(batch)) fail('the tracker answered with something that is not an issue list');
-    issues.push(...batch);
-    if (batch.length < 100) {
-      capped = false;
-      break;
-    }
-  }
-  if (capped) {
-    // The cap ended the read, not a short batch: issues past page 20 are
-    // invisible to the dedupe, and a failure on one of them gets a SECOND
-    // issue — the flood this path exists to prevent. Warn and include what
-    // was read; the run stays loud about the degraded dedupe.
-    console.warn(
-      'file-failure-issues: the open-issue list hit the 20-page cap (2000 issues) — issues past it ' +
-        'are invisible to the dedupe and a failure on an already-tracked file can be filed a second ' +
-        'time. Close or mark stale issues, or raise the cap.'
-    );
-  }
-  return issues;
+function locatorHandles(errorText) {
+  const lines = String(errorText || '')
+    .split('\n')
+    .filter((candidate) => candidate.trim().startsWith('Locator:'));
+  if (lines.length === 0) return [];
+  const byAttribute = handlesIn(lines.join('\n'));
+  const byTestId = Array.from(lines.join('\n').matchAll(/getByTestId\(\s*['"]([^'"]+)['"]\s*\)/g)).map(
+    (match) => match[1]
+  );
+  return [...new Set([...byAttribute, ...byTestId])];
 }
 
 /**
- * The spec paths a text names — the tokens that end in a spec file
- * extension.
+ * This checkout's HEAD, or null when the checkout cannot answer.
  */
-function specPathsIn(text) {
-  const tokens = String(text || '').match(/[A-Za-z0-9_./-]*\.(?:spec|test)\.[cm]?[jt]sx?/g) || [];
-  return tokens.map((token) => token.replace(/^\.\//, ''));
-}
-
-/**
- * Does this token name THIS file?
- *
- * The token is compared as a path: it is the file's repository path, or
- * a path that ENDS with it (an absolute path, or the file's URL in a
- * tracker link) — but not a path whose prefix is inside the e2e tree:
- * `tests/e2e/helpers/tests/e2e/a.spec.js` is a DIFFERENT file that
- * happens to carry this one's path as its tail.
- */
-function namesThisFile(token, file) {
-  if (token === file) return true;
-  // The path relative to the e2e tree: 'helpers/a.spec.js'.
-  const relative = file.startsWith(`${TESTS_E2E_ROOT}/`) ? file.slice(TESTS_E2E_ROOT.length + 1) : null;
-  if (relative && token === relative) return true;
-  if (!token.endsWith(`/${file}`)) return false;
-  const prefix = token.slice(0, token.length - file.length - 1);
-  return !(prefix === TESTS_E2E_ROOT || prefix.includes(`${TESTS_E2E_ROOT}/`));
-}
-
-/**
- * The e2e tree's OWN spec names (#1802): the files it has NOW, plus the
- * ones it HAS HAD.
- *
- * A bare file name in a title names this tree's spec when it is one of
- * these. The rule reads the tree's own names instead of the COMPLEMENT of
- * a repo-wide walk, which is what it used to read ("does ANY file outside
- * the tree carry this name?"): the complement's verdict depended on what
- * sits NEXT to the repo — a file outside the tree that happens to share a
- * spec name turned a bare-named dedication into a non-dedication, and the
- * failure path then filed a second issue for a file that already has one
- * — and the walk's cost grew with the checkout's shape (~0.08 s in a
- * branch worktree, ~0.8 s in a checkout carrying sibling worktrees, each
- * a full repo copy the walk had to traverse).
- *
- * "Had" comes from the tree's git history: a renamed or deleted spec's
- * bare name must stay recognised — a title naming several spec files is a
- * GROUP, not a dedication, and a file that was renamed away must still
- * count as one of them. A root with no git behind it (the unit spec's
- * synthetic checkouts) has no past names — that is the definition of
- * "had" there, not a swallowed failure.
- *
- * The set is built ONCE per root (the tree walk is bounded by the tree;
- * the git call is ~50 ms on this tree's history) and only when a bare
- * name is actually met, which is at most once per title.
- */
-const e2eSpecNamesByRoot = new Map();
-
-function e2eOwnSpecNames(root = REPO_ROOT) {
-  if (e2eSpecNamesByRoot.has(root)) return e2eSpecNamesByRoot.get(root);
-  const names = new Set();
-  // NOW: the tree's own directory — bounded by the tree, never by the
-  // checkout around it.
-  const walk = (dir) => {
-    let entries;
-    try {
-      entries = fs.readdirSync(dir, { withFileTypes: true });
-    } catch {
-      return;
-    }
-    for (const entry of entries) {
-      if (entry.name === 'node_modules' || entry.name === '.git') continue;
-      const full = path.join(dir, entry.name);
-      if (entry.isDirectory()) walk(full);
-      else if (SPEC_FILE_RE.test(entry.name)) names.add(entry.name);
-    }
-  };
-  walk(path.join(root, TESTS_E2E_ROOT));
-  // HAD: the tree's git history, one call.
+function checkoutHead(run = execFileSync) {
   try {
-    const out = execFileSync(
+    return run('git', ['rev-parse', 'HEAD'], {
+      cwd: REPO_ROOT,
+      encoding: 'utf-8',
+      stdio: ['ignore', 'pipe', 'ignore']
+    }).trim();
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Is the venue's build BEHIND this checkout's HEAD?
+ *
+ * true = the venue's build is an ancestor of the checkout (the venue cannot
+ * serve what the checkout declares); false = it is not (the venue is not
+ * behind, so a missing handle is the product's); null = the checkout cannot
+ * answer (a shallow clone, an unknown sha).
+ *
+ * @param {string} venueBuild - the build the venue serves
+ * @returns {true|false|null} the relation
+ */
+function isBehindCheckout(venueBuild, run = execFileSync) {
+  try {
+    const head = run('git', ['rev-parse', 'HEAD'], {
+      cwd: REPO_ROOT,
+      encoding: 'utf-8',
+      stdio: ['ignore', 'pipe', 'ignore']
+    }).trim();
+    // The venue serves THIS very checkout: it is not behind it. The
+    // ancestor test alone cannot say so — a commit IS its own ancestor —
+    // so equality is settled first. Both spellings count (the venue's
+    // marker may carry an abbreviated sha).
+    if (venueBuild && head && (head.startsWith(venueBuild) || venueBuild.startsWith(head))) {
+      return false;
+    }
+    run('git', ['merge-base', '--is-ancestor', venueBuild, 'HEAD'], {
+      cwd: REPO_ROOT,
+      stdio: 'ignore'
+    });
+    return true;
+  } catch (error) {
+    // git merge-base --is-ancestor exits 1 for "not an ancestor" and 128 for
+    // "cannot read it".
+    return error.status === 1 ? false : null;
+  }
+}
+
+/**
+ * The file in THIS checkout that declares a handle, or null when no source
+ * declares it (a spec defect) or the checkout cannot answer.
+ *
+ * @param {string} handle - the handle value
+ * @returns {string|null} the declaring file
+ */
+function declaringFile(handle, run = execFileSync) {
+  try {
+    // The app's SOURCE files, and the test tree excluded: a handle the
+    // frontend's own Jest tree declares is not a declaration — no build
+    // renders a mock.
+    const out = run(
       'git',
-      ['-C', root, 'log', '--format=', '--name-only', '--', TESTS_E2E_ROOT],
-      // stderr is captured, not inherited: the catch below reads it to tell
-      // the two failure arms apart, and an inherited stderr would print raw
-      // `fatal:` lines into the run output a human scans for red — on every
-      // synthetic-root case of the unit spec.
-      { encoding: 'utf-8', maxBuffer: 32 * 1024 * 1024, timeout: 30000, stdio: ['ignore', 'pipe', 'pipe'] }
-    );
-    // A shallow checkout truncates "had": a renamed spec whose rename
-    // commit is missing from the truncated history stops being
-    // recognised, and the dedupe quietly degrades toward filing a second
-    // issue for a file that already has one (#1802). Name the
-    // degradation once — the checkout can fix it with a full fetch.
-    let shallow = '';
-    try {
-      shallow = execFileSync('git', ['-C', root, 'rev-parse', '--is-shallow-repository'], {
+      [
+        'grep',
+        '-l',
+        '-F',
+        '-e',
+        handle,
+        'HEAD',
+        '--',
+        `:(glob)${FRONTEND_SRC_REL}/**/*.vue`,
+        `:(glob)${FRONTEND_SRC_REL}/**/*.js`,
+        ':(exclude,glob)**/__tests__/**',
+        ':(exclude,glob)**/__mocks__/**'
+      ],
+      {
+        cwd: REPO_ROOT,
         encoding: 'utf-8',
-        timeout: 10000,
         stdio: ['ignore', 'pipe', 'ignore']
-      });
-    } catch {
-      shallow = '';
-    }
-    if (shallow.trim() === 'true') {
-      console.warn(
-        'file-failure-issues: this checkout is a SHALLOW clone — its git history is truncated, so a spec renamed or deleted before the truncation is no longer recognised by the dedupe and a multi-file title naming it can be misjudged as a dedication. A full fetch (GIT_DEPTH: 0) restores the rule.'
+      }
+    );
+    return out.split('\n')[0].replace(/^HEAD:/, '') || null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * The CONTEXT of the red: the facts a reader needs to tell a stale VENUE
+ * from a defect of the product.
+ *
+ * Two of them decide it. The build the VENUE serves: a venue behind this
+ * checkout cannot serve the handles the checkout declares, and the remedy is
+ * a venue refresh, not a code change. And the handles each failing spec
+ * WAITED FOR, with the file in this checkout that declares them: a handle no
+ * source declares is a spec defect.
+ *
+ * @param {Map<string, Array<{error: string}>>} byFile - the failures grouped by spec file
+ * @param {{venueBuild?: string, head?: string, behind?: boolean|null, declaringFile?: Function}} [readers] - the readers (injectable for the unit spec)
+ * @returns {string} the report block
+ */
+function venueContext(byFile, readers = {}) {
+  const venueBuild = readers.venueBuild !== undefined ? readers.venueBuild : process.env.E2E_VENUE_BUILD_GIT_SHA || '';
+  const head = readers.head !== undefined ? readers.head : checkoutHead();
+  const declare = readers.declaringFile || declaringFile;
+  const lines = ['the red, in facts:'];
+  lines.push(`  - venue build: ${venueBuild ? `\`${venueBuild}\`` : 'unknown — the run carried no build marker'}`);
+  lines.push(`  - this checkout: ${head ? `\`${head}\`` : 'unknown — the checkout cannot answer'}`);
+  const behind =
+    readers.behind !== undefined ? readers.behind : venueBuild && head ? isBehindCheckout(venueBuild) : null;
+  lines.push(
+    '  - the venue is ' +
+      (behind === true
+        ? 'BEHIND this checkout — it cannot serve the handles the checkout declares: refresh the venue, no code change'
+        : behind === false
+          ? "NOT behind this checkout — a missing handle is the PRODUCT's, not the venue's"
+          : 'not comparable — the two builds could not be compared')
+  );
+  for (const [file, failures] of byFile) {
+    lines.push(`  - ${file} (${failures.length} failure(s))`);
+    for (const handle of waitedHandles(failures)) {
+      const source = declare(handle);
+      lines.push(
+        `      waited for \`${handle}\` — ${
+          source ? `declared by this checkout at HEAD in ${source}` : 'declared by NO source in this checkout at HEAD'
+        }`
       );
     }
-    for (const line of out.split('\n')) {
-      const name = line.trim().split('/').pop();
-      if (name && SPEC_FILE_RE.test(name)) names.add(name);
-    }
-  } catch (e) {
-    // Two arms, told apart by what git itself said:
-    // - a root with NO git behind it (the unit spec's synthetic checkouts)
-    //   has no past names — that is the definition of "had" there, not a
-    //   swallowed failure, and it stays silent;
-    // - a root whose git call FAILED (an absent binary, a timeout, a
-    //   permissions error) silently empties its "had" set, so it is named:
-    //   a spec renamed in the unread history can then be misjudged as
-    //   another file's dedication, filing a second issue for a file that
-    //   already has one. The read above still contributes what it read.
-    const stderr = String(e.stderr || '').trim();
-    if (!/not a git repository/i.test(stderr)) {
-      console.warn(
-        `file-failure-issues: the git history of ${root} could not be read — a spec renamed or deleted ` +
-          `in the unread history is no longer recognised by the dedupe (${firstErrorReason(e)})`
-      );
-    }
   }
-  e2eSpecNamesByRoot.set(root, names);
-  return names;
+  return lines.join('\n');
 }
 
 /**
- * Does this path token name a file of the e2e tree?
+ * The handles the failures of one spec file waited for — the locator lines
+ * of their errors, deduplicated.
  *
- * The tokens come from a title, so they may be written three ways: the
- * repository path, an absolute path or a tracker URL (all of which carry
- * the tree's root), or relative to the tree's root ('helpers/a.spec.js').
- * A path of ANOTHER tree (a frontend unit test) is not this tree's
- * business — the failure path does not file it.
- *
- * The relative spelling is recognised by its FIRST segment: it is a
- * directory of the e2e tree.
+ * @param {Array<{error: string}>} failures - the failures of one spec file
+ * @returns {Array<string>} the handles
  */
-function isE2ePath(token, root = REPO_ROOT) {
-  if (token.includes(`${TESTS_E2E_ROOT}/`)) return true;
-  const first = token.split('/')[0];
-  if (first === token) {
-    // A bare spec file name is this tree's path when it is one of the
-    // tree's OWN names (#1802) — a file it has now, or one it has had:
-    // a file that was RENAMED must not drop out of the comparison (that
-    // would turn a multi-file title into a dedication).
-    return SPEC_FILE_RE.test(token) && e2eOwnSpecNames(root).has(token);
+function waitedHandles(failures) {
+  const handles = new Set();
+  for (const failure of failures) {
+    for (const handle of locatorHandles(failure.error)) handles.add(handle);
   }
-  return fs.existsSync(path.join(root, TESTS_E2E_ROOT, first));
+  return [...handles];
 }
 
-/**
- * Is this issue DEDICATED to the file — does its title name that file and
- * no other?
- *
- * A title that names SEVERAL spec files tracks a GROUP: the wave issue
- * that touched a dozen of them. Such an issue must not absorb their
- * failures — a failure on one of them still gets an issue of its own, or
- * the file shows red with nothing pointing at it.
- */
-function titleIsDedicatedTo(title, file, root = REPO_ROOT) {
-  // Only the paths of the tree this path covers count: a title that
-  // also names a FRONTEND test (a different tree, a different failure
-  // path) is still dedicated to this e2e file.
-  const paths = specPathsIn(title).filter((token) => isE2ePath(token, root));
-  if (paths.length === 0) return false;
-  // EVERY path the title names must name THIS file — under the
-  // repository path, an absolute path or a tracker URL. A title that
-  // names another file as well is an umbrella, whatever it says about
-  // this one.
-  return paths.every((path) => namesThisFile(path, file));
-}
-
-/**
- * The marker this script writes in an issue body to bind that issue to
- * one spec file. ONE spelling, used both to write it and to read it back:
- * a drift between the two would silently degrade the dedupe to
- * title-only.
- */
-function specFileMarker(file) {
-  return `- spec file: \`${file}\``;
-}
-
-/**
- * The open issue that already tracks this spec file, or null.
- *
- * An issue that already tracks the failure must NOT be duplicated: the run
- * comments on it instead, and a spec file nobody tracks yet gets its own
- * issue.
- *
- * A match must be DEDICATED to the file, and there are exactly two places
- * where such a dedication can be found:
- *
- * - the TITLE names that file and no other — the dedicated issue this
- *   script files, and the dedicated issue a human filed;
- * - the DESCRIPTION carries the marker this script writes
- *   ("- spec file: `path`") — the same dedicated issue.
- *
- * A path that appears in either place WITHOUT being dedicated is NOT a
- * match: an umbrella issue that LISTS several spec paths (a wave that
- * touched a dozen of them) would otherwise absorb every one of their
- * failures, and the failure would never get an issue of its own — the
- * tracker would show the file as red with nothing pointing at it.
- */
-function findTrackedIssue(file, openIssues) {
-  const marker = specFileMarker(file);
-  // The dedicated TITLE wins: an issue matched only by the marker is
-  // the same file's issue too, but the one whose title says so is the
-  // one a reader lands on.
-  const dedicated = openIssues.filter((issue) => titleIsDedicatedTo(issue.title, file));
-  if (dedicated.length) return dedicated[0];
-  return openIssues.find((issue) => (issue.description || '').includes(marker)) || null;
-}
-
-/**
- * The command that reproduces the run, as the run itself was launched: the
- * address the runner resolved the venue NAME to included, or the command is
- * a DNS failure waiting to happen.
- */
-function reproduceCommand(venue) {
-  const parts = [`BASE_URL=${venue}`];
-  if (process.env[VENUE_IP_ENV]) {
-    // Only when the runner knows the host: a placeholder here would paste
-    // an array into the command.
-    if (process.env[VENUE_HOST_ENV]) parts.push(`E2E_VENUE_HOST=${process.env[VENUE_HOST_ENV]}`);
-    parts.push(`E2E_VENUE_IP=${process.env[VENUE_IP_ENV]}`);
-  }
-  return `${parts.join(' ')} tests/e2e/run/run-local-e2e.sh`;
-}
-
-/**
- * The issue body of a spec file nobody tracks yet.
- */
 /**
  * The failures grouped by the spec FILE they belong to.
  *
- * One issue per spec FILE: the file is the unit an owner fixes, and a
- * file-level title keeps the dedupe stable across runs. Two failures in
- * the same file are ONE issue with two entries.
+ * One entry per spec FILE: the file is the unit an owner fixes, and a
+ * file-level title keeps the grouping stable across runs. Two failures in
+ * the same file are ONE entry with two lines.
  */
 function groupFailuresByFile(failed) {
   const byFile = new Map();
@@ -552,182 +431,7 @@ function groupFailuresByFile(failed) {
   return byFile;
 }
 
-/**
- * The venue build line, from the sha the run's pre-flight handed over
- * (#1851): an issue that does not name the served build is one an
- * operator cannot diagnose in one read — a stale venue fails specs for
- * product-reasons that read like test defects.
- *
- * @param {string|undefined} venueBuildGitSha - the E2E_VENUE_BUILD_GIT_SHA
- *   the run script exported (empty/absent = the run carried no marker)
- * @returns {string} the body line
- */
-function venueBuildLine(venueBuildGitSha) {
-  return venueBuildGitSha
-    ? `- venue build: \`${venueBuildGitSha}\``
-    : '- venue build: unknown — the run carried no build marker (a venue predating the #1851 contract, or the probe could not read it)';
-}
-
-function issueBody(file, failures, venue, runStamp, venueBuildGitSha) {
-  return [
-    'Filed by the local e2e run (`tests/e2e/run/run-local-e2e.sh`).',
-    '',
-    `- venue: \`${venue}\``,
-    ...(process.env[VENUE_IP_ENV]
-      ? [
-          `- the runner resolved the venue name to ` +
-            `\`${process.env[VENUE_HOST_ENV] || '(the BASE_URL host)'}\` = \`${process.env[VENUE_IP_ENV]}\``
-        ]
-      : []),
-    venueBuildLine(venueBuildGitSha),
-    `- run: ${runStamp}`,
-    specFileMarker(file),
-    `- failing tests: ${failures.length}`,
-    '',
-    '## Failures',
-    '',
-    ...failures
-      .slice(0, MAX_FAILURES_PER_ISSUE)
-      .flatMap((failure) => [`### ${failure.title}`, '', '```', failure.error, '```', '']),
-    ...(failures.length > MAX_FAILURES_PER_ISSUE
-      ? [`(${failures.length - MAX_FAILURES_PER_ISSUE} more failures omitted.)`, '']
-      : []),
-    '## Reproduce',
-    '',
-    '```bash',
-    reproduceCommand(venue),
-    '```',
-    '',
-    'The failure output is in this issue; the run also writes a JSON and a JUnit report',
-    'under `reports/` on the machine that ran it.'
-  ].join('\n');
-}
-
-/**
- * The comment posted on an issue that already tracks the failure.
- */
-function commentBody(files, venue, runStamp, venueBuildGitSha) {
-  // One argv element carries the whole comment, so the cap is the COMMENT's
-  // budget, not each file's — an umbrella issue tracking many files must not
-  // push the body past the kernel's per-argument cap either.
-  let budget = MAX_FAILURES_PER_ISSUE;
-  return [
-    `The local e2e run is still red on ${files.length} spec file(s) this issue covers ` +
-      `(${runStamp}, venue \`${venue}\`).`,
-    venueBuildLine(venueBuildGitSha),
-    '',
-    ...files.flatMap((entry) => {
-      const taken = entry.failures.slice(0, Math.max(0, budget));
-      budget -= taken.length;
-      return [
-        `### ${entry.file}`,
-        '',
-        ...taken.flatMap((failure) => [`**${failure.title}**`, '```', failure.error, '```', '']),
-        ...(entry.failures.length > taken.length
-          ? [`(${entry.failures.length - taken.length} more failures omitted.)`, '']
-          : [])
-      ];
-    })
-  ].join('\n');
-}
-
-/**
- * Why a child-process call failed, in one line. The tool's own message is
- * the first non-empty line of its stderr (glab's refusal, git's failure);
- * the command that failed is in the error's message and is not useful to a
- * reader. Shared by the tracker calls and the git-history read.
- */
-function firstErrorReason(error) {
-  const stderr = (error.stderr || '').trim();
-  const firstStderrLine = stderr.split('\n').find((line) => line.trim().length > 0);
-  if (firstStderrLine) return firstStderrLine.trim();
-  return error.message.split('\n').slice(0, 2).join(' | ');
-}
-
-function createIssue(file, failures, venue, runStamp) {
-  const title = `test(e2e): ${file} is red on the local run`;
-  const created = JSON.parse(
-    glab([
-      '-X',
-      'POST',
-      `projects/${GITLAB_PROJECT_ID}/issues`,
-      '-f',
-      `title=${title}`,
-      '-f',
-      `description=${issueBody(file, failures, venue, runStamp, process.env.E2E_VENUE_BUILD_GIT_SHA)}`,
-      '-f',
-      `labels=${LABELS.join(',')}`
-    ])
-  );
-  process.stdout.write(`  #${created.iid} (created) ${title}\n`);
-  return created.iid;
-}
-
-function commentOnIssue(issue, files, venue, runStamp) {
-  glab([
-    '-X',
-    'POST',
-    `projects/${GITLAB_PROJECT_ID}/issues/${issue.iid}/notes`,
-    '-f',
-    `body=${commentBody(files, venue, runStamp, process.env.E2E_VENUE_BUILD_GIT_SHA)}`
-  ]);
-  process.stdout.write(`  #${issue.iid} (commented) ${issue.title}\n`);
-}
-
-/**
- * File the failing files against the tracker — the loop whose loudness the
- * run depends on.
- *
- * The contract: one tracker error never takes the filing down. A file whose
- * create fails is reported and the remaining files are still attempted; an
- * issue whose comment fails puts every file it covers into the errors; the
- * errors come back so the caller can refuse the exit code. A swallow here
- * would leave a red run that the tracker never hears about — the silence
- * this path exists to end.
- *
- * `clients` injects the tracker calls (the same dependency-injection shape
- * as the backend's createApp pattern: production passes nothing and gets
- * the real glab clients; the unit spec passes fakes to pin the contract).
- */
-function fileTrackedFailures(byFile, openIssues, venue, runStamp, clients = {}) {
-  const create = clients.createIssue || createIssue;
-  const comment = clients.commentOnIssue || commentOnIssue;
-  // The failing files are grouped by the issue that already tracks them, so
-  // one umbrella issue receives ONE comment for the whole run — not one per
-  // file. A file nobody tracks yet gets its own issue.
-  const byIssue = new Map();
-  const errors = [];
-  for (const [file, failures] of byFile) {
-    const tracked = findTrackedIssue(file, openIssues);
-    try {
-      if (!tracked) {
-        create(file, failures, venue, runStamp);
-        continue;
-      }
-      const entry = byIssue.get(tracked.iid) || { issue: tracked, files: [] };
-      entry.files.push({ file, failures });
-      byIssue.set(tracked.iid, entry);
-    } catch (e) {
-      // One tracker error must not swallow the remaining failures.
-      errors.push(`${file}: ${firstErrorReason(e)}`);
-      process.stdout.write(`  ! ${file} could not be filed: ${firstErrorReason(e)}\n`);
-    }
-  }
-  for (const { issue, files } of byIssue.values()) {
-    try {
-      comment(issue, files, venue, runStamp);
-    } catch (e) {
-      for (const entry of files) {
-        errors.push(`${entry.file}: ${firstErrorReason(e)}`);
-      }
-      process.stdout.write(`  ! #${issue.iid} could not be commented: ${firstErrorReason(e)}\n`);
-    }
-  }
-  return errors;
-}
-
 function main() {
-  const fileIssues = process.argv.includes('--file-issues');
   const reportFlag = process.argv.indexOf('--report');
   const reportValue = reportFlag === -1 ? null : process.argv[reportFlag + 1];
   if (reportFlag !== -1 && (!reportValue || reportValue.startsWith('-'))) {
@@ -743,11 +447,10 @@ function main() {
   // The venue is the address the FAILED RUN pointed at, not whatever this
   // shell happens to carry: the runner passes --venue explicitly, and a
   // hand re-run in a fresh shell (no BASE_URL exported) would otherwise
-  // file issues naming https://localhost with a reproduce command that
-  // reproduces nothing.
+  // report a venue the run never touched.
   const venue = venueValue || BASE_URL;
   // Validated by readReport: the stamp is the run's own start, never this
-  // filing's wall clock.
+  // report's wall clock.
   const runStamp = report.stats.startTime;
 
   const tests = collectTests(report.suites);
@@ -759,9 +462,8 @@ function main() {
 
   // The report's status vocabulary is expected | unexpected | flaky | skipped:
   // a test that passed is 'expected', and ONLY 'unexpected' is a failure.
-  // Reading anything that is not 'passed' as a failure files an issue for
-  // every green spec — the whole point of the path is that the issues it
-  // files mean something.
+  // Reading anything that is not 'passed' as a failure would report every
+  // green spec as red.
   const skipped = tests.filter((entry) => entry.test.status === 'skipped');
   const failed = tests.filter((entry) => entry.test.status === 'unexpected');
 
@@ -780,7 +482,7 @@ function main() {
   }
 
   if (failed.length === 0) {
-    process.stdout.write('\nno failure to file.\n');
+    process.stdout.write('\nno failure to report.\n');
     return;
   }
 
@@ -789,13 +491,10 @@ function main() {
   // re-probe", and an assertion about an observation that has not
   // happened yet is a lie whichever way the venue answers. The probe
   // answers "is the venue drivable NOW" — the same check the run started
-  // with — and it runs in BOTH modes: the dry run's whole value is
-  // showing what the failure path WOULD do, so its report needs the same
-  // honest observation. The documented venue-death case (the node
-  // reboots mid-run) fails every spec that navigates afterwards with
-  // ERR_CONNECTION_REFUSED, and filing one issue per spec file for that
-  // single cause is exactly the tracker noise the failure path exists to
-  // prevent.
+  // with. The documented venue-death case (the node reboots mid-run)
+  // fails every spec that navigates afterwards with ERR_CONNECTION_REFUSED,
+  // and reporting one failure per spec file for that single cause is
+  // exactly the noise this path exists to absorb.
   try {
     execFileSync('node', [path.join(__dirname, 'preflight.js')], {
       stdio: 'inherit',
@@ -804,69 +503,56 @@ function main() {
   } catch {
     process.stderr.write(
       'file-failure-issues: the venue is not drivable — the failures are a venue event, ' +
-        'not per-spec findings. NOTHING is filed; re-run the suite once the venue answers.\n'
+        'not per-spec findings. Nothing to report per spec; re-run the suite once the venue answers.\n'
     );
     process.exit(1);
   }
 
   // The healed-outage case (#1783): a venue that went away MID-RUN and
   // came back passes the re-probe above, and without the signature filter
-  // the run would file one product issue per spec file for a single venue
-  // event (the 2026-11-10 node reboot filed exactly that). Failures whose
-  // error carries an edge-transport signature are grouped into ONE
-  // venue-availability report instead; a file whose OTHER failures
-  // survive the filter still gets filed for those.
+  // the run would report one failure per spec file for a single venue
+  // event (the 2026-11-10 node reboot produced exactly that). Failures
+  // whose error carries an edge-transport signature are grouped into ONE
+  // venue-availability report instead; a file whose OTHER failures survive
+  // the filter is still reported for those.
   const { fileable: byFile, noise: venueNoise } = partitionVenueNoise(groupFailuresByFile(failed));
   if (venueNoise.size > 0) {
     process.stdout.write(venueAvailabilityReport(venueNoise, venue) + '\n');
   }
   if (byFile.size === 0) {
     process.stdout.write(
-      '\nnothing was filed — every failure carries the venue-outage signature; the report above is the record.\n'
+      '\nnothing to report per spec — every failure carries the venue-outage signature; the report above is the record.\n'
     );
     return;
   }
 
+  // The CONTEXT: what a reader (a human, or an agent) needs to tell a
+  // stale VENUE from a defect of the product. The suite is launched on
+  // demand, so whoever launched it sees this red — the report's job is to
+  // make the red readable, not to decide it.
   process.stdout.write(`\nfailing spec files: ${byFile.size}\n`);
-  if (!fileIssues) {
-    for (const [file, failures] of byFile) {
-      process.stdout.write(`  - ${file} (${failures.length})\n`);
-    }
-    process.stdout.write('\nre-run with --file-issues to file them as status::backlog issues.\n');
-    return;
-  }
-
-  process.stdout.write('\nfiled:\n');
-  const openIssues = fetchOpenIssues();
-  const errors = fileTrackedFailures(byFile, openIssues, venue, runStamp);
-
-  if (errors.length > 0) {
-    process.stderr.write(
-      `\nfile-failure-issues: ${errors.length} failing file(s) could NOT be filed — ` +
-        'the run is red and the tracker does not know it yet:\n' +
-        errors.map((line) => `  - ${line}`).join('\n') +
-        '\n'
-    );
-    process.exit(1);
-  }
+  process.stdout.write(venueContext(byFile) + '\n');
+  process.stdout.write(
+    '\nfile the issue by hand: the failures, the venue build and this checkout are the facts a reader needs.\n'
+  );
 }
 
 if (require.main === module) {
   main();
 }
 
-// Exposed for the unit spec: the dedupe rule, the refusal wording, the
-// venue-outage partition and the filing loop's loudness contract are
-// behaviour, and behaviour is tested, not trusted.
+// Exposed for the unit spec: the venue-outage partition and the context
+// the report prints are behaviour, and behaviour is tested, not trusted.
 module.exports = {
-  findTrackedIssue,
-  specPathsIn,
-  titleIsDedicatedTo,
-  firstErrorReason,
   groupFailuresByFile,
-  issueBody,
   isConnectionSignature,
   partitionVenueNoise,
   venueAvailabilityReport,
-  fileTrackedFailures
+  locatorHandles,
+  handlesIn,
+  checkoutHead,
+  isBehindCheckout,
+  declaringFile,
+  waitedHandles,
+  venueContext
 };

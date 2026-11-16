@@ -74,7 +74,6 @@ process's own death passed through (a signal, an OOM).
 | the Inter fonts on `XDG_DATA_HOME` | the pixel-measurement specs measure rendered text |
 | a reachable venue | `BASE_URL` points at the stack's edge |
 | Keycloak master-realm admin | see step 1 above |
-| `glab`, authenticated to the project | the failure path reads the open-issue list before it files — a red run on a machine without it reports the failures but files nothing |
 
 ### The pre-flight
 
@@ -83,8 +82,8 @@ dies on the same message. `tests/e2e/run/preflight.js` tells them apart —
 it launches the browser and opens the venue **before** the suite touches
 anything, and stops the run with the named cause. Without it, a runner
 whose Chromium build does not match the installed `@playwright/test` turns
-220 of 242 tests into the same launch error, and the failure path files an
-issue per spec file for one missing binary.
+220 of 242 tests into the same launch error, and the failure path reports
+one failure per spec file for one missing binary.
 
 The pre-flight also **reports the runner it used** — the `@playwright/test`
 version on disk and the Chromium revision that version names — so a result
@@ -209,8 +208,8 @@ legitimately flip the grant on a real venue (`data/okf/smoke-test/mint-tokens.mj
 the rag-benchmarks anchor wrapper) each carry a verified revert, and a revert
 that fails to land is what this gate catches — on the default pair or on any
 pair the script's own overrides named. Two obligations, neither dropping the
-other: the gate's verdict is RECORDED first, the failure path still files a red
-run's issues, and the gate's exit 5 is the last word. The gate sweeps the
+other: the gate's verdict is RECORDED first, the failure path still reports a
+red run, and the gate's exit 5 is the last word. The gate sweeps the
 realms `ROPC_POSTURE_REALMS` names, comma-separated (default `genie`) —
 two standing postures stay out of the verdict, because their grants are
 the provisioned state and not a run's doing: the test-only realm
@@ -236,69 +235,73 @@ A red run must not stay a silent red (#1736). The run ends with
 `tests/e2e/run/file-failure-issues.js`, which:
 
 - prints the counts, the skipped specs with their reasons, and the failures;
-- files **one issue per failing spec file** — title
-  `test(e2e): <file> is red on the local run`, labelled `status::backlog`
-  (set once, at creation, and never moved again), carrying the failing
-  tests and their logs;
-- adds a **comment** instead of a second issue when an open issue with that
-  title already exists, so a suite that stays red does not flood the tracker.
+- prints the **context of the red**: the build the venue serves, this
+  checkout's HEAD, whether the venue's build is behind it, and — per
+  failing spec file — the handles the spec waited for and the file in
+  this checkout that declares them.
 
-To only report, without filing: `E2E_FILE_ISSUES=0 tests/e2e/run/run-local-e2e.sh`.
-To file a past run's failures by hand, read the run's own report (the runner
-renames it — the fixed path holds whatever ran last):
+The suite is launched **on demand** — a human, or an agent asked to run it
+— so whoever launched it sees the red. The issue is written **by hand**,
+from that report. The path files nothing: its job is to make the red
+readable.
+
+To read a past run's failures (the runner renames the report — the fixed
+path holds whatever ran last):
 
 ```bash
 ls reports/playwright-report-run-*.json
 node tests/e2e/run/file-failure-issues.js --report reports/playwright-report-run-<stamp>.json \
-  --venue https://genieai-forge.local:4443 --file-issues
+  --venue https://genieai-forge.local:4443
 ```
 
-`--venue` is the address the FAILED RUN pointed at — the evidence in the
-issue and the venue-alive re-probe both key on it, not on this shell's
-`BASE_URL`.
+`--venue` is the address the FAILED RUN pointed at — the venue-alive
+re-probe keys on it, not on this shell's `BASE_URL`.
 
-A run that wrote **no** report is a broken run: the runner stops there and
-files nothing rather than reading the fixed path, which would be another
-run's report.
+A run that wrote **no** report is a broken run: the runner stops there
+rather than reading the fixed path, which would be another run's report.
 
-An issue that already tracks the failing spec file is **not** duplicated:
-the path comments on it instead (an umbrella issue that mentions the file's
-path gets one comment for the whole run, not one per file).
+**A red run is not automatically a finding.** Two venue events produce
+exactly the same report as a defect of the product:
 
-**A red run is not automatically a finding.** A venue that goes away
-mid-run — the `forge-k3s` node rebooting during a run moves its address
-and with it the edge's LoadBalancer IP, and every spec that navigates
-during that window fails with `net::ERR_CONNECTION_REFUSED at the edge` —
-produces exactly the same report as a product defect. Check the venue's
-own events before filing anything:
+- a venue that goes away mid-run — the `forge-k3s` node rebooting during
+  a run moves its address and with it the edge's LoadBalancer IP, and
+  every spec that navigates during that window fails with
+  `net::ERR_CONNECTION_REFUSED at the edge`. The path groups those
+  failures into ONE venue-availability report. Check the venue's own
+  events before reading anything into the rest:
+
+  ```bash
+  kubectl get events -A --field-selector reason=NodeReady --sort-by=.lastTimestamp
+  kubectl -n genieai get events --sort-by=.lastTimestamp | tail
+  ```
+
+- a **stale venue build** (#1844/#1845, #1895, #1896): every deployment
+  tracks the mutable `main` registry tag with `imagePullPolicy: Always`,
+  but a pod picks up a new `main` only when it restarts — a wave that
+  lands frontend test handles leaves the venue's pods serving the build
+  from BEFORE the wave, and every spec asserting those handles fails with
+  `element(s) not found`.
+
+The report answers the second one in one line: **the venue's build is
+BEHIND this checkout** (the two builds are compared with `git
+merge-base --is-ancestor`; a venue serving EXACTLY this checkout is not
+behind it — it is current). A venue behind cannot serve the handles the
+checkout declares — the remedy is a venue refresh, not a code change:
 
 ```bash
-kubectl get events -A --field-selector reason=NodeReady --sort-by=.lastTimestamp
-kubectl -n genieai get events --sort-by=.lastTimestamp | tail
+kubectl -n genieai rollout restart deploy/genieai-genieai-umbrella-frontend
 ```
 
-A **stale venue build** produces the same confusion from the opposite
-direction (#1844/#1845): every deployment tracks the mutable `main`
-registry tag with `imagePullPolicy: Always`, but a pod picks up a new
-`main` only when it restarts — a wave that lands frontend test handles
-or new surfaces leaves the venue's pods serving the build from BEFORE
-the wave, and every spec asserting those handles fails with
-`element(s) not found`, three identical red runs in a row.
+then re-run the red specs before believing anything.
 
-The check — does the venue serve a handle the checkout has? The
-frontend lazy-loads its views, so a handle lives in a CHUNK, not in the
-main bundle. Walk it: fetch `/` and read the served `js/app.<hash>.js`
-name from the HTML; fetch that bundle and extract its webpack
-chunk-hash map (the `{<id>:"<hash>", ...}` object beside the `"js/"+`
-script-name template); fetch `js/<id>.<hash>.js` for each entry and
-grep for the handle the failing spec reads. A handle the checkout has
+To prove it by hand — does the venue serve the handle the checkout
+declares? The frontend lazy-loads its views, so a handle lives in a
+CHUNK, not in the main bundle. Fetch `/` and read the served
+`js/app.<hash>.js` name from the HTML; fetch that bundle and extract its
+webpack chunk-hash map (the `{<id>:"<hash>", ...}` object beside the
+`"js/"+` script-name template); fetch `js/<id>.<hash>.js` for each entry
+and grep for the handle the failing spec reads. A handle the checkout has
 and no chunk carries is a stale venue, not a spec defect.
-
-The remedy is the lightest possible touch on the shared stack — a
-rollout restart of the stale deployment
-(`kubectl -n genieai rollout restart deploy/genieai-genieai-umbrella-frontend`),
-which pulls the `main` tag the declared baseline already points at —
-followed by re-running the red specs before believing anything.
 
 ### The build marker and the pre-flight probe (#1851)
 
@@ -315,15 +318,15 @@ verdict as a `venue build:` line:
   reads against the named build, not the checkout's;
 - **predates the contract** — no readable `/build-info.json` (the SPA
   fallback answers): a frontend built before #1851. Freshness is
-  undetectable there; the chunk walk above is still the tool;
+  undetectable there; the chunk walk below is still the tool;
 - **BROKEN** — the path is served but carries no readable `git_sha`:
   the venue HAS the contract and violated it. This one stops the run,
   like an unreachable venue — it is a deployment defect, not a
   freshness fact.
 
-The failure path (`file-failure-issues.js`) embeds the marker in EVERY
-issue it files (`venue build: <sha>`), so a stale venue cannot file a
-misleading spec-defect issue without naming its build.
+The failure path (`file-failure-issues.js`) names the marker in its
+report (`venue build: <sha>`), so a stale venue cannot be mistaken for a
+defect of the product without the build being named.
 
 ## Shared-stack discipline
 

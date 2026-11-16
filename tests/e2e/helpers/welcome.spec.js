@@ -328,11 +328,10 @@ test.describe('the seeded locale is proved, not assumed', () => {
  * The gate owns the banner's VISIBILITY, not only its presence: a banner
  * that is mounted but hidden (or collapsed to a zero-size box) is not a
  * page anybody can measure — a collapsed banner's box reads zeroed and
- * there is no clip to take, so the capture throws; a hidden one keeps
- * its box and paints nothing, so the capture reads the page behind it.
- * The two failures are not alike: a collapsed banner fails LOUDLY, and a
- * hidden one fails silently — it yields the wrong pixels and nothing
- * fails.
+ * there is no clip to take, so a capture of it throws; a hidden one
+ * keeps its box and paints nothing, so a capture of it reads the page
+ * behind it. The gate refuses both, so the session does not open on a
+ * banner nobody can measure.
  *
  * These drive the real session against a page whose banner fails the
  * gate: the session must refuse to open. (The gate's own condition is

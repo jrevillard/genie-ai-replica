@@ -880,6 +880,9 @@ test.describe("the verdict is proven against the venue's own build", () => {
       return '';
     };
     handleDeclaredAtBuild('abc1234def', 'some-handle', run);
+    // The marker itself is asserted first: without it the positional
+    // read below would blame the handle instead of the missing marker.
+    expect(args).toContain('-e');
     expect(args[args.indexOf('-e') + 1]).toBe('some-handle');
   });
 

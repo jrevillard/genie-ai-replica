@@ -3817,6 +3817,8 @@ describe('the local e2e run defines the executed set (#1736)', () => {
     // other — and the line is all the operator reads.
     const failurePath = fs.readFileSync(FAILURE_PATH, 'utf-8');
     expect(failurePath).toMatch(/venueNoise\.size > 0 && staleVenue\.size > 0/);
+    // And the line it prints names both of them.
+    expect(failurePath).toMatch(/venue-outage signature or is explained by/);
   });
 
   // Any flag other than the project selector would shrink the executed set

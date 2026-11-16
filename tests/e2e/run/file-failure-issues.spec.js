@@ -1506,8 +1506,9 @@ test.describe('a compound locator with mixed committed answers is filed', () => 
     // source declares it, and that neither case can be proven stale.
     expect(refused[0].reason).toContain('no STATIC source');
     expect(refused[0].reason).toContain('computes it at runtime');
-    // And its CONCLUSION: a reason that kept the two clauses but
-    // claimed the opposite of what they mean would still satisfy them.
-    expect(refused[0].reason).toContain('cannot be proven stale');
+    // And its CONCLUSION, for BOTH branches: a reason that kept the
+    // two clauses but claimed the opposite, or claimed it for one
+    // branch only, would still satisfy them.
+    expect(refused[0].reason).toContain('neither case can be proven stale');
   });
 });

@@ -570,7 +570,7 @@ function partitionStaleVenue(byFile, context) {
             handle: candidate.handle,
             reason:
               'no build can serve it — no STATIC source in this checkout declares it (the app never ' +
-              'declared it, or it computes it at runtime: a computed handle cannot be proven stale either)'
+              'declared it, or it computes it at runtime: neither case can be proven stale)'
           });
           verdicts.push({ candidate, verdict: 'not-stale' });
           continue;

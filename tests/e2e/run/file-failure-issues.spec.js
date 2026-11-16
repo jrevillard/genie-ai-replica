@@ -745,6 +745,40 @@ test.describe('a stale venue is told apart from a product defect', () => {
     expect(fileable.get('tests/e2e/a.spec.js')).toHaveLength(1);
   });
 
+  test('a declaration no commit carries is refused, and the refusal is reported', () => {
+    // The working tree declares it, no commit does: the failure is
+    // filed, and the reason is named — a silent refusal is
+    // indistinguishable from a verdict.
+    const context = {
+      servedText: '"some-other-handle"',
+      declared: new Map([[STALE_HANDLE, 'components/gov-chat-frontend/src/components/ChatFolders.vue']]),
+      boundSha: HEAD_SHA,
+      declaredAtBuild: (sha) => sha === 'HEAD',
+      committedAtHead: () => false
+    };
+    const byFile = new Map([['tests/e2e/a.spec.js', [{ error: STALE_ERROR }]]]);
+    const { fileable, stale, refused } = partitionStaleVenue(byFile, context);
+    expect(stale.size).toBe(0);
+    expect(fileable.get('tests/e2e/a.spec.js')).toHaveLength(1);
+    expect(refused.map((entry) => entry.handle)).toEqual([STALE_HANDLE]);
+    expect(refused[0].reason).toContain('no commit declares it');
+  });
+
+  test('a checkout that cannot read the committed source is refused, and named', () => {
+    const context = {
+      servedText: '"some-other-handle"',
+      declared: new Map([[STALE_HANDLE, 'components/gov-chat-frontend/src/components/ChatFolders.vue']]),
+      boundSha: HEAD_SHA,
+      declaredAtBuild: (sha) => sha === 'HEAD',
+      committedAtHead: () => null
+    };
+    const byFile = new Map([['tests/e2e/a.spec.js', [{ error: STALE_ERROR }]]]);
+    const { fileable, stale, refused } = partitionStaleVenue(byFile, context);
+    expect(stale.size).toBe(0);
+    expect(fileable.get('tests/e2e/a.spec.js')).toHaveLength(1);
+    expect(refused[0].reason).toContain('could not read the committed source');
+  });
+
   test('an unbound venue (no build to read) classifies nothing — the failures stay fileable', () => {
     const context = { ...PROVEN_STALE, boundSha: null };
     const byFile = new Map([['tests/e2e/a.spec.js', [{ error: STALE_ERROR }]]]);
@@ -1178,6 +1212,21 @@ test.describe('a build that cannot be read refuses the verdict', () => {
     expect(stale.size).toBe(0);
     expect(fileable.get('tests/e2e/a.spec.js')).toHaveLength(1);
     expect(refused.map((entry) => entry.handle)).toEqual(['chat-history-item']);
+  });
+
+  test('a build that carries no app source tree refuses the binding, and names why', () => {
+    // A grep over a path the build does not have answers "nothing is
+    // declared" — a different fact, and one that would license the
+    // verdict. The gate is load-bearing, so it is pinned.
+    const head = execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf-8' }).trim();
+    const bound = bindVenueBuild({
+      runSha: head,
+      venueSha: head,
+      sourceTreeExists: () => false
+    });
+    expect(bound.boundSha).toBe(null);
+    expect(bound.note).toContain('carries no app source tree');
+    expect(bound.note).toContain('filed as they are');
   });
 
   test('a checkout that cannot answer the ancestry refuses the binding, and names why', () => {

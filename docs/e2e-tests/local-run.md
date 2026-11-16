@@ -351,6 +351,13 @@ count. A handle that exists only in an uncommitted edit, or only in a
 test, is carried by no commit, so no build can serve it: it is a spec
 defect, filed as one, not a stale venue.
 
+The two reads are deliberately asymmetric, each at its safe side: the
+COMMITTED read is strict (a real binding, the app's test tree excluded),
+while the read AT THE VENUE'S BUILD is loose (any mention of the handle
+counts). A loose read there can only make the venue look MORE capable
+than it is — and the direction that matters, "the venue's build does not
+declare it", is the one that licenses the verdict.
+
 **The binding.** The bundle read happens at filing time; the failure was
 produced earlier. The verdict is only made when the venue still serves
 the build the RUN exercised: the run's own build — the sidecar the runner
@@ -362,6 +369,7 @@ writes beside the run's report — against the venue's current one.
 | MOVED since the run | not bound: the failures are filed as they are |
 | no readable build marker | not bound: the failures are filed as they are |
 | not behind the checkout | not bound: a missing handle is not the venue's |
+| its build carries no app source tree | not bound: the proof cannot read it, so the failures are filed as they are |
 
 The failures the stale venue explains drop out of the filing — the
 shape the venue-outage report already has — and the run prints one

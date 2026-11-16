@@ -225,12 +225,15 @@ function handleCommittedAtHead(handle) {
         'grep',
         '-q',
         '-E',
-        `data-test(id|-id)=["']${escaped}["']`,
+        `data-test(id|-id)\\s*=\\s*["']${escaped}["']`,
         'HEAD',
         '--',
         FRONTEND_SRC_REL,
-        `:(exclude)${FRONTEND_SRC_REL}/__tests__`,
-        `:(exclude)${FRONTEND_SRC_REL}/__mocks__`
+        // The SAME rule the working-tree walk holds to: every directory
+        // NAMED __tests__ or __mocks__, at any depth, is excluded — the
+        // two readers must not diverge on what a declaration is.
+        ':(exclude,glob)**/__tests__/**',
+        ':(exclude,glob)**/__mocks__/**'
       ],
       { cwd: REPO_ROOT, stdio: 'ignore' }
     );
@@ -473,19 +476,11 @@ function venueStaleProof(candidate, context) {
  */
 function staleVenueHandles(failure, context) {
   if (!isNotFoundFailure(failure?.error)) return [];
-  const committed = context.committedAtHead || handleCommittedAtHead;
   const missing = [];
   for (const handle of locatorHandles(failure.error)) {
     if (bundleServesHandle(context.servedText, handle)) continue;
     const source = context.declared.get(handle);
     if (!source) continue;
-    // The declaration must be in the COMMITTED app. The working tree is
-    // what the run exercises, but no build of it exists: a handle that
-    // lives only in an uncommitted edit is not the venue's fault — no
-    // commit carries it, so no build can serve it — and classifying it
-    // as a stale venue would drop the failure out of the filing with a
-    // remedy (a venue refresh) that cannot help.
-    if (!committed(handle)) continue;
     missing.push({ handle, source });
   }
   return missing;
@@ -520,13 +515,33 @@ function partitionStaleVenue(byFile, context) {
         rest.push(failure);
         continue;
       }
-      const verdicts = candidates.map((candidate) => ({
-        candidate,
-        verdict: venueStaleProof(candidate, context)
-      }));
+      // The declaration must be in the COMMITTED app. The working tree
+      // is what the run exercises, but no build of it exists: a handle
+      // that lives only in an uncommitted edit (or only in a test) is
+      // not the venue's fault — no commit carries it, so no build can
+      // serve it — and classifying it as a stale venue would drop the
+      // failure out of the filing with a remedy (a venue refresh) that
+      // cannot help.
+      const committed = context.committedAtHead || handleCommittedAtHead;
+      const verdicts = [];
+      for (const candidate of candidates) {
+        const declaration = committed(candidate.handle);
+        if (declaration !== true) {
+          // Not committed, or the checkout cannot answer: the failure is
+          // filed, and the reason is named — a silent refusal is
+          // indistinguishable from a verdict.
+          refused.push({
+            handle: candidate.handle,
+            reason: declaration === null ? 'the checkout could not read the committed source' : 'no commit declares it'
+          });
+          verdicts.push({ candidate, verdict: 'not-stale' });
+          continue;
+        }
+        verdicts.push({ candidate, verdict: venueStaleProof(candidate, context) });
+      }
       for (const { candidate, verdict } of verdicts) {
         if (verdict === 'unreadable' && !refused.some((entry) => entry.handle === candidate.handle)) {
-          refused.push(candidate);
+          refused.push({ handle: candidate.handle, reason: "the venue's build could not be read" });
         }
       }
       // EVERY candidate must be proven stale. A locator that names a
@@ -721,7 +736,8 @@ function bindVenueBuild(options = {}) {
   // The app's source must EXIST at that build: a grep over a path the
   // build does not have answers "nothing is declared", which is a
   // different fact — and one that would license the verdict.
-  if (!sourceTreeExistsAt(venueSha)) {
+  const sourceTreeExists = options.sourceTreeExists || sourceTreeExistsAt;
+  if (!sourceTreeExists(venueSha)) {
     return {
       boundSha: null,
       note:
@@ -1429,9 +1445,9 @@ async function main() {
     // refused, and a silent refusal would read like a proof that said
     // no. The failures are filed as they are.
     process.stdout.write(
-      `\nthe venue's build \`${staleContext.boundSha}\` could not be read for ${refused.length} ` +
-        `handle(s) (${refused.map((entry) => `\`${entry.handle}\``).join(', ')}) — the verdict is ` +
-        'refused for them, so the failures are filed as they are.\n'
+      `\nthe verdict was refused for ${refused.length} handle(s) (` +
+        `${refused.map((entry) => `\`${entry.handle}\`: ${entry.reason}`).join('; ')}) — the ` +
+        'failures are filed as they are.\n'
     );
   }
   if (staleVenue.size > 0) {

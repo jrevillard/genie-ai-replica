@@ -3097,6 +3097,16 @@ contractual evidence — a fresh clone does not carry them.)
     an unknown flag instead of ignoring it (`--compose PATH` was
     silently ignored, so the gate compared the DEFAULT compose file).
 
+  Live on the 1.37 laptop cluster, chart **0.2.174** (`genieai.v6`): the
+  backend's rendered policy carries the OTLP port on its own rule
+  (`egress[3] = 4318 -> 0.0.0.0/0`, the external-API rule reduced to
+  80/443), and the telemetry path is PROVEN open rather than assumed — the
+  collector's own receiver counter (`otelcol_receiver_accepted_spans`)
+  went from **125 to 132** across five direct backend requests, with the
+  SDK enabled (`ENABLE_OBSERVABILITY=1`) and the endpoint pointing at the
+  in-cluster collector. The old shape could not have done that: the
+  collector's pod IP is in none of the operator's CIDRs.
+
 ## Plan map
 
 The campaign ran as eight written plans plus three design specs. Those were

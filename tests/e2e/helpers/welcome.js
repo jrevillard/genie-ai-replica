@@ -74,8 +74,9 @@ async function waitForComposerReady(page) {
  *   - the banner is there (a banner that is not mounted is not settled);
  *   - it is VISIBLE: a non-empty box, and a visibility that is not
  *     hidden. A banner that is mounted but collapsed or hidden is not a
- *     page anybody can measure — the box reads come back zeroed and the
- *     pixel capture has no clip to take;
+ *     page anybody can measure — a collapsed banner's box reads zeroed,
+ *     a hidden one paints nothing, and the pixel capture comes back
+ *     empty in either case;
  *   - its entrance animation is over: gli-enter runs 650 ms of opacity
  *     and transform on .quick-help-banner, and a box read or a capture
  *     inside that window measures the animation rather than the page.
@@ -108,8 +109,9 @@ function bannerIsSettled(doc) {
  *
  *    The gate also owns the banner's VISIBILITY, not only its presence:
  *    a banner that is mounted but hidden (or collapsed to a zero-size
- *    box) is not a page anybody can measure — the box reads come back
- *    zeroed and the pixel capture has no clip to take. This is the
+ *    box) is not a page anybody can measure — a collapsed banner's box
+ *    reads zeroed, a hidden one paints nothing, and the pixel capture
+ *    comes back empty in either case. This is the
  *    observable the post-reload selector wait used to enforce, and the
  *    reason the reload path can leave the banner to THIS gate alone.
  *

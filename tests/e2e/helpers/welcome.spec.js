@@ -89,9 +89,10 @@ function fakeBanner({
 
 /**
  * A fake browser whose context counts its closes and can refuse to
- * close. The page answers every call the open path makes — the waits
- * resolve immediately, because what is under test is the CLOSE, not
- * the page.
+ * close. The page answers every call the open path makes — the selector
+ * wait resolves immediately, and the entrance gate resolves when the
+ * banner settles (or throws on its timeout, the way the real page
+ * would), because what is under test is the CLOSE, not the page.
  *
  * `lang` is what the fake page reports for <html lang>: the adoption
  * pin reads it, and it is the app's own signal of the locale it
@@ -326,8 +327,9 @@ test.describe('the seeded locale is proved, not assumed', () => {
  *
  * The gate owns the banner's VISIBILITY, not only its presence: a banner
  * that is mounted but hidden (or collapsed to a zero-size box) is not a
- * page anybody can measure — the box reads come back zeroed and the
- * pixel capture has no clip to take. The post-reload selector wait used
+ * page anybody can measure — a collapsed banner's box reads zeroed, a
+ * hidden one paints nothing, and the pixel capture comes back empty in
+ * either case. The post-reload selector wait used
  * to enforce that, and when the reload path left the banner to this gate
  * alone, the guarantee would have gone with it — silently, because
  * nothing failed until a capture read an empty clip.

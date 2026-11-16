@@ -142,6 +142,25 @@ The constraint binds the NEW agentic path only; it does not require touching
 the existing stack. **R12 discipline:** a capability may only be described as
 "OPEA-free" for its explicitly validated scope (FR-22).
 
+## 5b. Glossary
+
+Core nouns, used consistently; drift here is where downstream extraction
+breaks (rubric finding M-1).
+
+| Term | Meaning in this PRD |
+|---|---|
+| **Document capability contract** | The GENIE-owned, agent-facing API defining document operations (input/result/provenance/error semantics, limits, versioning). Working names `search_knowledge`, `read_source` are placeholders, not schemas. |
+| **Document capability boundary** | The logical separation between the agent and knowledge access, realized by the contract. Not necessarily a microservice (D01 decides placement). |
+| **Agentic path** | The new request path: agent loop over the contract's operations. OPEA-free by constraint (FR-20). |
+| **Legacy path** | The existing OPEA-backed fixed RAG pipeline serving current chat traffic, unchanged throughout this initiative. |
+| **Agent** | One model-directed loop executing approved document operations within server-side bounds (SC-01). Not a persona, not multi-agent. |
+| **Runtime** | The software layer implementing the agent loop (custom loop, framework, or SDK-driven runtime — D03). |
+| **Reference validity** | A citation resolves to an authorized, actually-retrieved source (mechanically checkable). |
+| **Grounding** | The cited passage supports the associated claim (distinct from reference validity; FR-10). |
+| **Rollout record** | Per-stage artifact: consumers, versions, procedures, in-flight treatment, rollback triggers + responsible operator, rehearsal evidence (FR-16). |
+| **OPEA component** | Defined in §5: `comps` + overlay services built on it + their build-time downloads. |
+| **Activation** | Deployment-level switch routing requests to the agentic path (FR-15). |
+
 ## 6. Feature groups and functional requirements
 
 IDs are stable. Working names (`search_knowledge`, `read_source`) are not
@@ -225,8 +244,9 @@ second authorization or knowledge-governance layer).
 
 ### FG-3 — Chat integration, activation and rollback
 
-- **FR-14** The agentic path is compatible with the selected existing client
-  API, streaming (SSE), translation and error behaviors. Any approved change
+- **FR-14** The agentic path is compatible with the existing client API
+  as inventoried by V05, including streaming (SSE), translation and error
+  behaviors. Any approved change
   is explicitly versioned. Internal agent events adopt the AG-UI event
   taxonomy as a pattern (run lifecycle, text deltas, tool-call lifecycle,
   state) — not as a dependency — mapped onto the existing SSE contract
@@ -271,7 +291,9 @@ second authorization or knowledge-governance layer).
   service calls and no OPEA build-time downloads — enforced from the first
   delivered stage, verified by build/CI checks where feasible.
 - **FR-21** The agentic path adds no new OPEA coupling that makes the
-  deferred OPEA exit harder.
+  deferred OPEA exit harder. Verified by the same build/CI dependency
+  audit as FR-20 (no `comps`/OPEA imports or downloads in agentic-path
+  packages), plus an explicit check at each stage gate's review.
 - **FR-22** A capability is described as "OPEA-free" only for its explicitly
   validated scope.
 - **FR-28** Authorization acceptance covers **retained data**, not only
@@ -356,17 +378,25 @@ Gate structure (per stage):
   on every measured dimension; E02 shows agentic gains within accepted
   limits; bounded execution and rollback demonstrated (V06/V08).
 
-Measured dimensions (reported separately, FR-27): retrieval quality, answer
-grounding, abstention correctness, latency, resource consumption.
+Measured dimensions (reported separately, FR-27):
+
+| ID | Dimension |
+|----|-----------|
+| M-1 | Retrieval quality |
+| M-2 | Answer grounding |
+| M-3 | Abstention correctness |
+| M-4 | Latency |
+| M-5 | Resource consumption |
 
 Counter-metrics:
 
-- Cost and latency per agentic request vs the RAG reference (agentic loops
-  can be expensive; the delta must be visible, not averaged away).
-- Excessive abstention rate (answers avoided for questions the reference
-  answers correctly).
-- Rate of executions hitting execution limits or cancellation (FR-11) — a
-  quality signal, not just a safety one.
+- **CM-1** Cost and latency per agentic request vs the RAG reference
+  (agentic loops can be expensive; the delta must be visible, not averaged
+  away).
+- **CM-2** Excessive abstention rate (answers avoided for questions the
+  reference answers correctly).
+- **CM-3** Rate of executions hitting execution limits or cancellation
+  (FR-11) — a quality signal, not just a safety one.
 
 ## 9. Delivery staging
 
@@ -392,7 +422,7 @@ through the verification item that feeds it:
 |----|----------|--------|--------|
 | D01 | Ownership/placement of the document capability boundary | Open | V02, V04 |
 | D02 | OPEA-free agentic path coexisting with unchanged legacy OPEA RAG | Proposed (operator direction 2026-11-16) | V03, NFR-3 |
-| D03 | First agent runtime | Open. Operator named DSH the preferred **investigation** candidate (2026-11-10 framing). S1 research (2026-11-16, amended post-review AM-1/AM-2) ranked DSH last **provisionally** — the original "not embeddable" premise was corrected (DSH ships TS + Python SDKs driving its runtime as a JSON-RPC stdio **subprocess**, bundled runtime, `sdk-minimal` profile); what stands: developer preview, no security audit, zero evidenced adoption, vLLM untested, and the subprocess integration mode (lifecycle, isolation, cost, published-version availability) is **unassessed** — assess before treating any ranking as settled. DSH revisit trigger (AM-1-corrected): stable non-preview release + security audit + completed subprocess-mode operational assessment. Research screening pick: **custom minimal tool-calling loop** (REC-1, provisional — unimplemented; D03 acceptance requires a GENIE implementation against FR-10..FR-12), **pydantic-ai** runner-up. Decision at S4 entry from V06 + pre-adoption licensing evidence (V07a) | S1 research + amendments, SC-01 experiment, V06, V07 |
+| D03 | First agent runtime | Open — operator named DSH preferred investigation candidate (2026-11-10); S1 research (amended AM-1/AM-2) screening pick: custom minimal loop (provisional, unimplemented), pydantic-ai runner-up, DSH unassessed on its actual SDK-subprocess integration mode. **Full candidate state, corrected revisit trigger and required evidence: addendum §D.** Decision at S4 entry from V06 + V07a | S1 research + amendments, SC-01 experiment, V06, V07 |
 | D04 | Preservation vs versioning of document/client contracts | Open | V05 |
 | D05 | Release gates and pilot scope | Open | Baseline measurement, validation infrastructure (V09) |
 

@@ -81,7 +81,6 @@
 
 const { test, expect } = require('@playwright/test');
 const { withWelcomeSession, readVisualLayerState, capturePixels, lum, WCAG_BIND } = require('../helpers/welcome');
-const { assertAdoptedLocale } = require('../helpers/locale');
 
 /*
  * The measured floors.
@@ -1359,8 +1358,9 @@ test.describe('Welcome banner invariants', () => {
             browser,
             { viewport: { width: vp.width, height: 800 }, theme, locale },
             async (page) => {
+              // The adopted-locale pin lives in the session helper now: it
+              // proves the seed was adopted before it hands the page over.
               const where = `${vp.label}/${theme}/${locale}`;
-              await assertAdoptedLocale(page, where, locale);
               const m = await veilGeometry(page);
               expect(m, `${where} the veil's geometry read`).not.toBeNull();
 
@@ -1441,8 +1441,9 @@ test.describe('Welcome banner invariants', () => {
             browser,
             { viewport: { width: vp.width, height: 800 }, theme, locale },
             async (page) => {
+              // The adopted-locale pin lives in the session helper now: it
+              // proves the seed was adopted before it hands the page over.
               const where = `${vp.label}/${theme}/${locale}`;
-              await assertAdoptedLocale(page, where, locale);
               // The title's own state in one string, so every message below can
               // name what the difference costs instead of only what it is.
               const as = (g) =>

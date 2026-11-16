@@ -17,7 +17,12 @@
 // the measurement it is about is worth nothing in a CI log.
 
 const { expect } = require('@playwright/test');
-const { loginViaUI } = require('./chatbot');
+// The login is read through the chatbot module object at CALL time — the
+// codebase's substitution idiom (helpers/auth.js reads its transport the
+// same way) — so the session's close verdict is unit-coverable OFFLINE:
+// the same function answers at runtime, a unit spec swaps it (#1900).
+const chatbot = require('./chatbot');
+const { assertAdoptedLocale } = require('./locale');
 
 // The welcome composer's own resting viewport. The height is a
 // parameter rather than a constant because it is a real difference
@@ -107,13 +112,26 @@ async function waitForBannerSettled(page) {
  *   theme     the context's colorScheme ('light' | 'dark')
  *   locale    applied through the app's own boot path
  *             (localStorage.userLocale, read by main.js before mount)
+ *             and ADOPTED — the session proves it landed before it is
+ *             returned (see below); a locale without the reload that
+ *             adopts it is refused
  *   setupPage an async hook run on the page BEFORE the login — the
  *             place for route stubs: the first chat mount already
  *             sees them, instead of a stub installed after the app
  *             has already fetched the real thing
  *   reload    false skips the splash-clearing reload — for a spec
  *             that HOLDS a network answer, a `waitUntil: 'networkidle'`
- *             reload would never settle
+ *             reload would never settle. A seeded locale and a skipped
+ *             reload contradict each other — the seed lands after the
+ *             login and only the next boot reads it — so the pair is
+ *             refused at the door rather than left to measure the
+ *             fallback locale
+ *
+ * A seeded locale is PROVEN, not assumed: the app writes the locale it
+ * adopted to <html lang> at boot, and the session asserts that attribute
+ * before it returns. A deployment whose active-locale set drops the
+ * seeded locale falls back to English, and a session that fell back
+ * measures the fallback's page and passes vacuously.
  *
  * The banner's entrance animation is over before the screen is
  * returned (see waitForBannerEntrance) — box and geometry reads see
@@ -129,9 +147,23 @@ async function waitForBannerSettled(page) {
  * context before rethrowing, so a failed open cannot leak it.
  */
 async function openWelcomeScreen(browser, { viewport, theme, locale, setupPage, reload = true } = {}) {
+  if (locale && !reload) {
+    // A seeded locale is only ADOPTED by a boot: the write below lands
+    // after the login, and the app reads localStorage.userLocale before it
+    // mounts — so the reload is the boot that adopts it. Without the
+    // reload the session would run on the locale it booted with and every
+    // measurement in it would read that locale instead of the seeded one.
+    throw new Error(
+      `a seeded locale (${locale}) needs the reload that adopts it — the seed lands after the ` +
+        `login and only the next boot reads it, so reload: false leaves the session on the ` +
+        `locale it booted with`
+    );
+  }
+  const sessionViewport = viewport || DEFAULT_VIEWPORT;
+  const sessionTheme = theme || 'light';
   const ctx = await browser.newContext({
-    viewport: viewport || DEFAULT_VIEWPORT,
-    colorScheme: theme || 'light',
+    viewport: sessionViewport,
+    colorScheme: sessionTheme,
     ignoreHTTPSErrors: true
   });
   try {
@@ -139,7 +171,7 @@ async function openWelcomeScreen(browser, { viewport, theme, locale, setupPage, 
     if (setupPage) {
       await setupPage(page);
     }
-    await loginViaUI(page);
+    await chatbot.loginViaUI(page);
     if (locale) {
       await page.evaluate((l) => localStorage.setItem('userLocale', l), locale);
     }
@@ -153,9 +185,26 @@ async function openWelcomeScreen(browser, { viewport, theme, locale, setupPage, 
     await page.waitForSelector('[data-testid="quick-help-banner"]', { timeout: 15000 });
     if (reload) {
       await page.reload({ waitUntil: 'networkidle', timeout: 30000 });
-      await page.waitForSelector('[data-testid="quick-help-banner"]', { timeout: 15000 });
     }
+    // ONE gate owns the banner after the reload: the entrance gate polls
+    // for the banner to EXIST as well as for its entrance animation to be
+    // over, so a second selector wait here would spend the same
+    // observable twice — and fail on it twice (#1899).
     await waitForBannerEntrance(page);
+    if (locale) {
+      // The seed is only ADOPTED when the app boots on it, and the
+      // adoption is PROVEN here, not assumed: main.js falls back to
+      // English when the seeded locale is not in the deployment's active
+      // set (VUE_APP_AVAILABLE_LOCALES), and a session that fell back
+      // measures the fallback's page and passes vacuously (#1874, #1891).
+      // The app writes the adopted locale to <html lang> at boot, so that
+      // attribute is the pin.
+      await assertAdoptedLocale(
+        page,
+        `the welcome session (${locale}, ${sessionTheme}, ${sessionViewport.width}x${sessionViewport.height})`,
+        locale
+      );
+    }
     return { ctx, page };
   } catch (e) {
     // Loud cleanup, same verdict rule as the body path in

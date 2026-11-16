@@ -54,7 +54,7 @@
 // caption's wording, a count of user turns) — a screenshot alone would prove
 // nothing.
 const { test, expect } = require('@playwright/test');
-const { openWelcomeScreen } = require('../helpers/welcome');
+const { withWelcomeSession } = require('../helpers/welcome');
 // The stream interception contract — no credential in it, so this spec
 // (which needs neither) never imports the credential module.
 const { captureStreamPosts } = require('../helpers/stream-capture');
@@ -158,7 +158,18 @@ const STUB_BUTTONS = [
   })
 ];
 
-async function openWelcome(browser, { holdHierarchy = false } = {}) {
+/**
+ * Open the welcome session this spec serves, and run `fn` inside it.
+ *
+ * The close is the shared helper's own guarantee (withWelcomeSession): an
+ * assertion that throws cannot leak the session.
+ *
+ * `fn` receives the session's page and the gate's release — the release is
+ * null unless the hierarchy is held, and it is only meaningful inside the
+ * session: the gate is created by the setup hook below, which runs before
+ * the body.
+ */
+async function withWelcome(browser, { holdHierarchy = false } = {}, fn) {
   // Both stubs are installed BEFORE the login, so the first chat mount
   // already sees them (the shared recipe, helpers/quick-help-stubs.js).
   // The gate is created here and released by the caller, which is what
@@ -177,16 +188,13 @@ async function openWelcome(browser, { holdHierarchy = false } = {}) {
 
   // A held hierarchy must not be reloaded for: the reload waits for
   // networkidle, and the held answer never settles it. A held run relies
-  // on the spec's own wait — openWelcomeScreen's reload is skipped.
-  const { ctx, page } = await openWelcomeScreen(browser, {
-    setupPage,
-    reload: !holdHierarchy
+  // on the spec's own wait — the helper's reload is skipped.
+  return withWelcomeSession(browser, { setupPage, reload: !holdHierarchy }, async (page) => {
+    // The composer appears only once the configuration's buttons are known:
+    // it is the signal that the config has been read and applied.
+    await page.waitForSelector('[data-testid="welcome-composer"]', { timeout: 15000 });
+    return fn(page, release);
   });
-
-  // The composer appears only once the configuration's buttons are known:
-  // it is the signal that the config has been read and applied.
-  await page.waitForSelector('[data-testid="welcome-composer"]', { timeout: 15000 });
-  return { ctx, page, release };
 }
 
 /**
@@ -206,170 +214,161 @@ test.describe('Quick Help scope states', () => {
     // window — while it is pending, cards whose scope nobody can say is
     // valid must not be offered (a click they cannot answer is a dead
     // click).
-    const { ctx, page, release } = await openWelcome(browser, { holdHierarchy: true });
+    await withWelcome(browser, { holdHierarchy: true }, async (page, release) => {
+      // The configuration is applied (the composer is there) and the hierarchy
+      // has not answered: the grid must not exist.
+      await expect(page.locator('[data-testid="quick-help-grid"]')).toHaveCount(0);
 
-    // The configuration is applied (the composer is there) and the hierarchy
-    // has not answered: the grid must not exist.
-    await expect(page.locator('[data-testid="quick-help-grid"]')).toHaveCount(0);
-
-    // Once the hierarchy lands, the grid appears — with its cards in it.
-    release();
-    const grid = page.locator('[data-testid="quick-help-grid"]');
-    await expect(grid).toBeVisible({ timeout: 20000 });
-    expect(await page.locator('[data-testid="quick-help-item"]').count()).toBeGreaterThan(0);
-
-    await ctx.close();
+      // Once the hierarchy lands, the grid appears — with its cards in it.
+      release();
+      const grid = page.locator('[data-testid="quick-help-grid"]');
+      await expect(grid).toBeVisible({ timeout: 20000 });
+      expect(await page.locator('[data-testid="quick-help-item"]').count()).toBeGreaterThan(0);
+    });
   });
 
   test('a card whose label the hierarchy cannot name renders the error state and sends nothing', async ({
     browser
   }) => {
-    const { ctx, page } = await openWelcome(browser);
+    await withWelcome(browser, {}, async (page) => {
+      const broken = page.locator('[data-testid="quick-help-item"][data-state="config-error"]');
+      const brokenCount = await broken.count();
+      expect(brokenCount, 'the spec serves three broken cards').toBe(3);
 
-    const broken = page.locator('[data-testid="quick-help-item"][data-state="config-error"]');
-    const brokenCount = await broken.count();
-    expect(brokenCount, 'the spec serves three broken cards').toBe(3);
+      // The broken card says so: the icon and the caption naming the problem.
+      await expect(broken.first().locator('[data-testid="quick-help-error-icon"]')).toBeVisible();
+      const caption = broken.first().locator('[data-testid="quick-help-error-caption"]');
+      await expect(caption).toBeVisible();
+      expect((await caption.innerText()).trim().length).toBeGreaterThan(0);
 
-    // The broken card says so: the icon and the caption naming the problem.
-    await expect(broken.first().locator('[data-testid="quick-help-error-icon"]')).toBeVisible();
-    const caption = broken.first().locator('[data-testid="quick-help-error-caption"]');
-    await expect(caption).toBeVisible();
-    expect((await caption.innerText()).trim().length).toBeGreaterThan(0);
+      // And the click sends NOTHING: no turn, no user message.
+      const watcher = await watchQueries(page);
+      await broken.first().click();
 
-    // And the click sends NOTHING: no turn, no user message.
-    const watcher = await watchQueries(page);
-    await broken.first().click();
+      // The refusal is synchronous — nothing waits on the click, so these
+      // are negative checks read at refusal time (the count's own auto-retry
+      // bounds a late-mounted turn): no turn is mounted and nothing is on
+      // the query path. A send that escaped the synchronous refusal after
+      // this instant is the send-time guard's subject, owned by the Jest
+      // suite ("a scoped button sends nothing when the tree is not there to
+      // name its category"), not by this spec. (A bounded window cannot be
+      // built from Playwright's primitives here: expect.poll and every
+      // toPass/waitForLoadState shape resolves immediately on an already
+      // stable negative — reviewed 2026-11-15.)
+      await expect(page.locator('[data-testid="user-avatar"]')).toHaveCount(0);
+      expect(watcher.queried(), 'a broken card must not reach the query path').toBe(false);
 
-    // The refusal is synchronous — nothing waits on the click, so these
-    // are negative checks read at refusal time (the count's own auto-retry
-    // bounds a late-mounted turn): no turn is mounted and nothing is on
-    // the query path. A send that escaped the synchronous refusal after
-    // this instant is the send-time guard's subject, owned by the Jest
-    // suite ("a scoped button sends nothing when the tree is not there to
-    // name its category"), not by this spec. (A bounded window cannot be
-    // built from Playwright's primitives here: expect.poll and every
-    // toPass/waitForLoadState shape resolves immediately on an already
-    // stable negative — reviewed 2026-11-15.)
-    await expect(page.locator('[data-testid="user-avatar"]')).toHaveCount(0);
-    expect(watcher.queried(), 'a broken card must not reach the query path').toBe(false);
-
-    // The tile guard refuses BEFORE anything is installed: no context item
-    // appears, and the welcome screen (which only renders while NO context
-    // item is selected) is still there. This is the assertion that tells
-    // the tile guard apart from the send-time guard — the send-time guard
-    // blocks the query but leaves the chip installed.
-    await expect(page.locator('[data-testid="quick-help-banner"]')).toBeVisible();
-
-    await ctx.close();
+      // The tile guard refuses BEFORE anything is installed: no context item
+      // appears, and the welcome screen (which only renders while NO context
+      // item is selected) is still there. This is the assertion that tells
+      // the tile guard apart from the send-time guard — the send-time guard
+      // blocks the query but leaves the chip installed.
+      await expect(page.locator('[data-testid="quick-help-banner"]')).toBeVisible();
+    });
   });
 
   test('the caption names WHICH part of the scope is gone', async ({ browser }) => {
-    const { ctx, page } = await openWelcome(browser);
+    await withWelcome(browser, {}, async (page) => {
+      // The card whose CATEGORY left the hierarchy, and the card whose LABEL
+      // did. Both are broken, and both refuse their click — but they are
+      // DIFFERENT problems, and the caption is what tells the operator which
+      // half of the configuration to fix. A caption that always named the
+      // category (or always the label) would send the operator to the wrong
+      // place.
+      const gone = page
+        .locator('[data-testid="quick-help-item"][data-state="config-error"]')
+        .filter({ hasText: 'Category gone' });
+      expect(await gone.count(), 'the card whose category is gone is broken').toBe(1);
 
-    // The card whose CATEGORY left the hierarchy, and the card whose LABEL
-    // did. Both are broken, and both refuse their click — but they are
-    // DIFFERENT problems, and the caption is what tells the operator which
-    // half of the configuration to fix. A caption that always named the
-    // category (or always the label) would send the operator to the wrong
-    // place.
-    const gone = page
-      .locator('[data-testid="quick-help-item"][data-state="config-error"]')
-      .filter({ hasText: 'Category gone' });
-    expect(await gone.count(), 'the card whose category is gone is broken').toBe(1);
+      const goneCaption = gone.first().locator('[data-testid="quick-help-error-caption"]');
+      await expect(goneCaption).toBeVisible();
+      const goneText = (await goneCaption.innerText()).trim();
+      expect(goneText.length, 'the caption says something').toBeGreaterThan(0);
+      expect(goneText.toLowerCase(), 'the caption names the CATEGORY as the gone thing').toContain('category');
+      // The gone LABEL is named — the caption quotes it, so the operator knows
+      // WHICH label to fix.
+      expect(goneText, 'the caption does not blame a label that is still there').not.toContain('No Such Service');
 
-    const goneCaption = gone.first().locator('[data-testid="quick-help-error-caption"]');
-    await expect(goneCaption).toBeVisible();
-    const goneText = (await goneCaption.innerText()).trim();
-    expect(goneText.length, 'the caption says something').toBeGreaterThan(0);
-    expect(goneText.toLowerCase(), 'the caption names the CATEGORY as the gone thing').toContain('category');
-    // The gone LABEL is named — the caption quotes it, so the operator knows
-    // WHICH label to fix.
-    expect(goneText, 'the caption does not blame a label that is still there').not.toContain('No Such Service');
+      const labelGone = page
+        .locator('[data-testid="quick-help-item"][data-state="config-error"]')
+        .filter({ hasText: 'Label gone' });
+      expect(await labelGone.count(), 'the card whose label is gone is broken').toBe(1);
 
-    const labelGone = page
-      .locator('[data-testid="quick-help-item"][data-state="config-error"]')
-      .filter({ hasText: 'Label gone' });
-    expect(await labelGone.count(), 'the card whose label is gone is broken').toBe(1);
-
-    const labelCaption = labelGone.first().locator('[data-testid="quick-help-error-caption"]');
-    await expect(labelCaption).toBeVisible();
-    const labelText = (await labelCaption.innerText()).trim();
-    // The gone LABEL is quoted by name — that is the whole point of the
-    // caption: the operator sees WHICH label to fix.
-    expect(labelText, 'the caption quotes the label that is gone').toContain('No Such Service');
-    expect(labelText.toLowerCase(), 'the caption does not blame the category — its legacy KEY resolved').not.toContain(
-      'category'
-    );
-
-    await ctx.close();
+      const labelCaption = labelGone.first().locator('[data-testid="quick-help-error-caption"]');
+      await expect(labelCaption).toBeVisible();
+      const labelText = (await labelCaption.innerText()).trim();
+      // The gone LABEL is quoted by name — that is the whole point of the
+      // caption: the operator sees WHICH label to fix.
+      expect(labelText, 'the caption quotes the label that is gone').toContain('No Such Service');
+      expect(
+        labelText.toLowerCase(),
+        'the caption does not blame the category — its legacy KEY resolved'
+      ).not.toContain('category');
+    });
   });
 
   test('a card whose title resolves to nothing renders the error state, and its caption names the title', async ({
     browser
   }) => {
-    const { ctx, page } = await openWelcome(browser);
+    await withWelcome(browser, {}, async (page) => {
+      // The card declares NO scope, so its scope is fine — the missing TITLE
+      // is the only thing wrong with it. It must still be a VISIBLE failure:
+      // the error class, the warning icon and the caption that says why.
+      // That the click sends nothing is the press gate's own, pre-existing
+      // rule (no service, no selection) — asserted by the Jest suite for
+      // this exact card shape, and by the error-card test above for the
+      // broken-scope shape — so repeating it here would kill no mutation of
+      // the TITLE gate this card exists to pin.
+      const card = page.locator('[data-testid="quick-help-item"][data-state="config-error"][data-scope="just-chat"]');
+      await expect(card).toHaveCount(1);
 
-    // The card declares NO scope, so its scope is fine — the missing TITLE
-    // is the only thing wrong with it. It must still be a VISIBLE failure:
-    // the error class, the warning icon and the caption that says why.
-    // That the click sends nothing is the press gate's own, pre-existing
-    // rule (no service, no selection) — asserted by the Jest suite for
-    // this exact card shape, and by the error-card test above for the
-    // broken-scope shape — so repeating it here would kill no mutation of
-    // the TITLE gate this card exists to pin.
-    const card = page.locator('[data-testid="quick-help-item"][data-state="config-error"][data-scope="just-chat"]');
-    await expect(card).toHaveCount(1);
-
-    await expect(card.first().locator('[data-testid="quick-help-error-icon"]')).toBeVisible();
-    const caption = card.first().locator('[data-testid="quick-help-error-caption"]');
-    await expect(caption).toBeVisible();
-    const captionText = (await caption.innerText()).trim();
-    expect(captionText.length, 'the caption says something').toBeGreaterThan(0);
-    expect(captionText.toLowerCase(), 'the caption names the missing TITLE').toContain('title');
-
-    await ctx.close();
+      await expect(card.first().locator('[data-testid="quick-help-error-icon"]')).toBeVisible();
+      const caption = card.first().locator('[data-testid="quick-help-error-caption"]');
+      await expect(caption).toBeVisible();
+      const captionText = (await caption.innerText()).trim();
+      expect(captionText.length, 'the caption says something').toBeGreaterThan(0);
+      expect(captionText.toLowerCase(), 'the caption names the missing TITLE').toContain('title');
+    });
   });
 
   test('a healthy card is NOT an error card and its click does reach the query path', async ({ browser }) => {
-    const { ctx, page } = await openWelcome(browser);
+    await withWelcome(browser, {}, async (page) => {
+      // The CONTROL. A spec that stubs every card to "broken" would pass even
+      // if the app rendered every card as an error — and a spec that only
+      // asserts "nothing was sent" would pass even if NOTHING ever worked.
+      const healthy = page.locator('[data-testid="quick-help-item"]').filter({ hasText: 'Healthy card' });
+      expect(await healthy.count(), 'the healthy card is rendered').toBe(1);
+      expect(
+        await healthy.first().locator('[data-testid="quick-help-error-icon"]').count(),
+        'a card whose scope names fine is not an error card'
+      ).toBe(0);
 
-    // The CONTROL. A spec that stubs every card to "broken" would pass even
-    // if the app rendered every card as an error — and a spec that only
-    // asserts "nothing was sent" would pass even if NOTHING ever worked.
-    const healthy = page.locator('[data-testid="quick-help-item"]').filter({ hasText: 'Healthy card' });
-    expect(await healthy.count(), 'the healthy card is rendered').toBe(1);
-    expect(
-      await healthy.first().locator('[data-testid="quick-help-error-icon"]').count(),
-      'a card whose scope names fine is not an error card'
-    ).toBe(0);
+      const watcher = await watchQueries(page);
+      await healthy.first().click();
 
-    const watcher = await watchQueries(page);
-    await healthy.first().click();
+      // A healthy card DOES reach the query path.
+      await expect.poll(() => watcher.queried(), { timeout: 15000 }).toBe(true);
 
-    // A healthy card DOES reach the query path.
-    await expect.poll(() => watcher.queried(), { timeout: 15000 }).toBe(true);
-
-    // And the query carries the card's SCOPE — the contract the watcher
-    // above only counts. Jest owns the assembly (ChatBotComponent.test.js);
-    // this is the assembled query over the real route: the scoping fields
-    // exactly as the fixture declares them, the scoped context option,
-    // and the dual-prompt turn (visible text displayed, hidden prompt
-    // sent — equal here, so the user turn carries it either way). The
-    // exactly-one send is the tile's own: one click, one auto-send, and
-    // the empty-body fulfill answers it without a retry.
-    expect(watcher.bodies, 'the healthy card sends exactly one query').toHaveLength(1);
-    const body = watcher.bodies[0];
-    expect(body.contextOption, 'the scoped send declares the label-filtered context option').toBe(
-      'conversation-with-context-labels'
-    );
-    expect(body.context.categoryLabel, 'the ENGLISH category label reaches the query').toBe('Civil Registry');
-    expect(body.context.serviceLabels, 'the declared labels reach the query').toEqual(['Births']);
-    expect(body.userQuestion, 'the visible text is what the user asked').toBe('Tell me about births');
-    expect(
-      body.messages.at(-1),
-      'the turn rides the messages array, its last user entry the prompt the LLM answers'
-    ).toEqual({ role: 'user', content: 'Tell me about births' });
-
-    await ctx.close();
+      // And the query carries the card's SCOPE — the contract the watcher
+      // above only counts. Jest owns the assembly (ChatBotComponent.test.js);
+      // this is the assembled query over the real route: the scoping fields
+      // exactly as the fixture declares them, the scoped context option,
+      // and the dual-prompt turn (visible text displayed, hidden prompt
+      // sent — equal here, so the user turn carries it either way). The
+      // exactly-one send is the tile's own: one click, one auto-send, and
+      // the empty-body fulfill answers it without a retry.
+      expect(watcher.bodies, 'the healthy card sends exactly one query').toHaveLength(1);
+      const body = watcher.bodies[0];
+      expect(body.contextOption, 'the scoped send declares the label-filtered context option').toBe(
+        'conversation-with-context-labels'
+      );
+      expect(body.context.categoryLabel, 'the ENGLISH category label reaches the query').toBe('Civil Registry');
+      expect(body.context.serviceLabels, 'the declared labels reach the query').toEqual(['Births']);
+      expect(body.userQuestion, 'the visible text is what the user asked').toBe('Tell me about births');
+      expect(
+        body.messages.at(-1),
+        'the turn rides the messages array, its last user entry the prompt the LLM answers'
+      ).toEqual({ role: 'user', content: 'Tell me about births' });
+    });
   });
 });

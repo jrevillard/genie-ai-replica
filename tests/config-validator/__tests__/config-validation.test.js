@@ -3821,7 +3821,7 @@ describe('the local e2e run defines the executed set (#1736)', () => {
     // one and still leave the file containing both phrases. The whole
     // message is pinned, both halves of it.
     expect(failurePath).toMatch(
-      /venueNoise\.size > 0 && staleVenue\.size > 0[^}]{0,400}venue-outage signature or is explained by[^}]{0,200}the venue's stale build; the report above is the record/
+      /venueNoise\.size > 0 && staleVenue\.size > 0[^}]{0,400}'[^'\n]*venue-outage signature or is explained by[^}]{0,200}"[^"\n]*the venue's stale build; the report above is the record/
     );
   });
 

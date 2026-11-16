@@ -20,7 +20,13 @@ const {
   isNotFoundFailure,
   staleVenueHandles,
   partitionStaleVenue,
-  venueStalenessReport
+  venueStalenessReport,
+  venueStaleProof,
+  handleDeclaredAtBuild,
+  bindVenueBuild,
+  buildStaleVenueContext,
+  runBuildSha,
+  sidecarPath
 } = require('./file-failure-issues');
 
 const FILE = 'tests/e2e/theme/theme-runtime-config.spec.js';
@@ -552,6 +558,34 @@ test.describe('a stale venue is told apart from a product defect', () => {
   // #1896 shape exactly.
   const STALE = { servedText: '"upload-files-dialog"', declared: DECLARED };
 
+  // The checkout's own HEAD — the build the proof reads the app's source
+  // at. It is read from the repository, not hardcoded: the sha of a
+  // commit that has been rewritten is not a fact a unit spec may carry.
+  const HEAD_SHA = execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf-8' }).trim();
+
+  // A handle NO source declares. The proof reads the app's source AT THE
+  // VENUE'S BUILD, so a test of the stale-venue verdict needs a build that
+  // does not declare the handle it asks about — and a name nothing
+  // declares is exactly that. The shape is the stale venue's: the
+  // checkout declares it, the venue's build does not.
+  const STALE_HANDLE = 'test-only-handle-no-source-declares';
+  const STALE_ERROR = [
+    'Error: expect(locator).toBeVisible() failed',
+    '',
+    `Locator: locator('[data-testid="${STALE_HANDLE}"]')`,
+    'Expected: visible',
+    'Timeout: 15000ms',
+    'Error: element(s) not found'
+  ].join('\n');
+  // The venue serves a bundle WITHOUT the handle, and the checkout
+  // declares it — and the venue's build (HEAD) does not declare it
+  // either, so the verdict is proven.
+  const PROVEN_STALE = {
+    servedText: '"some-other-handle"',
+    declared: new Map([[STALE_HANDLE, 'components/gov-chat-frontend/src/components/ChatFolders.vue']]),
+    boundSha: HEAD_SHA
+  };
+
   test('the handles a failure waits for are read from the LOCATOR line', () => {
     expect(locatorHandles(HISTORY_ERROR)).toEqual(['chat-history-item']);
     // The compound locator names both — the dialog the venue HAS and the
@@ -607,8 +641,8 @@ test.describe('a stale venue is told apart from a product defect', () => {
   });
 
   test('a file whose failures are ALL stale drops out of the filing', () => {
-    const byFile = new Map([['tests/e2e/chatbot/conversation-history.spec.js', [{ error: HISTORY_ERROR }]]]);
-    const { fileable, stale } = partitionStaleVenue(byFile, STALE);
+    const byFile = new Map([['tests/e2e/chatbot/conversation-history.spec.js', [{ error: STALE_ERROR }]]]);
+    const { fileable, stale } = partitionStaleVenue(byFile, PROVEN_STALE);
     expect(fileable.size).toBe(0);
     expect(stale.get('tests/e2e/chatbot/conversation-history.spec.js').failures).toHaveLength(1);
   });
@@ -617,13 +651,37 @@ test.describe('a stale venue is told apart from a product defect', () => {
     const byFile = new Map([
       [
         'tests/e2e/documents/upload.spec.js',
-        [{ error: UPLOAD_ERROR }, { error: 'Error: expect(received).toBe(true) failed' }]
+        [{ error: STALE_ERROR }, { error: 'Error: expect(received).toBe(true) failed' }]
       ]
     ]);
-    const { fileable, stale } = partitionStaleVenue(byFile, STALE);
+    const { fileable, stale } = partitionStaleVenue(byFile, PROVEN_STALE);
     expect(fileable.get('tests/e2e/documents/upload.spec.js')).toHaveLength(1);
     expect(fileable.get('tests/e2e/documents/upload.spec.js')[0].error).toContain('toBe(true)');
     expect(stale.get('tests/e2e/documents/upload.spec.js').failures).toHaveLength(1);
+  });
+
+  test("a handle the VENUE'S OWN BUILD declared is a product defect — it is filed, not classified", () => {
+    // The app declared the handle at the venue's build and the venue's
+    // bundle does not carry it: the app's build dropped it. That is a
+    // defect of the product, and it must be FILED as one — a verdict that
+    // called it a stale venue would silence it.
+    const context = {
+      servedText: '"other"',
+      declared: new Map([['chat-history-item', 'components/gov-chat-frontend/src/components/ChatFolders.vue']]),
+      boundSha: HEAD_SHA
+    };
+    const byFile = new Map([['tests/e2e/a.spec.js', [{ error: HISTORY_ERROR }]]]);
+    const { fileable, stale } = partitionStaleVenue(byFile, context);
+    expect(fileable.get('tests/e2e/a.spec.js')).toHaveLength(1);
+    expect(stale.size).toBe(0);
+  });
+
+  test('an unbound venue (no build to read) classifies nothing — the failures stay fileable', () => {
+    const context = { ...PROVEN_STALE, boundSha: null };
+    const byFile = new Map([['tests/e2e/a.spec.js', [{ error: STALE_ERROR }]]]);
+    const { fileable, stale } = partitionStaleVenue(byFile, context);
+    expect(fileable.get('tests/e2e/a.spec.js')).toHaveLength(1);
+    expect(stale.size).toBe(0);
   });
 
   test('the report names the venue, the missing handle, the file that declares it, and the remedy', () => {
@@ -648,5 +706,252 @@ test.describe('a stale venue is told apart from a product defect', () => {
     expect(report).toContain('docs/e2e-tests/local-run.md');
     // The handle the venue DOES serve is not reported as missing.
     expect(report).not.toContain('`upload-files-dialog`');
+  });
+});
+
+/**
+ * The proof the stale-venue verdict rests on (#1895, #1896).
+ *
+ * A verdict that calls a failure "the venue's" without proving it silences
+ * a real defect; a verdict that refuses to prove it files a venue problem
+ * as a product bug. The proof has three links — the bundle does not carry
+ * the handle (observed), the checkout declares it (observed), and the app's
+ * source AT THE VENUE'S BUILD does not declare it either (read from that
+ * build) — and all three must hold.
+ */
+test.describe("the verdict is proven against the venue's own build", () => {
+  const HEAD_SHA = execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf-8' }).trim();
+  // A sha no repository holds: the build cannot be read, and a build that
+  // cannot be read proves nothing.
+  const UNREADABLE_SHA = 'deadbeefdeadbeefdeadbeefdeadbeefdeadbeef';
+
+  test('a handle the app declares AT THE BUILD is declared — the read answers', () => {
+    expect(handleDeclaredAtBuild(HEAD_SHA, 'chat-history-item')).toBe(true);
+  });
+
+  test('a handle NO source declares is not declared at the build', () => {
+    expect(handleDeclaredAtBuild(HEAD_SHA, 'test-only-handle-no-source-declares')).toBe(false);
+  });
+
+  test('a build that cannot be read proves nothing — the answer is null, not false', () => {
+    // null and false mean different things: false licenses the verdict,
+    // null refuses it. A build that cannot be read must not license
+    // anything.
+    expect(handleDeclaredAtBuild(UNREADABLE_SHA, 'chat-history-item')).toBe(null);
+  });
+
+  test('the proof is stale only when the build does not declare the handle', () => {
+    const stale = { handle: 'test-only-handle-no-source-declares', source: 'x.vue' };
+    const declared = { handle: 'chat-history-item', source: 'x.vue' };
+    expect(venueStaleProof(stale, { boundSha: HEAD_SHA })).toBe('stale');
+    expect(venueStaleProof(declared, { boundSha: HEAD_SHA })).toBe('not-stale');
+    // No bound build: nothing to read, so nothing is proven.
+    expect(venueStaleProof(stale, { boundSha: null })).toBe('not-stale');
+  });
+});
+
+/**
+ * The bundle read is bound to the build the RUN exercised.
+ *
+ * The read happens at filing time; the failure was produced earlier. A
+ * venue that moved in between answers with a bundle that is not the one
+ * the failure was produced against — and a verdict about a stale venue is
+ * a verdict about a BUILD.
+ */
+test.describe("the venue's bundle is bound to the run's build", () => {
+  const HEAD_SHA = execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf-8' }).trim();
+  const OTHER_SHA = '1111111111111111111111111111111111111111';
+
+  test("a run and a venue that agree on the build, on this checkout's line, are bound", () => {
+    const bound = bindVenueBuild({ runSha: HEAD_SHA, venueSha: HEAD_SHA });
+    expect(bound.boundSha).toBe(HEAD_SHA);
+    expect(bound.note).toBe(null);
+  });
+
+  test('a run that carried no build marker is not bound — the failures are filed as they are', () => {
+    const bound = bindVenueBuild({ runSha: null, venueSha: HEAD_SHA });
+    expect(bound.boundSha).toBe(null);
+    expect(bound.note).toContain('no build marker');
+    expect(bound.note).toContain('filed as they are');
+  });
+
+  test('a venue with no readable marker is not bound', () => {
+    const bound = bindVenueBuild({ runSha: HEAD_SHA, venueSha: null });
+    expect(bound.boundSha).toBe(null);
+    expect(bound.note).toContain('no readable build marker');
+  });
+
+  test("a venue that MOVED since the run is not bound — the bundle read is not the run's build", () => {
+    const bound = bindVenueBuild({ runSha: OTHER_SHA, venueSha: HEAD_SHA });
+    expect(bound.boundSha).toBe(null);
+    expect(bound.note).toContain('MOVED');
+    expect(bound.note).toContain(OTHER_SHA);
+    expect(bound.note).toContain(HEAD_SHA);
+  });
+
+  test("a venue that is NOT behind the checkout is not bound — a missing handle is not the venue's", () => {
+    const bound = bindVenueBuild({ runSha: OTHER_SHA, venueSha: OTHER_SHA });
+    expect(bound.boundSha).toBe(null);
+    expect(bound.note).toContain('not an ancestor');
+  });
+});
+
+/**
+ * The run's build travels with the run.
+ *
+ * The runner exports the sha its pre-flight read; a run filed BY HAND
+ * inherits no environment, so the runner writes the sha BESIDE the run's
+ * own report.
+ */
+test.describe('the run carries its build', () => {
+  test("the sidecar sits beside the run's own report", () => {
+    expect(sidecarPath('/tmp/reports/playwright-report-run-20261116T101112Z.json')).toBe(
+      '/tmp/reports/playwright-report-run-20261116T101112Z.build.json'
+    );
+  });
+
+  test("the sidecar carries the run's build when the environment carries none", () => {
+    const previous = process.env.E2E_VENUE_BUILD_GIT_SHA;
+    delete process.env.E2E_VENUE_BUILD_GIT_SHA;
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'run-build-'));
+    const report = path.join(dir, 'playwright-report-run-20261116T101112Z.json');
+    fs.writeFileSync(sidecarPath(report), JSON.stringify({ git_sha: 'abc1234def' }));
+    try {
+      expect(runBuildSha(report)).toBe('abc1234def');
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+      if (previous !== undefined) process.env.E2E_VENUE_BUILD_GIT_SHA = previous;
+    }
+  });
+
+  test('a run with neither an environment nor a sidecar carries no build — the failures are filed as they are', () => {
+    const previous = process.env.E2E_VENUE_BUILD_GIT_SHA;
+    delete process.env.E2E_VENUE_BUILD_GIT_SHA;
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'run-build-'));
+    try {
+      expect(runBuildSha(path.join(dir, 'no-such-report.json'))).toBe(null);
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+      if (previous !== undefined) process.env.E2E_VENUE_BUILD_GIT_SHA = previous;
+    }
+  });
+});
+
+test.describe('the locator line names a handle in both spellings', () => {
+  test('the getByTestId spelling names the same handle as the attribute spelling', () => {
+    // Playwright prints the locator it waited on. `getByTestId('x')`
+    // names the same handle as `[data-testid="x"]` — and carries no
+    // attribute, so the attribute scan alone would miss it and the
+    // classification would go silently inert for that spelling.
+    const error = [
+      'Error: expect(locator).toBeVisible() failed',
+      '',
+      "Locator: getByTestId('chat-history-item')",
+      'Expected: visible',
+      'Error: element(s) not found'
+    ].join('\n');
+    expect(locatorHandles(error)).toEqual(['chat-history-item']);
+  });
+});
+
+test.describe('the filed body names a venue that moved', () => {
+  test('the body names both builds when the venue answered with another one', () => {
+    const body = issueBody(
+      'tests/e2e/a.spec.js',
+      [{ title: 'a › first', error: 'boom' }],
+      'https://venue.example:4443',
+      '2026-11-11T00:00:00Z',
+      'abc1234def',
+      'fedcba987'
+    );
+    expect(body).toContain('- venue build: `abc1234def`');
+    expect(body).toContain('the venue has moved since the run: it now serves `fedcba987`');
+  });
+
+  test('a venue that did not move adds no second line', () => {
+    const body = issueBody(
+      'tests/e2e/a.spec.js',
+      [{ title: 'a › first', error: 'boom' }],
+      'https://venue.example:4443',
+      '2026-11-11T00:00:00Z',
+      'abc1234def',
+      'abc1234def'
+    );
+    expect(body).toContain('- venue build: `abc1234def`');
+    expect(body).not.toContain('the venue has moved');
+  });
+});
+
+/**
+ * The context that carries the read is built only from what the venue
+ * proves — and every arm of it is pinned here, without a venue.
+ */
+test.describe('the venue context is built only from what the venue proves', () => {
+  const INDEX = '<html><script defer src="/js/app.1229e2fc.js"></script></html>';
+  const APP = 'i.u=e=>"js/"+e+"."+{73:"7f541a03"}[e]+".js"';
+  const transport = (bodies) => async (_method, url) => {
+    const key = Object.keys(bodies).find((candidate) => url.endsWith(candidate));
+    if (key === undefined) return { status: 404, data: 'not found' };
+    return { status: 200, data: bodies[key] };
+  };
+  const SERVING = transport({
+    '/': INDEX,
+    '/js/app.1229e2fc.js': APP,
+    '/js/73.7f541a03.js': '"chat-history-item"'
+  });
+  const NOT_FOUND_ERROR = [
+    'Error: expect(locator).toBeVisible() failed',
+    '',
+    'Locator: locator(\'[data-testid="chat-history-item"]\')',
+    'Error: element(s) not found'
+  ].join('\n');
+  const BY_FILE = new Map([['tests/e2e/a.spec.js', [{ error: NOT_FOUND_ERROR }]]]);
+
+  test('a run with no not-found failure needs no read at all', async () => {
+    const context = await buildStaleVenueContext('https://venue.example:4443', new Map(), {
+      request: SERVING
+    });
+    expect(context.ok).toBe(false);
+    expect(context.note).toBe(null);
+  });
+
+  test('a bundle that cannot be read degrades to filing the failures as they are', async () => {
+    const context = await buildStaleVenueContext('https://venue.example:4443', BY_FILE, {
+      request: async () => {
+        throw new Error('the venue answered nothing');
+      }
+    });
+    expect(context.ok).toBe(false);
+    expect(context.note).toContain("the venue's served bundle could not be read");
+    expect(context.note).toContain('filed as they are');
+  });
+
+  test("a bundle carrying NONE of the checkout's handles is not this app — no verdict", async () => {
+    const context = await buildStaleVenueContext('https://venue.example:4443', BY_FILE, {
+      request: transport({
+        '/': INDEX,
+        '/js/app.1229e2fc.js': APP,
+        '/js/73.7f541a03.js': '"a-handle-the-app-never-declared"'
+      })
+    });
+    expect(context.ok).toBe(false);
+    expect(context.note).toContain("carries none of the checkout's handles");
+  });
+
+  test('a read that succeeded carries the bundle, the declarations and the binding', async () => {
+    const context = await buildStaleVenueContext('https://venue.example:4443', BY_FILE, {
+      request: SERVING,
+      runSha: 'abc1234def',
+      venueSha: 'fedcba987'
+    });
+    expect(context.ok).toBe(true);
+    expect(context.servedText).toContain('"chat-history-item"');
+    expect(context.declared.get('chat-history-item')).toBe(
+      'components/gov-chat-frontend/src/components/ChatFolders.vue'
+    );
+    // The two builds disagree: the venue moved since the run — the
+    // context says so and binds nothing.
+    expect(context.boundSha).toBe(null);
+    expect(context.note).toContain('MOVED');
   });
 });

@@ -212,6 +212,11 @@ RUN_REPORT="reports/playwright-report-run-$(date -u +%Y%m%dT%H%M%SZ).json"
 if [ -f reports/playwright-report.json ]; then
   mv reports/playwright-report.json "$RUN_REPORT"
   echo "report: $RUN_REPORT"
+  # The build this run exercised, BESIDE the run's own report. The failure
+  # path binds the venue's served bundle to the build that produced the
+  # failure, and a run filed BY HAND (the documented recipe) inherits no
+  # environment — the sidecar is what carries the build with the run.
+  printf '{"git_sha":"%s"}\n' "$E2E_VENUE_BUILD_GIT_SHA" > "${RUN_REPORT%.json}.build.json"
 else
   # NO fallback to the fixed path: it holds whatever the last Playwright
   # invocation in this checkout wrote (a developer's single spec, a --list

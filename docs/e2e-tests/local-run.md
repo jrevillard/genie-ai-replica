@@ -297,7 +297,8 @@ name from the HTML; fetch that bundle and extract its webpack
 chunk-hash map (the `{<id>:"<hash>", ...}` object beside the `"js/"+`
 script-name template); fetch `js/<id>.<hash>.js` for each entry and
 grep for the handle the failing spec reads. A handle the checkout has
-and no chunk carries is a stale venue, not a spec defect.
+and no chunk carries is a stale venue — provided the venue's build does
+not declare it either (the build proof below).
 
 **The run makes that walk itself** — see *A stale venue is classified,
 not filed as a product defect* below.
@@ -324,15 +325,34 @@ exactly as they were, with the reason printed.
 | The handle the spec waits for | The verdict |
 |---|---|
 | the venue serves it | a product finding — filed as one |
-| the venue does NOT serve it, the checkout DECLARES it | a **stale venue**: not filed, reported with the remedy |
+| the venue does NOT serve it, the checkout DECLARES it | a CANDIDATE — the build proof decides |
 | neither serves it, the checkout does NOT declare it | a **spec defect**: filed as the product finding it is |
+
+**The build proof.** A candidate is a stale venue only when the app's
+source AT THE VENUE'S BUILD does not declare the handle either — read
+from that build (`git grep` at that commit), never inferred. A build
+that DID declare the handle and did not ship it is the app's own build
+dropping it: a product defect, filed as one.
+
+**The binding.** The bundle read happens at filing time; the failure was
+produced earlier. The verdict is only made when the venue still serves
+the build the RUN exercised: the run's own marker
+(`E2E_VENUE_BUILD_GIT_SHA`, or the sidecar the runner writes beside the
+run's report) against the venue's current one.
+
+| The venue's state | The verdict |
+|---|---|
+| serves the run's build, and that build is behind the checkout | the candidate is decided by the build proof |
+| MOVED since the run | not bound: the failures are filed as they are |
+| no readable build marker | not bound: the failures are filed as they are |
+| not behind the checkout | not bound: a missing handle is not the venue's |
 
 The failures the stale venue explains drop out of the filing — the
 shape the venue-outage report already has — and the run prints one
 `venue-staleness report` naming the venue, the missing handle, the file
 that declares it, and the remedy. The run stays RED.
 
-Two details the read holds to:
+Three details the read holds to:
 
 - the handle is searched for as a QUOTED value, so `upload-files-dialog`
   does not match a bundle that carries only
@@ -340,7 +360,9 @@ Two details the read holds to:
   venue;
 - the walk must fetch EVERY chunk the app bundle names. A chunk that
   cannot be read makes the walk incomplete, and an incomplete walk
-  cannot say a handle is absent.
+  cannot say a handle is absent;
+- a chunk the edge answers with the SPA's fallback page (HTTP 200, HTML)
+  is NOT the chunk: the walk rejects the body, for the same reason.
 
 
 ### The build marker and the pre-flight probe (#1851)

@@ -269,6 +269,13 @@ test.describe('Conversation history persistence', () => {
   });
 
   test('saves a conversation and restores it in a new session', async ({ browser }) => {
+    // This test logs in TWICE — the session that saves (the beforeEach)
+    // and the session that restores — so the file's single-login ceiling
+    // does not cover it. The ceiling is a BUDGET, not a deadline: every
+    // step below carries its own hard timeout, so a hang still fails on
+    // the step that hung.
+    test.setTimeout(LOGIN_BUDGET_TIMEOUT_MS * 2);
+
     const userText = 'Tell me about healthcare services';
     const chatTitle = `E2E Test Chat ${Date.now()}`;
 

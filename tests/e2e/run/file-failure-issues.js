@@ -28,6 +28,7 @@
  *   node tests/e2e/run/file-failure-issues.js [--file-issues]
  */
 const fs = require('fs');
+const os = require('os');
 const path = require('path');
 const { execFileSync } = require('child_process');
 
@@ -42,6 +43,8 @@ const { VENUE_IP_ENV, VENUE_HOST_ENV } = require('../helpers/venue-launch-args')
 // The venue's SERVED bundle — the read that tells a stale venue from a
 // product defect (#1895, #1896).
 const { handlesIn, bundleServesHandle, checkoutDeclaredHandles, fetchVenueBundleText } = require('./venue-bundle');
+// The app's source tree, repo-relative: the path the build proof reads.
+const FRONTEND_SRC_REL = 'components/gov-chat-frontend/src';
 // The e2e tree's root: a path whose prefix is INSIDE it is a different
 // file that happens to carry another one's path as its tail.
 const TESTS_E2E_ROOT = 'tests/e2e';
@@ -176,7 +179,13 @@ function locatorHandles(errorText) {
     .split('\n')
     .find((candidate) => candidate.trim().startsWith('Locator:'));
   if (!line) return [];
-  return handlesIn(line);
+  // The attribute spelling (`[data-testid="x"]`) and Playwright's own
+  // `getByTestId('x')` name the SAME handle in two spellings. The second
+  // carries no attribute, so the attribute scan alone would miss it — and
+  // the classification would go silently inert for that spelling.
+  const byAttribute = handlesIn(line);
+  const byTestId = Array.from(line.matchAll(/getByTestId\(\s*['"]([^'"]+)['"]\s*\)/g)).map((match) => match[1]);
+  return [...new Set([...byAttribute, ...byTestId])];
 }
 
 /**
@@ -192,6 +201,137 @@ function locatorHandles(errorText) {
  */
 function isNotFoundFailure(errorText) {
   return /element\(s\) not found/.test(String(errorText || ''));
+}
+
+/**
+ * Does the app's source AT THIS BUILD declare the handle?
+ *
+ * The question the verdict rests on: the venue's bundle does not carry
+ * the handle and the checkout declares it — but did the app DECLARE it
+ * at the venue's build, or did the declaration arrive LATER? The answer
+ * is read from that build (`git grep` at that commit), not inferred
+ * from the checkout's shape.
+ *
+ * The search is the raw handle string inside the app's source tree: a
+ * handle that appears there at the build counts as declared. The search
+ * is deliberately loose (it would also match a mention in a comment),
+ * because the loose answer is the CONSERVATIVE one: a handle that was
+ * already there is the app's own build dropping it — a product defect,
+ * filed as one.
+ *
+ * @param {string} sha - the build to read
+ * @param {string} handle - the handle value
+ * @returns {true|false|null} true = the build declares it, false = it does
+ *   not, null = the build could not be read
+ */
+function handleDeclaredAtBuild(sha, handle) {
+  try {
+    execFileSync('git', ['grep', '-q', '-F', handle, sha, '--', FRONTEND_SRC_REL], {
+      cwd: REPO_ROOT,
+      stdio: 'ignore'
+    });
+    return true;
+  } catch (error) {
+    // git grep exits 1 for "not found" and 128 for "cannot read it".
+    return error.status === 1 ? false : null;
+  }
+}
+
+/**
+ * Is this build an ancestor of the checkout's HEAD?
+ *
+ * A build that is not behind the checkout cannot be "stale" in the sense
+ * the verdict uses: it is either AHEAD of the checkout or on another
+ * line, and neither is a venue that fell behind.
+ *
+ * @param {string} sha - the build to test
+ * @returns {boolean} whether the build is an ancestor of HEAD
+ */
+function isAncestorOfHead(sha) {
+  try {
+    execFileSync('git', ['merge-base', '--is-ancestor', sha, 'HEAD'], {
+      cwd: REPO_ROOT,
+      stdio: 'ignore'
+    });
+    return true;
+  } catch {
+    // Exit 1: the build is known and is not an ancestor. Exit 128: the
+    // checkout does not know the build at all.
+    return false;
+  }
+}
+
+/**
+ * The build the RUN was made against.
+ *
+ * The runner exports the sha its pre-flight read (`E2E_VENUE_BUILD_GIT_SHA`)
+ * and writes it BESIDE the run's own report, so a run filed BY HAND (the
+ * documented recipe, in a shell that inherits nothing) carries its build
+ * with it. The environment comes first: it is the run's own marker.
+ *
+ * @param {string} reportPath - the report the failure path reads
+ * @returns {string|null} the sha, or null when the run carried none
+ */
+function runBuildSha(reportPath) {
+  const fromEnv = process.env.E2E_VENUE_BUILD_GIT_SHA;
+  if (fromEnv && fromEnv !== 'unknown') return fromEnv;
+  try {
+    const sidecar = JSON.parse(fs.readFileSync(sidecarPath(reportPath), 'utf-8'));
+    const sha = sidecar && sidecar.git_sha;
+    return typeof sha === 'string' && sha && sha !== 'unknown' ? sha : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * The sidecar that carries a run's build, next to the run's own report.
+ *
+ * @param {string} reportPath - the report the failure path reads
+ * @returns {string} the sidecar path
+ */
+function sidecarPath(reportPath) {
+  return `${reportPath.replace(/\.json$/, '')}.build.json`;
+}
+
+/**
+ * The build the VENUE SERVES NOW, from the pre-flight's scratch file.
+ *
+ * @param {string} file - the scratch file the pre-flight wrote
+ * @returns {string|null} the sha, or null when the venue serves none
+ */
+function readVenueBuildSha(file) {
+  try {
+    const sha = fs.readFileSync(file, 'utf-8').trim();
+    return sha && sha !== 'unknown' ? sha : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Is this missing handle the VENUE's fault — its build cannot serve it?
+ *
+ * The proof has three links and all three must hold:
+ *
+ *  1. the venue's served bundle does not carry the handle (observed);
+ *  2. the checkout declares it (observed);
+ *  3. the app's source AT THE VENUE'S BUILD does not declare it either
+ *     (read from that build) — so the declaration is newer than the
+ *     venue's build and the venue cannot serve it.
+ *
+ * Link 3 is what tells a stale venue from a product defect: a build that
+ * DID declare the handle and did not ship it is the app's own build
+ * dropping it — a product defect, filed as one.
+ *
+ * @param {{handle: string, source: string}} candidate - the missing handle
+ * @param {{boundSha: string|null}} context - the venue's bound build
+ * @returns {'stale'|'not-stale'} the verdict
+ */
+function venueStaleProof(candidate, context) {
+  if (!context.boundSha) return 'not-stale';
+  const declared = handleDeclaredAtBuild(context.boundSha, candidate.handle);
+  return declared === false ? 'stale' : 'not-stale';
 }
 
 /**
@@ -238,13 +378,17 @@ function partitionStaleVenue(byFile, context) {
     const rest = [];
     const missing = new Map();
     for (const failure of failures) {
-      const handles = staleVenueHandles(failure, context);
-      if (handles.length === 0) {
+      // The candidates are the handles the venue does not serve; the
+      // PROOF decides. A candidate the venue's own build DID declare is
+      // the app's build dropping it — a product defect, filed as one.
+      const candidates = staleVenueHandles(failure, context);
+      const proven = candidates.filter((candidate) => venueStaleProof(candidate, context) === 'stale');
+      if (proven.length === 0) {
         rest.push(failure);
         continue;
       }
       explained.push(failure);
-      for (const { handle, source } of handles) {
+      for (const { handle, source } of proven) {
         if (!missing.has(handle)) missing.set(handle, source);
       }
     }
@@ -264,13 +408,14 @@ function partitionStaleVenue(byFile, context) {
  * @param {string} venue - the venue address the failed run pointed at
  * @returns {string} the report text (no trailing newline)
  */
-function venueStalenessReport(stale, venue) {
+function venueStalenessReport(stale, venue, context = {}) {
   const total = [...stale.values()].reduce((sum, entry) => sum + entry.failures.length, 0);
+  const build = context.boundSha ? ` (the venue's build \`${context.boundSha}\` does not declare it either)` : '';
   const lines = [
     '',
     `venue-staleness report: ${total} failure(s) across ${stale.size} spec file(s) wait for a handle ` +
-      'the VENUE DOES NOT SERVE while the checkout DECLARES it — the venue is serving an older ' +
-      'frontend build than the checkout:'
+      'the VENUE DOES NOT SERVE while the checkout DECLARES it — the venue serves a build that ' +
+      `predates the declaration${build}:`
   ];
   for (const [file, entry] of stale) {
     lines.push(`  - ${file}: ${entry.failures.length} failure(s)`);
@@ -281,8 +426,8 @@ function venueStalenessReport(stale, venue) {
     }
   }
   lines.push(
-    `The venue answered the re-probe at ${venue} — this is a STALE VENUE BUILD, not a product ` +
-      'finding: nothing is filed for these failures. The run is still RED.'
+    `The venue answered the re-probe at ${venue} — the failure belongs to the VENUE's build, not to ` +
+      'the product: nothing is filed for these failures. The run is still RED.'
   );
   lines.push(
     "Refresh the venue's frontend build (the stale-venue remedy: docs/e2e-tests/local-run.md) and " +
@@ -304,21 +449,28 @@ function venueStalenessReport(stale, venue) {
  * @param {Map<string, Array<{error: string}>>} byFile - the grouped failures
  * @returns {Promise<{ok: boolean, servedText?: string, declared?: Map<string, string>, note?: string}>} the context, or the reason there is none
  */
-async function buildStaleVenueContext(venue, byFile) {
+async function buildStaleVenueContext(venue, byFile, options = {}) {
   const failures = [...byFile.values()].flat();
   if (!failures.some((failure) => isNotFoundFailure(failure.error))) {
     return { ok: false, note: null };
   }
   let servedText;
+  let declared;
   try {
-    servedText = await fetchVenueBundleText(venue);
+    // The transport is injectable (the same seam venue-bundle.js owns):
+    // the unit spec pins the context's arms without a venue.
+    servedText = await fetchVenueBundleText(venue, options.request ? { request: options.request } : {});
+    // The checkout's declarations are read INSIDE the same guard as the
+    // bundle: the walk is additive, and a source tree that cannot be
+    // read must degrade to filing the failures as they are — never take
+    // the whole filing down.
+    declared = checkoutDeclaredHandles();
   } catch (error) {
     return {
       ok: false,
       note: `the venue's served bundle could not be read (${error.message}) — the failures are filed ` + 'as they are.'
     };
   }
-  const declared = checkoutDeclaredHandles();
   // The walk must have read the APP: a bundle carrying NONE of the
   // checkout's handles is not this app, and a verdict built on it would
   // be a guess dressed as a finding.
@@ -331,7 +483,65 @@ async function buildStaleVenueContext(venue, byFile) {
         'not be read, so the failures are filed as they are.'
     };
   }
-  return { ok: true, servedText, declared };
+  return {
+    ok: true,
+    servedText,
+    declared,
+    ...bindVenueBuild(options)
+  };
+}
+
+/**
+ * Bind the venue's served bundle to the build the RUN exercised.
+ *
+ * A verdict about a stale venue is a verdict about a BUILD. The bundle
+ * read here is the venue's bundle NOW; the failure was produced against
+ * the venue THEN. The two are the same only when the venue has not
+ * moved since the run — and the verdict is only made when the build is
+ * also PROVABLY behind the checkout, so that "the venue is behind" is a
+ * read fact and not an inference.
+ *
+ * @param {{runSha?: string, venueSha?: string}} options - the run's build and the venue's current build
+ * @returns {{boundSha: string|null, note: string|null}} the bound build, or the reason there is none
+ */
+function bindVenueBuild(options = {}) {
+  const runSha = options.runSha || null;
+  const venueSha = options.venueSha || null;
+  if (!runSha) {
+    return {
+      boundSha: null,
+      note:
+        "the run carried no build marker — the venue's bundle cannot be bound to the build that " +
+        'produced these failures, so they are filed as they are.'
+    };
+  }
+  if (!venueSha) {
+    return {
+      boundSha: null,
+      note:
+        "the venue serves no readable build marker — the venue's bundle cannot be bound to the " +
+        'build that produced these failures, so they are filed as they are.'
+    };
+  }
+  if (runSha !== venueSha) {
+    return {
+      boundSha: null,
+      note:
+        `the venue has MOVED since the run (the run exercised \`${runSha}\`, the venue now serves ` +
+        `\`${venueSha}\`) — the bundle read now is not the build that produced these failures, so ` +
+        'they are filed as they are.'
+    };
+  }
+  if (!isAncestorOfHead(venueSha)) {
+    return {
+      boundSha: null,
+      note:
+        `the venue's build \`${venueSha}\` is not an ancestor of this checkout's HEAD — it is not ` +
+        "behind the checkout, so a missing handle is not the venue's: the failures are filed as " +
+        'they are.'
+    };
+  }
+  return { boundSha: venueSha, note: null };
 }
 
 function fail(message) {
@@ -740,13 +950,23 @@ function groupFailuresByFile(failed) {
  *   the run script exported (empty/absent = the run carried no marker)
  * @returns {string} the body line
  */
-function venueBuildLine(venueBuildGitSha) {
-  return venueBuildGitSha
-    ? `- venue build: \`${venueBuildGitSha}\``
-    : '- venue build: unknown — the run carried no build marker (a venue predating the #1851 contract, or the probe could not read it)';
+function venueBuildLine(venueBuildGitSha, venueNowSha) {
+  const lines = [
+    venueBuildGitSha
+      ? `- venue build: \`${venueBuildGitSha}\``
+      : '- venue build: unknown — the run carried no build marker (a venue predating the #1851 contract, or the probe could not read it)'
+  ];
+  if (venueNowSha && venueBuildGitSha && venueNowSha !== venueBuildGitSha) {
+    // The venue moved between the run and the filing: the failure was
+    // produced against the build above, and the venue now answers with
+    // another one. The reader needs both to know the verdict could not
+    // be made.
+    lines.push(`- the venue has moved since the run: it now serves \`${venueNowSha}\``);
+  }
+  return lines.join('\n');
 }
 
-function issueBody(file, failures, venue, runStamp, venueBuildGitSha) {
+function issueBody(file, failures, venue, runStamp, venueBuildGitSha, venueNowSha) {
   return [
     'Filed by the local e2e run (`tests/e2e/run/run-local-e2e.sh`).',
     '',
@@ -757,7 +977,7 @@ function issueBody(file, failures, venue, runStamp, venueBuildGitSha) {
             `\`${process.env[VENUE_HOST_ENV] || '(the BASE_URL host)'}\` = \`${process.env[VENUE_IP_ENV]}\``
         ]
       : []),
-    venueBuildLine(venueBuildGitSha),
+    venueBuildLine(venueBuildGitSha, venueNowSha),
     `- run: ${runStamp}`,
     specFileMarker(file),
     `- failing tests: ${failures.length}`,
@@ -784,7 +1004,7 @@ function issueBody(file, failures, venue, runStamp, venueBuildGitSha) {
 /**
  * The comment posted on an issue that already tracks the failure.
  */
-function commentBody(files, venue, runStamp, venueBuildGitSha) {
+function commentBody(files, venue, runStamp, venueBuildGitSha, venueNowSha) {
   // One argv element carries the whole comment, so the cap is the COMMENT's
   // budget, not each file's — an umbrella issue tracking many files must not
   // push the body past the kernel's per-argument cap either.
@@ -792,7 +1012,7 @@ function commentBody(files, venue, runStamp, venueBuildGitSha) {
   return [
     `The local e2e run is still red on ${files.length} spec file(s) this issue covers ` +
       `(${runStamp}, venue \`${venue}\`).`,
-    venueBuildLine(venueBuildGitSha),
+    venueBuildLine(venueBuildGitSha, venueNowSha),
     '',
     ...files.flatMap((entry) => {
       const taken = entry.failures.slice(0, Math.max(0, budget));
@@ -822,7 +1042,7 @@ function firstErrorReason(error) {
   return error.message.split('\n').slice(0, 2).join(' | ');
 }
 
-function createIssue(file, failures, venue, runStamp) {
+function createIssue(file, failures, venue, runStamp, venueNowSha) {
   const title = `test(e2e): ${file} is red on the local run`;
   const created = JSON.parse(
     glab([
@@ -832,7 +1052,7 @@ function createIssue(file, failures, venue, runStamp) {
       '-f',
       `title=${title}`,
       '-f',
-      `description=${issueBody(file, failures, venue, runStamp, process.env.E2E_VENUE_BUILD_GIT_SHA)}`,
+      `description=${issueBody(file, failures, venue, runStamp, process.env.E2E_VENUE_BUILD_GIT_SHA, venueNowSha)}`,
       '-f',
       `labels=${LABELS.join(',')}`
     ])
@@ -841,13 +1061,13 @@ function createIssue(file, failures, venue, runStamp) {
   return created.iid;
 }
 
-function commentOnIssue(issue, files, venue, runStamp) {
+function commentOnIssue(issue, files, venue, runStamp, venueNowSha) {
   glab([
     '-X',
     'POST',
     `projects/${GITLAB_PROJECT_ID}/issues/${issue.iid}/notes`,
     '-f',
-    `body=${commentBody(files, venue, runStamp, process.env.E2E_VENUE_BUILD_GIT_SHA)}`
+    `body=${commentBody(files, venue, runStamp, process.env.E2E_VENUE_BUILD_GIT_SHA, venueNowSha)}`
   ]);
   process.stdout.write(`  #${issue.iid} (commented) ${issue.title}\n`);
 }
@@ -867,7 +1087,7 @@ function commentOnIssue(issue, files, venue, runStamp) {
  * as the backend's createApp pattern: production passes nothing and gets
  * the real glab clients; the unit spec passes fakes to pin the contract).
  */
-function fileTrackedFailures(byFile, openIssues, venue, runStamp, clients = {}) {
+function fileTrackedFailures(byFile, openIssues, venue, runStamp, clients = {}, venueNowSha = null) {
   const create = clients.createIssue || createIssue;
   const comment = clients.commentOnIssue || commentOnIssue;
   // The failing files are grouped by the issue that already tracks them, so
@@ -879,7 +1099,7 @@ function fileTrackedFailures(byFile, openIssues, venue, runStamp, clients = {}) 
     const tracked = findTrackedIssue(file, openIssues);
     try {
       if (!tracked) {
-        create(file, failures, venue, runStamp);
+        create(file, failures, venue, runStamp, venueNowSha);
         continue;
       }
       const entry = byIssue.get(tracked.iid) || { issue: tracked, files: [] };
@@ -893,7 +1113,7 @@ function fileTrackedFailures(byFile, openIssues, venue, runStamp, clients = {}) 
   }
   for (const { issue, files } of byIssue.values()) {
     try {
-      comment(issue, files, venue, runStamp);
+      comment(issue, files, venue, runStamp, venueNowSha);
     } catch (e) {
       for (const entry of files) {
         errors.push(`${entry.file}: ${firstErrorReason(e)}`);
@@ -974,12 +1194,27 @@ async function main() {
   // ERR_CONNECTION_REFUSED, and filing one issue per spec file for that
   // single cause is exactly the tracker noise the failure path exists to
   // prevent.
+  // The venue's CURRENT build marker (#1851): the pre-flight reads
+  // /build-info.json and hands the sha over through a scratch file (an
+  // env var cannot cross back out of a child process). The failure path
+  // needs it to BIND the venue's served bundle to the build the run
+  // exercised — a venue that moved since the run answers with a bundle
+  // that is not the one the failure was produced against.
+  const venueBuildFile = fs.mkdtempSync(path.join(os.tmpdir(), 'file-failure-issues-build-'));
+  let venueSha;
+  let preflightFailed = false;
   try {
     execFileSync('node', [path.join(__dirname, 'preflight.js')], {
       stdio: 'inherit',
-      env: { ...process.env, BASE_URL: venue }
+      env: { ...process.env, BASE_URL: venue, E2E_VENUE_BUILD_FILE: venueBuildFile }
     });
   } catch {
+    preflightFailed = true;
+  } finally {
+    venueSha = readVenueBuildSha(venueBuildFile);
+    fs.rmSync(venueBuildFile, { recursive: true, force: true });
+  }
+  if (preflightFailed) {
     process.stderr.write(
       'file-failure-issues: the venue is not drivable — the failures are a venue event, ' +
         'not per-spec findings. NOTHING is filed; re-run the suite once the venue answers.\n'
@@ -1003,7 +1238,10 @@ async function main() {
   // declaration, fails exactly like a product defect — and used to be
   // FILED as one. The venue's served bundle is the only thing that tells
   // the two apart.
-  const staleContext = await buildStaleVenueContext(venue, noiseFree);
+  const staleContext = await buildStaleVenueContext(venue, noiseFree, {
+    runSha: runBuildSha(reportPath),
+    venueSha
+  });
   const { fileable: byFile, stale: staleVenue } = staleContext.ok
     ? partitionStaleVenue(noiseFree, staleContext)
     : { fileable: noiseFree, stale: new Map() };
@@ -1011,7 +1249,7 @@ async function main() {
     process.stdout.write(`\n${staleContext.note}\n`);
   }
   if (staleVenue.size > 0) {
-    process.stdout.write(venueStalenessReport(staleVenue, venue) + '\n');
+    process.stdout.write(venueStalenessReport(staleVenue, venue, staleContext) + '\n');
   }
   if (byFile.size === 0) {
     if (venueNoise.size > 0) {
@@ -1039,7 +1277,7 @@ async function main() {
 
   process.stdout.write('\nfiled:\n');
   const openIssues = fetchOpenIssues();
-  const errors = fileTrackedFailures(byFile, openIssues, venue, runStamp);
+  const errors = fileTrackedFailures(byFile, openIssues, venue, runStamp, {}, venueSha);
 
   if (errors.length > 0) {
     process.stderr.write(
@@ -1077,5 +1315,11 @@ module.exports = {
   isNotFoundFailure,
   staleVenueHandles,
   partitionStaleVenue,
-  venueStalenessReport
+  venueStalenessReport,
+  venueStaleProof,
+  handleDeclaredAtBuild,
+  bindVenueBuild,
+  buildStaleVenueContext,
+  runBuildSha,
+  sidecarPath
 };

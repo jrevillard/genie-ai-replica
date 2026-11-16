@@ -29,7 +29,12 @@
  */
 const fs = require('fs');
 const path = require('path');
-const { request } = require('../helpers/auth');
+const { request, mapWithConcurrency } = require('../helpers/auth');
+
+// How many chunks the walk reads at once. The walk asks the edge for
+// every chunk the app bundle names; a bounded wave keeps that polite
+// (and quick) without a per-chunk handshake serialized behind the last.
+const CHUNK_FETCH_CONCURRENCY = 6;
 
 const REPO_ROOT = path.resolve(__dirname, '..', '..', '..');
 // Where the app declares its handles. The declaration lives in the
@@ -218,7 +223,10 @@ function chunkPaths(appBundleText) {
 function checkoutDeclaredHandles(srcDir = FRONTEND_SRC) {
   const declared = new Map();
   const walk = (dir) => {
-    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+    // SORTED: the report names the file that declares a handle, and a
+    // name that depends on the filesystem's order is a different name on
+    // every machine — the determinism rule, applied to a report.
+    for (const entry of fs.readdirSync(dir, { withFileTypes: true }).sort((a, b) => (a.name < b.name ? -1 : 1))) {
       const full = path.join(dir, entry.name);
       if (entry.isDirectory()) {
         if (TEST_DIRECTORIES.has(entry.name)) continue;
@@ -262,24 +270,58 @@ async function fetchVenueBundleText(venue, options = {}) {
   }
   const app = await send('GET', `${origin}/${appMatch[0]}`, { raw: true });
   const appText = String(app.data || '');
+  assertScript(appText, `${appMatch[0]}`);
   const paths = chunkPaths(appText);
   if (!paths) {
     throw new Error('the venue app bundle names no chunks (no readable chunk template)');
   }
   const parts = [appText];
-  for (const chunkPath of paths) {
+  // The chunks are read in bounded parallel waves (the shape the repo
+  // already owns for the sweeps): a fresh TLS handshake per chunk, one
+  // after another, is the slowest way to ask a shared edge for a handful
+  // of files. The wave is BOUNDED so the walk does not storm the venue,
+  // and the FIRST failure wins — a chunk that cannot be read makes the
+  // walk incomplete, and an incomplete walk cannot say a handle is
+  // absent.
+  const chunkBodies = await mapWithConcurrency(paths, CHUNK_FETCH_CONCURRENCY, async (chunkPath) => {
     const chunk = await send('GET', `${origin}${chunkPath}`, { raw: true });
     if (chunk.status !== 200) {
       throw new Error(`the venue chunk ${chunkPath} answered HTTP ${chunk.status}`);
     }
-    parts.push(String(chunk.data || ''));
-  }
+    const body = String(chunk.data || '');
+    assertScript(body, chunkPath);
+    return body;
+  });
+  parts.push(...chunkBodies);
   return parts.join('\n');
+}
+
+/**
+ * The body the venue answered with is SCRIPT — not the SPA's fallback
+ * page.
+ *
+ * The status cannot be trusted for this: the edge rewrites a missing
+ * asset to the SPA's index with HTTP 200 (`proxy_intercept_errors on;
+ * error_page 404 = @frontend_spa;` in the nginx template), so a chunk
+ * that does not exist answers 200 and carries HTML. A walk that believed
+ * the status would call itself complete on a chunk it never read, and
+ * then report a handle living in that chunk as ABSENT — the direction
+ * that hides a real defect behind a stale-venue verdict.
+ *
+ * @param {string} body - the served body
+ * @param {string} what - the path it was served for (the message)
+ * @throws {Error} when the body is not script
+ */
+function assertScript(body, what) {
+  if (/^\s*</.test(body)) {
+    throw new Error(`the venue answered ${what} with the SPA fallback page, not the script`);
+  }
 }
 
 module.exports = {
   handlesIn,
   bundleServesHandle,
+  assertScript,
   parseChunkNaming,
   chunkPaths,
   checkoutDeclaredHandles,

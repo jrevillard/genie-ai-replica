@@ -928,6 +928,10 @@ services:
     # surfaces. Same variable gates all four (env template documents it).
     profiles: ["okf"]
     logging: *fluent-logging
+    # least-privilege hardening (SAST wave-8): no capabilities at all —
+    # the server binds a high port and writes nothing outside its mounts.
+    cap_drop:
+      - ALL
     # Harden: no privilege escalation from the container — the file's
     # convention (37 existing services set it; kics Security Opt Not Set).
     security_opt:
@@ -1250,6 +1254,10 @@ services:
     # OKF feature flag: parked with the okf-server (see okf-server block).
     profiles: ["okf"]
     logging: *fluent-logging
+    # least-privilege hardening (SAST wave-8): no capabilities at all —
+    # uvicorn binds a high port and writes nothing outside its mounts.
+    cap_drop:
+      - ALL
     # Harden: no privilege escalation (same convention; kics Security Opt Not Set).
     security_opt:
       - no-new-privileges:true
@@ -1302,6 +1310,11 @@ services:
     # OKF feature flag: parked with the okf-server (see okf-server block).
     profiles: ["okf"]
     logging: *fluent-logging
+    # least-privilege hardening (SAST wave-8): no capabilities at all —
+    # the evaluation server binds a high port and writes nothing outside
+    # its mounts.
+    cap_drop:
+      - ALL
     # Harden: no privilege escalation from the container — the file's
     # convention (kics Security Opt Not Set).
     security_opt:

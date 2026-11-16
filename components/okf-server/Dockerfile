@@ -14,6 +14,14 @@ RUN rm -rf /app/node_modules/shared-lib
 COPY okf-server/ ./
 
 FROM node:22
+# Security-patch the runtime base: pull current Debian security updates so the
+# shipped image does not lag distro point-releases between upstream rebuilds
+# (same doctrine as the gov-chat-backend runtime stage). The full node:22 base
+# is kept for now — the compose healthcheck probes with wget, which the slim
+# base does not ship; slimming is a separate change with its own tool audit.
+RUN apt-get update && \
+    apt-get upgrade -y && \
+    rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 COPY --from=builder /app/package*.json ./
 COPY --from=builder /app/node_modules ./node_modules

@@ -1046,6 +1046,24 @@ services:
       # no max_model_len. Read by dataprep AND okf-server, so one line tunes
       # both worlds.
       - DATAPREP_MAX_MODEL_LEN=${DATAPREP_MAX_MODEL_LEN:-0}
+      # THE CEILING'S MIRROR KNOBS (#1205): the ceiling is derived from these
+      # SAME deployment values dataprep reads — without them reaching this
+      # container the mirror silently falls back to the code defaults while
+      # dataprep uses the deployment's (batch 16 vs 4 changes the derived
+      # ceiling by ~31k chars — the #1588 drift reborn as a delivery gap).
+      # Defaults match dataprep's own compose lines exactly; an override in
+      # .env moves BOTH derivations together.
+      - DATAPREP_LLM_LABEL_BATCH_SIZE=${DATAPREP_LLM_LABEL_BATCH_SIZE:-4}
+      - DATAPREP_CONTEXTUAL_MAX_TOKENS=${DATAPREP_CONTEXTUAL_MAX_TOKENS:-512}
+      - DATAPREP_CHUNK_SIZE=${DATAPREP_CHUNK_SIZE:-500}
+      - DATAPREP_CHUNK_SIZE_PDF=${DATAPREP_CHUNK_SIZE_PDF:-500}
+      - DATAPREP_CHUNK_SIZE_DOCX=${DATAPREP_CHUNK_SIZE_DOCX:-1000}
+      - DATAPREP_CHUNK_SIZE_XLSX=${DATAPREP_CHUNK_SIZE_XLSX:-1500}
+      - DATAPREP_CHUNK_SIZE_PPTX=${DATAPREP_CHUNK_SIZE_PPTX:-500}
+      - DATAPREP_CHUNK_SIZE_HTML=${DATAPREP_CHUNK_SIZE_HTML:-500}
+      - DATAPREP_CHUNK_SIZE_TXT=${DATAPREP_CHUNK_SIZE_TXT:-500}
+      - DATAPREP_CHUNK_SIZE_MD=${DATAPREP_CHUNK_SIZE_MD:-500}
+      - CONTEXTUAL_RETRIEVAL_PROMPT=${CONTEXTUAL_RETRIEVAL_PROMPT:-}
       # Lane cool-down after a dataprep 429 (slot busy): without it a saturated
       # queue hot-loops at ~1 claim/sec (incident 2026-09-28 — 434 rows bouncing
       # while one slot was held for hours during a vLLM outage). Rows never
@@ -2287,6 +2305,7 @@ services:
       DOCLING_DEVICE: ${DOCLING_DEVICE:-cuda}
       DOCLING_ENDPOINT: ${DOCLING_ENDPOINT:-}
       NVIDIA_VISIBLE_DEVICES: ${NVIDIA_VISIBLE_DEVICES:-all}
+      DATAPREP_CHUNK_SIZE: ${DATAPREP_CHUNK_SIZE:-500}
       DATAPREP_CHUNK_SIZE_PDF: ${DATAPREP_CHUNK_SIZE_PDF:-500}
       DATAPREP_CHUNK_SIZE_DOCX: ${DATAPREP_CHUNK_SIZE_DOCX:-1000}
       DATAPREP_CHUNK_SIZE_XLSX: ${DATAPREP_CHUNK_SIZE_XLSX:-1500}

@@ -88,7 +88,7 @@ async function main() {
     console.error('OKF_SMOKE_TOKEN_ADMIN required');
     process.exit(1);
   }
-  console.log('OKF ceiling smoke — ceiling in force: ' + CEILING);
+  console.log('OKF ceiling smoke');
   console.log('');
 
   // ── 0a. The READOUT: the live ceiling and WHY it is that number ───────────
@@ -335,9 +335,16 @@ async function main() {
     fail('setup: the split repo could not be created → ' + splitRepo.status);
   } else {
     const splitId = splitRepo.body.repo_id;
+    // The fixture is sized from the LIVE ceiling (a fixed ~300k body would
+    // sit UNDER the derived ceiling on a deployment with a bigger window —
+    // a >81k-token window derives >300k — and the split assertion would
+    // fail even though the ceiling works).
+    const target = CEILING * 2;
+    const filler = 'lorem ipsum dolor sit amet ';
+    const perSection = Math.ceil(target / 6 / filler.length);
     const sections = [];
     for (let i = 0; i < 6; i += 1) {
-      sections.push('## Section ' + i + '\n\n' + 'lorem ipsum dolor sit amet '.repeat(1852));
+      sections.push('## Section ' + i + '\n\n' + filler.repeat(perSection));
     }
     const bigBody = sections.join('\n\n');
     const bigImp = await call('POST', `/api/okf/repos/${splitId}/import`, {

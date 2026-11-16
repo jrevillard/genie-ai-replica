@@ -288,7 +288,7 @@ function coerceWindow(value) {
   let coerced = value;
   if (typeof coerced === 'string') {
     const trimmed = coerced.trim();
-    if (!/^d+$/.test(trimmed)) return null;
+    if (!/^\d+$/.test(trimmed)) return null;
     coerced = Number(trimmed);
   }
   if (!Number.isFinite(coerced) || !Number.isInteger(coerced)) return null;
@@ -328,7 +328,12 @@ function pruneOldest(set) {
 async function getServedModelId(baseUrl, { timeoutMs, apiKey, quiet = false } = {}) {
   const outcome = await sharedProbe(baseUrl, { timeoutMs, apiKey, quiet });
   if (outcome.id !== null) return outcome.id;
-  throw outcome.err;
+  // An EMPTY base answers "nothing known" (id null, err null) — that is a
+  // null return, NOT a throw: throwing null here bypassed every caller's
+  // `if (!id) → discoveryError` branch with an opaque TypeError (the
+  // pre-#1205 contract for a base that never resolved).
+  if (outcome.err) throw outcome.err;
+  return outcome.id;
 }
 
 /** The served CONTEXT WINDOW (tokens) for baseUrl, TTL-cached on the SAME
@@ -796,6 +801,7 @@ function clearModelCache() {
 }
 
 module.exports = {
+  MAX_SANE_MODEL_WINDOW_TOKENS,
   credentialForBase,
   deploymentKey,
   envPin,

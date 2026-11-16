@@ -35,12 +35,20 @@ const MIRROR_FILE = path.join('components', 'okf-server', 'services', 'contextua
 /**
  * Read a python string literal and resolve the escapes it uses.
  *
- * Only the escapes these constants actually use are resolved (\n, \t, \",
- * \\) — a literal with an unknown escape is left as written, so the
- * comparison fails loudly instead of silently agreeing on a wrong value.
+ * The BACKSLASH escape is resolved first (via a placeholder), so a source
+ * literal like `\\n` resolves to backslash + n — resolving \n first would
+ * corrupt exactly the comparison this gate exists to keep honest. Only the
+ * escapes these constants actually use are resolved; a literal with an
+ * unknown escape is left as written, so the comparison fails loudly
+ * instead of silently agreeing on a wrong value.
  */
 function resolvePythonLiteral(literal) {
-  return literal.replace(/\\n/g, '\n').replace(/\\t/g, '\t').replace(/\\"/g, '"').replace(/\\\\/g, '\\');
+  return literal
+    .replace(/\\\\/g, '\x00BS\x00')
+    .replace(/\\n/g, '\n')
+    .replace(/\\t/g, '\t')
+    .replace(/\\"/g, '"')
+    .replace(/\x00BS\x00/g, '\\');
 }
 
 /**
@@ -78,7 +86,11 @@ function pythonInt(source, name) {
 }
 
 /**
- * The length of a python triple-quoted constant.
+ * The length of a python triple-quoted constant AS DATAPREP USES IT: the
+ * prompt is `.strip()`ped before it is measured (`_ctx_env.strip() or
+ * default`), so the pin compares the stripped length — pinning the raw
+ * literal would be off by exactly the strip whitespace on the next
+ * prompt edit.
  *
  * @param {string} source - the python source
  * @param {string} name - the constant name
@@ -86,7 +98,7 @@ function pythonInt(source, name) {
  */
 function pythonTripleQuotedLength(source, name) {
   const match = source.match(new RegExp(`${name}\\s*=\\s*"""([\\s\\S]*?)"""`));
-  return match ? match[1].length : null;
+  return match ? match[1].trim().length : null;
 }
 
 /**

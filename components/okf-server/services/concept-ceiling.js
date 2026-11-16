@@ -72,6 +72,9 @@ const CEILING_SOURCES = {
  * not silently widen the gate (stale beats broken). */
 let lastKnownDerived = null;
 
+/** The windows already warned about as too small (the once-guard above). */
+const tooSmallWarned = new Set();
+
 /** Read the operator's explicit pin, or null. */
 function operatorPin() {
   const raw = process.env.OKF_MAX_CONCEPT_DOC_CHARS;
@@ -111,12 +114,20 @@ function effectiveCeiling() {
     // there (no contextualization, no truncation), so there is no ceiling
     // to derive. The static default applies — with a warning, because a
     // deployment on a small window deserves to know its ceiling is a
-    // fallback rather than a derivation.
-    logger.warn('ceiling.window_too_small', {
-      window_tokens: window.window,
-      reserved_tokens: derived.terms.total,
-      note: 'the serving-model window cannot hold the context reservations — dataprep serves raw chunks there (no truncation), so the static ceiling applies'
-    });
+    // fallback rather than a derivation. ONCE per window value: the
+    // ceiling is read on every concept GET, save, import batch and publish
+    // gate — an unguarded line would flood the log with hundreds of
+    // duplicates per incident (the house one-line-per-incident rule; the
+    // Python twin's _warn_once is the same discipline). The set is keyed
+    // by the window so a CHANGED window warns again.
+    if (!tooSmallWarned.has(window.window)) {
+      tooSmallWarned.add(window.window);
+      logger.warn('ceiling.window_too_small', {
+        window_tokens: window.window,
+        reserved_tokens: derived.terms.total,
+        note: 'the serving-model window cannot hold the context reservations — dataprep serves raw chunks there (no truncation), so the static ceiling applies'
+      });
+    }
   }
 
   if (lastKnownDerived) {
@@ -206,5 +217,6 @@ module.exports = {
   operatorPin,
   _resetForTesting: () => {
     lastKnownDerived = null;
+    tooSmallWarned.clear();
   }
 };

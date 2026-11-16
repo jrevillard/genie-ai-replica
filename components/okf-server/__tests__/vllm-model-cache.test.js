@@ -899,6 +899,16 @@ describe('#1205 — getServedWindow (one probe, two fields)', () => {
     }
   );
 
+  test('a proxy that serializes the field as a DIGIT STRING is accepted (python int() parity)', async () => {
+    // The docblock's own case: "some proxies serialize the field as a JSON
+    // string". '65536' must parse — this is the regression the CI lint
+    // nearly shipped: a broken /^d+$/ rejected every valid digit string and
+    // the deployment silently fell back to the static ceiling.
+    mockProbeSuccess('served/model', { max_model_len: '65536' });
+    const result = await cache.getServedWindow('http://vllm:8000');
+    expect(result.window).toBe(65536);
+  });
+
   test('a FAILED probe serves the STALE window (stale beats broken)', async () => {
     mockProbeSuccess('served/model', { max_model_len: 65536 });
     await cache.getServedWindow('http://vllm:8000');
@@ -918,6 +928,16 @@ describe('#1205 — getServedWindow (one probe, two fields)', () => {
     expect(result.window).toBeNull();
     expect(result.stale).toBe(false);
     expect(result.error).toBeTruthy();
+  });
+
+  test('an EMPTY base answers null (never a throw of null)', async () => {
+    // The #1205 refactor's regression, pinned: getServedModelId('') used to
+    // return null; the shared chain's outcome carries err=null there, and a
+    // naive `throw outcome.err` threw NULL — bypassing every caller's
+    // `if (!id) → discoveryError` branch with an opaque TypeError.
+    await expect(cache.getServedModelId('')).resolves.toBeNull();
+    const win = await cache.getServedWindow('');
+    expect(win.window).toBeNull();
   });
 
   test('an absurdly large window is a broken proxy value, dropped', async () => {

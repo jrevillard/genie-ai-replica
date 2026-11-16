@@ -34,7 +34,12 @@
 // and the ceiling falls back — a boot that cannot reach the endpoint
 // degrades to the static default instead of blocking the first import.
 
-const { getServedWindow, deploymentVllmBase, credentialForBase } = require('./vllm-model-cache');
+const {
+  getServedWindow,
+  deploymentVllmBase,
+  credentialForBase,
+  MAX_SANE_MODEL_WINDOW_TOKENS
+} = require('./vllm-model-cache');
 const { logger } = require('../shared-lib/logger');
 
 /** The window sources the ceiling's ladder can see. */
@@ -56,8 +61,11 @@ const state = {
 /** The operator's explicit statement of the window the endpoint serves.
  *
  * dataprep's tier 1 (DATAPREP_MAX_MODEL_LEN): 0 = discover, >0 = stated.
- * The same sanitization: a non-positive or unparseable value is "not
- * stated", never a window of zero.
+ * The same sanitization, including the SANITY CEILING: dataprep's
+ * _sanitize_window_override treats an absurd override (a typo, or a
+ * chars-not-tokens value) as unset and discovers instead — an absurd
+ * stated window here would derive a ceiling of hundreds of millions of
+ * characters and silently disable the guard on every write path.
  *
  * @returns {number|null}
  */
@@ -66,6 +74,7 @@ function operatorStatedWindow() {
   if (raw === undefined || raw === null || String(raw).trim() === '') return null;
   const parsed = parseInt(String(raw).trim(), 10);
   if (!Number.isFinite(parsed) || parsed <= 0) return null;
+  if (parsed > MAX_SANE_MODEL_WINDOW_TOKENS) return null;
   return parsed;
 }
 

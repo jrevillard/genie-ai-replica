@@ -54,6 +54,14 @@ describe('#1205 — the window discovery tiers', () => {
     expect(llmWindow.operatorStatedWindow()).toBeNull();
   });
 
+  test('an ABSURD operator statement is treated as unset (dataprep _sanitize_window_override parity)', () => {
+    // A typo or a chars-not-tokens value (100000000) must not derive a
+    // ceiling of hundreds of millions of characters — the same sanity
+    // ceiling the discovered tier enforces applies to the stated one.
+    process.env.DATAPREP_MAX_MODEL_LEN = '100000000';
+    expect(llmWindow.operatorStatedWindow()).toBeNull();
+  });
+
   test('the current window is readable SYNCHRONOUSLY (no network on a write path)', () => {
     delete process.env.DATAPREP_MAX_MODEL_LEN;
     llmWindow.__setWindowForTesting(65536, 'discovered');

@@ -31,7 +31,8 @@
 //                              map in genieai_dataprep_microservice.py
 //                              (get_chunk_size_for_file)
 //   prompt length              dataprep: CONTEXTUAL_RETRIEVAL_PROMPT (default
-//                              _CONTEXTUAL_RETRIEVAL_PROMPT_DEFAULT, 1016 chars)
+//                              _CONTEXTUAL_RETRIEVAL_PROMPT_DEFAULT, 1014
+//                              chars after dataprep's .strip())
 //   header / marker            dataprep: DOC_CONTEXT_HEADER,
 //                              DOC_CONTEXT_TRUNCATION_MARKER
 //
@@ -87,9 +88,10 @@ const DOC_CONTEXT_HEADER = 'Document content (may be truncated):\n';
 /** dataprep: DOC_CONTEXT_TRUNCATION_MARKER. */
 const DOC_CONTEXT_TRUNCATION_MARKER = '...[truncated]';
 
-/** dataprep: _CONTEXTUAL_RETRIEVAL_PROMPT_DEFAULT (1016 chars) — the
- * per-chunk system prompt whose tokens are reserved from the window. */
-const CONTEXTUAL_RETRIEVAL_PROMPT_DEFAULT_CHARS = 1016;
+/** dataprep: _CONTEXTUAL_RETRIEVAL_PROMPT_DEFAULT, as dataprep MEASURES it —
+ * `.strip()`ped (1014 of the literal's 1016 chars). The validator pins this
+ * number against dataprep's source with the same strip applied. */
+const CONTEXTUAL_RETRIEVAL_PROMPT_DEFAULT_CHARS = 1014;
 
 /** The representative scaffolding a concept document carries: the filename
  * line and a two-label line, joined the way dataprep joins them
@@ -129,32 +131,46 @@ function smallestChunkSize() {
   return smallest;
 }
 
-/** The serialized user turn of a batch of chunks — the EXACT shape dataprep
- * sends: json.dumps of [{"index": i, "text": t}] with python's DEFAULT
- * separators (", " between items, ": " after the keys) and ensure_ascii
- * escaping. Python's json.dumps is not JSON.stringify: the spaces are part
- * of the reservation, and a non-ASCII document expands every character to
- * a six-character escape (dataprep: _batch_user_turn_chars).
+/** The serialized user turn of a batch of chunks, as dataprep's
+ * json.dumps produces it — python's DEFAULT separators (", " between
+ * items, ": " after the keys) are part of the reservation, and the
+ * ensure_ascii escaping is modeled at its WORST case: every chunk
+ * character as a six-character \uXXXX escape (dataprep:
+ * _batch_user_turn_chars measures the REAL turn per document; a
+ * policy ceiling has no document, so it reserves the worst script).
  *
  * @param {number} batchSize number of chunks in the batch
  * @param {number} chunkChars characters per chunk
  * @returns {number} the serialized length in characters
  */
 function serializedBatchChars(batchSize, chunkChars) {
-  const parts = [];
-  for (let i = 0; i < batchSize; i += 1) {
-    parts.push(`{"index": ${i}, "text": "${'x'.repeat(chunkChars)}"}`);
-  }
-  return parts.length ? `[${parts.join(', ')}]`.length : 0;
+  // The reservation is the WORST-CASE serialized shape: python's
+  // ensure_ascii escaping expands EVERY non-ASCII character to a
+  // six-character \uXXXX escape, and the ceiling must hold for every
+  // script a corpus can carry (an ASCII-only basis would let a CJK
+  // document at the ceiling pass the gate and truncate anyway — the
+  // exact #1588 condition, reborn for multilingual corpora). The JSON
+  // scaffolding around each item does not escape: the per-item cost is
+  // the scaffolding plus chunkChars × 6.
+  const itemOverhead = `{"index": 0, "text": ""}`.length;
+  const textChars = chunkChars * 6; // ensure_ascii worst case
+  return batchSize * (itemOverhead + textChars) + (batchSize > 0 ? batchSize - 1 : 0) * 2;
 }
 
 /** The prompt tokens reserved from the window: the per-chunk system prompt
- * (DATAPREP_CONTEXTUAL_RETRIEVAL_PROMPT when the deployment sets it, else
- * dataprep's default length). */
+ * (CONTEXTUAL_RETRIEVAL_PROMPT when the deployment sets it — stripped, the
+ * way dataprep measures it — else dataprep's default length). */
 function promptTokens() {
-  const override = process.env.DATAPREP_CONTEXTUAL_RETRIEVAL_PROMPT;
+  // The env override is CONTEXTUAL_RETRIEVAL_PROMPT — the SAME spelling
+  // dataprep reads (a DATAPREP_-prefixed mirror name would be a knob
+  // nothing sets: the drift the mirror exists to prevent). dataprep
+  // strips the value before measuring (`_ctx_env.strip() or default`),
+  // so the mirror strips too.
+  const override = process.env.CONTEXTUAL_RETRIEVAL_PROMPT;
   const chars =
-    override && String(override).trim() !== '' ? String(override).length : CONTEXTUAL_RETRIEVAL_PROMPT_DEFAULT_CHARS;
+    override && String(override).trim() !== ''
+      ? String(override).trim().length
+      : CONTEXTUAL_RETRIEVAL_PROMPT_DEFAULT_CHARS;
   return Math.ceil(chars / CHARS_PER_TOKEN);
 }
 

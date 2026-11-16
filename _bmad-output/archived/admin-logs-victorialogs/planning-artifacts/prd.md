@@ -2,7 +2,7 @@
 prd_key: admin-logs-victorialogs
 created: 2026-08-31
 updated: 2026-09-04
-status: active
+status: archived (2026-11-16; initiative complete — see _bmad-output/planning-artifacts/prd.md for the active initiative)
 initiative: admin-logs + security-scan migration to VictoriaLogs
 umbrella_branch: feat/admin-logs-victorialogs/prd
 umbrella_mr: "!343"

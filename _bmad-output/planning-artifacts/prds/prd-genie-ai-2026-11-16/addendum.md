@@ -38,7 +38,13 @@ cited in the PRD carry their source-revision limits.
 Filled from the S1 research digest (`research-extract.md`) — maintained here
 so the PRD's D03 section stays a pointer, not a copy. See section "Runtime
 candidates" in the extract; the ranked recommendation and per-candidate
-maturity/licence signals live there.
+maturity/licence signals live there. **Post-review (2026-11-16): the
+research's "Amendments" section (AM-1..AM-6) supersedes the affected extract
+statements — DSH embeddability corrected (SDK subprocess mode exists; rank-5
+provisional, operational assessment outstanding), custom-loop pick
+provisional (unimplemented), LangGraph time controls and vLLM tool-choice
+prerequisites scoped by version/mode. No ranking is settled evidence until
+the AM-1 assessment and a GENIE implementation exist.**
 
 Selection drivers for D03 (from framing + operator): plugin architecture
 (evaluating DSH specifically for this), licence compatibility (V07),

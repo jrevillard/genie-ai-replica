@@ -82,8 +82,8 @@ dies on the same message. `tests/e2e/run/preflight.js` tells them apart —
 it launches the browser and opens the venue **before** the suite touches
 anything, and stops the run with the named cause. Without it, a runner
 whose Chromium build does not match the installed `@playwright/test` turns
-220 of 242 tests into the same launch error, and the failure path reports an
-issue per spec file for one missing binary.
+220 of 242 tests into the same launch error, and the failure path reports
+one failure per spec file for one missing binary.
 
 The pre-flight also **reports the runner it used** — the `@playwright/test`
 version on disk and the Chromium revision that version names — so a result
@@ -208,8 +208,8 @@ legitimately flip the grant on a real venue (`data/okf/smoke-test/mint-tokens.mj
 the rag-benchmarks anchor wrapper) each carry a verified revert, and a revert
 that fails to land is what this gate catches — on the default pair or on any
 pair the script's own overrides named. Two obligations, neither dropping the
-other: the gate's verdict is RECORDED first, the failure path still reports a red
-run's issues, and the gate's exit 5 is the last word. The gate sweeps the
+other: the gate's verdict is RECORDED first, the failure path still reports a
+red run, and the gate's exit 5 is the last word. The gate sweeps the
 realms `ROPC_POSTURE_REALMS` names, comma-separated (default `genie`) —
 two standing postures stay out of the verdict, because their grants are
 the provisioned state and not a run's doing: the test-only realm

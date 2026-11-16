@@ -64,7 +64,13 @@ function fakeBanner({
   const doc = {
     // The locale the app adopted at boot — the app's own signal, read
     // off the document.
-    documentElement: { lang },
+    documentElement: {
+      lang,
+      // The DOM's own read: a respelling of the same read
+      // (`getAttribute('lang')`) must reach the fake, not a
+      // TypeError.
+      getAttribute: (name) => (name === 'lang' ? lang : null)
+    },
     querySelector: (selector) => {
       selectors.push(selector);
       return mounted && selector === BANNER_HANDLE ? element : null;
@@ -172,10 +178,10 @@ const rejection = (promise) =>
 
 // The module's public surface is NOT checked here: a caller
 // destructuring a name the module no longer exports dies with a
-// TypeError at RUN time, on the venue. The gate for that lives in the
-// config-validator (`__tests__/e2e-helper-surface.test.js`), which CI
-// runs on every MR and which derives the names from the callers
-// themselves.
+// TypeError at RUN time, on the venue. A CI door for that needs an
+// AST-derived gate (a text reader mistakes strings and template
+// literals for code, and a hand-copied list is disarmable in the same
+// MR) — it is filed as its own issue, #1924.
 
 test('the session viewport is a COPY of the default viewport, not the shared object', () => {
   expect(DEFAULT_SESSION.viewport, 'the session owns its viewport').not.toBe(DEFAULT_VIEWPORT);

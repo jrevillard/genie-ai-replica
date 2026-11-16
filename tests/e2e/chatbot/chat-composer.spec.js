@@ -576,8 +576,8 @@ const PRIMITIVE_FIELD_FLOOR = 80;
 const MEASURE_CASES = [
   { viewport: { width: 1920, height: 1080 }, theme: 'light' },
   { viewport: { width: 1920, height: 1080 }, theme: 'dark' },
-  { viewport: DEFAULT_VIEWPORT, theme: 'light' },
-  { viewport: DEFAULT_VIEWPORT, theme: 'dark' }
+  { viewport: { ...DEFAULT_VIEWPORT }, theme: 'light' },
+  { viewport: { ...DEFAULT_VIEWPORT }, theme: 'dark' }
 ];
 
 const label = (c) => `${c.viewport.width}x${c.viewport.height} ${c.theme}`;

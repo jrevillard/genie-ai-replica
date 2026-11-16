@@ -330,10 +330,9 @@ test.describe('the seeded locale is proved, not assumed', () => {
  * page anybody can measure — a collapsed banner's box reads zeroed and
  * there is no clip to take, so the capture throws; a hidden one keeps
  * its box and paints nothing, so the capture reads the page behind it.
- * The post-reload selector wait used
- * to enforce that, and when the reload path left the banner to this gate
- * alone, the guarantee would have gone with it — silently, because
- * nothing failed until a capture read the page behind the banner.
+ * The two failures are not alike: a collapsed banner fails LOUDLY, and a
+ * hidden one fails silently — it yields the wrong pixels and nothing
+ * fails.
  *
  * These drive the real session against a page whose banner fails the
  * gate: the session must refuse to open. (The gate's own condition is

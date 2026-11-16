@@ -113,9 +113,8 @@ function bannerIsSettled(doc) {
  *    box) is not a page anybody can measure — a collapsed banner's box
  *    reads zeroed and there is no clip to take, so the capture throws;
  *    a hidden one keeps its box and paints nothing, so the capture
- *    reads the page behind it. This is the
- *    observable the post-reload selector wait used to enforce, and the
- *    reason the reload path can leave the banner to THIS gate alone.
+ *    reads the page behind it. Both halves are what a capture needs, so
+ *    the reload path leaves the banner to THIS gate alone.
  *
  * 2. waitForCompositingSettled — compositing of the masked banner. A
  *    capture taken before the compositor has produced its final frame

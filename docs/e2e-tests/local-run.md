@@ -410,9 +410,10 @@ Four details the read holds to:
 - the walk reads the app's SOURCE files, not the files a BUILD imports: a
   handle added to a component no entry point imports yields a stale-venue
   verdict that refreshing the venue cannot cure (the component never
-  renders). Four components under the frontend's `src` are imported by
-  nothing today (`components/okf/LabelEditor.vue` is named only by a Jest
-  contract test, and the walk's own rule excludes the test tree). None of
+  renders). Four Vue components under the frontend's `src` are imported
+  by nothing today (`components/okf/LabelEditor.vue` is named only by a
+  Jest contract test, and the walk's own rule excludes the test tree), and
+  two `.js` modules of the walk's source set are orphans as well. None of
   them declares a handle today.
 
 ### The build marker and the pre-flight probe (#1851)

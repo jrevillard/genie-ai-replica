@@ -96,8 +96,9 @@ Multi-phase procedure in `docs/e2e-tests/`:
 **The suite has no CI door** (operator decision, 2026-11-10: no CI resources
 for the Playwright suite — it runs locally, regularly). The executed set is
 the local run's: `tests/e2e/run/run-local-e2e.sh` runs the whole `tests/e2e/`
-tree against a deployed stack, prints the outcome and files a
-`status::backlog` issue per failing spec file →
+tree against a deployed stack, prints the outcome and the **context** of
+every red (the build the venue serves, this checkout's HEAD, and the handles
+the specs waited for) — the issue itself is written **by hand** →
 `docs/e2e-tests/local-run.md`.
 
 ### Demo Data Seeding

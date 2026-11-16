@@ -183,3 +183,74 @@ Two further syntheses are consumed directly by the recommendations: DSH's `ToolD
 ## Staleness map
 
 24 ledger claims mapped against the technical pack's freshness windows (version/compat ≤1 mo · ecosystem/license/maturity/perf ≤6 mo · pattern ≤24 mo). None stale at completion. **Earliest re-check: 2026-12-01** — the compat/version class (Agents SDK tracing-default + CC-mode drops, pydantic-ai 2.68.0, LangGraph langchain-core dep, vLLM parser/strict behaviour, DSH pi-ai adapter mechanism, pydantic-ai UsageLimits, LangGraph streaming modes, AI SDK repairToolCall): every one of these moves within weeks and directly gates REC-1/REC-2/REC-6. Ecosystem/maturity claims (DSH adoption absence, framework cadences) re-check 2027-05-01; pattern claims (taxonomy, authz model, citation mechanics) up to 2028-11. This map is the Refresh work order — `bmad-deep-recon` refresh on this folder re-checks exactly these.
+
+---
+
+## Amendments — post-review verification (2026-11-16)
+
+Adversarial review of MR !919 identified factual errors and evidence-grade
+issues in this report. Corrections below supersede the corresponding body
+statements; the body is left as written for audit honesty. The same
+corrections propagate to `research-extract.md` (digest) and the PRD.
+
+**AM-1 (DSH embeddability — corrects §2.1/§2.2 "workstation not embeddable"
+and the revisit trigger "embeddable server mode").** Verified against the
+DSH repository at commit `39163dd3`: an SDK family exists that drives a
+complete Harness runtime from another process over newline-delimited
+JSON-RPC on stdio — a TypeScript client spawning `dsh` as a subprocess
+(`packages/sdk`), and a Python SDK shipping a bundled runtime
+(`python/sdk-runtime`, `sdk-minimal` profile). DSH is therefore embeddable
+**as an SDK-driven subprocess**, not as an in-process library. The rank-5
+verdict rested partly on a false premise. What remains valid: developer
+preview, no security audit, zero evidenced adoption, vLLM compatibility
+untested, and the operational cost of a subprocess-per-? lifecycle (session
+management, isolation, resource footprint) is **unassessed**. The ranking is
+provisional pending an operational assessment of the SDK integration mode
+(lifecycle, isolation, cost, availability in the published version). This
+amendment does not recommend adopting DSH.
+
+**AM-2 (custom-loop maturity is provisional — qualifies §2.2/§2.3).** The
+custom loop's Production maturity 4/5 was scored "supported but not proven"
+with no GENIE implementation and no comparative experiment; the ~80-line
+practitioner example does not establish the cost of validation, retries,
+streaming, cancellation, accounting and audit integration. The weighted
+ranking is a screening over documented mechanisms, not proof of comparative
+production fitness. Evidence required before D03 can accept the custom loop:
+a GENIE implementation against FR-10..FR-12/NFR-7 requirements. Also: G4
+(per-operation authorization) was evaluated mainly as tool registration and
+G5 (existing-SSE-contract compatibility) mainly as streaming availability —
+both gates need re-evaluation at application level, not mechanism level.
+
+**AM-3 (LangGraph budget controls — corrects §2.1 G6 "no time/token
+budget").** Verified at langgraph commit `02f2c2e6`: `TimeoutPolicy`
+(`run_timeout`, `idle_timeout`) exists, scoped to node attempts, cooperative
+(asyncio cancellation; not fired while the GIL is blocked); `step_timeout`
+exists in the graph engine. Corrected statement: LangGraph has node-scoped
+cooperative time controls but no complete end-to-end request/token budget.
+`StateGraph.compile` defaults `checkpointer` to None — the
+`langchain-core` dependency exists whether or not a checkpoint backend is
+operated; distinguish dependency weight from optional persistence.
+
+**AM-4 (vLLM tool-choice prerequisites are version- and mode-scoped —
+corrects §4 "without [parser], named/required `tool_choice` returns HTTP
+400").** Verified against vLLM v0.29.0 docs (compose-pinned version) at
+commit `98dff2a8`: named function calling and `tool_choice='required'` are
+supported **by default** through the structured-outputs backend; the
+`--enable-auto-tool-choice` + parser prerequisite applies to **automatic**
+tool calling. The FSM-compile first-call latency note remains correct (it
+applies to the structured-outputs path). Corrected requirement: build a
+version × model × parser × tool-choice-mode × schema-strictness × streaming
+compatibility matrix and validate the deployed combination in V06. The
+deployed version itself remains V03 work.
+
+**AM-5 (licence screening grade — qualifies §2.1 cut of Mastra).** "Cut,
+licence-blocked" overstated: NOASSERTION with an unread LICENSE is
+**unverified**, not incompatible. Unread/failed-retrieval licence metadata
+is recorded as unverified and never counted as an incompatibility finding
+(aligns PRD FR-19/V07).
+
+**AM-6 (claim ledger).** The report's own tally (2 verified / 22 unverified
+/ 1 overturned) means ranking conclusions above rest mostly on unverified
+claims; decision-critical sources are pinned to versions/commits in AM-1,
+AM-3, AM-4. Compatibility-class claims re-check 2026-12-01 (§ Staleness
+map) — unchanged.

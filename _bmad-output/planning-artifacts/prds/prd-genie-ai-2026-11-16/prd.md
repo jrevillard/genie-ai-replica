@@ -182,17 +182,30 @@ second authorization or knowledge-governance layer).
   search within configured, server-side limits — one agent, approved document
   operations only.
 - **FR-10** The agent returns either a source-grounded answer with traceable
-  citations or an explicit insufficient-evidence response. Citation
-  enforcement is mechanical, not rhetorical: every citation is verified
-  against structured tool results carrying stable source identifiers, with a
-  refusal path; prompt-level citation instructions alone are not accepted as
-  enforcement (research REC-5 — adding them made invention *worse* in the
-  literature).
+  citations or an explicit insufficient-evidence response. Two acceptance
+  criteria are defined separately: **reference validity** (every citation
+  resolves to an authorized, actually-retrieved source — checkable
+  mechanically against structured tool results with stable source
+  identifiers) and **grounding** (the cited passage supports the associated
+  claim — an unsupported assertion citing a genuine source fails grounding
+  even though its references are valid). Prompt-level citation instructions
+  alone are not accepted as enforcement (research REC-5 — adding them made
+  invention *worse* in the literature). The PRD also requires an explicit
+  **release policy**: what content may be streamed to the user before
+  verification completes (the existing SSE route forwards text chunks ahead
+  of final metadata, so a post-release verification failure cannot unsend
+  text), and the user-visible outcome when verification fails — including
+  partial and translated responses. The enforcement mechanism is an
+  architecture decision.
 - **FR-11** Agent execution is bounded server-side on every dimension — step
   cap, wall-clock time, per-run token budget, model/tool-call count and
   evidence volume — because no framework supplies complete bounds (REC-3).
+  Counting semantics are defined: retries, parallel tool invocations and
+  auxiliary model calls (e.g. translation, classification) all count against
+  the budgets, and the wall-clock deadline applies end-to-end per request.
   Cancellation propagates from client disconnect through the loop to the
-  model call, and is tested (with FR-16).
+  model call, and is tested (with FR-16). Numeric thresholds remain
+  post-baseline (§8).
 - **FR-12** Authorization follows the per-request intersection model (REC-4,
   converged pattern): effective permissions = user ∩ task over the
   registered toolset; the user is the actor (impersonation semantics —
@@ -216,8 +229,17 @@ second authorization or knowledge-governance layer).
   (configuration flag), alongside the unchanged legacy RAG path. Granularity
   per user/tenant is a deliberate non-goal of iteration 1.
 - **FR-16** Rollback (agentic ↔ legacy routing) is demonstrated for every
-  delivered stage; data-changing stages (none in iteration 1's read-only
-  scope) would require explicit recovery procedures.
+  delivered stage. Rollback treatment is defined for **in-flight requests**
+  (completion vs interruption), **partial responses** already streamed, and
+  **persisted conversations** created by the agentic path — including
+  format/version compatibility with the legacy path and whether any agent
+  session state is reused after rollback. Acceptance scenario required: an
+  agentic conversation is started, agentic routing is disabled, and that
+  conversation is continued on the legacy path without data loss or
+  corruption. Session and audit persistence are in scope (§4.1), so "no
+  data changes" claims are limited to authoritative knowledge stores;
+  future data-changing stages would require explicit recovery procedures.
+  Aligned with V08.
 
 ### FG-4 — Governance, audit and compliance
 
@@ -227,10 +249,13 @@ second authorization or knowledge-governance layer).
 - **FR-18** Agent executions are observable through the existing stack (OTel
   traces, VictoriaLogs/VictoriaTraces, Grafana dashboards). No dedicated
   admin UI in iteration 1.
-- **FR-19** Licences are validated for selected package versions, plugins,
-  images, binaries and models (including transitive and optional
-  dependencies); required notices are preserved and project disclosures
-  updated (verification V07).
+- **FR-19** Licensing evidence comes in two mandatory tiers: **V07a —
+  pre-adoption** (licence verification for the exact package versions of any
+  dependency before it is adopted — gates D03; NOASSERTION/unread licence
+  text counts as **unverified**, never as an incompatibility finding) and
+  **V07b — pre-release** (complete licence and redistribution assessment
+  incl. transitive/optional dependencies, images, binaries, models; required
+  notices preserved and project disclosures updated).
 - **FR-20** The agentic request path contains no `comps` imports, no OPEA
   service calls and no OPEA build-time downloads — enforced from the first
   delivered stage, verified by build/CI checks where feasible.
@@ -238,14 +263,27 @@ second authorization or knowledge-governance layer).
   deferred OPEA exit harder.
 - **FR-22** A capability is described as "OPEA-free" only for its explicitly
   validated scope.
+- **FR-28** Authorization acceptance covers **retained data**, not only
+  live calls: evidence retained across turns, session state and
+  audit/tracing records have defined ownership and access rules (fed by
+  V04). Tested: cross-user and cross-session identifier attempts, narrower
+  task scopes, and permission changes that occur **between turns before
+  retained evidence is reused**. Historical visibility of earlier answers
+  after a source is revoked is an explicit product-policy decision
+  (recorded, not defaulted).
 
 ### FG-5 — Evaluation infrastructure
 
-- **FR-23** The evaluation protocol runs two experiments separately:
-  **E01** fixed-RAG reference vs the new OPEA-free document capability
-  boundary (did the OPEA-free path preserve required behaviour?); **E02**
-  fixed-RAG reference vs the agent over equivalent capabilities (does agentic
-  behaviour provide useful gains within acceptable limits?).
+- **FR-23** The evaluation protocol runs two experiments over three
+  configurations sharing one backend per comparison: **A** = legacy fixed
+  RAG; **B** = a fixed (non-agentic) pipeline over the new OPEA-free
+  capabilities; **C** = the agent over those same new capabilities.
+  **E01 compares A/B** (did the OPEA-free path preserve required
+  behaviour?); **E02 compares B/C** (does agentic behaviour provide useful
+  gains within acceptable limits?) — so an E02 delta is attributable to the
+  agent, not to the retrieval migration. Corpus, models, retrieval settings
+  and execution conditions are controlled across each pair; intentional
+  prompt/orchestration differences are recorded.
 - **FR-24** Every evaluation run versions its corpus, cases, configurations,
   models, prompts and evaluator instructions; evaluation cases used to tune
   the implementation are kept separate from the assessment set.
@@ -264,11 +302,11 @@ second authorization or knowledge-governance layer).
 |----|-------------|
 | NFR-1 (Security) | Trusted-service authorization on every operation (FR-12); no raw AQL to agents (ADR okf-011); provenance preserved end-to-end. |
 | NFR-2 (Sovereignty/licensing) | Apache-2.0-compatible selections only (V07 assessment before any release using the artifacts). Sovereignty is gated on **defaults, not capabilities**: every runtime/dependency is audited for default telemetry, default cloud export and licence posture before adoption (research §5.2 — the field's documented failure mode is a default, e.g. OpenAI Agents SDK exporting traces to OpenAI cloud keyed on the same credential as a self-hosted baseURL). Any runtime under developer-preview status carries an explicit operational-risk acceptance. |
-| NFR-3 (Coexistence) | The legacy OPEA RAG path serves existing traffic unchanged throughout; the agentic path is additive. Resource contention on shared model services is measured (E02 reports it), not assumed away. |
+| NFR-3 (Coexistence) | The legacy OPEA RAG path serves existing traffic unchanged throughout; the agentic path is additive. A **legacy non-regression criterion under concurrent agentic load** is part of the S4 gate (per-run bounds do not by themselves prevent many bounded runs from saturating shared vLLM/TEI); the expected saturation/admission behaviour of the agentic path is defined. E02 measures resource consumption; thresholds post-baseline per §8. |
 | NFR-4 (Operability) | Rollback rehearsed per stage (V08); deployment-level activation (FR-15); observability through the existing stack (FR-18). |
 | NFR-5 (Compatibility) | Existing client API/SSE/error contracts inventoried and regression-covered before the S3 compatibility gate (V05). |
 | NFR-6 (CI) | Executable CI/integration coverage and runner availability confirmed; checks needing a separate environment are identified (V09 — repo E2E execution is suspended per ADR 0001; the local E2E run is the current baseline). |
-| NFR-7 (Reversibility) | Choices reversible where practical; no second authorization or knowledge-governance layer; no generic multi-engine platform built merely to claim future flexibility — the design minimizes direct coupling and documents replacement costs instead. The runner-up runtime (pydantic-ai per the S1 research) is kept as designated fallback with a ≤1-day swap-in exit test (REC-2). |
+| NFR-7 (Reversibility) | Choices reversible where practical; no second authorization or knowledge-governance layer; no generic multi-engine platform built merely to claim future flexibility — the design minimizes direct coupling and documents replacement costs instead. Required now for every candidate: documented dependency boundaries and replacement scope, with measured or estimated swap cost. The runner-up runtime and swap duration are **hypotheses until runtime/placement evidence exists** (a scoped spike demonstrates them; the research's ≤1-day pydantic-ai estimate assumes same-Python placement, which Node-vs-Python (OQ-6) may invalidate) — decided after D03/placement, consistent with not building a second engine merely to demonstrate flexibility. |
 
 ## 8. Success metrics and counter-metrics
 
@@ -321,7 +359,7 @@ through the verification item that feeds it:
 |----|----------|--------|--------|
 | D01 | Ownership/placement of the document capability boundary | Open | V02, V04 |
 | D02 | OPEA-free agentic path coexisting with unchanged legacy OPEA RAG | Proposed (operator direction 2026-11-16) | V03, NFR-3 |
-| D03 | First agent runtime | Open. Operator named DSH the preferred **investigation** candidate (2026-11-10 framing); the S1 research (2026-11-16) ranks DSH **last** of five — "do not adopt as a dependency" (3-month-old developer preview, no security audit, workstation not embeddable; revisit trigger: stable non-preview release + embeddable server mode + security audit; borrow its `ToolDefinition` split as a pattern). Research pick: **custom minimal tool-calling loop** (REC-1), **pydantic-ai** designated runner-up (REC-2). Decision at S4 entry from V06/V07 | S1 research, SC-01 experiment, V06, V07 |
+| D03 | First agent runtime | Open. Operator named DSH the preferred **investigation** candidate (2026-11-10 framing). S1 research (2026-11-16, amended post-review AM-1/AM-2) ranked DSH last **provisionally** — the original "not embeddable" premise was corrected (DSH ships TS + Python SDKs driving its runtime as a JSON-RPC stdio **subprocess**, bundled runtime, `sdk-minimal` profile); what stands: developer preview, no security audit, zero evidenced adoption, vLLM untested, and the subprocess integration mode (lifecycle, isolation, cost, published-version availability) is **unassessed** — assess before treating any ranking as settled. Research screening pick: **custom minimal tool-calling loop** (REC-1, provisional — unimplemented; D03 acceptance requires a GENIE implementation against FR-10..FR-12), **pydantic-ai** runner-up. Decision at S4 entry from V06 + pre-adoption licensing evidence (V07a) | S1 research + amendments, SC-01 experiment, V06, V07 |
 | D04 | Preservation vs versioning of document/client contracts | Open | V05 |
 | D05 | Release gates and pilot scope | Open | Baseline measurement, validation infrastructure (V09) |
 
@@ -334,7 +372,8 @@ Verification backlog (roles, not yet named assignees):
 | V04 | Map effective authorization, provenance and ownership across existing services, incl. OKF amendments | Contract acceptance | Architecture + security reviewers |
 | V05 | Inventory actual API/SSE/error contracts and current regression coverage | S3 compatibility gate | Backend/frontend + QA |
 | V06 | Test selected runtime integration with GENIE's model endpoint, approved tools, isolation, cancellation, telemetry | S4 runtime decision | Agent integration owner |
-| V07 | Licence and redistribution assessment for selected artifacts incl. transitive/optional dependencies | Pilot/release using them | Licensing reviewer |
+| V07a | Pre-adoption licence verification for the exact versions of any dependency being adopted (NOASSERTION/unread = unverified, not incompatible) | D03 close / any dependency adoption | Licensing reviewer |
+| V07b | Full licence and redistribution assessment for selected artifacts incl. transitive/optional dependencies, notices, disclosures | Pilot/release using them | Licensing reviewer |
 | V08 | Rehearse routing rollback (agentic ↔ legacy) | S4 rollout | Operations + QA |
 | V09 | Confirm executable CI/integration coverage and runner availability; identify checks needing a separate environment | Release-gate acceptance | CI + QA owners |
 
@@ -373,8 +412,9 @@ Verification backlog (roles, not yet named assignees):
 3. Contract placement (D01): new service, extension of an existing one
    (backend BFF? document-repository? OKF?), or library? Architecture doc
    decides from V02/V04 evidence.
-4. Runtime (D03): DSH vs alternatives — decided at S4 entry from S1 research
-   + V06/V07.
+4. Runtime (D03): custom loop vs pydantic-ai vs DSH-via-SDK-subprocess —
+   decided at S4 entry from the amended S1 research (incl. the AM-1 DSH
+   subprocess-mode operational assessment) + V06 + V07a.
 5. Where do agreed evaluation thresholds live once measured (D05), and who
    signs the E01/E02 gate?
 6. Node vs Python placement of the agent loop — no public evidence either

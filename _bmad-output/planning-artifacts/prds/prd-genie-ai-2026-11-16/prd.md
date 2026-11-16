@@ -214,7 +214,11 @@ second authorization or knowledge-governance layer).
   neither party gains permissions); enforcement lives in the tool executor
   with per-request identity; the approved public/restricted knowledge
   distinction is preserved, and authorization errors never trigger a more
-  permissive fallback.
+  permissive fallback. Degraded modes obey the same honesty rule as the
+  happy path: an availability fallback must never silently conceal
+  inadequate evidence — when retrieval runs degraded (partial availability,
+  fallback strategy), insufficiency is reported as insufficiency, never
+  returned as a confident answer (framing §11).
 - **FR-13** Evidence surfaced to the user resolves to authorized, stable
   citations, rendered through the existing RAG citation components (no new
   frontend citation surface in iteration 1).
@@ -238,10 +242,15 @@ second authorization or knowledge-governance layer).
   session state is reused after rollback. Acceptance scenario required: an
   agentic conversation is started, agentic routing is disabled, and that
   conversation is continued on the legacy path without data loss or
-  corruption. Session and audit persistence are in scope (§4.1), so "no
-  data changes" claims are limited to authoritative knowledge stores;
-  future data-changing stages would require explicit recovery procedures.
-  Aligned with V08.
+  corruption. Every stage rollout is recorded in a **rollout record**
+  identifying: selected consumers and capabilities, artifact/configuration
+  versions, activation and rollback procedures, in-flight treatment,
+  **rollback triggers and the responsible operator** (a named person who
+  pulls the trigger when a trigger condition fires — "rollback is possible"
+  is not accountability), and rehearsal evidence (framing §11). Session and
+  audit persistence are in scope (§4.1), so "no data changes" claims are
+  limited to authoritative knowledge stores; future data-changing stages
+  would require explicit recovery procedures. Aligned with V08.
 
 ### FG-4 — Governance, audit and compliance
 
@@ -273,6 +282,17 @@ second authorization or knowledge-governance layer).
   retained evidence is reused**. Historical visibility of earlier answers
   after a source is revoked is an explicit product-policy decision
   (recorded, not defaulted).
+- **FR-29** Structural decisions of this initiative are recorded as decision
+  records (ADRs) with the framing §12 discipline: the traceability chain
+  `use case → requirement → decision → investigation/story → merge request →
+  validation evidence → released version` is maintained; each record carries
+  status (Proposed/Accepted/Rejected/Superseded), date, owner, reviewers,
+  problem/constraints/alternatives, decision + evidence, consequences and
+  replacement costs, reconsideration triggers, and links; superseded
+  records are preserved with links to successors; existing ADRs are
+  status-checked before reliance (e.g. okf-034 is still `Proposed` and must
+  not be treated as accepted); each document has one canonical home and is
+  linked, not duplicated.
 
 ### FG-5 — Evaluation infrastructure
 
@@ -290,7 +310,12 @@ second authorization or knowledge-governance layer).
   use them; intentional prompt/orchestration differences are recorded.
 - **FR-24** Every evaluation run versions its corpus, cases, configurations,
   models, prompts and evaluator instructions; evaluation cases used to tune
-  the implementation are kept separate from the assessment set.
+  the implementation are kept separate from the assessment set. The
+  evaluation set's composition is fixed explicitly: **answerable and
+  unanswerable questions, citation checks, representative languages** (the
+  product is multilingual; translation is a compatibility surface per
+  FR-14), **restricted/public access scenarios, failure and cancellation
+  cases** (framing §10).
 - **FR-25** Authorization scenarios are part of the evaluation set; no
   unauthorized disclosure is accepted. Passing them is evidence for tested
   conditions, not proof of impossibility. The evaluation set also includes
@@ -367,7 +392,7 @@ through the verification item that feeds it:
 |----|----------|--------|--------|
 | D01 | Ownership/placement of the document capability boundary | Open | V02, V04 |
 | D02 | OPEA-free agentic path coexisting with unchanged legacy OPEA RAG | Proposed (operator direction 2026-11-16) | V03, NFR-3 |
-| D03 | First agent runtime | Open. Operator named DSH the preferred **investigation** candidate (2026-11-10 framing). S1 research (2026-11-16, amended post-review AM-1/AM-2) ranked DSH last **provisionally** — the original "not embeddable" premise was corrected (DSH ships TS + Python SDKs driving its runtime as a JSON-RPC stdio **subprocess**, bundled runtime, `sdk-minimal` profile); what stands: developer preview, no security audit, zero evidenced adoption, vLLM untested, and the subprocess integration mode (lifecycle, isolation, cost, published-version availability) is **unassessed** — assess before treating any ranking as settled. Research screening pick: **custom minimal tool-calling loop** (REC-1, provisional — unimplemented; D03 acceptance requires a GENIE implementation against FR-10..FR-12), **pydantic-ai** runner-up. Decision at S4 entry from V06 + pre-adoption licensing evidence (V07a) | S1 research + amendments, SC-01 experiment, V06, V07 |
+| D03 | First agent runtime | Open. Operator named DSH the preferred **investigation** candidate (2026-11-10 framing). S1 research (2026-11-16, amended post-review AM-1/AM-2) ranked DSH last **provisionally** — the original "not embeddable" premise was corrected (DSH ships TS + Python SDKs driving its runtime as a JSON-RPC stdio **subprocess**, bundled runtime, `sdk-minimal` profile); what stands: developer preview, no security audit, zero evidenced adoption, vLLM untested, and the subprocess integration mode (lifecycle, isolation, cost, published-version availability) is **unassessed** — assess before treating any ranking as settled. DSH revisit trigger (AM-1-corrected): stable non-preview release + security audit + completed subprocess-mode operational assessment. Research screening pick: **custom minimal tool-calling loop** (REC-1, provisional — unimplemented; D03 acceptance requires a GENIE implementation against FR-10..FR-12), **pydantic-ai** runner-up. Decision at S4 entry from V06 + pre-adoption licensing evidence (V07a) | S1 research + amendments, SC-01 experiment, V06, V07 |
 | D04 | Preservation vs versioning of document/client contracts | Open | V05 |
 | D05 | Release gates and pilot scope | Open | Baseline measurement, validation infrastructure (V09) |
 
@@ -375,7 +400,7 @@ Verification backlog (roles, not yet named assignees):
 
 | ID | Investigation | Required before | Role |
 |----|---------------|-----------------|------|
-| V02 | Record what the OPEA retriever/embedding path contributes to query results (semantics, filtering, reranking); distinguish query from ingestion paths | S3 design | Technical lead |
+| V02 | Record what the OPEA retriever/embedding path contributes to query results (semantics, filtering, reranking); distinguish query from ingestion paths. Input: the OPEA contract-test suite (F06) documents retrieval/filtering/reranking/ingestion/telemetry checks | S3 design | Technical lead |
 | V03 | Record deployed versions, image digests, models, configurations, topology; reconcile with source baseline | Representative baseline | Operations |
 | V04 | Map effective authorization, provenance and ownership across existing services, incl. OKF amendments | Contract acceptance | Architecture + security reviewers |
 | V05 | Inventory actual API/SSE/error contracts and current regression coverage | S3 compatibility gate | Backend/frontend + QA |

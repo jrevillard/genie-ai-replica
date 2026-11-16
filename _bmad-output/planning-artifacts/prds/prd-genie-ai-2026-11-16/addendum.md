@@ -44,7 +44,11 @@ statements — DSH embeddability corrected (SDK subprocess mode exists; rank-5
 provisional, operational assessment outstanding), custom-loop pick
 provisional (unimplemented), LangGraph time controls and vLLM tool-choice
 prerequisites scoped by version/mode. No ranking is settled evidence until
-the AM-1 assessment and a GENIE implementation exist.**
+the AM-1 assessment and a GENIE implementation exist. The screen's G4
+(per-operation authorization) and G5 (existing-SSE-contract compatibility)
+verdicts were **mechanism-level** (tool registration, streaming
+availability) and need re-evaluation at application level — riding V04/V05
+and the V06 integration test.**
 
 Selection drivers for D03 (from framing + operator): plugin architecture
 (evaluating DSH specifically for this), licence compatibility (V07),
@@ -58,3 +62,15 @@ inventory; data-transition and ingestion-writer strategy; backend-comparison
 evaluation (formerly E03); Intel archival scope/timing monitoring (formerly
 V01); progressive replacement sequencing across the legacy stack. Entry
 condition: the agentic foundations exist (S4 done).
+
+## F. Retrieval-strategy guard (framing NOTE, preserved verbatim in intent)
+
+**Removing embeddings or vector indexes is not an accepted decision.** Such a
+removal requires evidence on answer quality, retrieval coverage, citations,
+latency, resource consumption and operational complexity — six dimensions,
+not one (a firewall against single-metric arguments, e.g. the
+Medium-article thesis that published retrieval results transfer). A
+subsequent controlled experiment **may** compare lexical, vector, structural
+and hybrid retrieval strategies using the same GENIE corpus, authorization
+rules and evaluation protocol — an option for iteration 2+, recorded here so
+it survives PRD scope boundaries.

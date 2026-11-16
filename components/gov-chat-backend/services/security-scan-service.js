@@ -158,14 +158,6 @@ const securityScanService = {
         service: 'http'
       },
       {
-        type: 'ip_blocked',
-        severity: 'medium',
-        regex: /IP Blocked/i,
-        description: 'IP blocked due to suspicious activity',
-        recommendation: 'Review blocked IPs for false positives and enhance rate limiting.',
-        service: 'system'
-      },
-      {
         type: 'auth_failure_401',
         severity: 'medium',
         regex: /Authentication Failure - 401/i,
@@ -238,7 +230,9 @@ const securityScanService = {
         service: 'system'
       }
     ];
-    const suspiciousPatterns = [/SQL injection|XSS|CSRF|brute force|command injection|threat detection|ip blocked/i];
+    // `ip blocked` left the alternation with the IP-reputation retirement
+    // (#582): nothing logs that line anymore.
+    const suspiciousPatterns = [/SQL injection|XSS|CSRF|brute force|command injection|threat detection/i];
 
     try {
       logger.info(
@@ -320,7 +314,7 @@ const securityScanService = {
     //
     // Known limit: a 3-character floor discards the regex structure. A
     // tight pattern is widened into a loose one before it reaches VL —
-    // `/IP Blocked/i` is fetched as `_msg:~"Blocked"`, and the
+    // a short pattern is fetched as a loose `_msg:~"…"` literal, and the
     // `/404 Not Found: (GET|POST|PUT|DELETE)/` pattern as an OR over
     // `_msg:~"GET" | "POST" | "PUT" | "DELETE"`, which on a web server
     // returns a thousand unrelated lines. The re-test below keeps the
@@ -1092,16 +1086,6 @@ const securityScanService = {
           title: 'Fix CORS Configuration',
           description: 'Cross-Origin Resource Sharing (CORS) is too permissive',
           action: 'Restrict CORS to only allow trusted domains instead of wildcard (*) origin'
-        });
-      }
-
-      const ipBlockedIssues = vulnerabilities.medium.filter((v) => v.type === 'ip_blocked');
-      if (ipBlockedIssues.length > 0) {
-        recommendations.push({
-          severity: 'medium',
-          title: 'Review IP Blocking Events',
-          description: `${ipBlockedIssues.length} IP blocking events detected`,
-          action: 'Investigate blocked IPs for malicious activity and review rate limiting policies'
         });
       }
 

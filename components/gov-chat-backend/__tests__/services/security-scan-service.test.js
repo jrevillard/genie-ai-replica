@@ -429,13 +429,15 @@ describe('SecurityScanService', () => {
       expect(result.some((r) => r.title === 'Fix CORS Configuration')).toBe(true);
     });
 
-    it('should generate IP blocking recommendation', () => {
+    it('generates no IP-blocking recommendation — the pattern is retired (#582)', () => {
+      // The ip_reputation system is gone; a hypothetical ip_blocked finding
+      // must not resurrect the "Review IP Blocking Events" recommendation.
       const result = securityScanService.generateRecommendations(
         { count: 0, details: [] },
         { count: 0, details: [] },
         { critical: [], medium: [{ type: 'ip_blocked' }], low: [] }
       );
-      expect(result.some((r) => r.title === 'Review IP Blocking Events')).toBe(true);
+      expect(result.some((r) => r.title === 'Review IP Blocking Events')).toBe(false);
     });
 
     it('should generate 401 recommendation', () => {
@@ -773,7 +775,7 @@ describe('SecurityScanService', () => {
   describe('VL scan pagination', () => {
     // The brute-force pattern's clause is exactly `_msg:~"brute force"`
     // (regex /brute force/i has a single literal), which lets the mock
-    // route full pages to that pattern alone — the other 13 patterns and
+    // route full pages to that pattern alone — the other 12 patterns and
     // the suspicious-term clause (which also contains the literal) get
     // empty results.
     const BF_CLAUSE = '_msg:~"brute force"';
@@ -991,13 +993,23 @@ describe('SecurityScanService', () => {
     });
 
     it('labels the suspicious-activity entry with the term that matched, not the longest alternative', async () => {
-      // The suspicious regex is one alternation over seven attack
-      // families; every entry used to report the longest of the seven,
-      // so an IP-blocked line was filed as "command injection". The
-      // reported term keeps the casing of the log line it came from.
-      const result = await scanWith('IP blocked for repeated failures');
-      const entry = result.suspiciousActivities.find((a) => a.pattern === 'IP blocked');
+      // The suspicious regex is one alternation over several attack
+      // families; every entry used to report the longest of them, so a
+      // brute-force line was filed as "command injection". The reported
+      // term keeps the casing of the log line it came from. (The retired
+      // `ip blocked` alternative left the alternation with #582.)
+      const result = await scanWith('brute force suspected on login');
+      const entry = result.suspiciousActivities.find((a) => a.pattern === 'brute force');
       expect(entry).toBeDefined();
+    });
+
+    it('no longer carries the retired ip_blocked vulnerability pattern (#582)', async () => {
+      // The pattern row, its recommendation handler and the middleware's
+      // "IP Blocked" log source are all gone — the scan must neither match
+      // the old line nor report it as a vulnerability type.
+      const result = await scanWith('IP Blocked due to suspicious activity');
+      expect(result.vulnerabilities.medium.find((v) => v.type === 'ip_blocked')).toBeUndefined();
+      expect(result.suspiciousActivities.some((a) => a.pattern === 'IP blocked')).toBe(false);
     });
   });
 

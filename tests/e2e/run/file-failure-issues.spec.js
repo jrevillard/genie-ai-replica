@@ -64,12 +64,12 @@ test.describe('a failure carrying an edge-transport signature is venue noise (#1
     expect(isConnectionSignature(null)).toBe(false);
   });
 
-  test('the partition keeps product failures fileable and moves the signature ones to the report', () => {
+  test('the partition keeps product failures per-spec and moves the signature ones to the report', () => {
     // The PRODUCTION partition is what is under test here — not a
     // re-implementation of it. A mixed file: one outage symptom, one
-    // real assertion failure — the real one stays fileable, the outage
-    // one is noise; an all-signature file drops out of the filing
-    // entirely; a clean file passes through untouched.
+    // real assertion failure — the real one stays per-spec, the outage
+    // one is noise; an all-signature file drops out of the per-spec
+    // report entirely; a clean file passes through untouched.
     const grouped = groupFailuresByFile([
       {
         file: 'tests/e2e/welcome-banner.spec.js',

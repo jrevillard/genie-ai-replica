@@ -172,8 +172,9 @@ fi
 # The venue build marker (#1851): the pre-flight reads /build-info.json and
 # hands the served build's git sha over through a scratch file (an env var
 # cannot cross back out of a child process). The failure path reads the
-# exported value and writes it into EVERY issue it files — a stale venue
-# cannot file a misleading spec-defect issue without naming its build.
+# exported value and prints it with the outcome — a stale venue's red is
+# named with the build it served, so a reader can tell a stale venue from
+# a defect of the product.
 echo "pre-flight"
 E2E_VENUE_BUILD_FILE="$(mktemp)"
 # The preflight may exit nonzero (an unreachable venue, a BROKEN marker) and
@@ -228,7 +229,7 @@ fi
 # genie (or whatever ROPC_POSTURE_REALMS names) accepting password grants
 # fails the RUN even when every
 # spec was green. The gate RECORDS its verdict here; the failure path runs
-# next (a red run files its issues whatever the posture said); the gate's
+# next (the red is reported whatever the posture said); the gate's
 # exit 5 is the exit's last word. One exception sits ABOVE it: a run
 # crashed too hard to write a report exits 4 before the gate — its venue
 # state persists, so the NEXT run's gate catches any leftover.

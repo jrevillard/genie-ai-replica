@@ -37,7 +37,7 @@ const REPO_ROOT = path.resolve(__dirname, '..', '..', '..');
 // The report the run read: the runner moves the fresh report to a
 // per-run name before handing it over, so a later `playwright test --list`
 // (or any other invocation) in the same checkout cannot replace the
-// evidence this path files from.
+// evidence this path reports from.
 const DEFAULT_REPORT_PATH = path.join(REPO_ROOT, 'reports', 'playwright-report.json');
 
 // The venue's edge: ONE definition, credential-free — the same address the
@@ -56,7 +56,7 @@ const MAX_ERROR_LINES = 40;
 
 // A single failure's text is bounded in BOTH dimensions: the line count
 // above, and the character count here — one enormous line would otherwise
-// push the issue body past the kernel's per-argument cap on its own.
+// flood the report on its own.
 const MAX_ERROR_CHARS = 8000;
 
 // The transport signatures of a navigation that never reached the app:
@@ -81,10 +81,10 @@ function isConnectionSignature(failure) {
 }
 
 /**
- * Split the grouped failures into what is FILEABLE and what is VENUE
- * NOISE (#1783). A file whose failures are ALL connection signatures
- * drops out of the filing entirely; a file whose other failures survive
- * the filter stays fileable for exactly those. Pure — the same grouped
+ * Split the grouped failures into what is a PRODUCT finding and what is
+ * VENUE NOISE (#1783). A file whose failures are ALL connection signatures
+ * drops out of the per-spec report entirely; a file whose other failures
+ * survive the filter stays for exactly those. Pure — the same grouped
  * input always produces the same split, and the caller owns the
  * printing.
  * @param {Map<string, Array<{error: string}>>} byFile - The grouped
@@ -110,8 +110,8 @@ function partitionVenueNoise(byFile) {
 }
 
 /**
- * The ONE venue-availability report that replaces one product issue per
- * spec file for a healed mid-run outage (#1783): the venue, the
+ * The ONE venue-availability report for a healed mid-run outage (#1783):
+ * the venue, the
  * signature-bearing failure inventory, and the verdict. Pure string —
  * the caller prints it, the unit spec asserts it.
  * @param {Map<string, Array<{error: string}>>} venueNoise - Per spec
@@ -132,7 +132,7 @@ function venueAvailabilityReport(venueNoise, venue) {
   }
   lines.push(
     `The venue answered the re-probe at ${venue} — these look like a venue outage that healed ` +
-      'mid-run, NOT product findings: nothing is filed for them. The run is still RED; ' +
+      'mid-run, NOT product findings: nothing is reported per spec for them. The run is still RED; ' +
       'check the venue events (kubectl get events -A) and re-run the suite once the venue has been stable.'
   );
   return lines.join('\n');
@@ -159,15 +159,15 @@ function readReport(reportPath) {
   if (!report || !Array.isArray(report.suites)) {
     fail(`the JSON report at ${reportPath} carries no suites — it is not a Playwright report`);
   }
-  // The run stamp filed with every issue comes from stats.startTime — the
-  // moment the red run STARTED, not the moment this filing ran. A report
-  // without it would otherwise get a fabricated wall-clock stamp, and the
-  // issue would misattribute the run it names (Playwright's json reporter
+  // The run stamp comes from stats.startTime — the moment the red run
+  // STARTED, not the moment this path read the report. A report without it
+  // would otherwise get a fabricated wall-clock stamp, and the report
+  // would misattribute the run it names (Playwright's json reporter
   // always writes stats; one that did not is not a report this path reads).
   if (!report.stats || typeof report.stats.startTime !== 'string') {
     fail(
       `the JSON report at ${reportPath} carries no stats.startTime — it is not a report the ` +
-        'failure path can stamp a filed issue with'
+        'failure path can stamp the run it names with'
     );
   }
   return report;
@@ -177,8 +177,7 @@ function readReport(reportPath) {
  * Every test in the report, with the file it belongs to and the FULL title
  * path (the describe blocks plus the test title). The report carries the
  * test title alone; two tests with the same title in different describes
- * would otherwise be indistinguishable in the run output and in a filed
- * issue.
+ * would otherwise be indistinguishable in the run output.
  */
 function collectTests(suites, inheritedFile, describePath = [], out = []) {
   for (const suite of suites || []) {
@@ -199,8 +198,8 @@ function collectTests(suites, inheritedFile, describePath = [], out = []) {
 
 /**
  * The spec file's path, relative to the repository root. The report carries
- * it relative to the test directory — the tracker, the docs and the issues
- * all name spec files by their repository path.
+ * it relative to the test directory — the report and the docs name spec
+ * files by their repository path.
  */
 function repoPath(file) {
   if (!file) return '(unknown file)';
@@ -403,9 +402,9 @@ function waitedHandles(failures) {
 /**
  * The failures grouped by the spec FILE they belong to.
  *
- * One issue per spec FILE: the file is the unit an owner fixes, and a
- * file-level title keeps the dedupe stable across runs. Two failures in
- * the same file are ONE issue with two entries.
+ * One entry per spec FILE: the file is the unit an owner fixes, and a
+ * file-level title keeps the grouping stable across runs. Two failures in
+ * the same file are ONE entry with two lines.
  */
 function groupFailuresByFile(failed) {
   const byFile = new Map();

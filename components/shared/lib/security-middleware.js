@@ -17,8 +17,6 @@ class SecurityMiddleware {
     pathTraversal: [/(\.\.[/\\])+/i, /(%2e%2e[/\\])+/i, /\b(etc\/passwd|\/root\/)\b/i]
   };
 
-  static ipReputation = new Map();
-
   static apiLimiter = rateLimit({
     windowMs: 60 * 1000, // 1 minute
     max: 1000,
@@ -91,7 +89,6 @@ class SecurityMiddleware {
       });
     }
 
-    SecurityMiddleware.updateIPReputation(req);
     next();
   }
 
@@ -138,46 +135,13 @@ class SecurityMiddleware {
       userAgent: req.headers['user-agent'],
       user: req.user || null
     });
-
-    SecurityMiddleware.blockIP(req.ip, 'Threat detected', req);
   }
 
-  static updateIPReputation(req) {
-    // Skip reputation scoring for auth endpoints, authenticated requests, and health checks
-    if (req.path.startsWith('/api/auth') || req.headers.authorization || req.user || req.path === '/api/health') {
-      logger.debug('Skipping IP reputation scoring for authenticated request', {
-        ip: req.ip,
-        path: req.path,
-        user: req.user || null,
-        hasAuthHeader: !!req.headers.authorization
-      });
-      return;
-    }
-
-    const ip = req.ip;
-    const key = ip;
-    const reputation = SecurityMiddleware.ipReputation.get(key) || {
-      score: 0,
-      lastSeen: Date.now()
-    };
-    const timeSinceLastSeen = Date.now() - reputation.lastSeen;
-    reputation.score = Math.max(0, reputation.score - Math.floor(timeSinceLastSeen / (1000 * 60 * 60)));
-    reputation.score += 1;
-    SecurityMiddleware.ipReputation.set(key, {
-      score: reputation.score,
-      lastSeen: Date.now()
-    });
-
-    logger.debug('Updated IP reputation', {
-      ip,
-      score: reputation.score,
-      path: req.path
-    });
-
-    if (reputation.score > 100) {
-      SecurityMiddleware.blockIP(ip, `High threat score (${reputation.score})`, req);
-    }
-  }
+  // The IP-reputation system was retired (#582, operator ruling
+  // 2026-11-15): it scored every clean request in an in-memory Map,
+  // logged "IP Blocked" past a threshold — and nothing ever blocked. The
+  // request gate for every endpoint is the express-rate-limit middleware
+  // configured above.
 
   static applySecurityMiddleware(app) {
     // Apply chat-specific rate limiter
@@ -212,17 +176,6 @@ class SecurityMiddleware {
         });
       }
       next();
-    });
-  }
-
-  static blockIP(ip, reason, req = null) {
-    logger.warn('IP Blocked', {
-      ip,
-      reason,
-      path: req?.path || null,
-      method: req?.method || null,
-      userAgent: req?.headers?.['user-agent'] || null,
-      user: req?.user || null
     });
   }
 

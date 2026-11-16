@@ -2989,6 +2989,25 @@ contractual evidence — a fresh clone does not carry them.)
   chat-helper fix as ALREADY UPSTREAM, and the branch now carries neither.
   The branch's chart work is the only thing left in it, which is what the
   branch is for.
+- **Chart 0.2.172 is LIVE on the 1.37 laptop cluster — the rebased branch
+  installs and the realm imports.** The upgrade ran end to end
+  (`Helm upgrade succeeded for release genieai/genieai.v4 with chart
+  genieai-umbrella@0.2.172`), which means the post-upgrade convergence
+  hook — the realm import — resolved every placeholder, the two new ones
+  included. Read back from the LIVE realm through the Keycloak admin API
+  (not from the file):
+  - `ssoSessionIdleTimeout` = **28800** (8 h) and `ssoSessionMaxLifespan`
+    = **604800** (7 d) — the values main's realm asks for. Keycloak's own
+    defaults (1800 / 36000) are what #1834 was filed against, so this is
+    the fix VISIBLE in the cluster, not just in the render.
+  - `directAccessGrantsEnabled` = **false** on all four built-in clients
+    the realm now declares (`account`, `account-console`, `admin-cli`,
+    `broker`) — main's #1849 posture, applied by the chart's copy of the
+    realm through kcc.
+  Through the Envoy edge (nodePort 30356, `Host: genieai.local`):
+  `/api/health` → **200** `application/json`, `/api-docs.json` → **200**
+  `application/json` carrying the OpenAPI document — the 0.2.171 routing
+  fix still holds after the rebase.
 
 ## Plan map
 

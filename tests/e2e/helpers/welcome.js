@@ -2,9 +2,9 @@
 //
 // The welcome screen's recipes, written once.
 //
-// Four specs open a signed-in session on the welcome screen, three of
-// them capture pixels and read them back, and two of them compute WCAG
-// contrast ratios. Each of those was written out again in every file,
+// Five specs open a signed-in session on the welcome screen, one of
+// them captures pixels and reads them back, and two of them compute
+// WCAG contrast ratios. Each of those was written out again in every file,
 // and the copies had already drifted: two alpha tables carrying the
 // same numbers under two names, and a visual-layer read whose "layer
 // is off" branch returned bare from one copy and `{ hasOverlay: false }`
@@ -74,9 +74,10 @@ async function waitForComposerReady(page) {
  *   - the banner is there (a banner that is not mounted is not settled);
  *   - it is VISIBLE: a non-empty box, and a visibility that is not
  *     hidden. A banner that is mounted but collapsed or hidden is not a
- *     page anybody can measure — a collapsed banner's box reads zeroed,
- *     a hidden one paints nothing, and the pixel capture comes back
- *     empty in either case;
+ *     page anybody can measure — a collapsed banner's box reads zeroed
+ *     and there is no clip to take, so the capture throws; a hidden one
+ *     keeps its box and paints nothing, so the capture reads the page
+ *     behind it;
  *   - its entrance animation is over: gli-enter runs 650 ms of opacity
  *     and transform on .quick-help-banner, and a box read or a capture
  *     inside that window measures the animation rather than the page.
@@ -110,8 +111,9 @@ function bannerIsSettled(doc) {
  *    The gate also owns the banner's VISIBILITY, not only its presence:
  *    a banner that is mounted but hidden (or collapsed to a zero-size
  *    box) is not a page anybody can measure — a collapsed banner's box
- *    reads zeroed, a hidden one paints nothing, and the pixel capture
- *    comes back empty in either case. This is the
+ *    reads zeroed and there is no clip to take, so the capture throws;
+ *    a hidden one keeps its box and paints nothing, so the capture
+ *    reads the page behind it. This is the
  *    observable the post-reload selector wait used to enforce, and the
  *    reason the reload path can leave the banner to THIS gate alone.
  *

@@ -2211,6 +2211,7 @@ export default {
       },
       card: {
         actions: 'إجراءات {name}',
+        browse: 'استعراض',
         building: 'يبني…',
         buildingAria: 'قيد الإنشاء — لا يزال الملف المصدر قيد المعالجة',
         delete: 'حذف',

@@ -2237,6 +2237,7 @@ export default {
       },
       card: {
         actions: 'Vitendo vya {name}',
+        browse: 'Vinjari',
         building: 'Inajenga…',
         buildingAria: 'Inajengwa — faili chanzo bado inachakatwa',
         delete: 'Futa',

@@ -2178,6 +2178,7 @@ export default {
       },
       card: {
         actions: '{name} 的操作',
+        browse: '浏览',
         building: '构建中…',
         buildingAria: '正在构建 — 源文件仍在处理中',
         delete: '删除',

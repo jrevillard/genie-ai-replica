@@ -2207,6 +2207,7 @@ export default {
       },
       card: {
         actions: 'Kōm̦m̦an ko ñan {name}',
+        browse: 'Browse',
         building: 'A bering loo…',
         buildingAria: 'Ej kōm̦m̦an — peba in jikin eo ej pād ilo wāween jerbal',
         delete: 'A kuntu',

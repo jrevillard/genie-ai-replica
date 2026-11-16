@@ -3060,6 +3060,7 @@ export default {
       },
       card: {
         actions: 'Actions for {name}',
+        browse: 'Browse',
         building: 'Building…',
         buildingAria: 'Building — the source file is still being processed',
         delete: 'Delete',

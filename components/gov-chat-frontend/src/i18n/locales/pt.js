@@ -2254,6 +2254,7 @@ export default {
       },
       card: {
         actions: 'Ações para {name}',
+        browse: 'Explorar',
         building: 'Construindo…',
         buildingAria: 'Em construção — o arquivo de origem ainda está sendo processado',
         delete: 'Excluir',

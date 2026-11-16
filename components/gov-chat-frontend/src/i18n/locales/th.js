@@ -2216,6 +2216,7 @@ export default {
       },
       card: {
         actions: 'การดำเนินการสำหรับ {name}',
+        browse: 'เรียกดู',
         building: 'กำลังสร้าง…',
         buildingAria: 'กำลังสร้าง — ไฟล์ต้นฉบับยังอยู่ระหว่างการประมวลผล',
         delete: 'ลบ',

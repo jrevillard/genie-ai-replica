@@ -2243,6 +2243,7 @@ export default {
       },
       card: {
         actions: 'Tindakan untuk {name}',
+        browse: 'Jelajahi',
         building: 'Membangun…',
         buildingAria: 'Membangun — berkas sumber masih diproses',
         delete: 'Hapus',

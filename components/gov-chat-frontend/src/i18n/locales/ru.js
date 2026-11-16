@@ -2246,6 +2246,7 @@ export default {
       },
       card: {
         actions: 'Действия для {name}',
+        browse: 'Обзор',
         building: 'Сборка…',
         buildingAria: 'Сборка — исходный файл все еще обрабатывается',
         delete: 'Удалить',

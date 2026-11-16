@@ -2237,6 +2237,7 @@ export default {
       },
       card: {
         actions: '{name}-এর জন্য ক্রিয়া',
+        browse: 'ব্রাউজ',
         building: 'তৈরি করা হচ্ছে…',
         buildingAria: 'তৈরি হচ্ছে — উৎস ফাইলটি এখনও প্রক্রিয়াজাত হচ্ছে',
         delete: 'মুছুন',

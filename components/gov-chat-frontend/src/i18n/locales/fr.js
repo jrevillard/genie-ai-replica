@@ -2261,6 +2261,7 @@ export default {
       },
       card: {
         actions: 'Actions pour {name}',
+        browse: 'Parcourir',
         building: 'Construction…',
         buildingAria: 'Génération en cours — le fichier source est toujours en cours de traitement',
         delete: 'Supprimer',

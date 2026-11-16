@@ -28,6 +28,14 @@ internationalizationEnabled: $(env:KEYCLOAK_I18N_ENABLED)
 defaultLocale: $(env:KEYCLOAK_LOCALE)
 supportedLocales: $(env:KEYCLOAK_SUPPORTED_LOCALES)
 accessTokenLifespan: $(env:KEYCLOAK_ACCESS_TOKEN_LIFESPAN)
+# Session lifespans — #1834. Keycloak's defaults (idle 1800 s / 30 min, max
+# 36000 s / 10 h) killed the SSO session after 30 idle minutes, so every hard
+# refresh past that bounced through a full browser LOGIN (the "token problem");
+# the 10-hour wall was the same family (#1820). Compose supplies workday
+# defaults (idle 8 h, max 7 d) — a hard refresh now finds a live session and
+# renews silently.
+ssoSessionIdleTimeout: $(env:KEYCLOAK_SSO_SESSION_IDLE_TIMEOUT)
+ssoSessionMaxLifespan: $(env:KEYCLOAK_SSO_SESSION_MAX_LIFESPAN)
 
 # --- Audit trail (David 2026-10-11: "enable Keycloak admin events") -----------
 # All three flags were left at Keycloak's default (false), so NOTHING was ever
@@ -148,15 +156,41 @@ users:
 
 # OIDC client configuration
 clients:
-  # Keycloak built-in account console (needs webOrigins for iframe auth)
+  # Keycloak built-in clients — declared so the realm export pins the
+  # absolute-zero ROPC posture over the built-ins (#1849). Keycloak
+  # provisions them into every realm and gives admin-cli
+  # directAccessGrantsEnabled=true by default; with the pin below the
+  # server's default can no longer leave a standing password-grant
+  # surface in the primary realm. Partial declarations are safe:
+  # config-cli updates the existing built-in with the declared fields
+  # (the account/account-console entries have worked this way from the
+  # start), and nothing here mints through genie's admin-cli — all
+  # admin mints use the MASTER realm's admin-cli (helpers/auth.js).
+  #
+  # Verified against a fresh Keycloak 26.8.0 with the real kcc
+  # 6.5.0-26 (2026-11-15): this exact set imports cleanly and every
+  # client of the imported realm reads back directAccessGrantsEnabled
+  # =false, admin-cli included. realm-management and
+  # security-admin-console are deliberately NOT declared: kcc refuses
+  # to update them — its client update trips the built-ins'
+  # authentication-flow bindings and Keycloak answers HTTP 403
+  # (measured twice; the import dies on realm-management). Their
+  # grants stay at Keycloak's default (false, read back), and the
+  # #1846 posture sweep keeps exempting exactly those two by name.
   - clientId: account
     enabled: true
+    directAccessGrantsEnabled: false
     webOrigins:
       - $(env:KC_PUBLIC_ORIGIN)
   - clientId: account-console
     enabled: true
+    directAccessGrantsEnabled: false
     webOrigins:
       - $(env:KC_PUBLIC_ORIGIN)
+  - clientId: admin-cli
+    directAccessGrantsEnabled: false
+  - clientId: broker
+    directAccessGrantsEnabled: false
 
   - clientId: $(env:KC_CLIENT_ID)
     enabled: true

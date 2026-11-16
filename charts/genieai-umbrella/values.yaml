@@ -380,6 +380,18 @@ data:
     # accept the discovery issuer plus the KEYCLOAK_PUBLIC_URL /
     # KEYCLOAK_BROWSER_ISSUER aliases; only the document-repository pins
     # one, because its tokens are minted against the public issuer).
+    # KEYCLOAK_DISCOVERY_URL is the same kind of name: it pins the host
+    # the OIDC DISCOVERY document is fetched from, and the code falls
+    # back to KEYCLOAK_URL when it is unset. The chart leaves it unset on
+    # purpose — its KEYCLOAK_URL is the in-cluster Keycloak Service, and
+    # the realm's hostname is PINNED to the public origin, so the
+    # discovery document fetched in-cluster publishes the PUBLIC issuer:
+    # the browser's tokens and the verifier's document agree without an
+    # alias. A deployment whose discovery host must differ from
+    # KEYCLOAK_URL sets it through the service's `env` map
+    # (services.<service>.env) — the knob every other service-level
+    # override uses — and the parity gate files the name under
+    # codeDefault.
     # Explicit Keycloak URL overrides, all empty by default: the
     # applications derive what they need from the issuer they were
     # given, and a default that guessed an address would override that
@@ -443,6 +455,16 @@ data:
     supportedLocales: []
     # Access-token TTL in seconds.
     accessTokenLifespan: 300
+    # SSO session lifespans in seconds (#1834). Keycloak's built-in
+    # defaults (idle 1800 = 30 min, max 36000 = 10 h) expire the browser
+    # session under the user: after 30 idle minutes a hard refresh
+    # bounced through a full LOGIN instead of renewing silently, and
+    # every session died outright at 10 hours. These are the workday
+    # defaults Compose ships (docker-compose.yaml: idle 8 h, max 7 d) —
+    # the same numbers, so a Compose venue and a chart venue hold the
+    # same session.
+    ssoSessionIdleTimeout: 28800
+    ssoSessionMaxLifespan: 604800
     # Confidential-client secrets. These values are read ONLY by the
     # render-time guard below: the chart renders no secret, and kcc
     # receives the real values through `convergence.envSecrets` rows that
@@ -909,6 +931,26 @@ services:
     # clamavHost is unreachable under the default-deny egress).
     # Toggles the doc-repo virus-scan step (CLAMSCAN_* wiring above).
     virusScanning: true
+    # The local-scanner fallback, exported as CLAMSCAN_LOCAL_FALLBACK.
+    # OFF in the chart, ON in Compose — the topologies differ: the
+    # chart runs the scanner as its own clamav Deployment (the doc-repo
+    # pod reaches it over the network, and its entrypoint leaves the
+    # embedded daemon DOWN), while Compose runs the scanner INSIDE the
+    # document-repository container, where the embedded daemon is the
+    # scanner. The application reads the variable as unset = "follow the
+    # host": unset + a remote host = no fallback, unset + a local host =
+    # fallback. The chart states it instead of inheriting it, so the
+    # effective value does not depend on how clamavHost is spelled. An
+    # operator who runs a clamd sidecar next to the document-repository
+    # sets it to true.
+    clamavLocalFallback: false
+    # CLAMSCAN_ACTIVE is NOT rendered: the application reads it as
+    # "the scanner is active unless the variable says false", and the
+    # chart's scanner IS the clamav tier's — the same effective value
+    # Compose's empty default produces. An operator who turns the scan
+    # step off does it with `virusScanning` above, which is the knob the
+    # chart documents (the parity gate files the name under
+    # codeDefault).
     # Web-crawler egress (POST /api/files/crawl/schedule fetches
     # arbitrary user-supplied URLs + redirect hops). NetworkPolicy peers
     # cannot express a domain, so the rule is port-scoped over 80/443:

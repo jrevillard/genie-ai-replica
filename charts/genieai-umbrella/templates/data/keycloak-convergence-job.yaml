@@ -76,6 +76,7 @@ being set would fail this assertion on every default render.
       "KEYCLOAK_LOGIN_WITH_EMAIL" "KEYCLOAK_DUPLICATE_EMAILS" "KEYCLOAK_BRUTE_FORCE"
       "KEYCLOAK_PASSWORD_POLICY" "KEYCLOAK_THEME" "KEYCLOAK_I18N_ENABLED"
       "KEYCLOAK_LOCALE" "KEYCLOAK_SUPPORTED_LOCALES" "KEYCLOAK_ACCESS_TOKEN_LIFESPAN"
+      "KEYCLOAK_SSO_SESSION_IDLE_TIMEOUT" "KEYCLOAK_SSO_SESSION_MAX_LIFESPAN"
       "EMAIL_FROM" "EMAIL_HOST" "EMAIL_PORT"
       "EMAIL_SECURE" "EMAIL_SMTP_STARTTLS" "EMAIL_SMTP_AUTH" "EMAIL_USER" -}}
 {{- /* Snapshot the INLINE-fixed names BEFORE the envSecrets rows are
@@ -343,6 +344,16 @@ spec:
               value: {{ $keycloak.supportedLocales | default (list "ar" "de" "en" "es" "fr" "pt" "ru" "th" "zh-Hans") | toJson | quote }}
             - name: KEYCLOAK_ACCESS_TOKEN_LIFESPAN
               value: {{ $keycloak.accessTokenLifespan | default 300 | quote }}
+            # SSO session lifespans (#1834) — the realm file declares both
+            # as placeholders, so the Job must export them: an unsatisfied
+            # placeholder aborts the kcc import with a parse error that
+            # names nothing. Keycloak's own defaults (idle 30 min, max
+            # 10 h) are what #1834 was filed against — the values here
+            # are the workday defaults Compose ships.
+            - name: KEYCLOAK_SSO_SESSION_IDLE_TIMEOUT
+              value: {{ $keycloak.ssoSessionIdleTimeout | default 28800 | quote }}
+            - name: KEYCLOAK_SSO_SESSION_MAX_LIFESPAN
+              value: {{ $keycloak.ssoSessionMaxLifespan | default 604800 | quote }}
             # Secret-backed parameters, one row per operator-declared
             # entry. The rows are VALIDATED by the helper (a typo'd key
             # would render `name: null` and the API server would reject

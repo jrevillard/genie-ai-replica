@@ -39,6 +39,15 @@ still turns it off on its own. */ -}}
 {{- if kindIs "bool" $servicesDocumentRepository.virusScanning -}}
 {{- $virusScanning = and $clamavOn $servicesDocumentRepository.virusScanning -}}
 {{- end -}}
+{{- /* CLAMSCAN_LOCAL_FALLBACK is a BOOL for the same reason: the
+application reads it as "the local scanner is the fallback unless the
+variable says false", and a nil rendered by | toString would read as
+"<nil>" — neither true nor false to the application. Coerced the same
+way $virusScanning is. */ -}}
+{{- $clamavLocalFallback := false -}}
+{{- if kindIs "bool" $servicesDocumentRepository.clamavLocalFallback -}}
+{{- $clamavLocalFallback = $servicesDocumentRepository.clamavLocalFallback -}}
+{{- end -}}
 {{- /* The chart owns `document-repository-uploads` only while
 `services.documentRepository.pvc.enabled` is true. With it off, a volume
 row still naming that claim leaves the pod in ContainerCreating forever
@@ -109,6 +118,7 @@ see. */ -}}
     (dict "name" "CLAMSCAN_HOST" "value" ($servicesDocumentRepository.clamavHost | default "clamav" | toString))
     (dict "name" "CLAMSCAN_PORT" "value" ($servicesClamav.port | default 3310 | toString))
     (dict "name" "VIRUS_SCANNING" "value" ($virusScanning | toString))
+    (dict "name" "CLAMSCAN_LOCAL_FALLBACK" "value" ($clamavLocalFallback | toString))
     (dict "name" "OTEL_EXPORTER_OTLP_ENDPOINT" "value" (include "genieai-umbrella.otlpEndpoint" .))
     (dict "name" "ENABLE_OBSERVABILITY" "value" (include "genieai-umbrella.observabilityEnabledFlag" .))
 -}}

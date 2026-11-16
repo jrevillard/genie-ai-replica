@@ -51,7 +51,8 @@
         "KEYCLOAK_ADDITIONAL_REALMS": "empty in Compose; the backend parses an unset value as an empty JSON array, so leaving it unset is the same result",
         "OPEA_SSL_SKIP_VERIFY": "empty in Compose; the code treats an unset value as 'verify', and the chart's NODE_TLS_REJECT_UNAUTHORIZED=1 says the same thing for the Node client",
         "KEYCLOAK_DISCOVERY_TIMEOUT_MS": "the shared OIDC verifier applies its own 5000ms discovery budget when the variable is unset, and Compose leaves it unset too — both surfaces run the same default",
-        "KEYCLOAK_EXPECTED_ISSUER": "the variable pins a strict issuer only when set; on this service it is unset on both surfaces, so the verifier accepts the discovery issuer plus the KEYCLOAK_PUBLIC_URL / KEYCLOAK_BROWSER_ISSUER aliases"
+        "KEYCLOAK_EXPECTED_ISSUER": "the variable pins a strict issuer only when set; on this service it is unset on both surfaces, so the verifier accepts the discovery issuer plus the KEYCLOAK_PUBLIC_URL / KEYCLOAK_BROWSER_ISSUER aliases",
+        "KEYCLOAK_DISCOVERY_URL": "Compose leaves it empty and the shared verifier falls back to KEYCLOAK_URL, which the chart sets to the in-cluster Keycloak Service. The realm's hostname is PINNED to the public origin, so the discovery document fetched in-cluster publishes the PUBLIC issuer: the browser's tokens and the verifier's document agree without an alias. A deployment whose discovery host must differ from KEYCLOAK_URL sets it through the service's `env` map (services.<service>.env)."
       },
       "secretProvided": {
         "KEYCLOAK_PROXY_CLIENT_SECRET": {
@@ -78,12 +79,18 @@
         "KEYCLOAK_URL": "the service resolves JWKS in-cluster; Compose reaches Keycloak through the public origin",
         "OTEL_EXPORTER_OTLP_ENDPOINT": "the collector is an operator-managed instance with its own Service name",
         "VICTORIALOGS_URL": "the collector is an operator-managed instance with its own Service name",
-        "KEYCLOAK_EXPECTED_ISSUER": "the chart pins the PUBLIC issuer (the realm's tokens carry it), while Compose leaves the variable unset — the Kubernetes adaptation of the same split-URL OIDC contract (KEYCLOAK_PUBLIC_URL / KEYCLOAK_JWKS_URL) the backend and okf-server share"
+        "KEYCLOAK_EXPECTED_ISSUER": "the chart pins the PUBLIC issuer (the realm's tokens carry it), while Compose leaves the variable unset — the Kubernetes adaptation of the same split-URL OIDC contract (KEYCLOAK_PUBLIC_URL / KEYCLOAK_JWKS_URL) the backend and okf-server share",
+        "CLAMSCAN_HOST": "the chart points the scanner at the in-cluster clamav Service the chart renders (services.documentRepository.clamavHost); Compose leaves the host unset and runs the scanner inside the document-repository container. Same application, each surface's own address.",
+        "CLAMSCAN_PORT": "the chart dials the clamav Service's port (services.clamav.port, 3310); Compose leaves it empty and the application talks to the embedded daemon on its default port.",
+        "VIRUS_SCANNING": "the chart ships the ClamAV tier and turns the scan step on; Compose leaves the flag to the operator, whose default deployment runs without it.",
+        "CLAMSCAN_LOCAL_FALLBACK": "the chart states the fallback OFF (services.documentRepository.clamavLocalFallback): the scanner is the clamav Deployment and the doc-repo pod's embedded daemon stays down, so a local fallback would find nothing. Compose leaves it unset and the embedded daemon IS the scanner, so the fallback is on there."
       },
       "composeOnly": {},
       "notRead": {},
       "codeDefault": {
-        "KEYCLOAK_DISCOVERY_TIMEOUT_MS": "the shared OIDC verifier applies its own 5000ms discovery budget when the variable is unset, and Compose leaves it unset too — both surfaces run the same default"
+        "KEYCLOAK_DISCOVERY_TIMEOUT_MS": "the shared OIDC verifier applies its own 5000ms discovery budget when the variable is unset, and Compose leaves it unset too — both surfaces run the same default",
+        "CLAMSCAN_ACTIVE": "Compose leaves it empty and the application reads the scanner as active unless the variable says 'false'; the chart does not render it either, and its scanner (the clamav tier) is active. The chart's own switch for the scan step is services.documentRepository.virusScanning.",
+        "KEYCLOAK_DISCOVERY_URL": "Compose leaves it empty and the shared verifier falls back to KEYCLOAK_URL, which the chart sets to the in-cluster Keycloak Service. The realm's hostname is PINNED to the public origin, so the discovery document fetched in-cluster publishes the PUBLIC issuer: the browser's tokens and the verifier's document agree without an alias. A deployment whose discovery host must differ from KEYCLOAK_URL sets it through the service's `env` map (services.<service>.env)."
       },
       "secretProvided": {}
     },
@@ -334,7 +341,8 @@
       "notRead": {},
       "codeDefault": {
         "KEYCLOAK_DISCOVERY_TIMEOUT_MS": "the shared OIDC verifier applies its own 5000ms discovery budget when the variable is unset, and Compose leaves it unset too — both surfaces run the same default",
-        "KEYCLOAK_EXPECTED_ISSUER": "the variable pins a strict issuer only when set; on this service it is unset on both surfaces, so the verifier accepts the discovery issuer plus the KEYCLOAK_PUBLIC_URL / KEYCLOAK_BROWSER_ISSUER aliases"
+        "KEYCLOAK_EXPECTED_ISSUER": "the variable pins a strict issuer only when set; on this service it is unset on both surfaces, so the verifier accepts the discovery issuer plus the KEYCLOAK_PUBLIC_URL / KEYCLOAK_BROWSER_ISSUER aliases",
+        "KEYCLOAK_DISCOVERY_URL": "Compose leaves it empty and the shared verifier falls back to KEYCLOAK_URL, which the chart sets to the in-cluster Keycloak Service. The realm's hostname is PINNED to the public origin, so the discovery document fetched in-cluster publishes the PUBLIC issuer: the browser's tokens and the verifier's document agree without an alias. A deployment whose discovery host must differ from KEYCLOAK_URL sets it through the service's `env` map (services.<service>.env)."
       }
     },
     "pii-service": {

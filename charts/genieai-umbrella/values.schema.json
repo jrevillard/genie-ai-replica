@@ -333,6 +333,10 @@
               "type": "integer",
               "minimum": 1,
               "description": "Per-service override of global.progressDeadlineSeconds \u2014 the Deployment's progress window in seconds. Optional: not declared in values.yaml, because a concrete value there would always win over the chart-wide one (an overlay can set the key, never remove it, and the template reads the service key before the chart-wide one). A value below 1 second is rejected by the render. An explicit null is not accepted here \u2014 clear the chart-wide knob instead."
+            },
+            "clamavLocalFallback": {
+              "type": "boolean",
+              "description": "Whether the document-repository may fall back to a LOCAL clamd when the remote scanner is unreachable. False in the chart: the scanner is the chart's clamav Deployment and the pod's embedded daemon stays down, so a local fallback would find nothing. Compose leaves the variable unset, where the embedded daemon IS the scanner."
             }
           }
         },

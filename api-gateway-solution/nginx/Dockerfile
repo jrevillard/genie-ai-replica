@@ -1,5 +1,10 @@
 FROM nginx:1.28-alpine
 
+# Pull current Alpine security updates at build time (CVE remediation
+# playbook): the rolling base tag does not refresh on its own between
+# upstream rebuilds. Order matters: upgrade first, then add.
+RUN apk upgrade --no-cache
+
 RUN apk add --no-cache openssl gettext
 
 # Non-root runtime (#1227): the stock main config assumes a root master (pid

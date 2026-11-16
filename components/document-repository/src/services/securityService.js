@@ -8,11 +8,14 @@ const { dbService } = require('../../shared-lib');
 
 // Cached ClamAV signature version, stamped on every scan event.
 // Query `clamdscan --version` once at module load and cache the trimmed
-// stdout. The daemon is co-located in the doc-repo container so the call
-// is cheap, but emitting one process spawn per file scan would still
-// dominate scan latency for sub-millisecond scans. ENOENT / spawn
-// failures / empty output all fall back to 'unknown' so a missing daemon
-// during boot never breaks the upload path.
+// stdout. ENOENT / spawn failures / empty output all fall back to 'unknown'
+// so a missing daemon during boot never breaks the upload path.
+// NOTE (#1064 remote mode): this probe is LOCAL-binary only. A deployment
+// whose scanner is a remote clamd (CLAMSCAN_HOST) has no co-located daemon
+// for `clamdscan --version` to answer, so every event stamps
+// clamav_signature_version='unknown' there — honest, but the freshness
+// metric goes blind. Asking the REMOTE daemon (the clamd VERSION command
+// over TCP) is the follow-up that fixes it; deferred to #1901.
 const clamavSignatureVersion = (() => {
   try {
     const raw = execFileSync('clamdscan', ['--version'], {

@@ -141,6 +141,11 @@
               "type": "integer",
               "minimum": 0,
               "description": "SSO session maximum lifespan in seconds \u2014 the hard wall after which the user must log in again. 0 (or less) means the session never expires. The chart's default is the workday default Compose ships (7 days), not Keycloak's (10 hours, what #1820 was filed against)."
+            },
+            "accessTokenLifespan": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "Access-token TTL in seconds. 0 means the token never expires (Keycloak's reading of a non-positive value). The chart's default is 300 seconds, the value the Compose surface ships."
             }
           }
         }
@@ -256,6 +261,14 @@
               "type": "integer",
               "minimum": 1,
               "description": "Per-service override of global.progressDeadlineSeconds \\u2014 the Deployment's progress window in seconds. Optional: not declared in values.yaml, because a concrete value there would always be present \\u2014 an overlay can set the key, never remove it \\u2014 and the template reads the service key before the chart-wide one, which would make the global knob inert. A value below 1 second is rejected by the render. An explicit null is not accepted here \u2014 clear the chart-wide knob instead."
+            },
+            "externalApiCIDRs": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "pattern": "^([0-9a-fA-F.:]+)/([0-9]{1,3})$"
+              },
+              "description": "The CIDR blocks the backend may reach on 80/443. One entry per block, in CIDR notation (IPv4 or IPv6) \u2014 a hostname is refused at render, because the NetworkPolicy peer carries a CIDR and the API server would reject the whole policy at apply time with a field-level error that names the policy, not the values key."
             }
           }
         },
@@ -347,6 +360,14 @@
             "clamavLocalFallback": {
               "type": "boolean",
               "description": "Whether the document-repository may fall back to a LOCAL clamd when the remote scanner is unreachable. False in the chart: the scanner is the chart's clamav Deployment and the pod's embedded daemon stays down, so a local fallback would find nothing. Compose leaves the variable unset, where the embedded daemon IS the scanner."
+            },
+            "crawlAllowedCIDRs": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "pattern": "^([0-9a-fA-F.:]+)/([0-9]{1,3})$"
+              },
+              "description": "The CIDR blocks the document-repository may reach on 80/443. One entry per block, in CIDR notation (IPv4 or IPv6) \u2014 a hostname is refused at render, because the NetworkPolicy peer carries a CIDR and the API server would reject the whole policy at apply time with a field-level error that names the policy, not the values key."
             }
           }
         },

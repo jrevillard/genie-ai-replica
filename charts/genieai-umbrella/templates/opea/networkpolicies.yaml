@@ -682,6 +682,18 @@ spec:
         - podSelector:
             matchLabels:
               app: vllm-translation
+        # The OKF tier's judge: RAGAS_JUDGE_BASE_URL points at the
+        # in-cluster model in in-cluster mode, so the tier must be an
+        # admitted peer of the model pod — the rule is one-sided
+        # otherwise (the tier's egress would allow the call, the
+        # model would refuse the caller) and every evaluation timed
+        # out instead of scoring.
+        - podSelector:
+            matchLabels:
+              genieai.io/component: okf-server
+        - podSelector:
+            matchLabels:
+              genieai.io/component: ragas-service
       ports:
         - protocol: TCP
           port: 8000
@@ -710,6 +722,15 @@ spec:
         - podSelector:
             matchLabels:
               genieai.io/component: dataprep
+        # The OKF tier's embedding probe (TEI_EMBED_HOST) and the RAGAS
+        # embedder (RAGAS_EMBED_BASE_URL) — same one-sided-rule trap
+        # as the judge above.
+        - podSelector:
+            matchLabels:
+              genieai.io/component: okf-server
+        - podSelector:
+            matchLabels:
+              genieai.io/component: ragas-service
       ports:
         - protocol: TCP
           port: 80
@@ -872,6 +893,27 @@ spec:
     {{- if and (eq $opeaGpu.mode "external") $opeaGpu.nodeHost }}
     {{- include "genieai-umbrella.opeaGpuEgressRule" . | nindent 4 }}
     {{- end }}
+    {{- if eq $opeaGpu.mode "in-cluster" }}
+    # The in-cluster models (TEI_EMBED_HOST, RAGAS_JUDGE_BASE_URL). The
+    # external-mode rule above names the GPU node; in in-cluster mode
+    # the models are pods, and the tier had NO rule for them at all —
+    # so the tier's embedding probe and every RAG evaluation timed out
+    # under the default-deny egress, with no error anywhere.
+    - to:
+        - podSelector:
+            matchLabels:
+              app: tei
+      ports:
+        - protocol: TCP
+          port: 80
+    - to:
+        - podSelector:
+            matchLabels:
+              app: vllm
+      ports:
+        - protocol: TCP
+          port: 8000
+    {{- end }}
 ---
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
@@ -955,5 +997,25 @@ spec:
           port: {{ include "genieai-umbrella.otlpPort" . }}
     {{- if and (eq $opeaGpu.mode "external") $opeaGpu.nodeHost }}
     {{- include "genieai-umbrella.opeaGpuEgressRule" . | nindent 4 }}
+    {{- end }}
+    {{- if eq $opeaGpu.mode "in-cluster" }}
+    # The judge LLM and the embedder, in in-cluster mode: the same two
+    # models the okf-server rule above names. Without them the sidecar
+    # had DNS and OTLP only — every evaluation timed out instead of
+    # scoring.
+    - to:
+        - podSelector:
+            matchLabels:
+              app: vllm
+      ports:
+        - protocol: TCP
+          port: 8000
+    - to:
+        - podSelector:
+            matchLabels:
+              app: tei
+      ports:
+        - protocol: TCP
+          port: 80
     {{- end }}
 {{- end -}}

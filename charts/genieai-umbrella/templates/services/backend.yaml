@@ -340,8 +340,20 @@ spec:
           port: 80
         - protocol: TCP
           port: 443
-        # OTLP exporter: required for the observability pipeline. Without
-        # this port the default-deny policy drops all traces at the source.
+    # OTLP exporter: required for the observability pipeline. Without
+    # this port the default-deny policy drops all traces at the source.
+    #
+    # Its OWN rule, not a port in the external-API rule above: that
+    # rule's peers are the operator's `externalApiCIDRs`, and the
+    # collector is an in-cluster pod whose IP is in none of them — so
+    # pinning the CIDRs (the documented way to restrict that egress)
+    # silently closed the telemetry path and every span was lost at the
+    # source, with no error anywhere. The document-repository's OTLP
+    # rule has always been shaped this way.
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+      ports:
         - protocol: TCP
           port: {{ include "genieai-umbrella.otlpPort" . }}
     {{- if $obsLogs.enabled }}

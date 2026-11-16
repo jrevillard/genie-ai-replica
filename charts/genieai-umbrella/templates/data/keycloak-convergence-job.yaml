@@ -115,6 +115,13 @@ setting an operator wants for a kiosk or a single-machine venue. A
 {{- if not (kindIs "invalid" $keycloak.ssoSessionMaxLifespan) -}}
 {{- $ssoSessionMaxLifespan = $keycloak.ssoSessionMaxLifespan -}}
 {{- end -}}
+{{- /* The access-token TTL is the THIRD knob of this family and the
+last one still on `| default`: an explicit 0 — Keycloak's "the token
+never expires" — was silently rendered as 300. Same nil check. */ -}}
+{{- $accessTokenLifespan := 300 -}}
+{{- if not (kindIs "invalid" $keycloak.accessTokenLifespan) -}}
+{{- $accessTokenLifespan = $keycloak.accessTokenLifespan -}}
+{{- end -}}
 {{- $realmFile := $assets.Files.Get "files/genie-realm.yaml" -}}
 {{- if $keycloak.failOnPlaceholderSecrets -}}
 {{- range $p := (regexFindAll "\\$\\(env:[A-Z_][A-Z0-9_]*\\)" $realmFile -1) -}}
@@ -356,7 +363,7 @@ spec:
             - name: KEYCLOAK_SUPPORTED_LOCALES
               value: {{ $keycloak.supportedLocales | default (list "ar" "de" "en" "es" "fr" "pt" "ru" "th" "zh-Hans") | toJson | quote }}
             - name: KEYCLOAK_ACCESS_TOKEN_LIFESPAN
-              value: {{ $keycloak.accessTokenLifespan | default 300 | quote }}
+              value: {{ $accessTokenLifespan | quote }}
             # SSO session lifespans (#1834) — the realm file declares both
             # as placeholders, so the Job must export them: an unsatisfied
             # placeholder aborts the kcc import with a parse error that

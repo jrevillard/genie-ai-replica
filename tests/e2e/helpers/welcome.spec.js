@@ -170,38 +170,12 @@ const rejection = (promise) =>
     (e) => e
   );
 
-/**
- * The module's public surface, checked against its callers.
- *
- * The suite has no CI door: a spec that destructures a name this
- * module no longer exports dies with a TypeError at RUN time, on the
- * venue, and nothing else notices — the gates that run offline never
- * execute the spec's body. These are the names the callers destructure
- * from here: the three chatbot specs, the three theme specs and the
- * dashboard capture script.
- *
- * The list is the module's exports, EXACTLY: a name a caller needs
- * that is missing here is a missing export, and an export here that no
- * caller needs is a surface nothing pins. So the list drifts with the
- * callers — an export added for a new caller makes this fail until
- * the list names it.
- */
-test('the module exports exactly the names its callers destructure', () => {
-  expect(Object.keys(welcome).sort()).toEqual([
-    'DEFAULT_SESSION',
-    'DEFAULT_VIEWPORT',
-    'LAYER_STATE_BIND',
-    'WCAG_BIND',
-    'capturePixels',
-    'contrastRatio',
-    'lum',
-    'readVisualLayerState',
-    'waitForBannerSettled',
-    'waitForComposerReady',
-    'withComposerSession',
-    'withWelcomeSession'
-  ]);
-});
+// The module's public surface is NOT checked here: this spec runs on
+// the local run, and the risk it would guard — a caller destructuring
+// a name the module no longer exports — bites on the venue, where
+// nothing offline notices. The gate lives in the config-validator
+// (`__tests__/e2e-helper-surface.test.js`), which CI runs on every MR
+// and which derives the names from the callers themselves.
 
 test('the session viewport is a COPY of the default viewport, not the shared object', () => {
   expect(welcome.DEFAULT_SESSION.viewport, 'the session owns its viewport').not.toBe(welcome.DEFAULT_VIEWPORT);

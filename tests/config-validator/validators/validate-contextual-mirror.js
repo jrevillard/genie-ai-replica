@@ -43,12 +43,20 @@ const MIRROR_FILE = path.join('components', 'okf-server', 'services', 'contextua
  * instead of silently agreeing on a wrong value.
  */
 function resolvePythonLiteral(literal) {
+  // split/join with a printable sentinel — no regex, so the escape
+  // ORDER is the only thing that matters and no-control-regex has
+  // nothing to say.
   return literal
-    .replace(/\\\\/g, '\x00BS\x00')
-    .replace(/\\n/g, '\n')
-    .replace(/\\t/g, '\t')
-    .replace(/\\"/g, '"')
-    .replace(/\x00BS\x00/g, '\\');
+    .split('\\\\')
+    .join('<<BS>>')
+    .split('\\n')
+    .join('\n')
+    .split('\\t')
+    .join('\t')
+    .split('\\"')
+    .join('"')
+    .split('<<BS>>')
+    .join('\\');
 }
 
 /**

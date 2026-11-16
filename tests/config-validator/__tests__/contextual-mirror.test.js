@@ -72,7 +72,7 @@ describe('!1205 — the Node mirror and dataprep agree on the budget constants',
       "const CHUNK_SIZE_EXTENSIONS = [['.pdf', 'DATAPREP_CHUNK_SIZE_PDF'], ['.md', 'DATAPREP_CHUNK_SIZE_MD']];",
       "const DOC_CONTEXT_HEADER = 'Document content (may be truncated):\\n';",
       "const DOC_CONTEXT_TRUNCATION_MARKER = '...[truncated]';",
-      'const CONTEXTUAL_RETRIEVAL_PROMPT_DEFAULT_CHARS = 10;',
+      'const CONTEXTUAL_RETRIEVAL_PROMPT_DEFAULT_CHARS = 8;',
       ''
     ].join('\n');
 
@@ -123,8 +123,8 @@ describe('!1205 — the Node mirror and dataprep agree on the budget constants',
       writeFixture(
         MIRROR_FILE,
         MIRROR.replace(
-          'CONTEXTUAL_RETRIEVAL_PROMPT_DEFAULT_CHARS = 10',
-          'CONTEXTUAL_RETRIEVAL_PROMPT_DEFAULT_CHARS = 11'
+          'CONTEXTUAL_RETRIEVAL_PROMPT_DEFAULT_CHARS = 8',
+          'CONTEXTUAL_RETRIEVAL_PROMPT_DEFAULT_CHARS = 9'
         )
       );
       expect(checkFixture().errors.join('\n')).toMatch(/prompt default length/);

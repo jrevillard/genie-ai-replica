@@ -262,6 +262,11 @@ node tests/e2e/run/file-failure-issues.js --report reports/playwright-report-run
 issue and the venue-alive re-probe both key on it, not on this shell's
 `BASE_URL`.
 
+The run's BUILD travels with the report: the runner writes it beside the
+report (`<report>.build.json`), and the stale-venue classification binds
+the venue's served bundle to THAT build. A report without its sidecar
+carries no build, and its failures are filed as they are.
+
 A run that wrote **no** report is a broken run: the runner stops there and
 files nothing rather than reading the fixed path, which would be another
 run's report.

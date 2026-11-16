@@ -3,6 +3,17 @@
  */
 require('dotenv').config();
 
+// The five pass-through scanning knobs (VIRUS_SCANNING, CLAMSCAN_HOST,
+// CLAMSCAN_PORT, CLAMSCAN_LOCAL_FALLBACK, CLAMSCAN_ACTIVE) reach the
+// container through compose's `${VAR:-}` empty defaults, so an operator who
+// leaves a knob out of .env still delivers '' into the container. Normalize
+// once: '' means UNSET for this family — by mechanism, not per-knob
+// coincidence (#1064).
+const clamEnv = (name) => {
+  const value = process.env[name];
+  return value === '' ? undefined : value;
+};
+
 const config = {
   port: process.env.PORT || 3001,
   nodeEnv: process.env.NODE_ENV || 'development',
@@ -75,7 +86,7 @@ const config = {
   // directly; the auth middleware only delegates to it.
 
   //Controls whether or not the clamav service is used for uploaded documents
-  virusScanning: process.env.VIRUS_SCANNING === 'true' || false,
+  virusScanning: clamEnv('VIRUS_SCANNING') === 'true' || false,
 
   // ClamAV configuration using clamscan library
   clamscan: {
@@ -90,21 +101,35 @@ const config = {
     // FIX: Use a strict === 'true' check, as 'false' string is truthy
     socket: process.env.CLAMSCAN_SOCKET === 'true' || false,
 
-    host: process.env.CLAMSCAN_HOST || '127.0.0.1',
+    host: clamEnv('CLAMSCAN_HOST') || '127.0.0.1',
 
     // FIX: Convert port string to a number
-    port: parseInt(process.env.CLAMSCAN_PORT, 10) || 3310,
+    port: parseInt(clamEnv('CLAMSCAN_PORT'), 10) || 3310,
 
     // FIX: Convert timeout string to a number
     timeout: parseInt(process.env.CLAMSCAN_TIMEOUT, 10) || 60000,
 
-    // Default-on, opt-out: falling back to the local binary is what this
-    // deployment has always done, so `false` disables it rather than `true`
-    // enabling it. Read the variable — `=== 'true' || true` is always true
-    // and makes CLAMSCAN_LOCAL_FALLBACK inert.
-    localFallback: process.env.CLAMSCAN_LOCAL_FALLBACK !== 'false',
+    // LOCAL mode: default-on, opt-out — falling back to the local binary
+    // is what a local-scanner deployment has always done, so `false`
+    // disables it rather than `true` enabling it. REMOTE mode
+    // (CLAMSCAN_HOST set to a non-local host, #1064): default OFF — no
+    // local daemon exists to fall back to, and a fallback attempt would
+    // just stall every scan against a socket nothing listens on. An
+    // explicit CLAMSCAN_LOCAL_FALLBACK wins in both modes.
+    // '' counts as UNSET for this whole family (the clamEnv reader above):
+    // compose delivers '' for every knob an operator leaves unset, and
+    // treating '' as an explicit value would make the remote-mode default
+    // unreachable in exactly the deployment shape this ships to.
+    localFallback: (() => {
+      const fallback = clamEnv('CLAMSCAN_LOCAL_FALLBACK');
+      if (fallback === undefined) {
+        const remoteHost = clamEnv('CLAMSCAN_HOST');
+        return !remoteHost || ['127.0.0.1', 'localhost', '::1'].includes(remoteHost);
+      }
+      return fallback !== 'false';
+    })(),
     path: process.env.CLAMSCAN_PATH || '/usr/bin/clamdscan',
-    active: process.env.CLAMSCAN_ACTIVE !== 'false'
+    active: clamEnv('CLAMSCAN_ACTIVE') !== 'false'
   },
 
   // Logging configuration

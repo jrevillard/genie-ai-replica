@@ -35,7 +35,7 @@ const DEFAULT_VIEWPORT = { width: 1440, height: 900 };
 // The session the specs open when they measure the welcome screen: the
 // resting viewport, in the light theme. One owner, so the specs and the
 // helper agree on what "the welcome screen at rest" means.
-const DEFAULT_SESSION = { viewport: DEFAULT_VIEWPORT, theme: 'light' };
+const DEFAULT_SESSION = { viewport: { ...DEFAULT_VIEWPORT }, theme: 'light' };
 
 // Hard bounds for the two settle gates below. A gate that expires is a
 // failure, never a reason to sample a moving page.
@@ -518,6 +518,7 @@ const LAYER_STATE_BIND = `return (${visualLayerState.toString()});`;
 module.exports = {
   withWelcomeSession,
   withComposerSession,
+  waitForComposerReady,
   DEFAULT_VIEWPORT,
   DEFAULT_SESSION,
   waitForBannerSettled,

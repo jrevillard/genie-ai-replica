@@ -345,9 +345,11 @@ not an answer, it is an absence of one: the verdict is refused and the
 failures are filed as they are, with the reason printed. Nothing is
 guessed from a checkout that cannot see the build.
 
-The declaration the proof reads is the COMMITTED one. A handle that
-exists only in an uncommitted edit is carried by no commit, so no build
-can serve it: it is a spec defect, filed as one, not a stale venue.
+The declaration the proof reads is the COMMITTED one, and it must be a
+real binding in the app's source — the frontend's own Jest tree does not
+count. A handle that exists only in an uncommitted edit, or only in a
+test, is carried by no commit, so no build can serve it: it is a spec
+defect, filed as one, not a stale venue.
 
 **The binding.** The bundle read happens at filing time; the failure was
 produced earlier. The verdict is only made when the venue still serves
@@ -377,7 +379,6 @@ Three details the read holds to:
   cannot say a handle is absent;
 - a chunk the edge answers with the SPA's fallback page (HTTP 200, HTML)
   is NOT the chunk: the walk rejects the body, for the same reason.
-
 
 ### The build marker and the pre-flight probe (#1851)
 

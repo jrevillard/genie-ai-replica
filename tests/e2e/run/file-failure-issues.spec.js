@@ -23,6 +23,8 @@ const {
   venueStalenessReport,
   venueStaleProof,
   handleDeclaredAtBuild,
+  handleCommittedAtHead,
+  sourceTreeExistsAt,
   ancestryOfHead,
   probeVenueBuildSha,
   bindVenueBuild,
@@ -557,8 +559,14 @@ test.describe('a stale venue is told apart from a product defect', () => {
   ]);
 
   // A venue that serves the dialog but not its confirm button — the
-  // #1896 shape exactly.
-  const STALE = { servedText: '"upload-files-dialog"', declared: DECLARED };
+  // #1896 shape exactly. The committed reader is injected: a spec that
+  // reads the real app's source goes red on a rename, and the failure
+  // path files that red as a product bug.
+  const STALE = {
+    servedText: '"upload-files-dialog"',
+    declared: DECLARED,
+    committedAtHead: () => true
+  };
 
   // The checkout's own HEAD — the build the proof reads the app's source
   // at. It is read from the repository, not hardcoded: the sha of a
@@ -592,7 +600,8 @@ test.describe('a stale venue is told apart from a product defect', () => {
     // needs one goes red exactly where the operator runs the suite. The
     // real read has its own specs (the declared handle at HEAD, a handle
     // nothing declares, a sha no repository holds).
-    declaredAtBuild: (sha) => sha === 'HEAD'
+    declaredAtBuild: (sha) => sha === 'HEAD',
+    committedAtHead: () => true
   };
 
   test('the handles a failure waits for are read from the LOCATOR line', () => {
@@ -678,7 +687,8 @@ test.describe('a stale venue is told apart from a product defect', () => {
       servedText: '"other"',
       declared: new Map([['chat-history-item', 'components/gov-chat-frontend/src/components/ChatFolders.vue']]),
       boundSha: HEAD_SHA,
-      declaredAtBuild: () => true
+      declaredAtBuild: () => true,
+      committedAtHead: () => true
     };
     const byFile = new Map([['tests/e2e/a.spec.js', [{ error: HISTORY_ERROR }]]]);
     const { fileable, stale } = partitionStaleVenue(byFile, context);
@@ -696,7 +706,9 @@ test.describe('a stale venue is told apart from a product defect', () => {
       servedText: '"some-other-handle"',
       declared: new Map([[STALE_HANDLE, 'components/gov-chat-frontend/src/components/ChatFolders.vue']]),
       boundSha: HEAD_SHA,
-      declaredAtBuild: () => false
+      declaredAtBuild: () => false,
+      // The handle is NOT committed: no build carries it.
+      committedAtHead: () => false
     };
     const byFile = new Map([['tests/e2e/a.spec.js', [{ error: STALE_ERROR }]]]);
     const { fileable, stale } = partitionStaleVenue(byFile, context);
@@ -724,7 +736,8 @@ test.describe('a stale venue is told apart from a product defect', () => {
       // Declared at HEAD; at the venue's build the first handle is
       // missing (stale) and the second one was declared (the app's own
       // build dropped it).
-      declaredAtBuild: (sha) => (sha === 'HEAD' ? true : STALE_HANDLE)
+      declaredAtBuild: (sha, handle) => (sha === 'HEAD' ? true : handle === STALE_HANDLE ? false : true),
+      committedAtHead: () => true
     };
     const byFile = new Map([['tests/e2e/a.spec.js', [{ error: compound }]]]);
     const { fileable, stale } = partitionStaleVenue(byFile, context);
@@ -1105,6 +1118,35 @@ test.describe('an ambient marker never binds a report', () => {
 /**
  * A build the checkout cannot read refuses the verdict — and says so.
  */
+test.describe('the COMMITTED declaration is read strictly', () => {
+  test('the app declares the handle at HEAD', () => {
+    expect(handleCommittedAtHead('chat-history-item')).toBe(true);
+  });
+
+  test("the frontend's OWN test tree does not declare an app handle", () => {
+    // The app never ships `answer-source-card-0`: the frontend's Jest
+    // tree declares it. A committed-only-in-a-test handle is carried by
+    // no build, so no build can serve it — and a verdict built on it
+    // would drop a failure the operator must see.
+    expect(handleCommittedAtHead('answer-source-card-0')).toBe(false);
+  });
+
+  test('a handle nothing declares is not committed', () => {
+    expect(handleCommittedAtHead('test-only-handle-no-source-declares')).toBe(false);
+  });
+});
+
+test.describe("the app's source must EXIST at the build", () => {
+  test('HEAD carries the app source tree', () => {
+    const HEAD_SHA = execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf-8' }).trim();
+    expect(sourceTreeExistsAt(HEAD_SHA)).toBe(true);
+  });
+
+  test('a build no repository holds carries no source tree', () => {
+    expect(sourceTreeExistsAt('deadbeefdeadbeefdeadbeefdeadbeefdeadbeef')).toBe(false);
+  });
+});
+
 test.describe('a build that cannot be read refuses the verdict', () => {
   const UNREADABLE_SHA = 'deadbeefdeadbeefdeadbeefdeadbeefdeadbeef';
 
@@ -1122,7 +1164,8 @@ test.describe('a build that cannot be read refuses the verdict', () => {
       servedText: '"some-other-handle"',
       declared: new Map([['chat-history-item', 'components/gov-chat-frontend/src/components/ChatFolders.vue']]),
       boundSha: UNREADABLE_SHA,
-      declaredAtBuild: (sha) => (sha === 'HEAD' ? true : null)
+      declaredAtBuild: (sha) => (sha === 'HEAD' ? true : null),
+      committedAtHead: () => true
     };
     const error = [
       'Error: expect(locator).toBeVisible() failed',

@@ -204,6 +204,69 @@ function isNotFoundFailure(errorText) {
 }
 
 /**
+ * Does the app's COMMITTED source declare the handle?
+ *
+ * This is the strict half of the proof: the checkout's own declaration
+ * must be a real binding in the app's source, and the frontend's Jest
+ * tree does not count — a handle committed only in a test is carried by
+ * no build, so no build can serve it, and a verdict built on it would
+ * drop a failure the operator must see.
+ *
+ * @param {string} handle - the handle value
+ * @returns {true|false|null} true = the committed app declares it, false =
+ *   it does not, null = the checkout could not answer
+ */
+function handleCommittedAtHead(handle) {
+  const escaped = String(handle).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  try {
+    execFileSync(
+      'git',
+      [
+        'grep',
+        '-q',
+        '-E',
+        `data-test(id|-id)=["']${escaped}["']`,
+        'HEAD',
+        '--',
+        FRONTEND_SRC_REL,
+        `:(exclude)${FRONTEND_SRC_REL}/__tests__`,
+        `:(exclude)${FRONTEND_SRC_REL}/__mocks__`
+      ],
+      { cwd: REPO_ROOT, stdio: 'ignore' }
+    );
+    return true;
+  } catch (error) {
+    // git grep exits 1 for "no match" and 128 for "cannot read it".
+    return error.status === 1 ? false : null;
+  }
+}
+
+/**
+ * Does the app's source tree exist AT THIS BUILD?
+ *
+ * `git grep` over a path a build does not have answers "nothing is
+ * declared" — which is a DIFFERENT fact from "the handle is not
+ * declared", and one that would license the verdict. The pathspec's
+ * existence is checked first.
+ *
+ * @param {string} sha - the build to read
+ * @returns {boolean} whether the app's source tree is there
+ */
+function sourceTreeExistsAt(sha) {
+  try {
+    const out = execFileSync('git', ['ls-tree', '-r', '--name-only', sha, '--', FRONTEND_SRC_REL], {
+      cwd: REPO_ROOT,
+      encoding: 'utf-8',
+      maxBuffer: 32 * 1024 * 1024,
+      stdio: ['ignore', 'pipe', 'ignore']
+    });
+    return out.trim().length > 0;
+  } catch {
+    return false;
+  }
+}
+
+/**
  * Does the app's source AT THIS BUILD declare the handle?
  *
  * The question the verdict rests on: the venue's bundle does not carry
@@ -410,7 +473,7 @@ function venueStaleProof(candidate, context) {
  */
 function staleVenueHandles(failure, context) {
   if (!isNotFoundFailure(failure?.error)) return [];
-  const read = context.declaredAtBuild || handleDeclaredAtBuild;
+  const committed = context.committedAtHead || handleCommittedAtHead;
   const missing = [];
   for (const handle of locatorHandles(failure.error)) {
     if (bundleServesHandle(context.servedText, handle)) continue;
@@ -422,7 +485,7 @@ function staleVenueHandles(failure, context) {
     // commit carries it, so no build can serve it — and classifying it
     // as a stale venue would drop the failure out of the filing with a
     // remedy (a venue refresh) that cannot help.
-    if (!read('HEAD', handle)) continue;
+    if (!committed(handle)) continue;
     missing.push({ handle, source });
   }
   return missing;
@@ -587,6 +650,10 @@ async function buildStaleVenueContext(venue, byFile, options = {}) {
     // above): the unit spec pins the proof's arms without borrowing a
     // commit from the repository's history.
     declaredAtBuild: options.declaredAtBuild || handleDeclaredAtBuild,
+    // The COMMITTED declaration is read strictly (a real binding in the
+    // app's source, not in its test tree): the same injectable shape as
+    // the build reader beside it.
+    committedAtHead: options.committedAtHead || handleCommittedAtHead,
     ...bindVenueBuild(options)
   };
 }
@@ -649,6 +716,17 @@ function bindVenueBuild(options = {}) {
       note:
         `the venue's build \`${venueSha}\` cannot be read by this checkout (a shallow clone?) — the ` +
         'verdict is refused, so the failures are filed as they are.'
+    };
+  }
+  // The app's source must EXIST at that build: a grep over a path the
+  // build does not have answers "nothing is declared", which is a
+  // different fact — and one that would license the verdict.
+  if (!sourceTreeExistsAt(venueSha)) {
+    return {
+      boundSha: null,
+      note:
+        `the venue's build \`${venueSha}\` carries no app source tree — the proof cannot read it, ` +
+        'so the failures are filed as they are.'
     };
   }
   return { boundSha: venueSha, note: null };
@@ -1426,6 +1504,8 @@ module.exports = {
   venueStalenessReport,
   venueStaleProof,
   handleDeclaredAtBuild,
+  handleCommittedAtHead,
+  sourceTreeExistsAt,
   ancestryOfHead,
   bindVenueBuild,
   probeVenueBuildSha,

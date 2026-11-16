@@ -3770,6 +3770,20 @@ describe('the local e2e run defines the executed set (#1736)', () => {
     expect(failurePath).toMatch(/await classifyVenueFailures\(/);
   });
 
+  test("the entry point binds the classification to the run's build and the venue's build", () => {
+    // The arguments are load-bearing: without them the classifier has
+    // nothing to bind and refuses EVERY verdict — the failures are
+    // filed exactly as they were before this change, the regression
+    // this change ends, with every suite green.
+    const failurePath = fs.readFileSync(FAILURE_PATH, 'utf-8');
+    expect(failurePath).toMatch(/const runSha = runBuildSha\(reportPath\);/);
+    // The venue's build is the probe's answer, not another sha: the
+    // binding compares it with the run's build, and a wrong one would
+    // satisfy that comparison whatever the venue serves.
+    expect(failurePath).toMatch(/\{[^}]*sha: venueSha[^}]*\} = probeVenueBuildSha\(venue\)/);
+    expect(failurePath).toMatch(/classifyVenueFailures\(venue, noiseFree, \{ runSha, venueSha \}\)/);
+  });
+
   test('the entry point PRINTS the classification it computed', () => {
     // The classification's content is pinned by the seam's own spec; what
     // was missing is the write: deleting the print loop silences every

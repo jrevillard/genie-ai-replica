@@ -817,6 +817,26 @@ test.describe('a stale venue is told apart from a product defect', () => {
     // The handle the venue DOES serve is not reported as missing.
     expect(report).not.toContain('`upload-files-dialog`');
   });
+
+  test('the report names the build the venue was bound to', () => {
+    // The bound build is the proof's third link made visible: the
+    // operator must be able to read WHICH build did not declare the
+    // handle. Without it the report says "a build that predates the
+    // declaration" and names none.
+    const stale = new Map([
+      [
+        'tests/e2e/documents/upload.spec.js',
+        {
+          failures: [{ error: UPLOAD_ERROR }],
+          missing: new Map([
+            ['upload-files-dialog-confirm', 'components/gov-chat-frontend/src/components/UploadFilesDialog.vue']
+          ])
+        }
+      ]
+    ]);
+    const report = venueStalenessReport(stale, 'https://venue.example:4443', { boundSha: 'abc1234def' });
+    expect(report).toContain("the venue's build `abc1234def` does not declare it either");
+  });
 });
 
 /**
@@ -1200,6 +1220,10 @@ test.describe('the COMMITTED declaration is read strictly', () => {
     // disagree on what a declaration is.
     expect(new RegExp(pattern).test('data-testid="some-handle"')).toBe(true);
     expect(new RegExp(pattern).test('data-test-id="some-handle"')).toBe(true);
+    // The ERE must stay POSIX: `\s` is a GNU extension, and on a host
+    // whose grep does not know it every static declaration reads as
+    // "not committed" — the verdict is refused forever.
+    expect(pattern).not.toMatch(/\\s/);
   });
 });
 

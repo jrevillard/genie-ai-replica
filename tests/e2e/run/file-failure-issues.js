@@ -245,8 +245,11 @@ function handleCommittedAtHead(handle, run = execFileSync) {
         // separates a static binding from a dynamic one. POSIX ERE has
         // no look-behind, so the preceding character is consumed
         // instead: the line's start, or any character that is not a
-        // colon.
-        `(^|[^:])data-test(id|-id)\\s*=\\s*["']${escaped}["']`,
+        // colon. The whitespace class is written out (`[ <tab>]`)
+        // rather than `\s`: that is a GNU extension, and on a host whose
+        // grep does not know it every static declaration would read as
+        // "not committed" — the verdict would be refused forever.
+        `(^|[^:])data-test(id|-id)[ \t]*=[ \t]*["']${escaped}["']`,
         'HEAD',
         '--',
         FRONTEND_SRC_REL,

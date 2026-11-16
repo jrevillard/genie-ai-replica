@@ -45,3 +45,24 @@ their "prod" renders stopped being the same surface, and a defect that
 only shows for one host shape (a DNS name with dots, an explicit port, an
 IP literal — which changes the derived egress ipBlock) was covered in one
 job and missing from the other.
+
+## The realm's placeholders, and the Job that must export them
+
+`configs/keycloak/genie-realm.yaml` carries `$(env:VAR)` placeholders that
+keycloak-config-cli substitutes at import time. The chart ships a COPY of
+that file (`charts/genieai-assets/files/genie-realm.yaml`) and CI compares
+the two with `cmp` — a copy that drifts changes what the chart imports, so
+the check is a hard gate.
+
+The chart's own render-time guard checks the placeholders against `$known`,
+a list written out BY HAND in the convergence Job template, in parallel
+with that Job's env block. The two lists are not derived from each other:
+a name in `$known` is not necessarily exported, and a placeholder that is
+declared but never rendered passes every render and aborts the import at
+runtime with a kcc parse error that names nothing.
+
+`scripts/ci/realm-placeholder-export-check.py` closes that hole from the
+RENDER — the env names the convergence Job actually exports, against the
+placeholders the realm actually carries. It runs in `chart:lint`, right
+after the base render. A render that carries no convergence Job is
+refused as vacuous rather than passing.

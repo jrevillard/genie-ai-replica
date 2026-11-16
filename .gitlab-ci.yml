@@ -4208,6 +4208,16 @@ chart:lint:
     - >-
       helm template test charts/genieai-umbrella -n genieai --kube-version $(cat charts/ci/kube-version) $(cat charts/ci/render-base-flags)
       > /tmp/rendered.yaml
+    # Every $(env:VAR) the realm carries must be EXPORTED by the
+    # convergence Job. The chart's own render-time guard compares the
+    # placeholders against a list written out BY HAND in the template
+    # (in parallel with the Job's env block — adding a name to one does
+    # not add it to the other), so a placeholder that is declared but not
+    # rendered passes every render and aborts the kcc import at runtime
+    # with a parse error that names nothing. This gate reads the RENDER:
+    # the env names the Job actually exports, and the placeholders the
+    # realm actually carries.
+    - python3 scripts/ci/realm-placeholder-export-check.py /tmp/rendered.yaml charts/genieai-assets/files/genie-realm.yaml
     # Full-surface render (render-only, no install cost): with defaults
     # opea.enabled / observability.metrics / traces / grafana are all OFF,
     # so ~half the templates never render and a typo in any of them

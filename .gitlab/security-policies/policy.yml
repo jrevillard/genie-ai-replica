@@ -1,8 +1,14 @@
 # GitLab Security Orchestration Policies for GENIE.AI.
 #
-# Stored in the project's own security policy project (this repo self-linked:
-# Settings → Security & Compliance → Policies → Policy project = this project).
+# Stored in the project's own security policy project
+# (un/itu/genie-ai-security-policy-project), file
+# .gitlab/security-policies/policy.yml in that project's default branch.
 # Policies are versioned here, reviewed via MR, enforced by GitLab.
+#
+# GitLab validates this file against
+# ee/app/validators/json_schemas/security_orchestration_policy.json.
+# A single schema violation invalidates the WHOLE file: GitLab then reports
+# "policy.yml file has syntax errors" and enforces NO policy at all.
 #
 # See docs/adr/0001-gitlab-registry-build-scan-pipeline.md for context.
 
@@ -20,6 +26,7 @@ approval_policy:
     enabled: true
     rules:
       - type: scan_finding
+        branch_type: protected
         scanners:
           - container_scanning
           - sast
@@ -28,7 +35,12 @@ approval_policy:
         severity_levels:
           - critical
           - high
-        number_of_changes_required: 1
+        vulnerabilities_allowed: 0
+        vulnerability_states:
+          # new_needs_triage = vulnerabilities introduced by the MR that are not
+          # yet present on the target branch. Pre-existing findings are ignored,
+          # otherwise every MR would be blocked by the known CVE backlog.
+          - new_needs_triage
     actions:
       - type: require_approval
         approvals_required: 1
@@ -48,16 +60,28 @@ approval_policy:
     enabled: true
     rules:
       - type: license_finding
+        branch_type: protected
         license_states:
-          - detected
+          # newly_detected = a new package, or a new license for an existing
+          # package, introduced by the MR.
+          - newly_detected
         license_types:
+          # SPDX identifiers and the matching SPDX names: GitLab documents
+          # license names, but a report may carry the identifier only.
           - AGPL-1.0
+          - Affero General Public License v1.0
           - AGPL-3.0
+          - Affero General Public License v3.0
           - GPL-2.0
+          - GNU General Public License v2.0 only
           - GPL-3.0
+          - GNU General Public License v3.0 only
           - SSPL
+          - Server Side Public License, v 1
           - BUSL-1.1
+          - Business Source License 1.1
           - Commons-Clause
+          - LicenseRef-Commons-Clause
         match_on_inclusion_license: false
     actions:
       - type: require_approval

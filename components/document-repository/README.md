@@ -746,3 +746,4 @@ curl -X POST http://localhost:3000/api/files/retract \
 ## License
 
 SPDX-License-Identifier: Apache-2.0
+<!-- policy validation: exercises the merged approval rule with container_scanning -->

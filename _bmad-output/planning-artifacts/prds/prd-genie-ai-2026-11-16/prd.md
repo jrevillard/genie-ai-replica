@@ -277,15 +277,17 @@ second authorization or knowledge-governance layer).
 ### FG-5 — Evaluation infrastructure
 
 - **FR-23** The evaluation protocol runs two experiments over three
-  configurations sharing one backend per comparison: **A** = legacy fixed
-  RAG; **B** = a fixed (non-agentic) pipeline over the new OPEA-free
-  capabilities; **C** = the agent over those same new capabilities.
-  **E01 compares A/B** (did the OPEA-free path preserve required
-  behaviour?); **E02 compares B/C** (does agentic behaviour provide useful
-  gains within acceptable limits?) — so an E02 delta is attributable to the
-  agent, not to the retrieval migration. Corpus, models, retrieval settings
-  and execution conditions are controlled across each pair; intentional
-  prompt/orchestration differences are recorded.
+  configurations: **A** = legacy fixed RAG; **B** = a fixed (non-agentic)
+  pipeline over the new OPEA-free capabilities; **C** = the agent over
+  those same new capabilities. **E01 compares A/B** (did the OPEA-free
+  path preserve required behaviour?) — the retrieval backend is the
+  variable under test, so A and B deliberately differ there. **E02
+  compares B/C** (does agentic behaviour provide useful gains within
+  acceptable limits?) — B and C share the same retrieval backend, so an
+  E02 delta is attributable to the agent, not to the retrieval migration.
+  Held fixed within each pair: corpus, evaluation set, execution
+  conditions, and the model services to the extent each configuration can
+  use them; intentional prompt/orchestration differences are recorded.
 - **FR-24** Every evaluation run versions its corpus, cases, configurations,
   models, prompts and evaluator instructions; evaluation cases used to tune
   the implementation are kept separate from the assessment set.

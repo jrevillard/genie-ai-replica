@@ -3811,6 +3811,14 @@ describe('the local e2e run defines the executed set (#1736)', () => {
     expect(failurePath).not.toMatch(/classification\.reports\s*=[^=]/);
   });
 
+  test('the summary names BOTH kinds of venue failure when both are present', () => {
+    // A run can fail on the venue's outage AND on the venue's stale
+    // build. A summary that names only one of them is wrong about the
+    // other — and the line is all the operator reads.
+    const failurePath = fs.readFileSync(FAILURE_PATH, 'utf-8');
+    expect(failurePath).toMatch(/venueNoise\.size > 0 && staleVenue\.size > 0/);
+  });
+
   // Any flag other than the project selector would shrink the executed set
   // without the path derivation noticing it (--grep, --shard, a reporter
   // that drops results). Its own test, so a violation names itself instead

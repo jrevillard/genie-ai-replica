@@ -323,14 +323,15 @@ function sourceTreeExistsAt(sha) {
  *
  * @param {string} sha - the build to read
  * @param {string} handle - the handle value
+ * @param {Function} [run] - the git call (injectable for the unit spec)
  * @returns {true|false|null} true = the build declares it, false = it does
  *   not, null = the build could not be read
  */
-function handleDeclaredAtBuild(sha, handle) {
+function handleDeclaredAtBuild(sha, handle, run = execFileSync) {
   try {
     // `-e` ends the option list (a handle that starts with a dash
     // would otherwise be read as an option).
-    execFileSync('git', ['grep', '-q', '-F', '-e', handle, sha, '--', FRONTEND_SRC_REL], {
+    run('git', ['grep', '-q', '-F', '-e', handle, sha, '--', FRONTEND_SRC_REL], {
       cwd: REPO_ROOT,
       stdio: 'ignore'
     });

@@ -870,6 +870,19 @@ test.describe("the verdict is proven against the venue's own build", () => {
     expect(handleDeclaredAtBuild(UNREADABLE_SHA, 'chat-history-item')).toBe(null);
   });
 
+  test('the build-side read ends its options before the handle', () => {
+    // A handle that STARTS with a dash would be read as an option and
+    // git would exit 128: the reader would answer "the build could not
+    // be read" for a build it reads perfectly well.
+    let args = null;
+    const run = (_command, callArgs) => {
+      args = callArgs;
+      return '';
+    };
+    handleDeclaredAtBuild('abc1234def', 'some-handle', run);
+    expect(args[args.indexOf('-e') + 1]).toBe('some-handle');
+  });
+
   test('the proof is stale only when the build does not declare the handle', () => {
     const stale = { handle: 'test-only-handle-no-source-declares', source: 'x.vue' };
     const declared = { handle: 'chat-history-item', source: 'x.vue' };

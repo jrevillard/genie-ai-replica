@@ -273,9 +273,14 @@ kubectl -n genieai port-forward svc/envoy-genieai-genieai-<hash> 4443:4443
 # the listener stays alive but the tunnel is dead, and every later
 # goto against networkidle fails in a cascade that looks like a test
 # defect. Relay the nodePort instead (data plane, no apiserver):
-#   relay:  python3 -c '<asyncio pump> 127.0.0.1:4443 ->
-#           $(minikube ip):<nodePort 31736>'   (see /tmp/relay-4443.py)
-#   run:    BASE_URL=https://genieai.local:4443 npx playwright test tests/e2e/
+#   relay:  python3 scripts/laptop-edge-relay.py   (discovers the node's
+#           address and the Envoy Service's https nodePort — the number
+#           changes with every install, so the recipe names no number)
+#   run:    BASE_URL=https://genieai.local:4443 E2E_VENUE_IP=127.0.0.1 \
+#           npx playwright test tests/e2e/
+# E2E_VENUE_IP maps the venue's NAME to the relay's loopback address for
+# BOTH resolvers — the suite's origin port (4443) and the cluster's
+# nodePort are two different numbers, and the relay is the adapter.
 # The origin MUST stay https://genieai.local:4443 — the realm's
 # redirectUris and the frontend's baked issuer are pinned to it; any
 # other port breaks the OIDC redirect, not the tests. Tests that need

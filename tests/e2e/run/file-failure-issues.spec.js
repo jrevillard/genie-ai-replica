@@ -1196,6 +1196,20 @@ test.describe('the COMMITTED declaration is read strictly', () => {
     expect(handleCommittedAtHead('test-only-handle-no-source-declares')).toBe(false);
   });
 
+  test('a checkout that CANNOT read the committed source answers null, not false', () => {
+    // `git grep` exits 128 when it cannot read the tree (a shallow
+    // clone, an unknown revision). "the checkout could not answer" is a
+    // DIFFERENT fact from "no commit declares it", and the refusal says
+    // which one it is — a reader that answered false would report the
+    // wrong reason for every handle.
+    const unreadable = () => {
+      const error = new Error('git grep exited 128');
+      error.status = 128;
+      throw error;
+    };
+    expect(handleCommittedAtHead('chat-history-item', unreadable)).toBe(null);
+  });
+
   test('a DYNAMIC binding is not a declaration', () => {
     // `:data-testid="x"` binds the attribute to a value the build does
     // not know statically: no build serves it as a handle. Counting it

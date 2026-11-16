@@ -3770,6 +3770,16 @@ describe('the local e2e run defines the executed set (#1736)', () => {
     expect(failurePath).toMatch(/await classifyVenueFailures\(/);
   });
 
+  test('the entry point files WHAT THE CLASSIFICATION left fileable', () => {
+    // The consumption of the verdict is load-bearing: filing the raw
+    // failures instead of the classification's fileable set files one
+    // product bug per spec file against a stale venue — the regression
+    // this change ends — while the staleness report says the opposite.
+    // Every suite stays green when it is broken.
+    const failurePath = fs.readFileSync(FAILURE_PATH, 'utf-8');
+    expect(failurePath).toMatch(/const byFile = classification\.fileable;/);
+  });
+
   test("the entry point binds the classification to the run's build and the venue's build", () => {
     // The arguments are load-bearing: without them the classifier has
     // nothing to bind and refuses EVERY verdict — the failures are

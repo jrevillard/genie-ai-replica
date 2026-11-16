@@ -332,7 +332,13 @@ exactly as they were, with the reason printed.
 | the venue serves it | a product finding — filed as one |
 | the venue does NOT serve it, the checkout DECLARES it | a CANDIDATE — the build proof decides |
 | the venue does NOT serve it, only the WORKING TREE declares it | a spec defect: no commit carries the declaration, so no build can serve it |
-| neither serves it, the checkout does NOT declare it | a **spec defect**: filed as the product finding it is |
+| neither serves it, the checkout does NOT declare it STATICALLY | filed as the product finding it is — either the app never had the handle (a spec defect), or the app computes it at runtime (`:data-test-id="health-${id}"`, whose literal no build carries): neither can be proven stale |
+
+The last row is the safe direction: an undeclared handle is FILED, never
+classified as the venue's. A computed handle cannot be read out of any
+commit — the source carries the template, not the value — so the proof
+cannot be made for one, and the run says so instead of claiming the
+checkout declares nothing.
 
 **The build proof.** A candidate is a stale venue only when the app's
 source AT THE VENUE'S BUILD does not declare the handle either — read

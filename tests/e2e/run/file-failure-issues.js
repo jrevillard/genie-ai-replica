@@ -491,16 +491,18 @@ function venueStaleProof(candidate, context) {
  * The handles this failure waits for that the VENUE DOES NOT SERVE while
  * the CHECKOUT DECLARES them — the stale-venue signature.
  *
- * A handle the venue does not serve AND the checkout does not declare is
- * a SPEC defect (the app never had it): it is not a stale venue, and it
- * is filed as the product finding it is. It stays in the list, flagged
- * `specDefect`, so that a compound locator carrying it beside a stale
- * handle is filed rather than classified — the spec defect must not
- * disappear behind the stale one.
+ * A handle the venue does not serve AND the checkout declares NOWHERE
+ * statically is not a stale venue: either the app never had it (a spec
+ * defect) or the app computes it at runtime (`:data-test-id="health-${id}"`
+ * — no build carries the literal). Neither can be proven stale, so the
+ * failure is filed as the product finding it is. It stays in the list,
+ * flagged `specDefect`, so that a compound locator carrying it beside a
+ * stale handle is filed rather than classified — the undeclared handle
+ * must not disappear behind the stale one.
  *
  * @param {{error: string}} failure - the failure
  * @param {{servedText: string, declared: Map<string, string>}} context - the venue's served bundle and the checkout's declarations
- * @returns {Array<{handle: string, source: string|null, specDefect: boolean}>} the candidates, with the file that declares each (null when the checkout declares none)
+ * @returns {Array<{handle: string, source: string|null, specDefect: boolean}>} the candidates, with the file that declares each (null when the checkout declares none statically)
  */
 function staleVenueHandles(failure, context) {
   if (!isNotFoundFailure(failure?.error)) return [];
@@ -557,12 +559,18 @@ function partitionStaleVenue(byFile, context) {
       const verdicts = [];
       for (const candidate of candidates) {
         if (candidate.specDefect) {
-          // No build can serve it: the spec waits for a handle nobody
-          // declares. It is a spec defect, filed as one — and the
-          // failure must not be classified as the venue's.
+          // No build can serve it: the spec waits for a handle this
+          // checkout declares NOWHERE statically. That is either a spec
+          // defect (the app never had the handle) or a handle the app
+          // computes at runtime (`:data-test-id="health-${id}"`) — no
+          // build carries the literal, so neither can be proven stale.
+          // It is filed as a product finding, and the failure must not
+          // be classified as the venue's.
           refused.push({
             handle: candidate.handle,
-            reason: 'no build can serve it — no source in this checkout declares it'
+            reason:
+              'no build can serve it — no STATIC source in this checkout declares it (the app never ' +
+              'declared it, or it computes it at runtime: a computed handle cannot be proven stale either)'
           });
           verdicts.push({ candidate, verdict: 'not-stale' });
           continue;

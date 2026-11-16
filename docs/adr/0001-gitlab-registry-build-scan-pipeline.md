@@ -79,8 +79,9 @@ promote:image → cross-repo copy tmp/<image>@DIGEST → <image>:main / :main-<s
 ```
 
 - Candidates live in a **separate `tmp/` namespace** (`registry.../genie-ai/tmp/<image>`).
-  The real namespace (`genie-ai/<image>`) only ever holds deployable tags —
-  orphan candidates never pollute it, which matters for registry audit clarity.
+  The real namespace (`genie-ai/<image>`) never holds orphan candidates — it
+  holds the deployable tags plus the branch tags of past pipelines, which the
+  registry cleanup policy reaps after 7 days (see the cleanup section below).
 - Promotion is a **cross-repo copy by immutable digest** (blob-mount, no
   re-upload). The exact bytes scanned are the bytes deployed.
 - E2E pulls the candidate from `tmp/` (`docker compose pull` + `up --no-build`)
@@ -193,25 +194,44 @@ no CI job, no token. Applied on project 90 via the UI
 
 - `enabled`: true
 - `cadence`: `1d` (runs daily)
-- `keep_n`: 5 (keep the 5 most recent matching tags per image, safety net)
+- `keep_n`: 5 (the 5 most recent deletion candidates are always kept, per repository)
 - `name_regex` (delete): `.*` (every tag is a deletion candidate)
-- `name_regex_keep`: `main.*|latest|v.*|release.*`
+- `name_regex_keep`: `latest|v.*|release.*`
 - `older_than`: `7d`
 
 **Regex anchoring**: GitLab wraps keep/remove patterns with `\A...\Z`, so each
-must match the **full** tag name. `main.*` catches `main` + `main-<sha>`;
-`release.*` catches `release-el-salvador` + `release-el-salvador-<sha>` (NOT
-`release-*`, which in regex means `release` + zero-or-more hyphens — a trap).
+must match the **full** tag name. `release.*` catches `release-el-salvador` +
+`release-el-salvador-<sha>` (NOT `release-*`, which in regex means `release` +
+zero-or-more hyphens — a trap). `v.*` catches `vX.Y.Z` and `vX.Y-<sha>`.
 `cache` is intentionally NOT kept: the build cache tag is rewritten on every
 build, so active images keep fresh cache automatically; cache for an image not
 built in 7d is stale and safe to reap (self-healing on next build).
 
-Effect: any tag not matching the keep-regex and older than 7d is deleted, in
-**both** namespaces. Deployable tags (`main`/`main-<sha>`/`latest`/`vX.Y.Z`/
-`release-*`) match keep → preserved. Candidate tags (`pending-*`/`mr-*`) and
-stale `:cache` → reaped after 7d. The real namespace only ever holds deployable
-tags. `release.*` in the keep-regex is **critical** once release-branch image
-tags exist — without it the policy would purge release rolling tags.
+**What survives** (per repository): `latest` (GitLab excludes it before the
+rules apply, even without the regex), the `v*` release tags, the `release*`
+branch tags, and — via `keep_n` — the 5 most recent deletion candidates.
+
+**What is purged** (older than 7d and not among those 5): every branch tag —
+`main`, `main-<sha>`, `dev-el-salvador` and its `-<sha>` variants,
+`docs-*`, `feat-*`, `bmad-loop-*`, `ci-test-*` — plus the candidate tags
+(`pending-*`, `mr-*`) and the stale `:cache` tags. **The rolling branch tags
+`main` and `dev-el-salvador` are meant to be purged**: they are re-created by
+the next pipeline on that branch, so a deployment must use a tag that exists at
+deploy time.
+
+**Deploy consequence**: `genie_ai_global_tag` defaults to `main`
+(`deploy/ansible/tasks/deploy-shared-facts.yml`) → deploying from `main`
+requires a main pipeline in the last 7 days. The release branch is covered
+indefinitely by `release.*`; for a reproducible deploy, use the SHA-pinned
+`release-el-salvador-<sha>` (also kept by `release.*`).
+
+**How GitLab applies the rules** (docs order, worth knowing when a tag
+survives a run): collect the repository's tags → exclude `latest` → keep only
+the tags matching `name_regex` → exclude `name_regex_keep` → exclude tags
+without a manifest → order by creation date → exclude the `keep_n` most recent
+→ exclude tags younger than `older_than` → exclude protected and immutable
+tags → delete what is left. A run may leave tags behind (the execution is
+time-limited on GitLab.com); the next run picks them up.
 
 ---
 

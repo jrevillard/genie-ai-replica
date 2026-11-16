@@ -9,7 +9,6 @@
 // runtime answers, and a validator that recomputed the ceiling would be a
 // third derivation. The constants are literals in both files, and THAT is
 // what can drift silently.
-const fs = require('fs');
 const path = require('path');
 const { withTree } = require('../validators/temp-tree');
 const {
@@ -154,7 +153,8 @@ describe('!1205 — the Node mirror and dataprep agree on the budget constants',
     test('a missing dataprep file is reported (the pin cannot pass vacuously)', () => {
       // A SEPARATE tree without the file: the same case as a deleted file,
       // without the delete race.
-      const { [DATAPREP_FILE]: dropped, ...partialFiles } = CODE_FILES;
+      const partialFiles = { ...CODE_FILES };
+      delete partialFiles[DATAPREP_FILE];
       withTree('contextual-mirror-partial-', partialFiles, (root) => {
         expect(check(root).errors.join('\n')).toMatch(/missing/);
       });

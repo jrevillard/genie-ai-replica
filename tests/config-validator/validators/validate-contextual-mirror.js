@@ -430,7 +430,7 @@ function composeServiceBlock(text, service) {
   const startMatch = text.match(new RegExp(`\\n  ${service}:\\n`));
   if (!startMatch) return null;
   const rest = text.slice(startMatch.index + 1);
-  const nextMatch = rest.match(/\n  [A-Za-z0-9_-]+:\n/);
+  const nextMatch = rest.match(/\n {2}[A-Za-z0-9_-]+:\n/);
   return nextMatch ? rest.slice(0, nextMatch.index + 1) : rest;
 }
 

@@ -40,11 +40,18 @@ const chatbot = require('./chatbot');
  * close. The page answers every call the open path makes — the waits
  * resolve immediately, because what is under test is the CLOSE, not
  * the page.
+ *
+ * `lang` is what the fake page reports for <html lang>: the adoption
+ * pin reads it, and it is the app's own signal of the locale it
+ * adopted at boot.
  */
-function fakeBrowser({ closeFails = false } = {}) {
-  const log = { closes: 0, pages: 0 };
+function fakeBrowser({ closeFails = false, lang = 'en' } = {}) {
+  const log = { closes: 0, pages: 0, contexts: 0 };
   const page = {
-    async evaluate() {
+    async evaluate(fn) {
+      // The adoption pin reads <html lang>; the seeds write
+      // localStorage and their result is not read.
+      if (typeof fn === 'function' && /documentElement\.lang/.test(fn.toString())) return lang;
       return undefined;
     },
     async waitForSelector() {
@@ -71,6 +78,7 @@ function fakeBrowser({ closeFails = false } = {}) {
     log,
     browser: {
       async newContext() {
+        log.contexts += 1;
         return ctx;
       }
     }
@@ -186,5 +194,81 @@ test.describe('a session that fails to open closes itself too', () => {
     expect(caught.message, 'the close failure joins the open failure').toContain('the login failed');
     expect(caught.message, 'the close failure is named').toContain('the context refused to close');
     expect(log.closes, 'the close was attempted').toBe(1);
+  });
+});
+
+test.describe('the seeded locale is proved, not assumed', () => {
+  test('a seeded locale with no reload is refused BEFORE a context exists', async () => {
+    const { browser, log } = fakeBrowser();
+
+    // The seed lands after the login and only the next boot reads it,
+    // so the pair is a contradiction: the session must refuse it rather
+    // than open on the locale it booted with.
+    await expect(
+      welcome.withWelcomeSession(browser, { locale: 'fr', reload: false }, async () => 'never runs')
+    ).rejects.toThrow(/needs the reload that adopts it/);
+    expect(log.contexts, 'no context was opened for a refused session').toBe(0);
+  });
+
+  test('a locale the app adopted is accepted', async () => {
+    const { browser } = fakeBrowser({ lang: 'fr' });
+
+    const value = await welcome.withWelcomeSession(browser, { locale: 'fr' }, async () => 'the measurement');
+
+    expect(value, 'the session ran on the adopted locale').toBe('the measurement');
+  });
+
+  test('a locale the app did NOT adopt fails the session', async () => {
+    // The app fell back to English (its active-locale set drops 'fr'):
+    // every measurement in this session would read the fallback and pass
+    // vacuously, so the session says so instead of measuring nothing.
+    const { browser } = fakeBrowser({ lang: 'en' });
+
+    await expect(welcome.withWelcomeSession(browser, { locale: 'fr' }, async () => 'never runs')).rejects.toThrow(
+      /<html lang> reads 'en', not the seeded 'fr'/
+    );
+  });
+});
+
+/**
+ * The entrance gate's own condition, pinned OFFLINE.
+ *
+ * The gate owns the banner's VISIBILITY, not only its presence: a banner
+ * that is mounted but hidden (or collapsed to a zero-size box) is not a
+ * page anybody can measure — the box reads come back zeroed and the
+ * pixel capture has no clip to take. The post-reload selector wait used
+ * to enforce that, and when the reload path left the banner to this gate
+ * alone, the guarantee would have gone with it — silently, because
+ * nothing failed until a capture read an empty clip.
+ */
+test.describe("the banner gate owns the banner's visibility", () => {
+  const banner = ({ width = 800, height = 120, animations = [] } = {}) => ({
+    getBoundingClientRect: () => ({ width, height }),
+    getAnimations: () => animations
+  });
+  const doc = (element, { visibility = 'visible' } = {}) => ({
+    querySelector: () => element,
+    defaultView: { getComputedStyle: () => ({ visibility }) }
+  });
+
+  test('a banner that is not mounted is not settled', () => {
+    expect(welcome.bannerIsSettled(doc(null))).toBe(false);
+  });
+
+  test('a banner with no box is not settled', () => {
+    expect(welcome.bannerIsSettled(doc(banner({ width: 0, height: 120 })))).toBe(false);
+    expect(welcome.bannerIsSettled(doc(banner({ width: 800, height: 0 })))).toBe(false);
+  });
+
+  test('a hidden banner is not settled', () => {
+    expect(welcome.bannerIsSettled(doc(banner(), { visibility: 'hidden' }))).toBe(false);
+  });
+
+  test('a banner whose entrance animation still runs is not settled', () => {
+    expect(welcome.bannerIsSettled(doc(banner({ animations: [{ playState: 'running' }] })))).toBe(false);
+  });
+
+  test('a visible, settled banner is settled', () => {
+    expect(welcome.bannerIsSettled(doc(banner({ animations: [{ playState: 'finished' }] })))).toBe(true);
   });
 });

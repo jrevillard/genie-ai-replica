@@ -300,7 +300,7 @@ async function readWelcomePanel(page) {
 }
 
 test.describe('Welcome panel does not scroll horizontally', () => {
-  // openWelcomeScreen logs in through the browser — the budget is the
+  // withWelcomeSession logs in through the browser — the budget is the
   // login's own ceiling, derived once beside loginViaUI (#1798).
   test.describe.configure({ timeout: LOGIN_BUDGET_TIMEOUT_MS });
 
@@ -315,7 +315,7 @@ test.describe('Welcome panel does not scroll horizontally', () => {
             viewport: { width: vp, height: 800 },
             theme
             // The banner's box reaches its final width once the entrance
-            // animation openWelcomeScreen waits for passes — no fixed
+            // animation withWelcomeSession waits for passes — no fixed
             // settle window is needed for this read.
           },
           async (page) => {

@@ -37,6 +37,36 @@ const DEFAULT_VIEWPORT = { width: 1440, height: 900 };
 const ENTRANCE_TIMEOUT_MS = 15000;
 const COMPOSITING_TIMEOUT_MS = 15000;
 
+/**
+ * Is the welcome banner laid out, visible and settled?
+ *
+ * The page-side half of the entrance gate, written once so the gate and
+ * its unit spec read the SAME condition (the visualLayerState precedent:
+ * a page-side function that reaches Node as source).
+ *
+ * Three conditions, all of them observable:
+ *
+ *   - the banner is there (a banner that is not mounted is not settled);
+ *   - it is VISIBLE: a non-empty box, and a visibility that is not
+ *     hidden. A banner that is mounted but collapsed or hidden is not a
+ *     page anybody can measure — the box reads come back zeroed and the
+ *     pixel capture has no clip to take;
+ *   - its entrance animation is over: gli-enter runs 650 ms of opacity
+ *     and transform on .quick-help-banner, and a box read or a capture
+ *     inside that window measures the animation rather than the page.
+ *
+ * @param {Document} doc
+ * @returns {boolean}
+ */
+function bannerIsSettled(doc) {
+  const banner = doc.querySelector('[data-testid="quick-help-banner"]');
+  if (banner === null) return false;
+  const rect = banner.getBoundingClientRect();
+  if (rect.width <= 0 || rect.height <= 0) return false;
+  if (doc.defaultView.getComputedStyle(banner).visibility === 'hidden') return false;
+  return banner.getAnimations().every((a) => a.playState !== 'running');
+}
+
 /*
  * Two gates, both real observables, split by who needs them:
  *
@@ -46,6 +76,13 @@ const COMPOSITING_TIMEOUT_MS = 15000;
  *    rather than the page. The gate is the animation's own playState,
  *    so the wait ends when the page is done animating, at whatever
  *    speed the machine renders it. Every open session passes it.
+ *
+ *    The gate also owns the banner's VISIBILITY, not only its presence:
+ *    a banner that is mounted but hidden (or collapsed to a zero-size
+ *    box) is not a page anybody can measure — the box reads come back
+ *    zeroed and the pixel capture has no clip to take. This is the
+ *    observable the post-reload selector wait used to enforce, and the
+ *    reason the reload path can leave the banner to THIS gate alone.
  *
  * 2. waitForCompositingSettled — compositing of the masked banner. A
  *    capture taken before the compositor has produced its final frame
@@ -59,14 +96,9 @@ const COMPOSITING_TIMEOUT_MS = 15000;
  *    sample pixels without capturePixels.
  */
 async function waitForBannerEntrance(page) {
-  await page.waitForFunction(
-    () => {
-      const banner = document.querySelector('[data-testid="quick-help-banner"]');
-      return banner !== null && banner.getAnimations().every((a) => a.playState !== 'running');
-    },
-    undefined,
-    { timeout: ENTRANCE_TIMEOUT_MS }
-  );
+  await page.waitForFunction(`(${bannerIsSettled.toString()})(document)`, undefined, {
+    timeout: ENTRANCE_TIMEOUT_MS
+  });
 }
 
 async function waitForCompositingSettled(page) {
@@ -139,9 +171,11 @@ async function waitForBannerSettled(page) {
  * settled frame: capturePixels gates on it (waitForCompositingSettled)
  * on its first capture of a page.
  *
- * Returns { ctx, page } — the caller closes ctx when it is done. Prefer
- * withWelcomeSession, which owns that close guarantee in its own control
- * flow.
+ * Returns { ctx, page } — INTERNAL: the only caller is withWelcomeSession,
+ * which owns the close guarantee in its own control flow. This half is
+ * not exported: a caller that reached for it would have to close the
+ * context itself, which is exactly the shape the helper exists to make
+ * unforgetable (#1888).
  * The open path holds the same guarantee for itself: a throw after the
  * context exists (a login that fails, a wait that expires) closes the
  * context before rethrowing, so a failed open cannot leak it.
@@ -428,8 +462,8 @@ return { lum, contrastRatio };`;
 const LAYER_STATE_BIND = `return (${visualLayerState.toString()});`;
 
 module.exports = {
-  openWelcomeScreen,
   withWelcomeSession,
+  bannerIsSettled,
   waitForBannerSettled,
   readVisualLayerState,
   capturePixels,

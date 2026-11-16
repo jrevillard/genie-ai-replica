@@ -224,10 +224,12 @@ async function openWelcomeScreen(browser, { viewport, theme, locale, setupPage, 
     await waitForBannerEntrance(page);
     if (locale) {
       // The seed is only ADOPTED when the app boots on it, and the
-      // adoption is PROVEN here, not assumed: main.js falls back to
-      // English when the seeded locale is not in the deployment's active
-      // set (VUE_APP_AVAILABLE_LOCALES), and a session that fell back
-      // measures the fallback's page and passes vacuously (#1874, #1891).
+      // adoption is PROVEN here, not assumed: the app resolves the
+      // locale it adopts from the saved preference, then from the
+      // BROWSER's language, and only then English — so a deployment
+      // whose active set (VUE_APP_AVAILABLE_LOCALES) does not carry the
+      // seed adopts another locale, and a session that adopted it
+      // measures that page and passes vacuously (#1874, #1891).
       // The app writes the adopted locale to <html lang> at boot, so that
       // attribute is the pin.
       await assertAdoptedLocale(
@@ -295,9 +297,10 @@ async function closeLoudly(ctx, failure) {
  *
  * A seeded locale is PROVEN, not assumed: the app writes the locale it
  * adopted to <html lang> at boot, and the session asserts that attribute
- * before it returns. A deployment whose active-locale set drops the
- * seeded locale falls back to English, and a session that fell back
- * measures the fallback's page and passes vacuously.
+ * before it returns. A deployment whose active-locale set does not carry
+ * the seeded locale adopts another one — the browser's language when the
+ * set carries it, English otherwise — and a session that adopted it
+ * measures that page and passes vacuously.
  *
  * The banner's entrance animation is over before the screen is
  * returned (see waitForBannerEntrance) — box and geometry reads see

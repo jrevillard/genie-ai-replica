@@ -331,6 +331,7 @@ exactly as they were, with the reason printed.
 |---|---|
 | the venue serves it | a product finding — filed as one |
 | the venue does NOT serve it, the checkout DECLARES it | a CANDIDATE — the build proof decides |
+| the venue does NOT serve it, only the WORKING TREE declares it | a spec defect: no commit carries the declaration, so no build can serve it |
 | neither serves it, the checkout does NOT declare it | a **spec defect**: filed as the product finding it is |
 
 **The build proof.** A candidate is a stale venue only when the app's
@@ -344,11 +345,14 @@ not an answer, it is an absence of one: the verdict is refused and the
 failures are filed as they are, with the reason printed. Nothing is
 guessed from a checkout that cannot see the build.
 
+The declaration the proof reads is the COMMITTED one. A handle that
+exists only in an uncommitted edit is carried by no commit, so no build
+can serve it: it is a spec defect, filed as one, not a stale venue.
+
 **The binding.** The bundle read happens at filing time; the failure was
 produced earlier. The verdict is only made when the venue still serves
-the build the RUN exercised: the run's own marker
-(`E2E_VENUE_BUILD_GIT_SHA`, or the sidecar the runner writes beside the
-run's report) against the venue's current one.
+the build the RUN exercised: the run's own build — the sidecar the runner
+writes beside the run's report — against the venue's current one.
 
 | The venue's state | The verdict |
 |---|---|

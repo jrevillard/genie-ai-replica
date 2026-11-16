@@ -23,6 +23,7 @@ const {
   venueStalenessReport,
   venueStaleProof,
   handleDeclaredAtBuild,
+  ancestryOfHead,
   probeVenueBuildSha,
   bindVenueBuild,
   buildStaleVenueContext,
@@ -584,7 +585,14 @@ test.describe('a stale venue is told apart from a product defect', () => {
   const PROVEN_STALE = {
     servedText: '"some-other-handle"',
     declared: new Map([[STALE_HANDLE, 'components/gov-chat-frontend/src/components/ChatFolders.vue']]),
-    boundSha: HEAD_SHA
+    boundSha: HEAD_SHA,
+    // The build reader is INJECTED: the unit spec must not borrow a
+    // commit from the repository's history — a checkout at origin/main
+    // carries no commit that is not behind its HEAD, and a spec that
+    // needs one goes red exactly where the operator runs the suite. The
+    // real read has its own specs (the declared handle at HEAD, a handle
+    // nothing declares, a sha no repository holds).
+    declaredAtBuild: (sha) => sha === 'HEAD'
   };
 
   test('the handles a failure waits for are read from the LOCATOR line', () => {
@@ -669,12 +677,59 @@ test.describe('a stale venue is told apart from a product defect', () => {
     const context = {
       servedText: '"other"',
       declared: new Map([['chat-history-item', 'components/gov-chat-frontend/src/components/ChatFolders.vue']]),
-      boundSha: HEAD_SHA
+      boundSha: HEAD_SHA,
+      declaredAtBuild: () => true
     };
     const byFile = new Map([['tests/e2e/a.spec.js', [{ error: HISTORY_ERROR }]]]);
     const { fileable, stale } = partitionStaleVenue(byFile, context);
     expect(fileable.get('tests/e2e/a.spec.js')).toHaveLength(1);
     expect(stale.size).toBe(0);
+  });
+
+  test("a declaration that lives only in the WORKING TREE is not the venue's — the failure is filed", () => {
+    // The working tree is what the run exercises, but no build of it
+    // exists: a handle in an uncommitted edit is carried by no commit,
+    // so no build can serve it — and classifying it as a stale venue
+    // would drop the failure out of the filing with a remedy (a venue
+    // refresh) that cannot help.
+    const context = {
+      servedText: '"some-other-handle"',
+      declared: new Map([[STALE_HANDLE, 'components/gov-chat-frontend/src/components/ChatFolders.vue']]),
+      boundSha: HEAD_SHA,
+      declaredAtBuild: () => false
+    };
+    const byFile = new Map([['tests/e2e/a.spec.js', [{ error: STALE_ERROR }]]]);
+    const { fileable, stale } = partitionStaleVenue(byFile, context);
+    expect(stale.size).toBe(0);
+    expect(fileable.get('tests/e2e/a.spec.js')).toHaveLength(1);
+  });
+
+  test("a locator naming a STALE handle AND a handle the app's build dropped is filed, not classified", () => {
+    // Two causes in one failure: the venue cannot serve the first, and
+    // the app's own build dropped the second. The product defect must
+    // not be silenced by the stale one.
+    const compound = [
+      'Error: expect(locator).toBeVisible() failed',
+      '',
+      'Locator: locator(\'[data-testid="test-only-handle-no-source-declares"]\').locator(\'[data-testid="chat-history-item"]\')',
+      'Error: element(s) not found'
+    ].join('\n');
+    const context = {
+      servedText: '"some-other-handle"',
+      declared: new Map([
+        [STALE_HANDLE, 'components/gov-chat-frontend/src/components/ChatFolders.vue'],
+        ['chat-history-item', 'components/gov-chat-frontend/src/components/ChatFolders.vue']
+      ]),
+      boundSha: HEAD_SHA,
+      // Declared at HEAD; at the venue's build the first handle is
+      // missing (stale) and the second one was declared (the app's own
+      // build dropped it).
+      declaredAtBuild: (sha) => (sha === 'HEAD' ? true : STALE_HANDLE)
+    };
+    const byFile = new Map([['tests/e2e/a.spec.js', [{ error: compound }]]]);
+    const { fileable, stale } = partitionStaleVenue(byFile, context);
+    expect(stale.size).toBe(0);
+    expect(fileable.get('tests/e2e/a.spec.js')).toHaveLength(1);
   });
 
   test('an unbound venue (no build to read) classifies nothing — the failures stay fileable', () => {
@@ -744,10 +799,11 @@ test.describe("the verdict is proven against the venue's own build", () => {
   test('the proof is stale only when the build does not declare the handle', () => {
     const stale = { handle: 'test-only-handle-no-source-declares', source: 'x.vue' };
     const declared = { handle: 'chat-history-item', source: 'x.vue' };
-    expect(venueStaleProof(stale, { boundSha: HEAD_SHA })).toBe('stale');
+    const notDeclared = { boundSha: HEAD_SHA, declaredAtBuild: (sha) => sha === 'HEAD' };
+    expect(venueStaleProof(stale, notDeclared)).toBe('stale');
     // The build DID declare it: the app's own build dropped it — a
     // product defect, filed as one.
-    expect(venueStaleProof(declared, { boundSha: HEAD_SHA })).toBe('declared');
+    expect(venueStaleProof(declared, { boundSha: HEAD_SHA, declaredAtBuild: () => true })).toBe('declared');
     // No bound build: nothing to read, so nothing is proven.
     expect(venueStaleProof(stale, { boundSha: null })).toBe('not-stale');
   });
@@ -793,17 +849,32 @@ test.describe("the venue's bundle is bound to the run's build", () => {
   });
 
   test("a venue that is NOT behind the checkout is not bound — a missing handle is not the venue's", () => {
-    // A build the checkout KNOWS and that is not behind HEAD: a commit on
-    // origin/main that this branch does not carry. The refusal is what is
-    // pinned (the wording belongs to the arm, not to the contract).
-    const ahead = execFileSync('git', ['rev-list', '--max-count=1', 'origin/main', '--not', 'HEAD'], {
-      encoding: 'utf-8'
-    }).trim();
-    expect(ahead, 'the checkout carries a build that is not behind its HEAD').not.toBe('');
-    const bound = bindVenueBuild({ runSha: ahead, venueSha: ahead });
+    // The ancestry reader is injected: the unit spec must not borrow a
+    // commit from the repository's history — a checkout at origin/main
+    // carries no commit that is not behind its HEAD, and a spec that
+    // needs one goes red exactly where the operator runs the suite.
+    const bound = bindVenueBuild({
+      runSha: OTHER_SHA,
+      venueSha: OTHER_SHA,
+      ancestry: () => 'not-ancestor'
+    });
     expect(bound.boundSha).toBe(null);
-    expect(bound.note).toContain(ahead);
+    expect(bound.note).toContain(OTHER_SHA);
     expect(bound.note).toContain('filed as they are');
+  });
+
+  test('the ancestry reader tells the three answers apart', () => {
+    // The real reader: HEAD is behind itself, and a sha no repository
+    // holds cannot be placed at all.
+    expect(ancestryOfHead(HEAD_SHA)).toBe('ancestor');
+    expect(ancestryOfHead('deadbeefdeadbeefdeadbeefdeadbeefdeadbeef')).toBe('unknown');
+    // Exit 1 is the third answer — the build is known and is not behind.
+    const notAncestor = () => {
+      const error = new Error('not an ancestor');
+      error.status = 1;
+      throw error;
+    };
+    expect(ancestryOfHead('abc1234', notAncestor)).toBe('not-ancestor');
   });
 });
 
@@ -1038,16 +1109,20 @@ test.describe('a build that cannot be read refuses the verdict', () => {
   const UNREADABLE_SHA = 'deadbeefdeadbeefdeadbeefdeadbeefdeadbeef';
 
   test('the proof refuses, it does not answer', () => {
-    expect(venueStaleProof({ handle: 'chat-history-item', source: 'x.vue' }, { boundSha: UNREADABLE_SHA })).toBe(
-      'unreadable'
-    );
+    expect(
+      venueStaleProof(
+        { handle: 'chat-history-item', source: 'x.vue' },
+        { boundSha: UNREADABLE_SHA, declaredAtBuild: () => null }
+      )
+    ).toBe('unreadable');
   });
 
   test('the refusals are collected, and the failures stay fileable', () => {
     const context = {
       servedText: '"some-other-handle"',
       declared: new Map([['chat-history-item', 'components/gov-chat-frontend/src/components/ChatFolders.vue']]),
-      boundSha: UNREADABLE_SHA
+      boundSha: UNREADABLE_SHA,
+      declaredAtBuild: (sha) => (sha === 'HEAD' ? true : null)
     };
     const error = [
       'Error: expect(locator).toBeVisible() failed',
@@ -1063,7 +1138,11 @@ test.describe('a build that cannot be read refuses the verdict', () => {
   });
 
   test('a checkout that cannot answer the ancestry refuses the binding, and names why', () => {
-    const bound = bindVenueBuild({ runSha: UNREADABLE_SHA, venueSha: UNREADABLE_SHA });
+    const bound = bindVenueBuild({
+      runSha: UNREADABLE_SHA,
+      venueSha: UNREADABLE_SHA,
+      ancestry: () => 'unknown'
+    });
     expect(bound.boundSha).toBe(null);
     expect(bound.note).toContain('cannot be read by this checkout');
   });

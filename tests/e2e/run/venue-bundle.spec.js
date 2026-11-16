@@ -144,6 +144,21 @@ test.describe('the walk reads the venue and every chunk it names', () => {
     ).rejects.toThrow(/SPA fallback/);
   });
 
+  test('a chunk the venue answers EMPTY is not the chunk either', async () => {
+    // An empty body is a chunk the walk never read: the walk would call
+    // itself complete on it, and a handle living in that chunk would be
+    // reported as absent.
+    await expect(
+      fetchVenueBundleText('https://venue.example:4443', {
+        request: transport({
+          '/': INDEX,
+          '/js/app.1229e2fc.js': APP,
+          '/js/73.7f541a03.js': ''
+        })
+      })
+    ).rejects.toThrow(/empty body/);
+  });
+
   test('a venue that serves no app bundle makes the walk incomplete', async () => {
     await expect(
       fetchVenueBundleText('https://venue.example:4443', {

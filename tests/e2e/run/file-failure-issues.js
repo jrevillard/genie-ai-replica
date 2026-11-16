@@ -250,11 +250,12 @@ function handleDeclaredAtBuild(sha, handle) {
  * answer, the second is an answer.
  *
  * @param {string} sha - the build to test
+ * @param {Function} [run] - the git call (injectable for the unit spec)
  * @returns {'ancestor'|'not-ancestor'|'unknown'} the relation
  */
-function ancestryOfHead(sha) {
+function ancestryOfHead(sha, run = execFileSync) {
   try {
-    execFileSync('git', ['merge-base', '--is-ancestor', sha, 'HEAD'], {
+    run('git', ['merge-base', '--is-ancestor', sha, 'HEAD'], {
       cwd: REPO_ROOT,
       stdio: 'ignore'
     });
@@ -377,12 +378,16 @@ function probeVenueBuildSha(venue, spawn = spawnPreflight) {
  * dropping it — a product defect, filed as one.
  *
  * @param {{handle: string, source: string}} candidate - the missing handle
- * @param {{boundSha: string|null}} context - the venue's bound build
- * @returns {'stale'|'not-stale'} the verdict
+ * @param {{boundSha: string|null, declaredAtBuild?: Function}} context - the venue's bound build and the build reader
+ * @returns {'stale'|'declared'|'unreadable'|'not-stale'} the verdict: the
+ *   venue's build cannot serve it, the build DID declare it (the app's own
+ *   build dropped it), the build could not be read (the verdict is
+ *   refused), or there is no bound build to read
  */
 function venueStaleProof(candidate, context) {
   if (!context.boundSha) return 'not-stale';
-  const declared = handleDeclaredAtBuild(context.boundSha, candidate.handle);
+  const read = context.declaredAtBuild || handleDeclaredAtBuild;
+  const declared = read(context.boundSha, candidate.handle);
   if (declared === false) return 'stale';
   if (declared === true) return 'declared';
   // The build could not be read: the verdict is refused, and the refusal
@@ -405,11 +410,19 @@ function venueStaleProof(candidate, context) {
  */
 function staleVenueHandles(failure, context) {
   if (!isNotFoundFailure(failure?.error)) return [];
+  const read = context.declaredAtBuild || handleDeclaredAtBuild;
   const missing = [];
   for (const handle of locatorHandles(failure.error)) {
     if (bundleServesHandle(context.servedText, handle)) continue;
     const source = context.declared.get(handle);
     if (!source) continue;
+    // The declaration must be in the COMMITTED app. The working tree is
+    // what the run exercises, but no build of it exists: a handle that
+    // lives only in an uncommitted edit is not the venue's fault — no
+    // commit carries it, so no build can serve it — and classifying it
+    // as a stale venue would drop the failure out of the filing with a
+    // remedy (a venue refresh) that cannot help.
+    if (!read('HEAD', handle)) continue;
     missing.push({ handle, source });
   }
   return missing;
@@ -440,21 +453,30 @@ function partitionStaleVenue(byFile, context) {
       // PROOF decides. A candidate the venue's own build DID declare is
       // the app's build dropping it — a product defect, filed as one.
       const candidates = staleVenueHandles(failure, context);
-      const proven = [];
-      for (const candidate of candidates) {
-        const verdict = venueStaleProof(candidate, context);
-        if (verdict === 'stale') proven.push(candidate);
+      if (candidates.length === 0) {
+        rest.push(failure);
+        continue;
+      }
+      const verdicts = candidates.map((candidate) => ({
+        candidate,
+        verdict: venueStaleProof(candidate, context)
+      }));
+      for (const { candidate, verdict } of verdicts) {
         if (verdict === 'unreadable' && !refused.some((entry) => entry.handle === candidate.handle)) {
           refused.push(candidate);
         }
       }
-      if (proven.length === 0) {
+      // EVERY candidate must be proven stale. A locator that names a
+      // handle the venue cannot serve AND a handle the app's own build
+      // dropped carries two causes, and the product defect must not be
+      // silenced by the stale one.
+      if (!verdicts.every((entry) => entry.verdict === 'stale')) {
         rest.push(failure);
         continue;
       }
       explained.push(failure);
-      for (const { handle, source } of proven) {
-        if (!missing.has(handle)) missing.set(handle, source);
+      for (const { candidate } of verdicts) {
+        if (!missing.has(candidate.handle)) missing.set(candidate.handle, candidate.source);
       }
     }
     if (rest.length > 0) fileable.set(file, rest);
@@ -561,6 +583,10 @@ async function buildStaleVenueContext(venue, byFile, options = {}) {
     ok: true,
     servedText,
     declared,
+    // The build reader is injectable (the same shape as the transport
+    // above): the unit spec pins the proof's arms without borrowing a
+    // commit from the repository's history.
+    declaredAtBuild: options.declaredAtBuild || handleDeclaredAtBuild,
     ...bindVenueBuild(options)
   };
 }
@@ -581,6 +607,7 @@ async function buildStaleVenueContext(venue, byFile, options = {}) {
 function bindVenueBuild(options = {}) {
   const runSha = options.runSha || null;
   const venueSha = options.venueSha || null;
+  const ancestry = options.ancestry || ancestryOfHead;
   if (!runSha) {
     return {
       boundSha: null,
@@ -606,8 +633,8 @@ function bindVenueBuild(options = {}) {
         'they are filed as they are.'
     };
   }
-  const ancestry = ancestryOfHead(venueSha);
-  if (ancestry === 'not-ancestor') {
+  const relation = ancestry(venueSha);
+  if (relation === 'not-ancestor') {
     return {
       boundSha: null,
       note:
@@ -616,7 +643,7 @@ function bindVenueBuild(options = {}) {
         'they are.'
     };
   }
-  if (ancestry === 'unknown') {
+  if (relation === 'unknown') {
     return {
       boundSha: null,
       note:

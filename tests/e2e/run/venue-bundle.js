@@ -316,6 +316,12 @@ function assertScript(body, what) {
   if (/^\s*</.test(body)) {
     throw new Error(`the venue answered ${what} with the SPA fallback page, not the script`);
   }
+  if (!String(body || '').trim()) {
+    // An empty body is not the chunk either: the walk would call itself
+    // complete on a chunk it never read, and a handle living in that
+    // chunk would be reported as absent.
+    throw new Error(`the venue answered ${what} with an empty body, not the script`);
+  }
 }
 
 module.exports = {
@@ -325,6 +331,5 @@ module.exports = {
   parseChunkNaming,
   chunkPaths,
   checkoutDeclaredHandles,
-  fetchVenueBundleText,
-  FRONTEND_SRC
+  fetchVenueBundleText
 };

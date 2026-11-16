@@ -1200,7 +1200,12 @@ async function main() {
   // needs it to BIND the venue's served bundle to the build the run
   // exercised — a venue that moved since the run answers with a bundle
   // that is not the one the failure was produced against.
-  const venueBuildFile = fs.mkdtempSync(path.join(os.tmpdir(), 'file-failure-issues-build-'));
+  // A DIRECTORY of its own, and the marker file INSIDE it: the
+  // pre-flight writes the marker with writeFileSync, and a scratch path
+  // that is itself a directory is a scratch path the marker cannot be
+  // written to.
+  const venueBuildDir = fs.mkdtempSync(path.join(os.tmpdir(), 'file-failure-issues-build-'));
+  const venueBuildFile = path.join(venueBuildDir, 'build');
   let venueSha;
   let preflightFailed = false;
   try {
@@ -1212,7 +1217,7 @@ async function main() {
     preflightFailed = true;
   } finally {
     venueSha = readVenueBuildSha(venueBuildFile);
-    fs.rmSync(venueBuildFile, { recursive: true, force: true });
+    fs.rmSync(venueBuildDir, { recursive: true, force: true });
   }
   if (preflightFailed) {
     process.stderr.write(

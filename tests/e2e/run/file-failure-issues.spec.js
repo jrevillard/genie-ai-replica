@@ -1500,5 +1500,11 @@ test.describe('a compound locator with mixed committed answers is filed', () => 
     expect(stale.size).toBe(0);
     expect(fileable.get('tests/e2e/a.spec.js')).toHaveLength(1);
     expect(refused[0].reason).toContain('no build can serve it');
+    // The reason must not claim the checkout declares nothing: the app
+    // computes some handles at runtime (`:data-test-id="health-${id}"`),
+    // and no build carries the literal — so the truth is that no STATIC
+    // source declares it, and that neither case can be proven stale.
+    expect(refused[0].reason).toContain('no STATIC source');
+    expect(refused[0].reason).toContain('computes it at runtime');
   });
 });

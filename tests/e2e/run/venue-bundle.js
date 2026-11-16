@@ -49,7 +49,7 @@ const FRONTEND_SRC = path.join(REPO_ROOT, 'components', 'gov-chat-frontend', 'sr
  * looked up in a bundle and is not a declaration. The look-behind keeps
  * the dynamic spelling out.
  */
-const HANDLE_RE = /(?<!:)data-test(?:id|-id)\s*=\s*["']([^"']+)["']/g;
+const HANDLE_RE = /(?<!:)data-test(?:id|-id)[ \t]*=[ \t]*["']([^"']+)["']/g;
 
 // The chunk filename template webpack emits: "js/"+<name>+"."+<hash>+".js".
 // The anchor is the template itself, not a shape of it: the map of chunk

@@ -47,6 +47,16 @@ test.describe('the handles a source text declares', () => {
     expect(handlesIn('<div :data-test-id="row.kind">')).toEqual([]);
   });
 
+  test('a binding SPLIT across lines names no handle — the two readers read lines', () => {
+    // The committed reader is a `git grep`, and git grep reads LINES:
+    // a binding whose value sits on the next line is not a declaration
+    // there. The working-tree reader must hold to the same rule, or the
+    // two readers disagree about what a declaration is — and the
+    // disagreement is read as "no commit declares it", a false reason
+    // printed next to a filed failure.
+    expect(handlesIn('<div\n  data-testid=\n  "ghost-handle"\n>')).toEqual([]);
+  });
+
   test('every declaration in a text is found, in order', () => {
     const source = '<a data-testid="one"></a><b data-test-id="two"></b>';
     expect(handlesIn(source)).toEqual(['one', 'two']);

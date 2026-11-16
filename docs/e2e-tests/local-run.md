@@ -367,8 +367,9 @@ declare it", is the one that licenses the verdict.
 The COMMITTED read and the working-tree walk count the SAME
 declarations, so the two cannot disagree on what a declaration is: both
 read the app's SOURCE files (`.vue`, `.js` — a handle NAMED in a README
-is not a declaration, no build renders it), and a DYNAMIC binding
-(`:data-testid="x"`) is not one. Its value is not known at build time, no
+is not a declaration, no build renders it), both read LINES (a binding
+whose value sits on the next line is a declaration in neither), and a
+DYNAMIC binding (`:data-testid="x"`) is not one. Its value is not known at build time, no
 build serves it as a handle, and counting it would let a handle that
 lives only in an uncommitted edit pass the committed gate on the strength
 of an unrelated dynamic binding — the verdict would then fire on a build
@@ -405,7 +406,12 @@ Three details the read holds to:
   cannot be read makes the walk incomplete, and an incomplete walk
   cannot say a handle is absent;
 - a chunk the edge answers with the SPA's fallback page (HTTP 200, HTML)
-  is NOT the chunk: the walk rejects the body, for the same reason.
+  is NOT the chunk: the walk rejects the body, for the same reason;
+- the walk reads the app's SOURCE files, not the files a BUILD imports: a
+  handle added to a component no entry point imports yields a stale-venue
+  verdict that refreshing the venue cannot cure (the component never
+  renders). Three components under the frontend's `src` are imported by
+  nothing today.
 
 ### The build marker and the pre-flight probe (#1851)
 

@@ -231,9 +231,20 @@ this file, rewrites image names from `tmp/<image>:<candidate>` →
 `un/itu/genie-ai-security-policy-project`, `scan_finding` / `container_scanning`),
 not `trivy --exit-code 1`. Scan jobs are `allow_failure: true`.
 
+One `scan_finding` rule covers the four scanners (`sast`, `dependency_scanning`,
+`secret_detection`, `container_scanning`) with `vulnerabilities_allowed: 0` on
+newly-detected HIGH/CRITICAL — zero tolerance, not a budget. The policy declares
+`fallback_behavior: {fail: open}`: container scanning only runs for the images a
+merge request touches, so when the source pipeline has no container scan to
+compare against the target, the policy is **skipped** (no approval demanded)
+instead of blocking the merge request. A real violation — a newly-detected
+HIGH/CRITICAL finding — still fails the policy and demands a maintainer
+approval.
+
 **Regex**:
 ```bash
 PRIMARY_TAG="${FINAL_TAGS%% *}"
 sed "s|tmp/${IMAGE_NAME}:[^\"() ]*|${IMAGE_NAME}:${PRIMARY_TAG}|g" \
   gl-scan-tmp.json > gl-container-scanning-report.json
 ```
+

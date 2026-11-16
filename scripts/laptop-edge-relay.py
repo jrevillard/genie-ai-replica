@@ -66,13 +66,17 @@ def minikube_ip():
             "minikube is not on PATH — pass the edge address explicitly: "
             "scripts/laptop-edge-relay.py <host> <nodePort>"
         )
-    out = subprocess.run(
-        [binary, "ip"], capture_output=True, text=True, check=True
-    ).stdout.strip()
-    if not out:
+    # check=False, and the stderr tail in the message: `minikube ip`
+    # fails on a stopped cluster, and a traceback would bury the cause
+    # under the tool's own stack.
+    result = subprocess.run([binary, "ip"], capture_output=True, text=True, check=False)
+    out = result.stdout.strip()
+    if result.returncode != 0 or not out:
+        detail = (result.stderr or result.stdout).strip().splitlines()
+        tail = detail[-1] if detail else "no output"
         raise SystemExit(
-            "minikube ip answered nothing — is the cluster running? "
-            "Pass the edge address explicitly: "
+            f"minikube ip failed (exit {result.returncode}): {tail} — "
+            "is the cluster running? Pass the edge address explicitly: "
             "scripts/laptop-edge-relay.py <host> <nodePort>"
         )
     return out
@@ -80,7 +84,7 @@ def minikube_ip():
 
 def envoy_node_port():
     """The Envoy data-plane Service's HTTPS nodePort."""
-    out = subprocess.run(
+    result = subprocess.run(
         [
             "kubectl",
             "-n",
@@ -95,11 +99,18 @@ def envoy_node_port():
         capture_output=True,
         text=True,
         check=False,
-    ).stdout.strip()
-    if not out:
+    )
+    out = result.stdout.strip()
+    if result.returncode != 0 or not out:
+        # kubectl's stderr is the cause (no cluster, wrong context,
+        # forbidden) — without it the message would blame the install
+        # for a lookup that never reached the API server.
+        detail = (result.stderr or result.stdout).strip().splitlines()
+        tail = detail[-1] if detail else "no output"
         raise SystemExit(
-            "the Envoy Service's https nodePort was not found in the genieai "
-            "namespace — is the release installed? Pass the port explicitly: "
+            f"the Envoy Service's https nodePort was not found in the genieai "
+            f"namespace (kubectl exit {result.returncode}): {tail} — is the "
+            "release installed? Pass the port explicitly: "
             "scripts/laptop-edge-relay.py <host> <nodePort>"
         )
     return int(out)
@@ -147,7 +158,14 @@ async def main():
 
 if __name__ == "__main__":
     if len(sys.argv) == 3:
-        TARGET = (sys.argv[1], int(sys.argv[2]))
+        try:
+            port = int(sys.argv[2])
+        except ValueError:
+            raise SystemExit(
+                f"the port must be a number, not {sys.argv[2]!r} — the Envoy "
+                "Service's https nodePort"
+            ) from None
+        TARGET = (sys.argv[1], port)
     elif len(sys.argv) == 1:
         TARGET = (minikube_ip(), envoy_node_port())
     else:

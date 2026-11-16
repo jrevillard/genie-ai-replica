@@ -102,6 +102,19 @@ resolveReplicas was written to avoid. */ -}}
 {{- if not (kindIs "invalid" $convergence.backoffLimit) -}}
 {{- $backoffLimit = $convergence.backoffLimit -}}
 {{- end -}}
+{{- /* The SSO session lifespans are a NIL check for the same reason:
+Sprig treats 0 as empty, and 0 is a MEANINGFUL value here — Keycloak
+reads a non-positive session lifetime as "never expire", which is the
+setting an operator wants for a kiosk or a single-machine venue. A
+`| default 28800` would silently turn that 0 into 8 hours. */ -}}
+{{- $ssoSessionIdleTimeout := 28800 -}}
+{{- if not (kindIs "invalid" $keycloak.ssoSessionIdleTimeout) -}}
+{{- $ssoSessionIdleTimeout = $keycloak.ssoSessionIdleTimeout -}}
+{{- end -}}
+{{- $ssoSessionMaxLifespan := 604800 -}}
+{{- if not (kindIs "invalid" $keycloak.ssoSessionMaxLifespan) -}}
+{{- $ssoSessionMaxLifespan = $keycloak.ssoSessionMaxLifespan -}}
+{{- end -}}
 {{- $realmFile := $assets.Files.Get "files/genie-realm.yaml" -}}
 {{- if $keycloak.failOnPlaceholderSecrets -}}
 {{- range $p := (regexFindAll "\\$\\(env:[A-Z_][A-Z0-9_]*\\)" $realmFile -1) -}}
@@ -351,9 +364,9 @@ spec:
             # 10 h) are what #1834 was filed against — the values here
             # are the workday defaults Compose ships.
             - name: KEYCLOAK_SSO_SESSION_IDLE_TIMEOUT
-              value: {{ $keycloak.ssoSessionIdleTimeout | default 28800 | quote }}
+              value: {{ $ssoSessionIdleTimeout | quote }}
             - name: KEYCLOAK_SSO_SESSION_MAX_LIFESPAN
-              value: {{ $keycloak.ssoSessionMaxLifespan | default 604800 | quote }}
+              value: {{ $ssoSessionMaxLifespan | quote }}
             # Secret-backed parameters, one row per operator-declared
             # entry. The rows are VALIDATED by the helper (a typo'd key
             # would render `name: null` and the API server would reject

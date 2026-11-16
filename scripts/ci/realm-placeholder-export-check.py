@@ -21,6 +21,14 @@ Deleting an env row from the template turns this gate red; the chart's
 own guard stays green. That is the whole point: the two checks cover
 different classes, and only the pair covers the class.
 
+SCOPE: this gate proves that a placeholder is EXPORTED — that the name
+is among the Job's env rows. It says nothing about the VALUE: a row
+that carries the right name and the wrong number passes by design (the
+value's correctness belongs to the template that computes it, and to
+the chart's own render-time guard). A second gate that reads values
+would have to decide what the right value IS, per placeholder — a
+judgement the chart does not encode anywhere.
+
 Usage:
   realm-placeholder-export-check.py <rendered.yaml> <realm-file>
 

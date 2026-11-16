@@ -131,6 +131,16 @@
               ],
               "minimum": 1,
               "description": "Instance count for this data tier. null (the default) = the cluster profile's count (clusterProfileInstances); an explicit integer wins over the profile."
+            },
+            "ssoSessionIdleTimeout": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "SSO session idle timeout in seconds. 0 (or less) means the session never idles out \u2014 Keycloak's own reading of a non-positive value. The chart's default is the workday default Compose ships (8 hours), not Keycloak's (30 minutes, what #1834 was filed against)."
+            },
+            "ssoSessionMaxLifespan": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "SSO session maximum lifespan in seconds \u2014 the hard wall after which the user must log in again. 0 (or less) means the session never expires. The chart's default is the workday default Compose ships (7 days), not Keycloak's (10 hours, what #1820 was filed against)."
             }
           }
         }

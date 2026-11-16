@@ -4601,22 +4601,29 @@ chart:parity:
       --set okf.enabled=true
       --set opea.gpu.nodeHost=https://gpu.ci-render.local:444
       > /tmp/rendered.yaml
-    # --min-compared is the floor on variables actually compared (325 —
+    # --min-compared is the floor on variables actually compared (327 —
     # the number the gate compares TODAY, with the OPEA and OKF tiers
     # switched on; secretProvided, mayDiffer and
     # codeDefault rows are excluded from the count, so growing ANY of
     # those categories drops the number and trips the floor instead of
     # quietly greening the gate). The floor equals the count, not one
     # below it: with a floor of 171 a single reclassification was
-    # invisible. The count FELL 331 → 325 with this commit: six of the
-    # seven gaps it closes are filed under codeDefault / mayDiffer, the
-    # two categories excluded from the compared count (each verified
-    # unset on both surfaces, or the chart's public-issuer pin). The
-    # seventh — the document-repository's KEYCLOAK_REALM, the row the
-    # shared verifier reads — was ALREADY counted as a gap ("absent
-    # from the chart" counts as compared) and stays counted once the
-    # chart renders it, so it moves the gaps, not the count.
-    - python3 scripts/ci/config-parity-check.py /tmp/rendered.yaml --min-compared=325
+    # invisible. RE-MEASURE it whenever the allowlist changes — the
+    # count is a measurement, not a constant. It was 331 before the
+    # KEYCLOAK_REALM row was closed (six of that commit's seven gaps
+    # were filed under codeDefault / mayDiffer, the two categories
+    # excluded from the compared count; the seventh — the
+    # document-repository's KEYCLOAK_REALM, the row the shared verifier
+    # reads — was ALREADY counted as a gap, "absent from the chart"
+    # counts as compared, so it moved the gaps, not the count).
+    # The 2026-11-16 rebase onto main took it 325 → 327: main's
+    # compose changes added KEYCLOAK_DISCOVERY_URL to three services
+    # (compared, then filed under codeDefault — unset on both surfaces,
+    # so the verifier's own fallback applies) and made the ClamAV
+    # knobs remote-canonical, which the chart's ClamAV tier makes
+    # four mayDiffer rows. Eight reclassifications, eight fewer
+    # variables in the compared set.
+    - python3 scripts/ci/config-parity-check.py /tmp/rendered.yaml --min-compared=327
   rules:
     # The gate verifies its `notRead` claims against the APPLICATION
     # source: a commit under components/ or genie-ai-overlay/ that starts

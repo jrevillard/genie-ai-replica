@@ -463,6 +463,10 @@ data:
     # defaults Compose ships (docker-compose.yaml: idle 8 h, max 7 d) —
     # the same numbers, so a Compose venue and a chart venue hold the
     # same session.
+    # A value of 0 is MEANINGFUL and is preserved: Keycloak reads a
+    # non-positive session lifetime as "never expire" (the kiosk
+    # setting). It is not "unset" — the chart's nil check keeps it
+    # distinguishable from the default below.
     ssoSessionIdleTimeout: 28800
     ssoSessionMaxLifespan: 604800
     # Confidential-client secrets. These values are read ONLY by the

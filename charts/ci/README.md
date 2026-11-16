@@ -66,3 +66,22 @@ RENDER — the env names the convergence Job actually exports, against the
 placeholders the realm actually carries. It runs in `chart:lint`, right
 after the base render. A render that carries no convergence Job is
 refused as vacuous rather than passing.
+
+It proves a placeholder is EXPORTED, not that its value is right: the
+name is the contract this gate owns, the value belongs to the template
+that computes it.
+
+## The parity floor is a measurement
+
+`config-parity-check.py --min-compared=N` floors how many variables the
+run actually COMPARED. Every allowlist category (`mayDiffer`,
+`codeDefault`, `composeOnly`, `notRead`, `secretProvided`) removes
+variables from that set, so a reclassification lowers the count — and a
+floor left where it was stops noticing. The floor equals the count, not
+one below it.
+
+So it is a MEASUREMENT, not a constant: re-measure it whenever the
+allowlist changes (the gate prints the count in its first line) and
+update the invocation in `.gitlab-ci.yml` in the same commit. A floor
+that is even one below the count hides exactly the reclassification it
+exists to catch.

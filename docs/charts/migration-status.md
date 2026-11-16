@@ -3008,6 +3008,26 @@ contractual evidence — a fresh clone does not carry them.)
   `/api/health` → **200** `application/json`, `/api-docs.json` → **200**
   `application/json` carrying the OpenAPI document — the 0.2.171 routing
   fix still holds after the rebase.
+- **The review round over the rebase's diff found no correctness defect and
+  one real gap in the CI's own floor.** The reviewer reproduced the gate's
+  mutation independently (deleting the two env rows leaves the chart's
+  guard GREEN and turns the new gate red) and re-verified every parity
+  claim against the shipped application source (`clamEnv` treats `''` as
+  unset; the doc-repo's entrypoint leaves the embedded clamd down in
+  remote mode). Its Important finding was the parity FLOOR: this
+  commit's eight reclassifications moved the compared count from 335 to
+  **327**, and the floor was still 325 — so the floor, whose own doctrine
+  is "the floor equals the count, not one below it", had stopped
+  noticing the very reclassification it exists to catch. Bumped to 327
+  (measured, not guessed) with the adjacent comment rewritten. Its
+  Minor findings, all fixed: the two new convergence env rows used
+  `| default`, so an operator's explicit `0` — Keycloak's "never
+  expire" — was silently rendered as 28800 (the file documents that exact
+  trap 250 lines above it; the rows now use the same nil-check idiom as
+  `backoffLimit`, and the two knobs are typed in the schema); the relay
+  script's discovery failures raised a traceback or blamed the install
+  for a lookup that never reached the API server (both now name the
+  cause and exit with it).
 
 ## Plan map
 

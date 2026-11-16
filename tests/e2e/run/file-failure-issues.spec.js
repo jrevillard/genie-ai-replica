@@ -1194,6 +1194,12 @@ test.describe('the COMMITTED declaration is read strictly', () => {
     expect(new RegExp(pattern).test(' data-testid="some-handle"')).toBe(true);
     expect(new RegExp(pattern).test(' :data-test-id="some-handle"')).toBe(false);
     expect(new RegExp(pattern).test(' data-test-id="some-handle"')).toBe(true);
+    // The attribute at the START of a line is a static declaration too:
+    // dropping the `^|` half of the pattern would stop every
+    // column-zero declaration from matching, and the two readers would
+    // disagree on what a declaration is.
+    expect(new RegExp(pattern).test('data-testid="some-handle"')).toBe(true);
+    expect(new RegExp(pattern).test('data-test-id="some-handle"')).toBe(true);
   });
 });
 

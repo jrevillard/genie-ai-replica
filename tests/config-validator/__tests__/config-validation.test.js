@@ -3779,6 +3779,9 @@ describe('the local e2e run defines the executed set (#1736)', () => {
     // satisfy it.
     const failurePath = fs.readFileSync(FAILURE_PATH, 'utf-8');
     expect(failurePath).toMatch(/for \(const line of classification\.reports\) \{[^{}]*process\.stdout\.write\(/);
+    // The reports must not be emptied before the print: a reassignment
+    // would silence every report with the loop still in place.
+    expect(failurePath).not.toMatch(/classification\.reports\s*=[^=]/);
   });
 
   // Any flag other than the project selector would shrink the executed set

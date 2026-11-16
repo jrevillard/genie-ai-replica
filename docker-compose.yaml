@@ -1510,6 +1510,18 @@ services:
       - KEYCLOAK_DISCOVERY_TIMEOUT_MS=${KEYCLOAK_DISCOVERY_TIMEOUT_MS:-}
       - KC_CLIENT_ID=${KEYCLOAK_CLIENT_ID:-genie-app}
       - LOG_LEVEL=${LOG_LEVEL:-info}
+      # Virus scanning (#1064, remote-canonical): set CLAMSCAN_HOST to the
+      # clamav service's hostname when the clamav scanner runs remotely —
+      # the entrypoint then leaves the embedded clamd DOWN (no freshclam
+      # download, no daemon) and the app scans against the remote host,
+      # with the local-binary fallback OFF by default in that mode. Unset =
+      # local mode: the embedded clamd starts and is the scanner. The
+      # CLAMSCAN_LOCAL_FALLBACK / CLAMSCAN_ACTIVE / VIRUS_SCANNING overrides
+      # pass through on the same contract the app reads.
+      - CLAMSCAN_HOST=${CLAMSCAN_HOST:-}
+      - CLAMSCAN_LOCAL_FALLBACK=${CLAMSCAN_LOCAL_FALLBACK:-}
+      - CLAMSCAN_ACTIVE=${CLAMSCAN_ACTIVE:-}
+      - VIRUS_SCANNING=${VIRUS_SCANNING:-}
       - VL_QUERY_TIMEOUT_MS=${VL_QUERY_TIMEOUT_MS:-30000}
       # Mirrors the backend block — same operator-override path for
       # VICTORIALOGS_URL + VICTORIALOGS_TENANT_ID so a staging-VL override

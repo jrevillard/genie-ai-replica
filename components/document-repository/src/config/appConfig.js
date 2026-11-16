@@ -98,11 +98,20 @@ const config = {
     // FIX: Convert timeout string to a number
     timeout: parseInt(process.env.CLAMSCAN_TIMEOUT, 10) || 60000,
 
-    // Default-on, opt-out: falling back to the local binary is what this
-    // deployment has always done, so `false` disables it rather than `true`
-    // enabling it. Read the variable — `=== 'true' || true` is always true
-    // and makes CLAMSCAN_LOCAL_FALLBACK inert.
-    localFallback: process.env.CLAMSCAN_LOCAL_FALLBACK !== 'false',
+    // LOCAL mode: default-on, opt-out — falling back to the local binary
+    // is what a local-scanner deployment has always done, so `false`
+    // disables it rather than `true` enabling it. REMOTE mode
+    // (CLAMSCAN_HOST set to a non-local host, #1064): default OFF — no
+    // local daemon exists to fall back to, and a fallback attempt would
+    // just stall every scan against a socket nothing listens on. An
+    // explicit CLAMSCAN_LOCAL_FALLBACK wins in both modes.
+    localFallback: (() => {
+      if (process.env.CLAMSCAN_LOCAL_FALLBACK === undefined) {
+        const remoteHost = process.env.CLAMSCAN_HOST;
+        return !remoteHost || ['127.0.0.1', 'localhost', '::1'].includes(remoteHost);
+      }
+      return process.env.CLAMSCAN_LOCAL_FALLBACK !== 'false';
+    })(),
     path: process.env.CLAMSCAN_PATH || '/usr/bin/clamdscan',
     active: process.env.CLAMSCAN_ACTIVE !== 'false'
   },

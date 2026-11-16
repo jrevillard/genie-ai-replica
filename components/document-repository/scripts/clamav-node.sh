@@ -1,18 +1,44 @@
 #!/bin/bash
-# This script is used to start the document repository service. It starts clamav first, waits and then starts the node server
-echo "#Starting ClamAV daemon..."
-freshclam --quiet --no-warnings || true
-clamd &
-CLAMD_PID=$!
+# This script is used to start the document repository service.
+#
+# TWO scanner modes (#1064, remote-canonical ruling 2026-11-15). The app's
+# scanner (src/services/securityService.js) reads its host from
+# CLAMSCAN_HOST — the CLAMSCAN_* family is the ONE contract; this script now
+# reads the same variable instead of ignoring it:
+#
+#   - REMOTE (CLAMSCAN_HOST set to a non-local host): the remote clamd is
+#     the scanner — starting a local one here was dead weight (a freshclam
+#     signature download plus a daemon plus a readiness wait, every boot,
+#     for a scanner the app would not use). Go straight to Node.
+#   - LOCAL (nothing set, or a loopback host): start the embedded clamd as
+#     before — the image stays complete for this mode.
+echo "#Starting document-repository..."
 
-echo "Wait a moment for clamav to start"
-sleep 15
+is_local_host() {
+  case "$1" in
+    "" | 127.0.0.1 | localhost | ::1) return 0 ;;
+    *) return 1 ;;
+  esac
+}
 
-while ! clamdscan --version > /dev/null 2>&1; do
-    echo "Waiting for ClamAV daemon to start..."  
-    sleep 5
-done
+if is_local_host "$CLAMSCAN_HOST"; then
+  echo "Local ClamAV mode (no CLAMSCAN_HOST configured) — starting ClamAV daemon..."
+  freshclam --quiet --no-warnings || true
+  clamd &
+  CLAMD_PID=$!
 
-echo "ClamAV daemon started successfully"
+  echo "Wait a moment for clamav to start"
+  sleep 15
+
+  while ! clamdscan --version > /dev/null 2>&1; do
+      echo "Waiting for ClamAV daemon to start..."
+      sleep 5
+  done
+
+  echo "ClamAV daemon started successfully"
+else
+  echo "Remote ClamAV mode (CLAMSCAN_HOST=$CLAMSCAN_HOST) — the local daemon stays down."
+fi
+
 echo "Starting Node.js application..."
 exec node src/server.js

@@ -1129,6 +1129,19 @@ KC_OKF_SERVER_CLIENT_SECRET=
 # Default 300000 (5 min).
 # OKF_BUNDLE_STORE_TIMEOUT_MS=300000
 
+# Virus scanning (doc-repo, #1064 remote-canonical). Unset = LOCAL mode: the
+# embedded clamd starts inside the doc-repo container and is the scanner.
+# Set CLAMSCAN_HOST to the hostname of a remote clamd (compose: the `clamav`
+# service) and the container leaves its embedded daemon DOWN — no freshclam
+# signature download, no daemon, no readiness wait — and scans against the
+# remote host with the local-binary fallback OFF by default (an explicit
+# CLAMSCAN_LOCAL_FALLBACK=true/false wins in both modes). The compose
+# doc-repo service passes all four through.
+# CLAMSCAN_HOST=
+# CLAMSCAN_LOCAL_FALLBACK=
+# CLAMSCAN_ACTIVE=
+# VIRUS_SCANNING=
+
 # Dataprep service account secret (client_credentials grant)
 KC_DATAPREP_CLIENT_SECRET=
 

@@ -244,7 +244,7 @@ if ! node "$REPO_ROOT/tests/e2e/run/check-ropc-posture.js"; then
 fi
 
 # The failure path runs BEFORE the gate's verdict becomes the exit: a red
-# run files its failures whatever the posture said — two obligations, and
+# run is REPORTED whatever the posture said — two obligations, and
 # neither drops the other (the gate's verdict is the LAST word: its exit
 # code wins below).
 set +e

@@ -143,6 +143,18 @@ test.describe('the report names the CONTEXT of the red', () => {
     expect(locatorHandles('Error: something else entirely')).toEqual([]);
   });
 
+  test('every locator line of a failure is read, not only the first', () => {
+    // A failure can carry several locators; the handles of all of them
+    // are the ones the spec waited for.
+    const failure = [
+      'Error: expect(locator).toBeVisible() failed',
+      '',
+      'Locator: locator(\'[data-testid="chat-history-item"]\')',
+      'Locator: locator(\'[data-testid="upload-files-dialog-confirm"]\')'
+    ].join('\n');
+    expect(locatorHandles(failure)).toEqual(['chat-history-item', 'upload-files-dialog-confirm']);
+  });
+
   test('a handle is matched as a QUOTED value', () => {
     // `upload-files-dialog` must not be read out of a text that carries
     // only `upload-files-dialog-confirm`.
@@ -163,7 +175,10 @@ test.describe('the report names the CONTEXT of the red', () => {
     expect(report).toContain('BEHIND this checkout');
     expect(report).toContain('tests/e2e/a.spec.js');
     expect(report).toContain('chat-history-item');
-    expect(report).toContain('components/gov-chat-frontend/src/components/ChatFolders.vue');
+    // The declaring file is read at HEAD — the report says so.
+    expect(report).toContain(
+      'declared by this checkout at HEAD in components/gov-chat-frontend/src/components/ChatFolders.vue'
+    );
   });
 
   test('a venue that is NOT behind the checkout is told so', () => {
@@ -204,11 +219,18 @@ test.describe('the report names the CONTEXT of the red', () => {
     expect(checkoutHead()).toBe(head);
   });
 
-  test('a build behind the checkout is behind it, and an unknown one is unknown', () => {
+  test('a build behind the checkout is behind it; the checkout ITSELF is not', () => {
     const head = execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf-8' }).trim();
-    // "Behind" means "an ancestor of the checkout": the checkout's own
-    // build is its own ancestor, so a venue serving it is not behind.
-    expect(isBehindCheckout(head)).toBe(true);
+    // The venue serving THIS checkout is not behind it. The ancestor test
+    // alone cannot say so — a commit IS its own ancestor — so the equality
+    // is settled first. Without that, the report would tell the reader to
+    // refresh a venue that is already current.
+    expect(isBehindCheckout(head)).toBe(false);
+    // The abbreviated spelling names the same commit.
+    expect(isBehindCheckout(head.slice(0, 9))).toBe(false);
+    // An ancestor IS behind the checkout.
+    const parent = execFileSync('git', ['rev-parse', 'HEAD~1'], { encoding: 'utf-8' }).trim();
+    expect(isBehindCheckout(parent)).toBe(true);
     // A sha no repository holds cannot be compared at all.
     expect(isBehindCheckout('deadbeefdeadbeefdeadbeefdeadbeefdeadbeef')).toBe(null);
   });

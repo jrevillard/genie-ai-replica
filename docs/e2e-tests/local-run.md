@@ -284,7 +284,8 @@ exactly the same report as a defect of the product:
 
 The report answers the second one in one line: **the venue's build is
 BEHIND this checkout** (the two builds are compared with `git
-merge-base --is-ancestor`). A venue behind cannot serve the handles the
+merge-base --is-ancestor`; a venue serving EXACTLY this checkout is not
+behind it — it is current). A venue behind cannot serve the handles the
 checkout declares — the remedy is a venue refresh, not a code change:
 
 ```bash

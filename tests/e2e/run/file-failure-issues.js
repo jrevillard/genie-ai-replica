@@ -251,12 +251,14 @@ function handlesIn(text) {
  * @returns {string[]} the handle values the locator names
  */
 function locatorHandles(errorText) {
-  const line = String(errorText || '')
+  const lines = String(errorText || '')
     .split('\n')
-    .find((candidate) => candidate.trim().startsWith('Locator:'));
-  if (!line) return [];
-  const byAttribute = handlesIn(line);
-  const byTestId = Array.from(line.matchAll(/getByTestId\(\s*['"]([^'"]+)['"]\s*\)/g)).map((match) => match[1]);
+    .filter((candidate) => candidate.trim().startsWith('Locator:'));
+  if (lines.length === 0) return [];
+  const byAttribute = handlesIn(lines.join('\n'));
+  const byTestId = Array.from(lines.join('\n').matchAll(/getByTestId\(\s*['"]([^'"]+)['"]\s*\)/g)).map(
+    (match) => match[1]
+  );
   return [...new Set([...byAttribute, ...byTestId])];
 }
 
@@ -288,6 +290,18 @@ function checkoutHead(run = execFileSync) {
  */
 function isBehindCheckout(venueBuild, run = execFileSync) {
   try {
+    const head = run('git', ['rev-parse', 'HEAD'], {
+      cwd: REPO_ROOT,
+      encoding: 'utf-8',
+      stdio: ['ignore', 'pipe', 'ignore']
+    }).trim();
+    // The venue serves THIS very checkout: it is not behind it. The
+    // ancestor test alone cannot say so — a commit IS its own ancestor —
+    // so equality is settled first. Both spellings count (the venue's
+    // marker may carry an abbreviated sha).
+    if (venueBuild && head && (head.startsWith(venueBuild) || venueBuild.startsWith(head))) {
+      return false;
+    }
     run('git', ['merge-base', '--is-ancestor', venueBuild, 'HEAD'], {
       cwd: REPO_ROOT,
       stdio: 'ignore'
@@ -376,7 +390,7 @@ function venueContext(byFile, readers = {}) {
       const source = declare(handle);
       lines.push(
         `      waited for \`${handle}\` — ${
-          source ? `declared by this checkout in ${source}` : 'declared by NO source in this checkout'
+          source ? `declared by this checkout at HEAD in ${source}` : 'declared by NO source in this checkout at HEAD'
         }`
       );
     }

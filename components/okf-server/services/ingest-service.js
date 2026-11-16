@@ -310,8 +310,9 @@ function zipToRawInputs(zipBase64, maxConcepts, bundleName) {
     entries = zip.getEntries();
   } catch (err) {
     const msg = parseErrMessage(err);
-    const dupNames = (String(msg).match(/Duplicate entry name "([^"]+)"/g) || [])
-      .map((s) => s.replace(/Duplicate entry name "|"/g, ''));
+    const dupNames = (String(msg).match(/Duplicate entry name "([^"]+)"/g) || []).map((s) =>
+      s.replace(/Duplicate entry name "|"/g, '')
+    );
     if (dupNames.length > 0) {
       throw new IngestError(
         'VALIDATION_ERROR',
@@ -321,14 +322,13 @@ function zipToRawInputs(zipBase64, maxConcepts, bundleName) {
     }
     throw new IngestError('BAD_ZIP', `bundle zip could not be read: ${msg}`, 400);
   }
-  const kept = entries
-    .filter(
-      (e) =>
-        !e.isDirectory &&
-        e.entryName.endsWith('.md') &&
-        !e.entryName.startsWith('__MACOSX/') &&
-        !e.entryName.split('/').pop().startsWith('.')
-    );
+  const kept = entries.filter(
+    (e) =>
+      !e.isDirectory &&
+      e.entryName.endsWith('.md') &&
+      !e.entryName.startsWith('__MACOSX/') &&
+      !e.entryName.split('/').pop().startsWith('.')
+  );
   entries = kept;
   if (entries.length === 0) {
     throw new IngestError('VALIDATION_ERROR', 'bundle zip contains no .md concept files', 400);

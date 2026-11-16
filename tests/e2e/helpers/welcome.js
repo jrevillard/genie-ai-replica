@@ -86,7 +86,7 @@ async function waitForComposerReady(page) {
 function bannerIsSettled(doc) {
   const banner = doc.querySelector('[data-testid="quick-help-banner"]');
   if (banner === null) return false;
-  // Cheapest first: getAnimations() touches no style and no layout, the
+  // Cheapest first: getAnimations() flushes style but not layout, the
   // box read flushes layout and the style read forces a recalc. The gate
   // polls on every animation frame, so the two expensive reads only run
   // once the entrance is over.

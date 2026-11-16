@@ -23,6 +23,7 @@ const {
   venueStalenessReport,
   venueStaleProof,
   handleDeclaredAtBuild,
+  probeVenueBuildSha,
   bindVenueBuild,
   buildStaleVenueContext,
   runBuildSha,
@@ -744,7 +745,9 @@ test.describe("the verdict is proven against the venue's own build", () => {
     const stale = { handle: 'test-only-handle-no-source-declares', source: 'x.vue' };
     const declared = { handle: 'chat-history-item', source: 'x.vue' };
     expect(venueStaleProof(stale, { boundSha: HEAD_SHA })).toBe('stale');
-    expect(venueStaleProof(declared, { boundSha: HEAD_SHA })).toBe('not-stale');
+    // The build DID declare it: the app's own build dropped it — a
+    // product defect, filed as one.
+    expect(venueStaleProof(declared, { boundSha: HEAD_SHA })).toBe('declared');
     // No bound build: nothing to read, so nothing is proven.
     expect(venueStaleProof(stale, { boundSha: null })).toBe('not-stale');
   });
@@ -790,9 +793,17 @@ test.describe("the venue's bundle is bound to the run's build", () => {
   });
 
   test("a venue that is NOT behind the checkout is not bound — a missing handle is not the venue's", () => {
-    const bound = bindVenueBuild({ runSha: OTHER_SHA, venueSha: OTHER_SHA });
+    // A build the checkout KNOWS and that is not behind HEAD: a commit on
+    // origin/main that this branch does not carry. The refusal is what is
+    // pinned (the wording belongs to the arm, not to the contract).
+    const ahead = execFileSync('git', ['rev-list', '--max-count=1', 'origin/main', '--not', 'HEAD'], {
+      encoding: 'utf-8'
+    }).trim();
+    expect(ahead, 'the checkout carries a build that is not behind its HEAD').not.toBe('');
+    const bound = bindVenueBuild({ runSha: ahead, venueSha: ahead });
     expect(bound.boundSha).toBe(null);
-    expect(bound.note).toContain('not an ancestor');
+    expect(bound.note).toContain(ahead);
+    expect(bound.note).toContain('filed as they are');
   });
 });
 
@@ -953,5 +964,140 @@ test.describe('the venue context is built only from what the venue proves', () =
     // context says so and binds nothing.
     expect(context.boundSha).toBe(null);
     expect(context.note).toContain('MOVED');
+  });
+});
+
+/**
+ * The marker handover — the one line that broke in production.
+ *
+ * The pre-flight hands the venue's build over through a scratch file (an
+ * env var cannot cross back out of a child process). The scratch path
+ * was once a DIRECTORY: the pre-flight's write failed, the venue's build
+ * was never read, every stale-venue failure was filed as a product
+ * defect — and the run printed a plausible note about it. The handover
+ * is pinned here so that class cannot come back.
+ */
+test.describe('the venue build marker is handed over', () => {
+  test('the pre-flight writes the marker into a scratch path it can write to', () => {
+    let seen = null;
+    const result = probeVenueBuildSha('https://venue.example:4443', (env) => {
+      seen = env;
+      // The handover's own regression: a scratch path that is a
+      // DIRECTORY makes this throw (EISDIR).
+      fs.writeFileSync(env.E2E_VENUE_BUILD_FILE, 'abc1234def');
+    });
+    expect(result.failed).toBe(false);
+    expect(result.sha).toBe('abc1234def');
+    expect(seen.BASE_URL).toBe('https://venue.example:4443');
+    expect(seen.E2E_VENUE_BUILD_FILE).toContain('file-failure-issues-build-');
+  });
+
+  test('a pre-flight that fails says so, and no build is read', () => {
+    const result = probeVenueBuildSha('https://venue.example:4443', () => {
+      throw new Error('the venue is not drivable');
+    });
+    expect(result.failed).toBe(true);
+    expect(result.sha).toBe(null);
+  });
+
+  test('a pre-flight that writes no marker leaves the build unknown', () => {
+    const result = probeVenueBuildSha('https://venue.example:4443', () => {});
+    expect(result.failed).toBe(false);
+    expect(result.sha).toBe(null);
+  });
+});
+
+/**
+ * The run's build is the REPORT's build.
+ *
+ * An ambient marker in the environment names SOME run, not necessarily
+ * this one — and binding this report's failures to another run's build is
+ * the one confusion the binding exists to prevent.
+ */
+test.describe('an ambient marker never binds a report', () => {
+  test("the environment marker is NOT the report's build", () => {
+    const previous = process.env.E2E_VENUE_BUILD_GIT_SHA;
+    process.env.E2E_VENUE_BUILD_GIT_SHA = 'ambient1234';
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'run-build-'));
+    try {
+      // The report carries no sidecar: it carries no build, whatever the
+      // environment says.
+      expect(runBuildSha(path.join(dir, 'no-sidecar.json'))).toBe(null);
+    } finally {
+      fs.rmSync(dir, { recursive: true, force: true });
+      if (previous === undefined) delete process.env.E2E_VENUE_BUILD_GIT_SHA;
+      else process.env.E2E_VENUE_BUILD_GIT_SHA = previous;
+    }
+  });
+});
+
+/**
+ * A build the checkout cannot read refuses the verdict — and says so.
+ */
+test.describe('a build that cannot be read refuses the verdict', () => {
+  const UNREADABLE_SHA = 'deadbeefdeadbeefdeadbeefdeadbeefdeadbeef';
+
+  test('the proof refuses, it does not answer', () => {
+    expect(venueStaleProof({ handle: 'chat-history-item', source: 'x.vue' }, { boundSha: UNREADABLE_SHA })).toBe(
+      'unreadable'
+    );
+  });
+
+  test('the refusals are collected, and the failures stay fileable', () => {
+    const context = {
+      servedText: '"some-other-handle"',
+      declared: new Map([['chat-history-item', 'components/gov-chat-frontend/src/components/ChatFolders.vue']]),
+      boundSha: UNREADABLE_SHA
+    };
+    const error = [
+      'Error: expect(locator).toBeVisible() failed',
+      '',
+      'Locator: locator(\'[data-testid="chat-history-item"]\')',
+      'Error: element(s) not found'
+    ].join('\n');
+    const byFile = new Map([['tests/e2e/a.spec.js', [{ error }]]]);
+    const { fileable, stale, refused } = partitionStaleVenue(byFile, context);
+    expect(stale.size).toBe(0);
+    expect(fileable.get('tests/e2e/a.spec.js')).toHaveLength(1);
+    expect(refused.map((entry) => entry.handle)).toEqual(['chat-history-item']);
+  });
+
+  test('a checkout that cannot answer the ancestry refuses the binding, and names why', () => {
+    const bound = bindVenueBuild({ runSha: UNREADABLE_SHA, venueSha: UNREADABLE_SHA });
+    expect(bound.boundSha).toBe(null);
+    expect(bound.note).toContain('cannot be read by this checkout');
+  });
+});
+
+/**
+ * The declaration walk is additive: a source tree that cannot be walked
+ * degrades to filing the failures as they are.
+ */
+test.describe('a declaration walk that fails degrades to filing', () => {
+  test('the failures are filed as they are, and the reason is named', async () => {
+    const error = [
+      'Error: expect(locator).toBeVisible() failed',
+      '',
+      'Locator: locator(\'[data-testid="chat-history-item"]\')',
+      'Error: element(s) not found'
+    ].join('\n');
+    const byFile = new Map([['tests/e2e/a.spec.js', [{ error }]]]);
+    const bodies = {
+      '/': '<html><script defer src="/js/app.aaaa1111.js"></script></html>',
+      '/js/app.aaaa1111.js': 'i.u=e=>"js/"+e+"."+{73:"7f541a03"}[e]+".js"',
+      '/js/73.7f541a03.js': '"chat-history-item"'
+    };
+    const context = await buildStaleVenueContext('https://venue.example:4443', byFile, {
+      request: async (_method, url) => {
+        const key = Object.keys(bodies).find((candidate) => url.endsWith(candidate));
+        return key === undefined ? { status: 404, data: 'not found' } : { status: 200, data: bodies[key] };
+      },
+      declaredHandles: () => {
+        throw new Error('the source tree cannot be read');
+      }
+    });
+    expect(context.ok).toBe(false);
+    expect(context.note).toContain("the checkout's declarations could not be walked");
+    expect(context.note).toContain('filed as they are');
   });
 });

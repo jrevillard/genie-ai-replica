@@ -334,6 +334,11 @@ from that build (`git grep` at that commit), never inferred. A build
 that DID declare the handle and did not ship it is the app's own build
 dropping it: a product defect, filed as one.
 
+A build the checkout CANNOT READ — a shallow clone, an unknown sha — is
+not an answer, it is an absence of one: the verdict is refused and the
+failures are filed as they are, with the reason printed. Nothing is
+guessed from a checkout that cannot see the build.
+
 **The binding.** The bundle read happens at filing time; the failure was
 produced earlier. The verdict is only made when the venue still serves
 the build the RUN exercised: the run's own marker

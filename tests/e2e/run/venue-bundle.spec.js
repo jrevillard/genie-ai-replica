@@ -126,6 +126,24 @@ test.describe('the walk reads the venue and every chunk it names', () => {
     ).rejects.toThrow(/fm\.65fd7075\.js/);
   });
 
+  test('a chunk the edge answers with the SPA fallback page is NOT the chunk', async () => {
+    // The edge rewrites a missing asset to the SPA's index with HTTP
+    // 200 (`proxy_intercept_errors on; error_page 404 = @frontend_spa;`).
+    // A walk that believed the status would call itself complete on a
+    // chunk it never read, and then report a handle living in that chunk
+    // as ABSENT — the direction that hides a real defect behind a
+    // stale-venue verdict.
+    await expect(
+      fetchVenueBundleText('https://venue.example:4443', {
+        request: transport({
+          '/': INDEX,
+          '/js/app.1229e2fc.js': APP,
+          '/js/73.7f541a03.js': '<!DOCTYPE html><html><body>the SPA</body></html>'
+        })
+      })
+    ).rejects.toThrow(/SPA fallback/);
+  });
+
   test('a venue that serves no app bundle makes the walk incomplete', async () => {
     await expect(
       fetchVenueBundleText('https://venue.example:4443', {

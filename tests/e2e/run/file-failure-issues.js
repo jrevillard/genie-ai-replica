@@ -244,37 +244,45 @@ function handleDeclaredAtBuild(sha, handle) {
  * the verdict uses: it is either AHEAD of the checkout or on another
  * line, and neither is a venue that fell behind.
  *
+ * The three answers are kept apart: a build the checkout CANNOT READ (a
+ * shallow clone, an unknown sha) is not the same fact as a build it can
+ * read and knows is not behind — the first is a checkout that cannot
+ * answer, the second is an answer.
+ *
  * @param {string} sha - the build to test
- * @returns {boolean} whether the build is an ancestor of HEAD
+ * @returns {'ancestor'|'not-ancestor'|'unknown'} the relation
  */
-function isAncestorOfHead(sha) {
+function ancestryOfHead(sha) {
   try {
     execFileSync('git', ['merge-base', '--is-ancestor', sha, 'HEAD'], {
       cwd: REPO_ROOT,
       stdio: 'ignore'
     });
-    return true;
-  } catch {
-    // Exit 1: the build is known and is not an ancestor. Exit 128: the
-    // checkout does not know the build at all.
-    return false;
+    return 'ancestor';
+  } catch (error) {
+    // Exit 1: the build is known and is not an ancestor. Exit 128 (or a
+    // missing git): the checkout cannot answer at all.
+    return error.status === 1 ? 'not-ancestor' : 'unknown';
   }
 }
 
 /**
  * The build the RUN was made against.
  *
- * The runner exports the sha its pre-flight read (`E2E_VENUE_BUILD_GIT_SHA`)
- * and writes it BESIDE the run's own report, so a run filed BY HAND (the
- * documented recipe, in a shell that inherits nothing) carries its build
- * with it. The environment comes first: it is the run's own marker.
+ * The runner writes the sha its pre-flight read BESIDE the run's own
+ * report, so the build travels with the report — whether the runner
+ * files it or a human does, in a shell that inherits nothing.
+ *
+ * The sidecar is the ONLY source: an ambient marker in the environment
+ * names SOME run, not necessarily this one, and binding this report's
+ * failures to another run's build is the one confusion the binding
+ * exists to prevent. A report with no sidecar carries no build, and its
+ * failures are filed as they are.
  *
  * @param {string} reportPath - the report the failure path reads
  * @returns {string|null} the sha, or null when the run carried none
  */
 function runBuildSha(reportPath) {
-  const fromEnv = process.env.E2E_VENUE_BUILD_GIT_SHA;
-  if (fromEnv && fromEnv !== 'unknown') return fromEnv;
   try {
     const sidecar = JSON.parse(fs.readFileSync(sidecarPath(reportPath), 'utf-8'));
     const sha = sidecar && sidecar.git_sha;
@@ -310,6 +318,50 @@ function readVenueBuildSha(file) {
 }
 
 /**
+ * The pre-flight, spawned the way the failure path needs it: the venue
+ * address, and the scratch file the marker is handed over through (an
+ * env var cannot cross back out of a child process).
+ *
+ * @param {object} env - the environment additions
+ */
+function spawnPreflight(env) {
+  execFileSync('node', [path.join(__dirname, 'preflight.js')], {
+    stdio: 'inherit',
+    env: { ...process.env, ...env }
+  });
+}
+
+/**
+ * The venue's CURRENT build marker: the pre-flight reads /build-info.json
+ * and hands the sha over through a scratch file.
+ *
+ * The scratch path is a FILE inside a directory of its own. The
+ * pre-flight writes the marker with writeFileSync, and a scratch path
+ * that is itself a directory is a path the marker cannot be written to —
+ * the defect that left the whole verdict inert while the run printed a
+ * plausible note about it.
+ *
+ * @param {string} venue - the venue address
+ * @param {(env: object) => void} [spawn] - the pre-flight spawn (injectable for the unit spec)
+ * @returns {{sha: string|null, failed: boolean}} the venue's build, and whether the pre-flight failed
+ */
+function probeVenueBuildSha(venue, spawn = spawnPreflight) {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'file-failure-issues-build-'));
+  const file = path.join(dir, 'build');
+  let sha;
+  let failed = false;
+  try {
+    spawn({ BASE_URL: venue, E2E_VENUE_BUILD_FILE: file });
+  } catch {
+    failed = true;
+  } finally {
+    sha = readVenueBuildSha(file);
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+  return { sha, failed };
+}
+
+/**
  * Is this missing handle the VENUE's fault — its build cannot serve it?
  *
  * The proof has three links and all three must hold:
@@ -331,7 +383,12 @@ function readVenueBuildSha(file) {
 function venueStaleProof(candidate, context) {
   if (!context.boundSha) return 'not-stale';
   const declared = handleDeclaredAtBuild(context.boundSha, candidate.handle);
-  return declared === false ? 'stale' : 'not-stale';
+  if (declared === false) return 'stale';
+  if (declared === true) return 'declared';
+  // The build could not be read: the verdict is refused, and the refusal
+  // is reported — a silent refusal is indistinguishable from a proof
+  // that said no.
+  return 'unreadable';
 }
 
 /**
@@ -367,12 +424,13 @@ function staleVenueHandles(failure, context) {
  * failures survive the split stays fileable for exactly those.
  *
  * @param {Map<string, Array<{error: string}>>} byFile - the grouped failures
- * @param {{servedText: string, declared: Map<string, string>}} context - the venue's served bundle and the checkout's declarations
- * @returns {{fileable: Map<string, Array<{error: string}>>, stale: Map<string, {failures: Array<{error: string}>, missing: Map<string, string>}>}}
+ * @param {{servedText: string, declared: Map<string, string>, boundSha?: string|null}} context - the venue's served bundle, the checkout's declarations and the bound build
+ * @returns {{fileable: Map<string, Array<{error: string}>>, stale: Map<string, {failures: Array<{error: string}>, missing: Map<string, string>}>, refused: Array<{handle: string, source: string}>}} the fileable failures, the venue-explained ones, and the candidates whose proof could not read the build
  */
 function partitionStaleVenue(byFile, context) {
   const fileable = new Map();
   const stale = new Map();
+  const refused = [];
   for (const [file, failures] of byFile) {
     const explained = [];
     const rest = [];
@@ -382,7 +440,14 @@ function partitionStaleVenue(byFile, context) {
       // PROOF decides. A candidate the venue's own build DID declare is
       // the app's build dropping it — a product defect, filed as one.
       const candidates = staleVenueHandles(failure, context);
-      const proven = candidates.filter((candidate) => venueStaleProof(candidate, context) === 'stale');
+      const proven = [];
+      for (const candidate of candidates) {
+        const verdict = venueStaleProof(candidate, context);
+        if (verdict === 'stale') proven.push(candidate);
+        if (verdict === 'unreadable' && !refused.some((entry) => entry.handle === candidate.handle)) {
+          refused.push(candidate);
+        }
+      }
       if (proven.length === 0) {
         rest.push(failure);
         continue;
@@ -395,7 +460,7 @@ function partitionStaleVenue(byFile, context) {
     if (rest.length > 0) fileable.set(file, rest);
     if (explained.length > 0) stale.set(file, { failures: explained, missing });
   }
-  return { fileable, stale };
+  return { fileable, stale, refused };
 }
 
 /**
@@ -454,21 +519,30 @@ async function buildStaleVenueContext(venue, byFile, options = {}) {
   if (!failures.some((failure) => isNotFoundFailure(failure.error))) {
     return { ok: false, note: null };
   }
+  // The transport is injectable (the same seam venue-bundle.js owns): the
+  // unit spec pins the context's arms without a venue.
   let servedText;
-  let declared;
   try {
-    // The transport is injectable (the same seam venue-bundle.js owns):
-    // the unit spec pins the context's arms without a venue.
     servedText = await fetchVenueBundleText(venue, options.request ? { request: options.request } : {});
-    // The checkout's declarations are read INSIDE the same guard as the
-    // bundle: the walk is additive, and a source tree that cannot be
-    // read must degrade to filing the failures as they are — never take
-    // the whole filing down.
-    declared = checkoutDeclaredHandles();
   } catch (error) {
     return {
       ok: false,
       note: `the venue's served bundle could not be read (${error.message}) — the failures are filed ` + 'as they are.'
+    };
+  }
+  // The checkout's declarations are read under their OWN guard: the walk
+  // is additive, and a source tree that cannot be walked must degrade to
+  // filing the failures as they are — never take the whole filing down.
+  // The reader is injectable so the unit spec can pin that degradation.
+  let declared;
+  try {
+    const readDeclared = options.declaredHandles || checkoutDeclaredHandles;
+    declared = readDeclared();
+  } catch (error) {
+    return {
+      ok: false,
+      note:
+        `the checkout's declarations could not be walked (${error.message}) — the failures are filed ` + 'as they are.'
     };
   }
   // The walk must have read the APP: a bundle carrying NONE of the
@@ -532,13 +606,22 @@ function bindVenueBuild(options = {}) {
         'they are filed as they are.'
     };
   }
-  if (!isAncestorOfHead(venueSha)) {
+  const ancestry = ancestryOfHead(venueSha);
+  if (ancestry === 'not-ancestor') {
     return {
       boundSha: null,
       note:
         `the venue's build \`${venueSha}\` is not an ancestor of this checkout's HEAD — it is not ` +
         "behind the checkout, so a missing handle is not the venue's: the failures are filed as " +
         'they are.'
+    };
+  }
+  if (ancestry === 'unknown') {
+    return {
+      boundSha: null,
+      note:
+        `the venue's build \`${venueSha}\` cannot be read by this checkout (a shallow clone?) — the ` +
+        'verdict is refused, so the failures are filed as they are.'
     };
   }
   return { boundSha: venueSha, note: null };
@@ -1042,7 +1125,7 @@ function firstErrorReason(error) {
   return error.message.split('\n').slice(0, 2).join(' | ');
 }
 
-function createIssue(file, failures, venue, runStamp, venueNowSha) {
+function createIssue(file, failures, venue, runStamp, venueNowSha, runSha) {
   const title = `test(e2e): ${file} is red on the local run`;
   const created = JSON.parse(
     glab([
@@ -1052,7 +1135,7 @@ function createIssue(file, failures, venue, runStamp, venueNowSha) {
       '-f',
       `title=${title}`,
       '-f',
-      `description=${issueBody(file, failures, venue, runStamp, process.env.E2E_VENUE_BUILD_GIT_SHA, venueNowSha)}`,
+      `description=${issueBody(file, failures, venue, runStamp, runSha, venueNowSha)}`,
       '-f',
       `labels=${LABELS.join(',')}`
     ])
@@ -1061,13 +1144,13 @@ function createIssue(file, failures, venue, runStamp, venueNowSha) {
   return created.iid;
 }
 
-function commentOnIssue(issue, files, venue, runStamp, venueNowSha) {
+function commentOnIssue(issue, files, venue, runStamp, venueNowSha, runSha) {
   glab([
     '-X',
     'POST',
     `projects/${GITLAB_PROJECT_ID}/issues/${issue.iid}/notes`,
     '-f',
-    `body=${commentBody(files, venue, runStamp, process.env.E2E_VENUE_BUILD_GIT_SHA, venueNowSha)}`
+    `body=${commentBody(files, venue, runStamp, runSha, venueNowSha)}`
   ]);
   process.stdout.write(`  #${issue.iid} (commented) ${issue.title}\n`);
 }
@@ -1087,7 +1170,7 @@ function commentOnIssue(issue, files, venue, runStamp, venueNowSha) {
  * as the backend's createApp pattern: production passes nothing and gets
  * the real glab clients; the unit spec passes fakes to pin the contract).
  */
-function fileTrackedFailures(byFile, openIssues, venue, runStamp, clients = {}, venueNowSha = null) {
+function fileTrackedFailures(byFile, openIssues, venue, runStamp, clients = {}, venueNowSha = null, runSha = null) {
   const create = clients.createIssue || createIssue;
   const comment = clients.commentOnIssue || commentOnIssue;
   // The failing files are grouped by the issue that already tracks them, so
@@ -1099,7 +1182,7 @@ function fileTrackedFailures(byFile, openIssues, venue, runStamp, clients = {}, 
     const tracked = findTrackedIssue(file, openIssues);
     try {
       if (!tracked) {
-        create(file, failures, venue, runStamp, venueNowSha);
+        create(file, failures, venue, runStamp, venueNowSha, runSha);
         continue;
       }
       const entry = byIssue.get(tracked.iid) || { issue: tracked, files: [] };
@@ -1113,7 +1196,7 @@ function fileTrackedFailures(byFile, openIssues, venue, runStamp, clients = {}, 
   }
   for (const { issue, files } of byIssue.values()) {
     try {
-      comment(issue, files, venue, runStamp, venueNowSha);
+      comment(issue, files, venue, runStamp, venueNowSha, runSha);
     } catch (e) {
       for (const entry of files) {
         errors.push(`${entry.file}: ${firstErrorReason(e)}`);
@@ -1195,30 +1278,11 @@ async function main() {
   // single cause is exactly the tracker noise the failure path exists to
   // prevent.
   // The venue's CURRENT build marker (#1851): the pre-flight reads
-  // /build-info.json and hands the sha over through a scratch file (an
-  // env var cannot cross back out of a child process). The failure path
-  // needs it to BIND the venue's served bundle to the build the run
-  // exercised — a venue that moved since the run answers with a bundle
-  // that is not the one the failure was produced against.
-  // A DIRECTORY of its own, and the marker file INSIDE it: the
-  // pre-flight writes the marker with writeFileSync, and a scratch path
-  // that is itself a directory is a scratch path the marker cannot be
-  // written to.
-  const venueBuildDir = fs.mkdtempSync(path.join(os.tmpdir(), 'file-failure-issues-build-'));
-  const venueBuildFile = path.join(venueBuildDir, 'build');
-  let venueSha;
-  let preflightFailed = false;
-  try {
-    execFileSync('node', [path.join(__dirname, 'preflight.js')], {
-      stdio: 'inherit',
-      env: { ...process.env, BASE_URL: venue, E2E_VENUE_BUILD_FILE: venueBuildFile }
-    });
-  } catch {
-    preflightFailed = true;
-  } finally {
-    venueSha = readVenueBuildSha(venueBuildFile);
-    fs.rmSync(venueBuildDir, { recursive: true, force: true });
-  }
+  // /build-info.json and hands the sha over through a scratch file. The
+  // failure path needs it to BIND the venue's served bundle to the build
+  // the run exercised — a venue that moved since the run answers with a
+  // bundle that is not the one the failure was produced against.
+  const { sha: venueSha, failed: preflightFailed } = probeVenueBuildSha(venue);
   if (preflightFailed) {
     process.stderr.write(
       'file-failure-issues: the venue is not drivable — the failures are a venue event, ' +
@@ -1243,15 +1307,27 @@ async function main() {
   // declaration, fails exactly like a product defect — and used to be
   // FILED as one. The venue's served bundle is the only thing that tells
   // the two apart.
-  const staleContext = await buildStaleVenueContext(venue, noiseFree, {
-    runSha: runBuildSha(reportPath),
-    venueSha
-  });
-  const { fileable: byFile, stale: staleVenue } = staleContext.ok
+  const runSha = runBuildSha(reportPath);
+  const staleContext = await buildStaleVenueContext(venue, noiseFree, { runSha, venueSha });
+  const {
+    fileable: byFile,
+    stale: staleVenue,
+    refused
+  } = staleContext.ok
     ? partitionStaleVenue(noiseFree, staleContext)
-    : { fileable: noiseFree, stale: new Map() };
+    : { fileable: noiseFree, stale: new Map(), refused: [] };
   if (staleContext.note) {
     process.stdout.write(`\n${staleContext.note}\n`);
+  }
+  if (refused.length > 0) {
+    // The proof could not read the venue's build: the verdict is
+    // refused, and a silent refusal would read like a proof that said
+    // no. The failures are filed as they are.
+    process.stdout.write(
+      `\nthe venue's build \`${staleContext.boundSha}\` could not be read for ${refused.length} ` +
+        `handle(s) (${refused.map((entry) => `\`${entry.handle}\``).join(', ')}) — the verdict is ` +
+        'refused for them, so the failures are filed as they are.\n'
+    );
   }
   if (staleVenue.size > 0) {
     process.stdout.write(venueStalenessReport(staleVenue, venue, staleContext) + '\n');
@@ -1282,7 +1358,7 @@ async function main() {
 
   process.stdout.write('\nfiled:\n');
   const openIssues = fetchOpenIssues();
-  const errors = fileTrackedFailures(byFile, openIssues, venue, runStamp, {}, venueSha);
+  const errors = fileTrackedFailures(byFile, openIssues, venue, runStamp, {}, venueSha, runSha);
 
   if (errors.length > 0) {
     process.stderr.write(
@@ -1323,7 +1399,9 @@ module.exports = {
   venueStalenessReport,
   venueStaleProof,
   handleDeclaredAtBuild,
+  ancestryOfHead,
   bindVenueBuild,
+  probeVenueBuildSha,
   buildStaleVenueContext,
   runBuildSha,
   sidecarPath

@@ -60,9 +60,10 @@ const SESSION_OPTIONS = {
 test.describe('Conversation history persistence', () => {
   // Two ceilings compose: the beforeEach login (budgeted beside
   // loginViaUI) and this file's own steps — a mocked answer on a slow
-  // stack, a reload and two API fetches (#1798). test.setTimeout is this
-  // file's spelling; a failure stays attached to its step instead of
-  // dying on the generic wall.
+  // stack and the API fetches (#1798). test.setTimeout is this file's
+  // spelling; a failure stays attached to its step instead of dying on
+  // the generic wall. The restore test logs in twice and raises its own
+  // ceiling for that.
   test.setTimeout(LOGIN_BUDGET_TIMEOUT_MS);
 
   let page;

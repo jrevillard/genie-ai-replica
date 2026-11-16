@@ -1129,15 +1129,20 @@ KC_OKF_SERVER_CLIENT_SECRET=
 # Default 300000 (5 min).
 # OKF_BUNDLE_STORE_TIMEOUT_MS=300000
 
-# Virus scanning (doc-repo, #1064 remote-canonical). Unset = LOCAL mode: the
-# embedded clamd starts inside the doc-repo container and is the scanner.
-# Set CLAMSCAN_HOST to the hostname of a remote clamd (compose: the `clamav`
-# service) and the container leaves its embedded daemon DOWN — no freshclam
-# signature download, no daemon, no readiness wait — and scans against the
-# remote host with the local-binary fallback OFF by default (an explicit
-# CLAMSCAN_LOCAL_FALLBACK=true/false wins in both modes). The compose
-# doc-repo service passes all four through.
+# Virus scanning (doc-repo, #1064 remote-canonical). VIRUS_SCANNING!=true
+# keeps ClamAV down entirely — the app never initializes a scanner without
+# it, so the container also skips the freshclam download and daemon boot.
+# VIRUS_SCANNING=true + unset CLAMSCAN_HOST = LOCAL mode: the embedded clamd
+# starts inside the doc-repo container and is the scanner. Set CLAMSCAN_HOST
+# to the hostname of a remote clamd (compose: the `clamav` service) and the
+# container leaves its embedded daemon DOWN — no freshclam signature
+# download, no daemon, no readiness wait — and scans against the remote host
+# with the local-binary fallback OFF by default (an explicit
+# CLAMSCAN_LOCAL_FALLBACK=true/false wins in both modes). All five pass
+# through compose to the container; '' (compose's empty default for a knob
+# you leave unset) counts as UNSET in the app, never as an explicit value.
 # CLAMSCAN_HOST=
+# CLAMSCAN_PORT=
 # CLAMSCAN_LOCAL_FALLBACK=
 # CLAMSCAN_ACTIVE=
 # VIRUS_SCANNING=

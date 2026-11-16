@@ -105,12 +105,18 @@ const config = {
     // local daemon exists to fall back to, and a fallback attempt would
     // just stall every scan against a socket nothing listens on. An
     // explicit CLAMSCAN_LOCAL_FALLBACK wins in both modes.
+    // '' counts as UNSET throughout: compose passes this family through
+    // with empty defaults (`${CLAMSCAN_LOCAL_FALLBACK:-}`), so an operator
+    // who leaves a knob out of .env still delivers '' into the container —
+    // treating '' as an explicit value would make the remote-mode default
+    // unreachable in exactly the deployment shape this ships to.
     localFallback: (() => {
-      if (process.env.CLAMSCAN_LOCAL_FALLBACK === undefined) {
+      const fallback = process.env.CLAMSCAN_LOCAL_FALLBACK;
+      if (fallback === undefined || fallback === '') {
         const remoteHost = process.env.CLAMSCAN_HOST;
         return !remoteHost || ['127.0.0.1', 'localhost', '::1'].includes(remoteHost);
       }
-      return process.env.CLAMSCAN_LOCAL_FALLBACK !== 'false';
+      return fallback !== 'false';
     })(),
     path: process.env.CLAMSCAN_PATH || '/usr/bin/clamdscan',
     active: process.env.CLAMSCAN_ACTIVE !== 'false'

@@ -1,17 +1,24 @@
 #!/bin/bash
 # This script is used to start the document repository service.
 #
-# TWO scanner modes (#1064, remote-canonical ruling 2026-11-15). The app's
-# scanner (src/services/securityService.js) reads its host from
+# The app's scanner (src/services/securityService.js) reads its host from
 # CLAMSCAN_HOST — the CLAMSCAN_* family is the ONE contract; this script now
-# reads the same variable instead of ignoring it:
+# reads the same variables instead of ignoring them (#1064, remote-canonical
+# ruling 2026-11-15). The loopback list below is hand-synced with the
+# appConfig localFallback IIFE and the appConfig.clamscan test matrix — keep
+# all three in lock-step:
 #
-#   - REMOTE (CLAMSCAN_HOST set to a non-local host): the remote clamd is
-#     the scanner — starting a local one here was dead weight (a freshclam
-#     signature download plus a daemon plus a readiness wait, every boot,
-#     for a scanner the app would not use). Go straight to Node.
-#   - LOCAL (nothing set, or a loopback host): start the embedded clamd as
-#     before — the image stays complete for this mode.
+#   - OFF (VIRUS_SCANNING is not 'true'): the app never initializes a
+#     scanner (appConfig.virusScanning gates NodeClam.init), so no daemon
+#     is started — not the freshclam download, not the daemon, not the
+#     readiness wait.
+#   - LOCAL (scanning on, CLAMSCAN_HOST unset or loopback): start the
+#     embedded clamd as before — the image stays complete for this mode.
+#   - REMOTE (scanning on, CLAMSCAN_HOST set to a non-local host): the
+#     remote clamd is the scanner — starting a local one here was dead
+#     weight (a freshclam signature download plus a daemon plus a readiness
+#     wait, every boot, for a scanner the app would not use). Go straight
+#     to Node.
 echo "#Starting document-repository..."
 
 is_local_host() {
@@ -21,11 +28,12 @@ is_local_host() {
   esac
 }
 
-if is_local_host "$CLAMSCAN_HOST"; then
+if [ "$VIRUS_SCANNING" != "true" ]; then
+  echo "Virus scanning disabled (VIRUS_SCANNING!=true) — ClamAV stays down."
+elif is_local_host "$CLAMSCAN_HOST"; then
   echo "Local ClamAV mode (no CLAMSCAN_HOST configured) — starting ClamAV daemon..."
   freshclam --quiet --no-warnings || true
   clamd &
-  CLAMD_PID=$!
 
   echo "Wait a moment for clamav to start"
   sleep 15

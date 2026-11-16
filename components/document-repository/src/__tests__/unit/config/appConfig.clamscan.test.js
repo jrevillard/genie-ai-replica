@@ -48,3 +48,50 @@ describe('appConfig.clamscan toggles', () => {
     expect(config.clamscan.port).toBe(3311);
   });
 });
+
+// #1064 remote-canonical: the localFallback default is MODE-AWARE, decided at
+// require time in appConfig.js. The loopback list lives in THREE hand-synced
+// places — this matrix, the appConfig IIFE, and the `is_local_host` case list
+// in scripts/clamav-node.sh — keep them in lock-step when a form is added.
+describe('appConfig.clamscan localFallback matrix (#1064 remote-canonical)', () => {
+  afterEach(() => jest.resetModules());
+
+  it('nothing set → local mode, fallback ON (the historical default preserved)', () => {
+    expect(loadAppConfig({}).clamscan.localFallback).toBe(true);
+  });
+
+  it.each([
+    ['127.0.0.1'],
+    ['localhost'],
+    ['::1'],
+    // compose pass-through shapes: an operator who leaves a knob out of .env
+    // delivers '' into the container, and '' must count as unset
+    ['']
+  ])('CLAMSCAN_HOST=%s (LOCAL_FALLBACK unset) → local mode, fallback ON', (host) => {
+    expect(loadAppConfig({ CLAMSCAN_HOST: host }).clamscan.localFallback).toBe(true);
+  });
+
+  it('CLAMSCAN_HOST=<remote>, no explicit fallback → fallback OFF (the ruling)', () => {
+    expect(loadAppConfig({ CLAMSCAN_HOST: 'clamav' }).clamscan.localFallback).toBe(false);
+  });
+
+  it('CLAMSCAN_HOST=<remote>, fallback passed through as compose-empty → fallback OFF', () => {
+    expect(loadAppConfig({ CLAMSCAN_HOST: 'clamav', CLAMSCAN_LOCAL_FALLBACK: '' }).clamscan.localFallback).toBe(false);
+  });
+
+  it('explicit CLAMSCAN_LOCAL_FALLBACK=true wins over remote mode', () => {
+    expect(loadAppConfig({ CLAMSCAN_HOST: 'clamav', CLAMSCAN_LOCAL_FALLBACK: 'true' }).clamscan.localFallback).toBe(
+      true
+    );
+  });
+
+  it('explicit CLAMSCAN_LOCAL_FALLBACK=false wins over local mode', () => {
+    expect(loadAppConfig({ CLAMSCAN_LOCAL_FALLBACK: 'false' }).clamscan.localFallback).toBe(false);
+  });
+
+  it('explicit CLAMSCAN_LOCAL_FALLBACK=false wins over remote mode', () => {
+    expect(loadAppConfig({ CLAMSCAN_HOST: 'clamav', CLAMSCAN_LOCAL_FALLBACK: 'false' }).clamscan.localFallback).toBe(
+      false
+    );
+  });
+});

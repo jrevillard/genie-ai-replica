@@ -1514,11 +1514,15 @@ services:
       # clamav service's hostname when the clamav scanner runs remotely —
       # the entrypoint then leaves the embedded clamd DOWN (no freshclam
       # download, no daemon) and the app scans against the remote host,
-      # with the local-binary fallback OFF by default in that mode. Unset =
-      # local mode: the embedded clamd starts and is the scanner. The
-      # CLAMSCAN_LOCAL_FALLBACK / CLAMSCAN_ACTIVE / VIRUS_SCANNING overrides
-      # pass through on the same contract the app reads.
+      # with the local-binary fallback OFF by default in that mode. VIRUS_
+      # SCANNING!=true keeps the daemon down entirely (the app never
+      # initializes a scanner without it). Unset host = local mode: the
+      # embedded clamd starts and is the scanner. The CLAMSCAN_LOCAL_FALLBACK /
+      # CLAMSCAN_PORT / CLAMSCAN_ACTIVE / VIRUS_SCANNING overrides pass
+      # through on the same contract the app reads; '' from these empty
+      # defaults means UNSET in the app (see the appConfig localFallback IIFE).
       - CLAMSCAN_HOST=${CLAMSCAN_HOST:-}
+      - CLAMSCAN_PORT=${CLAMSCAN_PORT:-}
       - CLAMSCAN_LOCAL_FALLBACK=${CLAMSCAN_LOCAL_FALLBACK:-}
       - CLAMSCAN_ACTIVE=${CLAMSCAN_ACTIVE:-}
       - VIRUS_SCANNING=${VIRUS_SCANNING:-}

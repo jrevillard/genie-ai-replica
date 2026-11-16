@@ -2937,6 +2937,58 @@ contractual evidence — a fresh clone does not carry them.)
 - GPU tier is a binary choice: `opea.gpu.mode=external` (remote OpenAI-compatible
   API) or `in-cluster` (model Deployments behind `gpu=true` nodeSelector).
   Laptop runs external; in-cluster is render-validated only (no GPU locally).
+- **The branch was rebased onto `main` again (189 commits behind, 603 replayed,
+  chart 0.2.171 → 0.2.172)** — main moved the Keycloak realm to declare the
+  SSO session lifespans (`ssoSessionIdleTimeout` /
+  `ssoSessionMaxLifespan`, #1834) and to pin `directAccessGrantsEnabled: false`
+  on the built-in clients (#1849), added `KEYCLOAK_DISCOVERY_URL` to the
+  compose services, and made the ClamAV knobs remote-canonical (#1064). Chart
+  content was byte-identical across the replay (`charts/`, `scripts/ci/` and
+  the bootstrap script unchanged), so the rebase's whole cost was the SEMANTIC
+  pass below — and it found three real breaks:
+  - **the realm copy had drifted** — the chart carries
+    `configs/keycloak/genie-realm.yaml` as a copy (CI compares them with
+    `cmp`), and main's version added 35 lines. Re-synced.
+  - **the two new realm placeholders were unexported** — the realm body
+    carries `$(env:KEYCLOAK_SSO_SESSION_IDLE_TIMEOUT)` and
+    `$(env:KEYCLOAK_SSO_SESSION_MAX_LIFESPAN)`; the chart's convergence Job
+    exported neither, so kcc would have aborted the import with a parse
+    error that names nothing. Wired through
+    `data.keycloak.ssoSessionIdleTimeout` / `ssoSessionMaxLifespan` (the
+    workday defaults Compose ships: 28800 / 604800).
+  - **the compose↔chart parity gate found 8 gaps** — all introduced by main's
+    compose changes. Classified and filed: `CLAMSCAN_HOST` / `CLAMSCAN_PORT` /
+    `VIRUS_SCANNING` / `CLAMSCAN_LOCAL_FALLBACK` under `mayDiffer` (the chart
+    ships the ClamAV tier and dials it over the network; Compose runs the
+    scanner inside the container), `CLAMSCAN_ACTIVE` and
+    `KEYCLOAK_DISCOVERY_URL` (backend, document-repository, okf-server) under
+    `codeDefault` — both unset on both surfaces, so the code's own default
+    applies. The local fallback became an EXPLICIT chart value
+    (`services.documentRepository.clamavLocalFallback`, default false): the
+    application reads an unset value as "follow the host", so the chart's
+    effective value used to depend on how `clamavHost` was spelled.
+    Documented in `values.yaml` (the gate requires a `codeDefault` name to be
+    findable by an operator) and typed in `values.schema.json`.
+  - **the realm's own render-time guard has a hole, and it is now closed** —
+    the chart's guard compares the realm's placeholders against `$known`, a
+    list written out BY HAND in the template IN PARALLEL with the Job's env
+    block: adding a name to one does not add it to the other. A placeholder
+    declared in `$known` but never rendered as an env row therefore passes
+    every render and fails at runtime. Mutation-proven: deleting the two new
+    env rows left the chart's guard GREEN. New gate
+    `scripts/ci/realm-placeholder-export-check.py` reads the RENDER (the
+    third artifact, not a second declaration): the env names the convergence
+    Job actually exports against the placeholders the realm actually carries.
+    Mutation-tested: a dropped env row turns it red; a render without the
+    Job is refused as vacuous rather than passing.
+  The rebase also settled the two e2e commits the branch carried: **!841 had
+  already merged on 2026-11-12** (`f41fd09bf`), carrying the shared
+  `tests/e2e/helpers/base-url.js` for the venue origin, `venue-launch-args.js`
+  for the DNS mapping, and the chat helper's store-getter read extracted into
+  a testable function — so the replay dropped the branch's own sweep and
+  chat-helper fix as ALREADY UPSTREAM, and the branch now carries neither.
+  The branch's chart work is the only thing left in it, which is what the
+  branch is for.
 
 ## Plan map
 

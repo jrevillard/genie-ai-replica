@@ -122,10 +122,7 @@ describe('!1205 — the Node mirror and dataprep agree on the budget constants',
     test('a drifted prompt length is reported', () => {
       writeFixture(
         MIRROR_FILE,
-        MIRROR.replace(
-          'CONTEXTUAL_RETRIEVAL_PROMPT_DEFAULT_CHARS = 8',
-          'CONTEXTUAL_RETRIEVAL_PROMPT_DEFAULT_CHARS = 9'
-        )
+        MIRROR.replace('CONTEXTUAL_RETRIEVAL_PROMPT_DEFAULT_CHARS = 8', 'CONTEXTUAL_RETRIEVAL_PROMPT_DEFAULT_CHARS = 9')
       );
       expect(checkFixture().errors.join('\n')).toMatch(/prompt default length/);
     });

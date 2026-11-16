@@ -1353,6 +1353,23 @@ test.describe('the failure path runs the classification', () => {
     expect(result.reports.join('\n')).not.toContain('venue-staleness report');
   });
 
+  test('a refused verdict is PRINTED with the handle and the reason', async () => {
+    // A refusal that prints nothing is indistinguishable from a verdict:
+    // the operator would read a filed product defect and never learn that
+    // the proof could not answer.
+    const byFile = new Map([['tests/e2e/chatbot/conversation-history.spec.js', [{ error: HISTORY_NOT_FOUND }]]]);
+    const result = await classifyVenueFailures('https://venue.example:4443', byFile, {
+      ...readers((sha) => sha === 'HEAD'),
+      // No commit declares the handle: the proof refuses.
+      committedAtHead: () => false
+    });
+    expect(result.fileable.get('tests/e2e/chatbot/conversation-history.spec.js')).toHaveLength(1);
+    expect(result.refused.length).toBe(1);
+    const printed = result.reports.join('\n');
+    expect(printed).toContain('chat-history-item');
+    expect(printed).toContain('no commit declares it');
+  });
+
   test('a venue the run cannot bind leaves the failures filed, and says why', async () => {
     const byFile = new Map([['tests/e2e/chatbot/conversation-history.spec.js', [{ error: HISTORY_NOT_FOUND }]]]);
     const result = await classifyVenueFailures('https://venue.example:4443', byFile, {

@@ -3749,11 +3749,25 @@ describe('the local e2e run defines the executed set (#1736)', () => {
   // build — the verdict is always refused, every stale-venue failure is
   // filed as a product defect, and the suite stays green. The writer and
   // the reader must name the file the same way.
-  test('the runner writes the run\'s build beside its report', () => {
+  test('the runner writes the run\'s build beside its report, under the name the failure path reads', () => {
     expect(runScript).toMatch(/\$\{RUN_REPORT%\.json\}\.build\.json/);
     expect(runScript).toMatch(/git_sha/);
+    // The READER's name, derived by the failure path itself: the writer
+    // and the reader must agree, or every run carries no build, the
+    // verdict is always refused, and every stale-venue failure is filed
+    // as a product defect — with the suite green.
+    const { sidecarPath } = require(path.join(ROOT, 'tests/e2e/run/file-failure-issues.js'));
+    const report = '/tmp/reports/playwright-report-run-20261116T101112Z.json';
+    expect(sidecarPath(report)).toBe(`${report.replace(/\.json$/, '')}.build.json`);
+  });
+
+  // The failure path's own wiring: the classification the whole feature
+  // is, called from the entry point. Delete the call and the run files
+  // every stale-venue failure as a product defect again — the regression
+  // this feature exists to end — with the suite green.
+  test('the failure path calls the classification from its entry point', () => {
     const failurePath = fs.readFileSync(FAILURE_PATH, 'utf-8');
-    expect(failurePath).toMatch(/\.build\.json/);
+    expect(failurePath).toMatch(/await classifyVenueFailures\(/);
   });
 
   // Any flag other than the project selector would shrink the executed set

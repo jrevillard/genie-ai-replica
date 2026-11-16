@@ -234,9 +234,10 @@ function handleCommittedAtHead(handle) {
         // excluded — the two readers must not diverge on what a
         // declaration is. (On a DYNAMIC binding — `:data-testid="x"` —
         // this reader is the loose one: the value is not known, so the
-        // string counts. The direction is safe: a handle counted as
-        // declared here can only make the verdict refuse, never make it
-        // fire.)
+        // string counts. The direction is safe: the handle it counts as
+        // declared is then not a stale-venue candidate, so the failure
+        // is filed — a loose read can only make the verdict refuse, never
+        // make it fire.)
         ':(exclude,glob)**/__tests__/**',
         ':(exclude,glob)**/__mocks__/**'
       ],
@@ -473,11 +474,14 @@ function venueStaleProof(candidate, context) {
  *
  * A handle the venue does not serve AND the checkout does not declare is
  * a SPEC defect (the app never had it): it is not a stale venue, and it
- * is filed as the product finding it is.
+ * is filed as the product finding it is. It stays in the list, flagged
+ * `specDefect`, so that a compound locator carrying it beside a stale
+ * handle is filed rather than classified — the spec defect must not
+ * disappear behind the stale one.
  *
  * @param {{error: string}} failure - the failure
  * @param {{servedText: string, declared: Map<string, string>}} context - the venue's served bundle and the checkout's declarations
- * @returns {Array<{handle: string, source: string}>} the missing handles, with the file that declares each
+ * @returns {Array<{handle: string, source: string|null, specDefect: boolean}>} the candidates, with the file that declares each (null when the checkout declares none)
  */
 function staleVenueHandles(failure, context) {
   if (!isNotFoundFailure(failure?.error)) return [];
@@ -539,7 +543,7 @@ function partitionStaleVenue(byFile, context) {
           // failure must not be classified as the venue's.
           refused.push({
             handle: candidate.handle,
-            reason: 'no build can serve it — no source declares it'
+            reason: 'no build can serve it — no source in this checkout declares it'
           });
           verdicts.push({ candidate, verdict: 'not-stale' });
           continue;

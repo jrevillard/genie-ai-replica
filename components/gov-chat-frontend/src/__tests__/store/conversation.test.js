@@ -305,7 +305,26 @@ describe('conversation persistence', () => {
     store.commit('conversation/appendUserMessage', { sender: 'user', content: 'q' });
     // No timer advance: the pagehide handler must write through
     // synchronously or a reload within the 300 ms window drops the turn.
-    document.dispatchEvent(new Event('pagehide'));
+    window.dispatchEvent(new Event('pagehide'));
+    const raw = JSON.parse(sessionStorage.getItem(STORAGE_KEY));
+    expect(raw.conversations.open.messages.at(-1).content).toBe('q');
+    unsubscribe();
+  });
+
+  it('receives pagehide from the WINDOW, the only target the browser dispatches it at (#1907)', () => {
+    // pagehide is dispatched AT THE WINDOW and does not propagate to the
+    // document — measured on the venue: a window listener recorded the
+    // event while a document listener registered for the same event saw
+    // nothing, so a write-through registered on document never ran and a
+    // reload inside the debounce window read a mid-save snapshot. The
+    // document-dispatched sibling test cannot catch this: dispatchEvent
+    // delivers to the target's own listeners on either registration
+    // target, hiding which object the handler is attached to. Mutation
+    // check: registering onPageHide on document keeps THIS red.
+    const store = freshStore();
+    const unsubscribe = subscribeConversation(store);
+    store.commit('conversation/appendUserMessage', { sender: 'user', content: 'q' });
+    window.dispatchEvent(new Event('pagehide'));
     const raw = JSON.parse(sessionStorage.getItem(STORAGE_KEY));
     expect(raw.conversations.open.messages.at(-1).content).toBe('q');
     unsubscribe();
@@ -317,7 +336,7 @@ describe('conversation persistence', () => {
     // arming the timer. Pin the branch: no mutation, no write, no error.
     const store = freshStore();
     const unsubscribe = subscribeConversation(store);
-    document.dispatchEvent(new Event('pagehide'));
+    window.dispatchEvent(new Event('pagehide'));
     expect(sessionStorage.getItem(STORAGE_KEY)).toBeNull();
     unsubscribe();
   });

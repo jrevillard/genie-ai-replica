@@ -661,7 +661,13 @@ export function subscribeConversation(store) {
     timer = null;
     persistConversation(store.state.conversation);
   };
-  document.addEventListener('pagehide', onPageHide);
+  // The listener lives on the WINDOW because that is where the browser
+  // dispatches pagehide: the event targets the Window object and never
+  // propagates to the document, so a document-registered write-through
+  // never runs (#1907 — measured on the venue: the window listener saw
+  // the event, the document listener saw nothing, and a reload inside
+  // the debounce window read a mid-save snapshot).
+  window.addEventListener('pagehide', onPageHide);
   const unsubscribeStore = store.subscribe((mutation) => {
     if (!mutation.type.startsWith('conversation/')) return;
     // A full reset must replace the stored payload synchronously: the state
@@ -689,7 +695,7 @@ export function subscribeConversation(store) {
   });
   return () => {
     unsubscribeStore();
-    document.removeEventListener('pagehide', onPageHide);
+    window.removeEventListener('pagehide', onPageHide);
     if (timer) clearTimeout(timer);
     timer = null;
   };

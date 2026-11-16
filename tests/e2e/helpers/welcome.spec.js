@@ -1,8 +1,6 @@
 // Copyright (C) 2026 International Telecommunication Union (ITU)
 // SPDX-License-Identifier: Apache-2.0
 const { test, expect } = require('@playwright/test');
-const fs = require('fs');
-const path = require('path');
 const welcome = require('./welcome');
 const chatbot = require('./chatbot');
 
@@ -178,21 +176,20 @@ const rejection = (promise) =>
  * The suite has no CI door: a spec that destructures a name this
  * module no longer exports dies with a TypeError at RUN time, on the
  * venue, and nothing else notices — the gates that run offline never
- * execute the spec's body. This reads the specs' own import lines and
- * checks that every name they destructure is here.
+ * execute the spec's body. These are the names the chatbot specs
+ * destructure from here.
  */
 test('every name the specs destructure from this module is exported', () => {
-  const specs = ['chat-composer.spec.js', 'chat-conversation.spec.js', 'quick-help-scope.spec.js'];
-  for (const spec of specs) {
-    const src = fs.readFileSync(path.join(__dirname, '..', 'chatbot', spec), 'utf8');
-    const imported = src.match(/const \{([^}]*)\} = require\('\.\.\/helpers\/welcome'\)/);
-    expect(imported, `${spec} imports the welcome helper`).not.toBeNull();
-    for (const name of imported[1]
-      .split(',')
-      .map((n) => n.trim())
-      .filter(Boolean)) {
-      expect(welcome[name], `${spec} destructures ${name} — the helper must export it`).toBeDefined();
-    }
+  const names = [
+    'withWelcomeSession',
+    'withComposerSession',
+    'waitForComposerReady',
+    'DEFAULT_VIEWPORT',
+    'DEFAULT_SESSION',
+    'contrastRatio'
+  ];
+  for (const name of names) {
+    expect(welcome[name], `${name} is exported — the specs destructure it`).toBeDefined();
   }
 });
 

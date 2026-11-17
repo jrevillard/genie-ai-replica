@@ -84,6 +84,49 @@ services:
       - RUST_BACKTRACE=${RUST_BACKTRACE:-}
       - NVIDIA_VISIBLE_DEVICES=void
 
+  # Task 14 — GPU reranker: the TEI ROCm image cannot run on gfx1151
+  # (Instinct-only kernels; see the spike results), so this third vLLM
+  # instance serves the same cross-encoder on the GPU. The `reranker`
+  # wrapper selects it with RERANKER_BACKEND=vllm below; TEI stays the
+  # default backend on every other deployment (this file is the only place
+  # the switch flips). vLLM's rerank API is the Cohere shape
+  # (POST /v1/rerank {model, query, documents} → results[].relevance_score);
+  # the wrapper normalizes it to its internal {index, score} contract.
+  vllm-reranker:
+    image: ${VLLM_ROCM_IMAGE}
+    # Same profile gate as the other vLLM instances (base `vllm` uses
+    # [gpu-models]) — a new service in an overlay does NOT inherit the
+    # base service's profiles.
+    profiles: [gpu-models]
+    # Same explicit-command pattern as the two vLLM instances above: the
+    # ROCm image has no serving entrypoint.
+    command: >
+      vllm serve
+      --model ${VLLM_RERANKER_MODEL_ID:-BAAI/bge-reranker-v2-m3}
+      --gpu_memory_utilization ${VLLM_RERANKER_GPU_UTILIZATION:-0.05}
+      --served-model-name ${VLLM_RERANKER_MODEL_ID:-BAAI/bge-reranker-v2-m3}
+      --max_model_len ${VLLM_RERANKER_MAX_MODEL_LEN:-8192}
+      --enforce-eager
+      --port 8000
+    environment:
+      - HUGGING_FACE_HUB_TOKEN=${HUGGING_FACE_HUB_TOKEN}
+      - NVIDIA_VISIBLE_DEVICES=void
+    devices:
+      - /dev/kfd:/dev/kfd
+      - /dev/dri:/dev/dri
+    group_add:
+      - "${RENDER_GID:-990}" # render — GID is distro-specific; measure with `getent group render`
+      - "${VIDEO_GID:-44}"   # video
+
+  # Switch the wrapper to the GPU reranker. environment merges BY KEY: these
+  # three keys are additive to the base definition; TEI_RERANKING_ENDPOINT
+  # stays (unused by the vllm backend, harmless to keep).
+  reranker:
+    environment:
+      - RERANKER_BACKEND=${RERANKER_BACKEND:-tei}
+      - RERANKER_VLLM_ENDPOINT=${RERANKER_VLLM_ENDPOINT:-http://vllm-reranker:8000}
+      - RERANKER_VLLM_MODEL=${RERANKER_VLLM_MODEL:-BAAI/bge-reranker-v2-m3}
+
   # Shared-host accommodation: the Docker daemon's fluentd log driver
   # sends container stdout to HOST port 24224, and exactly one collector
   # can bind it. On a host that already runs another GENIE stack, that

@@ -340,6 +340,18 @@ describe('Configuration Validation Suite', () => {
       expect(result.warnings.filter((w) => w.includes('Unknown GPU parameter'))).toEqual([]);
     });
 
+    test('StrixHalo pins the vLLM reranker backend with a valid enum value', () => {
+      const parsed = parseGpuProfile(STRIXHALO_FILE);
+      const backend = parsed.variables.find((v) => v.name === 'RERANKER_BACKEND');
+      expect(backend).toBeDefined();
+      expect(backend.value).toBe('vllm');
+      const result = validateHardwareProfile(STRIXHALO_FILE, 'STRIX HALO (iGPU unified memory)');
+      // The six Task-14 variables must be in GPU_RANGES: an unknown-parameter
+      // warning here means the validator vocabulary lags the profile file.
+      expect(result.warnings.filter((w) => w.includes('Unknown GPU parameter'))).toEqual([]);
+      expect(result.errors).toEqual([]);
+    });
+
     test('T4 uses conservative settings vs RTX6000', () => {
       const t4 = parseGpuProfile(T4_FILE);
       const rtx = parseGpuProfile(RTX6000_FILE);

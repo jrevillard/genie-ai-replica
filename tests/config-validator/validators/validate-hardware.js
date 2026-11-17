@@ -36,11 +36,35 @@ const GPU_RANGES = {
   NGINX_HTTP_PORT: { type: 'int', min: 1, max: 65535, optional: true },
   NGINX_HTTPS_PORT: { type: 'int', min: 1, max: 65535, optional: true },
   ARANGO_PORT: { type: 'int', min: 1, max: 65535, optional: true },
+  GPU_HTTPS_PORT: { type: 'int', min: 1, max: 65535, optional: true },
+  GPU_HTTP_PORT: { type: 'int', min: 1, max: 65535, optional: true },
+  // Sizing model IDs (the split GPU-node stack defaults to different models;
+  // the Strix Halo profile pins both to the spike-measured pair)
+  VLLM_LLM_MODEL_ID: { type: 'string', optional: true },
+  VLLM_TRANSLATION_MODEL_ID: { type: 'string', optional: true },
+  // TEI CPU-image batch caps (the Strix Halo profile runs TEI on the CPU
+  // image; GPU-sized batch knobs inflate candle's buffer pools on CPU —
+  // the reranker measured 16.3 GiB RSS at 8192/32)
+  TEI_RERANKING_MAX_BATCH_TOKENS: { type: 'int', min: 128, max: 131072, optional: true },
+  TEI_RERANKING_MAX_CONCURRENT_REQUESTS: { type: 'int', min: 1, max: 512, optional: true },
+  TEI_EMBEDDING_MAX_BATCH_TOKENS: { type: 'int', min: 128, max: 131072, optional: true },
+  TEI_RERANKING_AUTO_TRUNCATE: { type: 'enum', values: ['true', 'false'], optional: true },
   // Image pins (string-typed: registry refs, range-checked only for presence
   // by the profile guard — no value validation here)
   VLLM_ROCM_IMAGE: { type: 'string', optional: true },
   TEI_ROCM_EMBEDDING_IMAGE: { type: 'string', optional: true },
-  TEI_ROCM_RERANKING_IMAGE: { type: 'string', optional: true }
+  TEI_ROCM_RERANKING_IMAGE: { type: 'string', optional: true },
+  // Task 14 — vLLM reranker backend (ROCm path). tei stays the default
+  // backend everywhere; the Strix Halo profile flips to vllm because the
+  // TEI ROCm image cannot run on gfx1151 (spike results). The utilization
+  // floor keeps parity with the other GPU knobs (a rerank instance at 0.05
+  // is deliberate sizing, not an accident).
+  RERANKER_BACKEND: { type: 'enum', values: ['tei', 'vllm'], optional: true },
+  RERANKER_VLLM_ENDPOINT: { type: 'string', optional: true },
+  RERANKER_VLLM_MODEL: { type: 'string', optional: true },
+  VLLM_RERANKER_MODEL_ID: { type: 'string', optional: true },
+  VLLM_RERANKER_GPU_UTILIZATION: { min: 0.01, max: 0.95, type: 'float', optional: true },
+  VLLM_RERANKER_MAX_MODEL_LEN: { min: 512, max: 131072, type: 'int', optional: true }
 };
 
 /**

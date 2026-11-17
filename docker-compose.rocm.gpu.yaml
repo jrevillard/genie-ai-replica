@@ -88,6 +88,34 @@ services:
       - RUST_BACKTRACE=${RUST_BACKTRACE:-}
       - NVIDIA_VISIBLE_DEVICES=void
 
+  # Task 14 — GPU reranker on the split node, same shape as the
+  # single-server overlay's vllm-reranker. The MAIN stack's reranker
+  # wrapper reaches it in split deployments through nginx-gpu (the
+  # /v1/rerank proxy route), so RERANKER_VLLM_ENDPOINT on the main stack
+  # points at the node's published address, not this container name.
+  vllm-reranker:
+    image: ${VLLM_ROCM_IMAGE}
+    # No profiles key — the GPU-node stack's model services (vllm-llm,
+    # tei-embedding, …) carry none either; this standalone stack is the
+    # GPU tier.
+    command: >
+      vllm serve
+      --model ${VLLM_RERANKER_MODEL_ID:-BAAI/bge-reranker-v2-m3}
+      --gpu_memory_utilization ${VLLM_RERANKER_GPU_UTILIZATION:-0.05}
+      --served-model-name ${VLLM_RERANKER_MODEL_ID:-BAAI/bge-reranker-v2-m3}
+      --max_model_len ${VLLM_RERANKER_MAX_MODEL_LEN:-8192}
+      --enforce-eager
+      --port 8000
+    environment:
+      - HUGGING_FACE_HUB_TOKEN=${HUGGING_FACE_HUB_TOKEN}
+      - NVIDIA_VISIBLE_DEVICES=void
+    devices:
+      - /dev/kfd:/dev/kfd
+      - /dev/dri:/dev/dri
+    group_add:
+      - "${RENDER_GID:-990}" # render — distro-specific; `getent group render`
+      - "${VIDEO_GID:-44}"   # video
+
   docling-serve:
     environment:
       - NVIDIA_VISIBLE_DEVICES=void

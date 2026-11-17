@@ -278,7 +278,9 @@ HUGGING_FACE_HUB_TOKEN=
 # requests strict JSON object output per chunk; a model/vLLM without guided JSON
 # produces markdown-wrapped or malformed JSON -> per-chunk fallback (slower,
 # lower label quality). Validated on ibm-granite/granite-4.1-8b.
-# DATAPREP_MAX_CONCURRENT_BATCHES=20  # concurrent LLM label calls (default 20; was 5)
+# DATAPREP_MAX_CONCURRENT_BATCHES=20  # concurrent LLM batches per phase — labelling,
+#                                     #   context generation and graph extraction
+#                                     #   (default 20; was 5)
 # DATAPREP_INGEST_CONCURRENCY=1       # parallel ingest slots per dataprep container
 #                                     #   (David, 2026-09-03). Each slot is a flock file;
 #                                     #   429 only when ALL are busy. 1 = historical

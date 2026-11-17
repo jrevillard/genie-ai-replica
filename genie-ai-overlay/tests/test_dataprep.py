@@ -309,22 +309,40 @@ class TestLoadAndChunk:
         assert result == ["Title Content"]
 
     @pytest.mark.asyncio
-    async def test_docling_method_unsupported_extension_routes_to_standard_loader(self):
-        """A .doc under CONTENT_EXTRACTION_METHOD=docling goes to the standard loader.
+    @pytest.mark.parametrize(
+        ("filename", "content"),
+        [
+            ("legacy.doc", "Legacy doc content"),
+            ("notes.txt", "Plain text content"),
+        ],
+        ids=["legacy-doc", "txt"],
+    )
+    @pytest.mark.asyncio
+    async def test_docling_method_unsupported_extension_routes_to_standard_loader(self, filename, content):
+        """An extension docling cannot read goes to the standard loader.
 
         The caller owns the routing: only the extensions docling_document_loader
-        supports reach it; everything else takes the standard loader, which reads
-        .doc/.ppt. Routing an unsupported extension into the docling loader would
-        drop the document to zero chunks behind a warning (issue #1661).
+        supports reach it; everything else takes the standard loader, which
+        reads .doc/.ppt. Routing an unsupported extension into the docling
+        loader would drop the document to zero chunks behind a warning (issue
+        #1661).
+
+        Two extensions, one behaviour. `.doc` is the legacy binary Word
+        format. `.txt` is plain text: docling has no plain-text format either,
+        so a .txt routed to the docling loader failed with `File format not
+        allowed` on every deployment that keeps the shipped
+        CONTENT_EXTRACTION_METHOD=docling default — a file the repository
+        accepts that no default deployment could ingest (issue #1985). The
+        standard loader reads it, so the ingest WORKS.
         """
         dp = create_dataprep()
 
         doc_path = MagicMock()
-        doc_path.path = "legacy.doc"
+        doc_path.path = filename
         doc_path.chunk_size = 1500
         doc_path.chunk_overlap = 150
 
-        mock_doc = MagicMock(page_content="Legacy doc content")
+        mock_doc = MagicMock(page_content=content)
         splitter = MagicMock()
         splitter.create_documents.return_value = [mock_doc]
 
@@ -335,7 +353,7 @@ class TestLoadAndChunk:
                 dp_module,
                 "document_loader",
                 new_callable=AsyncMock,
-                return_value="Legacy doc content",
+                return_value=content,
             ) as standard_loader,
             patch.object(dp_module, "is_valid_content", return_value=True),
             patch.object(dp_module, "RecursiveCharacterTextSplitter", return_value=splitter),
@@ -343,7 +361,7 @@ class TestLoadAndChunk:
         ):
             result = await dp._load_and_chunk(doc_path)
 
-        assert result == ["Legacy doc content"]
+        assert result == [content]
         docling_loader.assert_not_called()
         standard_loader.assert_awaited_once()
 
@@ -358,56 +376,6 @@ class TestLoadAndChunk:
         from dataprep import genieai_dataprep_utils as utils
 
         assert dp_module.DOCLING_SUPPORTED_EXTENSIONS is utils.DOCLING_SUPPORTED_EXTENSIONS
-
-    def test_txt_is_not_a_docling_extension(self):
-        """.txt must not be claimed by the docling set (issue #1985).
-
-        docling has no plain-text format: a .txt routed to the docling loader
-        ends in 'Ingestion error' after a successful upload — a file the user
-        can upload but can never ingest, on every deployment that keeps the
-        shipped CONTENT_EXTRACTION_METHOD=docling default (compose and chart
-        both do). Plain text belongs to the standard loader.
-        """
-        assert ".txt" not in dp_module.DOCLING_SUPPORTED_EXTENSIONS
-
-    @pytest.mark.asyncio
-    async def test_txt_with_docling_method_routes_to_standard_loader(self):
-        """A .txt under CONTENT_EXTRACTION_METHOD=docling goes to the standard loader (issue #1985).
-
-        The standard loader reads plain text, so the ingest must WORK — the
-        upload-side allowlist keeps accepting .txt, and the chain (dataprep
-        extension set, repository allowlist, UI copy) stays consistent with
-        the file ingesting rather than the upload refusing it.
-        """
-        dp = create_dataprep()
-
-        doc_path = MagicMock()
-        doc_path.path = "notes.txt"
-        doc_path.chunk_size = 1500
-        doc_path.chunk_overlap = 150
-
-        mock_doc = MagicMock(page_content="Plain text content")
-        splitter = MagicMock()
-        splitter.create_documents.return_value = [mock_doc]
-
-        with (
-            patch.object(dp_module, "CONTENT_EXTRACTION_METHOD", "docling"),
-            patch.object(dp_module, "docling_document_loader", new_callable=AsyncMock) as docling_loader,
-            patch.object(
-                dp_module,
-                "document_loader",
-                new_callable=AsyncMock,
-                return_value="Plain text content",
-            ) as standard_loader,
-            patch.object(dp_module, "is_valid_content", return_value=True),
-            patch.object(dp_module, "RecursiveCharacterTextSplitter", return_value=splitter),
-            patch.object(dp_module, "get_separators", return_value=["\n\n"]),
-        ):
-            result = await dp._load_and_chunk(doc_path)
-
-        assert result == ["Plain text content"]
-        docling_loader.assert_not_called()
-        standard_loader.assert_awaited_once()
 
     @pytest.mark.asyncio
     async def test_empty_content_returns_empty(self):

@@ -1490,7 +1490,7 @@ class TestTheGraphPhaseIsCeilinged:
         monkeypatch.setattr(dataprep, "DATAPREP_LLM_PHASE_TIMEOUT_SECONDS", 0.4)
         monkeypatch.setattr(dataprep, "DATAPREP_LLM_PROGRESS_INTERVAL_SECONDS", 60.0)
         monkeypatch.setattr(dataprep, "_PHASE_CANCEL_GRACE_SECONDS", 0.2)
-        monkeypatch.setattr(dataprep, "_GRAPH_STRAGGLER_GRACE_SECONDS", 0.1)
+        monkeypatch.setattr(dataprep, "_GRAPH_WRITER_SETTLE_SECONDS", 0.1)
         # A fresh gate per run: the module-level semaphore binds to whichever
         # event loop created it, and this test is the one that drives real
         # batches through it.
@@ -1510,7 +1510,6 @@ class TestTheGraphPhaseIsCeilinged:
         async def scenario():
             dp = _stub_dataprep()
             dp.db = MagicMock()
-            dp.embeddings = MagicMock()
             dp.retract_file = AsyncMock()
             dp._fetch_all_labels = AsyncMock(return_value=["Tax:IVA"])
             dp._load_and_chunk = AsyncMock(return_value=["chunk one", "chunk two"])

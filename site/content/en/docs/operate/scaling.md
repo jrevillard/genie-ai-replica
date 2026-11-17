@@ -201,8 +201,9 @@ To raise ingestion throughput on the single replica (each lever multiplies
 the load on the vLLM that labelling shares with chat answering — size
 against the model's headroom, especially on a shared GPU):
 
-- **Label-batch concurrency**: `DATAPREP_MAX_CONCURRENT_BATCHES` (default
-  `20`, raised from `5` after the labelling-bottleneck fix).
+- **Batch concurrency**: `DATAPREP_MAX_CONCURRENT_BATCHES` (default
+  `20`, raised from `5` after the labelling-bottleneck fix). It caps the
+  in-flight batches of the labelling, context-generation and graph phases.
 - **Batch size**: `DATAPREP_LLM_LABEL_BATCH_SIZE` (default `4`) — chunks
   per labelling call. Larger batches amortise the call overhead but stretch
   the per-call latency window.

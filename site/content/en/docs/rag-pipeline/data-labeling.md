@@ -64,7 +64,7 @@ Stages 4-6 run inside the dataprep service
 | `LABEL_SELECTOR_SYSTEM_PROMPT` | built-in | System prompt for the labelling LLM. Override in `.env`. |
 | `DATAPREP_LLM_LABEL_BATCH_SIZE` | 4 | Chunks per LLM labelling call (one call returns `{"0": [...], "1": [...]}`). |
 | `DATAPREP_LLM_TEMPERATURE` | 0.0 | Sampling temperature for the labelling call. `0` for deterministic output. |
-| `DATAPREP_MAX_CONCURRENT_BATCHES` | 20 | Concurrent in-flight labelling calls. |
+| `DATAPREP_MAX_CONCURRENT_BATCHES` | 20 | Concurrent in-flight batches — the labelling, context-generation and graph phases each cap at this many. |
 | `CONTEXTUAL_LABEL_RAW` | `true` | Decouple labelling from context: label the raw chunk, embed the contextualised text. |
 | `CONTEXTUAL_RETRIEVAL_ENABLED` | `true` | Generate the per-chunk (or per-doc) context prefix. |
 | `CONTEXTUAL_STRATEGY` | `doc_level` (docker-compose) / `per_chunk` (env template & code default) | `per_chunk` (Anthropic recipe) or `doc_level` (N× cheaper). docker-compose runtime default is `doc_level`; the env template and the in-code default are `per_chunk`. |

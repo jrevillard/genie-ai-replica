@@ -41,8 +41,9 @@ that position:
     keeps comps' own ``int`` 600 s default. The wedge that default used to
     make unbounded is now contained from the outside: the graph-insertion
     phase runs under the same phase ceiling as the other LLM phases (issue
-    #1726), and its budget expiry FAILS the ingest (auto-retract + self-heal
-    re-ingest) instead of holding the single ingest lane forever. What remains
+    #1726), and its budget expiry FAILS the ingest (auto-retract; re-ingest is
+    manual for a legacy file (#1992) — the D4-b self-heal covers OKF re-indexes
+    only) instead of holding the single ingest lane forever. What remains
     vendored-side debt is the per-call HTTP read budget itself: a call parked
     on a dead socket still burns its full 600 s inside the phase before the
     ceiling can act, and binding it differently needs a patch to the vendored

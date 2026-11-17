@@ -1538,8 +1538,9 @@ class TestTheGraphPhaseIsCeilinged:
         dp, exc, elapsed = _run(scenario())
         # The ingest must END while the wedged call (2 s) is still parked.
         # Generous on purpose — the ceiling path takes ~0.6 s (0.4 s deadline
-        # plus the patched 0.1 s straggler grace) and the bound only has to
-        # separate that from the 2 s the un-budgeted phase would wait.
+        # plus the patched 0.1 s straggler grace, the 0.2 s settle window
+        # included) and the bound only has to separate that from the 2 s the
+        # un-budgeted phase would wait.
         assert elapsed < 5.0, f"the ingest held the lane for {elapsed:.1f}s past the 0.4s budget"
         # Deterministic lower bound: the phase cannot return before its 0.4 s
         # deadline (the conversion is wedged past it), and the expiry path owes

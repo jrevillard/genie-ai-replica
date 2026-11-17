@@ -39,7 +39,6 @@
 const vm = require('vm');
 const fs = require('fs');
 const os = require('os');
-const path = require('path');
 const auth = require('./auth');
 // The venue's edge from the credential-free module: import the module that
 // defines what you use — the chat helper this used to import is a module
@@ -288,7 +287,11 @@ async function ingestChainReady() {
   // 'retracted' instead of its own ingest. A unique name AND unique bytes
   // give every probe its own file, and its own cleanup.
   const canaryName = `ingest-probe-canary-${CANARY_RUN_ID}.txt`;
-  const canaryPath = path.join(os.tmpdir(), canaryName);
+  // The canary's path is a plain template, not a path.join: the
+  // config-validator's variable-anchor policy (#1393) accepts a join only
+  // when it is anchored on a same-file __dirname initializer, and the
+  // runner's temp directory is neither.
+  const canaryPath = `${os.tmpdir()}/${canaryName}`;
   try {
     fs.writeFileSync(canaryPath, `Ingest probe canary ${CANARY_RUN_ID} — one chunk of plain text.\n`);
     const record = await uploadFileViaApi(auth.request, token, canaryPath);

@@ -4411,8 +4411,10 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                     # under the (now global) batch gate, but convert_to_graph_documents
                     # makes ONE vLLM call PER CHUNK sequentially inside its batch thread
                     # — so smaller batches = finer parallelism under the same gate.
-                    # Env-tunable (review 2026-10-15); 10 keeps ~40 docs in flight at
-                    # gate=4 instead of 40 serialized inside 4 fat threads.
+                    # Env-tunable (review 2026-10-15); 10 is the shipped default
+                    # (DATAPREP_GRAPH_BATCH_SIZE): at the shipped gate of 20 that
+                    # is ~200 docs in flight, and a smaller batch only shortens
+                    # the tail of the last batch.
                     BATCH_SIZE = int(os.getenv("DATAPREP_GRAPH_BATCH_SIZE", "10"))
                     total_batches = (len(documents_to_process) + BATCH_SIZE - 1) // BATCH_SIZE
 
@@ -4519,8 +4521,8 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                         raise Exception(
                             f"Graph insertion exceeded its {DATAPREP_LLM_PHASE_TIMEOUT_SECONDS:g}s budget "
                             "with batches still running — the ingest failed rather than degraded a "
-                            "partial graph; the document is retracted and needs a re-kick (the D4-b "
-                            "self-heal covers OKF re-indexes only, #1992). A batch makes one call per "
+                            "partial graph; the document is retracted and needs a re-kick (the "
+                            "automatic re-ingest covers OKF re-indexes only). A batch makes one call per "
                             "chunk sequentially (10 chunks per batch by default) and the retry "
                             "ladder repeats it, so a wedged endpoint burns far more than the ceiling: "
                             "fix the endpoint, or raise DATAPREP_LLM_PHASE_TIMEOUT_SECONDS."
@@ -4549,7 +4551,7 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                             f"Graph insertion failed for all {total_batches} batch(es): "
                             "0 graph documents were written after retries — refusing to report "
                             "ingested over an empty graph. The document is retracted and needs a "
-                            "re-kick (the D4-b self-heal covers OKF re-indexes only, #1992). "
+                            "re-kick (the automatic re-ingest covers OKF re-indexes only). "
                             f"Last error: {str(last_err or 'unknown')[:150]}"
                         )
 

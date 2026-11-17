@@ -1586,8 +1586,8 @@ class TestTheGraphPhaseIsCeilinged:
         error_texts = [c.kwargs.get("error", "") for c in dp._update_doc_status.call_args_list]
         assert any("budget" in str(e) for e in error_texts), error_texts
         # The auto-retract is what clears the partial graph and the file's
-        # Pending state. Re-ingest is manual for a legacy file (#1992); the
-        # D4-b self-heal covers OKF re-indexes only.
+        # Pending state. Re-ingest is manual for a legacy file; the automatic
+        # re-ingest covers OKF re-indexes only.
         dp.retract_file.assert_awaited_once()
 
     def test_a_raising_graph_batch_settles_the_writers_before_the_retract(self, monkeypatch):
@@ -1666,7 +1666,6 @@ class TestTheGraphPhaseIsCeilinged:
         A bare ``asyncio.sleep`` here would fail the timing assertion: the
         retract would land at once instead of after the window.
         """
-        from fastapi import HTTPException
 
         monkeypatch.setenv("VLLM_API_KEY", "test-key")
         monkeypatch.setenv("VLLM_ENDPOINT", "http://localhost:8000")
@@ -1716,12 +1715,21 @@ class TestTheGraphPhaseIsCeilinged:
                 await asyncio.wait_for(settle_started.wait(), timeout=10)
                 cancelled_at.append(time.monotonic())
                 task.cancel()
-                with pytest.raises((HTTPException, asyncio.CancelledError)):
+                # The kill's OWN cancellation must reach the caller: the settle
+                # re-raises the absorbed object, so the task ends cancelled and
+                # the document reads 'Killed'. A settle that swallowed it would
+                # leave the ingest reporting a plain ingestion failure.
+                with pytest.raises(asyncio.CancelledError):
                     await task
             return dp, cancelled_at[0], retracted_at
 
         dp, cancelled_at, retracted_at = _run(scenario())
         assert retracted_at, "the kill rollback never retracted the document"
+        statuses = [c.args[1] for c in dp._update_doc_status.call_args_list]
+        assert statuses[-1] == "Killed", (
+            f"the kill did not reach the kill path: {statuses} — the settle swallowed the "
+            "cancellation instead of re-raising it"
+        )
         waited = retracted_at[0] - cancelled_at
         # The window is 0.5 s and the cancel lands at its opening, so the
         # retract must not land before the window ends. The bound sits well

@@ -63,24 +63,53 @@ context:
 ## Implementation Notes
 
 - The baseline venue is the shared k3s `genieai` namespace (chart 0.2.177, release `genieai.v38`, external GPU model tier). PRD §13-1 (which deployment hosts the first end-to-end validation) stays open: the capture takes the namespace as an argument, so designating a venue is a re-run, not a rewrite.
-- The chart source in this repository is identical to the deployed chart's source (`git diff origin/feat/k8s-migration HEAD -- charts/` is empty at version 0.2.177), so the repository's `values.yaml` is the source baseline for the deployed chart.
-- The comparison layers are chart default → overlay override → running pod. A difference against the *effective* value (default + override) is a discrepancy; a difference against the chart default alone is not.
-- `imageID` is the digest of the pulled image **index** (calibrated against the digest-pinned Envoy image: the pod's `imageID` equals the tag's index digest, not its amd64 child), so the registry comparison is index against index.
+- The chart source in this repository is identical to the deployed chart's source (`git diff origin/feat/k8s-migration HEAD -- charts/` is empty at version 0.2.177), so the repository's `values.yaml` is the source baseline for the deployed chart. The capture reads the local `Chart.yaml` and compares its version with the deployed release: a checkout whose chart has moved on would otherwise describe what the repository would deploy, not what runs.
+- The comparison layers are chart default → overlay override → running pod, and they stay three distinct columns. A difference against the *effective* value (default + override) is a discrepancy; a difference against the chart default alone is not.
+- `imageID` is the digest of the pulled image **index** (calibrated against the digest-pinned Envoy image: the pod's `imageID` equals the tag's index digest, not its amd64 child), so the registry comparison is index against index. The index digest is not a content identity — it moves on every re-push (the attestation changes the index, not the image) — so the record also carries the amd64 child digest, the stable one. The running digests of the eight application images are absent from the registry's current indexes: the pods run a push the registry no longer serves.
+- The chart templates are parsed, never guessed: the mapping from a values leaf to an environment variable exists only in the templates. A variable the parse cannot resolve is reported as TEMPLATE (rendered from a literal or a helper), never silently compared. The values the chart *computes* — the GPU endpoint family and the public origin, the two venue-specific values a cross-venue baseline exists to pin — are derived exactly as the chart's helpers derive them and compared like any other value.
+- The capture is read-only. It creates, patches and deletes nothing, and a secret value never reaches the record: a secret-backed variable is shown as its reference, and the model endpoints are probed with the TLS posture of the workload that declares the endpoint.
 
 ## Spec Change Log
 
 ## Review Triage Log
 
+Global review (`/code-review`, xhigh, 23 findings, verified against the live cluster). Every finding is dispositioned below; "fixed" means the correction is in the diff, "extracted" means a linked backlog issue carries it.
+
+| # | Finding | Verdict | Disposition |
+|---|---|---|---|
+| 1 | The ArangoDB server (an `ArangoDeployment`, not a StatefulSet) is absent from the record | high | **fixed** — a pod no workload owns is now a row of the image table (the database's version is stated, not implied by its services) |
+| 2 | The injected-variable filter drops the chart-declared `<peer>_SERVICE_PORT` variables | high | **fixed** — the filter now applies only to a variable the chart does not declare; the chart-declared ones are compared against the template's literal |
+| 3 | The "chart default" column carries the merged value, so an override is invisible | high | **fixed** — chart default, overlay override and deployed value are three distinct columns |
+| 4 | "Not declared by the chart source" is false for the application tier | high | **fixed** — the line says "not compared against the chart source", and the application tier is compared for its model ids only |
+| 5 | The backend's whole environment is compared although it is not retrieval configuration | medium | **fixed** — the application tier is compared for its model ids only |
+| 6 | The backend's translation model is compared against the OPEA tier's path | high | **fixed** — the backend's model comes from `services.backend.translation.modelId` |
+| 7 | A model no workload pins is reported as a verified MATCH | medium | **fixed** — the status compares the chart default with the served id; the declared column says "no workload pins this model" |
+| 8 | The declared model depends on kubectl's item order | medium | **fixed** — each role names its (workload, variable) sources in a fixed order |
+| 9 | The documented exit code is wrong and a late failure escapes as a traceback | medium | **fixed** — the capture exits 3 with the reason, and the whole capture is wrapped |
+| 10 | The record's re-run command does not refresh the committed record | medium | **fixed** — the command carries the path the record was written to |
+| 11 | The capture never checks that the local chart source is the deployed chart | high | **fixed** — the local `Chart.yaml` version is read and a difference is a dispositioned discrepancy |
+| 12 | Helper-rendered variables are never compared | high | **fixed** for the values that matter — the GPU endpoint family and the public origin are derived as the chart derives them and compared; the in-cluster URLs stay TEMPLATE (they are derived from cluster names, not from venue configuration) |
+| 13 | The in-cluster collector is listed as an external dependency | low | **fixed** — cluster-internal hosts are excluded |
+| 14 | The running digest comes from an arbitrary matching pod | high | **fixed** — the running, ready, newest pod wins |
+| 15 | The overlay is read with a hardcoded key and an assumed kind | medium | **fixed** — the `valuesFrom` kind and `valuesKey` are honoured, a missing overlay raises, and an empty condition list no longer raises |
+| 16 | The OPEA tier is a hand-maintained list; the PII, OKF and RAGAS tiers are not compared | low | **extracted** (#1988) — their workloads are captured as workloads; extending the environment comparison is outside the acceptance criteria, which name the retrieval configuration |
+| 17 | The GPU credential is sent over an unverified TLS connection, decided globally | high | **fixed** — the posture comes from the workload that declares the endpoint, per endpoint |
+| 18 | No CI job runs the capture's tests | medium | **extracted** (#1987) — the pipeline is a shared surface; the finding is filed with the direction |
+| 19 | The "an undispositioned difference fails the capture" gate is only pinned at the helper level | high | **fixed** — the program's own gate is tested: the record is written, the marker is rendered and the capture exits 2 |
+| 20 | A chart default of 1.0 is compared as `1` against a deployed `1.0` | medium | **fixed** — numbers compare numerically |
+| 21 | A bare `--out` filename raises, and a pipe in a value breaks the table | low | **fixed** — the directory is created only when there is one, and the cells escape pipes |
+| 22 | The provenance names the kubeconfig's first cluster, not the current context | medium | **fixed** — the current context's cluster is read |
+
 ## Design Notes
 
-The registry digest is resolved with an anonymous pull token; the GitLab front door answers 403 to the default Python user agent, so the capture identifies itself. The model endpoints are probed with the deployment's own TLS posture (the GPU node's certificate is signed by an internal CA, and the deployment declares `OPEA_SSL_SKIP_VERIFY=1`).
+The registry digest is resolved with an anonymous pull token; the GitLab front door answers 403 to the default Python user agent, so the capture identifies itself. The model endpoints are probed with the deployment's own TLS posture (the GPU node's certificate is signed by an internal CA, and the workload that declares the endpoint declares `OPEA_SSL_SKIP_VERIFY=1`).
 
 ## Verification
 
 **Commands:**
-- `uv run --no-cache --with pyyaml python scripts/baseline/capture-deployed-baseline.py --namespace genieai` — expected: the record is written and the capture exits 0.
+- `uv run --no-cache --with pyyaml python scripts/baseline/capture-deployed-baseline.py --namespace genieai --out docs/baselines/v03-deployed-baseline-2026-11-17.md` — expected: the record is written and the capture exits 0.
 - `uv run --no-cache --with pytest --with pyyaml python -m pytest scripts/baseline/tests -q` — expected: every matrix row is covered and passing.
 
 **Manual checks (if no CLI):**
 - Read the record's discrepancy table: every row carries a disposition, none says UNRESOLVED.
-- Confirm the record contains no secret value: the secret-backed rows show only `secret:<name>/<key>`.
+- Confirm the record contains no secret value: the secret-backed variables are listed by name, and the record holds no value from a Secret.

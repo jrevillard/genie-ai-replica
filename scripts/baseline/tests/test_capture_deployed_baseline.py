@@ -5,7 +5,7 @@ source. Its failure modes are quiet ones - an unexplained difference, a
 secret value in the record, a dropped comparison - so they are pinned here
 rather than left to a reading of the generated file.
 
-Run: python3 -m pytest scripts/baseline/tests -q
+Run: uv run --no-cache --with pytest --with pyyaml python -m pytest scripts/baseline/tests -q
 """
 
 import importlib.util
@@ -43,15 +43,37 @@ def env_maps():
     return capture.template_env_maps()
 
 
+@pytest.fixture(scope="module")
+def overlay_values():
+    import yaml
+
+    return yaml.safe_load(
+        """
+        opea:
+          chatqna:
+            rerankingStrategy: threshold
+          gpu:
+            mode: external
+            nodeHost: "https://gpu.example:444"
+            paths: {llm: /llm, embedding: /embed, reranker: /rerank, translation: /translation}
+        ingress:
+          host: "genieai.example:4443"
+          scheme: https
+        """
+    )
+
+
 def test_values_leaf_resolves_to_its_chart_path(env_maps):
     """A variable the template renders from a values leaf points at that leaf."""
     assert (
-        env_maps["chatqna"]["RERANKING_STRATEGY"] == "opea.chatqna.rerankingStrategy"
+        env_maps["chatqna"]["RERANKING_STRATEGY"]["path"]
+        == "opea.chatqna.rerankingStrategy"
     )
     assert (
-        env_maps["retriever"]["RETRIEVER_HYBRID_RRF_K"] == "opea.retriever.retrieverHybridRrfK"
+        env_maps["retriever"]["RETRIEVER_HYBRID_RRF_K"]["path"]
+        == "opea.retriever.retrieverHybridRrfK"
     )
-    assert env_maps["embedding"]["EMBEDDING_MODEL_ID"] == "opea.embedding.modelId"
+    assert env_maps["embedding"]["EMBEDDING_MODEL_ID"]["path"] == "opea.embedding.modelId"
 
 
 def test_every_opea_workload_is_parsed(env_maps):
@@ -60,15 +82,21 @@ def test_every_opea_workload_is_parsed(env_maps):
         assert env_maps[component], f"{component} template parsed nothing"
 
 
-def test_template_literal_is_not_compared(chart_values, env_maps):
-    """A variable the template renders from a helper is TEMPLATE, not a difference."""
+def test_template_literal_is_the_source_of_a_literal(env_maps):
+    """A value the template renders verbatim is compared against that literal."""
+    entry = env_maps["chatqna"]["RETRIEVER_SERVICE_PORT"]
+    assert entry["literal"] == "7000"
+
+
+def test_helper_rendered_variable_is_not_compared(chart_values, env_maps):
+    """A variable the template renders by a helper is TEMPLATE, not a difference."""
     workload = {
         "name": "genieai-genieai-umbrella-chatqna",
         "component": "chatqna",
-        "containers": [{"name": "chatqna", "image": "x", "env": {"DOC_REPO_URL": "http://x"}}],
+        "containers": [{"name": "chatqna", "image": "x", "env": {"OTEL_EXPORTER_OTLP_ENDPOINT": "http://x"}}],
     }
-    rows, undeclared = capture.compare_workload(workload, env_maps, chart_values)
-    row = next(row for row in rows if row["env"] == "DOC_REPO_URL")
+    rows, undeclared = capture.compare_workload(workload, env_maps, chart_values, {}, chart_values)
+    row = next(row for row in rows if row["env"] == "OTEL_EXPORTER_OTLP_ENDPOINT")
     assert row["status"] == "TEMPLATE"
     assert not undeclared
 
@@ -82,10 +110,52 @@ def test_matching_value_is_reported_as_match(chart_values, env_maps):
             {"name": "chatqna", "image": "x", "env": {"RERANKING_STRATEGY": "slice"}}
         ],
     }
-    rows, _ = capture.compare_workload(workload, env_maps, chart_values)
+    rows, _ = capture.compare_workload(workload, env_maps, chart_values, {}, chart_values)
     row = next(row for row in rows if row["env"] == "RERANKING_STRATEGY")
     assert row["status"] == "MATCH"
     assert row["source_path"] == "opea.chatqna.rerankingStrategy"
+
+
+def test_the_three_layers_stay_distinct(chart_values, overlay_values, env_maps):
+    """The chart default, the overlay override and the deployed value are three columns."""
+    effective = capture.deep_merge(chart_values, overlay_values)
+    workload = {
+        "name": "genieai-genieai-umbrella-chatqna",
+        "component": "chatqna",
+        "containers": [
+            {"name": "chatqna", "image": "x", "env": {"RERANKING_STRATEGY": "threshold"}}
+        ],
+    }
+    rows, _ = capture.compare_workload(
+        workload, env_maps, chart_values, overlay_values, effective
+    )
+    row = next(row for row in rows if row["env"] == "RERANKING_STRATEGY")
+    assert row["source_value"] == "slice"  # the chart's own default
+    assert row["overlay_value"] == "threshold"  # the overlay override
+    assert row["deployed"] == "threshold"  # what the pod carries
+    assert row["status"] == "MATCH"
+
+
+def test_derived_value_is_compared_against_the_chart_derivation(chart_values, overlay_values, env_maps):
+    """A helper-rendered endpoint is compared against the same derivation."""
+    effective = capture.deep_merge(chart_values, overlay_values)
+    workload = {
+        "name": "genieai-genieai-umbrella-chatqna",
+        "component": "chatqna",
+        "containers": [
+            {
+                "name": "chatqna",
+                "image": "x",
+                "env": {"VLLM_LLM_ENDPOINT": "https://gpu.example:444/llm"},
+            }
+        ],
+    }
+    rows, _ = capture.compare_workload(
+        workload, env_maps, chart_values, overlay_values, effective
+    )
+    row = next(row for row in rows if row["env"] == "VLLM_LLM_ENDPOINT")
+    assert row["status"] == "MATCH"
+    assert row["overlay_value"] == "https://gpu.example:444/llm"
 
 
 def test_difference_without_disposition_stays_unresolved():
@@ -116,8 +186,8 @@ def test_secret_value_never_reaches_the_record():
     assert env["PLAIN"] == "visible"
 
 
-def test_injected_service_variables_are_skipped(chart_values, env_maps):
-    """Kubernetes injects the service-discovery variables; they are not configuration."""
+def test_injected_variables_are_skipped_unless_the_chart_declares_them(chart_values, env_maps):
+    """Kubernetes injects the service-discovery variables; a chart-declared one is compared."""
     workload = {
         "name": "genieai-genieai-umbrella-retriever",
         "component": "retriever",
@@ -132,12 +202,12 @@ def test_injected_service_variables_are_skipped(chart_values, env_maps):
             }
         ],
     }
-    rows, undeclared = capture.compare_workload(workload, env_maps, chart_values)
+    rows, undeclared = capture.compare_workload(workload, env_maps, chart_values, {}, chart_values)
     assert [row["env"] for row in rows] == ["RETRIEVER_ARANGO_K"]
     assert not undeclared
 
 
-def test_overlay_override_is_reported_as_a_separate_layer(chart_values):
+def test_overlay_override_is_a_separate_layer(chart_values):
     """The overlay is a deployment-specific layer, not a discrepancy."""
     merged = capture.deep_merge(chart_values, {"opea": {"retriever": {"retrieverArangoK": "42"}}})
     assert capture.get_path(merged, "opea.retriever.retrieverArangoK") == "42"
@@ -148,3 +218,96 @@ def test_image_tag_is_read_from_a_tagged_reference():
     """A digest-pinned image has no tag to resolve."""
     assert capture.image_tag("registry.example/genie-ai-backend:main") == "main"
     assert capture.image_tag("registry.example/genie-ai-backend@sha256:abc") == ""
+
+
+def test_numbers_compare_numerically():
+    """A chart default of 1.0 and a deployed "1.0" are the same value."""
+    assert capture.values_equal(1.0, "1.0")
+    assert capture.values_equal("1.0", "1.0")
+    assert capture.values_equal("1.0", "1")
+    assert not capture.values_equal("1.0", "2")
+
+
+def test_an_undispositioned_difference_fails_the_capture(tmp_path):
+    """The program's own gate: the record is written AND the capture exits 2."""
+    data = {
+        "capture": {
+            "date": "2026-11-17",
+            "timestamp": "2026-11-17T00:00:00+00:00",
+            "cluster": "https://cluster",
+            "namespace": "genieai",
+            "release": "genieai",
+            "release_revision": 1,
+            "chart_name": "charts/genieai-umbrella",
+            "chart_version": "0.2.1",
+            "local_chart_version": "0.2.1",
+            "overlay_name": "overlay",
+            "command": "python3 capture.py",
+        },
+        "images": [],
+        "models": [],
+        "config": [],
+        "discrepancies": [
+            {
+                "workload": "genieai-genieai-umbrella-retriever",
+                "env": "RETRIEVER_ARANGO_K",
+                "source_value": "20",
+                "deployed": "4",
+                "disposition": "**UNRESOLVED**",
+            }
+        ],
+        "image_disposition_note": "",
+        "topology": {
+            "services": [],
+            "network_policies": 0,
+            "edge": "(none)",
+            "external": "(none)",
+        },
+    }
+    out_path = tmp_path / "record.md"
+    unresolved = capture.write_record(data, str(out_path))
+    assert len(unresolved) == 1
+    assert capture.exit_code_for(unresolved) == 2
+    assert "**UNRESOLVED**" in out_path.read_text(encoding="utf-8")
+
+
+def test_a_dispositioned_difference_exits_zero(tmp_path):
+    """A known difference is recorded with its disposition and does not fail the capture."""
+    data = {
+        "capture": {
+            "date": "2026-11-17",
+            "timestamp": "2026-11-17T00:00:00+00:00",
+            "cluster": "https://cluster",
+            "namespace": "genieai",
+            "release": "genieai",
+            "release_revision": 1,
+            "chart_name": "charts/genieai-umbrella",
+            "chart_version": "0.2.1",
+            "local_chart_version": "0.2.1",
+            "overlay_name": "overlay",
+            "command": "python3 capture.py",
+        },
+        "images": [],
+        "models": [],
+        "config": [],
+        "discrepancies": [
+            {
+                "workload": "genieai-genieai-umbrella-chatqna",
+                "env": "KC_REALM",
+                "source_value": "",
+                "deployed": "genie",
+                "disposition": "By design - the chart leaves the realm empty.",
+            }
+        ],
+        "image_disposition_note": "",
+        "topology": {
+            "services": [],
+            "network_policies": 0,
+            "edge": "(none)",
+            "external": "(none)",
+        },
+    }
+    out_path = tmp_path / "record.md"
+    unresolved = capture.write_record(data, str(out_path))
+    assert unresolved == []
+    assert capture.exit_code_for(unresolved) == 0

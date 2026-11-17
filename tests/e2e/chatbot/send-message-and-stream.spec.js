@@ -151,6 +151,16 @@ test.describe('Chatbot message sending and SSE streaming — the French answer',
     expect(botText.length, 'the French answer arrived').toBeGreaterThan(0);
     expect(botText, 'the answer still names the subject of the question').toContain('GENIE');
 
+    // The answer is FRENCH, not merely untranslated: a venue whose
+    // translation chain silently answered with the English text would
+    // carry translationFailed=false and pass the two checks below without
+    // having translated anything. The tokens are French function words
+    // an English answer does not carry ('est', 'une', 'des', 'pour' …);
+    // the answer's LANGUAGE is the subject, so it is asserted.
+    expect(botText, 'the answer is in French').toMatch(
+      /\b(est|sont|un|une|des|du|de|le|la|les|pour|avec|dans|sur|et|il|ne|pas|nous|vous|qui|que|ce|cette)\b/i
+    );
+
     // The app's own translation verdict, read twice on two channels:
     //
     // 1. The DOM marker renders ONLY when the done frame carried

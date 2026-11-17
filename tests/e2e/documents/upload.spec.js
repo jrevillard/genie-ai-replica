@@ -113,13 +113,19 @@ test.describe('Document Upload — the ingest chain', () => {
     // docling, and docling does not accept plain text — a .txt file fails
     // at chunking with 'File format not allowed' and its status never
     // reaches 'Ingested'. The .md fixture is ingested for real.
-    const fileName = 'test-document.md';
-    await uploadFile(page, path.join(FIXTURES_DIR, fileName));
+    //
+    // Its NAME is its own, distinct from the upload group's fixture: the
+    // dashboard's table lists the rows by name, so a shared name would let
+    // the batch action target another group's leftover row instead of this
+    // run's — and the wait below would then watch a row nobody ingested.
+    const fileName = 'test-document-ingest.md';
 
     // The upload dialog does not hand back the server's file id, and the
-    // fixed fixture name may match rows a previous run left behind —
-    // snapshot the ids BEFORE the ingest so the wait keys on THIS run's
-    // row, never on a leftover that may sit in another status forever.
+    // fixture name may match rows a previous run left behind — snapshot
+    // the ids BEFORE the upload, so the wait keys on THIS run's row, never
+    // on a leftover that may sit in another status forever. (A snapshot
+    // taken after the upload would list this run's own row among the
+    // known ids, and the run's row would never be found.)
     const token = await getSessionToken(page);
     const before = await request('GET', `/api/files?limit=50&search=${encodeURIComponent(fileName)}`, {
       headers: { Authorization: `Bearer ${token}` }
@@ -128,6 +134,8 @@ test.describe('Document Upload — the ingest chain', () => {
     const knownIds = new Set(
       ((before.data && before.data.data) || []).filter((f) => f.file_name === fileName).map((f) => f.file_id)
     );
+
+    await uploadFile(page, path.join(FIXTURES_DIR, fileName));
 
     // The ingest is the dashboard's own batch action on the fresh row:
     // the checkbox is a structural tail of the declared row handle, the
@@ -163,11 +171,14 @@ test.describe('Document Upload — the ingest chain', () => {
     ).toBe('ingested');
 
     // The rendered verdict: the search refresh re-reads the list (the
-    // table has no auto-poll), and the pinned-English pill reads exactly
-    // 'Ingested' — the same vocabulary, seen by the user.
+    // table has no auto-poll), and the pinned-English pill reads the
+    // ingested status — the same vocabulary, seen by the user. The CASE is
+    // folded before the comparison: the status tag renders through a CSS
+    // `text-transform: uppercase`, so the text the browser hands back is
+    // 'INGESTED' whatever the DOM carries.
     await searchDocuments(page, fileName);
     const ingestedRow = await waitForDocumentInTable(page, fileName);
     const statusText = (await ingestedRow.locator('[data-test-id="document-status"]').innerText()).trim();
-    expect(statusText, 'the table renders the Ingested status').toBe('Ingested');
+    expect(statusText.toLowerCase(), 'the table renders the Ingested status').toBe('ingested');
   });
 });

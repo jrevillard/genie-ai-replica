@@ -193,6 +193,14 @@ issues in this report. Corrections below supersede the corresponding body
 statements; the body is left as written for audit honesty. The same
 corrections propagate to `research-extract.md` (digest) and the PRD.
 
+**AM-7 (DSH 282k★ figure — challenge refuted, figure stands).** A 2026-11-17
+review challenged the "282k★ launch velocity" figure (§2.2 DSH ecosystem
+record) as an implausible typo for 28.2k. Live re-check of
+github.com/deepseek-ai/deepseek-harness (2026-11-17): **282.6k stars, 35.0k
+forks** — the figure as written is correct; the challenge was wrong. No body
+change. Recorded here so the 2026-12-01 compat re-check inherits the
+verification trail.
+
 **AM-1 (DSH embeddability — corrects §2.1/§2.2 "workstation not embeddable"
 and the revisit trigger "embeddable server mode").** Verified against the
 DSH repository at commit `39163dd3`: an SDK family exists that drives a

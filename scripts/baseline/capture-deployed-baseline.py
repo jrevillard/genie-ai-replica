@@ -240,9 +240,8 @@ def parse_template_env(template_file):
     """
     text = open(os.path.join(CHART_TEMPLATES, template_file), encoding="utf-8").read()
     mapping = {}
-    depth = _block_depth(text)
 
-    def record(env_name, expression, conditional=False):
+    def record(env_name, expression):
         if env_name in mapping:
             return
         chain = _expression_chain(expression)
@@ -250,39 +249,19 @@ def parse_template_env(template_file):
             "chain": chain,
             "path": chain[0][1] if chain and chain[0][0] == "path" else None,
             "literal": chain[0][1] if chain and chain[0][0] == "literal" else None,
-            "conditional": conditional,
         }
 
     # Service-factory style: (dict "name" "ENV" "value" <expr>)
     for match in re.finditer(r'\(dict "name" "([A-Z0-9_]+)" "value" (.*)', text):
-        record(match.group(1), match.group(2), depth.get(match.group(1), 0) > 0)
+        record(match.group(1), match.group(2))
 
     # Hand-rendered style: - name: ENV / [comment lines] / value: {{ <expr> }}
     for match in re.finditer(
         r"- name: ([A-Z0-9_]+)\n(?:\s*#.*\n)*\s*value: \{\{-?\s*(.*?)\s*\}\}", text
     ):
-        record(match.group(1), match.group(2), depth.get(match.group(1), 0) > 0)
+        record(match.group(1), match.group(2))
 
     return mapping
-
-
-def _block_depth(text):
-    """The template block depth at each environment declaration.
-
-    A variable declared inside an `if`/`range`/`with` block is rendered only
-    under that condition: the deployment legitimately does not carry it.
-    """
-    depth = {}
-    level = 0
-    for line in text.splitlines():
-        for match in re.finditer(r'\(dict "name" "([A-Z0-9_]+)"', line):
-            depth[match.group(1)] = level
-        for match in re.finditer(r"- name: ([A-Z0-9_]+)", line):
-            depth[match.group(1)] = level
-        opens = len(re.findall(r"\{\{-?\s*(if|range|with|define)\b", line))
-        closes = len(re.findall(r"\{\{-?\s*end\b", line))
-        level = max(0, level + opens - closes)
-    return depth
 
 
 def _expression_chain(expression):
@@ -356,30 +335,6 @@ def _resolve_chain(chain, values):
         else:
             return None, value
     return None, None
-
-
-def _expression_to_path(expression):
-    """Resolve a template value expression to the chart values path it reads."""
-    for pattern in (
-        r"index \(index \(\$opea \| default dict\) \"([a-z]+)\"[^)]*\) \"([A-Za-z0-9]+)\"",
-        r"index \(index \(\$opeaModels \| default dict\) \"([a-z]+)\"[^)]*\) \"([A-Za-z0-9]+)\"",
-    ):
-        found = re.search(pattern, expression)
-        if found:
-            prefix = "opea" if "opeaModels" not in pattern else "opea.models"
-            return f"{prefix}.{found.group(1)}.{found.group(2)}"
-
-    found = re.search(
-        r"index \(\$opea\.([a-z]+) \| default dict\) \"([A-Za-z0-9]+)\"", expression
-    )
-    if found:
-        return f"opea.{found.group(1)}.{found.group(2)}"
-
-    found = re.search(r"\$([A-Za-z][A-Za-z0-9]*)\.([A-Za-z0-9]+)", expression)
-    if found and found.group(1) in SECTION_VARS:
-        return f"opea.{SECTION_VARS[found.group(1)]}.{found.group(2)}"
-
-    return None
 
 
 SECTION_VARS = {

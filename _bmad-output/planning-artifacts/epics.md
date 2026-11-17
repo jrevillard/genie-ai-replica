@@ -1,5 +1,5 @@
 ---
-stepsCompleted: []
+stepsCompleted: ['step-01-validate-prerequisites', 'step-02-design-epics']
 inputDocuments:
   - _bmad-output/planning-artifacts/prds/prd-genie-ai-2026-11-16/prd.md
   - _bmad-output/planning-artifacts/architecture/architecture-genie-ai-2026-11-16/ARCHITECTURE-SPINE.md
@@ -96,7 +96,7 @@ From the UX design contract (DESIGN.md + EXPERIENCE.md):
 Ordering and blocking rules carried from the PRD — the epic/story map must schedule their production and approval at the right stage:
 
 - **V02** (record OPEA query-path semantics incl. preparation pipeline) — before S3 design; feeds AR-4/AR-5.
-- **V03** (record deployed versions, image digests, models, configurations, topology; reconcile with source baseline) — before the representative baseline measurement (E01 reference).
+- **V03** (record deployed versions, image digests, models, configurations, topology; reconcile with source baseline) — before the representative baseline measurement (E01 reference); **no code dependency — runs as an early parallel track from Epic 1**.
 - **V04** (map effective authorization, provenance and ownership across existing services) — before contract acceptance; a divergence reopens AD-3/AD-4.
 - **V05** (inventory actual API/SSE/error contracts and regression coverage) — before the S3 compatibility gate; a discrepancy reopens AD-8.
 - **V06 + V07a** (runtime integration test; pre-adoption license verification per exact package version) — before D03 adoption at S4 entry; D03 must not close on compat research past its 2026-12-01 re-check without a refresh.
@@ -109,8 +109,58 @@ Ordering and blocking rules carried from the PRD — the epic/story map must sch
 
 ### FR Coverage Map
 
-{{requirements_coverage_map}}
+FR-1: Epic 1 — contract semantics (input/result/provenance/error per operation)
+FR-2: Epic 1 — trusted caller context; model args never widen access
+FR-3: Epic 1 — stable source ids + provenance for citation resolution
+FR-4: Epic 1 — per-operation cancellation/timeout/result-size limits
+FR-5: Epic 1 — contract compatibility & versioning rules
+FR-6: Epic 1 — first implementation OPEA-free
+FR-7: Epic 1 — no OPEA-specific representations in agent-facing contracts
+FR-8: Epic 1 — V02 recorded before contract acceptance
+FR-9: Epic 2 — governed agent loop, approved operations only
+FR-10: Epic 2 — grounded answer or explicit insufficiency; mechanical enforcement + release policy
+FR-11: Epic 2 — bounded execution, everything counts, cancellation chain
+FR-12: Epic 1 (executor enforcement) + Epic 2 (degraded-mode honesty at answer level)
+FR-13: Epic 2 — citations through existing RAG components
+FR-14: Epic 2 — client API/SSE/translation compatibility; versioned extensions
+FR-15: Epic 1 (flag mechanism) + Epic 3 (operational activation capability) — deployment-level activation flag
+FR-16: Epic 3 — rollback demonstrated per stage; rollout records with named operator
+FR-17: Epic 2 — version trail for every execution (run-start handshake)
+FR-18: Epic 2 — observability through existing stack
+FR-19: Epic 2 (V07a gates D03) + Epic 4 (V07b pre-release)
+FR-20: Epic 1 — OPEA-free enforced by CI from first delivered stage
+FR-21: Epic 1 — no new OPEA coupling (same audit + stage-gate check)
+FR-22: Epic 1 — "OPEA-free" claims scoped to validated surface
+FR-23: Epic 4 — E01 (A/B) + E02 (B/C) protocol
+FR-24: Epic 4 — eval-set versioning, composition, tuning/assessment separation
+FR-25: Epic 4 — authorization + prompt-injection scenarios in the eval set
+FR-26: Epic 4 — reference defects recorded, never silently required
+FR-27: Epic 4 — separate reporting of M-1..M-5 + uncontrolled differences
+FR-28: Epic 1 — retained-data ownership/access rules; between-turns tests
+FR-29: Epic 1 (starts story 1, continues) — ADR discipline
+FR-30: Epic 2 — activity line (started/completed/failed, versioned events, graceful degradation)
+NFR-1: Epic 1 (no raw AQL, trusted-service authz) + Epic 2 (end-to-end provenance)
+NFR-2: Epic 1 (service dependency defaults audit) + Epic 2 (runtime dependency audit, D03)
+NFR-3: Epic 2 (admission, budgets) + Epic 3 (coexistence under flag) + Epic 4 (E02 resource measurement)
+NFR-4: Epic 3 — rollback rehearsed, deployment-level activation
+NFR-5: Epic 1 (V05 inventory) + Epic 2 (SSE regression coverage)
+NFR-6: Epic 4 — V09 coverage incl. new CI surface
+NFR-7: Epic 2 — runtime seam, replacement scope + swap cost per candidate
 
 ## Epic List
 
-{{epics_list}}
+### Epic 1: OPEA-free document capability layer (S3)
+Engineering and evaluation can search and read the knowledge base through a GENIE-owned, OPEA-free capability contract whose query-path behavior deliberately matches the current pipeline (V02-recorded), with authorization enforced by construction and every execution attributable. Includes the **activation-flag mechanism** (compose + routing seam, so the service is born switchable) and the **V03 baseline measurement as an early parallel track** (no code dependency — starts day one, feeds E4's reference).
+**FRs covered:** FR-1..FR-8, FR-12 (executor), FR-20, FR-21, FR-22, FR-28, FR-29 · FR-15 (mechanism) · AR-1..AR-5, AR-2 gate, AR-11 skeleton · Gates: V02 (before design), V04 (contract acceptance), V05 (compatibility).
+
+### Epic 2: Governed document-QA agent with visible work (S4a)
+Users receive source-grounded agentic answers or explicit insufficiency — with a visible activity line (started/completed/failed per operation), honest tri-state verdicts, bounded execution, working cancellation, and full version attribution; the runtime (D03) closes at epic entry from V06+V07a.
+**FRs covered:** FR-9..FR-14, FR-17, FR-18, FR-30, FR-12 (degraded honesty) · AR-6..AR-9, AR-15 · UX-DR1..UX-DR8 · Gate: D03 closure (V06+V07a, 2026-12-01 freshness).
+
+### Epic 3: Safe activation and rollback (S4b)
+Operators can enable the agentic path per deployment with one flag, see agentic conversations continue safely on the legacy path after rollback, and hold a rollout record naming the rollback trigger's responsible operator with rehearsal evidence. The flag MECHANISM is born in Epic 1 (service switchable from day one); this epic owns the operational choreography — shared routing helper coverage of both request paths, rollback scenario and rehearsals, rollout records.
+**FRs covered:** FR-15 (operational capability), FR-16 · AR-10 · Gates: V08 rehearsals (incl. BFF-timeout/deadline pair), rollout records per stage.
+
+### Epic 4: Evaluation and evidence
+Engineering can prove — with versioned corpora, cases and configurations — that the OPEA-free path preserves required behavior (E01: A/B) and that the agent earns its cost within accepted limits (E02: B/C), with thresholds agreed post-baseline and counter-metrics visible. **Counter-metrics are first-class:** CM-1 (cost/latency delta), CM-2 (excessive-abstention rate), CM-3 (limit/cancellation hit rate) get a dedicated reporting story — the proof includes showing the agent did not game it. The E01 harness REUSES Epic 1's equivalence suite as its config-B driver (one evaluation runway, no second stack). V03 baseline measured in Epic 1's parallel track is this epic's reference input.
+**FRs covered:** FR-23..FR-27, FR-19 (V07b), CM-1..CM-3 · Gates: threshold agreement rule, S3/S4 exit evidence, V09.

@@ -1,6 +1,9 @@
 const https = require('https');
 const { chromium } = require('@playwright/test');
 const { loginViaUI, TEST_USER } = require('./chatbot');
+// The locale the APP adopted — one home for the read (helpers/locale.js
+// owns the pin, so it owns the read of what the pin produced).
+const { readAdoptedLocale } = require('./locale');
 // The venue's edge comes from the credential-free module: this file needs
 // the edge and no credential, and the edge has one definition.
 const { BASE_URL } = require('./base-url');
@@ -573,20 +576,24 @@ async function mapWithConcurrency(items, limit, fn) {
  *        session's token, the locale the app adopted, and when the session
  *        was opened (the age the callers bound their cache by)
  */
-async function openVenueSession({ user, locale } = {}) {
+async function openVenueSession({ browser, user, locale } = {}) {
   let ownBrowser = null;
   let context = null;
   let seen = { token: null, adopted: null, at: Date.now() };
   let sessionError = null;
   let teardownError = null;
   try {
-    ownBrowser = await chromium.launch({ args: venueLaunchArgs() });
-    context = await ownBrowser.newContext({ ignoreHTTPSErrors: true, locale });
+    // The throwaway browser carries the venue mapping (empty unless
+    // E2E_VENUE_IP is set): Chromium resolves hostnames with its own stack,
+    // so a browser launched without it cannot open a venue whose name the
+    // runner cannot resolve.
+    ownBrowser = browser ? null : await chromium.launch({ args: venueLaunchArgs() });
+    context = await (browser || ownBrowser).newContext({ ignoreHTTPSErrors: true, locale });
     const page = await context.newPage();
     await loginViaUI(page, user || TEST_USER);
     seen = {
       token: await getSessionToken(page),
-      adopted: await page.evaluate(() => document.documentElement.lang),
+      adopted: await readAdoptedLocale(page),
       at: Date.now()
     };
   } catch (e) {
@@ -622,50 +629,14 @@ async function openVenueSession({ user, locale } = {}) {
  * @returns {Promise<string>} Access token string
  */
 async function getSessionTokenViaUI({ browser, user } = {}) {
-  let ownBrowser = null;
-  let context = null;
-  let token = null;
-  let loginError = null;
-  let teardownError = null;
-  try {
-    // The throwaway browser carries the venue mapping (empty unless
-    // E2E_VENUE_IP is set): Chromium resolves hostnames with its own stack,
-    // so a browser launched without it cannot open a venue whose name the
-    // runner cannot resolve.
-    ownBrowser = browser ? null : await chromium.launch({ args: venueLaunchArgs() });
-    context = await (browser || ownBrowser).newContext({ ignoreHTTPSErrors: true });
-    const page = await context.newPage();
-    await loginViaUI(page, user || TEST_USER);
-    token = await getSessionToken(page);
-  } catch (e) {
-    loginError = e;
-  } finally {
-    // The context closes BEFORE the browser (a browser-close failure must
-    // not skip the context close and leak it). The teardown failure is only
-    // COLLECTED here: a throw inside a finally supersedes whatever the try
-    // decided (eslint no-unsafe-finally), so the decision below — after the
-    // finally — throws the login failure as the primary error with the
-    // teardown error attached as its cause (#1883), and a teardown failure
-    // on a login that succeeded is still thrown: the throwaway session's
-    // cleanup fails loudly, never silently.
-    if (context) {
-      try {
-        await context.close();
-      } catch (e) {
-        teardownError = e;
-      }
-    }
-    if (ownBrowser) {
-      try {
-        await ownBrowser.close();
-      } catch (e) {
-        if (!teardownError) teardownError = e;
-      }
-    }
-  }
-  // The decision lives in resolveSessionOutcome (below) — the contract is
-  // pinned there, this call site just hands it the three facts.
-  return resolveSessionOutcome(loginError, teardownError, token);
+  // ONE session primitive (openVenueSession above) owns the browser, the
+  // context, the login and the teardown contract — this is its token-only
+  // face. The teardown contract is the one resolveSessionOutcome owns: a
+  // session that failed throws its failure (with a teardown failure as the
+  // cause), a teardown failure on a successful session throws too, and a
+  // clean run returns what it saw (#1883).
+  const session = await openVenueSession({ browser, user });
+  return session.token;
 }
 
 /**

@@ -247,6 +247,18 @@ async function venueSession(locale, { fresh = false } = {}) {
 }
 
 /**
+ * The locale the app adopted in the last session opened for that locale
+ * ('' when no session was opened for it).
+ *
+ * @param {string} locale - the locale code
+ * @returns {string} the adopted locale code
+ */
+function adoptedLocaleOf(locale) {
+  const session = sessionCache.get(locale);
+  return session ? session.adopted : '';
+}
+
+/**
  * Does the APP adopt this locale — the deployment's whitelist is only half
  * of the frontend's rule, and the other half (the build's locale files) is
  * not published by the venue: a deployment whose whitelist names a locale
@@ -441,18 +453,16 @@ async function ingestChainReady() {
     uploadFileViaApi,
     triggerIngestViaApi,
     waitForFileIngestedViaApi,
-    sweepDeleteOneFile
+    sweepDeleteOneFile,
+    fileIdOf
   } = require('./documents');
   const token = await adminSessionToken();
   let fileId = null;
   let verdict = null;
   let probeError = null;
-  // The canary's NAME is unique per process: the repository mints a fresh
-  // file id per upload (it stores a content hash and never looks one up),
-  // so two canaries are two files — but the FILE LIST carries both, and a
-  // caller that picks "the row with this name" would then read the older
-  // one, whose cleanup had already retracted it. The unique name keeps
-  // every canary's row unambiguous.
+  // The canary's NAME is unique per process (see CANARY_RUN_ID: the file
+  // list carries every canary, and only a unique name keeps the rows
+  // unambiguous).
   //
   // Its extension is MARKDOWN, and it matters: the dataprep routes the
   // docling-supported extensions to docling, and docling does not accept
@@ -473,7 +483,9 @@ async function ingestChainReady() {
     // drift apart.
     fs.writeFileSync(canaryPath, fs.readFileSync(CANARY_FIXTURE_PATH, 'utf8'));
     const record = await uploadFileViaApi(auth.request, token, canaryPath);
-    fileId = record.file_id;
+    // The id through the helper's own reader (file_id || _key || id): the
+    // payload's own key is not the only spelling the repository uses.
+    fileId = fileIdOf(record);
     await triggerIngestViaApi(auth.request, token, fileId);
     try {
       // The wait rides its OWN session: the canary's budget (180 s) sits on
@@ -524,10 +536,10 @@ async function ingestChainReady() {
   // second canary document the venue would have to carry).
   ingestChainCache = verdict;
 
-  // The cleanup runs on a session of its OWN: the canary's own token is as
-  // old as the wait that just ended (up to the probe's budget), and a realm
-  // token lives 300 s — a cleanup on an expired token would fail on the
-  // venue's 401 and read as a venue that cannot delete a document.
+  // The cleanup rides the WAIT's session — the one opened for the wait
+  // above, which is minutes younger than the canary's own token — so the
+  // delete cannot fail on an expired token and read as a venue that cannot
+  // delete a document.
   const cleanupToken = await adminSessionToken();
   const cleanupHeaders = { Authorization: `Bearer ${cleanupToken}` };
   const cleanupFailures = [];
@@ -724,7 +736,7 @@ async function frenchStreamingReady() {
 async function frenchStreamingMissingReason() {
   if (!(await localeActive('fr'))) return missingLocaleReason('fr');
   if (!(await localeAdopted('fr'))) {
-    const adopted = sessionCache.get('fr');
+    const adopted = adoptedLocaleOf('fr');
     return (
       "venue profile: the app does not adopt the locale 'fr' (it booted on " +
       `'${adopted ? adopted.adopted : 'unknown'}') — the frontend fell back to English at boot, so ` +

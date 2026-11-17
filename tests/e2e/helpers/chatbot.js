@@ -319,6 +319,24 @@ function streamingFlagOf(read) {
 const NOT_READABLE = Symbol('not-readable');
 
 /**
+ * The last bot message of a read — ONE selector for every decider that
+ * asks "which message is the bot's". Pure, and OUT of the page.
+ *
+ * `undefined` when the read carries no bot message yet (the welcome
+ * bubble and a turn that has not landed); the callers decide what an
+ * unreadable read means for them.
+ *
+ * @param {{state: string, messages?: object[]}} read - what the page read
+ * @returns {object|undefined} the last bot message, or undefined
+ */
+function lastBotMessageOf(read) {
+  if (!read || (read.state !== 'ok' && read.state !== 'no-open-conversation')) return undefined;
+  const messages = read.messages || [];
+  const bots = messages.filter((m) => m.sender === 'bot');
+  return bots[bots.length - 1];
+}
+
+/**
  * The metadata frame's responseTime of the last bot message, from a read
  * of the store's public getter (the same shape streamingFlagOf decides
  * on). Pure, and OUT of the page — the same decider pattern, so the
@@ -341,9 +359,7 @@ function lastBotResponseTimeOf(read) {
   if (!read || (read.state !== 'ok' && read.state !== 'no-open-conversation')) {
     return NOT_READABLE;
   }
-  const messages = read.messages || [];
-  const bots = messages.filter((m) => m.sender === 'bot');
-  const last = bots[bots.length - 1];
+  const last = lastBotMessageOf(read);
   if (last === undefined) return undefined;
   return last.responseTime;
 }
@@ -369,9 +385,7 @@ function lastBotTranslationFailedOf(read) {
   if (!read || (read.state !== 'ok' && read.state !== 'no-open-conversation')) {
     return NOT_READABLE;
   }
-  const messages = read.messages || [];
-  const bots = messages.filter((m) => m.sender === 'bot');
-  const last = bots[bots.length - 1];
+  const last = lastBotMessageOf(read);
   if (last === undefined) return undefined;
   return last.translationFailed;
 }

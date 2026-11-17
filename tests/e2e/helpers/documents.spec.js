@@ -22,6 +22,27 @@ const {
  * module), so a frontend change to the normalisation cannot leave this
  * copy stale.
  */
+/**
+ * The scripted transport the helper specs drive: a queue of answers, one
+ * per call, and the calls it recorded. ONE definition for the whole file —
+ * the four describes below drive the same helpers and must not keep four
+ * copies of it in step.
+ *
+ * @param {object[]} script - the answers, in order
+ * @returns {{request: Function, calls: object[][]}} the transport and its log
+ */
+function scriptedTransport(script) {
+  const calls = [];
+  const request = async (method, path, options) => {
+    calls.push([method, path, options]);
+    if (script.length === 0) {
+      throw new Error(`unexpected call ${method} ${path} — the script is exhausted`);
+    }
+    return script.shift();
+  };
+  return { request, calls };
+}
+
 test.describe('the document status predicate', () => {
   const file = (status) => ({ file_name: 'a.pdf', dataprep: { status } });
 
@@ -130,18 +151,6 @@ test.describe('the sweep per-file delete (retract-then-delete, #1864)', () => {
   // are recorded too (#1864 review): the bearer header the sweep sends is
   // part of the contract — a refactor that drops it stays green on
   // method+path pins and only fails at the venue with a wave of 401s.
-  function scriptedTransport(script) {
-    const calls = [];
-    const request = async (method, path, options) => {
-      calls.push([method, path, options]);
-      if (script.length === 0) {
-        throw new Error(`unexpected call ${method} ${path} — the script is exhausted`);
-      }
-      return script.shift();
-    };
-    return { request, calls };
-  }
-
   const authed = (token) => ({ headers: { Authorization: `Bearer ${token}` } });
   const bearerCall = (method, path, token = 'tok') => [method, path, authed(token)];
 
@@ -284,18 +293,6 @@ test.describe('the API upload (multipart, the repository upload route)', () => {
   // The same scripted transport the sweep spec uses: the recorded calls
   // ARE the assertion subject — the multipart request shape (boundary
   // header, bearer, field name, file name, content) is the contract.
-  function scriptedTransport(script) {
-    const calls = [];
-    const request = async (method, path, options) => {
-      calls.push([method, path, options]);
-      if (script.length === 0) {
-        throw new Error(`unexpected call ${method} ${path} — the script is exhausted`);
-      }
-      return script.shift();
-    };
-    return { request, calls };
-  }
-
   test('the upload rides a multipart body carrying the file part and the bearer', async () => {
     const record = { file_id: 'f1', file_name: 'ingest-probe-canary.md' };
     const t = scriptedTransport([{ status: 201, data: { success: true, data: record }, headers: {} }]);
@@ -339,18 +336,6 @@ test.describe('the API upload (multipart, the repository upload route)', () => {
 });
 
 test.describe('the ingest trigger (the repository ingest route)', () => {
-  function scriptedTransport(script) {
-    const calls = [];
-    const request = async (method, path, options) => {
-      calls.push([method, path, options]);
-      if (script.length === 0) {
-        throw new Error(`unexpected call ${method} ${path} — the script is exhausted`);
-      }
-      return script.shift();
-    };
-    return { request, calls };
-  }
-
   test('an accepted ingest is one POST with the bearer, and the payload returns', async () => {
     const t = scriptedTransport([{ status: 200, data: { success: true }, headers: {} }]);
     expect(await triggerIngestViaApi(t.request, 'tok', 'f1')).toEqual({ success: true });
@@ -399,84 +384,65 @@ test.describe('the ingest trigger (the repository ingest route)', () => {
 });
 
 test.describe('the ingest wait (the dataprep status over the API)', () => {
-  function scriptedTransport(script, callLog) {
-    const request = async (method, path) => {
-      callLog.push([method, path]);
-      if (script.length === 0) {
-        throw new Error(`unexpected call ${method} ${path} — the script is exhausted`);
-      }
-      return script.shift();
-    };
-    return request;
-  }
-
   const record = (status) => ({ status: 200, data: { data: { file_id: 'f1', dataprep: { status } } }, headers: {} });
 
   test('a file already ingested costs ONE read and returns the record', async () => {
-    const calls = [];
-    const request = scriptedTransport([record('Ingested')], calls);
-    const file = await waitForFileIngestedViaApi(request, 'tok', 'f1');
+    const t = scriptedTransport([record('Ingested')]);
+    const file = await waitForFileIngestedViaApi(t.request, 'tok', 'f1');
     expect(file.file_id).toBe('f1');
-    expect(calls).toHaveLength(1);
+    expect(t.calls).toHaveLength(1);
   });
 
   test('pending then ingested: the wait holds until the shared vocabulary reads ingested', async () => {
-    const calls = [];
-    const request = scriptedTransport([record('Pending'), record('Ingesting'), record('Ingested')], calls);
-    const file = await waitForFileIngestedViaApi(request, 'tok', 'f1', { timeoutMs: 15000 });
+    const t = scriptedTransport([record('Pending'), record('Ingesting'), record('Ingested')]);
+    const file = await waitForFileIngestedViaApi(t.request, 'tok', 'f1', { timeoutMs: 15000 });
     expect(file.dataprep.status).toBe('Ingested');
     // One read before the wait, at least one during it.
-    expect(calls.length).toBeGreaterThanOrEqual(2);
+    expect(t.calls.length).toBeGreaterThanOrEqual(2);
   });
 
   test('an Ingestion Error is terminal and fails AT ONCE with the status named', async () => {
-    const calls = [];
-    const request = scriptedTransport([record('Ingestion Error')], calls);
-    await expect(waitForFileIngestedViaApi(request, 'tok', 'f1', { timeoutMs: 30000 })).rejects.toThrow(
+    const t = scriptedTransport([record('Ingestion Error')]);
+    await expect(waitForFileIngestedViaApi(t.request, 'tok', 'f1', { timeoutMs: 30000 })).rejects.toThrow(
       /dataprep status is 'Ingestion Error'/
     );
-    expect(calls).toHaveLength(1);
+    expect(t.calls).toHaveLength(1);
   });
 
   test('a budget spent on pending expires with the observed value in the failure', async () => {
-    const calls = [];
-    const request = scriptedTransport([record('Pending'), record('Pending')], calls);
-    await expect(waitForFileIngestedViaApi(request, 'tok', 'f1', { timeoutMs: 500 })).rejects.toThrow(/ingested/);
+    const t = scriptedTransport([record('Pending'), record('Pending')]);
+    await expect(waitForFileIngestedViaApi(t.request, 'tok', 'f1', { timeoutMs: 500 })).rejects.toThrow(/ingested/);
   });
 
   test('a non-200 record read is a named failure, not a poll tick', async () => {
-    const calls = [];
-    const request = scriptedTransport([{ status: 500, data: { error: 'boom' }, headers: {} }], calls);
-    await expect(waitForFileIngestedViaApi(request, 'tok', 'f1', { timeoutMs: 30000 })).rejects.toThrow(/HTTP 500/);
-    expect(calls).toHaveLength(1);
+    const t = scriptedTransport([{ status: 500, data: { error: 'boom' }, headers: {} }]);
+    await expect(waitForFileIngestedViaApi(t.request, 'tok', 'f1', { timeoutMs: 30000 })).rejects.toThrow(/HTTP 500/);
+    expect(t.calls).toHaveLength(1);
   });
 
   test('an expired session (401) is named as the session, not as a missing file', async () => {
-    const calls = [];
-    const request = scriptedTransport([{ status: 401, data: { error: 'TOKEN_EXPIRED' }, headers: {} }], calls);
+    const t = scriptedTransport([{ status: 401, data: { error: 'TOKEN_EXPIRED' }, headers: {} }]);
     // The realm's access token lives 300 s: a wait that outlives it dies
     // on the 401, and the failure has to say WHICH it was.
-    await expect(waitForFileIngestedViaApi(request, 'expired-token', 'f1', { timeoutMs: 30000 })).rejects.toThrow(
+    await expect(waitForFileIngestedViaApi(t.request, 'expired-token', 'f1', { timeoutMs: 30000 })).rejects.toThrow(
       /401/
     );
-    expect(calls).toHaveLength(1);
+    expect(t.calls).toHaveLength(1);
   });
 
   test('a killed ingest is terminal and fails AT ONCE with the status named', async () => {
-    const calls = [];
-    const request = scriptedTransport([record('Killed')], calls);
-    await expect(waitForFileIngestedViaApi(request, 'tok', 'f1', { timeoutMs: 30000 })).rejects.toThrow(
+    const t = scriptedTransport([record('Killed')]);
+    await expect(waitForFileIngestedViaApi(t.request, 'tok', 'f1', { timeoutMs: 30000 })).rejects.toThrow(
       /dataprep status is 'Killed'/
     );
-    expect(calls).toHaveLength(1);
+    expect(t.calls).toHaveLength(1);
   });
 
   test('the degraded ingest is terminal too — it is not the Ingested the callers assert', async () => {
-    const calls = [];
-    const request = scriptedTransport([record('Ingested with Warnings')], calls);
-    await expect(waitForFileIngestedViaApi(request, 'tok', 'f1', { timeoutMs: 30000 })).rejects.toThrow(
+    const t = scriptedTransport([record('Ingested with Warnings')]);
+    await expect(waitForFileIngestedViaApi(t.request, 'tok', 'f1', { timeoutMs: 30000 })).rejects.toThrow(
       /dataprep status is 'Ingested with Warnings'/
     );
-    expect(calls).toHaveLength(1);
+    expect(t.calls).toHaveLength(1);
   });
 });

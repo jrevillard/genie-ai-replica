@@ -9,9 +9,13 @@ const {
   searchDocuments,
   waitForFileIngestedViaApi,
   waitForDocumentInTable,
-  deleteAllTestDocuments
+  deleteAllTestDocuments,
+  // The status predicate the admin filter itself uses, read through the
+  // helper that owns the bridge to the frontend's ES module (and the Node
+  // floor that bridge needs) — one import site for the whole suite.
+  matchesStatus
 } = require('../helpers/documents');
-const { request, getSessionTokenViaUI, SESSION_MINT_TIMEOUT_MS } = require('../helpers/auth');
+const { request, getSessionToken, getSessionTokenViaUI, SESSION_MINT_TIMEOUT_MS } = require('../helpers/auth');
 const { TEST_ADMIN_USER } = require('../helpers/e2e-fixtures');
 const { pinLocale } = require('../helpers/locale');
 const {
@@ -20,8 +24,6 @@ const {
   ingestChainMissingReason,
   INGEST_PROBE_BUDGET_MS
 } = require('../helpers/venue-profile');
-const { normalizeStatus } = require('../../../components/gov-chat-frontend/src/utils/documentStatus');
-
 const FIXTURES_DIR = path.join(__dirname, '..', 'fixtures');
 // The ingest chain is real dataprep work (ClamAV scan, chunking, LLM
 // labeling, indexing) behind a possibly loaded shared venue — the wait is
@@ -118,10 +120,11 @@ test.describe('Document Upload — the ingest chain', () => {
 
   test.afterAll(async ({ browser }) => {
     // The helper's mint + list + delete sweep outlives the 60s hook
-    // default. Same prefix as the upload group's sweep: the fixture name
-    // this group uploads carries it too.
+    // default. This group's OWN rows: its seed names carry this prefix,
+    // and the upload group sweeps its own (a second sweep over the same
+    // population would only repeat the work).
     test.setTimeout(SESSION_MINT_TIMEOUT_MS);
-    await deleteAllTestDocuments('test-document', { browser });
+    await deleteAllTestDocuments('test-document-ingest', { browser });
   });
 
   test('ingest an uploaded file and reach the Ingested status', async ({ page, browser }) => {
@@ -140,12 +143,9 @@ test.describe('Document Upload — the ingest chain', () => {
     const fileName = `test-document-ingest-${RUN_ID}.md`;
     const uploadPath = `${os.tmpdir()}/${fileName}`;
 
-    // The upload and the trigger run on a session of their own.
-    const token = await getSessionTokenViaUI({ user: TEST_ADMIN_USER, browser });
-
     try {
-      // The scratch copy is made INSIDE the try, so a mint that failed
-      // leaves no scratch file behind.
+      // The scratch copy is made INSIDE the try, so a failed copy leaves no
+      // scratch file behind.
       fs.copyFileSync(path.join(FIXTURES_DIR, 'test-document-ingest.md'), uploadPath);
       await uploadFile(page, uploadPath);
 
@@ -167,8 +167,12 @@ test.describe('Document Upload — the ingest chain', () => {
       // of truth the table echoes. The wait is bounded and keys on the
       // file id this run created; its expiry carries the last observed
       // status.
+      // The list read rides the PAGE's own admin session (the page is
+      // logged in as the same admin, through navigateToDocumentManagement):
+      // a read that takes seconds does not need a second browser login.
+      const pageToken = await getSessionToken(page);
       const uploaded = await request('GET', `/api/files?limit=50&search=${encodeURIComponent(fileName)}`, {
-        headers: { Authorization: `Bearer ${token}` }
+        headers: { Authorization: `Bearer ${pageToken}` }
       });
       expect(uploaded.status, 'the file list answers the post-ingest read').toBe(200);
       const mine = ((uploaded.data && uploaded.data.data) || []).find((f) => f.file_name === fileName);
@@ -182,10 +186,7 @@ test.describe('Document Upload — the ingest chain', () => {
       const file = await waitForFileIngestedViaApi(request, waitToken, mine.file_id, {
         timeoutMs: INGEST_BUDGET_MS
       });
-      expect(
-        normalizeStatus(file.dataprep && file.dataprep.status),
-        "the dataprep chain landed Ingested for this run's file"
-      ).toBe('ingested');
+      expect(matchesStatus(file, 'ingested'), "the dataprep chain landed Ingested for this run's file").toBe(true);
 
       // The rendered verdict: the search refresh re-reads the list (the
       // table has no auto-poll), and the pinned-English pill reads the

@@ -705,5 +705,11 @@ module.exports = {
   getDocumentTableRows,
   deleteAllTestDocuments,
   sweepDeleteOneFile,
-  matchesStatus
+  matchesStatus,
+  fileIdOf,
+  // The shared status vocabulary, re-exported: this module is the ONE place
+  // that bridges to the frontend's ES module (and owns the Node floor that
+  // bridge needs), so a spec that needs the vocabulary reads it HERE
+  // rather than opening a second import site.
+  normalizeStatus
 };

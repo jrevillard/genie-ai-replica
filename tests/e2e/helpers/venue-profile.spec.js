@@ -17,7 +17,6 @@ const auth = require('./auth');
  */
 const REAL_REQUEST = auth.request;
 const REAL_GET_ADMIN_TOKEN = auth.getAdminToken;
-const REAL_GET_SESSION_TOKEN = auth.getSessionTokenViaUI;
 const REAL_OPEN_VENUE_SESSION = auth.openVenueSession;
 const PROFILE_PATH = require.resolve('./venue-profile');
 
@@ -30,7 +29,6 @@ function freshProfile() {
 test.afterEach(() => {
   auth.request = REAL_REQUEST;
   auth.getAdminToken = REAL_GET_ADMIN_TOKEN;
-  auth.getSessionTokenViaUI = REAL_GET_SESSION_TOKEN;
   auth.openVenueSession = REAL_OPEN_VENUE_SESSION;
 });
 
@@ -65,7 +63,6 @@ function fakeTransport(answers) {
  */
 function fakeVenueSession({ adopted, at } = {}) {
   const sessions = { count: 0 };
-  auth.getSessionTokenViaUI = async () => 'fake-session-token';
   auth.openVenueSession = async ({ locale } = {}) => {
     sessions.count += 1;
     return {
@@ -363,12 +360,8 @@ test.describe('the locale whitelist probe reads the config the frontend reads', 
 test.describe('the translation probe reads the venue through its own endpoint', () => {
   // The probe opens a realm session through the browser login (the faked
   // one here): a master-admin token is the wrong issuer for the backend.
-  function fakeSessionMint() {
-    fakeVenueSession();
-  }
-
   test('a venue that translates the probe answers true, with the en→fr body', async () => {
-    fakeSessionMint();
+    fakeVenueSession();
     const calls = fakeTransport([{ status: 200, data: { translated_texts: ['Bonjour'] }, headers: {} }]);
     const profile = freshProfile();
     expect(await profile.translatesTo('fr')).toBe(true);
@@ -381,7 +374,7 @@ test.describe('the translation probe reads the venue through its own endpoint', 
   });
 
   test('the typed UNSUPPORTED_LANGUAGE refusal is the venue saying the language is absent', async () => {
-    fakeSessionMint();
+    fakeVenueSession();
     fakeTransport([
       { status: 400, data: { error: 'UNSUPPORTED_LANGUAGE', message: 'Unsupported target language' }, headers: {} }
     ]);
@@ -394,7 +387,7 @@ test.describe('the translation probe reads the venue through its own endpoint', 
     // that carries the source text back is a chain that did not translate.
     // That is a defect in the chain (operator ruling on #1984): the probe
     // throws, and the verdict is neither cached nor a skip.
-    fakeSessionMint();
+    fakeVenueSession();
     const calls = fakeTransport([{ status: 200, data: { translated_texts: ['Hello'] }, headers: {} }]);
     const profile = freshProfile();
     await expect(profile.translatesTo('fr')).rejects.toThrow(/WITHOUT translating/);
@@ -403,7 +396,7 @@ test.describe('the translation probe reads the venue through its own endpoint', 
   });
 
   test('a 200 with no translated text is the same failure', async () => {
-    fakeSessionMint();
+    fakeVenueSession();
     const calls = fakeTransport([{ status: 200, data: { translated_texts: [] }, headers: {} }]);
     const profile = freshProfile();
     await expect(profile.translatesTo('fr')).rejects.toThrow(/WITHOUT translating/);
@@ -411,14 +404,14 @@ test.describe('the translation probe reads the venue through its own endpoint', 
   });
 
   test('any other 400 is an unreadable venue, not an absent one', async () => {
-    fakeSessionMint();
+    fakeVenueSession();
     fakeTransport([{ status: 400, data: { error: 'VALIDATION_ERROR' }, headers: {} }]);
     const profile = freshProfile();
     await expect(profile.translatesTo('fr')).rejects.toThrow(/venue profile is UNKNOWN/);
   });
 
   test('a 5xx is an unreadable venue too — loud, and never cached', async () => {
-    fakeSessionMint();
+    fakeVenueSession();
     fakeTransport([
       { status: 503, data: { error: 'unavailable' }, headers: {} },
       { status: 200, data: { translated_texts: ['Bonjour'] }, headers: {} }
@@ -488,10 +481,6 @@ test.describe('the French streaming premise combines the venue facts', () => {
 });
 
 test.describe('the ingest-chain canary uploads, ingests, and cleans up', () => {
-  function fakeSessionMint() {
-    fakeVenueSession();
-  }
-
   const uploaded = (fileId) => ({
     status: 201,
     data: { success: true, data: { file_id: fileId, file_name: 'ingest-probe-canary.md' } },
@@ -504,7 +493,7 @@ test.describe('the ingest-chain canary uploads, ingests, and cleans up', () => {
   });
 
   test('a canary that reaches Ingested is a ready venue — and leaves nothing behind', async () => {
-    fakeSessionMint();
+    fakeVenueSession();
     const calls = fakeTransport([
       uploaded('c1'),
       { status: 200, data: { success: true }, headers: {} },
@@ -526,7 +515,7 @@ test.describe('the ingest-chain canary uploads, ingests, and cleans up', () => {
   });
 
   test('a canary that lands Ingestion Error is NOT a ready venue, and the reason says what happened', async () => {
-    fakeSessionMint();
+    fakeVenueSession();
     fakeTransport([
       uploaded('c1'),
       { status: 200, data: { success: true }, headers: {} },
@@ -542,7 +531,7 @@ test.describe('the ingest-chain canary uploads, ingests, and cleans up', () => {
   });
 
   test('a venue that cannot accept the upload is UNREADABLE — loud, not a false verdict', async () => {
-    fakeSessionMint();
+    fakeVenueSession();
     fakeTransport([
       { status: 500, data: { success: false, error: 'boom' }, headers: {} },
       // The cleanup's prefix sweep: nothing was committed under the name.
@@ -556,7 +545,7 @@ test.describe('the ingest-chain canary uploads, ingests, and cleans up', () => {
     // The degraded status is indexed, but it is not the 'Ingested' the
     // specs assert: a premise that admitted it would run the specs on a
     // venue they would red on. The reason names the status it landed.
-    fakeSessionMint();
+    fakeVenueSession();
     fakeTransport([
       uploaded('c1'),
       { status: 200, data: { success: true }, headers: {} },
@@ -579,7 +568,7 @@ test.describe('the ingest-chain canary uploads, ingests, and cleans up', () => {
     // The degraded status can arrive on the wait's SECOND read: the wait
     // must end there — polling a status that will not change would burn
     // the whole budget to say the same thing.
-    fakeSessionMint();
+    fakeVenueSession();
     fakeTransport([
       uploaded('c1'),
       { status: 200, data: { success: true }, headers: {} },
@@ -600,7 +589,7 @@ test.describe('the ingest-chain canary uploads, ingests, and cleans up', () => {
   });
 
   test('a canary that cannot be removed FAILS the probe — a leftover stays in the venue corpus', async () => {
-    fakeSessionMint();
+    fakeVenueSession();
     fakeTransport([
       uploaded('c1'),
       { status: 200, data: { success: true }, headers: {} },

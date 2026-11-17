@@ -98,6 +98,11 @@ const FRENCH_ONLY_WORDS = [
 // The same words, matched at once — every occurrence, case-insensitively.
 const FRENCH_WORD_PATTERN = new RegExp(`\\b(${FRENCH_ONLY_WORDS.join('|')})\\b`, 'gi');
 
+// The browser context every spec in this file opens: the venue serves
+// HTTPS with the edge's own certificate, and the app's CSP blocks the
+// browser from preloading what it fetches itself.
+const CONTEXT_OPTIONS = { ignoreHTTPSErrors: true, bypassCSP: true };
+
 test.describe('Chatbot message sending and SSE streaming', () => {
   // The beforeEach logs in through the browser and navigates — the
   // budget is the login's own ceiling, derived once beside loginViaUI
@@ -108,10 +113,7 @@ test.describe('Chatbot message sending and SSE streaming', () => {
   let context;
 
   test.beforeEach(async ({ browser }) => {
-    context = await browser.newContext({
-      ignoreHTTPSErrors: true,
-      bypassCSP: true
-    });
+    context = await browser.newContext(CONTEXT_OPTIONS);
     page = await context.newPage();
 
     await loginViaUI(page);
@@ -208,10 +210,7 @@ test.describe('Chatbot message sending and SSE streaming — the French answer',
   let context;
 
   test.beforeEach(async ({ browser }) => {
-    context = await browser.newContext({
-      ignoreHTTPSErrors: true,
-      bypassCSP: true
-    });
+    context = await browser.newContext(CONTEXT_OPTIONS);
     page = await context.newPage();
 
     // The locale is pinned BEFORE any page script runs, and the pin is
@@ -262,8 +261,8 @@ test.describe('Chatbot message sending and SSE streaming — the French answer',
     // English answer.
     //
     // Two OCCURRENCES are required, not two distinct words: a terse but
-    // correct French answer ("GENIE.AI est un outil.") carries one word
-    // twice, and a distinct-word count would red it.
+    // correct French answer ("GENIE.AI est un outil, et cet outil est
+    // utile.") repeats ONE word, and a distinct-word count would red it.
     //
     // This is not a language detector — French shares 'la', 'un', 'des'
     // and 'que' with Spanish and Italian, so another Latin-script

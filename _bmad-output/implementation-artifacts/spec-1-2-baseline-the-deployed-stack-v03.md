@@ -144,7 +144,7 @@ This is the chain's third fix review — the cap. It was not clean, so the chain
 
 | # | Finding | Verdict | Disposition |
 |---|---|---|---|
-| F3-1 | The unestablishable tree comparison still failed open: the code appended a discrepancy only when the comparison said DIFFERENT, and stayed silent when it could not establish one (and the attested-version comparison had not landed) | high | **fixed, UNREVIEWED** (`<final-sha>`) — the identity gate now reads the attested version from the release history (a difference is a discrepancy) and the tree comparison fails closed: an unestablishable comparison on a GitRepository source is an unresolved difference |
+| F3-1 | The unestablishable tree comparison still failed open: the code appended a discrepancy only when the comparison said DIFFERENT, and stayed silent when it could not establish one (and the attested-version comparison had not landed) | high | **fixed, UNREVIEWED** (`d5c3ffb9f`) — the identity gate now reads the attested version from the release history (a difference is a discrepancy) and the tree comparison fails closed: an unestablishable comparison on a GitRepository source is an unresolved difference |
 | F3-2 | `deployed_chart_source` returned a tuple on the non-GitRepository branch | low | **fixed, UNREVIEWED** — the branch returns an empty string |
 | F3-3 | `disposition_for` was a constant-None stub | low | **fixed, UNREVIEWED** — the stub is removed; an unexplained difference carries no disposition by construction |
 

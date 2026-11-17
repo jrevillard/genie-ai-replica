@@ -5,7 +5,12 @@ const { execFileSync } = require('child_process');
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
-const { classifyVenueStatus, namedFailure } = require('./preflight');
+const {
+  classifyVenueStatus,
+  namedFailure,
+  describeBuildFreshness,
+  classifyCheckoutDifference
+} = require('./preflight');
 
 /**
  * Unit spec for the pre-flight's diagnosis.
@@ -248,7 +253,7 @@ test.describe('the pre-flight reports a FAILED CLEANUP', () => {
  * build time; the pre-flight reads it. Both helpers are pure — the spec
  * runs without a browser and without a venue.
  */
-const { parseBuildMarker, describeBuildFreshness } = require('./preflight');
+const { parseBuildMarker } = require('./preflight');
 
 test.describe('the venue build marker parser (#1851)', () => {
   test('a marker the contract wrote parses to its git sha', () => {
@@ -327,5 +332,81 @@ test.describe('the venue build freshness verdict (#1851)', () => {
     const line = describeBuildFreshness('abc1234', null);
     expect(line).toContain('unknown');
     expect(line).toContain('abc1234');
+  });
+});
+
+test.describe('the freshness verdict names WHAT differs (#1987)', () => {
+  test('the classifier sorts a path into the class that matters', () => {
+    const classified = classifyCheckoutDifference([
+      'components/gov-chat-backend/index.js',
+      'charts/genieai-umbrella/Chart.yaml',
+      'docs/e2e-tests/local-run.md',
+      'README.md'
+    ]);
+    expect(classified.product).toEqual(['components/gov-chat-backend/index.js']);
+    expect(classified.deployment).toEqual(['charts/genieai-umbrella/Chart.yaml']);
+    expect(classified.neither).toEqual(['docs/e2e-tests/local-run.md', 'README.md']);
+  });
+
+  test('a build context outside the product tree is still served', () => {
+    // `tools/tempo-proxy` is its own image build context: a change under
+    // `tools/` ships in an image, so it is served code, not tooling.
+    const classified = classifyCheckoutDifference(['tools/tempo-proxy/main.go']);
+    expect(classified.product).toEqual(['tools/tempo-proxy/main.go']);
+    expect(classified.neither).toEqual([]);
+  });
+
+  test('a path the table does not know is treated as served', () => {
+    // The default must not understate a difference: a new top-level
+    // directory holding product code would otherwise be reported as
+    // harmless.
+    const classified = classifyCheckoutDifference(['brand-new-service/main.py']);
+    expect(classified.product).toEqual(['brand-new-service/main.py']);
+    expect(classified.deployment).toEqual([]);
+    expect(classified.neither).toEqual([]);
+  });
+
+  test('a difference in the served product is STALE, naming the paths', () => {
+    const difference = classifyCheckoutDifference(['components/gov-chat-frontend/src/App.vue']);
+    const line = describeBuildFreshness('old1111', 'new2222', difference);
+    expect(line).toContain('STALE');
+    expect(line).toContain('old1111');
+    expect(line).toContain('new2222');
+    expect(line).toContain('components/gov-chat-frontend/src/App.vue');
+    expect(line).toContain('every red below is suspect');
+    expect(line).toContain('docs/e2e-tests/local-run.md');
+  });
+
+  test('a difference only in the deployment definition is NOT a stale product', () => {
+    // The chart can move the runtime environment, so the verdict cannot
+    // wave it away — but it cannot change the served code either, and
+    // claiming "every red below is suspect" would send the operator
+    // hunting a defect the difference cannot cause.
+    const difference = classifyCheckoutDifference([
+      'charts/genieai-umbrella/Chart.yaml',
+      'charts/genieai-umbrella/templates/opea/chatqna.yaml'
+    ]);
+    const line = describeBuildFreshness('old1111', 'new2222', difference);
+    expect(line).toContain("the served code is the checkout's");
+    expect(line).toContain('charts/genieai-umbrella/Chart.yaml');
+    expect(line).toContain('runtime environment');
+    expect(line).not.toContain('every red below is suspect');
+  });
+
+  test('a difference outside everything that is served says so plainly', () => {
+    const difference = classifyCheckoutDifference(['docs/charts/migration-status.md']);
+    const line = describeBuildFreshness('old1111', 'new2222', difference);
+    expect(line).toContain("the served product is the checkout's");
+    expect(line).not.toContain('STALE');
+    expect(line).not.toContain('every red below is suspect');
+  });
+
+  test('a difference that could not be computed keeps the STALE claim', () => {
+    // The served sha is not in this checkout (another branch, a shallow
+    // clone): the difference is unknown, so the verdict must not claim
+    // the product matches.
+    const line = describeBuildFreshness('old1111', 'new2222', null);
+    expect(line).toContain('STALE');
+    expect(line).toContain('every red below is suspect');
   });
 });

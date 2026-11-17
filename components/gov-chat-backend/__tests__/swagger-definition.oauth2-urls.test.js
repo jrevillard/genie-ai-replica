@@ -138,11 +138,12 @@ describe('swagger-definition OAuth2 flow URLs', () => {
     ['a scheme-only base', 'http://'],
     ['an empty base', '']
   ])('refuses %s (no usable KEYCLOAK_URL)', (_label, value) => {
-    // A relative served URL opens the Authorize popup on the docs origin
-    // itself — a silent misconfiguration. The unset case must stay visibly
-    // broken instead.
+    // The contract: the served URL must name NO origin — not a same-origin
+    // relative path (the Authorize popup would open on the docs origin
+    // itself) and not an absolute URL to some origin either. The mis-
+    // configuration must stay visibly broken instead of silently working.
     const { authorizationUrl } = flowUrlsFor({ KEYCLOAK_URL: value });
     expect(authorizationUrl.startsWith('/')).toBe(false);
-    expect(authorizationUrl).toContain('undefined');
+    expect(authorizationUrl).not.toMatch(/^https?:\/\//);
   });
 });

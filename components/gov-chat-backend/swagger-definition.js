@@ -3,49 +3,12 @@
 // swagger spec) and scripts/generate-api-client.sh (the mobile client
 // generation spec). Reads process.env at require time; no other side effects.
 
-// Base URL for the Swagger UI OAuth2 flow URLs below. The Authorize
-// round-trip runs IN THE BROWSER, so the served URLs must be
-// browser-reachable: on split-URL deployments (#1889, the k8s venue)
-// KEYCLOAK_URL carries the cluster-internal issuer — a browser popup dies
-// on DNS, and the HTTPS docs page + plain-HTTP token endpoint is mixed
-// content, hard-blocked by Chromium. KEYCLOAK_PUBLIC_URL is the
-// browser-facing alias the shared verifier already honours
-// (shared/lib/keycloak-auth-service.js); unset = KEYCLOAK_URL, the
-// historical compose behaviour (there KEYCLOAK_URL is already
-// browser-reachable).
-//
-// The public value is served verbatim to the browser, so it is validated
-// like the servers[0].url base below: a value that is not an absolute
-// http(s) URL, or that carries whitespace or a control character, is
-// IGNORED and the flow URLs fall back to KEYCLOAK_URL (the historical
-// source). One trailing slash is stripped — the same normalization the
-// verifier applies to its public-issuer alias, so the served URL and the
-// accepted issuer cannot drift apart. A value carrying whitespace is
-// refused rather than trimmed: the verifier does not trim its alias, so a
-// trimmed base here would point at an issuer the verifier never accepts.
-//
-// When no base URL is configured at all — KEYCLOAK_URL unset or empty — the
-// served URL keeps the historical visibly-broken 'undefined' shape: a
-// same-origin relative URL would open the Authorize popup on the docs
-// origin itself — a silent misconfiguration.
-const oauth2BaseUrl = (() => {
-  const publicBase = (process.env.KEYCLOAK_PUBLIC_URL || '').replace(/\/$/, '');
-  if (publicBase) {
-    // eslint-disable-next-line no-control-regex -- intentional: the C0 control range is exactly what WHATWG strips
-    if (!/[\s\u0000-\u001F"#<>?`{}]/.test(publicBase)) {
-      try {
-        if (/^https?:$/.test(new URL(publicBase).protocol)) return publicBase;
-      } catch {
-        // Not a parseable URL — fall through to KEYCLOAK_URL.
-      }
-    }
-  }
-  const internalBase = process.env.KEYCLOAK_URL;
-  // Unset or empty stays undefined (see above); trailing slashes are
-  // stripped so the served URL never carries a doubled path segment.
-  if (typeof internalBase !== 'string' || internalBase === '') return undefined;
-  return internalBase.replace(/\/+$/, '');
-})();
+// Base URL for the Swagger UI OAuth2 flow URLs below. The resolution lives
+// in ./swagger-oauth2-base.js — ONE implementation, shared with the
+// client-generation pin guard (scripts/build-openapi-spec.js), which must
+// judge the served URLs against the same rules.
+const { resolveOAuth2BaseUrl } = require('./swagger-oauth2-base');
+const oauth2BaseUrl = resolveOAuth2BaseUrl(process.env);
 
 module.exports = {
   openapi: '3.0.0',

@@ -57,19 +57,22 @@ function buildSpec() {
   //     now yields a same-origin RELATIVE URL (not an 'undefined'
   //     interpolation), which the old 'undefined' check passed vacuously;
   //   - it derives from the configured base, so the artifacts stay pinned.
-  // The expected base MIRRORS the resolution in swagger-definition.js (keep
-  // the two in sync): the public value wins unless it carries whitespace
-  // (refused there), and trailing slashes are stripped.
-  const publicValue = process.env.KEYCLOAK_PUBLIC_URL || '';
-  const publicBase = /\s/.test(publicValue) ? '' : publicValue.replace(/\/+$/, '');
-  const expectedBase =
-    publicBase || (typeof process.env.KEYCLOAK_URL === 'string' ? process.env.KEYCLOAK_URL.replace(/\/+$/, '') : '');
+  // The expected base comes from the SAME resolver the runtime spec uses
+  // (components/gov-chat-backend/swagger-oauth2-base.js): a duplicated
+  // predicate here drifted from it and aborted the generation on URLs the
+  // runtime had legitimately produced.
+  const { resolveOAuth2BaseUrl } = backendRequire('./swagger-oauth2-base');
+  const expectedBase = resolveOAuth2BaseUrl(process.env);
   for (const [label, url] of [
     ['authorizationUrl', flow?.authorizationUrl],
     ['tokenUrl', flow?.tokenUrl]
   ]) {
     assert.ok(
-      typeof url === 'string' && !url.includes('undefined') && /^https?:\/\//.test(url) && url.startsWith(expectedBase),
+      typeof url === 'string' &&
+        !url.includes('undefined') &&
+        /^https?:\/\//.test(url) &&
+        typeof expectedBase === 'string' &&
+        url.startsWith(expectedBase),
       label +
         ' is not a concrete URL (absolute, derived from the KEYCLOAK_URL pin) —' +
         ' the KEYCLOAK_URL/KEYCLOAK_REALM pins are missing from the env -i' +

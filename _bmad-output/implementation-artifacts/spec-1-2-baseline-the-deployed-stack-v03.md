@@ -73,7 +73,9 @@ context:
 
 ## Review Triage Log
 
-Global review (`/code-review`, xhigh, 23 findings, verified against the live cluster). Every finding is dispositioned below; "fixed" means the correction is in the diff, "extracted" means a linked backlog issue carries it.
+### Global review (`/code-review`, xhigh, 23 findings, verified against the live cluster)
+
+Every finding is dispositioned below; "fixed" means the correction is in the diff, "extracted" means a linked backlog issue carries it.
 
 | # | Finding | Verdict | Disposition |
 |---|---|---|---|
@@ -99,6 +101,17 @@ Global review (`/code-review`, xhigh, 23 findings, verified against the live clu
 | 20 | A chart default of 1.0 is compared as `1` against a deployed `1.0` | medium | **fixed** — numbers compare numerically |
 | 21 | A bare `--out` filename raises, and a pipe in a value breaks the table | low | **fixed** — the directory is created only when there is one, and the cells escape pipes |
 | 22 | The provenance names the kubeconfig's first cluster, not the current context | medium | **fixed** — the current context's cluster is read |
+
+### Fix review 1 (`superpowers:requesting-code-review`, fresh context, correction diff `2c098f005..3b92ec341`)
+
+| # | Finding | Verdict | Disposition |
+|---|---|---|---|
+| F1-1 | The record publishes two differences that do not exist (`KC_REALM`): the parse read only the first operand of the template's `\| default` chain | high | **fixed** — the template's fallback chain is walked as the chart walks it: the empty `opea.chatqna.kcRealm` falls back to `data.keycloak.realm`, which is the value the pod carries. The row now names `data.keycloak.realm` as its source, and the disposition that pointed at a fallback the record never evaluated is gone |
+| F1-2 | A model-id difference never reaches the discrepancy table or the exit gate | high | **fixed** — a served model that differs from the source is a difference: it enters the discrepancy table and the exit-2 gate |
+| F1-3 | The discrepancy table drops the overlay layer and names the chart default as the source | high | **fixed** — the row carries the effective value (chart default + overlay override), which is what the comparison used, and the path it was read from |
+| F1-4 | The application tier silently drops the variables it resolved | high | **fixed** — a variable that is not compared is listed as such, never dropped |
+| F1-5 | The third layer is the Deployment's pod template, not the running pod | high | **fixed** — the environment is read from the pod whose digest is reported: during a rollout the record states what serves traffic |
+| F1-6 | The chart-identity check compares a field the platform ignores (`spec.chart.spec.version` of a GitRepository source) | high | **fixed** — the chart's identity is its source commit: the capture reads the GitRepository's artifact revision and compares the local chart tree with that tree |
 
 ## Design Notes
 

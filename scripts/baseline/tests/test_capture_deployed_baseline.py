@@ -19,6 +19,37 @@ SCRIPT = os.path.join(
 )
 
 
+def _record_data():
+    return {
+        "capture": {
+            "date": "2026-11-17",
+            "timestamp": "2026-11-17T00:00:00+00:00",
+            "cluster": "https://cluster",
+            "namespace": "genieai",
+            "release": "genieai",
+            "release_revision": 1,
+            "chart_name": "charts/genieai-umbrella",
+            "chart_version": "0.2.1",
+            "local_chart_version": "0.2.1",
+            "deployed_chart_source": "",
+            "chart_source_matches": None,
+            "overlay_name": "overlay",
+            "command": "python3 capture.py",
+        },
+        "images": [],
+        "models": [],
+        "config": [],
+        "discrepancies": [],
+        "image_disposition_note": "",
+        "topology": {
+            "services": [],
+            "network_policies": 0,
+            "edge": "(none)",
+            "external": "(none)",
+        },
+    }
+
+
 def load_capture():
     spec = importlib.util.spec_from_file_location("capture_deployed_baseline", SCRIPT)
     module = importlib.util.module_from_spec(spec)
@@ -164,12 +195,19 @@ def test_difference_without_disposition_stays_unresolved():
     assert capture.disposition_for(row, "genieai-genieai-umbrella-chatqna") is None
 
 
-def test_known_difference_carries_its_disposition():
-    """A known difference names the reason it is not a defect."""
-    row = {"env": "KC_REALM", "status": "DIFFERENT"}
-    disposition = capture.disposition_for(row, "genieai-genieai-umbrella-chatqna")
-    assert disposition
-    assert "data.keycloak.realm" in disposition
+def test_a_fallback_chain_resolves_to_the_value_the_chart_renders(chart_values, env_maps):
+    """The chart's own fallback is part of the source: no difference, no disposition."""
+    effective = chart_values
+    workload = {
+        "name": "genieai-genieai-umbrella-chatqna",
+        "component": "chatqna",
+        "containers": [{"name": "chatqna", "image": "x", "env": {"KC_REALM": "genie"}}],
+    }
+    rows, _ = capture.compare_workload(workload, env_maps, chart_values, {}, effective)
+    row = next(row for row in rows if row["env"] == "KC_REALM")
+    assert row["status"] == "MATCH"
+    assert row["source_path"] == "data.keycloak.realm"
+    assert capture.disposition_for(row, workload["name"]) is None
 
 
 def test_secret_value_never_reaches_the_record():
@@ -311,3 +349,46 @@ def test_a_dispositioned_difference_exits_zero(tmp_path):
     unresolved = capture.write_record(data, str(out_path))
     assert unresolved == []
     assert capture.exit_code_for(unresolved) == 0
+
+def test_a_model_difference_reaches_the_discrepancy_table(tmp_path):
+    """A served model that differs from the source is a difference, and it fails."""
+    models = capture.build_models(
+        {"chatqna": {"LLM_MODEL": "ibm-granite/granite-4.1-8b"}},
+        {"opea": {"models": {"llm": {"modelId": "ibm-granite/granite-4.1-8b"}}}},
+        {"llm": {"model_id": "another/model"}},
+    )
+    llm = next(model for model in models if model["role"] == "llm")
+    assert llm["status"] == "DIFFERENT"
+
+    data = _record_data()
+    data["discrepancies"].append(
+        {
+            "workload": "(llm model)",
+            "env": "model id",
+            "source_value": llm["chart_default"],
+            "source_path": llm["chart_default_path"],
+            "deployed": llm["served"],
+            "disposition": "**UNRESOLVED**",
+        }
+    )
+    out_path = str(tmp_path / "record.md")
+    unresolved = capture.write_record(data, out_path)
+    assert len(unresolved) == 1
+    assert capture.exit_code_for(unresolved) == 2
+
+
+def test_the_discrepancy_row_carries_the_effective_value():
+    """The source of a difference is the effective value, not the chart default."""
+    row = {
+        "env": "RERANKING_STRATEGY",
+        "status": "DIFFERENT",
+        "source_value": "slice",  # the chart default
+        "overlay_value": "threshold",  # the overlay override
+        "effective_value": "threshold",  # what the comparison used
+        "source_path": "opea.chatqna.rerankingStrategy",
+        "deployed": "adaptive",
+    }
+    discrepancy = capture.discrepancy_row("chatqna", row, None)
+    assert discrepancy["source_value"] == "threshold"
+    assert discrepancy["source_path"] == "opea.chatqna.rerankingStrategy"
+    assert discrepancy["disposition"] == "**UNRESOLVED**"

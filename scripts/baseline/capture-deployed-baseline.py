@@ -132,10 +132,6 @@ DISPOSITIONS = {
         "tag). Updating the running stack is the venue update procedure, outside this "
         "story."
     ),
-    "kc-realm": (
-        "By design - the chart leaves the realm empty in this section; the template "
-        "falls back to data.keycloak.realm."
-    ),
     "chart-version": (
         "Recorded - the local chart source is not the chart the deployment runs. The "
         "comparison below is against the local source, so it describes what the "
@@ -212,6 +208,12 @@ def is_injected(env_name):
     return any(pattern.search(env_name) for pattern in INJECTED_PATTERNS)
 
 
+def _display_path(path):
+    """The path as the record shows it: repo-relative, absolute when outside."""
+    relative = os.path.relpath(path, REPO_ROOT)
+    return path if relative.startswith("..") else relative
+
+
 def cell(value):
     """A markdown table cell: pipes would break the column count."""
     return normalize(value).replace("|", "\\|")
@@ -236,10 +238,11 @@ def parse_template_env(template_file):
     def record(env_name, expression):
         if env_name in mapping:
             return
-        literal = _expression_literal(expression)
+        chain = _expression_chain(expression)
         mapping[env_name] = {
-            "path": _expression_to_path(expression),
-            "literal": literal,
+            "chain": chain,
+            "path": chain[0][1] if chain and chain[0][0] == "path" else None,
+            "literal": chain[0][1] if chain and chain[0][0] == "literal" else None,
         }
 
     # Service-factory style: (dict "name" "ENV" "value" <expr>)
@@ -255,21 +258,77 @@ def parse_template_env(template_file):
     return mapping
 
 
-def _expression_literal(expression):
-    """The value a template renders verbatim ("7000"), or None.
+def _expression_chain(expression):
+    """The fallback chain of a template expression, in order.
 
-    The captured expression keeps the call's closing parenthesis, so the
-    literal is looked for after dropping it.
+    `($opeaChatqna.kcRealm | default ($dataKeycloak.realm | default "genie"))`
+    renders the first candidate that carries a value: the chart leaves the
+    realm empty in that section and falls back to the realm the data tier
+    declares. Reading only the first operand would report a difference the
+    chart does not make.
     """
-    candidate = expression.strip()
+    candidates = []
+
+    # A bare literal: the template renders this value verbatim.
+    stripped = expression.strip()
     for _ in range(4):
-        found = re.fullmatch(r'"([^"]*)"', candidate)
+        found = re.fullmatch(r'"([^"]*)"', stripped)
         if found:
-            return found.group(1)
-        if not candidate.endswith(")"):
-            return None
-        candidate = candidate[:-1].strip()
-    return None
+            candidates.append((0, "literal", found.group(1)))
+            break
+        if not stripped.endswith(")"):
+            break
+        stripped = stripped[:-1].strip()
+
+    def add(position, path):
+        candidates.append((position, "path", path))
+
+    for found in re.finditer(
+        r"index \(index \(\$opea \| default dict\) \"([a-z]+)\"[^)]*\) \"([A-Za-z0-9]+)\"",
+        expression,
+    ):
+        add(found.start(), f"opea.{found.group(1)}.{found.group(2)}")
+
+    for found in re.finditer(
+        r"index \(index \(\$opeaModels \| default dict\) \"([a-z]+)\"[^)]*\) \"([A-Za-z0-9]+)\"",
+        expression,
+    ):
+        add(found.start(), f"opea.models.{found.group(1)}.{found.group(2)}")
+
+    for found in re.finditer(
+        r"index \(\$opea\.([a-z]+) \| default dict\) \"([A-Za-z0-9]+)\"", expression
+    ):
+        add(found.start(), f"opea.{found.group(1)}.{found.group(2)}")
+
+    for found in re.finditer(r"\$([A-Za-z][A-Za-z0-9]*)\.([A-Za-z0-9]+)", expression):
+        variable, key = found.group(1), found.group(2)
+        if variable in SECTION_VARS:
+            add(found.start(), f"opea.{SECTION_VARS[variable]}.{key}")
+        elif variable.startswith("data") and variable != "data":
+            add(found.start(), f"data.{variable[4:].lower()}.{key}")
+
+    # A literal only counts when it is the operand of a `default`: the other
+    # quoted strings in an expression are arguments of a helper call.
+    for found in re.finditer(r'\|\s*default\s+"([^"]*)"', expression):
+        candidates.append((found.start(), "literal", found.group(1)))
+
+    candidates.sort(key=lambda item: item[0])
+    return [(kind, value) for _position, kind, value in candidates]
+
+
+def _resolve_chain(chain, values):
+    """The first candidate of the chain that carries a value.
+
+    Returns (the source it came from, the value).
+    """
+    for kind, value in chain:
+        if kind == "path":
+            found = get_path(values, value)
+            if found not in (None, "", [], {}):
+                return value, found
+        else:
+            return None, value
+    return None, None
 
 
 def _expression_to_path(expression):
@@ -421,6 +480,10 @@ def capture_pods(namespace):
     for pod in kubectl_json(namespace, "get", "pods").get("items", []):
         meta = pod["metadata"]
         status = pod.get("status", {})
+        spec_containers = {
+            container["name"]: container
+            for container in pod.get("spec", {}).get("containers", [])
+        }
         for container in status.get("containerStatuses", []):
             pods.append(
                 {
@@ -433,6 +496,7 @@ def capture_pods(namespace):
                     "restarts": container.get("restartCount", 0),
                     "phase": status.get("phase", ""),
                     "created": meta.get("creationTimestamp", ""),
+                    "env": container_env(spec_containers.get(container.get("name"), {})),
                 }
             )
     return pods
@@ -501,6 +565,38 @@ def local_chart_version():
     """The version of the chart source this capture compares against."""
     with open(os.path.join(CHART_DIR, "Chart.yaml"), encoding="utf-8") as handle:
         return (yaml.safe_load(handle) or {}).get("version", "")
+
+
+def deployed_chart_source(flux_namespace, source_ref):
+    """The commit of the chart source the release was rendered from.
+
+    For a GitRepository source the release ignores `spec.chart.spec.version`
+    and installs the branch tip: the identity of the chart is its commit,
+    not its version field.
+    """
+    if source_ref.get("kind") != "GitRepository":
+        return "", ""
+    namespace = source_ref.get("namespace", flux_namespace)
+    repository = kubectl_json(namespace, "get", "gitrepository", source_ref["name"])
+    revision = repository.get("status", {}).get("artifact", {}).get("revision", "")
+    # The revision is "<branch>@sha1:<sha>"; the commit is the identity.
+    found = re.search(r"([0-9a-f]{40})", revision)
+    return found.group(1) if found else revision
+
+
+def chart_source_matches(deployed_sha):
+    """Whether the local chart tree is the tree the deployment was rendered from.
+
+    Returns None when the deployed commit is unknown to this checkout.
+    """
+    if not deployed_sha:
+        return None
+    try:
+        run(["git", "-C", REPO_ROOT, "cat-file", "-e", f"{deployed_sha}^{{commit}}"])
+    except RuntimeError:
+        return None
+    diff = run(["git", "-C", REPO_ROOT, "diff", "--stat", deployed_sha, "--", "charts/"])
+    return diff.strip() == ""
 
 
 # --------------------------------------------------------------------------
@@ -712,20 +808,20 @@ def resolve_source(
         default, override, effective = layers(None, derived_key)
         return f"derived:{derived_key}", default, override, effective, None
 
-    # 3. a values leaf the template renders into this variable, or the
-    #    value the template renders verbatim
+    # 3. a values leaf the template renders into this variable - through
+    #    the template's own fallback chain - or the value it renders verbatim
     template_entry = template_map.get(env_name) if template_map else None
     if template_entry:
-        chart_path = template_entry.get("path")
-        if chart_path:
-            default, override, effective = layers(chart_path)
-            if effective is not None:
-                return chart_path, default, override, effective, None
-        literal = template_entry.get("literal")
-        if literal is not None:
-            # The template IS the source for a literal, and no overlay can
-            # override it.
-            return "template literal", literal, "", literal, None
+        chain = template_entry.get("chain") or []
+        _default_path, default = _resolve_chain(chain, chart_values)
+        effective_path, effective = _resolve_chain(chain, effective_values)
+        override = ""
+        if chain and chain[0][0] == "path":
+            found = get_path(overlay, chain[0][1])
+            if found not in (None, ""):
+                override = normalize(found)
+        if effective is not None:
+            return effective_path or "template literal", default, override, effective, None
 
     # 4. a model id declared by a workload outside the parsed templates
     model_path = MODEL_VARIABLES.get(component, {}).get(env_name)
@@ -750,9 +846,11 @@ def compare_workload(workload, env_maps, chart_values, overlay_values, effective
 
     rows = []
     undeclared = []
-    deployed_env = {}
-    for container in workload["containers"]:
-        deployed_env.update(container["env"])
+    deployed_env = workload.get("serving_env")
+    if deployed_env is None:
+        deployed_env = {}
+        for container in workload["containers"]:
+            deployed_env.update(container["env"])
 
     for env_name, deployed in sorted(deployed_env.items()):
         label, default, override, effective, status = resolve_source(
@@ -762,7 +860,9 @@ def compare_workload(workload, env_maps, chart_values, overlay_values, effective
             if model_only and env_name not in MODEL_VARIABLES.get(component, {}):
                 # The application tier is compared for its model ids only:
                 # its remaining environment is not the retrieval
-                # configuration this story baselines.
+                # configuration this story baselines. It is listed, never
+                # dropped silently.
+                undeclared.append((env_name, deployed))
                 continue
             status = "MATCH" if values_equal(effective, deployed) else "DIFFERENT"
         elif status == "UNDECLARED" and is_injected(env_name):
@@ -776,6 +876,7 @@ def compare_workload(workload, env_maps, chart_values, overlay_values, effective
                 "source_path": label,
                 "source_value": normalize(default),
                 "overlay_value": normalize(override),
+                "effective_value": normalize(effective),
                 "deployed": deployed,
                 "status": status,
             }
@@ -783,12 +884,30 @@ def compare_workload(workload, env_maps, chart_values, overlay_values, effective
     return rows, undeclared
 
 
+def discrepancy_row(workload_name, row, disposition):
+    """The discrepancy a compared row produces.
+
+    The source of the difference is the EFFECTIVE value (the chart default
+    with the overlay override applied) - that is what the comparison used -
+    and the path it comes from names where the value was read.
+    """
+    return {
+        "workload": workload_name,
+        "env": row["env"],
+        "source_value": row["effective_value"]
+        or row["overlay_value"]
+        or row["source_value"]
+        or "(derived from the chart source)",
+        "source_path": row["source_path"],
+        "deployed": row["deployed"],
+        "disposition": disposition or "**UNRESOLVED**",
+    }
+
+
 def disposition_for(row, workload_name):
     """The disposition of a difference, or None when the difference is unexplained."""
     if row["status"] != "DIFFERENT":
         return None
-    if row["env"] == "KC_REALM":
-        return DISPOSITIONS["kc-realm"]
     return None
 
 
@@ -814,7 +933,23 @@ def render_markdown(data):
         f"- **Release:** `{capture['release']}` revision {capture['release_revision']}, "
         f"chart `{capture['chart_name']}` {capture['chart_version']}"
     )
-    add(f"- **Source compared against:** the chart source in this repository, version {capture['local_chart_version']}")
+    add(
+        f"- **Source compared against:** the chart source in this repository, version "
+        f"{capture['local_chart_version']}"
+        + (
+            f" - the deployment was rendered from the chart source commit "
+            f"`{capture['deployed_chart_source']}`"
+            + (
+                " (the local chart tree is that tree)"
+                if capture["chart_source_matches"] is True
+                else " (the local chart tree DIFFERS from that tree)"
+                if capture["chart_source_matches"] is False
+                else " (that commit is unknown to this checkout)"
+            )
+            if capture.get("deployed_chart_source")
+            else ""
+        )
+    )
     add(f"- **Overlay values:** `{capture['overlay_name']}`")
     add("")
     add("## How to re-run")
@@ -906,10 +1041,12 @@ def render_markdown(data):
         add("| workload | variable | source | deployed | disposition |")
         add("|---|---|---|---|---|")
         for row in data["discrepancies"]:
+            source = cell(row["source_value"])
+            if row.get("source_path"):
+                source = f"{source} (`{row['source_path']}`)"
             add(
                 f"| `{cell(row['workload'])}` | `{cell(row['env'])}` | "
-                f"{cell(row['source_value'])} | {cell(row['deployed'])} | "
-                f"{cell(row['disposition'])} |"
+                f"{source} | {cell(row['deployed'])} | {cell(row['disposition'])} |"
             )
         add("")
         add(data["image_disposition_note"])
@@ -1079,6 +1216,7 @@ def build_models(env_by_component, effective_values, served):
             {
                 "role": role,
                 "chart_default": chart_default,
+                "chart_default_path": path,
                 "declared": declared or "(no workload pins this model)",
                 "served": served_id,
                 "detail": detail + (f", pinned by {declared_source}" if declared_source else ""),
@@ -1118,6 +1256,19 @@ def capture(namespace, flux_namespace, release, date, out_path):
     images = build_images(workloads, pods)
     image_differences = resolve_registry_digests(images)
 
+    # The third layer is the SERVING pod, not the Deployment's template:
+    # during a rollout the two differ, and the serving pod is what E01
+    # measures.
+    for workload in workloads:
+        serving = {}
+        for container in workload["containers"]:
+            pod = pick_running_pod(pods, workload, container["name"])
+            if pod and pod.get("env"):
+                serving.update(pod["env"])
+            else:
+                serving.update(container["env"])
+        workload["serving_env"] = serving
+
     env_by_component = {}
     for workload in workloads:
         for container in workload["containers"]:
@@ -1133,15 +1284,7 @@ def capture(namespace, flux_namespace, release, date, out_path):
             if row["status"] == "DIFFERENT":
                 disposition = disposition_for(row, workload["name"])
                 discrepancies.append(
-                    {
-                        "workload": workload["name"],
-                        "env": row["env"],
-                        "source_value": row["source_value"]
-                        or row["overlay_value"]
-                        or "(derived from the chart source)",
-                        "deployed": row["deployed"],
-                        "disposition": disposition or "**UNRESOLVED**",
-                    }
+                    discrepancy_row(workload["name"], row, disposition)
                 )
         if rows:
             config.append(
@@ -1151,18 +1294,39 @@ def capture(namespace, flux_namespace, release, date, out_path):
     served = capture_models(namespace, env_by_component)
     models = build_models(env_by_component, effective_values, served)
 
+    # A served model that differs from the source is a difference between
+    # the deployment and the source: it belongs in the discrepancy table
+    # and in the exit gate.
+    for model in models:
+        if model["status"] != "DIFFERENT":
+            continue
+        discrepancies.append(
+            {
+                "workload": f"({model['role']} model)",
+                "env": "model id",
+                "source_value": model["chart_default"],
+                "source_path": model["chart_default_path"],
+                "deployed": model["served"],
+                "disposition": "**UNRESOLVED**",
+            }
+        )
+
     # The chart source this capture compares against must be the chart the
     # deployment runs: otherwise the record describes what the repository
     # would deploy, not what serves traffic.
     deployed_chart_version = release_info["chart"].get("version", "")
     local_version = local_chart_version()
-    if deployed_chart_version and local_version != deployed_chart_version:
+    source_ref = release_info["chart"].get("sourceRef", {})
+    deployed_source = deployed_chart_source(flux_namespace, source_ref)
+    tree_matches = chart_source_matches(deployed_source)
+    if tree_matches is False:
         discrepancies.append(
             {
                 "workload": "(chart source)",
-                "env": "chart version",
-                "source_value": f"local chart source {local_version}",
-                "deployed": f"deployed chart {deployed_chart_version}",
+                "env": "chart source",
+                "source_value": f"the local chart tree ({local_version})",
+                "source_path": "charts/",
+                "deployed": f"the chart the deployment was rendered from ({deployed_source})",
                 "disposition": DISPOSITIONS["chart-version"],
             }
         )
@@ -1205,11 +1369,13 @@ def capture(namespace, flux_namespace, release, date, out_path):
             "chart_name": release_info["chart"].get("chart", ""),
             "chart_version": deployed_chart_version,
             "local_chart_version": local_version,
+            "deployed_chart_source": deployed_source,
+            "chart_source_matches": tree_matches,
             "overlay_name": release_info["overlay_name"],
             "command": (
                 "uv run --no-cache --with pyyaml python "
                 f"scripts/baseline/capture-deployed-baseline.py --namespace {namespace} "
-                f"--out {os.path.relpath(out_path, REPO_ROOT)}"
+                f"--out {_display_path(out_path)}"
             ),
         },
         "images": images,

@@ -593,6 +593,10 @@ def capture_release(flux_namespace, release):
                 f"the overlay {kind} {name} carries no {values_key} - the effective "
                 "source baseline cannot be resolved"
             )
+    # The version a cluster object ATTESTS: the release history records the
+    # chart version the deployed release was packaged from.
+    history = status.get("history") or []
+    deployed_chart_version = history[0].get("chartVersion", "") if history else ""
     return {
         "chart": spec.get("chart", {}).get("spec", {}),
         "revision": revision,
@@ -600,6 +604,7 @@ def capture_release(flux_namespace, release):
         "overlay_name": overlay_name,
         "status": conditions[0].get("message", ""),
         "ready": conditions[0].get("status", ""),
+        "deployed_chart_version": deployed_chart_version,
     }
 
 
@@ -617,7 +622,7 @@ def deployed_chart_source(flux_namespace, source_ref):
     not its version field.
     """
     if source_ref.get("kind") != "GitRepository":
-        return "", ""
+        return ""
     namespace = source_ref.get("namespace", flux_namespace)
     repository = kubectl_json(namespace, "get", "gitrepository", source_ref["name"])
     revision = repository.get("status", {}).get("artifact", {}).get("revision", "")
@@ -974,13 +979,6 @@ def discrepancy_row(workload_name, row, disposition):
         "deployed": row["deployed"],
         "disposition": disposition or "**UNRESOLVED**",
     }
-
-
-def disposition_for(row):
-    """The disposition of a difference, or None when the difference is unexplained."""
-    if row["status"] != "DIFFERENT":
-        return None
-    return None
 
 
 # --------------------------------------------------------------------------
@@ -1363,10 +1361,9 @@ def capture(namespace, flux_namespace, release, date, out_path):
         )
         for row in rows:
             if row["status"] == "DIFFERENT":
-                disposition = disposition_for(row)
-                discrepancies.append(
-                    discrepancy_row(workload["name"], row, disposition)
-                )
+                # No disposition table remains: an unexplained difference
+                # must fail the capture, so it carries none.
+                discrepancies.append(discrepancy_row(workload["name"], row, None))
             elif row["status"] == "NOT CARRIED":
                 discrepancies.append(
                     discrepancy_row(
@@ -1409,20 +1406,48 @@ def capture(namespace, flux_namespace, release, date, out_path):
 
     # The chart source this capture compares against must be the chart the
     # deployment runs: otherwise the record describes what the repository
-    # would deploy, not what serves traffic.
-    deployed_chart_version = release_info["chart"].get("version", "")
+    # would deploy, not what serves traffic. The identity is anchored to
+    # what a cluster object attests - the version in the release history -
+    # and the tree comparison against the source's current ref fails
+    # CLOSED: an unestablishable comparison is an unresolved difference.
+    deployed_chart_version = release_info.get("deployed_chart_version", "")
     local_version = local_chart_version()
-    source_ref = release_info["chart"].get("sourceRef", {})
-    deployed_source = deployed_chart_source(flux_namespace, source_ref)
-    tree_matches = chart_source_matches(deployed_source)
-    if tree_matches is False:
+    if deployed_chart_version and local_version != deployed_chart_version:
         discrepancies.append(
             {
                 "workload": "(chart source)",
-                "env": "chart source",
+                "env": "chart version",
+                "source_value": f"the local chart source ({local_version})",
+                "source_path": "charts/genieai-umbrella/Chart.yaml",
+                "deployed": f"the chart version the release history attests ({deployed_chart_version})",
+                "disposition": DISPOSITIONS["chart-version"],
+            }
+        )
+    source_ref = release_info["chart"].get("sourceRef", {})
+    is_git_source = source_ref.get("kind") == "GitRepository"
+    deployed_source = deployed_chart_source(flux_namespace, source_ref)
+    tree_matches = chart_source_matches(deployed_source)
+    if is_git_source and tree_matches is None:
+        # The comparison could not be established: a ref this checkout does
+        # not know, or an artifact that carries no commit. It fails closed.
+        discrepancies.append(
+            {
+                "workload": "(chart source)",
+                "env": "chart tree",
+                "source_value": f"the source's current ref ({deployed_source or 'unknown'})",
+                "source_path": "charts/",
+                "deployed": "unknown to this checkout",
+                "disposition": "**UNRESOLVED**",
+            }
+        )
+    elif tree_matches is False:
+        discrepancies.append(
+            {
+                "workload": "(chart source)",
+                "env": "chart tree",
                 "source_value": f"the local chart tree ({local_version})",
                 "source_path": "charts/",
-                "deployed": f"the chart the deployment was rendered from ({deployed_source})",
+                "deployed": f"the source's current ref ({deployed_source})",
                 "disposition": DISPOSITIONS["chart-version"],
             }
         )
@@ -1463,7 +1488,7 @@ def capture(namespace, flux_namespace, release, date, out_path):
             "release": release,
             "release_revision": release_info["revision"],
             "chart_name": release_info["chart"].get("chart", ""),
-            "chart_version": deployed_chart_version,
+            "chart_version": release_info.get("deployed_chart_version", ""),
             "local_chart_version": local_version,
             "deployed_chart_source": deployed_source,
             "chart_source_matches": tree_matches,

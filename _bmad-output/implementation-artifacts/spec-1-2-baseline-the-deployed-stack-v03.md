@@ -138,6 +138,16 @@ Every finding is dispositioned below; "fixed" means the correction is in the dif
 | F2-9 | No test pinned the false-difference class | medium | **fixed** — the failing shapes are pinned: both index forms, the falsy leaf, the subtree guard, and the overlay read at the resolved path |
 | F2-10 | The GPU credential was sent to the TEI endpoints | low | **reverted** — the live TEI endpoint answers 401 without the bearer: the deployment itself authenticates all four model paths with the same key, so mirroring the deployment means sending it. The credential follows the deployment's own wiring |
 
+### Fix review 3 (`superpowers:requesting-code-review`, fresh context, the full chain `3b92ec341..b939e0e00`)
+
+This is the chain's third fix review — the cap. It was not clean, so the chain is parked: the corrections below are applied and pushed, but no fourth review verifies them. That decision belongs to the operator (or to the orchestrator, which owns the caps).
+
+| # | Finding | Verdict | Disposition |
+|---|---|---|---|
+| F3-1 | The unestablishable tree comparison still failed open: the code appended a discrepancy only when the comparison said DIFFERENT, and stayed silent when it could not establish one (and the attested-version comparison had not landed) | high | **fixed, UNREVIEWED** (`<final-sha>`) — the identity gate now reads the attested version from the release history (a difference is a discrepancy) and the tree comparison fails closed: an unestablishable comparison on a GitRepository source is an unresolved difference |
+| F3-2 | `deployed_chart_source` returned a tuple on the non-GitRepository branch | low | **fixed, UNREVIEWED** — the branch returns an empty string |
+| F3-3 | `disposition_for` was a constant-None stub | low | **fixed, UNREVIEWED** — the stub is removed; an unexplained difference carries no disposition by construction |
+
 ## Design Notes
 
 The registry digest is resolved with an anonymous pull token; the GitLab front door answers 403 to the default Python user agent, so the capture identifies itself. The model endpoints are probed with the deployment's own TLS posture (the GPU node's certificate is signed by an internal CA, and the workload that declares the endpoint declares `OPEA_SSL_SKIP_VERIFY=1`).

@@ -191,9 +191,21 @@ def test_derived_value_is_compared_against_the_chart_derivation(chart_values, ov
 
 
 def test_difference_without_disposition_stays_unresolved():
-    """An unexplained difference has no disposition - the capture must fail on it."""
-    row = {"env": "RERANKING_STRATEGY", "status": "DIFFERENT"}
-    assert capture.disposition_for(row) is None
+    """An unexplained difference carries no disposition - the capture fails on it."""
+    row = capture.discrepancy_row(
+        "genieai-genieai-umbrella-chatqna",
+        {
+            "env": "RERANKING_STRATEGY",
+            "status": "DIFFERENT",
+            "effective_value": "threshold",
+            "overlay_value": "",
+            "source_value": "slice",
+            "source_path": "opea.chatqna.rerankingStrategy",
+            "deployed": "adaptive",
+        },
+        None,
+    )
+    assert row["disposition"] == "**UNRESOLVED**"
 
 
 def test_a_fallback_chain_resolves_to_the_value_the_chart_renders(chart_values, env_maps):
@@ -208,7 +220,6 @@ def test_a_fallback_chain_resolves_to_the_value_the_chart_renders(chart_values, 
     row = next(row for row in rows if row["env"] == "KC_REALM")
     assert row["status"] == "MATCH"
     assert row["source_path"] == "data.keycloak.realm"
-    assert capture.disposition_for(row) is None
 
 
 def test_secret_value_never_reaches_the_record():

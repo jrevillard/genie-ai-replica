@@ -1174,4 +1174,19 @@ const Map<String, dynamic> idLocale = {
   },
   'welcomeMessage':
       'Selamat datang! Bagaimana saya bisa membantu Anda hari ini?',
+  "okfBrowser": {
+    "title": "Jelajahi repositori",
+    "drawerEntry": "Jelajahi repositori",
+    "drawerPrompt": "Repository id",
+    "currentNotice": "Menampilkan yang terindeks saat ini — belum tentu versi yang dikutip.",
+    "selectHint": "Pilih konsep dari pohon untuk membacanya di sini.",
+    "showMore": "Tampilkan lebih banyak",
+    "back": "Kembali",
+    "forward": "Maju",
+    "backToList": "Kembali ke daftar",
+    "conceptUnavailable": "Konsep ini tidak tersedia.",
+    "unavailable": "Repositori ini tidak dapat dijelajahi saat ini.",
+    "download": "Unduh",
+    "downloadEmpty": "This concept has no content to download.",
+  },
 };

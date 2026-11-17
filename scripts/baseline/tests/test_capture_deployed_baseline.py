@@ -190,24 +190,6 @@ def test_derived_value_is_compared_against_the_chart_derivation(chart_values, ov
     assert row["overlay_value"] == "https://gpu.example:444/llm"
 
 
-def test_difference_without_disposition_stays_unresolved():
-    """An unexplained difference carries no disposition - the capture fails on it."""
-    row = capture.discrepancy_row(
-        "genieai-genieai-umbrella-chatqna",
-        {
-            "env": "RERANKING_STRATEGY",
-            "status": "DIFFERENT",
-            "effective_value": "threshold",
-            "overlay_value": "",
-            "source_value": "slice",
-            "source_path": "opea.chatqna.rerankingStrategy",
-            "deployed": "adaptive",
-        },
-        None,
-    )
-    assert row["disposition"] == "**UNRESOLVED**"
-
-
 def test_a_fallback_chain_resolves_to_the_value_the_chart_renders(chart_values, env_maps):
     """The chart's own fallback is part of the source: no difference, no disposition."""
     effective = chart_values
@@ -282,41 +264,16 @@ def test_numbers_compare_numerically():
 
 def test_an_undispositioned_difference_fails_the_capture(tmp_path):
     """The program's own gate: the record is written AND the capture exits 2."""
-    data = {
-        "capture": {
-            "date": "2026-11-17",
-            "timestamp": "2026-11-17T00:00:00+00:00",
-            "cluster": "https://cluster",
-            "namespace": "genieai",
-            "release": "genieai",
-            "release_revision": 1,
-            "chart_name": "charts/genieai-umbrella",
-            "chart_version": "0.2.1",
-            "local_chart_version": "0.2.1",
-            "overlay_name": "overlay",
-            "release_health": "True - Helm upgrade succeeded",
-            "command": "python3 capture.py",
-        },
-        "images": [],
-        "models": [],
-        "config": [],
-        "discrepancies": [
-            {
-                "workload": "genieai-genieai-umbrella-retriever",
-                "env": "RETRIEVER_ARANGO_K",
-                "source_value": "20",
-                "deployed": "4",
-                "disposition": "**UNRESOLVED**",
-            }
-        ],
-        "image_disposition_note": "",
-        "topology": {
-            "services": [],
-            "network_policies": 0,
-            "edge": "(none)",
-            "external": "(none)",
-        },
-    }
+    data = _record_data()
+    data["discrepancies"].append(
+        {
+            "workload": "genieai-genieai-umbrella-retriever",
+            "env": "RETRIEVER_ARANGO_K",
+            "source_value": "20",
+            "deployed": "4",
+            "disposition": "**UNRESOLVED**",
+        }
+    )
     out_path = tmp_path / "record.md"
     unresolved = capture.write_record(data, str(out_path))
     assert len(unresolved) == 1
@@ -326,41 +283,16 @@ def test_an_undispositioned_difference_fails_the_capture(tmp_path):
 
 def test_a_dispositioned_difference_exits_zero(tmp_path):
     """A known difference is recorded with its disposition and does not fail the capture."""
-    data = {
-        "capture": {
-            "date": "2026-11-17",
-            "timestamp": "2026-11-17T00:00:00+00:00",
-            "cluster": "https://cluster",
-            "namespace": "genieai",
-            "release": "genieai",
-            "release_revision": 1,
-            "chart_name": "charts/genieai-umbrella",
-            "chart_version": "0.2.1",
-            "local_chart_version": "0.2.1",
-            "overlay_name": "overlay",
-            "release_health": "True - Helm upgrade succeeded",
-            "command": "python3 capture.py",
-        },
-        "images": [],
-        "models": [],
-        "config": [],
-        "discrepancies": [
-            {
-                "workload": "genieai-genieai-umbrella-chatqna",
-                "env": "KC_REALM",
-                "source_value": "",
-                "deployed": "genie",
-                "disposition": "By design - the chart leaves the realm empty.",
-            }
-        ],
-        "image_disposition_note": "",
-        "topology": {
-            "services": [],
-            "network_policies": 0,
-            "edge": "(none)",
-            "external": "(none)",
-        },
-    }
+    data = _record_data()
+    data["discrepancies"].append(
+        {
+            "workload": "genieai-genieai-umbrella-chatqna",
+            "env": "KC_REALM",
+            "source_value": "",
+            "deployed": "genie",
+            "disposition": "By design - the chart leaves the realm empty.",
+        }
+    )
     out_path = tmp_path / "record.md"
     unresolved = capture.write_record(data, str(out_path))
     assert unresolved == []
@@ -456,3 +388,41 @@ def test_the_overlay_is_read_where_the_value_resolves(chart_values, env_maps):
     assert row["status"] == "MATCH"
     assert row["source_path"] == "data.keycloak.realm"
     assert row["overlay_value"] == "gov-realm"
+
+
+def test_a_subtree_candidate_falls_through_to_the_literal(env_maps):
+    """`index ($okf.server | default dict) "url"` with no okf.server renders the literal."""
+    chain = env_maps["dataprep"]["OKF_SERVER_URL"]["chain"]
+    literal = next(value for kind, value in chain if kind == "literal")
+    resolved = capture._resolve_chain(chain, {"okf": {"server": {"name": "x"}}})
+    assert resolved == (None, literal)
+
+
+def test_the_chart_default_carries_the_path_it_resolved_from(chart_values, overlay_values, env_maps):
+    """When the chain falls through, the record names both sides' sources."""
+    # The overlay pins the realm; the chart default falls through the same
+    # chain but may land on a different element. The row must say where each
+    # column came from.
+    overlay = {"data": {"keycloak": {"realm": "gov-realm"}}}
+    effective = capture.deep_merge(chart_values, overlay)
+    workload = {
+        "name": "genieai-genieai-umbrella-chatqna",
+        "component": "chatqna",
+        "containers": [{"name": "chatqna", "image": "x", "env": {"KC_REALM": "gov-realm"}}],
+    }
+    rows, _ = capture.compare_workload(
+        workload, env_maps, chart_values, overlay, effective
+    )
+    row = next(row for row in rows if row["env"] == "KC_REALM")
+    assert row["default_path"] == row["source_path"]
+
+
+def test_an_unknown_deployed_commit_fails_the_tree_comparison_closed():
+    """A commit this checkout does not know is UNRESOLVED, never a green match."""
+    assert capture.chart_source_matches("0" * 40) is None
+    assert capture.chart_source_matches("") is None
+
+
+def test_a_non_gitrepository_source_names_no_commit():
+    """A release that renders from a non-GitRepository source attests no commit."""
+    assert capture.deployed_chart_source("flux-system", {"kind": "HelmChart", "name": "x"}) == ""

@@ -4,7 +4,7 @@ type: 'feature'
 created: '2026-11-17'
 status: 'in-progress'
 route: 'dispatch'
-review_loop_iteration: 0
+review_loop_iteration: 4
 baseline_commit: '30aac4753'
 context:
   - '{project-root}/_bmad-output/implementation-artifacts/epic-1-context.md'
@@ -147,6 +147,31 @@ This is the chain's third fix review — the cap. It was not clean, so the chain
 | F3-1 | The unestablishable tree comparison still failed open: the code appended a discrepancy only when the comparison said DIFFERENT, and stayed silent when it could not establish one (and the attested-version comparison had not landed) | high | **fixed, UNREVIEWED** (`d5c3ffb9f`) — the identity gate now reads the attested version from the release history (a difference is a discrepancy) and the tree comparison fails closed: an unestablishable comparison on a GitRepository source is an unresolved difference |
 | F3-2 | `deployed_chart_source` returned a tuple on the non-GitRepository branch | low | **fixed, UNREVIEWED** — the branch returns an empty string |
 | F3-3 | `disposition_for` was a constant-None stub | low | **fixed, UNREVIEWED** — the stub is removed; an unexplained difference carries no disposition by construction |
+| F3-4 | The not-carried disposition asserted a conclusion the capture cannot support ("the chart renders some rows only under a condition") instead of naming the observation | low | **fixed, UNREVIEWED** — the disposition states the observation and the check to run: whether the chart renders the row only under a condition, and otherwise that the deployment is missing a knob the source declares |
+| F3-5 | The model differences were assembled inline in `capture()`, so the model-discrepancy rule was untestable | low | **fixed, UNREVIEWED** — the rule is extracted into `model_discrepancy_rows(models)`, and the test drives it directly |
+| F3-6 | The per-component environment map was built from the merged container environments instead of the serving container's own environment | low | **fixed, UNREVIEWED** — the map is built from `workload["serving_env"]`, so the comparison reads the environment the running pod actually serves |
+| F3-7 | The chart-default column did not say which chain element the default resolved from, so a default and a deployed value that fell through different fallbacks read as one shared source | low | **fixed, UNREVIEWED** — the row carries the path the default resolved from and the record annotates the cell (`via <path>`) when it differs from the effective value's path |
+
+### Fix review 4 (`superpowers:requesting-code-review`, fresh context, the correction diff `a4680f926..e385a4652`)
+
+Authorized by the operator on the coordination board (the same disposition given to #1984). The review was **not clean** ("With fixes": 2 Important + 4 Minor), so the chain is parked again: the corrections below are applied and pushed, but no fifth review verifies them — that needs a fresh ruling.
+
+| # | Finding | Verdict | Disposition |
+|---|---|---|---|
+| F4-1 | The identity gate ships without a pinning test: `chart_source_matches` and `deployed_chart_source` had no unit test, and this gate has already failed open twice | high | **fixed, UNREVIEWED** — three pins: an unknown commit resolves to `None` (never a green match), an empty commit resolves to `None`, and a non-GitRepository source names no commit |
+| F4-2 | A stopped workload produced a false "DIFFERENT" image discrepancy: with no running pod the row's running digest is `"not running"`, and a resolvable registry tag then marked the row DIFFERENT with the stale-pull disposition — a different fact | high | **fixed, UNREVIEWED** — a workload that does not run resolves the registry digest but is marked NOT COMPARABLE, never DIFFERENT |
+| F4-3 | An empty release history failed the version gate open: `deployed_chart_version` was `""` and the comparison was silently skipped | low | **fixed, UNREVIEWED** — an empty attested version is an UNRESOLVED difference ("the release history carries no chart version"), matching the gate's own contract |
+| F4-4 | A non-GitRepository chart source skipped the tree comparison silently — both branches inert, the record sentence omitted | low | **fixed, UNREVIEWED** — the record states that the release renders from no GitRepository source, so no chart-source commit attests the deployment |
+| F4-5 | Test duplication: the re-written difference test asserted what another test already asserts, and two tests hand-copied the production record dict | low | **fixed, UNREVIEWED** — the duplicate assertion is removed and the two record-gate tests build on the shared fixture |
+| F4-6 | The release's `Ready` condition was read as `conditions[0]`; the CRD does not order conditions | low | **fixed, UNREVIEWED** — the condition is selected by type |
+
+**Review 4 recommendations, recorded as the reviewer stated them:**
+
+- Land findings 1-2 in one small fix commit: both cheap, both on the gate/watchdog surface E01 relies on.
+- On any future venue move (PRD §13-1), re-verify the `history[0]` newest-first assumption on that release — the capture depends on it without asserting it.
+- Readability: the amd64 child digest (the stable content identity) is listed before the index digest (which moves on every re-push).
+
+**Declined to judge by the reviewer** (no action, recorded for the record): the app-tier and PII/OKF/RAGAS-tier environment comparisons (extracted as #1988), the missing CI job for the capture tests (extracted as #1987), the float fallback in `values_equal`, secret-kind `valuesFrom` values, untracked files under `charts/`, the sprint-status status flip, and the anonymous pull-token assumption (it fails per-row NOT COMPARABLE, never silent).
 
 ## Design Notes
 

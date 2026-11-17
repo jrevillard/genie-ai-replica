@@ -134,9 +134,9 @@ DISPOSITIONS = {
     ),
     "not-carried": (
         "Reported - the chart declares this variable and the deployment does not "
-        "carry it. The chart renders some rows only under a condition (the prompt "
-        "rows, the docling endpoint), so this is reported and does not fail the "
-        "capture."
+        "carry it. Verify whether the chart renders this row only under a "
+        "condition; if it does not, the deployment is missing a knob the source "
+        "declares."
     ),
     "chart-version": (
         "Recorded - the local chart source is not the chart the deployment runs. The "
@@ -569,7 +569,11 @@ def capture_release(flux_namespace, release):
     revision = 0
     for entry in status.get("history", []):
         revision = max(revision, int(entry.get("version", 0)))
-    conditions = status.get("conditions") or [{}]
+    conditions = status.get("conditions") or []
+    ready = next(
+        (condition for condition in conditions if condition.get("type") == "Ready"),
+        {},
+    )
     overlay = deep_merge({}, spec.get("values") or {})
     overlay_name = "inline values" if spec.get("values") else ""
     for source in spec.get("valuesFrom", []):
@@ -602,8 +606,8 @@ def capture_release(flux_namespace, release):
         "revision": revision,
         "overlay": overlay,
         "overlay_name": overlay_name,
-        "status": conditions[0].get("message", ""),
-        "ready": conditions[0].get("status", ""),
+        "status": ready.get("message", ""),
+        "ready": ready.get("status", ""),
         "deployed_chart_version": deployed_chart_version,
     }
 
@@ -822,9 +826,10 @@ def resolve_source(
 ):
     """Resolve one environment variable against the source baseline.
 
-    Returns (label, chart default, overlay value, effective value, status).
-    The three layers stay distinct: the chart's own default, the overlay
-    override that applies on top of it, and what the deployment runs.
+    Returns (label, chart default, overlay value, effective value, status,
+    the path the chart default resolved from). The three layers stay
+    distinct: the chart's own default, the overlay override that applies on
+    top of it, and what the deployment runs.
     """
     overlay = overlay_values or {}
 
@@ -847,20 +852,27 @@ def resolve_source(
         path = f"opea.{section}.env.{env_name}"
         if get_path(chart_values, path) is not None or get_path(effective_values, path) is not None:
             default, override, effective = layers(path)
-            return path, default, override, effective, None
+            return path, default, override, effective, None, path
 
     # 2. a value the chart derives from other values (GPU endpoints, origin)
     derived_key = DERIVED_VARIABLES.get((component, env_name))
     if derived_key:
         default, override, effective = layers(None, derived_key)
-        return f"derived:{derived_key}", default, override, effective, None
+        return (
+            f"derived:{derived_key}",
+            default,
+            override,
+            effective,
+            None,
+            derived_key,
+        )
 
     # 3. a values leaf the template renders into this variable - through
     #    the template's own fallback chain - or the value it renders verbatim
     template_entry = template_map.get(env_name) if template_map else None
     if template_entry:
         chain = template_entry.get("chain") or []
-        _default_path, default = _resolve_chain(chain, chart_values)
+        default_path, default = _resolve_chain(chain, chart_values)
         effective_path, effective = _resolve_chain(chain, effective_values)
         override = ""
         if effective_path:
@@ -871,20 +883,27 @@ def resolve_source(
             if not _sprig_empty(found):
                 override = normalize(found)
         if effective is not None:
-            return effective_path or "template literal", default, override, effective, None
+            return (
+                effective_path or "template literal",
+                default,
+                override,
+                effective,
+                None,
+                default_path,
+            )
 
     # 4. a model id declared by a workload outside the parsed templates
     model_path = MODEL_VARIABLES.get(component, {}).get(env_name)
     if model_path:
         default, override, effective = layers(model_path)
         if effective is not None:
-            return model_path, default, override, effective, None
+            return model_path, default, override, effective, None, model_path
 
     # 5. the template renders the variable, but from a literal or a helper
     if template_map and env_name in template_map:
-        return "", "(template literal or helper)", "", "", "TEMPLATE"
+        return "", "(template literal or helper)", "", "", "TEMPLATE", ""
 
-    return "", "", "", "", "UNDECLARED"
+    return "", "", "", "", "UNDECLARED", ""
 
 
 def compare_workload(workload, env_maps, chart_values, overlay_values, effective_values):
@@ -912,7 +931,7 @@ def compare_workload(workload, env_maps, chart_values, overlay_values, effective
 
     for env_name in sorted(declared_names | set(deployed_env)):
         if env_name not in deployed_env:
-            label, default, override, effective, status = resolve_source(
+            label, default, override, effective, status, default_path = resolve_source(
                 env_name, component, section, template_map, chart_values, overlay_values, effective_values
             )
             if status == "UNDECLARED":
@@ -921,6 +940,7 @@ def compare_workload(workload, env_maps, chart_values, overlay_values, effective
                 {
                     "env": env_name,
                     "source_path": label,
+                    "default_path": default_path,
                     "source_value": normalize(default),
                     "overlay_value": normalize(override),
                     "effective_value": normalize(effective),
@@ -930,7 +950,7 @@ def compare_workload(workload, env_maps, chart_values, overlay_values, effective
             )
             continue
         deployed = deployed_env[env_name]
-        label, default, override, effective, status = resolve_source(
+        label, default, override, effective, status, default_path = resolve_source(
             env_name, component, section, template_map, chart_values, overlay_values, effective_values
         )
         if status is None:
@@ -951,6 +971,7 @@ def compare_workload(workload, env_maps, chart_values, overlay_values, effective
             {
                 "env": env_name,
                 "source_path": label,
+                "default_path": default_path,
                 "source_value": normalize(default),
                 "overlay_value": normalize(override),
                 "effective_value": normalize(effective),
@@ -1016,7 +1037,7 @@ def render_markdown(data):
                 else " - that ref is unknown to this checkout, so the tree comparison could not be established"
             )
             if capture.get("deployed_chart_source")
-            else ""
+            else " - the release does not render from a GitRepository source, so no chart-source commit attests the deployment"
         )
     )
     add(f"- **Overlay values:** `{capture['overlay_name']}`")
@@ -1037,20 +1058,21 @@ def render_markdown(data):
     add("## Workloads and image digests")
     add("")
     add(
-        "`running digest` is the digest the pod actually runs. `registry digest` is what "
-        "the registry serves for the same tag at capture time."
+        "`running digest` is the digest the pod actually runs. The amd64 child is the "
+        "stable content identity; the index digest is what the registry serves for the "
+        "tag at capture time (it moves on every re-push, so it is shown last)."
     )
     add("")
     add(
-        "| workload | container | image | running digest | registry index digest | "
-        "registry amd64 child | status |"
+        "| workload | container | image | running digest | registry amd64 child | "
+        "registry index digest | status |"
     )
     add("|---|---|---|---|---|---|---|")
     for row in data["images"]:
         add(
             f"| `{cell(row['workload'])}` | {cell(row['container'])} | `{cell(row['image'])}` | "
-            f"`{cell(row['running_digest'])}` | {cell(row['registry_digest'])} | "
-            f"{cell(row['registry_child_digest'])} | {row['status']} |"
+            f"`{cell(row['running_digest'])}` | {cell(row['registry_child_digest'])} | "
+            f"{cell(row['registry_digest'])} | {row['status']} |"
         )
     add("")
 
@@ -1083,8 +1105,15 @@ def render_markdown(data):
         add("| variable | chart default | overlay | deployed | status |")
         add("|---|---|---|---|---|")
         for row in workload["rows"]:
+            default_cell = cell(row["source_value"])
+            # The chain is per-side: when the chart default fell through to a
+            # different element than the deployed value resolved from, say so
+            # - otherwise the two columns read as one shared source.
+            default_path = row.get("default_path")
+            if default_path and default_path != row["source_path"]:
+                default_cell = f"{default_cell} (`via {default_path}`)"
             add(
-                f"| `{cell(row['env'])}` | {cell(row['source_value'])} | "
+                f"| `{cell(row['env'])}` | {default_cell} | "
                 f"{cell(row['overlay_value'])} | {cell(row['deployed'])} | {row['status']} |"
             )
         add("")
@@ -1232,6 +1261,15 @@ def resolve_registry_digests(images):
             digest, child, note = registry_digest(row["_image"])
         except Exception as error:  # noqa: BLE001 - reported, never fatal
             digest, child, note = None, "", f"unresolved ({error})"
+        if not row["running_digest"] or row["running_digest"] == "not running":
+            # A workload that runs no pod is never compared: a "DIFFERENT"
+            # verdict would assert stale-pull behaviour about a container
+            # that does not exist.
+            row["registry_digest"] = digest or note or "not applicable"
+            row["registry_child_digest"] = child or ""
+            row["status"] = "NOT COMPARABLE"
+            del row["_image"]
+            continue
         if digest:
             row["registry_digest"] = digest
             row["registry_child_digest"] = child or "single manifest"
@@ -1246,6 +1284,30 @@ def resolve_registry_digests(images):
             row["status"] = "NOT COMPARABLE"
         del row["_image"]
     return differences
+
+
+def model_discrepancy_rows(models):
+    """The discrepancies the model table produces.
+
+    A model the node serves that differs from the source, and a model that
+    could not be probed at all, are both unresolved: the record cannot
+    attest the served model ids the acceptance criteria name.
+    """
+    rows = []
+    for model in models:
+        if model["status"] not in ("DIFFERENT", "NOT PROBED", "UNKNOWN"):
+            continue
+        rows.append(
+            {
+                "workload": f"({model['role']} model)",
+                "env": "model id",
+                "source_value": model["difference_source"],
+                "source_path": model["difference_path"],
+                "deployed": model["served"],
+                "disposition": "**UNRESOLVED**",
+            }
+        )
+    return rows
 
 
 def build_models(env_by_component, effective_values, served):
@@ -1348,10 +1410,15 @@ def capture(namespace, flux_namespace, release, date, out_path):
                 serving.update(container["env"])
         workload["serving_env"] = serving
 
+    # The model table answers for the SERVING pod, like the configuration
+    # tables: during a rollout the Deployment template can disagree with
+    # what actually answers.
     env_by_component = {}
     for workload in workloads:
-        for container in workload["containers"]:
-            env_by_component.setdefault(workload["component"], {}).update(container["env"])
+        if workload.get("serving_env"):
+            env_by_component.setdefault(workload["component"], {}).update(
+                workload["serving_env"]
+            )
 
     config = []
     discrepancies = []
@@ -1387,22 +1454,7 @@ def capture(namespace, flux_namespace, release, date, out_path):
     # A served model that differs from the source is a difference between
     # the deployment and the source: it belongs in the discrepancy table
     # and in the exit gate.
-    for model in models:
-        # A model the node serves that differs from the source, and a model
-        # that could not be probed at all, are both unresolved: the record
-        # cannot attest the served model ids the acceptance criteria name.
-        if model["status"] not in ("DIFFERENT", "NOT PROBED", "UNKNOWN"):
-            continue
-        discrepancies.append(
-            {
-                "workload": f"({model['role']} model)",
-                "env": "model id",
-                "source_value": model["difference_source"],
-                "source_path": model["difference_path"],
-                "deployed": model["served"],
-                "disposition": "**UNRESOLVED**",
-            }
-        )
+    discrepancies.extend(model_discrepancy_rows(models))
 
     # The chart source this capture compares against must be the chart the
     # deployment runs: otherwise the record describes what the repository
@@ -1412,7 +1464,19 @@ def capture(namespace, flux_namespace, release, date, out_path):
     # CLOSED: an unestablishable comparison is an unresolved difference.
     deployed_chart_version = release_info.get("deployed_chart_version", "")
     local_version = local_chart_version()
-    if deployed_chart_version and local_version != deployed_chart_version:
+    if not deployed_chart_version:
+        # The identity gate cannot run without an attested version.
+        discrepancies.append(
+            {
+                "workload": "(chart source)",
+                "env": "chart version",
+                "source_value": f"the local chart source ({local_version})",
+                "source_path": "charts/genieai-umbrella/Chart.yaml",
+                "deployed": "the release history carries no chart version",
+                "disposition": "**UNRESOLVED**",
+            }
+        )
+    elif local_version != deployed_chart_version:
         discrepancies.append(
             {
                 "workload": "(chart source)",

@@ -17,6 +17,7 @@ const auth = require('./auth');
  */
 const REAL_REQUEST = auth.request;
 const REAL_GET_ADMIN_TOKEN = auth.getAdminToken;
+const REAL_GET_SESSION_TOKEN = auth.getSessionTokenViaUI;
 const PROFILE_PATH = require.resolve('./venue-profile');
 
 /** A fresh, uncached copy of the helper. */
@@ -28,6 +29,7 @@ function freshProfile() {
 test.afterEach(() => {
   auth.request = REAL_REQUEST;
   auth.getAdminToken = REAL_GET_ADMIN_TOKEN;
+  auth.getSessionTokenViaUI = REAL_GET_SESSION_TOKEN;
 });
 
 /** The fake transport: a queue of answers, one per call. */
@@ -277,5 +279,203 @@ test.describe('the hook-skip contract the guarded specs stand on (#1773)', () =>
 
   test('the hook after the skipped hook did not run', () => {
     expect(bodyRan).toBe(false);
+  });
+});
+
+test.describe('the locale whitelist probe reads the config the frontend reads', () => {
+  test('an empty whitelist keeps every locale active', async () => {
+    fakeTransport([{ status: 200, data: 'window.APP_CONFIG = {\n  availableLocales: "",\n};\n' }]);
+    const profile = freshProfile();
+    expect(await profile.localeActive('fr')).toBe(true);
+  });
+
+  test('a config without the knob keeps every locale active', async () => {
+    fakeTransport([{ status: 200, data: 'window.APP_CONFIG = {\n  apiUrl: "/api",\n};\n' }]);
+    const profile = freshProfile();
+    expect(await profile.localeActive('fr')).toBe(true);
+  });
+
+  test('no runtime config at all keeps every locale active (the dev-build arm)', async () => {
+    fakeTransport([{ status: 404, data: null }]);
+    const profile = freshProfile();
+    expect(await profile.localeActive('fr')).toBe(true);
+  });
+
+  test('a whitelist that excludes the locale excludes it — and matches case-insensitively', async () => {
+    // The frontend's rule (whitelist.js): trim, lowercase, compare. The
+    // probe applies the same rule, arm for arm.
+    fakeTransport([{ status: 200, data: 'window.APP_CONFIG = {\n  availableLocales: "en,es",\n};\n' }]);
+    const profile = freshProfile();
+    expect(await profile.localeActive('fr')).toBe(false);
+    expect(await profile.localeActive('es')).toBe(true);
+  });
+
+  test('a whitelist carrying the locale in another case still admits it', async () => {
+    fakeTransport([{ status: 200, data: 'window.APP_CONFIG = {\n  availableLocales: "EN,FR",\n};\n' }]);
+    const profile = freshProfile();
+    expect(await profile.localeActive('fr')).toBe(true);
+  });
+
+  test('the skip reason renders the whitelist exactly and names the NOT-exercised verdict', async () => {
+    fakeTransport([{ status: 200, data: 'window.APP_CONFIG = {\n  availableLocales: "en,es",\n};\n' }]);
+    const profile = freshProfile();
+    const reason = await profile.missingLocaleReason('fr');
+    expect(reason).toContain('availableLocales="en,es"');
+    expect(reason).toContain("'fr'");
+    expect(reason).toMatch(/NOT exercised/);
+  });
+});
+
+test.describe('the translation probe reads the venue through its own endpoint', () => {
+  // The probe mints a realm session through the browser login (the faked
+  // one here): a master-admin token is the wrong issuer for the backend.
+  function fakeSessionMint() {
+    auth.getSessionTokenViaUI = async () => 'fake-session-token';
+  }
+
+  test('a venue that translates the probe answers true, with the en→fr body', async () => {
+    fakeSessionMint();
+    const calls = fakeTransport([{ status: 200, data: { translated_texts: ['Bonjour'] }, headers: {} }]);
+    const profile = freshProfile();
+    expect(await profile.translatesTo('fr')).toBe(true);
+    expect(calls).toHaveLength(1);
+    expect(calls[0].method).toBe('POST');
+    expect(calls[0].path).toBe('/api/translate');
+    expect(calls[0].options.body.target_lang).toBe('fr');
+    expect(calls[0].options.body.source_lang).toBe('en');
+    expect(calls[0].options.headers.Authorization).toBe('Bearer fake-session-token');
+  });
+
+  test('the typed UNSUPPORTED_LANGUAGE refusal is the venue saying the language is absent', async () => {
+    fakeSessionMint();
+    fakeTransport([
+      { status: 400, data: { error: 'UNSUPPORTED_LANGUAGE', message: 'Unsupported target language' }, headers: {} }
+    ]);
+    const profile = freshProfile();
+    expect(await profile.translatesTo('fr')).toBe(false);
+  });
+
+  test('any other 400 is an unreadable venue, not an absent one', async () => {
+    fakeSessionMint();
+    fakeTransport([{ status: 400, data: { error: 'VALIDATION_ERROR' }, headers: {} }]);
+    const profile = freshProfile();
+    await expect(profile.translatesTo('fr')).rejects.toThrow(/venue profile is UNKNOWN/);
+  });
+
+  test('a 5xx is an unreadable venue too — loud, and never cached', async () => {
+    fakeSessionMint();
+    fakeTransport([
+      { status: 503, data: { error: 'unavailable' }, headers: {} },
+      { status: 200, data: { translated_texts: ['Bonjour'] }, headers: {} }
+    ]);
+    const profile = freshProfile();
+    await expect(profile.translatesTo('fr')).rejects.toThrow(/HTTP 503/);
+    // The failed probe left nothing cached: the next call re-reads the
+    // venue in its own name instead of inheriting the error.
+    expect(await profile.translatesTo('fr')).toBe(true);
+  });
+});
+
+test.describe('the French streaming premise combines the two venue facts', () => {
+  test('a venue without the locale never asks the translation endpoint', async () => {
+    auth.getSessionTokenViaUI = async () => 'fake-session-token';
+    const calls = fakeTransport([
+      { status: 200, data: 'window.APP_CONFIG = {\n  availableLocales: "en,es",\n};\n' },
+      { status: 200, data: { translated_texts: ['Bonjour'] }, headers: {} }
+    ]);
+    const profile = freshProfile();
+    expect(await profile.frenchStreamingReady()).toBe(false);
+    // Exactly ONE call happened — the config read. The translation probe
+    // was not spent on a venue whose locale already failed the premise.
+    expect(calls).toHaveLength(1);
+  });
+
+  test('an active locale with no translation chain is a false, and the reason names the chain', async () => {
+    auth.getSessionTokenViaUI = async () => 'fake-session-token';
+    fakeTransport([
+      { status: 200, data: 'window.APP_CONFIG = {\n  availableLocales: "",\n};\n' },
+      { status: 400, data: { error: 'UNSUPPORTED_LANGUAGE', message: 'Unsupported target language' }, headers: {} }
+    ]);
+    const profile = freshProfile();
+    expect(await profile.frenchStreamingReady()).toBe(false);
+    const reason = await profile.frenchStreamingMissingReason();
+    expect(reason).toMatch(/translation chain/);
+    expect(reason).toMatch(/NOT exercised/);
+  });
+
+  test('both facts present is a ready venue', async () => {
+    auth.getSessionTokenViaUI = async () => 'fake-session-token';
+    fakeTransport([
+      { status: 200, data: 'window.APP_CONFIG = {\n  availableLocales: "",\n};\n' },
+      { status: 200, data: { translated_texts: ['Bonjour'] }, headers: {} }
+    ]);
+    const profile = freshProfile();
+    expect(await profile.frenchStreamingReady()).toBe(true);
+  });
+});
+
+test.describe('the ingest-chain canary uploads, ingests, and cleans up', () => {
+  function fakeSessionMint() {
+    auth.getSessionTokenViaUI = async () => 'fake-session-token';
+  }
+
+  const uploaded = (fileId) => ({
+    status: 201,
+    data: { success: true, data: { file_id: fileId, file_name: 'ingest-probe-canary.txt' } },
+    headers: {}
+  });
+  const recordRead = (fileId, status) => ({
+    status: 200,
+    data: { success: true, data: { file_id: fileId, file_name: 'ingest-probe-canary.txt', dataprep: { status } } },
+    headers: {}
+  });
+
+  test('a canary that reaches Ingested is a ready venue — and leaves nothing behind', async () => {
+    fakeSessionMint();
+    const calls = fakeTransport([
+      uploaded('c1'),
+      { status: 200, data: { success: true }, headers: {} },
+      recordRead('c1', 'Ingested'),
+      recordRead('c1', 'Ingested'),
+      { status: 200, data: { success: true }, headers: {} }
+    ]);
+    const profile = freshProfile();
+    expect(await profile.ingestChainReady()).toBe(true);
+    // The whole conversation, in order: upload, ingest, the wait's reads,
+    // the cleanup's record read and delete.
+    expect(calls.map((c) => `${c.method} ${c.path}`)).toEqual([
+      'POST /api/files/upload',
+      'POST /api/files/c1/ingest',
+      'GET /api/files/c1',
+      'GET /api/files/c1',
+      'DELETE /api/files/c1'
+    ]);
+  });
+
+  test('a canary that lands Ingestion Error is NOT a ready venue, and the reason says what happened', async () => {
+    fakeSessionMint();
+    fakeTransport([
+      uploaded('c1'),
+      { status: 200, data: { success: true }, headers: {} },
+      recordRead('c1', 'Ingestion Error'),
+      recordRead('c1', 'Ingestion Error'),
+      { status: 200, data: { success: true }, headers: {} }
+    ]);
+    const profile = freshProfile();
+    expect(await profile.ingestChainReady()).toBe(false);
+    const reason = await profile.ingestChainMissingReason();
+    expect(reason).toContain('Ingestion Error');
+    expect(reason).toMatch(/NOT exercised/);
+  });
+
+  test('a venue that cannot accept the upload is UNREADABLE — loud, not a false verdict', async () => {
+    fakeSessionMint();
+    fakeTransport([
+      { status: 500, data: { success: false, error: 'boom' }, headers: {} },
+      // The cleanup's prefix sweep: nothing was committed under the name.
+      { status: 200, data: { data: [] }, headers: {} }
+    ]);
+    const profile = freshProfile();
+    await expect(profile.ingestChainReady()).rejects.toThrow(/could not read the venue/);
   });
 });

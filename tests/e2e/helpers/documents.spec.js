@@ -2,7 +2,14 @@
 // SPDX-License-Identifier: Apache-2.0
 const { test, expect } = require('@playwright/test');
 const fs = require('fs');
-const { matchesStatus, sweepDeleteOneFile } = require('./documents');
+const path = require('path');
+const {
+  matchesStatus,
+  sweepDeleteOneFile,
+  uploadFileViaApi,
+  triggerIngestViaApi,
+  waitForFileIngestedViaApi
+} = require('./documents');
 
 /**
  * Unit spec for the document status predicate (#1781).
@@ -268,5 +275,158 @@ test.describe('the sweep per-file delete (retract-then-delete, #1864)', () => {
     const t = scriptedTransport([]);
     const failure = await sweepDeleteOneFile(t.request, file, 'tok');
     expect(failure).toMatch(/^test-document-leftover\.pdf: unexpected call DELETE/);
+  });
+});
+
+test.describe('the API upload (multipart, the repository upload route)', () => {
+  const FIXTURE = path.join(__dirname, '..', 'fixtures', 'ingest-probe-canary.txt');
+
+  // The same scripted transport the sweep spec uses: the recorded calls
+  // ARE the assertion subject — the multipart request shape (boundary
+  // header, bearer, field name, file name, content) is the contract.
+  function scriptedTransport(script) {
+    const calls = [];
+    const request = async (method, path, options) => {
+      calls.push([method, path, options]);
+      if (script.length === 0) {
+        throw new Error(`unexpected call ${method} ${path} — the script is exhausted`);
+      }
+      return script.shift();
+    };
+    return { request, calls };
+  }
+
+  test('the upload rides a multipart body carrying the file part and the bearer', async () => {
+    const record = { file_id: 'f1', file_name: 'ingest-probe-canary.txt' };
+    const t = scriptedTransport([{ status: 201, data: { success: true, data: record }, headers: {} }]);
+    expect(await uploadFileViaApi(t.request, 'tok', FIXTURE)).toEqual(record);
+
+    expect(t.calls).toHaveLength(1);
+    const [method, path, options] = t.calls[0];
+    expect(method).toBe('POST');
+    expect(path).toBe('/api/files/upload');
+    expect(options.headers.Authorization).toBe('Bearer tok');
+    // The Content-Type rides the transport's OWN channel (`contentType`):
+    // the transport overwrites any Content-Type in the headers map, so a
+    // multipart body sent as application/json is parsed as JSON by the
+    // repository and refused with a 400 naming the body's first token.
+    expect(options.headers['Content-Type']).toBeUndefined();
+    // The boundary travels in the Content-Type AND the body: a mismatch
+    // would be refused by multer before any handler ran.
+    const boundary = /boundary=(.+)$/.exec(options.contentType)[1];
+    expect(options.body).toContain(`--${boundary}\r\n`);
+    expect(options.body).toContain('Content-Disposition: form-data; name="file"; filename="ingest-probe-canary.txt"');
+    expect(options.body).toContain('Content-Type: text/markdown');
+    const content = fs.readFileSync(FIXTURE, 'utf8');
+    expect(options.body).toContain(content);
+    // The terminator closes the part — a body without it is not multipart.
+    expect(options.body.endsWith(`--${boundary}--\r\n`)).toBe(true);
+  });
+
+  test('a non-201 answer is a named failure carrying the status and the file', async () => {
+    const t = scriptedTransport([{ status: 400, data: { success: false, error: 'Invalid file type' }, headers: {} }]);
+    await expect(uploadFileViaApi(t.request, 'tok', FIXTURE)).rejects.toThrow(/HTTP 400/);
+    // The same failure names the file it was about — one message, both
+    // facts: a fresh transport, because the scripted one is spent.
+    const t2 = scriptedTransport([{ status: 400, data: { success: false, error: 'Invalid file type' }, headers: {} }]);
+    await expect(uploadFileViaApi(t2.request, 'tok', FIXTURE)).rejects.toThrow(/ingest-probe-canary\.txt/);
+  });
+
+  test('a 201 without a file record is a named failure, not an undefined id', async () => {
+    const t = scriptedTransport([{ status: 201, data: { success: true, data: {} }, headers: {} }]);
+    await expect(uploadFileViaApi(t.request, 'tok', FIXTURE)).rejects.toThrow(/without a file record/);
+  });
+});
+
+test.describe('the ingest trigger (the repository ingest route)', () => {
+  function scriptedTransport(script) {
+    const calls = [];
+    const request = async (method, path, options) => {
+      calls.push([method, path, options]);
+      if (script.length === 0) {
+        throw new Error(`unexpected call ${method} ${path} — the script is exhausted`);
+      }
+      return script.shift();
+    };
+    return { request, calls };
+  }
+
+  test('an accepted ingest is one POST with the bearer, and the payload returns', async () => {
+    const t = scriptedTransport([{ status: 200, data: { success: true }, headers: {} }]);
+    expect(await triggerIngestViaApi(t.request, 'tok', 'f1')).toEqual({ success: true });
+    expect(t.calls).toEqual([['POST', '/api/files/f1/ingest', { headers: { Authorization: 'Bearer tok' } }]]);
+  });
+
+  test('a 207 multi-status envelope is accepted too', async () => {
+    const t = scriptedTransport([{ status: 207, data: { results: [] }, headers: {} }]);
+    expect(await triggerIngestViaApi(t.request, 'tok', 'f1')).toEqual({ results: [] });
+  });
+
+  test("dataprep's 409 idempotency guard (ingest_already_running) is the accepted state", async () => {
+    const t = scriptedTransport([{ status: 409, data: { code: 'ingest_already_running' }, headers: {} }]);
+    expect(await triggerIngestViaApi(t.request, 'tok', 'f1')).toEqual({ code: 'ingest_already_running' });
+  });
+
+  test('a 409 without the code, and any other status, fail loud with the status named', async () => {
+    const t = scriptedTransport([
+      { status: 409, data: { code: 'SOMETHING_ELSE' }, headers: {} },
+      { status: 429, data: { error: 'busy' }, headers: {} }
+    ]);
+    await expect(triggerIngestViaApi(t.request, 'tok', 'f1')).rejects.toThrow(/HTTP 409/);
+    await expect(triggerIngestViaApi(t.request, 'tok', 'f1')).rejects.toThrow(/HTTP 429/);
+  });
+});
+
+test.describe('the ingest wait (the dataprep status over the API)', () => {
+  function scriptedTransport(script, callLog) {
+    const request = async (method, path) => {
+      callLog.push([method, path]);
+      if (script.length === 0) {
+        throw new Error(`unexpected call ${method} ${path} — the script is exhausted`);
+      }
+      return script.shift();
+    };
+    return request;
+  }
+
+  const record = (status) => ({ status: 200, data: { data: { file_id: 'f1', dataprep: { status } } }, headers: {} });
+
+  test('a file already ingested costs ONE read and returns the record', async () => {
+    const calls = [];
+    const request = scriptedTransport([record('Ingested')], calls);
+    const file = await waitForFileIngestedViaApi(request, 'tok', 'f1');
+    expect(file.file_id).toBe('f1');
+    expect(calls).toHaveLength(1);
+  });
+
+  test('pending then ingested: the wait holds until the shared vocabulary reads ingested', async () => {
+    const calls = [];
+    const request = scriptedTransport([record('Pending'), record('Ingesting'), record('Ingested')], calls);
+    const file = await waitForFileIngestedViaApi(request, 'tok', 'f1', { timeoutMs: 15000 });
+    expect(file.dataprep.status).toBe('Ingested');
+    // One read before the wait, at least one during it.
+    expect(calls.length).toBeGreaterThanOrEqual(2);
+  });
+
+  test('an Ingestion Error is terminal and fails AT ONCE with the status named', async () => {
+    const calls = [];
+    const request = scriptedTransport([record('Ingestion Error')], calls);
+    await expect(waitForFileIngestedViaApi(request, 'tok', 'f1', { timeoutMs: 30000 })).rejects.toThrow(
+      /dataprep status is 'Ingestion Error'/
+    );
+    expect(calls).toHaveLength(1);
+  });
+
+  test('a budget spent on pending expires with the observed value in the failure', async () => {
+    const calls = [];
+    const request = scriptedTransport([record('Pending'), record('Pending')], calls);
+    await expect(waitForFileIngestedViaApi(request, 'tok', 'f1', { timeoutMs: 500 })).rejects.toThrow(/ingested/);
+  });
+
+  test('a non-200 record read is a named failure, not a poll tick', async () => {
+    const calls = [];
+    const request = scriptedTransport([{ status: 500, data: { error: 'boom' }, headers: {} }], calls);
+    await expect(waitForFileIngestedViaApi(request, 'tok', 'f1', { timeoutMs: 30000 })).rejects.toThrow(/HTTP 500/);
+    expect(calls).toHaveLength(1);
   });
 });

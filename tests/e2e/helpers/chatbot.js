@@ -238,15 +238,17 @@ function readStreamingState() {
   if (!store) return { state: 'no-store' };
   if (!hasGetter) return { state: 'no-getter' };
   if (!open) return { state: 'no-open-conversation' };
-  // Only what the decision needs: each message's sender, streaming flag
-  // and the metadata frame's responseTime. The whole conversation would
-  // cross the wire on every poll tick — and WHICH messages are the bot's
-  // is decided on this side, where it is unit tested.
+  // Only what the decision needs: each message's sender, streaming flag,
+  // the metadata frame's responseTime and the done frame's translation
+  // verdict. The whole conversation would cross the wire on every poll
+  // tick — and WHICH messages are the bot's is decided on this side, where
+  // it is unit tested.
   const messages = open.messages
     ? open.messages.map((m) => ({
         sender: m.sender,
         isStreaming: m.isStreaming,
-        responseTime: m.metadata ? m.metadata.responseTime : undefined
+        responseTime: m.metadata ? m.metadata.responseTime : undefined,
+        translationFailed: m.translationFailed
       }))
     : [];
   return { state: 'ok', messages };
@@ -344,6 +346,31 @@ function lastBotResponseTimeOf(read) {
   const last = bots[bots.length - 1];
   if (last === undefined) return undefined;
   return last.responseTime;
+}
+
+/**
+ * The done frame's translation verdict of the last bot message, from a read
+ * of the store's public getter (the same shape the other deciders read).
+ * Pure, and OUT of the page — the same decider pattern, so the read's named
+ * causes stay decidable where they are unit tested.
+ *
+ * The flag's ABSENCE crosses the wire as absence, like the streaming flag
+ * does: the welcome bubble and a turn whose done frame has not landed carry
+ * no `translationFailed` key, and coercing that to `false` would say "the
+ * answer was translated" before any answer existed. `undefined` reports it.
+ *
+ * @param {{state: string, messages?: object[]}} read - what the page read
+ * @returns {boolean|undefined|symbol} the verdict, undefined, or NOT_READABLE
+ */
+function lastBotTranslationFailedOf(read) {
+  if (!read || (read.state !== 'ok' && read.state !== 'no-open-conversation')) {
+    return NOT_READABLE;
+  }
+  const messages = read.messages || [];
+  const bots = messages.filter((m) => m.sender === 'bot');
+  const last = bots[bots.length - 1];
+  if (last === undefined) return undefined;
+  return last.translationFailed;
 }
 
 /**
@@ -472,6 +499,7 @@ module.exports = {
   readStreamingState,
   streamingFlagOf,
   lastBotResponseTimeOf,
+  lastBotTranslationFailedOf,
   NOT_READABLE,
   botStreamingFlag,
   loginViaUI,

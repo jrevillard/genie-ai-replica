@@ -1,4 +1,6 @@
 const { expect } = require('@playwright/test');
+const fs = require('fs');
+const path = require('path');
 // The shared document-status vocabulary: the frontend owns the rule this
 // helper mirrors, so the helper IMPORTS it instead of spelling it (#1781).
 // The bridge is Node's CommonJS-require-of-an-ES-module (unflagged from
@@ -352,6 +354,172 @@ async function getDocumentTableRows(page) {
 }
 
 /**
+ * One multipart/form-data body for the repository's single-file upload route
+ * (POST /api/files/upload, multer field `file`).
+ *
+ * UTF-8 TEXT fixtures only: the body is assembled as a string and the shared
+ * transport writes strings as UTF-8, so the bytes arrive exactly as read for
+ * an ASCII/UTF-8 text file. A binary fixture (a PDF, a ZIP) would be
+ * corrupted by the string round-trip and needs a transport Buffer arm first
+ * — no such fixture is ingested through this helper.
+ *
+ * Pure, so the unit spec can pin the bytes at the helper's own boundary
+ * through uploadFileViaApi's scripted transport.
+ *
+ * @param {string} boundary - the multipart boundary (no leading `--`)
+ * @param {string} fileName - the file name the server should see
+ * @param {string} contentType - the part's Content-Type
+ * @param {string} content - the file's text, as read from disk
+ * @returns {string} the full multipart body
+ */
+function multipartBody(boundary, fileName, contentType, content) {
+  return (
+    `--${boundary}\r\n` +
+    `Content-Disposition: form-data; name="file"; filename="${fileName}"\r\n` +
+    `Content-Type: ${contentType}\r\n\r\n` +
+    content +
+    `\r\n--${boundary}--\r\n`
+  );
+}
+
+/**
+ * Upload one text file through the repository's HTTP contract and return the
+ * response payload's file record (file_id, file_name, dataprep...).
+ *
+ * The transport (`request`) is injected by parameter, like sweepDeleteOneFile's:
+ * it belongs to helpers/auth.js, and the unit spec scripts it — the request
+ * shape (multipart body, boundary header, bearer) IS the contract under test.
+ *
+ * @param {Function} request - the auth helper's `request` transport
+ * @param {string} token - the uploader's bearer token (the document surface is
+ *        ADMIN_ONLY on the document-repository)
+ * @param {string} filePath - absolute path of the text file to upload
+ * @returns {Promise<object>} the response payload's `data` file record
+ */
+async function uploadFileViaApi(request, token, filePath) {
+  const fileName = path.basename(filePath);
+  const content = fs.readFileSync(filePath, 'utf8');
+  const boundary = `e2e-upload-${Math.random().toString(16).slice(2)}`;
+  const res = await request('POST', '/api/files/upload', {
+    headers: { Authorization: `Bearer ${token}` },
+    // The transport sets Content-Type from `contentType` and OVERWRITES any
+    // Content-Type in the headers map (it is the one that writes the body) —
+    // a multipart body sent as application/json is parsed as JSON by the
+    // repository and refused with a 400 naming the body's first token.
+    contentType: `multipart/form-data; boundary=${boundary}`,
+    body: multipartBody(boundary, fileName, 'text/markdown', content)
+  });
+  if (res.status !== 201) {
+    throw new Error(
+      `the upload of ${fileName} answered HTTP ${res.status} ` + `(body: ${JSON.stringify(res.data).slice(0, 200)})`
+    );
+  }
+  if (!res.data || !res.data.data || !res.data.data.file_id) {
+    throw new Error(
+      `the upload of ${fileName} answered 201 without a file record ` +
+        `(body: ${JSON.stringify(res.data).slice(0, 200)})`
+    );
+  }
+  return res.data.data;
+}
+
+/**
+ * Trigger the dataprep ingest of one file through the repository's HTTP
+ * contract (POST /api/files/:fileId/ingest) — the same call the admin
+ * dashboard's batch ingest makes.
+ *
+ * The ingest runs asynchronously: a 200/207 means the work was ACCEPTED, not
+ * finished — the caller waits for the status with waitForFileIngestedViaApi.
+ *
+ * @param {Function} request - the auth helper's `request` transport
+ * @param {string} token - the caller's bearer token
+ * @param {string} fileId - the file to ingest
+ * @returns {Promise<object>} the response payload (per-file result or status)
+ */
+async function triggerIngestViaApi(request, token, fileId) {
+  const res = await request('POST', `/api/files/${fileId}/ingest`, {
+    headers: { Authorization: `Bearer ${token}` }
+  });
+  // 200 (accepted) and 207 (multi-status envelope) both mean the ingest was
+  // taken on; 409 ingest_already_running is dataprep's idempotency guard —
+  // a live task already owns the file, which is the state the caller wants.
+  const accepted =
+    res.status === 200 ||
+    res.status === 207 ||
+    (res.status === 409 && res.data && res.data.code === 'ingest_already_running');
+  if (!accepted) {
+    throw new Error(
+      `the ingest call for file ${fileId} answered HTTP ${res.status} ` +
+        `(body: ${JSON.stringify(res.data).slice(0, 200)})`
+    );
+  }
+  return res.data;
+}
+
+/**
+ * Hold until one file's dataprep status reads 'ingested' over the API —
+ * the shared vocabulary's normalised form (the stored value is capitalised;
+ * the comparison is normalizeStatus's, like every other consumer's).
+ *
+ * The TERMINAL statuses fail AT ONCE (named, with the status): 'ingestion
+ * error' is a failed ingest, and 'retracted' is a file withdrawn from the
+ * corpus — neither will ever read 'ingested', so polling them to the
+ * timeout would only delay the same red. The ingest budget expires on
+ * 'pending'/'ingesting' with the last observed status in the message —
+ * that is the shape a venue without (or with a wedged) dataprep chain
+ * produces, and the message says which.
+ *
+ * @param {Function} request - the auth helper's `request` transport
+ * @param {string} token - the caller's bearer token
+ * @param {string} fileId - the file whose status is waited for
+ * @param {object} [options]
+ * @param {number} [options.timeoutMs=240000] - the ingest budget
+ * @returns {Promise<object>} the file record that reached 'ingested'
+ */
+async function waitForFileIngestedViaApi(request, token, fileId, { timeoutMs = 240000 } = {}) {
+  const read = async () => {
+    const res = await request('GET', `/api/files/${fileId}`, {
+      headers: { Authorization: `Bearer ${token}` }
+    });
+    if (res.status !== 200) {
+      throw new Error(`the file record of ${fileId} answered HTTP ${res.status} while polling for 'ingested'`);
+    }
+    // The record rides the response's `data` envelope (GET /api/files/:fileId
+    // → {success, message, data}); the dataprep block is what the wait reads.
+    return res.data && res.data.data;
+  };
+
+  // One read before the wait: a file that already ingested (a re-run against
+  // a converged venue) must not spend the budget discovering it.
+  const statusOf = (record) => normalizeStatus(record && record.dataprep && record.dataprep.status);
+  const TERMINAL = ['ingestion error', 'retracted'];
+  let file = await read();
+  if (TERMINAL.includes(statusOf(file))) {
+    throw new Error(`the ingest of file ${fileId} failed — the dataprep status is '${file.dataprep.status}'`);
+  }
+  if (statusOf(file) !== 'ingested') {
+    await expect
+      .poll(
+        async () => {
+          file = await read();
+          const status = statusOf(file);
+          // A terminal status that arrives MID-WAIT ends the wait at
+          // once (the poll propagates the throw): a retracted file never
+          // reads 'ingested', and polling it to the deadline would only
+          // delay the same named failure.
+          if (TERMINAL.includes(status)) {
+            throw new Error(`the ingest of file ${fileId} failed — the dataprep status is '${file.dataprep.status}'`);
+          }
+          return status;
+        },
+        { timeout: timeoutMs, intervals: [1000, 5000] }
+      )
+      .toBe('ingested');
+  }
+  return file;
+}
+
+/**
  * Delete all test documents matching a prefix via API.
  * Used for test cleanup. Direct access grants are disabled on the realm by
  * design, so the deletes run with a browser-session token (the master admin
@@ -503,6 +671,9 @@ module.exports = {
   navigateToDocumentManagement,
   openUploadDialog,
   uploadFile,
+  uploadFileViaApi,
+  triggerIngestViaApi,
+  waitForFileIngestedViaApi,
   waitForDocumentInTable,
   searchDocuments,
   waitForTableRowsSettled,

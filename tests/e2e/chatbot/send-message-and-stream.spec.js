@@ -9,9 +9,12 @@ const {
   getLastBotMessage,
   readStreamingState,
   lastBotResponseTimeOf,
+  lastBotTranslationFailedOf,
   NOT_READABLE,
   USER_BUBBLE
 } = require('../helpers/chatbot');
+const { pinLocale, assertAdoptedLocale } = require('../helpers/locale');
+const { skipUnlessVenue, frenchStreamingReady, frenchStreamingMissingReason } = require('../helpers/venue-profile');
 
 test.describe('Chatbot message sending and SSE streaming', () => {
   // The beforeEach logs in through the browser and navigates — the
@@ -96,6 +99,78 @@ test.describe('Chatbot message sending and SSE streaming', () => {
       typeof responseTime,
       `the backend's responseTime rode the metadata frame (got ${JSON.stringify(responseTime)})`
     ).toBe('number');
+  });
+});
+
+test.describe('Chatbot message sending and SSE streaming — the French answer', () => {
+  // The venue premise runs FIRST: without an active 'fr' locale in the
+  // deployment's whitelist and a translation chain that answers en→fr,
+  // this group's pin would measure a fallback page and its premise is
+  // simply absent (#1742). The skip hook is the group's first beforeAll,
+  // so the guarded setup after it never runs on a parked venue.
+  test.beforeAll(skipUnlessVenue(test, frenchStreamingReady, frenchStreamingMissingReason));
+
+  test.describe.configure({ timeout: LOGIN_BUDGET_TIMEOUT_MS });
+
+  let page;
+  let context;
+
+  test.beforeEach(async ({ browser }) => {
+    context = await browser.newContext({
+      ignoreHTTPSErrors: true,
+      bypassCSP: true
+    });
+    page = await context.newPage();
+
+    // The locale is pinned BEFORE any page script runs, and the pin is
+    // proven (helpers/locale.js): the request's `context.language` is the
+    // app's own UI locale, so a pin that did not land would ask for a
+    // different language than the one this spec asserts. The adoption is
+    // asserted on the booted app — a session that fell back to 'en'
+    // measures the fallback and passes vacuously (#1891).
+    await pinLocale(context, 'fr');
+    await loginViaUI(page);
+    await navigateToChatbot(page);
+    await assertAdoptedLocale(page, 'the French streaming spec', 'fr');
+  });
+
+  test.afterEach(async () => {
+    await context?.close();
+  });
+
+  test('streams the French translation when the UI locale is fr', async () => {
+    // The question names the product, so the grounded answer carries the
+    // proper noun in ANY language — the subject survives its translation
+    // and the assertion is not a copy comparison.
+    const question = 'What is GENIE.AI?';
+
+    await sendMessage(page, question);
+    await waitForBotResponse(page, { timeout: 120000 });
+
+    const botText = await getLastBotMessage(page);
+    expect(botText.length, 'the French answer arrived').toBeGreaterThan(0);
+    expect(botText, 'the answer still names the subject of the question').toContain('GENIE');
+
+    // The app's own translation verdict, read twice on two channels:
+    //
+    // 1. The DOM marker renders ONLY when the done frame carried
+    //    translationFailed=true (the amber note beside an English answer a
+    //    failed translation left behind) — its absence is the UI contract.
+    await expect(page.locator('[data-testid="translation-failed"]')).toHaveCount(0);
+
+    // 2. The store's flag on the completed turn — the same getter the
+    //    streaming-flag wait reads, mapped through the helper's page-side
+    //    read. `false` (not absent) is the contract: the done frame
+    //    delivered the verdict for this turn.
+    const read = await page.evaluate(readStreamingState);
+    const translationFailed = lastBotTranslationFailedOf(read);
+    if (translationFailed === NOT_READABLE) {
+      throw new Error(`the store read could not see the completed turn: ${read && read.state}`);
+    }
+    expect(
+      translationFailed,
+      `the done frame carried translationFailed=false (got ${JSON.stringify(translationFailed)})`
+    ).toBe(false);
   });
 });
 

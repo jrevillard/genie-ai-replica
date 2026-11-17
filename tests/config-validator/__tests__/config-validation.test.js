@@ -2860,6 +2860,7 @@ describe('e2e merge-train changes filters (#1264)', () => {
       'tests/e2e/chatbot/conversation-history.spec.js',
       'tests/e2e/chatbot/error-handling.spec.js',
       'tests/e2e/chatbot/quick-help-scope.spec.js',
+      'tests/e2e/chatbot/real-rag-citation.spec.js',
       'tests/e2e/chatbot/send-message-and-stream.spec.js',
       'tests/e2e/documents/search.spec.js',
       'tests/e2e/documents/upload.spec.js',

@@ -85,9 +85,9 @@ docker service scale genieai_<service>=<replicas>     # Scale a service
 - Only nginx ports (80, 443) exposed; all other services internal
 - Node labels: `gateway=true`, `gpu=true`, `genieai=true`
 
-### Kubernetes (feature branch)
+### Kubernetes
 
-Helm chart on `feat/k8s-migration`, deployed to laptop minikube via Flux from
+Helm chart on `main`, deployed to laptop minikube via Flux from
 `genie-ai-deploy`. Compose + Ansible remain primary (see above). Per-env
 overlays + SealedSecrets live in the deploy repo.
 
@@ -96,7 +96,7 @@ set: `.claude/rules/K8s-WORKFLOW.md` (the only k8s rule file — read it
 before touching `charts/**`).
 
 ```bash
-# Chart dev cycle (worktree: feat/k8s-migration)
+# Chart dev cycle (any checkout of the chart)
 helm dependency update charts/genieai-umbrella    # vendored deps are GITIGNORED
                                                    # (genieai-common, gateway-helm): a fresh
                                                    # checkout has no charts/*.tgz, and every
@@ -171,7 +171,7 @@ For the full architecture overview with diagrams (C4 context/container, authenti
 
 ### Layer Stack
 
-0. **Deployment Layer**: Helm chart (`charts/genieai-umbrella` + library `charts/genieai-common`) reconciled by Flux v2 from the `genie-ai-deploy` repo — Kubernetes path on feature branch `feat/k8s-migration`, validated on laptop minikube (`overlays/<dev>-laptop/dev`).
+0. **Deployment Layer**: Helm chart (`charts/genieai-umbrella` + library `charts/genieai-common`) reconciled by Flux v2 from the `genie-ai-deploy` repo — Kubernetes path on `main`, validated on laptop minikube (`overlays/<dev>-laptop/dev`).
 1. **Client Layer**: Vue 3 web app (`components/gov-chat-frontend`), Flutter mobile (`mobile/genie_ai_mobile`)
 2. **API Gateway**: Kong/NGINX (`api-gateway-solution`)
 3. **Application Layer**: Node.js/Express backend (`components/gov-chat-backend`)
@@ -240,7 +240,7 @@ When adding a doc, pick one home based on audience. Do not duplicate across both
 | API Gateway | Kong, NGINX |
 | Testing | Jest (Node.js), pytest (Python), Playwright (E2E), flutter_test |
 | Observability | OTel SDK, VictoriaMetrics, VictoriaLogs, VictoriaTraces, Grafana |
-| Kubernetes deployment | Helm 3 + Flux v2 (`charts/genieai-umbrella` + `genie-ai-deploy`, feature branch `feat/k8s-migration`) |
+| Kubernetes deployment | Helm 3 + Flux v2 (`charts/genieai-umbrella` + `genie-ai-deploy`) |
 | CI/CD | GitLab CI (`.gitlab-ci.yml`) |
 
 ## Linting and Formatting
@@ -496,7 +496,7 @@ To change built-in defaults, edit the Python code:
 - Database URLs: `ARANGO_URL`, `VLLM_ENDPOINT`, etc. (defaults in docker-compose.yaml)
 - Service configurations: `LOG_LEVEL`, `NODE_ENV`, `TRANSLATION_BACKEND`, etc. (defaults in code)
 
-**Kubernetes equivalent (feature branch `feat/k8s-migration`):** chart
+**Kubernetes equivalent:** chart
 defaults live in `charts/genieai-umbrella/values.yaml`; per-environment
 overrides (clusterProfile, namespace, ingress host, Arango/Postgres
 topology, GPU mode) ship as a `ConfigMap` rendered by Kustomize in

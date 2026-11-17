@@ -51,15 +51,19 @@ function buildSpec() {
   );
   const flow = spec.components?.securitySchemes?.KeycloakOAuth2?.flows?.authorizationCode;
   // swagger-definition.js builds the flow URLs from KEYCLOAK_PUBLIC_URL when
-  // it is set, and from KEYCLOAK_URL otherwise (#1889). Two properties must
+  // it is usable, and from KEYCLOAK_URL otherwise (#1889). Two properties must
   // hold for the committed Dart artifacts (which embed these URLs):
   //   - the served URL is CONCRETE and ABSOLUTE — a dropped KEYCLOAK_URL pin
   //     now yields a same-origin RELATIVE URL (not an 'undefined'
   //     interpolation), which the old 'undefined' check passed vacuously;
   //   - it derives from the configured base, so the artifacts stay pinned.
-  // The envelope pins KEYCLOAK_URL only (env -i leaves PUBLIC_URL unset);
-  // the expected base therefore mirrors the code's own precedence.
-  const expectedBase = (process.env.KEYCLOAK_PUBLIC_URL || process.env.KEYCLOAK_URL || '').trim().replace(/\/$/, '');
+  // The expected base MIRRORS the resolution in swagger-definition.js (keep
+  // the two in sync): the public value wins unless it carries whitespace
+  // (refused there), and trailing slashes are stripped.
+  const publicValue = process.env.KEYCLOAK_PUBLIC_URL || '';
+  const publicBase = /\s/.test(publicValue) ? '' : publicValue.replace(/\/+$/, '');
+  const expectedBase =
+    publicBase || (typeof process.env.KEYCLOAK_URL === 'string' ? process.env.KEYCLOAK_URL.replace(/\/+$/, '') : '');
   for (const [label, url] of [
     ['authorizationUrl', flow?.authorizationUrl],
     ['tokenUrl', flow?.tokenUrl]

@@ -136,4 +136,16 @@ describe('swagger-definition OAuth2 flow URLs', () => {
     const { authorizationUrl } = flowUrls();
     expect(authorizationUrl.startsWith('/')).toBe(false);
   });
+
+  it('never degrades to a same-origin relative URL when KEYCLOAK_URL is empty', () => {
+    // An empty value is the delivery shape of an unset variable (compose
+    // passes `KEYCLOAK_PUBLIC_URL=${KEYCLOAK_PUBLIC_URL:-}`): it must not
+    // become a working-looking relative URL either.
+    process.env.KEYCLOAK_URL = '';
+    delete process.env.KEYCLOAK_PUBLIC_URL;
+    process.env.KEYCLOAK_REALM = 'genie';
+    jest.resetModules();
+    const { authorizationUrl } = flowUrls();
+    expect(authorizationUrl.startsWith('/')).toBe(false);
+  });
 });

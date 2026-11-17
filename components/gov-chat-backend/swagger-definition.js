@@ -24,8 +24,8 @@
 // refused rather than trimmed: the verifier does not trim its alias, so a
 // trimmed base here would point at an issuer the verifier never accepts.
 //
-// When no base URL is configured at all, KEYCLOAK_URL stays undefined and
-// the served URL keeps the historical visibly-broken 'undefined' shape: a
+// When no base URL is configured at all — KEYCLOAK_URL unset or empty — the
+// served URL keeps the historical visibly-broken 'undefined' shape: a
 // same-origin relative URL would open the Authorize popup on the docs
 // origin itself — a silent misconfiguration.
 const oauth2BaseUrl = (() => {
@@ -41,9 +41,10 @@ const oauth2BaseUrl = (() => {
     }
   }
   const internalBase = process.env.KEYCLOAK_URL;
-  // Undefined stays undefined (see above); a trailing slash is stripped so
-  // the served URL never carries a doubled path segment.
-  return typeof internalBase === 'string' ? internalBase.replace(/\/+$/, '') : internalBase;
+  // Unset or empty stays undefined (see above); trailing slashes are
+  // stripped so the served URL never carries a doubled path segment.
+  if (typeof internalBase !== 'string' || internalBase === '') return undefined;
+  return internalBase.replace(/\/+$/, '');
 })();
 
 module.exports = {

@@ -326,12 +326,10 @@ test.describe('the done frame translation verdict is read through the same store
     expect(lastBotTranslationFailedOf(read)).toBeUndefined();
   });
 
-  test('a welcome-only transcript and an empty transcript both report undefined', () => {
-    // The welcome bubble IS a bot message — its row carries no verdict,
-    // which reads as the undefined case, distinct from a broken contract.
-    expect(
-      lastBotTranslationFailedOf({ state: 'ok', messages: [{ sender: 'bot', isStreaming: undefined }] })
-    ).toBeUndefined();
+  test('an empty transcript reports undefined — there is no bot message at all', () => {
+    // The OTHER branch from the welcome bubble's (proven above, through
+    // the real page read): no bot message in the transcript, so the
+    // decider has no row to read a verdict from.
     expect(lastBotTranslationFailedOf({ state: 'ok', messages: [] })).toBeUndefined();
   });
 

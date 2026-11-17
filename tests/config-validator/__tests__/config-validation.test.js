@@ -3560,7 +3560,13 @@ describe('e2e merge-train changes filters (#1264)', () => {
   // union, not why they are missing: delete the stack input and the reverse
   // pin demands both in the anchor.
   test('the derived out-of-tree emissions are exactly these (#1843)', () => {
+    // The i18n glob is there because the e2e suite reads the frontend's
+    // OWN locale-whitelist module (the venue probe's parity test compares
+    // the probe's rule against the owner's answer) — a new out-of-tree
+    // consumption lands here, the loud conscious step the rule asks for.
+    // It adds no anchor entry: the frontend stack input already covers it.
     expect(DERIVED_OUT_OF_TREE).toEqual([
+      'components/gov-chat-frontend/src/i18n/**/*',
       'components/gov-chat-frontend/src/i18n/locales/**/*',
       'components/gov-chat-frontend/src/utils/**/*'
     ]);

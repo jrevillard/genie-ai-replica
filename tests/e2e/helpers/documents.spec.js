@@ -5,23 +5,23 @@ const fs = require('fs');
 const path = require('path');
 const {
   matchesStatus,
+  normalizeStatus,
   sweepDeleteOneFile,
   uploadFileViaApi,
   triggerIngestViaApi,
   waitForFileIngestedViaApi
 } = require('./documents');
 
-/**
- * Unit spec for the document status predicate (#1781).
- *
- * `matchesStatus` mirrors what AdminDashboard.vue's `filteredDocuments`
- * renders, and it derives its normalisation from the SHARED vocabulary
- * (`components/gov-chat-frontend/src/utils/documentStatus.js`) — the same
- * `normalizeStatus` the admin filter applies. These cases pin the
- * predicate's own contract; the shared identity is structural (one
- * module), so a frontend change to the normalisation cannot leave this
- * copy stale.
- */
+// Unit spec for the document status predicate (#1781).
+//
+// `matchesStatus` mirrors what AdminDashboard.vue's `filteredDocuments`
+// renders, and it derives its normalisation from the SHARED vocabulary
+// (`components/gov-chat-frontend/src/utils/documentStatus.js`) — the same
+// `normalizeStatus` the admin filter applies. These cases pin the
+// predicate's own contract; the shared identity is structural (one
+// module — the helper owns the bridge to the frontend's ES module, and
+// every reader of the vocabulary reads it THROUGH that bridge), so a
+// frontend change to the normalisation cannot leave this copy stale.
 /**
  * The scripted transport the helper specs drive: a queue of answers, one
  * per call, and the calls it recorded. ONE definition for the whole file —
@@ -85,7 +85,6 @@ test.describe('the document status predicate', () => {
     // survives any refactor of how the helper reaches the module. A
     // dead require beside a private copy is caught by the tripwire
     // below, not here.
-    const { normalizeStatus } = require('../../../components/gov-chat-frontend/src/utils/documentStatus');
     const statuses = [
       'all',
       'Ingested',
@@ -322,11 +321,11 @@ test.describe('the API upload (multipart, the repository upload route)', () => {
 
   test('a non-201 answer is a named failure carrying the status and the file', async () => {
     const t = scriptedTransport([{ status: 400, data: { success: false, error: 'Invalid file type' }, headers: {} }]);
-    await expect(uploadFileViaApi(t.request, 'tok', FIXTURE)).rejects.toThrow(/HTTP 400/);
-    // The same failure names the file it was about — one message, both
-    // facts: a fresh transport, because the scripted one is spent.
-    const t2 = scriptedTransport([{ status: 400, data: { success: false, error: 'Invalid file type' }, headers: {} }]);
-    await expect(uploadFileViaApi(t2.request, 'tok', FIXTURE)).rejects.toThrow(/ingest-probe-canary\.md/);
+    // ONE failure, ONE assertion: the message carries the status AND the
+    // file it was about, so one regex proves both facts.
+    await expect(uploadFileViaApi(t.request, 'tok', FIXTURE)).rejects.toThrow(
+      /the upload of ingest-probe-canary\.md answered HTTP 400/
+    );
   });
 
   test('a 201 without a file record is a named failure, not an undefined id', async () => {
@@ -411,7 +410,14 @@ test.describe('the ingest wait (the dataprep status over the API)', () => {
 
   test('a budget spent on pending expires with the observed value in the failure', async () => {
     const t = scriptedTransport([record('Pending'), record('Pending')]);
-    await expect(waitForFileIngestedViaApi(t.request, 'tok', 'f1', { timeoutMs: 500 })).rejects.toThrow(/ingested/);
+    // The OBSERVED status, not the expected one: the failure carries
+    // 'Received: "pending"', and a regex on 'ingested' would match the
+    // EXPECTED side of the very same message. The gap is a wildcard
+    // because the reporter's colour codes sit between the label and the
+    // value.
+    await expect(waitForFileIngestedViaApi(t.request, 'tok', 'f1', { timeoutMs: 500 })).rejects.toThrow(
+      /Received:.*"pending"/
+    );
   });
 
   test('a non-200 record read is a named failure, not a poll tick', async () => {
@@ -424,8 +430,10 @@ test.describe('the ingest wait (the dataprep status over the API)', () => {
     const t = scriptedTransport([{ status: 401, data: { error: 'TOKEN_EXPIRED' }, headers: {} }]);
     // The realm's access token lives 300 s: a wait that outlives it dies
     // on the 401, and the failure has to say WHICH it was.
+    // The SESSION branch, not the bare status: the generic branch reads
+    // 'HTTP 401', the session branch names the verdict the realm sent.
     await expect(waitForFileIngestedViaApi(t.request, 'expired-token', 'f1', { timeoutMs: 30000 })).rejects.toThrow(
-      /401/
+      /the endpoint answered TOKEN_EXPIRED/
     );
     expect(t.calls).toHaveLength(1);
   });

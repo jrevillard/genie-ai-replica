@@ -739,7 +739,7 @@ async function frenchStreamingMissingReason() {
     const adopted = adoptedLocaleOf('fr');
     return (
       "venue profile: the app does not adopt the locale 'fr' (it booted on " +
-      `'${adopted ? adopted.adopted : 'unknown'}') — the frontend fell back to English at boot, so ` +
+      `'${adopted || 'unknown'}') — the frontend fell back to English at boot, so ` +
       "every measurement of a French session would read the fallback (the deployment's whitelist " +
       'names the locale, so the most likely cause is a build that carries no locale file for it), ' +
       'and this surface is therefore NOT exercised by this run'

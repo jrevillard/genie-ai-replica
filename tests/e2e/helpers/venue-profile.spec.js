@@ -110,6 +110,18 @@ test.describe('the OKF probe reads the venue like the frontend reads it', () => 
     expect(await profile.okfEnabled()).toBe(true);
   });
 
+  test('the runtime config is read RAW — it is JavaScript, not JSON', async () => {
+    // The config file is EVALUATED by the frontend, so the transport's
+    // raw escape hatch is what hands the probe text instead of a JSON
+    // parse failure. Nothing else pins that flag: the fake transport
+    // answers whatever it is given, so a probe that dropped it would read
+    // the same shapes here and fail on the venue instead.
+    const calls = fakeTransport([{ status: 200, data: 'window.APP_CONFIG = {\n  okfEnabled: "0",\n};\n' }]);
+    const profile = freshProfile();
+    await profile.okfEnabled();
+    expect(calls[0].options.raw).toBe(true);
+  });
+
   test('a numeric 1 is a different writer and does not enable them', async () => {
     // Strict equality: the frontend does not coerce.
     fakeTransport([{ status: 200, data: 'window.APP_CONFIG = {\n  okfEnabled: 1,\n};\n' }]);
@@ -320,6 +332,34 @@ test.describe('the locale whitelist probe reads the config the frontend reads', 
     expect(await profile.localeActive('fr')).toBe(true);
   });
 
+  test("the probe applies the frontend's OWN rule, arm for arm", async () => {
+    // The probe SPELLS the frontend's whitelist rule (split, trim,
+    // lowercase, 'en' always retained). A probe that grew stricter than
+    // the frontend would skip a surface the deployment really serves —
+    // coverage lost with no red anywhere — so the probe's decision is
+    // compared against the OWNER's own answer, over a set of whitelists
+    // and locales.
+    //
+    // The frontend owns the rule in an ES module; the spec reads it
+    // through the same bridge the helper owns (the spec runs on a runner
+    // above the CommonJS-require-of-ESM floor, which the helper names).
+    const { applyLocaleWhitelist } = require('../../../components/gov-chat-frontend/src/i18n/whitelist');
+    const locales = ['en', 'fr', 'es', 'de'];
+    const whitelists = ['', '   ', 'en', 'fr', 'en,fr', 'EN, FR', 'es,de'];
+    for (const whitelist of whitelists) {
+      for (const locale of locales) {
+        fakeVenueSession();
+        fakeTransport([{ status: 200, data: `window.APP_CONFIG = {\n  availableLocales: "${whitelist}",\n};\n` }]);
+        const profile = freshProfile();
+        // The owner's answer: does the locale SURVIVE the frontend's own
+        // filter?
+        const filtered = applyLocaleWhitelist(Object.fromEntries(locales.map((code) => [code, {}])), whitelist);
+        const expected = Object.keys(filtered).some((code) => code.toLowerCase() === locale.toLowerCase());
+        expect(await profile.localeActive(locale)).toBe(expected);
+      }
+    }
+  });
+
   test('a whitelist that excludes the locale excludes it — and matches case-insensitively', async () => {
     // The frontend's rule (whitelist.js): trim, lowercase, compare. The
     // probe applies the same rule, arm for arm.
@@ -476,6 +516,9 @@ test.describe('the French streaming premise combines the venue facts', () => {
     expect(calls).toHaveLength(1);
     const reason = await profile.frenchStreamingMissingReason();
     expect(reason).toMatch(/does not adopt the locale 'fr'/);
+    // The OBSERVED locale, not a placeholder: the reason is what the
+    // operator reads to know WHICH locale the app booted on.
+    expect(reason).toMatch(/it booted on 'en'/);
     expect(reason).toMatch(/NOT exercised/);
   });
 });

@@ -261,8 +261,8 @@ test.describe('Chatbot message sending and SSE streaming — the French answer',
     // English answer.
     //
     // Two OCCURRENCES are required, not two distinct words: a terse but
-    // correct French answer ("GENIE.AI est un outil, et cet outil est
-    // utile.") repeats ONE word, and a distinct-word count would red it.
+    // correct French answer ("L'outil est bon. Il est grand.") repeats
+    // ONE word of the list, and a distinct-word count would red it.
     //
     // This is not a language detector — French shares 'la', 'un', 'des'
     // and 'que' with Spanish and Italian, so another Latin-script

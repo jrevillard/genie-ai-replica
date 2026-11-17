@@ -148,7 +148,13 @@ the app-side threadpool fix restores both the availability and a hang
 bound (an exec probe cannot see a python-level deadlock). The honest
 long-term fix is application-side (serve /health from the
 threadpool so it answers while the loop is busy); this probe keeps the
-chart correct until that lands. */ -}}
+chart correct until that lands.
+
+The readiness probe carries NO initialDelaySeconds: the startupProbe
+below owns the slow start, and a readiness delay adds a SECOND floor on
+top of it — the pod then stays out of the Service's endpoints for that
+long after every restart, although it is already serving. Readiness now
+tracks the startup probe's success. */ -}}
 {{- $svcVals := dict
     "image" (dict "repository" "genie-ai-chatqna-server" "tag" "main")
     "workingDir" "/app/ChatQnA"
@@ -156,7 +162,7 @@ chart correct until that lands. */ -}}
     "resources" (dict "requests" (dict "cpu" "200m" "memory" "512Mi") "limits" (dict "cpu" "2" "memory" "4Gi"))
     "env" (include "genieai-umbrella.envRowsDedupe" (concat $tuningEnv $promptEnv $gpuSecretEnv $opeaEnvRows | toJson) | fromJsonArray)
     "probes" (dict
-      "readiness" (dict "httpGet" (dict "path" "/health" "port" "http") "initialDelaySeconds" 120 "periodSeconds" 15)
+      "readiness" (dict "httpGet" (dict "path" "/health" "port" "http") "periodSeconds" 15)
       "liveness"  (dict "exec" (dict "command" (list "sh" "-c" "kill -0 1")) "initialDelaySeconds" 180 "periodSeconds" 30)
       "startup"   (dict "httpGet" (dict "path" "/health" "port" "http") "failureThreshold" 30 "periodSeconds" 10)
     )

@@ -86,10 +86,13 @@ spec:
             # keep in sync.
             capabilities:
               drop: ["ALL"]
+          # No readiness initialDelaySeconds: the startupProbe below owns
+          # the slow start, and a readiness delay adds a second floor on
+          # top of it — the pod stays out of the Service's endpoints for
+          # that long after every restart, although it is already serving.
           readinessProbe:
             tcpSocket:
               port: 8888
-            initialDelaySeconds: 30
             periodSeconds: 15
           livenessProbe:
             tcpSocket:

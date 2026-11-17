@@ -166,13 +166,18 @@ operator's value wins over a derived row of the same name. */ -}}
     (dict "name" "ARANGO_DB" "value" ($dataArangodb.database | default "_system" | toString))
     (dict "name" "ARANGO_USERNAME" "value" "root")
 -}}
+{{- /* The readiness probe carries NO initialDelaySeconds: the
+startupProbe below owns the slow start, and a readiness delay adds a
+second floor on top of it — the pod then stays out of the Service's
+endpoints for that long after every restart, although it is already
+serving. */}}
 {{- $svcVals := dict
     "image" (dict "repository" "genie-ai-dataprep-arango" "tag" "main")
     "port" 5000
     "resources" (dict "requests" (dict "cpu" "200m" "memory" "512Mi") "limits" (dict "cpu" "2" "memory" "4Gi"))
     "env" (include "genieai-umbrella.envRowsDedupe" (concat $arangoEnv $tuningEnv $promptEnv $arangoSecretEnv $kcSecretEnv $gpuSecretEnv $okfEnv $okfSecretEnv $opeaEnvRows | toJson) | fromJsonArray)
     "probes" (dict
-      "readiness" (dict "tcpSocket" (dict "port" 5000) "initialDelaySeconds" 30 "periodSeconds" 15)
+      "readiness" (dict "tcpSocket" (dict "port" 5000) "periodSeconds" 15)
       "liveness"  (dict "tcpSocket" (dict "port" 5000) "initialDelaySeconds" 60 "periodSeconds" 30)
       "startup"   (dict "tcpSocket" (dict "port" 5000) "failureThreshold" 30 "periodSeconds" 10)
     )

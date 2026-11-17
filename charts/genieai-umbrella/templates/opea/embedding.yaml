@@ -27,13 +27,18 @@ opea.embedding.env was silently dropped: the value merged into
 .Values, no template read it, and the rendered Deployment was
 byte-identical to one without it. */ -}}
 {{- $opeaEnvRows := include "genieai-umbrella.envMapRows" ($opeaEmbedding.env | default dict) | fromJsonArray -}}
+{{- /* The readiness probe carries NO initialDelaySeconds: the
+startupProbe below owns the slow start, and a readiness delay adds a
+second floor on top of it — the pod then stays out of the Service's
+endpoints for that long after every restart, although it is already
+serving. */}}
 {{- $svcVals := dict
     "image" (dict "repository" "genie-ai-embedding" "tag" "main")
     "port" 6000
     "resources" (dict "requests" (dict "cpu" "100m" "memory" "256Mi") "limits" (dict "cpu" "1" "memory" "1Gi"))
     "env" (include "genieai-umbrella.envRowsDedupe" (concat $urls $secretEnv $opeaEnvRows | toJson) | fromJsonArray)
     "probes" (dict
-      "readiness" (dict "httpGet" (dict "path" "/health" "port" 6000) "initialDelaySeconds" 30 "periodSeconds" 15)
+      "readiness" (dict "httpGet" (dict "path" "/health" "port" 6000) "periodSeconds" 15)
       "liveness"  (dict "httpGet" (dict "path" "/health" "port" 6000) "initialDelaySeconds" 60 "periodSeconds" 30)
       "startup"   (dict "httpGet" (dict "path" "/health" "port" 6000) "failureThreshold" 30 "periodSeconds" 10)
     )

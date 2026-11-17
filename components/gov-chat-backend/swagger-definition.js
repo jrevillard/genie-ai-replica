@@ -2,6 +2,20 @@
 // securitySchemes, global security, tags), required by index.js (the runtime
 // swagger spec) and scripts/generate-api-client.sh (the mobile client
 // generation spec). Reads process.env at require time; no other side effects.
+
+// Base URL for the Swagger UI OAuth2 flow URLs below. The Authorize
+// round-trip runs IN THE BROWSER, so the served URLs must be
+// browser-reachable: on split-URL deployments (#1889, the k8s venue)
+// KEYCLOAK_URL carries the cluster-internal issuer — a browser popup dies
+// on DNS, and the HTTPS docs page + plain-HTTP token endpoint is mixed
+// content, hard-blocked by Chromium. KEYCLOAK_PUBLIC_URL is the
+// browser-facing alias the shared verifier already honours
+// (shared/lib/keycloak-auth-service.js); unset = KEYCLOAK_URL, the
+// historical compose behaviour (there KEYCLOAK_URL is already
+// browser-reachable). Trailing slash stripped, same shape as the
+// verifier's public-issuer alias.
+const oauth2BaseUrl = (process.env.KEYCLOAK_PUBLIC_URL || process.env.KEYCLOAK_URL || '').replace(/\/+$/, '');
+
 module.exports = {
   openapi: '3.0.0',
   info: {
@@ -62,8 +76,8 @@ module.exports = {
         description: 'Keycloak OAuth2 authentication (Authorization Code + PKCE)',
         flows: {
           authorizationCode: {
-            authorizationUrl: `${process.env.KEYCLOAK_URL}/realms/${process.env.KEYCLOAK_REALM}/protocol/openid-connect/auth`,
-            tokenUrl: `${process.env.KEYCLOAK_URL}/realms/${process.env.KEYCLOAK_REALM}/protocol/openid-connect/token`,
+            authorizationUrl: `${oauth2BaseUrl}/realms/${process.env.KEYCLOAK_REALM}/protocol/openid-connect/auth`,
+            tokenUrl: `${oauth2BaseUrl}/realms/${process.env.KEYCLOAK_REALM}/protocol/openid-connect/token`,
             scopes: {
               openid: 'OpenID Connect scope',
               profile: 'User profile information',

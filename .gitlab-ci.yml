@@ -104,6 +104,9 @@ variables:
   #   never shipped or executed in production).
   # - _bmad-output/**: generated BMAD planning/implementation/spec artifacts.
   # NOTE: gemnasium (dependency scanning) does NOT honor this var — see DS_EXCLUDED_PATHS
+  # data/** (added 2026-11-17): local validation tooling and deployment data
+  # (data/okf/smoke-test harness, per-country bundles, backups) — never shipped
+  # in any runtime image; the analyzer was flagging its fs/SSRF/TLS-reject sites.
   # below. Secret Detection is intentionally NOT excluded (SECRET_DETECTION_EXCLUDED_PATHS
   # stays unset) so secrets in any BMAD sample content still surface in the dashboard.
   SAST_EXCLUDED_PATHS: >-
@@ -122,7 +125,8 @@ variables:
     .claude/**,
     .agents/**,
     _bmad/**,
-    _bmad-output/**
+    _bmad-output/**,
+    data/**
   # --- Dependency Scanning exclusions (gemnasium + gemnasium-python) ---
   # Comma-separated pathspec list, honored by both analyzers. Without these
   # excludes, gemnasium-python entered _bmad/scripts/setup.py on job 93669

@@ -202,9 +202,11 @@ _dataprep_phase_budget_exhausted_total = _meter.create_counter(
     "rag.dataprep.phase_budget_exhausted",
     description=(
         "LLM phases abandoned because they exceeded DATAPREP_LLM_PHASE_TIMEOUT_SECONDS. "
-        "The ingest continued on the phase's fallback, so this counts degraded "
-        "documents, not failed ones. A non-zero rate on a healthy GPU means the "
-        "per-request budget is too tight for the phase, not that the GPU is busy."
+        "Labeling and context ingest continued on the phase's fallback, so those "
+        "count degraded documents; the graph phase has no fallback, so its "
+        "exhaustions FAIL the ingest (auto-retract + self-heal re-ingest). A "
+        "non-zero rate on a healthy GPU means the per-request budget is too "
+        "tight for the phase, not that the GPU is busy."
     ),
 )
 
@@ -227,6 +229,9 @@ _llm_fallback_total = _meter.create_counter(
 # splits the join the moment one of them is reworded.
 PHASE_LABEL_LABELING = "labeling"
 PHASE_LABEL_CONTEXTUAL = "contextual"
+# The graph-extraction phase (issue #1726): budgeted like the two above, but
+# with no fallback — its exhaustions fail the ingest instead of degrading it.
+PHASE_LABEL_GRAPH = "graph"
 
 # Import exceptions for robust error handling
 # Import Parent Class
@@ -1797,11 +1802,10 @@ async def _gather_with_phase_budget_inner(
         # into a silently degraded document.
         #
         # An absorbed cancellation does not displace it, but it is not silent
-        # either: without this the same situation logged a warning in
-        # _await_with_heartbeat and vanished here, so an operator who cancelled
-        # a failing phase saw "Ingestion Error" with no record that a kill had
-        # been requested. The failure wins because it is the more specific
-        # cause; the cancellation is recorded so the other is not lost.
+        # either: without this, an operator who cancelled a failing phase saw
+        # "Ingestion Error" with no record that a kill had been requested. The
+        # failure wins because it is the more specific cause; the cancellation
+        # is recorded so the other is not lost.
         if settle_interrupted:
             logger.warning(
                 f"{phase}: cancelled externally while settling a failed batch; "
@@ -1817,137 +1821,13 @@ async def _gather_with_phase_budget_inner(
         message = (
             f"{phase} exceeded its {DATAPREP_LLM_PHASE_TIMEOUT_SECONDS:g}s budget after "
             f"{time.monotonic() - started:.1f}s: {len(results)}/{total} batches completed, "
-            f"{abandoned} abandoned. Falling back for the remaining batches."
+            f"{abandoned} abandoned."
         )
         logger.warning(message)
         await _safe_log(write_ingestion_log, file_id, "WARN", phase, message)
         return results, True
 
     return results, False
-
-
-async def _await_with_heartbeat(
-    tasks: list, *, phase: str, total: int, file_id: str, write_ingestion_log
-) -> list | None:
-    """Wait for every task, reporting progress as they settle.
-
-    The counterpart to ``_gather_with_phase_budget`` for a phase that has no
-    fallback: it has the same reporting but no deadline, because the only way to
-    bound a phase is to give up on part of it and this phase cannot lose work
-    without losing documents. Errors propagate as ``asyncio.gather`` raises them
-    (first failure wins), so the caller's existing error handling still applies.
-
-    Every exit other than the success path takes the still-pending batches with
-    it, by cancelling them and giving ``_PHASE_CANCEL_GRACE_SECONDS`` to settle.
-    That matters because the caller retracts the document on every one of those
-    exits: a batch still running writes into ArangoDB after ``retract_file`` has
-    deleted it, resurrecting chunks for a document the admin UI shows as failed.
-
-    Cancelling does not stop a batch already inside ``asyncio.to_thread`` — the
-    thread runs to completion either way, and that race is pre-existing and
-    documented at the call site. What it does stop is every batch still queued
-    on ``MAX_CONCURRENT_BATCHES``, which for a large document is most of them:
-    they have not reached the thread and would otherwise write the whole
-    document after the retraction. So the grace window is a courtesy for batches
-    that unwind promptly, not a licence to abandon the rest.
-    """
-    if not tasks:
-        return
-
-    started = time.monotonic()
-    interval = DATAPREP_LLM_PROGRESS_INTERVAL_SECONDS
-    next_report = started + interval
-    pending = set(tasks)
-    # Submission order, for the same reason as the budgeted variant: the set
-    # asyncio.wait returns has no order, and which failing batch decides the
-    # ingest's outcome must not depend on it.
-    order = {id(task): n for n, task in enumerate(tasks)}
-    completed = 0
-    failure: BaseException | None = None
-
-    try:
-        while pending:
-            settled = {t for t in pending if t.done()}
-            pending -= settled
-            if not settled:
-                done, pending = await asyncio.wait(pending, timeout=interval, return_when=asyncio.FIRST_COMPLETED)
-                settled = done
-            for task in sorted(settled, key=lambda t: order[id(t)]):
-                # Re-raise the first failure, as gather would. Done before any
-                # further reporting so the phase fails on the real error rather than
-                # on the heartbeat's log write.
-                # cancelled() first: Task.exception() raises
-                # CancelledError on a cancelled task, so one individually-
-                # cancelled batch would otherwise turn the whole phase into a
-                # CancelledError and the document would report "Killed" instead
-                # of the failure it actually had.
-                if task.cancelled():
-                    continue
-                exc = task.exception()
-                completed += 1
-                if exc is not None and failure is None:
-                    failure = exc
-
-            if failure is not None:
-                # Cancelled and settled, like every other non-success exit here.
-                # The caller retracts the document the moment this raises, so a
-                # sibling left running writes into ArangoDB after the retraction
-                # and resurrects its chunks for a document the admin UI shows as
-                # failed. Batches already inside asyncio.to_thread are unaffected
-                # either way — that thread runs to completion whatever we do — so
-                # what cancelling actually stops is every batch still queued on
-                # the semaphore, which for a large document is most of them.
-                #
-                # _settle_and_retrieve absorbs a cancellation that arrives during
-                # the window: the settle is what was promised, it has a timeout of
-                # its own, and losing it to a second cancel would hand the caller
-                # exactly the abandoned-batch outcome described above.
-                for task in pending:
-                    task.cancel()
-                interrupted, _absorbed = await _settle_and_retrieve(pending)
-                if interrupted:
-                    # An external cancellation during the settle does not replace
-                    # the failure. The document is retracted either way, but the
-                    # kill switch would report "Killed by an administrator" and
-                    # the ArangoDB error underneath — the one thing the operator
-                    # needs — would never reach the ingestion log.
-                    logger.warning(
-                        f"{phase}: cancelled externally while settling a failed batch; "
-                        "reporting the batch failure, which is the more specific cause"
-                    )
-                raise failure
-
-            now = time.monotonic()
-            if pending and now >= next_report:
-                next_report = now + interval
-                message = (
-                    f"{phase} in progress: {completed}/{total} batches completed, "
-                    f"{len(pending)} in flight, {now - started:.0f}s elapsed"
-                )
-                logger.info(message)
-                await _safe_log(write_ingestion_log, file_id, "INFO", phase, message)
-
-    except asyncio.CancelledError:
-        # Every exit other than the success path has to take the still-pending
-        # batches with it, because the caller is retracted either way.
-        # asyncio.gather, which this helper replaced, did that implicitly by
-        # cancelling its children; a bare `while pending` loop does not, so an
-        # external cancellation — ingest_file_with_guardrail's kill switch, or
-        # a service shutdown — propagated straight out and left every queued
-        # graph batch running. They were parked on the semaphore at that point,
-        # so they would acquire it and write the whole document to ArangoDB
-        # AFTER retract_file() had already deleted it: chunks resurrected for a
-        # document the admin UI shows as Killed, and served to the retriever.
-        for task in pending:
-            task.cancel()
-        _, _absorbed = await _settle_and_retrieve(pending)
-        raise
-
-    # Success path (merge 2026-10-21): every task has settled, so their results
-    # are handed back for the caller's insertion accounting — the empty-graph
-    # refusal must not regress under the heartbeat. Callers that ignore the
-    # return are unaffected.
-    return [t.result() for t in tasks]
 
 
 @OpeaComponentRegistry.register("GENIE_DATAPREP_ARANGODB")
@@ -4504,26 +4384,32 @@ class GenieArangoDataprep(OpeaArangoDataprep):
 
                     # Wait for all batches to complete
                     #
-                    # Not run through _gather_with_phase_budget, unlike the two
-                    # LLM phases above. That helper cancels stragglers on its
-                    # deadline, which is only safe because the labeling and
-                    # context phases have a fallback that turns an abandoned
-                    # batch into a degraded-but-present result. This phase has
-                    # none: a cancelled batch loses its chunks outright and the
-                    # ingest still ends "Ingested" — silently dropping documents
-                    # from the knowledge graph is strictly worse than a slow one.
-                    # So this phase is unbounded, but it still HEARTBEATS, because a
-                    # wedged graph phase is just as silent as the LLM phases
-                    # were and the whole point is that it is visible.
+                    # Run through _gather_with_phase_budget like the two LLM
+                    # phases above (issue #1726). It used to be unbounded, on
+                    # the argument that this phase has no fallback: a cancelled
+                    # batch loses its chunks outright, and "Ingested" over a
+                    # partial graph is silent data loss. The field evidence
+                    # settled it the other way — a graph-extraction call parked
+                    # on a dead socket never returns at all, and dataprep
+                    # serves ONE ingest at a time (DATAPREP_INGEST_CONCURRENCY=1),
+                    # so the wedged file held the only lane and every later
+                    # ingest was refused with 429 System busy. The budget ends
+                    # that: on a deadline the phase gives up, and the check
+                    # below FAILS the ingest rather than degrading it — the
+                    # auto-retract cleans whatever the finished batches wrote
+                    # and the drain-level self-heal re-ingests the file later.
+                    # No chunks are silently dropped; the loss on one wedged
+                    # file is now an honest failure instead of the whole queue.
                     #
-                    # Its clients are not ours to bound. The embedding half runs
-                    # inside the vendored comps dataprep, which reads VLLM_TIMEOUT
-                    # from a bare os.getenv — so a value would reach httpx as a
-                    # string, which 0.28 does not coerce, and the client raises
-                    # TypeError instead of timing out. That is why no compose
-                    # line injects it (see OVERRIDES.yaml). The ArangoDB writes
-                    # go through langchain-arangodb / py-arango, which carry
-                    # their own socket timeouts and take no HTTP budget.
+                    # Its per-call budget stays the vendored side's debt. The
+                    # embedding half runs inside the vendored comps dataprep,
+                    # which reads VLLM_TIMEOUT from a bare os.getenv — so a
+                    # value would reach httpx as a string, which 0.28 does not
+                    # coerce, and the client raises TypeError instead of timing
+                    # out. That is why no compose line injects it (see
+                    # OVERRIDES.yaml). The ArangoDB writes go through
+                    # langchain-arangodb / py-arango, which carry their own
+                    # socket timeouts and take no HTTP budget.
                     # Zero-batch ingest (documents_to_process == []): no batch
                     # tasks are scheduled, so `results` must be bound anyway —
                     # left unbound, the totals below raised UnboundLocalError
@@ -4531,13 +4417,29 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                     # 'Ingestion Error' and auto-retracted an honest empty run
                     # (review 2026-10-29 round 3).
                     results = []
+                    timed_out = False
                     if tasks:
-                        results = await _await_with_heartbeat(
+                        results, timed_out = await _gather_with_phase_budget(
                             tasks,
                             phase="Graph insertion",
+                            phase_label=PHASE_LABEL_GRAPH,
                             total=len(tasks),
                             file_id=input.file_id,
                             write_ingestion_log=self._write_ingestion_log,
+                        )
+                    if timed_out:
+                        # No fallback: the abandoned batches' chunks are gone,
+                        # and "Ingested" over a partial graph is silent data
+                        # loss — the exact outcome this phase's old no-deadline
+                        # stance existed to prevent. Raising lands in the
+                        # designed failure path below — 'Ingestion Error'
+                        # carries the cause, the auto-retract cleans the
+                        # partial graph, and the drain-level self-heal (D4-b)
+                        # re-ingests the file.
+                        raise Exception(
+                            f"Graph insertion exceeded its {DATAPREP_LLM_PHASE_TIMEOUT_SECONDS:g}s budget "
+                            "with batches still running — the ingest failed rather than degraded a "
+                            "partial graph; the document is retracted and can be re-ingested."
                         )
 
                     # Empty-graph refusal (P0, David 2026-09-09): a batch/model

@@ -99,6 +99,27 @@
     "new"
    ],
    "_comment": "OKF feature flag: restore-kong-config.sh strips this service and the okf-route when OKF_ENABLED != 1 (2026-10-21 merge prep)."
+  },
+  {
+   "name": "okf-import",
+   "id": "a1b2c3d4-e5f6-4a5b-8c9d-0e1f2a3b4c5e",
+   "protocol": "http",
+   "host": "okf-server",
+   "port": 3002,
+   "path": null,
+   "connect_timeout": 60000,
+   "read_timeout": 3600000,
+   "write_timeout": 3600000,
+   "retries": 0,
+   "enabled": true,
+   "client_certificate": null,
+   "tls_verify": null,
+   "tls_verify_depth": null,
+   "ca_certificates": null,
+   "tags": [
+    "new"
+   ],
+   "_comment": "#1944: the import route's long-timeout service, on the model of express-api's 1h read/write. Same upstream as okf-server (parse + PII scan + enqueue is a 55-75s wait at 5-6k concepts, and a queued import legitimately runs to minutes); Kong cut it at 60s while okf-server continued, so operators saw a red 'import failed' for operations that succeeded. retries stays 0 like okf-server — Kong must never replay an import POST. Stripped with the okf entities when OKF_ENABLED != 1."
   }
  ],
  "routes": [
@@ -914,6 +935,35 @@
     "genie-ai"
    ],
    "_comment": "OKF feature flag: removed with the okf-server service when OKF_ENABLED != 1."
+  },
+  {
+   "name": "okf-import-route",
+   "id": "b2c3d4e5-f6a7-4b6c-9d0e-1f2a3b4c5d6f",
+   "service": {
+    "name": "okf-import"
+   },
+   "paths": [
+    "/api/okf/repos/"
+   ],
+   "methods": [
+    "POST"
+   ],
+   "strip_path": false,
+   "preserve_host": false,
+   "regex_priority": 0,
+   "path_handling": "v0",
+   "request_buffering": true,
+   "response_buffering": true,
+   "https_redirect_status_code": 426,
+   "protocols": [
+    "http",
+    "https"
+   ],
+   "tags": [
+    "okf",
+    "genie-ai"
+   ],
+   "_comment": "#1944: okf import/write POSTs ride the long-timeout okf-import service — the longer prefix beats okf-route's /api/okf for matching requests, the POST-only filter drops reads back to okf-route's 60s backstop, and POST /api/okf/repos (create) still routes at 60s because the prefix requires the trailing segment. Carries the okf tag so the OKF_ENABLED parking deletes it with the rest."
   }
  ],
  "plugins": [

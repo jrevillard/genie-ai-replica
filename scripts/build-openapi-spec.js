@@ -53,10 +53,10 @@ function buildSpec() {
   // swagger-definition.js builds the flow URLs from KEYCLOAK_PUBLIC_URL when
   // it is usable, and from KEYCLOAK_URL otherwise (#1889). Two properties must
   // hold for the committed Dart artifacts (which embed these URLs):
-  //   - the served URL is CONCRETE and ABSOLUTE — a dropped KEYCLOAK_URL pin
-  //     now yields a same-origin RELATIVE URL (not an 'undefined'
-  //     interpolation), which the old 'undefined' check passed vacuously;
-  //   - it derives from the configured base, so the artifacts stay pinned.
+  //   - the served URL is CONCRETE and ABSOLUTE — the 'undefined' clause
+  //     catches a dropped KEYCLOAK_REALM pin, but it cannot tell a dropped
+  //     base from a resolver that serves a same-origin RELATIVE URL;
+  //   - it derives from the resolved base, so the artifacts stay pinned.
   // The expected base comes from the SAME resolver the runtime spec uses
   // (components/gov-chat-backend/swagger-oauth2-base.js): a duplicated
   // predicate here drifted from it and aborted the generation on URLs the
@@ -65,15 +65,17 @@ function buildSpec() {
   // insensitive), and a regex here disagreed on it.
   const { resolveOAuth2BaseUrl, isAbsoluteHttpUrl } = backendRequire('./swagger-oauth2-base');
   const expectedBase = resolveOAuth2BaseUrl(process.env);
-  // Two distinct causes, two distinct messages: a missing pin (the env -i
-  // envelope lost an assignment) and a malformed served URL (the spec no
-  // longer builds the flow URLs the way the resolver does). One message for
-  // both sent the operator to the wrong place.
+  // Two distinct causes, two distinct messages: no usable base (the env -i
+  // envelope lost an assignment, or the pin is empty / not an absolute
+  // http(s) URL) and a malformed served URL (the spec no longer builds the
+  // flow URLs the way the resolver does). One message for both sent the
+  // operator to the wrong place.
   assert.ok(
     typeof expectedBase === 'string',
     'the flow URLs have no usable base — the KEYCLOAK_URL pin is missing from' +
-      ' the env -i line in scripts/generate-api-client.sh, so the served URLs' +
-      ' cannot be a concrete URL derived from it.'
+      ' the env -i line in scripts/generate-api-client.sh, or it is empty / not' +
+      ' an absolute http(s) URL, so the served URLs cannot be a concrete URL' +
+      ' derived from it.'
   );
   for (const [label, url] of [
     ['authorizationUrl', flow?.authorizationUrl],
@@ -82,7 +84,7 @@ function buildSpec() {
     assert.ok(
       typeof url === 'string' && !url.includes('undefined') && isAbsoluteHttpUrl(url) && url.startsWith(expectedBase),
       label +
-        ' is not a concrete URL (absolute, derived from the KEYCLOAK_URL pin) —' +
+        ' is not a concrete URL (absolute, derived from the resolved base) —' +
         ' the KEYCLOAK_REALM pin is missing from the env -i line in' +
         ' scripts/generate-api-client.sh, or swagger-definition.js no longer' +
         ' builds the flow URLs from KEYCLOAK_PUBLIC_URL/KEYCLOAK_URL.'

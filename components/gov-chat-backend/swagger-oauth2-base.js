@@ -36,6 +36,13 @@
  *     would open the Authorize popup on the docs origin itself — a silent
  *     misconfiguration.
  *
+ * The servers[0].url base (API_URL) uses the same acceptance test but is
+ * TRIMMED by its caller (swagger-definition.js) and falls back to '/'; a
+ * padded API_URL is therefore accepted there, while a padded flow-URL base
+ * is refused. The difference is deliberate: API_URL is a deployment
+ * operator's own value with a relative fallback, the flow-URL base must
+ * name an origin or nothing.
+ *
  * The narrative (the #1889 story, the deployment leg) lives in
  * CHANGELOG.md and in the `env` template.
  */

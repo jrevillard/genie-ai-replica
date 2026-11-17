@@ -199,6 +199,34 @@ CAPABILITIES.** Concretely:
   reached only from OKF citations; a legacy-only deployment simply never
   shows an OKF affordance, and the screen itself is dormant until reached.
 
+## Saving and reloading conversations (David, 2026-11-17)
+
+Chat-screen parity explicitly includes CONVERSATION SAVE AND RELOAD: the
+mobile's save/reload semantics must match the Vue counterpart's, not just
+the live answer surface. The web's contract, mirrored:
+
+- **Save fidelity**: the snapshot write-through that survives a reload
+  mid-save (the web's #925 ruling: the write-through lives at window
+  level, so a reload landing inside the persist debounce reads a
+  post-save snapshot and a just-saved conversation never reopens as
+  "unsaved changes"). Mobile's equivalent save guard must reach the same
+  outcome — a saved conversation reloads as saved.
+- **Reload fidelity**: a restored conversation rebuilds its sources from
+  persisted metadata — including the OKF identity repair the web does
+  (`graftOkfIdentity`: re-attach source/repoId/bundleVersion/graphName
+  from raw metadata onto persisted rows, clear dead URLs), and the
+  `resolve-repo` repair for pre-OKF rows that carry only a concept id.
+- **Title fidelity**: restored OKF rows swap id-based titles for
+  frontmatter titles exactly like the web's CAP-3 async resolution
+  (definitive unavailability cached; transient failures retry on the
+  next load).
+- **Sources-list fidelity on reload**: the related-documents list
+  rebuilds deduped, newest-first, with per-kind rendering intact (the
+  mode-aware contract above applies to reloaded rows identically).
+
+The story's diff inventory pins each of these against the Vue
+conversation store's behavior, with tests for the restore arms.
+
 ## Out-of-band notes
 
 - `flutter_markdown` 0.7.x is discontinued upstream — fine for this wave;

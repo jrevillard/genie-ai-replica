@@ -1691,6 +1691,19 @@ class TestTheGraphPhaseIsCeilinged:
 
             cancelled_at = []
             retracted_at = []
+            settle_started = asyncio.Event()
+
+            # Wrap the REAL settle (the shield is what is under test): the
+            # event says when the window opened, so the cancel lands inside
+            # it deterministically. A fixed sleep here would guess at the
+            # window's position and flake on a loaded runner.
+            real_settle = dp._settle_graph_writers
+
+            async def settle():
+                settle_started.set()
+                await real_settle()
+
+            dp._settle_graph_writers = settle
 
             async def retract(file_id=None, graph_name=None):
                 retracted_at.append(time.monotonic())
@@ -1700,9 +1713,7 @@ class TestTheGraphPhaseIsCeilinged:
             inp = _graph_ingest_input()
             with _patched_graph_ingest():
                 task = asyncio.ensure_future(dp.ingest_file_with_guardrail(inp, lock_file=None))
-                # Wait until the phase has expired and the settle is running:
-                # the wedged conversion is the only thing that takes that long.
-                await asyncio.sleep(0.6)
+                await asyncio.wait_for(settle_started.wait(), timeout=10)
                 cancelled_at.append(time.monotonic())
                 task.cancel()
                 with pytest.raises((HTTPException, asyncio.CancelledError)):
@@ -1712,9 +1723,10 @@ class TestTheGraphPhaseIsCeilinged:
         dp, cancelled_at, retracted_at = _run(scenario())
         assert retracted_at, "the kill rollback never retracted the document"
         waited = retracted_at[0] - cancelled_at
-        # The window is 0.5 s and the cancel lands inside it: the retract must
-        # not land before it. Generous on purpose (the settle starts a hair
-        # after the cancel), but far above the zero an unshielded wait gives.
+        # The window is 0.5 s and the cancel lands at its opening, so the
+        # retract must not land before the window ends. The bound sits well
+        # below the window (the retract follows the settle plus the kill
+        # rollback) and far above the zero an unshielded wait gives.
         assert waited >= 0.3, (
             f"the retract landed {waited:.3f}s after the cancel — the settle window was "
             "truncated, so a writer thread can land its write after the retract (#1991)"

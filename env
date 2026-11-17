@@ -576,7 +576,12 @@ HUGGING_FACE_HUB_TOKEN=
 #                                 #   injected nowhere, and the graph phase keeps
 #                                 #   comps' own 600 s default — which is also
 #                                 #   correct, that being the one phase with no
-#                                 #   fallback. See genie-ai-overlay/OVERRIDES.yaml.
+#                                 #   fallback. The phase itself is bounded from
+#                                 #   the outside by
+#                                 #   DATAPREP_LLM_PHASE_TIMEOUT_SECONDS: a
+#                                 #   wedged endpoint FAILS that ingest instead
+#                                 #   of holding the single ingest lane. See
+#                                 #   genie-ai-overlay/OVERRIDES.yaml.
 #
 # Dataprep phase budgets — the wall clock for a whole LLM phase, not one call.
 # A phase that runs out is abandoned: the labelling and context-generation

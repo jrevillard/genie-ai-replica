@@ -4411,7 +4411,7 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                     # under the (now global) batch gate, but convert_to_graph_documents
                     # makes ONE vLLM call PER CHUNK sequentially inside its batch thread
                     # — so smaller batches = finer parallelism under the same gate.
-                    # Env-tunable (review 2026-10-15); 3 keeps ~12 docs in flight at
+                    # Env-tunable (review 2026-10-15); 10 keeps ~40 docs in flight at
                     # gate=4 instead of 40 serialized inside 4 fat threads.
                     BATCH_SIZE = int(os.getenv("DATAPREP_GRAPH_BATCH_SIZE", "10"))
                     total_batches = (len(documents_to_process) + BATCH_SIZE - 1) // BATCH_SIZE
@@ -4521,7 +4521,7 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                             "with batches still running — the ingest failed rather than degraded a "
                             "partial graph; the document is retracted and needs a re-kick (the D4-b "
                             "self-heal covers OKF re-indexes only, #1992). A batch makes one call per "
-                            "chunk sequentially (DATAPREP_GRAPH_BATCH_SIZE, default 10) and the retry "
+                            "chunk sequentially (10 chunks per batch by default) and the retry "
                             "ladder repeats it, so a wedged endpoint burns far more than the ceiling: "
                             "fix the endpoint, or raise DATAPREP_LLM_PHASE_TIMEOUT_SECONDS."
                         )
@@ -4548,9 +4548,9 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                         raise Exception(
                             f"Graph insertion failed for all {total_batches} batch(es): "
                             "0 graph documents were written after retries — refusing to report "
-                            f"ingested over an empty graph. Last error: {last_err or 'unknown'}. "
-                            "The document is retracted and can be re-ingested (a re-kick: the "
-                            "D4-b self-heal covers OKF re-indexes only, #1992)."
+                            "ingested over an empty graph. The document is retracted and needs a "
+                            "re-kick (the D4-b self-heal covers OKF re-indexes only, #1992). "
+                            f"Last error: {str(last_err or 'unknown')[:150]}"
                         )
 
                     # Ensure the vector index matches the embedder dim

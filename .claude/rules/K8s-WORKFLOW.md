@@ -26,9 +26,12 @@ the contracts that matter when editing `charts/genieai-umbrella/**` or the
 - **Flux namespace**: `flux-system` (GitLab Agent + HelmRelease live here).
 - **Chart publishing**: pushes to the `charts/genieai-umbrella/**` branch
   publish **instantly** via the GitRepository source-ref
-  `branch: feat/k8s-migration` (HEAD, no SHA pin) — pushes to `main` do NOT
-  reach the laptop cluster. HelmRelease `chart.spec.chart` rewrites to that
-  branch HEAD — **no CI wait** between commit and Flux picking it up.
+  `branch: main` (HEAD, no SHA pin) — the overlays track `main`, so a push
+  to `main` reaches the cluster. HelmRelease `chart.spec.chart` rewrites to
+  that branch HEAD — **no CI wait** between commit and Flux picking it up.
+  The overlays tracked the campaign branch `feat/k8s-migration` until it was
+  merged: a branch that is merged stops receiving the commits made after it,
+  so the cluster would have reconciled a frozen snapshot of it.
 - **What does NOT trigger an upgrade**: a `valuesFrom` ConfigMap or Secret
   content change alone. Flux watches chart-source references; values are
   watched indirectly. Force: `flux reconcile helmrelease genieai -n flux-system`.
@@ -121,8 +124,8 @@ helm-controller reconciles on the SOURCE's artifact, not on
 `spec.chart.spec.version`: the HelmRelease CRD says the field is
 "ignored for charts from v1.GitRepository and v1beta2.Bucket sources"
 (helm-controller v1.1.0). For the chart's GitRepository the artifact is
-the **branch tip** — the overlays track `branch: feat/k8s-migration`,
-deliberately not a commit pin. So a chart push reaches the cluster
+the **branch tip** — the overlays track `branch: main`, deliberately not a
+commit pin. So a chart push reaches the cluster
 whether or not the version was bumped; what the bump buys is that the
 overlay and the chart agree on what is deployed.
 

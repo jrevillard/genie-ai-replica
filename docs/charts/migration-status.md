@@ -10,6 +10,36 @@ contractual evidence — a fresh clone does not carry them.)
 
 ## Current state (2026-11-17)
 
+- **The Kubernetes migration is MERGED into `main`** (2026-11-17). The
+  chart: `genie-ai` MR !520 -> `main` (`f15cff8b4`), `genieai-umbrella`
+  at `version: 0.2.177` / `appVersion: 0.2.177`. The deploy
+  configuration: `genie-ai-deploy` MR !1 -> `main` (`3ffb609`) and MR
+  !10 (`8c55024`), so the per-environment overlays (Flux, the public
+  values, the SealedSecrets) live in the deploy repository's `main`. The
+  cluster's own `GitRepository` read the MERGED feature branch, which
+  would have frozen the reconciliation on a snapshot of it — it now
+  reads `main`, and the bootstrap applies the same manifests from
+  either branch, so the handover changed nothing but the freshness.
+  The laptop cluster runs `genieai.v9` with `genieai-umbrella@0.2.177`,
+  23 pods Running, `/api/health` 200 through the edge.
+
+- **The deploy repository's CI still named the deleted minikube venue.**
+  The generic minikube venue was removed (`298762b`) but the CI file kept
+  `dry-run:minikube/dev`, which rendered `clusters/minikube` — a tree
+  that no longer exists. The job failed on the first push of a NEW
+  branch: a new branch's diff covers the whole tree, so every
+  `rules: changes` entry matches. Fixed in MR !11 (`7de8cdd`): the dead
+  job is gone; the manual deploy gate is `deploy:venue` on the `deploy`
+  environment (the old `minikube/dev` environment carried no protection
+  rules, so no approval gate was lost); and the laptop dry-run now
+  renders the cluster bootstrap subtree the way the forge job already
+  did — `clusters/jrevillard-laptop` holds the GitRepository and the
+  Flux Kustomizations an operator applies BY HAND, and no pipeline
+  parsed them. Two leftovers stay inert and are NOT fixed here:
+  `.gitlab/agents/minikube/config.yaml` (an Agent configured for an
+  overlay that no longer exists) and the `overlays/minikube/.*`
+  creation rule in `.sops.yaml`.
+
 - **The shared GPU node's LLM does not answer a GENERATION — and that
   blocks the three GPU-dependent steps of the six-check set.** The vLLM
   servers answer `/v1/models` in 0.1 s (the models are loaded:

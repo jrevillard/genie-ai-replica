@@ -204,7 +204,8 @@ _dataprep_phase_budget_exhausted_total = _meter.create_counter(
         "LLM phases abandoned because they exceeded DATAPREP_LLM_PHASE_TIMEOUT_SECONDS. "
         "Labeling and context ingest continued on the phase's fallback, so those "
         "count degraded documents; the graph phase has no fallback, so its "
-        "exhaustions FAIL the ingest (auto-retract + self-heal re-ingest). A "
+        "exhaustions FAIL the ingest (auto-retract; re-ingest is manual for a "
+        "legacy file — the D4-b self-heal covers OKF re-indexes only, #1992). A "
         "non-zero rate on a healthy GPU means the per-request budget is too "
         "tight for the phase, not that the GPU is busy."
     ),
@@ -669,6 +670,14 @@ DATAPREP_LLM_PROGRESS_INTERVAL_SECONDS = positive_float_env("DATAPREP_LLM_PROGRE
 # limit. A task that has not finished by then is abandoned, which is what the
 # caller's fallback is for.
 _PHASE_CANCEL_GRACE_SECONDS = 5.0
+
+# How long the graph phase's expiry path waits before raising, so an insertion
+# thread already past extraction lands its write inside what the retract will
+# delete instead of after it (#1991). Bounded on purpose — the ceiling exists
+# to release the single ingest lane fast. A straggler slower than this still
+# races the retract; that residual is the pre-existing race every failure exit
+# has (#1991).
+_GRAPH_STRAGGLER_GRACE_SECONDS = 5.0
 
 # Contextual Retrieval (Anthropic-style): per-chunk LLM-generated document
 # context prepended to each chunk before embedding + labeling, so chunks carry
@@ -4396,10 +4405,19 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                     # ingest was refused with 429 System busy. The budget ends
                     # that: on a deadline the phase gives up, and the check
                     # below FAILS the ingest rather than degrading it — the
-                    # auto-retract cleans whatever the finished batches wrote
-                    # and the drain-level self-heal re-ingests the file later.
+                    # auto-retract cleans whatever the SETTLED batches wrote.
+                    # A batch thread already inside an add_graph_documents
+                    # insertion at the deadline runs to completion either way
+                    # (cancellation cannot stop a thread), so the expiry path
+                    # first gives in-flight insertions a short grace to land
+                    # INSIDE what the retract is about to delete; a straggler
+                    # slower than that grace can still write after the retract
+                    # — the same race every failure exit (batch error, kill)
+                    # has always had (#1991).
                     # No chunks are silently dropped; the loss on one wedged
                     # file is now an honest failure instead of the whole queue.
+                    # Re-ingest is a human action for a legacy file (#1992):
+                    # the D4-b self-heal covers OKF re-indexes only.
                     #
                     # Its per-call budget stays the vendored side's debt. The
                     # embedding half runs inside the vendored comps dataprep,
@@ -4433,13 +4451,23 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                         # loss — the exact outcome this phase's old no-deadline
                         # stance existed to prevent. Raising lands in the
                         # designed failure path below — 'Ingestion Error'
-                        # carries the cause, the auto-retract cleans the
-                        # partial graph, and the drain-level self-heal (D4-b)
-                        # re-ingests the file.
+                        # carries the cause and the auto-retract cleans the
+                        # partial graph. Re-ingest is manual for a legacy file
+                        # (#1992); the D4-b self-heal re-ingests OKF re-indexes
+                        # only.
+                        #
+                        # The grace before the raise lets an insertion thread
+                        # already past extraction land its write INSIDE what
+                        # the retract is about to delete, instead of after it
+                        # (#1991). Bounded: the lane must still release fast —
+                        # that is the point of the ceiling.
+                        await asyncio.sleep(_GRAPH_STRAGGLER_GRACE_SECONDS)
                         raise Exception(
                             f"Graph insertion exceeded its {DATAPREP_LLM_PHASE_TIMEOUT_SECONDS:g}s budget "
                             "with batches still running — the ingest failed rather than degraded a "
-                            "partial graph; the document is retracted and can be re-ingested."
+                            "partial graph; the document is retracted and can be re-ingested. "
+                            "Raise DATAPREP_LLM_PHASE_TIMEOUT_SECONDS, or raise "
+                            "DATAPREP_MAX_CONCURRENT_BATCHES to shorten the phase's wall clock."
                         )
 
                     # Empty-graph refusal (P0, David 2026-09-09): a batch/model
@@ -4449,7 +4477,9 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                     # inserted across failed batches = the ingestion FAILED: the
                     # raise routes into the designed error path below ('Ingested
                     # Error' callback + auto-retract), the row never reaches
-                    # 'indexed', and the drain-level D4-b self-heal re-ingests it.
+                    # 'indexed'. Re-ingest: the D4-b self-heal covers OKF
+                    # re-indexes only — a legacy file needs a human re-kick
+                    # (#1992).
                     results = results or []
                     inserted_total = sum(r["inserted"] for r in results if r)
                     failed_batches = sum(1 for r in results if r and r.get("failed"))

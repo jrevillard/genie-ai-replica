@@ -1472,11 +1472,11 @@ class TestTheGraphPhaseIsCeilinged:
     (observed in the field: the read never returns, vLLM's engine sits idle)
     held the only lane, and every later ingest was refused with
     `429 System busy`. The ceiling releases the lane by giving the phase up
-    honestly — the ingest FAILS ('Ingestion Error'), the auto-retract cleans
-    the partial graph, and the drain-level self-heal re-ingests the file
-    later. A hung graph phase must never end 'Ingested': that would be a
-    silently partial knowledge graph, the exact outcome the phase's old
-    no-deadline stance existed to prevent.
+    honestly — the ingest FAILS ('Ingestion Error') and the auto-retract cleans
+    the partial graph; re-ingest is manual for a legacy file (#1992). A hung
+    graph phase must never end 'Ingested': that would be a silently partial
+    knowledge graph, the exact outcome the phase's old no-deadline stance
+    existed to prevent.
     """
 
     def test_a_hung_graph_extraction_fails_the_ingest_within_the_budget(self, monkeypatch):
@@ -1490,6 +1490,7 @@ class TestTheGraphPhaseIsCeilinged:
         monkeypatch.setattr(dataprep, "DATAPREP_LLM_PHASE_TIMEOUT_SECONDS", 0.4)
         monkeypatch.setattr(dataprep, "DATAPREP_LLM_PROGRESS_INTERVAL_SECONDS", 60.0)
         monkeypatch.setattr(dataprep, "_PHASE_CANCEL_GRACE_SECONDS", 0.2)
+        monkeypatch.setattr(dataprep, "_GRAPH_STRAGGLER_GRACE_SECONDS", 0.1)
         # A fresh gate per run: the module-level semaphore binds to whichever
         # event loop created it, and this test is the one that drives real
         # batches through it.
@@ -1501,8 +1502,9 @@ class TestTheGraphPhaseIsCeilinged:
             # executor join at asyncio.run() shutdown waits out the remaining
             # sleep, so every assertion below holds while the call is STILL
             # running. That is the lane-release proof: the ingest ended
-            # before the wedged call did.
-            time.sleep(6.0)
+            # before the wedged call did. The sleep stays short (2 s, not 30)
+            # because the executor join pays it on every suite run.
+            time.sleep(2.0)
             return []
 
         async def scenario():
@@ -1534,10 +1536,18 @@ class TestTheGraphPhaseIsCeilinged:
                     return dp, exc, time.monotonic() - started
 
         dp, exc, elapsed = _run(scenario())
-        # The ingest must END while the wedged call (6 s) is still parked.
+        # The ingest must END while the wedged call (2 s) is still parked.
         # Generous on purpose — the ceiling path takes ~1 s and the bound only
-        # has to separate that from the 6 s the un-budgeted phase would wait.
+        # has to separate that from the 2 s the un-budgeted phase would wait.
         assert elapsed < 5.0, f"the ingest held the lane for {elapsed:.1f}s past the 0.4s budget"
+        # Deterministic lower bound: the phase cannot return before its 0.4 s
+        # deadline (the conversion is wedged past it), and the expiry path owes
+        # the 0.1 s straggler grace before raising — deleting the grace sleep
+        # fails this line. The upper bound stays the flake-proof one.
+        assert elapsed >= 0.5, (
+            f"the ingest returned in {elapsed:.2f}s — below the 0.4s ceiling plus the "
+            "straggler grace, which means one of the two waits is missing"
+        )
         assert exc.status_code == 500, exc.status_code
         assert "budget" in str(exc.detail), exc.detail
         statuses = [c.args[1] for c in dp._update_doc_status.call_args_list]

@@ -10,10 +10,10 @@ const {
   waitForFileIngestedViaApi,
   waitForDocumentInTable,
   deleteAllTestDocuments,
-  // The status predicate the admin filter itself uses, read through the
-  // helper that owns the bridge to the frontend's ES module (and the Node
-  // floor that bridge needs) — one import site for the whole suite.
-  matchesStatus
+  // The shared status vocabulary, read through the helper that owns the
+  // bridge to the frontend's ES module (and the Node floor that bridge
+  // needs) — one import site for the whole suite.
+  normalizeStatus
 } = require('../helpers/documents');
 const { request, getSessionToken, getSessionTokenViaUI, SESSION_MINT_TIMEOUT_MS } = require('../helpers/auth');
 const { TEST_ADMIN_USER } = require('../helpers/e2e-fixtures');
@@ -120,9 +120,11 @@ test.describe('Document Upload — the ingest chain', () => {
 
   test.afterAll(async ({ browser }) => {
     // The helper's mint + list + delete sweep outlives the 60s hook
-    // default. This group's OWN rows: its seed names carry this prefix,
-    // and the upload group sweeps its own (a second sweep over the same
-    // population would only repeat the work).
+    // default. This group's OWN rows: its seed names carry this prefix.
+    // The upload group's sweep (prefix 'test-document') covers this
+    // family too, but it runs FIRST — so it can only remove the leftovers
+    // of an aborted earlier run; this group's own sweep removes what
+    // this run left.
     test.setTimeout(SESSION_MINT_TIMEOUT_MS);
     await deleteAllTestDocuments('test-document-ingest', { browser });
   });
@@ -157,10 +159,13 @@ test.describe('Document Upload — the ingest chain', () => {
       await row.locator('input[type="checkbox"]').check();
       await page.getByRole('button', { name: /ingest selected/i }).click();
       await page.getByRole('button', { name: 'Ingest', exact: true }).click();
-      await expect(
-        page.locator('[data-test-id="notification-success"]'),
-        'the batch ingest confirms itself'
-      ).toBeVisible();
+      // No toast assertion here: the app renders the notification by TYPE
+      // ('notification-success'), and the upload dialog emits the SAME
+      // type — so that locator can bind to the upload's own toast, and
+      // with both toasts alive it resolves two elements (a strict-mode
+      // error, not a clean failure). The wait below is the real proof:
+      // an action that was not accepted leaves the file un-ingested, and
+      // the wait fails with the status it last saw.
 
       // The chain the UI cannot show by itself: the ingest was accepted,
       // and the dataprep status lands 'Ingested' over the API — the source
@@ -186,7 +191,10 @@ test.describe('Document Upload — the ingest chain', () => {
       const file = await waitForFileIngestedViaApi(request, waitToken, mine.file_id, {
         timeoutMs: INGEST_BUDGET_MS
       });
-      expect(matchesStatus(file, 'ingested'), "the dataprep chain landed Ingested for this run's file").toBe(true);
+      expect(
+        normalizeStatus(file.dataprep && file.dataprep.status),
+        "the dataprep chain landed Ingested for this run's file"
+      ).toBe('ingested');
 
       // The rendered verdict: the search refresh re-reads the list (the
       // table has no auto-poll), and the pinned-English pill reads the

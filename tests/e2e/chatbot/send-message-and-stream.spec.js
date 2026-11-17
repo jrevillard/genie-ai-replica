@@ -229,7 +229,7 @@ test.describe('Chatbot message sending and SSE streaming — the French answer',
     await context?.close();
   });
 
-  test('streams the French translation when the UI locale is fr', async () => {
+  test('the streamed answer is in French when the UI locale is fr', async () => {
     // The question names the product, so the grounded answer carries the
     // proper noun in ANY language — the subject survives its translation
     // and the assertion is not a copy comparison.
@@ -247,13 +247,21 @@ test.describe('Chatbot message sending and SSE streaming — the French answer',
     await expect(page.locator('[data-testid="answer-actions"]')).toBeVisible();
 
     const botText = await getLastBotMessage(page);
-    expect(botText.length, 'the French answer arrived').toBeGreaterThan(0);
     expect(botText, 'the answer still names the subject of the question').toContain('GENIE');
 
     // The answer is FRENCH, not merely untranslated: a venue whose
     // translation chain silently answered with the English text would
     // carry translationFailed=false and pass the two checks below without
     // having translated anything.
+    //
+    // This list is the spec's own ECHO DETECTOR, and it stays for the
+    // operator's ruling on #1984: an untranslated answer is a BUG in the
+    // chain, so it must turn the spec RED — never retried, never skipped.
+    // The venue premise proves the translator at the API (one sample);
+    // this proves the TRANSLATION REACHED THE ANSWER, which the premise
+    // cannot see. The list is a heuristic, and it is the price of that
+    // verdict: it is widened whenever a correct French answer uses none
+    // of its words.
     //
     // The words are ones ENGLISH does not use ('est', 'sont', 'elle',
     // 'nous', 'dans', 'avec', 'cette', 'pour' …) — never the words

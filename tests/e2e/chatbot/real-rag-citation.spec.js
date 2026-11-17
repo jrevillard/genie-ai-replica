@@ -1,4 +1,6 @@
 const { test, expect } = require('@playwright/test');
+const fs = require('fs');
+const os = require('os');
 const path = require('path');
 const {
   loginViaUI,
@@ -24,11 +26,21 @@ const {
 } = require('../helpers/venue-profile');
 
 // The fixture whose fact the answer must carry and whose file the sources
-// must cite. Both seeds are fixed inputs of this spec (no wall-clock, no
-// copy): the token is unique in the repository, the question names the
-// fixture's subject, the citation is the uploaded file's own name.
+// must cite. The FACT is a fixed input of this spec (no wall-clock, no
+// copy): the token is unique in the repository and the question names the
+// fixture's subject.
+//
+// The FILE NAME is unique per RUN: the sources are asserted by name, and
+// the venue is shared — a leftover from an earlier run (or a concurrent
+// one) carries the same name AND the same fact, so a fixed name would let
+// the citation be satisfied by a file this run never ingested, and the
+// sweep would delete another run's file mid-flight. The seed is the
+// fixture's own text, copied out under this run's name (the same rule the
+// ingest group uses).
 const FIXTURE_PATH = path.join(__dirname, '..', 'fixtures', 'e2e-rag-citation.md');
-const FIXTURE_NAME = 'e2e-rag-citation.md';
+const FIXTURE_SEED = 'e2e-rag-citation';
+const RUN_ID = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+const FIXTURE_NAME = `${FIXTURE_SEED}-${RUN_ID}.md`;
 const FACT_TOKEN = 'QZK-7319';
 const QUESTION = 'What is the maintenance access code for the XR-7 controller?';
 
@@ -65,7 +77,7 @@ test.describe('Chatbot — a real answer cites its real source', () => {
     // answer a later run's question (the sweep is loud, never warned
     // away). The mint + list + delete sweep outlives the 60s hook default.
     test.setTimeout(SESSION_MINT_TIMEOUT_MS);
-    await deleteAllTestDocuments('e2e-rag-citation', { browser });
+    await deleteAllTestDocuments(FIXTURE_SEED, { browser });
   });
 
   test('the answer carries the fixture fact and the sources cite the fixture file', async ({ page, browser }) => {
@@ -80,35 +92,59 @@ test.describe('Chatbot — a real answer cites its real source', () => {
     // ordinary user sees is the one under test.
     const token = await getSessionTokenViaUI({ user: TEST_ADMIN_USER, browser });
 
-    const record = await uploadFileViaApi(request, token, FIXTURE_PATH);
-    await triggerIngestViaApi(request, token, record.file_id);
-    // The wait reads the API, and a realm access token lives 300 s: the
-    // token the upload carried would be minutes old by the time the ingest
-    // lands, and would expire mid-wait. A session minted for the wait
-    // answers in its own right.
-    const waitToken = await getSessionTokenViaUI({ user: TEST_ADMIN_USER, browser });
-    await waitForFileIngestedViaApi(request, waitToken, record.file_id, { timeoutMs: INGEST_BUDGET_MS });
+    // The upload carries THIS RUN's name: the file is copied out under it
+    // (the fixture's own bytes, a fresh name), so the sources are
+    // asserted against a file no other run can own. The runner's scratch
+    // copy is removed in the finally below — the venue-side document is
+    // removed by the group's sweep.
+    const uploadPath = `${os.tmpdir()}/${FIXTURE_NAME}`;
+    try {
+      fs.copyFileSync(FIXTURE_PATH, uploadPath);
+      const record = await uploadFileViaApi(request, token, uploadPath);
+      await triggerIngestViaApi(request, token, record.file_id);
+      // The wait reads the API, and a realm access token lives 300 s: the
+      // token the upload carried would be minutes old by the time the
+      // ingest lands, and would expire mid-wait. A session minted for the
+      // wait answers in its own right.
+      const waitToken = await getSessionTokenViaUI({ user: TEST_ADMIN_USER, browser });
+      await waitForFileIngestedViaApi(request, waitToken, record.file_id, { timeoutMs: INGEST_BUDGET_MS });
 
-    await loginViaUI(page);
-    await navigateToChatbot(page);
+      await loginViaUI(page);
+      await navigateToChatbot(page);
 
-    await sendMessage(page, QUESTION);
-    await waitForBotResponse(page, { timeout: ANSWER_BUDGET_MS });
+      await sendMessage(page, QUESTION);
+      await waitForBotResponse(page, { timeout: ANSWER_BUDGET_MS });
 
-    // The answer is grounded: the unique fact only the fixture carries is
-    // IN the answer text.
-    const botText = await getLastBotMessage(page);
-    expect(botText, 'the answer carries the fact only the fixture holds').toContain(FACT_TOKEN);
+      // The answer is grounded: the unique fact only the fixture carries
+      // is IN the answer text.
+      const botText = await getLastBotMessage(page);
+      expect(botText, 'the answer carries the fact only the fixture holds').toContain(FACT_TOKEN);
 
-    // And the citation: the metadata frame's source cards name the file
-    // the chunks came from. The card set is handle-resolved; the filter is
-    // the spec's own seed data (the fixture's file name), not design copy.
-    await expect(page.locator('[data-testid="answer-sources"]'), 'the metadata frame rode the turn').toBeVisible({
-      timeout: 45000
-    });
-    const cards = page.locator('[data-testid^="answer-source-card-"]');
-    await expect(cards.filter({ hasText: FIXTURE_NAME }).first(), 'the sources cite the ingested fixture').toBeVisible({
-      timeout: 15000
-    });
+      // And the citation: the metadata frame's source cards name the file
+      // the chunks came from. The card set is handle-resolved; the filter
+      // is the spec's own seed data (this run's file name), not design
+      // copy.
+      await expect(page.locator('[data-testid="answer-sources"]'), 'the metadata frame rode the turn').toBeVisible({
+        timeout: 45000
+      });
+      const cards = page.locator('[data-testid^="answer-source-card-"]');
+      await expect(
+        cards.filter({ hasText: FIXTURE_NAME }).first(),
+        'the sources cite the ingested fixture'
+      ).toBeVisible({
+        timeout: 15000
+      });
+    } finally {
+      // The runner's own scratch copy of the seed: the venue-side document
+      // is removed by the group's sweep, this file is the runner's. A
+      // leftover is named, not swallowed.
+      try {
+        fs.unlinkSync(uploadPath);
+      } catch (e) {
+        // ENOENT is a file that was never created (the copy failed) — not
+        // a leftover. Anything else is a leftover, and it is named.
+        if (e.code !== 'ENOENT') console.warn(`the scratch copy ${uploadPath} could not be removed: ${e.message}`);
+      }
+    }
   });
 });

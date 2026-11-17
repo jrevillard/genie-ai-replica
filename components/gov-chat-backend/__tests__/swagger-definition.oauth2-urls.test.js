@@ -137,24 +137,20 @@ describe('swagger-definition OAuth2 flow URLs', () => {
     expect(authorizationUrl.startsWith('/')).toBe(false);
   });
 
-  it('refuses a degenerate KEYCLOAK_URL that is not an absolute http(s) URL', () => {
-    // '/' normalizes to an empty base: serving it would hand the browser a
-    // same-origin relative path (the Authorize popup on the docs origin).
-    process.env.KEYCLOAK_URL = '/';
+  it.each([
+    ['a path-only base', '/'],
+    ['a scheme-only base', 'http://'],
+    ['an empty base', '']
+  ])('refuses %s (KEYCLOAK_URL is not an absolute http(s) URL)', (_label, value) => {
+    // A degenerate base would hand the browser a same-origin relative path
+    // (the Authorize popup on the docs origin) — a silent misconfiguration.
+    // The served URL must stay visibly broken instead.
+    process.env.KEYCLOAK_URL = value;
     delete process.env.KEYCLOAK_PUBLIC_URL;
     process.env.KEYCLOAK_REALM = 'genie';
     jest.resetModules();
     const { authorizationUrl } = flowUrls();
     expect(authorizationUrl.startsWith('/')).toBe(false);
-  });
-
-  it('never degrades to a same-origin relative URL when KEYCLOAK_URL is empty', () => {
-    // An empty value must not become a working-looking relative URL.
-    process.env.KEYCLOAK_URL = '';
-    delete process.env.KEYCLOAK_PUBLIC_URL;
-    process.env.KEYCLOAK_REALM = 'genie';
-    jest.resetModules();
-    const { authorizationUrl } = flowUrls();
-    expect(authorizationUrl.startsWith('/')).toBe(false);
+    expect(authorizationUrl).toContain('undefined');
   });
 });

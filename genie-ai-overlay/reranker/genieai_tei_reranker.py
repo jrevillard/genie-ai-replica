@@ -346,7 +346,42 @@ class GenieTEIReranking(OpeaTEIReranking):
                 docs = [doc.text for doc in input.retrieved_docs]
                 query = input.initial_query if isinstance(input, SearchedDoc) else input.input
 
-                # Propagate trace context to TEI
+                # Task 14 — reranker backend selection, read per invocation.
+                # The env is fixed at container start; a per-request getenv
+                # costs nothing measurable and keeps the value monkeypatchable
+                # in tests. tei stays the default (the NVIDIA path must not
+                # move); an unknown value falls back to tei with a warning,
+                # mirroring resolve_reranking_strategy().
+                backend = (os.getenv("RERANKER_BACKEND") or "tei").strip().lower()
+                if backend not in ("tei", "vllm"):
+                    logger.warning(f"RERANKER_BACKEND={backend[:32]} is not a known backend. Falling back to tei.")
+                    backend = "tei"
+                span.set_attribute(ATTRIBUTE_NAMES["reranker_backend"], backend)
+
+                if backend == "vllm":
+                    # vLLM rerank backend (ROCm/gfx1151 path): a third vLLM
+                    # instance serves the same cross-encoder on GPU, since the
+                    # TEI ROCm image cannot run there (SPIKE-01: Instinct-only
+                    # kernels). The endpoint must name the vLLM instance — it
+                    # is NOT the TEI endpoint this class's base_url carries.
+                    vllm_endpoint = (os.getenv("RERANKER_VLLM_ENDPOINT") or "").strip() or self.base_url
+                    vllm_model = (os.getenv("RERANKER_VLLM_MODEL") or "").strip() or os.getenv("RERANKER_MODEL_ID", "")
+                    if not vllm_model:
+                        raise RuntimeError(
+                            "RERANKER_BACKEND=vllm but no model name is configured — "
+                            "set RERANKER_VLLM_MODEL (or RERANKER_MODEL_ID)."
+                        )
+                    request_url = f"{vllm_endpoint}/v1/rerank"
+                    request_payload = {"model": vllm_model, "query": query, "documents": docs}
+                else:
+                    request_url = f"{self.base_url}/rerank"
+                    # truncate=False forces TEI's strict input check;
+                    # without this the wrapper would silently receive
+                    # a saturated score and the chatqna adaptive path
+                    # would abstain without operator-visible signal.
+                    request_payload = {"query": query, "texts": docs, "truncate": False}
+
+                # Propagate trace context to the rerank backend
                 headers = {}
                 propagate.inject(headers)
 
@@ -363,12 +398,8 @@ class GenieTEIReranking(OpeaTEIReranking):
                             )
                         ) as session,
                         session.post(
-                            f"{self.base_url}/rerank",
-                            # truncate=False forces TEI's strict input check;
-                            # without this the wrapper would silently receive
-                            # a saturated score and the chatqna adaptive path
-                            # would abstain without operator-visible signal.
-                            json={"query": query, "texts": docs, "truncate": False},
+                            request_url,
+                            json=request_payload,
                             headers=headers,
                         ) as resp,
                     ):
@@ -378,68 +409,112 @@ class GenieTEIReranking(OpeaTEIReranking):
                     span.set_status(Status(StatusCode.ERROR, str(e)))
                     raise
 
-                # TEI returns HTTP 422 + a Validation error_type when the strict
-                # input-length check fires (per-input cap = min(model.max_position_embeddings,
-                # --max-batch-tokens); we set --max-batch-tokens to 8192 via the compose
-                # entrypoint). We surface it as a typed exception so the microservice
-                # can re-raise an HTTP 422 and chatqna can abstain instead of returning 500.
-                if resp.status == 422 and (
-                    isinstance(decoded_response, dict) and decoded_response.get("error_type") == "Validation"
-                ):
-                    error_message = decoded_response.get("error", "unknown")
-                    # TEI's message carries the offending token count, e.g.
-                    # "...must have less than 8192 tokens. Given: 19505".
-                    # Surfaced as a span attribute so operators can size
-                    # dataprep chunk_size from the trace.
-                    given_tokens = None
-                    if error_message:
-                        m = re.search(r"Given:\s*(\d+)", error_message)
-                        if m:
-                            given_tokens = int(m.group(1))
-                    span.set_attribute("reranker.input_too_long", True)
-                    if given_tokens is not None:
-                        span.set_attribute("reranker.rejected_tokens", given_tokens)
-                    span.set_status(Status(StatusCode.ERROR, "Reranker input exceeds per-input token cap"))
-                    _reranker_input_too_long_total.add(1)
-                    logger.warning(
-                        f"Reranker input too long: {len(docs)} docs, "
-                        f"actual={given_tokens if given_tokens is not None else 'unknown'} tokens"
-                    )
-                    raise RerankerInputTooLongError(f"TEI rejected input: {error_message}")
+                if backend == "vllm":
+                    # vLLM speaks the Cohere rerank shape: an object carrying
+                    # results[] of {index, document, relevance_score}. Normalize
+                    # to the TEI scored-list contract — [{"index", "score"}] —
+                    # so every strategy below consumes one shape. Re-sorted
+                    # defensively: the slice/slice_threshold/adaptive branches
+                    # all assume descending order.
+                    if resp.status != 200:
+                        span.set_status(
+                            Status(
+                                StatusCode.ERROR,
+                                f"vLLM reranker returned HTTP {resp.status}: {decoded_response}",
+                            )
+                        )
+                        raise RuntimeError(
+                            f"vLLM reranker call failed: HTTP {resp.status} from "
+                            f"{request_url} (ndocs={len(docs)}). "
+                            f"Response: {decoded_response}"
+                        )
+                    vllm_results = decoded_response.get("results") if isinstance(decoded_response, dict) else None
+                    if vllm_results is None:
+                        span.set_status(
+                            Status(
+                                StatusCode.ERROR,
+                                f"vLLM reranker returned non-results response: {type(decoded_response).__name__}",
+                            )
+                        )
+                        raise RuntimeError(
+                            f"vLLM reranker returned an unexpected response type "
+                            f"{type(decoded_response).__name__} (expected an object "
+                            f"with a results[] list). HTTP was 200 but the body is "
+                            f"not the rerank contract. Response: {decoded_response}"
+                        )
+                    decoded_response = [
+                        {"index": int(r["index"]), "score": float(r["relevance_score"])} for r in vllm_results
+                    ]
+                    decoded_response.sort(key=lambda item: item["score"], reverse=True)
 
-                # Validate the TEI response contract before consuming it. TEI returns
-                # HTTP 200 + a list of {"index": int, "score": float} on success. On
-                # failure (e.g. 429 "Model is overloaded", 5xx), it returns a JSON
-                # error OBJECT like {"error": "...", "error_type": "Overloaded"}.
-                # Without this guard, iterating the error object yields its string
-                # keys, and `r["index"]` later raises a confusing
-                # "TypeError: string indices must be integers" that hides the real
-                # upstream failure. Fail loudly with the actual TEI status + body.
-                if resp.status != 200:
-                    span.set_status(
-                        Status(
-                            StatusCode.ERROR,
-                            f"TEI reranker returned HTTP {resp.status}: {decoded_response}",
+                # TEI-only checks — the strict 422 contract, the status contract
+                # and the scored-list shape are TEI behaviors. The vLLM branch
+                # above already validated its own status/shape and normalized
+                # the body, so these would be dead (or misleading) code there.
+                if backend == "tei":
+                    # TEI returns HTTP 422 + a Validation error_type when the strict
+                    # input-length check fires (per-input cap = min(model.max_position_embeddings,
+                    # --max-batch-tokens); we set --max-batch-tokens to 8192 via the compose
+                    # entrypoint). We surface it as a typed exception so the microservice
+                    # can re-raise an HTTP 422 and chatqna can abstain instead of returning 500.
+                    if resp.status == 422 and (
+                        isinstance(decoded_response, dict) and decoded_response.get("error_type") == "Validation"
+                    ):
+                        error_message = decoded_response.get("error", "unknown")
+                        # TEI's message carries the offending token count, e.g.
+                        # "...must have less than 8192 tokens. Given: 19505".
+                        # Surfaced as a span attribute so operators can size
+                        # dataprep chunk_size from the trace.
+                        given_tokens = None
+                        if error_message:
+                            m = re.search(r"Given:\s*(\d+)", error_message)
+                            if m:
+                                given_tokens = int(m.group(1))
+                        span.set_attribute("reranker.input_too_long", True)
+                        if given_tokens is not None:
+                            span.set_attribute("reranker.rejected_tokens", given_tokens)
+                        span.set_status(Status(StatusCode.ERROR, "Reranker input exceeds per-input token cap"))
+                        _reranker_input_too_long_total.add(1)
+                        logger.warning(
+                            f"Reranker input too long: {len(docs)} docs, "
+                            f"actual={given_tokens if given_tokens is not None else 'unknown'} tokens"
                         )
-                    )
-                    raise RuntimeError(
-                        f"TEI reranker call failed: HTTP {resp.status} from "
-                        f"{self.base_url}/rerank (ndocs={len(docs)}). "
-                        f"Response: {decoded_response}"
-                    )
-                if not isinstance(decoded_response, list):
-                    span.set_status(
-                        Status(
-                            StatusCode.ERROR,
-                            f"TEI reranker returned non-list response: {type(decoded_response).__name__}",
+                        raise RerankerInputTooLongError(f"TEI rejected input: {error_message}")
+
+                    # Validate the TEI response contract before consuming it. TEI returns
+                    # HTTP 200 + a list of {"index": int, "score": float} on success. On
+                    # failure (e.g. 429 "Model is overloaded", 5xx), it returns a JSON
+                    # error OBJECT like {"error": "...", "error_type": "Overloaded"}.
+                    # Without this guard, iterating the error object yields its string
+                    # keys, and `r["index"]` later raises a confusing
+                    # "TypeError: string indices must be integers" that hides the real
+                    # upstream failure. Fail loudly with the actual TEI status + body.
+                    if resp.status != 200:
+                        span.set_status(
+                            Status(
+                                StatusCode.ERROR,
+                                f"TEI reranker returned HTTP {resp.status}: {decoded_response}",
+                            )
                         )
-                    )
-                    raise RuntimeError(
-                        f"TEI reranker returned an unexpected response type "
-                        f"{type(decoded_response).__name__} (expected list of "
-                        "{{index, score}} dicts). HTTP was 200 but body is not the "
-                        f"scored-list contract. Response: {decoded_response}"
-                    )
+                        raise RuntimeError(
+                            f"TEI reranker call failed: HTTP {resp.status} from "
+                            f"{self.base_url}/rerank (ndocs={len(docs)}). "
+                            f"Response: {decoded_response}"
+                        )
+                    if not isinstance(decoded_response, list):
+                        span.set_status(
+                            Status(
+                                StatusCode.ERROR,
+                                f"TEI reranker returned non-list response: {type(decoded_response).__name__}",
+                            )
+                        )
+                        raise RuntimeError(
+                            f"TEI reranker returned an unexpected response type "
+                            f"{type(decoded_response).__name__} (expected list of "
+                            "{{index, score}} dicts). HTTP was 200 but body is not the "
+                            f"scored-list contract. Response: {decoded_response}"
+                        )
+
                 if len(decoded_response) != len(docs):
                     logger.warning(
                         f"TEI reranker returned {len(decoded_response)} scores for "

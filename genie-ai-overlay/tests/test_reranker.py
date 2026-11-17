@@ -1506,3 +1506,137 @@ class TestMicroserviceInputTooLong:
         assert isinstance(detail, dict)
         assert detail.get("error_type") == "RerankerInputTooLong"
         assert "Given: 19505" in detail["error"]
+
+
+# ---------------------------------------------------------------------------
+# Test: vLLM reranker backend (RERANKER_BACKEND=vllm) — Task 14
+# ---------------------------------------------------------------------------
+
+
+def create_vllm_rerank_response(results=None):
+    """Return a dict simulating vLLM /v1/rerank response (Cohere shape).
+
+    vLLM spells the score ``relevance_score`` (spike-verified, 2026-11-17):
+    ``{"results": [{"index": int, "document": {...}, "relevance_score": float}]} ``.
+    """
+    if results is None:
+        results = [{"index": i, "relevance_score": s} for i, s in enumerate([0.95, 0.82, 0.61])]
+    return {"results": results}
+
+
+class TestVllmBackend:
+    """RERANKER_BACKEND=vllm — request shape, response normalization, defaults.
+
+    The vLLM backend serves the same cross-encoder model on GPU via a third
+    vLLM instance (the TEI ROCm image cannot run on gfx1151). The switch is
+    config-only: tei stays the default, and the vLLM response is normalized
+    to the same [{"index", "score"}] list every strategy already consumes.
+    """
+
+    @pytest.mark.asyncio
+    async def test_vllm_backend_posts_vllm_request_shape(self, monkeypatch):
+        monkeypatch.setenv("RERANKER_BACKEND", "vllm")
+        monkeypatch.setenv("RERANKER_VLLM_ENDPOINT", "http://vllm-reranker:8000")
+        monkeypatch.setenv("RERANKER_VLLM_MODEL", "BAAI/bge-reranker-v2-m3")
+        reranker = create_reranker(base_url="http://tei-reranker:80")
+        input_doc = create_mock_searched_doc(texts=["a", "b", "c"], reranking_strategy="slice", top_n=3)
+        mock_session = create_mock_aiohttp_session(create_vllm_rerank_response())
+
+        with patch("reranker.genieai_tei_reranker.aiohttp.ClientSession", return_value=mock_session):
+            result = await reranker.invoke(input_doc)
+
+        url = mock_session.post.call_args[0][0]
+        assert url == "http://vllm-reranker:8000/v1/rerank"
+        body = mock_session.post.call_args[1]["json"]
+        assert body["model"] == "BAAI/bge-reranker-v2-m3"
+        assert body["query"] == "test query"
+        assert body["documents"] == ["a", "b", "c"]
+        # TEI-specific keys must not leak onto the vLLM path.
+        assert "texts" not in body
+        assert "truncate" not in body
+        assert len(result.reranked_docs) == 3
+
+    @pytest.mark.asyncio
+    async def test_vllm_backend_normalizes_cohere_shape(self, monkeypatch):
+        monkeypatch.setenv("RERANKER_BACKEND", "vllm")
+        monkeypatch.setenv("RERANKER_VLLM_ENDPOINT", "http://vllm-reranker:8000")
+        monkeypatch.setenv("RERANKER_VLLM_MODEL", "BAAI/bge-reranker-v2-m3")
+        reranker = create_reranker()
+        input_doc = create_mock_searched_doc(texts=["a", "b", "c"], reranking_strategy="slice", top_n=1)
+        # vLLM returns results sorted by relevance_score desc; index 2 is the winner.
+        scrambled = create_vllm_rerank_response(
+            [{"index": 2, "relevance_score": 0.95}, {"index": 0, "relevance_score": 0.61}, {"index": 1, "relevance_score": 0.82}]
+        )
+        mock_session = create_mock_aiohttp_session(scrambled)
+
+        with patch("reranker.genieai_tei_reranker.aiohttp.ClientSession", return_value=mock_session):
+            result = await reranker.invoke(input_doc)
+
+        assert len(result.reranked_docs) == 1
+        assert result.reranked_docs[0].score == 0.95
+        assert result.reranked_docs[0].text == "c"
+
+    @pytest.mark.asyncio
+    async def test_vllm_backend_non_200_raises(self, monkeypatch):
+        monkeypatch.setenv("RERANKER_BACKEND", "vllm")
+        monkeypatch.setenv("RERANKER_VLLM_ENDPOINT", "http://vllm-reranker:8000")
+        monkeypatch.setenv("RERANKER_VLLM_MODEL", "BAAI/bge-reranker-v2-m3")
+        reranker = create_reranker()
+        input_doc = create_mock_searched_doc(texts=["a", "b"], reranking_strategy="slice", top_n=1)
+        mock_session = create_mock_aiohttp_session({"error": "model overloaded"}, status=500)
+
+        with patch("reranker.genieai_tei_reranker.aiohttp.ClientSession", return_value=mock_session):
+            with pytest.raises(RuntimeError, match="vLLM"):
+                await reranker.invoke(input_doc)
+
+    @pytest.mark.asyncio
+    async def test_default_backend_is_tei(self, monkeypatch):
+        monkeypatch.delenv("RERANKER_BACKEND", raising=False)
+        monkeypatch.delenv("RERANKER_VLLM_ENDPOINT", raising=False)
+        monkeypatch.delenv("RERANKER_VLLM_MODEL", raising=False)
+        reranker = create_reranker(base_url="http://tei-reranker:80")
+        input_doc = create_mock_searched_doc(texts=["a", "b"], reranking_strategy="slice", top_n=2)
+        mock_session = create_mock_aiohttp_session(create_tei_rerank_response([0.9, 0.5]))
+
+        with patch("reranker.genieai_tei_reranker.aiohttp.ClientSession", return_value=mock_session):
+            await reranker.invoke(input_doc)
+
+        url = mock_session.post.call_args[0][0]
+        body = mock_session.post.call_args[1]["json"]
+        # Unchanged TEI contract — the NVIDIA path must not move.
+        assert url == "http://tei-reranker:80/rerank"
+        assert body["query"] == "test query"
+        assert body["texts"] == ["a", "b"]
+        assert body["truncate"] is False
+        assert "documents" not in body
+
+    @pytest.mark.asyncio
+    async def test_unknown_backend_falls_back_to_tei(self, monkeypatch):
+        monkeypatch.setenv("RERANKER_BACKEND", "openai")
+        monkeypatch.delenv("RERANKER_VLLM_ENDPOINT", raising=False)
+        monkeypatch.delenv("RERANKER_VLLM_MODEL", raising=False)
+        reranker = create_reranker(base_url="http://tei-reranker:80")
+        input_doc = create_mock_searched_doc(texts=["a", "b"], reranking_strategy="slice", top_n=1)
+        mock_session = create_mock_aiohttp_session(create_tei_rerank_response([0.9, 0.5]))
+
+        with patch("reranker.genieai_tei_reranker.aiohttp.ClientSession", return_value=mock_session):
+            await reranker.invoke(input_doc)
+
+        url = mock_session.post.call_args[0][0]
+        assert url == "http://tei-reranker:80/rerank"
+
+    @pytest.mark.asyncio
+    async def test_vllm_model_defaults_to_reranker_model_id(self, monkeypatch):
+        monkeypatch.setenv("RERANKER_BACKEND", "vllm")
+        monkeypatch.setenv("RERANKER_VLLM_ENDPOINT", "http://vllm-reranker:8000")
+        monkeypatch.delenv("RERANKER_VLLM_MODEL", raising=False)
+        monkeypatch.setenv("RERANKER_MODEL_ID", "BAAI/bge-reranker-v2-m3")
+        reranker = create_reranker()
+        input_doc = create_mock_searched_doc(texts=["a", "b"], reranking_strategy="slice", top_n=1)
+        mock_session = create_mock_aiohttp_session(create_vllm_rerank_response())
+
+        with patch("reranker.genieai_tei_reranker.aiohttp.ClientSession", return_value=mock_session):
+            await reranker.invoke(input_doc)
+
+        body = mock_session.post.call_args[1]["json"]
+        assert body["model"] == "BAAI/bge-reranker-v2-m3"

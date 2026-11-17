@@ -126,6 +126,10 @@ _ANY_WHITESPACE = re.compile(r"\s")
 ATTRIBUTE_NAMES = {
     # Correlation
     "query_id": QUERY_ID_KEY,
+    # Reranker backend (Task 14, ROCm path): which rerank backend answered a
+    # request — "tei" (default, NVIDIA path unchanged) or "vllm" (the GPU
+    # vLLM instance on gfx1151). Fixed enum, never request data.
+    "reranker_backend": "reranker.backend",
     # OKF multi-repo fan-out routing (feat/okf-server line). Values are
     # counts/booleans except leg.graph_name, which carries the Arango graph
     # collection name (identifier-charset, no whitespace).

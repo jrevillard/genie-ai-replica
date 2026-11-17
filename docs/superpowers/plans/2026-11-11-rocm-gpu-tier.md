@@ -407,11 +407,48 @@ Expected: the run prints green (0 failing spec files). A red run: triage per the
 
 Summarize gate evidence in the plan file (checkboxes ticked), then hand off to the branch-finishing flow: whole-branch review, then the single merge-to-main decision — which stays with the operator until the full suite is green (global constraint).
 
+### Task 14: vLLM reranker backend — config-gated GPU offload (added 2026-11-18, operator-approved)
+
+Operator decision: TEI stays default and untouched; add a second reranker
+backend served by a third vLLM instance on the gfx1151 GPU, selected purely
+by env config. SPIKE-01's finding drives this: the TEI ROCm image fails on
+gfx1151 (Instinct-only kernels), so the reranker is the one service stuck on
+CPU with a 16.3 GiB RSS spike at GPU-sized batch knobs.
+
+- [ ] **Step 1: Spike — vLLM pooling/rerank on gfx1151**
+
+`vllm serve BAAI/bge-reranker-v2-m3` on the pinned `rocm/vllm` image,
+`--gpu-memory-utilization 0.05 --max-model-len 8192`, port 8010. Criteria:
+`/health` 200; `POST /v1/rerank` returns `{"results": [{"index","score"}...]}`
+sorted descending; GTT delta ≈ 2 GiB. Record in the spike-results doc. If
+pooling fails on this image, STOP — report to operator, keep CPU TEI.
+
+- [ ] **Step 2: TDD — backend switch in the reranker component**
+
+`RERANKER_BACKEND=tei` (default) | `vllm` + `RERANKER_VLLM_ENDPOINT` +
+`RERANKER_VLLM_MODEL`. vLLM path posts `{model, query, documents}` to
+`/v1/rerank` and normalizes `results[]` to the TEI-shaped
+`[{"index","score"}]` list — all five strategies downstream unchanged.
+TEI-specific behavior (truncate=False strict 422, RerankerInputTooLongError)
+stays on the TEI path only; vLLM truncates silently at model max (span attr
+`reranker.backend` records which ran). Red/green in
+`genie-ai-overlay/tests/test_reranker.py` (mocked comps conftest).
+
+- [ ] **Step 3: Compose + env + validator + docs**
+
+`vllm-reranker` service in `docker-compose.rocm.yaml` and
+`docker-compose.rocm.gpu.yaml` (same devices/group_add/NVIDIA-void pattern);
+`env.strixhalo` sizing pins (RERANKER_BACKEND=vllm, endpoint, utilization,
+max_model_len 8192); config-validator GPU_RANGES entries (TDD — red test
+first); docs: env-vars overlay tables, choosing-models Profile E, spike
+results. NVIDIA-path behavior byte-identical (backend default tei, no
+base-file edits).
+
 ---
 
 ## Self-Review
 
-- **Spec coverage:** spike-first pinning (Tasks 1–4), overlays + env file (5), live smoke (6), validator (7), bug MR carve-out (8), split topology (9), swarm (10), ansible both topologies (11), docs incl. helm/k8s handoff + ENVIRONMENT.md rule (12), no-root gate + full E2E + merge gate (13). Docs inventory from the spec maps to Task 12 file list. All seven design decisions trace to tasks.
+- **Spec coverage:** spike-first pinning (Tasks 1–4), overlays + env file (5), live smoke (6), validator (7), bug MR carve-out (8), split topology (9), swarm (10), ansible both topologies (11), docs incl. helm/k8s handoff + ENVIRONMENT.md rule (12), no-root gate + full E2E + merge gate (13), vLLM reranker backend (14 — Task-8-shaped carve-out, additive only). Docs inventory from the spec maps to Task 12 file list. All seven design decisions trace to tasks.
 - **Step scan:** spike tasks are command+criteria steps (exploratory by nature, each with a record/commit deliverable); config tasks pin exact files, keys, and assertion commands; TDD task has full red/green cycle; no TBD lines.
 - **Type consistency:** image var names (`VLLM_ROCM_IMAGE`, `TEI_ROCM_EMBEDDING_IMAGE`, `TEI_ROCM_RERANKING_IMAGE`), profile name string `STRIX HALO (iGPU unified memory)`, group name `rocm_gpu_nodes`, file names consistent across tasks.
 - **Review Focus:** drift → Task 5 assertions; guided JSON → Task 6 Step 2 + re-pin protocol; memory pressure → Task 3 Step 2 + Task 6; swarm silent-ignore → Tasks 4/10; venue creds → Task 13 Step 2.

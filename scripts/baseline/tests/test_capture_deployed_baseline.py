@@ -31,8 +31,6 @@ def _record_data():
             "chart_name": "charts/genieai-umbrella",
             "chart_version": "0.2.1",
             "local_chart_version": "0.2.1",
-            "deployed_chart_source": "",
-            "chart_source_matches": None,
             "overlay_name": "overlay",
             "release_health": "True - Helm upgrade succeeded",
             "command": "python3 capture.py",
@@ -417,12 +415,13 @@ def test_the_chart_default_carries_the_path_it_resolved_from(chart_values, overl
     assert row["default_path"] == row["source_path"]
 
 
-def test_an_unknown_deployed_commit_fails_the_tree_comparison_closed():
-    """A commit this checkout does not know is UNRESOLVED, never a green match."""
-    assert capture.chart_source_matches("0" * 40) is None
-    assert capture.chart_source_matches("") is None
-
-
-def test_a_non_gitrepository_source_names_no_commit():
-    """A release that renders from a non-GitRepository source attests no commit."""
-    assert capture.deployed_chart_source("flux-system", {"kind": "HelmChart", "name": "x"}) == ""
+def test_the_record_names_both_chart_versions():
+    """The record says which chart it reconciles against and which the release attests."""
+    data = _record_data()
+    data["capture"]["chart_version"] = "0.2.1"
+    data["capture"]["local_chart_version"] = "0.2.2"
+    out_path = "/tmp/record-versions.md"
+    capture.write_record(data, out_path)
+    text = open(out_path, encoding="utf-8").read()
+    assert "version 0.2.2" in text
+    assert "attests 0.2.1" in text

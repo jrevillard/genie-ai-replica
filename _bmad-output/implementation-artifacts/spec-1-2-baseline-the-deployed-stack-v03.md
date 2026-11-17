@@ -63,7 +63,7 @@ context:
 ## Implementation Notes
 
 - The baseline venue is the shared k3s `genieai` namespace (chart 0.2.177, release `genieai.v38`, external GPU model tier). PRD §13-1 (which deployment hosts the first end-to-end validation) stays open: the capture takes the namespace as an argument, so designating a venue is a re-run, not a rewrite.
-- The chart's identity is established from what cluster objects attest: the release **history** records the chart version the deployed release was packaged from, and the capture compares it with the local `Chart.yaml`. A version difference is a discrepancy. The tree comparison against the GitRepository's artifact revision is a comparison against the source's **current** ref — the commit the release was rendered from is not attested by any cluster object (helm-controller repackages on the chart version, so the source tip can move past the deployed chart) — so the record states a tree comparison, never a rendered-from claim, and an unestablishable comparison (a ref unknown to the checkout) is an unresolved difference, not a silent pass.
+- The record reconciles the deployment against **the chart source in this repository** (its `values.yaml` defaults plus the overlay the release carries). The version the deployed release attests — read from the release history's latest revision — is reported next to it as provenance: the record says which chart it compared against and which chart the deployment runs. It is not a gate: the acceptance criteria ask for the record, and a chart-identity gate is machinery the criteria do not require (trimmed after the fourth fix review, on the operator's ruling).
 - The comparison layers are chart default → overlay override → running pod, and they stay three distinct columns. A difference against the *effective* value (default + override) is a discrepancy; a difference against the chart default alone is not.
 - `imageID` is the digest of the pulled image **index** (calibrated against the digest-pinned Envoy image: the pod's `imageID` equals the tag's index digest, not its amd64 child), so the registry comparison is index against index. The index digest is not a content identity — it moves on every re-push (the attestation changes the index, not the image) — so the record also carries the amd64 child digest, the stable one. The running digests of the eight application images are absent from the registry's current indexes: the pods run a push the registry no longer serves.
 - The chart templates are parsed, never guessed: the mapping from a values leaf to an environment variable exists only in the templates. A variable the parse cannot resolve is reported as TEMPLATE (rendered from a literal or a helper), never silently compared. The values the chart *computes* — the GPU endpoint family and the public origin, the two venue-specific values a cross-venue baseline exists to pin — are derived exactly as the chart's helpers derive them and compared like any other value.
@@ -158,10 +158,10 @@ Authorized by the operator on the coordination board (the same disposition given
 
 | # | Finding | Verdict | Disposition |
 |---|---|---|---|
-| F4-1 | The identity gate ships without a pinning test: `chart_source_matches` and `deployed_chart_source` had no unit test, and this gate has already failed open twice | high | **fixed, UNREVIEWED** — three pins: an unknown commit resolves to `None` (never a green match), an empty commit resolves to `None`, and a non-GitRepository source names no commit |
+| F4-1 | The identity gate ships without a pinning test: `chart_source_matches` and `deployed_chart_source` had no unit test, and this gate has already failed open twice | high | **superseded by the trim** — the gate and both functions are gone (the acceptance criteria do not require them); the record still names the chart it reconciles against and the version the release attests, and a test pins that sentence |
 | F4-2 | A stopped workload produced a false "DIFFERENT" image discrepancy: with no running pod the row's running digest is `"not running"`, and a resolvable registry tag then marked the row DIFFERENT with the stale-pull disposition — a different fact | high | **fixed, UNREVIEWED** — a workload that does not run resolves the registry digest but is marked NOT COMPARABLE, never DIFFERENT |
-| F4-3 | An empty release history failed the version gate open: `deployed_chart_version` was `""` and the comparison was silently skipped | low | **fixed, UNREVIEWED** — an empty attested version is an UNRESOLVED difference ("the release history carries no chart version"), matching the gate's own contract |
-| F4-4 | A non-GitRepository chart source skipped the tree comparison silently — both branches inert, the record sentence omitted | low | **fixed, UNREVIEWED** — the record states that the release renders from no GitRepository source, so no chart-source commit attests the deployment |
+| F4-3 | An empty release history failed the version gate open: `deployed_chart_version` was `""` and the comparison was silently skipped | low | **superseded by the trim** — the version gate is gone; the attested version is a reported fact, and an empty one is stated as such in the record header |
+| F4-4 | A non-GitRepository chart source skipped the tree comparison silently — both branches inert, the record sentence omitted | low | **superseded by the trim** — the tree comparison is gone with the rest of the identity gate |
 | F4-5 | Test duplication: the re-written difference test asserted what another test already asserts, and two tests hand-copied the production record dict | low | **fixed, UNREVIEWED** — the duplicate assertion is removed and the two record-gate tests build on the shared fixture |
 | F4-6 | The release's `Ready` condition was read as `conditions[0]`; the CRD does not order conditions | low | **fixed, UNREVIEWED** — the condition is selected by type |
 
@@ -172,6 +172,22 @@ Authorized by the operator on the coordination board (the same disposition given
 - Readability: the amd64 child digest (the stable content identity) is listed before the index digest (which moves on every re-push).
 
 **Declined to judge by the reviewer** (no action, recorded for the record): the app-tier and PII/OKF/RAGAS-tier environment comparisons (extracted as #1988), the missing CI job for the capture tests (extracted as #1987), the float fallback in `values_equal`, secret-kind `valuesFrom` values, untracked files under `charts/`, the sprint-status status flip, and the anonymous pull-token assumption (it fails per-row NOT COMPARABLE, never silent).
+
+### Trim (operator's ruling on the coordination board)
+
+The ruling: the cap stays 3, and a parking resolves as (1) reduce the diff where it exceeds the acceptance criteria, then (2) **one** more scoped fix review over the reduced diff, whose clean verdict closes the chain.
+
+**Removed — the chart-identity gate and the machinery around it** (the acceptance criteria ask for the record, not for a chart-identity verdict):
+
+- `deployed_chart_source` (the GitRepository artifact-revision lookup) and `chart_source_matches` (the local-tree comparison);
+- the discrepancy rows the gate produced (a chart-version difference, an unestablishable tree comparison);
+- the `chart-version` disposition (no row uses it any more);
+- the header's identity sentences (the source's current ref, the tree comparison);
+- the three pins for the removed functions.
+
+**Kept — the whole record the criteria name**, unchanged: the image digests (running, registry index, amd64 child), the four model roles (declared and served), the retrieval configuration reconciled against the chart source in its three layers with a disposition per difference, the topology, the exit gate on an undispositioned difference, and the read-only, dated, deterministic, re-runnable properties.
+
+**Size:** 117 lines removed from the capture, 11 from the tests, 5 from the record. On this venue the gate produced no rows, so the record's substance is unchanged: only its provenance sentence moved ("the deployed release attests 0.2.177"). The attested version is still read, still reported, still from the release history's **latest** revision (the history is not ordered, so the highest revision wins) — as a fact, not as a gate.
 
 ## Design Notes
 

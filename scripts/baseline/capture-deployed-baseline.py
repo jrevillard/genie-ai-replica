@@ -138,12 +138,6 @@ DISPOSITIONS = {
         "condition; if it does not, the deployment is missing a knob the source "
         "declares."
     ),
-    "chart-version": (
-        "Recorded - the local chart source is not the chart the deployment runs. The "
-        "comparison below is against the local source, so it describes what the "
-        "repository would deploy, not what runs. Re-run the capture from the chart "
-        "version the deployment runs."
-    ),
 }
 
 
@@ -597,10 +591,15 @@ def capture_release(flux_namespace, release):
                 f"the overlay {kind} {name} carries no {values_key} - the effective "
                 "source baseline cannot be resolved"
             )
-    # The version a cluster object ATTESTS: the release history records the
-    # chart version the deployed release was packaged from.
+    # The version the release history attests: the chart version the deployed
+    # release was packaged from. The record names it as provenance - which
+    # chart the deployment runs - next to the chart source it reconciles
+    # against.
     history = status.get("history") or []
-    deployed_chart_version = history[0].get("chartVersion", "") if history else ""
+    deployed_chart_version = ""
+    if history:
+        latest = max(history, key=lambda entry: int(entry.get("version", 0)))
+        deployed_chart_version = latest.get("chartVersion", "")
     return {
         "chart": spec.get("chart", {}).get("spec", {}),
         "revision": revision,
@@ -616,38 +615,6 @@ def local_chart_version():
     """The version of the chart source this capture compares against."""
     with open(os.path.join(CHART_DIR, "Chart.yaml"), encoding="utf-8") as handle:
         return (yaml.safe_load(handle) or {}).get("version", "")
-
-
-def deployed_chart_source(flux_namespace, source_ref):
-    """The commit of the chart source the release was rendered from.
-
-    For a GitRepository source the release ignores `spec.chart.spec.version`
-    and installs the branch tip: the identity of the chart is its commit,
-    not its version field.
-    """
-    if source_ref.get("kind") != "GitRepository":
-        return ""
-    namespace = source_ref.get("namespace", flux_namespace)
-    repository = kubectl_json(namespace, "get", "gitrepository", source_ref["name"])
-    revision = repository.get("status", {}).get("artifact", {}).get("revision", "")
-    # The revision is "<branch>@sha1:<sha>"; the commit is the identity.
-    found = re.search(r"([0-9a-f]{40})", revision)
-    return found.group(1) if found else revision
-
-
-def chart_source_matches(deployed_sha):
-    """Whether the local chart tree is the tree the deployment was rendered from.
-
-    Returns None when the deployed commit is unknown to this checkout.
-    """
-    if not deployed_sha:
-        return None
-    try:
-        run(["git", "-C", REPO_ROOT, "cat-file", "-e", f"{deployed_sha}^{{commit}}"])
-    except RuntimeError:
-        return None
-    diff = run(["git", "-C", REPO_ROOT, "diff", "--stat", deployed_sha, "--", "charts/"])
-    return diff.strip() == ""
 
 
 # --------------------------------------------------------------------------
@@ -1026,19 +993,8 @@ def render_markdown(data):
     )
     add(
         f"- **Source compared against:** the chart source in this repository, version "
-        f"{capture['local_chart_version']} (the release history attests {capture['chart_version']})"
-        + (
-            f" - the chart source's current ref is `{capture['deployed_chart_source']}`"
-            + (
-                " - the local chart tree is identical to that ref"
-                if capture["chart_source_matches"] is True
-                else " - the local chart tree DIFFERS from that ref"
-                if capture["chart_source_matches"] is False
-                else " - that ref is unknown to this checkout, so the tree comparison could not be established"
-            )
-            if capture.get("deployed_chart_source")
-            else " - the release does not render from a GitRepository source, so no chart-source commit attests the deployment"
-        )
+        f"{capture['local_chart_version']} (the deployed release attests "
+        f"{capture['chart_version'] or 'no chart version'})"
     )
     add(f"- **Overlay values:** `{capture['overlay_name']}`")
     add(f"- **Release health:** {capture['release_health']}")
@@ -1456,66 +1412,6 @@ def capture(namespace, flux_namespace, release, date, out_path):
     # and in the exit gate.
     discrepancies.extend(model_discrepancy_rows(models))
 
-    # The chart source this capture compares against must be the chart the
-    # deployment runs: otherwise the record describes what the repository
-    # would deploy, not what serves traffic. The identity is anchored to
-    # what a cluster object attests - the version in the release history -
-    # and the tree comparison against the source's current ref fails
-    # CLOSED: an unestablishable comparison is an unresolved difference.
-    deployed_chart_version = release_info.get("deployed_chart_version", "")
-    local_version = local_chart_version()
-    if not deployed_chart_version:
-        # The identity gate cannot run without an attested version.
-        discrepancies.append(
-            {
-                "workload": "(chart source)",
-                "env": "chart version",
-                "source_value": f"the local chart source ({local_version})",
-                "source_path": "charts/genieai-umbrella/Chart.yaml",
-                "deployed": "the release history carries no chart version",
-                "disposition": "**UNRESOLVED**",
-            }
-        )
-    elif local_version != deployed_chart_version:
-        discrepancies.append(
-            {
-                "workload": "(chart source)",
-                "env": "chart version",
-                "source_value": f"the local chart source ({local_version})",
-                "source_path": "charts/genieai-umbrella/Chart.yaml",
-                "deployed": f"the chart version the release history attests ({deployed_chart_version})",
-                "disposition": DISPOSITIONS["chart-version"],
-            }
-        )
-    source_ref = release_info["chart"].get("sourceRef", {})
-    is_git_source = source_ref.get("kind") == "GitRepository"
-    deployed_source = deployed_chart_source(flux_namespace, source_ref)
-    tree_matches = chart_source_matches(deployed_source)
-    if is_git_source and tree_matches is None:
-        # The comparison could not be established: a ref this checkout does
-        # not know, or an artifact that carries no commit. It fails closed.
-        discrepancies.append(
-            {
-                "workload": "(chart source)",
-                "env": "chart tree",
-                "source_value": f"the source's current ref ({deployed_source or 'unknown'})",
-                "source_path": "charts/",
-                "deployed": "unknown to this checkout",
-                "disposition": "**UNRESOLVED**",
-            }
-        )
-    elif tree_matches is False:
-        discrepancies.append(
-            {
-                "workload": "(chart source)",
-                "env": "chart tree",
-                "source_value": f"the local chart tree ({local_version})",
-                "source_path": "charts/",
-                "deployed": f"the source's current ref ({deployed_source})",
-                "disposition": DISPOSITIONS["chart-version"],
-            }
-        )
-
     image_discrepancies = [
         {
             "workload": row["workload"],
@@ -1553,9 +1449,7 @@ def capture(namespace, flux_namespace, release, date, out_path):
             "release_revision": release_info["revision"],
             "chart_name": release_info["chart"].get("chart", ""),
             "chart_version": release_info.get("deployed_chart_version", ""),
-            "local_chart_version": local_version,
-            "deployed_chart_source": deployed_source,
-            "chart_source_matches": tree_matches,
+            "local_chart_version": local_chart_version(),
             "overlay_name": release_info["overlay_name"],
             "release_health": (
                 f"{release_info['ready']} - {release_info['status']}"

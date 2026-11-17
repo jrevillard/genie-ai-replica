@@ -10,6 +10,46 @@ contractual evidence — a fresh clone does not carry them.)
 
 ## Current state (2026-11-17)
 
+- **The AI tier's readiness probes no longer add a floor on top of the
+  startup probe (0.2.177)** — six services (chatqna, dataprep,
+  embedding, reranker, retriever, translation) carried a readiness
+  `initialDelaySeconds` (120 s for chatqna, 30 s for the rest) ON TOP of
+  the startup probe that already gates the slow start. Measured on the
+  laptop: a chatqna pod whose container was answering `/health` two
+  seconds after it started stayed OUT of the Service's endpoints for
+  **128 seconds** — every restart, every scale-up. With the floor gone
+  the same pod is Ready in **9 seconds**. The invariant is written into
+  each template: the startup probe owns the slow start, the readiness
+  probe adds no second floor. `clamav` keeps its 60 s (the signature
+  load is a real slow start the tcp startup probe cannot see), and the
+  services WITHOUT a startup probe keep their delay — there it is the
+  only floor.
+
+- **The validation set ran green against 0.2.177 on the laptop
+  (2026-11-17)** — the chart's five test suites Succeeded (namespace,
+  data-deps, observability, stateless-reach, tcp-reach); the six-check
+  set is green for its first three (health 200 through the edge, the
+  genie theme on the login form, the Register link); and the whole local
+  E2E suite is **471 passed / 0 failed / 25 skipped** — the 25 are the
+  surfaces this venue does not expose (the OKF pillar is dark, the realm
+  has no second realm, no identity provider). The first pass of the
+  day was red on ONE file (`admin/authz.spec.js`, 2 failures): the edge's
+  keep-alive race (#1847) hitting a probe path that bypasses the
+  sanctioned retry in `helpers/auth.js`. The spec passes 3/3 in
+  isolation and the second pass was green.
+
+- **Two doc defects the validation run exposed** — the site's
+  Kubernetes guide told the operator to run `helm test genieai -n
+  genieai`, which answers **release: not found** (Flux's
+  helm-controller keeps the release Secret in `flux-system`, not in the
+  application namespace); the deploy repo's README now carries the
+  whole validation recipe (the reconcile, the rollout restart a new
+  image build requires — the tag is mutable and `pullPolicy: Always`
+  only applies at pod creation — `helm test` against the namespace the
+  release is stored in, and the local E2E run with its nodePort relay
+  and the admin credential the runner refuses to guess for a non-default
+  venue).
+
 - **The branch was rebased onto `main` (149d150d5) on 2026-11-17** — 621
   commits replayed; ONE file conflicted (`CHANGELOG.md`, resolved as the
   union of both sides), every other commit applied cleanly, and the

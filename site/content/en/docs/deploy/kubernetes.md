@@ -628,8 +628,15 @@ origin directly; TLS is the edge's concern.
 
 ```bash
 make -C charts test                        # ct install on a throwaway kind cluster
-helm test genieai -n genieai               # the chart's test pods, against a running release
+helm test genieai -n flux-system           # the chart's test pods, against a running release
 ```
+
+The namespace is where the release STORAGE lives, not where the stack
+runs. Flux's helm-controller keeps the release Secret in its own
+namespace (`flux-system`), so `helm test -n genieai` answers **release:
+not found** — the application namespace holds no release Secret at all. A
+release installed by `helm install -n genieai` stores its Secret in the
+application namespace, and that is the namespace to pass there.
 
 `make -C charts test` boots its own kind cluster, installs the chart
 with the data tier off (the operators and their CRDs are cluster

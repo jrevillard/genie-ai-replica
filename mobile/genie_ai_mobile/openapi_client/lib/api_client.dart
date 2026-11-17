@@ -360,6 +360,14 @@ class ApiClient {
           return CategoryTree.fromJson(value);
         case 'CategoryTreeChildrenInner':
           return CategoryTreeChildrenInner.fromJson(value);
+        case 'ConceptCard':
+          return ConceptCard.fromJson(value);
+        case 'ConceptCardSource':
+          return ConceptCardSource.fromJson(value);
+        case 'ConceptTreePage':
+          return ConceptTreePage.fromJson(value);
+        case 'ConceptTreeRow':
+          return ConceptTreeRow.fromJson(value);
         case 'Conversation':
           return Conversation.fromJson(value);
         case 'ConversationListResponse':
@@ -388,6 +396,8 @@ class ApiClient {
           return Query.fromJson(value);
         case 'QueryContext':
           return QueryContext.fromJson(value);
+        case 'ResolveRepoResponse':
+          return ResolveRepoResponse.fromJson(value);
         case 'SearchResponse':
           return SearchResponse.fromJson(value);
         case 'SearchResponseResultsInner':

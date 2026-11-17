@@ -86,8 +86,8 @@ From the architecture spine **AD-8** — the BFF owns the SSE contract; extensio
 
 | Event | Payload | Meaning |
 |---|---|---|
-| `agent_activity` | operation name + lifecycle state (`started` \| `completed` \| `failed`) | One tool call's lifecycle. Frames **interleave with `chunk`s**. Carries the operation name from the registered toolset — **never raw model reasoning**. |
-| `agent_verdict` | grounding verdict (+ a correction on failure) | Emitted **after the last `chunk`, before `metadata`**. Not rendered by the line: it maps onto the existing ungrounded-answer warning path. |
+| `agent_activity` | operation name + lifecycle state (`started` \| `completed` \| `failed`) | One tool call's lifecycle. Frames **interleave with `chunk`s**. Carries the operation name from the registered toolset — **never raw model reasoning**. Iteration-1 invariant (spine AD-6): document-tool calls dispatch **serially** — no overlapping same-name calls, so the current-operation row is never ambiguous. |
+| `agent_verdict` | grounding verdict (`grounded` \| `ungrounded` \| `unverified`, + a correction on failure) | Emitted **after the last `chunk`, before `metadata`**. Not rendered by the line. Projection truth table: `grounded` → no warning, `is_grounded:true`; `ungrounded` → the existing ungrounded-answer warning (`.answer-warning`), `is_grounded:false`; `unverified` (judge unavailable/timeout) → a **distinct neutral note** (new copy key `chatbot.agentActivity.verificationUnavailable`), `is_grounded:false` — **never** the ungrounded warning, which would falsely claim "not based on library documents". The verdict certifies the source-language text; a translated answer does not inherit it as a claim about the translation (spine AD-7). |
 
 Unknown event types are ignored gracefully by both clients today: the web's switch has no default (`src/services/chatbotService.js:194-222`), and the mobile parser returns `null` for an unknown type (`lib/services/sse_parser.dart`, `_parseEvent`). A client that knows nothing about the agent path behaves exactly as it does today.
 
@@ -115,6 +115,7 @@ Namespace: **`chatbot.agentActivity.*`**, in the `chatbot` tree the chat surface
 | `chatbot.agentActivity.working` | "Working…" | generic running state (operation with no catalogue entry) |
 | `chatbot.agentActivity.stepCompleted` | "Step completed." | generic completed state |
 | `chatbot.agentActivity.stepFailed` | "A step failed." | generic failed state |
+| `chatbot.agentActivity.verificationUnavailable` | "Response verification could not be completed." | `unverified` verdict note (truth table above) — distinct from the ungrounded warning, which claims a different fact |
 | `chatbot.agentActivity.operations.search_knowledge.running` | "Searching knowledge…" | per-operation running label |
 | `chatbot.agentActivity.operations.search_knowledge.completed` | "Searched the knowledge base." | per-operation completed label |
 | `chatbot.agentActivity.operations.search_knowledge.failed` | "Searching the knowledge base failed." | per-operation failed label |

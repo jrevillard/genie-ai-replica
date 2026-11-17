@@ -425,7 +425,7 @@ through the verification item that feeds it:
 
 | ID | Decision | Status | Fed by |
 |----|----------|--------|--------|
-| D01 | Ownership/placement of the document capability boundary | Open | V02, V04 |
+| D01 | Ownership/placement of the document capability boundary | **Acted 2026-11-16** (architecture spine AD-3: contract = module inside `components/agent-service`, okf-server remains THE per-user read authority; operator-approved) | V02, V04 confirm at contract acceptance — a V04 divergence reopens the AD |
 | D02 | OPEA-free agentic path coexisting with unchanged legacy OPEA RAG | Proposed (operator direction 2026-11-16) | V03, NFR-3 |
 | D03 | First agent runtime | Open — the operator named DSH the preferred investigation candidate (2026-11-10); research screening pick: custom minimal loop (provisional). **Candidate state, corrected revisit trigger, required evidence: addendum §D.** Decision at S4 entry from V06 and V07a; **must not close on research evidence older than the 2026-12-01 re-check** (PRD §13-7) | S1 research + amendments, SC-01 experiment, V06, V07 |
 | D04 | Preservation vs versioning of document/client contracts | Open | V05 |
@@ -488,8 +488,10 @@ Verification backlog (roles, not yet named assignees):
    subprocess-mode operational assessment) + V06 + V07a.
 5. Where do agreed evaluation thresholds live once measured (D05), and who
    signs the E01/E02 gate?
-6. Node vs Python placement of the agent loop — no public evidence either
-   way (research OQ-6); an architecture-doc decision from team constraints.
+6. ~~Node vs Python placement of the agent loop~~ **Resolved 2026-11-16
+   (operator):** Python host service `components/agent-service`
+   (architecture spine AD-2 — keeps the runner-up runtime hypothesis
+   reachable, reuses `AsyncOpenAI` precedent; harness-independent).
 7. S1 research freshness: compatibility/version-class claims are re-checked
    on 2026-12-01 — the date gate is carried in the D03 row (§10).
 

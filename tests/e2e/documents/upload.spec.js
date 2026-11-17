@@ -140,10 +140,7 @@ test.describe('Document Upload — the ingest chain', () => {
     const fileName = `test-document-ingest-${RUN_ID}.md`;
     const uploadPath = `${os.tmpdir()}/${fileName}`;
 
-    // The wait reads the API, and a realm access token lives 300 s: the
-    // page's own token would be minutes old by the time the ingest lands
-    // and would expire mid-wait. A session minted for the wait answers in
-    // its own right.
+    // The upload and the trigger run on a session of their own.
     const token = await getSessionTokenViaUI({ user: TEST_ADMIN_USER, browser });
 
     try {
@@ -176,7 +173,13 @@ test.describe('Document Upload — the ingest chain', () => {
       expect(uploaded.status, 'the file list answers the post-ingest read').toBe(200);
       const mine = ((uploaded.data && uploaded.data.data) || []).find((f) => f.file_name === fileName);
       expect(mine, 'this run uploaded exactly one row under its own name').toBeDefined();
-      const file = await waitForFileIngestedViaApi(request, token, mine.file_id, {
+      // The wait reads the API, and a realm access token lives 300 s: the
+      // token the upload carried is already as old as the upload and the
+      // batch action, and it would expire UNDER a 240 s wait — the poll
+      // would die on a 401 instead of reporting the real outcome. A
+      // session minted for the wait answers in its own right.
+      const waitToken = await getSessionTokenViaUI({ user: TEST_ADMIN_USER, browser });
+      const file = await waitForFileIngestedViaApi(request, waitToken, mine.file_id, {
         timeoutMs: INGEST_BUDGET_MS
       });
       expect(

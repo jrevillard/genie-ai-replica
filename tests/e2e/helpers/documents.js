@@ -467,11 +467,12 @@ async function triggerIngestViaApi(request, token, fileId) {
  * capitalised; the comparison is normalizeStatus's, like every other
  * consumer's).
  *
- * Which statuses count as ingested is the CALLER's: 'ingested with
- * warnings' is a REAL, indexed outcome (partial labels, a truncated
- * document context), so a probe that asks "does this venue's chain work?"
- * accepts it, while a spec that asserts the exact 'Ingested' status does
- * not. The default is the exact one.
+ * The status it waits for is the EXACT 'ingested' one: 'ingested with
+ * warnings' is a real, indexed outcome (partial labels, a truncated
+ * document context), but it is not the status the callers assert, and a
+ * wait that accepted it would let a spec claim an 'Ingested' it never
+ * saw. It ends the wait at once, named, like the other terminal
+ * statuses — it will not become 'ingested'.
  *
  * The TERMINAL statuses fail AT ONCE (named, with the status): 'ingestion
  * error' is a failed ingest, 'retracted' is a file withdrawn from the
@@ -486,11 +487,9 @@ async function triggerIngestViaApi(request, token, fileId) {
  * @param {string} fileId - the file whose status is waited for
  * @param {object} [options]
  * @param {number} [options.timeoutMs=240000] - the ingest budget
- * @param {string[]} [options.accept=['ingested']] - the statuses that count
- *        as an ingested outcome
  * @returns {Promise<object>} the file record that reached an ingested status
  */
-async function waitForFileIngestedViaApi(request, token, fileId, { timeoutMs = 240000, accept = ['ingested'] } = {}) {
+async function waitForFileIngestedViaApi(request, token, fileId, { timeoutMs = 240000 } = {}) {
   const read = async () => {
     const res = await request('GET', `/api/files/${fileId}`, {
       headers: { Authorization: `Bearer ${token}` }
@@ -510,12 +509,17 @@ async function waitForFileIngestedViaApi(request, token, fileId, { timeoutMs = 2
   // One read before the wait: a file that already ingested (a re-run against
   // a converged venue) must not spend the budget discovering it.
   const statusOf = (record) => normalizeStatus(record && record.dataprep && record.dataprep.status);
-  const TERMINAL = ['ingestion error', 'retracted', 'killed'];
+  // The statuses that will NOT become 'ingested': a failed ingest, a
+  // withdrawn file, a killed ingest, and the degraded-but-indexed one.
+  const TERMINAL = ['ingestion error', 'retracted', 'killed', 'ingested with warnings'];
+  const terminalError = (record) =>
+    `the ingest of file ${fileId} did not reach 'Ingested' — the dataprep status is ` +
+    `'${record.dataprep.status}', and that status will not change`;
   let file = await read();
   if (TERMINAL.includes(statusOf(file))) {
-    throw new Error(`the ingest of file ${fileId} failed — the dataprep status is '${file.dataprep.status}'`);
+    throw new Error(terminalError(file));
   }
-  if (!accept.includes(statusOf(file))) {
+  if (statusOf(file) !== 'ingested') {
     await expect
       .poll(
         async () => {
@@ -526,16 +530,16 @@ async function waitForFileIngestedViaApi(request, token, fileId, { timeoutMs = 2
           // reads an ingested status, and polling it to the deadline would
           // only delay the same named failure.
           if (TERMINAL.includes(status)) {
-            throw new Error(`the ingest of file ${fileId} failed — the dataprep status is '${file.dataprep.status}'`);
+            throw new Error(terminalError(file));
           }
           return status;
         },
         { timeout: timeoutMs, intervals: [1000, 5000] }
       )
-      // The accepted set, matched as a whole: the status is a normalised
-      // vocabulary value, so the alternation is anchored (a bare 'ingested'
-      // alternative would also match 'ingested with warnings').
-      .toMatch(new RegExp(`^(${accept.map((s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|')})$`));
+      // The exact status, compared as a whole: the vocabulary's normalised
+      // form is 'ingested', and the degraded 'ingested with warnings' is a
+      // DIFFERENT status — it ended the wait above, named.
+      .toBe('ingested');
   }
   return file;
 }

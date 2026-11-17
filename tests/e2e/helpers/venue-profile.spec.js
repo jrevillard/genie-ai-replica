@@ -567,10 +567,33 @@ test.describe('the ingest-chain canary uploads, ingests, and cleans up', () => {
     await expect(profile.ingestChainReady()).rejects.toThrow(/could not read the venue/);
   });
 
-  test('a canary that lands Ingested with Warnings MID-WAIT is a ready venue', async () => {
-    // The degraded status can arrive on the wait's SECOND read: the
-    // anchored alternation the wait matches on is what accepts it, and
-    // this is the case that exercises the poll.
+  test('a canary that lands Ingested with Warnings is NOT a ready venue — the specs assert the exact status', async () => {
+    // The degraded status is indexed, but it is not the 'Ingested' the
+    // specs assert: a premise that admitted it would run the specs on a
+    // venue they would red on. The reason names the status it landed.
+    fakeSessionMint();
+    fakeTransport([
+      uploaded('c1'),
+      { status: 200, data: { success: true }, headers: {} },
+      recordRead('c1', 'Ingested with Warnings'),
+      // The cleanup's record read, then its delete.
+      {
+        status: 200,
+        data: { success: true, data: { file_id: 'c1', file_name: 'ingest-probe-canary.md' } },
+        headers: {}
+      },
+      { status: 200, data: { success: true }, headers: {} }
+    ]);
+    const profile = freshProfile();
+    expect(await profile.ingestChainReady()).toBe(false);
+    const reason = await profile.ingestChainMissingReason();
+    expect(reason).toContain('Ingested with Warnings');
+  });
+
+  test('a canary that lands Ingested with Warnings MID-WAIT ends the wait at once, named', async () => {
+    // The degraded status can arrive on the wait's SECOND read: the wait
+    // must end there — polling a status that will not change would burn
+    // the whole budget to say the same thing.
     fakeSessionMint();
     fakeTransport([
       uploaded('c1'),
@@ -586,20 +609,9 @@ test.describe('the ingest-chain canary uploads, ingests, and cleans up', () => {
       { status: 200, data: { success: true }, headers: {} }
     ]);
     const profile = freshProfile();
-    expect(await profile.ingestChainReady()).toBe(true);
-  });
-
-  test('a canary that lands Ingested with Warnings is a ready venue — indexed, if degraded', async () => {
-    fakeSessionMint();
-    fakeTransport([
-      uploaded('c1'),
-      { status: 200, data: { success: true }, headers: {} },
-      recordRead('c1', 'Ingested with Warnings'),
-      recordRead('c1', 'Ingested with Warnings'),
-      { status: 200, data: { success: true }, headers: {} }
-    ]);
-    const profile = freshProfile();
-    expect(await profile.ingestChainReady()).toBe(true);
+    expect(await profile.ingestChainReady()).toBe(false);
+    const reason = await profile.ingestChainMissingReason();
+    expect(reason).toContain('Ingested with Warnings');
   });
 
   test('a canary that cannot be removed FAILS the probe — a leftover stays in the venue corpus', async () => {

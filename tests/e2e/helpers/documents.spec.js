@@ -429,4 +429,33 @@ test.describe('the ingest wait (the dataprep status over the API)', () => {
     await expect(waitForFileIngestedViaApi(request, 'tok', 'f1', { timeoutMs: 30000 })).rejects.toThrow(/HTTP 500/);
     expect(calls).toHaveLength(1);
   });
+
+  test('an expired session (401) is named as the session, not as a missing file', async () => {
+    const calls = [];
+    const request = scriptedTransport([{ status: 401, data: { error: 'TOKEN_EXPIRED' }, headers: {} }], calls);
+    // The realm's access token lives 300 s: a wait that outlives it dies
+    // on the 401, and the failure has to say WHICH it was.
+    await expect(waitForFileIngestedViaApi(request, 'expired-token', 'f1', { timeoutMs: 30000 })).rejects.toThrow(
+      /401/
+    );
+    expect(calls).toHaveLength(1);
+  });
+
+  test('a killed ingest is terminal and fails AT ONCE with the status named', async () => {
+    const calls = [];
+    const request = scriptedTransport([record('Killed')], calls);
+    await expect(waitForFileIngestedViaApi(request, 'tok', 'f1', { timeoutMs: 30000 })).rejects.toThrow(
+      /dataprep status is 'Killed'/
+    );
+    expect(calls).toHaveLength(1);
+  });
+
+  test('the degraded ingest is terminal too — it is not the Ingested the callers assert', async () => {
+    const calls = [];
+    const request = scriptedTransport([record('Ingested with Warnings')], calls);
+    await expect(waitForFileIngestedViaApi(request, 'tok', 'f1', { timeoutMs: 30000 })).rejects.toThrow(
+      /dataprep status is 'Ingested with Warnings'/
+    );
+    expect(calls).toHaveLength(1);
+  });
 });

@@ -17,17 +17,17 @@ const { pinLocale, assertAdoptedLocale } = require('../helpers/locale');
 const { SESSION_MINT_TIMEOUT_MS } = require('../helpers/auth');
 const { skipUnlessVenue, frenchStreamingReady, frenchStreamingMissingReason } = require('../helpers/venue-profile');
 
-// The French-only words the answer must carry. French shares 'la', 'le',
-// 'un', 'de', 'que', 'ce' and 'il' with Spanish, Italian and Portuguese —
-// a word from that set would pass an answer in another Latin-script
-// language — so the list carries only words French does not share:
-// 'est' (Spanish 'es'), 'sont', 'elle', 'nous', 'vous', 'dans', 'avec',
-// 'cette', 'pour', 'une', 'des', 'du', 'les', 'qui', 'tout', 'aux',
-// 'leur', 'ses', 'aussi', 'ainsi', 'donc', 'ne', 'pas'. ('plus' is
-// deliberately absent: it is an ordinary English word, and an English
-// answer would carry it. An ACCENTED word is absent for the same reason
-// from the other side: the word boundary this match uses is ASCII, so
-// 'être' would never match.)
+// The words the answer must carry. They are words ENGLISH does not use —
+// 'est' (English 'is'), 'sont', 'elle', 'nous', 'vous', 'dans', 'avec',
+// 'cette', 'pour', 'une', 'un', 'des', 'du', 'les', 'qui', 'tout', 'aux',
+// 'leur', 'ses', 'aussi', 'ainsi', 'donc', 'ne', 'pas' — and never the
+// words English shares with French ('la', 'le', 'de', 'que', 'ce'): those
+// would carry an English answer.
+//
+// Two are deliberately absent: 'plus' (an ordinary English word — an
+// English answer would carry it) and any ACCENTED word ('être'): the word
+// boundary this match uses is ASCII, so an accented word would never
+// match at all.
 const FRENCH_ONLY_WORDS = [
   'est',
   'sont',
@@ -40,6 +40,7 @@ const FRENCH_ONLY_WORDS = [
   'cette',
   'pour',
   'une',
+  'un',
   'des',
   'du',
   'les',
@@ -55,6 +56,9 @@ const FRENCH_ONLY_WORDS = [
   'ne',
   'pas'
 ];
+
+// The same words, matched at once — every occurrence, case-insensitively.
+const FRENCH_WORD_PATTERN = new RegExp(`\\b(${FRENCH_ONLY_WORDS.join('|')})\\b`, 'gi');
 
 test.describe('Chatbot message sending and SSE streaming', () => {
   // The beforeEach logs in through the browser and navigates — the
@@ -197,6 +201,14 @@ test.describe('Chatbot message sending and SSE streaming — the French answer',
     await sendMessage(page, question);
     await waitForBotResponse(page, { timeout: 120000 });
 
+    // The DOM must have PROCESSED the done frame before the answer is
+    // read: the action row renders only on a completed turn (it carries
+    // the query id the done frame delivers), so its presence is the DOM's
+    // own signal that the frame landed — and the answer the read returns
+    // is the one the DOM paints. Without that wait the read could take a
+    // DOM one patch behind the store.
+    await expect(page.locator('[data-testid="answer-actions"]')).toBeVisible();
+
     const botText = await getLastBotMessage(page);
     expect(botText.length, 'the French answer arrived').toBeGreaterThan(0);
     expect(botText, 'the answer still names the subject of the question').toContain('GENIE');
@@ -206,27 +218,24 @@ test.describe('Chatbot message sending and SSE streaming — the French answer',
     // carry translationFailed=false and pass the two checks below without
     // having translated anything.
     //
-    // The words are FRENCH-ONLY ones — 'est', 'sont', 'elle', 'nous',
-    // 'dans', 'avec', 'cette', 'pour' … — and not the words French shares
-    // with Spanish or Italian ('la', 'le', 'un', 'de', 'que', 'ce'): one
-    // shared word would pass an answer in another Latin-script language.
-    // TWO of them are required, so a single quoted coincidence (a file
-    // name in the sources, a proper noun) cannot carry the assertion.
-    const frenchWords = FRENCH_ONLY_WORDS.filter((w) => new RegExp(`\\b${w}\\b`, 'i').test(botText));
-    expect(
-      frenchWords.length,
-      `the answer is in French (French-only words found: ${frenchWords.join(', ') || 'none'})`
-    ).toBeGreaterThanOrEqual(2);
+    // The words are ones ENGLISH does not use — 'est', 'sont', 'elle',
+    // 'nous', 'dans', 'avec', 'cette', 'pour' … — and not the words
+    // English shares with French ('la', 'le', 'un', 'de', 'que', 'ce'):
+    // those would carry an English answer.
+    //
+    // Two OCCURRENCES are required, not two distinct words: a terse but
+    // correct French answer ("GENIE.AI est un outil.") carries one word
+    // twice, and a distinct-word count would red it.
+    //
+    // This is not a language detector: the list also holds words Spanish
+    // and Italian use ('des', 'ses', 'qui'), so a Spanish answer could
+    // match it. What makes the answer French is the PREMISE — the venue
+    // resolves the en→fr translator the chat path itself uses — and this
+    // assertion is the check that the translation reached the answer.
+    const frenchHits = (botText.match(FRENCH_WORD_PATTERN) || []).length;
+    expect(frenchHits, `the answer is in French (French-only words found: ${frenchHits})`).toBeGreaterThanOrEqual(2);
 
     // The app's own translation verdict, read twice on two channels:
-    //
-    // 0. The DOM must have PROCESSED the done frame before the marker can
-    //    be read: the action row renders only on a completed turn (it
-    //    carries the query id the done frame delivers), so its presence is
-    //    the DOM's own signal that the frame landed. Without that wait the
-    //    marker check below would read a DOM one patch behind the store
-    //    and pass for the wrong reason.
-    await expect(page.locator('[data-testid="answer-actions"]')).toBeVisible();
     //
     // 1. The DOM marker renders ONLY when the done frame carried
     //    translationFailed=true (the amber note beside an English answer a

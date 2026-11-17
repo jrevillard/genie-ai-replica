@@ -390,9 +390,12 @@ async function translatesTo(locale) {
     });
     return false;
   }
-  // Anything else (5xx, a proxy page, an empty body) is the venue failing
-  // to answer a question it understood — that is an UNREADABLE venue, not
-  // an absent surface: fail loudly, cache nothing.
+  // Anything else (a 5xx, a 400 that is not the typed refusal) is the venue
+  // failing to answer a question it understood — that is an UNREADABLE
+  // venue, not an absent surface: fail loudly, cache nothing. (A 200 that
+  // carries no translation is NOT this branch: the body was read above,
+  // and a chain that answered without translating is a chain that cannot
+  // translate — the skip reason names it.)
   throw new Error(
     `the venue's translation endpoint answered HTTP ${res.status} for the en→${locale} probe — ` +
       'the venue profile is UNKNOWN, which is not the same as a missing translation chain'
@@ -426,7 +429,9 @@ async function missingTranslationReason(locale) {
  * The probe is BEHAVIORAL, because no HTTP surface declares the chain's
  * presence: it uploads its own tiny canary through the repository's upload
  * route, triggers the ingest, holds until the shared status vocabulary
- * reads an ingested status (bounded), then retracts/deletes the canary.
+ * reads the EXACT 'ingested' status the specs assert (bounded), then
+ * retracts/deletes the canary. A degraded 'ingested with warnings' is not
+ * that status: the premise must not admit a venue the specs would red on.
  *
  * The verdict (and the last status it observed on a miss) is cached per
  * PROCESS, and the suite runs in ONE worker process — so a run pays ONE
@@ -490,15 +495,11 @@ async function ingestChainReady() {
     await triggerIngestViaApi(auth.request, token, fileId);
     try {
       const ingested = await waitForFileIngestedViaApi(auth.request, token, fileId, {
-        timeoutMs: INGEST_PROBE_BUDGET_MS,
-        // The probe asks "does this venue's chain work?" — a degraded but
-        // INDEXED ingest ('ingested with warnings') is a working chain, and
-        // refusing it would turn a healthy-enough venue into a skip.
-        accept: ['ingested', 'ingested with warnings']
+        timeoutMs: INGEST_PROBE_BUDGET_MS
       });
       // The status the canary ACTUALLY landed on, not a hardcoded 'ingested':
-      // the probe accepts two statuses, and the reason it reports must name
-      // the one the venue answered with.
+      // the reason the probe reports must name the one the venue answered
+      // with.
       verdict = {
         ready: true,
         lastStatus: (ingested.dataprep && ingested.dataprep.status) || 'ingested'
@@ -583,6 +584,14 @@ async function ingestChainReady() {
     // question. The probe therefore FAILS on it, on both paths: the
     // cleanup is this run's own artifact, and a run that cannot clean up
     // after itself has no business deciding that the chain is ready.
+    //
+    // The cached verdict becomes the FAILURE, not the stale 'ready': the
+    // next consumer of the premise must not read a ready chain from a
+    // venue that still holds this run's canary.
+    ingestChainCache = {
+      ready: false,
+      lastStatus: `the canary's cleanup failed: ${cleanupFailures.join('; ')}`
+    };
     throw new Error(
       `the ingest canary's cleanup failed — the venue keeps a canary document: ${cleanupFailures.join('; ')}`
     );

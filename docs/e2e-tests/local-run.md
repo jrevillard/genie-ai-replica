@@ -142,11 +142,12 @@ checked-out lockfile pins.
 
 ### Venue address
 
-A venue whose edge hostname the runner cannot resolve (a cluster-internal
-name, or a name the venue's own DNS serves) needs its address in the
-environment. Resolve the venue's address and pass it as `E2E_VENUE_IP`.
-The example below is the **shared-forge venue** — substitute your venue's
-own names for both:
+A runner that cannot resolve the venue's edge hostname needs the address
+resolved another way: ask for whatever name the venue IS reachable by —
+below, the cluster-internal name that fronts the shared-forge edge — and
+pass the answer as `E2E_VENUE_IP`. The example is the **shared-forge
+venue** — the shared k8s stack of the *Shared-stack discipline* section
+and the run's DEFAULT venue; substitute your venue's own names and port:
 
 ```bash
 E2E_VENUE_IP=$(getent hosts forge-k3s.openclaw.svc.cluster.local | awk '{print $1}') \
@@ -275,7 +276,7 @@ exactly the same report as a defect of the product:
 
   ```bash
   kubectl get events -A --field-selector reason=NodeReady --sort-by=.lastTimestamp
-  kubectl -n genieai get events --sort-by=.lastTimestamp | tail
+  kubectl -n <venue-namespace> get events --sort-by=.lastTimestamp | tail
   ```
 
 - a **stale venue build** (#1844/#1845, #1895, #1896): every deployment
@@ -292,7 +293,7 @@ behind it — it is current). A venue behind cannot serve the handles the
 checkout declares — the remedy is a venue refresh, not a code change:
 
 ```bash
-kubectl -n genieai rollout restart deploy/genieai-genieai-umbrella-frontend
+kubectl -n <venue-namespace> rollout restart deploy/<frontend-deployment>
 ```
 
 then re-run the red specs before believing anything.

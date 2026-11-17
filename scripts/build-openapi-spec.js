@@ -65,10 +65,7 @@ function buildSpec() {
     ['tokenUrl', flow?.tokenUrl]
   ]) {
     assert.ok(
-      typeof url === 'string' &&
-        !url.includes('undefined') &&
-        /^https?:\/\//.test(url) &&
-        (expectedBase === '' || url.startsWith(expectedBase)),
+      typeof url === 'string' && !url.includes('undefined') && /^https?:\/\//.test(url) && url.startsWith(expectedBase),
       label +
         ' is not a concrete URL (absolute, derived from the KEYCLOAK_URL pin) —' +
         ' the KEYCLOAK_URL/KEYCLOAK_REALM pins are missing from the env -i' +

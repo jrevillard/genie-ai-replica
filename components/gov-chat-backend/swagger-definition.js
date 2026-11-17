@@ -20,14 +20,16 @@
 // IGNORED and the flow URLs fall back to KEYCLOAK_URL (the historical
 // source). One trailing slash is stripped — the same normalization the
 // verifier applies to its public-issuer alias, so the served URL and the
-// accepted issuer cannot drift apart.
+// accepted issuer cannot drift apart. A value carrying whitespace is
+// refused rather than trimmed: the verifier does not trim its alias, so a
+// trimmed base here would point at an issuer the verifier never accepts.
 //
 // When no base URL is configured at all, KEYCLOAK_URL stays undefined and
 // the served URL keeps the historical visibly-broken 'undefined' shape: a
 // same-origin relative URL would open the Authorize popup on the docs
 // origin itself — a silent misconfiguration.
 const oauth2BaseUrl = (() => {
-  const publicBase = (process.env.KEYCLOAK_PUBLIC_URL || '').trim().replace(/\/$/, '');
+  const publicBase = (process.env.KEYCLOAK_PUBLIC_URL || '').replace(/\/$/, '');
   if (publicBase) {
     // eslint-disable-next-line no-control-regex -- intentional: the C0 control range is exactly what WHATWG strips
     if (!/[\s\u0000-\u001F"#<>?`{}]/.test(publicBase)) {
@@ -38,7 +40,10 @@ const oauth2BaseUrl = (() => {
       }
     }
   }
-  return process.env.KEYCLOAK_URL;
+  const internalBase = process.env.KEYCLOAK_URL;
+  // Undefined stays undefined (see above); a trailing slash is stripped so
+  // the served URL never carries a doubled path segment.
+  return typeof internalBase === 'string' ? internalBase.replace(/\/+$/, '') : internalBase;
 })();
 
 module.exports = {

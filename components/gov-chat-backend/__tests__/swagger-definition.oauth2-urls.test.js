@@ -95,18 +95,30 @@ describe('swagger-definition OAuth2 flow URLs', () => {
     expect(authorizationUrl).toBe('https://keycloak.example.com/auth/realms/genie/protocol/openid-connect/auth');
   });
 
-  it('trims a KEYCLOAK_PUBLIC_URL carrying surrounding whitespace (same as the servers base)', () => {
+  it('ignores a KEYCLOAK_PUBLIC_URL carrying surrounding whitespace (the verifier does not trim its alias)', () => {
+    // Trimming here would point the browser at an issuer the shared
+    // verifier never accepts (its public-issuer alias is not trimmed), so
+    // a padded value is refused and the flow URLs fall back to KEYCLOAK_URL.
     process.env.KEYCLOAK_URL = 'https://keycloak.example.com/auth';
     process.env.KEYCLOAK_PUBLIC_URL = ' https://docs.example.org/auth ';
     process.env.KEYCLOAK_REALM = 'genie';
     jest.resetModules();
     const { authorizationUrl } = flowUrls();
-    expect(authorizationUrl).toBe('https://docs.example.org/auth/realms/genie/protocol/openid-connect/auth');
+    expect(authorizationUrl).toBe('https://keycloak.example.com/auth/realms/genie/protocol/openid-connect/auth');
   });
 
   it('ignores a KEYCLOAK_PUBLIC_URL carrying embedded whitespace', () => {
     process.env.KEYCLOAK_URL = 'https://keycloak.example.com/auth';
     process.env.KEYCLOAK_PUBLIC_URL = 'https://do cs.example.org/auth';
+    process.env.KEYCLOAK_REALM = 'genie';
+    jest.resetModules();
+    const { authorizationUrl } = flowUrls();
+    expect(authorizationUrl).toBe('https://keycloak.example.com/auth/realms/genie/protocol/openid-connect/auth');
+  });
+
+  it('strips a trailing slash from the KEYCLOAK_URL fallback (no doubled path segment)', () => {
+    process.env.KEYCLOAK_URL = 'https://keycloak.example.com/auth/';
+    delete process.env.KEYCLOAK_PUBLIC_URL;
     process.env.KEYCLOAK_REALM = 'genie';
     jest.resetModules();
     const { authorizationUrl } = flowUrls();

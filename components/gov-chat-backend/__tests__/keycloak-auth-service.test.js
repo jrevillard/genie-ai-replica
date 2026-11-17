@@ -83,6 +83,12 @@ const publishedCandidates = (count) => Array.from({ length: count }, (_, i) => (
 
 describe('keycloakAuthService', () => {
   beforeEach(() => {
+    // KEYCLOAK_PUBLIC_URL (the browser-facing issuer alias) is read by the
+    // verifier at init: an ambient value in the developer's or CI runner's
+    // environment would register an extra accepted issuer and change what
+    // this suite observes. Neutralized here — the alias is not what this
+    // file exercises.
+    delete process.env.KEYCLOAK_PUBLIC_URL;
     keycloakAuthService._resetForTesting();
     mockCreateRemoteJWKSet = jest.fn().mockReturnValue(jest.fn());
     mockJwtVerify = jest.fn();

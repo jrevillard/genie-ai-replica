@@ -890,7 +890,10 @@ KEYCLOAK_URL=https://localhost/auth
 #                           dies on DNS. A value that is not an absolute http(s)
 #                           URL is IGNORED (the flow URLs fall back to
 #                           KEYCLOAK_URL). KEYCLOAK_BROWSER_ISSUER is NOT a base
-#                           URL (it is a full issuer) and does not feed them.
+#                           URL (it is a full issuer) and does not feed them —
+#                           a deployment that sets KEYCLOAK_BROWSER_ISSUER for
+#                           token validation and wants the Swagger Authorize
+#                           round-trip must ALSO set KEYCLOAK_PUBLIC_URL.
 #   KEYCLOAK_INTERNAL_URL — internal Keycloak base (http://keycloak:8080) used by
 #                           chatqna (JWKS fetch) and dataprep (service-account token
 #                           mint). okf-server uses it ONLY as a connection failover —

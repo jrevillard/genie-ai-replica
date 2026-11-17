@@ -427,7 +427,7 @@ through the verification item that feeds it:
 |----|----------|--------|--------|
 | D01 | Ownership/placement of the document capability boundary | Open | V02, V04 |
 | D02 | OPEA-free agentic path coexisting with unchanged legacy OPEA RAG | Proposed (operator direction 2026-11-16) | V03, NFR-3 |
-| D03 | First agent runtime | Open — the operator named DSH the preferred investigation candidate (2026-11-10); research screening pick: custom minimal loop (provisional). **Candidate state, corrected revisit trigger, required evidence: addendum §D.** Decision at S4 entry from V06 and V07a; **must not close on research evidence older than the 2026-12-01 re-check** (OQ-7) | S1 research + amendments, SC-01 experiment, V06, V07 |
+| D03 | First agent runtime | Open — the operator named DSH the preferred investigation candidate (2026-11-10); research screening pick: custom minimal loop (provisional). **Candidate state, corrected revisit trigger, required evidence: addendum §D.** Decision at S4 entry from V06 and V07a; **must not close on research evidence older than the 2026-12-01 re-check** (PRD §13-7) | S1 research + amendments, SC-01 experiment, V06, V07 |
 | D04 | Preservation vs versioning of document/client contracts | Open | V05 |
 | D05 | Release gates and pilot scope | Open | Baseline measurement, validation infrastructure (V09) |
 
@@ -451,7 +451,7 @@ Verification backlog (roles, not yet named assignees):
 
 | Risk | Mitigation |
 |------|-----------|
-| DSH (or any selected runtime) is developer-preview software | V06 integration test + explicit operational-risk acceptance (NFR-2); runtime contract stays decoupled (NFR-7) so replacement is documented, not blocked |
+| DSH is developer-preview software (the risk is DSH-specific; pydantic-ai is Production/Stable and a custom loop is GENIE code) | V06 integration test + explicit operational-risk acceptance (NFR-2); runtime contract stays decoupled (NFR-7) so replacement is documented, not blocked |
 | OPEA-free path silently diverges from required RAG behavior | V02 recorded behavior; E01 regression gate (§8) |
 | No pilot user/cohort defined | Evaluation vs agreed fixed reference; D05 names pilot scope before rollout decisions |
 | Repo E2E execution suspended (ADR 0001) | V09 maps which gates rely on the local E2E baseline; release gates may not silently assume unavailable CI |

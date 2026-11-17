@@ -4041,8 +4041,19 @@ class GenieArangoDataprep(OpeaArangoDataprep):
         Bounded on purpose: the ceiling exists to release the single ingest
         lane fast, and a writer slower than this window still races the
         retract.
+
+        The window runs behind the module's own shield (``_settle_and_retrieve``)
+        so a cancellation arriving inside it cannot truncate it to zero — an
+        unshielded wait would skip the window entirely, which is the outcome
+        the window exists to prevent. The absorbed cancellation is re-raised
+        as THIS object: a fresh CancelledError would carry none of the
+        original's identity, and the kill path must still see its own
+        cancellation.
         """
-        await asyncio.sleep(_GRAPH_WRITER_SETTLE_SECONDS)
+        wait = asyncio.ensure_future(asyncio.sleep(_GRAPH_WRITER_SETTLE_SECONDS))
+        _interrupted, absorbed = await _settle_and_retrieve([wait], timeout=_GRAPH_WRITER_SETTLE_SECONDS)
+        if absorbed is not None:
+            raise absorbed
 
     async def _process_batch(self, batch_docs, current_batch_num, total_batches, input, graph_name, semaphore):
         """Helper to process a single batch with concurrency control.
@@ -4442,7 +4453,9 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                     # first gives in-flight insertions a short grace to land
                     # INSIDE what the retract is about to delete; a straggler
                     # slower than that grace can still write after the retract
-                    # — the same race the kill path has always had (#1991).
+                    # — the same race the kill path has always had, and the
+                    # batch-error path carries it for writers slower than the
+                    # grace too (#1991).
                     # No chunks are silently dropped; the loss on one wedged
                     # file is now an honest failure instead of the whole queue.
                     # The operator guidance lives in the failure messages
@@ -4495,11 +4508,11 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                         raise Exception(
                             f"Graph insertion exceeded its {DATAPREP_LLM_PHASE_TIMEOUT_SECONDS:g}s budget "
                             "with batches still running — the ingest failed rather than degraded a "
-                            "partial graph; the document is retracted and needs a re-kick. A batch "
-                            "makes one call per chunk sequentially (DATAPREP_GRAPH_BATCH_SIZE, default "
-                            "10) and the retry ladder repeats it, so a wedged endpoint burns far more "
-                            "than the ceiling: fix the endpoint, or raise "
-                            "DATAPREP_LLM_PHASE_TIMEOUT_SECONDS."
+                            "partial graph; the document is retracted and needs a re-kick (the D4-b "
+                            "self-heal covers OKF re-indexes only, #1992). A batch makes one call per "
+                            "chunk sequentially (DATAPREP_GRAPH_BATCH_SIZE, default 10) and the retry "
+                            "ladder repeats it, so a wedged endpoint burns far more than the ceiling: "
+                            "fix the endpoint, or raise DATAPREP_LLM_PHASE_TIMEOUT_SECONDS."
                         )
 
                     # Empty-graph refusal (P0, David 2026-09-09): a batch/model

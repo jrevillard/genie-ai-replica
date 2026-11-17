@@ -15,12 +15,13 @@ it reports while it runs, and it degrades rather than raising.
 
 import ast
 import asyncio
+import contextlib
 import gc
 import json
 import sys
 import time
 from pathlib import Path
-from unittest.mock import MagicMock
+from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
@@ -104,6 +105,41 @@ def _stub_dataprep():
 
 def _run(coro):
     return asyncio.run(coro)
+
+
+def _stub_graph_phase_ingest(dp):
+    """The collaborators the graph phase reads, for the graph-phase tests.
+
+    One owner for the ingest scaffold the two graph-phase tests share: the
+    labelling/contextualisation stubs, the taxonomy fetch, the chunking and
+    the vector-index call. The tests add only what they are about — the
+    wedged extraction, the failing batch log, the recording retract.
+    """
+    dp.db = MagicMock()
+    dp._fetch_all_labels = AsyncMock(return_value=["Tax:IVA"])
+    dp._load_and_chunk = AsyncMock(return_value=["chunk one", "chunk two"])
+    dp._run_guardrail = AsyncMock(return_value={"success": True})
+    dp._update_doc_status = AsyncMock()
+    dp._apply_contextualization = AsyncMock(side_effect=lambda c, i, f: (list(c), []))
+    dp._apply_labels = AsyncMock(
+        return_value=([{"text": "a", "labels": ["Tax:IVA"]}, {"text": "b", "labels": ["Tax:IVA"]}], [])
+    )
+    dp.ensure_vector_index = AsyncMock(return_value=(None, None))
+
+
+def _graph_ingest_input():
+    """The ingest request the graph-phase tests drive."""
+    return MagicMock(file_id="f1", file_path="/tmp/f1.pdf", graph_name="GRAPH", file_labels=[])
+
+
+@contextlib.contextmanager
+def _patched_graph_ingest():
+    """The graph phase's construction seams: the graph object and the Document type."""
+    with (
+        patch.object(dataprep, "ArangoGraph"),
+        patch.object(dataprep, "Document", side_effect=lambda **kw: MagicMock(metadata=dict(kw))),
+    ):
+        yield
 
 
 def _AsyncJson(payload):
@@ -1480,8 +1516,6 @@ class TestTheGraphPhaseIsCeilinged:
     """
 
     def test_a_hung_graph_extraction_fails_the_ingest_within_the_budget(self, monkeypatch):
-        from unittest.mock import AsyncMock, MagicMock, patch
-
         from fastapi import HTTPException
 
         monkeypatch.setenv("VLLM_API_KEY", "test-key")
@@ -1509,25 +1543,13 @@ class TestTheGraphPhaseIsCeilinged:
 
         async def scenario():
             dp = _stub_dataprep()
-            dp.db = MagicMock()
+            _stub_graph_phase_ingest(dp)
             dp.retract_file = AsyncMock()
-            dp._fetch_all_labels = AsyncMock(return_value=["Tax:IVA"])
-            dp._load_and_chunk = AsyncMock(return_value=["chunk one", "chunk two"])
-            dp._run_guardrail = AsyncMock(return_value={"success": True})
-            dp._update_doc_status = AsyncMock()
-            dp._apply_contextualization = AsyncMock(side_effect=lambda c, i, f: (list(c), []))
-            dp._apply_labels = AsyncMock(
-                return_value=([{"text": "a", "labels": ["Tax:IVA"]}, {"text": "b", "labels": ["Tax:IVA"]}], [])
-            )
-            dp.ensure_vector_index = AsyncMock(return_value=(None, None))
             dp.llm_transformer.convert_to_graph_documents = wedged_conversion
 
-            inp = MagicMock(file_id="f1", file_path="/tmp/f1.pdf", graph_name="GRAPH", file_labels=[])
+            inp = _graph_ingest_input()
             started = time.monotonic()
-            with (
-                patch.object(dataprep, "ArangoGraph"),
-                patch.object(dataprep, "Document", side_effect=lambda **kw: MagicMock(metadata=dict(kw))),
-            ):
+            with _patched_graph_ingest():
                 try:
                     await dp.ingest_file_with_guardrail(inp, lock_file=None)
                     raise AssertionError("the ingest reported success over a hung graph phase")
@@ -1542,11 +1564,11 @@ class TestTheGraphPhaseIsCeilinged:
         assert elapsed < 5.0, f"the ingest held the lane for {elapsed:.1f}s past the 0.4s budget"
         # Deterministic lower bound: the phase cannot return before its 0.4 s
         # deadline (the conversion is wedged past it), and the expiry path owes
-        # the 0.1 s straggler grace before raising — deleting the grace sleep
+        # the 0.1 s writer settle before raising — deleting the settle call
         # fails this line. The upper bound stays the flake-proof one.
         assert elapsed >= 0.5, (
             f"the ingest returned in {elapsed:.2f}s — below the 0.4s ceiling plus the "
-            "straggler grace, which means one of the two waits is missing"
+            "writer settle, which means one of the two waits is missing"
         )
         assert exc.status_code == 500, exc.status_code
         assert "budget" in str(exc.detail), exc.detail
@@ -1572,8 +1594,6 @@ class TestTheGraphPhaseIsCeilinged:
         what orders the two, so the ORDERING is the contract under test:
         deleting the settle call leaves this suite green otherwise.
         """
-        from unittest.mock import AsyncMock, MagicMock, patch
-
         from fastapi import HTTPException
 
         monkeypatch.setenv("VLLM_API_KEY", "test-key")
@@ -1588,16 +1608,7 @@ class TestTheGraphPhaseIsCeilinged:
 
         async def scenario():
             dp = _stub_dataprep()
-            dp.db = MagicMock()
-            dp._fetch_all_labels = AsyncMock(return_value=["Tax:IVA"])
-            dp._load_and_chunk = AsyncMock(return_value=["chunk one", "chunk two"])
-            dp._run_guardrail = AsyncMock(return_value={"success": True})
-            dp._update_doc_status = AsyncMock()
-            dp._apply_contextualization = AsyncMock(side_effect=lambda c, i, f: (list(c), []))
-            dp._apply_labels = AsyncMock(
-                return_value=([{"text": "a", "labels": ["Tax:IVA"]}, {"text": "b", "labels": ["Tax:IVA"]}], [])
-            )
-            dp.ensure_vector_index = AsyncMock(return_value=(None, None))
+            _stub_graph_phase_ingest(dp)
 
             async def failing_log(_file_id, _level, stage, _message):
                 # The GRAPH stage only. A batch swallows every exception, so
@@ -1619,12 +1630,8 @@ class TestTheGraphPhaseIsCeilinged:
 
             dp.retract_file = retract
 
-            inp = MagicMock(file_id="f1", file_path="/tmp/f1.pdf", graph_name="GRAPH", file_labels=[])
-            with (
-                patch.object(dataprep, "ArangoGraph"),
-                patch.object(dataprep, "Document", side_effect=lambda **kw: MagicMock(metadata=dict(kw))),
-                pytest.raises(HTTPException),
-            ):
+            inp = _graph_ingest_input()
+            with _patched_graph_ingest(), pytest.raises(HTTPException):
                 await dp.ingest_file_with_guardrail(inp, lock_file=None)
             return dp
 

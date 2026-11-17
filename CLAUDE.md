@@ -26,7 +26,9 @@ This includes:
 
 ### Environment Setup (First Time)
 
-All deployments use a single `.env` file at the project root:
+All Compose and Swarm deployments use a single `.env` file at the project
+root (the Kubernetes path has no `.env` — its configuration is the chart
+values plus Secret env rows):
 
 ```bash
 # Copy the template to your local environment file
@@ -83,6 +85,59 @@ docker service scale genieai_<service>=<replicas>     # Scale a service
 - Only nginx ports (80, 443) exposed; all other services internal
 - Node labels: `gateway=true`, `gpu=true`, `genieai=true`
 
+### Kubernetes (feature branch)
+
+Helm chart on `feat/k8s-migration`, deployed to laptop minikube via Flux from
+`genie-ai-deploy`. Compose + Ansible remain primary (see above). Per-env
+overlays + SealedSecrets live in the deploy repo.
+
+→ Full chart workflow, render gates, Helm traps and the live validation
+set: `.claude/rules/K8s-WORKFLOW.md` (the only k8s rule file — read it
+before touching `charts/**`).
+
+```bash
+# Chart dev cycle (worktree: feat/k8s-migration)
+helm dependency update charts/genieai-umbrella    # vendored deps are GITIGNORED
+                                                   # (genieai-common, gateway-helm): a fresh
+                                                   # checkout has no charts/*.tgz, and every
+                                                   # helm command below fails without them
+helm lint --strict charts/genieai-umbrella                       # local lint
+# NEVER bare `helm template` — the rtk hook garbles it. The render
+# needs the deployment data (it has no chart defaults for them) and a
+# mail server: verifyEmail/resetPasswordAllowed default to the Compose
+# values, and the render refuses them without an smtp. The smtp.* values
+# below are render-only placeholders — a name that answers nothing.
+rtk proxy helm template test charts/genieai-umbrella -n genieai \
+  --set data.keycloak.failOnPlaceholderSecrets=false \
+  --set data.keycloak.adminEmail=ci-render@example.org \
+  --set data.keycloak.smtp.from=no-reply@ci.invalid \
+  --set data.keycloak.smtp.host=smtp.invalid \
+  --set data.keycloak.smtp.port=587 \
+  --set data.keycloak.smtp.starttls=true \
+  --set ingress.host=ci-render.local
+git commit/push                                                  # triggers CI: chart:lint + chart:contract + chart:parity + chart:crd-validate
+                                                                  # (chart:install is a MANUAL job — see .gitlab-ci.yml)
+# In genie-ai-deploy: bump `version:` in overlays/<cluster>/<env>/helmrelease.yaml
+flux reconcile helmrelease genieai -n flux-system                # roll the cluster
+
+# Cluster access (namespace: genieai)
+kubectl -n genieai get pods,svc,hpa
+kubectl -n flux-system get helmrelease genieai                   # the HelmRelease lives in flux-system
+kubectl -n genieai port-forward svc/envoy-genieai-genieai-<hash> 4443:4443   # browser-validate via https://genieai.local:4443
+# (nginx is gone from the data path — Envoy Gateway is the edge; see charts README)
+# The Envoy Service port is the one in ingress.host (4443 here), NOT 443:
+# the Gateway's HTTPS listener binds the public port.
+
+# Render gate (refactors)
+# Byte-compare `helm template` across `opea.gpu.mode=external|in-cluster` — classify every diff line as intentional or drift.
+```
+
+**Key notes:**
+- Chart at `charts/genieai-umbrella/`, library at `charts/genieai-common/`; see `charts/README.md`
+- Cluster prerequisites: CNPG (a CRD serving `postgresql.cnpg.io/v1`), kube-arangodb 1.4.x, keycloak-operator 26.x, sealed-secrets ≥0.40 — installed once per cluster, before any release
+- GPU tier is binary (`opea.gpu.mode=external|in-cluster`); ArangoDB mode switch needs `helm uninstall` + `helm install` (no auto-promote)
+- Live state + plan status: `docs/charts/migration-status.md`
+
 ### E2E Tests
 
 Multi-phase procedure in `docs/e2e-tests/`:
@@ -116,6 +171,7 @@ For the full architecture overview with diagrams (C4 context/container, authenti
 
 ### Layer Stack
 
+0. **Deployment Layer**: Helm chart (`charts/genieai-umbrella` + library `charts/genieai-common`) reconciled by Flux v2 from the `genie-ai-deploy` repo — Kubernetes path on feature branch `feat/k8s-migration`, validated on laptop minikube (`overlays/<dev>-laptop/dev`).
 1. **Client Layer**: Vue 3 web app (`components/gov-chat-frontend`), Flutter mobile (`mobile/genie_ai_mobile`)
 2. **API Gateway**: Kong/NGINX (`api-gateway-solution`)
 3. **Application Layer**: Node.js/Express backend (`components/gov-chat-backend`)
@@ -151,6 +207,8 @@ Each RAG pipeline stage emits OTel spans (when observability enabled), propagate
 | `genie-ai-overlay/reranker/` | Result reranking service |
 | `genie-ai-overlay/core/` | Shared types, protocols, constants |
 | `genie-ai-overlay/tests/` | OPEA pytest suite (retriever, dataprep, reranker, tracing) |
+| `charts/genieai-umbrella/` | Single-install umbrella chart (data layer + services + OPEA tier) |
+| `charts/genieai-common/` | Library chart (templates + helpers) |
 | `api-gateway-solution/` | Kong/NGINX configuration and scripts |
 | `secrets/` | **Secrets** (SSL certificates - NOT committed) |
 | `configs/` | **Configuration** (LLM prompts, OTel collector, Grafana dashboards) |
@@ -182,6 +240,7 @@ When adding a doc, pick one home based on audience. Do not duplicate across both
 | API Gateway | Kong, NGINX |
 | Testing | Jest (Node.js), pytest (Python), Playwright (E2E), flutter_test |
 | Observability | OTel SDK, VictoriaMetrics, VictoriaLogs, VictoriaTraces, Grafana |
+| Kubernetes deployment | Helm 3 + Flux v2 (`charts/genieai-umbrella` + `genie-ai-deploy`, feature branch `feat/k8s-migration`) |
 | CI/CD | GitLab CI (`.gitlab-ci.yml`) |
 
 ## Linting and Formatting
@@ -284,7 +343,7 @@ Following DRY principle, defaults live in code/docker-compose, not in env files.
 - `VLLM_LLM_MODEL_ID` - Labeling/chat LLM. **Must support OpenAI-compatible `response_format={"type":"json_object"}`** (vLLM guided JSON); dataprep requests strict JSON label output per chunk. Models without guided JSON produce malformed output → per-chunk fallback (slower, lower label quality). Validated on `ibm-granite/granite-4.1-8b`.
 - `RERANKING_STRATEGY` - Strategy for selecting the final reranked set: `slice` (default; top-N), `threshold`, `slice_threshold`, `knee_threshold`, or `adaptive`.
 - `RERANKER_TOP_N` - Number of top chunks kept by `slice`/`slice_threshold` strategies (default 3).
-- `CONTEXTUAL_RETRIEVAL_ENABLED` - Contextual Retrieval (Anthropic-style), **on by default**: prepend an LLM doc-context prefix to each chunk before embedding + labeling (default `true`; set `false` to disable — a no-op beyond skipping context generation). Adds one vLLM call/chunk at ingest; never blocks ingestion (raw-chunk fallback). See the [Data Labelling Strategy](site/content/en/docs/rag/data-labeling.md) doc (§7 — Contextual Retrieval).
+- `CONTEXTUAL_RETRIEVAL_ENABLED` - Contextual Retrieval (Anthropic-style), **on by default**: prepend an LLM doc-context prefix to each chunk before embedding + labeling (default `true`; set `false` to disable — a no-op beyond skipping context generation). Adds one vLLM call/chunk at ingest; never blocks ingestion (raw-chunk fallback). See the [Data Labelling Strategy](site/content/en/docs/rag-pipeline/data-labeling.md) doc (§7 — Contextual Retrieval).
 - `DATAPREP_CONTEXTUAL_MODEL` - Model for context generation (empty = reuse `VLLM_LLM_MODEL_ID`); must support guided JSON.
 - `DATAPREP_CONTEXTUAL_DOC_BUDGET` - Max chars of document text fed to the context LLM as part of its system prompt. **Default `0` = derive from the serving model's window, discovered at runtime from `VLLM_ENDPOINT`** (issue #1182; same discovery chatqna uses, TTL-cached via `core/model_cache.py`) — the context call is `system prompt + document context + batch chunk text` and reserves `DATAPREP_CONTEXTUAL_MAX_TOKENS` **per chunk in the batch**, so everything but the document context is subtracted from the window. Deriving is what makes one setting correct across hardware that differs 32×: ~250k chars at the default 65536-token window (also `env.rtx6000`, which serves 65536), and **none** on `env.t4` (2048), where the output reservation alone exceeds the window. When discovery has no answer, dataprep falls back to a fail-closed 2048-token window **with a warning naming the remedy**; `DATAPREP_MAX_MODEL_LEN` overrides it. **Never hardcode this from another deployment**: a budget sized for a large GPU overflows a small one, and the rejected calls fall back to raw chunks *silently*. Set `>0` to a maximum — the served window still caps it, so a budget copied from a larger-window deployment cannot overflow a small one — and `<0` to disable contextualization. Truncation (document longer than the budget) is now recorded in the admin Ingestion Log — check it after changing this.
 - `VLLM_MAX_MODEL_LEN` - The serving model's context window (`env.t4` 2048, `env.rtx6000` 65536, compose default 65536) — passed to vLLM as `--max-model-len`. **Dataprep does NOT read it** (issue #1182): the doc-context budget derives from the window the endpoint actually serves, discovered at runtime from `VLLM_ENDPOINT`. **Deployment sizes with the model**: a customer who provisions a larger-parameter model and raises this to, say, 131072 gets a proportionally larger document-context budget — dataprep picks up the served window within the discovery TTL (60s), no restart, nothing to re-tune. Raising it is only useful if the GPU has the memory for the KV cache — the window costs memory roughly linearly, which is why `env.t4` is pinned to 2048.
@@ -292,7 +351,7 @@ Following DRY principle, defaults live in code/docker-compose, not in env files.
 - `DATAPREP_CONTEXTUAL_MAX_TOKENS` - Max output tokens for the context-generation LLM call (doc-level + per-chunk). The model writes ~196 tokens; the legacy hard cap of 200 left no headroom, so the JSON `{"context":"..."}` was truncated mid-string under concurrent vLLM load → JSONDecodeError → raw-chunk fallback. 512 gives comfortable margin at no extra cost (default 512).
 - `CONTEXTUAL_STRATEGY` - `per_chunk` (default; one call/chunk, section-tailored context — the Anthropic recipe) or `doc_level` (one call/doc, same context on every chunk — N× cheaper, still propagates the doc subject).
 - `CONTEXTUAL_LABEL_RAW` - Decoupled mode (default `true`): label the RAW chunk, use the generated context ONLY for the embedding (keeps label precision while propagating the subject via vectors).
-- `OKF_MAX_CONCEPT_DOC_CHARS` - Maximum characters in ONE concept document **body** (okf-server). Default **250000**; a **static literal**. Enforced on **every** write path: the import **splits** a larger document losslessly (or rejects it with `CONCEPT_TOO_LARGE` when it cannot be split without loss), the Studio editor **refuses** the save (409, nothing written), and the publish gate **refuses before minting** a version. Tracks the Contextual Retrieval document budget above, which is **derived at runtime** from the served window — measured on the default 65536-token window the derived per-chunk budget is ≈219 700 chars, i.e. **below** this default, so a concept at the ceiling has its document context truncated (recorded in the ingestion log). On a 4096- or 2048-token window there is **no room** for a document context at all and contextualization is skipped for every document. Raise it deliberately.
+- `OKF_MAX_CONCEPT_DOC_CHARS` - Maximum characters in ONE concept document **body** (okf-server). **Unset = derived** from the serving-model window the same endpoint dataprep reads (`/v1/models`) — measured on the default 65536-token window the derived per-chunk budget is ≈219 700 chars. Set it to PIN a number; an operator's pin is never overruled. On Kubernetes the knob is the chart value `okf.maxConceptDocChars` (empty = derived). Enforced on **every** write path: the import **splits** a larger document losslessly (or rejects it with `CONCEPT_TOO_LARGE` when it cannot be split without loss), the Studio editor **refuses** the save (409, nothing written), and the publish gate **refuses before minting** a version. The derivation reads the chunking and batching values the deployment uses (`DATAPREP_CHUNK_SIZE*`, `DATAPREP_CONTEXTUAL_MAX_TOKENS`, `DATAPREP_LLM_LABEL_BATCH_SIZE`, `DATAPREP_MAX_MODEL_LEN`) — those reach **both** dataprep and okf-server, so the two derivations cannot drift (a container that misses them silently falls back to the code defaults while dataprep uses the deployment's — the #1588 drift reborn as a delivery gap). On a 4096- or 2048-token window there is **no room** for a document context at all and contextualization is skipped for every document. Raise it deliberately.
 - `CORS_ALLOWED_ORIGINS` - CORS allowed origins
 - `CSP_CONNECT_SRC` - Content Security Policy connect sources
 - `NGINX_PUBLIC_DOMAIN` - Public domain for Nginx
@@ -342,7 +401,7 @@ Two **separate pairs**, each of which only works when both halves move together:
   lane caps, not this number.
 
 → Full sizing procedure for the four lane variables (both pairs, the memory
-budget, how to verify what a host actually got): `.claude/rules/CAPACITY-SIZING.md`
+budget, how to verify what a host actually got): the table below.
 
 ##### Sizing the four lane variables for a target host
 
@@ -382,11 +441,10 @@ docker compose up -d --force-recreate okf-server pii-service dataprep-arango-ser
   small VPS, set these deliberately from the table.
 
 - `KEYCLOAK_SUPPORTED_LOCALES` - Keycloak login-page locales (JSON array, e.g. `["en","es"]`; unset = curated default)
-- `STREAMING_TRANSLATION_ENABLED` - Stream the target-language chat translation during generation instead of English-then-flip (issue #829). `1`/`0`; default `0` (current behavior)
+- `STREAMING_TRANSLATION_ENABLED` - Stream the target-language chat translation during generation instead of English-then-flip (issue #829). `1`/`0`; default `1` — the frontend never translates chat answers client-side, so with `0` non-English UIs get English answers
+- `TRANSLATION_BACKEND` - Which backend translates the answer. A deployment that **names** a translation API (`GPU_NODE_HOST` set, or `VLLM_TRANSLATION_ENDPOINT` pointing at something other than the in-cluster worker) always uses it: the GPU is mandatory, the backend waits for it at startup and refuses to start when it does not answer, rather than translate with a model the deployment did not ask for. Where no API is named, this variable chooses between the two backends that exist — `auto` (the code's default when unset) probes the in-cluster worker once and keeps the GPU if it answers, the CPU model (Xenova/nllb-200-distilled-600M, ~6 Gi at ONNX load) if it does not; `cpu` takes the CPU model; `gpu` skips the probe and requires the GPU.
 - `CONFIG_DIR_FRONTEND` / `CONFIG_DIR_KEYCLOAK` - Host paths bind-mounted read-only into the frontend (`/app/dist/config`) and Keycloak (`/opt/keycloak/themes`, the themes root — every theme under it is served) containers. Hold the theme CSS, runtime JSON config, logo, splash assets and the whole `genie` Keycloak theme. Seeded from the deployed branch by the `config_bootstrap` role and **mirrored on every deploy** — the branch is the source of truth, so edits made directly on the node are overwritten by the next deploy; keep changes in the repository. Set by Ansible (`deploy/ansible/templates/env.j2`, from `config_dir` in `group_vars/all.yml`); the root `env` template carries the local-dev defaults. **A bind mount never falls back to image contents** — Docker creates a missing source path as an empty root-owned directory that shadows the image, so an unseeded host yields an unbranded frontend and Keycloak with no error anywhere.
-
-**API Keys:**
-- `HUGGING_FACE_HUB_TOKEN` - Required for pulling models
+HUB_TOKEN` - Required for pulling models
 - `VLLM_API_KEY` - GPU node API key, sent as `Authorization: Bearer` by all clients. OpenAI-compatible clients (ChatOpenAI, AsyncOpenAI) use `api_key` param natively; OPEA TEI wrapper services (embedding, reranker) use `HF_TOKEN` env var (automatically set from `VLLM_API_KEY` in docker-compose.yaml)
 
 **Observability (optional, Section 12C):**
@@ -438,6 +496,13 @@ To change built-in defaults, edit the Python code:
 - Database URLs: `ARANGO_URL`, `VLLM_ENDPOINT`, etc. (defaults in docker-compose.yaml)
 - Service configurations: `LOG_LEVEL`, `NODE_ENV`, `TRANSLATION_BACKEND`, etc. (defaults in code)
 
+**Kubernetes equivalent (feature branch `feat/k8s-migration`):** chart
+defaults live in `charts/genieai-umbrella/values.yaml`; per-environment
+overrides (clusterProfile, namespace, ingress host, Arango/Postgres
+topology, GPU mode) ship as a `ConfigMap` rendered by Kustomize in
+`genie-ai-deploy/overlays/<env>/dev/`; secrets ship as `SealedSecret`
+resources committed in the overlay; the controller materializes them as namespace Secrets the chart's pods mount directly. Only the public values ConfigMap flows through `valuesFrom`.
+
 ## Observability Stack (Optional)
 
 Disabled by default. Enable: `docker compose --profile observability up -d` or `ENABLE_OBSERVABILITY=1` in `.env`.
@@ -476,7 +541,7 @@ docker-compose.yaml (dual-mode)
 
 **Remote GPU**: Set `GPU_NODE_HOST` in `.env`, skip `gpu-models` profile. Orchestrator endpoints overridden to GPU node. `VLLM_API_KEY` for auth. See `env` Section 14.
 
-→ Full architecture diagrams: `site/content/en/docs/architecture/architecture.md` | Deployment guides: `site/content/en/docs/deployment/docker-compose-setup.md`, `site/content/en/docs/deployment/docker-swarm-setup.md`
+→ Full architecture diagrams: `site/content/en/docs/architecture/architecture.md` | Deployment guides: `site/content/en/docs/deploy/docker-compose-setup.md`, `site/content/en/docs/deploy/docker-swarm-setup.md` | Kubernetes: `site/content/en/docs/deploy/kubernetes.md`
 
 ## Database Schema (ArangoDB)
 

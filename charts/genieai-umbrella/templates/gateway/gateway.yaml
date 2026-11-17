@@ -1,0 +1,129 @@
+{{/*
+Hostname without any port. ingress.host MAY carry a public port (e.g.
+genieai.local:4443 when a non-privileged local forward fronts the edge);
+the OIDC issuer and KC_PUBLIC_ORIGIN keep the port, but Gateway API
+hostnames, certificate dnsNames and SAN-derived secret names must not —
+HTTPRoute hostname validation rejects ports, and hostname matching
+strips the port from the Host header anyway.
+
+An IPv6 literal ("[2001:db8::1]:4443") cannot be split on ":" — every
+derivation below would produce garbage (hostname "[2001", and
+"db8" | int = 8 for the port), so both helpers fail the render instead.
+An ingress fronting IPv6 still serves hosts by DNS name.
+*/}}
+{{- define "genieai-umbrella.ingressHost" -}}
+{{- /* Normalized before it is read: a CLEARED ingress block must fail
+with this helper's own message (naming the values key) instead of the
+template engine crashing on a nil parent. */ -}}
+{{- $ingress := .Values.ingress | default dict -}}
+{{- $host := $ingress.host | required "ingress.host is required — supply the public hostname (may carry :port) in the environment overlay" -}}
+{{- if contains "[" $host -}}
+{{- fail (printf "ingress.host must be a DNS hostname optionally followed by :port — an IPv6 literal (%s) cannot be split; use a hostname" $host) -}}
+{{- end -}}
+{{- /* The PORT is validated HERE, at the parse site, and not at the
+listeners that consume it: the two consumers (the https listener and
+the http→https redirect) are both TLS-gated, so in the DEFAULT
+topology (ingress.tls.enabled=false) a malformed port reached every
+OTHER derivation — the OIDC issuer, the CORS origin, both CSP
+connect-src sets, the X-Forwarded-Host header — with no error
+anywhere. A browser cannot dial port 443x, so the SPA's token exchange
+failed far from the values key the operator typed. Sprig's `int` is
+lenient ("443x" → 0), so the port is checked for digits and for its
+range before anything reads it. */ -}}
+{{- $parts := splitList ":" $host -}}
+{{- if gt (len $parts) 2 -}}
+{{- fail (printf "ingress.host %q carries more than one colon segment: the shape is host or host:port, and a third segment (%s) would flow verbatim into the OIDC issuer, the CORS origin and both CSP sets" $host (index $parts 2)) -}}
+{{- end -}}
+{{- if gt (len $parts) 1 -}}
+{{- $port := index $parts 1 -}}
+{{- if not (regexMatch "^[0-9]{1,5}$" $port) -}}
+{{- fail (printf "ingress.host carries an invalid port %q: the port must be numeric (a value like \"genieai.local:443x\" is not a port)" $port) -}}
+{{- end -}}
+{{- if or (lt (int $port) 1) (gt (int $port) 65535) -}}
+{{- fail (printf "ingress.host carries an out-of-range port %q: a TCP port is between 1 and 65535" $port) -}}
+{{- end -}}
+{{- end -}}
+{{- $host -}}
+{{- end -}}
+{{- define "genieai-umbrella.ingressHostname" -}}
+{{- (include "genieai-umbrella.ingressHost" . | splitList ":" | first) -}}
+{{- end -}}
+{{/*
+The PUBLIC port from ingress.host — the single derivation site for the
+https listener port and the HTTPRoute redirect port. Bare host → 443.
+
+The port is VALIDATED in ingressHost, the parse site every consumer
+reaches (see the note there).
+*/}}
+{{- define "genieai-umbrella.ingressPublicPort" -}}
+{{- $parts := include "genieai-umbrella.ingressHost" . | splitList ":" -}}
+{{- $port := "443" -}}
+{{- if gt (len $parts) 1 -}}
+{{- $port = index $parts 1 -}}
+{{- end -}}
+{{- $port | int -}}
+{{- end -}}
+{{/*
+Canonical TLS Secret name. Precedence:
+  1. ingress.tls.secretName — operator pre-baked certificate (sovereign
+     deployments that manage keys outside cert-manager). Setting it also
+     suppresses the chart's Certificate CR.
+  2. <host>-tls — matches the cert-manager Certificate CR this chart
+     renders (its secretName uses this same helper).
+The Gateway listener's certificateRefs and the Certificate CR both call
+this helper — a second derivation site would let the two drift and leave
+the https listener waiting on a Secret nobody writes.
+*/}}
+{{- define "genieai-umbrella.tlsSecretName" -}}
+{{- $ingress := .Values.ingress | default dict -}}
+{{- $ingressTls := $ingress.tls | default dict -}}
+{{- $ingressTls.secretName | default (printf "%s-tls" (include "genieai-umbrella.ingressHostname" .)) -}}
+{{- end -}}
+{{- $ingress := .Values.ingress | default dict -}}
+{{- $ingressTls := $ingress.tls | default dict -}}
+{{- if $ingress.enabled -}}
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: genieai
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" .Values "component" "ingress") | nindent 4 }}
+spec:
+  gatewayClassName: {{ $ingress.className | default "envoy" | quote }}
+  listeners:
+    - name: http
+      protocol: HTTP
+      port: 80
+      allowedRoutes:
+        namespaces:
+          from: Same
+    {{- /*
+      The https listener renders ONLY when ingress.tls.enabled — Gateway
+      API rejects `tls: {mode: Terminate}` without a certificateRefs
+      entry, so the listener is rendered fully or not at all. The http
+      listener stays for the cert-manager http01 bootstrap path and for
+      HTTP→HTTPS redirect, which the operator expresses as an HTTPRoute
+      with a requestRedirect filter attached to the http listener.
+    */ -}}
+    {{- if $ingressTls.enabled }}
+    - name: https
+      protocol: HTTPS
+      # The listener binds the PUBLIC port — the one ingress.host carries
+      # (443 when bare). Envoy derives X-Forwarded-Port from the listener
+      # and Keycloak (backchannelDynamic) builds the discovery document's
+      # token/jwks/userinfo URLs from those headers; a listener on 443
+      # behind a port-bearing origin serves portless backchannel URLs and
+      # the SPA's token exchange fails. Single source of truth: the port
+      # in ingress.host.
+      port: {{ include "genieai-umbrella.ingressPublicPort" . }}
+      tls:
+        mode: Terminate
+        certificateRefs:
+          - kind: Secret
+            name: {{ include "genieai-umbrella.tlsSecretName" . }}
+      allowedRoutes:
+        namespaces:
+          from: Same
+    {{- end }}
+{{- end -}}

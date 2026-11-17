@@ -1,0 +1,222 @@
+{{/*
+genieai-umbrella.opeaGpuEndpoint — returns the full GPU endpoint URL for a given path key.
+
+Signature: {{ include "genieai-umbrella.opeaGpuEndpoint" (dict "root" . "path" "<key>") }}
+
+Modes:
+  - external (default): joins opea.gpu.nodeHost with opea.gpu.paths.<key>.
+    Fails at render time when nodeHost is empty — the orchestrator env rows
+    carry these URLs verbatim, and an empty value would reach the pods as a
+    literal empty-string endpoint (connection failure at runtime instead of
+    a named error at install time).
+  - in-cluster: returns an in-cluster Service URL using a fixed
+    service-name:port map (llm→vllm:8000, embedding→tei:80,
+    reranker→tei-reranker:80, translation→vllm-translation:9031).
+    There is NO docling entry: the chart renders no docling Deployment
+    in any mode, so the docling endpoint is empty in-cluster too — the
+    documented signal that dataprep uses its in-process converter.
+
+Unknown path key → fail. Unknown mode → fail.
+*/}}
+{{- define "genieai-umbrella.opeaGpuEndpoint" -}}
+{{- $root := .root -}}
+{{- $key  := .path -}}
+{{- /* The GPU block is normalized parent-first: a cleared `opea` or
+`opea.gpu` must fail by NAME (the mode guard below) instead of
+crashing the template engine on a nil parent. */ -}}
+{{- $opea := $root.Values.opea | default dict -}}
+{{- $gpu := $opea.gpu | default dict -}}
+{{- $mode := $gpu.mode -}}
+
+{{- $validKeys := list "llm" "embedding" "reranker" "translation" "docling" -}}
+{{- if not (has $key $validKeys) -}}
+{{- fail (printf "unknown opea.gpu endpoint key: %s" $key) -}}
+{{- end -}}
+
+{{- if eq $mode "in-cluster" -}}
+  {{- if eq $key "llm" -}}
+http://vllm.{{ $root.Values.namespace }}.svc.cluster.local:8000
+  {{- else if eq $key "embedding" -}}
+http://tei.{{ $root.Values.namespace }}.svc.cluster.local:80
+  {{- else if eq $key "reranker" -}}
+http://tei-reranker.{{ $root.Values.namespace }}.svc.cluster.local:80
+  {{- else if eq $key "translation" -}}
+http://vllm-translation.{{ $root.Values.namespace }}.svc.cluster.local:9031
+  {{- else if eq $key "docling" -}}
+{{- /* No docling Deployment is rendered in-cluster; an empty endpoint
+makes dataprep use its in-process docling converter (the same fallback
+an empty env var produces). */ -}}
+{{- "" -}}
+  {{- end -}}
+
+{{- else if eq $mode "external" -}}
+  {{- $host := $gpu.nodeHost -}}
+  {{- if not $host -}}
+{{- fail "opea.gpu.mode=external requires opea.gpu.nodeHost (e.g. https://gpu-node:444); without it every orchestrator would render an empty GPU endpoint" -}}
+  {{- else if not (regexMatch "^https?://" $host) -}}
+{{- fail (printf "opea.gpu.nodeHost %q carries no http:// or https:// scheme — the orchestrator endpoints are nodeHost + path, and a scheme-less endpoint is a URL no client can dial" $host) -}}
+  {{- else -}}
+{{- /* An empty path renders an EMPTY endpoint, not the bare nodeHost:
+the empty endpoint is the documented "no such remote target" signal
+(dataprep's in-process docling fallback keys on it), and host + "" would
+hand the application a URL whose every request 404s. */ -}}
+{{- $paths := $gpu.paths | default dict -}}
+{{- $p := index $paths $key -}}
+{{- /* The docling path is OPTIONAL: an empty docling endpoint is the
+documented signal that dataprep uses its in-process converter (see
+opea/dataprep.yaml), so a cleared one is not an error. Every other path
+names a model the orchestrator DIALS, and an empty endpoint there is a
+runtime connection failure with no error anywhere. */ -}}
+{{- $optionalKeys := list "docling" -}}
+{{- /* A missing path is a NAMED error, not an empty endpoint: the
+endpoint is nodeHost + path, and an empty path renders an empty URL
+the pod dials — a connection failure at runtime, with the values key
+the operator cleared nowhere in the message. The chart's own defaults
+(llm=/llm, embedding=/embed, reranker=/rerank, translation=/translation)
+are deleted by a null, so they cannot be the fallback. */ -}}
+{{- if and (not $p) (not (has $key $optionalKeys)) -}}
+{{- fail (printf "opea.gpu.paths.%s is required in the external GPU mode — the endpoint is nodeHost + path, and a missing path renders an empty endpoint the pods dial; declare it (the chart's defaults are llm=/llm, embedding=/embed, reranker=/rerank, translation=/translation)" $key) -}}
+{{- end -}}
+{{- if $p -}}
+{{- trimSuffix "/" $host }}{{ $p }}
+{{- end -}}
+  {{- end -}}
+
+{{- else -}}
+{{- fail (printf "unknown opea.gpu.mode: %s (expected external or in-cluster)" $mode) -}}
+{{- end -}}
+{{- end -}}
+
+{{/*
+genieai-umbrella.opeaSslSkipVerify — returns "1" when the operator declared
+the GPU node's certificate untrusted, else "0".
+
+Driven by opea.gpu.skipTlsVerify, NOT by the nodeHost scheme. An https://
+endpoint says nothing about whether its certificate is in the trust store,
+and disabling verification is not a decision a template takes on the
+operator's behalf — Compose exposes the same variable and defaults it to 0
+for the same reason. The alternative reads as "the chart trusts whatever
+answers on that port", and prompts, the VLLM_API_KEY bearer and translated
+answers all cross it.
+
+Signature: {{ include "genieai-umbrella.opeaSslSkipVerify" . }}
+*/}}
+{{- define "genieai-umbrella.opeaSslSkipVerify" -}}
+{{- $opea := .Values.opea | default dict -}}
+{{- $gpu := $opea.gpu | default dict -}}
+{{- if $gpu.skipTlsVerify -}}1{{- else -}}0{{- end -}}
+{{- end -}}
+
+{{/*
+genieai-umbrella.opeaGpuHostname — the bare host of opea.gpu.nodeHost
+(scheme, port, and path stripped; bracketed IPv6 literals preserved).
+Feeds the GPU_NODE_HOST env the model-id auto-detection gates on.
+Empty nodeHost → empty string (auto-detection stays off).
+*/}}
+{{- define "genieai-umbrella.opeaGpuHostname" -}}
+{{- $opea := .Values.opea | default dict -}}
+{{- $gpu := $opea.gpu | default dict -}}
+{{- regexReplaceAll "^([a-z]+://)?(\\[[^\\]]+\\]|[^:/]+).*" ($gpu.nodeHost | default "") "$2" -}}
+{{- end -}}
+
+{{/*
+genieai-umbrella.opeaNetworkFromUrl — the ipBlock CIDRs and ports for ANY
+named external destination, as JSON: `{"cidrs": [...], "ports": [...]}`.
+Takes `{"root": <root ctx>, "url": <url>}`.
+
+The destination is NAMED (opea.gpu.nodeHost for the six orchestrators, the
+backend's translation endpoint for the BFF), so the egress rule does not
+have to be 0.0.0.0/0 the way it was when the chart ignored the URL:
+
+  - an IPv4 literal in the URL becomes a /32 — exact, and no operator
+    action (a laptop overlay pointing at 10.0.0.110:444 gets exactly
+    that);
+  - a DNS name cannot become a CIDR, so opea.gpu.allowedCIDRs applies
+    (the knob the crawler tier already uses), and an empty list falls
+    back to 0.0.0.0/0 — the same approximation Compose makes, since a
+    NetworkPolicy has no way to express a hostname;
+  - the port comes from the URL (`:444`, `:8443`, …). A URL with NO
+    explicit port falls back to the SCHEME's port — 443 for https, 80
+    for plain http: a rule permitting 443 while the client dials 80
+    drops every connection under default-deny. The old rule hardcoded
+    443 + 444 on both ports at once.
+*/}}
+{{- define "genieai-umbrella.opeaNetworkFromUrl" -}}
+{{- $root := .root -}}
+{{- $url := .url | default "" -}}
+{{- $opea := $root.Values.opea | default dict -}}
+{{- $gpu := $opea.gpu | default dict -}}
+{{- if contains "[" $url -}}
+{{- fail (printf "an IPv6 literal (%s) is not supported as a named destination: the egress rule can only express an IPv4 CIDR, and an IPv6 connection matches no ipBlock — use a DNS name" $url) -}}
+{{- end -}}
+{{- /* The port is derived from the authority, which only a URL with a
+scheme carries. A scheme-less host (10.0.0.110:444) matched nothing and
+the rule silently admitted TCP 443 while the client dialed 444: every
+GPU call dropped under default-deny, with no error anywhere. */ -}}
+{{- if not (regexMatch "^https?://" $url) -}}
+{{- fail (printf "the destination URL %q carries no http:// or https:// scheme: the egress port is derived from the URL, and a scheme-less host renders an endpoint no client can dial" $url) -}}
+{{- end -}}
+{{- $host := regexReplaceAll "^([a-z]+://)?(\\[[^\\]]+\\]|[^:/]+).*" $url "$2" -}}
+{{- $isIPv4 := regexMatch "^[0-9]{1,3}(\\.[0-9]{1,3}){3}$" $host -}}
+{{- $cidrs := list -}}
+{{- if $isIPv4 -}}
+{{- $cidrs = append $cidrs (printf "%s/32" $host) -}}
+{{- else if $gpu.allowedCIDRs -}}
+{{- $cidrs = $gpu.allowedCIDRs -}}
+{{- else -}}
+{{- $cidrs = list "0.0.0.0/0" -}}
+{{- end -}}
+{{- /* The port comes from the AUTHORITY (scheme://… up to the first /),
+not from the whole URL: a regex over the full string took a colon in the
+path or query (`/translate?from=en:1`) as the egress port and rendered a
+policy admitting port 1 while the backend dialed 443. */ -}}
+{{- $authority := regexFind "^https?://[^/]+" $url -}}
+{{- $port := "443" -}}
+{{- $matched := regexFind ":[0-9]{1,5}$" $authority -}}
+{{- if $matched -}}
+{{- $port = regexFind "[0-9]{1,5}" $matched -}}
+{{- else if regexMatch "^http://" $url -}}
+{{- $port = "80" -}}
+{{- end -}}
+{{- dict "cidrs" $cidrs "ports" (list $port) | toJson -}}
+{{- end -}}
+
+{{/*
+genieai-umbrella.opeaGpuEgressRule — the NetworkPolicy egress rule for the
+external GPU node (opea.gpu.nodeHost). One definition for the six
+orchestrators that all dial it; they differ only in which other peers
+they reach.
+
+Relative indentation: callers apply `| nindent 4`.
+*/}}
+{{- define "genieai-umbrella.opeaGpuEgressRule" -}}
+{{- $opea := .Values.opea | default dict -}}
+{{- $gpu := $opea.gpu | default dict -}}
+{{- include "genieai-umbrella.opeaEgressRuleFromUrl" (dict "root" . "url" ($gpu.nodeHost | default "")) -}}
+{{- end -}}
+
+{{/*
+genieai-umbrella.opeaEgressRuleFromUrl — the same rule for an arbitrary
+named destination. Takes `{"root": <root ctx>, "url": <url>}`.
+Relative indentation: callers apply `| nindent 4`.
+*/}}
+{{- define "genieai-umbrella.opeaEgressRuleFromUrl" -}}
+{{- include "genieai-umbrella.opeaEgressRuleFromNetwork" (dict "net" (include "genieai-umbrella.opeaNetworkFromUrl" . | fromJson)) -}}
+{{- end -}}
+
+{{- define "genieai-umbrella.opeaEgressRuleFromNetwork" -}}
+{{- $net := .net -}}
+{{- /* The destination is named, so the rule is a /32 when the host is an
+       IP and the operator's CIDR list otherwise — not 0.0.0.0/0 on two
+       ports. */}}
+- to:
+{{- range $cidr := $net.cidrs }}
+  - ipBlock:
+      cidr: {{ $cidr }}
+{{- end }}
+  ports:
+{{- range $port := $net.ports }}
+  - protocol: TCP
+    port: {{ $port }}
+{{- end }}
+{{- end -}}

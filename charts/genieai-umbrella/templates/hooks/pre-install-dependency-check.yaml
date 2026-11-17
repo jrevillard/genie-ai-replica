@@ -1,0 +1,193 @@
+{{- /* Render-time cross-check: a `services.X.enabled: true` (or
+       `data.X.enabled: true`) MUST have a matching entry in
+       `dependencyGraph.{services,data}`. Without it, the dep-check
+       Job below treats the missing graph node as `enabled: false`
+       (no validation), and the install proceeds with a service that
+       has no graph-validated dependencies. The service then fails
+       to start, far from this hook. Fail the render here.
+       The toRawJson|fromJson round-trip converts the chart-supplied
+       common.Values to a plain map[string]interface{} that Sprig's
+       `dig` can navigate (the dep-check enabled.json below does the
+       same for the same reason). */ -}}{{- $global := .Values.global | default dict -}}
+
+{{- $vals := .Values | toRawJson | fromJson -}}
+{{- $svcGraph := dig "dependencyGraph" "services" dict $vals -}}
+{{- range $name, $cfg := dig "services" dict $vals }}
+{{- if and (kindIs "map" $cfg) (dig "enabled" false $cfg) (not (hasKey $svcGraph $name)) }}
+{{- fail (printf "services.%s.enabled is true but dependencyGraph.services has no '%s' entry; add it to dependencyGraph.services.%s (with deps: [...]) so the pre-install dep-check validates its requirements" $name $name $name) -}}
+{{- end }}
+{{- end }}
+{{- $dataGraph := dig "dependencyGraph" "data" dict $vals -}}
+{{- range $name, $cfg := dig "data" dict $vals }}
+{{- if and (kindIs "map" $cfg) (dig "enabled" false $cfg) (not (hasKey $dataGraph $name)) }}
+{{- fail (printf "data.%s.enabled is true but dependencyGraph.data has no '%s' entry; add it to dependencyGraph.data.%s (with deps: [...]) so the pre-install dep-check validates its requirements" $name $name $name) -}}
+{{- end }}
+{{- end }}
+{{- /* The OPEA tier is one switch over six orchestrators, and every
+       orchestrator dials at least one in-cluster Service. With no node
+       for the tier, `opea.enabled: true` with the document repository
+       switched off installs cleanly and leaves DOC_REPO_URL pointing at a
+       Service nobody renders. Turning the tier on therefore requires
+       declaring its nodes. */ -}}
+{{- $opeaGraph := dig "dependencyGraph" "opea" dict $vals -}}
+{{- if and (dig "opea" "enabled" false $vals) (not $opeaGraph) }}
+{{- fail "opea.enabled is true but dependencyGraph.opea declares no node; add an entry per rendered orchestrator (chatqna, dataprep, retriever, reranker, embedding, translation) with its deps, so the pre-install dep-check validates them" -}}
+{{- end }}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "genieai-common.fullname" . }}-dep-check
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" .Values "component" "pre-install") | nindent 4 }}
+  annotations:
+    # Helm 3 scans templates/ recursively for hook annotations. Subdirectory
+    # name `hooks/` is irrelevant to Helm; the annotations below are what
+    # matter.
+    "helm.sh/hook": pre-install,pre-upgrade
+    "helm.sh/hook-weight": "-5"          # run after clusterprofile-detect (-10)
+    "helm.sh/hook-delete-policy": before-hook-creation
+spec:
+  backoffLimit: 0
+  template:
+    metadata:
+      labels:
+        {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" .Values "component" "pre-install") | nindent 8 }}
+    spec:
+      restartPolicy: Never
+      serviceAccountName: {{ include "genieai-common.fullname" . }}-dep-check
+      # The evaluator reads only the two mounted JSON files; it makes no
+      # Kubernetes API calls, so it never needs a service account token.
+      automountServiceAccountToken: false
+      {{- with $global.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65534
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: dep-check
+          # Minimal alpine + python base; the evaluator parses only the two
+          # JSON mounts and needs no YAML library.
+          image: "{{ $global.toolingImageRegistry | default "docker.io" }}/python:3.12-alpine"
+          imagePullPolicy: IfNotPresent
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            runAsNonRoot: true
+            runAsUser: 65534
+            capabilities:
+              drop:
+                - ALL
+          command:
+            - python3
+            - -c
+            - |
+              import json, os, sys
+              graph_path = "/var/run/genieai/dependency-graph.json"
+              if not os.path.exists(graph_path):
+                  print(f"FAIL: {graph_path} missing"); sys.exit(1)
+              try:
+                  with open(graph_path) as f:
+                      graph = json.load(f)
+              except (FileNotFoundError, json.JSONDecodeError) as e:
+                  print(f"FAIL: dependency-graph.json is missing or corrupt: {e}"); sys.exit(1)
+              # Enabled toggles come from the enabled.json mount — the
+              # chart flattens every `services.<X>.enabled` /
+              # `data.<X>.enabled` boolean to JSON at render time. The
+              # graph lists only declared deps; enabled.json is the sole
+              # source for whether each component is on.
+              enabled_json = "/var/run/genieai/enabled.json"
+              if not os.path.exists(enabled_json):
+                  print(f"FAIL: {enabled_json} missing"); sys.exit(1)
+              try:
+                  with open(enabled_json) as f:
+                      enabled = json.load(f)
+              except (FileNotFoundError, json.JSONDecodeError) as e:
+                  print(f"FAIL: enabled.json is missing or corrupt: {e}"); sys.exit(1)
+              # Dependency names resolve against the graph's own
+              # namespaces, in tier order: services, then the OPEA tier,
+              # then data.
+              def dep_tier(dep):
+                  for tier in ("services", "opea", "data"):
+                      if dep in graph.get(tier, {}):
+                          return tier
+                  return "data"
+              def dep_enabled(dep):
+                  return enabled.get(f"{dep_tier(dep)}.{dep}.enabled", False)
+              def dep_kind(dep):
+                  return {"services": "service", "opea": "opea"}.get(dep_tier(dep), "data")
+              failures = []
+              for tier in ("services", "data", "opea"):
+                  for svc, deps in graph.get(tier, {}).items():
+                      if not enabled.get(f"{tier}.{svc}.enabled", False):
+                          continue
+                      for dep in deps.get("deps", []):
+                          if dep == "":
+                              continue
+                          if not dep_enabled(dep):
+                              failures.append(f"{tier}.{svc} requires {dep_kind(dep)}.{dep}")
+              if failures:
+                  print("FAIL: unmet dependencies")
+                  for f in failures:
+                      print(f"  - {f}")
+                  sys.exit(1)
+              print("PASS: dependency graph satisfied")
+          volumeMounts:
+            - name: dependency-graph
+              mountPath: /var/run/genieai
+              readOnly: true
+      volumes:
+        - name: dependency-graph
+          configMap:
+            name: {{ include "genieai-common.fullname" . }}-dep-graph
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "genieai-common.fullname" . }}-dep-graph
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" .Values "component" "pre-install") | nindent 4 }}
+  annotations:
+    # Hook with weight -20: created after the RBAC (-30) and BEFORE the
+    # dep-check Job (-5) mounts it. A regular ConfigMap would not exist on
+    # first install (regular resources land after all pre-install hooks).
+    "helm.sh/hook": pre-install,pre-upgrade
+    "helm.sh/hook-weight": "-20"
+    "helm.sh/hook-delete-policy": before-hook-creation
+  {{- /*
+    enabled.json flattens the component enabled toggles as JSON so the
+    dependency-check Pod reads them without parsing values.yaml. Absent
+    keys read FALSE — an unexported toggle disables, never enables, a
+    component's edge checks.
+  */}}
+data:
+  dependency-graph.json: |
+    {{- include "genieai-umbrella.dependencyGraph.json" . | nindent 4 }}
+  enabled.json: |
+    {{- /* FAIL-SAFE flat map: every toggle defaults to FALSE when absent —
+           a missing export disables a component's checks, never enables
+           them. Exported keys derive from the graph itself (the ranges
+           below iterate dependencyGraph keys), so a new graph node exports
+           its toggle automatically. The round-trip via toRawJson|fromJson
+           makes the values tree a plain map[string]interface{} that Sprig's
+           `dig` navigates uniformly across Helm versions; inside a literal
+           block scalar, dash-closers would trim the newline the `|` pipe
+           needs, so every line uses plain `}}` closers. */ -}}
+    {{- $flat := dict }}
+    {{- range $name, $deps := dig "dependencyGraph" "services" dict $vals }}
+    {{- $_ := set $flat (printf "services.%s.enabled" $name) (dig "services" $name "enabled" false $vals) }}
+    {{- end }}
+    {{- /* The OPEA tier has no per-service toggle: one switch renders all
+           six orchestrators. A node is on only when that switch is on. */}}
+    {{- range $name, $deps := dig "dependencyGraph" "opea" dict $vals }}
+    {{- $_ := set $flat (printf "opea.%s.enabled" $name) (dig "opea" "enabled" false $vals) }}
+    {{- end }}
+    {{- range $name, $deps := dig "dependencyGraph" "data" dict $vals }}
+    {{- $_ := set $flat (printf "data.%s.enabled" $name) (dig "data" $name "enabled" false $vals) }}
+    {{- end }}
+    {{ $flat | mustToJson }}

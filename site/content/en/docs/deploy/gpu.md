@@ -8,7 +8,7 @@ aliases:
 mode: how-to
 persona: deployer
 owner: "docs-stewards"
-last_reviewed: 2026-09-18
+last_reviewed: 2026-11-17
 ---
 
 This guide covers how to deploy GENIE.AI's AI layer on NVIDIA GPUs: choosing
@@ -240,11 +240,45 @@ separate from the app stack, see
 and set `GPU_NODE_HOST`, `VLLM_API_KEY`, and (for self-signed certs)
 `OPEA_SSL_SKIP_VERIFY=1` on the app node.
 
+## Kubernetes GPU modes
+
+On Kubernetes the GPU is chosen by `opea.gpu.mode` — the switch is
+binary, and it decides where the model weights live and which knobs
+apply. There is no `GPU_NODE_HOST` and no `env.t4` / `env.rtx6000`
+profile override on this path.
+
+| Mode | Models run | Knobs |
+|---|---|---|
+| `external` (default) | On a standalone GPU node reachable over HTTPS | `opea.gpu.nodeHost` (e.g. `https://gpu-node:444`), `opea.gpu.paths.{llm,embedding,reranker,translation,docling}`, `opea.gpu.skipTlsVerify`, `opea.gpu.allowedCIDRs` |
+| `in-cluster` | On pods scheduled to the GPU nodes of the cluster itself | `opea.models.nodeSelector` (defaults to `{gpu: "true"}`), the model weights on a ReadWriteOnce PVC (`opea.models.cache`) |
+
+**`external`** needs no GPU in the cluster — it points at an endpoint you
+operate. The chart refuses to render it without `opea.gpu.nodeHost`
+rather than shipping an empty GPU URL.
+
+**`in-cluster`** needs the NVIDIA device plugin installed and the GPU
+nodes labelled — the chart selects them through `opea.models.nodeSelector`,
+which **replaces** the default map outright, so declare every label your
+pods need:
+
+```bash
+# the NVIDIA device plugin must be installed on the cluster
+kubectl label node <gpu-node> gpu=true
+```
+
+If your cluster uses the NVIDIA GPU Feature Discovery labels instead
+(`nvidia.com/gpu.present=true`), set the map in your overlay rather than
+relabelling the node.
+
+Both modes authenticate with the `vllm-api-key` Secret (`VLLM_API_KEY`,
+and `HF_TOKEN` for the gated models).
+
 ## Related docs
 
 - [Install Guide](/docs/deploy/install-guide/) — canonical end-to-end deploy + env var reference
 - [Docker Compose Setup](/docs/deploy/docker-compose-setup/) — single-host `docker compose up` flow
 - [Docker Swarm Setup](/docs/deploy/docker-swarm-setup/) — multi-node Swarm + node labels + remote GPU
+- [Kubernetes Deployment](/docs/deploy/kubernetes/) — the Helm chart path, GPU modes and cluster prerequisites
 - [NVIDIA A40 Install Guide](/docs/deploy/a40-install/) — pre-flight for 48 GB A40 hardware (Ubuntu 22.04 + NVIDIA driver)
 
 ## Resources

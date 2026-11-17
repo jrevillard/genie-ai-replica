@@ -21,6 +21,7 @@ These docs stay in the repo (not published on the site) — referenced by code a
 - [fcntl-locking-stub.md](./fcntl-locking-stub.md) — the ingest slot-lock mechanism (`fcntl`), the Windows type stub, and its failure modes
 - [adr/](./adr/) — architecture decision records
 - [e2e-tests/](./e2e-tests/) — end-to-end test procedures
+- [charts/](./charts/) — the Kubernetes migration: design of record, live status map, review ledger, research notes
 - [superpowers/](./superpowers/) — workflow / design specs
 
 ## Rule

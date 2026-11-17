@@ -1,0 +1,27 @@
+{{- /*
+  GatewayClass binding the chart's Gateway to the Envoy Gateway controller
+  installed by the envoyGateway dependency.
+
+  Cluster-scoped and a per-cluster SINGLETON: Envoy Gateway documents
+  creating it out of band (one kubectl apply per cluster), so a chart that
+  unconditionally owns it fails with "already exists" on any cluster that
+  followed that instruction — while a chart uninstall deletes the class out
+  from under every other Gateway in the cluster. Opt-in via
+  ingress.createGatewayClass (default false).
+*/ -}}
+{{- $ingress := .Values.ingress | default dict -}}
+{{- $envoyGateway := .Values.envoyGateway | default dict -}}
+{{- if and $ingress.enabled $ingress.createGatewayClass $envoyGateway.enabled -}}
+apiVersion: gateway.networking.k8s.io/v1
+kind: GatewayClass
+metadata:
+  name: {{ $ingress.className | default "envoy" }}
+  labels:
+    {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" .Values "component" "ingress") | nindent 4 }}
+spec:
+  # EG >=1.7 identifies as gatewayclass-controller (no dash) — the
+  # documented gateway-class-controller string is silently ignored
+  # (controller logs "GatewayClass name for gateway doesn't match
+  # configured name" and the class stays Pending forever).
+  controllerName: gateway.envoyproxy.io/gatewayclass-controller
+{{- end -}}

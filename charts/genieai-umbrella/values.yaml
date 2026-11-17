@@ -1,0 +1,1499 @@
+# GENIE.AI umbrella chart — foundation values.
+# The template surface and this file move together, in BOTH directions:
+# every key a template reads is declared here (with its template default,
+# so an operator can discover the knob and its type without reading
+# template source), and keys no template reads are not declared.
+# scripts/ci/values-surface-check.py enforces the first half in CI.
+#
+# CLEARING A BLOCK. Helm's `null` DELETES a key — it does not merge an
+# empty map over it. So `services.backend: null` removes the whole
+# service entry, switch included, and the service stops rendering: a
+# cleared block turns the tier it controls OFF, the same meaning as
+# `enabled: false`. The chart NEVER crashes on a cleared block: every
+# block is read through a normalized binding, so a cleared block
+# degrades to the chart's own default, or the render fails with a
+# message naming the values key (never a template-engine crash).
+# scripts/ci/clearable-blocks-check.py sweeps every block in this file on
+# both render surfaces and asserts exactly that. The documented way to
+# drop an override WITHOUT losing the chart's defaults is an empty map
+# (`global: {}`), which MERGES.
+
+# Target namespace for tier templates that spell one out. MUST equal the
+# release namespace (-n) — the chart fails the render otherwise (the
+# Namespace resource and test pod follow .Release.Namespace).
+namespace: genieai
+
+global:
+  # The progress deadline every Deployment the chart renders carries.
+  # Kubernetes defaults spec.progressDeadlineSeconds to 600s and that
+  # clock starts when the DEPLOYMENT is created, not when the pod runs —
+  # on a first install the pod is created minutes later (multi-GB images
+  # still pulling), so it inherits only what is left of the window. Past
+  # it the Deployment reports ProgressDeadlineExceeded, Helm declares the
+  # release failed and uninstalls it, deleting the resources the next
+  # attempt needs — the install restarts from scratch and can loop.
+  # Per-service override: services.<svc>.progressDeadlineSeconds
+  # (wins over this value).
+  # 1800s, calibrated on the reference venue (a single-node k3s dev
+  # cluster: an 18-minute first install, almost all of it image pulls —
+  # the OPEA images are multi-GB by nature, so a cold pull eating into
+  # the window is the NORMAL case, not an outlier). A venue slower than
+  # that declares its own value in its overlay, BELOW its own Helm
+  # INSTALL timeout: the deadline fires an uninstall (an INSTALL
+  # failure — an upgrade aborts without uninstalling), so it must never
+  # outlive the install wait it sits in (the forge overlay carries
+  # 2400s under a 3600s install timeout).
+  progressDeadlineSeconds: 1800
+  # Optional registry prefix that WINS over the top-level imageRegistry
+  # when set (the factory and the migrations Job both read it first).
+  # Empty = the top-level imageRegistry applies. Exists for operators
+  # following the Helm `global.*` convention; the chart's own overlays
+  # set the top-level key.
+  imageRegistry: ""
+  # imagePullSecrets — a list of {name: <Secret>} refs wired into every
+  # service pod's spec.imagePullSecrets, for a registry that requires
+  # authentication. The registry the images are pulled FROM is the
+  # top-level imageRegistry (which prefixes every image.repository) —
+  # this knob is only about the PULL CREDENTIALS.
+  imagePullSecrets: []
+  # Architecture for the tooling images the hooks/test pods download
+  # (kubectl). Empty = DETECT it at runtime from the node
+  # (`uname -m` in the init container): a hardcoded amd64 on an arm64
+  # cluster (Apple Silicon minikube) downloads a binary the node cannot
+  # execute — "exec format error", and the pod never starts. Set amd64
+  # or arm64 to force a value.
+  toolingArch: ""
+  # Registry for Helm hook Jobs and test pods that pull public Docker
+  # Hub images (alpine, python, busybox). Separate from the
+  # top-level `imageRegistry`, which scopes service images to the GitLab
+  # Container Registry; tooling images are not republished there, so
+  # they must keep their public registry. Empty = docker.io.
+  toolingImageRegistry: ""
+  # The pre-upgrade cluster-profile hook and the test-pod init
+  # containers download kubectl with busybox wget from the public
+  # releases (the pre-install dependency-check Job downloads nothing).
+  # In air-gapped environments set this to an internal mirror —
+  # [http(s)://]host[:port 1-65535][/multi/segment/prefix]; the scheme
+  # is optional (scheme-less makes wget use plain HTTP against the
+  # local proxy), LOWERCASE ONLY (busybox wget rejects mixed-case
+  # schemes outright), no trailing slash, and the path
+  # /release/v1.33.0/bin/linux/<arch>/kubectl (<arch> detected at
+  # runtime unless global.toolingArch forces one) is appended
+  # automatically. The render rejects any other shape: the value is
+  # interpolated into the init container's shell. Default = empty (use
+  # the public URLs).
+  kubeletToolsMirror: ""
+  # Global pull-policy override for the service images. Leave empty: the
+  # default follows the tag (mutable tags — main, latest, stable* — pull
+  # Always; a pinned tag pulls IfNotPresent), and a per-service
+  # services.<svc>.image.pullPolicy beats both.
+  imagePullPolicy: ""
+
+# Drives chart-derived defaults (replica counts, data-tier topology,
+# observability). dev | staging | prod — sovereign is reserved until the
+# sovereign deployment tier lands (values.schema.json's clusterProfile
+# enum rejects it until then).
+clusterProfile: dev
+
+# Observability. Per-component flags — there is intentionally NO
+# master `enabled` switch. VictoriaLogs is the baseline: the admin
+# logs UI reads it, so `logs.enabled` defaults TRUE (VLSingle + OTel
+# collector gateway + filelog DaemonSet agent). Metrics, traces and
+# Grafana are opt-in (default FALSE) per environment via the deploy
+# repo overlay ConfigMap.
+#
+# Operator controllers (vmoperator, opentelemetry-operator,
+# grafana-operator) are cluster bootstrap prerequisites — installed
+# via genie-ai-deploy (Flux HelmReleases) or
+# genie-ai/scripts/install-prereqs.sh; the chart renders only the CRs.
+observability:
+  logs:
+    enabled: true
+    # VLSingle retention period (30d default).
+    retentionPeriod: "30d"
+    storageSize: 20Gi
+    storageClassName: ""      # "" = inherit pluggable.storageClassName ("" itself = cluster default)
+  metrics:
+    enabled: false
+    # VMSingle retention period.
+    retentionPeriod: "30d"
+    storageSize: 20Gi
+    storageClassName: ""      # "" = inherit pluggable.storageClassName ("" itself = cluster default)
+  traces:
+    enabled: false
+    # VTSingle retention period.
+    retentionPeriod: "30d"
+    storageSize: 20Gi
+    storageClassName: ""      # "" = inherit pluggable.storageClassName ("" itself = cluster default)
+  grafana:
+    enabled: false
+    # Pin the Grafana image version on the CR. Without it the operator
+    # (v5.25.0) substitutes its built-in default, 13.1.3 — a broken
+    # Docker Hub tag whose amd64 /run.sh is 0 bytes, so the pod
+    # crashloops with `exec /run.sh: exec format error` on every fresh
+    # pull (#1420). 12.4 is the version docker-compose pins (line 3188):
+    # one Grafana version across both delivery paths.
+    version: "12.4"
+    # The Grafana admin USERNAME. The operator writes it into
+    # genieai-grafana-admin-credentials on every reconcile and it wins
+    # over any user an operator-provided Secret carried; the PASSWORD is
+    # always the operator's (generated once, kept across reconciles).
+    # Leave "admin" unless the site pins a different console user.
+    adminUser: admin
+    # Container resources for the Grafana pod. Empty = the template
+    # default (requests 100m/128Mi, limits 500m/1Gi).
+    resources: {}
+  # OTel operator collector CR name; the in-cluster Service is named
+  # <cr>-collector (see templates/_lib/_observability.tpl).
+  collectorCRName: genieai-collector
+  # Collector OTLP/HTTP listener port. Default 4318 matches the
+  # OpenTelemetry Operator's default `spec.ports[0].port`. Override
+  # when the cluster-side Collector Service exposes a non-default
+  # port (e.g. port collisions on a shared node).
+  collectorPort: 4318
+  # Collector image for the GATEWAY, applied only when the metrics tier
+  # is on: it is the one signal that needs prometheusremotewrite, and the
+  # operator's default image (the `k8s` distribution) has no prometheus
+  # exporter — the collector then refuses to start and the logs and
+  # traces pipelines die with it. The filelog agent keeps the operator
+  # default: it only forwards over otlphttp.
+  collectorImage: "ghcr.io/open-telemetry/opentelemetry-collector-releases/opentelemetry-collector-contrib:0.161.0"
+  # The filelog agent's k8sattributes processor needs the Kubernetes API.
+  # A NetworkPolicy cannot name the API server (it is not a pod), so the
+  # peer is a CIDR: list the control plane's address range here.
+  #
+  # Empty (the default) means the CNI's own default applies. That works
+  # on Calico and kube-router, whose failsafe ports include the API
+  # server's; it is NOT guaranteed. A CNI that denies host-to-pod by
+  # default (Cilium with --allow-localhost=policy, a hardened Calico
+  # with a global default-deny) drops the agent's watch, and the
+  # symptom is silent and narrow: logs still arrive, every row just
+  # loses its k8s.pod.name / service.name. Check it after installing on
+  # a new cluster:
+  #   kubectl -n genieai-obs logs deploy/genieai-agent --tail=50 | grep -i error
+  collectorAgent:
+    apiServerCIDRs: []
+
+# data layer values
+
+# Declared alongside the templates that dereference them:
+# the data-tier PVCs read `pluggable.storageClassName`, the convergence
+# Job derives KC_PUBLIC_ORIGIN from `ingress.host`. Helm nil-pointer-evaluates
+# a missing parent map even under `with`/`default` guards — the keys must
+# exist in values.yaml before any template reads them.
+# Per-environment overrides elaborate both blocks; do not duplicate them here.
+# Registry prefix for the genie-ai-* service images. Deliberately NOT
+# under `global.`: `global.imageRegistry` is a Helm-wide convention that
+# every subchart consumes (gateway-helm rewrites its images through it),
+# and this registry only mirrors GENIE.AI images — subchart images
+# (Envoy Gateway) must keep their upstream registry.
+imageRegistry: "registry.opensource.unicc.org/un/itu/genie-ai"
+
+pluggable:
+  # The chart-wide storage class for EVERY persistent volume the chart
+  # creates: the data-tier PVCs (ArangoDB, CNPG, document-repository
+  # uploads, redis appendonly, clamav signatures, model cache, ragas
+  # judge cache) AND the observability CRs (VLSingle/VMSingle/VTSingle
+  # `storage.className`). "" (the default) = each volume lands on the
+  # cluster's default StorageClass; set it per venue — a dev cluster
+  # can point it at a tmpfs-backed StorageClass to pull the cache-class
+  # volumes into RAM (#1522), a prod venue at its SSD class. Applied at
+  # PVC creation: changing it later does NOT migrate existing volumes
+  # (storageClassName is immutable on a bound PVC).
+  storageClassName: ""
+
+# Envoy Gateway controller (chart dependency). On by default — the edge
+# tier couples 1:1 with the Gateway/HTTPRoute resources the chart renders.
+# false = another controller owns the `ingress.className` GatewayClass
+# (chart still renders the controller-agnostic Gateway API resources).
+# An off-cluster edge does NOT disable this: it forwards to the in-cluster
+# Envoy data plane, which stays the single path router. See
+# site/content/en/docs/deploy/ for the exposure topologies.
+envoyGateway:
+  enabled: true
+
+ingress:
+  # Create the cluster-scoped GatewayClass. Cluster-scoped singleton:
+  # Envoy Gateway documents creating it once per cluster out of band, so
+  # an install into a cluster that already has it fails with "already
+  # exists", and uninstalling this release would delete a class other
+  # Gateways depend on. Default false — set true only in an environment
+  # where this release owns it (single-stack dev cluster), or pre-create
+  # the class yourself.
+  createGatewayClass: false
+  #
+  # Multiple GENIE releases on one cluster: supported, with three
+  # requirements — distinct release names, distinct namespaces, distinct
+  # ingress hosts. Every cluster-scoped resource the chart owns carries
+  # the release name or the namespace, EXCEPT the GatewayClass, which is
+  # a deliberate per-cluster singleton both releases share (that is why
+  # createGatewayClass defaults to false: pre-create it once, or let each
+  # environment opt in). CI asserts this per render — a cluster-scoped
+  # name carrying neither is a second-release collision waiting to happen.
+  # The operator dependencies (kube-arangodb, CNPG, keycloak-operator,
+  # cert-manager, vmoperator, otel-operator) are cluster-wide by nature:
+  # install them ONCE and share them.
+  # Public hostname (may carry :port, e.g. genieai.local:4443) — the OIDC
+  # issuer, redirect URLs and TLS dnsNames all derive from it. Deployment
+  # data, supplied per environment; no chart default.
+  host: ""
+  # Scheme of the public origin. Feeds KC_PUBLIC_ORIGIN (realm
+  # redirectUris/webOrigins): a port-forward demo serves plain HTTP, so
+  # the overlay sets http:// there or every login redirect mismatches.
+  scheme: https
+  # Gateway API tier. Off by default: a deployment CAN reach the release
+  # without it, but by port-forwarding the individual Services (backend,
+  # keycloak) — the Envoy data-plane Service is NOT such a path: its
+  # proxy pods exist only once a Gateway reconciles (the controller
+  # provisions them from the CR), so port-forwarding Envoy presumes this
+  # tier. Turn it on when an Envoy Gateway (or any controller
+  # implementing the `envoy` class) fronts the release; the laptop
+  # overlay ships it on.
+  enabled: false
+  # GatewayClass the Gateway binds to. The controller that owns the class
+  # is a cluster prerequisite (scripts/install-prereqs.sh installs Envoy
+  # Gateway); the chart never installs it.
+  className: envoy
+  tls:
+    # HTTPS listener + cert-manager Certificate. Requires an Issuer the
+    # operator created beforehand (issuerName); a pre-baked Secret
+    # (secretName) skips the Certificate CR entirely — sovereign
+    # deployments that manage keys outside cert-manager.
+    enabled: false
+    issuerName: ""
+    # ClusterIssuer (cluster-scoped) or Issuer (namespace-scoped).
+    issuerKind: ClusterIssuer
+    secretName: ""
+  # Namespace of the Envoy data plane. Empty = the Gateway's own
+  # namespace (EG 1.x default — the proxy pods carry
+  # gateway.envoyproxy.io/owning-gateway-* labels there). Set only when
+  # an EnvoyProxy CR moves the data plane elsewhere.
+  dataplaneNamespace: ""
+  # Cross-origin API access. Empty list = no CORS SecurityPolicy rendered
+  # (same-origin deployments — the default topology — need none).
+  cors:
+    allowOrigins: []
+    # Methods and headers the CORS policy permits once allowOrigins is
+    # set. Declared because the cors-policy template reads them — an
+    # undeclared template-read knob is undiscoverable and untyped. An
+    # empty list falls back to the template's defaults (GET, POST, PUT,
+    # PATCH, DELETE, OPTIONS / Authorization, Content-Type,
+    # X-Requested-With).
+    allowMethods: []
+    allowHeaders: []
+
+data:
+  # The `enabled` toggles gate the custom resources only; the operator
+  # controllers that reconcile them (CNPG, kube-arangodb, keycloak-operator)
+  # are cluster bootstrap prerequisites — see the README's Cluster
+  # prerequisites section.
+  # `dependencyGraph` drives the pre-install dep-check for both tiers:
+  # the hook exports one toggle per graph key into enabled.json and
+  # refuses an install whose enabled component depends on a disabled
+  # one. A component absent from the graph exports nothing, so its
+  # dependencies go unchecked — add the entry alongside the component.
+  postgres:
+    enabled: true
+    # CNPG Cluster resources for the keycloak-db (the only Postgres; the edge
+    # tier is Envoy Gateway, not Kong).
+    #
+    # `instances: null` = inherit the cluster profile's count
+    # (clusterProfileInstances: prod 3, every other profile 1). Set a
+    # number to PIN the count in every profile — an explicit value wins
+    # over the profile, because it is the count the operator sized the
+    # database for. ArangoDB does NOT follow: data.arangodb.mode is the
+    # only source of truth for its topology, on every profile.
+    instances: null
+    storageSize: 10Gi
+    storageClassName: ""              # "" = inherit pluggable.storageClassName ("" itself = cluster default)
+  arangodb:
+    enabled: true
+    # Arango deployment mode. THIS VALUE IS THE ONLY SOURCE OF TRUTH for
+    # the rendered ArangoDeployment mode — the chart does NOT auto-promote
+    # on clusterProfile changes (kube-arangodb requires fresh uninstall+install
+    # for mode switches; see docs/charts/arangodb-mode-migration.md). Operators
+    # switch by editing this value, then running helm uninstall + helm install.
+    mode: single
+    # The database every service connects to (ARANGO_DB). `_system` is
+    # ArangoDB's own database and always exists, which is why the chart
+    # defaults to it; a dedicated database would have to be created and,
+    # for an existing deployment, migrated collection by collection.
+    # Compose uses `genie-ai` (docker-compose.yaml) — an intentional
+    # divergence, declared in scripts/ci/config-parity-allowlist.json.
+    database: _system
+    storageSize: 50Gi
+    # Covers the dbserver AND the agency volume (the agency keeps its own size only).
+    storageClassName: ""      # "" = inherit pluggable.storageClassName ("" itself = cluster default)
+    agentsStorageSize: 2Gi             # cluster-mode Agency volume — config state (MBs), not document data
+    # The ArangoDB member's Kubernetes resources (requests + limits, the
+    # kube-arangodb ServerGroupSpec.resources). The chart default is a CPU
+    # request ONLY: a member with no request runs on the node's leftovers,
+    # and its exec readiness probe — an in-container process spawn the
+    # operator issues with a 2-second timeout — then misses its window and
+    # the pod flaps NotReady while the database answers fine (#1606). The
+    # request is the guaranteed share that keeps the probe answering. No
+    # memory request and no limits on purpose: arangod self-sizes its heap
+    # to the node, and a memory LIMIT on a database is an OOMKill waiting
+    # for the first large query. The render REJECTS an override that drops
+    # the request. Cluster mode applies the same map to agents, dbservers
+    # and coordinators (8 members × this request) — size it for the mode.
+    resources:
+      requests:
+        cpu: 500m
+    # Timeout (seconds) the kube-arangodb operator writes into the member's
+    # exec liveness/readiness/startup probes (spec.<group>.probes.
+    # <livenessProbeSpec|readinessProbeSpec|startupProbeSpec>.timeoutSeconds,
+    # ServerGroupProbesSpec — kube-arangodb 1.4.5). Upstream default is 2s:
+    # spawning a process inside the container can miss 2s on a CPU-saturated
+    # node and the pod is declared NotReady while the database answers
+    # (#1606). One value for all three probe specs.
+    probeTimeoutSeconds: 10
+  keycloak:
+    # Gates the Keycloak CR. The operator itself is a cluster
+    # bootstrap prerequisite — NOT a chart dependency.
+    enabled: true
+    instances: null                   # null = inherit clusterProfileInstances (prod 2, else 1); a number pins the count in every profile
+    # Operator contact email for the genie-admin realm user — deployment
+    # data, supplied per environment. No chart default: the render fails
+    # loudly when it is missing.
+    adminEmail: ""
+    # Realm and client identifiers the convergence Job exports for the
+    # realm file's $(env:VAR) placeholders. These must match the
+    # clientIds consumers use; changing one after install does not
+    # rename the client in Keycloak.
+    realm: genie
+    webClientId: genie-app
+    grafanaClientId: grafana
+    adminUsername: genie-admin
+    defaultLocale: en
+    # The shared OIDC verifier's discovery budget. NOT rendered as an
+    # environment row: the code applies its own 5000ms default when
+    # KEYCLOAK_DISCOVERY_TIMEOUT_MS is unset, and Compose leaves it unset
+    # too — so both surfaces run the same default (the parity gate files
+    # this under codeDefault). The name is documented here because an
+    # operator reading the chart must be able to find it: a venue that
+    # needs a different budget sets it on the Compose surface, or pins
+    # row through the service's `env` map
+    # (services.<service>.env — the knob the frontend uses for the same
+    # purpose). The same goes for KEYCLOAK_EXPECTED_ISSUER on the
+    # services that do not pin an issuer (the backend and okf-server
+    # accept the discovery issuer plus the KEYCLOAK_PUBLIC_URL /
+    # KEYCLOAK_BROWSER_ISSUER aliases; only the document-repository pins
+    # one, because its tokens are minted against the public issuer).
+    # KEYCLOAK_DISCOVERY_URL is the same kind of name: it pins the host
+    # the OIDC DISCOVERY document is fetched from, and the code falls
+    # back to KEYCLOAK_URL when it is unset. The chart leaves it unset on
+    # purpose — its KEYCLOAK_URL is the in-cluster Keycloak Service, and
+    # the realm's hostname is PINNED to the public origin, so the
+    # discovery document fetched in-cluster publishes the PUBLIC issuer:
+    # the browser's tokens and the verifier's document agree without an
+    # alias. A deployment whose discovery host must differ from
+    # KEYCLOAK_URL sets it through the service's `env` map
+    # (services.<service>.env) — the knob every other service-level
+    # override uses — and the parity gate files the name under
+    # codeDefault.
+    # Explicit Keycloak URL overrides, all empty by default: the
+    # applications derive what they need from the issuer they were
+    # given, and a default that guessed an address would override that
+    # derivation with a lie. Set one only when a deployment's topology
+    # makes the derived answer wrong.
+    publicUrl: ""
+    jwksUrl: ""
+    browserIssuer: ""
+    internalUrl: ""
+    # Login/account/admin/email theme name, exported as KEYCLOAK_THEME.
+    # The `genie` theme source lives at configs/keycloak/themes (the
+    # same source the compose path bind-mounts since #998). The chart
+    # ships it as files/keycloak-themes.tgz (regenerate with
+    # `make keycloak-theme` — CI fails on drift), unpacked into
+    # /opt/keycloak/themes/<theme> by an initContainer because the
+    # Keycloak CR has no volume surface. MUST match the theme directory
+    # at the tarball root (themes/<theme>/) — a rename here without
+    # regenerating the tarball from a matching tree leaves Keycloak
+    # theme-less.
+    theme: genie
+    # Image that unpacks the theme tarball in the Keycloak pod's
+    # initContainer. Needs tar(1) with gzip + --strip-components
+    # (busybox qualifies). NULL by default = docker.io/busybox:1.36
+    # through global.toolingImageRegistry, like every other public
+    # tooling image in this chart; an explicit value is a FULL image
+    # reference and wins verbatim (an air-gapped cluster may also pin a
+    # fully qualified unpack image this way).
+    themeUnpackImage: null
+    # Self-registration ("Register" link on the login page). Mirrors the
+    # compose default (KEYCLOAK_REGISTRATION_ENABLED:-true).
+    registrationAllowed: true
+    # "Forgot password?" link on the login page. Defaults to the compose
+    # default (KEYCLOAK_RESET_PASSWORD:-true): a deployment that has a mail
+    # server gets the feature, and one that has none says so explicitly by
+    # setting this false. The render FAILS when it is true without
+    # data.keycloak.smtp — a sentinelled smtpServer would swallow the mail
+    # and leave the user staring at a reset form that never answers.
+    resetPasswordAllowed: true
+    # Four realm knobs the convergence Job always exports. Defaults are
+    # the Swarm export's effective values: brute force protection, login
+    # by email and i18n on, duplicate emails off.
+    bruteForceProtected: true
+    loginWithEmailAllowed: true
+    internationalizationEnabled: true
+    duplicateEmailsAllowed: false
+    # Email verification on new accounts. Same SMTP dependency as
+    # resetPasswordAllowed, same default as compose
+    # (KEYCLOAK_VERIFY_EMAIL:-true). `smtp` being null in the values is a
+    # value like any other, not a statement that a deployment has no mail
+    # server: an environment that genuinely sends no mail turns this off on
+    # purpose, in its overlay, where the choice is visible.
+    verifyEmail: true
+    # Realm password policy — defaults to the Swarm export value
+    # (public-sector baseline). Non-empty on purpose: an empty value
+    # would be dropped from the convergence Job's env (K8s omitempty),
+    # and kcc fails the import on the missing variable. Any
+    # GENIE_ADMIN_PASSWORD must satisfy the policy or the realm import
+    # rejects the credential.
+    passwordPolicy: length(12) and upperCase(1) and lowerCase(1) and digits(1) and specialChars(1)
+    # Login-page locales; empty = default 9-locale list.
+    supportedLocales: []
+    # Access-token TTL in seconds.
+    accessTokenLifespan: 300
+    # SSO session lifespans in seconds (#1834). Keycloak's built-in
+    # defaults (idle 1800 = 30 min, max 36000 = 10 h) expire the browser
+    # session under the user: after 30 idle minutes a hard refresh
+    # bounced through a full LOGIN instead of renewing silently, and
+    # every session died outright at 10 hours. These are the workday
+    # defaults Compose ships (docker-compose.yaml: idle 8 h, max 7 d) —
+    # the same numbers, so a Compose venue and a chart venue hold the
+    # same session.
+    # A value of 0 is MEANINGFUL and is preserved: Keycloak reads a
+    # non-positive session lifetime as "never expire" (the kiosk
+    # setting). It is not "unset" — the chart's nil check keeps it
+    # distinguishable from the default below.
+    ssoSessionIdleTimeout: 28800
+    ssoSessionMaxLifespan: 604800
+    # Confidential-client secrets. These values are read ONLY by the
+    # render-time guard below: the chart renders no secret, and kcc
+    # receives the real values through `convergence.envSecrets` rows that
+    # reference operator-provided Secrets via `valueFrom.secretKeyRef`.
+    # Keeping them here is what lets the render fail loudly when a client
+    # secret is still a placeholder, instead of creating an OIDC client
+    # whose secret no consumer in the cluster holds.
+    # These values are NOT what reaches Keycloak. Setting them satisfies
+    # the guard below; the actual secrets are the `envSecrets` rows.
+    clientSecrets:
+      proxyClient: change-me-proxy-client
+      dataprep: change-me-dataprep-client
+      grafana: change-me-grafana-client
+    # Fail the render when any clientSecrets value is still a change-me
+    # placeholder. Default is TRUE so a default install with
+    # `change-me-*` client secrets now FAILS the render; opt back to
+    # false where the placeholder is acceptable — that is CI's
+    # `chart:lint` render (it supplies no envSecrets rows) and dev/kind.
+    failOnPlaceholderSecrets: true
+    # SMTP for email verification and password reset. `smtp: null` is a
+    # value like any other, not a statement that the deployment has no
+    # mail server: the realm's smtpServer block always renders (the kcc
+    # substitution of `$(env:EMAIL_*)` is unconditional), and with no
+    # server declared it carries sentinel values that dial nothing. A
+    # deployment that sends no mail turns verifyEmail and
+    # resetPasswordAllowed off on purpose, in its overlay, where the
+    # choice is visible. A deployment that does send mail names its
+    # server here. The render FAILS when either flag is true and this is
+    # null — a sentinelled smtpServer would swallow the mail and leave
+    # the user staring at a form that never answers.
+    # The mail server (see the flags above). Null = no mail server; the
+    # two flags above must then be false or the render fails. When set,
+    # the surface the convergence Job reads is:
+    #   from (required)   — the From address verification/reset mail carries
+    #   host (required)   — the SMTP server
+    #   port              — default 25
+    #   ssl / starttls    — transport security, default false each
+    #   auth              — false = no authentication; EMAIL_USER renders
+    #                       the sentinel "unused"
+    #   user (with auth)  — required; the password arrives through the
+    #                       EMAIL_PASSWORD envSecrets row (a Secret, never
+    #                       this values file)
+    smtp: null
+    mobileClientId: genie-mobile          # Flutter OIDC client (public, PKCE)
+    mobileRedirectScheme: genieai         # <scheme>://callback redirect
+    # ── Keycloak 26 v2beta1 connection + behavior knobs ──
+    # CNPG Cluster name (its Read-Write Service is "<cnpgServiceName>-rw").
+    # The chart names the CNPG Cluster after it and points the Keycloak CR
+    # at "<cnpgServiceName>-rw.<namespace>.svc.cluster.local" — one knob,
+    # one name, so the two cannot drift.
+    cnpgServiceName: keycloak-db
+    # Database connection secret (the chart does NOT materialize it — operator
+    # wires it from their secret backend; the secret MUST carry both
+    # `username` and `password` keys for CNPG to bootstrap).
+    db:
+      secretName: keycloak-db-credentials
+      vendor: postgres
+      port: 5432
+      database: keycloak
+      # The bootstrap role CNPG creates. It MUST equal the `username`
+      # key of the keycloak-db-credentials Secret: CNPG derives the role
+      # from that key, and a mismatch (owner `keycloak`, Secret
+      # `postgres`) fails at initdb with a CNPG event, not at render
+      # time.
+      username: keycloak
+    # HTTP listener (TLS terminates at Envoy Gateway, not here).
+    # Context path Keycloak serves under (the operator CR's
+    # http-relative-path). Single source: the internal/public URL helpers
+    # and the HTTPRoute /auth rules all derive from it.
+    httpRelativePath: /auth
+    http:
+      httpEnabled: true
+    # Hostname strict mode: false for lab/staging (Envoy rewrites the public
+    # hostname via proxy headers); true in prod via spec.hostname.hostname.
+    hostname:
+      strict: false
+    # Trust X-Forwarded-* from Envoy Gateway. KC_PROXY=edge env was removed
+    # in KC 24+; spec.proxy.headers is the only path.
+    proxy:
+      headers: xforwarded
+    # Keycloak start mode. The stock quay.io/keycloak image has no
+    # pre-built server: `start --optimized` aborts on first boot
+    # ("use 'kc.sh build' first"). Pre-built custom images set true.
+    startOptimized: false
+    # Image-bump requires single-replica mode (DB migrations need exclusive
+    # access). Chart's instances=1 by default; prod bumps to 2 + manual drain.
+    update:
+      strategy: RecreateOnImageChange
+    # ── Realm convergence (keycloak-config-cli) ──
+    # The realm is created and then converged on every release by a Helm
+    # post-install/post-upgrade/post-rollback hook Job. This chart renders
+    # no realm-import CR — keycloak-config-cli is the realm's only owner.
+    convergence:
+      enabled: true
+      # kcc waits for Keycloak itself via KEYCLOAK_AVAILABILITYCHECK_*,
+      # so retries here cover genuine failures, not startup.
+      backoffLimit: 2
+      # Secret-backed realm parameters. One row per `$(env:VAR)` in
+      # files/genie-realm.yaml whose value is a secret. The chart wires
+      # `valueFrom.secretKeyRef`; it never renders the value.
+      #
+      # The five the realm actually needs — worked mapping:
+      #   clientSecrets.proxyClient -> KC_PROXY_CLIENT_SECRET
+      #   clientSecrets.dataprep    -> KC_DATAPREP_CLIENT_SECRET
+      #   clientSecrets.grafana     -> KC_GRAFANA_CLIENT_SECRET
+      #   (admin)                   -> GENIE_ADMIN_PASSWORD
+      #   (mail)                    -> EMAIL_PASSWORD
+      envSecrets: []
+    # Name of the operator-provided Secret holding `username` +
+    # `password` for the master-realm administrator the Keycloak
+    # operator creates. The convergence Job authenticates with it.
+    # The chart references the Secret by name; it never reads it.
+    # Upstream ignores this stanza when a master realm already exists.
+    bootstrapAdmin:
+      userSecret: keycloak-admin-credentials
+
+# service ↔ data dependency graph (used by pre-install hook).
+# Read by the dependency-check hook Job; values are intentionally declarative
+# to keep the static analysis simple (no chart-template evaluation at
+# Job runtime).
+#
+# Each key maps a component to the list of components it requires. The Job
+# fails the install if a service is enabled but any of its listed targets
+# is not.
+dependencyGraph:
+  # Edges are unconditional: a node's deps are checked whenever the node is
+  # on. A dependency that only exists in some profiles (the backend reaching
+  # chatqna, which only exists with the OPEA tier) is deliberately NOT an
+  # edge — declaring it would fail the install of every API-only deployment
+  # that runs with the tier off. The dangling URL such a deployment carries
+  # is inherited from Compose, which has the same shape.
+  services:
+    backend:
+      - keycloak
+      - arangodb
+      - redisCache
+    redisCache: []
+    frontend:
+      - backend
+      - keycloak                         # the /auth/ proxy terminates at Keycloak
+    documentRepository:
+      - keycloak
+      - arangodb
+      - clamav
+    clamav: []
+  data:
+    postgres:
+      - ""                                # no deps; lowest tier
+    arangodb:
+      - ""
+    keycloak:
+      - postgres
+  # One switch renders all six orchestrators, so every node below is on
+  # exactly when opea.enabled is. Edges are the in-cluster Services each
+  # orchestrator dials, read off its rendered env rows.
+  opea:
+    chatqna:
+      - documentRepository
+      - backend
+      - keycloak
+      - retriever
+      - reranker
+      - embedding                        # EMBEDDING_SERVER_HOST_IP=embedding:6000
+      - translation                      # TRANSLATION_SERVICE_HOST_IP=translation:9031
+    dataprep:
+      - documentRepository
+      - backend
+      - keycloak
+      - arangodb
+      - embedding
+    retriever:
+      - arangodb
+      - embedding
+    reranker: []                          # the model endpoint is the GPU node, off-cluster
+    embedding: []                         # ditto
+    translation: []                       # ditto
+
+# Stateless application tier. Each entry drives a per-service Deployment
+# rendered by the corresponding template under templates/services/.
+#
+# Per-service entry shape:
+#   enabled: master toggle for the rendered resource
+#   replicas: pod count. NULL by default: unset lets the cluster profile
+#     apply (prod/staging counts, 1 on dev); an EXPLICIT value — including
+#     0, the documented scale-off — always wins over the profile.
+#   image.repository / image.tag: container image pulled at deploy time
+#   port: the CONTAINER port. Factory-rendered services: the Service
+#     listens on 80 and forwards to the container's named `http` port
+#     (this value), and the httpGet probes use the same name — an
+#     override moves all of them together. Exceptions rendered by hand:
+#     redisCache and clamav expose their Service ON this port (redis's
+#     --port flag; clamd's fixed 3310, which the render rejects
+#     changing), so there the Service port follows the value.
+#   resources: k8s requests + limits (CPU + memory)
+#   env: raw env entries appended to the rendered Deployment
+#   secrets: K8s Secret refs consumed via envFrom (each entry: {name: <secret-name>};
+#            the whole Secret is mounted — every key in the Secret becomes an env var)
+#   pvc: optional PersistentVolumeClaim spec for stateful services
+#   volumes: optional PodSpec volumes (PVC, ConfigMap, emptyDir, ...)
+#   volumeMounts: optional container volumeMounts (subPath supported)
+#   probes: readiness/liveness/startup probe definitions
+#   progressDeadlineSeconds: OPTIONAL per-service override of
+#     global.progressDeadlineSeconds (the Deployment's progress window).
+#     Not declared here on purpose: a concrete value would always be
+#     present — an overlay can set the key, never remove it — and the
+#     template reads the service key before the chart-wide one, which
+#     would make the global knob inert for exactly these services — the
+#     backend among them.
+#   podDisruptionBudget: optional PDB; null disables
+#   podAnnotations: optional map merged into the pod template metadata
+#   workingDir: optional container working directory
+#   command / args: optional container command overrides
+#   image.pullPolicy: optional; derived from the tag when absent
+#   podSecurityContext: optional pod-level securityContext (fsGroup...)
+#
+# scripts/ci/values-surface-check.py enforces this shape list against the
+# factory's `$svc.<key>` reads — the list cannot drift from the surface.
+#
+# OPEA-tier note — the OPEA deployments (opea.enabled) ALSO read
+# services.<name>, with different merge semantics: maps deep-merge key by
+# key over the template defaults (resources, image, probes), but LIST
+# values replace the template-built rows whole — an env override drops
+# every chart-default env row (secret refs included, so chat then fails
+# at request time with no scheduling symptom). Per-variable env goes
+# through opea.<svc>.env, a map merged beside the defaults. Wiring the
+# Services and NetworkPolicies reference is template-owned: chatqna's
+# container port 8888 is hardcoded in its Service and the OPEA policies,
+# so a port override yields a Deployment nothing reaches.
+services:
+  backend:
+    enabled: true
+    replicas: null
+    image: { repository: genie-ai-backend, tag: "main" }
+    # External HTTPS API egress (the backend dials public APIs directly:
+    # weather = api.open-meteo.com, WeatherService). NetworkPolicy peers
+    # cannot express a domain, so the rule is port-scoped over 80/443:
+    # pin resolved CIDRs here to restrict it, or leave empty for the
+    # compose-equivalent open egress on the HTTP(S) ports — the same
+    # convention services.documentRepository.crawlAllowedCIDRs sets one
+    # tier over. Empty by default: without this rule the backend cannot
+    # reach ANY external HTTPS API on a NetworkPolicy-enforced cluster
+    # (#1631).
+    externalApiCIDRs: []
+    # One-shot migrations Job (post-install/post-upgrade hook) that
+    # creates the ArangoDB collections; same registry/tag conventions
+    # as the service images.
+    migrationsImage: { repository: genie-ai-db-migrations, tag: "main" }
+    # Remote translation API (OpenAI-compatible vLLM). endpoint empty is
+    # NOT automatically the CPU model: with the OPEA tier on, the
+    # endpoint derives from opea.gpu (the nodeHost in external mode, the
+    # in-cluster model Service in in-cluster mode) exactly the way the
+    # orchestrators' endpoints do — and a named API, derived or explicit,
+    # is mandatory: the backend waits for it at startup and refuses to
+    # come up without it. The CPU model translates only when NO endpoint
+    # exists at all — opea disabled AND this empty. Set it to target a
+    # GPU node's translation API directly, independent of the OPEA tier.
+    translation:
+      endpoint: ""
+      modelId: ""
+      # Stream the target-language chat translation during generation
+      # (issue #829) instead of an English-only stream. The frontend
+      # translates only the right-sidebar content client-side; chat
+      # answers are translated exclusively by this backend flag, so
+      # with it off the streamed answer stays English for non-English
+      # UI languages. Defaults ON.
+      streamingEnabled: true
+      # Which backend translates the answer.
+      #
+      # NOT a knob: the chart DERIVES it. The application decides on the
+      # endpoint, not on a setting — a deployment that NAMED a
+      # translation API always uses it, and the backend refuses to start
+      # when that API does not answer. With a named endpoint the
+      # translator is the GPU path; without one, the in-process CPU model
+      # (Xenova/nllb-200-distilled-600M, ~6 Gi at ONNX load) is the only
+      # reachable translator. A `backend` key here fails the render
+      # rather than being silently rewritten.
+      # Budget for the startup probe of the configured translation API.
+      # Failing it stops the backend — the API is mandatory once named —
+      # so it has to cover a cold TLS handshake to a remote GPU node
+      # that is busy serving another workload.
+      # A value below 1 is treated as UNSET by the application (it
+      # parses with a minimum of 1 and falls back to its own 30 s
+      # default), so 0 does not mean "fail the probe immediately".
+      probeTimeoutSeconds: 30
+    # OPEA chat pipeline host (chatqna service). Empty = the code's
+    # image default — set it to the chatqna Service when the OPEA
+    # chart (in-cluster Service name).
+    opeaHost: ""
+    port: 3000
+    # Image USER is `node` (uid 1000). The namespace enforces Pod Security
+    # `baseline` (the in-cluster GPU model tier cannot run non-root, so it
+    # cannot go stricter — see templates/opea/models/_model-deployment.tpl).
+    # The backend opts into the `restricted` profile anyway: runAsNonRoot +
+    # no-privilege-escalation + dropped capabilities, so a namespace that
+    # later tightens to `restricted` does not reject it.
+    securityContext:
+      runAsNonRoot: true
+      runAsUser: 1000
+      allowPrivilegeEscalation: false
+      capabilities: { drop: ["ALL"] }
+    # The backend loads the Xenova nllb-200-distilled-600M translation
+    # model in-process (CPU worker) when the GPU translation endpoint
+    # is unreachable — 4 threads, 5 batches. The ONNX load (weights +
+    # arena + per-thread copies) peaks ABOVE 8 Gi: measured on the
+    # laptop, an 8 Gi limit ended in OOMKill (exit 137) mid-load, and
+    # on a node whose own memory is close to the limit, that OOM
+    # reached the node and took the control plane down with it. A
+    # limit below the peak turns a degraded translation into a
+    # crash-looping backend. The compose path imposes no limit at all,
+    # so this one is a chart-only constraint.
+    resources: { requests: { cpu: 100m, memory: 1Gi }, limits: { cpu: 1, memory: 12Gi } }
+    # Environment rows the chart adds to the backend, beyond the ones its
+    # templates derive. Docker Compose sets the same variables on the
+    # `backend` service, and the two must stay in step: the parity gate
+    # (scripts/ci/config-parity-check.py) fails the build when Compose names
+    # a variable the chart does not, or when the two disagree on a value
+    # that is not a Kubernetes address. Keep the values here identical to
+    # the Compose defaults.
+    #
+    # A MAP, not a list: Helm merges maps key by key, so an overlay that
+    # sets one variable keeps every default declared here beside it. A
+    # list would be replaced wholesale and one overlay value would
+    # silently drop the rest.
+    env:
+      LOG_LEVEL: info
+      OTEL_SERVICE_NAME: backend
+      # Which retrieval context the chat assembles.
+      CONTEXT_OPTION: conversation-with-context-labels
+      # The service account the admin API proxy authenticates as.
+      KEYCLOAK_PROXY_CLIENT_ID: genie-proxy-client
+      # Multi-realm authentication: a JSON array of secondary realm
+      # descriptors the backend also trusts. Unset = the primary realm
+      # only (the same empty-array default Compose leaves it at).
+      #   KEYCLOAK_ADDITIONAL_REALMS: '[{"issuer":"...","clientId":"..."}]'
+      # TLS verification towards the model endpoints. 1 = verify (the
+      # default here and in Compose); a deployment whose GPU node serves
+      # a self-signed certificate sets 0, exactly as Compose does.
+      NODE_TLS_REJECT_UNAUTHORIZED: "1"
+      # VictoriaLogs tenancy and query budget for the admin log views.
+      VICTORIALOGS_TENANT_ID: "0:0"
+      VL_QUERY_TIMEOUT_MS: "30000"
+    secrets:
+      # KEYCLOAK_PROXY_CLIENT_SECRET for the genie-proxy-client service
+      # account (the realm's admin-API proxy). The value reaches the
+      # convergence Job through `convergence.envSecrets` — point
+      # `envSecrets[].secretName` at this Secret and the chart never reads
+      # it. The matching `data.keycloak.clientSecrets.proxyClient` is what
+      # the render-time placeholder guard checks, not what is sent.
+      - name: keycloak-proxy-client-secret
+      - name: translation-cache-password
+      # ARANGO_PASSWORD is wired explicitly via secretKeyRef in
+      # templates/services/backend.yaml; listing arango-root-secret here
+      # would envFrom-mount the whole Secret and duplicate the var.
+      #
+      # Nothing else belongs here: a row mounts EVERY key of the Secret
+      # into the container's environment, under the key's own name. The
+      # registry token is the OPEA tier's business (the model
+      # Deployments read HF_TOKEN from the vllm-api-key Secret), and the
+      # SMTP password belongs to the convergence Job (EMAIL_PASSWORD
+      # through `data.keycloak.convergence.envSecrets`) — neither is
+      # read by the backend.
+    pvc: null
+    probes:
+      readiness: { httpGet: { path: /api/health, port: http }, initialDelaySeconds: 10, periodSeconds: 10 }
+      liveness:  { httpGet: { path: /api/health, port: http }, initialDelaySeconds: 30, periodSeconds: 30 }
+      startup:   { httpGet: { path: /api/health, port: http }, initialDelaySeconds: 5, failureThreshold: 12 }
+    podDisruptionBudget: { minAvailable: 1 }
+
+  frontend:
+    enabled: true
+    replicas: null
+    image: { repository: genie-ai-frontend, tag: "main" }
+    port: 8090
+    # Image USER is nginx (uid 101). The Dockerfile pre-chowns
+    # every path the container writes (the runtime-config dir
+    # /app/dist/runtime, the nginx temp dirs under /tmp), the nginx pid and
+    # logs live in /tmp, and the rendered nginx.conf lands in /tmp — nothing
+    # at startup needs root or CAP_CHOWN anymore. The theme assets
+    # themselves are baked into the image; a ConfigMap mounted at
+    # /app/dist/config overrides them at runtime.
+    securityContext:
+      runAsNonRoot: true
+      runAsUser: 101
+      allowPrivilegeEscalation: false
+      capabilities:
+        drop: ["ALL"]
+    resources: { requests: { cpu: 50m, memory: 128Mi }, limits: { cpu: 500m, memory: 512Mi } }
+    # Extra origins for the SPA's Content-Security-Policy connect-src,
+    # beyond the derived set ('self', the public origin, and wss:///ws://
+    # on the public host). The Keycloak internal Service URL is
+    # deliberately NOT in it: a browser resolves Keycloak through the
+    # same-origin /auth edge route ('self' covers it) and cannot resolve
+    # cluster-internal DNS. Empty = the derived set only. Rendered as
+    # VUE_APP_CSP_CONNECT_SRC into the runtime config.js — it shapes the
+    # browser's connect-src, not the backend's own CSP header (that one
+    # carries only the derived set, and no knob feeds it).
+    cspConnectSrc: ""
+    # Empty by default: the entrypoint injects every VUE_APP_* row into
+    # /app/dist/runtime/config.js (window.APP_CONFIG) at startup, and the
+    # code defaults cover the knobs Compose leaves empty. The one the
+    # operator is most likely to tune —
+    #   VUE_APP_STREAM_IDLE_TIMEOUT_MS
+    # the chat-stream idle watch (the SPA aborts the stream when no frame
+    # arrives for this long and reports the timeout). Default 300000 (5
+    # min); it must outlast the backend's LLM budget (180 s) plus
+    # retrieval, or a slow-but-healthy answer is abandoned client-side.
+    #   env:
+    #     VUE_APP_STREAM_IDLE_TIMEOUT_MS: "600000"
+    # (a bare "" is the default; the SPA falls back to 300000 on any
+    # non-numeric value.)
+    #   VUE_APP_AVAILABLE_LOCALES — comma-separated whitelist of active
+    #     UI locales (e.g. "en,es,fr"); unset/empty = every locale the
+    #     build ships. The Keycloak login-page side of the same knob is
+    #     data.keycloak.supportedLocales.
+    env: {}
+    secrets: []
+    pvc: null
+    probes:
+      readiness: { httpGet: { path: /health, port: http }, initialDelaySeconds: 5, periodSeconds: 10 }
+      liveness:  { httpGet: { path: /health, port: http }, initialDelaySeconds: 30, periodSeconds: 30 }
+    # prod scales this service to 2 replicas for zero-downtime rolling
+    # updates — a budget with no PDB lets a voluntary disruption take
+    # BOTH at once, which is the exact outage the second replica exists
+    # to prevent. (Single-replica profiles render no PDB: the generator
+    # emits one only at >=2 replicas.)
+    podDisruptionBudget: { minAvailable: 1 }
+
+  documentRepository:
+    enabled: true
+    replicas: null
+    image: { repository: genie-ai-document-repository, tag: "main" }
+    port: 3001
+    # The image has no USER directive, so the default would be root.
+    # Pin to uid 1000 (matches backend's node user) so the PVC mounts
+    # at /app/uploads and /app/data (kubelet-created dirs at
+    # root:root 0755) are writable by the application.
+    securityContext:
+      runAsNonRoot: true
+      runAsUser: 1000
+      allowPrivilegeEscalation: false
+      capabilities: { drop: ["ALL"] }
+    # fsGroup: 1000 — without this, the kubelet creates the PVC
+    # mountpoint at /app/uploads as root:root 0755 and uid 1000
+    # cannot write there. fsGroup makes kubelet chown the mount
+    # to 1000:1000 on first attach. The image USER being root
+    # makes the kubelet default 0755 ownership; only fsGroup
+    # overrides it.
+    podSecurityContext:
+      fsGroup: 1000
+      fsGroupChangePolicy: OnRootMismatch
+    # ClamAV service discovery. Defaults assume the in-cluster
+    # Service rendered by charts/genieai-umbrella/templates/services/clamav.yaml;
+    # operators with an external ClamAV (separate namespace, dedicated
+    # cluster) override `clamavHost` with the FQDN/hostname the
+    # documentRepository pod can resolve (e.g. clamav.corp.example.com
+    # or clamav.<other-namespace>.svc.cluster.local).
+    clamavHost: clamav
+    # NOTE: there is no separate dial-port knob. CLAMSCAN_PORT follows
+    # services.clamav.port — the one port the chart carries — because a
+    # different number could only name a port nothing serves: the
+    # NetworkPolicy admits the clamav pod's port and clamd takes its
+    # port from clamd.conf. An external scanner therefore needs the same
+    # port AND an egress rule the chart does not render (an external
+    # clamavHost is unreachable under the default-deny egress).
+    # Toggles the doc-repo virus-scan step (CLAMSCAN_* wiring above).
+    virusScanning: true
+    # The local-scanner fallback, exported as CLAMSCAN_LOCAL_FALLBACK.
+    # OFF in the chart, ON in Compose — the topologies differ: the
+    # chart runs the scanner as its own clamav Deployment (the doc-repo
+    # pod reaches it over the network, and its entrypoint leaves the
+    # embedded daemon DOWN), while Compose runs the scanner INSIDE the
+    # document-repository container, where the embedded daemon is the
+    # scanner. The application reads the variable as unset = "follow the
+    # host": unset + a remote host = no fallback, unset + a local host =
+    # fallback. The chart states it instead of inheriting it, so the
+    # effective value does not depend on how clamavHost is spelled. An
+    # operator who runs a clamd sidecar next to the document-repository
+    # sets it to true.
+    clamavLocalFallback: false
+    # CLAMSCAN_ACTIVE is NOT rendered: the application reads it as
+    # "the scanner is active unless the variable says false", and the
+    # chart's scanner IS the clamav tier's — the same effective value
+    # Compose's empty default produces. An operator who turns the scan
+    # step off does it with `virusScanning` above, which is the knob the
+    # chart documents (the parity gate files the name under
+    # codeDefault).
+    # Web-crawler egress (POST /api/files/crawl/schedule fetches
+    # arbitrary user-supplied URLs + redirect hops). NetworkPolicy peers
+    # cannot express a domain, so the rule is port-scoped over 80/443:
+    # pin resolved CIDRs here (dig +short <site> against the operators'
+    # authoritative resolver) to restrict it, or leave empty for the
+    # compose-equivalent open egress on the HTTP(S) ports.
+    crawlAllowedCIDRs: []
+    resources: { requests: { cpu: 100m, memory: 256Mi }, limits: { cpu: 1, memory: 1Gi } }
+    # Environment rows the chart adds to the document-repository, beyond
+    # the ones its template derives. Docker Compose sets the same
+    # variables on the `document-repository` service; the parity gate
+    # (scripts/ci/config-parity-check.py) keeps the two in step. A MAP, not a
+    # list: Helm merges maps key by key, so an overlay that sets one
+    # variable keeps every default declared here beside it.
+    env:
+      # The client the service validates the browser's token against.
+      KC_CLIENT_ID: genie-app
+      LOG_LEVEL: info
+      OTEL_SERVICE_NAME: document-repository
+      # TLS verification towards the model endpoints. 1 = verify (the
+      # default here and in Compose); a deployment whose GPU node serves
+      # a self-signed certificate sets 0, exactly as Compose does.
+      NODE_TLS_REJECT_UNAUTHORIZED: "1"
+      # VictoriaLogs tenancy and query budget for the admin log views.
+      VICTORIALOGS_TENANT_ID: "0:0"
+      VL_QUERY_TIMEOUT_MS: "30000"
+    secrets: []
+    pvc:
+      enabled: true                     # rendered as PVC by the doc-repo template
+      storageSize: 20Gi
+      storageClassName: ""      # "" = inherit pluggable.storageClassName ("" itself = cluster default)
+    volumes:
+      - name: uploads
+        persistentVolumeClaim:
+          claimName: document-repository-uploads
+    volumeMounts:
+      - name: uploads
+        mountPath: /app/uploads
+    # The image's CMD is `bash /app/clamav-node.sh` which starts a
+    # local clamd in the container, runs freshclam (150-200 MB
+    # signature download on cold cache), and waits for the local
+    # clamd to be reachable before exec'ing the Node server. The
+    # Node app, however, never uses the local clamd: it connects to
+    # the cluster clamav Service at CLAMAV_HOST=clamav:3310 — the
+    # local clamd is a dead-weight entrypoint gate. Override the
+    # command to launch the Node server directly, skipping the
+    # freshclam download, the local clamd spawn, and the
+    # `clamdscan --version` polling that made the script appear to
+    # work in 0.1.15-0.1.16 despite the local clamav being broken.
+    # K8s `command:` replaces the image ENTRYPOINT, so the
+    # docker-entrypoint.sh wrapper is bypassed entirely.
+    command: ["node"]
+    args: ["src/server.js"]
+    probes:
+      readiness: { httpGet: { path: /health, port: http }, initialDelaySeconds: 10, periodSeconds: 10 }
+      liveness:  { tcpSocket: { port: http }, initialDelaySeconds: 30, periodSeconds: 30 }
+    # Same prod-2-replica reasoning as frontend: minAvailable 1.
+    podDisruptionBudget: { minAvailable: 1 }
+
+  clamav:
+    cache:
+      enabled: true
+      size: 2Gi
+      storageClassName: ""      # "" = inherit pluggable.storageClassName ("" itself = cluster default)
+    enabled: true
+    replicas: null
+    # Tag: `stable-debian`. The chart
+    # used `1.3` historically, but Docker Hub's clamav/clamav 1.x line
+    # only ships `1.4+`; the operator logs `manifest unknown` and the
+    # pod stays in ImagePullBackOff. `stable-debian` is a moving tag
+    # — re-pin to a digest before any production rollout.
+    # pullPolicy: read by this template directly (the service factory
+    # reads it for the other services, where the per-service shape block
+    # documents it). Empty = derived from the tag by the factory's
+    # helper (a mutable tag pulls Always, a pinned one does not).
+    image: { repository: clamav/clamav, tag: "stable-debian", pullPolicy: "" }
+    # Listener port. The template derives the Service port, the
+    # NetworkPolicy rules, the tcpSocket probe ports, the helm-test
+    # probe AND the document-repository's dial port from THIS knob, and
+    # the render REJECTS a value other than 3310: the clamd daemon takes
+    # its port from clamd.conf, which the image fixes (its entrypoint
+    # honours no port variable), so another number moves the plumbing to
+    # a port nothing listens on.
+    port: 3310
+    # securityContext / volumes / volumeMounts / PVC are NOT values
+    # here: templates/services/clamav.yaml is a hand-written Deployment
+    # that owns them (uid 1000 rationale, /run/clamav tmpfs, signature
+    # cache). Edit the template, not this block.
+    resources: { requests: { cpu: 100m, memory: 512Mi }, limits: { cpu: 1, memory: 1Gi } }
+    # A MAP ({NAME: value}), like every other service's env: a list of
+    # {name, value} rows renders one variable named 0.
+    env: {}
+    probes:
+      # The tcpSocket PORT is derived from services.clamav.port — a
+      # probe dials the listener, so the two must be the same number
+      # and an override of the service port has to move the probes
+      # with it. The declared tcpSocket is therefore empty: a number
+      # here would either be dead (the template overrides it) or would
+      # win over the derivation, and the probe would then dial a port
+      # the pod does not listen on.
+      readiness: { tcpSocket: {}, initialDelaySeconds: 60, periodSeconds: 30 }
+      liveness:  { tcpSocket: {}, initialDelaySeconds: 120, periodSeconds: 60, failureThreshold: 5 }
+      # The upstream entrypoint starts freshclam (which downloads the
+      # ~200 MB CVD signature set) and only then opens the clamd
+      # listener: the tcpSocket probe fails for the whole download, and
+      # the liveness budget would kill the pod mid-download. With the
+      # cache disabled the kill discards the partial download and the
+      # pod restarts from zero — a crash loop. The startup probe covers
+      # the download window (30 × 10 s = 5 min) and suspends the
+      # liveness/readiness probes until the listener answers.
+      startup:  { tcpSocket: {}, failureThreshold: 30, periodSeconds: 10 }
+    podDisruptionBudget: null
+    # Egress to the ClamAV signature-distribution network on 80/443.
+    # `database.clamav.net` is a CNAME-to-A round-robin and the IP set
+    # shifts; pin resolved IPs in this list (run `dig +short
+    # database.clamav.net` against the operators' authoritative resolver
+    # and replace quarterly). Empty = fall back to the network-policy
+    # wildcard `0.0.0.0/0`, which permits every IPv4 destination on the
+    # CVD ports — only acceptable for dev clusters or when running
+    # behind a private ClamAV mirror.
+    cvdAllowedCIDRs: []
+
+  redisCache:
+    enabled: true
+    replicas: null
+    # pullPolicy: read by this template directly (the service factory
+    # reads it for the other services, where the per-service shape block
+    # documents it). Empty = derived from the tag by the factory's
+    # helper (a mutable tag pulls Always, a pinned one does not).
+    image: { repository: redis, tag: "7-alpine", pullPolicy: "" }
+    port: 6379
+    # Probes are NOT declared under a `probes:` key here: the
+    # hand-written template (templates/services/redis-cache.yaml) renders
+    # readiness/liveness exec probes that ASSERT the reply
+    # (`test "$(redis-cli -p <port> ping)" = PONG` — redis-cli exits 0
+    # on server error replies, so a bare ping would pass during an AOF
+    # load), plus a startup probe covering that load window on a
+    # PVC-backed /data. To widen or retime them, edit the template.
+    resources: { requests: { cpu: 50m, memory: 128Mi }, limits: { cpu: 250m, memory: 512Mi } }
+    pvc:
+      enabled: true                          # appendonly persistence
+      storageSize: 5Gi
+      storageClassName: ""      # "" = inherit pluggable.storageClassName ("" itself = cluster default)
+    podDisruptionBudget: null
+
+# OKF tier (the knowledge-frame server and its PII / RAGAS sidecars).
+# Disabled by default — the same dark default the Compose file ships
+# (`OKF_ENABLED=0`, replicas 0): the deployment wiring below (the
+# OKF_* variables the existing services export) is unconditional, but
+# the tier's own workloads render only when this is true.
+okf:
+  enabled: false
+  server:
+    # The address the other services call the OKF server at. The
+    # default is the tier's own in-cluster Service name; when the tier
+    # is dark (enabled: false) the address is still exported — the
+    # wiring matches Compose, where the variables are set while the
+    # server's replicas sit at 0.
+    url: "http://okf-server:3002"
+    # opea-style env override map — rows here win over the template's
+    # derived rows of the same name.
+    env: {}
+  retrievalConfig:
+    ttlMs: "30000"
+    timeoutMs: "3000"
+  # The ceiling on ONE concept document's body (OKF_MAX_CONCEPT_DOC_CHARS).
+  # EMPTY by default — the server DERIVES it from the serving-model window
+  # the same endpoint dataprep reads, exactly as the Compose deployment
+  # does. Pin it to a number to state a ceiling the derivation may not
+  # exceed; an operator pin is never overruled. A non-empty default would
+  # pin every deployment and the derivation would never engage.
+  maxConceptDocChars: ""
+  # The largest bundle the document repository will forward to the OKF
+  # crawl pipeline, in megabytes.
+  bundleMaxMb: "100"
+  pii:
+    webConcurrency: "4"       # PII_WEB_CONCURRENCY
+    regionMaxChars: "50000"   # PII_REGION_MAX_CHARS
+    env: {}
+  ragas:
+    env: {}
+  # The RAGAS judge cache PVC size — the KG builds that the cache spares
+  # cost ~50 minutes on a cold cache.
+  ragasCacheSize: "5Gi"
+  ragasCacheStorageClassName: ""  # "" = inherit pluggable.storageClassName ("" itself = cluster default)
+
+# OPEA AI/ML tier. Disabled by default; enabling renders the six
+# OPEA services (chatqna, retriever, dataprep, reranker, embedding,
+# translation). The per-service templates carry the defaults for
+# chart-specific tuning (RERANKING_*, RETRIEVER_*, CHATQNA_*, etc.).
+opea:
+  enabled: false
+  gpu:
+    # external: model endpoints live on a remote GPU node (nodeHost + paths).
+    # in-cluster: vLLM/TEI Deployments are rendered by this chart and the
+    # endpoint URLs point at the in-cluster Service names instead.
+    mode: external
+    # e.g. https://10.0.0.110:444 — empty disables endpoint rendering
+    # (callers receive an empty string and gate accordingly).
+    nodeHost: ""
+    # Disables TLS verification towards the model endpoints
+    # (OPEA_SSL_SKIP_VERIFY=1 on the six orchestrators). Default false,
+    # which is what Compose does, and it is NOT inferred from `nodeHost`:
+    # an https:// endpoint says nothing about whether its certificate is
+    # trusted, and turning verification off is not a decision a chart
+    # should make on the operator's behalf. Set it when the GPU node
+    # serves a certificate the trust store does not carry.
+    skipTlsVerify: false
+    # Egress CIDRs the orchestrators may reach the GPU node on. A
+    # NetworkPolicy cannot express a hostname, so a nodeHost that is a DNS
+    # name needs one here; an IPv4 literal becomes its own /32 and needs
+    # nothing. Empty with a DNS name falls back to 0.0.0.0/0 on the port
+    # from the URL — the same approximation the crawler tier documents.
+    allowedCIDRs: []
+    paths:
+      llm: /llm
+      embedding: /embed
+      reranker: /rerank
+      translation: /translation
+      # The docling endpoint is OPT-IN, like the reference deployment
+      # (Compose leaves DOCLING_ENDPOINT empty and dataprep uses its
+      # in-process converter). The chart renders no docling service in
+      # any mode: an external GPU node may serve one, but nothing here
+      # deploys it, so a default endpoint would point every ingestion at
+      # a service that answers 404. Set it when the GPU node really
+      # serves docling-serve at that path.
+      docling: ""
+  chatqna:
+    # CHATQNA_*, RERANKING_*, MULTI_TURN_* — every knob the chatqna
+    # template reads, declared with its template default so an operator
+    # can discover the tuning surface without reading template source
+    # (scripts/ci/values-surface-check.py keeps this list complete).
+    chatqnaType: "ChatQnA"                # CHATQNA_TYPE; OPEA pipeline name
+    logLevel: "info"                      # LOG_LEVEL
+    rerankingStrategy: "slice"            # RERANKING_STRATEGY: slice | threshold | slice_threshold | knee_threshold | adaptive
+    rerankingThreshold: "0.75"            # RERANKING_THRESHOLD (threshold strategies)
+    rerankerTopN: "3"                     # RERANKER_TOP_N (slice strategies)
+    rerankerScoreCalibration: "none"      # RERANKER_SCORE_CALIBRATION
+    rerankerScoreTemperature: "1.0"       # RERANKER_SCORE_TEMPERATURE
+    confidenceRankDecay: "0.5"            # CONFIDENCE_RANK_DECAY
+    llmSelfConfidenceEnabled: "0"         # LLM_SELF_CONFIDENCE_ENABLED (env string: "0"/"1")
+    multiTurnBlendEnabled: "false"        # MULTI_TURN_BLEND_ENABLED (env string: "false"/"true")
+    multiTurnBlendAlpha: "0.7"            # MULTI_TURN_BLEND_ALPHA
+    multiTurnHistoryTurns: "1"            # MULTI_TURN_HISTORY_TURNS
+    retrieverArangoK: "20"                # RETRIEVER_ARANGO_K
+    retrieverArangoFetchK: "30"           # RETRIEVER_ARANGO_FETCH_K
+    retrieverArangoScoreThreshold: "0.2"  # RETRIEVER_ARANGO_SCORE_THRESHOLD
+    retrieverArangoDistanceThreshold: "1" # RETRIEVER_ARANGO_DISTANCE_THRESHOLD
+    retrieverArangoLambdaMult: "0.5"      # RETRIEVER_ARANGO_LAMBDA_MULT
+    retrieverArangoSearchStart: "chunk"   # RETRIEVER_ARANGO_SEARCH_START
+    retrieverArangoTraversalMaxDepth: "2"       # RETRIEVER_ARANGO_TRAVERSAL_MAX_DEPTH
+    retrieverArangoTraversalMaxReturned: "5"    # RETRIEVER_ARANGO_TRAVERSAL_MAX_RETURNED
+    retrieverArangoTraversalScoreThreshold: "0.7"  # RETRIEVER_ARANGO_TRAVERSAL_SCORE_THRESHOLD
+    kcClientId: "genie-app"               # KC_CLIENT_ID for the chatqna service account
+    kcRealm: ""                           # KC_REALM; empty = follow data.keycloak.realm
+    systemPrompt: ""                      # CHATQNA_SYSTEM_PROMPT; empty = built-in default
+    # Boolean realm-adjacent knobs the template exports as env strings.
+    # Declared (not left implicit) so the values-schema bools gate types
+    # them like every other boolean leaf.
+    chatqnaEnforceAbstention: true
+    retrieverArangoTraversalEnabled: true
+    # `env` carries the variables the chart must configure the way Compose
+    # configures them. The parity gate (scripts/ci/config-parity-check.py)
+    # keeps the two in step. A MAP, not a list: Helm merges maps key by
+    # key, so an overlay that sets one variable keeps every default
+    # declared here beside it.
+    env:
+      # Path the embedding endpoint is called on.
+      EMBEDDING_SERVER_ENDPOINT: /v1/embeddings
+      # The models are baked into the image; the startup HF Hub HEAD
+      # check is unreachable from a pod with no internet egress, and its
+      # blocking retry loop (5 x 8 s) starves the uvicorn event loop —
+      # the 1 s readiness probe then fails and the pod leaves the
+      # Service endpoints. Offline mode skips the check and loads the
+      # local copy directly.
+      HF_HUB_OFFLINE: "1"
+      # Model-endpoint HTTP budgets, resolved by the shared policy module
+      # (genie-ai-overlay/core/model_http_policy.py).
+      MODEL_CONNECT_TIMEOUT_SECONDS: "30"
+      MODEL_CONTROL_PLANE_TIMEOUT_SECONDS: "30"
+      MODEL_PROBE_TIMEOUT_SECONDS: "10"
+      # Multi-turn rewrite: `blend` mixes the history into the query,
+      # `condense` rewrites the history into a standalone query.
+      MULTI_TURN_MODE: blend
+      MULTI_TURN_CONDENSE_HISTORY_TURNS: "8"
+      MULTI_TURN_CONDENSE_MAX_TOKENS: "256"
+      MULTI_TURN_CONDENSE_TIMEOUT_SECONDS: "5.0"
+      # Override knobs the chart leaves unset on purpose (the code
+      # defaults cover them; Compose leaves them empty too):
+      #   MAX_MODEL_LEN_TEXTGEN / MAX_TRANSLATION_CHARS — hard model
+      #     context caps; 0/unset = the vLLM-served model's own limit.
+      #     Set them only when a shared GPU model is loaded with a
+      #     SMALLER max len than the requests this service builds.
+      #   MULTI_TURN_CONDENSE_SYSTEM_PROMPT — replaces the built-in
+      #     condense-rewrite prompt (must still demand JSON-only output).
+      #   OPENAI_API_KEY — the GPU node key; the chart delivers it as
+      #     VLLM_API_KEY from the vllm-api-key Secret, which the code
+      #     accepts on the same paths.
+  retriever:
+    # RETRIEVER_* — every knob the retriever template reads, declared
+    # with its template default (see the chatqna note).
+    retrieverComponentName: "GENIE_RETRIEVER_ARANGODB"  # RETRIEVER_COMPONENT_NAME
+    arangoGraphName: "GRAPH"              # ARANGO_GRAPH_NAME
+    logLevel: "info"                      # LOG_LEVEL
+    rerankingStrategy: "slice"            # RERANKING_STRATEGY
+    retrieverArangoK: "20"                # RETRIEVER_ARANGO_K
+    retrieverArangoFetchK: "30"           # RETRIEVER_ARANGO_FETCH_K
+    retrieverArangoScoreThreshold: "0.2"  # RETRIEVER_ARANGO_SCORE_THRESHOLD
+    retrieverArangoDistanceThreshold: "1" # RETRIEVER_ARANGO_DISTANCE_THRESHOLD
+    retrieverArangoLambdaMult: "0.5"      # RETRIEVER_ARANGO_LAMBDA_MULT
+    retrieverArangoSearchStart: "chunk"   # RETRIEVER_ARANGO_SEARCH_START
+    retrieverArangoSearchMode: "vector"   # RETRIEVER_ARANGO_SEARCH_MODE: vector | hybrid
+    retrieverArangoUseApproxSearch: "false"     # RETRIEVER_ARANGO_USE_APPROX_SEARCH
+    retrieverArangoDistanceStrategy: "COSINE"   # RETRIEVER_ARANGO_DISTANCE_STRATEGY
+    retrieverArangoNprobe: "1"            # RETRIEVER_ARANGO_NPROBE (dataprep row reads it too)
+    retrieverArangoNumCentroids: "1"      # RETRIEVER_ARANGO_NUM_CENTROIDS
+    retrieverArangoFilterStrategy: "OR"   # RETRIEVER_ARANGO_FILTER_STRATEGY
+    retrieverArangoTraversalMaxDepth: "2"              # RETRIEVER_ARANGO_TRAVERSAL_MAX_DEPTH
+    retrieverArangoTraversalMaxReturned: "5"           # RETRIEVER_ARANGO_TRAVERSAL_MAX_RETURNED
+    retrieverArangoTraversalScoreThreshold: "0.7"      # RETRIEVER_ARANGO_TRAVERSAL_SCORE_THRESHOLD
+    retrieverArangoTraversalConcurrentBatches: "10"    # RETRIEVER_ARANGO_TRAVERSAL_CONCURRENT_BATCHES
+    retrieverArangoTraversalMaxEdgesPerNode: "2000"    # RETRIEVER_ARANGO_TRAVERSAL_MAX_EDGES_PER_NODE
+    retrieverArangoTraversalMaxLinks: "300000"         # RETRIEVER_ARANGO_TRAVERSAL_MAX_LINKS
+    # Fan-out retrieval: how many graphs fan out from the spine, how
+    # deep, and the per-graph budget.
+    retrieverFanoutEnabled: true                       # RETRIEVER_FANOUT_ENABLED (env string)
+    retrieverFanoutCandidateCapGlobal: "200"           # RETRIEVER_FANOUT_CANDIDATE_CAP_GLOBAL
+    retrieverFanoutCandidateCapPerGraph: "50"          # RETRIEVER_FANOUT_CANDIDATE_CAP_PER_GRAPH
+    retrieverFanoutExtractedHopCap: "1"                # RETRIEVER_FANOUT_EXTRACTED_HOP_CAP
+    retrieverFanoutMaxGraphs: "5"                      # RETRIEVER_FANOUT_MAX_GRAPHS
+    retrieverFanoutPerGraphTimeoutMs: "8000"           # RETRIEVER_FANOUT_PER_GRAPH_TIMEOUT_MS
+    retrieverFanoutSpineMaxHops: "2"                   # RETRIEVER_FANOUT_SPINE_MAX_HOPS
+    # Route gate: decides between lexical/dense/hybrid paths per query.
+    retrieverRouteEnabled: true                        # RETRIEVER_ROUTE_ENABLED (env string)
+    retrieverRouteProbeTimeoutMs: "2000"               # RETRIEVER_ROUTE_PROBE_TIMEOUT_MS
+    retrieverRouteRetry: "1"                           # RETRIEVER_ROUTE_RETRY
+    retrieverRouteTopK: "40"                           # RETRIEVER_ROUTE_TOP_K
+    retrieverRouteMinChunks: "3"                       # RETRIEVER_ROUTE_MIN_CHUNKS
+    retrieverRouteForbiddenTagMax: "0.55"              # RETRIEVER_ROUTE_FORBIDDEN_TAG_MAX
+    retrieverRouteHeadsSupersede: true                 # RETRIEVER_ROUTE_HEADS_SUPERSEDE (env string)
+    retrieverRouteHeadFloor: "0.55"                    # RETRIEVER_ROUTE_HEAD_FLOOR
+    retrieverRouteHeadMargin: "0.01"                   # RETRIEVER_ROUTE_HEAD_MARGIN
+    retrieverRouteHeadWeight: "1.0"                    # RETRIEVER_ROUTE_HEAD_WEIGHT
+    retrieverHybridRrfK: "60"             # RETRIEVER_HYBRID_RRF_K
+    retrieverHybridBm25Candidates: "50"   # RETRIEVER_HYBRID_BM25_CANDIDATES
+    retrieverHybridDenseWeight: "1.0"     # RETRIEVER_HYBRID_DENSE_WEIGHT
+    retrieverHybridLexicalWeight: "1.0"   # RETRIEVER_HYBRID_LEXICAL_WEIGHT
+    retrieverHybridBm25Analyzer: "text_en"      # RETRIEVER_HYBRID_BM25_ANALYZER
+    retrieverSummarizerEnabled: "false"   # RETRIEVER_SUMMARIZER_ENABLED (env string)
+    # Boolean knobs the template exports as env strings (typed by the
+    # bools gate — see the chatqna note).
+    retrieverArangoTraversalEnabled: true
+    retrieverHybridRetrievalEnabled: true
+    # `env` carries the variables the chart must configure the way Compose
+    # configures them (see the parity gate).
+    env:
+      MODEL_EMBEDDING_TIMEOUT_SECONDS: "600"
+      MODEL_LLM_MAX_RETRIES: "2"
+      MODEL_LLM_TIMEOUT_SECONDS: "180"
+      MODEL_PROBE_TIMEOUT_SECONDS: "10"
+      MODEL_SUMMARIZER_TIMEOUT_SECONDS: "600"
+  dataprep:
+    # chunking / labeling / contextual retrieval — every knob the dataprep
+    # template reads, declared with its template default (see the chatqna
+    # note).
+    dataprepComponentName: "GENIE_DATAPREP_ARANGODB"   # DATAPREP_COMPONENT_NAME
+    arangoGraphName: "GRAPH"              # ARANGO_GRAPH_NAME
+    dataprepMaxConcurrentBatches: "20"    # DATAPREP_MAX_CONCURRENT_BATCHES
+    dataprepIngestConcurrency: "1"        # DATAPREP_INGEST_CONCURRENCY (per-file ingest workers)
+    dataprepVllmMaxModelLen: "65536"      # VLLM_MAX_MODEL_LEN (the window the doc-budget derivation reads)
+    # The serving-model window, STATED by the operator (0/unset = discover
+    # it from the endpoint's /v1/models — what dataprep does). The only
+    # lever on a strict OpenAI-compatible provider whose /v1/models carries
+    # no max_model_len. Read by dataprep AND okf-server, so one line tunes
+    # both worlds — the okf-server mirrors the same value.
+    dataprepMaxModelLen: "0"              # DATAPREP_MAX_MODEL_LEN
+    # OKF labeling round-trip tuning (retry backoff, second-round delay,
+    # storm cooldown) — the tier's own defaults; see the OKF tier block.
+    okfLlmRetryAttempts: "5"              # OKF_LLM_RETRY_ATTEMPTS
+    okfLlmRetryBaseMs: "2000"             # OKF_LLM_RETRY_BASE_MS
+    okfLlmRetryMaxMs: "90000"             # OKF_LLM_RETRY_MAX_MS
+    okfLlmRound2DelayS: "45"              # OKF_LLM_ROUND2_DELAY_S
+    okfLlmStormCooldownS: "20"            # OKF_LLM_STORM_COOLDOWN_S
+    okfLlmStormCooldownMaxS: "120"        # OKF_LLM_STORM_COOLDOWN_MAX_S
+    dataprepLlmLabelBatchSize: "4"        # DATAPREP_LLM_LABEL_BATCH_SIZE
+    dataprepChunkSize: "500"              # DATAPREP_CHUNK_SIZE
+    dataprepChunkSizePdf: "500"           # DATAPREP_CHUNK_SIZE_PDF
+    dataprepChunkSizeXlsx: "1500"         # DATAPREP_CHUNK_SIZE_XLSX
+    dataprepChunkSizeDocx: "1000"         # DATAPREP_CHUNK_SIZE_DOCX
+    dataprepChunkSizePptx: "500"          # DATAPREP_CHUNK_SIZE_PPTX
+    dataprepChunkSizeHtml: "500"          # DATAPREP_CHUNK_SIZE_HTML
+    dataprepChunkSizeMd: "500"            # DATAPREP_CHUNK_SIZE_MD
+    dataprepChunkSizeTxt: "500"           # DATAPREP_CHUNK_SIZE_TXT
+    dataprepChunkOverlap: "50"            # DATAPREP_CHUNK_OVERLAP
+    labelingStrategy: "llm"               # LABELING_STRATEGY
+    embeddingLabelThreshold: "0.75"       # EMBEDDING_LABEL_THRESHOLD
+    bm25LabelThreshold: "2.00"            # BM25_LABEL_THRESHOLD
+    contentExtractionMethod: "docling"    # CONTENT_EXTRACTION_METHOD
+    doclingDevice: "cuda"                 # DOCLING_DEVICE
+    dataprepContextualModel: ""           # DATAPREP_CONTEXTUAL_MODEL; empty = reuse the chat LLM
+    dataprepContextualDocBudget: "0"      # DATAPREP_CONTEXTUAL_DOC_BUDGET (0 = derive from VLLM_MAX_MODEL_LEN)
+    dataprepContextualDocBudgetDocLevel: "100000"  # DATAPREP_CONTEXTUAL_DOC_BUDGET_DOC_LEVEL
+    dataprepContextualMaxTokens: "512"    # DATAPREP_CONTEXTUAL_MAX_TOKENS
+    contextualStrategy: "per_chunk"       # CONTEXTUAL_STRATEGY: per_chunk | doc_level
+    contextualRetrievalPrompt: ""         # CONTEXTUAL_RETRIEVAL_PROMPT; empty = built-in default
+    labelSelectorSystemPrompt: ""         # LABEL_SELECTOR_SYSTEM_PROMPT; empty = built-in default
+    kcDataprepClientId: "dataprep-service-client"  # KC_DATAPREP_CLIENT_ID
+    kcRealm: ""                           # KC_REALM; empty = follow data.keycloak.realm
+    keycloakSslSkipVerify: "0"            # KEYCLOAK_SSL_SKIP_VERIFY (env string: "0"/"1")
+    guardrailUrl: "http://guardrail:9090/v1/guardrails"  # GUARDRAIL_URL (guardrail tier is disabled)
+    logLevel: "info"                      # LOG_LEVEL
+    # Boolean knobs the template exports as env strings (typed by the
+    # bools gate — see the chatqna note).
+    contextualRetrievalEnabled: true
+    contextualLabelRaw: true
+    # `env` carries the variables the chart must configure the way Compose
+    # configures them (see the parity gate).
+    env:
+      # Ceiling for the LLM phase. The label batches and the contextual
+      # retrieval calls run inside it, so raising the per-call budgets
+      # without raising this one makes dataprep warn at startup.
+      DATAPREP_LLM_PHASE_TIMEOUT_SECONDS: "900"
+      # How often the phase reports its progress.
+      DATAPREP_LLM_PROGRESS_INTERVAL_SECONDS: "60"
+      # Model-endpoint HTTP budgets, resolved by the shared policy module.
+      MODEL_AUTH_TIMEOUT_SECONDS: "300"
+      MODEL_CONNECT_TIMEOUT_SECONDS: "30"
+      MODEL_CONTROL_PLANE_TIMEOUT_SECONDS: "30"
+      MODEL_LLM_MAX_RETRIES: "2"
+      MODEL_LLM_TIMEOUT_SECONDS: "180"
+      MODEL_PROBE_TIMEOUT_SECONDS: "10"
+  reranker:
+    # Adaptive-utility tuning knobs read at reranker startup; only used
+    # when RERANKING_STRATEGY=adaptive. Rendered as the
+    # NOVELTY_SIGMOID_*/CONTEXT_DECAY_FACTOR/MIN_VALUE_THRESHOLD env rows
+    # in templates/opea/reranker.yaml.
+    noveltySigmoidA: "20.0"
+    noveltySigmoidB: "0.25"
+    contextDecayFactor: "0.0025"
+    minValueThreshold: "-1.0"
+    logLevel: info
+    # `env` carries the variables the chart must configure the way Compose
+    # configures them (see the parity gate).
+    env:
+      MODEL_CONNECT_TIMEOUT_SECONDS: "30"
+      MODEL_RERANK_TIMEOUT_SECONDS: "300"
+      # The component name the reranker reports in its spans.
+      RERANK_COMPONENT_NAME: GENIE_TEI_RERANKING
+  embedding:
+    modelId: BAAI/bge-large-en-v1.5
+    # Operator-facing environment map, like the other orchestrators'
+    # (`opea.chatqna.env` etc). A MAP so an overlay that sets one
+    # variable keeps the chart's own rows beside it.
+    env: {}
+  translation:
+    modelId: google/gemma-3-4b-it
+    # The vLLM tuning args of the in-cluster translation model. Compose
+    # exposes the same four knobs as VLLM_TRANSLATION_* (the env.t4 /
+    # env.rtx6000 GPU profiles exist to set them), and the chart's
+    # values were hardcoded in the template — a 16 GB T4 cannot hold
+    # the default context length and the operator's only recourse was
+    # editing the chart. Defaults are the Compose ones.
+    gpuUtilization: "0.3"
+    maxModelLen: "2048"
+    maxNumSeqs: "16"
+    dtype: "auto"
+  models:
+    # in-cluster mode only.
+    llm:
+      modelId: ibm-granite/granite-4.1-8b
+      # The vLLM tuning args of the in-cluster chat model. Compose
+      # exposes the same four knobs as VLLM_* (the GPU profiles
+      # env.t4 / env.rtx6000 exist to set them); the chart's values
+      # were hardcoded in the template, so a site whose GPU cannot hold
+      # the default context length had to edit the chart. Defaults are
+      # the Compose ones.
+      gpuUtilization: "0.55"
+      maxModelLen: "65536"
+      maxNumSeqs: "64"
+      dtype: "half"
+    reranker:
+      # TEI reranker model. The embedding model reads from
+      # opea.embedding.modelId; the LLM from opea.models.llm.modelId;
+      # only the reranker model needed a new key.
+      modelId: BAAI/bge-reranker-v2-m3
+    # Shared model-weights cache mounted by all four model Deployments.
+    # HF weights are 4-16 GB per model; without a persistent cache every
+    # pod restart re-downloads them. ReadWriteOnce — assumes all model
+    # pods on the single GPU node (the one opea.models.nodeSelector
+    # selects); multi-GPU clusters need RWX or per-model claims.
+    cache:
+      enabled: true
+      storageClassName: ""   # surface wins over pluggable.storageClassName; "" = inherit it
+      size: 100Gi
+    # resources for ALL FOUR model Deployments (llm, reranker, embedding,
+    # translation) — one shared dict, NOT per-model. Empty = no explicit
+    # requests/limits (the pods share one GPU via utilization args; see
+    # the model-deployment template note).
+    resources: {}
+    # Node selector for the four in-cluster model Deployments. EMPTY =
+    # the chart's default (a node labelled `gpu=true`, the documented
+    # single-GPU-node topology). Declare the map to use your cluster's
+    # own labels — NVIDIA GPU Feature Discovery ships
+    # `nvidia.com/gpu.present=true`; otherwise the four model pods stay
+    # Pending with "node(s) didn't match Pod's node affinity/selector"
+    # and nothing in the chart, the render gates or the CRD gate
+    # reports it. The map is declared EMPTY on purpose: Helm MERGES
+    # values maps, so a chart default of `{gpu: "true"}` would survive
+    # your overlay next to your own label and make the pods need a node
+    # carrying both. Declaring it here replaces the default outright.
+    nodeSelector: {}
+
+# clusterProfile-driven replica overrides. prod runs multiple replicas per
+# stateless service for zero-downtime rolling updates; staging runs a
+# reduced subset. dev has no entry — every service falls back to its own
+# `services.<name>.replicas` (default 1).
+clusterProfileReplicas:
+  prod:
+    backend: 3
+    frontend: 2
+    documentRepository: 2
+  staging:
+    backend: 2
+    frontend: 2
+    documentRepository: 1
+
+# clusterProfile-driven instance counts for the DATA tier — the Keycloak
+# CR's `spec.instances` and the CNPG Cluster's `spec.instances`. prod
+# runs a Keycloak pair against a three-instance Postgres; every other
+# profile keeps a single instance of each.
+#
+# The order is the SAME as `clusterProfileReplicas`: the explicit value
+# wins, then the profile, then 1 (resolveInstances and resolveReplicas
+# share it). The chart declares both knobs `null` by default, which is
+# what keeps "unset" — the profile applies — distinguishable from "the
+# operator pinned a count": a chart default of 1 could not carry that
+# distinction.
+clusterProfileInstances:
+  prod:
+    keycloak: 2
+    postgres: 3
+

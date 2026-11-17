@@ -241,3 +241,8 @@ smoke-*.xlsx
 
 # The local e2e run checkout lock (tests/e2e/run/run-local-e2e.sh)
 .e2e-run.lock
+
+# Captured sealed-secrets PRIVATE keys (laptop-cluster-bootstrap runbook)
+sealed-secrets-key*.json
+# Captured Flux GitLab PAT — same --capture mode, same one-git-add-A hazard
+flux-git-auth.json

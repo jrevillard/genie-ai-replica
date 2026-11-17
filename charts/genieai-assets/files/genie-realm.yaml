@@ -1,0 +1,335 @@
+realm: $(env:KC_REALM)
+enabled: true
+# TLS is handled by NGINX (reverse proxy) — Keycloak receives plain HTTP internally
+sslRequired: none
+
+# Realm security and behavior properties
+registrationAllowed: $(env:KEYCLOAK_REGISTRATION_ENABLED)
+verifyEmail: $(env:KEYCLOAK_VERIFY_EMAIL)
+resetPasswordAllowed: $(env:KEYCLOAK_RESET_PASSWORD)
+loginWithEmailAllowed: $(env:KEYCLOAK_LOGIN_WITH_EMAIL)
+duplicateEmailsAllowed: $(env:KEYCLOAK_DUPLICATE_EMAILS)
+bruteForceProtected: $(env:KEYCLOAK_BRUTE_FORCE)
+passwordPolicy: $(env:KEYCLOAK_PASSWORD_POLICY)
+loginTheme: $(env:KEYCLOAK_THEME)
+accountTheme: $(env:KEYCLOAK_THEME)
+adminTheme: $(env:KEYCLOAK_THEME)
+emailTheme: $(env:KEYCLOAK_THEME)
+smtpServer:
+  from: $(env:EMAIL_FROM)
+  host: $(env:EMAIL_HOST)
+  port: $(env:EMAIL_PORT)
+  ssl: $(env:EMAIL_SECURE)
+  starttls: $(env:EMAIL_SMTP_STARTTLS)
+  auth: $(env:EMAIL_SMTP_AUTH)
+  user: $(env:EMAIL_USER)
+  password: $(env:EMAIL_PASSWORD)
+internationalizationEnabled: $(env:KEYCLOAK_I18N_ENABLED)
+defaultLocale: $(env:KEYCLOAK_LOCALE)
+supportedLocales: $(env:KEYCLOAK_SUPPORTED_LOCALES)
+accessTokenLifespan: $(env:KEYCLOAK_ACCESS_TOKEN_LIFESPAN)
+# Session lifespans — #1834. Keycloak's defaults (idle 1800 s / 30 min, max
+# 36000 s / 10 h) killed the SSO session after 30 idle minutes, so every hard
+# refresh past that bounced through a full browser LOGIN (the "token problem");
+# the 10-hour wall was the same family (#1820). Compose supplies workday
+# defaults (idle 8 h, max 7 d) — a hard refresh now finds a live session and
+# renews silently.
+ssoSessionIdleTimeout: $(env:KEYCLOAK_SSO_SESSION_IDLE_TIMEOUT)
+ssoSessionMaxLifespan: $(env:KEYCLOAK_SSO_SESSION_MAX_LIFESPAN)
+
+# --- Audit trail (David 2026-10-11: "enable Keycloak admin events") -----------
+# All three flags were left at Keycloak's default (false), so NOTHING was ever
+# stored in event_entity / admin_event_entity. The 2026-10-09 silent
+# genie-admin deletion and the 2026-10-11 mid-wizard logout were both
+# unprovable for exactly that reason — and the gap is TOTAL, not admin-only:
+# the realm stored zero login events too. The "refresh token errors" visible in
+# `docker logs` are Keycloak server-log WARN lines, not stored events, and that
+# log rotates away within minutes, so it is not an audit trail.
+# Hardcoded true, NOT env-substituted — this is a compliance control that must
+# not be silently disabled by a missing env var (same reasoning as sslRequired
+# below). NOTE: keycloak-config-cli substitutes env variables over the RAW file
+# text BEFORE YAML parsing — comments included — so never write a dollar-paren
+# env token inside a comment; it hard-fails the whole import.
+eventsEnabled: true            # login/token events (LOGIN, LOGIN_ERROR, REFRESH_TOKEN_ERROR)
+adminEventsEnabled: true       # admin REST ops — the only proof of a deliberate LOGOUT / session revocation
+adminEventsDetailsEnabled: true # records WHAT changed, not merely that something did
+eventsExpiration: 7776000      # 90 days in seconds; absent = unbounded event-table growth
+
+# Realm roles (must be defined before users that reference them)
+roles:
+  realm:
+    - name: admin
+      description: Administrator role with full access
+      composite: true
+      composites:
+        client:
+          realm-management:
+            - manage-users
+            - query-users
+            - view-identity-providers
+    - name: dataprep-service
+      description: Service account role for Dataprep ingestion pipeline
+    - name: tools-admin
+      description: OKF steward/admin role required by okf-server for repository and concept mutations (Story 2.2)
+    - name: okf-service
+      description: Service-account role for the okf-server client (Story 2.9.1) — allows the orchestrator's doc-repo storage calls (ingest-bundle)
+
+# okf-server client service account (auto-created by Keycloak on client creation;
+# declared here so config-cli assigns the okf-service realm role — Story 2.9.1).
+users:
+  - username: service-account-okf-server
+    enabled: true
+    serviceAccountClientId: okf-server
+    realmRoles:
+      - okf-service
+  - username: $(env:GENIE_ADMIN_USERNAME)
+    enabled: true
+    email: $(env:GENIE_ADMIN_EMAIL)
+    firstName: Admin
+    lastName: GENIE
+    credentials:
+      - type: password
+        value: $(env:GENIE_ADMIN_PASSWORD)
+        temporary: false
+    # Story 6.1 (G3/G15): wildcard okf scope — the operator keeps full OKF
+    # access via scopes even without the tools-admin bootstrap role. The
+    # okf_scopes claim is minted by the user-attribute protocol mappers on the
+    # genie-app and okf-server clients (multivalued attribute → JSON array).
+    attributes:
+      okf_scopes:
+        - okf:*:*:admin
+    realmRoles:
+      - admin
+      - tools-admin
+    clientRoles:
+      realm-management:
+        # Realm
+        - view-realm
+        - manage-realm
+        - query-realms
+        # Users
+        - view-users
+        - manage-users
+        - query-users
+        - impersonation
+        # Groups
+        - query-groups
+        # Clients
+        - view-clients
+        - manage-clients
+        - query-clients
+        - create-client
+        # Events
+        - view-events
+        - manage-events
+        # Identity Providers
+        - view-identity-providers
+        - manage-identity-providers
+        # Authorization
+        - view-authorization
+        - manage-authorization
+  # Service account user for genie-proxy-client — assigns realm-management client roles
+  # keycloak-config-cli uses serviceAccountClientId to link this user entry to the client's service account
+  # Story 6-1c addition (2026-10-17): manage-realm — creating the per-repo
+  # scope ROLES (POST /roles) 403s without it while user grants silently
+  # succeed, which made group-grant failures look arbitrary. NOTE: this
+  # realm's realm-management client carries the KC 26 role set — it has NO
+  # manage-roles / manage-groups roles to map (role-mapping and group writes
+  # are governed by the fine-grained admin-permission model); naming them
+  # here hard-fails the import with "Cannot find client role".
+  - username: service-account-genie-proxy-client
+    enabled: true
+    serviceAccountClientId: genie-proxy-client
+    clientRoles:
+      realm-management:
+        - query-users
+        - view-users
+        - manage-users
+        - view-realm
+        - manage-realm
+  # Service account user for dataprep-service-client — assigns realm role for document-repository authorization
+  - username: service-account-dataprep-service-client
+    enabled: true
+    serviceAccountClientId: dataprep-service-client
+    realmRoles:
+      - dataprep-service
+
+# OIDC client configuration
+clients:
+  # Keycloak built-in clients — declared so the realm export pins the
+  # absolute-zero ROPC posture over the built-ins (#1849). Keycloak
+  # provisions them into every realm and gives admin-cli
+  # directAccessGrantsEnabled=true by default; with the pin below the
+  # server's default can no longer leave a standing password-grant
+  # surface in the primary realm. Partial declarations are safe:
+  # config-cli updates the existing built-in with the declared fields
+  # (the account/account-console entries have worked this way from the
+  # start), and nothing here mints through genie's admin-cli — all
+  # admin mints use the MASTER realm's admin-cli (helpers/auth.js).
+  #
+  # Verified against a fresh Keycloak 26.8.0 with the real kcc
+  # 6.5.0-26 (2026-11-15): this exact set imports cleanly and every
+  # client of the imported realm reads back directAccessGrantsEnabled
+  # =false, admin-cli included. realm-management and
+  # security-admin-console are deliberately NOT declared: kcc refuses
+  # to update them — its client update trips the built-ins'
+  # authentication-flow bindings and Keycloak answers HTTP 403
+  # (measured twice; the import dies on realm-management). Their
+  # grants stay at Keycloak's default (false, read back), and the
+  # #1846 posture sweep keeps exempting exactly those two by name.
+  - clientId: account
+    enabled: true
+    directAccessGrantsEnabled: false
+    webOrigins:
+      - $(env:KC_PUBLIC_ORIGIN)
+  - clientId: account-console
+    enabled: true
+    directAccessGrantsEnabled: false
+    webOrigins:
+      - $(env:KC_PUBLIC_ORIGIN)
+  - clientId: admin-cli
+    directAccessGrantsEnabled: false
+  - clientId: broker
+    directAccessGrantsEnabled: false
+
+  - clientId: $(env:KC_CLIENT_ID)
+    enabled: true
+    publicClient: true
+    standardFlowEnabled: true
+    directAccessGrantsEnabled: false
+    implicitFlowEnabled: false
+    serviceAccountsEnabled: false
+    attributes:
+      pkce.code.challenge.method: S256
+      oauth2.device.authorization.grant.enabled: false
+      client.credentials.use.refresh.token: false
+      require.pushed.authorization.requests: false
+    redirectUris:
+      - $(env:KC_PUBLIC_ORIGIN)/*
+    webOrigins:
+      - $(env:KC_PUBLIC_ORIGIN)
+    # Story 6.1 (FR-18, RFC 8707): steward browser tokens carry the caller's
+    # okf scopes (user-attribute mapper, multivalued) and the okf-server
+    # audience. Direct mappers — NOT a shared client scope — so the client's
+    # standard optional-scope set is untouched (additive-only provisioning).
+    protocolMappers:
+      - name: okf-scopes
+        protocol: openid-connect
+        protocolMapper: oidc-usermodel-attribute-mapper
+        consentRequired: false
+        config:
+          user.attribute: okf_scopes
+          claim.name: okf_scopes
+          jsonType.label: String
+          id.token.claim: 'false'
+          access.token.claim: 'true'
+          userinfo.token.claim: 'false'
+          multivalued: 'true'
+      - name: okf-server-audience
+        protocol: openid-connect
+        protocolMapper: oidc-audience-mapper
+        consentRequired: false
+        config:
+          included.client.audience: okf-server
+          access.token.claim: 'true'
+
+  # Service account for GENIE.AI backend → Keycloak Admin API proxy
+  # Used to manage users, roles (CRUD, assign/remove) on behalf of GENIE.AI admin operations,
+  # including the OKF access-control facility (per-repo scope roles + group grants, Story 6-1c).
+  # Permissions: user/group/role management; NOT realm settings or client config.
+  - clientId: genie-proxy-client
+    enabled: true
+    publicClient: false
+    standardFlowEnabled: false
+    directAccessGrantsEnabled: false
+    implicitFlowEnabled: false
+    serviceAccountsEnabled: true
+    secret: $(env:KC_PROXY_CLIENT_SECRET)
+
+  # Service account for Dataprep ingestion pipeline → document-repository
+  # Uses client_credentials grant to obtain tokens for service-to-service calls.
+  # The dataprep-service realm role authorizes PATCH /api/files/:fileId/status in document-repository.
+  - clientId: dataprep-service-client
+    enabled: true
+    publicClient: false
+    standardFlowEnabled: false
+    directAccessGrantsEnabled: false
+    implicitFlowEnabled: false
+    serviceAccountsEnabled: true
+    secret: $(env:KC_DATAPREP_CLIENT_SECRET)
+
+  # OKF server client (Story 6.1, ADR-okf-025): confidential service client for
+  # okf-server↔Keycloak service-to-service flows (token exchange etc.). Its own
+  # tokens carry the okf_scopes claim (same user-attribute mapper shape as
+  # genie-app). Audience binding is activated per deployment via OKF_AUDIENCE
+  # (empty default — off for existing deployments; see env template).
+  - clientId: okf-server
+    enabled: true
+    publicClient: false
+    standardFlowEnabled: false
+    directAccessGrantsEnabled: false
+    implicitFlowEnabled: false
+    serviceAccountsEnabled: true
+    secret: $(env:KC_OKF_SERVER_CLIENT_SECRET)
+    protocolMappers:
+      - name: okf-scopes
+        protocol: openid-connect
+        protocolMapper: oidc-usermodel-attribute-mapper
+        consentRequired: false
+        config:
+          user.attribute: okf_scopes
+          claim.name: okf_scopes
+          jsonType.label: String
+          id.token.claim: 'false'
+          access.token.claim: 'true'
+          userinfo.token.claim: 'false'
+          multivalued: 'true'
+      - name: okf-server-audience
+        protocol: openid-connect
+        protocolMapper: oidc-audience-mapper
+        consentRequired: false
+        config:
+          included.client.audience: okf-server
+          access.token.claim: 'true'
+
+  # Mobile OIDC client for institutional deployments (Flutter app)
+  # Each deployment configures its own clientId and redirect scheme via env vars.
+  # Public client with PKCE — mobile apps cannot securely hold client secrets (RFC 8252).
+  # Refresh token rotation: each refresh invalidates the old RT and issues a new one.
+  # See: mobile/genie_ai_mobile/CLAUDE.md (deployment guide)
+  - clientId: $(env:KC_MOBILE_CLIENT_ID)
+    enabled: true
+    publicClient: true
+    standardFlowEnabled: true
+    directAccessGrantsEnabled: false
+    implicitFlowEnabled: false
+    serviceAccountsEnabled: false
+    attributes:
+      pkce.code.challenge.method: S256
+      client.credentials.use.refresh.token: true
+      oauth2.device.authorization.grant.enabled: false
+      require.pushed.authorization.requests: false
+    redirectUris:
+      - $(env:KC_MOBILE_REDIRECT_SCHEME)://callback
+    webOrigins:
+      - "+"
+
+  # Grafana observability dashboards — OIDC SSO via Keycloak
+  # Confidential client with standard flow. Grafana authenticates users via Generic OAuth.
+  - clientId: $(env:KC_GRAFANA_CLIENT_ID)
+    enabled: true
+    publicClient: false
+    standardFlowEnabled: true
+    directAccessGrantsEnabled: false
+    implicitFlowEnabled: false
+    serviceAccountsEnabled: false
+    secret: $(env:KC_GRAFANA_CLIENT_SECRET)
+    attributes:
+      pkce.code.challenge.method: S256
+      oauth2.device.authorization.grant.enabled: false
+      client.credentials.use.refresh.token: false
+      require.pushed.authorization.requests: false
+    redirectUris:
+      - $(env:KC_PUBLIC_ORIGIN)/grafana/*
+    webOrigins:
+      - $(env:KC_PUBLIC_ORIGIN)

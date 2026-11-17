@@ -1,0 +1,28 @@
+{{/*
+  TEI embedding server (in-cluster GPU mode only). Image from
+  ghcr.io unconditionally (not mirrored; air-gapped sites rewrite via
+  insertAgent). The embedding model id inherits
+  .Values.opea.embedding.modelId so the orchestrators and the
+  in-cluster model stay aligned without a second key. Skeleton via
+  genieai-umbrella.modelDeployment.
+*/}}
+{{- $opea := .Values.opea | default dict -}}
+{{- $opeaGpu := $opea.gpu | default dict -}}
+{{- $opeaEmbedding := $opea.embedding | default dict -}}
+
+{{- if and $opea.enabled (eq $opeaGpu.mode "in-cluster") -}}
+{{- $modelId := $opeaEmbedding.modelId | default "BAAI/bge-large-en-v1.5" | toString -}}
+{{- include "genieai-umbrella.modelDeployment" (dict
+      "root" .
+      "name" "tei"
+      "image" "ghcr.io/huggingface/text-embeddings-inference:1.9.3"
+      "port" 80
+      "mountPath" "/data"
+      "readinessDelay" 30
+      "livenessDelay" 60
+      "startup" (dict "failureThreshold" 48 "periodSeconds" 6)
+      "commandText" "          command: [\"/bin/sh\", \"-c\"]"
+      "envText" "            - name: RUST_BACKTRACE\n              value: \"\""
+      "argsText" (printf "            - >-\n              text-embeddings-router\n              --json-output\n              --model-id %s\n              --auto-truncate false" $modelId)
+    ) -}}
+{{- end -}}

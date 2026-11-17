@@ -1,0 +1,27 @@
+{{/*
+  TEI reranker server (in-cluster GPU mode only). Model id from
+  .Values.opea.models.reranker.modelId. Image from ghcr.io
+  unconditionally (see tei.yaml). Skeleton via
+  genieai-umbrella.modelDeployment.
+*/}}
+{{- $opea := .Values.opea | default dict -}}
+{{- $opeaGpu := $opea.gpu | default dict -}}
+{{- $opeaModels := $opea.models | default dict -}}
+{{- $opeaModelsReranker := $opeaModels.reranker | default dict -}}
+
+{{- if and $opea.enabled (eq $opeaGpu.mode "in-cluster") -}}
+{{- $modelId := $opeaModelsReranker.modelId | default "BAAI/bge-reranker-v2-m3" | toString -}}
+{{- include "genieai-umbrella.modelDeployment" (dict
+      "root" .
+      "name" "tei-reranker"
+      "image" "ghcr.io/huggingface/text-embeddings-inference:1.9.3"
+      "port" 80
+      "mountPath" "/data"
+      "readinessDelay" 30
+      "livenessDelay" 60
+      "startup" (dict "failureThreshold" 48 "periodSeconds" 6)
+      "commandText" "          command: [\"/bin/sh\", \"-c\"]"
+      "envText" "            - name: RUST_BACKTRACE\n              value: \"\""
+      "argsText" (printf "            - >-\n              text-embeddings-router\n              --json-output\n              --model-id %s\n              --max-batch-tokens 8192\n              --max-concurrent-requests 32\n              --auto-truncate false" $modelId)
+    ) -}}
+{{- end -}}

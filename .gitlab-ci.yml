@@ -4049,6 +4049,959 @@ test:flutter:
 # the mobile app, so e2e:playwright deliberately does not run on mobile-only
 # trains — its single alias rule cannot match there, and its hard needs can
 # never dangle.
+
+# Helm chart lint + render-validate — fast (~30s), runs on shared runners.
+# Pin a Helm image that ships kubectl + bash so kubeconform can validate
+# the rendered API manifest. kubeconform is shipped as a tarball so install
+# directly from stdin.
+chart:lint:
+  # helm 4.3.0 — the same helm the chart is developed against locally.
+  # The pipeline and the workstation must render the chart with the
+  # SAME helm: helm 3 and helm 4 differ in template semantics, and a
+  # chart that only ever renders green on one of them is a chart
+  # nobody can trust on the other. The tag is pinned (never `latest`:
+  # a mutable tag changes the pipeline without a commit).
+  #
+  # Every RENDER job in the pipeline uses this helm (chart:lint,
+  # chart:parity, chart:contract, chart:crd-validate) — one render
+  # semantics everywhere, the workstation's. The one job that INSTALLS
+  # (chart:install) runs helm 3.16.3 on purpose: the installer in
+  # production is helm-controller, which is helm 3. Measured on this
+  # chart, the two render identically (helm 4 emits blank lines the
+  # other does not; nothing else differs), so the install exercises
+  # the installer's semantics on the very chart the gates validated.
+  # The Kubernetes version is passed EXPLICITLY to every render and
+  # lint below (--kube-version): without it helm compares the
+  # chart's kubeVersion constraint against the Kubernetes version
+  # COMPILED INTO the helm binary, so the same chart renders on one
+  # machine and fails on another.
+  image: dtzar/helm-kubectl:4.3.0
+  stage: test
+  interruptible: true
+  before_script:
+    - apk add --no-cache curl bash tar python3 py3-yaml
+    - |
+      cat > /tmp/strict-yaml.py <<'PY'
+      # Helm's rendered output can concatenate documents (a stray `{{- if }}`
+      # trims the newline before a `---`) or emit duplicate mapping keys;
+      # both are invalid Kubernetes YAML and both pass Helm's own parser and
+      # a default YAML load. This checks both, for every render the job made.
+      import re
+      import sys
+      import yaml
+
+      class Strict(yaml.SafeLoader):
+          pass
+
+      def no_dup(loader, node, deep=False):
+          keys = set()
+          for key_node, _ in node.value:
+              key = loader.construct_object(key_node, deep=deep)
+              if key in keys:
+                  raise ValueError("duplicate key %r at line %s" % (key, key_node.start_mark.line + 1))
+              keys.add(key)
+          return yaml.SafeLoader.construct_mapping(loader, node, deep)
+
+      Strict.add_constructor(yaml.resolver.BaseResolver.DEFAULT_MAPPING_TAG, no_dup)
+
+      for path in sys.argv[1:]:
+          docs = [d for d in yaml.load_all(open(path), Loader=Strict) if d]
+          print("%s: %d documents, strict parse OK" % (path, len(docs)))
+      PY
+    - |
+      cat > /tmp/cluster-scope-check.py <<'PY'
+      # Cluster-scoped resources are the only thing that can make two
+      # GENIE releases collide on one cluster: a cluster-scoped name that
+      # does not carry the release name means release B fails its install
+      # with "already exists" (and release A's uninstall removes a class
+      # or role the other still needs).
+      #
+      # A name may carry EITHER the release name (chart-owned resources) or
+      # the namespace (the gateway-helm subchart names its topology-injector
+      # webhook after the namespace it installs into) — both are stable
+      # across a second release in a different namespace / under a different
+      # release name.
+      #
+      # Usage: cluster-scope-check.py <release> <namespace> <n-allowed> <allowed>... <render>...
+      import re
+      import sys
+      import yaml
+
+      CLUSTER_SCOPED = {
+          "ClusterRole", "ClusterRoleBinding", "GatewayClass",
+          "CustomResourceDefinition", "PriorityClass", "APIService",
+          "MutatingWebhookConfiguration", "ValidatingWebhookConfiguration",
+          "ValidatingAdmissionPolicy", "ValidatingAdmissionPolicyBinding",
+          "StorageClass", "CSIDriver", "IngressClass", "Node",
+      }
+
+      release, namespace, n_allowed = sys.argv[1], sys.argv[2], int(sys.argv[3])
+      allowed = set(sys.argv[4:4 + n_allowed])
+      paths = sys.argv[4 + n_allowed:]
+      for path in paths:
+          for doc in yaml.safe_load_all(open(path)):
+              if not doc or doc.get("kind") not in CLUSTER_SCOPED:
+                  continue
+              name = doc["metadata"]["name"]
+              # Segment match, not substring: "latest" contains "test",
+              # so a bare `in` would wave through names that a second
+              # release would collide with.
+              # The release/namespace may appear as any DELIMITED segment
+              # (some names are suffixed, some prefixed, some joined with
+              # ":" or "."), but never merely as a substring — "latest"
+              # contains "test".
+              segments = set(re.split(r"[-:.]", name))
+              qualified = release in segments or namespace in segments
+              # The GatewayClass is a deliberate per-cluster singleton
+              # (ingress.createGatewayClass defaults to false precisely so
+              # no release owns it) — its name comes from
+              # ingress.className, so allow it by KIND, not by a literal
+              # that would go stale on an override.
+              # The gateway-helm subchart also installs a cluster-wide
+              # ValidatingAdmissionPolicy under a FIXED name
+              # (safe-upgrades.gateway.networking.k8s.io): a second
+              # GENIE release on the same cluster collides on it, like
+              # the GatewayClass. Both are per-cluster singletons the
+              # subchart owns, not per-release resources.
+              singleton = doc["kind"] in (
+                  "GatewayClass", "ValidatingAdmissionPolicy",
+                  "ValidatingAdmissionPolicyBinding",
+              )
+              if singleton or name in allowed or qualified:
+                  print("ok cluster-scoped %s/%s%s" % (
+                      doc["kind"], name, " (singleton)" if singleton else ""))
+                  continue
+              raise SystemExit(
+                  "cluster-scoped %s/%s carries neither the release name (%s), the "
+                  "namespace (%s) nor an explicit allow-list entry — a second GENIE "
+                  "release on this cluster would fail with 'already exists'"
+                  % (doc["kind"], name, release, namespace))
+      PY
+    - helm dependency update charts/genieai-umbrella
+  script:
+    # The realm file is duplicated: this copy is for the chart's
+    # convergence Job, configs/keycloak/genie-realm.yaml is COPYed into
+    # the compose image. They must stay byte-identical or the two
+    # delivery paths deploy different realms.
+    - cmp -s charts/genieai-assets/files/genie-realm.yaml configs/keycloak/genie-realm.yaml || { echo "realm file drift between the chart copy and the compose copy - update both"; exit 1; }
+    # Same contract for the Keycloak theme tarball, content-compared:
+    # regenerate to a temp file and hash the member listing + the
+    # concatenated member contents. Byte-comparing the .tgz itself would
+    # be flaky — gzip output differs a few bytes across gzip versions.
+    - ./scripts/regen-keycloak-theme.sh /tmp/themes-check.tgz >/dev/null
+    - |
+      [ "$(tar -tzf /tmp/themes-check.tgz | sha256sum)" = "$(tar -tzf charts/genieai-assets/files/keycloak-themes.tgz | sha256sum)" ] \
+      && [ "$(tar -xzOf /tmp/themes-check.tgz | sha256sum)" = "$(tar -xzOf charts/genieai-assets/files/keycloak-themes.tgz | sha256sum)" ] \
+      || { echo "keycloak theme tarball content drift - run 'make keycloak-theme' and commit the result"; exit 1; }
+    # Same contract for the Grafana dashboards and the alert rules: the
+    # chart inlines them into GrafanaDashboard / GrafanaAlertRule CRs, so
+    # it carries a copy of configs/grafana/provisioning. The check also
+    # compares the template's dashboard list against the files on disk —
+    # a copied file the template does not list is never rendered, and a
+    # listed file that is missing inlines as an empty dashboard.
+    - ./scripts/sync-chart-dashboards.sh --check || { echo "grafana dashboard drift - run 'make chart-dashboards' and commit the result"; exit 1; }
+    - helm lint charts/genieai-umbrella --strict --kube-version $(cat charts/ci/kube-version)
+    # The render-time guards, EXERCISED. `helm lint --strict` downgrades
+    # every `fail()` to an INFO line and still exits 0 (helm 3.16.3
+    # prints `level=INFO msg="funcMap fail"` for each guard it hits), and
+    # every render below switches the placeholder guard off through the
+    # shared render fixture — so nothing else in this pipeline could
+    # catch a guard that stopped firing. This renders the values each
+    # guard must reject and requires the render to fail.
+    - ./scripts/ci/render-guards-check.sh charts/genieai-umbrella
+    # Base tier render. charts/ci/render-base-flags is the shared render
+    # fixture (required deployment data + placeholder-secret off + an
+    # smtp that answers nothing — see the file and the chart README's
+    # "Mail is not optional"): SHAPE values, nothing here reaches a
+    # cluster.
+    - >-
+      helm template test charts/genieai-umbrella -n genieai --kube-version $(cat charts/ci/kube-version) $(cat charts/ci/render-base-flags)
+      > /tmp/rendered.yaml
+    # Every $(env:VAR) the realm carries must be EXPORTED by the
+    # convergence Job. The chart's own render-time guard compares the
+    # placeholders against a list written out BY HAND in the template
+    # (in parallel with the Job's env block — adding a name to one does
+    # not add it to the other), so a placeholder that is declared but not
+    # rendered passes every render and aborts the kcc import at runtime
+    # with a parse error that names nothing. This gate reads the RENDER:
+    # the env names the Job actually exports, and the placeholders the
+    # realm actually carries.
+    - python3 scripts/ci/realm-placeholder-export-check.py /tmp/rendered.yaml charts/genieai-assets/files/genie-realm.yaml
+    # Full-surface render (render-only, no install cost): with defaults
+    # opea.enabled / observability.metrics / traces / grafana are all OFF,
+    # so ~half the templates never render and a typo in any of them
+    # merges green. This is the gate that catches the class of defect the
+    # base render cannot see.
+    - >-
+      helm template test charts/genieai-umbrella -n genieai --kube-version $(cat charts/ci/kube-version) $(cat charts/ci/render-base-flags)
+      $(cat charts/ci/render-full-flags)
+      --set opea.gpu.nodeHost=https://gpu.ci-render.local:444
+      > /tmp/rendered-full.yaml
+    # Production topology render. The GPU node host is the SAME in every
+    # CI render (https://gpu.ci-render.local:444 — see
+    # charts/ci/README.md): this job's prod render and chart:crd-validate's
+    # prod render must be the same surface, or a defect that only shows
+    # for one host shape (a DNS name with dots, a port, an IP literal) is
+    # covered in one job and missing from the other.
+    # clusterProfile=prod is enum-legal and
+    # nothing else in CI ever selects it, so the whole prod surface was
+    # unvalidated: it is the only configuration that emits a
+    # PodDisruptionBudget, it multiplies the backend to 3 and the
+    # document-repository and frontend to 2, and it puts the Keycloak
+    # database at 3 CNPG instances. ingress.tls.enabled adds the
+    # cert-manager Certificate, which no other render emits either.
+    #
+    # The OPEA tier is ON here, the same as the chart:crd-validate prod
+    # render: two jobs calling their render "the prod one" must render
+    # the same thing, or a surface is covered in one job and missing
+    # from the other for reasons nobody wrote down.
+    - >-
+      helm template test charts/genieai-umbrella -n genieai --kube-version $(cat charts/ci/kube-version) $(cat charts/ci/render-base-flags)
+      $(cat charts/ci/render-full-flags)
+      --set clusterProfile=prod
+      --set ingress.tls.enabled=true
+      --set ingress.tls.issuerName=selfsigned
+      --set observability.metrics.enabled=true
+      --set observability.traces.enabled=true
+      --set opea.gpu.nodeHost=https://gpu.ci-render.local:444
+      > /tmp/rendered-prod.yaml
+    # Same render with the in-cluster GPU tier: every orchestrator's
+    # endpoint, model Deployment, NetworkPolicy port and model-cache PVC
+    # differs between the two modes.
+    - >-
+      helm template test charts/genieai-umbrella -n genieai --kube-version $(cat charts/ci/kube-version) $(cat charts/ci/render-base-flags)
+      $(cat charts/ci/render-full-flags)
+      --set opea.gpu.mode=in-cluster
+      > /tmp/rendered-incluster.yaml
+    - >-
+      curl -fsSL
+      https://github.com/yannh/kubeconform/releases/download/v0.6.7/kubeconform-linux-amd64.tar.gz
+      | tar -xz -C /usr/local/bin kubeconform
+    - kubeconform -summary -ignore-missing-schemas -kubernetes-version 1.33.0 /tmp/rendered.yaml /tmp/rendered-full.yaml /tmp/rendered-prod.yaml /tmp/rendered-incluster.yaml
+    # values.yaml goes through the same duplicate-key check as the renders:
+    # Helm resolves a repeated key last-wins BEFORE anything downstream sees
+    # it, so a `services.<svc>.env` declared twice renders identically whether
+    # one copy or two are present — and an operator editing the copy Helm
+    # ignores gets no error anywhere.
+    - python3 /tmp/strict-yaml.py charts/genieai-umbrella/values.yaml /tmp/rendered.yaml /tmp/rendered-full.yaml /tmp/rendered-prod.yaml /tmp/rendered-incluster.yaml
+    # NetworkPolicy cross-check: the chart renders an ingress and an egress
+    # side for every component, in different templates, edited
+    # independently. A flow declared on one side and absent from the other
+    # renders fine, passes kubeconform, and only times out at runtime — and
+    # only on a CNI that enforces NetworkPolicy (the default minikube and
+    # kind CNIs store the objects and drop them, so a laptop cluster looks
+    # healthy while carrying a broken egress graph).
+    - python3 scripts/ci/networkpolicy-crosscheck.py /tmp/rendered.yaml /tmp/rendered-full.yaml /tmp/rendered-prod.yaml /tmp/rendered-incluster.yaml
+    # The schema types every boolean leaf of values.yaml so a wrongly-typed
+    # knob fails with the operator's path instead of "wrong type for value;
+    # expected bool". This check keeps the two lists from drifting.
+    - python3 scripts/ci/values-schema-bools-check.py charts/genieai-umbrella/values.yaml charts/genieai-umbrella/values.schema.json
+    # Every key a template reads must be declared in values.yaml with its
+    # template default — a tuning knob an operator cannot discover without
+    # reading template source, and one a fat-fingered key silently ignores
+    # (the values digest is unchanged, so Flux never even rolls). The
+    # reads are resolved TRANSITIVELY: a template that normalizes a block
+    # reads its leaves through a variable, and a chain of normalizations
+    # (`$a := .Values.x`, `$b := $a.y`, `$c := $b.z`) is what the chart
+    # actually uses — resolving one hop only would leave every leaf below
+    # it invisible, and the coverage would shrink with each
+    # normalization. The reverse half (keys no template reads) is the
+    # header's claim, not a gate: it is judged on every render by the
+    # parity gate's chart-side walk.
+    - python3 scripts/ci/values-surface-check.py
+    # Every rendered environment value must be a STRING. `v1.EnvVar.value`
+    # is typed string: the API server rejects a number or a boolean at
+    # apply time — minutes after the install, with the pod's manifest as
+    # the only clue. The chart builds env rows from two surfaces (the
+    # operator's values.yaml map and the rows the templates assemble),
+    # and the DEFAULTS are strings — so the gate also renders with the
+    # numeric and boolean knobs overridden to a number, which is the
+    # configuration that used to render `value: 42`.
+    - python3 scripts/ci/env-types-check.py charts/genieai-umbrella
+    # The chart's version moves with the chart's content: the deploy
+    # repo's overlay names the version it installs, so a change that
+    # leaves the version behind makes the overlay name a release the
+    # cluster is not running. (Flux itself ignores the field for a
+    # Git-path source — the install decision is the source's artifact
+    # digest.) The rule is in .claude/rules/K8s-WORKFLOW.md ("Bump per
+    # push, not per batch"); this gate makes it enforceable.
+    - python3 scripts/ci/chart-version-check.py charts/genieai-umbrella
+    # Clearing a block must never crash the render. Helm's `null`
+    # DELETES a key, so a cleared block turns the tier it controls OFF
+    # (the same meaning as `enabled: false`) — and the chart degrades to
+    # its own default, or fails with a message naming the values key.
+    # A template-engine crash names a TEMPLATE instead, and leaves the
+    # operator guessing which of the hundred blocks they cleared was
+    # guilty. The sweep is STRUCTURAL: every dict-valued node of
+    # values.yaml is cleared, one at a time, on both render surfaces
+    # (a list of block names cannot see a block added later, and the
+    # blocks that crash are exactly the ones nobody remembered to add).
+    # Six review passes found that class (helm test templates, two
+    # services' optional PVC block, the convergence templates, the
+    # identity CR's sub-blocks, the edge tier's tls/cors blocks).
+    - python3 scripts/ci/clearable-blocks-check.py charts/genieai-umbrella
+    # The data tier's instance counts resolve the way the values say: the
+    # profile map supplies the count when the operator states none, and
+    # an explicit data.<tier>.instances WINS over the profile. The prod
+    # profile used to hardcode 2 and 3, so an operator's 5 and 7 were
+    # discarded with no warning and no error.
+    - python3 scripts/ci/instance-count-check.py charts/genieai-umbrella
+    # No allow-list entries: the GatewayClass the edge tier renders is
+    # exempt by KIND (the script's own singleton list) — a NAME entry
+    # here was dead weight that would have re-permitted any
+    # cluster-scoped object literally named `envoy` in every render.
+    - >-
+      python3 /tmp/cluster-scope-check.py test genieai 0
+      /tmp/rendered.yaml /tmp/rendered-full.yaml /tmp/rendered-prod.yaml /tmp/rendered-incluster.yaml
+  rules:
+    # First-match semantics: a bare second merge_request_event rule would
+    # make this job run on every MR and render the changes filter dead.
+    # configs/grafana is in the filter because the chart vendors a copy of
+    # the dashboards and the alert rules: a change to the source must
+    # trigger the gate that checks the copy, or the drift it is meant to
+    # catch reaches the cluster unnoticed.
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+      changes:
+        - charts/**/*
+        - scripts/**/*
+        - configs/keycloak/**/*
+        - configs/grafana/**/*
+        - .gitlab-ci.yml
+    - if: '$CI_COMMIT_BRANCH'
+      changes:
+        - charts/**/*
+        - scripts/**/*
+        - configs/keycloak/**/*
+        - configs/grafana/**/*
+        - .gitlab-ci.yml
+
+# Chart contract gate — proves the CHART-RENDERED observability config,
+# not just the compose copy. The PII-redaction OTTL lives twice (compose
+# configs/otel/ + the chart's collector template); run-pii-smoke.sh only
+# tests the compose copy by default. Here the chart is rendered, the
+# gateway collector's spec.config is extracted, the VictoriaLogs exporter
+# endpoint is rewritten to the smoke's docker-network placeholder, and the
+# SAME smoke suite runs against it. A regex fix landing in compose but not
+# in the chart fails this job instead of leaking PII on k8s deployments.
+chart:contract:
+  image: docker:28
+  stage: test
+  tags: [docker]
+  # No dind sidecar: the [docker] runner exposes its daemon via the socket
+  # (the pattern the promote:* jobs use — and the docker:28 client is the
+  # one proven to reach it; an alpine docker-cli in another image did not).
+  # Shares the chart-dind resource group with chart:crd-validate — runner
+  # capacity, not daemon mutual exclusion: crd-validate drives its own
+  # in-container daemon while this job drives the runner's shared one.
+  resource_group: chart-dind
+  retry:
+    max: 1
+    when: [runner_system_failure, stuck_or_timeout_failure, script_failure]
+  interruptible: true
+  before_script:
+    # python3 + py3-yaml: the config-extraction step below parses the
+    # rendered collector CR with pyyaml.
+    - apk add --no-cache bash tar curl python3 py3-yaml
+    # helm 4.3.0 — the SAME helm chart:lint and chart:parity render
+    # with, and the one the workstation develops against. Every RENDER
+    # in the pipeline must agree with every other render; only the
+    # INSTALL job (chart:install) runs the installer's helm, because
+    # helm-controller — what production installs through — is helm 3.
+    # Measured: 3.16.3 and 4.3.0 render THIS chart identically (helm 4
+    # emits 61 blank lines more, nothing else), so the alignment
+    # changes no job's verdict — it removes the question.
+    - curl -fsSL https://get.helm.sh/helm-v4.3.0-linux-amd64.tar.gz | tar -xz -C /tmp
+    - install -m 0755 /tmp/linux-amd64/helm /usr/local/bin/helm
+    - helm dependency update charts/genieai-umbrella
+  script:
+    - >-
+      helm template test charts/genieai-umbrella -n genieai --kube-version $(cat charts/ci/kube-version) $(cat charts/ci/render-base-flags)
+      > /tmp/rendered.yaml
+    # Extract the gateway OpenTelemetryCollector's inline config map and
+    # swap the in-cluster VL endpoint for the smoke's container placeholder.
+    - |
+      python3 - <<'PY'
+      import yaml
+      docs = list(yaml.safe_load_all(open('/tmp/rendered.yaml')))
+      cr = next(d for d in docs if d and d.get('kind') == 'OpenTelemetryCollector'
+                and d['metadata']['name'] == 'genieai-collector')
+      cfg = yaml.safe_dump(cr['spec']['config'], default_flow_style=False, sort_keys=False)
+      cfg = cfg.replace('vlsingle-victorialogs.genieai.svc.cluster.local',
+                        'genie-pii-vl-HOSTPLACEHOLDER')
+      # The replace above keys on the chart's VL hostname VERBATIM. If the
+      # VLSingle CR is renamed, the replace silently no-ops, the config
+      # keeps the in-cluster hostname, and the smoke below dies with a
+      # generic row-timeout instead of naming the rename — assert the
+      # marker exists, so a hostname change fails HERE with the cause.
+      assert 'genie-pii-vl-HOSTPLACEHOLDER' in cfg, (
+          'the rendered VL endpoint no longer matches '
+          'vlsingle-victorialogs.genieai.svc.cluster.local — update the '
+          'placeholder rewrite in this job and in run-pii-smoke.sh')
+      open('/tmp/contract-collector-config.yaml', 'w').write(cfg)
+      assert 'pii_redact' in cfg, 'pii_redact processor missing from the rendered gateway config'
+      assert 'fluent_forward' not in cfg, 'fluent_forward receiver is compose-only; it must not render on k8s'
+      print('extracted gateway config:', len(cfg), 'bytes')
+      PY
+    # The app SDKs must point at the operator-derived collector Service
+    # (<cr-name>-collector), not a hand-written name.
+    #
+    # Scoped to the app Deployments on purpose. A whole-file grep is
+    # vacuous here: the filelog agent's OpenTelemetryCollector CR carries
+    # the same URL, so every app Deployment could be pointed at a
+    # Service that does not exist and this assertion would still pass —
+    # a green pipeline over a total loss of trace export. Parsed, not
+    # grepped, and every app workload must carry it.
+    - |
+      python3 - <<'PY'
+      import sys, yaml
+
+      EXPECTED = 'http://genieai-collector-collector.genieai.svc.cluster.local:4318'
+      # Deployments the chart owns and whose SDK exports over OTLP.
+      APPS = ('backend', 'documentrepository', 'frontend')
+
+      found = {}
+      for doc in yaml.safe_load_all(open('/tmp/rendered.yaml')):
+          if not doc or doc.get('kind') != 'Deployment':
+              continue
+          name = doc['metadata']['name']
+          slug = name.rsplit('-', 1)[-1]
+          if slug not in APPS:
+              continue
+          for c in doc['spec']['template']['spec']['containers']:
+              for e in c.get('env', []):
+                  if e.get('name') == 'OTEL_EXPORTER_OTLP_ENDPOINT':
+                      found.setdefault(slug, e.get('value'))
+
+      missing = [a for a in APPS if a not in found]
+      wrong = {a: v for a, v in found.items() if v != EXPECTED}
+      if missing:
+          sys.exit(f'app Deployments with no OTEL_EXPORTER_OTLP_ENDPOINT: {missing}')
+      if wrong:
+          sys.exit(f'OTEL_EXPORTER_OTLP_ENDPOINT drifted from the operator Service name: {wrong}')
+      print('OTLP endpoint on every app Deployment:', ', '.join(sorted(found)))
+      PY
+    # The SPA's connect-src and the backend's CSP header answer the same
+    # question ("which origins may this client talk to?"), so they derive
+    # from ONE helper. They drifted once: the SPA's list carried only the
+    # public origin, so a browser on a non-default port (the laptop
+    # port-forward, https://genieai.local:4443) had its own same-origin
+    # /api calls blocked — the explicit origin does not match the page
+    # origin, and 'self' is the only source that does.
+    - |
+      python3 - <<'PY'
+      import sys, yaml
+
+      def env_of(doc, name):
+          for c in doc['spec']['template']['spec']['containers']:
+              for e in c.get('env', []):
+                  if e.get('name') == name:
+                      return e.get('value')
+          return None
+
+      deployments = {}
+      for doc in yaml.safe_load_all(open('/tmp/rendered.yaml')):
+          if not doc or doc.get('kind') != 'Deployment':
+              continue
+          slug = doc['metadata']['name'].rsplit('-', 1)[-1]
+          if slug in ('backend', 'frontend'):
+              deployments[slug] = doc
+
+      missing = [s for s in ('backend', 'frontend') if s not in deployments]
+      if missing:
+          sys.exit(f'no Deployment for {missing} in the render')
+
+      backend = env_of(deployments['backend'], 'CSP_CONNECT_SRC')
+      frontend = env_of(deployments['frontend'], 'VUE_APP_CSP_CONNECT_SRC')
+      if not backend or not frontend:
+          sys.exit(f'CSP rows missing: backend={backend!r} frontend={frontend!r}')
+      if "'self'" not in frontend:
+          sys.exit(f"the SPA's connect-src carries no 'self' source: {frontend!r} — a browser "
+                   'on a non-default port (the laptop port-forward) has its own same-origin '
+                   '/api calls blocked')
+      if not frontend.startswith(backend):
+          sys.exit(f"the SPA's connect-src does not start with the backend's derived set: "
+                   f'frontend={frontend!r} backend={backend!r}')
+      print('CSP: backend and SPA share the derived set —', backend)
+      PY
+    - PII_SMOKE_CONFIG=/tmp/contract-collector-config.yaml ./tests/otel-collector/run-pii-smoke.sh
+  rules:
+    # Generic (not branch-pinned): the job validates the chart at its own
+    # commit SHA, so contract coverage follows chart/otel changes wherever
+    # they land — release/* cherry-picks, other feature branches, main.
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+      changes:
+        - charts/**/*
+        - scripts/**/*
+        - configs/otel/**/*
+        - tests/otel-collector/**/*
+        - .gitlab-ci.yml
+      when: on_success
+    - if: '$CI_COMMIT_BRANCH'
+      changes:
+        - charts/**/*
+        - scripts/**/*
+        - configs/otel/**/*
+        - tests/otel-collector/**/*
+        - .gitlab-ci.yml
+      when: on_success
+
+# Helm chart end-to-end — kind cluster inside DinD, install 4 cluster
+# operators via scripts/install-prereqs.sh, then install + helm-test the
+# genie-ai umbrella chart. allow_failure because the operator + chart
+# fan-out is resource-sensitive on the shared docker runner pool.
+# CRD strict-decoding gate.
+#
+# kubeconform runs with `-ignore-missing-schemas`, so every Custom
+# Resource in this chart is UNVALIDATED by chart:lint — it has no schema
+# to check against. That blind spot is not theoretical: the
+# grafana-operator decodes its CRs strictly, and `spec.credentialsEx` /
+# `spec.resources` (neither is a CRD field) rejected the whole Grafana
+# object with `helm lint` and kubeconform both green. The only thing
+# that catches this class is a real API server asked to validate the
+# object against the installed CRD's OpenAPI schema.
+#
+# So: kind + the operator CRDs + `kubectl apply --dry-run=server`. No
+# images are pulled and no workload is scheduled — this is a schema
+# check, not an install, which is why it can afford to run on every
+# chart push where chart:install cannot (that one needs >30m).
+# Configuration parity gate: the chart and Docker Compose must configure
+# the same applications the same way.
+#
+# The two surfaces deploy the same services, and nothing else in the
+# pipeline compares them: `helm lint` checks the chart against itself, the
+# Compose file against itself, and the tests run with whatever environment
+# the CI job happens to have. A variable added to one surface and forgotten
+# in the other is a green pipeline that deploys differently depending on
+# where it runs — which is exactly what a rebase brings in when upstream
+# adds a variable to Compose.
+#
+# The gate compares the rendered chart against docker-compose.yaml, service
+# pair by service pair. The differences that ARE the Kubernetes adaptation
+# (the addresses each surface reaches) are declared in
+# scripts/ci/config-parity-allowlist.json, each with its reason; everything
+# else — timeouts, retries, feature flags, log level, identity — must
+# carry the same value.
+chart:parity:
+  # No [docker] tag and no chart-dind group: this job never touches the
+  # Docker daemon (helm + python only). In the group it parked a 17 s
+  # render-and-compare behind the two kind boots and delayed the
+  # merge-gating crd-validate with it.
+  # helm 4.3.0 — the same helm the chart is developed against locally.
+  # The pipeline and the workstation must render the chart with the
+  # SAME helm: helm 3 and helm 4 differ in template semantics, and a
+  # chart that only ever renders green on one of them is a chart
+  # nobody can trust on the other. The tag is pinned (never `latest`:
+  # a mutable tag changes the pipeline without a commit).
+  # The Kubernetes version is passed EXPLICITLY to every render and
+  # lint below (--kube-version): without it helm compares the
+  # chart's kubeVersion constraint against the Kubernetes version
+  # COMPILED INTO the helm binary, so the same chart renders on one
+  # machine and fails on another.
+  image: dtzar/helm-kubectl:4.3.0
+  stage: test
+  retry:
+    max: 1
+    when: [runner_system_failure, stuck_or_timeout_failure, script_failure]
+  interruptible: true
+  before_script:
+    # The image carries helm, kubectl, curl and bash; only python3 +
+    # pyyaml need installing.
+    - apk add --no-cache python3 py3-yaml
+    - helm dependency update charts/genieai-umbrella
+  script:
+    # The OPEA tier must be ON: the gate compares the AI services too, and
+    # they only exist when the tier is enabled. A GPU node host is needed
+    # because the external mode refuses to render without one.
+    - >
+      helm template test charts/genieai-umbrella -n genieai --kube-version $(cat charts/ci/kube-version) $(cat charts/ci/render-base-flags)
+      --set opea.enabled=true
+      --set okf.enabled=true
+      --set opea.gpu.nodeHost=https://gpu.ci-render.local:444
+      > /tmp/rendered.yaml
+    # --min-compared is the floor on variables actually compared (327 —
+    # the number the gate compares TODAY, with the OPEA and OKF tiers
+    # switched on; secretProvided, mayDiffer and
+    # codeDefault rows are excluded from the count, so growing ANY of
+    # those categories drops the number and trips the floor instead of
+    # quietly greening the gate). The floor equals the count, not one
+    # below it: with a floor of 171 a single reclassification was
+    # invisible. RE-MEASURE it whenever the allowlist changes — the
+    # count is a measurement, not a constant. It was 331 before the
+    # KEYCLOAK_REALM row was closed (six of that commit's seven gaps
+    # were filed under codeDefault / mayDiffer, the two categories
+    # excluded from the compared count; the seventh — the
+    # document-repository's KEYCLOAK_REALM, the row the shared verifier
+    # reads — was ALREADY counted as a gap, "absent from the chart"
+    # counts as compared, so it moved the gaps, not the count).
+    # The 2026-11-16 rebase onto main took it 335 → 327: main's
+    # compose changes added KEYCLOAK_DISCOVERY_URL to three services
+    # (compared, then filed under codeDefault — unset on both surfaces,
+    # so the verifier's own fallback applies) and made the ClamAV
+    # knobs remote-canonical, which the chart's ClamAV tier makes
+    # four mayDiffer rows. Eight reclassifications, eight fewer
+    # variables in the compared set (the 325 above was the previous
+    # FLOOR, not the count it was measured against).
+    - python3 scripts/ci/config-parity-check.py /tmp/rendered.yaml --min-compared=327
+  rules:
+    # The gate verifies its `notRead` claims against the APPLICATION
+    # source: a commit under components/ or genie-ai-overlay/ that starts
+    # reading a claimed-unread variable falsifies the claim. Without
+    # those paths in `changes`, the job is not even added to the
+    # pipeline and the claim stays unverified while the pipeline stays
+    # green.
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+      changes:
+        - charts/**/*
+        - scripts/**/*
+        - docker-compose.yaml
+        - env
+        - .gitlab-ci.yml
+        - components/**/*
+        - genie-ai-overlay/**/*
+      when: on_success
+    - if: '$CI_COMMIT_BRANCH'
+      changes:
+        - charts/**/*
+        - scripts/**/*
+        - docker-compose.yaml
+        - env
+        - .gitlab-ci.yml
+        - components/**/*
+        - genie-ai-overlay/**/*
+      when: on_success
+
+chart:crd-validate:
+  image: docker:28-dind
+  stage: test
+  tags: [docker]
+  resource_group: chart-dind
+  allow_failure: false
+  variables:
+    KUBECONFIG: /tmp/kubeconfig
+  retry:
+    max: 1
+    when: [runner_system_failure, stuck_or_timeout_failure, script_failure]
+  interruptible: true
+  before_script:
+    - apk add --no-cache bash curl python3 py3-yaml
+    # helm 4.3.0 — the SAME helm chart:lint and chart:parity render
+    # with, and the one the workstation develops against. Every RENDER
+    # in the pipeline must agree with every other render; only the
+    # INSTALL job (chart:install) runs the installer's helm, because
+    # helm-controller — what production installs through — is helm 3.
+    # Measured: 3.16.3 and 4.3.0 render THIS chart identically (helm 4
+    # emits 61 blank lines more, nothing else), so the alignment
+    # changes no job's verdict — it removes the question.
+    - curl -fsSL https://get.helm.sh/helm-v4.3.0-linux-amd64.tar.gz | tar -xz -C /tmp
+    - install -m 0755 /tmp/linux-amd64/helm /usr/local/bin/helm
+    - curl -fsSL -o /tmp/kubectl https://dl.k8s.io/release/v1.33.0/bin/linux/amd64/kubectl
+    - install -m 0755 /tmp/kubectl /usr/local/bin/kubectl
+    - curl -fsSL -o /tmp/kind https://kind.sigs.k8s.io/dl/v0.27.0/kind-linux-amd64
+    - install -m 0755 /tmp/kind /usr/local/bin/kind
+    - helm dependency update charts/genieai-umbrella
+  script:
+    - trap 'kind delete cluster --name genieai-crd 2>/dev/null || true' EXIT
+    - trap 'exit 130' INT
+    - trap 'exit 143' TERM
+    # Same daemon-address derivation as chart:install: the kind API must
+    # bind the DOCKER DAEMON's docker0 address, not the job container's
+    # 127.0.0.1 (the runner socket-proxy setup), and it must land in the
+    # API cert's SANs so kubectl needs no rewrite.
+    - |
+      case "${DOCKER_HOST:-}" in
+        tcp://*)
+          DAEMON_HOST="${DOCKER_HOST#tcp://}"; DAEMON_HOST="${DAEMON_HOST%%:*}" ;;
+        "")
+          DAEMON_HOST="127.0.0.1" ;;
+        *)
+          echo "ERROR: chart:crd-validate needs DOCKER_HOST=tcp://<host>:<port> (got '${DOCKER_HOST}')" >&2
+          exit 1 ;;
+      esac
+      cat > /tmp/kind-config.yaml <<EOF
+      kind: Cluster
+      apiVersion: kind.x-k8s.io/v1alpha4
+      networking:
+        apiServerAddress: "${DAEMON_HOST}"
+        apiServerPort: 36444
+      EOF
+    # Purged only once the daemon address is known to be usable: the
+    # runner's docker socket is shared with every other job on the host,
+    # and a job that cannot even address its daemon has no business
+    # deleting a cluster on it first. The cluster is named `genieai-crd`,
+    # not `kind` — and NOT the name chart:install uses — so a leftover
+    # from another project, or from a concurrent manual install run on
+    # the other port, is never in the blast radius either.
+    - kind delete cluster --name genieai-crd 2>/dev/null || true
+    - kind create cluster --name genieai-crd --config /tmp/kind-config.yaml --image kindest/node:v1.33.0 --wait 5m
+    - kind get kubeconfig --name genieai-crd > "$KUBECONFIG"
+    - export KUBECONFIG
+    # The CRDs only — the operators never need to be Ready, and waiting on
+    # them would only add minutes. --with-grafana covers the grafana CRs,
+    # which the default render leaves out.
+    - ./scripts/install-prereqs.sh --with-grafana
+    - |
+      set -e
+      helm template test charts/genieai-umbrella -n genieai --kube-version $(cat charts/ci/kube-version) $(cat charts/ci/render-base-flags) \
+        $(cat charts/ci/render-full-flags) \
+        --set opea.gpu.mode=in-cluster \
+        > /tmp/crd-validate.yaml
+    # The second render exists because the first one is not the deployment
+    # that ships: clusterProfile=prod multiplies the replicas and puts the
+    # Keycloak database at 3 CNPG instances, and ingress.tls.enabled adds
+    # the cert-manager Certificate. Both are custom resources, and a
+    # custom resource is exactly what `kubeconform -ignore-missing-schemas`
+    # skips — so without a render that includes them, the only objects a
+    # real API server ever validated are the ones the laptop profile emits.
+    # A typo in a CRD field is rejected by the operator's strict decoder
+    # with helm lint, kubeconform and the CI YAML parse all green.
+    - |
+      set -e
+      helm template test charts/genieai-umbrella -n genieai --kube-version $(cat charts/ci/kube-version) $(cat charts/ci/render-base-flags) \
+        $(cat charts/ci/render-full-flags) \
+        --set clusterProfile=prod \
+        --set ingress.tls.enabled=true \
+        --set ingress.tls.issuerName=selfsigned \
+        --set opea.gpu.nodeHost=https://gpu.ci-render.local:444 \
+        > /tmp/crd-validate-prod.yaml
+      ./scripts/ci/validate-crds.sh /tmp/crd-validate.yaml /tmp/crd-validate-prod.yaml
+  rules:
+    # scripts/ci/validate-crds.sh is the job's last step and its whole
+    # assertion: a change to the script must re-run the job, or a relaxed
+    # grep ships with no pipeline ever having exercised it.
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+      changes:
+        - charts/**/*
+        - scripts/install-prereqs.sh
+        - scripts/ci/validate-crds.sh
+        - .gitlab-ci.yml
+      when: on_success
+    - if: '$CI_COMMIT_BRANCH'
+      changes:
+        - charts/**/*
+        - scripts/install-prereqs.sh
+        - scripts/ci/validate-crds.sh
+        - .gitlab-ci.yml
+      when: on_success
+
+chart:install:
+  image: docker:28-dind
+  stage: test
+  tags: [docker]
+  # Own group, not chart-dind: this is a MANUAL 30-minute install. In the
+  # shared group one click parks the two per-push kind gates for its
+  # whole duration. Its kind cluster is also named differently
+  # (genieai-install) and its API port distinct (36443 vs 36444), so
+  # nothing about its runtime depends on the group for safety.
+  resource_group: chart-install-dind
+  # Manual + allow_failure: a `when: manual` job WITHOUT allow_failure
+  # leaves the pipeline blocked on a pending manual action — the MR
+  # pipeline never goes green and merge gating never passes. With it,
+  # the pipeline succeeds without this job and it stays runnable by hand
+  # (same posture as the compose E2E suite below).
+  allow_failure: true
+  # No dind sidecar — the [docker] runner exposes its daemon via the
+  # socket (promote:* pattern). The image is only used as the docker CLI.
+  variables:
+    KUBECONFIG: /tmp/kubeconfig
+  retry:
+    max: 1
+    when: [runner_system_failure, stuck_or_timeout_failure, script_failure]
+  interruptible: true
+  before_script:
+    - apk add --no-cache curl bash
+    # helm 3.16.3 — deliberately NOT the render gates' 4.3.0: this job
+    # INSTALLS the chart, and the installer in production is
+    # helm-controller, which is helm 3 (its releases are
+    # sh.helm.release.v3). An install job must exercise the installer's
+    # semantics, not the renderer's. The two helms render this chart
+    # identically today (measured), so the install is not a different
+    # chart than the gates validated — but that is a measurement, and
+    # this job is where a divergence would surface.
+    - curl -fsSL https://get.helm.sh/helm-v3.16.3-linux-amd64.tar.gz | tar -xz -C /tmp
+    - install -m 0755 /tmp/linux-amd64/helm /usr/local/bin/helm
+    - curl -fsSL -o /tmp/kubectl https://dl.k8s.io/release/v1.33.0/bin/linux/amd64/kubectl
+    - install -m 0755 /tmp/kubectl /usr/local/bin/kubectl
+    - curl -fsSL -o /tmp/kind https://kind.sigs.k8s.io/dl/v0.27.0/kind-linux-amd64
+    - install -m 0755 /tmp/kind /usr/local/bin/kind
+    - helm dependency update charts/genieai-umbrella
+    - helm version --short
+    - kubectl version --client
+    - kind version
+  script:
+    # Shared daemon hygiene: the kind cluster lives on the runner HOST
+    # (via the socket proxy), NOT under the runner's job-container
+    # lifecycle — GitLab never cleans it. Purge on entry AND on every exit
+    # path, or a failed job leaves node containers + pulled images
+    # (multi-GB) on the shared host forever (observed: 'node(s) already
+    # exist' caused by the previous run's debris). The INT/TERM traps make
+    # a GitLab cancel/timeout (SIGTERM to the process group) exit through
+    # the EXIT trap — bash does NOT run EXIT traps on unhandled signals.
+    - trap 'kind delete cluster --name genieai-install 2>/dev/null || true' EXIT
+    - trap 'exit 130' INT
+    - trap 'exit 143' TERM
+    - kind delete cluster --name genieai-install 2>/dev/null || true
+    # Bind the API server on the DAEMON's docker0 address (kind's default
+    # 127.0.0.1 is unreachable from the job container when the daemon is
+    # remote — the runner socket-proxy setup). Using the real address (not
+    # 0.0.0.0) also puts it in the API cert's SANs, so kubectl needs no
+    # rewrite. Fixed port is safe — the chart-install-dind resource group
+    # serializes successive runs of this job (its only member). unix://
+    # sockets are rejected outright: the
+    # derivation would yield apiServerAddress "unix" and kind create would
+    # fail far from the cause.
+    - |
+      case "${DOCKER_HOST:-}" in
+        tcp://*)
+          DAEMON_HOST="${DOCKER_HOST#tcp://}"; DAEMON_HOST="${DAEMON_HOST%%:*}" ;;
+        "")
+          DAEMON_HOST="127.0.0.1" ;;
+        *)
+          echo "ERROR: chart:install needs DOCKER_HOST=tcp://<host>:<port> (got '${DOCKER_HOST}')" >&2
+          exit 1 ;;
+      esac
+      cat > /tmp/kind-config.yaml <<EOF
+      kind: Cluster
+      apiVersion: kind.x-k8s.io/v1alpha4
+      networking:
+        apiServerAddress: "${DAEMON_HOST}"
+        apiServerPort: 36443
+      EOF
+      echo "kind API on ${DAEMON_HOST}:36443"
+    # Purged only once the daemon address is known to be usable (see the
+    # note in chart:crd-validate).
+    - kind delete cluster --name genieai-install 2>/dev/null || true
+    - kind create cluster --name genieai-install --config /tmp/kind-config.yaml --image kindest/node:v1.33.0 --wait 5m
+    # KUBECONFIG first, THEN anything that speaks to the cluster: the
+    # variable points at a file nothing creates until this step, and
+    # kubectl with a KUBECONFIG naming a missing file falls back to
+    # http://localhost:8080 — "connection refused" as the job's only
+    # symptom.
+    - kind get kubeconfig --name genieai-install > "$KUBECONFIG"
+    - export KUBECONFIG
+    # kind ships no default StorageClass: every PVC stays Pending and
+    # `helm install --wait` blocks on it until the job timeout — a
+    # storage gap indistinguishable from a chart defect. local-path gives
+    # the install real volumes.
+    - kubectl apply -f
+      https://raw.githubusercontent.com/rancher/local-path-provisioner/v0.0.26/deploy/local-path-storage.yaml
+    - kubectl wait --for=condition=Ready pod -l app=local-path-provisioner
+      -n local-path-storage --timeout=120s
+    - ./scripts/install-prereqs.sh
+    # The operator-provided Secrets the release mounts. The chart renders
+    # none, and every one below is mounted through a NON-optional
+    # secretKeyRef: without them the db-migrations and realm-convergence
+    # hook Jobs land in CreateContainerConfigError, never start, and
+    # `helm install --wait` fails on the hooks with a message that names
+    # a pod rather than the missing Secret. Throwaway values — this
+    # cluster is deleted at the end of the job.
+    - |
+      set -e
+      kubectl create namespace genieai --dry-run=client -o yaml | kubectl apply -f -
+      kubectl create secret generic arango-root-secret -n genieai \
+        --from-literal=username=root --from-literal=password=ci-arango-password
+      kubectl create secret generic arango-jwt-secret -n genieai \
+        --from-literal=token=ci-jwt-token
+      kubectl create secret generic keycloak-db-credentials -n genieai \
+        --from-literal=username=keycloak --from-literal=password=ci-db-password
+      kubectl create secret generic keycloak-admin-credentials -n genieai \
+        --from-literal=username=admin --from-literal=password=ci-admin-password
+      kubectl create secret generic translation-cache-password -n genieai \
+        --from-literal=password=ci-cache-password \
+        --from-literal=TRANSLATION_CACHE_PASSWORD=ci-cache-password
+      kubectl create secret generic keycloak-proxy-client-secret -n genieai \
+        --from-literal=KEYCLOAK_PROXY_CLIENT_SECRET=ci-proxy-secret
+      kubectl create secret generic kc-dataprep-client-secret -n genieai \
+        --from-literal=KC_DATAPREP_CLIENT_SECRET=ci-dataprep-secret
+      kubectl create secret generic kc-grafana-client-secret -n genieai \
+        --from-literal=KEYCLOAK_GRAFANA_CLIENT_SECRET=ci-grafana-secret
+      kubectl create secret generic keycloak-convergence-credentials -n genieai \
+        --from-literal=GENIE_ADMIN_PASSWORD=ci-admin-password \
+        --from-literal=EMAIL_PASSWORD=ci-email-password
+    # The convergence Job reads the realm's client secrets and the admin
+    # password from those Secrets — without these rows it exports empty
+    # values and the realm is imported with clients whose secret nobody
+    # holds.
+    - |
+      cat > /tmp/ci-values.yaml <<'EOF'
+      data:
+        keycloak:
+          convergence:
+            envSecrets:
+              - { envVar: KC_PROXY_CLIENT_SECRET, secretName: keycloak-proxy-client-secret, secretKey: KEYCLOAK_PROXY_CLIENT_SECRET }
+              - { envVar: KC_DATAPREP_CLIENT_SECRET, secretName: kc-dataprep-client-secret, secretKey: KC_DATAPREP_CLIENT_SECRET }
+              - { envVar: KC_GRAFANA_CLIENT_SECRET, secretName: kc-grafana-client-secret, secretKey: KEYCLOAK_GRAFANA_CLIENT_SECRET }
+              - { envVar: GENIE_ADMIN_PASSWORD, secretName: keycloak-convergence-credentials, secretKey: GENIE_ADMIN_PASSWORD }
+              - { envVar: EMAIL_PASSWORD, secretName: keycloak-convergence-credentials, secretKey: EMAIL_PASSWORD }
+      EOF
+    # KNOWN INCOMPLETE (manual job): the operator images (ArangoDB,
+    # Keycloak, the model pulls) are multi-GB and this cluster is a cold
+    # kind node on a shared runner — the install needs far more than the
+    # 30-minute budget. The Secrets ARE created above, so the job
+    # exercises a real install (hook ordering, data tier, realm
+    # convergence) rather than failing on a missing Secret.
+    #
+    # The CRD surface IS covered per push by chart:crd-validate, which
+    # validates every rendered object against the installed CRDs without
+    # scheduling anything — that is the half of installability a cold
+    # kind cluster is not needed for.
+    - >-
+      helm install test charts/genieai-umbrella -n genieai --create-namespace
+      $(cat charts/ci/render-base-flags)
+      -f /tmp/ci-values.yaml
+      --set "data.keycloak.clientSecrets.proxyClient=${CI_JOB_ID}-proxy"
+      --set "data.keycloak.clientSecrets.dataprep=${CI_JOB_ID}-dataprep"
+      --set "data.keycloak.clientSecrets.grafana=${CI_JOB_ID}-grafana"
+      --wait --timeout 30m
+    # Wait on Deployments, NOT pods: pre-install hook pods (dependency
+    # check) are Succeeded-phase and never become Ready — `kubectl wait
+    # pods --all` times out on them even on a healthy install (empirically
+    # confirmed).
+    - kubectl wait --for=condition=Available deploy --all -n genieai --timeout=10m
+    - helm test test -n genieai --logs
+    - mkdir -p chart-test-logs
+    - >-
+      for r in $(kubectl get deploy -n genieai -o name); do
+      kubectl logs -n genieai "$r" --all-containers
+      > "chart-test-logs/${r##*/}.log" 2>&1 || true;
+      done
+  artifacts:
+    when: always
+    expire_in: 7 days
+    paths:
+      - chart-test-logs/
+  # Manual-only (2026-10-19): a cold full-stack install on the shared
+  # runner pool needs >30m (multi-GB pulls inside the kind node + shared
+  # CPU) — not tenable as a per-push gate. Same posture as the compose E2E
+  # jobs: the fast gates (chart:lint, chart:contract) run per push;
+  # installability is proven continuously on the live laptop cluster; this
+  # job stays available on demand (click to run, e.g. before a release).
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "schedule"'
+      when: never
+    # A pipeline started from the UI/API has source "web" — first-match
+    # semantics, so `when: never` here would DROP the job from exactly the
+    # pipeline whose purpose is to run it by hand.
+    - if: '$CI_PIPELINE_SOURCE == "web"'
+      when: manual
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+      changes:
+        - charts/**/*
+        - scripts/**/*
+        - .gitlab-ci.yml
+      when: manual
+    # The migration branch AND the default branch: the job is the
+    # on-demand installability proof, and pinning it to the branch name
+    # alone would drop it from every push pipeline the day the branch
+    # merges — exactly when an operator wants to click it before a
+    # release.
+    - if: '$CI_COMMIT_BRANCH == "feat/k8s-migration" || $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH'
+      changes:
+        - charts/**/*
+        - scripts/**/*
+        - .gitlab-ci.yml
+      when: manual
+
+# Patrol E2E tests — DinD emulator (shared with scheduled:e2e-mobile)
 e2e:integration:
   extends: .e2e_integration_base
   stage: e2e

@@ -1,0 +1,30 @@
+{{- $ns := .Values.namespace -}}
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ include "genieai-common.fullname" . }}-dep-check
+  namespace: {{ $ns }}
+  labels:
+    {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" .Values "component" "rbac") | nindent 4 }}
+  annotations:
+    "helm.sh/hook": pre-install,pre-upgrade
+    "helm.sh/hook-weight": "-30"
+    "helm.sh/hook-delete-policy": before-hook-creation
+rules:
+  # Exactly what the hook Jobs + test pods consume — re-add verbs/resources
+  # together with the consumer that needs them, never speculatively.
+  # Secrets: the test-data-deps pod's materialization check (get only).
+  - apiGroups: [""]
+    resources: ["secrets"]
+    verbs: ["get"]
+  # Events for the clusterprofile-detect hook's Event create
+  - apiGroups: [""]
+    resources: ["events"]
+    verbs: ["create"]
+  # NO k8s.keycloak.org grants on purpose: nothing here calls the
+  # Keycloak API — the dep-check Job runs with
+  # automountServiceAccountToken: false and makes no API calls, the
+  # detect hook only lists namespaces and creates events, and the test
+  # pods read namespaces and Secrets. Earlier revisions listed the
+  # operator's CRs "for completeness"; a grant with no consumer is pure
+  # review surface — this file carries exactly what is consumed.

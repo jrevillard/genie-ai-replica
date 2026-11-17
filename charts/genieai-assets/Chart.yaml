@@ -1,0 +1,25 @@
+apiVersion: v2
+name: genieai-assets
+description: |
+  Runtime assets of the GENIE.AI stack (Keycloak theme tarball, realm
+  manifest, Grafana dashboards, alert rules) carried as chart FILES and
+  rendered by the parent umbrella's templates.
+
+  Why this chart exists: helm-controller persists a release snapshot
+  (chart.files + chart.templates + rendered manifest + hooks) into a
+  single Kubernetes Secret, capped at 1 MiB by the API server — and it
+  does NOT persist dependency content (proven on release v11:
+  chart.dependencies absent). Carrying the payload files HERE keeps
+  them out of the snapshot while the umbrella still reads them through
+  .Subcharts.genieai-assets.Files and renders them into it exactly as
+  before.
+
+  This is cargo, deliberately: no templates, no values. The bytes in
+  files/ are copies of sources owned elsewhere — the drift guards in
+  CI (sync-chart-dashboards.sh --check, the theme checksum annotation)
+  and the sync targets (make chart-dashboards, make keycloak-theme)
+  point at THIS chart's files/ now.
+type: application
+version: 0.1.0
+appVersion: "0.2.127"
+keywords: [genie-ai, assets, cargo]

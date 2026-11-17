@@ -1,0 +1,195 @@
+{{- /* Every sub-block of the identity tier is bound BEFORE it is read:
+a cleared sub-block (db, http, hostname, proxy, update, bootstrapAdmin)
+must degrade to the chart's documented default instead of crashing the
+template engine on a nil parent — the crash names a template, never the
+values key the operator cleared. */ -}}
+{{- $assets := index .Subcharts "genieai-assets" -}}
+{{- $data := .Values.data | default dict -}}
+{{- /* The tooling registry the air-gapped contract routes every public
+image through — the theme-unpack init pulls busybox like every other
+hook and test pod. */ -}}
+{{- $global := .Values.global | default dict -}}
+{{- $kc := $data.keycloak | default dict -}}
+{{- $kcBootstrap := $kc.bootstrapAdmin | default dict -}}
+{{- $kcDb := $kc.db | default dict -}}
+{{- $kcHttp := $kc.http | default dict -}}
+{{- $kcHostname := $kc.hostname | default dict -}}
+{{- $kcProxy := $kc.proxy | default dict -}}
+{{- $kcUpdate := $kc.update | default dict -}}
+{{- $ingress := .Values.ingress | default dict -}}
+{{- if $kc.enabled -}}
+{{- $instances := include "genieai-umbrella.resolveInstances" (dict "Values" .Values "tier" "keycloak") | int -}}
+{{- $ns := .Values.namespace -}}
+{{- $dbHost := printf "%s-rw.%s.svc.cluster.local" ($kc.cnpgServiceName | default "keycloak-db") $ns -}}
+apiVersion: k8s.keycloak.org/v2beta1
+kind: Keycloak
+metadata:
+  name: keycloak
+  namespace: {{ $ns }}
+  labels:
+    {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" .Values "component" "identity") | nindent 4 }}
+    genieai.io/data-tier: identity
+spec:
+  # The convergence Job authenticates with these credentials, so they
+  # must exist before it runs — otherwise its first token call returns
+  # 401 and the release fails. The Secret is operator-provided; the
+  # chart references it by name and never reads its contents.
+  #
+  # Upstream caveat: if a master realm already exists on the cluster,
+  # the operator ignores this stanza entirely. The symptom is a 401 on
+  # the Job's first authenticated call — not a clearer message.
+  bootstrapAdmin:
+    user:
+      secret: {{ $kcBootstrap.userSecret | default "keycloak-admin-credentials" }}
+  instances: {{ $instances }}
+  # The pull credentials for the Keycloak StatefulSet. The OPERATOR owns
+  # that StatefulSet, so the chart cannot write its pod spec directly —
+  # and the podTemplate is NOT the way either: the operator overwrites
+  # the template's imagePullSecrets with this field's value
+  # (`withImagePullSecrets(spec.getImagePullSecrets())` in
+  # KeycloakDeploymentDependentResource) and warns on the CR status that
+  # "The imagePullSecrets of the keycloak container cannot be modified
+  # using podTemplate". This CR field is the one the operator reads.
+  # Without it a mirrored registry cannot pull the Keycloak image and
+  # the whole identity tier stays in ImagePullBackOff, with a pull
+  # error naming no values key.
+  {{- with $global.imagePullSecrets }}
+  imagePullSecrets:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+  # CNPG hosts the Postgres database; the secret holds both `username` and
+  # `password` keys (CNPG bootstrap requirement). The chart does NOT
+  # materialize the secret — operators wire it from their secret backend.
+  db:
+    vendor: {{ $kcDb.vendor | default "postgres" }}
+    host: {{ $dbHost }}
+    port: {{ $kcDb.port | default 5432 }}
+    database: {{ $kcDb.database | default "keycloak" }}
+    usernameSecret:
+      name: {{ $kcDb.secretName | default "keycloak-db-credentials" }}
+      key: username
+    passwordSecret:
+      name: {{ $kcDb.secretName | default "keycloak-db-credentials" }}
+      key: password
+  # TLS terminates at the edge (Envoy Gateway); the pod serves plain HTTP
+  # internally. Letting the operator create an Ingress would shadow that.
+  http:
+    # kindIs guard: sprig `default true` would swallow an explicit `false`.
+    httpEnabled: {{ ternary $kcHttp.httpEnabled true (kindIs "bool" $kcHttp.httpEnabled) }}
+  hostname:
+    # Fixed frontend URL (issuer base): tokens carry this issuer on every
+    # request path, so the browser OIDC flow and the backend validation
+    # agree. Full URL including the /auth context path (upstream hostname
+    # v2 accepts scheme://host[:port]/path). When ingress.host is unset,
+    # falls back to strict:false and derives per-request — fine for
+    # throwaway clusters, wrong whenever two clients reach Keycloak
+    # through different hostnames.
+    strict: {{ $kcHostname.strict | default false }}
+    {{- if $ingress.host }}
+    # The issuer base, same string the backend's KEYCLOAK_EXPECTED_ISSUER
+    # and the realm's redirect URLs use: scheme + host + the context path
+    # (data.keycloak.httpRelativePath).
+    hostname: {{ include "genieai-umbrella.keycloakPublicIssuer" . }}
+    {{- end }}
+    # Backchannel URLs (JWKS, token, userinfo inside the discovery
+    # document) keep deriving from the request host, so in-cluster
+    # consumers get keycloak-service URLs they can resolve while the
+    # issuer stays pinned to the public hostname.
+    backchannelDynamic: true
+  ingress:
+    enabled: false
+  {{- /*
+    Theme delivery: the CR has no volume/volumeMount surface (upstream
+    PR #53826 pending), so the pod template escape hatch is the only
+    injection point. The stock operator image stays untouched — the
+    theme tree travels in the keycloak-theme ConfigMap (single tgz key)
+    and an initContainer unpacks it into an emptyDir mounted at
+    /opt/keycloak/themes/<theme>, leaving the image's stock themes in
+    place. The checksum annotation makes a tarball change roll the pods:
+    Keycloak caches themes at startup, a mounted-file change alone would
+    never be picked up.
+  */}}
+  unsupported:
+    podTemplate:
+      metadata:
+        annotations:
+          genieai.io/keycloak-theme-checksum: {{ $assets.Files.Get "files/keycloak-themes.tgz" | sha256sum | trunc 16 }}
+      spec:
+        volumes:
+          - name: keycloak-themes-src
+            configMap:
+              name: keycloak-theme
+          - name: keycloak-theme
+            emptyDir:
+              sizeLimit: 8Mi
+        initContainers:
+          - name: unpack-keycloak-theme
+            # The registry prefix applies to the DEFAULT only: an
+            # explicit themeUnpackImage is a full image reference and
+            # wins verbatim, so a mirror operator can also pin a fully
+            # qualified unpack image.
+            image: {{ .Values.data.keycloak.themeUnpackImage | default (printf "%s/busybox:1.36" ($global.toolingImageRegistry | default "docker.io")) }}
+            command:
+              - sh
+              - -c
+              # tarball root is themes/<theme>/: strip 2 so the tree lands
+              # directly at the emptyDir root (= /opt/keycloak/themes/<theme>)
+              - tar -xzf /src/keycloak-themes.tgz -C /theme --strip-components=2
+            volumeMounts:
+              - name: keycloak-themes-src
+                mountPath: /src
+                readOnly: true
+              - name: keycloak-theme
+                mountPath: /theme
+        # Merged into the operator-generated keycloak container by name —
+        # the only way to attach a mount to it through the pod template.
+        containers:
+          - name: keycloak
+            volumeMounts:
+              - name: keycloak-theme
+                mountPath: {{ printf "/opt/keycloak/themes/%s" ($kc.theme | default "genie") }}
+                readOnly: true
+  # Trust X-Forwarded-* from Envoy. KC_PROXY=edge was removed in KC 24+;
+  # spec.proxy.headers is the only path. Misconfiguration manifests as
+  # `Invalid parameter: redirect_uri` loops on login.
+  proxy:
+    headers: {{ $kcProxy.headers | default "xforwarded" }}
+  # KC 26 prod start mode (--optimized). The stock quay.io/keycloak image
+  # has no pre-built server: `start --optimized` on first boot refuses
+  # ("Please don't use this flag for the first startup or use kc.sh
+  # build"). Default to false; custom pre-built images override to true.
+  startOptimized: {{ $kc.startOptimized | default false }}
+  # Image-bump = recreate, not roll: Keycloak needs exclusive access for
+  # its schema migrations, so the operator deletes the pod and starts a
+  # new one rather than overlapping two.
+  #
+  # Read that against the replica count. At the chart default
+  # (instances: 1) a bump is a short outage of the single replica. On
+  # the prod profile (instances: 2) `RecreateOnImageChange` takes BOTH
+  # replicas down together — the operator has no drain hook, so there
+  # is no rolling option here. Draining first (scale the CR to 0, bump
+  # the operator image, scale back) is an operator step, not something
+  # this chart performs; `update.strategy: RollingUpdate` is the
+  # alternative if the site can tolerate overlapping migrations.
+  update:
+    strategy: {{ $kcUpdate.strategy | default "RecreateOnImageChange" }}
+  # KC 26 default probe timing is fine (10min startup grace). Memory request
+  # is the real knob: lower it and the pod OOMs before becoming ready.
+  resources:
+    requests:
+      cpu: 500m
+      memory: 1700Mi
+    limits:
+      cpu: 2
+      memory: 2Gi
+  # templates/services/backend.yaml and documentRepository.yaml both dial
+  # `.../keycloak-service:8080/auth`. Nothing else configures that prefix
+  # on Kubernetes — in the Swarm path NGINX routes /auth/* — so without
+  # this option Keycloak serves at / and every authenticated request 404s.
+  additionalOptions:
+    - name: http-relative-path
+      # Single source: the URL helpers and the HTTPRoute /auth rules read
+      # the same value (see genieai-umbrella.keycloakContextPath), so the
+      # served context path and every caller cannot drift apart.
+      value: {{ include "genieai-umbrella.keycloakContextPath" . }}
+{{- end -}}

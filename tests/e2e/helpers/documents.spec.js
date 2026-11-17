@@ -362,6 +362,27 @@ test.describe('the ingest trigger (the repository ingest route)', () => {
     expect(await triggerIngestViaApi(t.request, 'tok', 'f1')).toEqual({ results: [] });
   });
 
+  test("the repository's OWN 409 body ('An ingest for this file is already running') is the accepted state", async () => {
+    // The repository answers the conflict in its own words, not the
+    // producer's code: a repository that forwards the producer's body
+    // answers with that. Both are the same state — a live task owns the
+    // file, which is what the caller wants.
+    const t = scriptedTransport([
+      {
+        status: 409,
+        data: { success: false, error: 'Conflict', message: 'An ingest for this file is already running' },
+        headers: {}
+      }
+    ]);
+    // The call RESOLVES (it does not throw): the conflict is the accepted
+    // state, and the payload rides back with the repository's own body.
+    await expect(triggerIngestViaApi(t.request, 'tok', 'f1')).resolves.toMatchObject({
+      error: 'Conflict',
+      message: 'An ingest for this file is already running'
+    });
+    expect(t.calls).toEqual([['POST', '/api/files/f1/ingest', { headers: { Authorization: 'Bearer tok' } }]]);
+  });
+
   test("dataprep's 409 idempotency guard (ingest_already_running) is the accepted state", async () => {
     const t = scriptedTransport([{ status: 409, data: { code: 'ingest_already_running' }, headers: {} }]);
     expect(await triggerIngestViaApi(t.request, 'tok', 'f1')).toEqual({ code: 'ingest_already_running' });

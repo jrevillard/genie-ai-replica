@@ -19,22 +19,39 @@ const { skipUnlessVenue, frenchStreamingReady, frenchStreamingMissingReason } = 
 
 // The words the answer must carry. They are words ENGLISH does not use —
 // 'est' (English 'is'), 'sont', 'elle', 'nous', 'vous', 'dans', 'avec',
-// 'cette', 'pour', 'une', 'un', 'des', 'du', 'les', 'qui', 'tout', 'aux',
-// 'leur', 'ses', 'aussi', 'ainsi', 'donc', 'ne', 'pas' — and never the
-// words English shares with French ('la', 'le', 'de', 'que', 'ce'): those
-// would carry an English answer.
+// 'cette', 'pour', 'une', 'un', 'des', 'du', 'les', 'le', 'la', 'ce',
+// 'que', 'aux', 'leur', 'ses', 'aussi', 'ainsi', 'donc', 'ne', 'pas' —
+// and never the words English DOES use ('de' as in 'de facto', 'on',
+// 'plus', 'car'): those would carry an English answer.
 //
-// Two are deliberately absent: 'plus' (an ordinary English word — an
-// English answer would carry it) and any ACCENTED word ('être'): the word
-// boundary this match uses is ASCII, so an accented word would never
-// match at all.
+// The list is deliberately WIDE. An earlier, narrower list held only
+// the words Spanish and Italian do not share with French, and a correct
+// French answer using none of them ("GENIE.AI est l'outil d'IA de
+// l'administration.") REDDED on it — a false red on a healthy venue is
+// the worse failure, so the common French function words are in.
+//
+// Two are deliberately absent for a different reason: 'plus' (an ordinary
+// English word — an English answer would carry it) and any ACCENTED
+// word ('être', 'très'): the word boundary this match uses is ASCII, so
+// an accented word would never match at all.
+//
+// What this list is NOT: a language detector. It cannot tell French from
+// Spanish or Italian — they share 'la', 'un', 'des' and 'que'. What makes
+// the answer French is the PREMISE (the venue resolves the en→fr
+// translator the chat path itself uses); this list is the check that the
+// translation REACHED the text.
 const FRENCH_ONLY_WORDS = [
   'est',
   'sont',
   'elle',
   'elles',
+  'ils',
   'nous',
   'vous',
+  'votre',
+  'vos',
+  'notre',
+  'nos',
   'dans',
   'avec',
   'cette',
@@ -44,9 +61,10 @@ const FRENCH_ONLY_WORDS = [
   'des',
   'du',
   'les',
-  'qui',
-  'tout',
-  'toute',
+  'le',
+  'la',
+  'ce',
+  'que',
   'aux',
   'leur',
   'ses',
@@ -54,7 +72,27 @@ const FRENCH_ONLY_WORDS = [
   'ainsi',
   'donc',
   'ne',
-  'pas'
+  'pas',
+  'tout',
+  'toute',
+  'tous',
+  'toutes',
+  'quel',
+  'quelle',
+  'bien',
+  'mais',
+  'comme',
+  'sans',
+  'encore',
+  'toujours',
+  'jamais',
+  'beaucoup',
+  'sur',
+  'ici',
+  'puis',
+  'dont',
+  'chez',
+  'sous'
 ];
 
 // The same words, matched at once — every occurrence, case-insensitively.
@@ -218,20 +256,21 @@ test.describe('Chatbot message sending and SSE streaming — the French answer',
     // carry translationFailed=false and pass the two checks below without
     // having translated anything.
     //
-    // The words are ones ENGLISH does not use — 'est', 'sont', 'elle',
-    // 'nous', 'dans', 'avec', 'cette', 'pour' … — and not the words
-    // English shares with French ('la', 'le', 'un', 'de', 'que', 'ce'):
-    // those would carry an English answer.
+    // The words are ones ENGLISH does not use ('est', 'sont', 'elle',
+    // 'nous', 'dans', 'avec', 'cette', 'pour' …) — never the words
+    // English uses ('de', 'on', 'plus', 'car'): those would carry an
+    // English answer.
     //
     // Two OCCURRENCES are required, not two distinct words: a terse but
     // correct French answer ("GENIE.AI est un outil.") carries one word
     // twice, and a distinct-word count would red it.
     //
-    // This is not a language detector: the list also holds words Spanish
-    // and Italian use ('des', 'ses', 'qui'), so a Spanish answer could
-    // match it. What makes the answer French is the PREMISE — the venue
-    // resolves the en→fr translator the chat path itself uses — and this
-    // assertion is the check that the translation reached the answer.
+    // This is not a language detector — French shares 'la', 'un', 'des'
+    // and 'que' with Spanish and Italian, so another Latin-script
+    // language could match the list. What makes the answer French is the
+    // PREMISE (the venue resolves the en→fr translator the chat path
+    // itself uses); this assertion is the check that the translation
+    // REACHED the answer text.
     const frenchHits = (botText.match(FRENCH_WORD_PATTERN) || []).length;
     expect(frenchHits, `the answer is in French (French-only words found: ${frenchHits})`).toBeGreaterThanOrEqual(2);
 

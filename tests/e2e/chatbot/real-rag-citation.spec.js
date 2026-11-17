@@ -69,7 +69,9 @@ test.describe('Chatbot — a real answer cites its real source', () => {
   });
 
   test('the answer carries the fixture fact and the sources cite the fixture file', async ({ page, browser }) => {
-    test.setTimeout(INGEST_BUDGET_MS + ANSWER_BUDGET_MS + 180000);
+    // Two mints (the upload's session and the wait's own), the ingest
+    // wait, the answer's wait and the page login all compose here.
+    test.setTimeout(SESSION_MINT_TIMEOUT_MS + INGEST_BUDGET_MS + ANSWER_BUDGET_MS + 180000);
 
     // The document surface is ADMIN_ONLY on the document-repository: the
     // upload and the ingest run on the admin's session token, minted

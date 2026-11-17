@@ -63,7 +63,7 @@ The handles these specs read (`stat-*`, `logs-*`, `admin-documents-*`,
 | Spec | Classes used | Residual |
 |---|---|---|
 | `search.spec.js` | handle (via `helpers/documents.js`) | — |
-| `upload.spec.js` | handle | — |
+| `upload.spec.js` | handle (+ role locators on the batch-ingest action and its confirm dialog) | — |
 
 `helpers/documents.js` was the last class-locator helper (`table.data-table`,
 `.dialog-container`, `.drop-zone input[type=file]`, `.file-list .file-item`,

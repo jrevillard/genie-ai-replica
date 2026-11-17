@@ -233,9 +233,9 @@ async function localeActive(locale) {
  * @param {string} locale - the locale the session boots with
  * @returns {Promise<{token: string, adopted: string, at: number}>} the session
  */
-async function venueSession(locale) {
+async function venueSession(locale, { fresh = false } = {}) {
   const hit = sessionCache.get(locale);
-  if (hit !== undefined && Date.now() - hit.at < SESSION_MAX_AGE_MS) return hit;
+  if (!fresh && hit !== undefined && Date.now() - hit.at < SESSION_MAX_AGE_MS) return hit;
   const seen = await auth.openVenueSession({ user: TEST_ADMIN_USER, locale });
   const session = {
     token: seen.token,
@@ -273,10 +273,18 @@ async function localeAdopted(locale) {
  * probe minutes later, and the probe would read the 401 as an unreadable
  * venue instead of an absent surface.
  *
+ * `fresh` opens a NEW session whatever the cache holds — for the leg that
+ * cannot afford an aged token: a bounded wait of its own (the canary's
+ * ingest wait) sits on top of the session's age, and the two together can
+ * outrun the token's 300 s life.
+ *
+ * @param {object} [options]
+ * @param {boolean} [options.fresh=false] - open a new session instead of
+ *        reusing the cached one
  * @returns {Promise<string>} the realm-scoped bearer token
  */
-async function adminSessionToken() {
-  return (await venueSession('en')).token;
+async function adminSessionToken({ fresh = false } = {}) {
+  return (await venueSession('en', { fresh })).token;
 }
 
 /**
@@ -334,7 +342,15 @@ async function translatesTo(locale) {
     // answer that is the source text unchanged is a chain that echoed the
     // input. The verdict is about the TRANSLATION, so the body is read.
     const translated = Array.isArray(res.data && res.data.translated_texts) ? res.data.translated_texts[0] : undefined;
-    if (typeof translated !== 'string' || translated.trim() === '' || translated.trim() === SOURCE) {
+    // The comparison is on the NORMALISED forms (case and trailing
+    // punctuation): 'hello', 'HELLO' and 'Hello!' are the source echoed
+    // back, and the ruling says an echo is a failure.
+    const normalise = (text) =>
+      String(text)
+        .trim()
+        .toLowerCase()
+        .replace(/[.!?,;:]+$/, '');
+    if (typeof translated !== 'string' || translated.trim() === '' || normalise(translated) === normalise(SOURCE)) {
       // An answer without a translation is a BUG in the translation chain,
       // not a missing surface and not a transient (operator ruling on #1984):
       // the group REDS here, loudly, and NOTHING is cached — not a pass, not
@@ -460,7 +476,12 @@ async function ingestChainReady() {
     fileId = record.file_id;
     await triggerIngestViaApi(auth.request, token, fileId);
     try {
-      const ingested = await waitForFileIngestedViaApi(auth.request, token, fileId, {
+      // The wait rides its OWN session: the canary's budget (180 s) sits on
+      // top of the session's age (up to 120 s), and the two together can
+      // outrun the token's 300 s life — the poll would die on a 401 and
+      // the verdict would read like an absent chain.
+      const waitToken = await adminSessionToken({ fresh: true });
+      const ingested = await waitForFileIngestedViaApi(auth.request, waitToken, fileId, {
         timeoutMs: INGEST_PROBE_BUDGET_MS
       });
       // The status the canary ACTUALLY landed on, not a hardcoded 'ingested':

@@ -108,7 +108,12 @@ test.describe('Document Upload — the ingest chain', () => {
   });
 
   test('ingest an uploaded file and reach the Ingested status', async ({ page }) => {
-    const fileName = 'test-document.txt';
+    // The ingested file is MARKDOWN, and the extension is part of the
+    // subject: the dataprep routes the docling-supported extensions to
+    // docling, and docling does not accept plain text — a .txt file fails
+    // at chunking with 'File format not allowed' and its status never
+    // reaches 'Ingested'. The .md fixture is ingested for real.
+    const fileName = 'test-document.md';
     await uploadFile(page, path.join(FIXTURES_DIR, fileName));
 
     // The upload dialog does not hand back the server's file id, and the

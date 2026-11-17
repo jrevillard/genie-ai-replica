@@ -55,18 +55,19 @@ const { uploadFileViaApi, triggerIngestViaApi, waitForFileIngestedViaApi, sweepD
 
 const RUNTIME_CONFIG_PATH = '/runtime/config.js';
 
-// The canary's identity, unique per PROCESS: the repository resolves an
-// upload by its content, so two canaries with the same bytes and the same
-// name are the SAME file — the second probe would wait on the first
-// probe's file, which the first probe's cleanup already retracted. The id
-// is an identity, never an asserted value (the same rule as the suite's
-// unique seed names).
+// The canary's identity, unique per PROCESS. The repository mints a FRESH
+// file id per upload, so two canaries are two files — but the FILE LIST
+// carries both, and a caller that picks "the row with this name" would
+// then read the older one (the list is oldest-first), whose cleanup had
+// already retracted it. A unique name keeps every canary's row
+// unambiguous. The id is an identity, never an asserted value (the same
+// rule as the suite's unique seed names).
 const CANARY_RUN_ID = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
 
 // The ingest canary's budget: the chain is ONE tiny chunk, so the budget
 // covers queue + LLM labeling + embedding on a loaded shared venue, not a
 // real document's ingest. Beyond it the chain is absent or wedged.
-const INGEST_PROBE_BUDGET_MS = 180000;
+const INGEST_PROBE_BUDGET_MS = 150000;
 
 // The evaluated `window.APP_CONFIG`, cached per process. `undefined` = not
 // read yet; `null` = the venue carries no runtime config at all (the 404
@@ -77,6 +78,9 @@ const realmCache = new Map();
 const identityProviderCache = new Map();
 const translationCache = new Map();
 let ingestChainCache = null;
+// The admin session token the probes mint, cached per process (the mint is
+// the slowest leg of every probe that talks to the repository).
+let adminTokenCache = null;
 
 /**
  * Read and evaluate the venue's runtime config (`/runtime/config.js`) — the
@@ -211,7 +215,7 @@ async function missingLocaleReason(locale) {
  */
 async function translatesTo(locale) {
   if (translationCache.has(locale)) return translationCache.get(locale);
-  const token = await auth.getSessionTokenViaUI({ user: TEST_ADMIN_USER });
+  const token = await adminSessionToken();
   // The smallest request the endpoint accepts: one fixed text, a fixed
   // source and the requested target. The TEXT is a fixture of this probe —
   // the verdict is about the endpoint's answer, never about the text.
@@ -253,29 +257,47 @@ async function missingTranslationReason(locale) {
 }
 
 /**
+ * The admin session token the venue probes use, minted through the browser
+ * login (the realm refuses direct grants, so a master-admin token is the
+ * wrong issuer here) and cached per PROCESS: the mint is the probes'
+ * slowest leg, and one process that runs two probes pays it once.
+ * @returns {Promise<string>} the realm-scoped bearer token
+ */
+async function adminSessionToken() {
+  if (adminTokenCache === null) {
+    adminTokenCache = await auth.getSessionTokenViaUI({ user: TEST_ADMIN_USER });
+  }
+  return adminTokenCache;
+}
+
+/**
  * Can this venue carry a document through the ingest chain — upload,
  * ClamAV scan, dataprep, and the status callback that lands 'Ingested'?
  *
  * The probe is BEHAVIORAL, because no HTTP surface declares the chain's
  * presence: it uploads its own tiny canary through the repository's upload
  * route, triggers the ingest, holds until the shared status vocabulary
- * reads 'ingested' (bounded), then retracts/deletes the canary. The verdict
- * (and the last status it observed on a miss) is cached per process — the
- * canary costs one real ingest, once per run, not once per spec.
+ * reads an ingested status (bounded), then retracts/deletes the canary.
+ *
+ * The verdict (and the last status it observed on a miss) is cached per
+ * PROCESS, and Playwright gives each spec FILE its own process — so a run
+ * that drives two files pays TWO canary ingests, not one. The session token
+ * is cached with it: the mint is the probe's slowest leg, and a process
+ * that runs two probes pays it once.
  *
  * A venue that CANNOT read (the upload or the ingest call itself fails at
  * the transport or with a non-accepted status) is an UNREADABLE venue: the
  * probe throws — an unreadable venue is not an absent chain. A venue that
- * READS but never lands 'ingested' (the status expires the budget in
- * pending/ingesting, or lands 'ingestion error') is a venue whose chain is
- * absent or unhealthy: the verdict is false, with that status in the
+ * READS but never lands an ingested status (the status expires the budget
+ * in pending/ingesting, or lands 'ingestion error') is a venue whose chain
+ * is absent or unhealthy: the verdict is false, with that status in the
  * reason.
  *
- * @returns {Promise<boolean>} true when the canary reached 'ingested'
+ * @returns {Promise<boolean>} true when the canary reached an ingested status
  */
 async function ingestChainReady() {
   if (ingestChainCache !== null) return ingestChainCache.ready;
-  const token = await auth.getSessionTokenViaUI({ user: TEST_ADMIN_USER });
+  const token = await adminSessionToken();
   const headers = { Authorization: `Bearer ${token}` };
   let fileId = null;
   let verdict = null;
@@ -286,22 +308,40 @@ async function ingestChainReady() {
   // first canary's cleanup already retracted, and the second would read
   // 'retracted' instead of its own ingest. A unique name AND unique bytes
   // give every probe its own file, and its own cleanup.
-  const canaryName = `ingest-probe-canary-${CANARY_RUN_ID}.txt`;
+  // The canary's extension is MARKDOWN, and it matters: the dataprep routes
+  // the docling-supported extensions to docling, and docling does not accept
+  // plain text — a .txt canary fails with 'File format not allowed' at
+  // chunking, so the probe would read a broken ingest as an absent chain and
+  // skip every spec that needs one. The .md canary is ingested for real.
+  const canaryName = `ingest-probe-canary-${CANARY_RUN_ID}.md`;
   // The canary's path is a plain template, not a path.join: the
   // config-validator's variable-anchor policy (#1393) accepts a join only
   // when it is anchored on a same-file __dirname initializer, and the
   // runner's temp directory is neither.
   const canaryPath = `${os.tmpdir()}/${canaryName}`;
   try {
-    fs.writeFileSync(canaryPath, `Ingest probe canary ${CANARY_RUN_ID} — one chunk of plain text.\n`);
+    fs.writeFileSync(
+      canaryPath,
+      `# Ingest probe canary ${CANARY_RUN_ID}\n\nOne chunk of text for the venue's ingest probe.\n`
+    );
     const record = await uploadFileViaApi(auth.request, token, canaryPath);
     fileId = record.file_id;
     await triggerIngestViaApi(auth.request, token, fileId);
     try {
-      await waitForFileIngestedViaApi(auth.request, token, fileId, {
-        timeoutMs: INGEST_PROBE_BUDGET_MS
+      const ingested = await waitForFileIngestedViaApi(auth.request, token, fileId, {
+        timeoutMs: INGEST_PROBE_BUDGET_MS,
+        // The probe asks "does this venue's chain work?" — a degraded but
+        // INDEXED ingest ('ingested with warnings') is a working chain, and
+        // refusing it would turn a healthy-enough venue into a skip.
+        accept: ['ingested', 'ingested with warnings']
       });
-      verdict = { ready: true, lastStatus: 'ingested' };
+      // The status the canary ACTUALLY landed on, not a hardcoded 'ingested':
+      // the probe accepts two statuses, and the reason it reports must name
+      // the one the venue answered with.
+      verdict = {
+        ready: true,
+        lastStatus: (ingested.dataprep && ingested.dataprep.status) || 'ingested'
+      };
     } catch (e) {
       // The wait names the miss (the expired budget's last status, or the
       // terminal 'ingestion error'); the verdict is false with that detail.

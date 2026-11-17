@@ -1,1 +1,0 @@
-Ingest probe canary for the venue profile. One chunk of plain text: the venue-profile canary uploads this file, triggers the ingest and holds until the dataprep status reads ingested.

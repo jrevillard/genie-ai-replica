@@ -279,7 +279,7 @@ test.describe('the sweep per-file delete (retract-then-delete, #1864)', () => {
 });
 
 test.describe('the API upload (multipart, the repository upload route)', () => {
-  const FIXTURE = path.join(__dirname, '..', 'fixtures', 'ingest-probe-canary.txt');
+  const FIXTURE = path.join(__dirname, '..', 'fixtures', 'ingest-probe-canary.md');
 
   // The same scripted transport the sweep spec uses: the recorded calls
   // ARE the assertion subject — the multipart request shape (boundary
@@ -297,7 +297,7 @@ test.describe('the API upload (multipart, the repository upload route)', () => {
   }
 
   test('the upload rides a multipart body carrying the file part and the bearer', async () => {
-    const record = { file_id: 'f1', file_name: 'ingest-probe-canary.txt' };
+    const record = { file_id: 'f1', file_name: 'ingest-probe-canary.md' };
     const t = scriptedTransport([{ status: 201, data: { success: true, data: record }, headers: {} }]);
     expect(await uploadFileViaApi(t.request, 'tok', FIXTURE)).toEqual(record);
 
@@ -315,7 +315,7 @@ test.describe('the API upload (multipart, the repository upload route)', () => {
     // would be refused by multer before any handler ran.
     const boundary = /boundary=(.+)$/.exec(options.contentType)[1];
     expect(options.body).toContain(`--${boundary}\r\n`);
-    expect(options.body).toContain('Content-Disposition: form-data; name="file"; filename="ingest-probe-canary.txt"');
+    expect(options.body).toContain('Content-Disposition: form-data; name="file"; filename="ingest-probe-canary.md"');
     expect(options.body).toContain('Content-Type: text/markdown');
     const content = fs.readFileSync(FIXTURE, 'utf8');
     expect(options.body).toContain(content);
@@ -329,7 +329,7 @@ test.describe('the API upload (multipart, the repository upload route)', () => {
     // The same failure names the file it was about — one message, both
     // facts: a fresh transport, because the scripted one is spent.
     const t2 = scriptedTransport([{ status: 400, data: { success: false, error: 'Invalid file type' }, headers: {} }]);
-    await expect(uploadFileViaApi(t2.request, 'tok', FIXTURE)).rejects.toThrow(/ingest-probe-canary\.txt/);
+    await expect(uploadFileViaApi(t2.request, 'tok', FIXTURE)).rejects.toThrow(/ingest-probe-canary\.md/);
   });
 
   test('a 201 without a file record is a named failure, not an undefined id', async () => {

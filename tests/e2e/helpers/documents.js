@@ -441,12 +441,17 @@ async function triggerIngestViaApi(request, token, fileId) {
     headers: { Authorization: `Bearer ${token}` }
   });
   // 200 (accepted) and 207 (multi-status envelope) both mean the ingest was
-  // taken on; 409 ingest_already_running is dataprep's idempotency guard —
-  // a live task already owns the file, which is the state the caller wants.
-  const accepted =
-    res.status === 200 ||
-    res.status === 207 ||
-    (res.status === 409 && res.data && res.data.code === 'ingest_already_running');
+  // taken on. A 409 is dataprep's idempotency guard — a live task already owns
+  // the file, which is the state the caller wants — and the repository
+  // answers it with ITS OWN body: {success:false, error:'Conflict',
+  // message:'An ingest for this file is already running…'}. The producer's
+  // code ('ingest_already_running') is accepted too, because a repository
+  // that forwards the producer's body answers with it.
+  const alreadyRunning =
+    res.status === 409 &&
+    res.data &&
+    (res.data.code === 'ingest_already_running' || /already running/i.test(String(res.data.message || '')));
+  const accepted = res.status === 200 || res.status === 207 || alreadyRunning;
   if (!accepted) {
     throw new Error(
       `the ingest call for file ${fileId} answered HTTP ${res.status} ` +
@@ -457,32 +462,45 @@ async function triggerIngestViaApi(request, token, fileId) {
 }
 
 /**
- * Hold until one file's dataprep status reads 'ingested' over the API —
- * the shared vocabulary's normalised form (the stored value is capitalised;
- * the comparison is normalizeStatus's, like every other consumer's).
+ * Hold until one file's dataprep status reads an INGESTED status over the
+ * API — the shared vocabulary's normalised form (the stored value is
+ * capitalised; the comparison is normalizeStatus's, like every other
+ * consumer's).
+ *
+ * Which statuses count as ingested is the CALLER's: 'ingested with
+ * warnings' is a REAL, indexed outcome (partial labels, a truncated
+ * document context), so a probe that asks "does this venue's chain work?"
+ * accepts it, while a spec that asserts the exact 'Ingested' status does
+ * not. The default is the exact one.
  *
  * The TERMINAL statuses fail AT ONCE (named, with the status): 'ingestion
- * error' is a failed ingest, and 'retracted' is a file withdrawn from the
- * corpus — neither will ever read 'ingested', so polling them to the
- * timeout would only delay the same red. The ingest budget expires on
- * 'pending'/'ingesting' with the last observed status in the message —
- * that is the shape a venue without (or with a wedged) dataprep chain
- * produces, and the message says which.
+ * error' is a failed ingest, 'retracted' is a file withdrawn from the
+ * corpus and 'killed' is a killed ingest — none of them will ever read an
+ * ingested status, so polling them to the timeout would only delay the
+ * same red. The ingest budget expires on 'pending'/'ingesting' with the
+ * last observed status in the message — that is the shape a venue without
+ * (or with a wedged) dataprep chain produces, and the message says which.
  *
  * @param {Function} request - the auth helper's `request` transport
  * @param {string} token - the caller's bearer token
  * @param {string} fileId - the file whose status is waited for
  * @param {object} [options]
  * @param {number} [options.timeoutMs=240000] - the ingest budget
- * @returns {Promise<object>} the file record that reached 'ingested'
+ * @param {string[]} [options.accept=['ingested']] - the statuses that count
+ *        as an ingested outcome
+ * @returns {Promise<object>} the file record that reached an ingested status
  */
-async function waitForFileIngestedViaApi(request, token, fileId, { timeoutMs = 240000 } = {}) {
+async function waitForFileIngestedViaApi(request, token, fileId, { timeoutMs = 240000, accept = ['ingested'] } = {}) {
   const read = async () => {
     const res = await request('GET', `/api/files/${fileId}`, {
       headers: { Authorization: `Bearer ${token}` }
     });
     if (res.status !== 200) {
-      throw new Error(`the file record of ${fileId} answered HTTP ${res.status} while polling for 'ingested'`);
+      // A 401 here is the session's own expiry (the realm's access token
+      // lives 300 s), not a missing file: the shared auth helper names
+      // that verdict, and this reader reuses it so the failure says which.
+      const detail = res.status === 401 ? describeUnauthorized(res, token) : `HTTP ${res.status}`;
+      throw new Error(`the file record of ${fileId} answered ${detail} while polling for an ingested status`);
     }
     // The record rides the response's `data` envelope (GET /api/files/:fileId
     // → {success, message, data}); the dataprep block is what the wait reads.
@@ -492,12 +510,12 @@ async function waitForFileIngestedViaApi(request, token, fileId, { timeoutMs = 2
   // One read before the wait: a file that already ingested (a re-run against
   // a converged venue) must not spend the budget discovering it.
   const statusOf = (record) => normalizeStatus(record && record.dataprep && record.dataprep.status);
-  const TERMINAL = ['ingestion error', 'retracted'];
+  const TERMINAL = ['ingestion error', 'retracted', 'killed'];
   let file = await read();
   if (TERMINAL.includes(statusOf(file))) {
     throw new Error(`the ingest of file ${fileId} failed — the dataprep status is '${file.dataprep.status}'`);
   }
-  if (statusOf(file) !== 'ingested') {
+  if (!accept.includes(statusOf(file))) {
     await expect
       .poll(
         async () => {
@@ -505,8 +523,8 @@ async function waitForFileIngestedViaApi(request, token, fileId, { timeoutMs = 2
           const status = statusOf(file);
           // A terminal status that arrives MID-WAIT ends the wait at
           // once (the poll propagates the throw): a retracted file never
-          // reads 'ingested', and polling it to the deadline would only
-          // delay the same named failure.
+          // reads an ingested status, and polling it to the deadline would
+          // only delay the same named failure.
           if (TERMINAL.includes(status)) {
             throw new Error(`the ingest of file ${fileId} failed — the dataprep status is '${file.dataprep.status}'`);
           }
@@ -514,7 +532,10 @@ async function waitForFileIngestedViaApi(request, token, fileId, { timeoutMs = 2
         },
         { timeout: timeoutMs, intervals: [1000, 5000] }
       )
-      .toBe('ingested');
+      // The accepted set, matched as a whole: the status is a normalised
+      // vocabulary value, so the alternation is anchored (a bare 'ingested'
+      // alternative would also match 'ingested with warnings').
+      .toMatch(new RegExp(`^(${accept.map((s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|')})$`));
   }
   return file;
 }

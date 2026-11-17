@@ -421,12 +421,12 @@ test.describe('the ingest-chain canary uploads, ingests, and cleans up', () => {
 
   const uploaded = (fileId) => ({
     status: 201,
-    data: { success: true, data: { file_id: fileId, file_name: 'ingest-probe-canary.txt' } },
+    data: { success: true, data: { file_id: fileId, file_name: 'ingest-probe-canary.md' } },
     headers: {}
   });
   const recordRead = (fileId, status) => ({
     status: 200,
-    data: { success: true, data: { file_id: fileId, file_name: 'ingest-probe-canary.txt', dataprep: { status } } },
+    data: { success: true, data: { file_id: fileId, file_name: 'ingest-probe-canary.md', dataprep: { status } } },
     headers: {}
   });
 

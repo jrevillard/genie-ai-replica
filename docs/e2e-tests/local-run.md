@@ -143,11 +143,10 @@ checked-out lockfile pins.
 ### Venue address
 
 A runner that cannot resolve the venue's edge hostname needs the address
-resolved another way: ask for whatever name the venue IS reachable by —
-below, the cluster-internal name that fronts the shared-forge edge — and
-pass the answer as `E2E_VENUE_IP`. The example is the **shared-forge
-venue** — the shared k8s stack of the *Shared-stack discipline* section
-and the run's DEFAULT venue; substitute your venue's own names and port:
+resolved another way: ask for whatever name the venue IS reachable by and
+pass the answer as `E2E_VENUE_IP`. The example below resolves the
+**shared-forge venue** — the run's DEFAULT venue, the shared stack of the
+*Shared-stack discipline* section; substitute your venue's own names and port:
 
 ```bash
 E2E_VENUE_IP=$(getent hosts forge-k3s.openclaw.svc.cluster.local | awk '{print $1}') \
@@ -267,7 +266,7 @@ rather than reading the fixed path, which would be another run's report.
 **A red run is not automatically a finding.** Two venue events produce
 exactly the same report as a defect of the product:
 
-- a venue that goes away mid-run — the venue's own node rebooting during
+- a venue that goes away mid-run — the venue's node rebooting during
   a run moves its address and with it the edge's LoadBalancer IP, and
   every spec that navigates during that window fails with
   `net::ERR_CONNECTION_REFUSED at the edge`. The path groups those

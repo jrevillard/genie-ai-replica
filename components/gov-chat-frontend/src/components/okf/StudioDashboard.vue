@@ -113,6 +113,15 @@
             <DsButton v-else variant="secondary" small :disabled="actionBusy" @click.stop="onLifecycle(r)">
               {{ contextualLabel(r) }}
             </DsButton>
+            <!-- BROWSE (the dashboard's entry into the W9 concept-tree
+              browser): read-only, so unlike the lifecycle verbs it is
+              offered on EVERY card in EVERY state — a Building or Draining
+              repo can be inspected while it works, and the busy guard that
+              locks the mutating buttons does not apply to a read. StudioTab
+              hosts the dialog (one store slice, one visible state). -->
+            <DsButton variant="ghost" small data-test-id="okf-studio-browse" @click.stop="onBrowse(r)">
+              {{ translate('okf.dashboard.card.browse', 'Browse') }}
+            </DsButton>
             <!-- Unpublish (2026-09-25): publish → review. A published repo
               (serving or not) can be reverted to In Review for corrections —
               stops RAG serving immediately, the bundle zip stays. Confirm
@@ -463,7 +472,7 @@ export default {
     OkfPiiReviewSummary
   },
   mixins: [translateMixin],
-  emits: ['new', 'resume'],
+  emits: ['new', 'resume', 'browse'],
   data() {
     return {
       lanes: LANES,
@@ -809,6 +818,11 @@ export default {
     },
     onCardClick(r) {
       this.$emit('resume', r.repo_id);
+    },
+    /** BROWSE: hand the repo to StudioTab, which opens the W9 concept-tree
+     * browser at it (the same read-only browse a chat citation offers). */
+    onBrowse(r) {
+      this.$emit('browse', r.repo_id);
     },
     // BUILDING GATE hover popup: only building cards sprout the progress
     // metrics card; it follows below the card and survives moving the

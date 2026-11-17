@@ -26,14 +26,20 @@
     @action="onAction"
   >
     <!-- CURRENT-STATE SEMANTICS (frozen spec requirement): browse reflects
-         what is indexed NOW, not the version that was cited. -->
-    <p v-if="!unavailable" class="okf-browser__notice" data-testid="okf-browser-current-notice">
+         what is indexed NOW. With a citation, the notice says so; a
+         REPO-LEVEL open (the Studio dashboard's Browse — nothing was cited)
+         drops the citation clause instead of asserting a relationship that
+         cannot apply there. -->
+    <p v-if="!unavailable && startConceptId" class="okf-browser__notice" data-testid="okf-browser-current-notice">
       {{
         translate(
           'chatbot.okfBrowser.currentNotice',
           'Showing what is indexed now — not necessarily the version that was cited.'
         )
       }}
+    </p>
+    <p v-else-if="!unavailable" class="okf-browser__notice" data-testid="okf-browser-current-notice">
+      {{ translate('okf.dashboard.card.browseNotice', 'Showing what is indexed now.') }}
     </p>
 
     <div v-if="unavailable" class="okf-browser__unavailable" data-testid="okf-browser-unavailable">
@@ -220,6 +226,11 @@ export default {
     },
     error() {
       return this.browser.error || null;
+    },
+    /** The seed concept: null on a REPO-LEVEL open (the dashboard's Browse)
+     * — the notice arm above reads it to drop the citation clause. */
+    startConceptId() {
+      return this.browser.startConceptId || null;
     },
     selectedConceptId() {
       return this.browser.selectedConceptId || null;

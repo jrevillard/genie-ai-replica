@@ -2178,6 +2178,8 @@ export default {
       },
       card: {
         actions: '{name} 的操作',
+        browse: '浏览',
+        browseNotice: '显示当前已索引的内容。',
         building: '构建中…',
         buildingAria: '正在构建 — 源文件仍在处理中',
         delete: '删除',

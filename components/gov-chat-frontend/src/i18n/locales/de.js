@@ -2261,6 +2261,8 @@ export default {
       },
       card: {
         actions: 'Aktionen für {name}',
+        browse: 'Durchsuchen',
+        browseNotice: 'Zeigt, was aktuell indexiert ist.',
         building: 'Wird erstellt…',
         buildingAria: 'Wird erstellt — die Quelldatei wird noch verarbeitet',
         delete: 'Löschen',

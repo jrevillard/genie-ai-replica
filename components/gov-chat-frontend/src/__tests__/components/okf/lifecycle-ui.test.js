@@ -1000,3 +1000,52 @@ describe('OkfVersionsDialog — the versions panel', () => {
     });
   });
 });
+
+describe('OkfStudioDashboard — the Browse action (the W9 browser from a card)', () => {
+  async function mountedWith(repos) {
+    const store = buildStore();
+    const wrapper = mount(OkfStudioDashboard, {
+      global: { mocks: { $store: store }, stubs: STUBS }
+    });
+    await seedRepos(store, repos);
+    await flush();
+    return { store, wrapper };
+  }
+
+  it('every lane card offers Browse (read-only — even Building and Draining)', async () => {
+    const { wrapper } = await mountedWith([
+      { repo_id: 'd1', name: 'Drafty', lifecycle_state: 'draft', concept_count: 1 },
+      { repo_id: 'pb', name: 'Pubby', lifecycle_state: 'publish', version: 2, concept_count: 4 },
+      {
+        repo_id: 'sv',
+        name: 'Serving',
+        lifecycle_state: 'publish',
+        version: 2,
+        ingested_at: '2026-11-01T00:00:00Z',
+        concept_count: 4
+      },
+      {
+        repo_id: 'bd',
+        name: 'Building',
+        lifecycle_state: 'draft',
+        concept_count: 0,
+        conversion: { status: 'processing' }
+      }
+    ]);
+    const browseButtons = wrapper.findAll('[data-test-id="okf-studio-browse"]');
+    expect(browseButtons.length).toBe(4);
+    expect(browseButtons.map((b) => b.text())).toEqual(['Browse', 'Browse', 'Browse', 'Browse']);
+  });
+
+  it('clicking Browse emits the repo id (StudioTab owns the dialog)', async () => {
+    const { wrapper } = await mountedWith([
+      { repo_id: 'pb', name: 'Pubby', lifecycle_state: 'publish', version: 2, concept_count: 4 }
+    ]);
+    const browse = wrapper.find('[data-test-id="okf-studio-browse"]');
+    await browse.trigger('click');
+    expect(wrapper.emitted('browse')).toEqual([['pb']]);
+    // The card click (resume → the heavyweight editor) must not fire —
+    // @click.stop keeps the browse read separate from the open.
+    expect(wrapper.emitted('resume')).toBeUndefined();
+  });
+});

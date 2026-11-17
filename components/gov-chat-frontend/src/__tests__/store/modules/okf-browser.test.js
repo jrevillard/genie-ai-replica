@@ -77,10 +77,24 @@ describe('okf store — browser slice (W9 concept tree browse)', () => {
   test('openConceptBrowser validates identity and resets the slice', async () => {
     mockTreePage.mockImplementation(async (_r, { offset }) => page(2, offset, 2));
     const store = buildStore();
-    const noId = await store.dispatch('okf/openConceptBrowser', { repoId: 'r1' });
+    // NO repo identity at all is still a refusal (the honest backstop).
+    const noId = await store.dispatch('okf/openConceptBrowser', {});
     expect(noId.ok).toBe(false);
     expect(store.state.okf.browser.visible).toBe(false);
 
+    // A REPO-LEVEL open (the Studio dashboard's Browse): the tree only, no
+    // concept seeded, no concept fetch — the detail pane stays on its
+    // select hint until a concept is visited.
+    const repoOnly = await store.dispatch('okf/openConceptBrowser', { repoId: 'r1' });
+    expect(repoOnly.ok).toBe(true);
+    expect(store.state.okf.browser.visible).toBe(true);
+    expect(store.state.okf.browser.repoId).toBe('r1');
+    expect(store.state.okf.browser.startConceptId).toBeNull();
+    expect(store.state.okf.browser.selectedConceptId).toBeNull();
+    expect(mockTreePage).toHaveBeenCalledWith('r1', { limit: 200, offset: 0 });
+    expect(mockFetchConcept).not.toHaveBeenCalled();
+
+    // A CITATION-level open is unchanged: concept seeded, walk + first hop.
     await store.dispatch('okf/openConceptBrowser', { repoId: 'r1', conceptId: 'cited' });
     const b = store.state.okf.browser;
     expect(b.visible).toBe(true);
@@ -88,8 +102,6 @@ describe('okf store — browser slice (W9 concept tree browse)', () => {
     expect(b.startConceptId).toBe('cited');
     expect(b.concepts.length).toBe(2); // the walk ran and committed its page
     expect(b.unavailable).toBe(false);
-    // A fresh open is a fresh walk + the first hop (both dispatched).
-    expect(mockTreePage).toHaveBeenCalledWith('r1', { limit: 200, offset: 0 });
     expect(mockFetchConcept).toHaveBeenCalledWith('r1', 'cited');
   });
 

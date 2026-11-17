@@ -1537,8 +1537,9 @@ class TestTheGraphPhaseIsCeilinged:
 
         dp, exc, elapsed = _run(scenario())
         # The ingest must END while the wedged call (2 s) is still parked.
-        # Generous on purpose — the ceiling path takes ~1 s and the bound only
-        # has to separate that from the 2 s the un-budgeted phase would wait.
+        # Generous on purpose — the ceiling path takes ~0.6 s (0.4 s deadline
+        # plus the patched 0.1 s straggler grace) and the bound only has to
+        # separate that from the 2 s the un-budgeted phase would wait.
         assert elapsed < 5.0, f"the ingest held the lane for {elapsed:.1f}s past the 0.4s budget"
         # Deterministic lower bound: the phase cannot return before its 0.4 s
         # deadline (the conversion is wedged past it), and the expiry path owes
@@ -1558,7 +1559,8 @@ class TestTheGraphPhaseIsCeilinged:
         error_texts = [c.kwargs.get("error", "") for c in dp._update_doc_status.call_args_list]
         assert any("budget" in str(e) for e in error_texts), error_texts
         # The auto-retract is what clears the partial graph and the file's
-        # Pending state — the drain-level self-heal then re-ingests it.
+        # Pending state. Re-ingest is manual for a legacy file (#1992); the
+        # D4-b self-heal covers OKF re-indexes only.
         dp.retract_file.assert_awaited_once()
 
 

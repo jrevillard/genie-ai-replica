@@ -205,7 +205,7 @@ _dataprep_phase_budget_exhausted_total = _meter.create_counter(
         "Labeling and context ingest continued on the phase's fallback, so those "
         "count degraded documents; the graph phase has no fallback, so its "
         "exhaustions FAIL the ingest (auto-retract; re-ingest is manual for a "
-        "legacy file — the D4-b self-heal covers OKF re-indexes only, #1992). A "
+        "legacy file — the D4-b self-heal covers OKF re-indexes only). A "
         "non-zero rate on a healthy GPU means the per-request budget is too "
         "tight for the phase, not that the GPU is busy."
     ),

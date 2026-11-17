@@ -2,9 +2,9 @@
 //
 // The welcome screen's recipes, written once.
 //
-// Four specs open a signed-in session on the welcome screen, three of
-// them capture pixels and read them back, and two of them compute WCAG
-// contrast ratios. Each of those was written out again in every file,
+// Five specs open a signed-in session on the welcome screen, one of
+// them captures pixels and reads them back, and two of them compute
+// WCAG contrast ratios. Each of those was written out again in every file,
 // and the copies had already drifted: two alpha tables carrying the
 // same numbers under two names, and a visual-layer read whose "layer
 // is off" branch returned bare from one copy and `{ hasOverlay: false }`
@@ -17,7 +17,12 @@
 // the measurement it is about is worth nothing in a CI log.
 
 const { expect } = require('@playwright/test');
-const { loginViaUI } = require('./chatbot');
+// The login is read through the chatbot module object at CALL time — the
+// codebase's substitution idiom (helpers/auth.js reads its transport the
+// same way) — so the session's close verdict is unit-coverable OFFLINE:
+// the same function answers at runtime, a unit spec swaps it (#1900).
+const chatbot = require('./chatbot');
+const { assertAdoptedLocale } = require('./locale');
 
 // The welcome composer's own resting viewport. The height is a
 // parameter rather than a constant because it is a real difference
@@ -27,10 +32,71 @@ const { loginViaUI } = require('./chatbot');
 // is measuring a different page.
 const DEFAULT_VIEWPORT = { width: 1440, height: 900 };
 
+// The session the specs open when they measure the welcome screen: the
+// resting viewport, in the light theme. One owner, so the specs and the
+// helper agree on what "the welcome screen at rest" means.
+const DEFAULT_SESSION = { viewport: { ...DEFAULT_VIEWPORT }, theme: 'light' };
+
 // Hard bounds for the two settle gates below. A gate that expires is a
 // failure, never a reason to sample a moving page.
 const ENTRANCE_TIMEOUT_MS = 15000;
 const COMPOSITING_TIMEOUT_MS = 15000;
+// The composer is the welcome screen's own element — it mounts when the
+// configuration's buttons are known.
+const COMPOSER_READY_TIMEOUT_MS = 15000;
+
+/**
+ * Wait for the welcome composer to be mounted.
+ *
+ * The composer is the welcome screen's own element (`welcome-composer`,
+ * inside the welcome panel — the chat view has its own `chat-composer`),
+ * and it appears only once the configuration's buttons are known: it is
+ * the signal that the config has been read and applied.
+ *
+ * One recipe, so the specs that wait for it wait on the same observable
+ * with the same budget.
+ *
+ * @param {import('@playwright/test').Page} page
+ */
+async function waitForComposerReady(page) {
+  await page.waitForSelector('[data-testid="welcome-composer"]', { timeout: COMPOSER_READY_TIMEOUT_MS });
+}
+
+/**
+ * Is the welcome banner laid out, visible and settled?
+ *
+ * The page-side half of the entrance gate, written once so the gate and
+ * its unit spec read the SAME condition (the visualLayerState precedent:
+ * a page-side function that reaches Node as source).
+ *
+ * Three conditions, all of them observable:
+ *
+ *   - the banner is there (a banner that is not mounted is not settled);
+ *   - it is VISIBLE: a non-empty box, and a visibility that is not
+ *     hidden. A banner that is mounted but collapsed or hidden is not a
+ *     page anybody can measure — a collapsed banner's box reads zeroed
+ *     and there is no clip to take, so the capture throws; a hidden one
+ *     keeps its box and paints nothing, so the capture reads the page
+ *     behind it;
+ *   - its entrance animation is over: gli-enter runs 650 ms of opacity
+ *     and transform on .quick-help-banner, and a box read or a capture
+ *     inside that window measures the animation rather than the page.
+ *
+ * @param {Document} doc
+ * @returns {boolean}
+ */
+function bannerIsSettled(doc) {
+  const banner = doc.querySelector('[data-testid="quick-help-banner"]');
+  if (banner === null) return false;
+  // Cheapest first: getAnimations() flushes style but not layout, the
+  // box read flushes layout and the style read forces a recalc. The gate
+  // polls on every animation frame, so the two expensive reads only run
+  // once the entrance is over.
+  if (!banner.getAnimations().every((a) => a.playState !== 'running')) return false;
+  const rect = banner.getBoundingClientRect();
+  if (rect.width <= 0 || rect.height <= 0) return false;
+  return doc.defaultView.getComputedStyle(banner).visibility !== 'hidden';
+}
 
 /*
  * Two gates, both real observables, split by who needs them:
@@ -41,6 +107,14 @@ const COMPOSITING_TIMEOUT_MS = 15000;
  *    rather than the page. The gate is the animation's own playState,
  *    so the wait ends when the page is done animating, at whatever
  *    speed the machine renders it. Every open session passes it.
+ *
+ *    The gate also owns the banner's VISIBILITY, not only its presence:
+ *    a banner that is mounted but hidden (or collapsed to a zero-size
+ *    box) is not a page anybody can measure — a collapsed banner's box
+ *    reads zeroed and there is no clip to take, so the capture throws;
+ *    a hidden one keeps its box and paints nothing, so the capture
+ *    reads the page behind it. Both halves are what a capture needs, so
+ *    the reload path leaves the banner to THIS gate alone.
  *
  * 2. waitForCompositingSettled — compositing of the masked banner. A
  *    capture taken before the compositor has produced its final frame
@@ -54,14 +128,9 @@ const COMPOSITING_TIMEOUT_MS = 15000;
  *    sample pixels without capturePixels.
  */
 async function waitForBannerEntrance(page) {
-  await page.waitForFunction(
-    () => {
-      const banner = document.querySelector('[data-testid="quick-help-banner"]');
-      return banner !== null && banner.getAnimations().every((a) => a.playState !== 'running');
-    },
-    undefined,
-    { timeout: ENTRANCE_TIMEOUT_MS }
-  );
+  await page.waitForFunction(`(${bannerIsSettled.toString()})(document)`, undefined, {
+    timeout: ENTRANCE_TIMEOUT_MS
+  });
 }
 
 async function waitForCompositingSettled(page) {
@@ -96,42 +165,36 @@ async function waitForBannerSettled(page) {
 }
 
 /**
- * Open a signed-in session on the welcome screen.
+ * Open a signed-in session on the welcome screen — the open half.
  *
- * One recipe for the whole suite: the context, the browser login, the
- * sidebar hint, the navigation, and the reload that clears the splash
- * (it shows once per authenticated session) before the page is
- * sampled.
+ * INTERNAL: the only caller is withWelcomeSession, which owns the close
+ * guarantee in its own control flow. This half is not exported: a
+ * caller that reached for it would have to close the context itself,
+ * which is exactly the shape the helper exists to make unforgetable
+ * (#1888).
  *
- *   viewport  the context's window; defaults to 1440x900
- *   theme     the context's colorScheme ('light' | 'dark')
- *   locale    applied through the app's own boot path
- *             (localStorage.userLocale, read by main.js before mount)
- *   setupPage an async hook run on the page BEFORE the login — the
- *             place for route stubs: the first chat mount already
- *             sees them, instead of a stub installed after the app
- *             has already fetched the real thing
- *   reload    false skips the splash-clearing reload — for a spec
- *             that HOLDS a network answer, a `waitUntil: 'networkidle'`
- *             reload would never settle
- *
- * The banner's entrance animation is over before the screen is
- * returned (see waitForBannerEntrance) — box and geometry reads see
- * the resolved page. Pixel reads additionally see the compositor's
- * settled frame: capturePixels gates on it (waitForCompositingSettled)
- * on its first capture of a page.
- *
- * Returns { ctx, page } — the caller closes ctx when it is done. Prefer
- * withWelcomeSession, which owns that close guarantee in its own control
- * flow.
  * The open path holds the same guarantee for itself: a throw after the
  * context exists (a login that fails, a wait that expires) closes the
  * context before rethrowing, so a failed open cannot leak it.
  */
 async function openWelcomeScreen(browser, { viewport, theme, locale, setupPage, reload = true } = {}) {
+  if (locale && !reload) {
+    // A seeded locale is only ADOPTED by a boot: the write below lands
+    // after the login, and the app reads localStorage.userLocale before it
+    // mounts — so the reload is the boot that adopts it. Without the
+    // reload the session would run on the locale it booted with and every
+    // measurement in it would read that locale instead of the seeded one.
+    throw new Error(
+      `a seeded locale (${locale}) needs the reload that adopts it — the seed lands after the ` +
+        `login and only the next boot reads it, so reload: false leaves the session on the ` +
+        `locale it booted with`
+    );
+  }
+  const sessionViewport = viewport || DEFAULT_VIEWPORT;
+  const sessionTheme = theme || 'light';
   const ctx = await browser.newContext({
-    viewport: viewport || DEFAULT_VIEWPORT,
-    colorScheme: theme || 'light',
+    viewport: sessionViewport,
+    colorScheme: sessionTheme,
     ignoreHTTPSErrors: true
   });
   try {
@@ -139,7 +202,7 @@ async function openWelcomeScreen(browser, { viewport, theme, locale, setupPage, 
     if (setupPage) {
       await setupPage(page);
     }
-    await loginViaUI(page);
+    await chatbot.loginViaUI(page);
     if (locale) {
       await page.evaluate((l) => localStorage.setItem('userLocale', l), locale);
     }
@@ -153,9 +216,28 @@ async function openWelcomeScreen(browser, { viewport, theme, locale, setupPage, 
     await page.waitForSelector('[data-testid="quick-help-banner"]', { timeout: 15000 });
     if (reload) {
       await page.reload({ waitUntil: 'networkidle', timeout: 30000 });
-      await page.waitForSelector('[data-testid="quick-help-banner"]', { timeout: 15000 });
     }
+    // ONE gate owns the banner after the reload: the entrance gate polls
+    // for the banner to EXIST as well as for its entrance animation to be
+    // over, so a second selector wait here would spend the same
+    // observable twice — and fail on it twice (#1899).
     await waitForBannerEntrance(page);
+    if (locale) {
+      // The seed is only ADOPTED when the app boots on it, and the
+      // adoption is PROVEN here, not assumed: the app resolves the
+      // locale it adopts from the saved preference, then from the
+      // BROWSER's language, and only then English — so a deployment
+      // whose active set (VUE_APP_AVAILABLE_LOCALES) does not carry the
+      // seed adopts another locale, and a session that adopted it
+      // measures that page and passes vacuously (#1874, #1891).
+      // The app writes the adopted locale to <html lang> at boot, so that
+      // attribute is the pin.
+      await assertAdoptedLocale(
+        page,
+        `the welcome session (${sessionTheme}, ${sessionViewport.width}x${sessionViewport.height})`,
+        locale
+      );
+    }
     return { ctx, page };
   } catch (e) {
     // Loud cleanup, same verdict rule as the body path in
@@ -188,6 +270,43 @@ async function closeLoudly(ctx, failure) {
 
 /**
  * Open a welcome session, run `fn`, and guarantee the close.
+ *
+ * One recipe for the whole suite: the context, the browser login, the
+ * sidebar hint, the navigation, and the reload that clears the splash
+ * (it shows once per authenticated session) before the page is
+ * sampled.
+ *
+ *   viewport  the context's window; defaults to 1440x900
+ *   theme     the context's colorScheme ('light' | 'dark')
+ *   locale    applied through the app's own boot path
+ *             (localStorage.userLocale, read by main.js before mount)
+ *             and ADOPTED — the session proves it landed before it is
+ *             returned (see below); a locale without the reload that
+ *             adopts it is refused
+ *   setupPage an async hook run on the page BEFORE the login — the
+ *             place for route stubs: the first chat mount already
+ *             sees them, instead of a stub installed after the app
+ *             has already fetched the real thing
+ *   reload    false skips the splash-clearing reload — for a spec
+ *             that HOLDS a network answer, a `waitUntil: 'networkidle'`
+ *             reload would never settle. A seeded locale and a skipped
+ *             reload contradict each other — the seed lands after the
+ *             login and only the next boot reads it — so the pair is
+ *             refused at the door rather than left to measure the
+ *             fallback locale
+ *
+ * A seeded locale is PROVEN, not assumed: the app writes the locale it
+ * adopted to <html lang> at boot, and the session asserts that attribute
+ * before it returns. A deployment whose active-locale set does not carry
+ * the seeded locale adopts another one — the browser's language when the
+ * set carries it, English otherwise — and a session that adopted it
+ * measures that page and passes vacuously.
+ *
+ * The banner's entrance animation is over before the screen is
+ * returned (see waitForBannerEntrance) — box and geometry reads see
+ * the resolved page. Pixel reads additionally see the compositor's
+ * settled frame: capturePixels gates on it (waitForCompositingSettled)
+ * on its first capture of a page.
  *
  * The close guarantee lives here, not at the call site (#1888): the leak
  * the inline `try { ... } finally { await ctx.close(); }` shape guards
@@ -234,6 +353,30 @@ async function withWelcomeSession(browser, opts, fn) {
   // session-body verdict that never happened.
   await ctx.close();
   return result;
+}
+
+/**
+ * Open a welcome session and wait for the welcome composer.
+ *
+ * The composer is the welcome screen's own element (`welcome-composer`,
+ * inside the welcome panel — the chat view has its own `chat-composer`),
+ * and it appears only once the configuration's buttons are known: it is
+ * the signal that the config has been read and applied. A spec that
+ * measures the welcome screen, or clicks its grid, waits for that
+ * signal — one recipe, so the specs wait on the same observable with
+ * the same budget.
+ *
+ * The close is still the session helper's guarantee.
+ *
+ * @param {import('@playwright/test').Browser} browser
+ * @param {Parameters<withWelcomeSession>[1]} opts
+ * @param {(page: import('@playwright/test').Page) => Promise<*>} fn
+ */
+async function withComposerSession(browser, opts, fn) {
+  return withWelcomeSession(browser, opts, async (page) => {
+    await waitForComposerReady(page);
+    return fn(page);
+  });
 }
 
 /**
@@ -379,8 +522,11 @@ return { lum, contrastRatio };`;
 const LAYER_STATE_BIND = `return (${visualLayerState.toString()});`;
 
 module.exports = {
-  openWelcomeScreen,
   withWelcomeSession,
+  withComposerSession,
+  waitForComposerReady,
+  DEFAULT_VIEWPORT,
+  DEFAULT_SESSION,
   waitForBannerSettled,
   readVisualLayerState,
   capturePixels,

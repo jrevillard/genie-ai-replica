@@ -252,8 +252,10 @@ BASE_URL=https://genieai-forge.local:4443 tests/e2e/run/run-local-e2e.sh
 ```
 
 It provisions the venue fixtures, runs the **whole `tests/e2e/` tree**,
-prints the outcome — every skipped spec with its reason — and files a
-`status::backlog` issue per failing spec file. The contract, the venue
+prints the outcome — every skipped spec with its reason — and the
+**context** of every red: the build the venue serves, this checkout's HEAD,
+and the handles the failing specs waited for. The issue itself is written
+**by hand** — the run files nothing. The contract, the venue
 profile and the runtime skips: [`docs/e2e-tests/local-run.md`](../../docs/e2e-tests/local-run.md).
 
 The executed set is pinned by `tests/config-validator/`: the guard derives

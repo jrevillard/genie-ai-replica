@@ -2,307 +2,28 @@
 // SPDX-License-Identifier: Apache-2.0
 const { test, expect } = require('@playwright/test');
 const { execFileSync } = require('child_process');
-const fs = require('fs');
-const os = require('os');
-const path = require('path');
 const {
-  findTrackedIssue,
-  specPathsIn,
-  titleIsDedicatedTo,
-  firstErrorReason,
   groupFailuresByFile,
-  issueBody,
   isConnectionSignature,
   partitionVenueNoise,
   venueAvailabilityReport,
-  fileTrackedFailures
+  locatorHandles,
+  handlesIn,
+  checkoutHead,
+  isBehindCheckout,
+  declaringFile,
+  waitedHandles,
+  venueContext
 } = require('./file-failure-issues');
 
-const FILE = 'tests/e2e/theme/theme-runtime-config.spec.js';
-
 /**
- * Unit spec for the failure path's dedupe rule.
+ * Unit spec for the failure path's REPORT.
  *
- * The rule decides WHICH issue a failure lands on; a rule that swallows one
- * file's failure into another's issue (or files a duplicate for a file that
- * is already tracked) is exactly the tracker damage this path exists to
- * prevent, so both directions are pinned here.
+ * The suite is launched on demand — a human, or an agent asked to run it —
+ * so whoever launched it sees the red. The path's job is to make that red
+ * READABLE: the outcome, and the context that tells a stale VENUE from a
+ * defect of the product (#1895, #1896).
  */
-test.describe('a dedicated title names ONE spec file', () => {
-  test('the paths in a title are the spec paths it names', () => {
-    expect(specPathsIn(`see ${FILE} for the assertions`)).toEqual([FILE]);
-    expect(specPathsIn('components/gov-chat-frontend/src/App.vue')).toEqual([]);
-  });
-
-  test('a title that names this file alone is dedicated to it', () => {
-    expect(titleIsDedicatedTo(`test(e2e): ${FILE} is red on the local run`, FILE)).toBe(true);
-  });
-
-  test('a title that names SEVERAL spec files is an umbrella, not a dedication', () => {
-    // The wave issue that touched a dozen of them names them all: it
-    // tracks a GROUP, and a failure on one of them must still get its own
-    // issue.
-    const umbrella = `test(e2e): ${FILE} and tests/e2e/other.spec.js are red`;
-    expect(titleIsDedicatedTo(umbrella, FILE)).toBe(false);
-  });
-
-  test('an absolute path or a tracker URL names the same file', () => {
-    // The title may name the file the way a human writes it: an
-    // absolute path, or the file's URL in a tracker link. Both END with
-    // the repository path — the same file, named differently.
-    expect(titleIsDedicatedTo(`test(e2e): /home/dev/genie-ai/${FILE} is red`, FILE)).toBe(true);
-    expect(
-      titleIsDedicatedTo(`test(e2e): https://gitlab.example/un/itu/genie-ai/-/blob/main/${FILE} is red`, FILE)
-    ).toBe(true);
-  });
-
-  test('a title that names the same file twice is still dedicated to it', () => {
-    // The SAME token twice, and the file under TWO spellings: both name
-    // this one file, so both are a dedication — the title is judged per
-    // FILE, not per token.
-    expect(titleIsDedicatedTo(`test(e2e): ${FILE} — ${FILE} again`, FILE)).toBe(true);
-    expect(titleIsDedicatedTo(`test(e2e): ${FILE} — /home/dev/genie-ai/${FILE}`, FILE)).toBe(true);
-    expect(
-      titleIsDedicatedTo(`test(e2e): ${FILE} — https://gitlab.example/un/itu/genie-ai/-/blob/main/${FILE}`, FILE)
-    ).toBe(true);
-  });
-
-  test('a title that also names a FRONTEND test is still dedicated', () => {
-    // The failure path covers the e2e tree: a frontend test is another
-    // tree, another failure path — its mention says nothing about this
-    // file, and reading it as an umbrella would file a duplicate.
-    expect(
-      titleIsDedicatedTo(
-        `test(e2e): ${FILE} is red (frontend: components/gov-chat-frontend/src/__tests__/chatbotService.test.js)`,
-        FILE
-      )
-    ).toBe(true);
-  });
-
-  test('the path relative to the e2e tree names the file too', () => {
-    expect(titleIsDedicatedTo('test(e2e): helpers/chatbot.spec.js is red', 'tests/e2e/helpers/chatbot.spec.js')).toBe(
-      true
-    );
-  });
-
-  test('an umbrella in the RELATIVE spelling is an umbrella too', () => {
-    // The same umbrella in the RELATIVE spelling: the relative path of
-    // another file is this tree's path too, and it must not be dropped
-    // from the comparison (that would read the umbrella as a dedication).
-    expect(
-      titleIsDedicatedTo(
-        'test(e2e): helpers/chatbot.spec.js and helpers/other.spec.js are red',
-        'tests/e2e/helpers/chatbot.spec.js'
-      )
-    ).toBe(false);
-  });
-
-  test('a path that is only the TAIL of another e2e file does not match', () => {
-    // tests/e2e/helpers/tests/e2e/theme-runtime-config.spec.js is a
-    // different file that happens to carry this one's path as its tail.
-    expect(titleIsDedicatedTo('tests/e2e/helpers/tests/e2e/theme-runtime-config.spec.js', FILE)).toBe(false);
-  });
-
-  test('a title that names no spec file is dedicated to nothing', () => {
-    expect(titleIsDedicatedTo('the e2e suite is red', FILE)).toBe(false);
-  });
-});
-
-test.describe('a match must be DEDICATED to the spec file', () => {
-  test('the dedicated issue whose title carries the path matches', () => {
-    const issue = { title: `test(e2e): ${FILE} is red`, description: '' };
-    expect(findTrackedIssue(FILE, [issue])).toBe(issue);
-  });
-
-  test("the script's own marker in the description matches", () => {
-    const issue = { title: 'local e2e run failures', description: `- spec file: \`${FILE}\`` };
-    expect(findTrackedIssue(FILE, [issue])).toBe(issue);
-  });
-
-  test('an umbrella that only LISTS the path does not absorb the failure', () => {
-    // The wave issue that touched a dozen spec files names them in its
-    // description. Absorbing their failures would leave a red file with no
-    // issue of its own — the tracker noise this path exists to end.
-    const umbrella = {
-      title: '13 spec files hardcode the Compose edge',
-      description: `The wave touched ${FILE} and twelve other files.`
-    };
-    expect(findTrackedIssue(FILE, [umbrella])).toBe(null);
-  });
-
-  test('an umbrella that LISTS the paths in its TITLE does not absorb the failure either', () => {
-    // The title names several spec files: that is a group, not a
-    // dedication. The file's own failure still needs its own issue.
-    const umbrella = {
-      title: `test(e2e): ${FILE} and tests/e2e/other.spec.js are red`,
-      description: ''
-    };
-    expect(findTrackedIssue(FILE, [umbrella])).toBe(null);
-  });
-
-  test("another file's marker does not match", () => {
-    const issue = { title: 'local e2e run failures', description: '- spec file: `tests/e2e/other.spec.js`' };
-    expect(findTrackedIssue(FILE, [issue])).toBe(null);
-  });
-
-  test('an issue without a title does not take the filing loop down', () => {
-    // The tracker's issues always carry a title; a malformed one must not
-    // throw out of the per-file error handling (an undefined title is a
-    // TypeError in the path matcher, not a verdict).
-    expect(findTrackedIssue(FILE, [{ description: '' }])).toBe(null);
-  });
-
-  test('the issue whose TITLE is dedicated wins over one matched by the marker', () => {
-    // Both are the file's issue — the marker match names it in the
-    // description, the dedicated match in the title. The one a reader
-    // lands on is the dedicated one, so that is the one the dedupe must
-    // return: a filing that lands on the marker match leaves the
-    // dedicated issue open and the file pointing at the other one.
-    const byMarker = { title: 'local e2e run failures', description: `- spec file: \`${FILE}\`` };
-    const byTitle = { title: `test(e2e): ${FILE} is red`, description: '' };
-    expect(findTrackedIssue(FILE, [byMarker, byTitle])).toBe(byTitle);
-    // The order does not decide it either way.
-    expect(findTrackedIssue(FILE, [byTitle, byMarker])).toBe(byTitle);
-  });
-
-  test("a bare name of ANOTHER tree's file is not this tree's path", () => {
-    // A title that names an e2e spec AND a frontend unit test by its
-    // bare name is still a DEDICATION to the e2e file: the frontend test
-    // is not this tree's business. Counting it would make the title look
-    // like a group, and the failure path would file a second issue for a
-    // file that already has one.
-    //
-    // The other tree's file lives in a THROWAWAY tree, not in this
-    // checkout: the rule is about the names beside the tree, and a case
-    // that leaned on a file of ANOTHER component would break when that
-    // component renames it.
-    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'e2e-dedupe-'));
-    try {
-      // A name NO file in this checkout carries: a name that also exists
-      // here would make the case pass whatever root the walk used, and
-      // the root is the thing the case is about.
-      const frontend = 'SomeOtherTreeOnly.test.js';
-      fs.mkdirSync(path.join(root, 'components/gov-chat-frontend'), { recursive: true });
-      fs.writeFileSync(path.join(root, 'components/gov-chat-frontend', frontend), '');
-      const title = `test(e2e): ${FILE} and ${frontend} are red`;
-      expect(titleIsDedicatedTo(title, FILE, root)).toBe(true);
-      // And the frontend file on its own names nothing here.
-      expect(titleIsDedicatedTo(`test(e2e): ${frontend} is red`, FILE, root)).toBe(false);
-    } finally {
-      fs.rmSync(root, { recursive: true, force: true });
-    }
-  });
-
-  test("a COPY of this tree elsewhere in the checkout does not make its names another tree's", () => {
-    // The operator's checkout carries sibling worktrees, and each of them
-    // holds a full copy of tests/e2e. Those copies are THIS tree's own
-    // business: if their spec names counted as "another tree's files",
-    // this tree's bare names would stop naming this tree — and a title
-    // that names one of them by its bare name would no longer be a
-    // DEDICATION to it, so the failure path would file a SECOND issue
-    // for a file that already has one.
-    //
-    // The rule is exercised in a checkout shaped like that one — a
-    // throwaway tree the rule is pointed at, with this tree's own spec
-    // and the same file inside a sibling worktree's copy of the tree.
-    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'e2e-dedupe-'));
-    try {
-      fs.mkdirSync(path.join(root, 'tests/e2e'), { recursive: true });
-      fs.writeFileSync(path.join(root, 'tests/e2e/thing.spec.js'), '');
-      fs.mkdirSync(path.join(root, '.claude/worktrees/wt-a/tests/e2e'), { recursive: true });
-      fs.writeFileSync(path.join(root, '.claude/worktrees/wt-a/tests/e2e/thing.spec.js'), '');
-
-      expect(titleIsDedicatedTo('test(e2e): thing.spec.js is red', 'tests/e2e/thing.spec.js', root)).toBe(true);
-    } finally {
-      fs.rmSync(root, { recursive: true, force: true });
-    }
-  });
-
-  test("a bare spec file name is this tree's path even when the file is gone", () => {
-    // A RENAMED file must not drop out of the comparison: a title that
-    // names several spec files is a group, not a dedication, and the
-    // renamed file's bare name must still count as one of them —
-    // otherwise one multi-file title turns into a dedication to a file
-    // that is not in it.
-    //
-    // The rule reads the tree's OWN names (#1802): the files it has now,
-    // plus the ones it HAS HAD — "had" is the tree's git history. The
-    // case runs in a throwaway GIT repo so it owns that history: a spec
-    // the tree carried and then renamed away. (This checkout's real
-    // history would do, but the case must not depend on which files THIS
-    // tree happens to have renamed.)
-    const root = fs.mkdtempSync(path.join(os.tmpdir(), 'e2e-dedupe-'));
-    const git = (...args) =>
-      execFileSync(
-        'git',
-        ['-C', root, '-c', 'user.email=e2e-dedupe@example.invalid', '-c', 'user.name=e2e-dedupe', ...args],
-        { encoding: 'utf-8' }
-      );
-    try {
-      fs.mkdirSync(path.join(root, 'tests/e2e'), { recursive: true });
-      fs.writeFileSync(path.join(root, 'tests/e2e/renamed-away.spec.js'), '');
-      git('init', '-q');
-      git('add', 'tests/e2e/renamed-away.spec.js');
-      git('commit', '-q', '-m', 'the tree once carried this spec');
-      fs.rmSync(path.join(root, 'tests/e2e/renamed-away.spec.js'));
-      git('add', '-A');
-      git('commit', '-q', '-m', 'the spec was renamed away');
-      // The file is gone; its bare name is still this tree's.
-      const renamed = 'tests/e2e/renamed-away.spec.js';
-      expect(titleIsDedicatedTo('test(e2e): renamed-away.spec.js is red', renamed, root)).toBe(true);
-      // And it must not swallow a file it does not name.
-      expect(titleIsDedicatedTo('test(e2e): renamed-away.spec.js is red', FILE, root)).toBe(false);
-    } finally {
-      fs.rmSync(root, { recursive: true, force: true });
-    }
-  });
-});
-
-test.describe('one issue per failing spec FILE', () => {
-  test('two failures in the same file are one issue with two entries', () => {
-    // The file is the unit an owner fixes: a file-level title keeps the
-    // dedupe stable across runs, and the failing TESTS are the entries
-    // inside it.
-    const failed = [
-      { file: 'tests/e2e/a.spec.js', title: 'a › first', test: { results: [{ error: { message: 'boom' } }] } },
-      { file: 'tests/e2e/a.spec.js', title: 'a › second', test: { results: [{ error: { message: 'bang' } }] } },
-      { file: 'tests/e2e/b.spec.js', title: 'b › third', test: { results: [{ error: { message: 'snap' } }] } }
-    ];
-    const byFile = groupFailuresByFile(failed);
-    expect(byFile.size).toBe(2);
-    expect(byFile.get('tests/e2e/a.spec.js').map((f) => f.title)).toEqual(['a › first', 'a › second']);
-    expect(byFile.get('tests/e2e/b.spec.js').map((f) => f.title)).toEqual(['b › third']);
-  });
-
-  test('the filed body carries the marker the dedupe reads back', () => {
-    // ONE spelling, used both to write the marker and to read it back:
-    // a drift between the two would silently degrade the dedupe to
-    // title-only.
-    const body = issueBody(
-      'tests/e2e/a.spec.js',
-      [{ title: 'a › first', error: 'boom' }],
-      'https://venue.example:4443',
-      '2026-11-11T00:00:00Z'
-    );
-    expect(body).toContain('- spec file: `tests/e2e/a.spec.js`');
-    // And the failure it files is in the body.
-    expect(body).toContain('a › first');
-  });
-});
-
-test.describe('the tracker refusal names the tracker, not the command', () => {
-  test('the first stderr line is the tracker message', () => {
-    const error = new Error('Command failed: glab api projects/90/issues -f title=<the whole body>');
-    error.stderr = 'glab: 404 Not found (HTTP 404)\n';
-    expect(firstErrorReason(error)).toBe('glab: 404 Not found (HTTP 404)');
-  });
-
-  test('without stderr, the error message carries the reason', () => {
-    const error = new Error('spawn glab ENOENT\nat ChildProcess');
-    expect(firstErrorReason(error)).toBe('spawn glab ENOENT | at ChildProcess');
-  });
-});
-
 test.describe('a failure carrying an edge-transport signature is venue noise (#1783)', () => {
   // The observed signatures of the 2026-11-10 outage: the edge refused
   // while the k3s node rebooted and the LoadBalancer address moved.
@@ -343,12 +64,12 @@ test.describe('a failure carrying an edge-transport signature is venue noise (#1
     expect(isConnectionSignature(null)).toBe(false);
   });
 
-  test('the partition keeps product failures fileable and moves the signature ones to the report', () => {
+  test('the partition keeps product failures per-spec and moves the signature ones to the report', () => {
     // The PRODUCTION partition is what is under test here — not a
     // re-implementation of it. A mixed file: one outage symptom, one
-    // real assertion failure — the real one stays fileable, the outage
-    // one is noise; an all-signature file drops out of the filing
-    // entirely; a clean file passes through untouched.
+    // real assertion failure — the real one stays per-spec, the outage
+    // one is noise; an all-signature file drops out of the per-spec
+    // report entirely; a clean file passes through untouched.
     const grouped = groupFailuresByFile([
       {
         file: 'tests/e2e/welcome-banner.spec.js',
@@ -399,100 +120,141 @@ test.describe('a failure carrying an edge-transport signature is venue noise (#1
   });
 });
 
-test.describe('the filed body names the venue build (#1851)', () => {
+test.describe('the report names the CONTEXT of the red', () => {
   // The stale-venue trap: a venue serving an old build fails specs for
-  // product-reasons that read like test defects. An issue that does not
-  // name the served build is one an operator cannot diagnose in one read.
-  test('a run that carried the marker names the sha it exercised', () => {
-    const body = issueBody(
-      'tests/e2e/a.spec.js',
-      [{ title: 'a › first', error: 'boom' }],
-      'https://venue.example:4443',
-      '2026-11-11T00:00:00Z',
-      'abc1234def'
+  // product-reasons that read like test defects. The report says which
+  // build the venue serves, which build this checkout is at, and whether
+  // the venue is behind — the three facts that decide what the red means.
+  const FAILURE = [
+    'Error: expect(locator).toBeVisible() failed',
+    '',
+    'Locator: locator(\'[data-testid="chat-history-item"]\')',
+    'Expected: visible',
+    'Error: element(s) not found'
+  ].join('\n');
+
+  test('the locator line names the handles the failure waited for', () => {
+    expect(locatorHandles(FAILURE)).toEqual(['chat-history-item']);
+    // Playwright's own spelling names the same handle in another form.
+    expect(locatorHandles("Locator: locator.getByTestId('upload-files-dialog-confirm')")).toEqual([
+      'upload-files-dialog-confirm'
+    ]);
+    // A failure with no locator line names no handle.
+    expect(locatorHandles('Error: something else entirely')).toEqual([]);
+  });
+
+  test('every locator line of a failure is read, not only the first', () => {
+    // A failure can carry several locators; the handles of all of them
+    // are the ones the spec waited for.
+    const failure = [
+      'Error: expect(locator).toBeVisible() failed',
+      '',
+      'Locator: locator(\'[data-testid="chat-history-item"]\')',
+      'Locator: locator(\'[data-testid="upload-files-dialog-confirm"]\')'
+    ].join('\n');
+    expect(locatorHandles(failure)).toEqual(['chat-history-item', 'upload-files-dialog-confirm']);
+  });
+
+  test('a handle is matched as a QUOTED value', () => {
+    // `upload-files-dialog` must not be read out of a text that carries
+    // only `upload-files-dialog-confirm`.
+    expect(handlesIn('<div data-testid="upload-files-dialog-confirm">')).toEqual(['upload-files-dialog-confirm']);
+    expect(handlesIn('<div data-test-id="upload-files-dialog-confirm">')).toEqual(['upload-files-dialog-confirm']);
+  });
+
+  test('the report names the venue build, this checkout, and the relation', () => {
+    const byFile = new Map([['tests/e2e/a.spec.js', [{ error: FAILURE }]]]);
+    const report = venueContext(byFile, {
+      venueBuild: 'abc1234def',
+      head: 'fedcba987',
+      behind: true,
+      declaringFile: () => 'components/gov-chat-frontend/src/components/ChatFolders.vue'
+    });
+    expect(report).toContain('venue build: `abc1234def`');
+    expect(report).toContain('this checkout: `fedcba987`');
+    expect(report).toContain('BEHIND this checkout');
+    expect(report).toContain('tests/e2e/a.spec.js');
+    expect(report).toContain('chat-history-item');
+    // The declaring file is read at HEAD — the report says so.
+    expect(report).toContain(
+      'declared by this checkout at HEAD in components/gov-chat-frontend/src/components/ChatFolders.vue'
     );
-    expect(body).toContain('- venue build: `abc1234def`');
   });
 
-  test('a run without a marker says so, unknown — not a fabricated sha', () => {
-    const body = issueBody(
-      'tests/e2e/a.spec.js',
-      [{ title: 'a › first', error: 'boom' }],
-      'https://venue.example:4443',
-      '2026-11-11T00:00:00Z'
-    );
-    expect(body).toContain('- venue build: unknown');
-    expect(body).not.toMatch(/venue build: `[0-9a-f]{7,}`/);
-  });
-});
-test.describe('the filing loop stays loud when the tracker refuses (#1883)', () => {
-  // The filing loop's loudness contract: one tracker error never takes the
-  // filing down — the failing file is reported, the remaining files are
-  // still attempted, and the errors come back so the run can refuse the
-  // exit code. A swallow-and-exit-0 regression here is the exact silence
-  // the failure path exists to end, so the contract is pinned with fake
-  // clients (the same injection seam production leaves on its defaults).
-
-  const byFile = new Map([
-    ['tests/e2e/a.spec.js', [{ title: 'a › first', error: 'boom' }]],
-    ['tests/e2e/b.spec.js', [{ title: 'b › second', error: 'bang' }]]
-  ]);
-  const VENUE = 'https://e2e-venue.example:4443';
-  const STAMP = '2026-11-15T00:00:00Z';
-
-  function trackerError() {
-    const error = new Error('Command failed: glab api projects/90/issues');
-    error.stderr = 'glab: 404 Not found (HTTP 404)\n';
-    return error;
-  }
-
-  test('a file nobody tracks yet gets its own create, and a clean run returns no errors', () => {
-    const created = [];
-    const commented = [];
-    const errors = fileTrackedFailures(byFile, [], VENUE, STAMP, {
-      createIssue: (file) => created.push(file),
-      commentOnIssue: (issue, files) => commented.push(files.map((f) => f.file))
+  test('a venue that is NOT behind the checkout is told so', () => {
+    // The other answer, and the one that means the red is the product's.
+    const byFile = new Map([['tests/e2e/a.spec.js', [{ error: FAILURE }]]]);
+    const report = venueContext(byFile, {
+      venueBuild: 'abc1234def',
+      head: 'fedcba987',
+      behind: false,
+      declaringFile: () => null
     });
-    expect(created).toEqual(['tests/e2e/a.spec.js', 'tests/e2e/b.spec.js']);
-    expect(commented).toEqual([]);
-    expect(errors).toEqual([]);
+    expect(report).toContain('NOT behind this checkout');
+    expect(report).not.toContain('BEHIND this checkout');
   });
 
-  test('a tracked file is grouped under its issue — one comment, no create', () => {
-    const tracked = { iid: 7, title: `test(e2e): tests/e2e/a.spec.js is red`, description: '' };
-    const created = [];
-    const comments = [];
-    fileTrackedFailures(byFile, [tracked], VENUE, STAMP, {
-      createIssue: (file) => created.push(file),
-      commentOnIssue: (issue, files) => comments.push({ iid: issue.iid, files: files.map((f) => f.file) })
+  test('a handle no source declares is named as such', () => {
+    // A spec defect, not a stale venue: the checkout declares nothing.
+    const byFile = new Map([['tests/e2e/a.spec.js', [{ error: FAILURE }]]]);
+    const report = venueContext(byFile, {
+      venueBuild: 'abc1234def',
+      head: 'fedcba987',
+      behind: true,
+      declaringFile: () => null
     });
-    expect(created).toEqual(['tests/e2e/b.spec.js']);
-    expect(comments).toEqual([{ iid: 7, files: ['tests/e2e/a.spec.js'] }]);
+    expect(report).toContain('declared by NO source in this checkout');
   });
 
-  test('a create failure is reported and the remaining files are still attempted', () => {
-    const created = [];
-    const errors = fileTrackedFailures(byFile, [], VENUE, STAMP, {
-      createIssue: (file) => {
-        if (file === 'tests/e2e/a.spec.js') throw trackerError();
-        created.push(file);
-      },
-      commentOnIssue: () => {}
-    });
-    // The refused file is named, with the tracker's own reason.
-    expect(errors).toEqual(['tests/e2e/a.spec.js: glab: 404 Not found (HTTP 404)']);
-    // The file AFTER the refused one still got its create.
-    expect(created).toEqual(['tests/e2e/b.spec.js']);
+  test('a run with no build marker says so, unknown — not a fabricated sha', () => {
+    const byFile = new Map([['tests/e2e/a.spec.js', [{ error: FAILURE }]]]);
+    const report = venueContext(byFile, { venueBuild: '', head: 'fedcba987', behind: null, declaringFile: () => null });
+    expect(report).toContain('venue build: unknown');
+    expect(report).not.toMatch(/venue build: `[0-9a-f]{7,}`/);
+    expect(report).toContain('not comparable');
   });
 
-  test('a failed comment puts every file it covers into the errors', () => {
-    const tracked = { iid: 7, title: `test(e2e): tests/e2e/a.spec.js is red`, description: '' };
-    const errors = fileTrackedFailures(byFile, [tracked], VENUE, STAMP, {
-      createIssue: () => {},
-      commentOnIssue: () => {
-        throw trackerError();
-      }
-    });
-    expect(errors).toEqual(['tests/e2e/a.spec.js: glab: 404 Not found (HTTP 404)']);
+  test("the checkout's HEAD is read from the repository", () => {
+    const head = execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf-8' }).trim();
+    expect(checkoutHead()).toBe(head);
+  });
+
+  test('a build behind the checkout is behind it; the checkout ITSELF is not', () => {
+    const head = execFileSync('git', ['rev-parse', 'HEAD'], { encoding: 'utf-8' }).trim();
+    // The venue serving THIS checkout is not behind it. The ancestor test
+    // alone cannot say so — a commit IS its own ancestor — so the equality
+    // is settled first. Without that, the report would tell the reader to
+    // refresh a venue that is already current.
+    expect(isBehindCheckout(head)).toBe(false);
+    // The abbreviated spelling names the same commit.
+    expect(isBehindCheckout(head.slice(0, 9))).toBe(false);
+    // An ancestor IS behind the checkout.
+    const parent = execFileSync('git', ['rev-parse', 'HEAD~1'], { encoding: 'utf-8' }).trim();
+    expect(isBehindCheckout(parent)).toBe(true);
+    // A sha no repository holds cannot be compared at all.
+    expect(isBehindCheckout('deadbeefdeadbeefdeadbeefdeadbeefdeadbeef')).toBe(null);
+  });
+
+  test('the declaring file is the one that declares the handle', () => {
+    const source = declaringFile('chat-history-item');
+    expect(source).toBe('components/gov-chat-frontend/src/components/ChatFolders.vue');
+    // A handle no source declares has no declaring file.
+    expect(declaringFile('test-only-handle-no-source-declares')).toBe(null);
+  });
+
+  test("the frontend's OWN test tree declares no handle — its mocks are not the app", () => {
+    // The frontend's Jest tree declares handles its mocks render
+    // (`answer-source-card-0`). No build renders a mock, so naming the
+    // test file as the declaring file would send the reader to a file
+    // that is not the app.
+    expect(declaringFile('answer-source-card-0')).toBe(null);
+  });
+
+  test("the handles a file waited for are the union of its failures' locators", () => {
+    const failures = [
+      { error: FAILURE },
+      { error: 'Locator: locator(\'[data-testid="upload-files-dialog-confirm"]\')' }
+    ];
+    expect(waitedHandles(failures)).toEqual(['chat-history-item', 'upload-files-dialog-confirm']);
   });
 });

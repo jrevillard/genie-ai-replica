@@ -2871,6 +2871,7 @@ describe('e2e merge-train changes filters (#1264)', () => {
       'tests/e2e/helpers/route.spec.js',
       'tests/e2e/helpers/venue-launch-args.spec.js',
       'tests/e2e/helpers/venue-profile.spec.js',
+      'tests/e2e/helpers/welcome.spec.js',
       'tests/e2e/theme/living-intelligence.spec.js',
       'tests/e2e/theme/resizable-sidebars.spec.js',
       'tests/e2e/theme/responsive-layout.spec.js',
@@ -3702,8 +3703,10 @@ describe('e2e merge-train changes filters (#1264)', () => {
 //     unchanged) — see docs/e2e-tests/suite-map.md, issue #1741);
 //   - the invocation is DERIVED from the run script, never copied into a
 //     second hand-maintained list (the rule the CI derivation follows);
-//   - the run provisions the venue fixtures, and its failure path files a
-//     status::backlog issue — a red run must not stay a silent red.
+//   - the run provisions the venue fixtures, and its failure path REPORTS
+//     the run's outcome and the context of a red — a red run must not stay
+//     a silent red. The issue itself is written by hand: the suite is
+//     launched on demand, so whoever launched it sees the red.
 describe('the local e2e run defines the executed set (#1736)', () => {
   const RUN_SCRIPT = path.join(ROOT, 'tests/e2e/run/run-local-e2e.sh');
   const FAILURE_PATH = path.join(ROOT, 'tests/e2e/run/file-failure-issues.js');
@@ -3770,16 +3773,6 @@ describe('the local e2e run defines the executed set (#1736)', () => {
     expect(provisioning).toBeGreaterThan(-1);
     expect(suite).toBeGreaterThan(-1);
     expect(provisioning).toBeLessThan(suite);
-  });
-
-  test('the failure path files a status::backlog issue', () => {
-    const failurePath = fs.readFileSync(FAILURE_PATH, 'utf-8');
-    // The label set the path files with — PARSED, not grepped: the string
-    // also appears in the module's comment, and a guard that a comment
-    // satisfies does not guard anything.
-    const labels = failurePath.match(/const LABELS = \[([^\]]*)\]/);
-    expect(labels).not.toBeNull();
-    expect(labels[1]).toContain("'status::backlog'");
   });
 
   test('the runner, the failure path and the config agree on the report path', () => {

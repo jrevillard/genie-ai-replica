@@ -46,7 +46,7 @@
 const { test, expect } = require('@playwright/test');
 const fs = require('fs');
 const path = require('path');
-const { openWelcomeScreen } = require('../helpers/welcome');
+const { withComposerSession, waitForComposerReady, DEFAULT_VIEWPORT, DEFAULT_SESSION } = require('../helpers/welcome');
 const { QUICK_HELP_GRID_ITEM } = require('../helpers/layout');
 const { quickHelpButton, stubQuickHelpConfiguration, stubQuickHelpHierarchy } = require('../helpers/quick-help-stubs');
 
@@ -92,17 +92,6 @@ function composerPlaceholder(locale) {
   return own === undefined ? composerPlaceholder('en') : own;
 }
 
-/**
- * Sign in and land on the dashboard — the same session the welcome
- * screen's measurements open: nothing here reads the banner's mask
- * layer, and every test below waits for the state it needs on its own.
- */
-async function freshSignedIn(browser, viewport = { width: 1440, height: 900 }, theme = 'light') {
-  const { ctx, page } = await openWelcomeScreen(browser, { viewport, theme });
-  await page.waitForSelector('[data-testid="welcome-composer"]', { timeout: 15000 });
-  return { ctx, page };
-}
-
 /*
  * The grid-count fixture: the configuration this spec serves itself, so
  * the grid's count and the placement filter are asserted against a FIXED
@@ -129,77 +118,77 @@ const GRID_BUTTONS = [
  * — the sibling recipe (helpers/quick-help-stubs.js), installed before
  * the login so the first chat mount already sees it.
  */
-async function freshSignedInWithGridFixture(browser) {
-  const { ctx, page } = await openWelcomeScreen(browser, {
-    setupPage: async (page) => {
-      await stubQuickHelpConfiguration(page, GRID_BUTTONS);
-      await stubQuickHelpHierarchy(page, []);
-    }
-  });
-  await page.waitForSelector('[data-testid="welcome-composer"]', { timeout: 15000 });
-  return { ctx, page };
+async function withGridFixture(browser, fn) {
+  return withComposerSession(
+    browser,
+    {
+      setupPage: async (page) => {
+        await stubQuickHelpConfiguration(page, GRID_BUTTONS);
+        await stubQuickHelpHierarchy(page, []);
+      }
+    },
+    fn
+  );
 }
 
 // -------- one mounted at a time --------
 
 test.describe('chat-composer mounted state', () => {
   test('welcome screen has exactly one composer, inside the welcome panel', async ({ browser }) => {
-    const { ctx, page } = await freshSignedIn(browser);
-    // Land on the chat view fresh — the welcome screen renders first.
-    await page.goto(`${BASE_URL}/dashboard`, { waitUntil: 'networkidle', timeout: 30000 });
-    await page.waitForSelector('[data-testid="quick-help-banner"]', { timeout: 15000 });
-    // The composer mounts once the runtime config's buttons are known —
-    // hold for it, exactly one, before reading anything else.
-    await expect(page.locator('[data-testid="welcome-composer"]'), 'welcome screen composer count').toHaveCount(1);
+    await withComposerSession(browser, DEFAULT_SESSION, async (page) => {
+      // Land on the chat view fresh — the welcome screen renders first.
+      await page.goto(`${BASE_URL}/dashboard`, { waitUntil: 'networkidle', timeout: 30000 });
+      await page.waitForSelector('[data-testid="quick-help-banner"]', { timeout: 15000 });
+      // The composer mounts once the runtime config's buttons are known —
+      // hold for it, exactly one, before reading anything else.
+      await expect(page.locator('[data-testid="welcome-composer"]'), 'welcome screen composer count').toHaveCount(1);
 
-    const welcome = page.locator('[data-testid="welcome-composer"]');
-    await expect(welcome).toBeVisible();
-    // The composer lives between the banner and the grid, so the
-    // banner must come before the composer in DOM order, the
-    // composer before the grid.
-    const bannerTop = await page
-      .locator('[data-testid="quick-help-banner"]')
-      .evaluate((el) => el.getBoundingClientRect().top + el.getBoundingClientRect().height / 2);
-    const composerCenterY = await welcome.evaluate(
-      (el) => el.getBoundingClientRect().top + el.getBoundingClientRect().height / 2
-    );
-    const gridTop = await page
-      .locator('[data-testid="quick-help-grid"]')
-      .evaluate((el) => el.getBoundingClientRect().top);
-    expect(
-      bannerTop < composerCenterY && composerCenterY < gridTop,
-      `banner(${bannerTop}) < composer(${composerCenterY}) < grid(${gridTop})`
-    ).toBe(true);
+      const welcome = page.locator('[data-testid="welcome-composer"]');
+      await expect(welcome).toBeVisible();
+      // The composer lives between the banner and the grid, so the
+      // banner must come before the composer in DOM order, the
+      // composer before the grid.
+      const bannerTop = await page
+        .locator('[data-testid="quick-help-banner"]')
+        .evaluate((el) => el.getBoundingClientRect().top + el.getBoundingClientRect().height / 2);
+      const composerCenterY = await welcome.evaluate(
+        (el) => el.getBoundingClientRect().top + el.getBoundingClientRect().height / 2
+      );
+      const gridTop = await page
+        .locator('[data-testid="quick-help-grid"]')
+        .evaluate((el) => el.getBoundingClientRect().top);
+      expect(
+        bannerTop < composerCenterY && composerCenterY < gridTop,
+        `banner(${bannerTop}) < composer(${composerCenterY}) < grid(${gridTop})`
+      ).toBe(true);
 
-    // One composer root, one textarea, in the welcome screen.
-    const textareaCount = await page.locator('[data-testid="composer-field"]').count();
-    expect(textareaCount, 'welcome screen textarea count').toBe(1);
-
-    await ctx.close();
+      // One composer root, one textarea, in the welcome screen.
+      const textareaCount = await page.locator('[data-testid="composer-field"]').count();
+      expect(textareaCount, 'welcome screen textarea count').toBe(1);
+    });
   });
 
   test('chat view has exactly one composer (the v-else slot)', async ({ browser }) => {
-    const { ctx, page } = await freshSignedIn(browser);
-    await page.goto(`${BASE_URL}/dashboard`, { waitUntil: 'networkidle', timeout: 30000 });
-    await page.waitForSelector('[data-testid="welcome-composer"]', { timeout: 15000 });
+    await withComposerSession(browser, DEFAULT_SESSION, async (page) => {
+      await page.goto(`${BASE_URL}/dashboard`, { waitUntil: 'networkidle', timeout: 30000 });
+      await waitForComposerReady(page);
 
-    // Welcome screen → chat view: type something into the welcome composer
-    // and press Enter. The composer slot is replaced by the chat-view composer.
-    const welcomeField = page.locator('[data-testid="welcome-composer"] textarea');
-    await welcomeField.click();
-    await welcomeField.fill('hello from the welcome composer');
-    await welcomeField.press('Enter');
+      // Welcome screen → chat view: type something into the welcome composer
+      // and press Enter. The composer slot is replaced by the chat-view composer.
+      const welcomeField = page.locator('[data-testid="welcome-composer"] textarea');
+      await welcomeField.click();
+      await welcomeField.fill('hello from the welcome composer');
+      await welcomeField.press('Enter');
 
-    // The welcome composer is now out of the DOM; the chat-view composer is in.
-    await page.waitForSelector('[data-testid="chat-composer"]', { timeout: 10000 });
-    await expect(page.locator('[data-testid="welcome-composer"]')).toHaveCount(0);
-    const composerCount = await page.locator('[data-testid="chat-composer"]').count();
-    expect(composerCount, 'chat view composer count').toBe(1);
+      // The welcome composer is now out of the DOM; the chat-view composer is in.
+      await page.waitForSelector('[data-testid="chat-composer"]', { timeout: 10000 });
+      await expect(page.locator('[data-testid="welcome-composer"]')).toHaveCount(0);
+      const composerCount = await page.locator('[data-testid="chat-composer"]').count();
+      expect(composerCount, 'chat view composer count').toBe(1);
 
-    const textareaCount = await page.locator('[data-testid="composer-field"]').count();
-    expect(textareaCount, 'chat view textarea count').toBe(1);
-
-    await ctx.close();
+      const textareaCount = await page.locator('[data-testid="composer-field"]').count();
+      expect(textareaCount, 'chat view textarea count').toBe(1);
+    });
   });
 });
 
@@ -207,72 +196,72 @@ test.describe('chat-composer mounted state', () => {
 
 test.describe('composer send pathway', () => {
   test('welcome composer Enter sends and switches to the chat view', async ({ browser }) => {
-    const { ctx, page } = await freshSignedIn(browser);
-    await page.goto(`${BASE_URL}/dashboard`, { waitUntil: 'networkidle', timeout: 30000 });
-    await page.waitForSelector('[data-testid="welcome-composer"]', { timeout: 15000 });
+    await withComposerSession(browser, DEFAULT_SESSION, async (page) => {
+      await page.goto(`${BASE_URL}/dashboard`, { waitUntil: 'networkidle', timeout: 30000 });
+      await waitForComposerReady(page);
 
-    const probe = 'spec-welcome-send ' + Date.now();
-    const welcomeField = page.locator('[data-testid="welcome-composer"] textarea');
-    await welcomeField.click();
-    await welcomeField.fill(probe);
-    await welcomeField.press('Enter');
+      const probe = 'spec-welcome-send ' + Date.now();
+      const welcomeField = page.locator('[data-testid="welcome-composer"] textarea');
+      await welcomeField.click();
+      await welcomeField.fill(probe);
+      await welcomeField.press('Enter');
 
-    // Welcome screen disappears; chat view appears with the typed text as a user message.
-    await page.waitForSelector('[data-testid="chat-composer"]', { timeout: 10000 });
-    await expect(page.locator('[data-testid="chat-message-user"]')).toContainText(probe, { timeout: 10000 });
+      // Welcome screen disappears; chat view appears with the typed text as a user message.
+      await page.waitForSelector('[data-testid="chat-composer"]', { timeout: 10000 });
+      await expect(page.locator('[data-testid="chat-message-user"]')).toContainText(probe, { timeout: 10000 });
 
-    // "Just Chat" is not a knowledge domain — no context chip is fabricated
-    // for it. A pill here would present plain free chat as a filtered query.
-    const pills = await page.evaluate(() => {
-      const items = Array.from(document.querySelectorAll('[data-testid="context-items"] > *'));
-      return items.map((el) => el.textContent.trim());
+      // "Just Chat" is not a knowledge domain — no context chip is fabricated
+      // for it. A pill here would present plain free chat as a filtered query.
+      const pills = await page.evaluate(() => {
+        const items = Array.from(document.querySelectorAll('[data-testid="context-items"] > *'));
+        return items.map((el) => el.textContent.trim());
+      });
+      expect(pills.length, `no just-chat pill expected (got ${JSON.stringify(pills)})`).toBe(0);
     });
-    expect(pills.length, `no just-chat pill expected (got ${JSON.stringify(pills)})`).toBe(0);
-    await ctx.close();
   });
 
   test('Shift+Enter inserts a newline and does NOT send', async ({ browser }) => {
-    const { ctx, page } = await freshSignedIn(browser);
-    await page.goto(`${BASE_URL}/dashboard`, { waitUntil: 'networkidle', timeout: 30000 });
-    await page.waitForSelector('[data-testid="welcome-composer"]', { timeout: 15000 });
+    await withComposerSession(browser, DEFAULT_SESSION, async (page) => {
+      await page.goto(`${BASE_URL}/dashboard`, { waitUntil: 'networkidle', timeout: 30000 });
+      await waitForComposerReady(page);
 
-    const probe = 'spec-shift-' + Date.now();
-    const welcomeField = page.locator('[data-testid="welcome-composer"] textarea');
-    await welcomeField.click();
-    await welcomeField.fill(probe);
-    await welcomeField.press('Shift+Enter');
+      const probe = 'spec-shift-' + Date.now();
+      const welcomeField = page.locator('[data-testid="welcome-composer"] textarea');
+      await welcomeField.click();
+      await welcomeField.fill(probe);
+      await welcomeField.press('Shift+Enter');
 
-    // No chat view; welcome composer still present.
-    await expect(page.locator('[data-testid="chat-composer"]')).toHaveCount(0);
-    await expect(page.locator('[data-testid="welcome-composer"]')).toBeVisible();
-    // No user message was appended.
-    await expect(page.locator('[data-testid="chat-message-user"]')).toHaveCount(0);
-    // The textarea still contains the probe (plus a newline the browser may have appended).
-    await page.waitForFunction(
-      (expected) => {
-        const ta = document.querySelector('[data-testid="welcome-composer"] textarea');
-        return ta && ta.value.startsWith(expected);
-      },
-      probe,
-      { timeout: 5000 }
-    );
-    await ctx.close();
+      // No chat view; welcome composer still present.
+      await expect(page.locator('[data-testid="chat-composer"]')).toHaveCount(0);
+      await expect(page.locator('[data-testid="welcome-composer"]')).toBeVisible();
+      // No user message was appended.
+      await expect(page.locator('[data-testid="chat-message-user"]')).toHaveCount(0);
+      // The textarea still contains the probe (plus a newline the browser may have appended).
+      await page.waitForFunction(
+        (expected) => {
+          const ta = document.querySelector('[data-testid="welcome-composer"] textarea');
+          return ta && ta.value.startsWith(expected);
+        },
+        probe,
+        { timeout: 5000 }
+      );
+    });
   });
 
   test('Enter on an empty composer does NOT send', async ({ browser }) => {
-    const { ctx, page } = await freshSignedIn(browser);
-    await page.goto(`${BASE_URL}/dashboard`, { waitUntil: 'networkidle', timeout: 30000 });
-    await page.waitForSelector('[data-testid="welcome-composer"]', { timeout: 15000 });
+    await withComposerSession(browser, DEFAULT_SESSION, async (page) => {
+      await page.goto(`${BASE_URL}/dashboard`, { waitUntil: 'networkidle', timeout: 30000 });
+      await waitForComposerReady(page);
 
-    const welcomeField = page.locator('[data-testid="welcome-composer"] textarea');
-    await welcomeField.click();
-    await welcomeField.press('Enter');
+      const welcomeField = page.locator('[data-testid="welcome-composer"] textarea');
+      await welcomeField.click();
+      await welcomeField.press('Enter');
 
-    // No user message, welcome composer still present.
-    await expect(page.locator('[data-testid="chat-message-user"]')).toHaveCount(0);
-    await expect(page.locator('[data-testid="chat-composer"]')).toHaveCount(0);
-    await expect(page.locator('[data-testid="welcome-composer"]')).toBeVisible();
-    await ctx.close();
+      // No user message, welcome composer still present.
+      await expect(page.locator('[data-testid="chat-message-user"]')).toHaveCount(0);
+      await expect(page.locator('[data-testid="chat-composer"]')).toHaveCount(0);
+      await expect(page.locator('[data-testid="welcome-composer"]')).toBeVisible();
+    });
   });
 });
 
@@ -283,22 +272,24 @@ test.describe('grid after placement extraction', () => {
   // count and the negative below are the placement filter's contract,
   // not the deployed venue's seed content.
   test('grid holds exactly the fixture tiles; the composer entry is not among them', async ({ browser }) => {
-    const { ctx, page } = await freshSignedInWithGridFixture(browser);
-    await page.goto(`${BASE_URL}/dashboard`, { waitUntil: 'networkidle', timeout: 30000 });
-    await page.waitForSelector(QUICK_HELP_GRID_ITEM, { timeout: 15000 });
-    // The Living Intelligence entrance animation mounts the tiles over
-    // ~650 ms — the count assertion waits out the whole entrance.
-    await expect(page.locator(QUICK_HELP_GRID_ITEM)).toHaveCount(8);
+    await withGridFixture(browser, async (page) => {
+      await page.goto(`${BASE_URL}/dashboard`, { waitUntil: 'networkidle', timeout: 30000 });
+      await page.waitForSelector(QUICK_HELP_GRID_ITEM, { timeout: 15000 });
+      // The Living Intelligence entrance animation mounts the tiles over
+      // ~650 ms — the count assertion waits out the whole entrance.
+      await expect(page.locator(QUICK_HELP_GRID_ITEM)).toHaveCount(8);
 
-    // The fixture's composer entry is TITLED "Just Chat" — the very text
-    // a filter bypass would leak into the grid. A tile carrying it (or
-    // any title matching it) means the placement filter bypassed the
-    // grid; the count above already broke, this names the leaked card.
-    const tiles = page.locator(QUICK_HELP_GRID_ITEM);
-    const justChatTexts = await tiles.evaluateAll((nodes) => nodes.map((n) => n.textContent.trim()));
-    const hasJustChatTile = justChatTexts.some((t) => /just.{0,2}chat/i.test(t));
-    expect(hasJustChatTile, `tile text never contains "just chat" (got ${JSON.stringify(justChatTexts)})`).toBe(false);
-    await ctx.close();
+      // The fixture's composer entry is TITLED "Just Chat" — the very text
+      // a filter bypass would leak into the grid. A tile carrying it (or
+      // any title matching it) means the placement filter bypassed the
+      // grid; the count above already broke, this names the leaked card.
+      const tiles = page.locator(QUICK_HELP_GRID_ITEM);
+      const justChatTexts = await tiles.evaluateAll((nodes) => nodes.map((n) => n.textContent.trim()));
+      const hasJustChatTile = justChatTexts.some((t) => /just.{0,2}chat/i.test(t));
+      expect(hasJustChatTile, `tile text never contains "just chat" (got ${JSON.stringify(justChatTexts)})`).toBe(
+        false
+      );
+    });
   });
 });
 
@@ -317,37 +308,38 @@ test.describe('config / composer identity', () => {
   test("welcome composer carries the reference's leading mark, the entry's tint and its accessible name", async ({
     browser
   }) => {
-    const { ctx, page } = await freshSignedIn(browser);
-    await page.goto(`${BASE_URL}/dashboard`, { waitUntil: 'networkidle', timeout: 30000 });
-    await page.waitForSelector('[data-testid="welcome-composer"]', { timeout: 15000 });
-    const composerRoot = page.locator('[data-testid="welcome-composer"]');
-    // The tint lands as the composer's inline style — wait for it before
-    // the raw attribute reads below.
-    await expect(composerRoot).toHaveAttribute('style', /--composer-tint:/i);
+    await withComposerSession(browser, DEFAULT_SESSION, async (page) => {
+      await page.goto(`${BASE_URL}/dashboard`, { waitUntil: 'networkidle', timeout: 30000 });
+      await waitForComposerReady(page);
+      const composerRoot = page.locator('[data-testid="welcome-composer"]');
+      // The tint lands as the composer's inline style — wait for it before
+      // the raw attribute reads below.
+      await expect(composerRoot).toHaveAttribute('style', /--composer-tint:/i);
 
-    // The leading mark is the reference's sparkles (a four-pointed star
-    // with two smaller ones), not the entry's chat bubble: the reference
-    // draws that mark at the head of the welcome bar.
-    await expect(page.locator('[data-testid="welcome-composer-leading-mark"]')).toHaveCount(1);
+      // The leading mark is the reference's sparkles (a four-pointed star
+      // with two smaller ones), not the entry's chat bubble: the reference
+      // draws that mark at the head of the welcome bar.
+      await expect(page.locator('[data-testid="welcome-composer-leading-mark"]')).toHaveCount(1);
 
-    // The entry's colours are emitted as the *tint*; the bar's own
-    // background is derived from the theme's surface and that tint, so a
-    // light-mode colour never lands on the dark theme. The inline style
-    // therefore carries the tint, and the rendered background is a mix.
-    const inlineStyle = await composerRoot.getAttribute('style');
-    expect(inlineStyle || '', `composer inline style (got ${inlineStyle})`).toMatch(/--composer-tint:\s*#?[0-9a-f]+/i);
-    expect(inlineStyle || '', `composer outline (got ${inlineStyle})`).toMatch(
-      /--composer-tint-outline:\s*#?[0-9a-f]+/i
-    );
+      // The entry's colours are emitted as the *tint*; the bar's own
+      // background is derived from the theme's surface and that tint, so a
+      // light-mode colour never lands on the dark theme. The inline style
+      // therefore carries the tint, and the rendered background is a mix.
+      const inlineStyle = await composerRoot.getAttribute('style');
+      expect(inlineStyle || '', `composer inline style (got ${inlineStyle})`).toMatch(
+        /--composer-tint:\s*#?[0-9a-f]+/i
+      );
+      expect(inlineStyle || '', `composer outline (got ${inlineStyle})`).toMatch(
+        /--composer-tint-outline:\s*#?[0-9a-f]+/i
+      );
 
-    // Accessible name: aria-label on the FIELD — the wrapper div is
-    // role-less, so a generic element's aria-label never reaches the
-    // accessibility tree. The field is what assistive tech reads; the
-    // data-testid is the handle the composer declares on it.
-    const ariaLabel = await page.locator('[data-testid="composer-field"]').getAttribute('aria-label');
-    expect(ariaLabel, `composer field aria-label (got ${ariaLabel})`).toBeTruthy();
-
-    await ctx.close();
+      // Accessible name: aria-label on the FIELD — the wrapper div is
+      // role-less, so a generic element's aria-label never reaches the
+      // accessibility tree. The field is what assistive tech reads; the
+      // data-testid is the handle the composer declares on it.
+      const ariaLabel = await page.locator('[data-testid="composer-field"]').getAttribute('aria-label');
+      expect(ariaLabel, `composer field aria-label (got ${ariaLabel})`).toBeTruthy();
+    });
   });
 
   test("the composer's background follows the theme, not the entry's light-mode colour", async ({ browser }) => {
@@ -357,82 +349,80 @@ test.describe('config / composer identity', () => {
     // theme's surface tinted with the entry's colour, and the two themes
     // must land on opposite sides of mid-grey.
     for (const theme of ['light', 'dark']) {
-      const { ctx, page } = await freshSignedIn(browser, { width: 1440, height: 900 }, theme);
-      await page.goto(`${BASE_URL}/dashboard`, { waitUntil: 'networkidle', timeout: 30000 });
-      await page.waitForSelector('[data-testid="welcome-composer"]', { timeout: 15000 });
-      // The background is derived from the composer's tint; wait for the
-      // tint to land before reading the computed paint.
-      await expect(page.locator('[data-testid="welcome-composer"]')).toHaveAttribute('style', /--composer-tint:/i);
+      await withComposerSession(browser, { ...DEFAULT_SESSION, theme }, async (page) => {
+        await page.goto(`${BASE_URL}/dashboard`, { waitUntil: 'networkidle', timeout: 30000 });
+        await waitForComposerReady(page);
+        // The background is derived from the composer's tint; wait for the
+        // tint to land before reading the computed paint.
+        await expect(page.locator('[data-testid="welcome-composer"]')).toHaveAttribute('style', /--composer-tint:/i);
 
-      const bg = await page.evaluate(() => {
-        const el = document.querySelector('[data-testid="welcome-composer"]');
-        if (!el) return null;
-        const raw = getComputedStyle(el).backgroundColor;
-        const m = raw.match(/[\d.]+/g);
-        if (!m) return null;
-        // Chromium resolves a color-mix() to `color(srgb r g b)`, whose
-        // components are 0-1 fractions, while an rgb() is 0-255. Both
-        // forms have to be read, or the luminance below is off by 255x.
-        const scale = raw.startsWith('color(') ? 255 : 1;
-        return { r: +m[0] * scale, g: +m[1] * scale, b: +m[2] * scale, raw };
+        const bg = await page.evaluate(() => {
+          const el = document.querySelector('[data-testid="welcome-composer"]');
+          if (!el) return null;
+          const raw = getComputedStyle(el).backgroundColor;
+          const m = raw.match(/[\d.]+/g);
+          if (!m) return null;
+          // Chromium resolves a color-mix() to `color(srgb r g b)`, whose
+          // components are 0-1 fractions, while an rgb() is 0-255. Both
+          // forms have to be read, or the luminance below is off by 255x.
+          const scale = raw.startsWith('color(') ? 255 : 1;
+          return { r: +m[0] * scale, g: +m[1] * scale, b: +m[2] * scale, raw };
+        });
+        expect(bg, `${theme}: the composer has a background`).not.toBeNull();
+        const luminance = 0.2126 * bg.r + 0.7152 * bg.g + 0.0722 * bg.b;
+        if (theme === 'dark') {
+          expect(
+            luminance,
+            `the dark composer's background is ${JSON.stringify(bg)} (luminance ${luminance.toFixed(1)}) — ` +
+              `it must be a dark surface, not the entry's light-mode colour`
+          ).toBeLessThan(140);
+        } else {
+          expect(
+            luminance,
+            `the light composer's background is ${JSON.stringify(bg)} (luminance ${luminance.toFixed(1)}) — ` +
+              `it must stay a light surface`
+          ).toBeGreaterThan(200);
+        }
       });
-      expect(bg, `${theme}: the composer has a background`).not.toBeNull();
-      const luminance = 0.2126 * bg.r + 0.7152 * bg.g + 0.0722 * bg.b;
-      if (theme === 'dark') {
-        expect(
-          luminance,
-          `the dark composer's background is ${JSON.stringify(bg)} (luminance ${luminance.toFixed(1)}) — ` +
-            `it must be a dark surface, not the entry's light-mode colour`
-        ).toBeLessThan(140);
-      } else {
-        expect(
-          luminance,
-          `the light composer's background is ${JSON.stringify(bg)} (luminance ${luminance.toFixed(1)}) — ` +
-            `it must stay a light surface`
-        ).toBeGreaterThan(200);
-      }
-      await ctx.close();
     }
   });
 
   test('disabled attach and mic carry a "not available yet" tooltip', async ({ browser }) => {
-    const { ctx, page } = await freshSignedIn(browser);
-    await page.goto(`${BASE_URL}/dashboard`, { waitUntil: 'networkidle', timeout: 30000 });
-    await page.waitForSelector('[data-testid="welcome-composer"]', { timeout: 15000 });
+    await withComposerSession(browser, DEFAULT_SESSION, async (page) => {
+      await page.goto(`${BASE_URL}/dashboard`, { waitUntil: 'networkidle', timeout: 30000 });
+      await waitForComposerReady(page);
 
-    const attachBtn = page.locator('[data-testid="composer-attach-btn"]');
-    const micBtn = page.locator('[data-testid="composer-mic-btn"]');
-    await expect(attachBtn).toBeDisabled();
-    await expect(micBtn).toBeDisabled();
-    const attachTitle = await attachBtn.getAttribute('title');
-    const micTitle = await micBtn.getAttribute('title');
-    expect((attachTitle || '').toLowerCase(), `attach title (got ${attachTitle})`).toMatch(/not available/);
-    expect((micTitle || '').toLowerCase(), `mic title (got ${micTitle})`).toMatch(/not available/);
-
-    await ctx.close();
+      const attachBtn = page.locator('[data-testid="composer-attach-btn"]');
+      const micBtn = page.locator('[data-testid="composer-mic-btn"]');
+      await expect(attachBtn).toBeDisabled();
+      await expect(micBtn).toBeDisabled();
+      const attachTitle = await attachBtn.getAttribute('title');
+      const micTitle = await micBtn.getAttribute('title');
+      expect((attachTitle || '').toLowerCase(), `attach title (got ${attachTitle})`).toMatch(/not available/);
+      expect((micTitle || '').toLowerCase(), `mic title (got ${micTitle})`).toMatch(/not available/);
+    });
   });
 
   test('send button has an accessible name and is disabled on empty content', async ({ browser }) => {
-    const { ctx, page } = await freshSignedIn(browser);
-    await page.goto(`${BASE_URL}/dashboard`, { waitUntil: 'networkidle', timeout: 30000 });
-    await page.waitForSelector('[data-testid="welcome-composer"]', { timeout: 15000 });
+    await withComposerSession(browser, DEFAULT_SESSION, async (page) => {
+      await page.goto(`${BASE_URL}/dashboard`, { waitUntil: 'networkidle', timeout: 30000 });
+      await waitForComposerReady(page);
 
-    const sendBtn = page.locator('[data-testid="composer-send-btn"]');
-    await expect(sendBtn).toBeDisabled();
-    // The accessible name is the aria-label — the one mechanism the
-    // accessibility tree reads; the title attribute is tooltip copy the
-    // composer also renders, and pinning either-or would accept a button
-    // whose name mechanism regressed.
-    const sendLabel = await sendBtn.getAttribute('aria-label');
-    expect((sendLabel || '').trim().length > 0, 'send aria-label (the accessible name)').toBe(true);
+      const sendBtn = page.locator('[data-testid="composer-send-btn"]');
+      await expect(sendBtn).toBeDisabled();
+      // The accessible name is the aria-label — the one mechanism the
+      // accessibility tree reads; the title attribute is tooltip copy the
+      // composer also renders, and pinning either-or would accept a button
+      // whose name mechanism regressed.
+      const sendLabel = await sendBtn.getAttribute('aria-label');
+      expect((sendLabel || '').trim().length > 0, 'send aria-label (the accessible name)').toBe(true);
 
-    // Filling the field enables the button.
-    const field = page.locator('[data-testid="welcome-composer"] textarea');
-    await field.click();
-    await field.fill('hi');
-    await expect(sendBtn).toBeEnabled();
-
-    await ctx.close();
+      // Filling the field enables the button.
+      const field = page.locator('[data-testid="welcome-composer"] textarea');
+      await field.click();
+      await field.fill('hi');
+      await expect(sendBtn).toBeEnabled();
+    });
   });
 });
 
@@ -440,29 +430,29 @@ test.describe('config / composer identity', () => {
 
 test.describe('visual-layer off', () => {
   test('composer works with data-visual="off"', async ({ browser }) => {
-    const { ctx, page } = await freshSignedIn(browser);
-    await page.goto(`${BASE_URL}/dashboard`, { waitUntil: 'networkidle', timeout: 30000 });
-    await page.waitForSelector('[data-testid="welcome-composer"]', { timeout: 15000 });
-    // Flip the data-visual toggle off and verify nothing in the composer
-    // becomes unusable — the composer's behaviour does not depend on the
-    // visual layer.
-    await page.evaluate(() => {
-      document.documentElement.dataset.visual = 'off';
-    });
+    await withComposerSession(browser, DEFAULT_SESSION, async (page) => {
+      await page.goto(`${BASE_URL}/dashboard`, { waitUntil: 'networkidle', timeout: 30000 });
+      await waitForComposerReady(page);
+      // Flip the data-visual toggle off and verify nothing in the composer
+      // becomes unusable — the composer's behaviour does not depend on the
+      // visual layer.
+      await page.evaluate(() => {
+        document.documentElement.dataset.visual = 'off';
+      });
 
-    const welcomeField = page.locator('[data-testid="welcome-composer"] textarea');
-    await welcomeField.click();
-    const probe = 'visual-off-send-' + Date.now();
-    await welcomeField.fill(probe);
-    await welcomeField.press('Enter');
+      const welcomeField = page.locator('[data-testid="welcome-composer"] textarea');
+      await welcomeField.click();
+      const probe = 'visual-off-send-' + Date.now();
+      await welcomeField.fill(probe);
+      await welcomeField.press('Enter');
 
-    await page.waitForSelector('[data-testid="chat-composer"]', { timeout: 10000 });
-    await expect(page.locator('[data-testid="chat-message-user"]')).toContainText(probe, { timeout: 10000 });
-    // Restore for any downstream test that expects the default layer.
-    await page.evaluate(() => {
-      document.documentElement.dataset.visual = 'on';
+      await page.waitForSelector('[data-testid="chat-composer"]', { timeout: 10000 });
+      await expect(page.locator('[data-testid="chat-message-user"]')).toContainText(probe, { timeout: 10000 });
+      // Restore for any downstream test that expects the default layer.
+      await page.evaluate(() => {
+        document.documentElement.dataset.visual = 'on';
+      });
     });
-    await ctx.close();
   });
 });
 
@@ -470,74 +460,74 @@ test.describe('visual-layer off', () => {
 
 test.describe('composer field', () => {
   test('the field inside the pill draws no border and no background of its own', async ({ browser }) => {
-    const { ctx, page } = await freshSignedIn(browser);
-    await page.goto(`${BASE_URL}/dashboard`, { waitUntil: 'networkidle', timeout: 30000 });
-    await page.waitForSelector('[data-testid="welcome-composer"]', { timeout: 15000 });
+    await withComposerSession(browser, DEFAULT_SESSION, async (page) => {
+      await page.goto(`${BASE_URL}/dashboard`, { waitUntil: 'networkidle', timeout: 30000 });
+      await waitForComposerReady(page);
 
-    // The DsInput primitive carries a border, a background and a radius.
-    // Inside the composer pill they would draw a box around the text — the
-    // pill is supposed to be the only shape on show. A reset written as a
-    // descendant selector (`.field .ds-input`) matches nothing, because the
-    // class lands on the primitive's own root; this asserts the rendered
-    // result, not the selector.
-    const field = await page.evaluate(() => {
-      const ta = document.querySelector('[data-testid="welcome-composer"] textarea');
-      if (!ta) return null;
-      const cs = getComputedStyle(ta);
-      return {
-        borderTopWidth: cs.borderTopWidth,
-        borderTopStyle: cs.borderTopStyle,
-        background: cs.backgroundColor,
-        radius: cs.borderTopLeftRadius,
-        resize: cs.resize
-      };
+      // The DsInput primitive carries a border, a background and a radius.
+      // Inside the composer pill they would draw a box around the text — the
+      // pill is supposed to be the only shape on show. A reset written as a
+      // descendant selector (`.field .ds-input`) matches nothing, because the
+      // class lands on the primitive's own root; this asserts the rendered
+      // result, not the selector.
+      const field = await page.evaluate(() => {
+        const ta = document.querySelector('[data-testid="welcome-composer"] textarea');
+        if (!ta) return null;
+        const cs = getComputedStyle(ta);
+        return {
+          borderTopWidth: cs.borderTopWidth,
+          borderTopStyle: cs.borderTopStyle,
+          background: cs.backgroundColor,
+          radius: cs.borderTopLeftRadius,
+          resize: cs.resize
+        };
+      });
+      expect(field, 'the welcome composer has a field').not.toBeNull();
+      expect(
+        parseFloat(field.borderTopWidth),
+        `the field draws a ${field.borderTopWidth} ${field.borderTopStyle} border inside the pill`
+      ).toBe(0);
+      expect(field.background, 'the field paints its own background inside the pill').toMatch(
+        /rgba\(0, 0, 0, 0\)|transparent/
+      );
+      expect(field.resize, 'the field is resizable by the user').toBe('none');
     });
-    expect(field, 'the welcome composer has a field').not.toBeNull();
-    expect(
-      parseFloat(field.borderTopWidth),
-      `the field draws a ${field.borderTopWidth} ${field.borderTopStyle} border inside the pill`
-    ).toBe(0);
-    expect(field.background, 'the field paints its own background inside the pill').toMatch(
-      /rgba\(0, 0, 0, 0\)|transparent/
-    );
-    expect(field.resize, 'the field is resizable by the user').toBe('none');
-    await ctx.close();
   });
 
   test('the pill carries the focus ring, not the field inside it', async ({ browser }) => {
-    const { ctx, page } = await freshSignedIn(browser);
-    await page.goto(`${BASE_URL}/dashboard`, { waitUntil: 'networkidle', timeout: 30000 });
-    await page.waitForSelector('[data-testid="welcome-composer"]', { timeout: 15000 });
+    await withComposerSession(browser, DEFAULT_SESSION, async (page) => {
+      await page.goto(`${BASE_URL}/dashboard`, { waitUntil: 'networkidle', timeout: 30000 });
+      await waitForComposerReady(page);
 
-    const field = page.locator('[data-testid="welcome-composer"] textarea');
-    await field.click();
-    // The focus ring may trail the focus through a transition — wait for
-    // it to paint before reading the computed styles.
-    // The testid and the class land on the SAME element — the composer
-    // root (the testid falls through onto it) — so the selector is a
-    // compound, not a descendant chain.
-    await expect
-      .poll(
-        () =>
-          page.evaluate(() => getComputedStyle(document.querySelector('[data-testid="welcome-composer"]')).boxShadow),
-        { timeout: 5000 }
-      )
-      .not.toBe('none');
+      const field = page.locator('[data-testid="welcome-composer"] textarea');
+      await field.click();
+      // The focus ring may trail the focus through a transition — wait for
+      // it to paint before reading the computed styles.
+      // The testid and the class land on the SAME element — the composer
+      // root (the testid falls through onto it) — so the selector is a
+      // compound, not a descendant chain.
+      await expect
+        .poll(
+          () =>
+            page.evaluate(() => getComputedStyle(document.querySelector('[data-testid="welcome-composer"]')).boxShadow),
+          { timeout: 5000 }
+        )
+        .not.toBe('none');
 
-    const rings = await page.evaluate(() => {
-      const pill = document.querySelector('[data-testid="welcome-composer"]');
-      const ta = document.querySelector('[data-testid="welcome-composer"] textarea');
-      const p = pill ? getComputedStyle(pill) : null;
-      const t = ta ? getComputedStyle(ta) : null;
-      return {
-        pillShadow: p ? p.boxShadow : null,
-        pillBorder: p ? p.borderTopColor : null,
-        fieldShadow: t ? t.boxShadow : null
-      };
+      const rings = await page.evaluate(() => {
+        const pill = document.querySelector('[data-testid="welcome-composer"]');
+        const ta = document.querySelector('[data-testid="welcome-composer"] textarea');
+        const p = pill ? getComputedStyle(pill) : null;
+        const t = ta ? getComputedStyle(ta) : null;
+        return {
+          pillShadow: p ? p.boxShadow : null,
+          pillBorder: p ? p.borderTopColor : null,
+          fieldShadow: t ? t.boxShadow : null
+        };
+      });
+      expect(rings.pillShadow, 'the pill shows no focus ring').not.toBe('none');
+      expect(rings.fieldShadow, 'the field draws its own focus box inside the pill').toBe('none');
     });
-    expect(rings.pillShadow, 'the pill shows no focus ring').not.toBe('none');
-    expect(rings.fieldShadow, 'the field draws its own focus box inside the pill').toBe('none');
-    await ctx.close();
   });
 });
 
@@ -586,8 +576,8 @@ const PRIMITIVE_FIELD_FLOOR = 80;
 const MEASURE_CASES = [
   { viewport: { width: 1920, height: 1080 }, theme: 'light' },
   { viewport: { width: 1920, height: 1080 }, theme: 'dark' },
-  { viewport: { width: 1440, height: 900 }, theme: 'light' },
-  { viewport: { width: 1440, height: 900 }, theme: 'dark' }
+  { viewport: { ...DEFAULT_VIEWPORT }, theme: 'light' },
+  { viewport: { ...DEFAULT_VIEWPORT }, theme: 'dark' }
 ];
 
 const label = (c) => `${c.viewport.width}x${c.viewport.height} ${c.theme}`;
@@ -611,22 +601,6 @@ const label = (c) => `${c.viewport.width}x${c.viewport.height} ${c.theme}`;
  */
 const RESTING_HEIGHT_WIDTH = 1920;
 const GROWTH_LINES = { '1920x1080 light': 2, '1440x900 light': 3 };
-
-/**
- * Sign in, land on the welcome screen and read the geometry. A thin
- * wrapper over the suite's one welcome session — the context, the login,
- * the sidebar hint and the splash-clearing reload are all `openWelcomeScreen`
- * — plus the composer itself, which is the element under test here.
- *
- * The composer's geometry does not sit behind the banner's mask layer:
- * `openWelcomeScreen`'s animation and compositing gates are enough for
- * the reads below.
- */
-async function openWelcome(browser, { viewport, theme, locale } = {}) {
-  const { ctx, page } = await openWelcomeScreen(browser, { viewport, theme, locale });
-  await page.waitForSelector('[data-testid="welcome-composer"]', { timeout: 15000 });
-  return { ctx, page };
-}
 
 async function measureWelcomeBar(page) {
   return page.evaluate(() => {
@@ -668,125 +642,128 @@ async function measureWelcomeBar(page) {
 // One test per page state: the ratio, the primitive's floor, the resting
 // height and the growth on typing all read the same four renders, and
 // each used to boot its own. Four boots instead of twelve.
+//
+// The composer's geometry does not sit behind the banner's mask layer:
+// the shared session helper's animation and compositing gates are enough
+// for the reads below.
 test.describe('welcome bar measure', () => {
   for (const c of MEASURE_CASES) {
     test(`bar measure, and the field grows with what is typed into it (${label(c)})`, async ({ browser }) => {
-      const { ctx, page } = await openWelcome(browser, c);
-      const before = await measureWelcomeBar(page);
-      expect(before.grid, 'the welcome screen has a card row').not.toBeNull();
-      expect(before.bar, 'the welcome screen has a bar').not.toBeNull();
+      await withComposerSession(browser, c, async (page) => {
+        const before = await measureWelcomeBar(page);
+        expect(before.grid, 'the welcome screen has a card row').not.toBeNull();
+        expect(before.bar, 'the welcome screen has a bar').not.toBeNull();
 
-      // The row's measure is DERIVED, not a table: the card minimum and
-      // the gap token, read from the element that declares them, decide
-      // it — 4 cards + 3 gaps. Both the grid and the wrapper have to
-      // resolve to it.
-      //
-      // The ratio assertion below cannot stand in for this: when BOTH
-      // caps are lost the row and the wrapper are both the overlay's
-      // content width, and 0.81 of one is still 0.81 of the other. That
-      // is the shape of the original defect — an unresolved var() is
-      // invalid at computed-value time and errors nowhere — so the caps
-      // are checked against the derivation on their own.
-      const cardMin = parseFloat(before.cardMin);
-      const gap = parseFloat(before.spaceXl);
-      expect(
-        Number.isFinite(cardMin) && Number.isFinite(gap),
-        `the overlay must carry the card measure for both the row and the composer to inherit it ` +
-          `(got --qh-card-min: "${before.cardMin}", --space-xl: "${before.spaceXl}"); an empty value means ` +
-          `the declaration moved somewhere the composer's wrapper is a sibling of, not a descendant of`
-      ).toBe(true);
-      const derived = 4 * cardMin + 3 * gap;
-      for (const [name, value] of [
-        ['card row', before.gridMaxW],
-        ['composer wrapper', before.wrapperMaxW]
-      ]) {
+        // The row's measure is DERIVED, not a table: the card minimum and
+        // the gap token, read from the element that declares them, decide
+        // it — 4 cards + 3 gaps. Both the grid and the wrapper have to
+        // resolve to it.
+        //
+        // The ratio assertion below cannot stand in for this: when BOTH
+        // caps are lost the row and the wrapper are both the overlay's
+        // content width, and 0.81 of one is still 0.81 of the other. That
+        // is the shape of the original defect — an unresolved var() is
+        // invalid at computed-value time and errors nowhere — so the caps
+        // are checked against the derivation on their own.
+        const cardMin = parseFloat(before.cardMin);
+        const gap = parseFloat(before.spaceXl);
         expect(
-          parseFloat(value),
-          `${name} max-width resolved to "${value}" at ${label(c)}, expected the derived measure ` +
-            `4 × ${cardMin} + 3 × ${gap} = ${derived} px — an unresolved var() is invalid at ` +
-            `computed-value time and falls back to none`
-        ).toBeCloseTo(derived, 1);
-      }
-      expect(
-        before.wrapper.w,
-        `wrapper ${before.wrapper.w} vs card row ${before.grid.w} at ${label(c)} — they share one cap, so ` +
-          `they are the same width`
-      ).toBeCloseTo(before.grid.w, 0);
-
-      expect(
-        Math.abs(before.ratio - REFERENCE_RATIO) <= RATIO_TOLERANCE,
-        `bar/card-row ratio at ${label(c)}: ${before.bar.w} / ${before.grid.w} = ${before.ratio.toFixed(4)} — ` +
-          `the mockup measures 805/989 = 0.814, expected ${REFERENCE_RATIO} ± ${RATIO_TOLERANCE}`
-      ).toBe(true);
-
-      expect(before.field, 'the welcome composer has a field').not.toBeNull();
-      expect(
-        before.field.h,
-        `field height at ${label(c)} is ${before.field.h} px — the primitive's ` +
-          `${PRIMITIVE_FIELD_FLOOR} px textarea min-height reached the composer ` +
-          `(declared min-height: ${before.fieldMinH}, bar min-height: ${before.barMinH})`
-      ).toBeLessThan(PRIMITIVE_FIELD_FLOOR);
-      expect(
-        before.bar.h,
-        `bar height at ${label(c)} is ${before.bar.h} px — the ${PRIMITIVE_FIELD_FLOOR} px field floor ` +
-          `plus the bar's padding puts it at ${PRIMITIVE_FIELD_FLOOR + 10}`
-      ).toBeLessThan(PRIMITIVE_FIELD_FLOOR);
-
-      // The resting height, where the field is wide enough for every
-      // locale's placeholder to be one line.
-      if (c.viewport.width === RESTING_HEIGHT_WIDTH) {
+          Number.isFinite(cardMin) && Number.isFinite(gap),
+          `the overlay must carry the card measure for both the row and the composer to inherit it ` +
+            `(got --qh-card-min: "${before.cardMin}", --space-xl: "${before.spaceXl}"); an empty value means ` +
+            `the declaration moved somewhere the composer's wrapper is a sibling of, not a descendant of`
+        ).toBe(true);
+        const derived = 4 * cardMin + 3 * gap;
+        for (const [name, value] of [
+          ['card row', before.gridMaxW],
+          ['composer wrapper', before.wrapperMaxW]
+        ]) {
+          expect(
+            parseFloat(value),
+            `${name} max-width resolved to "${value}" at ${label(c)}, expected the derived measure ` +
+              `4 × ${cardMin} + 3 × ${gap} = ${derived} px — an unresolved var() is invalid at ` +
+              `computed-value time and falls back to none`
+          ).toBeCloseTo(derived, 1);
+        }
         expect(
-          before.bar.h,
-          `bar height at 1920 ${c.theme} is ${before.bar.h} px — the reference's 52 px bar at a 989 px row ` +
-            `scales to 52 × 964/989 = 50.7 px at our 964 px row`
-        ).toBe(REFERENCE_BAR_HEIGHT);
+          before.wrapper.w,
+          `wrapper ${before.wrapper.w} vs card row ${before.grid.w} at ${label(c)} — they share one cap, so ` +
+            `they are the same width`
+        ).toBeCloseTo(before.grid.w, 0);
+
+        expect(
+          Math.abs(before.ratio - REFERENCE_RATIO) <= RATIO_TOLERANCE,
+          `bar/card-row ratio at ${label(c)}: ${before.bar.w} / ${before.grid.w} = ${before.ratio.toFixed(4)} — ` +
+            `the mockup measures 805/989 = 0.814, expected ${REFERENCE_RATIO} ± ${RATIO_TOLERANCE}`
+        ).toBe(true);
+
+        expect(before.field, 'the welcome composer has a field').not.toBeNull();
         expect(
           before.field.h,
-          `field height at 1920 ${c.theme} is ${before.field.h} px — one line of 14 px text plus 2 × 4 px padding`
-        ).toBeLessThanOrEqual(ONE_LINE_FIELD_MAX);
-      }
+          `field height at ${label(c)} is ${before.field.h} px — the primitive's ` +
+            `${PRIMITIVE_FIELD_FLOOR} px textarea min-height reached the composer ` +
+            `(declared min-height: ${before.fieldMinH}, bar min-height: ${before.barMinH})`
+        ).toBeLessThan(PRIMITIVE_FIELD_FLOOR);
+        expect(
+          before.bar.h,
+          `bar height at ${label(c)} is ${before.bar.h} px — the ${PRIMITIVE_FIELD_FLOOR} px field floor ` +
+            `plus the bar's padding puts it at ${PRIMITIVE_FIELD_FLOOR + 10}`
+        ).toBeLessThan(PRIMITIVE_FIELD_FLOOR);
 
-      // The growth, on the two light renders that carry it.
-      const lines = GROWTH_LINES[label(c)];
-      if (lines) {
-        const where = label(c);
-        // Real typing: the composer's own keydown owns Enter (it sends)
-        // and lets Shift+Enter through as a newline. Filling the value
-        // would skip the input path entirely.
-        const field = page.locator('[data-testid="welcome-composer"] textarea');
-        await field.click();
-        const typed = [];
-        for (let i = 1; i <= lines; i += 1) {
-          const text = `line ${i} of the question`;
-          typed.push(text);
-          if (i > 1) await page.keyboard.press('Shift+Enter');
-          await page.keyboard.type(text, { delay: 5 });
+        // The resting height, where the field is wide enough for every
+        // locale's placeholder to be one line.
+        if (c.viewport.width === RESTING_HEIGHT_WIDTH) {
+          expect(
+            before.bar.h,
+            `bar height at 1920 ${c.theme} is ${before.bar.h} px — the reference's 52 px bar at a 989 px row ` +
+              `scales to 52 × 964/989 = 50.7 px at our 964 px row`
+          ).toBe(REFERENCE_BAR_HEIGHT);
+          expect(
+            before.field.h,
+            `field height at 1920 ${c.theme} is ${before.field.h} px — one line of 14 px text plus 2 × 4 px padding`
+          ).toBeLessThanOrEqual(ONE_LINE_FIELD_MAX);
         }
-        // The bar's height grows with the field's content; the Vue-driven
-        // resize trails the last keystroke — wait for the grown height.
-        await expect
-          .poll(async () => (await measureWelcomeBar(page)).bar.h, { timeout: 5000 })
-          .toBeGreaterThan(before.bar.h);
 
-        const after = await measureWelcomeBar(page);
-        expect(after.value, `the field holds every line typed at ${where} (got ${JSON.stringify(after.value)})`).toBe(
-          typed.join('\n')
-        );
-        expect(
-          after.bar.h,
-          `bar height at ${where} stayed at ${after.bar.h} px after ${lines} lines were typed ` +
-            `(was ${before.bar.h} px) — the field did not grow with its content`
-        ).toBeGreaterThan(before.bar.h);
-        // Every line is on show: the field is as tall as its content, so
-        // nothing is scrolled out of the last line.
-        expect(
-          after.fieldScrollH,
-          `field content is ${after.fieldScrollH} px in a ${after.fieldClientH} px box at ${where} — ` +
-            `the last line is scrolled out of view`
-        ).toBeLessThanOrEqual(after.fieldClientH + 1);
-      }
+        // The growth, on the two light renders that carry it.
+        const lines = GROWTH_LINES[label(c)];
+        if (lines) {
+          const where = label(c);
+          // Real typing: the composer's own keydown owns Enter (it sends)
+          // and lets Shift+Enter through as a newline. Filling the value
+          // would skip the input path entirely.
+          const field = page.locator('[data-testid="welcome-composer"] textarea');
+          await field.click();
+          const typed = [];
+          for (let i = 1; i <= lines; i += 1) {
+            const text = `line ${i} of the question`;
+            typed.push(text);
+            if (i > 1) await page.keyboard.press('Shift+Enter');
+            await page.keyboard.type(text, { delay: 5 });
+          }
+          // The bar's height grows with the field's content; the Vue-driven
+          // resize trails the last keystroke — wait for the grown height.
+          await expect
+            .poll(async () => (await measureWelcomeBar(page)).bar.h, { timeout: 5000 })
+            .toBeGreaterThan(before.bar.h);
 
-      await ctx.close();
+          const after = await measureWelcomeBar(page);
+          expect(after.value, `the field holds every line typed at ${where} (got ${JSON.stringify(after.value)})`).toBe(
+            typed.join('\n')
+          );
+          expect(
+            after.bar.h,
+            `bar height at ${where} stayed at ${after.bar.h} px after ${lines} lines were typed ` +
+              `(was ${before.bar.h} px) — the field did not grow with its content`
+          ).toBeGreaterThan(before.bar.h);
+          // Every line is on show: the field is as tall as its content, so
+          // nothing is scrolled out of the last line.
+          expect(
+            after.fieldScrollH,
+            `field content is ${after.fieldScrollH} px in a ${after.fieldClientH} px box at ${where} — ` +
+              `the last line is scrolled out of view`
+          ).toBeLessThanOrEqual(after.fieldClientH + 1);
+        }
+      });
     });
   }
 
@@ -846,63 +823,60 @@ test.describe('welcome bar measure', () => {
     const measurements = {}; // measurements[locale][viewport] = { rendered, contentW, fieldH, barH }
 
     for (const vp of VIEWPORTS) {
-      const { ctx, page } = await openWelcome(browser, {
-        viewport: { width: vp.width, height: vp.height }
-      });
+      await withComposerSession(browser, { viewport: { width: vp.width, height: vp.height } }, async (page) => {
+        for (const locale of LOCALES) {
+          const expected = composerPlaceholder(locale);
+          await page.evaluate((l) => {
+            document.querySelector('#app').__vue_app__.config.globalProperties.$setLocale(l);
+          }, locale);
+          await page.waitForFunction(
+            ({ want, wantLang }) => {
+              const ta = document.querySelector('[data-testid="welcome-composer"] textarea');
+              return !!ta && ta.placeholder === want && document.documentElement.lang === wantLang;
+            },
+            { want: expected, wantLang: locale },
+            { timeout: 10000 }
+          );
 
-      for (const locale of LOCALES) {
-        const expected = composerPlaceholder(locale);
-        await page.evaluate((l) => {
-          document.querySelector('#app').__vue_app__.config.globalProperties.$setLocale(l);
-        }, locale);
-        await page.waitForFunction(
-          ({ want, wantLang }) => {
+          const m = await page.evaluate(() => {
             const ta = document.querySelector('[data-testid="welcome-composer"] textarea');
-            return !!ta && ta.placeholder === want && document.documentElement.lang === wantLang;
-          },
-          { want: expected, wantLang: locale },
-          { timeout: 10000 }
-        );
-
-        const m = await page.evaluate(() => {
-          const ta = document.querySelector('[data-testid="welcome-composer"] textarea');
-          if (!ta) return null;
-          const cs = getComputedStyle(ta);
-          // Chromium's <canvas> shorthand `font` setter takes the same
-          // combination the layout engine uses — `font-style font-variant
-          // font-weight font-size/line-height font-family`. Reading the
-          // longhand properties and joining avoids drift between the
-          // measurement and what the page actually rendered with.
-          const font =
-            `${cs.fontStyle} ${cs.fontVariant} ${cs.fontWeight} ` +
-            `${cs.fontSize}/${cs.lineHeight} ${cs.fontFamily}`.trim();
-          const canvas = document.createElement('canvas');
-          const cctx = canvas.getContext('2d');
-          cctx.font = font;
-          const renderedW = cctx.measureText(ta.placeholder).width;
-          const fieldRect = ta.getBoundingClientRect();
-          // The text is laid out in the CONTENT box, not the border box:
-          // `getBoundingClientRect()` reports border-box, the textarea's
-          // padding eats 4 px on each side, so subtract it before
-          // comparing the rendered text against the field.
-          const padL = parseFloat(cs.paddingLeft) || 0;
-          const padR = parseFloat(cs.paddingRight) || 0;
-          const contentW = fieldRect.width - padL - padR;
-          const bar = document.querySelector('[data-testid="quick-help-composer"] [data-testid="welcome-composer"]');
-          const barRect = bar ? bar.getBoundingClientRect() : null;
-          return {
-            lang: document.documentElement.lang,
-            placeholder: ta.placeholder,
-            renderedW: +renderedW.toFixed(2),
-            contentW: +contentW.toFixed(2),
-            fieldH: +fieldRect.height.toFixed(2),
-            barH: barRect ? +barRect.height.toFixed(2) : null
-          };
-        });
-        if (!measurements[locale]) measurements[locale] = {};
-        measurements[locale][vp.name] = m;
-      }
-      await ctx.close();
+            if (!ta) return null;
+            const cs = getComputedStyle(ta);
+            // Chromium's <canvas> shorthand `font` setter takes the same
+            // combination the layout engine uses — `font-style font-variant
+            // font-weight font-size/line-height font-family`. Reading the
+            // longhand properties and joining avoids drift between the
+            // measurement and what the page actually rendered with.
+            const font =
+              `${cs.fontStyle} ${cs.fontVariant} ${cs.fontWeight} ` +
+              `${cs.fontSize}/${cs.lineHeight} ${cs.fontFamily}`.trim();
+            const canvas = document.createElement('canvas');
+            const cctx = canvas.getContext('2d');
+            cctx.font = font;
+            const renderedW = cctx.measureText(ta.placeholder).width;
+            const fieldRect = ta.getBoundingClientRect();
+            // The text is laid out in the CONTENT box, not the border box:
+            // `getBoundingClientRect()` reports border-box, the textarea's
+            // padding eats 4 px on each side, so subtract it before
+            // comparing the rendered text against the field.
+            const padL = parseFloat(cs.paddingLeft) || 0;
+            const padR = parseFloat(cs.paddingRight) || 0;
+            const contentW = fieldRect.width - padL - padR;
+            const bar = document.querySelector('[data-testid="quick-help-composer"] [data-testid="welcome-composer"]');
+            const barRect = bar ? bar.getBoundingClientRect() : null;
+            return {
+              lang: document.documentElement.lang,
+              placeholder: ta.placeholder,
+              renderedW: +renderedW.toFixed(2),
+              contentW: +contentW.toFixed(2),
+              fieldH: +fieldRect.height.toFixed(2),
+              barH: barRect ? +barRect.height.toFixed(2) : null
+            };
+          });
+          if (!measurements[locale]) measurements[locale] = {};
+          measurements[locale][vp.name] = m;
+        }
+      });
     }
 
     // Surface every locale's numbers in one summary so a failure can be

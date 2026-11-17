@@ -81,7 +81,6 @@
 
 const { test, expect } = require('@playwright/test');
 const { withWelcomeSession, readVisualLayerState, capturePixels, lum, WCAG_BIND } = require('../helpers/welcome');
-const { assertAdoptedLocale } = require('../helpers/locale');
 
 /*
  * The measured floors.
@@ -1084,7 +1083,7 @@ async function subtitleContrast(page) {
 test.describe('Welcome banner invariants', () => {
   // The budget below is the default 60s per test, and one test is 12 sessions
   // (6 viewports x 2 themes), each a browser login plus the entrance gate
-  // openWelcomeScreen applies (pixel readers pay the compositing gate once
+  // withWelcomeSession applies (pixel readers pay the compositing gate once
   // per page, inside capturePixels). At four viewports
   // that was eight sessions and fitted; at six it does not, and three of the
   // six tests were killed mid-loop by the harness with the viewport list's
@@ -1360,7 +1359,6 @@ test.describe('Welcome banner invariants', () => {
             { viewport: { width: vp.width, height: 800 }, theme, locale },
             async (page) => {
               const where = `${vp.label}/${theme}/${locale}`;
-              await assertAdoptedLocale(page, where, locale);
               const m = await veilGeometry(page);
               expect(m, `${where} the veil's geometry read`).not.toBeNull();
 
@@ -1442,7 +1440,6 @@ test.describe('Welcome banner invariants', () => {
             { viewport: { width: vp.width, height: 800 }, theme, locale },
             async (page) => {
               const where = `${vp.label}/${theme}/${locale}`;
-              await assertAdoptedLocale(page, where, locale);
               // The title's own state in one string, so every message below can
               // name what the difference costs instead of only what it is.
               const as = (g) =>

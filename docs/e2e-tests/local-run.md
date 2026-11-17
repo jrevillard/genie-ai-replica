@@ -331,8 +331,9 @@ verdict as a `venue build:` line:
 
 The difference is read from the checkout (`git diff --name-only
 <served-sha>..HEAD`) and sorted by what a path can change — the served
-code (the image build contexts: `components/**`, `genie-ai-overlay/**`,
-`configs/**`, `api-gateway-solution/**`, the `env*` and compose files),
+code (the image build contexts and the bind mounts: `components/**`,
+`genie-ai-overlay/**`, `configs/**`, `tools/tempo-proxy/**`,
+`api-gateway-solution/**`, `secrets/**`, the `env*` and compose files),
 the deployment definition, and neither. A path the table does not know
 is treated as served: the verdict must not understate a difference.
 - **predates the contract** — no readable `/build-info.json` (the SPA

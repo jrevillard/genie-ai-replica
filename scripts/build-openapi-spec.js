@@ -50,14 +50,16 @@ function buildSpec() {
       ' servers list).'
   );
   const flow = spec.components?.securitySchemes?.KeycloakOAuth2?.flows?.authorizationCode;
-  // swagger-definition.js prefers KEYCLOAK_PUBLIC_URL for the flow URLs
-  // (#1889) — the envelope pins only KEYCLOAK_URL (env -i: PUBLIC_URL is
-  // unset here), so a pin assignment dropped from the env -i line would
-  // now surface as a RELATIVE served URL, not an 'undefined' interpolation.
-  // The 'undefined' check alone would pass vacuously; the startsWith pin
-  // check keeps the drop loud (and proves the served URL derives from the
-  // pin, which the committed Dart artifacts embed).
-  const keycloakPin = process.env.KEYCLOAK_URL;
+  // swagger-definition.js builds the flow URLs from KEYCLOAK_PUBLIC_URL when
+  // it is set, and from KEYCLOAK_URL otherwise (#1889). Two properties must
+  // hold for the committed Dart artifacts (which embed these URLs):
+  //   - the served URL is CONCRETE and ABSOLUTE — a dropped KEYCLOAK_URL pin
+  //     now yields a same-origin RELATIVE URL (not an 'undefined'
+  //     interpolation), which the old 'undefined' check passed vacuously;
+  //   - it derives from the configured base, so the artifacts stay pinned.
+  // The envelope pins KEYCLOAK_URL only (env -i leaves PUBLIC_URL unset);
+  // the expected base therefore mirrors the code's own precedence.
+  const expectedBase = (process.env.KEYCLOAK_PUBLIC_URL || process.env.KEYCLOAK_URL || '').trim().replace(/\/$/, '');
   for (const [label, url] of [
     ['authorizationUrl', flow?.authorizationUrl],
     ['tokenUrl', flow?.tokenUrl]
@@ -65,12 +67,12 @@ function buildSpec() {
     assert.ok(
       typeof url === 'string' &&
         !url.includes('undefined') &&
-        typeof keycloakPin === 'string' &&
-        url.startsWith(keycloakPin),
+        /^https?:\/\//.test(url) &&
+        (expectedBase === '' || url.startsWith(expectedBase)),
       label +
-        ' is not a concrete URL derived from the KEYCLOAK_URL pin — the' +
-        ' KEYCLOAK_URL/KEYCLOAK_REALM pins are missing from the env -i line' +
-        ' in scripts/generate-api-client.sh, or swagger-definition.js no' +
+        ' is not a concrete URL (absolute, derived from the KEYCLOAK_URL pin) —' +
+        ' the KEYCLOAK_URL/KEYCLOAK_REALM pins are missing from the env -i' +
+        ' line in scripts/generate-api-client.sh, or swagger-definition.js no' +
         ' longer builds the flow URLs from KEYCLOAK_PUBLIC_URL/KEYCLOAK_URL.'
     );
   }

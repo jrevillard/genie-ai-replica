@@ -881,6 +881,16 @@ KEYCLOAK_URL=https://localhost/auth
 # reachable from inside the container network, e.g. Docker Desktop WSL2):
 #   KEYCLOAK_PUBLIC_URL   — browser-facing issuer alias for token validation
 #                           (backend, document-repository, okf-server). Unset = disabled.
+#                           ALSO the browser-facing base for the Swagger UI OAuth2
+#                           flow URLs the backend serves in /api-docs.json
+#                           (authorizationUrl/tokenUrl, #1889): the Authorize
+#                           round-trip runs in the browser, so a deployment whose
+#                           KEYCLOAK_URL is an internal address must set this
+#                           variable to the browser-reachable base, or the popup
+#                           dies on DNS. A value that is not an absolute http(s)
+#                           URL is IGNORED (the flow URLs fall back to
+#                           KEYCLOAK_URL). KEYCLOAK_BROWSER_ISSUER is NOT a base
+#                           URL (it is a full issuer) and does not feed them.
 #   KEYCLOAK_INTERNAL_URL — internal Keycloak base (http://keycloak:8080) used by
 #                           chatqna (JWKS fetch) and dataprep (service-account token
 #                           mint). okf-server uses it ONLY as a connection failover —

@@ -72,4 +72,56 @@ describe('swagger-definition OAuth2 flow URLs', () => {
     const { authorizationUrl } = flowUrls();
     expect(authorizationUrl).toBe('https://docs.example.org/auth/realms/genie/protocol/openid-connect/auth');
   });
+
+  it('treats an EMPTY KEYCLOAK_PUBLIC_URL as unset (the compose delivery shape)', () => {
+    // Compose delivers `KEYCLOAK_PUBLIC_URL=${KEYCLOAK_PUBLIC_URL:-}` — an
+    // unset variable arrives as the empty string, not as an absent one.
+    process.env.KEYCLOAK_URL = 'https://keycloak.example.com/auth';
+    process.env.KEYCLOAK_PUBLIC_URL = '';
+    process.env.KEYCLOAK_REALM = 'genie';
+    jest.resetModules();
+    const { authorizationUrl } = flowUrls();
+    expect(authorizationUrl).toBe('https://keycloak.example.com/auth/realms/genie/protocol/openid-connect/auth');
+  });
+
+  it('ignores a KEYCLOAK_PUBLIC_URL that is not an absolute http(s) URL', () => {
+    // Served verbatim, a scheme-less or whitespace-carrying value breaks the
+    // Authorize popup — the same class the servers[0].url base refuses.
+    process.env.KEYCLOAK_URL = 'https://keycloak.example.com/auth';
+    process.env.KEYCLOAK_PUBLIC_URL = 'docs.example.org/auth';
+    process.env.KEYCLOAK_REALM = 'genie';
+    jest.resetModules();
+    const { authorizationUrl } = flowUrls();
+    expect(authorizationUrl).toBe('https://keycloak.example.com/auth/realms/genie/protocol/openid-connect/auth');
+  });
+
+  it('trims a KEYCLOAK_PUBLIC_URL carrying surrounding whitespace (same as the servers base)', () => {
+    process.env.KEYCLOAK_URL = 'https://keycloak.example.com/auth';
+    process.env.KEYCLOAK_PUBLIC_URL = ' https://docs.example.org/auth ';
+    process.env.KEYCLOAK_REALM = 'genie';
+    jest.resetModules();
+    const { authorizationUrl } = flowUrls();
+    expect(authorizationUrl).toBe('https://docs.example.org/auth/realms/genie/protocol/openid-connect/auth');
+  });
+
+  it('ignores a KEYCLOAK_PUBLIC_URL carrying embedded whitespace', () => {
+    process.env.KEYCLOAK_URL = 'https://keycloak.example.com/auth';
+    process.env.KEYCLOAK_PUBLIC_URL = 'https://do cs.example.org/auth';
+    process.env.KEYCLOAK_REALM = 'genie';
+    jest.resetModules();
+    const { authorizationUrl } = flowUrls();
+    expect(authorizationUrl).toBe('https://keycloak.example.com/auth/realms/genie/protocol/openid-connect/auth');
+  });
+
+  it('never degrades to a same-origin relative URL when no base URL is configured', () => {
+    // A relative served URL opens the Authorize popup on the docs origin
+    // itself — a silent misconfiguration. The unset case must stay visibly
+    // broken instead.
+    delete process.env.KEYCLOAK_URL;
+    delete process.env.KEYCLOAK_PUBLIC_URL;
+    process.env.KEYCLOAK_REALM = 'genie';
+    jest.resetModules();
+    const { authorizationUrl } = flowUrls();
+    expect(authorizationUrl.startsWith('/')).toBe(false);
+  });
 });

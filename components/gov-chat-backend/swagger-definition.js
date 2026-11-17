@@ -12,9 +12,34 @@
 // browser-facing alias the shared verifier already honours
 // (shared/lib/keycloak-auth-service.js); unset = KEYCLOAK_URL, the
 // historical compose behaviour (there KEYCLOAK_URL is already
-// browser-reachable). Trailing slash stripped, same shape as the
-// verifier's public-issuer alias.
-const oauth2BaseUrl = (process.env.KEYCLOAK_PUBLIC_URL || process.env.KEYCLOAK_URL || '').replace(/\/+$/, '');
+// browser-reachable).
+//
+// The public value is served verbatim to the browser, so it is validated
+// like the servers[0].url base below: a value that is not an absolute
+// http(s) URL, or that carries whitespace or a control character, is
+// IGNORED and the flow URLs fall back to KEYCLOAK_URL (the historical
+// source). One trailing slash is stripped — the same normalization the
+// verifier applies to its public-issuer alias, so the served URL and the
+// accepted issuer cannot drift apart.
+//
+// When no base URL is configured at all, KEYCLOAK_URL stays undefined and
+// the served URL keeps the historical visibly-broken 'undefined' shape: a
+// same-origin relative URL would open the Authorize popup on the docs
+// origin itself — a silent misconfiguration.
+const oauth2BaseUrl = (() => {
+  const publicBase = (process.env.KEYCLOAK_PUBLIC_URL || '').trim().replace(/\/$/, '');
+  if (publicBase) {
+    // eslint-disable-next-line no-control-regex -- intentional: the C0 control range is exactly what WHATWG strips
+    if (!/[\s\u0000-\u001F"#<>?`{}]/.test(publicBase)) {
+      try {
+        if (/^https?:$/.test(new URL(publicBase).protocol)) return publicBase;
+      } catch {
+        // Not a parseable URL — fall through to KEYCLOAK_URL.
+      }
+    }
+  }
+  return process.env.KEYCLOAK_URL;
+})();
 
 module.exports = {
   openapi: '3.0.0',

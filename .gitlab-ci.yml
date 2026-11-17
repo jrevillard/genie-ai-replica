@@ -1268,6 +1268,13 @@ container_scanning:
   image: docker:28
   tags: [docker]
   interruptible: true
+  # Shallow clone for the build jobs: they consume the checkout as a build
+  # context and never read the history, while the pipeline-wide GIT_DEPTH: 0
+  # makes every job clone the full 2.1 GB .git (measured 2026-11-17) — the
+  # clone alone ran past the runner's get_sources budget and killed the
+  # build jobs at a constant 65 s (retriever-arango / dataprep-arango /
+  # keycloak-config), with no error in the job trace.
+  GIT_DEPTH: "1"
   # Builds consume only the checkout (docker buildx) — no upstream artifacts.
   # Without this, GitLab's default makes every build job download ALL
   # test-stage artifacts (scan reports, JUnit XML) — pure waste, and the

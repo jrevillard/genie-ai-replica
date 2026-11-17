@@ -80,6 +80,7 @@ def overlay_values():
     return yaml.safe_load(
         """
         opea:
+          enabled: true
           chatqna:
             rerankingStrategy: threshold
           gpu:
@@ -118,29 +119,35 @@ def test_template_literal_is_the_source_of_a_literal(env_maps):
     assert entry["literal"] == "7000"
 
 
-def test_helper_rendered_variable_is_not_compared(chart_values, env_maps):
+def test_helper_rendered_variable_is_not_compared(chart_values, overlay_values, env_maps):
     """A variable the template renders by a helper is TEMPLATE, not a difference."""
     workload = {
         "name": "genieai-genieai-umbrella-chatqna",
         "component": "chatqna",
         "containers": [{"name": "chatqna", "image": "x", "env": {"OTEL_EXPORTER_OTLP_ENDPOINT": "http://x"}}],
     }
-    rows, undeclared = capture.compare_workload(workload, env_maps, chart_values, {}, chart_values)
+    effective = capture.deep_merge(chart_values, overlay_values)
+    rows, undeclared, _injected = capture.compare_workload(
+        workload, env_maps, chart_values, overlay_values, effective
+    )
     row = next(row for row in rows if row["env"] == "OTEL_EXPORTER_OTLP_ENDPOINT")
     assert row["status"] == "TEMPLATE"
     assert not undeclared
 
 
-def test_matching_value_is_reported_as_match(chart_values, env_maps):
-    """The chart default and the deployed value agree -> MATCH."""
+def test_matching_value_is_reported_as_match(chart_values, overlay_values, env_maps):
+    """The source's effective value and the deployed value agree -> MATCH."""
     workload = {
         "name": "genieai-genieai-umbrella-chatqna",
         "component": "chatqna",
         "containers": [
-            {"name": "chatqna", "image": "x", "env": {"RERANKING_STRATEGY": "slice"}}
+            {"name": "chatqna", "image": "x", "env": {"RERANKING_STRATEGY": "threshold"}}
         ],
     }
-    rows, _ = capture.compare_workload(workload, env_maps, chart_values, {}, chart_values)
+    effective = capture.deep_merge(chart_values, overlay_values)
+    rows, _, _injected = capture.compare_workload(
+        workload, env_maps, chart_values, overlay_values, effective
+    )
     row = next(row for row in rows if row["env"] == "RERANKING_STRATEGY")
     assert row["status"] == "MATCH"
     assert row["source_path"] == "opea.chatqna.rerankingStrategy"
@@ -156,7 +163,7 @@ def test_the_three_layers_stay_distinct(chart_values, overlay_values, env_maps):
             {"name": "chatqna", "image": "x", "env": {"RERANKING_STRATEGY": "threshold"}}
         ],
     }
-    rows, _ = capture.compare_workload(
+    rows, _, _injected = capture.compare_workload(
         workload, env_maps, chart_values, overlay_values, effective
     )
     row = next(row for row in rows if row["env"] == "RERANKING_STRATEGY")
@@ -180,7 +187,7 @@ def test_derived_value_is_compared_against_the_chart_derivation(chart_values, ov
             }
         ],
     }
-    rows, _ = capture.compare_workload(
+    rows, _, _injected = capture.compare_workload(
         workload, env_maps, chart_values, overlay_values, effective
     )
     row = next(row for row in rows if row["env"] == "VLLM_LLM_ENDPOINT")
@@ -188,15 +195,17 @@ def test_derived_value_is_compared_against_the_chart_derivation(chart_values, ov
     assert row["overlay_value"] == "https://gpu.example:444/llm"
 
 
-def test_a_fallback_chain_resolves_to_the_value_the_chart_renders(chart_values, env_maps):
+def test_a_fallback_chain_resolves_to_the_value_the_chart_renders(chart_values, overlay_values, env_maps):
     """The chart's own fallback is part of the source: no difference, no disposition."""
-    effective = chart_values
+    effective = capture.deep_merge(chart_values, overlay_values)
     workload = {
         "name": "genieai-genieai-umbrella-chatqna",
         "component": "chatqna",
         "containers": [{"name": "chatqna", "image": "x", "env": {"KC_REALM": "genie"}}],
     }
-    rows, _ = capture.compare_workload(workload, env_maps, chart_values, {}, effective)
+    rows, _, _injected = capture.compare_workload(
+        workload, env_maps, chart_values, overlay_values, effective
+    )
     row = next(row for row in rows if row["env"] == "KC_REALM")
     assert row["status"] == "MATCH"
     assert row["source_path"] == "data.keycloak.realm"
@@ -216,7 +225,7 @@ def test_secret_value_never_reaches_the_record():
     assert env["PLAIN"] == "visible"
 
 
-def test_injected_variables_are_skipped_unless_the_chart_declares_them(chart_values, env_maps):
+def test_injected_variables_are_skipped_unless_the_chart_declares_them(chart_values, overlay_values, env_maps):
     """Kubernetes injects the service-discovery variables; a chart-declared one is compared."""
     workload = {
         "name": "genieai-genieai-umbrella-retriever",
@@ -232,7 +241,10 @@ def test_injected_variables_are_skipped_unless_the_chart_declares_them(chart_val
             }
         ],
     }
-    rows, undeclared = capture.compare_workload(workload, env_maps, chart_values, {}, chart_values)
+    effective = capture.deep_merge(chart_values, overlay_values)
+    rows, undeclared, _injected = capture.compare_workload(
+        workload, env_maps, chart_values, overlay_values, effective
+    )
     compared = [row for row in rows if row["status"] != "NOT CARRIED"]
     assert [row["env"] for row in compared] == ["RETRIEVER_ARANGO_K"]
     # the injected variable is dropped, the declared-but-absent ones are reported
@@ -296,30 +308,64 @@ def test_a_dispositioned_difference_exits_zero(tmp_path):
     assert unresolved == []
     assert capture.exit_code_for(unresolved) == 0
 
-def test_a_model_difference_reaches_the_discrepancy_table(tmp_path):
+def test_a_model_difference_reaches_the_discrepancy_table(tmp_path, chart_values):
     """A served model that differs from the source is a difference, and it fails."""
     models = capture.build_models(
-        {"chatqna": {"LLM_MODEL": "ibm-granite/granite-4.1-8b"}},
-        {"opea": {"models": {"llm": {"modelId": "ibm-granite/granite-4.1-8b"}}}},
-        {"llm": {"model_id": "another/model"}},
+        {
+            "chatqna": {
+                "LLM_MODEL": "ibm-granite/granite-4.1-8b",
+                "VLLM_TRANSLATION_MODEL_ID": "google/gemma-3-4b-it",
+            },
+            "embedding": {"EMBEDDING_MODEL_ID": "BAAI/bge-large-en-v1.5"},
+        },
+        chart_values,
+        chart_values,
+        {
+            "embedding": {"model_id": "BAAI/bge-large-en-v1.5"},
+            "reranker": {"model_id": "BAAI/bge-reranker-v2-m3"},
+            "llm": {"model_id": "another/model"},
+            "translation": {"model_id": "google/gemma-3-4b-it"},
+        },
     )
     llm = next(model for model in models if model["role"] == "llm")
     assert llm["status"] == "DIFFERENT"
 
     data = _record_data()
-    data["discrepancies"].append(
-        {
-            "workload": "(llm model)",
-            "env": "model id",
-            "source_value": llm["chart_default"],
-            "source_path": llm["chart_default_path"],
-            "deployed": llm["served"],
-            "disposition": "**UNRESOLVED**",
-        }
-    )
+    # The production rule builds the rows: a test that hand-copies them
+    # would pass even if the rule were dropped.
+    data["discrepancies"].extend(capture.model_discrepancy_rows(models))
     out_path = str(tmp_path / "record.md")
     unresolved = capture.write_record(data, out_path)
     assert len(unresolved) == 1
+    assert capture.exit_code_for(unresolved) == 2
+
+
+def test_the_capture_fails_on_a_configuration_difference_it_finds(tmp_path):
+    """The program's own gate: the difference the capture finds fails the capture."""
+    data = _record_data()
+    data["discrepancies"] = capture.collect_discrepancies(
+        [
+            {
+                "workload": "genieai-genieai-umbrella-chatqna",
+                "rows": [
+                    {
+                        "env": "RERANKING_STRATEGY",
+                        "status": "DIFFERENT",
+                        "source_value": "slice",
+                        "overlay_value": "",
+                        "effective_value": "slice",
+                        "source_path": "opea.chatqna.rerankingStrategy",
+                        "deployed": "adaptive",
+                    }
+                ],
+            }
+        ],
+        [],
+        [],
+    )
+    assert len(data["discrepancies"]) == 1
+    out_path = tmp_path / "record.md"
+    unresolved = capture.write_record(data, str(out_path))
     assert capture.exit_code_for(unresolved) == 2
 
 
@@ -372,14 +418,14 @@ def test_a_subtree_is_not_treated_as_a_value():
 
 def test_the_overlay_is_read_where_the_value_resolves(chart_values, env_maps):
     """An override further down the chain is the layer that produced the value."""
-    overlay = {"data": {"keycloak": {"realm": "gov-realm"}}}
+    overlay = {"opea": {"enabled": True}, "data": {"keycloak": {"realm": "gov-realm"}}}
     effective = capture.deep_merge(chart_values, overlay)
     workload = {
         "name": "genieai-genieai-umbrella-chatqna",
         "component": "chatqna",
         "containers": [{"name": "chatqna", "image": "x", "env": {"KC_REALM": "gov-realm"}}],
     }
-    rows, _ = capture.compare_workload(
+    rows, _, _injected = capture.compare_workload(
         workload, env_maps, chart_values, overlay, effective
     )
     row = next(row for row in rows if row["env"] == "KC_REALM")
@@ -401,27 +447,194 @@ def test_the_chart_default_carries_the_path_it_resolved_from(chart_values, overl
     # The overlay pins the realm; the chart default falls through the same
     # chain but may land on a different element. The row must say where each
     # column came from.
-    overlay = {"data": {"keycloak": {"realm": "gov-realm"}}}
+    overlay = {"opea": {"enabled": True}, "data": {"keycloak": {"realm": "gov-realm"}}}
     effective = capture.deep_merge(chart_values, overlay)
     workload = {
         "name": "genieai-genieai-umbrella-chatqna",
         "component": "chatqna",
         "containers": [{"name": "chatqna", "image": "x", "env": {"KC_REALM": "gov-realm"}}],
     }
-    rows, _ = capture.compare_workload(
+    rows, _, _injected = capture.compare_workload(
         workload, env_maps, chart_values, overlay, effective
     )
     row = next(row for row in rows if row["env"] == "KC_REALM")
     assert row["default_path"] == row["source_path"]
 
 
-def test_the_record_names_both_chart_versions():
+def test_the_record_names_both_chart_versions(tmp_path):
     """The record says which chart it reconciles against and which the release attests."""
     data = _record_data()
     data["capture"]["chart_version"] = "0.2.1"
     data["capture"]["local_chart_version"] = "0.2.2"
-    out_path = "/tmp/record-versions.md"
-    capture.write_record(data, out_path)
-    text = open(out_path, encoding="utf-8").read()
+    out_path = tmp_path / "record.md"
+    capture.write_record(data, str(out_path))
+    text = out_path.read_text(encoding="utf-8")
     assert "version 0.2.2" in text
     assert "attests 0.2.1" in text
+
+
+def test_a_row_the_chart_renders_under_a_condition_is_not_a_missing_one(chart_values, env_maps):
+    """The chart omits the prompt row when the value is empty: not a difference."""
+    overlay = {"opea": {"enabled": True}}
+    effective = capture.deep_merge(chart_values, overlay)
+    workload = {
+        "name": "genieai-genieai-umbrella-chatqna",
+        "component": "chatqna",
+        "containers": [{"name": "chatqna", "image": "x", "env": {"LLM_MODEL": "m"}}],
+    }
+    rows, _, _injected = capture.compare_workload(
+        workload, env_maps, chart_values, overlay, effective
+    )
+    assert "CHATQNA_SYSTEM_PROMPT" not in [row["env"] for row in rows]
+
+
+def test_a_guarded_row_is_reported_when_the_condition_holds(chart_values, env_maps):
+    """With the operator's prompt set, the chart declares the row: it is reported."""
+    overlay = {"opea": {"enabled": True, "chatqna": {"systemPrompt": "be brief"}}}
+    effective = capture.deep_merge(chart_values, overlay)
+    workload = {
+        "name": "genieai-genieai-umbrella-chatqna",
+        "component": "chatqna",
+        "containers": [{"name": "chatqna", "image": "x", "env": {"LLM_MODEL": "m"}}],
+    }
+    rows, _, _injected = capture.compare_workload(workload, env_maps, chart_values, overlay, effective)
+    row = next(row for row in rows if row["env"] == "CHATQNA_SYSTEM_PROMPT")
+    assert row["status"] == "NOT CARRIED"
+
+
+def test_the_backend_translation_model_is_read_through_the_template(chart_values, overlay_values, env_maps):
+    """The template's own fallback is the source: the chart's leaf is empty."""
+    workload = {
+        "name": "genieai-genieai-umbrella-backend",
+        "component": "backend",
+        "containers": [
+            {
+                "name": "backend",
+                "image": "x",
+                "env": {"VLLM_TRANSLATION_MODEL_ID": "google/gemma-3-4b-it"},
+            }
+        ],
+    }
+    effective = capture.deep_merge(chart_values, overlay_values)
+    rows, _, _injected = capture.compare_workload(
+        workload, env_maps, chart_values, overlay_values, effective
+    )
+    row = next(row for row in rows if row["env"] == "VLLM_TRANSLATION_MODEL_ID")
+    assert row["source_path"] == "services.backend.translation.modelId"
+    assert row["source_value"] == "google/gemma-3-4b-it"
+    assert row["status"] == "MATCH"
+
+
+def test_the_backend_translation_endpoint_is_compared(chart_values, overlay_values, env_maps):
+    """A derived endpoint the application tier carries is reconciled, not dropped."""
+    effective = capture.deep_merge(chart_values, overlay_values)
+    workload = {
+        "name": "genieai-genieai-umbrella-backend",
+        "component": "backend",
+        "containers": [
+            {
+                "name": "backend",
+                "image": "x",
+                "env": {"VLLM_TRANSLATION_ENDPOINT": "https://gpu.example:444/translation"},
+            }
+        ],
+    }
+    rows, undeclared, _injected = capture.compare_workload(
+        workload, env_maps, chart_values, overlay_values, effective
+    )
+    row = next(row for row in rows if row["env"] == "VLLM_TRANSLATION_ENDPOINT")
+    assert row["status"] == "MATCH"
+    assert "VLLM_TRANSLATION_ENDPOINT" not in [name for name, _value in undeclared]
+
+
+def test_a_role_the_deployment_does_not_declare_is_not_compared(chart_values):
+    """The reranker model belongs to the in-cluster tier this venue does not run."""
+    models = capture.build_models(
+        {"chatqna": {"LLM_MODEL": "ibm-granite/granite-4.1-8b"}},
+        chart_values,
+        chart_values,
+        {
+            "embedding": {"model_id": "BAAI/bge-large-en-v1.5"},
+            "reranker": {"model_id": "BAAI/bge-reranker-v2-m3"},
+            "llm": {"model_id": "ibm-granite/granite-4.1-8b"},
+            "translation": {"model_id": "google/gemma-3-4b-it"},
+        },
+    )
+    reranker = next(model for model in models if model["role"] == "reranker")
+    assert reranker["status"] == "NOT DECLARED HERE"
+    assert reranker["served"] == "BAAI/bge-reranker-v2-m3"
+    llm = next(model for model in models if model["role"] == "llm")
+    assert llm["status"] == "MATCH"
+
+
+def test_the_images_are_compared_by_content_not_by_index(monkeypatch):
+    """The same content behind another index digest is not a difference."""
+    digests = {
+        "main": ("sha256:index-new", "sha256:child", ""),
+        "sha256:index-old": ("sha256:index-old", "sha256:child", ""),
+        "sha256:child": ("sha256:child", "sha256:child", ""),
+    }
+
+    def fake_manifest(image, reference):
+        return digests.get(reference, (None, "", "not found"))
+
+    monkeypatch.setattr(capture, "registry_manifest", fake_manifest)
+    images = [
+        {
+            "workload": "w",
+            "container": "c",
+            "image": "registry.example/genie-ai-backend:main",
+            "running_digest": "registry.example/genie-ai-backend@sha256:index-old",
+            "running_child_digest": "",
+            "pull_policy": "Always",
+            "registry_digest": "",
+            "registry_child_digest": "",
+            "status": "NOT RUNNING",
+            "_image": "registry.example/genie-ai-backend:main",
+        }
+    ]
+    capture.resolve_registry_digests(images)
+    assert images[0]["status"] == "SAME CONTENT"
+
+    digests["sha256:index-old"] = ("sha256:index-old", "sha256:other-child", "")
+    images[0]["_image"] = "registry.example/genie-ai-backend:main"
+    images[0]["running_digest"] = "registry.example/genie-ai-backend@sha256:index-old"
+    capture.resolve_registry_digests(images)
+    assert images[0]["status"] == "DIFFERENT"
+
+
+def test_the_overlay_values_inline_in_the_release_win_over_the_sources(monkeypatch):
+    """Flux: the values inlined in the HelmRelease have the higher priority."""
+    helmrelease = {
+        "spec": {
+            "chart": {"spec": {"chart": "genieai-umbrella"}},
+            "values": {"opea": {"chatqna": {"rerankingStrategy": "inline"}}},
+            "valuesFrom": [
+                {
+                    "kind": "ConfigMap",
+                    "name": "overlay",
+                    "valuesKey": "values.yaml",
+                }
+            ],
+        },
+        "status": {
+            "conditions": [{"type": "Ready", "status": "True", "message": "ok"}],
+            "history": [{"version": 1, "chartVersion": "0.2.1"}],
+        },
+    }
+    configmap = {"data": {"values.yaml": "opea:\n  chatqna:\n    rerankingStrategy: from-source\n"}}
+
+    def fake_kubectl(namespace, *args):
+        if args[0] == "get" and args[1] == "helmrelease":
+            return helmrelease
+        if args[0] == "get" and args[1] == "configmap":
+            return configmap
+        raise AssertionError(args)
+
+    monkeypatch.setattr(capture, "kubectl_json", fake_kubectl)
+    release = capture.capture_release("flux-system", "genieai")
+    assert (
+        release["overlay"]["opea"]["chatqna"]["rerankingStrategy"] == "inline"
+    )
+    assert "overlay" in release["overlay_name"]
+    assert "inline values" in release["overlay_name"]

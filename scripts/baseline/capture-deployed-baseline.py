@@ -23,6 +23,7 @@ from __future__ import annotations
 
 import argparse
 import base64
+from functools import lru_cache
 import datetime as dt
 import json
 import os
@@ -41,6 +42,7 @@ except ImportError:  # pragma: no cover - CI installs PyYAML for the chart gates
 REPO_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 CHART_DIR = os.path.join(REPO_ROOT, "charts", "genieai-umbrella")
 CHART_TEMPLATES = os.path.join(CHART_DIR, "templates", "opea")
+BACKEND_TEMPLATE = os.path.join(CHART_DIR, "templates", "services", "backend.yaml")
 
 # The GitLab front door refuses the default Python user agent (the token
 # endpoint answers 403); the capture identifies itself like a normal client.
@@ -60,13 +62,11 @@ OPEA_WORKLOADS = {
     "translation": ("translation.yaml", "translation"),
 }
 
-# Model ids declared by a workload OUTSIDE the parsed OPEA templates, with the
-# chart path each one comes from. The backend's translation model is declared
-# by the application tier (services.backend.translation.modelId), not by the
-# OPEA tier (opea.translation.modelId) - the two coincide today only because
-# both default to the same model id.
+# The model ids the APPLICATION tier pins. The chart path each one comes
+# from is read from the application's own template - that template's
+# fallback chain is the only place the fallback is written down.
 MODEL_VARIABLES = {
-    "backend": {"VLLM_TRANSLATION_MODEL_ID": "services.backend.translation.modelId"},
+    "backend": ("VLLM_TRANSLATION_MODEL_ID",),
 }
 
 # The model roles the record reports. Each role names the chart path that
@@ -88,20 +88,26 @@ MODEL_ROLES = (
 # the realm pins) and they are derived exactly as the chart's helpers derive
 # them (templates/_lib/_opea.tpl, templates/_lib/_urls.tpl).
 DERIVED_VARIABLES = {
-    ("chatqna", "VLLM_LLM_ENDPOINT"): "gpu.endpoint.llm",
-    ("chatqna", "VLLM_TRANSLATION_ENDPOINT"): "gpu.endpoint.translation",
-    ("chatqna", "GPU_NODE_HOST"): "gpu.hostname",
-    ("chatqna", "KEYCLOAK_URL"): "public.issuer",
-    ("dataprep", "VLLM_ENDPOINT"): "gpu.endpoint.llm",
-    ("dataprep", "TEI_EMBEDDING_ENDPOINT"): "gpu.endpoint.embedding",
-    ("dataprep", "GPU_NODE_HOST"): "gpu.hostname",
-    ("retriever", "VLLM_ENDPOINT"): "gpu.endpoint.llm",
-    ("retriever", "TEI_EMBEDDING_ENDPOINT"): "gpu.endpoint.embedding",
-    ("retriever", "GPU_NODE_HOST"): "gpu.hostname",
-    ("embedding", "EMBEDDING_MODEL_ENDPOINT"): "gpu.endpoint.embedding",
-    ("embedding", "TEI_EMBEDDING_ENDPOINT"): "gpu.endpoint.embedding",
-    ("reranker", "TEI_RERANKING_ENDPOINT"): "gpu.endpoint.reranker",
-    ("backend", "VLLM_TRANSLATION_ENDPOINT"): "gpu.endpoint.translation",
+    ("chatqna", "VLLM_LLM_ENDPOINT"): [("derived", "gpu.endpoint.llm")],
+    ("chatqna", "VLLM_TRANSLATION_ENDPOINT"): [("derived", "gpu.endpoint.translation")],
+    ("chatqna", "GPU_NODE_HOST"): [("derived", "gpu.hostname")],
+    ("chatqna", "KEYCLOAK_URL"): [("derived", "public.issuer")],
+    ("dataprep", "VLLM_ENDPOINT"): [("derived", "gpu.endpoint.llm")],
+    ("dataprep", "TEI_EMBEDDING_ENDPOINT"): [("derived", "gpu.endpoint.embedding")],
+    ("dataprep", "GPU_NODE_HOST"): [("derived", "gpu.hostname")],
+    ("retriever", "VLLM_ENDPOINT"): [("derived", "gpu.endpoint.llm")],
+    ("retriever", "TEI_EMBEDDING_ENDPOINT"): [("derived", "gpu.endpoint.embedding")],
+    ("retriever", "GPU_NODE_HOST"): [("derived", "gpu.hostname")],
+    ("embedding", "EMBEDDING_MODEL_ENDPOINT"): [("derived", "gpu.endpoint.embedding")],
+    ("embedding", "TEI_EMBEDDING_ENDPOINT"): [("derived", "gpu.endpoint.embedding")],
+    ("reranker", "TEI_RERANKING_ENDPOINT"): [("derived", "gpu.endpoint.reranker")],
+    # The backend names its translation endpoint explicitly when the
+    # operator does; otherwise it falls back to the GPU's translation
+    # endpoint, exactly as the template does.
+    ("backend", "VLLM_TRANSLATION_ENDPOINT"): [
+        ("path", "services.backend.translation.endpoint"),
+        ("derived", "gpu.endpoint.translation"),
+    ],
 }
 
 # Kubernetes injects the service-discovery variables into every pod; they
@@ -224,38 +230,181 @@ def cell(value):
 # --------------------------------------------------------------------------
 
 
-def parse_template_env(template_file):
-    """Return {env name: {"path": ..., "literal": ...}} for one chart template.
+def parse_template_env(template_path):
+    """Return {env name: {...}} for one chart template.
 
     A path is the chart values leaf the template reads; a literal is the
-    value the template renders verbatim. A variable with neither is rendered
-    by a helper call and is recorded as "declared by the template, not by a
-    values leaf".
+    value the template renders verbatim; a chain is the template's own
+    fallback order; the guards are the conditions under which the template
+    renders the row at all. A row the template renders only under a
+    condition that does not hold is NOT declared by the chart - the
+    deployment is right to not carry it.
     """
-    text = open(os.path.join(CHART_TEMPLATES, template_file), encoding="utf-8").read()
+    text = open(template_path, encoding="utf-8").read()
     mapping = {}
+    locals_map = {}
+    guards = []
 
     def record(env_name, expression):
         if env_name in mapping:
             return
-        chain = _expression_chain(expression)
+        chain = _expression_chain(expression, locals_map)
         mapping[env_name] = {
             "chain": chain,
             "path": chain[0][1] if chain and chain[0][0] == "path" else None,
             "literal": chain[0][1] if chain and chain[0][0] == "literal" else None,
+            "guards": [guard for guard in guards if guard],
         }
 
+    events = []
+    # A local assignment: {{- $name := <expr> -}}
+    for match in re.finditer(
+        r"\{\{-?\s*\$([A-Za-z][A-Za-z0-9]*)\s*(:=|=)\s*(.*?)\s*-?\}\}", text, re.S
+    ):
+        events.append((match.start(), "assign", match.groups()))
+    # A block: {{- if <cond> -}} / {{- else -}} / {{- end -}}
+    for match in re.finditer(r"\{\{-?\s*(if|else|end)\b(.*?)-?\}\}", text, re.S):
+        events.append((match.start(), match.group(1), match.group(2)))
     # Service-factory style: (dict "name" "ENV" "value" <expr>)
-    for match in re.finditer(r'\(dict "name" "([A-Z0-9_]+)" "value" (.*)', text):
-        record(match.group(1), match.group(2))
-
+    for match in re.finditer(r'\(dict "name" "([A-Z0-9_]+)" "value" ', text):
+        events.append(
+            (match.start(), "env", (match.group(1), _dict_expression(text, match.end())))
+        )
     # Hand-rendered style: - name: ENV / [comment lines] / value: {{ <expr> }}
     for match in re.finditer(
         r"- name: ([A-Z0-9_]+)\n(?:\s*#.*\n)*\s*value: \{\{-?\s*(.*?)\s*\}\}", text
     ):
-        record(match.group(1), match.group(2))
+        events.append((match.start(), "env", match.groups()))
+
+    for _position, kind, payload in sorted(events, key=lambda item: item[0]):
+        if kind == "assign":
+            name, operator, expression = payload
+            chain, base = _local_assignment(expression, locals_map)
+            known = locals_map.get(name) or {}
+            if operator == "=" and known.get("chain"):
+                # A reassignment adds an alternative: the template renders
+                # whichever value it ends up with.
+                chain = list(known["chain"]) + list(chain)
+            locals_map[name] = {"chain": chain, "base": base}
+        elif kind == "if":
+            guards.append(_guard_chain(payload, locals_map))
+        elif kind == "else":
+            # A row in the else branch renders when the condition does NOT
+            # hold. The capture does not evaluate that, so it treats the
+            # row as declared.
+            if guards:
+                guards[-1] = []
+        elif kind == "end":
+            if guards:
+                guards.pop()
+        elif kind == "env":
+            record(payload[0], payload[1])
 
     return mapping
+
+
+def _dict_expression(text, start):
+    """The expression of a (dict "name" ... "value" <expr>) row.
+
+    The expression may hold parentheses of its own, so the call is closed
+    by counting them - a row's value is not the rest of the line.
+    """
+    depth = 1
+    index = start
+    while index < len(text):
+        char = text[index]
+        if char == "(":
+            depth += 1
+        elif char == ")":
+            depth -= 1
+            if depth == 0:
+                return text[start:index].strip()
+        index += 1
+    return text[start:].strip()
+
+
+def _strip_parens(expression):
+    """The expression without the closing parens of the call around it."""
+    stripped = expression.strip()
+    for _ in range(4):
+        if not stripped.endswith(")"):
+            break
+        stripped = stripped[:-1].strip()
+    return stripped
+
+
+def _variable_base(name, locals_map):
+    """The values path a template variable points at."""
+    known = (locals_map or {}).get(name)
+    if known and known.get("base"):
+        return known["base"]
+    return _variable_prefix(name)
+
+
+def _local_assignment(expression, locals_map):
+    """(chain, base path) for one template local assignment."""
+    expression = expression.strip()
+    found = re.match(r"^\.Values\.([A-Za-z0-9_.]+)", expression)
+    if found:
+        return [("path", found.group(1))], found.group(1)
+    found = re.search(
+        r'include "genieai-umbrella\.opeaGpuEndpoint".*?"path"\s+"([A-Za-z0-9]+)"',
+        expression,
+    )
+    if found:
+        return [("derived", f"gpu.endpoint.{found.group(1)}")], None
+    found = re.match(r"^\$([A-Za-z][A-Za-z0-9]*)(?:\.([A-Za-z0-9]+))?", expression)
+    if found:
+        name, key = found.group(1), found.group(2)
+        base = _variable_base(name, locals_map)
+        if base:
+            path = f"{base}.{key}" if key else base
+            chain = [("path", path)]
+            chain += [
+                item for item in _expression_chain(expression) if item[0] == "literal"
+            ]
+            return chain, path
+    return _expression_chain(expression), None
+
+
+def _guard_chain(condition, locals_map):
+    """The chain a guard's condition stands for (empty = always rendered)."""
+    condition = condition.strip()
+    if "not" in condition.split():
+        # A negated condition: the capture does not evaluate it, so the row
+        # is treated as declared.
+        return []
+    found = re.fullmatch(r"\$([A-Za-z][A-Za-z0-9]*)", condition)
+    if found:
+        known = (locals_map or {}).get(found.group(1))
+        return list(known.get("chain") or []) if known else []
+    found = re.fullmatch(r"\$([A-Za-z][A-Za-z0-9]*)\.([A-Za-z0-9]+)", condition)
+    if found:
+        base = _variable_base(found.group(1), locals_map)
+        if base:
+            return [("path", f"{base}.{found.group(2)}")]
+    return []
+
+
+def _candidate_holds(item, values):
+    """Whether one candidate of a guard carries a value."""
+    kind, value = item
+    if kind == "path":
+        found = get_path(values, value)
+        if isinstance(found, (dict, list)):
+            return False
+        return not _sprig_empty(found)
+    if kind == "derived":
+        return not _sprig_empty(derive_values(values).get(value, ""))
+    return not _sprig_empty(value)
+
+
+def _guards_hold(guards, values):
+    """Whether every guard of a rendered row holds for these values."""
+    for guard in guards:
+        if not any(_candidate_holds(item, values) for item in guard):
+            return False
+    return True
 
 
 def _dotted_prefix(variable, key):
@@ -286,7 +435,7 @@ def _variable_prefix(variable):
     return None
 
 
-def _expression_chain(expression):
+def _expression_chain(expression, locals_map=None):
     """The fallback chain of a template expression, in order.
 
     `($opeaChatqna.kcRealm | default ($dataKeycloak.realm | default "genie"))`
@@ -298,15 +447,17 @@ def _expression_chain(expression):
     candidates = []
 
     # A bare literal: the template renders this value verbatim.
-    stripped = expression.strip()
-    for _ in range(4):
-        found = re.fullmatch(r'"([^"]*)"', stripped)
-        if found:
-            candidates.append((0, "literal", found.group(1)))
-            break
-        if not stripped.endswith(")"):
-            break
-        stripped = stripped[:-1].strip()
+    stripped = _strip_parens(expression)
+    found = re.fullmatch(r'"([^"]*)"', stripped)
+    if found:
+        candidates.append((0, "literal", found.group(1)))
+    else:
+        # A bare local: the value the template assigned to it.
+        local = re.fullmatch(r"\$([A-Za-z][A-Za-z0-9]*)", stripped)
+        if local and locals_map:
+            known = locals_map.get(local.group(1))
+            if known and known.get("chain"):
+                return list(known["chain"])
 
     # Two-level index: index (index ($opea | default dict) "llm" ...) "modelId"
     for found in re.finditer(
@@ -342,7 +493,7 @@ def _expression_chain(expression):
             )
 
     for found in re.finditer(r"\$([A-Za-z][A-Za-z0-9]*)\.([A-Za-z0-9]+)", expression):
-        prefix = _variable_prefix(found.group(1))
+        prefix = _variable_base(found.group(1), locals_map)
         if prefix:
             candidates.append((found.start(), "path", f"{prefix}.{found.group(2)}"))
 
@@ -372,6 +523,10 @@ def _resolve_chain(chain, values):
                 continue
             if not _sprig_empty(found):
                 return value, found
+        elif kind == "derived":
+            found = derive_values(values).get(value, "")
+            if not _sprig_empty(found):
+                return value, found
         else:
             return None, value
     return None, None
@@ -389,12 +544,25 @@ def _sprig_empty(value):
     )
 
 
+@lru_cache(maxsize=None)
 def template_env_maps():
     """{workload component: {env name: chart path or None}} for every OPEA workload."""
     return {
-        component: parse_template_env(template_file)
+        component: parse_template_env(os.path.join(CHART_TEMPLATES, template_file))
         for component, (template_file, _section) in OPEA_WORKLOADS.items()
     }
+
+
+@lru_cache(maxsize=None)
+def backend_env_map():
+    """The application tier's template rows.
+
+    The application tier is not the retrieval configuration, but its
+    translation block declares a model id the backend pins - and the
+    template's own fallback chain is the only place that fallback is
+    written down.
+    """
+    return parse_template_env(BACKEND_TEMPLATE)
 
 
 SECTION_VARS = {
@@ -509,12 +677,31 @@ def capture_workloads(namespace):
     return workloads
 
 
+def hook_jobs(namespace):
+    """The Helm hook jobs of the namespace.
+
+    A hook job runs once per release: its pods are not part of the
+    deployment's steady state, and their random name would make the
+    baseline drift on every release for reasons that have nothing to do
+    with the stack.
+    """
+    names = set()
+    for item in kubectl_json(namespace, "get", "jobs").get("items", []):
+        annotations = item.get("metadata", {}).get("annotations", {})
+        if "helm.sh/hook" in annotations:
+            names.add(item["metadata"]["name"])
+    return names
+
+
 def capture_pods(namespace):
     """Running pods with the digest of the image they actually run."""
+    hooks = hook_jobs(namespace)
     pods = []
     for pod in kubectl_json(namespace, "get", "pods").get("items", []):
         meta = pod["metadata"]
         status = pod.get("status", {})
+        if meta.get("labels", {}).get("job-name") in hooks:
+            continue
         spec_containers = {
             container["name"]: container
             for container in pod.get("spec", {}).get("containers", [])
@@ -527,6 +714,9 @@ def capture_pods(namespace):
                     "container": container.get("name", ""),
                     "image": container.get("image") or "",
                     "digest": container.get("imageID", ""),
+                    "pull_policy": spec_containers.get(container.get("name"), {}).get(
+                        "imagePullPolicy", ""
+                    ),
                     "ready": container.get("ready", False),
                     "restarts": container.get("restartCount", 0),
                     "phase": status.get("phase", ""),
@@ -568,15 +758,15 @@ def capture_release(flux_namespace, release):
         (condition for condition in conditions if condition.get("type") == "Ready"),
         {},
     )
-    overlay = deep_merge({}, spec.get("values") or {})
-    overlay_name = "inline values" if spec.get("values") else ""
+    overlay = {}
+    overlay_names = []
     for source in spec.get("valuesFrom", []):
         name = source.get("name")
         if not name:
             continue
-        overlay_name = name
         kind = source.get("kind", "ConfigMap")
         values_key = source.get("valuesKey", "values.yaml")
+        target_path = source.get("targetPath", "")
         if kind == "Secret":
             secret = kubectl_json(flux_namespace, "get", "secret", name)
             encoded = secret.get("data", {}).get(values_key)
@@ -585,12 +775,23 @@ def capture_release(flux_namespace, release):
             configmap = kubectl_json(flux_namespace, "get", "configmap", name)
             raw = configmap.get("data", {}).get(values_key)
         if raw:
-            overlay = deep_merge(overlay, yaml.safe_load(raw) or {})
-        else:
+            values = yaml.safe_load(raw) or {}
+            if target_path:
+                values = {target_path: values}
+            overlay = deep_merge(overlay, values)
+            overlay_names.append(name)
+        elif not source.get("optional"):
             raise RuntimeError(
                 f"the overlay {kind} {name} carries no {values_key} - the effective "
                 "source baseline cannot be resolved"
             )
+    # Flux: the values inlined in the HelmRelease have a HIGHER priority
+    # than the values the release reads from a source.
+    inline = spec.get("values") or {}
+    if inline:
+        overlay = deep_merge(overlay, inline)
+        overlay_names.append("inline values")
+    overlay_name = ", ".join(overlay_names) or "(none)"
     # The version the release history attests: the chart version the deployed
     # release was packaged from. The record names it as provenance - which
     # chart the deployment runs - next to the chart source it reconciles
@@ -631,19 +832,16 @@ def image_tag(image):
     return ""
 
 
-def registry_digest(image):
-    """The digests the registry currently serves for a tagged image.
+def registry_manifest(image, reference):
+    """The digests the registry serves for one reference of an image.
 
+    `reference` is a tag or a digest; `image` names the repository.
     Returns (index digest, amd64 child digest, note). The index digest is
     what the runtime records as the running digest; the child digest is the
     stable content identity (the index digest moves on every re-push, the
     attestation changes the index and not the image).
     """
-    reference = image.split("@")[0]
-    parts = reference.rsplit(":", 1)
-    if len(parts) != 2 or "/" not in parts[0]:
-        return None, "", "pinned by digest or not a tagged image"
-    repository, tag = parts
+    repository = image.split("@")[0].rsplit(":", 1)[0]
     registry_host = repository.split("/")[0]
     if not registry_host.startswith("registry."):
         return None, "", "outside the GitLab registry"
@@ -659,7 +857,7 @@ def registry_digest(image):
     ) as response:
         token = json.load(response).get("token", "")
     request = urllib.request.Request(
-        f"https://{registry_host}/v2/{project}/manifests/{tag}",
+        f"https://{registry_host}/v2/{project}/manifests/{reference}",
         headers={
             "User-Agent": USER_AGENT,
             "Authorization": f"Bearer {token}",
@@ -679,11 +877,19 @@ def registry_digest(image):
     child = ""
     try:
         manifest = json.loads(body)
-        for entry in manifest.get("manifests", []):
-            platform = entry.get("platform", {})
-            if platform.get("os") == "linux" and platform.get("architecture") == "amd64":
-                child = entry.get("digest", "")
-                break
+        entries = manifest.get("manifests")
+        if entries:
+            for entry in entries:
+                platform = entry.get("platform", {})
+                if (
+                    platform.get("os") == "linux"
+                    and platform.get("architecture") == "amd64"
+                ):
+                    child = entry.get("digest", "")
+                    break
+        else:
+            # A single manifest: its own digest is the content identity.
+            child = index_digest or ""
     except ValueError:
         child = ""
     return index_digest, child, ""
@@ -822,16 +1028,34 @@ def resolve_source(
             return path, default, override, effective, None, path
 
     # 2. a value the chart derives from other values (GPU endpoints, origin)
-    derived_key = DERIVED_VARIABLES.get((component, env_name))
-    if derived_key:
-        default, override, effective = layers(None, derived_key)
+    derived_chain = DERIVED_VARIABLES.get((component, env_name))
+    if derived_chain:
+        default_path, default = _resolve_chain(derived_chain, chart_values)
+        effective_path, effective = _resolve_chain(derived_chain, effective_values)
+        override = ""
+        if effective_path and effective_path.startswith("gpu."):
+            # A derived value has no values leaf of its own: the overlay's
+            # contribution is the derived value when it differs from the
+            # chart's default.
+            override = effective if effective != default else ""
+        elif effective_path:
+            found = get_path(overlay, effective_path)
+            if not _sprig_empty(found):
+                override = normalize(found)
+        chain_path = next(
+            (value for kind, value in derived_chain if kind in ("path", "derived")), None
+        )
+        label = effective_path or default_path or chain_path or f"derived:{component}.{env_name}"
+        # The default may not resolve (the chart's own default is empty and
+        # the operator sets it): the path it would come from is still named.
+        default_path = default_path or chain_path
         return (
-            f"derived:{derived_key}",
+            f"derived:{label}",
             default,
             override,
             effective,
             None,
-            derived_key,
+            default_path,
         )
 
     # 3. a values leaf the template renders into this variable - through
@@ -850,21 +1074,20 @@ def resolve_source(
             if not _sprig_empty(found):
                 override = normalize(found)
         if effective is not None:
+            # The label names the values leaf the template READS, even when
+            # the value itself came from the template's fallback: the leaf
+            # is where the operator would set it.
+            chain_path = next(
+                (value for kind, value in chain if kind == "path"), None
+            )
             return (
-                effective_path or "template literal",
+                effective_path or chain_path or "template literal",
                 default,
                 override,
                 effective,
                 None,
                 default_path,
             )
-
-    # 4. a model id declared by a workload outside the parsed templates
-    model_path = MODEL_VARIABLES.get(component, {}).get(env_name)
-    if model_path:
-        default, override, effective = layers(model_path)
-        if effective is not None:
-            return model_path, default, override, effective, None, model_path
 
     # 5. the template renders the variable, but from a literal or a helper
     if template_map and env_name in template_map:
@@ -879,9 +1102,20 @@ def compare_workload(workload, env_maps, chart_values, overlay_values, effective
     section = OPEA_WORKLOADS.get(component, (None, None))[1]
     template_map = env_maps.get(component, {}) if section else {}
     model_only = component not in OPEA_WORKLOADS
+    if model_only:
+        # The application tier is compared for the model ids it pins and
+        # for the endpoints the chart derives; its remaining environment is
+        # not the retrieval configuration this story baselines. It is
+        # listed, never dropped silently.
+        template_map = {
+            name: entry
+            for name, entry in backend_env_map().items()
+            if name in MODEL_VARIABLES.get(component, ())
+        }
 
     rows = []
     undeclared = []
+    injected = []
     deployed_env = workload.get("serving_env")
     if deployed_env is None:
         deployed_env = {}
@@ -903,6 +1137,11 @@ def compare_workload(workload, env_maps, chart_values, overlay_values, effective
             )
             if status == "UNDECLARED":
                 continue
+            entry = template_map.get(env_name) or {}
+            if entry.get("guards") and not _guards_hold(entry["guards"], effective_values):
+                # The chart renders this row only under a condition that does
+                # not hold here: the deployment is right to not carry it.
+                continue
             rows.append(
                 {
                     "env": env_name,
@@ -921,7 +1160,11 @@ def compare_workload(workload, env_maps, chart_values, overlay_values, effective
             env_name, component, section, template_map, chart_values, overlay_values, effective_values
         )
         if status is None:
-            if model_only and env_name not in MODEL_VARIABLES.get(component, {}):
+            if (
+                model_only
+                and env_name not in MODEL_VARIABLES.get(component, ())
+                and (component, env_name) not in DERIVED_VARIABLES
+            ):
                 # The application tier is compared for its model ids only:
                 # its remaining environment is not the retrieval
                 # configuration this story baselines. It is listed, never
@@ -930,6 +1173,9 @@ def compare_workload(workload, env_maps, chart_values, overlay_values, effective
                 continue
             status = "MATCH" if values_equal(effective, deployed) else "DIFFERENT"
         elif status == "UNDECLARED" and is_injected(env_name):
+            # Kubernetes injects it: it is not configuration, but it is not
+            # dropped either - the record says so.
+            injected.append(env_name)
             continue
         if status == "UNDECLARED":
             undeclared.append((env_name, deployed))
@@ -946,7 +1192,7 @@ def compare_workload(workload, env_maps, chart_values, overlay_values, effective
                 "status": status,
             }
         )
-    return rows, undeclared
+    return rows, undeclared, injected
 
 
 def discrepancy_row(workload_name, row, disposition):
@@ -1014,21 +1260,24 @@ def render_markdown(data):
     add("## Workloads and image digests")
     add("")
     add(
-        "`running digest` is the digest the pod actually runs. The amd64 child is the "
-        "stable content identity; the index digest is what the registry serves for the "
-        "tag at capture time (it moves on every re-push, so it is shown last)."
+        "The **running index digest** is the digest the pod's runtime records. The "
+        "**running amd64 child** is the CONTENT the pod runs - the child digest is the "
+        "content identity; the index digest moves on every re-push (the attestation "
+        "changes the index, not the image). The two registry columns are what the "
+        "registry serves for the tag at capture time. The verdict compares the "
+        "CONTENT, never the index."
     )
     add("")
     add(
-        "| workload | container | image | running digest | registry amd64 child | "
-        "registry index digest | status |"
+        "| workload | container | image | running index digest | running amd64 child | "
+        "registry index digest | registry amd64 child | status |"
     )
-    add("|---|---|---|---|---|---|---|")
+    add("|---|---|---|---|---|---|---|---|")
     for row in data["images"]:
         add(
             f"| `{cell(row['workload'])}` | {cell(row['container'])} | `{cell(row['image'])}` | "
-            f"`{cell(row['running_digest'])}` | {cell(row['registry_child_digest'])} | "
-            f"{cell(row['registry_digest'])} | {row['status']} |"
+            f"`{cell(row['running_digest'])}` | {cell(row.get('running_child_digest', ''))} | "
+            f"{cell(row['registry_digest'])} | {cell(row['registry_child_digest'])} | {row['status']} |"
         )
     add("")
 
@@ -1091,6 +1340,12 @@ def render_markdown(data):
                 + ", ".join(f"`{name}`" for name, _value in workload["undeclared"])
             )
             add("")
+        if workload.get("injected"):
+            add(
+                "Injected by Kubernetes (service discovery, not configuration): "
+                + ", ".join(f"`{name}`" for name in workload["injected"])
+            )
+            add("")
 
     add("## Discrepancies and dispositions")
     add("")
@@ -1111,6 +1366,23 @@ def render_markdown(data):
         add("")
         add(data["image_disposition_note"])
         add("")
+
+    add("## Workload readiness")
+    add("")
+    add(
+        "Each workload with the pods that serve it. A pod that is not Running, or a "
+        "container that restarted, is stated here: the record describes the "
+        "deployment, and the deployment's health is part of it."
+    )
+    add("")
+    add("| workload | kind | replicas | ready | pods | restarts |")
+    add("|---|---|---|---|---|---|")
+    for row in data.get("workloads", []):
+        add(
+            f"| `{cell(row['name'])}` | {cell(row['kind'])} | {cell(row['replicas'])} | "
+            f"{cell(row['ready'])} | {cell(row['pods'])} | {cell(row['restarts'])} |"
+        )
+    add("")
 
     add("## Topology")
     add("")
@@ -1174,6 +1446,8 @@ def build_images(workloads, pods):
                     "container": container["name"],
                     "image": container["image"],
                     "running_digest": running["digest"] if running else "not running",
+                    "running_child_digest": "",
+                    "pull_policy": running.get("pull_policy", "") if running else "",
                     "registry_digest": "",
                     "registry_child_digest": "",
                     "status": "NOT RUNNING",
@@ -1199,6 +1473,8 @@ def build_images(workloads, pods):
                 "container": pod["container"],
                 "image": pod["image"],
                 "running_digest": pod["digest"],
+                "running_child_digest": "",
+                "pull_policy": pod.get("pull_policy", ""),
                 "registry_digest": "",
                 "registry_child_digest": "",
                 "status": "NOT RUNNING",
@@ -1209,37 +1485,162 @@ def build_images(workloads, pods):
 
 
 def resolve_registry_digests(images):
-    """Resolve the registry digests of every tagged image and compare."""
+    """Resolve the registry digests of every image and compare the CONTENT.
+
+    The running image and the registry's current tag are compared by their
+    amd64 child digest - the content identity. The index digest is
+    reported, never used as the verdict: it changes on every re-push (the
+    attestation changes the index, not the image), so an index that moved
+    says nothing about the image the pod runs.
+    """
     differences = 0
     for row in images:
-        digest, child, note = None, "", ""
+        running = row["running_digest"]
+        tag_digest, tag_child, note = None, "", ""
         try:
-            digest, child, note = registry_digest(row["_image"])
+            tag_digest, tag_child, note = registry_manifest(
+                row["_image"], image_tag(row["_image"])
+            )
         except Exception as error:  # noqa: BLE001 - reported, never fatal
-            digest, child, note = None, "", f"unresolved ({error})"
-        if not row["running_digest"] or row["running_digest"] == "not running":
-            # A workload that runs no pod is never compared: a "DIFFERENT"
-            # verdict would assert stale-pull behaviour about a container
-            # that does not exist.
-            row["registry_digest"] = digest or note or "not applicable"
-            row["registry_child_digest"] = child or ""
+            tag_digest, tag_child, note = None, "", f"unresolved ({error})"
+        row["registry_digest"] = tag_digest or note or "not applicable"
+        row["registry_child_digest"] = tag_child or ""
+        if not running or running == "not running":
+            # A workload that runs no pod is never compared: a verdict
+            # would assert something about a container that does not exist.
+            row["running_child_digest"] = ""
             row["status"] = "NOT COMPARABLE"
             del row["_image"]
             continue
-        if digest:
-            row["registry_digest"] = digest
-            row["registry_child_digest"] = child or "single manifest"
-            running = row["running_digest"]
-            same = digest in running or running.endswith(digest)
+        running_child = ""
+        running_note = ""
+        try:
+            _served, running_child, running_note = registry_manifest(
+                row["_image"], running.split("@")[-1]
+            )
+        except Exception as error:  # noqa: BLE001 - reported, never fatal
+            running_child, running_note = "", f"unresolved ({error})"
+        row["running_child_digest"] = running_child or running_note
+        if not tag_child:
+            # The tag's content could not be resolved: nothing to compare.
+            row["status"] = "NOT COMPARABLE"
+        elif running_child:
+            if running_child == tag_child:
+                # The same content: only the index moved.
+                row["status"] = (
+                    "MATCH"
+                    if tag_digest and tag_digest in running
+                    else "SAME CONTENT"
+                )
+            else:
+                row["status"] = "DIFFERENT"
+                differences += 1
+        else:
+            # The registry does not serve the running digest: only the
+            # index digests can be compared.
+            same = bool(tag_digest) and (
+                tag_digest in running or running.endswith(tag_digest)
+            )
             row["status"] = "MATCH" if same else "DIFFERENT"
             if not same:
                 differences += 1
-        else:
-            row["registry_digest"] = note or "not applicable"
-            row["registry_child_digest"] = ""
-            row["status"] = "NOT COMPARABLE"
         del row["_image"]
     return differences
+
+
+def image_disposition(row):
+    """The disposition of one image row, stated as observed facts."""
+    if row["status"] == "DIFFERENT":
+        return (
+            "Accepted for V03 - the running image and the registry's current tag carry "
+            f"different content (the running amd64 child digest "
+            f"{row['running_child_digest']}, the tag's {row['registry_child_digest']}). "
+            "The running content is the reference E01 must measure against; re-running "
+            "the capture after a rollout refreshes this row."
+        )
+    if row["status"] == "SAME CONTENT":
+        return (
+            "Accepted for V03 - the running image and the registry's current tag carry the "
+            f"same content (the same amd64 child digest {row['registry_child_digest']}); "
+            "only the index digest differs, and the index is not a content identity: it "
+            "changes on every re-push (the attestation changes the index, not the image). "
+            f"The deployment declares imagePullPolicy {row.get('pull_policy') or 'Always'}, "
+            "so the next pod start pulls the current index. E01 must measure against the "
+            "content digest, which is stable."
+        )
+    return (
+        "Accepted for V03 - the running digest is the reference E01 must measure against; "
+        "the registry's current index digest is reported next to it."
+    )
+
+
+def image_note(images):
+    """The counts the image table ends with, computed from the rows."""
+    comparable = [
+        row
+        for row in images
+        if row["status"] in ("MATCH", "SAME CONTENT", "DIFFERENT")
+    ]
+    moved = [row for row in comparable if row["status"] != "MATCH"]
+    same = [row for row in moved if row["status"] == "SAME CONTENT"]
+    different = [row for row in moved if row["status"] == "DIFFERENT"]
+    return (
+        f"{len(moved)} of the {len(comparable)} comparable GitLab-registry workload "
+        f"images run an index digest that differs from the registry's current tag: "
+        f"{len(same)} of them carry the same content, {len(different)} a different "
+        "one. The "
+        f"{len(images) - len(comparable)} other rows are not comparable - an image "
+        "outside the GitLab registry, a digest-pinned image, or a pod no workload owns."
+    )
+
+
+def collect_discrepancies(config, models, images):
+    """Every difference the record reports, each with its disposition.
+
+    The capture's own gate lives here: a difference the capture finds and
+    cannot explain carries no disposition, and the record then fails.
+    """
+    discrepancies = []
+    for workload in config:
+        for row in workload["rows"]:
+            if row["status"] == "DIFFERENT":
+                # No disposition table remains: an unexplained difference
+                # must fail the capture, so it carries none.
+                discrepancies.append(
+                    discrepancy_row(workload["workload"], row, None)
+                )
+            elif row["status"] == "NOT CARRIED":
+                discrepancies.append(
+                    discrepancy_row(
+                        workload["workload"], row, DISPOSITIONS["not-carried"]
+                    )
+                )
+    # A served model that differs from the source is a difference between
+    # the deployment and the source: it belongs in the discrepancy table
+    # and in the exit gate.
+    discrepancies.extend(model_discrepancy_rows(models))
+    discrepancies.extend(image_discrepancy_rows(images))
+    return discrepancies
+
+
+def image_discrepancy_rows(images):
+    """The discrepancies the image table produces."""
+    rows = []
+    for row in images:
+        if row["status"] not in ("DIFFERENT", "SAME CONTENT"):
+            continue
+        rows.append(
+            {
+                "workload": row["workload"],
+                "env": "image digest",
+                "source_value": (
+                    f"registry `{image_tag(row['image'])}` = {row['registry_digest']}"
+                ),
+                "deployed": f"running {row['running_digest']}",
+                "disposition": image_disposition(row),
+            }
+        )
+    return rows
 
 
 def model_discrepancy_rows(models):
@@ -1266,8 +1667,15 @@ def model_discrepancy_rows(models):
     return rows
 
 
-def build_models(env_by_component, effective_values, served):
-    """The models table: what the chart declares, what the cluster pins, what answers."""
+def build_models(env_by_component, chart_values, effective_values, served):
+    """The models table: what the chart declares, what the cluster pins, what answers.
+
+    A role that no workload in the deployment declares is reported as
+    "not declared here": the chart's value for it belongs to a topology
+    this deployment does not run (the in-cluster model tier, deployed only
+    in `gpu.mode=in-cluster`), and comparing against it would publish a
+    difference that does not exist.
+    """
     models = []
     for role, path, sources in MODEL_ROLES:
         declared = ""
@@ -1291,8 +1699,9 @@ def build_models(env_by_component, effective_values, served):
             )
             if observed.get(key) is not None
         )
-        chart_default = normalize(get_path(effective_values, path))
-        difference_source = chart_default
+        chart_default = normalize(get_path(chart_values, path))
+        effective = normalize(get_path(effective_values, path))
+        difference_source = effective or chart_default
         difference_path = path
         if declared and served_id != "unknown" and not values_equal(declared, served_id):
             difference_source = declared
@@ -1301,9 +1710,12 @@ def build_models(env_by_component, effective_values, served):
             status = "NOT PROBED"
         elif served_id == "unknown":
             status = "UNKNOWN"
-        elif not values_equal(chart_default, served_id):
+        elif not declared:
+            status = "NOT DECLARED HERE"
+        elif not values_equal(declared, served_id):
             status = "DIFFERENT"
-        elif declared and not values_equal(declared, served_id):
+        elif not values_equal(effective, declared):
+            # The deployment pins another value than the source declares.
             status = "DIFFERENT"
         else:
             status = "MATCH"
@@ -1314,13 +1726,44 @@ def build_models(env_by_component, effective_values, served):
                 "chart_default_path": path,
                 "difference_source": difference_source,
                 "difference_path": difference_path,
-                "declared": declared or "(no workload pins this model)",
+                "declared": declared or "(no workload declares this model)",
                 "served": served_id,
                 "detail": detail + (f", pinned by {declared_source}" if declared_source else ""),
                 "status": status,
             }
         )
     return models
+
+
+def workload_status(workloads, pods):
+    """Each workload with its readiness and the pods that serve it."""
+    rows = []
+    for workload in workloads:
+        matching = [
+            pod
+            for pod in pods
+            if all(
+                pod["labels"].get(key) == value
+                for key, value in workload["selector"].items()
+            )
+        ]
+        phases = {}
+        for pod in matching:
+            phases[pod["phase"]] = phases.get(pod["phase"], 0) + 1
+        rows.append(
+            {
+                "name": workload["name"],
+                "kind": workload["kind"],
+                "replicas": workload["replicas"],
+                "ready": workload["ready"],
+                "pods": ", ".join(
+                    f"{phase} x{count}" for phase, count in sorted(phases.items())
+                )
+                or "(no pod)",
+                "restarts": sum(pod["restarts"] for pod in matching),
+            }
+        )
+    return rows
 
 
 def external_dependencies(workloads):
@@ -1351,7 +1794,7 @@ def capture(namespace, flux_namespace, release, date, out_path):
     env_maps = template_env_maps()
 
     images = build_images(workloads, pods)
-    image_differences = resolve_registry_digests(images)
+    resolve_registry_digests(images)
 
     # The third layer is the SERVING pod, not the Deployment's template:
     # during a rollout the two differ, and the serving pod is what E01
@@ -1377,22 +1820,10 @@ def capture(namespace, flux_namespace, release, date, out_path):
             )
 
     config = []
-    discrepancies = []
     for workload in workloads:
-        rows, undeclared = compare_workload(
+        rows, undeclared, injected = compare_workload(
             workload, env_maps, chart_values, overlay_values, effective_values
         )
-        for row in rows:
-            if row["status"] == "DIFFERENT":
-                # No disposition table remains: an unexplained difference
-                # must fail the capture, so it carries none.
-                discrepancies.append(discrepancy_row(workload["name"], row, None))
-            elif row["status"] == "NOT CARRIED":
-                discrepancies.append(
-                    discrepancy_row(
-                        workload["name"], row, DISPOSITIONS["not-carried"]
-                    )
-                )
         if rows:
             multi = len(workload["containers"]) > 1
             config.append(
@@ -1400,29 +1831,17 @@ def capture(namespace, flux_namespace, release, date, out_path):
                     "workload": workload["name"],
                     "rows": rows,
                     "undeclared": undeclared,
+                    "injected": injected,
                     "multi_container": multi,
                 }
             )
 
     served = capture_models(namespace, env_by_component)
-    models = build_models(env_by_component, effective_values, served)
+    models = build_models(env_by_component, chart_values, effective_values, served)
 
-    # A served model that differs from the source is a difference between
-    # the deployment and the source: it belongs in the discrepancy table
-    # and in the exit gate.
-    discrepancies.extend(model_discrepancy_rows(models))
-
-    image_discrepancies = [
-        {
-            "workload": row["workload"],
-            "env": "image digest",
-            "source_value": f"registry `{image_tag(row['image'])}` = {row['registry_digest']}",
-            "deployed": f"running {row['running_digest']}",
-            "disposition": DISPOSITIONS["image-digest"],
-        }
-        for row in images
-        if row["status"] == "DIFFERENT"
-    ]
+    # Every difference the record reports, each with its disposition. The
+    # capture's own gate: a difference without one fails the capture.
+    discrepancies = collect_discrepancies(config, models, images)
 
     edge = ", ".join(
         f"{service['name']} ({service['type']} {service['ports']})"
@@ -1459,17 +1878,15 @@ def capture(namespace, flux_namespace, release, date, out_path):
             "command": (
                 "uv run --no-cache --with pyyaml python "
                 f"scripts/baseline/capture-deployed-baseline.py --namespace {namespace} "
-                f"--out {_display_path(out_path)}"
+                f"--date {date} --out {_display_path(out_path)}"
             ),
         },
         "images": images,
         "models": models,
         "config": config,
-        "discrepancies": image_discrepancies + discrepancies,
-        "image_disposition_note": (
-            f"{image_differences} of {len(images)} workload images run a digest that "
-            "differs from the registry tag."
-        ),
+        "workloads": workload_status(workloads, pods),
+        "discrepancies": discrepancies,
+        "image_disposition_note": image_note(images),
         "topology": {
             "services": topology["services"],
             "network_policies": topology["network_policies"],

@@ -898,8 +898,10 @@ KEYCLOAK_URL=https://localhost/auth
 #                           KEYCLOAK_URL.
 #                           It must be the SAME browser-facing alias the
 #                           token verifier accepts, and it must MATCH the
-#                           frontend's keycloak.url (the frontend container's
-#                           KEYCLOAK_URL / VUE_APP_KEYCLOAK_URL, else
+#                           frontend's keycloak.url (window.APP_CONFIG.
+#                           keycloak.url, written by the frontend container
+#                           from VUE_APP_KEYCLOAK_URL; its fallbacks are the
+#                           build-time VUE_APP_KEYCLOAK_URL and then
 #                           ${origin}/auth) — this variable does NOT
 #                           configure the frontend. If its ORIGIN differs
 #                           from the docs page's own origin, add it to

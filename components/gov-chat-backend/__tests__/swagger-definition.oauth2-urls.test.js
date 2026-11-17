@@ -139,13 +139,12 @@ describe('swagger-definition OAuth2 flow URLs', () => {
     ['an empty base', '']
   ])('refuses %s (no usable KEYCLOAK_URL)', (_label, value) => {
     // The contract: with no usable base the served URL must stay the
-    // visibly-broken marker — it must not name an origin, and it must not
-    // be a relative path of any shape (root-relative or scheme-less): the
-    // Authorize popup would open on the docs origin itself. The marker is
-    // what distinguishes it from a relative path; WHATWG parsing is what
-    // proves it names no origin.
+    // visibly-broken marker, anchored at the base position (an unanchored
+    // substring check would accept a mutated '/undefined/...' base — still
+    // a same-origin relative path) — and it must name no origin, so an
+    // absolute URL to some origin is refused too.
     const { authorizationUrl } = flowUrlsFor({ KEYCLOAK_URL: value });
-    expect(authorizationUrl).toContain('undefined');
+    expect(authorizationUrl).toMatch(/^undefined\//);
     expect(() => new URL(authorizationUrl)).toThrow();
   });
 });

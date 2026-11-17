@@ -72,3 +72,7 @@ final translationApiProvider = Provider<TranslationApi>((ref) {
 final authenticationApiProvider = Provider<AuthenticationApi>((ref) {
   return AuthenticationApi(ref.watch(authenticatedApiProvider));
 });
+
+final okfApiProvider = Provider<OkfApi>((ref) {
+  return OkfApi(ref.watch(authenticatedApiProvider));
+});

@@ -133,7 +133,7 @@ class ConceptBrowserController extends Notifier<ConceptBrowserState> {
     try {
       final page = await repo.fetchTreePage(repoId, offset: 0);
       if (gen != _generation) return;
-      final rows = page.concepts ?? const <ConceptTreeRow>[];
+      final rows = page.concepts;
       final total = page.total;
       state = state.copyWith(
         rows: rows,
@@ -181,7 +181,7 @@ class ConceptBrowserController extends Notifier<ConceptBrowserState> {
     try {
       final page = await repo.fetchTreePage(s.repoId!, offset: offset);
       if (gen != _generation) return;
-      final loaded = page.concepts ?? const <ConceptTreeRow>[];
+      final loaded = page.concepts;
       final knownIds = s.rows.map((r) => r.conceptId).toSet();
       final rows = [
         ...s.rows,

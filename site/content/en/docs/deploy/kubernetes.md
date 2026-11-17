@@ -54,14 +54,14 @@ page that carries the detail.
 | Edge | nginx in front of Kong | [Envoy Gateway](/docs/reference/routes/) (`Gateway` + `HTTPRoute`); Kong is not deployed |
 | Rate limiting | Kong enforces 1000/min on the API service | no rate-limit rule on the chart's routes — a client never sees a 429 |
 | Dotfile paths | nginx rejects them | no equivalent: the SPA catch-all answers them, the backend never sees them |
-| Secrets | one `.env` file | operator-provided Secrets in the namespace; the chart creates none and works with any backend (SealedSecrets, External Secrets) |
+| Secrets | one `.env` file | operator-provided Secrets in the namespace; the chart creates no credential Secret (only the realm definition) and works with any backend (SealedSecrets, External Secrets) |
 | Keycloak | a GENIE.AI image | the official operator's CR; the realm converges through a Helm hook Job — see [Required Secrets](#required-secrets) |
 | Databases | `postgres` and `arangodb` containers | CloudNativePG `Cluster` and a kube-arangodb `ArangoDeployment`; switching the ArangoDB mode is an uninstall + install |
 | Database name | `genie-ai` | `_system` — an existing database is migrated, not repointed |
 | Observability | containers behind a profile | vmoperator CRs plus the OpenTelemetry operator's collector; the log tier is **on** by default ([details](/docs/observe/configuration/)) |
 | AI tier | vLLM/TEI containers; a remote GPU through `GPU_NODE_HOST` | `opea.gpu.mode`: `external` (a GPU node) or `in-cluster` (the chart renders the model Deployments — needs the NVIDIA device plugin and `gpu=true` nodes) ([GPU modes](/docs/deploy/gpu/)) |
 | OKF tier | `OKF_ENABLED=0` | `okf.enabled: false` — the same dark default ([OKF variables](/docs/configure/okf-variables/)) |
-| Health probes | compose healthchecks | per-service probes: `/api/health` on the backend and the document repository, a TCP dial on dataprep, `/health` on okf-server ([probes](/docs/operate/health-checks/)) |
+| Health probes | compose healthchecks | per-service probes: `/api/health` on the backend, `/health` on the document repository and okf-server, a TCP dial on dataprep ([probes](/docs/operate/health-checks/)) |
 | Update | `docker compose pull && up -d`, `docker stack deploy` | `helm upgrade`, or a Flux reconcile of the overlay; the install/upgrade hooks run on every release ([updates](/docs/operate/updates/)) |
 | Rollback | redeploy the previous tag | revert the overlay commit and reconcile — the branch tip is what installs, the overlay's version field is a label |
 | Backup | volume copies | `arangodump`, `pg_dumpall` on the CNPG cluster, PVC copies; no Velero, and the operator CRs are re-created after the data is back ([backup](/docs/operate/backup-restore/)) |

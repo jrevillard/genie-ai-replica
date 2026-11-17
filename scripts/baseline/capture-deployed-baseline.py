@@ -132,6 +132,12 @@ DISPOSITIONS = {
         "tag). Updating the running stack is the venue update procedure, outside this "
         "story."
     ),
+    "not-carried": (
+        "Reported - the chart declares this variable and the deployment does not "
+        "carry it. The chart renders some rows only under a condition (the prompt "
+        "rows, the docling endpoint), so this is reported and does not fail the "
+        "capture."
+    ),
     "chart-version": (
         "Recorded - the local chart source is not the chart the deployment runs. The "
         "comparison below is against the local source, so it describes what the "
@@ -234,8 +240,9 @@ def parse_template_env(template_file):
     """
     text = open(os.path.join(CHART_TEMPLATES, template_file), encoding="utf-8").read()
     mapping = {}
+    depth = _block_depth(text)
 
-    def record(env_name, expression):
+    def record(env_name, expression, conditional=False):
         if env_name in mapping:
             return
         chain = _expression_chain(expression)
@@ -243,19 +250,39 @@ def parse_template_env(template_file):
             "chain": chain,
             "path": chain[0][1] if chain and chain[0][0] == "path" else None,
             "literal": chain[0][1] if chain and chain[0][0] == "literal" else None,
+            "conditional": conditional,
         }
 
     # Service-factory style: (dict "name" "ENV" "value" <expr>)
     for match in re.finditer(r'\(dict "name" "([A-Z0-9_]+)" "value" (.*)', text):
-        record(match.group(1), match.group(2))
+        record(match.group(1), match.group(2), depth.get(match.group(1), 0) > 0)
 
     # Hand-rendered style: - name: ENV / [comment lines] / value: {{ <expr> }}
     for match in re.finditer(
         r"- name: ([A-Z0-9_]+)\n(?:\s*#.*\n)*\s*value: \{\{-?\s*(.*?)\s*\}\}", text
     ):
-        record(match.group(1), match.group(2))
+        record(match.group(1), match.group(2), depth.get(match.group(1), 0) > 0)
 
     return mapping
+
+
+def _block_depth(text):
+    """The template block depth at each environment declaration.
+
+    A variable declared inside an `if`/`range`/`with` block is rendered only
+    under that condition: the deployment legitimately does not carry it.
+    """
+    depth = {}
+    level = 0
+    for line in text.splitlines():
+        for match in re.finditer(r'\(dict "name" "([A-Z0-9_]+)"', line):
+            depth[match.group(1)] = level
+        for match in re.finditer(r"- name: ([A-Z0-9_]+)", line):
+            depth[match.group(1)] = level
+        opens = len(re.findall(r"\{\{-?\s*(if|range|with|define)\b", line))
+        closes = len(re.findall(r"\{\{-?\s*end\b", line))
+        level = max(0, level + opens - closes)
+    return depth
 
 
 def _expression_chain(expression):
@@ -397,7 +424,8 @@ def derive_values(values):
         if gpu.get("mode") == "in-cluster":
             return in_cluster.get(key, "")
         path = paths.get(key, "")
-        return f"{node}{path}" if node and path else ""
+        host = node[:-1] if node.endswith("/") else node
+        return f"{host}{path}" if host and path else ""
 
     hostname = re.sub(r"^([a-z]+://)?(\[[^\]]+\]|[^:/]+).*", r"\2", node)
     ingress = get_path(values, "ingress") or {}
@@ -529,8 +557,8 @@ def capture_release(flux_namespace, release):
     for entry in status.get("history", []):
         revision = max(revision, int(entry.get("version", 0)))
     conditions = status.get("conditions") or [{}]
-    overlay = {}
-    overlay_name = ""
+    overlay = deep_merge({}, spec.get("values") or {})
+    overlay_name = "inline values" if spec.get("values") else ""
     for source in spec.get("valuesFrom", []):
         name = source.get("name")
         if not name:
@@ -558,6 +586,7 @@ def capture_release(flux_namespace, release):
         "overlay": overlay,
         "overlay_name": overlay_name,
         "status": conditions[0].get("message", ""),
+        "ready": conditions[0].get("status", ""),
     }
 
 
@@ -737,9 +766,9 @@ def capture_models(namespace, env_by_component):
         flavour = "tei" if role in ("embedding", "reranker") else "openai"
         try:
             if flavour == "tei":
-                info = http_json(
-                    f"{base}/info", api_key, insecure=insecure_for(component)
-                )
+                # TEI does not authenticate with the GPU API key: the
+                # credential belongs to the OpenAI-compatible endpoints.
+                info = http_json(f"{base}/info", None, insecure=insecure_for(component))
                 served[role] = {
                     "model_id": info.get("model_id"),
                     "dtype": info.get("model_dtype"),
@@ -852,7 +881,34 @@ def compare_workload(workload, env_maps, chart_values, overlay_values, effective
         for container in workload["containers"]:
             deployed_env.update(container["env"])
 
-    for env_name, deployed in sorted(deployed_env.items()):
+    # The comparison is two-directional: the source's own variables are
+    # enumerated too, so a knob the chart declares and the deployment does
+    # not carry is reported instead of being invisible.
+    declared_names = set(template_map.keys())
+    if section:
+        env_map = get_path(effective_values, f"opea.{section}.env") or {}
+        declared_names |= set(env_map.keys())
+
+    for env_name in sorted(declared_names | set(deployed_env)):
+        if env_name not in deployed_env:
+            label, default, override, effective, status = resolve_source(
+                env_name, component, section, template_map, chart_values, overlay_values, effective_values
+            )
+            if status == "UNDECLARED":
+                continue
+            rows.append(
+                {
+                    "env": env_name,
+                    "source_path": label,
+                    "source_value": normalize(default),
+                    "overlay_value": normalize(override),
+                    "effective_value": normalize(effective),
+                    "deployed": "(not carried)",
+                    "status": "NOT CARRIED",
+                }
+            )
+            continue
+        deployed = deployed_env[env_name]
         label, default, override, effective, status = resolve_source(
             env_name, component, section, template_map, chart_values, overlay_values, effective_values
         )
@@ -904,7 +960,7 @@ def discrepancy_row(workload_name, row, disposition):
     }
 
 
-def disposition_for(row, workload_name):
+def disposition_for(row):
     """The disposition of a difference, or None when the difference is unexplained."""
     if row["status"] != "DIFFERENT":
         return None
@@ -951,6 +1007,7 @@ def render_markdown(data):
         )
     )
     add(f"- **Overlay values:** `{capture['overlay_name']}`")
+    add(f"- **Release health:** {capture['release_health']}")
     add("")
     add("## How to re-run")
     add("")
@@ -1105,12 +1162,9 @@ def build_images(workloads, pods):
     state the version the retrieval runs against.
     """
     images = []
-    claimed = set()
     for workload in workloads:
         for container in workload["containers"]:
             running = pick_running_pod(pods, workload, container["name"])
-            if running:
-                claimed.add(running["pod"])
             images.append(
                 {
                     "workload": workload["name"],
@@ -1282,9 +1336,15 @@ def capture(namespace, flux_namespace, release, date, out_path):
         )
         for row in rows:
             if row["status"] == "DIFFERENT":
-                disposition = disposition_for(row, workload["name"])
+                disposition = disposition_for(row)
                 discrepancies.append(
                     discrepancy_row(workload["name"], row, disposition)
+                )
+            elif row["status"] == "NOT CARRIED":
+                discrepancies.append(
+                    discrepancy_row(
+                        workload["name"], row, DISPOSITIONS["not-carried"]
+                    )
                 )
         if rows:
             config.append(
@@ -1372,6 +1432,11 @@ def capture(namespace, flux_namespace, release, date, out_path):
             "deployed_chart_source": deployed_source,
             "chart_source_matches": tree_matches,
             "overlay_name": release_info["overlay_name"],
+            "release_health": (
+                f"{release_info['ready']} - {release_info['status']}"
+                if release_info["status"]
+                else "unknown"
+            ),
             "command": (
                 "uv run --no-cache --with pyyaml python "
                 f"scripts/baseline/capture-deployed-baseline.py --namespace {namespace} "
@@ -1433,11 +1498,11 @@ def main():
         data = capture(
             args.namespace, args.flux_namespace, args.release, args.date, out_path
         )
+        unresolved = write_record(data, out_path)
     except Exception as error:  # noqa: BLE001 - the failure must name itself
         print(f"capture failed: {error}", file=sys.stderr)
         sys.exit(3)
 
-    unresolved = write_record(data, out_path)
     print(f"record written: {out_path}")
 
     if unresolved:

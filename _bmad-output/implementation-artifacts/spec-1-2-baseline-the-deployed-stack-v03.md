@@ -63,7 +63,7 @@ context:
 ## Implementation Notes
 
 - The baseline venue is the shared k3s `genieai` namespace (chart 0.2.177, release `genieai.v38`, external GPU model tier). PRD §13-1 (which deployment hosts the first end-to-end validation) stays open: the capture takes the namespace as an argument, so designating a venue is a re-run, not a rewrite.
-- The chart source in this repository is identical to the deployed chart's source (`git diff origin/feat/k8s-migration HEAD -- charts/` is empty at version 0.2.177), so the repository's `values.yaml` is the source baseline for the deployed chart. The capture reads the local `Chart.yaml` and compares its version with the deployed release: a checkout whose chart has moved on would otherwise describe what the repository would deploy, not what runs.
+- The chart source in this repository IS the deployed chart's source: the release installs the branch tip of the `genie-ai` GitRepository (helm-controller ignores `spec.chart.spec.version` for a GitRepository source), and the capture reads that repository's artifact revision and compares the local chart tree with it. On 2026-11-17 the deployment was rendered from `a8309521e1e5aba3fd91171045c3028e69b57477` and the local `charts/` tree is that tree. A checkout whose chart has moved on would otherwise describe what the repository would deploy, not what runs.
 - The comparison layers are chart default → overlay override → running pod, and they stay three distinct columns. A difference against the *effective* value (default + override) is a discrepancy; a difference against the chart default alone is not.
 - `imageID` is the digest of the pulled image **index** (calibrated against the digest-pinned Envoy image: the pod's `imageID` equals the tag's index digest, not its amd64 child), so the registry comparison is index against index. The index digest is not a content identity — it moves on every re-push (the attestation changes the index, not the image) — so the record also carries the amd64 child digest, the stable one. The running digests of the eight application images are absent from the registry's current indexes: the pods run a push the registry no longer serves.
 - The chart templates are parsed, never guessed: the mapping from a values leaf to an environment variable exists only in the templates. A variable the parse cannot resolve is reported as TEMPLATE (rendered from a literal or a helper), never silently compared. The values the chart *computes* — the GPU endpoint family and the public origin, the two venue-specific values a cross-venue baseline exists to pin — are derived exactly as the chart's helpers derive them and compared like any other value.
@@ -73,7 +73,7 @@ context:
 
 ## Review Triage Log
 
-### Global review (`/code-review`, xhigh, 23 findings, verified against the live cluster)
+### Global review (`/code-review`, xhigh, 22 findings, verified against the live cluster)
 
 Every finding is dispositioned below; "fixed" means the correction is in the diff, "extracted" means a linked backlog issue carries it.
 
@@ -112,6 +112,16 @@ Every finding is dispositioned below; "fixed" means the correction is in the dif
 | F1-4 | The application tier silently drops the variables it resolved | high | **fixed** — a variable that is not compared is listed as such, never dropped |
 | F1-5 | The third layer is the Deployment's pod template, not the running pod | high | **fixed** — the environment is read from the pod whose digest is reported: during a rollout the record states what serves traffic |
 | F1-6 | The chart-identity check compares a field the platform ignores (`spec.chart.spec.version` of a GitRepository source) | high | **fixed** — the chart's identity is its source commit: the capture reads the GitRepository's artifact revision and compares the local chart tree with that tree |
+| F1-7 | The comparison is one-directional: a chart-declared variable missing from the deployment is never detected | high | **fixed** — the source's own variables are enumerated too: a variable the chart declares and the deployment does not carry is reported (`NOT CARRIED`) with a disposition |
+| F1-8 | The triage log's own count was wrong (23 against 22 rows) | low | **fixed** — the count is 22 |
+| F1-9 | `write_record` was outside the capture's failure contract | low | **fixed** — the record is written inside the try, so a write failure exits 3 with the reason |
+| F1-10 | `spec.values` (inline HelmRelease values) were ignored | low | **fixed** — the inline values are merged into the effective source |
+| F1-11 | `disposition_for` carried an unused parameter | low | **fixed** — the parameter is gone |
+| F1-12 | `build_images` computed a set it never used | low | **fixed** — the dead code is gone |
+| F1-13 | The HelmRelease's condition message was captured and dropped | low | **fixed** — the record states the release health |
+| F1-14 | `derive_values` omitted the chart's `trimSuffix "/"` on the GPU host | low | **fixed** — the host is trimmed exactly as the chart trims it |
+| F1-15 | The GPU API key was sent to every probed endpoint, TEI included | low | **fixed** — the credential goes to the OpenAI-compatible endpoints only; TEI does not authenticate with it |
+| F1-16 | The Implementation Note cited the wrong branch as the chart's source | low | **fixed** — the release installs the `main` branch tip; the note says so and the capture proves it against the artifact revision |
 
 ## Design Notes
 

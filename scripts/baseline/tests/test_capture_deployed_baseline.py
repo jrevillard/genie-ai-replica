@@ -34,6 +34,7 @@ def _record_data():
             "deployed_chart_source": "",
             "chart_source_matches": None,
             "overlay_name": "overlay",
+            "release_health": "True - Helm upgrade succeeded",
             "command": "python3 capture.py",
         },
         "images": [],
@@ -192,7 +193,7 @@ def test_derived_value_is_compared_against_the_chart_derivation(chart_values, ov
 def test_difference_without_disposition_stays_unresolved():
     """An unexplained difference has no disposition - the capture must fail on it."""
     row = {"env": "RERANKING_STRATEGY", "status": "DIFFERENT"}
-    assert capture.disposition_for(row, "genieai-genieai-umbrella-chatqna") is None
+    assert capture.disposition_for(row) is None
 
 
 def test_a_fallback_chain_resolves_to_the_value_the_chart_renders(chart_values, env_maps):
@@ -207,7 +208,7 @@ def test_a_fallback_chain_resolves_to_the_value_the_chart_renders(chart_values, 
     row = next(row for row in rows if row["env"] == "KC_REALM")
     assert row["status"] == "MATCH"
     assert row["source_path"] == "data.keycloak.realm"
-    assert capture.disposition_for(row, workload["name"]) is None
+    assert capture.disposition_for(row) is None
 
 
 def test_secret_value_never_reaches_the_record():
@@ -241,8 +242,10 @@ def test_injected_variables_are_skipped_unless_the_chart_declares_them(chart_val
         ],
     }
     rows, undeclared = capture.compare_workload(workload, env_maps, chart_values, {}, chart_values)
-    assert [row["env"] for row in rows] == ["RETRIEVER_ARANGO_K"]
-    assert not undeclared
+    compared = [row for row in rows if row["status"] != "NOT CARRIED"]
+    assert [row["env"] for row in compared] == ["RETRIEVER_ARANGO_K"]
+    # the injected variable is dropped, the declared-but-absent ones are reported
+    assert "ARANGODB_SINGLE_SERVICE_HOST" not in [row["env"] for row in rows]
 
 
 def test_overlay_override_is_a_separate_layer(chart_values):
@@ -280,6 +283,7 @@ def test_an_undispositioned_difference_fails_the_capture(tmp_path):
             "chart_version": "0.2.1",
             "local_chart_version": "0.2.1",
             "overlay_name": "overlay",
+            "release_health": "True - Helm upgrade succeeded",
             "command": "python3 capture.py",
         },
         "images": [],
@@ -323,6 +327,7 @@ def test_a_dispositioned_difference_exits_zero(tmp_path):
             "chart_version": "0.2.1",
             "local_chart_version": "0.2.1",
             "overlay_name": "overlay",
+            "release_health": "True - Helm upgrade succeeded",
             "command": "python3 capture.py",
         },
         "images": [],

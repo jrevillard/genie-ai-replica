@@ -243,7 +243,20 @@ lane settings above.
 
 | Variable | Default | Purpose |
 |---|---|---|
-| `OKF_MAX_CONCEPT_DOC_CHARS` | `250000` | Maximum characters in ONE concept document **body**. |
+| `OKF_MAX_CONCEPT_DOC_CHARS` | **derived** (unset) | Maximum characters in ONE concept document **body**. |
+
+**Unset = derived.** The ceiling is derived from the serving-model window
+the same endpoint dataprep reads (`/v1/models`), so it is right on every
+deployment rather than right on one: on the default 65536-token window
+the derived budget is ≈219 700 characters. Set the variable to pin a
+number instead — an operator's pin is never overruled. The derivation
+depends on the chunking and batching values the deployment uses
+(`DATAPREP_CHUNK_SIZE*`, `DATAPREP_CONTEXTUAL_MAX_TOKENS`,
+`DATAPREP_LLM_LABEL_BATCH_SIZE`, `DATAPREP_MAX_MODEL_LEN`), which reach
+**both** dataprep and okf-server so the two derivations cannot drift.
+
+On Kubernetes the knob is the chart value `okf.maxConceptDocChars`
+(empty = derived).
 
 The ceiling is enforced on every path that can write a concept body, so no
 oversized document can reach the corpus whichever way it arrives:

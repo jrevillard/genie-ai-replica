@@ -1120,6 +1120,13 @@ okf:
   retrievalConfig:
     ttlMs: "30000"
     timeoutMs: "3000"
+  # The ceiling on ONE concept document's body (OKF_MAX_CONCEPT_DOC_CHARS).
+  # EMPTY by default — the server DERIVES it from the serving-model window
+  # the same endpoint dataprep reads, exactly as the Compose deployment
+  # does. Pin it to a number to state a ceiling the derivation may not
+  # exceed; an operator pin is never overruled. A non-empty default would
+  # pin every deployment and the derivation would never engage.
+  maxConceptDocChars: ""
   # The largest bundle the document repository will forward to the OKF
   # crawl pipeline, in megabytes.
   bundleMaxMb: "100"
@@ -1318,6 +1325,12 @@ opea:
     dataprepMaxConcurrentBatches: "20"    # DATAPREP_MAX_CONCURRENT_BATCHES
     dataprepIngestConcurrency: "1"        # DATAPREP_INGEST_CONCURRENCY (per-file ingest workers)
     dataprepVllmMaxModelLen: "65536"      # VLLM_MAX_MODEL_LEN (the window the doc-budget derivation reads)
+    # The serving-model window, STATED by the operator (0/unset = discover
+    # it from the endpoint's /v1/models — what dataprep does). The only
+    # lever on a strict OpenAI-compatible provider whose /v1/models carries
+    # no max_model_len. Read by dataprep AND okf-server, so one line tunes
+    # both worlds — the okf-server mirrors the same value.
+    dataprepMaxModelLen: "0"              # DATAPREP_MAX_MODEL_LEN
     # OKF labeling round-trip tuning (retry backoff, second-round delay,
     # storm cooldown) — the tier's own defaults; see the OKF tier block.
     okfLlmRetryAttempts: "5"              # OKF_LLM_RETRY_ATTEMPTS
@@ -1327,6 +1340,7 @@ opea:
     okfLlmStormCooldownS: "20"            # OKF_LLM_STORM_COOLDOWN_S
     okfLlmStormCooldownMaxS: "120"        # OKF_LLM_STORM_COOLDOWN_MAX_S
     dataprepLlmLabelBatchSize: "4"        # DATAPREP_LLM_LABEL_BATCH_SIZE
+    dataprepChunkSize: "500"              # DATAPREP_CHUNK_SIZE
     dataprepChunkSizePdf: "500"           # DATAPREP_CHUNK_SIZE_PDF
     dataprepChunkSizeXlsx: "1500"         # DATAPREP_CHUNK_SIZE_XLSX
     dataprepChunkSizeDocx: "1000"         # DATAPREP_CHUNK_SIZE_DOCX

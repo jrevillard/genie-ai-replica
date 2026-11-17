@@ -138,13 +138,14 @@ describe('swagger-definition OAuth2 flow URLs', () => {
     ['a scheme-only base', 'http://'],
     ['an empty base', '']
   ])('refuses %s (no usable KEYCLOAK_URL)', (_label, value) => {
-    // The contract: the served URL must name NO origin. A relative path
-    // (root-relative or scheme-less) would open the Authorize popup on the
-    // docs origin itself; an absolute URL would point at some origin. Both
-    // are silent misconfigurations — the served URL must stay visibly
-    // broken instead. WHATWG parsing is the test: it throws for every
-    // relative shape and succeeds only for an absolute URL.
+    // The contract: with no usable base the served URL must stay the
+    // visibly-broken marker — it must not name an origin, and it must not
+    // be a relative path of any shape (root-relative or scheme-less): the
+    // Authorize popup would open on the docs origin itself. The marker is
+    // what distinguishes it from a relative path; WHATWG parsing is what
+    // proves it names no origin.
     const { authorizationUrl } = flowUrlsFor({ KEYCLOAK_URL: value });
+    expect(authorizationUrl).toContain('undefined');
     expect(() => new URL(authorizationUrl)).toThrow();
   });
 });

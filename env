@@ -898,11 +898,12 @@ KEYCLOAK_URL=https://localhost/auth
 #                           KEYCLOAK_URL.
 #                           It must be the SAME browser-facing alias the
 #                           token verifier accepts, and it must MATCH the
-#                           frontend's keycloak.url (the runtime config
-#                           /config/genie-ai-config.json) — this variable
-#                           does NOT configure the frontend. If its ORIGIN
-#                           differs from the docs page's own origin, add it
-#                           to CSP_CONNECT_SRC too — the docs page's policy
+#                           frontend's keycloak.url (the frontend container's
+#                           KEYCLOAK_URL / VUE_APP_KEYCLOAK_URL, else
+#                           ${origin}/auth) — this variable does NOT
+#                           configure the frontend. If its ORIGIN differs
+#                           from the docs page's own origin, add it to
+#                           CSP_CONNECT_SRC too — the docs page's policy
 #                           gates the token exchange.
 #   KEYCLOAK_INTERNAL_URL — internal Keycloak base (http://keycloak:8080) used by
 #                           chatqna (JWKS fetch) and dataprep (service-account token

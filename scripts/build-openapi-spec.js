@@ -54,8 +54,9 @@ function buildSpec() {
   // it is usable, and from KEYCLOAK_URL otherwise (#1889). Two properties must
   // hold for the committed Dart artifacts (which embed these URLs):
   //   - the served URL is CONCRETE and ABSOLUTE — the 'undefined' clause
-  //     catches a dropped KEYCLOAK_REALM pin, but it cannot tell a dropped
-  //     base from a resolver that serves a same-origin RELATIVE URL;
+  //     catches a dropped KEYCLOAK_REALM pin (and a dropped base, whose
+  //     served URL keeps the 'undefined' shape), but it cannot see a
+  //     resolver that serves a same-origin RELATIVE URL;
   //   - it derives from the resolved base, so the artifacts stay pinned.
   // The expected base comes from the SAME resolver the runtime spec uses
   // (components/gov-chat-backend/swagger-oauth2-base.js): a duplicated

@@ -2,6 +2,14 @@
 // securitySchemes, global security, tags), required by index.js (the runtime
 // swagger spec) and scripts/generate-api-client.sh (the mobile client
 // generation spec). Reads process.env at require time; no other side effects.
+
+// Base URL for the Swagger UI OAuth2 flow URLs below. The resolution lives
+// in ./swagger-oauth2-base.js — ONE implementation, shared with the
+// client-generation pin guard (scripts/build-openapi-spec.js), which must
+// judge the served URLs against the same rules.
+const { resolveOAuth2BaseUrl, isAbsoluteHttpUrl } = require('./swagger-oauth2-base');
+const oauth2BaseUrl = resolveOAuth2BaseUrl(process.env);
+
 module.exports = {
   openapi: '3.0.0',
   info: {
@@ -34,22 +42,14 @@ module.exports = {
       url: (() => {
         const raw = (process.env.API_URL || '').trim();
         const base = raw.replace(/\/+$/, '');
-        // The base-usability check: WHATWG parsing REWRITES the characters
-        // below (it strips the C0 controls and percent-encodes the
+        // The base-usability check lives in ./swagger-oauth2-base.js
+        // (isAbsoluteHttpUrl): WHATWG parsing REWRITES the characters it
+        // refuses (it strips the C0 controls and percent-encodes the
         // others), and the value is served verbatim — so a value carrying
         // one would be served in a form the parser never validated (a
         // control byte in the served document, a query swallowing the
         // joined path). A whitespace is in the same class.
-        // eslint-disable-next-line no-control-regex -- intentional: the C0 control range is exactly what WHATWG strips
-        if (/[\s\u0000-\u001F"#<>?`{}]/.test(base)) return '/';
-        try {
-          // WHATWG parsing is the exact validator: it rejects scheme-only
-          // and scheme-less values; a valid URL is served verbatim
-          // (including its original scheme casing).
-          return /^https?:$/.test(new URL(base).protocol) ? base : '/';
-        } catch {
-          return '/';
-        }
+        return isAbsoluteHttpUrl(base) ? base : '/';
       })(),
       description: 'API server base'
     }
@@ -62,8 +62,8 @@ module.exports = {
         description: 'Keycloak OAuth2 authentication (Authorization Code + PKCE)',
         flows: {
           authorizationCode: {
-            authorizationUrl: `${process.env.KEYCLOAK_URL}/realms/${process.env.KEYCLOAK_REALM}/protocol/openid-connect/auth`,
-            tokenUrl: `${process.env.KEYCLOAK_URL}/realms/${process.env.KEYCLOAK_REALM}/protocol/openid-connect/token`,
+            authorizationUrl: `${oauth2BaseUrl}/realms/${process.env.KEYCLOAK_REALM}/protocol/openid-connect/auth`,
+            tokenUrl: `${oauth2BaseUrl}/realms/${process.env.KEYCLOAK_REALM}/protocol/openid-connect/token`,
             scopes: {
               openid: 'OpenID Connect scope',
               profile: 'User profile information',

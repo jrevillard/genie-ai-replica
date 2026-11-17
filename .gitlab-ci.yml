@@ -20,7 +20,15 @@ variables:
   PYTEST_VERSION: "9.1.1"
   FLUTTER_ARCHIVE: "https://storage.googleapis.com/flutter_infra_release/releases/stable/linux/flutter_linux_${FLUTTER_VERSION}-stable.tar.xz"
   # --- Container build/scan/promote pipeline (see docs/adr/0001-gitlab-registry-build-scan-pipeline.md) ---
-  GIT_DEPTH: "0"  # full history needed for CI_COMMIT_SHORT_SHA stability across matrix jobs
+  # Shallow clone: no CI job reads the git history (the changelog check greps
+  # CHANGELOG.md; the release job publishes through the API), and the full
+  # clone was the pipeline's heaviest step — the .git carries a 2.1 GB blob
+  # (a model directory committed by mistake, `data/models--BAAI--bge-m3`),
+  # so every job downloaded 2.1 GB before running, and the build jobs
+  # outlived their get_sources budget (constant 65 s deaths with an empty
+  # trace, measured 2026-11-17). The release process runs locally and is
+  # unaffected.
+  GIT_DEPTH: "1"
   TRIVY_IMAGE_TAG: "aquasec/trivy:0.57.0"
   SYFT_VERSION: "v1.26.0"
   # --- OKF content-only chunking (Story 4.8-amend) ---
@@ -202,6 +210,13 @@ workflow:
   # sits above that floor.
   image: node:22-alpine
   interruptible: true
+  before_script:
+    # Workspace reset — see .build_template for the full story (the
+    # 2026-10-19 stale-bytes incident and the 2.1 GB full-fetch budget).
+    # The npm download cache is preserved: it is the one reuse channel
+    # npm ci genuinely has.
+    - git clean -ffdx -e .npm -e node_modules -e .venv || true
+    - git checkout -f HEAD -- . || git reset --hard HEAD || true
   variables:
     npm_config_cache: "$CI_PROJECT_DIR/.npm/"
   cache:
@@ -1275,6 +1290,16 @@ container_scanning:
   # uploads fine) killed builds before their script ran.
   dependencies: []
   before_script:
+    # Workspace reset (2026-10-19 incident, 2026-11-17 measurement): a reused
+    # runner workspace served stale bytes to prettier once, and the full-depth
+    # fetch was the standing mitigation — but a fetch restores the TRACKED
+    # files only, so the residue that actually bites (untracked leftovers,
+    # root-owned files the runner cannot unlink, data/ logs, secrets) survived
+    # it, and the checkout itself is what blew the get_sources budget (the
+    # .git carries a 2.1 GB blob). Reset the workspace explicitly instead:
+    # clean the untracked residue and force-restore the tracked tree.
+    - git clean -ffdx -e .npm -e node_modules -e .venv || true
+    - git checkout -f HEAD -- . || git reset --hard HEAD || true
     - echo "$CI_REGISTRY_PASSWORD" | docker login -u "$CI_REGISTRY_USER" --password-stdin "$CI_REGISTRY"
     - if [ -n "$DOCKER_HUB_USER" ]; then echo "$DOCKER_HUB_TOKEN" | docker login -u "$DOCKER_HUB_USER" --password-stdin docker.io; fi
   script:
@@ -3200,8 +3225,11 @@ release:create:
 # Workspace residue (2026-10-19 incident): a reused runner workspace once
 # served stale bytes of keycloak-auth-service.js / tracing.js to prettier —
 # lint failed on content that was not this ref's (branch pipeline green,
-# docker repro red). The pipeline-global GIT_DEPTH: "0" full fetch is the
-# standing mitigation; if lint ever checks the wrong copy of a file, suspect
+# docker repro red). The standing mitigation is now the explicit workspace
+# reset in .node_base / .build_template (git clean + git checkout -f), which
+# is what actually removes the residue; the pipeline-global GIT_DEPTH: "0"
+# full fetch never did (it restores the tracked files only) and cost every
+# job a 2.1 GB clone. If lint ever checks the wrong copy of a file, suspect
 # workspace residue first.
 .lint_component:
   extends: .lint_node

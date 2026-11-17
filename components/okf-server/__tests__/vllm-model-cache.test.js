@@ -29,8 +29,8 @@ function modelsPayload(id, extra = {}) {
   return { data: { data: [{ id, ...extra }] } };
 }
 
-function mockProbeSuccess(id) {
-  axios.get = jest.fn().mockResolvedValue(modelsPayload(id));
+function mockProbeSuccess(id, extra = {}) {
+  axios.get = jest.fn().mockResolvedValue(modelsPayload(id, extra));
 }
 
 isolateVllmEnv(ENV_KEYS);
@@ -859,5 +859,90 @@ describe('probe deadline and timeout parsing', () => {
     axios.get.mockResolvedValue(modelsPayload('served/model'));
     await cache.getServedModelId('http://vllm:8000');
     expect(axios.get.mock.calls[0][1].timeout).toBe(10000);
+  });
+});
+
+// ─── #1205: the served CONTEXT WINDOW rides the same probe ────────────────
+//
+// One HTTP call serves two fields (the Python twin's design): the window is
+// read from the SAME /v1/models payload the model id comes from, cached on
+// the same entry, stale-served on the same failed probe. 'No window' is an
+// ANSWER (a strict OpenAI-compatible provider omits the field), not an
+// error — the ceiling's ladder owns what an unknown window means.
+describe('#1205 — getServedWindow (one probe, two fields)', () => {
+  test('a vLLM payload carries the window from the SAME probe', async () => {
+    mockProbeSuccess('served/model', { max_model_len: 65536 });
+    const result = await cache.getServedWindow('http://vllm:8000');
+    expect(result.window).toBe(65536);
+    expect(result.stale).toBe(false);
+    expect(result.error).toBeNull();
+    // One HTTP call for both fields: the id and the window share the probe.
+    expect(axios.get).toHaveBeenCalledTimes(1);
+    const id = await cache.getServedModelId('http://vllm:8000');
+    expect(id).toBe('served/model');
+    expect(axios.get).toHaveBeenCalledTimes(1);
+  });
+
+  test('a strict provider without the field answers window=null, not an error', async () => {
+    mockProbeSuccess('served/model');
+    const result = await cache.getServedWindow('http://vllm:8000');
+    expect(result.window).toBeNull();
+    expect(result.stale).toBe(false);
+  });
+
+  test.each([['-1'], ['0'], ['abc'], ['1e15'], ['3.5']])(
+    'a broken window payload (%s) is dropped, never trusted',
+    async (raw) => {
+      mockProbeSuccess('served/model', { max_model_len: raw });
+      const result = await cache.getServedWindow('http://vllm:8000');
+      expect(result.window).toBeNull();
+    }
+  );
+
+  test('a proxy that serializes the field as a DIGIT STRING is accepted (python int() parity)', async () => {
+    // The docblock's own case: "some proxies serialize the field as a JSON
+    // string". '65536' must parse — this is the regression the CI lint
+    // nearly shipped: a broken /^d+$/ rejected every valid digit string and
+    // the deployment silently fell back to the static ceiling.
+    mockProbeSuccess('served/model', { max_model_len: '65536' });
+    const result = await cache.getServedWindow('http://vllm:8000');
+    expect(result.window).toBe(65536);
+  });
+
+  test('a FAILED probe serves the STALE window (stale beats broken)', async () => {
+    mockProbeSuccess('served/model', { max_model_len: 65536 });
+    await cache.getServedWindow('http://vllm:8000');
+    // The probe now fails — but only after the cached entry has AGED past
+    // the TTL (the suite's clock is frozen, so the entry would otherwise
+    // still be fresh and the plain cache hit would be served instead).
+    jest.spyOn(Date, 'now').mockReturnValue(1_061_000); // +61s: entry expired, negative window live
+    axios.get = jest.fn().mockRejectedValue(new Error('connection refused'));
+    const result = await cache.getServedWindow('http://vllm:8000');
+    expect(result.window).toBe(65536);
+    expect(result.stale).toBe(true);
+  });
+
+  test('nothing ever answered + failed probe = window null', async () => {
+    axios.get = jest.fn().mockRejectedValue(new Error('connection refused'));
+    const result = await cache.getServedWindow('http://vllm:8000');
+    expect(result.window).toBeNull();
+    expect(result.stale).toBe(false);
+    expect(result.error).toBeTruthy();
+  });
+
+  test('an EMPTY base answers null (never a throw of null)', async () => {
+    // The #1205 refactor's regression, pinned: getServedModelId('') used to
+    // return null; the shared chain's outcome carries err=null there, and a
+    // naive `throw outcome.err` threw NULL — bypassing every caller's
+    // `if (!id) → discoveryError` branch with an opaque TypeError.
+    await expect(cache.getServedModelId('')).resolves.toBeNull();
+    const win = await cache.getServedWindow('');
+    expect(win.window).toBeNull();
+  });
+
+  test('an absurdly large window is a broken proxy value, dropped', async () => {
+    mockProbeSuccess('served/model', { max_model_len: 10_000_001 });
+    const result = await cache.getServedWindow('http://vllm:8000');
+    expect(result.window).toBeNull();
   });
 });

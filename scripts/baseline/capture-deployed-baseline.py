@@ -779,9 +779,9 @@ def capture_models(namespace, env_by_component):
         flavour = "tei" if role in ("embedding", "reranker") else "openai"
         try:
             if flavour == "tei":
-                # TEI does not authenticate with the GPU API key: the
-                # credential belongs to the OpenAI-compatible endpoints.
-                info = http_json(f"{base}/info", None, insecure=insecure_for(component))
+                info = http_json(
+                    f"{base}/info", api_key, insecure=insecure_for(component)
+                )
                 served[role] = {
                     "model_id": info.get("model_id"),
                     "dtype": info.get("model_dtype"),
@@ -858,9 +858,12 @@ def resolve_source(
         _default_path, default = _resolve_chain(chain, chart_values)
         effective_path, effective = _resolve_chain(chain, effective_values)
         override = ""
-        if chain and chain[0][0] == "path":
-            found = get_path(overlay, chain[0][1])
-            if found not in (None, ""):
+        if effective_path:
+            # The overlay is read where the value actually resolved: an
+            # override further down the chain is the layer that produced
+            # the deployed value, and the record must show it.
+            found = get_path(overlay, effective_path)
+            if not _sprig_empty(found):
                 override = normalize(found)
         if effective is not None:
             return effective_path or "template literal", default, override, effective, None
@@ -1004,16 +1007,15 @@ def render_markdown(data):
     )
     add(
         f"- **Source compared against:** the chart source in this repository, version "
-        f"{capture['local_chart_version']}"
+        f"{capture['local_chart_version']} (the release history attests {capture['chart_version']})"
         + (
-            f" - the deployment was rendered from the chart source commit "
-            f"`{capture['deployed_chart_source']}`"
+            f" - the chart source's current ref is `{capture['deployed_chart_source']}`"
             + (
-                " (the local chart tree is that tree)"
+                " - the local chart tree is identical to that ref"
                 if capture["chart_source_matches"] is True
-                else " (the local chart tree DIFFERS from that tree)"
+                else " - the local chart tree DIFFERS from that ref"
                 if capture["chart_source_matches"] is False
-                else " (that commit is unknown to this checkout)"
+                else " - that ref is unknown to this checkout, so the tree comparison could not be established"
             )
             if capture.get("deployed_chart_source")
             else ""
@@ -1094,6 +1096,11 @@ def render_markdown(data):
             f"Compared against a chart value: {compared}; rendered by the template "
             f"(literal or helper): {templated}."
         )
+        if workload.get("multi_container"):
+            add(
+                "This workload carries several containers; their environments are "
+                "merged and a name collision keeps the last container's value."
+            )
         add("")
         if workload["undeclared"]:
             add(
@@ -1269,6 +1276,11 @@ def build_models(env_by_component, effective_values, served):
             if observed.get(key) is not None
         )
         chart_default = normalize(get_path(effective_values, path))
+        difference_source = chart_default
+        difference_path = path
+        if declared and served_id != "unknown" and not values_equal(declared, served_id):
+            difference_source = declared
+            difference_path = f"{declared_source} (pinned)"
         if observed.get("error"):
             status = "NOT PROBED"
         elif served_id == "unknown":
@@ -1284,6 +1296,8 @@ def build_models(env_by_component, effective_values, served):
                 "role": role,
                 "chart_default": chart_default,
                 "chart_default_path": path,
+                "difference_source": difference_source,
+                "difference_path": difference_path,
                 "declared": declared or "(no workload pins this model)",
                 "served": served_id,
                 "detail": detail + (f", pinned by {declared_source}" if declared_source else ""),
@@ -1360,8 +1374,14 @@ def capture(namespace, flux_namespace, release, date, out_path):
                     )
                 )
         if rows:
+            multi = len(workload["containers"]) > 1
             config.append(
-                {"workload": workload["name"], "rows": rows, "undeclared": undeclared}
+                {
+                    "workload": workload["name"],
+                    "rows": rows,
+                    "undeclared": undeclared,
+                    "multi_container": multi,
+                }
             )
 
     served = capture_models(namespace, env_by_component)
@@ -1371,14 +1391,17 @@ def capture(namespace, flux_namespace, release, date, out_path):
     # the deployment and the source: it belongs in the discrepancy table
     # and in the exit gate.
     for model in models:
-        if model["status"] != "DIFFERENT":
+        # A model the node serves that differs from the source, and a model
+        # that could not be probed at all, are both unresolved: the record
+        # cannot attest the served model ids the acceptance criteria name.
+        if model["status"] not in ("DIFFERENT", "NOT PROBED", "UNKNOWN"):
             continue
         discrepancies.append(
             {
                 "workload": f"({model['role']} model)",
                 "env": "model id",
-                "source_value": model["chart_default"],
-                "source_path": model["chart_default_path"],
+                "source_value": model["difference_source"],
+                "source_path": model["difference_path"],
                 "deployed": model["served"],
                 "disposition": "**UNRESOLVED**",
             }

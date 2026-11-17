@@ -397,3 +397,51 @@ def test_the_discrepancy_row_carries_the_effective_value():
     assert discrepancy["source_value"] == "threshold"
     assert discrepancy["source_path"] == "opea.chatqna.rerankingStrategy"
     assert discrepancy["disposition"] == "**UNRESOLVED**"
+
+def test_index_into_a_dotted_variable_resolves_to_its_path(env_maps):
+    """`index ($okf.server | default dict) "url"` is the leaf okf.server.url."""
+    chain = env_maps["dataprep"]["OKF_SERVER_URL"]["chain"]
+    assert ("path", "okf.server.url") in chain
+
+
+def test_index_into_a_plain_variable_resolves_to_its_path(env_maps):
+    """`index $dataKeycloak "internalUrl"` is the leaf data.keycloak.internalUrl."""
+    chain = env_maps["dataprep"]["KEYCLOAK_INTERNAL_URL"]["chain"]
+    assert ("path", "data.keycloak.internalUrl") in chain
+
+
+def test_a_falsy_leaf_falls_to_the_next_candidate():
+    """Sprig's `default` treats zero and false as empty: the fallback renders."""
+    chain = [("path", "opea.dataprep.dataprepContextualDocBudget"), ("literal", "6000")]
+    assert capture._resolve_chain(chain, {"opea": {"dataprep": {"dataprepContextualDocBudget": 0}}}) == (
+        None,
+        "6000",
+    )
+    assert capture._resolve_chain(
+        chain, {"opea": {"dataprep": {"dataprepContextualDocBudget": "8192"}}}
+    ) == ("opea.dataprep.dataprepContextualDocBudget", "8192")
+
+
+def test_a_subtree_is_not_treated_as_a_value():
+    """A mis-parsed path that points at a subtree would compare a repr."""
+    chain = [("path", "opea.retriever"), ("literal", "fallback")]
+    resolved = capture._resolve_chain(chain, {"opea": {"retriever": {"retrieverArangoK": "20"}}})
+    assert resolved == (None, "fallback")
+
+
+def test_the_overlay_is_read_where_the_value_resolves(chart_values, env_maps):
+    """An override further down the chain is the layer that produced the value."""
+    overlay = {"data": {"keycloak": {"realm": "gov-realm"}}}
+    effective = capture.deep_merge(chart_values, overlay)
+    workload = {
+        "name": "genieai-genieai-umbrella-chatqna",
+        "component": "chatqna",
+        "containers": [{"name": "chatqna", "image": "x", "env": {"KC_REALM": "gov-realm"}}],
+    }
+    rows, _ = capture.compare_workload(
+        workload, env_maps, chart_values, overlay, effective
+    )
+    row = next(row for row in rows if row["env"] == "KC_REALM")
+    assert row["status"] == "MATCH"
+    assert row["source_path"] == "data.keycloak.realm"
+    assert row["overlay_value"] == "gov-realm"

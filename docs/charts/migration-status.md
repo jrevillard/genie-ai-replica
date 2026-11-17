@@ -10,6 +10,23 @@ contractual evidence — a fresh clone does not carry them.)
 
 ## Current state (2026-11-17)
 
+- **The branch was rebased onto `main` (149d150d5) on 2026-11-17** — 621
+  commits replayed; ONE file conflicted (`CHANGELOG.md`, resolved as the
+  union of both sides), every other commit applied cleanly, and the
+  rebased tree differs from the pre-rebase tip by exactly `main`'s 95
+  files — nothing of the campaign was lost. All four chart gates pass
+  locally against the rebased tree: the parity gate compares **340
+  variables across 16 service pairs with 0 gaps** (floor 327),
+  `chart-version-check` sees the version move with its content, `helm
+  lint --strict` is clean, and the render parses under a strict
+  duplicate-key loader (102 documents). The behavioural delta the parity
+  gate CANNOT see — it compares environments, not behaviour — is now
+  consolidated in ONE table for the operator: "What differs from Docker
+  Compose" in `site/content/en/docs/deploy/kubernetes.md`, covering the
+  edge, the rate limit, the dotfile rule, the secret mechanism, Keycloak,
+  the data tier, the database name, observability, the AI tier, the OKF
+  tier, the probes, the update and rollback paths, and the backup path.
+
 - **The live six-check pass ran on 0.2.149 (2026-11-02) — the first
   since 0.2.130, and the first over the busybox tooling tier** — 6/6.
   **The chart has moved on since that pass (0.2.176): the six-check set

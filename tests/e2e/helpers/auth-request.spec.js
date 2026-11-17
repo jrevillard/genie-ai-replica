@@ -2,7 +2,9 @@
 // SPDX-License-Identifier: Apache-2.0
 const https = require('https');
 const fs = require('fs');
+const os = require('os');
 const path = require('path');
+const { execFileSync } = require('child_process');
 const { test, expect } = require('@playwright/test');
 const auth = require('./auth');
 
@@ -27,19 +29,31 @@ const auth = require('./auth');
  *
  * The transport speaks HTTPS (`https.request`, `rejectUnauthorized:
  * false`), so the fixture is a local TLS server carrying a self-signed
- * certificate — the committed throwaway keypair beside this spec
- * (`test-tls-key.pem` / `test-tls-cert.pem`, CN=e2e-transport-test,
- * generated once with openssl; it guards nothing and is never a
- * credential). The test reaches it by passing the ABSOLUTE URL as the
- * path argument: `new URL(path, BASE_URL)` ignores the base for an
- * absolute URL, so no module state is touched and no other spec in this
- * worker sees a moved venue edge.
+ * certificate. The throwaway keypair (CN=e2e-transport-test, it guards
+ * nothing and is never a credential) is GENERATED at load time by openssl
+ * into the OS temp dir — nothing key-shaped is committed to the tree
+ * (the committed fixture used to trip Secret Detection as a PKCS8 private
+ * key, CRITICAL, on every scan). An openssl that is missing or fails is
+ * a loud setup failure, per the suite determinism rule. The test reaches
+ * the server by passing the ABSOLUTE URL as the path argument:
+ * `new URL(path, BASE_URL)` ignores the base for an absolute URL, so no
+ * module state is touched and no other spec in this worker sees a moved
+ * venue edge.
  */
 
-const TLS_OPTIONS = {
-  key: fs.readFileSync(path.join(__dirname, 'test-tls-key.pem')),
-  cert: fs.readFileSync(path.join(__dirname, 'test-tls-cert.pem'))
-};
+function generateTlsOptions() {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'e2e-transport-tls-'));
+  const keyPath = path.join(dir, 'key.pem');
+  const certPath = path.join(dir, 'cert.pem');
+  execFileSync(
+    'openssl',
+    ['req', '-x509', '-newkey', 'rsa:2048', '-nodes', '-keyout', keyPath, '-out', certPath, '-days', '30', '-subj', '/CN=e2e-transport-test'],
+    { stdio: 'ignore' }
+  );
+  return { key: fs.readFileSync(keyPath), cert: fs.readFileSync(certPath) };
+}
+
+const TLS_OPTIONS = generateTlsOptions();
 
 /** Start a one-shot TLS server whose single response `responder` builds. */
 function startServer(responder) {

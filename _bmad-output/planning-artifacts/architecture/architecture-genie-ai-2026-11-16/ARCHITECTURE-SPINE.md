@@ -309,11 +309,18 @@ service; the frontend never talks to anything but the BFF.
   detects the conversation language, translates non-English history/queries
   to English BEFORE embedding (English-only embedding space), applies
   history/input bounds, and records `query_translation_status`
-  (`genieai_chatqna.py:4663/4689/4972`); the port's retrieval adapter owns
-  the equivalent preparation (language determination, normalization or its
-  justified replacement, bounds, failure/overflow behavior, status
-  provenance), and configs B/C use identical preparation so the E02 delta
-  attributes to the agent. **Method:
+  (`genieai_chatqna.py:4663/4689/4972`). **Input-preparation ownership
+  (resolves the port/vLLM boundary):** the **agent application layer (the
+  loop)** owns query/history preparation — language detection,
+  translate-to-English BEFORE each `search_knowledge` call (including every
+  refined query generated mid-loop), bounds, failure/overflow behavior,
+  status provenance (`query_translation_status`). The loop may call vLLM
+  (paradigm diagram); preparation calls are auxiliary model calls — budgeted
+  (AD-6), cancellation-chained, and invisible to the activity line. The
+  **port's input contract requires prepared (English) queries** and carries
+  the preparation status in results — the port itself never calls vLLM
+  (unchanged). Answer translation stays BFF-owned (AD-14). Configs B/C use
+  identical preparation so the E02 delta attributes to the agent. **Method:
   reimplementation, not code sharing** — a **clean-slate port**: modern
   patterns (typed port/adapters, DI, testable units) are encouraged where
   needed, but **behavior is frozen** to the V02-recorded semantics in
@@ -375,12 +382,14 @@ service; the frontend never talks to anything but the BFF.
   outputs (FR-25); a document attempting to steer the agent counts as a
   finding regardless of outcome.
 
-### AD-14 — Translation on the agentic path: BFF-executed, vLLM backend only
+### AD-14 — Answer translation on the agentic path: BFF-executed, vLLM backend only
 
-- **Binds:** FR-14, FR-11 counting semantics, AD-1, AD-6, AD-8.
+- **Binds:** FR-14, FR-11 counting semantics, AD-1, AD-6, AD-8, AD-10.
 - **Prevents:** an OPEA-free violation through the translation back door (the
   CPU translation backend is the OPEA-built `opea/translation` image), and
-  unattributed translation cost.
+  unattributed translation cost. **Scope: this AD governs ANSWER translation
+  only** — input/query preparation translation is loop-owned (AD-10) as an
+  auxiliary budgeted call.
 - **Rule:** On the agentic path, translation runs in the BFF against the
   **vLLM GPU backend** (existing `gpu-translate-backend` pattern) — the OPEA
   translation image is never invoked (AD-1). The BFF translation module is

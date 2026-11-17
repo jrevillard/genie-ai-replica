@@ -134,8 +134,9 @@ describe('swagger-definition OAuth2 flow URLs', () => {
   ])('strips ALL trailing slashes from the KEYCLOAK_URL fallback (%s — no doubled path segment)', (_label, value) => {
     // The ALL-slashes strip (the verifier's discovery-base rule) is what
     // this pins: a regression to the one-slash rule (the verifier's
-    // public-alias rule, five lines away in the resolver) would double the
-    // path segment for a multi-slash value, so the case pins two slashes.
+    // public-alias rule, the neighbouring line in the resolver) would
+    // double the path segment for a multi-slash value, so the case pins
+    // two slashes.
     const { authorizationUrl } = flowUrlsFor({ KEYCLOAK_URL: value });
     expect(authorizationUrl).toBe('https://keycloak.example.com/auth/realms/genie/protocol/openid-connect/auth');
   });

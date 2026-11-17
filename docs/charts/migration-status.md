@@ -10,6 +10,38 @@ contractual evidence — a fresh clone does not carry them.)
 
 ## Current state (2026-11-17)
 
+- **The shared GPU node's LLM does not answer a GENERATION — and that
+  blocks the three GPU-dependent steps of the six-check set.** The vLLM
+  servers answer `/v1/models` in 0.1 s (the models are loaded:
+  granite-4.1-8b with a 65536-token window, gemma-3-4b-it with 8192),
+  but a generation never answers — from a cluster pod AND from the
+  workstation (110 s, no response). On the laptop: the dataprep's
+  labelling succeeds (9 s), the contextualization falls back to the raw
+  text ("0 using raw text after batch + per-chunk recovery failed"),
+  then the GRAPH INSERTION phase hangs forever — that phase is
+  deliberately unbounded (the vendored comps' client takes no HTTP
+  budget, and a cancelled batch would drop chunks silently), so the
+  file stays `Ingesting` with 0 chunks and the next one stays
+  `Pending` (the dataprep serves one ingest at a time). The chat's SSE
+  headers arrive after ~3 minutes and the stream then aborts.
+  **This is NOT a chart defect**: the dataprep's egress to the GPU
+  (`:444`) is allowed, the endpoint is correct, and
+  `MODEL_LLM_TIMEOUT_SECONDS` bounds the phases that HAVE a fallback —
+  the unbounded phase has no chart-side lever. The same node serves the
+  El Salvador deployment, so the impact is not laptop-only.
+
+- **The green local E2E run does NOT prove the RAG path.** The chat
+  specs mock the stream (nothing in the suite references
+  `/api/query/stream`), so the 471 green tests exercise the shell, the
+  session and the UI around a stubbed answer. The chat that reaches the
+  GPU is only covered by the six-check set — and it is blocked by the
+  GPU node above. The suite's own `venue build: STALE` line is a FALSE
+  POSITIVE on a chart-only branch: the venue serves main's build
+  (`1f483a99`, an ancestor of `main`) and the delta to the checkout is
+  112 chart files + 13 docs + 20 scripts with **zero application-code
+  files** — the comparison is sha-vs-sha and cannot see that the served
+  product IS the checkout's.
+
 - **The AI tier's readiness probes no longer add a floor on top of the
   startup probe (0.2.177)** — six services (chatqna, dataprep,
   embedding, reranker, retriever, translation) carried a readiness

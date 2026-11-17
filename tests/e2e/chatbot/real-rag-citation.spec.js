@@ -16,7 +16,12 @@ const {
   waitForFileIngestedViaApi,
   deleteAllTestDocuments
 } = require('../helpers/documents');
-const { skipUnlessVenue, ingestChainReady, ingestChainMissingReason } = require('../helpers/venue-profile');
+const {
+  skipUnlessVenue,
+  ingestChainReady,
+  ingestChainMissingReason,
+  INGEST_PROBE_BUDGET_MS
+} = require('../helpers/venue-profile');
 
 // The fixture whose fact the answer must carry and whose file the sources
 // must cite. Both seeds are fixed inputs of this spec (no wall-clock, no
@@ -41,11 +46,14 @@ test.describe('Chatbot — a real answer cites its real source', () => {
   // first beforeAll, so the guarded setup after it never runs on a venue
   // without the chain.
   test.beforeAll(async () => {
-    // The canary runs a REAL ingest (queue, labeling, embedding) on a
-    // shared venue, and it holds until the status lands — its own budget
-    // (180 s) must fit inside this hook's clock, or the hook's deadline
-    // would cut the verdict off mid-wait.
-    test.setTimeout(INGEST_BUDGET_MS + 180000);
+    // The premise's real cost is a browser login (the realm refuses
+    // direct grants, so the probe mints through the browser — budgeted at
+    // SESSION_MINT_TIMEOUT_MS) PLUS the canary's own ingest wait PLUS the
+    // canary's cleanup sweep. The hook runs under the PROJECT's timeout
+    // otherwise, and a hook cut mid-probe ERRORS the group instead of
+    // skipping it — and the canary's cleanup, which sits AFTER the wait,
+    // would never run: the canary would stay in the venue's corpus.
+    test.setTimeout(SESSION_MINT_TIMEOUT_MS + INGEST_PROBE_BUDGET_MS + 120000);
     await skipUnlessVenue(test, ingestChainReady, ingestChainMissingReason)();
   });
 

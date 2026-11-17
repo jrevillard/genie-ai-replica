@@ -546,6 +546,69 @@ async function mapWithConcurrency(items, limit, fn) {
 }
 
 /**
+ * Open one browser session on the venue and report what the session SAW:
+ * the realm token it carries and the locale the APP adopted.
+ *
+ * The locale is set on the CONTEXT (`newContext({ locale })`), so the app
+ * boots on `navigator.language` — the app's own detection order, with no
+ * stored preference in a fresh context to override it. The adopted
+ * language is then read off `<html lang>`, the attribute main.js writes
+ * with the locale the app actually booted with: the deployment's
+ * whitelist is only HALF of the frontend's rule (the active set is the
+ * build's locale FILES filtered by the whitelist), and only the app can
+ * say which files it ships. A deployment whose whitelist names a locale
+ * its build does not carry falls back to 'en', and this is the probe that
+ * sees it.
+ *
+ * The teardown contract is the one getSessionTokenViaUI owns: a session
+ * that failed throws its failure (with a teardown failure as the cause),
+ * a teardown failure on a successful session throws too, and a clean run
+ * returns what it saw.
+ *
+ * @param {object} [options]
+ * @param {{username: string, password: string}} [options.user] - Defaults to
+ *        TEST_USER.
+ * @param {string} [options.locale] - The locale the context boots with.
+ * @returns {Promise<{token: string, adopted: string}>} the session's token
+ *        and the locale the app adopted
+ */
+async function openVenueSession({ user, locale } = {}) {
+  let ownBrowser = null;
+  let context = null;
+  let seen = { token: null, adopted: null };
+  let sessionError = null;
+  let teardownError = null;
+  try {
+    ownBrowser = await chromium.launch({ args: venueLaunchArgs() });
+    context = await ownBrowser.newContext({ ignoreHTTPSErrors: true, locale });
+    const page = await context.newPage();
+    await loginViaUI(page, user || TEST_USER);
+    seen = {
+      token: await getSessionToken(page),
+      adopted: await page.evaluate(() => document.documentElement.lang)
+    };
+  } catch (e) {
+    sessionError = e;
+  } finally {
+    if (context) {
+      try {
+        await context.close();
+      } catch (e) {
+        teardownError = e;
+      }
+    }
+    if (ownBrowser) {
+      try {
+        await ownBrowser.close();
+      } catch (e) {
+        if (!teardownError) teardownError = e;
+      }
+    }
+  }
+  return resolveSessionOutcome(sessionError, teardownError, seen);
+}
+
+/**
  * Log in through the UI in a throwaway session and return that session's
  * access token — the cleanup paths' replacement for minting a token with
  * ROPC, which the realm refuses by design.
@@ -646,6 +709,7 @@ module.exports = {
   getUserToken,
   getSessionToken,
   getSessionTokenViaUI,
+  openVenueSession,
   resolveSessionOutcome,
   parseJwtClaims,
   request,

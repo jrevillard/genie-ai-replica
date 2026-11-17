@@ -18,6 +18,7 @@ const auth = require('./auth');
 const REAL_REQUEST = auth.request;
 const REAL_GET_ADMIN_TOKEN = auth.getAdminToken;
 const REAL_GET_SESSION_TOKEN = auth.getSessionTokenViaUI;
+const REAL_OPEN_VENUE_SESSION = auth.openVenueSession;
 const PROFILE_PATH = require.resolve('./venue-profile');
 
 /** A fresh, uncached copy of the helper. */
@@ -30,6 +31,7 @@ test.afterEach(() => {
   auth.request = REAL_REQUEST;
   auth.getAdminToken = REAL_GET_ADMIN_TOKEN;
   auth.getSessionTokenViaUI = REAL_GET_SESSION_TOKEN;
+  auth.openVenueSession = REAL_OPEN_VENUE_SESSION;
 });
 
 /** The fake transport: a queue of answers, one per call. */
@@ -53,6 +55,20 @@ function fakeTransport(answers) {
     return Promise.resolve({ status: answer.status, data: answer.data, headers: {} });
   };
   return calls;
+}
+
+/**
+ * The venue session the probes open: a realm token, and the locale the app
+ * adopted in that session. The real session launches a browser and logs in —
+ * the unit spec fakes it, and `adopted` overrides the locale the fake app
+ * reports (the default is the locale the session was opened with).
+ */
+function fakeVenueSession({ adopted } = {}) {
+  auth.getSessionTokenViaUI = async () => 'fake-session-token';
+  auth.openVenueSession = async ({ locale } = {}) => ({
+    token: 'fake-session-token',
+    adopted: adopted || locale || 'en'
+  });
 }
 
 test.describe('the OKF probe reads the venue like the frontend reads it', () => {
@@ -316,6 +332,18 @@ test.describe('the locale whitelist probe reads the config the frontend reads', 
     expect(await profile.localeActive('fr')).toBe(true);
   });
 
+  test("'en' stays active even when the whitelist does not name it", async () => {
+    // The frontend's rule (whitelist.js): 'en' is ALWAYS retained so
+    // vue-i18n's fallbackLocale can resolve. A probe that said otherwise
+    // would skip the default locale on a venue that serves it perfectly
+    // well.
+    fakeTransport([{ status: 200, data: 'window.APP_CONFIG = {\n  availableLocales: "es,fr",\n};\n' }]);
+    const profile = freshProfile();
+    expect(await profile.localeActive('en')).toBe(true);
+    expect(await profile.localeActive('fr')).toBe(true);
+    expect(await profile.localeActive('de')).toBe(false);
+  });
+
   test('the skip reason renders the whitelist exactly and names the NOT-exercised verdict', async () => {
     fakeTransport([{ status: 200, data: 'window.APP_CONFIG = {\n  availableLocales: "en,es",\n};\n' }]);
     const profile = freshProfile();
@@ -327,10 +355,10 @@ test.describe('the locale whitelist probe reads the config the frontend reads', 
 });
 
 test.describe('the translation probe reads the venue through its own endpoint', () => {
-  // The probe mints a realm session through the browser login (the faked
+  // The probe opens a realm session through the browser login (the faked
   // one here): a master-admin token is the wrong issuer for the backend.
   function fakeSessionMint() {
-    auth.getSessionTokenViaUI = async () => 'fake-session-token';
+    fakeVenueSession();
   }
 
   test('a venue that translates the probe answers true, with the en→fr body', async () => {
@@ -351,6 +379,22 @@ test.describe('the translation probe reads the venue through its own endpoint', 
     fakeTransport([
       { status: 400, data: { error: 'UNSUPPORTED_LANGUAGE', message: 'Unsupported target language' }, headers: {} }
     ]);
+    const profile = freshProfile();
+    expect(await profile.translatesTo('fr')).toBe(false);
+  });
+
+  test('a 200 that echoes the source is not a translation', async () => {
+    // The status alone does not prove the chain translated anything: a body
+    // that carries the source text back is a chain that did not translate.
+    fakeSessionMint();
+    fakeTransport([{ status: 200, data: { translated_texts: ['Hello'] }, headers: {} }]);
+    const profile = freshProfile();
+    expect(await profile.translatesTo('fr')).toBe(false);
+  });
+
+  test('a 200 with no translated text is not a translation either', async () => {
+    fakeSessionMint();
+    fakeTransport([{ status: 200, data: { translated_texts: [] }, headers: {} }]);
     const profile = freshProfile();
     expect(await profile.translatesTo('fr')).toBe(false);
   });
@@ -376,9 +420,9 @@ test.describe('the translation probe reads the venue through its own endpoint', 
   });
 });
 
-test.describe('the French streaming premise combines the two venue facts', () => {
+test.describe('the French streaming premise combines the venue facts', () => {
   test('a venue without the locale never asks the translation endpoint', async () => {
-    auth.getSessionTokenViaUI = async () => 'fake-session-token';
+    fakeVenueSession();
     const calls = fakeTransport([
       { status: 200, data: 'window.APP_CONFIG = {\n  availableLocales: "en,es",\n};\n' },
       { status: 200, data: { translated_texts: ['Bonjour'] }, headers: {} }
@@ -391,7 +435,7 @@ test.describe('the French streaming premise combines the two venue facts', () =>
   });
 
   test('an active locale with no translation chain is a false, and the reason names the chain', async () => {
-    auth.getSessionTokenViaUI = async () => 'fake-session-token';
+    fakeVenueSession();
     fakeTransport([
       { status: 200, data: 'window.APP_CONFIG = {\n  availableLocales: "",\n};\n' },
       { status: 400, data: { error: 'UNSUPPORTED_LANGUAGE', message: 'Unsupported target language' }, headers: {} }
@@ -404,7 +448,7 @@ test.describe('the French streaming premise combines the two venue facts', () =>
   });
 
   test('both facts present is a ready venue', async () => {
-    auth.getSessionTokenViaUI = async () => 'fake-session-token';
+    fakeVenueSession();
     fakeTransport([
       { status: 200, data: 'window.APP_CONFIG = {\n  availableLocales: "",\n};\n' },
       { status: 200, data: { translated_texts: ['Bonjour'] }, headers: {} }
@@ -412,11 +456,29 @@ test.describe('the French streaming premise combines the two venue facts', () =>
     const profile = freshProfile();
     expect(await profile.frenchStreamingReady()).toBe(true);
   });
+
+  test('a build that does not carry the locale file fails the premise, and the reason says so', async () => {
+    // The whitelist names 'fr', the build ships no fr.js: the app boots on
+    // 'en'. The premise is the venue's answer to "can this deployment serve
+    // this locale?", and the app is the only one that can answer it.
+    fakeVenueSession({ adopted: 'en' });
+    const calls = fakeTransport([
+      { status: 200, data: 'window.APP_CONFIG = {\n  availableLocales: "en,fr",\n};\n' },
+      { status: 200, data: { translated_texts: ['Bonjour'] }, headers: {} }
+    ]);
+    const profile = freshProfile();
+    expect(await profile.frenchStreamingReady()).toBe(false);
+    // The translation endpoint was never asked: the locale already failed.
+    expect(calls).toHaveLength(1);
+    const reason = await profile.frenchStreamingMissingReason();
+    expect(reason).toMatch(/does not adopt the locale 'fr'/);
+    expect(reason).toMatch(/NOT exercised/);
+  });
 });
 
 test.describe('the ingest-chain canary uploads, ingests, and cleans up', () => {
   function fakeSessionMint() {
-    auth.getSessionTokenViaUI = async () => 'fake-session-token';
+    fakeVenueSession();
   }
 
   const uploaded = (fileId) => ({

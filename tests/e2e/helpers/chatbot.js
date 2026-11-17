@@ -354,10 +354,13 @@ function lastBotResponseTimeOf(read) {
  * Pure, and OUT of the page — the same decider pattern, so the read's named
  * causes stay decidable where they are unit tested.
  *
- * The flag's ABSENCE crosses the wire as absence, like the streaming flag
- * does: the welcome bubble and a turn whose done frame has not landed carry
- * no `translationFailed` key, and coercing that to `false` would say "the
- * answer was translated" before any answer existed. `undefined` reports it.
+ * The flag is a BOOLEAN on every message the store holds: the store
+ * commits it with `Boolean(data.translationFailed)`, and the message
+ * factory defaults it to false. So `false` means "no failed-translation
+ * verdict was received for this turn" — it does NOT mean "the backend sent
+ * a verdict", and the absence of the verdict is not observable here.
+ * `undefined` is what a read with NO bot message answers — the welcome
+ * bubble and a turn that has not landed carry no flag at all.
  *
  * @param {{state: string, messages?: object[]}} read - what the page read
  * @returns {boolean|undefined|symbol} the verdict, undefined, or NOT_READABLE

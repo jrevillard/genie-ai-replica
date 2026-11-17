@@ -14,7 +14,46 @@ const {
   USER_BUBBLE
 } = require('../helpers/chatbot');
 const { pinLocale, assertAdoptedLocale } = require('../helpers/locale');
+const { SESSION_MINT_TIMEOUT_MS } = require('../helpers/auth');
 const { skipUnlessVenue, frenchStreamingReady, frenchStreamingMissingReason } = require('../helpers/venue-profile');
+
+// The French-only words the answer must carry. French shares 'la', 'le',
+// 'un', 'de', 'que', 'ce' and 'il' with Spanish, Italian and Portuguese —
+// a word from that set would pass an answer in another Latin-script
+// language — so the list carries only words French does not share:
+// 'est' (Spanish 'es'), 'sont', 'elle', 'nous', 'vous', 'dans', 'avec',
+// 'cette', 'pour', 'une', 'des', 'du', 'les', 'qui', 'tout', 'aux',
+// 'leur', 'ses', 'être', 'aussi', 'ainsi', 'donc', 'ne', 'pas'. ('plus'
+// is deliberately absent: it is an ordinary English word, and an English
+// answer would carry it.)
+const FRENCH_ONLY_WORDS = [
+  'est',
+  'sont',
+  'elle',
+  'elles',
+  'nous',
+  'vous',
+  'dans',
+  'avec',
+  'cette',
+  'pour',
+  'une',
+  'des',
+  'du',
+  'les',
+  'qui',
+  'tout',
+  'toute',
+  'aux',
+  'leur',
+  'ses',
+  'être',
+  'aussi',
+  'ainsi',
+  'donc',
+  'ne',
+  'pas'
+];
 
 test.describe('Chatbot message sending and SSE streaming', () => {
   // The beforeEach logs in through the browser and navigates — the
@@ -104,11 +143,21 @@ test.describe('Chatbot message sending and SSE streaming', () => {
 
 test.describe('Chatbot message sending and SSE streaming — the French answer', () => {
   // The venue premise runs FIRST: without an active 'fr' locale in the
-  // deployment's whitelist and a translation chain that answers en→fr,
-  // this group's pin would measure a fallback page and its premise is
-  // simply absent (#1742). The skip hook is the group's first beforeAll,
-  // so the guarded setup after it never runs on a parked venue.
-  test.beforeAll(skipUnlessVenue(test, frenchStreamingReady, frenchStreamingMissingReason));
+  // deployment's whitelist, an app that adopts it, and a translation chain
+  // that answers en→fr with a TRANSLATED text, this group's pin would
+  // measure a fallback page and its premise is simply absent (#1742). The
+  // skip hook is the group's first beforeAll, so the guarded setup after it
+  // never runs on a parked venue.
+  test.beforeAll(async () => {
+    // The premise opens a browser session of its own (the realm refuses
+    // direct grants, so the probe logs in through the browser — a mint
+    // budgeted at SESSION_MINT_TIMEOUT_MS). A hook runs under the PROJECT's
+    // timeout otherwise (60 s), and the probe would be cut mid-login: the
+    // group would ERROR instead of skipping, which is the opposite of what
+    // the venue-skip contract is for.
+    test.setTimeout(SESSION_MINT_TIMEOUT_MS + 120000);
+    await skipUnlessVenue(test, frenchStreamingReady, frenchStreamingMissingReason)();
+  });
 
   test.describe.configure({ timeout: LOGIN_BUDGET_TIMEOUT_MS });
 
@@ -154,14 +203,29 @@ test.describe('Chatbot message sending and SSE streaming — the French answer',
     // The answer is FRENCH, not merely untranslated: a venue whose
     // translation chain silently answered with the English text would
     // carry translationFailed=false and pass the two checks below without
-    // having translated anything. The tokens are French function words
-    // an English answer does not carry ('est', 'une', 'des', 'pour' …);
-    // the answer's LANGUAGE is the subject, so it is asserted.
-    expect(botText, 'the answer is in French').toMatch(
-      /\b(est|sont|un|une|des|du|de|le|la|les|pour|avec|dans|sur|et|il|ne|pas|nous|vous|qui|que|ce|cette)\b/i
-    );
+    // having translated anything.
+    //
+    // The words are FRENCH-ONLY ones — 'est', 'sont', 'elle', 'nous',
+    // 'dans', 'avec', 'cette', 'pour' … — and not the words French shares
+    // with Spanish or Italian ('la', 'le', 'un', 'de', 'que', 'ce'): one
+    // shared word would pass an answer in another Latin-script language.
+    // TWO of them are required, so a single quoted coincidence (a file
+    // name in the sources, a proper noun) cannot carry the assertion.
+    const frenchWords = FRENCH_ONLY_WORDS.filter((w) => new RegExp(`\\b${w}\\b`, 'i').test(botText));
+    expect(
+      frenchWords.length,
+      `the answer is in French (French-only words found: ${frenchWords.join(', ') || 'none'})`
+    ).toBeGreaterThanOrEqual(2);
 
     // The app's own translation verdict, read twice on two channels:
+    //
+    // 0. The DOM must have PROCESSED the done frame before the marker can
+    //    be read: the action row renders only on a completed turn (it
+    //    carries the query id the done frame delivers), so its presence is
+    //    the DOM's own signal that the frame landed. Without that wait the
+    //    marker check below would read a DOM one patch behind the store
+    //    and pass for the wrong reason.
+    await expect(page.locator('[data-testid="answer-actions"]')).toBeVisible();
     //
     // 1. The DOM marker renders ONLY when the done frame carried
     //    translationFailed=true (the amber note beside an English answer a
@@ -170,8 +234,13 @@ test.describe('Chatbot message sending and SSE streaming — the French answer',
 
     // 2. The store's flag on the completed turn — the same getter the
     //    streaming-flag wait reads, mapped through the helper's page-side
-    //    read. `false` (not absent) is the contract: the done frame
-    //    delivered the verdict for this turn.
+    //    read. `false` is the contract: the completed turn carries NO
+    //    failed-translation verdict, which is what the backend reports on
+    //    `done` when its translator could not answer. (The store coerces
+    //    the flag with Boolean(), so a turn that never received a verdict
+    //    carries `false` too — the flag says "the translation did not
+    //    fail", not "the backend sent a verdict". The answer's LANGUAGE,
+    //    asserted above, is what proves the translation happened.)
     const read = await page.evaluate(readStreamingState);
     const translationFailed = lastBotTranslationFailedOf(read);
     if (translationFailed === NOT_READABLE) {
@@ -179,7 +248,7 @@ test.describe('Chatbot message sending and SSE streaming — the French answer',
     }
     expect(
       translationFailed,
-      `the done frame carried translationFailed=false (got ${JSON.stringify(translationFailed)})`
+      `the completed turn carries no failed-translation verdict (got ${JSON.stringify(translationFailed)})`
     ).toBe(false);
   });
 });

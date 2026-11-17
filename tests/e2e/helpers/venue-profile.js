@@ -39,6 +39,7 @@
 const vm = require('vm');
 const fs = require('fs');
 const os = require('os');
+const path = require('path');
 const auth = require('./auth');
 // The venue's edge from the credential-free module: import the module that
 // defines what you use — the chat helper this used to import is a module
@@ -49,19 +50,22 @@ const { BASE_URL } = require('./base-url');
 const { TEST_ADMIN_USER } = require('./e2e-fixtures');
 // The documents-domain helpers the ingest canary drives over the venue's
 // own HTTP contract: upload, ingest, the ingest wait and the per-file
-// delete. The transport stays injectable in every one of them, so the unit
-// spec scripts the whole canary conversation.
-const { uploadFileViaApi, triggerIngestViaApi, waitForFileIngestedViaApi, sweepDeleteOneFile } = require('./documents');
+// delete. They are required INSIDE the canary, not here: the documents
+// helper imports the frontend's ES-module status vocabulary and names the
+// Node floor that bridge needs AT LOAD TIME. A module-scope import here
+// would put that floor on EVERY consumer of the venue profile — the OKF,
+// auth and theme specs that never touch the documents domain would fail
+// to LOAD on an older runner instead of skipping.
 
 const RUNTIME_CONFIG_PATH = '/runtime/config.js';
 
 // The canary's identity, unique per PROCESS. The repository mints a FRESH
-// file id per upload, so two canaries are two files — but the FILE LIST
-// carries both, and a caller that picks "the row with this name" would
-// then read the older one (the list is oldest-first), whose cleanup had
-// already retracted it. A unique name keeps every canary's row
-// unambiguous. The id is an identity, never an asserted value (the same
-// rule as the suite's unique seed names).
+// file id per upload (it stores a content hash and never looks one up), so
+// two canaries are two files — but the FILE LIST carries both, and a
+// caller that picks "the row with this name" would then read the older
+// one, whose cleanup had already retracted it. A unique name keeps every
+// canary's row unambiguous. The id is an identity, never an asserted value
+// (the same rule as the suite's unique seed names).
 const CANARY_RUN_ID = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
 
 // The ingest canary's budget: the chain is ONE tiny chunk, so the budget
@@ -78,9 +82,24 @@ const realmCache = new Map();
 const identityProviderCache = new Map();
 const translationCache = new Map();
 let ingestChainCache = null;
-// The admin session token the probes mint, cached per process (the mint is
-// the slowest leg of every probe that talks to the repository).
-let adminTokenCache = null;
+
+// The venue sessions the probes opened, cached per locale: each carries the
+// realm token and the locale the app ADOPTED in that session.
+//
+// The token is BOUNDED, and the bound is the point: a realm access token
+// lives 300 s (KEYCLOAK_ACCESS_TOKEN_LIFESPAN), and Playwright runs the
+// whole suite in ONE worker process — so a token cached for the run would
+// be handed to a probe minutes later, already expired, and the probe
+// would read the 401 as an unreadable venue instead of an absent surface.
+// A session older than this bound is re-opened.
+const SESSION_MAX_AGE_MS = 120000;
+const sessionCache = new Map();
+
+// The canary's text — the ONE place it lives. The probe copies these bytes
+// under the canary's own name (the name is unique per process, the bytes
+// are shared), so the fixture the unit spec reads and the file the venue
+// ingests cannot drift apart.
+const CANARY_FIXTURE_PATH = path.join(__dirname, '..', 'fixtures', 'ingest-probe-canary.md');
 
 /**
  * Read and evaluate the venue's runtime config (`/runtime/config.js`) — the
@@ -163,6 +182,15 @@ async function okfProfile() {
  * fallback's page and pass vacuously (the #1874/#1891 lesson), so the
  * exclusion is a venue fact this probe reads BEFORE the spec runs.
  *
+ * The rule is the frontend's, arm for arm: the whitelist is applied to the
+ * build's locale FILES, and 'en' is ALWAYS retained so vue-i18n's
+ * fallbackLocale can resolve — a whitelist that does not name 'en' still
+ * leaves 'en' active, and a probe that said otherwise would skip the
+ * default locale on a venue that serves it perfectly well.
+ *
+ * The FILES are the other half of the rule, and the venue does not publish
+ * them: `localeAdopted` is the probe that sees them, by booting the app.
+ *
  * @param {string} locale - the locale code to check (e.g. 'fr')
  * @returns {Promise<boolean>} true when the frontend would adopt the locale
  */
@@ -176,7 +204,63 @@ async function localeActive(locale) {
     .map((s) => s.trim().toLowerCase())
     .filter(Boolean);
   if (whitelist.length === 0) return true;
-  return whitelist.includes(locale.toLowerCase());
+  const code = locale.toLowerCase();
+  // 'en' is always retained — the frontend's own rule, arm for arm.
+  if (code === 'en') return true;
+  return whitelist.includes(code);
+}
+
+/**
+ * Open (or reuse) one venue session and report what it saw.
+ *
+ * The session boots the app on `locale` and reads back the locale the app
+ * ADOPTED (`<html lang>`), next to the realm token it carries. Both come
+ * from one login: the token is what the probes call the venue with, and
+ * the adopted locale is what proves the deployment can serve it.
+ *
+ * @param {string} locale - the locale the session boots with
+ * @returns {Promise<{token: string, adopted: string, at: number}>} the session
+ */
+async function venueSession(locale) {
+  const hit = sessionCache.get(locale);
+  if (hit !== undefined && Date.now() - hit.at < SESSION_MAX_AGE_MS) return hit;
+  const seen = await auth.openVenueSession({ user: TEST_ADMIN_USER, locale });
+  const session = { token: seen.token, adopted: String(seen.adopted || ''), at: Date.now() };
+  sessionCache.set(locale, session);
+  return session;
+}
+
+/**
+ * Does the APP adopt this locale — the deployment's whitelist is only half
+ * of the frontend's rule, and the other half (the build's locale files) is
+ * not published by the venue: a deployment whose whitelist names a locale
+ * its build does not carry falls back to 'en' at boot, and a spec pinning
+ * that locale would measure the fallback's page.
+ *
+ * The probe boots the app on the locale and reads the adopted language off
+ * `<html lang>` — the app's own answer, the same signal the specs assert.
+ *
+ * @param {string} locale - the locale code to check (e.g. 'fr')
+ * @returns {Promise<boolean>} true when the app booted on that locale
+ */
+async function localeAdopted(locale) {
+  const session = await venueSession(locale);
+  return session.adopted.toLowerCase() === locale.toLowerCase();
+}
+
+/**
+ * The admin session token the probes call the venue with.
+ *
+ * The session is cached per locale and BOUNDED (see SESSION_MAX_AGE_MS): a
+ * realm access token lives 300 s, and the suite runs in one worker process
+ * for the whole run — an unbounded cache would hand an expired token to a
+ * probe minutes later, and the probe would read the 401 as an unreadable
+ * venue instead of an absent surface.
+ *
+ * @returns {Promise<string>} the realm-scoped bearer token
+ */
+async function adminSessionToken() {
+  return (await venueSession('en')).token;
 }
 
 /**
@@ -202,9 +286,11 @@ async function missingLocaleReason(locale) {
 
 /**
  * Does the venue's translation chain answer a fixed en→fr probe — the same
- * POST /api/translate call the answer translation serves? The session token
- * is minted through the browser login (the realm refuses direct grants, so
- * a master-admin token is the wrong issuer here) and cached per process.
+ * translator the answer translation serves? The chat path resolves the SAME
+ * translator this probe exercises (the backend's `translationService`
+ * prepares it for the requested language pair and refuses the ones its map
+ * does not carry), so a refusal here is the refusal the chat path would
+ * answer, and a translation here is a translation the chat path can make.
  *
  * The verdict is cached per process; a FAILED probe (transport error, an
  * unreadable venue) is not cached — it throws, because an unreadable venue
@@ -219,13 +305,19 @@ async function translatesTo(locale) {
   // The smallest request the endpoint accepts: one fixed text, a fixed
   // source and the requested target. The TEXT is a fixture of this probe —
   // the verdict is about the endpoint's answer, never about the text.
+  const SOURCE = 'Hello';
   const res = await auth.request('POST', '/api/translate', {
     headers: { Authorization: `Bearer ${token}` },
-    body: { texts: ['Hello'], source_lang: 'en', target_lang: locale }
+    body: { texts: [SOURCE], source_lang: 'en', target_lang: locale }
   });
   if (res.status === 200) {
-    translationCache.set(locale, true);
-    return true;
+    // A 200 alone is not a translation: the body carries the answer, and an
+    // answer that is the source text unchanged is a chain that echoed the
+    // input. The verdict is about the TRANSLATION, so the body is read.
+    const translated = Array.isArray(res.data && res.data.translated_texts) ? res.data.translated_texts[0] : undefined;
+    const verdict = typeof translated === 'string' && translated.trim() !== '' && translated.trim() !== SOURCE;
+    translationCache.set(locale, verdict);
+    return verdict;
   }
   if (res.status === 400 && res.data && res.data.error === 'UNSUPPORTED_LANGUAGE') {
     // The deployment's language map refuses this target: the typed refusal
@@ -257,20 +349,6 @@ async function missingTranslationReason(locale) {
 }
 
 /**
- * The admin session token the venue probes use, minted through the browser
- * login (the realm refuses direct grants, so a master-admin token is the
- * wrong issuer here) and cached per PROCESS: the mint is the probes'
- * slowest leg, and one process that runs two probes pays it once.
- * @returns {Promise<string>} the realm-scoped bearer token
- */
-async function adminSessionToken() {
-  if (adminTokenCache === null) {
-    adminTokenCache = await auth.getSessionTokenViaUI({ user: TEST_ADMIN_USER });
-  }
-  return adminTokenCache;
-}
-
-/**
  * Can this venue carry a document through the ingest chain — upload,
  * ClamAV scan, dataprep, and the status callback that lands 'Ingested'?
  *
@@ -280,10 +358,9 @@ async function adminSessionToken() {
  * reads an ingested status (bounded), then retracts/deletes the canary.
  *
  * The verdict (and the last status it observed on a miss) is cached per
- * PROCESS, and Playwright gives each spec FILE its own process — so a run
- * that drives two files pays TWO canary ingests, not one. The session token
- * is cached with it: the mint is the probe's slowest leg, and a process
- * that runs two probes pays it once.
+ * PROCESS, and the suite runs in ONE worker process — so a run pays ONE
+ * canary ingest, not one per spec file. The session token is cached with
+ * it: the mint is the probe's slowest leg.
  *
  * A venue that CANNOT read (the upload or the ingest call itself fails at
  * the transport or with a non-accepted status) is an UNREADABLE venue: the
@@ -297,22 +374,35 @@ async function adminSessionToken() {
  */
 async function ingestChainReady() {
   if (ingestChainCache !== null) return ingestChainCache.ready;
+  // The documents-domain helpers are required HERE, not at module scope:
+  // they import the frontend's ES-module status vocabulary, which names the
+  // Node floor it needs at load time — and only the canary drives that
+  // domain. A module-scope import would put that floor on every consumer
+  // of the venue profile, including the specs that never touch it.
+  const {
+    uploadFileViaApi,
+    triggerIngestViaApi,
+    waitForFileIngestedViaApi,
+    sweepDeleteOneFile
+  } = require('./documents');
   const token = await adminSessionToken();
   const headers = { Authorization: `Bearer ${token}` };
   let fileId = null;
   let verdict = null;
   let probeError = null;
-  // The canary's IDENTITY is unique per invocation: the same bytes under
-  // the same name resolve to the SAME repository file (the content hash),
-  // so a second canary would wait on the first canary's file — which the
-  // first canary's cleanup already retracted, and the second would read
-  // 'retracted' instead of its own ingest. A unique name AND unique bytes
-  // give every probe its own file, and its own cleanup.
-  // The canary's extension is MARKDOWN, and it matters: the dataprep routes
-  // the docling-supported extensions to docling, and docling does not accept
+  // The canary's NAME is unique per process: the repository mints a fresh
+  // file id per upload (it stores a content hash and never looks one up),
+  // so two canaries are two files — but the FILE LIST carries both, and a
+  // caller that picks "the row with this name" would then read the older
+  // one, whose cleanup had already retracted it. The unique name keeps
+  // every canary's row unambiguous.
+  //
+  // Its extension is MARKDOWN, and it matters: the dataprep routes the
+  // docling-supported extensions to docling, and docling does not accept
   // plain text — a .txt canary fails with 'File format not allowed' at
-  // chunking, so the probe would read a broken ingest as an absent chain and
-  // skip every spec that needs one. The .md canary is ingested for real.
+  // chunking, so the probe would read a broken ingest as an absent chain
+  // and skip every spec that needs one. The .md canary is ingested for
+  // real.
   const canaryName = `ingest-probe-canary-${CANARY_RUN_ID}.md`;
   // The canary's path is a plain template, not a path.join: the
   // config-validator's variable-anchor policy (#1393) accepts a join only
@@ -320,10 +410,11 @@ async function ingestChainReady() {
   // runner's temp directory is neither.
   const canaryPath = `${os.tmpdir()}/${canaryName}`;
   try {
-    fs.writeFileSync(
-      canaryPath,
-      `# Ingest probe canary ${CANARY_RUN_ID}\n\nOne chunk of text for the venue's ingest probe.\n`
-    );
+    // The canary's TEXT lives in the fixture, and the fixture is the ONE
+    // place it lives: the probe writes those bytes under the canary's own
+    // name, so the unit spec's sample file and the live probe can never
+    // drift apart.
+    fs.writeFileSync(canaryPath, fs.readFileSync(CANARY_FIXTURE_PATH, 'utf8'));
     const record = await uploadFileViaApi(auth.request, token, canaryPath);
     fileId = record.file_id;
     await triggerIngestViaApi(auth.request, token, fileId);
@@ -364,9 +455,10 @@ async function ingestChainReady() {
   // would pollute the venue's document list. When the id came back, one
   // sweep delete settles it; when the upload failed before its answer, the
   // file may still have been committed server-side, so the canary's unique
-  // name is swept too. Cleanup failures are VISIBLE — they ride the reason
-  // on a verdict, and they ride the thrown message on a probe failure —
-  // but they never mask the probe's own answer.
+  // name is swept too. A cleanup that FAILS is thrown, not folded into the
+  // verdict: a canary left in the venue's corpus can be retrieved by the
+  // next run's question, and a run that cannot clean up after itself must
+  // not certify that the chain is ready.
   const cleanupFailures = [];
   let ids = fileId !== null ? [fileId] : [];
   if (fileId === null) {
@@ -402,10 +494,15 @@ async function ingestChainReady() {
     });
   }
   if (cleanupFailures.length > 0) {
-    verdict = {
-      ready: verdict.ready,
-      lastStatus: `${verdict.lastStatus}; canary cleanup failed: ${cleanupFailures.join('; ')}`
-    };
+    // A canary that could not be removed stays in the venue's document list
+    // — and the venue's corpus is what the chat answers from, so a leftover
+    // is not a harmless leftover: it can be retrieved by the next run's
+    // question. The probe therefore FAILS on it, on both paths: the
+    // cleanup is this run's own artifact, and a run that cannot clean up
+    // after itself has no business deciding that the chain is ready.
+    throw new Error(
+      `the ingest canary's cleanup failed — the venue keeps a canary document: ${cleanupFailures.join('; ')}`
+    );
   }
   ingestChainCache = verdict;
   return verdict.ready;
@@ -525,16 +622,19 @@ function missingIdentityProviderReason(realm) {
 }
 
 /**
- * Can a spec pin 'fr' AND have the venue translate into it — the two venue
+ * Can a spec pin 'fr' AND have the venue translate into it — the three venue
  * facts the French streaming specs need? The locale must be in the
  * deployment's active set (a pin the frontend would silently fall back
- * from measures the wrong page), and the translation chain must answer
- * en→fr. Both halves are cached probes; the reason names the half that
- * failed.
- * @returns {Promise<boolean>} true when both venue facts hold
+ * from measures the wrong page), the APP must adopt it (the whitelist is
+ * only half of the frontend's rule — the build's locale files are the other
+ * half, and a build without them falls back to 'en' at boot), and the
+ * translation chain must answer en→fr with a TRANSLATED text. Every half
+ * is a cached probe; the reason names the half that failed.
+ * @returns {Promise<boolean>} true when every venue fact holds
  */
 async function frenchStreamingReady() {
   if (!(await localeActive('fr'))) return false;
+  if (!(await localeAdopted('fr'))) return false;
   return translatesTo('fr');
 }
 
@@ -545,6 +645,15 @@ async function frenchStreamingReady() {
  */
 async function frenchStreamingMissingReason() {
   if (!(await localeActive('fr'))) return missingLocaleReason('fr');
+  if (!(await localeAdopted('fr'))) {
+    const adopted = sessionCache.get('fr');
+    return (
+      "venue profile: the app does not adopt the locale 'fr' (it booted on " +
+      `'${adopted ? adopted.adopted : 'unknown'}') — the deployment's whitelist names the locale but ` +
+      'the build carries no locale file for it, so the frontend falls back to English at boot and ' +
+      'this surface is therefore NOT exercised by this run'
+    );
+  }
   return missingTranslationReason('fr');
 }
 
@@ -585,6 +694,7 @@ module.exports = {
   okfEnabled,
   okfParkedReason,
   localeActive,
+  localeAdopted,
   missingLocaleReason,
   translatesTo,
   missingTranslationReason,
@@ -592,6 +702,7 @@ module.exports = {
   frenchStreamingMissingReason,
   ingestChainReady,
   ingestChainMissingReason,
+  INGEST_PROBE_BUDGET_MS,
   realmExists,
   missingRealmReason,
   hasIdentityProvider,

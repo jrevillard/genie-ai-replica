@@ -54,6 +54,7 @@ The handles these specs read (`stat-*`, `logs-*`, `admin-documents-*`,
 | `chat-conversation.spec.js` | handle (+ a `hasText` discriminator on a handle) | — |
 | `error-handling.spec.js` | handle (`nav-status`, `answer-error`, `composer-field`) | — |
 | `quick-help-scope.spec.js` | handle (+ `hasText` discriminators on handles, declared `data-state` attributes) | — |
+| `real-rag-citation.spec.js` | handle (+ a `hasText` discriminator on a handle) | — |
 | `send-message-and-stream.spec.js` | handle (via `BOT_BUBBLE` in `helpers/chatbot.js`) | — |
 | `conversation-history.spec.js` | handle (via helper) | — (`#chatTitle` migrated onto `chat-title`, #1830) |
 

@@ -359,6 +359,56 @@ class TestLoadAndChunk:
 
         assert dp_module.DOCLING_SUPPORTED_EXTENSIONS is utils.DOCLING_SUPPORTED_EXTENSIONS
 
+    def test_txt_is_not_a_docling_extension(self):
+        """.txt must not be claimed by the docling set (issue #1985).
+
+        docling has no plain-text format: a .txt routed to the docling loader
+        ends in 'Ingestion error' after a successful upload — a file the user
+        can upload but can never ingest, on every deployment that keeps the
+        shipped CONTENT_EXTRACTION_METHOD=docling default (compose and chart
+        both do). Plain text belongs to the standard loader.
+        """
+        assert ".txt" not in dp_module.DOCLING_SUPPORTED_EXTENSIONS
+
+    @pytest.mark.asyncio
+    async def test_txt_with_docling_method_routes_to_standard_loader(self):
+        """A .txt under CONTENT_EXTRACTION_METHOD=docling goes to the standard loader (issue #1985).
+
+        The standard loader reads plain text, so the ingest must WORK — the
+        upload-side allowlist keeps accepting .txt, and the chain (dataprep
+        extension set, repository allowlist, UI copy) stays consistent with
+        the file ingesting rather than the upload refusing it.
+        """
+        dp = create_dataprep()
+
+        doc_path = MagicMock()
+        doc_path.path = "notes.txt"
+        doc_path.chunk_size = 1500
+        doc_path.chunk_overlap = 150
+
+        mock_doc = MagicMock(page_content="Plain text content")
+        splitter = MagicMock()
+        splitter.create_documents.return_value = [mock_doc]
+
+        with (
+            patch.object(dp_module, "CONTENT_EXTRACTION_METHOD", "docling"),
+            patch.object(dp_module, "docling_document_loader", new_callable=AsyncMock) as docling_loader,
+            patch.object(
+                dp_module,
+                "document_loader",
+                new_callable=AsyncMock,
+                return_value="Plain text content",
+            ) as standard_loader,
+            patch.object(dp_module, "is_valid_content", return_value=True),
+            patch.object(dp_module, "RecursiveCharacterTextSplitter", return_value=splitter),
+            patch.object(dp_module, "get_separators", return_value=["\n\n"]),
+        ):
+            result = await dp._load_and_chunk(doc_path)
+
+        assert result == ["Plain text content"]
+        docling_loader.assert_not_called()
+        standard_loader.assert_awaited_once()
+
     @pytest.mark.asyncio
     async def test_empty_content_returns_empty(self):
         """Empty content from loader returns empty list."""

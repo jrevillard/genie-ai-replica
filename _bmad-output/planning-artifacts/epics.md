@@ -301,7 +301,7 @@ So that equivalence is proven continuously and config B generates complete answe
 **Given** the V02 fixtures (story 1.1) and the implemented port (stories 1.6–1.8)
 **When** the equivalence suite runs
 **Then** every catalog behavior is asserted against the recorded expectations
-**And** the no-agent mode is implemented service-side: a single-pass call through preparation → retrieval → reranking → selection (the full fixed pipeline E01's config B needs), through the same admission lane — component fixtures alone do not produce a complete answer
+**And** the no-agent mode is implemented service-side: a single-pass call through preparation → retrieval → reranking → selection → **context/prompt construction → one fixed generation stage → checking/verdict/result assembly** (and controlled answer translation when the experiment includes it) — the complete fixed pipeline E01's config B needs, through the shared admission-lane primitive (implemented in this epic's foundation work; 2.3 later hardens it with agent budgets) — component fixtures alone do not produce a complete answer
 **And** the V05 inventory documents the actual API/SSE/error contract surface with current regression coverage, listing gaps as pre-S3-exit work items
 **And** the S3 exit checklist (contract + authorization + compatibility checks; V02/V04/V05 evidence recorded) is completable from this epic's artifacts
 
@@ -338,22 +338,7 @@ So that D03 closes on current evidence, not stale research.
 **And** cancellation and client-disconnect propagation to the model call are demonstrated at runtime level (full request-path integration is gated separately in 2.3/2.4 — the phases are explicit)
 **And** V07a license verification passes for the exact package versions of every adopted dependency; developer-preview status (if applicable) carries an explicit operational-risk acceptance; default telemetry/cloud-export posture is audited (NFR-2)
 **And** the D03 decision is recorded as an ADR citing V06+V07a evidence; it does not close on compat research past its 2026-12-01 re-check without a refresh; every candidate carries documented replacement scope and estimated swap cost (NFR-7)
-**And** the selected runtime's production implementation follows on the same seam in the subsequent stories
-
-### Story 2.2: V06 runtime verification and D03 closure
-
-As the runtime decision owner,
-I want the selected runtime verified against GENIE's model endpoint (tool-calling matrix, isolation, cancellation, telemetry) with pre-adoption license checks,
-So that D03 closes on current evidence, not stale research.
-
-**Acceptance Criteria:**
-
-**Given** the deployed vLLM version (V03 baseline)
-**When** V06 runs
-**Then** the version × model × parser × tool-choice-mode × schema-strictness × streaming compatibility matrix is validated against the deployed combination (REC-6 prerequisites pinned)
-**And** cancellation and client-disconnect propagation to the model call are tested end-to-end
-**And** V07a license verification passes for the exact package versions of every adopted dependency (NOASSERTION = unverified, blocking)
-**And** the D03 decision is recorded as an ADR citing V06+V07a evidence; it does not close on compat research past its 2026-12-01 re-check without a refresh; every candidate carries documented replacement scope and estimated swap cost (NFR-7)
+**And** the SELECTED runtime's production implementation is owned by story 2.5's integration slice (assembling the loop implementation on this seam through 2.3/2.4) — Epic 2's "D03 closes at epic entry" means closure happens inside this epic's opening stories (2.1 probe → 2.2 decision), not before the epic starts
 
 ### Story 2.3: Request orchestrator — budgets, admission, cancellation
 
@@ -397,8 +382,8 @@ So that both request modes carry full compatibility, not just SSE.
 **Given** an agentic-routed non-streaming request
 **When** the BFF consumes the agent's result
 **Then** the JSON response carries the existing field shapes: response text, metadata (`source_documents` incl. the `okf-concept` variant, `grounding_status` + legacy `is_grounded`), queryId — with citations, translation (per mode) and persistence behaving as the streaming path
-**And** error/insufficiency cases return the existing JSON error contract (not SSE frames)
-**And** end-to-end tests cover the success and error/insufficiency cases through the real endpoint
+**And** insufficient-evidence cases return the **success contract with an insufficiency outcome** (never an HTTP error — insufficiency is a successful answer type; V05-derived shape), while genuine failures (upstream errors, authorization failures, timeouts) return the existing JSON error contract — the two are separate acceptance cases, never merged
+**And** end-to-end tests cover success, insufficiency and error cases through the real endpoint
 
 ### Story 2.5: The governed answer path (integration slice)
 
@@ -406,7 +391,7 @@ As an end user,
 I want the agent to answer from evidence or say it cannot,
 So that I never receive confident invention.
 
-**Integration slice — assembles the deliverables of 2.1/2.3/2.6/2.10 and the capability layer into the complete user flow; it owns the end-to-end acceptance evidence, not a second implementation of the loop or verifier.**
+**Integration slice — assembles the deliverables of 2.1/2.3/2.6/2.10 and the capability layer into the complete user flow; it owns the end-to-end acceptance evidence, not a second implementation of the loop or verifier. It CONSUMES 2.6 and 2.10 — they precede it (numbering is identity, not execution order).**
 
 **Acceptance Criteria:**
 
@@ -665,19 +650,20 @@ So that release gates rest on available evidence.
 | 2.3 orchestrator | FR-11, AR-7 | 2.2 | budget/admission tests |
 | 2.4 BFF frame writer | AR-9, FR-14 | 2.2, 3.1 helper | frame tests |
 | 2.4b non-streaming | FR-14 (JSON) | 2.4 | e2e JSON contract |
-| 2.5 answer path (slice) | FR-9..13, AD-13 | 2.1..2.4b, Epic 1 | end-to-end acceptance |
-| 2.6 citations tri-state | FR-10, AR-8 | 2.5 | verdict tests |
+| 2.5 answer path (slice) | FR-9..13, AD-13 | 2.1..2.4b, **2.6, 2.10**, Epic 1 | end-to-end acceptance |
+| 2.6 citations tri-state | FR-10, AR-8 | 2.1 seam + drafted-answer contract, 1.5 | verdict tests (built against the seam contract, before the slice) |
 | 2.7 web line | FR-30, UX-DR1/2/4..7 | 2.4, 2.6 | rendered behavior specs |
 | 2.8 mobile line | FR-30, UX-DR3..7 | 2.4, 2.6 | widget tests |
 | 2.9 SSE regression | FR-14/30, NFR-5 | 2.4, 2.7 | pinned e2e set |
 | 2.10 translation | FR-14, AR-14 | 2.3 counters, 2.4 | residual-budget tests |
 | 2.11 attribution | FR-17, 18, AR-11 | 2.3 | handshake + crash tests |
+| (admission-lane primitive) | AR-10 lane | — implemented in E1 foundation work (with 1.9's no-agent mode); 2.3 hardens it with agent budgets | shared primitive, no cross-epic cycle |
 | 3.1 one flag both paths | FR-15, AR-10 | 1.3 | routing-disagreement test |
 | 3.2 rollback continuity | FR-16 | 3.1, Epic 2 | continuation scenario |
 | 3.3 V08 rehearsals | FR-16, NFR-4 | 3.2 | rollout records |
 | 4.1 harness | FR-23/24 | 1.9 | versioned runs |
 | 4.2 authz+injection | FR-25 | 4.1 | scenario findings |
-| 4.3 E01 A/B | FR-26/27, M-1..5 | 1.2, 4.1, V05 | comparison report |
-| 4.4 thresholds+CM | §8 rule, CM-1..3 | 4.3 (A-only) | signed thresholds |
+| 4.3 E01 A/B | FR-26/27, M-1..5 | 1.2, 4.1, V05, **4.4 threshold approval (gated assessment)** | comparison report |
+| 4.4 thresholds+CM | §8 rule, CM-1..3 | **4.1's A-only reference measurements** (artifact-level input — 4.3 is NOT a prerequisite) | signed thresholds |
 | 4.5 E02 B/C + coexistence | FR-23, NFR-3 | 4.4, Epic 2 | gated report |
 | 4.6 V09+V07b | FR-19b, NFR-6 | prior epics | evidence bundle |

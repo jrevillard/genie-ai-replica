@@ -308,7 +308,6 @@ class TestLoadAndChunk:
 
         assert result == ["Title Content"]
 
-    @pytest.mark.asyncio
     @pytest.mark.parametrize(
         ("filename", "content"),
         [

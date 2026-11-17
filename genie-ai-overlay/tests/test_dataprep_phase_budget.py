@@ -1537,8 +1537,8 @@ class TestTheGraphPhaseIsCeilinged:
         dp, exc, elapsed = _run(scenario())
         # The ingest must END while the wedged call (2 s) is still parked.
         # Generous on purpose — the ceiling path takes ~0.7 s (0.4 s deadline
-        # + 0.2 s settle window + 0.1 s straggler grace) and the bound only
-        # has to separate that from the 2 s the un-budgeted phase would wait.
+        # + 0.2 s settle window + 0.1 s writer settle) and the bound only has
+        # to separate that from the 2 s the un-budgeted phase would wait.
         assert elapsed < 5.0, f"the ingest held the lane for {elapsed:.1f}s past the 0.4s budget"
         # Deterministic lower bound: the phase cannot return before its 0.4 s
         # deadline (the conversion is wedged past it), and the expiry path owes
@@ -1561,6 +1561,84 @@ class TestTheGraphPhaseIsCeilinged:
         # Pending state. Re-ingest is manual for a legacy file (#1992); the
         # D4-b self-heal covers OKF re-indexes only.
         dp.retract_file.assert_awaited_once()
+
+    def test_a_raising_graph_batch_settles_the_writers_before_the_retract(self, monkeypatch):
+        """A batch that raises must settle the in-flight writers before the retract.
+
+        The batch-error exit carries the same race as the budget expiry: a
+        sibling batch can be inside ``asyncio.to_thread(add_graph_documents)``
+        — a thread cancellation cannot stop — and its write would land AFTER
+        the auto-retract deleted the document's rows (#1991). The settle is
+        what orders the two, so the ORDERING is the contract under test:
+        deleting the settle call leaves this suite green otherwise.
+        """
+        from unittest.mock import AsyncMock, MagicMock, patch
+
+        from fastapi import HTTPException
+
+        monkeypatch.setenv("VLLM_API_KEY", "test-key")
+        monkeypatch.setenv("VLLM_ENDPOINT", "http://localhost:8000")
+        monkeypatch.setenv("VLLM_MODEL_ID", "test-model")
+        monkeypatch.setattr(dataprep, "DATAPREP_LLM_PHASE_TIMEOUT_SECONDS", 5.0)
+        monkeypatch.setattr(dataprep, "DATAPREP_LLM_PROGRESS_INTERVAL_SECONDS", 60.0)
+        monkeypatch.setattr(dataprep, "_PHASE_CANCEL_GRACE_SECONDS", 0.2)
+        monkeypatch.setattr(dataprep, "_global_batch_gate", lambda: asyncio.Semaphore(4))
+
+        order = []
+
+        async def scenario():
+            dp = _stub_dataprep()
+            dp.db = MagicMock()
+            dp._fetch_all_labels = AsyncMock(return_value=["Tax:IVA"])
+            dp._load_and_chunk = AsyncMock(return_value=["chunk one", "chunk two"])
+            dp._run_guardrail = AsyncMock(return_value={"success": True})
+            dp._update_doc_status = AsyncMock()
+            dp._apply_contextualization = AsyncMock(side_effect=lambda c, i, f: (list(c), []))
+            dp._apply_labels = AsyncMock(
+                return_value=([{"text": "a", "labels": ["Tax:IVA"]}, {"text": "b", "labels": ["Tax:IVA"]}], [])
+            )
+            dp.ensure_vector_index = AsyncMock(return_value=(None, None))
+
+            async def failing_log(_file_id, _level, stage, _message):
+                # The GRAPH stage only. A batch swallows every exception, so
+                # the one way its failure escapes is a raise INSIDE its error
+                # handler — which is exactly when a sibling may be
+                # mid-insertion. The pipeline's own logs keep working.
+                if stage == "Graph":
+                    raise RuntimeError("ingestion log write failed")
+
+            dp._write_ingestion_log = failing_log
+
+            async def settle():
+                order.append("settle")
+
+            dp._settle_graph_writers = settle
+
+            async def retract(file_id=None, graph_name=None):
+                order.append("retract")
+
+            dp.retract_file = retract
+
+            inp = MagicMock(file_id="f1", file_path="/tmp/f1.pdf", graph_name="GRAPH", file_labels=[])
+            with (
+                patch.object(dataprep, "ArangoGraph"),
+                patch.object(dataprep, "Document", side_effect=lambda **kw: MagicMock(metadata=dict(kw))),
+                pytest.raises(HTTPException),
+            ):
+                await dp.ingest_file_with_guardrail(inp, lock_file=None)
+            return dp
+
+        dp = _run(scenario())
+        assert "settle" in order, (
+            f"the writer settle did not run before the failure propagated: {order} — the "
+            "batch-error exit carries the same resurrect-after-retract race as the expiry exit"
+        )
+        assert order.index("settle") < order.index("retract"), (
+            f"the retract ran before the writers settled: {order} — a writer thread that lands "
+            "after the retract resurrects the document's rows (#1991)"
+        )
+        statuses = [c.args[1] for c in dp._update_doc_status.call_args_list]
+        assert statuses[-1] == "Ingestion Error", statuses
 
 
 class TestASecondCancellationCannotSkipTheSettle:

@@ -388,8 +388,10 @@ MAX_CONCURRENT_BATCHES = int(os.getenv("DATAPREP_MAX_CONCURRENT_BATCHES", "20"))
 # each CONCEPT independently, so N concurrent ingests presented N x the cap to
 # the shared GPU — measured 12 lanes x 20 = up to 240 concurrent calls, inflating
 # per-call latency 3-15x and making added concurrency buy queueing, not
-# throughput. One module-level gate makes DATAPREP_MAX_CONCURRENT_BATCHES the
-# fleet-wide cap it reads as. Created lazily so env overrides still apply.
+# throughput. One module-level gate makes DATAPREP_MAX_CONCURRENT_BATCHES the cap
+# the GRAPH phase reads across every ingest; the labelling and context phases
+# each cap their own batches at the same value (their own semaphores).
+# Created lazily so env overrides still apply.
 _BATCH_GATE: asyncio.Semaphore | None = None
 
 
@@ -677,9 +679,8 @@ _PHASE_CANCEL_GRACE_SECONDS = 5.0
 # different mechanism from the cancel grace above (that one waits for a
 # cancelled TASK to unwind; this one waits for a writer THREAD to finish), so
 # it has its own constant even though the two share a value. Bounded on
-# purpose — the ceiling exists to release the single ingest lane fast. A
-# straggler slower than this still races the retract; that residual is the
-# pre-existing race every failure exit has (#1991).
+# purpose — the ceiling exists to release the single ingest lane fast, and a
+# writer slower than this still races the retract (#1991).
 _GRAPH_WRITER_SETTLE_SECONDS = 5.0
 
 # Contextual Retrieval (Anthropic-style): per-chunk LLM-generated document
@@ -4029,12 +4030,17 @@ class GenieArangoDataprep(OpeaArangoDataprep):
         (#1991). Waiting a bounded window before the failure propagates lets
         those writes land INSIDE what the retract is about to delete.
 
-        Called on both graph-phase failure exits (the budget expiry and the
-        empty-graph refusal) and on a batch exception, so the race is closed
-        the same way wherever it opens. Bounded on purpose: the ceiling exists
-        to release the single ingest lane fast, and a writer slower than this
-        window still races the retract — the residual every failure exit has
-        always had.
+        Called where a writer can still be in flight: the budget expiry (the
+        abandoned batches' threads) and a batch exception (a sibling may be
+        mid-insertion). NOT called on the empty-graph refusal — every batch
+        task has completed there, so there is no writer to wait for. NOT
+        called on the kill path either: the kill rollback is a cancellation
+        path, and awaiting inside it needs the shielded `_run_uninterruptible`
+        the rollback already uses — out of scope here.
+
+        Bounded on purpose: the ceiling exists to release the single ingest
+        lane fast, and a writer slower than this window still races the
+        retract.
         """
         await asyncio.sleep(_GRAPH_WRITER_SETTLE_SECONDS)
 
@@ -4315,8 +4321,10 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                     # Under decoupled mode the two stages are INDEPENDENT (labeling
                     # reads original_chunks), so run them concurrently — serially they
                     # added the entire labeling wall time on top of contextualization
-                    # (review 2026-10-15). Both streams share the module-global batch
-                    # gate, so gathering does not raise total vLLM concurrency.
+                    # (review 2026-10-15). Each stream caps its own batches at
+                    # DATAPREP_MAX_CONCURRENT_BATCHES, so gathering them presents
+                    # up to twice that to the model — the two semaphores are not
+                    # the module-global gate the graph phase uses.
                     if CONTEXTUAL_LABEL_RAW:
                         (
                             (contextualized, contextual_reasons),
@@ -4434,8 +4442,7 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                     # first gives in-flight insertions a short grace to land
                     # INSIDE what the retract is about to delete; a straggler
                     # slower than that grace can still write after the retract
-                    # — the same race every failure exit (batch error, kill)
-                    # has always had (#1991).
+                    # — the same race the kill path has always had (#1991).
                     # No chunks are silently dropped; the loss on one wedged
                     # file is now an honest failure instead of the whole queue.
                     # The operator guidance lives in the failure messages
@@ -4488,13 +4495,11 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                         raise Exception(
                             f"Graph insertion exceeded its {DATAPREP_LLM_PHASE_TIMEOUT_SECONDS:g}s budget "
                             "with batches still running — the ingest failed rather than degraded a "
-                            "partial graph; the document is retracted and can be re-ingested "
-                            "(a re-kick: the D4-b self-heal covers OKF re-indexes only, #1992). "
-                            "A wedged graph call carries the vendored per-call budget (600 s by "
-                            "default — see genie-ai-overlay/build-patches/comps_http_budget_debt.py), "
-                            "so one hung call can outlast the whole ceiling: raise "
-                            "DATAPREP_LLM_PHASE_TIMEOUT_SECONDS above it, or raise "
-                            "DATAPREP_MAX_CONCURRENT_BATCHES to shorten the phase's wall clock."
+                            "partial graph; the document is retracted and needs a re-kick. A batch "
+                            "makes one call per chunk sequentially (DATAPREP_GRAPH_BATCH_SIZE, default "
+                            "10) and the retry ladder repeats it, so a wedged endpoint burns far more "
+                            "than the ceiling: fix the endpoint, or raise "
+                            "DATAPREP_LLM_PHASE_TIMEOUT_SECONDS."
                         )
 
                     # Empty-graph refusal (P0, David 2026-09-09): a batch/model
@@ -4516,7 +4521,6 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                         f"{failed_batches}/{total_batches} batch(es) hit failures.",
                     )
                     if documents_to_process and inserted_total == 0 and failed_batches > 0:
-                        await self._settle_graph_writers()
                         raise Exception(
                             f"Graph insertion failed for all {total_batches} batch(es): "
                             "0 graph documents were written after retries — refusing to report "

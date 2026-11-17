@@ -389,40 +389,25 @@ test.describe('the translation probe reads the venue through its own endpoint', 
     expect(await profile.translatesTo('fr')).toBe(false);
   });
 
-  test('a 200 that echoes the source TWICE is not a translation', async () => {
+  test('a 200 that echoes the source is a bug in the chain — it REDS, and it is not retried', async () => {
     // The status alone does not prove the chain translated anything: a body
     // that carries the source text back is a chain that did not translate.
-    // ONE such answer is not a venue fact (a loaded translator can echo a
-    // one-word probe back), so the probe takes a second sample.
+    // That is a defect in the chain (operator ruling on #1984): the probe
+    // throws, and the verdict is neither cached nor a skip.
     fakeSessionMint();
-    fakeTransport([
-      { status: 200, data: { translated_texts: ['Hello'] }, headers: {} },
-      { status: 200, data: { translated_texts: ['Hello'] }, headers: {} }
-    ]);
+    const calls = fakeTransport([{ status: 200, data: { translated_texts: ['Hello'] }, headers: {} }]);
     const profile = freshProfile();
-    expect(await profile.translatesTo('fr')).toBe(false);
+    await expect(profile.translatesTo('fr')).rejects.toThrow(/WITHOUT translating/);
+    // ONE call: the probe is never re-issued.
+    expect(calls).toHaveLength(1);
   });
 
-  test('one untranslated answer is not the verdict of the venue — the second sample decides', async () => {
-    // A single echoed answer must not skip the French surface for the
-    // whole run: the second sample translates, so the chain is ready.
+  test('a 200 with no translated text is the same failure', async () => {
     fakeSessionMint();
-    fakeTransport([
-      { status: 200, data: { translated_texts: ['Hello'] }, headers: {} },
-      { status: 200, data: { translated_texts: ['Bonjour'] }, headers: {} }
-    ]);
+    const calls = fakeTransport([{ status: 200, data: { translated_texts: [] }, headers: {} }]);
     const profile = freshProfile();
-    expect(await profile.translatesTo('fr')).toBe(true);
-  });
-
-  test('a 200 with no translated text is not a translation either', async () => {
-    fakeSessionMint();
-    fakeTransport([
-      { status: 200, data: { translated_texts: [] }, headers: {} },
-      { status: 200, data: { translated_texts: [] }, headers: {} }
-    ]);
-    const profile = freshProfile();
-    expect(await profile.translatesTo('fr')).toBe(false);
+    await expect(profile.translatesTo('fr')).rejects.toThrow(/WITHOUT translating/);
+    expect(calls).toHaveLength(1);
   });
 
   test('any other 400 is an unreadable venue, not an absent one', async () => {

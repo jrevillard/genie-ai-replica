@@ -264,6 +264,34 @@ def parse_template_env(template_file):
     return mapping
 
 
+def _dotted_prefix(variable, key):
+    """The values path a dotted template variable plus an index key addresses."""
+    if variable in SECTION_VARS:
+        return f"opea.{SECTION_VARS[variable]}.{key}"
+    if variable.startswith("data") and variable != "data":
+        return f"data.{variable[4:].lower()}.{key}"
+    if variable in ("opea", "okf", "data"):
+        return f"{variable}.{key}"
+    return None
+
+
+def _variable_prefix(variable):
+    """The values path a template local variable addresses.
+
+    `$dataKeycloak` is `data.keycloak`, `$opeaModelsLlm` is `opea.models.llm`;
+    a variable the chart does not use as a values pointer maps to nothing.
+    """
+    if variable in SECTION_VARS:
+        return f"opea.{SECTION_VARS[variable]}"
+    if variable == "opeaModels":
+        return "opea.models"
+    if variable in ("opea", "okf", "data"):
+        return variable
+    if variable.startswith("data") and variable != "data":
+        return f"data.{variable[4:].lower()}"
+    return None
+
+
 def _expression_chain(expression):
     """The fallback chain of a template expression, in order.
 
@@ -286,32 +314,43 @@ def _expression_chain(expression):
             break
         stripped = stripped[:-1].strip()
 
-    def add(position, path):
-        candidates.append((position, "path", path))
-
+    # Two-level index: index (index ($opea | default dict) "llm" ...) "modelId"
     for found in re.finditer(
-        r"index \(index \(\$opea \| default dict\) \"([a-z]+)\"[^)]*\) \"([A-Za-z0-9]+)\"",
+        r"index \(index \(\$([A-Za-z]+)[^)]*\) \"([a-z]+)\"[^)]*\) \"([A-Za-z0-9]+)\"",
         expression,
     ):
-        add(found.start(), f"opea.{found.group(1)}.{found.group(2)}")
+        prefix = _variable_prefix(found.group(1))
+        if prefix:
+            candidates.append(
+                (found.start(), "path", f"{prefix}.{found.group(2)}.{found.group(3)}")
+            )
 
+    # Dotted variable + index: index ($opea.retriever | default dict) "key"
+    #   or index ($okf.server | default dict) "url"
     for found in re.finditer(
-        r"index \(index \(\$opeaModels \| default dict\) \"([a-z]+)\"[^)]*\) \"([A-Za-z0-9]+)\"",
+        r'index \(?\$([A-Za-z]+)\.([A-Za-z0-9]+)(?:\s*\|\s*default\s+dict\))?\s*\"([A-Za-z0-9]+)\"',
         expression,
     ):
-        add(found.start(), f"opea.models.{found.group(1)}.{found.group(2)}")
+        prefix = _dotted_prefix(found.group(1), found.group(2))
+        if prefix:
+            candidates.append((found.start(), "path", f"{prefix}.{found.group(3)}"))
 
+    # Single-level index on a plain variable, with or without a defaulted
+    # dict: index $dataKeycloak "internalUrl"
     for found in re.finditer(
-        r"index \(\$opea\.([a-z]+) \| default dict\) \"([A-Za-z0-9]+)\"", expression
+        r'index \(?\$([A-Za-z]+)(?:\s*\|\s*default\s+dict\)?)?\s*\"([A-Za-z0-9]+)\"',
+        expression,
     ):
-        add(found.start(), f"opea.{found.group(1)}.{found.group(2)}")
+        prefix = _variable_prefix(found.group(1))
+        if prefix:
+            candidates.append(
+                (found.start(), "path", f"{prefix}.{found.group(2)}")
+            )
 
     for found in re.finditer(r"\$([A-Za-z][A-Za-z0-9]*)\.([A-Za-z0-9]+)", expression):
-        variable, key = found.group(1), found.group(2)
-        if variable in SECTION_VARS:
-            add(found.start(), f"opea.{SECTION_VARS[variable]}.{key}")
-        elif variable.startswith("data") and variable != "data":
-            add(found.start(), f"data.{variable[4:].lower()}.{key}")
+        prefix = _variable_prefix(found.group(1))
+        if prefix:
+            candidates.append((found.start(), "path", f"{prefix}.{found.group(2)}"))
 
     # A literal only counts when it is the operand of a `default`: the other
     # quoted strings in an expression are arguments of a helper call.
@@ -325,16 +364,43 @@ def _expression_chain(expression):
 def _resolve_chain(chain, values):
     """The first candidate of the chain that carries a value.
 
-    Returns (the source it came from, the value).
+    Emptiness is Helm's own: sprig's `default` treats nil, the empty string,
+    `false`, zero and the empty list or map as empty, and renders the next
+    candidate. Returns (the source it came from, the value).
     """
     for kind, value in chain:
         if kind == "path":
             found = get_path(values, value)
-            if found not in (None, "", [], {}):
+            if isinstance(found, (dict, list)):
+                # A subtree, not a leaf: the chain mis-parsed the path and
+                # pointing at it would compare a Python repr against the
+                # deployment.
+                continue
+            if not _sprig_empty(found):
                 return value, found
         else:
             return None, value
     return None, None
+
+
+def _sprig_empty(value):
+    """Sprig's `empty`: nil, "", false, 0, and the empty list or map."""
+    return (
+        value is None
+        or value == ""
+        or value is False
+        or value == 0
+        or value == []
+        or value == {}
+    )
+
+
+def template_env_maps():
+    """{workload component: {env name: chart path or None}} for every OPEA workload."""
+    return {
+        component: parse_template_env(template_file)
+        for component, (template_file, _section) in OPEA_WORKLOADS.items()
+    }
 
 
 SECTION_VARS = {
@@ -347,14 +413,6 @@ SECTION_VARS = {
     "opeaModelsLlm": "models.llm",
     "opeaModelsReranker": "models.reranker",
 }
-
-
-def template_env_maps():
-    """{workload component: {env name: chart path or None}} for every OPEA workload."""
-    return {
-        component: parse_template_env(template_file)
-        for component, (template_file, _section) in OPEA_WORKLOADS.items()
-    }
 
 
 def derive_values(values):

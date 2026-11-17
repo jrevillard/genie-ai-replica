@@ -1513,7 +1513,7 @@ class TestTheGraphPhaseIsCeilinged:
     held the only lane, and every later ingest was refused with
     `429 System busy`. The ceiling releases the lane by giving the phase up
     honestly — the ingest FAILS ('Ingestion Error') and the auto-retract cleans
-    the partial graph; re-ingest is manual for a legacy file (#1992). A hung
+    the partial graph; re-ingest is manual for a legacy file. A hung
     graph phase must never end 'Ingested': that would be a silently partial
     knowledge graph, the exact outcome the phase's old no-deadline stance
     existed to prevent.
@@ -1727,8 +1727,8 @@ class TestTheGraphPhaseIsCeilinged:
         assert retracted_at, "the kill rollback never retracted the document"
         statuses = [c.args[1] for c in dp._update_doc_status.call_args_list]
         assert statuses[-1] == "Killed", (
-            f"the kill did not reach the kill path: {statuses} — the settle swallowed the "
-            "cancellation instead of re-raising it"
+            f"the kill did not reach the kill path: {statuses} — the kill path did not run, "
+            "or the settle swallowed the cancellation instead of re-raising it"
         )
         waited = retracted_at[0] - cancelled_at
         # The window is 0.5 s and the cancel lands at its opening, so the

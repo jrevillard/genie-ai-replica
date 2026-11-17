@@ -4411,10 +4411,14 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                     # under the (now global) batch gate, but convert_to_graph_documents
                     # makes ONE vLLM call PER CHUNK sequentially inside its batch thread
                     # — so smaller batches = finer parallelism under the same gate.
-                    # Env-tunable (review 2026-10-15); 10 is the shipped default
-                    # (DATAPREP_GRAPH_BATCH_SIZE): at the shipped gate of 20 that
-                    # is ~200 docs in flight, and a smaller batch only shortens
-                    # the tail of the last batch.
+                    # The batch size is read from the container environment
+                    # (DATAPREP_GRAPH_BATCH_SIZE, review 2026-10-15) and defaults
+                    # to 10; no shipped config surface exposes it (env template,
+                    # compose, chart), so a deployment runs the default. At the
+                    # shipped gate of 20 that is ~200 chunks in flight: a smaller
+                    # batch buys parallelism while the batches fit under the gate,
+                    # and only shortens the tail of the last batch once they
+                    # saturate it.
                     BATCH_SIZE = int(os.getenv("DATAPREP_GRAPH_BATCH_SIZE", "10"))
                     total_batches = (len(documents_to_process) + BATCH_SIZE - 1) // BATCH_SIZE
 

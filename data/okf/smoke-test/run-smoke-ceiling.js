@@ -31,7 +31,12 @@ const BASE = process.env.OKF_SMOKE_BASE_URL || 'http://localhost:3002';
 const TOKEN = process.env.OKF_SMOKE_TOKEN_ADMIN;
 const REPO_NAME = 'smoke-ceiling';
 const DOMAIN = 'smoke';
-const CEILING = Number(process.env.OKF_MAX_CONCEPT_DOC_CHARS || 250000);
+// #1205: the ceiling is DERIVED from the serving-model window — the smoke
+// reads the LIVE effective ceiling from the server's own readout (below),
+// never from env: asserting against a literal here would be a SECOND
+// derivation of the number, which is exactly what the spec forbids.
+let CEILING = null;
+let CEILING_SOURCE = null;
 
 let REPO_ID = null; // the server mints the repo_id
 let failures = 0;
@@ -83,8 +88,30 @@ async function main() {
     console.error('OKF_SMOKE_TOKEN_ADMIN required');
     process.exit(1);
   }
-  console.log('OKF ceiling smoke — ceiling in force: ' + CEILING);
+  console.log('OKF ceiling smoke');
   console.log('');
+
+  // ── 0a. The READOUT: the live ceiling and WHY it is that number ───────────
+  // #1205: the ceiling is derived from the serving-model window, so the
+  // number alone no longer says which lever moves it. The readout answers
+  // both, and this smoke asserts against the LIVE effective value.
+  const readout = await call('GET', '/api/okf/admin/ceiling');
+  if (readout.status !== 200 || !readout.body || !readout.body.ceiling) {
+    fail('the ceiling readout → ' + readout.status + ' ' + JSON.stringify(readout.body).slice(0, 200));
+    return done();
+  }
+  CEILING = readout.body.ceiling;
+  CEILING_SOURCE = readout.body.source;
+  pass('the readout answers: ceiling=' + CEILING + ' source=' + CEILING_SOURCE);
+  // The READOUT's internal arithmetic (terms summing, derived-vs-window
+  // consistency) is unit-pinned — asserting it here checks the controller
+  // against itself, not the deployment. What a LIVE check adds is the
+  // effective value, its source, and the refusal's provenance below.
+  if (CEILING_SOURCE === 'discovered-from-window') {
+    pass('  the ceiling is DERIVED from the serving window (source ' + CEILING_SOURCE + ')');
+  } else {
+    pass('  the ceiling is a FALLBACK or PIN (source ' + CEILING_SOURCE + ') — the derivation is not engaged');
+  }
 
   // ── 0. Cleanup a prior run ────────────────────────────────────────────────
   // A crashed prior run (token expiry mid-run) leaves the repo behind and
@@ -181,6 +208,11 @@ async function main() {
       ? pass('  the refusal names the ceiling (' + CEILING + '-character ceiling)')
       : fail('  the refusal does not name the ceiling: ' + msg.slice(0, 200));
     namesRemedy ? pass('  the refusal names a remedy') : fail('  the refusal names no remedy: ' + msg.slice(0, 200));
+    // #1205: the refusal names WHERE the ceiling came from — a curator must
+    // know which lever moves the number (pin / window / fallback).
+    CEILING_SOURCE && msg.indexOf('(' + CEILING_SOURCE + ')') !== -1
+      ? pass('  the refusal names the ceiling source (' + CEILING_SOURCE + ')')
+      : fail('  the refusal does not name the ceiling source: ' + msg.slice(0, 200));
   } else {
     fail(
       'an over-ceiling body → ' +
@@ -300,9 +332,16 @@ async function main() {
     fail('setup: the split repo could not be created → ' + splitRepo.status);
   } else {
     const splitId = splitRepo.body.repo_id;
+    // The fixture is sized from the LIVE ceiling (a fixed ~300k body would
+    // sit UNDER the derived ceiling on a deployment with a bigger window —
+    // a >81k-token window derives >300k — and the split assertion would
+    // fail even though the ceiling works).
+    const target = CEILING * 2;
+    const filler = 'lorem ipsum dolor sit amet ';
+    const perSection = Math.ceil(target / 6 / filler.length);
     const sections = [];
     for (let i = 0; i < 6; i += 1) {
-      sections.push('## Section ' + i + '\n\n' + 'lorem ipsum dolor sit amet '.repeat(1852));
+      sections.push('## Section ' + i + '\n\n' + filler.repeat(perSection));
     }
     const bigBody = sections.join('\n\n');
     const bigImp = await call('POST', `/api/okf/repos/${splitId}/import`, {

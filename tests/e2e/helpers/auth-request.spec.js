@@ -47,7 +47,21 @@ function generateTlsOptions() {
   const certPath = path.join(dir, 'cert.pem');
   execFileSync(
     'openssl',
-    ['req', '-x509', '-newkey', 'rsa:2048', '-nodes', '-keyout', keyPath, '-out', certPath, '-days', '30', '-subj', '/CN=e2e-transport-test'],
+    [
+      'req',
+      '-x509',
+      '-newkey',
+      'rsa:2048',
+      '-nodes',
+      '-keyout',
+      keyPath,
+      '-out',
+      certPath,
+      '-days',
+      '30',
+      '-subj',
+      '/CN=e2e-transport-test'
+    ],
     { stdio: 'ignore' }
   );
   return { key: fs.readFileSync(keyPath), cert: fs.readFileSync(certPath) };

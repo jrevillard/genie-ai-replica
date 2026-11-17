@@ -295,21 +295,43 @@ function findDuplicateEntryNames(entryNames) {
  * cap (zip bomb).
  * @throws IngestError BAD_ZIP | VALIDATION_ERROR | TOO_MANY_CONCEPTS | ZIP_TOO_LARGE (400) */
 function zipToRawInputs(zipBase64, maxConcepts, bundleName) {
+  // adm-zip >= 0.6 rejects duplicate entry names AT PARSE TIME (the writer
+  // still dedups, so the only producer of such bundles is external tooling —
+  // python zipfile et al.). The parse error therefore carries the ambiguity
+  // signal, and the D-V3 contract (refuse with the names called out, as a
+  // VALIDATION_ERROR distinct from an unreadable zip) is honoured by mapping
+  // the parser's rejection onto the same IngestError the in-service guard
+  // (kept as defense-in-depth) raises. The parser may throw a bare array of
+  // errors, so the message extraction accepts both shapes.
+  const parseErrMessage = (err) =>
+    Array.isArray(err) ? err.map((e) => e && e.message).join('; ') : err && err.message;
   let zip;
+  let entries;
   try {
     zip = new AdmZip(Buffer.from(String(zipBase64), 'base64'));
+    entries = zip.getEntries();
   } catch (err) {
-    throw new IngestError('BAD_ZIP', `bundle zip could not be read: ${err.message}`, 400);
-  }
-  const entries = zip
-    .getEntries()
-    .filter(
-      (e) =>
-        !e.isDirectory &&
-        e.entryName.endsWith('.md') &&
-        !e.entryName.startsWith('__MACOSX/') &&
-        !e.entryName.split('/').pop().startsWith('.')
+    const msg = parseErrMessage(err);
+    const dupNames = (String(msg).match(/Duplicate entry name "([^"]+)"/g) || []).map((s) =>
+      s.replace(/Duplicate entry name "|"/g, '')
     );
+    if (dupNames.length > 0) {
+      throw new IngestError(
+        'VALIDATION_ERROR',
+        `bundle zip contains duplicate concept entries: ${[...new Set(dupNames)].join(', ')}`,
+        400
+      );
+    }
+    throw new IngestError('BAD_ZIP', `bundle zip could not be read: ${msg}`, 400);
+  }
+  const kept = entries.filter(
+    (e) =>
+      !e.isDirectory &&
+      e.entryName.endsWith('.md') &&
+      !e.entryName.startsWith('__MACOSX/') &&
+      !e.entryName.split('/').pop().startsWith('.')
+  );
+  entries = kept;
   if (entries.length === 0) {
     throw new IngestError('VALIDATION_ERROR', 'bundle zip contains no .md concept files', 400);
   }

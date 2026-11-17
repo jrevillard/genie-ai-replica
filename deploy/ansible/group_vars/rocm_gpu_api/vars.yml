@@ -35,3 +35,11 @@ rocm_video_gid: 44
 # stack with this GPU-node stack (renders SECTION 18B endpoint overrides
 # in the app .env). Undefined/false = no output.
 # rocm_gpu_node_local: true
+
+# Task 14 — GPU reranker: the TEI ROCm image cannot run on gfx1151
+# (Instinct-only kernels; see the spike results), so the /rerank/ proxy
+# route flips to the third vLLM instance added by the
+# docker-compose.rocm.gpu.yaml overlay. The app side selects the same
+# backend with RERANKER_BACKEND=vllm (rendered in SECTION 18B).
+gpu_rerank_upstream: vllm-reranker:8000
+vllm_reranker_model_id: BAAI/bge-reranker-v2-m3

@@ -21,7 +21,7 @@ import json
 import sys
 import time
 from pathlib import Path
-from unittest.mock import AsyncMock, MagicMock, patch
+from unittest.mock import MagicMock
 
 import pytest
 
@@ -115,6 +115,8 @@ def _stub_graph_phase_ingest(dp):
     the vector-index call. The tests add only what they are about — the
     wedged extraction, the failing batch log, the recording retract.
     """
+    from unittest.mock import AsyncMock, MagicMock
+
     dp.db = MagicMock()
     dp._fetch_all_labels = AsyncMock(return_value=["Tax:IVA"])
     dp._load_and_chunk = AsyncMock(return_value=["chunk one", "chunk two"])
@@ -135,6 +137,8 @@ def _graph_ingest_input():
 @contextlib.contextmanager
 def _patched_graph_ingest():
     """The graph phase's construction seams: the graph object and the Document type."""
+    from unittest.mock import MagicMock, patch
+
     with (
         patch.object(dataprep, "ArangoGraph"),
         patch.object(dataprep, "Document", side_effect=lambda **kw: MagicMock(metadata=dict(kw))),
@@ -1516,6 +1520,8 @@ class TestTheGraphPhaseIsCeilinged:
     """
 
     def test_a_hung_graph_extraction_fails_the_ingest_within_the_budget(self, monkeypatch):
+        from unittest.mock import AsyncMock
+
         from fastapi import HTTPException
 
         monkeypatch.setenv("VLLM_API_KEY", "test-key")
@@ -1646,6 +1652,73 @@ class TestTheGraphPhaseIsCeilinged:
         )
         statuses = [c.args[1] for c in dp._update_doc_status.call_args_list]
         assert statuses[-1] == "Ingestion Error", statuses
+
+    def test_a_kill_inside_the_writer_settle_still_waits_the_window(self, monkeypatch):
+        """A cancellation inside the settle must not truncate the window.
+
+        The settle exists so an in-flight writer lands its write BEFORE the
+        retract. An unshielded wait is cancellable — a kill arriving inside
+        the window truncated it to zero, so the writer landed after the
+        retract and resurrected the document's rows (#1991). The window runs
+        behind the module's own shield, and the absorbed cancellation is
+        re-raised as THAT object, so the kill path still sees its own signal.
+
+        A bare ``asyncio.sleep`` here would fail the timing assertion: the
+        retract would land at once instead of after the window.
+        """
+        from fastapi import HTTPException
+
+        monkeypatch.setenv("VLLM_API_KEY", "test-key")
+        monkeypatch.setenv("VLLM_ENDPOINT", "http://localhost:8000")
+        monkeypatch.setenv("VLLM_MODEL_ID", "test-model")
+        monkeypatch.setattr(dataprep, "DATAPREP_LLM_PHASE_TIMEOUT_SECONDS", 0.4)
+        monkeypatch.setattr(dataprep, "DATAPREP_LLM_PROGRESS_INTERVAL_SECONDS", 60.0)
+        monkeypatch.setattr(dataprep, "_PHASE_CANCEL_GRACE_SECONDS", 0.2)
+        monkeypatch.setattr(dataprep, "_GRAPH_WRITER_SETTLE_SECONDS", 0.5)
+        monkeypatch.setattr(dataprep, "_global_batch_gate", lambda: asyncio.Semaphore(4))
+
+        async def scenario():
+            dp = _stub_dataprep()
+            _stub_graph_phase_ingest(dp)
+
+            def wedged_conversion(_docs):
+                # Parked past the ceiling, so the phase expires and the settle
+                # starts; the cancel then lands inside that window.
+                time.sleep(2.0)
+                return []
+
+            dp.llm_transformer.convert_to_graph_documents = wedged_conversion
+
+            cancelled_at = []
+            retracted_at = []
+
+            async def retract(file_id=None, graph_name=None):
+                retracted_at.append(time.monotonic())
+
+            dp.retract_file = retract
+
+            inp = _graph_ingest_input()
+            with _patched_graph_ingest():
+                task = asyncio.ensure_future(dp.ingest_file_with_guardrail(inp, lock_file=None))
+                # Wait until the phase has expired and the settle is running:
+                # the wedged conversion is the only thing that takes that long.
+                await asyncio.sleep(0.6)
+                cancelled_at.append(time.monotonic())
+                task.cancel()
+                with pytest.raises((HTTPException, asyncio.CancelledError)):
+                    await task
+            return dp, cancelled_at[0], retracted_at
+
+        dp, cancelled_at, retracted_at = _run(scenario())
+        assert retracted_at, "the kill rollback never retracted the document"
+        waited = retracted_at[0] - cancelled_at
+        # The window is 0.5 s and the cancel lands inside it: the retract must
+        # not land before it. Generous on purpose (the settle starts a hair
+        # after the cancel), but far above the zero an unshielded wait gives.
+        assert waited >= 0.3, (
+            f"the retract landed {waited:.3f}s after the cancel — the settle window was "
+            "truncated, so a writer thread can land its write after the retract (#1991)"
+        )
 
 
 class TestASecondCancellationCannotSkipTheSettle:

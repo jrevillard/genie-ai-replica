@@ -4494,7 +4494,18 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                             # thread — the same race the expiry exit has. Settle
                             # the writers before the failure propagates to the
                             # retract that follows (#1991).
-                            await self._settle_graph_writers()
+                            try:
+                                await self._settle_graph_writers()
+                            except asyncio.CancelledError:
+                                # A kill landed inside the window. The batch
+                                # failure is the more specific cause, so it
+                                # wins — the module's rule for an absorbed
+                                # cancellation, and the kill is recorded here so
+                                # it is not lost.
+                                logger.warning(
+                                    "Graph insertion failed while the ingest was cancelled; "
+                                    "reporting the batch failure, which is the more specific cause"
+                                )
                             raise
                     if timed_out:
                         # No fallback: the abandoned batches' chunks are gone,

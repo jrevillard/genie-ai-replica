@@ -1335,7 +1335,15 @@ container_scanning:
       if [ "${FORCE_IMAGE_REBUILD:-}" = "true" ]; then
         NOCACHE="--no-cache"
       fi
+      # --progress=plain: the runner kills a job that emits no output for longer
+      # than its connection_timeout (60 s by default). A buildx build is silent
+      # while it pulls its bases and runs its layers, so the no-cache rebuilds
+      # died at a constant 66 s / 126 s with an empty job trace — the same
+      # symptom as the 2.1 GB clone, which is why the two were easy to confuse.
+      # The plain progress streams every build step: the runner sees activity
+      # and the job survives, and the log is readable instead of empty.
       docker buildx build \
+        --progress=plain \
         --pull \
         --push \
         $NOCACHE \

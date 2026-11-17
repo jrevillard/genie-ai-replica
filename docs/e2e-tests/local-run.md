@@ -19,7 +19,7 @@ moved (#1823, [suite-map.md](suite-map.md)).
 ## The command
 
 ```bash
-BASE_URL=https://genieai-forge.local:4443 tests/e2e/run/run-local-e2e.sh
+BASE_URL=https://<your-venue-host>:4443 tests/e2e/run/run-local-e2e.sh
 ```
 
 One command, from the repository root. It:
@@ -142,8 +142,11 @@ checked-out lockfile pins.
 
 ### Venue address
 
-The shared k8s stack advertises its edge as `genieai-forge.local`, a name the
-cluster DNS does not serve. A runner that cannot resolve it needs the address:
+A runner that cannot resolve the venue's edge hostname needs the address
+resolved another way: ask for whatever name the venue IS reachable by and
+pass the answer as `E2E_VENUE_IP`. The example below resolves the
+**shared-forge venue** — the run's DEFAULT venue, the shared stack of the
+*Shared-stack discipline* section; substitute your venue's own names and port:
 
 ```bash
 E2E_VENUE_IP=$(getent hosts forge-k3s.openclaw.svc.cluster.local | awk '{print $1}') \
@@ -251,7 +254,7 @@ path holds whatever ran last):
 ```bash
 ls reports/playwright-report-run-*.json
 node tests/e2e/run/file-failure-issues.js --report reports/playwright-report-run-<stamp>.json \
-  --venue https://genieai-forge.local:4443
+  --venue https://<your-venue-host>:4443
 ```
 
 `--venue` is the address the FAILED RUN pointed at — the venue-alive
@@ -263,7 +266,7 @@ rather than reading the fixed path, which would be another run's report.
 **A red run is not automatically a finding.** Two venue events produce
 exactly the same report as a defect of the product:
 
-- a venue that goes away mid-run — the `forge-k3s` node rebooting during
+- a venue that goes away mid-run — the venue's node rebooting during
   a run moves its address and with it the edge's LoadBalancer IP, and
   every spec that navigates during that window fails with
   `net::ERR_CONNECTION_REFUSED at the edge`. The path groups those
@@ -272,7 +275,7 @@ exactly the same report as a defect of the product:
 
   ```bash
   kubectl get events -A --field-selector reason=NodeReady --sort-by=.lastTimestamp
-  kubectl -n genieai get events --sort-by=.lastTimestamp | tail
+  kubectl -n <venue-namespace> get events --sort-by=.lastTimestamp | tail
   ```
 
 - a **stale venue build** (#1844/#1845, #1895, #1896): every deployment
@@ -289,7 +292,7 @@ behind it — it is current). A venue behind cannot serve the handles the
 checkout declares — the remedy is a venue refresh, not a code change:
 
 ```bash
-kubectl -n genieai rollout restart deploy/genieai-genieai-umbrella-frontend
+kubectl -n <venue-namespace> rollout restart deploy/<frontend-deployment>
 ```
 
 then re-run the red specs before believing anything.
@@ -347,7 +350,7 @@ Two caveats the operator should know before booking a slot:
 
 ## Known-red specs
 
-The run of 2026-11-10 (forge venue, chart 0.2.171, `genieai-forge.local:4443`):
+The run of 2026-11-10 (shared-forge venue, chart 0.2.171):
 **242 tests — 212 passed, 13 failed, 17 skipped.** Spec paths below are
 shown at their current (post-#1741 reorganization) home; the run itself
 recorded the pre-reorganization paths (`epic1/…`, `epic3/…`, root-level,
@@ -358,7 +361,7 @@ and `chatbot/…` for the specs that did not move).
 | `auth/a1`, `a2`, `a3`, `auth/l1`, `l2`, `l3` | 8 | the specs navigate to a literal `https://localhost/`, which answers nothing on a k8s venue | #1737 (MR !841) |
 | `chatbot/error-handling`, `chatbot/send-message-and-stream`, `chatbot/chat-conversation` | 5 | `waitForBotResponse` polls a Vuex path the CSR refactor deleted — the same drift, seen as a disposed route context and a click timeout | #1738, #1758 (MR !841) |
 
-An earlier run of the same day showed five more failures (`welcome-banner`, `resizable-sidebars`) that were **not** a spec defect: the `forge-k3s` node rebooted mid-run and the edge refused connections. On the settled stack they pass.
+An earlier run of the same day showed five more failures (`welcome-banner`, `resizable-sidebars`) that were **not** a spec defect: the venue's node rebooted mid-run and the edge refused connections. On the settled stack they pass.
 
 A spec that is known-red is named, never silently excluded, and never edited
 to make it pass. These reds are the **proof that the suite runs** — the run

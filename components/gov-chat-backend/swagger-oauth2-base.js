@@ -1,51 +1,48 @@
 'use strict';
 
 /**
- * Resolver for the base URL of the Swagger UI OAuth2 flow URLs
- * (authorizationUrl / tokenUrl, served in /api-docs.json).
+ * URL rules for the Swagger UI OAuth2 flow URLs (authorizationUrl /
+ * tokenUrl, served in /api-docs.json) and for the spec's server base.
  *
- * ONE implementation, two consumers: the runtime spec
- * (swagger-definition.js) and the client-generation pin guard
- * (scripts/build-openapi-spec.js, which runs the spec extraction under
- * `env -i` and must judge the served URLs against the same rules). A
- * duplicated predicate drifted between them — the guard then aborted the
- * generation on a served URL the runtime had legitimately produced.
+ * ONE implementation, several consumers: the runtime spec
+ * (swagger-definition.js — the flow-URL base and the servers[0].url base)
+ * and the client-generation pin guard (scripts/build-openapi-spec.js, which
+ * runs the extraction under `env -i` and must judge the served URLs against
+ * the same rules) — a duplicated predicate drifted between them once
+ * already, and the guard then aborted the generation on a served URL the
+ * runtime had legitimately produced.
  *
- * Why the resolution exists (#1889): the Authorize round-trip runs IN THE
- * BROWSER, so the served URLs must be browser-reachable. On split-URL
- * deployments (the k8s venue) KEYCLOAK_URL carries the cluster-internal
- * issuer — a browser popup dies on DNS, and the HTTPS docs page +
- * plain-HTTP token endpoint is mixed content, hard-blocked by Chromium.
- * KEYCLOAK_PUBLIC_URL is the browser-facing alias the shared verifier
- * already accepts (shared/lib/keycloak-auth-service.js); unset =
- * KEYCLOAK_URL, the historical compose behaviour (there KEYCLOAK_URL is
- * already browser-reachable).
+ * The rules:
+ *   - the Authorize round-trip runs IN THE BROWSER, so the flow-URL base
+ *     must be browser-reachable: on split-URL deployments (the k8s venue,
+ *     #1889) KEYCLOAK_URL carries the cluster-internal issuer. The base
+ *     prefers KEYCLOAK_PUBLIC_URL — the browser-facing alias the shared
+ *     verifier already accepts (shared/lib/keycloak-auth-service.js) —
+ *     and falls back to KEYCLOAK_URL (the compose deployment, where
+ *     KEYCLOAK_URL is already browser-reachable);
+ *   - a URL is usable only when it is an ABSOLUTE http(s) URL free of
+ *     whitespace, control characters and fragment/query punctuation — the
+ *     last class breaks the flow outright, because a fragment or query in
+ *     the base swallows the appended '/realms/...' path. The public value
+ *     is REFUSED, not trimmed: the verifier does not trim its alias
+ *     either, so a trimmed base here would point the browser at an issuer
+ *     the verifier never accepts;
+ *   - trailing slashes: the public value loses exactly ONE (the
+ *     verifier's public-issuer rule), the KEYCLOAK_URL fallback loses ALL
+ *     of them (the verifier's discovery-base rule) — the served URL and
+ *     the accepted issuer cannot drift apart;
+ *   - with no usable base the result is undefined: the served URL keeps
+ *     its visibly-broken 'undefined' shape. A same-origin relative URL
+ *     would open the Authorize popup on the docs origin itself — a silent
+ *     misconfiguration.
  *
- * A base is usable only when it is an ABSOLUTE http(s) URL free of
- * whitespace, control characters and the URL-fragment/query punctuation
- * (" # <> ? ` { }) — the last class breaks the flow outright, because a
- * fragment or query in the base swallows the appended '/realms/...' path.
- * The public value is refused (not trimmed — the verifier does not trim
- * its alias either, so a trimmed base here would point the browser at an
- * issuer the verifier never accepts); the KEYCLOAK_URL fallback is refused
- * the same way, so no unusable base is ever served verbatim.
- *
- * Trailing slashes: the public value loses exactly ONE — the verifier's
- * public-issuer rule, so the served URL and the accepted issuer cannot
- * drift apart. The KEYCLOAK_URL fallback loses ALL of them — the
- * verifier's discovery-base rule, so the served URL never carries a
- * doubled path segment.
- *
- * With no usable base at all, the result is undefined: the served URL
- * keeps its historical visibly-broken 'undefined' shape. A same-origin
- * relative URL would open the Authorize popup on the docs origin itself —
- * a silent misconfiguration.
+ * The narrative (the #1889 story, the deployment leg) lives in
+ * CHANGELOG.md and in the `env` template.
  */
 
 /**
- * Is this value usable as the base of the flow URLs? Absolute http(s)
- * only, free of whitespace, control characters and fragment/query
- * punctuation.
+ * Is this value an absolute http(s) URL usable in the served spec — as the
+ * base of the flow URLs, or as a served URL itself?
  *
  * @param {string} value
  * @returns {boolean}

@@ -1,0 +1,29 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "genieai-common library chart values",
+  "description": "Descriptive schema for the library's naming knobs. NOTE on scope: the helpers read these keys from the CONSUMING chart's root values (nameOverride, fullnameOverride, component at the top level), because template definitions render with the parent's context. Setting them under the `genieai-common:` dependency subtree therefore does nothing \u2014 and it is not a harmless no-op either: additionalProperties is false, so a key there ABORTS the render with \"additional properties 'x' not allowed\". Set them at the root of the consuming chart's values.",
+  "type": "object",
+  "properties": {
+    "global": {
+      "type": "object",
+      "description": "Helm-injected subtree every chart receives from the root release values. Defined here only so additionalProperties:false tolerates the key Helm always injects; the library itself reads nothing from it."
+    },
+    "nameOverride": {
+      "type": "string",
+      "description": "Override the chart name segment in resource names. Empty = use chart default.",
+      "maxLength": 63
+    },
+    "fullnameOverride": {
+      "type": "string",
+      "description": "Override the entire resource name prefix. Empty = use <release>-<chart>.",
+      "maxLength": 40
+    },
+    "component": {
+      "type": "string",
+      "description": "Free-form string identifying the component of a resource. genieai-common.labels emits BOTH genieai.io/component: <component> and app.kubernetes.io/component: <component> from this value. All call sites pass the per-template component name as a dict key when invoking the labels helper (e.g. include 'genieai-common.labels' (dict 'Chart' .Chart ... 'component' 'data-arangodb')); the top-level `component` value is a default fallback for ad-hoc callers and should not be set by the consuming chart.",
+      "default": "umbrella",
+      "maxLength": 63
+    }
+  },
+  "additionalProperties": false
+}

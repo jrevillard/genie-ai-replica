@@ -1,0 +1,103 @@
+{{- /*
+  The Cluster below is Keycloak's database, not a generic PostgreSQL
+  tier: its name, its bootstrap database and its owner all come from
+  data.keycloak.*, and the Keycloak CR's spec.db.host points at it.
+  Turning the postgres tier off while Keycloak is on therefore deletes
+  the only database the CR can reach, and nothing reports it — the
+  Keycloak pods stay Pending on a connection error. Fail the render
+  instead of shipping that combination.
+*/ -}}
+{{- $data := .Values.data | default dict -}}
+{{- $kc := $data.keycloak | default dict -}}
+{{- $kcDb := $kc.db | default dict -}}
+{{- $postgres := $data.postgres | default dict -}}
+{{- $pluggable := .Values.pluggable | default dict -}}
+{{- if and $kc.enabled (not $postgres.enabled) -}}
+{{- fail "data.keycloak.enabled=true requires data.postgres.enabled=true — this chart renders exactly one CNPG Cluster (the Keycloak database, named data.keycloak.cnpgServiceName); without it the Keycloak CR has no database to connect to" -}}
+{{- end -}}
+{{- if $postgres.enabled -}}
+{{- $instances := include "genieai-umbrella.resolveInstances" (dict "Values" .Values "tier" "postgres") | int -}}
+apiVersion: postgresql.cnpg.io/v1
+kind: Cluster
+metadata:
+  name: {{ $kc.cnpgServiceName | default "keycloak-db" }}
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" .Values "component" "data-postgres") | nindent 4 }}
+    genieai.io/data-tier: postgresql
+    genieai.io/serves: keycloak
+spec:
+  instances: {{ $instances }}
+  # Zero-downtime primary rolling updates: fail over to a replica before
+  # updating the primary (enum: switchover | restart, the CNPG default).
+  # Distinct from primaryUpdateStrategy (unsupervised | supervised), which
+  # only gates whether the operator needs manual approval for the failover.
+  primaryUpdateMethod: switchover
+  # Hardcoded to ghcr.io/cloudnative-pg/postgresql:16 — never prefixed
+  # by the top-level imageRegistry. The GitLab registry mirror at
+  # registry.opensource.unicc.org/un/itu/genie-ai does not carry
+  # cloudnative-pg/postgresql, so the conditional prefix
+  # (`<imageRegistry>/cloudnative-pg/postgresql:16`) was producing
+  # `manifest unknown` on every fresh install. Operators air-gapping
+  # the cluster must mirror this specific image into their private
+  # registry AND override the imageName via a values patch.
+  imageName: "ghcr.io/cloudnative-pg/postgresql:16"
+  imagePullPolicy: IfNotPresent
+  storage:
+    size: {{ $postgres.storageSize | default "10Gi" }}
+    # Render storageClass ONLY when set: an empty-string value would pin
+    # storageClassName: "" which means "NO default storage class" and
+    # strands the PVC on most clusters.
+    {{- with ($postgres.storageClassName | default $pluggable.storageClassName) }}
+    storageClass: {{ . }}
+    {{- end }}
+    # Access modes live under pvcTemplate, NOT directly on storage:
+    # the CNPG Cluster CRD exposes only size / storageClass /
+    # resizeInUseVolumes / pvcTemplate, and it decodes strictly, so a
+    # sibling `accessModes:` key rejects the whole Cluster — the
+    # Keycloak database, and with it the whole install.
+    pvcTemplate:
+      accessModes:
+        - ReadWriteOnce
+  postgresql:
+    parameters:
+      max_connections: "200"
+      shared_buffers: "256MB"
+  # CNPG publishes 3 Services for this Cluster:
+  #   <cluster>       (RW, points at the current primary; default JDBC target)
+  #   <cluster>-rw    (RW, explicit; the Keycloak CR's spec.db.host uses this name)
+  #   <cluster>-ro    (RO, replicas; for read-heavy reporting)
+  # The Cluster's name IS `data.keycloak.cnpgServiceName` — one knob, one
+  # name — and the Keycloak v2beta1 CR's spec.db.host is
+  # `<cluster>-rw.<ns>.svc.cluster.local` (see keycloak-instance.yaml).
+  bootstrap:
+    initdb:
+      # Same values the Keycloak CR reads (data.keycloak.db.*) — the CNPG
+      # cluster creates the bootstrap Secret/database and Keycloak consumes
+      # them; two independent sources of truth here would let a
+      # db.secretName override split that contract silently.
+      database: {{ $kcDb.database | default "keycloak" }}
+      # The bootstrap role. CNPG derives it from the Secret's `username`
+      # key, so `owner` and data.keycloak.db.secretName must agree: a
+      # Secret carrying username: someone-else creates role
+      # `someone-else` and this line then names a role that does not
+      # exist, which fails at initdb time with a CNPG error rather than
+      # at render time. Both default to keycloak — the knob exists so an
+      # operator whose Secret carries a different username can say so:
+      # set data.keycloak.db.username to the SAME value as the Secret's
+      # `username` key.
+      owner: {{ $kcDb.username | default "keycloak" }}
+      # CNPG expects this Secret to carry BOTH `username` and `password`
+      # keys (username-only fails validation). The Secret is
+      # operator-provided via their secret backend; the chart does not
+      # materialize it.
+      secret:
+        name: {{ $kcDb.secretName | default "keycloak-db-credentials" }}
+  serviceAccountTemplate:
+    metadata:
+      labels:
+        {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" .Values "component" "data-postgres") | nindent 8 }}
+  # NOTE: no `monitoring.enablePodMonitor` — that emits a Prometheus-operator
+  # ServiceMonitor and no Prometheus operator is installed in this stack.
+  # Metrics are scraped via VMServiceScrape.
+{{- end -}}

@@ -1,0 +1,474 @@
+{{- $services := .Values.services | default dict -}}
+{{- $opea := .Values.opea | default dict -}}
+{{- $okf := .Values.okf | default dict -}}
+{{- $opeaRetriever := $opea.retriever | default dict -}}
+{{- $data := .Values.data | default dict -}}
+{{- $dataKeycloak := $data.keycloak | default dict -}}
+{{- $dataArangodb := $data.arangodb | default dict -}}
+{{- $servicesRedisCache := $services.redisCache | default dict -}}
+{{- $obs := .Values.observability | default dict -}}
+{{- $obsLogs := $obs.logs | default dict -}}
+{{- $obsMetrics := $obs.metrics | default dict -}}
+{{- $opeaGpu := $opea.gpu | default dict -}}
+{{- $svcBackend := $services.backend | default dict -}}
+{{- /* The document-repository's port: bound parent-first (see the same
+note in frontend.yaml) — a cleared services.documentRepository must
+degrade this egress rule to the default port. */ -}}
+{{- $servicesDocumentRepository := index $services "documentRepository" | default dict -}}
+{{- $ingress := .Values.ingress | default dict -}}
+{{- if $svcBackend.enabled -}}
+{{- $ns := .Values.namespace -}}
+{{- $backendVals := deepCopy .Values -}}
+{{- /* Remote translation API (OpenAI-compatible vLLM). An explicit
+value wins. Otherwise the endpoint derives from the OPEA tier the same
+way the other five orchestrators derive theirs, through
+genieai-umbrella.opeaGpuEndpoint: the in-cluster model Service in
+in-cluster GPU mode, `opea.gpu.nodeHost + opea.gpu.paths.translation` in
+external mode.
+
+Deriving it matters: the endpoint is what tells the application that a
+GPU translation API was NAMED, and a named API is mandatory — the
+backend waits for it at startup and refuses to come up without it.
+Unset, the application has no GPU API to reach, and the answer is
+translated by an in-process CPU model — Xenova/nllb-200-distilled-600M,
+~6 Gi at ONNX load and a core of steady inference. On a node near its
+memory limit that is not a degradation, it is an OOM kill of the backend
+(observed on the laptop: exit 137, and the node dying with it). In
+external mode the helper also fails the render when
+`opea.gpu.nodeHost` is empty, so the misconfiguration is named at
+install time instead of surfacing as a missing translation endpoint at
+the first user request. */ -}}
+{{- /* Normalized once: an overlay that clears the whole block
+       (`services.backend.translation: null`) gets the derived behavior,
+       not a nil-pointer crash — the same degrade-gracefully contract
+       every other cleared block in the chart follows. */ -}}
+{{- $translation := $svcBackend.translation | default dict -}}
+{{- $translationEndpoint := $translation.endpoint | default "" -}}
+{{- if and (not $translationEndpoint) $opea.enabled -}}
+{{- $translationEndpoint = include "genieai-umbrella.opeaGpuEndpoint" (dict "root" . "path" "translation") -}}
+{{- end -}}
+{{- $translationSecrets := list -}}
+{{- /* Which backend translates the answer. The application decides this
+       on the endpoint, not on the knob: a deployment that NAMED a
+       translation API always uses it — TRANSLATION_BACKEND is not an
+       input to that decision, and the backend refuses to start when the
+       named API does not answer rather than translate with a model the
+       deployment did not ask for.
+
+       So the chart states the outcome it can actually produce. With an
+       endpoint: the GPU, and `cpu` is refused at render time, because
+       the application would ignore it and use the GPU anyway — a chart
+       advertising the CPU model while the deployment uses the GPU is
+       the silent mismatch this file exists to prevent. Without one:
+       the in-process CPU model, since a `gpu` would probe a
+       compose-era endpoint that does not resolve here. */ -}}
+{{- /* The translation backend is DERIVED, never configured. The
+application decides it on the endpoint: a deployment that NAMED a
+translation API always uses it — whatever the deployment says — and the
+backend refuses to start when that API does not answer. With no named
+API, the in-process CPU model is the only reachable translator (a
+`gpu` would probe a compose-era endpoint that does not resolve here).
+There WAS a `backend` knob here and it could only be overwritten
+(auto → gpu|cpu) or refused (cpu while an endpoint is configured), so
+it advertised a choice the chart never honoured. An overlay that still
+sets it fails the render instead of being silently rewritten. */ -}}
+{{- if $translation.backend -}}
+{{- fail "services.backend.translation.backend is not a knob: the translation backend is DERIVED — a named translation API is mandatory (the GPU path), and without one the in-process CPU model is the only reachable translator. Remove the key." -}}
+{{- end -}}
+{{- $translationBackend := ternary "gpu" "cpu" (ne $translationEndpoint "") -}}
+{{- $translationEnv := list
+    (dict "name" "TRANSLATION_BACKEND" "value" $translationBackend) -}}
+{{- $probeTimeout := $translation.probeTimeoutSeconds -}}
+{{- /* Presence check, not truthiness: Sprig's truthiness would silently
+drop an explicit 0 — the same falsy-zero trap the convergence Job's
+backoffLimit fix removed. Note that 0 does NOT shorten the budget: the
+application parses the value with a minimum of 1 and falls back to its
+own 30 s default for anything below, so a 0 in the manifest buys the
+default, not an immediate failure. */ -}}
+{{- if not (kindIs "invalid" $probeTimeout) -}}
+{{- $translationEnv = concat $translationEnv (list
+    (dict "name" "TRANSLATION_PROBE_TIMEOUT_SECONDS" "value" (printf "%v" $probeTimeout))) -}}
+{{- end -}}
+{{- if $translationEndpoint }}
+{{- $translationEnv = concat $translationEnv (list
+    (dict "name" "VLLM_TRANSLATION_ENDPOINT" "value" $translationEndpoint)
+    (dict "name" "VLLM_TRANSLATION_MODEL_ID" "value" ($translation.modelId | default "google/gemma-3-4b-it"))
+) }}
+{{- $translationSecrets = list (include "genieai-umbrella.secretKeyRefEnv" (dict
+    "var" "VLLM_API_KEY" "secret" "vllm-api-key" "key" "VLLM_API_KEY") | fromJson) -}}
+{{- end }}
+{{- /* OPEA chat pipeline (chatqna). When the OPEA tier is enabled the
+host defaults to the in-cluster chatqna Service; the code default names
+a compose-only service that does not resolve here. */ -}}
+{{- $opeaHost := $svcBackend.opeaHost -}}
+{{- if and (not $opeaHost) $opea.enabled -}}
+{{- $opeaHost = printf "chatqna.%s.svc.cluster.local" .Values.namespace -}}
+{{- end -}}
+{{- if $opeaHost }}
+{{- $translationEnv = concat $translationEnv (list (dict "name" "OPEA_HOST" "value" $opeaHost) (dict "name" "OPEA_PORT" "value" "8888")) -}}
+{{- end }}
+{{- /* STREAMING_TRANSLATION_ENABLED is a strict YAML boolean. Non-bool
+values (0, "0", "false") fail at render time: Sprig's default/coalesce
+treat false as empty and a non-empty string flips ternary to its true
+branch, so a lenient coercion would silently stream translated output
+against an operator's explicit off switch. */ -}}
+{{- $streamingTranslation := $translation.streamingEnabled -}}
+{{- /* Absent (key removed or the whole block cleared) falls back to the
+declared default; a PRESENT non-boolean still fails — the strict-typing
+guard exists for the fat-fingered value, not for the cleared block. */ -}}
+{{- if and (not (kindIs "invalid" $streamingTranslation)) (not (kindIs "bool" $streamingTranslation)) -}}
+{{- fail "services.backend.translation.streamingEnabled must be a YAML boolean (true or false)" -}}
+{{- end -}}
+{{- /* Absent key -> the declared default (true). A plain `| default`
+cannot be used: Sprig treats `false` as empty, so it would flip an
+explicit `false` back to `true`. */ -}}
+{{- if kindIs "invalid" $streamingTranslation -}}
+{{- $streamingTranslation = true -}}
+{{- end -}}
+{{- /* The ARANGO_GRAPH_NAME row: the legacy graph name the BFF prepends
+in hybrid mode — MUST match the retriever's own ARANGO_GRAPH_NAME
+(opea.retriever), or the legacy leg diverges from the fan-out leg. */ -}}
+{{- $urls := list
+    (dict "name" "KEYCLOAK_URL" "value" (include "genieai-umbrella.keycloakInternalURL" .))
+    (dict "name" "KEYCLOAK_REALM" "value" ($dataKeycloak.realm | default "genie" | toString))
+    (dict "name" "KEYCLOAK_CLIENT_ID" "value" ($dataKeycloak.webClientId | default "genie-app" | toString))
+    (dict "name" "ARANGO_URL" "value" (include "genieai-umbrella.arangoURL" .))
+    (dict "name" "ARANGO_DB" "value" ($dataArangodb.database | default "_system" | toString))
+    (dict "name" "ARANGO_USER" "value" "root")
+    (dict "name" "ARANGO_GRAPH_NAME" "value" (index $opeaRetriever "arangoGraphName" | default "GRAPH" | toString))
+    (dict "name" "KEYCLOAK_PUBLIC_URL" "value" (index ($dataKeycloak | default dict) "publicUrl" | default "" | toString))
+    (dict "name" "KEYCLOAK_JWKS_URL" "value" (index ($dataKeycloak | default dict) "jwksUrl" | default "" | toString))
+    (dict "name" "KEYCLOAK_BROWSER_ISSUER" "value" (index ($dataKeycloak | default dict) "browserIssuer" | default "" | toString))
+    (dict "name" "OKF_ENABLED" "value" (ternary "1" "0" (eq true (index $okf "enabled"))))
+    (dict "name" "OKF_SERVER_URL" "value" (index ($okf.server | default dict) "url" | default "http://okf-server:3002" | toString))
+    (dict "name" "OKF_RETRIEVAL_CONFIG_TTL_MS" "value" (index ($okf.retrievalConfig | default dict) "ttlMs" | default "30000" | toString))
+    (dict "name" "OKF_RETRIEVAL_CONFIG_TIMEOUT_MS" "value" (index ($okf.retrievalConfig | default dict) "timeoutMs" | default "3000" | toString))
+    (dict "name" "OTEL_EXPORTER_OTLP_ENDPOINT" "value" (include "genieai-umbrella.otlpEndpoint" .))
+    (dict "name" "ENABLE_OBSERVABILITY" "value" (include "genieai-umbrella.observabilityEnabledFlag" .))
+    (dict "name" "TRANSLATION_CACHE" "value" "on")
+    (dict "name" "TRANSLATION_CACHE_HOST" "value" (printf "redis-cache.%s.svc.cluster.local" $ns))
+    (dict "name" "TRANSLATION_CACHE_PORT" "value" ($servicesRedisCache.port | default 6379 | toString))
+    (dict "name" "STREAMING_TRANSLATION_ENABLED" "value" (ternary "1" "0" $streamingTranslation))
+-}}
+{{- /* The public origin: the browser's origin is the deployment's ingress,
+not a localhost list. Compose derives the same two rows from
+NGINX_PUBLIC_DOMAIN; the chart derives them from ingress.scheme +
+ingress.host, and the operator's own value (services.backend.env) wins
+over both — the rows below come first, the operator's last. */ -}}
+{{- /* Through the helper, not the raw value: the helper carries the
+`required` fail and the IPv6 rejection, and a render with Keycloak (the
+transitive guard carrier) disabled must fail HERE too instead of
+shipping CORS/CSP origins built from an empty host. */ -}}
+{{- $publicHost := include "genieai-umbrella.ingressHost" . -}}
+{{- $publicScheme := $ingress.scheme | default "https" -}}
+{{- $publicOrigin := printf "%s://%s" $publicScheme $publicHost -}}
+{{- $urls = concat $urls (list
+    (dict "name" "CORS_ALLOWED_ORIGINS" "value" $publicOrigin)
+    (dict "name" "CSP_CONNECT_SRC" "value" (include "genieai-umbrella.cspConnectSrc" .))
+) -}}
+{{- /* GPU_NODE_HOST is the signal the application uses to tell a named GPU
+API from its in-cluster worker, and it reaches the backend only when the
+OPEA tier is on: with no GPU API named there is no GPU host to name, and
+the backend's translation endpoint is what declares one. */ -}}
+{{- if $opea.enabled -}}
+{{- $urls = concat $urls (list
+    (dict "name" "GPU_NODE_HOST" "value" (include "genieai-umbrella.opeaGpuHostname" .))
+) -}}
+{{- end -}}
+{{- /* Admin logs UI data source — the vmoperator-managed VLSingle
+      Service (<cr-name> pattern). Rendered only when the log tier is
+      on; without it the backend treats VL as absent and every
+      /api/admin/logs read 503s with the typed vl_unreachable error. */ -}}
+{{- if $obsLogs.enabled -}}
+{{- $urls = concat $urls (list (dict "name" "VICTORIALOGS_URL" "value" (printf "http://vlsingle-victorialogs.%s.svc.cluster.local:9428" $ns))) -}}
+{{- end }}
+{{- $urls = concat $urls $translationEnv -}}
+{{- $secretEnv := list (include "genieai-umbrella.secretKeyRefEnv" (dict "var" "ARANGO_PASSWORD" "secret" "arango-root-secret" "key" "password" "optional" true) | fromJson) -}}
+{{- $secretEnv = concat $secretEnv $translationSecrets -}}
+{{- $existing := index $backendVals.services.backend "env" | default dict -}}
+{{- $existingRows := include "genieai-umbrella.envMapRows" $existing | fromJsonArray -}}
+{{- /* The operator's rows come LAST and envRowsDedupe keeps ONE row per
+name (the last wins): helm-controller applies with server-side apply,
+which merges `env` as a list of dicts keyed by `name` — a duplicate name
+is a hard install error there, not the last-wins merge plain kubectl
+performs, so the documented "the operator's value wins" override needs
+the dedupe, not just ordering. */ -}}
+{{- $_ := set $backendVals.services.backend "env" (include "genieai-umbrella.envRowsDedupe" (concat $urls $secretEnv $existingRows | toJson) | fromJsonArray) -}}
+{{- $ctx := dict "name" "backend" "component" "backend" "Values" $backendVals "Chart" .Chart "Release" .Release -}}
+{{- include "genieai-umbrella.serviceDeployment" $ctx }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: backend
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" .Values "component" "backend") | nindent 4 }}
+spec:
+  ports:
+    - name: http
+      port: 80
+      targetPort: http
+  selector:
+    {{- include "genieai-common.serviceSelector" (dict "Chart" .Chart "Release" .Release "Values" .Values "component" "backend") | nindent 4 }}
+---
+# Default-deny with ingress allowlist and egress scoped to the data tier.
+# Egress uses port-scoped ipBlock rules because the operator-managed peers
+# (kube-arangodb, CloudNative-PG, Keycloak operator) expose their real pod
+# labels only at runtime; guessed labels silently block traffic. A
+# follow-up that inspects live pod labels can tighten these to
+# namespaceSelector / podSelector peers when the operator label shape
+# is known.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: backend
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" .Values "component" "backend") | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      genieai.io/component: backend
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    # The Envoy Gateway data plane (edge routing: /api, /api-docs) plus
+    # same-namespace consumers on the app port — the frontend BFF-dials
+    # the backend directly for SPA-initiated calls, and chatqna fetches
+    # user context from /api/me/context.
+    {{- if $ingress.enabled }}
+    - from:
+        {{- include "genieai-umbrella.ingressDataPlanePeer" . | nindent 8 }}
+      ports:
+        - protocol: TCP
+          port: {{ $svcBackend.port | default 3000 }}
+    {{- end }}
+    # The same-namespace consumers, named. A `podSelector: {}` peer
+    # matches EVERY pod in the namespace — the operator's ArangoDB, the
+    # CNPG keycloak-db, the VictoriaMetrics/Logs/Traces pods, any Job
+    # that lands here — and it voids the default-deny this policy
+    # exists for: /api/admin/* would be reachable from all of them. The
+    # list is the chart's own egress rules towards the backend:
+    # frontend (SPA-initiated calls), documentRepository, chatqna and
+    # dataprep (user context), plus the helm-test probe.
+    - from:
+        - podSelector:
+            matchLabels:
+              genieai.io/component: frontend
+        - podSelector:
+            matchLabels:
+              genieai.io/component: documentRepository
+        - podSelector:
+            matchLabels:
+              genieai.io/component: chatqna
+        - podSelector:
+            matchLabels:
+              genieai.io/component: dataprep
+        - podSelector:
+            matchLabels:
+              genieai.io/component: test
+      ports:
+        - protocol: TCP
+          port: {{ $svcBackend.port | default 3000 }}
+  {{- if $obsMetrics.enabled }}
+  # vm-operator scrape peer — the same peer every sibling policy
+  # carries. PRE-WIRED, INERT TODAY: the VMServiceScrape CRs match
+  # nothing on purpose (see vmsingle.yaml) and no workload serves
+  # /metrics yet; the peer keeps a future real scrape from silently
+  # timing out against the default-deny.
+    - from:
+        - podSelector:
+            matchLabels:
+              managed-by: vm-operator
+              app.kubernetes.io/instance: vmetrics
+      ports:
+        - protocol: TCP
+          port: {{ $svcBackend.port | default 3000 }}
+  {{- end }}
+  egress:
+    # DNS resolution to kube-system.
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+    # Data tier: ArangoDB (8529), CNPG keycloak-db (5432), Keycloak (8080),
+    # Redis cache (services.redisCache.port, default 6379 — the same knob
+    # the Service and the backend's TRANSLATION_CACHE_PORT derive from).
+    # Port-scoped any-destination pending verified
+    # peer labels — see header note above. Operators tightening to
+    # specific peers should override this rule via the pluggable
+    # `networkPolicy.peers` surface (Plan 6) rather than editing the
+    # rendered NetworkPolicy in place.
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+      ports:
+        - protocol: TCP
+          port: 8529
+        - protocol: TCP
+          port: 5432
+        - protocol: TCP
+          port: 8080
+        - protocol: TCP
+          port: {{ $servicesRedisCache.port | default 6379 }}
+    {{- /* External HTTPS API egress: the backend dials public APIs
+    directly (weather: api.open-meteo.com — WeatherService). NetworkPolicy
+    peers cannot express a domain, and the upstream sits behind a DNS
+    round-robin pool, so this is a port-scoped ipBlock over 80/443 — the
+    same approximation the document-repository crawler and the ClamAV
+    signature-update rules use. Empty list = allow every IPv4 destination
+    on the HTTP(S) ports, matching the compose deployment's unrestricted
+    network (#1631). */}}
+    - to:
+        {{- range $cidr := $svcBackend.externalApiCIDRs }}
+        - ipBlock:
+            cidr: {{ $cidr }}
+        {{- end }}
+        {{- if not $svcBackend.externalApiCIDRs }}
+        - ipBlock:
+            cidr: 0.0.0.0/0
+        {{- end }}
+      ports:
+        - protocol: TCP
+          port: 80
+        - protocol: TCP
+          port: 443
+    # OTLP exporter: required for the observability pipeline. Without
+    # this port the default-deny policy drops all traces at the source.
+    #
+    # Its OWN rule, not a port in the external-API rule above: that
+    # rule's peers are the operator's `externalApiCIDRs`, and the
+    # collector is an in-cluster pod whose IP is in none of them — so
+    # pinning the CIDRs (the documented way to restrict that egress)
+    # silently closed the telemetry path and every span was lost at the
+    # source, with no error anywhere. The document-repository's OTLP
+    # rule has always been shaped this way.
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+      ports:
+        - protocol: TCP
+          port: {{ include "genieai-umbrella.otlpPort" . }}
+    {{- if $obsLogs.enabled }}
+    # VictoriaLogs read path for the admin logs UI (VICTORIALOGS_URL).
+    # Own rule, not a port in the shared any-destination list: the
+    # VLSingle pod carries vmoperator-stamped labels, so the peer is
+    # exact.
+    - to:
+        - podSelector:
+            matchLabels:
+              managed-by: vm-operator
+              app.kubernetes.io/instance: victorialogs
+      ports:
+        - protocol: TCP
+          port: 9428
+    {{- end }}
+    # document-repository (file references) — post-DNAT pod port,
+    # services.documentRepository.port; the doc-repo ingress rule
+    # already permits backend as a peer.
+    - to:
+        - podSelector:
+            matchLabels:
+              genieai.io/component: documentRepository
+      ports:
+        - protocol: TCP
+          port: {{ $servicesDocumentRepository.port | default 3001 }}
+    {{- if $opea.enabled }}
+    # Chat stream: the backend dials the chatqna orchestrator directly
+    # (OPEA_HOST:8888) when the OPEA tier is enabled. query-service.js
+    # builds the URL internally; this egress rule is the only
+    # path that lets the chat stream reach chatqna under default-deny.
+    - to:
+        - podSelector:
+            matchLabels:
+              genieai.io/component: chatqna
+      ports:
+        - protocol: TCP
+          port: 8888
+    # The OPEA translation Service (component "translation"), which
+    # serves the same OpenAI-compatible API on 8888 (its Service maps
+    # 9031 to it). An endpoint pointing at it — the natural choice for
+    # an in-cluster deployment — was dropped by the backend's own
+    # default-deny egress, and the BFF silently fell back to the
+    # in-process CPU model: several Gi of RAM for a degraded path the
+    # operator never asked for. (The vllm-translation MODEL Service,
+    # the default in-cluster endpoint, has its own rule below.)
+    - to:
+        - podSelector:
+            matchLabels:
+              genieai.io/component: translation
+      ports:
+        # Pod space (post-DNAT): the container listens on 8888; 9031 is
+        # the Service's EXTERNAL port (chatqna's TRANSLATION_SERVICE_PORT)
+        # and admits nothing after DNAT.
+        - protocol: TCP
+          port: 8888
+    {{- end }}
+    {{- if eq true (index $okf "enabled") }}
+    # OKF retrieval posture: with the tier on, the backend's retrieval
+    # client dials okf-server (OKF_SERVER_URL:3002) on every query —
+    # under default-deny a missing rule here is a 3 s timeout per chat
+    # and a dead retrieval path, not an error anywhere.
+    - to:
+        - podSelector:
+            matchLabels:
+              genieai.io/component: okf-server
+      ports:
+        - protocol: TCP
+          port: 3002
+    {{- end }}
+    {{- if and $opea.enabled (eq $opeaGpu.mode "in-cluster") }}
+    # In-cluster translation model (VLLM_TRANSLATION_ENDPOINT default).
+    - to:
+        - podSelector:
+            matchLabels:
+              app: vllm-translation
+      ports:
+        - protocol: TCP
+          port: 9031
+    {{- end }}
+    {{- /* Gated on the endpoint the backend ACTUALLY DIALS being EXTERNAL —
+           the derived one ($translationEndpoint above), not the raw
+           values knob, and not the GPU MODE: an explicit endpoint
+           overrides the derivation in in-cluster mode too (models
+           in-cluster, translation on a remote API), and that endpoint is
+           a URL the default-deny must be told about.
+
+           "Covered by a podSelector rule" is TRUE only for the two
+           cluster-local peers the chart names: the translation component
+           (8888/9031) and the in-cluster vllm-translation (9031). An
+           endpoint pointing at ANY OTHER cluster-local Service — a
+           shared translator the operator runs in the cluster — got no
+           rule at all, and since a NAMED translation API is mandatory,
+           the backend's startup probe then failed and the backend
+           refused to start. */ -}}
+    {{- $clusterLocalPeers := list (printf "translation.%s.svc.cluster.local" $ns) (printf "vllm-translation.%s.svc.cluster.local" $ns) -}}
+    {{- $coveredByPeerRule := false -}}
+    {{- range $peer := $clusterLocalPeers -}}
+    {{- if and $translationEndpoint (contains $peer $translationEndpoint) -}}
+    {{- $coveredByPeerRule = true -}}
+    {{- end -}}
+    {{- end -}}
+    {{- if and $translationEndpoint (not $coveredByPeerRule) }}
+    # External translation endpoint: the CIDR and the port derive from
+    # the endpoint URL, exactly as the six orchestrators derive theirs
+    # from opea.gpu.nodeHost. Not 0.0.0.0/0 on 443 + 444.
+    #
+    # A named endpoint that resolves to an in-cluster Service must
+    # publish the port its container listens on: a NetworkPolicy's
+    # egress port is matched AFTER DNAT, against the pod's port, while
+    # this rule carries the URL's port (the Service's). The chart
+    # cannot read an operator-named Service's targetPort, so a Service
+    # that publishes 8443 and targets 9000 is admitted by neither the
+    # policy nor the pod. A destination outside the cluster (an IP
+    # literal, a node reached directly) has no DNAT and no such gap.
+    {{- include "genieai-umbrella.opeaEgressRuleFromUrl" (dict "root" $ "url" $translationEndpoint) | nindent 4 }}
+    {{- end }}
+{{- end -}}

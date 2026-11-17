@@ -1,0 +1,399 @@
+{{- /* The convergence block is CLEARABLE: a cleared block means "no
+convergence" (the same as enabled: false), not a nil-pointer crash. */ -}}{{- $global := .Values.global | default dict -}}
+{{- $assets := index .Subcharts "genieai-assets" -}}
+
+{{- $data := .Values.data | default dict -}}
+{{- $keycloak := $data.keycloak | default dict -}}
+{{- $keycloakBootstrap := $keycloak.bootstrapAdmin | default dict -}}
+{{- $keycloakConvergence := $keycloak.convergence | default dict -}}
+{{- $ingress := .Values.ingress | default dict -}}
+{{- $convergence := $keycloak.convergence | default dict -}}
+{{- if and $keycloak.enabled $convergence.enabled -}}
+{{- /*
+keycloak-config-cli owns the realm. The operator's KeycloakRealmImport
+CR was removed: it is create-only (the operator hardcodes --override=false
+and implements no Updater), so a changed spec.realm is silently ignored
+while the CR still reports Done=True/HasErrors=False.
+
+Run-always is correct here because every realm parameter reaches the
+import through an env or envSecrets row, both of which are values — so
+a parameter change moves the values digest and fires this hook.
+*/ -}}
+{{- $ns := .Values.namespace -}}
+{{- $secretName := $keycloakBootstrap.userSecret | default "keycloak-admin-credentials" -}}
+{{- $realmSecret := printf "%s-keycloak-realm" (include "genieai-common.fullname" .) -}}
+{{- /*
+Placeholder guard, relocated from the deleted realm import.
+
+What it actually checks, stated plainly because the old message got it
+wrong: `data.keycloak.clientSecrets.*` is NOT what reaches Keycloak. The
+realm's client secrets come from the operator-provided Secrets the Job
+exports through `data.keycloak.convergence.envSecrets` — the guard
+below checks that every `$(env:VAR)` the realm body carries is wired to
+one of them, and kcc substitutes at import time. This value is the
+chart's formal ticket that the deployment was configured for the realm
+at all: it must not be left at the chart default, and the overlay that
+sets it is the same overlay that names the Secrets.
+*/ -}}
+{{- if $keycloak.failOnPlaceholderSecrets -}}
+{{- $cs := $keycloak.clientSecrets | default dict -}}
+{{- range $k := list "proxyClient" "dataprep" "grafana" -}}
+{{- $v := dig $k "" $cs -}}
+{{- if or (not $v) (eq $v "") (hasPrefix "change-me" $v) -}}
+{{- fail (printf "data.keycloak.clientSecrets.%s is empty or a placeholder (change-me-*). This value is NOT what reaches Keycloak: the realm\u0027s client secrets come from the operator-provided Secrets the convergence Job exports (data.keycloak.convergence.envSecrets), and the guard below checks that every one of them is wired. This value is the chart\u0027s formal ticket that the deployment was configured for the realm at all — it must not be left at the chart default. Set it to any non-default string, and put the real secret in the Secret the matching envSecrets row names. Set data.keycloak.failOnPlaceholderSecrets=false only where the placeholder is acceptable" $k) -}}
+{{- end -}}
+{{- end -}}
+{{- end -}}
+{{- /*
+Placeholder completeness. Every `$(env:VAR)` in the realm file must
+resolve from this Job's env or from an envSecrets row. An unsatisfied
+placeholder is invisible to Helm and surfaces only as a kcc parse
+error at Job runtime, far from its cause.
+
+$known is written out by hand, in parallel with the env block below —
+it is NOT derived from it. Adding a variable to one list does not add it
+to the other. The drift this guards against fails LOUDLY: helm names the
+unsatisfied placeholder and the render aborts, so the cost of a stale
+list is a false alarm during review, never a silent miss. The kcc
+internals — the two availability-check settings and the four IMPORT_*
+variables — are deliberately absent, because no realm placeholder may
+name them.
+*/ -}}
+{{- /*
+SMTP placeholders are listed unconditionally: the realm file's
+smtpServer block is unconditional too (genie-realm.yaml:18-26), so a
+default install with smtp:null must still resolve them — to empty
+strings. Gating them on smtp
+being set would fail this assertion on every default render.
+*/ -}}
+{{- $known := list
+      "KEYCLOAK_URL" "KEYCLOAK_USER" "KEYCLOAK_PASSWORD"
+      "KC_OKF_SERVER_CLIENT_SECRET"
+      "KC_REALM" "KC_CLIENT_ID" "KC_PUBLIC_ORIGIN"
+      "KC_MOBILE_CLIENT_ID" "KC_MOBILE_REDIRECT_SCHEME" "KC_GRAFANA_CLIENT_ID"
+      "GENIE_ADMIN_USERNAME" "GENIE_ADMIN_EMAIL"
+      "KEYCLOAK_REGISTRATION_ENABLED" "KEYCLOAK_VERIFY_EMAIL" "KEYCLOAK_RESET_PASSWORD"
+      "KEYCLOAK_LOGIN_WITH_EMAIL" "KEYCLOAK_DUPLICATE_EMAILS" "KEYCLOAK_BRUTE_FORCE"
+      "KEYCLOAK_PASSWORD_POLICY" "KEYCLOAK_THEME" "KEYCLOAK_I18N_ENABLED"
+      "KEYCLOAK_LOCALE" "KEYCLOAK_SUPPORTED_LOCALES" "KEYCLOAK_ACCESS_TOKEN_LIFESPAN"
+      "KEYCLOAK_SSO_SESSION_IDLE_TIMEOUT" "KEYCLOAK_SSO_SESSION_MAX_LIFESPAN"
+      "EMAIL_FROM" "EMAIL_HOST" "EMAIL_PORT"
+      "EMAIL_SECURE" "EMAIL_SMTP_STARTTLS" "EMAIL_SMTP_AUTH" "EMAIL_USER" -}}
+{{- /* Snapshot the INLINE-fixed names BEFORE the envSecrets rows are
+appended below: the collision check near the Job's env block compares a
+declared envSecrets row against these — a secret-backed row is a normal
+way to feed a placeholder, it is only a bug when it re-names a variable
+the Job already fixes inline (that row would duplicate the name under
+SSA's name-keyed env merge). */ -}}
+{{- $fixedEnvVars := $known -}}
+{{- /* The rows go through the VALIDATION helper, not straight from
+the values: a malformed row (a scalar, a typo'd key) would otherwise
+crash this template with a raw Go-template error before the guard
+below could name it. */ -}}
+{{- range $e := (include "genieai-umbrella.validatedConvergenceEnvSecrets" ($convergence.envSecrets | default list) | fromJsonArray) -}}
+{{- $known = append $known $e.envVar -}}
+{{- end -}}
+{{- /* backoffLimit is a NIL check, not `| default 2`: Sprig treats 0 as
+empty, so an explicit 0 (fail fast — gate a GitOps pipeline on a bad
+realm) silently rendered 2 and the release failure arrived two retries
+later with three failed pods instead of one. The same falsy-zero trap
+resolveReplicas was written to avoid. */ -}}
+{{- $backoffLimit := 2 -}}
+{{- if not (kindIs "invalid" $convergence.backoffLimit) -}}
+{{- $backoffLimit = $convergence.backoffLimit -}}
+{{- end -}}
+{{- /* The SSO session lifespans are a NIL check for the same reason:
+Sprig treats 0 as empty, and 0 is a MEANINGFUL value here — Keycloak
+reads a non-positive session lifetime as "never expire", which is the
+setting an operator wants for a kiosk or a single-machine venue. A
+`| default 28800` would silently turn that 0 into 8 hours. */ -}}
+{{- $ssoSessionIdleTimeout := 28800 -}}
+{{- if not (kindIs "invalid" $keycloak.ssoSessionIdleTimeout) -}}
+{{- $ssoSessionIdleTimeout = $keycloak.ssoSessionIdleTimeout -}}
+{{- end -}}
+{{- $ssoSessionMaxLifespan := 604800 -}}
+{{- if not (kindIs "invalid" $keycloak.ssoSessionMaxLifespan) -}}
+{{- $ssoSessionMaxLifespan = $keycloak.ssoSessionMaxLifespan -}}
+{{- end -}}
+{{- /* The access-token TTL is the THIRD knob of this family and the
+last one still on `| default`: an explicit 0 — Keycloak's "the token
+never expires" — was silently rendered as 300. Same nil check. */ -}}
+{{- $accessTokenLifespan := 300 -}}
+{{- if not (kindIs "invalid" $keycloak.accessTokenLifespan) -}}
+{{- $accessTokenLifespan = $keycloak.accessTokenLifespan -}}
+{{- end -}}
+{{- $realmFile := $assets.Files.Get "files/genie-realm.yaml" -}}
+{{- if $keycloak.failOnPlaceholderSecrets -}}
+{{- range $p := (regexFindAll "\\$\\(env:[A-Z_][A-Z0-9_]*\\)" $realmFile -1) -}}
+{{- $n := trimPrefix "$(env:" (trimSuffix ")" $p) -}}
+{{- if not (has $n $known) -}}
+{{- fail (printf "files/genie-realm.yaml references $(env:%s) but this Job exports no such variable; add it to the Job env or to data.keycloak.convergence.envSecrets, or kcc fails at runtime with an opaque parse error. Set data.keycloak.failOnPlaceholderSecrets=false to accept unresolved placeholders — kcc will then create clients with empty secrets" $n) -}}
+{{- end -}}
+{{- end -}}
+{{- end -}}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "genieai-common.fullname" . }}-keycloak-convergence
+  namespace: {{ $ns }}
+  labels:
+    {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" .Values "component" "identity") | nindent 4 }}
+    genieai.io/data-tier: identity
+  annotations:
+    # Helm 3 scans templates/ recursively; the subdirectory name is
+    # irrelevant, the annotations are what matter.
+    # post-rollback is inert under ArgoCD, which translates these to
+    # PostSync and has no distinct rollback phase — its "rollback" is a
+    # resync to a prior SHA, which re-fires post-upgrade. Convergence
+    # still happens there; do not expect a rollback-specific run.
+    "helm.sh/hook": post-install,post-upgrade,post-rollback
+    "helm.sh/hook-weight": "10"
+    # hook-succeeded deletes only a Job that SUCCEEDED — a failed one
+    # survives for debugging, which is the point of running it as a hook;
+    # before-hook-creation replaces a stale one on the next release.
+    "helm.sh/hook-delete-policy": hook-succeeded,before-hook-creation
+spec:
+  backoffLimit: {{ $backoffLimit }}
+  template:
+    metadata:
+      labels:
+        {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" .Values "component" "identity") | nindent 8 }}
+    spec:
+      restartPolicy: Never
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+        runAsUser: 65534
+      {{- with $global.imagePullSecrets }}
+      # PodSpec level (NOT inside the container entry — a container-level
+      # imagePullSecrets is silently dropped under default field validation
+      # and the pull fails with no error).
+      imagePullSecrets: {{ toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: keycloak-config-cli
+          # The -26 suffix encodes the Keycloak major version. A Keycloak
+          # major bump needs a matching kcc tag bump.
+          # Pulled from docker.io unconditionally: kcc is not mirrored in
+          # the registries deployments pull their other images from
+          # (verified 2026-10-14, UNICC mirror), and a conditional
+          # imageRegistry prefix would 404 the pull. An air-gapped
+          # site must mirror docker.io/adorsys/keycloak-config-cli and
+          # rewrite via insertAgent, not via the registry value.
+          image: docker.io/adorsys/keycloak-config-cli:6.5.0-26
+          imagePullPolicy: IfNotPresent
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+          env:
+            # /auth is required: the Keycloak CR sets
+            # additionalOptions http-relative-path=/auth, and kcc's URL
+            # format is scheme://host:port/web-context. Without it the
+            # token call 404s on the wrong context and surfaces as 401.
+            # The host is the operator's own Service, not one this chart
+            # creates: the Keycloak CR is named `keycloak` and the operator
+            # appends a hardcoded "-service" suffix. Renaming the CR
+            # breaks this URL with no render-time symptom.
+            - name: KEYCLOAK_URL
+              value: {{ include "genieai-umbrella.keycloakInternalURL" . | quote }}
+            - name: KEYCLOAK_USER
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $secretName | quote }}
+                  key: username
+            - name: KEYCLOAK_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ $secretName | quote }}
+                  key: password
+            # The okf-server client's secret — the realm body carries it
+            # as $(env:KC_OKF_SERVER_CLIENT_SECRET). The `optional` flag
+            # only spares the pod a CreateContainerConfigError: it does
+            # NOT spare the import. kcc runs with
+            # IMPORT_VARSUBSTITUTION_UNDEFINEDISERROR=true (its default),
+            # so a deployment whose Secret is missing converges the realm
+            # with the variable UNDEFINED and the import dies on the
+            # unresolved placeholder — failing this hook, and the whole
+            # release with it. This secret is therefore a required part
+            # of the deployment's sealed-secret set (like the admin
+            # credentials above), whatever the OKF tier's enabled state.
+            - name: KC_OKF_SERVER_CLIENT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: okf-server-client-secret
+                  key: KC_OKF_SERVER_CLIENT_SECRET
+                  optional: true
+            # The okf-server client's secret — the realm body carries it
+            # as $(env:KC_OKF_SERVER_CLIENT_SECRET). The `optional` flag
+            # only spares the pod a CreateContainerConfigError: it does
+            # NOT spare the import. kcc runs with
+            # IMPORT_VARSUBSTITUTION_UNDEFINEDISERROR=true (its default),
+            # so a deployment whose Secret is missing converges the realm
+            # with the variable UNDEFINED and the import dies on the
+            # unresolved placeholder — failing this hook, and the whole
+            # release with it. This secret is therefore a required part
+            # of the deployment's sealed-secret set (like the admin
+            # credentials above), whatever the OKF tier's enabled state.
+            # Keycloak takes ~70s to report Ready on a cold start. kcc's
+            # availability check owns that wait, so backoffLimit above
+            # covers real failures rather than startup.
+            - name: KEYCLOAK_AVAILABILITYCHECK_ENABLED
+              value: "true"
+            - name: KEYCLOAK_AVAILABILITYCHECK_TIMEOUT
+              value: "300s"
+            - name: IMPORT_PATH
+              value: /config/
+            - name: IMPORT_FILES
+              value: /config/genie-realm.yaml
+            - name: IMPORT_VARSUBSTITUTION_ENABLED
+              value: "true"
+            - name: IMPORT_CACHE_ENABLED
+              value: "true"
+            # Non-secret realm parameters, resolved from the realm file's
+            # $(env:VAR) placeholders. Values only — no Secret here. Each
+            # carries the same default its values.yaml declaration does:
+            # a null DELETES the declared default, and `| quote` of nil
+            # renders `value: null` — a row the API server rejects (or
+            # empties), with the kcc import dying on an unresolved
+            # $(env:VAR) far from the cleared knob.
+            - name: KC_REALM
+              value: {{ $keycloak.realm | default "genie" | quote }}
+            - name: KC_CLIENT_ID
+              value: {{ $keycloak.webClientId | default "genie-app" | quote }}
+            - name: KC_PUBLIC_ORIGIN
+              value: {{ printf "%s://%s" ($ingress.scheme | default "https") (include "genieai-umbrella.ingressHost" .) | quote }}
+            - name: KC_MOBILE_CLIENT_ID
+              value: {{ $keycloak.mobileClientId | default "genie-mobile" | quote }}
+            - name: KC_MOBILE_REDIRECT_SCHEME
+              value: {{ $keycloak.mobileRedirectScheme | default "genieai" | quote }}
+            - name: KC_GRAFANA_CLIENT_ID
+              value: {{ $keycloak.grafanaClientId | default "grafana" | quote }}
+            - name: GENIE_ADMIN_USERNAME
+              value: {{ $keycloak.adminUsername | default "genie-admin" | quote }}
+            - name: GENIE_ADMIN_EMAIL
+              # Supplied per environment (operator contact) — no silent
+              # placeholder fallback.
+              value: {{ $keycloak.adminEmail | required "data.keycloak.adminEmail is required — supply the operator contact email in the environment overlay" | quote }}
+            {{- $smtp := $keycloak.smtp | default dict }}
+            # A flow that SENDS a mail needs a mail server. The realm's
+            # smtpServer block is unconditional (kcc substitutes every
+            # EMAIL_* placeholder), so without an smtp the realm would be
+            # imported with sentinel values — host "localhost", from
+            # "no-reply@genieai.local" — and the send would fail at
+            # runtime with nothing in the operator's face: the user sees
+            # "check your email" and no mail ever leaves. Failing the
+            # render points at the knob instead.
+            {{- /* The guard reads the knob through the same helper the env
+            row uses, with the SAME fallback: values.yaml declares both
+            knobs `true`, so an UNSET knob (an overlay's `null` deletes
+            it) must be judged as true — otherwise a deployment that
+            nulls the knob gets the opposite of the documented default
+            AND the guard stops firing, silently installing a realm
+            that never verifies an address. `| default true` cannot
+            express that: Sprig treats `false` as empty, so an
+            explicit false would read as true and the guard would fire
+            on the "no mail server" deployment the knob exists for. */ -}}
+            {{- if and (eq (include "genieai-umbrella.boolEnvValue" (dict "value" $keycloak.verifyEmail "default" true)) "true") (not $smtp) -}}
+            {{- fail "data.keycloak.verifyEmail=true requires data.keycloak.smtp — without a mail server the verification mail never leaves" -}}
+            {{- end -}}
+            {{- if and (eq (include "genieai-umbrella.boolEnvValue" (dict "value" $keycloak.resetPasswordAllowed "default" true)) "true") (not $smtp) -}}
+            {{- fail "data.keycloak.resetPasswordAllowed=true requires data.keycloak.smtp — without a mail server the reset mail never leaves" -}}
+            {{- end -}}
+            # The realm file's smtpServer block is unconditional, so the
+            # EMAIL_* vars must resolve on every install — including
+            # smtp:null. Kubernetes drops an EnvVar whose value is the
+            # empty string (omitempty on the API type), and kcc's
+            # substitution then fails the whole import on the missing
+            # variable — so unset fields get non-empty sentinels instead
+            # empty strings would fail kcc's substitution. With auth=false the
+            # host/user values are never dialed.
+            # Real values are required once an smtp server is declared;
+            # with smtp:null the sentinels stay inert (nothing is dialed,
+            # no mail leaves) while keeping kcc's substitution resolvable.
+            - name: EMAIL_FROM
+              value: {{ if $smtp }}{{ $smtp.from | required "data.keycloak.smtp.from is required when smtp is set" | quote }}{{ else }}no-reply@genieai.local{{ end }}
+            - name: EMAIL_HOST
+              value: {{ if $smtp }}{{ $smtp.host | required "data.keycloak.smtp.host is required when smtp is set" | quote }}{{ else }}localhost{{ end }}
+            - name: EMAIL_PORT
+              value: {{ $smtp.port | default 25 | int | quote }}
+            - name: EMAIL_SECURE
+              value: {{ eq ($smtp.ssl | default false | toString) "true" | quote }}
+            - name: EMAIL_SMTP_STARTTLS
+              value: {{ eq ($smtp.starttls | default false | toString) "true" | quote }}
+            - name: EMAIL_SMTP_AUTH
+              value: {{ eq ($smtp.auth | default false | toString) "true" | quote }}
+            - name: EMAIL_USER
+              value: {{ if and $smtp ($smtp.auth) }}{{ $smtp.user | required "data.keycloak.smtp.user is required when smtp.auth is true" | quote }}{{ else }}unused{{ end }}
+            - name: KEYCLOAK_REGISTRATION_ENABLED
+              value: {{ include "genieai-umbrella.boolEnvValue" (dict "value" $keycloak.registrationAllowed "default" true) | quote }}
+            - name: KEYCLOAK_VERIFY_EMAIL
+              value: {{ include "genieai-umbrella.boolEnvValue" (dict "value" $keycloak.verifyEmail "default" true) | quote }}
+            - name: KEYCLOAK_RESET_PASSWORD
+              value: {{ include "genieai-umbrella.boolEnvValue" (dict "value" $keycloak.resetPasswordAllowed "default" true) | quote }}
+            - name: KEYCLOAK_LOGIN_WITH_EMAIL
+              value: {{ eq (include "genieai-umbrella.boolEnvValue" (dict "value" $keycloak.loginWithEmailAllowed "default" true)) "true" | quote }}
+            - name: KEYCLOAK_DUPLICATE_EMAILS
+              value: {{ include "genieai-umbrella.boolEnvValue" (dict "value" $keycloak.duplicateEmailsAllowed "default" false) | quote }}
+            - name: KEYCLOAK_BRUTE_FORCE
+              value: {{ eq (include "genieai-umbrella.boolEnvValue" (dict "value" $keycloak.bruteForceProtected "default" true)) "true" | quote }}
+            - name: KEYCLOAK_PASSWORD_POLICY
+              value: {{ $keycloak.passwordPolicy | default "length(12) and upperCase(1) and lowerCase(1) and digits(1) and specialChars(1)" | quote }}
+            - name: KEYCLOAK_THEME
+              # Same fallback as the Keycloak CR's theme mount path: the
+              # tarball's only root is themes/genie, so "keycloak" (the
+              # upstream default) resolves to a directory that exists
+              # nowhere — an unthemed login page with no error anywhere.
+              value: {{ $keycloak.theme | default "genie" | quote }}
+            - name: KEYCLOAK_I18N_ENABLED
+              value: {{ eq (include "genieai-umbrella.boolEnvValue" (dict "value" $keycloak.internationalizationEnabled "default" true)) "true" | quote }}
+            # A default, not a bare read: an overlay that clears
+            # defaultLocale would render value: "" — which Kubernetes
+            # drops (omitempty), leaving $(env:KEYCLOAK_LOCALE)
+            # unresolved and kcc failing the import. Same sentinel
+            # logic as the EMAIL_* rows.
+            - name: KEYCLOAK_LOCALE
+              value: {{ $keycloak.defaultLocale | default "en" | quote }}
+            # JSON array literal, not a comma-joined string: the realm
+            # file's supportedLocales is a list field, and kcc's textual
+            # substitution must inject a parseable JSON array. A CSV
+            # here fails the import with
+            # "Cannot construct instance of java.util.HashSet".
+            - name: KEYCLOAK_SUPPORTED_LOCALES
+              value: {{ $keycloak.supportedLocales | default (list "ar" "de" "en" "es" "fr" "pt" "ru" "th" "zh-Hans") | toJson | quote }}
+            - name: KEYCLOAK_ACCESS_TOKEN_LIFESPAN
+              value: {{ $accessTokenLifespan | quote }}
+            # SSO session lifespans (#1834) — the realm file declares both
+            # as placeholders, so the Job must export them: an unsatisfied
+            # placeholder aborts the kcc import with a parse error that
+            # names nothing. Keycloak's own defaults (idle 30 min, max
+            # 10 h) are what #1834 was filed against — the values here
+            # are the workday defaults Compose ships.
+            - name: KEYCLOAK_SSO_SESSION_IDLE_TIMEOUT
+              value: {{ $ssoSessionIdleTimeout | quote }}
+            - name: KEYCLOAK_SSO_SESSION_MAX_LIFESPAN
+              value: {{ $ssoSessionMaxLifespan | quote }}
+            # Secret-backed parameters, one row per operator-declared
+            # entry. The rows are VALIDATED by the helper (a typo'd key
+            # would render `name: null` and the API server would reject
+            # the whole Job at apply time), and a row naming one of the
+            # Job's FIXED variables fails the render here: the Job env
+            # list is not deduped (the collision is a caller bug, not a
+            # merge to resolve), and SSA would reject the duplicate
+            # name at install anyway (issue #1362's failure class).
+            {{- range $row := ($convergence.envSecrets | default list) -}}
+            {{- if has $row.envVar $fixedEnvVars -}}
+            {{- fail (printf "convergence envSecrets row %q names one of the Job's fixed variables — remove the row, the Job's own value is the contract" $row.envVar) -}}
+            {{- end -}}
+            {{- end -}}
+            {{- include "genieai-umbrella.convergenceEnvSecretRows" ($convergence.envSecrets | default list) | nindent 12 }}
+          volumeMounts:
+            - name: realm
+              mountPath: /config
+              readOnly: true
+      volumes:
+        - name: realm
+          secret:
+            secretName: {{ $realmSecret | quote }}
+{{- end -}}

@@ -1,0 +1,61 @@
+{{- $obs := .Values.observability | default dict -}}
+{{- $pluggable := .Values.pluggable | default dict -}}
+{{- $obsMetrics := $obs.metrics | default dict -}}
+{{- if $obsMetrics.enabled }}
+{{- /*
+  VMSingle CR — single-node VictoriaMetrics.
+  apiVersion: VMSingle stays on operator.victoriametrics.com/v1beta1
+  in vmoperator v0.75.0 (VMSingle was not promoted to v1 alongside
+  VLSingle/VTSingle). Validation deferred to first reconcile — the
+  operator is not installed locally.
+
+  The operator creates the in-cluster Service as <kind>-<metadata.name>
+  ("vmsingle-vmetrics") on the standard VM HTTP port 8428. Remote-write
+  exporters point at
+  http://vmsingle-vmetrics.{{ .Values.namespace }}.svc.cluster.local:8428/api/v1/write
+  (the Prometheus remote-write endpoint).
+*/}}
+apiVersion: operator.victoriametrics.com/v1beta1
+kind: VMSingle
+metadata:
+  name: vmetrics
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" .Values "component" "observability") | nindent 4 }}
+spec:
+  # ingestOnlyMode is a *bool with no kubebuilder default, so the operator
+  # dereferences nil to TRUE and skips the entire scrape-config builder
+  # (createOrUpdateScrapeConfig returns before it reads any selector).
+  # The symptom is invisible: VMServiceScrape CRs still report
+  # `status.updateStatus: operational` — that only proves the CR is
+  # valid — while VMSingle reports zero targets and zero series. Setting
+  # it false is what lets the operator generate its self-scrape, so the
+  # stack's own VictoriaMetrics dashboard has data.
+  ingestOnlyMode: false
+  # No serviceScrapeSelector: the VMServiceScrape CRs the chart renders
+  # are inert (none of the workloads exposes a Prometheus surface — they
+  # export over OTLP), and an ABSENT selector matches nothing, which is
+  # the deterministic way to keep them that way. The second gate the
+  # scrape CRs need is therefore not satisfied on purpose. When an image
+  # does expose /metrics, set a selector here that matches those CRs'
+  # OWN labels (not their target Service) — a nil selector is "match
+  # nothing", not "match all".
+  # serviceScrapeSelector:
+  #   matchLabels:
+  #     app.kubernetes.io/instance: <release>
+  retentionPeriod: {{ $obsMetrics.retentionPeriod | quote }}
+  removePvcAfterDelete: false
+  storage:
+    {{- /* Same chart-wide storage-class hook every PVC reads
+    (pluggable.storageClassName) — a venue that points the data tier at
+    a fast or tmpfs-backed StorageClass must reach the observability
+    tier too. Omitted when unset: the operator then creates the PVC
+    against the cluster default class. */ -}}
+    {{- with ($obsMetrics.storageClassName | default $pluggable.storageClassName) }}
+    className: {{ . }}
+    {{- end }}
+    resources:
+      requests:
+        storage: {{ $obsMetrics.storageSize | quote }}
+  replicaCount: 1
+{{- end }}

@@ -1,0 +1,150 @@
+{{- $global := .Values.global | default dict -}}
+{{- $services := .Values.services | default dict -}}
+{{- $servicesBackend := $services.backend | default dict -}}
+{{- $data := .Values.data | default dict -}}
+{{- $dataArangodb := $data.arangodb | default dict -}}
+{{- if and $servicesBackend.enabled $dataArangodb.enabled -}}
+{{- /*
+The migrations image (components/gov-chat-backend/Dockerfile.migrations)
+creates the ArangoDB collections the backend's user provisioning writes
+to. The helm hook ordering gates the backend on this Job's success
+(the equivalent of a depends_on condition) — this Job (weight 5) runs before
+the Keycloak convergence Job (weight 10) on install and upgrade, and
+the backend starts unconditionally but fails its first authenticated
+request without the collections, which is what this Job prevents.
+
+The Job is gated on arangodb.enabled TOO: without ArangoDB there is
+nothing to migrate, and a Job that runs anyway would lose its init
+container's env rows while the workload survived — the clearable-blocks
+gate rightly calls that an unowned drop. With ArangoDB cleared the
+whole Job vanishes; the backend then fails its own named connection
+error on first query.
+*/ -}}
+{{- $ns := .Values.namespace -}}
+{{- /* Same precedence as the service factory: the documented install
+knob global.imageRegistry wins over the top-level imageRegistry — a
+divergence here would move every service image to an air-gapped mirror
+while this hook kept pulling from the default registry. */ -}}
+{{- $registry := $global.imageRegistry | default .Values.imageRegistry -}}
+{{- $img := $servicesBackend.migrationsImage | default dict -}}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "genieai-common.fullname" . }}-db-migrations
+  namespace: {{ $ns }}
+  labels:
+    {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" .Values "component" "backend") | nindent 4 }}
+  annotations:
+    "helm.sh/hook": post-install,post-upgrade,post-rollback
+    "helm.sh/hook-weight": "5"
+    "helm.sh/hook-delete-policy": hook-succeeded,before-hook-creation
+spec:
+  backoffLimit: 3
+  template:
+    metadata:
+      labels:
+        # component "migrate-db", NOT "backend": a pod labeled like the
+        # backend Service's own selector joins its EndpointSlice, so during
+        # the post-install hook window real /api traffic load-balances to a
+        # migrations process that exits when it finishes. The egress this
+        # loses is granted back by migrate/db-migrations-networkpolicy.yaml.
+        {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" .Values "component" "migrate-db") | nindent 8 }}
+    spec:
+      restartPolicy: Never
+      # Same contract as the service factory and the convergence Job: a
+      # registry that needs a pull secret (an air-gapped mirror, a private
+      # GitLab registry) would leave THIS hook in ImagePullBackOff, and
+      # the hook blocks the whole install — with a message naming a
+      # component the operator is not looking at.
+      {{- with $global.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+        runAsUser: 65534
+      {{- /* Helm's --wait tracks BUILT-IN kinds only: the ArangoDeployment
+      is a custom resource, so the hook Job starts while the ArangoDB
+      pods are still pulling their image and bootstrapping. The
+      migration script connects with no retry, the Job exhausts
+      backoffLimit and the install fails on the hook — a message that
+      points nowhere near the real cause. This initContainer waits for
+      the database to answer before the migration container starts (the
+      sibling convergence Job does the same for Keycloak with
+      KEYCLOAK_AVAILABILITYCHECK). */ -}}
+      {{- if $dataArangodb.enabled }}
+      initContainers:
+        - name: wait-for-arango
+          {{- /* busybox — see the toolingImage helper for why not curlimages/curl. */}}
+          image: {{ include "genieai-umbrella.toolingImage" . }}
+          imagePullPolicy: IfNotPresent
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+          env:
+            # The probe below must present the same credentials the migration
+            # run itself uses: an auth-enabled ArangoDB (the default here)
+            # answers 401 to an anonymous /_api/version, and an
+            # unauthenticated wget probe can then never see the 200 it
+            # waits for.
+            - name: ARANGO_USER
+              value: "root"
+            - name: ARANGO_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: arango-root-secret
+                  key: password
+          command:
+            - sh
+            - -c
+            - |
+              url="{{ include "genieai-umbrella.arangoURL" . }}/_api/version"
+              # busybox wget has no --user/--password: the basic-auth pair
+              # rides in the userinfo form instead (busybox wget decodes
+              # %XX escapes there). The root Secret is operator-provided
+              # (bootstrap.passwordSecretNames in the ArangoDeployment),
+              # so its charset is not ours to guarantee: encode the four
+              # userinfo-delimiter characters, % first.
+              prefix="${url%%://*}"
+              upw="$ARANGO_USER:$ARANGO_PASSWORD"
+              upw="${upw//%/%25}"; upw="${upw//@/%40}"; upw="${upw//:/%3A}"; upw="${upw//\//%2F}"
+              authurl="${prefix}://${upw}@${url#*://}"
+              i=0
+              while [ "$i" -lt 100 ]; do
+                if wget -q -O /dev/null "$authurl" >/dev/null 2>&1; then
+                  echo "arangodb is up: $url"
+                  exit 0
+                fi
+                i=$((i+1))
+                sleep 3
+              done
+              echo "arangodb did not answer $url within 300s" >&2
+              exit 1
+      {{- end }}
+      containers:
+        - name: db-migrations
+          image: {{ if $registry }}{{ $registry }}/{{ end }}{{ $img.repository | default "genie-ai-db-migrations" }}:{{ $img.tag | default "main" }}
+          imagePullPolicy: {{ include "genieai-umbrella.imagePullPolicy" (dict "tag" ($img.tag | default "main") "pullPolicy" $global.imagePullPolicy) }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+          env:
+            # Mirrors the backend's data-tier wiring: same URL, database
+            # and credentials, so the collections land in the database
+            # the backend actually reads.
+            - name: ARANGO_URL
+              value: {{ include "genieai-umbrella.arangoURL" . | quote }}
+            - name: ARANGO_DB
+              value: {{ $dataArangodb.database | default "_system" | quote }}
+            - name: ARANGO_USER
+              value: "root"
+            - name: ARANGO_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: arango-root-secret
+                  key: password
+{{- end -}}

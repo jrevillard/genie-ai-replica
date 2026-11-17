@@ -1,0 +1,666 @@
+{
+  "$schema": "https://json-schema.org/draft-07/schema#",
+  "$comment": "Pins the values a wrong TYPE or a wrong ENUM would silently mis-render. Enums: a wrong clusterProfile renders the dev topology and the drift hook cannot catch it. Booleans: Helm's `not`/`and`/`or`/`ternary` are strict \u2014 a knob set to 0 or \"true\" aborts the render with 'wrong type for value; expected bool; got int64', so the type is checked up front instead. Everything else stays permissive (no additionalProperties:false anywhere) \u2014 Helm injects `global`, and future tiers add keys. Every boolean leaf of values.yaml is typed here; scripts/ci/values-schema-bools-check.py fails the build when a new one is added without a matching constraint.",
+  "type": "object",
+  "properties": {
+    "clusterProfile": {
+      "type": "string",
+      "enum": [
+        "dev",
+        "staging",
+        "prod"
+      ]
+    },
+    "data": {
+      "type": "object",
+      "properties": {
+        "postgres": {
+          "type": "object",
+          "properties": {
+            "enabled": {
+              "type": "boolean"
+            },
+            "instances": {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "minimum": 1,
+              "description": "Instance count for this data tier. null (the default) = the cluster profile's count (clusterProfileInstances); an explicit integer wins over the profile."
+            }
+          }
+        },
+        "arangodb": {
+          "type": "object",
+          "properties": {
+            "enabled": {
+              "type": "boolean"
+            },
+            "resources": {
+              "type": "object",
+              "description": "The ArangoDB member's Kubernetes resources, applied to every server group (single mode: the single member; cluster mode: agents, dbservers and coordinators alike). The chart default is a cpu request only \u2014 a member with no request runs on the node's leftovers and its exec probes miss their window, flapping the pod NotReady while the database answers (#1606). No memory request and no limits by default: arangod self-sizes its heap, and a memory limit on a database is an OOMKill waiting for the first large query. The render rejects an override that carries no requests.cpu.",
+              "properties": {
+                "requests": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": [
+                      "string",
+                      "number"
+                    ]
+                  }
+                },
+                "limits": {
+                  "type": "object",
+                  "additionalProperties": {
+                    "type": [
+                      "string",
+                      "number"
+                    ]
+                  }
+                }
+              }
+            },
+            "probeTimeoutSeconds": {
+              "type": "integer",
+              "minimum": 1,
+              "description": "Timeout in seconds the kube-arangodb operator writes into the member's exec liveness/readiness/startup probes (spec.<group>.probes.*.timeoutSeconds). Upstream default is 2s; spawning a process inside the container can miss 2s on a CPU-saturated node and the pod is declared NotReady while the database answers (#1606). One value for all three probe specs."
+            }
+          }
+        },
+        "keycloak": {
+          "type": "object",
+          "properties": {
+            "bruteForceProtected": {
+              "type": "boolean"
+            },
+            "convergence": {
+              "type": "object",
+              "properties": {
+                "enabled": {
+                  "type": "boolean"
+                }
+              }
+            },
+            "duplicateEmailsAllowed": {
+              "type": "boolean"
+            },
+            "enabled": {
+              "type": "boolean"
+            },
+            "failOnPlaceholderSecrets": {
+              "type": "boolean"
+            },
+            "hostname": {
+              "type": "object",
+              "properties": {
+                "strict": {
+                  "type": "boolean"
+                }
+              }
+            },
+            "http": {
+              "type": "object",
+              "properties": {
+                "httpEnabled": {
+                  "type": "boolean"
+                }
+              }
+            },
+            "internationalizationEnabled": {
+              "type": "boolean"
+            },
+            "loginWithEmailAllowed": {
+              "type": "boolean"
+            },
+            "registrationAllowed": {
+              "type": "boolean"
+            },
+            "resetPasswordAllowed": {
+              "type": "boolean"
+            },
+            "startOptimized": {
+              "type": "boolean"
+            },
+            "verifyEmail": {
+              "type": "boolean"
+            },
+            "instances": {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "minimum": 1,
+              "description": "Instance count for this data tier. null (the default) = the cluster profile's count (clusterProfileInstances); an explicit integer wins over the profile."
+            },
+            "ssoSessionIdleTimeout": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "SSO session idle timeout in seconds. 0 (or less) means the session never idles out \u2014 Keycloak's own reading of a non-positive value. The chart's default is the workday default Compose ships (8 hours), not Keycloak's (30 minutes, what #1834 was filed against)."
+            },
+            "ssoSessionMaxLifespan": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "SSO session maximum lifespan in seconds \u2014 the hard wall after which the user must log in again. 0 (or less) means the session never expires. The chart's default is the workday default Compose ships (7 days), not Keycloak's (10 hours, what #1820 was filed against)."
+            },
+            "accessTokenLifespan": {
+              "type": "integer",
+              "minimum": 0,
+              "description": "Access-token TTL in seconds. 0 means the token never expires (Keycloak's reading of a non-positive value). The chart's default is 300 seconds, the value the Compose surface ships."
+            }
+          }
+        }
+      }
+    },
+    "observability": {
+      "type": "object",
+      "properties": {
+        "logs": {
+          "type": "object",
+          "properties": {
+            "enabled": {
+              "type": "boolean"
+            }
+          }
+        },
+        "metrics": {
+          "type": "object",
+          "properties": {
+            "enabled": {
+              "type": "boolean"
+            }
+          }
+        },
+        "traces": {
+          "type": "object",
+          "properties": {
+            "enabled": {
+              "type": "boolean"
+            }
+          }
+        },
+        "grafana": {
+          "type": "object",
+          "properties": {
+            "enabled": {
+              "type": "boolean"
+            }
+          }
+        }
+      }
+    },
+    "envoyGateway": {
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        }
+      }
+    },
+    "ingress": {
+      "type": "object",
+      "properties": {
+        "createGatewayClass": {
+          "type": "boolean"
+        },
+        "enabled": {
+          "type": "boolean"
+        },
+        "tls": {
+          "type": "object",
+          "properties": {
+            "enabled": {
+              "type": "boolean"
+            }
+          }
+        }
+      }
+    },
+    "services": {
+      "type": "object",
+      "properties": {
+        "backend": {
+          "type": "object",
+          "properties": {
+            "enabled": {
+              "type": "boolean"
+            },
+            "translation": {
+              "type": "object",
+              "properties": {
+                "streamingEnabled": {
+                  "type": "boolean"
+                }
+              }
+            },
+            "securityContext": {
+              "type": "object",
+              "properties": {
+                "runAsNonRoot": {
+                  "type": "boolean"
+                },
+                "allowPrivilegeEscalation": {
+                  "type": "boolean"
+                }
+              }
+            },
+            "replicas": {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "minimum": 0,
+              "description": "Pod count for this service. null (the default) = the cluster profile's count (clusterProfileReplicas), or 1 when the profile has no entry; an explicit integer \u2014 including 0, the scale-off \u2014 wins over the profile."
+            },
+            "port": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 65535,
+              "description": "The port the container listens on and every piece of plumbing (Service targetPort, NetworkPolicy, probes) dials. The chart also sets the process's own port (PORT, or --port for redis), so an override moves the LISTENER too. ClamAV is the exception the render enforces: clamd takes its port from clamd.conf, so only 3310 is accepted."
+            },
+            "progressDeadlineSeconds": {
+              "type": "integer",
+              "minimum": 1,
+              "description": "Per-service override of global.progressDeadlineSeconds \\u2014 the Deployment's progress window in seconds. Optional: not declared in values.yaml, because a concrete value there would always be present \\u2014 an overlay can set the key, never remove it \\u2014 and the template reads the service key before the chart-wide one, which would make the global knob inert. A value below 1 second is rejected by the render. An explicit null is not accepted here \u2014 clear the chart-wide knob instead."
+            },
+            "externalApiCIDRs": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "pattern": "^([0-9a-fA-F.:]+)/([0-9]{1,3})$"
+              },
+              "description": "The CIDR blocks the backend may reach on 80/443. One entry per block, in CIDR notation (IPv4 or IPv6) \u2014 a hostname is refused at render, because the NetworkPolicy peer carries a CIDR and the API server would reject the whole policy at apply time with a field-level error that names the policy, not the values key."
+            }
+          }
+        },
+        "frontend": {
+          "type": "object",
+          "properties": {
+            "enabled": {
+              "type": "boolean"
+            },
+            "securityContext": {
+              "type": "object",
+              "properties": {
+                "runAsNonRoot": {
+                  "type": "boolean"
+                },
+                "allowPrivilegeEscalation": {
+                  "type": "boolean"
+                }
+              }
+            },
+            "replicas": {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "minimum": 0,
+              "description": "Pod count for this service. null (the default) = the cluster profile's count (clusterProfileReplicas), or 1 when the profile has no entry; an explicit integer \u2014 including 0, the scale-off \u2014 wins over the profile."
+            },
+            "port": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 65535,
+              "description": "The port the container listens on and every piece of plumbing (Service targetPort, NetworkPolicy, probes) dials. The chart also sets the process's own port (PORT, or --port for redis), so an override moves the LISTENER too. ClamAV is the exception the render enforces: clamd takes its port from clamd.conf, so only 3310 is accepted."
+            },
+            "progressDeadlineSeconds": {
+              "type": "integer",
+              "minimum": 1,
+              "description": "Per-service override of global.progressDeadlineSeconds \u2014 the Deployment's progress window in seconds. Optional: not declared in values.yaml, because a concrete value there would always win over the chart-wide one (an overlay can set the key, never remove it, and the template reads the service key before the chart-wide one). A value below 1 second is rejected by the render. An explicit null is not accepted here \u2014 clear the chart-wide knob instead."
+            }
+          }
+        },
+        "documentRepository": {
+          "type": "object",
+          "properties": {
+            "enabled": {
+              "type": "boolean"
+            },
+            "securityContext": {
+              "type": "object",
+              "properties": {
+                "runAsNonRoot": {
+                  "type": "boolean"
+                },
+                "allowPrivilegeEscalation": {
+                  "type": "boolean"
+                }
+              }
+            },
+            "virusScanning": {
+              "type": "boolean"
+            },
+            "pvc": {
+              "type": "object",
+              "properties": {
+                "enabled": {
+                  "type": "boolean"
+                }
+              }
+            },
+            "replicas": {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "minimum": 0,
+              "description": "Pod count for this service. null (the default) = the cluster profile's count (clusterProfileReplicas), or 1 when the profile has no entry; an explicit integer \u2014 including 0, the scale-off \u2014 wins over the profile."
+            },
+            "port": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 65535,
+              "description": "The port the container listens on and every piece of plumbing (Service targetPort, NetworkPolicy, probes) dials. The chart also sets the process's own port (PORT, or --port for redis), so an override moves the LISTENER too. ClamAV is the exception the render enforces: clamd takes its port from clamd.conf, so only 3310 is accepted."
+            },
+            "progressDeadlineSeconds": {
+              "type": "integer",
+              "minimum": 1,
+              "description": "Per-service override of global.progressDeadlineSeconds \u2014 the Deployment's progress window in seconds. Optional: not declared in values.yaml, because a concrete value there would always win over the chart-wide one (an overlay can set the key, never remove it, and the template reads the service key before the chart-wide one). A value below 1 second is rejected by the render. An explicit null is not accepted here \u2014 clear the chart-wide knob instead."
+            },
+            "clamavLocalFallback": {
+              "type": "boolean",
+              "description": "Whether the document-repository may fall back to a LOCAL clamd when the remote scanner is unreachable. False in the chart: the scanner is the chart's clamav Deployment and the pod's embedded daemon stays down, so a local fallback would find nothing. Compose leaves the variable unset, where the embedded daemon IS the scanner."
+            },
+            "crawlAllowedCIDRs": {
+              "type": "array",
+              "items": {
+                "type": "string",
+                "pattern": "^([0-9a-fA-F.:]+)/([0-9]{1,3})$"
+              },
+              "description": "The CIDR blocks the document-repository may reach on 80/443. One entry per block, in CIDR notation (IPv4 or IPv6) \u2014 a hostname is refused at render, because the NetworkPolicy peer carries a CIDR and the API server would reject the whole policy at apply time with a field-level error that names the policy, not the values key."
+            }
+          }
+        },
+        "clamav": {
+          "type": "object",
+          "properties": {
+            "cache": {
+              "type": "object",
+              "properties": {
+                "enabled": {
+                  "type": "boolean"
+                }
+              }
+            },
+            "enabled": {
+              "type": "boolean"
+            },
+            "replicas": {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "minimum": 0,
+              "description": "Pod count for this service. null (the default) = the cluster profile's count (clusterProfileReplicas), or 1 when the profile has no entry; an explicit integer \u2014 including 0, the scale-off \u2014 wins over the profile."
+            },
+            "port": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 65535,
+              "description": "The port the container listens on and every piece of plumbing (Service targetPort, NetworkPolicy, probes) dials. The chart also sets the process's own port (PORT, or --port for redis), so an override moves the LISTENER too. ClamAV is the exception the render enforces: clamd takes its port from clamd.conf, so only 3310 is accepted."
+            },
+            "progressDeadlineSeconds": {
+              "type": "integer",
+              "minimum": 1,
+              "description": "Per-service override of global.progressDeadlineSeconds \u2014 the Deployment's progress window in seconds. Optional: not declared in values.yaml, because a concrete value there would always win over the chart-wide one (an overlay can set the key, never remove it, and the template reads the service key before the chart-wide one). A value below 1 second is rejected by the render. An explicit null is not accepted here \u2014 clear the chart-wide knob instead."
+            }
+          }
+        },
+        "redisCache": {
+          "type": "object",
+          "properties": {
+            "enabled": {
+              "type": "boolean"
+            },
+            "pvc": {
+              "type": "object",
+              "properties": {
+                "enabled": {
+                  "type": "boolean"
+                }
+              }
+            },
+            "replicas": {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "minimum": 0,
+              "description": "Pod count for this service. null (the default) = the cluster profile's count (clusterProfileReplicas), or 1 when the profile has no entry; an explicit integer \u2014 including 0, the scale-off \u2014 wins over the profile."
+            },
+            "port": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 65535,
+              "description": "The port the container listens on and every piece of plumbing (Service targetPort, NetworkPolicy, probes) dials. The chart also sets the process's own port (PORT, or --port for redis), so an override moves the LISTENER too. ClamAV is the exception the render enforces: clamd takes its port from clamd.conf, so only 3310 is accepted."
+            },
+            "progressDeadlineSeconds": {
+              "type": "integer",
+              "minimum": 1,
+              "description": "Per-service override of global.progressDeadlineSeconds \u2014 the Deployment's progress window in seconds. Optional: not declared in values.yaml, because a concrete value there would always win over the chart-wide one (an overlay can set the key, never remove it, and the template reads the service key before the chart-wide one). A value below 1 second is rejected by the render. An explicit null is not accepted here \u2014 clear the chart-wide knob instead."
+            }
+          }
+        }
+      }
+    },
+    "opea": {
+      "type": "object",
+      "properties": {
+        "chatqna": {
+          "type": "object",
+          "properties": {
+            "chatqnaEnforceAbstention": {
+              "type": "boolean"
+            },
+            "retrieverArangoTraversalEnabled": {
+              "type": "boolean"
+            }
+          }
+        },
+        "dataprep": {
+          "type": "object",
+          "properties": {
+            "contextualRetrievalEnabled": {
+              "type": "boolean"
+            },
+            "contextualLabelRaw": {
+              "type": "boolean"
+            }
+          }
+        },
+        "enabled": {
+          "type": "boolean"
+        },
+        "gpu": {
+          "type": "object",
+          "properties": {
+            "skipTlsVerify": {
+              "type": "boolean"
+            }
+          }
+        },
+        "models": {
+          "type": "object",
+          "properties": {
+            "cache": {
+              "type": "object",
+              "properties": {
+                "enabled": {
+                  "type": "boolean"
+                }
+              }
+            }
+          }
+        },
+        "retriever": {
+          "type": "object",
+          "properties": {
+            "retrieverArangoTraversalEnabled": {
+              "type": "boolean"
+            },
+            "retrieverHybridRetrievalEnabled": {
+              "type": "boolean"
+            },
+            "retrieverFanoutEnabled": {
+              "type": "boolean"
+            },
+            "retrieverRouteEnabled": {
+              "type": "boolean"
+            },
+            "retrieverRouteHeadsSupersede": {
+              "type": "boolean"
+            }
+          }
+        }
+      }
+    },
+    "clusterProfileInstances": {
+      "type": "object",
+      "description": "clusterProfile-driven instance counts for the data tier (Keycloak, Postgres). An explicit data.<tier>.instances wins over these.",
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": {
+          "type": "integer",
+          "minimum": 1
+        }
+      }
+    },
+    "clusterProfileReplicas": {
+      "type": "object",
+      "description": "clusterProfile-driven replica overrides. The order is the EXPLICIT value, then the profile, then 1: `services.<svc>.replicas` wins over this map when it is set (null by default = the profile applies).",
+      "additionalProperties": {
+        "type": "object",
+        "additionalProperties": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    },
+    "global": {
+      "type": "object",
+      "$comment": "Closed block: every key the templates read through the captured $global is typed, and unknown keys are REJECTED at render (Helm would otherwise accept a typo'd key as nil \u2014 e.g. `imagePullSecret` for `imagePullSecrets`, read from 13 sites \u2014 and every pod would ImagePullBackOff in the cluster with no schema error naming the key). toolingArch and kubeletToolsMirror additionally constrain shapes the render interpolates into a shell. The block coalesces wholesale into subcharts (gateway-helm): verified it ships no schema and reads no global.* key, so closing here cannot reject a key it consumes.",
+      "properties": {
+        "imageRegistry": {
+          "type": "string",
+          "description": "Optional registry prefix that WINS over the top-level imageRegistry when set (the factory and the migrations Job read it first); empty = the top-level imageRegistry applies. Exists for operators following the Helm global.* convention \u2014 the chart's own overlays set the top-level key."
+        },
+        "progressDeadlineSeconds": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 1,
+          "description": "The progress deadline every Deployment the chart renders carries. Kubernetes defaults spec.progressDeadlineSeconds to 600s and that clock starts when the DEPLOYMENT is created, not when the pod runs: on a first install the pod is created minutes later (multi-GB images still pulling) and inherits only what is left of the window. Past it the Deployment reports ProgressDeadlineExceeded, Helm declares the release failed and uninstalls it, deleting the resources the next attempt needs. Per-service override: services.<svc>.progressDeadlineSeconds. An explicit null clears the knob back to the template default."
+        },
+        "imagePullSecrets": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string",
+                "minLength": 1
+              }
+            },
+            "required": [
+              "name"
+            ],
+            "additionalProperties": false,
+            "description": "A pull-credential Secret reference ({name: <Secret>}) wired into every service pod's spec.imagePullSecrets."
+          },
+          "description": "Pull credentials for a registry that requires authentication \u2014 only about the PULL CREDENTIALS; the registry images are pulled FROM is the top-level imageRegistry."
+        },
+        "toolingArch": {
+          "type": "string",
+          "enum": [
+            "",
+            "amd64",
+            "arm64",
+            "arm",
+            "386"
+          ],
+          "description": "Forces the kubectl binary architecture the tools-init container downloads; empty = detect from uname -m. Constrained to the values the download URL accepts \u2014 the value is interpolated into the init container's shell, so anything outside the enum is rejected at render, not executed."
+        },
+        "toolingImageRegistry": {
+          "type": "string",
+          "description": "Registry for Helm hook Jobs and test pods that pull public Docker Hub images (alpine, python, busybox); empty = docker.io. Separate from the top-level imageRegistry, which scopes service images to the GitLab Container Registry."
+        },
+        "kubeletToolsMirror": {
+          "type": "string",
+          "pattern": "^(|((https?://)?[A-Za-z0-9][A-Za-z0-9.-]*(:([1-9][0-9]{0,3}|[1-5][0-9]{4}|6[0-4][0-9]{3}|65[0-4][0-9]{2}|655[0-2][0-9]|6553[0-5]))?(/[A-Za-z0-9._~%-]+)*))$",
+          "description": "Internal mirror for the kubectl download: [http[s]://]host[:port 1-65535][/multi/segment/prefix] \u2014 the scheme is optional and LOWERCASE-only (busybox wget rejects mixed-case schemes; scheme-less makes wget use plain HTTP), /release/... is appended (the binary is checksum-verified against a sha256 pinned in the chart \u2014 the mirror serves the binary only), and the prefix may carry multiple path segments (the Nexus/Artifactory repository topology). No trailing slash (it would double the appended path's leading slash on strict routers). The host admits a colon only before a numeric port in the 1-65535 range, and the scheme only http(s): the value is interpolated into the tools-init container's shell inside double quotes, and any other shape (file://, https:mirror, :99999, shell metacharacters) is rejected at render."
+        },
+        "imagePullPolicy": {
+          "type": "string",
+          "enum": [
+            "",
+            "Always",
+            "IfNotPresent",
+            "Never"
+          ],
+          "description": "Global pull-policy override for the service images; empty = follows the tag (mutable tags pull Always, pinned tags IfNotPresent), and a per-service services.<svc>.image.pullPolicy beats both."
+        }
+      },
+      "additionalProperties": false
+    },
+    "okf": {
+      "type": "object",
+      "description": "The OKF knowledge-frame tier. Dark by default \u2014 mirrors Compose's OKF_ENABLED=0.",
+      "properties": {
+        "enabled": {
+          "type": "boolean"
+        },
+        "server": {
+          "type": "object",
+          "properties": {
+            "url": {
+              "type": "string"
+            },
+            "env": {
+              "type": "object"
+            }
+          }
+        },
+        "retrievalConfig": {
+          "type": "object",
+          "properties": {
+            "ttlMs": {
+              "type": "string"
+            },
+            "timeoutMs": {
+              "type": "string"
+            }
+          }
+        },
+        "bundleMaxMb": {
+          "type": "string"
+        },
+        "pii": {
+          "type": "object",
+          "properties": {
+            "webConcurrency": {
+              "type": "string"
+            },
+            "regionMaxChars": {
+              "type": "string"
+            },
+            "env": {
+              "type": "object"
+            }
+          }
+        },
+        "ragas": {
+          "type": "object",
+          "properties": {
+            "env": {
+              "type": "object"
+            }
+          }
+        },
+        "ragasCacheSize": {
+          "type": "string"
+        }
+      }
+    }
+  }
+}

@@ -7,7 +7,7 @@ aliases:
 mode: reference
 persona: deployer
 owner: "docs-stewards"
-last_reviewed: 2026-09-18
+last_reviewed: 2026-11-17
 ---
 
 The observability stack has **two layers** with different defaults. VictoriaLogs
@@ -73,6 +73,15 @@ Grafana queries all three behind `/grafana/`.
 | `OTEL_EXPORTER_OTLP_LOGS_ENDPOINT` | `http://otel-collector:4318/v1/logs` | No | OTLP logs endpoint (backend + doc-repo + OPEA). Setting the signal-specific endpoint makes the SDK use it as-is instead of appending `/v1/logs` to `OTEL_EXPORTER_OTLP_ENDPOINT`. |
 | `OTEL_EXPORTER_OTLP_TRACES_ENDPOINT` | `grpc://127.0.0.1:4317` | No | Legacy OTLP gRPC traces endpoint (pre-OTel-Collector setup). Leave at default unless you have a specific reason to use gRPC. |
 
+> **The defaults above are the Compose service names.** On Kubernetes the
+> collector is an OpenTelemetry Operator custom resource and its Service
+> is named `genieai-collector-collector` — the chart wires the app
+> services to it itself, so an operator never sets
+> `OTEL_EXPORTER_OTLP_ENDPOINT` there. Overriding it by hand to
+> `http://otel-collector:4318` points at a Service that does not exist.
+> The Kubernetes observability topology is described in
+> [Kubernetes observability](#kubernetes-observability) below.
+
 ### How it is enabled per deployment mode
 
 - **Docker Compose** — `docker compose --profile observability up -d`. The
@@ -135,7 +144,7 @@ exposed) with Keycloak OIDC SSO.
 
 ## Collector placement
 
-The OTel Collector runs in Docker Swarm `mode: global` with **no node
+**Docker Compose / Swarm.** The OTel Collector runs in Docker Swarm `mode: global` with **no node
 placement constraint** — one collector on **every** node (gateway, genieai,
 gpu). **You do not need to do anything for collector placement** — the stack
 already runs one collector per Swarm node, so container logs are captured
@@ -148,6 +157,50 @@ container logs into it. External log injection is blocked by design.
 
 > Verify on the **Observability stack health** dashboard — `otelcol_*` metrics
 > are non-zero from every Swarm node.
+
+### Kubernetes observability
+
+The Helm chart renders the same three signal paths with **different
+objects**, and it is not a 1:1 rename — the collector becomes an
+OpenTelemetry Operator custom resource and the Victoria* stores become
+vm-operator custom resources:
+
+| Piece | Compose / Swarm | Kubernetes |
+|---|---|---|
+| Log agent | fluentd log driver → collector | `OpenTelemetryCollector` **DaemonSet** `genieai-agent` (namespace `genieai-obs`), image `opentelemetry-collector-k8s` |
+| Collector | container `otel-collector` | `OpenTelemetryCollector` **Deployment** `genieai-collector` (namespace `genieai`), image `opentelemetry-collector-contrib` |
+| Collector Service | `otel-collector:4318` | `genieai-collector-collector:4318` (`-extension:13133` health, `-headless`, `-monitoring:8888`) |
+| VictoriaLogs | container `victorialogs` | `VLSingle` CR → Service `vlsingle-victorialogs:9428` |
+| VictoriaMetrics | container `victoriametrics` | `VMSingle` CR → Service `vmsingle-vmetrics:8428` |
+| VictoriaTraces | container `victoriatraces` | `VTSingle` CR → Service `vtsingle-vtraces:10428` |
+| Grafana | container `grafana` | Grafana Operator CR → Service `genieai-grafana-service` |
+
+The tiers are separate values: `observability.logs.enabled` (default
+**true** — the admin logs UI reads VictoriaLogs), `observability.metrics.enabled`
+and `observability.traces.enabled` (default false), plus
+`observability.grafana.enabled`.
+
+**The cluster prerequisites are the OpenTelemetry Operator and the
+vm-operator** — the default install renders the collector and the
+`VLSingle` CR, so both operators must be present before the release
+installs. `scripts/install-prereqs.sh` installs them.
+
+Two knobs that fail quietly when the cluster is not what the chart
+assumes:
+
+- `observability.collectorImage` — the chart pins the **contrib**
+  distribution because the collector's `prometheusremotewrite` exporter
+  needs it. Point it at the plain `k8s` distribution and the collector
+  refuses to start (`unknown type: "prometheusremotewrite"`), taking the
+  logs and traces pipelines with it.
+- `observability.collectorAgent.apiServerCIDRs` — the agent's
+  `k8sattributes` processor needs the API server, which a NetworkPolicy
+  cannot name. Empty (the default) means the CNI's own default applies.
+  On a CNI that denies host-to-pod traffic (Cilium with
+  `--allow-localhost=policy`, a hardened Calico), the agent's watch dies
+  **silently**: logs still arrive, but every row loses its
+  `k8s.pod.name` / `service.name`. Set this to the control plane's
+  address range when the cluster blocks it.
 
 ## Disabling
 

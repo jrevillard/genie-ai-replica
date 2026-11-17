@@ -1,0 +1,67 @@
+{{/*
+  reranker OPEA orchestrator. TEI_RERANKING_ENDPOINT resolves to the gpu-path for
+  `reranker`; HF_TOKEN + VLLM_API_KEY from the vllm-api-key Secret; the
+  OTel exporter + LOG_LEVEL + the four adaptive-utility tuning knobs
+  (NOVELTY_SIGMOID_*, CONTEXT_DECAY_FACTOR, MIN_VALUE_THRESHOLD) carry
+  defaults overridable via .Values.opea.reranker.* (camelCase).
+  Container/listen port 8000.
+*/}}
+{{- $opea := .Values.opea | default dict -}}
+{{- $opeaReranker := $opea.reranker | default dict -}}
+
+{{- if $opea.enabled -}}
+{{- $vals := deepCopy .Values -}}
+{{- $urls := list
+    (dict "name" "TEI_RERANKING_ENDPOINT" "value" (include "genieai-umbrella.opeaGpuEndpoint" (dict "root" . "path" "reranker")))
+    (dict "name" "OPEA_SSL_SKIP_VERIFY" "value" (include "genieai-umbrella.opeaSslSkipVerify" .))
+    (dict "name" "ENABLE_OBSERVABILITY" "value" (include "genieai-umbrella.observabilityEnabledFlag" .))
+    (dict "name" "OTEL_EXPORTER_OTLP_ENDPOINT" "value" (include "genieai-umbrella.otlpEndpoint" .))
+    (dict "name" "LOG_LEVEL" "value" ($opeaReranker.logLevel | default "info" | toString))
+    (dict "name" "NOVELTY_SIGMOID_A" "value" ($opeaReranker.noveltySigmoidA | default "20.0" | toString))
+    (dict "name" "NOVELTY_SIGMOID_B" "value" ($opeaReranker.noveltySigmoidB | default "0.25" | toString))
+    (dict "name" "CONTEXT_DECAY_FACTOR" "value" ($opeaReranker.contextDecayFactor | default "0.0025" | toString))
+    (dict "name" "MIN_VALUE_THRESHOLD" "value" ($opeaReranker.minValueThreshold | default "-1.0" | toString))
+-}}
+{{- $secretEnv := include "genieai-umbrella.gpuApiKeyEnv" (dict "keys" (list "HF_TOKEN" "VLLM_API_KEY")) | fromJsonArray -}}
+{{- /* opea.reranker.env: see the parity gate. */ -}}
+{{- $opeaEnvRows := include "genieai-umbrella.envMapRows" ($opeaReranker.env | default dict) | fromJsonArray -}}
+{{- /* The readiness probe carries NO initialDelaySeconds: the
+startupProbe below owns the slow start, and a readiness delay adds a
+second floor on top of it — the pod then stays out of the Service's
+endpoints for that long after every restart, although it is already
+serving. */}}
+{{- $svcVals := dict
+    "image" (dict "repository" "genie-ai-reranker" "tag" "main")
+    "port" 8000
+    "resources" (dict "requests" (dict "cpu" "200m" "memory" "256Mi") "limits" (dict "cpu" "2" "memory" "2Gi"))
+    "env" (include "genieai-umbrella.envRowsDedupe" (concat $urls $secretEnv $opeaEnvRows | toJson) | fromJsonArray)
+    "probes" (dict
+      "readiness" (dict "tcpSocket" (dict "port" 8000) "periodSeconds" 15)
+      "liveness"  (dict "tcpSocket" (dict "port" 8000) "initialDelaySeconds" 60 "periodSeconds" 30)
+      "startup"   (dict "tcpSocket" (dict "port" 8000) "failureThreshold" 30 "periodSeconds" 10)
+    )
+-}}
+{{- /* The service map is rebuilt rather than mutated in place: a
+cleared `services` map has nothing to mutate, and `set` on a nil map
+crashes the template engine. */ -}}
+{{- $valsServices := $vals.services | default dict -}}
+{{- $_ := set $valsServices "reranker" (mergeOverwrite $svcVals (index $valsServices "reranker" | default dict)) -}}
+{{- $_ := set $vals "services" $valsServices -}}
+{{- $ctx := dict "name" "reranker" "component" "reranker" "Values" $vals "Chart" .Chart "Release" .Release -}}
+{{- include "genieai-umbrella.serviceDeployment" $ctx }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: reranker
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" .Values "component" "reranker") | nindent 4 }}
+spec:
+  ports:
+    - name: http
+      port: 8000
+      targetPort: 8000
+  selector:
+    {{- include "genieai-common.serviceSelector" (dict "Chart" .Chart "Release" .Release "Values" .Values "component" "reranker") | nindent 4 }}
+{{- end -}}

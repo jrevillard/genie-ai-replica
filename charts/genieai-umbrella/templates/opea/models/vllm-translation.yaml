@@ -1,0 +1,28 @@
+{{/*
+  vLLM translation model (in-cluster GPU mode only). Image from docker.io unconditionally
+  (see vllm.yaml). Carries a wait-for-vllm initContainer that
+  serializes the two HF model downloads on a single GPU node.
+  Skeleton via genieai-umbrella.modelDeployment.
+*/}}
+{{- $global := .Values.global | default dict -}}
+{{- $opea := .Values.opea | default dict -}}
+{{- $opeaGpu := $opea.gpu | default dict -}}
+{{- $opeaTranslation := $opea.translation | default dict -}}
+
+{{- if and $opea.enabled (eq $opeaGpu.mode "in-cluster") -}}
+{{- $modelId := $opeaTranslation.modelId | default "google/gemma-3-4b-it" | toString -}}
+{{- $translation := $opeaTranslation -}}
+{{- $initText := printf "      initContainers:\n        # Serializes the two HF model downloads: without it both vLLM\n        # pods pull concurrently on the single GPU node and can OOM.\n        - name: wait-for-vllm\n          image: %s\n          # busybox, not curlimages/curl: the curl image layers\n          # carry the build host's overlayfs xattrs in PAX headers\n          # and cannot be extracted on storage refusing user.*\n          # setxattr (fuse-overlayfs venues).\n          command:\n            - sh\n            - -c\n            - until wget -q -O /dev/null http://vllm.%s.svc.cluster.local:8000/health; do echo waiting for vllm; sleep 5; done" (include "genieai-umbrella.toolingImage" .) .Values.namespace -}}
+{{- include "genieai-umbrella.modelDeployment" (dict
+      "root" .
+      "name" "vllm-translation"
+      "image" "docker.io/vllm/vllm-openai:v0.29.0"
+      "port" 9031
+      "mountPath" "/root/.cache/huggingface"
+      "readinessDelay" 60
+      "livenessDelay" 120
+      "startup" (dict "failureThreshold" 30 "periodSeconds" 10)
+      "initText" $initText
+      "argsText" (printf "            - --model\n            - \"%s\"\n            - --gpu_memory_utilization\n            - \"%s\"\n            - --served-model-name\n            - \"%s\"\n            - --max_model_len\n            - \"%s\"\n            - --dtype=%s\n            - --port\n            - \"9031\"\n            - --no-enable-chunked-prefill\n            - --max-num-seqs\n            - \"%s\"\n            - --chat-template-content-format\n            - openai" $modelId ($translation.gpuUtilization | default "0.3" | toString) $modelId ($translation.maxModelLen | default "2048" | toString) ($translation.dtype | default "auto" | toString) ($translation.maxNumSeqs | default "16" | toString))
+    ) -}}
+{{- end -}}

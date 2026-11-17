@@ -1,0 +1,41 @@
+# Minimum values the chart's render guards require — the chart does NOT
+# install with its own defaults: `ingress.host` and
+# `data.keycloak.adminEmail` are `required`, `verifyEmail` /
+# `resetPasswordAllowed` default to true and refuse a release with no
+# mail server, and the placeholder-secret guard rejects a `change-me-*`
+# client secret.
+#
+# The client-secret values below are RENDER GUARDS, not credentials: the
+# realm reads the real secrets from the Secrets the operator materializes
+# (data.keycloak.convergence.envSecrets), never from these strings. They
+# must be non-placeholder for the guard to pass, and they are safe to
+# commit for that reason. Replace them with your own values if your
+# policy requires it.
+ingress:
+  host: genieai.example.org
+  scheme: https
+data:
+  keycloak:
+    adminEmail: ops@example.org
+    smtp:
+      from: no-reply@example.org
+      host: smtp.example.org
+      port: 587
+      starttls: true
+    clientSecrets:
+      proxyClient: example-only-not-a-credential
+      dataprep: example-only-not-a-credential
+      grafana: example-only-not-a-credential
+    # The placeholder-COMPLETENESS guard needs these rows as well: the
+    # realm body reads $(env:KC_*_SECRET), $(env:GENIE_ADMIN_PASSWORD) and
+    # $(env:EMAIL_PASSWORD), and every placeholder must resolve from the
+    # Job's env or from an envSecrets row or the render fails. The Secrets
+    # named here are the ones the operator materializes; the values file
+    # only names them.
+    convergence:
+      envSecrets:
+        - { envVar: KC_PROXY_CLIENT_SECRET, secretName: keycloak-proxy-client-secret, secretKey: KEYCLOAK_PROXY_CLIENT_SECRET }
+        - { envVar: KC_DATAPREP_CLIENT_SECRET, secretName: kc-dataprep-client-secret, secretKey: KC_DATAPREP_CLIENT_SECRET }
+        - { envVar: KC_GRAFANA_CLIENT_SECRET, secretName: kc-grafana-client-secret, secretKey: KEYCLOAK_GRAFANA_CLIENT_SECRET }
+        - { envVar: GENIE_ADMIN_PASSWORD, secretName: keycloak-convergence-credentials, secretKey: GENIE_ADMIN_PASSWORD }
+        - { envVar: EMAIL_PASSWORD, secretName: keycloak-convergence-credentials, secretKey: EMAIL_PASSWORD }

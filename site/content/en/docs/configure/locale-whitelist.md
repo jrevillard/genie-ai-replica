@@ -6,7 +6,7 @@ section: "configure"
 mode: how-to
 persona: deployer
 owner: "docs-stewards"
-last_reviewed: 2026-09-19
+last_reviewed: 2026-11-17
 ---
 
 GENIE.AI ships **locale files for every supported language** in the source
@@ -68,9 +68,21 @@ login, registration, and email-verification pages** — not the GENIE.AI
 web UI.
 
 ```bash
-# In .env
+# In .env (Compose / Swarm)
 KEYCLOAK_SUPPORTED_LOCALES=["en","fr"]
 ```
+
+> **On Kubernetes the knob is the chart value, not the env var.** The
+> chart reads `data.keycloak.supportedLocales` (a JSON array, empty =
+> the chart's curated 9-locale default) and renders the realm's
+> `supportedLocales` from it — the `KEYCLOAK_SUPPORTED_LOCALES` env var
+> is not a chart input. Set it in the environment's values:
+
+> ```yaml
+> data:
+>   keycloak:
+>     supportedLocales: '["en","fr"]'
+> ```
 
 The codes are Keycloak's internal locale codes (typically `en`, `es`,
 `fr`, `de`, etc., and hyphenated variants like `zh-Hans`). They must

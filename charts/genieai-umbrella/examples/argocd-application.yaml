@@ -1,0 +1,93 @@
+# TARGET-STATE EXAMPLE — as written, this Application CANNOT sync from a
+# plain repo clone: ArgoCD does not run `helm dependency build`, and the
+# vendored genieai-common tarball (charts/genieai-umbrella/charts/*.tgz)
+# is deliberately gitignored (regenerated via `make deps` in charts/).
+# The manifest illustrates the target state once the chart publishes to a
+# registry (OCI artifact or a Helm repo) — sync from a repo `path:` only
+# works after the dependency tarball exists in the cloned tree.
+#
+# IMPORTANT: do NOT render — apply manually.
+# This file is a literal ArgoCD Application manifest, NOT a Helm template.
+# Apply with:
+#   kubectl apply -f argocd-application.yaml -n argocd
+# Pre-conditions:
+#   - ArgoCD installed in the `argocd` namespace
+#   - an AppProject named `genieai` exists (spec.project below), e.g.
+#     `kubectl apply -f` an AppProject manifest granting the repo + destinations
+#   - the target cluster is the current kubectl context
+#
+# HELM HOOKS UNDER ARGOCD: ArgoCD runs the sync-phase ones. It maps the
+# helm.sh/hook types `pre-install` and `pre-upgrade` to its PreSync phase,
+# and `post-install` and `post-upgrade` to PostSync. So this chart's
+# dependency-check resources and cluster-profile-detect Job run as
+# PreSync, and the realm convergence Job runs as PostSync.
+#
+# NOT covered — the chart's `helm.sh/hook: test` resources (the namespace
+# and stateless-reachability tests). ArgoCD has no phase for them and
+# does not run `helm test` on sync; execute them with `argocd app exec`
+# or a plain `helm test` against the namespace.
+#
+# Two consequences worth stating plainly:
+#   - They re-run on every sync, not only when what they watch changed.
+#     ArgoCD has no change-gating for hooks, so the convergence Job
+#     reconciles the realm on every ArgoCD sync, not only on a release
+#     that changed it.
+#   - `post-rollback` is not in ArgoCD's hook map. ArgoCD has no
+#     distinct rollback phase; a "rollback" is a resync to a prior SHA,
+#     which re-fires PostSync. Convergence still happens there.
+#
+# LIMITATION (destructive prune): ArgoCD deletes rendered resources
+# directly when pruning. An automated prune of this Application removes
+# the Namespace and every PVC inside it with no confirmation gate,
+# because Helm lifecycle hooks do not run on prune. Protect
+# GitOps-delivered instances with an ArgoCD-native mechanism
+# (sync-options disabling automated prune, or finalizers), not with a
+# Helm hook — a Helm hook only protects `helm uninstall`.
+#
+# This example installs the umbrella chart DIRECTLY from its repo path
+# (ArgoCD auto-detects the Helm chart via the Chart.yaml in the path).
+# The values file it references carries the deployment data the chart's
+# render guards require — the chart does not install with its own
+# defaults.
+#
+# That is a simplification for the example, not the deployment model. The
+# real one is Flux v2 with a HelmRelease per target, in the genie-ai-deploy
+# repo under overlays/<cluster>/<env>/, each with that target's values — see
+# docs/charts/laptop-cluster-bootstrap.md and .claude/rules/K8s-WORKFLOW.md.
+# To drive ArgoCD with per-target values instead, point path at the
+# overlay and set valueFiles, and for el-salvador-style targets also change
+# targetRevision: HEAD -> release/<env> and namespace: genieai ->
+# genieai-<env>.
+---
+# - repoURL uses the scp-like SSH form since GitLab requires auth; the ssh://
+#   form needs an explicit numeric port (ssh://git@host:22/un/...) — the
+#   `:un` segment of the naive URL parses as a port and breaks.
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: genieai-dev
+  namespace: argocd
+spec:
+  project: genieai
+  source:
+    repoURL: git@opensource.unicc.org:un/itu/genie-ai.git
+    targetRevision: HEAD
+    # The chart itself, not a per-env overlay — see the comment block above.
+    path: charts/genieai-umbrella
+    # The chart does NOT install with its own defaults: ingress.host and
+    # data.keycloak.adminEmail are `required`, the mail server is required
+    # while verifyEmail/resetPasswordAllowed are on, and the placeholder
+    # guard rejects a `change-me-*` client secret. These values carry the
+    # minimum that passes those guards; the real Secrets still come from
+    # the operator's secret backend.
+    valueFiles:
+      - examples/argocd-values.yaml
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: genieai
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      - CreateNamespace=true

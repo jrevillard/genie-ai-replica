@@ -1,0 +1,207 @@
+{{- $obs := .Values.observability | default dict -}}
+{{- $obsLogs := $obs.logs | default dict -}}
+{{- $obsMetrics := $obs.metrics | default dict -}}
+{{- $obsTraces := $obs.traces | default dict -}}
+{{- if or $obsLogs.enabled $obsMetrics.enabled $obsTraces.enabled }}
+{{- /*
+  OTel Collector gateway — deployment mode. Receives OTLP from
+  instrumented app services and from the filelog DaemonSet agent,
+  routes each signal to the matching storage backend.
+
+  name: matches the Service derivation in _lib/_observability.tpl
+  (<cr-name>-collector). Default .Values.observability.collectorCRName
+  = "genieai-collector" → Service "genieai-collector-collector" on
+  port .Values.observability.collectorPort.
+
+  Service mesh traffic: app SDKs export via
+  http://genieai-collector-collector.<ns>.svc.cluster.local:4318 (the
+  helper genieai-umbrella.otlpEndpoint returns the same URL — see
+  service-factory callers).
+
+  Conditional exporters / pipelines: each signal only ships when its
+  flag is on. With only one flag on, the chart renders a single
+  pipeline and that pipeline's exporter — no orphan exporters.
+
+  Validation: the operator-managed Service ports are operator-defaults
+  (4318 HTTP, 8428 VM, 9428 VL, 4318 VT). The collector `config` is a
+  MAP (otel-operator v1beta1 rejects string configs — see the note on
+  the config block below). Validation deferred to first reconcile —
+  the operator is not installed locally.
+*/}}
+apiVersion: opentelemetry.io/v1beta1
+kind: OpenTelemetryCollector
+metadata:
+  name: {{ $obs.collectorCRName | default "genieai-collector" }}
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" .Values "component" "observability") | nindent 4 }}
+spec:
+  mode: deployment
+  {{- /* The operator's default image is the `k8s` distribution, which
+         ships NO prometheus exporter of any kind — verified against the
+         image itself (`/otelcol-k8s components` → debug, file,
+         load_balancing, nop, otelarrow, otlp_grpc, otlp_http). With the
+         metrics tier on, the prometheusremotewrite exporter below makes
+         the collector fail to start:
+           'exporters' unknown type: "prometheusremotewrite" for id:
+           "prometheusremotewrite/victoriametrics"
+         and it takes the LOGS and TRACES pipelines down with it, since
+         one process serves all three. The `contrib` distribution is the
+         one that carries it. Only the GATEWAY gets this image: the
+         filelog agent needs nothing but otlphttp and runs on every node,
+         where the extra size is pure cost. */}}
+  {{- if $obsMetrics.enabled }}
+  image: {{ $obs.collectorImage | quote }}
+  {{- end }}
+  # The Service the operator creates must expose the ports the receiver
+  # LISTENS on: without this the operator keeps its default (4318) while
+  # every client is pointed at observability.collectorPort, and the OTLP
+  # export fails with connection refused — silently, for every workload.
+  # Declaring spec.ports REPLACES the operator's default port list, so
+  # the gRPC receiver (4317, bound by the config below and admitted by
+  # the gateway's NetworkPolicy) has to be carried here too.
+  ports:
+    - name: otlp-http
+      port: {{ $obs.collectorPort | default 4318 }}
+      protocol: TCP
+      targetPort: {{ $obs.collectorPort | default 4318 }}
+    - name: otlp-grpc
+      port: 4317
+      protocol: TCP
+      targetPort: 4317
+  # config as a map (otel-operator v1beta1 rejects string configs)
+  config:
+    receivers:
+      otlp:
+        protocols:
+          http:
+            endpoint: 0.0.0.0:{{ $obs.collectorPort | default 4318 }}
+          grpc:
+            endpoint: 0.0.0.0:4317
+    processors:
+      batch:
+        timeout: 5s
+        send_batch_size: 1024
+        send_batch_max_size: 2048
+      # Kubernetes-native addition (no compose counterpart): hard
+      # backpressure ahead of batch so a slow exporter cannot OOM the
+      # collector pod.
+      memory_limiter:
+        check_interval: 1s
+        limit_percentage: 75
+        spike_limit_percentage: 15
+{{- if $obsLogs.enabled }}
+{{- include "genieai-umbrella.otelLogTransformProcessors" . | nindent 6 }}
+{{- end }}
+    exporters:
+{{- if $obsLogs.enabled }}
+      otlphttp/victorialogs:
+        # Base URL only — the exporter appends /v1/logs. VictoriaLogs
+        # serves OTLP ingestion under /insert/opentelemetry/v1/logs.
+        endpoint: http://vlsingle-victorialogs.{{ .Values.namespace }}.svc.cluster.local:9428/insert/opentelemetry
+        sending_queue:
+          enabled: true
+          num_consumers: 10
+          queue_size: 1000
+        retry_on_failure:
+          enabled: true
+          initial_interval: 5s
+          max_interval: 30s
+{{- end }}
+{{- if $obsMetrics.enabled }}
+      prometheusremotewrite/victoriametrics:
+        endpoint: http://vmsingle-vmetrics.{{ .Values.namespace }}.svc.cluster.local:8428/api/v1/write
+        tls:
+          insecure: true
+        resource_to_telemetry_conversion:
+          enabled: true
+        retry_on_failure:
+          enabled: true
+          initial_interval: 5s
+          max_interval: 30s
+          max_elapsed_time: 300s
+        timeout: 15s
+{{- else }}
+      # Metrics sink when the metrics tier is off. App SDKs initialise a
+      # MeterProvider whenever ENABLE_OBSERVABILITY=1, and the OTLP receiver
+      # only registers /v1/metrics when a metrics pipeline consumes it —
+      # without this pipeline every instrumented pod retries its metric
+      # export forever on 404 ("Failed to export batch code: 404", live
+      # observed on 0.2.41). nop accepts and discards.
+      nop: {}
+{{- end }}
+{{- if $obsTraces.enabled }}
+      otlphttp/victoriatraces:
+        # VictoriaTraces is single-port (-httpListenAddr=:10428) and its
+        # ingest paths live under /insert like the rest of the Victoria
+        # family — /insert/opentelemetry/v1/traces (the otlphttp exporter
+        # appends /v1/traces to this base; /opentelemetry without /insert
+        # answers 400 InvalidArgument).
+        endpoint: http://vtsingle-vtraces.{{ .Values.namespace }}.svc.cluster.local:10428/insert/opentelemetry
+        tls:
+          insecure: true
+        sending_queue:
+          enabled: true
+          num_consumers: 10
+          queue_size: 5000
+        retry_on_failure:
+          enabled: true
+          initial_interval: 5s
+          max_interval: 30s
+          max_elapsed_time: 300s
+        timeout: 15s
+{{- else }}
+      # Traces sink when the traces tier is off. Same reasoning as the
+      # metrics `nop` above: the app SDKs build a TracerProvider whenever
+      # ENABLE_OBSERVABILITY=1, and the OTLP receiver only registers
+      # /v1/traces when a traces pipeline consumes it — without one,
+      # every span export 404s and retries forever.
+      nop/traces: {}
+{{- end }}
+    extensions:
+      health_check:
+        endpoint: 0.0.0.0:13133
+    service:
+      extensions: [health_check]
+      telemetry:
+        metrics:
+          level: detailed
+          readers:
+            - pull:
+                exporter:
+                  prometheus:
+                    host: 0.0.0.0
+                    port: 8888
+      pipelines:
+{{- if $obsLogs.enabled }}
+        logs:
+          receivers: [otlp]
+          # Same transform set as the filelog agent — OTLP-sourced logs
+          # (app services with ENABLE_OBSERVABILITY) get identical PII
+          # redaction and body normalisation before VictoriaLogs.
+          processors: [transform/pii_redact, transform/extract_envelope_trace_context, transform/stamp_log_metadata_from_msg, transform/normalize_log_body, transform/strip_python_log_prefix, memory_limiter, batch]
+          exporters: [otlphttp/victorialogs]
+{{- end }}
+{{- if $obsMetrics.enabled }}
+        metrics:
+          receivers: [otlp]
+          processors: [memory_limiter, batch]
+          exporters: [prometheusremotewrite/victoriametrics]
+{{- else }}
+        metrics:
+          receivers: [otlp]
+          processors: [memory_limiter]
+          exporters: [nop]
+{{- end }}
+{{- if $obsTraces.enabled }}
+        traces:
+          receivers: [otlp]
+          processors: [memory_limiter, batch]
+          exporters: [otlphttp/victoriatraces]
+{{- else }}
+        traces:
+          receivers: [otlp]
+          processors: [memory_limiter]
+          exporters: [nop/traces]
+{{- end }}
+{{- end }}

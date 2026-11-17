@@ -1,0 +1,134 @@
+{{/*
+  retriever OPEA orchestrator. Factory-driven like the other
+  three OPEA deployments. ARANGO_* wired through the chart's arangoHost
+  helper (single `arangodb-single.<ns>.svc.cluster.local:8529` URL;
+  `ARANGO_DB` unified on `_system` like backend/doc-repo, regardless of
+  the image's own `genie-ai` default). `RERANKING_STRATEGY` plus the
+  RETRIEVER_ARANGO_* and RETRIEVER_HYBRID_* tuning defaults lifted from
+  the template via `| default` so per-deploy overrides land
+  under `.Values.opea.retriever.<camelCase>`. GPU endpoints
+  (`VLLM_ENDPOINT`, `TEI_EMBEDDING_ENDPOINT`) via the opea helpers;
+  HF_TOKEN + VLLM_API_KEY from the vllm-api-key Secret. Container/listen
+  port 7000; probes are tcpSocket dials on that port (an L4 accept, not an L7 /health).
+*/}}
+{{- $opea := .Values.opea | default dict -}}
+{{- $opeaRetriever := $opea.retriever | default dict -}}
+{{- $opeaModels := $opea.models | default dict -}}
+{{- $opeaModelsLlm := $opeaModels.llm | default dict -}}
+{{- $data := .Values.data | default dict -}}
+{{- $dataArangodb := $data.arangodb | default dict -}}
+
+{{- if $opea.enabled -}}
+{{- $vals  := deepCopy .Values -}}
+{{- $ns    := .Values.namespace -}}
+{{- $llmEndpoint := include "genieai-umbrella.opeaGpuEndpoint" (dict "root" . "path" "llm") -}}
+{{- $embeddingEndpoint := include "genieai-umbrella.opeaGpuEndpoint" (dict "root" . "path" "embedding") -}}
+{{- /* MODEL_HUB_EMBED_TIMEOUT_SECONDS bounds a wedged /embed read on the
+TEI/HF hub clients — Compose derives the same row (issue #1381: the live
+incident held an ingest thread 30+ min with no log line). */ -}}
+{{- $tuningEnv := list
+    (dict "name" "ARANGO_GRAPH_NAME" "value" ($opeaRetriever.arangoGraphName | default "GRAPH" | toString))
+    (dict "name" "MODEL_DETECT_TTL" "value" "60")
+    (dict "name" "MODEL_HUB_EMBED_TIMEOUT_SECONDS" "value" "600")
+    (dict "name" "RETRIEVER_COMPONENT_NAME" "value" ($opeaRetriever.retrieverComponentName | default "GENIE_RETRIEVER_ARANGODB" | toString))
+    (dict "name" "RETRIEVER_ARANGO_K" "value" ($opeaRetriever.retrieverArangoK | default "20" | toString))
+    (dict "name" "RETRIEVER_ARANGO_FETCH_K" "value" ($opeaRetriever.retrieverArangoFetchK | default "30" | toString))
+    (dict "name" "RETRIEVER_ARANGO_SCORE_THRESHOLD" "value" ($opeaRetriever.retrieverArangoScoreThreshold | default "0.2" | toString))
+    (dict "name" "RETRIEVER_ARANGO_DISTANCE_THRESHOLD" "value" ($opeaRetriever.retrieverArangoDistanceThreshold | default "1" | toString))
+    (dict "name" "RETRIEVER_ARANGO_LAMBDA_MULT" "value" ($opeaRetriever.retrieverArangoLambdaMult | default "0.5" | toString))
+    (dict "name" "RETRIEVER_ARANGO_SEARCH_START" "value" ($opeaRetriever.retrieverArangoSearchStart | default "chunk" | toString))
+    (dict "name" "RETRIEVER_ARANGO_SEARCH_MODE" "value" ($opeaRetriever.retrieverArangoSearchMode | default "vector" | toString))
+    (dict "name" "RETRIEVER_ARANGO_USE_APPROX_SEARCH" "value" ($opeaRetriever.retrieverArangoUseApproxSearch | default "false" | toString))
+    (dict "name" "RETRIEVER_ARANGO_DISTANCE_STRATEGY" "value" ($opeaRetriever.retrieverArangoDistanceStrategy | default "COSINE" | toString))
+    (dict "name" "RETRIEVER_ARANGO_NUM_CENTROIDS" "value" ($opeaRetriever.retrieverArangoNumCentroids | default "1" | toString))
+    (dict "name" "RETRIEVER_ARANGO_FILTER_STRATEGY" "value" ($opeaRetriever.retrieverArangoFilterStrategy | default "OR" | toString))
+    (dict "name" "RETRIEVER_ARANGO_TRAVERSAL_ENABLED" "value" (include "genieai-umbrella.boolEnvValue" (dict "value" $opeaRetriever.retrieverArangoTraversalEnabled "default" true)))
+    (dict "name" "RETRIEVER_ARANGO_TRAVERSAL_MAX_DEPTH" "value" ($opeaRetriever.retrieverArangoTraversalMaxDepth | default "2" | toString))
+    (dict "name" "RETRIEVER_ARANGO_TRAVERSAL_MAX_RETURNED" "value" ($opeaRetriever.retrieverArangoTraversalMaxReturned | default "5" | toString))
+    (dict "name" "RETRIEVER_ARANGO_TRAVERSAL_SCORE_THRESHOLD" "value" ($opeaRetriever.retrieverArangoTraversalScoreThreshold | default "0.7" | toString))
+    (dict "name" "RETRIEVER_ARANGO_TRAVERSAL_CONCURRENT_BATCHES" "value" ($opeaRetriever.retrieverArangoTraversalConcurrentBatches | default "10" | toString))
+    (dict "name" "RETRIEVER_ARANGO_TRAVERSAL_MAX_EDGES_PER_NODE" "value" ($opeaRetriever.retrieverArangoTraversalMaxEdgesPerNode | default "2000" | toString))
+    (dict "name" "RETRIEVER_ARANGO_TRAVERSAL_MAX_LINKS" "value" ($opeaRetriever.retrieverArangoTraversalMaxLinks | default "300000" | toString))
+    (dict "name" "RETRIEVER_FANOUT_ENABLED" "value" (include "genieai-umbrella.boolEnvValue" (dict "value" $opeaRetriever.retrieverFanoutEnabled "default" true)))
+    (dict "name" "RETRIEVER_FANOUT_CANDIDATE_CAP_GLOBAL" "value" ($opeaRetriever.retrieverFanoutCandidateCapGlobal | default "200" | toString))
+    (dict "name" "RETRIEVER_FANOUT_CANDIDATE_CAP_PER_GRAPH" "value" ($opeaRetriever.retrieverFanoutCandidateCapPerGraph | default "50" | toString))
+    (dict "name" "RETRIEVER_FANOUT_EXTRACTED_HOP_CAP" "value" ($opeaRetriever.retrieverFanoutExtractedHopCap | default "1" | toString))
+    (dict "name" "RETRIEVER_FANOUT_MAX_GRAPHS" "value" ($opeaRetriever.retrieverFanoutMaxGraphs | default "5" | toString))
+    (dict "name" "RETRIEVER_FANOUT_PER_GRAPH_TIMEOUT_MS" "value" ($opeaRetriever.retrieverFanoutPerGraphTimeoutMs | default "8000" | toString))
+    (dict "name" "RETRIEVER_FANOUT_SPINE_MAX_HOPS" "value" ($opeaRetriever.retrieverFanoutSpineMaxHops | default "2" | toString))
+    (dict "name" "RETRIEVER_ROUTE_ENABLED" "value" (include "genieai-umbrella.boolEnvValue" (dict "value" $opeaRetriever.retrieverRouteEnabled "default" true)))
+    (dict "name" "RETRIEVER_ROUTE_PROBE_TIMEOUT_MS" "value" ($opeaRetriever.retrieverRouteProbeTimeoutMs | default "2000" | toString))
+    (dict "name" "RETRIEVER_ROUTE_RETRY" "value" ($opeaRetriever.retrieverRouteRetry | default "1" | toString))
+    (dict "name" "RETRIEVER_ROUTE_TOP_K" "value" ($opeaRetriever.retrieverRouteTopK | default "40" | toString))
+    (dict "name" "RETRIEVER_ROUTE_MIN_CHUNKS" "value" ($opeaRetriever.retrieverRouteMinChunks | default "3" | toString))
+    (dict "name" "RETRIEVER_ROUTE_FORBIDDEN_TAG_MAX" "value" ($opeaRetriever.retrieverRouteForbiddenTagMax | default "0.55" | toString))
+    (dict "name" "RETRIEVER_ROUTE_HEADS_SUPERSEDE" "value" (include "genieai-umbrella.boolEnvValue" (dict "value" $opeaRetriever.retrieverRouteHeadsSupersede "default" true)))
+    (dict "name" "RETRIEVER_ROUTE_HEAD_FLOOR" "value" ($opeaRetriever.retrieverRouteHeadFloor | default "0.55" | toString))
+    (dict "name" "RETRIEVER_ROUTE_HEAD_MARGIN" "value" ($opeaRetriever.retrieverRouteHeadMargin | default "0.01" | toString))
+    (dict "name" "RETRIEVER_ROUTE_HEAD_WEIGHT" "value" ($opeaRetriever.retrieverRouteHeadWeight | default "1.0" | toString))
+    (dict "name" "RETRIEVER_HYBRID_RETRIEVAL_ENABLED" "value" (include "genieai-umbrella.boolEnvValue" (dict "value" $opeaRetriever.retrieverHybridRetrievalEnabled "default" true)))
+    (dict "name" "RETRIEVER_HYBRID_RRF_K" "value" ($opeaRetriever.retrieverHybridRrfK | default "60" | toString))
+    (dict "name" "RETRIEVER_HYBRID_BM25_CANDIDATES" "value" ($opeaRetriever.retrieverHybridBm25Candidates | default "50" | toString))
+    (dict "name" "RETRIEVER_HYBRID_DENSE_WEIGHT" "value" ($opeaRetriever.retrieverHybridDenseWeight | default "1.0" | toString))
+    (dict "name" "RETRIEVER_HYBRID_LEXICAL_WEIGHT" "value" ($opeaRetriever.retrieverHybridLexicalWeight | default "1.0" | toString))
+    (dict "name" "RETRIEVER_HYBRID_BM25_ANALYZER" "value" ($opeaRetriever.retrieverHybridBm25Analyzer | default "text_en" | toString))
+    (dict "name" "RERANKING_STRATEGY" "value" ($opeaRetriever.rerankingStrategy | default "slice" | toString))
+    (dict "name" "RETRIEVER_SUMMARIZER_ENABLED" "value" ($opeaRetriever.retrieverSummarizerEnabled | default "false" | toString))
+    (dict "name" "LOG_LEVEL" "value" ($opeaRetriever.logLevel | default "info" | toString))
+    (dict "name" "VLLM_ENDPOINT" "value" $llmEndpoint)
+    (dict "name" "VLLM_MODEL_ID" "value" ($opeaModelsLlm.modelId | default "ibm-granite/granite-4.1-8b" | toString))
+    (dict "name" "GPU_NODE_HOST" "value" (include "genieai-umbrella.opeaGpuHostname" .))
+    (dict "name" "TEI_EMBEDDING_ENDPOINT" "value" $embeddingEndpoint)
+    (dict "name" "OPEA_SSL_SKIP_VERIFY" "value" (include "genieai-umbrella.opeaSslSkipVerify" .))
+    (dict "name" "ENABLE_OBSERVABILITY" "value" (include "genieai-umbrella.observabilityEnabledFlag" .))
+    (dict "name" "OTEL_EXPORTER_OTLP_ENDPOINT" "value" (include "genieai-umbrella.otlpEndpoint" .))
+-}}
+{{- $arangoSecretEnv := list (include "genieai-umbrella.secretKeyRefEnv" (dict "var" "ARANGO_PASSWORD" "secret" "arango-root-secret" "key" "password" "optional" true) | fromJson) -}}
+{{- $gpuSecretEnv := include "genieai-umbrella.gpuApiKeyEnv" (dict "keys" (list "HF_TOKEN" "VLLM_API_KEY")) | fromJsonArray -}}
+{{- /* opea.retriever.env: see the parity gate. */ -}}
+{{- $opeaEnvRows := include "genieai-umbrella.envMapRows" ($opeaRetriever.env | default dict) | fromJsonArray -}}
+{{- $arangoEnv := list
+    (dict "name" "ARANGO_URL" "value" (include "genieai-umbrella.arangoURL" .))
+    (dict "name" "ARANGO_DB" "value" ($dataArangodb.database | default "_system" | toString))
+    (dict "name" "ARANGO_USERNAME" "value" "root")
+-}}
+{{- /* The readiness probe carries NO initialDelaySeconds: the
+startupProbe below owns the slow start, and a readiness delay adds a
+second floor on top of it — the pod then stays out of the Service's
+endpoints for that long after every restart, although it is already
+serving. */}}
+{{- $svcVals := dict
+    "image" (dict "repository" "genie-ai-retriever-arango" "tag" "main")
+    "port" 7000
+    "resources" (dict "requests" (dict "cpu" "200m" "memory" "256Mi") "limits" (dict "cpu" "2" "memory" "2Gi"))
+    "env" (include "genieai-umbrella.envRowsDedupe" (concat $arangoEnv $tuningEnv $arangoSecretEnv $gpuSecretEnv $opeaEnvRows | toJson) | fromJsonArray)
+    "probes" (dict
+      "readiness" (dict "tcpSocket" (dict "port" 7000) "periodSeconds" 15)
+      "liveness"  (dict "tcpSocket" (dict "port" 7000) "initialDelaySeconds" 60 "periodSeconds" 30)
+      "startup"   (dict "tcpSocket" (dict "port" 7000) "failureThreshold" 30 "periodSeconds" 10)
+    )
+-}}
+{{- /* The service map is rebuilt rather than mutated in place: a
+cleared `services` map has nothing to mutate, and `set` on a nil map
+crashes the template engine. */ -}}
+{{- $valsServices := $vals.services | default dict -}}
+{{- $_ := set $valsServices "retriever" (mergeOverwrite $svcVals (index $valsServices "retriever" | default dict)) -}}
+{{- $_ := set $vals "services" $valsServices -}}
+{{- $ctx := dict "name" "retriever" "component" "retriever" "Values" $vals "Chart" .Chart "Release" .Release -}}
+{{- include "genieai-umbrella.serviceDeployment" $ctx }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: retriever
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" .Values "component" "retriever") | nindent 4 }}
+spec:
+  ports:
+    - name: http
+      port: 7000
+      targetPort: 7000
+  selector:
+    {{- include "genieai-common.serviceSelector" (dict "Chart" .Chart "Release" .Release "Values" .Values "component" "retriever") | nindent 4 }}
+{{- end -}}

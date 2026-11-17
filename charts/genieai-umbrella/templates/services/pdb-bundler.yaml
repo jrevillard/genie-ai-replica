@@ -1,0 +1,31 @@
+{{- /* The service entries are read through a normalized map: a
+cleared service entry reads as an empty map (the service simply does
+not render) instead of crashing `index` on a nil value. */ -}}
+{{- $services := .Values.services | default dict -}}
+{{- $svcBackend := $services.backend | default dict -}}
+{{- $svcFrontend := $services.frontend | default dict -}}
+{{- $svcDocRepo := $services.documentRepository | default dict -}}
+{{- $svcClamav := $services.clamav | default dict -}}
+{{- $svcRedis := $services.redisCache | default dict -}}
+{{- if or $svcBackend.enabled $svcFrontend.enabled $svcDocRepo.enabled $svcClamav.enabled $svcRedis.enabled -}}
+{{- /*
+  The bundler pairs each values key (left) with the component label
+  the corresponding Pod template carries (right). The two are
+  identical for backend/frontend/clamav but differ for
+  documentRepository (camelCase values key, camelCase pod label)
+  and redisCache (camelCase values key, kebab-case pod label).
+  The PDB helper emits a selector that must match the pod labels,
+  so the right-hand value is the one passed to the helper.
+*/ -}}
+{{- /* The PDB helper opens its own output with `---` whenever it
+emits a budget, so the documents separate themselves; an emitted
+nothing contributes nothing. */ -}}
+{{- range $pair := list (list "backend" "backend") (list "frontend" "frontend") (list "documentRepository" "documentRepository") (list "clamav" "clamav") (list "redisCache" "redis-cache") -}}
+{{- $valuesKey := index $pair 0 -}}
+{{- $component := index $pair 1 -}}
+{{- $svc := index $services $valuesKey | default dict -}}
+{{- if $svc.enabled -}}
+{{- include "genieai-umbrella.pdbForService" (dict "name" $valuesKey "component" $component "Values" $.Values "Chart" $.Chart "Release" $.Release) -}}
+{{- end -}}
+{{- end -}}
+{{- end -}}

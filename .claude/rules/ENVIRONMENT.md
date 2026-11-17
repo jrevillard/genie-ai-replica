@@ -98,7 +98,7 @@ same number and they are **not** derived from one source:
 
 | Setting | Owner | Default | Nature |
 |---|---|---|---|
-| `OKF_MAX_CONCEPT_DOC_CHARS` | okf-server | `250000` | A **static literal**. Bounds the characters in ONE concept document **body**. |
+| `OKF_MAX_CONCEPT_DOC_CHARS` | okf-server | *unset* | Bounds the characters in ONE concept document **body**. Unset = **derived** from the serving-model window; set = an operator pin, never overruled. On Kubernetes: the chart value `okf.maxConceptDocChars`. |
 | `DATAPREP_CONTEXTUAL_DOC_BUDGET` | dataprep | `0` | **Derived at runtime** from the context window the endpoint actually serves (`VLLM_ENDPOINT`). `0` = derive. |
 
 Measured on the shipped defaults (500-char chunks, `per_chunk` strategy):

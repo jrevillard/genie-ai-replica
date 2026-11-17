@@ -1,0 +1,45 @@
+{{- $obs := .Values.observability | default dict -}}
+{{- $pluggable := .Values.pluggable | default dict -}}
+{{- $obsLogs := $obs.logs | default dict -}}
+{{- if $obsLogs.enabled }}
+{{- /*
+  VLSingle CR — single-node VictoriaLogs.
+  Reconciled by the vmoperator (cluster bootstrap prerequisite, NOT a
+  chart dependency — see charts/README.md). The operator creates the
+  Deployment + Service named <kind>-<metadata.name>
+  ("vlsingle-victorialogs"), so OTLP ingest reaches
+  http://vlsingle-victorialogs.{{ .Values.namespace }}.svc.cluster.local:9428
+  (VictoriaLogs default OTLP port).
+
+  apiVersion: vmoperator v0.75.0 consolidates VLSingle under
+  operator.victoriametrics.com/v1. Earlier releases exposed it under
+  logs.victoriametrics.com/v1beta1; that group is no longer served by
+  the current CRD. Validation is deferred to first reconcile — the
+  operator is not installed locally, so helm template + lint cannot
+  catch a group mismatch; the field shape was checked against the
+  vmoperator v0.75.0 API docs (VLSingleSpec).
+*/}}
+apiVersion: operator.victoriametrics.com/v1
+kind: VLSingle
+metadata:
+  name: victorialogs
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" .Values "component" "observability") | nindent 4 }}
+spec:
+  retentionPeriod: {{ $obsLogs.retentionPeriod | quote }}
+  removePvcAfterDelete: false
+  storage:
+    {{- /* Same chart-wide storage-class hook every PVC reads
+    (pluggable.storageClassName) — a venue that points the data tier at
+    a fast or tmpfs-backed StorageClass must reach the observability
+    tier too. Omitted when unset: the operator then creates the PVC
+    against the cluster default class. */ -}}
+    {{- with ($obsLogs.storageClassName | default $pluggable.storageClassName) }}
+    className: {{ . }}
+    {{- end }}
+    resources:
+      requests:
+        storage: {{ $obsLogs.storageSize | quote }}
+  replicaCount: 1
+{{- end }}

@@ -1,0 +1,12 @@
+dependencies:
+- name: genieai-common
+  repository: file://../genieai-common
+  version: 0.1.0
+- name: genieai-assets
+  repository: file://../genieai-assets
+  version: 0.1.0
+- name: gateway-helm
+  repository: oci://docker.io/envoyproxy
+  version: v1.9.2
+digest: sha256:30a39ea906be3f3626d3751a19f2d2d6634c79857db70c40a2534d2debf34c87
+generated: "2026-10-29T11:03:13.396333165+01:00"

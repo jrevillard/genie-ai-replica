@@ -1,0 +1,74 @@
+{{- $data := .Values.data | default dict -}}
+{{- $kc := $data.keycloak | default dict -}}
+{{- $ingress := .Values.ingress | default dict -}}
+{{- if $kc.enabled -}}
+{{- /*
+  Keycloak ingress policy. Three peer families reach port 8080:
+  - the Envoy Gateway data plane — edge routing of /auth/ (same-origin
+    OIDC with the SPA), only when the ingress tier is on;
+  - the backend — realm token validation flows through the internal
+    KEYCLOAK_URL, not the edge;
+  - same-namespace pods — the post-install convergence and migration
+    Jobs drive the Admin API on the same port.
+
+  Ingress-only by design: Keycloak's egress surface (SMTP, backchannel
+  logout, outbound federated IdPs) is deployment-specific; a wrong
+  default-deny there breaks login in ways nothing in this chart can
+  see. Egress hardening is an operator decision.
+*/ -}}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: keycloak
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" .Values "component" "keycloak") | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/instance: keycloak
+      app.kubernetes.io/managed-by: keycloak-operator
+  policyTypes:
+    - Ingress
+  ingress:
+    {{- if $ingress.enabled }}
+    - from:
+        {{- include "genieai-umbrella.ingressDataPlanePeer" . | nindent 8 }}
+      ports:
+        - protocol: TCP
+          port: 8080
+    {{- end }}
+    # The same-namespace consumers, named. `podSelector: {}` matches
+    # EVERY pod in the namespace and voids the default-deny this policy
+    # exists for — and port 8080 serves the Keycloak ADMIN REST API and
+    # the admin console, not just the OIDC endpoints. The list is the
+    # chart's own consumers: the backend (realm token validation), the
+    # document-repository (JWKS fetch), chatqna and dataprep (their
+    # service-account token), the post-install convergence Job
+    # (component "identity") that drives the Admin API — and the helm-test
+    # probe (component "test"), the chart's only in-cluster L7 check of
+    # the OIDC discovery endpoint; without it the probe times out on an
+    # enforcing CNI and the smoke asserts nothing.
+    - from:
+        - podSelector:
+            matchLabels:
+              genieai.io/component: backend
+        - podSelector:
+            matchLabels:
+              genieai.io/component: documentRepository
+        - podSelector:
+            matchLabels:
+              genieai.io/component: chatqna
+        - podSelector:
+            matchLabels:
+              genieai.io/component: dataprep
+        - podSelector:
+            matchLabels:
+              genieai.io/component: identity
+        - podSelector:
+            matchLabels:
+              genieai.io/component: test
+      ports:
+        - protocol: TCP
+          port: 8080
+{{- end -}}

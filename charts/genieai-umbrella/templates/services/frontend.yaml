@@ -1,0 +1,143 @@
+{{- $services := .Values.services | default dict -}}
+{{- $obs := .Values.observability | default dict -}}
+{{- $obsMetrics := $obs.metrics | default dict -}}
+{{- $svcFrontend := $services.frontend | default dict -}}
+{{- /* The backend's port: bound parent-first, like every values read —
+a cleared services.backend must degrade this egress rule to the default
+port, not crash the render on a nil parent. */ -}}
+{{- $servicesBackend := index $services "backend" | default dict -}}
+{{- $ingress := .Values.ingress | default dict -}}
+{{- if $svcFrontend.enabled -}}
+{{- $vals := deepCopy .Values -}}
+{{- /* The SPA resolves its OIDC issuer at RUNTIME from
+   window.APP_CONFIG.keycloak.url, which docker-entrypoint.sh generates
+   from VUE_APP_KEYCLOAK_URL (no image rebuild). Unset, it falls back to
+   `${origin}/auth` in oidcConfig.js — a hardcoded context path the chart
+   cannot reach. Setting it from keycloakPublicIssuer is what keeps
+   data.keycloak.httpRelativePath authoritative for the browser too. */ -}}
+{{- /* The SPA's connect-src is the SAME derived set the backend's CSP
+header carries ('self', the public origin, the WebSocket source), plus
+the operator's extra origins. Deriving it once is what keeps the two
+policies from drifting: the SPA's own list was missing 'self', so a
+browser on a non-default port (the laptop port-forward,
+https://genieai.local:4443) had its same-origin /api calls blocked —
+the explicit origin "https://genieai.local" does not match the page
+origin "https://genieai.local:4443", and 'self' is the only source
+that matches whatever origin the page was served from. */ -}}
+{{- $cspConnectSrc := include "genieai-umbrella.cspConnectSrc" . -}}
+{{- with $svcFrontend.cspConnectSrc -}}
+{{- $cspConnectSrc = printf "%s %s" $cspConnectSrc . -}}
+{{- end -}}
+{{- $urls := list
+    (dict "name" "VUE_APP_API_URL" "value" "/api")
+    (dict "name" "VUE_APP_KEYCLOAK_URL" "value" (include "genieai-umbrella.keycloakPublicIssuer" .))
+    (dict "name" "VUE_APP_CSP_CONNECT_SRC" "value" $cspConnectSrc)
+    (dict "name" "VUE_APP_OKF_ENABLED" "value" (ternary "1" "0" (eq true (index (.Values.okf | default dict) "enabled"))))
+    (dict "name" "OTEL_EXPORTER_OTLP_ENDPOINT" "value" (include "genieai-umbrella.otlpEndpoint" .))
+-}}
+{{- $existing := index $vals.services.frontend "env" | default dict -}}
+{{- $existingRows := include "genieai-umbrella.envMapRows" $existing | fromJsonArray -}}
+{{- $_ := set $vals.services.frontend "env" (include "genieai-umbrella.envRowsDedupe" (concat $urls $existingRows | toJson) | fromJsonArray) -}}
+{{- $ctx := dict "name" "frontend" "component" "frontend" "Values" $vals "Chart" .Chart "Release" .Release -}}
+{{- include "genieai-umbrella.serviceDeployment" $ctx }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: frontend
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" .Values "component" "frontend") | nindent 4 }}
+spec:
+  ports:
+    - name: http
+      port: 80
+      targetPort: http
+  selector:
+    {{- include "genieai-common.serviceSelector" (dict "Chart" .Chart "Release" .Release "Values" .Values "component" "frontend") | nindent 4 }}
+---
+# Default-deny with ingress allowlist from the edge proxy and egress
+# scoped to the BFF plus the OTLP collector.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: frontend
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" .Values "component" "frontend") | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      genieai.io/component: frontend
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    # The SPA is served by the frontend container; the only network peer
+    # is the Envoy Gateway data plane (the edge tier routes `/` here).
+    # With the ingress tier disabled there is no exposure at all — and
+    # on a policy-enforcing CNI (the laptop cluster is built with
+    # calico precisely for that) the default-deny holds and the edge
+    # would 504 into this Service. A dev cluster that wants
+    # port-forward-only access must either enable the ingress tier or
+    # run a CNI that does not apply policies (minikube kubenet).
+    {{- if $ingress.enabled }}
+    - from:
+        {{- include "genieai-umbrella.ingressDataPlanePeer" . | nindent 8 }}
+      ports:
+        - protocol: TCP
+          port: {{ $svcFrontend.port | default 8090 }}
+    {{- end }}
+    # helm-test reachability probe (component "test").
+    - from:
+        - podSelector:
+            matchLabels:
+              genieai.io/component: test
+      ports:
+        - protocol: TCP
+          port: {{ $svcFrontend.port | default 8090 }}
+  {{- if $obsMetrics.enabled }}
+  # vm-operator scrape peer — PRE-WIRED, INERT TODAY: the chart's
+  # VMServiceScrape CRs match nothing on purpose (VMSingle carries no
+  # serviceScrapeSelector — see templates/observability/vmsingle.yaml)
+  # and no workload here exposes a Prometheus surface (they export over
+  # OTLP). The peer exists so that enabling a real scrape surface later
+  # does not silently time out against the default-deny.
+    - from:
+        - podSelector:
+            matchLabels:
+              managed-by: vm-operator
+              app.kubernetes.io/instance: vmetrics
+      ports:
+        - protocol: TCP
+          port: {{ $svcFrontend.port | default 8090 }}
+  {{- end }}
+  egress:
+    # DNS resolution to kube-system.
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+    # Backend BFF. Post-DNAT pod port — services.backend.port — not the
+    # Service port (80, the factory's fixed listen).
+    - to:
+        - podSelector:
+            matchLabels:
+              genieai.io/component: backend
+      ports:
+        - protocol: TCP
+          port: {{ $servicesBackend.port | default 3000 }}
+    # OTLP exporter. Required for the observability pipeline; without
+    # this port the default-deny policy drops frontend telemetry.
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+      ports:
+        - protocol: TCP
+          port: {{ include "genieai-umbrella.otlpPort" . }}
+{{- end -}}

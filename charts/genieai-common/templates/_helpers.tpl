@@ -1,0 +1,84 @@
+{{/*
+Expand the name of the chart.
+*/}}
+{{- define "genieai-common.name" -}}
+{{- default .Chart.Name .Values.nameOverride | trunc 63 | trimSuffix "-" -}}
+{{- end -}}
+
+{{/*
+Create a default fully qualified app name.
+Truncate at 40 chars: the name budget reserves 23 chars of headroom under
+the 63-char K8s object-name limit for the longest suffix the chart appends
+(currently "-clusterprofile-detect", 22 chars — the pre-upgrade drift hook).
+*/}}
+{{- define "genieai-common.fullname" -}}
+{{- if .Values.fullnameOverride -}}
+{{- .Values.fullnameOverride | trunc 40 | trimSuffix "-" -}}
+{{- else -}}
+{{- $name := default .Chart.Name .Values.nameOverride -}}
+{{- if contains $name .Release.Name -}}
+{{- .Release.Name | trunc 40 | trimSuffix "-" -}}
+{{- else -}}
+{{- printf "%s-%s" .Release.Name $name | trunc 40 | trimSuffix "-" -}}
+{{- end -}}
+{{- end -}}
+{{- end -}}
+
+{{/*
+Chart name and version label.
+*/}}
+{{- define "genieai-common.chart" -}}
+{{- printf "%s-%s" .Chart.Name .Chart.Version | replace "+" "_" | trunc 63 | trimSuffix "-" -}}
+{{- end -}}
+
+{{/*
+Common labels — applied to all umbrella resources.
+Includes helm.sh/chart, app.kubernetes.io/name, app.kubernetes.io/instance,
+app.kubernetes.io/version, app.kubernetes.io/managed-by, plus genie-ai-specific
+labels for Prometheus / OpenTelemetry service discovery.
+
+Call sites pass the per-template component name in the context dict
+(`(dict "Chart" .Chart "Release" .Release "Values" .Values
+"component" <name>)`); the helper emits both component labels from that
+single value. The component is read directly — never merged with
+.Values — because sprig `merge` gives precedence to the FIRST argument,
+so a merge that intended the per-call value to win would still fall
+back to any top-level `.Values.component` set via `--set`.
+*/}}
+{{- define "genieai-common.labels" -}}
+helm.sh/chart: {{ include "genieai-common.chart" . }}
+{{ include "genieai-common.selectorLabels" . }}
+{{- if .Chart.AppVersion }}
+app.kubernetes.io/version: {{ .Chart.AppVersion | quote }}
+{{- end }}
+app.kubernetes.io/managed-by: {{ .Release.Service }}
+app.kubernetes.io/component: {{ .component | default "umbrella" | quote }}
+genieai.io/component: {{ .component | default "umbrella" | quote }}
+genieai.io/managed-by: helm
+{{- end -}}
+
+{{/*
+Selector labels — used in Deployment selectors and Service selectors.
+Note: must NOT include version (selector is immutable).
+*/}}
+{{- define "genieai-common.selectorLabels" -}}
+app.kubernetes.io/name: {{ include "genieai-common.name" . }}
+app.kubernetes.io/instance: {{ .Release.Name }}
+{{- end -}}
+
+{{/*
+Service selector labels — used in Deployment selectors, Service selectors,
+and pod template labels. Includes name, instance, and component labels;
+omits chart, version, and managed-by (those mutate across chart upgrades
+and would break selector immutability).
+
+Call sites pass the per-template component name in the context dict
+(`(dict "Chart" .Chart "Release" .Release "Values" .Values
+"component" <name>)`); the helper emits both component labels from that
+single value, matching `genieai-common.labels`.
+*/}}
+{{- define "genieai-common.serviceSelector" -}}
+{{- include "genieai-common.selectorLabels" . }}
+app.kubernetes.io/component: {{ .component | default "umbrella" | quote }}
+genieai.io/component: {{ .component | default "umbrella" | quote }}
+{{- end -}}

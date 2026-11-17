@@ -31,7 +31,9 @@ ingestion sequence inside the cluster. For each uploaded file it does, in
 order:
 
 ```
-1. Parse         — docling (PDF/DOCX/PPTX/XLSX/HTML/TXT/MD) extracts text + structure
+1. Parse         — docling (PDF/DOCX/PPTX/XLSX/HTML/MD) extracts text + structure;
+                   plain text (.TXT) goes to the standard loader (docling has no
+                   plain-text format)
 2. Chunk         — split into retrieval-sized chunks (per format: see table below)
 3. Context prefix — (if enabled) prepend an LLM-generated doc-context to each chunk
 4. Label         — each chunk labelled against the service taxonomy

@@ -575,10 +575,13 @@ HUGGING_FACE_HUB_TOKEN=
 #                                 #   fallback. See genie-ai-overlay/OVERRIDES.yaml.
 #
 # Dataprep phase budgets — the wall clock for a whole LLM phase, not one call.
-# A phase that runs out is abandoned and degrades (labelling to file labels,
-# context generation to the raw chunk); it does not fail the ingest.
+# A phase that runs out is abandoned: the labelling and context-generation
+# phases DEGRADE (labelling to file labels, context generation to the raw
+# chunk) and the document still ingests; the GRAPH phase has no fallback, so
+# the ingest FAILS, the partial graph is retracted, and the file needs a
+# manual re-kick.
 #
-# DATAPREP_LLM_PHASE_TIMEOUT_SECONDS=900   # labelling / context generation.
+# DATAPREP_LLM_PHASE_TIMEOUT_SECONDS=900   # labelling / context generation / graph.
 #                                 #   Wall clock for a whole LLM phase, not for
 #                                 #   one call. Above a single batched call
 #                                 #   ((1+MAX_RETRIES) x 180 = 540s) so a slow

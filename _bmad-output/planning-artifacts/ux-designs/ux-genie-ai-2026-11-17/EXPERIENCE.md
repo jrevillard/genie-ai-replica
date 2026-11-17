@@ -38,7 +38,7 @@ The line is bound to **one turn**, not to a surface. It appears above the answer
 
 | Slot | Web | Mobile | Content |
 |---|---|---|---|
-| Activity line | new row inside `.answer-card` (`ChatBotComponent.vue:148`), sibling of `.message-bubble` (`:157`) | the in-flight row slot (`chatbot_component.dart:2468-2492`), above the assistant message | operation label + state marker |
+| Activity line | new row inside `.answer-card` (`ChatBotComponent.vue:148`), first child, sibling of `.message-bubble` (`:157`; convert the `v-else` to explicit `v-if`) | the in-flight row slot (`chatbot_component.dart:2468-2492`), the trailing ListView item after the streaming assistant message | operation label + state marker |
 | Answer | `.message-bubble` (`:157`) | assistant message bubble | streamed answer text |
 | Answer warning | `.answer-warning` (`:263` ungrounded, `:271` translation failed) | answer-level warning | the `agent_verdict` outcome |
 | Answer error | `.answer-error` (`:149-156`) with Retry | error row | stream failure / interruption |
@@ -219,6 +219,6 @@ The Telegram/OpenClaw pattern is the target. **Iteration 1 does not design it**;
 ## Open questions
 
 1. **Mid-answer activity — DECIDED (operator, 2026-11-17).** AD-8 lets `agent_activity` frames interleave with `chunk`s, and the transport stays that way. Iteration 1 clients render the line **before the first `chunk` only**; post-chunk activity frames (including failures) are accepted-but-unrendered — the graceful-ignore both parsers already perform. The agent loop is not constrained by this rendering rule. Iteration 2 renders post-chunk activity as the compact re-opened line. This is a documented iteration-1 limitation, not an open item.
-2. **Handover timing — RECOMMENDATION logged (2026-11-17).** The legacy "Thinking…" indicator shows until the first `agent_activity` frame. Recommendation for the S4 agent service: emit an `agent_activity` frame immediately at run start, so the handover is seamless. Server-side change, tracked in the architecture memlog; not a UX blocker.
-3. **Mobile locale parity has no gate.** Web parity is enforced by `localeConsistency.test.js`; mobile falls back to English silently (`i18n_service.dart:203-206`), so a missing mobile key ships unnoticed. Iteration 1 requires all 14 mobile locale files to carry the new keys, enforced by review only. Decide whether a mobile parity check is added (pre-existing gap, predates this spec).
+2. **Handover timing — RECOMMENDATION logged (2026-11-17).** The legacy "Thinking…" indicator shows until the first `agent_activity` frame. Recommendation for the S4 agent service: emit an `agent_activity` frame immediately at run start, so the handover is seamless. Server-side change, recorded in BOTH memlogs (UX + architecture); not a UX blocker.
+3. **Mobile locale parity has no gate.** Web parity is enforced by `localeConsistency.test.js`; mobile falls back to English silently (`i18n_service.dart:212-218`), so a missing mobile key ships unnoticed. Iteration 1 requires all 14 mobile locale files to carry the new keys, enforced by review only. Decide whether a mobile parity check is added (pre-existing gap, predates this spec; a widget-test gate is cheap and has precedent — `test/config/flutter_appauth_insecure_gate_test.dart`).
 4. **Operation vocabulary.** The i18n catalogue keys are the server's operation names. The spine records `search_knowledge` and `read_source` as *working* names, versioned at contract acceptance — if the accepted contract renames them, the catalogue paths change with them.

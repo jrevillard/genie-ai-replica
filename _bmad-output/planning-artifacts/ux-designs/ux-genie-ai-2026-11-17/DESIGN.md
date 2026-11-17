@@ -67,9 +67,9 @@ No bold, no uppercase, no second type size for the state — the state is carrie
 
 ## Layout & Spacing
 
-- **Web** — a new row inside `.answer-card` (`ChatBotComponent.vue:148`), a **sibling of `.message-bubble`** (`:157`), so it inherits the card's own `gap: var(--space-sm)` (`:3875`) and sits above the answer. The line owns no margin.
-- **Mobile** — the slot of the in-flight row (`mobile/genie_ai_mobile/lib/components/chat/chatbot_component.dart:2468-2492`), above the assistant message. Same position in the turn, different container.
-- **Inside the row** — spinner (16px / `DsSpinner` size `sm`) + `{spacing.sm}` gap + label. One line, no wrap in iteration 1; an over-long label truncates with an ellipsis.
+- **Web** — a new row inside `.answer-card` (`ChatBotComponent.vue:148`), a **sibling of `.message-bubble`** (`:157`), so it inherits the card's own `gap: var(--space-sm)` (`:3875`) and sits above the answer. The line owns no margin. **Insertion point pinned:** the row is the **first child of `.answer-card`** — `.message-bubble`'s `v-else` (`:157`) must become an explicit `v-if` (a `v-else` needs its `v-if` adjacent; inserting between `:149` and `:157` as-is is a compile error).
+- **Mobile** — the slot of the in-flight row (`mobile/genie_ai_mobile/lib/components/chat/chatbot_component.dart:2468-2492`), the **trailing** ListView item (renders after the streaming assistant message, at `index == _messages.length`) — the same turn-relative position as web, at the bottom of the turn rather than above the answer bubble.
+- **Inside the row** — spinner (16px / `DsSpinner` size `sm`) + `{spacing.sm}` gap + label. One line, no wrap in iteration 1; an over-long label truncates with an ellipsis — **except the `failed` state, which never truncates** (the state word must survive every locale's label length; a11y floor, `EXPERIENCE.md`).
 - **No fill in the running state.** The line is text on the card's own surface — a chip would read as a message.
 
 ## Components

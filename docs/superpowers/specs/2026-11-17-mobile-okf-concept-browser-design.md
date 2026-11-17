@@ -32,7 +32,9 @@ this wave.
 - No admin surfaces (the fence above).
 - No chat-citation rendering, no sidebar changes (their issues own those).
 - No backend behavior change: the routes exist and serve under open scope
-  mode; this wave only makes them VISIBLE to the generator.
+  mode; this wave only makes them VISIBLE to the generator. The legacy RAG
+  pipeline's request/response contract is likewise untouched — the wave
+  must not degrade any of its existing capabilities.
 - No HTML rendering in concept bodies (see Markdown, below).
 - No QR/deep-link provisioning, no certificate pinning (backlog notes).
 
@@ -161,6 +163,41 @@ The committed client must remain byte-identical to what CI's drift gate
 would produce — run the `--check` equivalent before pushing any backend
 contract change. If the shim is missing, regenerating on WSL is the
 fallback (the script's own environment contract holds there).
+
+## Retrieval modes — legacy, OKF Only, Hybrid (David, 2026-11-17)
+
+The backend retrieval posture serves THREE configured modes — `legacy`,
+`okf_only`, `hybrid` (the retrieval-config contract the admin surface
+already reads). **The mobile app must support all of them, and the LEGACY
+RAG QUERY PIPELINE MUST REMAIN FULLY FUNCTIONAL WITH ITS EXISTING
+CAPABILITIES.** Concretely:
+
+- **Mode-aware source rendering.** A chat answer's `source_documents` may
+  be legacy documents, OKF concepts, or BOTH in one list (hybrid). Every
+  source row is classified by the shared predicate
+  (`source === 'okf-concept' || conceptId present`) — never by absence of
+  an OKF marker:
+  - a LEGACY document renders exactly as it does today (title, file
+    name, format, the doc-repo view route) with NO OKF badge and NO
+    Browse-repository affordance;
+  - an OKF concept carries the badge and the Browse affordance;
+  - a hybrid answer renders both kinds side by side in one list, each
+    through its own route.
+- **The legacy wire contract is untouched.** This wave adds nothing to
+  the query request or response shapes; the SSE `extra` passthrough and
+  the non-streaming fallback keep their existing behavior byte-for-byte.
+  The OKF citation fields ride the metadata the backend already sends
+  when an OKF-sourced chunk is retrieved.
+- **Regression pins are part of the definition of done.** Unit tests
+  pin, per mode: a legacy-only answer renders no OKF affordances; an
+  OKF-only answer renders the badge + Browse; a hybrid answer renders
+  both kinds correctly in one list; and the legacy document open path
+  (the doc-repo view route) keeps working — including the dead-auth fix
+  that ships with #1938, which is a LEGACY capability restored, not an
+  OKF feature.
+- **The browser screen is mode-independent.** Browsing is per-repo and
+  reached only from OKF citations; a legacy-only deployment simply never
+  shows an OKF affordance, and the screen itself is dormant until reached.
 
 ## Out-of-band notes
 

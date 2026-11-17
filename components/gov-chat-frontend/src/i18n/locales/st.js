@@ -2251,6 +2251,8 @@ export default {
       },
       card: {
         actions: 'Liketso bakeng sa {name}',
+        browse: 'Sheba',
+        browseNotice: 'E bontša se ngolotsoeng kaharano hona joale.',
         building: 'Kaho…',
         buildingAria: 'E ntse e hahoa — faele ea mohloli e ntse e sebetsoa',
         delete: 'Hlakola',

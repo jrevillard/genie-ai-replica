@@ -2256,6 +2256,8 @@ export default {
       },
       card: {
         actions: 'Acciones para {name}',
+        browse: 'Explorar',
+        browseNotice: 'Muestra lo que está indexado ahora.',
         building: 'Construyendo…',
         buildingAria: 'En construcción — el archivo fuente aún se está procesando',
         delete: 'Eliminar',

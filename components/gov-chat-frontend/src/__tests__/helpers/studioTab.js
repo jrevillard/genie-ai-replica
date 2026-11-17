@@ -59,7 +59,15 @@ jest.mock('@/services/repoOkfService', () => ({
 }));
 jest.mock('@/services/conceptService', () => ({
   __esModule: true,
-  default: { listForRepo: jest.fn().mockResolvedValue([]), get: jest.fn(), update: jest.fn() }
+  default: {
+    listForRepo: jest.fn().mockResolvedValue([]),
+    get: jest.fn(),
+    update: jest.fn(),
+    // The W9 browser's paginated index (the dashboard's Browse walks it
+    // through okf/fetchConceptTree) — an EMPTY page: the walk commits and
+    // the slice says so honestly instead of an unmocked-function throw.
+    getConceptTree: jest.fn().mockResolvedValue({ total: 0, offset: 0, limit: 200, concepts: [] })
+  }
 }));
 jest.mock('@/services/studioService', () => ({
   __esModule: true,

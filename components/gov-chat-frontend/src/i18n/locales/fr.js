@@ -2261,6 +2261,8 @@ export default {
       },
       card: {
         actions: 'Actions pour {name}',
+        browse: 'Parcourir',
+        browseNotice: 'Affiche ce qui est indexé actuellement.',
         building: 'Construction…',
         buildingAria: 'Génération en cours — le fichier source est toujours en cours de traitement',
         delete: 'Supprimer',

@@ -22,7 +22,17 @@ const path = require('path');
  */
 function withTree(prefix, files, fn) {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), prefix));
-  const remove = () => fs.rmSync(root, { recursive: true, force: true });
+  // BEST-EFFORT cleanup: the tree lives in TEMP, and on the Windows dev
+  // host the AV can hold a just-written file (EPERM/EBUSY) past the
+  // retries — a failed sweep must not fail the case (the next mkdtemp is
+  // a fresh dir regardless; CI is Linux and never sees this).
+  const remove = () => {
+    try {
+      fs.rmSync(root, { recursive: true, force: true, maxRetries: 3, retryDelay: 100 });
+    } catch {
+      /* best effort */
+    }
+  };
   try {
     for (const [name, content] of Object.entries(files)) {
       const full = path.join(root, name);

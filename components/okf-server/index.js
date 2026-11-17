@@ -102,6 +102,21 @@ if (require.main === module) {
       require('./services/pii-service')
         .sweepInterruptedScans()
         .catch((err) => logger.error('PII scan boot sweep failed (non-fatal)', { error: err.message }));
+      // #1205: the concept-document CEILING is derived from the serving-model
+      // window the same endpoint dataprep reads (/v1/models). The discovery
+      // probe is network I/O and never runs on a write path, so it is kicked
+      // here and refreshed on the cache's TTL; until the first probe
+      // settles, the ceiling falls back to its static default. Non-fatal:
+      // an endpoint that cannot be reached must not stop the server.
+      const windowRefresh = require('./services/llm-window').startWindowRefresh();
+      // The SUCCESS line is applyWindow's own state-change log
+      // (ceiling.window.discovered / .overridden) — logging it again here
+      // was one incident, two lines. The boot path keeps only the failure
+      // arm: applyWindow's change-guard suppresses a cold-boot failure
+      // (state starts at unknown), so this .catch is the one honest record.
+      windowRefresh.ready.catch((err) =>
+        logger.error('OKF ceiling window probe failed (non-fatal)', { error: err.message })
+      );
     });
 }
 

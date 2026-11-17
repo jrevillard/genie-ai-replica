@@ -1,0 +1,61 @@
+- id: "1"
+  title: Window discovery client — /v1/models, DATAPREP_MAX_MODEL_LEN, stale-while-revalidate, validator pin
+  description: >-
+    okf-server discovers the serving-model context window the way dataprep does: VLLM_ENDPOINT +
+    /v1/models, the SAME endpoint dataprep reads (not okf-server's own judge base), honoring the
+    SAME operator lever (DATAPREP_MAX_MODEL_LEN: 0 = discover, >0 = stated window — the only lever
+    on strict OpenAI-compatible providers). Stale-while-revalidate TTL cache (house pattern: the
+    smoke harness's serviceToken) so no enforcement path does blocking network I/O; discovery
+    state changes log once (window discovered / overridden / guess / stale-served). A
+    config-validator check pins okf-server's mirrored formula constants (CHARS_PER_TOKEN, prompt
+    and scaffold lengths, CONTEXTUAL_MAX_TOKENS and batch-size spellings) against dataprep's
+    python source, so the two-derivations drift #1588 names cannot happen silently (CAP-1, CAP-3).
+  spec_checkpoint: false
+  done_checkpoint: false
+  invoke_dev_with: >-
+    New module under services/ feeding concept-ceiling.js — concept-ceiling stays the ONE ceiling
+    reader; nothing else imports the discovery client. Mirror dataprep's _serving_model_window
+    semantics INCLUDING its DATAPREP_MAX_MODEL_LEN sanitization; do NOT mirror its
+    DERIVE_FALLBACK_WINDOW guess as a ceiling (the ladder decision belongs to story 2). The
+    validator check follows the parse-ansible / js-files precedent in tests/config-validator.
+    Verbose structured logging on every state change; no new required env vars.
+- id: "2"
+  title: Derived ceiling + fallback ladder + refusal source naming
+  description: >-
+    concept-ceiling.js derives the ceiling from the discovered window with dataprep's formula
+    (prompt_tokens + serialized-batch_tokens + output_tokens(×batch) + scaffold_tokens against
+    the window, CHARS_PER_TOKEN=4) so "over the ceiling" and "context truncates" stay the same
+    condition on any window; fallback ladder explicit OKF_MAX_CONCEPT_DOC_CHARS pin >
+    last-known-good derived > static default 250000 with a loud WARN (deliberately NOT dataprep's
+    2048 guess — a guess-derived WRITE ceiling would refuse nearly every import during an
+    endpoint blip); every CONCEPT_TOO_LARGE refusal names the ceiling's source
+    (discovered-from-window / operator pin / static default) and the deployment docs state
+    "unset = derived; set = pin" (CAP-2, CAP-3 docs half). Unit matrix pins window × knob
+    combinations, the 65536-window ~219700 measurement, pin precedence, and the ladder.
+  spec_checkpoint: false
+  done_checkpoint: false
+  invoke_dev_with: >-
+    maxConceptDocChars() keeps its call-time env read and its callers' shapes — the derivation
+    changes WHAT the function answers, not who calls it (ingest, editor save, publish gate stay
+    untouched except message text). The batch/output/scaffold terms read the SAME env knobs
+    dataprep reads (DATAPREP_CONTEXTUAL_MAX_TOKENS, DATAPREP_LLM_LABEL_BATCH_SIZE); the prompt
+    constants are mirrored and pinned by story 1's validator check. Coverage must not decrease —
+    the ceiling module is measured, so the new paths carry their own tests.
+- id: "3"
+  title: Smoke leg + env/env.j2 docs — #1588 closes
+  description: >-
+    The smoke harness gains the ceiling leg: on the live build it asserts okf-server's derived
+    ceiling matches dataprep's derived budget for the same window within the formula's
+    tolerance, and exercises the ladder (pin beats derived beats default) with both ceiling
+    sources visible in the smoke output (CAP-4). env and env.j2 comments move from "keep the
+    literal in step by hand" to "unset = derived; set = pin" — the #1588 operator burden ends —
+    and the smoke run closes #1588 with evidence. Runs live on the local build per the
+    smoke-per-story rule; the MR carries the story/spec bookkeeping per docs-merge-with-code.
+  spec_checkpoint: false
+  done_checkpoint: false
+  invoke_dev_with: >-
+    Extend the existing OKF smoke harness (data/okf/smoke-test) following its run-* pattern;
+    the tolerance and the dataprep-side read path must come from the LIVE services, not a
+    second local re-derivation (that would be the drift the spec forbids). Re-run the full
+    smoke harness live; fix findings until green. CHANGELOG entry names the deployer-visible
+    contract change.

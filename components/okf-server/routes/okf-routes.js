@@ -81,6 +81,12 @@ router.put('/retrieval-config', requireRole('tools-admin'), retrievalConfigContr
 // (it pre-gates on a real repo). Tools-admin only: it names WHO changed the
 // global posture and WHEN.
 router.get('/retrieval-config/audit', requireRole('tools-admin'), retrievalConfigController.getRetrievalConfigAudit);
+// #1205: the concept-document CEILING in effect right now, and WHY it is
+// that number — the ceiling is derived from the serving-model window, so
+// the number alone no longer says which lever moves it. Tools-admin only
+// (platform-level, like the governance reads above). The smoke harness
+// reads this to assert against the LIVE effective ceiling.
+router.get('/admin/ceiling', requireRole('tools-admin'), require('../controllers/ceiling-controller').getCeiling);
 
 // Frontmatter (Story 1.6, 2026-10-07): read-by-default for the BFF/retriever
 // hot path; the write paths (PATCH / GET suggest) require write scope, which

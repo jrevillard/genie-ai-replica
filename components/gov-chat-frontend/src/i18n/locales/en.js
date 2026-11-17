@@ -3060,6 +3060,8 @@ export default {
       },
       card: {
         actions: 'Actions for {name}',
+        browse: 'Browse',
+        browseNotice: 'Showing what is indexed now.',
         building: 'Building…',
         buildingAria: 'Building — the source file is still being processed',
         delete: 'Delete',

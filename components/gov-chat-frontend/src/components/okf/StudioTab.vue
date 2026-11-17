@@ -79,7 +79,7 @@
       </p>
     </div>
 
-    <OkfStudioDashboard v-if="view === 'dashboard'" @resume="onResume" @new="onNew" />
+    <OkfStudioDashboard v-if="view === 'dashboard'" @resume="onResume" @new="onNew" @browse="onBrowse" />
 
     <DsDialog
       class="genie-living-intelligence"
@@ -228,6 +228,14 @@
         }}
       </p>
     </DsDialog>
+
+    <!-- The W9 concept-tree browser, hosted for the dashboard's Browse
+      action. The state lives in the okf store's browser slice — the SAME
+      slice the chat shell's instance reads — so both entry points share one
+      visible state and one close semantic. This screen is a ROUTE separate
+      from the chat, so the two instances are never co-mounted (no double
+      render); this one exists because the admin route cannot see the chat's. -->
+    <ConceptBrowserDialog :visible="browserVisible" @close="closeConceptBrowser" />
   </div>
 </template>
 
@@ -251,6 +259,7 @@ import OkfConformanceDebtPanel from './ConformanceDebtPanel.vue';
 // wizard's Entry step — one tested owner).
 import { describeCreateFailure } from './steps/failureMessages';
 import OkfRepoEditorShell from './editor/RepoEditorShell.vue';
+import ConceptBrowserDialog from './ConceptBrowserDialog.vue';
 
 export default {
   name: 'OkfStudioTab',
@@ -267,7 +276,8 @@ export default {
     OkfStudioWizard,
     OkfRetrievalCard,
     OkfConformanceDebtPanel,
-    OkfRepoEditorShell
+    OkfRepoEditorShell,
+    ConceptBrowserDialog
   },
   mixins: [translateMixin],
   // 'studio-ready' fires from mounted() AFTER the entry-point window
@@ -304,6 +314,12 @@ export default {
   },
   computed: {
     ...mapGetters('okf', ['isExpert', 'draftsUnavailable']),
+    // The browser slice's visibility (the same getter the chat shell's
+    // instance reads — one state, two screens).
+    browserVisible() {
+      const browser = this.$store.getters['okf/browser'];
+      return !!(browser && browser.visible);
+    },
     // D-B honesty: the selected classification mode's real meaning.
     classHint() {
       const key =
@@ -409,6 +425,16 @@ export default {
   methods: {
     onExpertChange(mode) {
       this.$store.dispatch('okf/setExpertMode', mode === 'expert');
+    },
+    /** BROWSE (the dashboard's read verb): open the W9 concept-tree browser
+     * at this repository. A REPO-level open — no concept seeded, the tree
+     * is the invitation and the detail pane shows the select hint until a
+     * concept is visited. */
+    onBrowse(repoId) {
+      this.$store.dispatch('okf/openConceptBrowser', { repoId });
+    },
+    closeConceptBrowser() {
+      this.$store.dispatch('okf/closeConceptBrowser');
     },
     async onResume(repoId) {
       // Story #978: a repo card click opens the Editor shell — Wizard | Editor

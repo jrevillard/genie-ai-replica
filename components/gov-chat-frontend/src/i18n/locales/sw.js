@@ -2237,6 +2237,8 @@ export default {
       },
       card: {
         actions: 'Vitendo vya {name}',
+        browse: 'Vinjari',
+        browseNotice: 'Inaonyesha kilichopangwa kwa faharasa sasa.',
         building: 'Inajenga…',
         buildingAria: 'Inajengwa — faili chanzo bado inachakatwa',
         delete: 'Futa',

@@ -80,7 +80,12 @@ test.describe('Chatbot — a real answer cites its real source', () => {
 
     const record = await uploadFileViaApi(request, token, FIXTURE_PATH);
     await triggerIngestViaApi(request, token, record.file_id);
-    await waitForFileIngestedViaApi(request, token, record.file_id, { timeoutMs: INGEST_BUDGET_MS });
+    // The wait reads the API, and a realm access token lives 300 s: the
+    // token the upload carried would be minutes old by the time the ingest
+    // lands, and would expire mid-wait. A session minted for the wait
+    // answers in its own right.
+    const waitToken = await getSessionTokenViaUI({ user: TEST_ADMIN_USER, browser });
+    await waitForFileIngestedViaApi(request, waitToken, record.file_id, { timeoutMs: INGEST_BUDGET_MS });
 
     await loginViaUI(page);
     await navigateToChatbot(page);

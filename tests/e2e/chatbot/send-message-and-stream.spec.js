@@ -23,9 +23,11 @@ const { skipUnlessVenue, frenchStreamingReady, frenchStreamingMissingReason } = 
 // language — so the list carries only words French does not share:
 // 'est' (Spanish 'es'), 'sont', 'elle', 'nous', 'vous', 'dans', 'avec',
 // 'cette', 'pour', 'une', 'des', 'du', 'les', 'qui', 'tout', 'aux',
-// 'leur', 'ses', 'être', 'aussi', 'ainsi', 'donc', 'ne', 'pas'. ('plus'
-// is deliberately absent: it is an ordinary English word, and an English
-// answer would carry it.)
+// 'leur', 'ses', 'aussi', 'ainsi', 'donc', 'ne', 'pas'. ('plus' is
+// deliberately absent: it is an ordinary English word, and an English
+// answer would carry it. An ACCENTED word is absent for the same reason
+// from the other side: the word boundary this match uses is ASCII, so
+// 'être' would never match.)
 const FRENCH_ONLY_WORDS = [
   'est',
   'sont',
@@ -47,7 +49,6 @@ const FRENCH_ONLY_WORDS = [
   'aux',
   'leur',
   'ses',
-  'être',
   'aussi',
   'ainsi',
   'donc',

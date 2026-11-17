@@ -301,6 +301,39 @@ async function missingLocaleReason(locale) {
 }
 
 /**
+ * One translation probe against the venue's endpoint.
+ *
+ * @param {string} locale - the target language
+ * @param {string} token - the bearer token
+ * @param {string} source - the fixed source text
+ * @returns {Promise<object>} the raw response
+ */
+async function sample(locale, token, source) {
+  return auth.request('POST', '/api/translate', {
+    headers: { Authorization: `Bearer ${token}` },
+    body: { texts: [source], source_lang: 'en', target_lang: locale }
+  });
+}
+
+/**
+ * What one translation answer says: did it TRANSLATE, and if not, why not.
+ *
+ * @param {object} res - the endpoint's answer
+ * @param {string} source - the source text that was sent
+ * @returns {{ok: boolean, cause: string}} the reading
+ */
+function readTranslation(res, source) {
+  const translated = Array.isArray(res.data && res.data.translated_texts) ? res.data.translated_texts[0] : undefined;
+  if (typeof translated !== 'string' || translated.trim() === '') {
+    return { ok: false, cause: 'the probe was answered 200 with no translated text' };
+  }
+  if (translated.trim() === source) {
+    return { ok: false, cause: 'the probe was answered 200 with the source text unchanged' };
+  }
+  return { ok: true, cause: 'the probe was answered with a translation' };
+}
+
+/**
  * Does the venue's translation chain answer a fixed en→fr probe — the same
  * translator the answer translation serves? The chat path resolves the SAME
  * translator this probe exercises (the backend's `translationService`
@@ -322,33 +355,31 @@ async function translatesTo(locale) {
   // source and the requested target. The TEXT is a fixture of this probe —
   // the verdict is about the endpoint's answer, never about the text.
   const SOURCE = 'Hello';
-  const res = await auth.request('POST', '/api/translate', {
-    headers: { Authorization: `Bearer ${token}` },
-    body: { texts: [SOURCE], source_lang: 'en', target_lang: locale }
-  });
+  const res = await sample(locale, token, SOURCE);
   if (res.status === 200) {
     // A 200 alone is not a translation: the body carries the answer, and an
     // answer that is the source text unchanged is a chain that echoed the
-    // input. The verdict is about the TRANSLATION, so the body is read —
-    // and the CAUSE travels with it, because the skip reason has to name
-    // what the venue DID, not a guess at why.
-    const translated = Array.isArray(res.data && res.data.translated_texts) ? res.data.translated_texts[0] : undefined;
-    if (typeof translated !== 'string' || translated.trim() === '') {
-      translationCache.set(locale, {
-        verdict: false,
-        cause: 'the probe was answered 200 with no translated text'
-      });
-      return false;
+    // input. The verdict is about the TRANSLATION, so the body is read.
+    const first = readTranslation(res, SOURCE);
+    if (first.ok) {
+      translationCache.set(locale, { verdict: true, cause: 'the probe was answered with a translation' });
+      return true;
     }
-    if (translated.trim() === SOURCE) {
+    // ONE untranslated answer is not a venue fact: a loaded translator can
+    // echo a single-word probe back, and caching that would skip the whole
+    // French surface for the run — a green report on a suite that never
+    // exercised it. So a second sample decides, and only two agreeing
+    // samples become the run's verdict.
+    const second = readTranslation(await sample(locale, token, SOURCE), SOURCE);
+    if (second.ok) {
       translationCache.set(locale, {
-        verdict: false,
-        cause: 'the probe was answered 200 with the source text unchanged'
+        verdict: true,
+        cause: 'the probe was answered with a translation on the second sample'
       });
-      return false;
+      return true;
     }
-    translationCache.set(locale, { verdict: true, cause: 'the probe was answered with a translation' });
-    return true;
+    translationCache.set(locale, { verdict: false, cause: second.cause });
+    return false;
   }
   if (res.status === 400 && res.data && res.data.error === 'UNSUPPORTED_LANGUAGE') {
     // The deployment's language map refuses this target: the typed refusal
@@ -383,8 +414,8 @@ async function missingTranslationReason(locale) {
   const cause = observed ? observed.cause : 'the probe has not run (it runs at the skip decision)';
   return (
     `venue profile: the translation chain cannot answer en→${locale} (${cause}) — the translation ` +
-    'this spec asserts has no backend on this venue, and that surface is therefore NOT exercised ' +
-    'by this run'
+    'this spec asserts cannot be produced on this venue, and that surface is therefore NOT ' +
+    'exercised by this run'
   );
 }
 
@@ -484,9 +515,11 @@ async function ingestChainReady() {
   } finally {
     try {
       fs.unlinkSync(canaryPath);
-    } catch {
+    } catch (e) {
       // The temp file is the runner's own scratch; a leftover in the
-      // runner's tmp is not venue state and must not fail the probe.
+      // runner's tmp is not venue state and must not fail the probe — but
+      // it is named, so a reader of the output can see it.
+      if (e.code !== 'ENOENT') console.warn(`the scratch file ${canaryPath} could not be removed: ${e.message}`);
     }
   }
 

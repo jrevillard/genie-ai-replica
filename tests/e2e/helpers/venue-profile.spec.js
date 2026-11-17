@@ -389,18 +389,38 @@ test.describe('the translation probe reads the venue through its own endpoint', 
     expect(await profile.translatesTo('fr')).toBe(false);
   });
 
-  test('a 200 that echoes the source is not a translation', async () => {
+  test('a 200 that echoes the source TWICE is not a translation', async () => {
     // The status alone does not prove the chain translated anything: a body
     // that carries the source text back is a chain that did not translate.
+    // ONE such answer is not a venue fact (a loaded translator can echo a
+    // one-word probe back), so the probe takes a second sample.
     fakeSessionMint();
-    fakeTransport([{ status: 200, data: { translated_texts: ['Hello'] }, headers: {} }]);
+    fakeTransport([
+      { status: 200, data: { translated_texts: ['Hello'] }, headers: {} },
+      { status: 200, data: { translated_texts: ['Hello'] }, headers: {} }
+    ]);
     const profile = freshProfile();
     expect(await profile.translatesTo('fr')).toBe(false);
   });
 
+  test('one untranslated answer is not the verdict of the venue — the second sample decides', async () => {
+    // A single echoed answer must not skip the French surface for the
+    // whole run: the second sample translates, so the chain is ready.
+    fakeSessionMint();
+    fakeTransport([
+      { status: 200, data: { translated_texts: ['Hello'] }, headers: {} },
+      { status: 200, data: { translated_texts: ['Bonjour'] }, headers: {} }
+    ]);
+    const profile = freshProfile();
+    expect(await profile.translatesTo('fr')).toBe(true);
+  });
+
   test('a 200 with no translated text is not a translation either', async () => {
     fakeSessionMint();
-    fakeTransport([{ status: 200, data: { translated_texts: [] }, headers: {} }]);
+    fakeTransport([
+      { status: 200, data: { translated_texts: [] }, headers: {} },
+      { status: 200, data: { translated_texts: [] }, headers: {} }
+    ]);
     const profile = freshProfile();
     expect(await profile.translatesTo('fr')).toBe(false);
   });
@@ -545,6 +565,28 @@ test.describe('the ingest-chain canary uploads, ingests, and cleans up', () => {
     ]);
     const profile = freshProfile();
     await expect(profile.ingestChainReady()).rejects.toThrow(/could not read the venue/);
+  });
+
+  test('a canary that lands Ingested with Warnings MID-WAIT is a ready venue', async () => {
+    // The degraded status can arrive on the wait's SECOND read: the
+    // anchored alternation the wait matches on is what accepts it, and
+    // this is the case that exercises the poll.
+    fakeSessionMint();
+    fakeTransport([
+      uploaded('c1'),
+      { status: 200, data: { success: true }, headers: {} },
+      recordRead('c1', 'Pending'),
+      recordRead('c1', 'Ingested with Warnings'),
+      // The cleanup's record read, then its delete.
+      {
+        status: 200,
+        data: { success: true, data: { file_id: 'c1', file_name: 'ingest-probe-canary.md' } },
+        headers: {}
+      },
+      { status: 200, data: { success: true }, headers: {} }
+    ]);
+    const profile = freshProfile();
+    expect(await profile.ingestChainReady()).toBe(true);
   });
 
   test('a canary that lands Ingested with Warnings is a ready venue — indexed, if degraded', async () => {

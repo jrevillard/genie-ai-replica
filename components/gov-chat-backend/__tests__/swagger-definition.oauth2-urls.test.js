@@ -1,0 +1,159 @@
+'use strict';
+
+/**
+ * The Swagger UI OAuth2 round-trip runs IN THE BROWSER: the authorizationUrl
+ * and tokenUrl swagger-definition.js serves in /api-docs.json must be
+ * reachable from the user's browser, not from the container network (#1889).
+ *
+ * Split-URL deployments (the k8s venue) carry the cluster-internal issuer in
+ * KEYCLOAK_URL — a browser popup opening it dies on DNS, and even with a
+ * host mapping the HTTPS docs page + plain-HTTP token endpoint is mixed
+ * content, hard-blocked by Chromium. The fix mirrors the split-URL OIDC
+ * convention the shared verifier already honours
+ * (shared/lib/keycloak-auth-service.js): prefer the browser-facing
+ * KEYCLOAK_PUBLIC_URL for the flow URLs, fall back to KEYCLOAK_URL when the
+ * public variable is unset (the compose deployment's historical behaviour —
+ * there KEYCLOAK_URL is already browser-reachable; see the env template's
+ * Split-URL OIDC section).
+ *
+ * swagger-definition.js reads process.env at require time, so each case
+ * arranges the env, resets the module registry and re-requires the module.
+ * The realm comes from setup-env.js (KEYCLOAK_REALM='genie').
+ */
+
+require('./setup-env');
+
+const FLOW_URL_VARS = ['KEYCLOAK_URL', 'KEYCLOAK_PUBLIC_URL'];
+
+/**
+ * The served OAuth2 flow URLs for the given environment. An undefined value
+ * removes the variable (the "unset" state).
+ */
+const flowUrlsFor = ({ KEYCLOAK_URL, KEYCLOAK_PUBLIC_URL }) => {
+  for (const [key, value] of [
+    ['KEYCLOAK_URL', KEYCLOAK_URL],
+    ['KEYCLOAK_PUBLIC_URL', KEYCLOAK_PUBLIC_URL]
+  ]) {
+    if (value === undefined) {
+      delete process.env[key];
+    } else {
+      process.env[key] = value;
+    }
+  }
+  jest.resetModules();
+  const definition = require('../swagger-definition');
+  const flow = definition.components.securitySchemes.KeycloakOAuth2.flows.authorizationCode;
+  return { authorizationUrl: flow.authorizationUrl, tokenUrl: flow.tokenUrl };
+};
+
+describe('swagger-definition OAuth2 flow URLs', () => {
+  let saved;
+
+  beforeEach(() => {
+    saved = FLOW_URL_VARS.map((key) => [key, process.env[key]]);
+  });
+
+  afterEach(() => {
+    for (const [key, value] of saved) {
+      if (value === undefined) {
+        delete process.env[key];
+      } else {
+        process.env[key] = value;
+      }
+    }
+    jest.resetModules();
+  });
+
+  it('prefers KEYCLOAK_PUBLIC_URL when set (split-URL deployments, #1889)', () => {
+    const { authorizationUrl, tokenUrl } = flowUrlsFor({
+      KEYCLOAK_URL: 'http://keycloak-service.genieai.svc.cluster.local:8080/auth',
+      KEYCLOAK_PUBLIC_URL: 'https://docs.example.org/auth'
+    });
+    expect(authorizationUrl).toBe('https://docs.example.org/auth/realms/genie/protocol/openid-connect/auth');
+    expect(tokenUrl).toBe('https://docs.example.org/auth/realms/genie/protocol/openid-connect/token');
+  });
+
+  it('falls back to KEYCLOAK_URL when KEYCLOAK_PUBLIC_URL is unset (compose behaviour)', () => {
+    const { authorizationUrl, tokenUrl } = flowUrlsFor({
+      KEYCLOAK_URL: 'https://keycloak.example.com/auth'
+    });
+    expect(authorizationUrl).toBe('https://keycloak.example.com/auth/realms/genie/protocol/openid-connect/auth');
+    expect(tokenUrl).toBe('https://keycloak.example.com/auth/realms/genie/protocol/openid-connect/token');
+  });
+
+  it('strips a trailing slash from KEYCLOAK_PUBLIC_URL (same shape as the verifier alias)', () => {
+    const { authorizationUrl } = flowUrlsFor({
+      KEYCLOAK_URL: 'https://keycloak.example.com/auth',
+      KEYCLOAK_PUBLIC_URL: 'https://docs.example.org/auth/'
+    });
+    expect(authorizationUrl).toBe('https://docs.example.org/auth/realms/genie/protocol/openid-connect/auth');
+  });
+
+  it('treats an EMPTY KEYCLOAK_PUBLIC_URL as unset (the compose delivery shape)', () => {
+    // Compose delivers `KEYCLOAK_PUBLIC_URL=${KEYCLOAK_PUBLIC_URL:-}` — an
+    // unset variable arrives as the empty string, not as an absent one.
+    const { authorizationUrl } = flowUrlsFor({
+      KEYCLOAK_URL: 'https://keycloak.example.com/auth',
+      KEYCLOAK_PUBLIC_URL: ''
+    });
+    expect(authorizationUrl).toBe('https://keycloak.example.com/auth/realms/genie/protocol/openid-connect/auth');
+  });
+
+  it('ignores a KEYCLOAK_PUBLIC_URL that is not an absolute http(s) URL', () => {
+    // Served verbatim, a scheme-less or whitespace-carrying value breaks the
+    // Authorize popup — the same class the servers[0].url base refuses.
+    const { authorizationUrl } = flowUrlsFor({
+      KEYCLOAK_URL: 'https://keycloak.example.com/auth',
+      KEYCLOAK_PUBLIC_URL: 'docs.example.org/auth'
+    });
+    expect(authorizationUrl).toBe('https://keycloak.example.com/auth/realms/genie/protocol/openid-connect/auth');
+  });
+
+  it('ignores a KEYCLOAK_PUBLIC_URL carrying surrounding whitespace (the verifier does not trim its alias)', () => {
+    // Trimming here would point the browser at an issuer the shared
+    // verifier never accepts (its public-issuer alias is not trimmed), so
+    // a padded value is refused and the flow URLs fall back to KEYCLOAK_URL.
+    const { authorizationUrl } = flowUrlsFor({
+      KEYCLOAK_URL: 'https://keycloak.example.com/auth',
+      KEYCLOAK_PUBLIC_URL: ' https://docs.example.org/auth '
+    });
+    expect(authorizationUrl).toBe('https://keycloak.example.com/auth/realms/genie/protocol/openid-connect/auth');
+  });
+
+  it('ignores a KEYCLOAK_PUBLIC_URL carrying embedded whitespace', () => {
+    const { authorizationUrl } = flowUrlsFor({
+      KEYCLOAK_URL: 'https://keycloak.example.com/auth',
+      KEYCLOAK_PUBLIC_URL: 'https://do cs.example.org/auth'
+    });
+    expect(authorizationUrl).toBe('https://keycloak.example.com/auth/realms/genie/protocol/openid-connect/auth');
+  });
+
+  it.each([
+    ['one trailing slash', 'https://keycloak.example.com/auth/'],
+    ['two trailing slashes', 'https://keycloak.example.com/auth//']
+  ])('strips ALL trailing slashes from the KEYCLOAK_URL fallback (%s — no doubled path segment)', (_label, value) => {
+    // The ALL-slashes strip (the verifier's discovery-base rule) is what
+    // this pins: a regression to the one-slash rule (the verifier's
+    // public-alias rule, the neighbouring line in the resolver) would
+    // double the path segment for a multi-slash value, so the case pins
+    // two slashes.
+    const { authorizationUrl } = flowUrlsFor({ KEYCLOAK_URL: value });
+    expect(authorizationUrl).toBe('https://keycloak.example.com/auth/realms/genie/protocol/openid-connect/auth');
+  });
+
+  it.each([
+    ['no base at all', undefined],
+    ['a path-only base', '/'],
+    ['a scheme-only base', 'http://'],
+    ['an empty base', '']
+  ])('refuses %s (no usable KEYCLOAK_URL)', (_label, value) => {
+    // The contract: with no usable base the served URL must stay the
+    // visibly-broken marker, anchored at the base position (an unanchored
+    // substring check would accept a mutated '/undefined/...' base — still
+    // a same-origin relative path) — and it must name no origin, so an
+    // absolute URL to some origin is refused too.
+    const { authorizationUrl } = flowUrlsFor({ KEYCLOAK_URL: value });
+    expect(authorizationUrl).toMatch(/^undefined\//);
+    expect(() => new URL(authorizationUrl)).toThrow();
+  });
+});

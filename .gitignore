@@ -164,11 +164,9 @@ docker-compose.override.yml
 *.crt
 !configs/**/*.crt
 !configs/**/*.pem
-# The e2e transport owner test's throwaway TLS fixture (#1804): a
-# self-signed keypair (CN=e2e-transport-test) that guards nothing and is
-# never a credential. Every other .pem stays ignored.
-!tests/e2e/helpers/test-tls-key.pem
-!tests/e2e/helpers/test-tls-cert.pem
+# The e2e transport owner test (#1804) generates its throwaway self-signed
+# TLS keypair at load time (openssl, OS temp dir) — no key material is
+# committed; every .pem stays ignored.
 
 # Python editable install artifacts
 genie-ai-overlay/*.egg-info/

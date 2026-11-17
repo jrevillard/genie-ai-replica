@@ -348,6 +348,14 @@ test.describe('the freshness verdict names WHAT differs (#1987)', () => {
     expect(classified.neither).toEqual(['docs/e2e-tests/local-run.md', 'README.md']);
   });
 
+  test('a build context outside the product tree is still served', () => {
+    // `tools/tempo-proxy` is its own image build context: a change under
+    // `tools/` ships in an image, so it is served code, not tooling.
+    const classified = classifyCheckoutDifference(['tools/tempo-proxy/main.go']);
+    expect(classified.product).toEqual(['tools/tempo-proxy/main.go']);
+    expect(classified.neither).toEqual([]);
+  });
+
   test('a path the table does not know is treated as served', () => {
     // The default must not understate a difference: a new top-level
     // directory holding product code would otherwise be reported as

@@ -293,27 +293,31 @@ async function probeVenueBuild(context, baseUrl) {
 
 /**
  * The paths that change the SERVED product, read from the build
- * contexts rather than from taste:
+ * contexts and the bind mounts rather than from taste:
  *
  * - `components/**` — the frontend image's build context IS `components/`,
  *   so the whole tree ships in it; the backend, the document repository,
  *   the OKF server and the sidecars are built from it too;
  * - `genie-ai-overlay/**` — the OPEA images copy their service directory,
  *   `core/` and `build-patches/` out of it;
- * - `configs/**` — the Keycloak theme is baked into an image, the
- *   collector and the Grafana dashboards are mounted from it;
- * - `api-gateway-solution/**` — the gateway configuration;
- * - `env`, `env.*`, `docker-compose*.yaml` — the runtime environment;
- * - `mobile/**`, `document-translation/**`, `data/**`, `secrets/**` — the
- *   rest of the shipped product.
+ * - `configs/**` — the Keycloak theme is baked into an image (its own
+ *   build context), the collector config and the Grafana dashboards are
+ *   mounted from it;
+ * - `tools/tempo-proxy/**` — its own build context;
+ * - `api-gateway-solution/**` — the gateway configuration, and the
+ *   certbot entrypoint that is mounted from it;
+ * - `secrets/**` — the mounted certificates;
+ * - `env`, `env.*`, `docker-compose*.yaml` — the runtime environment.
  *
  * `charts/**` and `deploy/**` change HOW the product is deployed — its
  * environment, its probes, its resources. They cannot change the served
  * CODE, but they CAN move the runtime environment, so they carry their
  * own verdict.
  *
- * Everything else is neither: docs, the docs site, the tests, the
- * agent tooling. A difference there cannot explain a red.
+ * Everything else is neither: the docs, the docs site, the tests, the
+ * agent tooling, and the parts of the product this venue does not serve
+ * (the mobile app, the translation service, the seed data). A
+ * difference there cannot explain a red.
  *
  * A path this table does not know is treated as SERVED: the default must
  * not understate a difference (a new top-level directory holding product
@@ -323,20 +327,14 @@ const SERVED_PRODUCT_ENTRIES = new Set([
   'components',
   'genie-ai-overlay',
   'configs',
+  'tools',
   'api-gateway-solution',
-  'mobile',
-  'document-translation',
-  'data',
   'secrets',
   'env',
   'env.rtx6000',
   'env.t4',
   'docker-compose.yaml',
-  'docker-compose.gpu.yaml',
-  'design-system.html',
-  'typings',
-  'go.mod',
-  'openapitools.json'
+  'docker-compose.gpu.yaml'
 ]);
 
 const DEPLOYMENT_ENTRIES = new Set(['charts', 'deploy', '.gitlab-ci.yml']);
@@ -346,7 +344,13 @@ const NEITHER_ENTRIES = new Set([
   'site',
   'tests',
   'scripts',
-  'tools',
+  'mobile',
+  'document-translation',
+  'data',
+  'design-system.html',
+  'typings',
+  'go.mod',
+  'openapitools.json',
   '.claude',
   '.agents',
   '_bmad',

@@ -372,8 +372,11 @@ const mutations = {
   setBrowser(state, patch) {
     state.browser = { ...state.browser, ...patch };
   },
-  /** Open the dialog fresh at a cited concept — every open RESETS the index
-   * (browse reflects what is indexed NOW, never a stale cached corpus). */
+  /** Open the dialog fresh — every open RESETS the index (browse reflects
+   * what is indexed NOW, never a stale cached corpus). Two modes: at a
+   * CITED concept (conceptId seeds the history) or REPO-LEVEL (no
+   * conceptId — the Studio dashboard's Browse; the detail pane shows the
+   * select hint and the history starts empty until the first visit). */
   openBrowser(state, { repoId, conceptId } = {}) {
     state.browser = {
       ...initialBrowserState(),
@@ -2311,15 +2314,20 @@ const actions = {
    * identity (a pre-CAP-1 persisted row) never opens a dead dialog — but
    * the affordances only render on working citations, so this arm is a
    * backstop, not the UI's gate.
+   *
+   * A REPO-LEVEL open (no conceptId — the Studio dashboard's Browse action)
+   * loads the tree ONLY: the dialog's existing "select a concept" empty
+   * state is the invitation, and the history starts empty until the first
+   * visit (the openBrowser mutation already handles a null seed).
    */
   openConceptBrowser({ commit, dispatch }, { repoId, conceptId } = {}) {
-    if (!repoId || !conceptId) return { ok: false, code: 'VALIDATION_ERROR' };
+    if (!repoId || (conceptId !== undefined && !conceptId)) return { ok: false, code: 'VALIDATION_ERROR' };
     commit('openBrowser', { repoId, conceptId });
     // Both runs own their stale guards independently; neither blocks the
     // other — the list is usable from the first committed page, the detail
     // pane as soon as the CAP-2 card lands.
     dispatch('fetchConceptTree', { repoId });
-    dispatch('browserLoadConcept', { repoId, conceptId });
+    if (conceptId) dispatch('browserLoadConcept', { repoId, conceptId });
     return { ok: true };
   },
 

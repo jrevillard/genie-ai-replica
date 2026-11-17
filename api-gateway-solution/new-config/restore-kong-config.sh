@@ -136,11 +136,12 @@ restore_config() {
     config_json=$(cat "$backup_file")
 
     # OKF feature flag (2026-10-21, merge prep): OKF_ENABLED=0 parks the OKF
-    # API surface. The okf-server service and /api/okf route are stripped from
-    # the declarative config before apply, and any okf-tagged entities from an
-    # earlier enabled run are deleted so a disable is idempotent. The OKF
-    # containers (okf-server/ragas-service/pii-service) and the frontend's OKF
-    # surfaces are gated by the same variable.
+    # API surface. The okf-server and okf-import (#1944) services and the
+    # okf-tagged routes are stripped from the declarative config before
+    # apply, and any okf-tagged entities from an earlier enabled run are
+    # deleted so a disable is idempotent. The OKF containers
+    # (okf-server/ragas-service/pii-service) and the frontend's OKF surfaces
+    # are gated by the same variable.
     if [ "${OKF_ENABLED:-0}" != "1" ]; then
         log "OKF_ENABLED=${OKF_ENABLED:-0} — parking the OKF API surface"
         # Paginate (review !622 round 9, #78688): Kong caps /routes at a default
@@ -187,7 +188,13 @@ restore_config() {
             response=$(curl -s -o /dev/null -w "%{http_code}" -X DELETE "$KONG_ADMIN_URL/services/okf-server" < /dev/null)
             log "Deleted okf-server service (HTTP $response)"
         fi
-        config_json=$(echo "$config_json" | jq 'del(.services[] | select(.name == "okf-server")) | del(.routes[] | select((.tags // []) | index("okf")))')
+        # #1944: the long-timeout import service parks with the rest of the
+        # OKF surface — same idempotent disable, same fail-soft delete probe.
+        if [ "$(curl -s "$KONG_ADMIN_URL/services/okf-import" < /dev/null | jq -r '.id // empty')" ]; then
+            response=$(curl -s -o /dev/null -w "%{http_code}" -X DELETE "$KONG_ADMIN_URL/services/okf-import" < /dev/null)
+            log "Deleted okf-import service (HTTP $response)"
+        fi
+        config_json=$(echo "$config_json" | jq 'del(.services[] | select(.name == "okf-server" or .name == "okf-import")) | del(.routes[] | select((.tags // []) | index("okf")))')
     fi
 
     errors=0

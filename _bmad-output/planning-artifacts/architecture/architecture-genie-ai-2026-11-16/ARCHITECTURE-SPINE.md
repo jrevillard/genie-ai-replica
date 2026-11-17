@@ -276,11 +276,16 @@ service; the frontend never talks to anything but the BFF.
   tolerated-absent. The **query-instruction embedding prefix**
   (`get_query_instruction` per embedding model) is mandatory on every query
   embedding — omitted prefixes silently corrupt dense scores. **Method:
-  reimplementation, not code sharing** — the port is new Python in
-  agent-service; no shared library, no wrapping, no dual-mode code with the
-  OPEA overlay (a shared lib would restructure the comps-vendoring build and
-  couple the paths — FR-21; the bounded duplication ends by deletion at the
-  deferred OPEA-exit initiative, never by merging). Evaluation
+  reimplementation, not code sharing** — a **clean-slate port**: modern
+  patterns (typed port/adapters, DI, testable units) are encouraged where
+  needed, but **behavior is frozen** to the V02-recorded semantics in
+  iteration 1 so E01 attributes every difference to nothing; behavioral
+  improvements are iteration-2 work with evidence (addendum F). The port is
+  new Python in agent-service; no shared library, no wrapping, no dual-mode
+  code with the OPEA overlay (a shared lib would restructure the
+  comps-vendoring build and couple the paths — FR-21; the bounded
+  duplication ends by deletion at the deferred OPEA-exit initiative, never
+  by merging). Evaluation
   config B (fixed pipeline over the new capabilities) = a no-agent mode of
   the same service: a single-pass port call through the same orchestrator
   admission lane and the same budgets — B and C share the retrieval backend

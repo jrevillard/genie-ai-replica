@@ -117,7 +117,7 @@ lib/design_system/
 
 ### Keycloak Mobile Client
 
-For creating a new institutional deployment, follow the [Mobile Deployment Onboarding Guide](../../../site/content/en/docs/deployment/mobile-deployment-guide.md). The guide covers environment variables, Keycloak client creation, flavor configuration, build commands, and validation.
+For creating a new institutional deployment, follow the [Mobile Deployment Onboarding Guide](../../../site/content/en/docs/mobile/mobile-deployment-guide.md). The guide covers environment variables, Keycloak client creation, flavor configuration, build commands, and validation.
 
 The mobile OIDC client is created automatically by keycloak-config-cli from environment variables. For the legacy manual creation process (kept for reference):
 

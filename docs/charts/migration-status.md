@@ -45,8 +45,10 @@ contractual evidence — a fresh clone does not carry them.)
   itself stays blocked on operator CRD surfaces — measured and
   recorded in the #1231 issue.
 - **The OKF integration is complete and reviewed (0.2.131–0.2.136)** —
-  the parity gate compares 311 variables across 16 service pairs with
-  zero gaps, the whole-integration review's eight findings closed, the
+  the parity gate compared 311 variables across 16 service pairs with
+  zero gaps at that wave (the gate's floor has since moved to **327** —
+  `.gitlab-ci.yml` passes `--min-compared=327`), the whole-integration
+  review's eight findings closed, the
   verification pass confirmed against the rendered manifests and the
   live cluster, and the clearable-blocks gate crash the tier's first
   renders carried is fixed (the four tier templates now gate
@@ -332,10 +334,11 @@ contractual evidence — a fresh clone does not carry them.)
   every cluster in the range, so it pins the range's LOW bound, and
   the only commands the hooks run (`get ns`, `describe ns`, `create -f`
   of an Event) are on stable APIs.
-- **The 1.37 laptop cluster runs chart 0.2.170, validated live** — the
+- **The 1.37 laptop cluster was rebuilt on Kubernetes v1.37.0 and
+  validated live at chart 0.2.170** — the
   cluster was rebuilt on Kubernetes **v1.37.0** (minikube v1.39.0, Calico
   enforcing the NetworkPolicies) and the whole platform converged:
-  the HelmRelease reports Ready with chart `genieai-umbrella@0.2.170`,
+  the HelmRelease reported Ready with chart `genieai-umbrella@0.2.170`,
   and the two operator bumps are effective on the cluster
   (cert-manager **v1.21.3**, kube-arangodb **1.4.7** — read back from
   the Flux HelmReleases, not from the file). Live evidence for the

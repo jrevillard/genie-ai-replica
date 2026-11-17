@@ -305,7 +305,11 @@ For each plug point, the chart ships a **default backend's templates**, with the
 
 Switching `pluggable.secretsBackend` between installs (`externalSecrets` → `sealedSecrets`, etc.) leaves the prior backend's CRs (`ExternalSecret`, `SealedSecret`, `SecretProviderClass`) in the cluster. The chart does not delete them on uninstall or swap. Manual reconciliation needed.
 
-**Shipped migration playbook** (`docs/charts/secrets-migration.md`) covers:
+**Secret-backend switching playbook** — NOT WRITTEN. The doc planned as
+`docs/charts/secrets-migration.md` was never authored; the transitions it
+would have covered are recorded here for the record (the chart ships only
+the `sealedSecrets` backend today, so none of these transitions is
+reachable without adding the other backends first):
 
 - `externalSecrets → sealedSecrets`: Vault paths stay the same; on next deploy, ESO controllers offline the synced K8s Secrets, then `kubeseal`-encrypted files rotate in. Rollback within 24h if Vault path reconciliation fails.
 - `externalSecrets → secretProviderClass`: AKV targets must already exist; chart's `templates/_lib/secrets-aks-spn/` references the AKV URI; manual `kubectl delete externalsecret,secretstore` first.
@@ -315,7 +319,7 @@ Switching `pluggable.secretsBackend` between installs (`externalSecrets` → `se
 
 ### 6.2 Single-backend ships; document others as plug-points
 
-Per YAGNI discipline (Code Review pass, Y2): the chart ships only **`sealedSecrets`** rendered (per §6 table and §8 — v1's default and only backend). Templates for `externalSecrets` (ESO) and `secretProviderClass` (Azure CSI) are **not yet authored**; the plug-point design is documented in `docs/charts/pluggable-backends.md` so a later MR can add them. This avoids premature template triplication while preserving the pluggability surface area. (An earlier draft of this paragraph named `externalSecrets` as the shipped backend — inverted; corrected.)
+Per YAGNI discipline (Code Review pass, Y2): the chart ships only **`sealedSecrets`** rendered (per §6 table and §8 — v1's default and only backend). Templates for `externalSecrets` (ESO) and `secretProviderClass` (Azure CSI) are **not yet authored**; the plug-point design is sketched in this section (the doc planned as `docs/charts/pluggable-backends.md` was never written) so a later MR can add them. This avoids premature template triplication while preserving the pluggability surface area. (An earlier draft of this paragraph named `externalSecrets` as the shipped backend — inverted; corrected.)
 
 ## 7. Component surface (app tier, 28 services)
 
@@ -452,53 +456,44 @@ vLLM/TEI resources remain governed by `services.*.resources`; `gpu.limitsPerServ
 
 ## 12. Migration tie-in
 
-The chart supports three install patterns:
+**What shipped is the Flux path**, not the ArgoCD/`deploy/environments/`
+model this section originally described. The per-environment overlays live
+in the **separate `genie-ai-deploy` repository**, under
+`overlays/<cluster>/<env>/`, and are reconciled by **Flux v2** (the
+`genie-ai-deploy` README carries the operator bootstrap). The
+`deploy/environments/` directory in this repository is intentionally empty
+— its README states it plainly: "It is not the model that shipped."
+
+The shipped install path:
 
 ```bash
-# Pattern A — full install on a greenfield cluster
-# --create-namespace is REQUIRED: the Namespace is a regular chart
-# resource and the release Secret + pre-install hooks need it present
-# before any chart resource applies.
-helm install prd charts/genieai-umbrella -n genieai --create-namespace \
-  -f ./deploy/environments/prod/values-override.yaml
-
-# Pattern B — partial install during phased migration
-# F5 fix (per round-8 review): the pre-install dep-check Job fails
-# any install where a service's declared data deps are not enabled
-# (e.g. `services.backend` requires `data.arangodb`). For Pattern B
-# the operator MUST explicitly skip the dep check via the
-# `--no-hooks` flag (or, equivalently, disable the dep-check
-# ServiceAccount in the per-env values). Plan 2 Task 6 ships the
-# dep check; this flag is the documented escape hatch.
-helm install prd charts/genieai-umbrella -n genieai --create-namespace \
-  -f ./deploy/environments/migration-step1.yaml \
-  --set data.postgres.enabled=true \
-  --set data.arangodb.enabled=false \
-  --set services.frontend.enabled=true \
-  --set services.backend.enabled=true \
-  --no-hooks   # skip the dep-check pre-install Job (Pattern B is
-               # the documented exception; the prod / dev / sovereign
-               # overlays do NOT use --no-hooks)
-
-# Pattern C — Swarm bridge (legacy coexistence)
-helm install edge charts/genieai-umbrella -n genieai-edge --create-namespace \
-  -f ./deploy/environments/sovereign/values-override.yaml \
-  --set migration.swarmFallback=true \
-  --set migration.swarmEndpoint=http://10.0.0.102:443 \
-  # Brace-wrap comma lists: bare --set splits on commas and the second
-  # CIDR would be parsed as a separate (invalid) expression.
-  --set 'migration.swarmAllowedCIDRs={10.0.0.0/16,192.168.0.0/16}'
+# The deploy repo owns the environment. Flux reconciles it; the operator
+# never runs helm against the cluster by hand.
+flux reconcile helmrelease genieai -n flux-system
+flux get hr genieai -n flux-system
 ```
 
-Each pattern produces a working install. Pattern A is the v1 target. B and C exist to keep options open during phased migration.
+The chart's own README (`charts/genieai-umbrella/README.md`) carries the
+plain-`helm install` equivalent for an operator who runs the chart
+directly, with the full Secret and `envSecrets` recipe.
 
-**Pattern C network requirement**: The default-deny NetworkPolicy egress (per spec §7) blocks cross-cluster traffic unless an explicit allowlist is present. When `migration.swarmFallback: true`, the chart emits an additional egress rule per app-tier service allowing TCP to the IP range(s) listed in `migration.swarmAllowedCIDRs` (operator-supplied; `10.0.0.0/16` default for the .102 cluster). Without this, Pattern C pods fail Swarm-bridge egress to `migration.swarmEndpoint` at install time. **Review Focus F12 fix.**
+**Never shipped — kept here as design history:**
 
-Per-env install in practice:
-- **Plain envs** (dev, staging, prod): `values-override.yaml` lives in `deploy/environments/<env>/`. ArgoCD ApplicationSet pulls from `main` branch + renders the override file at the same ref.
-- **High-customization envs** (el-salvador): same path, on `release/el-salvador` branch. Production reference is whichever ArgoCD Application is configured for the .102 cluster.
-
-`release/<env>` branches modify ONLY `deploy/environments/<env>/` and any overlay content. The chart source under `charts/` is untouched — same source across all envs, differing only in overlay values. This is the K8s-idiomatic equivalent of today's "branch carries env customizations, deploy.yml reads them."
+- **Pattern B (partial install during a phased migration).** The
+  dependency-graph pre-install Job refuses an install where a service's
+  declared data dependencies are disabled (e.g. `services.backend`
+  requires `data.arangodb`); `--no-hooks` was to be the documented escape
+  hatch. The `dependencyGraph` values block shipped instead, and the Job
+  now fails the install **by name** ("dependency not satisfied") rather
+  than hanging.
+- **Pattern C (Swarm bridge).** `migration.swarmFallback`,
+  `migration.swarmEndpoint` and `migration.swarmAllowedCIDRs` are **not
+  chart values** — no `migration.*` key exists in `values.yaml`. The
+  equivalent capability shipped as the OPEA tier's own egress knobs
+  (`opea.gpu.allowedCIDRs`, `services.backend.externalApiCIDRs`,
+  `services.documentRepository.crawlAllowedCIDRs`).
+- **Per-env `release/<env>` branches carrying `deploy/environments/<env>/`.**
+  Replaced by per-cluster overlays in the deploy repo.
 
 ## 13. Test strategy
 
@@ -736,28 +731,39 @@ Renovate bot tracked in `renovate.json` updates `charts/genieai-umbrella/Chart.y
 
 ## 15. Documentation
 
-Spec'd under `site/content/en/docs/deployment/kubernetes-helm.md` (new page, public docs site). Pull-down of:
-- installation matrix (env → values file → expected install time)
-- values.yaml field reference
-- pluggable backends table
-- phased migration playbook
+Spec'd under `site/content/en/docs/deployment/kubernetes-helm.md` (new page,
+public docs site). **The page shipped under a different path** —
+`site/content/en/docs/deploy/kubernetes.md` (the site's `deployment/`
+section was renamed `deploy/`). Pull-down of:
+- installation matrix (env → values file → expected install time) — **not written**
+- values.yaml field reference — **not written**
+- pluggable backends table — **not written**
+- phased migration playbook — **not written**
 
-Internal ops docs under `docs/charts/` (K8s-only, dev-internal, not published):
-- `docs/charts/operator-selection.md` — why these deps
-- `docs/charts/migration-playbook.md` — group-by-group cutover
-- `docs/charts/secrets-backend-matrix.md` — ESO/Vault/AKV/Sealed
-- `docs/charts/ci-cd.md` — gitlab-ci integration notes
+Internal ops docs under `docs/charts/` (K8s-only, dev-internal, not
+published). **These four were planned and never written** — the list is
+kept so the gap stays visible instead of hiding behind a dangling link:
+
+- `docs/charts/operator-selection.md` — why these deps — **not written**
+- `docs/charts/migration-playbook.md` — group-by-group cutover — **not written**
+- `docs/charts/secrets-backend-matrix.md` — ESO/Vault/AKV/Sealed — **not written**
+- `docs/charts/ci-cd.md` — gitlab-ci integration notes — **not written**
+
+What exists instead: `docs/charts/migration-status.md` (the live ledger),
+`docs/charts/laptop-cluster-bootstrap.md` (a cluster bootstrap procedure),
+and the CI gates themselves (`scripts/ci/`, documented in
+`charts/README.md`).
 
 ## 16. Open questions
 
 These are deliberate unknowns NOT blocking v1, but documented for follow-up:
 
-1. **Pluggable secrets delivery default**: `sealedSecrets` is current default. Helm dep pinned to `~> 2.20.0` (pin rationale in `docs/charts/k8s-native-audit.md`; the CVE IDs cited by early research were NOT verified and are retracted — rotation is operator-initiated, see §8). Chart ships ONLY this backend in v1. Adding `externalSecrets` (ESO + Vault) and `secretProviderClass` (Azure CSI) later is documented in `docs/charts/pluggable-backends.md`. Self-rationale (2026-10-08): sovereign public-sector posture + no Vault infrastructure available.
+1. **Pluggable secrets delivery default**: `sealedSecrets` is current default. Helm dep pinned to `~> 2.20.0` (pin rationale in `docs/charts/k8s-native-audit.md`; the CVE IDs cited by early research were NOT verified and are retracted — rotation is operator-initiated, see §8). Chart ships ONLY this backend in v1. Adding `externalSecrets` (ESO + Vault) and `secretProviderClass` (Azure CSI) later is sketched in this section (the doc planned as `docs/charts/pluggable-backends.md` was never written). Self-rationale (2026-10-08): sovereign public-sector posture + no Vault infrastructure available.
 2. **Multi-cluster topology**: not v1. Documented in roadmap.
 3. **GPU sharing (MIG/MPS/time-slicing)**: per-service fine-grained control on 24GB cards is a v2 epic; v1 keeps simple `nodeSelector` and `replicas`. **GPU nodePool validation** (G2) — `gpu.enabled: true` should require `gpu.nodePoolRef` to be set against a labelled node pool; without GPU nodes, the NVIDIA operator DaemonSet crashloops. P2 to add in v1.1.
 4. **Connection pooling (PgBouncer)**: CloudNativePG has native support; whether `services.backend` connects via pooler or direct is a v1.1 decision.
 5. **Sticky dev workflow**: out-of-tree dev loop (helm-up + exec into container) is not specified. Solve during Day-1 onboarding.
-6. **Vault audit logging** (V4 from review): if externalSecrets is the default backend, Vault's audit device must be enabled for compliance; cross-reference in `docs/charts/secrets-audit-compliance.md`. P2.
+6. **Vault audit logging** (V4 from review): if externalSecrets is the default backend, Vault's audit device must be enabled for compliance; cross-reference (the doc planned as `docs/charts/secrets-audit-compliance.md` was never written). P2.
 7. **Library-chart vs `_helpers.tpl` naming** (Y1 from review): `genieai-common` IS conceptually the umbrella's `_helpers.tpl` plus standalone templates. Clarify in chart README: "library chart contains template definitions; consuming charts call them via `{{ include }}` — NO `import-values:` (dropped: Helm 4 injects the reserved `global` key into subchart values, which the library schema rejects; see §3 amendment), and helpers.tpl contains labels/selectors/name conventions." P2 doc clarification.
 8. **Service template generator** (Y3 from review): 28 services × 4 templates = ~112 files. v1 ships them hand-authored for transparency; **v1.1 introduces `make render-services` from a single service-list YAML**. P2 deferred.
 
@@ -773,14 +779,15 @@ These are deliberate unknowns NOT blocking v1, but documented for follow-up:
 - `deploy/environments/prod/` (HA production)
 - `deploy/environments/el-salvador/` (customization template — populated by future work on that env)
 - `deploy/environments/README.md`
-- `site/content/en/docs/deployment/kubernetes-helm.md`
-- `site/content/en/docs/deployment/per-env-branches.md`
+- `site/content/en/docs/deploy/kubernetes.md` (shipped — the page planned
+  as `docs/deployment/kubernetes-helm.md`)
+- `site/content/en/docs/deployment/per-env-branches.md` — **not written**
 - `.gitlab-ci.yml` integration (`charts:lint`, `charts:integration`, `charts:scan`)
 - `docs/charts/helm-charts-design.md` (this doc)
-- `docs/charts/operator-selection.md`
-- `docs/charts/migration-playbook.md`
-- `docs/charts/per-env-config.md`
-- One Phased-migration example values file per documented group (5, 2, 1, 4, 6, 3)
+- `docs/charts/operator-selection.md` — **not written**
+- `docs/charts/migration-playbook.md` — **not written**
+- `docs/charts/per-env-config.md` — **not written**
+- One Phased-migration example values file per documented group (5, 2, 1, 4, 6, 3) — **not written**
 
 ## 18. What lands later
 
@@ -951,7 +958,7 @@ For envs that need `release/<env>` branches, change `targetRevision`. The mechan
 
 #### 19.3.3 Flux — alternative for teams committed to GitOps Toolkit
 
-Same idea via `HelmRelease` + `Kustomization`. Documented in `docs/charts/per-env-config.md` as option C.
+Same idea via `HelmRelease` + `Kustomization` — which is what shipped (option C; the doc planned as `docs/charts/per-env-config.md` was never written).
 
 #### 19.3.4 Why this is three options, not one
 

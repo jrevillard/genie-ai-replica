@@ -60,29 +60,10 @@ rtk proxy helm template genieai charts/genieai-umbrella/ \
 #    SealedSecrets sealed against THAT cluster's key). Substitute the
 #    name of the overlay your deploy-repo checkout carries.
 
-# 4. Bump chart version in two places (always together)
-#    - charts/genieai-umbrella/Chart.yaml (version + appVersion if changed)
-#    - genie-ai-deploy overlay: overlays/<dev>-laptop/dev/helmrelease.yaml
-#      spec.chart.spec.version
-#
-#    WHY, exactly: the version is the deploy repo's LABEL of the chart
-#    it installs — a reader of the overlay sees which chart release
-#    the cluster runs. It is NOT what Flux reconciles on for this
-#    source: the HelmRelease CRD says the field is "ignored for charts
-#    from v1.GitRepository and v1beta2.Bucket sources" (helm-controller
-#    v1.1.0), and the controller's install decision is the SOURCE's
-#    artifact digest — for the chart's GitRepository that is the branch
-#    tip (the overlays track `branch: feat/k8s-migration`, deliberately
-#    not a commit pin). So a chart push reaches the cluster with or
-#    without a version bump; what the bump buys is that the overlay and
-#    the chart agree on what is deployed.
-#
-#    Bump per push, not per batch, so the label never names a chart
-#    that is not the one in the cluster.
-#
-#    CI enforces it: scripts/ci/chart-version-check.py (chart:lint job) fails
-#    the pipeline when the last two chart-touching commits changed the
-#    chart's content without moving the version.
+# 4. Bump the chart version (Chart.yaml) AND the overlay's version
+#    (genie-ai-deploy) — always together, every overlay.
+#    Full workflow, gate, verification and rollback: "Chart version
+#    bump — the workflow" below.
 
 # 5. Commit chart + push genie-ai-deploy (overlay version bump). Order:
 #    a) push chart repo (chart publish first, otherwise overlay can pull
@@ -94,6 +75,123 @@ flux reconcile helmrelease genieai -n flux-system
 # 6. Watch rollout
 kubectl -n genieai rollout status deploy/genieai-genieai-umbrella-<service> --timeout=300s
 ```
+
+## Chart version bump — the workflow
+
+The chart version is released on its **own axis**, independent of the
+product release (the image tags). It has the same discipline as the
+release workflow: a named artifact, a gate that enforces it, a
+verification step, and a rollback path. The full picture:
+
+### When the bump is mandatory
+
+**Any commit that touches `charts/genieai-umbrella/**`,
+`charts/genieai-common/**` or `charts/genieai-assets/**`.** All three
+change what the umbrella installs: the library renders INTO the
+umbrella's output, and the assets chart is a **cargo dependency** whose
+files (the realm, the Keycloak theme tarball, the Grafana dashboards)
+are rendered by the umbrella through `.Subcharts.genieai-assets.Files`
+and travel with the release. `charts/README.md` and `charts/Makefile`
+sit OUTSIDE the watched paths and need no bump.
+
+The gate is `scripts/ci/chart-version-check.py` (the `chart:lint` job):
+it compares the last two chart-touching commits of the change and fails
+when the content moved without the version moving. It runs in CI, so a
+missed bump is caught by the pipeline — but it is cheaper not to trip it.
+
+> A `make chart-dashboards` or `make keycloak-theme` regeneration touches
+> `charts/genieai-assets/**` — it is a chart change, and it needs the bump
+> like any other.
+
+### What to change
+
+| File | Field | Value |
+|---|---|---|
+| `charts/genieai-umbrella/Chart.yaml` | `version` | the new chart release (`0.2.N` → `0.2.N+1`) |
+| `charts/genieai-umbrella/Chart.yaml` | `appVersion` | mirrors `version` **deliberately** — it tracks the chart layout, not the product release (the two are on independent axes; deployed image tags come from values, never from `appVersion`) |
+| `genie-ai-deploy/overlays/<cluster>/<env>/helmrelease.yaml` | `spec.chart.spec.version` | the same number, in EVERY overlay that installs the chart |
+
+**The overlay bump is a separate repository and a separate commit.**
+Bump every overlay, not just the one you are testing on: an overlay left
+at the old number names a chart the cluster is not running.
+
+### Why the overlay's version is a LABEL, not the reconcile key
+
+helm-controller reconciles on the SOURCE's artifact, not on
+`spec.chart.spec.version`: the HelmRelease CRD says the field is
+"ignored for charts from v1.GitRepository and v1beta2.Bucket sources"
+(helm-controller v1.1.0). For the chart's GitRepository the artifact is
+the **branch tip** — the overlays track `branch: feat/k8s-migration`,
+deliberately not a commit pin. So a chart push reaches the cluster
+whether or not the version was bumped; what the bump buys is that the
+overlay and the chart agree on what is deployed.
+
+Two consequences to keep in mind:
+
+- A bump does **not** gate the install — the branch tip is what installs.
+- A branch-tip source means a broken commit lands in the cluster on the
+  next reconcile (1 minute on the laptop overlay), with no CI gate in
+  between. That is the accepted trade-off for a dev cluster; production
+  gates at the merge-to-main step.
+
+### The order (two repos, two pushes)
+
+```bash
+# 1. In the CHART repo: bump Chart.yaml, commit, push.
+#    The chart publishes on push — the overlay must never name a version
+#    that does not exist yet.
+git add charts/genieai-umbrella/Chart.yaml
+git commit -m "chore(charts): <what changed> (0.2.N+1)"
+git push
+
+# 2. In the DEPLOY repo: bump spec.chart.spec.version in every overlay
+#    that installs this chart, commit, push.
+git add overlays/*/dev/helmrelease.yaml
+git commit -m "chore(deploy): the overlay installs chart 0.2.N+1"
+git push
+
+# 3. Reconcile and watch (the overlay's source interval is 10m; force it).
+flux reconcile helmrelease genieai -n flux-system
+flux get hr genieai -n flux-system
+kubectl -n genieai rollout status deploy/genieai-genieai-umbrella-<service> --timeout=300s
+```
+
+### Verify
+
+```bash
+# The release reports the chart it installed
+flux get hr genieai -n flux-system        # Ready, chart genieai-umbrella@0.2.N+1
+helm -n genieai list                      # the release revision
+kubectl -n genieai get pods               # every pod Ready
+```
+
+The three must agree: the chart's `Chart.yaml`, the overlay's
+`spec.chart.spec.version`, and the release the cluster reports. A
+mismatch is the signal that one of the two bumps was missed.
+
+### Rollback
+
+Revert **both** commits (chart first or overlay first, in the same order
+as the install — the overlay must never name a version that does not
+exist), push, and reconcile. A chart rollback after the overlay has
+already moved on is the case that breaks: the overlay's version names a
+chart that no longer exists at that number.
+
+### Relation to the release workflow
+
+They are **two independent axes**:
+
+| | Chart version | Product release |
+|---|---|---|
+| Bumps when | the chart's content changes | the product ships |
+| Lives in | `charts/genieai-umbrella/Chart.yaml` + the deploy-repo overlays | `CHANGELOG.md`, a `release/X.Y` branch, a `vX.Y.Z` tag |
+| Gate | `chart-version-check.py` (`chart:lint`) | `config:changelog` + the tag pipeline |
+| Installs into | the cluster | the images |
+
+A release that also changes the chart runs **both**: the chart bump
+(here) and the release workflow (`.claude/rules/RELEASE.md`). Neither
+substitutes for the other, and a release that bumps only one of them
+leaves the other stale.
 
 ## The chart carries copies — re-sync them
 
@@ -140,11 +238,13 @@ ownership errors. **Always** render with `-n genieai`.
 ### Gate B — placeholder-secret guard
 
 `data.keycloak.failOnPlaceholderSecrets` defaults to `true` (prod safety).
-The laptop overlay sets it `false` (overlay values via `values:` inline block
-in `helmrelease.yaml`), feeding real client secrets through `envSecrets` rows
-that reference the Secrets the SealedSecret controller materializes in the namespace. A render with no overlay values
-**must** carry `--set data.keycloak.failOnPlaceholderSecrets=false` or the
-render fails loudly on `change-me-*` placeholders.
+The laptop overlay **keeps it on** — it declares non-placeholder values
+for `data.keycloak.clientSecrets.*` and wires the realm's Secret-backed
+variables through `data.keycloak.convergence.envSecrets` rows that
+reference the Secrets the SealedSecret controller materializes in the
+namespace, so the render passes with the guard ON. A render with no
+overlay values **must** carry `--set data.keycloak.failOnPlaceholderSecrets=false`
+or the render fails loudly on `change-me-*` placeholders.
 
 ### Gate C — byte-compare for pure refactors
 
@@ -255,9 +355,12 @@ both `opea.gpu.mode` values.
 # Always work in the app namespace
 kubectl -n genieai get pods,svc,deploy
 
-# Naming: Deployments = <release>-genieai-umbrella-<service>
-# (genieai-genieai-umbrella-backend, ...); Services use literal short names
-# (svc/nginx, svc/backend, svc/clamav, ...).
+# Naming: most Deployments = <release>-genieai-umbrella-<service>
+# (genieai-genieai-umbrella-backend, ...), but three carry a bare name:
+# clamav, redis-cache, envoy-gateway (the last is the Envoy Gateway
+# subchart). Services use literal short names
+# (svc/backend, svc/clamav, svc/envoy-genieai-genieai-<hash>, ...).
+# `kubectl -n genieai get deploy` is the authoritative list.
 kubectl -n genieai get pods -l app.kubernetes.io/name=<chart>
 
 # Pod env (BEFORE theorizing why a feature is misbehaving)
@@ -314,8 +417,10 @@ Special case — `vllm-api-key` carries **two** keys:
 ## Live validation set
 
 The end-to-end test that proves the stack works. Per cycle, run all six
-(last full pass: **0.2.130, 2026-10-29**, on the rebuilt 12 GiB node —
-all six green; previous full pass was 0.2.32, 2026-10-18):
+(last full pass: **0.2.149, 2026-11-02** — 6/6, the first over the
+busybox tooling tier; previous full passes: 0.2.130, 2026-10-29, and
+0.2.32, 2026-10-18). The chart has moved on since that pass — re-run the
+set before trusting it on a newer release:
 
 1. `/api/health` returns 200 through the edge: `kubectl -n genieai
    port-forward svc/envoy-genieai-genieai-<hash> 4443:4443` (the Service
@@ -339,18 +444,13 @@ all six green; previous full pass was 0.2.32, 2026-10-18):
    just-ingested file; confirm the answer is correct AND `source_documents`
    cites the file.
 
-Known caveats from the 0.2.130 pass:
+Known caveats:
 
-- **The chatqna tokenizer is NOT available offline** (main-side defect):
-  `align_inputs` calls `AutoTokenizer.from_pretrained(LLM_MODEL)` at
-  request time, the image bakes no HF cache, and the chatqna
-  NetworkPolicy has no egress to huggingface.co — so a fresh pod
-  cannot serve ANY chat. The 0.2.130 pass worked because the tokenizer
-  files were injected by hand into the running pod
-  (`~/.cache/huggingface/hub/models--ibm-granite--granite-4.1-8b/`,
-  snapshot + `refs/main`); a pod restart loses them. The proper fix is
-  a main-side MR baking the tokenizer into the chatqna image
-  (HF_HUB_OFFLINE=1 + cache = deterministic, no egress needed).
+- **The chatqna tokenizer defect is FIXED** (!631): the service counts
+  tokens through the LLM server's `/tokenize` endpoint instead of loading
+  a local `AutoTokenizer`, so a fresh pod serves chat with no HF cache and
+  no huggingface.co egress. (The 0.2.130-pass caveat that said otherwise
+  is kept in the ledger for the record.)
 - **First-boot ordering**: on a cold cluster the dataprep (and any OPEA
   service) crashes once with a collector `ConnectionError` when its OTLP
   exporter fires before the collector pod pulled its image. The

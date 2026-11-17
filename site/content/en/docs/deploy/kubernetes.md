@@ -8,7 +8,7 @@ aliases:
 mode: how-to
 persona: deployer
 owner: "docs-stewards"
-last_reviewed: 2026-10-18
+last_reviewed: 2026-11-17
 ---
 
 This guide covers GENIE.AI on Kubernetes via the `genieai-umbrella` Helm chart.
@@ -27,6 +27,19 @@ GitOps is the supported distribution model. A companion `genie-ai-deploy`
 repo holds the Flux `Kustomization` + `HelmRelease` for each environment.
 Flux reconciles from the deploy repo at a fixed interval; the chart itself
 lives under `charts/` in the application repo and is referenced by path.
+
+Two consequences of that wiring are worth knowing before an upgrade:
+
+- The `HelmRelease`'s `spec.chart.spec.version` is **ignored** for a
+  Git-path source — helm-controller reconciles on the SOURCE artifact, so
+  the chart version that installs is the one in the branch the
+  `GitRepository` points at. The overlay's `version:` field is a label
+  that keeps the overlay and the chart in agreement; changing it does not
+  select a chart.
+- A chart branch is usually tracked by **branch tip, not a commit pin**,
+  so a push to that branch reaches the cluster on the next reconcile
+  interval — with no CI gate in between. On a development cluster that is
+  the wanted behaviour; on production, gate at the merge step.
 
 ## Prerequisites
 
@@ -56,8 +69,22 @@ reconcilers and failed releases.
 | `kube-arangodb` | 1.4.x | ArangoDB `ArangoDeployment` / `ArangoMember` |
 | CloudNativePG (`cnpg`) | a CRD serving `postgresql.cnpg.io/v1` | The Keycloak Postgres cluster (`keycloak-db`) |
 | `keycloak-operator` | 26.8.0 | `Keycloak` CR + realm import infrastructure |
-| `cert-manager` | latest | Per-env TLS — required when issuer pinning is enabled |
 | `sealed-secrets` (or alternative) | ≥ 0.40 | Encrypts Secrets into the deploy repo |
+| **OpenTelemetry Operator** | ships the `opentelemetry.io/v1beta1` CRDs | The collector gateway **and** the filelog agent — **required by the default install**: `observability.logs.enabled` defaults to `true`, so a release without it fails with `no matches for kind "OpenTelemetryCollector"` |
+| **victoria-metrics-operator** (vm-operator) | ships `operator.victoriametrics.com/v1` | The `VLSingle` / `VMSingle` / `VTSingle` CRs — **required by the default install** for the same reason (`observability.logs.enabled: true`) |
+| `cert-manager` | latest | Per-env TLS — required when `ingress.tls.enabled` names an issuer |
+
+Two more CRD sets come from the chart's own dependency: the **Gateway API**
+CRDs (`gateway.networking.k8s.io`) and the Envoy Gateway bundle ship with
+the `gateway-helm` dependency, so an install that owns its edge needs
+nothing extra — but an install that points `gatewayClassName` at a
+controller installed by other means needs the Gateway API CRDs present.
+
+`scripts/install-prereqs.sh` (repository root) installs the whole set —
+keycloak-operator, cnpg, kube-arangodb, sealed-secrets, cert-manager,
+vm-operator and the OpenTelemetry Operator — and the Gateway API CRDs.
+Re-running it is safe (each install is gated on an existing namespace and
+release).
 
 Later tiers add: GPU device plugin + node feature discovery (when
 `opea.gpu.mode=in-cluster`). The Envoy Gateway is NOT a prerequisite — it
@@ -107,7 +134,15 @@ pre-install hooks run (without it the first hook Job never schedules:
 "namespaces \"genieai\" not found"). The chart does render one other
 Namespace, `<release-namespace>-obs`: the observability tier's file-log
 agent reads the node's `/var/log/pods` through hostPath volumes, which
-the release namespace's pod-security baseline forbids. `my-values.yaml` must
+the release namespace's pod-security baseline forbids.
+
+A release installs **with no public entry point** unless you ask for one:
+`ingress.enabled` defaults to `false` (no `Gateway`, no `HTTPRoute`). Set
+it `true`, and make sure a `GatewayClass` named `envoy` exists in the
+cluster (or set `ingress.createGatewayClass: true` on a cluster this
+release owns) — see [Exposure topologies](#exposure-topologies).
+
+`my-values.yaml` must
 carry the values the render requires — the public origin, the operator
 contact, a mail server and the client-secret placeholders (see
 [Configuration highlights](#configuration-highlights) and the chart
@@ -123,11 +158,16 @@ overlays/<cluster>/<env>/
 ├── gitrepository-chart.yaml      # Flux GitRepository for genie-ai repo
 ├── helmrelease.yaml              # HelmRelease → charts/genieai-umbrella
 ├── helmrelease-kube-arangodb.yaml # per-namespace ArangoDB operator HelmRelease
+├── helmrelease-cert-manager.yaml  # cert-manager, when ingress.tls uses an issuer
+├── helmrelease-observability-operators.yaml # vm-operator + OpenTelemetry Operator
 ├── helmrepository-arango.yaml    # chart source for that operator
+├── helmrepository-jetstack.yaml  # chart source for cert-manager
+├── helmrepository-observability.yaml # chart sources for the observability operators
 ├── namespace-genieai.yaml        # the genieai Namespace
 ├── values.yaml                   # ConfigMap values (cluster-shared, public)
 ├── secrets.template.yaml         # plaintext source for SOPS encryption (committed)
 ├── secrets.sops.yaml             # encrypted output (committed; decrypts via Flux SOPS integration when configured)
+├── mailpit.yaml                  # optional mail sink (dev clusters)
 └── secrets/                      # SealedSecret materializations
     ├── arango-root-secret.yaml
     ├── keycloak-admin-credentials.yaml
@@ -135,9 +175,12 @@ overlays/<cluster>/<env>/
 ```
 
 The `HelmRelease` references the operator-owned values through
-`valuesFrom`: a `ConfigMap` in the Flux namespace carries them, and an
-overlay that also ships SOPS-encrypted values adds a `Secret` entry
-beside it. Inline `values:` carries the per-cluster overrides. The chart's
+`valuesFrom`: a `ConfigMap` in the Flux namespace carries them (the
+reference overlay calls it `genieai-<cluster>-public`), and an overlay
+that also ships SOPS-encrypted values adds a `Secret` entry beside it.
+Most overlays carry **no inline `values:` block** — the ConfigMap is the
+single source of the values, and inline entries are for per-cluster
+overrides only. The chart's
 placeholder guard (`data.keycloak.failOnPlaceholderSecrets`) stays at
 its default — **on**: an overlay that feeds the realm's client secrets
 through the convergence Job's `envSecrets` rows declares non-placeholder
@@ -185,12 +228,45 @@ the release completes.
 | `keycloak-convergence-credentials` | `GENIE_ADMIN_PASSWORD`, `EMAIL_PASSWORD` | kcc convergence Job (`$(env:VAR)` placeholders in the realm body) — `EMAIL_PASSWORD` is the realm's SMTP password: the `smtpServer` block always renders, so the Job resolves it on every install |
 | `keycloak-proxy-client-secret` | `KEYCLOAK_PROXY_CLIENT_SECRET` | Backend env (`genie-proxy-client` service account) |
 | `kc-dataprep-client-secret` | `KC_DATAPREP_CLIENT_SECRET` | Dataprep client-credentials grant |
-| `kc-grafana-client-secret` | `KC_GRAFANA_CLIENT_SECRET` | Grafana OIDC client |
-| `translation-cache-password` | `password` | Backend translation cache |
+| `kc-grafana-client-secret` | `KEYCLOAK_GRAFANA_CLIENT_SECRET` | Grafana OIDC client — the key name is **not** the env var the Job exports |
+| `translation-cache-password` | `TRANSLATION_CACHE_PASSWORD` | Backend translation cache |
+
+The key names are load-bearing: a Secret created with the wrong key name
+leaves the pod in `CreateContainerConfigError` (`secretKeyRef` cannot
+resolve the key) — the pod never starts.
 
 Additional Secrets used in the SealedSecret pattern: `keycloak-db-credentials`,
 `arango-jwt-secret`. A `kc-grafana-client-secret` is required when Grafana
-SSO is enabled (planned Observability tier).
+SSO is enabled (planned Observability tier). The OKF tier, when enabled
+(`okf.enabled: true`), adds `okf-server-client-secret` (key
+`KC_OKF_SERVER_CLIENT_SECRET`) and `okf-internal-secret` (key
+`OKF_INTERNAL_SECRET`).
+
+**`data.keycloak.db.username`** must equal the `username` key of the
+`keycloak-db-credentials` Secret: CloudNativePG derives the bootstrap
+role from that key, and a mismatch fails at `initdb` (a CNPG event), not
+at render time.
+
+### The five convergence rows
+
+The realm body carries `$(env:VAR)` placeholders that the convergence
+Job (kcc) must resolve at import time. With the placeholder guard on
+(the default, prod posture), the **render fails** naming any variable the
+Job does not export — so every Secret-backed variable needs a row in
+`data.keycloak.convergence.envSecrets`:
+
+| `envVar` | `secretName` | `secretKey` |
+|---|---|---|
+| `KC_PROXY_CLIENT_SECRET` | `keycloak-proxy-client-secret` | `KEYCLOAK_PROXY_CLIENT_SECRET` |
+| `KC_DATAPREP_CLIENT_SECRET` | `kc-dataprep-client-secret` | `KC_DATAPREP_CLIENT_SECRET` |
+| `KC_GRAFANA_CLIENT_SECRET` | `kc-grafana-client-secret` | `KEYCLOAK_GRAFANA_CLIENT_SECRET` |
+| `GENIE_ADMIN_PASSWORD` | `keycloak-convergence-credentials` | `GENIE_ADMIN_PASSWORD` |
+| `EMAIL_PASSWORD` | `keycloak-convergence-credentials` | `EMAIL_PASSWORD` |
+
+`data.keycloak.clientSecrets.proxyClient` / `.dataprep` / `.grafana` are
+**not** the secrets that reach Keycloak — the render-time guard reads
+them; the rows above carry the real values. Set them to any
+non-placeholder string.
 
 Setting `data.keycloak.convergence.enabled=false` skips the kcc hook and
 the realm is never imported — useful for smoke installs.
@@ -345,11 +421,25 @@ every fresh pull crashloops with `exec /run.sh: exec format error`.
 
 The chart ships an Envoy Gateway as an optional dependency
 (`envoyGateway.enabled`, default `true`) and renders Gateway API
-resources (`Gateway`, `GatewayClass`, `HTTPRoute`, optional
-cert-manager `Certificate` and CORS `SecurityPolicy`). **There is no nginx
-in the Kubernetes data path** — Envoy routes every public path (`/` SPA,
-`/api/`, `/api-docs/`, `/auth/` Keycloak, `/api/files/` + `/uploads/`
-document repository). Pick one of three scenarios:
+resources (`Gateway`, `HTTPRoute`, optional cert-manager `Certificate` and
+CORS `SecurityPolicy`). **There is no nginx in the Kubernetes data path**
+— Envoy routes every public path (`/` SPA, `/api/`, `/api-docs/`,
+`/auth/` Keycloak, `/api/files/` + `/uploads/` document repository).
+
+Two knobs decide whether an edge exists at all:
+
+| Knob | Default | Effect |
+|---|---|---|
+| `ingress.enabled` | `false` | `false` renders **no** `Gateway` and no `HTTPRoute` — the release installs with no public entry point |
+| `ingress.createGatewayClass` | `false` | `false` renders **no** `GatewayClass` — the `Gateway` references `gatewayClassName: envoy`, so a cluster with no such class has no data plane and every request 404s |
+
+Set `ingress.createGatewayClass: true` only when this release owns the
+cluster-scoped class (a single-stack dev cluster); on a shared cluster,
+pre-create the `envoy` GatewayClass out of band and leave the knob
+`false` — a release that owns it deletes it on uninstall, taking other
+Gateways' data planes with it.
+
+Pick one of three scenarios:
 
 ### Scenario 1 — Edge deployed, port-forward as the local front (laptop/dev)
 
@@ -363,7 +453,7 @@ the OIDC issuer without root.
 ```mermaid
 flowchart LR
     dev["Developer browser<br/>https://genieai.local:4443"]
-    pf["kubectl port-forward<br/>4443 → envoy svc 443"]
+    pf["kubectl port-forward<br/>4443 → envoy svc 4443"]
     edge["Envoy data-plane<br/>(Gateway + HTTPRoute active)"]
     subgraph cluster ["namespace: genieai"]
         edge --> spa["frontend (SPA)"]
@@ -388,10 +478,16 @@ flowchart LR
 ### Scenario 2 — Envoy Gateway in-chart (default)
 
 `ingress.enabled: true` + `envoyGateway.enabled: true` (default). The chart
-installs Envoy Gateway, owns the `GatewayClass`, terminates TLS
-(cert-manager `Certificate` from `ingress.tls.issuerName`, or a pre-baked
-Secret via `ingress.tls.secretName`), and NetworkPolicies only admit the
-Envoy data-plane pods as external peers.
+installs Envoy Gateway, terminates TLS (cert-manager `Certificate` from
+`ingress.tls.issuerName`, or a pre-baked Secret via
+`ingress.tls.secretName`), and NetworkPolicies only admit the Envoy
+data-plane pods as external peers.
+
+The `GatewayClass` is **not** chart-owned by default — see
+[`ingress.createGatewayClass`](#exposure-topologies). With the knob
+`false`, the cluster must already carry an `envoy` GatewayClass
+(`controllerName: gateway.envoyproxy.io/gatewayclass-controller`); the
+`Gateway` below references it by name.
 
 ```mermaid
 flowchart LR
@@ -421,6 +517,7 @@ flowchart LR
 |---|---|
 | `ingress.enabled` | `true` |
 | `envoyGateway.enabled` | `true` (default) |
+| `ingress.createGatewayClass` | `true` on a cluster this release owns; `false` (default) when the class already exists |
 | `ingress.tls.enabled` / `issuerName` / `secretName` | cert-manager flow (`issuerKind`: `ClusterIssuer` by default, set `Issuer` for a namespace-scoped one) or pre-baked certificate |
 | `ingress.cors.allowOrigins` | optional CORS `SecurityPolicy` (empty = same-origin, no policy rendered) |
 
@@ -430,8 +527,11 @@ Two operational notes on this scenario:
   issuer workflow must align its identifiers with that form.
 - `GatewayClass.spec.controllerName` is immutable — upgrading a cluster
   that still carries a GatewayClass created with an older chart's
-  controller name requires a one-time `kubectl delete gatewayclass envoy`
-  (the chart recreates it).
+  controller name requires a one-time `kubectl delete gatewayclass envoy`.
+  It is recreated **only** when `ingress.createGatewayClass: true`; with
+  the default `false`, recreate it out of band (a `Gateway` whose
+  `gatewayClassName` points at a missing class gets no data plane and
+  answers 404).
 
 ### Scenario 3 — External controller / off-cluster edge
 
@@ -480,13 +580,19 @@ veth traffic, without per-service certificates or a mesh.
 **Dev port-forward** (Scenario 1 — the validated laptop loop):
 
 ```bash
-kubectl -n genieai port-forward svc/envoy-genieai-genieai-<hash> 4443:443
+kubectl -n genieai port-forward svc/envoy-genieai-genieai-<hash> 4443:4443
 # Browse https://genieai.local:4443  (self-signed certificate)
 ```
 
 The overlay sets `ingress.host: genieai.local:4443` and `scheme: https`;
 `/etc/hosts` maps `genieai.local` to `127.0.0.1`. The browser origin must
 carry the same port as the OIDC issuer or login redirects mismatch.
+
+**The Service port is the one in `ingress.host`, not a fixed 443.** The
+Gateway's HTTPS listener binds the public port (the port `ingress.host`
+carries), so a `genieai.local:4443` origin yields a data-plane Service
+exposing `4443` — forward `4443:4443`. A bare hostname yields `443` and
+forwarding `4443:443` fails.
 
 **Exposed environments** (Scenarios 2–3): browse the `ingress.host`
 origin directly; TLS is the edge's concern.
@@ -507,6 +613,12 @@ render and the install ordering, not a working stack. The helm-test
 pods run against a release you already installed, and both need
 `kubectl`; the chart's init container downloads it into a shared
 `emptyDir`. There is no `make test` at the repository root.
+
+The test pods probe the **Services** (backend, frontend, document
+repository on port 80; TCP reach for clamav and redis). They do **not**
+probe the edge — a release with no `Gateway`, or a `Gateway` pointing at
+a missing `GatewayClass`, passes `helm test` green while being
+unreachable. Check the edge separately (the health probe below).
 
 **Service health** — through the edge:
 
@@ -537,3 +649,9 @@ disabled data tier, the Job fails the install with a clear
 - Migration status, plan map, and remaining phases:
   `docs/charts/migration-status.md`
 - Deploy repo: `genie-ai-deploy/overlays/<cluster>/<env>/`
+
+> **The chart version is not the product version.** The chart is released
+> on its own axis (`0.2.N`), independent of the product release (`vX.Y.Z`)
+> and of the image tags a deployment runs. The overlay's
+> `spec.chart.spec.version` names the chart the cluster installs; the
+> images come from the values.

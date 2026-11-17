@@ -15,9 +15,38 @@ Kubernetes-deployment Helm charts for GENIE.AI.
 
 The live map of what shipped, what was superseded and what remains is [`docs/charts/migration-status.md`](../docs/charts/migration-status.md); the design of record is [`docs/charts/helm-charts-design.md`](../docs/charts/helm-charts-design.md).
 
+## Releasing the chart
+
+The chart is released on its **own axis**, independent of the product
+release (which tags images and moves `CHANGELOG.md`).
+
+**Any commit touching `charts/genieai-umbrella/**`,
+`charts/genieai-common/**` or `charts/genieai-assets/**` must move the
+chart's version** — the library renders into the umbrella's output, and
+the assets chart's files (realm, theme tarball, dashboards) ride the
+release, so all three change what the umbrella installs. The gate is
+`scripts/ci/chart-version-check.py` (the `chart:lint` job): it fails when
+the content moved without the version moving.
+
+The bump is **two repositories, two commits, always together**:
+
+| File | Field |
+|---|---|
+| `charts/genieai-umbrella/Chart.yaml` | `version` (and `appVersion`, which mirrors it deliberately — it tracks the chart layout, not the product release) |
+| `genie-ai-deploy/overlays/<cluster>/<env>/helmrelease.yaml` | `spec.chart.spec.version` — **every** overlay, not just the one you are testing on |
+
+Push the chart first, then the overlay (the overlay must never name a
+chart version that does not exist yet), then
+`flux reconcile helmrelease genieai -n flux-system`.
+
+The full workflow — when the bump is mandatory, the push order, the
+verification, the rollback, and how the chart axis relates to the product
+release — is in [`.claude/rules/K8s-WORKFLOW.md`](../.claude/rules/K8s-WORKFLOW.md)
+§ *Chart version bump*.
+
 ## Cluster prerequisites
 
-Operator controllers (CNPG with a CRD serving `postgresql.cnpg.io/v1`, kube-arangodb 1.4.x, sealed-secrets ≥0.40, keycloak-operator 26.x, OpenTelemetry Operator) are cluster bootstrap prerequisites — installed once per cluster, before any release. Per-release operator installs would create competing cluster-scoped controllers. `scripts/install-prereqs.sh` automates the set. Conditional prerequisites: cert-manager (only when `ingress.tls.enabled` with an issuer), GPU operator (only when `opea.gpu.mode=in-cluster`), grafana-operator 5.25.0 (only when `observability.grafana.enabled=true`; `./scripts/install-prereqs.sh --with-grafana` adds it). The Envoy Gateway is NOT a prerequisite — it ships as a chart dependency (`envoyGateway.enabled`, default on).
+Operator controllers (CNPG with a CRD serving `postgresql.cnpg.io/v1`, kube-arangodb 1.4.x, sealed-secrets ≥0.40, keycloak-operator 26.x, OpenTelemetry Operator, victoria-metrics-operator) are cluster bootstrap prerequisites — installed once per cluster, before any release. Per-release operator installs would create competing cluster-scoped controllers. `scripts/install-prereqs.sh` automates the set. Conditional prerequisites: cert-manager (only when `ingress.tls.enabled` with an issuer), GPU operator (only when `opea.gpu.mode=in-cluster`), grafana-operator 5.25.0 (only when `observability.grafana.enabled=true`; `./scripts/install-prereqs.sh --with-grafana` adds it). The Envoy Gateway is NOT a prerequisite — it ships as a chart dependency (`envoyGateway.enabled`, default on).
 
 A policy-enforcing CNI must also let **node-to-pod traffic through on the health port**. The OTel operator probes its collectors on the health extension (13133), and kubelet sends that probe from the node — a peer no `namespaceSelector` can name, so the chart cannot admit it in the collectors' NetworkPolicy. Calico and kube-router allow it unconditionally; a CNI that defaults to denying host-to-pod (Cilium with `--allow-localhost=policy`) leaves the collector pods permanently un-Ready, which stalls the whole observability tier. Verify on any new cluster with `kubectl -n genieai get pods -l app.kubernetes.io/managed-by=opentelemetry-operator`.
 

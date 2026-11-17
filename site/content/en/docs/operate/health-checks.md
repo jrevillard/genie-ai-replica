@@ -4,7 +4,7 @@ description: Operational health endpoints — the public /api/health probe and t
 weight: 7
 mode: how-to
 audience: deployer, operator
-last_reviewed: 2026-09-19
+last_reviewed: 2026-11-17
 persona: deployer
 owner: "docs-stewards"
 aliases:
@@ -18,8 +18,10 @@ aliases:
 > 2. **`/api/admin/system-health`** — a richer **admin diagnostic** that probes
 >    ArangoDB, Keycloak, and the backend itself (requires the `admin` realm role).
 >
-> Use the first for liveness, the second for readiness and post-deploy smoke
-> tests.
+> Use the first for liveness and readiness probes, the second for
+> post-deploy smoke tests and diagnostics. The Helm chart ships
+> `/api/health` for **all three** probes (liveness, readiness, startup) —
+> see [Kubernetes probes](#kubernetes-probes).
 
 This page covers what each endpoint reports, how to wire them into your
 infrastructure, and how to interpret the results.
@@ -33,6 +35,8 @@ infrastructure, and how to interpret the results.
     [Deployment &rarr; Docker Swarm Setup](/docs/deploy/docker-swarm-setup/).
   - **Ansible** automated Swarm — see
     [Deployment &rarr; Install Guide](/docs/deploy/install-guide/).
+  - **Kubernetes** (Helm chart) — see
+    [Deployment &rarr; Kubernetes Deployment](/docs/deploy/kubernetes/).
 - The stack's **public domain** (`NGINX_PUBLIC_DOMAIN` in `.env`, default
   `localhost`) and **HTTPS port** (`NGINX_HTTPS_PORT`, default `443`).
 - For the admin endpoint: a Keycloak user with the **`admin`** realm role —
@@ -122,9 +126,14 @@ docker exec <stack>_backend wget -qO- http://localhost:3000/api/health
 
 ### When NOT to use it
 
-- For **readiness**, do not use `/api/health` — it does not probe ArangoDB
-  or Keycloak. Wire readiness to `/api/admin/system-health` instead
-  (or a custom dependency-aware probe).
+- For a **dependency-aware readiness probe**, `/api/health` does not probe
+  ArangoDB or Keycloak. A dependency-aware readiness probe is a design
+  choice, not the shipped one: the Helm chart probes `/api/health` for
+  readiness, liveness and startup (see
+  [Kubernetes probes](#kubernetes-probes)). Wiring readiness to
+  `/api/admin/system-health` instead means every downstream hiccup
+  flapping the pod's readiness, and it needs a service-account JWT
+  carrying the `admin` realm role.
 - For **liveness of the whole stack** (frontend, OPEA, document repository),
   `/api/health` is backend-only. Probe each service's own port or rely on
   the [Application Metrics dashboard](/docs/observe/dashboards/).
@@ -253,32 +262,35 @@ heavy modules on first boot.
 
 ### Kubernetes probes
 
+The chart's own probe set for the backend — three probes on `/api/health`
+over the named container port:
+
 ```yaml
+readinessProbe:
+  httpGet: { path: /api/health, port: http }
+  initialDelaySeconds: 10
+  periodSeconds: 10
 livenessProbe:
-  httpGet:
-    path: /api/health
-    port: 3000
+  httpGet: { path: /api/health, port: http }
   initialDelaySeconds: 30
   periodSeconds: 30
-readinessProbe:
-  httpGet:
-    path: /api/admin/system-health
-    port: 3000
-  httpHeaders:
-    - name: Authorization
-      value: Bearer <service-account-token>
-  initialDelaySeconds: 10
-  periodSeconds: 15
-  failureThreshold: 3
+startupProbe:
+  httpGet: { path: /api/health, port: http }
+  initialDelaySeconds: 5
+  failureThreshold: 12
 ```
 
-> **Important:** the readiness probe needs a service-account JWT with the
-> **`admin`** realm role. Mint one via Keycloak's `client_credentials`
-> grant with a dedicated `genie-readiness` client (recommended), or reuse
-> the `genie-app` client if its service account carries the role. The
-> default `genie-app` client does **not** carry the `admin` role by
-> default — check
-> [Configure &rarr; Keycloak Admin Guide](/docs/configure/keycloak-admin-guide/).
+Override them through `services.backend.probes` in the values file (the
+same `probes.readiness` / `probes.liveness` / `probes.startup` keys carry
+the full probe spec).
+
+> **Note:** `/api/admin/system-health` is a **diagnostic** endpoint, not a
+> probe target. It aggregates every dependency (ArangoDB, Keycloak,
+> the OPEA tier), so probing it makes a pod's readiness flap on any
+> downstream hiccup — and on Kubernetes it would need a service-account
+> JWT carrying the `admin` realm role. Probe `/api/health` (the constant-
+> time handler) and read `/api/admin/system-health` from outside the
+> cluster for diagnostics.
 
 ### Prometheus / blackbox_exporter
 
@@ -346,7 +358,7 @@ proxy does not expose, or the `admin` role missing from the service account).
 | Admin endpoint returns **401** with a valid admin token | The JWT was minted against the wrong realm, or the `admin` role was not assigned | The admin endpoint validates against the **same realm** the user logs into, not `master`. Check `KEYCLOAK_URL` and `KEYCLOAK_REALM` (default `genie`) point at the user realm. |
 | Admin endpoint returns **403** with a valid token | JWT is valid but lacks the `admin` realm role | Assign the role in Keycloak Admin Console → Users → Role mapping → Realm roles, or use a service account whose role mapping includes `admin`. See [Configure &rarr; Keycloak Admin Guide](/docs/configure/keycloak-admin-guide/). |
 | Swarm repeatedly restarts a healthy backend | Healthcheck `interval` is shorter than the request latency | Raise `interval` to ≥ 30s and `timeout` to ≥ 5s. The endpoint takes < 50 ms but cold-start migrations can briefly block the event loop. |
-| Kubernetes readiness probe flapping | `/api/admin/system-health` is slow under load (ArangoDB warm-up, Keycloak introspection) | Increase `failureThreshold` to 3 and `periodSeconds` to 15–20 s. For very large deployments, consider a separate readiness check that only pings ArangoDB. |
+| Kubernetes readiness probe flapping | The probe targets `/api/admin/system-health`, which aggregates every dependency and is slow under load (ArangoDB warm-up, Keycloak introspection) | The shipped chart probes `/api/health` — point the probe there, or increase `failureThreshold` to 3 and `periodSeconds` to 15–20 s. For very large deployments, consider a separate readiness check that only pings ArangoDB. |
 | `wget: not found` in healthcheck logs | Backend image was rebuilt on a slim base that dropped `wget` | Restore `wget` in the `Dockerfile` for `components/gov-chat-backend` (the entrypoint also needs it). |
 
 ## Related

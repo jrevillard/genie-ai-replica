@@ -110,6 +110,33 @@ git checkout vX.Y.Z-rc.1 && git log -1 --format="%H %s" vX.Y.Z-rc.1
 git tag vX.Y.Z && git push origin vX.Y.Z
 ```
 
+## The chart is released on its own axis
+
+A product release (tag, images, changelog) and a **chart release**
+(`charts/genieai-umbrella/Chart.yaml` `version` + the deploy-repo
+overlays) are **independent axes**. The chart version tracks the chart's
+content; the product version tracks the product. A release that also
+changed the chart runs **both** workflows — neither substitutes for the
+other, and running only one leaves the other stale.
+
+| | Chart release | Product release |
+|---|---|---|
+| Bumps when | the chart's content changes | the product ships |
+| Lives in | `charts/genieai-umbrella/Chart.yaml` + every deploy-repo overlay | `CHANGELOG.md`, `release/X.Y`, a `vX.Y.Z` tag |
+| Gate | `chart-version-check.py` (`chart:lint` job) | `config:changelog` + the tag pipeline |
+| Installs into | the cluster | the images |
+
+**Do the chart bump FIRST** (chart repo push → deploy-repo overlay push
+→ reconcile): the overlay's `spec.chart.spec.version` must never name a
+chart version that does not exist yet. The full workflow — when the bump
+is mandatory, the two-repository order, the verification and the
+rollback — is in
+[`.claude/rules/K8s-WORKFLOW.md`](K8s-WORKFLOW.md) § *Chart version bump*.
+
+> The chart's `appVersion` mirrors its `version` **deliberately** — it
+> tracks the chart layout, not the product release. The deployed image
+> tags come from the values, never from `appVersion`.
+
 ## Key Rules
 
 - **Never commit to `main` or `release/*` directly** — use MRs
@@ -120,7 +147,10 @@ git tag vX.Y.Z && git push origin vX.Y.Z
 - **`docs/UPGRADE.md` required for breaking changes** — update it in the same
   MR as the changelog; one migration section per breaking change
 - **Pre-release tags skip `latest`** — `v2.1.0-alpha.1` does not update `latest`
+- **A chart change is a chart release too** — bump `Chart.yaml` + every
+  overlay, even when the product version does not move
 
 ## Reference
 
 Full documentation with rationale, diagrams, and CI details: `docs/RELEASE.md`.
+The chart release workflow: `.claude/rules/K8s-WORKFLOW.md` § *Chart version bump*.

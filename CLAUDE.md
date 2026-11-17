@@ -26,7 +26,9 @@ This includes:
 
 ### Environment Setup (First Time)
 
-All deployments use a single `.env` file at the project root:
+All Compose and Swarm deployments use a single `.env` file at the project
+root (the Kubernetes path has no `.env` — its configuration is the chart
+values plus Secret env rows):
 
 ```bash
 # Copy the template to your local environment file
@@ -89,6 +91,10 @@ Helm chart on `feat/k8s-migration`, deployed to laptop minikube via Flux from
 `genie-ai-deploy`. Compose + Ansible remain primary (see above). Per-env
 overlays + SealedSecrets live in the deploy repo.
 
+→ Full chart workflow, render gates, Helm traps and the live validation
+set: `.claude/rules/K8s-WORKFLOW.md` (the only k8s rule file — read it
+before touching `charts/**`).
+
 ```bash
 # Chart dev cycle (worktree: feat/k8s-migration)
 helm dependency update charts/genieai-umbrella    # vendored deps are GITIGNORED
@@ -111,14 +117,16 @@ rtk proxy helm template test charts/genieai-umbrella -n genieai \
   --set ingress.host=ci-render.local
 git commit/push                                                  # triggers CI: chart:lint + chart:contract + chart:parity + chart:crd-validate
                                                                   # (chart:install is a MANUAL job — see .gitlab-ci.yml)
-# In genie-ai-deploy: bump `version:` in overlays/<env>/dev/helmrelease.yaml
+# In genie-ai-deploy: bump `version:` in overlays/<cluster>/<env>/helmrelease.yaml
 flux reconcile helmrelease genieai -n flux-system                # roll the cluster
 
 # Cluster access (namespace: genieai)
 kubectl -n genieai get pods,svc,hpa
 kubectl -n flux-system get helmrelease genieai                   # the HelmRelease lives in flux-system
-kubectl -n genieai port-forward svc/envoy-genieai-genieai-<hash> 4443:443   # browser-validate via https://genieai.local:4443
+kubectl -n genieai port-forward svc/envoy-genieai-genieai-<hash> 4443:4443   # browser-validate via https://genieai.local:4443
 # (nginx is gone from the data path — Envoy Gateway is the edge; see charts README)
+# The Envoy Service port is the one in ingress.host (4443 here), NOT 443:
+# the Gateway's HTTPS listener binds the public port.
 
 # Render gate (refactors)
 # Byte-compare `helm template` across `opea.gpu.mode=external|in-cluster` — classify every diff line as intentional or drift.
@@ -335,7 +343,7 @@ Following DRY principle, defaults live in code/docker-compose, not in env files.
 - `VLLM_LLM_MODEL_ID` - Labeling/chat LLM. **Must support OpenAI-compatible `response_format={"type":"json_object"}`** (vLLM guided JSON); dataprep requests strict JSON label output per chunk. Models without guided JSON produce malformed output → per-chunk fallback (slower, lower label quality). Validated on `ibm-granite/granite-4.1-8b`.
 - `RERANKING_STRATEGY` - Strategy for selecting the final reranked set: `slice` (default; top-N), `threshold`, `slice_threshold`, `knee_threshold`, or `adaptive`.
 - `RERANKER_TOP_N` - Number of top chunks kept by `slice`/`slice_threshold` strategies (default 3).
-- `CONTEXTUAL_RETRIEVAL_ENABLED` - Contextual Retrieval (Anthropic-style), **on by default**: prepend an LLM doc-context prefix to each chunk before embedding + labeling (default `true`; set `false` to disable — a no-op beyond skipping context generation). Adds one vLLM call/chunk at ingest; never blocks ingestion (raw-chunk fallback). See the [Data Labelling Strategy](site/content/en/docs/rag/data-labeling.md) doc (§7 — Contextual Retrieval).
+- `CONTEXTUAL_RETRIEVAL_ENABLED` - Contextual Retrieval (Anthropic-style), **on by default**: prepend an LLM doc-context prefix to each chunk before embedding + labeling (default `true`; set `false` to disable — a no-op beyond skipping context generation). Adds one vLLM call/chunk at ingest; never blocks ingestion (raw-chunk fallback). See the [Data Labelling Strategy](site/content/en/docs/rag-pipeline/data-labeling.md) doc (§7 — Contextual Retrieval).
 - `DATAPREP_CONTEXTUAL_MODEL` - Model for context generation (empty = reuse `VLLM_LLM_MODEL_ID`); must support guided JSON.
 - `DATAPREP_CONTEXTUAL_DOC_BUDGET` - Max chars of document text fed to the context LLM as part of its system prompt. **Default `0` = derive from the serving model's window, discovered at runtime from `VLLM_ENDPOINT`** (issue #1182; same discovery chatqna uses, TTL-cached via `core/model_cache.py`) — the context call is `system prompt + document context + batch chunk text` and reserves `DATAPREP_CONTEXTUAL_MAX_TOKENS` **per chunk in the batch**, so everything but the document context is subtracted from the window. Deriving is what makes one setting correct across hardware that differs 32×: ~250k chars at the default 65536-token window (also `env.rtx6000`, which serves 65536), and **none** on `env.t4` (2048), where the output reservation alone exceeds the window. When discovery has no answer, dataprep falls back to a fail-closed 2048-token window **with a warning naming the remedy**; `DATAPREP_MAX_MODEL_LEN` overrides it. **Never hardcode this from another deployment**: a budget sized for a large GPU overflows a small one, and the rejected calls fall back to raw chunks *silently*. Set `>0` to a maximum — the served window still caps it, so a budget copied from a larger-window deployment cannot overflow a small one — and `<0` to disable contextualization. Truncation (document longer than the budget) is now recorded in the admin Ingestion Log — check it after changing this.
 - `VLLM_MAX_MODEL_LEN` - The serving model's context window (`env.t4` 2048, `env.rtx6000` 65536, compose default 65536) — passed to vLLM as `--max-model-len`. **Dataprep does NOT read it** (issue #1182): the doc-context budget derives from the window the endpoint actually serves, discovered at runtime from `VLLM_ENDPOINT`. **Deployment sizes with the model**: a customer who provisions a larger-parameter model and raises this to, say, 131072 gets a proportionally larger document-context budget — dataprep picks up the served window within the discovery TTL (60s), no restart, nothing to re-tune. Raising it is only useful if the GPU has the memory for the KV cache — the window costs memory roughly linearly, which is why `env.t4` is pinned to 2048.
@@ -393,7 +401,7 @@ Two **separate pairs**, each of which only works when both halves move together:
   lane caps, not this number.
 
 → Full sizing procedure for the four lane variables (both pairs, the memory
-budget, how to verify what a host actually got): `.claude/rules/CAPACITY-SIZING.md`
+budget, how to verify what a host actually got): the table below.
 
 ##### Sizing the four lane variables for a target host
 
@@ -533,7 +541,7 @@ docker-compose.yaml (dual-mode)
 
 **Remote GPU**: Set `GPU_NODE_HOST` in `.env`, skip `gpu-models` profile. Orchestrator endpoints overridden to GPU node. `VLLM_API_KEY` for auth. See `env` Section 14.
 
-→ Full architecture diagrams: `site/content/en/docs/architecture/architecture.md` | Deployment guides: `site/content/en/docs/deployment/docker-compose-setup.md`, `site/content/en/docs/deployment/docker-swarm-setup.md`
+→ Full architecture diagrams: `site/content/en/docs/architecture/architecture.md` | Deployment guides: `site/content/en/docs/deploy/docker-compose-setup.md`, `site/content/en/docs/deploy/docker-swarm-setup.md` | Kubernetes: `site/content/en/docs/deploy/kubernetes.md`
 
 ## Database Schema (ArangoDB)
 

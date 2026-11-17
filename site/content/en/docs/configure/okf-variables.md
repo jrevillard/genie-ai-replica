@@ -173,6 +173,27 @@ concurrent imports demand twice the scan capacity and both still report
 `paired: true`. If you run imports back to back, set the pair for the number you
 might run at once, not the number you are running now.
 
+### Imports and the gateway timeout
+
+The lanes decide how fast an import runs; the gateway decides whether the
+browser is still there when it finishes. A 5–6k-concept zip takes **55–75
+seconds** before its response (parse + PII scan + enqueue — the LLM curation
+passes run fire-and-forget afterwards), and back-to-back imports queue on the
+PII sidecar, stretching that wait further. At the generic 60-second gateway
+timeout this surfaced as a `504` "import failed" in the UI for operations that
+had in fact completed server-side — retrying re-did the work and masked real
+failures behind the same red signal (#1944).
+
+The gateway therefore carries a dedicated **1-hour** read/write ceiling for the
+OKF write POSTs under `/api/okf/repos/…` (the `okf-import` service); every
+other `/api/okf` route keeps the 60-second backstop, and `POST
+/api/okf/repos` (repository create) still answers inside it. Kong holds
+`retries: 0` on the import service, so a connection that genuinely breaks is
+**never replayed silently** — an import the UI reports as failed is a real
+failure and must be re-run deliberately. Deployments planning large crawls
+should size the lanes first (the table above), then let the import run: a
+healthy big-crawl import is slow, not failed.
+
 ## Import capacity (creating a repository)
 
 Importing a repository — from a bundle, from documents, or from a crawl — is a

@@ -316,9 +316,25 @@ same browser context that checked reachability, and every run prints the
 verdict as a `venue build:` line:
 
 - **fresh** — the marker equals the checkout's `HEAD`;
-- **STALE** — the marker names another sha: the line carries BOTH shas
-  and the remedy pointer above; the run continues, but every red below
-  reads against the named build, not the checkout's;
+- **STALE** — the marker names another sha AND the served PRODUCT
+  differs: the line carries BOTH shas, the paths that differ, and the
+  remedy pointer above; the run continues, but every red below reads
+  against the named build, not the checkout's;
+- **the served code is the checkout's** — the marker names another sha,
+  but the difference is only in the DEPLOYMENT definition (`charts/**`,
+  `deploy/**`, the pipeline): the served images are the checkout's, and a
+  red below is suspect only if that change moved the runtime
+  environment;
+- **the served product is the checkout's** — the marker names another
+  sha, but nothing that is served differs (docs, the docs site, the
+  tests, the agent tooling): no red below is a staleness artefact.
+
+The difference is read from the checkout (`git diff --name-only
+<served-sha>..HEAD`) and sorted by what a path can change — the served
+code (the image build contexts: `components/**`, `genie-ai-overlay/**`,
+`configs/**`, `api-gateway-solution/**`, the `env*` and compose files),
+the deployment definition, and neither. A path the table does not know
+is treated as served: the verdict must not understate a difference.
 - **predates the contract** — no readable `/build-info.json` (the SPA
   fallback answers): a frontend built before #1851. Freshness is
   undetectable there; the chunk walk below is still the tool;

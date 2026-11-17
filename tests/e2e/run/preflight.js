@@ -283,11 +283,148 @@ async function probeVenueBuild(context, baseUrl) {
   } catch {
     headSha = null;
   }
+  const difference = checkoutDifference(parsed.gitSha, headSha);
   return {
-    line: `venue build: ${describeBuildFreshness(parsed.gitSha, headSha)}`,
+    line: `venue build: ${describeBuildFreshness(parsed.gitSha, headSha, difference)}`,
     malformed: false,
     gitSha: parsed.gitSha
   };
+}
+
+/**
+ * The paths that change the SERVED product, read from the build
+ * contexts rather than from taste:
+ *
+ * - `components/**` — the frontend image's build context IS `components/`,
+ *   so the whole tree ships in it; the backend, the document repository,
+ *   the OKF server and the sidecars are built from it too;
+ * - `genie-ai-overlay/**` — the OPEA images copy their service directory,
+ *   `core/` and `build-patches/` out of it;
+ * - `configs/**` — the Keycloak theme is baked into an image, the
+ *   collector and the Grafana dashboards are mounted from it;
+ * - `api-gateway-solution/**` — the gateway configuration;
+ * - `env`, `env.*`, `docker-compose*.yaml` — the runtime environment;
+ * - `mobile/**`, `document-translation/**`, `data/**`, `secrets/**` — the
+ *   rest of the shipped product.
+ *
+ * `charts/**` and `deploy/**` change HOW the product is deployed — its
+ * environment, its probes, its resources. They cannot change the served
+ * CODE, but they CAN move the runtime environment, so they carry their
+ * own verdict.
+ *
+ * Everything else is neither: docs, the docs site, the tests, the
+ * agent tooling. A difference there cannot explain a red.
+ *
+ * A path this table does not know is treated as SERVED: the default must
+ * not understate a difference (a new top-level directory holding product
+ * code would otherwise be reported as harmless).
+ */
+const SERVED_PRODUCT_ENTRIES = new Set([
+  'components',
+  'genie-ai-overlay',
+  'configs',
+  'api-gateway-solution',
+  'mobile',
+  'document-translation',
+  'data',
+  'secrets',
+  'env',
+  'env.rtx6000',
+  'env.t4',
+  'docker-compose.yaml',
+  'docker-compose.gpu.yaml',
+  'design-system.html',
+  'typings',
+  'go.mod',
+  'openapitools.json'
+]);
+
+const DEPLOYMENT_ENTRIES = new Set(['charts', 'deploy', '.gitlab-ci.yml']);
+
+const NEITHER_ENTRIES = new Set([
+  'docs',
+  'site',
+  'tests',
+  'scripts',
+  'tools',
+  '.claude',
+  '.agents',
+  '_bmad',
+  '_bmad-output',
+  '.gitlab',
+  '.husky',
+  '.serena',
+  '.github',
+  'package.json',
+  'package-lock.json',
+  'playwright.config.js',
+  'skills-lock.json',
+  '.gitignore',
+  '.gitattributes',
+  '.editorconfig',
+  '.prettierignore',
+  '.prettierrc',
+  '.semgrepignore',
+  '.trivyignore',
+  '.dockerignore',
+  '.claudeignore',
+  '.hugo_build.lock'
+]);
+
+/**
+ * Split the paths that differ between two commits into the three classes
+ * that mean different things for a red.
+ *
+ * @param {string[]} paths - the paths that differ, as git names them
+ * @returns {{product: string[], deployment: string[], neither: string[]}}
+ */
+function classifyCheckoutDifference(paths) {
+  const product = [];
+  const deployment = [];
+  const neither = [];
+  for (const path of paths || []) {
+    const top = path.split('/')[0];
+    if (SERVED_PRODUCT_ENTRIES.has(top)) {
+      product.push(path);
+    } else if (DEPLOYMENT_ENTRIES.has(top)) {
+      deployment.push(path);
+    } else if (NEITHER_ENTRIES.has(top) || path.endsWith('.md')) {
+      neither.push(path);
+    } else {
+      // Unknown: assume it is served (see the table's contract).
+      product.push(path);
+    }
+  }
+  return { product, deployment, neither };
+}
+
+/**
+ * The paths that differ between the build the venue serves and the
+ * checkout, classified. `null` when the difference cannot be computed —
+ * the served sha is not in this checkout (a build from another branch or
+ * a shallow clone), which is a fact the verdict has to name rather than
+ * hide.
+ *
+ * @param {string} venueSha - the sha the venue's marker names
+ * @param {string|null} headSha - the checkout's HEAD
+ * @returns {{product: string[], deployment: string[], neither: string[]}|null}
+ */
+function checkoutDifference(venueSha, headSha) {
+  if (!headSha || !venueSha || venueSha === 'unknown') {
+    return null;
+  }
+  let out;
+  try {
+    out = require('child_process')
+      .execFileSync('git', ['diff', '--name-only', `${venueSha}..${headSha}`], {
+        encoding: 'utf8',
+        stdio: ['ignore', 'pipe', 'ignore']
+      })
+      .trim();
+  } catch {
+    return null;
+  }
+  return classifyCheckoutDifference(out ? out.split('\n').filter(Boolean) : []);
 }
 
 /**
@@ -343,29 +480,75 @@ function parseBuildMarker(status, contentType, bodyText) {
 
 /**
  * The freshness verdict, as one line the operator reads next to the
- * venue's address: the marker's sha against the checkout's HEAD. A
- * mismatch is STALE — named, with both shas and the remedy pointer; the
- * run does NOT stop for it (a venue may legitimately serve a different
- * build than the checkout — a release branch, a deploy in flight), but
- * every red below it now reads against the served build, not against
- * the checkout's.
+ * venue's address: the marker's sha against the checkout's HEAD, and —
+ * when the two differ — WHAT differs between them.
+ *
+ * The sha comparison alone answers "is this the same build?" but not
+ * "can that difference explain a red?", and the difference matters: a
+ * checkout whose only delta from the served build is the Helm chart
+ * serves the SAME product, and telling the operator that "every red
+ * below is suspect" sends them hunting a defect the delta cannot cause.
+ * So the verdict names the class of the difference:
+ *
+ * - the served PRODUCT differs -> STALE, every red below is suspect;
+ * - only the DEPLOYMENT definition differs -> the served code is the
+ *   checkout's, and a red is suspect only if that change moved the
+ *   runtime environment;
+ * - nothing that is served differs -> the served product IS the
+ *   checkout's, and no red below is a staleness artefact.
+ *
+ * The run does NOT stop for a mismatch (a venue may legitimately serve a
+ * different build than the checkout — a release branch, a deploy in
+ * flight); the verdict names what is being exercised.
  *
  * @param {string} gitSha - the marker's git sha
  * @param {string|null} headSha - the checkout's HEAD, or null when it
  *   could not be read
+ * @param {{product: string[], deployment: string[], neither: string[]}|null} difference -
+ *   the classified paths that differ, or null when it could not be computed
  * @returns {string} the freshness line
  */
-function describeBuildFreshness(gitSha, headSha) {
+function describeBuildFreshness(gitSha, headSha, difference) {
   if (!headSha) {
     return `of unknown freshness (serves ${gitSha}; the checkout's HEAD could not be read)`;
   }
   if (gitSha === headSha) {
     return `fresh — the venue serves the checkout's build (${gitSha})`;
   }
+  if (!difference) {
+    return (
+      `STALE — the venue serves ${gitSha}, the checkout is ${headSha}: every red below is suspect ` +
+      'until the venue serves this build (the stale-venue remedy: docs/e2e-tests/local-run.md)'
+    );
+  }
+  const remedy = ' (the stale-venue remedy: docs/e2e-tests/local-run.md)';
+  if (difference.product.length > 0) {
+    return (
+      `STALE — the venue serves ${gitSha}, the checkout is ${headSha}: the served product differs ` +
+      `(${difference.product.length} path(s), e.g. ${difference.product.slice(0, 3).join(', ')}) — ` +
+      `every red below is suspect${remedy}`
+    );
+  }
+  if (difference.deployment.length > 0) {
+    return (
+      `the served code is the checkout's — the venue serves ${gitSha}, the checkout is ${headSha}, and ` +
+      `the difference is in the DEPLOYMENT definition (${difference.deployment.length} path(s), e.g. ` +
+      `${difference.deployment.slice(0, 3).join(', ')}): a red below is suspect only if that change ` +
+      `moved the runtime environment${remedy}`
+    );
+  }
   return (
-    `STALE — the venue serves ${gitSha}, the checkout is ${headSha}: every red below is suspect ` +
-    'until the venue serves this build (the stale-venue remedy: docs/e2e-tests/local-run.md)'
+    `the served product is the checkout's — the venue serves ${gitSha}, the checkout is ${headSha}, and ` +
+    `the difference touches nothing that is served (${difference.neither.length} path(s)): no red below ` +
+    'is a staleness artefact'
   );
 }
 
-module.exports = { classifyVenueStatus, namedFailure, parseBuildMarker, describeBuildFreshness };
+module.exports = {
+  classifyVenueStatus,
+  namedFailure,
+  parseBuildMarker,
+  describeBuildFreshness,
+  classifyCheckoutDifference,
+  checkoutDifference
+};

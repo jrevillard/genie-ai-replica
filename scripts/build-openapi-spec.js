@@ -60,8 +60,10 @@ function buildSpec() {
   // The expected base comes from the SAME resolver the runtime spec uses
   // (components/gov-chat-backend/swagger-oauth2-base.js): a duplicated
   // predicate here drifted from it and aborted the generation on URLs the
-  // runtime had legitimately produced.
-  const { resolveOAuth2BaseUrl } = backendRequire('./swagger-oauth2-base');
+  // runtime had legitimately produced. The absolute-URL test is that
+  // module's too — the runtime accepts on WHATWG grounds (scheme case
+  // insensitive), and a regex here disagreed on it.
+  const { resolveOAuth2BaseUrl, isAbsoluteHttpUrl } = backendRequire('./swagger-oauth2-base');
   const expectedBase = resolveOAuth2BaseUrl(process.env);
   for (const [label, url] of [
     ['authorizationUrl', flow?.authorizationUrl],
@@ -70,7 +72,7 @@ function buildSpec() {
     assert.ok(
       typeof url === 'string' &&
         !url.includes('undefined') &&
-        /^https?:\/\//.test(url) &&
+        isAbsoluteHttpUrl(url) &&
         typeof expectedBase === 'string' &&
         url.startsWith(expectedBase),
       label +

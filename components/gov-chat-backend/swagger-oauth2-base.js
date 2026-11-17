@@ -7,8 +7,8 @@
  * ONE implementation, two consumers: the runtime spec
  * (swagger-definition.js) and the client-generation pin guard
  * (scripts/build-openapi-spec.js, which runs the spec extraction under
- * `env -i` and must judge the served URLs against the same resolution).
- * A duplicated predicate drifted between them — the guard then aborted
+ * `env -i` and must judge the served URLs against the same rules). A
+ * duplicated predicate drifted between them — the guard then aborted the
  * generation on a served URL the runtime had legitimately produced.
  *
  * Why the resolution exists (#1889): the Authorize round-trip runs IN THE
@@ -21,18 +21,19 @@
  * KEYCLOAK_URL, the historical compose behaviour (there KEYCLOAK_URL is
  * already browser-reachable).
  *
- * The public value is served verbatim to the browser, so it is validated
- * like the servers[0].url base in swagger-definition.js: a value that is
- * not an absolute http(s) URL, or that carries whitespace or a control
- * character, is REFUSED (not trimmed — the verifier does not trim its
- * alias either, so a trimmed base here would point the browser at an
- * issuer the verifier never accepts) and the flow URLs fall back to
- * KEYCLOAK_URL.
+ * A base is usable only when it is an ABSOLUTE http(s) URL free of
+ * whitespace, control characters and the URL-fragment/query punctuation
+ * (" # <> ? ` { }) — the last class breaks the flow outright, because a
+ * fragment or query in the base swallows the appended '/realms/...' path.
+ * The public value is refused (not trimmed — the verifier does not trim
+ * its alias either, so a trimmed base here would point the browser at an
+ * issuer the verifier never accepts); the KEYCLOAK_URL fallback is refused
+ * the same way, so no unusable base is ever served verbatim.
  *
- * Trailing slashes: the public value loses exactly ONE — the
- * verifier's public-issuer rule, so the served URL and the accepted
- * issuer cannot drift apart. The KEYCLOAK_URL fallback loses ALL of them
- * — the verifier's discovery-base rule, so the served URL never carries a
+ * Trailing slashes: the public value loses exactly ONE — the verifier's
+ * public-issuer rule, so the served URL and the accepted issuer cannot
+ * drift apart. The KEYCLOAK_URL fallback loses ALL of them — the
+ * verifier's discovery-base rule, so the served URL never carries a
  * doubled path segment.
  *
  * With no usable base at all, the result is undefined: the served URL
@@ -42,19 +43,21 @@
  */
 
 /**
- * Is this value usable as the browser-facing base of the flow URLs?
- * Absolute http(s) only, and free of whitespace and control characters.
+ * Is this value usable as the base of the flow URLs? Absolute http(s)
+ * only, free of whitespace, control characters and fragment/query
+ * punctuation.
  *
  * @param {string} value
  * @returns {boolean}
  */
-function isUsablePublicBase(value) {
+function isAbsoluteHttpUrl(value) {
   if (!value) return false;
   // eslint-disable-next-line no-control-regex -- intentional: the C0 control range is exactly what WHATWG strips
   if (/[\s\u0000-\u001F"#<>?`{}]/.test(value)) return false;
   try {
     // WHATWG parsing is the exact validator: it rejects scheme-only and
-    // scheme-less values.
+    // scheme-less values, and it lowercases the scheme (so 'HTTP://x' is
+    // an http URL).
     return /^https?:$/.test(new URL(value).protocol);
   } catch {
     return false;
@@ -64,15 +67,14 @@ function isUsablePublicBase(value) {
 /**
  * Resolve the base URL of the Swagger UI OAuth2 flow URLs.
  *
- * @param {NodeJS.ProcessEnv} [env] - the environment to read (default: process.env)
- * @returns {string|undefined} the base URL, or undefined when none is configured
+ * @param {NodeJS.ProcessEnv} env - the environment to read
+ * @returns {string|undefined} the base URL, or undefined when none is usable
  */
-function resolveOAuth2BaseUrl(env = process.env) {
+function resolveOAuth2BaseUrl(env) {
   const publicBase = (env.KEYCLOAK_PUBLIC_URL || '').replace(/\/$/, '');
-  if (isUsablePublicBase(publicBase)) return publicBase;
-  const internalBase = env.KEYCLOAK_URL;
-  if (typeof internalBase !== 'string' || internalBase === '') return undefined;
-  return internalBase.replace(/\/+$/, '');
+  if (isAbsoluteHttpUrl(publicBase)) return publicBase;
+  const internalBase = (env.KEYCLOAK_URL || '').replace(/\/+$/, '');
+  return isAbsoluteHttpUrl(internalBase) ? internalBase : undefined;
 }
 
-module.exports = { resolveOAuth2BaseUrl };
+module.exports = { resolveOAuth2BaseUrl, isAbsoluteHttpUrl };

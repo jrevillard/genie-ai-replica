@@ -1298,9 +1298,22 @@ container_scanning:
           BUILD_ARGS="--build-arg GIT_SHA=${CI_COMMIT_SHA:-unknown}"
           ;;
       esac
+      # FORCE_IMAGE_REBUILD (the monthly schedule / operator trigger) must be
+      # a REAL rebuild: with the registry cache left on, buildx reuses the
+      # cached RUN layers and an unchanged Dockerfile never re-runs
+      # `apt-get upgrade` / `apk upgrade` — the security-update layers only
+      # ever executed once per Dockerfile edit, so the monthly cycle pulled
+      # no new packages (measured 2026-11-17: two same-day rebuilds shipped
+      # identical libpq 17.11 / nginx 1.28.3-r1 while 17.12 / 1.28.3-r4 sat
+      # in the security repos). --no-cache re-runs every layer.
+      NOCACHE=""
+      if [ "${FORCE_IMAGE_REBUILD:-}" = "true" ]; then
+        NOCACHE="--no-cache"
+      fi
       docker buildx build \
         --pull \
         --push \
+        $NOCACHE \
         -t "$REGISTRY_REF" \
         -f "$DOCKERFILE" \
         $BUILD_ARGS \

@@ -30,8 +30,12 @@ Operator overrides only what differs on the target cluster.
 
 ```bash
 # 1. Verify the cluster operators are installed (one-time per cluster).
-#    See "Cluster prerequisites" below.
-kubectl get crd | grep -E 'keycloak|sealedsecret|cluster\.arangodb|cnpg'
+#    See "Cluster prerequisites" below. The opentelemetry.io and
+#    operator.victoriametrics.com CRDs are part of this list: the
+#    DEFAULT install renders the collector and the VLSingle (the log tier
+#    is on by default), so an install without those two operators fails
+#    with "no matches for kind".
+kubectl get crd | grep -E 'keycloak|sealedsecret|cluster\.arangodb|cnpg|opentelemetry\.io|operator\.victoriametrics\.com'
 
 # 2. Create the namespace and the operator-provided Secrets. The chart
 #    never creates a secret; every one below is mounted through a
@@ -97,6 +101,7 @@ kubectl -n genieai create secret generic kc-grafana-client-secret \
 #    actually carries are the ones the rows below reference.
 helm install genieai charts/genieai-umbrella/ \
   --create-namespace --namespace genieai \
+  --set ingress.enabled=true \
   --set ingress.host=genie.example.org \
   --set data.keycloak.adminEmail=ops@example.org \
   --set data.keycloak.smtp.from=no-reply@genie.example.org \
@@ -125,6 +130,30 @@ helm install genieai charts/genieai-umbrella/ \
 # 4. Smoke-test the release.
 helm test genieai -n genieai
 ```
+
+**Two knobs decide whether the release is reachable.** `ingress.enabled`
+defaults to `false`, so the install above sets it `true` explicitly —
+without it the chart renders no `Gateway` and no `HTTPRoute`, and the
+release has no public entry point. And the chart does **not** create the
+`GatewayClass` (`ingress.createGatewayClass` defaults to `false`): the
+`Gateway` references a class named `envoy`, which the cluster must
+already carry. On a single-stack cluster you own, add
+`--set ingress.createGatewayClass=true`; on a shared cluster, pre-create
+the class instead (a release that owns it deletes it on uninstall).
+
+**`helm test` does not probe the edge.** The test pods reach the
+backend, frontend and document-repository **Services** on port 80 (plus
+TCP checks for clamav and redis). A release whose `Gateway` points at a
+missing `GatewayClass` — or with `ingress.enabled: false` — passes the
+test green while being unreachable. Probe the edge separately:
+
+```bash
+kubectl -n genieai port-forward svc/envoy-genieai-genieai-<hash> 4443:4443
+curl -sk -H "Host: genieai.local" https://localhost:4443/api/health
+```
+
+(The Envoy Service port is the one `ingress.host` carries — `4443` for a
+port-bearing origin, `443` for a bare hostname.)
 
 Override the image registry (air-gapped mirror) or the per-service image
 tag/policy (laptop-build workflow with local minikube images):
@@ -175,6 +204,7 @@ only the custom resources they manage.
 | sealed-secrets | ≥0.40 | `helm install sealed-secrets sealed-secrets --repo https://bitnami.github.io/sealed-secrets` |
 | keycloak-operator | 26.8.0 | From the repo root: `./scripts/install-prereqs.sh` (Kustomize overlay that overrides the upstream `keycloak` namespace to `keycloak-system`; Quarkus-based modern operator, 4 CRDs in `k8s.keycloak.org`). Alternatives: OLM (`installPlanApproval: Manual` recommended — auto-upgrade causes unintended Keycloak version bumps), or `oci://quay.io/keycloak/keycloak-operator-helm` (experimental, cluster-wide). |
 | OpenTelemetry Operator | latest | (required by `observability.*`; the collector Service it creates is what `otlpEndpoint` points at) |
+| victoria-metrics-operator (vm-operator) | ships `operator.victoriametrics.com/v1` (the VLSingle/VMSingle/VTSingle CRs — **the log tier is on by default**, so this is required by the default install) | `helm install vmoperator victoria-metrics-operator --repo https://victoriametrics.github.io/helm-charts` |
 | GPU operator (NVIDIA) | latest | (required by `opea.gpu.mode=in-cluster`; the in-cluster model Deployments target `gpu=true` nodes) |
 | cert-manager | latest | (only when `ingress.tls.enabled` with an issuer) |
 | Envoy Gateway | — | NOT a prerequisite — chart dependency (`envoyGateway.enabled`, default on) |

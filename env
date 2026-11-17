@@ -903,10 +903,16 @@ KEYCLOAK_URL=https://localhost/auth
 #                           from VUE_APP_KEYCLOAK_URL; its fallbacks are the
 #                           build-time VUE_APP_KEYCLOAK_URL and then
 #                           ${origin}/auth) — this variable does NOT
-#                           configure the frontend. If its ORIGIN differs
-#                           from the docs page's own origin, add it to
-#                           CSP_CONNECT_SRC too — the docs page's policy
-#                           gates the token exchange.
+#                           configure the frontend. It should also live on
+#                           the docs page's OWN origin: every shipped
+#                           topology (compose, the k8s venue) serves Keycloak
+#                           under the same public origin as the docs, and the
+#                           gateway's /api-docs Content-Security-Policy
+#                           hardcodes connect-src 'self' there
+#                           (api-gateway-solution/nginx/conf/default.conf.
+#                           template) — a base on a DIFFERENT origin needs
+#                           that gateway template widened, which is a
+#                           gateway-config change, not an env knob.
 #   KEYCLOAK_INTERNAL_URL — internal Keycloak base (http://keycloak:8080) used by
 #                           chatqna (JWKS fetch) and dataprep (service-account token
 #                           mint). okf-server uses it ONLY as a connection failover —

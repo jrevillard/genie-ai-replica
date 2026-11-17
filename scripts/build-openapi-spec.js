@@ -83,7 +83,10 @@ function buildSpec() {
     ['tokenUrl', flow?.tokenUrl]
   ]) {
     assert.ok(
-      typeof url === 'string' && !url.includes('undefined') && isAbsoluteHttpUrl(url) && url.startsWith(expectedBase),
+      typeof url === 'string' &&
+        !url.includes('undefined') &&
+        isAbsoluteHttpUrl(url) &&
+        url.startsWith(expectedBase + '/realms/'),
       label +
         ' is not a concrete URL (absolute, derived from the resolved base) —' +
         ' the KEYCLOAK_REALM pin is missing from the env -i line in' +

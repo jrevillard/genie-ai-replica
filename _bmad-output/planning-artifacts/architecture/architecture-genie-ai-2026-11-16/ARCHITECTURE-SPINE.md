@@ -73,9 +73,12 @@ service; the frontend never talks to anything but the BFF.
   `comps`/OPEA imports or OPEA build-time downloads in agent-path packages —
   **including the BFF's agentic routing branch** — from the first delivered
   stage. No agentic-routed request invokes an OPEA-built service at any hop
-  (FR-20); the OPEA translation image is covered by this ban (AD-14).
-  FR-21 adds an explicit no-new-OPEA-coupling check at each stage gate's
-  review. "OPEA-free" claims are scoped to validated surface only (FR-22).
+  (FR-20); the OPEA translation image is covered by this ban (AD-14). The
+  BFF leg (Node, imports nothing) is enforced by a **routing-helper test**,
+  not a grep: the agentic branch must never target the chatqna/OPEA URL —
+  the legacy branch keeps its call by design. FR-21 adds an explicit
+  no-new-OPEA-coupling check at each stage gate's review. "OPEA-free"
+  claims are scoped to validated surface only (FR-22).
 
 ### AD-2 — One new Python service hosts port and loop
 
@@ -129,7 +132,11 @@ service; the frontend never talks to anything but the BFF.
   never a confident answer. `read_source` re-validates every resolved target
   (file_id via doc-repo, concept via okf-server/`okf_concepts_meta`) against
   the request's authorized graph set — live-service lookup alone is not
-  enforcement. Retained evidence/session/audit data carries ownership and
+  enforcement. Mapping for the legacy corpus: a legacy `file_id` belongs to
+  the shared legacy GRAPH (no per-user ACL) — it is in-scope iff the
+  request's authorized set includes the legacy graph (i.e. the resolution
+  context allowed legacy retrieval at all). Retained evidence/session/audit
+  data carries ownership and
   access rules (cross-user and between-turns permission-change attempts are
   tested).
 
@@ -142,8 +149,10 @@ service; the frontend never talks to anything but the BFF.
   subprocess) plugs onto: (a) server-registered tool definitions, (b) an
   internal event stream shaped on the AG-UI taxonomy (run lifecycle, text
   deltas, tool-call lifecycle, state — pattern, not dependency), (c) budget
-  and cancellation hooks. The internal event vocabulary and the
-  tool/operation names are **owned by the seam** (the `agent/` module): a
+  and cancellation hooks. **The internal envelope is
+  `{run_id, call_id, seq, kind, payload}`, owned by the `agent/` module —
+  runtimes never emit BFF frame names.** The internal event vocabulary and
+  the tool/operation names are **owned by the seam**: a
   runtime swap adapts its native events to that vocabulary — it never renames
   it. The D03 decision closes at S4 entry from V06 + V07a and must not close
   on research evidence past its 2026-12-01 compat re-check without a refresh.
@@ -165,12 +174,17 @@ service; the frontend never talks to anything but the BFF.
   as a BFF timeout (CM-3). Cancellation chain: BFF detects client disconnect
   on the stream (replacing the dead `req.on('close')` path) → aborts the
   upstream call → agent-service cancels the in-flight model call. Admission
-  control against shared vLLM/TEI: a lane-cap-style concurrency bound
-  (env-configured semaphore, the repo's established capacity mechanism —
-  compose has no cgroups) through which **every** request mode passes,
-  including the no-agent evaluation mode (AD-10), so admission policy never
-  becomes a hidden variable in E02. Saturation behavior defined before S4.
-  Numeric thresholds are post-baseline (PRD §8).
+  control against shared vLLM/TEI: a lane-cap concurrency bound using the
+  repo's established **cross-process flock slot-pool idiom** (dataprep
+  precedent, `genieai_dataprep_microservice.py:118-147` — per-process
+  semaphores cannot bound a multi-replica service; the bound is
+  **fleet-wide across replicas**, 429 only when all slots are busy) through
+  which **every** request mode passes, including the no-agent evaluation
+  mode (AD-10), so admission policy never becomes a hidden variable in E02.
+  Auxiliary model calls (grounding judge, classification, translation)
+  emit **no** `agent_activity` event — the line reports tool calls, not
+  plumbing. Saturation behavior defined before S4. Numeric thresholds are
+  post-baseline (PRD §8).
 
 ### AD-7 — Citation enforcement: mechanical reference validity + judged grounding, behind a named release policy
 
@@ -185,9 +199,16 @@ service; the frontend never talks to anything but the BFF.
   deployment-level enum (`verdict-marked` | `verdict-silent` |
   `hold-until-verified`); iteration 1 ships `verdict-marked`: stream normally,
   verdict + explicit `agent_verdict` correction event on failure (position
-  pinned by AD-8), persisted marking — never silent. Changing policy =
+  pinned by AD-8), persisted marking — never silent. `verdict-silent` means
+  no separate streamed event — the verdict is **always** surfaced on the
+  answer surface (answer-level warning + persisted marking); no policy value
+  hides a failed verification from the user (FR-10/FR-12). Changing policy =
   versioned additive SSE event + re-measured evaluation, not per-request
-  switching; no policy value disables verification. Citations render through
+  switching; no policy value disables verification. **Single source of
+  truth:** the verdict is the only authority — the `metadata` frame's
+  `is_grounded` is derived from it (written by the BFF from the agent's
+  verdict), so the client's unconditional `metadata` handling can never
+  overwrite a failed verdict with a confident one. Citations render through
   the existing RAG citation components.
 
 ### AD-8 — The BFF owns the SSE contract; extensions are additive and versioned
@@ -205,8 +226,12 @@ service; the frontend never talks to anything but the BFF.
   and **before** `metadata`; `done` is always the last frame. The `metadata`
   frame's `source_documents` array keeps its existing shape (including the
   `okf-concept` variant) so existing citation components and post-rollback
-  re-render work unchanged. agent-service emits the BFF's JSON event dialect
-  directly (the bytes-repr dialect dies with chatqna). Translation
+  re-render work unchanged. **Frame writer:** agent-service emits the
+  internal seam stream (AD-5 envelope); the **BFF parses it and writes every
+  client frame** — chunk relay, translation injection (AD-14), metadata
+  emission + version-record persistence (AD-11), `done`/`error`. The
+  bytes-repr dialect dies with chatqna; agent-service never writes a client
+  frame. Translation
   compatibility carries over in both modes (translated units as `chunk`
   frames when streaming translation is on; `done.translationFailed`
   semantics preserved; backend per AD-14). The SSE e2e envelope stays
@@ -250,7 +275,12 @@ service; the frontend never talks to anything but the BFF.
   defense-in-depth post-filter, file_id enrichment, CAP-1 identity join
   tolerated-absent. The **query-instruction embedding prefix**
   (`get_query_instruction` per embedding model) is mandatory on every query
-  embedding — omitted prefixes silently corrupt dense scores. Evaluation
+  embedding — omitted prefixes silently corrupt dense scores. **Method:
+  reimplementation, not code sharing** — the port is new Python in
+  agent-service; no shared library, no wrapping, no dual-mode code with the
+  OPEA overlay (a shared lib would restructure the comps-vendoring build and
+  couple the paths — FR-21; the bounded duplication ends by deletion at the
+  deferred OPEA-exit initiative, never by merging). Evaluation
   config B (fixed pipeline over the new capabilities) = a no-agent mode of
   the same service: a single-pass port call through the same orchestrator
   admission lane and the same budgets — B and C share the retrieval backend
@@ -321,12 +351,12 @@ service; the frontend never talks to anything but the BFF.
 | Concern | Convention |
 | --- | --- |
 | Naming | Service dir `components/agent-service`; image `genie-ai-agent-server`; env prefix `AGENT_*`; capability ops `search_knowledge`, `read_source` (working names, versioned at contract acceptance); SSE event names stay lowercase single words. |
-| Stable source ids | Legacy: `file_id` (resolves via doc-repo `GET /api/files/:id`). OKF: `concept_id` + `repo_id` + `bundle_version`, resolved by exact join on `okf_concepts_meta` — never by graph-name parsing. `chunk_key` rides metadata; it is not a persisted citation id. |
+| Stable source ids | Legacy: `file_id` (resolves via doc-repo `GET /api/files/:id`) — carried in the frame as the `document_id` field's value, `source` absent (legacy branch). OKF: `concept_id` + `repo_id` + `bundle_version`, resolved by exact join on `okf_concepts_meta` — never by graph-name parsing — and carried with `source: 'okf-concept'` (without it the frontend takes the legacy branch and builds a 404 doc-repo URL, `conversation.js:239-296`). `chunk_key` rides metadata; it is not a persisted citation id. |
 | Trusted caller context | Structured fields: user id (`iss_sub`) + authorized graph set + task restrictions. Never the `search_start` compressed string (one string, four concerns). Bearer tokens are forwarded only where a downstream service enforces its own validation (okf-server, doc-repo). |
 | Errors & insufficiency | Insufficient evidence is a **successful answer type**, not an error; authorization failures never fall back more permissively; degraded availability reports insufficiency. Error events keep the existing SSE `error` frame semantics. |
 | Config | Hand-wired compose `environment:` blocks (no `env_file` in this repo); every new var documented in the root `env` template and covered by `tests/config-validator/` (AC2/AC4); activation flag gates compose + routing together. |
 | Timestamps | UTC ISO (`toISOString`) everywhere persisted, matching existing services. |
-| Capacity | Lane-cap env semaphores (import/drain-pair discipline), not cgroups — compose defines no resource limits. |
+| Capacity | Lane-cap via cross-process flock slot pools (dataprep idiom) — fleet-wide across replicas, not per-process semaphores; not cgroups — compose defines no resource limits. |
 | Dependency adoption | Before ANY runtime/dependency is adopted: audit its **defaults** — default telemetry, default cloud export, license posture — against the exact package version (NFR-2; V07a). Developer-preview status requires an explicit operational-risk acceptance. |
 | Decision records | Structural decisions land as ADRs with the FR-29 discipline (status Proposed/Accepted/Rejected/Superseded, date, owner, reviewers, evidence, reconsideration triggers; superseded records preserved and linked; one canonical home per record). This spine's ADs follow the same status discipline; existing ADRs are status-checked before reliance. |
 

@@ -186,20 +186,13 @@ Two further syntheses are consumed directly by the recommendations: DSH's `ToolD
 
 ---
 
-## Amendments — post-review verification (2026-11-16)
+## Amendments — post-review verification (2026-11-16; AM-7 added 2026-11-17)
 
 Adversarial review of MR !919 identified factual errors and evidence-grade
 issues in this report. Corrections below supersede the corresponding body
 statements; the body is left as written for audit honesty. The same
 corrections propagate to `research-extract.md` (digest) and the PRD.
 
-**AM-7 (DSH 282k★ figure — challenge refuted, figure stands).** A 2026-11-17
-review challenged the "282k★ launch velocity" figure (§2.2 DSH ecosystem
-record) as an implausible typo for 28.2k. Live re-check of
-github.com/deepseek-ai/deepseek-harness (2026-11-17): **282.6k stars, 35.0k
-forks** — the figure as written is correct; the challenge was wrong. No body
-change. Recorded here so the 2026-12-01 compat re-check inherits the
-verification trail.
 
 **AM-1 (DSH embeddability — corrects §2.1/§2.2 "workstation not embeddable"
 and the revisit trigger "embeddable server mode").** Verified against the
@@ -266,3 +259,12 @@ map) — unchanged. **Count correction:** the staleness map's "24 ledger
 claims mapped" is an off-by-one — the ledger holds **25** claims
 (2 verified + 22 unverified + 1 overturned, matching the frontmatter and
 the run memlog). A refresh must re-check 25.
+
+
+**AM-7 (DSH 282k★ figure — challenge refuted, figure stands).** A 2026-11-17
+review challenged the "282k★ launch velocity" figure (§2.2 DSH ecosystem
+record) as an implausible typo for 28.2k. Live re-check of
+github.com/deepseek-ai/deepseek-harness (2026-11-17): **282.6k stars, 35.0k
+forks** — the figure as written is correct; the challenge was wrong. No body
+change. Recorded here so the 2026-12-01 compat re-check inherits the
+verification trail.

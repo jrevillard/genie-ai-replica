@@ -268,8 +268,8 @@ second authorization or knowledge-governance layer).
     Aligned with V08.
 
 - **FR-30** The user sees a minimal **activity line** while the agent works:
-  tool-call lifecycle events (started/completed, operation name — not raw
-  model reasoning) carried as **new, explicitly versioned SSE event types**
+  tool-call lifecycle events (started/completed/**failed**, operation name — not raw
+  model reasoning; failure visibility is operator-required) carried as **new, explicitly versioned SSE event types**
   (the first concrete instance of D04's preservation-vs-versioning
   decision), shaped from the AG-UI tool-call lifecycle taxonomy (FR-14).
   Frontend rendering is minimal: a status line, no expandable tool detail.

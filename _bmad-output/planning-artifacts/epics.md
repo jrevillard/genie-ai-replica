@@ -178,8 +178,9 @@ So that the OPEA-free implementation preserves it deliberately and E01 can prove
 **Acceptance Criteria:**
 
 **Given** the deployed configuration (values from story 1.2 where available)
-**When** the query path is exercised across the behavior catalog — dense retrieval (brute-force cosine default), BM25 (analyzer, deployed k values), RRF fusion, label-filter strategy, defense-in-depth post-filter, file_id enrichment, CAP-1 identity join (including tolerated absence), query-instruction prefix, and the preparation pipeline (language detection among all supported locales, any-source-language→English translation before embedding, history/input bounds, `query_translation_status`)
+**When** the query path is exercised across the behavior catalog — dense retrieval (brute-force cosine default), BM25 (analyzer, deployed k values), RRF fusion, label-filter strategy, defense-in-depth post-filter, file_id enrichment, CAP-1 identity join (including tolerated absence), the **TEI reranking + evidence-selection stage** (rerank invocation, `RERANKING_STRATEGY` slice/threshold/knee/adaptive, `RERANKER_TOP_N`, thresholds, selected-passage order, reranker-down behavior), the query-instruction prefix as a **model-specific contract** (`get_query_instruction` per embedding model — including models with an intentionally absent prefix, e.g. bge-m3, and deployer overrides), and the preparation pipeline (language detection among all supported locales, any-source-language→English translation before embedding, history/input bounds, `query_translation_status`)
 **Then** each behavior is documented with inputs, deployed parameter values, and expected outputs, as fixtures consumable by tests
+**And** the preparation pipeline's failure classes are recorded **as deployed, separately**: translator unavailable, oversized input (the deployed `TranslationInputTooLongError` → explicit 422 `translation_input_too_long` with `abstained:true` — NOT an untranslated fallback), and translation-returning-blank — each with its distinct expected outcome
 **And** at least three locales are covered including one non-Latin script, recording the detected language, the exact English string sent to the embedder, and the status field
 **And** the record is linked as an ADR-evidenced artifact (FR-29 discipline starts here)
 
@@ -209,6 +210,7 @@ So that the capability layer has a home that ships dark and is born switchable.
 **When** the service is added
 **Then** compose block carries cap_drop/no-new-privileges, the fluentd anchor, a healthcheck, no host port, and `replicas: ${AGENT_ENABLED:-0}`
 **And** the CI triplet (build/scan/promote) plus lint/test jobs exist; the ansible `genieai_images` entry exists; config-validator coverage passes (env template documented, wired)
+**And** every introduced dependency (FastAPI and its tree) passes the pre-adoption checklist BEFORE acceptance: V07a exact-version license verification + NFR-2 defaults audit (default telemetry, default cloud export) — NOASSERTION counts as unverified and blocks; the checklist is reusable by every later dependency-introducing story
 **And** OTel traces are emitted when observability is enabled — the ported tracing module contains no `comps` imports (passes the repo's grep)
 **And** with `AGENT_ENABLED=0` nothing about the agentic path is reachable
 
@@ -251,8 +253,8 @@ So that retrieval works without OPEA and matches the V02-recorded behavior.
 
 **Given** the V02 record (story 1.1) and the contract (story 1.5)
 **When** `search_knowledge` executes
-**Then** dense retrieval, BM25, RRF fusion, label filtering and post-filtering, file_id enrichment and CAP-1 identity join behave per the recorded semantics, with the same env-exposed knobs
-**And** the query-instruction prefix is applied on every query embedding — a test proves its absence corrupts scores (negative control)
+**Then** dense retrieval, BM25, RRF fusion, label filtering and post-filtering, file_id enrichment, CAP-1 identity join AND the reranking/evidence-selection stage behave per the recorded semantics — selected evidence and order match the recorded reference for fixed candidates, including cutoff/empty-result and reranker-down cases, with the same env-exposed knobs
+**And** the embedding request honors the recorded **model-specific instruction contract** (`get_query_instruction`), including the no-prefix models (bge-m3, MiniLM) and deployer overrides — asserted against the model contract, not a universal degradation claim
 **And** the input contract requires prepared English queries; non-prepared input is rejected by contract
 **And** per-behavior equivalence tests pass against the V02 fixtures for every catalog behavior
 **And** no `comps`/OPEA import or download exists in the package (gate 1.4 green) and structure follows modern patterns (clean-slate per AD-10 — behavior frozen, structure free)
@@ -270,8 +272,9 @@ So that nothing the model asks for can exceed what the user may see.
 **Then** legacy `file_id` resolves via doc-repo and OKF concepts via the exact `okf_concepts_meta` join, and every resolved target is re-validated against the request's authorized set — legacy corpus mapping per AD-4
 **And** authorization-resolution failure produces an error or insufficiency outcome — never a wider corpus (fail-closed; the legacy fail-open path is not replicated)
 **And** caller-supplied graph/repo identifiers pass the charset guard or resolve server-side (repo_id→graph_name)
-**And** cross-user and cross-session identifier attempts are rejected with tests; permission changes between turns invalidate retained evidence reuse (FR-28)
+**And** cross-user and cross-session identifier attempts are rejected with tests; permission changes between turns invalidate retained evidence reuse (FR-28); the negative authorization matrix covers **search** results (restricted-graph content is not searchable), not only read targets
 **And** degraded downstream availability reports insufficiency/degradation — never confident data
+**And** the retained-data product decision (historical visibility of earlier answers after a source is revoked) is recorded with its save/revoke/restore acceptance scenario, using existing stores and authorities — no new governance layer
 
 ### Story 1.8: Implement the input-preparation module
 
@@ -284,20 +287,21 @@ So that retrieval always operates on the English the embedding space expects, id
 **Given** a conversation in any supported locale (tests include a non-Latin script)
 **When** preparation runs
 **Then** the language is detected, the query/history is translated to English via the vLLM translation endpoint as a budgeted auxiliary call with cancellation propagation, bounds are applied, and `query_translation_status` is recorded
-**And** translation failure or oversized input degrades exactly as the V02 record specifies (untranslated fallback + status), never a silent behavior change
+**And** preparation failure classes behave per the V02 record's per-class outcomes — translator unavailable, oversized input (explicit 422 `translation_input_too_long` with abstention, as deployed — not an untranslated fallback), blank translation — each mutually consistent with the capability contract's error taxonomy; no single fallback is hardcoded across error classes
 **And** the module serves refined mid-loop queries identically to the initial request, and configs B/C use it unchanged
 
 ### Story 1.9: Behavioral equivalence suite (E01 runway) and V05 inventory
 
 As an evaluator,
-I want the per-behavior equivalence suite — the same runway E01 will drive as config B — plus the inventory of the live client contracts,
-So that equivalence is proven continuously, not reconstructed for the evaluation.
+I want the per-behavior equivalence suite plus the service-side no-agent mode (config B's full answer pipeline) and the inventory of the live client contracts,
+So that equivalence is proven continuously and config B generates complete answers without agent involvement.
 
 **Acceptance Criteria:**
 
 **Given** the V02 fixtures (story 1.1) and the implemented port (stories 1.6–1.8)
 **When** the equivalence suite runs
-**Then** every catalog behavior is asserted against the recorded expectations, and the suite is invokable as E01's config-B driver without adaptation (one evaluation runway)
+**Then** every catalog behavior is asserted against the recorded expectations
+**And** the no-agent mode is implemented service-side: a single-pass call through preparation → retrieval → reranking → selection (the full fixed pipeline E01's config B needs), through the same admission lane — component fixtures alone do not produce a complete answer
 **And** the V05 inventory documents the actual API/SSE/error contract surface with current regression coverage, listing gaps as pre-S3-exit work items
 **And** the S3 exit checklist (contract + authorization + compatibility checks; V02/V04/V05 evidence recorded) is completable from this epic's artifacts
 
@@ -305,19 +309,36 @@ So that equivalence is proven continuously, not reconstructed for the evaluation
 
 Users receive source-grounded agentic answers or explicit insufficiency — with a visible activity line (started/completed/failed per operation), honest tri-state verdicts, bounded execution, working cancellation, and full version attribution; the runtime (D03) closes at epic entry from V06+V07a.
 
-### Story 2.1: Runtime seam and first loop
+### Story 2.1: Runtime seam and bounded decision probe
 
 As the runtime decision owner,
-I want the agent seam (registered toolset, internal envelope, event vocabulary, budget/cancellation hooks) with a custom minimal loop driving it,
-So that SC-01 runs on GENIE-owned plumbing and every D03 candidate plugs onto the same interface.
+I want the agent seam (registered toolset, internal envelope, event vocabulary, budget/cancellation hooks) plus a bounded smoke probe of the provisional candidate,
+So that D03 closes on evidence from a working seam, whichever runtime wins — and the plan stays coherent if it is not the custom loop.
 
 **Acceptance Criteria:**
 
 **Given** the capability contract (story 1.5)
 **When** the seam is implemented
 **Then** tools are registered server-side only (the registry is the authorization surface — nothing unregistered is callable), the internal envelope is `{run_id, call_id, seq, kind, payload}` owned by `agent/`, and the event vocabulary is AG-UI-shaped and owned by the seam — the loop never emits BFF frame names
-**And** the custom loop executes search/read within the registered toolset, serial document-tool dispatch, and emits run/text-delta/tool-lifecycle events on the seam
+**And** a bounded probe (smoke, not production implementation) exercises the provisional candidate on the seam — small toolset, one multi-hop question — producing comparable evidence for V06/D03
+**And** the probe is explicitly pre-decision evidence: if D03 selects pydantic-ai or DSH, the production implementation follows the SELECTED runtime on the same seam — no obligation to ship a production custom loop or a second engine
 **And** budget and cancellation hooks are honored: a cancelled run stops dispatching and cancels the in-flight model call
+
+### Story 2.2: V06 runtime verification and D03 closure
+
+As the runtime decision owner,
+I want the selected runtime verified against GENIE's model endpoint (tool-calling matrix, isolation, default-telemetry posture, cancellation, telemetry) with pre-adoption license checks,
+So that D03 closes on current evidence, not stale research.
+
+**Acceptance Criteria:**
+
+**Given** the deployed vLLM version (V03 baseline) and the 2.1 probe evidence
+**When** V06 runs
+**Then** the version × model × parser × tool-choice-mode × schema-strictness × streaming compatibility matrix is validated against the deployed combination (REC-6 prerequisites pinned)
+**And** cancellation and client-disconnect propagation to the model call are demonstrated at runtime level (full request-path integration is gated separately in 2.3/2.4 — the phases are explicit)
+**And** V07a license verification passes for the exact package versions of every adopted dependency; developer-preview status (if applicable) carries an explicit operational-risk acceptance; default telemetry/cloud-export posture is audited (NFR-2)
+**And** the D03 decision is recorded as an ADR citing V06+V07a evidence; it does not close on compat research past its 2026-12-01 re-check without a refresh; every candidate carries documented replacement scope and estimated swap cost (NFR-7)
+**And** the selected runtime's production implementation follows on the same seam in the subsequent stories
 
 ### Story 2.2: V06 runtime verification and D03 closure
 
@@ -347,6 +368,7 @@ So that no run escapes its bounds and shared model services are protected.
 **Then** step cap, wall-clock, token budget, call count and evidence volume are enforced with everything counted (retries, tool calls, auxiliary calls incl. judge/classification/preparation-translation)
 **And** admission uses the flock slot pool with the one-replica deployment contract — saturation yields a defined 429/admission behavior, and the no-agent mode passes through the same lane
 **And** the BFF's upstream timeout on the agent leg is configured ≥ the agent-phase deadline plus margin (pair documented for V08)
+**And** the run's resource counters (tokens, calls) are shared state between agent and BFF: translation checks the remaining token/call allowance before starting, bounds each request to the remaining allowance, and falls back conservatively (skip translation with the recorded status, never exceed) when usage is unavailable — the deadline/cancellation ownership unchanged
 **And** cancellation from the BFF aborts the run and releases slots; a run that hits a budget ends with an honest terminal state, never a fabricated answer
 
 ### Story 2.4: BFF frame writer and disconnect detection
@@ -361,22 +383,39 @@ So that the client contract is owned in one place and cancellation actually prop
 **When** the BFF proxies an agentic request
 **Then** it writes every client frame itself — chunk relay, `agent_activity`, `agent_verdict`, metadata (+ version-record persistence), translation injection, `done`/`error` — with the five existing types and terminal order preserved verbatim
 **And** client disconnect is detected on the stream (replacing the dead `req.on('close')` path), aborting the upstream call and cancelling in-flight work
+**And** the shared routing helper (guarded in E3's 3.1) is the only way either agentic endpoint is exposed — the BFF integration and the guarded seam land together
 **And** the `queries` doc is minted per turn with the same shape as the legacy path (queryId continuity for persistence, analytics, saved conversations)
 
-### Story 2.5: The governed answer path
+### Story 2.4b: Non-streaming integration (JSON path)
+
+As an end user or integrator,
+I want the non-streaming `POST /api/queries` path to return the versioned-compatible JSON result when routed to the agent,
+So that both request modes carry full compatibility, not just SSE.
+
+**Acceptance Criteria:**
+
+**Given** an agentic-routed non-streaming request
+**When** the BFF consumes the agent's result
+**Then** the JSON response carries the existing field shapes: response text, metadata (`source_documents` incl. the `okf-concept` variant, `grounding_status` + legacy `is_grounded`), queryId — with citations, translation (per mode) and persistence behaving as the streaming path
+**And** error/insufficiency cases return the existing JSON error contract (not SSE frames)
+**And** end-to-end tests cover the success and error/insufficiency cases through the real endpoint
+
+### Story 2.5: The governed answer path (integration slice)
 
 As an end user,
 I want the agent to answer from evidence or say it cannot,
 So that I never receive confident invention.
 
+**Integration slice — assembles the deliverables of 2.1/2.3/2.6/2.10 and the capability layer into the complete user flow; it owns the end-to-end acceptance evidence, not a second implementation of the loop or verifier.**
+
 **Acceptance Criteria:**
 
 **Given** a question and the registered toolset
-**When** the loop runs
+**When** the full flow runs
 **Then** it returns either a source-grounded answer with traceable citations (rendered through the existing RAG citation components, FR-13) or an explicit insufficient-evidence response
 **And** retrieved content is data, never instructions — hostile instructions embedded in documents or tool outputs are not followed (AD-13), and an injection attempt is a recorded finding
 **And** degraded retrieval (partial availability, fallback strategy) reports insufficiency, never a confident answer (FR-12)
-**And** multilingual behavior carries over: preparation (story 1.8) for retrieval, BFF answer translation for display
+**And** multilingual behavior carries over: preparation (story 1.8) for retrieval, BFF answer translation for display — asserted end-to-end in this story
 
 ### Story 2.6: Citation verification pipeline and tri-state verdict
 
@@ -532,7 +571,8 @@ So that A/B/C run on the same machinery with controlled inputs.
 **When** the harness is built
 **Then** every run versions its corpus, cases, configurations, models, prompts and evaluator instructions; tuning cases are kept separate from the assessment set (FR-24)
 **And** the set composition is fixed and explicit: answerable and unanswerable questions, citation checks, representative languages (incl. non-Latin), restricted/public access scenarios, failure and cancellation cases
-**And** configs A (legacy fixed RAG), B (fixed pipeline over the new capabilities, full answer pipeline named: preparation/retrieval/rerank/generation/checking) and C (agent) are invokable with per-pair held-fixed conditions and recorded intentional differences (FR-23)
+**And** configs A (legacy fixed RAG), B (the service-side no-agent mode from story 1.9 — the harness is its caller, not its implementer) and C (agent) are invokable with per-pair held-fixed conditions and recorded intentional differences (FR-23)
+**And** reference measurement is A-only first: measure A alone, freeze thresholds, THEN run the gated B/C candidate assessments (partial order: A-only metrics exist before thresholds are signed and before the first gated B/C run); the existing `tests/rag-benchmarks` capture machinery is reused where suitable, with suitability/version checks — never blind reuse of an old baseline artifact
 
 ### Story 4.2: Authorization and injection scenario suite
 
@@ -587,8 +627,9 @@ So that the agentic delta is attributable to the agent.
 **Given** configs B and C sharing retrieval backend, preparation and admission policy
 **When** E02 runs
 **Then** gains (multi-hop and ambiguous queries) and costs are reported per dimension with thresholds applied; resource consumption under concurrent load is measured (NFR-3)
+**And** **legacy non-regression under agent load is a tested criterion, not a report line**: a controlled legacy-only vs legacy-with-agent-load comparison runs with the agreed legacy latency/error/availability limits and the defined saturation/admission response — a resource report that hides slowed/failing legacy responses fails this acceptance
 **And** the verdict is honest: agentic benefits remain hypotheses until measured on GENIE's corpora and query mix (PRD §4.1 note); a negative result is recorded, not massaged
-**And** the S4 exit evidence bundle (E01 + E02 + bounded execution + rollback demo) is assemblable from this epic's artifacts
+**And** the S4 exit evidence bundle (E01 + E02 + bounded execution + rollback demo + coexistence criterion) is assemblable from this epic's artifacts
 
 ### Story 4.6: Release-readiness evidence (V09 + V07b)
 
@@ -603,3 +644,40 @@ So that release gates rest on available evidence.
 **Then** executable coverage and runner availability are confirmed, with checks needing a separate environment identified — including the new CI surface (agent pytest suite, OPEA-free gate, e2e pins) (NFR-6)
 **And** V07b completes the full license and redistribution assessment (transitive/optional dependencies, images, binaries, models; notices preserved; disclosures updated) before any pilot/release use (FR-19)
 **And** gaps between gates and available evidence are surfaced as blockers, never absorbed silently
+
+### Covers / Depends on / Evidence summary
+
+(Traceability strip — FR-29. Dependencies are upstream-only within each epic.)
+
+| Story | Covers (key reqs) | Depends on | Evidence class |
+|---|---|---|---|
+| 1.1 V02 record | FR-8, AR-4 | — | reference fixtures |
+| 1.2 V03 baseline | V03 | — (parallel track) | ops inventory |
+| 1.3 service skeleton | AR-1, FR-15 mech | — | deployable service + V07a checklist |
+| 1.4 OPEA-free gate | FR-20..22 | 1.3 (scan target) | CI gate red-test |
+| 1.5 contract | FR-1..5, 7 | 1.1, V04 review | typed API + V04 acceptance |
+| 1.6 search port | FR-6, AR-5 | 1.1, 1.5 | equivalence fixtures |
+| 1.7 read + authz | FR-2, 12, 28 | 1.5, 1.6 | negative matrix + policy record |
+| 1.8 preparation | AR-4 (EP-01) | 1.1, 1.5 | per-class failure outcomes |
+| 1.9 equivalence + no-agent B | FR-23 (B), AR-10 lane | 1.6..1.8 | suite + full-answer mode |
+| 2.1 seam + probe | FR-9, AR-6 | Epic 1 | probe evidence (pre-D03) |
+| 2.2 V06 + D03 | FR-19a, NFR-2, D03 | 2.1, V03 | matrix + ADR |
+| 2.3 orchestrator | FR-11, AR-7 | 2.2 | budget/admission tests |
+| 2.4 BFF frame writer | AR-9, FR-14 | 2.2, 3.1 helper | frame tests |
+| 2.4b non-streaming | FR-14 (JSON) | 2.4 | e2e JSON contract |
+| 2.5 answer path (slice) | FR-9..13, AD-13 | 2.1..2.4b, Epic 1 | end-to-end acceptance |
+| 2.6 citations tri-state | FR-10, AR-8 | 2.5 | verdict tests |
+| 2.7 web line | FR-30, UX-DR1/2/4..7 | 2.4, 2.6 | rendered behavior specs |
+| 2.8 mobile line | FR-30, UX-DR3..7 | 2.4, 2.6 | widget tests |
+| 2.9 SSE regression | FR-14/30, NFR-5 | 2.4, 2.7 | pinned e2e set |
+| 2.10 translation | FR-14, AR-14 | 2.3 counters, 2.4 | residual-budget tests |
+| 2.11 attribution | FR-17, 18, AR-11 | 2.3 | handshake + crash tests |
+| 3.1 one flag both paths | FR-15, AR-10 | 1.3 | routing-disagreement test |
+| 3.2 rollback continuity | FR-16 | 3.1, Epic 2 | continuation scenario |
+| 3.3 V08 rehearsals | FR-16, NFR-4 | 3.2 | rollout records |
+| 4.1 harness | FR-23/24 | 1.9 | versioned runs |
+| 4.2 authz+injection | FR-25 | 4.1 | scenario findings |
+| 4.3 E01 A/B | FR-26/27, M-1..5 | 1.2, 4.1, V05 | comparison report |
+| 4.4 thresholds+CM | §8 rule, CM-1..3 | 4.3 (A-only) | signed thresholds |
+| 4.5 E02 B/C + coexistence | FR-23, NFR-3 | 4.4, Epic 2 | gated report |
+| 4.6 V09+V07b | FR-19b, NFR-6 | prior epics | evidence bundle |

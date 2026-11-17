@@ -37,8 +37,13 @@ moved too. Two derivations matter:
     umbrella's output, so a library-only fix changes what the umbrella
     installs while leaving the umbrella's version where it was — the
     overlay would name a release whose content is not the one in the
-    cluster. Both chart directories are watched; only the umbrella's
-    Chart.yaml is exempt (it is the version itself).
+    cluster. The assets chart charts/genieai-assets rides along the same
+    way: it is a CARGO dependency whose files/ (the realm, the Keycloak
+    theme tarball, the Grafana dashboards) are rendered by the umbrella
+    through .Subcharts.genieai-assets.Files and travel with the release,
+    so an assets-only change is also a change to what the umbrella
+    installs. All three chart directories are watched; only the
+    umbrella's Chart.yaml is exempt (it is the version itself).
 
 Usage: scripts/ci/chart-version-check.py [chart-path]
        CHART=charts/genieai-umbrella scripts/ci/chart-version-check.py
@@ -52,8 +57,9 @@ import yaml
 
 DEFAULT_CHART = "charts/genieai-umbrella"
 # The library chart renders into the umbrella's output; a change here is
-# a change to what the umbrella installs.
-WATCHED = (DEFAULT_CHART, "charts/genieai-common")
+# a change to what the umbrella installs. The assets chart rides with the
+# release (its files/ are rendered by the umbrella), so it counts too.
+WATCHED = (DEFAULT_CHART, "charts/genieai-common", "charts/genieai-assets")
 
 
 def git(*args):

@@ -71,7 +71,13 @@ const CANARY_RUN_ID = `${Date.now().toString(36)}-${Math.random().toString(36).s
 // The ingest canary's budget: the chain is ONE tiny chunk, so the budget
 // covers queue + LLM labeling + embedding on a loaded shared venue, not a
 // real document's ingest. Beyond it the chain is absent or wedged.
-const INGEST_PROBE_BUDGET_MS = 150000;
+//
+// 180 s, not less: the budget separates "the venue has no ingest chain"
+// (a skip) from "the venue's chain is slow" (a red), and a budget that
+// tight turns a loaded shared venue into a silent coverage loss — the
+// group's whole subject would be skipped with a reason that reads like an
+// absent feature.
+const INGEST_PROBE_BUDGET_MS = 180000;
 
 // The evaluated `window.APP_CONFIG`, cached per process. `undefined` = not
 // read yet; `null` = the venue carries no runtime config at all (the 404
@@ -92,6 +98,9 @@ let ingestChainCache = null;
 // be handed to a probe minutes later, already expired, and the probe
 // would read the 401 as an unreadable venue instead of an absent surface.
 // A session older than this bound is re-opened.
+//
+// The bound assumes the SHIPPED 300 s lifespan. A deployment running a
+// shorter one has to lower it — the hole is narrowed, not closed.
 const SESSION_MAX_AGE_MS = 120000;
 const sessionCache = new Map();
 
@@ -218,6 +227,9 @@ async function localeActive(locale) {
  * from one login: the token is what the probes call the venue with, and
  * the adopted locale is what proves the deployment can serve it.
  *
+ * The session's OWN age is what the cache is bounded by (the session says
+ * when it was opened), not the age of the cache entry.
+ *
  * @param {string} locale - the locale the session boots with
  * @returns {Promise<{token: string, adopted: string, at: number}>} the session
  */
@@ -225,7 +237,11 @@ async function venueSession(locale) {
   const hit = sessionCache.get(locale);
   if (hit !== undefined && Date.now() - hit.at < SESSION_MAX_AGE_MS) return hit;
   const seen = await auth.openVenueSession({ user: TEST_ADMIN_USER, locale });
-  const session = { token: seen.token, adopted: String(seen.adopted || ''), at: Date.now() };
+  const session = {
+    token: seen.token,
+    adopted: String(seen.adopted || ''),
+    at: typeof seen.at === 'number' ? seen.at : Date.now()
+  };
   sessionCache.set(locale, session);
   return session;
 }
@@ -300,7 +316,7 @@ async function missingLocaleReason(locale) {
  * @returns {Promise<boolean>} true when the venue translated the probe text
  */
 async function translatesTo(locale) {
-  if (translationCache.has(locale)) return translationCache.get(locale);
+  if (translationCache.has(locale)) return translationCache.get(locale).verdict;
   const token = await adminSessionToken();
   // The smallest request the endpoint accepts: one fixed text, a fixed
   // source and the requested target. The TEXT is a fixture of this probe —
@@ -313,16 +329,34 @@ async function translatesTo(locale) {
   if (res.status === 200) {
     // A 200 alone is not a translation: the body carries the answer, and an
     // answer that is the source text unchanged is a chain that echoed the
-    // input. The verdict is about the TRANSLATION, so the body is read.
+    // input. The verdict is about the TRANSLATION, so the body is read —
+    // and the CAUSE travels with it, because the skip reason has to name
+    // what the venue DID, not a guess at why.
     const translated = Array.isArray(res.data && res.data.translated_texts) ? res.data.translated_texts[0] : undefined;
-    const verdict = typeof translated === 'string' && translated.trim() !== '' && translated.trim() !== SOURCE;
-    translationCache.set(locale, verdict);
-    return verdict;
+    if (typeof translated !== 'string' || translated.trim() === '') {
+      translationCache.set(locale, {
+        verdict: false,
+        cause: 'the probe was answered 200 with no translated text'
+      });
+      return false;
+    }
+    if (translated.trim() === SOURCE) {
+      translationCache.set(locale, {
+        verdict: false,
+        cause: 'the probe was answered 200 with the source text unchanged'
+      });
+      return false;
+    }
+    translationCache.set(locale, { verdict: true, cause: 'the probe was answered with a translation' });
+    return true;
   }
   if (res.status === 400 && res.data && res.data.error === 'UNSUPPORTED_LANGUAGE') {
     // The deployment's language map refuses this target: the typed refusal
     // IS the venue saying the language is absent.
-    translationCache.set(locale, false);
+    translationCache.set(locale, {
+      verdict: false,
+      cause: 'the probe was refused with UNSUPPORTED_LANGUAGE'
+    });
     return false;
   }
   // Anything else (5xx, a proxy page, an empty body) is the venue failing
@@ -341,10 +375,16 @@ async function translatesTo(locale) {
  * @returns {Promise<string>} the reason
  */
 async function missingTranslationReason(locale) {
+  // The cause the probe OBSERVED, not the one this function would have
+  // guessed: a venue whose translator answers 200 with the English text is
+  // not a venue whose language map refused the language, and the operator
+  // reads the difference.
+  const observed = translationCache.get(locale);
+  const cause = observed ? observed.cause : 'the probe has not run (it runs at the skip decision)';
   return (
-    `venue profile: the translation chain cannot answer en→${locale} (the POST /api/translate probe ` +
-    'was refused with UNSUPPORTED_LANGUAGE) — the streamed translation this spec asserts has no ' +
-    'backend on this venue, and that surface is therefore NOT exercised by this run'
+    `venue profile: the translation chain cannot answer en→${locale} (${cause}) — the translation ` +
+    'this spec asserts has no backend on this venue, and that surface is therefore NOT exercised ' +
+    'by this run'
   );
 }
 
@@ -386,7 +426,6 @@ async function ingestChainReady() {
     sweepDeleteOneFile
   } = require('./documents');
   const token = await adminSessionToken();
-  const headers = { Authorization: `Bearer ${token}` };
   let fileId = null;
   let verdict = null;
   let probeError = null;
@@ -459,12 +498,23 @@ async function ingestChainReady() {
   // verdict: a canary left in the venue's corpus can be retrieved by the
   // next run's question, and a run that cannot clean up after itself must
   // not certify that the chain is ready.
+  // The verdict is cached BEFORE the cleanup: the cleanup must not make the
+  // next spec file run the whole canary again (a second real ingest, and a
+  // second canary document the venue would have to carry).
+  ingestChainCache = verdict;
+
+  // The cleanup runs on a session of its OWN: the canary's own token is as
+  // old as the wait that just ended (up to the probe's budget), and a realm
+  // token lives 300 s — a cleanup on an expired token would fail on the
+  // venue's 401 and read as a venue that cannot delete a document.
+  const cleanupToken = await adminSessionToken();
+  const cleanupHeaders = { Authorization: `Bearer ${cleanupToken}` };
   const cleanupFailures = [];
   let ids = fileId !== null ? [fileId] : [];
   if (fileId === null) {
     try {
       const searchRes = await auth.request('GET', `/api/files?limit=50&search=${encodeURIComponent(canaryName)}`, {
-        headers
+        headers: cleanupHeaders
       });
       if (searchRes.status === 200 && Array.isArray(searchRes.data && searchRes.data.data)) {
         ids = searchRes.data.data.filter((f) => f.file_name === canaryName).map((f) => f.file_id);
@@ -475,11 +525,11 @@ async function ingestChainReady() {
   }
   for (const id of ids) {
     try {
-      const res = await auth.request('GET', `/api/files/${id}`, { headers });
+      const res = await auth.request('GET', `/api/files/${id}`, { headers: cleanupHeaders });
       if (res.status === 200 && res.data && res.data.data) {
         // The record rides the response's `data` envelope; the sweep delete
         // keys on the record's own file_id.
-        const failure = await sweepDeleteOneFile(auth.request, res.data.data, token);
+        const failure = await sweepDeleteOneFile(auth.request, res.data.data, cleanupToken);
         if (failure) cleanupFailures.push(failure);
       }
     } catch (e) {
@@ -504,7 +554,6 @@ async function ingestChainReady() {
       `the ingest canary's cleanup failed — the venue keeps a canary document: ${cleanupFailures.join('; ')}`
     );
   }
-  ingestChainCache = verdict;
   return verdict.ready;
 }
 
@@ -649,9 +698,10 @@ async function frenchStreamingMissingReason() {
     const adopted = sessionCache.get('fr');
     return (
       "venue profile: the app does not adopt the locale 'fr' (it booted on " +
-      `'${adopted ? adopted.adopted : 'unknown'}') — the deployment's whitelist names the locale but ` +
-      'the build carries no locale file for it, so the frontend falls back to English at boot and ' +
-      'this surface is therefore NOT exercised by this run'
+      `'${adopted ? adopted.adopted : 'unknown'}') — the frontend fell back to English at boot, so ` +
+      "every measurement of a French session would read the fallback (the deployment's whitelist " +
+      'names the locale, so the most likely cause is a build that carries no locale file for it), ' +
+      'and this surface is therefore NOT exercised by this run'
     );
   }
   return missingTranslationReason('fr');

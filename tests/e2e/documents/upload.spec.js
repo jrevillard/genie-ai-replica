@@ -139,7 +139,6 @@ test.describe('Document Upload — the ingest chain', () => {
     // copied out under this run's name.
     const fileName = `test-document-ingest-${RUN_ID}.md`;
     const uploadPath = `${os.tmpdir()}/${fileName}`;
-    fs.copyFileSync(path.join(FIXTURES_DIR, 'test-document-ingest.md'), uploadPath);
 
     // The wait reads the API, and a realm access token lives 300 s: the
     // page's own token would be minutes old by the time the ingest lands
@@ -148,6 +147,9 @@ test.describe('Document Upload — the ingest chain', () => {
     const token = await getSessionTokenViaUI({ user: TEST_ADMIN_USER, browser });
 
     try {
+      // The scratch copy is made INSIDE the try, so a mint that failed
+      // leaves no scratch file behind.
+      fs.copyFileSync(path.join(FIXTURES_DIR, 'test-document-ingest.md'), uploadPath);
       await uploadFile(page, uploadPath);
 
       // The ingest is the dashboard's own batch action on the fresh row:
@@ -194,12 +196,15 @@ test.describe('Document Upload — the ingest chain', () => {
       expect(statusText.toLowerCase(), 'the table renders the Ingested status').toBe('ingested');
     } finally {
       // The runner's own scratch copy of the seed: the venue-side document
-      // is removed by the group's sweep, this file is the runner's.
+      // is removed by the group's sweep, this file is the runner's. A
+      // leftover is named, not swallowed — the runner's tmp is scratch, but
+      // a reader of the output has to be able to see it.
       try {
         fs.unlinkSync(uploadPath);
-      } catch {
-        // The scratch copy is the runner's own state; a leftover in the
-        // runner's tmp is not venue state and must not fail the spec.
+      } catch (e) {
+        // ENOENT is a file that was never created (the copy failed) — not a
+        // leftover. Anything else is a leftover, and it is named.
+        if (e.code !== 'ENOENT') console.warn(`the scratch copy ${uploadPath} could not be removed: ${e.message}`);
       }
     }
   });

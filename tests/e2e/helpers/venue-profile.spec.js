@@ -63,12 +63,18 @@ function fakeTransport(answers) {
  * the unit spec fakes it, and `adopted` overrides the locale the fake app
  * reports (the default is the locale the session was opened with).
  */
-function fakeVenueSession({ adopted } = {}) {
+function fakeVenueSession({ adopted, at } = {}) {
+  const sessions = { count: 0 };
   auth.getSessionTokenViaUI = async () => 'fake-session-token';
-  auth.openVenueSession = async ({ locale } = {}) => ({
-    token: 'fake-session-token',
-    adopted: adopted || locale || 'en'
-  });
+  auth.openVenueSession = async ({ locale } = {}) => {
+    sessions.count += 1;
+    return {
+      token: 'fake-session-token',
+      adopted: adopted || locale || 'en',
+      at: typeof at === 'function' ? at() : Date.now()
+    };
+  };
+  return sessions;
 }
 
 test.describe('the OKF probe reads the venue like the frontend reads it', () => {
@@ -539,5 +545,59 @@ test.describe('the ingest-chain canary uploads, ingests, and cleans up', () => {
     ]);
     const profile = freshProfile();
     await expect(profile.ingestChainReady()).rejects.toThrow(/could not read the venue/);
+  });
+
+  test('a canary that lands Ingested with Warnings is a ready venue — indexed, if degraded', async () => {
+    fakeSessionMint();
+    fakeTransport([
+      uploaded('c1'),
+      { status: 200, data: { success: true }, headers: {} },
+      recordRead('c1', 'Ingested with Warnings'),
+      recordRead('c1', 'Ingested with Warnings'),
+      { status: 200, data: { success: true }, headers: {} }
+    ]);
+    const profile = freshProfile();
+    expect(await profile.ingestChainReady()).toBe(true);
+  });
+
+  test('a canary that cannot be removed FAILS the probe — a leftover stays in the venue corpus', async () => {
+    fakeSessionMint();
+    fakeTransport([
+      uploaded('c1'),
+      { status: 200, data: { success: true }, headers: {} },
+      recordRead('c1', 'Ingested'),
+      // The cleanup's record read, then a delete the venue refuses.
+      {
+        status: 200,
+        data: { success: true, data: { file_id: 'c1', file_name: 'ingest-probe-canary.md' } },
+        headers: {}
+      },
+      { status: 500, data: { success: false, error: 'boom' }, headers: {} }
+    ]);
+    const profile = freshProfile();
+    // The chain WAS ready — and the run cannot certify it while it leaves
+    // a canary document behind in a corpus the next run's questions read.
+    await expect(profile.ingestChainReady()).rejects.toThrow(/cleanup failed/);
+  });
+});
+
+test.describe('the venue session is bounded by its own age', () => {
+  test('a session past the bound is re-opened — a realm token lives 300 s', async () => {
+    // The cached session is older than the bound: the probe must not hand
+    // its expired token to the next call.
+    const sessions = fakeVenueSession({ at: () => Date.now() - 200000 });
+    const profile = freshProfile();
+    expect(await profile.localeAdopted('fr')).toBe(true);
+    expect(sessions.count).toBe(1);
+    expect(await profile.localeAdopted('fr')).toBe(true);
+    expect(sessions.count).toBe(2);
+  });
+
+  test('a session inside the bound is reused — one login, not one per probe', async () => {
+    const sessions = fakeVenueSession();
+    const profile = freshProfile();
+    expect(await profile.localeAdopted('fr')).toBe(true);
+    expect(await profile.localeAdopted('fr')).toBe(true);
+    expect(sessions.count).toBe(1);
   });
 });

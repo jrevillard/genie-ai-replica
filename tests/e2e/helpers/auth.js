@@ -569,13 +569,14 @@ async function mapWithConcurrency(items, limit, fn) {
  * @param {{username: string, password: string}} [options.user] - Defaults to
  *        TEST_USER.
  * @param {string} [options.locale] - The locale the context boots with.
- * @returns {Promise<{token: string, adopted: string}>} the session's token
- *        and the locale the app adopted
+ * @returns {Promise<{token: string, adopted: string, at: number}>} the
+ *        session's token, the locale the app adopted, and when the session
+ *        was opened (the age the callers bound their cache by)
  */
 async function openVenueSession({ user, locale } = {}) {
   let ownBrowser = null;
   let context = null;
-  let seen = { token: null, adopted: null };
+  let seen = { token: null, adopted: null, at: Date.now() };
   let sessionError = null;
   let teardownError = null;
   try {
@@ -585,7 +586,8 @@ async function openVenueSession({ user, locale } = {}) {
     await loginViaUI(page, user || TEST_USER);
     seen = {
       token: await getSessionToken(page),
-      adopted: await page.evaluate(() => document.documentElement.lang)
+      adopted: await page.evaluate(() => document.documentElement.lang),
+      at: Date.now()
     };
   } catch (e) {
     sessionError = e;

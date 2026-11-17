@@ -8,10 +8,12 @@ repo, the cluster and the CI pipeline. (The SDD ledgers under
 `.superpowers/sdd/` are working history on the author's machine, not
 contractual evidence — a fresh clone does not carry them.)
 
-## Current state (2026-11-02)
+## Current state (2026-11-17)
 
 - **The live six-check pass ran on 0.2.149 (2026-11-02) — the first
-  since 0.2.130, and the first over the busybox tooling tier** — 6/6:
+  since 0.2.130, and the first over the busybox tooling tier** — 6/6.
+  **The chart has moved on since that pass (0.2.176): the six-check set
+  has NOT been re-run against it**, and the gap grows with every release:
   health, genie theme on the login form, the register link, a French
   streaming chat ("La capitale de la France est Paris."), an
   upload→ClamAV→ingest cycle (Ingested, 1 chunk, 20 s), and a RAG
@@ -3109,6 +3111,85 @@ contractual evidence — a fresh clone does not carry them.)
   SDK enabled (`ENABLE_OBSERVABILITY=1`) and the endpoint pointing at the
   in-cluster collector. The old shape could not have done that: the
   collector's pod IP is in none of the operator's CIDRs.
+
+- **The documentation audit found the Kubernetes docs wrong where a deployer
+  acts on them (0.2.175) — the chart's own Quickstart was the worst case.**
+  Every doc surface (the published site, the agent rules, `docs/charts/`,
+  every `CLAUDE.md`) was audited against the rendered manifests,
+  `values.yaml`, the templates and the live 1.37 cluster. None of the
+  findings was stylistic:
+  - the site's port-forward command (`4443:443`) **could not work** — the
+    Envoy data-plane Service exposes the port `ingress.host` carries (the
+    Gateway's HTTPS listener binds the public port), and the live Service
+    reads **80 and 4443**; only the rule file had it right;
+  - the site claimed the chart "owns" the `GatewayClass`, while
+    `ingress.createGatewayClass` defaults to **false** and the default
+    render carries **no** `GatewayClass` at all — a `Gateway` pointing at a
+    class that does not exist has no data plane, and every request 404s;
+    `ingress.enabled` defaults to false too, so the release has no public
+    entry point either;
+  - two `Secret` key names in the Required-Secrets table were wrong
+    (`TRANSLATION_CACHE_PASSWORD`, `KEYCLOAK_GRAFANA_CLIENT_SECRET`), so the
+    pod would have sat in `CreateContainerConfigError` and never started;
+  - the operator checklist omitted the two operators the DEFAULT install
+    requires — the OpenTelemetry Operator and the vm-operator (the log tier
+    is on by default, so the release renders the collector and the
+    `VLSingle`) — and the five mandatory `envSecrets` rows;
+  - the probes the site recommended contradicted the chart's own (the chart
+    probes `/api/health` for all three probes; the dependency-aware
+    endpoint is a diagnostic, and on Kubernetes it would need a
+    service-account JWT);
+  - the Kong rate limit and the Nginx dotfile blocking the API contract
+    promised do not exist on the Envoy edge — the SPA catch-all answers
+    those paths, and the BFF's own blocker never sees them;
+  - the chart's **Quickstart installed a release with no public entry
+    point** (`ingress.enabled` defaults to false), and its own `helm test`
+    — which probes the Services, not the edge — passed it green.
+  The chart is released on its own axis and nothing said so: the bump is
+  now a documented workflow (K8s-WORKFLOW.md § *Chart version bump*,
+  RELEASE.md § *The chart is released on its own axis*, charts/README.md
+  § *Releasing the chart*) with its gate, its two-repository order, its
+  verification and its rollback. The version gate now watches the assets
+  chart too (`charts/genieai-assets/**` rides the release — an assets-only
+  change changed what the cluster installed and the gate did not see it).
+  Mutation-tested: an assets-only change with no bump now fails the gate;
+  the same change with a bump passes.
+
+- **The parity gate found the OKF tier's ceiling drifting from Compose
+  (0.2.176) — fourteen variables, and the drift was silent on Kubernetes
+  only.** `main` changed the concept-document ceiling's semantics (#1205:
+  unset = DERIVED from the serving-model window) and gave the okf-server the
+  same chunking and batching values dataprep reads, so the two ceilings
+  derive from the same numbers. The chart still **pinned 250000** and
+  rendered **none** of the mirror knobs: the container fell back to the code
+  defaults while dataprep used the deployment's — the #1588 drift reborn as
+  a delivery gap. The chart renders the mirrors now (read from the dataprep
+  block, so one override moves both derivations, exactly as one `.env` line
+  does in Compose), `DATAPREP_CHUNK_SIZE` has a row, and the ceiling is
+  derived unless an operator pins it (`okf.maxConceptDocChars`).
+  The gate was RIGHT and the chart was stale — and the staleness was NOT
+  from this change: merging the branch tip of the day before with the `main`
+  the pipeline used reproduced the same fourteen gaps. **`main` had moved
+  under the branch**, and the branch had not caught up.
+  Live on the 1.37 laptop cluster, chart **0.2.176** (`genieai.v8`): the
+  dataprep pod carries `DATAPREP_CHUNK_SIZE=500` — the variable the chart
+  never rendered — the edge answers `200 {"status":"ok"}` through Envoy on
+  the 4443 origin, and the three versions agree (`Chart.yaml`, the
+  deploy-repo overlay merged as MR !6, and the release the cluster reports).
+  The OKF tier is **DARK on this venue** (`okf.enabled` is not set in the
+  laptop overlay), so the twelve mirror knobs and the derived ceiling are
+  proven by the parity gate and the render, **not** by a live pod.
+
+- **The CI episode was the runner's fault, not the change's — a RECURRENCE
+  of #1922.** The MR pipeline failed on `lint:frontend` with
+  `runner_system_failure` (the job died on the shared runner; the thirteen
+  jobs that had completed were green, and the chart gates had not been
+  reached). The
+  retry passed and the pipeline went green — 99 jobs, the chart gates
+  included. **The remedy #1922 proposed is still unapplied**: the test jobs
+  carry no `retry.when: [runner_system_failure, ...]`, so every infra hiccup
+  on this shared pool turns a green change red and blocks the merge gate on
+  a fault that has nothing to do with the change.
 
 ## Plan map
 

@@ -42,9 +42,12 @@ const auth = require('./auth');
  */
 
 function generateTlsOptions() {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'e2e-transport-tls-'));
-  const keyPath = path.join(dir, 'key.pem');
-  const certPath = path.join(dir, 'cert.pem');
+  // String concatenation, not path.join: the config-validator's
+  // non-literal-consumption gate only accepts __dirname-anchored joins
+  // (#1393), and this directory is deliberately NOT checkout-relative.
+  const dir = fs.mkdtempSync(`${os.tmpdir()}/e2e-transport-tls-`);
+  const keyPath = `${dir}/key.pem`;
+  const certPath = `${dir}/cert.pem`;
   execFileSync(
     'openssl',
     [

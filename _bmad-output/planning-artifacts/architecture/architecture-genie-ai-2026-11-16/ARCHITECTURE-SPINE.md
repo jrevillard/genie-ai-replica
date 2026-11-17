@@ -156,35 +156,55 @@ service; the frontend never talks to anything but the BFF.
   runtime swap adapts its native events to that vocabulary — it never renames
   it. The D03 decision closes at S4 entry from V06 + V07a and must not close
   on research evidence past its 2026-12-01 compat re-check without a refresh.
-  Every candidate documents dependency boundaries and swap cost (NFR-7);
-  pydantic-ai stays the designated fallback with a ≤1-day swap-in exit test.
+  Every candidate documents dependency boundaries and replacement scope with
+  measured or estimated swap cost (NFR-7). **pydantic-ai is the runner-up
+  HYPOTHESIS** (PRD NFR-7, addendum §D) — a swap-in spike is optional
+  evidence, not an obligation; "≤1 day" is a hypothesis to measure, never a
+  prescribed test target.
 
 ### AD-6 — Bounded execution and cancellation are owned by the request orchestrator
 
 - **Binds:** FR-11, NFR-3, CM-3.
 - **Prevents:** unbounded agent loops; budgets that only count the happy path;
   cancellation that never reaches the model call.
-- **Rule:** A per-request orchestrator in agent-service owns: step cap,
-  end-to-end wall-clock deadline, per-run token budget, model/tool-call count,
-  evidence volume. **Everything counts**: retries, parallel tool invocations,
-  auxiliary model calls (translation, classification, the grounding judge).
-  **One wall-clock owner:** the BFF's upstream timeout on the agent leg is
-  configured ≥ the orchestrator deadline plus margin — the pair is validated
-  in the V08 rollback rehearsal, so a long agent run is never misattributed
-  as a BFF timeout (CM-3). Cancellation chain: BFF detects client disconnect
-  on the stream (replacing the dead `req.on('close')` path) → aborts the
-  upstream call → agent-service cancels the in-flight model call. Admission
-  control against shared vLLM/TEI: a lane-cap concurrency bound using the
-  repo's established **cross-process flock slot-pool idiom** (dataprep
-  precedent, `genieai_dataprep_microservice.py:118-147` — per-process
-  semaphores cannot bound a multi-replica service; the bound is
-  **fleet-wide across replicas**, 429 only when all slots are busy) through
-  which **every** request mode passes, including the no-agent evaluation
-  mode (AD-10), so admission policy never becomes a hidden variable in E02.
+- **Rule:** **Two-level budget ownership.** The **BFF owns the true
+  end-to-end request deadline** — it is the only component alive for the
+  whole lifecycle (agent phase + translation + finalization). The agent
+  orchestrator owns the **agent-phase sub-budget**: step cap, agent-phase
+  wall-clock deadline (communicated in the request), per-run token budget,
+  model/tool-call count, evidence volume. **Everything counts**: retries,
+  tool invocations, auxiliary model calls (translation, classification, the
+  grounding judge). Translation runs on the **residual**: the BFF starts no
+  translation call beyond the remaining deadline, cancels the downstream
+  translate call on client disconnect, and accounts token usage — estimated
+  where the backend discards it (the existing `gpu-translate-backend`
+  returns only translated strings and has its own 30s timeout; it must
+  return usage or be wrapped with an estimate). The BFF's upstream timeout
+  on the agent leg is configured ≥ the agent-phase deadline plus margin —
+  the pair is validated in the V08 rollback rehearsal, so a long agent run
+  is never misattributed as a BFF timeout (CM-3). Cancellation chain: BFF
+  detects client disconnect on the stream (replacing the dead
+  `req.on('close')` path) → aborts the upstream call → agent-service cancels
+  the in-flight model call. Admission control against shared vLLM/TEI: a
+  concurrency bound using the repo's **flock slot-pool idiom**
+  (dataprep precedent, `genieai_dataprep_microservice.py:118-147` — note:
+  that idiom is **intra-container only**; its locks live in the container's
+  `/tmp` and compose declares dataprep a SINGLE-REPLICA CONTRACT,
+  docker-compose.yaml:2375). **Iteration-1 deployment contract: the
+  activation flag runs agent-service at exactly one replica (0 or 1)** —
+  with one replica, the slot pool IS the global bound (429 only when all
+  slots busy); scaling beyond one replica requires an explicitly shared
+  coordination mechanism with failure/lease semantics and a verified
+  topology, and is deferred until that mechanism exists. **Every** request
+  mode passes through the lane, including the no-agent evaluation mode
+  (AD-10), so admission policy never becomes a hidden variable in E02.
   Auxiliary model calls (grounding judge, classification, translation)
   emit **no** `agent_activity` event — the line reports tool calls, not
-  plumbing. Saturation behavior defined before S4. Numeric thresholds are
-  post-baseline (PRD §8).
+  plumbing. **Document-tool calls dispatch serially** (one in flight) in
+  iteration 1 — auxiliary calls may overlap; this keeps the client event
+  projection unambiguous (AD-8) while FR-11 still counts parallel-capable
+  behavior for whatever the runtime attempts. Saturation behavior defined
+  before S4. Numeric thresholds are post-baseline (PRD §8).
 
 ### AD-7 — Citation enforcement: mechanical reference validity + judged grounding, behind a named release policy
 
@@ -204,12 +224,21 @@ service; the frontend never talks to anything but the BFF.
   answer surface (answer-level warning + persisted marking); no policy value
   hides a failed verification from the user (FR-10/FR-12). Changing policy =
   versioned additive SSE event + re-measured evaluation, not per-request
-  switching; no policy value disables verification. **Single source of
-  truth:** the verdict is the only authority — the `metadata` frame's
-  `is_grounded` is derived from it (written by the BFF from the agent's
-  verdict), so the client's unconditional `metadata` handling can never
-  overwrite a failed verdict with a confident one. Citations render through
-  the existing RAG citation components.
+  switching; no policy value disables verification. **Verdict tri-state and
+  projection (single source of truth):** the verdict is
+  `grounded | ungrounded | unverified`; the `metadata` frame carries
+  `grounding_status` (tri-state) and the legacy boolean `is_grounded`
+  derived from it (`true` iff `grounded`; the tri-state exists so new
+  clients distinguish "verification could not complete" from "not supported
+  by sources" — `unverified` must never render the ungrounded warning's
+  claim). The client's unconditional `metadata` handling can never overwrite
+  a failed verdict with a confident one. **Verdict scope:** the verdict
+  certifies the **source-language answer text it evaluated**; a delivered
+  translation is a different representation — `metadata` records the
+  translation mode, and a translated answer never silently inherits
+  `grounded` as a claim about the translated text (iteration 1 does not
+  re-judge translations; the persisted record and UI mark the distinction).
+  Citations render through the existing RAG citation components.
 
 ### AD-8 — The BFF owns the SSE contract; extensions are additive and versioned
 
@@ -275,7 +304,16 @@ service; the frontend never talks to anything but the BFF.
   defense-in-depth post-filter, file_id enrichment, CAP-1 identity join
   tolerated-absent. The **query-instruction embedding prefix**
   (`get_query_instruction` per embedding model) is mandatory on every query
-  embedding — omitted prefixes silently corrupt dense scores. **Method:
+  embedding — omitted prefixes silently corrupt dense scores. **V02 scope
+  includes the query/history preparation pipeline** — the current path
+  detects the conversation language, translates non-English history/queries
+  to English BEFORE embedding (English-only embedding space), applies
+  history/input bounds, and records `query_translation_status`
+  (`genieai_chatqna.py:4663/4689/4972`); the port's retrieval adapter owns
+  the equivalent preparation (language determination, normalization or its
+  justified replacement, bounds, failure/overflow behavior, status
+  provenance), and configs B/C use identical preparation so the E02 delta
+  attributes to the agent. **Method:
   reimplementation, not code sharing** — a **clean-slate port**: modern
   patterns (typed port/adapters, DI, testable units) are encouraged where
   needed, but **behavior is frozen** to the V02-recorded semantics in
@@ -299,13 +337,17 @@ service; the frontend never talks to anything but the BFF.
   guarded `comps` hooks** — the ported file must itself pass the AD-1 gate —
   first non-overlay Python service with OTel traces, plus the fluentd logging
   anchor and the `OTEL_SERVICE_NAME` compose↔source pair convention.
-  Namespace `genie-core`-family, per-service name. **Version-record carrier
-  (FR-17):** agent-service emits the execution-version record
-  (implementation, model, prompt, configuration ids) in its final metadata
-  frame; the BFF persists it verbatim into the `queries` doc — the audit
-  chain has exactly one writer shape and no second carrier. RAG-pipeline
-  spans follow the existing W3C traceparent propagation conventions; no
-  credentials or unnecessary sensitive content in records.
+  Namespace `genie-core`-family, per-service name. **Version handshake
+  (FR-17, every execution):** agent-service emits a **run-start seam event**
+  carrying the execution-version record (implementation, model, prompt,
+  configuration ids); the BFF persists it into the `queries` doc AT START
+  (the doc already exists, `isAnswered:false`); the final metadata frame
+  carries the completed record and the terminal outcome. Cancelled,
+  timed-out or crashed runs therefore keep their versions and an honest
+  terminal/interrupted state — no execution is left unattributable because
+  the final frame never arrived. RAG-pipeline spans follow the existing W3C
+  traceparent propagation conventions; no credentials or unnecessary
+  sensitive content in records.
 
 ### AD-12 — No new persistence: existing stores, unchanged shapes
 
@@ -346,10 +388,13 @@ service; the frontend never talks to anything but the BFF.
   static gate does not grep it — enforcement is the backend selection keyed
   on the routing flag (agentic-routed request ⇒ vLLM backend, asserted by
   config check + covered by an e2e spec), not import hygiene. Translation
-  tokens and wall-clock count into the same per-request budget, reported
-  through the AD-11 execution record; the agent service reserves no
-  translation budget of its own. Streaming and non-streaming translation
-  modes keep AD-8 semantics.
+  runs on the **residual budget under the BFF's end-to-end deadline**
+  (AD-6): no translation call starts beyond the remaining deadline,
+  disconnect cancels the downstream call, and usage is returned or
+  estimated (the backend's string-only response and private 30s timeout do
+  not satisfy this unchanged); accounting lands in the AD-11 execution
+  record. Streaming and non-streaming translation modes keep AD-8
+  semantics.
 
 ## Consistency Conventions
 
@@ -361,7 +406,7 @@ service; the frontend never talks to anything but the BFF.
 | Errors & insufficiency | Insufficient evidence is a **successful answer type**, not an error; authorization failures never fall back more permissively; degraded availability reports insufficiency. Error events keep the existing SSE `error` frame semantics. |
 | Config | Hand-wired compose `environment:` blocks (no `env_file` in this repo); every new var documented in the root `env` template and covered by `tests/config-validator/` (AC2/AC4); activation flag gates compose + routing together. |
 | Timestamps | UTC ISO (`toISOString`) everywhere persisted, matching existing services. |
-| Capacity | Lane-cap via cross-process flock slot pools (dataprep idiom) — fleet-wide across replicas, not per-process semaphores; not cgroups — compose defines no resource limits. |
+| Capacity | Lane-cap via flock slot pools (dataprep idiom, intra-container). Iteration-1 deployment contract: agent-service runs at exactly ONE replica (flag-gated 0/1) — the slot pool is then the global bound. Multi-replica requires an explicitly shared coordination mechanism (deferred); not cgroups — compose defines no resource limits. |
 | Dependency adoption | Before ANY runtime/dependency is adopted: audit its **defaults** — default telemetry, default cloud export, license posture — against the exact package version (NFR-2; V07a). Developer-preview status requires an explicit operational-risk acceptance. |
 | Decision records | Structural decisions land as ADRs with the FR-29 discipline (status Proposed/Accepted/Rejected/Superseded, date, owner, reviewers, evidence, reconsideration triggers; superseded records preserved and linked; one canonical home per record). This spine's ADs follow the same status discipline; existing ADRs are status-checked before reliance. |
 

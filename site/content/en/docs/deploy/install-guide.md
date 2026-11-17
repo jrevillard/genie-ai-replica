@@ -8,7 +8,7 @@ aliases:
 mode: how-to
 persona: deployer
 owner: "docs-stewards"
-last_reviewed: 2026-09-18
+last_reviewed: 2026-11-17
 ---
 
 This is the canonical end-to-end install procedure for GENIE.AI. **Choose
@@ -23,6 +23,12 @@ backbone:
 | **Docker Swarm** (`docker stack deploy`) | Production multi-node, HA, mixed CPU/GPU node placement | [Docker Swarm Setup](/docs/deploy/docker-swarm-setup/) |
 | **Ansible + Swarm** | Repeatable fleet deploys with per-environment secrets | [Ansible README](https://opensource.unicc.org/un/itu/genie-ai/-/raw/main/deploy/ansible/README.md) |
 | **Remote GPU** (`GPU_NODE_HOST=`) | OPEA orchestrators on CPU node, vLLM/TEI on a separate GPU node | [Remote GPU Node](/docs/deploy/docker-swarm-setup/#remote-gpu-node) |
+| **Kubernetes** (Helm umbrella chart + Flux) | The migration target — a single `helm install` renders the whole stack, reconciled by Flux from the `genie-ai-deploy` repo | [Kubernetes Deployment](/docs/deploy/kubernetes/) |
+
+Compose and Ansible remain the primary deployment path today; the
+Helm chart is the migration target and is validated on a laptop
+minikube cluster. A Kubernetes deployment is configured entirely through
+chart values and Secrets — **there is no `.env` file** on that path.
 
 GPU profiles (T4 16 GB / RTX 6000 24 GB / A40 48 GB / H100) layer on top of
 any of the above via the `env.t4` / `env.rtx6000` overrides — see
@@ -660,6 +666,17 @@ GPU stack confirmation (with `--profile opea --profile gpu-models`):
 ```bash
 docker service logs genieai_vllm -f | grep 'Application startup complete'
 curl -sk https://localhost/api/health | python3 -m json.tool
+```
+
+**On Kubernetes**, the equivalent of steps 7-8 is a Flux reconcile plus a
+readiness check — the whole procedure, the operator prerequisites and the
+verification commands live in
+[Kubernetes Deployment](/docs/deploy/kubernetes/):
+
+```bash
+flux reconcile helmrelease genieai -n flux-system
+flux get hr genieai -n flux-system
+kubectl -n genieai get pods
 ```
 
 ## Step 9: Knowledge-base population

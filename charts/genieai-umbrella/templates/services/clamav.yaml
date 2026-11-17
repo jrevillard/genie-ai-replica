@@ -1,0 +1,317 @@
+{{- /* The service entry is COPIED before it is defaulted: the copy keeps
+the defaulting local to this render, and the image block is materialized
+so a cleared `image` reads as an empty map — the chart's own default
+applies instead of the template engine crashing on a nil parent. A
+cleared service entry reads as an empty map: the service then does not
+render, which is the documented meaning of `enabled: false`. */ -}}{{- $global := .Values.global | default dict -}}
+
+{{- $services := .Values.services | default dict -}}
+{{- $servicesClamav := $services.clamav | default dict -}}
+{{- $servicesClamavCache := $servicesClamav.cache | default dict -}}
+
+{{- $svc := deepCopy ($services.clamav | default dict) -}}
+{{- $_ := set $svc "image" ($svc.image | default dict) -}}
+{{- $cache := $svc.cache | default dict -}}
+{{- $pluggable := .Values.pluggable | default dict -}}
+{{- if $svc.enabled -}}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: clamav
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" .Values "component" "clamav") | nindent 4 }}
+spec:
+  replicas: {{ include "genieai-umbrella.resolveReplicas" (dict "Values" .Values "service" "clamav") | int }}
+  progressDeadlineSeconds: {{ include "genieai-umbrella.progressDeadlineSeconds" (dict "Values" .Values "service" "clamav") }}
+  selector:
+    matchLabels:
+      genieai.io/component: clamav
+  template:
+    metadata:
+      labels:
+        {{- include "genieai-common.serviceSelector" (dict "Chart" .Chart "Release" .Release "Values" .Values "component" "clamav") | nindent 8 }}
+    spec:
+      {{- with $global.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      securityContext:
+        runAsNonRoot: true
+        # The image's clamav user is uid/gid 1000 (verified via
+        # `docker run --rm --entrypoint sh clamav/clamav:stable-debian
+        # -c "grep clamav /etc/passwd"`). Earlier revisions used 100
+        # and crashed with "Failed to open log file
+        # /var/log/clamav/freshclam.log: Permission denied" — the
+        # dir is owned 1000:1000 in the image, and the emptyDir
+        # mounts default to root:root 0755 which uid 100 cannot
+        # write. fsGroup 1000 gives the volume GID 1000 so the
+        # process can chown files inside it.
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: clamav
+          image: "{{ $svc.image.repository | default "clamav/clamav" }}:{{ $svc.image.tag | default "stable-debian" }}"
+          imagePullPolicy: {{ include "genieai-umbrella.imagePullPolicy" (dict "tag" $svc.image.tag "pullPolicy" ($svc.image.pullPolicy | default $global.imagePullPolicy)) }}
+          # /init-unprivileged is the upstream-provided entrypoint for
+          # running clamav 1.4+ as non-root. The default entrypoint
+          # runs `install -o clamav /run/clamav` and `chown -R clamav
+          # /var/lib/clamav` as uid 0, which returns EPERM under
+          # runAsUser: 100 even with CAP_CHOWN — the mountpoint
+          # inode is owned by root and chowning it requires
+          # privileged CAP_CHOWN. /init-unprivileged drops to clamav
+          # BEFORE the chown, using su-exec so the chown runs as
+          # the target user and silently no-ops on paths it already
+          # owns. See https://github.com/Cisco-Talos/clamav/issues/478
+          command: ["/init-unprivileged"]
+          args: ["clamav"]
+          ports:
+            - name: avscanner
+              containerPort: {{ $svc.port | default 3310 }}
+          env:
+            {{- toYaml (include "genieai-umbrella.envMapRows" ($svc.env | default dict) | fromJsonArray) | nindent 12 }}
+          resources:
+            {{- toYaml $svc.resources | nindent 12 }}
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 1000
+            allowPrivilegeEscalation: false
+            # ClamAV's writable paths in the runtime image are tmpfs-mounted
+            # (/tmp) or backed by an explicit volume mounted at
+            # /var/lib/clamav by this hand-written Deployment. A read-only
+            # root filesystem keeps the on-disk attack surface limited to
+            # those mount points; without them freshclam + clamd fail with
+            # EROFS on first write.
+            readOnlyRootFilesystem: true
+            # The container runs /init-unprivileged as uid 1000:
+            # as a non-root process it holds no effective capabilities
+            # to begin with, and the unprivileged entrypoint chowns
+            # nothing (the volume fsGroup already grants the write).
+            # drop ALL therefore removes nothing the process used —
+            # it only guarantees that stays true.
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+            - name: clamav-data
+              mountPath: /var/lib/clamav
+            - name: run-clamav
+              mountPath: /run/clamav
+            # /var/log/clamav is owned by clamav:clamav in the image,
+            # but with readOnlyRootFilesystem: true the file is on the
+            # read-only rootfs and freshclam cannot write its log
+            # there. An emptyDir mount gives freshclam + clamd a
+            # writable surface for /var/log/clamav/{freshclam,clamd}.log
+            # without giving up readOnlyRootFilesystem.
+            - name: clamav-log
+              mountPath: /var/log/clamav
+          {{- /* The tcpSocket probes dial the LISTENER port: an override
+          of services.clamav.port must move them with it, or the pod is
+          probed on a port it no longer listens on and never goes Ready.
+          Set on the copy — the values are read-only render input.
+
+          The probe's port is DERIVED: it must be the listener's port,
+          because a probe on another port never goes Ready. The
+          derivation wins — the merge the template used before gave
+          precedence to the DESTINATION, so an operator's declared
+          probe port was discarded SILENTLY and the knob in
+          values.yaml was dead. The operator's own value is now
+          REJECTED by name when it contradicts the derivation, which is
+          the chart's rule for a value it cannot honour: a number here
+          that differs from the listener's port is a mistake worth
+          naming, not a knob to override. values.yaml declares an empty
+          tcpSocket for that reason — a declared number would always
+          win over the derivation (Helm merges the chart's values with
+          the overlay's, and the template cannot tell them apart). */ -}}
+          {{- $clamavPort := $svc.port | default 3310 -}}
+          {{- if ne (int $clamavPort) 3310 -}}
+          {{- fail (printf "services.clamav.port must be 3310: the clamd daemon takes its port from clamd.conf, which the image fixes at 3310 (the image's entrypoint honours no port variable — /init reads only CLAMAV_NO_*), so a different number moves the Service, the NetworkPolicy and the probes to a port nothing listens on, and every scan times out") -}}
+          {{- end -}}
+          {{- $probes := deepCopy ($svc.probes | default dict) -}}
+          {{- /* Sub-blocks normalize too: a cleared probes block carries
+          no readiness/liveness/startup maps, and a bare .tcpSocket read
+          on their nil crashed the render. */ -}}
+          {{- $readiness := $probes.readiness | default dict -}}
+          {{- $liveness := $probes.liveness | default dict -}}
+          {{- $startup := $probes.startup | default dict -}}
+          {{- if hasKey $readiness "tcpSocket" -}}{{- if and (hasKey $readiness.tcpSocket "port") (ne (int $readiness.tcpSocket.port) (int $clamavPort)) -}}{{- fail (printf "services.clamav.probes.readiness.tcpSocket.port must equal services.clamav.port (%d): the probe dials the listener, and a probe on another port never goes Ready" (int $clamavPort)) -}}{{- end -}}{{- $_ := set $readiness.tcpSocket "port" $clamavPort -}}{{- end -}}
+          {{- if hasKey $liveness "tcpSocket" -}}{{- if and (hasKey $liveness.tcpSocket "port") (ne (int $liveness.tcpSocket.port) (int $clamavPort)) -}}{{- fail (printf "services.clamav.probes.liveness.tcpSocket.port must equal services.clamav.port (%d): the probe dials the listener, and a probe on another port never goes Ready" (int $clamavPort)) -}}{{- end -}}{{- $_ := set $liveness.tcpSocket "port" $clamavPort -}}{{- end -}}
+          {{- if hasKey $startup "tcpSocket" -}}{{- if and (hasKey $startup.tcpSocket "port") (ne (int $startup.tcpSocket.port) (int $clamavPort)) -}}{{- fail (printf "services.clamav.probes.startup.tcpSocket.port must equal services.clamav.port (%d): the probe dials the listener, and a probe on another port never goes Ready" (int $clamavPort)) -}}{{- end -}}{{- $_ := set $startup.tcpSocket "port" $clamavPort -}}{{- end -}}
+          {{- with $readiness }}
+          readinessProbe:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- with $liveness }}
+          livenessProbe:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          {{- /* The BOUND binding, not the raw block: $startup carries
+          the port merge above — rendering the raw `$probes.startup`
+          rested on the two names aliasing one map, and the natural
+          dead-variable cleanup of the unused binding would have left
+          the startup probe dialing the old port. */ -}}
+          {{- with $startup }}
+          startupProbe:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+      volumes:
+        # freshclam writes signature downloads + lock files to /tmp; without
+        # a tmpfs-backed mount the download is rejected with EROFS.
+        - name: tmp
+          emptyDir:
+            medium: Memory
+        # clamd scans against the signature set in /var/lib/clamav; without
+        # a writable mount freshclam cannot stage the .cvd files there.
+        {{- if $cache.enabled }}
+        # Signature database (~200 MB CVD set) on a persistent claim so a
+        # pod restart does not re-download from the CVD mirror.
+        - name: clamav-data
+          persistentVolumeClaim:
+            claimName: genieai-clamav-cache
+        {{- else }}
+        - name: clamav-data
+          emptyDir: {}
+        {{- end }}
+        # The entrypoint runs `install -o clamav -g clamav /run/clamav`
+        # and `chown` it. /run/clamav is NOT in the image — it's a tmpfs
+        # the entrypoint expects to find. The factory's pod-level
+        # volumeMounts don't reach this custom Deployment, so the
+        # mount has to be declared here.
+        - name: run-clamav
+          emptyDir:
+            medium: Memory
+        - name: clamav-log
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: clamav
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" .Values "component" "clamav") | nindent 4 }}
+spec:
+  ports:
+    - name: avscanner
+      # Same knob the containerPort derives from: an override that moved
+      # only the container listener would leave the Service dialing a
+      # dead port with lint, kubeconform and the crosscheck all green.
+      port: {{ $svc.port | default 3310 }}
+  selector:
+    {{- include "genieai-common.serviceSelector" (dict "Chart" .Chart "Release" .Release "Values" .Values "component" "clamav") | nindent 4 }}
+---
+# Ingress: document-repository (the sole consumer in this tier) and
+# the helm-test peer. Egress limited to DNS and the CVD
+# signature-update ports;
+# see egress note for the FQDN-allowlist gap.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: clamav
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" .Values "component" "clamav") | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      genieai.io/component: clamav
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              genieai.io/component: documentRepository
+      ports:
+        - protocol: TCP
+          port: {{ $svc.port | default 3310 }}
+    # helm-test reachability probe (component "test").
+    - from:
+        - podSelector:
+            matchLabels:
+              genieai.io/component: test
+      ports:
+        - protocol: TCP
+          port: {{ $svc.port | default 3310 }}
+  egress:
+    # DNS resolution to kube-system.
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+      ports:
+        - protocol: UDP
+          port: 53
+        # Truncated UDP answers fall back to TCP — freshclam resolves a
+        # CNAME chain, exactly the shape that trips it.
+        - protocol: TCP
+          port: 53
+    # CVD signature updates on 80/443. NetworkPolicy peers are limited
+    # to podSelector / namespaceSelector / ipBlock — `host:` is not a
+    # valid peer and was rejected by the API server. Domain allowlisting
+    # requires DNS-policy engines (Cilium / Calico FQDN rules) and is
+    # left to a follow-up; the port-scoped ipBlock below is the
+    # closest NetworkPolicy-native approximation.
+    # Each entry in `.Values.services.clamav.cvdAllowedCIDRs` becomes its
+    # own ipBlock egress rule (one ipBlock.cidr per rule is the API
+    # contract — comma-joining into one string would either be ignored
+    # by the validator or rejected).
+    # `default` triggers only on NIL — an empty list (`[]`, the
+    # values.yaml default) is NOT nil and the helper would emit zero
+    # blocks, breaking freshclam. Branch explicitly on the empty case
+    # so operators get the documented ANY-destination fallback when
+    # they leave the list unset.
+    {{- if $servicesClamav.cvdAllowedCIDRs }}
+    {{- range $cidr := $servicesClamav.cvdAllowedCIDRs }}
+    - to:
+        - ipBlock:
+            cidr: {{ $cidr }}
+      ports:
+        - protocol: TCP
+          port: 80
+        - protocol: TCP
+          port: 443
+    {{- end }}
+    {{- else }}
+    # Default: allow all IPv4 destinations on 80/443. NetworkPolicy
+    # has no FQDN selectors (that requires Cilium / Calico); for stricter
+    # control, operators should override `services.clamav.cvdAllowedCIDRs`
+    # with the resolved IPs of database.clamav.net.
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+      ports:
+        - protocol: TCP
+          port: 80
+        - protocol: TCP
+          port: 443
+    {{- end }}
+{{- end }}
+---
+{{- if and $servicesClamav.enabled $servicesClamavCache.enabled }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: genieai-clamav-cache
+  namespace: {{ .Values.namespace }}
+  labels:
+    app.kubernetes.io/part-of: genieai
+spec:
+  accessModes:
+    - ReadWriteOnce
+  # Render the storage class ONLY when set: an empty-string
+  # storageClassName means "NO default storage class" and strands the
+  # PVC on most clusters. Same contract as the document-repository and
+  # redis PVCs.
+  {{- with ($servicesClamavCache.storageClassName | default $pluggable.storageClassName) }}
+  storageClassName: {{ . }}
+  {{- end }}
+  resources:
+    requests:
+      storage: {{ $servicesClamavCache.size | default "2Gi" }}
+{{- end }}

@@ -1,0 +1,1021 @@
+{{/*
+  OPEA NetworkPolicies — one per orchestrator (chatqna, retriever,
+  dataprep, reranker, embedding, translation). Per-service default-deny
+  with explicit ingress allowlist (mirrors the real call graph) and
+  egress allowlist scoped to the in-cluster peers each service's env
+  actually dials. Header-only gate: opea.enabled.
+
+  GPU-model Deployments (vllm, tei, tei-reranker, vllm-translation; the
+  in-cluster mode only) get INGRESS-ONLY policies at the bottom of this
+  file: inference endpoints accept traffic solely from the orchestrators
+  that call them. Egress stays open (weights pull, DNS).
+
+  External GPU mode (opea.gpu.mode=external AND nodeHost set) adds one
+  egress rule per orchestrator, rendered once by the genieai-umbrella.
+  opeaGpuEgressRule helper. The destination is NAMED, so the rule is
+  scoped: an IPv4 literal in nodeHost becomes a /32, a DNS name takes
+  opea.gpu.allowedCIDRs, and the port comes from the URL rather than
+  being one of a hardcoded pair.
+*/}}
+{{- $opea := .Values.opea | default dict -}}
+{{- $obs := .Values.observability | default dict -}}
+{{- $obsMetrics := $obs.metrics | default dict -}}
+{{- $opeaGpu := $opea.gpu | default dict -}}
+{{- /* The app-tier ports the egress rules name, bound parent-first like
+every values read: the knob a policy follows must be the SAME knob the
+Service and the probes follow (services.<svc>.port), or an operator's
+override strands the orchestrator behind its own default-deny. */ -}}
+{{- $appPorts := dict "backend" 3000 "documentRepository" 3001 -}}
+{{- $services := .Values.services | default dict -}}
+{{- range $name, $default := $appPorts -}}
+{{- $_ := set $appPorts $name (int (index (index $services $name | default dict) "port" | default $default)) -}}
+{{- end -}}
+
+{{- if $opea.enabled -}}
+---
+# chatqna (port 8888). Ingress: backend BFF. Egress: in-cluster
+# orchestrator peers (embedding 6000, retriever 7000, reranker 8000,
+# translation 8888), document-repository, backend BFF,
+# keycloak (8080), OTLP, external GPU node when in external mode.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: chatqna
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" .Values "component" "chatqna") | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      genieai.io/component: chatqna
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              genieai.io/component: backend
+      ports:
+        - protocol: TCP
+          port: 8888
+  {{- if eq true (index (.Values.okf | default dict) "enabled") }}
+  # The OKF server's RAGAS answer path (OKF_RAGAS_SERVE_URL defaults to
+  # http://chatqna:8888/v1/chatqna): the eval pipeline asks chatqna the
+  # same questions a user would. Peer half of the tier's own egress
+  # rule — one without the other passes every render gate and silently
+  # drops the traffic.
+    - from:
+        - podSelector:
+            matchLabels:
+              genieai.io/component: okf-server
+      ports:
+        - protocol: TCP
+          port: 8888
+  {{- end }}
+  {{- if $obsMetrics.enabled }}
+  # vm-operator scrape peer — PRE-WIRED, INERT TODAY: the chart's
+  # VMServiceScrape CRs match nothing on purpose (VMSingle carries no
+  # serviceScrapeSelector — see templates/observability/vmsingle.yaml)
+  # and no workload here exposes a Prometheus surface (they export over
+  # OTLP). The peer exists so that enabling a real scrape surface later
+  # does not silently time out against the default-deny.
+    - from:
+        - podSelector:
+            matchLabels:
+              managed-by: vm-operator
+              app.kubernetes.io/instance: vmetrics
+      ports:
+        - protocol: TCP
+          port: 8888
+  {{- end }}
+  egress:
+    # DNS resolution to kube-system.
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+    # In-cluster orchestrator peers (post-DNAT pod ports).
+    - to:
+        - podSelector:
+            matchLabels:
+              genieai.io/component: embedding
+      ports:
+        - protocol: TCP
+          port: 6000
+    - to:
+        - podSelector:
+            matchLabels:
+              genieai.io/component: retriever
+      ports:
+        - protocol: TCP
+          port: 7000
+    - to:
+        - podSelector:
+            matchLabels:
+              genieai.io/component: reranker
+      ports:
+        - protocol: TCP
+          port: 8000
+    - to:
+        - podSelector:
+            matchLabels:
+              genieai.io/component: translation
+      ports:
+        # Post-DNAT pod port; the Service maps 9031 to the image's
+        # listener 8888.
+        - protocol: TCP
+          port: 8888
+    # document-repository (DOC_REPO_URL). Post-DNAT pod port —
+    # services.documentRepository.port (the Service publishes the
+    # factory's fixed 80 and targets the pod by name).
+    - to:
+        - podSelector:
+            matchLabels:
+              genieai.io/component: documentRepository
+      ports:
+        - protocol: TCP
+          port: {{ index $appPorts "documentRepository" }}
+    # Backend BFF (BACKEND_SERVICE_URL). Post-DNAT pod port —
+    # services.backend.port (the Service publishes the factory's fixed
+    # 80 and targets the pod by name).
+    - to:
+        - podSelector:
+            matchLabels:
+              genieai.io/component: backend
+      ports:
+        - protocol: TCP
+          port: {{ index $appPorts "backend" }}
+    # Keycloak (KEYCLOAK_URL). Port-scoped ipBlock pending verified
+    # peer labels — the operator-managed Keycloak pod labels are not
+    # part of the genieai.io/component convention. Same rationale as
+    # backend.yaml's data-tier egress.
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+      ports:
+        - protocol: TCP
+          port: 8080
+    # OTLP exporter. Required for the observability pipeline; without
+    # this port the default-deny policy drops chatqna telemetry.
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+      ports:
+        - protocol: TCP
+          port: {{ include "genieai-umbrella.otlpPort" . }}
+    {{- if and (eq $opeaGpu.mode "external") $opeaGpu.nodeHost }}
+{{- include "genieai-umbrella.opeaGpuEgressRule" . | nindent 4 }}
+    {{- end }}
+    {{- if eq $opeaGpu.mode "in-cluster" }}
+    # In-cluster GPU models (VLLM_LLM_ENDPOINT, VLLM_TRANSLATION_ENDPOINT).
+    # The model Deployments carry `app: <name>` pod labels, not the
+    # genieai.io/component convention.
+    - to:
+        - podSelector:
+            matchLabels:
+              app: vllm
+      ports:
+        - protocol: TCP
+          port: 8000
+    - to:
+        - podSelector:
+            matchLabels:
+              app: vllm-translation
+      ports:
+        - protocol: TCP
+          port: 9031
+    {{- end }}
+---
+# retriever (port 7000). Ingress: chatqna. Egress: ArangoDB (8529),
+# OTLP, external GPU node when in external mode. retriever.yaml has no
+# KEYCLOAK_URL env, so keycloak egress is NOT included.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: retriever
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" .Values "component" "retriever") | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      genieai.io/component: retriever
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              genieai.io/component: chatqna
+      ports:
+        - protocol: TCP
+          port: 7000
+  {{- if $obsMetrics.enabled }}
+  # vm-operator scrape peer — PRE-WIRED, INERT TODAY: the chart's
+  # VMServiceScrape CRs match nothing on purpose (VMSingle carries no
+  # serviceScrapeSelector — see templates/observability/vmsingle.yaml)
+  # and no workload here exposes a Prometheus surface (they export over
+  # OTLP). The peer exists so that enabling a real scrape surface later
+  # does not silently time out against the default-deny.
+    - from:
+        - podSelector:
+            matchLabels:
+              managed-by: vm-operator
+              app.kubernetes.io/instance: vmetrics
+      ports:
+        - protocol: TCP
+          port: 7000
+  {{- end }}
+  egress:
+    # DNS resolution to kube-system.
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+    # ArangoDB (ARANGO_URL). Port-scoped ipBlock pending verified peer
+    # labels — the operator-managed kube-arangodb pod labels are not
+    # part of the genieai.io/component convention. Same rationale as
+    # backend.yaml's data-tier egress.
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+      ports:
+        - protocol: TCP
+          port: 8529
+    # OTLP exporter.
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+      ports:
+        - protocol: TCP
+          port: {{ include "genieai-umbrella.otlpPort" . }}
+    {{- if and (eq $opeaGpu.mode "external") $opeaGpu.nodeHost }}
+{{- include "genieai-umbrella.opeaGpuEgressRule" . | nindent 4 }}
+    {{- end }}
+    {{- if eq $opeaGpu.mode "in-cluster" }}
+    # In-cluster GPU models (VLLM_ENDPOINT, TEI_EMBEDDING_ENDPOINT).
+    - to:
+        - podSelector:
+            matchLabels:
+              app: vllm
+      ports:
+        - protocol: TCP
+          port: 8000
+    - to:
+        - podSelector:
+            matchLabels:
+              app: tei
+      ports:
+        - protocol: TCP
+          port: 80
+    {{- end }}
+---
+# dataprep (port 5000). Ingress: documentRepository. Egress: ArangoDB
+# (8529), keycloak (8080), document-repository, backend BFF,
+# OTLP, external GPU node when in external mode.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: dataprep
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" .Values "component" "dataprep") | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      genieai.io/component: dataprep
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              genieai.io/component: documentRepository
+      ports:
+        - protocol: TCP
+          port: 5000
+    {{- if eq true (index (.Values.okf | default dict) "enabled") }}
+    # The OKF server's ingest worker POSTs extraction jobs straight to
+    # this service (OKF_SERVER_URL wiring on the okf-server side points
+    # here); under default-deny the drops would surface as ingest jobs
+    # that never start.
+    - from:
+        - podSelector:
+            matchLabels:
+              genieai.io/component: okf-server
+      ports:
+        - protocol: TCP
+          port: 5000
+    {{- end }}
+  {{- if $obsMetrics.enabled }}
+  # vm-operator scrape peer — PRE-WIRED, INERT TODAY: the chart's
+  # VMServiceScrape CRs match nothing on purpose (VMSingle carries no
+  # serviceScrapeSelector — see templates/observability/vmsingle.yaml)
+  # and no workload here exposes a Prometheus surface (they export over
+  # OTLP). The peer exists so that enabling a real scrape surface later
+  # does not silently time out against the default-deny.
+    - from:
+        - podSelector:
+            matchLabels:
+              managed-by: vm-operator
+              app.kubernetes.io/instance: vmetrics
+      ports:
+        - protocol: TCP
+          port: 5000
+  {{- end }}
+  egress:
+    # DNS resolution to kube-system.
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+    # ArangoDB (ARANGO_URL). Port-scoped ipBlock.
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+      ports:
+        - protocol: TCP
+          port: 8529
+    # Keycloak (KEYCLOAK_URL). Port-scoped ipBlock.
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+      ports:
+        - protocol: TCP
+          port: 8080
+    # document-repository (DOCUMENT_REPOSITORY_URL). Post-DNAT pod port —
+    # services.documentRepository.port (the Service publishes the
+    # factory's fixed 80 and targets the pod by name).
+    - to:
+        - podSelector:
+            matchLabels:
+              genieai.io/component: documentRepository
+      ports:
+        - protocol: TCP
+          port: {{ index $appPorts "documentRepository" }}
+    # Backend BFF (BACKEND_SERVICE_URL). Post-DNAT pod port —
+    # services.backend.port (the Service publishes the factory's fixed
+    # 80 and targets the pod by name).
+    - to:
+        - podSelector:
+            matchLabels:
+              genieai.io/component: backend
+      ports:
+        - protocol: TCP
+          port: {{ index $appPorts "backend" }}
+    # OTLP exporter.
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+      ports:
+        - protocol: TCP
+          port: {{ include "genieai-umbrella.otlpPort" . }}
+    {{- if and (eq $opeaGpu.mode "external") $opeaGpu.nodeHost }}
+{{- include "genieai-umbrella.opeaGpuEgressRule" . | nindent 4 }}
+    {{- end }}
+    {{- if eq $opeaGpu.mode "in-cluster" }}
+    # In-cluster GPU models (VLLM_ENDPOINT, TEI_EMBEDDING_ENDPOINT).
+    # DOCLING_ENDPOINT has no in-cluster Deployment to target — the
+    # chart renders no docling model service.
+    - to:
+        - podSelector:
+            matchLabels:
+              app: vllm
+      ports:
+        - protocol: TCP
+          port: 8000
+    - to:
+        - podSelector:
+            matchLabels:
+              app: tei
+      ports:
+        - protocol: TCP
+          port: 80
+    {{- end }}
+---
+# embedding (port 6000). Ingress: chatqna + retriever + dataprep.
+# Egress: OTLP, external GPU node when in external mode.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: embedding
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" .Values "component" "embedding") | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      genieai.io/component: embedding
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              genieai.io/component: chatqna
+        - podSelector:
+            matchLabels:
+              genieai.io/component: retriever
+        - podSelector:
+            matchLabels:
+              genieai.io/component: dataprep
+      ports:
+        - protocol: TCP
+          port: 6000
+  {{- if $obsMetrics.enabled }}
+  # vm-operator scrape peer — PRE-WIRED, INERT TODAY: the chart's
+  # VMServiceScrape CRs match nothing on purpose (VMSingle carries no
+  # serviceScrapeSelector — see templates/observability/vmsingle.yaml)
+  # and no workload here exposes a Prometheus surface (they export over
+  # OTLP). The peer exists so that enabling a real scrape surface later
+  # does not silently time out against the default-deny.
+    - from:
+        - podSelector:
+            matchLabels:
+              managed-by: vm-operator
+              app.kubernetes.io/instance: vmetrics
+      ports:
+        - protocol: TCP
+          port: 6000
+  {{- end }}
+  egress:
+    # DNS resolution to kube-system.
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+    # OTLP exporter.
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+      ports:
+        - protocol: TCP
+          port: {{ include "genieai-umbrella.otlpPort" . }}
+    {{- if and (eq $opeaGpu.mode "external") $opeaGpu.nodeHost }}
+{{- include "genieai-umbrella.opeaGpuEgressRule" . | nindent 4 }}
+    {{- end }}
+    {{- if eq $opeaGpu.mode "in-cluster" }}
+    # In-cluster GPU model (TEI_EMBEDDING_ENDPOINT).
+    - to:
+        - podSelector:
+            matchLabels:
+              app: tei
+      ports:
+        - protocol: TCP
+          port: 80
+    {{- end }}
+---
+# reranker (port 8000). Ingress: chatqna. Egress: OTLP, external GPU
+# node when in external mode.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: reranker
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" .Values "component" "reranker") | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      genieai.io/component: reranker
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              genieai.io/component: chatqna
+      ports:
+        - protocol: TCP
+          port: 8000
+  {{- if $obsMetrics.enabled }}
+  # vm-operator scrape peer — PRE-WIRED, INERT TODAY: the chart's
+  # VMServiceScrape CRs match nothing on purpose (VMSingle carries no
+  # serviceScrapeSelector — see templates/observability/vmsingle.yaml)
+  # and no workload here exposes a Prometheus surface (they export over
+  # OTLP). The peer exists so that enabling a real scrape surface later
+  # does not silently time out against the default-deny.
+    - from:
+        - podSelector:
+            matchLabels:
+              managed-by: vm-operator
+              app.kubernetes.io/instance: vmetrics
+      ports:
+        - protocol: TCP
+          port: 8000
+  {{- end }}
+  egress:
+    # DNS resolution to kube-system.
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+    # OTLP exporter.
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+      ports:
+        - protocol: TCP
+          port: {{ include "genieai-umbrella.otlpPort" . }}
+    {{- if and (eq $opeaGpu.mode "external") $opeaGpu.nodeHost }}
+{{- include "genieai-umbrella.opeaGpuEgressRule" . | nindent 4 }}
+    {{- end }}
+    {{- if eq $opeaGpu.mode "in-cluster" }}
+    # In-cluster GPU model (TEI_RERANKING_ENDPOINT).
+    - to:
+        - podSelector:
+            matchLabels:
+              app: tei-reranker
+      ports:
+        - protocol: TCP
+          port: 80
+    {{- end }}
+---
+# translation (port 9031). Ingress: chatqna. Egress: OTLP, external
+# GPU node when in external mode.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: translation
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" .Values "component" "translation") | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      genieai.io/component: translation
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    - from:
+        # chatqna: history/answer translation.
+        - podSelector:
+            matchLabels:
+              genieai.io/component: chatqna
+        # backend BFF: dials the OPEA translation Service when
+        # services.backend.translation.endpoint points at it — a named
+        # translation API is mandatory, so a dropped probe stops the
+        # backend from starting. (The backend's DEFAULT in-cluster
+        # endpoint is the vllm-translation model Service, which this
+        # policy does not select: the backend's own egress carries the
+        # peer for it.)
+        - podSelector:
+            matchLabels:
+              genieai.io/component: backend
+      ports:
+        # Post-DNAT pod port; the Service maps 9031 to 8888.
+        - protocol: TCP
+          port: 8888
+  {{- if $obsMetrics.enabled }}
+  # vm-operator scrape peer — PRE-WIRED, INERT TODAY: the chart's
+  # VMServiceScrape CRs match nothing on purpose (VMSingle carries no
+  # serviceScrapeSelector — see templates/observability/vmsingle.yaml)
+  # and no workload here exposes a Prometheus surface (they export over
+  # OTLP). The peer exists so that enabling a real scrape surface later
+  # does not silently time out against the default-deny.
+    - from:
+        - podSelector:
+            matchLabels:
+              managed-by: vm-operator
+              app.kubernetes.io/instance: vmetrics
+      ports:
+        - protocol: TCP
+          port: 8888
+  {{- end }}
+  egress:
+    # DNS resolution to kube-system.
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+    # OTLP exporter.
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+      ports:
+        - protocol: TCP
+          port: {{ include "genieai-umbrella.otlpPort" . }}
+    {{- if and (eq $opeaGpu.mode "external") $opeaGpu.nodeHost }}
+{{- include "genieai-umbrella.opeaGpuEgressRule" . | nindent 4 }}
+    {{- end }}
+    {{- if eq $opeaGpu.mode "in-cluster" }}
+    # In-cluster GPU model (LLM_ENDPOINT).
+    - to:
+        - podSelector:
+            matchLabels:
+              app: vllm-translation
+      ports:
+        - protocol: TCP
+          port: 9031
+    {{- end }}
+---
+{{- /* Model-pod ingress policies (in-cluster mode). Without them the GPU
+inference endpoints are reachable from every pod that can route to the
+namespace — free GPU spend for anything compromised in-cluster. Egress
+stays open: model pods pull weights from HF and answer DNS. */ -}}
+{{- if eq $opeaGpu.mode "in-cluster" }}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: vllm-model
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" .Values "component" "vllm") | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      app: vllm
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              genieai.io/component: chatqna
+        - podSelector:
+            matchLabels:
+              genieai.io/component: retriever
+        - podSelector:
+            matchLabels:
+              genieai.io/component: dataprep
+        # The translation model's wait-for-vllm initContainer probes
+        # vllm:8000/health (wget) before starting: without this peer the init is
+        # blocked by the very policy that guards the vLLM pods, and the
+        # translation model never starts (an Init:0/1 loop with nothing
+        # in the vLLM logs to explain it).
+        - podSelector:
+            matchLabels:
+              app: vllm-translation
+        # The OKF tier's judge: RAGAS_JUDGE_BASE_URL points at the
+        # in-cluster model in in-cluster mode, so the tier must be an
+        # admitted peer of the model pod — the rule is one-sided
+        # otherwise (the tier's egress would allow the call, the
+        # model would refuse the caller) and every evaluation timed
+        # out instead of scoring.
+        - podSelector:
+            matchLabels:
+              genieai.io/component: okf-server
+        - podSelector:
+            matchLabels:
+              genieai.io/component: ragas-service
+      ports:
+        - protocol: TCP
+          port: 8000
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: tei-model
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" .Values "component" "tei") | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      app: tei
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              genieai.io/component: embedding
+        - podSelector:
+            matchLabels:
+              genieai.io/component: retriever
+        - podSelector:
+            matchLabels:
+              genieai.io/component: dataprep
+        # The OKF tier's embedding probe (TEI_EMBED_HOST) and the RAGAS
+        # embedder (RAGAS_EMBED_BASE_URL) — same one-sided-rule trap
+        # as the judge above.
+        - podSelector:
+            matchLabels:
+              genieai.io/component: okf-server
+        - podSelector:
+            matchLabels:
+              genieai.io/component: ragas-service
+      ports:
+        - protocol: TCP
+          port: 80
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: tei-reranker-model
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" .Values "component" "tei-reranker") | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      app: tei-reranker
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              genieai.io/component: reranker
+      ports:
+        - protocol: TCP
+          port: 80
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: vllm-translation-model
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" .Values "component" "vllm-translation") | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      app: vllm-translation
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              genieai.io/component: translation
+        - podSelector:
+            matchLabels:
+              genieai.io/component: chatqna
+        # backend BFF: its in-cluster translation endpoint defaults to
+        # this Service when services.backend.translation.endpoint is
+        # unset; a named translation API is mandatory, so a dropped
+        # probe stops the backend from starting.
+        - podSelector:
+            matchLabels:
+              genieai.io/component: backend
+      ports:
+        - protocol: TCP
+          port: 9031
+{{- end }}
+{{- end -}}{{- /*
+
+The OKF tier's own policies — rendered only when the tier is on, in the
+same default-deny-with-allowlists shape the orchestrators carry. The
+peers' rules that point INTO the tier (backend egress to okf-server,
+dataprep ingress from the ingest worker) live in their own policies,
+gated the same way: a tier policy without the peer half (or the other
+way round) passes every render gate and silently drops the traffic it
+was written to allow.
+
+*/ -}}
+{{- if eq true (index (.Values.okf | default dict) "enabled") }}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: okf-server
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" .Values "component" "okf-server") | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      genieai.io/component: okf-server
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    # The BFF's retrieval-posture client (OKF_SERVER_URL) and the
+    # dataprep worker, which carries the same wiring and kicks the
+    # server on ingest completions.
+    - from:
+        - podSelector:
+            matchLabels:
+              genieai.io/component: backend
+        - podSelector:
+            matchLabels:
+              genieai.io/component: dataprep
+      ports:
+        - protocol: TCP
+          port: 3002
+  egress:
+    # DNS resolution to kube-system.
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+    # ArangoDB (concept store), the dataprep ingest endpoint, the RAGAS
+    # sidecar, the chatqna serve path, the Keycloak token call (the
+    # operator-managed pod labels are outside the genieai.io/component
+    # convention — same port-scoped ipBlock the orchestrators carry),
+    # and the OTLP exporter.
+    - to:
+        - podSelector:
+            matchLabels:
+              genieai.io/component: dataprep
+      ports:
+        - protocol: TCP
+          port: 5000
+    - to:
+        - podSelector:
+            matchLabels:
+              genieai.io/component: ragas-service
+      ports:
+        - protocol: TCP
+          port: 8090
+    - to:
+        - podSelector:
+            matchLabels:
+              genieai.io/component: chatqna
+      ports:
+        - protocol: TCP
+          port: 8888
+    # The document repository (DOCUMENT_REPOSITORY_URL, app default
+    # http://document-repository:3001): the ingest worker POSTs bundles
+    # to its /api/files/ingest-bundle endpoint and the backing-file
+    # service deletes through it — under default-deny a missing rule
+    # here stalls the whole OKF ingest lifecycle with no error
+    # anywhere. Post-DNAT pod port — services.documentRepository.port.
+    - to:
+        - podSelector:
+            matchLabels:
+              genieai.io/component: documentRepository
+      ports:
+        - protocol: TCP
+          port: {{ index $appPorts "documentRepository" }}
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+      ports:
+        - protocol: TCP
+          port: 8529
+        - protocol: TCP
+          port: 8080
+        - protocol: TCP
+          port: {{ include "genieai-umbrella.otlpPort" . }}
+    {{- if and (eq $opeaGpu.mode "external") $opeaGpu.nodeHost }}
+    {{- include "genieai-umbrella.opeaGpuEgressRule" . | nindent 4 }}
+    {{- end }}
+    {{- if eq $opeaGpu.mode "in-cluster" }}
+    # The in-cluster models (TEI_EMBED_HOST, RAGAS_JUDGE_BASE_URL). The
+    # external-mode rule above names the GPU node; in in-cluster mode
+    # the models are pods, and the tier had NO rule for them at all —
+    # so the tier's embedding probe and every RAG evaluation timed out
+    # under the default-deny egress, with no error anywhere.
+    - to:
+        - podSelector:
+            matchLabels:
+              app: tei
+      ports:
+        - protocol: TCP
+          port: 80
+    - to:
+        - podSelector:
+            matchLabels:
+              app: vllm
+      ports:
+        - protocol: TCP
+          port: 8000
+    {{- end }}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: pii-service
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" .Values "component" "pii-service") | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      genieai.io/component: pii-service
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              genieai.io/component: okf-server
+      ports:
+        - protocol: TCP
+          port: 8000
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+      ports:
+        - protocol: TCP
+          port: {{ include "genieai-umbrella.otlpPort" . }}
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: ragas-service
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" .Values "component" "ragas-service") | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      genieai.io/component: ragas-service
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              genieai.io/component: okf-server
+      ports:
+        - protocol: TCP
+          port: 8090
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+    # The judge LLM and the embedding endpoint — both derived from the
+    # GPU tier, so the named-destination GPU rule carries them whatever
+    # the mode — and the OTLP exporter.
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+      ports:
+        - protocol: TCP
+          port: {{ include "genieai-umbrella.otlpPort" . }}
+    {{- if and (eq $opeaGpu.mode "external") $opeaGpu.nodeHost }}
+    {{- include "genieai-umbrella.opeaGpuEgressRule" . | nindent 4 }}
+    {{- end }}
+    {{- if eq $opeaGpu.mode "in-cluster" }}
+    # The judge LLM and the embedder, in in-cluster mode: the same two
+    # models the okf-server rule above names. Without them the sidecar
+    # had DNS and OTLP only — every evaluation timed out instead of
+    # scoring.
+    - to:
+        - podSelector:
+            matchLabels:
+              app: vllm
+      ports:
+        - protocol: TCP
+          port: 8000
+    - to:
+        - podSelector:
+            matchLabels:
+              app: tei
+      ports:
+        - protocol: TCP
+          port: 80
+    {{- end }}
+{{- end -}}

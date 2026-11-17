@@ -1,0 +1,193 @@
+{{/*
+  chatqna OPEA orchestrator. Factory-driven like the
+  other five OPEA deployments. In-cluster peer wiring uses bare Service
+  DNS names (the chart convention, mirroring the edge route
+  upstreams: `embedding`, `retriever`, `reranker`, `translation`); ports match the
+  Services rendered in tasks 2-3 (embedding 6000, retriever 7000,
+  reranker 8000, translation 9031). GPU endpoints (`VLLM_LLM_ENDPOINT`,
+  `VLLM_TRANSLATION_ENDPOINT`) via the opea helpers; VLLM_API_KEY from
+  the vllm-api-key Secret. `MEGA_SERVICE_HOST_IP` resolves to the
+  chart's own `chatqna` Service.
+
+  CHATQNA_SYSTEM_PROMPT defaults to the empty string
+  (`${...:-}`); the chatqna Python code falls through to its built-in
+  default in that case. The chart OMITS the env row entirely when the
+  value is empty (Kubernetes then injects no env var; os.getenv returns
+  the second arg and the Python fallback wins) and renders the
+  operator override as a bare value so the YAML emitter does not
+  re-quote it (a YAML block scalar like `|` in the values file is
+  honored end-to-end for multi-line prompts).
+
+  The guardrail is not rendered by this chart; `GUARDRAIL_SERVICE_*`
+  carry the defaults (`guardrail:9090`) and the service tolerates
+  an unreachable guardrail. `GPU_NODE_HOST` is superseded by the
+  opeaGpuEndpoint helper. `OPENAI_API_KEY` is delivered from the same
+  vllm-api-key Secret as `VLLM_API_KEY` — the translation and
+  multi-turn-condense clients read only that name for their Bearer
+  header (Compose maps `${VLLM_API_KEY:-}` into it), and a deployment
+  whose GPU node enforces the key would otherwise see `Bearer None`.
+
+  KEYCLOAK_URL is the PUBLIC origin (the pinned issuer on the Keycloak
+  CR) — the validator compares it against the token's iss claim, which
+  carries the public issuer. KEYCLOAK_INTERNAL_URL is the in-cluster
+  JWKS base (its code default names an unresolvable service name,
+  here). The public/in-cluster split mirrors the backend's translation
+  wiring and Keycloak's hostname v2 backchannelDynamic.
+  DOC_REPO_URL/BACKEND_SERVICE_URL/KEYCLOAK_URL target the in-cluster
+  Service names + chart port mappings
+  (document-repository and backend publish the factory's fixed port 80,
+  which targets the pod by name — the pod port is
+  services.documentRepository.port / services.backend.port;
+  keycloak-service:8080/auth). Container/listen port 8888; healthcheck
+  hits `/health` on that port.
+*/}}
+{{- $opea := .Values.opea | default dict -}}
+{{- $opeaChatqna := $opea.chatqna | default dict -}}
+{{- $opeaModels := $opea.models | default dict -}}
+{{- $opeaModelsLlm := $opeaModels.llm | default dict -}}
+{{- $opeaTranslation := $opea.translation | default dict -}}
+{{- $data := .Values.data | default dict -}}
+{{- $dataKeycloak := $data.keycloak | default dict -}}
+
+{{- if $opea.enabled -}}
+{{- $vals  := deepCopy .Values -}}
+{{- $ns    := .Values.namespace -}}
+{{- $llmEndpoint := include "genieai-umbrella.opeaGpuEndpoint" (dict "root" . "path" "llm") -}}
+{{- $translationEndpoint := include "genieai-umbrella.opeaGpuEndpoint" (dict "root" . "path" "translation") -}}
+{{- $tuningEnv := list
+    (dict "name" "CHATQNA_TYPE" "value" ($opeaChatqna.chatqnaType | default "ChatQnA" | toString))
+    (dict "name" "MEGA_SERVICE_HOST_IP" "value" "chatqna")
+    (dict "name" "LOG_LEVEL" "value" ($opeaChatqna.logLevel | default "info" | toString))
+    (dict "name" "EMBEDDING_SERVER_HOST_IP" "value" "embedding")
+    (dict "name" "EMBEDDING_SERVER_PORT" "value" "6000")
+    (dict "name" "RETRIEVER_SERVICE_HOST_IP" "value" "retriever")
+    (dict "name" "RETRIEVER_SERVICE_PORT" "value" "7000")
+    (dict "name" "RERANK_SERVER_HOST_IP" "value" "reranker")
+    (dict "name" "RERANK_SERVER_PORT" "value" "8000")
+    (dict "name" "TRANSLATION_SERVICE_HOST_IP" "value" "translation")
+    (dict "name" "TRANSLATION_SERVICE_PORT" "value" "9031")
+    (dict "name" "VLLM_LLM_ENDPOINT" "value" $llmEndpoint)
+    (dict "name" "VLLM_TRANSLATION_ENDPOINT" "value" $translationEndpoint)
+    (dict "name" "LLM_MODEL" "value" ($opeaModelsLlm.modelId | default "ibm-granite/granite-4.1-8b" | toString))
+    (dict "name" "VLLM_MODEL_ID" "value" "")
+    (dict "name" "MODEL_DETECT_TTL" "value" "60")
+    (dict "name" "VLLM_TRANSLATION_MODEL_ID" "value" ($opeaTranslation.modelId | default "google/gemma-3-4b-it" | toString))
+    (dict "name" "RERANKING_STRATEGY" "value" ($opeaChatqna.rerankingStrategy | default "slice" | toString))
+    (dict "name" "RERANKING_THRESHOLD" "value" ($opeaChatqna.rerankingThreshold | default "0.75" | toString))
+    (dict "name" "RERANKER_TOP_N" "value" ($opeaChatqna.rerankerTopN | default "3" | toString))
+    (dict "name" "RETRIEVER_ARANGO_K" "value" ($opeaChatqna.retrieverArangoK | default "20" | toString))
+    (dict "name" "RETRIEVER_ARANGO_FETCH_K" "value" ($opeaChatqna.retrieverArangoFetchK | default "30" | toString))
+    (dict "name" "RETRIEVER_ARANGO_SCORE_THRESHOLD" "value" ($opeaChatqna.retrieverArangoScoreThreshold | default "0.2" | toString))
+    (dict "name" "RETRIEVER_ARANGO_DISTANCE_THRESHOLD" "value" ($opeaChatqna.retrieverArangoDistanceThreshold | default "1" | toString))
+    (dict "name" "RETRIEVER_ARANGO_LAMBDA_MULT" "value" ($opeaChatqna.retrieverArangoLambdaMult | default "0.5" | toString))
+    (dict "name" "RETRIEVER_ARANGO_SEARCH_START" "value" ($opeaChatqna.retrieverArangoSearchStart | default "chunk" | toString))
+    (dict "name" "RETRIEVER_ARANGO_TRAVERSAL_ENABLED" "value" (include "genieai-umbrella.boolEnvValue" (dict "value" $opeaChatqna.retrieverArangoTraversalEnabled "default" true)))
+    (dict "name" "RETRIEVER_ARANGO_TRAVERSAL_MAX_DEPTH" "value" ($opeaChatqna.retrieverArangoTraversalMaxDepth | default "2" | toString))
+    (dict "name" "RETRIEVER_ARANGO_TRAVERSAL_MAX_RETURNED" "value" ($opeaChatqna.retrieverArangoTraversalMaxReturned | default "5" | toString))
+    (dict "name" "RETRIEVER_ARANGO_TRAVERSAL_SCORE_THRESHOLD" "value" ($opeaChatqna.retrieverArangoTraversalScoreThreshold | default "0.7" | toString))
+    (dict "name" "CONFIDENCE_RANK_DECAY" "value" ($opeaChatqna.confidenceRankDecay | default "0.5" | toString))
+    (dict "name" "RERANKER_SCORE_CALIBRATION" "value" ($opeaChatqna.rerankerScoreCalibration | default "none" | toString))
+    (dict "name" "RERANKER_SCORE_TEMPERATURE" "value" ($opeaChatqna.rerankerScoreTemperature | default "1.0" | toString))
+    (dict "name" "LLM_SELF_CONFIDENCE_ENABLED" "value" ($opeaChatqna.llmSelfConfidenceEnabled | default "0" | toString))
+    (dict "name" "MULTI_TURN_BLEND_ENABLED" "value" ($opeaChatqna.multiTurnBlendEnabled | default "false" | toString))
+    (dict "name" "MULTI_TURN_BLEND_ALPHA" "value" ($opeaChatqna.multiTurnBlendAlpha | default "0.7" | toString))
+    (dict "name" "MULTI_TURN_HISTORY_TURNS" "value" ($opeaChatqna.multiTurnHistoryTurns | default "1" | toString))
+    (dict "name" "DOC_REPO_URL" "value" (include "genieai-umbrella.serviceURL" (dict "root" . "name" "document-repository" "port" 80)))
+    (dict "name" "BACKEND_SERVICE_URL" "value" (include "genieai-umbrella.serviceURL" (dict "root" . "name" "backend" "port" 80)))
+    (dict "name" "KEYCLOAK_URL" "value" (include "genieai-umbrella.keycloakPublicIssuer" .))
+    (dict "name" "KC_REALM" "value" ($opeaChatqna.kcRealm | default ($dataKeycloak.realm | default "genie") | toString))
+    (dict "name" "KEYCLOAK_INTERNAL_URL" "value" (include "genieai-umbrella.keycloakInternalURL" .))
+    (dict "name" "GPU_NODE_HOST" "value" (include "genieai-umbrella.opeaGpuHostname" .))
+    (dict "name" "KC_CLIENT_ID" "value" ($opeaChatqna.kcClientId | default "genie-app" | toString))
+    (dict "name" "CHATQNA_ENFORCE_ABSTENTION" "value" (include "genieai-umbrella.boolEnvValue" (dict "value" $opeaChatqna.chatqnaEnforceAbstention "default" true)))
+    (dict "name" "GUARDRAIL_SERVICE_HOST_IP" "value" "guardrail")
+    (dict "name" "GUARDRAIL_SERVICE_PORT" "value" "9090")
+    (dict "name" "OPEA_SSL_SKIP_VERIFY" "value" (include "genieai-umbrella.opeaSslSkipVerify" .))
+    (dict "name" "ENABLE_OBSERVABILITY" "value" (include "genieai-umbrella.observabilityEnabledFlag" .))
+    (dict "name" "OTEL_EXPORTER_OTLP_ENDPOINT" "value" (include "genieai-umbrella.otlpEndpoint" .))
+-}}
+{{- /* CHATQNA_SYSTEM_PROMPT defaults to empty;
+the chatqna Python code falls through to its built-in prompt when the
+env is empty/falsy. Rendering the env row with `| default "" | quote`
+would emit the literal two-character string `""`, which the Python code
+would treat as a non-empty prompt and pass through to the LLM. The
+conditional append below OMITS the row entirely when the value is
+empty (Kubernetes then has no env var to inject; os.getenv returns the
+second arg, empty, and the Python fallback wins), and renders the
+operator override as a bare value so the YAML emitter does not
+re-quote it (a YAML block scalar like `|` in the values file is honored
+end-to-end for multi-line prompts). */ -}}
+{{- $promptEnv := list -}}
+{{- $systemPrompt := $opeaChatqna.systemPrompt | default "" -}}
+{{- if $systemPrompt -}}
+{{- $promptEnv = append $promptEnv (dict "name" "CHATQNA_SYSTEM_PROMPT" "value" $systemPrompt) -}}
+{{- end -}}
+{{- $gpuSecretEnv := include "genieai-umbrella.gpuApiKeyEnv" (dict "keys" (list "VLLM_API_KEY" "OPENAI_API_KEY")) | fromJsonArray -}}
+{{- /* opea.chatqna.env: the variables the chart must configure the way
+Compose configures them (parity gate: scripts/ci/config-parity-check.py).
+A MAP, so an overlay that sets one variable keeps the others. The rows
+come last and envRowsDedupe keeps ONE row per name (the operator's
+wins): SSA merges env name-keyed, a duplicate name fails the install
+(issue #1362). */ -}}
+{{- $opeaEnvRows := include "genieai-umbrella.envMapRows" ($opeaChatqna.env | default dict) | fromJsonArray -}}
+{{- /* workingDir: the image ENTRYPOINT runs `python genieai_chatqna.py`
+with a RELATIVE path; the script lives in /app/ChatQnA/. Without it the container starts in /app and
+exits immediately ("can't open file"). */ -}}
+{{- /* Liveness is an EXEC probe, not httpGet: the orchestrator's
+uvicorn event loop is blocked for the whole duration of a query (the
+retrieval, rerank and LLM hops run synchronously in front of it —
+measured 60-90 s on the shared GPU), so a HTTP /health probe with the
+default 1 s timeout reports three consecutive failures every time a
+real query runs and the kubelet kills the pod mid-stream (exit 137,
+observed live: the backend saw "socket hang up" from a pod the liveness
+had just killed). `kill -0 1` probes the PROCESS — it fires only when
+the container is genuinely dead, and never punishes a busy event loop.
+The cost is accepted: readiness still flaps NotReady while the loop is
+busy (single replica — no new requests mid-query), which is honest, and
+the app-side threadpool fix restores both the availability and a hang
+bound (an exec probe cannot see a python-level deadlock). The honest
+long-term fix is application-side (serve /health from the
+threadpool so it answers while the loop is busy); this probe keeps the
+chart correct until that lands.
+
+The readiness probe carries NO initialDelaySeconds: the startupProbe
+below owns the slow start, and a readiness delay adds a SECOND floor on
+top of it — the pod then stays out of the Service's endpoints for that
+long after every restart, although it is already serving. Readiness now
+tracks the startup probe's success. */ -}}
+{{- $svcVals := dict
+    "image" (dict "repository" "genie-ai-chatqna-server" "tag" "main")
+    "workingDir" "/app/ChatQnA"
+    "port" 8888
+    "resources" (dict "requests" (dict "cpu" "200m" "memory" "512Mi") "limits" (dict "cpu" "2" "memory" "4Gi"))
+    "env" (include "genieai-umbrella.envRowsDedupe" (concat $tuningEnv $promptEnv $gpuSecretEnv $opeaEnvRows | toJson) | fromJsonArray)
+    "probes" (dict
+      "readiness" (dict "httpGet" (dict "path" "/health" "port" "http") "periodSeconds" 15)
+      "liveness"  (dict "exec" (dict "command" (list "sh" "-c" "kill -0 1")) "initialDelaySeconds" 180 "periodSeconds" 30)
+      "startup"   (dict "httpGet" (dict "path" "/health" "port" "http") "failureThreshold" 30 "periodSeconds" 10)
+    )
+-}}
+{{- /* The service map is rebuilt rather than mutated in place: a
+cleared `services` map has nothing to mutate, and `set` on a nil map
+crashes the template engine. */ -}}
+{{- $valsServices := $vals.services | default dict -}}
+{{- $_ := set $valsServices "chatqna" (mergeOverwrite $svcVals (index $valsServices "chatqna" | default dict)) -}}
+{{- $_ := set $vals "services" $valsServices -}}
+{{- $ctx := dict "name" "chatqna" "component" "chatqna" "Values" $vals "Chart" .Chart "Release" .Release -}}
+{{- include "genieai-umbrella.serviceDeployment" $ctx }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: chatqna
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" .Values "component" "chatqna") | nindent 4 }}
+spec:
+  ports:
+    - name: http
+      port: 8888
+      targetPort: 8888
+  selector:
+    {{- include "genieai-common.serviceSelector" (dict "Chart" .Chart "Release" .Release "Values" .Values "component" "chatqna") | nindent 4 }}
+{{- end -}}

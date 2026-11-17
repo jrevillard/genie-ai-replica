@@ -1,0 +1,88 @@
+{{- /*
+  Observability-tier reachability smoke test. Probes the
+  per-component operator-managed storage backends' /health endpoints:
+  VLSingle :9428, VMSingle :8428, VTSingle :10428. Each check is
+  gated on the corresponding component flag so the same template
+  works for the logs-only baseline install (default) and the
+  all-on overlay.
+
+  Skipped: Grafana /admin /health, collector-gateway 13133 (the
+  collector self-telemetry path is exercised by the live PII smoke
+  on the deployed cluster; a TCP-probe in the test pod adds noise
+  without catching what the live smoke doesn't already catch).
+*/}}
+{{- $global := .Values.global | default dict -}}
+{{- $obs := .Values.observability | default dict -}}
+{{- $obsLogs := $obs.logs | default dict -}}
+{{- $obsMetrics := $obs.metrics | default dict -}}
+{{- $obsTraces := $obs.traces | default dict -}}
+
+{{- if or $obsLogs.enabled $obsMetrics.enabled $obsTraces.enabled }}
+apiVersion: v1
+kind: Pod
+metadata:
+  name: {{ include "genieai-common.fullname" . }}-test-observability
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- /* component "test", like every sibling test pod: the ingress
+    peers the chart's policies grant are `genieai.io/component: test`, so
+    labeling this pod "observability" worked only while the storage pods
+    carried no ingress policy at all — the first policy added there would
+    silently time this pod out (a "test" peer does not select it). */ -}}
+    {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" .Values "component" "test") | nindent 4 }}
+  annotations:
+    "helm.sh/hook": test
+    "helm.sh/hook-delete-policy": before-hook-creation
+spec:
+  restartPolicy: Never
+  securityContext:
+    runAsNonRoot: true
+    runAsUser: 65534
+    seccompProfile:
+      type: RuntimeDefault
+  {{- with $global.imagePullSecrets }}
+  # Same credential as every sibling pod: a credentialed docker.io
+  # mirror must not ImagePullBackOff the test pod while every workload
+  # it probes pulls fine.
+  imagePullSecrets:
+    {{- toYaml . | nindent 8 }}
+  {{- end }}
+  containers:
+    - name: t
+      {{- /* busybox — see the toolingImage helper for why not curlimages/curl. */}}
+      image: {{ include "genieai-umbrella.toolingImage" . }}
+      imagePullPolicy: IfNotPresent
+      securityContext:
+        allowPrivilegeEscalation: false
+        readOnlyRootFilesystem: true
+        runAsNonRoot: true
+        runAsUser: 65534
+        capabilities:
+          drop:
+            - ALL
+      command:
+        - /bin/sh
+        - -c
+        - |
+          set -eu
+          failures=0
+          {{- include "genieai-umbrella.testCheckHelper" . | nindent 10 }}
+          {{- /* Each check hits the operator-managed Service — the
+                 stable in-cluster contract. VL/VM/VT each expose
+                 /health on their default port; the response is a
+                 bare 200 OK on a healthy instance. */ -}}
+          {{- if $obsLogs.enabled }}
+          check vlsingle-victorialogs 9428 /health 200
+          {{- end }}
+          {{- if $obsMetrics.enabled }}
+          check vmsingle-vmetrics 8428 /health 200
+          {{- end }}
+          {{- if $obsTraces.enabled }}
+          check vtsingle-vtraces 10428 /health 200
+          {{- end }}
+          if [ "$failures" -gt 0 ]; then
+            echo "FAIL: $failures observability backend(s) unreachable"
+            exit 1
+          fi
+          echo "PASS: observability backends reachable"
+{{- end }}

@@ -7,7 +7,7 @@ aliases:
 mode: how-to
 persona: deployer
 owner: "docs-stewards"
-last_reviewed: 2026-09-19
+last_reviewed: 2026-11-17
 ---
 
 If you operate a GENIE.AI deployment and own the recovery story, this page
@@ -25,6 +25,14 @@ them in.
 > know how to back up; everything below is for the operator who needs to
 > build a backup routine from scratch.
 
+> **Scope — this page is the Compose / Swarm routine.** The procedures
+> below use `docker exec` and the Compose named volumes. On Kubernetes the
+> same four stores exist but they are operator-managed custom resources
+> and PVCs, and **there is no Kong DB** (the edge is Envoy Gateway) — see
+> [Kubernetes](#kubernetes) at the end of this page for the differences.
+> Velero is **not** part of the chart: it is a design proposal only, so no
+> Kubernetes-native backup mechanism ships with GENIE.AI.
+
 ## Overview — what state lives where
 
 `docker-compose.yaml` declares the named volumes the stack depends on
@@ -36,7 +44,7 @@ inputs (HuggingFace model cache, Certbot certs from a CA) or loss-tolerant
 | Store | Volume name (top-level) | Mounted at | Holds | Backup criticality |
 |---|---|---|---|---|
 | **ArangoDB** | `arango_data` | `/var/lib/arangodb3` | Knowledge base: chunks, embeddings, knowledge graph, labels, conversations, users, ingestion logs | **Critical** |
-| **PostgreSQL** | `postgres_data` | `/var/lib/postgresql/data` | Kong DB (routes/services/plugins) + Keycloak DB (realms, clients, users, roles) | **Critical** |
+| **PostgreSQL** | `postgres_data` | `/var/lib/postgresql/data` | Kong DB (routes/services/plugins — **Compose/Swarm only**) + Keycloak DB (realms, clients, users, roles) | **Critical** |
 | **Redis** | `redis_data` | `/data` | Translation cache, backend cache | **Critical** |
 | **Document-repository uploads** | `doc_repo_uploads` | `/app/uploads` | Original uploaded source files (the only durable copy after the chunks are derived) | **Critical** |
 | Backend misc uploads | `backend_uploads` | `/app/Uploads` | Backend `Uploads/` directory (legacy, see [component config]({{< relref "/docs/reference/env-vars" >}})) | Low |
@@ -61,7 +69,10 @@ freshly-restored ArangoDB on an empty PostgreSQL is still broken:
 - **No gateway.** Kong stores its DB-mode configuration in PostgreSQL.
   Without it, every route (`/api/auth/*`, `/api/chat/*`, `/api/admin/*`,
   `/api/services/*`, `/grafana/`, …) is gone; the public-facing surface
-  returns 404s or — worse — unconfigured defaults.
+  returns 404s or — worse — unconfigured defaults. **Compose / Swarm
+  only** — on Kubernetes the edge is Envoy Gateway and its routes come
+  from the chart's `HTTPRoute`, so there is no gateway database to
+  restore.
 - **No translations.** Redis holds the translation cache. Loss means a
   cold cache, not data loss, but every translated response is regenerated
   on first request (slow first paint).
@@ -826,6 +837,29 @@ leave the system in an inconsistent state. See
 > source documents is therefore your insurance of last resort. See
 > [Knowledge base &rarr; Document
 > lifecycle]({{< relref "/docs/knowledge-base/document-lifecycle" >}}).
+
+## Kubernetes
+
+The four critical stores exist on Kubernetes too, but they are
+operator-managed custom resources and PVCs — not Compose named volumes.
+
+| Store | What holds it | Backup | Restore |
+|---|---|---|---|
+| **ArangoDB** | `ArangoDeployment` (kube-arangodb), single or cluster mode | `arangodump` from the `arangodb-single-single` pod | `arangorestore` into the restored PVC, then re-create the `ArangoDeployment` CR |
+| **PostgreSQL** | CNPG `Cluster` named `keycloak-db` (the **only** Postgres — there is no Kong DB) | `pg_dumpall` from the CNPG instance pod | restore into the CNPG instance, then re-create the `Cluster` CR |
+| **Redis** | `redis-cache` PVC (appendonly) | snapshot the PVC, or `redis-cli BGSAVE` + copy `dump.rdb` | restore the PVC, then let the Deployment re-create it |
+| **Document-repository uploads** | `document-repository` PVC | snapshot the PVC | restore the PVC, then re-create the Deployment |
+
+Two structural differences from Compose:
+
+- **A PVC is not a `docker volume`.** Restore order matters the same way
+  (PostgreSQL → Redis → uploads → ArangoDB), but the operator-managed CR
+  (the `ArangoDeployment`, the CNPG `Cluster`) is re-created *after* the
+  data it owns is back in place — the CR is what claims the PVC.
+- **No Velero.** The chart ships no Kubernetes-native backup mechanism;
+  the design (`docs/charts/helm-charts-design.md`) proposes one, but it is
+  not implemented. Use the storage class's own snapshot facility, or dump
+  from inside the pods as above.
 
 ## Related
 

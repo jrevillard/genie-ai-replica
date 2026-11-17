@@ -1,0 +1,127 @@
+{{/*
+  translation OPEA orchestrator. Image is the UNCONDITIONAL docker.io upstream image
+  opea/translation:1.3, NOT the registry-prefixed genie-ai-* convention.
+  Same treatment as the keycloak-config-cli image in data/keycloak-
+  convergence-job.yaml: the upstream image is not mirrored in the genie-ai
+  CI registry, and the imageRegistry prefix would 404 the pull.
+  Air-gapped sites must mirror docker.io/opea/translation and rewrite via
+  insertAgent, not via the registry value. Hand-rendered instead of going
+  through genieai-umbrella.serviceDeployment because the factory
+  unconditionally prefixes the image with .Values.imageRegistry.
+  The image listens on 8888 (its own default; nothing maps the
+  port). The Service exposes 9031 -> 8888 because chatqna dials
+  TRANSLATION_SERVICE_PORT 9031; the tcpSocket probe targets the real
+  listener (8888).
+*/}}
+{{- $global := .Values.global | default dict -}}
+{{- $opea := .Values.opea | default dict -}}
+{{- $opeaTranslation := $opea.translation | default dict -}}
+
+{{- if $opea.enabled -}}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: translation
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" .Values "component" "translation") | nindent 4 }}
+spec:
+  replicas: 1
+  progressDeadlineSeconds: {{ include "genieai-umbrella.progressDeadlineSeconds" (dict "Values" .Values "service" "") }}
+  selector:
+    matchLabels:
+      {{- include "genieai-common.serviceSelector" (dict "Chart" .Chart "Release" .Release "Values" .Values "component" "translation") | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "genieai-common.serviceSelector" (dict "Chart" .Chart "Release" .Release "Values" .Values "component" "translation") | nindent 8 }}
+    spec:
+      securityContext:
+        seccompProfile:
+          type: RuntimeDefault
+      {{- with $global.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: translation
+          # Pulled from docker.io unconditionally: opea/translation is
+          # not mirrored in the registries deployments pull their other
+          # images from (verified 2026-10-15), and the
+          # imageRegistry prefix would 404 the pull. An air-gapped
+          # site must mirror docker.io/opea/translation and rewrite via
+          # insertAgent, not via the registry value.
+          image: docker.io/opea/translation:1.3
+          imagePullPolicy: {{ include "genieai-umbrella.imagePullPolicy" (dict "tag" "1.3" "pullPolicy" $global.imagePullPolicy) }}
+          ports:
+            - name: http
+              containerPort: 8888
+          env:
+            - name: LLM_ENDPOINT
+              value: {{ include "genieai-umbrella.opeaGpuEndpoint" (dict "root" . "path" "translation") }}
+            - name: LLM_MODEL_ID
+              # Quoted AND stringified: this template hand-renders its
+              # env block (it does not go through the service factory's
+              # envRows normalization), and `v1.EnvVar.value` is typed
+              # string — an operator whose model id happens to parse as
+              # a YAML number ("3.1") would otherwise take the whole
+              # Deployment down with "cannot unmarshal number into Go
+              # struct field EnvVar.value of type string".
+              value: {{ $opeaTranslation.modelId | default "google/gemma-3-4b-it" | toString | quote }}
+            # Observability exporter — derived from the umbrella
+            # observability flags (any signal on → SDK initialises)
+            # rather than a per-service knob.
+            - name: ENABLE_OBSERVABILITY
+              value: {{ include "genieai-umbrella.observabilityEnabledFlag" . | quote }}
+            - name: OTEL_EXPORTER_OTLP_ENDPOINT
+              value: {{ include "genieai-umbrella.otlpEndpoint" . }}
+          {{- $tRes := mergeOverwrite (dict "requests" (dict "cpu" "200m" "memory" "256Mi") "limits" (dict "cpu" "2" "memory" "2Gi")) (index (index (.Values.services | default dict) "translation" | default dict) "resources" | default dict) }}
+          resources:
+            {{- toYaml $tRes | nindent 12 }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            # seccomp lives at the POD level (see spec.securityContext
+            # above) and already covers this container — a container-
+            # level copy would be dead YAML with a second placement to
+            # keep in sync.
+            capabilities:
+              drop: ["ALL"]
+          # No readiness initialDelaySeconds: the startupProbe below owns
+          # the slow start, and a readiness delay adds a second floor on
+          # top of it — the pod stays out of the Service's endpoints for
+          # that long after every restart, although it is already serving.
+          readinessProbe:
+            tcpSocket:
+              port: 8888
+            periodSeconds: 15
+          livenessProbe:
+            tcpSocket:
+              port: 8888
+            initialDelaySeconds: 60
+            periodSeconds: 30
+          # Cold start: the translation worker loads the model before it
+          # binds 8888; without a startup window the liveness probe's
+          # 60s + 3x30s budget kills the pod mid-load on a contended
+          # node (the same slow-start class the factory services got
+          # startup probes for).
+          startupProbe:
+            tcpSocket:
+              port: 8888
+            failureThreshold: 30
+            periodSeconds: 10
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: translation
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" .Values "component" "translation") | nindent 4 }}
+spec:
+  ports:
+    - name: http
+      port: 9031
+      targetPort: 8888
+  selector:
+    {{- include "genieai-common.serviceSelector" (dict "Chart" .Chart "Release" .Release "Values" .Values "component" "translation") | nindent 4 }}
+{{- end -}}

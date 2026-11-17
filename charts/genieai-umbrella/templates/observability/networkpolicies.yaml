@@ -1,0 +1,208 @@
+{{- /*
+  Observability-tier NetworkPolicies — one per collector workload
+  (gateway + filelog agent), per-component-flag-gated. Storage pods
+  are addressed by their vmoperator-stamped labels (managed-by:
+  vm-operator + app.kubernetes.io/instance: <cr-name>, verified on a
+  live cluster); the gateway collector by managed-by:
+  opentelemetry-operator in the stack namespace.
+*/}}
+{{- $obs := .Values.observability | default dict -}}
+{{- $obsLogs := $obs.logs | default dict -}}
+{{- $obsMetrics := $obs.metrics | default dict -}}
+{{- $obsTraces := $obs.traces | default dict -}}
+{{- $obsCollectorAgent := $obs.collectorAgent | default dict -}}
+
+{{- if or $obsLogs.enabled $obsMetrics.enabled $obsTraces.enabled }}
+---
+# Collector gateway: receives OTLP from app SDKs and from the
+# filelog agent; ships to VLSingle / VMSingle / VTSingle.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: collector-gateway
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" .Values "component" "observability") | nindent 4 }}
+spec:
+  podSelector:
+    # The operator owns the workload pods' labels; the stable selector
+    # is the managed-by label (OTC pods for both CRs carry it — the
+    # gateway and agent policies then differ only by ports).
+    matchLabels:
+      app.kubernetes.io/managed-by: opentelemetry-operator
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    # OTLP/HTTP + OTLP/gRPC from any pod in the namespace. App
+    # SDKs dial the gateway at 4318 (HTTP) and 4317 (gRPC); the
+    # filelog agent dials 4318 from the same namespace too.
+    #
+    # `podSelector: {}` is DELIBERATE and is the one place in this chart
+    # where a policy is not default-deny: it is the OTLP intake, and the
+    # set of instrumented workloads is whatever the release happens to
+    # run — the collector cannot enumerate its own clients, and a
+    # component list here would silently drop telemetry the moment a
+    # service is added. The trade-off is explicit: any pod in this
+    # namespace can push arbitrary metrics, logs or traces into the
+    # collector. That is the same trust boundary as the metrics
+    # ingress, and it is why the gateway's own egress stays restrictive.
+    #
+    # The kubelet probe on the health extension (13133) is NOT listed:
+    # it originates from the node, which no peer selector can name, so
+    # it rides the CNI's host-to-pod default. A CNI that denies that
+    # by default leaves this collector un-Ready — see the CNI note in
+    # charts/README.md ("Cluster prerequisites").
+    - from:
+        - podSelector: {}
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ .Values.namespace }}-obs
+      ports:
+        - protocol: TCP
+          port: {{ include "genieai-umbrella.otlpPort" . }}
+        - protocol: TCP
+          port: 4317
+  egress:
+    # DNS resolution to kube-system.
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+    {{- if $obsLogs.enabled }}
+    # VLSingle OTLP ingest (VL default OTLP port 9428).
+    - to:
+        - podSelector:
+            matchLabels:
+              managed-by: vm-operator
+              app.kubernetes.io/instance: victorialogs
+      ports:
+        - protocol: TCP
+          port: 9428
+    {{- end }}
+    {{- if $obsMetrics.enabled }}
+    # VMSingle Prometheus remote-write. The port is 8429, NOT the 8428
+    # the collector's endpoint names: the vm-operator Service publishes
+    # 8428 as an ALIAS that DNATs to the pod's 8429, and a
+    # NetworkPolicy is evaluated after that translation. A rule on 8428
+    # therefore admits nothing, and the failure is silent — the
+    # collector's prometheusremotewrite exporter just times out
+    # ("context deadline exceeded") and drops every batch, while logs
+    # and traces keep flowing because VictoriaLogs and VictoriaTraces
+    # map their Service port straight through. Verified on the laptop:
+    # deleting this policy took otelcol_exporter_sent_metric_points from
+    # 0 to 556 in under a minute.
+    # Same trap as every other pod-to-pod peer in this chart: use the
+    # container port, not the Service port.
+    - to:
+        - podSelector:
+            matchLabels:
+              managed-by: vm-operator
+              app.kubernetes.io/instance: vmetrics
+      ports:
+        - protocol: TCP
+          port: 8429
+    {{- end }}
+    {{- if $obsTraces.enabled }}
+    # VTSingle is single-port (-httpListenAddr=:10428): the Jaeger query
+    # API AND the OTLP ingest (/insert/opentelemetry) both live there —
+    # the collector's exporter dials 10428 (see otel-collector.yaml).
+    - to:
+        - podSelector:
+            matchLabels:
+              managed-by: vm-operator
+              app.kubernetes.io/instance: vtraces
+      ports:
+        - protocol: TCP
+          port: 10428
+    {{- end }}
+{{- end }}
+{{- if $obsLogs.enabled }}
+---
+# Filelog agent (DaemonSet): tails containerd's pod-log path on each
+# node and forwards to the gateway over OTLP. Ingress is closed
+# (the agent never accepts inbound traffic — filelog is a one-way
+# pull from the host filesystem). Gated on logs alone: the agent
+# lives in <ns>-obs, a namespace that only exists when the log tier
+# is on — rendering this policy under metrics/traces-only would
+# target a nonexistent namespace and fail the install.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: collector-agent
+  namespace: {{ .Values.namespace }}-obs
+  labels:
+    {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" .Values "component" "observability") | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/managed-by: opentelemetry-operator
+  policyTypes:
+    - Ingress
+    - Egress
+  # Ingress: closed. A policy that lists only Egress imposes NO ingress
+  # restriction at all — the agent's 8888 self-telemetry port would be
+  # reachable from every pod in the cluster. An empty ingress list is
+  # the deny-all.
+  ingress: []
+  egress:
+    # DNS resolution to kube-system.
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+    # Kubernetes API. The agent's k8sattributes processor
+    # (auth_type: serviceAccount) watches pods/namespaces to attach
+    # k8s.pod.* and service.name to each log line; without access every
+    # row stays un-enriched.
+    #
+    # A NetworkPolicy cannot NAME the API server: it is not a pod, so a
+    # namespaceSelector on `default` selects no peer at all (proved on
+    # the laptop's Calico: the rule was in place and the traffic went
+    # through anyway, because the destination is the control plane's
+    # host endpoint). Only a CIDR can express it — the same shape as
+    # the document-repository's crawlAllowedCIDRs.
+    #
+    # Empty (the default) means NO rule is rendered for the API server:
+    # the traffic then depends on the CNI's own failsafe ports, and only
+    # Calico's include the API server's 6443. On Cilium or kube-router
+    # the k8sattributes processor cannot watch pods and namespaces, and
+    # every log line ships without its k8s.pod.* / service.name
+    # enrichment — silently, with the agent still reporting healthy. Set
+    # observability.collectorAgent.apiServerCIDRs on those CNIs.
+    {{- with $obsCollectorAgent.apiServerCIDRs }}
+    - to:
+        {{- range . }}
+        - ipBlock:
+            cidr: {{ . }}
+        {{- end }}
+      ports:
+        - protocol: TCP
+          port: 443
+        - protocol: TCP
+          port: 6443
+    {{- end }}
+    # Forward to the collector gateway (OTLP/HTTP :4318) in the stack
+    # namespace — the gateway pods carry the otel-operator managed-by
+    # label.
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ .Values.namespace }}
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/managed-by: opentelemetry-operator
+      ports:
+        - protocol: TCP
+          port: {{ include "genieai-umbrella.otlpPort" . }}
+{{- end }}

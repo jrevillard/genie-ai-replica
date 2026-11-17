@@ -5,7 +5,7 @@ description: 'Every public endpoint with request/response shape, auth requiremen
 mode: reference
 persona: developer
 owner: docs-stewards
-last_reviewed: 2026-09-19
+last_reviewed: 2026-11-17
 aliases:
   - /docs/backend/api-contracts-backend/
 ---
@@ -22,7 +22,7 @@ For the narrative version with worked examples, see this page itself — this is
 ## Component
 
 `components/gov-chat-backend/` (Node.js 22, Express, JWT, winston).
-**Base URL**: `https://<domain>/api` (via Kong Gateway).
+**Base URL**: `https://<domain>/api` (via Kong Gateway on Compose/Swarm; via the Envoy Gateway `HTTPRoute` on Kubernetes).
 **Internal port**: 3000 (not exposed in Swarm).
 **OpenAPI**: `/api-docs` (Swagger UI served from the BFF itself).
 
@@ -182,7 +182,7 @@ Everything else requires a valid Keycloak JWT.
 | `FORBIDDEN`            | 403    | Authenticated but missing required realm role                                                                                                                              |
 | `NOT_FOUND`            | 404    | Resource does not exist                                                                                                                                                    |
 | `VALIDATION_FAILED`    | 422    | **Not emitted.** Backend uses `ValidationError` (HTTP 400) — no dedicated envelope code is sent; either implement 422 or drop the row                                      |
-| `RATE_LIMITED`         | 429    | Emitted by Kong, **not** the backend (Kong enforces 1000/min per consumer on express-api and returns plain text `API rate limit exceeded`, not the standard JSON envelope) |
+| `RATE_LIMITED`         | 429    | Emitted by Kong, **not** the backend (Kong enforces 1000/min per consumer on express-api and returns plain text `API rate limit exceeded`, not the standard JSON envelope). **Compose / Swarm only** — the Kubernetes edge (Envoy Gateway) configures no rate limit, so this code never appears there |
 | `CHATQNA_STREAM_ERROR` | 502    | Upstream ChatQnA streaming error (ArangoDB / ChatQnA / Keycloak upstream errors propagate through this code)                                                               |
 | `INTERNAL`             | 500    | Unhandled exception                                                                                                                                                        |
 | `TOKEN_INVALID`        | 401    | `keycloak-auth-middleware.js:79,157`                                                                                                                                       |
@@ -202,11 +202,12 @@ Everything else requires a valid Keycloak JWT.
 
 | Layer                | What it blocks                                                                                |
 | -------------------- | --------------------------------------------------------------------------------------------- |
-| **Nginx**            | Dotfiles (`.X` except `.well-known`) and VCS dirs (`.git`, `.svn`, `.hg`, `CVS`, `BitKeeper`) |
-| **Kong**             | Adds headers (`X-Forwarded-For`, etc.); rate limit on express-api service                     |
+| **Nginx** (Compose / Swarm) | Dotfiles (`.X` except `.well-known`) and VCS dirs (`.git`, `.svn`, `.hg`, `CVS`, `BitKeeper`) |
+| **Kong** (Compose / Swarm) | Adds headers (`X-Forwarded-For`, etc.); rate limit on express-api service                     |
+| **Envoy Gateway** (Kubernetes) | TLS termination and path routing only — **no dotfile/VCS blocking, no rate limit** |
 | **Helmet (backend)** | CSP, HSTS, frame-options, X-Content-Type-Options                                              |
 | **CORS**             | Allowlist via `CORS_ALLOWED_ORIGINS`                                                          |
-| **Rate limit**       | Kong rate-limit 1000 / minute per consumer on the express-api service                         |
+| **Rate limit**       | Kong rate-limit 1000 / minute per consumer on the express-api service — **Compose / Swarm only** |
 
 ### Defense in depth (sensitive-path blocker)
 
@@ -222,6 +223,14 @@ caller IP, method, and User-Agent, then returns:
 This is defense-in-depth — Kong should already be blocking these paths,
 but the BFF rejects them as well so a misconfigured Kong cannot leak
 secrets.
+
+**On Kubernetes the BFF blocker does not see those paths.** The chart's
+`HTTPRoute` sends every unmatched path (including `/.env`, `/.git`) to
+the frontend SPA catch-all, so the request never reaches the BFF. The
+frontend image ships no such files and answers 404 — but the block is
+not made by the edge, and the BFF's matcher never runs. On the
+Kubernetes edge, add an explicit `HTTPRoute` rule ahead of the
+catch-all if the cluster must not answer dotfile paths at all.
 
 ## Route domains
 

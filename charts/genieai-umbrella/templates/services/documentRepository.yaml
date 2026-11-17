@@ -1,0 +1,356 @@
+{{- /*
+  documentRepository depends on:
+    - the ArangoDB Service from the data tier (kube-arangodb operator owns
+      the Service name — the hostname comes from the arangoHost helper
+      which honors .Values.data.arangodb.mode)
+    - the `arango-root-secret` Secret in this namespace, operator-provided
+      via their secret backend of choice; supplies ARANGO_PASSWORD via
+      secretKeyRef below
+  Both prerequisites are required for this Deployment's pods to schedule
+  and become ready.
+*/ -}}{{- $services := .Values.services | default dict -}}
+{{- $servicesDocumentRepository := $services.documentRepository | default dict -}}
+{{- /* The backend's port: bound parent-first, like every values read —
+a cleared services.backend must degrade this egress rule to the default
+port, not crash the render on a nil parent. */ -}}
+{{- $servicesBackend := index $services "backend" | default dict -}}
+{{- $data := .Values.data | default dict -}}
+{{- $dataKeycloak := $data.keycloak | default dict -}}
+{{- $dataArangodb := $data.arangodb | default dict -}}
+{{- $servicesClamav := $services.clamav | default dict -}}
+{{- $obs := .Values.observability | default dict -}}
+{{- $obsLogs := $obs.logs | default dict -}}
+{{- $obsMetrics := $obs.metrics | default dict -}}
+
+{{- $ingress := .Values.ingress | default dict -}}
+{{- if $servicesDocumentRepository.enabled -}}
+{{- $ns := .Values.namespace -}}
+{{- $vals := deepCopy .Values -}}
+{{- /* VIRUS_SCANNING is the app-side switch, not the operator's: a scan
+step with no scanner behind it fails every upload, so the ClamAV tier
+being off forces it off. `services.documentRepository.virusScanning`
+still turns it off on its own. */ -}}
+{{- /* Coerced to a BOOL: a cleared clamav block leaves `enabled` nil, and
+`and nil false` is nil — which `| toString` renders as the debug text
+"<nil>" instead of the false the application reads
+(`process.env.VIRUS_SCANNING === "true"`). */ -}}
+{{- $clamavOn := and (kindIs "bool" $servicesClamav.enabled) $servicesClamav.enabled -}}
+{{- $virusScanning := $clamavOn -}}
+{{- if kindIs "bool" $servicesDocumentRepository.virusScanning -}}
+{{- $virusScanning = and $clamavOn $servicesDocumentRepository.virusScanning -}}
+{{- end -}}
+{{- /* CLAMSCAN_LOCAL_FALLBACK is a BOOL for the same reason: the
+application reads it as "the local scanner is the fallback unless the
+variable says false", and a nil rendered by | toString would read as
+"<nil>" — neither true nor false to the application. Coerced the same
+way $virusScanning is. */ -}}
+{{- $clamavLocalFallback := false -}}
+{{- if kindIs "bool" $servicesDocumentRepository.clamavLocalFallback -}}
+{{- $clamavLocalFallback = $servicesDocumentRepository.clamavLocalFallback -}}
+{{- end -}}
+{{- /* The chart owns `document-repository-uploads` only while
+`services.documentRepository.pvc.enabled` is true. With it off, a volume
+row still naming that claim leaves the pod in ContainerCreating forever
+(kubelet waits on a claim nobody creates), so the chart-owned rows are
+dropped here. Operator-supplied volumes and mounts are left untouched:
+turning the PVC off means "ephemeral /app/uploads, or bring your own
+volume". */ -}}
+{{- /* The PVC block is OPTIONAL (the per-service shape block says so): a cleared block means "no chart-owned claim", not a nil-pointer crash. */ -}}
+{{- $pvc := $servicesDocumentRepository.pvc | default dict -}}
+{{- if not $pvc.enabled -}}
+{{- $ownedClaim := "document-repository-uploads" -}}
+{{- $keptVolumes := list -}}
+{{- range $v := ($vals.services.documentRepository.volumes | default list) -}}
+{{- if ne (dig "persistentVolumeClaim" "claimName" "" $v) $ownedClaim -}}
+{{- $keptVolumes = append $keptVolumes $v -}}
+{{- end -}}
+{{- end -}}
+{{- /* Mounts follow their volumes: a mount row survives iff a KEPT
+volume carries its name. Filtering mounts by a hardcoded name instead
+kept the chart's mount name alive against an operator's own `uploads`
+volume (their volume survived the claim filter, their mount was
+dropped) and would drop the chart's mount against a kept volume of the
+same name. The join by name is the only predicate both sides share. */ -}}
+{{- $keptNames := dict -}}
+{{- range $v := $keptVolumes -}}
+{{- $_ := set $keptNames (get $v "name") true -}}
+{{- end -}}
+{{- $keptMounts := list -}}
+{{- range $m := ($vals.services.documentRepository.volumeMounts | default list) -}}
+{{- if get $keptNames (get $m "name") -}}
+{{- $keptMounts = append $keptMounts $m -}}
+{{- end -}}
+{{- end -}}
+{{- $_ := set $vals.services.documentRepository "volumes" $keptVolumes -}}
+{{- $_ := set $vals.services.documentRepository "volumeMounts" $keptMounts -}}
+{{- end -}}
+{{- /* KEYCLOAK_EXPECTED_ISSUER: tokens carry the public issuer pinned on the
+Keycloak CR (hostname v2); JWKS keeps resolving in-cluster through
+KEYCLOAK_URL. Without the override the service derives the expected
+issuer from the in-cluster URL and rejects every browser token. */ -}}
+{{- /* Dataprep URL parts are explicit. The service's own default host
+names a service absent here, and DATAPREP_PORT collides with
+the Kubernetes-injected connection env for the dataprep Service
+(tcp://<ip>:5000) — the controller concatenates host:port into a URL, so
+both rows must be set explicitly. */ -}}
+{{- /* The shared OIDC verifier reads KEYCLOAK_REALM (not the legacy
+KC_REALM spelling) — the same row the backend and okf-server carry.
+The chart's KEYCLOAK_URL is the in-cluster URL, which carries no
+/realms/ segment, so without this row the verifier would fetch the
+discovery document from .../realms/undefined and the document-repository
+would verify nothing at all. The legacy KC_REALM row that used to sit
+here was read by nobody on this service (only the OPEA Python
+services read that spelling) and Compose never set it for the
+document-repository either — a chart-only row the parity gate cannot
+see. */ -}}
+{{- $urls := list
+    (dict "name" "KEYCLOAK_URL" "value" (include "genieai-umbrella.keycloakInternalURL" .))
+    (dict "name" "KEYCLOAK_REALM" "value" ($dataKeycloak.realm | default "genie" | toString))
+    (dict "name" "KEYCLOAK_EXPECTED_ISSUER" "value" (printf "%s/realms/%s" (include "genieai-umbrella.keycloakPublicIssuer" .) ($dataKeycloak.realm | default "genie")))
+    (dict "name" "KEYCLOAK_PUBLIC_URL" "value" (index $dataKeycloak "publicUrl" | default "" | toString))
+    (dict "name" "KEYCLOAK_JWKS_URL" "value" (index $dataKeycloak "jwksUrl" | default "" | toString))
+    (dict "name" "KEYCLOAK_BROWSER_ISSUER" "value" (index $dataKeycloak "browserIssuer" | default "" | toString))
+    (dict "name" "OKF_BUNDLE_MAX_MB" "value" (index (.Values.okf | default dict) "bundleMaxMb" | default "100" | toString))
+    (dict "name" "ARANGO_URL" "value" (include "genieai-umbrella.arangoURL" .))
+    (dict "name" "ARANGO_DB" "value" ($dataArangodb.database | default "_system" | toString))
+    (dict "name" "DATAPREP_HOST" "value" "http://dataprep")
+    (dict "name" "DATAPREP_PORT" "value" "5000")
+    (dict "name" "CLAMSCAN_HOST" "value" ($servicesDocumentRepository.clamavHost | default "clamav" | toString))
+    (dict "name" "CLAMSCAN_PORT" "value" ($servicesClamav.port | default 3310 | toString))
+    (dict "name" "VIRUS_SCANNING" "value" ($virusScanning | toString))
+    (dict "name" "CLAMSCAN_LOCAL_FALLBACK" "value" ($clamavLocalFallback | toString))
+    (dict "name" "OTEL_EXPORTER_OTLP_ENDPOINT" "value" (include "genieai-umbrella.otlpEndpoint" .))
+    (dict "name" "ENABLE_OBSERVABILITY" "value" (include "genieai-umbrella.observabilityEnabledFlag" .))
+-}}
+{{- /* Admin logs UI data source — the vmoperator-managed VLSingle
+Service, same address the backend is given. */ -}}
+{{- if $obsLogs.enabled -}}
+{{- $urls = concat $urls (list (dict "name" "VICTORIALOGS_URL" "value" (printf "http://vlsingle-victorialogs.%s.svc.cluster.local:9428" $ns))) -}}
+{{- end }}
+{{- $secretEnv := list (include "genieai-umbrella.secretKeyRefEnv" (dict "var" "ARANGO_PASSWORD" "secret" "arango-root-secret" "key" "password" "optional" true) | fromJson) -}}
+{{- $existingEnv := index $vals.services.documentRepository "env" | default dict -}}
+{{- $existingRows := include "genieai-umbrella.envMapRows" $existingEnv | fromJsonArray -}}
+{{- /* The operator's rows come LAST and envRowsDedupe keeps ONE row per
+name (the last wins): helm-controller applies with server-side apply,
+which merges `env` as a list of dicts keyed by `name` — a duplicate name
+is a hard install error there, not the last-wins merge plain kubectl
+performs (issue #1362). */ -}}
+{{- $_ := set $vals.services.documentRepository "env" (include "genieai-umbrella.envRowsDedupe" (concat $urls $secretEnv $existingRows | toJson) | fromJsonArray) -}}
+{{- $ctx := dict "name" "documentRepository" "component" "documentRepository" "Values" $vals "Chart" .Chart "Release" .Release -}}
+{{- include "genieai-umbrella.serviceDeployment" $ctx }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: document-repository
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" .Values "component" "documentRepository") | nindent 4 }}
+spec:
+  ports:
+    - name: http
+      port: 80
+      targetPort: http
+  selector:
+    {{- include "genieai-common.serviceSelector" (dict "Chart" .Chart "Release" .Release "Values" .Values "component" "documentRepository") | nindent 4 }}
+---
+# Default-deny with ingress from the BFF and egress scoped to the
+# BFF, the ClamAV scanner, and the OTLP collector.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: document-repository
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" .Values "component" "documentRepository") | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      genieai.io/component: documentRepository
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    # The Envoy Gateway data plane (edge routing: /api/files, /api/labels,
+    # /uploads) and the backend (file references) on the container port
+    # (post-DNAT).
+    {{- if $ingress.enabled }}
+    - from:
+        {{- include "genieai-umbrella.ingressDataPlanePeer" . | nindent 8 }}
+      ports:
+        - protocol: TCP
+          port: {{ $servicesDocumentRepository.port | default 3001 }}
+    {{- end }}
+    - from:
+        - podSelector:
+            matchLabels:
+              genieai.io/component: backend
+      ports:
+        - protocol: TCP
+          port: {{ $servicesDocumentRepository.port | default 3001 }}
+    # dataprep: PATCH /api/files/<id>/status is how an ingest reports
+    # completion (genieai_dataprep_arangodb.py _update_doc_status).
+    - from:
+        - podSelector:
+            matchLabels:
+              genieai.io/component: dataprep
+      ports:
+        - protocol: TCP
+          port: {{ $servicesDocumentRepository.port | default 3001 }}
+    # chatqna: reads file metadata for citation provenance
+    # (genieai_chatqna.py, the sources shown next to an answer).
+    - from:
+        - podSelector:
+            matchLabels:
+              genieai.io/component: chatqna
+      ports:
+        - protocol: TCP
+          port: {{ $servicesDocumentRepository.port | default 3001 }}
+    # helm-test reachability probe (component "test").
+    - from:
+        - podSelector:
+            matchLabels:
+              genieai.io/component: test
+      ports:
+        - protocol: TCP
+          port: {{ $servicesDocumentRepository.port | default 3001 }}
+  {{- if eq true (index (.Values.okf | default dict) "enabled") }}
+  # The OKF server (DOCUMENT_REPOSITORY_URL, app default
+  # http://document-repository:3001): its ingest worker POSTs bundles
+  # and its backing-file service deletes here. Peer half of the
+  # tier's own egress rule — one without the other passes every
+  # render gate and silently drops the traffic.
+    - from:
+        - podSelector:
+            matchLabels:
+              genieai.io/component: okf-server
+      ports:
+        - protocol: TCP
+          port: {{ $servicesDocumentRepository.port | default 3001 }}
+  {{- end }}
+  {{- if $obsMetrics.enabled }}
+  # vm-operator scrape peer — PRE-WIRED, INERT TODAY: the chart's
+  # VMServiceScrape CRs match nothing on purpose (VMSingle carries no
+  # serviceScrapeSelector — see templates/observability/vmsingle.yaml)
+  # and no workload here exposes a Prometheus surface (they export over
+  # OTLP). The peer exists so that enabling a real scrape surface later
+  # does not silently time out against the default-deny.
+    - from:
+        - podSelector:
+            matchLabels:
+              managed-by: vm-operator
+              app.kubernetes.io/instance: vmetrics
+      ports:
+        - protocol: TCP
+          port: {{ $servicesDocumentRepository.port | default 3001 }}
+  {{- end }}
+  egress:
+    # DNS resolution to kube-system.
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+    # Backend BFF. Post-DNAT pod port — services.backend.port (the
+    # Service publishes the factory's fixed 80 and targets the pod by
+    # name).
+    - to:
+        - podSelector:
+            matchLabels:
+              genieai.io/component: backend
+      ports:
+        - protocol: TCP
+          port: {{ $servicesBackend.port | default 3000 }}
+    # ClamAV scanner. Post-DNAT pod port; the Service port is identical,
+    # but pod-to-pod peers must use the container port. The port comes
+    # from services.clamav.port — the knob the clamav Deployment,
+    # Service, policies AND this side's dial port derive from. The chart
+    # carries no separate dial-port knob: a different number could only
+    # name a port nothing serves.
+    - to:
+        - podSelector:
+            matchLabels:
+              genieai.io/component: clamav
+      ports:
+        - protocol: TCP
+          port: {{ $servicesClamav.port | default 3310 }}
+    # Data tier: ArangoDB (8529) — pending verified peer labels.
+    # Same port-scoped pattern as the backend's data-tier egress.
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+      ports:
+        - protocol: TCP
+          port: 8529
+    {{- /* Web-crawler egress: POST /api/files/crawl/schedule fetches
+    arbitrary user-supplied URLs (and every redirect hop). NetworkPolicy
+    peers cannot express a domain, so this is a port-scoped ipBlock over
+    80/443 — the same approximation the ClamAV signature-update rule
+    documents. Empty list = allow every IPv4 destination on the HTTP(S)
+    ports, matching the compose deployment's unrestricted network. */}}
+    - to:
+        {{- range $cidr := $servicesDocumentRepository.crawlAllowedCIDRs }}
+        - ipBlock:
+            cidr: {{ $cidr }}
+        {{- end }}
+        {{- if not $servicesDocumentRepository.crawlAllowedCIDRs }}
+        - ipBlock:
+            cidr: 0.0.0.0/0
+        {{- end }}
+      ports:
+        - protocol: TCP
+          port: 80
+        - protocol: TCP
+          port: 443
+    # Ingestion trigger: POST /api/files/<id>/ingest calls the dataprep
+    # Service directly (fileController _ingestFileById).
+    - to:
+        - podSelector:
+            matchLabels:
+              genieai.io/component: dataprep
+      ports:
+        - protocol: TCP
+          port: 5000
+    # Remote JWKS fetch (jose createRemoteJWKSet) on the first
+    # authenticated request — KEYCLOAK_URL points at keycloak-service.
+    # The Keycloak pod is operator-managed and carries no
+    # genieai.io/component label; these are its real pod labels (verified
+    # live, and the same pair templates/data/keycloak-networkpolicy.yaml
+    # selects on).
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/instance: keycloak
+              app.kubernetes.io/managed-by: keycloak-operator
+      ports:
+        - protocol: TCP
+          port: 8080
+    # OTLP exporter. Required for the observability pipeline; without
+    # this port the default-deny policy drops document-repository
+    # telemetry.
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+      ports:
+        - protocol: TCP
+          port: {{ include "genieai-umbrella.otlpPort" . }}
+    {{- if $obsLogs.enabled }}
+    # VictoriaLogs read path. The chart renders VICTORIALOGS_URL for this
+    # pod whenever the logs tier is on; an env var pointing at a
+    # destination the pod's own policy forbids fails as a connection
+    # error the day a consumer lands, instead of as a config error now.
+    # Same peer the backend's policy selects (vmoperator-stamped labels).
+    - to:
+        - podSelector:
+            matchLabels:
+              managed-by: vm-operator
+              app.kubernetes.io/instance: victorialogs
+      ports:
+        - protocol: TCP
+          port: 9428
+    {{- end }}
+{{- end -}}

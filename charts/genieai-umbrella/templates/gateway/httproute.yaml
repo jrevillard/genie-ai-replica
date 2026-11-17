@@ -1,0 +1,211 @@
+{{- $services := .Values.services | default dict -}}
+{{- $servicesDocumentRepository := $services.documentRepository | default dict -}}
+{{- $servicesBackend := $services.backend | default dict -}}
+{{- $obs := .Values.observability | default dict -}}
+{{- $obsGrafana := $obs.grafana | default dict -}}
+{{- $servicesFrontend := $services.frontend | default dict -}}
+{{- $ingress := .Values.ingress | default dict -}}
+{{- $ingressTls := $ingress.tls | default dict -}}
+{{- $data := .Values.data | default dict -}}
+{{- $dataKeycloak := $data.keycloak | default dict -}}
+{{- if $ingress.enabled -}}
+{{- /*
+  Edge routing: the Gateway owns the hostname and TLS, this route owns
+  the path matrix. Gateway API resolves rule matches by rule-list order
+  (first match wins — NOT longest-prefix), so the more-specific paths
+  (/api/files, /api/labels) are listed before /api/ itself; keep that
+  ordering when adding rules. Matches within a single rule are OR-ed.
+  Envoy sets Host and
+  X-Forwarded-* on upstream calls natively — Keycloak needs both to derive
+  its issuer from the public origin instead of the in-cluster service name.
+
+  backend / document-repository / keycloak / frontend Services are the
+  only upstreams; chat SSE streams pass through unbuffered by default.
+*/ -}}
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: genieai
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" .Values "component" "ingress") | nindent 4 }}
+spec:
+  parentRefs:
+    - name: genieai
+      # Bind to the https listener when TLS is on, http otherwise — the
+      # Gateway renders the https listener conditionally, so sectionName
+      # must name the listener that actually exists.
+      sectionName: {{ if $ingressTls.enabled }}https{{ else }}http{{ end }}
+  hostnames:
+    # Port-free hostname — a port on ingress.host is legal for the public
+    # origin (issuer, redirects) but forbidden in HTTPRoute hostnames.
+    - {{ include "genieai-umbrella.ingressHostname" . | quote }}
+  rules:
+    {{- /* document-repository API paths: longest-prefix exceptions that beat the /api/ rule below.
+       A rule whose backend Service is not rendered must not be rendered at all: a
+       backendRef to a Service that does not exist leaves the whole HTTPRoute
+       with ResolvedRefs=False, and the edge answers 500 on every path it
+       carries — including the ones that are fine. */}}
+    {{- if $servicesDocumentRepository.enabled }}
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /api/files
+        - path:
+            type: PathPrefix
+            value: /api/labels
+      backendRefs:
+        - name: document-repository
+          port: 80
+    {{- end }}
+    {{- /* Backend BFF: /api + swagger. The chat SSE stream lives here:
+           Envoy's default route timeout kills long streams mid-flight
+           (live-observed: backend finished in 20s, browser got a 504 at
+           52s). The BACKEND owns the real stream budget
+           (CHATQNA_STREAM_TIMEOUT, default 3600s) and aborts on its own;
+           the edge sits above it so the application timeout governs —
+           1h10m = the backend default + margin. */}}
+    {{- if $servicesBackend.enabled }}
+    - matches:
+        # PathPrefix "/api/" does not match the bare "/api" (the prefix
+        # includes the slash) — real flows always carry subpaths, but the
+        # bare form gets the same backend instead of falling through to
+        # the SPA catch-all. Exact (not PathPrefix) on the bare forms: a
+        # PathPrefix "/api" would also swallow "/apifoo".
+        - path:
+            type: PathPrefix
+            value: /api/
+        - path:
+            type: Exact
+            value: /api
+        # swagger-ui is served at the bare "/api-docs"; "/api-docs/" (the
+        # redirect target) must land on the backend too, not on the SPA
+        # catch-all.
+        - path:
+            type: Exact
+            value: /api-docs
+        - path:
+            type: PathPrefix
+            value: /api-docs/
+        # "/api-docs.json" — the OpenAPI document itself — needs its OWN
+        # Exact rule: Gateway API's PathPrefix matches on PATH ELEMENTS
+        # ("/api-docs" covers "/api-docs" and "/api-docs/..."), so
+        # "/api-docs.json" matches neither "/api-docs" nor
+        # "/api-docs/" and fell through to the SPA catch-all, which
+        # answered it with the app's index.html. The live evidence: the
+        # edge returned `content-type: text/html` for a JSON document
+        # (the backend answers the same path with application/json).
+        # nginx in the Compose deployment routes it by a RAW prefix
+        # ("location /api-docs"), which is why the Compose venue never
+        # showed the gap — the two edges do not express a prefix the
+        # same way, and this rule is the one the Gateway API needs.
+        - path:
+            type: Exact
+            value: /api-docs.json
+      timeouts:
+        backendRequest: 1h10m
+      backendRefs:
+        - name: backend
+          port: 80
+    {{- end }}
+    {{- /* Keycloak OIDC endpoints, same-origin with the SPA. The /auth
+           prefix reaches Keycloak as-is (its http-relative-path is
+           /auth). Envoy's upstream request carries the Host without the
+           port, and Keycloak (backchannelDynamic) rebuilds the discovery
+           document's token/jwks/userinfo URLs from the forwarded host —
+           portless backchannel URLs the SPA then fails to reach. The
+           RequestHeaderModifier re-pins X-Forwarded-Host to the full
+           public origin (ingress.host, port included) so every URL in
+           the discovery document matches the issuer's origin. */}}
+    {{- if $dataKeycloak.enabled }}
+    - matches:
+        # Both forms: like /api, PathPrefix "/auth/" misses the bare
+        # "/auth" some OIDC clients request.
+        - path:
+            type: PathPrefix
+            value: {{ include "genieai-umbrella.keycloakContextPath" . }}/
+        - path:
+            type: Exact
+            value: {{ include "genieai-umbrella.keycloakContextPath" . }}
+      filters:
+        - type: RequestHeaderModifier
+          requestHeaderModifier:
+            set:
+              - name: X-Forwarded-Host
+                value: {{ $ingress.host | quote }}
+      backendRefs:
+        - name: keycloak-service
+          port: 8080
+    {{- end }}
+    {{- /* Grafana (opt-in tier). Before the SPA catch-all: /grafana
+           would otherwise be served by the frontend.
+
+           The backendRef names the Service the OPERATOR creates, which
+           is `<cr-name>-service` (the Grafana CR's own status.adminUrl
+           points at it) — the same convention as Keycloak's
+           `<cr-name>-service` above. It is not configurable: the CR has
+           no field for the Service name, since spec.service.metadata
+           carries annotations and labels only and a `name` there is
+           pruned. Naming the CR instead leaves the HTTPRoute
+           unresolvable — Envoy then answers with a direct 500 and the
+           Grafana logs never see a single request, which is exactly how
+           this shipped unnoticed. */ -}}
+    {{- if $obsGrafana.enabled }}
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /grafana
+      backendRefs:
+        - name: genieai-grafana-service
+          port: 80
+    {{- end }}
+    {{- /* Frontend SPA catch-all. */}}
+    {{- if $servicesFrontend.enabled }}
+    - matches:
+        - path:
+            type: PathPrefix
+            value: /
+      backendRefs:
+        - name: frontend
+          port: 80
+    {{- end }}
+{{- end -}}
+{{- /* HTTP → HTTPS redirect on the http listener. With TLS on, the
+Gateway renders BOTH listeners but the main route binds only https —
+without this route the http listener answers Envoy's 404 for every
+plain-http request, and a cert-manager ACME http-01 issuer can never
+complete its /.well-known/acme-challenge/ order (the challenge arrives
+on port 80). The rule carries no path match, so it redirects everything;
+cert-manager's per-Order solver route matches the challenge path EXACTLY,
+and Gateway API precedence (exact beats prefix) gives it the request
+before the redirect sees it. */ -}}
+{{- if and $ingress.enabled $ingressTls.enabled }}
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: HTTPRoute
+metadata:
+  name: genieai-redirect
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" .Values "component" "ingress") | nindent 4 }}
+spec:
+  parentRefs:
+    - name: genieai
+      sectionName: http
+  hostnames:
+    - {{ include "genieai-umbrella.ingressHostname" . | quote }}
+  rules:
+    - filters:
+        - type: RequestRedirect
+          requestRedirect:
+            scheme: https
+            # The PUBLIC port, same single source the https listener
+            # uses. Without it Envoy strips the source :80 and the
+            # Location points at 443 — connection refused on the
+            # port-bearing origin (genieai.local:4443) the chart
+            # explicitly supports. Envoy Gateway drops a redirect port
+            # equal to the scheme's well-known port by itself, so the
+            # default here is harmless for a bare-host origin.
+            port: {{ include "genieai-umbrella.ingressPublicPort" . }}
+            statusCode: 301
+{{- end }}

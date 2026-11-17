@@ -1,0 +1,163 @@
+{{- $global := .Values.global | default dict -}}
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: {{ include "genieai-common.fullname" . }}-clusterprofile-detect
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" .Values "component" "clusterprofile-detect") | nindent 4 }}
+  annotations:
+    # pre-upgrade ONLY: the label `genieai.io/cluster-profile` is NOT
+    # written by the chart — the chart does not render the Namespace at
+    # all. The environment owns it: the deploy repo's namespace
+    # Kustomization puts the label on the release namespace, and it is
+    # there from before the first release. A plain `helm install` (no
+    # deploy repo) creates the namespace WITHOUT the label, and this
+    # hook then takes its advisory "label absent" branch.
+    "helm.sh/hook": pre-upgrade
+    # Runs before the dependency check (-5) so operators checking upgrade
+    # progress see profile drift surfaced alongside dependency failures.
+    "helm.sh/hook-weight": "-10"
+    "helm.sh/hook-delete-policy": before-hook-creation
+spec:
+  backoffLimit: 1
+  template:
+    metadata:
+      labels:
+        {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" .Values "component" "clusterprofile-detect") | nindent 8 }}
+    spec:
+      restartPolicy: Never
+      serviceAccountName: {{ include "genieai-common.fullname" . }}-dep-check
+      {{- with $global.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 65534
+        seccompProfile:
+          type: RuntimeDefault
+      # `registry.k8s.io/kubectl` is distroless (no /bin/sh), so this Pod
+      # ships kubectl via an init container that downloads the static
+      # binary into the shared `tools` emptyDir. The main container is
+      # alpine (sh is built in); kubectl is made discoverable via the PATH env,
+      # which prepends /tools/bin.
+      volumes:
+        - name: tools
+          emptyDir: {}
+      initContainers:
+        {{- include "genieai-umbrella.toolsInitContainer" . | nindent 8 }}
+      containers:
+        - name: detect
+          image: "{{ $global.toolingImageRegistry | default "docker.io" }}/alpine:3.20"
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: PATH
+              # Prepend /tools/bin so kubectl (downloaded by the
+              # `tools` init container) is discoverable by the script.
+              value: /tools/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+            - name: RENDERED_PROFILE
+              value: {{ .Values.clusterProfile | default "dev" | quote }}
+            - name: TARGET_NAMESPACE
+              value: {{ .Values.namespace | quote }}
+            - name: DRIFT_MSG
+              # Operator-facing drift text. The detected namespace label
+              # value lands in the printed output via a $detected shell
+              # substitution at runtime, not via render-time interpolation
+              # — rendering $detected here would require double-escaping
+              # every shell metacharacter in the field, and a hostile
+              # label value (backtick, $, ", newline) would otherwise
+              # break the printf-built manifest below. Static text only.
+              value: "cluster-profile drift: namespace label does not match the profile this release renders. If unintentional, set clusterProfile to the detected value on the next upgrade; if this upgrade intentionally changes the profile, ignore — and note the label itself is owned by the environment (the deploy repo sets it on the namespace), not by this release."
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            runAsNonRoot: true
+            runAsUser: 65534
+            capabilities:
+              drop:
+                - ALL
+          volumeMounts:
+            - name: tools
+              mountPath: /tools
+          command:
+            - /bin/sh
+            - -c
+            - |
+              set -eu
+              ns="$TARGET_NAMESPACE"
+              # The profile this release actually deploys, baked in at render
+              # time: a running Job has no access to Helm values, and Helm
+              # never re-renders templates mid-install/upgrade — so the only
+              # faithful comparison target is the literal rendered value.
+              rendered="$RENDERED_PROFILE"
+              # The label is applied by a regular Namespace resource, which
+              # can lag hook start; poll a bounded 3 attempts, 2s apart.
+              # `read_failed` tracks only the current iteration's success:
+              # a successful-but-empty kubectl get clears the flag, so a
+              # later attempt's transient error is not muddled with an
+              # earlier one's. The final-branch decides between
+              # "read failed" and "label absent" based on the post-loop
+              # values, which lets a noisy cluster's stuck attempt be
+              # distinguished from a fresh namespace without the label.
+              detected=""
+              read_failed=0
+              for attempt in 1 2 3; do
+                if profile=$(kubectl get ns "$ns" -o jsonpath='{.metadata.labels.genieai\.io/cluster-profile}' 2>/dev/null); then
+                  read_failed=0
+                  if [ -n "$profile" ]; then
+                    detected="$profile"
+                    break
+                  fi
+                else
+                  read_failed=1
+                fi
+                [ "$attempt" -lt 3 ] && sleep 2
+              done
+              if [ -z "$detected" ] && [ "$read_failed" -eq 1 ]; then
+                echo "WARN: namespace label read failed; skipping drift check" >&2
+              elif [ -z "$detected" ] && [ "$read_failed" -eq 0 ]; then
+                # Label absent (read succeeded, value empty) is a separate
+                # case from a read error. The pre-upgrade drift check is
+                # only meaningful when the cluster is already labelled;
+                # a fresh namespace with no label falls into the advisory
+                # bucket and prints a WARN to stderr so the operator sees
+                # the missing config without the upgrade being blocked.
+                # Exit stays 0 (advisory only) — matching the read-error
+                # branch's semantics. The label-absent branch used to
+                # fall through silently: operators had no signal that
+                # genieai.io/cluster-profile was unset.
+                echo "WARN: namespace $ns lacks genieai.io/cluster-profile label (set it to dev|staging|prod or accept defaults via clusterProfile)" >&2
+              fi
+              if [ -n "$detected" ] && [ "$detected" != "$rendered" ]; then
+                # Echo a one-line summary that includes the detected value
+                # (echo is shell-quoted, so metacharacters in $detected
+                # render as literal text, not as shell control).
+                echo "DRIFT: cluster-profile namespace label '${detected}' != rendered '${rendered}'"
+                # The Event is the visibility channel (kubectl describe ns).
+                # Built from static printf lines so no operator-controlled
+                # value (namespace, drift text) is expanded at render
+                # time — every dynamic value lands as a shell variable
+                # inside the printf body. $DRIFT_MSG is the operator-facing
+                # drift text (static, set as a container env); the
+                # namespace and detected label flow through $ns and
+                # $detected without touching printf's format string.
+                printf '%s\n' \
+                  "apiVersion: v1" \
+                  "kind: Event" \
+                  "metadata:" \
+                  "  name: genieai-profile-drift-$(date +%s)" \
+                  "  namespace: $ns" \
+                  "involvedObject:" \
+                  "  apiVersion: v1" \
+                  "  kind: Namespace" \
+                  "  name: $ns" \
+                  "reason: ClusterProfileDetected" \
+                  "type: Warning" \
+                  "message: \"$DRIFT_MSG\"" \
+                  | ( kubectl create -f - >/dev/null 2>/tools/event.err; rc=$?; cat /tools/event.err >&2; exit $rc ) \
+                    || echo "WARN: event create failed" >&2
+              fi
+              # Drift detection is advisory: a mismatch (or an unreadable
+              # label) must never block the upgrade itself.
+              exit 0

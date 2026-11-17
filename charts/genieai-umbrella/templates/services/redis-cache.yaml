@@ -1,0 +1,247 @@
+{{- /* Copied and defaulted before it is read — see services/clamav.yaml
+for the rationale (a cleared image block must degrade to the chart's
+default, not crash the template engine). */ -}}{{- $global := .Values.global | default dict -}}
+{{- $services := .Values.services | default dict -}}
+{{- $obs := .Values.observability | default dict -}}
+{{- $obsMetrics := $obs.metrics | default dict -}}
+
+{{- $svc := deepCopy ($services.redisCache | default dict) -}}
+{{- $_ := set $svc "image" ($svc.image | default dict) -}}
+{{- /* The LISTENER port, bound once: the --port flag, the containerPort,
+the Service, the NetworkPolicy and every probe command derive from it
+(clamav.yaml binds its port the same way). */ -}}
+{{- $redisPort := $svc.port | default 6379 -}}
+{{- /* The probe command, bound once: three probes must agree on what
+"serving" means, and the assert is a quoted one-liner easy to get
+subtly wrong. */ -}}
+{{- $redisProbe := printf "test \"$(redis-cli -p %s ping)\" = PONG" ($redisPort | toString) -}}
+{{- $pluggable := .Values.pluggable | default dict -}}
+{{- if $svc.enabled -}}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: redis-cache
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" .Values "component" "redis-cache") | nindent 4 }}
+spec:
+  replicas: {{ include "genieai-umbrella.resolveReplicas" (dict "Values" .Values "service" "redisCache") | int }}
+  progressDeadlineSeconds: {{ include "genieai-umbrella.progressDeadlineSeconds" (dict "Values" .Values "service" "redisCache") }}
+  selector:
+    matchLabels:
+      genieai.io/component: redis-cache
+  template:
+    metadata:
+      labels:
+        {{- include "genieai-common.serviceSelector" (dict "Chart" .Chart "Release" .Release "Values" .Values "component" "redis-cache") | nindent 8 }}
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 999                     # redis:7-alpine `redis` account
+        runAsGroup: 999
+        fsGroup: 999                       # /data writable for AOF
+        seccompProfile:
+          type: RuntimeDefault
+      {{- with $global.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      containers:
+        - name: redis-cache
+          # Same tag-driven pull policy as the factory's images: the
+          # laptop-build workflow overrides pullPolicy per service, and
+          # a hand-written Deployment that drops the key silently
+          # ignores it.
+          image: "{{ $svc.image.repository | default "redis" }}:{{ $svc.image.tag | default "7-alpine" }}"
+          imagePullPolicy: {{ include "genieai-umbrella.imagePullPolicy" (dict "tag" ($svc.image.tag | default "7-alpine") "pullPolicy" ($svc.image.pullPolicy | default $global.imagePullPolicy)) }}
+          # $(VAR) in args expands against the container env below
+          # (Kubernetes native expansion).
+          args:
+            - redis-server
+            - --port
+            # The port the plumbing uses (Service, NetworkPolicy,
+            # probes) — redis-server takes it as a flag, so an override
+            # of services.redisCache.port moves the LISTENER with it.
+            - "{{ $redisPort }}"
+            - --appendonly
+            - "yes"
+            - --maxmemory-policy
+            - noeviction
+            - --requirepass
+            - $(TRANSLATION_CACHE_PASSWORD)
+          env:
+            # redis-cli consumes REDISCLI_AUTH automatically for the
+            # health probes below. The Secret is REQUIRED, not optional:
+            # --requirepass is unconditionally set above, and an optional
+            # secretKeyRef leaves the literal "$(TRANSLATION_CACHE_PASSWORD)"
+            # in the args — redis then runs with an unknown literal password
+            # and every probe gets NOAUTH. translation-cache-password is on
+            # the chart's required-secrets list; a missing Secret must fail
+            # the pod loudly at scheduling, not corrupt auth silently.
+            - name: REDISCLI_AUTH
+              valueFrom:
+                secretKeyRef:
+                  name: translation-cache-password
+                  key: TRANSLATION_CACHE_PASSWORD
+            - name: TRANSLATION_CACHE_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: translation-cache-password
+                  key: TRANSLATION_CACHE_PASSWORD
+          ports:
+            - name: redis
+              containerPort: {{ $redisPort }}
+          # The probes ASSERT the reply (`test "$(… ping)" = PONG`),
+          # because redis-cli exits 0 on every server error reply
+          # (-LOADING, NOAUTH — verified on redis:7-alpine) and a bare
+          # `redis-cli ping` would succeed while the server cannot serve.
+          # With --appendonly yes redis replies -LOADING until the
+          # dataset is in memory; on a PVC-backed /data a grown AOF can
+          # outrun the liveness budget below and the pod would restart
+          # into the same load — a crash loop. The startup probe (30 x
+          # 10 s = 5 min) suspends readiness and liveness until the
+          # server actually answers PONG, the same window clamav's
+          # startup probe gives the signature download.
+          startupProbe:
+            exec: { command: ["sh", "-c", {{ $redisProbe | quote }}] }
+            failureThreshold: 30
+            periodSeconds: 10
+          readinessProbe:
+            exec: { command: ["sh", "-c", {{ $redisProbe | quote }}] }
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            exec: { command: ["sh", "-c", {{ $redisProbe | quote }}] }
+            initialDelaySeconds: 30
+            periodSeconds: 30
+          volumeMounts:
+            - name: data
+              mountPath: /data
+            - name: tmp
+              mountPath: /tmp
+          resources:
+            {{- toYaml $svc.resources | nindent 12 }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            runAsNonRoot: true
+            capabilities: { drop: ["ALL"] }
+      volumes:
+        - name: data
+        {{- /* The PVC block is OPTIONAL (the per-service shape block says so): a cleared block means "no claim", not a nil-pointer crash. */ -}}
+{{- $pvc := $svc.pvc | default dict -}}
+{{- if $pvc.enabled }}
+          persistentVolumeClaim:
+            claimName: redis-cache-data
+        {{- else }}
+          emptyDir: {}
+        {{- end }}
+        # redis 7 writes cluster-config + RDB snapshots to /tmp at
+        # startup; with readOnlyRootFilesystem: true the server
+        # exits with "Read-only file system". A tmpfs-backed emptyDir
+        # satisfies the writes while keeping the on-disk attack
+        # surface limited to /data + /tmp.
+        - name: tmp
+          emptyDir:
+            medium: Memory
+{{- /* Same $pvc binding as the volume above: the claim document and the
+volume that mounts it must agree on whether the block is enabled. */ -}}
+{{- if $pvc.enabled }}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: redis-cache-data
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" .Values "component" "redis-cache") | nindent 4 }}
+spec:
+  accessModes: ["ReadWriteOnce"]
+  resources:
+    requests:
+      storage: {{ $svc.pvc.storageSize | default "5Gi" }}
+  {{- with ($pvc.storageClassName | default $pluggable.storageClassName) }}
+  storageClassName: {{ . }}
+  {{- end }}
+{{- end }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: redis-cache
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" .Values "component" "redis-cache") | nindent 4 }}
+spec:
+  ports:
+    - name: redis
+      port: {{ $redisPort }}
+  selector:
+    {{- include "genieai-common.serviceSelector" (dict "Chart" .Chart "Release" .Release "Values" .Values "component" "redis-cache") | nindent 4 }}
+---
+# Ingress: backend (the sole consumer), the helm-test peer, and the
+# vm-operator scrape peer when observability metrics are on.
+# Egress: DNS only.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: redis-cache
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" .Values "component" "redis-cache") | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      genieai.io/component: redis-cache
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels:
+              genieai.io/component: backend
+      ports:
+        - protocol: TCP
+          port: {{ $redisPort }}
+    # helm-test reachability probe (component "test").
+    - from:
+        - podSelector:
+            matchLabels:
+              genieai.io/component: test
+      ports:
+        - protocol: TCP
+          port: {{ $redisPort }}
+  {{- if $obsMetrics.enabled }}
+  # vm-operator scrape peer — PRE-WIRED, INERT TODAY: the chart's
+  # VMServiceScrape CRs match nothing on purpose (VMSingle carries no
+  # serviceScrapeSelector — see templates/observability/vmsingle.yaml)
+  # and no workload here exposes a Prometheus surface (they export over
+  # OTLP). The peer exists so that enabling a real scrape surface later
+  # does not silently time out against the default-deny. Redis speaks
+  # RESP on the listener port, not HTTP — a real scrape needs a
+  # redis_exporter sidecar on its own port before any of this matters.
+    - from:
+        - podSelector:
+            matchLabels:
+              managed-by: vm-operator
+              app.kubernetes.io/instance: vmetrics
+      ports:
+        - protocol: TCP
+          port: {{ $redisPort }}
+  {{- end }}
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+      ports:
+        - protocol: UDP
+          port: 53
+        # Truncated UDP answers (TC bit) fall back to TCP — the same
+        # fallback every sibling policy grants; a resolver that
+        # truncates would otherwise strand redis mid-resolution under
+        # default-deny.
+        - protocol: TCP
+          port: 53
+{{- end -}}

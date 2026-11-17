@@ -7,7 +7,7 @@ aliases:
 mode: how-to
 persona: deployer
 owner: "docs-stewards"
-last_reviewed: 2026-09-19
+last_reviewed: 2026-11-17
 ---
 
 GENIE.AI has three kinds of update, with different blast radii. The critical
@@ -16,7 +16,8 @@ backups before every change and keep the previous-known-good tag for rollback.
 
 ## Prerequisites
 
-- A working deployment (Compose or Swarm) with `.env` populated.
+- A working deployment (Compose, Swarm, or Kubernetes) with `.env` populated
+  (Compose/Swarm) or the deploy-repo overlay in place (Kubernetes).
 - `GENIE_AI_GLOBAL_TAG` rollback target noted before starting (per-service tags like `GENIE_AI_BACKEND_IMAGE_TAG` override just the backend).
 - For model pulls: `HUGGING_FACE_HUB_TOKEN` set in `.env`. Without it, vLLM
   silently stalls while retrying the private-model download with no error in
@@ -257,6 +258,48 @@ docker service ls --format '{{.Name}} {{.DesiredState}} {{.CurrentState}}' | gre
 Confirm the **Application metrics** dashboard's `Backend HTTP Requests` panel
 shows traffic matching the pre-update rate.
 
+## Updating the stack on Kubernetes
+
+The Helm chart is upgraded through the deploy repo; the cluster never
+receives a manual `helm upgrade`.
+
+1. **Bump the chart version and the overlay in lockstep.** The chart's
+   `charts/genieai-umbrella/Chart.yaml` `version:` moves with the chart's
+   content, and the deploy-repo overlay's
+   `overlays/<cluster>/<env>/helmrelease.yaml` `spec.chart.spec.version`
+   moves with it — the overlay's field is the label that keeps the two in
+   agreement. (helm-controller ignores that field for a Git-path source:
+   the chart that installs is the one in the branch the `GitRepository`
+   tracks.)
+2. **Push the chart, then the overlay.** The chart repository publishes on
+   push; the overlay's `spec.chart.spec.version` must name a version that
+   exists.
+3. **Reconcile and watch:**
+
+   ```bash
+   flux reconcile helmrelease genieai -n flux-system
+   flux get hr genieai -n flux-system
+   kubectl -n genieai rollout status deploy/genieai-genieai-umbrella-backend
+   ```
+
+4. **Watch the hooks.** The chart runs pre-install / pre-upgrade / post-upgrade
+   Jobs — the dependency-graph check, the realm convergence (kcc), the
+   database migrations, and the cluster-profile drift detection. A failed
+   hook fails the release:
+
+   ```bash
+   kubectl -n genieai get jobs
+   kubectl -n genieai logs job/<hook-job> --tail=100
+   ```
+
+5. **Apply the same regression watch as below** — dashboards, error rate,
+   latency p95.
+
+> **Timeouts.** The install pulls every image (~20 GB on a cold cluster)
+> before the pods can start, so the HelmRelease needs `spec.timeout: 60m`,
+> `spec.install.timeout: 2700s` and `spec.upgrade.timeout: 900s`. The
+> helm-controller's 5-minute default is exceeded on a cold install.
+
 > **Update cadence.** Take a backup before every stack update, and keep at
 > least the previous-known-good image tag so you can roll back. An update
 > without a rollback path is not an update — it is a cutover.
@@ -290,6 +333,28 @@ docker compose pull <service>
 docker compose up -d <service>
 ```
 
+### Kubernetes (Helm + Flux)
+
+The release is Flux-owned — never edit the cluster by hand: helm-controller
+reconciles it and undoes manual edits.
+
+```bash
+# 1. Note the current release (chart + revision) before you change anything
+flux get hr genieai -n flux-system
+
+# 2. Roll back by reverting the deploy-repo commit that carried the change
+#    (the overlay's helmrelease.yaml + values.yaml), then:
+flux reconcile hr genieai -n flux-system
+
+# 3. Confirm the release came back
+flux get hr genieai -n flux-system
+kubectl -n genieai get pods
+```
+
+A failed HelmRelease is auto-remediated by the controller (the overlay sets
+`upgrade.remediation.retries`), which rolls the release back on its own
+when the upgrade does not reach Ready.
+
 Rollback does **not** undo a re-ingestion (the new chunks/embeddings are
 already in ArangoDB). If the failed update required a re-ingest, restore from
 backup — see [Backup & restore]({{< relref "backup-restore" >}}).
@@ -302,6 +367,10 @@ docker service ls --filter name=genieai_<service> --format '{{.Name}} {{.Image}}
 
 # Compose
 docker compose ps <service>
+
+# Kubernetes — confirm the release and its pods
+flux get hr genieai -n flux-system
+kubectl -n genieai get pods
 ```
 
 Watch the **Service health** dashboard — the 5xx rate should fall back to

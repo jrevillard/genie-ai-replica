@@ -8,7 +8,7 @@ aliases:
 mode: how-to
 persona: deployer
 owner: "docs-stewards"
-last_reviewed: 2026-09-19
+last_reviewed: 2026-11-17
 ---
 
 This page is the **single source of truth** for which deployment topology
@@ -450,6 +450,38 @@ Swarm).
 | Let's Encrypt | optional | optional | optional | optional | optional | optional | optional | optional | yes |
 | Public FQDN | optional | optional | optional | optional | optional | optional | optional | optional | yes |
 
+## Kubernetes topologies
+
+The catalog above covers the Compose and Swarm topologies. The Helm chart
+adds three more axes of choice, orthogonal to A–I: **how the edge is
+exposed**, and **where the models run**.
+
+| | K1 | K2 | K3 | K4 | K5 |
+|---|---|---|---|---|---|
+| Edge | Envoy Gateway in-chart | external Gateway API controller | `kubectl port-forward` (dev) | Envoy Gateway in-chart | Envoy Gateway in-chart |
+| Public origin | `https://<fqdn>` (LoadBalancer / DNS) | DMZ edge → Envoy | `https://genieai.local:4443` | as K1 | as K1 |
+| Models | in-cluster GPU (`opea.gpu.mode=in-cluster`) | remote GPU (`opea.gpu.mode=external`) | remote GPU | in-cluster GPU | in-cluster GPU |
+| GPU node label | `gpu=true` + NVIDIA device plugin | – | – | `gpu=true` + device plugin | `gpu=true` + device plugin |
+| Typical use | production cluster | sovereign DMZ | laptop / dev cluster | single-node GPU cluster | production GPU cluster |
+
+The knobs behind each cell:
+
+| Axis | Values |
+|---|---|
+| Edge in-chart | `ingress.enabled: true`, `envoyGateway.enabled: true` (default) |
+| External controller | `ingress.enabled: true`, `envoyGateway.enabled: false`, `ingress.className: <your class>` |
+| Dev port-forward | `ingress.host: genieai.local:4443` (the port is kept for the OIDC issuer) |
+| GatewayClass | `ingress.createGatewayClass: true` on a cluster the release owns; `false` (default) when the class already exists |
+| GPU | `opea.gpu.mode: external` (with `opea.gpu.nodeHost`) or `in-cluster` (with `opea.models.nodeSelector`) |
+
+Full detail, including the diagrams and the exact values:
+[Kubernetes Deployment → Exposure topologies](/docs/deploy/kubernetes/#exposure-topologies).
+
+> A release with `ingress.enabled` at its default (`false`) has **no
+> public entry point** — no `Gateway`, no `HTTPRoute`. The chart's helm
+> test does not probe the edge, so such a release passes its own smoke
+> test while being unreachable.
+
 ## Verify it worked (any topology)
 
 After deploy, run this checklist against **your** topology:
@@ -573,6 +605,8 @@ Procedures:
   profiles, VRAM sizing
 - [NVIDIA A40 Install Guide](/docs/deploy/a40-install/) — A40-specific
   driver walkthrough (topology C variant)
+- [Kubernetes Deployment](/docs/deploy/kubernetes/) — the Helm chart path
+  (topologies K1–K5): cluster prerequisites, edge exposure, GPU modes
 
 Architecture:
 

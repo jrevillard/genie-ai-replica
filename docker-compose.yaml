@@ -842,8 +842,10 @@ services:
       # so it must cover a cold TLS handshake to a remote GPU node.
       - TRANSLATION_PROBE_TIMEOUT_SECONDS=${TRANSLATION_PROBE_TIMEOUT_SECONDS:-30}
       # Stream the target-language translation during chat (#829): stream the UI
-      # language while generating instead of English-then-flip. 0 = current behavior.
-      - STREAMING_TRANSLATION_ENABLED=${STREAMING_TRANSLATION_ENABLED:-0}
+      # language while generating instead of English-only (the frontend never
+      # translates chat answers client-side, so with this off non-English UIs
+      # get English answers). Set 0 to disable.
+      - STREAMING_TRANSLATION_ENABLED=${STREAMING_TRANSLATION_ENABLED:-1}
       # OPEA runtime patches for remote GPU node (SSL bypass)
       - OPEA_SSL_SKIP_VERIFY=${OPEA_SSL_SKIP_VERIFY:-}
       # GPU node API key for Authorization: Bearer (translation, vLLM calls)
@@ -1802,9 +1804,9 @@ services:
     # ports:
     #   - "${LLM_SERVER_PORT:-8000}:8000"
     command: >
-      --model ${VLLM_LLM_MODEL_ID:-meta-llama/Meta-Llama-3.1-8B-Instruct}
+      --model ${VLLM_LLM_MODEL_ID:-ibm-granite/granite-4.1-8b}
       --gpu_memory_utilization ${VLLM_GPU_UTILIZATION:-0.55}
-      --served-model-name ${VLLM_LLM_MODEL_ID:-meta-llama/Meta-Llama-3.1-8B-Instruct}
+      --served-model-name ${VLLM_LLM_MODEL_ID:-ibm-granite/granite-4.1-8b}
       --max_model_len ${VLLM_MAX_MODEL_LEN:-65536}
       --max_num_seqs ${VLLM_MAX_NUM_SEQS:-16}
       --dtype=${VLLM_DTYPE:-half}
@@ -1847,7 +1849,7 @@ services:
     image: ${GENIE_AI_TEXTGEN_IMAGE:-${GENIE_AI_REGISTRY:-registry.opensource.unicc.org/un/itu/genie-ai}/genie-ai-textgen}:${GENIE_AI_TEXTGEN_IMAGE_TAG:-${GENIE_AI_GLOBAL_TAG:-latest}}
     environment:
       - LLM_ENDPOINT=${VLLM_ENDPOINT:-http://vllm:8000}
-      - LLM_MODEL_ID=${VLLM_LLM_MODEL_ID:-meta-llama/Meta-Llama-3.1-8B-Instruct}
+      - LLM_MODEL_ID=${VLLM_LLM_MODEL_ID:-ibm-granite/granite-4.1-8b}
       - OPEA_SSL_SKIP_VERIFY=${OPEA_SSL_SKIP_VERIFY:-0}
 
     # Internal only
@@ -2588,6 +2590,13 @@ services:
     environment:
       CHATQNA_TYPE: ${CHATQNA_TYPE:-ChatQnA}
       VLLM_API_KEY: ${VLLM_API_KEY:-}
+      # The model the chat orchestrator REQUESTS. It must be the model
+      # the vLLM server serves (VLLM_LLM_MODEL_ID, the --served-model-name
+      # of the vllm service below): the chatqna code's own default is a
+      # different model, and vLLM answers a request for an unknown model
+      # with 404 — every chat request fails. The chart sets the same
+      # variable from opea.models.llm.modelId.
+      LLM_MODEL: ${VLLM_LLM_MODEL_ID:-ibm-granite/granite-4.1-8b}
       # Control-plane budget for the backend / document-repository calls on the
       # chat path (core/model_http_policy.py).
       MODEL_CONTROL_PLANE_TIMEOUT_SECONDS: ${MODEL_CONTROL_PLANE_TIMEOUT_SECONDS:-30}

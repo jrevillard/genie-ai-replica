@@ -1,0 +1,267 @@
+{{- $obs := .Values.observability | default dict -}}
+{{- /* The ingress block, bound parent-first like every other read: a
+cleared ingress block must not crash the template engine on a nil
+parent — the helper below fails by NAME, which is the contract. */ -}}
+{{- $ingress := .Values.ingress | default dict -}}
+{{- $obsGrafana := $obs.grafana | default dict -}}
+{{- $obsLogs := $obs.logs | default dict -}}
+{{- $obsMetrics := $obs.metrics | default dict -}}
+{{- $obsTraces := $obs.traces | default dict -}}
+{{- if $obsGrafana.enabled }}
+{{- /* Grafana without a datasource is a blank canvas: every dashboard
+renders broken. Fail at render time when no storage component is
+enabled alongside it. */ -}}
+{{- if not (or $obsLogs.enabled $obsMetrics.enabled $obsTraces.enabled) -}}
+{{- fail "observability.grafana.enabled=true requires at least one storage component (logs/metrics/traces enabled) — otherwise Grafana has no datasource" -}}
+{{- end }}
+{{- /*
+  Grafana instance + datasources, rendered as grafana-operator CRs.
+  Operator (grafana-operator / bitnami) is a cluster bootstrap
+  prerequisite — see charts/README.md.
+
+  Reached through the edge at /grafana: gateway/httproute.yaml renders a
+  PathPrefix rule for it (before the SPA catch-all) pointing at
+  "genieai-grafana-service" — the Service grafana-operator creates after
+  the CR (<cr-name>-service convention; same name the backendRef below
+  and the CR's spec carry).
+  That name is the operator's convention, not a settable field
+  (spec.service.metadata only carries annotations/labels, so a name there
+  would be pruned); what the chart DOES pin is the Service port (80 →
+  targetPort 3000), which the route's backendRef depends on. Same path
+  the compose deployment serves through Kong. CRD group: grafana.integreatly.org/v1beta1
+  (the bitnami v4.9.x chart ships this group; the upstream
+  grafana-operator project also uses it).
+
+  Datasource definitions (type, url, uid, editable, jsonData) keep
+  the contract the shipped dashboard JSON bakes in via uid
+  references. Service FQDNs point at the operator-managed storage
+  CRs, whose Services follow the <kind>-<cr-name> pattern:
+  "vlsingle-victorialogs" :9428, "vmsingle-vmetrics" :8428,
+  "vtsingle-vtraces" :10428 for the Jaeger query API VictoriaTraces
+  serves natively.
+
+  allowCrossNamespaceImport: true on metrics + traces datasources
+  so dashboards in operator-managed folders (provisioned across
+  namespaces by GrafanaFolder CRs the operator ships) can resolve
+  them. Logs datasource stays local — VL is namespace-scoped to
+  the admin-logs UI per environment.
+
+  Admin secret: the operator owns "<cr-name>-admin-credentials" and
+  reads exactly two keys — GF_SECURITY_ADMIN_USER and
+  GF_SECURITY_ADMIN_PASSWORD (grafana-operator v5 constants). With an
+  admin_user SET in spec.config.security (below), the operator
+  OVERWRITES the Secret's user with it on every reconcile — the value
+  here wins, an operator-provided user does not. Leave the default and
+  the generated Secret carries admin + a generated password; pin the
+  user through observability.grafana.adminUser and know it overrides
+  the Secret on every reconcile.
+
+  root_url / server config: left at operator defaults; the
+  gateway / ingress in front of the cluster sets the public origin
+  via the existing `ingress.host` + `ingress.scheme` values.
+*/}}
+apiVersion: grafana.integreatly.org/v1beta1
+kind: Grafana
+metadata:
+  name: genieai-grafana
+  namespace: {{ .Values.namespace }}
+  labels:
+    # component "grafana" (not "observability"): every grafana-operator CR
+    # in this chart selects its instance via
+    # instanceSelector.matchLabels app.kubernetes.io/component: grafana —
+    # any other component label leaves datasources/folders/dashboards/
+    # alert rules silently unimported.
+    {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" .Values "component" "grafana") | nindent 4 }}
+spec:
+  # Explicit image version. Without it the operator substitutes its
+  # built-in default — 13.1.3 on v5.25.0 — and that Docker Hub tag's
+  # amd64 /run.sh is 0 bytes: the pod crashloops with `exec /run.sh:
+  # exec format error` on every fresh pull (#1420). Default 12.4 = the
+  # version docker-compose pins, one Grafana across both paths.
+  version: {{ $obsGrafana.version | default "12.4" | quote }}
+  # Resource overrides: the operator's own defaults are 100m/256Mi
+  # request and 1024Mi limit. The container-level block is what the
+  # CRD accepts (see the note below) and the operator merges it by
+  # container name.
+  deployment:
+    spec:
+      template:
+        spec:
+          containers:
+            - name: grafana
+              resources:
+                {{- toYaml ($obsGrafana.resources | default (dict "requests" (dict "cpu" "100m" "memory" "128Mi") "limits" (dict "cpu" "500m" "memory" "1Gi"))) | nindent 16 }}
+  # Service spec the operator MUST materialise for the edge route to
+  # resolve. Two contracts live here:
+  #   - the port: grafana-operator defaults the Service to Grafana's own
+  #     3000 (config.GrafanaHTTPPort), so a backendRef on 80 has no
+  #     matching ServicePort and every request 503s.
+  #   - the selector: pinning it makes the route's Service independent of
+  #     the operator's pod labels.
+  # spec.service.metadata.name is NOT in the CRD schema (annotations and
+  # labels only) — the apiserver prunes it silently, so the Service name
+  # is the operator's own convention: "<cr-name>-service", i.e.
+  # genieai-grafana-service. That is the name gateway/httproute.yaml
+  # routes /grafana to; the two must not drift.
+  service:
+    spec:
+      type: ClusterIP
+      # The operator labels the Grafana pods with EXACTLY {app: <cr-name>}
+      # (reconcilers/grafana/deployment_reconciler.go, getSelectorLabels) and
+      # selects them with the same label. A selector on
+      # app.kubernetes.io/* matches nothing here: the Service gets zero
+      # endpoints and every request 503s at the edge.
+      selector:
+        app: genieai-grafana
+      ports:
+        - name: http
+          port: 80
+          targetPort: 3000
+          protocol: TCP
+  # Admin credentials: the operator owns them. It creates
+  # "<cr-name>-admin-credentials" (resources.GetGrafanaAdminSecret, the
+  # name is built as "%s-admin-credentials") and uses it when it already
+  # exists — so an operator-provided Secret named
+  # "genieai-grafana-admin-credentials" pins the password, and without
+  # one the operator generates it. The CR has no field for it: the
+  # grafana-operator v5 CRD decodes strictly, and an unknown
+  # `credentialsEx` field makes the API server reject the WHOLE Grafana
+  # resource.
+  # Resource block: the operator sets its own defaults (100m/256Mi
+  # request, 1024Mi limit) and the CR cannot override them at the top
+  # level either — `spec.resources` is not in the CRD, and the same
+  # strict decoding rejects the whole resource. The container-level
+  # block below is the only place the CRD accepts one: the operator
+  # merges `spec.deployment` over its generated Deployment with a
+  # STRATEGIC merge patch, whose container list merges by name, so the
+  # operator keeps its image and args and only the resources change.
+  config:
+    # The edge mounts this tier at /grafana (see gateway/httproute.yaml).
+    # root_url + serve_from_sub_path are what make that work: without
+    # them Grafana emits absolute asset URLs at the domain root
+    # (/public/*), which the SPA catch-all answers with index.html and
+    # the UI renders blank. Same shape the compose path gets from Kong's
+    # strip-prefix location.
+    server:
+      # Through the shared helper, not a raw values chain: the helper
+      # normalizes a cleared ingress block (failing by name, as every
+      # consumer of the public host does) and validates the host:port
+      # shape this URL feeds to the browser. The else-branch the raw
+      # chain carried was unreachable — no render passes the guards
+      # with ingress.host unset — and advertised a degrade path nothing
+      # could take.
+      root_url: {{ printf "%s://%s/grafana" ($ingress.scheme | default "https") (include "genieai-umbrella.ingressHost" .) }}
+      # spec.config is a map[string]string (the ini-file form): every
+      # value must be a STRING. A YAML boolean is rejected by the API
+      # server with "must be of type string: boolean" — the whole Grafana
+      # resource goes with it.
+      serve_from_sub_path: "true"
+    log:
+      mode: console
+    security:
+      # The operator's own default user is "admin"; a literal here is
+      # what the admin secret reconciler writes into
+      # genieai-grafana-admin-credentials on every reconcile — it wins
+      # over whatever user an operator-provided Secret carried.
+      # Quoted: spec.config is a map[string]string — an unquoted YAML
+      # boolean (an operator writing `adminUser: true`) is rejected by
+      # the API server and takes the whole Grafana CR — datasources,
+      # folders, dashboards, alert rules — with it.
+      admin_user: {{ $obsGrafana.adminUser | default "admin" | quote }}
+---
+{{- if $obsLogs.enabled }}
+---
+# VictoriaLogs datasource — mirrors vm-datasource.yml's "VictoriaLogs"
+# entry (type victoriametrics-logs-datasource, uid
+# victoriametrics-logs, derived-fields to trace datasource).
+apiVersion: grafana.integreatly.org/v1beta1
+kind: GrafanaDatasource
+metadata:
+  name: victorialogs
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" .Values "component" "observability") | nindent 4 }}
+spec:
+  instanceSelector:
+    matchLabels:
+      app.kubernetes.io/component: grafana
+  datasource:
+    name: VictoriaLogs
+    type: victoriametrics-logs-datasource
+    access: proxy
+    url: http://vlsingle-victorialogs.{{ .Values.namespace }}.svc.cluster.local:9428
+    uid: victoriametrics-logs
+    editable: false
+    jsonData:
+      maxLines: 1000
+      derivedFields:
+        - datasourceUid: victoriatraces
+          matcherRegex: "/trace_id=\"([^\"]+)\"/"
+          name: TraceID
+          url: "$${__value.raw}"
+        - datasourceUid: victoriatraces
+          matcherRegex: "/span_id=\"([^\"]+)\"/"
+          name: SpanID
+          url: "$${__value.raw}"
+{{- end }}
+{{- if $obsMetrics.enabled }}
+---
+# VictoriaMetrics datasource — mirrors vm-datasource.yml's
+# "VictoriaMetrics" entry (type prometheus, uid victoriametrics,
+# isDefault: true).
+apiVersion: grafana.integreatly.org/v1beta1
+kind: GrafanaDatasource
+metadata:
+  name: victoriametrics
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" .Values "component" "observability") | nindent 4 }}
+spec:
+  instanceSelector:
+    matchLabels:
+      app.kubernetes.io/component: grafana
+  allowCrossNamespaceImport: true
+  datasource:
+    name: VictoriaMetrics
+    type: prometheus
+    access: proxy
+    url: http://vmsingle-vmetrics.{{ .Values.namespace }}.svc.cluster.local:8428
+    uid: victoriametrics
+    isDefault: true
+    editable: false
+    jsonData:
+      timeInterval: "15s"
+      httpMethod: POST
+{{- end }}
+{{- if $obsTraces.enabled }}
+---
+# VictoriaTraces datasource — the datasource talks to the VTSingle
+# Service directly: VictoriaTraces serves the Jaeger HTTP API
+# natively on port 10428, no intermediary proxy.
+# Type "jaeger" per the dashboard datasource contract.
+apiVersion: grafana.integreatly.org/v1beta1
+kind: GrafanaDatasource
+metadata:
+  name: victoriatraces
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" .Values "component" "observability") | nindent 4 }}
+spec:
+  instanceSelector:
+    matchLabels:
+      app.kubernetes.io/component: grafana
+  allowCrossNamespaceImport: true
+  datasource:
+    name: VictoriaTraces
+    type: jaeger
+    access: proxy
+    # /select/jaeger is REQUIRED: Grafana's Jaeger datasource appends
+    # /api/* to this base, and VictoriaTraces serves the HTTP Jaeger API
+    # under the Victoria prefix (live: /api/services answers 400 without
+    # it, /select/jaeger/api/services answers 200). Same role tempo-proxy
+    # played in Swarm, which is why removing the proxy obliges this path.
+    url: http://vtsingle-vtraces.{{ .Values.namespace }}.svc.cluster.local:10428/select/jaeger
+    uid: victoriatraces
+    editable: false
+{{- end }}
+{{- end }}

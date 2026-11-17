@@ -1,0 +1,196 @@
+
+{{- $data := .Values.data | default dict -}}
+{{- $arangodb := $data.arangodb | default dict -}}
+{{- $pluggable := .Values.pluggable | default dict -}}
+{{- /* Every server group (single, agents, dbservers, coordinators)
+carries the same resources map and probe timeout: a member with no
+request runs on the node's leftovers and its exec probes miss their
+window (#1606), and the operator's default 2s probe timeout is the
+second half of that failure. Values:
+data.arangodb.resources / data.arangodb.probeTimeoutSeconds. */ -}}
+{{- define "genieai-umbrella.arangoMemberWorkload" -}}
+    resources:
+      {{- toYaml .resources | nindent 6 }}
+    probes:
+      livenessProbeSpec:
+        timeoutSeconds: {{ .timeout }}
+      readinessProbeSpec:
+        timeoutSeconds: {{ .timeout }}
+      startupProbeSpec:
+        timeoutSeconds: {{ .timeout }}
+{{- end -}}
+{{- if $arangodb.enabled -}}
+{{- /* Honor .Values.data.arangodb.mode ONLY — no auto-promotion.
+       Switching mode requires a fresh uninstall+install (kube-arangodb
+       cannot mutate an ArangoDeployment's spec.mode in place; the prior
+       ArangoDeployment becomes orphaned on a Helm upgrade because Helm
+       only manages resources in the current render). See
+       docs/charts/arangodb-mode-migration.md. */ -}}
+{{- $mode := $arangodb.mode | default "single" -}}
+{{- $memberResources := $arangodb.resources | default dict -}}
+{{- /* A member with NO cpu request is the exact pathology this knob
+exists to remove: it runs on the node's leftovers, the exec probes miss
+their window and the pod flaps NotReady while the database answers. An
+override that drops the request fails the render by name. */ -}}
+{{- if not (index ($memberResources.requests | default dict) "cpu") }}
+{{- fail "data.arangodb.resources.requests.cpu is required — a member with no cpu request gets the node's leftovers and its exec probes miss their window (issue #1606)" }}
+{{- end }}
+{{- /* A zero request is no request: the guard reads the value as a
+string-or-number and rejects the exact zeros ("0", 0). Full k8s
+quantity parsing ("0m", "1m") is not the guard's job — a zero
+MILICORE value is a deliberate sizing decision, not the forgotten
+request this guard exists to catch. */ -}}
+{{- $cpuReq := index ($memberResources.requests | default dict) "cpu" }}
+{{- if eq (printf "%v" $cpuReq) "0" }}
+{{- fail "data.arangodb.resources.requests.cpu must be greater than zero — a zero request is no request: the member still gets the node's leftovers (issue #1606)" }}
+{{- end }}
+{{- /* int(): values.yaml numbers arrive as float64 and `lt` refuses a
+float64/int comparison. */ -}}
+{{- $probeTimeout := int ($arangodb.probeTimeoutSeconds | default 10) -}}
+{{- if lt $probeTimeout 1 -}}
+{{- fail (printf "data.arangodb.probeTimeoutSeconds must be at least 1 second (got %v)" $probeTimeout) }}
+{{- end }}
+{{- if eq $mode "single" -}}
+apiVersion: database.arangodb.com/v1
+kind: ArangoDeployment
+metadata:
+  # metadata.name MUST match the DNS name used by the chart + Swarm migration
+  # paths. Swarm service is arango-vector-db; we render as arangodb-single to
+  # match the chart's existing service consumer namespace, which is
+  # downstream-of-here stable.
+  name: arangodb-single
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" .Values "component" "data-arangodb") | nindent 4 }}
+    genieai.io/data-tier: arangodb
+spec:
+  mode: Single
+  # Hardcoded `arangodb/arangodb:3.12.4` (no registry prefix) — the
+  # mirror at registry.opensource.unicc.org does not carry this image
+  # (`docker manifest inspect <mirror>/arangodb/arangodb:3.12.4`
+  # returns "no such manifest"). Same pattern as the CNPG template's
+  # hardcoded `ghcr.io/cloudnative-pg/postgresql:16`. The upstream
+  # docker.io path is reachable; we don't pretend the mirror covers
+  # the data tier.
+  image: arangodb/arangodb:3.12.4
+  externalAccess:
+    type: None
+  single:
+    args:
+      # Vector indexes are required by the ingestion/retrieval pipeline
+      # (dataprep creates them; hybrid retrieval returns nothing without
+      # the flag). Flag name per ArangoDB 3.12.4.
+      - --experimental-vector-index=true
+      # NO --server.endpoint: `arangodb://` is not a valid endpoint scheme
+      # (arangod accepts tcp:// / ssl://). The operator sets endpoint+advertising
+      # itself from the CR; hand-rolling it here breaks pod startup.
+    {{ include "genieai-umbrella.arangoMemberWorkload" (dict "resources" $memberResources "timeout" $probeTimeout) }}
+    volumeClaimTemplate:
+      spec:
+        # Render storageClass ONLY when set: empty-string pins
+        # storageClassName: "" = "no default SC" and strands the PVC
+        # (same trap the CNPG template guards against).
+        {{- with ($arangodb.storageClassName | default $pluggable.storageClassName) }}
+        storageClassName: {{ . }}
+        {{- end }}
+        accessModes:
+          - ReadWriteOnce
+        resources:
+          requests:
+            storage: {{ $arangodb.storageSize | default "50Gi" }}
+  auth:
+    jwtSecretName: arango-jwt-secret
+  # Plain HTTP on 8529. The operator enables TLS by default (per-deployment
+  # self-signed CA); every in-cluster consumer (backend, doc-repo, dataprep)
+  # connects with http:// URLs and carries no CA trust store, so TLS would
+  # require distributing the CA secret to each client. `caSecretName: None`
+  # is the operator's documented off-switch (kube-arangodb docs/tls.html).
+  tls:
+    caSecretName: None
+  # Root password bootstrap: passwordSecretNames is a map of username to
+  # Secret name (kube-arangodb 1.4.5 BootstrapSpec). The referenced Secret
+  # must carry basic-auth keys (`username`, `password`); without this wiring
+  # the operator leaves the root password EMPTY (default `None`).
+  # Charset constraint: the db-migrations wait probe sends these
+  # credentials as busybox-wget userinfo and percent-encodes % @ : /
+  # — any other non-ASCII or control character in the password breaks
+  # that header. Keep the generated password alphanumeric-plus-safe
+  # punctuation, or extend the encoder.
+  bootstrap:
+    passwordSecretNames:
+      root: arango-root-secret
+  imagePullPolicy: IfNotPresent
+{{- else if eq $mode "cluster" -}}
+apiVersion: database.arangodb.com/v1
+kind: ArangoDeployment
+metadata:
+  name: arangodb-cluster
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" .Values "component" "data-arangodb") | nindent 4 }}
+    genieai.io/data-tier: arangodb
+spec:
+  mode: Cluster
+  # Hardcoded `arangodb/arangodb:3.12.4` (no registry prefix) — see
+  # the `Single` branch above for the mirror-coverage rationale.
+  image: arangodb/arangodb:3.12.4
+  externalAccess:
+    type: None
+  agents:
+    count: 3
+    args:
+      # Vector indexes are required by the ingestion/retrieval pipeline
+      # (flag name per ArangoDB 3.12.4; same flag as the single branch).
+      - --experimental-vector-index=true
+    # Agency state MUST persist across restarts — on emptyDir every pod
+    # reschedule loses the cluster configuration.
+    {{ include "genieai-umbrella.arangoMemberWorkload" (dict "resources" $memberResources "timeout" $probeTimeout) }}
+    volumeClaimTemplate:
+      spec:
+        {{- with ($arangodb.storageClassName | default $pluggable.storageClassName) }}
+        storageClassName: {{ . }}
+        {{- end }}
+        accessModes:
+          - ReadWriteOnce
+        resources:
+          requests:
+            # Agency holds cluster-configuration state only (MBs), not
+            # document data — sized independently of the dbservers volume.
+            storage: {{ $arangodb.agentsStorageSize | default "2Gi" }}
+  dbservers:
+    count: 3
+    args:
+      # Vector indexes are required by the ingestion/retrieval pipeline
+      # (flag name per ArangoDB 3.12.4; same flag as the single branch).
+      - --experimental-vector-index=true
+    {{ include "genieai-umbrella.arangoMemberWorkload" (dict "resources" $memberResources "timeout" $probeTimeout) }}
+    volumeClaimTemplate:
+      spec:
+        {{- with ($arangodb.storageClassName | default $pluggable.storageClassName) }}
+        storageClassName: {{ . }}
+        {{- end }}
+        accessModes:
+          - ReadWriteOnce
+        resources:
+          requests:
+            storage: {{ $arangodb.storageSize | default "50Gi" }}
+  coordinators:
+    count: 2
+    args:
+      # Vector indexes are required by the ingestion/retrieval pipeline
+      # (flag name per ArangoDB 3.12.4; same flag as the single branch).
+      - --experimental-vector-index=true
+    {{ include "genieai-umbrella.arangoMemberWorkload" (dict "resources" $memberResources "timeout" $probeTimeout) }}
+  auth:
+    jwtSecretName: arango-jwt-secret
+  # Plain HTTP — see the `Single` branch for the rationale.
+  tls:
+    caSecretName: None
+  bootstrap:
+    passwordSecretNames:
+      root: arango-root-secret
+  imagePullPolicy: IfNotPresent
+{{- else -}}
+{{- fail (printf "data.arangodb.mode must be \"single\" or \"cluster\", got %q" $mode) -}}
+{{- end -}}
+{{- end -}}

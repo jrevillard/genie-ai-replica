@@ -1,0 +1,156 @@
+{{- /* Stateless-tier service reachability smoke test. Probes each Service's
+       /health endpoint (or TCP-open for clamd / redis-cache) and asserts
+       the response. Skips disabled services. */ -}}{{- $global := .Values.global | default dict -}}
+
+apiVersion: v1
+kind: Pod
+metadata:
+  name: {{ include "genieai-common.fullname" . }}-test-stateless-reach
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" .Values "component" "test") | nindent 4 }}
+  annotations:
+    "helm.sh/hook": test
+    "helm.sh/hook-delete-policy": before-hook-creation
+spec:
+  restartPolicy: Never
+  securityContext:
+    runAsNonRoot: true
+    runAsUser: 65534
+    seccompProfile:
+      type: RuntimeDefault
+  {{- with $global.imagePullSecrets }}
+  # Same credential as every sibling pod: a credentialed docker.io
+  # mirror must not ImagePullBackOff the test pod while every workload
+  # it probes pulls fine.
+  imagePullSecrets:
+    {{- toYaml . | nindent 8 }}
+  {{- end }}
+  containers:
+    - name: t
+      {{- /* busybox — see the toolingImage helper for why not curlimages/curl. */}}
+      image: {{ include "genieai-umbrella.toolingImage" . }}
+      imagePullPolicy: IfNotPresent
+      securityContext:
+        allowPrivilegeEscalation: false
+        readOnlyRootFilesystem: true
+        runAsNonRoot: true
+        runAsUser: 65534
+        capabilities:
+          drop:
+            - ALL
+      command:
+        - /bin/sh
+        - -c
+        - |
+          set -eu
+          failures=0
+          {{- include "genieai-umbrella.testCheckHelper" . | nindent 10 }}
+          # The TCP-open probes (clamav, redis-cache) live in the
+          # busybox/nc sibling pod below, NOT here: this image ships no
+          # nc, and curl's telnet:// exit code cannot tell a DROPPED SYN
+          # from an OPEN port that stays silent — both exit 28
+          # (measured against a listening socket that never answers), so
+          # a curl-based probe either passes a policy-dropped flow or
+          # fails a healthy one.
+          {{- /* Checks hit the SERVICE ports (80; non-HTTP probes use their
+                 configured port), NOT the container ports — Services are
+                 the stable in-cluster contract. */ -}}
+          {{- /* The service blocks are CLEARABLE — a cleared block degrades to
+the derived behaviour, not to a nil-pointer crash in a helm TEST
+template (which names the test pod, never the values key). */ -}}
+{{- $services := .Values.services | default dict -}}
+{{- $backend := $services.backend | default dict -}}
+{{- $frontend := $services.frontend | default dict -}}
+{{- $documentRepository := $services.documentRepository | default dict -}}
+{{- $clamav := $services.clamav | default dict -}}
+{{- $redisCache := $services.redisCache | default dict -}}
+{{- if $backend.enabled }}
+          check backend 80 /api/health 200
+          {{- end }}
+          {{- if $frontend.enabled }}
+          check frontend 80 /health 200
+          {{- end }}
+          {{- if $documentRepository.enabled }}
+          check document-repository 80 /health 200
+          {{- end }}
+          if [ "$failures" -gt 0 ]; then
+            echo "FAIL: $failures service(s) unreachable"
+            exit 1
+          fi
+          echo "PASS: all stateless-tier services reachable"
+{{- if or $clamav.enabled $redisCache.enabled }}
+---
+# TCP reachability for the binary-protocol services (clamav, redis-cache)
+# from the only peer their NetworkPolicies admit. nc -z completes the
+# handshake and exits 0 — an open port that never answers still passes,
+# and a dropped SYN (a NetworkPolicy hole) times out and fails.
+apiVersion: v1
+kind: Pod
+metadata:
+  name: {{ include "genieai-common.fullname" . }}-test-tcp-reach
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" .Values "component" "test") | nindent 4 }}
+  annotations:
+    "helm.sh/hook": test
+    "helm.sh/hook-delete-policy": before-hook-creation
+spec:
+  restartPolicy: Never
+  securityContext:
+    runAsNonRoot: true
+    runAsUser: 65534
+    seccompProfile:
+      type: RuntimeDefault
+  {{- with $global.imagePullSecrets }}
+  # Same credential as every sibling pod: a credentialed docker.io
+  # mirror must not ImagePullBackOff the test pod while every workload
+  # it probes pulls fine.
+  imagePullSecrets:
+    {{- toYaml . | nindent 8 }}
+  {{- end }}
+  containers:
+    - name: tcp-reach
+      image: {{ include "genieai-umbrella.toolingImage" . }}
+      # Same container-level restricted-profile set as the sibling test
+      # pods: the pod-level block carries runAsNonRoot only, and a
+      # namespace enforcing `restricted` rejects the pod at admission on
+      # the missing container fields. (The namespace enforces `baseline`
+      # today — the fields are the free stricter posture, not a current
+      # requirement.)
+      securityContext:
+        allowPrivilegeEscalation: false
+        readOnlyRootFilesystem: true
+        runAsNonRoot: true
+        runAsUser: 65534
+        capabilities:
+          drop:
+            - ALL
+      command:
+        - /bin/sh
+        - -c
+        - |
+          set -eu
+          failures=0
+          {{- if $clamav.enabled }}
+          if nc -z -w 5 clamav {{ $clamav.port | default 3310 }}; then
+            echo "PASS: clamav reachable"
+          else
+            echo "FAIL: clamav unreachable"
+            failures=$((failures+1))
+          fi
+          {{- end }}
+          {{- if $redisCache.enabled }}
+          if nc -z -w 5 redis-cache {{ $redisCache.port | default 6379 }}; then
+            echo "PASS: redis-cache reachable"
+          else
+            echo "FAIL: redis-cache unreachable"
+            failures=$((failures+1))
+          fi
+          {{- end }}
+          if [ "$failures" -gt 0 ]; then
+            echo "FAIL: $failures TCP service(s) unreachable"
+            exit 1
+          fi
+          echo "PASS: all TCP-probed services reachable"
+{{- end }}

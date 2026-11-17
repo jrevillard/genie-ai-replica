@@ -1,0 +1,237 @@
+{{- /*
+  Tier gate for one dashboard entry: renders it only when every storage
+  tier its panels query is enabled in this environment. A dashboard whose
+  datasource is absent is permanently blank and its panels read
+  "Datasource not found" — silently, with the pipeline green.
+*/}}
+{{- $assets := index .Subcharts "genieai-assets" -}}
+{{- $obs := .Values.observability | default dict -}}
+{{- $obsGrafana := $obs.grafana | default dict -}}
+{{- $obsMetrics := $obs.metrics | default dict -}}
+{{- $obsTraces := $obs.traces | default dict -}}
+{{- $obsLogs := $obs.logs | default dict -}}
+
+{{- define "genieai-umbrella.dashboardTierEnabled" -}}
+{{- $e := .entry -}}
+{{- $t := .tier -}}
+{{- if and (or (not $e.metrics) $t.metrics) (or (not $e.traces) $t.traces) (or (not $e.logs) $t.logs) -}}true{{- end -}}
+{{- end -}}
+
+{{- /*
+  Datasource substitution for one dashboard. The shipped JSONs come from
+  Grafana's own export format and carry ${DS_*} / ${datasource}
+  placeholders; Grafana only resolves them through __inputs in the JSON,
+  which these files do not declare. spec.datasources[] is the operator's
+  documented substitution surface and is rendered only for the tiers this
+  environment actually has (the CR must not name an absent datasource).
+*/}}
+{{- define "genieai-umbrella.dashboardDatasources" -}}
+{{- $e := .entry -}}
+{{- $t := .tier -}}
+{{- $subs := list }}
+{{- if $t.metrics -}}
+{{- /* "ds" is the lowercase placeholder the two single-node stack
+     dashboards use as their templating variable's uid — same import-
+     placeholder syntax as ${DS_*}, and the operator's substitution is a
+     blind, case-sensitive ReplaceAll: unmapped, 28 panel references
+     reach Grafana as a literal "${ds}" datasource that exists nowhere
+     and the panels render "Datasource not found" forever. */}}
+{{- $subs = concat $subs (list (dict "inputName" "DS_VICTORIAMETRICS" "datasourceName" "victoriametrics") (dict "inputName" "DS_PROMETHEUS" "datasourceName" "victoriametrics") (dict "inputName" "ds" "datasourceName" "victoriametrics")) -}}
+{{- end -}}
+{{- if $t.traces -}}
+{{- $subs = concat $subs (list (dict "inputName" "DS_VICTORIATRACES" "datasourceName" "victoriatraces")) -}}
+{{- end -}}
+{{- if $t.logs -}}
+{{- /* The bare "datasource" placeholder belongs to the LOGS datasource:
+     every panel of service-logs.json is a
+     "victoriametrics-logs-datasource" panel. The substitution target is
+     the datasource's UID, not the GrafanaDatasource CR's name: the CR is
+     "victorialogs" but its uid is "victoriametrics-logs" (grafana.yaml),
+     and a value that is neither resolves to nothing — the Logs panel
+     renders "Datasource not found" forever. */}}
+{{- $subs = concat $subs (list (dict "inputName" "DS_VICTORIALOGS" "datasourceName" "victoriametrics-logs") (dict "inputName" "datasource" "datasourceName" "victoriametrics-logs")) -}}
+{{- end -}}
+{{- if $subs }}
+  datasources:
+{{ toYaml $subs | indent 4 }}
+{{- end }}
+{{- end }}
+
+{{- if $obsGrafana.enabled }}
+{{- /*
+  GrafanaFolders + GrafanaDashboard + GrafanaAlertRuleGroup CRs.
+  GrafanaFolders group dashboards into a UI tree: General for the
+  application-facing dashboards, Observability for the stack
+  dashboards.
+
+  Dashboards: configs/grafana/provisioning/dashboards/*.json +
+  dashboards/observability/*.json — carried by the genieai-assets cargo
+  dependency and inlined via `$assets.Files.Get` (the
+  largest is ~263 KiB, well under the 1 MiB ConfigMap threshold where
+  the spec.url+ConfigMap fallback would be safer; carrying the bytes in
+  a dependency also keeps them out of the helm release snapshot — see
+  that chart's description). Helm's `toString` keeps the raw JSON
+  intact in a block scalar.
+
+  Alert rules: configs/grafana/provisioning/alerting/alert-rules.yml
+  is the only file with `groups:` (contact-points and
+  notification-policies are separate Grafana resources — the
+  bitnami/grafana-operator 4.9.x does not yet ship CRs for them
+  under the same stable API; provisioning them via Helm is deferred
+  to a follow-up).
+
+  One GrafanaAlertRuleGroup per `groups[]` entry: the bitnami
+  operator's GrafanaAlertRuleGroup CR takes spec.rules (not nested
+  groups), so the file's `groups[].rules[]` is split per group.
+*/}}
+{{- /* Per-tier gating: a dashboard whose datasource does not exist in this
+       environment renders permanently blank and its alert rules can never
+       fire — the worst kind of green. Each entry names the storage tiers
+       it needs. */ -}}
+{{- $tierOn := dict "metrics" $obsMetrics.enabled "traces" $obsTraces.enabled "logs" $obsLogs.enabled -}}
+{{- /* The tier columns are what the dashboard's PANELS query (walked
+from the JSON "datasource" fields), not what the dashboard is ABOUT:
+service-logs is LogsQL only, the trace waterfall and the single-node
+stack dashboards are PromQL over VictoriaMetrics even though their
+subject is traces/logs. A column set wider than the queries suppresses
+a dashboard whose datasource IS provisioned — a logs-only Grafana
+showed two empty folders. */ -}}
+{{- $dashboardsGeneral := list
+  (dict "file" "application-metrics.json"         "metrics" true "traces" false "logs" false)
+  (dict "file" "rag-pipeline-trace-waterfall.json" "metrics" true "traces" false "logs" false)
+  (dict "file" "service-health.json"               "metrics" true "traces" false "logs" false)
+  (dict "file" "service-logs.json"                 "metrics" false "traces" false "logs" true)
+  (dict "file" "trace-explorer.json"               "metrics" true "traces" true "logs" false) -}}
+{{- $dashboardsObservability := list
+  (dict "file" "observability-stack-health.json"   "metrics" true "traces" false "logs" false)
+  (dict "file" "victorialogs-single-node.json"     "metrics" true "traces" false "logs" false)
+  (dict "file" "victoriametrics-single-node.json"  "metrics" true "traces" false "logs" false)
+  (dict "file" "victoriatraces-single-node.json"   "metrics" true "traces" false "logs" false) -}}
+---
+# Folders. General holds the application-facing dashboards.
+apiVersion: grafana.integreatly.org/v1beta1
+kind: GrafanaFolder
+metadata:
+  name: genieai-general
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" .Values "component" "observability") | nindent 4 }}
+spec:
+  instanceSelector:
+    matchLabels:
+      app.kubernetes.io/component: grafana
+  title: General
+  allowCrossNamespaceImport: true
+---
+# Observability folder mirrors `dashboards/observability/`.
+apiVersion: grafana.integreatly.org/v1beta1
+kind: GrafanaFolder
+metadata:
+  name: genieai-observability
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" .Values "component" "observability") | nindent 4 }}
+spec:
+  instanceSelector:
+    matchLabels:
+      app.kubernetes.io/component: grafana
+  title: Observability
+  allowCrossNamespaceImport: true
+---
+{{- range $dashboardsGeneral }}
+{{- if include "genieai-umbrella.dashboardTierEnabled" (dict "entry" . "tier" $tierOn) }}
+---
+apiVersion: grafana.integreatly.org/v1beta1
+kind: GrafanaDashboard
+metadata:
+  # Strip `.json` so the metadata.name stays DNS-label-compatible
+  # (operator's name = UID by default; the original filename's `.`
+  # would fail the 253-char label rule).
+  name: {{ trimSuffix ".json" .file | replace "/" "-" }}
+  namespace: {{ $.Values.namespace }}
+  labels:
+    {{- include "genieai-common.labels" (dict "Chart" $.Chart "Release" $.Release "Values" $.Values "component" "dashboards") | nindent 4 }}
+spec:
+  instanceSelector:
+    matchLabels:
+      app.kubernetes.io/component: grafana
+  folderRef: genieai-general
+  allowCrossNamespaceImport: true
+  # resyncPeriod, not resyncInterval: the GrafanaDashboard CRD has
+  # no `resyncInterval`, and grafana-operator decodes strictly —
+  # one unknown field rejects every dashboard.
+  resyncPeriod: 30s
+{{- include "genieai-umbrella.dashboardDatasources" (dict "root" $ "entry" . "tier" $tierOn) }}
+  json: |-
+{{ $assets.Files.Get (printf "files/observability/dashboards/%s" .file) | indent 4 }}
+{{- end }}
+{{- end }}
+{{- range $dashboardsObservability }}
+{{- if include "genieai-umbrella.dashboardTierEnabled" (dict "entry" . "tier" $tierOn) }}
+---
+apiVersion: grafana.integreatly.org/v1beta1
+kind: GrafanaDashboard
+metadata:
+  name: {{ trimSuffix ".json" .file | replace "/" "-" }}
+  namespace: {{ $.Values.namespace }}
+  labels:
+    {{- include "genieai-common.labels" (dict "Chart" $.Chart "Release" $.Release "Values" $.Values "component" "dashboards") | nindent 4 }}
+spec:
+  instanceSelector:
+    matchLabels:
+      app.kubernetes.io/component: grafana
+  folderRef: genieai-observability
+  allowCrossNamespaceImport: true
+  # resyncPeriod, not resyncInterval: the GrafanaDashboard CRD has
+  # no `resyncInterval`, and grafana-operator decodes strictly —
+  # one unknown field rejects every dashboard.
+  resyncPeriod: 30s
+{{- include "genieai-umbrella.dashboardDatasources" (dict "root" $ "entry" . "tier" $tierOn) }}
+  json: |-
+{{ $assets.Files.Get (printf "files/observability/dashboards/observability/%s" .file) | indent 4 }}
+{{- end }}
+{{- end }}
+{{- $alertFile := $assets.Files.Get "files/observability/alerting/alert-rules.yml" }}
+{{- /* Per-group tier gating: a rule group whose datasource is absent
+       never evaluates, so its alert can never fire while the pipeline
+       stays green. Named per group rather than looked up in a map —
+       the group names contain dots, and a map lookup on a dotted key is
+       a path traversal in Helm's `get`. */ -}}
+{{- range $group := ($alertFile | fromYaml).groups }}
+{{- /* Every group's queries are PromQL over the COLLECTOR's own metrics
+       (otelcol_receiver_accepted_log_points, vt_http_errors_total,
+       vm_free_disk_space_bytes, ...) — they live in VictoriaMetrics, not
+       in the log/trace store the rule is ABOUT. Every datasourceUid in
+       the rules file is "victoriametrics" (or the "__expr__" server-side
+       expression fed from it), so every group needs the METRICS tier
+       whatever its subject is, and none needs logs or traces: gating a
+       group on the tier it is ABOUT suppresses the collector-down alert
+       in exactly the metrics-only deployment that still runs a
+       collector. */}}
+{{- $onMetrics := $obsMetrics.enabled }}
+{{- if $onMetrics }}
+---
+apiVersion: grafana.integreatly.org/v1beta1
+kind: GrafanaAlertRuleGroup
+metadata:
+  # RFC 1123: lowercase alphanumerics and "-", no underscore. The group
+  # names carry both a dot and an underscore ("observability.vm_storage"),
+  # so both have to be replaced — a name with an underscore is rejected
+  # by the API server, and every GrafanaAlertRuleGroup in the release
+  # would fail to apply (no alerting at all).
+  name: {{ $group.name | replace "." "-" | replace "_" "-" }}
+  namespace: {{ $.Values.namespace }}
+  labels:
+    {{- include "genieai-common.labels" (dict "Chart" $.Chart "Release" $.Release "Values" $.Values "component" "alerts") | nindent 4 }}
+spec:
+  instanceSelector:
+    matchLabels:
+      app.kubernetes.io/component: grafana
+  folderRef: genieai-observability
+  allowCrossNamespaceImport: true
+  interval: {{ $group.interval }}
+  rules:
+{{ toYaml $group.rules | indent 4 }}
+{{- end }}
+{{- end }}
+{{- end }}

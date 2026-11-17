@@ -1,0 +1,72 @@
+apiVersion: v2
+name: genieai-umbrella
+description: |
+  Single-install umbrella chart for GENIE.AI. Renders the entire 28-service
+  stack with one `helm install` — typically consumed via Flux from the
+  per-cluster Kustomize overlays (overlays/<cluster>/<env>/) in the
+  genie-ai-deploy repo.
+type: application
+version: 0.2.177
+# `appVersion` mirrors the chart version deliberately: it tracks the chart
+# layout, not the GENIE.AI product release (the two versions on independent
+# axes; deployed image tags are governed by values, not by appVersion).
+# Never "latest" — OCI registries reject it for immutable promotion.
+appVersion: 0.2.177
+# The Kubernetes versions the chart is validated on: CI renders and
+# dry-runs against 1.33 (kind) and the laptop cluster runs 1.37 (Calico,
+# policies enforced). Helm refuses an install outside the range, with
+# the range named in the error — a cluster too old (or too new, before
+# the stack's own components support it) is a configuration error, not a
+# runtime surprise.
+#
+# The bound is a PLATFORM contract, not a claim that every pinned
+# component supports the whole range: Keycloak's tested range ends at
+# 1.34 and cert-manager's at 1.36, so 1.35+ runs them in their
+# upstream best-effort mode. The range says where the chart is
+# exercised, and site/content/en/docs/deploy/kubernetes.md says what
+# the components upstream guarantee.
+kubeVersion: ">=1.33.0-0 <1.38.0-0"
+keywords:
+  - genie-ai
+  - umbrella
+  - sovereign
+  - rag
+home: https://opensource.unicc.org/un/itu/genie-ai
+sources:
+  - https://opensource.unicc.org/un/itu/genie-ai.git
+maintainers:
+  - name: GENIE.AI
+    email: maintainers@example.invalid
+dependencies:
+  # Local library chart — re-rendered on every umbrella install.
+  # No `import-values`: it exports values only (template definitions are
+  # always callable via {{ include "genieai-common.*" . }} without it), and
+  # importing the library's values tree would carry Helm's reserved `global`
+  # key into a schema-validated subtree the library rejects.
+  - name: genieai-common
+    version: "0.1.0"
+    repository: "file://../genieai-common"
+  # Runtime assets (theme tarball, realm, dashboards, alerting) as a CARGO
+  # dependency: its files/ ride outside the release snapshot (helm-controller
+  # persists no dependency content — see that chart's description), while this
+  # chart's templates read them through .Subcharts.genieai-assets.Files.
+  - name: genieai-assets
+    version: "0.1.0"
+    repository: "file://../genieai-assets"
+  # Envoy Gateway — the edge tier this chart's Gateway/HTTPRoute CRs bind
+  # to. Unlike the data-layer operators below, the edge controller couples
+  # 1:1 with the ingress resources the chart renders (GatewayClass, data
+  # plane placement), so it ships WITH the chart by default. Disable it
+  # (envoyGateway.enabled=false) when another controller owns the
+  # `ingress.className` GatewayClass, or when an off-cluster edge forwards
+  # to a controller installed by other means — the chart then renders only
+  # the controller-agnostic Gateway API resources.
+  - name: gateway-helm
+    version: "v1.9.2"
+    repository: "oci://docker.io/envoyproxy"
+    condition: envoyGateway.enabled
+# Operator controllers (CNPG, kube-arangodb, sealed-secrets,
+# keycloak-operator, GPU, cert-manager) are cluster bootstrap
+# prerequisites installed once per cluster — the chart renders only the
+# custom resources they manage. Per-release operator installs would
+# create competing cluster-scoped controllers.

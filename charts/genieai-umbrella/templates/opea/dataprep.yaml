@@ -1,0 +1,208 @@
+{{/*
+  dataprep OPEA orchestrator. Factory-driven like the other
+  four OPEA deployments. ARANGO_* wired through the chart's arangoHost
+  helper (single `arangodb-single.<ns>.svc.cluster.local:8529` URL;
+  `ARANGO_DB` unified on `_system` like backend/doc-repo/retriever,
+  regardless of the image's own `genie-ai` default). Keycloak client wiring
+  is secretKeyRef-backed: `KC_DATAPREP_CLIENT_SECRET` from the operator-
+  managed `kc-dataprep-client-secret` Secret (already in the cluster per
+  the convergence flow). GPU endpoints (`VLLM_ENDPOINT`,
+  `TEI_EMBEDDING_ENDPOINT`, `DOCLING_ENDPOINT`) via the opea helpers;
+  HF_TOKEN + VLLM_API_KEY from the vllm-api-key Secret. Container/listen
+  port 5000; probes are tcpSocket dials on that port (an L4 accept, not an L7 /health).
+
+  LABEL_SELECTOR_SYSTEM_PROMPT and CONTEXTUAL_RETRIEVAL_PROMPT default
+  to the empty string by convention; the
+  dataprep Python code falls through to its own built-in prompts in
+  that case. The chart OMITS the env row entirely when the value is
+  empty (Kubernetes then injects no env var; os.getenv returns the
+  default and the Python fallback wins), and emits the operator
+  override via `| quote` so a multi-line prompt stays a single valid
+  YAML scalar.
+
+  The guardrail is not rendered by this chart; `GUARDRAIL_URL` carries
+  the image default (`http://guardrail:9090/v1/guardrails`) and the
+  service tolerates an unreachable guardrail.
+*/}}
+{{- $opea := .Values.opea | default dict -}}
+{{- $opeaDataprep := $opea.dataprep | default dict -}}
+{{- $opeaModels := $opea.models | default dict -}}
+{{- $opeaModelsLlm := $opeaModels.llm | default dict -}}
+{{- $data := .Values.data | default dict -}}
+{{- $dataKeycloak := $data.keycloak | default dict -}}
+{{- $dataArangodb := $data.arangodb | default dict -}}
+
+{{- if $opea.enabled -}}
+{{- $vals  := deepCopy .Values -}}
+{{- $ns    := .Values.namespace -}}
+{{- $llmEndpoint := include "genieai-umbrella.opeaGpuEndpoint" (dict "root" . "path" "llm") -}}
+{{- $embeddingEndpoint := include "genieai-umbrella.opeaGpuEndpoint" (dict "root" . "path" "embedding") -}}
+{{- $doclingEndpoint := include "genieai-umbrella.opeaGpuEndpoint" (dict "root" . "path" "docling") -}}
+{{- /* One graph name for every service that touches it: the ARANGO_GRAPH_NAME
+row reads the retriever block's key first, the dataprep block's own key
+second — Compose carries a single ARANGO_GRAPH_NAME knob, and an
+operator overriding the retriever key must not leave dataprep
+labeling a graph under the old name. */ -}}
+{{- /* MODEL_HUB_EMBED_TIMEOUT_SECONDS bounds a wedged /embed read on the
+TEI/HF hub clients — Compose derives the same row (issue #1381: the live
+incident held an ingest thread 30+ min with no log line). */ -}}
+{{- $tuningEnv := list
+    (dict "name" "DATAPREP_COMPONENT_NAME" "value" ($opeaDataprep.dataprepComponentName | default "GENIE_DATAPREP_ARANGODB" | toString))
+    (dict "name" "DATAPREP_INGEST_CONCURRENCY" "value" ($opeaDataprep.dataprepIngestConcurrency | default "1" | toString))
+    (dict "name" "VLLM_MAX_MODEL_LEN" "value" ($opeaDataprep.dataprepVllmMaxModelLen | default "65536" | toString))
+    (dict "name" "DATAPREP_MAX_MODEL_LEN" "value" ($opeaDataprep.dataprepMaxModelLen | default "0" | toString))
+    (dict "name" "DATAPREP_RECOVERY_MAX_ATTEMPTS" "value" "30")
+    (dict "name" "DATAPREP_RECOVERY_RETRY_SECONDS" "value" "10")
+    (dict "name" "MODEL_DETECT_TTL" "value" "60")
+    (dict "name" "MODEL_HUB_EMBED_TIMEOUT_SECONDS" "value" "600")
+    (dict "name" "RETRIEVER_ARANGO_NPROBE" "value" (index ($opea.retriever | default dict) "retrieverArangoNprobe" | default "1" | toString))
+    (dict "name" "RETRIEVER_ARANGO_NUM_CENTROIDS" "value" (index ($opea.retriever | default dict) "retrieverArangoNumCentroids" | default "1" | toString))
+    (dict "name" "RETRIEVER_ARANGO_DISTANCE_STRATEGY" "value" (index ($opea.retriever | default dict) "retrieverArangoDistanceStrategy" | default "COSINE" | toString))
+    (dict "name" "ARANGO_GRAPH_NAME" "value" (index ($opea.retriever | default dict) "arangoGraphName" | default ($opeaDataprep.arangoGraphName | default "GRAPH") | toString))
+    (dict "name" "DATAPREP_MAX_CONCURRENT_BATCHES" "value" ($opeaDataprep.dataprepMaxConcurrentBatches | default "20" | toString))
+    (dict "name" "DATAPREP_LLM_LABEL_BATCH_SIZE" "value" ($opeaDataprep.dataprepLlmLabelBatchSize | default "4" | toString))
+    (dict "name" "DATAPREP_CHUNK_SIZE" "value" ($opeaDataprep.dataprepChunkSize | default "500" | toString))
+    (dict "name" "DATAPREP_CHUNK_SIZE_PDF" "value" ($opeaDataprep.dataprepChunkSizePdf | default "500" | toString))
+    (dict "name" "DATAPREP_CHUNK_SIZE_DOCX" "value" ($opeaDataprep.dataprepChunkSizeDocx | default "1000" | toString))
+    (dict "name" "DATAPREP_CHUNK_SIZE_XLSX" "value" ($opeaDataprep.dataprepChunkSizeXlsx | default "1500" | toString))
+    (dict "name" "DATAPREP_CHUNK_SIZE_PPTX" "value" ($opeaDataprep.dataprepChunkSizePptx | default "500" | toString))
+    (dict "name" "DATAPREP_CHUNK_SIZE_HTML" "value" ($opeaDataprep.dataprepChunkSizeHtml | default "500" | toString))
+    (dict "name" "DATAPREP_CHUNK_SIZE_TXT" "value" ($opeaDataprep.dataprepChunkSizeTxt | default "500" | toString))
+    (dict "name" "DATAPREP_CHUNK_SIZE_MD" "value" ($opeaDataprep.dataprepChunkSizeMd | default "500" | toString))
+    (dict "name" "DATAPREP_CHUNK_OVERLAP" "value" ($opeaDataprep.dataprepChunkOverlap | default "50" | toString))
+    (dict "name" "LABELING_STRATEGY" "value" ($opeaDataprep.labelingStrategy | default "llm" | toString))
+    (dict "name" "EMBEDDING_LABEL_THRESHOLD" "value" ($opeaDataprep.embeddingLabelThreshold | default "0.75" | toString))
+    (dict "name" "BM25_LABEL_THRESHOLD" "value" ($opeaDataprep.bm25LabelThreshold | default "2.00" | toString))
+    (dict "name" "CONTENT_EXTRACTION_METHOD" "value" ($opeaDataprep.contentExtractionMethod | default "docling" | toString))
+    (dict "name" "CONTEXTUAL_RETRIEVAL_ENABLED" "value" (include "genieai-umbrella.boolEnvValue" (dict "value" $opeaDataprep.contextualRetrievalEnabled "default" true)))
+    (dict "name" "DATAPREP_CONTEXTUAL_MODEL" "value" ($opeaDataprep.dataprepContextualModel | default "" | toString))
+    (dict "name" "DATAPREP_CONTEXTUAL_DOC_BUDGET" "value" ($opeaDataprep.dataprepContextualDocBudget | default "6000" | toString))
+    (dict "name" "DATAPREP_CONTEXTUAL_DOC_BUDGET_DOC_LEVEL" "value" ($opeaDataprep.dataprepContextualDocBudgetDocLevel | default "100000" | toString))
+    (dict "name" "DATAPREP_CONTEXTUAL_MAX_TOKENS" "value" ($opeaDataprep.dataprepContextualMaxTokens | default "512" | toString))
+    (dict "name" "CONTEXTUAL_STRATEGY" "value" ($opeaDataprep.contextualStrategy | default "per_chunk" | toString))
+    (dict "name" "CONTEXTUAL_LABEL_RAW" "value" (include "genieai-umbrella.boolEnvValue" (dict "value" $opeaDataprep.contextualLabelRaw "default" true)))
+    (dict "name" "VLLM_MODEL_ID" "value" ($opeaModelsLlm.modelId | default "ibm-granite/granite-4.1-8b" | toString))
+    (dict "name" "VLLM_ENDPOINT" "value" $llmEndpoint)
+    (dict "name" "GPU_NODE_HOST" "value" (include "genieai-umbrella.opeaGpuHostname" .))
+    (dict "name" "TEI_EMBEDDING_ENDPOINT" "value" $embeddingEndpoint)
+    (dict "name" "DOCLING_DEVICE" "value" ($opeaDataprep.doclingDevice | default "cuda" | toString))
+    (dict "name" "GUARDRAIL_URL" "value" ($opeaDataprep.guardrailUrl | default "http://guardrail:9090/v1/guardrails" | toString))
+    (dict "name" "DOCUMENT_REPOSITORY_URL" "value" (include "genieai-umbrella.serviceURL" (dict "root" . "name" "document-repository" "port" 80)))
+    (dict "name" "BACKEND_SERVICE_URL" "value" (include "genieai-umbrella.serviceURL" (dict "root" . "name" "backend" "port" 80)))
+    (dict "name" "KEYCLOAK_URL" "value" (include "genieai-umbrella.keycloakInternalURL" .))
+    (dict "name" "KC_REALM" "value" ($opeaDataprep.kcRealm | default ($dataKeycloak.realm | default "genie") | toString))
+    (dict "name" "KC_DATAPREP_CLIENT_ID" "value" ($opeaDataprep.kcDataprepClientId | default "dataprep-service-client" | toString))
+    (dict "name" "OPEA_SSL_SKIP_VERIFY" "value" (include "genieai-umbrella.opeaSslSkipVerify" .))
+    (dict "name" "KEYCLOAK_SSL_SKIP_VERIFY" "value" ($opeaDataprep.keycloakSslSkipVerify | default "0" | toString))
+    (dict "name" "ENABLE_OBSERVABILITY" "value" (include "genieai-umbrella.observabilityEnabledFlag" .))
+    (dict "name" "OTEL_EXPORTER_OTLP_ENDPOINT" "value" (include "genieai-umbrella.otlpEndpoint" .))
+    (dict "name" "LOG_LEVEL" "value" ($opeaDataprep.logLevel | default "info" | toString))
+-}}
+{{- /* DOCLING_ENDPOINT follows the code's own GPU-vs-local logic: an
+empty endpoint = the in-process docling converter, a non-empty one = a
+remote docling-serve. The helper returns empty whenever no docling
+target exists (no in-cluster Deployment; an external deployment whose
+opea.gpu.paths.docling is empty — the default).
+
+The row is rendered ONLY when there is a target. `v1.EnvVar.value` is
+omitempty, so a row carrying `value: ""` is DROPPED by the API server:
+the manifest would declare a variable the kubelet never sets, and the
+declared value and the delivered one would differ — the manifest
+asserting something the cluster does not do. With the row absent, the
+variable is absent, which is what the application sees: it reads
+`os.getenv("DOCLING_ENDPOINT", "")` and the default IS the empty
+string. Compose sets the variable to an empty string (docker keeps
+empty env vars), so both surfaces land on the same value. */ -}}
+{{- if $doclingEndpoint -}}
+{{- $tuningEnv = append $tuningEnv (dict "name" "DOCLING_ENDPOINT" "value" $doclingEndpoint) -}}
+{{- end -}}
+{{- /* LABEL_SELECTOR_SYSTEM_PROMPT / CONTEXTUAL_RETRIEVAL_PROMPT default
+empty; the dataprep Python code falls through
+to its built-in prompt when the env is empty/falsy. Rendering the env
+row with `| default "" | quote` would emit the literal two-character
+string `""`, which `os.getenv(...).strip() or _DEFAULT` would treat as
+truthy and pass through to the LLM. The conditional append below OMITS
+the row entirely when the value is empty (Kubernetes then has no env
+var to inject; os.getenv returns the second arg, empty, and the Python
+fallback wins), and renders the operator override as a bare value so
+the YAML emitter does not re-quote it (a YAML block scalar like `|`
+in the values file is honored end-to-end for multi-line prompts). */ -}}
+{{- $promptEnv := list -}}
+{{- $labelPrompt := $opeaDataprep.labelSelectorSystemPrompt | default "" -}}
+{{- if $labelPrompt -}}
+{{- $promptEnv = append $promptEnv (dict "name" "LABEL_SELECTOR_SYSTEM_PROMPT" "value" $labelPrompt) -}}
+{{- end -}}
+{{- $ctxPrompt := $opeaDataprep.contextualRetrievalPrompt | default "" -}}
+{{- if $ctxPrompt -}}
+{{- $promptEnv = append $promptEnv (dict "name" "CONTEXTUAL_RETRIEVAL_PROMPT" "value" $ctxPrompt) -}}
+{{- end -}}
+{{- $arangoSecretEnv := list (include "genieai-umbrella.secretKeyRefEnv" (dict "var" "ARANGO_PASSWORD" "secret" "arango-root-secret" "key" "password" "optional" true) | fromJson) -}}
+{{- $kcSecretEnv := list
+    (include "genieai-umbrella.secretKeyRefEnv" (dict "var" "KC_DATAPREP_CLIENT_SECRET" "secret" "kc-dataprep-client-secret" "key" "KC_DATAPREP_CLIENT_SECRET") | fromJson)
+-}}
+{{- /* The OKF wiring: the variables Compose sets on this service whether
+or not the tier is enabled. OKF_INTERNAL_SECRET is delivered through
+the okf-internal-secret Secret (optional here — the tier is dark by
+default and a deployment that has not installed the sealed secret must
+still boot), the rest are the tier's own defaults. */ -}}
+{{- $okf := .Values.okf | default dict -}}
+{{- $okfSecretEnv := list (include "genieai-umbrella.secretKeyRefEnv" (dict "var" "OKF_INTERNAL_SECRET" "secret" "okf-internal-secret" "key" "OKF_INTERNAL_SECRET" "optional" true) | fromJson) -}}
+{{- $okfEnv := list
+    (dict "name" "OKF_SERVER_URL" "value" (index ($okf.server | default dict) "url" | default "http://okf-server:3002" | toString))
+    (dict "name" "OKF_LLM_RETRY_ATTEMPTS" "value" ($opeaDataprep.okfLlmRetryAttempts | default "5" | toString))
+    (dict "name" "OKF_LLM_RETRY_BASE_MS" "value" ($opeaDataprep.okfLlmRetryBaseMs | default "2000" | toString))
+    (dict "name" "OKF_LLM_RETRY_MAX_MS" "value" ($opeaDataprep.okfLlmRetryMaxMs | default "90000" | toString))
+    (dict "name" "OKF_LLM_ROUND2_DELAY_S" "value" ($opeaDataprep.okfLlmRound2DelayS | default "45" | toString))
+    (dict "name" "OKF_LLM_STORM_COOLDOWN_S" "value" ($opeaDataprep.okfLlmStormCooldownS | default "20" | toString))
+    (dict "name" "OKF_LLM_STORM_COOLDOWN_MAX_S" "value" ($opeaDataprep.okfLlmStormCooldownMaxS | default "120" | toString))
+    (dict "name" "KEYCLOAK_INTERNAL_URL" "value" (index $dataKeycloak "internalUrl" | default "" | toString))
+-}}
+{{- $gpuSecretEnv := include "genieai-umbrella.gpuApiKeyEnv" (dict "keys" (list "HF_TOKEN" "VLLM_API_KEY" "HUGGINGFACEHUB_API_TOKEN")) | fromJsonArray -}}
+{{- /* opea.dataprep.env: see the parity gate. The rows come last so an
+operator's value wins over a derived row of the same name. */ -}}
+{{- $opeaEnvRows := include "genieai-umbrella.envMapRows" ($opeaDataprep.env | default dict) | fromJsonArray -}}
+{{- $arangoEnv := list
+    (dict "name" "ARANGO_URL" "value" (include "genieai-umbrella.arangoURL" .))
+    (dict "name" "ARANGO_DB" "value" ($dataArangodb.database | default "_system" | toString))
+    (dict "name" "ARANGO_USERNAME" "value" "root")
+-}}
+{{- /* The readiness probe carries NO initialDelaySeconds: the
+startupProbe below owns the slow start, and a readiness delay adds a
+second floor on top of it — the pod then stays out of the Service's
+endpoints for that long after every restart, although it is already
+serving. */}}
+{{- $svcVals := dict
+    "image" (dict "repository" "genie-ai-dataprep-arango" "tag" "main")
+    "port" 5000
+    "resources" (dict "requests" (dict "cpu" "200m" "memory" "512Mi") "limits" (dict "cpu" "2" "memory" "4Gi"))
+    "env" (include "genieai-umbrella.envRowsDedupe" (concat $arangoEnv $tuningEnv $promptEnv $arangoSecretEnv $kcSecretEnv $gpuSecretEnv $okfEnv $okfSecretEnv $opeaEnvRows | toJson) | fromJsonArray)
+    "probes" (dict
+      "readiness" (dict "tcpSocket" (dict "port" 5000) "periodSeconds" 15)
+      "liveness"  (dict "tcpSocket" (dict "port" 5000) "initialDelaySeconds" 60 "periodSeconds" 30)
+      "startup"   (dict "tcpSocket" (dict "port" 5000) "failureThreshold" 30 "periodSeconds" 10)
+    )
+-}}
+{{- /* The service map is rebuilt rather than mutated in place: a
+cleared `services` map has nothing to mutate, and `set` on a nil map
+crashes the template engine. */ -}}
+{{- $valsServices := $vals.services | default dict -}}
+{{- $_ := set $valsServices "dataprep" (mergeOverwrite $svcVals (index $valsServices "dataprep" | default dict)) -}}
+{{- $_ := set $vals "services" $valsServices -}}
+{{- $ctx := dict "name" "dataprep" "component" "dataprep" "Values" $vals "Chart" .Chart "Release" .Release -}}
+{{- include "genieai-umbrella.serviceDeployment" $ctx }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: dataprep
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "genieai-common.labels" (dict "Chart" .Chart "Release" .Release "Values" .Values "component" "dataprep") | nindent 4 }}
+spec:
+  ports:
+    - name: http
+      port: 5000
+      targetPort: 5000
+  selector:
+    {{- include "genieai-common.serviceSelector" (dict "Chart" .Chart "Release" .Release "Values" .Values "component" "dataprep") | nindent 4 }}
+{{- end -}}

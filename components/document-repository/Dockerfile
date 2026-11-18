@@ -4,7 +4,7 @@
 # base drops build-essential/python3/make and their linux-libc-dev kernel-header
 # dependency chain, removing that CVE surface from the scan. An apt upgrade
 # pulls current Debian security updates so the image never lags point-releases.
-FROM node:22-trixie AS builder
+FROM node:22 AS builder
 
 WORKDIR /app
 
@@ -21,12 +21,20 @@ WORKDIR /app
 RUN rm -rf /app/node_modules/shared-lib
 
 # ======== Runtime ========
-FROM node:22-trixie-slim
+FROM node:22-slim
 
 # System dependencies: ClamAV for upload scanning (+ current security updates).
 # clamdscan is a Recommends of clamav-daemon but the app's scanner preference
 # and clamav-node.sh's readiness loop both invoke it explicitly. curl backs the
 # compose healthcheck (docker-compose.yaml doc-repo service).
+#
+# This image stays on the BOOKWORM base on purpose (measured 2026-11-18): the
+# trixie base ships clamav 1.4.3 and trixie-security carries NO clamav at
+# all, while bookworm-security carries the fixed 1.4.6 — so the trixie swap
+# traded the zlib1g finding (1 Critical) for 65 clamav findings (35 HIGH,
+# 30 MEDIUM) on the very image that scans untrusted uploads. The zlib1g
+# bookworm exposure stays accepted-risk here until trixie-security ships
+# clamav 1.4.6; the bustable upgrade layer picks it up the day it does.
 RUN apt-get update && \
     apt-get install -y --no-install-recommends clamav clamav-daemon clamdscan curl && \
     apt-get clean && \

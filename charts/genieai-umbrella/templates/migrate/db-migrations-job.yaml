@@ -27,6 +27,11 @@ divergence here would move every service image to an air-gapped mirror
 while this hook kept pulling from the default registry. */ -}}
 {{- $registry := $global.imageRegistry | default .Values.imageRegistry -}}
 {{- $img := $servicesBackend.migrationsImage | default dict -}}
+{{- /* The migrations Job follows the same tag resolution as the services:
+the per-service pin, else the global `imageTag`, else "main". */ -}}
+{{- $imgTag := include "genieai-umbrella.imageTag" (dict "root" . "serviceTag" ($img.tag | default "")) }}
+{{- $opeaVals := .Values.opea | default dict }}
+{{- $baseTag := include "genieai-umbrella.imageTagBase" (dict "tag" $imgTag "suffix" ($opeaVals.imageTagSuffix | default "")) }}
 apiVersion: batch/v1
 kind: Job
 metadata:
@@ -126,8 +131,8 @@ spec:
       {{- end }}
       containers:
         - name: db-migrations
-          image: {{ if $registry }}{{ $registry }}/{{ end }}{{ $img.repository | default "genie-ai-db-migrations" }}:{{ $img.tag | default "main" }}
-          imagePullPolicy: {{ include "genieai-umbrella.imagePullPolicy" (dict "tag" ($img.tag | default "main") "pullPolicy" $global.imagePullPolicy) }}
+          image: {{ if $registry }}{{ $registry }}/{{ end }}{{ $img.repository | default "genie-ai-db-migrations" }}:{{ $imgTag }}
+          imagePullPolicy: {{ include "genieai-umbrella.imagePullPolicy" (dict "tag" $baseTag "pullPolicy" $global.imagePullPolicy) }}
           securityContext:
             allowPrivilegeEscalation: false
             capabilities:

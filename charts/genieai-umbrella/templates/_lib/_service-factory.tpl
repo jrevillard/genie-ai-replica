@@ -92,13 +92,22 @@ spec:
       convention) wins over the top-level imageRegistry; both target only
       the genie-ai-* factory images. */}}
       {{- $registry := $global.imageRegistry | default $ctx.Values.imageRegistry }}
+      {{- /* The tag this image is pulled with: the per-service pin, else
+      the global `imageTag` (one line to bump the whole stack), else
+      "main". The per-service values ship EMPTY, so the global applies. */}}
+      {{- $imgTag := include "genieai-umbrella.imageTag" (dict "root" $ctx "serviceTag" ($svc.image.tag | default "")) }}
+      {{- /* The pull policy judges MUTABILITY, and the variant suffix must
+      not change it: "main-slim" is as mutable as "main", "v2.1.0-slim" as
+      immutable as "v2.1.0". The policy therefore reads the BASE tag. */}}
+      {{- $opeaVals := $ctx.Values.opea | default dict }}
+      {{- $baseTag := include "genieai-umbrella.imageTagBase" (dict "tag" $imgTag "suffix" ($opeaVals.imageTagSuffix | default "")) }}
       containers:
         - name: {{ $objectName }}
-          image: {{- if $registry }} {{ $registry }}/{{ $svc.image.repository }}{{ else }} {{ $svc.image.repository }}{{ end }}:{{ $svc.image.tag | default "latest" }}
+          image: {{- if $registry }} {{ $registry }}/{{ $svc.image.repository }}{{ else }} {{ $svc.image.repository }}{{ end }}:{{ $imgTag }}
           # Per-service pullPolicy wins; global pullPolicy follows; the
           # tag decides otherwise (mutable tags pull Always — see the
           # helper).
-          imagePullPolicy: {{ include "genieai-umbrella.imagePullPolicy" (dict "tag" $svc.image.tag "pullPolicy" ($svc.image.pullPolicy | default $global.imagePullPolicy)) }}
+          imagePullPolicy: {{ include "genieai-umbrella.imagePullPolicy" (dict "tag" $baseTag "pullPolicy" ($svc.image.pullPolicy | default $global.imagePullPolicy)) }}
           {{- with $svc.workingDir }}
           workingDir: {{ . }}
           {{- end }}

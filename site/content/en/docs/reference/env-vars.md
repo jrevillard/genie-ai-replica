@@ -221,6 +221,19 @@ ROCm venue the overlay wires it for **backend, okf-server and
 document-repository** (the last one is required for OKF publishing —
 see [OKF Deployment & Lifecycle](/docs/knowledge-base/okf-deployment/)).
 
+### Keycloak issuer pin (`KEYCLOAK_HOSTNAME`)
+
+Optional, unset by default (the historical hostname-only behavior). Set
+to the FULL public frontend URL (`https://<domain>:<port>/auth`) to pin
+Keycloak's hostname-v2 `KC_HOSTNAME`: every token mint — browser AND
+in-network `client_credentials` — then carries the public issuer,
+regardless of which route reached Keycloak. Needed on deployments where
+containers cannot reach the host-published edge (the service-token mint
+silently fails over to the in-network URL and self-reports an internal
+issuer, which validators accepting only the public issuer reject —
+symptom: `chatqna HTTP 401` on every RAGAS serve leg). NVIDIA venues
+that leave it unset are unaffected.
+
 ### Reranker backend (`RERANKER_BACKEND`)
 
 The reranker wrapper (`genie-ai-overlay/reranker/`) has two backends,

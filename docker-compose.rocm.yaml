@@ -202,15 +202,15 @@ services:
       - KEYCLOAK_DISCOVERY_URL=${KEYCLOAK_DISCOVERY_URL:-http://keycloak:8080}
       - KEYCLOAK_JWKS_URL=${KEYCLOAK_JWKS_URL:-http://keycloak:8080/realms/${KEYCLOAK_REALM:-genie}/protocol/openid-connect/certs}
       - KEYCLOAK_PUBLIC_URL=${KEYCLOAK_PUBLIC_URL:-https://${NGINX_PUBLIC_DOMAIN}:${NGINX_HTTPS_PORT:-443}/auth}
-      # The service-token mint (KC_OKF_SERVER client — the RAGAS answer leg,
-      # doc-repo calls) goes PUBLIC-FIRST by design (#1636: the mint host
-      # stamps iss, chatqna accepts only the public-URL issuer). Without the
-      # TLS skip that public mint dies against the self-signed edge and the
-      # silent failover mints at http://keycloak:8080 — the resulting token
-      # carries the INTERNAL issuer and chatqna 401s every serve call (live:
-      # 2026-11-18, both RAGAS runs aborted 20/20 with "chatqna HTTP 401").
-      # OPEA_SSL_SKIP_VERIFY is the genie_ssl_patch knob — self-signed venue.
-      - OPEA_SSL_SKIP_VERIFY=${OPEA_SSL_SKIP_VERIFY:-1}
+      # NOTE (rules audit F4): NO TLS-skip knobs here — an earlier attempt
+      # rendered OPEA_SSL_SKIP_VERIFY/NODE_TLS_REJECT_UNAUTHORIZED for the
+      # serve-leg mint; both are dead weight (OPEA_SSL_SKIP_VERIFY patches
+      # PYTHON services only and okf-server is Node; NODE_TLS was irrelevant
+      # because the public endpoint is UNREACHABLE from containers on this
+      # class of host — a routing fact, not a certificate one). The real fix
+      # is the deployment-level KEYCLOAK_HOSTNAME pin (base compose): the
+      # in-network mint then stamps the PUBLIC issuer and chatqna accepts
+      # every token regardless of route.
 
   # Same split-URL trio as backend/okf-server: document-repository verifies
   # tokens and (on the OKF publish path) authenticates its side of the

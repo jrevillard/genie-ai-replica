@@ -138,6 +138,26 @@ the knobs to lower.
   (`RERANKER_BACKEND=vllm` — the TEI ROCm image fails on gfx1151;
   `env.strixhalo` flips the switch, `tei` stays the default everywhere
   else).
+- **OKF on the ROCm venue (live-verified 2026-11-18)** — four venue-only
+  settings the deployment docs assume away: `OKF_ENABLED=1` in `.env`
+  (+ `--profile okf` + kong-config re-run + frontend recreate); the
+  split-URL Keycloak trio now wired for **okf-server AND
+  document-repository** in `docker-compose.rocm.yaml` (doc-repo's block
+  is load-bearing: without it OKF publish fails
+  `EXPORT_FAILED … doc-repo status 503`); `VLLM_ENDPOINT=http://vllm:8000`
+  in `.env` (okf-server's LLM legs are opt-in — unset, LLM-Assisted
+  import stalls with "LLM not configured"; the other consumers of the
+  var already default to the same URL); and the nginx dev cert generator
+  now stamps a SAN (`IP:<domain>|DNS:<domain>,DNS:localhost,IP:127.0.0.1`)
+  — a SAN-less cert makes browsers reject every XHR (`ERR_CERT_AUTHORITY_INVALID`),
+  the frontend's `/runtime/config.js` fails, `APP_CONFIG` never loads and
+  APIs fall back to `localhost:3000` — which reads as a "lost session",
+  not a cert problem. Topic-link knobs for the 2B-class model:
+  `OKF_TOPIC_LINK_TIMEOUT_MS` (60s default — 7/19 batches exceeded it on
+  a 144-concept import), `OKF_TOPIC_LINK_BATCH`, `OKF_TOPIC_LINK_LANES`,
+  `OKF_TOPIC_LINK_MAX_PER_CONCEPT`; failures are fail-soft, re-runs
+  densify. Full runbook (role seeding, lifecycle by API, failure-class
+  table): `docs/rocm-venue-okf-runbook.md`.
 - The ceiling is enforced on **every** write path: the import splits (or
   rejects), the Studio editor refuses the save (409, nothing written), and
   the publish gate refuses **before** minting a version. For an over-ceiling

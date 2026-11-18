@@ -270,6 +270,43 @@ invocation above) on the ROCm node, wired to the app stack with the
 remote-GPU pattern — see
 [Docker Swarm Setup](/docs/deploy/docker-swarm-setup/).
 
+### OKF stack on a ROCm venue (live-verified additions)
+
+Running the OKF knowledge-base tier on a ROCm single-server venue needs
+four venue-only settings (all in the local `.env` / the ROCm overlay —
+no NVIDIA-path file changes):
+
+1. **`OKF_ENABLED=1`** + `--profile okf` + a kong-config re-run — see
+   [OKF Deployment & Lifecycle](/docs/knowledge-base/okf-deployment/)
+   for the full flag semantics.
+2. **Split-URL auth for okf-server AND document-repository** — the ROCm
+   overlay (`docker-compose.rocm.yaml`) carries the
+   `KEYCLOAK_DISCOVERY_URL` / `KEYCLOAK_JWKS_URL` /
+   `KEYCLOAK_PUBLIC_URL` trio for three services now: backend,
+   okf-server, document-repository. Document-repository's block is what
+   makes OKF publishing work (its OIDC discovery otherwise times out
+   against the self-signed edge and bundle storage answers 503 →
+   `EXPORT_FAILED` on publish).
+3. **`VLLM_ENDPOINT=http://vllm:8000`** — opts okf-server's LLM legs in
+   (LLM-Assisted import curation, topic links, manifest summaries).
+   Unset, those legs refuse ("LLM not configured") and the wizard
+   stalls. Other consumers of the variable already default to the same
+   URL, so the setting moves only okf-server.
+4. **TLS cert SAN** — the nginx dev generator stamps
+   `subjectAltName=IP:<NGINX_PUBLIC_DOMAIN>|DNS:<NGINX_PUBLIC_DOMAIN>,DNS:localhost,IP:127.0.0.1`.
+   Older images (pre-fix) generate a SAN-less cert whose symptoms are
+   browser `ERR_CERT_AUTHORITY_INVALID` on API calls and the frontend
+   falling back to `localhost:3000` — rebuild the nginx image and
+   recreate the container to regenerate with the SAN.
+
+Topic-link enrichment on the 2B-class ROCm models: batches of 8 concepts
+sometimes exceed the 60 s per-call budget (measured 7 of 19 batches on a
+144-concept import — fail-soft, the run completes). Tune
+`OKF_TOPIC_LINK_TIMEOUT_MS` / `OKF_TOPIC_LINK_BATCH` and re-run the pass
+to densify links. The full live-venue runbook — Keycloak role seeding,
+the OKF lifecycle via API, and every failure signature — is
+`docs/rocm-venue-okf-runbook.md` in the repository.
+
 ## Verifying the GPU stack
 
 After deploy, **wait** for vLLM to load the model. On first run this includes

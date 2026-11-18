@@ -195,6 +195,27 @@ group GIDs and shared-host port plan. Values exactly as shipped:
 | `VLLM_RERANKER_GPU_UTILIZATION` | `0.05` | ~2.3 GiB of GTT (spike measured 1.56 GiB touched) — sits inside the 27 GB ceiling beside granite (0.28) + gemma (0.12) |
 | `VLLM_RERANKER_MAX_MODEL_LEN` | `8192` | Rerank window; vLLM truncates silently at this length (TEI's strict 422 path is backend-specific and stays on `tei`) |
 
+### OKF-stack variables (venue-level, not ROCm-exclusive)
+
+These apply on any deployment running the OKF stack; they surfaced as
+required on the live ROCm venue and are recorded here because they are
+**not** GPU-profile variables:
+
+| Variable | Default | Notes |
+|---|---|---|
+| `OKF_ENABLED` | `0` | Master flag: starts okf-server + pii-service (profile `okf` / Swarm replicas), adds/strips the Kong `/api/okf` route (kong-config apply), and drives `window.APP_CONFIG.okfEnabled`. Changing it requires bringing up `kong-config okf-server pii-service` and recreating the frontend |
+| `VLLM_ENDPOINT` (okf-server) | *(empty)* | **Opt-in gate for the OKF LLM legs** (LLM-Assisted import curation, topic links, manifest summaries). Empty = the legs refuse ("LLM not configured") and the Studio LLM-Assisted flow stalls after the raw import. Set to the serving vLLM (`http://vllm:8000`) to opt in; the deployment's own model is discovered per the !631 policy. Other compose consumers of this variable already default to the same URL, so setting it moves only okf-server |
+| `OKF_TOPIC_LINK_TIMEOUT_MS` | `60000` | Per-batch budget for LLM topic-link proposals. On 2B-class models (granite-3.1-2b) batches of 8 sometimes exceed 60 s — measured 7 of 19 batches on a 144-concept import; failures are fail-soft (skipped), re-running densifies |
+| `OKF_TOPIC_LINK_BATCH` | `8` | Concepts per LLM call — lower it to shorten prompts before raising the timeout |
+| `OKF_TOPIC_LINK_LANES` | `4` | Parallel topic-link batches |
+| `OKF_TOPIC_LINK_MAX_PER_CONCEPT` | `6` | Cap on links accepted per concept (over-cap proposals dropped) |
+
+The split-URL Keycloak trio (`KEYCLOAK_DISCOVERY_URL` /
+`KEYCLOAK_JWKS_URL` / `KEYCLOAK_PUBLIC_URL`) applies per service; on the
+ROCm venue the overlay wires it for **backend, okf-server and
+document-repository** (the last one is required for OKF publishing —
+see [OKF Deployment & Lifecycle](/docs/knowledge-base/okf-deployment/)).
+
 ### Reranker backend (`RERANKER_BACKEND`)
 
 The reranker wrapper (`genie-ai-overlay/reranker/`) has two backends,

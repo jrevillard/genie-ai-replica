@@ -223,7 +223,7 @@ automatically.
 docker pull registry.opensource.unicc.org/un/itu/genie-ai/genie-ai-frontend:main
 ```
 
-Replace `main` with your target `GENIE_AI_GLOBAL_TAG` value.
+Replace `main` with your target `GENIE_AI_IMAGE_TAG` value.
 
 ### 5b. Per-service image configuration
 
@@ -232,11 +232,16 @@ Image references use a two-variable pattern per service, defined in `env`
 
 ```
 GENIE_AI_<NAME>_IMAGE=registry.opensource.unicc.org/un/itu/genie-ai/genie-ai-<name>
-GENIE_AI_<NAME>_IMAGE_TAG=${GENIE_AI_GLOBAL_TAG:-latest}
+GENIE_AI_<NAME>_IMAGE_TAG=${GENIE_AI_IMAGE_TAG:-${GENIE_AI_GLOBAL_TAG:-latest}}
 ```
 
 Compose resolves
-`${GENIE_AI_<NAME>_IMAGE}:${GENIE_AI_<NAME>_IMAGE_TAG:-${GENIE_AI_GLOBAL_TAG:-latest}}`.
+`${GENIE_AI_<NAME>_IMAGE}:${GENIE_AI_<NAME>_IMAGE_TAG:-${GENIE_AI_IMAGE_TAG:-${GENIE_AI_GLOBAL_TAG:-latest}}}`.
+
+`GENIE_AI_IMAGE_TAG` is the tag every GENIE.AI image carries (a release tag
+`vX.Y.Z`, or a branch tag like `main`): **one line to bump the whole
+stack**. `GENIE_AI_GLOBAL_TAG` is its former name — still read as a
+fallback for one release, then removed.
 
 The default is the GitLab registry with tag `main` — no overrides needed for
 standard deployments.
@@ -250,13 +255,34 @@ To pin one service to a different version:
 GENIE_AI_FRONTEND_IMAGE_TAG=v1.2.3
 ```
 
-All other services continue using `GENIE_AI_GLOBAL_TAG`.
+All other services continue using `GENIE_AI_IMAGE_TAG`. A pin names the
+exact tag: it is never given the variant suffix below.
 
-### 5d. Custom or air-gapped registries
+### 5d. The slim image variant
+
+The model-serving images (the reranker, the retriever and the dataprep) are
+also published under a **slim** tag — the same service code without the
+model stack (no PyTorch, no CUDA wheels, no local weights). A node whose
+model calls all go to an external GPU API should run them: they are ~10×
+smaller, which is what keeps the node's image disk out of the eviction
+range. See [Slim Image Variants](/docs/deploy/slim-images/).
+
+```bash
+# .env
+GENIE_AI_OPEA_IMAGE_TAG_SUFFIX=-slim
+```
+
+It applies to those three images and to nothing else — the other images
+have no model stack, and the upstream OPEA images (embedding, textgen,
+translation) are not built here at all. The slim dataprep delegates the
+document conversion to a remote docling-serve, so it needs
+`DOCLING_ENDPOINT` set (see **Section 14**).
+
+### 5e. Custom or air-gapped registries
 
 ```bash
 GENIE_AI_REGISTRY=my-registry.example.com/genieai
-GENIE_AI_GLOBAL_TAG=release-el-salvador
+GENIE_AI_IMAGE_TAG=release-el-salvador
 ```
 
 Then `docker pull` from GitLab, re-tag, and `docker push` to your registry.

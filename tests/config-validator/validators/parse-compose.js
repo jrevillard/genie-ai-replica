@@ -28,12 +28,17 @@ function parseComposeEnvVars(filePath) {
     .split('\n')
     .filter((line) => !line.trim().startsWith('#'))
     .join('\n');
-  // Regex: /\$\{([A-Z_][A-Z0-9_]*)(?::?-((?:[^{}]|\$\{[^}]*\})*))?\}/g
-  // Default group uses (?:[^{}]|\$\{[^}]*\})* to handle ONE level of nested
-  // ${...} in defaults (e.g. ${VAR:-${OTHER:-fallback}}). The separator is
-  // :?- (optional colon, required dash) so both ${VAR:-d} and ${VAR-d}
-  // (unset-only) parse.
-  const regex = /\$\{([A-Z_][A-Z0-9_]*)(?::?-((?:[^{}]|\$\{[^}]*\})*))?\}/g;
+  // Regex: /\$\{([A-Z_][A-Z0-9_]*)(?::?-((?:[^{}]|\$\{(?:[^{}]|\$\{[^}]*\})*\})*))?\}/g
+  // Default group uses (?:[^{}]|\$\{(?:[^{}]|\$\{[^}]*\})*\})* to handle
+  // TWO levels of nested ${...} in a default — the shape the image-tag
+  // knobs use: ${GENIE_AI_<SVC>_IMAGE_TAG:-${GENIE_AI_IMAGE_TAG:-${GENIE_AI_GLOBAL_TAG:-latest}}}
+  // (the per-service pin, the current global, the deprecated global). One
+  // level was not enough: the extraction stopped one brace short and the
+  // cross-reference then read the compose default as DIFFERENT from the
+  // env template's (identical) value — a false "conflicting defaults" on
+  // every image line. The separator is :?- (optional colon, required
+  // dash) so both ${VAR:-d} and ${VAR-d} (unset-only) parse.
+  const regex = /\$\{([A-Z_][A-Z0-9_]*)(?::?-((?:[^{}]|\$\{(?:[^{}]|\$\{[^}]*\})*\})*))?\}/g;
   const seen = new Map();
 
   let match;

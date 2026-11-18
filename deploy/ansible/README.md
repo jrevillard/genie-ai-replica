@@ -509,15 +509,40 @@ ansible-playbook -i inventory/itu_rtx_test.ini deploy.yml --tags deploy --vault-
 
 ## Image Tags and Per-Service Overrides
 
-By default every service pulls the same registry tag via `genie_ai_global_tag`
+By default every service pulls the same registry tag via `genie_ai_image_tag`
 (the branch-name tag is mutable and always points at the branch's latest CI
-build; the `<branch>-<sha>` tag is immutable). To pin only specific images to a
-different tag while the rest keep the global one, pass `image_tag_overrides`:
+build; the `<branch>-<sha>` tag is immutable). `genie_ai_global_tag` is the
+former name — still read as a fallback for one release, then removed.
+
+To pin only specific images to a different tag while the rest keep the
+global one, pass `image_tag_overrides`:
 
 ```bash
 ansible-playbook -i inventory/itu_rtx_test.ini deploy.yml --vault-id itu_rtx_test@prompt \
-  --extra-vars '{"repo_branch":"main","genie_ai_global_tag":"main","image_tag_overrides":{"genie-ai-reranker":"dev-el-salvador"}}'
+  --extra-vars '{"repo_branch":"main","genie_ai_image_tag":"main","image_tag_overrides":{"genie-ai-reranker":"dev-el-salvador"}}'
 ```
+
+An `image_tag_overrides` entry names the EXACT tag: it is never given the
+variant suffix below.
+
+### The slim variant
+
+The model-serving images (the reranker, the retriever, the dataprep) are also
+published under a slim tag — the same service code without the model stack
+(no PyTorch, no CUDA wheels, no local weights). On a node whose model calls
+all go to an external GPU API they are ~10x smaller, which is what keeps the
+node's image disk out of the eviction range.
+
+```bash
+ansible-playbook -i inventory/itu_rtx_test.ini deploy.yml --vault-id itu_rtx_test@prompt \
+  --extra-vars '{"repo_branch":"main","genie_ai_image_tag":"main","genie_ai_opea_image_tag_suffix":"-slim"}'
+```
+
+It applies to those three images and to nothing else — the other images have
+no model stack, and the upstream OPEA images (embedding, textgen,
+translation) are not built here at all. The slim dataprep delegates the
+document conversion to a remote docling-serve, so it needs `DOCLING_ENDPOINT`
+set (see the environment file's Section 14).
 
 - **Keys** must be image names from `deploy/ansible/tasks/deploy-shared-facts.yml`
   (`genieai_images`). The deploy fails with `Validate image_tag_overrides keys

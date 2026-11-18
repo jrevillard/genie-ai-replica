@@ -51,8 +51,8 @@ the running stack so the record can be verified and kept honest.
 
 | Scenario | Input / State | Expected Output / Behavior | Error Handling |
 |----------|--------------|---------------------------|----------------|
-| record the deployed configuration | the running retriever / chatqna / reranker / embedding pods | one JSON document with the knob values, their absence, the resolved query instruction and the three locale samples | a missing pod makes the probe exit 2 with the missing services named |
-| verify the record against the venue | `--verify <fixtures file>` | exit 0 when the live deployment still matches the recorded measurement | exit 1 with one line per drifted knob |
+| record the deployed configuration | the running retriever / chatqna / reranker / embedding / backend pods | one JSON document with the knob values (scoped per container), their absence, the resolved query instruction, the measured translation budget and the three locale samples | a missing pod makes the probe exit 2 with the missing services named |
+| verify the record against the venue | `--verify <fixtures file>` | exit 0 when the live deployment still matches the recorded measurement | exit 1 with one line per drifted knob; a difference in the SAMPLED locale strings is a warning, not a drift |
 | a translator that is unavailable | the translation endpoint is unreachable or times out | the turn still answers, the source-language history is embedded, the status is `fallback_timeout` or `fallback_error` | never an untranslated silent success — the status makes the degradation visible |
 | an oversized query | the query does not fit the translation window | chatqna answers HTTP 422 `translation_input_too_long` with `abstained: true` | no untranslated fallback |
 | a translation that comes back blank | the model answers 200 with an empty completion | the turn still answers, the status is `fallback_error` | never reported as a success |
@@ -144,6 +144,40 @@ the running stack so the record can be verified and kept honest.
 - No service was modified, restarted or scaled; the only writes are this story,
   the record, the fixtures and the probe.
 
+### Corrections after the global review
+
+The global review of MR !948 raised fifteen findings; all were verified against
+the code before being acted on, and all are now applied:
+
+- the translation **char budget** was wrong by an order of magnitude: the 2000
+  constant is only the fallback used when the window discovery fails. The
+  deployed budget is **11520 characters** (8192-token window), now measured by
+  the probe and recorded in §5.3;
+- the **graph traversal** stage was missing from the catalog. It runs on the
+  deployed chat path and **rewrites every surviving chunk's text** before the
+  reranker and the LLM see it — now recorded in §4.9;
+- the **history language** rule was mis-stated: the detected code is kept for the
+  history even when unsupported, and only the answer language falls back to `EN`
+  (§5.1);
+- `passthrough_unknown_language` covers a **refused** named code, not only an
+  absent one (§5.2);
+- an invalid filter strategy in the **environment** crashes the retriever at
+  import (503), it is not an HTTP 400 — only a per-request override is (§4.4);
+- the empty-**retrieval** abstention (`no_documents_retrieved`) was missing next
+  to the empty-**selection** one (§4.13);
+- the BM25 leg was credited to `okf-024`, whose BM25 is a different mechanism; it
+  is specified by a SPEC (§4.2, §9);
+- the probe measured the **backend** container too, so the BFF values in §5.5 are
+  measured instead of asserted;
+- the probe now exercises the **message-list** history shape the BFF actually
+  sends, not the single-message branch;
+- `--verify` is container-scoped, covers the query instruction, the model id, the
+  language count and the translation budget, and treats the sampled locale
+  strings as warnings rather than drift;
+- the probe is executable and its failures exit 2 with a message instead of a
+  traceback;
+- four citation ranges were corrected to the lines that carry the code.
+
 ## Spec Change Log
 
 ## Review Triage Log
@@ -168,7 +202,7 @@ The record separates three things that are easy to conflate:
 ## Verification
 
 **Commands:**
-- `python3 scripts/baselines/probe-v02-query-path.py --verify docs/baselines/v02-opea-query-path-contract.fixtures.json`
+- `scripts/baselines/probe-v02-query-path.py --verify docs/baselines/v02-opea-query-path-contract.fixtures.json`
   -- expected: `V02 contract verified: the live deployment matches the recorded
   measurement.` and exit 0.
 - `python3 -c "import json; json.load(open('docs/baselines/v02-opea-query-path-contract.fixtures.json'))"`
@@ -178,5 +212,6 @@ The record separates three things that are easy to conflate:
 
 **Manual checks:**
 - the record's §5.6 table lists three locales, one non-Latin, each with the
-  detected language, the status and the exact embedded string;
+  detected language, the status and the exact embedded string, and states that
+  they are a sample;
 - the record's §9 table lists every linked ADR with its status.

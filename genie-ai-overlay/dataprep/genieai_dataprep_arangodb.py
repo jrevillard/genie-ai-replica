@@ -2261,9 +2261,12 @@ class GenieArangoDataprep(OpeaArangoDataprep):
             return
 
         payload = {"level": level, "stage": stage, "message": message}
-        propagate.inject(headers)
         primary_url = f"{DOCUMENT_REPOSITORY_URL}/api/files/{file_id}/ingestion-log"
         try:
+            # The trace-context injection is inside the try on purpose: this
+            # function is called from paths that must not fail for a
+            # bookkeeping reason (the late-write purge), so it never raises.
+            propagate.inject(headers)
             async with (
                 self._log_semaphore,
                 aiohttp.ClientSession(
@@ -4241,8 +4244,8 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                         # the one outcome that changes its data: whatever the
                         # late write lands after the new ingest's retract stays
                         # as duplicate rows. Say so where they will look.
-                        # (The log write swallows its own failures — it must
-                        # not take the purge down with it.)
+                        # (A log write must not take the purge down with it,
+                        # and `_write_ingestion_log` never raises.)
                         await self._write_ingestion_log(
                             file_id,
                             "INFO",

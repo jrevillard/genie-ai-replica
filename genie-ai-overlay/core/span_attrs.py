@@ -275,10 +275,11 @@ ATTRIBUTE_NAMES = {
     "dataprep_file_id": "dataprep.file_id",
     "dataprep_kill_result": "dataprep.kill_result",
     # The late-write purge's outcome (dataprep.late_write_purge): what the
-    # purge did — purged / failed / stood_down. Without it a failed purge and
-    # a successful one look the same in the trace: background_span does not
-    # set the ERROR status on its own, and the purge swallows the exception
-    # it retries.
+    # purge did — purged / failed / stood_down / cancelled. Without it a
+    # failed purge and a successful one look the same in the trace:
+    # background_span does not set the ERROR status on its own, and the purge
+    # swallows the exception it retries. 'cancelled' is the outcome that
+    # leaves the rows behind (the process went down mid-purge).
     "dataprep_purge_result": "dataprep.purge_result",
     # Chunking — dataprep.chunking and the llm.* spans that label the chunks
     "dataprep_chunk_count": "dataprep.chunk_count",

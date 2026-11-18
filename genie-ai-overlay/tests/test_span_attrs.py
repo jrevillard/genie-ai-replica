@@ -178,7 +178,7 @@ class TestVocabularyShape:
         # rag.translation.query_status (issue #1026 - the query-translation
         # fallback the embedder receives); 112 -> 113 for
         # dataprep.purge_result (the late-write purge's outcome: purged /
-        # failed / stood_down).
+        # failed / stood_down / cancelled).
         assert len(ATTRIBUTE_NAMES) == 113
 
 

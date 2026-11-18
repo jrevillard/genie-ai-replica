@@ -1323,6 +1323,15 @@ container_scanning:
       fi
       REGISTRY_REF="$CI_REGISTRY_IMAGE/tmp/$IMAGE_NAME:${CANDIDATE_TAG}"
       CACHE_REF="$CI_REGISTRY_IMAGE/tmp/$IMAGE_NAME:cache-${CI_COMMIT_REF_SLUG}"
+      # The branch cache is EMPTY on a branch's first pipeline, so every
+      # layer rebuilds from scratch - and the heavy images then die: the
+      # runtime stage's apt install is a multi-minute SILENT step, and a job
+      # that prints nothing for a whole trace-update interval is killed (the
+      # trace API rejects the empty chunk with 403; the runner reads that as
+      # "the job was canceled"). Seeding the build with main's cache makes a
+      # new branch's first pipeline warm, so the heavy images build in
+      # seconds instead of dying (measured 2026-11-18: keycloak-config 65 s
+      # dead vs 16 s green with a warm cache).
       echo "Building $IMAGE_NAME → ${REGISTRY_REF}"
       # The frontend bakes a build marker (#1851): /build-info.json carries
       # the commit the image was built from, and the e2e pre-flight reads
@@ -1379,6 +1388,7 @@ container_scanning:
         -f "$DOCKERFILE" \
         $BUILD_ARGS \
         --cache-from "type=registry,ref=$CACHE_REF" \
+        --cache-from "type=registry,ref=$CI_REGISTRY_IMAGE/tmp/$IMAGE_NAME:cache-$CI_DEFAULT_BRANCH" \
         --cache-to "type=registry,ref=$CACHE_REF,mode=max" \
         "$CONTEXT"
 

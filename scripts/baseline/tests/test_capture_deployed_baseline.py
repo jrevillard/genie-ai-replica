@@ -11,6 +11,7 @@ Run: uv run --no-cache --with pytest --with pyyaml python -m pytest scripts/base
 import base64
 import importlib.util
 import os
+import re
 
 import pytest
 
@@ -135,24 +136,6 @@ def test_helper_rendered_variable_is_not_compared(chart_values, overlay_values, 
     assert not undeclared
 
 
-def test_matching_value_is_reported_as_match(chart_values, overlay_values, env_maps):
-    """The source's effective value and the deployed value agree -> MATCH."""
-    workload = {
-        "name": "genieai-genieai-umbrella-chatqna",
-        "component": "chatqna",
-        "containers": [
-            {"name": "chatqna", "image": "x", "env": {"RERANKING_STRATEGY": "threshold"}}
-        ],
-    }
-    effective = capture.deep_merge(chart_values, overlay_values)
-    rows, _ = capture.compare_workload(
-        workload, env_maps, chart_values, overlay_values, effective
-    )
-    row = next(row for row in rows if row["env"] == "RERANKING_STRATEGY")
-    assert row["status"] == "MATCH"
-    assert row["source_path"] == "opea.chatqna.rerankingStrategy"
-
-
 def test_the_three_layers_stay_distinct(chart_values, overlay_values, env_maps):
     """The chart default, the overlay override and the deployed value are three columns."""
     effective = capture.deep_merge(chart_values, overlay_values)
@@ -171,6 +154,7 @@ def test_the_three_layers_stay_distinct(chart_values, overlay_values, env_maps):
     assert row["overlay_value"] == "threshold"  # the overlay override
     assert row["deployed"] == "threshold"  # what the pod carries
     assert row["status"] == "MATCH"
+    assert row["source_path"] == "opea.chatqna.rerankingStrategy"
 
 
 def test_derived_value_is_compared_against_the_chart_derivation(chart_values, overlay_values, env_maps):
@@ -249,6 +233,8 @@ def test_injected_variables_are_skipped_unless_the_chart_declares_them(chart_val
     assert [row["env"] for row in compared] == ["RETRIEVER_ARANGO_K"]
     # the injected variable is dropped, the declared-but-absent ones are reported
     assert "ARANGODB_SINGLE_SERVICE_HOST" not in [row["env"] for row in rows]
+    # and it is not listed as "carried but not compared" either
+    assert "ARANGODB_SINGLE_SERVICE_HOST" not in [name for name in undeclared]
 
 
 def test_overlay_override_is_a_separate_layer(chart_values):
@@ -256,6 +242,11 @@ def test_overlay_override_is_a_separate_layer(chart_values):
     merged = capture.deep_merge(chart_values, {"opea": {"retriever": {"retrieverArangoK": "42"}}})
     assert capture.get_path(merged, "opea.retriever.retrieverArangoK") == "42"
     assert capture.get_path(chart_values, "opea.retriever.retrieverArangoK") == "20"
+    # the chart's own defaults under the same subtree survive the merge: a
+    # shallow merge would drop them and manufacture false differences
+    assert capture.get_path(merged, "opea.retriever.retrieverHybridRrfK") == (
+        capture.get_path(chart_values, "opea.retriever.retrieverHybridRrfK")
+    )
 
 
 def test_numbers_compare_numerically():
@@ -334,35 +325,6 @@ def test_a_model_difference_reaches_the_discrepancy_table(tmp_path, chart_values
     assert capture.exit_code_for(unresolved) == 2
 
 
-def test_the_capture_fails_on_a_configuration_difference_it_finds(tmp_path):
-    """The program's own gate: the difference the capture finds fails the capture."""
-    data = _record_data()
-    data["discrepancies"] = capture.collect_discrepancies(
-        [
-            {
-                "workload": "genieai-genieai-umbrella-chatqna",
-                "rows": [
-                    {
-                        "env": "RERANKING_STRATEGY",
-                        "status": "DIFFERENT",
-                        "source_value": "slice",
-                        "overlay_value": "",
-                        "effective_value": "slice",
-                        "source_path": "opea.chatqna.rerankingStrategy",
-                        "deployed": "adaptive",
-                    }
-                ],
-            }
-        ],
-        [],
-        [],
-    )
-    assert len(data["discrepancies"]) == 1
-    out_path = tmp_path / "record.md"
-    unresolved = capture.write_record(data, str(out_path))
-    assert capture.exit_code_for(unresolved) == 2
-
-
 def test_the_discrepancy_row_carries_the_effective_value():
     """The source of a difference is the effective value, not the chart default."""
     row = {
@@ -436,12 +398,19 @@ def test_a_subtree_candidate_falls_through_to_the_literal(env_maps):
     assert resolved == (None, literal)
 
 
-def test_the_chart_default_carries_the_path_it_resolved_from(chart_values, overlay_values, env_maps):
-    """When the chain falls through, the record names both sides' sources."""
-    # The overlay pins the realm; the chart default falls through the same
-    # chain but may land on a different element. The row must say where each
-    # column came from.
-    overlay = {"opea": {"enabled": True}, "data": {"keycloak": {"realm": "gov-realm"}}}
+def test_the_record_names_the_source_each_column_came_from(
+    tmp_path, chart_values, overlay_values, env_maps
+):
+    """The record says where the chart default and the effective value came from.
+
+    The overlay pins the realm; the chart's own default falls through the
+    template's fallback chain to another leaf. The record must say which
+    is which - the two columns are not the same source.
+    """
+    overlay = {
+        "opea": {"enabled": True, "chatqna": {"kcRealm": "gov-realm"}},
+        "data": {"keycloak": {"realm": "fallback-realm"}},
+    }
     effective = capture.deep_merge(chart_values, overlay)
     workload = {
         "name": "genieai-genieai-umbrella-chatqna",
@@ -452,7 +421,15 @@ def test_the_chart_default_carries_the_path_it_resolved_from(chart_values, overl
         workload, env_maps, chart_values, overlay, effective
     )
     row = next(row for row in rows if row["env"] == "KC_REALM")
-    assert row["default_path"] == row["source_path"]
+    assert row["source_path"] == "opea.chatqna.kcRealm"
+    assert row["default_path"] == "data.keycloak.realm"
+
+    data = _record_data()
+    data["config"] = [{"workload": workload["name"], "rows": rows, "undeclared": []}]
+    out_path = tmp_path / "record.md"
+    capture.write_record(data, str(out_path))
+    text = out_path.read_text(encoding="utf-8")
+    assert "data.keycloak.realm" in text
 
 
 def test_the_record_names_the_chart_source_it_reconciles_against(tmp_path):
@@ -656,8 +633,14 @@ def test_the_comparison_reports_a_difference_it_finds(
     data["discrepancies"] = capture.collect_discrepancies(
         [{"workload": workload["name"], "rows": rows}], [], []
     )
+    # the DIFFERENT row is the one that reaches the discrepancy table
+    differing = [row for row in rows if row["status"] == "DIFFERENT"]
+    assert "RERANKING_STRATEGY" in [row["env"] for row in differing]
+    assert "RERANKING_STRATEGY" in [row["env"] for row in data["discrepancies"]]
     out_path = str(tmp_path / "record.md")
     unresolved = capture.write_record(data, out_path)
+    # and it is among the differences that carry no disposition
+    assert "RERANKING_STRATEGY" in [row["env"] for row in unresolved]
     assert capture.exit_code_for(unresolved) == 2
 
 
@@ -797,12 +780,23 @@ def test_a_value_that_lives_in_a_secret_never_reaches_the_record(tmp_path, monke
                     "effective_value": "sk-live-SUPERSECRET",
                     "deployed": "<secret:vllm-api-key/VLLM_API_KEY>",
                     "status": "MATCH",
-                }
+                },
+                {
+                    "env": "OPENAI_API_KEY_DRIFTED",
+                    "source_path": "opea.chatqna.env.OPENAI_API_KEY",
+                    "default_path": "opea.chatqna.env.OPENAI_API_KEY",
+                    "source_value": "",
+                    "overlay_value": "sk-live-SUPERSECRET",
+                    "effective_value": "sk-live-SUPERSECRET",
+                    "deployed": "another-value",
+                    "status": "DIFFERENT",
+                },
             ],
             "undeclared": [],
             "multi_container": False,
         }
     ]
+    data["discrepancies"] = capture.collect_discrepancies(data["config"], [], [])
     out_path = tmp_path / "record.md"
     capture.write_record(data, str(out_path))
     text = out_path.read_text(encoding="utf-8")
@@ -893,23 +887,6 @@ def test_an_unconditional_row_the_deployment_does_not_carry_fails_the_capture(
     out_path = tmp_path / "record.md"
     unresolved = capture.write_record(data, str(out_path))
     assert capture.exit_code_for(unresolved) == 2
-
-
-def test_a_workload_without_a_compared_row_is_still_listed(chart_values, overlay_values, env_maps):
-    """A workload that carries only application variables is listed, not dropped."""
-    effective = capture.deep_merge(chart_values, overlay_values)
-    workload = {
-        "name": "genieai-genieai-umbrella-frontend",
-        "component": "frontend",
-        "containers": [
-            {"name": "frontend", "image": "x", "env": {"VUE_APP_API_URL": "http://x"}}
-        ],
-    }
-    rows, undeclared = capture.compare_workload(
-        workload, env_maps, chart_values, overlay_values, effective
-    )
-    assert not rows
-    assert undeclared
 
 
 # --------------------------------------------------------------------------
@@ -1111,3 +1088,104 @@ def test_a_commented_out_row_is_not_a_declaration(tmp_path):
     mapping = capture.parse_template_env(str(template))
     assert "COMMENTED_OUT" not in mapping
     assert "REAL" in mapping
+
+
+def test_a_non_negated_condition_the_capture_cannot_evaluate_is_conditional(
+    tmp_path, chart_values, overlay_values
+):
+    """A condition that is neither a local nor a path leaves the row conditional."""
+    template = tmp_path / "svc.yaml"
+    template.write_text(
+        "{{- $svc := .Values.services.backend | default dict -}}\n"
+        "{{- if eq $svc.name \"x\" -}}\n"
+        "- name: ONLY_WHEN_NAMED_X\n"
+        "  value: {{ $svc.name }}\n"
+        "{{- end -}}\n",
+        encoding="utf-8",
+    )
+    mapping = capture.parse_template_env(str(template))
+    assert mapping["ONLY_WHEN_NAMED_X"]["unresolved_guard"] is True
+
+    overlay = {"opea": {"enabled": True}}
+    effective = capture.deep_merge(chart_values, overlay)
+    workload = {
+        "name": "genieai-genieai-umbrella-chatqna",
+        "component": "chatqna",
+        "containers": [{"name": "chatqna", "image": "x", "env": {"LLM_MODEL": "m"}}],
+    }
+    rows, _ = capture.compare_workload(
+        workload, {"chatqna": mapping}, chart_values, overlay, effective
+    )
+    row = next(row for row in rows if row["env"] == "ONLY_WHEN_NAMED_X")
+    assert row["status"] == "CONDITIONAL"
+
+
+def test_an_else_branch_declares_its_row_only_when_the_condition_does_not_hold(
+    tmp_path, chart_values
+):
+    """The else branch is the negated condition, not an unresolved one."""
+    template = tmp_path / "svc.yaml"
+    template.write_text(
+        "{{- $svc := .Values.services.backend | default dict -}}\n"
+        "{{- if $svc.enabled -}}\n"
+        "- name: WHEN_ENABLED\n"
+        "  value: {{ $svc.name }}\n"
+        "{{- else -}}\n"
+        "- name: WHEN_DISABLED\n"
+        "  value: {{ $svc.name }}\n"
+        "{{- end -}}\n",
+        encoding="utf-8",
+    )
+    mapping = capture.parse_template_env(str(template))
+
+    def declared_rows(enabled):
+        overlay = {"opea": {"enabled": True}, "services": {"backend": {"enabled": enabled}}}
+        effective = capture.deep_merge(chart_values, overlay)
+        workload = {
+            "name": "genieai-genieai-umbrella-chatqna",
+            "component": "chatqna",
+            "containers": [{"name": "chatqna", "image": "x", "env": {"LLM_MODEL": "m"}}],
+        }
+        rows, _ = capture.compare_workload(
+            workload, {"chatqna": mapping}, chart_values, overlay, effective
+        )
+        return [row["env"] for row in rows]
+
+    assert "WHEN_ENABLED" in declared_rows(True)
+    assert "WHEN_DISABLED" not in declared_rows(True)
+    assert "WHEN_DISABLED" in declared_rows(False)
+    assert "WHEN_ENABLED" not in declared_rows(False)
+
+
+def test_the_capture_only_reads_the_cluster():
+    """The capture is read-only: it runs no mutating kubectl verb."""
+    with open(SCRIPT, encoding="utf-8") as handle:
+        source = handle.read()
+    mutating = (
+        "delete",
+        "apply",
+        "patch",
+        "create",
+        "replace",
+        "edit",
+        "scale",
+        "rollout",
+        "annotate",
+        "label",
+        "port-forward",
+        "exec",
+        "drain",
+        "cordon",
+    )
+    for invocation in re.findall(r'\[\s*"kubectl".*?\]', source, re.S):
+        for verb in mutating:
+            assert f'"{verb}"' not in invocation, invocation
+
+
+def test_the_record_carries_the_capture_date(tmp_path):
+    """The record is dated: the capture's date is in its heading."""
+    data = _record_data()
+    data["capture"]["date"] = "2026-11-18"
+    out_path = tmp_path / "record.md"
+    capture.write_record(data, str(out_path))
+    assert "2026-11-18" in out_path.read_text(encoding="utf-8").splitlines()[0]

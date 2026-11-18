@@ -108,6 +108,22 @@ const pinEnglish = async ({ page }) => {
   await pinLocale(page.context(), 'en');
 };
 
+/**
+ * The locale the APP adopted — the language it booted with, read off
+ * `<html lang>` (the attribute main.js writes with the resolved locale).
+ *
+ * ONE home for the read: the pin lives here, so the read of what the pin
+ * produced lives here too, and every reader (the specs' assertion, the
+ * venue profile's adoption probe) sees the same signal.
+ *
+ * @param {import('@playwright/test').Page} page - the page to read from
+ * @returns {Promise<string>} the adopted locale code ('' when the page
+ *   carries no attribute)
+ */
+async function readAdoptedLocale(page) {
+  return page.evaluate(() => document.documentElement.lang || '');
+}
+
 // The locale sweeps' premise, asserted once per session: the app ADOPTED the
 // seeded locale. main.js's detectInitialLocale silently falls back to 'en'
 // when the saved locale is not in the deployment's active set (the
@@ -119,7 +135,7 @@ const pinEnglish = async ({ page }) => {
 // pinLocale (pin the seed, prove the seed, prove the adoption — one
 // concern), before anything is measured.
 async function assertAdoptedLocale(page, where, locale) {
-  const adopted = await page.evaluate(() => document.documentElement.lang);
+  const adopted = await readAdoptedLocale(page);
   expect(
     adopted,
     `${where}: <html lang> reads '${adopted}', not the seeded '${locale}' — ` +
@@ -127,4 +143,4 @@ async function assertAdoptedLocale(page, where, locale) {
   ).toBe(locale);
 }
 
-module.exports = { pinLocale, pinEnglish, assertAdoptedLocale };
+module.exports = { pinLocale, pinEnglish, assertAdoptedLocale, readAdoptedLocale };

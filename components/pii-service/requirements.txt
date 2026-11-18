@@ -3,8 +3,19 @@
 # may use whatever pydantic it needs (user directive).
 fastapi==0.141.1
 uvicorn==0.30.6
-presidio-analyzer==2.2.364
-presidio-anonymizer==2.2.364
+
+# presidio 2.2.366 (2026-11) is the first release that allows the fixed
+# cryptography: 2.2.364 pins cryptography<49.0.0, which is exactly the
+# range the advisories flag —
+#   CVE-2026-69249 (HIGH) duplicate self-signed intermediates, exponential
+#                          blowup while resolving a chain;
+#   CVE-2026-69248 (HIGH) the verifier accepts a wildcard DNS name that
+#                          escapes the names the intermediate CA permits;
+#   CVE-2026-69247 (MEDIUM) PKCS#7 decryption is a Bleichenbacher oracle.
+# 2.2.365/2.2.366 require cryptography>=50.0.0,<51.0.0, so the bump pulls
+# the fixed cryptography in (50.0.2) without a second transitive pin.
+presidio-analyzer==2.2.366
+presidio-anonymizer==2.2.366
 
 # preshed is spaCy's hash-map primitive, and 3.0.14 (released 2026-10-24)
 # breaks the tokenizer: loading the baked-in NER model raises

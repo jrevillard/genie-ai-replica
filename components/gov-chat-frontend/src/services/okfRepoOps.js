@@ -24,7 +24,7 @@ import repoOkfService from './repoOkfService';
 import conceptService from './conceptService';
 import httpService from './httpService';
 import serviceTreeService from './serviceTreeService';
-import matter from 'gray-matter';
+import { safeMatter } from './safeMatter';
 
 /** Slug for new concept paths: a client-side mirror of the okf-server base
  * slug grammar (issue #1190 SSOT) for locally-minted concept paths. Two
@@ -242,7 +242,7 @@ export function buildConceptPayload({ title, type = 'topic', body = '', existing
   let pasteFm = {};
   let pasteBody = body || '';
   try {
-    const parsed = matter(pasteBody || '');
+    const parsed = safeMatter(pasteBody || '');
     pasteFm = parsed.data || {};
     pasteBody = parsed.content || '';
   } catch {

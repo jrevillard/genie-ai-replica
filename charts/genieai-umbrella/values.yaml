@@ -1254,6 +1254,12 @@ opea:
       #     VLLM_API_KEY from the vllm-api-key Secret, which the code
       #     accepts on the same paths.
   retriever:
+    # The image this service runs. The default is the fat image (`:main`).
+    # The slim variant (`:main-slim`, issue #2000) carries NO model stack
+    # — no torch, no CUDA wheels, no local weights — for a deployment whose
+    # model calls all go to an external GPU API. Set the tag (or a digest)
+    # here to run the slim variant.
+    image: { repository: genie-ai-retriever-arango, tag: "main" }
     # RETRIEVER_* — every knob the retriever template reads, declared
     # with its template default (see the chatqna note).
     retrieverComponentName: "GENIE_RETRIEVER_ARANGODB"  # RETRIEVER_COMPONENT_NAME
@@ -1317,6 +1323,12 @@ opea:
       MODEL_PROBE_TIMEOUT_SECONDS: "10"
       MODEL_SUMMARIZER_TIMEOUT_SECONDS: "600"
   dataprep:
+    # The image this service runs. The default is the fat image (`:main`).
+    # The slim variant (`:main-slim`, issue #2000) carries NO model stack
+    # — no torch, no CUDA wheels, no local weights — for a deployment whose
+    # model calls all go to an external GPU API. Set the tag (or a digest)
+    # here to run the slim variant.
+    image: { repository: genie-ai-dataprep-arango, tag: "main" }
     # chunking / labeling / contextual retrieval — every knob the dataprep
     # template reads, declared with its template default (see the chatqna
     # note).
@@ -1387,6 +1399,12 @@ opea:
       MODEL_LLM_TIMEOUT_SECONDS: "180"
       MODEL_PROBE_TIMEOUT_SECONDS: "10"
   reranker:
+    # The image this service runs. The default is the fat image (`:main`).
+    # The slim variant (`:main-slim`, issue #2000) carries NO model stack
+    # — no torch, no CUDA wheels, no local weights — for a deployment whose
+    # model calls all go to an external GPU API. Set the tag (or a digest)
+    # here to run the slim variant.
+    image: { repository: genie-ai-reranker, tag: "main" }
     # Adaptive-utility tuning knobs read at reranker startup; only used
     # when RERANKING_STRATEGY=adaptive. Rendered as the
     # NOVELTY_SIGMOID_*/CONTEXT_DECAY_FACTOR/MIN_VALUE_THRESHOLD env rows

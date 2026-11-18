@@ -462,7 +462,7 @@ def main() -> int:
     if args.verify:
         try:
             return verify(args.verify, document)
-        except (OSError, ValueError, KeyError) as exc:
+        except (OSError, ValueError, KeyError, AttributeError, TypeError) as exc:
             print(f"verify failed: {exc}", file=sys.stderr)
             return 2
 

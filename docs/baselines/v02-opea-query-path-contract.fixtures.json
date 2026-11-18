@@ -445,13 +445,16 @@
             "RETRIEVER_ARANGO_TRAVERSAL_MAX_DEPTH": "2",
             "RETRIEVER_ARANGO_TRAVERSAL_MAX_RETURNED": "5",
             "RETRIEVER_ARANGO_TRAVERSAL_SCORE_THRESHOLD": "0.7"
+          },
+          "backend": {
+            "OKF_ENABLED": "0"
           }
         },
         "expected_output": {
           "enablement": "chatqna forwards enable_traversal from its own env (RETRIEVER_ARANGO_TRAVERSAL_ENABLED=true), so the traversal RUNS on the deployed chat path",
           "text_mutation": "each surviving chunk's page_content is REWRITTEN: '\\n------\\nRELATED INFORMATION:\\n------\\n' plus the neighbourhood. The reranker therefore scores text-augmented documents, and so does the LLM",
           "neighbour_limit": "at most traversal_max_returned (5) neighbours per chunk, at most traversal_max_depth (2) hops, each neighbour above traversal_score_threshold (0.7)",
-          "size_gate": "the size gate (max_links) and the leg sub-budget are FAN-OUT PER-LEG contracts (retriever:1996-2005, 2307): the legacy single-graph path runs with legacy_unbounded=True, so it has neither gate nor time-box. The deployed venue runs the LEGACY path — the carrier carries labels only, no graph names, so the fan-out does not engage (retriever:2317-2342).",
+          "size_gate": "the size gate (max_links) and the leg sub-budget are FAN-OUT PER-LEG contracts (retriever:1996-2005, 2307): the legacy single-graph path runs with legacy_unbounded=True, so it has neither gate nor time-box. The deployed venue runs the LEGACY path: the backend serves OKF_ENABLED=0, so the retrieval-config client short-circuits to the legacy default and never dials the okf-server (retrieval-config-client.js:113, :450); the BFF's engaged flag is therefore absent (query-service.js:691-694); the carrier names NO graph and the fan-out does not engage (retriever:2317-2342). The FAN-OUT PATH still carries both.",
           "concurrency": "the deployed traversal_concurrent_batches is 10; the service caps itself at 4 (Arango Traversal ... is above the safe cap (4). Capping to 4.)",
           "failure": "a failed traversal leaves the zeros it found: the leg continues WITHOUT graph enrichment"
         },
@@ -678,7 +681,7 @@
       "measured_budget": {
         "translation_window_tokens": 8192,
         "translation_char_budget": 11520,
-        "derivation": "(window - 512) // 2 * 3 = 11520 characters; 512 is TRANSLATION_PROMPT_OVERHEAD_TOKENS, 128 is TRANSLATION_COMPLETION_SAFETY_TOKENS. MAX_TRANSLATION_CHARS is unset, so the 2000-character code constant is only the FALLBACK used when the window discovery fails",
+        "derivation": "(window - TRANSLATION_PROMPT_OVERHEAD_TOKENS) // 2 * TRANSLATION_CHARS_PER_TOKEN = (8192 - 512) // 2 * 3 = 11520 characters. The 512 is TRANSLATION_PROMPT_OVERHEAD_TOKENS (chatqna:857); the 3 is TRANSLATION_CHARS_PER_TOKEN (chatqna:876). The completion reserve is a SEPARATE constant, TRANSLATION_COMPLETION_SAFETY_TOKENS=128 (chatqna:606). MAX_TRANSLATION_CHARS is unset, so the 2000-character code constant is only the FALLBACK used when the window discovery fails.",
         "prompt_overhead_tokens": 512,
         "completion_safety_tokens": 128
       },
@@ -690,7 +693,7 @@
         "fallback_error": "the translation failed for any other reason (blank input, blank completion, unreadable registry, unknown model failure) — the SOURCE-language history is embedded"
       },
       "bounds": {
-        "char_budget": "11520 characters on the deployed venue (derived from the discovered 8192-token window); MAX_TRANSLATION_CHARS is unset",
+        "char_budget": "11520 characters on the deployed venue: (window - TRANSLATION_PROMPT_OVERHEAD_TOKENS) // 2 * TRANSLATION_CHARS_PER_TOKEN = (8192 - 512) // 2 * 3. MAX_TRANSLATION_CHARS is unset, so the 2000-character code constant is only the FALLBACK used when the window discovery fails, and an explicit value only lowers the derived budget.",
         "single_message_shape": "a single-message history over the budget is REFUSED: TranslationInputTooLongError -> HTTP 422 (see failure classes)",
         "list_shape": "the CHAR BUDGET never refuses the list shape: the oldest turns are dropped and the newest message's tail is truncated. The TRANSLATION WINDOW can still overflow, and that DOES refuse: TranslationInputTooLongError is deliberately not caught in the list branch (chatqna:4237-4243), so it reaches the 422 handler (§ failure classes).",
         "generation_time_truncation": "when the prompt exceeds the model window, the OLDEST history segments are dropped; the retrieved documents are never truncated"

@@ -65,7 +65,7 @@ the running stack so the record can be verified and kept honest.
   the search branches (§4.1), the BM25 view and its AQL (§4.2), `rrf_fuse` (§4.3),
   the label clause builder and the Python post-filter (§4.4, §4.5), the batched
   file_id enrichment (§4.6), the CAP-1 join (§4.7), `_attach_provenance` (§4.8),
-  the fan-out (§4.9), the routing gate (§4.10), the query-instruction wrapper.
+  the graph traversal (§4.9), the fan-out (§4.10), the routing gate (§4.11), the query-instruction wrapper.
 - `genie-ai-overlay/retriever/config.py` — the knob names and the code defaults.
 - `genie-ai-overlay/core/embedding_query_prefix.py` — the model-specific
   query-instruction contract.

@@ -13,7 +13,7 @@
 | Upstream authority | PRD `agentic-foundations`, architecture spine AD-10 (behavior frozen to this record) |
 | Owner | the story 1.1 worker · reviewers: the orchestrator's review chain (MR !948) |
 | Evidence | the probe run on the venue: `V02 contract verified: the live deployment matches the recorded measurement.` (exit 0), plus the live observations of §7 |
-| Reconsideration triggers | the deployed query-path knobs change; the **OKF posture changes** (`OKF_ENABLED` leaves `0`, or an okf-server appears: the fan-out engages and the traversal's size gate and leg budget return); the venue is re-based; a story of Epic 1 reports a behavior the record does not describe; the ADR statuses of §9 change |
+| Reconsideration triggers | the deployed query-path knobs change; the **OKF posture changes** — the BFF consults the okf-server **and** that server reports an engaged posture with serving graphs: only then does the carrier name graphs, the fan-out engage, and the traversal's size gate and leg budget return; the venue is re-based; a story of Epic 1 reports a behavior the record does not describe; the ADR statuses of §9 change |
 
 ### FR-29 traceability
 
@@ -354,10 +354,13 @@ file.
   with `legacy_unbounded=True` (`retriever:2307`), so it has **neither** gate nor
   time-box.
 
-  **The deployed venue runs that legacy path.** The BFF's `engaged` flag comes
-  from the okf-server and is read, never re-derived (`query-service.js:693-694`);
-  the venue serves `OKF_ENABLED=0` (§3.3), so the engagement lookup yields no
-  engagement, the carrier names **no graph**, and the fan-out does not engage
+  **The deployed venue runs that legacy path.** The venue serves `OKF_ENABLED=0`
+  (§3.3), so the BFF's retrieval-config client short-circuits to the legacy
+  default and **never dials the okf-server**
+  (`components/gov-chat-backend/services/retrieval-config-client.js:113`, `:450`);
+  the `engaged` flag the BFF reads is therefore absent
+  (`components/gov-chat-backend/services/query-service.js:691-694`); the carrier
+  names **no graph**, and the fan-out does not engage
   (`retriever:2317-2342`). The deployed traversal is therefore **not**
   size-gated and **not** time-boxed. The **fan-out path still carries both**
   (§4.10): the port must preserve the difference between the two paths, not
@@ -374,7 +377,9 @@ file.
   one graph (an empty carrier keeps the legacy single-graph path). A timed-out or
   failed leg is a **zero-hit leg**: the fusion continues with the surviving legs.
   The second-level cross-graph fusion is an **unweighted** RRF keyed on
-  `(graph_name, chunk_id)`, truncated to `min(k, 200)`.
+  `(graph_name, chunk_id)`, truncated to `min(k, 200)`. Each fan-out leg's
+  traversal is **size-gated** (`max_links`) and bounded by the **leg sub-budget**
+  — the two bounds the legacy path does not have (§4.9).
 * **Code** — `genie-ai-overlay/retriever/genieai_retriever_arangodb.py:2413-2483`,
   `:2380-2410`.
 * **ADR evidence** — `okf-012`, `okf-027`.

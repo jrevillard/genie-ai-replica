@@ -4711,6 +4711,46 @@ chart:lint:
       $(cat charts/ci/render-full-flags)
       --set opea.gpu.mode=in-cluster
       > /tmp/rendered-incluster.yaml
+    # The image-tag RULES (issue #2000's naming refactor): one version, one
+    # variant, one pin. Four renders, one assertion set — the version for
+    # every GENIE.AI image, the variant on the three model-serving images
+    # ONLY, a pin naming the EXACT tag (never the composed one), and the pull
+    # policy judging the BASE tag. Nothing else in this job knows those
+    # rules: `helm lint` only knows the template parses, the values gates
+    # only know a value is DECLARED, and the parity gate compares
+    # environment variables, not image tags.
+    - >-
+      helm template test charts/genieai-umbrella -n genieai --kube-version $(cat charts/ci/kube-version) $(cat charts/ci/render-base-flags)
+      --set opea.enabled=true --set okf.enabled=true
+      --set opea.gpu.nodeHost=https://gpu.ci-render.local:444
+      --set imageTag=v2.1.0
+      > /tmp/rendered-tag-global.yaml
+    - >-
+      helm template test charts/genieai-umbrella -n genieai --kube-version $(cat charts/ci/kube-version) $(cat charts/ci/render-base-flags)
+      --set opea.enabled=true --set okf.enabled=true
+      --set opea.gpu.nodeHost=https://gpu.ci-render.local:444
+      --set imageTag=v2.1.0 --set opea.imageTagSuffix=-slim
+      > /tmp/rendered-tag-variant.yaml
+    - >-
+      helm template test charts/genieai-umbrella -n genieai --kube-version $(cat charts/ci/kube-version) $(cat charts/ci/render-base-flags)
+      --set opea.enabled=true --set okf.enabled=true
+      --set opea.gpu.nodeHost=https://gpu.ci-render.local:444
+      --set imageTag=v2.1.0 --set opea.imageTagSuffix=-slim
+      --set services.backend.image.tag=v1.9.8
+      --set opea.chatqna.image.tag=v1.9.9
+      --set opea.embedding.image.tag=v1.9.7
+      --set okf.server.image.tag=v1.9.6
+      --set okf.pii.image.tag=v1.9.5
+      --set okf.ragas.image.tag=v1.9.4
+      --set opea.reranker.image.tag=v1.9.3
+      > /tmp/rendered-tag-pinned.yaml
+    - >-
+      helm template test charts/genieai-umbrella -n genieai --kube-version $(cat charts/ci/kube-version) $(cat charts/ci/render-base-flags)
+      --set opea.enabled=true --set okf.enabled=true
+      --set opea.gpu.nodeHost=https://gpu.ci-render.local:444
+      --set imageTag=main --set opea.imageTagSuffix=-slim
+      > /tmp/rendered-tag-mutable.yaml
+    - python3 scripts/ci/image-tag-check.py /tmp/rendered-tag-global.yaml /tmp/rendered-tag-variant.yaml /tmp/rendered-tag-pinned.yaml /tmp/rendered-tag-mutable.yaml
     - >-
       curl -fsSL
       https://github.com/yannh/kubeconform/releases/download/v0.6.7/kubeconform-linux-amd64.tar.gz

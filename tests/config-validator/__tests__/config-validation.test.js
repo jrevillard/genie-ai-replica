@@ -143,7 +143,14 @@ describe('Configuration Validation Suite', () => {
     'DOCLING_ENDPOINT_TIMEOUT',
     // Per-service image vars — infrastructure (not app config), used by compose only
     'GENIE_AI_REGISTRY',
-    'GENIE_AI_GLOBAL_TAG'
+    // The tag every GENIE.AI image carries. GENIE_AI_GLOBAL_TAG is the
+    // former name, still read as a fallback for one release.
+    'GENIE_AI_IMAGE_TAG',
+    'GENIE_AI_GLOBAL_TAG',
+    // The tag suffix for the OPEA tier's model-serving images (the slim
+    // build — issue #2000). It is read by docker-compose's interpolation
+    // of the three OPEA image lines, not by a container's env.
+    'GENIE_AI_OPEA_IMAGE_TAG_SUFFIX'
   ]);
 
   // !1073 — documented OKF_* knobs that are deliberately NOT wired to a
@@ -552,7 +559,9 @@ describe('Configuration Validation Suite', () => {
           (name) =>
             name.startsWith('GENIE_AI_') &&
             name !== 'GENIE_AI_REGISTRY' &&
+            name !== 'GENIE_AI_IMAGE_TAG' &&
             name !== 'GENIE_AI_GLOBAL_TAG' &&
+            name !== 'GENIE_AI_OPEA_IMAGE_TAG_SUFFIX' &&
             !rendered.has(name)
         );
       expect(unrendered).toEqual([]);

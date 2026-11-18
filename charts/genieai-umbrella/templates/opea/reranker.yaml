@@ -41,7 +41,7 @@ image) or a digest. The default is unchanged. */ -}}
    values block and demands exactly that. */ -}}
 {{- $opeaVals := .Values.opea | default dict -}}
 {{- $svcOvr := $opeaVals.reranker | default dict -}}
-{{- $img := merge (deepCopy ($svcOvr.image | default dict)) (dict "repository" "genie-ai-reranker" "tag" "main") -}}
+{{- $img := merge (deepCopy ($svcOvr.image | default dict)) (dict "repository" "genie-ai-reranker" "tag" (include "genieai-umbrella.opeaImageTag" (dict "root" . "key" "reranker" "serviceTag" (($svcOvr.image).tag | default "")))) -}}
 {{- $svcVals := dict
     "image" $img
     "port" 8000

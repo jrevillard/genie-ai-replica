@@ -34,124 +34,136 @@ from __future__ import annotations
 
 import argparse
 import json
-import shlex
 import subprocess
 import sys
-from datetime import datetime, timezone
+from datetime import UTC, datetime
+from typing import NamedTuple
 
-# The knobs the V02 record is about, per container. Every one of them is read
-# from the running pod, so the record states the deployed value, not the
-# repository default.
-CONTAINER_KNOBS: dict[str, list[str]] = {
-    "retriever": [
-        "ARANGO_DB",
-        "ARANGO_GRAPH_NAME",
-        "ARANGO_URL",
-        "RETRIEVER_ARANGO_SEARCH_MODE",
-        "RETRIEVER_ARANGO_SEARCH_START",
-        "RETRIEVER_ARANGO_DISTANCE_STRATEGY",
-        "RETRIEVER_ARANGO_DISTANCE_THRESHOLD",
-        "RETRIEVER_ARANGO_FETCH_K",
-        "RETRIEVER_ARANGO_K",
-        "RETRIEVER_ARANGO_LAMBDA_MULT",
-        "RETRIEVER_ARANGO_NUM_CENTROIDS",
-        "RETRIEVER_ARANGO_SCORE_THRESHOLD",
-        "RETRIEVER_ARANGO_USE_APPROX_SEARCH",
-        "RETRIEVER_ARANGO_FILTER_STRATEGY",
-        "RETRIEVER_ARANGO_TRAVERSAL_ENABLED",
-        "RETRIEVER_ARANGO_TRAVERSAL_MAX_DEPTH",
-        "RETRIEVER_ARANGO_TRAVERSAL_MAX_RETURNED",
-        "RETRIEVER_ARANGO_TRAVERSAL_SCORE_THRESHOLD",
-        "RETRIEVER_ARANGO_TRAVERSAL_CONCURRENT_BATCHES",
-        "RETRIEVER_ARANGO_TRAVERSAL_MAX_LINKS",
-        "RETRIEVER_ARANGO_TRAVERSAL_MAX_EDGES_PER_NODE",
-        "RETRIEVER_HYBRID_RETRIEVAL_ENABLED",
-        "RETRIEVER_HYBRID_BM25_ANALYZER",
-        "RETRIEVER_HYBRID_BM25_CANDIDATES",
-        "RETRIEVER_HYBRID_RRF_K",
-        "RETRIEVER_HYBRID_DENSE_WEIGHT",
-        "RETRIEVER_HYBRID_LEXICAL_WEIGHT",
-        "RETRIEVER_FANOUT_ENABLED",
-        "RETRIEVER_FANOUT_MAX_GRAPHS",
-        "RETRIEVER_FANOUT_PER_GRAPH_TIMEOUT_MS",
-        "RETRIEVER_FANOUT_CANDIDATE_CAP_GLOBAL",
-        "RETRIEVER_FANOUT_CANDIDATE_CAP_PER_GRAPH",
-        "RETRIEVER_ROUTE_ENABLED",
-        "RETRIEVER_ROUTE_TOP_K",
-        "RETRIEVER_ROUTE_MIN_CHUNKS",
-        "RETRIEVER_ROUTE_PROBE_TIMEOUT_MS",
-        "RETRIEVER_ROUTE_RETRY",
-        "RETRIEVER_ROUTE_HEAD_WEIGHT",
-        "RETRIEVER_ROUTE_HEAD_MARGIN",
-        "RETRIEVER_ROUTE_HEAD_FLOOR",
-        "RETRIEVER_ROUTE_FORBIDDEN_TAG_MAX",
-        "RETRIEVER_ROUTE_HEADS_SUPERSEDE",
-        "TEI_EMBEDDING_ENDPOINT",
-    ],
-    "chatqna": [
-        "RETRIEVER_ARANGO_SEARCH_START",
-        "RETRIEVER_ARANGO_DISTANCE_THRESHOLD",
-        "RETRIEVER_ARANGO_FETCH_K",
-        "RETRIEVER_ARANGO_K",
-        "RETRIEVER_ARANGO_LAMBDA_MULT",
-        "RETRIEVER_ARANGO_SCORE_THRESHOLD",
-        "RETRIEVER_ARANGO_TRAVERSAL_ENABLED",
-        "RETRIEVER_ARANGO_TRAVERSAL_MAX_DEPTH",
-        "RETRIEVER_ARANGO_TRAVERSAL_MAX_RETURNED",
-        "RETRIEVER_ARANGO_TRAVERSAL_SCORE_THRESHOLD",
-        "RERANKING_STRATEGY",
-        "RERANKING_THRESHOLD",
-        "RERANKER_TOP_N",
-        "RERANKER_SCORE_CALIBRATION",
-        "RERANKER_SCORE_TEMPERATURE",
-        "VLLM_TRANSLATION_ENDPOINT",
-        "VLLM_TRANSLATION_MODEL_ID",
-        "TRANSLATION_SERVICE_HOST_IP",
-        "TRANSLATION_SERVICE_PORT",
-        "TRANSLATION_SERVICE_TIMEOUT",
-        "LANGUAGE_REGISTRY_FILEPATH",
-        "MAX_TRANSLATION_CHARS",
-        "MULTI_TURN_MODE",
-        "MULTI_TURN_HISTORY_TURNS",
-        "MULTI_TURN_BLEND_ENABLED",
-        "MULTI_TURN_BLEND_ALPHA",
-        "MULTI_TURN_CONDENSE_HISTORY_TURNS",
-        "TEI_EMBED_MODEL",
-        "EMBEDDING_QUERY_INSTRUCTIONS",
-    ],
-    "reranker": [
-        "RERANKING_STRATEGY",
-        "RERANKING_THRESHOLD",
-        "RERANKER_TOP_N",
-    ],
-    "embedding": [
-        "TEI_EMBEDDING_ENDPOINT",
-        "EMBEDDING_MODEL_ID",
-        "EMBEDDING_MODEL_ENDPOINT",
-    ],
-    "backend": [
-        "OPEA_HOST",
-        "OPEA_PORT",
-        "CONTEXT_OPTION",
-        "TRANSLATION_BACKEND",
-        "GPU_NODE_HOST",
-        "VLLM_TRANSLATION_ENDPOINT",
-        "VLLM_TRANSLATION_MODEL_ID",
-        "STREAMING_TRANSLATION_ENABLED",
-        "OPEA_STREAMING",
-        "OKF_ENABLED",
-        "OKF_SERVER_URL",
-    ],
-}
 
-# The containers the probe reads, and the pod-name marker that identifies
-# each of them.
-CONTAINERS: dict[str, str] = {
-    "retriever": "umbrella-retriever-",
-    "chatqna": "umbrella-chatqna-",
-    "reranker": "umbrella-reranker-",
-    "embedding": "umbrella-embedding-",
-    "backend": "umbrella-backend-",
+# The containers the probe reads: the pod-name marker that identifies each
+# one, and the knobs the V02 record is about for it. Every knob is read from
+# the running pod, so the record states the deployed value, not the repository
+# default. One entry per container: a new container touches one place.
+class Container(NamedTuple):
+    marker: str
+    knobs: list[str]
+
+
+CONTAINERS: dict[str, Container] = {
+    "retriever": Container(
+        marker="umbrella-retriever-",
+        knobs=[
+            "ARANGO_DB",
+            "ARANGO_GRAPH_NAME",
+            "ARANGO_URL",
+            "RETRIEVER_ARANGO_SEARCH_MODE",
+            "RETRIEVER_ARANGO_SEARCH_START",
+            "RETRIEVER_ARANGO_DISTANCE_STRATEGY",
+            "RETRIEVER_ARANGO_DISTANCE_THRESHOLD",
+            "RETRIEVER_ARANGO_FETCH_K",
+            "RETRIEVER_ARANGO_K",
+            "RETRIEVER_ARANGO_LAMBDA_MULT",
+            "RETRIEVER_ARANGO_NUM_CENTROIDS",
+            "RETRIEVER_ARANGO_SCORE_THRESHOLD",
+            "RETRIEVER_ARANGO_USE_APPROX_SEARCH",
+            "RETRIEVER_ARANGO_FILTER_STRATEGY",
+            "RETRIEVER_ARANGO_TRAVERSAL_ENABLED",
+            "RETRIEVER_ARANGO_TRAVERSAL_MAX_DEPTH",
+            "RETRIEVER_ARANGO_TRAVERSAL_MAX_RETURNED",
+            "RETRIEVER_ARANGO_TRAVERSAL_SCORE_THRESHOLD",
+            "RETRIEVER_ARANGO_TRAVERSAL_CONCURRENT_BATCHES",
+            "RETRIEVER_ARANGO_TRAVERSAL_MAX_LINKS",
+            "RETRIEVER_ARANGO_TRAVERSAL_MAX_EDGES_PER_NODE",
+            "RETRIEVER_HYBRID_RETRIEVAL_ENABLED",
+            "RETRIEVER_HYBRID_BM25_ANALYZER",
+            "RETRIEVER_HYBRID_BM25_CANDIDATES",
+            "RETRIEVER_HYBRID_RRF_K",
+            "RETRIEVER_HYBRID_DENSE_WEIGHT",
+            "RETRIEVER_HYBRID_LEXICAL_WEIGHT",
+            "RETRIEVER_FANOUT_ENABLED",
+            "RETRIEVER_FANOUT_MAX_GRAPHS",
+            "RETRIEVER_FANOUT_PER_GRAPH_TIMEOUT_MS",
+            "RETRIEVER_FANOUT_CANDIDATE_CAP_GLOBAL",
+            "RETRIEVER_FANOUT_CANDIDATE_CAP_PER_GRAPH",
+            "RETRIEVER_ROUTE_ENABLED",
+            "RETRIEVER_ROUTE_TOP_K",
+            "RETRIEVER_ROUTE_MIN_CHUNKS",
+            "RETRIEVER_ROUTE_PROBE_TIMEOUT_MS",
+            "RETRIEVER_ROUTE_RETRY",
+            "RETRIEVER_ROUTE_HEAD_WEIGHT",
+            "RETRIEVER_ROUTE_HEAD_MARGIN",
+            "RETRIEVER_ROUTE_HEAD_FLOOR",
+            "RETRIEVER_ROUTE_FORBIDDEN_TAG_MAX",
+            "RETRIEVER_ROUTE_HEADS_SUPERSEDE",
+            "TEI_EMBEDDING_ENDPOINT",
+        ],
+    ),
+    "chatqna": Container(
+        marker="umbrella-chatqna-",
+        knobs=[
+            "RETRIEVER_ARANGO_SEARCH_START",
+            "RETRIEVER_ARANGO_DISTANCE_THRESHOLD",
+            "RETRIEVER_ARANGO_FETCH_K",
+            "RETRIEVER_ARANGO_K",
+            "RETRIEVER_ARANGO_LAMBDA_MULT",
+            "RETRIEVER_ARANGO_SCORE_THRESHOLD",
+            "RETRIEVER_ARANGO_TRAVERSAL_ENABLED",
+            "RETRIEVER_ARANGO_TRAVERSAL_MAX_DEPTH",
+            "RETRIEVER_ARANGO_TRAVERSAL_MAX_RETURNED",
+            "RETRIEVER_ARANGO_TRAVERSAL_SCORE_THRESHOLD",
+            "RERANKING_STRATEGY",
+            "RERANKING_THRESHOLD",
+            "RERANKER_TOP_N",
+            "RERANKER_SCORE_CALIBRATION",
+            "RERANKER_SCORE_TEMPERATURE",
+            "VLLM_TRANSLATION_ENDPOINT",
+            "VLLM_TRANSLATION_MODEL_ID",
+            "TRANSLATION_SERVICE_HOST_IP",
+            "TRANSLATION_SERVICE_PORT",
+            "TRANSLATION_SERVICE_TIMEOUT",
+            "LANGUAGE_REGISTRY_FILEPATH",
+            "MAX_TRANSLATION_CHARS",
+            "MULTI_TURN_MODE",
+            "MULTI_TURN_HISTORY_TURNS",
+            "MULTI_TURN_BLEND_ENABLED",
+            "MULTI_TURN_BLEND_ALPHA",
+            "MULTI_TURN_CONDENSE_HISTORY_TURNS",
+            "TEI_EMBED_MODEL",
+            "EMBEDDING_QUERY_INSTRUCTIONS",
+        ],
+    ),
+    "reranker": Container(
+        marker="umbrella-reranker-",
+        knobs=[
+            "RERANKING_STRATEGY",
+            "RERANKING_THRESHOLD",
+            "RERANKER_TOP_N",
+        ],
+    ),
+    "embedding": Container(
+        marker="umbrella-embedding-",
+        knobs=[
+            "TEI_EMBEDDING_ENDPOINT",
+            "EMBEDDING_MODEL_ID",
+            "EMBEDDING_MODEL_ENDPOINT",
+        ],
+    ),
+    "backend": Container(
+        marker="umbrella-backend-",
+        knobs=[
+            "OPEA_HOST",
+            "OPEA_PORT",
+            "CONTEXT_OPTION",
+            "TRANSLATION_BACKEND",
+            "GPU_NODE_HOST",
+            "VLLM_TRANSLATION_ENDPOINT",
+            "VLLM_TRANSLATION_MODEL_ID",
+            "STREAMING_TRANSLATION_ENABLED",
+            "OPEA_STREAMING",
+            "OKF_ENABLED",
+            "OKF_SERVER_URL",
+        ],
+    ),
 }
 
 # The locale samples the record covers. Three languages, one of them written
@@ -174,20 +186,16 @@ LOCALE_SAMPLES = [
     },
     {
         "locale": "ar",
-        "text": (
-            "كيف تدير مدينة دبي خدمات النقل العام للسكان والزوار "
-            "خلال موسم الصيف؟"
-        ),
+        "text": ("كيف تدير مدينة دبي خدمات النقل العام للسكان والزوار خلال موسم الصيف؟"),
     },
 ]
 
 # Runs INSIDE the chatqna container. It calls the deployed preparation code
 # (the same functions the live query path calls) so the English string it
 # reports is the string the embedder receives.
-IN_POD_SOURCE = r'''
+IN_POD_SOURCE = r"""
 import asyncio
 import json
-import os
 import sys
 
 sys.path.insert(0, "/app")
@@ -198,7 +206,7 @@ from langdetect import detect
 import genieai_chatqna as cq
 from core.embedding_query_prefix import TEI_EMBED_MODEL, get_query_instruction
 
-samples = json.loads(os.environ["V02_PROBE_SAMPLES"])
+samples = json.loads(sys.argv[1])
 instruction = get_query_instruction(TEI_EMBED_MODEL)
 
 
@@ -247,11 +255,18 @@ payload = {
     "locales": asyncio.run(probe()),
 }
 print("@@V02@@" + json.dumps(payload, ensure_ascii=False))
-'''
+"""
 
 
 class ProbeError(RuntimeError):
     """A probe step that could not be completed."""
+
+
+# Every failure mode the probe can classify: a missing pod or binary, a
+# non-zero kubectl exit, a timeout, a malformed payload, a drifted fixtures
+# file. One tuple, one failure path — a new failure mode cannot escape as a
+# traceback.
+PROBE_ERRORS = (ProbeError, OSError, ValueError, KeyError, TypeError, AttributeError)
 
 
 def run(cmd: list[str], stdin: str | None = None) -> str:
@@ -270,7 +285,7 @@ def find_pods(namespace: str) -> dict[str, str]:
     """Map container name -> running pod name."""
     raw = run(["kubectl", "-n", namespace, "get", "pods", "-o", "json"])
     pods = json.loads(raw)["items"]
-    found: dict[str, tuple[str, str, bool]] = {}
+    found: dict[str, tuple[tuple[bool, str], str]] = {}
     for pod in pods:
         if pod["status"]["phase"] != "Running":
             continue
@@ -280,17 +295,18 @@ def find_pods(namespace: str) -> dict[str, str]:
             condition.get("type") == "Ready" and condition.get("status") == "True"
             for condition in pod["status"].get("conditions", [])
         )
-        for container, marker in CONTAINERS.items():
-            if marker not in name:
+        for container, spec in CONTAINERS.items():
+            if spec.marker not in name:
                 continue
             # A rolling update leaves two Running pods of the same service
             # behind, and the newest one is often not Ready yet. The Service
             # routes to Ready endpoints only, so a Ready pod wins over a
             # newer non-Ready one; among equals the newest wins.
+            key = (ready, created)
             current = found.get(container)
-            if current is None or (ready, created) > (current[2], current[1]):
-                found[container] = (name, created, ready)
-    return {container: name for container, (name, _, _) in found.items()}
+            if current is None or key > current[0]:
+                found[container] = (key, name)
+    return {container: name for container, (_, name) in found.items()}
 
 
 def pod_env(namespace: str, pod: str) -> dict[str, str]:
@@ -305,7 +321,9 @@ def pod_env(namespace: str, pod: str) -> dict[str, str]:
 
 
 def probe_locales(namespace: str, pod: str) -> dict:
-    payload = shlex.quote(json.dumps(LOCALE_SAMPLES, ensure_ascii=False))
+    # The samples travel as an argv value, not through a shell: kubectl passes
+    # the argv to the container command verbatim, so no quoting layer can
+    # mangle the non-Latin sample.
     cmd = [
         "kubectl",
         "-n",
@@ -314,9 +332,9 @@ def probe_locales(namespace: str, pod: str) -> dict:
         "-i",
         pod,
         "--",
-        "sh",
-        "-c",
-        f"V02_PROBE_SAMPLES={payload} python3 -",
+        "python3",
+        "-",
+        json.dumps(LOCALE_SAMPLES, ensure_ascii=False),
     ]
     out = run(cmd, stdin=IN_POD_SOURCE)
     for line in out.splitlines():
@@ -334,20 +352,34 @@ def measure(namespace: str) -> dict:
     envs = {container: pod_env(namespace, pod) for container, pod in pods.items()}
     document = {
         "probe": "v02-opea-query-path",
-        "recorded_at": datetime.now(timezone.utc).isoformat(timespec="seconds"),
+        "recorded_at": datetime.now(UTC).isoformat(timespec="seconds"),
         "namespace": namespace,
         "pods": pods,
         "deployed_env": {
-            container: {knob: env[knob] for knob in CONTAINER_KNOBS[container] if knob in env}
+            container: {knob: env[knob] for knob in CONTAINERS[container].knobs if knob in env}
             for container, env in envs.items()
         },
         "absent_knobs": {
-            container: [knob for knob in CONTAINER_KNOBS[container] if knob not in env]
+            container: [knob for knob in CONTAINERS[container].knobs if knob not in env]
             for container, env in envs.items()
         },
     }
     document["preparation"] = probe_locales(namespace, pods["chatqna"])
     return document
+
+
+def compare_knobs(drift: list[str], label: str, live: dict, expected: dict, absent: list[str]) -> None:
+    """Append one drift line per knob that differs from the live deployment.
+
+    ``expected`` maps a knob to the value the record claims; ``absent`` lists
+    the knobs the record claims the deployment does not serve.
+    """
+    for knob, value in expected.items():
+        if live.get(knob) != value:
+            drift.append(f"{label}.{knob}: expected {value!r} -> live {live.get(knob)!r}")
+    for knob in absent:
+        if knob in live:
+            drift.append(f"{label}.{knob}: expected absent -> live {live.get(knob)!r}")
 
 
 def verify(fixtures_path: str, document: dict) -> int:
@@ -361,13 +393,13 @@ def verify(fixtures_path: str, document: dict) -> int:
 
     # 1. The recorded measurement must still match the deployment.
     for container, knobs in recorded["deployed_env"].items():
-        live = document["deployed_env"].get(container, {})
-        for knob, value in knobs.items():
-            if live.get(knob) != value:
-                drift.append(f"{container}.{knob}: recorded {value!r} -> live {live.get(knob)!r}")
-        for knob in recorded.get("absent_knobs", {}).get(container, []):
-            if knob in live:
-                drift.append(f"{container}.{knob}: recorded absent -> live {live.get(knob)!r}")
+        compare_knobs(
+            drift,
+            f"recorded {container}",
+            document["deployed_env"].get(container, {}),
+            knobs,
+            recorded.get("absent_knobs", {}).get(container, []),
+        )
 
     # 2. Every knob an expectation claims must be served by the named
     #    container, with the recorded value.
@@ -378,17 +410,21 @@ def verify(fixtures_path: str, document: dict) -> int:
     claims["preparation"] = preparation
     for name, claim in claims.items():
         for container, knobs in (claim.get("deployed_knobs") or {}).items():
-            live = document["deployed_env"].get(container, {})
-            for knob, value in knobs.items():
-                if knob not in live:
-                    drift.append(f"{name}: {container}.{knob} is not served by the deployment")
-                elif live[knob] != value:
-                    drift.append(f"{name}: {container}.{knob} expected {value!r} -> live {live[knob]!r}")
+            compare_knobs(
+                drift,
+                f"{name} {container}",
+                document["deployed_env"].get(container, {}),
+                knobs,
+                [],
+            )
         for container, knobs in (claim.get("absent_knobs") or {}).items():
-            live = document["deployed_env"].get(container, {})
-            for knob in knobs:
-                if knob in live:
-                    drift.append(f"{name}: {container}.{knob} expected absent -> live {live[knob]!r}")
+            compare_knobs(
+                drift,
+                f"{name} {container}",
+                document["deployed_env"].get(container, {}),
+                {},
+                knobs,
+            )
 
     # 3. The query-instruction resolution is a contract, not a sample.
     live_prep = document["preparation"]
@@ -450,24 +486,24 @@ def main() -> int:
 
     try:
         document = measure(args.namespace)
-    except (ProbeError, OSError, ValueError, KeyError, TypeError) as exc:
+
+        text = json.dumps(document, indent=2, ensure_ascii=False)
+        if args.out:
+            with open(args.out, "w", encoding="utf-8") as handle:
+                handle.write(text + "\n")
+
+        if args.verify:
+            return verify(args.verify, document)
+
+        print(text)
+        return 0
+    except PROBE_ERRORS as exc:
+        # One failure path for every failure mode the probe can classify: a
+        # missing pod, an unreadable payload, a drifted fixtures file. The
+        # message says what happened; the exit code says the contract was not
+        # established.
         print(f"probe failed: {exc}", file=sys.stderr)
         return 2
-
-    text = json.dumps(document, indent=2, ensure_ascii=False)
-    if args.out:
-        with open(args.out, "w", encoding="utf-8") as handle:
-            handle.write(text + "\n")
-
-    if args.verify:
-        try:
-            return verify(args.verify, document)
-        except (OSError, ValueError, KeyError, AttributeError, TypeError) as exc:
-            print(f"verify failed: {exc}", file=sys.stderr)
-            return 2
-
-    print(text)
-    return 0
 
 
 if __name__ == "__main__":

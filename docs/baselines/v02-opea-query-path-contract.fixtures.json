@@ -755,7 +755,7 @@
         }
       ],
       "adrs": [],
-      "probe_note": "the probe MIRRORS the detection + history-language rule (it lives inside handle_request and cannot be called directly); the deployed rule is genie-ai-overlay/chatqna/genieai_chatqna.py:4578-4661 and :4672"
+      "probe_note": "the probe MIRRORS the detection + history-language rule (it lives inside handle_request and cannot be called directly); the deployed rule is genie-ai-overlay/chatqna/genieai_chatqna.py:4578-4661 and :4672. ONE branch is not mirrored: when the detector yields NO code the deployed rule falls back to the REQUESTED language (detected_language or original_language, chatqna:4672) while the probe falls back to EN; all three sampled texts yield a code, so the branch is never exercised."
     },
     "live_observations": {
       "venue": "k3s namespace genieai, chart genieai-umbrella, OPEA GPU mode external",

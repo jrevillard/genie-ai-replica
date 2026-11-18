@@ -1078,25 +1078,25 @@ def build_embeddings(embed: dict | None = None):
             raise RuntimeError("embed override incomplete — base_url and model are required")
         from langchain_openai import OpenAIEmbeddings
 
-        return LangchainEmbeddingsWrapper(
-            OpenAIEmbeddings(
-                model=model,
-                api_key=embed.get("api_key") or "sk-no-key",
-                base_url=base,
-                # check_embedding_ctx_length=False is REQUIRED against any
-                # non-OpenAI embeddings endpoint: langchain's default
-                # tokenizes inputs with tiktoken (an OpenAI vocabulary) and
-                # POSTS the token-ID ARRAYS — a BERT-vocab model (bge-*)
-                # rejects ids past ~30k with "Token id N is out of
-                # vocabulary" (live: 2026-11-18, answer_relevancy rows 400ing
-                # against the GPU vLLM pooling instance). With the check
-                # off, raw text is sent and the server tokenizes with its
-                # own vocabulary — the same decision the dataprep builder
-                # (core/embedding_backend.py) made.
-                check_embedding_ctx_length=False,
-                **_tls_client_kwargs(),
-            )
+        embeddings_client = OpenAIEmbeddings(
+            model=model,
+            api_key=embed.get("api_key") or "sk-no-key",
+            base_url=base,
+            **_tls_client_kwargs(),
         )
+        # check_embedding_ctx_length=False is REQUIRED against any non-OpenAI
+        # embeddings endpoint: langchain's default tokenizes inputs with
+        # tiktoken (an OpenAI vocabulary) and POSTS the token-ID ARRAYS — a
+        # BERT-vocab model (bge-*) rejects ids past ~30k with "Token id N is
+        # out of vocabulary" (live: 2026-11-18, answer_relevancy rows 400ing
+        # against the GPU vLLM pooling instance). With the check off, raw
+        # text is sent and the server tokenizes with its own vocabulary —
+        # the same decision the dataprep builder (core/embedding_backend.py)
+        # made. SET AS AN ATTRIBUTE: langchain_openai 1.x removed the
+        # constructor param (pydantic silently ignores the kwarg) while
+        # embed_documents still honors the attribute; 0.x accepted both.
+        embeddings_client.check_embedding_ctx_length = False
+        return LangchainEmbeddingsWrapper(embeddings_client)
 
     model = os.getenv("RAGAS_EMBED_MODEL")
     if not model:
@@ -1111,21 +1111,20 @@ def build_embeddings(embed: dict | None = None):
     if dialect == "openai":
         from langchain_openai import OpenAIEmbeddings
 
-        return LangchainEmbeddingsWrapper(
-            OpenAIEmbeddings(
-                model=model,
-                api_key=api_key or "sk-no-key",
-                base_url=base,
-                # REQUIRED against non-OpenAI endpoints: tiktoken token-ID
-                # arrays 400 on any BERT-vocab model ("Token id N is out of
-                # vocabulary" — live 2026-11-18, answer_relevancy vs the GPU
-                # vLLM bge instance). Raw text lets the server tokenize with
-                # its own vocabulary. Same rationale as the override path
-                # above and dataprep's builder.
-                check_embedding_ctx_length=False,
-                **_tls_client_kwargs(),
-            )
+        embeddings_client = OpenAIEmbeddings(
+            model=model,
+            api_key=api_key or "sk-no-key",
+            base_url=base,
+            **_tls_client_kwargs(),
         )
+        # REQUIRED against non-OpenAI endpoints: tiktoken token-ID arrays
+        # 400 on any BERT-vocab model ("Token id N is out of vocabulary" —
+        # live 2026-11-18, answer_relevancy vs the GPU vLLM bge instance).
+        # Same rationale as the override path above and dataprep's builder.
+        # SET AS AN ATTRIBUTE — see the comment on the override builder for
+        # the langchain_openai 1.x constructor-param removal.
+        embeddings_client.check_embedding_ctx_length = False
+        return LangchainEmbeddingsWrapper(embeddings_client)
     return LangchainEmbeddingsWrapper(_TeiEmbeddings(base, api_key, model))
 
 

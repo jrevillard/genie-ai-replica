@@ -1083,6 +1083,17 @@ def build_embeddings(embed: dict | None = None):
                 model=model,
                 api_key=embed.get("api_key") or "sk-no-key",
                 base_url=base,
+                # check_embedding_ctx_length=False is REQUIRED against any
+                # non-OpenAI embeddings endpoint: langchain's default
+                # tokenizes inputs with tiktoken (an OpenAI vocabulary) and
+                # POSTS the token-ID ARRAYS — a BERT-vocab model (bge-*)
+                # rejects ids past ~30k with "Token id N is out of
+                # vocabulary" (live: 2026-11-18, answer_relevancy rows 400ing
+                # against the GPU vLLM pooling instance). With the check
+                # off, raw text is sent and the server tokenizes with its
+                # own vocabulary — the same decision the dataprep builder
+                # (core/embedding_backend.py) made.
+                check_embedding_ctx_length=False,
                 **_tls_client_kwargs(),
             )
         )
@@ -1105,6 +1116,13 @@ def build_embeddings(embed: dict | None = None):
                 model=model,
                 api_key=api_key or "sk-no-key",
                 base_url=base,
+                # REQUIRED against non-OpenAI endpoints: tiktoken token-ID
+                # arrays 400 on any BERT-vocab model ("Token id N is out of
+                # vocabulary" — live 2026-11-18, answer_relevancy vs the GPU
+                # vLLM bge instance). Raw text lets the server tokenize with
+                # its own vocabulary. Same rationale as the override path
+                # above and dataprep's builder.
+                check_embedding_ctx_length=False,
                 **_tls_client_kwargs(),
             )
         )

@@ -2248,3 +2248,26 @@ class TestScopedJudgeKey:
         # the gateway's /embed path is a DIFFERENT service on the SAME host —
         # the deployment credential still applies (the shared-gateway shape)
         assert ragas_engine._scoped_judge_key("https://gpu.example.com/embed") == "gpu-bearer"
+
+
+@pytest.mark.parametrize("mode", ["env", "override"])
+def test_openai_embedder_disables_tiktoken_ctx_check(mode, monkeypatch, engine_env):
+    """check_embedding_ctx_length=False is REQUIRED on the openai dialect
+    against any non-OpenAI embeddings endpoint: langchain's default
+    tokenizes inputs with tiktoken (an OpenAI vocabulary) and POSTS the
+    token-ID ARRAYS — a BERT-vocab model (bge-*) rejects ids past ~30k
+    with "Token id N is out of vocabulary" (live 2026-11-18:
+    answer_relevancy rows 400ing against the GPU vLLM pooling instance).
+    The fix sends raw text; the server tokenizes with its own vocabulary
+    — the same decision dataprep's builder made."""
+    pytest.importorskip("langchain_openai", reason="langchain_openai not installed")
+    if mode == "override":
+        emb = ragas_engine.build_embeddings(
+            embed={"base_url": "http://localhost:1/v1", "model": "test-embed"}
+        )
+    else:
+        monkeypatch.setenv("RAGAS_EMBED_API", "openai")
+        monkeypatch.setenv("RAGAS_EMBED_BASE_URL", "http://localhost:1/v1")
+        emb = ragas_engine.build_embeddings()
+    client = getattr(emb, "embeddings", emb)
+    assert getattr(client, "check_embedding_ctx_length", None) is False

@@ -23,7 +23,6 @@ from __future__ import annotations
 
 import argparse
 import base64
-from functools import lru_cache
 import datetime as dt
 import json
 import os
@@ -33,6 +32,7 @@ import subprocess
 import sys
 import urllib.error
 import urllib.request
+from functools import cache
 
 try:
     import yaml
@@ -254,7 +254,8 @@ def parse_template_env(template_path):
     condition that does not hold is NOT declared by the chart - the
     deployment is right to not carry it.
     """
-    text = open(template_path, encoding="utf-8").read()
+    with open(template_path, encoding="utf-8") as handle:
+        text = handle.read()
     mapping = {}
     locals_map = {}
     guards = []
@@ -595,7 +596,7 @@ def _sprig_empty(value):
     )
 
 
-@lru_cache(maxsize=None)
+@cache
 def template_env_maps():
     """{workload component: {env name: chart path or None}} for every OPEA workload."""
     return {
@@ -604,7 +605,7 @@ def template_env_maps():
     }
 
 
-@lru_cache(maxsize=None)
+@cache
 def backend_env_map():
     """The application tier's template rows.
 

@@ -47,16 +47,6 @@ FROM python:3.11-slim
 # Current Debian security updates so the shipped image does not lag
 # distro point-releases between upstream rebuilds. curl backs the compose
 # healthcheck (docker-compose.yaml retriever service).
-# The upgrade layer is the ONLY layer that must re-run on a monthly
-# rebuild: CACHE_BUST changes the layer's hash, so the rest of the
-# image stays cached and the rebuild finishes in seconds instead of
-# re-running the (silent, multi-minute) apt install.
-ARG CACHE_BUST=0
-RUN echo "cache-bust: $CACHE_BUST" && apt-get update && \
-    apt-get upgrade -y && \
-    apt-get clean && \
-    rm -rf /var/lib/apt/lists/*
-
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
     curl \
@@ -65,6 +55,31 @@ RUN apt-get update && \
     libmariadb3 \
     ca-certificates \
     && rm -rf /var/lib/apt/lists/*
+
+# The upgrade layer is the ONLY layer that must re-run on a monthly rebuild:
+# CACHE_BUST changes the layer's hash, so the install layer above stays
+# cached and the rebuild finishes in seconds instead of re-running the
+# (silent, multi-minute) apt install.
+# It MUST come AFTER the install layer: a layer's cache key includes its
+# parent, so an upgrade placed BEFORE the install would invalidate the
+# install's cache entry and the whole heavy install would rebuild (and die
+# on the silent step). Measured 2026-11-18: dataprep 125 s dead that way,
+# 45 s green with the install cached.
+ARG CACHE_BUST=0
+# The upgrade layer is the ONLY layer that must re-run on a monthly
+# rebuild: CACHE_BUST changes the layer's hash, so the install layer
+# above stays cached and the rebuild finishes in seconds instead of
+# re-running the (silent, multi-minute) apt install.
+#
+# It MUST come AFTER the install layer: a layer's cache key includes its
+# parent, so an upgrade placed BEFORE the install would invalidate the
+# install's cache entry and the whole heavy install would rebuild (and
+# die on the silent step). Measured 2026-11-18: dataprep 125 s dead that
+# way, 45 s green with the install cached.
+RUN echo "cache-bust: $CACHE_BUST" && apt-get update && \
+    apt-get upgrade -y && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 

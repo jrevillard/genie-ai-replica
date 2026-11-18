@@ -16,21 +16,27 @@ FROM python:3.11-slim
 # Install system dependencies required by the original reranker (upgrade pulls
 # current Debian security updates so the image does not lag point-releases)
 ARG CACHE_BUST=0
-# The upgrade layer is the ONLY layer that must re-run on a monthly
-# rebuild: CACHE_BUST changes the layer's hash, so the rest of the
-# image stays cached and the rebuild finishes in seconds instead of
-# re-running the (silent, multi-minute) apt install.
-RUN echo "cache-bust: $CACHE_BUST" && apt-get update -y && \
-    apt-get upgrade -y && \
-    apt-get clean && \
-    rm -rf /var/lib/apt/lists/*
-
 RUN apt-get update -y && \
     apt-get install -y --no-install-recommends --fix-missing \
     git \
     curl \
     libgl1 \
     libglx-mesa0 && \
+    rm -rf /var/lib/apt/lists/*
+
+# The upgrade layer is the ONLY layer that must re-run on a monthly
+# rebuild: CACHE_BUST changes the layer's hash, so the install layer
+# above stays cached and the rebuild finishes in seconds instead of
+# re-running the (silent, multi-minute) apt install.
+#
+# It MUST come AFTER the install layer: a layer's cache key includes its
+# parent, so an upgrade placed BEFORE the install would invalidate the
+# install's cache entry and the whole heavy install would rebuild (and
+# die on the silent step). Measured 2026-11-18: dataprep 125 s dead that
+# way, 45 s green with the install cached.
+RUN echo "cache-bust: $CACHE_BUST" && apt-get update -y && \
+    apt-get upgrade -y && \
+    apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app

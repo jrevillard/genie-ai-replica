@@ -224,9 +224,11 @@ file.
   `genie-ai-overlay/retriever/genieai_retriever_arangodb.py:833-878`, `:880-936`,
   `:1851-1854`.
 * **Provenance** — this leg is specified by a **SPEC**, not by an ADR:
-  `_bmad-output/implementation-artifacts/spec-hybrid-retrieval-bm25-rrf.md`.
-  (`okf-024`'s BM25 is a different mechanism — repo-metadata ranking over
-  `okf_concepts_meta` for graph *selection* — and does not cover this leg.)
+  `_bmad-output/archived/opea-1.5-upgrade/implementation-artifacts/spec-hybrid-retrieval-bm25-rrf.md`
+  (archived; the retriever's own comment at `genie-ai-overlay/retriever/config.py:110` still points at its
+  pre-archive path). (`okf-024`'s BM25 is a different mechanism — repo-metadata
+  ranking over `okf_concepts_meta` for graph *selection* — and does not cover this
+  leg.)
 
 ### 4.3 RRF fusion
 
@@ -344,10 +346,16 @@ file.
 
   so the documents the reranker scores and the LLM reads are **text-augmented**,
   not the raw chunk. At most 5 neighbours per chunk, at most 2 hops, each
-  neighbour above the 0.7 score threshold. A graph above `max_links` (300000)
-  skips the traversal entirely — its fused vector results stand alone. A failed
-  traversal leaves the zeros it found: the leg continues **without** graph
-  enrichment.
+  neighbour above the 0.7 score threshold. A failed traversal leaves the zeros it
+  found: the leg continues **without** graph enrichment.
+
+  The **size gate** (`max_links`, 300000) and the leg sub-budget are **fan-out
+  per-leg contracts** (`retriever:1996-2005`): the legacy single-graph path runs
+  with `legacy_unbounded=True` (`retriever:2307`), so it has **neither** gate nor
+  time-box. The deployed venue runs that legacy path — the carrier carries
+  labels only and no graph names, so the fan-out does not engage
+  (`retriever:2317-2342`) — which means the deployed traversal is **not**
+  size-gated and **not** time-boxed.
 * **Code** — `genie-ai-overlay/retriever/genieai_retriever_arangodb.py:1981-2131`,
   `:2073-2080`; `genie-ai-overlay/chatqna/genieai_chatqna.py:4915-4926`.
 * **ADR evidence** — `okf-012` (multi-graph grounding).
@@ -483,6 +491,10 @@ file.
   `:4666-4672` (the history language), `:4681-4752` (status and translation),
   `:4786-4806` (query extraction), `:1321-1322` (budget constant and marker
   pattern).
+* **The probe mirrors this rule, it does not invoke it**: the detection and the
+  history-language choice live inside `handle_request`, so the probe re-implements
+  them against the deployed `langdetect` and the deployed registry
+  (`chatqna:4578-4661`, `:4672`).
 * **Registry** — `genie-ai-overlay/chatqna/language-registry.json`, a symlink to
   the backend's shared registry (`components/gov-chat-backend/services/translation/language-maps/language-registry.json`):
   **41 language codes**. The path is overridable with `LANGUAGE_REGISTRY_FILEPATH`
@@ -509,7 +521,7 @@ be `null` (`components/gov-chat-backend/services/query-service.js:488-518`).
 | translation window | **8192 tokens** (discovered from the translation endpoint at runtime) |
 | history character budget | **11520 characters** = `(window − 512) // 2 × 3`. `MAX_TRANSLATION_CHARS` is **unset**: the 2000-character code constant is only the **fallback** used when the window discovery fails, and an explicit value only *lowers* the derived budget |
 | single-message shape | a history over the budget is **refused**: `TranslationInputTooLongError` → HTTP 422 (§5.4) |
-| list shape (the deployed BFF shape) | an oversized history is **never refused**: the oldest turns are dropped and the newest message's tail is truncated to the budget |
+| list shape (the deployed BFF shape) | the **char budget** never refuses it: the oldest turns are dropped and the newest message's tail is truncated. The **translation window** can still overflow, and that **does** refuse (§5.4) |
 | generation-time overflow | the **oldest history segments** are dropped; the retrieved documents are never truncated |
 | BFF-side bounds | the HTTP body limit is 50 MB and the requested language is truncated to 32 characters; the BFF imposes **no** query or history length bound |
 
@@ -644,9 +656,9 @@ treated as accepted):
 
 Two behaviors have **no** ADR: the BM25 lexical leg (§4.2) and the query-instruction
 contract (§4.12) are specified by code and by a SPEC
-(`_bmad-output/implementation-artifacts/spec-hybrid-retrieval-bm25-rrf.md`), not by a
-decision record. They are recorded here so that the gap is visible rather than
-silent.
+(`_bmad-output/archived/opea-1.5-upgrade/implementation-artifacts/spec-hybrid-retrieval-bm25-rrf.md`),
+not by a decision record. They are recorded here so that the gap is visible rather
+than silent.
 
 The architecture spine's AD-10 is the decision that freezes the behavior to this
 record; the spine itself is the umbrella's planning artifact, not an ADR.

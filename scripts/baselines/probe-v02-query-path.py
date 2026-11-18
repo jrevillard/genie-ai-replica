@@ -34,7 +34,6 @@ from __future__ import annotations
 
 import argparse
 import json
-import os
 import shlex
 import subprocess
 import sys
@@ -269,15 +268,20 @@ def find_pods(namespace: str) -> dict[str, str]:
     """Map container name -> running pod name."""
     raw = run(["kubectl", "-n", namespace, "get", "pods", "-o", "json"])
     pods = json.loads(raw)["items"]
-    found: dict[str, str] = {}
+    found: dict[str, tuple[str, str]] = {}
     for pod in pods:
         if pod["status"]["phase"] != "Running":
             continue
         name = pod["metadata"]["name"]
+        created = pod["metadata"].get("creationTimestamp", "")
         for container, marker in CONTAINERS.items():
-            if container not in found and marker in name:
-                found[container] = name
-    return found
+            if marker not in name:
+                continue
+            # A rolling update leaves two Running pods of the same service
+            # behind; the newest one is the one the Service routes to.
+            if container not in found or created > found[container][1]:
+                found[container] = (name, created)
+    return {container: name for container, (name, _) in found.items()}
 
 
 def pod_env(namespace: str, pod: str) -> dict[str, str]:
@@ -361,7 +365,7 @@ def verify(fixtures_path: str, document: dict) -> int:
     expectations = fixtures.get("expectations", {})
     behaviors = expectations.get("behaviors", {})
     preparation = expectations.get("preparation", {})
-    claims = {name: behavior for name, behavior in behaviors.items()}
+    claims = dict(behaviors)
     claims["preparation"] = preparation
     for name, claim in claims.items():
         for container, knobs in (claim.get("deployed_knobs") or {}).items():
@@ -380,7 +384,13 @@ def verify(fixtures_path: str, document: dict) -> int:
     # 3. The query-instruction resolution is a contract, not a sample.
     live_prep = document["preparation"]
     rec_prep = recorded.get("preparation", {})
-    for field in ("query_instruction", "model_id", "supported_language_count", "translation_char_budget"):
+    for field in (
+        "query_instruction",
+        "model_id",
+        "supported_language_count",
+        "translation_window",
+        "translation_char_budget",
+    ):
         if live_prep.get(field) != rec_prep.get(field):
             drift.append(f"preparation.{field}: recorded {rec_prep.get(field)!r} -> live {live_prep.get(field)!r}")
 
@@ -393,7 +403,14 @@ def verify(fixtures_path: str, document: dict) -> int:
         if live_locale is None:
             warnings.append(f"locale {locale['locale']}: no live measurement")
             continue
-        for field in ("detected_language", "query_translation_status", "english_query", "embedded_text"):
+        for field in (
+            "detected_language",
+            "detected_supported",
+            "history_language",
+            "query_translation_status",
+            "english_query",
+            "embedded_text",
+        ):
             if live_locale.get(field) != locale.get(field):
                 warnings.append(
                     f"locale {locale['locale']}.{field}: recorded {locale.get(field)!r} "
@@ -424,7 +441,7 @@ def main() -> int:
 
     try:
         document = measure(args.namespace)
-    except ProbeError as exc:
+    except (ProbeError, OSError, ValueError) as exc:
         print(f"probe failed: {exc}", file=sys.stderr)
         return 2
 

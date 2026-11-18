@@ -273,7 +273,7 @@
           "genie-ai-overlay/retriever/genieai_retriever_arangodb.py:1851-1854 (leg invocation)"
         ],
         "adrs": [],
-        "provenance": "_bmad-output/implementation-artifacts/spec-hybrid-retrieval-bm25-rrf.md — this leg is specified by a SPEC, not by an ADR. okf-024's BM25 is a different mechanism (repo-metadata ranking over okf_concepts_meta for graph SELECTION) and does not cover this leg."
+        "provenance": "_bmad-output/archived/opea-1.5-upgrade/implementation-artifacts/spec-hybrid-retrieval-bm25-rrf.md — this leg is specified by a SPEC, not by an ADR (the spec is archived; the retriever's own comment at config.py:110 still points at its pre-archive path). okf-024's BM25 is a different mechanism (repo-metadata ranking over okf_concepts_meta for graph SELECTION) and does not cover this leg."
       },
       "rrf_fusion": {
         "title": "RRF fusion of the dense and lexical legs",
@@ -449,7 +449,7 @@
           "enablement": "chatqna forwards enable_traversal from its own env (RETRIEVER_ARANGO_TRAVERSAL_ENABLED=true), so the traversal RUNS on the deployed chat path",
           "text_mutation": "each surviving chunk's page_content is REWRITTEN: '\\n------\\nRELATED INFORMATION:\\n------\\n' plus the neighbourhood. The reranker therefore scores text-augmented documents, and so does the LLM",
           "neighbour_limit": "at most traversal_max_returned (5) neighbours per chunk, at most traversal_max_depth (2) hops, each neighbour above traversal_score_threshold (0.7)",
-          "size_gate": "a graph above traversal_max_links (300000) skips the traversal entirely: its fused vector results stand alone",
+          "size_gate": "the size gate (max_links) and the leg sub-budget are FAN-OUT PER-LEG contracts (retriever:1996-2005, 2307): the legacy single-graph path runs with legacy_unbounded=True, so it has neither gate nor time-box. The deployed venue runs the LEGACY path — the carrier carries labels only, no graph names, so the fan-out does not engage (retriever:2317-2342).",
           "concurrency": "the deployed traversal_concurrent_batches is 10; the service caps itself at 4 (Arango Traversal ... is above the safe cap (4). Capping to 4.)",
           "failure": "a failed traversal leaves the zeros it found: the leg continues WITHOUT graph enrichment"
         },
@@ -669,13 +669,15 @@
         "genie-ai-overlay/chatqna/genieai_chatqna.py:4786-4806 (the retrieval query extraction)",
         "genie-ai-overlay/chatqna/genieai_chatqna.py:821-847 (the translation window and the char budget)",
         "genie-ai-overlay/chatqna/genieai_chatqna.py:1321-1322 (the char budget constant and the USER marker pattern)",
-        "genie-ai-overlay/chatqna/language-registry.json (the supported locale registry)"
+        "genie-ai-overlay/chatqna/language-registry.json (the supported locale registry)",
+        "the probe MIRRORS the detection + history-language rule (it lives inside handle_request and cannot be called directly); the deployed rule is chatqna:4578-4661 and :4672"
       ],
       "measured_budget": {
         "translation_window_tokens": 8192,
         "translation_char_budget": 11520,
-        "derivation": "(window - 512) // 2 * 3 = 11520 characters; MAX_TRANSLATION_CHARS is unset, so the 2000-character code constant is only the FALLBACK used when the window discovery fails",
-        "completion_cap_fallback": 512
+        "derivation": "(window - 512) // 2 * 3 = 11520 characters; 512 is TRANSLATION_PROMPT_OVERHEAD_TOKENS, 128 is TRANSLATION_COMPLETION_SAFETY_TOKENS. MAX_TRANSLATION_CHARS is unset, so the 2000-character code constant is only the FALLBACK used when the window discovery fails",
+        "prompt_overhead_tokens": 512,
+        "completion_safety_tokens": 128
       },
       "status_values": {
         "translated": "the history was translated to English",
@@ -687,7 +689,7 @@
       "bounds": {
         "char_budget": "11520 characters on the deployed venue (derived from the discovered 8192-token window); MAX_TRANSLATION_CHARS is unset",
         "single_message_shape": "a single-message history over the budget is REFUSED: TranslationInputTooLongError -> HTTP 422 (see failure classes)",
-        "list_shape": "the deployed BFF sends a MESSAGE LIST (CONTEXT_OPTION=conversation-with-context-labels): an oversized list is NEVER refused — the oldest turns are dropped and the newest message's tail is truncated to the budget",
+        "list_shape": "the CHAR BUDGET never refuses the list shape: the oldest turns are dropped and the newest message's tail is truncated. The TRANSLATION WINDOW can still overflow, and that DOES refuse: TranslationInputTooLongError is deliberately not caught in the list branch (chatqna:4237-4243), so it reaches the 422 handler (§ failure classes).",
         "generation_time_truncation": "when the prompt exceeds the model window, the OLDEST history segments are dropped; the retrieved documents are never truncated"
       },
       "locales": [
@@ -698,7 +700,8 @@
           "detected_supported": true,
           "query_translation_status": "translated",
           "english_query": "Hello, how does the city of Geneva manage public transport services for residents and visitors?",
-          "embedded_text": "Represent this sentence for searching relevant passages: Hello, how does the city of Geneva manage public transport services for residents and visitors?"
+          "embedded_text": "Represent this sentence for searching relevant passages: Hello, how does the city of Geneva manage public transport services for residents and visitors?",
+          "history_language": "FR"
         },
         {
           "locale": "es",
@@ -707,7 +710,8 @@
           "detected_supported": true,
           "query_translation_status": "translated",
           "english_query": "How does the city of Barcelona manage public transport services for residents and visitors?",
-          "embedded_text": "Represent this sentence for searching relevant passages: How does the city of Barcelona manage public transport services for residents and visitors?"
+          "embedded_text": "Represent this sentence for searching relevant passages: How does the city of Barcelona manage public transport services for residents and visitors?",
+          "history_language": "ES"
         },
         {
           "locale": "ar",
@@ -716,7 +720,8 @@
           "detected_supported": true,
           "query_translation_status": "translated",
           "english_query": "How does Dubai manage public transportation services for residents and visitors during the summer season?",
-          "embedded_text": "Represent this sentence for searching relevant passages: How does Dubai manage public transportation services for residents and visitors during the summer season?"
+          "embedded_text": "Represent this sentence for searching relevant passages: How does Dubai manage public transportation services for residents and visitors during the summer season?",
+          "history_language": "AR"
         }
       ],
       "locale_coverage_note": "Three locales, one of them written in a non-Latin script (Arabic). The detected language, the exact English string handed to the embedder and the status field are recorded for each. These strings are a SAMPLE, not a contract: langdetect is unseeded and the translation model is sampled, so the probe reports a difference in them as a warning, never as a drift.",

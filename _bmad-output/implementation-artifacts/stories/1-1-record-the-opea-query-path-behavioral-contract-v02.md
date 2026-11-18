@@ -178,6 +178,29 @@ the code before being acted on, and all are now applied:
   traceback;
 - four citation ranges were corrected to the lines that carry the code.
 
+### Corrections after the fix review
+
+The scoped fix review of the correction diff raised three Important findings, all
+in the sections the correction rewrote; each was verified against the code and all
+are now applied:
+
+- the **traversal size gate** is a fan-out per-leg contract. The legacy
+  single-graph path runs with `legacy_unbounded=True` and has neither the gate
+  nor the leg sub-budget — and the deployed venue runs that legacy path, so the
+  deployed traversal is neither size-gated nor time-boxed (§4.9);
+- the **SPEC that specifies the BM25 leg** is archived: the record and the
+  fixtures now cite the archived path (§4.2, §9);
+- §5.3 contradicted §5.4 on the deployed list shape: the char budget truncates
+  and never refuses, but the translation window can still overflow and that does
+  refuse with a 422 (§5.3, §5.4).
+
+The minor findings were applied too: the mislabelled token reserve was renamed
+(`prompt_overhead_tokens` / `completion_safety_tokens`), `--verify` now compares
+the translation window and warns on the two unchecked locale fields, the probe's
+exit-2 contract covers every measurement failure, the probe picks the newest
+Running pod of a service, and the record states that the probe **mirrors** the
+deployed language rule rather than invoking it.
+
 ## Spec Change Log
 
 ## Review Triage Log

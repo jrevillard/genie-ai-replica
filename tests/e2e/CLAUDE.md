@@ -47,13 +47,14 @@ in the error (never silently tolerated).
   the spec asserts (the transport dropped it, or the edge returned its own
   reset artifact — a transport artifact, not a product verdict). It may
   never re-run or re-decide an assertion the spec itself makes: once an
-  attempt PRODUCED a product verdict, a second answer is no evidence where
-  the first was the truth. Two neighbours are not retries: a WAIT for a
-  convergent condition (it re-reads a STATE that is still MOVING until it
-  holds — the earlier read was never a verdict; see *Wait for conditions,
-  not durations* below), and a two-leg cleanup protocol (a re-issue of the
-  same request, only because the STATE CHANGED — the sweep's re-DELETE:
-  `helpers/documents.js` `sweepDeleteOneFile`). The inventory:
+  attempt PRODUCED a product verdict about what the spec asserts, a second
+  answer is no evidence where the first was the truth. Two neighbours are
+  not retries: a WAIT for a convergent condition (it re-reads a STATE that
+  is still MOVING until it holds — the earlier read was never a verdict;
+  see *Wait for conditions, not durations* below), and a two-leg cleanup
+  protocol (a re-issue of the same request, only because the STATE
+  CHANGED — the sweep's re-DELETE: `helpers/documents.js`
+  `sweepDeleteOneFile`). The inventory:
   1. `helpers/auth.js`'s `request()` — the edge's own upstream-reset failure
      re-issued on the idempotent methods (#1847 — operator-sanctioned as the
      deterministic answer to a genuine transient): the k8s venue's Envoy
@@ -86,13 +87,13 @@ in the error (never silently tolerated).
   translation — it echoed its English source, or carried none at all — and
   the probe's verdict would have come from that second answer: a first
   answer that echoed its source became INVISIBLE (a chain that echoed once
-  could end the run green; a chain that never translated had its French
-  surface skipped — a coverage loss, not a red). The operator REFUSED it:
-  an untranslated answer is a BUG in the translation chain, not a
-  transient, so the probe stays at ONE sample and an echoed answer turns
-  the spec RED. A setup premise does not exempt it: the probe's answer IS
-  a product verdict, and a second sample would have re-asked a question
-  whose answer was already the truth.
+  would have carried the run green; a chain that never translated had its
+  French surface skipped — a coverage loss, not a red). The operator
+  REFUSED it: an untranslated answer is a BUG in the translation chain,
+  not a transient, so the probe stays at ONE sample and an echoed answer
+  turns the GROUP RED. A setup premise does not exempt a RETRY of it: the
+  probe's answer IS a product verdict, and a second sample would have
+  re-asked a question whose answer was already the truth.
 
   This list is exhaustive. A new retry surface needs an operator ruling
   recorded here first; no spec adds a retry loop, and Playwright's

@@ -3156,9 +3156,30 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                         response_format={"type": "json_object"},
                     )
                     parsed = json.loads(response.choices[0].message.content)
-                    raw = parsed.get("contexts", parsed) if isinstance(parsed, dict) else {}
+                    # The batch contract is {index: context}, but models drift:
+                    # granite returned {"contexts": [{"index": N, "context": ...}]}
+                    # (a LIST) — the old code crashed on raw.items() with
+                    # AttributeError: 'list' object has no attribute 'items' and
+                    # every batch fell back to per-chunk calls (and some of THOSE
+                    # failed too → raw-text chunks). Normalize both shapes:
+                    # dict → (key, value) pairs; list → ("index", "context") pairs.
+                    if isinstance(parsed, dict):
+                        raw = parsed.get("contexts", parsed)
+                    elif isinstance(parsed, list):
+                        raw = parsed
+                    else:
+                        raw = None
+                    items: list[tuple[object, object]] = []
+                    if isinstance(raw, dict):
+                        items = list(raw.items())
+                    elif isinstance(raw, list):
+                        items = [
+                            (c.get("index"), c.get("context", c.get("text")))
+                            for c in raw
+                            if isinstance(c, dict)
+                        ]
                     out: dict[int, str] = {}
-                    for k, v in raw.items():
+                    for k, v in items:
                         try:
                             idx = int(k)
                         except (TypeError, ValueError):

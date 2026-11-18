@@ -2897,7 +2897,16 @@ services:
       # proxy-headers: xforwarded, Kong sends X-Forwarded-Prefix: /auth
       # via request-transformer plugin → Keycloak resolves context-path dynamically.
       - KC_PROXY_HEADERS=xforwarded
-      - KC_HOSTNAME=${NGINX_PUBLIC_DOMAIN:-localhost}
+      # KEYCLOAK_HOSTNAME (optional, hostname-v2 absolute URL): pin the FULL
+      # public frontend URL (scheme://host:port/auth) so EVERY token mint —
+      # browser AND in-network client_credentials — carries the public
+      # issuer. Without it an in-network mint self-reports as
+      # http://<domain>:8080/realms/... and every validator that accepts
+      # only the public issuer (chatqna's, #1636) 401s the token (live:
+      # 2026-11-18 — containers cannot hairpin to the host-published edge,
+      # so the service-token mint silently failed over to the internal URL).
+      # Unset = the historical hostname-only behavior; NVIDIA venues unaffected.
+      - KC_HOSTNAME=${KEYCLOAK_HOSTNAME:-${NGINX_PUBLIC_DOMAIN:-localhost}}
       # Enable HTTP — NGINX handles TLS termination, Keycloak only needs HTTP internally
       - KC_HTTP_ENABLED=true
       # SMTP (reuses EMAIL_* from Section 2)

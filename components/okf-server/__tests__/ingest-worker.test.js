@@ -1058,6 +1058,33 @@ describe('size-adaptive job windows (spec #1020 §5.9 — OKF_JOB_WINDOW_ADAPTIV
       const q = render({ body: 'x'.repeat(2000000) });
       expect(q.query).toContain('CEIL(LENGTH(m.body) / 500)');
     });
+
+    test('the adaptive fragment is paren/bracket BALANCED (live-caught: the first cut shipped `)]))` for `)])])` — a parse error the string asserts above cannot see; the worker died on every claim scan)', () => {
+      process.env.OKF_JOB_WINDOW_ADAPTIVE = 'true';
+      const q = render({ chunk_count: 18, body: '' });
+      const fragment = q.query.slice(q.query.indexOf('MAX(['));
+      const depth = { '(': 0, '[': 0 };
+      for (const ch of fragment) {
+        if (ch === '(') depth['('] += 1;
+        else if (ch === ')') depth['('] -= 1;
+        else if (ch === '[') depth['['] += 1;
+        else if (ch === ']') depth['['] -= 1;
+        expect(depth['(']).toBeGreaterThanOrEqual(0);
+        expect(depth['[']).toBeGreaterThanOrEqual(0);
+      }
+      expect(depth['(']).toBe(0);
+      expect(depth['[']).toBe(0);
+    });
+
+    test('adaptive fragment GOLDEN (full string — the exact clamp nesting)', () => {
+      process.env.OKF_JOB_WINDOW_ADAPTIVE = 'true';
+      const q = render({ chunk_count: 18, body: '' });
+      expect(q.query).toBe(
+        'FILTER m.worker_claimed_at == null OR DATE_TIMESTAMP(m.worker_claimed_at) < ' +
+          'DATE_NOW() - MAX([1800000, MIN([21600000, CEIL(((m.chunk_count != null AND m.chunk_count > 0) ' +
+          '? m.chunk_count : CEIL(LENGTH(m.body) / 500)) * 5000 * 1.5)])])'
+      );
+    });
   });
 
   test('expiry with an ALIVE dataprep task → deferred: parked one window, NO re-kick, NO retract', async () => {

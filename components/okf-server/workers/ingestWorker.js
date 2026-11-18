@@ -175,7 +175,7 @@ function rowStaleCutoffAql(row) {
   return literal(
     `DATE_NOW() - MAX([${windowFloorMs()}, MIN([${windowMaxMs()}, ` +
       `CEIL(((${row}.chunk_count != null AND ${row}.chunk_count > 0) ? ${row}.chunk_count : ` +
-      `CEIL(LENGTH(${row}.body) / ${CHUNK_SIZE_ESTIMATE_CHARS})) * ${windowMsPerChunk()} * 1.5)]))`
+      `CEIL(LENGTH(${row}.body) / ${CHUNK_SIZE_ESTIMATE_CHARS})) * ${windowMsPerChunk()} * 1.5)])])`
   );
 }
 /** §5.9 liveness probe — is dataprep actively running this fileId's

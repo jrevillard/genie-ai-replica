@@ -68,6 +68,8 @@ probe:huge:
 probe:patch-size:
   extends: .probe
   stage: probe
+  before_script:
+    - apk add --no-cache curl
   script:
     - |
       offset=0

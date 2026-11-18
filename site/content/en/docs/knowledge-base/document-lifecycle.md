@@ -223,11 +223,11 @@ rows it writes are the same content the re-kick indexes, so that document
 ends up with two copies of its chunks. The purge that would have removed them
 stands down once a new ingest of the same document has started: it deletes by
 document id, so it must not delete the new ingest's rows. The purge is held in
-memory, so a dataprep restart between the failure and the late write's completion
-loses it, and nothing announces that — and a writer that never settles (a wedged
-database) is never purged at all, because the purge runs when the writer settles.
-If a document's chunk count and the number
-of chunks the retriever sees disagree, retract it and ingest it again.
+memory, so a dataprep restart between the failure and the late write's
+completion loses it, and nothing announces that — and a writer that never
+settles (a wedged database) is never purged at all, because the purge runs
+when the writer settles. If a document's chunk count and the number of chunks
+the retriever sees disagree, retract it and ingest it again.
 
 ## Stuck documents recover themselves after a dataprep restart
 

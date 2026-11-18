@@ -172,7 +172,7 @@ import javascript from 'highlight.js/lib/languages/javascript';
 import bash from 'highlight.js/lib/languages/bash';
 import json from 'highlight.js/lib/languages/json';
 import yaml from 'highlight.js/lib/languages/yaml';
-import matter from 'gray-matter';
+import { safeMatter, safeStringify } from '../../services/safeMatter';
 import taskLists from 'markdown-it-task-lists';
 import DsProgress from './Progress.vue';
 import DsInput from './Input.vue';
@@ -344,7 +344,7 @@ export default {
         const s = String(this.localValue || '');
         const m = /^---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)/.exec(s);
         if (!m) return { data: {}, content: s };
-        return { data: matter('---\n' + m[1] + '\n---').data || {}, content: s.slice(m[0].length) };
+        return { data: safeMatter('---\n' + m[1] + '\n---').data || {}, content: s.slice(m[0].length) };
       } catch {
         return { data: {}, content: this.localValue || '' };
       }
@@ -640,7 +640,7 @@ export default {
         // Cheap fm-only split — same rationale as the parsed computed.
         const s = String(raw || '');
         const m = /^---\r?\n([\s\S]*?)\r?\n---(?:\r?\n|$)/.exec(s);
-        const parsed = m ? matter('---\n' + m[1] + '\n---') : { data: {} };
+        const parsed = m ? safeMatter('---\n' + m[1] + '\n---') : { data: {} };
         return {
           okf_version: parsed.data?.okf_version || '',
           lifecycle: {
@@ -695,7 +695,7 @@ export default {
         }
       };
       const body = this.contentBody;
-      const next = matter.stringify(body, fm);
+      const next = safeStringify(body, fm);
       this.localValue = next;
       this.$emit('update:value', next);
       this.$emit('frontmatter-change', this.draftFrontmatter);

@@ -22,7 +22,10 @@ const matter = require('gray-matter');
 
 // gray-matter reads the language from the line right after the opening
 // delimiter ("---js", "--- javascript", ...). A bare "---" declares none.
-const LANGUAGE_MARKER = /^---[ \t]*([A-Za-z0-9_+-]*)[ \t]*\r?\n/;
+// Its detection runs on the BOM-STRIPPED content and trims the language line
+// with the full Unicode trim — the wrapper mirrors both, or the whitelist
+// would miss a declaration gray-matter does see.
+const DELIMITER = '---';
 
 const ALLOWED_LANGUAGES = new Set(['', 'yaml', 'yml', 'json']);
 
@@ -35,8 +38,12 @@ const ALLOWED_LANGUAGES = new Set(['', 'yaml', 'yml', 'json']);
  * @returns {string} the declared language, lowercased ('' = none)
  */
 function declaredLanguage(content) {
-  const match = LANGUAGE_MARKER.exec(content == null ? '' : String(content));
-  return match ? match[1].trim().toLowerCase() : '';
+  const text = String(content == null ? '' : content).replace(/^\uFEFF/, '');
+  if (!text.startsWith(DELIMITER)) return '';
+  const after = text.slice(DELIMITER.length);
+  const newline = after.search(/\r?\n/);
+  const line = newline === -1 ? after : after.slice(0, newline);
+  return line.trim().toLowerCase();
 }
 
 /**
@@ -62,10 +69,13 @@ function safeMatter(content, options = {}) {
 }
 
 /**
- * Serialize a document with its front matter. Writing YAML never
- * evaluates anything — this wrapper exists so that NO service has to
- * require gray-matter directly (the guard test asserts it), which keeps
- * the parse path impossible to reopen by accident.
+ * Serialize a document with its front matter.
+ *
+ * The engine barrier belongs HERE as well: gray-matter PARSES a string
+ * content before writing it (index.js:161 — `if (typeof file === 'string')
+ * file = matter(file, options)`), so matter.stringify('---js\n…', data)
+ * evaluates the string. The whitelist in safeMatter does not apply here —
+ * this path never went through it.
  *
  * @param {string} content - the document body
  * @param {object} data - the front matter
@@ -73,7 +83,10 @@ function safeMatter(content, options = {}) {
  * @returns {string} the document, front matter included
  */
 function stringify(content, data, options = {}) {
-  return matter.stringify(content, data, options);
+  return matter.stringify(content, data, {
+    ...options,
+    engines: { ...(options.engines || {}), javascript: false, coffee: false }
+  });
 }
 
 module.exports = { safeMatter, stringify, declaredLanguage };

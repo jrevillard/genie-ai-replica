@@ -13,7 +13,7 @@ const fs = require('fs');
 const path = require('path');
 
 const matter = require('gray-matter');
-const { safeMatter, declaredLanguage } = require('../services/safe-frontmatter');
+const { safeMatter, stringify, declaredLanguage } = require('../services/safe-frontmatter');
 
 const SERVICES_DIR = path.join(__dirname, '..', 'services');
 
@@ -55,6 +55,14 @@ describe('safeMatter', () => {
     expect(global.__grayMatterPwned).toBeUndefined();
   });
 
+  it('sees the language through a BOM and through a non-breaking space', () => {
+    // gray-matter strips the BOM and trims the language line with the full
+    // Unicode trim — the detection must mirror both, or the whitelist would
+    // miss a declaration gray-matter does see.
+    expect(() => safeMatter('\uFEFF---js\n{}\n---\n')).toThrow(/not allowed/);
+    expect(() => safeMatter('--- js\n{}\n---\n')).toThrow(/not allowed/);
+  });
+
   it("does not populate gray-matter's parse cache (a cached parse would be replayed)", () => {
     const before = Object.keys(matter.cache || {}).length;
     safeMatter('---\ntitle: cached\n---\nbody\n');
@@ -62,10 +70,28 @@ describe('safeMatter', () => {
   });
 });
 
+describe('stringify', () => {
+  it('writes a document with its front matter', () => {
+    const out = stringify('The body.\n', { title: 'A concept' });
+    expect(out).toContain('title: A concept');
+    expect(out).toContain('The body.');
+  });
+
+  it('never evaluates a string content (gray-matter parses it first)', () => {
+    // gray-matter PARSES a string content before writing it (index.js:161),
+    // so the payload can travel in the BODY: the whitelist of safeMatter
+    // does not apply to this path.
+    const attack = '---js\n{ this: global.__grayMatterPwned = true }\n---\nbody\n';
+    expect(() => stringify(attack, { a: 1 })).toThrow();
+    expect(global.__grayMatterPwned).toBeUndefined();
+  });
+});
+
 describe('declaredLanguage', () => {
   it.each([
     ['---\ntitle: x\n---\n', ''],
     ['---js\n{}\n---\n', 'js'],
+    ['\uFEFF---js\n{}\n---\n', 'js'],
     ['--- javascript \n{}\n---\n', 'javascript'],
     ['no front matter', ''],
     ['', '']

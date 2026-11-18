@@ -39,11 +39,12 @@ FROM nginx:1.28-alpine
 # CVE-2026-42055 (r4), CVE-2026-42533 and CVE-2026-60005 (r6). Alpine v3.23
 # publishes 1.28.3-r7; dropping the pin lets apk move the whole nginx set in
 # one transaction (same upstream 1.28.3 — the r-series are security
-# rebuilds, ABI stable). `nginx -v` prints the version into the build log:
-# the build itself is the proof that the image is no longer on r1.
+# rebuilds, ABI stable). `apk info -v nginx` prints the EXACT package version
+# (with the Alpine -r revision) into the build log: the build itself is the
+# proof that the image left r1.
 RUN sed -i 's/^nginx=.*/nginx/' /etc/apk/world \
     && apk upgrade --no-cache \
-    && nginx -v
+    && apk info -v nginx
 
 WORKDIR /app
 

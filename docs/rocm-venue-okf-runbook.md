@@ -286,6 +286,7 @@ re-importing.
 | publish blocked, `pii_hit_count > 0` | NER hits (names) | `pii-acknowledge` (audited) |
 | token 401 `TOKEN_EXPIRED` mid-flow | client-credential tokens are minutes-lived | mint fresh |
 | chat queries return zero chunks; retriever logs `Graph 'GRAPH' does not exist` | backend container predates `OKF_ENABLED=1` — retrieval-config client short-circuits to `parked`, 0 serving graphs | §2 step 4: recreate backend, verify `fanout_config_resolved` `serving_graph_count >= 1` |
+| RAGAS serve run aborts 0/20 with `run_answer_leg_aborted chatqna HTTP 401` | okf-server's service-token mint died on the self-signed PUBLIC endpoint (TLS verify) and failed over to the in-network URL — the token carries the internal issuer, chatqna accepts only the public one | §3 trio container's `OPEA_SSL_SKIP_VERIFY=1` (now the rocm-overlay default for okf-server); recreate okf-server, verify the mint log names the PUBLIC endpoint |
 
 ## 10. ArangoDB coexistence
 

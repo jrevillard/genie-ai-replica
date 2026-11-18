@@ -202,6 +202,15 @@ services:
       - KEYCLOAK_DISCOVERY_URL=${KEYCLOAK_DISCOVERY_URL:-http://keycloak:8080}
       - KEYCLOAK_JWKS_URL=${KEYCLOAK_JWKS_URL:-http://keycloak:8080/realms/${KEYCLOAK_REALM:-genie}/protocol/openid-connect/certs}
       - KEYCLOAK_PUBLIC_URL=${KEYCLOAK_PUBLIC_URL:-https://${NGINX_PUBLIC_DOMAIN}:${NGINX_HTTPS_PORT:-443}/auth}
+      # The service-token mint (KC_OKF_SERVER client — the RAGAS answer leg,
+      # doc-repo calls) goes PUBLIC-FIRST by design (#1636: the mint host
+      # stamps iss, chatqna accepts only the public-URL issuer). Without the
+      # TLS skip that public mint dies against the self-signed edge and the
+      # silent failover mints at http://keycloak:8080 — the resulting token
+      # carries the INTERNAL issuer and chatqna 401s every serve call (live:
+      # 2026-11-18, both RAGAS runs aborted 20/20 with "chatqna HTTP 401").
+      # OPEA_SSL_SKIP_VERIFY is the genie_ssl_patch knob — self-signed venue.
+      - OPEA_SSL_SKIP_VERIFY=${OPEA_SSL_SKIP_VERIFY:-1}
 
   # Same split-URL trio as backend/okf-server: document-repository verifies
   # tokens and (on the OKF publish path) authenticates its side of the

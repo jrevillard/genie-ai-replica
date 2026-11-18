@@ -286,8 +286,8 @@ BASE_URL=https://<your-venue-host>:4443 tests/e2e/run/run-local-e2e.sh
 
 `<your-venue-host>` is the venue's edge hostname, and the `:4443` that
 follows is the shared forge's edge port — substitute both when your venue
-differs. Its worked example, and the `E2E_VENUE_IP` mapping for a runner
-that cannot resolve its venue's name, are in
+differs. The shared forge's worked example, and the `E2E_VENUE_IP` mapping
+for a runner that cannot resolve its venue's name, are in
 [`docs/e2e-tests/local-run.md`](../../docs/e2e-tests/local-run.md#venue-address)
 (§ Venue address).
 

@@ -50,6 +50,12 @@ global:
   # following the Helm `global.*` convention; the chart's own overlays
   # set the top-level key.
   imageRegistry: ""
+  # Optional VERSION tag that WINS over the top-level imageTag when set
+  # (the factory, the migrations Job and the OPEA templates all read it
+  # first). Empty = the top-level imageTag applies. Exists for operators
+  # following the Helm `global.*` convention; the chart's own overlays
+  # set the top-level key.
+  imageTag: ""
   # imagePullSecrets — a list of {name: <Secret>} refs wired into every
   # service pod's spec.imagePullSecrets, for a registry that requires
   # authentication. The registry the images are pulled FROM is the

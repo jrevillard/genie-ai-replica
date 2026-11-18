@@ -119,7 +119,8 @@ For the GPU-specific layer, see [GPU Deployment](/docs/deploy/gpu/).
   See [GPU Deployment](/docs/deploy/gpu/) and
   [NVIDIA A40 Install Guide](/docs/deploy/a40-install/).
 - **Node.js 22+** — required for JavaScript tooling. Docker images use
-  `node:22`; CI lint+test jobs run on `node:22-alpine`.
+  `node:22-trixie` / `node:22-trixie-slim`; CI lint+test jobs run on
+  `node:22-alpine`.
 
 ## Step 3: Install Docker on every host
 

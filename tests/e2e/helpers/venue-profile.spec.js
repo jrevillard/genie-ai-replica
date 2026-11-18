@@ -17,6 +17,7 @@ const auth = require('./auth');
  */
 const REAL_REQUEST = auth.request;
 const REAL_GET_ADMIN_TOKEN = auth.getAdminToken;
+const REAL_OPEN_VENUE_SESSION = auth.openVenueSession;
 const PROFILE_PATH = require.resolve('./venue-profile');
 
 /** A fresh, uncached copy of the helper. */
@@ -28,6 +29,7 @@ function freshProfile() {
 test.afterEach(() => {
   auth.request = REAL_REQUEST;
   auth.getAdminToken = REAL_GET_ADMIN_TOKEN;
+  auth.openVenueSession = REAL_OPEN_VENUE_SESSION;
 });
 
 /** The fake transport: a queue of answers, one per call. */
@@ -51,6 +53,25 @@ function fakeTransport(answers) {
     return Promise.resolve({ status: answer.status, data: answer.data, headers: {} });
   };
   return calls;
+}
+
+/**
+ * The venue session the probes open: a realm token, and the locale the app
+ * adopted in that session. The real session launches a browser and logs in —
+ * the unit spec fakes it, and `adopted` overrides the locale the fake app
+ * reports (the default is the locale the session was opened with).
+ */
+function fakeVenueSession({ adopted, at } = {}) {
+  const sessions = { count: 0 };
+  auth.openVenueSession = async ({ locale } = {}) => {
+    sessions.count += 1;
+    return {
+      token: 'fake-session-token',
+      adopted: adopted || locale || 'en',
+      at: typeof at === 'function' ? at() : Date.now()
+    };
+  };
+  return sessions;
 }
 
 test.describe('the OKF probe reads the venue like the frontend reads it', () => {
@@ -87,6 +108,18 @@ test.describe('the OKF probe reads the venue like the frontend reads it', () => 
     fakeTransport([{ status: 404, data: null }]);
     const profile = freshProfile();
     expect(await profile.okfEnabled()).toBe(true);
+  });
+
+  test('the runtime config is read RAW — it is JavaScript, not JSON', async () => {
+    // The config file is EVALUATED by the frontend, so the transport's
+    // raw escape hatch is what hands the probe text instead of a JSON
+    // parse failure. Nothing else pins that flag: the fake transport
+    // answers whatever it is given, so a probe that dropped it would read
+    // the same shapes here and fail on the venue instead.
+    const calls = fakeTransport([{ status: 200, data: 'window.APP_CONFIG = {\n  okfEnabled: "0",\n};\n' }]);
+    const profile = freshProfile();
+    await profile.okfEnabled();
+    expect(calls[0].options.raw).toBe(true);
   });
 
   test('a numeric 1 is a different writer and does not enable them', async () => {
@@ -277,5 +310,365 @@ test.describe('the hook-skip contract the guarded specs stand on (#1773)', () =>
 
   test('the hook after the skipped hook did not run', () => {
     expect(bodyRan).toBe(false);
+  });
+});
+
+test.describe('the locale whitelist probe reads the config the frontend reads', () => {
+  test('an empty whitelist keeps every locale active', async () => {
+    fakeTransport([{ status: 200, data: 'window.APP_CONFIG = {\n  availableLocales: "",\n};\n' }]);
+    const profile = freshProfile();
+    expect(await profile.localeActive('fr')).toBe(true);
+  });
+
+  test('a config without the knob keeps every locale active', async () => {
+    fakeTransport([{ status: 200, data: 'window.APP_CONFIG = {\n  apiUrl: "/api",\n};\n' }]);
+    const profile = freshProfile();
+    expect(await profile.localeActive('fr')).toBe(true);
+  });
+
+  test('no runtime config at all keeps every locale active (the dev-build arm)', async () => {
+    fakeTransport([{ status: 404, data: null }]);
+    const profile = freshProfile();
+    expect(await profile.localeActive('fr')).toBe(true);
+  });
+
+  test("the probe applies the frontend's OWN rule, arm for arm", async () => {
+    // The probe SPELLS the frontend's whitelist rule (split, trim,
+    // lowercase, 'en' always retained). A probe that grew stricter than
+    // the frontend would skip a surface the deployment really serves —
+    // coverage lost with no red anywhere — so the probe's decision is
+    // compared against the OWNER's own answer, over a set of whitelists
+    // and locales.
+    //
+    // The frontend owns the rule in an ES module; the spec reads it
+    // through the same bridge the helper owns (the spec runs on a runner
+    // above the CommonJS-require-of-ESM floor, which the helper names).
+    const { applyLocaleWhitelist } = require('../../../components/gov-chat-frontend/src/i18n/whitelist');
+    const locales = ['en', 'fr', 'es', 'de'];
+    const whitelists = ['', '   ', 'en', 'fr', 'en,fr', 'EN, FR', 'es,de'];
+    for (const whitelist of whitelists) {
+      for (const locale of locales) {
+        fakeVenueSession();
+        fakeTransport([{ status: 200, data: `window.APP_CONFIG = {\n  availableLocales: "${whitelist}",\n};\n` }]);
+        const profile = freshProfile();
+        // The owner's answer: does the locale SURVIVE the frontend's own
+        // filter?
+        const filtered = applyLocaleWhitelist(Object.fromEntries(locales.map((code) => [code, {}])), whitelist);
+        const expected = Object.keys(filtered).some((code) => code.toLowerCase() === locale.toLowerCase());
+        expect(await profile.localeActive(locale)).toBe(expected);
+      }
+    }
+  });
+
+  test('a whitelist that excludes the locale excludes it — and matches case-insensitively', async () => {
+    // The frontend's rule (whitelist.js): trim, lowercase, compare. The
+    // probe applies the same rule, arm for arm.
+    fakeTransport([{ status: 200, data: 'window.APP_CONFIG = {\n  availableLocales: "en,es",\n};\n' }]);
+    const profile = freshProfile();
+    expect(await profile.localeActive('fr')).toBe(false);
+    expect(await profile.localeActive('es')).toBe(true);
+  });
+
+  test('a whitelist carrying the locale in another case still admits it', async () => {
+    fakeTransport([{ status: 200, data: 'window.APP_CONFIG = {\n  availableLocales: "EN,FR",\n};\n' }]);
+    const profile = freshProfile();
+    expect(await profile.localeActive('fr')).toBe(true);
+  });
+
+  test("'en' stays active even when the whitelist does not name it", async () => {
+    // The frontend's rule (whitelist.js): 'en' is ALWAYS retained so
+    // vue-i18n's fallbackLocale can resolve. A probe that said otherwise
+    // would skip the default locale on a venue that serves it perfectly
+    // well.
+    fakeTransport([{ status: 200, data: 'window.APP_CONFIG = {\n  availableLocales: "es,fr",\n};\n' }]);
+    const profile = freshProfile();
+    expect(await profile.localeActive('en')).toBe(true);
+    expect(await profile.localeActive('fr')).toBe(true);
+    expect(await profile.localeActive('de')).toBe(false);
+  });
+
+  test('the skip reason renders the whitelist exactly and names the NOT-exercised verdict', async () => {
+    fakeTransport([{ status: 200, data: 'window.APP_CONFIG = {\n  availableLocales: "en,es",\n};\n' }]);
+    const profile = freshProfile();
+    const reason = await profile.missingLocaleReason('fr');
+    expect(reason).toContain('availableLocales="en,es"');
+    expect(reason).toContain("'fr'");
+    expect(reason).toMatch(/NOT exercised/);
+  });
+});
+
+test.describe('the translation probe reads the venue through its own endpoint', () => {
+  // The probe opens a realm session through the browser login (the faked
+  // one here): a master-admin token is the wrong issuer for the backend.
+  test('a venue that translates the probe answers true, with the en→fr body', async () => {
+    fakeVenueSession();
+    const calls = fakeTransport([{ status: 200, data: { translated_texts: ['Bonjour'] }, headers: {} }]);
+    const profile = freshProfile();
+    expect(await profile.translatesTo('fr')).toBe(true);
+    expect(calls).toHaveLength(1);
+    expect(calls[0].method).toBe('POST');
+    expect(calls[0].path).toBe('/api/translate');
+    expect(calls[0].options.body.target_lang).toBe('fr');
+    expect(calls[0].options.body.source_lang).toBe('en');
+    expect(calls[0].options.headers.Authorization).toBe('Bearer fake-session-token');
+  });
+
+  test('the typed UNSUPPORTED_LANGUAGE refusal is the venue saying the language is absent', async () => {
+    fakeVenueSession();
+    fakeTransport([
+      { status: 400, data: { error: 'UNSUPPORTED_LANGUAGE', message: 'Unsupported target language' }, headers: {} }
+    ]);
+    const profile = freshProfile();
+    expect(await profile.translatesTo('fr')).toBe(false);
+  });
+
+  test('a 200 that echoes the source is a bug in the chain — it REDS, and it is not retried', async () => {
+    // The status alone does not prove the chain translated anything: a body
+    // that carries the source text back is a chain that did not translate.
+    // That is a defect in the chain (operator ruling on #1984): the probe
+    // throws, and the verdict is neither cached nor a skip.
+    fakeVenueSession();
+    const calls = fakeTransport([{ status: 200, data: { translated_texts: ['Hello'] }, headers: {} }]);
+    const profile = freshProfile();
+    await expect(profile.translatesTo('fr')).rejects.toThrow(/WITHOUT translating/);
+    // ONE call: the probe is never re-issued.
+    expect(calls).toHaveLength(1);
+  });
+
+  test('a 200 with no translated text is the same failure', async () => {
+    fakeVenueSession();
+    const calls = fakeTransport([{ status: 200, data: { translated_texts: [] }, headers: {} }]);
+    const profile = freshProfile();
+    await expect(profile.translatesTo('fr')).rejects.toThrow(/WITHOUT translating/);
+    expect(calls).toHaveLength(1);
+  });
+
+  test('any other 400 is an unreadable venue, not an absent one', async () => {
+    fakeVenueSession();
+    fakeTransport([{ status: 400, data: { error: 'VALIDATION_ERROR' }, headers: {} }]);
+    const profile = freshProfile();
+    await expect(profile.translatesTo('fr')).rejects.toThrow(/venue profile is UNKNOWN/);
+  });
+
+  test('a 5xx is an unreadable venue too — loud, and never cached', async () => {
+    fakeVenueSession();
+    fakeTransport([
+      { status: 503, data: { error: 'unavailable' }, headers: {} },
+      { status: 200, data: { translated_texts: ['Bonjour'] }, headers: {} }
+    ]);
+    const profile = freshProfile();
+    await expect(profile.translatesTo('fr')).rejects.toThrow(/HTTP 503/);
+    // The failed probe left nothing cached: the next call re-reads the
+    // venue in its own name instead of inheriting the error.
+    expect(await profile.translatesTo('fr')).toBe(true);
+  });
+});
+
+test.describe('the French streaming premise combines the venue facts', () => {
+  test('a venue without the locale never asks the translation endpoint', async () => {
+    fakeVenueSession();
+    const calls = fakeTransport([
+      { status: 200, data: 'window.APP_CONFIG = {\n  availableLocales: "en,es",\n};\n' },
+      { status: 200, data: { translated_texts: ['Bonjour'] }, headers: {} }
+    ]);
+    const profile = freshProfile();
+    expect(await profile.frenchStreamingReady()).toBe(false);
+    // Exactly ONE call happened — the config read. The translation probe
+    // was not spent on a venue whose locale already failed the premise.
+    expect(calls).toHaveLength(1);
+  });
+
+  test('an active locale with no translation chain is a false, and the reason names the chain', async () => {
+    fakeVenueSession();
+    fakeTransport([
+      { status: 200, data: 'window.APP_CONFIG = {\n  availableLocales: "",\n};\n' },
+      { status: 400, data: { error: 'UNSUPPORTED_LANGUAGE', message: 'Unsupported target language' }, headers: {} }
+    ]);
+    const profile = freshProfile();
+    expect(await profile.frenchStreamingReady()).toBe(false);
+    const reason = await profile.frenchStreamingMissingReason();
+    expect(reason).toMatch(/translation chain/);
+    expect(reason).toMatch(/NOT exercised/);
+  });
+
+  test('both facts present is a ready venue', async () => {
+    fakeVenueSession();
+    fakeTransport([
+      { status: 200, data: 'window.APP_CONFIG = {\n  availableLocales: "",\n};\n' },
+      { status: 200, data: { translated_texts: ['Bonjour'] }, headers: {} }
+    ]);
+    const profile = freshProfile();
+    expect(await profile.frenchStreamingReady()).toBe(true);
+  });
+
+  test('a build that does not carry the locale file fails the premise, and the reason says so', async () => {
+    // The whitelist names 'fr', the build ships no fr.js: the app boots on
+    // 'en'. The premise is the venue's answer to "can this deployment serve
+    // this locale?", and the app is the only one that can answer it.
+    fakeVenueSession({ adopted: 'en' });
+    const calls = fakeTransport([
+      { status: 200, data: 'window.APP_CONFIG = {\n  availableLocales: "en,fr",\n};\n' },
+      { status: 200, data: { translated_texts: ['Bonjour'] }, headers: {} }
+    ]);
+    const profile = freshProfile();
+    expect(await profile.frenchStreamingReady()).toBe(false);
+    // The translation endpoint was never asked: the locale already failed.
+    expect(calls).toHaveLength(1);
+    const reason = await profile.frenchStreamingMissingReason();
+    expect(reason).toMatch(/does not adopt the locale 'fr'/);
+    // The OBSERVED locale, not a placeholder: the reason is what the
+    // operator reads to know WHICH locale the app booted on.
+    expect(reason).toMatch(/it booted on 'en'/);
+    expect(reason).toMatch(/NOT exercised/);
+  });
+});
+
+test.describe('the ingest-chain canary uploads, ingests, and cleans up', () => {
+  const uploaded = (fileId) => ({
+    status: 201,
+    data: { success: true, data: { file_id: fileId, file_name: 'ingest-probe-canary.md' } },
+    headers: {}
+  });
+  const recordRead = (fileId, status) => ({
+    status: 200,
+    data: { success: true, data: { file_id: fileId, file_name: 'ingest-probe-canary.md', dataprep: { status } } },
+    headers: {}
+  });
+
+  test('a canary that reaches Ingested is a ready venue — and leaves nothing behind', async () => {
+    fakeVenueSession();
+    const calls = fakeTransport([
+      uploaded('c1'),
+      { status: 200, data: { success: true }, headers: {} },
+      recordRead('c1', 'Ingested'),
+      recordRead('c1', 'Ingested'),
+      { status: 200, data: { success: true }, headers: {} }
+    ]);
+    const profile = freshProfile();
+    expect(await profile.ingestChainReady()).toBe(true);
+    // The whole conversation, in order: upload, ingest, the wait's reads,
+    // the cleanup's record read and delete.
+    expect(calls.map((c) => `${c.method} ${c.path}`)).toEqual([
+      'POST /api/files/upload',
+      'POST /api/files/c1/ingest',
+      'GET /api/files/c1',
+      'GET /api/files/c1',
+      'DELETE /api/files/c1'
+    ]);
+  });
+
+  test('a canary that lands Ingestion Error is NOT a ready venue, and the reason says what happened', async () => {
+    fakeVenueSession();
+    fakeTransport([
+      uploaded('c1'),
+      { status: 200, data: { success: true }, headers: {} },
+      recordRead('c1', 'Ingestion Error'),
+      recordRead('c1', 'Ingestion Error'),
+      { status: 200, data: { success: true }, headers: {} }
+    ]);
+    const profile = freshProfile();
+    expect(await profile.ingestChainReady()).toBe(false);
+    const reason = await profile.ingestChainMissingReason();
+    expect(reason).toContain('Ingestion Error');
+    expect(reason).toMatch(/NOT exercised/);
+  });
+
+  test('a venue that cannot accept the upload is UNREADABLE — loud, not a false verdict', async () => {
+    fakeVenueSession();
+    fakeTransport([
+      { status: 500, data: { success: false, error: 'boom' }, headers: {} },
+      // The cleanup's prefix sweep: nothing was committed under the name.
+      { status: 200, data: { data: [] }, headers: {} }
+    ]);
+    const profile = freshProfile();
+    await expect(profile.ingestChainReady()).rejects.toThrow(/could not read the venue/);
+  });
+
+  test('a canary that lands Ingested with Warnings is NOT a ready venue — the specs assert the exact status', async () => {
+    // The degraded status is indexed, but it is not the 'Ingested' the
+    // specs assert: a premise that admitted it would run the specs on a
+    // venue they would red on. The reason names the status it landed.
+    fakeVenueSession();
+    fakeTransport([
+      uploaded('c1'),
+      { status: 200, data: { success: true }, headers: {} },
+      recordRead('c1', 'Ingested with Warnings'),
+      // The cleanup's record read, then its delete.
+      {
+        status: 200,
+        data: { success: true, data: { file_id: 'c1', file_name: 'ingest-probe-canary.md' } },
+        headers: {}
+      },
+      { status: 200, data: { success: true }, headers: {} }
+    ]);
+    const profile = freshProfile();
+    expect(await profile.ingestChainReady()).toBe(false);
+    const reason = await profile.ingestChainMissingReason();
+    expect(reason).toContain('Ingested with Warnings');
+  });
+
+  test('a canary that lands Ingested with Warnings MID-WAIT ends the wait at once, named', async () => {
+    // The degraded status can arrive on the wait's SECOND read: the wait
+    // must end there — polling a status that will not change would burn
+    // the whole budget to say the same thing.
+    fakeVenueSession();
+    fakeTransport([
+      uploaded('c1'),
+      { status: 200, data: { success: true }, headers: {} },
+      recordRead('c1', 'Pending'),
+      recordRead('c1', 'Ingested with Warnings'),
+      // The cleanup's record read, then its delete.
+      {
+        status: 200,
+        data: { success: true, data: { file_id: 'c1', file_name: 'ingest-probe-canary.md' } },
+        headers: {}
+      },
+      { status: 200, data: { success: true }, headers: {} }
+    ]);
+    const profile = freshProfile();
+    expect(await profile.ingestChainReady()).toBe(false);
+    const reason = await profile.ingestChainMissingReason();
+    expect(reason).toContain('Ingested with Warnings');
+  });
+
+  test('a canary that cannot be removed FAILS the probe — a leftover stays in the venue corpus', async () => {
+    fakeVenueSession();
+    fakeTransport([
+      uploaded('c1'),
+      { status: 200, data: { success: true }, headers: {} },
+      recordRead('c1', 'Ingested'),
+      // The cleanup's record read, then a delete the venue refuses.
+      {
+        status: 200,
+        data: { success: true, data: { file_id: 'c1', file_name: 'ingest-probe-canary.md' } },
+        headers: {}
+      },
+      { status: 500, data: { success: false, error: 'boom' }, headers: {} }
+    ]);
+    const profile = freshProfile();
+    // The chain WAS ready — and the run cannot certify it while it leaves
+    // a canary document behind in a corpus the next run's questions read.
+    await expect(profile.ingestChainReady()).rejects.toThrow(/cleanup failed/);
+  });
+});
+
+test.describe('the venue session is bounded by its own age', () => {
+  test('a session past the bound is re-opened — a realm token lives 300 s', async () => {
+    // The cached session is older than the bound: the probe must not hand
+    // its expired token to the next call.
+    const sessions = fakeVenueSession({ at: () => Date.now() - 200000 });
+    const profile = freshProfile();
+    expect(await profile.localeAdopted('fr')).toBe(true);
+    expect(sessions.count).toBe(1);
+    expect(await profile.localeAdopted('fr')).toBe(true);
+    expect(sessions.count).toBe(2);
+  });
+
+  test('a session inside the bound is reused — one login, not one per probe', async () => {
+    const sessions = fakeVenueSession();
+    const profile = freshProfile();
+    expect(await profile.localeAdopted('fr')).toBe(true);
+    expect(await profile.localeAdopted('fr')).toBe(true);
+    expect(sessions.count).toBe(1);
   });
 });

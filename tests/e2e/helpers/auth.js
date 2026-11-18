@@ -1,6 +1,9 @@
 const https = require('https');
 const { chromium } = require('@playwright/test');
 const { loginViaUI, TEST_USER } = require('./chatbot');
+// The locale the APP adopted — one home for the read (helpers/locale.js
+// owns the pin, so it owns the read of what the pin produced).
+const { readAdoptedLocale } = require('./locale');
 // The venue's edge comes from the credential-free module: this file needs
 // the edge and no credential, and the edge has one definition.
 const { BASE_URL } = require('./base-url');
@@ -546,21 +549,38 @@ async function mapWithConcurrency(items, limit, fn) {
 }
 
 /**
- * Log in through the UI in a throwaway session and return that session's
- * access token — the cleanup paths' replacement for minting a token with
- * ROPC, which the realm refuses by design.
+ * Open one browser session on the venue and report what the session SAW:
+ * the realm token it carries and the locale the APP adopted.
+ *
+ * The locale is set on the CONTEXT (`newContext({ locale })`), so the app
+ * boots on `navigator.language` — the app's own detection order, with no
+ * stored preference in a fresh context to override it. The adopted
+ * language is then read off `<html lang>`, the attribute main.js writes
+ * with the locale the app actually booted with: the deployment's
+ * whitelist is only HALF of the frontend's rule (the active set is the
+ * build's locale FILES filtered by the whitelist), and only the app can
+ * say which files it ships. A deployment whose whitelist names a locale
+ * its build does not carry falls back to 'en', and this is the probe that
+ * sees it.
+ *
+ * The teardown contract is the one getSessionTokenViaUI owns: a session
+ * that failed throws its failure (with a teardown failure as the cause),
+ * a teardown failure on a successful session throws too, and a clean run
+ * returns what it saw.
+ *
  * @param {object} [options]
- * @param {import('@playwright/test').Browser} [options.browser] - Reuse this
- *        browser; launches a throwaway chromium when omitted.
  * @param {{username: string, password: string}} [options.user] - Defaults to
  *        TEST_USER.
- * @returns {Promise<string>} Access token string
+ * @param {string} [options.locale] - The locale the context boots with.
+ * @returns {Promise<{token: string, adopted: string, at: number}>} the
+ *        session's token, the locale the app adopted, and when the session
+ *        was opened (the age the callers bound their cache by)
  */
-async function getSessionTokenViaUI({ browser, user } = {}) {
+async function openVenueSession({ browser, user, locale } = {}) {
   let ownBrowser = null;
   let context = null;
-  let token = null;
-  let loginError = null;
+  let seen = { token: null, adopted: null, at: Date.now() };
+  let sessionError = null;
   let teardownError = null;
   try {
     // The throwaway browser carries the venue mapping (empty unless
@@ -568,21 +588,17 @@ async function getSessionTokenViaUI({ browser, user } = {}) {
     // so a browser launched without it cannot open a venue whose name the
     // runner cannot resolve.
     ownBrowser = browser ? null : await chromium.launch({ args: venueLaunchArgs() });
-    context = await (browser || ownBrowser).newContext({ ignoreHTTPSErrors: true });
+    context = await (browser || ownBrowser).newContext({ ignoreHTTPSErrors: true, locale });
     const page = await context.newPage();
     await loginViaUI(page, user || TEST_USER);
-    token = await getSessionToken(page);
+    seen = {
+      token: await getSessionToken(page),
+      adopted: await readAdoptedLocale(page),
+      at: Date.now()
+    };
   } catch (e) {
-    loginError = e;
+    sessionError = e;
   } finally {
-    // The context closes BEFORE the browser (a browser-close failure must
-    // not skip the context close and leak it). The teardown failure is only
-    // COLLECTED here: a throw inside a finally supersedes whatever the try
-    // decided (eslint no-unsafe-finally), so the decision below — after the
-    // finally — throws the login failure as the primary error with the
-    // teardown error attached as its cause (#1883), and a teardown failure
-    // on a login that succeeded is still thrown: the throwaway session's
-    // cleanup fails loudly, never silently.
     if (context) {
       try {
         await context.close();
@@ -598,9 +614,29 @@ async function getSessionTokenViaUI({ browser, user } = {}) {
       }
     }
   }
-  // The decision lives in resolveSessionOutcome (below) — the contract is
-  // pinned there, this call site just hands it the three facts.
-  return resolveSessionOutcome(loginError, teardownError, token);
+  return resolveSessionOutcome(sessionError, teardownError, seen);
+}
+
+/**
+ * Log in through the UI in a throwaway session and return that session's
+ * access token — the cleanup paths' replacement for minting a token with
+ * ROPC, which the realm refuses by design.
+ * @param {object} [options]
+ * @param {import('@playwright/test').Browser} [options.browser] - Reuse this
+ *        browser; launches a throwaway chromium when omitted.
+ * @param {{username: string, password: string}} [options.user] - Defaults to
+ *        TEST_USER.
+ * @returns {Promise<string>} Access token string
+ */
+async function getSessionTokenViaUI({ browser, user } = {}) {
+  // ONE session primitive (openVenueSession above) owns the browser, the
+  // context, the login and the teardown contract — this is its token-only
+  // face. The teardown contract is the one resolveSessionOutcome owns: a
+  // session that failed throws its failure (with a teardown failure as the
+  // cause), a teardown failure on a successful session throws too, and a
+  // clean run returns what it saw (#1883).
+  const session = await openVenueSession({ browser, user });
+  return session.token;
 }
 
 /**
@@ -646,6 +682,7 @@ module.exports = {
   getUserToken,
   getSessionToken,
   getSessionTokenViaUI,
+  openVenueSession,
   resolveSessionOutcome,
   parseJwtClaims,
   request,

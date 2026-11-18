@@ -21,7 +21,9 @@ describe('ci env rewrite gate: the repository', () => {
   test('every literal .env rewrite in the CI targets a variable the env template assigns', () => {
     const dead = findDeadEnvRewrites(CI_FILE, ENV_TEMPLATE);
     const report = dead
-      .map((rewrite) => `  .gitlab-ci.yml:${rewrite.line} rewrites ${rewrite.name}, which the env template does not assign`)
+      .map(
+        (rewrite) => `  .gitlab-ci.yml:${rewrite.line} rewrites ${rewrite.name}, which the env template does not assign`
+      )
       .join('\n');
     expect(dead.map((rewrite) => rewrite.name)).toEqual([]);
     expect(report).toBe('');

@@ -75,9 +75,7 @@ function findDeadEnvRewrites(ciPath, envTemplatePath) {
     throw new Error(`Failed to read ${ciPath}`, { cause: err });
   }
 
-  const assigned = new Set(
-    parseEnvTemplate(envTemplatePath).variables.map((variable) => variable.name)
-  );
+  const assigned = new Set(parseEnvTemplate(envTemplatePath).variables.map((variable) => variable.name));
 
   return findCiEnvRewrites(ciContent).filter((rewrite) => !assigned.has(rewrite.name));
 }

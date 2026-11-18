@@ -59,3 +59,29 @@ probe:huge:
     - echo "P5 huge done $(date -u +%T)"
     - sleep 120
     - echo "P5 huge end $(date -u +%T)"
+
+# P6: the runner's own request, reproduced from inside a job: PATCH the
+# trace endpoint with a valid job token at growing body sizes, and print
+# the RESPONSE HEADERS (no token is ever printed). This tells us who
+# answers 403: GitLab (x-gitlab-meta / x-request-id), the edge (cf-ray),
+# or something else (neither).
+probe:patch-size:
+  extends: .probe
+  stage: probe
+  script:
+    - |
+      offset=0
+      for size in 1000 64000 150000 300000 1000000; do
+        head -c "$size" /dev/zero | tr '\0' 'a' > /tmp/payload
+        code=$(curl -sS -D /tmp/h -o /tmp/b -w '%{http_code}' \
+          -X PATCH "$CI_API_V4_URL/jobs/$CI_JOB_ID/trace" \
+          -H "JOB-TOKEN: $CI_JOB_TOKEN" \
+          -H "Content-Range: ${offset}-$((offset + size - 1))" \
+          -H "Content-Type: text/plain" \
+          --data-binary @/tmp/payload)
+        echo "size=$size code=$code"
+        grep -iE '^(x-request-id|x-gitlab-meta|cf-ray|job-status|range|x-gitlab-trace-update-interval|server)' /tmp/h | sed 's/^/    /' || true
+        newoff=$(grep -i '^range:' /tmp/h | sed -E 's/.*-([0-9]+).*/\1/')
+        [ -n "$newoff" ] && offset=$newoff
+        sleep 3
+      done

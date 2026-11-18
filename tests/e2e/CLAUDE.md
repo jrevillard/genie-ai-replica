@@ -40,20 +40,19 @@ in the error (never silently tolerated).
   hazard: it exists only where it is sanctioned HERE, with its contract
   spelled out. Every entry keys on a condition, is bounded, and fails loud
   on its last observed outcome — never a silent give-up. One clause binds
-  every entry, and it is the one that matters most: **a retry may never
-  cover an assertion path.** A retry may only cover a transport or setup
-  path OUTSIDE any spec's subject — and the test that decides is this: a
-  path whose failure produced NO answer the spec could judge (the
-  transport dropped it, or the edge returned its own reset artifact — not
-  a product verdict). It may never re-run or re-decide an assertion the
-  spec itself makes: once an attempt PRODUCED a product verdict, re-asking
-  it decides the spec's verdict on the second answer, and a second answer
-  is no evidence where the first was the truth. Two neighbours are not
-  retries: a WAIT for a convergent condition (it re-reads a STATE until
-  it holds — it never re-asks a QUESTION for a fresher answer; see *Wait
-  for conditions, not durations* below), and a two-leg cleanup protocol
-  (a re-issue after a STATE CHANGE — it re-asks the same request only
-  because the state moved). The inventory:
+  every entry: **a retry may never cover an assertion path.** A retry may
+  only cover a transport or setup path OUTSIDE any spec's subject, and the
+  test that decides is WHAT the attempt produced, not who judges it: a path
+  whose failure produced no verdict about the system under test (the
+  transport dropped it, or the edge returned its own reset artifact — a
+  transport artifact, not a product verdict). It may never re-run or
+  re-decide an assertion the spec itself makes: once an attempt PRODUCED a
+  product verdict, a second answer is no evidence where the first was the
+  truth. Two neighbours are not retries: a WAIT for a convergent condition
+  (it re-reads a STATE that is still MOVING until it holds — the earlier
+  read was never a verdict; see *Wait for conditions, not durations*
+  below), and a two-leg cleanup protocol (a re-issue of the same request,
+  only because the STATE CHANGED). The inventory:
   1. `helpers/auth.js`'s `request()` — the edge's own upstream-reset failure
      re-issued on the idempotent methods (#1847 — operator-sanctioned as the
      deterministic answer to a genuine transient): the k8s venue's Envoy
@@ -84,17 +83,15 @@ in the error (never silently tolerated).
   proposed fourth entry would have made `helpers/venue-profile.js`'s
   `translatesTo()` take a SECOND SAMPLE whenever a 200 answer carried no
   translation — it echoed its English source, or carried none at all — and
-  the probe's verdict, and with it the run's French coverage, would have
-  come from that second answer: a first answer that echoed its source
-  became INVISIBLE (a chain that echoed once could end the run green; a
-  chain that never translated had its French surface skipped — a coverage
-  loss, not a red). The operator REFUSED it: an untranslated answer is a
-  BUG in the translation chain, not a transient, so the probe stays at ONE
-  sample and an echoed answer turns the spec RED. That is the clause in
-  one case: a retry may recover a transport that dropped an answer, but it
-  may not re-ask a question whose answer IS a product verdict — not even
-  when the question is only a setup premise and the second answer would
-  "confirm" it. The second answer is not evidence about the first.
+  the probe's verdict would have come from that second answer: a first
+  answer that echoed its source became INVISIBLE (a chain that echoed once
+  could end the run green; a chain that never translated had its French
+  surface skipped — a coverage loss, not a red). The operator REFUSED it:
+  an untranslated answer is a BUG in the translation chain, not a
+  transient, so the probe stays at ONE sample and an echoed answer turns
+  the spec RED. A setup premise does not exempt it: the probe's answer IS
+  a product verdict, and a second sample would have re-asked a question
+  whose answer was already the truth.
 
   This list is exhaustive. A new retry surface needs an operator ruling
   recorded here first; no spec adds a retry loop, and Playwright's

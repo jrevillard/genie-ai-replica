@@ -3354,6 +3354,13 @@ class TestTheLateGraphWriteIsPurged:
             "cascade that never happened"
         )
         assert "(attempt 1/2)" in announcements[0], announcements
+        # And the stand-down itself is written where the operator reads: the
+        # straggler's rows may survive as duplicates, and this document's log
+        # is the only place that says so.
+        standdowns = [
+            str(call.args[3]) for call in dp._write_ingestion_log.call_args_list if "stands down" in str(call.args[3])
+        ]
+        assert len(standdowns) == 1, f"the stand-down was not reported in the document's own log: {standdowns}"
 
     def test_a_failure_with_no_writer_in_flight_registers_no_purge(self, monkeypatch):
         """Nothing to purge means nothing registered.
@@ -3467,6 +3474,9 @@ class TestTheLateGraphWriteIsPurged:
         ]
         assert len(announcements) == 2, f"the purge did not announce both attempts: {announcements}"
         assert "(attempt 1/2)" in announcements[0], announcements
+        # And the stand-down itself is written where the operator reads: the
+        # straggler's rows may survive as duplicates, and this document's log
+        # is the only place that says so.
         assert "(attempt 2/2)" in announcements[1], announcements
 
     def test_the_rollback_retracts_from_the_graph_the_insertion_wrote_to(self, monkeypatch):

@@ -1552,6 +1552,11 @@ async def _run_uninterruptible(coro, *, timeout: float, label: str) -> bool:
 # loaded database. Only reached when an operator cancels the same ingest twice.
 _ROLLBACK_CANCEL_GRACE_SECONDS = 60.0
 
+# How many times the late-write purge may try before it reports the failure
+# to the operator (the announcement and the failure row both cite this
+# total, so the count lives here — three literals that must move together).
+_LATE_WRITE_PURGE_ATTEMPTS = 2
+
 
 async def _gather_with_phase_budget(
     tasks: list, *, phase: str, phase_label: str, total: int, file_id: str, write_ingestion_log
@@ -4201,7 +4206,7 @@ class GenieArangoDataprep(OpeaArangoDataprep):
         """
         with background_span("dataprep.late_write_purge", attributes={"dataprep.file_id": file_id}):
             try:
-                for attempt in (1, 2):
+                for attempt in range(1, _LATE_WRITE_PURGE_ATTEMPTS + 1):
                     # Checked before EVERY attempt: a retry runs seconds later, and
                     # a new ingest may have started in between. This is a
                     # point-in-time check, not a lock: a re-kick that starts after
@@ -4219,6 +4224,19 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                             f"{file_id}: the late graph-write purge stands down — a new ingest of the "
                             "document started, and this purge deletes by document id (#1991)"
                         )
+                        # The operator reads the document's log, and this is
+                        # the one outcome that changes its data: whatever the
+                        # late write lands after the new ingest's retract stays
+                        # as duplicate rows. Say so where they will look.
+                        await self._write_ingestion_log(
+                            file_id,
+                            "INFO",
+                            "System",
+                            "The purge of the rows a previous ingest's late write left behind stands "
+                            "down — a new ingest of this document started, and the purge deletes by "
+                            "document id. If that write lands after this ingest's cleanup, its rows "
+                            "stay as duplicates (see the document-lifecycle doc).",
+                        )
                         return
                     try:
                         # Announced here, per attempt: the cascade writes its
@@ -4230,17 +4248,19 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                             "INFO",
                             "System",
                             f"Purging the rows a graph insertion wrote after the retraction "
-                            f"(attempt {attempt}/2) — the insertion was still running when the "
+                            f"(attempt {attempt}/{_LATE_WRITE_PURGE_ATTEMPTS}) — the insertion was "
+                            "still running when the "
                             "ingest failed or was killed, and its write landed after the cleanup.",
                         )
                         await purge()
                         return
                     except Exception as exc:  # noqa: BLE001 — a failed purge must not kill the service
                         logger.error(
-                            f"{file_id}: the late graph-write purge failed (attempt {attempt}/2): "
+                            f"{file_id}: the late graph-write purge failed "
+                            f"(attempt {attempt}/{_LATE_WRITE_PURGE_ATTEMPTS}): "
                             f"{type(exc).__name__}: {exc}"
                         )
-                        if attempt == 2:
+                        if attempt == _LATE_WRITE_PURGE_ATTEMPTS:
                             await self._write_ingestion_log(
                                 file_id,
                                 "ERROR",

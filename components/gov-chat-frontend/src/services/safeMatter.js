@@ -45,6 +45,17 @@ function safeEngines(options) {
   return { ...(options.engines || {}), javascript: false, coffee: false };
 }
 
+// The options we forward: the caller's, minus the ones that would select an
+// engine by hand (`language` / `lang` — gray-matter's defaults() reads
+// them), plus the disabled code-executing engines.
+function safeOptions(options) {
+  const forwarded = { ...options };
+  delete forwarded.language;
+  delete forwarded.lang;
+  forwarded.engines = safeEngines(options);
+  return forwarded;
+}
+
 /**
  * Parse front matter without ever evaluating it.
  *
@@ -58,7 +69,7 @@ export function safeMatter(content, options = {}) {
   if (!ALLOWED_LANGUAGES.has(language)) {
     throw new Error(`Front matter language "${language}" is not allowed (only yaml and json are)`);
   }
-  return matter(content, { ...options, engines: safeEngines(options) });
+  return matter(content, safeOptions(options));
 }
 
 /**
@@ -71,7 +82,7 @@ export function safeMatter(content, options = {}) {
  * @returns {string} the document, front matter included
  */
 export function safeStringify(content, data, options = {}) {
-  return matter.stringify(content, data, { ...options, engines: safeEngines(options) });
+  return matter.stringify(content, data, safeOptions(options));
 }
 
 export { declaredLanguage };

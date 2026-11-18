@@ -47,6 +47,25 @@ function declaredLanguage(content) {
 }
 
 /**
+ * The options we forward: the caller's, minus the ones that would select
+ * an engine by hand (`language` / `lang` — gray-matter's defaults() reads
+ * them), plus the disabled code-executing engines.
+ *
+ * @param {object} options - the caller's options
+ * @returns {object} the options to forward
+ */
+function safeOptions(options) {
+  const forwarded = { ...options };
+  delete forwarded.language;
+  delete forwarded.lang;
+  // Ours last: a caller cannot re-enable an engine we just disabled.
+  // gray-matter merges the default engines with ours, so `false` here
+  // replaces the eval()-based ones and their dispatch throws.
+  forwarded.engines = { ...(options.engines || {}), javascript: false, coffee: false };
+  return forwarded;
+}
+
+/**
  * Parse front matter without ever evaluating it.
  *
  * @param {string} content - the raw document (delimiters included)
@@ -59,13 +78,7 @@ function safeMatter(content, options = {}) {
   if (!ALLOWED_LANGUAGES.has(language)) {
     throw new Error(`Front matter language "${language}" is not allowed (only yaml and json are)`);
   }
-  return matter(content, {
-    ...options,
-    // Ours last: a caller cannot re-enable an engine we just disabled.
-    // gray-matter merges the default engines with ours, so `false` here
-    // replaces the eval()-based ones and their dispatch throws.
-    engines: { ...(options.engines || {}), javascript: false, coffee: false }
-  });
+  return matter(content, safeOptions(options));
 }
 
 /**
@@ -83,10 +96,7 @@ function safeMatter(content, options = {}) {
  * @returns {string} the document, front matter included
  */
 function stringify(content, data, options = {}) {
-  return matter.stringify(content, data, {
-    ...options,
-    engines: { ...(options.engines || {}), javascript: false, coffee: false }
-  });
+  return matter.stringify(content, data, safeOptions(options));
 }
 
 module.exports = { safeMatter, stringify, declaredLanguage };

@@ -111,7 +111,9 @@ describe('the contract: gray-matter is reached through safeMatter only', () => {
         if (!/\.(js|vue)$/.test(entry.name)) continue;
         if (full.endsWith(path.join('services', 'safeMatter.js'))) continue;
         const source = fs.readFileSync(full, 'utf8');
-        if (/from\s+['"]gray-matter['"]|require\(\s*['"]gray-matter['"]\s*\)/.test(source)) {
+        if (
+          /from\s+['"]gray-matter['"]|require\(\s*['"]gray-matter['"]\s*\)|import\(\s*['"]gray-matter['"]/.test(source)
+        ) {
           offenders.push(path.relative(SRC_DIR, full));
         }
       }

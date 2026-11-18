@@ -15,7 +15,11 @@ const path = require('path');
 const matter = require('gray-matter');
 const { safeMatter, stringify, declaredLanguage } = require('../services/safe-frontmatter');
 
-const SERVICES_DIR = path.join(__dirname, '..', 'services');
+const COMPONENT_DIR = path.join(__dirname, '..');
+// Every import form gray-matter can be reached through: require, static
+// import, dynamic import — single or double quotes.
+const DIRECT_IMPORT =
+  /(require\(\s*['"]gray-matter['"]\s*\))|(from\s+['"]gray-matter['"])|(import\(\s*['"]gray-matter['"])/;
 
 describe('safeMatter', () => {
   it('parses ordinary YAML front matter', () => {
@@ -101,21 +105,33 @@ describe('declaredLanguage', () => {
 });
 
 describe('the contract: gray-matter is reached through safe-frontmatter only', () => {
-  it('no service or worker requires gray-matter directly', () => {
+  it('no module of the component requires gray-matter directly', () => {
     // Parsing is the dangerous direction; serializing is not. Routing
     // BOTH through one module makes the rule crisp and checkable: a
     // future service that reaches for gray-matter directly would reopen
     // CVE-2026-78847, and this test fails the day it does.
+    //
+    // The whole component is walked — a require in controllers/, routes/,
+    // scripts/, validators/, middleware/, db/ or index.js would reopen it
+    // just as much as one in services/ — and every import FORM is caught
+    // (require, static import, dynamic import, single or double quotes).
     const offenders = [];
-    for (const dir of [SERVICES_DIR, path.join(SERVICES_DIR, '..', 'workers')]) {
-      if (!fs.existsSync(dir)) continue;
-      for (const file of fs.readdirSync(dir).filter((f) => f.endsWith('.js'))) {
-        if (file === 'safe-frontmatter.js') continue;
-        if (fs.readFileSync(path.join(dir, file), 'utf8').includes("require('gray-matter')")) {
-          offenders.push(path.basename(dir) === 'workers' ? `workers/${file}` : file);
+    const walk = (dir) => {
+      for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+        if (entry.name === 'node_modules' || entry.name === '__tests__') continue;
+        const full = path.join(dir, entry.name);
+        if (entry.isDirectory()) {
+          walk(full);
+          continue;
+        }
+        if (!entry.name.endsWith('.js')) continue;
+        if (full.endsWith(path.join('services', 'safe-frontmatter.js'))) continue;
+        if (DIRECT_IMPORT.test(fs.readFileSync(full, 'utf8'))) {
+          offenders.push(path.relative(COMPONENT_DIR, full));
         }
       }
-    }
+    };
+    walk(COMPONENT_DIR);
     expect(offenders).toEqual([]);
   });
 });

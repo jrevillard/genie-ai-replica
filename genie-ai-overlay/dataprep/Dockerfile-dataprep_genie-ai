@@ -86,8 +86,17 @@ WORKDIR /app
 # healthcheck (docker-compose.yaml dataprep service) and in-container
 # debugging recipes; libreoffice + the document-conversion toolchain;
 # opencv's libgl1/libglib2.0-0; tesseract.
-RUN apt-get update -y && \
+ARG CACHE_BUST=0
+# The upgrade layer is the ONLY layer that must re-run on a monthly
+# rebuild: CACHE_BUST changes the layer's hash, so the rest of the
+# image stays cached and the rebuild finishes in seconds instead of
+# re-running the (silent, multi-minute) apt install.
+RUN echo "cache-bust: $CACHE_BUST" && apt-get update -y && \
     apt-get upgrade -y && \
+    apt-get clean && \
+    rm -rf /var/lib/apt/lists/*
+
+RUN apt-get update -y && \
     apt-get install -y --no-install-recommends --fix-missing \
     curl \
     default-jre-headless \

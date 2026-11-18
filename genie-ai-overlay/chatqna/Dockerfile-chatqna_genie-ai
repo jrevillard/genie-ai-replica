@@ -56,7 +56,12 @@ USER root
 
 # Security-patch the base: pull current Debian security updates so the shipped
 # image does not lag distro point-releases between upstream rebuilds.
-RUN apt-get update -y && \
+# The upgrade layer is the ONLY layer that must re-run on a monthly
+# rebuild: CACHE_BUST changes the layer's hash, so the rest of the
+# image stays cached and the rebuild finishes in seconds instead of
+# re-running the (silent, multi-minute) apt install.
+ARG CACHE_BUST=0
+RUN echo "cache-bust: $CACHE_BUST" && apt-get update -y && \
     apt-get upgrade -y && \
     rm -rf /var/lib/apt/lists/*
 

@@ -15,7 +15,12 @@ USER root
 # security updates from the trixie repo. The upstream image's openssl
 # (3.5.4-1~deb13u1) lags the repo (3.5.7-1~deb13u2, fixes CVE-2026-31789); the
 # distro upgrade touches only apt-managed packages, not the /usr/local Python.
-RUN apt-get update -y \
+ARG CACHE_BUST=0
+# The upgrade layer is the ONLY layer that must re-run on a monthly
+# rebuild: CACHE_BUST changes the layer's hash, so the rest of the
+# image stays cached and the rebuild finishes in seconds instead of
+# re-running the (silent, multi-minute) apt install.
+RUN echo "cache-bust: $CACHE_BUST" && apt-get update -y \
     && apt-get upgrade -y \
     && rm -rf /var/lib/apt/lists/*
 COPY --chmod=0755 genie-ai-overlay/build-patches/install_site_startup.sh /app/install_site_startup.sh

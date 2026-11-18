@@ -13,7 +13,12 @@ FROM ${UPSTREAM_IMAGE}
 # build time clears base-image CVEs without waiting for an upstream OPEA rebase;
 # the distro upgrade touches only apt-managed packages (the interpreter in
 # /usr/local comes from the python:3.11-slim lineage and is unaffected).
-RUN apt-get update -y \
+ARG CACHE_BUST=0
+# The upgrade layer is the ONLY layer that must re-run on a monthly
+# rebuild: CACHE_BUST changes the layer's hash, so the rest of the
+# image stays cached and the rebuild finishes in seconds instead of
+# re-running the (silent, multi-minute) apt install.
+RUN echo "cache-bust: $CACHE_BUST" && apt-get update -y \
     && apt-get upgrade -y \
     && rm -rf /var/lib/apt/lists/*
 

@@ -22,14 +22,16 @@
 
 const { test, expect } = require('@playwright/test');
 const { BASE_URL } = require('../helpers/base-url');
-const { getAdminToken, SESSION_MINT_TIMEOUT_MS } = require('../helpers/auth');
-const { createUser, deleteUser } = require('../helpers/keycloak-admin');
+const { SESSION_MINT_TIMEOUT_MS } = require('../helpers/auth');
 const { okfEnabled, okfParkedReason, skipUnlessVenue } = require('../helpers/venue-profile');
 const { pinLocale } = require('../helpers/locale');
 const { KEYCLOAK_AUTH_ENDPOINT_GLOB } = require('../helpers/keycloak-landing');
+const { REPO_NAME, registerRagasVenueFixtures } = require('../helpers/ragas-venue-seed');
 
-const REALM = process.env.KEYCLOAK_REALM || 'genie';
-const REPO_NAME = process.env.OKF_SMOKE_REPO_NAME || 'El Salvador';
+// The specs seed their OWN repo (#1890) — never venue data. REPO_NAME is
+// the fixture's fixed name ('ragas-venue-seed', helpers/ragas-venue-seed.js);
+// the fixture hooks below provision the repo, its suite and its done run,
+// and purge everything afterwards (the "clean it up" ruling).
 const USER = 'okf-rescore-e2e';
 const PW = 'RescoreE2ePass123!';
 
@@ -45,29 +47,20 @@ test.describe('the RAGAS guide explains the output, and a re-score is a tracked 
   // runtime config the frontend itself reads.
   test.beforeEach(skipUnlessVenue(test, okfEnabled, okfParkedReason));
 
-  let adminToken;
-  let userId;
-
   // The venue-skip guard (#1742, wired by skipUnlessVenue): when it
-  // skips, the mint below never runs — Playwright does not run the hooks
-  // that follow a skipped hook.
+  // skips, the fixture hooks below never run — Playwright does not run
+  // the hooks that follow a skipped hook.
   test.beforeAll(skipUnlessVenue(test, okfEnabled, okfParkedReason));
 
-  test.beforeAll(async () => {
-    // Minting can exceed the 60s beforeAll hook default — see SESSION_MINT_TIMEOUT_MS.
-    test.setTimeout(SESSION_MINT_TIMEOUT_MS);
-
-    adminToken = await getAdminToken();
-    userId = await createUser(adminToken, REALM, {
-      username: USER,
-      email: 'okf-rescore-e2e@example.invalid',
-      password: PW,
-      realmRoles: ['tools-admin']
-    });
-  });
-
-  test.afterAll(async () => {
-    if (adminToken && userId) await deleteUser(adminToken, REALM, userId);
+  // The #1890 fixture protocol — stated ONCE in the helper (the #1773
+  // convention): beforeAll probes the back-door transport (skip WITH A
+  // REASON before anything exists), mints the tools-admin user, seeds the
+  // repo + suite + done run; afterAll purges on EVERY exit (a half-seeded
+  // repo never outlives the spec) and deletes the user in FINALLY.
+  registerRagasVenueFixtures(test, {
+    username: USER,
+    email: 'okf-rescore-e2e@example.invalid',
+    password: PW
   });
 
   test('the read chapter renders the output table, and a re-score is tracked and cancellable', async ({ browser }) => {

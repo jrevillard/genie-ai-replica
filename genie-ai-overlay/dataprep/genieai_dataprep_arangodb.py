@@ -4221,6 +4221,18 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                         )
                         return
                     try:
+                        # Announced here, per attempt: the cascade writes its
+                        # own stage rows into the document's log, and the
+                        # operator must be able to tell which cascade they
+                        # are reading — the rollback's, or this one's.
+                        await self._write_ingestion_log(
+                            file_id,
+                            "INFO",
+                            "System",
+                            f"Purging the rows a graph insertion wrote after the retraction "
+                            f"(attempt {attempt}/2) — the insertion was still running when the "
+                            "ingest failed, and its write landed after the cleanup.",
+                        )
                         await purge()
                         return
                     except Exception as exc:  # noqa: BLE001 — a failed purge must not kill the service
@@ -4270,16 +4282,11 @@ class GenieArangoDataprep(OpeaArangoDataprep):
 
         The retraction writes its own stage rows into the document's
         ingestion log, so the operator would meet a SECOND cascade there
-        with nothing explaining it. One row says what it is.
+        with nothing explaining it. The row that announces it is written by
+        the caller, once per attempt, so a retried purge says which attempt
+        it is.
         """
         logger.warning(f"{file_id}: purging the graph rows an in-flight insertion wrote after the retract (#1991)")
-        await self._write_ingestion_log(
-            file_id,
-            "INFO",
-            "System",
-            "Purging the rows a graph insertion wrote after the retraction — the insertion was "
-            "still running when the ingest failed, and its write landed after the cleanup.",
-        )
         await self.retract_file(file_id=file_id, graph_name=graph_name, update_status=False)
 
     async def _insert_graph_documents(self, graph_docs, *, input, graph_name) -> None:

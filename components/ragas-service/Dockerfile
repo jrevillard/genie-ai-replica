@@ -10,6 +10,23 @@
 
 FROM python:3.11-slim
 
+# The OS packages are refreshed by a separate, bustable layer: the monthly
+# rebuild passes --build-arg CACHE_BUST=<timestamp>, and a layer that takes
+# that argument is the only one whose cache key changes. This image installs
+# no OS package, but the BASE carries them (zlib1g — CVE-2026-85091, whose
+# fix lives in the trixie security pocket: 1:1.3.dfsg+really1.3.1-1+deb13u1),
+# and the base tag only moves when upstream rebuilds it. This layer is what
+# pulls that fix on the monthly cycle.
+#
+# Position: after the expensive layers (what sits above it stays cached — a
+# layer's cache key includes its parent), before the writes to package-owned
+# paths (a package that moves would restore its own files over ours), and
+# still root.
+ARG CACHE_BUST=0
+RUN CACHE_BUST=$CACHE_BUST apt-get update -y -o Acquire::Retries=5 && \
+    CACHE_BUST=$CACHE_BUST apt-get upgrade -y --with-new-pkgs --fix-missing -o Acquire::Retries=5 && \
+    apt-get clean && rm -rf /var/lib/apt/lists/*
+
 ENV PYTHONUNBUFFERED=1 \
     PIP_NO_CACHE_DIR=1 \
     PORT=8090

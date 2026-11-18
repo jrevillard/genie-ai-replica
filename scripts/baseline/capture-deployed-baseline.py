@@ -128,21 +128,10 @@ INJECTED_PATTERNS = (
 # no entry here is rendered as UNRESOLVED: an unexplained drift must not
 # pass silently.
 DISPOSITIONS = {
-    "image-digest": (
-        "Accepted for V03 - the running digest is the reference E01 must measure "
-        "against. The pod runs a push the registry no longer serves, and the tag has "
-        "moved on. Note that the index digest is not a content identity: it changes on "
-        "every re-push (the attestation), so the amd64 child digest is the stable "
-        "one. The divergence is the known containerd stale-pull behaviour of the "
-        "venue-update mechanism (a rollout restart alone does not re-pull a mutable "
-        "tag). Updating the running stack is the venue update procedure, outside this "
-        "story."
-    ),
-    "not-carried": (
-        "Reported - the chart declares this variable and the deployment does not "
-        "carry it. Verify whether the chart renders this row only under a "
-        "condition; if it does not, the deployment is missing a knob the source "
-        "declares."
+    "conditional": (
+        "Reported - the chart renders this variable under a condition the capture "
+        "could not evaluate (a negated or unparseable one), and the deployment does "
+        "not carry it. Verify whether the chart renders it in this deployment."
     ),
 }
 
@@ -173,6 +162,32 @@ def get_path(values, path):
             return None
         node = node[part]
     return node
+
+
+def leaf_paths(values, prefix=""):
+    """The dotted paths of every leaf of a values tree."""
+    paths = set()
+    if isinstance(values, dict):
+        for key, value in values.items():
+            child = f"{prefix}.{key}" if prefix else str(key)
+            paths.update(leaf_paths(value, child))
+    elif isinstance(values, list):
+        paths.add(prefix)
+    else:
+        paths.add(prefix)
+    return paths
+
+
+def set_path(values, path, replacement):
+    """The values tree with `path` replaced by `replacement`."""
+    parts = path.split(".")
+    node = values
+    for part in parts[:-1]:
+        node = node.setdefault(part, {})
+        if not isinstance(node, dict):
+            return values
+    node[parts[-1]] = replacement
+    return values
 
 
 def deep_merge(base, override):
@@ -253,7 +268,8 @@ def parse_template_env(template_path):
             "chain": chain,
             "path": chain[0][1] if chain and chain[0][0] == "path" else None,
             "literal": chain[0][1] if chain and chain[0][0] == "literal" else None,
-            "guards": [guard for guard in guards if guard],
+            "guards": [guard for guard in guards if guard and guard != "block"],
+            "unresolved_guard": any(guard is None for guard in guards),
         }
 
     events = []
@@ -262,8 +278,13 @@ def parse_template_env(template_path):
         r"\{\{-?\s*\$([A-Za-z][A-Za-z0-9]*)\s*(:=|=)\s*(.*?)\s*-?\}\}", text, re.S
     ):
         events.append((match.start(), "assign", match.groups()))
-    # A block: {{- if <cond> -}} / {{- else -}} / {{- end -}}
-    for match in re.finditer(r"\{\{-?\s*(if|else|end)\b(.*?)-?\}\}", text, re.S):
+    # A block: {{- if <cond> -}} / {{- else -}} / {{- end -}} and the other
+    # block openers, whose `end` must not pop an `if` guard.
+    for match in re.finditer(
+        r"\{\{-?\s*(if|else|end|with|range|define|block|template)\b(.*?)-?\}\}",
+        text,
+        re.S,
+    ):
         events.append((match.start(), match.group(1), match.group(2)))
     # Service-factory style: (dict "name" "ENV" "value" <expr>)
     for match in re.finditer(r'\(dict "name" "([A-Z0-9_]+)" "value" ', text):
@@ -290,10 +311,14 @@ def parse_template_env(template_path):
             guards.append(_guard_chain(payload, locals_map))
         elif kind == "else":
             # A row in the else branch renders when the condition does NOT
-            # hold. The capture does not evaluate that, so it treats the
-            # row as declared.
+            # hold. The capture does not evaluate that, so the guard is
+            # unresolved: the row is conditional, not unconditional.
             if guards:
-                guards[-1] = []
+                guards[-1] = None
+        elif kind in ("with", "range", "define", "block", "template"):
+            # A block that is not a guard: its `end` closes it, never an
+            # enclosing `if` guard.
+            guards.append("block")
         elif kind == "end":
             if guards:
                 guards.pop()
@@ -368,12 +393,15 @@ def _local_assignment(expression, locals_map):
 
 
 def _guard_chain(condition, locals_map):
-    """The chain a guard's condition stands for (empty = always rendered)."""
+    """The chain a guard's condition stands for.
+
+    None means the capture cannot evaluate the condition: the row is
+    conditional, and the record must not claim the chart declares it.
+    """
     condition = condition.strip()
     if "not" in condition.split():
-        # A negated condition: the capture does not evaluate it, so the row
-        # is treated as declared.
-        return []
+        # A negated condition: the capture does not evaluate it.
+        return None
     found = re.fullmatch(r"\$([A-Za-z][A-Za-z0-9]*)", condition)
     if found:
         known = (locals_map or {}).get(found.group(1))
@@ -747,9 +775,17 @@ def capture_release(flux_namespace, release):
     release_obj = kubectl_json(flux_namespace, "get", "helmrelease", release)
     spec = release_obj.get("spec", {})
     status = release_obj.get("status", {})
-    revision = 0
-    for entry in status.get("history", []):
-        revision = max(revision, int(entry.get("version", 0)))
+    # The revision the cluster attests as DEPLOYED: a failed upgrade is
+    # recorded in the history before it fails, so the highest version is not
+    # necessarily the one that runs.
+    history = status.get("history") or []
+    deployed = [entry for entry in history if entry.get("status") == "deployed"]
+    if deployed:
+        revision = max(int(entry.get("version", 0)) for entry in deployed)
+    else:
+        revision = max(
+            (int(entry.get("version", 0)) for entry in history), default=0
+        )
     conditions = status.get("conditions") or []
     ready = next(
         (condition for condition in conditions if condition.get("type") == "Ready"),
@@ -757,6 +793,8 @@ def capture_release(flux_namespace, release):
     )
     overlay = {}
     overlay_names = []
+    secret_paths = set()
+    targeted = []
     for source in spec.get("valuesFrom", []):
         name = source.get("name")
         if not name:
@@ -773,9 +811,19 @@ def capture_release(flux_namespace, release):
             raw = configmap.get("data", {}).get(values_key)
         if raw:
             values = yaml.safe_load(raw) or {}
+            if kind == "Secret":
+                # The values live in a Secret: they are used for the
+                # comparison, in memory, and their paths are remembered so
+                # the record can show that a value came from a Secret
+                # without ever showing the value.
+                secret_paths.update(leaf_paths(values))
             if target_path:
-                values = {target_path: values}
-            overlay = deep_merge(overlay, values)
+                # A targeted source is applied LAST and REPLACES the subtree
+                # at that path (Flux applies the references with a
+                # targetPath after everything else).
+                targeted.append((target_path, values))
+            else:
+                overlay = deep_merge(overlay, values)
             overlay_names.append(name)
         elif not source.get("optional"):
             raise RuntimeError(
@@ -788,12 +836,15 @@ def capture_release(flux_namespace, release):
     if inline:
         overlay = deep_merge(overlay, inline)
         overlay_names.append("inline values")
+    for target_path, values in targeted:
+        overlay = set_path(overlay, target_path, values)
     overlay_name = ", ".join(overlay_names) or "(none)"
     return {
         "chart": spec.get("chart", {}).get("spec", {}),
         "revision": revision,
         "overlay": overlay,
         "overlay_name": overlay_name,
+        "secret_paths": secret_paths,
         "status": ready.get("message", ""),
         "ready": ready.get("status", ""),
     }
@@ -810,13 +861,27 @@ def local_chart_version():
 # --------------------------------------------------------------------------
 
 
+def image_reference(image):
+    """(tag, digest) of an image reference.
+
+    `repo:tag` names a tag. `repo:tag@sha256:digest` and `repo@sha256:digest`
+    name a PINNED artifact: the digest is what the deployment declares, and
+    the tag is only the name it was pushed under.
+    """
+    reference, _, digest = image.partition("@")
+    parts = reference.rsplit(":", 1)
+    tag = parts[1] if len(parts) == 2 and "/" in parts[0] else ""
+    return tag, digest.strip()
+
+
 def image_tag(image):
     """The tag of a tagged image reference (empty for a digest-pinned one)."""
-    reference = image.split("@")[0]
-    parts = reference.rsplit(":", 1)
-    if len(parts) == 2 and "/" in parts[0]:
-        return parts[1]
-    return ""
+    tag, digest = image_reference(image)
+    if digest:
+        # The reference names a pinned artifact: the tag is not what the
+        # deployment runs.
+        return ""
+    return tag
 
 
 def registry_manifest(image, reference):
@@ -915,6 +980,13 @@ def capture_models(namespace, env_by_component):
 
     Each endpoint is probed with the TLS posture of the workload that
     declares it, never with another workload's.
+
+    The credential is the node's `vllm-api-key`. The GPU front door
+    answers 401 without a bearer, and it accepts this key as well as the
+    deployment's own `HF_TOKEN` (which the retriever's TEI call carries;
+    the reranker's client sends no `Authorization` header at all). The
+    probe therefore authenticates against the front door, not by
+    mirroring one client.
     """
     api_key = cluster_secret(namespace, "vllm-api-key", "VLLM_API_KEY")
 
@@ -1128,6 +1200,7 @@ def compare_workload(workload, env_maps, chart_values, overlay_values, effective
                 # The chart renders this row only under a condition that does
                 # not hold here: the deployment is right to not carry it.
                 continue
+            conditional = bool(entry.get("unresolved_guard"))
             rows.append(
                 {
                     "env": env_name,
@@ -1137,7 +1210,11 @@ def compare_workload(workload, env_maps, chart_values, overlay_values, effective
                     "overlay_value": normalize(override),
                     "effective_value": normalize(effective),
                     "deployed": "(not carried)",
-                    "status": "NOT CARRIED",
+                    # An unconditional row the deployment does not carry is a
+                    # difference: it carries no disposition and fails the
+                    # capture. A conditional one (a condition the capture
+                    # could not evaluate) is reported, not a verdict.
+                    "status": "CONDITIONAL" if conditional else "NOT CARRIED",
                 }
             )
             continue
@@ -1209,6 +1286,7 @@ def render_markdown(data):
     lines = []
     add = lines.append
     capture = data["capture"]
+    secret_paths = set(capture.get("secret_paths") or [])
     add(f"# V03 deployed baseline - {capture['date']}")
     add("")
     add(
@@ -1247,9 +1325,10 @@ def render_markdown(data):
         "The **running index digest** is the digest the pod's runtime records. The "
         "**running amd64 child** is the CONTENT the pod runs - the child digest is the "
         "content identity; the index digest moves on every re-push (the attestation "
-        "changes the index, not the image). The two registry columns are what the "
-        "registry serves for the tag at capture time. The verdict compares the "
-        "CONTENT, never the index."
+        "changes the index, not the image). The two registry columns are the digests "
+        "of the artifact the deployment DECLARES: its digest pin when the reference "
+        "carries one, its tag otherwise, resolved at capture time. The verdict compares "
+        "the CONTENT, never the index."
     )
     add("")
     add(
@@ -1274,7 +1353,7 @@ def render_markdown(data):
     add("|---|---|---|---|---|---|")
     for row in data["models"]:
         add(
-            f"| {row['role']} | {cell(row['chart_default'])} | {cell(row['declared'])} | "
+            f"| {row['role']} | {cell(row['chart_default_display'])} | {cell(row['declared'])} | "
             f"{cell(row['served'])} | {cell(row['detail'])} | {row['status']} |"
         )
     add("")
@@ -1291,8 +1370,9 @@ def render_markdown(data):
     for workload in data["config"]:
         add(f"### `{cell(workload['workload'])}`")
         add("")
-        add("| variable | chart default | overlay | deployed | status |")
-        add("|---|---|---|---|---|")
+        if workload["rows"]:
+            add("| variable | chart default | overlay | deployed | status |")
+            add("|---|---|---|---|---|")
         for row in workload["rows"]:
             default_cell = cell(row["source_value"])
             # The chain is per-side: when the chart default fell through to a
@@ -1301,17 +1381,23 @@ def render_markdown(data):
             default_path = row.get("default_path")
             if default_path and default_path != row["source_path"]:
                 default_cell = f"{default_cell} (`via {default_path}`)"
+            overlay_cell = cell(row["overlay_value"])
+            if row.get("source_path") in secret_paths:
+                # The value lives in a Secret: the record says so and never
+                # shows it.
+                overlay_cell = "<from secret>"
             add(
                 f"| `{cell(row['env'])}` | {default_cell} | "
-                f"{cell(row['overlay_value'])} | {cell(row['deployed'])} | {row['status']} |"
+                f"{overlay_cell} | {cell(row['deployed'])} | {row['status']} |"
             )
         add("")
         compared = sum(1 for row in workload["rows"] if row["status"] != "TEMPLATE")
         templated = sum(1 for row in workload["rows"] if row["status"] == "TEMPLATE")
-        add(
-            f"Compared against a chart value: {compared}; rendered by the template "
-            f"(literal or helper): {templated}."
-        )
+        if workload["rows"]:
+            add(
+                f"Compared against a chart value: {compared}; rendered by the template "
+                f"(literal or helper): {templated}."
+            )
         if workload.get("multi_container"):
             add(
                 "This workload carries several containers; their environments are "
@@ -1335,7 +1421,9 @@ def render_markdown(data):
         add("|---|---|---|---|---|")
         for row in data["discrepancies"]:
             source = cell(row["source_value"])
-            if row.get("source_path"):
+            if row.get("source_path") in secret_paths:
+                source = "<from secret>"
+            elif row.get("source_path"):
                 source = f"{source} (`{row['source_path']}`)"
             add(
                 f"| `{cell(row['workload'])}` | `{cell(row['env'])}` | "
@@ -1458,9 +1546,13 @@ def resolve_registry_digests(images):
     for row in images:
         running = row["running_digest"]
         tag_digest, tag_child, note = None, "", ""
+        tag, digest = image_reference(row["_image"])
+        # The artifact the deployment DECLARES: its digest pin when it has
+        # one, its tag otherwise. Resolving the tag of a pinned reference
+        # would describe another artifact than the one the deployment runs.
         try:
             tag_digest, tag_child, note = registry_manifest(
-                row["_image"], image_tag(row["_image"])
+                row["_image"], digest or tag
             )
         except Exception as error:  # noqa: BLE001 - reported, never fatal
             tag_digest, tag_child, note = None, "", f"unresolved ({error})"
@@ -1513,11 +1605,13 @@ def image_disposition(row):
     """The disposition of one image row, stated as observed facts."""
     if row["status"] == "DIFFERENT":
         return (
-            "Accepted for V03 - the running image and the registry's current tag carry "
-            f"different content (the running amd64 child digest "
-            f"{row['running_child_digest']}, the tag's {row['registry_child_digest']}). "
-            "The running content is the reference E01 must measure against; re-running "
-            "the capture after a rollout refreshes this row."
+            "Accepted for V03 - the running image and the image the deployment declares "
+            f"carry different content (the running amd64 child digest "
+            f"{row['running_child_digest']}, the declared one {row['registry_child_digest']}). "
+            "The running content is the reference E01 must measure against. The "
+            f"deployment declares imagePullPolicy {row.get('pull_policy') or 'not declared'}, "
+            "so the next pod start pulls the declared reference; re-running the capture "
+            "after a rollout refreshes this row."
         )
     if row["status"] == "SAME CONTENT":
         return (
@@ -1525,7 +1619,7 @@ def image_disposition(row):
             f"same content (the same amd64 child digest {row['registry_child_digest']}); "
             "only the index digest differs, and the index is not a content identity: it "
             "changes on every re-push (the attestation changes the index, not the image). "
-            f"The deployment declares imagePullPolicy {row.get('pull_policy') or 'Always'}, "
+            f"The deployment declares imagePullPolicy {row.get('pull_policy') or 'not declared'}, "
             "so the next pod start pulls the current index. E01 must measure against the "
             "content digest, which is stable."
         )
@@ -1545,13 +1639,15 @@ def image_note(images):
     moved = [row for row in comparable if row["status"] != "MATCH"]
     same = [row for row in moved if row["status"] == "SAME CONTENT"]
     different = [row for row in moved if row["status"] == "DIFFERENT"]
+    outside = sum(1 for row in images if row["registry_digest"] == "outside the GitLab registry")
+    other = len(images) - len(comparable) - outside
     return (
         f"{len(moved)} of the {len(comparable)} comparable GitLab-registry workload "
-        f"images run an index digest that differs from the registry's current tag: "
+        f"images run an index digest that differs from the one the deployment declares: "
         f"{len(same)} of them carry the same content, {len(different)} a different "
-        "one. The "
-        f"{len(images) - len(comparable)} other rows are not comparable - an image "
-        "outside the GitLab registry, a digest-pinned image, or a pod no workload owns."
+        f"one. The {len(images) - len(comparable)} other rows are not comparable - "
+        f"{outside} of them an image outside the GitLab registry, {other} a reference "
+        "that resolves to no artifact, or a pod no workload owns."
     )
 
 
@@ -1570,11 +1666,18 @@ def collect_discrepancies(config, models, images):
                 discrepancies.append(
                     discrepancy_row(workload["workload"], row, None)
                 )
-            elif row["status"] == "NOT CARRIED":
+            elif row["status"] == "CONDITIONAL":
                 discrepancies.append(
                     discrepancy_row(
-                        workload["workload"], row, DISPOSITIONS["not-carried"]
+                        workload["workload"], row, DISPOSITIONS["conditional"]
                     )
+                )
+            elif row["status"] == "NOT CARRIED":
+                # An unconditional chart-declared variable the deployment does
+                # not carry is a difference: no disposition, so the capture
+                # fails on it.
+                discrepancies.append(
+                    discrepancy_row(workload["workload"], row, None)
                 )
     # A served model that differs from the source is a difference between
     # the deployment and the source: it belongs in the discrepancy table
@@ -1684,6 +1787,10 @@ def build_models(env_by_component, chart_values, effective_values, served):
             {
                 "role": role,
                 "chart_default": chart_default,
+                "chart_default_display": (
+                    chart_default if status != "NOT DECLARED HERE" else
+                    "(not deployed in this topology)"
+                ),
                 "chart_default_path": path,
                 "difference_source": difference_source,
                 "difference_path": difference_path,
@@ -1754,7 +1861,7 @@ def capture(namespace, flux_namespace, release, date, out_path):
         rows, undeclared = compare_workload(
             workload, env_maps, chart_values, overlay_values, effective_values
         )
-        if rows:
+        if rows or undeclared:
             multi = len(workload["containers"]) > 1
             config.append(
                 {
@@ -1781,6 +1888,7 @@ def capture(namespace, flux_namespace, release, date, out_path):
     return {
         "capture": {
             "date": date,
+            "secret_paths": sorted(release_info.get("secret_paths") or []),
             "timestamp": dt.datetime.now().astimezone().isoformat(timespec="seconds"),
             "cluster": run(
                 [

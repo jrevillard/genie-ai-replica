@@ -8,6 +8,7 @@ rather than left to a reading of the generated file.
 Run: uv run --no-cache --with pytest --with pyyaml python -m pytest scripts/baseline/tests -q
 """
 
+import base64
 import importlib.util
 import os
 
@@ -635,3 +636,286 @@ def test_the_overlay_values_inline_in_the_release_win_over_the_sources(monkeypat
     )
     assert "overlay" in release["overlay_name"]
     assert "inline values" in release["overlay_name"]
+
+
+def test_the_comparison_reports_a_difference_it_finds(chart_values, overlay_values, env_maps):
+    """The comparison itself says a row differs - not a hand-built row.
+
+    A mutant that makes `compare_workload` stop reporting DIFFERENT dies
+    here: the row is produced by the comparison, not by the test.
+    """
+    effective = capture.deep_merge(chart_values, overlay_values)
+    workload = {
+        "name": "genieai-genieai-umbrella-chatqna",
+        "component": "chatqna",
+        "containers": [
+            {"name": "chatqna", "image": "x", "env": {"RERANKING_STRATEGY": "adaptive"}}
+        ],
+    }
+    rows, _ = capture.compare_workload(
+        workload, env_maps, chart_values, overlay_values, effective
+    )
+    row = next(row for row in rows if row["env"] == "RERANKING_STRATEGY")
+    assert row["status"] == "DIFFERENT"
+
+    data = _record_data()
+    data["discrepancies"] = capture.collect_discrepancies(
+        [{"workload": workload["name"], "rows": rows}], [], []
+    )
+    out_path = tmp_path = None
+    import tempfile
+
+    with tempfile.TemporaryDirectory() as directory:
+        out_path = f"{directory}/record.md"
+        unresolved = capture.write_record(data, out_path)
+        assert capture.exit_code_for(unresolved) == 2
+
+
+def test_an_unprobeable_model_is_an_unresolved_difference(tmp_path, chart_values):
+    """A model that could not be probed is a gap in the record: it fails."""
+    models = capture.build_models(
+        {
+            "chatqna": {
+                "LLM_MODEL": "ibm-granite/granite-4.1-8b",
+                "VLLM_TRANSLATION_MODEL_ID": "google/gemma-3-4b-it",
+            },
+            "embedding": {"EMBEDDING_MODEL_ID": "BAAI/bge-large-en-v1.5"},
+        },
+        chart_values,
+        chart_values,
+        {
+            "embedding": {"model_id": "BAAI/bge-large-en-v1.5"},
+            "reranker": {"model_id": "BAAI/bge-reranker-v2-m3"},
+            "llm": {"error": "401 unauthorized"},
+            "translation": {"model_id": "google/gemma-3-4b-it"},
+        },
+    )
+    llm = next(model for model in models if model["role"] == "llm")
+    assert llm["status"] == "NOT PROBED"
+
+    data = _record_data()
+    data["discrepancies"].extend(capture.model_discrepancy_rows(models))
+    out_path = tmp_path / "record.md"
+    unresolved = capture.write_record(data, str(out_path))
+    assert len(unresolved) == 1
+    assert capture.exit_code_for(unresolved) == 2
+
+
+def test_a_pinned_image_reference_names_its_artifact():
+    """`repo:tag@sha256:digest` names the pinned artifact, not the tag."""
+    assert capture.image_reference("registry.example/app:main") == ("main", "")
+    assert capture.image_reference("registry.example/app@sha256:abc") == ("", "sha256:abc")
+    assert capture.image_reference("registry.example/app:main@sha256:abc") == (
+        "main",
+        "sha256:abc",
+    )
+    # the tag of a pinned reference is not what the deployment runs
+    assert capture.image_tag("registry.example/app:main@sha256:abc") == ""
+    assert capture.image_tag("registry.example/app:main") == "main"
+
+
+def test_a_digest_pinned_reference_is_resolved_as_its_digest(monkeypatch):
+    """The registry columns describe the artifact the deployment DECLARES."""
+    resolved = []
+
+    def fake_manifest(image, reference):
+        resolved.append(reference)
+        return ("sha256:index", "sha256:child", "")
+
+    monkeypatch.setattr(capture, "registry_manifest", fake_manifest)
+    images = [
+        {
+            "workload": "w",
+            "container": "c",
+            "image": "registry.example/app:main@sha256:pinned",
+            "running_digest": "registry.example/app@sha256:index",
+            "running_child_digest": "",
+            "pull_policy": "Always",
+            "registry_digest": "",
+            "registry_child_digest": "",
+            "status": "NOT RUNNING",
+            "_image": "registry.example/app:main@sha256:pinned",
+        }
+    ]
+    capture.resolve_registry_digests(images)
+    # the DECLARED artifact is resolved by its pin, the running one by its
+    # own digest
+    assert resolved[0] == "sha256:pinned"
+
+
+def test_a_value_that_lives_in_a_secret_never_reaches_the_record(tmp_path):
+    """A Secret-kind overlay source is compared, never printed."""
+    helmrelease = {
+        "spec": {
+            "chart": {"spec": {"chart": "genieai-umbrella"}},
+            "valuesFrom": [
+                {
+                    "kind": "Secret",
+                    "name": "overlay-secret",
+                    "valuesKey": "values.yaml",
+                }
+            ],
+        },
+        "status": {
+            "conditions": [{"type": "Ready", "status": "True", "message": "ok"}],
+            "history": [{"version": 1, "chartVersion": "0.2.1", "status": "deployed"}],
+        },
+    }
+    secret = {
+        "data": {
+            "values.yaml": base64.b64encode(
+                b"opea:\n  chatqna:\n    env:\n      OPENAI_API_KEY: sk-live-SUPERSECRET\n"
+            ).decode()
+        }
+    }
+
+    def fake_kubectl(namespace, *args):
+        if args[0] == "get" and args[1] == "helmrelease":
+            return helmrelease
+        if args[0] == "get" and args[1] == "secret":
+            return secret
+        raise AssertionError(args)
+
+    monkey = pytest.MonkeyPatch()
+    monkey.setattr(capture, "kubectl_json", fake_kubectl)
+    try:
+        release = capture.capture_release("flux-system", "genieai")
+    finally:
+        monkey.undo()
+
+    # the value is used for the comparison...
+    assert (
+        release["overlay"]["opea"]["chatqna"]["env"]["OPENAI_API_KEY"]
+        == "sk-live-SUPERSECRET"
+    )
+    # ...but its path is remembered so the record can hide it
+    assert "opea.chatqna.env.OPENAI_API_KEY" in release["secret_paths"]
+
+    data = _record_data()
+    data["capture"]["secret_paths"] = sorted(release["secret_paths"])
+    data["config"] = [
+        {
+            "workload": "genieai-genieai-umbrella-chatqna",
+            "rows": [
+                {
+                    "env": "OPENAI_API_KEY",
+                    "source_path": "opea.chatqna.env.OPENAI_API_KEY",
+                    "default_path": "opea.chatqna.env.OPENAI_API_KEY",
+                    "source_value": "",
+                    "overlay_value": "sk-live-SUPERSECRET",
+                    "effective_value": "sk-live-SUPERSECRET",
+                    "deployed": "<secret:vllm-api-key/VLLM_API_KEY>",
+                    "status": "MATCH",
+                }
+            ],
+            "undeclared": [],
+            "multi_container": False,
+        }
+    ]
+    out_path = tmp_path / "record.md"
+    capture.write_record(data, str(out_path))
+    text = out_path.read_text(encoding="utf-8")
+    assert "sk-live-SUPERSECRET" not in text
+    assert "<from secret>" in text
+
+
+def test_a_targeted_overlay_source_wins_over_the_inline_values(monkeypatch):
+    """Flux applies the values with a targetPath last, replacing the subtree."""
+    helmrelease = {
+        "spec": {
+            "chart": {"spec": {"chart": "genieai-umbrella"}},
+            "values": {"opea": {"chatqna": {"env": {"CHATQNA_TYPE": "inline"}}}},
+            "valuesFrom": [
+                {
+                    "kind": "ConfigMap",
+                    "name": "overlay",
+                    "valuesKey": "values.yaml",
+                    "targetPath": "opea.chatqna.env",
+                }
+            ],
+        },
+        "status": {
+            "conditions": [{"type": "Ready", "status": "True", "message": "ok"}],
+            "history": [{"version": 1, "chartVersion": "0.2.1", "status": "deployed"}],
+        },
+    }
+    configmap = {
+        "data": {"values.yaml": "CHATQNA_TYPE: from-targetPath\n"}
+    }
+
+    def fake_kubectl(namespace, *args):
+        if args[0] == "get" and args[1] == "helmrelease":
+            return helmrelease
+        if args[0] == "get" and args[1] == "configmap":
+            return configmap
+        raise AssertionError(args)
+
+    monkeypatch.setattr(capture, "kubectl_json", fake_kubectl)
+    release = capture.capture_release("flux-system", "genieai")
+    assert release["overlay"]["opea"]["chatqna"]["env"]["CHATQNA_TYPE"] == (
+        "from-targetPath"
+    )
+
+
+def test_the_revision_is_the_one_the_cluster_attests_as_deployed(monkeypatch):
+    """A failed upgrade is in the history before it fails: it is not deployed."""
+    helmrelease = {
+        "spec": {"chart": {"spec": {"chart": "genieai-umbrella"}}},
+        "status": {
+            "conditions": [{"type": "Ready", "status": "True", "message": "ok"}],
+            "history": [
+                {"version": 51, "chartVersion": "0.2.178", "status": "failed"},
+                {"version": 50, "chartVersion": "0.2.177", "status": "deployed"},
+            ],
+        },
+    }
+
+    def fake_kubectl(namespace, *args):
+        return helmrelease
+
+    monkeypatch.setattr(capture, "kubectl_json", fake_kubectl)
+    release = capture.capture_release("flux-system", "genieai")
+    assert release["revision"] == 50
+
+
+def test_an_unconditional_row_the_deployment_does_not_carry_fails_the_capture(
+    chart_values, overlay_values, env_maps, tmp_path
+):
+    """A chart-declared variable the deployment lacks is a difference."""
+    overlay = {"opea": {"enabled": True}}
+    effective = capture.deep_merge(chart_values, overlay)
+    workload = {
+        "name": "genieai-genieai-umbrella-chatqna",
+        "component": "chatqna",
+        "containers": [{"name": "chatqna", "image": "x", "env": {"LLM_MODEL": "m"}}],
+    }
+    rows, _ = capture.compare_workload(
+        workload, env_maps, chart_values, overlay, effective
+    )
+    not_carried = [row for row in rows if row["status"] == "NOT CARRIED"]
+    assert not_carried, "the fixture must produce an unconditional missing row"
+
+    data = _record_data()
+    data["discrepancies"] = capture.collect_discrepancies(
+        [{"workload": workload["name"], "rows": not_carried}], [], []
+    )
+    out_path = tmp_path / "record.md"
+    unresolved = capture.write_record(data, str(out_path))
+    assert capture.exit_code_for(unresolved) == 2
+
+
+def test_a_workload_without_a_compared_row_is_still_listed(chart_values, overlay_values, env_maps):
+    """A workload that carries only application variables is listed, not dropped."""
+    effective = capture.deep_merge(chart_values, overlay_values)
+    workload = {
+        "name": "genieai-genieai-umbrella-frontend",
+        "component": "frontend",
+        "containers": [
+            {"name": "frontend", "image": "x", "env": {"VUE_APP_API_URL": "http://x"}}
+        ],
+    }
+    rows, undeclared = capture.compare_workload(
+        workload, env_maps, chart_values, overlay_values, effective
+    )
+    assert not rows
+    assert undeclared

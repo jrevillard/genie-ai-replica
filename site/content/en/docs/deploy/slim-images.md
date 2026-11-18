@@ -24,6 +24,14 @@ library** — only the installed dependency set differs. The slim variant is
 not a different release: it is the same release, built without the weight a
 CPU-only node never reads.
 
+The version and the variant are two independent knobs, one per deployment
+target:
+
+| | Kubernetes | Compose / Swarm |
+|---|---|---|
+| the version (all images) | `imageTag` | `GENIE_AI_IMAGE_TAG` |
+| the variant (the three model-serving images) | `opea.imageTagSuffix` | `GENIE_AI_OPEA_IMAGE_TAG_SUFFIX` |
+
 ## Why the two variants exist
 
 The default images resolve `torch==2.13.0` to the CUDA build, which carries
@@ -88,33 +96,27 @@ needs `hq` tables or a local OCR pipeline.
 
 The tag is a normal image tag: set it where the deployment names the image.
 
+**Kubernetes** — one line in the overlay:
+
 ```yaml
 # genie-ai-deploy overlay (Helm chart values)
-services:
-  reranker:
-    image:
-      repository: genie-ai-reranker
-      tag: main-slim
-  retrieverArango:
-    image:
-      repository: genie-ai-retriever-arango
-      tag: main-slim
-  dataprepArango:
-    image:
-      repository: genie-ai-dataprep-arango
-      tag: main-slim
+opea:
+  imageTagSuffix: "-slim"
 ```
 
-With Docker Compose, the tag is the image-tag variable of the service:
+**Docker Compose / Swarm** — one line in the `.env`:
 
 ```bash
-GENIE_AI_RERANKER_IMAGE_TAG=main-slim
-GENIE_AI_RETRIEVER_ARANGO_IMAGE_TAG=main-slim
-GENIE_AI_DATAPREP_ARANGO_IMAGE_TAG=main-slim
+GENIE_AI_OPEA_IMAGE_TAG_SUFFIX=-slim
 ```
 
-Pinning a **digest** works the same way and is what the Kubernetes overlays
-do — the digest is of the slim image's manifest, not the default one.
+It applies to the three model-serving images and to nothing else. A
+per-image pin (`opea.reranker.image.tag` in Kubernetes,
+`GENIE_AI_RERANKER_IMAGE_TAG` in Compose) names the EXACT tag and never
+gets the suffix.
+
+Pinning a **digest** works the same way — the digest is of the slim
+image's manifest, not the default one.
 
 ## Air-gapped deployments
 

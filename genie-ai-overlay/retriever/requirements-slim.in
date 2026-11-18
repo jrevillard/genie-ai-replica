@@ -1,0 +1,88 @@
+# GENIE.AI SLIM lock for the retriever microservice (issue #2000).
+#
+# Same source tree, same behaviour — the SLIM variant only changes WHAT THE
+# FINAL IMAGE INSTALLS. The fat lock (requirements-cpu.txt) resolves
+# `torch==2.13.0` to the CUDA/cu13 build (15 `nvidia-*` wheels + triton,
+# ~3.8 GB compressed in the pip layer), because `uv pip compile` resolves the
+# Linux torch wheel from PyPI, where it IS the CUDA build.
+#
+# The retriever DOES have a local-model path — `HuggingFaceBgeEmbeddings`
+# (genieai_retriever_arangodb.py, the `else` branch of the embedding
+# selection) loads a sentence-transformers model in-process when no remote
+# embedding endpoint is configured. So torch stays — but CPU-only: the
+# `+cpu` local build, from the PyTorch CPU index, at the SAME version
+# (2.13.0). The local-model path keeps working; only the device changes
+# (CPU instead of CUDA), which is what a deployment without a GPU needs.
+#
+# EVERY version below is the version the FAT lock pins — the slim image must
+# not drift from the fat one on anything but torch. (A fresh resolve pulled
+# numpy 2.4.6 / openai 2.54 against the fat lock's numpy 1.26.4 / openai
+# 1.109.1: same source, different runtime. The pins below remove that
+# freedom on purpose; the TRANSITIVE dependencies still float, and are
+# hash-pinned in the compiled lock.)
+#
+# DELTAS vs requirements-cpu.txt:
+#   - torch: CUDA/cu13 build -> CPU build (+cpu). Drops the 15 `nvidia-*`
+#     wheels and triton (~3 GB compressed).
+#   - dropped: docling, docling-core, docling-ibm-models, easyocr,
+#     graspologic, einops, bs4, docx2txt, cairosvg, decord, pathway,
+#     neo4j, mariadb, pgvector, opensearch-py, pymilvus, qdrant-haystack,
+#     redis, the whole `llama-index-*` tree, and the `langchain-{community,
+#     milvus, elasticsearch, mariadb, opengauss, pinecone}` family — none of
+#     them is imported by the retriever's runtime chain (ArangoVector,
+#     HuggingFaceBgeEmbeddings, HuggingFaceEndpointEmbeddings, ChatOpenAI,
+#     OpenAIEmbeddings, ArangoClient, the comps core).
+#   - docarray[full] -> docarray (the "full" extra pulls trimesh, av, jax,
+#     pandas, pydub, lz4, protobuf; the vendored
+#     `comps/cores/proto/docarray.py` only needs the BASE package).
+#
+# Regenerate with (the CPU index FIRST, and `unsafe-best-match` because uv's
+# default `first-index` stops at PyPI, where torch==2.13.0 IS the CUDA
+# build, and never reaches the CPU index's 2.13.0+cpu):
+#   uv pip compile --generate-hashes --python-version 3.11 \
+#     --python-platform x86_64-manylinux_2_31 \
+#     --index-url https://download.pytorch.org/whl/cpu \
+#     --extra-index-url https://pypi.org/simple \
+#     --index-strategy unsafe-best-match \
+#     requirements-slim.in -o requirements-slim.txt
+
+aiohttp==3.14.3
+docarray==0.41.0
+fastapi==0.118.2
+httpx==0.28.1
+huggingface-hub==0.36.2
+langchain==0.3.27
+langchain-arangodb==1.2.0
+langchain-community==0.3.31
+langchain-core==0.3.86
+langchain-huggingface==0.3.1
+langchain-openai==0.3.35
+langchain-text-splitters==0.3.11
+numpy==1.26.4
+openai==1.109.1
+opentelemetry-api==1.44.0
+opentelemetry-exporter-otlp==1.44.0
+opentelemetry-sdk==1.44.0
+Pillow==11.3.0
+prometheus-fastapi-instrumentator==7.1.0
+python-arango==8.3.3
+python-multipart==0.0.32
+pyyaml==6.0.3
+requests==2.34.2
+sentence-transformers==5.7.0
+shortuuid==1.0.13
+transformers==4.57.6
+uvicorn==0.52.1
+
+# CPU-only torch: the local-embedding fallback loads a sentence-transformers
+# model in-process (HuggingFaceBgeEmbeddings), so torch stays — but without
+# the CUDA build. The `+cpu` local version is only published on the PyTorch
+# CPU index; PyPI's `torch==2.13.0` IS the CUDA build and must not be picked.
+torch==2.13.0+cpu
+
+# === OpenTelemetry instrumentation (distributed tracing) ===
+opentelemetry-instrumentation-fastapi>=0.65b0
+opentelemetry-instrumentation-httpx>=0.65b0
+opentelemetry-instrumentation-aiohttp-client>=0.65b0
+opentelemetry-instrumentation-requests>=0.65b0
+opentelemetry-exporter-otlp-proto-http>=1.22

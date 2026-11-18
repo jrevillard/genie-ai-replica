@@ -4180,6 +4180,12 @@ class GenieArangoDataprep(OpeaArangoDataprep):
         ingest lane — the lane must come back fast (that is what the phase
         budget is for) and the writer can be arbitrarily slow.
 
+        The cascade it runs is the same synchronous AQL work every retraction
+        already does (the OKF worker retracts before every ingest), so the
+        event loop is blocked for its duration here as it is there. What
+        changes is that it can now overlap ANOTHER ingest — the lane was
+        released on purpose.
+
         A failed purge leaves the failed document's rows indexed while the UI
         says it failed, so it is retried once and, if it still fails, the
         operator is told — in the document's own ingestion log, the channel
@@ -4188,64 +4194,71 @@ class GenieArangoDataprep(OpeaArangoDataprep):
         A purge that is no longer the file's registered one stands down: a
         new ingest of the same document started, and this purge deletes by
         document id — it would delete the NEW attempt's rows.
+
+        The purge runs AFTER the ingest's own span closed, so it opens its
+        own: without it these lines are the only ones of the mechanism that
+        cannot be correlated with the ingest that produced them.
         """
-        try:
-            for attempt in (1, 2):
-                # Checked before EVERY attempt: a retry runs seconds later, and
-                # a new ingest may have started in between. This is a
-                # point-in-time check, not a lock: a re-kick that starts after
-                # it and before the retraction's own AQL still loses its rows.
-                # The window is one retraction wide, and the re-kick's graph
-                # phase is minutes away — the alternative (holding the
-                # ingestion lane until every writer settled) is the regression
-                # the phase budget was merged to remove.
+        with background_span("dataprep.late_write_purge"):
+            try:
+                for attempt in (1, 2):
+                    # Checked before EVERY attempt: a retry runs seconds later, and
+                    # a new ingest may have started in between. This is a
+                    # point-in-time check, not a lock: a re-kick that starts after
+                    # it and before the retraction's own AQL still loses its rows.
+                    # The window is one retraction wide — the retraction's own
+                    # awaits are in it — and the re-kick would have to WRITE its
+                    # chunks inside that window; its graph phase is minutes away.
+                    # The alternative (holding the ingestion lane until every
+                    # writer settled) is the regression the phase budget was
+                    # merged to remove.
+                    states = getattr(self, "_late_write_states", None)
+                    state = states.get(file_id) if states else None
+                    if state is None or state["purge"] is not purge:
+                        logger.warning(
+                            f"{file_id}: the late graph-write purge stands down — a new ingest of the "
+                            "document started, and this purge deletes by document id (#1991)"
+                        )
+                        return
+                    try:
+                        await purge()
+                        return
+                    except Exception as exc:  # noqa: BLE001 — a failed purge must not kill the service
+                        logger.error(
+                            f"{file_id}: the late graph-write purge failed (attempt {attempt}/2): "
+                            f"{type(exc).__name__}: {exc}"
+                        )
+                        if attempt == 2:
+                            await self._write_ingestion_log(
+                                file_id,
+                                "ERROR",
+                                "System",
+                                "The purge of the rows an in-flight graph insertion wrote after the "
+                                "retraction failed — the document's chunks may still be indexed. Retract "
+                                "the document and re-kick it.",
+                            )
+                        else:
+                            await asyncio.sleep(2)
+            except asyncio.CancelledError:
+                # The loop is going down (the process is exiting): the purge
+                # cannot finish, and the rows it was written to remove may
+                # survive. Say so — the alternative is silence.
+                logger.warning(f"{file_id}: the late graph-write purge was cancelled before it finished")
+                raise
+            finally:
+                # The purge has run (or given up): the file owes nothing more.
+                # Nothing can write after it — the rollback cancelled the batch
+                # tasks, so no insertion can start — and every writer that could
+                # write has settled, which is what fired the purge.
+                #
+                # Only THIS purge's own registration is cleared: a newer attempt
+                # may have registered its purge in the meantime, and clearing
+                # that one would leave its late write un-purged.
                 states = getattr(self, "_late_write_states", None)
                 state = states.get(file_id) if states else None
-                if state is None or state["purge"] is not purge:
-                    logger.warning(
-                        f"{file_id}: the late graph-write purge stands down — a new ingest of the "
-                        "document started, and this purge deletes by document id (#1991)"
-                    )
-                    return
-                try:
-                    await purge()
-                    return
-                except Exception as exc:  # noqa: BLE001 — a failed purge must not kill the service
-                    logger.error(
-                        f"{file_id}: the late graph-write purge failed (attempt {attempt}/2): "
-                        f"{type(exc).__name__}: {exc}"
-                    )
-                    if attempt == 2:
-                        await self._write_ingestion_log(
-                            file_id,
-                            "ERROR",
-                            "System",
-                            "The purge of the rows an in-flight graph insertion wrote after the "
-                            "retraction failed — the document's chunks may still be indexed. Retract "
-                            "the document and re-kick it.",
-                        )
-                    else:
-                        await asyncio.sleep(2)
-        except asyncio.CancelledError:
-            # The loop is going down (the process is exiting): the purge
-            # cannot finish, and the rows it was written to remove may
-            # survive. Say so — the alternative is silence.
-            logger.warning(f"{file_id}: the late graph-write purge was cancelled before it finished")
-            raise
-        finally:
-            # The purge has run (or given up): the file owes nothing more.
-            # Nothing can write after it — the rollback cancelled the batch
-            # tasks, so no insertion can start — and every writer that could
-            # write has settled, which is what fired the purge.
-            #
-            # Only THIS purge's own registration is cleared: a newer attempt
-            # may have registered its purge in the meantime, and clearing
-            # that one would leave its late write un-purged.
-            states = getattr(self, "_late_write_states", None)
-            state = states.get(file_id) if states else None
-            if state is not None and state["purge"] is purge:
-                state["purge"] = None
-            self._maybe_drop_late_write_state(file_id)
+                if state is not None and state["purge"] is purge:
+                    state["purge"] = None
+                self._maybe_drop_late_write_state(file_id)
 
     async def _purge_late_write(self, file_id: str, graph_name: str) -> None:
         """Delete the rows a late graph write left behind for a failed file (#1991).
@@ -4254,8 +4267,19 @@ class GenieArangoDataprep(OpeaArangoDataprep):
         it never touches the document's status: the failure status is the
         terminal one and a purge that clobbered it would hide the failure from
         the operator.
+
+        The retraction writes its own stage rows into the document's
+        ingestion log, so the operator would meet a SECOND cascade there
+        with nothing explaining it. One row says what it is.
         """
         logger.warning(f"{file_id}: purging the graph rows an in-flight insertion wrote after the retract (#1991)")
+        await self._write_ingestion_log(
+            file_id,
+            "INFO",
+            "System",
+            "Purging the rows a graph insertion wrote after the retraction — the insertion was "
+            "still running when the ingest failed, and its write landed after the cleanup.",
+        )
         await self.retract_file(file_id=file_id, graph_name=graph_name, update_status=False)
 
     async def _insert_graph_documents(self, graph_docs, *, input, graph_name) -> None:

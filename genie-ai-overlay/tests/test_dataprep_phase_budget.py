@@ -3606,6 +3606,105 @@ class TestTheLateGraphWriteIsPurged:
         statuses = [c.args[1] for c in dp._update_doc_status.call_args_list]
         assert statuses[-1] == "Ingestion Error", statuses
 
+    def test_the_purge_says_so_in_the_documents_ingestion_log(self, monkeypatch):
+        """The operator meets a SECOND cascade in the document's log — say why.
+
+        The purge runs the retraction's cascade, and that cascade writes its
+        own stage rows into the document's ingestion log. Without a row of
+        its own, the operator reads a failed ingest whose log shows two
+        unexplained deletions — and the doc that tells them to reason about
+        the purge standing down never mentions it.
+        """
+        from unittest.mock import MagicMock
+
+        from fastapi import HTTPException
+
+        self._cool_llm_env(monkeypatch)
+        self._fast_phases(monkeypatch)
+
+        order = []
+
+        async def scenario():
+            dp = _stub_dataprep()
+            _stub_graph_phase_ingest(dp)
+            dp.embeddings = MagicMock()
+
+            def slow_insert(**_kwargs):
+                time.sleep(1.6)
+                order.append("write")
+                return None
+
+            graph_cls = MagicMock()
+            graph_cls.return_value.add_graph_documents = slow_insert
+
+            async def retract(file_id=None, graph_name=None, update_status=True):
+                order.append("retract")
+
+            dp.retract_file = retract
+
+            inp = _graph_ingest_input()
+            with _patched_graph_ingest(graph_cls), pytest.raises(HTTPException):
+                await dp.ingest_file_with_guardrail(inp, lock_file=None)
+            purged = await _wait_for(lambda: order.count("retract") >= 2)
+            return dp, purged
+
+        dp, purged = _run(scenario())
+        assert purged, f"the purge never ran: {order}"
+        rows = [c.args[3] for c in dp._write_ingestion_log.call_args_list if c.args[1] == "INFO"]
+        assert any("Purging the rows" in message for message in rows), (
+            f"the purge did not announce itself in the document's own log: {rows}"
+        )
+
+    def test_the_purge_runs_inside_its_own_span(self, monkeypatch, captured_spans):
+        """The purge's log lines must be correlatable with the ingest.
+
+        The purge runs after the ingest's span closed — it is a post-request
+        background task — so it opens its own. Without it, its lines (the
+        purge, its failure, its stand-down) are the only ones of the
+        mechanism that cannot be tied back to the ingest that produced them.
+        """
+        from unittest.mock import MagicMock
+
+        from fastapi import HTTPException
+
+        self._cool_llm_env(monkeypatch)
+        self._fast_phases(monkeypatch)
+
+        order = []
+
+        async def scenario():
+            dp = _stub_dataprep()
+            _stub_graph_phase_ingest(dp)
+            dp.embeddings = MagicMock()
+
+            def slow_insert(**_kwargs):
+                time.sleep(1.6)
+                order.append("write")
+                return None
+
+            graph_cls = MagicMock()
+            graph_cls.return_value.add_graph_documents = slow_insert
+
+            async def retract(file_id=None, graph_name=None, update_status=True):
+                order.append("retract")
+
+            dp.retract_file = retract
+
+            inp = _graph_ingest_input()
+            with _patched_graph_ingest(graph_cls), pytest.raises(HTTPException):
+                await dp.ingest_file_with_guardrail(inp, lock_file=None)
+            purged = await _wait_for(lambda: order.count("retract") >= 2)
+            # The span closes when the purge's body ends — after its last
+            # retraction, so wait for it rather than assume it.
+            spanned = await _wait_for(lambda: captured_spans("dataprep.late_write_purge"))
+            return dp, purged, spanned
+
+        dp, purged, spanned = _run(scenario())
+        assert purged, f"the purge never ran: {order}"
+        assert spanned, (
+            "the purge ran without a span — its log lines cannot be correlated with the ingest that produced them"
+        )
+
     def test_the_failed_ingest_ends_on_the_failure_status(self, monkeypatch):
         """A failed ingest ends 'Ingestion Error', not 'Retracted' (#1992).
 

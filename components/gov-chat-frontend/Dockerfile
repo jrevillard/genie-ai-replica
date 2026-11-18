@@ -31,7 +31,19 @@ FROM nginx:1.28-alpine
 # Pull current Alpine security updates at build time (CVE remediation
 # playbook): the rolling base tag does not refresh on its own between
 # upstream rebuilds.
-RUN apk upgrade --no-cache
+#
+# The unpin is mandatory, not cosmetic: the official image pins
+# nginx=1.28.3-r1 in /etc/apk/world, and `apk upgrade` refuses to move a
+# pinned package — so the Alpine security rebuilds never landed and the
+# frontend kept shipping CVE-2026-9256 (fixed in r2), CVE-2026-49975 (r3),
+# CVE-2026-42055 (r4), CVE-2026-42533 and CVE-2026-60005 (r6). Alpine v3.23
+# publishes 1.28.3-r7; dropping the pin lets apk move the whole nginx set in
+# one transaction (same upstream 1.28.3 — the r-series are security
+# rebuilds, ABI stable). `nginx -v` prints the version into the build log:
+# the build itself is the proof that the image is no longer on r1.
+RUN sed -i 's/^nginx=.*/nginx/' /etc/apk/world \
+    && apk upgrade --no-cache \
+    && nginx -v
 
 WORKDIR /app
 

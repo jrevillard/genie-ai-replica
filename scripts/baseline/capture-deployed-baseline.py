@@ -669,8 +669,6 @@ def capture_workloads(namespace):
                     "name": meta["name"],
                     "component": meta.get("labels", {}).get("app.kubernetes.io/component", ""),
                     "selector": spec.get("selector", {}).get("matchLabels", {}),
-                    "replicas": spec.get("replicas", 1),
-                    "ready": item.get("status", {}).get("readyReplicas", 0),
                     "containers": containers,
                 }
             )
@@ -718,7 +716,6 @@ def capture_pods(namespace):
                         "imagePullPolicy", ""
                     ),
                     "ready": container.get("ready", False),
-                    "restarts": container.get("restartCount", 0),
                     "phase": status.get("phase", ""),
                     "created": meta.get("creationTimestamp", ""),
                     "env": container_env(spec_containers.get(container.get("name"), {})),
@@ -792,15 +789,6 @@ def capture_release(flux_namespace, release):
         overlay = deep_merge(overlay, inline)
         overlay_names.append("inline values")
     overlay_name = ", ".join(overlay_names) or "(none)"
-    # The version the release history attests: the chart version the deployed
-    # release was packaged from. The record names it as provenance - which
-    # chart the deployment runs - next to the chart source it reconciles
-    # against.
-    history = status.get("history") or []
-    deployed_chart_version = ""
-    if history:
-        latest = max(history, key=lambda entry: int(entry.get("version", 0)))
-        deployed_chart_version = latest.get("chartVersion", "")
     return {
         "chart": spec.get("chart", {}).get("spec", {}),
         "revision": revision,
@@ -808,7 +796,6 @@ def capture_release(flux_namespace, release):
         "overlay_name": overlay_name,
         "status": ready.get("message", ""),
         "ready": ready.get("status", ""),
-        "deployed_chart_version": deployed_chart_version,
     }
 
 
@@ -1115,7 +1102,6 @@ def compare_workload(workload, env_maps, chart_values, overlay_values, effective
 
     rows = []
     undeclared = []
-    injected = []
     deployed_env = workload.get("serving_env")
     if deployed_env is None:
         deployed_env = {}
@@ -1173,9 +1159,8 @@ def compare_workload(workload, env_maps, chart_values, overlay_values, effective
                 continue
             status = "MATCH" if values_equal(effective, deployed) else "DIFFERENT"
         elif status == "UNDECLARED" and is_injected(env_name):
-            # Kubernetes injects it: it is not configuration, but it is not
-            # dropped either - the record says so.
-            injected.append(env_name)
+            # Kubernetes injects it: it is service discovery, not
+            # configuration, and the chart does not declare it.
             continue
         if status == "UNDECLARED":
             undeclared.append((env_name, deployed))
@@ -1192,7 +1177,7 @@ def compare_workload(workload, env_maps, chart_values, overlay_values, effective
                 "status": status,
             }
         )
-    return rows, undeclared, injected
+    return rows, undeclared
 
 
 def discrepancy_row(workload_name, row, disposition):
@@ -1235,12 +1220,11 @@ def render_markdown(data):
     add(f"- **Target deployment:** {capture['cluster']} - namespace `{capture['namespace']}`")
     add(
         f"- **Release:** `{capture['release']}` revision {capture['release_revision']}, "
-        f"chart `{capture['chart_name']}` {capture['chart_version']}"
+        f"chart `{capture['chart_name']}`"
     )
     add(
         f"- **Source compared against:** the chart source in this repository, version "
-        f"{capture['local_chart_version']} (the deployed release attests "
-        f"{capture['chart_version'] or 'no chart version'})"
+        f"{capture['local_chart_version']}"
     )
     add(f"- **Overlay values:** `{capture['overlay_name']}`")
     add(f"- **Release health:** {capture['release_health']}")
@@ -1340,12 +1324,6 @@ def render_markdown(data):
                 + ", ".join(f"`{name}`" for name, _value in workload["undeclared"])
             )
             add("")
-        if workload.get("injected"):
-            add(
-                "Injected by Kubernetes (service discovery, not configuration): "
-                + ", ".join(f"`{name}`" for name in workload["injected"])
-            )
-            add("")
 
     add("## Discrepancies and dispositions")
     add("")
@@ -1366,23 +1344,6 @@ def render_markdown(data):
         add("")
         add(data["image_disposition_note"])
         add("")
-
-    add("## Workload readiness")
-    add("")
-    add(
-        "Each workload with the pods that serve it. A pod that is not Running, or a "
-        "container that restarted, is stated here: the record describes the "
-        "deployment, and the deployment's health is part of it."
-    )
-    add("")
-    add("| workload | kind | replicas | ready | pods | restarts |")
-    add("|---|---|---|---|---|---|")
-    for row in data.get("workloads", []):
-        add(
-            f"| `{cell(row['name'])}` | {cell(row['kind'])} | {cell(row['replicas'])} | "
-            f"{cell(row['ready'])} | {cell(row['pods'])} | {cell(row['restarts'])} |"
-        )
-    add("")
 
     add("## Topology")
     add("")
@@ -1735,37 +1696,6 @@ def build_models(env_by_component, chart_values, effective_values, served):
     return models
 
 
-def workload_status(workloads, pods):
-    """Each workload with its readiness and the pods that serve it."""
-    rows = []
-    for workload in workloads:
-        matching = [
-            pod
-            for pod in pods
-            if all(
-                pod["labels"].get(key) == value
-                for key, value in workload["selector"].items()
-            )
-        ]
-        phases = {}
-        for pod in matching:
-            phases[pod["phase"]] = phases.get(pod["phase"], 0) + 1
-        rows.append(
-            {
-                "name": workload["name"],
-                "kind": workload["kind"],
-                "replicas": workload["replicas"],
-                "ready": workload["ready"],
-                "pods": ", ".join(
-                    f"{phase} x{count}" for phase, count in sorted(phases.items())
-                )
-                or "(no pod)",
-                "restarts": sum(pod["restarts"] for pod in matching),
-            }
-        )
-    return rows
-
-
 def external_dependencies(workloads):
     """The endpoints the deployment reaches OUTSIDE the cluster."""
     external = set()
@@ -1821,7 +1751,7 @@ def capture(namespace, flux_namespace, release, date, out_path):
 
     config = []
     for workload in workloads:
-        rows, undeclared, injected = compare_workload(
+        rows, undeclared = compare_workload(
             workload, env_maps, chart_values, overlay_values, effective_values
         )
         if rows:
@@ -1831,7 +1761,6 @@ def capture(namespace, flux_namespace, release, date, out_path):
                     "workload": workload["name"],
                     "rows": rows,
                     "undeclared": undeclared,
-                    "injected": injected,
                     "multi_container": multi,
                 }
             )
@@ -1867,7 +1796,6 @@ def capture(namespace, flux_namespace, release, date, out_path):
             "release": release,
             "release_revision": release_info["revision"],
             "chart_name": release_info["chart"].get("chart", ""),
-            "chart_version": release_info.get("deployed_chart_version", ""),
             "local_chart_version": local_chart_version(),
             "overlay_name": release_info["overlay_name"],
             "release_health": (
@@ -1884,7 +1812,6 @@ def capture(namespace, flux_namespace, release, date, out_path):
         "images": images,
         "models": models,
         "config": config,
-        "workloads": workload_status(workloads, pods),
         "discrepancies": discrepancies,
         "image_disposition_note": image_note(images),
         "topology": {

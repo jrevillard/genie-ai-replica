@@ -29,7 +29,6 @@ def _record_data():
             "release": "genieai",
             "release_revision": 1,
             "chart_name": "charts/genieai-umbrella",
-            "chart_version": "0.2.1",
             "local_chart_version": "0.2.1",
             "overlay_name": "overlay",
             "release_health": "True - Helm upgrade succeeded",
@@ -127,7 +126,7 @@ def test_helper_rendered_variable_is_not_compared(chart_values, overlay_values, 
         "containers": [{"name": "chatqna", "image": "x", "env": {"OTEL_EXPORTER_OTLP_ENDPOINT": "http://x"}}],
     }
     effective = capture.deep_merge(chart_values, overlay_values)
-    rows, undeclared, _injected = capture.compare_workload(
+    rows, undeclared = capture.compare_workload(
         workload, env_maps, chart_values, overlay_values, effective
     )
     row = next(row for row in rows if row["env"] == "OTEL_EXPORTER_OTLP_ENDPOINT")
@@ -145,7 +144,7 @@ def test_matching_value_is_reported_as_match(chart_values, overlay_values, env_m
         ],
     }
     effective = capture.deep_merge(chart_values, overlay_values)
-    rows, _, _injected = capture.compare_workload(
+    rows, _ = capture.compare_workload(
         workload, env_maps, chart_values, overlay_values, effective
     )
     row = next(row for row in rows if row["env"] == "RERANKING_STRATEGY")
@@ -163,7 +162,7 @@ def test_the_three_layers_stay_distinct(chart_values, overlay_values, env_maps):
             {"name": "chatqna", "image": "x", "env": {"RERANKING_STRATEGY": "threshold"}}
         ],
     }
-    rows, _, _injected = capture.compare_workload(
+    rows, _ = capture.compare_workload(
         workload, env_maps, chart_values, overlay_values, effective
     )
     row = next(row for row in rows if row["env"] == "RERANKING_STRATEGY")
@@ -187,7 +186,7 @@ def test_derived_value_is_compared_against_the_chart_derivation(chart_values, ov
             }
         ],
     }
-    rows, _, _injected = capture.compare_workload(
+    rows, _ = capture.compare_workload(
         workload, env_maps, chart_values, overlay_values, effective
     )
     row = next(row for row in rows if row["env"] == "VLLM_LLM_ENDPOINT")
@@ -203,7 +202,7 @@ def test_a_fallback_chain_resolves_to_the_value_the_chart_renders(chart_values, 
         "component": "chatqna",
         "containers": [{"name": "chatqna", "image": "x", "env": {"KC_REALM": "genie"}}],
     }
-    rows, _, _injected = capture.compare_workload(
+    rows, _ = capture.compare_workload(
         workload, env_maps, chart_values, overlay_values, effective
     )
     row = next(row for row in rows if row["env"] == "KC_REALM")
@@ -242,7 +241,7 @@ def test_injected_variables_are_skipped_unless_the_chart_declares_them(chart_val
         ],
     }
     effective = capture.deep_merge(chart_values, overlay_values)
-    rows, undeclared, _injected = capture.compare_workload(
+    rows, undeclared = capture.compare_workload(
         workload, env_maps, chart_values, overlay_values, effective
     )
     compared = [row for row in rows if row["status"] != "NOT CARRIED"]
@@ -425,7 +424,7 @@ def test_the_overlay_is_read_where_the_value_resolves(chart_values, env_maps):
         "component": "chatqna",
         "containers": [{"name": "chatqna", "image": "x", "env": {"KC_REALM": "gov-realm"}}],
     }
-    rows, _, _injected = capture.compare_workload(
+    rows, _ = capture.compare_workload(
         workload, env_maps, chart_values, overlay, effective
     )
     row = next(row for row in rows if row["env"] == "KC_REALM")
@@ -454,23 +453,21 @@ def test_the_chart_default_carries_the_path_it_resolved_from(chart_values, overl
         "component": "chatqna",
         "containers": [{"name": "chatqna", "image": "x", "env": {"KC_REALM": "gov-realm"}}],
     }
-    rows, _, _injected = capture.compare_workload(
+    rows, _ = capture.compare_workload(
         workload, env_maps, chart_values, overlay, effective
     )
     row = next(row for row in rows if row["env"] == "KC_REALM")
     assert row["default_path"] == row["source_path"]
 
 
-def test_the_record_names_both_chart_versions(tmp_path):
-    """The record says which chart it reconciles against and which the release attests."""
+def test_the_record_names_the_chart_source_it_reconciles_against(tmp_path):
+    """The record says which chart source the comparison is made against."""
     data = _record_data()
-    data["capture"]["chart_version"] = "0.2.1"
     data["capture"]["local_chart_version"] = "0.2.2"
     out_path = tmp_path / "record.md"
     capture.write_record(data, str(out_path))
     text = out_path.read_text(encoding="utf-8")
     assert "version 0.2.2" in text
-    assert "attests 0.2.1" in text
 
 
 def test_a_row_the_chart_renders_under_a_condition_is_not_a_missing_one(chart_values, env_maps):
@@ -482,7 +479,7 @@ def test_a_row_the_chart_renders_under_a_condition_is_not_a_missing_one(chart_va
         "component": "chatqna",
         "containers": [{"name": "chatqna", "image": "x", "env": {"LLM_MODEL": "m"}}],
     }
-    rows, _, _injected = capture.compare_workload(
+    rows, _ = capture.compare_workload(
         workload, env_maps, chart_values, overlay, effective
     )
     assert "CHATQNA_SYSTEM_PROMPT" not in [row["env"] for row in rows]
@@ -497,7 +494,7 @@ def test_a_guarded_row_is_reported_when_the_condition_holds(chart_values, env_ma
         "component": "chatqna",
         "containers": [{"name": "chatqna", "image": "x", "env": {"LLM_MODEL": "m"}}],
     }
-    rows, _, _injected = capture.compare_workload(workload, env_maps, chart_values, overlay, effective)
+    rows, _ = capture.compare_workload(workload, env_maps, chart_values, overlay, effective)
     row = next(row for row in rows if row["env"] == "CHATQNA_SYSTEM_PROMPT")
     assert row["status"] == "NOT CARRIED"
 
@@ -516,7 +513,7 @@ def test_the_backend_translation_model_is_read_through_the_template(chart_values
         ],
     }
     effective = capture.deep_merge(chart_values, overlay_values)
-    rows, _, _injected = capture.compare_workload(
+    rows, _ = capture.compare_workload(
         workload, env_maps, chart_values, overlay_values, effective
     )
     row = next(row for row in rows if row["env"] == "VLLM_TRANSLATION_MODEL_ID")
@@ -539,7 +536,7 @@ def test_the_backend_translation_endpoint_is_compared(chart_values, overlay_valu
             }
         ],
     }
-    rows, undeclared, _injected = capture.compare_workload(
+    rows, undeclared = capture.compare_workload(
         workload, env_maps, chart_values, overlay_values, effective
     )
     row = next(row for row in rows if row["env"] == "VLLM_TRANSLATION_ENDPOINT")

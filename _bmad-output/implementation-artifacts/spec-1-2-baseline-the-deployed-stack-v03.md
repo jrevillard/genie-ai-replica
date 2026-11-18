@@ -63,7 +63,7 @@ context:
 ## Implementation Notes
 
 - The baseline venue is the shared k3s `genieai` namespace (chart 0.2.177, release `genieai.v38`, external GPU model tier). PRD §13-1 (which deployment hosts the first end-to-end validation) stays open: the capture takes the namespace as an argument, so designating a venue is a re-run, not a rewrite.
-- The record reconciles the deployment against **the chart source in this repository** (its `values.yaml` defaults plus the overlay the release carries). The version the deployed release attests — read from the release history's latest revision — is reported next to it as provenance: the record says which chart it compared against and which chart the deployment runs. It is not a gate: the acceptance criteria ask for the record, and a chart-identity gate is machinery the criteria do not require (trimmed after the fourth fix review, on the operator's ruling).
+- The record reconciles the deployment against **the chart source in this repository** (its `values.yaml` defaults plus the overlay the release carries). Whether that source is the chart the running release was rendered from is a separate question: the chart-identity attestation that answers it exceeded the acceptance criteria, was trimmed twice on the operator's ruling, and is now story 1.2b (#1998).
 - The comparison layers are chart default → overlay override → running pod, and they stay three distinct columns. A difference against the *effective* value (default + override) is a discrepancy; a difference against the chart default alone is not.
 - `imageID` is the digest of the pulled image **index** (calibrated against the digest-pinned Envoy image: the pod's `imageID` equals the tag's index digest, not its amd64 child). The index digest is not a content identity — it moves on every re-push (the attestation changes the index, not the image) — so the verdict compares the **amd64 child digest**, the content identity, and the record carries both. The registry still serves the running index digests; what moved is the CONTENT behind the mutable `main` tag: the deployments run an earlier build than the tag now points at. The record states which of the two it is, per image.
 - The chart templates are parsed, never guessed: the mapping from a values leaf to an environment variable exists only in the templates. A variable the parse cannot resolve is reported as TEMPLATE (rendered from a literal or a helper), never silently compared. The values the chart *computes* — the GPU endpoint family and the public origin, the two venue-specific values a cross-venue baseline exists to pin — are derived exactly as the chart's helpers derive them and compared like any other value.
@@ -215,6 +215,22 @@ The one scoped review the operator's ruling authorized after the trim. Verdict: 
 | F5-18 | A `valuesFrom` without its key raised even when the source is `optional`, and `targetPath` was ignored | low | **fixed, UNREVIEWED** — `optional` and `targetPath` are honoured |
 | F5-19 | The chart-versions test wrote a fixed path under `/tmp` | low | **fixed, UNREVIEWED** — it uses the fixture's temporary directory |
 | F5-20 | The injected service-discovery variables were dropped silently, contradicting "a variable that is not compared is listed as such" | low | **fixed, UNREVIEWED** — they are listed per workload (this venue injects none) |
+
+### The operator's ruling (coordination board #1216, note 127654) and the trim it ordered
+
+**Exit criterion: KISS and LEAN.** Only what the acceptance criteria name stays in this MR — the record (image digests: running, registry index, amd64 child; the four model roles declared AND served; the retrieval configuration reconciled against the chart source with one disposition per difference; the topology; the exit gate on an undispositioned difference; dated, deterministic, read-only, re-runnable), plus this story file and its `sprint-status.yaml` entry.
+
+**Removed in this trim:**
+
+| Removed | Why |
+|---|---|
+| the attested chart version (the release history's chart version) and the header's attestation clause | the chart-IDENTITY gate's residue — story 1.2b (#1998) |
+| the workload readiness table, and the `replicas` / `ready` / `restarts` fields behind it | the criteria do not name it (the review's own alternative was to drop the unused fields) |
+| the listing of the injected service-discovery variables | the criteria do not name it; Kubernetes injects none on this venue |
+
+**Kept — everything the criteria name**, unchanged: the image digests (running index, running amd64 child, registry index, registry amd64 child), the four model roles (declared and served), the retrieval configuration reconciled against the chart source in its three layers with a disposition per difference, the topology, the exit gate on an undispositioned difference, and the record's date, its re-run command and its read-only statement.
+
+**Story 1.2b (#1998)** carries the chart-identity attestation: the version the release history attests, the tree comparison against the source the release was rendered from, the discrepancy rows both produce, and the pins that hold the gate closed when a comparison cannot be established.
 
 ## Design Notes
 

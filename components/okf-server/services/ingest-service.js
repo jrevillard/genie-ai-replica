@@ -16,7 +16,7 @@
 // reconciliation, stored-file branch always re-parses, summary.parsed/success.
 
 const AdmZip = require('adm-zip');
-const matter = require('gray-matter');
+const { stringify } = require('./safe-frontmatter');
 const { aql } = require('arangojs');
 const typeInference = require('./type-inference-service');
 const { slugify: slugSSOT } = require('./slug');
@@ -276,7 +276,7 @@ function normalizeInputs(input) {
  * re-parse threw PARSE_ERROR 400 mid-batch). Empty frontmatter emits NO block
  * (verified) — a stored file's own frontmatter stays intact for 4a to lift. */
 function markdownFor(input) {
-  return matter.stringify(input.body || '', input.frontmatter || {});
+  return stringify(input.body || '', input.frontmatter || {});
 }
 
 /** Duplicate entry names in a bundle's central directory (crafted by foreign

@@ -2,19 +2,47 @@
 // SPDX-License-Identifier: Apache-2.0
 const { test, expect } = require('@playwright/test');
 const fs = require('fs');
-const { matchesStatus, sweepDeleteOneFile } = require('./documents');
+const path = require('path');
+const {
+  matchesStatus,
+  normalizeStatus,
+  sweepDeleteOneFile,
+  uploadFileViaApi,
+  triggerIngestViaApi,
+  waitForFileIngestedViaApi
+} = require('./documents');
 
+// Unit spec for the document status predicate (#1781).
+//
+// `matchesStatus` mirrors what AdminDashboard.vue's `filteredDocuments`
+// renders, and it derives its normalisation from the SHARED vocabulary
+// (`components/gov-chat-frontend/src/utils/documentStatus.js`) — the same
+// `normalizeStatus` the admin filter applies. These cases pin the
+// predicate's own contract; the shared identity is structural (one
+// module — the helper owns the bridge to the frontend's ES module, and
+// every reader of the vocabulary reads it THROUGH that bridge), so a
+// frontend change to the normalisation cannot leave this copy stale.
 /**
- * Unit spec for the document status predicate (#1781).
+ * The scripted transport the helper specs drive: a queue of answers, one
+ * per call, and the calls it recorded. ONE definition for the whole file —
+ * the four describes below drive the same helpers and must not keep four
+ * copies of it in step.
  *
- * `matchesStatus` mirrors what AdminDashboard.vue's `filteredDocuments`
- * renders, and it derives its normalisation from the SHARED vocabulary
- * (`components/gov-chat-frontend/src/utils/documentStatus.js`) — the same
- * `normalizeStatus` the admin filter applies. These cases pin the
- * predicate's own contract; the shared identity is structural (one
- * module), so a frontend change to the normalisation cannot leave this
- * copy stale.
+ * @param {object[]} script - the answers, in order
+ * @returns {{request: Function, calls: object[][]}} the transport and its log
  */
+function scriptedTransport(script) {
+  const calls = [];
+  const request = async (method, path, options) => {
+    calls.push([method, path, options]);
+    if (script.length === 0) {
+      throw new Error(`unexpected call ${method} ${path} — the script is exhausted`);
+    }
+    return script.shift();
+  };
+  return { request, calls };
+}
+
 test.describe('the document status predicate', () => {
   const file = (status) => ({ file_name: 'a.pdf', dataprep: { status } });
 
@@ -57,7 +85,6 @@ test.describe('the document status predicate', () => {
     // survives any refactor of how the helper reaches the module. A
     // dead require beside a private copy is caught by the tripwire
     // below, not here.
-    const { normalizeStatus } = require('../../../components/gov-chat-frontend/src/utils/documentStatus');
     const statuses = [
       'all',
       'Ingested',
@@ -123,18 +150,6 @@ test.describe('the sweep per-file delete (retract-then-delete, #1864)', () => {
   // are recorded too (#1864 review): the bearer header the sweep sends is
   // part of the contract — a refactor that drops it stays green on
   // method+path pins and only fails at the venue with a wave of 401s.
-  function scriptedTransport(script) {
-    const calls = [];
-    const request = async (method, path, options) => {
-      calls.push([method, path, options]);
-      if (script.length === 0) {
-        throw new Error(`unexpected call ${method} ${path} — the script is exhausted`);
-      }
-      return script.shift();
-    };
-    return { request, calls };
-  }
-
   const authed = (token) => ({ headers: { Authorization: `Bearer ${token}` } });
   const bearerCall = (method, path, token = 'tok') => [method, path, authed(token)];
 
@@ -268,5 +283,174 @@ test.describe('the sweep per-file delete (retract-then-delete, #1864)', () => {
     const t = scriptedTransport([]);
     const failure = await sweepDeleteOneFile(t.request, file, 'tok');
     expect(failure).toMatch(/^test-document-leftover\.pdf: unexpected call DELETE/);
+  });
+});
+
+test.describe('the API upload (multipart, the repository upload route)', () => {
+  const FIXTURE = path.join(__dirname, '..', 'fixtures', 'ingest-probe-canary.md');
+
+  // The same scripted transport the sweep spec uses: the recorded calls
+  // ARE the assertion subject — the multipart request shape (boundary
+  // header, bearer, field name, file name, content) is the contract.
+  test('the upload rides a multipart body carrying the file part and the bearer', async () => {
+    const record = { file_id: 'f1', file_name: 'ingest-probe-canary.md' };
+    const t = scriptedTransport([{ status: 201, data: { success: true, data: record }, headers: {} }]);
+    expect(await uploadFileViaApi(t.request, 'tok', FIXTURE)).toEqual(record);
+
+    expect(t.calls).toHaveLength(1);
+    const [method, path, options] = t.calls[0];
+    expect(method).toBe('POST');
+    expect(path).toBe('/api/files/upload');
+    expect(options.headers.Authorization).toBe('Bearer tok');
+    // The Content-Type rides the transport's OWN channel (`contentType`):
+    // the transport overwrites any Content-Type in the headers map, so a
+    // multipart body sent as application/json is parsed as JSON by the
+    // repository and refused with a 400 naming the body's first token.
+    expect(options.headers['Content-Type']).toBeUndefined();
+    // The boundary travels in the Content-Type AND the body: a mismatch
+    // would be refused by multer before any handler ran.
+    const boundary = /boundary=(.+)$/.exec(options.contentType)[1];
+    expect(options.body).toContain(`--${boundary}\r\n`);
+    expect(options.body).toContain('Content-Disposition: form-data; name="file"; filename="ingest-probe-canary.md"');
+    expect(options.body).toContain('Content-Type: text/markdown');
+    const content = fs.readFileSync(FIXTURE, 'utf8');
+    expect(options.body).toContain(content);
+    // The terminator closes the part — a body without it is not multipart.
+    expect(options.body.endsWith(`--${boundary}--\r\n`)).toBe(true);
+  });
+
+  test('a non-201 answer is a named failure carrying the status and the file', async () => {
+    const t = scriptedTransport([{ status: 400, data: { success: false, error: 'Invalid file type' }, headers: {} }]);
+    // ONE failure, ONE assertion: the message carries the status AND the
+    // file it was about, so one regex proves both facts.
+    await expect(uploadFileViaApi(t.request, 'tok', FIXTURE)).rejects.toThrow(
+      /the upload of ingest-probe-canary\.md answered HTTP 400/
+    );
+  });
+
+  test('a 201 without a file record is a named failure, not an undefined id', async () => {
+    const t = scriptedTransport([{ status: 201, data: { success: true, data: {} }, headers: {} }]);
+    await expect(uploadFileViaApi(t.request, 'tok', FIXTURE)).rejects.toThrow(/without a file record/);
+  });
+});
+
+test.describe('the ingest trigger (the repository ingest route)', () => {
+  test('an accepted ingest is one POST with the bearer, and the payload returns', async () => {
+    const t = scriptedTransport([{ status: 200, data: { success: true }, headers: {} }]);
+    expect(await triggerIngestViaApi(t.request, 'tok', 'f1')).toEqual({ success: true });
+    expect(t.calls).toEqual([['POST', '/api/files/f1/ingest', { headers: { Authorization: 'Bearer tok' } }]]);
+  });
+
+  test('a 207 multi-status envelope is accepted too', async () => {
+    const t = scriptedTransport([{ status: 207, data: { results: [] }, headers: {} }]);
+    expect(await triggerIngestViaApi(t.request, 'tok', 'f1')).toEqual({ results: [] });
+  });
+
+  test("the repository's OWN 409 body ('An ingest for this file is already running') is the accepted state", async () => {
+    // The repository answers the conflict in its own words, not the
+    // producer's code: a repository that forwards the producer's body
+    // answers with that. Both are the same state — a live task owns the
+    // file, which is what the caller wants.
+    const t = scriptedTransport([
+      {
+        status: 409,
+        data: { success: false, error: 'Conflict', message: 'An ingest for this file is already running' },
+        headers: {}
+      }
+    ]);
+    // The call RESOLVES (it does not throw): the conflict is the accepted
+    // state, and the payload rides back with the repository's own body.
+    await expect(triggerIngestViaApi(t.request, 'tok', 'f1')).resolves.toMatchObject({
+      error: 'Conflict',
+      message: 'An ingest for this file is already running'
+    });
+    expect(t.calls).toEqual([['POST', '/api/files/f1/ingest', { headers: { Authorization: 'Bearer tok' } }]]);
+  });
+
+  test("dataprep's 409 idempotency guard (ingest_already_running) is the accepted state", async () => {
+    const t = scriptedTransport([{ status: 409, data: { code: 'ingest_already_running' }, headers: {} }]);
+    expect(await triggerIngestViaApi(t.request, 'tok', 'f1')).toEqual({ code: 'ingest_already_running' });
+  });
+
+  test('a 409 without the code, and any other status, fail loud with the status named', async () => {
+    const t = scriptedTransport([
+      { status: 409, data: { code: 'SOMETHING_ELSE' }, headers: {} },
+      { status: 429, data: { error: 'busy' }, headers: {} }
+    ]);
+    await expect(triggerIngestViaApi(t.request, 'tok', 'f1')).rejects.toThrow(/HTTP 409/);
+    await expect(triggerIngestViaApi(t.request, 'tok', 'f1')).rejects.toThrow(/HTTP 429/);
+  });
+});
+
+test.describe('the ingest wait (the dataprep status over the API)', () => {
+  const record = (status) => ({ status: 200, data: { data: { file_id: 'f1', dataprep: { status } } }, headers: {} });
+
+  test('a file already ingested costs ONE read and returns the record', async () => {
+    const t = scriptedTransport([record('Ingested')]);
+    const file = await waitForFileIngestedViaApi(t.request, 'tok', 'f1');
+    expect(file.file_id).toBe('f1');
+    expect(t.calls).toHaveLength(1);
+  });
+
+  test('pending then ingested: the wait holds until the shared vocabulary reads ingested', async () => {
+    const t = scriptedTransport([record('Pending'), record('Ingesting'), record('Ingested')]);
+    const file = await waitForFileIngestedViaApi(t.request, 'tok', 'f1', { timeoutMs: 15000 });
+    expect(file.dataprep.status).toBe('Ingested');
+    // One read before the wait, at least one during it.
+    expect(t.calls.length).toBeGreaterThanOrEqual(2);
+  });
+
+  test('an Ingestion Error is terminal and fails AT ONCE with the status named', async () => {
+    const t = scriptedTransport([record('Ingestion Error')]);
+    await expect(waitForFileIngestedViaApi(t.request, 'tok', 'f1', { timeoutMs: 30000 })).rejects.toThrow(
+      /dataprep status is 'Ingestion Error'/
+    );
+    expect(t.calls).toHaveLength(1);
+  });
+
+  test('a budget spent on pending expires with the observed value in the failure', async () => {
+    const t = scriptedTransport([record('Pending'), record('Pending')]);
+    // The OBSERVED status, not the expected one: the failure carries
+    // 'Received: "pending"', and a regex on 'ingested' would match the
+    // EXPECTED side of the very same message. The gap is a wildcard
+    // because the reporter's colour codes sit between the label and the
+    // value.
+    await expect(waitForFileIngestedViaApi(t.request, 'tok', 'f1', { timeoutMs: 500 })).rejects.toThrow(
+      /Received:.*"pending"/
+    );
+  });
+
+  test('a non-200 record read is a named failure, not a poll tick', async () => {
+    const t = scriptedTransport([{ status: 500, data: { error: 'boom' }, headers: {} }]);
+    await expect(waitForFileIngestedViaApi(t.request, 'tok', 'f1', { timeoutMs: 30000 })).rejects.toThrow(/HTTP 500/);
+    expect(t.calls).toHaveLength(1);
+  });
+
+  test('an expired session (401) is named as the session, not as a missing file', async () => {
+    const t = scriptedTransport([{ status: 401, data: { error: 'TOKEN_EXPIRED' }, headers: {} }]);
+    // The realm's access token lives 300 s: a wait that outlives it dies
+    // on the 401, and the failure has to say WHICH it was.
+    // The SESSION branch, not the bare status: the generic branch reads
+    // 'HTTP 401', the session branch names the verdict the realm sent.
+    await expect(waitForFileIngestedViaApi(t.request, 'expired-token', 'f1', { timeoutMs: 30000 })).rejects.toThrow(
+      /the endpoint answered TOKEN_EXPIRED/
+    );
+    expect(t.calls).toHaveLength(1);
+  });
+
+  test('a killed ingest is terminal and fails AT ONCE with the status named', async () => {
+    const t = scriptedTransport([record('Killed')]);
+    await expect(waitForFileIngestedViaApi(t.request, 'tok', 'f1', { timeoutMs: 30000 })).rejects.toThrow(
+      /dataprep status is 'Killed'/
+    );
+    expect(t.calls).toHaveLength(1);
+  });
+
+  test('the degraded ingest is terminal too — it is not the Ingested the callers assert', async () => {
+    const t = scriptedTransport([record('Ingested with Warnings')]);
+    await expect(waitForFileIngestedViaApi(t.request, 'tok', 'f1', { timeoutMs: 30000 })).rejects.toThrow(
+      /dataprep status is 'Ingested with Warnings'/
+    );
+    expect(t.calls).toHaveLength(1);
   });
 });

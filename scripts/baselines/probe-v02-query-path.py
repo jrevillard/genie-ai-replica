@@ -458,17 +458,20 @@ def verify(fixtures_path: str, document: dict) -> int:
 
     # 4. The locale strings are a SAMPLE: the detector is unseeded and the
     #    translation model is sampled, so a difference is a warning. The
-    #    sample lives once, in the recorded capture; the expectation block
-    #    POINTS at it (preparation.locales_source) and the pointer is
-    #    resolved here, so the declaration stays load-bearing and the
-    #    comparison cannot read nothing.
+    #    sample lives once, in the recorded capture, and the comparison
+    #    ALWAYS reads the capture — never a pointer's target — so no
+    #    declaration can decouple the two. The declaration
+    #    (preparation.locales_source) is checked against the capture, so a
+    #    repointed pointer is a drift too.
     pointer = preparation.get("locales_source")
-    expected_locales = resolve_pointer(fixtures, pointer)
+    expected_locales = rec_prep.get("locales") or []
     if not expected_locales:
         drift.append(
-            f"preparation.locales_source: {pointer!r} does not resolve to a locale sample — "
+            "measured.preparation.locales: the recorded capture carries no locale sample — "
             "the record claims three locales, one of them non-Latin"
         )
+    elif resolve_pointer(fixtures, pointer) != expected_locales:
+        drift.append(f"preparation.locales_source: {pointer!r} does not point at the recorded capture's locale sample")
     live_locales = {l.get("locale"): l for l in live_prep.get("locales", [])}
     for locale in expected_locales:
         live_locale = live_locales.get(locale["locale"])

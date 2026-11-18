@@ -115,6 +115,15 @@ services:
     group_add:
       - "${RENDER_GID:-990}" # render — distro-specific; `getent group render`
       - "${VIDEO_GID:-44}"   # video
+    # Same overlay rule: attach to the stack's model network explicitly
+    # (docker-compose.gpu.yaml defines gpu_network and every sibling
+    # service names it).
+    volumes:
+      # Same cache as the base vLLM services — without it every recreate
+      # re-downloads the ~1.2 GB cross-encoder from HF.
+      - hf_cache:/root/.cache/huggingface
+    networks:
+      - gpu_network
 
   docling-serve:
     environment:

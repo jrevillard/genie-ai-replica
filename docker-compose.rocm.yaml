@@ -117,6 +117,36 @@ services:
     group_add:
       - "${RENDER_GID:-990}" # render — GID is distro-specific; measure with `getent group render`
       - "${VIDEO_GID:-44}"   # video
+    # A NEW service in an overlay does NOT inherit the base service's
+    # networks — without this it lands on compose's default network, where
+    # the `reranker` wrapper (genieai_network) cannot resolve its name.
+    volumes:
+      # Same cache as the base vLLM services — without it every recreate
+      # re-downloads the ~1.2 GB cross-encoder from HF.
+      - hf_cache:/root/.cache/huggingface
+    networks:
+      - genieai_network
+
+  # Split-URL auth knobs (the JWKS/firewall blocker fix): the backend's
+  # token verification fetches discovery + JWKS IN-NETWORK (keycloak:8080,
+  # plain HTTP inside the compose network), while KEYCLOAK_URL stays the
+  # browser-facing https://localhost/auth for CSP/admin-proxy. The accepted
+  # issuer comes FROM the discovery document; tokens minted through the
+  # browser edge carry the 8443 issuer, which KEYCLOAK_PUBLIC_URL adds to
+  # the trusted allow-list. DISCOVERY override is the fetch-host BASE (the
+  # auth service appends /realms/<realm>/.well-known itself); JWKS is the
+  # full certificates URL. NVIDIA venue: this overlay is not loaded —
+  # behavior unchanged there.
+  backend:
+    environment:
+      - KEYCLOAK_DISCOVERY_URL=${KEYCLOAK_DISCOVERY_URL:-http://keycloak:8080}
+      - KEYCLOAK_JWKS_URL=${KEYCLOAK_JWKS_URL:-http://keycloak:8080/realms/${KEYCLOAK_REALM:-genie}/protocol/openid-connect/certs}
+      # Keycloak reflects the request Host into the token iss, so tokens
+      # minted through the browser edge carry iss https://<domain>:<port>/auth
+      # while the in-network discovery (keycloak:8080 view) names the 8080
+      # issuer. The PUBLIC_URL alias adds the browser issuer to the trusted
+      # allow-list without moving the JWKS fetch out of the network.
+      - KEYCLOAK_PUBLIC_URL=${KEYCLOAK_PUBLIC_URL:-https://${NGINX_PUBLIC_DOMAIN}:${NGINX_HTTPS_PORT:-443}/auth}
 
   # Switch the wrapper to the GPU reranker. environment merges BY KEY: these
   # three keys are additive to the base definition; TEI_RERANKING_ENDPOINT

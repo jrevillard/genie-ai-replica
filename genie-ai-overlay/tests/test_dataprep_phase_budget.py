@@ -3546,6 +3546,74 @@ class TestTheLateGraphWriteIsPurged:
         assert spanned, "the purge ran without a span"
         assert spanned[0].attributes.get("dataprep.purge_result") == "cancelled", spanned[0].attributes
 
+    def test_a_failed_purge_keeps_its_outcome_when_its_log_row_is_cancelled(self, monkeypatch, captured_spans):
+        """The FIRST outcome wins.
+
+        A purge that failed and is then cancelled while writing its error row
+        has still failed: the trace must not report "cancelled" for it. The
+        two mean different things to the operator — a cancelled purge never
+        ran its cascade, a failed one ran it twice and lost.
+        """
+        from unittest.mock import AsyncMock, MagicMock
+
+        from fastapi import HTTPException
+
+        self._cool_llm_env(monkeypatch)
+        self._fast_phases(monkeypatch)
+        monkeypatch.setattr(dataprep, "_LATE_WRITE_PURGE_RETRY_SECONDS", 0.05)
+
+        order = []
+
+        async def scenario():
+            dp = _stub_dataprep()
+            _stub_graph_phase_ingest(dp)
+            dp.embeddings = MagicMock()
+
+            def slow_insert(**_kwargs):
+                # The writer thread: it sleeps past the phase budget, so the
+                # failure path retracts while the writer is still in flight.
+                time.sleep(1.6)
+                order.append("write")
+                return None
+
+            graph_cls = MagicMock()
+            graph_cls.return_value.add_graph_documents = slow_insert
+
+            async def retract(file_id=None, graph_name=None, update_status=True):
+                order.append("retract")
+                raise RuntimeError("the database is unreachable")
+
+            dp.retract_file = retract
+
+            # The purge's own error row blocks: the cancellation lands on it.
+            at_error_row = asyncio.Event()
+
+            async def write_log(file_id, level, stage, message):
+                if "retraction failed" in str(message):
+                    at_error_row.set()
+                    await asyncio.sleep(30)
+
+            dp._write_ingestion_log = AsyncMock(side_effect=write_log)
+
+            inp = _graph_ingest_input()
+            with _patched_graph_ingest(graph_cls), pytest.raises(HTTPException):
+                await dp.ingest_file_with_guardrail(inp, lock_file=None)
+            # The writer lands, the purge runs its two attempts, and the error
+            # row it writes for the operator blocks.
+            assert await _wait_for(at_error_row.is_set), f"the purge never reached its error row: {order}"
+            # The process goes down while that row is being written.
+            for task in list(dataprep._BACKGROUND_TASKS):
+                task.cancel()
+            assert await _wait_for(lambda: not dataprep._BACKGROUND_TASKS), (
+                f"the cancelled purge never finished: {order}"
+            )
+            return dp
+
+        _run(scenario())
+        spanned = captured_spans("dataprep.late_write_purge")
+        assert spanned, "the purge ran without a span"
+        assert spanned[0].attributes.get("dataprep.purge_result") == "failed", spanned[0].attributes
+
     def test_the_rollback_retracts_from_the_graph_the_insertion_wrote_to(self, monkeypatch):
         """One graph name, resolved once, for the insertion AND the rollbacks.
 

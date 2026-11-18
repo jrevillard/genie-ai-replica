@@ -278,8 +278,9 @@ ATTRIBUTE_NAMES = {
     # purge did — purged / failed / stood_down / cancelled. Without it a
     # failed purge and a successful one look the same in the trace:
     # background_span does not set the ERROR status on its own, and the purge
-    # swallows the exception it retries. 'cancelled' is the outcome that
-    # leaves the rows behind (the process went down mid-purge).
+    # swallows the exception it retries. What is unique to 'cancelled' is the
+    # silence: no outcome row reaches the document's own ingestion log, so
+    # the operator has to read the trace.
     "dataprep_purge_result": "dataprep.purge_result",
     # Chunking — dataprep.chunking and the llm.* spans that label the chunks
     "dataprep_chunk_count": "dataprep.chunk_count",

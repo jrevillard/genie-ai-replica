@@ -2263,10 +2263,15 @@ class GenieArangoDataprep(OpeaArangoDataprep):
         payload = {"level": level, "stage": stage, "message": message}
         primary_url = f"{DOCUMENT_REPOSITORY_URL}/api/files/{file_id}/ingestion-log"
         try:
-            # The trace-context injection is inside the try on purpose: this
-            # function is called from paths that must not fail for a
-            # bookkeeping reason (the late-write purge), so it never raises.
-            propagate.inject(headers)
+            # The trace-context injection has its own guard: this function is
+            # called from paths that must not fail for a bookkeeping reason
+            # (the late-write purge), so it never raises — and a failed
+            # injection costs the row its trace context, not the row itself
+            # (the outer handler would skip the write).
+            try:
+                propagate.inject(headers)
+            except Exception as e:  # noqa: BLE001 — the row matters more than its trace context
+                logger.warning(f"Log write for {file_id} ran without its trace context: {e}")
             async with (
                 self._log_semaphore,
                 aiohttp.ClientSession(
@@ -4219,6 +4224,10 @@ class GenieArangoDataprep(OpeaArangoDataprep):
         own: without it these lines are the only ones of the mechanism that
         cannot be correlated with the ingest that produced them.
         """
+        # The purge's outcome, recorded once: the FIRST outcome wins. A
+        # stand-down (or a failure) whose own log row is cancelled has still
+        # stood down — reporting "cancelled" for it would misreport it.
+        outcome = None
         with background_span("dataprep.late_write_purge", attributes={"dataprep.file_id": file_id}) as span:
             try:
                 for attempt in range(1, _LATE_WRITE_PURGE_ATTEMPTS + 1):
@@ -4240,6 +4249,7 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                             "document started, and this purge deletes by document id (#1991)"
                         )
                         span.set_attribute(ATTRIBUTE_NAMES["dataprep_purge_result"], "stood_down")
+                        outcome = "stood_down"
                         # The operator reads the document's log, and this is
                         # the one outcome that changes its data: whatever the
                         # late write lands after the new ingest's retract stays
@@ -4273,6 +4283,7 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                         )
                         await purge()
                         span.set_attribute(ATTRIBUTE_NAMES["dataprep_purge_result"], "purged")
+                        outcome = "purged"
                         return
                     except Exception as exc:  # noqa: BLE001 — a failed purge must not kill the service
                         logger.error(
@@ -4282,6 +4293,7 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                         )
                         if attempt == _LATE_WRITE_PURGE_ATTEMPTS:
                             span.set_attribute(ATTRIBUTE_NAMES["dataprep_purge_result"], "failed")
+                            outcome = "failed"
                             await self._write_ingestion_log(
                                 file_id,
                                 "ERROR",
@@ -4296,10 +4308,14 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                 # The loop is going down (the process is exiting): the purge
                 # cannot finish, and the rows it was written to remove may
                 # survive. Say so — the alternative is silence. The span
-                # records the outcome too: a cancelled purge is the one that
-                # leaves the rows behind, and a query for the outcome must
-                # find it.
-                span.set_attribute(ATTRIBUTE_NAMES["dataprep_purge_result"], "cancelled")
+                # records the outcome too: a cancelled purge leaves the rows
+                # behind and says NOTHING in the document's own log (a
+                # shutdown is not the moment to write there), so a query for
+                # the outcome must find it. An outcome already recorded wins:
+                # a purge that stood down and was cancelled while writing its
+                # log row has still stood down.
+                if outcome is None:
+                    span.set_attribute(ATTRIBUTE_NAMES["dataprep_purge_result"], "cancelled")
                 logger.warning(f"{file_id}: the late graph-write purge was cancelled before it finished")
                 raise
             finally:

@@ -2661,6 +2661,42 @@ class TestWriteIngestionLog:
             mock_aiohttp.ClientSession.return_value = session
             await dp._write_ingestion_log("file1", "INFO", "System", "test")
 
+    @pytest.mark.asyncio
+    async def test_a_failed_trace_injection_keeps_the_row_and_raises_nothing(self):
+        """The log write never raises, and a failed injection costs the trace context only.
+
+        The late-write purge writes to the document's log from a failure path
+        that must not fail for a bookkeeping reason, and the purge's comment
+        says the write cannot raise. The one call that could — the
+        trace-context injection — has its own guard: a failed injection leaves
+        the row (without its trace context) instead of raising out of the
+        write.
+        """
+        dp = create_dataprep()
+
+        resp_ctx = _mock_aiohttp_response(status=201)
+        session = _mock_aiohttp_session("post", resp_ctx)
+
+        with (
+            patch.object(
+                dp,
+                "_service_headers",
+                new_callable=AsyncMock,
+                return_value={"Authorization": "Bearer t", "Content-Type": "application/json"},
+            ),
+            patch.object(dp_module, "aiohttp") as mock_aiohttp,
+            patch.object(dp_module, "propagate") as mock_propagate,
+        ):
+            mock_aiohttp.ClientTimeout.return_value = MagicMock()
+            mock_aiohttp.ClientSession.return_value = session
+            mock_propagate.inject.side_effect = RuntimeError("no propagator")
+            # No exception must escape: the caller is a failure path.
+            await dp._write_ingestion_log("file1", "INFO", "System", "test")
+
+        # And the row is still written: the trace context is what the failed
+        # injection costs, not the row the operator reads.
+        session.post.assert_called_once()
+
 
 class TestFetchAllLabels:
     """Tests for _fetch_all_labels()."""

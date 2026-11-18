@@ -64,7 +64,17 @@ const GPU_RANGES = {
   RERANKER_VLLM_MODEL: { type: 'string', optional: true },
   VLLM_RERANKER_MODEL_ID: { type: 'string', optional: true },
   VLLM_RERANKER_GPU_UTILIZATION: { min: 0.01, max: 0.95, type: 'float', optional: true },
-  VLLM_RERANKER_MAX_MODEL_LEN: { min: 512, max: 131072, type: 'int', optional: true }
+  VLLM_RERANKER_MAX_MODEL_LEN: { min: 512, max: 131072, type: 'int', optional: true },
+  // Task-14 mirror — vLLM embedding backend (ROCm path). tei stays the
+  // default backend everywhere; the Strix Halo profile flips to vllm for the
+  // same reason as the reranker (the TEI ROCm image cannot run on gfx1151).
+  // Same validation shape as the reranker entries above, same floor on the
+  // utilization knob (a 0.05 embed instance is deliberate sizing).
+  EMBEDDING_BACKEND: { type: 'enum', values: ['tei', 'vllm'], optional: true },
+  EMBEDDING_VLLM_ENDPOINT: { type: 'string', optional: true },
+  VLLM_EMBEDDING_MODEL_ID: { type: 'string', optional: true },
+  VLLM_EMBEDDING_GPU_UTILIZATION: { min: 0.01, max: 0.95, type: 'float', optional: true },
+  VLLM_EMBEDDING_MAX_MODEL_LEN: { min: 512, max: 131072, type: 'int', optional: true }
 };
 
 /**

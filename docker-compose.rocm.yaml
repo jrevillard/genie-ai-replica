@@ -92,6 +92,40 @@ services:
   # the switch flips). vLLM's rerank API is the Cohere shape
   # (POST /v1/rerank {model, query, documents} → results[].relevance_score);
   # the wrapper normalizes it to its internal {index, score} contract.
+  # GPU embedder (ROCm venue): the same spike-proven mechanism as the
+  # GPU reranker — the TEI ROCm image cannot run on gfx1151, and the CPU
+  # TEI embedder saturates ~24 cores under concurrent ingest. vLLM serves
+  # bge-large-en-v1.5 as a pooling model (--task embed) and answers the
+  # OpenAI shape (POST /v1/embeddings {model, input} → data[].embedding).
+  # The `embedding` wrapper selects it with EMBEDDING_BACKEND=vllm; TEI
+  # stays the default backend on every other deployment.
+  vllm-embedding:
+    image: ${VLLM_ROCM_IMAGE}
+    profiles: [gpu-models]
+    command: >
+      vllm serve
+      --model ${VLLM_EMBEDDING_MODEL_ID:-BAAI/bge-large-en-v1.5}
+      --gpu_memory_utilization ${VLLM_EMBEDDING_GPU_UTILIZATION:-0.05}
+      --served-model-name ${VLLM_EMBEDDING_MODEL_ID:-BAAI/bge-large-en-v1.5}
+      --max_model_len ${VLLM_EMBEDDING_MAX_MODEL_LEN:-512}
+      --enforce-eager
+      --port 8000
+    environment:
+      - HUGGING_FACE_HUB_TOKEN=${HUGGING_FACE_HUB_TOKEN}
+      - NVIDIA_VISIBLE_DEVICES=void
+    devices:
+      - /dev/kfd:/dev/kfd
+      - /dev/dri:/dev/dri
+    group_add:
+      - "${RENDER_GID:-990}" # render — GID is distro-specific; measure with `getent group render`
+      - "${VIDEO_GID:-44}"   # video
+    volumes:
+      # Same cache as the base vLLM services — without it every recreate
+      # re-downloads the model from HF.
+      - hf_cache:/root/.cache/huggingface
+    networks:
+      - genieai_network
+
   vllm-reranker:
     image: ${VLLM_ROCM_IMAGE}
     # Same profile gate as the other vLLM instances (base `vllm` uses
@@ -178,6 +212,24 @@ services:
       - RERANKER_BACKEND=${RERANKER_BACKEND:-tei}
       - RERANKER_VLLM_ENDPOINT=${RERANKER_VLLM_ENDPOINT:-http://vllm-reranker:8000}
       - RERANKER_VLLM_MODEL=${RERANKER_VLLM_MODEL:-BAAI/bge-reranker-v2-m3}
+
+  # Same switch for the EMBEDDING path (Task-14 mirror): dataprep embeds the
+  # corpus and the retriever embeds the query, and both swap their TEI client
+  # for the vLLM pooling instance above when EMBEDDING_BACKEND=vllm. The two
+  # consumers MUST move together — a retriever answering vLLM vectors against
+  # a dataprep that still writes TEI vectors poisons the corpus (mismatched
+  # vector spaces in one collection). environment merges BY KEY: additive to
+  # the base definition. TEI stays the default (the ${EMBEDDING_BACKEND:-tei}
+  # guard) — env.strixhalo is the only place the switch flips.
+  dataprep-arango-service:
+    environment:
+      - EMBEDDING_BACKEND=${EMBEDDING_BACKEND:-tei}
+      - EMBEDDING_VLLM_ENDPOINT=${EMBEDDING_VLLM_ENDPOINT:-http://vllm-embedding:8000}
+
+  retriever-arango-service:
+    environment:
+      - EMBEDDING_BACKEND=${EMBEDDING_BACKEND:-tei}
+      - EMBEDDING_VLLM_ENDPOINT=${EMBEDDING_VLLM_ENDPOINT:-http://vllm-embedding:8000}
 
   # Shared-host accommodation: the Docker daemon's fluentd log driver
   # sends container stdout to HOST port 24224, and exactly one collector

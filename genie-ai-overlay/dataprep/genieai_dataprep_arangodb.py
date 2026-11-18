@@ -20,6 +20,12 @@ from typing import Any
 import aiohttp
 from opentelemetry import propagate
 
+from core.embedding_backend import (
+    EMBEDDING_VLLM_ENDPOINT,
+    build_vllm_embeddings,
+    embeddings_backend_active,
+    resolved_embed_model,
+)
 from core.model_cache import MAX_SANE_MODEL_WINDOW_TOKENS, get_max_model_len, get_model_id, resolve_model_id
 from core.model_http_policy import (
     AIOHTTP_CONNECT_TIMEOUT_SECONDS,
@@ -1885,6 +1891,18 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                 f"[ embed-budget ] dataprep TEI embed clients bounded at "
                 f"{HUB_EMBED_TIMEOUT_SECONDS:.0f}s per call ({', '.join(hardened)}) "
                 f"— was unbounded (#1381)"
+            )
+        # Task-14 mirror — config-gated GPU embedding backend. When active,
+        # the comps-built TEI client above is swapped post-construction: our
+        # subclass owns self.embeddings, so reassigning it needs no vendored
+        # patch (the parent's _initialize_embeddings result is simply
+        # replaced). tei default everywhere; an NVIDIA deployment never
+        # enters this branch. See core/embedding_backend.py.
+        if embeddings_backend_active():
+            self.embeddings = build_vllm_embeddings("BAAI/bge-large-en-v1.5")
+            logger.info(
+                f"[ embed-backend ] dataprep embeddings → vLLM "
+                f"({EMBEDDING_VLLM_ENDPOINT}, model {resolved_embed_model('BAAI/bge-large-en-v1.5')})"
             )
         # FIX: Increased Semaphore from 5 to 100 to restore ingestion speed.
         # The backend rate limit is now disabled, so we can send logs much faster.

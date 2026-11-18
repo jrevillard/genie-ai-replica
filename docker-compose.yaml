@@ -2245,7 +2245,19 @@ services:
       # bounds a wedged /embed connection that previously waited forever —
       # the live incident held an ingest thread 30+ min with no log line.
       MODEL_HUB_EMBED_TIMEOUT_SECONDS: ${MODEL_HUB_EMBED_TIMEOUT_SECONDS:-600}
+      # The OpenAI-compatible embedding budget, read via core/embedding_backend.py
+      # when EMBEDDING_BACKEND=vllm activates the GPU path (the TEI branch is
+      # bounded at the hub client above, not here). Injected so the operator
+      # knob reaches every container whose code reads it.
+      MODEL_EMBEDDING_TIMEOUT_SECONDS: ${MODEL_EMBEDDING_TIMEOUT_SECONDS:-600}
       TEI_EMBEDDING_ENDPOINT: ${EMBEDDING_SERVICE_URL:-http://tei:80}
+      # Config-gated embedding backend (Task-14 mirror): tei stays the default
+      # on every platform — this block alone changes nothing. The vllm branch
+      # activates only when a deployment sets BOTH values (see env.strixhalo
+      # + docker-compose.rocm.yaml, the ROCm venue where the TEI image cannot
+      # run on the GPU); unknown values fall back to tei.
+      EMBEDDING_BACKEND: ${EMBEDDING_BACKEND:-tei}
+      EMBEDDING_VLLM_ENDPOINT: ${EMBEDDING_VLLM_ENDPOINT:-}
       GUARDRAIL_URL: http://guardrail:9090/v1/guardrails
       ARANGO_URL: http://arango-vector-db:8529
       ARANGO_DB: ${ARANGO_DB:-genie-ai}
@@ -2519,6 +2531,13 @@ services:
       HF_TOKEN: ${VLLM_API_KEY:-}
       VLLM_API_KEY: ${VLLM_API_KEY:-}
       OPEA_SSL_SKIP_VERIFY: ${OPEA_SSL_SKIP_VERIFY:-0}
+      # Config-gated embedding backend (Task-14 mirror): tei stays the default
+      # on every platform — this block alone changes nothing. The vllm branch
+      # activates only when a deployment sets BOTH values (see env.strixhalo
+      # + docker-compose.rocm.yaml, the ROCm venue where the TEI image cannot
+      # run on the GPU); unknown values fall back to tei.
+      EMBEDDING_BACKEND: ${EMBEDDING_BACKEND:-tei}
+      EMBEDDING_VLLM_ENDPOINT: ${EMBEDDING_VLLM_ENDPOINT:-}
       # OpenTelemetry — SDK is no-op when ENABLE_OBSERVABILITY != 1
       ENABLE_OBSERVABILITY: ${ENABLE_OBSERVABILITY:-0}
       OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-http://otel-collector:4318}

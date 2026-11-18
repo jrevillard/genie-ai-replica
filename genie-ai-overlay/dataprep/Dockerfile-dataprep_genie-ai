@@ -254,6 +254,13 @@ COPY genie-ai-overlay/core/model_cache.py /app/core/model_cache.py
 COPY genie-ai-overlay/core/model_http_policy.py /app/core/model_http_policy.py
 COPY genie-ai-overlay/core/service_endpoints.py /app/core/service_endpoints.py
 
+# Copy the config-gated embedding backend selector (importable as
+# core.embedding_backend). The dataprep subclass __init__ asks it after the
+# parent builds the TEI client — tei default everywhere, the swap is
+# post-construction on our own object; without this file the image fails at
+# import, not at runtime.
+COPY genie-ai-overlay/core/embedding_backend.py /app/core/embedding_backend.py
+
 # Copy the shared span-attribute vocabulary (importable as core.span_attrs).
 # The LLM timeout attributes this overlay added are stamped through it rather
 # than by literal, so a renamed key cannot diverge between the vocabulary and

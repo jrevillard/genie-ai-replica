@@ -27,6 +27,7 @@ from langchain_core.documents import Document
 from langchain_huggingface import HuggingFaceEndpointEmbeddings
 from langchain_openai import ChatOpenAI, OpenAIEmbeddings
 
+from core.embedding_backend import build_vllm_embeddings, embeddings_backend_active, resolved_embed_model
 from core.label_contract import build_filter_labels
 from core.model_cache import ModelDiscoveryError, coerce_int, resolve_model_id
 from core.model_http_policy import (
@@ -66,6 +67,7 @@ from .config import (
     ARANGO_USE_APPROX_SEARCH,
     ARANGO_USERNAME,
     EMBEDDING_TIMEOUT,
+    EMBEDDING_VLLM_ENDPOINT,
     FANOUT_CANDIDATE_CAP_GLOBAL,
     FANOUT_CANDIDATE_CAP_PER_GRAPH,
     FANOUT_ENABLED,
@@ -1649,7 +1651,24 @@ class GenieaiArangoRetriever(OpeaComponent):
                     logger.error(f"Document '{random_doc_id}' has an empty embedding field.")
                     return []
 
-            if OPENAI_API_KEY and OPENAI_EMBED_MODEL and OPENAI_EMBED_ENABLED:
+            if embeddings_backend_active():
+                # GPU vLLM embeddings (Task-14 mirror; ROCm path) — FIRST in
+                # the ladder, ahead of the OpenAI-API and TEI branches. The
+                # vLLM pooling endpoint is OpenAI-compatible
+                # (POST /v1/embeddings {model, input} → data[].embedding;
+                # spike-verified on the ROCm venue), so the client shape is
+                # the same OpenAIEmbeddings the OpenAI-API branch below
+                # builds. check_embedding_ctx_length=False is REQUIRED:
+                # bge-large is not tiktoken-tokenizable and langchain's
+                # default tokenization path silently mangles the input.
+                # No query-instruction wrapper: get_query_instruction()
+                # returns None for bge — same as the OpenAI branch below.
+                embeddings = build_vllm_embeddings("BAAI/bge-large-en-v1.5")
+                logger.info(
+                    f"[ embed-backend ] retriever embeddings → vLLM "
+                    f"({EMBEDDING_VLLM_ENDPOINT}, model {resolved_embed_model('BAAI/bge-large-en-v1.5')})"
+                )
+            elif OPENAI_API_KEY and OPENAI_EMBED_MODEL and OPENAI_EMBED_ENABLED:
                 # OpenAI embeddings are not contrastive / instruction-tuned —
                 # get_query_instruction(OPENAI_EMBED_MODEL) returns None for
                 # any OpenAI model id, so the wrapper is never installed here.

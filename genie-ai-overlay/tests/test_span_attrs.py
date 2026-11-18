@@ -179,8 +179,10 @@ class TestVocabularyShape:
         # fallback the embedder receives); 112 -> 113 for
         # dataprep.purge_result (the late-write purge's outcome: purged /
         # failed / stood_down / cancelled); 113 -> 114 for reranker.backend
-        # (Task 14 - which rerank backend answered, tei|vllm, ROCm path).
-        assert len(ATTRIBUTE_NAMES) == 114
+        # (Task 14 - which rerank backend answered, tei|vllm, ROCm path);
+        # 114 -> 115 for embedding.backend (Task-14 mirror - which embedding
+        # client served, tei|vllm, ROCm path).
+        assert len(ATTRIBUTE_NAMES) == 115
 
 
 class TestLegacyAttributeNames:
@@ -280,8 +282,9 @@ class TestLegacyAttributeNames:
         # 111 -> 112 with rag.translation.query_status (issue #1026);
         # 112 -> 113 with dataprep.purge_result (the late-write purge's
         # outcome); 113 -> 114 with reranker.backend (Task 14 - tei|vllm
-        # backend switch).
-        assert len(ATTRIBUTE_NAMES) == 114
+        # backend switch); 114 -> 115 with embedding.backend (Task-14
+        # mirror - tei|vllm embedding client).
+        assert len(ATTRIBUTE_NAMES) == 115
         assert len(LEGACY_ATTRIBUTE_NAMES) == 21
 
 

@@ -130,6 +130,11 @@ ATTRIBUTE_NAMES = {
     # request — "tei" (default, NVIDIA path unchanged) or "vllm" (the GPU
     # vLLM instance on gfx1151). Fixed enum, never request data.
     "reranker_backend": "reranker.backend",
+    # Embedding backend (Task-14 mirror, ROCm path): which embedding client
+    # served a retrieval or ingest — "tei" (default, NVIDIA path unchanged)
+    # or "vllm" (the GPU vLLM pooling instance). Fixed enum, never request
+    # data. Same shape as reranker.backend above.
+    "embedding_backend": "embedding.backend",
     # OKF multi-repo fan-out routing (feat/okf-server line). Values are
     # counts/booleans except leg.graph_name, which carries the Arango graph
     # collection name (identifier-charset, no whitespace).

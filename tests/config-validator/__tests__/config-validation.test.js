@@ -352,6 +352,23 @@ describe('Configuration Validation Suite', () => {
       expect(result.errors).toEqual([]);
     });
 
+    test('StrixHalo pins the vLLM embedding backend with a valid enum value', () => {
+      // Task-14 mirror: same pin as the reranker test above — the profile
+      // flips EMBEDDING_BACKEND to vllm, the endpoint names the pooling
+      // instance, and every new variable must be in GPU_RANGES or the
+      // unknown-parameter warning fires here.
+      const parsed = parseGpuProfile(STRIXHALO_FILE);
+      const backend = parsed.variables.find((v) => v.name === 'EMBEDDING_BACKEND');
+      expect(backend).toBeDefined();
+      expect(backend.value).toBe('vllm');
+      const endpoint = parsed.variables.find((v) => v.name === 'EMBEDDING_VLLM_ENDPOINT');
+      expect(endpoint).toBeDefined();
+      expect(endpoint.value).toBe('http://vllm-embedding:8000');
+      const result = validateHardwareProfile(STRIXHALO_FILE, 'STRIX HALO (iGPU unified memory)');
+      expect(result.warnings.filter((w) => w.includes('Unknown GPU parameter'))).toEqual([]);
+      expect(result.errors).toEqual([]);
+    });
+
     test('T4 uses conservative settings vs RTX6000', () => {
       const t4 = parseGpuProfile(T4_FILE);
       const rtx = parseGpuProfile(RTX6000_FILE);

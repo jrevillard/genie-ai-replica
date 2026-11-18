@@ -46,6 +46,16 @@ if DEBUG:
 # Embedding model
 TEI_EMBEDDING_ENDPOINT = os.getenv("TEI_EMBEDDING_ENDPOINT", "")
 
+# Task-14-mirror embedding backend (ROCm path). tei stays the default on
+# every platform; the vllm branch activates only when EMBEDDING_BACKEND=vllm
+# AND EMBEDDING_VLLM_ENDPOINT is set. The resolving reader is
+# core/embedding_backend.py (the retriever's embedding ladder asks its
+# embeddings_backend_active() per request); these constants are the
+# startup snapshot the config file convention carries — the ladder logs the
+# endpoint from them.
+EMBEDDING_BACKEND = os.getenv("EMBEDDING_BACKEND", "tei")
+EMBEDDING_VLLM_ENDPOINT = os.getenv("EMBEDDING_VLLM_ENDPOINT", "")
+
 HF_TOKEN = os.getenv("HF_TOKEN") or os.getenv("HUGGINGFACEHUB_API_TOKEN", "")
 
 # OpenAI

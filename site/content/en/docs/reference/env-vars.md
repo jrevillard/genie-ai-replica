@@ -194,6 +194,11 @@ group GIDs and shared-host port plan. Values exactly as shipped:
 | `VLLM_RERANKER_MODEL_ID` | `BAAI/bge-reranker-v2-m3` | Same model, the `vllm-reranker` service's own knob |
 | `VLLM_RERANKER_GPU_UTILIZATION` | `0.05` | ~2.3 GiB of GTT (spike measured 1.56 GiB touched) — sits inside the 27 GB ceiling beside granite (0.28) + gemma (0.12) |
 | `VLLM_RERANKER_MAX_MODEL_LEN` | `8192` | Rerank window; vLLM truncates silently at this length (TEI's strict 422 path is backend-specific and stays on `tei`) |
+| `EMBEDDING_BACKEND` | `vllm` | Task-14-mirror embedding backend switch: `tei` (default everywhere; NVIDIA path) or `vllm`. On Strix Halo BOTH embedding consumers (dataprep corpus embeds + retriever query embeds) move to the third vLLM instance (`vllm-embedding` service, added by the ROCm overlays) — the pair moves together, a split would mix vector spaces in one collection. Unknown values fall back to `tei`; `vllm` with no endpoint fails soft to `tei` with a warning |
+| `EMBEDDING_VLLM_ENDPOINT` | `http://vllm-embedding:8000` | The pooling endpoint answering the OpenAI shape (`POST /v1/embeddings {model, input}` → `data[].embedding`). The client appends `/v1` itself |
+| `VLLM_EMBEDDING_MODEL_ID` | `BAAI/bge-large-en-v1.5` | The pooling model the instance serves with `--served-model-name`; the embedding clients send the same id (override per consumer with `EMBEDDING_MODEL_ID`) |
+| `VLLM_EMBEDDING_GPU_UTILIZATION` | `0.05` | bge-large bf16 weights are ~0.6 GiB — the smallest slice of the GTT, beside the reranker (0.05) + granite (0.28) + gemma (0.12) |
+| `VLLM_EMBEDDING_MAX_MODEL_LEN` | `512` | Embed window; sized for the ~500-char chunk size — the endpoint bounds what langchain is told NOT to pre-chunk (`check_embedding_ctx_length=False`, bge is not tiktoken-tokenizable) |
 
 ### OKF-stack variables (venue-level, not ROCm-exclusive)
 
@@ -229,6 +234,24 @@ selected per deployment by `RERANKER_BACKEND`:
 An unknown value falls back to `tei` with a warning, mirroring the
 strategy resolver. The `reranker.backend` span attribute records which
 backend answered each request.
+
+### Embedding backend (`EMBEDDING_BACKEND`)
+
+The same mechanism, mirrored for embeddings (Task-14 mirror). The two
+embedding consumers — dataprep (corpus) and the retriever (queries) —
+select their client per deployment:
+
+| Backend | Serves | Notes |
+|---|---|---|
+| `tei` (default) | TEI `/embed` via the hub clients | NVIDIA path unchanged, byte-identical |
+| `vllm` | vLLM `/v1/embeddings` (OpenAI-compatible pooling shape) | ROCm/gfx1151 path: the TEI ROCm image cannot run on the GPU, so embeddings run as a third vLLM instance. Dataprep swaps its comps-built client post-construction; the retriever puts the branch first in its embedding ladder. Both log one `[ embed-backend ]` line when the branch runs |
+
+The vllm branch activates only when `EMBEDDING_BACKEND=vllm` AND
+`EMBEDDING_VLLM_ENDPOINT` is set — a `vllm` value with an empty endpoint
+fails soft to `tei` with a warning naming the remedy. The two consumers
+move together: dataprep writes the corpus vectors and the retriever
+answers queries in the same vector space, so the compose overlay flips
+both or neither.
 
 ## Validation
 

@@ -14,19 +14,29 @@ RUN rm -rf /app/node_modules/shared-lib
 COPY okf-server/ ./
 
 FROM node:22
-# Security-patch the runtime base: pull current Debian security updates so the
-# shipped image does not lag distro point-releases between upstream rebuilds
-# (same doctrine as the gov-chat-backend runtime stage). The full node:22 base
-# is kept for now — the compose healthcheck probes with wget, which the slim
-# base does not ship; slimming is a separate change with its own tool audit.
-RUN apt-get update && \
-    apt-get upgrade -y && \
-    rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 COPY --from=builder /app/package*.json ./
 COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/shared-lib ./shared-lib
 COPY okf-server/ ./
+
+# Security-patch the runtime base: pull current Debian security updates so the
+# shipped image does not lag distro point-releases between upstream rebuilds
+# (same doctrine as the gov-chat-backend runtime stage). The full node:22 base
+# is kept for now — the compose healthcheck probes with wget, which the slim
+# base does not ship; slimming is a separate change with its own tool audit.
+#
+# The OS packages are refreshed by a separate, bustable layer: the monthly
+# rebuild passes --build-arg CACHE_BUST=<timestamp>, and a layer that takes
+# that argument is the only one whose cache key changes.
+#
+# It comes AFTER the COPY layers on purpose: a layer's cache key includes its
+# parent, so busting the upgrade layer re-runs the layers that follow it —
+# and the node_modules COPY is not cheap.
+ARG CACHE_BUST=0
+RUN CACHE_BUST=$CACHE_BUST apt-get update -y -o Acquire::Retries=5 && \
+    apt-get upgrade -y --with-new-pkgs --fix-missing -o Acquire::Retries=5 && \
+    apt-get clean && rm -rf /var/lib/apt/lists/*
 
 EXPOSE 3002
 ENV PORT=3002

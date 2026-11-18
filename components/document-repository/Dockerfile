@@ -28,22 +28,9 @@ FROM node:22-slim
 # and clamav-node.sh's readiness loop both invoke it explicitly. curl backs the
 # compose healthcheck (docker-compose.yaml doc-repo service).
 RUN apt-get update && \
-    apt-get upgrade -y && \
     apt-get install -y --no-install-recommends clamav clamav-daemon clamdscan curl && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
-
-# Configure freshclam
-RUN sed -i 's/^NotifyClamd/#NotifyClamd/' /etc/clamav/freshclam.conf
-
-# Configure clamd
-RUN sed -i 's/^LocalSocket /#LocalSocket /' /etc/clamav/clamd.conf \
-    && sed -i 's/^FixStaleSocket /#FixStaleSocket /' /etc/clamav/clamd.conf \
-    && sed -i 's/^LocalSocketGroup /#LocalSocketGroup /' /etc/clamav/clamd.conf \
-    && sed -i 's/^LocalSocketMode /#LocalSocketMode /' /etc/clamav/clamd.conf \
-    && echo 'TCPSocket 3310' >> /etc/clamav/clamd.conf \
-    && echo 'TCPAddr 0.0.0.0' >> /etc/clamav/clamd.conf \
-    && sed -i 's/^User /#User /' /etc/clamav/clamd.conf
 
 # Create app directory
 WORKDIR /app
@@ -65,9 +52,6 @@ RUN chmod +x clamav-node.sh
 # The clamd `User clamav` self-drop is disabled above: as non-root the daemon
 # keeps the invoking uid, and mixing the clamav package user (104) with the
 # node user (1000) over the same directories would fight over ownership.
-RUN mkdir -p uploads /var/lib/clamav /var/log/clamav /run/clamav \
-    && chown -R node:node uploads /var/lib/clamav /var/log/clamav /run/clamav
-
 # Expose ports
 EXPOSE 3001 3310
 
@@ -79,6 +63,45 @@ ENV ARANGO_USER=root
 ENV UPLOAD_DIR=./uploads
 ENV MAX_FILE_SIZE=52428800
 ENV MAX_FILES_UPLOAD=10
+
+# The OS packages are refreshed by a separate, bustable layer: the monthly
+# rebuild passes --build-arg CACHE_BUST=<timestamp>, and a layer that takes
+# that argument is the only one whose cache key changes.
+#
+# Position: after the expensive layers (what sits above it stays cached — a
+# layer's cache key includes its parent), before the writes to package-owned
+# paths (a package that moves would restore its own files over ours), and
+# still root.
+# The upgrade output is kept OUT of the job trace: dpkg prints the path of
+# every conffile it reinstalls, and this image MODIFIES the clamav ones
+# (/etc/clamav/clamd.conf), so a clamav bump prints exactly the kind of path
+# the WAF blocks. The output is printed (sanitized) only when the step
+# fails. The WAF exception is tracked in issue #2001 — this workaround is to
+# be purged once it lands.
+ARG CACHE_BUST=0
+RUN CACHE_BUST=$CACHE_BUST apt-get update -y -o Acquire::Retries=5 && \
+    (CACHE_BUST=$CACHE_BUST apt-get upgrade -y --with-new-pkgs --fix-missing -o Acquire::Retries=5 > /tmp/apt.log 2>&1 || { tail -n 50 /tmp/apt.log | sed -E 's#(/[A-Za-z0-9._~/-]{2,})#<path>#g'; exit 1; }) && \
+    apt-get clean && rm -rf /var/lib/apt/lists/* && rm -f /tmp/apt.log
+
+# The clamav directories belong to the clamav package: a package that moves
+# resets their ownership, so the chown comes AFTER the upgrade layer — our
+# ownership then always wins.
+RUN mkdir -p uploads /var/lib/clamav /var/log/clamav /run/clamav \
+    && chown -R node:node uploads /var/lib/clamav /var/log/clamav /run/clamav
+
+# Configure freshclam
+RUN sed -i 's/^NotifyClamd/#NotifyClamd/' /etc/clamav/freshclam.conf
+
+# Configure clamd — AFTER the upgrade layer on purpose: these files belong to
+# the clamav package, and a package that moves restores its own conffiles
+# over ours. Writing them after the upgrade means our version always wins.
+RUN sed -i 's/^LocalSocket /#LocalSocket /' /etc/clamav/clamd.conf \
+    && sed -i 's/^FixStaleSocket /#FixStaleSocket /' /etc/clamav/clamd.conf \
+    && sed -i 's/^LocalSocketGroup /#LocalSocketGroup /' /etc/clamav/clamd.conf \
+    && sed -i 's/^LocalSocketMode /#LocalSocketMode /' /etc/clamav/clamd.conf \
+    && echo 'TCPSocket 3310' >> /etc/clamav/clamd.conf \
+    && echo 'TCPAddr 0.0.0.0' >> /etc/clamav/clamd.conf \
+    && sed -i 's/^User /#User /' /etc/clamav/clamd.conf
 
 # Non-root (#1227): node (uid 1000) owns everything this container writes.
 USER node

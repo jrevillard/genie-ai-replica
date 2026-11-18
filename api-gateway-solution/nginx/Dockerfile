@@ -9,9 +9,20 @@
 # current 1.30.6-r1, which carries all five fixes (1.30.1-r0 .. 1.30.4-r0).
 FROM nginx:1.30-alpine
 
+# The OS packages are refreshed by a separate, bustable layer: the monthly
+# rebuild passes --build-arg CACHE_BUST=<timestamp>, and a layer that takes
+# that argument is the only one whose cache key changes.
+#
+# It comes FIRST in the runtime stage, and that is deliberate: the layers
+# below it rewrite paths the nginx PACKAGE owns (/etc/nginx/nginx.conf, the
+# removal of /etc/nginx/conf.d/default.conf). A package that moves would
+# restore its own files over ours, so our writes have to come AFTER the
+# upgrade. Everything below is cheap (a package add, COPYs, a chown), so
+# busting this layer monthly costs nothing.
+#
 # Pull current Alpine security updates at build time (CVE remediation
 # playbook): the rolling base tag does not refresh on its own between
-# upstream rebuilds. Order matters: upgrade first, then add.
+# upstream rebuilds.
 #
 # The nginx package itself is pinned by the upstream image (reproducibility:
 # the tag must not change behaviour under an `apk upgrade`), and on the
@@ -21,7 +32,8 @@ FROM nginx:1.30-alpine
 #
 # `apk info -v nginx` prints the EXACT package version (with the Alpine -r
 # revision) into the build log: the build itself is the proof of what ships.
-RUN apk upgrade --no-cache \
+ARG CACHE_BUST=0
+RUN CACHE_BUST=$CACHE_BUST apk upgrade --no-cache \
     && apk info -v nginx
 
 RUN apk add --no-cache openssl gettext

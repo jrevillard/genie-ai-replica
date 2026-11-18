@@ -11,7 +11,7 @@ never writes a secret into the record.
 Usage:
     uv run --no-cache --with pyyaml python scripts/baseline/capture-deployed-baseline.py \
         --namespace genieai \
-        --out docs/baselines/v03-deployed-baseline-2026-11-17.md
+        --out docs/baselines/v03-deployed-baseline-2026-11-18.md
 
 Exit codes:
     0  the record was written and every discrepancy carries a disposition

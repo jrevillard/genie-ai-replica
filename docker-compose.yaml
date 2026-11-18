@@ -1363,7 +1363,7 @@ services:
       # dialect is TEI-native ({base}/embed, the project's TEI-behind-
       # nginx contract); RAGAS_EMBED_API=openai switches to any
       # OpenAI-compatible embeddings endpoint (/embeddings).
-      - RAGAS_EMBED_BASE_URL=${RAGAS_EMBED_BASE_URL:-http://tei-embedding-server:80}
+      - RAGAS_EMBED_BASE_URL=${RAGAS_EMBED_BASE_URL:-http://tei:80}
       - RAGAS_EMBED_MODEL=${RAGAS_EMBED_MODEL:-${EMBEDDING_MODEL_ID:-}}
       - RAGAS_EMBED_API=${RAGAS_EMBED_API:-tei}
       # Disk judge cache (2026-10-18): responses keyed by prompt+params

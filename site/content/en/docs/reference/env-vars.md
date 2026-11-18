@@ -175,9 +175,13 @@ group GIDs and shared-host port plan. Values exactly as shipped:
 
 | Variable | env.strixhalo value | Notes |
 |---|---|---|
-| `VLLM_ROCM_IMAGE` | `rocm/vllm:rocm10.1.0_ubuntu24.04_py3.14-pytorch_2.13.0_vllm-0.29.0` | vLLM ROCm 10.1 build (0.29.x) — both vLLM instances and the GPU reranker |
+| `VLLM_ROCM_IMAGE` | `rocm/vllm:rocm10.1.0_ubuntu24.04_py3.14-pytorch_2.13.0_vllm-0.29.0` | vLLM ROCm 10.1 build (0.29.x) — the image behind all four vLLM instances of the ROCm profile (llm / translation / reranker / embedding) |
 | `TEI_ROCM_EMBEDDING_IMAGE` | `ghcr.io/huggingface/text-embeddings-inference:cpu-1.9.3` | CPU image — the ROCm TEI build fails on gfx1151 |
 | `TEI_ROCM_RERANKING_IMAGE` | `ghcr.io/huggingface/text-embeddings-inference:cpu-1.9.3` | CPU image (same) — kept for the TEI backend; the reranker wrapper defaults to the GPU vLLM instance on this profile |
+| `TEI_RERANKING_MAX_BATCH_TOKENS` | `2048` | TEI CPU-footprint caps (the base compose's GPU-side values inflate candle's buffer pools on CPU; the reranker measured 16.3 GiB RSS at 8192/32) |
+| `TEI_RERANKING_MAX_CONCURRENT_REQUESTS` | `8` | paired with the batch-token cap above |
+| `TEI_EMBEDDING_MAX_BATCH_TOKENS` | `2048` | same story, embedding side — cuts the footprint ~3x with no quality effect |
+| `TEI_RERANKING_AUTO_TRUNCATE` | `true` | required with the 2048 batch cap (bge-reranker-v2-m3's max input is 8192; chunks are ~500 chars, so truncation is theoretical in the RAG path) |
 | `VLLM_LLM_MODEL_ID` | `ibm-granite/granite-3.1-2b-instruct` | Spike-sized main LLM (fits the 27 GB shared-host ceiling) |
 | `VLLM_TRANSLATION_MODEL_ID` | `google/gemma-3-1b-it` | Spike-sized translation LLM |
 | `DOCLING_DEVICE` | `cpu` | No docling ROCm support on the ROCm path |
@@ -194,11 +198,11 @@ group GIDs and shared-host port plan. Values exactly as shipped:
 | `VLLM_RERANKER_MODEL_ID` | `BAAI/bge-reranker-v2-m3` | Same model, the `vllm-reranker` service's own knob |
 | `VLLM_RERANKER_GPU_UTILIZATION` | `0.05` | ~2.3 GiB of GTT (spike measured 1.56 GiB touched) — sits inside the 27 GB ceiling beside granite (0.28) + gemma (0.12) |
 | `VLLM_RERANKER_MAX_MODEL_LEN` | `8192` | Rerank window; vLLM truncates silently at this length (TEI's strict 422 path is backend-specific and stays on `tei`) |
-| `EMBEDDING_BACKEND` | `vllm` | Task-14-mirror embedding backend switch: `tei` (default everywhere; NVIDIA path) or `vllm`. On Strix Halo BOTH embedding consumers (dataprep corpus embeds + retriever query embeds) move to the third vLLM instance (`vllm-embedding` service, added by the ROCm overlays) — the pair moves together, a split would mix vector spaces in one collection. Unknown values fall back to `tei`; `vllm` with no endpoint fails soft to `tei` with a warning |
+| `EMBEDDING_BACKEND` | `vllm` | Task-14-mirror embedding backend switch: `tei` (default everywhere; NVIDIA path) or `vllm`. On Strix Halo BOTH embedding consumers (dataprep corpus embeds + retriever query embeds) move to the FOURTH vLLM instance (`vllm-embedding` service, added by the ROCm overlays) — the pair moves together, a split would mix vector spaces in one collection. Unknown values fall back to `tei`; `vllm` with no endpoint fails soft to `tei` with a warning |
 | `EMBEDDING_VLLM_ENDPOINT` | `http://vllm-embedding:8000` | The pooling endpoint answering the OpenAI shape (`POST /v1/embeddings {model, input}` → `data[].embedding`). The client appends `/v1` itself |
-| `VLLM_EMBEDDING_MODEL_ID` | `BAAI/bge-large-en-v1.5` | The pooling model the instance serves with `--served-model-name`; the embedding clients send the same id (override per consumer with `EMBEDDING_MODEL_ID`) |
-| `VLLM_EMBEDDING_GPU_UTILIZATION` | `0.05` | bge-large bf16 weights are ~0.6 GiB — the smallest slice of the GTT, beside the reranker (0.05) + granite (0.28) + gemma (0.12) |
-| `VLLM_EMBEDDING_MAX_MODEL_LEN` | `512` | Embed window; sized for the ~500-char chunk size — the endpoint bounds what langchain is told NOT to pre-chunk (`check_embedding_ctx_length=False`, bge is not tiktoken-tokenizable) |
+| `VLLM_EMBEDDING_MODEL_ID` | *(docker-compose.rocm.yaml overlay default)* `BAAI/bge-large-en-v1.5` | The pooling model the instance serves with `--served-model-name`; the embedding clients send the same id (override per consumer with `EMBEDDING_MODEL_ID`). Not set in `env.strixhalo` — the overlay ships the default |
+| `VLLM_EMBEDDING_GPU_UTILIZATION` | *(overlay default)* `0.05` | bge-large bf16 weights are ~0.6 GiB — the smallest slice of the GTT, beside the reranker (0.05) + granite (0.28) + gemma (0.12) |
+| `VLLM_EMBEDDING_MAX_MODEL_LEN` | *(overlay default)* `512` | Embed window; sized for the ~500-char chunk size — the endpoint bounds what langchain is told NOT to pre-chunk (`check_embedding_ctx_length=False`, bge is not tiktoken-tokenizable) |
 
 ### OKF-stack variables (venue-level, not ROCm-exclusive)
 
@@ -257,7 +261,7 @@ select their client per deployment:
 | Backend | Serves | Notes |
 |---|---|---|
 | `tei` (default) | TEI `/embed` via the hub clients | NVIDIA path unchanged, byte-identical |
-| `vllm` | vLLM `/v1/embeddings` (OpenAI-compatible pooling shape) | ROCm/gfx1151 path: the TEI ROCm image cannot run on the GPU, so embeddings run as a third vLLM instance. Dataprep swaps its comps-built client post-construction; the retriever puts the branch first in its embedding ladder. Both log one `[ embed-backend ]` line when the branch runs |
+| `vllm` | vLLM `/v1/embeddings` (OpenAI-compatible pooling shape) | ROCm/gfx1151 path: the TEI ROCm image cannot run on the GPU, so embeddings run as the fourth vLLM instance. Dataprep swaps its comps-built client post-construction; the retriever puts the branch first in its embedding ladder. Both log one `[ embed-backend ]` line when the branch runs |
 
 The vllm branch activates only when `EMBEDDING_BACKEND=vllm` AND
 `EMBEDDING_VLLM_ENDPOINT` is set — a `vllm` value with an empty endpoint

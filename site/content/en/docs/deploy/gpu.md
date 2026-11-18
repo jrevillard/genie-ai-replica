@@ -142,9 +142,14 @@ This uses the compose defaults (e.g. `VLLM_GPU_UTILIZATION=0.55`,
 
 ## ROCm (AMD Strix Halo / gfx1151)
 
-The AMD path deploys the same four GPU-tier services (two vLLM instances +
-two TEI instances) on an AMD Radeon iGPU through compose **overlay files** —
-the base files and the NVIDIA path are never edited. Values below were
+The AMD path deploys six GPU-tier services — four vLLM instances (`vllm`,
+`vllm-translation-guardrail`, `vllm-reranker`, `vllm-embedding`) and the
+two TEI containers — on an AMD Radeon iGPU through compose **overlay
+files** (the base files and the NVIDIA path are never edited). The
+reranker and embedding consumers run on the GPU too: `env.strixhalo` sets
+`RERANKER_BACKEND=vllm` / `EMBEDDING_BACKEND=vllm`, switching the reranker
+wrapper and both embedding consumers (dataprep + retriever) from TEI to
+the two extra pooling instances. Values below were
 measured on the reference machine: AMD Ryzen AI MAX+ 395 "Strix Halo",
 Radeon 8060S iGPU, `gfx1151`, 91 GB unified LPDDR5X.
 
@@ -181,7 +186,7 @@ ROCm file must come **last** (verbatim from the overlay headers):
 
 ```bash
 # Single-server: main stack, GPU tier on the local iGPU
-docker compose --env-file env.strixhalo \
+docker compose --env-file .env --env-file env.strixhalo \
   -f docker-compose.yaml -f docker-compose.rocm.yaml \
   --profile opea --profile gpu-models up -d
 
@@ -200,6 +205,17 @@ by ROCm containers). Everything else merges from the base files. The TEI
 services need no device access (CPU image). For the Ansible path,
 `deploy/ansible/deploy-gpu-rocm.yml` +
 `group_vars/rocm_gpu_api/vars.yml` drive the same GPU-node stack.
+
+{{% alert title="`env.strixhalo` is the single-server profile" color="warning" %}}
+Its `RERANKER_BACKEND=vllm` / `EMBEDDING_BACKEND=vllm` flips hard-fail on a
+compose **split** venue: the static gpu-proxy
+(`configs/nginx-gpu/gpu-proxy.conf`) hardcodes the TEI upstreams and the
+split GPU-node stack has no `vllm-embedding` service, so an embedder
+pointed at `vllm-embedding` has nothing to reach. On a split venue unset
+both variables (the compose path keeps TEI), or deploy with the Ansible
+path, where Section 18 / 18B and the node-side `gpu_rerank_upstream` flip
+wire the vLLM reranker through the proxy.
+{{% /alert %}}
 
 ### Window / memory sizing
 
@@ -222,9 +238,19 @@ measure 8.58 GiB).
 | `VLLM_TRANSLATION_MAX_MODEL_LEN` | `8192` | |
 | `VLLM_TRANSLATION_MAX_NUM_SEQS` | `16` | |
 | `VLLM_TRANSLATION_DTYPE` | `auto` | |
+| `RERANKER_BACKEND` | `vllm` | reranker wrapper calls the `vllm-reranker` pooling instance, not TEI |
+| `VLLM_RERANKER_MODEL_ID` / `RERANKER_VLLM_MODEL` | `BAAI/bge-reranker-v2-m3` | the cross-encoder the reranker instance serves (Cohere response shape) |
+| `VLLM_RERANKER_GPU_UTILIZATION` | `0.05` | ~2.3 GiB claim (spike-measured ~1.56 GiB touched) |
+| `VLLM_RERANKER_MAX_MODEL_LEN` | `8192` | |
+| `EMBEDDING_BACKEND` | `vllm` | dataprep + retriever call the `vllm-embedding` pooling instance |
+| `VLLM_EMBEDDING_MODEL_ID` | `BAAI/bge-large-en-v1.5` | overlay default — the pooling model (OpenAI `/v1/embeddings` shape) |
+| `VLLM_EMBEDDING_GPU_UTILIZATION` | `0.05` | overlay default |
+| `VLLM_EMBEDDING_MAX_MODEL_LEN` | `512` | overlay default |
 
-Coexistence verified: both instances healthy together, peak GTT
-**19.6 GiB** against the 27 GB budget. The 8B-class models
+Coexistence verified at the 2B sizing: the two main instances healthy
+together, peak GTT **~19.6 GiB** against the 27 GB budget — before the two
+extra 0.05 pooling instances (the shipped tier peaks ≤ ~22 GiB). The
+8B-class models
 (granite-4.1-8b + gemma-3-4b-it) need a **mostly-dedicated** host: `0.55`
 / `49152` fits the 45.8 GiB aperture with neighbors stopped (~39 GB peak;
 ~16.5 GiB weights + 8.25 GiB KV). Window sizing here is hardware math,
@@ -235,10 +261,15 @@ not a tuning preference: at 0.55 a 65536 window needs ~10 GiB KV and does
 
 The official TEI ROCm image (`text-embeddings-inference:rocm-latest`)
 targets Instinct dGPUs (gfx9); on gfx1151 the backend dies on the first
-embed request. The CPU image serves `bge-large-en-v1.5` and
-`bge-reranker-v2-m3` fine on 32 cores and claims **zero GTT** — the whole
-aperture stays available to the two vLLM instances. The base compose TEI
-entrypoint flags work unchanged on the CPU image.
+embed request, so the two TEI containers start with the **CPU** image
+(the base compose TEI entrypoint flags work unchanged there). On this
+profile they serve nothing: `env.strixhalo` sets `RERANKER_BACKEND=vllm`
+and `EMBEDDING_BACKEND=vllm`, so the reranker wrapper reads
+`vllm-reranker` and both embedding consumers (dataprep embeds the corpus,
+the retriever embeds the queries) read `vllm-embedding`. The two
+consumers must move together — one on TEI and one on vLLM would mix
+vector spaces in one collection. On a compose split venue the node-side
+`/embed` route stays TEI (see the warning below).
 
 ### Verifying the ROCm GPU stack
 
@@ -298,6 +329,13 @@ no NVIDIA-path file changes):
    browser `ERR_CERT_AUTHORITY_INVALID` on API calls and the frontend
    falling back to `localhost:3000` — rebuild the nginx image and
    recreate the container to regenerate with the SAN.
+5. **RAGAS judge + embedder** — the judge defaults work on ROCm as-is
+   (they inherit the deployment's vLLM). The embedder needs a ROCm
+   override in the same `.env`:
+   `RAGAS_EMBED_BASE_URL=http://vllm-embedding:8000/v1` +
+   `RAGAS_EMBED_API=openai` — the vLLM pooling instance serves the OpenAI
+   `/embeddings` shape, not the TEI `/embed` route the compose default
+   names.
 
 Topic-link enrichment on the 2B-class ROCm models: batches of 8 concepts
 sometimes exceed the 60 s per-call budget (measured 7 of 19 batches on a

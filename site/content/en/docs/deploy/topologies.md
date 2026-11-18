@@ -102,7 +102,7 @@ vars like `DEPLOY_OPEA` / `ENABLE_OBSERVABILITY` / `CERTBOT_REPLICAS`).
 |---|---|---|---|
 | _(none)_ | `docker compose up -d` | `postgres`, `kong*`, `nginx`, `frontend`, `redis-cache`, `db-migrations`, `backend`, `document-repository`, `clamav`, `arango-vector-db`, `postgres-init`, `keycloak*`, `victorialogs`, `otel-collector`, `otel-collector-init` | All these always start in Swarm (15 named + 3 always-on observability backends) |
 | `opea` | `--profile opea` | `textgen`, `translation`, `guardrail`, `embedding`, `reranker`, `dataprep-arango-service`, `retriever-arango-service`, `chatqna-xeon-backend-server`, `chatqna-xeon-ui-server` (replicas 0), `chatqna-xeon-nginx-server` (replicas 0) | Gated by `DEPLOY_OPEA` (default `1`) |
-| `gpu-models` | `--profile gpu-models` | `vllm`, `vllm-translation-guardrail`, `tei`, `tei_reranker` | Gated by `GPU_MODEL_REPLICAS` (defaults to `DEPLOY_OPEA` — `1` by default; set `0` for remote GPU) |
+| `gpu-models` | `--profile gpu-models` | `vllm`, `vllm-translation-guardrail`, `tei`, `tei_reranker` (the ROCm overlay adds `vllm-reranker` + `vllm-embedding`) | Gated by `GPU_MODEL_REPLICAS` (defaults to `DEPLOY_OPEA` — `1` by default; set `0` for remote GPU) |
 | `observability` | `--profile observability` | `victoriametrics`, `victoriatraces`, `tempo-proxy`, `grafana` | Gated by `ENABLE_OBSERVABILITY` (default `0`). Note: `victorialogs`, `otel-collector`, and `otel-collector-init` start regardless — they have no profile and run in `mode: global` / `replicas: 1` so admin endpoints and log collection stay functional. |
 | `letsencrypt` | `--profile letsencrypt` | `certbot` | Gated by `CERTBOT_REPLICAS` (default `0`) |
 
@@ -113,11 +113,14 @@ vars like `DEPLOY_OPEA` / `ENABLE_OBSERVABILITY` / `CERTBOT_REPLICAS`).
 > Swarm — set the matching env var (`DEPLOY_OPEA=0`,
 > `ENABLE_OBSERVABILITY=0`, `CERTBOT_REPLICAS=0`).
 
-> **AMD ROCm note:** the ROCm GPU tier is not a separate profile — it is
-> the same `gpu-models` services with the vendor overlay layered in via
-> `-f docker-compose.rocm.yaml` (single-server, topology B) or
-> `-f docker-compose.rocm.gpu.yaml` (GPU node, topology F), sized by
-> `env.strixhalo`. See [GPU Deployment → ROCm](/docs/deploy/gpu/).
+> **AMD ROCm note:** the ROCm GPU tier is not a separate profile — the
+> vendor overlay layers in via `-f docker-compose.rocm.yaml`
+> (single-server, topology B) or `-f docker-compose.rocm.gpu.yaml`
+> (GPU node, topology F), sized by `env.strixhalo`. The single-server
+> overlay ADDS `vllm-reranker` + `vllm-embedding` to the `gpu-models`
+> services, and `RERANKER_BACKEND` / `EMBEDDING_BACKEND` switch the
+> reranker and embedding consumers to them. See
+> [GPU Deployment → ROCm](/docs/deploy/gpu/).
 >
 > **ROCm swarm caveat:** `docker stack deploy` ignores compose
 > `devices:` (the short form is silently dropped; the long form is

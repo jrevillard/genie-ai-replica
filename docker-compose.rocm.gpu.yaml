@@ -5,7 +5,7 @@
 #     -f docker-compose.gpu.yaml -f docker-compose.rocm.gpu.yaml up -d
 #
 # `-f` order matters: this file must come last. Only the keys a ROCm host
-# needs change: image pins (env.strixhalo), GPU device access for the two
+# needs change: image pins (env.strixhalo), GPU device access for the three
 # vLLM instances, neutralization of the NVIDIA env var (compose merges
 # `environment:` BY KEY — `void` is ignored by ROCm containers and claims
 # no GPU even on an NVIDIA host), and two venue accommodations commented
@@ -24,9 +24,9 @@ services:
     # Restated as an explicit `vllm serve` invocation with IDENTICAL flags.
     command: >
       vllm serve
-      --model ${VLLM_LLM_MODEL_ID:-ibm-granite/granite-3.3-2b-instruct}
+      --model ${VLLM_LLM_MODEL_ID:-ibm-granite/granite-3.1-2b-instruct}
       --gpu_memory_utilization ${VLLM_GPU_UTILIZATION:-0.55}
-      --served-model-name ${VLLM_LLM_MODEL_ID:-ibm-granite/granite-3.3-2b-instruct}
+      --served-model-name ${VLLM_LLM_MODEL_ID:-ibm-granite/granite-3.1-2b-instruct}
       --max_model_len ${VLLM_MAX_MODEL_LEN:-65536}
       --max_num_seqs ${VLLM_MAX_NUM_SEQS:-16}
       --dtype=${VLLM_DTYPE:-half}
@@ -63,16 +63,6 @@ services:
     group_add:
       - "${RENDER_GID:-990}" # render
       - "${VIDEO_GID:-44}"   # video
-    # Venue accommodation pending MR !853 (the base file's healthcheck
-    # probes 5001 while the service serves 8000 — the static NVIDIA stack
-    # cannot converge; the ansible-rendered template already probes 8000).
-    # DROP this restatement once !853 merges.
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
-      interval: 10s
-      timeout: 5s
-      retries: 20
-      start_period: 300s
 
   tei-embedding:
     image: ${TEI_ROCM_EMBEDDING_IMAGE}

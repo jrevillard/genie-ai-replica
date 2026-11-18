@@ -691,6 +691,52 @@ Three Ansible variables control TLS verification for self-signed certificates in
 
 For detailed explanations of each variable and the underlying mechanisms, see [Self-Signed Certificates](../docker-compose-setup.md#self-signed-certificates--decision-matrix).
 
+### ROCm GPU Node (AMD Strix Halo — gfx1151)
+
+The ROCm path mirrors the NVIDIA one with its own playbook and config:
+
+```bash
+# 1. Inventory (dedicated group)
+cp inventory/rocm_gpu.ini.example inventory/rocm_gpu.ini   # fill host + user
+
+# 2. Non-secret config already lives in group_vars/rocm_gpu_api/vars.yml
+#    (image pins, GIDs, ports, gpu_rerank_upstream, TEI caps — edit per host)
+
+# 3. Encrypted secrets (ROCm GPU node vault)
+ansible-vault create group_vars/rocm_gpu_api/vault.yml
+# Required: hugging_face_hub_token, gpu_api_keys (list of {name, key})
+
+# 4. Deploy (same tag structure as deploy-gpu.yml: install / prepare / deploy)
+ansible-playbook -i inventory/rocm_gpu.ini deploy-gpu-rocm.yml --vault-id rocm_gpu_api@prompt
+```
+
+The playbook renders the standalone GPU-node stack from
+`docker-compose.gpu.yaml.j2` + the ROCm overlay
+(`docker-compose.rocm.gpu.yaml`, copied to the node) and the gpu-proxy
+template — whose `/rerank/` route flips its upstream to the vLLM
+reranker via `gpu_rerank_upstream` (default `vllm-reranker:8000`; the TEI
+ROCm image cannot run on gfx1151). The TEI batch caps
+(`tei_embedding_max_batch_tokens`, `tei_reranking_max_batch_tokens`,
+`tei_reranking_max_concurrent_requests`) are mirrored in
+`group_vars/rocm_gpu_api/vars.yml` — CPU TEI inflates candle buffers at
+the GPU-sized defaults (16.3 GiB RSS measured at 8192/32); if you lower
+the caps, also set `tei_reranking_auto_truncate: true` (the template
+defaults it to `false`).
+
+Two flags wire the APP stack to this node (both render app-side `.env`
+sections in `templates/env.j2`):
+
+| Flag | Where | Renders | Notes |
+|------|-------|---------|-------|
+| `rocm_gpu_node_local: true` (+ `gpu_https_port`) | the ROCm host's own `group_vars` | **Section 18B** — co-located endpoints (`https://<ansible_host>:<port>/...`), `OPEA_SSL_SKIP_VERIFY=1` (unconditional — the node cert is self-signed), `GPU_MODEL_REPLICAS=0`, and the Task-14 reranker trio (`RERANKER_BACKEND=vllm` + endpoint + model). Also **suppresses Section 20** (`opea_ssl_skip_verify`) so dotenv last-wins cannot undo the forced skip | single-server: app stack shares the host with the GPU-node stack |
+| `rocm_gpu_node_remote: true` | the APP host's `group_vars` (plus `gpu_node_host`) | **Section 18** — remote endpoint overrides plus the same Task-14 reranker trio (no forced SSL skip; pair with `opea_ssl_skip_verify: "1"` from Section 20 for a self-signed node) | GPU node is a separate machine |
+
+Section 19 (`node_tls_reject_unauthorized`) and Section 21
+(`keycloak_ssl_skip_verify`) behave as documented in the self-signed
+decision matrix above. Sizing (GTT claims, windows, the four-vLLM
+fleet): see the ROCm section of
+`site/content/en/docs/deploy/gpu.md`.
+
 ## Port Configuration
 
 If ports 80/443 are occupied (e.g. by another stack), override them in your environment config:

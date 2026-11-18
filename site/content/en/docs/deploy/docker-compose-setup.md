@@ -361,6 +361,11 @@ Use this when the GPU tier should run on the local AMD iGPU instead of an
 NVIDIA card. Hardware prerequisites, image pins, sizing values and the
 swarm caveat: [GPU Deployment → ROCm](/docs/deploy/gpu/).
 
+Running the **OKF stack on a ROCm venue** needs four venue-only settings
+on top (`OKF_ENABLED=1` + `--profile okf` + a kong-config re-run +
+recreating the backend AND frontend) — see
+[OKF Deployment & Lifecycle](/docs/knowledge-base/okf-deployment/).
+
 ### 6e. Remote GPU node (optional)
 
 GENIE.AI can connect to a dedicated GPU node for AI services while the app

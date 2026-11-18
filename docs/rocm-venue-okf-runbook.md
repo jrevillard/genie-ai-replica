@@ -177,6 +177,7 @@ dance):
 #          body: [{"id":"<role-id>","name":"tools-admin"}]   → 204
 # token:   POST /auth/realms/genie/protocol/openid-connect/token
 #          grant_type=client_credentials client_id=dataprep-service-client
+#          client_secret=$KC_DATAPREP_CLIENT_SECRET   # absent → 401 invalid_client
 ```
 
 Client-credential tokens are **short-lived** (minutes) — mint fresh per
@@ -286,7 +287,9 @@ re-importing.
 | publish blocked, `pii_hit_count > 0` | NER hits (names) | `pii-acknowledge` (audited) |
 | token 401 `TOKEN_EXPIRED` mid-flow | client-credential tokens are minutes-lived | mint fresh |
 | chat queries return zero chunks; retriever logs `Graph 'GRAPH' does not exist` | backend container predates `OKF_ENABLED=1` — retrieval-config client short-circuits to `parked`, 0 serving graphs | §2 step 4: recreate backend, verify `fanout_config_resolved` `serving_graph_count >= 1` |
-| RAGAS serve run aborts 0/20 with `run_answer_leg_aborted chatqna HTTP 401` | the mint silently failed over to `http://keycloak:8080` — TWO stacked causes: (1) containers cannot hairpin to the host-published edge on this machine (curl from the container times out — TLS knobs are irrelevant, OPEA_SSL_SKIP_VERIFY patches Python only and okf-server is Node), (2) hostname-only `KC_HOSTNAME` let the in-network mint self-report `http://<domain>:8080/...` — chatqna accepts only the public-URL issuer (#1636) | set `KEYCLOAK_HOSTNAME=https://<domain>:8443/auth` in `.env` (hostname-v2 absolute URL — every mint everywhere carries the public issuer); proven by decoding an in-network-minted token + chatqna passing auth on it |
+| RAGAS serve run aborts 0/20 with `run_answer_leg_aborted chatqna HTTP 401` | the mint silently failed over to `http://keycloak:8080` — TWO stacked causes: (1) containers cannot hairpin to the host-published edge on this machine (curl from the container times out — TLS knobs are irrelevant, OPEA_SSL_SKIP_VERIFY patches Python only and okf-server is Node), (2) hostname-only `KC_HOSTNAME` let the in-network mint self-report `http://<domain>:8080/...` — chatqna accepts only the public-URL issuer (#1636) | set `KEYCLOAK_HOSTNAME=https://<domain>:8443/auth` in `.env` (hostname-v2 absolute URL — every mint everywhere carries the public issuer); proven by decoding an in-network-minted token + chatqna passing auth on it. NOTE: Keycloak reads `KC_HOSTNAME` at boot — recreate the keycloak container after changing it (`docker compose up -d --force-recreate keycloak`) |
+| model calls fail with DNS/connect errors; the vLLM instance container shows `Exited(137)` | OOM kill under GTT pressure — the GPU-tier claim + baseline exceeded the aperture/host RAM | `restart: unless-stopped` self-heals once memory frees (check `rocm-smi --showmeminfo gtt`); if it crashloops, lower the instance's `*_GPU_UTILIZATION` or stop a neighbor |
+| repo stuck draining at N-1/N; import never completes (#2005) | a drain claim went stale (worker died mid-concept) — the row keeps its `worker_claimed_at` stamp | the claim-staleness reaper dead-letters the row on its next pass (recovery = clear the stamp on the stuck concept row, or wait out the row's staleness window) |
 
 ## 10. ArangoDB coexistence
 

@@ -85,6 +85,33 @@ was max 54064. Window sizing is hardware math, not a tuning preference.
 Both vLLM claims additionally count against the host's 91 GB system RAM
 — size chart requests/pods accordingly on a co-tenanted node.
 
+## Task-14 addendum — the ROCm fleet is FOUR vLLM instances
+
+Post-spike (Task 14 + its embedding mirror, 2026-11-18) the ROCm profile
+runs FOUR vLLM instances, not the two sized above: llm, translation, and
+two pooling instances — `vllm-reranker` (serves
+`BAAI/bge-reranker-v2-m3` via `/v1/rerank`, Cohere response shape) and
+`vllm-embedding` (serves `BAAI/bge-large-en-v1.5` as a pooling model via
+`/v1/embeddings`, OpenAI shape), each at 0.05 of the GTT. Consumers are
+switched per deployment: `RERANKER_BACKEND=vllm` points the reranker
+wrapper at the reranker instance; `EMBEDDING_BACKEND=vllm` moves BOTH
+embedding consumers (dataprep corpus + retriever queries) to the
+embedding instance — the pair moves together, a split would mix vector
+spaces in one collection. A chart rendering this profile therefore needs
+four vLLM workloads plus the two backend switches in the consumers' env.
+Sizing rows to add: `VLLM_RERANKER_GPU_UTILIZATION=0.05` /
+`VLLM_RERANKER_MAX_MODEL_LEN=8192`; the embedding mirror ships overlay
+defaults (`VLLM_EMBEDDING_GPU_UTILIZATION=0.05` /
+`VLLM_EMBEDDING_MAX_MODEL_LEN=512`).
+
+The "TEI pods serve bge-large and bge-reranker" shape described above
+(and in validation step 6) is the NVIDIA path only. On this profile the
+two TEI containers still start (CPU image, zero GTT) but serve nothing
+on the single-server venue — both consumers read the vLLM pooling
+instances. On the compose SPLIT venue the node-side `/embed` route stays
+TEI (there is no `vllm-embedding` service node-side), so a chart should
+model the TEI workloads as the fallback shape, not the serving path.
+
 ## Device access (what the compose path does)
 
 The working compose passthrough on this machine:

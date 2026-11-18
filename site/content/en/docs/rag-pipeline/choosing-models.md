@@ -62,7 +62,8 @@ QUERY PIPELINE:
 
 ## The Six Model Roles
 
-GENIE.AI has **six distinct AI model roles**, served by **two vLLM instances** and **two TEI instances**:
+GENIE.AI has **six distinct AI model roles**, served by **two vLLM instances** and **two TEI instances**
+(NVIDIA default; the Strix Halo profile runs four vLLM instances — see Profile E below):
 
 | # | Role | Docker Service | Config Variable | Shared With | License Sensitivity |
 |---|------|---------------|-----------------|-------------|-------------------|
@@ -743,10 +744,15 @@ must stay under the operator's 27 GB ceiling, decision 2026-11-11; the
 | Main vLLM | `ibm-granite/granite-3.1-2b-instruct` (half) | 0.28 (~12.8 GiB: ~4.3 GiB weights + ~3.8 GiB KV + overhead) | **49152** |
 | Translation vLLM | `google/gemma-3-1b-it` | 0.12 (~5.5 GiB: ~2 GiB weights + an 8192 KV window, with margin) | 8192 |
 | Reranker vLLM (Task 14) | `BAAI/bge-reranker-v2-m3` | 0.05 (~2.3 GiB claimed; spike measured 1.56 GiB touched) | 8192 |
-| TEI embedding | `BAAI/bge-large-en-v1.5` | **CPU** (zero GTT) | — |
+| Embedding vLLM (Task-14 mirror) | `BAAI/bge-large-en-v1.5` (pooling, `EMBEDDING_BACKEND=vllm`) | 0.05 (overlay default) | 512 |
 
-Coexistence verified: peak GTT 19.6 GiB with both LLM instances healthy;
-the reranker instance adds ~1.6 GiB measured.
+The two TEI containers still start on the CPU image and claim zero GTT;
+on this profile they serve nothing — with `RERANKER_BACKEND=vllm` and
+`EMBEDDING_BACKEND=vllm` both consumers read the vLLM pooling instances.
+
+Coexistence verified: peak GTT ~19.6 GiB at the 2B sizing with the two
+main LLM instances healthy, before the two extra 0.05 pooling instances
+(the reranker measured ~1.6 GiB touched; the shipped tier peaks ≤ ~22 GiB).
 
 Notes:
 
@@ -760,7 +766,8 @@ Notes:
 - Guided JSON (`response_format={"type":"json_object"}`) verified on the
   ROCm vLLM image — the labeling role keeps its model requirement.
 - The TEI ROCm image fails on gfx1151 (Instinct-only kernels); the CPU
-  image serves the embedding model fine on 32 cores.
+  image serves the models fine on 32 cores — but on this profile the
+  embedder is the fourth vLLM instance, not TEI (see the table above).
 - **The reranker is NOT on TEI here.** The reranker wrapper's
   `RERANKER_BACKEND=vllm` switch points it at a third vLLM instance
   serving the same `BAAI/bge-reranker-v2-m3` cross-encoder on the GPU
@@ -788,6 +795,16 @@ VLLM_TRANSLATION_MAX_NUM_SEQS=16
 VLLM_TRANSLATION_DTYPE=auto
 
 DOCLING_DEVICE=cpu
+
+# Reranker + embeddings pool on their own vLLM instances (Task 14 + mirror)
+RERANKER_BACKEND=vllm
+RERANKER_VLLM_ENDPOINT=http://vllm-reranker:8000
+RERANKER_VLLM_MODEL=BAAI/bge-reranker-v2-m3
+VLLM_RERANKER_MODEL_ID=BAAI/bge-reranker-v2-m3
+
+EMBEDDING_BACKEND=vllm
+EMBEDDING_VLLM_ENDPOINT=http://vllm-embedding:8000
+VLLM_EMBEDDING_MODEL_ID=BAAI/bge-large-en-v1.5
 ```
 
 ### Other Notable Hardware

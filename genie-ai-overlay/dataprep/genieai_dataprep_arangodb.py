@@ -4308,15 +4308,13 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                 # The loop is going down (the process is exiting): the purge
                 # cannot finish, and the rows it was written to remove may
                 # survive. Say so — the alternative is silence. The span
-                # records the outcome too: a cancelled purge leaves the rows
-                # behind and writes NO OUTCOME ROW in the document's own log
-                # (what the log holds depends on where the cancellation
-                # landed: no announcement row, an announcement row without
-                # its cascade, or partial cascade rows — a shutdown is not
-                # the moment to write there), so a query for the outcome must
-                # find it. An outcome already recorded wins: a purge that
-                # stood down and was cancelled while writing its log row has
-                # still stood down.
+                # records the outcome too: the SPAN is where the outcome
+                # lives. The document's log is left indeterminate in that
+                # window — the row the purge was writing may or may not have
+                # reached it (a request already sent can still commit) — and
+                # the service log says the purge was cancelled. An outcome
+                # already recorded wins: a purge that stood down and was
+                # cancelled while writing its log row has still stood down.
                 if outcome is None:
                     span.set_attribute(ATTRIBUTE_NAMES["dataprep_purge_result"], "cancelled")
                     logger.warning(f"{file_id}: the late graph-write purge was cancelled before it finished")
@@ -4327,7 +4325,7 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                     # be read as "the purge never ran".
                     logger.warning(
                         f"{file_id}: the late graph-write purge was cancelled; its outcome was already "
-                        f"recorded ({outcome})"
+                        f"recorded in the trace ({outcome})"
                     )
                 raise
             finally:

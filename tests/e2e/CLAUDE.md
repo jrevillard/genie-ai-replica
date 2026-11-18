@@ -42,17 +42,18 @@ in the error (never silently tolerated).
   on its last observed outcome — never a silent give-up. One clause binds
   every entry, and it is the one that matters most: **a retry may never
   cover an assertion path.** A retry may only cover a transport or setup
-  path OUTSIDE any spec's subject: an attempt that produced NO answer the
-  spec could judge — the transport dropped it, or the edge returned its own
-  reset artifact, which is not a product verdict. It may never re-run or
-  re-decide an assertion the spec itself makes: once an attempt PRODUCED a
-  product verdict, re-asking it decides the spec's verdict on the second
-  answer, and a second answer is no evidence where the first was the truth.
-  Two neighbours are not retries: a WAIT for a convergent condition (it
-  re-reads a state until it holds, and never accepts a value the spec did
-  not ask for — see *Wait for conditions, not durations* below), and a
-  two-leg cleanup protocol (a re-issue after a STATE CHANGE — it never
-  re-runs the same condition). The inventory:
+  path OUTSIDE any spec's subject — that is, a path whose failure produced
+  NO answer the spec could judge: the transport dropped it, or the edge
+  returned its own reset artifact, which is not a product verdict. It may
+  never re-run or re-decide an assertion the spec itself makes: once an
+  attempt PRODUCED a product verdict, re-asking it decides the spec's
+  verdict on the second answer, and a second answer is no evidence where
+  the first was the truth. Two neighbours are not retries: a WAIT for a
+  convergent condition (it re-reads a state until it holds, and never
+  accepts a value the spec did not ask for — see *Wait for conditions,
+  not durations* below), and a two-leg cleanup protocol (a re-issue after
+  a STATE CHANGE — it re-asks the same request only because the state
+  moved). The inventory:
   1. `helpers/auth.js`'s `request()` — the edge's own upstream-reset failure
      re-issued on the idempotent methods (#1847 — operator-sanctioned as the
      deterministic answer to a genuine transient): the k8s venue's Envoy
@@ -86,13 +87,14 @@ in the error (never silently tolerated).
   verdict would have come from that second answer: a first answer that
   echoed its source became INVISIBLE (a chain that echoed once could end
   the run green; a chain that never translated had its French surface
-  silently skipped). The operator REFUSED it: an untranslated answer is a
-  BUG in the translation chain, not a transient, so the probe stays at ONE
-  sample and an echoed answer turns the spec RED. That is the clause in one
-  case: a retry may recover a transport that dropped an answer, but it may
-  not re-ask a question whose answer IS a product verdict — not even when
-  the question is only a setup premise and the second answer would
-  "confirm" it. The second answer is not evidence about the first.
+  skipped — a coverage loss, not a red). The operator REFUSED it: an
+  untranslated answer is a BUG in the translation chain, not a transient,
+  so the probe stays at ONE sample and an echoed answer turns the spec RED.
+  That is the clause in one case: a retry may recover a transport that
+  dropped an answer, but it may not re-ask a question whose answer IS a
+  product verdict — not even when the question is only a setup premise and
+  the second answer would "confirm" it. The second answer is not evidence
+  about the first.
 
   This list is exhaustive. A new retry surface needs an operator ruling
   recorded here first; no spec adds a retry loop, and Playwright's

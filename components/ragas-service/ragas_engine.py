@@ -1092,9 +1092,13 @@ def build_embeddings(embed: dict | None = None):
         # against the GPU vLLM pooling instance). With the check off, raw
         # text is sent and the server tokenizes with its own vocabulary —
         # the same decision the dataprep builder (core/embedding_backend.py)
-        # made. SET AS AN ATTRIBUTE: langchain_openai 1.x removed the
-        # constructor param (pydantic silently ignores the kwarg) while
-        # embed_documents still honors the attribute; 0.x accepted both.
+        # made. SET AS AN ATTRIBUTE (round-3 review S2, wheel-verified on the
+        # pinned 1.6.7): the ctor param ALSO works here — the field is still
+        # declared (default True) and pydantic's extra="forbid" would reject
+        # an unknown kwarg rather than swallow it. The attribute form is kept:
+        # it is what the in-image tests assert, it is honored by
+        # embed_documents at call time on both the 0.3.x pins (overlay core)
+        # and 1.6.7 (this image), and it does not depend on ctor wiring.
         embeddings_client.check_embedding_ctx_length = False
         return LangchainEmbeddingsWrapper(embeddings_client)
 
@@ -1121,8 +1125,8 @@ def build_embeddings(embed: dict | None = None):
         # 400 on any BERT-vocab model ("Token id N is out of vocabulary" —
         # live 2026-11-18, answer_relevancy vs the GPU vLLM bge instance).
         # Same rationale as the override path above and dataprep's builder.
-        # SET AS AN ATTRIBUTE — see the comment on the override builder for
-        # the langchain_openai 1.x constructor-param removal.
+        # SET AS AN ATTRIBUTE — see the override builder's comment for the
+        # wheel-verified rationale (round-3 review S2).
         embeddings_client.check_embedding_ctx_length = False
         return LangchainEmbeddingsWrapper(embeddings_client)
     return LangchainEmbeddingsWrapper(_TeiEmbeddings(base, api_key, model))

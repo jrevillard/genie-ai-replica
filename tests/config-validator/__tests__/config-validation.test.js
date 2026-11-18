@@ -939,7 +939,7 @@ describe('Configuration Validation Suite', () => {
       expect(block).toMatch(/- RAGAS_INTERNAL_SECRET=\$\{RAGAS_INTERNAL_SECRET:-\$\{OKF_INTERNAL_SECRET:-\}\}/);
       // Embedder: EMBEDDING_MODEL_ID is the deployment's actual var (the stack
       // has no EMBED_MODEL_ID); the TEI dialect default hits {base}/embed.
-      expect(block).toMatch(/- RAGAS_EMBED_BASE_URL=\$\{RAGAS_EMBED_BASE_URL:-http:\/\/tei-embedding-server:80\}/);
+      expect(block).toMatch(/- RAGAS_EMBED_BASE_URL=\$\{RAGAS_EMBED_BASE_URL:-http:\/\/tei:80\}/);
       expect(block).toMatch(/- RAGAS_EMBED_MODEL=\$\{RAGAS_EMBED_MODEL:-\$\{EMBEDDING_MODEL_ID:-\}\}/);
       expect(block).toMatch(/- RAGAS_EMBED_API=\$\{RAGAS_EMBED_API:-tei\}/);
     });
@@ -1129,7 +1129,7 @@ describe('Configuration Validation Suite', () => {
         url: vars.RAGAS_EMBED_BASE_URL ? vars.RAGAS_EMBED_BASE_URL.default : null
       }).toEqual({
         found: true,
-        url: 'http://tei-embedding-server:80'
+        url: 'http://tei:80'
       });
       expect({ found: !!vars.RAGAS_EMBED_API, v: vars.RAGAS_EMBED_API ? vars.RAGAS_EMBED_API.default : null }).toEqual({
         found: true,

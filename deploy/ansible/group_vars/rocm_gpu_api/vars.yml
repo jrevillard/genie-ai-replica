@@ -54,3 +54,9 @@ vllm_reranker_model_id: BAAI/bge-reranker-v2-m3
 tei_embedding_max_batch_tokens: "2048"
 tei_reranking_max_batch_tokens: "2048"
 tei_reranking_max_concurrent_requests: "8"
+# The reranker TEI contract is strict-422 at truncate=false (round-3 review
+# S1): with the batch cap lowered to 2048, truncation must be ON — matches
+# env.strixhalo (TEI_RERANKING_AUTO_TRUNCATE=true). The embedder stays
+# truncate-false: its model window (512) sits below the 2048 cap, and a
+# silently-truncated embedding would corrupt the vector space.
+tei_reranking_auto_truncate: "true"

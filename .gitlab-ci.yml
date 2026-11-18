@@ -1327,45 +1327,64 @@ container_scanning:
       # The frontend bakes a build marker (#1851): /build-info.json carries
       # the commit the image was built from, and the e2e pre-flight reads
       # it so a stale venue cannot file misleading spec-defect issues.
-      # Other images do not declare the ARG — buildx ignores it there, so
-      # the arg is passed only where it is consumed.
+      # GIT_SHA is passed only where it is consumed; the other images do not
+      # declare it, and buildx ignores an undeclared build-arg (with a
+      # warning, exit 0).
       BUILD_ARGS=""
       case "$DOCKERFILE" in
         *gov-chat-frontend*)
           BUILD_ARGS="--build-arg GIT_SHA=${CI_COMMIT_SHA:-unknown}"
           ;;
       esac
-      # FORCE_IMAGE_REBUILD (the monthly schedule / operator trigger) must be
-      # a REAL rebuild: with the registry cache left on, buildx reuses the
-      # cached RUN layers and an unchanged Dockerfile never re-runs
-      # `apt-get upgrade` / `apk upgrade` — the security-update layers only
-      # ever executed once per Dockerfile edit, so the monthly cycle pulled
-      # no new packages (measured 2026-11-17: two same-day rebuilds shipped
-      # identical libpq 17.11 / nginx 1.28.3-r1 while 17.12 / 1.28.3-r4 sat
-      # in the security repos). --no-cache re-runs every layer.
-      NOCACHE=""
-      if [ "${FORCE_IMAGE_REBUILD:-}" = "true" ]; then
-        NOCACHE="--no-cache"
+      # The contract of the monthly rebuild: an image whose Dockerfile
+      # upgrades OS packages must declare ARG CACHE_BUST, otherwise its
+      # packages are frozen at build time and the monthly rebuild ships the
+      # same ones forever. The dashboard surfaces that only weeks later, as
+      # "detected but unshipped" — this check surfaces it at build time.
+      if grep -qE '(apt-get|apk)[[:space:]]+upgrade' "$DOCKERFILE" \
+          && ! grep -qE '^[[:space:]]*ARG[[:space:]]+CACHE_BUST' "$DOCKERFILE"; then
+        echo "ERROR: $DOCKERFILE upgrades OS packages but declares no 'ARG CACHE_BUST' — the monthly rebuild would not refresh them"
+        exit 1
       fi
-      # --progress=plain: GitLab's trace API rejects an EMPTY chunk when the
-      # runner produced no output for a whole update interval (the coordinator
-      # answers the runner with `update-interval=1m0s`); the runner reads that
-      # 403 as "the job was canceled" and kills the job. A buildx build
-      # without --progress is silent while it pulls its bases and runs its
-      # layers, so the no-cache rebuilds died at a constant ~66 s with an empty
-      # job trace — the same symptom as the 2.1 GB clone, which is why the two
-      # were easy to confuse. The plain progress streams every build step: the
-      # runner sees activity, the job survives, and the log is readable
-      # instead of empty.
+      # FORCE_IMAGE_REBUILD (the monthly schedule / operator trigger) must
+      # refresh the OS security packages. Every image that installs OS
+      # packages declares ARG CACHE_BUST on its upgrade layer: an ARG value
+      # is part of that layer's cache key, so the layer re-runs on every
+      # monthly rebuild — while every layer BEFORE it stays cached (a layer's
+      # cache key includes its parent). The upgrade layer therefore sits
+      # after the expensive layers (npm ci, pip install, model COPYs) and
+      # before the writes to package-owned paths, and still runs as root.
+      #
+      # The value is passed ONLY when the rebuild is forced. A fresh value on
+      # every pipeline would invalidate the upgrade layer on every merge and
+      # change every image digest for nothing.
+      #
+      # The mechanism this replaces was --no-cache: it re-ran EVERY layer of
+      # every image (multi-minute, mostly silent, and it re-resolved
+      # unpinned dependencies), and it still shipped stale packages whenever
+      # a build failed before reaching the upgrade layer.
+      if [ "${FORCE_IMAGE_REBUILD:-}" = "true" ]; then
+        BUILD_ARGS="$BUILD_ARGS --build-arg CACHE_BUST=$(date +%s)"
+      fi
+      # --progress=plain: buildx's default renderer is a dynamic display that
+      # collapses into an unreadable blob in a CI log. The plain renderer
+      # streams every build step, which makes the log usable AND keeps the
+      # trace alive during the long silent steps of an image build.
+      #
+      # It is NOT the fix for the "unknown_failure" deaths measured on
+      # 2026-11-17/18: those were Cloudflare's WAF refusing the job-log
+      # upload (403 on PATCH /api/v4/jobs/:id/trace — issue #2001), which
+      # the runner reads as "the job failed" and answers by killing the job.
+      # The build itself never failed, and the rejected chunks were 46-226 KB,
+      # never empty.
       docker buildx build \
         --progress=plain \
         --pull \
         --push \
-        $NOCACHE \
         -t "$REGISTRY_REF" \
         -f "$DOCKERFILE" \
         $BUILD_ARGS \
-        --cache-from "type=registry,ref=$CACHE_REF" \
+        --cache-from "type=registry,ref=$CACHE_REF,mode=max" \
         --cache-to "type=registry,ref=$CACHE_REF,mode=max" \
         "$CONTEXT"
 

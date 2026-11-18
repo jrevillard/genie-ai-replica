@@ -23,10 +23,10 @@
  * in the doc field (server-side), NOT in the YAML — the publish gate
  * reads it from there.
  */
-import matter from 'gray-matter';
+import { safeMatter, safeStringify } from './safeMatter';
 
 export function mergeFrontmatterIntoIndexMarkdown(markdown, shape) {
-  const parsed = matter(markdown || '');
+  const parsed = safeMatter(markdown || '');
   const existing = parsed.data || {};
   const nextFm = {
     ...existing,
@@ -39,5 +39,5 @@ export function mergeFrontmatterIntoIndexMarkdown(markdown, shape) {
       keyword: Array.isArray(shape.keyword) ? shape.keyword : []
     }
   };
-  return matter.stringify(parsed.content || '', nextFm);
+  return safeStringify(parsed.content || '', nextFm);
 }

@@ -639,8 +639,8 @@ function draftWholeMarkdown(text, { baseSlug, title: _title, meta }) {
   let fm;
   let content;
   try {
-    const matter = require('gray-matter');
-    const parsed = matter(raw); // gray-matter wants the WHOLE document (delimiters included)
+    const { safeMatter } = require('./safe-frontmatter');
+    const parsed = safeMatter(raw); // gray-matter wants the WHOLE document (delimiters included)
     fm = parsed.data || {};
     content = parsed.content || '';
   } catch (err) {

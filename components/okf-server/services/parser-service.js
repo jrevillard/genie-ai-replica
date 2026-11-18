@@ -10,7 +10,7 @@
 // derivation, and structural link extraction (FR-6, FR-7). Broken links tolerated.
 // MELT-instrumented (withSpan + shared logger + okf_parse_operations_total counter).
 
-const matter = require('gray-matter');
+const { safeMatter } = require('./safe-frontmatter');
 const MarkdownIt = require('markdown-it');
 const { DateTime } = require('luxon');
 
@@ -237,7 +237,7 @@ async function parseConcept(markdown, ctx = {}) {
 
     let parsed;
     try {
-      parsed = matter(String(markdown || ''));
+      parsed = safeMatter(String(markdown || ''));
     } catch (err) {
       recordOp('error');
       logger.error('OKF parse failed (malformed frontmatter)', { path: ctx.path, error: err.message });

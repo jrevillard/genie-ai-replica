@@ -56,10 +56,6 @@ USER root
 
 # Security-patch the base: pull current Debian security updates so the shipped
 # image does not lag distro point-releases between upstream rebuilds.
-RUN apt-get update -y && \
-    apt-get upgrade -y && \
-    rm -rf /var/lib/apt/lists/*
-
 WORKDIR /app
 
 # Tell Python to include all our custom code paths.
@@ -154,6 +150,21 @@ RUN chown -R user:user /app
 COPY --chmod=0755 genie-ai-overlay/build-patches/install_site_startup.sh /app/install_site_startup.sh
 COPY configs/ssl/genie_ssl_patch.py /app/genie_ssl_patch.py
 RUN /app/install_site_startup.sh
+
+# The OS packages are refreshed by a separate, bustable layer: the monthly
+# rebuild passes --build-arg CACHE_BUST=<timestamp>, and a layer that takes
+# that argument is the only one whose cache key changes.
+#
+# Position: after the expensive layers (what sits above it stays cached — a
+# layer's cache key includes its parent), before the writes to package-owned
+# paths (a package that moves would restore its own files over ours), and
+# still root. Here the expensive layer is the `pip install` of the OPEA
+# dependencies: above the upgrade layer, it stays cached instead of
+# re-resolving unpinned versions against PyPI on every monthly cycle.
+ARG CACHE_BUST=0
+RUN CACHE_BUST=$CACHE_BUST apt-get update -y -o Acquire::Retries=5 && \
+    apt-get upgrade -y --with-new-pkgs --fix-missing -o Acquire::Retries=5 && \
+    apt-get clean && rm -rf /var/lib/apt/lists/*
 
 # Step G: Run our new GENIE-AI entry point
 USER user

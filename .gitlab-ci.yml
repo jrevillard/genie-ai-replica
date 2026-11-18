@@ -162,6 +162,7 @@ variables:
 # Prevent duplicate branch+MR pipelines — first match wins
 workflow:
   rules:
+    - if: $CI_COMMIT_BRANCH =~ /\/prd$/
     - if: $CI_COMMIT_BRANCH && $CI_OPEN_MERGE_REQUESTS && $CI_PIPELINE_SOURCE == "push"
       when: never
     - if: $CI_COMMIT_TAG

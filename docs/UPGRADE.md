@@ -47,9 +47,14 @@ CUDA wheels, no local weights). Leave it unset to keep the current images.
 #### Helm chart: the per-service image tags ship empty, and the stack version moves to `imageTag`
 
 The chart's per-service image tags (`services.<svc>.image.tag`,
-`opea.<svc>.image.tag`) now default to `""` instead of `"main"`, and a new
-root value `imageTag` carries the stack's version for every GENIE.AI image
-the chart installs.
+`opea.<svc>.image.tag`, `okf.<svc>.image.tag`) now default to `""` instead
+of `"main"`, and a new root value `imageTag` carries the stack's version for
+every GENIE.AI image the chart installs.
+
+Five images had NO per-service tag at all — the chatqna, the embedding and
+the OKF trio (the server, the PII sidecar, the RAGAS judge) hardcoded their
+repository and tag in the template, so a pin was silently ignored. They now
+accept one, like every other GENIE.AI image.
 
 **Impact:** an overlay that pins a per-service tag explicitly — for example
 `services.backend.image.tag: "main"` — now PINS that one image to `main`,

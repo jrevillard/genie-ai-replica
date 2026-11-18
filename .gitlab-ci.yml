@@ -166,13 +166,13 @@ workflow:
     # every PRD story merge request, so the suppression rule below would
     # never let it have a pipeline of its own. Its tip MUST carry one: the
     # scan-result policies compare the source pipeline with the TARGET
-    # pipelines at the merge base, and with no target pipeline the comparison
-    # is impossible — the `license_finding` rule (DPG license compliance)
-    # declares no fallback and therefore fails closed, demanding a Maintainer
-    # approval the umbrella does not need, while the `scan_finding` rule (CVE)
-    # declares `fail: open` and survives the same error. This rule therefore
-    # sits BEFORE the suppression rule on purpose: it must apply to pushes on
-    # that branch. The security policies are untouched by it.
+    # branch's pipeline at the merge base, and with no target to compare
+    # against every license and every vulnerability of the source counts as
+    # newly introduced. The `license_finding` rule (DPG license compliance,
+    # no fallback) then demands a Maintainer approval the umbrella does not
+    # need. This rule therefore sits BEFORE the suppression rule on purpose:
+    # it must apply to pushes on that branch. The security policies
+    # themselves are untouched by it.
     - if: $CI_COMMIT_BRANCH =~ /\/prd$/
     - if: $CI_COMMIT_BRANCH && $CI_OPEN_MERGE_REQUESTS && $CI_PIPELINE_SOURCE == "push"
       when: never
@@ -1179,11 +1179,12 @@ include:
 # SAST jobs keep template defaults (won't activate for absent languages).
 #
 # The `*/prd` umbrella branch is listed for the same reason as the workflow rule
-# above: it is a protected merge target, and the DPG license rule compares the
-# source pipeline's license report with the TARGET branch's. A target pipeline
-# without an SBOM report leaves that comparison with nothing to diff against —
-# the same fail-closed outcome as no pipeline at all — and the gemnasium
-# dependency-scanning job is what uploads the SBOM.
+# above: it is a protected merge target, and the scan-result policies compare
+# the source pipeline with the TARGET branch's. The license rule needs a target
+# pipeline that carries the project's SBOM — the gemnasium dependency-scanning
+# job below uploads it — because without one the comparison is made against an
+# empty target and every license of the source counts as newly introduced. The
+# CVE rule needs the target's scan reports for the same reason.
 .security_run_rules: &security_run_rules
   - if: $CI_PIPELINE_SOURCE == "schedule"
     when: never

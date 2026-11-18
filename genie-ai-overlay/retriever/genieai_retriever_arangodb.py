@@ -1331,9 +1331,16 @@ class GenieaiArangoRetriever(OpeaComponent):
         span.set_attribute("rag.search_mode", ARANGO_SEARCH_MODE)
         span.set_attribute("rag.top_k", input.k if hasattr(input, "k") else 0)
         # embedding.backend (vocabulary-registered; code review 2026-11-18):
-        # the span names the resolved backend so a trace proves which embedder
-        # served the query — the observability payoff of the Task-14 mirror.
-        span.set_attribute(A["embedding_backend"], resolve_embedding_backend())
+        # the span names the ACTIVE backend — the backend that will actually
+        # serve this query, not the requested one. In the vllm-without-endpoint
+        # misconfiguration embeddings_backend_active() fails soft to TEI, and
+        # stamping the requested name here would make every trace lie about
+        # which embedder ran (verification round-2 N3; the reranker fix has
+        # the same ordering: fail-soft first, then stamp).
+        span.set_attribute(
+            A["embedding_backend"],
+            resolve_embedding_backend() if embeddings_backend_active() else "tei",
+        )
         _query_id = query_id_from_baggage()
         if _query_id:
             span.set_attribute(QUERY_ID_KEY, _query_id)

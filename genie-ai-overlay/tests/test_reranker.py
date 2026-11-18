@@ -1596,6 +1596,40 @@ class TestVllmBackend:
             await reranker.invoke(input_doc)
 
     @pytest.mark.asyncio
+    async def test_vllm_backend_without_endpoint_fails_soft_to_tei_warn_once(self, monkeypatch):
+        """RERANKER_BACKEND=vllm with NO endpoint → TEI backend serves the
+        request (span says tei), the warning fires exactly once across
+        requests, and the TEI URL is never hit with the vLLM payload shape
+        (the old `or self.base_url` misroute — verification round-2 N4)."""
+        monkeypatch.setenv("RERANKER_BACKEND", "vllm")
+        monkeypatch.delenv("RERANKER_VLLM_ENDPOINT", raising=False)
+        monkeypatch.setenv("RERANKER_VLLM_MODEL", "BAAI/bge-reranker-v2-m3")
+        # Reset the module warn-once flag so this test owns it regardless of
+        # execution order (verification round-2 N4: first consumer claims the
+        # flag for the whole process otherwise).
+        import reranker.genieai_tei_reranker as _mod
+
+        monkeypatch.setattr(_mod, "_WARNED_VLLM_ENDPOINT_MISSING", False)
+        reranker = create_reranker(base_url="http://tei-reranker:80")
+        input_doc = create_mock_searched_doc(texts=["a", "b"], reranking_strategy="slice", top_n=2)
+        mock_session = create_mock_aiohttp_session(create_tei_rerank_response([0.9, 0.5]))
+
+        with patch("reranker.genieai_tei_reranker.aiohttp.ClientSession", return_value=mock_session):
+            await reranker.invoke(input_doc)
+            await reranker.invoke(input_doc)
+
+        url = mock_session.post.call_args[0][0]
+        body = mock_session.post.call_args[1]["json"]
+        # Both requests fell back to TEI: TEI URL, TEI request shape.
+        assert url.startswith("http://tei-reranker:80")
+        assert "truncate" in body and "texts" in body
+        # Warn-once: exactly one warning for two requests (module-level logger).
+        endpoint_warnings = [
+            c for c in _mod.logger.warning.call_args_list if "RERANKER_VLLM_ENDPOINT is empty" in str(c)
+        ]
+        assert len(endpoint_warnings) == 1
+
+    @pytest.mark.asyncio
     async def test_default_backend_is_tei(self, monkeypatch):
         monkeypatch.delenv("RERANKER_BACKEND", raising=False)
         monkeypatch.delenv("RERANKER_VLLM_ENDPOINT", raising=False)

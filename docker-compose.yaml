@@ -2267,6 +2267,10 @@ services:
       # run on the GPU); unknown values fall back to tei.
       EMBEDDING_BACKEND: ${EMBEDDING_BACKEND:-tei}
       EMBEDDING_VLLM_ENDPOINT: ${EMBEDDING_VLLM_ENDPOINT:-}
+      # Paired model name (code review N1): the vLLM instance serves
+      # --served-model-name ${VLLM_EMBEDDING_MODEL_ID}; the client must send
+      # the SAME name or it 404s per request. resolved_embed_model reads this.
+      VLLM_EMBEDDING_MODEL_ID: ${VLLM_EMBEDDING_MODEL_ID:-}
       GUARDRAIL_URL: http://guardrail:9090/v1/guardrails
       ARANGO_URL: http://arango-vector-db:8529
       ARANGO_DB: ${ARANGO_DB:-genie-ai}
@@ -2547,6 +2551,8 @@ services:
       # run on the GPU); unknown values fall back to tei.
       EMBEDDING_BACKEND: ${EMBEDDING_BACKEND:-tei}
       EMBEDDING_VLLM_ENDPOINT: ${EMBEDDING_VLLM_ENDPOINT:-}
+      # Paired model name — same rationale as dataprep's row above (N1).
+      VLLM_EMBEDDING_MODEL_ID: ${VLLM_EMBEDDING_MODEL_ID:-}
       # OpenTelemetry — SDK is no-op when ENABLE_OBSERVABILITY != 1
       ENABLE_OBSERVABILITY: ${ENABLE_OBSERVABILITY:-0}
       OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-http://otel-collector:4318}

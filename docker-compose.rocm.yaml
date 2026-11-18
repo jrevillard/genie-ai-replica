@@ -237,11 +237,16 @@ services:
     environment:
       - EMBEDDING_BACKEND=${EMBEDDING_BACKEND:-tei}
       - EMBEDDING_VLLM_ENDPOINT=${EMBEDDING_VLLM_ENDPOINT:-http://vllm-embedding:8000}
+      # Paired model name (code review N1): the instance above serves
+      # ${VLLM_EMBEDDING_MODEL_ID}; the client sends the SAME name.
+      - VLLM_EMBEDDING_MODEL_ID=${VLLM_EMBEDDING_MODEL_ID:-}
 
   retriever-arango-service:
     environment:
       - EMBEDDING_BACKEND=${EMBEDDING_BACKEND:-tei}
       - EMBEDDING_VLLM_ENDPOINT=${EMBEDDING_VLLM_ENDPOINT:-http://vllm-embedding:8000}
+      # Paired model name — same rationale as dataprep's row above (N1).
+      - VLLM_EMBEDDING_MODEL_ID=${VLLM_EMBEDDING_MODEL_ID:-}
 
   # Shared-host accommodation: the Docker daemon's fluentd log driver
   # sends container stdout to HOST port 24224, and exactly one collector

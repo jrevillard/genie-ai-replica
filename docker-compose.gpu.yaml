@@ -104,7 +104,14 @@ services:
       - no-new-privileges:true
     restart: unless-stopped
     image: ghcr.io/huggingface/text-embeddings-inference:1.9.3
-    entrypoint: /bin/sh -c "text-embeddings-router --json-output --model-id ${EMBEDDING_MODEL_ID:-BAAI/bge-large-en-v1.5} --auto-truncate $(printf '%s' \"${TEI_EMBEDDING_AUTO_TRUNCATE:-false}\" | tr '[:upper:]' '[:lower:]')"
+    entrypoint: /bin/sh -c "text-embeddings-router --json-output --model-id ${EMBEDDING_MODEL_ID:-BAAI/bge-large-en-v1.5} --max-batch-tokens ${TEI_EMBEDDING_MAX_BATCH_TOKENS:-65535} --auto-truncate $(printf '%s' \"${TEI_EMBEDDING_AUTO_TRUNCATE:-false}\" | tr '[:upper:]' '[:lower:]')"
+    # --max-batch-tokens default 65535 = TEI's own built-in default, so an
+    # NVIDIA compose venue that never sets the var runs byte-identical
+    # behavior; a CPU-TEI host (Strix Halo class) pins 2048 via
+    # env.strixhalo — the cap measured in commit 196bc549 after CPU TEI
+    # inflated candle buffers to 16.3 GiB RSS at the GPU defaults (code
+    # review N2: the ansible split venue was capped, this compose one ran
+    # the flag-less entrypoint at TEI's default).
     volumes:
       - ${DATA_DIR:-./data}/huggingface:/data
     environment:

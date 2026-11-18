@@ -4673,11 +4673,15 @@ class GenieArangoDataprep(OpeaArangoDataprep):
         )
 
         try:
-            # embedding.backend stamped per ingest (code review 2026-11-18):
-            # the trace proves which embedder served this file's chunks.
+            # embedding.backend stamped per ingest — the ACTIVE backend
+            # (same active-not-requested rule as the retriever stamp; the
+            # misconfiguration case fails soft to TEI and the trace must say
+            # so). (code review 2026-11-18 + verification round-2 N3.)
             with background_span(
                 "dataprep.ingest.background",
-                attributes={"embedding.backend": resolve_embedding_backend()},
+                attributes={
+                    "embedding.backend": (resolve_embedding_backend() if embeddings_backend_active() else "tei")
+                },
             ):
                 # --- START PROTECTED EXECUTION (Spec 5.1) ---
                 await self._update_doc_status(input.file_id, "Ingesting", concept_id=getattr(input, "concept_id", None))

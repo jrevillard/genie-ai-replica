@@ -44,7 +44,8 @@ Kong** at apply time. Enable = all of:
    `... up -d kong-config` (recreates the one-shot container, which
    re-applies the declarative config honoring the flag).
 4. Recreate **every flag consumer** — compose reads `OKF_ENABLED` in
-   FIVE services and a container only picks up the new value when
+   SIX services (kong-config is step 3's one-shot; backend + frontend
+   are step 4's) and a container only picks up the new value when
    recreated (live miss 2026-11-18: backend left at `OKF_ENABLED=0`
    after the other four were recreated → retrieval-config client
    short-circuited to `parked` → 0 serving graphs → every chat query
@@ -82,6 +83,12 @@ surfaces as `EXPORT_FAILED: bundle store failed (doc-repo status 503)`
 when publishing an OKF repo. NVIDIA venues never load the overlay — no
 behavior change there.
 
+> **Remote-ROCm TLS:** Section 18's `rocm_gpu_node_remote` trio does NOT
+> render the TLS skip — a remote node serving its default self-signed cert
+> fails TLS verification on every model call unless the operator sets
+> Section 20's `opea_ssl_skip_verify: 1` in the APP host's group_vars (or
+> fronts the node with a real cert via the letsencrypt profile).
+>
 > **TLS-verify note (security round-2, 2026-11-18):** the co-located 18B
 > render sets `OPEA_SSL_SKIP_VERIFY=1` unconditionally (self-signed node
 > cert by design). The knob is **process-global** with no per-endpoint CA

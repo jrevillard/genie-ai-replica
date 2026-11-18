@@ -2,7 +2,7 @@
 title: 'Story 1.2 — Baseline the deployed stack (V03)'
 type: 'feature'
 created: '2026-11-17'
-status: 'in-progress'
+status: 'in-review'
 route: 'dispatch'
 review_loop_iteration: 4
 baseline_commit: '30aac4753'
@@ -257,6 +257,34 @@ Scope: `11488b546..e4ee0f69f` — the reduced diff, after the trim and the venue
 | F6-17 | The image table's legend did not hold for the pinned row | low | **fixed, UNREVIEWED** — the legend states that the registry columns are the digests of the artifact the deployment DECLARES |
 
 **The venue moved while the review ran** (release v50 → v51, the frontend tag re-pushed, the reranker's digest pin rolled back). The record is regenerated against the settled venue after these corrections.
+
+### The scoped fix review over the correction diff (the one the second ruling authorized)
+
+Scope: `fae2edd57..85339f78a` — the corrections of the review above, plus the sprint-status commit. Verdict: **"Ready to merge? With fixes"** — **no Critical**: the reviewer confirmed independently that the secret leak (F6-1) is fixed end-to-end through the production path, that a digest-pinned reference resolves its declared artifact (F6-2), that F6-4/5/6/9/11/12 are fixed, that the record reproduces byte-for-byte apart from its timestamp, that all four model ids and digests match independent probes, and that the capture is read-only and deterministic. Four findings were marked **required before merge**, seven are cleanup; all eleven are corrected here, **unreviewed**.
+
+| # | Finding | Verdict | Disposition |
+|---|---|---|---|
+| F7-1 | A CONDITIONAL row carried a blanket disposition, so the gate was satisfiable by the capture's own inability to evaluate a condition | high | **fixed, UNREVIEWED** — a conditional row carries NO disposition and fails the capture (exit 2), like every other unexplained difference. The blanket text is gone |
+| F7-2 | The negation test only matched a bare `not` token, so the chart's `and (not X) Y` form was read as "always declared"; and a condition that parses to neither a local nor a path was read as a guard that holds | high | **fixed, UNREVIEWED** — the negation is detected with a regex (`\(\s*not\b|\bnot\b`), and a condition that parses to neither a local nor a path is unknown, not "always declared" |
+| F7-3 | An `else` branch marked its guard unresolved instead of negating it | medium | **fixed, UNREVIEWED** — the `else` negates the guard it belongs to (`none` holds when no candidate carries a value) |
+| F7-4 | Four corrections were unpinned: a `with`/`range` block closing an enclosing `if` guard, a negated condition, `capture()` emitting a section for a workload with only undeclared variables, and a CONDITIONAL row reaching the discrepancy table | high | **fixed, UNREVIEWED** — four tests, one per correction. Each was re-run as a mutant against the suite: every mutant dies |
+| F7-5 | The image row named a pinned reference by an empty tag, and the disposition spoke of "the registry's current tag" | low | **fixed, UNREVIEWED** — a pinned reference is named by its digest, and the disposition speaks of the artifact the deployment declares |
+| F7-6 | The image note lumped the non-comparable rows into one count | low | **fixed, UNREVIEWED** — each reason is counted on its own, and the pods no workload owns are counted apart |
+| F7-7 | `template` opened a block in the guard stack although it has no matching `end` | low | **fixed, UNREVIEWED** — dropped from the block openers |
+| F7-8 | Two dead keys on the model rows (`chart_default`, `chart_default_path`) | low | **fixed, UNREVIEWED** — deleted |
+| F7-9 | A short image name (`redis:7-alpine`) lost its tag | low | **fixed, UNREVIEWED** — a colon names a tag unless what follows it is a registry port |
+| F7-10 | A workload that runs no pod was rendered `NOT COMPARABLE`, which hides whether it was scaled to zero or crashed | low | **fixed, UNREVIEWED** — the status says which (`NOT RUNNING (scaled to zero)` / `NOT RUNNING (no running pod)`) and the declared replica count is captured |
+| F7-11 | A targeted overlay source whose path runs through a scalar was dropped silently | low | **fixed, UNREVIEWED** — the capture fails loudly, as Flux does. The source ORDER is unchanged and matches Flux's own (`fluxcd/pkg/chartutil/values.go`: the sources merge in list order, the inline values win over them, the targeted ones replace their subtree last) |
+
+### Quality phase — simplify
+
+Four independent cleanup lenses (reuse, simplification, efficiency, altitude) reviewed the branch diff. The capture's observable behaviour is unchanged: re-running it against the settled venue produced the same record, byte for byte, except the timestamp — and the image note's wording, because its reasons now partition the rows (the two pods no workload owns were counted twice: once as "outside the GitLab registry", once as unowned).
+
+**Applied:** one image-reference parser (repository, tag, digest) instead of three partial ones — a registry with a port and no tag is no longer truncated to its host; one candidate-value helper, and one emptiness rule per question (a guard asks Go's truthiness, where a non-empty map IS truthy; a chain resolution asks whether a leaf carries a value); one registry token per repository and no second fetch for an artifact the pod already runs; the workloads table carries the template file and the section is the key; one source resolution per row; the undeclared list carries names; the `_image` twin of `image` and the dead `image_tag` helper are gone; the three identical branches of the discrepancy table are one.
+
+**Not applied (designs, not cleanups), recorded for story 1.2b (#1998) or a later story:** splitting the 160-line renderer into its sections; batching the kubectl calls into one request per namespace; memoizing the model probes; and the deeper re-implementations of Helm's templating, Helm's `coalesce` and Flux's precedence (a Go-template tokenizer, the chart's own rendered output as the source of truth, the controller's stored release as the effective layer). They would change what the capture compares against, not how it compares.
+
+**The reuse lens** found three duplications of knowledge the repo already owns. Two are applied: the capture's hand-maintained table of the chart's section names (`SECTION_VARS`) is gone — the template's own assignments already carry every mapping (emptying the table changed 0 resolved paths), and a renamed template local would have made the table answer with a path that no longer exists; and Go template comments are now stripped before the rows are read, because a commented-out row is documentation, not a declaration. The third — the capture's own rule for rendering a YAML scalar as text, which `scripts/ci/config-parity-check.py` also spells out — is left alone: the two gates are independent by design, and sharing the helper would couple the capture to the CI scripts it must not depend on. The registry client keeps its HTTP form (the documented `docker buildx imagetools inspect` path needs a docker daemon the capture does not assume) and now names its documented sibling, so the two do not drift.
 
 ## Design Notes
 

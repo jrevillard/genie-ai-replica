@@ -3,7 +3,7 @@
 # OKF Server — Node.js/Express (CommonJS). Mirrors gov-chat-backend build.
 # shared/lib is copied in (the shared library: logger, tracing, metrics, keycloak-auth-service).
 
-FROM node:22 AS builder
+FROM node:22-trixie AS builder
 RUN apt-get update && apt-get install -y --no-install-recommends python3 make build-essential && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 COPY okf-server/package*.json ./
@@ -13,7 +13,7 @@ RUN npm ci --omit=dev 2>/dev/null || npm install --omit=dev
 RUN rm -rf /app/node_modules/shared-lib
 COPY okf-server/ ./
 
-FROM node:22
+FROM node:22-trixie
 WORKDIR /app
 COPY --from=builder /app/package*.json ./
 COPY --from=builder /app/node_modules ./node_modules

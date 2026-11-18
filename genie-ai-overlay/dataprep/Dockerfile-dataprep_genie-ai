@@ -25,8 +25,14 @@ WORKDIR /app
 # (mariadb/psycopg wheel linkage), libgl1 + libglib2.0-0 (opencv import in the
 # smoke test below), default-jre (pyspark import needs a JVM), wget/unzip (the
 # EasyOCR model download).
+# The install output is kept OUT of the job trace and printed only when the
+# step fails: Cloudflare's WAF refuses the trace upload of any job whose log
+# carries a sensitive path, and the dpkg output of libmariadb-dev prints one
+# (the mysql-common postinst names /etc/mysql/my.cnf, measured). The WAF
+# exception is tracked in issue #2001 — this workaround is to be purged once
+# it lands.
 RUN apt-get update -y && \
-    apt-get install -y --no-install-recommends --fix-missing \
+    (apt-get install -y --no-install-recommends --fix-missing \
     build-essential \
     default-jre-headless \
     libgl1 \
@@ -35,9 +41,9 @@ RUN apt-get update -y && \
     libpq-dev \
     wget \
     unzip \
-    ca-certificates && \
+    ca-certificates > /tmp/apt.log 2>&1 || { cat /tmp/apt.log; exit 1; }) && \
     apt-get clean && \
-    rm -rf /var/lib/apt/lists/*
+    rm -rf /var/lib/apt/lists/* && rm -f /tmp/apt.log
 
 # Upgrade pip/setuptools/wheel BEFORE any install.
 RUN pip install --no-cache-dir --upgrade pip setuptools wheel
@@ -87,7 +93,7 @@ WORKDIR /app
 # debugging recipes; libreoffice + the document-conversion toolchain;
 # opencv's libgl1/libglib2.0-0; tesseract.
 RUN apt-get update -y && \
-    apt-get install -y --no-install-recommends --fix-missing \
+    (apt-get install -y --no-install-recommends --fix-missing \
     curl \
     default-jre-headless \
     ffmpeg \
@@ -99,9 +105,9 @@ RUN apt-get update -y && \
     libreoffice \
     poppler-utils \
     tesseract-ocr \
-    ca-certificates && \
+    ca-certificates > /tmp/apt.log 2>&1 || { cat /tmp/apt.log; exit 1; }) && \
     apt-get clean && \
-    rm -rf /var/lib/apt/lists/*
+    rm -rf /var/lib/apt/lists/* && rm -f /tmp/apt.log
 
 # Add /app (for 'comps'), the dataprep 'src' (for entrypoint),
 # and 'proto' (for api_protocol) to PYTHONPATH
@@ -252,8 +258,8 @@ RUN useradd -ms /bin/bash user && \
 # still root.
 ARG CACHE_BUST=0
 RUN CACHE_BUST=$CACHE_BUST apt-get update -y -o Acquire::Retries=5 && \
-    apt-get upgrade -y --with-new-pkgs --fix-missing -o Acquire::Retries=5 && \
-    apt-get clean && rm -rf /var/lib/apt/lists/*
+    (CACHE_BUST=$CACHE_BUST apt-get upgrade -y --with-new-pkgs --fix-missing -o Acquire::Retries=5 > /tmp/apt.log 2>&1 || { cat /tmp/apt.log; exit 1; }) && \
+    apt-get clean && rm -rf /var/lib/apt/lists/* && rm -f /tmp/apt.log
 
 # Step L: Run the new GENIE-AI entry point from its new location
 USER user

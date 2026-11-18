@@ -17,11 +17,18 @@ RUN git clone --depth 1 --branch ${OPEA_VERSION} ${OPEA_REPO_URL} .
 # linux-libc-dev kernel-header CVE surface out of the final image.
 FROM python:3.11-slim AS deps_builder
 
-RUN apt-get update && apt-get install -y --no-install-recommends \
+# The install output is kept OUT of the job trace and printed only when the
+# step fails: Cloudflare's WAF refuses the trace upload of any job whose log
+# carries a sensitive path, and the dpkg output of libmariadb3/libmariadb-dev
+# prints one (the mysql-common postinst names /etc/mysql/my.cnf, measured).
+# The WAF exception is tracked in issue #2001 — this workaround is to be
+# purged once it lands.
+RUN apt-get update && \
+    (apt-get install -y --no-install-recommends \
     build-essential \
     libmariadb-dev \
-    ca-certificates \
-    && rm -rf /var/lib/apt/lists/*
+    ca-certificates > /tmp/apt.log 2>&1 || { cat /tmp/apt.log; exit 1; }) && \
+    rm -rf /var/lib/apt/lists/* && rm -f /tmp/apt.log
 
 # Install dependencies from the committed hash-pinned lock.
 # The lock is compiled with `make lock-retriever` (uv pip compile
@@ -48,13 +55,13 @@ FROM python:3.11-slim
 # distro point-releases between upstream rebuilds. curl backs the compose
 # healthcheck (docker-compose.yaml retriever service).
 RUN apt-get update && \
-    apt-get install -y --no-install-recommends \
+    (apt-get install -y --no-install-recommends \
     curl \
     libcairo2 \
     libglib2.0-0 \
     libmariadb3 \
-    ca-certificates \
-    && rm -rf /var/lib/apt/lists/*
+    ca-certificates > /tmp/apt.log 2>&1 || { cat /tmp/apt.log; exit 1; }) && \
+    rm -rf /var/lib/apt/lists/* && rm -f /tmp/apt.log
 
 WORKDIR /app
 
@@ -131,8 +138,8 @@ RUN /app/install_site_startup.sh
 # still root.
 ARG CACHE_BUST=0
 RUN CACHE_BUST=$CACHE_BUST apt-get update -y -o Acquire::Retries=5 && \
-    apt-get upgrade -y --with-new-pkgs --fix-missing -o Acquire::Retries=5 && \
-    apt-get clean && rm -rf /var/lib/apt/lists/*
+    (CACHE_BUST=$CACHE_BUST apt-get upgrade -y --with-new-pkgs --fix-missing -o Acquire::Retries=5 > /tmp/apt.log 2>&1 || { cat /tmp/apt.log; exit 1; }) && \
+    apt-get clean && rm -rf /var/lib/apt/lists/* && rm -f /tmp/apt.log
 
 # Step H: Run the new GENIE-AI entry point from its new location
 USER user

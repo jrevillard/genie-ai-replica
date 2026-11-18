@@ -659,6 +659,16 @@ Two of these are **not merely different, they are inert**:
 5. The deployed venue carries a single graph (`GRAPH`). The fan-out (§4.10) and
    routing (§4.11) behaviors are recorded from the code and the deployed knobs,
    not from a live multi-graph run.
+6. The probe's **drift detection** has no automated, CI-runnable guard: the
+   probe needs a live venue, and the repository has no test harness for
+   `scripts/` (the sibling `scripts/ci/*.py` checks follow the same
+   convention — the script *is* the check). The comparison logic was therefore
+   **mutation-verified by hand** on 2026-11-18: a drifted deployed knob, a
+   drifted expectation, a knob the record claims is absent and a changed query
+   instruction each produce exit 1 with one line per difference, while a
+   differing **sampled** locale string produces a warning and exit 0. The
+   falsifiability of this record rests on that hand-run check until a venue is
+   available to the CI lane.
 
 ## 9. Decision records
 

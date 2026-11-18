@@ -299,6 +299,27 @@ The record separates three things that are easy to conflate:
 - `python3 -m py_compile scripts/baselines/probe-v02-query-path.py` -- expected:
   no output.
 
+**The guard is falsifiable (mutation check, 2026-11-18).** The probe's drift
+detection is what keeps this record honest, so each of its branches was
+exercised against a mutated copy of the fixtures:
+
+| Mutation | Expected | Result |
+|---|---|---|
+| none | exit 0, "contract verified" | exit 0 |
+| a deployed knob changed in the recorded measurement | exit 1, one line per difference | exit 1 |
+| an expectation claims a value the deployment no longer serves | exit 1 | exit 1 |
+| a knob the record claims is absent is now served | exit 1 | exit 1 |
+| the query instruction changes | exit 1 | exit 1 |
+| a **sampled** locale string differs | a warning, exit 0 | warning, exit 0 |
+
+The last row is the contract that separates the two kinds of difference: the
+deployed configuration is a contract, the sampled locale strings are a sample.
+
+The drift detection has **no automated CI-runner** — the probe needs a live
+venue, and the repository has no test harness for `scripts/` (the sibling
+`scripts/ci/*.py` checks follow the same convention: the script *is* the
+check). That gap is recorded in the record's §8.
+
 **Manual checks:**
 - the record's §5.6 table lists three locales, one non-Latin, each with the
   detected language, the status and the exact embedded string, and states that

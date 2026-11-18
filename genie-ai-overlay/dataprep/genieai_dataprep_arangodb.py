@@ -4310,21 +4310,24 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                 # survive. Say so — the alternative is silence. The span
                 # records the outcome too: a cancelled purge leaves the rows
                 # behind and writes NO OUTCOME ROW in the document's own log
-                # (the announcement row is there, without its cascade — a
-                # shutdown is not the moment to write there), so a query for
-                # the outcome must find it. An outcome already recorded wins:
-                # a purge that stood down and was cancelled while writing its
-                # log row has still stood down.
+                # (what the log holds depends on where the cancellation
+                # landed: no announcement row, an announcement row without
+                # its cascade, or partial cascade rows — a shutdown is not
+                # the moment to write there), so a query for the outcome must
+                # find it. An outcome already recorded wins: a purge that
+                # stood down and was cancelled while writing its log row has
+                # still stood down.
                 if outcome is None:
                     span.set_attribute(ATTRIBUTE_NAMES["dataprep_purge_result"], "cancelled")
                     logger.warning(f"{file_id}: the late graph-write purge was cancelled before it finished")
                 else:
                     # The service log must not contradict the span: the purge
                     # already had an outcome, and only the row that reports
-                    # it was cut off.
+                    # it was cut off. The outcome is named so the log cannot
+                    # be read as "the purge never ran".
                     logger.warning(
-                        f"{file_id}: the late graph-write purge was cancelled while writing the row "
-                        f"that reports its outcome ({outcome})"
+                        f"{file_id}: the late graph-write purge was cancelled; its outcome was already "
+                        f"recorded ({outcome})"
                     )
                 raise
             finally:

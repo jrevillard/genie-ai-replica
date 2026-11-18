@@ -4,7 +4,7 @@
 # base drops build-essential/python3/make and their linux-libc-dev kernel-header
 # dependency chain, removing that CVE surface from the scan. An apt upgrade
 # pulls current Debian security updates so the image never lags point-releases.
-FROM node:22 AS builder
+FROM node:22-trixie AS builder
 
 WORKDIR /app
 
@@ -21,7 +21,7 @@ WORKDIR /app
 RUN rm -rf /app/node_modules/shared-lib
 
 # ======== Runtime ========
-FROM node:22-slim
+FROM node:22-trixie-slim
 
 # System dependencies: ClamAV for upload scanning (+ current security updates).
 # clamdscan is a Recommends of clamav-daemon but the app's scanner preference

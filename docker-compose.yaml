@@ -2125,6 +2125,15 @@ services:
     environment:
       - TEI_RERANKING_ENDPOINT=${RERANKER_SERVICE_URL:-http://tei_reranker:80}
       - RERANK_COMPONENT_NAME=GENIE_TEI_RERANKING
+      # Rerank backend switch (Task-14 mirror of EMBEDDING_BACKEND): tei is
+      # the default everywhere; an operator flips to vllm + names the vLLM
+      # instance to reroute /v1/rerank. Without these passthroughs the env
+      # vars would never reach this container (compose env files only reach
+      # containers when interpolated into environment:) and setting them
+      # would silently no-op (code review, 2026-11-18).
+      - RERANKER_BACKEND=${RERANKER_BACKEND:-tei}
+      - RERANKER_VLLM_ENDPOINT=${RERANKER_VLLM_ENDPOINT:-}
+      - RERANKER_VLLM_MODEL=${RERANKER_VLLM_MODEL:-${VLLM_RERANKER_MODEL_ID:-}}
       - HF_TOKEN=${VLLM_API_KEY:-}
       - VLLM_API_KEY=${VLLM_API_KEY:-}
       - OPEA_SSL_SKIP_VERIFY=${OPEA_SSL_SKIP_VERIFY:-0}

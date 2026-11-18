@@ -1565,7 +1565,11 @@ class TestVllmBackend:
         input_doc = create_mock_searched_doc(texts=["a", "b", "c"], reranking_strategy="slice", top_n=1)
         # vLLM returns results sorted by relevance_score desc; index 2 is the winner.
         scrambled = create_vllm_rerank_response(
-            [{"index": 2, "relevance_score": 0.95}, {"index": 0, "relevance_score": 0.61}, {"index": 1, "relevance_score": 0.82}]
+            [
+                {"index": 2, "relevance_score": 0.95},
+                {"index": 0, "relevance_score": 0.61},
+                {"index": 1, "relevance_score": 0.82},
+            ]
         )
         mock_session = create_mock_aiohttp_session(scrambled)
 
@@ -1585,9 +1589,11 @@ class TestVllmBackend:
         input_doc = create_mock_searched_doc(texts=["a", "b"], reranking_strategy="slice", top_n=1)
         mock_session = create_mock_aiohttp_session({"error": "model overloaded"}, status=500)
 
-        with patch("reranker.genieai_tei_reranker.aiohttp.ClientSession", return_value=mock_session):
-            with pytest.raises(RuntimeError, match="vLLM"):
-                await reranker.invoke(input_doc)
+        with (
+            patch("reranker.genieai_tei_reranker.aiohttp.ClientSession", return_value=mock_session),
+            pytest.raises(RuntimeError, match="vLLM"),
+        ):
+            await reranker.invoke(input_doc)
 
     @pytest.mark.asyncio
     async def test_default_backend_is_tei(self, monkeypatch):

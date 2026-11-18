@@ -102,6 +102,11 @@ services:
   vllm-embedding:
     image: ${VLLM_ROCM_IMAGE}
     profiles: [gpu-models]
+    # A NEW service in an overlay does NOT inherit the base service's
+    # restart policy either — without this, an OOM kill (exit 137, live:
+    # 2026-11-18 GTT pressure during a heavy drain) leaves the container
+    # dead until a human notices (code review finding follow-up).
+    restart: unless-stopped
     command: >
       vllm serve
       --model ${VLLM_EMBEDDING_MODEL_ID:-BAAI/bge-large-en-v1.5}
@@ -128,6 +133,10 @@ services:
 
   vllm-reranker:
     image: ${VLLM_ROCM_IMAGE}
+    # Same restart gap as vllm-embedding: a NEW overlay service does not
+    # inherit the base restart policy — live OOM kill (exit 137, 2026-11-18
+    # GTT pressure) stayed dead for an hour. unless-stopped self-heals.
+    restart: unless-stopped
     # Same profile gate as the other vLLM instances (base `vllm` uses
     # [gpu-models]) — a new service in an overlay does NOT inherit the
     # base service's profiles.
@@ -211,7 +220,10 @@ services:
     environment:
       - RERANKER_BACKEND=${RERANKER_BACKEND:-tei}
       - RERANKER_VLLM_ENDPOINT=${RERANKER_VLLM_ENDPOINT:-http://vllm-reranker:8000}
-      - RERANKER_VLLM_MODEL=${RERANKER_VLLM_MODEL:-BAAI/bge-reranker-v2-m3}
+      # Paired name (code review, 2026-11-18): the instance above serves
+      # --served-model-name ${VLLM_RERANKER_MODEL_ID:-...}; the client must
+      # send the SAME name or vLLM 404s per request. Inherit the pair.
+      - RERANKER_VLLM_MODEL=${RERANKER_VLLM_MODEL:-${VLLM_RERANKER_MODEL_ID:-BAAI/bge-reranker-v2-m3}}
 
   # Same switch for the EMBEDDING path (Task-14 mirror): dataprep embeds the
   # corpus and the retriever embeds the query, and both swap their TEI client

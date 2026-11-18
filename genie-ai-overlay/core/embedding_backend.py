@@ -48,6 +48,12 @@ VLLM_EMBED_DEFAULT_MODEL = "BAAI/bge-large-en-v1.5"
 
 _EMBEDDING_BACKENDS = ("tei", "vllm")
 
+# Warn-once guards (code review, 2026-11-18): the retriever evaluates
+# embeddings_backend_active() per request/per fan-out leg — without these,
+# a misconfigured deployment warns at request rate instead of once.
+_WARNED_UNKNOWN_BACKEND = False
+_WARNED_MISSING_ENDPOINT = False
+
 
 def resolve_embedding_backend(requested: str | None = None) -> str:
     """Return the embedding backend that will actually run.
@@ -58,10 +64,13 @@ def resolve_embedding_backend(requested: str | None = None) -> str:
     switch made). Unknown or empty names resolve to ``tei``: the default
     path must never move because of a typo.
     """
+    global _WARNED_UNKNOWN_BACKEND
     raw = requested if requested is not None else os.getenv("EMBEDDING_BACKEND", "tei")
     backend = (raw or "tei").strip().lower()
     if backend not in _EMBEDDING_BACKENDS:
-        logger.warning(f"EMBEDDING_BACKEND={backend[:32]} is not a known backend. Falling back to tei.")
+        if not _WARNED_UNKNOWN_BACKEND:
+            logger.warning(f"EMBEDDING_BACKEND={backend[:32]} is not a known backend. Falling back to tei.")
+            _WARNED_UNKNOWN_BACKEND = True
         return "tei"
     return backend
 
@@ -74,15 +83,18 @@ def embeddings_backend_active() -> bool:
     fail soft here instead: the TEI path serves the request and one warning
     names the remedy.
     """
+    global _WARNED_MISSING_ENDPOINT
     if resolve_embedding_backend() != "vllm":
         return False
     endpoint = (os.getenv("EMBEDDING_VLLM_ENDPOINT") or "").strip().rstrip("/")
     if not endpoint:
-        logger.warning(
-            "EMBEDDING_BACKEND=vllm but EMBEDDING_VLLM_ENDPOINT is empty — "
-            "falling back to the TEI embedding path. Set EMBEDDING_VLLM_ENDPOINT "
-            "(e.g. http://vllm-embedding:8000) to activate the vLLM backend."
-        )
+        if not _WARNED_MISSING_ENDPOINT:
+            logger.warning(
+                "EMBEDDING_BACKEND=vllm but EMBEDDING_VLLM_ENDPOINT is empty — "
+                "falling back to the TEI embedding path. Set EMBEDDING_VLLM_ENDPOINT "
+                "(e.g. http://vllm-embedding:8000) to activate the vLLM backend."
+            )
+            _WARNED_MISSING_ENDPOINT = True
         return False
     return True
 
@@ -91,9 +103,14 @@ def resolved_embed_model(default_model: str = VLLM_EMBED_DEFAULT_MODEL) -> str:
     """The model id the vLLM embeddings client sends, env override first.
 
     One definition for the builder and the consumers' log lines, so what a
-    request sends and what the log reports cannot disagree.
+    request sends and what the log reports cannot disagree. The fallback
+    chain matches the serving side's own naming: EMBEDDING_MODEL_ID (client
+    override) → VLLM_EMBEDDING_MODEL_ID (the compose var that names what
+    the vllm-embedding instance serves — setting one without the other
+    would otherwise 404 per request, code review finding 9) → the built-in
+    default.
     """
-    return os.getenv("EMBEDDING_MODEL_ID", default_model)
+    return os.getenv("EMBEDDING_MODEL_ID") or os.getenv("VLLM_EMBEDDING_MODEL_ID") or default_model
 
 
 # Resolved once at import for parity with the retriever's config constants.

@@ -4631,7 +4631,12 @@ class TestContextualRetrieval:
         mock_client = AsyncMock()
         mock_client.chat.completions.create = AsyncMock(
             return_value=self._make_batch_list_response(
-                [{"index": 0, "text": "ctx0"}, "garbage-string", {"index": "not-an-int", "context": "x"}, {"index": 1, "context": "ctx1"}]
+                [
+                    {"index": 0, "text": "ctx0"},
+                    "garbage-string",
+                    {"index": "not-an-int", "context": "x"},
+                    {"index": 1, "context": "ctx1"},
+                ]
             )
         )
         batch = [(0, "chunk0"), (1, "chunk1")]

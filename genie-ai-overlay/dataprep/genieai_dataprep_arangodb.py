@@ -24,6 +24,7 @@ from core.embedding_backend import (
     EMBEDDING_VLLM_ENDPOINT,
     build_vllm_embeddings,
     embeddings_backend_active,
+    resolve_embedding_backend,
     resolved_embed_model,
 )
 from core.model_cache import MAX_SANE_MODEL_WINDOW_TOKENS, get_max_model_len, get_model_id, resolve_model_id
@@ -3173,11 +3174,7 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                     if isinstance(raw, dict):
                         items = list(raw.items())
                     elif isinstance(raw, list):
-                        items = [
-                            (c.get("index"), c.get("context", c.get("text")))
-                            for c in raw
-                            if isinstance(c, dict)
-                        ]
+                        items = [(c.get("index"), c.get("context", c.get("text"))) for c in raw if isinstance(c, dict)]
                     out: dict[int, str] = {}
                     for k, v in items:
                         try:
@@ -4676,7 +4673,12 @@ class GenieArangoDataprep(OpeaArangoDataprep):
         )
 
         try:
-            with background_span("dataprep.ingest.background"):
+            # embedding.backend stamped per ingest (code review 2026-11-18):
+            # the trace proves which embedder served this file's chunks.
+            with background_span(
+                "dataprep.ingest.background",
+                attributes={"embedding.backend": resolve_embedding_backend()},
+            ):
                 # --- START PROTECTED EXECUTION (Spec 5.1) ---
                 await self._update_doc_status(input.file_id, "Ingesting", concept_id=getattr(input, "concept_id", None))
                 await self._write_ingestion_log(input.file_id, "INFO", "System", "Ingestion task started.")

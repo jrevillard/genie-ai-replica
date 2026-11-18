@@ -169,12 +169,16 @@ function jobWindowMs(job) {
  * JOB_TIMEOUT_MS for every row. Mirrors jobWindowMs() in AQL:
  * clamp(FLOOR, MAX, estChunks × MS_PER_CHUNK × 1.5), estChunks =
  * chunk_count > 0 ? chunk_count : ceil(LENGTH(body)/500) — LENGTH(null) is
- * 0 in AQL, matching jobWindowMs's non-string body → 0. */
+ * 0 in AQL, matching jobWindowMs's non-string body → 0. chunk_count is
+ * type-gated with IS_NUMBER (code review, 2026-11-18): AQL's type order
+ * puts ANY string above every number, so `"5" > 0` is true and the
+ * arithmetic below would error the whole scan on a string-typed row;
+ * IS_NUMBER falls such rows to the body estimate like JS's coercion does. */
 function rowStaleCutoffAql(row) {
   if (!ADAPTIVE_WINDOWS()) return literal(`DATE_NOW() - ${JOB_TIMEOUT_MS()}`);
   return literal(
     `DATE_NOW() - MAX([${windowFloorMs()}, MIN([${windowMaxMs()}, ` +
-      `CEIL(((${row}.chunk_count != null AND ${row}.chunk_count > 0) ? ${row}.chunk_count : ` +
+      `CEIL(((IS_NUMBER(${row}.chunk_count) AND ${row}.chunk_count > 0) ? ${row}.chunk_count : ` +
       `CEIL(LENGTH(${row}.body) / ${CHUNK_SIZE_ESTIMATE_CHARS})) * ${windowMsPerChunk()} * 1.5)])])`
   );
 }

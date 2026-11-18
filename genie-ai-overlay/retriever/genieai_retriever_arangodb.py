@@ -27,7 +27,12 @@ from langchain_core.documents import Document
 from langchain_huggingface import HuggingFaceEndpointEmbeddings
 from langchain_openai import ChatOpenAI, OpenAIEmbeddings
 
-from core.embedding_backend import build_vllm_embeddings, embeddings_backend_active, resolved_embed_model
+from core.embedding_backend import (
+    build_vllm_embeddings,
+    embeddings_backend_active,
+    resolve_embedding_backend,
+    resolved_embed_model,
+)
 from core.label_contract import build_filter_labels
 from core.model_cache import ModelDiscoveryError, coerce_int, resolve_model_id
 from core.model_http_policy import (
@@ -1325,6 +1330,10 @@ class GenieaiArangoRetriever(OpeaComponent):
         span = tracer.start_span("retriever.hybrid_search")
         span.set_attribute("rag.search_mode", ARANGO_SEARCH_MODE)
         span.set_attribute("rag.top_k", input.k if hasattr(input, "k") else 0)
+        # embedding.backend (vocabulary-registered; code review 2026-11-18):
+        # the span names the resolved backend so a trace proves which embedder
+        # served the query — the observability payoff of the Task-14 mirror.
+        span.set_attribute(A["embedding_backend"], resolve_embedding_backend())
         _query_id = query_id_from_baggage()
         if _query_id:
             span.set_attribute(QUERY_ID_KEY, _query_id)

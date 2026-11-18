@@ -43,3 +43,14 @@ rocm_video_gid: 44
 # backend with RERANKER_BACKEND=vllm (rendered in SECTION 18B).
 gpu_rerank_upstream: vllm-reranker:8000
 vllm_reranker_model_id: BAAI/bge-reranker-v2-m3
+
+# CPU-TEI batch caps (code review finding 3, 2026-11-18): the GPU-node stack
+# runs CPU TEI on this class of hardware (the TEI ROCm image cannot run on
+# gfx1151), and CPU-TEI inflates candle buffers at the GPU-sized defaults —
+# measured 16.3 GiB RSS at 8192/32 on Strix Halo (commit 196bc549 capped the
+# compose venue at 2048/8/2048). Mirror the caps here; the template renders
+# them only when defined, so NVIDIA renders (which never load this file) stay
+# byte-identical.
+tei_embedding_max_batch_tokens: "2048"
+tei_reranking_max_batch_tokens: "2048"
+tei_reranking_max_concurrent_requests: "8"

@@ -77,6 +77,11 @@ setup_json_logging("genie_tei_reranking")
 install_uvicorn_access_logging()
 logflag = os.getenv("LOGFLAG", False)
 
+# Warn-once guard for the vllm-without-endpoint misconfiguration (code
+# review, 2026-11-18): the rerank path runs per request, so an unguarded
+# warning would fire at request rate.
+_WARNED_VLLM_ENDPOINT_MISSING = False
+
 # Strategies: slice, threshold, slice_threshold, knee_threshold, adaptive
 RERANKING_STRATEGY = os.getenv("RERANKING_STRATEGY", "slice")
 RERANKING_THRESHOLD = float(os.getenv("RERANKING_THRESHOLD", 0.75))
@@ -352,9 +357,25 @@ class GenieTEIReranking(OpeaTEIReranking):
                 # in tests. tei stays the default (the NVIDIA path must not
                 # move); an unknown value falls back to tei with a warning,
                 # mirroring resolve_reranking_strategy().
+                global _WARNED_VLLM_ENDPOINT_MISSING
                 backend = (os.getenv("RERANKER_BACKEND") or "tei").strip().lower()
                 if backend not in ("tei", "vllm"):
                     logger.warning(f"RERANKER_BACKEND={backend[:32]} is not a known backend. Falling back to tei.")
+                    backend = "tei"
+                if backend == "vllm" and not (os.getenv("RERANKER_VLLM_ENDPOINT") or "").strip():
+                    # Misroute guard (code review, 2026-11-18): the earlier
+                    # `or self.base_url` fallback POSTed the vLLM /v1/rerank
+                    # shape at the TEI endpoint — a guaranteed 404 per request,
+                    # the exact confusion the comment below warns about. Fail
+                    # soft to the TEI backend instead, warn ONCE with the remedy
+                    # (mirrors embeddings_backend_active in core/embedding_backend.py).
+                    if not _WARNED_VLLM_ENDPOINT_MISSING:
+                        logger.warning(
+                            "RERANKER_BACKEND=vllm but RERANKER_VLLM_ENDPOINT is empty — "
+                            "falling back to the TEI rerank backend. Set RERANKER_VLLM_ENDPOINT "
+                            "(e.g. http://vllm-reranker:8000) to activate the vLLM backend."
+                        )
+                        _WARNED_VLLM_ENDPOINT_MISSING = True
                     backend = "tei"
                 span.set_attribute(ATTRIBUTE_NAMES["reranker_backend"], backend)
 
@@ -364,12 +385,16 @@ class GenieTEIReranking(OpeaTEIReranking):
                     # TEI ROCm image cannot run there (SPIKE-01: Instinct-only
                     # kernels). The endpoint must name the vLLM instance — it
                     # is NOT the TEI endpoint this class's base_url carries.
-                    vllm_endpoint = (os.getenv("RERANKER_VLLM_ENDPOINT") or "").strip() or self.base_url
-                    vllm_model = (os.getenv("RERANKER_VLLM_MODEL") or "").strip() or os.getenv("RERANKER_MODEL_ID", "")
+                    vllm_endpoint = (os.getenv("RERANKER_VLLM_ENDPOINT") or "").strip()
+                    vllm_model = (
+                        (os.getenv("RERANKER_VLLM_MODEL") or "").strip()
+                        or (os.getenv("VLLM_RERANKER_MODEL_ID") or "").strip()
+                        or (os.getenv("RERANKER_MODEL_ID") or "").strip()
+                    )
                     if not vllm_model:
                         raise RuntimeError(
                             "RERANKER_BACKEND=vllm but no model name is configured — "
-                            "set RERANKER_VLLM_MODEL (or RERANKER_MODEL_ID)."
+                            "set RERANKER_VLLM_MODEL (or VLLM_RERANKER_MODEL_ID / RERANKER_MODEL_ID)."
                         )
                     request_url = f"{vllm_endpoint}/v1/rerank"
                     request_payload = {"model": vllm_model, "query": query, "documents": docs}

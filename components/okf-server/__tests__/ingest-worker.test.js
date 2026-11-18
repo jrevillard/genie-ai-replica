@@ -1081,9 +1081,21 @@ describe('size-adaptive job windows (spec #1020 §5.9 — OKF_JOB_WINDOW_ADAPTIV
       const q = render({ chunk_count: 18, body: '' });
       expect(q.query).toBe(
         'FILTER m.worker_claimed_at == null OR DATE_TIMESTAMP(m.worker_claimed_at) < ' +
-          'DATE_NOW() - MAX([1800000, MIN([21600000, CEIL(((m.chunk_count != null AND m.chunk_count > 0) ' +
+          'DATE_NOW() - MAX([1800000, MIN([21600000, CEIL(((IS_NUMBER(m.chunk_count) AND m.chunk_count > 0) ' +
           '? m.chunk_count : CEIL(LENGTH(m.body) / 500)) * 5000 * 1.5)])])'
       );
+    });
+
+    test('a string-typed chunk_count falls to the body estimate, not a scan-killing arithmetic error', () => {
+      // Code review 2026-11-18: AQL type order puts any string above every
+      // number — `"5" > 0` is TRUE in AQL, and `m.chunk_count * 5000` on a
+      // string row would error the ENTIRE claim scan (every lane), not just
+      // the row. The IS_NUMBER gate routes string-typed rows to the body
+      // branch, mirroring jobWindowMs's numeric coercion on the JS side.
+      process.env.OKF_JOB_WINDOW_ADAPTIVE = 'true';
+      const q = render({ chunk_count: '5', body: '' });
+      expect(q.query).toContain('IS_NUMBER(m.chunk_count) AND m.chunk_count > 0');
+      expect(q.query).not.toContain('m.chunk_count != null AND');
     });
   });
 

@@ -258,12 +258,6 @@ def test_overlay_override_is_a_separate_layer(chart_values):
     assert capture.get_path(chart_values, "opea.retriever.retrieverArangoK") == "20"
 
 
-def test_image_tag_is_read_from_a_tagged_reference():
-    """A digest-pinned image has no tag to resolve."""
-    assert capture.image_tag("registry.example/genie-ai-backend:main") == "main"
-    assert capture.image_tag("registry.example/genie-ai-backend@sha256:abc") == ""
-
-
 def test_numbers_compare_numerically():
     """A chart default of 1.0 and a deployed "1.0" are the same value."""
     assert capture.values_equal(1.0, "1.0")
@@ -588,14 +582,12 @@ def test_the_images_are_compared_by_content_not_by_index(monkeypatch):
             "registry_digest": "",
             "registry_child_digest": "",
             "status": "NOT RUNNING",
-            "_image": "registry.example/genie-ai-backend:main",
         }
     ]
     capture.resolve_registry_digests(images)
     assert images[0]["status"] == "SAME CONTENT"
 
     digests["sha256:index-old"] = ("sha256:index-old", "sha256:other-child", "")
-    images[0]["_image"] = "registry.example/genie-ai-backend:main"
     images[0]["running_digest"] = "registry.example/genie-ai-backend@sha256:index-old"
     capture.resolve_registry_digests(images)
     assert images[0]["status"] == "DIFFERENT"
@@ -638,7 +630,9 @@ def test_the_overlay_values_inline_in_the_release_win_over_the_sources(monkeypat
     assert "inline values" in release["overlay_name"]
 
 
-def test_the_comparison_reports_a_difference_it_finds(chart_values, overlay_values, env_maps):
+def test_the_comparison_reports_a_difference_it_finds(
+    tmp_path, chart_values, overlay_values, env_maps
+):
     """The comparison itself says a row differs - not a hand-built row.
 
     A mutant that makes `compare_workload` stop reporting DIFFERENT dies
@@ -662,13 +656,9 @@ def test_the_comparison_reports_a_difference_it_finds(chart_values, overlay_valu
     data["discrepancies"] = capture.collect_discrepancies(
         [{"workload": workload["name"], "rows": rows}], [], []
     )
-    out_path = tmp_path = None
-    import tempfile
-
-    with tempfile.TemporaryDirectory() as directory:
-        out_path = f"{directory}/record.md"
-        unresolved = capture.write_record(data, out_path)
-        assert capture.exit_code_for(unresolved) == 2
+    out_path = str(tmp_path / "record.md")
+    unresolved = capture.write_record(data, out_path)
+    assert capture.exit_code_for(unresolved) == 2
 
 
 def test_an_unprobeable_model_is_an_unresolved_difference(tmp_path, chart_values):
@@ -703,15 +693,21 @@ def test_an_unprobeable_model_is_an_unresolved_difference(tmp_path, chart_values
 
 def test_a_pinned_image_reference_names_its_artifact():
     """`repo:tag@sha256:digest` names the pinned artifact, not the tag."""
-    assert capture.image_reference("registry.example/app:main") == ("main", "")
-    assert capture.image_reference("registry.example/app@sha256:abc") == ("", "sha256:abc")
+    assert capture.image_reference("registry.example/app:main") == (
+        "registry.example/app",
+        "main",
+        "",
+    )
+    assert capture.image_reference("registry.example/app@sha256:abc") == (
+        "registry.example/app",
+        "",
+        "sha256:abc",
+    )
     assert capture.image_reference("registry.example/app:main@sha256:abc") == (
+        "registry.example/app",
         "main",
         "sha256:abc",
     )
-    # the tag of a pinned reference is not what the deployment runs
-    assert capture.image_tag("registry.example/app:main@sha256:abc") == ""
-    assert capture.image_tag("registry.example/app:main") == "main"
 
 
 def test_a_digest_pinned_reference_is_resolved_as_its_digest(monkeypatch):
@@ -734,7 +730,6 @@ def test_a_digest_pinned_reference_is_resolved_as_its_digest(monkeypatch):
             "registry_digest": "",
             "registry_child_digest": "",
             "status": "NOT RUNNING",
-            "_image": "registry.example/app:main@sha256:pinned",
         }
     ]
     capture.resolve_registry_digests(images)
@@ -743,7 +738,7 @@ def test_a_digest_pinned_reference_is_resolved_as_its_digest(monkeypatch):
     assert resolved[0] == "sha256:pinned"
 
 
-def test_a_value_that_lives_in_a_secret_never_reaches_the_record(tmp_path):
+def test_a_value_that_lives_in_a_secret_never_reaches_the_record(tmp_path, monkeypatch):
     """A Secret-kind overlay source is compared, never printed."""
     helmrelease = {
         "spec": {
@@ -776,12 +771,8 @@ def test_a_value_that_lives_in_a_secret_never_reaches_the_record(tmp_path):
             return secret
         raise AssertionError(args)
 
-    monkey = pytest.MonkeyPatch()
-    monkey.setattr(capture, "kubectl_json", fake_kubectl)
-    try:
-        release = capture.capture_release("flux-system", "genieai")
-    finally:
-        monkey.undo()
+    monkeypatch.setattr(capture, "kubectl_json", fake_kubectl)
+    release = capture.capture_release("flux-system", "genieai")
 
     # the value is used for the comparison...
     assert (
@@ -1075,10 +1066,18 @@ def test_capture_emits_a_section_for_a_workload_with_only_undeclared_variables(
 
 def test_a_short_image_name_still_names_a_tag():
     """`redis:7-alpine` is a tag; a registry port is not."""
-    assert capture.image_reference("redis:7-alpine") == ("7-alpine", "")
-    assert capture.image_reference("registry.example.com:5000/team/app:v1") == ("v1", "")
-    assert capture.image_reference("registry.example.com:5000/team/app") == ("", "")
-    assert capture.image_reference("team/app@sha256:abc") == ("", "sha256:abc")
+    assert capture.image_reference("redis:7-alpine") == ("redis", "7-alpine", "")
+    assert capture.image_reference("registry.example.com:5000/team/app:v1") == (
+        "registry.example.com:5000/team/app",
+        "v1",
+        "",
+    )
+    assert capture.image_reference("registry.example.com:5000/team/app") == (
+        "registry.example.com:5000/team/app",
+        "",
+        "",
+    )
+    assert capture.image_reference("team/app@sha256:abc") == ("team/app", "", "sha256:abc")
 
 
 def test_a_workload_that_runs_no_pod_says_why():

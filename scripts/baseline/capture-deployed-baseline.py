@@ -54,12 +54,12 @@ USER_AGENT = "genieai-baseline-capture/1.0"
 # ingestion tier the acceptance criteria name: the application tier (backend,
 # frontend, document repository) is compared for its model ids only.
 OPEA_WORKLOADS = {
-    "chatqna": ("chatqna.yaml", "chatqna"),
-    "retriever": ("retriever.yaml", "retriever"),
-    "dataprep": ("dataprep.yaml", "dataprep"),
-    "embedding": ("embedding.yaml", "embedding"),
-    "reranker": ("reranker.yaml", "reranker"),
-    "translation": ("translation.yaml", "translation"),
+    "chatqna": "chatqna.yaml",
+    "retriever": "retriever.yaml",
+    "dataprep": "dataprep.yaml",
+    "embedding": "embedding.yaml",
+    "reranker": "reranker.yaml",
+    "translation": "translation.yaml",
 }
 
 # The model ids the APPLICATION tier pins. The chart path each one comes
@@ -391,7 +391,7 @@ def _local_assignment(expression, locals_map):
     return _expression_chain(expression), None
 
 
-NEGATED = re.compile(r"\(\s*not\b|\bnot\b")
+NEGATED = re.compile(r"\bnot\b")
 
 
 def _guard_condition(condition, locals_map):
@@ -422,23 +422,36 @@ def _guard_condition(condition, locals_map):
     return None
 
 
-def _candidate_holds(item, values):
-    """Whether one candidate of a guard carries a value."""
+def _candidate_value(item, values, derived=None):
+    """The value one candidate of a chain names.
+
+    `None` when the candidate names nothing: a path that does not resolve,
+    or a derived value the chart does not compute.
+    """
     kind, value = item
     if kind == "path":
-        found = get_path(values, value)
-        if isinstance(found, (dict, list)):
-            return False
-        return not _sprig_empty(found)
+        return get_path(values, value)
     if kind == "derived":
-        return not _sprig_empty(derive_values(values).get(value, ""))
-    return not _sprig_empty(value)
+        source = derived if derived is not None else derive_values(values)
+        return source.get(value, "")
+    return value
+
+
+def _candidate_holds(item, values, derived=None):
+    """Whether one candidate of a guard carries a value.
+
+    A guard asks Go's question - is this truthy - and a non-empty map or
+    list IS truthy. The chain resolution asks a different one: a subtree is
+    not a value (see `_resolve_chain`).
+    """
+    return not _sprig_empty(_candidate_value(item, values, derived))
 
 
 def _guards_hold(guards, values):
     """Whether every known guard of a rendered row holds for these values."""
+    derived = derive_values(values)
     for kind, chain in guards:
-        holds = any(_candidate_holds(item, values) for item in chain)
+        holds = any(_candidate_holds(item, values, derived) for item in chain)
         if kind == "none":
             # The `else` branch of the condition: it renders when the
             # condition does NOT hold.
@@ -554,22 +567,19 @@ def _resolve_chain(chain, values):
     `false`, zero and the empty list or map as empty, and renders the next
     candidate. Returns (the source it came from, the value).
     """
-    for kind, value in chain:
-        if kind == "path":
-            found = get_path(values, value)
-            if isinstance(found, (dict, list)):
-                # A subtree, not a leaf: the chain mis-parsed the path and
-                # pointing at it would compare a Python repr against the
-                # deployment.
-                continue
-            if not _sprig_empty(found):
-                return value, found
-        elif kind == "derived":
-            found = derive_values(values).get(value, "")
-            if not _sprig_empty(found):
-                return value, found
-        else:
+    derived = derive_values(values)
+    for item in chain:
+        kind, value = item
+        if kind == "literal":
             return None, value
+        found = _candidate_value(item, values, derived)
+        if kind == "path" and isinstance(found, (dict, list)):
+            # A subtree, not a leaf: the chain mis-parsed the path and
+            # pointing at it would compare a Python repr against the
+            # deployment.
+            continue
+        if not _sprig_empty(found):
+            return value, found
     return None, None
 
 
@@ -590,7 +600,7 @@ def template_env_maps():
     """{workload component: {env name: chart path or None}} for every OPEA workload."""
     return {
         component: parse_template_env(os.path.join(CHART_TEMPLATES, template_file))
-        for component, (template_file, _section) in OPEA_WORKLOADS.items()
+        for component, template_file in OPEA_WORKLOADS.items()
     }
 
 
@@ -876,7 +886,7 @@ def local_chart_version():
 
 
 def image_reference(image):
-    """(tag, digest) of an image reference.
+    """(repository, tag, digest) of an image reference.
 
     `repo:tag` names a tag. `repo:tag@sha256:digest` and `repo@sha256:digest`
     name a PINNED artifact: the digest is what the deployment declares, and
@@ -886,26 +896,38 @@ def image_reference(image):
     parts = reference.rsplit(":", 1)
     # A colon names a tag when what follows it is not a registry port:
     # "host:5000/image" keeps the port in the repository name.
-    tag = parts[1] if len(parts) == 2 and "/" not in parts[1] else ""
-    return tag, digest.strip()
-
-
-def image_tag(image):
-    """The tag of a tagged image reference (empty for a digest-pinned one)."""
-    tag, digest = image_reference(image)
-    if digest:
-        # The reference names a pinned artifact: the tag is not what the
-        # deployment runs.
-        return ""
-    return tag
+    if len(parts) == 2 and "/" not in parts[1]:
+        repository, tag = parts[0], parts[1]
+    else:
+        repository, tag = reference, ""
+    return repository, tag, digest.strip()
 
 
 def image_reference_label(image):
     """The reference the deployment declares, as the record names it."""
-    tag, digest = image_reference(image)
+    _repository, tag, digest = image_reference(image)
     if digest:
         return f"pinned {digest}"
     return f"tag {tag}" if tag else "the image"
+
+
+REGISTRY_TOKENS = {}
+
+
+def registry_token(auth_host, project):
+    """A pull token for the registry, reused for the whole capture."""
+    key = (auth_host, project)
+    if key not in REGISTRY_TOKENS:
+        with urllib.request.urlopen(
+            urllib.request.Request(
+                f"https://{auth_host}/jwt/auth?service=container_registry"
+                f"&scope=repository:{project}:pull",
+                headers={"User-Agent": USER_AGENT},
+            ),
+            timeout=30,
+        ) as response:
+            REGISTRY_TOKENS[key] = json.load(response).get("token", "")
+    return REGISTRY_TOKENS[key]
 
 
 def registry_manifest(image, reference):
@@ -917,21 +939,13 @@ def registry_manifest(image, reference):
     stable content identity (the index digest moves on every re-push, the
     attestation changes the index and not the image).
     """
-    repository = image.split("@")[0].rsplit(":", 1)[0]
+    repository = image_reference(image)[0]
     registry_host = repository.split("/")[0]
     if not registry_host.startswith("registry."):
         return None, "", "outside the GitLab registry"
     project = repository.split("/", 1)[1]
     auth_host = re.sub(r"^registry\.", "", registry_host)
-    with urllib.request.urlopen(
-        urllib.request.Request(
-            f"https://{auth_host}/jwt/auth?service=container_registry"
-            f"&scope=repository:{project}:pull",
-            headers={"User-Agent": USER_AGENT},
-        ),
-        timeout=30,
-    ) as response:
-        token = json.load(response).get("token", "")
+    token = registry_token(auth_host, project)
     request = urllib.request.Request(
         f"https://{registry_host}/v2/{project}/manifests/{reference}",
         headers={
@@ -1089,25 +1103,13 @@ def resolve_source(
     """
     overlay = overlay_values or {}
 
-    def layers(path, derived_key=None):
-        if derived_key:
-            default = derive_values(chart_values).get(derived_key, "")
-            effective = derive_values(effective_values).get(derived_key, "")
-            # A derived value has no values leaf of its own: the overlay's
-            # contribution is the derived value when it differs from the
-            # chart's default.
-            override = effective if effective != default else ""
-        else:
-            default = get_path(chart_values, path)
-            effective = get_path(effective_values, path)
-            override = get_path(overlay, path)
-        return default, override, effective
-
     # 1. the section's environment map (the operator's own variables)
     if section:
         path = f"opea.{section}.env.{env_name}"
         if get_path(chart_values, path) is not None or get_path(effective_values, path) is not None:
-            default, override, effective = layers(path)
+            default = get_path(chart_values, path)
+            effective = get_path(effective_values, path)
+            override = get_path(overlay, path)
             return path, default, override, effective, None, path
 
     # 2. a value the chart derives from other values (GPU endpoints, origin)
@@ -1172,7 +1174,7 @@ def resolve_source(
                 default_path,
             )
 
-    # 5. the template renders the variable, but from a literal or a helper
+    # 4. the template renders the variable, but from a literal or a helper
     if template_map and env_name in template_map:
         return "", "(template literal or helper)", "", "", "TEMPLATE", ""
 
@@ -1182,7 +1184,7 @@ def resolve_source(
 def compare_workload(workload, env_maps, chart_values, overlay_values, effective_values):
     """Compare the deployed environment with the effective source baseline."""
     component = workload["component"]
-    section = OPEA_WORKLOADS.get(component, (None, None))[1]
+    section = component if component in OPEA_WORKLOADS else None
     template_map = env_maps.get(component, {}) if section else {}
     model_only = component not in OPEA_WORKLOADS
     if model_only:
@@ -1213,10 +1215,10 @@ def compare_workload(workload, env_maps, chart_values, overlay_values, effective
         declared_names |= set(env_map.keys())
 
     for env_name in sorted(declared_names | set(deployed_env)):
+        label, default, override, effective, status, default_path = resolve_source(
+            env_name, component, section, template_map, chart_values, overlay_values, effective_values
+        )
         if env_name not in deployed_env:
-            label, default, override, effective, status, default_path = resolve_source(
-                env_name, component, section, template_map, chart_values, overlay_values, effective_values
-            )
             if status == "UNDECLARED":
                 continue
             entry = template_map.get(env_name) or {}
@@ -1243,9 +1245,6 @@ def compare_workload(workload, env_maps, chart_values, overlay_values, effective
             )
             continue
         deployed = deployed_env[env_name]
-        label, default, override, effective, status, default_path = resolve_source(
-            env_name, component, section, template_map, chart_values, overlay_values, effective_values
-        )
         if status is None:
             if (
                 model_only
@@ -1256,7 +1255,7 @@ def compare_workload(workload, env_maps, chart_values, overlay_values, effective
                 # its remaining environment is not the retrieval
                 # configuration this story baselines. It is listed, never
                 # dropped silently.
-                undeclared.append((env_name, deployed))
+                undeclared.append(env_name)
                 continue
             status = "MATCH" if values_equal(effective, deployed) else "DIFFERENT"
         elif status == "UNDECLARED" and is_injected(env_name):
@@ -1264,7 +1263,7 @@ def compare_workload(workload, env_maps, chart_values, overlay_values, effective
             # configuration, and the chart does not declare it.
             continue
         if status == "UNDECLARED":
-            undeclared.append((env_name, deployed))
+            undeclared.append(env_name)
             continue
         rows.append(
             {
@@ -1431,7 +1430,7 @@ def render_markdown(data):
         if workload["undeclared"]:
             add(
                 "Carried by the deployment and not compared against the chart source: "
-                + ", ".join(f"`{name}`" for name, _value in workload["undeclared"])
+                + ", ".join(f"`{name}`" for name in workload["undeclared"])
             )
             add("")
 
@@ -1508,6 +1507,9 @@ def _not_running_status(workload):
     return "NOT RUNNING (no running pod)"
 
 
+UNOWNED_MARK = "no workload owns this pod"
+
+
 def build_images(workloads, pods):
     """One row per workload container, plus the pods no workload owns.
 
@@ -1531,7 +1533,6 @@ def build_images(workloads, pods):
                     "registry_digest": "",
                     "registry_child_digest": "",
                     "status": _not_running_status(workload),
-                    "_image": container["image"],
                 }
             )
 
@@ -1549,7 +1550,7 @@ def build_images(workloads, pods):
             continue
         images.append(
             {
-                "workload": f"{pod['pod']} (no workload owns this pod)",
+                "workload": f"{pod['pod']} ({UNOWNED_MARK})",
                 "container": pod["container"],
                 "image": pod["image"],
                 "running_digest": pod["digest"],
@@ -1558,7 +1559,6 @@ def build_images(workloads, pods):
                 "registry_digest": "",
                 "registry_child_digest": "",
                 "status": "NOT COMPARABLE",
-                "_image": pod["image"],
             }
         )
     return images
@@ -1577,13 +1577,13 @@ def resolve_registry_digests(images):
     for row in images:
         running = row["running_digest"]
         tag_digest, tag_child, note = None, "", ""
-        tag, digest = image_reference(row["_image"])
+        _repository, tag, digest = image_reference(row["image"])
         # The artifact the deployment DECLARES: its digest pin when it has
         # one, its tag otherwise. Resolving the tag of a pinned reference
         # would describe another artifact than the one the deployment runs.
         try:
             tag_digest, tag_child, note = registry_manifest(
-                row["_image"], digest or tag
+                row["image"], digest or tag
             )
         except Exception as error:  # noqa: BLE001 - reported, never fatal
             tag_digest, tag_child, note = None, "", f"unresolved ({error})"
@@ -1594,16 +1594,21 @@ def resolve_registry_digests(images):
             # would assert something about a container that does not
             # exist. The row keeps the reason it runs no pod.
             row["running_child_digest"] = ""
-            del row["_image"]
             continue
         running_child = ""
         running_note = ""
-        try:
-            _served, running_child, running_note = registry_manifest(
-                row["_image"], running.split("@")[-1]
-            )
-        except Exception as error:  # noqa: BLE001 - reported, never fatal
-            running_child, running_note = "", f"unresolved ({error})"
+        running_digest = running.split("@")[-1]
+        if tag_digest and running_digest == tag_digest:
+            # The pod runs the very artifact the deployment declares: its
+            # content is the content already resolved.
+            running_child = tag_child
+        else:
+            try:
+                _served, running_child, running_note = registry_manifest(
+                    row["image"], running_digest
+                )
+            except Exception as error:  # noqa: BLE001 - reported, never fatal
+                running_child, running_note = "", f"unresolved ({error})"
         row["running_child_digest"] = running_child or running_note
         if not tag_child:
             # The tag's content could not be resolved: nothing to compare.
@@ -1628,7 +1633,6 @@ def resolve_registry_digests(images):
             row["status"] = "MATCH" if same else "DIFFERENT"
             if not same:
                 differences += 1
-        del row["_image"]
     return differences
 
 
@@ -1676,29 +1680,33 @@ def image_note(images):
         for row in images
         if row["status"] not in ("MATCH", "SAME CONTENT", "DIFFERENT")
     ]
-    outside = [
-        row for row in rest if row["registry_digest"] == "outside the GitLab registry"
-    ]
-    unresolved = [
-        row for row in rest if str(row["registry_digest"]).startswith("unresolved")
-    ]
-    stopped = [row for row in rest if str(row["status"]).startswith("NOT RUNNING")]
-    unowned = [row for row in rest if "no workload owns this pod" in row["workload"]]
-    other = len(rest) - len(outside) - len(unresolved) - len(stopped) - len(unowned)
+    # Each row carries exactly one reason: the counts partition the rows.
+    counts = {"outside": 0, "unresolved": 0, "stopped": 0, "unowned": 0, "other": 0}
+    for row in rest:
+        if str(row["registry_digest"]).startswith("unresolved"):
+            counts["unresolved"] += 1
+        elif row["registry_digest"] == "outside the GitLab registry":
+            counts["outside"] += 1
+        elif str(row["status"]).startswith("NOT RUNNING"):
+            counts["stopped"] += 1
+        elif UNOWNED_MARK in row["workload"]:
+            counts["unowned"] += 1
+        else:
+            counts["other"] += 1
     reasons = []
-    if outside:
-        reasons.append(f"{len(outside)} an image outside the GitLab registry")
-    if unresolved:
-        reasons.append(f"{len(unresolved)} a reference the registry does not resolve")
-    if stopped:
-        reasons.append(f"{len(stopped)} a workload that runs no pod")
-    if unowned:
-        reasons.append(f"{len(unowned)} a pod no workload owns")
-    if other > 0:
-        reasons.append(f"{other} a reference that resolves to no artifact")
+    if counts["outside"]:
+        reasons.append(f"{counts['outside']} an image outside the GitLab registry")
+    if counts["unresolved"]:
+        reasons.append(f"{counts['unresolved']} a reference the registry does not resolve")
+    if counts["stopped"]:
+        reasons.append(f"{counts['stopped']} a workload that runs no pod")
+    if counts["unowned"]:
+        reasons.append(f"{counts['unowned']} a pod no workload owns")
+    if counts["other"]:
+        reasons.append(f"{counts['other']} a reference that resolves to no artifact")
     listed = ", ".join(reasons) if reasons else "none"
     owned_by_nobody = sum(
-        1 for row in images if "no workload owns this pod" in row["workload"]
+        1 for row in images if UNOWNED_MARK in row["workload"]
     )
     tail = (
         f" {owned_by_nobody} of the {len(images)} rows are pods no workload owns."

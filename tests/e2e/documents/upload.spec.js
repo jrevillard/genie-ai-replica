@@ -1,15 +1,37 @@
 const { test, expect } = require('@playwright/test');
+const fs = require('fs');
+const os = require('os');
 const path = require('path');
 const {
   navigateToDocumentManagement,
   openUploadDialog,
   uploadFile,
+  searchDocuments,
+  waitForFileIngestedViaApi,
   waitForDocumentInTable,
-  deleteAllTestDocuments
+  deleteAllTestDocuments,
+  // The shared status vocabulary, read through the helper that owns the
+  // bridge to the frontend's ES module (and the Node floor that bridge
+  // needs) — one import site for the whole suite.
+  normalizeStatus
 } = require('../helpers/documents');
-const { SESSION_MINT_TIMEOUT_MS } = require('../helpers/auth');
-
+const { request, getSessionToken, getSessionTokenViaUI, SESSION_MINT_TIMEOUT_MS } = require('../helpers/auth');
+const { TEST_ADMIN_USER } = require('../helpers/e2e-fixtures');
+const { pinLocale } = require('../helpers/locale');
+const {
+  skipUnlessVenue,
+  ingestChainReady,
+  ingestChainMissingReason,
+  INGEST_PROBE_BUDGET_MS
+} = require('../helpers/venue-profile');
 const FIXTURES_DIR = path.join(__dirname, '..', 'fixtures');
+// The ingest chain is real dataprep work (ClamAV scan, chunking, LLM
+// labeling, indexing) behind a possibly loaded shared venue — the wait is
+// bounded, never a sleep, and its expiry is the failure.
+const INGEST_BUDGET_MS = 240000;
+// This run's seed identity. The name is an identity, never an asserted
+// value (the same rule as the suite's unique seed names).
+const RUN_ID = `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
 
 test.describe('Document Upload', () => {
   // Login (30 s + 15 s retry) + navigation + table waits compose past the
@@ -17,6 +39,10 @@ test.describe('Document Upload', () => {
   test.setTimeout(120000);
 
   test.beforeEach(async ({ page }) => {
+    // The status pill's TEXT is i18n copy: the pin makes the English label
+    // the proven state of every session in this file, so a status read is
+    // a value comparison and never a locale bet (helpers/locale.js).
+    await pinLocale(page.context(), 'en');
     await navigateToDocumentManagement(page);
   });
 
@@ -60,5 +86,138 @@ test.describe('Document Upload', () => {
     // branch and kept passing when the copy dropped the extension — a
     // wrong-branch regression was green.
     expect(errorText).toMatch(/^File type "\.exe" is not allowed\.$/);
+  });
+});
+
+test.describe('Document Upload — the ingest chain', () => {
+  // The venue premise runs FIRST: without a dataprep chain that lands
+  // 'Ingested' (proven by the venue profile's own canary), this group's
+  // premise is absent, not broken (#1742). The skip hook is the group's
+  // first beforeAll, so the guarded setup after it never runs on a venue
+  // without the chain.
+  test.beforeAll(async () => {
+    // The premise's real cost is a browser login (the realm refuses
+    // direct grants, so the probe mints through the browser — budgeted at
+    // SESSION_MINT_TIMEOUT_MS) PLUS the canary's own ingest wait PLUS the
+    // canary's cleanup sweep. The hook runs under the PROJECT's timeout
+    // otherwise, and a hook cut mid-probe ERRORS the group instead of
+    // skipping it — and the canary's cleanup, which sits AFTER the wait,
+    // would never run: the canary would stay in the venue's corpus.
+    test.setTimeout(SESSION_MINT_TIMEOUT_MS + INGEST_PROBE_BUDGET_MS + 120000);
+    await skipUnlessVenue(test, ingestChainReady, ingestChainMissingReason)();
+  });
+
+  // The test itself mints a session of its own (the wait reads the API
+  // with a token that must not expire mid-wait), then uploads, then waits
+  // for real dataprep work: all three compose past the group's own
+  // ceiling.
+  test.setTimeout(SESSION_MINT_TIMEOUT_MS + INGEST_BUDGET_MS + 120000);
+
+  test.beforeEach(async ({ page }) => {
+    await pinLocale(page.context(), 'en');
+    await navigateToDocumentManagement(page);
+  });
+
+  test.afterAll(async ({ browser }) => {
+    // The helper's mint + list + delete sweep outlives the 60s hook
+    // default. This group's OWN rows: its seed names carry this prefix.
+    // The upload group's sweep (prefix 'test-document') covers this
+    // family too, but it runs FIRST — so it can only remove the leftovers
+    // of an aborted earlier run; this group's own sweep removes what
+    // this run left.
+    test.setTimeout(SESSION_MINT_TIMEOUT_MS);
+    await deleteAllTestDocuments('test-document-ingest', { browser });
+  });
+
+  test('ingest an uploaded file and reach the Ingested status', async ({ page, browser }) => {
+    // The ingested file is MARKDOWN, and the extension is part of the
+    // subject: the dataprep routes the docling-supported extensions to
+    // docling, and docling does not accept plain text — a .txt file fails
+    // at chunking with 'File format not allowed' and its status never
+    // reaches 'Ingested'. The .md fixture is ingested for real.
+    //
+    // Its NAME is unique per RUN: the dashboard's table lists the rows by
+    // name and the batch action takes the row it finds, so a name another
+    // run (or another group) also uses would let the action target a
+    // leftover row instead of this run's — and the wait below would then
+    // watch a row nobody ingested. The seed is the fixture's own text,
+    // copied out under this run's name.
+    const fileName = `test-document-ingest-${RUN_ID}.md`;
+    const uploadPath = `${os.tmpdir()}/${fileName}`;
+
+    try {
+      // The scratch copy is made INSIDE the try, so a failed copy leaves no
+      // scratch file behind.
+      fs.copyFileSync(path.join(FIXTURES_DIR, 'test-document-ingest.md'), uploadPath);
+      await uploadFile(page, uploadPath);
+
+      // The ingest is the dashboard's own batch action on the fresh row:
+      // the checkbox is a structural tail of the declared row handle, the
+      // two buttons are role-located under the pinned-English copy (the
+      // confirm dialog declares no handles — the accepted fallback).
+      const row = await waitForDocumentInTable(page, fileName);
+      await row.locator('input[type="checkbox"]').check();
+      await page.getByRole('button', { name: /ingest selected/i }).click();
+      await page.getByRole('button', { name: 'Ingest', exact: true }).click();
+      // No toast assertion here: the app renders the notification by TYPE
+      // ('notification-success'), and the upload dialog emits the SAME
+      // type — so that locator can bind to the upload's own toast, and
+      // with both toasts alive it resolves two elements (a strict-mode
+      // error, not a clean failure). The wait below is the real proof:
+      // an action that was not accepted leaves the file un-ingested, and
+      // the wait fails with the status it last saw.
+
+      // The chain the UI cannot show by itself: the ingest was accepted,
+      // and the dataprep status lands 'Ingested' over the API — the source
+      // of truth the table echoes. The wait is bounded and keys on the
+      // file id this run created; its expiry carries the last observed
+      // status.
+      // The list read rides the PAGE's own admin session (the page is
+      // logged in as the same admin, through navigateToDocumentManagement):
+      // a read that takes seconds does not need a second browser login.
+      const pageToken = await getSessionToken(page);
+      const uploaded = await request('GET', `/api/files?limit=50&search=${encodeURIComponent(fileName)}`, {
+        headers: { Authorization: `Bearer ${pageToken}` }
+      });
+      expect(uploaded.status, 'the file list answers the post-ingest read').toBe(200);
+      const mine = ((uploaded.data && uploaded.data.data) || []).find((f) => f.file_name === fileName);
+      expect(mine, 'this run uploaded exactly one row under its own name').toBeDefined();
+      // The wait reads the API, and a realm access token lives 300 s: the
+      // token the upload carried is already as old as the upload and the
+      // batch action, and it would expire UNDER a 240 s wait — the poll
+      // would die on a 401 instead of reporting the real outcome. A
+      // session minted for the wait answers in its own right.
+      const waitToken = await getSessionTokenViaUI({ user: TEST_ADMIN_USER, browser });
+      const file = await waitForFileIngestedViaApi(request, waitToken, mine.file_id, {
+        timeoutMs: INGEST_BUDGET_MS
+      });
+      expect(
+        normalizeStatus(file.dataprep && file.dataprep.status),
+        "the dataprep chain landed Ingested for this run's file"
+      ).toBe('ingested');
+
+      // The rendered verdict: the search refresh re-reads the list (the
+      // table has no auto-poll), and the pinned-English pill reads the
+      // ingested status — the same vocabulary, seen by the user. The CASE
+      // is folded before the comparison: the status tag renders through a
+      // CSS `text-transform: uppercase`, so the text the browser hands
+      // back is 'INGESTED' whatever the DOM carries.
+      await searchDocuments(page, fileName);
+      const ingestedRow = await waitForDocumentInTable(page, fileName);
+      const statusText = (await ingestedRow.locator('[data-test-id="document-status"]').innerText()).trim();
+      expect(statusText.toLowerCase(), 'the table renders the Ingested status').toBe('ingested');
+    } finally {
+      // The runner's own scratch copy of the seed: the venue-side document
+      // is removed by the group's sweep, this file is the runner's. A
+      // leftover is named, not swallowed — the runner's tmp is scratch, but
+      // a reader of the output has to be able to see it.
+      try {
+        fs.unlinkSync(uploadPath);
+      } catch (e) {
+        // ENOENT is a file that was never created (the copy failed) — not a
+        // leftover. Anything else is a leftover, and it is named.
+        if (e.code !== 'ENOENT') console.warn(`the scratch copy ${uploadPath} could not be removed: ${e.message}`);
+      }
+    }
   });
 });

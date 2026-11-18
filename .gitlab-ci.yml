@@ -215,7 +215,13 @@ workflow:
     # 2026-10-19 stale-bytes incident and the 2.1 GB full-fetch budget).
     # The npm download cache is preserved: it is the one reuse channel
     # npm ci genuinely has.
+    # Each step prints BEFORE it runs: a step that deletes a big tree (the
+    # leftover node_modules of a previous npm job) can stay silent for a
+    # full trace-update interval, and a silent interval kills the job (see
+    # the --progress=plain note below for the mechanism).
+    - echo "[workspace] removing the untracked residue (slow when a previous job left node_modules)"
     - git clean -ffdx -e .npm -e node_modules -e .venv || true
+    - echo "[workspace] restoring the tracked tree"
     - git checkout -f HEAD -- . || git reset --hard HEAD || true
   variables:
     npm_config_cache: "$CI_PROJECT_DIR/.npm/"
@@ -1298,7 +1304,13 @@ container_scanning:
     # it, and the checkout itself is what blew the get_sources budget (the
     # .git carries a 2.1 GB blob). Reset the workspace explicitly instead:
     # clean the untracked residue and force-restore the tracked tree.
+    # Each step prints BEFORE it runs: a step that deletes a big tree (the
+    # leftover node_modules of a previous npm job) can stay silent for a
+    # full trace-update interval, and a silent interval kills the job (see
+    # the --progress=plain note below for the mechanism).
+    - echo "[workspace] removing the untracked residue (slow when a previous job left node_modules)"
     - git clean -ffdx -e .npm -e node_modules -e .venv || true
+    - echo "[workspace] restoring the tracked tree"
     - git checkout -f HEAD -- . || git reset --hard HEAD || true
     - echo "$CI_REGISTRY_PASSWORD" | docker login -u "$CI_REGISTRY_USER" --password-stdin "$CI_REGISTRY"
     - if [ -n "$DOCKER_HUB_USER" ]; then echo "$DOCKER_HUB_TOKEN" | docker login -u "$DOCKER_HUB_USER" --password-stdin docker.io; fi
@@ -1335,7 +1347,18 @@ container_scanning:
       if [ "${FORCE_IMAGE_REBUILD:-}" = "true" ]; then
         NOCACHE="--no-cache"
       fi
+      # --progress=plain: GitLab's trace API rejects an EMPTY chunk when the
+      # runner produced no output for a whole update interval (the coordinator
+      # answers the runner with `update-interval=1m0s`); the runner reads that
+      # 403 as "the job was canceled" and kills the job. A buildx build
+      # without --progress is silent while it pulls its bases and runs its
+      # layers, so the no-cache rebuilds died at a constant ~66 s with an empty
+      # job trace — the same symptom as the 2.1 GB clone, which is why the two
+      # were easy to confuse. The plain progress streams every build step: the
+      # runner sees activity, the job survives, and the log is readable
+      # instead of empty.
       docker buildx build \
+        --progress=plain \
         --pull \
         --push \
         $NOCACHE \

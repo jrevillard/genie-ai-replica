@@ -1,9 +1,28 @@
-FROM nginx:1.28-alpine
+# The base tag is the fix, and the reason is the PIN, not the tag itself.
+# The official nginx image pins nginx=<exact version> in /etc/apk/world, and
+# `apk upgrade` refuses to move a pinned package. On the 1.28 line that pin
+# went stale upstream (nginx=1.28.3-r1 while Alpine published 1.28.3-r7), so
+# this image kept shipping CVE-2026-9256, CVE-2026-49975, CVE-2026-42055,
+# CVE-2026-42533 and CVE-2026-60005 — and no `apk upgrade` could ever move it
+# (measured: the world file read out of the published 1.28-alpine layer).
+# The 1.30 line IS maintained upstream: the image ships Alpine v3.24's
+# current 1.30.6-r1, which carries all five fixes (1.30.1-r0 .. 1.30.4-r0).
+FROM nginx:1.30-alpine
 
 # Pull current Alpine security updates at build time (CVE remediation
 # playbook): the rolling base tag does not refresh on its own between
 # upstream rebuilds. Order matters: upgrade first, then add.
-RUN apk upgrade --no-cache
+#
+# The nginx package itself is pinned by the upstream image (reproducibility:
+# the tag must not change behaviour under an `apk upgrade`), and on the
+# maintained 1.30 line that pin is the current one — upstream bumps it and
+# `--pull` picks it up. So this layer refreshes everything the pin does not
+# cover, and leaves nginx alone on purpose.
+#
+# `apk info -v nginx` prints the EXACT package version (with the Alpine -r
+# revision) into the build log: the build itself is the proof of what ships.
+RUN apk upgrade --no-cache \
+    && apk info -v nginx
 
 RUN apk add --no-cache openssl gettext
 

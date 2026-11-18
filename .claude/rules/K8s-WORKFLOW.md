@@ -440,8 +440,8 @@ set before trusting it on a newer release:
 5. Document upload → ClamAV scan → dataprep ingestion — upload via
    `POST /api/files/upload` (EN-only content) then trigger
    `POST /api/files/<id>/ingest`; watch dataprep status go `Ingested`.
-   **The file must be `.md`/`.pdf`/`.docx`** — docling rejects `.txt`
-   with `File format not allowed` and the ingest fails at chunking.
+   Use `.md`/`.pdf`/`.docx` — `.txt` also ingests now (routed to the
+   standard loader since #1985; docling itself has no plain-text format).
    Upload requires the `Admin` role (use `genie-admin`).
 6. RAG answer with citations — ask a question whose answer is in the
    just-ingested file; confirm the answer is correct AND `source_documents`

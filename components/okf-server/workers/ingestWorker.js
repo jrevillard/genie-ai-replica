@@ -19,7 +19,7 @@
 // 'indexed'|'failed' on okf_concepts_meta (2.9.1 writes 'parsed' only).
 
 const { aql } = require('arangojs');
-const matter = require('gray-matter');
+const { stringify } = require('../services/safe-frontmatter');
 const { parsePositiveInt } = require('../shared-lib/validation-utils');
 const dbService = require('../shared-lib/db-connection-service');
 const { logger } = require('../shared-lib/logger');
@@ -212,7 +212,7 @@ async function getDb() {
 /** Re-serialize a concept's stored markdown (frontmatter + body) — the same
  * gray-matter serializer the orchestrator uses (ADR-021 4f round-trip). */
 function markdownFor(input) {
-  return matter.stringify(input.body || '', input.frontmatter || {});
+  return stringify(input.body || '', input.frontmatter || {});
 }
 
 // Fields both claim strategies project onto the job row (single source of

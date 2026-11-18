@@ -314,9 +314,13 @@ exercised against a mutated copy of the fixtures:
 | the recorded capture carries no locale sample | exit 1 — the comparison cannot go vacuous | exit 1 |
 | the locale pointer names a path that does not exist | exit 1 | exit 1 |
 | the locale pointer is absent | exit 1 | exit 1 |
+| the locale pointer is repointed at an equal-valued copy | exit 1 — the declaration must name the capture's own list | exit 1 |
 
-The last row is the contract that separates the two kinds of difference: the
-deployed configuration is a contract, the sampled locale strings are a sample.
+The sampled-locale row is the contract that separates the two kinds of
+difference: the deployed configuration is a contract, the sampled locale
+strings are a sample. The last three rows are the non-vacuity guard — the
+comparison cannot silently read nothing, and the declaration cannot be
+repointed away from the recorded capture.
 
 The drift detection has **no automated CI-runner** — the probe needs a live
 venue, and the repository has no test harness for `scripts/` (the sibling

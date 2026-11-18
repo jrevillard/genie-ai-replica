@@ -613,8 +613,9 @@ The sample lives **once**, in the recorded capture
 (`measured.preparation.locales` in the fixtures file); the expectation block
 points at it (`preparation.locales_source`) instead of copying it. The probe
 compares the live measurement against the recorded capture itself — never
-against a pointer's target — and checks that the declaration still names it.
-So a moved or emptied sample is a **drift**, not a silent green.
+against a pointer's target — and checks that the declaration names that very
+list, not an equal-valued copy of it. So a moved, repointed or emptied sample
+is a **drift**, not a silent green.
 
 ## 6. Deployed values that differ from the repository defaults
 

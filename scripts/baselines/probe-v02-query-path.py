@@ -386,8 +386,11 @@ def resolve_pointer(document: dict, pointer: str | None) -> list:
     """Resolve a dotted pointer to a list inside the fixtures document.
 
     The expectation block declares where a value lives instead of copying
-    it (``preparation.locales_source``). Resolving the declaration keeps it
-    load-bearing: a moved value cannot leave a comparison reading nothing.
+    it (``preparation.locales_source``). The resolution is a CONSISTENCY
+    CHECK, not the comparison source: the comparison always reads the
+    recorded capture, and the declaration is checked against it. The
+    anti-vacuity guarantee comes from that check on the capture's own
+    emptiness, not from the resolution.
     """
     if not pointer:
         return []
@@ -470,7 +473,10 @@ def verify(fixtures_path: str, document: dict) -> int:
             "measured.preparation.locales: the recorded capture carries no locale sample — "
             "the record claims three locales, one of them non-Latin"
         )
-    elif resolve_pointer(fixtures, pointer) != expected_locales:
+    elif resolve_pointer(fixtures, pointer) is not expected_locales:
+        # The declaration must name THAT list, not an equal-valued copy of
+        # it: a pointer repointed at a duplicate would otherwise decouple
+        # the comparison from the recorded capture again.
         drift.append(f"preparation.locales_source: {pointer!r} does not point at the recorded capture's locale sample")
     live_locales = {l.get("locale"): l for l in live_prep.get("locales", [])}
     for locale in expected_locales:

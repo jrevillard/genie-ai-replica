@@ -3337,11 +3337,23 @@ class TestTheLateGraphWriteIsPurged:
                 assert await _wait_for(lambda: not dataprep._BACKGROUND_TASKS), f"the purge never finished: {order}"
             return dp
 
-        _run(scenario())
+        dp = _run(scenario())
         assert order.count("retract") == 2, (
             f"the purge deleted the re-kick's rows: {order} — it must stand down when a new "
             "ingest of the document has started"
         )
+        # The retry STOOD DOWN: it ran no cascade, so it announced nothing.
+        # Only the first attempt — the one that really ran — announced itself.
+        announcements = [
+            str(call.args[3])
+            for call in dp._write_ingestion_log.call_args_list
+            if "Purging the rows" in str(call.args[3])
+        ]
+        assert len(announcements) == 1, (
+            f"a purge that stood down announced itself: {announcements} — the operator reads a "
+            "cascade that never happened"
+        )
+        assert "(attempt 1/2)" in announcements[0], announcements
 
     def test_a_failure_with_no_writer_in_flight_registers_no_purge(self, monkeypatch):
         """Nothing to purge means nothing registered.
@@ -3446,6 +3458,16 @@ class TestTheLateGraphWriteIsPurged:
             f"the purge was not retried once: {order} — a single failed purge leaves the late "
             "write's rows indexed for good"
         )
+        # Each attempt says which it is: two rows reading the same would tell
+        # the operator nothing about which cascade they are reading.
+        announcements = [
+            str(call.args[3])
+            for call in dp._write_ingestion_log.call_args_list
+            if "Purging the rows" in str(call.args[3])
+        ]
+        assert len(announcements) == 2, f"the purge did not announce both attempts: {announcements}"
+        assert "(attempt 1/2)" in announcements[0], announcements
+        assert "(attempt 2/2)" in announcements[1], announcements
 
     def test_the_rollback_retracts_from_the_graph_the_insertion_wrote_to(self, monkeypatch):
         """One graph name, resolved once, for the insertion AND the rollbacks.
@@ -3638,14 +3660,20 @@ class TestTheLateGraphWriteIsPurged:
             graph_cls.return_value.add_graph_documents = slow_insert
 
             async def retract(file_id=None, graph_name=None, update_status=True):
-                order.append("retract")
+                # Was the purge announced before this cascade ran? The row
+                # that explains the deletion has to come first, or the
+                # operator reads the cascade before its explanation.
+                announced = any(
+                    "Purging the rows" in str(call.args[3]) for call in dp._write_ingestion_log.call_args_list
+                )
+                order.append(f"retract announced={announced}")
 
             dp.retract_file = retract
 
             inp = _graph_ingest_input()
             with _patched_graph_ingest(graph_cls), pytest.raises(HTTPException):
                 await dp.ingest_file_with_guardrail(inp, lock_file=None)
-            purged = await _wait_for(lambda: order.count("retract") >= 2)
+            purged = await _wait_for(lambda: sum(1 for entry in order if entry.startswith("retract")) >= 2)
             return dp, purged
 
         dp, purged = _run(scenario())
@@ -3653,6 +3681,13 @@ class TestTheLateGraphWriteIsPurged:
         rows = [c.args[3] for c in dp._write_ingestion_log.call_args_list if c.args[1] == "INFO"]
         assert any("Purging the rows" in message for message in rows), (
             f"the purge did not announce itself in the document's own log: {rows}"
+        )
+        # The announcement came BEFORE the cascade it announces: the purge's
+        # own retraction is the last one (the rollback's is the first).
+        cascades = [entry for entry in order if entry.startswith("retract")]
+        assert cascades[-1] == "retract announced=True", (
+            f"the cascade ran before the announcement: {order} — the operator reads the deletion "
+            "before the row that explains it"
         )
 
     def test_the_purge_runs_inside_its_own_span(self, monkeypatch, captured_spans):
@@ -3851,6 +3886,15 @@ class TestTheLateGraphWriteIsPurged:
             f"the re-kick was purged by the previous attempt's late write: {order} — the purge "
             "deletes by file_id and would have deleted the new attempt's rows too"
         )
+        # A purge that stands down did NOT run: it must not announce itself in
+        # the document's log, or the operator reads a cascade that never
+        # happened.
+        announcements = [
+            str(call.args[3])
+            for call in dp._write_ingestion_log.call_args_list
+            if "Purging the rows" in str(call.args[3])
+        ]
+        assert not announcements, f"a purge that stood down announced itself: {announcements}"
         statuses = [c.args[1] for c in dp._update_doc_status.call_args_list]
         assert statuses[-1] == "Ingested", statuses
 

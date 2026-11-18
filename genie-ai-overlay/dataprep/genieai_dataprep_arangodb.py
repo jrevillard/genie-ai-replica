@@ -4199,7 +4199,7 @@ class GenieArangoDataprep(OpeaArangoDataprep):
         own: without it these lines are the only ones of the mechanism that
         cannot be correlated with the ingest that produced them.
         """
-        with background_span("dataprep.late_write_purge"):
+        with background_span("dataprep.late_write_purge", attributes={"dataprep.file_id": file_id}):
             try:
                 for attempt in (1, 2):
                     # Checked before EVERY attempt: a retry runs seconds later, and
@@ -4231,7 +4231,7 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                             "System",
                             f"Purging the rows a graph insertion wrote after the retraction "
                             f"(attempt {attempt}/2) — the insertion was still running when the "
-                            "ingest failed, and its write landed after the cleanup.",
+                            "ingest failed or was killed, and its write landed after the cleanup.",
                         )
                         await purge()
                         return

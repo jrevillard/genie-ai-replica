@@ -82,6 +82,13 @@ surfaces as `EXPORT_FAILED: bundle store failed (doc-repo status 503)`
 when publishing an OKF repo. NVIDIA venues never load the overlay — no
 behavior change there.
 
+> **TLS-verify note (security round-2, 2026-11-18):** the co-located 18B
+> render sets `OPEA_SSL_SKIP_VERIFY=1` unconditionally (self-signed node
+> cert by design). The knob is **process-global** with no per-endpoint CA
+> pinning: a future deployment that fronts Keycloak or ArangoDB with a
+> publicly-signed cert would silently lose that verification. Revisit
+> before mixing signed and self-signed endpoints on one host.
+
 ## 4. The TLS certificate — generator, failure class, fix
 
 ### The failure class (what it looked like)

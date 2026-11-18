@@ -32,18 +32,6 @@ RUN apt-get update && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
 
-# Configure freshclam
-RUN sed -i 's/^NotifyClamd/#NotifyClamd/' /etc/clamav/freshclam.conf
-
-# Configure clamd
-RUN sed -i 's/^LocalSocket /#LocalSocket /' /etc/clamav/clamd.conf \
-    && sed -i 's/^FixStaleSocket /#FixStaleSocket /' /etc/clamav/clamd.conf \
-    && sed -i 's/^LocalSocketGroup /#LocalSocketGroup /' /etc/clamav/clamd.conf \
-    && sed -i 's/^LocalSocketMode /#LocalSocketMode /' /etc/clamav/clamd.conf \
-    && echo 'TCPSocket 3310' >> /etc/clamav/clamd.conf \
-    && echo 'TCPAddr 0.0.0.0' >> /etc/clamav/clamd.conf \
-    && sed -i 's/^User /#User /' /etc/clamav/clamd.conf
-
 # Create app directory
 WORKDIR /app
 
@@ -91,6 +79,20 @@ ARG CACHE_BUST=0
 RUN CACHE_BUST=$CACHE_BUST apt-get update -y -o Acquire::Retries=5 && \
     apt-get upgrade -y --with-new-pkgs --fix-missing -o Acquire::Retries=5 && \
     apt-get clean && rm -rf /var/lib/apt/lists/*
+
+# Configure freshclam
+RUN sed -i 's/^NotifyClamd/#NotifyClamd/' /etc/clamav/freshclam.conf
+
+# Configure clamd — AFTER the upgrade layer on purpose: these files belong to
+# the clamav package, and a package that moves restores its own conffiles
+# over ours. Writing them after the upgrade means our version always wins.
+RUN sed -i 's/^LocalSocket /#LocalSocket /' /etc/clamav/clamd.conf \
+    && sed -i 's/^FixStaleSocket /#FixStaleSocket /' /etc/clamav/clamd.conf \
+    && sed -i 's/^LocalSocketGroup /#LocalSocketGroup /' /etc/clamav/clamd.conf \
+    && sed -i 's/^LocalSocketMode /#LocalSocketMode /' /etc/clamav/clamd.conf \
+    && echo 'TCPSocket 3310' >> /etc/clamav/clamd.conf \
+    && echo 'TCPAddr 0.0.0.0' >> /etc/clamav/clamd.conf \
+    && sed -i 's/^User /#User /' /etc/clamav/clamd.conf
 
 # Non-root (#1227): node (uid 1000) owns everything this container writes.
 USER node

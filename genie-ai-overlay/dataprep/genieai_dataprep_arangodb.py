@@ -4225,7 +4225,7 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                             f"{file_id}: the late graph-write purge stands down — a new ingest of the "
                             "document started, and this purge deletes by document id (#1991)"
                         )
-                        span.set_attribute("dataprep.purge_result", "stood_down")
+                        span.set_attribute(ATTRIBUTE_NAMES["dataprep_purge_result"], "stood_down")
                         # The operator reads the document's log, and this is
                         # the one outcome that changes its data: whatever the
                         # late write lands after the new ingest's retract stays
@@ -4259,7 +4259,7 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                             "ingest failed or was killed, and its write landed after the cleanup.",
                         )
                         await purge()
-                        span.set_attribute("dataprep.purge_result", "purged")
+                        span.set_attribute(ATTRIBUTE_NAMES["dataprep_purge_result"], "purged")
                         return
                     except Exception as exc:  # noqa: BLE001 — a failed purge must not kill the service
                         logger.error(
@@ -4268,15 +4268,18 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                             f"{type(exc).__name__}: {exc}"
                         )
                         if attempt == _LATE_WRITE_PURGE_ATTEMPTS:
-                            span.set_attribute("dataprep.purge_result", "failed")
-                            await self._write_ingestion_log(
-                                file_id,
-                                "ERROR",
-                                "System",
-                                "The purge of the rows an in-flight graph insertion wrote after the "
-                                "retraction failed — the document's chunks may still be indexed. Retract "
-                                "the document and re-kick it.",
-                            )
+                            span.set_attribute(ATTRIBUTE_NAMES["dataprep_purge_result"], "failed")
+                            try:
+                                await self._write_ingestion_log(
+                                    file_id,
+                                    "ERROR",
+                                    "System",
+                                    "The purge of the rows an in-flight graph insertion wrote after the "
+                                    "retraction failed — the document's chunks may still be indexed. Retract "
+                                    "the document and re-kick it.",
+                                )
+                            except Exception as exc:  # noqa: BLE001 — a log write must not kill the purge
+                                logger.error(f"{file_id}: the purge's failure could not be logged: {exc!r}")
                         else:
                             await asyncio.sleep(2)
             except asyncio.CancelledError:

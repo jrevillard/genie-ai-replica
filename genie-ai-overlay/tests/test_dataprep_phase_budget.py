@@ -3411,7 +3411,7 @@ class TestTheLateGraphWriteIsPurged:
         states = getattr(dp, "_late_write_states", None) or {}
         assert "f1" not in states, f"the tracking state was left behind for a file with no writer in flight: {states}"
 
-    def test_a_failing_purge_is_retried_and_reported_to_the_operator(self, monkeypatch):
+    def test_a_failing_purge_is_retried_and_reported_to_the_operator(self, monkeypatch, captured_spans):
         """A purge that fails must not leave the rows behind in silence.
 
         The purge is what removes the late write's rows; if it fails, the
@@ -3480,6 +3480,11 @@ class TestTheLateGraphWriteIsPurged:
         assert len(announcements) == 2, f"the purge did not announce both attempts: {announcements}"
         assert "(attempt 1/2)" in announcements[0], announcements
         assert "(attempt 2/2)" in announcements[1], announcements
+        # The span says the purge FAILED (the retry exhausted its attempts):
+        # a trace must be able to tell a failed purge from a successful one.
+        spanned = captured_spans("dataprep.late_write_purge")
+        assert spanned, "the purge ran without a span"
+        assert spanned[0].attributes.get("dataprep.purge_result") == "failed", spanned[0].attributes
 
     def test_the_rollback_retracts_from_the_graph_the_insertion_wrote_to(self, monkeypatch):
         """One graph name, resolved once, for the insertion AND the rollbacks.

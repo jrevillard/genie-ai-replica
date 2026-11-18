@@ -77,7 +77,7 @@ if phase:
 |------|-------|----------------|
 | `dataprep.ingest` | ingest entry | `dataprep.file_type`, `dataprep.file_size_bytes`, `dataprep.file_id` |
 | `dataprep.retract` | retract entry | `dataprep.file_id` |
-| `dataprep.late_write_purge` | purge of a late graph write (#1991) | `dataprep.file_id` |
+| `dataprep.late_write_purge` | purge of a late graph write (#1991) | `dataprep.file_id`, `dataprep.purge_result` |
 | `dataprep.chunking` | docling + chunk | `dataprep.chunk_count` |
 | `dataprep.llm.label_chunk` | single-chunk label call | `dataprep.chunk_index`, `dataprep.llm_attempt`, `dataprep.llm_batched=False`, `dataprep.llm_model`, `dataprep.labels_suggested`, `dataprep.llm.completion_tokens`, `dataprep.llm.timed_out`, `dataprep.llm.timeout_seconds` |
 | `dataprep.llm.label_batch` | batched label call | `dataprep.llm_batched=True`, `dataprep.llm_batch_size`, `dataprep.chunk_indices`, `dataprep.llm_model`, `dataprep.labels_suggested`, `dataprep.llm.completion_tokens`, `dataprep.llm.prompt_tokens`, `dataprep.llm.timed_out`, `dataprep.llm.timeout_seconds` |

@@ -38,15 +38,20 @@ that position:
     empty knowledge graph — silently, on every deployment.
 
     So ``docker-compose.yaml`` deliberately does not inject it, and the phase
-    keeps comps' own ``int`` 600 s default. That default is also the right
-    value: this phase has no degradation path, so a batch cancelled mid-flight
-    loses its chunks outright while the document still reports success.
-    Binding it differently — or bounding the graph-insertion gather that
-    follows, which cannot be bounded from outside for the same reason — needs a
-    patch to the vendored source.
+    keeps comps' own ``int`` 600 s default. The wedge that default used to
+    make unbounded is now contained from the outside: the graph-insertion
+    phase runs under the same phase ceiling as the other LLM phases (issue
+    #1726), and its budget expiry FAILS the ingest instead of holding the
+    single ingest lane forever — the failure message carries the operator
+    guidance (what to raise, what to fix, that the re-ingest is manual). What
+    remains vendored-side debt is the per-call HTTP read budget itself: a
+    call parked on a dead socket still burns its full 600 s inside the phase
+    before the ceiling can act, and binding it differently needs a patch to
+    the vendored source.
 
-    The transformer also emits no span and no progress line, so nothing tells an
-    operator how far through the documents it is.
+    The transformer also emits no span of its own; the phase around it now
+    does (``dataprep.llm.phase``, carrying the budget and the timed_out
+    attribute), and the batch loop reports per-batch progress.
 
 ``OpeaArangoDataprep._initialize_embeddings``
     Builds the TEI embedding client used at ingest for label selection, chunk

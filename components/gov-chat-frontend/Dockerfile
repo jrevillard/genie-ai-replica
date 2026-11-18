@@ -26,12 +26,29 @@ RUN npm run build \
 # Pinned tag, not nginx:alpine: the Dockerfile chowns /app/dist/runtime to
 # the NUMERIC uid 101, so a floating tag whose nginx uid could shift would
 # freeze wrong ownership into the image. Same tag the edge nginx uses.
-FROM nginx:1.28-alpine
+#
+# 1.30 and not 1.28: the official image pins nginx=<exact version> in
+# /etc/apk/world and `apk upgrade` refuses to move a pinned package. On the
+# 1.28 line that pin went stale upstream (1.28.3-r1 while Alpine published
+# 1.28.3-r7), so this image kept shipping CVE-2026-9256, CVE-2026-49975,
+# CVE-2026-42055, CVE-2026-42533 and CVE-2026-60005. The 1.30 line is
+# maintained upstream (Alpine v3.24's current 1.30.6-r1 carries all five).
+FROM nginx:1.30-alpine
 
 # Pull current Alpine security updates at build time (CVE remediation
 # playbook): the rolling base tag does not refresh on its own between
 # upstream rebuilds.
-RUN apk upgrade --no-cache
+#
+# The nginx package itself stays pinned by the upstream image (that pin is
+# the reproducible combination upstream tested), and on the maintained 1.30
+# line it is the current one — upstream bumps it, `--pull` picks it up. So
+# this layer refreshes everything the pin does not cover, and leaves nginx
+# alone on purpose.
+#
+# `apk info -v nginx` prints the EXACT package version (with the Alpine -r
+# revision) into the build log: the build itself is the proof of what ships.
+RUN apk upgrade --no-cache \
+    && apk info -v nginx
 
 WORKDIR /app
 

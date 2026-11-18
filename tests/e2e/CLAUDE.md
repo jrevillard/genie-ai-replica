@@ -39,7 +39,22 @@ in the error (never silently tolerated).
 - **The sanctioned retry inventory (#1878).** A retry is a determinism
   hazard: it exists only where it is sanctioned HERE, with its contract
   spelled out. Every entry keys on a condition, is bounded, and fails loud
-  on its last observed outcome — never a silent give-up. The inventory:
+  on its last observed outcome — never a silent give-up. One clause binds
+  every entry: **a retry may never cover an assertion path.** A retry may
+  only cover a transport/setup path that is OUTSIDE any spec's subject —
+  and the criterion that decides is WHAT the attempt produced, not who
+  judges it: a path whose failure produced no product verdict about the
+  surface the spec asserts (the transport dropped it, or the edge returned
+  its own reset artifact — a transport artifact, not a product verdict). It
+  may never re-run or re-decide an assertion the spec itself makes: once
+  an attempt PRODUCED a product verdict about what the spec asserts, a
+  second answer is no evidence where the first was the truth. Two
+  neighbours are not retries: a WAIT for a convergent condition (it
+  re-reads a STATE that is still MOVING until it holds — the earlier read
+  was never a verdict; see *Wait for conditions, not durations* below),
+  and a cleanup protocol that re-issues the same request after a STATE
+  CHANGE (the sweep's re-DELETE: `helpers/documents.js`
+  `sweepDeleteOneFile`). The inventory:
   1. `helpers/auth.js`'s `request()` — the edge's own upstream-reset failure
      re-issued on the idempotent methods (#1847 — operator-sanctioned as the
      deterministic answer to a genuine transient): the k8s venue's Envoy
@@ -64,6 +79,24 @@ in the error (never silently tolerated).
      the deadline, a permanent error thrown at once, expiry loud with the
      last observed error. Provisioning infra, not an assertion path — the
      retry never covers a spec's own verdict.
+
+  **The boundary, worked out — the refused FR-translation probe (#1984 —
+  operator ruling, 2026-11-17, coordination board #1216, note 127389).** A
+  proposed fourth entry would have made `helpers/venue-profile.js`'s
+  `translatesTo()` take a SECOND SAMPLE whenever a 200 answer carried no
+  translation — it echoed its English source, or carried none at all — and
+  the probe's verdict would have come from that second answer: a first
+  answer that echoed its source became INVISIBLE (a chain that echoed only
+  that once would have carried the run green; a chain that never
+  translated had its French surface skipped — a coverage loss, not a red).
+  The operator REFUSED it: an untranslated answer is a BUG in the
+  translation chain, not a transient, so the probe stays at ONE sample and
+  an echoed answer turns the GROUP RED. A setup premise does not exempt a
+  RETRY of it — the clause forbids that too, for the probe's answer IS a
+  product verdict about the very capability the group asserts: a second
+  sample would have re-asked a question whose answer was already the
+  truth.
+
   This list is exhaustive. A new retry surface needs an operator ruling
   recorded here first; no spec adds a retry loop, and Playwright's
   `retries: 0` stays untouched.
@@ -248,8 +281,15 @@ no CI resources — it runs locally, regularly). The executed set is what the
 **local run** executes:
 
 ```bash
-BASE_URL=https://genieai-forge.local:4443 tests/e2e/run/run-local-e2e.sh
+BASE_URL=https://<your-venue-host>:4443 tests/e2e/run/run-local-e2e.sh
 ```
+
+`<your-venue-host>` is the venue's edge hostname, and the `:4443` that
+follows is the shared forge's edge port — substitute both when your venue
+differs. The shared forge's worked example, and the `E2E_VENUE_IP` mapping
+for a runner that cannot resolve its venue's name, are in
+[`docs/e2e-tests/local-run.md`](../../docs/e2e-tests/local-run.md#venue-address)
+(§ Venue address).
 
 It provisions the venue fixtures, runs the **whole `tests/e2e/` tree**,
 prints the outcome — every skipped spec with its reason — and the

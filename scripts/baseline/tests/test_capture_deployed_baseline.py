@@ -1093,3 +1093,21 @@ def test_a_targeted_overlay_path_through_a_scalar_fails_loudly():
     """Flux refuses such a path: the capture must not drop the source."""
     with pytest.raises(RuntimeError):
         capture.set_path({"a": 1}, "a.b", {})
+
+
+def test_a_commented_out_row_is_not_a_declaration(tmp_path):
+    """A Go template comment documents a row; the chart never renders it."""
+    template = tmp_path / "svc.yaml"
+    template.write_text(
+        "{{- $svc := .Values.services.backend | default dict -}}\n"
+        "{{/*\n"
+        "- name: COMMENTED_OUT\n"
+        "  value: {{ $svc.name }}\n"
+        "*/ -}}\n"
+        "- name: REAL\n"
+        "  value: {{ $svc.name }}\n",
+        encoding="utf-8",
+    )
+    mapping = capture.parse_template_env(str(template))
+    assert "COMMENTED_OUT" not in mapping
+    assert "REAL" in mapping

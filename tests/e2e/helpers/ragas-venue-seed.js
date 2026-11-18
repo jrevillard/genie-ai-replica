@@ -26,21 +26,31 @@
 //
 // TRANSPORT REQUIREMENT: the back door needs a docker daemon that can exec
 // into the venue's okf-server container. A venue without one (k8s-only)
-// skips the three specs WITH A REASON (#1742 protocol) — RagasSeedUnavailable
-// below — rather than failing on infrastructure it does not have.
+// skips the three specs WITH A REASON (#1742 protocol) in the fixture
+// hooks' probe — before any fixture exists — rather than failing on
+// infrastructure it does not have. A transport that dies MID-seed fails
+// the spec loudly: the afterAll purge still runs and says what survived.
+//
+// registerRagasVenueFixtures is the ONE wiring of the spec protocol (the
+// skipUnlessVenue convention, #1773: stated once, not pasted per spec).
 
 const { execFile } = require('node:child_process');
 const path = require('node:path');
 const { promisify } = require('node:util');
 
 const execFileP = promisify(execFile);
-const { getSessionTokenViaUI, request } = require('./auth');
+const { getSessionTokenViaUI, request, getAdminToken, SESSION_MINT_TIMEOUT_MS } = require('./auth');
+const { createUser, deleteUser } = require('./keycloak-admin');
 const seedDocs = require('../../../data/okf/smoke-test/ragas-venue-seed-docs');
 
 const SEED_DIR = path.resolve(__dirname, '../../../data/okf/smoke-test');
 const TEMPLATE_FILE = path.join(SEED_DIR, 'ragas-venue-seed-docs.js');
 const WRITER_FILE = path.join(SEED_DIR, 'seed-ragas-venue-docs.js');
+// The host↔writer path contract, stated once (cp target + every exec argv).
+const TEMPLATE_IN_CONTAINER = '/app/ragas-venue-seed-docs.js';
+const WRITER_IN_CONTAINER = '/app/seed-ragas-venue-docs.js';
 
+const REALM = process.env.KEYCLOAK_REALM || 'genie';
 // The publish-drain poll: a publish starts the async RAG drain, and the
 // card's Testing Lab button hides while `rag_ingestion.status ===
 // 'draining'`. A one-concept repo drains in seconds; two minutes bounds a
@@ -48,11 +58,10 @@ const WRITER_FILE = path.join(SEED_DIR, 'seed-ragas-venue-docs.js');
 const DRAIN_TIMEOUT_MS = 120000;
 const DRAIN_POLL_MS = 3000;
 
-/**
- * The seed cannot run on this venue: no docker/okf-server container for the
- * in-container back door. The specs catch this and skip WITH A REASON.
- */
-class RagasSeedUnavailable extends Error {}
+// The one no-container sentence — the probe's skip reason and the direct
+// caller's failure say the SAME thing about the SAME condition.
+const NO_CONTAINER_REASON =
+  'venue seed: no okf-server container reachable via docker (the #1890 back door needs docker exec into the venue’s okf-server; set OKF_E2E_OKF_CONTAINER to name it)';
 
 function log(step, msg) {
   console.log(`[ragas-venue-seed] ${step}: ${msg}`);
@@ -84,7 +93,8 @@ async function okfApi(method, urlPath, token, body) {
 /**
  * Every repository the caller can read, across ALL pages (the route caps a
  * page at 100 and hands back a cursor) — a stale seed repo hidden past page
- * 1 on a repo-heavy venue must still be found by the purge.
+ * 1 on a repo-heavy venue must still be found by the purge. The list
+ * envelope is the route's fixed { items, next_cursor }.
  */
 async function listRepos(token) {
   const all = [];
@@ -96,7 +106,7 @@ async function listRepos(token) {
       token
     );
     if (r.status !== 200) throw new Error(`repos list → ${r.status} ${JSON.stringify(r.body).slice(0, 200)}`);
-    const items = (r.body && (r.body.items || r.body.repos)) || [];
+    const items = (r.body && r.body.items) || [];
     all.push(...items);
     cursor = r.body && r.body.next_cursor;
     if (!cursor) return all;
@@ -133,7 +143,7 @@ async function purgeRepoWithLadder(token, repoId, container) {
   if (![200, 202, 204, 404].includes(st)) {
     if (!container)
       throw new Error(`venue purge: repo ${repoId} delete → ${st} and no container for the unstamp fallback`);
-    await execInContainer(container, ['node', '/app/seed-ragas-venue-docs.js', 'unstamp', repoId]);
+    await execInContainer(container, ['node', WRITER_IN_CONTAINER, 'unstamp', repoId]);
     st = await deleteOnce();
   }
   if (![200, 202, 204, 404].includes(st)) {
@@ -162,7 +172,7 @@ async function purgeStale(token, container) {
 /** Remove every okf_head_test_runs doc in the seed's suite scope, repo or
  * no repo (the writer's purge-docs). */
 async function sweepOrphanDocs(container) {
-  const out = await execInContainer(container, ['node', '/app/seed-ragas-venue-docs.js', 'purge-docs']);
+  const out = await execInContainer(container, ['node', WRITER_IN_CONTAINER, 'purge-docs']);
   log('purge', out.trim());
 }
 
@@ -180,29 +190,28 @@ async function execInContainer(container, args) {
 }
 
 /**
- * Seed the venue for the three RAGAS specs. Throws RagasSeedUnavailable when
- * the venue has no docker/okf-server container (the specs skip with a
- * reason); any other failure THROWS — a broken seed on a capable venue is a
- * loud failure, not a skip.
+ * Seed the venue for the three RAGAS specs. Any failure THROWS — a broken
+ * seed on a capable venue is a loud failure, not a skip (the venue posture
+ * check is the hooks' probe, which SKIPS before anything is created).
  *
  * @param {{username: string, password: string}} user - the spec's own
- *        tools-admin user (already created by the spec's beforeAll).
- * @returns {Promise<{repoId: string, token: string}>}
+ *        tools-admin user (already created by the fixture hooks).
+ * @param {string} [container] - the probed okf-server container (the
+ *        fixture hooks thread theirs so the seed re-runs no docker ps).
+ * @returns {Promise<{repoId: string}>}
  */
-async function seedRagasVenue(user) {
-  const container = await findOkfContainer();
-  if (!container) {
-    throw new RagasSeedUnavailable(
-      'venue seed: no okf-server container reachable via docker (the #1890 back door needs docker exec into the venue’s okf-server; set OKF_E2E_OKF_CONTAINER to name it)'
-    );
-  }
+async function seedRagasVenue(user, container = null) {
+  container = container || (await findOkfContainer());
+  if (!container) throw new Error(NO_CONTAINER_REASON);
   log('container', container);
 
-  // The writer + template go in FIRST — the stale-artifact purge's orphan
-  // sweep execs them (a container copy from a previous run may predate the
-  // current subcommands).
-  await docker(['cp', TEMPLATE_FILE, `${container}:/app/ragas-venue-seed-docs.js`]);
-  await docker(['cp', WRITER_FILE, `${container}:/app/seed-ragas-venue-docs.js`]);
+  // The writer + template go in FIRST (independent copies, overlapped) —
+  // the stale-artifact purge's orphan sweep execs them (a container copy
+  // from a previous run may predate the current subcommands).
+  await Promise.all([
+    docker(['cp', TEMPLATE_FILE, `${container}:${TEMPLATE_IN_CONTAINER}`]),
+    docker(['cp', WRITER_FILE, `${container}:${WRITER_IN_CONTAINER}`])
+  ]);
 
   const token = await getSessionTokenViaUI({ user });
   if (!token) throw new Error('venue seed: the UI session mint returned no token');
@@ -242,7 +251,7 @@ async function seedRagasVenue(user) {
 
   // The back door: exec the writer (copied in at the top of the seed). It
   // marks PII scanned (the submit gate) and writes both docs.
-  const out = await execInContainer(container, ['node', '/app/seed-ragas-venue-docs.js', 'seed', repoId]);
+  const out = await execInContainer(container, ['node', WRITER_IN_CONTAINER, 'seed', repoId]);
   log('back-door', out.trim().split('\n').join(' | '));
 
   for (const action of ['submit', 'approve', 'publish']) {
@@ -270,10 +279,11 @@ async function seedRagasVenue(user) {
   log('drain', 'settled');
 
   // The seed asserts its own readiness: the suite + run docs answer over
-  // the API exactly as the panel will read them.
+  // the API exactly as the panel will read them (listRuns' fixed envelope
+  // is { runs }, and every row projects suite_key).
   const runs = await okfApi('GET', `/api/okf/repos/${repoId}/ragas-testsuite/runs?kind=all&limit=20`, token);
-  const rows = (runs.body && runs.body.runs) || (runs.body && runs.body.items) || [];
-  const hasSuite = rows.some((x) => x.kind === 'ragas_suite' && (x.suite_key || x._key) === seedDocs.SUITE_KEY);
+  const rows = (runs.body && runs.body.runs) || [];
+  const hasSuite = rows.some((x) => x.kind === 'ragas_suite' && x.suite_key === seedDocs.SUITE_KEY);
   const hasDone = rows.some((x) => x.kind === 'ragas_run' && x.status === 'done' && x._key === seedDocs.RUN_KEY);
   if (!hasSuite || !hasDone) {
     throw new Error(
@@ -282,7 +292,7 @@ async function seedRagasVenue(user) {
   }
   log('ready', `repo ${repoId} carries suite ${seedDocs.SUITE_KEY} + done run ${seedDocs.RUN_KEY}`);
 
-  return { repoId, token };
+  return { repoId };
 }
 
 /**
@@ -294,16 +304,21 @@ async function seedRagasVenue(user) {
  * path: verify-clean runs even when no seed repo was found (the orphan
  * sweep's own verdict), and when docker is unreachable at purge time the
  * skipped check is NAMED in a warning, never silent.
+ *
+ * @param {{username: string, password: string}} user
+ * @param {string} [container] - the probed container (threaded by the
+ *        fixture hooks; re-discovered when omitted).
  */
-async function purgeRagasVenue(user) {
-  let container = null;
-  try {
-    container = await findOkfContainer();
-  } catch (e) {
-    log(
-      'purge',
-      `WARNING: docker unreachable at purge time (${e.message}) — unstamp fallback AND verify-clean are SKIPPED; any leftover goes UNVERIFIED`
-    );
+async function purgeRagasVenue(user, container = null) {
+  if (!container) {
+    try {
+      container = await findOkfContainer();
+    } catch (e) {
+      log(
+        'purge',
+        `WARNING: docker unreachable at purge time (${e.message}) — unstamp fallback AND verify-clean are SKIPPED; any leftover goes UNVERIFIED`
+      );
+    }
   }
   const token = await getSessionTokenViaUI({ user });
   if (!token) throw new Error('venue purge: the UI session mint returned no token');
@@ -322,7 +337,7 @@ async function purgeRagasVenue(user) {
     // Orphan docs (a crashed run's suite whose repo is long gone) have no
     // repo to hang off — sweep by suite_key, then demand a clean verdict.
     await sweepOrphanDocs(container);
-    const verdict = await execInContainer(container, ['node', '/app/seed-ragas-venue-docs.js', 'verify-clean']);
+    const verdict = await execInContainer(container, ['node', WRITER_IN_CONTAINER, 'verify-clean']);
     log('purge', verdict.trim());
   } else {
     log(
@@ -333,36 +348,65 @@ async function purgeRagasVenue(user) {
 }
 
 /**
- * The specs' FIRST seed call, BEFORE any fixture is created: probe the
- * back-door transport and skip the whole group WITH A REASON when the
- * venue has no okf-server container (#1742 protocol). The skip fires
- * before the user mint (a skip halts the remaining hooks — seeding after
- * a mint would leak the user), so everything the spec creates afterwards
- * is guaranteed purgeable.
+ * The spec fixture protocol, stated ONCE (the #1773 convention): the
+ * beforeAll probes the back-door transport — a venue without an
+ * okf-server container skips the whole group WITH A REASON before any
+ * fixture exists (a skip halts the remaining hooks, so nothing leaks) —
+ * then mints the spec's tools-admin user and seeds. The afterAll purges on
+ * EVERY exit — a half-seeded repo from a mid-seed throw must never
+ * outlive the spec either (#1890's whole class) — and deletes the Keycloak
+ * user in FINALLY, so a purge failure still removes the user before
+ * surfacing.
+ *
+ * @param {object} testApi - the Playwright `test` object the spec uses
+ * @param {{username: string, email: string, password: string}} fixture -
+ *        the spec's own tools-admin user description
  */
-async function probeOrSkip(test) {
-  let container;
-  try {
-    container = await findOkfContainer();
-  } catch (e) {
-    test.skip(true, `venue seed: docker itself is unreachable for the back door (${e.message})`);
-    return null;
-  }
-  if (!container) {
-    test.skip(
-      true,
-      'venue seed: no okf-server container reachable via docker (the #1890 back door needs docker exec into the venue’s okf-server; set OKF_E2E_OKF_CONTAINER to name it)'
-    );
-    return null;
-  }
-  return container;
+function registerRagasVenueFixtures(testApi, { username, email, password }) {
+  const user = { username, password };
+  let container = null;
+  let adminToken = null;
+  let userId = null;
+
+  testApi.beforeAll(async () => {
+    // Minting can exceed the 60s beforeAll hook default — see
+    // SESSION_MINT_TIMEOUT_MS in helpers/auth.js.
+    testApi.setTimeout(SESSION_MINT_TIMEOUT_MS);
+
+    try {
+      container = await findOkfContainer();
+    } catch (e) {
+      testApi.skip(true, `venue seed: docker itself is unreachable for the back door (${e.message})`);
+      return;
+    }
+    if (!container) {
+      testApi.skip(true, NO_CONTAINER_REASON);
+      return;
+    }
+
+    adminToken = await getAdminToken();
+    userId = await createUser(adminToken, REALM, {
+      username,
+      email,
+      password,
+      realmRoles: ['tools-admin']
+    });
+
+    await seedRagasVenue(user, container);
+  });
+
+  testApi.afterAll(async () => {
+    try {
+      if (container) await purgeRagasVenue(user, container);
+    } finally {
+      if (adminToken && userId) await deleteUser(adminToken, REALM, userId);
+    }
+  });
 }
 
 module.exports = {
   REPO_NAME: seedDocs.REPO_NAME,
-  RagasSeedUnavailable,
-  probeOrSkip,
+  registerRagasVenueFixtures,
   seedRagasVenue,
-  purgeRagasVenue,
-  purgeStale
+  purgeRagasVenue
 };

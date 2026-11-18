@@ -22,17 +22,15 @@
 
 const { test, expect } = require('@playwright/test');
 const { BASE_URL } = require('../helpers/base-url');
-const { getAdminToken, SESSION_MINT_TIMEOUT_MS } = require('../helpers/auth');
-const { createUser, deleteUser } = require('../helpers/keycloak-admin');
+const { SESSION_MINT_TIMEOUT_MS } = require('../helpers/auth');
 const { pinLocale } = require('../helpers/locale');
 const { KEYCLOAK_AUTH_ENDPOINT_GLOB } = require('../helpers/keycloak-landing');
 const { okfEnabled, okfParkedReason, skipUnlessVenue } = require('../helpers/venue-profile');
-const { REPO_NAME, probeOrSkip, seedRagasVenue, purgeRagasVenue } = require('../helpers/ragas-venue-seed');
+const { REPO_NAME, registerRagasVenueFixtures } = require('../helpers/ragas-venue-seed');
 
-const REALM = process.env.KEYCLOAK_REALM || 'genie';
 // The specs seed their OWN repo (#1890) — never venue data. REPO_NAME is
 // the fixture's fixed name ('ragas-venue-seed', helpers/ragas-venue-seed.js);
-// the beforeAll below provisions it and the afterAll purges it.
+// the fixture hooks below provision it and purge it afterwards.
 const USER = 'okf-judge-e2e';
 const PW = 'JudgeE2ePass123!';
 
@@ -48,53 +46,21 @@ test.describe('the RAGAS model selection is in the UI', () => {
   // runtime config the frontend itself reads.
   test.beforeEach(skipUnlessVenue(test, okfEnabled, okfParkedReason));
 
-  let adminToken;
-  let userId;
-  let probed = false;
-
   // The venue-skip guard (#1742, wired by skipUnlessVenue): when it
-  // skips, the mint below never runs — Playwright does not run the hooks
-  // that follow a skipped hook.
+  // skips, the fixture hooks below never run — Playwright does not run
+  // the hooks that follow a skipped hook.
   test.beforeAll(skipUnlessVenue(test, okfEnabled, okfParkedReason));
 
-  test.beforeAll(async () => {
-    // Minting can exceed the 60s beforeAll hook default — see SESSION_MINT_TIMEOUT_MS.
-    test.setTimeout(SESSION_MINT_TIMEOUT_MS);
-
-    // The #1890 back-door transport probe fires FIRST: a venue without an
-    // okf-server container skips the whole group WITH A REASON before any
-    // fixture exists (a skip halts the remaining hooks — seeding after the
-    // mint would leak the user). Once it passes, the purge in afterAll
-    // runs NO MATTER how the seed ends — a HALF-seeded repo must never
-    // outlive the spec either (#1890's whole class).
-    await probeOrSkip(test);
-    probed = true;
-
-    adminToken = await getAdminToken();
-    userId = await createUser(adminToken, REALM, {
-      username: USER,
-      email: 'okf-judge-e2e@example.invalid',
-      password: PW,
-      realmRoles: ['tools-admin']
-    });
-
-    // The #1890 venue seed: this spec's own repo + suite + done run (the
-    // panel's loadLatest auto-adopts them, so both judge selects render).
-    // A seed failure here FAILS — a capable venue with a broken seed is
-    // loud, never silent.
-    await seedRagasVenue({ username: USER, password: PW });
-  });
-
-  test.afterAll(async () => {
-    // The purge runs FIRST (it mints its own session as the same user) —
-    // #1890's cleanup ruling — and the user deletion runs in FINALLY: a
-    // purge failure (verify-clean leftovers) must still delete the
-    // Keycloak user, then surface the throw.
-    try {
-      if (probed) await purgeRagasVenue({ username: USER, password: PW });
-    } finally {
-      if (adminToken && userId) await deleteUser(adminToken, REALM, userId);
-    }
+  // The #1890 fixture protocol — stated ONCE in the helper (the #1773
+  // convention): beforeAll probes the back-door transport (skip WITH A
+  // REASON before anything exists), mints the tools-admin user, seeds the
+  // repo + suite + done run (the panel's loadLatest auto-adopts them, so
+  // both judge selects render); afterAll purges on EVERY exit and deletes
+  // the user in FINALLY.
+  registerRagasVenueFixtures(test, {
+    username: USER,
+    email: 'okf-judge-e2e@example.invalid',
+    password: PW
   });
 
   test('the judge dropdown is on screen in the RAGAS Benchmarks tab, with the .env default among its options', async ({

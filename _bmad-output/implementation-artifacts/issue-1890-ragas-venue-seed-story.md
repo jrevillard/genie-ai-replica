@@ -38,18 +38,24 @@ executions left lineage rows behind).
    surviving seed repo/doc row), `purge-docs` (orphan sweep by suite_key),
    `unstamp` (the purge ladder's serving-stamp last resort).
 3. **The host-side seed helper** — `tests/e2e/helpers/ragas-venue-seed.js`:
-   `probeOrSkip(test)` FIRST (skip the whole group WITH A REASON before any
-   fixture exists when no docker-reachable okf-server container — #1742
-   protocol; a skip halts the remaining hooks, so nothing leaks),
-   `seedRagasVenue(user)` (purge stale + orphans → repo via API → import →
-   back door → submit/approve/publish → drain-settle poll → readiness read of
-   listRuns), `purgeRagasVenue(user)` (suite cascade FIRST — a repo delete
-   does NOT cascade okf_head_test_runs docs, found live — then the repo, then
-   `verify-clean` in-container; any survivor FAILS the run).
+   `registerRagasVenueFixtures(test, { username, email, password })` is the
+   ONE wiring of the spec protocol (the #1773 stated-once convention):
+   beforeAll probes the back-door transport first (skip the whole group
+   WITH A REASON before any fixture exists when no docker-reachable
+   okf-server container — #1742 protocol; a skip halts the remaining
+   hooks, so nothing leaks), mints the spec's tools-admin user, and calls
+   `seedRagasVenue` (purge stale + orphans → repo via API → import → back
+   door → submit/approve/publish → drain-settle poll → readiness read of
+   listRuns); afterAll calls `purgeRagasVenue` (suite cascade FIRST — a
+   repo delete does NOT cascade okf_head_test_runs docs, found live — then
+   the repo, then the orphan sweep, then `verify-clean` in-container; any
+   survivor FAILS the run) on EVERY exit — a half-seeded repo from a
+   mid-seed throw never outlives the spec either — and deletes the
+   Keycloak user in FINALLY.
 4. **The three specs rewired** — the `|| 'El Salvador'` fallbacks deleted;
-   beforeAll = probe → mint tools-admin user → seed; afterAll = purge →
-   deleteUser. The #1876 knownKeys guard stays (belt and braces; a fresh seed
-   makes the history start at exactly one row).
+   each spec registers the fixture hooks with its own user description and
+   nothing else. The #1876 knownKeys guard stays (belt and braces; a fresh
+   seed makes the history start at exactly one row).
 5. **The unit pin** — `components/okf-server/__tests__/ragas-venue-seed-docs.test.js`
    runs `rescoreRun`'s ACTUAL validation against the template (mock-DB
    harness, sidecar mocked) plus the negative control (a foreign repo_id

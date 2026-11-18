@@ -36,6 +36,10 @@ const REPO_NAME = 'ragas-venue-seed';
 const DOMAIN = 'e2e-seed';
 const SUITE_KEY = 'e2e-seed-ragas-suite';
 const RUN_KEY = 'e2e-seed-ragas-run-done';
+// The _key prefix every seeded doc carries — the orphan sweep and
+// verify-clean build their filters from THIS constant, never a re-spelled
+// literal, so a key rename cannot decouple the sweep from the verifier.
+const SEED_KEY_PREFIX = 'e2e-seed-';
 // Deterministic timestamps: listRuns sorts by created_at DESC, and a fixed
 // instant keeps the seeded history stable across re-seeds (the purge in the
 // afterAll removes every prior seed first).
@@ -97,8 +101,10 @@ function runDoc(repoId) {
         {
           id: ENTRY.id,
           query: ENTRY.query,
-          contexts: ['Alpha is the venue seed fixture concept.'],
-          answer: 'Alpha is the venue seed fixture concept.',
+          // The fixture's answer/contexts ARE the suite entry's reference —
+          // one fact, stated once in ENTRY.
+          contexts: ENTRY.reference_passages,
+          answer: ENTRY.reference_answer,
           abstained: false,
           metrics: {},
           judged: true,
@@ -141,4 +147,4 @@ function runDoc(repoId) {
   };
 }
 
-module.exports = { REPO_NAME, DOMAIN, SUITE_KEY, RUN_KEY, METRICS, ENTRY, suiteDoc, runDoc };
+module.exports = { REPO_NAME, DOMAIN, SUITE_KEY, RUN_KEY, SEED_KEY_PREFIX, METRICS, ENTRY, suiteDoc, runDoc };

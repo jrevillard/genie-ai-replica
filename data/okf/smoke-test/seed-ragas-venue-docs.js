@@ -33,6 +33,11 @@ const piiService = require('./services/pii-service');
 const seed = require('./ragas-venue-seed-docs');
 
 const COLLECTION = 'okf_head_test_runs';
+// ONE seed-scope filter, shared by the orphan sweep and the verifier that
+// judges it — the prefix comes from the template (the one source of the
+// shape), so a key rename moves both together.
+const SEED_SCOPE_FILTER = 'd.suite_key == @sk OR d._key LIKE @prefix';
+const SEED_SCOPE_PARAMS = { sk: seed.SUITE_KEY, prefix: `${seed.SEED_KEY_PREFIX}%` };
 
 /**
  * The collection is created LAZILY by the app (head-suite/ragas-suite
@@ -65,8 +70,8 @@ async function main() {
     const db = await dbService.getConnection('default');
     await ensureSeedCollection(db);
     const cursor = await db.query(
-      'FOR d IN okf_head_test_runs FILTER d.suite_key == @sk OR d._key LIKE @prefix REMOVE d IN okf_head_test_runs RETURN d._key',
-      { sk: seed.SUITE_KEY, prefix: 'e2e-seed-%' }
+      `FOR d IN ${COLLECTION} FILTER ${SEED_SCOPE_FILTER} REMOVE d IN ${COLLECTION} RETURN d._key`,
+      SEED_SCOPE_PARAMS
     );
     const removed = await cursor.all();
     console.log('purge-docs: removed ' + removed.length + ' orphan doc(s): ' + JSON.stringify(removed));
@@ -89,10 +94,7 @@ async function main() {
     const col = db.collection(COLLECTION);
     const docs = (await col.exists())
       ? await (
-          await db.query('FOR d IN okf_head_test_runs FILTER d.suite_key == @sk OR d._key LIKE @prefix RETURN d._key', {
-            sk: seed.SUITE_KEY,
-            prefix: 'e2e-seed-%'
-          })
+          await db.query(`FOR d IN ${COLLECTION} FILTER ${SEED_SCOPE_FILTER} RETURN d._key`, SEED_SCOPE_PARAMS)
         ).all()
       : [];
     if (repos.length || docs.length) {

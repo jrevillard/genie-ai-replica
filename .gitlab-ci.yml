@@ -87,3 +87,26 @@ probe:patch-size:
         [ -n "$newoff" ] && offset=$newoff
         sleep 3
       done
+
+probe:raw-response:
+  extends: .probe
+  stage: probe
+  variables:
+    CI_DEBUG_TRACE: "true"
+  before_script:
+    - apk add --no-cache curl
+  script:
+    - |
+      echo "== PATCH exactement comme le runner : JOB-TOKEN + Content-Range =="
+      for R in 0 1 4096 99999999; do
+        code=$(curl -sS -o /tmp/b -D /tmp/h -w '%{http_code}' \
+          -X PATCH "$CI_API_V4_URL/jobs/$CI_JOB_ID/trace?debug_trace=true" \
+          -H "JOB-TOKEN: $CI_JOB_TOKEN" \
+          -H "Content-Range: ${R}-$((R + 9))" \
+          -H "Content-Type: text/plain" \
+          --data-binary "0123456789")
+        echo "--- range=${R}-$((R + 9)) code=$code"
+        sed -e 's/\r$//' /tmp/h
+        echo "BODY: $(head -c 600 /tmp/b)"
+        echo
+      done

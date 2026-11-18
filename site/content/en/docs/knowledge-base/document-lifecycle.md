@@ -29,7 +29,7 @@ admin UI shows them lowercased (`pending`, `ingesting`, etc.) — see the
 | `Ingesting` | `ingesting` | Dataprep is parsing, chunking, labelling, and embedding. |
 | `Ingested` | `ingested` | All chunks indexed; the document is **retrievable**. |
 | `Ingested with Warnings` | `ingested with warnings` | Ingestion finished, but a whole phase accomplished nothing: the labels or the generated contexts for every chunk came from the file labels or the raw text. Retrievable, but the model did no work on it — re-ingest, and read the ingestion log for which phase stopped and why. A few chunks falling back while the rest succeeded is normal operation and leaves the status plain `Ingested`. |
-| `Ingestion Error` | `ingestion error` | Processing failed; the document is **not** searchable. The partial graph was retracted, and a graph insertion still in flight when the failure happened is purged when it settles — as long as the service does not restart first: the purge is held in memory, so a dataprep restart between the failure and the late write's completion loses it, and the rows the late write lands stay. Check the ingestion log for the reason, fix it, and re-kick (see "A failed ingest is re-kicked by hand" below). |
+| `Ingestion Error` | `ingestion error` | Processing failed; the document is **not** searchable. The partial graph was retracted, and a graph insertion still in flight when the failure happened is purged when it settles — as long as the service does not restart first: the purge is held in memory, so a dataprep restart between the failure and the late write's completion loses it, and the rows the late write lands stay. A writer that never settles (a wedged database) is never purged at all. Check the ingestion log for the reason, fix it, and re-kick (see "A failed ingest is re-kicked by hand" below). |
 | `Killed` | `killed` | Ingestion was aborted by an admin (see "Kill an in-flight ingest" below). |
 | `Retracted` | `retracted` | The document was deliberately removed via the retract flow. Not searchable. |
 
@@ -224,7 +224,9 @@ ends up with two copies of its chunks. The purge that would have removed them
 stands down once a new ingest of the same document has started: it deletes by
 document id, so it must not delete the new ingest's rows. The purge is held in
 memory, so a dataprep restart between the failure and the late write's completion
-loses it, and nothing announces that. If a document's chunk count and the number
+loses it, and nothing announces that — and a writer that never settles (a wedged
+database) is never purged at all, because the purge runs when the writer settles.
+If a document's chunk count and the number
 of chunks the retriever sees disagree, retract it and ingest it again.
 
 ## Stuck documents recover themselves after a dataprep restart

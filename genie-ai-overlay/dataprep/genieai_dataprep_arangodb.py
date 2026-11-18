@@ -1558,6 +1558,11 @@ _ROLLBACK_CANCEL_GRACE_SECONDS = 60.0
 # together.
 _LATE_WRITE_PURGE_ATTEMPTS = 2
 
+# How long the purge waits between its attempts. The wait is the window in
+# which a re-kick can start and the purge must stand down, so it is a
+# documented constant rather than a literal in the loop.
+_LATE_WRITE_PURGE_RETRY_SECONDS = 2
+
 
 async def _gather_with_phase_budget(
     tasks: list, *, phase: str, phase_label: str, total: int, file_id: str, write_ingestion_log
@@ -4115,6 +4120,12 @@ class GenieArangoDataprep(OpeaArangoDataprep):
         With no insertion thread in flight there is nothing a late write can
         leave behind, so no purge is registered: an entry waiting for a purge
         that can never fire would outlive the ingest and leak.
+
+        The empty set is not a race: a writer is tracked BEFORE its insertion
+        is awaited, so a straggler the phase budget abandoned — the one the
+        phase's own comment warns about, "a straggler is still writing" — is
+        already in the set. A write that has not started cannot start after
+        this: the rollback cancelled the batch tasks.
         """
         state = self._late_write_state(file_id)
         if not state["writers"]:
@@ -4230,19 +4241,18 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                         # the one outcome that changes its data: whatever the
                         # late write lands after the new ingest's retract stays
                         # as duplicate rows. Say so where they will look.
-                        try:
-                            await self._write_ingestion_log(
-                                file_id,
-                                "INFO",
-                                "System",
-                                "The purge of the rows a previous ingest's late write left behind stands "
-                                "down — a new ingest of this document started, and the purge deletes by "
-                                "document id. If that write lands after this ingest's cleanup, its rows "
-                                "stay as duplicates; retract the document and ingest it again if the "
-                                "chunk count looks wrong.",
-                            )
-                        except Exception as exc:  # noqa: BLE001 — a log write must not kill the purge
-                            logger.error(f"{file_id}: the purge's stand-down could not be logged: {exc!r}")
+                        # (The log write swallows its own failures — it must
+                        # not take the purge down with it.)
+                        await self._write_ingestion_log(
+                            file_id,
+                            "INFO",
+                            "System",
+                            "The purge of the rows a previous ingest's late write left behind stands "
+                            "down — a new ingest of this document started, and the purge deletes by "
+                            "document id. If that write lands after this ingest's cleanup, its rows "
+                            "stay as duplicates; retract the document and ingest it again if the "
+                            "chunk count looks wrong.",
+                        )
                         return
                     try:
                         # Announced here, per attempt: the cascade writes its
@@ -4269,23 +4279,24 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                         )
                         if attempt == _LATE_WRITE_PURGE_ATTEMPTS:
                             span.set_attribute(ATTRIBUTE_NAMES["dataprep_purge_result"], "failed")
-                            try:
-                                await self._write_ingestion_log(
-                                    file_id,
-                                    "ERROR",
-                                    "System",
-                                    "The purge of the rows an in-flight graph insertion wrote after the "
-                                    "retraction failed — the document's chunks may still be indexed. Retract "
-                                    "the document and re-kick it.",
-                                )
-                            except Exception as exc:  # noqa: BLE001 — a log write must not kill the purge
-                                logger.error(f"{file_id}: the purge's failure could not be logged: {exc!r}")
+                            await self._write_ingestion_log(
+                                file_id,
+                                "ERROR",
+                                "System",
+                                "The purge of the rows an in-flight graph insertion wrote after the "
+                                "retraction failed — the document's chunks may still be indexed. Retract "
+                                "the document and re-kick it.",
+                            )
                         else:
-                            await asyncio.sleep(2)
+                            await asyncio.sleep(_LATE_WRITE_PURGE_RETRY_SECONDS)
             except asyncio.CancelledError:
                 # The loop is going down (the process is exiting): the purge
                 # cannot finish, and the rows it was written to remove may
-                # survive. Say so — the alternative is silence.
+                # survive. Say so — the alternative is silence. The span
+                # records the outcome too: a cancelled purge is the one that
+                # leaves the rows behind, and a query for the outcome must
+                # find it.
+                span.set_attribute(ATTRIBUTE_NAMES["dataprep_purge_result"], "cancelled")
                 logger.warning(f"{file_id}: the late graph-write purge was cancelled before it finished")
                 raise
             finally:

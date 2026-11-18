@@ -3486,6 +3486,66 @@ class TestTheLateGraphWriteIsPurged:
         assert spanned, "the purge ran without a span"
         assert spanned[0].attributes.get("dataprep.purge_result") == "failed", spanned[0].attributes
 
+    def test_a_cancelled_purge_records_that_it_was_cancelled(self, monkeypatch, captured_spans):
+        """A purge cancelled before it finishes must say so in the trace.
+
+        The process is going down — the pod is evicted, the loop is closed —
+        and the purge cannot finish: the rows it was written to remove may
+        survive. A trace that cannot tell a cancelled purge from a successful
+        one sends the operator looking in the wrong place, and the whole
+        point of the outcome attribute is that the trace says what happened.
+        """
+        from unittest.mock import MagicMock
+
+        from fastapi import HTTPException
+
+        self._cool_llm_env(monkeypatch)
+        self._fast_phases(monkeypatch)
+
+        order = []
+
+        async def scenario():
+            dp = _stub_dataprep()
+            _stub_graph_phase_ingest(dp)
+            dp.embeddings = MagicMock()
+
+            def slow_insert(**_kwargs):
+                # The writer thread: it sleeps past the phase budget, so the
+                # failure path retracts while the writer is still in flight.
+                time.sleep(1.6)
+                order.append("write")
+                return None
+
+            graph_cls = MagicMock()
+            graph_cls.return_value.add_graph_documents = slow_insert
+
+            async def retract(file_id=None, graph_name=None, update_status=True):
+                order.append(f"retract:{update_status}")
+                if order.count("retract:False") == 2:
+                    # The purge's own cascade — and the process goes down
+                    # while it runs, so it never finishes.
+                    await asyncio.sleep(30)
+
+            dp.retract_file = retract
+
+            inp = _graph_ingest_input()
+            with _patched_graph_ingest(graph_cls), pytest.raises(HTTPException):
+                await dp.ingest_file_with_guardrail(inp, lock_file=None)
+            # The writer is still parked in its thread: let it land, so the
+            # purge is scheduled, and wait for the purge's cascade to start.
+            assert await _wait_for(lambda: order.count("retract:False") >= 2), f"the purge never ran: {order}"
+            # The process goes down: the pending purge task goes with it.
+            for task in list(dataprep._BACKGROUND_TASKS):
+                task.cancel()
+            assert await _wait_for(lambda: not dataprep._BACKGROUND_TASKS), (
+                f"the cancelled purge never finished: {order}"
+            )
+
+        _run(scenario())
+        spanned = captured_spans("dataprep.late_write_purge")
+        assert spanned, "the purge ran without a span"
+        assert spanned[0].attributes.get("dataprep.purge_result") == "cancelled", spanned[0].attributes
+
     def test_the_rollback_retracts_from_the_graph_the_insertion_wrote_to(self, monkeypatch):
         """One graph name, resolved once, for the insertion AND the rollbacks.
 

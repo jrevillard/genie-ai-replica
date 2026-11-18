@@ -34,8 +34,16 @@ serving. */}}
 default repository/tag (merge gives the values precedence), so a deployment
 can pin the slim variant (`:main-slim` — issue #2000: no model stack in the
 image) or a digest. The default is unchanged. */ -}}
+{{- /* Parent-first normalization (the chart's nil-safety convention): a CLEARED
+   `opea` or `opea.reranker` (null) reads as an empty map at every level, so the image
+   resolution degrades to the default repository/tag instead of crashing the
+   template engine on a nil parent. The clearable-blocks gate sweeps every
+   values block and demands exactly that. */ -}}
+{{- $opeaVals := .Values.opea | default dict -}}
+{{- $svcOvr := $opeaVals.reranker | default dict -}}
+{{- $img := merge (deepCopy ($svcOvr.image | default dict)) (dict "repository" "genie-ai-reranker" "tag" "main") -}}
 {{- $svcVals := dict
-    "image" (merge (deepCopy (.Values.opea.reranker.image | default dict)) (dict "repository" "genie-ai-reranker" "tag" "main"))
+    "image" $img
     "port" 8000
     "resources" (dict "requests" (dict "cpu" "200m" "memory" "256Mi") "limits" (dict "cpu" "2" "memory" "2Gi"))
     "env" (include "genieai-umbrella.envRowsDedupe" (concat $urls $secretEnv $opeaEnvRows | toJson) | fromJsonArray)

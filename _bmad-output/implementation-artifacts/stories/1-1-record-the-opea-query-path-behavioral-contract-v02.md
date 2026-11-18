@@ -310,7 +310,7 @@ exercised against a mutated copy of the fixtures:
 | an expectation claims a value the deployment no longer serves | exit 1 | exit 1 |
 | a knob the record claims is absent is now served | exit 1 | exit 1 |
 | the query instruction changes | exit 1 | exit 1 |
-| a **sampled** locale string differs | a warning, exit 0 | warning, exit 0 |
+| a **sampled** locale string differs (`measured.preparation.locales`) | a warning, exit 0 | warning, exit 0 |
 
 The last row is the contract that separates the two kinds of difference: the
 deployed configuration is a contract, the sampled locale strings are a sample.
@@ -333,10 +333,15 @@ config module (it would lose the per-container scoping the fixtures rely on)
 and parallelizing the probe's calls (the locale samples exercise the shared GPU
 translation service — concurrency would take capacity from the shared stack).
 
-The scoped fix review of the quality diff returned **clean**. It was completed
-**inline** and is a documented deviation: the dispatched reviewer agent hung
-(12 minutes without a report), the fourth occurrence of the known reviewer-hang
-pattern on this host. The checks it would have run were executed and recorded:
+The scoped fix review of the quality diff returned **clean** — no findings. It
+was first completed **inline**, as a documented deviation: the dispatched
+reviewer agent had produced no report after 12 minutes, the fourth occurrence
+of the known reviewer-hang pattern on this host. The agent's report arrived
+later and independently confirmed the same verdict (**no findings**), having
+verified the knob lists and the locale samples byte-identical by AST
+comparison, the argv hand-off, the three drift conditions of `compare_knobs`,
+the exception coverage, the pod tie-break, the prose against
+`genieai_chatqna.py:4672` and the scope of the diff. The inline checks were:
 
 - the merged knob lists are **byte-identical** to the pre-refactor dicts
   (compared programmatically — same containers, same knobs, same order);
@@ -355,6 +360,41 @@ pattern on this host. The checks it would have run were executed and recorded:
   fallback, the refusal case), then mirrored in the fixtures;
 - the branch diff touches no service or app source — the story records, it
   does not modify.
+
+**Late cleanup findings, applied.** The three cleanup agents that had looked
+hung did deliver their reports afterwards; three of their findings were worth
+acting on and are applied:
+
+- **the locale sample now lives once.** The expectation block carried a
+  verbatim copy of the recorded capture, and the verification compared the live
+  measurement against the COPY — so deleting the copy alone would have turned
+  the locale comparison into a silent no-op (a false-green `--verify`). The
+  expectation block now points at `measured.preparation.locales`
+  (`locales_source`) and the verification compares against the recorded
+  capture, which is the same semantics the deployed-knob path already used;
+- **the identity fields live once.** The root keeps `artifact`,
+  `contract_version`, `story`, `scope` and `method`; the expectations block no
+  longer repeats them — its `method` copy described the *measured* block while
+  sitting in the expectations block, where it described nothing. `recorded_at`
+  and `pods` live only under `measured`, which is the probe's own document;
+- **the loop-invariant registry read is hoisted** (`language_codes_map()` once
+  instead of four times).
+
+**Three findings were skipped, with reasons:**
+
+- *translating the three locale samples concurrently* — the probe **measures**
+  the deployed translation path, and the deployed chat path translates one
+  history per request; the probe must exercise it the way the chat path
+  exercises it. Three concurrent calls would also take capacity from the
+  shared GPU translation endpoint that serves the live stack. The probe is a
+  rarely-run verification tool: 36 s is acceptable.
+- *running the five `kubectl exec` reads in parallel* — 5.6 s in total on a
+  rarely-run tool, and the concurrency is not worth the added machinery.
+- *reading only the probed variables instead of the whole environment* — the
+  probe already persists only the ≤42 probed knobs (the rest is read and
+  discarded, never written), the values are the pod's own environment —
+  reachable by anyone who can run the probe — and narrowing it would
+  re-introduce the shell layer the quality phase had just removed.
 
 **Manual checks:**
 - the record's §5.6 table lists three locales, one non-Latin, each with the

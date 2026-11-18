@@ -12,14 +12,6 @@
     "opea_gpu_mode": "external",
     "gpu_node_host": "https://ai.assembly.govstack.global:444"
   },
-  "recorded_at": "2026-11-18T08:13:14+00:00",
-  "pods": {
-    "backend": "genieai-genieai-umbrella-backend-6f99d78b68-gt7j8",
-    "chatqna": "genieai-genieai-umbrella-chatqna-8f76fd97f-pnk8g",
-    "embedding": "genieai-genieai-umbrella-embedding-9c4c7f756-nd68c",
-    "reranker": "genieai-genieai-umbrella-reranker-54db956ff6-h9mc4",
-    "retriever": "genieai-genieai-umbrella-retriever-68b8c8bf68-zphwk"
-  },
   "probe": "scripts/baselines/probe-v02-query-path.py",
   "measured": {
     "probe": "v02-opea-query-path",
@@ -186,11 +178,6 @@
     }
   },
   "expectations": {
-    "artifact": "v02-opea-query-path-contract",
-    "contract_version": "2",
-    "story": "#1947 — PRD agentic-foundations, story 1.1 (Epic 1 / stage S3, gate V02)",
-    "scope": "The OPEA query path as the deployed stack actually serves it: preparation -> embedding -> retrieval (dense + BM25 + RRF + filters + enrichment + traversal) -> reranking/evidence selection.",
-    "method": "Values are read from the running pods of the venue (measured block). Expectations are derived from the deployed source and cross-checked against the live observations in this file. Nothing here is inferred from the repository defaults alone.",
     "value_sources": {
       "chart": "charts/genieai-umbrella/values.yaml — the declared value the chart templates render into the pod env.",
       "code-default": "the value the running code falls back to when the chart does not template the variable.",
@@ -698,39 +685,7 @@
         "list_shape": "the CHAR BUDGET never refuses the list shape: the oldest turns are dropped and the newest message's tail is truncated. The TRANSLATION WINDOW can still overflow, and that DOES refuse: TranslationInputTooLongError is deliberately not caught in the list branch (chatqna:4237-4243), so it reaches the 422 handler (§ failure classes).",
         "generation_time_truncation": "when the prompt exceeds the model window, the OLDEST history segments are dropped; the retrieved documents are never truncated"
       },
-      "locales": [
-        {
-          "locale": "fr",
-          "sample": "Bonjour, comment la ville de Geneve gere-t-elle les services de transport public pour les habitants et les visiteurs ?",
-          "detected_language": "FR",
-          "detected_supported": true,
-          "query_translation_status": "translated",
-          "english_query": "Hello, how does the city of Geneva manage public transport services for residents and visitors?",
-          "embedded_text": "Represent this sentence for searching relevant passages: Hello, how does the city of Geneva manage public transport services for residents and visitors?",
-          "history_language": "FR"
-        },
-        {
-          "locale": "es",
-          "sample": "¿Como gestiona la ciudad de Barcelona los servicios de transporte publico para los residentes y los visitantes?",
-          "detected_language": "ES",
-          "detected_supported": true,
-          "query_translation_status": "translated",
-          "english_query": "How does the city of Barcelona manage public transport services for residents and visitors?",
-          "embedded_text": "Represent this sentence for searching relevant passages: How does the city of Barcelona manage public transport services for residents and visitors?",
-          "history_language": "ES"
-        },
-        {
-          "locale": "ar",
-          "sample": "كيف تدير مدينة دبي خدمات النقل العام للسكان والزوار خلال موسم الصيف؟",
-          "detected_language": "AR",
-          "detected_supported": true,
-          "query_translation_status": "translated",
-          "english_query": "How does Dubai manage public transportation services for residents and visitors during the summer season?",
-          "embedded_text": "Represent this sentence for searching relevant passages: How does Dubai manage public transportation services for residents and visitors during the summer season?",
-          "history_language": "AR"
-        }
-      ],
-      "locale_coverage_note": "Three locales, one of them written in a non-Latin script (Arabic). The detected language, the exact English string handed to the embedder and the status field are recorded for each. These strings are a SAMPLE, not a contract: langdetect is unseeded and the translation model is sampled, so the probe reports a difference in them as a warning, never as a drift.",
+      "locale_coverage_note": "Three locales, one of them written in a non-Latin script (Arabic). The detected language, the exact English string handed to the embedder and the status field are recorded for each. The sample itself lives ONCE, in the recorded capture (measured.preparation.locales, pointed at by locales_source): it is the verbatim output of the probe, and the verification compares the live measurement against it. These strings are a SAMPLE, not a contract: langdetect is unseeded and the translation model is sampled, so the probe reports a difference in them as a warning, never as a drift.",
       "failure_classes": [
         {
           "class": "translator_unavailable",
@@ -755,7 +710,8 @@
         }
       ],
       "adrs": [],
-      "probe_note": "the probe MIRRORS the detection + history-language rule (it lives inside handle_request and cannot be called directly); the deployed rule is genie-ai-overlay/chatqna/genieai_chatqna.py:4578-4661 and :4672. ONE branch is not mirrored: when the detector yields NO code the deployed rule falls back to the REQUESTED language - or to EN when the caller named none, and to EN as well when the named code was refused (detected_language or original_language, chatqna:4672) - while the probe always falls back to EN; all three sampled texts yield a code, so the branch is never exercised."
+      "probe_note": "the probe MIRRORS the detection + history-language rule (it lives inside handle_request and cannot be called directly); the deployed rule is genie-ai-overlay/chatqna/genieai_chatqna.py:4578-4661 and :4672. ONE branch is not mirrored: when the detector yields NO code the deployed rule falls back to the REQUESTED language - or to EN when the caller named none, and to EN as well when the named code was refused (detected_language or original_language, chatqna:4672) - while the probe always falls back to EN; all three sampled texts yield a code, so the branch is never exercised.",
+      "locales_source": "measured.preparation.locales"
     },
     "live_observations": {
       "venue": "k3s namespace genieai, chart genieai-umbrella, OPEA GPU mode external",

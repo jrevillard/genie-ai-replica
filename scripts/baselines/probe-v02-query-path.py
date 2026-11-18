@@ -212,11 +212,11 @@ instruction = get_query_instruction(TEI_EMBED_MODEL)
 
 async def probe():
     service = cq.ChatQnAService()
+    codes = cq.language_codes_map()
     results = []
     for sample in samples:
         text = sample["text"]
         detected = detect(text)
-        codes = cq.language_codes_map()
         supported = bool(detected) and (detected.lower() in codes or detected.lower() == "en")
         detected_language = detected.upper() if detected else None
         history_language = detected_language or "EN"
@@ -440,8 +440,10 @@ def verify(fixtures_path: str, document: dict) -> int:
             drift.append(f"preparation.{field}: recorded {rec_prep.get(field)!r} -> live {live_prep.get(field)!r}")
 
     # 4. The locale strings are a SAMPLE: the detector is unseeded and the
-    #    translation model is sampled, so a difference is a warning.
-    expected_locales = preparation.get("locales", [])
+    #    translation model is sampled, so a difference is a warning. The
+    #    sample lives once, in the recorded capture — the expectation block
+    #    points at it (preparation.locales_source) instead of copying it.
+    expected_locales = rec_prep.get("locales", [])
     live_locales = {l.get("locale"): l for l in live_prep.get("locales", [])}
     for locale in expected_locales:
         live_locale = live_locales.get(locale["locale"])

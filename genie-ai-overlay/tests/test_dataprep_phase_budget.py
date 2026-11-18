@@ -3383,9 +3383,11 @@ class TestTheLateGraphWriteIsPurged:
             return dp
 
         dp = _run(scenario())
-        state = dp._late_write_state("f1")
-        assert state["purge"] is None, "a purge was registered for a file with no writer in flight"
-        assert not state["writers"], state
+        # The RAW map: the accessor creates the entry it reads, so asking it
+        # for a file's state would bring back the very entry this test claims
+        # is gone.
+        states = getattr(dp, "_late_write_states", None) or {}
+        assert "f1" not in states, f"the tracking state was left behind for a file with no writer in flight: {states}"
 
     def test_a_failing_purge_is_retried_and_reported_to_the_operator(self, monkeypatch):
         """A purge that fails must not leave the rows behind in silence.
@@ -3499,8 +3501,18 @@ class TestTheLateGraphWriteIsPurged:
 
             dp.retract_file = retract
 
-            # No graph name on the request: the env fallback decides.
-            inp = MagicMock(file_id="f1", file_path="/tmp/f1.pdf", graph_name=None, file_labels=[])
+            # No graph name on the request: the env fallback decides. The
+            # request carries NO repo_id either, so the OKF-hint block runs —
+            # it is the block that used to CLOBBER the resolved graph name
+            # with "" and send the retraction to a graph nothing was written
+            # to.
+            inp = MagicMock(
+                file_id="f1",
+                file_path="/tmp/f1.pdf",
+                graph_name=None,
+                repo_id=None,
+                file_labels=[],
+            )
             with _patched_graph_ingest(graph_cls), pytest.raises(HTTPException):
                 await dp.ingest_file_with_guardrail(inp, lock_file=None)
             return dp
@@ -3758,3 +3770,142 @@ class TestTheLateGraphWriteIsPurged:
         )
         statuses = [c.args[1] for c in dp._update_doc_status.call_args_list]
         assert statuses[-1] == "Ingested", statuses
+
+    def test_the_failure_row_carries_the_cause(self, monkeypatch):
+        """The failed row's last_error names what actually went wrong.
+
+        The operator reads the row, not the service log: a generic
+        'Ingestion failed' prefix tells them nothing they can act on, and
+        the cause is what the ingestion log's ERROR entry repeats.
+        """
+        from unittest.mock import AsyncMock
+
+        from fastapi import HTTPException
+
+        monkeypatch.setenv("VLLM_API_KEY", "test-key")
+        monkeypatch.setenv("VLLM_ENDPOINT", "http://localhost:8000")
+        monkeypatch.setenv("VLLM_MODEL_ID", "test-model")
+        self._no_llm_storm(monkeypatch)
+
+        async def scenario():
+            dp = _stub_dataprep()
+            _stub_graph_phase_ingest(dp)
+            dp._load_and_chunk = AsyncMock(side_effect=RuntimeError("the model refused the shape"))
+
+            async def retract(file_id=None, graph_name=None, update_status=True):
+                return None
+
+            dp.retract_file = retract
+
+            inp = _graph_ingest_input()
+            with _patched_graph_ingest(), pytest.raises(HTTPException):
+                await dp.ingest_file_with_guardrail(inp, lock_file=None)
+            return dp
+
+        dp = _run(scenario())
+        failures = [c for c in dp._update_doc_status.call_args_list if c.args[1] == "Ingestion Error"]
+        assert failures, "the failed ingest never wrote the failure status"
+        assert failures[0].kwargs.get("error") == "the model refused the shape", (
+            f"the row does not carry the cause: {failures[0].kwargs.get('error')!r}"
+        )
+
+    def test_a_failed_retraction_is_reported_to_the_operator(self, monkeypatch):
+        """A retraction that fails leaves the document's rows behind — say so.
+
+        The retraction is what removes a failed document's rows. When it
+        fails, the document's chunks may still be indexed while the row
+        says it failed: the operator has to know, and the ingestion log of
+        THAT document is where they read it.
+        """
+        from unittest.mock import AsyncMock
+
+        from fastapi import HTTPException
+
+        monkeypatch.setenv("VLLM_API_KEY", "test-key")
+        monkeypatch.setenv("VLLM_ENDPOINT", "http://localhost:8000")
+        monkeypatch.setenv("VLLM_MODEL_ID", "test-model")
+        self._no_llm_storm(monkeypatch)
+
+        async def scenario():
+            dp = _stub_dataprep()
+            _stub_graph_phase_ingest(dp)
+            dp._load_and_chunk = AsyncMock(return_value=[])
+            dp.retract_file = AsyncMock(side_effect=RuntimeError("the graph is gone"))
+
+            inp = _graph_ingest_input()
+            with _patched_graph_ingest(), pytest.raises(HTTPException):
+                await dp.ingest_file_with_guardrail(inp, lock_file=None)
+            return dp
+
+        dp = _run(scenario())
+        logged = [c.args[3] for c in dp._write_ingestion_log.call_args_list if c.args[1] == "ERROR"]
+        assert any("retraction" in message for message in logged), (
+            f"the retraction failure was not reported to the operator: {logged}"
+        )
+
+    def test_a_failed_re_kick_still_purges_the_previous_attempts_straggler(self, monkeypatch):
+        """A re-kick that fails too must still close the PREVIOUS attempt's leak.
+
+        The first attempt's writer is still in flight when the operator
+        re-kicks the file, and the re-kick fails before it writes anything.
+        If the re-kick drops the tracking of that writer, its own failure
+        registers no purge — and the first attempt's rows stay indexed for
+        good: the exact defect the purge exists to close, surviving the
+        correction.
+        """
+        from unittest.mock import AsyncMock, MagicMock
+
+        from fastapi import HTTPException
+
+        monkeypatch.setenv("VLLM_API_KEY", "test-key")
+        monkeypatch.setenv("VLLM_ENDPOINT", "http://localhost:8000")
+        monkeypatch.setenv("VLLM_MODEL_ID", "test-model")
+        monkeypatch.setattr(dataprep, "DATAPREP_LLM_PHASE_TIMEOUT_SECONDS", 0.8)
+        monkeypatch.setattr(dataprep, "DATAPREP_LLM_PROGRESS_INTERVAL_SECONDS", 60.0)
+        monkeypatch.setattr(dataprep, "_PHASE_CANCEL_GRACE_SECONDS", 0.2)
+        monkeypatch.setattr(dataprep, "_GRAPH_WRITER_SETTLE_SECONDS", 0.05)
+        monkeypatch.setattr(dataprep, "_global_batch_gate", lambda: asyncio.Semaphore(4))
+        self._no_llm_storm(monkeypatch)
+
+        order = []
+
+        async def scenario():
+            dp = _stub_dataprep()
+            _stub_graph_phase_ingest(dp)
+            dp.embeddings = MagicMock()
+
+            def slow_insert(**_kwargs):
+                # The writer thread: it sleeps past the phase budget, so its
+                # write lands AFTER the failure path's retract.
+                time.sleep(1.6)
+                order.append("write")
+                return None
+
+            graph_cls = MagicMock()
+            graph_cls.return_value.add_graph_documents = slow_insert
+
+            async def retract(file_id=None, graph_name=None, update_status=True):
+                order.append(f"retract:{update_status}")
+
+            dp.retract_file = retract
+
+            inp = _graph_ingest_input()
+            # The first attempt: it fails with its writer still parked.
+            with _patched_graph_ingest(graph_cls), pytest.raises(HTTPException):
+                await dp.ingest_file_with_guardrail(inp, lock_file=None)
+            # The re-kick: it fails too, before any insertion of its own.
+            dp._load_and_chunk = AsyncMock(return_value=[])
+            with _patched_graph_ingest(graph_cls), pytest.raises(HTTPException):
+                await dp.ingest_file_with_guardrail(inp, lock_file=None)
+            # The straggler lands, and its purge must still run.
+            purged = await _wait_for(lambda: order.count("retract:False") >= 3)
+            return dp, purged
+
+        dp, purged = _run(scenario())
+        assert purged, (
+            f"the previous attempt's straggler was never purged: {order} — a re-kick that fails "
+            "must not leave the first attempt's rows indexed (#1991)"
+        )
+        assert "write" in order, f"the writer thread never landed: {order} — the test proved nothing"
+        statuses = [c.args[1] for c in dp._update_doc_status.call_args_list]
+        assert statuses[-1] == "Ingestion Error", statuses

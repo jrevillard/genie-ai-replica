@@ -4186,7 +4186,13 @@ class GenieArangoDataprep(OpeaArangoDataprep):
         try:
             for attempt in (1, 2):
                 # Checked before EVERY attempt: a retry runs seconds later, and
-                # a new ingest may have started in between.
+                # a new ingest may have started in between. This is a
+                # point-in-time check, not a lock: a re-kick that starts after
+                # it and before the retraction's own AQL still loses its rows.
+                # The window is one retraction wide, and the re-kick's graph
+                # phase is minutes away — the alternative (holding the
+                # ingestion lane until every writer settled) is the regression
+                # the phase budget was merged to remove.
                 states = getattr(self, "_late_write_states", None)
                 state = states.get(file_id) if states else None
                 if state is None or state["purge"] is not purge:
@@ -4446,7 +4452,14 @@ class GenieArangoDataprep(OpeaArangoDataprep):
         # attempt's straggler. The trade is deliberate: the straggler's rows
         # may survive as duplicates of a file that is being ingested anyway,
         # which is milder than deleting a healthy ingest's rows.
-        self._late_write_state(input.file_id).update({"purge": None, "writers": set()})
+        #
+        # The previous attempt's IN-FLIGHT writers stay tracked: if THIS
+        # attempt fails too, the rollback's purge must still be registered for
+        # them (an empty writer set would register no purge, and the
+        # straggler's rows would survive — the exact defect this mechanism
+        # exists to close). A purge registered by a FAILED attempt is safe to
+        # run: that attempt's own rows were retracted by its rollback.
+        self._late_write_state(input.file_id).update({"purge": None})
         # The caller's EXPLICIT repo_id is the identity channel (David,
         # 2026-08-31): born-right graph names encode repo NAME+VERSION, not the
         # repo_id — a graph name is a name, not an identity field. A graph
@@ -4948,6 +4961,7 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                             input.file_id,
                             graph_name,
                             error=error_msg,
+                            cause=str(e),
                             concept_id=getattr(input, "concept_id", None),
                         ),
                         timeout=_ROLLBACK_CANCEL_GRACE_SECONDS,
@@ -4973,7 +4987,7 @@ class GenieArangoDataprep(OpeaArangoDataprep):
             self._maybe_drop_late_write_state(input.file_id)
 
     async def _rollback_failed_ingest(
-        self, file_id: str, graph_name: str, *, error: str, concept_id: str | None = None
+        self, file_id: str, graph_name: str, *, error: str, cause: str, concept_id: str | None = None
     ) -> None:
         """Undo a failed ingest: retract what was written, then mark it failed.
 
@@ -4995,13 +5009,27 @@ class GenieArangoDataprep(OpeaArangoDataprep):
             file_id,
             "Ingestion Error",
             concept_id=concept_id,
-            error=str(error)[:500],
+            error=str(cause)[:500],
         )
         # Auto-retract created data. The retraction does NOT flip the status
         # here: this path's terminal state is the FAILURE ('Ingestion
         # Error'), and 'Retracted' would hide it from the operator — the
         # document's rows are gone, but the document did not ingest (#1992).
-        await self.retract_file(file_id=file_id, graph_name=graph_name, update_status=False)
+        try:
+            await self.retract_file(file_id=file_id, graph_name=graph_name, update_status=False)
+        except Exception as exc:  # noqa: BLE001 — the failure must still be reported
+            # The retraction failed: the document's rows may still be indexed
+            # while the row says it failed. That is the operator's document,
+            # so the operator reads it there — not only in the service log.
+            logger.error(f"{file_id}: the failure retraction failed: {type(exc).__name__}: {exc}")
+            await self._write_ingestion_log(
+                file_id,
+                "ERROR",
+                "System",
+                "The retraction of the failed ingest failed — the document's chunks may still be "
+                f"indexed. Retract the document by hand. ({type(exc).__name__}: {str(exc)[:200]})",
+            )
+            raise
         await self._write_ingestion_log(file_id, "INFO", "System", "Rollback complete. Document retracted.")
 
     async def _rollback_killed_ingest(self, file_id: str, graph_name: str, *, concept_id: str | None = None) -> None:

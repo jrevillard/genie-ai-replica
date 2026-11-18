@@ -50,7 +50,6 @@ FROM node:22-slim
 # python3, make) that the full node:22 image ships but the runtime never needs —
 # removing the linux-libc-dev kernel-headers CVE surface from the scan.
 RUN apt-get update && \
-    apt-get upgrade -y && \
     apt-get install -y --no-install-recommends \
         wget \
         ca-certificates && \
@@ -94,5 +93,17 @@ RUN mkdir -p /app/node_modules/@xenova/transformers/.cache /app/logs /app/Upload
 
 ENTRYPOINT ["/docker-entrypoint.sh"]
 CMD ["node", "index.js"]
+
+# The OS packages are refreshed by a separate, bustable layer: the monthly
+# rebuild passes --build-arg CACHE_BUST=<timestamp>, and a layer that takes
+# that argument is the only one whose cache key changes.
+#
+# It is the LAST RUN of the runtime stage on purpose: a layer's cache key
+# includes its parent, so an upgrade layer with an expensive layer above it
+# would re-run that layer on every monthly rebuild.
+ARG CACHE_BUST=0
+RUN CACHE_BUST=$CACHE_BUST apt-get update -y -o Acquire::Retries=5 && \
+    apt-get upgrade -y --with-new-pkgs --fix-missing -o Acquire::Retries=5 && \
+    apt-get clean && rm -rf /var/lib/apt/lists/*
 
 USER node

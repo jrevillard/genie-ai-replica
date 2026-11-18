@@ -28,7 +28,6 @@ FROM node:22-slim
 # and clamav-node.sh's readiness loop both invoke it explicitly. curl backs the
 # compose healthcheck (docker-compose.yaml doc-repo service).
 RUN apt-get update && \
-    apt-get upgrade -y && \
     apt-get install -y --no-install-recommends clamav clamav-daemon clamdscan curl && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/*
@@ -79,6 +78,18 @@ ENV ARANGO_USER=root
 ENV UPLOAD_DIR=./uploads
 ENV MAX_FILE_SIZE=52428800
 ENV MAX_FILES_UPLOAD=10
+
+# The OS packages are refreshed by a separate, bustable layer: the monthly
+# rebuild passes --build-arg CACHE_BUST=<timestamp>, and a layer that takes
+# that argument is the only one whose cache key changes.
+#
+# It is the LAST RUN of the runtime stage on purpose: a layer's cache key
+# includes its parent, so an upgrade layer with an expensive layer above it
+# would re-run that layer on every monthly rebuild.
+ARG CACHE_BUST=0
+RUN CACHE_BUST=$CACHE_BUST apt-get update -y -o Acquire::Retries=5 && \
+    apt-get upgrade -y --with-new-pkgs --fix-missing -o Acquire::Retries=5 && \
+    apt-get clean && rm -rf /var/lib/apt/lists/*
 
 # Non-root (#1227): node (uid 1000) owns everything this container writes.
 USER node

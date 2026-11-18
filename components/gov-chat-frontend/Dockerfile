@@ -35,21 +35,6 @@ RUN npm run build \
 # maintained upstream (Alpine v3.24's current 1.30.6-r1 carries all five).
 FROM nginx:1.30-alpine
 
-# Pull current Alpine security updates at build time (CVE remediation
-# playbook): the rolling base tag does not refresh on its own between
-# upstream rebuilds.
-#
-# The nginx package itself stays pinned by the upstream image (that pin is
-# the reproducible combination upstream tested), and on the maintained 1.30
-# line it is the current one — upstream bumps it, `--pull` picks it up. So
-# this layer refreshes everything the pin does not cover, and leaves nginx
-# alone on purpose.
-#
-# `apk info -v nginx` prints the EXACT package version (with the Alpine -r
-# revision) into the build log: the build itself is the proof of what ships.
-RUN apk upgrade --no-cache \
-    && apk info -v nginx
-
 WORKDIR /app
 
 COPY --from=build /app/dist /app/dist
@@ -67,6 +52,30 @@ RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 # creates itself.
 RUN mkdir -p /app/dist/runtime \
     && chown -R 101:101 /app/dist/runtime
+
+# The OS packages are refreshed by a separate, bustable layer: the monthly
+# rebuild passes --build-arg CACHE_BUST=<timestamp>, and a layer that takes
+# that argument is the only one whose cache key changes.
+#
+# It is the LAST RUN of the runtime stage on purpose: a layer's cache key
+# includes its parent, so an upgrade layer with an expensive layer above it
+# would re-run that layer on every monthly rebuild.
+#
+# Pull current Alpine security updates at build time (CVE remediation
+# playbook): the rolling base tag does not refresh on its own between
+# upstream rebuilds.
+#
+# The nginx package itself stays pinned by the upstream image (that pin is
+# the reproducible combination upstream tested), and on the maintained 1.30
+# line it is the current one — upstream bumps it, `--pull` picks it up. So
+# this layer refreshes everything the pin does not cover, and leaves nginx
+# alone on purpose.
+#
+# `apk info -v nginx` prints the EXACT package version (with the Alpine -r
+# revision) into the build log: the build itself is the proof of what ships.
+ARG CACHE_BUST=0
+RUN CACHE_BUST=$CACHE_BUST apk upgrade --no-cache \
+    && apk info -v nginx
 
 # In-container port is unprivileged (8090); nothing below 1024 is needed.
 EXPOSE 8090

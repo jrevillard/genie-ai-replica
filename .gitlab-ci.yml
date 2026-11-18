@@ -1335,33 +1335,40 @@ container_scanning:
           BUILD_ARGS="--build-arg GIT_SHA=${CI_COMMIT_SHA:-unknown}"
           ;;
       esac
-      # FORCE_IMAGE_REBUILD (the monthly schedule / operator trigger) must be
-      # a REAL rebuild: with the registry cache left on, buildx reuses the
-      # cached RUN layers and an unchanged Dockerfile never re-runs
-      # `apt-get upgrade` / `apk upgrade` — the security-update layers only
-      # ever executed once per Dockerfile edit, so the monthly cycle pulled
-      # no new packages (measured 2026-11-17: two same-day rebuilds shipped
-      # identical libpq 17.11 / nginx 1.28.3-r1 while 17.12 / 1.28.3-r4 sat
-      # in the security repos). --no-cache re-runs every layer.
-      NOCACHE=""
+      # FORCE_IMAGE_REBUILD (the monthly schedule / operator trigger) must
+      # refresh the OS security packages. Every image that installs OS
+      # packages declares ARG CACHE_BUST on its upgrade layer: an ARG value
+      # is part of that layer's cache key, so the layer re-runs on every
+      # monthly rebuild — while every layer before it stays cached (a layer's
+      # cache key includes its parent, which is why the upgrade layer sits
+      # LAST in the runtime stage).
+      #
+      # The value is passed ONLY when the rebuild is forced. A fresh value on
+      # every pipeline would invalidate the upgrade layer on every merge and
+      # change every image digest for nothing.
+      #
+      # The mechanism this replaces was --no-cache: it re-ran EVERY layer of
+      # every image (multi-minute, mostly silent, and it re-resolved
+      # unpinned dependencies), and it still shipped stale packages whenever
+      # a build failed before reaching the upgrade layer.
       if [ "${FORCE_IMAGE_REBUILD:-}" = "true" ]; then
-        NOCACHE="--no-cache"
+        BUILD_ARGS="$BUILD_ARGS --build-arg CACHE_BUST=$(date +%s)"
       fi
-      # --progress=plain: GitLab's trace API rejects an EMPTY chunk when the
-      # runner produced no output for a whole update interval (the coordinator
-      # answers the runner with `update-interval=1m0s`); the runner reads that
-      # 403 as "the job was canceled" and kills the job. A buildx build
-      # without --progress is silent while it pulls its bases and runs its
-      # layers, so the no-cache rebuilds died at a constant ~66 s with an empty
-      # job trace — the same symptom as the 2.1 GB clone, which is why the two
-      # were easy to confuse. The plain progress streams every build step: the
-      # runner sees activity, the job survives, and the log is readable
-      # instead of empty.
+      # --progress=plain: buildx's default renderer is a dynamic display that
+      # collapses into an unreadable blob in a CI log. The plain renderer
+      # streams every build step, which makes the log usable AND keeps the
+      # trace alive during the long silent steps of an image build.
+      #
+      # It is NOT the fix for the "unknown_failure" deaths measured on
+      # 2026-11-17/18: those were Cloudflare's WAF refusing the job-log
+      # upload (403 on PATCH /api/v4/jobs/:id/trace — issue #2001), which
+      # the runner reads as "the job failed" and answers by killing the job.
+      # The build itself never failed, and the rejected chunks were 46-226 KB,
+      # never empty.
       docker buildx build \
         --progress=plain \
         --pull \
         --push \
-        $NOCACHE \
         -t "$REGISTRY_REF" \
         -f "$DOCKERFILE" \
         $BUILD_ARGS \

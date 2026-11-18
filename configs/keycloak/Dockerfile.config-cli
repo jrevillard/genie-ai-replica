@@ -10,9 +10,17 @@ USER root
 # seen 2026-09-24 with libexpat1 2.6.1-2ubuntu0.6, hard 404 on every fresh
 # build for ~1h). apt then skips that one package instead of failing the
 # whole image build; the skipped bump is picked up by the next rebuild.
-RUN apt-get update -o Acquire::Retries=5 && \
-    apt-get upgrade -y --fix-missing -o Acquire::Retries=5 && \
-    rm -rf /var/lib/apt/lists/*
+# The OS packages are refreshed by a separate, bustable layer: the monthly
+# rebuild passes --build-arg CACHE_BUST=<timestamp>, and a layer that takes
+# that argument is the only one whose cache key changes.
+#
+# It is the LAST RUN of the runtime stage on purpose: a layer's cache key
+# includes its parent, so an upgrade layer with an expensive layer above it
+# would re-run that layer on every monthly rebuild.
+ARG CACHE_BUST=0
+RUN CACHE_BUST=$CACHE_BUST apt-get update -y -o Acquire::Retries=5 && \
+    apt-get upgrade -y --with-new-pkgs --fix-missing -o Acquire::Retries=5 && \
+    apt-get clean && rm -rf /var/lib/apt/lists/*
 USER 65534
 
 COPY genie-realm.yaml /config/genie-realm.yaml

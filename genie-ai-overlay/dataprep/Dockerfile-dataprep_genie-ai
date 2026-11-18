@@ -87,7 +87,6 @@ WORKDIR /app
 # debugging recipes; libreoffice + the document-conversion toolchain;
 # opencv's libgl1/libglib2.0-0; tesseract.
 RUN apt-get update -y && \
-    apt-get upgrade -y && \
     apt-get install -y --no-install-recommends --fix-missing \
     curl \
     default-jre-headless \
@@ -242,6 +241,18 @@ RUN useradd -ms /bin/bash user && \
     COPY --chmod=0755 genie-ai-overlay/build-patches/install_site_startup.sh /app/install_site_startup.sh
     COPY configs/ssl/genie_ssl_patch.py /app/genie_ssl_patch.py
     RUN /app/install_site_startup.sh
+
+# The OS packages are refreshed by a separate, bustable layer: the monthly
+# rebuild passes --build-arg CACHE_BUST=<timestamp>, and a layer that takes
+# that argument is the only one whose cache key changes.
+#
+# It is the LAST RUN of the runtime stage on purpose: a layer's cache key
+# includes its parent, so an upgrade layer with an expensive layer above it
+# would re-run that layer on every monthly rebuild.
+ARG CACHE_BUST=0
+RUN CACHE_BUST=$CACHE_BUST apt-get update -y -o Acquire::Retries=5 && \
+    apt-get upgrade -y --with-new-pkgs --fix-missing -o Acquire::Retries=5 && \
+    apt-get clean && rm -rf /var/lib/apt/lists/*
 
 # Step L: Run the new GENIE-AI entry point from its new location
 USER user

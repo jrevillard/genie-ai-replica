@@ -1,0 +1,898 @@
+{
+  "artifact": "v02-opea-query-path-contract",
+  "contract_version": "1",
+  "story": "#1947 — PRD agentic-foundations, story 1.1 (Epic 1 / stage S3, gate V02)",
+  "scope": "The OPEA query path as the deployed stack actually serves it: preparation -> embedding -> retrieval (dense + BM25 + RRF + filters + enrichment) -> reranking/evidence selection.",
+  "method": "Values are read from the running pods of the venue (measured block). Expectations are derived from the deployed source and cross-checked against the live observations in this file. Nothing here is inferred from the repository defaults alone.",
+  "venue": {
+    "cluster": "forge-k3s (shared k3s)",
+    "namespace": "genieai",
+    "profile": "dev",
+    "ingress_host": "genieai-forge.local:4443",
+    "opea_gpu_mode": "external",
+    "gpu_node_host": "https://ai.assembly.govstack.global:444"
+  },
+  "recorded_at": "2026-11-18T07:08:13+00:00",
+  "pods": {
+    "chatqna": "genieai-genieai-umbrella-chatqna-89bd98544-x5q5c",
+    "embedding": "genieai-genieai-umbrella-embedding-9c4c7f756-jglt6",
+    "reranker": "genieai-genieai-umbrella-reranker-54db956ff6-h9mc4",
+    "retriever": "genieai-genieai-umbrella-retriever-68b8c8bf68-zphwk"
+  },
+  "probe": "scripts/baselines/probe-v02-query-path.py",
+  "measured": {
+    "probe": "v02-opea-query-path",
+    "recorded_at": "2026-11-18T07:08:13+00:00",
+    "namespace": "genieai",
+    "pods": {
+      "chatqna": "genieai-genieai-umbrella-chatqna-89bd98544-x5q5c",
+      "embedding": "genieai-genieai-umbrella-embedding-9c4c7f756-jglt6",
+      "reranker": "genieai-genieai-umbrella-reranker-54db956ff6-h9mc4",
+      "retriever": "genieai-genieai-umbrella-retriever-68b8c8bf68-zphwk"
+    },
+    "deployed_env": {
+      "chatqna": {
+        "RETRIEVER_ARANGO_SEARCH_START": "chunk",
+        "RETRIEVER_ARANGO_DISTANCE_THRESHOLD": "1",
+        "RETRIEVER_ARANGO_FETCH_K": "30",
+        "RETRIEVER_ARANGO_K": "20",
+        "RETRIEVER_ARANGO_LAMBDA_MULT": "0.5",
+        "RETRIEVER_ARANGO_SCORE_THRESHOLD": "0.2",
+        "RETRIEVER_ARANGO_TRAVERSAL_ENABLED": "true",
+        "RETRIEVER_ARANGO_TRAVERSAL_MAX_DEPTH": "2",
+        "RETRIEVER_ARANGO_TRAVERSAL_MAX_RETURNED": "5",
+        "RETRIEVER_ARANGO_TRAVERSAL_SCORE_THRESHOLD": "0.7",
+        "RERANKING_STRATEGY": "slice",
+        "RERANKING_THRESHOLD": "0.75",
+        "RERANKER_TOP_N": "3",
+        "RERANKER_SCORE_CALIBRATION": "none",
+        "RERANKER_SCORE_TEMPERATURE": "1.0",
+        "VLLM_TRANSLATION_ENDPOINT": "https://ai.assembly.govstack.global:444/translation",
+        "VLLM_TRANSLATION_MODEL_ID": "google/gemma-3-4b-it",
+        "TRANSLATION_SERVICE_HOST_IP": "translation",
+        "TRANSLATION_SERVICE_PORT": "9031",
+        "MULTI_TURN_MODE": "blend",
+        "MULTI_TURN_HISTORY_TURNS": "1",
+        "MULTI_TURN_BLEND_ENABLED": "false",
+        "MULTI_TURN_BLEND_ALPHA": "0.7",
+        "MULTI_TURN_CONDENSE_HISTORY_TURNS": "8"
+      },
+      "embedding": {
+        "TEI_EMBEDDING_ENDPOINT": "https://ai.assembly.govstack.global:444/embed",
+        "EMBEDDING_MODEL_ID": "BAAI/bge-large-en-v1.5",
+        "EMBEDDING_MODEL_ENDPOINT": "https://ai.assembly.govstack.global:444/embed",
+        "TRANSLATION_SERVICE_PORT": "9031"
+      },
+      "reranker": {
+        "TRANSLATION_SERVICE_PORT": "9031"
+      },
+      "retriever": {
+        "ARANGO_DB": "_system",
+        "ARANGO_GRAPH_NAME": "GRAPH",
+        "ARANGO_URL": "http://arangodb-single.genieai.svc.cluster.local:8529",
+        "RETRIEVER_ARANGO_SEARCH_MODE": "vector",
+        "RETRIEVER_ARANGO_SEARCH_START": "chunk",
+        "RETRIEVER_ARANGO_DISTANCE_STRATEGY": "COSINE",
+        "RETRIEVER_ARANGO_DISTANCE_THRESHOLD": "1",
+        "RETRIEVER_ARANGO_FETCH_K": "30",
+        "RETRIEVER_ARANGO_K": "20",
+        "RETRIEVER_ARANGO_LAMBDA_MULT": "0.5",
+        "RETRIEVER_ARANGO_NUM_CENTROIDS": "1",
+        "RETRIEVER_ARANGO_SCORE_THRESHOLD": "0.2",
+        "RETRIEVER_ARANGO_USE_APPROX_SEARCH": "false",
+        "RETRIEVER_ARANGO_FILTER_STRATEGY": "OR",
+        "RETRIEVER_ARANGO_TRAVERSAL_ENABLED": "true",
+        "RETRIEVER_ARANGO_TRAVERSAL_MAX_DEPTH": "2",
+        "RETRIEVER_ARANGO_TRAVERSAL_MAX_RETURNED": "5",
+        "RETRIEVER_ARANGO_TRAVERSAL_SCORE_THRESHOLD": "0.7",
+        "RETRIEVER_HYBRID_RETRIEVAL_ENABLED": "true",
+        "RETRIEVER_HYBRID_BM25_ANALYZER": "text_en",
+        "RETRIEVER_HYBRID_BM25_CANDIDATES": "50",
+        "RETRIEVER_HYBRID_RRF_K": "60",
+        "RETRIEVER_HYBRID_DENSE_WEIGHT": "1.0",
+        "RETRIEVER_HYBRID_LEXICAL_WEIGHT": "1.0",
+        "RETRIEVER_FANOUT_ENABLED": "true",
+        "RETRIEVER_FANOUT_MAX_GRAPHS": "5",
+        "RETRIEVER_FANOUT_PER_GRAPH_TIMEOUT_MS": "8000",
+        "RETRIEVER_FANOUT_CANDIDATE_CAP_GLOBAL": "200",
+        "RETRIEVER_FANOUT_CANDIDATE_CAP_PER_GRAPH": "50",
+        "RETRIEVER_ROUTE_ENABLED": "true",
+        "RETRIEVER_ROUTE_TOP_K": "40",
+        "RETRIEVER_ROUTE_MIN_CHUNKS": "3",
+        "RETRIEVER_ROUTE_PROBE_TIMEOUT_MS": "2000",
+        "RETRIEVER_ROUTE_RETRY": "1",
+        "RETRIEVER_ROUTE_HEAD_WEIGHT": "1.0",
+        "RETRIEVER_ROUTE_HEAD_MARGIN": "0.01",
+        "RETRIEVER_ROUTE_HEAD_FLOOR": "0.55",
+        "RETRIEVER_ROUTE_FORBIDDEN_TAG_MAX": "0.55",
+        "RETRIEVER_ROUTE_HEADS_SUPERSEDE": "true",
+        "TEI_EMBEDDING_ENDPOINT": "https://ai.assembly.govstack.global:444/embed",
+        "RERANKING_STRATEGY": "slice",
+        "TRANSLATION_SERVICE_PORT": "9031"
+      }
+    },
+    "absent_knobs": {
+      "chatqna": [
+        "ARANGO_DB",
+        "ARANGO_GRAPH_NAME",
+        "ARANGO_URL",
+        "RETRIEVER_ARANGO_SEARCH_MODE",
+        "RETRIEVER_ARANGO_DISTANCE_STRATEGY",
+        "RETRIEVER_ARANGO_NUM_CENTROIDS",
+        "RETRIEVER_ARANGO_USE_APPROX_SEARCH",
+        "RETRIEVER_ARANGO_FILTER_STRATEGY",
+        "RETRIEVER_HYBRID_RETRIEVAL_ENABLED",
+        "RETRIEVER_HYBRID_BM25_ANALYZER",
+        "RETRIEVER_HYBRID_BM25_CANDIDATES",
+        "RETRIEVER_HYBRID_RRF_K",
+        "RETRIEVER_HYBRID_DENSE_WEIGHT",
+        "RETRIEVER_HYBRID_LEXICAL_WEIGHT",
+        "RETRIEVER_FANOUT_ENABLED",
+        "RETRIEVER_FANOUT_MAX_GRAPHS",
+        "RETRIEVER_FANOUT_PER_GRAPH_TIMEOUT_MS",
+        "RETRIEVER_FANOUT_CANDIDATE_CAP_GLOBAL",
+        "RETRIEVER_FANOUT_CANDIDATE_CAP_PER_GRAPH",
+        "RETRIEVER_ROUTE_ENABLED",
+        "RETRIEVER_ROUTE_TOP_K",
+        "RETRIEVER_ROUTE_MIN_CHUNKS",
+        "RETRIEVER_ROUTE_PROBE_TIMEOUT_MS",
+        "RETRIEVER_ROUTE_RETRY",
+        "RETRIEVER_ROUTE_HEAD_WEIGHT",
+        "RETRIEVER_ROUTE_HEAD_MARGIN",
+        "RETRIEVER_ROUTE_HEAD_FLOOR",
+        "RETRIEVER_ROUTE_FORBIDDEN_TAG_MAX",
+        "RETRIEVER_ROUTE_HEADS_SUPERSEDE",
+        "TEI_EMBED_MODEL",
+        "TEI_EMBEDDING_ENDPOINT",
+        "EMBEDDING_MODEL_ID",
+        "EMBEDDING_MODEL_ENDPOINT",
+        "EMBEDDING_QUERY_INSTRUCTIONS",
+        "TRANSLATION_SERVICE_TIMEOUT",
+        "LANGUAGE_REGISTRY_FILEPATH",
+        "MAX_TRANSLATION_CHARS"
+      ],
+      "embedding": [
+        "ARANGO_DB",
+        "ARANGO_GRAPH_NAME",
+        "ARANGO_URL",
+        "RETRIEVER_ARANGO_SEARCH_MODE",
+        "RETRIEVER_ARANGO_SEARCH_START",
+        "RETRIEVER_ARANGO_DISTANCE_STRATEGY",
+        "RETRIEVER_ARANGO_DISTANCE_THRESHOLD",
+        "RETRIEVER_ARANGO_FETCH_K",
+        "RETRIEVER_ARANGO_K",
+        "RETRIEVER_ARANGO_LAMBDA_MULT",
+        "RETRIEVER_ARANGO_NUM_CENTROIDS",
+        "RETRIEVER_ARANGO_SCORE_THRESHOLD",
+        "RETRIEVER_ARANGO_USE_APPROX_SEARCH",
+        "RETRIEVER_ARANGO_FILTER_STRATEGY",
+        "RETRIEVER_ARANGO_TRAVERSAL_ENABLED",
+        "RETRIEVER_ARANGO_TRAVERSAL_MAX_DEPTH",
+        "RETRIEVER_ARANGO_TRAVERSAL_MAX_RETURNED",
+        "RETRIEVER_ARANGO_TRAVERSAL_SCORE_THRESHOLD",
+        "RETRIEVER_HYBRID_RETRIEVAL_ENABLED",
+        "RETRIEVER_HYBRID_BM25_ANALYZER",
+        "RETRIEVER_HYBRID_BM25_CANDIDATES",
+        "RETRIEVER_HYBRID_RRF_K",
+        "RETRIEVER_HYBRID_DENSE_WEIGHT",
+        "RETRIEVER_HYBRID_LEXICAL_WEIGHT",
+        "RETRIEVER_FANOUT_ENABLED",
+        "RETRIEVER_FANOUT_MAX_GRAPHS",
+        "RETRIEVER_FANOUT_PER_GRAPH_TIMEOUT_MS",
+        "RETRIEVER_FANOUT_CANDIDATE_CAP_GLOBAL",
+        "RETRIEVER_FANOUT_CANDIDATE_CAP_PER_GRAPH",
+        "RETRIEVER_ROUTE_ENABLED",
+        "RETRIEVER_ROUTE_TOP_K",
+        "RETRIEVER_ROUTE_MIN_CHUNKS",
+        "RETRIEVER_ROUTE_PROBE_TIMEOUT_MS",
+        "RETRIEVER_ROUTE_RETRY",
+        "RETRIEVER_ROUTE_HEAD_WEIGHT",
+        "RETRIEVER_ROUTE_HEAD_MARGIN",
+        "RETRIEVER_ROUTE_HEAD_FLOOR",
+        "RETRIEVER_ROUTE_FORBIDDEN_TAG_MAX",
+        "RETRIEVER_ROUTE_HEADS_SUPERSEDE",
+        "TEI_EMBED_MODEL",
+        "EMBEDDING_QUERY_INSTRUCTIONS",
+        "RERANKING_STRATEGY",
+        "RERANKING_THRESHOLD",
+        "RERANKER_TOP_N",
+        "RERANKER_SCORE_CALIBRATION",
+        "RERANKER_SCORE_TEMPERATURE",
+        "VLLM_TRANSLATION_ENDPOINT",
+        "VLLM_TRANSLATION_MODEL_ID",
+        "TRANSLATION_SERVICE_HOST_IP",
+        "TRANSLATION_SERVICE_TIMEOUT",
+        "LANGUAGE_REGISTRY_FILEPATH",
+        "MAX_TRANSLATION_CHARS",
+        "MULTI_TURN_MODE",
+        "MULTI_TURN_HISTORY_TURNS",
+        "MULTI_TURN_BLEND_ENABLED",
+        "MULTI_TURN_BLEND_ALPHA",
+        "MULTI_TURN_CONDENSE_HISTORY_TURNS"
+      ],
+      "reranker": [
+        "ARANGO_DB",
+        "ARANGO_GRAPH_NAME",
+        "ARANGO_URL",
+        "RETRIEVER_ARANGO_SEARCH_MODE",
+        "RETRIEVER_ARANGO_SEARCH_START",
+        "RETRIEVER_ARANGO_DISTANCE_STRATEGY",
+        "RETRIEVER_ARANGO_DISTANCE_THRESHOLD",
+        "RETRIEVER_ARANGO_FETCH_K",
+        "RETRIEVER_ARANGO_K",
+        "RETRIEVER_ARANGO_LAMBDA_MULT",
+        "RETRIEVER_ARANGO_NUM_CENTROIDS",
+        "RETRIEVER_ARANGO_SCORE_THRESHOLD",
+        "RETRIEVER_ARANGO_USE_APPROX_SEARCH",
+        "RETRIEVER_ARANGO_FILTER_STRATEGY",
+        "RETRIEVER_ARANGO_TRAVERSAL_ENABLED",
+        "RETRIEVER_ARANGO_TRAVERSAL_MAX_DEPTH",
+        "RETRIEVER_ARANGO_TRAVERSAL_MAX_RETURNED",
+        "RETRIEVER_ARANGO_TRAVERSAL_SCORE_THRESHOLD",
+        "RETRIEVER_HYBRID_RETRIEVAL_ENABLED",
+        "RETRIEVER_HYBRID_BM25_ANALYZER",
+        "RETRIEVER_HYBRID_BM25_CANDIDATES",
+        "RETRIEVER_HYBRID_RRF_K",
+        "RETRIEVER_HYBRID_DENSE_WEIGHT",
+        "RETRIEVER_HYBRID_LEXICAL_WEIGHT",
+        "RETRIEVER_FANOUT_ENABLED",
+        "RETRIEVER_FANOUT_MAX_GRAPHS",
+        "RETRIEVER_FANOUT_PER_GRAPH_TIMEOUT_MS",
+        "RETRIEVER_FANOUT_CANDIDATE_CAP_GLOBAL",
+        "RETRIEVER_FANOUT_CANDIDATE_CAP_PER_GRAPH",
+        "RETRIEVER_ROUTE_ENABLED",
+        "RETRIEVER_ROUTE_TOP_K",
+        "RETRIEVER_ROUTE_MIN_CHUNKS",
+        "RETRIEVER_ROUTE_PROBE_TIMEOUT_MS",
+        "RETRIEVER_ROUTE_RETRY",
+        "RETRIEVER_ROUTE_HEAD_WEIGHT",
+        "RETRIEVER_ROUTE_HEAD_MARGIN",
+        "RETRIEVER_ROUTE_HEAD_FLOOR",
+        "RETRIEVER_ROUTE_FORBIDDEN_TAG_MAX",
+        "RETRIEVER_ROUTE_HEADS_SUPERSEDE",
+        "TEI_EMBED_MODEL",
+        "TEI_EMBEDDING_ENDPOINT",
+        "EMBEDDING_MODEL_ID",
+        "EMBEDDING_MODEL_ENDPOINT",
+        "EMBEDDING_QUERY_INSTRUCTIONS",
+        "RERANKING_STRATEGY",
+        "RERANKING_THRESHOLD",
+        "RERANKER_TOP_N",
+        "RERANKER_SCORE_CALIBRATION",
+        "RERANKER_SCORE_TEMPERATURE",
+        "VLLM_TRANSLATION_ENDPOINT",
+        "VLLM_TRANSLATION_MODEL_ID",
+        "TRANSLATION_SERVICE_HOST_IP",
+        "TRANSLATION_SERVICE_TIMEOUT",
+        "LANGUAGE_REGISTRY_FILEPATH",
+        "MAX_TRANSLATION_CHARS",
+        "MULTI_TURN_MODE",
+        "MULTI_TURN_HISTORY_TURNS",
+        "MULTI_TURN_BLEND_ENABLED",
+        "MULTI_TURN_BLEND_ALPHA",
+        "MULTI_TURN_CONDENSE_HISTORY_TURNS"
+      ],
+      "retriever": [
+        "TEI_EMBED_MODEL",
+        "EMBEDDING_MODEL_ID",
+        "EMBEDDING_MODEL_ENDPOINT",
+        "EMBEDDING_QUERY_INSTRUCTIONS",
+        "RERANKING_THRESHOLD",
+        "RERANKER_TOP_N",
+        "RERANKER_SCORE_CALIBRATION",
+        "RERANKER_SCORE_TEMPERATURE",
+        "VLLM_TRANSLATION_ENDPOINT",
+        "VLLM_TRANSLATION_MODEL_ID",
+        "TRANSLATION_SERVICE_HOST_IP",
+        "TRANSLATION_SERVICE_TIMEOUT",
+        "LANGUAGE_REGISTRY_FILEPATH",
+        "MAX_TRANSLATION_CHARS",
+        "MULTI_TURN_MODE",
+        "MULTI_TURN_HISTORY_TURNS",
+        "MULTI_TURN_BLEND_ENABLED",
+        "MULTI_TURN_BLEND_ALPHA",
+        "MULTI_TURN_CONDENSE_HISTORY_TURNS"
+      ]
+    },
+    "preparation": {
+      "model_id": "BAAI/bge-large-en-v1.5",
+      "query_instruction": "Represent this sentence for searching relevant passages: ",
+      "supported_language_count": 41,
+      "locales": [
+        {
+          "locale": "fr",
+          "sample": "Bonjour, comment la ville de Geneve gere-t-elle les services de transport public pour les habitants et les visiteurs ?",
+          "detected_language": "FR",
+          "detected_supported": true,
+          "history_language": "FR",
+          "query_translation_status": "translated",
+          "english_history": "Hello, how does the city of Geneva manage public transport services for residents and visitors?",
+          "english_query": "Hello, how does the city of Geneva manage public transport services for residents and visitors?",
+          "embedded_text": "Represent this sentence for searching relevant passages: Hello, how does the city of Geneva manage public transport services for residents and visitors?"
+        },
+        {
+          "locale": "es",
+          "sample": "¿Como gestiona la ciudad de Barcelona los servicios de transporte publico para los residentes y los visitantes?",
+          "detected_language": "ES",
+          "detected_supported": true,
+          "history_language": "ES",
+          "query_translation_status": "translated",
+          "english_history": "How does the city of Barcelona manage public transportation services for residents and visitors?",
+          "english_query": "How does the city of Barcelona manage public transportation services for residents and visitors?",
+          "embedded_text": "Represent this sentence for searching relevant passages: How does the city of Barcelona manage public transportation services for residents and visitors?"
+        },
+        {
+          "locale": "ar",
+          "sample": "كيف تدير مدينة دبي خدمات النقل العام للسكان والزوار خلال موسم الصيف؟",
+          "detected_language": "AR",
+          "detected_supported": true,
+          "history_language": "AR",
+          "query_translation_status": "translated",
+          "english_history": "How does the city of Dubai manage public transportation services for residents and visitors during the summer season?",
+          "english_query": "How does the city of Dubai manage public transportation services for residents and visitors during the summer season?",
+          "embedded_text": "Represent this sentence for searching relevant passages: How does the city of Dubai manage public transportation services for residents and visitors during the summer season?"
+        }
+      ]
+    }
+  },
+  "expectations": {
+    "artifact": "v02-opea-query-path-contract",
+    "contract_version": "1",
+    "story": "#1947 — PRD agentic-foundations, story 1.1 (Epic 1 / stage S3, gate V02)",
+    "scope": "The OPEA query path as the deployed stack actually serves it: preparation -> embedding -> retrieval (dense + BM25 + RRF + filters + enrichment) -> reranking/evidence selection.",
+    "method": "Values are read from the running pods of the venue (measured block). Expectations are derived from the deployed source and cross-checked against the live observations in this file. Nothing here is inferred from the repository defaults alone.",
+    "value_sources": {
+      "chart": "charts/genieai-umbrella/values.yaml — the declared value the chart templates render into the pod env.",
+      "code-default": "the value the running code falls back to when the chart does not template the variable.",
+      "deployed-overlay": "set by the venue overlay (ConfigMap genieai-forge-public in namespace flux-system)."
+    },
+    "behaviors": {
+      "dense_retrieval": {
+        "title": "Dense retrieval — brute-force cosine by default",
+        "inputs": {
+          "text": "the English retrieval query (chatqna sends the prefixed query text; the retriever receives the raw English text plus the pre-computed embedding)",
+          "embedding": "query vector, 1024 dimensions, produced by the embedding service from the PREFIXED query",
+          "search_start": "chunk",
+          "k": "RETRIEVER_ARANGO_K"
+        },
+        "deployed_knobs": {
+          "RETRIEVER_ARANGO_SEARCH_MODE": "vector",
+          "RETRIEVER_ARANGO_DISTANCE_STRATEGY": "COSINE",
+          "RETRIEVER_ARANGO_USE_APPROX_SEARCH": "false",
+          "RETRIEVER_ARANGO_K": "20",
+          "RETRIEVER_ARANGO_FETCH_K": "30",
+          "RETRIEVER_ARANGO_SCORE_THRESHOLD": "0.2",
+          "RETRIEVER_ARANGO_DISTANCE_THRESHOLD": "1",
+          "RETRIEVER_ARANGO_NUM_CENTROIDS": "1",
+          "RETRIEVER_ARANGO_SEARCH_START": "chunk",
+          "ARANGO_DB": "_system",
+          "ARANGO_GRAPH_NAME": "GRAPH"
+        },
+        "expected_output": {
+          "collection": "GRAPH_SOURCE (search_start=chunk)",
+          "search_call": "asimilarity_search_with_relevance_scores(query, embedding, k, score_threshold, use_approx=False, filter_clause=<label clause or empty>)",
+          "ordering": "descending relevance score",
+          "empty_result": "a leg that returns nothing does not fail the request; the BM25 leg may still rescue the query (fusion runs before the empty check)"
+        },
+        "code": [
+          "genie-ai-overlay/retriever/config.py:67-71 (distance strategy, use_approx, search mode, search start, graph, db)",
+          "genie-ai-overlay/retriever/genieai_retriever_arangodb.py:1502-1507 (per-request overrides)",
+          "genie-ai-overlay/retriever/genieai_retriever_arangodb.py:1763-1813 (the three search branches)",
+          "genie-ai-overlay/chatqna/genieai_chatqna.py:4911-4913 (k / fetch_k / score_threshold forwarded)"
+        ],
+        "notes": [
+          "use_approx_search=false means an exact scan: the vector index dataprep builds is NOT consulted on the query path.",
+          "RETRIEVER_ARANGO_DISTANCE_THRESHOLD is forwarded by chatqna but never read by the retriever — it has no effect on the deployed stack.",
+          "fetch_k is only consulted by the mmr branch, which the deployed search mode never selects."
+        ],
+        "adrs": [
+          "okf-039-retrieval-mode-governance"
+        ]
+      },
+      "bm25_lexical_leg": {
+        "title": "BM25 leg — ArangoSearch analyzer view, native BM25",
+        "inputs": {
+          "text": "the RAW English query (never the prefixed one): TOKENS(@query, @analyzer)",
+          "scope": "runs only when search_start == chunk"
+        },
+        "deployed_knobs": {
+          "RETRIEVER_HYBRID_RETRIEVAL_ENABLED": "true",
+          "RETRIEVER_HYBRID_BM25_ANALYZER": "text_en",
+          "RETRIEVER_HYBRID_BM25_CANDIDATES": "50"
+        },
+        "expected_output": {
+          "view": "GRAPH_BM25_VIEW (arangosearch view over GRAPH_SOURCE, created at runtime by the retriever)",
+          "view_creation": "on boot for the default graph, and lazily per graph on first BM25 use; a failure is logged and never raised",
+          "aql": "FOR doc IN `GRAPH_BM25_VIEW` SEARCH ANALYZER(doc.text IN TOKENS(@query, @analyzer), @analyzer) <label clause> LET _bm25_score = BM25(doc) SORT _bm25_score DESC LIMIT @n RETURN {key, text, chunk_labels, score}",
+          "n": "max(RETRIEVER_ARANGO_K, RETRIEVER_HYBRID_BM25_CANDIDATES) = 50",
+          "ordering": "descending BM25 score",
+          "failure": "any error is logged (BM25 search failed on view ...) and the leg returns []"
+        },
+        "code": [
+          "genie-ai-overlay/retriever/config.py:111-115 (enabled, analyzer, candidates, rrf k, weights)",
+          "genie-ai-overlay/retriever/genieai_retriever_arangodb.py:833-878 (_ensure_bm25_view)",
+          "genie-ai-overlay/retriever/genieai_retriever_arangodb.py:898-936 (_bm25_search)",
+          "genie-ai-overlay/retriever/genieai_retriever_arangodb.py:1851-1854 (leg invocation)"
+        ],
+        "adrs": [
+          "okf-024-graph-selection-router"
+        ]
+      },
+      "rrf_fusion": {
+        "title": "RRF fusion of the dense and lexical legs",
+        "inputs": {
+          "dense": "the dense leg results",
+          "bm25": "the lexical leg results"
+        },
+        "deployed_knobs": {
+          "RETRIEVER_HYBRID_RRF_K": "60",
+          "RETRIEVER_HYBRID_DENSE_WEIGHT": "1.0",
+          "RETRIEVER_HYBRID_LEXICAL_WEIGHT": "1.0"
+        },
+        "expected_output": {
+          "formula": "score(doc) += weight / (rrf_k + rank), rank counted per channel over newly seen ids only",
+          "identity": "the chunk _key (COLLECTION/ prefix stripped); a document without a key is kept standalone",
+          "ordering": "descending fused score; ties keep insertion order, which favours the dense channel",
+          "truncation": "the fused list is truncated to RETRIEVER_ARANGO_K (20) after fusion",
+          "failure": "a fusion error logs (Hybrid BM25+RRF fusion failed, falling back to dense-only) and the dense-only list is used"
+        },
+        "code": [
+          "genie-ai-overlay/retriever/genieai_retriever_arangodb.py:592-632 (rrf_fuse)",
+          "genie-ai-overlay/retriever/genieai_retriever_arangodb.py:1870-1891 (fusion call and truncation)"
+        ],
+        "adrs": [
+          "okf-027-cross-graph-rrf"
+        ]
+      },
+      "label_filter": {
+        "title": "Label filter strategy",
+        "inputs": {
+          "labels": "the requested labels, encoded in the search_start carrier or built from the request context"
+        },
+        "deployed_knobs": {
+          "RETRIEVER_ARANGO_FILTER_STRATEGY": "OR"
+        },
+        "expected_output": {
+          "field": "doc.chunk_labels",
+          "aql_or": "FILTER (doc.chunk_labels != null) AND ([\"L1\",\"L2\"] ANY IN doc.chunk_labels)",
+          "aql_and": "FILTER (doc.chunk_labels != null) AND ([\"L1\",\"L2\"] ALL IN doc.chunk_labels)",
+          "invalid_strategy": "HTTP 400",
+          "no_labels": "no filter clause is emitted at all"
+        },
+        "code": [
+          "genie-ai-overlay/retriever/config.py:82-88 (strategy set and validation)",
+          "genie-ai-overlay/retriever/genieai_retriever_arangodb.py:391-426 (clause builder)"
+        ],
+        "adrs": [
+          "okf-033-label-onboarding"
+        ]
+      },
+      "defense_in_depth_post_filter": {
+        "title": "Defense-in-depth post-filter (label re-check in Python)",
+        "inputs": {
+          "results": "the dense leg results and each BM25 row",
+          "labels": "the same requested labels"
+        },
+        "deployed_knobs": {
+          "RETRIEVER_ARANGO_FILTER_STRATEGY": "OR"
+        },
+        "expected_output": {
+          "dense_leg": "every result whose chunk_labels do not satisfy the strategy is dropped, after the database-side filter",
+          "bm25_leg": "every row whose chunk_labels do not satisfy the strategy is skipped",
+          "no_labels_requested": "every result passes",
+          "chunk_without_labels": "dropped whenever a label filter is active"
+        },
+        "code": [
+          "genie-ai-overlay/retriever/genieai_retriever_arangodb.py:302-315 (_chunk_passes_label_filter)",
+          "genie-ai-overlay/retriever/genieai_retriever_arangodb.py:921-923 (BM25 leg)",
+          "genie-ai-overlay/retriever/genieai_retriever_arangodb.py:1819-1833 (dense leg)"
+        ],
+        "note": "There is no score-threshold post-filter in the retriever: the score threshold is applied inside the similarity search call.",
+        "adrs": [
+          "okf-011-no-raw-aql-to-agents"
+        ]
+      },
+      "file_id_enrichment": {
+        "title": "file_id enrichment",
+        "inputs": {
+          "chunk_ids": "the _key of every surviving chunk"
+        },
+        "deployed_knobs": {
+          "ARANGO_DB": "_system",
+          "ARANGO_GRAPH_NAME": "GRAPH"
+        },
+        "expected_output": {
+          "aql": "ONE batched AQL for all chunks: FOR doc IN `GRAPH_SOURCE` FILTER doc._key IN @chunk_ids RETURN {key: doc._key, file_id: doc.file_id}",
+          "metadata": "metadata.file_ids is a LIST: [file_id] when the chunk carries one, [] when it does not",
+          "absent": "an absent file_id yields [], never null and never a missing key"
+        },
+        "code": [
+          "genie-ai-overlay/retriever/genieai_retriever_arangodb.py:1921-1940 (batched enrichment)"
+        ],
+        "adrs": []
+      },
+      "cap1_identity_join": {
+        "title": "CAP-1 identity join (repo_id + bundle_version), tolerated absence",
+        "inputs": {
+          "chunk_ids": "the _key of every surviving chunk",
+          "graph_name": "the graph the leg searched",
+          "concept_id": "the chunk's own file_id"
+        },
+        "deployed_knobs": {
+          "ARANGO_DB": "_system",
+          "ARANGO_GRAPH_NAME": "GRAPH"
+        },
+        "expected_output": {
+          "aql": "FOR doc IN `GRAPH_SOURCE` FILTER doc._key IN @chunk_ids LET meta = FIRST(FOR m IN okf_concepts_meta FILTER m.graph_name == @graph_name AND m.concept_id == doc.file_id RETURN m) RETURN {key: doc._key, repo_id: meta.repo_id, bundle_version: meta.bundle_version}",
+          "present": "metadata.repo_id and metadata.bundle_version are set",
+          "identity_document_absent": "the two keys are NOT set — the chunk is served unattributed, with no warning",
+          "join_failure": "the whole enrichment is skipped, an ERROR is logged (OKF identity enrichment failed (chunk identity left as-is): ...) and the leg is not broken"
+        },
+        "code": [
+          "genie-ai-overlay/retriever/genieai_retriever_arangodb.py:1941-1975 (the join and its failure isolation)"
+        ],
+        "adrs": [
+          "okf-012-multi-graph-grounding",
+          "okf-013-graph-name-wiring"
+        ]
+      },
+      "provenance_attach": {
+        "title": "Provenance attach (graph_name / repo_id / concept_id)",
+        "inputs": {
+          "results": "the enriched results of a leg"
+        },
+        "deployed_knobs": {},
+        "expected_output": {
+          "graph_name": "always set to the leg's graph name",
+          "concept_id": "the chunk's file_id, when derivable",
+          "repo_id": "set only when the caller passes one (never in the legacy single-graph path)"
+        },
+        "code": [
+          "genie-ai-overlay/retriever/genieai_retriever_arangodb.py:2345-2377 (_attach_provenance)"
+        ],
+        "adrs": [
+          "okf-013-graph-name-wiring"
+        ]
+      },
+      "fanout": {
+        "title": "Multi-graph fan-out",
+        "inputs": {
+          "carrier": "the encoded graph names carried in the request"
+        },
+        "deployed_knobs": {
+          "RETRIEVER_FANOUT_ENABLED": "true",
+          "RETRIEVER_FANOUT_MAX_GRAPHS": "5",
+          "RETRIEVER_FANOUT_PER_GRAPH_TIMEOUT_MS": "8000",
+          "RETRIEVER_FANOUT_CANDIDATE_CAP_PER_GRAPH": "50",
+          "RETRIEVER_FANOUT_CANDIDATE_CAP_GLOBAL": "200"
+        },
+        "expected_output": {
+          "engagement": "only when the carrier names at least one graph; an empty carrier keeps the legacy single-graph path",
+          "leg_failure": "a timed-out or failed leg is a ZERO-HIT leg — the fusion continues with the surviving legs",
+          "cross_graph_fusion": "second-level RRF over the legs, keyed on (graph_name, chunk_id), unweighted (1/(rrf_k + rank)), truncated to min(k, candidate cap global)"
+        },
+        "code": [
+          "genie-ai-overlay/retriever/genieai_retriever_arangodb.py:2413-2483 (leg invocation, timeout, caps)",
+          "genie-ai-overlay/retriever/genieai_retriever_arangodb.py:2380-2410 (cross-graph fusion)"
+        ],
+        "adrs": [
+          "okf-012-multi-graph-grounding",
+          "okf-027-cross-graph-rrf"
+        ]
+      },
+      "routing": {
+        "title": "Graph routing gate (head selection, forbidden tags, chunk competition)",
+        "inputs": {
+          "carrier": "the encoded graph names",
+          "query_embedding": "the query vector (routing is skipped without one)"
+        },
+        "deployed_knobs": {
+          "RETRIEVER_ROUTE_ENABLED": "true",
+          "RETRIEVER_ROUTE_TOP_K": "40",
+          "RETRIEVER_ROUTE_MIN_CHUNKS": "3",
+          "RETRIEVER_ROUTE_PROBE_TIMEOUT_MS": "2000",
+          "RETRIEVER_ROUTE_RETRY": "1",
+          "RETRIEVER_ROUTE_HEAD_WEIGHT": "1.0",
+          "RETRIEVER_ROUTE_HEAD_MARGIN": "0.01",
+          "RETRIEVER_ROUTE_HEAD_FLOOR": "0.55",
+          "RETRIEVER_ROUTE_FORBIDDEN_TAG_MAX": "0.55",
+          "RETRIEVER_ROUTE_HEADS_SUPERSEDE": "true"
+        },
+        "expected_output": {
+          "skipped": "routing is skipped (and the full carrier is fanned out) when it is disabled, when there is no query embedding, or when fewer than two OKF graphs are on the carrier",
+          "gate_order": "FLOOR (score < head floor) -> VETO (a forbidden per-tag vector at cosine >= forbidden tag max) -> MARGIN (score - forbidden centroid cosine <= head margin); a head passes only if every applicable gate passes",
+          "heads_supersede": "when any head passes, ONLY the claimed graphs are searched and the chunk probe is skipped entirely",
+          "chunk_competition": "per-graph probe, a graph qualifies with >= min_chunks hits, and the best-count graph qualifies even when none reaches the minimum",
+          "degraded": "a failed probe degrades to searching ALL carrier graphs (ROUTING DEGRADED ...)"
+        },
+        "code": [
+          "genie-ai-overlay/retriever/genieai_retriever_arangodb.py:2486-2713 (_route_graphs)"
+        ],
+        "adrs": [
+          "okf-024-graph-selection-router"
+        ]
+      },
+      "query_instruction": {
+        "title": "Query-instruction prefix — a MODEL-SPECIFIC contract",
+        "inputs": {
+          "model_id": "TEI_EMBED_MODEL (falling back to the code default BAAI/bge-large-en-v1.5)",
+          "overrides": "EMBEDDING_QUERY_INSTRUCTIONS (comma separated substring=instruction pairs)"
+        },
+        "deployed_knobs": {
+          "TEI_EMBED_MODEL": "unset -> the code default BAAI/bge-large-en-v1.5 is used",
+          "EMBEDDING_QUERY_INSTRUCTIONS": "unset -> the built-in table only",
+          "EMBEDDING_MODEL_ID": "BAAI/bge-large-en-v1.5 (the embedding service's own model)"
+        },
+        "expected_output": {
+          "resolved_instruction": "Represent this sentence for searching relevant passages: ",
+          "resolution_order": "deployer overrides first (first match wins), then the built-in table (first match wins, most specific first)",
+          "no_prefix_models": "a model with no entry (BAAI/bge-m3, sentence-transformers/*, mxbai-embed-large, ...) gets NO prefix — the query is embedded raw",
+          "applied_to": "the query only; passages are embedded without the prefix at ingestion",
+          "where": "chatqna prefixes the query before the embedding call; the retriever prefixes only in its own fallback embed path"
+        },
+        "code": [
+          "genie-ai-overlay/core/embedding_query_prefix.py:28-121 (the table, the overrides and the resolution)",
+          "genie-ai-overlay/chatqna/genieai_chatqna.py:2501-2518 (the prefix is applied)",
+          "genie-ai-overlay/retriever/genieai_retriever_arangodb.py:1711-1733 (the retriever's own fallback path)"
+        ],
+        "note": "The chat path sends the prefixed text to the embedder and the RAW text to the retriever, so the BM25 leg tokenizes the bare query.",
+        "adrs": []
+      },
+      "reranking_evidence_selection": {
+        "title": "TEI reranking + evidence selection",
+        "inputs": {
+          "query": "the retrieval query",
+          "docs": "the retrieved documents, in retrieval order"
+        },
+        "deployed_knobs": {
+          "RERANKING_STRATEGY": "slice",
+          "RERANKER_TOP_N": "3",
+          "RERANKING_THRESHOLD": "0.75",
+          "RERANKER_SCORE_CALIBRATION": "none",
+          "RERANKER_SCORE_TEMPERATURE": "1.0"
+        },
+        "expected_output": {
+          "invocation": "chatqna -> POST {RERANK_SERVER_HOST_IP}:{RERANK_SERVER_PORT}/v1/reranking, which calls TEI POST {base_url}/rerank with {\"query\": ..., \"texts\": [...], \"truncate\": false}; no top_n is sent to TEI, no Authorization header is sent",
+          "strategy_slice": "keep the first RERANKER_TOP_N entries of the score-descending response",
+          "strategy_threshold": "keep every doc with score >= RERANKING_THRESHOLD (count not capped by top_n)",
+          "strategy_slice_threshold": "keep docs with score >= RERANKING_THRESHOLD, capped at RERANKER_TOP_N",
+          "strategy_knee_threshold": "keep the knee+1 leading entries of the score curve; RERANKING_THRESHOLD is NOT consulted by this branch",
+          "strategy_adaptive": "keep every candidate whose value is strictly greater than the minimum value threshold; RERANKER_TOP_N does NOT cap it; it hard-fails when the chunk embeddings are missing or misaligned",
+          "order": "the selected passages keep the reranker's score-descending order all the way into the prompt and into source_documents",
+          "calibration": "none -> the raw TEI score is used; sigmoid -> 1/(1+exp(-score/temperature)), applied at confidence time only, never to the selection comparisons",
+          "empty_selection": "the LLM receives the abstention instructions instead of documents: abstained=true, abstention_reason=reranker_selected_nothing"
+        },
+        "code": [
+          "genie-ai-overlay/reranker/genieai_tei_reranker.py:326-337 (per-request values), :453-616 (the strategies)",
+          "genie-ai-overlay/reranker/genieai_tei_reranker.py:353-379 (the TEI call)",
+          "genie-ai-overlay/chatqna/genieai_chatqna.py:4936-4944 (chatqna sends strategy, top_n and threshold explicitly)",
+          "genie-ai-overlay/chatqna/genieai_chatqna.py:3057-3066, :3121-3123 (the order is preserved into the prompt)"
+        ],
+        "note": "Because chatqna always sends the strategy, top_n and the threshold, the reranker container's own defaults are inert on the chat path.",
+        "adrs": []
+      },
+      "reranker_down": {
+        "title": "Reranker-down behavior — one behavior per failure mode",
+        "inputs": {},
+        "deployed_knobs": {},
+        "expected_output": {
+          "unreachable_or_timeout": "the error propagates: no evidence, the turn fails (503 llm_unavailable for a model-discovery/transport error, otherwise 500). There is NO fallback to the retrieval order.",
+          "http_422_input_too_long": "HTTP 200 with abstained=true, abstention_reason=reranker_input_too_long, and an English abstention text",
+          "other_http_error": "RuntimeError -> HTTP 500 -> the turn fails",
+          "unexpected_body": "RuntimeError -> HTTP 500 -> the turn fails",
+          "score_count_mismatch": "not fatal: a warning is logged and the selection proceeds",
+          "index_out_of_range": "not fatal: the document is skipped",
+          "opaque_500_seen_as_an_empty_result": "the LLM receives the abstention instructions: abstained=true, abstention_reason=reranker_selected_nothing"
+        },
+        "code": [
+          "genie-ai-overlay/reranker/genieai_tei_reranker.py:376-448 (the failure modes)",
+          "genie-ai-overlay/reranker/genieai_reranking_microservice.py:136-163 (the HTTP mapping)",
+          "genie-ai-overlay/chatqna/genieai_chatqna.py:5035-5121 (the abstention path)"
+        ],
+        "adrs": []
+      }
+    },
+    "preparation": {
+      "title": "Input preparation pipeline — language detection, translation to English, bounds, status",
+      "order": [
+        "the caller names a language, or none is named",
+        "when none is named (or the named code was refused), the LAST USER MESSAGE is language-detected",
+        "the detected code is validated against the language registry; an unsupported code falls back to EN",
+        "when the history language is not EN, the history is translated to English",
+        "the last USER segment of the translated history becomes the retrieval query",
+        "the query instruction prefix is applied and the query is embedded",
+        "query_translation_status is stamped on the orchestrate span and in the response metadata"
+      ],
+      "deployed_knobs": {
+        "VLLM_TRANSLATION_ENDPOINT": "https://ai.assembly.govstack.global:444/translation",
+        "VLLM_TRANSLATION_MODEL_ID": "google/gemma-3-4b-it",
+        "TRANSLATION_SERVICE_HOST_IP": "translation",
+        "TRANSLATION_SERVICE_PORT": "9031",
+        "MULTI_TURN_MODE": "blend",
+        "MULTI_TURN_HISTORY_TURNS": "1",
+        "MULTI_TURN_BLEND_ENABLED": "false",
+        "MULTI_TURN_BLEND_ALPHA": "0.7",
+        "MULTI_TURN_CONDENSE_HISTORY_TURNS": "8"
+      },
+      "code": [
+        "genie-ai-overlay/chatqna/genieai_chatqna.py:4578-4661 (detection)",
+        "genie-ai-overlay/chatqna/genieai_chatqna.py:4681-4752 (status assembly and the translation call)",
+        "genie-ai-overlay/chatqna/genieai_chatqna.py:4786-4806 (the retrieval query extraction)",
+        "genie-ai-overlay/chatqna/genieai_chatqna.py:1321-1322 (the char budget and the USER marker pattern)",
+        "genie-ai-overlay/chatqna/language-registry.json (the supported locale registry)"
+      ],
+      "status_values": {
+        "translated": "the history was translated to English",
+        "passthrough_english": "the history was already English and English was established",
+        "passthrough_unknown_language": "no language was named and none could be established",
+        "fallback_timeout": "the translator timed out — the SOURCE-language history is embedded",
+        "fallback_error": "the translation failed for any other reason (blank input, blank completion, unreadable registry, unknown model failure) — the SOURCE-language history is embedded"
+      },
+      "bounds": {
+        "MAX_TRANSLATION_CHARS": "unset -> derived from the serving window, capped by the code default of 2000 characters",
+        "single_message_oversized": "refused: TranslationInputTooLongError -> HTTP 422 (see failure classes)",
+        "multi_message_history": "the oldest turns are dropped and the newest message's tail is truncated to the budget — the turn is NOT refused",
+        "generation_time_truncation": "when the prompt exceeds the model window, the OLDEST history segments are dropped; the retrieved documents are never truncated"
+      },
+      "locales": [
+        {
+          "locale": "fr",
+          "sample": "Bonjour, comment la ville de Geneve gere-t-elle les services de transport public pour les habitants et les visiteurs ?",
+          "detected_language": "FR",
+          "detected_supported": true,
+          "query_translation_status": "translated",
+          "english_query": "Hello, how does the city of Geneva manage public transport services for residents and visitors?",
+          "embedded_text": "Represent this sentence for searching relevant passages: Hello, how does the city of Geneva manage public transport services for residents and visitors?"
+        },
+        {
+          "locale": "es",
+          "sample": "¿Como gestiona la ciudad de Barcelona los servicios de transporte publico para los residentes y los visitantes?",
+          "detected_language": "ES",
+          "detected_supported": true,
+          "query_translation_status": "translated",
+          "english_query": "How does the city of Barcelona manage public transportation services for residents and visitors?",
+          "embedded_text": "Represent this sentence for searching relevant passages: How does the city of Barcelona manage public transportation services for residents and visitors?"
+        },
+        {
+          "locale": "ar",
+          "sample": "كيف تدير مدينة دبي خدمات النقل العام للسكان والزوار خلال موسم الصيف؟",
+          "detected_language": "AR",
+          "detected_supported": true,
+          "query_translation_status": "translated",
+          "english_query": "How does the city of Dubai manage public transportation services for residents and visitors during the summer season?",
+          "embedded_text": "Represent this sentence for searching relevant passages: How does the city of Dubai manage public transportation services for residents and visitors during the summer season?"
+        }
+      ],
+      "locale_coverage_note": "Three locales, one of them written in a non-Latin script (Arabic). The detected language, the exact English string handed to the embedder and the status field are recorded for each.",
+      "failure_classes": [
+        {
+          "class": "translator_unavailable",
+          "trigger": "the translation endpoint is unreachable, errors, or times out",
+          "expected_outcome": "the turn still answers; the SOURCE-language history is embedded (degraded retrieval) and the status is fallback_timeout (timeout) or fallback_error (other failure). The status makes the degradation visible.",
+          "abstains": false,
+          "http_status": 200
+        },
+        {
+          "class": "oversized_input",
+          "trigger": "the query does not fit the translation window (TranslationInputTooLongError)",
+          "expected_outcome": "the turn is REFUSED: HTTP 422 with body {\"detail\": {\"error\": \"translation_input_too_long\", \"message\": ..., \"abstained\": true, \"abstention_reason\": \"translation_input_too_long\"}}. There is NO untranslated fallback.",
+          "abstains": true,
+          "http_status": 422
+        },
+        {
+          "class": "translation_returning_blank",
+          "trigger": "the translation model answers 200 with an empty completion",
+          "expected_outcome": "the turn still answers; the SOURCE-language history is embedded and the status is fallback_error. A blank translation is a failure, never a silent success.",
+          "abstains": false,
+          "http_status": 200
+        }
+      ],
+      "adrs": []
+    },
+    "live_observations": {
+      "venue": "k3s namespace genieai, chart genieai-umbrella, OPEA GPU mode external",
+      "retrieval": {
+        "request": "a dense search over GRAPH_SOURCE with the corpus token, embedding computed by the embedding service",
+        "retriever_log": "Hybrid RRF fusion: 3 documents after fusing dense + BM25. / Extraction summary — graph=GRAPH, dense=3, bm25=1, fused=3, labels=[], filter_strategy=OR / Found 3 documents.",
+        "response_metadata": "file_ids populated with one id, chunk_key set, graph_name=GRAPH, query_embedding attached to the first result only"
+      },
+      "cap1_absence": {
+        "observed": "OKF identity enrichment failed (chunk identity left as-is): [HTTP 404][ERR 1203] collection or view not found: okf_concepts_meta",
+        "meaning": "the venue has no okf_concepts_meta collection, so the CAP-1 join fails as a whole; repo_id and bundle_version are absent from every result and the chunks are served unattributed"
+      },
+      "reranking": {
+        "request": "POST /v1/reranking with the three retrieved documents, top_n=3, reranking_strategy=slice",
+        "observed": "three documents reranked, scores 0.674801 / 0.6280653 / 0.0012018913, in descending score order"
+      },
+      "traversal_cap": {
+        "observed": "[Arango Traversal] ARANGO_TRAVERSAL_CONCURRENT_BATCHES=10 is above the safe cap (4). Capping to 4.",
+        "meaning": "the chart declares 10 concurrent batches; the service caps itself at 4"
+      }
+    },
+    "discrepancies": [
+      {
+        "knob": "RETRIEVER_ARANGO_K",
+        "code_default": "4",
+        "deployed": "20",
+        "source": "charts/genieai-umbrella/values.yaml:1202"
+      },
+      {
+        "knob": "RETRIEVER_ARANGO_FETCH_K",
+        "code_default": "20",
+        "deployed": "30",
+        "source": "charts/genieai-umbrella/values.yaml:1203"
+      },
+      {
+        "knob": "RETRIEVER_ARANGO_SCORE_THRESHOLD",
+        "code_default": "0.1",
+        "deployed": "0.2",
+        "source": "charts/genieai-umbrella/values.yaml:1204"
+      },
+      {
+        "knob": "RETRIEVER_ARANGO_SEARCH_START",
+        "code_default": "node (retriever config) / chunk (chatqna)",
+        "deployed": "chunk",
+        "source": "charts/genieai-umbrella/values.yaml:1207"
+      },
+      {
+        "knob": "ARANGO_DB",
+        "code_default": "genie-ai",
+        "deployed": "_system",
+        "source": "charts/genieai-umbrella/values.yaml:323 (data.arangodb.database)"
+      },
+      {
+        "knob": "RERANKING_STRATEGY",
+        "code_default": "adaptive (chatqna) / slice (reranker container)",
+        "deployed": "slice",
+        "source": "charts/genieai-umbrella/values.yaml:1192"
+      },
+      {
+        "knob": "RERANKING_THRESHOLD",
+        "code_default": "0.9 (chatqna) / 0.75 (reranker container)",
+        "deployed": "0.75",
+        "source": "charts/genieai-umbrella/values.yaml:1193"
+      },
+      {
+        "knob": "RERANKER_TOP_N",
+        "code_default": "3",
+        "deployed": "3",
+        "source": "charts/genieai-umbrella/values.yaml:1194 (equal to the code default)"
+      },
+      {
+        "knob": "TEI_EMBED_MODEL",
+        "code_default": "BAAI/bge-large-en-v1.5",
+        "deployed": "unset -> the code default applies",
+        "source": "code default (genie-ai-overlay/core/embedding_query_prefix.py:28); the chart does not template it"
+      },
+      {
+        "knob": "EMBEDDING_QUERY_INSTRUCTIONS",
+        "code_default": "unset",
+        "deployed": "unset",
+        "source": "not templated by the chart; the built-in table applies"
+      },
+      {
+        "knob": "RETRIEVER_ARANGO_DISTANCE_THRESHOLD",
+        "code_default": "1",
+        "deployed": "1",
+        "source": "charts/genieai-umbrella/values.yaml:1205 — but the retriever never reads it"
+      },
+      {
+        "knob": "MAX_TRANSLATION_CHARS",
+        "code_default": "2000",
+        "deployed": "unset -> derived from the serving window, capped at 2000",
+        "source": "code default (genie-ai-overlay/chatqna/genieai_chatqna.py:1321)"
+      },
+      {
+        "knob": "RETRIEVER_ARANGO_TRAVERSAL_CONCURRENT_BATCHES",
+        "code_default": "1",
+        "deployed": "10 (the service caps itself at 4)",
+        "source": "charts/genieai-umbrella/values.yaml:1296"
+      }
+    ],
+    "known_gaps": [
+      "The venue corpus holds 3 chunks, so result-LEVEL fixtures (which documents come back for a given query) are not stable and are not recorded. The contract records the BEHAVIOR (order, shape, statuses, enrichment), not a corpus snapshot.",
+      "langdetect is used without a fixed DetectorFactory seed, so the detected code for a short sample is not deterministic across runs; the recorded locales were verified on the running stack.",
+      "The chart does not template the RETRIEVER_HYBRID_* knobs for the chatqna container; only the retriever container carries them."
+    ]
+  }
+}

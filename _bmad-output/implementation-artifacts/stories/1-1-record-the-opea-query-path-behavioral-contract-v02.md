@@ -1,0 +1,182 @@
+---
+title: 'Record the OPEA query-path behavioral contract (V02)'
+type: 'feature'
+created: '2026-11-18'
+status: 'in-review'
+route: 'dispatch'
+review_loop_iteration: 0
+context:
+  - 'docs/baselines/v02-opea-query-path-contract.md'
+  - 'docs/baselines/v02-opea-query-path-contract.fixtures.json'
+---
+
+<frozen-after-approval reason="human-owned intent — do not modify unless human renegotiates">
+
+## Intent
+
+**Problem:** The OPEA-free capability layer (story 1.6) must preserve the current
+query-path behavior deliberately, and the E01 equivalence suite (story 1.9) must
+prove equivalence against something. Nothing records what that behavior actually
+is, and the values that drive it are env-tunable — they differ between the
+repository defaults, the chart and the running deployment.
+
+**Approach:** Record the deployed behavior of the whole query path — preparation,
+embedding, dense + BM25 retrieval, RRF fusion, label filtering, enrichment, the
+CAP-1 identity join and the reranking/evidence-selection stage — as one ADR-linked
+record with machine-readable fixtures, and ship a read-only probe that re-measures
+the running stack so the record can be verified and kept honest.
+
+## Boundaries & Constraints
+
+**Always:**
+- every value in the record is read from the running pods; the repository default
+  is recorded as a difference, never as the value;
+- each behavior states its inputs, its deployed parameter values, its expected
+  output and the code that implements it;
+- the preparation pipeline's failure classes are recorded separately, each with its
+  own outcome;
+- the record is linked to the decision records that establish it, with their
+  status checked before reliance;
+- the probe is read-only: it writes nothing, restarts nothing, mutates no data.
+
+**Never:**
+- no comparison engine, no identity gate, no disposition machinery — those belong
+  to story 1.2;
+- no derived value: a number the deployment does not serve is not recorded as
+  deployed;
+- no corpus snapshot as a fixture — the record captures behavior, not a result set;
+- no behavior change to the OPEA services: this story records, it does not modify.
+
+## I/O & Edge-Case Matrix
+
+| Scenario | Input / State | Expected Output / Behavior | Error Handling |
+|----------|--------------|---------------------------|----------------|
+| record the deployed configuration | the running retriever / chatqna / reranker / embedding pods | one JSON document with the knob values, their absence, the resolved query instruction and the three locale samples | a missing pod makes the probe exit 2 with the missing services named |
+| verify the record against the venue | `--verify <fixtures file>` | exit 0 when the live deployment still matches the recorded measurement | exit 1 with one line per drifted knob |
+| a translator that is unavailable | the translation endpoint is unreachable or times out | the turn still answers, the source-language history is embedded, the status is `fallback_timeout` or `fallback_error` | never an untranslated silent success — the status makes the degradation visible |
+| an oversized query | the query does not fit the translation window | chatqna answers HTTP 422 `translation_input_too_long` with `abstained: true` | no untranslated fallback |
+| a translation that comes back blank | the model answers 200 with an empty completion | the turn still answers, the status is `fallback_error` | never reported as a success |
+
+</frozen-after-approval>
+
+## Code Map
+
+- `genie-ai-overlay/retriever/genieai_retriever_arangodb.py` — the retrieval path:
+  the search branches (§4.1), the BM25 view and its AQL (§4.2), `rrf_fuse` (§4.3),
+  the label clause builder and the Python post-filter (§4.4, §4.5), the batched
+  file_id enrichment (§4.6), the CAP-1 join (§4.7), `_attach_provenance` (§4.8),
+  the fan-out (§4.9), the routing gate (§4.10), the query-instruction wrapper.
+- `genie-ai-overlay/retriever/config.py` — the knob names and the code defaults.
+- `genie-ai-overlay/core/embedding_query_prefix.py` — the model-specific
+  query-instruction contract.
+- `genie-ai-overlay/reranker/genieai_tei_reranker.py` — the TEI call, the five
+  reranking strategies, the failure modes.
+- `genie-ai-overlay/chatqna/genieai_chatqna.py` — the preparation pipeline
+  (detection, translation, bounds, status), the embedding of the prefixed query,
+  the reranking call and the abstention paths.
+- `genie-ai-overlay/chatqna/language-registry.json` — the supported locale
+  registry (a symlink to the backend's shared registry).
+- `components/gov-chat-backend/services/query-service.js`,
+  `components/gov-chat-backend/routes/query-routes.js` — the BFF boundary: what
+  the client actually receives for the status field and for the 422.
+- `charts/genieai-umbrella/values.yaml`, `charts/genieai-umbrella/templates/opea/*.yaml`
+  — the declared source of the deployed knob values.
+- `docs/adr/okf-0*.md` — the decision records the record links.
+
+## Tasks & Acceptance
+
+**Execution:**
+- [x] `scripts/baselines/probe-v02-query-path.py` -- a read-only probe that
+  measures the deployed knobs from the running pods and exercises the deployed
+  preparation code for the three locales -- the record must be re-measurable.
+- [x] `docs/baselines/v02-opea-query-path-contract.fixtures.json` -- the
+  machine-readable form: the measured block and the expectation block, with the
+  inputs, the deployed values, the expected outputs, the code references and the
+  ADR links of every behavior -- the fixtures must be consumable by tests.
+- [x] `docs/baselines/v02-opea-query-path-contract.md` -- the human-readable
+  record: the venue, the deployed configuration, the behavior catalog, the
+  preparation pipeline with its three failure classes, the locale coverage, the
+  deployed-vs-default differences, the live observations and the decision records.
+- [x] `_bmad-output/implementation-artifacts/sprint-status.yaml` -- the story
+  entry moves to `review` -- the story must reach review state.
+
+**Acceptance Criteria:**
+- Given the deployed configuration, when the query path is exercised across the
+  behavior catalog, then each behavior is documented with inputs, deployed
+  parameter values and expected outputs, as fixtures consumable by tests.
+- Given the preparation pipeline, when it fails, then the failure classes are
+  recorded as deployed and separately: translator unavailable, oversized input
+  (the deployed `TranslationInputTooLongError` → explicit 422
+  `translation_input_too_long` with `abstained: true`, not an untranslated
+  fallback), and translation-returning-blank, each with its distinct outcome.
+- Given a conversation in any supported locale, when it is prepared, then at least
+  three locales are covered including one non-Latin script, recording the detected
+  language, the exact English string sent to the embedder and the status field.
+- Given the record, when it is read, then it is linked as an ADR-evidenced
+  artifact, with the ADR statuses checked before reliance.
+
+## Implementation Notes
+
+- The venue is the shared k3s (`namespace genieai`, chart `genieai-umbrella`, OPEA
+  GPU mode `external`). The probe reads the deployed knobs from the pods, not from
+  the overlay ConfigMap alone, so a value that the chart does not template (for
+  example `TEI_EMBED_MODEL`) is recorded as absent-and-defaulted rather than as a
+  declared value.
+- The preparation probe runs **inside** the chatqna container and calls the
+  deployed functions (`_get_translated_history_string`, `USER_MSG_PATTERN`,
+  `language_codes_map`, `get_query_instruction`), so the English string it records
+  is the string the embedder receives, not a re-implementation of it.
+- The locale samples live in the probe, so re-running it reproduces the same three
+  cases. `langdetect` is unseeded, so the detection step is not deterministic for a
+  short sample — recorded as a known gap, not smoothed over.
+- The CAP-1 join was observed live on a venue **without** the `okf_concepts_meta`
+  collection: the join fails as a whole and the chunks are served unattributed.
+  That is the collection-level tolerated absence; the "identity document present"
+  branch is recorded from the code and flagged as such in the known gaps.
+- The BFF does not forward chatqna's 422 verbatim (the streaming path answers
+  HTTP 200 with an SSE error frame, the JSON path answers HTTP 500). The record
+  states both layers, because the contract the port must preserve is the one the
+  client sees.
+- The workflow checkpoint was not used as a hard stop: the operator's standing
+  instruction for this dispatch is autonomous execution to a draft merge request,
+  with the merge itself gated by the orchestrator's GO. The decisions a checkpoint
+  would have collected are recorded above and in the record's §6 and §8.
+- No service was modified, restarted or scaled; the only writes are this story,
+  the record, the fixtures and the probe.
+
+## Spec Change Log
+
+## Review Triage Log
+
+## Design Notes
+
+The record lives under `docs/baselines/` — the same home as the V03 baseline
+(story 1.2) — and the fixtures sit beside it as the machine-readable form, so a
+test can load one file and get both the measurement and the expectation. The
+probe is the third piece: it is what makes the record falsifiable, because
+`--verify` compares the live deployment against the committed measurement and
+exits non-zero on drift.
+
+The record separates three things that are easy to conflate:
+
+1. the **deployed value** (what the running pod serves) — always measured;
+2. the **code default** (what the service falls back to) — recorded only as a
+   difference, in §6;
+3. the **chart value** (what the chart declares) — the source of (1) whenever the
+   chart templates the knob.
+
+## Verification
+
+**Commands:**
+- `python3 scripts/baselines/probe-v02-query-path.py --verify docs/baselines/v02-opea-query-path-contract.fixtures.json`
+  -- expected: `V02 contract verified: the live deployment matches the recorded
+  measurement.` and exit 0.
+- `python3 -c "import json; json.load(open('docs/baselines/v02-opea-query-path-contract.fixtures.json'))"`
+  -- expected: no output (the fixtures file is valid JSON).
+- `python3 -m py_compile scripts/baselines/probe-v02-query-path.py` -- expected:
+  no output.
+
+**Manual checks:**
+- the record's §5.6 table lists three locales, one non-Latin, each with the
+  detected language, the status and the exact embedded string;
+- the record's §9 table lists every linked ADR with its status.

@@ -318,8 +318,9 @@ exercised against a mutated copy of the fixtures:
 
 The sampled-locale row is the contract that separates the two kinds of
 difference: the deployed configuration is a contract, the sampled locale
-strings are a sample. The last three rows are the non-vacuity guard — the
-comparison cannot silently read nothing, and the declaration cannot be
+strings are a sample. The emptiness row and the last three rows are the
+non-vacuity guard — the emptiness row keeps the comparison from silently
+reading nothing, and the last three keep the declaration from being
 repointed away from the recorded capture.
 
 The drift detection has **no automated CI-runner** — the probe needs a live

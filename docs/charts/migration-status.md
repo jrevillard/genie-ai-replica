@@ -57,21 +57,26 @@ contractual evidence — a fresh clone does not carry them.)
   alike. When the node recovered (a 200-token generation came back in
   2.8 s), the dataprep did NOT resume: its in-flight call sat on a
   **dead socket**, and the vendored comps' client takes **no HTTP
-  budget**, so the read never returns and the graph-insertion phase —
-  deliberately unbounded, because a cancelled batch would drop chunks
-  silently — stays in flight forever. The consequence is worse than a
-  slow ingest: the dataprep serves ONE ingest at a time, so the lane
-  stays blocked and every new file is refused with `429 Too Many
-  Requests` ("System busy (1 slot(s) all in use)"). The recovery is a
-  dataprep pod restart; the wedged file stays `Ingesting` and has to be
-  retracted.
+  budget**, so the read never returns. The graph-insertion phase was
+  then deliberately unbounded, because a cancelled batch would drop
+  chunks silently, so it stayed in flight forever. The consequence was
+  worse than a slow ingest: the dataprep serves ONE ingest at a time, so
+  the lane stayed blocked and every new file was refused with `429 Too
+  Many Requests` ("System busy (1 slot(s) all in use)"). The recovery
+  was a dataprep pod restart; the wedged file stayed `Ingesting` and had
+  to be retracted.
   **This is NOT a chart defect**: the egress to the GPU (`:444`) is
-  allowed, the endpoint is correct, and `MODEL_LLM_TIMEOUT_SECONDS`
-  bounds the phases that HAVE a fallback — the unbounded phase has no
-  chart-side lever. It IS an application-side weakness worth an issue: a
-  single dead socket wedges the only ingest lane, with no timeout and no
-  recovery. The same node serves the El Salvador deployment, so the
-  impact is not laptop-only.
+  allowed and the endpoint is correct. The application-side weakness is
+  now closed by #1726 / MR !945 (2026-11-17): the graph-insertion phase
+  runs under the same `DATAPREP_LLM_PHASE_TIMEOUT_SECONDS` ceiling as
+  the other LLM phases (a chart-side lever, `values.yaml`), so a wedged
+  socket fails that ingest — `Ingestion Error`, partial graph retracted,
+  manual re-kick — instead of blocking the lane. The vendored per-call
+  HTTP read budget stays the comps-side debt it was
+  (`genie-ai-overlay/build-patches/comps_http_budget_debt.py`), so the
+  call itself still burns its 600 s inside the phase before the ceiling
+  can act. The same node serves the El Salvador deployment, so the
+  impact was not laptop-only.
 
 - **The green local E2E run does NOT prove the RAG path.** The chat
   specs mock the stream (nothing in the suite references

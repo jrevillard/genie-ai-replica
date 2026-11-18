@@ -320,6 +320,42 @@ venue, and the repository has no test harness for `scripts/` (the sibling
 `scripts/ci/*.py` checks follow the same convention: the script *is* the
 check). That gap is recorded in the record's §8.
 
+### Quality phase (simplify, test-audit, scoped fix review)
+
+The simplify phase ran four cleanup angles; the changes that keep the same
+measurement landed in `b54348388`: one container table (marker + knobs), the
+locale samples handed to the in-pod script as an argv value (the shell quoting
+layer and `shlex` are gone), one `compare_knobs` helper instead of two drift
+loops, an explicit ordering key in the pod selection, one failure path with one
+error tuple, and ruff format under the repository's Python convention. Two
+angles were skipped deliberately: deriving the knob list from the service
+config module (it would lose the per-container scoping the fixtures rely on)
+and parallelizing the probe's calls (the locale samples exercise the shared GPU
+translation service — concurrency would take capacity from the shared stack).
+
+The scoped fix review of the quality diff returned **clean**. It was completed
+**inline** and is a documented deviation: the dispatched reviewer agent hung
+(12 minutes without a report), the fourth occurrence of the known reviewer-hang
+pattern on this host. The checks it would have run were executed and recorded:
+
+- the merged knob lists are **byte-identical** to the pre-refactor dicts
+  (compared programmatically — same containers, same knobs, same order);
+- the argv hand-off was **live-tested** against the running chatqna pod: the
+  JSON reaches `sys.argv[1]`, the non-Latin sample survives, and the resulting
+  measurement is identical to the committed fixtures (all five contract fields
+  and every locale field);
+- `compare_knobs`' unification changes one drift-line wording ("is not served
+  by the deployment" becomes "expected 'x' -> live None") — both cases still
+  exit 1, proven by the mutation table above;
+- `PROBE_ERRORS` is the exact union of the two former `except` tuples plus
+  `ProbeError`, so no failure mode escapes as a traceback;
+- the pod-selection tie-break is unchanged (Ready wins, then newest);
+- the unmirrored-branch sentence was verified against
+  `genieai_chatqna.py:4655-4672` and tightened twice (the requested-language
+  fallback, the refusal case), then mirrored in the fixtures;
+- the branch diff touches no service or app source — the story records, it
+  does not modify.
+
 **Manual checks:**
 - the record's §5.6 table lists three locales, one non-Latin, each with the
   detected language, the status and the exact embedded string, and states that

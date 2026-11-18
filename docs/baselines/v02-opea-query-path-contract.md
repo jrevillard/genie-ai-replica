@@ -512,9 +512,11 @@ file.
   them against the deployed `langdetect` and the deployed registry
   (`chatqna:4578-4661`, `:4672`). **One branch is not mirrored**: when the
   detector yields **no** code, the deployed rule falls back to the *requested*
-  language (`detected_language or original_language`, `chatqna:4672`) while the
-  probe falls back to `EN`. All three sampled texts yield a code, so the branch
-  is never exercised by the recorded measurement.
+  language — or to `EN` when the caller named none, and to `EN` as well when
+  the named code was refused (`detected_language or original_language`,
+  `chatqna:4672`) — while the probe always falls back to `EN`. All three
+  sampled texts yield a code, so the branch is never exercised by the recorded
+  measurement.
 * **Registry** — `genie-ai-overlay/chatqna/language-registry.json`, a symlink to
   the backend's shared registry (`components/gov-chat-backend/services/translation/language-maps/language-registry.json`):
   **41 language codes**. The path is overridable with `LANGUAGE_REGISTRY_FILEPATH`

@@ -148,6 +148,28 @@ services:
       # allow-list without moving the JWKS fetch out of the network.
       - KEYCLOAK_PUBLIC_URL=${KEYCLOAK_PUBLIC_URL:-https://${NGINX_PUBLIC_DOMAIN}:${NGINX_HTTPS_PORT:-443}/auth}
 
+  # Same split-URL trio as the backend: okf-server verifies the same
+  # dataprep-service-client tokens the ingest path mints, and its base
+  # definition derives KEYCLOAK_URL from the public edge (self-signed on
+  # this venue), which breaks both the discovery fetch (TLS) and the
+  # issuer match (8080 view vs 8443 tokens). NVIDIA venue: overlay not
+  # loaded — behavior unchanged there.
+  okf-server:
+    environment:
+      - KEYCLOAK_DISCOVERY_URL=${KEYCLOAK_DISCOVERY_URL:-http://keycloak:8080}
+      - KEYCLOAK_JWKS_URL=${KEYCLOAK_JWKS_URL:-http://keycloak:8080/realms/${KEYCLOAK_REALM:-genie}/protocol/openid-connect/certs}
+      - KEYCLOAK_PUBLIC_URL=${KEYCLOAK_PUBLIC_URL:-https://${NGINX_PUBLIC_DOMAIN}:${NGINX_HTTPS_PORT:-443}/auth}
+
+  # Same split-URL trio as backend/okf-server: document-repository verifies
+  # tokens and (on the OKF publish path) authenticates its side of the
+  # bundle-store handoff; its base KEYCLOAK_URL points at the public edge,
+  # whose self-signed cert times the discovery fetch out on this venue.
+  document-repository:
+    environment:
+      - KEYCLOAK_DISCOVERY_URL=${KEYCLOAK_DISCOVERY_URL:-http://keycloak:8080}
+      - KEYCLOAK_JWKS_URL=${KEYCLOAK_JWKS_URL:-http://keycloak:8080/realms/${KEYCLOAK_REALM:-genie}/protocol/openid-connect/certs}
+      - KEYCLOAK_PUBLIC_URL=${KEYCLOAK_PUBLIC_URL:-https://${NGINX_PUBLIC_DOMAIN}:${NGINX_HTTPS_PORT:-443}/auth}
+
   # Switch the wrapper to the GPU reranker. environment merges BY KEY: these
   # three keys are additive to the base definition; TEI_RERANKING_ENDPOINT
   # stays (unused by the vllm backend, harmless to keep).

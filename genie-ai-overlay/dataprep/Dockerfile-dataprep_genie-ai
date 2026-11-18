@@ -55,7 +55,8 @@ WORKDIR /app
 
 # Compile-time only: build-essential (C extensions), libmariadb-dev + libpq-dev
 # (mariadb/psycopg wheel linkage), libgl1 + libglib2.0-0 (opencv import in the
-# smoke test below), default-jre (the FAT lock's pyspark import needs a JVM —
+# smoke test below), libcairo2 (cairosvg import in the smoke test below),
+# default-jre (the FAT lock's pyspark import needs a JVM —
 # the slim lock carries no pyspark, so its builder stage needs none), and
 # wget/unzip (the EasyOCR model download).
 # The install output is kept OUT of the job trace and printed only when the
@@ -68,6 +69,7 @@ RUN apt-get update -y && \
     (apt-get install -y --no-install-recommends --fix-missing \
     build-essential \
     default-jre-headless \
+    libcairo2 \
     libgl1 \
     libglib2.0-0 \
     libmariadb-dev \
@@ -103,12 +105,22 @@ RUN python -c "${SMOKE_IMPORTS}; print('heavy-deps ok')"
 
 # Pre-download the EasyOCR models (prevents a one-time model download hang on
 # the first runtime request). Copied into the runtime stage below.
-RUN mkdir -p /tmp/easyocr /opt/easyocr/model /opt/easyocr/config && \
-    wget -O /tmp/easyocr/english_g2.zip https://github.com/JaidedAI/EasyOCR/releases/download/v1.3/english_g2.zip && \
-    wget -O /tmp/easyocr/craft_mlt_25k.zip https://github.com/JaidedAI/EasyOCR/releases/download/pre-v1.1.6/craft_mlt_25k.zip && \
-    unzip -o /tmp/easyocr/english_g2.zip -d /opt/easyocr/model && \
-    unzip -o /tmp/easyocr/craft_mlt_25k.zip -d /opt/easyocr/model && \
-    rm -rf /tmp/easyocr
+#
+# The slim variant (issue #2000) has neither easyocr nor a local converter —
+# the document conversion is delegated to a remote docling-serve — so it has
+# no use for the models. The directories are created either way, so the
+# runtime stage's COPY of them resolves to an empty tree in the slim variant
+# (the layer is a few kB).
+ARG INSTALL_EASYOCR_MODELS="true"
+RUN mkdir -p /opt/easyocr/model /opt/easyocr/config && \
+    if [ "$INSTALL_EASYOCR_MODELS" = "true" ]; then \
+      mkdir -p /tmp/easyocr && \
+      wget -O /tmp/easyocr/english_g2.zip https://github.com/JaidedAI/EasyOCR/releases/download/v1.3/english_g2.zip && \
+      wget -O /tmp/easyocr/craft_mlt_25k.zip https://github.com/JaidedAI/EasyOCR/releases/download/pre-v1.1.6/craft_mlt_25k.zip && \
+      unzip -o /tmp/easyocr/english_g2.zip -d /opt/easyocr/model && \
+      unzip -o /tmp/easyocr/craft_mlt_25k.zip -d /opt/easyocr/model && \
+      rm -rf /tmp/easyocr; \
+    fi
 
 # ======== Final Stage: Assembly ========
 # Match OPEA v1.5's dataprep base (python:3.11-slim). No GPU is granted to

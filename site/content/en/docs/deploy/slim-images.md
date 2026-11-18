@@ -38,19 +38,43 @@ Measured on one host, same base image:
 | image | `:main` | `:main-slim` |
 |---|---|---|
 | `genie-ai-reranker` | 6.82 GB | 848 MB |
-| `genie-ai-retriever-arango` | 8.54 GB | 1.75 GB |
-| `genie-ai-dataprep-arango` | 10.0 GB | 3.95 GB |
+| `genie-ai-retriever-arango` | 8.54 GB | 690 MB |
+| `genie-ai-dataprep-arango` | 10.0 GB | 2.25 GB |
 
 ## What the slim variant drops, per image
 
-- **reranker** — no PyTorch at all. The reranker is a client: it calls the
-  rerank endpoint and nothing else, so it has no local model to run.
-- **retriever** — PyTorch at its CPU build. The retriever keeps a local
-  fallback (a sentence-transformers model loaded in-process) for a
-  deployment with no embedding endpoint; it runs on CPU.
-- **dataprep** — PyTorch at its CPU build, and no JVM (the JVM belongs to
-  pyspark, which only the default lock carries). The dataprep's local OCR
-  (docling + easyocr) keeps working, on CPU.
+The slim variants carry **no model stack at all** — no PyTorch, no CUDA
+wheels, no local weights:
+
+- **reranker** — nothing. The reranker is a client: it calls the rerank
+  endpoint and holds nothing.
+- **retriever** — no in-process embedding fallback. The retriever loads a
+  sentence-transformers model locally only when **no** embedding endpoint is
+  configured; the slim image therefore needs a remote embedding endpoint,
+  which the external-GPU mode always has.
+- **dataprep** — no local document converter, no OCR, no EasyOCR models, no
+  JVM (the JVM belongs to pyspark, which only the default lock carries).
+  The conversion is delegated to a remote docling-serve.
+
+## What the slim dataprep needs from the operator
+
+The slim dataprep delegates the document conversion, so it needs a
+docling-serve endpoint:
+
+```yaml
+# genie-ai-deploy overlay — the chart renders DOCLING_ENDPOINT from it
+opea:
+  gpu:
+    mode: external
+    paths:
+      docling: /docling
+```
+
+Without it the slim dataprep has no local converter and refuses to start —
+the log names the remedy. It also supports the default `fast`
+table-extraction strategy only: the `hq` strategy needs the layout models
+the slim image does not carry. Use the default image for a deployment that
+needs `hq` tables or a local OCR pipeline.
 
 ## When to pin the slim tag
 

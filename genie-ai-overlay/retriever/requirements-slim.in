@@ -69,16 +69,24 @@ python-arango==8.3.3
 python-multipart==0.0.32
 pyyaml==6.0.3
 requests==2.34.2
-sentence-transformers==5.7.0
 shortuuid==1.0.13
 transformers==4.57.6
 uvicorn==0.52.1
 
-# CPU-only torch: the local-embedding fallback loads a sentence-transformers
-# model in-process (HuggingFaceBgeEmbeddings), so torch stays — but without
-# the CUDA build. The `+cpu` local version is only published on the PyTorch
-# CPU index; PyPI's `torch==2.13.0` IS the CUDA build and must not be picked.
-torch==2.13.0+cpu
+# NO torch, NO sentence-transformers.
+#
+# The retriever's TEI branch (the one the external-GPU mode takes) calls the
+# remote embedding endpoint through langchain's `HuggingFaceEndpointEmbeddings`
+# — an HTTP client, and langchain-huggingface imports `sentence_transformers`
+# LAZILY (inside the local-model class, not at module level), so the remote
+# path needs neither torch nor sentence-transformers. `transformers` itself
+# stays: langchain-huggingface's __init__ imports its chat models eagerly,
+# and transformers works without torch.
+#
+# What is dropped is the LOCAL fallback (`HuggingFaceBgeEmbeddings`, the
+# in-process sentence-transformers model) — it is the branch the retriever
+# takes only when no embedding endpoint is configured, which the
+# external-GPU mode never is. The fat image keeps it (and its torch).
 
 # === OpenTelemetry instrumentation (distributed tracing) ===
 opentelemetry-instrumentation-fastapi>=0.65b0

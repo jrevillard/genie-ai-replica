@@ -26,7 +26,12 @@ signatures operators actually hit.
 | Admin Dashboard OKF tab | same runtime config |
 
 After changing the flag: bring up `kong-config okf-server pii-service` and
-**recreate the frontend** so the entrypoint re-renders the runtime config.
+**recreate every flag consumer** — compose reads `OKF_ENABLED` in the
+backend, the frontend (`VUE_APP_OKF_ENABLED` runtime config) and the
+one-shot `kong-config` in addition to the profile-gated services, and a
+running container only picks up the new value when recreated. A backend
+left at the old value short-circuits chat retrieval to the legacy default
+(zero serving graphs → every query answers nothing).
 
 Check: `GET /api/okf/repos` should answer `401` (unauthenticated) — a
 `404 {"message":"Resource not found"}` means the Kong route is still
@@ -135,4 +140,5 @@ pass on the same repository densifies links.
 | `created: N, rejected: N` on import | missing `frontmatter.type` | add it, re-import |
 | LLM-Assisted stalls after import | `VLLM_ENDPOINT` unset for okf-server | opt in + recreate okf-server |
 | topic-link batches time out | per-call budget vs model speed | raise timeout / lower batch |
+| chat answers find no documents, retriever logs `Graph 'GRAPH' does not exist` | backend predates the `OKF_ENABLED=1` flip — 0 serving graphs | recreate backend; `fanout_config_resolved` must show `serving_graph_count >= 1` |
 | 502 through the gateway right after recreating a service | stale upstream DNS | self-heals in ~2 minutes |

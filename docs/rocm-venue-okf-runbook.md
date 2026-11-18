@@ -36,19 +36,28 @@ docker compose -p genieai-rocm \
 
 OKF ships **off** (`OKF_ENABLED=0` default): no okf-server container, no
 pii-service, and the kong-config init **strips the `/api/okf` route from
-Kong** at apply time. Enable = all four of:
+Kong** at apply time. Enable = all of:
 
 1. `.env`: `OKF_ENABLED=1`.
-2. Bring-up with `--profile okf` (starts okf-server + pii-service).
+2. Bring-up with `--profile okf` (starts okf-server + pii-service + ragas-service).
 3. Re-run the kong-config init so Kong gains the route:
    `... up -d kong-config` (recreates the one-shot container, which
    re-applies the declarative config honoring the flag).
-4. Recreate the frontend so its entrypoint re-renders runtime config
-   with `okfEnabled: "1"` (the Admin Dashboard hides the OKF surfaces
-   otherwise — `VUE_APP_OKF_ENABLED` mirrors the same var).
+4. Recreate **every flag consumer** — compose reads `OKF_ENABLED` in
+   FIVE services and a container only picks up the new value when
+   recreated (live miss 2026-11-18: backend left at `OKF_ENABLED=0`
+   after the other four were recreated → retrieval-config client
+   short-circuited to `parked` → 0 serving graphs → every chat query
+   answered zero chunks, the runbook's §9 table had no row for it):
+   `... up -d backend frontend` (`VUE_APP_OKF_ENABLED` mirrors the same
+   var into the frontend's runtime config; the Admin Dashboard hides
+   the OKF surfaces without it).
 
 Verify: `GET /api/okf/repos` through the edge answers 401/200 (not
-Kong's `{"message":"Resource not found"} 404`).
+Kong's `{"message":"Resource not found"} 404`), `docker exec
+<backend> sh -c 'echo $OKF_ENABLED'` prints `1`, and the backend log
+line `QueryService.fanout_config_resolved` reports
+`serving_graph_count >= 1` once a serving repo exists.
 
 ## 3. Split-URL auth — now THREE services
 
@@ -262,6 +271,7 @@ re-importing.
 | import `202` then Studio "not moving" (LLM-Assisted) | `VLLM_ENDPOINT` unset in okf-server — LLM legs off | §7 opt-in |
 | publish blocked, `pii_hit_count > 0` | NER hits (names) | `pii-acknowledge` (audited) |
 | token 401 `TOKEN_EXPIRED` mid-flow | client-credential tokens are minutes-lived | mint fresh |
+| chat queries return zero chunks; retriever logs `Graph 'GRAPH' does not exist` | backend container predates `OKF_ENABLED=1` — retrieval-config client short-circuits to `parked`, 0 serving graphs | §2 step 4: recreate backend, verify `fanout_config_resolved` `serving_graph_count >= 1` |
 
 ## 10. ArangoDB coexistence
 

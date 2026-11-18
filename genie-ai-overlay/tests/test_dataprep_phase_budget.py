@@ -1585,6 +1585,16 @@ class TestTheGraphPhaseIsCeilinged:
         assert statuses[-1] == "Ingestion Error", statuses
         error_texts = [c.kwargs.get("error", "") for c in dp._update_doc_status.call_args_list]
         assert any("budget" in str(e) for e in error_texts), error_texts
+        # The operator remedy must SURVIVE the status-error budget: the file
+        # row carries `str(error)[:500]`, so a longer message silently cuts
+        # the knob the operator has to raise.
+        cause = str(exc.__cause__)
+        assert len(cause) <= 500, (
+            f"the failure message is {len(cause)} chars — the status budget truncates it at "
+            "500, which would cut the remedy the operator needs"
+        )
+        assert "DATAPREP_LLM_PHASE_TIMEOUT_SECONDS" in cause, cause
+        assert any("DATAPREP_LLM_PHASE_TIMEOUT_SECONDS" in str(e) for e in error_texts), error_texts
         # The auto-retract is what clears the partial graph and the file's
         # Pending state. Re-ingest is manual for a legacy file; the automatic
         # re-ingest covers OKF re-indexes only.

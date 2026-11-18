@@ -1559,11 +1559,47 @@ GENIE_AI_DOCUMENT_REPOSITORY_IMAGE_TAG=${GENIE_AI_IMAGE_TAG:-${GENIE_AI_GLOBAL_T
 GENIE_AI_CHATQNA_SERVER_IMAGE=registry.opensource.unicc.org/un/itu/genie-ai/genie-ai-chatqna-server
 GENIE_AI_CHATQNA_SERVER_IMAGE_TAG=${GENIE_AI_IMAGE_TAG:-${GENIE_AI_GLOBAL_TAG:-latest}}
 GENIE_AI_DATAPREP_ARANGO_IMAGE=registry.opensource.unicc.org/un/itu/genie-ai/genie-ai-dataprep-arango
-GENIE_AI_DATAPREP_ARANGO_IMAGE_TAG=${GENIE_AI_IMAGE_TAG:-${GENIE_AI_GLOBAL_TAG:-latest}}${GENIE_AI_OPEA_IMAGE_TAG_SUFFIX:-}
+#
+# The three model-serving images carry NO per-service tag line on purpose:
+# the compose file composes their tag itself — the version, plus the
+# variant suffix when it is set — so the suffix works wherever this file
+# declares it (compose resolves an .env reference against the values
+# DEFINED ABOVE it, so a suffix line the template composes INTO these
+# lines would only work in one place in the file).
+#
+# To pin ONE of them to an exact tag (a canary, a hotfix, an air-gapped
+# mirror), add your own line below — a pin names the EXACT tag and never
+# receives the variant suffix:
+#   GENIE_AI_DATAPREP_ARANGO_IMAGE_TAG=v2.1.0
+
 GENIE_AI_RETRIEVER_ARANGO_IMAGE=registry.opensource.unicc.org/un/itu/genie-ai/genie-ai-retriever-arango
-GENIE_AI_RETRIEVER_ARANGO_IMAGE_TAG=${GENIE_AI_IMAGE_TAG:-${GENIE_AI_GLOBAL_TAG:-latest}}${GENIE_AI_OPEA_IMAGE_TAG_SUFFIX:-}
+#
+# The three model-serving images carry NO per-service tag line on purpose:
+# the compose file composes their tag itself — the version, plus the
+# variant suffix when it is set — so the suffix works wherever this file
+# declares it (compose resolves an .env reference against the values
+# DEFINED ABOVE it, so a suffix line the template composes INTO these
+# lines would only work in one place in the file).
+#
+# To pin ONE of them to an exact tag (a canary, a hotfix, an air-gapped
+# mirror), add your own line below — a pin names the EXACT tag and never
+# receives the variant suffix:
+#   GENIE_AI_RETRIEVER_ARANGO_IMAGE_TAG=v2.1.0
+
 GENIE_AI_RERANKER_IMAGE=registry.opensource.unicc.org/un/itu/genie-ai/genie-ai-reranker
-GENIE_AI_RERANKER_IMAGE_TAG=${GENIE_AI_IMAGE_TAG:-${GENIE_AI_GLOBAL_TAG:-latest}}${GENIE_AI_OPEA_IMAGE_TAG_SUFFIX:-}
+#
+# The three model-serving images carry NO per-service tag line on purpose:
+# the compose file composes their tag itself — the version, plus the
+# variant suffix when it is set — so the suffix works wherever this file
+# declares it (compose resolves an .env reference against the values
+# DEFINED ABOVE it, so a suffix line the template composes INTO these
+# lines would only work in one place in the file).
+#
+# To pin ONE of them to an exact tag (a canary, a hotfix, an air-gapped
+# mirror), add your own line below — a pin names the EXACT tag and never
+# receives the variant suffix:
+#   GENIE_AI_RERANKER_IMAGE_TAG=v2.1.0
+
 GENIE_AI_EMBEDDING_IMAGE=registry.opensource.unicc.org/un/itu/genie-ai/genie-ai-embedding
 GENIE_AI_EMBEDDING_IMAGE_TAG=${GENIE_AI_IMAGE_TAG:-${GENIE_AI_GLOBAL_TAG:-latest}}
 GENIE_AI_TEXTGEN_IMAGE=registry.opensource.unicc.org/un/itu/genie-ai/genie-ai-textgen

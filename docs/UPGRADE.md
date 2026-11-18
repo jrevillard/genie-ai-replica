@@ -22,21 +22,34 @@ the Helm chart exposes the same thing as the `imageTag` value.
 | Ansible (`--extra-vars`) | `genie_ai_global_tag` | `genie_ai_image_tag` |
 | Helm chart | *(none — `main` was hardcoded per service)* | `imageTag` |
 
-**Impact:** none on a deployment that reads the new names. The former names
-are still read as a fallback for one release, so an unchanged deployment keeps
-working — but the fallback disappears in the next one.
+**Impact:** an UNCHANGED deployment keeps working: the former names are still
+read as a fallback for one release (but the fallback disappears in the next
+one). Renaming the variable IN PLACE, however, breaks the stack **silently**:
+the `.env` template carries a per-service image-tag line for every image,
+and each of those lines reads the global **by name**. Rename the global and
+those lines fall back to `latest` — the whole stack moves to the `latest`
+tag, with no error anywhere.
 
-**Migration:** rename the variable in your `.env` and in your Ansible
-invocation:
+**Migration:** take the new `env` template — the per-service lines changed
+with the global's name — and re-apply your own values to it:
 
 ```bash
-# Compose — .env
+# Compose — the .env is a copy of the repo's `env` template: take the new
+# one, then re-apply your own values (the secrets it carries).
+cp env .env        # from the NEW template, then re-apply your values
+# then, in it:
 GENIE_AI_IMAGE_TAG=v2.1.0     # was GENIE_AI_GLOBAL_TAG=v2.1.0
 
-# Ansible — the playbook invocation
+# Ansible — the playbook invocation (no .env to touch: the playbook
+# generates the node's .env from its own template)
 ansible-playbook -i inventory/test.ini deploy.yml --vault-id test@prompt \
   --extra-vars "repo_branch=main genie_ai_image_tag=v2.1.0"
 ```
+
+An `.env` that still carries the OLD template's lines keeps the OLD
+behaviour — the fat images, and no variant knob: the three model-serving
+images no longer declare a per-service tag line in the template, and a
+`.env` that declares one shadows the version and the variant. Regenerate it.
 
 The variant (the slim build of the three model-serving images) is a SEPARATE
 knob, and it is new: `GENIE_AI_OPEA_IMAGE_TAG_SUFFIX` in Compose,

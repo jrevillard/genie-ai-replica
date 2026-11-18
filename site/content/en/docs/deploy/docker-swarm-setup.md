@@ -268,8 +268,16 @@ smaller, which is what keeps the node's image disk out of the eviction
 range. See [Slim Image Variants](/docs/deploy/slim-images/).
 
 ```bash
-# .env
+# .env — Docker Compose
 GENIE_AI_OPEA_IMAGE_TAG_SUFFIX=-slim
+```
+
+```bash
+# Ansible (Swarm) — the knob is the FACT, not a line in the node's .env:
+# the playbook regenerates that file on every run, so a line written by
+# hand is overwritten at the next deploy and the fat images come back.
+ansible-playbook -i inventory/itu_rtx_test.ini deploy.yml --vault-id itu_rtx_test@prompt \
+  --extra-vars '{"repo_branch":"main","genie_ai_image_tag":"main","genie_ai_opea_image_tag_suffix":"-slim"}'
 ```
 
 It applies to those three images and to nothing else: the CI publishes a
@@ -277,6 +285,11 @@ slim build for exactly those three, so there is no slim variant of the
 others to select. The slim dataprep delegates the document conversion to a
 remote docling-serve, so it needs `DOCLING_ENDPOINT` set (see **Section
 14**).
+
+On Compose, a per-image pin for one of the three is a line **you** add to
+your `.env` (`GENIE_AI_RERANKER_IMAGE_TAG=v2.1.0`): the template declares
+no per-service tag for them, because such a line would shadow the version
+and the variant. A pin names the EXACT tag — it never receives the suffix.
 
 ### 5e. Custom or air-gapped registries
 

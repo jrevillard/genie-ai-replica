@@ -104,16 +104,28 @@ opea:
   imageTagSuffix: "-slim"
 ```
 
-**Docker Compose / Swarm** — one line in the `.env`:
+**Docker Compose** — one line in the `.env`, wherever you put it:
 
 ```bash
 GENIE_AI_OPEA_IMAGE_TAG_SUFFIX=-slim
 ```
 
+**Docker Swarm (Ansible)** — one `--extra-vars` value, NOT a line in the
+node's `.env`: the playbook regenerates that file on every run, so a line
+written by hand is overwritten at the next deploy (and the fat images come
+back, silently).
+
+```bash
+ansible-playbook -i inventory/itu_rtx_test.ini deploy.yml --vault-id itu_rtx_test@prompt \
+  --extra-vars '{"repo_branch":"main","genie_ai_image_tag":"main","genie_ai_opea_image_tag_suffix":"-slim"}'
+```
+
 It applies to the three model-serving images and to nothing else. A
 per-image pin (`opea.reranker.image.tag` in Kubernetes,
 `GENIE_AI_RERANKER_IMAGE_TAG` in Compose) names the EXACT tag and never
-gets the suffix.
+gets the suffix — in Compose, that pin is a line **you** add to your `.env`
+(the template declares no per-service tag for the three, because such a
+line would shadow the version and the variant).
 
 The knob COMPOSES `<version><suffix>` — the version it is applied to must be
 a tag the CI publishes a slim build of: the branch tag (`main`) or a release

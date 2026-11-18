@@ -893,6 +893,38 @@ KEYCLOAK_URL=https://localhost/auth
 # reachable from inside the container network, e.g. Docker Desktop WSL2):
 #   KEYCLOAK_PUBLIC_URL   — browser-facing issuer alias for token validation
 #                           (backend, document-repository, okf-server). Unset = disabled.
+#                           ALSO the browser-facing base for the Swagger UI OAuth2
+#                           flow URLs the backend serves in /api-docs.json
+#                           (authorizationUrl/tokenUrl, #1889): the Authorize
+#                           round-trip runs in the browser, so a deployment whose
+#                           KEYCLOAK_URL is an internal address must set this
+#                           variable to the browser-reachable base, or the popup
+#                           dies on DNS. A value that is not an absolute http(s)
+#                           URL is IGNORED (the flow URLs fall back to
+#                           KEYCLOAK_URL). KEYCLOAK_BROWSER_ISSUER is NOT a base
+#                           URL (it is a full issuer) and does not feed them —
+#                           a deployment that sets KEYCLOAK_BROWSER_ISSUER for
+#                           token validation and wants the Swagger Authorize
+#                           round-trip must ALSO ensure the browser-facing base
+#                           is set: KEYCLOAK_PUBLIC_URL, or a browser-reachable
+#                           KEYCLOAK_URL.
+#                           It must be the SAME browser-facing alias the
+#                           token verifier accepts, and it must MATCH the
+#                           frontend's keycloak.url (window.APP_CONFIG.
+#                           keycloak.url, written by the frontend container
+#                           from VUE_APP_KEYCLOAK_URL; its fallbacks are the
+#                           build-time VUE_APP_KEYCLOAK_URL and then
+#                           ${origin}/auth) — this variable does NOT
+#                           configure the frontend. It should also live on
+#                           the docs page's OWN origin: every shipped
+#                           topology (compose, the k8s venue) serves Keycloak
+#                           under the same public origin as the docs, and the
+#                           gateway's /api-docs Content-Security-Policy
+#                           hardcodes connect-src 'self' there
+#                           (api-gateway-solution/nginx/conf/default.conf.
+#                           template) — a base on a DIFFERENT origin needs
+#                           that gateway template widened, which is a
+#                           gateway-config change, not an env knob.
 #   KEYCLOAK_INTERNAL_URL — internal Keycloak base (http://keycloak:8080) used by
 #                           chatqna (JWKS fetch) and dataprep (service-account token
 #                           mint). okf-server uses it ONLY as a connection failover —

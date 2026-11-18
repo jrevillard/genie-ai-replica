@@ -2232,8 +2232,11 @@ services:
       #
       # So the graph phase keeps comps' own int 600 s default - what it ran at
       # before this policy, and the right value for a phase with no degradation
-      # path. Binding it differently needs a patch to the vendored source,
-      # tracked in genie-ai-overlay/OVERRIDES.yaml, not a compose line.
+      # path. The phase itself is bounded from the outside by
+      # DATAPREP_LLM_PHASE_TIMEOUT_SECONDS (a wedged endpoint fails that
+      # ingest instead of holding the single ingest lane); binding the per-call
+      # budget differently needs a patch to the vendored source, tracked in
+      # genie-ai-overlay/OVERRIDES.yaml, not a compose line.
       #
       # #1381: the TEI EMBED half of that debt IS bounded from in-repo code —
       # the hub clients langchain builds get their deadline via

@@ -183,7 +183,13 @@ async def load_with_docling(doc_path: str) -> str:
 # (`genieai_dataprep_arangodb.py`) imports this constant to decide which files
 # are routed here; a second, restated tuple would let the two lists drift
 # apart and silently flip this guard between live and dead (issue #1661).
-DOCLING_SUPPORTED_EXTENSIONS = (".pdf", ".docx", ".pptx", ".xlsx", ".html", ".txt", ".md", ".asciidoc")
+#
+# `.txt` is deliberately absent (issue #1985): docling has no plain-text
+# format, so a .txt routed here failed with `File format not allowed` after a
+# successful upload — a file the repository accepts but no deployment with the
+# shipped CONTENT_EXTRACTION_METHOD=docling default could ever ingest. The
+# standard loader reads plain text, so the caller routes .txt there instead.
+DOCLING_SUPPORTED_EXTENSIONS = (".pdf", ".docx", ".pptx", ".xlsx", ".html", ".md", ".asciidoc")
 
 
 async def docling_document_loader(doc_path):

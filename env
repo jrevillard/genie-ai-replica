@@ -278,7 +278,11 @@ HUGGING_FACE_HUB_TOKEN=
 # requests strict JSON object output per chunk; a model/vLLM without guided JSON
 # produces markdown-wrapped or malformed JSON -> per-chunk fallback (slower,
 # lower label quality). Validated on ibm-granite/granite-4.1-8b.
-# DATAPREP_MAX_CONCURRENT_BATCHES=20  # concurrent LLM label calls (default 20; was 5)
+# DATAPREP_MAX_CONCURRENT_BATCHES=20  # concurrent LLM batches — the labelling and
+#                                     #   context-generation phases each cap their
+#                                     #   own at this many; the graph phase shares
+#                                     #   one module-level gate sized by it across
+#                                     #   every ingest (default 20; was 5)
 # DATAPREP_INGEST_CONCURRENCY=1       # parallel ingest slots per dataprep container
 #                                     #   (David, 2026-09-03). Each slot is a flock file;
 #                                     #   429 only when ALL are busy. 1 = historical
@@ -572,13 +576,21 @@ HUGGING_FACE_HUB_TOKEN=
 #                                 #   injected nowhere, and the graph phase keeps
 #                                 #   comps' own 600 s default — which is also
 #                                 #   correct, that being the one phase with no
-#                                 #   fallback. See genie-ai-overlay/OVERRIDES.yaml.
+#                                 #   fallback. The phase itself is bounded from
+#                                 #   the outside by
+#                                 #   DATAPREP_LLM_PHASE_TIMEOUT_SECONDS: a
+#                                 #   wedged endpoint FAILS that ingest instead
+#                                 #   of holding the single ingest lane. See
+#                                 #   genie-ai-overlay/OVERRIDES.yaml.
 #
 # Dataprep phase budgets — the wall clock for a whole LLM phase, not one call.
-# A phase that runs out is abandoned and degrades (labelling to file labels,
-# context generation to the raw chunk); it does not fail the ingest.
+# A phase that runs out is abandoned: the labelling and context-generation
+# phases DEGRADE (labelling to file labels, context generation to the raw
+# chunk) and the document still ingests; the GRAPH phase has no fallback, so
+# the ingest FAILS, the partial graph is retracted, and the file needs a
+# manual re-kick.
 #
-# DATAPREP_LLM_PHASE_TIMEOUT_SECONDS=900   # labelling / context generation.
+# DATAPREP_LLM_PHASE_TIMEOUT_SECONDS=900   # labelling / context generation / graph.
 #                                 #   Wall clock for a whole LLM phase, not for
 #                                 #   one call. Above a single batched call
 #                                 #   ((1+MAX_RETRIES) x 180 = 540s) so a slow

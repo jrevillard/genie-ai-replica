@@ -919,3 +919,178 @@ def test_a_workload_without_a_compared_row_is_still_listed(chart_values, overlay
     )
     assert not rows
     assert undeclared
+
+
+# --------------------------------------------------------------------------
+# the review findings the scoped fix review marked required before merge
+# --------------------------------------------------------------------------
+
+
+def test_a_with_block_does_not_close_an_enclosing_if_guard(tmp_path):
+    """A `with` block's end closes its own block, never the `if` around it."""
+    template = tmp_path / "svc.yaml"
+    template.write_text(
+        "{{- $svc := .Values.services.backend | default dict -}}\n"
+        "{{- if $svc.enabled -}}\n"
+        "{{- with $svc.env -}}\n"
+        '{{- $_ := set . "IGNORED" "x" -}}\n'
+        "{{- end -}}\n"
+        "- name: INSIDE\n"
+        "  value: {{ $svc.name }}\n"
+        "{{- end -}}\n"
+        "- name: OUTSIDE\n"
+        "  value: {{ $svc.name }}\n",
+        encoding="utf-8",
+    )
+    mapping = capture.parse_template_env(str(template))
+    assert mapping["INSIDE"]["guards"], "the `if` guard must survive the `with` block"
+    assert not mapping["OUTSIDE"]["guards"]
+
+
+def test_a_negated_condition_yields_a_conditional_row(
+    tmp_path, chart_values, overlay_values
+):
+    """A condition the capture cannot evaluate leaves the row conditional."""
+    template = tmp_path / "svc.yaml"
+    template.write_text(
+        "{{- $svc := .Values.services.backend | default dict -}}\n"
+        "{{- if not $svc.enabled -}}\n"
+        "- name: ONLY_WHEN_DISABLED\n"
+        "  value: {{ $svc.name }}\n"
+        "{{- end -}\n",
+        encoding="utf-8",
+    )
+    mapping = capture.parse_template_env(str(template))
+    assert mapping["ONLY_WHEN_DISABLED"]["unresolved_guard"] is True
+
+    overlay = {"opea": {"enabled": True}}
+    effective = capture.deep_merge(chart_values, overlay)
+    workload = {
+        "name": "genieai-genieai-umbrella-chatqna",
+        "component": "chatqna",
+        "containers": [{"name": "chatqna", "image": "x", "env": {"LLM_MODEL": "m"}}],
+    }
+    rows, _ = capture.compare_workload(
+        workload, {"chatqna": mapping}, chart_values, overlay, effective
+    )
+    row = next(row for row in rows if row["env"] == "ONLY_WHEN_DISABLED")
+    assert row["status"] == "CONDITIONAL"
+
+
+def test_a_conditional_row_reaches_the_discrepancy_table_and_fails_the_capture(
+    tmp_path,
+):
+    """A row the capture cannot decide is a difference it cannot explain."""
+    data = _record_data()
+    data["discrepancies"] = capture.collect_discrepancies(
+        [
+            {
+                "workload": "genieai-genieai-umbrella-chatqna",
+                "rows": [
+                    {
+                        "env": "ONLY_WHEN_DISABLED",
+                        "status": "CONDITIONAL",
+                        "source_value": "",
+                        "overlay_value": "",
+                        "effective_value": "",
+                        "source_path": "services.backend.name",
+                        "deployed": "(not carried)",
+                    }
+                ],
+            }
+        ],
+        [],
+        [],
+    )
+    assert len(data["discrepancies"]) == 1
+    assert data["discrepancies"][0]["disposition"] == "**UNRESOLVED**"
+    out_path = tmp_path / "record.md"
+    unresolved = capture.write_record(data, str(out_path))
+    assert capture.exit_code_for(unresolved) == 2
+
+
+def test_capture_emits_a_section_for_a_workload_with_only_undeclared_variables(
+    monkeypatch, tmp_path
+):
+    """A workload that carries only application variables still gets a section."""
+    monkeypatch.setattr(
+        capture,
+        "capture_workloads",
+        lambda namespace: [
+            {
+                "kind": "deploy",
+                "name": "genieai-genieai-umbrella-frontend",
+                "component": "frontend",
+                "selector": {"app.kubernetes.io/name": "frontend"},
+                "replicas": 1,
+                "containers": [
+                    {
+                        "name": "frontend",
+                        "image": "x",
+                        "env": {"VUE_APP_API_URL": "http://x"},
+                    }
+                ],
+            }
+        ],
+    )
+    monkeypatch.setattr(capture, "capture_pods", lambda namespace: [])
+    monkeypatch.setattr(
+        capture,
+        "capture_topology",
+        lambda namespace: {"services": [], "network_policies": 0},
+    )
+    monkeypatch.setattr(
+        capture,
+        "capture_release",
+        lambda namespace, release: {
+            "chart": {"chart": "genieai-umbrella"},
+            "revision": 1,
+            "overlay": {},
+            "overlay_name": "(none)",
+            "secret_paths": set(),
+            "status": "",
+            "ready": "",
+        },
+    )
+    monkeypatch.setattr(capture, "capture_models", lambda namespace, env: {})
+    monkeypatch.setattr(capture, "run", lambda args, check=True: "")
+    monkeypatch.setattr(capture, "local_chart_version", lambda: "0.2.1")
+
+    data = capture.capture(
+        "genieai", "flux-system", "genieai", "2026-11-18", str(tmp_path / "record.md")
+    )
+    section = next(
+        item
+        for item in data["config"]
+        if item["workload"] == "genieai-genieai-umbrella-frontend"
+    )
+    assert section["rows"] == []
+    assert section["undeclared"]
+
+
+# --------------------------------------------------------------------------
+# the cleanups the scoped fix review listed
+# --------------------------------------------------------------------------
+
+
+def test_a_short_image_name_still_names_a_tag():
+    """`redis:7-alpine` is a tag; a registry port is not."""
+    assert capture.image_reference("redis:7-alpine") == ("7-alpine", "")
+    assert capture.image_reference("registry.example.com:5000/team/app:v1") == ("v1", "")
+    assert capture.image_reference("registry.example.com:5000/team/app") == ("", "")
+    assert capture.image_reference("team/app@sha256:abc") == ("", "sha256:abc")
+
+
+def test_a_workload_that_runs_no_pod_says_why():
+    """A scaled-to-zero workload is not a crashed one."""
+    assert capture._not_running_status({"replicas": 0}) == "NOT RUNNING (scaled to zero)"
+    assert (
+        capture._not_running_status({"replicas": 1})
+        == "NOT RUNNING (no running pod)"
+    )
+
+
+def test_a_targeted_overlay_path_through_a_scalar_fails_loudly():
+    """Flux refuses such a path: the capture must not drop the source."""
+    with pytest.raises(RuntimeError):
+        capture.set_path({"a": 1}, "a.b", {})

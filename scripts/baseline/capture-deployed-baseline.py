@@ -127,15 +127,6 @@ INJECTED_PATTERNS = (
 # Dispositions for the differences this story knows about. A difference with
 # no entry here is rendered as UNRESOLVED: an unexplained drift must not
 # pass silently.
-DISPOSITIONS = {
-    "conditional": (
-        "Reported - the chart renders this variable under a condition the capture "
-        "could not evaluate (a negated or unparseable one), and the deployment does "
-        "not carry it. Verify whether the chart renders it in this deployment."
-    ),
-}
-
-
 # --------------------------------------------------------------------------
 # helpers
 # --------------------------------------------------------------------------
@@ -179,13 +170,21 @@ def leaf_paths(values, prefix=""):
 
 
 def set_path(values, path, replacement):
-    """The values tree with `path` replaced by `replacement`."""
+    """The values tree with `path` replaced by `replacement`.
+
+    Flux refuses to merge a targeted source whose path runs through a
+    scalar (helm's own parser errors on it), so the capture fails loudly
+    rather than dropping the source.
+    """
     parts = path.split(".")
     node = values
     for part in parts[:-1]:
         node = node.setdefault(part, {})
         if not isinstance(node, dict):
-            return values
+            raise RuntimeError(
+                f"the targeted overlay path {path} runs through a scalar - the "
+                "effective source baseline cannot be resolved"
+            )
     node[parts[-1]] = replacement
     return values
 
@@ -281,7 +280,7 @@ def parse_template_env(template_path):
     # A block: {{- if <cond> -}} / {{- else -}} / {{- end -}} and the other
     # block openers, whose `end` must not pop an `if` guard.
     for match in re.finditer(
-        r"\{\{-?\s*(if|else|end|with|range|define|block|template)\b(.*?)-?\}\}",
+        r"\{\{-?\s*(if|else|end|with|range|define|block)\b(.*?)-?\}\}",
         text,
         re.S,
     ):
@@ -308,14 +307,14 @@ def parse_template_env(template_path):
                 chain = list(known["chain"]) + list(chain)
             locals_map[name] = {"chain": chain, "base": base}
         elif kind == "if":
-            guards.append(_guard_chain(payload, locals_map))
+            guards.append(_guard_condition(payload, locals_map))
         elif kind == "else":
             # A row in the else branch renders when the condition does NOT
-            # hold. The capture does not evaluate that, so the guard is
-            # unresolved: the row is conditional, not unconditional.
-            if guards:
-                guards[-1] = None
-        elif kind in ("with", "range", "define", "block", "template"):
+            # hold: the enclosing guard is negated, not unresolved.
+            if guards and guards[-1] != "block":
+                top = guards[-1]
+                guards[-1] = ("none", top[1]) if top else None
+        elif kind in ("with", "range", "define", "block"):
             # A block that is not a guard: its `end` closes it, never an
             # enclosing `if` guard.
             guards.append("block")
@@ -392,26 +391,35 @@ def _local_assignment(expression, locals_map):
     return _expression_chain(expression), None
 
 
-def _guard_chain(condition, locals_map):
-    """The chain a guard's condition stands for.
+NEGATED = re.compile(r"\(\s*not\b|\bnot\b")
 
-    None means the capture cannot evaluate the condition: the row is
-    conditional, and the record must not claim the chart declares it.
+
+def _guard_condition(condition, locals_map):
+    """(kind, chain) for a guard's condition, or None when unevaluable.
+
+    `kind` is "any" - the condition holds when one of the chain's
+    candidates carries a value - or "none", the negated form an `else`
+    branch renders under. None means the capture cannot evaluate the
+    condition: the row is conditional, and the record must not claim the
+    chart declares it.
     """
     condition = condition.strip()
-    if "not" in condition.split():
+    if NEGATED.search(condition):
         # A negated condition: the capture does not evaluate it.
         return None
     found = re.fullmatch(r"\$([A-Za-z][A-Za-z0-9]*)", condition)
     if found:
         known = (locals_map or {}).get(found.group(1))
-        return list(known.get("chain") or []) if known else []
+        chain = list((known or {}).get("chain") or [])
+        return ("any", chain) if chain else None
     found = re.fullmatch(r"\$([A-Za-z][A-Za-z0-9]*)\.([A-Za-z0-9]+)", condition)
     if found:
         base = _variable_base(found.group(1), locals_map)
         if base:
-            return [("path", f"{base}.{found.group(2)}")]
-    return []
+            return ("any", [("path", f"{base}.{found.group(2)}")])
+    # A condition that parses to neither a local nor a path: the capture
+    # cannot evaluate it.
+    return None
 
 
 def _candidate_holds(item, values):
@@ -428,9 +436,14 @@ def _candidate_holds(item, values):
 
 
 def _guards_hold(guards, values):
-    """Whether every guard of a rendered row holds for these values."""
-    for guard in guards:
-        if not any(_candidate_holds(item, values) for item in guard):
+    """Whether every known guard of a rendered row holds for these values."""
+    for kind, chain in guards:
+        holds = any(_candidate_holds(item, values) for item in chain)
+        if kind == "none":
+            # The `else` branch of the condition: it renders when the
+            # condition does NOT hold.
+            holds = not holds
+        if not holds:
             return False
     return True
 
@@ -697,6 +710,7 @@ def capture_workloads(namespace):
                     "name": meta["name"],
                     "component": meta.get("labels", {}).get("app.kubernetes.io/component", ""),
                     "selector": spec.get("selector", {}).get("matchLabels", {}),
+                    "replicas": spec.get("replicas", 0) or 0,
                     "containers": containers,
                 }
             )
@@ -870,7 +884,9 @@ def image_reference(image):
     """
     reference, _, digest = image.partition("@")
     parts = reference.rsplit(":", 1)
-    tag = parts[1] if len(parts) == 2 and "/" in parts[0] else ""
+    # A colon names a tag when what follows it is not a registry port:
+    # "host:5000/image" keeps the port in the repository name.
+    tag = parts[1] if len(parts) == 2 and "/" not in parts[1] else ""
     return tag, digest.strip()
 
 
@@ -882,6 +898,14 @@ def image_tag(image):
         # deployment runs.
         return ""
     return tag
+
+
+def image_reference_label(image):
+    """The reference the deployment declares, as the record names it."""
+    tag, digest = image_reference(image)
+    if digest:
+        return f"pinned {digest}"
+    return f"tag {tag}" if tag else "the image"
 
 
 def registry_manifest(image, reference):
@@ -1477,6 +1501,13 @@ def pick_running_pod(pods, workload, container_name):
     return max(candidates, key=lambda pod: pod["created"])
 
 
+def _not_running_status(workload):
+    """Why a workload runs no pod: scaled to zero, or its pods are not there."""
+    if int(workload.get("replicas") or 0) == 0:
+        return "NOT RUNNING (scaled to zero)"
+    return "NOT RUNNING (no running pod)"
+
+
 def build_images(workloads, pods):
     """One row per workload container, plus the pods no workload owns.
 
@@ -1499,7 +1530,7 @@ def build_images(workloads, pods):
                     "pull_policy": running.get("pull_policy", "") if running else "",
                     "registry_digest": "",
                     "registry_child_digest": "",
-                    "status": "NOT RUNNING",
+                    "status": _not_running_status(workload),
                     "_image": container["image"],
                 }
             )
@@ -1526,7 +1557,7 @@ def build_images(workloads, pods):
                 "pull_policy": pod.get("pull_policy", ""),
                 "registry_digest": "",
                 "registry_child_digest": "",
-                "status": "NOT RUNNING",
+                "status": "NOT COMPARABLE",
                 "_image": pod["image"],
             }
         )
@@ -1560,9 +1591,9 @@ def resolve_registry_digests(images):
         row["registry_child_digest"] = tag_child or ""
         if not running or running == "not running":
             # A workload that runs no pod is never compared: a verdict
-            # would assert something about a container that does not exist.
+            # would assert something about a container that does not
+            # exist. The row keeps the reason it runs no pod.
             row["running_child_digest"] = ""
-            row["status"] = "NOT COMPARABLE"
             del row["_image"]
             continue
         running_child = ""
@@ -1615,13 +1646,14 @@ def image_disposition(row):
         )
     if row["status"] == "SAME CONTENT":
         return (
-            "Accepted for V03 - the running image and the registry's current tag carry the "
+            "Accepted for V03 - the running image and the artifact the deployment "
+            "declares carry the "
             f"same content (the same amd64 child digest {row['registry_child_digest']}); "
             "only the index digest differs, and the index is not a content identity: it "
             "changes on every re-push (the attestation changes the index, not the image). "
             f"The deployment declares imagePullPolicy {row.get('pull_policy') or 'not declared'}, "
-            "so the next pod start pulls the current index. E01 must measure against the "
-            "content digest, which is stable."
+            "so the next pod start pulls the declared reference. E01 must measure against "
+            "the content digest, which is stable."
         )
     return (
         "Accepted for V03 - the running digest is the reference E01 must measure against; "
@@ -1639,15 +1671,45 @@ def image_note(images):
     moved = [row for row in comparable if row["status"] != "MATCH"]
     same = [row for row in moved if row["status"] == "SAME CONTENT"]
     different = [row for row in moved if row["status"] == "DIFFERENT"]
-    outside = sum(1 for row in images if row["registry_digest"] == "outside the GitLab registry")
-    other = len(images) - len(comparable) - outside
+    rest = [
+        row
+        for row in images
+        if row["status"] not in ("MATCH", "SAME CONTENT", "DIFFERENT")
+    ]
+    outside = [
+        row for row in rest if row["registry_digest"] == "outside the GitLab registry"
+    ]
+    unresolved = [
+        row for row in rest if str(row["registry_digest"]).startswith("unresolved")
+    ]
+    stopped = [row for row in rest if str(row["status"]).startswith("NOT RUNNING")]
+    unowned = [row for row in rest if "no workload owns this pod" in row["workload"]]
+    other = len(rest) - len(outside) - len(unresolved) - len(stopped) - len(unowned)
+    reasons = []
+    if outside:
+        reasons.append(f"{len(outside)} an image outside the GitLab registry")
+    if unresolved:
+        reasons.append(f"{len(unresolved)} a reference the registry does not resolve")
+    if stopped:
+        reasons.append(f"{len(stopped)} a workload that runs no pod")
+    if unowned:
+        reasons.append(f"{len(unowned)} a pod no workload owns")
+    if other > 0:
+        reasons.append(f"{other} a reference that resolves to no artifact")
+    listed = ", ".join(reasons) if reasons else "none"
+    owned_by_nobody = sum(
+        1 for row in images if "no workload owns this pod" in row["workload"]
+    )
+    tail = (
+        f" {owned_by_nobody} of the {len(images)} rows are pods no workload owns."
+        if owned_by_nobody
+        else ""
+    )
     return (
         f"{len(moved)} of the {len(comparable)} comparable GitLab-registry workload "
         f"images run an index digest that differs from the one the deployment declares: "
         f"{len(same)} of them carry the same content, {len(different)} a different "
-        f"one. The {len(images) - len(comparable)} other rows are not comparable - "
-        f"{outside} of them an image outside the GitLab registry, {other} a reference "
-        "that resolves to no artifact, or a pod no workload owns."
+        f"one. The {len(rest)} other rows are not comparable - {listed}.{tail}"
     )
 
 
@@ -1667,10 +1729,11 @@ def collect_discrepancies(config, models, images):
                     discrepancy_row(workload["workload"], row, None)
                 )
             elif row["status"] == "CONDITIONAL":
+                # A row whose guard the capture cannot evaluate: it cannot
+                # certify that the chart leaves the row out here, so the row
+                # carries no disposition and the capture fails on it.
                 discrepancies.append(
-                    discrepancy_row(
-                        workload["workload"], row, DISPOSITIONS["conditional"]
-                    )
+                    discrepancy_row(workload["workload"], row, None)
                 )
             elif row["status"] == "NOT CARRIED":
                 # An unconditional chart-declared variable the deployment does
@@ -1698,7 +1761,8 @@ def image_discrepancy_rows(images):
                 "workload": row["workload"],
                 "env": "image digest",
                 "source_value": (
-                    f"registry `{image_tag(row['image'])}` = {row['registry_digest']}"
+                    f"registry `{image_reference_label(row['image'])}` = "
+                    f"{row['registry_digest']}"
                 ),
                 "deployed": f"running {row['running_digest']}",
                 "disposition": image_disposition(row),
@@ -1786,12 +1850,10 @@ def build_models(env_by_component, chart_values, effective_values, served):
         models.append(
             {
                 "role": role,
-                "chart_default": chart_default,
                 "chart_default_display": (
                     chart_default if status != "NOT DECLARED HERE" else
                     "(not deployed in this topology)"
                 ),
-                "chart_default_path": path,
                 "difference_source": difference_source,
                 "difference_path": difference_path,
                 "declared": declared or "(no workload declares this model)",

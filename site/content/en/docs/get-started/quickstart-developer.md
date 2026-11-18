@@ -35,7 +35,7 @@ a brand-new route.
 
 {{< callout type="info" >}}
 You **do not** install Node.js / Python / Flutter on the host. The dev
-loop runs each service inside its own container (`node:22`,
+loop runs each service inside its own container (`node:22-trixie`,
 `python:3.11`, `flutter:3.10`), so the runtime version and native deps
 match CI exactly. Skip `npm install` / `pip install` on the host.
 {{< /callout >}}

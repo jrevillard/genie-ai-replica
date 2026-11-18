@@ -244,6 +244,15 @@ def cell(value):
 # --------------------------------------------------------------------------
 
 
+def strip_go_comments(text):
+    """The template without its Go comments.
+
+    A commented-out row is documentation, not a declaration: reading it
+    would report a chart-declared variable the deployment does not carry.
+    """
+    return re.sub(r"\{\{-?\s*/\*.*?\*/\s*-?\}\}", "", text, flags=re.S)
+
+
 def parse_template_env(template_path):
     """Return {env name: {...}} for one chart template.
 
@@ -255,7 +264,7 @@ def parse_template_env(template_path):
     deployment is right to not carry it.
     """
     with open(template_path, encoding="utf-8") as handle:
-        text = handle.read()
+        text = strip_go_comments(handle.read())
     mapping = {}
     locals_map = {}
     guards = []
@@ -464,8 +473,6 @@ def _guards_hold(guards, values):
 
 def _dotted_prefix(variable, key):
     """The values path a dotted template variable plus an index key addresses."""
-    if variable in SECTION_VARS:
-        return f"opea.{SECTION_VARS[variable]}.{key}"
     if variable.startswith("data") and variable != "data":
         return f"data.{variable[4:].lower()}.{key}"
     if variable in ("opea", "okf", "data"):
@@ -476,11 +483,12 @@ def _dotted_prefix(variable, key):
 def _variable_prefix(variable):
     """The values path a template local variable addresses.
 
-    `$dataKeycloak` is `data.keycloak`, `$opeaModelsLlm` is `opea.models.llm`;
-    a variable the chart does not use as a values pointer maps to nothing.
+    `$dataKeycloak` is `data.keycloak`; a variable the chart does not use
+    as a values pointer maps to nothing. The template's own assignments
+    carry the rest (`$opeaChatqna := $opea.chatqna`), so no table of
+    section names is kept here: a renamed template local would make such
+    a table answer with a path that no longer exists.
     """
-    if variable in SECTION_VARS:
-        return f"opea.{SECTION_VARS[variable]}"
     if variable == "opeaModels":
         return "opea.models"
     if variable in ("opea", "okf", "data"):
@@ -615,18 +623,6 @@ def backend_env_map():
     written down.
     """
     return parse_template_env(BACKEND_TEMPLATE)
-
-
-SECTION_VARS = {
-    "opeaChatqna": "chatqna",
-    "opeaRetriever": "retriever",
-    "opeaDataprep": "dataprep",
-    "opeaEmbedding": "embedding",
-    "opeaReranker": "reranker",
-    "opeaTranslation": "translation",
-    "opeaModelsLlm": "models.llm",
-    "opeaModelsReranker": "models.reranker",
-}
 
 
 def derive_values(values):
@@ -939,6 +935,12 @@ def registry_manifest(image, reference):
     what the runtime records as the running digest; the child digest is the
     stable content identity (the index digest moves on every re-push, the
     attestation changes the index and not the image).
+
+    The registry's v2 API is queried directly (the registry LISTING is
+    polluted with cache-* buildx tags - see
+    `.claude/rules/CVE-REMEDIATION.md`). `docker buildx imagetools inspect`
+    resolves the same digests for an operator, but the capture must not
+    require a docker daemon.
     """
     repository = image_reference(image)[0]
     registry_host = repository.split("/")[0]

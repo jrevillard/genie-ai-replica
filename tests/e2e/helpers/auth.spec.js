@@ -117,8 +117,12 @@ test.describe("getSessionTokenViaUI's error-priority contract", () => {
     return null;
   };
 
-  test('a clean run returns the token', () => {
-    expect(auth.resolveSessionOutcome(null, null, 'the-token')).toBe('the-token');
+  test('a clean run returns what the session saw', () => {
+    // The primitive's success value is the SESSION (token, adopted
+    // locale, age) — the token-only face takes the token out of it, so
+    // the contract is pinned with the shape production passes.
+    const session = { token: 'the-token', adopted: 'fr', at: 1 };
+    expect(auth.resolveSessionOutcome(null, null, session)).toBe(session);
   });
 
   test('a teardown failure on a login that SUCCEEDED is thrown, token discarded', () => {

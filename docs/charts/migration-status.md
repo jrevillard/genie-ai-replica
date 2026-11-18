@@ -40,32 +40,46 @@ contractual evidence — a fresh clone does not carry them.)
   overlay that no longer exists) and the `overlays/minikube/.*`
   creation rule in `.sops.yaml`.
 
-- **The shared GPU node's LLM does not answer a GENERATION — and that
-  blocks the three GPU-dependent steps of the six-check set.** The vLLM
-  servers answer `/v1/models` in 0.1 s (the models are loaded:
-  granite-4.1-8b with a 65536-token window, gemma-3-4b-it with 8192),
-  but a generation never answers — from a cluster pod AND from the
-  workstation (110 s, no response). On the laptop: the dataprep's
-  labelling succeeds (9 s), the contextualization falls back to the raw
-  text ("0 using raw text after batch + per-chunk recovery failed"),
-  then the GRAPH INSERTION phase hangs forever — that phase is
-  deliberately unbounded (the vendored comps' client takes no HTTP
-  budget, and a cancelled batch would drop chunks silently), so the
-  file stays `Ingesting` with 0 chunks and the next one stays
-  `Pending` (the dataprep serves one ingest at a time). The chat's SSE
-  headers arrive after ~3 minutes and the stream then aborts.
-  **This is NOT a chart defect**: the dataprep's egress to the GPU
-  (`:444`) is allowed, the endpoint is correct, and
-  `MODEL_LLM_TIMEOUT_SECONDS` bounds the phases that HAVE a fallback —
-  the unbounded phase has no chart-side lever. The same node serves the
-  El Salvador deployment, so the impact is not laptop-only.
+- **The six-check set is GREEN 6/6 against 0.2.177 on the laptop
+  (2026-11-17, second pass)** — the three GPU-dependent steps ran once
+  the shared GPU node answered again: the upload → ClamAV → dataprep
+  cycle ended `Ingested` (1 chunk; labelling 1/1 in 1 s, contextualization
+  1/1 in 2 s with no raw-text fallback), the French streaming answer
+  named the fact ("Le code pour la porte du hangar … est actuellement
+  **4729**") and cited the just-ingested file (`hangar-access-notes.md`,
+  score 0.9958). That is the RAG path the green Playwright run does NOT
+  cover — the chat specs mock the stream.
+
+- **The GPU wedge had TWO layers, and only the first was the node.** The
+  vLLM server stopped answering generations while still answering
+  `/v1/models` in 0.15 s (the model is loaded) — `/llm/v1/chat/completions`
+  returned nothing for minutes, from a pod and from the workstation
+  alike. When the node recovered (a 200-token generation came back in
+  2.8 s), the dataprep did NOT resume: its in-flight call sat on a
+  **dead socket**, and the vendored comps' client takes **no HTTP
+  budget**, so the read never returns and the graph-insertion phase —
+  deliberately unbounded, because a cancelled batch would drop chunks
+  silently — stays in flight forever. The consequence is worse than a
+  slow ingest: the dataprep serves ONE ingest at a time, so the lane
+  stays blocked and every new file is refused with `429 Too Many
+  Requests` ("System busy (1 slot(s) all in use)"). The recovery is a
+  dataprep pod restart; the wedged file stays `Ingesting` and has to be
+  retracted.
+  **This is NOT a chart defect**: the egress to the GPU (`:444`) is
+  allowed, the endpoint is correct, and `MODEL_LLM_TIMEOUT_SECONDS`
+  bounds the phases that HAVE a fallback — the unbounded phase has no
+  chart-side lever. It IS an application-side weakness worth an issue: a
+  single dead socket wedges the only ingest lane, with no timeout and no
+  recovery. The same node serves the El Salvador deployment, so the
+  impact is not laptop-only.
 
 - **The green local E2E run does NOT prove the RAG path.** The chat
   specs mock the stream (nothing in the suite references
   `/api/query/stream`), so the 471 green tests exercise the shell, the
   session and the UI around a stubbed answer. The chat that reaches the
-  GPU is only covered by the six-check set — and it is blocked by the
-  GPU node above. The suite's own `venue build: STALE` line is a FALSE
+  GPU is only covered by the six-check set — which now passes 6/6 (see
+  above), so the RAG path IS proven, but not by this suite. The suite's
+  own `venue build: STALE` line is a FALSE
   POSITIVE on a chart-only branch: the venue serves main's build
   (`1f483a99`, an ancestor of `main`) and the delta to the checkout is
   112 chart files + 13 docs + 20 scripts with **zero application-code
@@ -90,8 +104,9 @@ contractual evidence — a fresh clone does not carry them.)
 - **The validation set ran green against 0.2.177 on the laptop
   (2026-11-17)** — the chart's five test suites Succeeded (namespace,
   data-deps, observability, stateless-reach, tcp-reach); the six-check
-  set is green for its first three (health 200 through the edge, the
-  genie theme on the login form, the Register link); and the whole local
+  set is green 6/6 (health 200 through the edge, the genie theme on the
+  login form, the Register link, and the three GPU-dependent steps); and
+  the whole local
   E2E suite is **471 passed / 0 failed / 25 skipped** — the 25 are the
   surfaces this venue does not expose (the OKF pillar is dark, the realm
   has no second realm, no identity provider). The first pass of the

@@ -238,15 +238,17 @@ function readStreamingState() {
   if (!store) return { state: 'no-store' };
   if (!hasGetter) return { state: 'no-getter' };
   if (!open) return { state: 'no-open-conversation' };
-  // Only what the decision needs: each message's sender, streaming flag
-  // and the metadata frame's responseTime. The whole conversation would
-  // cross the wire on every poll tick — and WHICH messages are the bot's
-  // is decided on this side, where it is unit tested.
+  // Only what the decision needs: each message's sender, streaming flag,
+  // the metadata frame's responseTime and the done frame's translation
+  // verdict. The whole conversation would cross the wire on every poll
+  // tick — and WHICH messages are the bot's is decided on this side, where
+  // it is unit tested.
   const messages = open.messages
     ? open.messages.map((m) => ({
         sender: m.sender,
         isStreaming: m.isStreaming,
-        responseTime: m.metadata ? m.metadata.responseTime : undefined
+        responseTime: m.metadata ? m.metadata.responseTime : undefined,
+        translationFailed: m.translationFailed
       }))
     : [];
   return { state: 'ok', messages };
@@ -317,6 +319,24 @@ function streamingFlagOf(read) {
 const NOT_READABLE = Symbol('not-readable');
 
 /**
+ * The last bot message of a read — ONE selector for every decider that
+ * asks "which message is the bot's". Pure, and OUT of the page.
+ *
+ * `undefined` when the read carries no bot message yet (the welcome
+ * bubble and a turn that has not landed); the callers decide what an
+ * unreadable read means for them.
+ *
+ * @param {{state: string, messages?: object[]}} read - what the page read
+ * @returns {object|undefined} the last bot message, or undefined
+ */
+function lastBotMessageOf(read) {
+  if (!read || (read.state !== 'ok' && read.state !== 'no-open-conversation')) return undefined;
+  const messages = read.messages || [];
+  const bots = messages.filter((m) => m.sender === 'bot');
+  return bots[bots.length - 1];
+}
+
+/**
  * The metadata frame's responseTime of the last bot message, from a read
  * of the store's public getter (the same shape streamingFlagOf decides
  * on). Pure, and OUT of the page — the same decider pattern, so the
@@ -339,11 +359,35 @@ function lastBotResponseTimeOf(read) {
   if (!read || (read.state !== 'ok' && read.state !== 'no-open-conversation')) {
     return NOT_READABLE;
   }
-  const messages = read.messages || [];
-  const bots = messages.filter((m) => m.sender === 'bot');
-  const last = bots[bots.length - 1];
+  const last = lastBotMessageOf(read);
   if (last === undefined) return undefined;
   return last.responseTime;
+}
+
+/**
+ * The done frame's translation verdict of the last bot message, from a read
+ * of the store's public getter (the same shape the other deciders read).
+ * Pure, and OUT of the page — the same decider pattern, so the read's named
+ * causes stay decidable where they are unit tested.
+ *
+ * The flag is a BOOLEAN on every message the store holds: the store
+ * commits it with `Boolean(data.translationFailed)`, and the message
+ * factory defaults it to false. So `false` means "no failed-translation
+ * verdict was received for this turn" — it does NOT mean "the backend sent
+ * a verdict", and the absence of the verdict is not observable here.
+ * `undefined` is what a read with NO bot message answers — the welcome
+ * bubble and a turn that has not landed carry no flag at all.
+ *
+ * @param {{state: string, messages?: object[]}} read - what the page read
+ * @returns {boolean|undefined|symbol} the verdict, undefined, or NOT_READABLE
+ */
+function lastBotTranslationFailedOf(read) {
+  if (!read || (read.state !== 'ok' && read.state !== 'no-open-conversation')) {
+    return NOT_READABLE;
+  }
+  const last = lastBotMessageOf(read);
+  if (last === undefined) return undefined;
+  return last.translationFailed;
 }
 
 /**
@@ -472,6 +516,7 @@ module.exports = {
   readStreamingState,
   streamingFlagOf,
   lastBotResponseTimeOf,
+  lastBotTranslationFailedOf,
   NOT_READABLE,
   botStreamingFlag,
   loginViaUI,

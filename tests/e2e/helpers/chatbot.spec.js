@@ -5,6 +5,7 @@ const {
   readStreamingState,
   streamingFlagOf,
   lastBotResponseTimeOf,
+  lastBotTranslationFailedOf,
   NOT_READABLE,
   botStreamingFlag,
   LOGIN_BUDGET_TIMEOUT_MS
@@ -275,5 +276,73 @@ test.describe('the login budget the login specs consume (#1798)', () => {
     // as a hook timeout on a loaded venue, never as a red unit test. A
     // deliberate change lands here — the diff makes the new value visible.
     expect(LOGIN_BUDGET_TIMEOUT_MS).toBe(300000);
+  });
+});
+
+test.describe('the done frame translation verdict is read through the same store getter', () => {
+  // The pure decider over the page-side read, beside its responseTime
+  // sibling: the read carries the done frame's translationFailed beside the
+  // sender, the flag and the responseTime, and the decider tells a broken
+  // store contract (NOT_READABLE — the caller's to report) apart from a
+  // message whose done frame has not landed (undefined). The verdict's
+  // ABSENCE stays an absence, like the streaming flag's: coercing a
+  // welcome bubble or an in-flight turn to `false` would say "the answer
+  // was translated" before any answer existed.
+  test('a completed turn whose done frame landed carries the verdict', () => {
+    const read = {
+      state: 'ok',
+      messages: [
+        { sender: 'user', isStreaming: undefined, translationFailed: undefined },
+        { sender: 'bot', isStreaming: false, translationFailed: false }
+      ]
+    };
+    expect(lastBotTranslationFailedOf(read)).toBe(false);
+    expect(lastBotTranslationFailedOf({ state: 'ok', messages: [{ sender: 'bot', translationFailed: true }] })).toBe(
+      true
+    );
+  });
+
+  test('a message with no verdict crosses the wire with no verdict', async ({ page }) => {
+    // The page-side read: the welcome bubble carries no translationFailed
+    // key, and the read must let that absence reach the decision as an
+    // absence — through the SAME fake-store path the flag read is proven
+    // on, with the helper's own read function.
+    await page.setContent('<div id="app"></div>');
+    await page.evaluate(() => {
+      const app = document.querySelector('#app');
+      app.__vue_app__ = {
+        config: {
+          globalProperties: {
+            $store: {
+              getters: { 'conversation/openConversation': { messages: [{ sender: 'bot', content: 'Welcome!' }] } }
+            }
+          }
+        }
+      };
+    });
+    const read = await page.evaluate(readStreamingState);
+    expect(read.state).toBe('ok');
+    expect(read.messages[0].translationFailed).toBe(undefined);
+    expect(lastBotTranslationFailedOf(read)).toBeUndefined();
+  });
+
+  test('an empty transcript reports undefined — there is no bot message at all', () => {
+    // The OTHER branch from the welcome bubble's (proven above, through
+    // the real page read): no bot message in the transcript, so the
+    // decider has no row to read a verdict from.
+    expect(lastBotTranslationFailedOf({ state: 'ok', messages: [] })).toBeUndefined();
+  });
+
+  test('a broken store contract is NOT_READABLE — the caller reports it by name', () => {
+    expect(lastBotTranslationFailedOf({ state: 'no-store' })).toBe(NOT_READABLE);
+    expect(lastBotTranslationFailedOf({ state: 'no-getter' })).toBe(NOT_READABLE);
+    expect(lastBotTranslationFailedOf(null)).toBe(NOT_READABLE);
+    // An unreadable state is not `undefined`: the two must never blur.
+    expect(lastBotTranslationFailedOf({ state: 'no-store' })).not.toBeUndefined();
+    expect(lastBotTranslationFailedOf({ state: 'not-booted' })).toBe(NOT_READABLE);
+  });
+
+  test('an open-but-empty conversation is not a contract break', () => {
+    expect(lastBotTranslationFailedOf({ state: 'no-open-conversation' })).toBeUndefined();
   });
 });

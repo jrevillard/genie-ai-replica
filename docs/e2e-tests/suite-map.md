@@ -70,14 +70,15 @@ one reads a missing directory as an accident.
 | `conversation-history.spec.js` | — | conversation history list, deletion and the cleanup sweep caps | core | `auth`, `chatbot` |
 | `error-handling.spec.js` | — | a failed chat turn renders the answer card's error block and recovers | core | `chatbot` |
 | `quick-help-scope.spec.js` | — | the Quick Help grid renders its declared scope and dead cards send nothing | core | `route`, `stream-route`, `welcome` |
-| `send-message-and-stream.spec.js` | — | sending a message and the SSE stream rendering | core | `chatbot` |
+| `real-rag-citation.spec.js` | — | a real answer: the ingested fixture's fact in the answer text and the fixture cited in the sources | core | `auth`, `chatbot`, `documents`, `venue-profile` (+ `fixtures/` seed files) |
+| `send-message-and-stream.spec.js` | — | sending a message and the SSE stream rendering; the French answer with the UI locale pinned to `fr` | core | `chatbot`, `locale`, `venue-profile` |
 
 ## `documents/` — document management
 
 | Spec | Phase/story | What it drives | Profile | Helpers |
 |------|-------------|----------------|---------|---------|
 | `search.spec.js` | — | document search by partial name | core | `auth`, `documents` (+ `fixtures/` seed files) |
-| `upload.spec.js` | — | upload of each supported extension into the document table | core | `auth`, `documents` (+ `fixtures/` seed files) |
+| `upload.spec.js` | — | upload of each supported extension into the document table; the ingest chain's `Ingested` status on the uploaded row | core | `auth`, `documents`, `locale`, `venue-profile` (+ `fixtures/` seed files) |
 
 ## `admin/` — the admin dashboard
 

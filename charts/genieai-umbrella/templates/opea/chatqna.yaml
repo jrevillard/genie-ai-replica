@@ -156,7 +156,7 @@ top of it — the pod then stays out of the Service's endpoints for that
 long after every restart, although it is already serving. Readiness now
 tracks the startup probe's success. */ -}}
 {{- $svcVals := dict
-    "image" (dict "repository" "genie-ai-chatqna-server" "tag" "main")
+    "image" (dict "repository" "genie-ai-chatqna-server" "tag" (include "genieai-umbrella.opeaImageTag" (dict "root" . "key" "chatqna" "serviceTag" "")))
     "workingDir" "/app/ChatQnA"
     "port" 8888
     "resources" (dict "requests" (dict "cpu" "200m" "memory" "512Mi") "limits" (dict "cpu" "2" "memory" "4Gi"))

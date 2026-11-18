@@ -41,18 +41,19 @@ in the error (never silently tolerated).
   spelled out. Every entry keys on a condition, is bounded, and fails loud
   on its last observed outcome — never a silent give-up. One clause binds
   every entry: **a retry may never cover an assertion path.** A retry may
-  only cover a transport or setup path OUTSIDE any spec's subject, and the
-  test that decides is WHAT the attempt produced, not who judges it: a path
-  whose failure produced no verdict about the system under test (the
-  transport dropped it, or the edge returned its own reset artifact — a
-  transport artifact, not a product verdict). It may never re-run or
-  re-decide an assertion the spec itself makes: once an attempt PRODUCED a
-  product verdict, a second answer is no evidence where the first was the
-  truth. Two neighbours are not retries: a WAIT for a convergent condition
-  (it re-reads a STATE that is still MOVING until it holds — the earlier
-  read was never a verdict; see *Wait for conditions, not durations*
-  below), and a two-leg cleanup protocol (a re-issue of the same request,
-  only because the STATE CHANGED). The inventory:
+  only cover a transport/setup path that is OUTSIDE any spec's subject —
+  and the test that decides is WHAT the attempt produced, not who judges
+  it: a path whose failure produced no product verdict about the surface
+  the spec asserts (the transport dropped it, or the edge returned its own
+  reset artifact — a transport artifact, not a product verdict). It may
+  never re-run or re-decide an assertion the spec itself makes: once an
+  attempt PRODUCED a product verdict, a second answer is no evidence where
+  the first was the truth. Two neighbours are not retries: a WAIT for a
+  convergent condition (it re-reads a STATE that is still MOVING until it
+  holds — the earlier read was never a verdict; see *Wait for conditions,
+  not durations* below), and a two-leg cleanup protocol (a re-issue of the
+  same request, only because the STATE CHANGED — the sweep's re-DELETE:
+  `helpers/documents.js` `sweepDeleteOneFile`). The inventory:
   1. `helpers/auth.js`'s `request()` — the edge's own upstream-reset failure
      re-issued on the idempotent methods (#1847 — operator-sanctioned as the
      deterministic answer to a genuine transient): the k8s venue's Envoy

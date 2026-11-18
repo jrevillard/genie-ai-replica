@@ -39,7 +39,14 @@ in the error (never silently tolerated).
 - **The sanctioned retry inventory (#1878).** A retry is a determinism
   hazard: it exists only where it is sanctioned HERE, with its contract
   spelled out. Every entry keys on a condition, is bounded, and fails loud
-  on its last observed outcome — never a silent give-up. The inventory:
+  on its last observed outcome — never a silent give-up. One clause binds
+  every entry, and it is the one that matters most: **a retry may never
+  cover an assertion path.** A retry may only cover a transport or setup
+  path that is OUTSIDE any spec's subject; it may never re-run or re-decide
+  an assertion the spec itself makes. Bounded, keyed and loud are necessary
+  but not sufficient: a retry that re-asks the very question the spec asks
+  decides the spec's verdict, and a second answer is no evidence where the
+  first was the truth. The inventory:
   1. `helpers/auth.js`'s `request()` — the edge's own upstream-reset failure
      re-issued on the idempotent methods (#1847 — operator-sanctioned as the
      deterministic answer to a genuine transient): the k8s venue's Envoy
@@ -64,6 +71,16 @@ in the error (never silently tolerated).
      the deadline, a permanent error thrown at once, expiry loud with the
      last observed error. Provisioning infra, not an assertion path — the
      retry never covers a spec's own verdict.
+  **The boundary, worked out — the refused FR-translation probe (#1984 —
+  operator ruling, 2026-11-17, coordination-board note 127389).** A proposed
+  fourth entry would have made `helpers/venue-profile.js`'s `translatesTo()`
+  take a SECOND SAMPLE when the venue's answer echoed its English source and
+  conclude on that second answer — a chain that never translated would then
+  have gone green on the retry. The operator REFUSED it: an untranslated
+  answer is a BUG in the translation chain, not a transient, so the probe
+  stays at ONE sample and an echoed answer turns the spec RED. That is the
+  clause in one case: a retry may recover a transport that dropped an
+  answer; it may not re-ask a question whose answer IS the verdict.
   This list is exhaustive. A new retry surface needs an operator ruling
   recorded here first; no spec adds a retry loop, and Playwright's
   `retries: 0` stays untouched.

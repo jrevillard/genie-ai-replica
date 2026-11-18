@@ -80,7 +80,7 @@ ENV MAX_FILES_UPLOAD=10
 # be purged once it lands.
 ARG CACHE_BUST=0
 RUN CACHE_BUST=$CACHE_BUST apt-get update -y -o Acquire::Retries=5 && \
-    (CACHE_BUST=$CACHE_BUST apt-get upgrade -y --with-new-pkgs --fix-missing -o Acquire::Retries=5 > /tmp/apt.log 2>&1 || { tail -n 50 /tmp/apt.log | sed -E 's#/etc/[A-Za-z0-9._/-]+##g'; exit 1; }) && \
+    (CACHE_BUST=$CACHE_BUST apt-get upgrade -y --with-new-pkgs --fix-missing -o Acquire::Retries=5 > /tmp/apt.log 2>&1 || { tail -n 50 /tmp/apt.log | sed -E 's#(/[A-Za-z0-9._~/-]{2,})#<path>#g'; exit 1; }) && \
     apt-get clean && rm -rf /var/lib/apt/lists/* && rm -f /tmp/apt.log
 
 # The clamav directories belong to the clamav package: a package that moves

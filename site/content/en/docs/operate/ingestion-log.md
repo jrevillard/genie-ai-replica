@@ -182,7 +182,7 @@ gotcha), see [`.claude/rules/DEBUGGING-TRACING.md`](https://opensource.unicc.org
 | A document lands as `Ingested with Warnings` instead of `Ingested` | One LLM phase degraded. The `System` log line names which cause and the knob that fixes it: **budget exhausted** → raise `DATAPREP_LLM_PHASE_TIMEOUT_SECONDS` (or `MODEL_LLM_TIMEOUT_SECONDS` with it); **client could not be built** → check `VLLM_ENDPOINT` and the model id; **no context generated** or **no labels generated** → the endpoint is unreachable or the model does not support `response_format=json_object`. The affected chunks carry the document's file labels (labelling) or raw text (Contextual Retrieval) instead of the model's output. | Yes, after fixing the cause — the document is indexed and searchable, only the enrichment is incomplete. Re-ingesting a degraded document clears its existing chunks first, so it replaces rather than duplicates. |
 | `in progress` rows whose elapsed time stops advancing | The phase is stuck rather than slow, or it has hit `DATAPREP_LLM_PHASE_TIMEOUT_SECONDS` and is about to end. Check the trace, then `MODEL_LLM_TIMEOUT_SECONDS` and `DATAPREP_LLM_PHASE_TIMEOUT_SECONDS` (raise both — the phase budget is the binding ceiling). | Depends on the phase. The labelling and Contextual Retrieval phases DEGRADE — the document still ingests on its fallback (file labels / raw chunk). The graph phase has no fallback: the ingest FAILS, the partial graph is retracted, and the file needs a manual re-kick. |
 | `failed` on the **context generation** step only | The doc-context budget is too large for the loaded context window: lower `DATAPREP_CONTEXTUAL_DOC_BUDGET` (or `DATAPREP_CONTEXTUAL_DOC_BUDGET_DOC_LEVEL` under the `doc_level` strategy), or disable Contextual Retrieval (`CONTEXTUAL_RETRIEVAL_ENABLED=false`) temporarily. | Only if you want the context prefix on existing documents. |
-| `Graph insertion exceeded its ...s budget` | The graph-extraction phase ran out of `DATAPREP_LLM_PHASE_TIMEOUT_SECONDS` (default 900 s) with batches still running — most often a wedged GPU. The ingest FAILED: the file lands `Ingestion Error` and the partial graph is retracted. | Raise `DATAPREP_LLM_PHASE_TIMEOUT_SECONDS`, or raise `DATAPREP_MAX_CONCURRENT_BATCHES` to shorten the phase's wall clock. Then re-ingest — the file is not re-ingested automatically (the automatic re-ingest covers OKF re-indexes only). |
+| `Graph insertion exceeded its ...s budget` | The graph-extraction phase ran out of `DATAPREP_LLM_PHASE_TIMEOUT_SECONDS` (default 900 s) with batches still running — most often a wedged GPU. The ingest FAILED: the file lands `Ingestion Error` and the partial graph is retracted. | Raise `DATAPREP_LLM_PHASE_TIMEOUT_SECONDS`, or raise `DATAPREP_MAX_CONCURRENT_BATCHES` to shorten the phase's wall clock. Then re-ingest — the file is not re-ingested automatically (see [the retry contract]({{< relref "/docs/knowledge-base/document-lifecycle" >}}) § "A failed ingest is re-kicked by hand": the automatic re-ingest covers OKF re-indexes only). |
 | `raw-chunk fallback` on isolated chunks (most chunks labelled) | Usually transient vLLM load. Re-ingest if labels are critical. | Optional. |
 | `failed` on **parsing** (docling) | Check the source file — scanned PDFs, password-protected files, etc. | After fixing the file (re-upload). |
 | `failed` on **embedding** | Check the `tei` Docker service health (`docker service ps genieai_tei` or `docker compose ps tei`). Dataprep calls TEI directly at `TEI_EMBEDDING_ENDPOINT` (default `http://tei:80`) — it does **not** go through the OPEA `embedding` wrapper (that wrapper is used by chatqna). | After the `tei` service is healthy again. |
@@ -268,6 +268,14 @@ diagnosis needs a probe, not a one-liner.
    file stays in `Ingesting` until the worker resumes or you kill it.
 
 ### Symptom: file ends in `Ingestion Error` with labelling parse failures
+
+`Ingestion Error` is the terminal state of a failed ingest: the failure
+retracted whatever the run had written, so nothing of the document is
+indexed, and **nothing re-ingests it automatically**. Fix the cause below,
+then re-kick the document (admin dashboard → Documents table → **Ingest** on
+the selected row, or `POST /api/files/{fileId}/ingest`). The retry contract is
+documented in [Document lifecycle]({{< relref "/docs/knowledge-base/document-lifecycle" >}}) §
+"A failed ingest is re-kicked by hand".
 
 The labelling LLM returned malformed JSON. Almost always a model issue, not
 a document issue. Steps:

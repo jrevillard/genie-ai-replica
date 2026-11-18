@@ -29,7 +29,7 @@ admin UI shows them lowercased (`pending`, `ingesting`, etc.) — see the
 | `Ingesting` | `ingesting` | Dataprep is parsing, chunking, labelling, and embedding. |
 | `Ingested` | `ingested` | All chunks indexed; the document is **retrievable**. |
 | `Ingested with Warnings` | `ingested with warnings` | Ingestion finished, but a whole phase accomplished nothing: the labels or the generated contexts for every chunk came from the file labels or the raw text. Retrievable, but the model did no work on it — re-ingest, and read the ingestion log for which phase stopped and why. A few chunks falling back while the rest succeeded is normal operation and leaves the status plain `Ingested`. |
-| `Ingestion Error` | `ingestion error` | Processing failed; the document is **not** searchable. Check the ingestion log for the reason. |
+| `Ingestion Error` | `ingestion error` | Processing failed; the document is **not** searchable. The partial graph was retracted, so nothing of it is indexed. Check the ingestion log for the reason, fix it, and re-kick (see "A failed ingest is re-kicked by hand" below). |
 | `Killed` | `killed` | Ingestion was aborted by an admin (see "Kill an in-flight ingest" below). |
 | `Retracted` | `retracted` | The document was deliberately removed via the retract flow. Not searchable. |
 
@@ -183,6 +183,39 @@ entry to the ingestion log (`"Ingestion process killed. Starting cleanup..."`),
 followed by an `INFO`-level entry (`"Cleanup complete. Document state set to Killed."`).
 After a kill, the document is not retrievable and
 its chunks may be partially present — retract it before re-uploading.
+
+## A failed ingest is re-kicked by hand
+
+A failed ingest ends in `Ingestion Error`, and **nothing re-ingests it
+automatically**. This is the whole retry contract, and it is deliberate:
+
+- A legacy document (anything uploaded through the admin dashboard or the
+  document-repository API) has no ingest drain of its own — it is ingested
+  because somebody asked for it. There is no queue that could pick it up
+  again.
+- The one automatic retry in the system belongs to the **OKF drain**: when a
+  concept that was indexed before fails to be re-indexed, the OKF worker
+  resets it to `parsed` once, so the drain picks it up again. It applies to
+  OKF **re-indexes** only — a concept that never indexed successfully has no
+  `last_good_index_at`, so it gets no automatic retry either.
+- Retrying a failure immediately would fail identically: the failures that
+  end in `Ingestion Error` are configuration and capacity failures (a phase
+  budget that is too low for the document, an unreachable endpoint, a model
+  that cannot answer the required shape), and the fix is a change the
+  operator makes, not a second attempt.
+
+So the procedure is: read the ingestion log, fix what it names, then re-kick.
+
+1. Open the document's ingestion log and read the `ERROR` line — it names the
+   cause and, for the phase-budget failure, the knob to raise.
+2. Apply the fix (raise `DATAPREP_LLM_PHASE_TIMEOUT_SECONDS`, fix the
+   endpoint, change the model).
+3. Re-kick the document: tick its row in the **Documents** table of the admin
+   dashboard and use the batch **Ingest** action, or call
+   `POST /api/files/{fileId}/ingest`.
+
+The re-kick is safe to repeat: the failed ingest already retracted its own
+partial graph, so there is nothing left to duplicate.
 
 ## Stuck documents recover themselves after a dataprep restart
 

@@ -2153,7 +2153,11 @@ class TestIngestFileWithGuardrail:
         ):
             await dp.ingest_file_with_guardrail(inp, lock_file=None)
 
-        mock_retract.assert_called_once_with(file_id="test-file-123", graph_name="GRAPH")
+        # update_status=False: 'Killed' is this path's terminal state, so the
+        # retraction must not flip the document to 'Retracted' on its way
+        # there (#1991/#1992 — the status the operator sees has to name the
+        # outcome, not the cleanup).
+        mock_retract.assert_called_once_with(file_id="test-file-123", graph_name="GRAPH", update_status=False)
         status_calls = [c.args[1] for c in mock_status.call_args_list]
         assert "Killed" in status_calls
 

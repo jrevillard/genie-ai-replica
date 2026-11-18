@@ -284,11 +284,12 @@ no CI resources — it runs locally, regularly). The executed set is what the
 BASE_URL=https://<your-venue-host>:4443 tests/e2e/run/run-local-e2e.sh
 ```
 
-`<your-venue-host>` is the venue's own edge address — host **and** port
-(the Compose stack's edge, for one, is `https://localhost`); the runbook's
-[*Venue address*](../../docs/e2e-tests/local-run.md#venue-address) section
-carries the one worked example — the shared forge's address, with the
-`E2E_VENUE_IP` mapping for a runner that cannot resolve its venue's name.
+`<your-venue-host>` is the venue's edge hostname, and the `:4443` that
+follows is the shared stack's edge port — substitute both when your venue
+differs. The shared forge's worked example and the `E2E_VENUE_IP` mapping
+for a runner that cannot resolve its venue's name are in
+[`docs/e2e-tests/local-run.md`](../../docs/e2e-tests/local-run.md#venue-address)
+(§ Venue address).
 
 It provisions the venue fixtures, runs the **whole `tests/e2e/` tree**,
 prints the outcome — every skipped spec with its reason — and the

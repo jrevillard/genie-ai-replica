@@ -609,6 +609,13 @@ wording or a different detected code. The probe therefore reports a difference i
 them as a **warning**; the contract is the *shape* (detected language, English
 string, status field), the *vocabulary* of §5.2 and the deployed budget of §5.3.
 
+The sample lives **once**, in the recorded capture
+(`measured.preparation.locales` in the fixtures file); the expectation block
+points at it (`preparation.locales_source`) instead of copying it, and the
+probe resolves that pointer — so a moved sample cannot leave the comparison
+reading nothing, and a recorded capture that carries no locale sample at all is
+reported as a **drift**.
+
 ## 6. Deployed values that differ from the repository defaults
 
 | Knob | Code default | Deployed | Source |

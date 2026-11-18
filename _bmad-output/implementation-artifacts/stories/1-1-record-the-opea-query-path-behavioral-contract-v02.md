@@ -311,6 +311,7 @@ exercised against a mutated copy of the fixtures:
 | a knob the record claims is absent is now served | exit 1 | exit 1 |
 | the query instruction changes | exit 1 | exit 1 |
 | a **sampled** locale string differs (`measured.preparation.locales`) | a warning, exit 0 | warning, exit 0 |
+| the recorded capture carries no locale sample | exit 1 — the comparison cannot go vacuous | exit 1 |
 
 The last row is the contract that separates the two kinds of difference: the
 deployed configuration is a contract, the sampled locale strings are a sample.
@@ -365,20 +366,25 @@ the exception coverage, the pod tie-break, the prose against
 hung did deliver their reports afterwards; three of their findings were worth
 acting on and are applied:
 
-- **the locale sample now lives once.** The expectation block carried a
-  verbatim copy of the recorded capture, and the verification compared the live
-  measurement against the COPY — so deleting the copy alone would have turned
-  the locale comparison into a silent no-op (a false-green `--verify`). The
-  expectation block now points at `measured.preparation.locales`
-  (`locales_source`) and the verification compares against the recorded
-  capture, which is the same semantics the deployed-knob path already used;
+- **the locale sample now lives once.** The expectation block carried a copy
+  of the recorded capture's locale sample — the six compared fields with
+  identical values, minus the raw `english_history` the verification never
+  compares — and the verification compared the live measurement against that
+  COPY, so deleting the copy alone would have turned the locale comparison
+  into a silent no-op. The expectation block now points at the recorded
+  capture (`locales_source`) and the verification resolves that pointer
+  against the capture, which is the same semantics the deployed-knob path
+  already used. Resolving the pointer also closes the vacuous case the
+  relocation alone would have left open: a recorded capture that carries no
+  locale sample is now a **drift**, not a silent green;
 - **the identity fields live once.** The root keeps `artifact`,
   `contract_version`, `story`, `scope` and `method`; the expectations block no
   longer repeats them — its `method` copy described the *measured* block while
   sitting in the expectations block, where it described nothing. `recorded_at`
   and `pods` live only under `measured`, which is the probe's own document;
-- **the loop-invariant registry read is hoisted** (`language_codes_map()` once
-  instead of four times).
+- **the loop-invariant registry read is hoisted**: the per-sample call goes
+  from three to one, so the probe reads the registry twice in total — once
+  for the samples, once for the language count.
 
 **Three findings were skipped, with reasons:**
 

@@ -382,6 +382,23 @@ def compare_knobs(drift: list[str], label: str, live: dict, expected: dict, abse
             drift.append(f"{label}.{knob}: expected absent -> live {live.get(knob)!r}")
 
 
+def resolve_pointer(document: dict, pointer: str | None) -> list:
+    """Resolve a dotted pointer to a list inside the fixtures document.
+
+    The expectation block declares where a value lives instead of copying
+    it (``preparation.locales_source``). Resolving the declaration keeps it
+    load-bearing: a moved value cannot leave a comparison reading nothing.
+    """
+    if not pointer:
+        return []
+    value = document
+    for part in pointer.split("."):
+        if not isinstance(value, dict) or part not in value:
+            return []
+        value = value[part]
+    return value if isinstance(value, list) else []
+
+
 def verify(fixtures_path: str, document: dict) -> int:
     """Compare the live measurement against a recorded fixtures file."""
     with open(fixtures_path, encoding="utf-8") as handle:
@@ -441,9 +458,17 @@ def verify(fixtures_path: str, document: dict) -> int:
 
     # 4. The locale strings are a SAMPLE: the detector is unseeded and the
     #    translation model is sampled, so a difference is a warning. The
-    #    sample lives once, in the recorded capture — the expectation block
-    #    points at it (preparation.locales_source) instead of copying it.
-    expected_locales = rec_prep.get("locales", [])
+    #    sample lives once, in the recorded capture; the expectation block
+    #    POINTS at it (preparation.locales_source) and the pointer is
+    #    resolved here, so the declaration stays load-bearing and the
+    #    comparison cannot read nothing.
+    pointer = preparation.get("locales_source")
+    expected_locales = resolve_pointer(fixtures, pointer)
+    if not expected_locales:
+        drift.append(
+            f"preparation.locales_source: {pointer!r} does not resolve to a locale sample — "
+            "the record claims three locales, one of them non-Latin"
+        )
     live_locales = {l.get("locale"): l for l in live_prep.get("locales", [])}
     for locale in expected_locales:
         live_locale = live_locales.get(locale["locale"])

@@ -12,23 +12,23 @@
     "opea_gpu_mode": "external",
     "gpu_node_host": "https://ai.assembly.govstack.global:444"
   },
-  "recorded_at": "2026-11-18T07:46:19+00:00",
+  "recorded_at": "2026-11-18T08:13:14+00:00",
   "pods": {
-    "backend": "genieai-genieai-umbrella-backend-85b57f6778-jpp45",
+    "backend": "genieai-genieai-umbrella-backend-6f99d78b68-gt7j8",
     "chatqna": "genieai-genieai-umbrella-chatqna-8f76fd97f-pnk8g",
-    "embedding": "genieai-genieai-umbrella-embedding-9c4c7f756-jglt6",
+    "embedding": "genieai-genieai-umbrella-embedding-9c4c7f756-nd68c",
     "reranker": "genieai-genieai-umbrella-reranker-54db956ff6-h9mc4",
     "retriever": "genieai-genieai-umbrella-retriever-68b8c8bf68-zphwk"
   },
   "probe": "scripts/baselines/probe-v02-query-path.py",
   "measured": {
     "probe": "v02-opea-query-path",
-    "recorded_at": "2026-11-18T07:46:19+00:00",
+    "recorded_at": "2026-11-18T08:13:14+00:00",
     "namespace": "genieai",
     "pods": {
-      "backend": "genieai-genieai-umbrella-backend-85b57f6778-jpp45",
+      "backend": "genieai-genieai-umbrella-backend-6f99d78b68-gt7j8",
       "chatqna": "genieai-genieai-umbrella-chatqna-8f76fd97f-pnk8g",
-      "embedding": "genieai-genieai-umbrella-embedding-9c4c7f756-jglt6",
+      "embedding": "genieai-genieai-umbrella-embedding-9c4c7f756-nd68c",
       "reranker": "genieai-genieai-umbrella-reranker-54db956ff6-h9mc4",
       "retriever": "genieai-genieai-umbrella-retriever-68b8c8bf68-zphwk"
     },
@@ -41,7 +41,9 @@
         "GPU_NODE_HOST": "ai.assembly.govstack.global",
         "VLLM_TRANSLATION_ENDPOINT": "https://ai.assembly.govstack.global:444/translation",
         "VLLM_TRANSLATION_MODEL_ID": "google/gemma-3-4b-it",
-        "STREAMING_TRANSLATION_ENABLED": "1"
+        "STREAMING_TRANSLATION_ENABLED": "1",
+        "OKF_ENABLED": "0",
+        "OKF_SERVER_URL": "http://okf-server:3002"
       },
       "chatqna": {
         "RETRIEVER_ARANGO_SEARCH_START": "chunk",
@@ -652,7 +654,9 @@
           "OPEA_PORT": "8888",
           "CONTEXT_OPTION": "conversation-with-context-labels",
           "TRANSLATION_BACKEND": "gpu",
-          "STREAMING_TRANSLATION_ENABLED": "1"
+          "STREAMING_TRANSLATION_ENABLED": "1",
+          "OKF_ENABLED": "0",
+          "OKF_SERVER_URL": "http://okf-server:3002"
         }
       },
       "absent_knobs": {
@@ -669,8 +673,7 @@
         "genie-ai-overlay/chatqna/genieai_chatqna.py:4786-4806 (the retrieval query extraction)",
         "genie-ai-overlay/chatqna/genieai_chatqna.py:821-847 (the translation window and the char budget)",
         "genie-ai-overlay/chatqna/genieai_chatqna.py:1321-1322 (the char budget constant and the USER marker pattern)",
-        "genie-ai-overlay/chatqna/language-registry.json (the supported locale registry)",
-        "the probe MIRRORS the detection + history-language rule (it lives inside handle_request and cannot be called directly); the deployed rule is chatqna:4578-4661 and :4672"
+        "genie-ai-overlay/chatqna/language-registry.json (the supported locale registry)"
       ],
       "measured_budget": {
         "translation_window_tokens": 8192,
@@ -748,7 +751,8 @@
           "http_status": 200
         }
       ],
-      "adrs": []
+      "adrs": [],
+      "probe_note": "the probe MIRRORS the detection + history-language rule (it lives inside handle_request and cannot be called directly); the deployed rule is genie-ai-overlay/chatqna/genieai_chatqna.py:4578-4661 and :4672"
     },
     "live_observations": {
       "venue": "k3s namespace genieai, chart genieai-umbrella, OPEA GPU mode external",
@@ -768,6 +772,10 @@
       "traversal_cap": {
         "observed": "[Arango Traversal] ARANGO_TRAVERSAL_CONCURRENT_BATCHES=10 is above the safe cap (4). Capping to 4.",
         "meaning": "the chart declares 10 concurrent batches; the service caps itself at 4"
+      },
+      "okf_posture": {
+        "observed": "the backend serves OKF_ENABLED=0 and OKF_SERVER_URL=http://okf-server:3002; the venue runs no okf-server pod",
+        "meaning": "the OKF posture is legacy: the BFF's engagement lookup yields no engagement, the carrier names no graph, and the retriever runs the legacy single-graph path — so the deployed traversal is neither size-gated nor time-boxed (see graph_traversal.size_gate)"
       }
     },
     "discrepancies": [
@@ -855,7 +863,7 @@
       "langdetect is used without a fixed DetectorFactory seed, and the translation model is sampled: the recorded locale strings are a SAMPLE. The probe reports a difference in them as a warning, never as a drift.",
       "The chart does not template the RETRIEVER_HYBRID_* knobs for the chatqna container; only the retriever container carries them.",
       "The CAP-1 join is exercised on a venue whose okf_concepts_meta collection is absent. The \"identity document present\" branch is therefore recorded from the code, not from a live hit.",
-      "The deployed venue carries a single graph (GRAPH); the fan-out and routing behaviors are recorded from the code and the deployed knobs, not from a live multi-graph run."
+      "The deployed venue carries a single graph (GRAPH). The fan-out (§4.10) and routing (§4.11) behaviors are recorded from the code and the deployed knobs, not from a live multi-graph run."
     ]
   }
 }

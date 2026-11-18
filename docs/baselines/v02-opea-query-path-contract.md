@@ -13,7 +13,7 @@
 | Upstream authority | PRD `agentic-foundations`, architecture spine AD-10 (behavior frozen to this record) |
 | Owner | the story 1.1 worker · reviewers: the orchestrator's review chain (MR !948) |
 | Evidence | the probe run on the venue: `V02 contract verified: the live deployment matches the recorded measurement.` (exit 0), plus the live observations of §7 |
-| Reconsideration triggers | the deployed query-path knobs change; the venue is re-based; a story of Epic 1 reports a behavior the record does not describe; the ADR statuses of §9 change |
+| Reconsideration triggers | the deployed query-path knobs change; the **OKF posture changes** (`OKF_ENABLED` leaves `0`, or an okf-server appears: the fan-out engages and the traversal's size gate and leg budget return); the venue is re-based; a story of Epic 1 reports a behavior the record does not describe; the ADR statuses of §9 change |
 
 ### FR-29 traceability
 
@@ -167,7 +167,7 @@ no data.
 |---|---|
 | embedding | `EMBEDDING_MODEL_ID=BAAI/bge-large-en-v1.5`, `TEI_EMBEDDING_ENDPOINT=https://ai.assembly.govstack.global:444/embed` |
 | reranker | **no `RERANKING_*` variable at all** — the container's own defaults are inert because chatqna sends the strategy, `top_n` and the threshold explicitly (`genie-ai-overlay/chatqna/genieai_chatqna.py:4936-4944`) |
-| backend (BFF) | `OPEA_HOST=chatqna.genieai.svc.cluster.local`, `OPEA_PORT=8888`, `CONTEXT_OPTION=conversation-with-context-labels`, `TRANSLATION_BACKEND=gpu`, `GPU_NODE_HOST=ai.assembly.govstack.global`, `STREAMING_TRANSLATION_ENABLED=1` |
+| backend (BFF) | `OPEA_HOST=chatqna.genieai.svc.cluster.local`, `OPEA_PORT=8888`, `CONTEXT_OPTION=conversation-with-context-labels`, `TRANSLATION_BACKEND=gpu`, `GPU_NODE_HOST=ai.assembly.govstack.global`, `STREAMING_TRANSLATION_ENABLED=1`, `OKF_ENABLED=0`, `OKF_SERVER_URL=http://okf-server:3002` |
 
 ## 4. Behavior catalog
 
@@ -352,10 +352,16 @@ file.
   The **size gate** (`max_links`, 300000) and the leg sub-budget are **fan-out
   per-leg contracts** (`retriever:1996-2005`): the legacy single-graph path runs
   with `legacy_unbounded=True` (`retriever:2307`), so it has **neither** gate nor
-  time-box. The deployed venue runs that legacy path — the carrier carries
-  labels only and no graph names, so the fan-out does not engage
-  (`retriever:2317-2342`) — which means the deployed traversal is **not**
-  size-gated and **not** time-boxed.
+  time-box.
+
+  **The deployed venue runs that legacy path.** The BFF's `engaged` flag comes
+  from the okf-server and is read, never re-derived (`query-service.js:693-694`);
+  the venue serves `OKF_ENABLED=0` (§3.3), so the engagement lookup yields no
+  engagement, the carrier names **no graph**, and the fan-out does not engage
+  (`retriever:2317-2342`). The deployed traversal is therefore **not**
+  size-gated and **not** time-boxed. The **fan-out path still carries both**
+  (§4.10): the port must preserve the difference between the two paths, not
+  generalize the legacy one.
 * **Code** — `genie-ai-overlay/retriever/genieai_retriever_arangodb.py:1981-2131`,
   `:2073-2080`; `genie-ai-overlay/chatqna/genieai_chatqna.py:4915-4926`.
 * **ADR evidence** — `okf-012` (multi-graph grounding).
@@ -519,14 +525,15 @@ be `null` (`components/gov-chat-backend/services/query-service.js:488-518`).
 | Bound | Deployed behavior |
 |---|---|
 | translation window | **8192 tokens** (discovered from the translation endpoint at runtime) |
-| history character budget | **11520 characters** = `(window − 512) // 2 × 3`. `MAX_TRANSLATION_CHARS` is **unset**: the 2000-character code constant is only the **fallback** used when the window discovery fails, and an explicit value only *lowers* the derived budget |
+| history character budget | **11520 characters** = `(window − TRANSLATION_PROMPT_OVERHEAD_TOKENS) // 2 × TRANSLATION_CHARS_PER_TOKEN` = `(8192 − 512) // 2 × 3` (`chatqna:857`, `:876`). `MAX_TRANSLATION_CHARS` is **unset**: the 2000-character code constant is only the **fallback** used when the window discovery fails, and an explicit value only *lowers* the derived budget. The completion reserve is a separate constant, `TRANSLATION_COMPLETION_SAFETY_TOKENS=128` (`chatqna:606`) |
 | single-message shape | a history over the budget is **refused**: `TranslationInputTooLongError` → HTTP 422 (§5.4) |
 | list shape (the deployed BFF shape) | the **char budget** never refuses it: the oldest turns are dropped and the newest message's tail is truncated. The **translation window** can still overflow, and that **does** refuse (§5.4) |
 | generation-time overflow | the **oldest history segments** are dropped; the retrieved documents are never truncated |
 | BFF-side bounds | the HTTP body limit is 50 MB and the requested language is truncated to 32 characters; the BFF imposes **no** query or history length bound |
 
 * **Code** — `genie-ai-overlay/chatqna/genieai_chatqna.py:821-847` (the window and
-  the budget), `:894-909` (the single-message refusal), `:912-968` (the list-shape
+  the budget), `:857` and `:876` (the two constants), `:606` (the completion
+  reserve), `:894-909` (the single-message refusal), `:912-968` (the list-shape
   trim).
 
 ### 5.4 Failure classes — three distinct outcomes
@@ -620,6 +627,7 @@ Two of these are **not merely different, they are inert**:
 | `[Arango Traversal] ARANGO_TRAVERSAL_CONCURRENT_BATCHES=10 is above the safe cap (4). Capping to 4.` | the chart declares 10 concurrent batches; the service caps itself at 4 |
 | the deployed translation window is **8192 tokens** and the derived history budget **11520 characters** | the char budget of §5.3 is measured, not derived from the constants |
 | the BFF serves `CONTEXT_OPTION=conversation-with-context-labels`, `TRANSLATION_BACKEND=gpu`, `STREAMING_TRANSLATION_ENABLED=1` | the message-list shape and the GPU answer translation of §5.5 are measured |
+| the BFF serves `OKF_ENABLED=0` and `OKF_SERVER_URL=http://okf-server:3002`, and the venue runs no okf-server | the OKF posture is legacy: the BFF's engagement lookup yields no engagement, the carrier names no graph, and the retriever runs the **legacy single-graph path** — so the deployed traversal is neither size-gated nor time-boxed (§4.9) |
 
 ## 8. Known gaps
 

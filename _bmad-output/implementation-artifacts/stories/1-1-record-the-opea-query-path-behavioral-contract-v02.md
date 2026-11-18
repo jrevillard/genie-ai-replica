@@ -197,9 +197,32 @@ are now applied:
 The minor findings were applied too: the mislabelled token reserve was renamed
 (`prompt_overhead_tokens` / `completion_safety_tokens`), `--verify` now compares
 the translation window and warns on the two unchecked locale fields, the probe's
-exit-2 contract covers every measurement failure, the probe picks the newest
-Running pod of a service, and the record states that the probe **mirrors** the
+exit-2 contract covers every failure mode it can classify (a non-zero exec, a
+missing binary, a timeout, a malformed payload), the probe picks the newest
+**Ready** pod of a service, and the record states that the probe **mirrors** the
 deployed language rule rather than invoking it.
+
+### Corrections after the second fix review
+
+The second scoped fix review confirmed the three Important findings as fixed and
+raised one more, plus minors:
+
+- the **deployed-path claim of §4.9** was true but carried no recorded
+  evidence: the load-bearing fact is the venue's **OKF posture**
+  (`OKF_ENABLED=0`, no okf-server → the BFF's engagement lookup yields no
+  engagement → the carrier names no graph → the retriever runs the legacy
+  single-graph path). The probe now **measures** `OKF_ENABLED` and
+  `OKF_SERVER_URL` on the backend container, §3.3 and §7 carry the measured
+  values, and the record's reconsideration triggers name the posture change;
+- "the carrier carries labels only" was reworded to "the carrier names **no
+  graph**" — the labels are request-dependent, the empty carrier is the
+  posture;
+- the record now states that the **fan-out path still carries** the size gate and
+  the leg budget (§4.10), so the legacy path's lack of them is not read as a
+  general absence;
+- the record names the two constants the budget derivation uses, and the
+  fixtures' `code` arrays keep their `path:line` shape (the prose moved to a
+  sibling `probe_note`).
 
 ## Spec Change Log
 

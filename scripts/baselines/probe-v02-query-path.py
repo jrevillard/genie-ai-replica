@@ -139,6 +139,8 @@ CONTAINER_KNOBS: dict[str, list[str]] = {
         "VLLM_TRANSLATION_MODEL_ID",
         "STREAMING_TRANSLATION_ENABLED",
         "OPEA_STREAMING",
+        "OKF_ENABLED",
+        "OKF_SERVER_URL",
     ],
 }
 
@@ -268,20 +270,27 @@ def find_pods(namespace: str) -> dict[str, str]:
     """Map container name -> running pod name."""
     raw = run(["kubectl", "-n", namespace, "get", "pods", "-o", "json"])
     pods = json.loads(raw)["items"]
-    found: dict[str, tuple[str, str]] = {}
+    found: dict[str, tuple[str, str, bool]] = {}
     for pod in pods:
         if pod["status"]["phase"] != "Running":
             continue
         name = pod["metadata"]["name"]
         created = pod["metadata"].get("creationTimestamp", "")
+        ready = any(
+            condition.get("type") == "Ready" and condition.get("status") == "True"
+            for condition in pod["status"].get("conditions", [])
+        )
         for container, marker in CONTAINERS.items():
             if marker not in name:
                 continue
             # A rolling update leaves two Running pods of the same service
-            # behind; the newest one is the one the Service routes to.
-            if container not in found or created > found[container][1]:
-                found[container] = (name, created)
-    return {container: name for container, (name, _) in found.items()}
+            # behind, and the newest one is often not Ready yet. The Service
+            # routes to Ready endpoints only, so a Ready pod wins over a
+            # newer non-Ready one; among equals the newest wins.
+            current = found.get(container)
+            if current is None or (ready, created) > (current[2], current[1]):
+                found[container] = (name, created, ready)
+    return {container: name for container, (name, _, _) in found.items()}
 
 
 def pod_env(namespace: str, pod: str) -> dict[str, str]:
@@ -441,7 +450,7 @@ def main() -> int:
 
     try:
         document = measure(args.namespace)
-    except (ProbeError, OSError, ValueError) as exc:
+    except (ProbeError, OSError, ValueError, KeyError, TypeError) as exc:
         print(f"probe failed: {exc}", file=sys.stderr)
         return 2
 

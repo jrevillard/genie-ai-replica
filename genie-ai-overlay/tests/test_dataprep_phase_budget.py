@@ -3329,10 +3329,16 @@ class TestTheLateGraphWriteIsPurged:
             with _patched_graph_ingest(graph_cls), pytest.raises(HTTPException):
                 await dp.ingest_file_with_guardrail(inp, lock_file=None)
             # The writer is still parked: let it land, and let its purge run.
-            await asyncio.sleep(2.4)
-            return dp
+            # Waited for, not slept for: the writer's thread and the settle
+            # callback are the code under test, and a loaded machine delays
+            # both by an unbounded amount.
+            purged = await _wait_for(lambda: order.count("retract:False") >= 2)
+            return dp, purged
 
-        dp = _run(scenario())
+        dp, purged = _run(scenario())
+        assert purged, (
+            f"the purge never ran after the late write: {order} — the rows the writer wrote survive the retract"
+        )
         assert order[:1] == ["retract:False"], (
             f"the failure path did not retract before the late write: {order} — the retraction "
             "is what the late write resurrects"
@@ -3356,8 +3362,14 @@ class TestTheLateGraphWriteIsPurged:
         auto-retract flip the row to 'Retracted' — the last write wins, so the
         operator saw a document that looked deliberately retracted, with the
         failure only in the ingestion log. The retraction no longer flips the
-        status, and the failure status is written after it, so the row ENDS on
-        the state that names what happened.
+        status, so the row ENDS on the state that names what happened.
+
+        The failure status is written BEFORE the retraction, not after it: an
+        await inside the failure path is cancellable, and a second
+        cancellation landing inside the retraction would skip a status write
+        that came after it — leaving the document on 'Ingesting' with the
+        failure only in the ingestion log. The retraction writes no status of
+        its own, so the order does not change which state the row ends on.
         """
         from unittest.mock import AsyncMock
 
@@ -3398,7 +3410,8 @@ class TestTheLateGraphWriteIsPurged:
             return dp
 
         _run(scenario())
-        assert order[-1] == "status:Ingestion Error", (
+        statuses = [entry for entry in order if entry.startswith("status:")]
+        assert statuses == ["status:Ingesting", "status:Ingestion Error"], (
             f"the failed ingest did not end on 'Ingestion Error': {order} — the row's terminal "
             "state has to name the failure, or the operator cannot tell a failed ingest from a "
             "deliberate retraction (#1992)"
@@ -3407,9 +3420,9 @@ class TestTheLateGraphWriteIsPurged:
             f"the failed ingest ended 'Retracted': {order} — that hides the failure behind a state "
             "that reads as a deliberate retraction"
         )
-        assert order.index("retract") < order.index("status:Ingestion Error"), (
-            f"the failure status was written before the retraction: {order} — the retraction's "
-            "own status write would overwrite it"
+        assert order.index("status:Ingestion Error") < order.index("retract"), (
+            f"the failure status was written after the retraction: {order} — a cancellation "
+            "landing inside the retraction would skip it and leave the document on 'Ingesting'"
         )
 
     def test_a_re_kick_is_not_purged_by_the_previous_attempt(self, monkeypatch):
@@ -3474,13 +3487,22 @@ class TestTheLateGraphWriteIsPurged:
                 task.cancel()
                 with pytest.raises(asyncio.CancelledError):
                     await task
+                state = dp._late_write_state("f1")
+                assert state["purge"] is not None, "the killed attempt registered no late-write purge"
                 # The re-kick: the operator fixed the cause and re-ingests.
                 result = await dp.ingest_file_with_guardrail(inp, lock_file=None)
                 assert result["status"] == 200, result
+                # The supersede is what protects the re-kick: the pending
+                # purge is dropped, so the straggler that lands now cannot
+                # delete the rows this attempt is writing.
+                assert state["purge"] is None, "the re-kick did not supersede the pending purge"
                 # Now the first attempt's straggler lands.
                 release.set()
                 assert await _wait_for(lambda: "write" in order), "the straggler never landed"
-                await asyncio.sleep(0.3)
+                # Let the settle callback run (it is what would schedule the
+                # purge), so the assertion below is not made before it.
+                for _ in range(5):
+                    await asyncio.sleep(0)
             return dp
 
         dp = _run(scenario())

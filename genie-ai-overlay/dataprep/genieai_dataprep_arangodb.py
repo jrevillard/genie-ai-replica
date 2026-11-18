@@ -4105,8 +4105,16 @@ class GenieArangoDataprep(OpeaArangoDataprep):
         The purge runs when the last graph insertion thread of the file
         settles: it deletes the rows that thread wrote AFTER the rollback's
         retract, which is what resurrects a failed document's rows.
+
+        With no insertion thread in flight there is nothing a late write can
+        leave behind, so no purge is registered: an entry waiting for a purge
+        that can never fire would outlive the ingest and leak.
         """
-        self._late_write_state(file_id)["purge"] = purge
+        state = self._late_write_state(file_id)
+        if not state["writers"]:
+            self._maybe_drop_late_write_state(file_id)
+            return
+        state["purge"] = purge
 
     def _maybe_drop_late_write_state(self, file_id: str) -> None:
         """Drop the per-file late-write state once nothing is pending (#1991).
@@ -4165,19 +4173,63 @@ class GenieArangoDataprep(OpeaArangoDataprep):
         It runs on a background task, AFTER the failing ingest released the
         ingest lane — the lane must come back fast (that is what the phase
         budget is for) and the writer can be arbitrarily slow.
+
+        A failed purge leaves the failed document's rows indexed while the UI
+        says it failed, so it is retried once and, if it still fails, the
+        operator is told — in the document's own ingestion log, the channel
+        they read for this file.
         """
         try:
-            await purge()
-        except Exception as exc:  # noqa: BLE001 — a failed purge must not kill the service
-            logger.error(f"{file_id}: the late graph-write purge failed: {type(exc).__name__}: {exc}")
+            for attempt in (1, 2):
+                try:
+                    await purge()
+                    return
+                except Exception as exc:  # noqa: BLE001 — a failed purge must not kill the service
+                    logger.error(
+                        f"{file_id}: the late graph-write purge failed (attempt {attempt}/2): "
+                        f"{type(exc).__name__}: {exc}"
+                    )
+                    if attempt == 2:
+                        await self._write_ingestion_log(
+                            file_id,
+                            "ERROR",
+                            "System",
+                            "The purge of the rows an in-flight graph insertion wrote after the "
+                            "retraction failed — the document's chunks may still be indexed. Retract "
+                            "the document and re-kick it.",
+                        )
+                    else:
+                        await asyncio.sleep(2)
+        finally:
+            # The purge has run (or given up): the file owes nothing more.
+            # Nothing can write after it — the rollback cancelled the batch
+            # tasks, so no insertion can start — and every writer that could
+            # write has settled, which is what fired the purge.
+            states = getattr(self, "_late_write_states", None)
+            if states:
+                state = states.get(file_id)
+                if state is not None:
+                    state["purge"] = None
+            self._maybe_drop_late_write_state(file_id)
 
-    async def _insert_graph_documents(self, graph_docs, *, input, graph_name, file_id: str) -> None:
+    async def _purge_late_write(self, file_id: str, graph_name: str) -> None:
+        """Delete the rows a late graph write left behind for a failed file (#1991).
+
+        The purge deletes by file_id, exactly like the retract it follows, and
+        it never touches the document's status: the failure status is the
+        terminal one and a purge that clobbered it would hide the failure from
+        the operator.
+        """
+        logger.warning(f"{file_id}: purging the graph rows an in-flight insertion wrote after the retract (#1991)")
+        await self.retract_file(file_id=file_id, graph_name=graph_name, update_status=False)
+
+    async def _insert_graph_documents(self, graph_docs, *, input, graph_name) -> None:
         """Insert one batch's graph documents, tracking the write (#1991).
 
         The insertion runs in a thread, so cancellation cannot stop it (see
-        the note above). The write is tracked as an in-flight writer of
-        ``file_id``; when it settles, the purge the rollback registered
-        deletes whatever it wrote.
+        the note above). The write is tracked as an in-flight writer of the
+        file; when it settles, the purge the rollback registered deletes
+        whatever it wrote.
 
         The thread is awaited through a SHIELD: a cancelled await would
         otherwise cancel the inner future while the thread keeps running, and
@@ -4199,8 +4251,8 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                 capitalization_strategy=getattr(input, "text_capitalization_strategy", "upper"),
             )
         )
-        self._track_graph_write(file_id, inner)
-        inner.add_done_callback(lambda future: self._settle_graph_write(file_id, future))
+        self._track_graph_write(input.file_id, inner)
+        inner.add_done_callback(lambda future: self._settle_graph_write(input.file_id, future))
         await asyncio.shield(inner)
 
     async def _process_batch(self, batch_docs, current_batch_num, total_batches, input, graph_name, semaphore):
@@ -4242,7 +4294,6 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                             graph_docs,
                             input=input,
                             graph_name=graph_name,
-                            file_id=input.file_id,
                         )
                     except Exception as embed_err:
                         logger.error(
@@ -4279,7 +4330,6 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                                     retry_graph_docs,
                                     input=input,
                                     graph_name=graph_name,
-                                    file_id=input.file_id,
                                 )
                                 inserted += len(retry_graph_docs)
                         except Exception as inner_e:
@@ -4356,6 +4406,16 @@ class GenieArangoDataprep(OpeaArangoDataprep):
         # the input + repo_id on the instance so the per-stage log POST
         # helper can mirror into the bundle zip's ingestion_log (file-centric UI).
         self._current_input = input
+        # The graph this ingest writes to, and the graph every rollback of it
+        # retracts from. Resolved ONCE, here: the insertion path fell back to
+        # ARANGO_GRAPH_NAME while the rollbacks fell back to the literal
+        # "GRAPH", so a deployment that sets the variable and a request that
+        # carries no graph name would retract from a graph nothing was
+        # written to — and the late-write purge with it.
+        # BREAKING CHANGE (v1.3 → v1.5): default changed from "genie_graph" to "GRAPH".
+        # Existing deployments with graph name "genie_graph" must set ARANGO_GRAPH_NAME=genie_graph
+        # in .env to restore v1.3 behavior, otherwise retract_file() will fail.
+        graph_name = getattr(input, "graph_name", None) or os.getenv("ARANGO_GRAPH_NAME", "GRAPH")
         # #1991: this attempt SUPERSEDES any pending late-write purge for the
         # same file. The purge deletes by file_id, so a purge left over from a
         # previous failed attempt would delete the rows THIS attempt writes —
@@ -4506,10 +4566,10 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                     ]
 
                     # 5. Graph Insertion (BATCHED & CONCURRENT)
-                    # BREAKING CHANGE (v1.3 → v1.5): default changed from "genie_graph" to "GRAPH".
-                    # Existing deployments with graph name "genie_graph" must set ARANGO_GRAPH_NAME=genie_graph
-                    # in .env to restore v1.3 behavior, otherwise retract_file() will fail.
-                    graph_name = getattr(input, "graph_name", os.getenv("ARANGO_GRAPH_NAME", "GRAPH"))
+                    # The graph name was resolved at the top of this method, so
+                    # the insertion and the rollbacks retract from the SAME
+                    # graph (they used to derive it separately, and the
+                    # rollbacks' fallback did not carry the env override).
                     # OKF per-repo graph (Story 2.9.6, G5): ensure the graph's
                     # collections exist before writing (no-op for the default graph).
                     self._ensure_graph_collections(graph_name)
@@ -4805,18 +4865,10 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                     # retract. Register the purge BEFORE the rollback runs: it
                     # deletes the rows the late write left behind, once the
                     # file's writers have settled.
-                    async def _purge_late_write():
-                        logger.warning(
-                            f"{input.file_id}: purging the graph rows an in-flight insertion wrote "
-                            "after the kill retract (#1991)"
-                        )
-                        await self.retract_file(
-                            file_id=input.file_id,
-                            graph_name=getattr(input, "graph_name", "GRAPH"),
-                            update_status=False,
-                        )
-
-                    self._register_late_write_purge(input.file_id, _purge_late_write)
+                    self._register_late_write_purge(
+                        input.file_id,
+                        lambda: self._purge_late_write(input.file_id, graph_name),
+                    )
 
                     # The rollback runs uninterruptible. This handler is a chain of
                     # awaits, and an await inside a cancellation path is itself
@@ -4829,7 +4881,7 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                     interrupted = await _run_uninterruptible(
                         self._rollback_killed_ingest(
                             input.file_id,
-                            getattr(input, "graph_name", "GRAPH"),
+                            graph_name,
                             concept_id=getattr(input, "concept_id", None),
                         ),
                         timeout=_ROLLBACK_CANCEL_GRACE_SECONDS,
@@ -4854,42 +4906,35 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                     # stopped, and its write lands after the retract below —
                     # the purge deletes whatever it wrote, once the file's
                     # writers have settled.
-                    async def _purge_late_write():
-                        logger.warning(
-                            f"{input.file_id}: purging the graph rows an in-flight insertion wrote "
-                            "after the retract (#1991)"
-                        )
-                        await self.retract_file(
-                            file_id=input.file_id,
-                            graph_name=getattr(input, "graph_name", "GRAPH"),
-                            update_status=False,
-                        )
+                    self._register_late_write_purge(
+                        input.file_id,
+                        lambda: self._purge_late_write(input.file_id, graph_name),
+                    )
 
-                    self._register_late_write_purge(input.file_id, _purge_late_write)
+                    # Failure clarity (David, 2026-09-09): the callback CARRIES the
+                    # cause — the row's last_error names what actually went wrong
+                    # instead of the generic 'Ingestion Error (chunks=0)' wrapper.
+                    # It is written BEFORE the retraction, so a cancellation
+                    # landing inside the retraction cannot lose it — and the
+                    # retraction does not write a status of its own (see
+                    # below), so the row still ENDS on the failure.
+                    await self._update_doc_status(
+                        input.file_id,
+                        "Ingestion Error",
+                        concept_id=getattr(input, "concept_id", None),
+                        error=str(e)[:500],
+                    )
 
                     # Auto-retract created data. The retraction does NOT flip the
                     # status here: this path's terminal state is the FAILURE
                     # ('Ingestion Error'), and 'Retracted' would hide it from
                     # the operator — the document's rows are gone, but the
                     # document did not ingest (#1992).
-                    try:
-                        await self.retract_file(
-                            file_id=input.file_id,
-                            graph_name=getattr(input, "graph_name", "GRAPH"),
-                            update_status=False,
-                        )
-                    finally:
-                        # Failure clarity (David, 2026-09-09): the callback CARRIES the
-                        # cause — the row's last_error names what actually went wrong
-                        # instead of the generic 'Ingestion Error (chunks=0)' wrapper.
-                        # It runs after the retract so the failure is the status the
-                        # row ENDS on, and a failed retract still reports it.
-                        await self._update_doc_status(
-                            input.file_id,
-                            "Ingestion Error",
-                            concept_id=getattr(input, "concept_id", None),
-                            error=str(e)[:500],
-                        )
+                    await self.retract_file(
+                        file_id=input.file_id,
+                        graph_name=graph_name,
+                        update_status=False,
+                    )
                     await self._write_ingestion_log(
                         input.file_id, "INFO", "System", "Rollback complete. Document retracted."
                     )

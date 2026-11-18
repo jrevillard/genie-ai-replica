@@ -270,11 +270,12 @@ diagnosis needs a probe, not a one-liner.
 ### Symptom: file ends in `Ingestion Error` with labelling parse failures
 
 `Ingestion Error` is the terminal state of a failed ingest: the failure
-retracted whatever the run had written, so nothing of the document is
-indexed, and **nothing re-ingests it automatically**. Fix the cause below,
-then re-kick the document (admin dashboard → Documents table → **Ingest** on
-the selected row, or `POST /api/files/{fileId}/ingest`). The retry contract is
-documented in [Document lifecycle]({{< relref "/docs/knowledge-base/document-lifecycle" >}}) §
+retracted whatever the run had written (and a graph insertion still in flight
+at that moment is purged when it settles), and **nothing re-ingests it
+automatically**. Fix the cause below, then re-kick the document (admin
+dashboard → Documents table → **Ingest** on the selected row, or
+`POST /api/files/{fileId}/ingest`). The retry contract is documented in
+[Document lifecycle]({{< relref "/docs/knowledge-base/document-lifecycle" >}}) §
 "A failed ingest is re-kicked by hand".
 
 The labelling LLM returned malformed JSON. Almost always a model issue, not

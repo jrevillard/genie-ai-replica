@@ -3237,6 +3237,22 @@ class TestAnIncompleteBatchKeepsWhatItAnswered:
         return response
 
 
+async def _wait_for(predicate, *, timeout: float = 10.0, interval: float = 0.01) -> bool:
+    """Wait for a condition the test controls. False when the bound expires.
+
+    A bounded wait, not a fixed sleep: the event it waits on is produced by
+    the code under test (a thread settling, a purge running), and the caller
+    asserts on the outcome.
+    """
+    deadline = time.monotonic() + timeout
+    while True:
+        if predicate():
+            return True
+        if time.monotonic() >= deadline:
+            return False
+        await asyncio.sleep(interval)
+
+
 class TestTheLateGraphWriteIsPurged:
     """A graph insertion that lands AFTER the retract must not survive it (#1991).
 
@@ -3249,6 +3265,20 @@ class TestTheLateGraphWriteIsPurged:
     The purge is what closes that: the ROLLBACK registers it, and it runs
     when the file's writers have settled — after the write, not on a timer.
     """
+
+    @staticmethod
+    def _no_llm_storm(monkeypatch):
+        """Keep the shared LLM storm cool-down out of this test's phases.
+
+        ``_LLM_STORM_UNTIL`` is a module-level timestamp the retry ladder
+        pushes into the future after a transient gateway error, and EVERY
+        later LLM call waits for it (20 s by default). An earlier test in the
+        suite that trips the ladder would park this test's batch for the
+        whole cool-down: the phase budget would expire before the batch ever
+        reached the insertion, and the test would measure nothing.
+        """
+        monkeypatch.setattr(dataprep, "_LLM_STORM_UNTIL", 0.0)
+        monkeypatch.setattr(dataprep, "_LLM_STORM_STRIKES", 0)
 
     def test_a_write_that_lands_after_the_retract_is_purged(self, monkeypatch):
         """The rows a late writer wrote are deleted once it settles.
@@ -3264,11 +3294,12 @@ class TestTheLateGraphWriteIsPurged:
         monkeypatch.setenv("VLLM_API_KEY", "test-key")
         monkeypatch.setenv("VLLM_ENDPOINT", "http://localhost:8000")
         monkeypatch.setenv("VLLM_MODEL_ID", "test-model")
-        monkeypatch.setattr(dataprep, "DATAPREP_LLM_PHASE_TIMEOUT_SECONDS", 0.2)
+        monkeypatch.setattr(dataprep, "DATAPREP_LLM_PHASE_TIMEOUT_SECONDS", 0.8)
         monkeypatch.setattr(dataprep, "DATAPREP_LLM_PROGRESS_INTERVAL_SECONDS", 60.0)
         monkeypatch.setattr(dataprep, "_PHASE_CANCEL_GRACE_SECONDS", 0.2)
         monkeypatch.setattr(dataprep, "_GRAPH_WRITER_SETTLE_SECONDS", 0.05)
         monkeypatch.setattr(dataprep, "_global_batch_gate", lambda: asyncio.Semaphore(4))
+        self._no_llm_storm(monkeypatch)
 
         order = []
 
@@ -3282,7 +3313,7 @@ class TestTheLateGraphWriteIsPurged:
             def slow_insert(**_kwargs):
                 # The writer thread: it sleeps past the phase budget, so its
                 # write lands AFTER the failure path's retract.
-                time.sleep(0.6)
+                time.sleep(1.6)
                 order.append("write")
                 return None
 
@@ -3298,13 +3329,13 @@ class TestTheLateGraphWriteIsPurged:
             with _patched_graph_ingest(graph_cls), pytest.raises(HTTPException):
                 await dp.ingest_file_with_guardrail(inp, lock_file=None)
             # The writer is still parked: let it land, and let its purge run.
-            await asyncio.sleep(1.0)
+            await asyncio.sleep(2.4)
             return dp
 
         dp = _run(scenario())
         assert order[:1] == ["retract:False"], (
-            f"the failure path did not retract before the late write: {order} — the retraction is "
-            "what the late write resurrects"
+            f"the failure path did not retract before the late write: {order} — the retraction "
+            "is what the late write resurrects"
         )
         assert "write" in order, f"the writer thread never landed: {order} — the test proved nothing"
         assert order.index("write") < len(order) - 1, (
@@ -3335,6 +3366,7 @@ class TestTheLateGraphWriteIsPurged:
         monkeypatch.setenv("VLLM_API_KEY", "test-key")
         monkeypatch.setenv("VLLM_ENDPOINT", "http://localhost:8000")
         monkeypatch.setenv("VLLM_MODEL_ID", "test-model")
+        self._no_llm_storm(monkeypatch)
 
         order = []
 
@@ -3390,18 +3422,22 @@ class TestTheLateGraphWriteIsPurged:
         may then survive as duplicates of a file that is being ingested
         anyway, which is the milder of the two failures.
         """
+        import threading
         from unittest.mock import MagicMock
 
         monkeypatch.setenv("VLLM_API_KEY", "test-key")
         monkeypatch.setenv("VLLM_ENDPOINT", "http://localhost:8000")
         monkeypatch.setenv("VLLM_MODEL_ID", "test-model")
-        monkeypatch.setattr(dataprep, "DATAPREP_LLM_PHASE_TIMEOUT_SECONDS", 0.2)
+        monkeypatch.setattr(dataprep, "DATAPREP_LLM_PHASE_TIMEOUT_SECONDS", 30.0)
         monkeypatch.setattr(dataprep, "DATAPREP_LLM_PROGRESS_INTERVAL_SECONDS", 60.0)
         monkeypatch.setattr(dataprep, "_PHASE_CANCEL_GRACE_SECONDS", 0.2)
         monkeypatch.setattr(dataprep, "_GRAPH_WRITER_SETTLE_SECONDS", 0.05)
         monkeypatch.setattr(dataprep, "_global_batch_gate", lambda: asyncio.Semaphore(4))
+        self._no_llm_storm(monkeypatch)
 
         order = []
+        started = threading.Event()
+        release = threading.Event()
 
         async def scenario():
             dp = _stub_dataprep()
@@ -3412,11 +3448,14 @@ class TestTheLateGraphWriteIsPurged:
 
             def insert(**_kwargs):
                 calls["n"] += 1
-                if calls["n"] == 1:
-                    # The first attempt's writer: it lands late, after the
-                    # failure that registered the purge.
-                    time.sleep(0.6)
-                    order.append("write")
+                if calls["n"] > 1:
+                    # The re-kick's own insertion: it lands immediately.
+                    return None
+                # The first attempt's writer: it parks until the test
+                # releases it, so its write lands after the kill's retract.
+                started.set()
+                release.wait(timeout=30)
+                order.append("write")
                 return None
 
             graph_cls = MagicMock()
@@ -3429,13 +3468,19 @@ class TestTheLateGraphWriteIsPurged:
 
             inp = _graph_ingest_input()
             with _patched_graph_ingest(graph_cls):
-                with pytest.raises(Exception):  # noqa: B017 — the first attempt fails
-                    await dp.ingest_file_with_guardrail(inp, lock_file=None)
+                task = asyncio.create_task(dp.ingest_file_with_guardrail(inp, lock_file=None))
+                assert await _wait_for(started.is_set), "the writer thread never reached the insertion"
+                # The kill: the ingest is cancelled while the writer is parked.
+                task.cancel()
+                with pytest.raises(asyncio.CancelledError):
+                    await task
                 # The re-kick: the operator fixed the cause and re-ingests.
                 result = await dp.ingest_file_with_guardrail(inp, lock_file=None)
                 assert result["status"] == 200, result
-            # Let the first attempt's straggler land.
-            await asyncio.sleep(1.0)
+                # Now the first attempt's straggler lands.
+                release.set()
+                assert await _wait_for(lambda: "write" in order), "the straggler never landed"
+                await asyncio.sleep(0.3)
             return dp
 
         dp = _run(scenario())

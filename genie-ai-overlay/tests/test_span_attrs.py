@@ -61,6 +61,7 @@ OWNED_SPAN_NAMES = {
     "dataprep.ingest.background",
     "dataprep.initialize_client",
     "dataprep.kill_ingest",
+    "dataprep.late_write_purge",
     "dataprep.llm.context_batch",
     "dataprep.llm.context_chunk",
     "dataprep.llm.context_doc",

@@ -742,9 +742,11 @@ must stay under the operator's 27 GB ceiling, decision 2026-11-11; the
 |---|---|---|---|
 | Main vLLM | `ibm-granite/granite-3.1-2b-instruct` (half) | 0.28 (~12.8 GiB: ~4.3 GiB weights + ~3.8 GiB KV + overhead) | **49152** |
 | Translation vLLM | `google/gemma-3-1b-it` | 0.12 (~5.5 GiB: ~2 GiB weights + an 8192 KV window, with margin) | 8192 |
-| TEI embedding / reranker | `BAAI/bge-large-en-v1.5` / `BAAI/bge-reranker-v2-m3` | **CPU** (zero GTT) | — |
+| Reranker vLLM (Task 14) | `BAAI/bge-reranker-v2-m3` | 0.05 (~2.3 GiB claimed; spike measured 1.56 GiB touched) | 8192 |
+| TEI embedding | `BAAI/bge-large-en-v1.5` | **CPU** (zero GTT) | — |
 
-Coexistence verified: peak GTT 19.6 GiB with both instances healthy.
+Coexistence verified: peak GTT 19.6 GiB with both LLM instances healthy;
+the reranker instance adds ~1.6 GiB measured.
 
 Notes:
 
@@ -758,7 +760,18 @@ Notes:
 - Guided JSON (`response_format={"type":"json_object"}`) verified on the
   ROCm vLLM image — the labeling role keeps its model requirement.
 - The TEI ROCm image fails on gfx1151 (Instinct-only kernels); the CPU
-  image serves both bge-scale models fine on 32 cores.
+  image serves the embedding model fine on 32 cores.
+- **The reranker is NOT on TEI here.** The reranker wrapper's
+  `RERANKER_BACKEND=vllm` switch points it at a third vLLM instance
+  serving the same `BAAI/bge-reranker-v2-m3` cross-encoder on the GPU
+  (its `/v1/rerank` API is the Cohere shape; the wrapper normalizes it).
+  TEI stays the default backend on every other deployment — the NVIDIA
+  path keeps TEI on GPU, where it is the more efficient server. The
+  vLLM reranker scores a 5-doc batch in ~164 ms warm (spike-measured),
+  and moves the reranker's ~5 GiB host-RAM footprint (the CPU image's
+  buffer pools, already batch-capped) into ~2 GiB of mostly-idle GTT.
+  An upstream TEI release with RDNA-capable kernels only needs the two
+  `TEI_ROCM_*` image pins flipped back — the switch is one env var.
 
 ```bash
 # Strix Halo (values ship in env.strixhalo, used with the ROCm overlays)

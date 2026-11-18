@@ -1,11 +1,14 @@
 # Helm/Kubernetes ROCm Handoff — Strix Halo (gfx1151)
 
-Handoff note for the external helm/Kubernetes repository. The charts and
-k8s scripts live in that repository; this note carries everything measured
-on this repo's reference machine so a `values-rocm.yaml` can be authored
-there without re-running the spike. Date: 2026-11-11. Audience: the
-engineer who maintains those charts — they have NOT seen this repo's
-spike.
+Handoff note for the helm/Kubernetes deployment path. Originally written
+2026-11-11 for charts living in the external `genie-ai-deploy` repository;
+**main has since absorbed the Helm chart in-repo** (`charts/genieai-umbrella/`,
+merge !520, 2026-11-17) — the chart and its k8s scripts are HERE now, the
+per-environment overlays (Flux, values, SealedSecrets) stay in
+`genie-ai-deploy`. This note still carries everything measured on this
+repo's reference machine so a ROCm `values-*.yaml` can be authored without
+re-running the spike. Audience: the engineer who maintains those charts —
+they have NOT seen this repo's spike.
 
 ## What landed in this repo
 

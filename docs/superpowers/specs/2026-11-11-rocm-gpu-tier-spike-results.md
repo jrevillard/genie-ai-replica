@@ -150,3 +150,40 @@ granite-4.1-8b needs ~16.5 GiB. Operator chose the model swap:
   11434, 21115–21119, 24224–24288, 33306…): **NGINX_HTTP_PORT=8180,
   NGINX_HTTPS_PORT=8443, ARANGO_PORT=18529** in `env.strixhalo`.
 
+
+## SPIKE-02 (Task 14, 2026-11-18): vLLM pooling/rerank on gfx1151 — PASS
+
+Operator decision: TEI stays default everywhere; add a config-gated second
+reranker backend served by a third vLLM instance on the GPU. This spike
+verifies the prerequisite the whole task hangs on.
+
+Setup: pinned `rocm/vllm` image (the winner of SPIKE-01), container
+`vllm serve BAAI/bge-reranker-v2-m3 --gpu-memory-utilization 0.05
+--max-model-len 8192 --enforce-eager --port 8010`, devices kfd/dri,
+groups 990/44, HF token. Model download ~1.2 GB; engine ready ~90 s.
+
+| Criterion | Expected | Measured |
+|---|---|---|
+| `/health` | 200 | **200 OK** |
+| `POST /v1/rerank` shape | `{"results": [{index, score}...]}` sorted desc | **200, `results[]` sorted desc — score key is `relevance_score`** (Cohere shape; entries carry `index`, `document`, `relevance_score`) |
+| Scoring sanity | relevant doc ≫ irrelevant | **0.9997 vs 2.1e-5 vs ~0** on a 3-doc probe |
+| GTT delta | ≈ 2 GiB | **1.56 GiB** (4.71 GiB − 3.15 GiB baseline) |
+| Latency | GPU-class | **164 ms warm** (5-doc batch, incl. HTTP) |
+
+Conclusions carried into the implementation:
+
+1. **vLLM 0.29 ROCm build serves cross-encoder pooling on gfx1151** — the
+   bge-reranker-v2-m3 (XLMRoberta sequence-classification) loads and scores
+   correctly. No ROCm-specific pooling gap.
+2. **The response is the Cohere rerank contract**, not TEI's: the wrapper
+   normalizes `results[].relevance_score` → `{index, score}` and re-sorts
+   defensively; every strategy downstream is backend-agnostic.
+3. **Score semantics comparable to TEI** (sigmoid-range: 0.9997 / 2e-5
+   spread) — `RERANKING_THRESHOLD` strategies keep their calibration.
+4. TEI's strict `truncate=False` 422 contract is TEI-only; vLLM truncates
+   silently at the model window — recorded via the `reranker.backend` span
+   attribute (vocabulary 112 → 113).
+5. Sizing: `VLLM_RERANKER_GPU_UTILIZATION=0.05` + `MAX_MODEL_LEN=8192`
+   pinned in env.strixhalo — inside the 27 GB ceiling beside granite
+   (0.28) + gemma (0.12); frees the CPU reranker's ~5 GiB post-cap host-RAM
+   footprint.

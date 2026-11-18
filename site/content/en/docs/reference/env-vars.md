@@ -175,9 +175,9 @@ group GIDs and shared-host port plan. Values exactly as shipped:
 
 | Variable | env.strixhalo value | Notes |
 |---|---|---|
-| `VLLM_ROCM_IMAGE` | `rocm/vllm:rocm10.1.0_ubuntu24.04_py3.14-pytorch_2.13.0_vllm-0.29.0` | vLLM ROCm 10.1 build (0.29.x) — both vLLM instances |
+| `VLLM_ROCM_IMAGE` | `rocm/vllm:rocm10.1.0_ubuntu24.04_py3.14-pytorch_2.13.0_vllm-0.29.0` | vLLM ROCm 10.1 build (0.29.x) — both vLLM instances and the GPU reranker |
 | `TEI_ROCM_EMBEDDING_IMAGE` | `ghcr.io/huggingface/text-embeddings-inference:cpu-1.9.3` | CPU image — the ROCm TEI build fails on gfx1151 |
-| `TEI_ROCM_RERANKING_IMAGE` | `ghcr.io/huggingface/text-embeddings-inference:cpu-1.9.3` | CPU image (same) |
+| `TEI_ROCM_RERANKING_IMAGE` | `ghcr.io/huggingface/text-embeddings-inference:cpu-1.9.3` | CPU image (same) — kept for the TEI backend; the reranker wrapper defaults to the GPU vLLM instance on this profile |
 | `VLLM_LLM_MODEL_ID` | `ibm-granite/granite-3.1-2b-instruct` | Spike-sized main LLM (fits the 27 GB shared-host ceiling) |
 | `VLLM_TRANSLATION_MODEL_ID` | `google/gemma-3-1b-it` | Spike-sized translation LLM |
 | `DOCLING_DEVICE` | `cpu` | No docling ROCm support on the ROCm path |
@@ -188,6 +188,26 @@ group GIDs and shared-host port plan. Values exactly as shipped:
 | `GPU_HTTPS_PORT` | `18443` | |
 | `RENDER_GID` | `990` | Distro-specific — `getent group render` |
 | `VIDEO_GID` | `44` | Distro-specific — `getent group video` |
+| `RERANKER_BACKEND` | `vllm` | Task-14 reranker backend switch: `tei` (default everywhere; NVIDIA path) or `vllm`. On Strix Halo the TEI ROCm image cannot run on gfx1151, so the reranker is a THIRD vLLM instance on the GPU (`vllm-reranker` service, added by the ROCm overlays) and the profile flips the switch. Unknown values fall back to `tei` |
+| `RERANKER_VLLM_ENDPOINT` | `http://vllm-reranker:8000` | Where the wrapper posts `{model, query, documents}` to `/v1/rerank` (Cohere shape). Split topology: the app-stack value is the nginx-gpu `/rerank` route (`https://<gpu-node>:<port>/rerank`), rendered by SECTION 18B |
+| `RERANKER_VLLM_MODEL` | `BAAI/bge-reranker-v2-m3` | The cross-encoder the vLLM instance serves with `--served-model-name` |
+| `VLLM_RERANKER_MODEL_ID` | `BAAI/bge-reranker-v2-m3` | Same model, the `vllm-reranker` service's own knob |
+| `VLLM_RERANKER_GPU_UTILIZATION` | `0.05` | ~2.3 GiB of GTT (spike measured 1.56 GiB touched) — sits inside the 27 GB ceiling beside granite (0.28) + gemma (0.12) |
+| `VLLM_RERANKER_MAX_MODEL_LEN` | `8192` | Rerank window; vLLM truncates silently at this length (TEI's strict 422 path is backend-specific and stays on `tei`) |
+
+### Reranker backend (`RERANKER_BACKEND`)
+
+The reranker wrapper (`genie-ai-overlay/reranker/`) has two backends,
+selected per deployment by `RERANKER_BACKEND`:
+
+| Backend | Serves | Request shape | Notes |
+|---|---|---|---|
+| `tei` (default) | TEI `/rerank` | `{query, texts, truncate: false}` | NVIDIA path unchanged. Strict mode: over-long (query, doc) pairs get TEI's HTTP 422, surfaced as `RerankerInputTooLongError` → chatqna abstains |
+| `vllm` | vLLM `/v1/rerank` (Cohere-compatible shape — not an OpenAI standard; OpenAI has no rerank endpoint) | `{model, query, documents}` | ROCm/gfx1151 path: the TEI ROCm image carries Instinct-only kernels, so the reranker runs as a third vLLM instance on the GPU. The wrapper normalizes `results[].relevance_score` to its internal `{index, score}` contract; all five reranking strategies are backend-agnostic |
+
+An unknown value falls back to `tei` with a warning, mirroring the
+strategy resolver. The `reranker.backend` span attribute records which
+backend answered each request.
 
 ## Validation
 

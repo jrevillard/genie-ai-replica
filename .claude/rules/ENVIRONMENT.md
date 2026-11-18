@@ -133,7 +133,11 @@ the knobs to lower.
   models (granite-3.1-2b @ 0.28, gemma-3-1b-it @ 0.12); the 8B-class
   models need a mostly-dedicated host at 0.55/49152, and 65536 does not
   fit that 45.8 GiB GTT
-  aperture). Same budget derivation on all three.
+  aperture). Same budget derivation on all three. On the Strix Halo
+  profile the RERANKER runs as a third vLLM instance on the GPU
+  (`RERANKER_BACKEND=vllm` — the TEI ROCm image fails on gfx1151;
+  `env.strixhalo` flips the switch, `tei` stays the default everywhere
+  else).
 - The ceiling is enforced on **every** write path: the import splits (or
   rejects), the Studio editor refuses the save (409, nothing written), and
   the publish gate refuses **before** minting a version. For an over-ceiling

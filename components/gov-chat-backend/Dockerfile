@@ -43,7 +43,7 @@ RUN mkdir -p /tmp/geonames && \
     [ "${line_count}" -gt 200000 ] || \
         (echo "ERROR: cities500.txt has ${line_count} lines, expected > 200000 (download likely truncated, refusing to ship bad data)" && exit 1)
 
-FROM node:22-slim-trixie
+FROM node:22-trixie-slim
 
 # Security-patch the runtime base and keep the shipped image at current Debian
 # point-releases. The slim base drops the build toolchain (build-essential,

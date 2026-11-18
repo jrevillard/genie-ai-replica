@@ -21,7 +21,7 @@ WORKDIR /app
 RUN rm -rf /app/node_modules/shared-lib
 
 # ======== Runtime ========
-FROM node:22-slim-trixie
+FROM node:22-trixie-slim
 
 # System dependencies: ClamAV for upload scanning (+ current security updates).
 # clamdscan is a Recommends of clamav-daemon but the app's scanner preference

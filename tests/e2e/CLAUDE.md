@@ -281,8 +281,14 @@ no CI resources — it runs locally, regularly). The executed set is what the
 **local run** executes:
 
 ```bash
-BASE_URL=https://genieai-forge.local:4443 tests/e2e/run/run-local-e2e.sh
+BASE_URL=https://<your-venue-host>:4443 tests/e2e/run/run-local-e2e.sh
 ```
+
+`<your-venue-host>` is the edge hostname of the venue you run against; the
+runbook's *Venue address* section
+([`docs/e2e-tests/local-run.md`](../../docs/e2e-tests/local-run.md))
+carries the one worked example — the shared forge's address, with the
+`E2E_VENUE_IP` mapping for a runner that cannot resolve it.
 
 It provisions the venue fixtures, runs the **whole `tests/e2e/` tree**,
 prints the outcome — every skipped spec with its reason — and the

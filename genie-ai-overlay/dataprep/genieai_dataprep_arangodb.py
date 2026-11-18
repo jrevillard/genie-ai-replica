@@ -4152,6 +4152,12 @@ class GenieArangoDataprep(OpeaArangoDataprep):
             # stay), or another writer is still in flight — purging now would
             # delete the rows THAT writer is about to write, and its own
             # settle would then purge them again. Wait for the last one.
+            if not state["writers"]:
+                # Nothing left pending either: drop the entry, or one late
+                # write would leave a state row behind for the life of the
+                # process — the growth the tracker's own docstring calls a
+                # defect.
+                self._maybe_drop_late_write_state(file_id)
             return
         self._schedule_late_write_purge(file_id, purge)
 
@@ -4459,7 +4465,15 @@ class GenieArangoDataprep(OpeaArangoDataprep):
         # straggler's rows would survive — the exact defect this mechanism
         # exists to close). A purge registered by a FAILED attempt is safe to
         # run: that attempt's own rows were retracted by its rollback.
-        self._late_write_state(input.file_id).update({"purge": None})
+        #
+        # The cost of keeping them: the purge fires only when EVERY tracked
+        # writer settles, including the previous attempt's. A writer that
+        # wedges forever delays the next failure's purge past it — its rows
+        # stay indexed until the wedge resolves or the process restarts.
+        # Scoping the fire condition to one attempt's writers would need
+        # per-attempt writer sets; not worth it for a corner that needs a
+        # permanently-wedged thread AND a failed re-kick to matter.
+        self._late_write_state(input.file_id)["purge"] = None
         # The caller's EXPLICIT repo_id is the identity channel (David,
         # 2026-08-31): born-right graph names encode repo NAME+VERSION, not the
         # repo_id — a graph name is a name, not an identity field. A graph

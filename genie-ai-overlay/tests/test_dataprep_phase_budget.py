@@ -3278,15 +3278,8 @@ class TestTheLateGraphWriteIsPurged:
         import threading
         from unittest.mock import MagicMock
 
-        monkeypatch.setenv("VLLM_API_KEY", "test-key")
-        monkeypatch.setenv("VLLM_ENDPOINT", "http://localhost:8000")
-        monkeypatch.setenv("VLLM_MODEL_ID", "test-model")
-        monkeypatch.setattr(dataprep, "DATAPREP_LLM_PHASE_TIMEOUT_SECONDS", 30.0)
-        monkeypatch.setattr(dataprep, "DATAPREP_LLM_PROGRESS_INTERVAL_SECONDS", 60.0)
-        monkeypatch.setattr(dataprep, "_PHASE_CANCEL_GRACE_SECONDS", 0.2)
-        monkeypatch.setattr(dataprep, "_GRAPH_WRITER_SETTLE_SECONDS", 0.05)
-        monkeypatch.setattr(dataprep, "_global_batch_gate", lambda: asyncio.Semaphore(4))
-        self._no_llm_storm(monkeypatch)
+        self._cool_llm_env(monkeypatch)
+        self._fast_phases(monkeypatch, phase_timeout=30.0)
 
         order = []
         started = threading.Event()
@@ -3337,8 +3330,11 @@ class TestTheLateGraphWriteIsPurged:
                 # The re-kick, in the purge's retry window.
                 result = await dp.ingest_file_with_guardrail(inp, lock_file=None)
                 assert result["status"] == 200, result
-                # Let the retry's sleep elapse.
-                await asyncio.sleep(2.5)
+                # Wait for the purge to finish: the retry's sleep is a real
+                # 2 s, and the background task is the observable event. A
+                # fixed sleep longer than the delay would be a race the
+                # suite does not need to take.
+                assert await _wait_for(lambda: not dataprep._BACKGROUND_TASKS), f"the purge never finished: {order}"
             return dp
 
         _run(scenario())
@@ -3354,16 +3350,13 @@ class TestTheLateGraphWriteIsPurged:
         WITHOUT an insertion thread in flight has no late write to purge: the
         retraction already removed everything the run wrote. Registering a
         purge that can never fire would leave an entry behind for every such
-        failure — and the entry holds the ingest request.
+        failure — and the entry holds the file's pending writers.
         """
         from unittest.mock import AsyncMock
 
         from fastapi import HTTPException
 
-        monkeypatch.setenv("VLLM_API_KEY", "test-key")
-        monkeypatch.setenv("VLLM_ENDPOINT", "http://localhost:8000")
-        monkeypatch.setenv("VLLM_MODEL_ID", "test-model")
-        self._no_llm_storm(monkeypatch)
+        self._cool_llm_env(monkeypatch)
 
         async def scenario():
             dp = _stub_dataprep()
@@ -3380,12 +3373,17 @@ class TestTheLateGraphWriteIsPurged:
             inp = _graph_ingest_input()
             with _patched_graph_ingest(), pytest.raises(HTTPException):
                 await dp.ingest_file_with_guardrail(inp, lock_file=None)
-            return dp
+            return dp, order
 
-        dp = _run(scenario())
-        # The RAW map: the accessor creates the entry it reads, so asking it
-        # for a file's state would bring back the very entry this test claims
-        # is gone.
+        dp, order = _run(scenario())
+        # What the operator sees: the failure retracted the file ONCE. A
+        # purge that fired anyway would delete the file's rows a second
+        # time — a second cascade against a document nothing else is
+        # writing to.
+        assert order.count("retract") == 1, order
+        # And the tracker kept nothing for it: the RAW map, because the
+        # accessor creates the entry it reads, so asking it for a file's
+        # state would bring back the very entry this test claims is gone.
         states = getattr(dp, "_late_write_states", None) or {}
         assert "f1" not in states, f"the tracking state was left behind for a file with no writer in flight: {states}"
 
@@ -3401,15 +3399,8 @@ class TestTheLateGraphWriteIsPurged:
 
         from fastapi import HTTPException
 
-        monkeypatch.setenv("VLLM_API_KEY", "test-key")
-        monkeypatch.setenv("VLLM_ENDPOINT", "http://localhost:8000")
-        monkeypatch.setenv("VLLM_MODEL_ID", "test-model")
-        monkeypatch.setattr(dataprep, "DATAPREP_LLM_PHASE_TIMEOUT_SECONDS", 0.8)
-        monkeypatch.setattr(dataprep, "DATAPREP_LLM_PROGRESS_INTERVAL_SECONDS", 60.0)
-        monkeypatch.setattr(dataprep, "_PHASE_CANCEL_GRACE_SECONDS", 0.2)
-        monkeypatch.setattr(dataprep, "_GRAPH_WRITER_SETTLE_SECONDS", 0.05)
-        monkeypatch.setattr(dataprep, "_global_batch_gate", lambda: asyncio.Semaphore(4))
-        self._no_llm_storm(monkeypatch)
+        self._cool_llm_env(monkeypatch)
+        self._fast_phases(monkeypatch)
 
         order = []
 
@@ -3468,16 +3459,9 @@ class TestTheLateGraphWriteIsPurged:
 
         from fastapi import HTTPException
 
-        monkeypatch.setenv("VLLM_API_KEY", "test-key")
-        monkeypatch.setenv("VLLM_ENDPOINT", "http://localhost:8000")
-        monkeypatch.setenv("VLLM_MODEL_ID", "test-model")
+        self._cool_llm_env(monkeypatch)
         monkeypatch.setenv("ARANGO_GRAPH_NAME", "env-graph")
-        monkeypatch.setattr(dataprep, "DATAPREP_LLM_PHASE_TIMEOUT_SECONDS", 0.8)
-        monkeypatch.setattr(dataprep, "DATAPREP_LLM_PROGRESS_INTERVAL_SECONDS", 60.0)
-        monkeypatch.setattr(dataprep, "_PHASE_CANCEL_GRACE_SECONDS", 0.2)
-        monkeypatch.setattr(dataprep, "_GRAPH_WRITER_SETTLE_SECONDS", 0.05)
-        monkeypatch.setattr(dataprep, "_global_batch_gate", lambda: asyncio.Semaphore(4))
-        self._no_llm_storm(monkeypatch)
+        self._fast_phases(monkeypatch)
 
         seen = {}
 
@@ -3525,8 +3509,8 @@ class TestTheLateGraphWriteIsPurged:
         )
 
     @staticmethod
-    def _no_llm_storm(monkeypatch):
-        """Keep the shared LLM storm cool-down out of this test's phases.
+    def _cool_llm_env(monkeypatch):
+        """The LLM environment every ingest in this class runs with.
 
         ``_LLM_STORM_UNTIL`` is a module-level timestamp the retry ladder
         pushes into the future after a transient gateway error, and EVERY
@@ -3535,8 +3519,24 @@ class TestTheLateGraphWriteIsPurged:
         whole cool-down: the phase budget would expire before the batch ever
         reached the insertion, and the test would measure nothing.
         """
+        monkeypatch.setenv("VLLM_API_KEY", "test-key")
+        monkeypatch.setenv("VLLM_ENDPOINT", "http://localhost:8000")
+        monkeypatch.setenv("VLLM_MODEL_ID", "test-model")
         monkeypatch.setattr(dataprep, "_LLM_STORM_UNTIL", 0.0)
         monkeypatch.setattr(dataprep, "_LLM_STORM_STRIKES", 0)
+
+    @staticmethod
+    def _fast_phases(monkeypatch, *, phase_timeout=0.8):
+        """The phase-budget knobs that make a graph phase fail fast.
+
+        Only the tests that drive the graph phase need them; the ones that
+        fail before it keep the module's own values.
+        """
+        monkeypatch.setattr(dataprep, "DATAPREP_LLM_PHASE_TIMEOUT_SECONDS", phase_timeout)
+        monkeypatch.setattr(dataprep, "DATAPREP_LLM_PROGRESS_INTERVAL_SECONDS", 60.0)
+        monkeypatch.setattr(dataprep, "_PHASE_CANCEL_GRACE_SECONDS", 0.2)
+        monkeypatch.setattr(dataprep, "_GRAPH_WRITER_SETTLE_SECONDS", 0.05)
+        monkeypatch.setattr(dataprep, "_global_batch_gate", lambda: asyncio.Semaphore(4))
 
     def test_a_write_that_lands_after_the_retract_is_purged(self, monkeypatch):
         """The rows a late writer wrote are deleted once it settles.
@@ -3549,15 +3549,8 @@ class TestTheLateGraphWriteIsPurged:
 
         from fastapi import HTTPException
 
-        monkeypatch.setenv("VLLM_API_KEY", "test-key")
-        monkeypatch.setenv("VLLM_ENDPOINT", "http://localhost:8000")
-        monkeypatch.setenv("VLLM_MODEL_ID", "test-model")
-        monkeypatch.setattr(dataprep, "DATAPREP_LLM_PHASE_TIMEOUT_SECONDS", 0.8)
-        monkeypatch.setattr(dataprep, "DATAPREP_LLM_PROGRESS_INTERVAL_SECONDS", 60.0)
-        monkeypatch.setattr(dataprep, "_PHASE_CANCEL_GRACE_SECONDS", 0.2)
-        monkeypatch.setattr(dataprep, "_GRAPH_WRITER_SETTLE_SECONDS", 0.05)
-        monkeypatch.setattr(dataprep, "_global_batch_gate", lambda: asyncio.Semaphore(4))
-        self._no_llm_storm(monkeypatch)
+        self._cool_llm_env(monkeypatch)
+        self._fast_phases(monkeypatch)
 
         order = []
 
@@ -3633,10 +3626,7 @@ class TestTheLateGraphWriteIsPurged:
 
         from fastapi import HTTPException
 
-        monkeypatch.setenv("VLLM_API_KEY", "test-key")
-        monkeypatch.setenv("VLLM_ENDPOINT", "http://localhost:8000")
-        monkeypatch.setenv("VLLM_MODEL_ID", "test-model")
-        self._no_llm_storm(monkeypatch)
+        self._cool_llm_env(monkeypatch)
 
         order = []
 
@@ -3696,15 +3686,8 @@ class TestTheLateGraphWriteIsPurged:
         import threading
         from unittest.mock import MagicMock
 
-        monkeypatch.setenv("VLLM_API_KEY", "test-key")
-        monkeypatch.setenv("VLLM_ENDPOINT", "http://localhost:8000")
-        monkeypatch.setenv("VLLM_MODEL_ID", "test-model")
-        monkeypatch.setattr(dataprep, "DATAPREP_LLM_PHASE_TIMEOUT_SECONDS", 30.0)
-        monkeypatch.setattr(dataprep, "DATAPREP_LLM_PROGRESS_INTERVAL_SECONDS", 60.0)
-        monkeypatch.setattr(dataprep, "_PHASE_CANCEL_GRACE_SECONDS", 0.2)
-        monkeypatch.setattr(dataprep, "_GRAPH_WRITER_SETTLE_SECONDS", 0.05)
-        monkeypatch.setattr(dataprep, "_global_batch_gate", lambda: asyncio.Semaphore(4))
-        self._no_llm_storm(monkeypatch)
+        self._cool_llm_env(monkeypatch)
+        self._fast_phases(monkeypatch, phase_timeout=30.0)
 
         order = []
         started = threading.Event()
@@ -3757,10 +3740,11 @@ class TestTheLateGraphWriteIsPurged:
                 # Now the first attempt's straggler lands.
                 release.set()
                 assert await _wait_for(lambda: "write" in order), "the straggler never landed"
-                # Let the settle callback run (it is what would schedule the
-                # purge), so the assertion below is not made before it.
-                for _ in range(5):
-                    await asyncio.sleep(0)
+                # The tracker must not keep a state row for the file once
+                # nothing is pending: the last settle drops the entry.
+                assert await _wait_for(lambda: "f1" not in (getattr(dp, "_late_write_states", None) or {})), (
+                    "the tracker kept a state row for a file with nothing pending"
+                )
             return dp
 
         dp = _run(scenario())
@@ -3782,10 +3766,7 @@ class TestTheLateGraphWriteIsPurged:
 
         from fastapi import HTTPException
 
-        monkeypatch.setenv("VLLM_API_KEY", "test-key")
-        monkeypatch.setenv("VLLM_ENDPOINT", "http://localhost:8000")
-        monkeypatch.setenv("VLLM_MODEL_ID", "test-model")
-        self._no_llm_storm(monkeypatch)
+        self._cool_llm_env(monkeypatch)
 
         async def scenario():
             dp = _stub_dataprep()
@@ -3821,10 +3802,7 @@ class TestTheLateGraphWriteIsPurged:
 
         from fastapi import HTTPException
 
-        monkeypatch.setenv("VLLM_API_KEY", "test-key")
-        monkeypatch.setenv("VLLM_ENDPOINT", "http://localhost:8000")
-        monkeypatch.setenv("VLLM_MODEL_ID", "test-model")
-        self._no_llm_storm(monkeypatch)
+        self._cool_llm_env(monkeypatch)
 
         async def scenario():
             dp = _stub_dataprep()
@@ -3857,15 +3835,8 @@ class TestTheLateGraphWriteIsPurged:
 
         from fastapi import HTTPException
 
-        monkeypatch.setenv("VLLM_API_KEY", "test-key")
-        monkeypatch.setenv("VLLM_ENDPOINT", "http://localhost:8000")
-        monkeypatch.setenv("VLLM_MODEL_ID", "test-model")
-        monkeypatch.setattr(dataprep, "DATAPREP_LLM_PHASE_TIMEOUT_SECONDS", 0.8)
-        monkeypatch.setattr(dataprep, "DATAPREP_LLM_PROGRESS_INTERVAL_SECONDS", 60.0)
-        monkeypatch.setattr(dataprep, "_PHASE_CANCEL_GRACE_SECONDS", 0.2)
-        monkeypatch.setattr(dataprep, "_GRAPH_WRITER_SETTLE_SECONDS", 0.05)
-        monkeypatch.setattr(dataprep, "_global_batch_gate", lambda: asyncio.Semaphore(4))
-        self._no_llm_storm(monkeypatch)
+        self._cool_llm_env(monkeypatch)
+        self._fast_phases(monkeypatch)
 
         order = []
 

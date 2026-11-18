@@ -272,7 +272,8 @@ diagnosis needs a probe, not a one-liner.
 
 `Ingestion Error` is the terminal state of a failed ingest: the failure
 retracted whatever the run had written (and a graph insertion still in flight
-at that moment is purged when it settles), and **nothing re-ingests it
+at that moment is purged when it settles, as long as the service does not
+restart first — the purge is held in memory), and **nothing re-ingests it
 automatically**. Fix the cause below, then re-kick the document (admin
 dashboard → Documents table → **Ingest** on the selected row, or
 `POST /api/files/{fileId}/ingest`). The retry contract is documented in

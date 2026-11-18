@@ -1553,8 +1553,9 @@ async def _run_uninterruptible(coro, *, timeout: float, label: str) -> bool:
 _ROLLBACK_CANCEL_GRACE_SECONDS = 60.0
 
 # How many times the late-write purge may try before it reports the failure
-# to the operator (the announcement and the failure row both cite this
-# total, so the count lives here — three literals that must move together).
+# to the operator. The announcement and the service-log failure line both
+# cite this total, so the count lives here — literals that must move
+# together.
 _LATE_WRITE_PURGE_ATTEMPTS = 2
 
 
@@ -4204,7 +4205,7 @@ class GenieArangoDataprep(OpeaArangoDataprep):
         own: without it these lines are the only ones of the mechanism that
         cannot be correlated with the ingest that produced them.
         """
-        with background_span("dataprep.late_write_purge", attributes={"dataprep.file_id": file_id}):
+        with background_span("dataprep.late_write_purge", attributes={"dataprep.file_id": file_id}) as span:
             try:
                 for attempt in range(1, _LATE_WRITE_PURGE_ATTEMPTS + 1):
                     # Checked before EVERY attempt: a retry runs seconds later, and
@@ -4224,19 +4225,24 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                             f"{file_id}: the late graph-write purge stands down — a new ingest of the "
                             "document started, and this purge deletes by document id (#1991)"
                         )
+                        span.set_attribute("dataprep.purge_result", "stood_down")
                         # The operator reads the document's log, and this is
                         # the one outcome that changes its data: whatever the
                         # late write lands after the new ingest's retract stays
                         # as duplicate rows. Say so where they will look.
-                        await self._write_ingestion_log(
-                            file_id,
-                            "INFO",
-                            "System",
-                            "The purge of the rows a previous ingest's late write left behind stands "
-                            "down — a new ingest of this document started, and the purge deletes by "
-                            "document id. If that write lands after this ingest's cleanup, its rows "
-                            "stay as duplicates (see the document-lifecycle doc).",
-                        )
+                        try:
+                            await self._write_ingestion_log(
+                                file_id,
+                                "INFO",
+                                "System",
+                                "The purge of the rows a previous ingest's late write left behind stands "
+                                "down — a new ingest of this document started, and the purge deletes by "
+                                "document id. If that write lands after this ingest's cleanup, its rows "
+                                "stay as duplicates; retract the document and ingest it again if the "
+                                "chunk count looks wrong.",
+                            )
+                        except Exception as exc:  # noqa: BLE001 — a log write must not kill the purge
+                            logger.error(f"{file_id}: the purge's stand-down could not be logged: {exc!r}")
                         return
                     try:
                         # Announced here, per attempt: the cascade writes its
@@ -4253,6 +4259,7 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                             "ingest failed or was killed, and its write landed after the cleanup.",
                         )
                         await purge()
+                        span.set_attribute("dataprep.purge_result", "purged")
                         return
                     except Exception as exc:  # noqa: BLE001 — a failed purge must not kill the service
                         logger.error(
@@ -4261,6 +4268,7 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                             f"{type(exc).__name__}: {exc}"
                         )
                         if attempt == _LATE_WRITE_PURGE_ATTEMPTS:
+                            span.set_attribute("dataprep.purge_result", "failed")
                             await self._write_ingestion_log(
                                 file_id,
                                 "ERROR",

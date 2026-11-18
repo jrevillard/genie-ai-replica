@@ -176,8 +176,10 @@ class TestVocabularyShape:
         # an over-rejecting reranker); 109 -> 111 for llm.endpoint +
         # token.count on the /tokenize counting span; 111 -> 112 for
         # rag.translation.query_status (issue #1026 - the query-translation
-        # fallback the embedder receives).
-        assert len(ATTRIBUTE_NAMES) == 112
+        # fallback the embedder receives); 112 -> 113 for
+        # dataprep.purge_result (the late-write purge's outcome: purged /
+        # failed / stood_down).
+        assert len(ATTRIBUTE_NAMES) == 113
 
 
 class TestLegacyAttributeNames:
@@ -274,8 +276,10 @@ class TestLegacyAttributeNames:
         # + 10 okf.fanout.* + 15 rag.route.* routing attributes from the okf
         # line; 108 -> 109 with answer.abstention_reason (main, !1121);
         # 109 -> 111 with the counting-span keys (llm.endpoint, token.count);
-        # 111 -> 112 with rag.translation.query_status (issue #1026).
-        assert len(ATTRIBUTE_NAMES) == 112
+        # 111 -> 112 with rag.translation.query_status (issue #1026);
+        # 112 -> 113 with dataprep.purge_result (the late-write purge's
+        # outcome).
+        assert len(ATTRIBUTE_NAMES) == 113
         assert len(LEGACY_ATTRIBUTE_NAMES) == 21
 
 

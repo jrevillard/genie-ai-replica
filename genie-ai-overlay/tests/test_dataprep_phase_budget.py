@@ -3266,7 +3266,7 @@ class TestTheLateGraphWriteIsPurged:
     when the file's writers have settled — after the write, not on a timer.
     """
 
-    def test_a_purge_that_retries_does_not_delete_a_re_kicks_rows(self, monkeypatch):
+    def test_a_purge_that_retries_does_not_delete_a_re_kicks_rows(self, monkeypatch, captured_spans):
         """A purge that retries must stand down when a re-kick started.
 
         The purge deletes by document id, so a purge that runs after a new
@@ -3361,6 +3361,11 @@ class TestTheLateGraphWriteIsPurged:
             str(call.args[3]) for call in dp._write_ingestion_log.call_args_list if "stands down" in str(call.args[3])
         ]
         assert len(standdowns) == 1, f"the stand-down was not reported in the document's own log: {standdowns}"
+        # And the span says so too: the stand-down is the outcome, and the
+        # purge that never ran left the straggler's rows behind.
+        spanned = captured_spans("dataprep.late_write_purge")
+        assert spanned, "the purge ran without a span"
+        assert spanned[0].attributes.get("dataprep.purge_result") == "stood_down", spanned[0].attributes
 
     def test_a_failure_with_no_writer_in_flight_registers_no_purge(self, monkeypatch):
         """Nothing to purge means nothing registered.
@@ -3474,9 +3479,6 @@ class TestTheLateGraphWriteIsPurged:
         ]
         assert len(announcements) == 2, f"the purge did not announce both attempts: {announcements}"
         assert "(attempt 1/2)" in announcements[0], announcements
-        # And the stand-down itself is written where the operator reads: the
-        # straggler's rows may survive as duplicates, and this document's log
-        # is the only place that says so.
         assert "(attempt 2/2)" in announcements[1], announcements
 
     def test_the_rollback_retracts_from_the_graph_the_insertion_wrote_to(self, monkeypatch):
@@ -3741,14 +3743,18 @@ class TestTheLateGraphWriteIsPurged:
             purged = await _wait_for(lambda: order.count("retract") >= 2)
             # The span closes when the purge's body ends — after its last
             # retraction, so wait for it rather than assume it.
-            spanned = await _wait_for(lambda: captured_spans("dataprep.late_write_purge"))
-            return dp, purged, spanned
+            await _wait_for(lambda: captured_spans("dataprep.late_write_purge"))
+            return dp, purged, captured_spans("dataprep.late_write_purge")
 
         dp, purged, spanned = _run(scenario())
         assert purged, f"the purge never ran: {order}"
         assert spanned, (
             "the purge ran without a span — its log lines cannot be correlated with the ingest that produced them"
         )
+        # The span says what the purge DID: a failed purge and a successful
+        # one look the same otherwise (background_span sets no ERROR status,
+        # and the purge swallows the exception it retries).
+        assert spanned[0].attributes.get("dataprep.purge_result") == "purged", spanned[0].attributes
 
     def test_the_failed_ingest_ends_on_the_failure_status(self, monkeypatch):
         """A failed ingest ends 'Ingestion Error', not 'Retracted' (#1992).

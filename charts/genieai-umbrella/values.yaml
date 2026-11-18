@@ -1139,6 +1139,11 @@ okf:
     # opea-style env override map — rows here win over the template's
     # derived rows of the same name.
     env: {}
+    # The image this service runs. The tag is the chart's global
+    # `imageTag` (one line to bump the whole stack); a literal tag here
+    # pins this one image, and it is honoured exactly — it never receives
+    # the variant suffix, because this image has no slim build.
+    image: { repository: genie-ai-okf-server, tag: "" }   # "" = the global imageTag (a literal tag here pins this one image)
   retrievalConfig:
     ttlMs: "30000"
     timeoutMs: "3000"
@@ -1153,10 +1158,20 @@ okf:
   # crawl pipeline, in megabytes.
   bundleMaxMb: "100"
   pii:
+    # The image this service runs. The tag is the chart's global
+    # `imageTag` (one line to bump the whole stack); a literal tag here
+    # pins this one image, and it is honoured exactly — it never receives
+    # the variant suffix, because this image has no slim build.
+    image: { repository: genie-ai-pii-service, tag: "" }   # "" = the global imageTag (a literal tag here pins this one image)
     webConcurrency: "4"       # PII_WEB_CONCURRENCY
     regionMaxChars: "50000"   # PII_REGION_MAX_CHARS
     env: {}
   ragas:
+    # The image this service runs. The tag is the chart's global
+    # `imageTag` (one line to bump the whole stack); a literal tag here
+    # pins this one image, and it is honoured exactly — it never receives
+    # the variant suffix, because this image has no slim build.
+    image: { repository: genie-ai-ragas-service, tag: "" }   # "" = the global imageTag (a literal tag here pins this one image)
     env: {}
   # The RAGAS judge cache PVC size — the KG builds that the cache spares
   # cost ~50 minutes on a cold cache.
@@ -1177,11 +1192,16 @@ opea:
   #             the document conversion to a remote docling-serve, so it
   #             needs `opea.gpu.paths.docling` set.
   #
-  # It applies to those THREE images and to nothing else: the other OPEA
-  # images have no model stack, and `genie-ai-embedding` is an upstream
-  # binary this project does not build (a slim build of it cannot
-  # exist). The set of images it applies to is a BUILD fact, not a
-  # values knob — an operator cannot widen it by mistake.
+  # It applies to those THREE images and to nothing else: the CI publishes
+  # a slim build for exactly those three, so there is no slim variant of
+  # the others to select. The set of images it applies to is a BUILD fact,
+  # not a values knob — an operator cannot widen it by mistake.
+  #
+  # The suffix COMPOSES onto the version tag: the version it is applied to
+  # must be a tag the CI publishes a slim build of (the branch tag, a
+  # release tag). It does not compose the immutable sha-pinned form
+  # (:main-slim-<sha>) — the CI publishes that one with the suffix BEFORE
+  # the sha — so pin it by name in the per-service image tag.
   imageTagSuffix: ""
   enabled: false
   gpu:
@@ -1220,6 +1240,11 @@ opea:
       # serves docling-serve at that path.
       docling: ""
   chatqna:
+    # The image this service runs. The tag is the chart's global
+    # `imageTag` (one line to bump the whole stack); a literal tag here
+    # pins this one image, and it is honoured exactly — it never receives
+    # the variant suffix, because this image has no slim build.
+    image: { repository: genie-ai-chatqna-server, tag: "" }   # "" = the global imageTag (a literal tag here pins this one image)
     # CHATQNA_*, RERANKING_*, MULTI_TURN_* — every knob the chatqna
     # template reads, declared with its template default so an operator
     # can discover the tuning surface without reading template source
@@ -1459,6 +1484,11 @@ opea:
       # The component name the reranker reports in its spans.
       RERANK_COMPONENT_NAME: GENIE_TEI_RERANKING
   embedding:
+    # The image this service runs. The tag is the chart's global
+    # `imageTag` (one line to bump the whole stack); a literal tag here
+    # pins this one image, and it is honoured exactly — it never receives
+    # the variant suffix, because this image has no slim build.
+    image: { repository: genie-ai-embedding, tag: "" }   # "" = the global imageTag (a literal tag here pins this one image)
     modelId: BAAI/bge-large-en-v1.5
     # Operator-facing environment map, like the other orchestrators'
     # (`opea.chatqna.env` etc). A MAP so an overlay that sets one

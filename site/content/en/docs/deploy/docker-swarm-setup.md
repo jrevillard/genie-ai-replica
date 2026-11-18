@@ -272,11 +272,11 @@ range. See [Slim Image Variants](/docs/deploy/slim-images/).
 GENIE_AI_OPEA_IMAGE_TAG_SUFFIX=-slim
 ```
 
-It applies to those three images and to nothing else — the other images
-have no model stack, and the upstream OPEA images (embedding, textgen,
-translation) are not built here at all. The slim dataprep delegates the
-document conversion to a remote docling-serve, so it needs
-`DOCLING_ENDPOINT` set (see **Section 14**).
+It applies to those three images and to nothing else: the CI publishes a
+slim build for exactly those three, so there is no slim variant of the
+others to select. The slim dataprep delegates the document conversion to a
+remote docling-serve, so it needs `DOCLING_ENDPOINT` set (see **Section
+14**).
 
 ### 5e. Custom or air-gapped registries
 

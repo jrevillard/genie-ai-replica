@@ -538,11 +538,17 @@ ansible-playbook -i inventory/itu_rtx_test.ini deploy.yml --vault-id itu_rtx_tes
   --extra-vars '{"repo_branch":"main","genie_ai_image_tag":"main","genie_ai_opea_image_tag_suffix":"-slim"}'
 ```
 
-It applies to those three images and to nothing else — the other images have
-no model stack, and the upstream OPEA images (embedding, textgen,
-translation) are not built here at all. The slim dataprep delegates the
-document conversion to a remote docling-serve, so it needs `DOCLING_ENDPOINT`
-set (see the environment file's Section 14).
+It applies to those three images and to nothing else: the CI publishes a
+slim build for exactly those three, so there is no slim variant of the
+others to select. The slim dataprep delegates the document conversion to a
+remote docling-serve, so it needs `DOCLING_ENDPOINT` set (see the
+environment file's Section 14).
+
+The suffix COMPOSES onto the version tag: the version it is applied to must
+be a tag the CI publishes a slim build of (the branch tag, a release tag).
+It does not compose the immutable sha-pinned form (`:main-slim-<sha>`) — the
+CI publishes that one with the suffix BEFORE the sha — so pin it by name in
+the per-image override.
 
 - **Keys** must be image names from `deploy/ansible/tasks/deploy-shared-facts.yml`
   (`genieai_images`). The deploy fails with `Validate image_tag_overrides keys

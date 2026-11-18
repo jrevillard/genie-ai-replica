@@ -23,9 +23,14 @@
     #             go to an external GPU API. The slim dataprep delegates
     #             the document conversion to a remote docling-serve, so it
     #             needs DOCLING_ENDPOINT set.
-    # It applies to those THREE images and to nothing else: the other
-    # images have no model stack, and the upstream OPEA images (embedding,
-    # textgen, translation) are not built here at all.
+    # It applies to those THREE images and to nothing else: the CI
+    # publishes a slim build for exactly those three, so there is no slim
+    # variant of the others to select.
+    # The suffix COMPOSES onto the version tag: the version it is applied
+    # to must be a tag the CI publishes a slim build of (the branch tag, a
+    # release tag). It does not compose the immutable sha-pinned form
+    # (:main-slim-<sha>) — the CI publishes that one with the suffix
+    # BEFORE the sha — so pin it by name in the per-image override.
     genie_ai_opea_image_tag_suffix: "{{ genie_ai_opea_image_tag_suffix | default('') }}"
     # Per-image tag overrides (optional): {genie-ai-frontend: v1.2.3} pins
     #    one image to a specific version; others use genie_ai_image_tag.

@@ -115,6 +115,13 @@ per-image pin (`opea.reranker.image.tag` in Kubernetes,
 `GENIE_AI_RERANKER_IMAGE_TAG` in Compose) names the EXACT tag and never
 gets the suffix.
 
+The knob COMPOSES `<version><suffix>` — the version it is applied to must be
+a tag the CI publishes a slim build of: the branch tag (`main`) or a release
+tag (`v2.1.0`). It does not compose the immutable sha-pinned form
+(`:main-slim-<sha>`), because the CI publishes that one with the suffix
+BEFORE the sha — so pin it by name (`GENIE_AI_RERANKER_IMAGE_TAG=main-slim-<sha>`),
+which the per-image pin does verbatim.
+
 Pinning a **digest** works the same way — the digest is of the slim
 image's manifest, not the default one.
 

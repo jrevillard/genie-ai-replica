@@ -55,10 +55,10 @@ value the operator could set wrong would break the pull of an image that
 has no slim build. The operator's knob is the CHOICE (`opea.imageTagSuffix`),
 not the membership.
 
-The other OPEA images are excluded on purpose: chatqna, okf-server,
-pii-service and ragas-service have no model stack, and embedding is an
-upstream binary this project does not build (a slim build of it cannot
-exist).
+The other OPEA images are excluded on purpose: the CI publishes a slim
+build for exactly these three, so there is no slim variant of the others
+to select (chatqna, okf-server, pii-service, ragas-service, embedding,
+textgen, translation).
 
 A per-service pin (opea.<svc>.image.tag) names the EXACT tag and is
 therefore never given the suffix — the same rule the compose path follows.

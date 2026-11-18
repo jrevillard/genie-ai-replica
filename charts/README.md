@@ -105,9 +105,10 @@ job.
 - PodDisruptionBudget: only emitted when `replicas >= 2`.
 - **One image tag for the whole stack.** `imageTag` (root) is the VERSION every GENIE.AI image
   carries — a release tag `vX.Y.Z` or a branch tag like `main`. The per-service
-  `services.<svc>.image.tag` (and `opea.<svc>.image.tag`) pin ONE image and win over it; they
-  ship EMPTY, not `main`, so the global can apply. `global.imageTag` (the Helm `global.*`
-  convention) wins over the root key, like `global.imageRegistry` does.
+  `services.<svc>.image.tag` (and `opea.<svc>.image.tag`, `okf.<svc>.image.tag` for the OKF
+  trio) pin ONE image and win over it; they ship EMPTY, not `main`, so the global can apply.
+  `global.imageTag` (the Helm `global.*` convention) wins over the root key, like
+  `global.imageRegistry` does.
 - **The image variant is a knob, not a tag edit.** `opea.imageTagSuffix` appends a suffix to the
   tag of the model-serving images — the reranker, the retriever and the dataprep. `""` is the
   default build (the one that ships the model stack); `-slim` is the slim build (no PyTorch, no

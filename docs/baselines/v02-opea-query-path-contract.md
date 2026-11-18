@@ -350,21 +350,26 @@ file.
   found: the leg continues **without** graph enrichment.
 
   The **size gate** (`max_links`, 300000) and the leg sub-budget are **fan-out
-  per-leg contracts** (`retriever:1996-2005`): the legacy single-graph path runs
+  per-leg contracts** (`retriever:1996-2011`, the gate itself at
+  `retriever:1452-1476`): the legacy single-graph path runs
   with `legacy_unbounded=True` (`retriever:2307`), so it has **neither** gate nor
   time-box.
 
   **The deployed venue runs that legacy path.** The venue serves `OKF_ENABLED=0`
   (§3.3), so the BFF's retrieval-config client short-circuits to the legacy
   default and **never dials the okf-server**
-  (`components/gov-chat-backend/services/retrieval-config-client.js:113`, `:450`);
-  the `engaged` flag the BFF reads is therefore absent
-  (`components/gov-chat-backend/services/query-service.js:691-694`); the carrier
-  names **no graph**, and the fan-out does not engage
-  (`retriever:2317-2342`). The deployed traversal is therefore **not**
-  size-gated and **not** time-boxed. The **fan-out path still carries both**
-  (§4.10): the port must preserve the difference between the two paths, not
-  generalize the legacy one.
+  (`components/gov-chat-backend/services/retrieval-config-client.js:113`, `:450`).
+  That default carries `engaged: false`
+  (`components/gov-chat-backend/services/retrieval-config-client.js:134`); the
+  BFF reads **the server's `engaged` flag, read and never re-derived**
+  (`components/gov-chat-backend/services/query-service.js:691-694`), so it is
+  false — and the carrier names **no graph** because the posture's `mode` is
+  `legacy`, the branch that adds nothing to the payload
+  (`components/gov-chat-backend/services/query-service.js:803-808`). The fan-out
+  does not engage (`retriever:2317-2342`). The deployed traversal is therefore
+  **not** size-gated and **not** time-boxed. The **fan-out path still carries
+  both** (§4.10): the port must preserve the difference between the two paths,
+  not generalize the legacy one.
 * **Code** — `genie-ai-overlay/retriever/genieai_retriever_arangodb.py:1981-2131`,
   `:2073-2080`; `genie-ai-overlay/chatqna/genieai_chatqna.py:4915-4926`.
 * **ADR evidence** — `okf-012` (multi-graph grounding).
@@ -632,7 +637,7 @@ Two of these are **not merely different, they are inert**:
 | `[Arango Traversal] ARANGO_TRAVERSAL_CONCURRENT_BATCHES=10 is above the safe cap (4). Capping to 4.` | the chart declares 10 concurrent batches; the service caps itself at 4 |
 | the deployed translation window is **8192 tokens** and the derived history budget **11520 characters** | the char budget of §5.3 is measured, not derived from the constants |
 | the BFF serves `CONTEXT_OPTION=conversation-with-context-labels`, `TRANSLATION_BACKEND=gpu`, `STREAMING_TRANSLATION_ENABLED=1` | the message-list shape and the GPU answer translation of §5.5 are measured |
-| the BFF serves `OKF_ENABLED=0` and `OKF_SERVER_URL=http://okf-server:3002`, and the venue runs no okf-server | the OKF posture is legacy: the BFF's engagement lookup yields no engagement, the carrier names no graph, and the retriever runs the **legacy single-graph path** — so the deployed traversal is neither size-gated nor time-boxed (§4.9) |
+| the BFF serves `OKF_ENABLED=0` and `OKF_SERVER_URL=http://okf-server:3002`, and the venue runs no okf-server | the OKF posture is legacy: the retrieval-config client short-circuits to the legacy default, which carries `engaged: false` (`retrieval-config-client.js:134`); the BFF reads that server flag, never re-derived (`query-service.js:691-694`), so the carrier names no graph (the mode is `legacy` — `query-service.js:803-808`) and the retriever runs the **legacy single-graph path** — so the deployed traversal is neither size-gated nor time-boxed (§4.9) |
 
 ## 8. Known gaps
 

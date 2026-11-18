@@ -243,10 +243,29 @@ Important findings (both text-level) plus six minors:
 The minors were applied too: §4.10 now states that each fan-out leg's traversal
 is size-gated and bounded by the leg sub-budget (the two bounds the legacy path
 does not have); the fixtures name the three token constants and keep the
-completion reserve separate from the char-budget derivation; the posture knob
-moved into the `graph_traversal` expectation, where a per-behavior test reads it;
-the probe's verify path widens the exit-2 contract too; and the story's Code Map
-section numbers were corrected.
+completion reserve separate from the char-budget derivation; the posture knob was
+**added** to the `graph_traversal` expectation (it stays in `preparation`),
+where a per-behavior test reads it; the probe's verify path widens the exit-2
+contract too; and the story's Code Map section numbers were corrected.
+
+### Corrections after the fourth (scoped) fix review
+
+The fourth scoped fix review — over the correction diff `cf89d7fb2..2fd9c4153` —
+returned a **clean** verdict: both Important findings of that round were
+verified fixed line by line. Its four wording-level minors were applied to the
+record, the fixtures and this story:
+
+- the record no longer claims the `engaged` flag the BFF reads is **absent**: the
+  legacy default **carries** `engaged: false`
+  (`retrieval-config-client.js:134`), and the operative reason the carrier names
+  no graph is the posture's `mode` being `legacy`
+  (`query-service.js:803-808`);
+- the record restores the dropped clause "**the server's `engaged` flag, read and
+  never re-derived**" (`query-service.js:691-694`);
+- the story's "the posture knob **moved**" is now "**was added** to the
+  `graph_traversal` expectation (it stays in `preparation`)";
+- the traversal citation is extended to the lines that carry the fan-out branch
+  (`retriever:1996-2011`) and to the size gate itself (`retriever:1452-1476`).
 
 ## Spec Change Log
 

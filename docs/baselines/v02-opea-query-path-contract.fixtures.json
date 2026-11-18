@@ -454,7 +454,7 @@
           "enablement": "chatqna forwards enable_traversal from its own env (RETRIEVER_ARANGO_TRAVERSAL_ENABLED=true), so the traversal RUNS on the deployed chat path",
           "text_mutation": "each surviving chunk's page_content is REWRITTEN: '\\n------\\nRELATED INFORMATION:\\n------\\n' plus the neighbourhood. The reranker therefore scores text-augmented documents, and so does the LLM",
           "neighbour_limit": "at most traversal_max_returned (5) neighbours per chunk, at most traversal_max_depth (2) hops, each neighbour above traversal_score_threshold (0.7)",
-          "size_gate": "the size gate (max_links) and the leg sub-budget are FAN-OUT PER-LEG contracts (retriever:1996-2005, 2307): the legacy single-graph path runs with legacy_unbounded=True, so it has neither gate nor time-box. The deployed venue runs the LEGACY path: the backend serves OKF_ENABLED=0, so the retrieval-config client short-circuits to the legacy default and never dials the okf-server (retrieval-config-client.js:113, :450); the BFF's engaged flag is therefore absent (query-service.js:691-694); the carrier names NO graph and the fan-out does not engage (retriever:2317-2342). The FAN-OUT PATH still carries both.",
+          "size_gate": "the size gate (max_links) and the leg sub-budget are FAN-OUT PER-LEG contracts (retriever:1996-2011, the gate itself at retriever:1452-1476, 2307): the legacy single-graph path runs with legacy_unbounded=True, so it has neither gate nor time-box. The deployed venue runs the LEGACY path: the backend serves OKF_ENABLED=0, so the retrieval-config client short-circuits to the legacy default and never dials the okf-server (retrieval-config-client.js:113, :450); that default carries engaged: false (retrieval-config-client.js:134), and the BFF reads the SERVER's engaged flag, read and never re-derived (query-service.js:691-694), so it is false — the carrier names NO graph because the posture's mode is legacy, the branch that adds nothing to the payload (query-service.js:803-808), and the fan-out does not engage (retriever:2317-2342). The FAN-OUT PATH still carries both.",
           "concurrency": "the deployed traversal_concurrent_batches is 10; the service caps itself at 4 (Arango Traversal ... is above the safe cap (4). Capping to 4.)",
           "failure": "a failed traversal leaves the zeros it found: the leg continues WITHOUT graph enrichment"
         },
@@ -778,7 +778,7 @@
       },
       "okf_posture": {
         "observed": "the backend serves OKF_ENABLED=0 and OKF_SERVER_URL=http://okf-server:3002; the venue runs no okf-server pod",
-        "meaning": "the OKF posture is legacy: the BFF's engagement lookup yields no engagement, the carrier names no graph, and the retriever runs the legacy single-graph path — so the deployed traversal is neither size-gated nor time-boxed (see graph_traversal.size_gate)"
+        "meaning": "the OKF posture is legacy: the retrieval-config client short-circuits to the legacy default (retrieval-config-client.js:113, :450), which carries engaged: false (:134); the BFF reads that server flag, never re-derived (query-service.js:691-694), so the carrier names no graph (the mode is legacy — query-service.js:803-808) and the retriever runs the legacy single-graph path — so the deployed traversal is neither size-gated nor time-boxed (see graph_traversal.size_gate)"
       }
     },
     "discrepancies": [

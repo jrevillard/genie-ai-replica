@@ -57,9 +57,10 @@ RUN mkdir -p /app/dist/runtime \
 # rebuild passes --build-arg CACHE_BUST=<timestamp>, and a layer that takes
 # that argument is the only one whose cache key changes.
 #
-# It is the LAST RUN of the runtime stage on purpose: a layer's cache key
-# includes its parent, so an upgrade layer with an expensive layer above it
-# would re-run that layer on every monthly rebuild.
+# Position: after the expensive layers (what sits above it stays cached — a
+# layer's cache key includes its parent), before the writes to package-owned
+# paths (a package that moves would restore its own files over ours), and
+# still root.
 #
 # Pull current Alpine security updates at build time (CVE remediation
 # playbook): the rolling base tag does not refresh on its own between

@@ -1327,21 +1327,33 @@ container_scanning:
       # The frontend bakes a build marker (#1851): /build-info.json carries
       # the commit the image was built from, and the e2e pre-flight reads
       # it so a stale venue cannot file misleading spec-defect issues.
-      # Other images do not declare the ARG — buildx ignores it there, so
-      # the arg is passed only where it is consumed.
+      # GIT_SHA is passed only where it is consumed; the other images do not
+      # declare it, and buildx ignores an undeclared build-arg (with a
+      # warning, exit 0).
       BUILD_ARGS=""
       case "$DOCKERFILE" in
         *gov-chat-frontend*)
           BUILD_ARGS="--build-arg GIT_SHA=${CI_COMMIT_SHA:-unknown}"
           ;;
       esac
+      # The contract of the monthly rebuild: an image whose Dockerfile
+      # upgrades OS packages must declare ARG CACHE_BUST, otherwise its
+      # packages are frozen at build time and the monthly rebuild ships the
+      # same ones forever. The dashboard surfaces that only weeks later, as
+      # "detected but unshipped" — this check surfaces it at build time.
+      if grep -qE '(apt-get|apk)[[:space:]]+upgrade' "$DOCKERFILE" \
+          && ! grep -qE '^[[:space:]]*ARG[[:space:]]+CACHE_BUST' "$DOCKERFILE"; then
+        echo "ERROR: $DOCKERFILE upgrades OS packages but declares no 'ARG CACHE_BUST' — the monthly rebuild would not refresh them"
+        exit 1
+      fi
       # FORCE_IMAGE_REBUILD (the monthly schedule / operator trigger) must
       # refresh the OS security packages. Every image that installs OS
       # packages declares ARG CACHE_BUST on its upgrade layer: an ARG value
       # is part of that layer's cache key, so the layer re-runs on every
-      # monthly rebuild — while every layer before it stays cached (a layer's
-      # cache key includes its parent, which is why the upgrade layer sits
-      # LAST in the runtime stage).
+      # monthly rebuild — while every layer BEFORE it stays cached (a layer's
+      # cache key includes its parent). The upgrade layer therefore sits
+      # after the expensive layers (npm ci, pip install, model COPYs) and
+      # before the writes to package-owned paths, and still runs as root.
       #
       # The value is passed ONLY when the rebuild is forced. A fresh value on
       # every pipeline would invalidate the upgrade layer on every merge and
@@ -1372,7 +1384,7 @@ container_scanning:
         -t "$REGISTRY_REF" \
         -f "$DOCKERFILE" \
         $BUILD_ARGS \
-        --cache-from "type=registry,ref=$CACHE_REF" \
+        --cache-from "type=registry,ref=$CACHE_REF,mode=max" \
         --cache-to "type=registry,ref=$CACHE_REF,mode=max" \
         "$CONTEXT"
 

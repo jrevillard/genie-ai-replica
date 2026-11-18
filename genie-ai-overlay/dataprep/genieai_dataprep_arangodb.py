@@ -4312,17 +4312,18 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                 # lives. The document's log may be missing the row the purge
                 # was writing when the cancellation landed (a request
                 # already sent can still commit), and the service log says
-                # the purge was cancelled. An outcome
-                # already recorded wins: a purge that stood down and was
-                # cancelled while writing its log row has still stood down.
+                # the purge was cancelled. An outcome already recorded wins:
+                # a purge that stood down and was cancelled while writing its
+                # log row has still stood down.
                 if outcome is None:
                     span.set_attribute(ATTRIBUTE_NAMES["dataprep_purge_result"], "cancelled")
                     logger.warning(f"{file_id}: the late graph-write purge was cancelled before it finished")
                 else:
                     # The service log must not contradict the span: the purge
-                    # already had an outcome, and only the row that reports
-                    # it may not have reached the log. The outcome is named
-                    # so the log cannot be read as "the purge never ran".
+                    # already had an outcome, and the row that reports it —
+                    # the one in flight — may not have reached the log. The
+                    # outcome is named so the log cannot be read as "the purge
+                    # never ran".
                     logger.warning(
                         f"{file_id}: the late graph-write purge was cancelled; its outcome was already "
                         f"recorded in the trace ({outcome})"

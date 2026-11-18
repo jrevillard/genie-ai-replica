@@ -224,6 +224,30 @@ raised one more, plus minors:
   fixtures' `code` arrays keep their `path:line` shape (the prose moved to a
   sibling `probe_note`).
 
+### Corrections after the third fix review
+
+The third scoped fix review confirmed the previous round's fixes and raised two
+Important findings (both text-level) plus six minors:
+
+- the reword "the carrier names **no graph**" had reached the record but **not**
+  its machine-readable mirror: the fixtures' `graph_traversal.size_gate` still
+  carried the old wording and contradicted the fixtures' own new
+  `live_observations.okf_posture` — both now agree;
+- the record's **reconsideration trigger** overstated what the posture change
+  proves: `OKF_ENABLED=1` alone does not engage the fan-out (the client
+  short-circuits to the legacy default unless the okf-server is actually
+  consulted *and* reports an engaged posture with serving graphs). The trigger
+  row now says exactly that, and the evidence chain now cites
+  `components/gov-chat-backend/services/retrieval-config-client.js:113`, `:450`.
+
+The minors were applied too: §4.10 now states that each fan-out leg's traversal
+is size-gated and bounded by the leg sub-budget (the two bounds the legacy path
+does not have); the fixtures name the three token constants and keep the
+completion reserve separate from the char-budget derivation; the posture knob
+moved into the `graph_traversal` expectation, where a per-behavior test reads it;
+the probe's verify path widens the exit-2 contract too; and the story's Code Map
+section numbers were corrected.
+
 ## Spec Change Log
 
 ## Review Triage Log

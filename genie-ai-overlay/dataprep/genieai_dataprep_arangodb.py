@@ -4178,9 +4178,23 @@ class GenieArangoDataprep(OpeaArangoDataprep):
         says it failed, so it is retried once and, if it still fails, the
         operator is told — in the document's own ingestion log, the channel
         they read for this file.
+
+        A purge that is no longer the file's registered one stands down: a
+        new ingest of the same document started, and this purge deletes by
+        document id — it would delete the NEW attempt's rows.
         """
         try:
             for attempt in (1, 2):
+                # Checked before EVERY attempt: a retry runs seconds later, and
+                # a new ingest may have started in between.
+                states = getattr(self, "_late_write_states", None)
+                state = states.get(file_id) if states else None
+                if state is None or state["purge"] is not purge:
+                    logger.warning(
+                        f"{file_id}: the late graph-write purge stands down — a new ingest of the "
+                        "document started, and this purge deletes by document id (#1991)"
+                    )
+                    return
                 try:
                     await purge()
                     return
@@ -4200,16 +4214,25 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                         )
                     else:
                         await asyncio.sleep(2)
+        except asyncio.CancelledError:
+            # The loop is going down (the process is exiting): the purge
+            # cannot finish, and the rows it was written to remove may
+            # survive. Say so — the alternative is silence.
+            logger.warning(f"{file_id}: the late graph-write purge was cancelled before it finished")
+            raise
         finally:
             # The purge has run (or given up): the file owes nothing more.
             # Nothing can write after it — the rollback cancelled the batch
             # tasks, so no insertion can start — and every writer that could
             # write has settled, which is what fired the purge.
+            #
+            # Only THIS purge's own registration is cleared: a newer attempt
+            # may have registered its purge in the meantime, and clearing
+            # that one would leave its late write un-purged.
             states = getattr(self, "_late_write_states", None)
-            if states:
-                state = states.get(file_id)
-                if state is not None:
-                    state["purge"] = None
+            state = states.get(file_id) if states else None
+            if state is not None and state["purge"] is purge:
+                state["purge"] = None
             self._maybe_drop_late_write_state(file_id)
 
     async def _purge_late_write(self, file_id: str, graph_name: str) -> None:
@@ -4436,11 +4459,14 @@ class GenieArangoDataprep(OpeaArangoDataprep):
         self._current_repo_id = getattr(input, "repo_id", None)
         self._current_okf_graph_hint = False
         if not self._current_repo_id:
+            # The OKF MARKER, read from the request — a local, because
+            # ``graph_name`` is the resolved graph this ingest writes to (the
+            # marker and the graph are different things).
             try:
-                graph_name = input.graph_name or ""
+                okf_hint = input.graph_name or ""
             except AttributeError:
-                graph_name = ""
-            self._current_okf_graph_hint = graph_name.startswith("OKF_")
+                okf_hint = ""
+            self._current_okf_graph_hint = okf_hint.startswith("OKF_")
         # The bundle-id cache is keyed by concept_id, but concept ids RECUR
         # across runs/repos ('index', 'service_directory', ...). A cache hit
         # from a previous ingest would mirror this run's logs into the
@@ -4899,45 +4925,39 @@ class GenieArangoDataprep(OpeaArangoDataprep):
                     error_msg = f"Ingestion failed: {str(e)}"
                     logger.error(error_msg)
 
-                    await self._write_ingestion_log(input.file_id, "ERROR", "System", f"{error_msg}. Rolling back.")
-
-                    # #1991: register the purge BEFORE the retract. A batch
+                    # #1991: register the purge FIRST — before any await in
+                    # this handler, so a cancellation cannot skip it. A batch
                     # thread already inside add_graph_documents cannot be
-                    # stopped, and its write lands after the retract below —
-                    # the purge deletes whatever it wrote, once the file's
-                    # writers have settled.
+                    # stopped, and its write lands after the retraction — the
+                    # purge deletes whatever it wrote, once the file's writers
+                    # have settled.
                     self._register_late_write_purge(
                         input.file_id,
                         lambda: self._purge_late_write(input.file_id, graph_name),
                     )
 
-                    # Failure clarity (David, 2026-09-09): the callback CARRIES the
-                    # cause — the row's last_error names what actually went wrong
-                    # instead of the generic 'Ingestion Error (chunks=0)' wrapper.
-                    # It is written BEFORE the retraction, so a cancellation
-                    # landing inside the retraction cannot lose it — and the
-                    # retraction does not write a status of its own (see
-                    # below), so the row still ENDS on the failure.
-                    await self._update_doc_status(
-                        input.file_id,
-                        "Ingestion Error",
-                        concept_id=getattr(input, "concept_id", None),
-                        error=str(e)[:500],
+                    # The rollback runs uninterruptible, like the kill
+                    # rollback. Inline, every step of it is an await that a
+                    # second cancellation could land on: skipping the
+                    # retraction leaves the document's rows indexed and served
+                    # while the UI says it failed, and skipping the status
+                    # write leaves the document on 'Ingesting' with the
+                    # failure only in the ingestion log.
+                    interrupted = await _run_uninterruptible(
+                        self._rollback_failed_ingest(
+                            input.file_id,
+                            graph_name,
+                            error=error_msg,
+                            concept_id=getattr(input, "concept_id", None),
+                        ),
+                        timeout=_ROLLBACK_CANCEL_GRACE_SECONDS,
+                        label=f"rollback of {input.file_id}",
                     )
-
-                    # Auto-retract created data. The retraction does NOT flip the
-                    # status here: this path's terminal state is the FAILURE
-                    # ('Ingestion Error'), and 'Retracted' would hide it from
-                    # the operator — the document's rows are gone, but the
-                    # document did not ingest (#1992).
-                    await self.retract_file(
-                        file_id=input.file_id,
-                        graph_name=graph_name,
-                        update_status=False,
-                    )
-                    await self._write_ingestion_log(
-                        input.file_id, "INFO", "System", "Rollback complete. Document retracted."
-                    )
+                    if interrupted:
+                        logger.warning(
+                            f"{input.file_id}: cancelled again during the failure rollback; "
+                            "the rollback was allowed to finish anyway"
+                        )
 
                     raise HTTPException(status_code=500, detail=error_msg) from e
 
@@ -4951,6 +4971,38 @@ class GenieArangoDataprep(OpeaArangoDataprep):
             # #1991: a file whose ingest neither failed nor left a writer in
             # flight has nothing left to track.
             self._maybe_drop_late_write_state(input.file_id)
+
+    async def _rollback_failed_ingest(
+        self, file_id: str, graph_name: str, *, error: str, concept_id: str | None = None
+    ) -> None:
+        """Undo a failed ingest: retract what was written, then mark it failed.
+
+        Split out of the ``except Exception`` handler so the whole sequence
+        can be handed to ``_run_uninterruptible`` as one unit — the same
+        contract as the kill rollback. Inline, a second cancellation could
+        land on one of the awaits and skip the rest, and each of the rest is
+        load-bearing: the retraction removes the document's rows, and the
+        status write names the failure.
+        """
+        await self._write_ingestion_log(file_id, "ERROR", "System", f"{error}. Rolling back.")
+        # Failure clarity (David, 2026-09-09): the callback CARRIES the
+        # cause — the row's last_error names what actually went wrong
+        # instead of the generic 'Ingestion Error (chunks=0)' wrapper.
+        # It is written BEFORE the retraction, so a cancellation landing
+        # inside the retraction cannot lose it — and the retraction does not
+        # write a status of its own, so the row still ENDS on the failure.
+        await self._update_doc_status(
+            file_id,
+            "Ingestion Error",
+            concept_id=concept_id,
+            error=str(error)[:500],
+        )
+        # Auto-retract created data. The retraction does NOT flip the status
+        # here: this path's terminal state is the FAILURE ('Ingestion
+        # Error'), and 'Retracted' would hide it from the operator — the
+        # document's rows are gone, but the document did not ingest (#1992).
+        await self.retract_file(file_id=file_id, graph_name=graph_name, update_status=False)
+        await self._write_ingestion_log(file_id, "INFO", "System", "Rollback complete. Document retracted.")
 
     async def _rollback_killed_ingest(self, file_id: str, graph_name: str, *, concept_id: str | None = None) -> None:
         """Undo a killed ingest: retract what was written, then mark it Killed.

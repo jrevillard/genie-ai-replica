@@ -221,10 +221,10 @@ One edge case: a graph insertion that was still in flight when the failure
 happened can land after the retraction — and after a re-kick has started. The
 rows it writes are the same content the re-kick indexes, so that document
 ends up with two copies of its chunks. The purge that would have removed them
-deliberately stands down once a new ingest of the same document starts (it
-deletes by document id, and it must not delete the new ingest's rows). If a
-document's chunk count and the number of chunks the retriever sees disagree,
-retract it and ingest it again.
+stands down once a new ingest of the same document has started: it deletes by
+document id, so it must not delete the new ingest's rows. If a document's
+chunk count and the number of chunks the retriever sees disagree, retract it
+and ingest it again.
 
 ## Stuck documents recover themselves after a dataprep restart
 

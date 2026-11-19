@@ -1184,9 +1184,13 @@ include:
 # pipeline that carries the project's SBOM — the gemnasium dependency-scanning
 # job below uploads it — because without one the comparison is made against an
 # empty target and every license of the source counts as newly introduced. That
-# job is advisory, so a green pipeline can still carry no SBOM; the red job is
-# the signal. The CVE rule needs the target's scan reports to tell a newly
-# detected finding from a pre-existing one.
+# job is advisory, so a green pipeline can still carry no SBOM: the warning
+# badge on it is the signal. The CVE rule declares `fallback_behavior:
+# {fail: open}`, so a missing target does not block it; it wants the target's
+# scan reports only to tell a newly detected finding from a pre-existing one.
+# The umbrella's pipeline carries dependency-scanning and SAST reports but no
+# container-scanning report (no image is built there), which that rule
+# tolerates.
 .security_run_rules: &security_run_rules
   - if: $CI_PIPELINE_SOURCE == "schedule"
     when: never

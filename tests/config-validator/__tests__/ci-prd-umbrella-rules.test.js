@@ -14,7 +14,7 @@ const CI_FILE = path.join(ROOT, '.gitlab-ci.yml');
 // which declares no `fallback_behavior`, so GitLab's empty default makes it
 // fail closed — demands a Maintainer approval the umbrella does not need.
 //
-// Three properties make that work, and none of them is visible to a "the CI
+// Four properties make that work, and none of them is visible to a "the CI
 // file still parses" check:
 //
 //   1. `workflow:rules` — the `*/prd` entry must not be shadowed by an entry
@@ -25,20 +25,26 @@ const CI_FILE = path.join(ROOT, '.gitlab-ci.yml');
 //      that suppresses the pipeline skips the security jobs.
 //   3. the gemnasium dependency-scanning job must run there too — it is what
 //      uploads the SBOM the license rule compares the target pipeline against.
-//
-// The failure mode of losing any of them is silent: the CI file still parses,
-// the pipeline is still green, and the merge requests simply keep demanding
-// the approval.
+//   4. both entries must cover the whole `*/prd` family, not one branch of it.
 //
 // The rules are read as STRUCTURE (a YAML parse), not as text: what these
 // checks are about is order, the presence of a `when:` key, and which job
 // consumes which list — none of which survives a scan that pins one exact
 // spelling of one line. The repository root already depends on js-yaml.
 
-const UMBRELLA = 'feat/agentic-foundations/prd';
+const UMBRELLA_BRANCHES = ['feat/agentic-foundations/prd', 'feat/server-side-tools/prd'];
 const SUPPRESSING_WHEN = ['never', 'manual'];
 
-const ci = yaml.load(fs.readFileSync(CI_FILE, 'utf8'));
+let ci;
+try {
+  ci = yaml.load(fs.readFileSync(CI_FILE, 'utf8'));
+} catch (error) {
+  throw new Error(
+    '.gitlab-ci.yml must stay parseable by js-yaml, which rejects duplicate keys and ' +
+      `unknown tags (a \`!reference\` would break this guard): ${error.message}`,
+    { cause: error }
+  );
+}
 
 const workflowRules = ci.workflow.rules;
 const securityRules = ci['.security_run_rules'];
@@ -47,62 +53,91 @@ function conditionOf(rule) {
   return rule && typeof rule.if === 'string' ? rule.if : '';
 }
 
-// The branch pattern a condition matches, when it states one.
-function branchPattern(rule) {
-  const match = /=~\s*\/(.+)\/\s*$/.exec(conditionOf(rule));
-  if (!match) return null;
+// The branch pattern a condition states, when it states one. GitLab reads the
+// literal between the first `/` after the `=~` operator and the last `/` of
+// the condition, so a condition that carries further conjuncts keeps its
+// pattern — and `\/` (which YAML unescapes to `/` inside a double-quoted
+// scalar) reads as the same pattern.
+function patternOf(condition) {
+  const operator = condition.indexOf('=~');
+  if (operator === -1) return null;
+  const start = condition.indexOf('/', operator);
+  if (start === -1) return null;
+  const end = condition.lastIndexOf('/');
+  if (end <= start) return null;
   try {
-    return new RegExp(match[1]);
+    return new RegExp(condition.slice(start + 1, end));
   } catch {
     return null;
   }
 }
 
-// A condition that covers the umbrella branch. Matching the BRANCH rather
-// than one literal spelling is what makes this locator semantic: quoting,
-// spacing and the pattern's wording do not matter, but a condition that stops
-// covering the umbrella is caught.
+// A rule that covers every umbrella branch: the pattern is applied to the
+// branch variable, and it covers the whole `*/prd` family rather than one
+// branch of it. Matching the BRANCH rather than one literal spelling is what
+// makes this locator semantic.
 function coversUmbrella(rule) {
-  const pattern = branchPattern(rule);
-  return pattern !== null && pattern.test(UMBRELLA);
+  const condition = conditionOf(rule);
+  if (!/\$CI_COMMIT_BRANCH\b/.test(condition)) return false;
+  const pattern = patternOf(condition);
+  if (!pattern) return false;
+  return UMBRELLA_BRANCHES.every((branch) => pattern.test(branch));
 }
 
 function umbrellaEntries(rules) {
   return (rules || []).filter(coversUmbrella);
 }
 
-// The branch pattern a condition states, normalized: `\/` and `/` denote the
-// same character (YAML unescapes the first inside a double-quoted scalar),
-// so the two spellings must compare equal.
+// The branch pattern of a rule, normalized: `\/` and `/` denote the same
+// character (YAML unescapes the first inside a double-quoted scalar), so the
+// two spellings must compare equal.
 function normalizedPattern(rule) {
-  const pattern = branchPattern(rule);
+  const pattern = patternOf(conditionOf(rule));
   if (!pattern) return null;
   return pattern.source.replace(/\\\//g, '/').replace(/\s+/g, '');
 }
 
-// Can this rule match a PUSH pipeline on the umbrella branch? A rule that
-// cannot is harmless above the umbrella entry, whatever its `when:` says.
-function canMatchPushOnUmbrella(rule) {
-  const condition = conditionOf(rule);
+// Can one conjunct of a condition be true for a PUSH pipeline on an umbrella
+// branch? GitLab evaluates `rules` in order and takes the first match, so a
+// rule that can match such a push decides the outcome.
+function conjunctMatchesPush(conjunct) {
+  const text = conjunct.trim();
+  if (!text) return true;
 
-  // A condition pinned to one pipeline source only matches pipelines of that
-  // source, and a push is not it.
-  const source = /\$CI_PIPELINE_SOURCE\s*==\s*"([^"]+)"/.exec(condition);
-  if (source && source[1] !== 'push') return false;
+  let match = /^\$CI_PIPELINE_SOURCE\s*==\s*"([^"]*)"$/.exec(text);
+  if (match) return match[1] === 'push';
+  match = /^\$CI_PIPELINE_SOURCE\s*!=\s*"([^"]*)"$/.exec(text);
+  if (match) return match[1] !== 'push';
 
-  // A branch pattern that does not cover the umbrella cannot match it.
-  const pattern = branchPattern(rule);
-  if (pattern && !pattern.test(UMBRELLA)) return false;
+  // A tag pipeline is not a branch push; its negation is.
+  if (text === '$CI_COMMIT_TAG') return false;
+  if (text === '!$CI_COMMIT_TAG') return true;
 
-  // The default branch is not the umbrella, and a tag pipeline is not a push.
-  if (/\$CI_DEFAULT_BRANCH/.test(condition)) return false;
-  if (/\$CI_COMMIT_TAG/.test(condition)) return false;
+  match = /^\$CI_COMMIT_BRANCH\s*==\s*"([^"]*)"$/.exec(text);
+  if (match) return UMBRELLA_BRANCHES.includes(match[1]);
+  match = /^\$CI_COMMIT_BRANCH\s*!=\s*"([^"]*)"$/.exec(text);
+  if (match) return !UMBRELLA_BRANCHES.includes(match[1]);
 
+  // The default branch is not an umbrella branch.
+  if (/^\$CI_COMMIT_BRANCH\s*==\s*\$CI_DEFAULT_BRANCH$/.test(text)) return false;
+  if (/^\$CI_COMMIT_BRANCH\s*!=\s*\$CI_DEFAULT_BRANCH$/.test(text)) return true;
+
+  const pattern = patternOf(text);
+  if (pattern) return UMBRELLA_BRANCHES.some((branch) => pattern.test(branch));
+
+  // An unknown shape is assumed to match: a new form of condition must not
+  // pass unnoticed.
   return true;
 }
 
+function canMatchPushOnUmbrella(rule) {
+  return conditionOf(rule)
+    .split('&&')
+    .every((conjunct) => conjunctMatchesPush(conjunct));
+}
+
 // The entries above `index` that would suppress the pipeline — and so the
-// rules that would follow — if they matched a push on the umbrella.
+// rules that would follow — if they matched a push on an umbrella branch.
 function shadowingEntries(rules, index) {
   return rules.slice(0, index).filter((rule) => SUPPRESSING_WHEN.includes(rule.when) && canMatchPushOnUmbrella(rule));
 }
@@ -136,7 +171,7 @@ describe('ci: the PRD umbrella branch rules (#2010)', () => {
   });
 
   it('keeps the two rules covering the same branches, so they cannot drift apart', () => {
-    // The two rules are located independently (by the branch they cover), so
+    // The two rules are located independently (by the branches they cover), so
     // this compares two separately found conditions — not one literal with
     // itself.
     const workflowPattern = normalizedPattern(umbrellaEntries(workflowRules)[0]);
@@ -153,5 +188,23 @@ describe('ci: the PRD umbrella branch rules (#2010)', () => {
     const job = ci['gemnasium-dependency_scanning'];
     expect(job).toBeDefined();
     expect(umbrellaEntries(job.rules)).toHaveLength(1);
+  });
+
+  it('keeps the SBOM uploader on the shared security rules', () => {
+    // The job must consume the shared list itself: an inline copy that
+    // forgets an entry silently drops the SBOM on some branches.
+    expect(ci['gemnasium-dependency_scanning'].rules).toBe(securityRules);
+  });
+
+  it('keeps the shared security list complete', () => {
+    // The entries that give the other branches their SBOM: dropping one
+    // leaves those branches with a target pipeline that carries none.
+    const conditions = securityRules.map(conditionOf);
+    expect(conditions.some((condition) => /\$CI_PIPELINE_SOURCE\s*==\s*"schedule"/.test(condition))).toBe(true);
+    expect(conditions.some((condition) => /\$CI_PIPELINE_SOURCE\s*==\s*"merge_request_event"/.test(condition))).toBe(
+      true
+    );
+    expect(conditions.some((condition) => /\$CI_DEFAULT_BRANCH/.test(condition))).toBe(true);
+    expect(conditions.some((condition) => /release/.test(condition))).toBe(true);
   });
 });

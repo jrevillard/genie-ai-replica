@@ -308,7 +308,7 @@ services:
     build: api-gateway-solution/new-config/
     # Pin the image's own USER (uid 1000) at compose level (#1227).
     user: "1000:1000"
-    image: ${GENIE_AI_KONG_CONFIG_IMAGE:-${GENIE_AI_REGISTRY:-registry.opensource.unicc.org/un/itu/genie-ai}/genie-ai-kong-config}:${GENIE_AI_KONG_CONFIG_IMAGE_TAG:-${GENIE_AI_GLOBAL_TAG:-latest}}
+    image: ${GENIE_AI_KONG_CONFIG_IMAGE:-${GENIE_AI_REGISTRY:-registry.opensource.unicc.org/un/itu/genie-ai}/genie-ai-kong-config}:${GENIE_AI_KONG_CONFIG_IMAGE_TAG:-${GENIE_AI_IMAGE_TAG:-${GENIE_AI_GLOBAL_TAG:-latest}}}
     networks:
       - genieai_network
     environment:
@@ -479,7 +479,7 @@ services:
         condition: service_completed_successfully
     restart: unless-stopped
     build: api-gateway-solution/nginx/
-    image: ${GENIE_AI_NGINX_IMAGE:-${GENIE_AI_REGISTRY:-registry.opensource.unicc.org/un/itu/genie-ai}/genie-ai-nginx}:${GENIE_AI_NGINX_IMAGE_TAG:-${GENIE_AI_GLOBAL_TAG:-latest}}
+    image: ${GENIE_AI_NGINX_IMAGE:-${GENIE_AI_REGISTRY:-registry.opensource.unicc.org/un/itu/genie-ai}/genie-ai-nginx}:${GENIE_AI_NGINX_IMAGE_TAG:-${GENIE_AI_IMAGE_TAG:-${GENIE_AI_GLOBAL_TAG:-latest}}}
     ports:
       - target: 8080
         published: ${NGINX_HTTP_PORT:-80}
@@ -601,7 +601,7 @@ services:
     # Dockerfile chowns the runtime-config dir and renders nginx.conf to /tmp.
     # Pinned by name: the image's USER is the numeric source of truth.
     user: nginx
-    image: ${GENIE_AI_FRONTEND_IMAGE:-${GENIE_AI_REGISTRY:-registry.opensource.unicc.org/un/itu/genie-ai}/genie-ai-frontend}:${GENIE_AI_FRONTEND_IMAGE_TAG:-${GENIE_AI_GLOBAL_TAG:-latest}}
+    image: ${GENIE_AI_FRONTEND_IMAGE:-${GENIE_AI_REGISTRY:-registry.opensource.unicc.org/un/itu/genie-ai}/genie-ai-frontend}:${GENIE_AI_FRONTEND_IMAGE_TAG:-${GENIE_AI_IMAGE_TAG:-${GENIE_AI_GLOBAL_TAG:-latest}}}
     environment:
       - PORT=8090
       - VUE_APP_API_URL=${VUE_APP_API_URL:-/api}
@@ -707,7 +707,7 @@ services:
     # Pin the image's node user (#1227) - Dockerfile.migrations sets USER node.
     # Pinned by name: the image's USER is the numeric source of truth.
     user: node
-    image: ${GENIE_AI_DB_MIGRATIONS_IMAGE:-${GENIE_AI_REGISTRY:-registry.opensource.unicc.org/un/itu/genie-ai}/genie-ai-db-migrations}:${GENIE_AI_DB_MIGRATIONS_IMAGE_TAG:-${GENIE_AI_GLOBAL_TAG:-latest}}
+    image: ${GENIE_AI_DB_MIGRATIONS_IMAGE:-${GENIE_AI_REGISTRY:-registry.opensource.unicc.org/un/itu/genie-ai}/genie-ai-db-migrations}:${GENIE_AI_DB_MIGRATIONS_IMAGE_TAG:-${GENIE_AI_IMAGE_TAG:-${GENIE_AI_GLOBAL_TAG:-latest}}}
     networks:
       - genieai_network
     environment:
@@ -750,7 +750,7 @@ services:
     # Pin the image's node user, uid 1000 (Dockerfile sets USER node) (#1227).
     # Pinned by name: the image's USER is the numeric source of truth.
     user: node
-    image: ${GENIE_AI_BACKEND_IMAGE:-${GENIE_AI_REGISTRY:-registry.opensource.unicc.org/un/itu/genie-ai}/genie-ai-backend}:${GENIE_AI_BACKEND_IMAGE_TAG:-${GENIE_AI_GLOBAL_TAG:-latest}}
+    image: ${GENIE_AI_BACKEND_IMAGE:-${GENIE_AI_REGISTRY:-registry.opensource.unicc.org/un/itu/genie-ai}/genie-ai-backend}:${GENIE_AI_BACKEND_IMAGE_TAG:-${GENIE_AI_IMAGE_TAG:-${GENIE_AI_GLOBAL_TAG:-latest}}}
     # Swarm: internal only - access via Kong proxy
     # ports:
     #   - "${BACKEND_PORT:-3000}:3000"
@@ -945,7 +945,7 @@ services:
     build:
       context: components/
       dockerfile: okf-server/Dockerfile
-    image: ${GENIE_AI_OKF_SERVER_IMAGE:-${GENIE_AI_REGISTRY:-registry.opensource.unicc.org/un/itu/genie-ai}/genie-ai-okf-server}:${GENIE_AI_OKF_SERVER_IMAGE_TAG:-${GENIE_AI_GLOBAL_TAG:-latest}}
+    image: ${GENIE_AI_OKF_SERVER_IMAGE:-${GENIE_AI_REGISTRY:-registry.opensource.unicc.org/un/itu/genie-ai}/genie-ai-okf-server}:${GENIE_AI_OKF_SERVER_IMAGE_TAG:-${GENIE_AI_IMAGE_TAG:-${GENIE_AI_GLOBAL_TAG:-latest}}}
     healthcheck:
       test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3002/health"]
       interval: 10s
@@ -1301,7 +1301,7 @@ services:
     build:
       context: components/pii-service/
       dockerfile: Dockerfile
-    image: ${GENIE_AI_PII_SERVICE_IMAGE:-${GENIE_AI_REGISTRY:-registry.opensource.unicc.org/un/itu/genie-ai}/genie-ai-pii-service}:${GENIE_AI_PII_SERVICE_IMAGE_TAG:-${GENIE_AI_GLOBAL_TAG:-latest}}
+    image: ${GENIE_AI_PII_SERVICE_IMAGE:-${GENIE_AI_REGISTRY:-registry.opensource.unicc.org/un/itu/genie-ai}/genie-ai-pii-service}:${GENIE_AI_PII_SERVICE_IMAGE_TAG:-${GENIE_AI_IMAGE_TAG:-${GENIE_AI_GLOBAL_TAG:-latest}}}
     # Internal only (never publicly routed) — the okf-server calls it
     # container-to-container on genieai_network, same as doc-repo -> dataprep.
     # Healthcheck hits /ready (not /health) so the spaCy model loads at startup,
@@ -1408,7 +1408,7 @@ services:
     build:
       context: components/ragas-service/
       dockerfile: Dockerfile
-    image: ${GENIE_AI_RAGAS_SERVICE_IMAGE:-${GENIE_AI_REGISTRY:-registry.opensource.unicc.org/un/itu/genie-ai}/genie-ai-ragas-service}:${GENIE_AI_RAGAS_SERVICE_IMAGE_TAG:-${GENIE_AI_GLOBAL_TAG:-latest}}
+    image: ${GENIE_AI_RAGAS_SERVICE_IMAGE:-${GENIE_AI_REGISTRY:-registry.opensource.unicc.org/un/itu/genie-ai}/genie-ai-ragas-service}:${GENIE_AI_RAGAS_SERVICE_IMAGE_TAG:-${GENIE_AI_IMAGE_TAG:-${GENIE_AI_GLOBAL_TAG:-latest}}}
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8090/health', timeout=8)"]
       interval: 30s
@@ -1522,7 +1522,7 @@ services:
     # ClamAV signature and socket dirs its entrypoint writes.
     # Pinned by name: the image's USER is the numeric source of truth.
     user: node
-    image: ${GENIE_AI_DOCUMENT_REPOSITORY_IMAGE:-${GENIE_AI_REGISTRY:-registry.opensource.unicc.org/un/itu/genie-ai}/genie-ai-document-repository}:${GENIE_AI_DOCUMENT_REPOSITORY_IMAGE_TAG:-${GENIE_AI_GLOBAL_TAG:-latest}}
+    image: ${GENIE_AI_DOCUMENT_REPOSITORY_IMAGE:-${GENIE_AI_REGISTRY:-registry.opensource.unicc.org/un/itu/genie-ai}/genie-ai-document-repository}:${GENIE_AI_DOCUMENT_REPOSITORY_IMAGE_TAG:-${GENIE_AI_IMAGE_TAG:-${GENIE_AI_GLOBAL_TAG:-latest}}}
     environment:
       # Secrets (required, no defaults in code)
       - ARANGO_PASSWORD=${ARANGO_PASSWORD}
@@ -1846,7 +1846,7 @@ services:
     build:
       context: .
       dockerfile: genie-ai-overlay/textgen/Dockerfile-textgen_genie-ai
-    image: ${GENIE_AI_TEXTGEN_IMAGE:-${GENIE_AI_REGISTRY:-registry.opensource.unicc.org/un/itu/genie-ai}/genie-ai-textgen}:${GENIE_AI_TEXTGEN_IMAGE_TAG:-${GENIE_AI_GLOBAL_TAG:-latest}}
+    image: ${GENIE_AI_TEXTGEN_IMAGE:-${GENIE_AI_REGISTRY:-registry.opensource.unicc.org/un/itu/genie-ai}/genie-ai-textgen}:${GENIE_AI_TEXTGEN_IMAGE_TAG:-${GENIE_AI_IMAGE_TAG:-${GENIE_AI_GLOBAL_TAG:-latest}}}
     environment:
       - LLM_ENDPOINT=${VLLM_ENDPOINT:-http://vllm:8000}
       - LLM_MODEL_ID=${VLLM_LLM_MODEL_ID:-ibm-granite/granite-4.1-8b}
@@ -2042,7 +2042,7 @@ services:
     build:
       context: .
       dockerfile: genie-ai-overlay/embedding/Dockerfile-embedding_genie-ai
-    image: ${GENIE_AI_EMBEDDING_IMAGE:-${GENIE_AI_REGISTRY:-registry.opensource.unicc.org/un/itu/genie-ai}/genie-ai-embedding}:${GENIE_AI_EMBEDDING_IMAGE_TAG:-${GENIE_AI_GLOBAL_TAG:-latest}}
+    image: ${GENIE_AI_EMBEDDING_IMAGE:-${GENIE_AI_REGISTRY:-registry.opensource.unicc.org/un/itu/genie-ai}/genie-ai-embedding}:${GENIE_AI_EMBEDDING_IMAGE_TAG:-${GENIE_AI_IMAGE_TAG:-${GENIE_AI_GLOBAL_TAG:-latest}}}
     environment:
       - EMBEDDING_MODEL_ENDPOINT=${EMBEDDING_SERVICE_URL:-http://tei:80}
       - TEI_EMBEDDING_ENDPOINT=${EMBEDDING_SERVICE_URL:-http://tei:80}
@@ -2121,7 +2121,7 @@ services:
     build:
       context: .
       dockerfile: genie-ai-overlay/reranker/Dockerfile-reranker_genie-ai
-    image: ${GENIE_AI_RERANKER_IMAGE:-${GENIE_AI_REGISTRY:-registry.opensource.unicc.org/un/itu/genie-ai}/genie-ai-reranker}:${GENIE_AI_RERANKER_IMAGE_TAG:-${GENIE_AI_GLOBAL_TAG:-latest}}
+    image: ${GENIE_AI_RERANKER_IMAGE:-${GENIE_AI_REGISTRY:-registry.opensource.unicc.org/un/itu/genie-ai}/genie-ai-reranker}:${GENIE_AI_RERANKER_IMAGE_TAG:-${GENIE_AI_IMAGE_TAG:-${GENIE_AI_GLOBAL_TAG:-latest}}${GENIE_AI_OPEA_IMAGE_TAG_SUFFIX:-}}
     environment:
       - TEI_RERANKING_ENDPOINT=${RERANKER_SERVICE_URL:-http://tei_reranker:80}
       - RERANK_COMPONENT_NAME=GENIE_TEI_RERANKING
@@ -2182,7 +2182,7 @@ services:
     build:
       context: .
       dockerfile: genie-ai-overlay/dataprep/Dockerfile-dataprep_genie-ai
-    image: ${GENIE_AI_DATAPREP_ARANGO_IMAGE:-${GENIE_AI_REGISTRY:-registry.opensource.unicc.org/un/itu/genie-ai}/genie-ai-dataprep-arango}:${GENIE_AI_DATAPREP_ARANGO_IMAGE_TAG:-${GENIE_AI_GLOBAL_TAG:-latest}}
+    image: ${GENIE_AI_DATAPREP_ARANGO_IMAGE:-${GENIE_AI_REGISTRY:-registry.opensource.unicc.org/un/itu/genie-ai}/genie-ai-dataprep-arango}:${GENIE_AI_DATAPREP_ARANGO_IMAGE_TAG:-${GENIE_AI_IMAGE_TAG:-${GENIE_AI_GLOBAL_TAG:-latest}}${GENIE_AI_OPEA_IMAGE_TAG_SUFFIX:-}}
     # Internal only
     # ports:
     #   - "5000:5000"
@@ -2232,8 +2232,11 @@ services:
       #
       # So the graph phase keeps comps' own int 600 s default - what it ran at
       # before this policy, and the right value for a phase with no degradation
-      # path. Binding it differently needs a patch to the vendored source,
-      # tracked in genie-ai-overlay/OVERRIDES.yaml, not a compose line.
+      # path. The phase itself is bounded from the outside by
+      # DATAPREP_LLM_PHASE_TIMEOUT_SECONDS (a wedged endpoint fails that
+      # ingest instead of holding the single ingest lane); binding the per-call
+      # budget differently needs a patch to the vendored source, tracked in
+      # genie-ai-overlay/OVERRIDES.yaml, not a compose line.
       #
       # #1381: the TEI EMBED half of that debt IS bounded from in-repo code —
       # the hub clients langchain builds get their deadline via
@@ -2426,7 +2429,7 @@ services:
     build:
       context: .
       dockerfile: genie-ai-overlay/retriever/Dockerfile-retriever_genie-ai
-    image: ${GENIE_AI_RETRIEVER_ARANGO_IMAGE:-${GENIE_AI_REGISTRY:-registry.opensource.unicc.org/un/itu/genie-ai}/genie-ai-retriever-arango}:${GENIE_AI_RETRIEVER_ARANGO_IMAGE_TAG:-${GENIE_AI_GLOBAL_TAG:-latest}}
+    image: ${GENIE_AI_RETRIEVER_ARANGO_IMAGE:-${GENIE_AI_REGISTRY:-registry.opensource.unicc.org/un/itu/genie-ai}/genie-ai-retriever-arango}:${GENIE_AI_RETRIEVER_ARANGO_IMAGE_TAG:-${GENIE_AI_IMAGE_TAG:-${GENIE_AI_GLOBAL_TAG:-latest}}${GENIE_AI_OPEA_IMAGE_TAG_SUFFIX:-}}
     # Internal only
     # ports:
     #   - "7025:7025"
@@ -2582,7 +2585,7 @@ services:
     build:
       context: .
       dockerfile: genie-ai-overlay/chatqna/Dockerfile-chatqna_genie-ai
-    image: ${GENIE_AI_CHATQNA_SERVER_IMAGE:-${GENIE_AI_REGISTRY:-registry.opensource.unicc.org/un/itu/genie-ai}/genie-ai-chatqna-server}:${GENIE_AI_CHATQNA_SERVER_IMAGE_TAG:-${GENIE_AI_GLOBAL_TAG:-latest}}
+    image: ${GENIE_AI_CHATQNA_SERVER_IMAGE:-${GENIE_AI_REGISTRY:-registry.opensource.unicc.org/un/itu/genie-ai}/genie-ai-chatqna-server}:${GENIE_AI_CHATQNA_SERVER_IMAGE_TAG:-${GENIE_AI_IMAGE_TAG:-${GENIE_AI_GLOBAL_TAG:-latest}}}
     working_dir: /app/ChatQnA
     # Internal OPEA service - no host port needed
     # ports:
@@ -2802,7 +2805,7 @@ services:
     # uid for its network-client lifetime.
     user: postgres
     build: configs/postgres/
-    image: ${GENIE_AI_POSTGRES_INIT_IMAGE:-${GENIE_AI_REGISTRY:-registry.opensource.unicc.org/un/itu/genie-ai}/genie-ai-postgres-init}:${GENIE_AI_POSTGRES_INIT_IMAGE_TAG:-${GENIE_AI_GLOBAL_TAG:-latest}}
+    image: ${GENIE_AI_POSTGRES_INIT_IMAGE:-${GENIE_AI_REGISTRY:-registry.opensource.unicc.org/un/itu/genie-ai}/genie-ai-postgres-init}:${GENIE_AI_POSTGRES_INIT_IMAGE_TAG:-${GENIE_AI_IMAGE_TAG:-${GENIE_AI_GLOBAL_TAG:-latest}}}
     environment:
       - PGHOST=postgres
       - PGUSER=${POSTGRES_USER:-genieai}
@@ -2929,7 +2932,7 @@ services:
       dockerfile: Dockerfile.config-cli
     # Pin the image's own USER (uid 65534) at compose level (#1227).
     user: "65534:65534"
-    image: ${GENIE_AI_KEYCLOAK_CONFIG_IMAGE:-${GENIE_AI_REGISTRY:-registry.opensource.unicc.org/un/itu/genie-ai}/genie-ai-keycloak-config}:${GENIE_AI_KEYCLOAK_CONFIG_IMAGE_TAG:-${GENIE_AI_GLOBAL_TAG:-latest}}
+    image: ${GENIE_AI_KEYCLOAK_CONFIG_IMAGE:-${GENIE_AI_REGISTRY:-registry.opensource.unicc.org/un/itu/genie-ai}/genie-ai-keycloak-config}:${GENIE_AI_KEYCLOAK_CONFIG_IMAGE_TAG:-${GENIE_AI_IMAGE_TAG:-${GENIE_AI_GLOBAL_TAG:-latest}}}
     environment:
       - KEYCLOAK_URL=http://keycloak:8080
       - KEYCLOAK_USER=admin
@@ -3239,7 +3242,7 @@ services:
     build:
       context: ./tools/tempo-proxy
       dockerfile: Dockerfile
-    image: ${GENIE_AI_TEMPO_PROXY_IMAGE:-${GENIE_AI_REGISTRY:-registry.opensource.unicc.org/un/itu/genie-ai}/genie-ai-tempo-proxy}:${GENIE_AI_TEMPO_PROXY_IMAGE_TAG:-${GENIE_AI_GLOBAL_TAG:-latest}}
+    image: ${GENIE_AI_TEMPO_PROXY_IMAGE:-${GENIE_AI_REGISTRY:-registry.opensource.unicc.org/un/itu/genie-ai}/genie-ai-tempo-proxy}:${GENIE_AI_TEMPO_PROXY_IMAGE_TAG:-${GENIE_AI_IMAGE_TAG:-${GENIE_AI_GLOBAL_TAG:-latest}}}
     environment:
       - VICTORIATRACES_URL=http://victoriatraces:10428
       - PORT=10429

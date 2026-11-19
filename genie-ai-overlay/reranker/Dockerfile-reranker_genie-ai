@@ -13,10 +13,31 @@ RUN git clone --depth 1 --branch ${OPEA_VERSION} ${OPEA_REPO_URL} .
 # ======== Final Stage: Assembly ========
 FROM python:3.11-slim
 
+# SLIM VARIANT (issue #2000) — one Dockerfile, two dependency sets.
+#
+#   requirements-cpu.txt  (default) → the FAT lock: `torch==2.13.0` resolves
+#       to the CUDA/cu13 build (15 `nvidia-*` wheels + triton, ~3.2 GB
+#       compressed in the pip layer — the whole 6.8 GB image). The reranker
+#       has NO local-model path (OPEA v1.5's
+#       `comps/rerankings/src/integrations/tei.py` is a pure remote client —
+#       `huggingface_hub.AsyncInferenceClient` against
+#       `TEI_RERANKING_ENDPOINT` — and `ovms.py` is remote too), so torch
+#       reaches the fat lock only through upstream OPEA's requirements.in
+#       (`sentence_transformers`, `datasets`, `haystack-ai`).
+#   requirements-slim.txt → the SLIM lock: no torch at all. The service code
+#       is identical; only the installed set changes.
+#
+# The build args are DEFAULTED, so the published `:main` image installs the
+# fat lock exactly as before.
+#
+# EXTRA_PIP_ARGS is empty for both variants of this image (the slim lock has
+# no torch): the reranker needs no second index.
+ARG REQUIREMENTS_FILE="requirements-cpu.txt"
+ARG EXTRA_PIP_ARGS=""
+
 # Install system dependencies required by the original reranker (upgrade pulls
 # current Debian security updates so the image does not lag point-releases)
 RUN apt-get update -y && \
-    apt-get upgrade -y && \
     apt-get install -y --no-install-recommends --fix-missing \
     git \
     curl \
@@ -40,8 +61,8 @@ COPY --from=opea_base /src/comps/ /app/comps/
 # reproducible and supply-chain-pinned, with no re-resolution against live PyPI.
 # `kneed` (used by the GenieTEIReranking class) is compiled into the lock, so
 # the separate pip install is gone.
-COPY genie-ai-overlay/reranker/requirements-cpu.txt /app/requirements-cpu.txt
-RUN pip install --no-cache-dir --no-deps --require-hashes -r /app/requirements-cpu.txt
+COPY genie-ai-overlay/reranker/${REQUIREMENTS_FILE} /app/requirements.txt
+RUN pip install --no-cache-dir --no-deps --require-hashes ${EXTRA_PIP_ARGS} -r /app/requirements.txt
 
 # Step D: Fix docarray circular import
 # The vendored comps/cores/proto/docarray.py shadows the real 'docarray' PyPI
@@ -83,6 +104,19 @@ RUN useradd -ms /bin/bash user && \
 COPY --chmod=0755 genie-ai-overlay/build-patches/install_site_startup.sh /app/install_site_startup.sh
 COPY configs/ssl/genie_ssl_patch.py /app/genie_ssl_patch.py
 RUN /app/install_site_startup.sh
+
+# The OS packages are refreshed by a separate, bustable layer: the monthly
+# rebuild passes --build-arg CACHE_BUST=<timestamp>, and a layer that takes
+# that argument is the only one whose cache key changes.
+#
+# Position: after the expensive layers (what sits above it stays cached — a
+# layer's cache key includes its parent), before the writes to package-owned
+# paths (a package that moves would restore its own files over ours), and
+# still root.
+ARG CACHE_BUST=0
+RUN CACHE_BUST=$CACHE_BUST apt-get update -y -o Acquire::Retries=5 && \
+    apt-get upgrade -y --with-new-pkgs --fix-missing -o Acquire::Retries=5 && \
+    apt-get clean && rm -rf /var/lib/apt/lists/*
 
 # Step H: Run the new microservice entry point from its new location
 USER user

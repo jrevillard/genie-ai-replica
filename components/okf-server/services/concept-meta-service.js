@@ -22,7 +22,7 @@
 
 const { createHash } = require('node:crypto');
 const { DateTime } = require('luxon');
-const matter = require('gray-matter');
+const { stringify } = require('./safe-frontmatter');
 const dbService = require('../shared-lib/db-connection-service');
 const { logger } = require('../shared-lib/logger');
 const config = require('../config');
@@ -1304,7 +1304,7 @@ async function patchConceptFields(repo_id, concept_id, { frontmatterPatch, body 
   }
   const fm = hasFm ? mergeFrontmatter(existing.frontmatter, frontmatterPatch) : existing.frontmatter || {};
   const bodyText = hasBody ? body : existing.body || '';
-  const parsed = await parserService.parseConcept(matter.stringify(bodyText, fm), {
+  const parsed = await parserService.parseConcept(stringify(bodyText, fm), {
     repo_id,
     path: `${concept_id}.md` // path determines concept_id (unchanged on patch)
   });

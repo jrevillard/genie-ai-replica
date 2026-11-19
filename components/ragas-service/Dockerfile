@@ -24,6 +24,24 @@ COPY app.py ragas_engine.py xlsx_io.py ./
 # Run as an unprivileged user (kics Missing User Instruction — the sibling
 # okf-server/pii-service images do the same; stateless CPU sidecar).
 RUN useradd --system --create-home --uid 10001 okf && chown -R okf:okf /app
+
+# The OS packages are refreshed by a separate, bustable layer: the monthly
+# rebuild passes --build-arg CACHE_BUST=<timestamp>, and a layer that takes
+# that argument is the only one whose cache key changes. This image installs
+# no OS package, but the BASE carries them (zlib1g — CVE-2026-85091, whose
+# fix lives in the trixie security pocket: 1:1.3.dfsg+really1.3.1-1+deb13u1),
+# and the base tag only moves when upstream rebuilds it. This layer is what
+# pulls that fix on the monthly cycle.
+#
+# Position: BELOW the dependency install (the pip install is the expensive
+# layer, and a layer's cache key includes its parent — so it stays cached
+# across a monthly bust), still root (the USER drop comes after), and above
+# nothing that writes to a package-owned path.
+ARG CACHE_BUST=0
+RUN CACHE_BUST=$CACHE_BUST apt-get update -y -o Acquire::Retries=5 && \
+    CACHE_BUST=$CACHE_BUST apt-get upgrade -y --with-new-pkgs --fix-missing -o Acquire::Retries=5 && \
+    apt-get clean && rm -rf /var/lib/apt/lists/*
+
 USER okf
 
 EXPOSE 8090

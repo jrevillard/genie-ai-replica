@@ -119,7 +119,8 @@ For the GPU-specific layer, see [GPU Deployment](/docs/deploy/gpu/).
   See [GPU Deployment](/docs/deploy/gpu/) and
   [NVIDIA A40 Install Guide](/docs/deploy/a40-install/).
 - **Node.js 22+** — required for JavaScript tooling. Docker images use
-  `node:22`; CI lint+test jobs run on `node:22-alpine`.
+  `node:22-trixie` / `node:22-trixie-slim`; CI lint+test jobs run on
+  `node:22-alpine`.
 
 ## Step 3: Install Docker on every host
 
@@ -454,7 +455,7 @@ defaults.
 | `DATAPREP_CHUNK_SIZE_TXT` | number | no | `500` | TXT chunk size |
 | `DATAPREP_CHUNK_SIZE_MD` | number | no | `500` | Markdown chunk size |
 | `DATAPREP_CHUNK_OVERLAP` | number | no | `50` | Overlap between chunks |
-| `DATAPREP_MAX_CONCURRENT_BATCHES` | number | no | `20` | Concurrent LLM label calls (was 5 in legacy configs) |
+| `DATAPREP_MAX_CONCURRENT_BATCHES` | number | no | `20` | Concurrent LLM batches — the labelling and context-generation phases each cap their own at this many; the graph phase shares one module-level gate sized by it across every ingest (was 5 in legacy configs) |
 | `DOCLING_DEVICE` | enum | no | `cuda` | `cuda` or `cpu` — CUDA is faster |
 | `DATAPREP_COMPONENT_NAME` | string | no | `GENIE_DATAPREP_ARANGODB` | Dataprep component name |
 | `DOCUMENT_REPOSITORY_URL` | string | no | `http://document-repository:3001` | Doc-repo internal URL |

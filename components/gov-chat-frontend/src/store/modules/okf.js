@@ -1090,10 +1090,12 @@ const actions = {
       // conceptService.get returns { frontmatter, body, ... } (the parsed
       // doc). Reconstruct the markdown via gray-matter so the
       // helper's matter() parse is symmetric.
-      const matter =
-        (await import(/* webpackChunkName: "gm" */ 'gray-matter')).default || (await import('gray-matter'));
+      // The safe wrapper, not gray-matter directly: stringify PARSES a
+      // string content before writing it, so the raw body would be
+      // evaluated (CVE-2026-78847).
+      const { safeStringify } = await import(/* webpackChunkName: "gm" */ '@/services/safeMatter');
       const indexMarkdown = indexDoc.frontmatter
-        ? matter.stringify(indexDoc.body || '', indexDoc.frontmatter)
+        ? safeStringify(indexDoc.body || '', indexDoc.frontmatter)
         : indexDoc.body || '';
 
       // 2. Build the new index.md with the approved frontmatter block

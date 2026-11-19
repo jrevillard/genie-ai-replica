@@ -10,6 +10,97 @@ change requires manual action from deployers.
 
 ### Breaking Changes
 
+#### Image tag variable renamed: `GENIE_AI_GLOBAL_TAG` / `genie_ai_global_tag` → `GENIE_AI_IMAGE_TAG` / `genie_ai_image_tag`
+
+The variable that carries the stack's version was named differently in every
+deployment target. Compose and Ansible now share one name — `IMAGE_TAG` — and
+the Helm chart exposes the same thing as the `imageTag` value.
+
+| Target | Former name | New name |
+|---|---|---|
+| Compose (`.env`) | `GENIE_AI_GLOBAL_TAG` | `GENIE_AI_IMAGE_TAG` |
+| Ansible (`--extra-vars`) | `genie_ai_global_tag` | `genie_ai_image_tag` |
+| Helm chart | *(none — `main` was hardcoded per service)* | `imageTag` |
+
+**Impact:** an UNCHANGED deployment keeps working: the former names are still
+read as a fallback for one release (but the fallback disappears in the next
+one). Renaming the variable IN PLACE, however, breaks the stack **silently**:
+the `.env` template carries a per-service image-tag line for every image,
+and each of those lines reads the global **by name**. Rename the global and
+those lines fall back to `latest` — the whole stack moves to the `latest`
+tag, with no error anywhere.
+
+**Migration:** take the new `env` template — the per-service lines changed
+with the global's name — and re-apply your own values to it:
+
+```bash
+# Compose — the .env is a copy of the repo's `env` template: take the new
+# one, then re-apply your own values (the secrets it carries).
+cp env .env        # from the NEW template, then re-apply your values
+# then, in it:
+GENIE_AI_IMAGE_TAG=v2.1.0     # was GENIE_AI_GLOBAL_TAG=v2.1.0
+
+# Ansible — the playbook invocation (no .env to touch: the playbook
+# generates the node's .env from its own template)
+ansible-playbook -i inventory/test.ini deploy.yml --vault-id test@prompt \
+  --extra-vars "repo_branch=main genie_ai_image_tag=v2.1.0"
+```
+
+An `.env` that still carries the OLD template's lines keeps the OLD
+behaviour — the fat images, and no variant knob: the three model-serving
+images no longer declare a per-service tag line in the template, and a
+`.env` that declares one shadows the version and the variant. Regenerate it.
+
+The variant (the slim build of the three model-serving images) is a SEPARATE
+knob, and it is new: `GENIE_AI_OPEA_IMAGE_TAG_SUFFIX` in Compose,
+`genie_ai_opea_image_tag_suffix` in Ansible, `opea.imageTagSuffix` in the
+chart. Empty = the default build, `-slim` = the slim build (no PyTorch, no
+CUDA wheels, no local weights). Leave it unset to keep the current images.
+
+#### Helm chart: the per-service image tags ship empty, and the stack version moves to `imageTag`
+
+The chart's per-service image tags (`services.<svc>.image.tag`,
+`opea.<svc>.image.tag`, `okf.<svc>.image.tag`) now default to `""` instead
+of `"main"`, and a new root value `imageTag` carries the stack's version for
+every GENIE.AI image the chart installs.
+
+Five images had NO per-service tag at all — the chatqna, the embedding and
+the OKF trio (the server, the PII sidecar, the RAGAS judge) hardcoded their
+repository and tag in the template, so a pin was silently ignored. They now
+accept one, like every other GENIE.AI image.
+
+**Impact:** an overlay that pins a per-service tag explicitly — for example
+`services.backend.image.tag: "main"` — now PINS that one image to `main`,
+while every other image follows `imageTag`. Before this change the two were
+the same value, so the pin was invisible; now it silently holds one image
+back when the global moves.
+
+**Migration:** drop the explicit per-service pins and set the global instead:
+
+```yaml
+# Before — one line per service, each carrying its own tag.
+services:
+  backend:
+    image: { repository: genie-ai-backend, tag: "main" }
+
+# After — one line for the whole stack.
+imageTag: "main"
+```
+
+A per-service pin stays valid when it names a DIFFERENT version than the
+rest of the stack (a canary, a hotfix): it is honoured exactly, and it never
+receives the variant suffix. The slim build of the three model-serving images
+is requested with the variant knob, not with a hand-written tag:
+
+```yaml
+imageTag: "main"
+opea:
+  imageTagSuffix: "-slim"   # the reranker, the retriever and the dataprep
+```
+
+The upstream images the chart does not own (clamav, redis, vllm, tei, …)
+carry their own pinned tag and are never affected by either knob.
+
 #### Android application id renamed: `com.example.genie_ai_mobile*` → `com.itu.genieai*`
 
 The mobile app's Android `applicationId`/`namespace` were the Flutter template

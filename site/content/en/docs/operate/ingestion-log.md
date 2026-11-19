@@ -108,7 +108,7 @@ via `_write_ingestion_log(...)`. Learning them saves hours of debugging.
 | `using raw chunks` | `Doc-level context generation failed after 3 attempts — using raw chunks.` | Contextual Retrieval / doc-context generation failed; ingestion continued with raw chunks (no contextual prefix). | Investigate per-chunk cause. Common: vLLM client init failed, LLM timeout, JSON parse error. |
 | `using raw chunk` | `Chunk 14: context generation failed after 3 attempts — using raw chunk.` | A single chunk's context-generation retries were exhausted; that chunk ingested with the raw text. | Usually transient (vLLM load). Investigate per chunk if persistent. |
 | `Batch labeling parse failure` | `Batch labeling parse failure for chunks [3, 4, 5]; falling back to per-chunk.` | The batched labelling answer was unusable: non-JSON, not a JSON object, or missing one of the requested chunk indices (the prompt requires every index present). | Model compatibility issue — see [RAG Pipeline &rarr; Choosing models]({{< relref "/docs/rag-pipeline/choosing-models" >}}). |
-| `in progress` | Two shapes, one grep key. A budgeted phase: `LLM labeling in progress: 18/65 batches completed, 20 in flight, 124s elapsed (budget 900s)`. The graph phase, which has no budget: `Graph insertion in progress: 40/65 batches completed, 20 in flight, 124s elapsed`. | A phase is still running and reporting on its timer. The presence of these rows is what distinguishes a slow phase from a stalled one. | None while it keeps ticking. If the elapsed time stops advancing between rows, the phase is stuck — check the trace. |
+| `in progress` | One shape, one grep key. The labelling phase: `LLM labeling in progress: 18/65 batches completed, 20 in flight, 124s elapsed (budget 900s)`. The graph phase, budgeted the same way: `Graph insertion in progress: 40/65 batches completed, 20 in flight, 124s elapsed (budget 900s)`. (Contextual Retrieval emits the same shape.) | A phase is still running and reporting on its timer. The presence of these rows is what distinguishes a slow phase from a stalled one. | None while it keeps ticking. If the elapsed time stops advancing between rows, the phase is stuck — check the trace. |
 | `Batch labeling call failed` | `Batch labeling call failed for chunks [7, 8] (vLLM timeout); falling back to per-chunk.` | A labelling batch failed; per-chunk fallback engaged. | Usually transient (vLLM load). Retry; if persistent, lower `DATAPREP_LLM_LABEL_BATCH_SIZE`. |
 | `context generation failed` | `Chunk 14: context generation failed after 3 attempts — using raw chunk.` | Contextual Retrieval's per-chunk doc-context call failed; chunk ingested without the context prefix. | Non-fatal — the chunk is still retrievable but with weaker labels. |
 
@@ -180,8 +180,10 @@ gotcha), see [`.claude/rules/DEBUGGING-TRACING.md`](https://opensource.unicc.org
 |---|---|---|
 | `Batch labeling parse failure` on every chunk | Check the model supports `response_format=json_object` ([RAG Pipeline &rarr; Choosing models]({{< relref "/docs/rag-pipeline/choosing-models" >}})). | No — fix the model config, then re-ingest. |
 | A document lands as `Ingested with Warnings` instead of `Ingested` | One LLM phase degraded. The `System` log line names which cause and the knob that fixes it: **budget exhausted** → raise `DATAPREP_LLM_PHASE_TIMEOUT_SECONDS` (or `MODEL_LLM_TIMEOUT_SECONDS` with it); **client could not be built** → check `VLLM_ENDPOINT` and the model id; **no context generated** or **no labels generated** → the endpoint is unreachable or the model does not support `response_format=json_object`. The affected chunks carry the document's file labels (labelling) or raw text (Contextual Retrieval) instead of the model's output. | Yes, after fixing the cause — the document is indexed and searchable, only the enrichment is incomplete. Re-ingesting a degraded document clears its existing chunks first, so it replaces rather than duplicates. |
-| `in progress` rows whose elapsed time stops advancing | The phase is stuck rather than slow, or it has hit `DATAPREP_LLM_PHASE_TIMEOUT_SECONDS` and is about to degrade. Check the trace, then `MODEL_LLM_TIMEOUT_SECONDS` and `DATAPREP_LLM_PHASE_TIMEOUT_SECONDS` (raise both — the phase budget is the binding ceiling). | No — the document still ingests on its fallback (file labels / raw chunk). |
+| `in progress` rows whose elapsed time stops advancing | The phase is stuck rather than slow, or it has hit `DATAPREP_LLM_PHASE_TIMEOUT_SECONDS` and is about to end. Check the trace, then `MODEL_LLM_TIMEOUT_SECONDS` and `DATAPREP_LLM_PHASE_TIMEOUT_SECONDS` (raise both — the phase budget is the binding ceiling). | Depends on the phase. The labelling and Contextual Retrieval phases DEGRADE — the document still ingests on its fallback (file labels / raw chunk). The graph phase has no fallback: the ingest FAILS, the partial graph is retracted, and the file needs a manual re-kick. |
 | `failed` on the **context generation** step only | The doc-context budget is too large for the loaded context window: lower `DATAPREP_CONTEXTUAL_DOC_BUDGET` (or `DATAPREP_CONTEXTUAL_DOC_BUDGET_DOC_LEVEL` under the `doc_level` strategy), or disable Contextual Retrieval (`CONTEXTUAL_RETRIEVAL_ENABLED=false`) temporarily. | Only if you want the context prefix on existing documents. |
+| `Graph insertion exceeded its ...s budget` | The graph-extraction phase ran out of `DATAPREP_LLM_PHASE_TIMEOUT_SECONDS` (default 900 s) with batches still running — most often a wedged GPU. The ingest FAILED: the file lands `Ingestion Error` and the partial graph is retracted. | Raise `DATAPREP_LLM_PHASE_TIMEOUT_SECONDS`, or raise `DATAPREP_MAX_CONCURRENT_BATCHES` to shorten the phase's wall clock. Then re-ingest — the file is not re-ingested automatically (see [the retry contract]({{< relref "/docs/knowledge-base/document-lifecycle" >}}) § "A failed ingest is re-kicked by hand": the automatic re-ingest covers OKF re-indexes only). |
+| `Purging the rows a graph insertion wrote after the retraction (attempt 1/2)` | A graph insertion was still running when the ingest failed or was killed, and its write landed after the rollback's cleanup. The purge deletes the rows the late write left behind — if the rollback's own cascade already removed them, the purge finds nothing left to delete; each attempt announces itself before it runs, and the cascade that follows a row is that attempt's deletion — unless the purge starts while the rollback's cascade is still finishing, in which case the two cascades' rows interleave. The document's own status is untouched by it. A purge that is cancelled (the service is going down) may leave this log missing the row it was writing when the cancellation landed (a request already sent can still commit). The trace carries the purge's outcome (`dataprep.purge_result` — `cancelled` only when no other outcome was recorded first; the first outcome always wins), and the service log says the purge was cancelled — when the line survives the shutdown — naming the outcome when one had already been recorded. The rows the purge did not delete stay indexed. | Not because of the purge — it only removes what the late write left behind. The document itself needs the manual re-kick of the retry contract: see [the retry contract]({{< relref "/docs/knowledge-base/document-lifecycle" >}}) § "A failed ingest is re-kicked by hand". |
 | `raw-chunk fallback` on isolated chunks (most chunks labelled) | Usually transient vLLM load. Re-ingest if labels are critical. | Optional. |
 | `failed` on **parsing** (docling) | Check the source file — scanned PDFs, password-protected files, etc. | After fixing the file (re-upload). |
 | `failed` on **embedding** | Check the `tei` Docker service health (`docker service ps genieai_tei` or `docker compose ps tei`). Dataprep calls TEI directly at `TEI_EMBEDDING_ENDPOINT` (default `http://tei:80`) — it does **not** go through the OPEA `embedding` wrapper (that wrapper is used by chatqna). | After the `tei` service is healthy again. |
@@ -268,6 +270,16 @@ diagnosis needs a probe, not a one-liner.
 
 ### Symptom: file ends in `Ingestion Error` with labelling parse failures
 
+`Ingestion Error` is the terminal state of a failed ingest: the failure
+retracted whatever the run had written (and a graph insertion still in flight
+at that moment is purged when it settles, as long as the service does not
+restart first — the purge is held in memory), and **nothing re-ingests it
+automatically**. Fix the cause below, then re-kick the document (admin
+dashboard → Documents table → **Ingest** on the selected row, or
+`POST /api/files/{fileId}/ingest`). The retry contract is documented in
+[Document lifecycle]({{< relref "/docs/knowledge-base/document-lifecycle" >}}) §
+"A failed ingest is re-kicked by hand".
+
 The labelling LLM returned malformed JSON. Almost always a model issue, not
 a document issue. Steps:
 
@@ -307,7 +319,11 @@ that did finish are real work and the chunks are indexed and searchable — but
 the operator is not told "Ingested" for a document that was only partially
 processed.
 
-Four causes, with different fixes:
+Four causes, with different fixes. The graph-extraction phase is not among
+them: it has no fallback, so when its budget expires the ingest FAILS
+(`Ingestion Error`, partial graph retracted) instead of landing in this
+status — see the `Graph insertion exceeded its ...s budget` row of the
+symptom table above.
 
 | Cause in the `System` line | What happened | Fix |
 |---|---|---|

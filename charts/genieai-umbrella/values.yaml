@@ -50,6 +50,12 @@ global:
   # following the Helm `global.*` convention; the chart's own overlays
   # set the top-level key.
   imageRegistry: ""
+  # Optional VERSION tag that WINS over the top-level imageTag when set
+  # (the factory, the migrations Job and the OPEA templates all read it
+  # first). Empty = the top-level imageTag applies. Exists for operators
+  # following the Helm `global.*` convention; the chart's own overlays
+  # set the top-level key.
+  imageTag: ""
   # imagePullSecrets — a list of {name: <Secret>} refs wired into every
   # service pod's spec.imagePullSecrets, for a registry that requires
   # authentication. The registry the images are pulled FROM is the
@@ -188,6 +194,22 @@ observability:
 # and this registry only mirrors GENIE.AI images — subchart images
 # (Envoy Gateway) must keep their upstream registry.
 imageRegistry: "registry.opensource.unicc.org/un/itu/genie-ai"
+# The VERSION tag every GENIE.AI image this chart installs carries (a
+# release tag vX.Y.Z, or a branch tag like main). ONE line to bump the
+# whole stack.
+#
+# A per-service pin wins over it: `services.<svc>.image.tag` (and
+# `opea.<svc>.image.tag` for the OPEA services) names the EXACT tag of
+# that one image. The per-service values ship EMPTY, not "main", so the
+# global can apply — a literal "main" there would shadow it forever.
+#
+# Empty = the historical default ("main"). The upstream images the chart
+# does not own (clamav, redis, vllm, tei, ...) carry their own pinned
+# tag and are never affected by this knob.
+#
+# `global.imageTag` (the Helm `global.*` convention, in the global block
+# above) wins over this one, like global.imageRegistry does.
+imageTag: ""
 
 pluggable:
   # The chart-wide storage class for EVERY persistent volume the chart
@@ -701,7 +723,7 @@ services:
   backend:
     enabled: true
     replicas: null
-    image: { repository: genie-ai-backend, tag: "main" }
+    image: { repository: genie-ai-backend, tag: "" }   # "" = the global imageTag (a literal tag here pins this one image)
     # External HTTPS API egress (the backend dials public APIs directly:
     # weather = api.open-meteo.com, WeatherService). NetworkPolicy peers
     # cannot express a domain, so the rule is port-scoped over 80/443:
@@ -715,7 +737,7 @@ services:
     # One-shot migrations Job (post-install/post-upgrade hook) that
     # creates the ArangoDB collections; same registry/tag conventions
     # as the service images.
-    migrationsImage: { repository: genie-ai-db-migrations, tag: "main" }
+    migrationsImage: { repository: genie-ai-db-migrations, tag: "" }   # "" = the global imageTag
     # Remote translation API (OpenAI-compatible vLLM). endpoint empty is
     # NOT automatically the CPU model: with the OPEA tier on, the
     # endpoint derives from opea.gpu (the nodeHost in external mode, the
@@ -840,7 +862,7 @@ services:
   frontend:
     enabled: true
     replicas: null
-    image: { repository: genie-ai-frontend, tag: "main" }
+    image: { repository: genie-ai-frontend, tag: "" }   # "" = the global imageTag (a literal tag here pins this one image)
     port: 8090
     # Image USER is nginx (uid 101). The Dockerfile pre-chowns
     # every path the container writes (the runtime-config dir
@@ -899,7 +921,7 @@ services:
   documentRepository:
     enabled: true
     replicas: null
-    image: { repository: genie-ai-document-repository, tag: "main" }
+    image: { repository: genie-ai-document-repository, tag: "" }   # "" = the global imageTag (a literal tag here pins this one image)
     port: 3001
     # The image has no USER directive, so the default would be root.
     # Pin to uid 1000 (matches backend's node user) so the PVC mounts
@@ -1117,6 +1139,11 @@ okf:
     # opea-style env override map — rows here win over the template's
     # derived rows of the same name.
     env: {}
+    # The image this service runs. The tag is the chart's global
+    # `imageTag` (one line to bump the whole stack); a literal tag here
+    # pins this one image, and it is honoured exactly — it never receives
+    # the variant suffix, because this image has no slim build.
+    image: { repository: genie-ai-okf-server, tag: "" }   # "" = the global imageTag (a literal tag here pins this one image)
   retrievalConfig:
     ttlMs: "30000"
     timeoutMs: "3000"
@@ -1131,10 +1158,20 @@ okf:
   # crawl pipeline, in megabytes.
   bundleMaxMb: "100"
   pii:
+    # The image this service runs. The tag is the chart's global
+    # `imageTag` (one line to bump the whole stack); a literal tag here
+    # pins this one image, and it is honoured exactly — it never receives
+    # the variant suffix, because this image has no slim build.
+    image: { repository: genie-ai-pii-service, tag: "" }   # "" = the global imageTag (a literal tag here pins this one image)
     webConcurrency: "4"       # PII_WEB_CONCURRENCY
     regionMaxChars: "50000"   # PII_REGION_MAX_CHARS
     env: {}
   ragas:
+    # The image this service runs. The tag is the chart's global
+    # `imageTag` (one line to bump the whole stack); a literal tag here
+    # pins this one image, and it is honoured exactly — it never receives
+    # the variant suffix, because this image has no slim build.
+    image: { repository: genie-ai-ragas-service, tag: "" }   # "" = the global imageTag (a literal tag here pins this one image)
     env: {}
   # The RAGAS judge cache PVC size — the KG builds that the cache spares
   # cost ~50 minutes on a cold cache.
@@ -1146,6 +1183,26 @@ okf:
 # translation). The per-service templates carry the defaults for
 # chart-specific tuning (RERANKING_*, RETRIEVER_*, CHATQNA_*, etc.).
 opea:
+  # The VARIANT suffix for the tag of the model-serving images — the
+  # reranker, the retriever and the dataprep:
+  #   ""      = the default build (the one that ships the model stack)
+  #   "-slim" = the slim build — no PyTorch, no CUDA wheels, no local
+  #             weights (issue #2000) — for a node whose model calls all
+  #             go to an external GPU API. The slim dataprep delegates
+  #             the document conversion to a remote docling-serve, so it
+  #             needs `opea.gpu.paths.docling` set.
+  #
+  # It applies to those THREE images and to nothing else: the CI publishes
+  # a slim build for exactly those three, so there is no slim variant of
+  # the others to select. The set of images it applies to is a BUILD fact,
+  # not a values knob — an operator cannot widen it by mistake.
+  #
+  # The suffix COMPOSES onto the version tag: the version it is applied to
+  # must be a tag the CI publishes a slim build of (the branch tag, a
+  # release tag). It does not compose the immutable sha-pinned form
+  # (:main-slim-<sha>) — the CI publishes that one with the suffix BEFORE
+  # the sha — so pin it by name in the per-service image tag.
+  imageTagSuffix: ""
   enabled: false
   gpu:
     # external: model endpoints live on a remote GPU node (nodeHost + paths).
@@ -1183,6 +1240,11 @@ opea:
       # serves docling-serve at that path.
       docling: ""
   chatqna:
+    # The image this service runs. The tag is the chart's global
+    # `imageTag` (one line to bump the whole stack); a literal tag here
+    # pins this one image, and it is honoured exactly — it never receives
+    # the variant suffix, because this image has no slim build.
+    image: { repository: genie-ai-chatqna-server, tag: "" }   # "" = the global imageTag (a literal tag here pins this one image)
     # CHATQNA_*, RERANKING_*, MULTI_TURN_* — every knob the chatqna
     # template reads, declared with its template default so an operator
     # can discover the tuning surface without reading template source
@@ -1254,6 +1316,12 @@ opea:
       #     VLLM_API_KEY from the vllm-api-key Secret, which the code
       #     accepts on the same paths.
   retriever:
+    # The image this service runs. The default is the fat image (`:main`).
+    # The slim variant (`:main-slim`, issue #2000) carries NO model stack
+    # — no torch, no CUDA wheels, no local weights — for a deployment whose
+    # model calls all go to an external GPU API. Set the tag (or a digest)
+    # here to run the slim variant.
+    image: { repository: genie-ai-retriever-arango, tag: "" }   # "" = the global imageTag (a literal tag here pins this one image)
     # RETRIEVER_* — every knob the retriever template reads, declared
     # with its template default (see the chatqna note).
     retrieverComponentName: "GENIE_RETRIEVER_ARANGODB"  # RETRIEVER_COMPONENT_NAME
@@ -1317,6 +1385,12 @@ opea:
       MODEL_PROBE_TIMEOUT_SECONDS: "10"
       MODEL_SUMMARIZER_TIMEOUT_SECONDS: "600"
   dataprep:
+    # The image this service runs. The default is the fat image (`:main`).
+    # The slim variant (`:main-slim`, issue #2000) carries NO model stack
+    # — no torch, no CUDA wheels, no local weights — for a deployment whose
+    # model calls all go to an external GPU API. Set the tag (or a digest)
+    # here to run the slim variant.
+    image: { repository: genie-ai-dataprep-arango, tag: "" }   # "" = the global imageTag (a literal tag here pins this one image)
     # chunking / labeling / contextual retrieval — every knob the dataprep
     # template reads, declared with its template default (see the chatqna
     # note).
@@ -1387,6 +1461,12 @@ opea:
       MODEL_LLM_TIMEOUT_SECONDS: "180"
       MODEL_PROBE_TIMEOUT_SECONDS: "10"
   reranker:
+    # The image this service runs. The default is the fat image (`:main`).
+    # The slim variant (`:main-slim`, issue #2000) carries NO model stack
+    # — no torch, no CUDA wheels, no local weights — for a deployment whose
+    # model calls all go to an external GPU API. Set the tag (or a digest)
+    # here to run the slim variant.
+    image: { repository: genie-ai-reranker, tag: "" }   # "" = the global imageTag (a literal tag here pins this one image)
     # Adaptive-utility tuning knobs read at reranker startup; only used
     # when RERANKING_STRATEGY=adaptive. Rendered as the
     # NOVELTY_SIGMOID_*/CONTEXT_DECAY_FACTOR/MIN_VALUE_THRESHOLD env rows
@@ -1404,6 +1484,11 @@ opea:
       # The component name the reranker reports in its spans.
       RERANK_COMPONENT_NAME: GENIE_TEI_RERANKING
   embedding:
+    # The image this service runs. The tag is the chart's global
+    # `imageTag` (one line to bump the whole stack); a literal tag here
+    # pins this one image, and it is honoured exactly — it never receives
+    # the variant suffix, because this image has no slim build.
+    image: { repository: genie-ai-embedding, tag: "" }   # "" = the global imageTag (a literal tag here pins this one image)
     modelId: BAAI/bge-large-en-v1.5
     # Operator-facing environment map, like the other orchestrators'
     # (`opea.chatqna.env` etc). A MAP so an overlay that sets one

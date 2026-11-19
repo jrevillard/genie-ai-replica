@@ -60,55 +60,78 @@ def _resolve_docling_device(env_device, cuda_available=None):
     return AcceleratorDevice.CPU
 
 
-try:
-    # The easyocr and docling imports sit INSIDE the try so that a missing
-    # dependency is caught here — above the try they would raise before the
-    # handler exists, and the remedy below would never be logged.
-    import easyocr
-    from docling.datamodel.base_models import InputFormat
-    from docling.datamodel.pipeline_options import (
-        AcceleratorDevice,
-        AcceleratorOptions,
-        EasyOcrOptions,
-        PdfPipelineOptions,
+# The LOCAL docling converter is built ONLY when no remote docling-serve is
+# configured (DOCLING_ENDPOINT empty). With a remote endpoint set, the
+# conversion is delegated (see _load_with_docling_remote) and the local
+# pipeline is never used — so the image does not need docling, easyocr or
+# torch at all. That is the slim image (issue #2000): it carries no local
+# model and delegates every model call, the document conversion included.
+#
+# The consequence is deliberate: a slim image WITHOUT DOCLING_ENDPOINT has no
+# local converter, and the error below names the remedy instead of failing
+# with an ImportError traceback.
+docling_converter = None
+
+if not DOCLING_ENDPOINT:
+    try:
+        # The easyocr and docling imports sit INSIDE the try so that a missing
+        # dependency is caught here — above the try they would raise before the
+        # handler exists, and the remedy below would never be logged.
+        import easyocr
+        from docling.datamodel.base_models import InputFormat
+        from docling.datamodel.pipeline_options import (
+            AcceleratorDevice,
+            AcceleratorOptions,
+            EasyOcrOptions,
+            PdfPipelineOptions,
+        )
+        from docling.document_converter import (
+            DocumentConverter,
+            PdfFormatOption,
+        )
+
+        reader = easyocr.Reader(["en"])  # Can add more languages later
+
+        # configuring Docling to use easyocr (more lightweight than OPEA default library)
+        ocr_options = EasyOcrOptions(lang=["en"])
+
+        # FIX: Configurable Accelerator Device (Default: CUDA)
+        # Reads 'DOCLING_DEVICE' env var: 'cpu' forces CPU, otherwise defaults to CUDA.
+        # CUDA is only selected when a GPU is actually available (see
+        # _resolve_docling_device); otherwise the code falls back to CPU.
+        env_device = os.getenv("DOCLING_DEVICE", "cuda").lower()
+        device_selection = _resolve_docling_device(env_device)
+        logger.info(
+            f"Docling configured to use {'CUDA (GPU)' if device_selection == AcceleratorDevice.CUDA else 'CPU'}."
+        )
+
+        accelerator_options = AcceleratorOptions(num_threads=4, device=device_selection)
+
+        # Pipeline for PDFs and Images (for layout analysis and OCR)
+        pdf_and_image_pipeline_config = PdfPipelineOptions(
+            do_ocr=True, ocr_options=ocr_options, accelerator_options=accelerator_options
+        )
+
+        # Map PDF file type to relevant pipeline
+        format_options = {
+            InputFormat.PDF: PdfFormatOption(pipeline_options=pdf_and_image_pipeline_config),
+            # Later can add pipelines for other file formats
+        }
+
+        # 5. Initialize the converter once, passing the format_options dict
+        docling_converter = DocumentConverter(format_options=format_options)
+
+    except ImportError:
+        logger.error(
+            "Please install docling and its dependencies: pip install docling easyocr — "
+            "or point DOCLING_ENDPOINT at a docling-serve endpoint, which is what the slim "
+            "image (issue #2000) expects: it carries no local converter."
+        )
+        raise
+else:
+    logger.info(
+        f"Docling conversion delegated to the remote endpoint {DOCLING_ENDPOINT} — no local converter is built."
     )
-    from docling.document_converter import (
-        DocumentConverter,
-        PdfFormatOption,
-    )
-
-    reader = easyocr.Reader(["en"])  # Can add more languages later
-
-    # configuring Docling to use easyocr (more lightweight than OPEA default library)
-    ocr_options = EasyOcrOptions(lang=["en"])
-
-    # FIX: Configurable Accelerator Device (Default: CUDA)
-    # Reads 'DOCLING_DEVICE' env var: 'cpu' forces CPU, otherwise defaults to CUDA.
-    # CUDA is only selected when a GPU is actually available (see
-    # _resolve_docling_device); otherwise the code falls back to CPU.
-    env_device = os.getenv("DOCLING_DEVICE", "cuda").lower()
-    device_selection = _resolve_docling_device(env_device)
-    logger.info(f"Docling configured to use {'CUDA (GPU)' if device_selection == AcceleratorDevice.CUDA else 'CPU'}.")
-
-    accelerator_options = AcceleratorOptions(num_threads=4, device=device_selection)
-
-    # Pipeline for PDFs and Images (for layout analysis and OCR)
-    pdf_and_image_pipeline_config = PdfPipelineOptions(
-        do_ocr=True, ocr_options=ocr_options, accelerator_options=accelerator_options
-    )
-
-    # Map PDF file type to relevant pipeline
-    format_options = {
-        InputFormat.PDF: PdfFormatOption(pipeline_options=pdf_and_image_pipeline_config),
-        # Later can add pipelines for other file formats
-    }
-
-    # 5. Initialize the converter once, passing the format_options dict
-    docling_converter = DocumentConverter(format_options=format_options)
-
-except ImportError:
-    logger.error("Please install docling and its dependencies: pip install docling easyocr")
-    raise
 
 
 ### Docling document loader ############################################################
@@ -183,7 +206,13 @@ async def load_with_docling(doc_path: str) -> str:
 # (`genieai_dataprep_arangodb.py`) imports this constant to decide which files
 # are routed here; a second, restated tuple would let the two lists drift
 # apart and silently flip this guard between live and dead (issue #1661).
-DOCLING_SUPPORTED_EXTENSIONS = (".pdf", ".docx", ".pptx", ".xlsx", ".html", ".txt", ".md", ".asciidoc")
+#
+# `.txt` is deliberately absent (issue #1985): docling has no plain-text
+# format, so a .txt routed here failed with `File format not allowed` after a
+# successful upload — a file the repository accepts but no deployment with the
+# shipped CONTENT_EXTRACTION_METHOD=docling default could ever ingest. The
+# standard loader reads plain text, so the caller routes .txt there instead.
+DOCLING_SUPPORTED_EXTENSIONS = (".pdf", ".docx", ".pptx", ".xlsx", ".html", ".md", ".asciidoc")
 
 
 async def docling_document_loader(doc_path):

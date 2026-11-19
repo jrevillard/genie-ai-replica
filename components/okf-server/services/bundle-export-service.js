@@ -38,7 +38,7 @@
 // Ingested progression.
 
 const AdmZip = require('adm-zip');
-const matter = require('gray-matter');
+const { stringify } = require('./safe-frontmatter');
 const dbService = require('../shared-lib/db-connection-service');
 const { logger } = require('../shared-lib/logger');
 const { withSpan } = require('../shared-lib/tracing');
@@ -81,13 +81,10 @@ async function buildBundleZip(repoId) {
   }
   const indexRow = rows.find((r) => r.is_index) || rows[0];
   const zip = new AdmZip();
-  zip.addFile('index.md', Buffer.from(matter.stringify(indexRow.body || '', indexRow.frontmatter || {}), 'utf8'));
+  zip.addFile('index.md', Buffer.from(stringify(indexRow.body || '', indexRow.frontmatter || {}), 'utf8'));
   for (const row of rows) {
     if (row.concept_id === indexRow.concept_id) continue;
-    zip.addFile(
-      `concepts/${row.concept_id}.md`,
-      Buffer.from(matter.stringify(row.body || '', row.frontmatter || {}), 'utf8')
-    );
+    zip.addFile(`concepts/${row.concept_id}.md`, Buffer.from(stringify(row.body || '', row.frontmatter || {}), 'utf8'));
   }
   return { buffer: zip.toBuffer(), concept_count: rows.length };
 }

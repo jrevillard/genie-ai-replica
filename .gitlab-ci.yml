@@ -227,7 +227,13 @@ workflow:
     # 2026-10-19 stale-bytes incident and the 2.1 GB full-fetch budget).
     # The npm download cache is preserved: it is the one reuse channel
     # npm ci genuinely has.
+    # Each step prints BEFORE it runs: a step that deletes a big tree (the
+    # leftover node_modules of a previous npm job) can stay silent for a
+    # full trace-update interval, and a silent interval kills the job (see
+    # the --progress=plain note below for the mechanism).
+    - echo "[workspace] removing the untracked residue (slow when a previous job left node_modules)"
     - git clean -ffdx -e .npm -e node_modules -e .venv || true
+    - echo "[workspace] restoring the tracked tree"
     - git checkout -f HEAD -- . || git reset --hard HEAD || true
   variables:
     npm_config_cache: "$CI_PROJECT_DIR/.npm/"
@@ -307,7 +313,7 @@ workflow:
   variables:
     COMPOSE_PROJECT_NAME: "ci-$CI_PIPELINE_ID"
     # Pull candidate images from the tmp/ quarantine namespace (where build:image
-    # pushes pre-promote candidates). GENIE_AI_GLOBAL_TAG matches the candidate tag.
+    # pushes pre-promote candidates). GENIE_AI_IMAGE_TAG matches the candidate tag.
     GENIE_AI_REGISTRY: "$CI_REGISTRY_IMAGE/tmp"  # e2e pulls candidates from tmp/ namespace
   allow_failure: false
   tags: [docker]
@@ -384,7 +390,13 @@ workflow:
       else
         E2E_TAG="pending-${CI_COMMIT_SHORT_SHA}"
       fi
-      sed -i "s|^GENIE_AI_GLOBAL_TAG=.*|GENIE_AI_GLOBAL_TAG=${E2E_TAG}|" .env
+      # The stack's version lives in GENIE_AI_IMAGE_TAG (GENIE_AI_GLOBAL_TAG
+      # is the former name, still read as a fallback for one release). The
+      # .env is built from the repo's env template, which carries the CURRENT
+      # name — a sed that targets a name the template no longer assigns
+      # matches NOTHING, and the E2E then pulls the template's default
+      # ("main") instead of the candidate it is supposed to test.
+      sed -i "s|^GENIE_AI_IMAGE_TAG=.*|GENIE_AI_IMAGE_TAG=${E2E_TAG}|" .env
       echo "E2E pulling candidate images tagged :${E2E_TAG}"
     # Pull all custom services from the registry. `up --no-build` below fails
     # loudly if a build:image job didn't publish its candidate, surfacing the
@@ -1325,7 +1337,13 @@ container_scanning:
     # it, and the checkout itself is what blew the get_sources budget (the
     # .git carries a 2.1 GB blob). Reset the workspace explicitly instead:
     # clean the untracked residue and force-restore the tracked tree.
+    # Each step prints BEFORE it runs: a step that deletes a big tree (the
+    # leftover node_modules of a previous npm job) can stay silent for a
+    # full trace-update interval, and a silent interval kills the job (see
+    # the --progress=plain note below for the mechanism).
+    - echo "[workspace] removing the untracked residue (slow when a previous job left node_modules)"
     - git clean -ffdx -e .npm -e node_modules -e .venv || true
+    - echo "[workspace] restoring the tracked tree"
     - git checkout -f HEAD -- . || git reset --hard HEAD || true
     - echo "$CI_REGISTRY_PASSWORD" | docker login -u "$CI_REGISTRY_USER" --password-stdin "$CI_REGISTRY"
     - if [ -n "$DOCKER_HUB_USER" ]; then echo "$DOCKER_HUB_TOKEN" | docker login -u "$DOCKER_HUB_USER" --password-stdin docker.io; fi
@@ -1342,36 +1360,106 @@ container_scanning:
       # The frontend bakes a build marker (#1851): /build-info.json carries
       # the commit the image was built from, and the e2e pre-flight reads
       # it so a stale venue cannot file misleading spec-defect issues.
-      # Other images do not declare the ARG — buildx ignores it there, so
-      # the arg is passed only where it is consumed.
+      # GIT_SHA is passed only where it is consumed; the other images do not
+      # declare it, and buildx ignores an undeclared build-arg (with a
+      # warning, exit 0).
       BUILD_ARGS=""
       case "$DOCKERFILE" in
         *gov-chat-frontend*)
           BUILD_ARGS="--build-arg GIT_SHA=${CI_COMMIT_SHA:-unknown}"
           ;;
       esac
-      # FORCE_IMAGE_REBUILD (the monthly schedule / operator trigger) must be
-      # a REAL rebuild: with the registry cache left on, buildx reuses the
-      # cached RUN layers and an unchanged Dockerfile never re-runs
-      # `apt-get upgrade` / `apk upgrade` — the security-update layers only
-      # ever executed once per Dockerfile edit, so the monthly cycle pulled
-      # no new packages (measured 2026-11-17: two same-day rebuilds shipped
-      # identical libpq 17.11 / nginx 1.28.3-r1 while 17.12 / 1.28.3-r4 sat
-      # in the security repos). --no-cache re-runs every layer.
-      NOCACHE=""
-      if [ "${FORCE_IMAGE_REBUILD:-}" = "true" ]; then
-        NOCACHE="--no-cache"
+      # The contract of the monthly rebuild: an image whose Dockerfile
+      # upgrades OS packages must declare ARG CACHE_BUST, otherwise its
+      # packages are frozen at build time and the monthly rebuild ships the
+      # same ones forever. The dashboard surfaces that only weeks later, as
+      # "detected but unshipped" — this check surfaces it at build time.
+      if grep -qE '(apt-get|apk)[[:space:]]+upgrade' "$DOCKERFILE" \
+          && ! grep -qE '^[[:space:]]*ARG[[:space:]]+CACHE_BUST' "$DOCKERFILE"; then
+        echo "ERROR: $DOCKERFILE upgrades OS packages but declares no 'ARG CACHE_BUST' — the monthly rebuild would not refresh them"
+        exit 1
       fi
+      # FORCE_IMAGE_REBUILD (the monthly schedule / operator trigger) must
+      # refresh the OS security packages. Every image that installs OS
+      # packages declares ARG CACHE_BUST on its upgrade layer: an ARG value
+      # is part of that layer's cache key, so the layer re-runs on every
+      # monthly rebuild — while every layer BEFORE it stays cached (a layer's
+      # cache key includes its parent). The upgrade layer therefore sits
+      # after the expensive layers (npm ci, pip install, model COPYs) and
+      # before the writes to package-owned paths, and still runs as root.
+      #
+      # The value is passed ONLY when the rebuild is forced. A fresh value on
+      # every pipeline would invalidate the upgrade layer on every merge and
+      # change every image digest for nothing.
+      #
+      # The mechanism this replaces was --no-cache: it re-ran EVERY layer of
+      # every image (multi-minute, mostly silent, and it re-resolved
+      # unpinned dependencies), and it still shipped stale packages whenever
+      # a build failed before reaching the upgrade layer.
+      if [ "${FORCE_IMAGE_REBUILD:-}" = "true" ]; then
+        BUILD_ARGS="$BUILD_ARGS --build-arg CACHE_BUST=$(date +%s)"
+      fi
+      # --progress=plain: buildx's default renderer is a dynamic display that
+      # collapses into an unreadable blob in a CI log. The plain renderer
+      # streams every build step, which makes the log usable AND keeps the
+      # trace alive during the long silent steps of an image build.
+      #
+      # It is NOT the fix for the "unknown_failure" deaths measured on
+      # 2026-11-17/18: those were Cloudflare's WAF refusing the job-log
+      # upload (403 on PATCH /api/v4/jobs/:id/trace — issue #2001), which
+      # the runner reads as "the job failed" and answers by killing the job.
+      # The build itself never failed, and the rejected chunks were 46-226 KB,
+      # never empty.
       docker buildx build \
+        --progress=plain \
         --pull \
         --push \
-        $NOCACHE \
         -t "$REGISTRY_REF" \
         -f "$DOCKERFILE" \
         $BUILD_ARGS \
-        --cache-from "type=registry,ref=$CACHE_REF" \
+        --cache-from "type=registry,ref=$CACHE_REF,mode=max" \
         --cache-to "type=registry,ref=$CACHE_REF,mode=max" \
         "$CONTEXT"
+      # SLIM VARIANT (issue #2000) — the same Dockerfile, built with the slim
+      # lock (torch at its CPU build instead of the CUDA build PyPI ships).
+      # Pushed as a SECOND tag in the SAME repository
+      # (`tmp/$IMAGE_NAME:slim-<cand>`) and promoted to `:main-slim`, so a
+      # deployment without a GPU pins the slim tag and one with a GPU keeps
+      # the fat one. The service code is identical — only the installed
+      # dependency set differs.
+      #
+      # A job that declares SLIM_REQUIREMENTS_FILE builds BOTH variants; a
+      # job that does not is untouched (the fat image is published exactly as
+      # before).
+      if [ -n "${SLIM_REQUIREMENTS_FILE:-}" ]; then
+        SLIM_REF="$CI_REGISTRY_IMAGE/tmp/$IMAGE_NAME:slim-${CANDIDATE_TAG}"
+        SLIM_CACHE_REF="$CI_REGISTRY_IMAGE/tmp/$IMAGE_NAME:cache-slim-${CI_COMMIT_REF_SLUG}"
+        echo "Building $IMAGE_NAME (slim) → ${SLIM_REF}"
+        # The build args are assembled as positional parameters: SMOKE_IMPORTS
+        # carries spaces and semicolons, and an unquoted expansion would
+        # word-split it.
+        set -- --build-arg "REQUIREMENTS_FILE=${SLIM_REQUIREMENTS_FILE}" \
+               --build-arg "EXTRA_PIP_ARGS=${SLIM_EXTRA_PIP_ARGS:-}"
+        if [ -n "${SLIM_SMOKE_IMPORTS:-}" ]; then
+          set -- "$@" --build-arg "SMOKE_IMPORTS=${SLIM_SMOKE_IMPORTS}"
+        fi
+        if [ -n "${SLIM_INSTALL_JRE:-}" ]; then
+          set -- "$@" --build-arg "INSTALL_JRE=${SLIM_INSTALL_JRE}"
+        fi
+        if [ -n "${SLIM_INSTALL_EASYOCR_MODELS:-}" ]; then
+          set -- "$@" --build-arg "INSTALL_EASYOCR_MODELS=${SLIM_INSTALL_EASYOCR_MODELS}"
+        fi
+        docker buildx build \
+          --pull \
+          --push \
+          $NOCACHE \
+          -t "$SLIM_REF" \
+          -f "$DOCKERFILE" \
+          "$@" \
+          --cache-from "type=registry,ref=$SLIM_CACHE_REF" \
+          --cache-to "type=registry,ref=$SLIM_CACHE_REF,mode=max" \
+          "$CONTEXT"
+      fi
 
 
 # Per-image container scan anchor. Inherits the GitLab Container-Scanning
@@ -1397,6 +1485,12 @@ container_scanning:
   # The override is required because GitLab CI variables can't do conditional
   # assignment based on $CI_PIPELINE_SOURCE inline — the natif gtcs scan only
   # reads $CS_IMAGE literally.
+  #
+  # CS_TAG_PREFIX (issue #2000): the slim variant of an image is pushed as a
+  # SECOND tag in the same repository (`slim-<cand>`), and it is a DIFFERENT
+  # image (different layers, different digest) — so it needs its own scan,
+  # its own vulnerability report and its own SBOM. The slim scan job sets
+  # CS_TAG_PREFIX="slim-"; the fat one leaves it empty.
   before_script:
     - |
       if [ "$CI_PIPELINE_SOURCE" = "merge_request_event" ]; then
@@ -1404,7 +1498,7 @@ container_scanning:
       else
         CANDIDATE_TAG="pending-${CI_COMMIT_SHORT_SHA}"
       fi
-      export CS_IMAGE="${CI_REGISTRY_IMAGE}/tmp/${IMAGE_NAME}:${CANDIDATE_TAG}"
+      export CS_IMAGE="${CI_REGISTRY_IMAGE}/tmp/${IMAGE_NAME}:${CS_TAG_PREFIX:-}${CANDIDATE_TAG}"
       echo "Scanning $CS_IMAGE"
   # Drop the natif `reports.container_scanning` + `reports.cyclonedx` uploads.
   # We override each report with an empty string — GitLab CI deep-merges
@@ -1429,9 +1523,9 @@ container_scanning:
   script:
     - |
       if [ "$CI_PIPELINE_SOURCE" = "merge_request_event" ]; then
-        SRC="$CI_REGISTRY_IMAGE/tmp/$IMAGE_NAME:mr-${CI_MERGE_REQUEST_IID}-${CI_COMMIT_SHORT_SHA}"
+        SRC="$CI_REGISTRY_IMAGE/tmp/$IMAGE_NAME:${PROMOTE_TAG_PREFIX:-}mr-${CI_MERGE_REQUEST_IID}-${CI_COMMIT_SHORT_SHA}"
       else
-        SRC="$CI_REGISTRY_IMAGE/tmp/$IMAGE_NAME:pending-${CI_COMMIT_SHORT_SHA}"
+        SRC="$CI_REGISTRY_IMAGE/tmp/$IMAGE_NAME:${PROMOTE_TAG_PREFIX:-}pending-${CI_COMMIT_SHORT_SHA}"
       fi
     - DIGEST="sha256:$(docker buildx imagetools inspect --raw "$SRC" | sha256sum | awk '{print $1}')"
     - echo "Promoting $IMAGE_NAME digest ${DIGEST:0:32}... (tmp/ → real namespace)"
@@ -1440,9 +1534,21 @@ container_scanning:
         # Pre-release tags (alpha, beta, rc) must NOT update "latest"
         if echo "$CI_COMMIT_TAG" | grep -qE -- '-(alpha|beta|rc)'; then
           echo "Pre-release tag detected — skipping 'latest' Docker tag"
-          FINAL_TAGS="$CI_COMMIT_TAG"
+          FINAL_TAGS="$CI_COMMIT_TAG${TAG_SUFFIX:-}"
         else
-          FINAL_TAGS="$CI_COMMIT_TAG latest"
+          # The slim variant (issue #2000) publishes under its OWN suffix:
+          # "latest" stays the fat image, the one every existing deployment
+          # pulls — a deployment that pins "latest" must not silently switch
+          # to the slim build (the slim dataprep carries no local converter).
+          # The slim build of the SAME release gets its own "latest-slim", so
+          # a deployment that follows the release can take the slim variant
+          # with the suffix knob alone, instead of having to pin a branch
+          # tag (the only slim tag that used to exist was "<branch>-slim").
+          if [ -n "${TAG_SUFFIX:-}" ]; then
+            FINAL_TAGS="$CI_COMMIT_TAG${TAG_SUFFIX} latest${TAG_SUFFIX}"
+          else
+            FINAL_TAGS="$CI_COMMIT_TAG latest"
+          fi
         fi
       else
         BRANCH_TAG="${CI_COMMIT_BRANCH:-$CI_MERGE_REQUEST_SOURCE_BRANCH_NAME}"
@@ -1453,7 +1559,7 @@ container_scanning:
         case "$BRANCH_TAG" in
           release-[0-9]*.[0-9]*) BRANCH_TAG="v${BRANCH_TAG#release-}" ;;
         esac
-        FINAL_TAGS="${BRANCH_TAG}-${CI_COMMIT_SHORT_SHA} ${BRANCH_TAG}"
+        FINAL_TAGS="${BRANCH_TAG}${TAG_SUFFIX:-}-${CI_COMMIT_SHORT_SHA} ${BRANCH_TAG}${TAG_SUFFIX:-}"
       fi
     - |
       for t in $FINAL_TAGS; do
@@ -1525,13 +1631,17 @@ container_scanning:
       else
         CANDIDATE_TAG="pending-${CI_COMMIT_SHORT_SHA}"
       fi
-      REGISTRY_REF="$CI_REGISTRY_IMAGE/tmp/$IMAGE_NAME:${CANDIDATE_TAG}"
+      REGISTRY_REF="$CI_REGISTRY_IMAGE/tmp/$IMAGE_NAME:${CONTRACT_TAG_PREFIX:-}${CANDIDATE_TAG}"
       CID="contract-${CI_JOB_ID}"
       echo "Running contract tests for $IMAGE_NAME (${REGISTRY_REF}) against real vendored comps"
       # docker create + docker cp (NOT -v): under DinD the daemon cannot see the
       # runner's filesystem, so a -v mount of $PWD yields an EMPTY /contracts.
       # docker cp transfers the suite into the container via the daemon instead.
-      docker create --name "$CID" --entrypoint sh "$REGISTRY_REF" \
+      # CONTRACT_ENV (issue #2000): the slim dataprep has no local docling
+      # converter — it delegates the conversion to a remote docling-serve —
+      # so the container needs DOCLING_ENDPOINT set for the module to import
+      # at all. The fat image needs nothing.
+      docker create --name "$CID" --entrypoint sh $CONTRACT_ENV "$REGISTRY_REF" \
         -c "pip install -q pytest pytest-asyncio && cd /contracts && python -m pytest ${CONTRACT_TEST_PATTERN} -p no:cacheprovider --junitxml=/tmp/contract-report.xml"
       docker cp genie-ai-overlay/contracts/. "$CID":/contracts/
       docker start -a "$CID"
@@ -1589,6 +1699,32 @@ contract:retriever-arango:
         paths: *retriever_source_changes
 
 
+
+contract:retriever-arango-slim:
+  <<: *contract_template
+  needs:
+    - job: build:retriever-arango
+  variables:
+    IMAGE_NAME: "genie-ai-retriever-arango"
+    CONTRACT_TAG_PREFIX: "slim-"
+    CONTRACT_TEST_PATTERN: "test_contract_orchestrator_wire.py test_contract_label_filter.py test_contract_retriever_fusion.py test_contract_e2e_pipeline.py::test_label_filter_contract_roundtrip test_contract_e2e_pipeline.py::test_label_filter_contract_empty_is_noop test_contract_e2e_pipeline.py::test_e2e_graph_schedules_real_orchestrator test_contract_nfrp_budgets.py::test_wire_latency_within_budget test_contract_nfrp_budgets.py::test_budget_table_present"
+  rules:
+    - *train_skip
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+      when: never
+    - if: $CI_PIPELINE_SOURCE == "web"
+      when: never
+    - if: $CI_COMMIT_TAG
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      changes:
+        paths: *retriever_source_changes
+        compare_to: $CI_MERGE_REQUEST_TARGET_BRANCH_NAME
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+      changes:
+        paths: *retriever_source_changes
+    - if: $CI_COMMIT_BRANCH =~ /^release\//
+      changes:
+        paths: *retriever_source_changes
 contract:reranker:
   <<: *contract_template
   needs:
@@ -1598,6 +1734,32 @@ contract:reranker:
     # Reranker in-image suite — verifies the v1.5 coupling surface:
     # GenieTEIReranking adapter imports, OpeaComponent registration,
     # ServiceType.RERANK enum, opea_telemetry decorator.
+    CONTRACT_TEST_PATTERN: "test_contract_reranker.py"
+  rules:
+    - *train_skip
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+      when: never
+    - if: $CI_PIPELINE_SOURCE == "web"
+      when: never
+    - if: $CI_COMMIT_TAG
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      changes:
+        paths: *reranker_source_changes
+        compare_to: $CI_MERGE_REQUEST_TARGET_BRANCH_NAME
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+      changes:
+        paths: *reranker_source_changes
+    - if: $CI_COMMIT_BRANCH =~ /^release\//
+      changes:
+        paths: *reranker_source_changes
+
+contract:reranker-slim:
+  <<: *contract_template
+  needs:
+    - job: build:reranker
+  variables:
+    IMAGE_NAME: "genie-ai-reranker"
+    CONTRACT_TAG_PREFIX: "slim-"
     CONTRACT_TEST_PATTERN: "test_contract_reranker.py"
   rules:
     - *train_skip
@@ -1642,6 +1804,43 @@ contract:dataprep-arango:
       changes:
         paths: *dataprep_source_changes
 
+
+contract:dataprep-arango-slim:
+  <<: *contract_template
+  needs:
+    - job: build:dataprep-arango
+  variables:
+    IMAGE_NAME: "genie-ai-dataprep-arango"
+    CONTRACT_TAG_PREFIX: "slim-"
+    # The slim image has no docling (the conversion is delegated to a remote
+    # docling-serve), so the two tests that drive the REAL docling chunker
+    # (the ingest smoke and the ingest wall-clock budget) cannot run here —
+    # the fat image's contract lane runs them. What runs here is everything
+    # else the dataprep's runtime chain is made of: the HTTP budgets, the
+    # wire latency and the budget table.
+    CONTRACT_TEST_PATTERN: "test_contract_http_budget.py test_contract_nfrp_budgets.py::test_wire_latency_within_budget test_contract_nfrp_budgets.py::test_budget_table_present"
+    # The dataprep module builds its local docling converter only when
+    # DOCLING_ENDPOINT is empty — and the slim image has no docling to build
+    # it with, so the container needs the variable set (it is never dialled
+    # by these tests).
+    CONTRACT_ENV: "-e DOCLING_ENDPOINT=http://docling.contract.invalid:8000"
+  rules:
+    - *train_skip
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+      when: never
+    - if: $CI_PIPELINE_SOURCE == "web"
+      when: never
+    - if: $CI_COMMIT_TAG
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      changes:
+        paths: *dataprep_source_changes
+        compare_to: $CI_MERGE_REQUEST_TARGET_BRANCH_NAME
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+      changes:
+        paths: *dataprep_source_changes
+    - if: $CI_COMMIT_BRANCH =~ /^release\//
+      changes:
+        paths: *dataprep_source_changes
 contract:chatqna-server:
   <<: *contract_template
   needs:
@@ -2561,6 +2760,26 @@ build:dataprep-arango:
     IMAGE_NAME: "genie-ai-dataprep-arango"
     CONTEXT: "."
     DOCKERFILE: "genie-ai-overlay/dataprep/Dockerfile-dataprep_genie-ai"
+    # SLIM variant (issue #2000): NO torch, NO torchvision, NO docling, NO
+    # easyocr, NO unstructured. The slim dataprep carries no local model at
+    # all — the document conversion is delegated to a remote docling-serve
+    # (DOCLING_ENDPOINT), the labelling to the remote vLLM and the
+    # embeddings to the remote TEI, exactly like the slim reranker and the
+    # slim retriever. That is why the PyTorch CPU index is not needed here.
+    #
+    # The smoke test imports the MODULE-LEVEL imports of the vendored
+    # `comps/dataprep/src/utils.py` — the surface the dataprep actually
+    # needs at boot. The fat variant keeps its own list (pyspark,
+    # unstructured, graspologic, whisper — the heavy four of its lock).
+    SLIM_REQUIREMENTS_FILE: "requirements-slim.txt"
+    SLIM_EXTRA_PIP_ARGS: ""
+    SLIM_SMOKE_IMPORTS: "import aiofiles; import cairosvg; import cv2; import docx; import docx2txt; import fitz; import numpy; import pandas; import pptx; import pytesseract; import bs4; import langchain; import langchain_community"
+    # The JVM is pyspark's, and pyspark is only in the fat lock — the slim
+    # lock has none, so it needs no JVM (194 MB).
+    SLIM_INSTALL_JRE: "false"
+    # The EasyOCR models belong to the local OCR pipeline; the slim variant
+    # has neither the pipeline nor the models (94 MB).
+    SLIM_INSTALL_EASYOCR_MODELS: "false"
   rules:
     - *train_skip
     - if: $FORCE_IMAGE_REBUILD == "true"
@@ -2676,12 +2895,85 @@ promote:dataprep-arango:
         paths: *dataprep_source_changes
 
 # genie-ai-retriever-arango
+
+promote:dataprep-arango-slim:
+  <<: *promote_template
+  needs:
+    - job: scan:dataprep-arango-slim
+      artifacts: true
+  variables:
+    IMAGE_NAME: "genie-ai-dataprep-arango"
+    # The slim variant is promoted under its own tag family: `:main-slim`
+    # (and `:main-slim-<sha>`), and `:latest-slim` for the latest RELEASE
+    # (`:vX.Y.Z-slim` for that release). `latest` stays with the fat image —
+    # every existing deployment pulls that one, and it must not silently
+    # switch to the slim build (the slim dataprep carries no local
+    # converter).
+    PROMOTE_TAG_PREFIX: "slim-"
+    TAG_SUFFIX: "-slim"
+  rules:
+    - *train_skip
+    - if: $FORCE_IMAGE_REBUILD == "true"
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+      when: never
+    - if: $CI_PIPELINE_SOURCE == "web"
+      when: never
+    - if: $CI_COMMIT_TAG
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      changes:
+        paths: *dataprep_source_changes
+        compare_to: $CI_MERGE_REQUEST_TARGET_BRANCH_NAME
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+      changes:
+        paths: *dataprep_source_changes
+    - if: $CI_COMMIT_BRANCH =~ /^release\//
+      changes:
+        paths: *dataprep_source_changes
+
+scan:dataprep-arango-slim:
+  <<: *scan_template
+  needs:
+    - job: build:dataprep-arango
+  variables:
+    IMAGE_NAME: "genie-ai-dataprep-arango"
+    # The slim variant is a DIFFERENT image (different layers, different
+    # digest) in the same repository: it needs its own scan, its own
+    # vulnerability report and its own SBOM.
+    CS_TAG_PREFIX: "slim-"
+  rules:
+    - *train_skip
+    - if: $FORCE_IMAGE_REBUILD == "true"
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+      when: never
+    - if: $CI_PIPELINE_SOURCE == "web"
+      when: never
+    - if: $CI_COMMIT_TAG
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      changes:
+        paths: *dataprep_source_changes
+        compare_to: $CI_MERGE_REQUEST_TARGET_BRANCH_NAME
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+      changes:
+        paths: *dataprep_source_changes
+    - if: $CI_COMMIT_BRANCH =~ /^release\//
+      changes:
+        paths: *dataprep_source_changes
 build:retriever-arango:
   <<: *build_template
   variables:
     IMAGE_NAME: "genie-ai-retriever-arango"
     CONTEXT: "."
     DOCKERFILE: "genie-ai-overlay/retriever/Dockerfile-retriever_genie-ai"
+    # SLIM variant (issue #2000): NO torch and NO sentence-transformers —
+    # the retriever's TEI branch is an HTTP client and langchain-huggingface
+    # imports sentence_transformers lazily, so the remote path needs neither.
+    # What is dropped is the LOCAL embedding fallback (HuggingFaceBgeEmbeddings),
+    # the branch the retriever takes only when no embedding endpoint is
+    # configured — which the external-GPU mode never is. Also left out: the
+    # packages no service imports (docling, easyocr, graspologic, the whole
+    # llama-index tree, langchain-{milvus,elasticsearch,mariadb,...}).
+    SLIM_REQUIREMENTS_FILE: "requirements-slim.txt"
+    SLIM_EXTRA_PIP_ARGS: ""
   rules:
     - *train_skip
     - if: $FORCE_IMAGE_REBUILD == "true"
@@ -2753,12 +3045,81 @@ promote:retriever-arango:
         paths: *retriever_source_changes
 
 # genie-ai-reranker
+
+promote:retriever-arango-slim:
+  <<: *promote_template
+  needs:
+    - job: scan:retriever-arango-slim
+      artifacts: true
+  variables:
+    IMAGE_NAME: "genie-ai-retriever-arango"
+    # The slim variant is promoted under its own tag family: `:main-slim`
+    # (and `:main-slim-<sha>`), and `:latest-slim` for the latest RELEASE
+    # (`:vX.Y.Z-slim` for that release). `latest` stays with the fat image —
+    # every existing deployment pulls that one, and it must not silently
+    # switch to the slim build (the slim dataprep carries no local
+    # converter).
+    PROMOTE_TAG_PREFIX: "slim-"
+    TAG_SUFFIX: "-slim"
+  rules:
+    - *train_skip
+    - if: $FORCE_IMAGE_REBUILD == "true"
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+      when: never
+    - if: $CI_PIPELINE_SOURCE == "web"
+      when: never
+    - if: $CI_COMMIT_TAG
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      changes:
+        paths: *retriever_source_changes
+        compare_to: $CI_MERGE_REQUEST_TARGET_BRANCH_NAME
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+      changes:
+        paths: *retriever_source_changes
+    - if: $CI_COMMIT_BRANCH =~ /^release\//
+      changes:
+        paths: *retriever_source_changes
+
+scan:retriever-arango-slim:
+  <<: *scan_template
+  needs:
+    - job: build:retriever-arango
+  variables:
+    IMAGE_NAME: "genie-ai-retriever-arango"
+    # The slim variant is a DIFFERENT image (different layers, different
+    # digest) in the same repository: it needs its own scan, its own
+    # vulnerability report and its own SBOM.
+    CS_TAG_PREFIX: "slim-"
+  rules:
+    - *train_skip
+    - if: $FORCE_IMAGE_REBUILD == "true"
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+      when: never
+    - if: $CI_PIPELINE_SOURCE == "web"
+      when: never
+    - if: $CI_COMMIT_TAG
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      changes:
+        paths: *retriever_source_changes
+        compare_to: $CI_MERGE_REQUEST_TARGET_BRANCH_NAME
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+      changes:
+        paths: *retriever_source_changes
+    - if: $CI_COMMIT_BRANCH =~ /^release\//
+      changes:
+        paths: *retriever_source_changes
 build:reranker:
   <<: *build_template
   variables:
     IMAGE_NAME: "genie-ai-reranker"
     CONTEXT: "."
     DOCKERFILE: "genie-ai-overlay/reranker/Dockerfile-reranker_genie-ai"
+    # SLIM variant (issue #2000): NO torch at all — the reranker is a
+    # pure TEI/OVMS client (OPEA v1.5's integrations/tei.py is a remote
+    # AsyncInferenceClient), so it has no local-model path to preserve
+    # and the CUDA stack was dead weight in every deployment.
+    SLIM_REQUIREMENTS_FILE: "requirements-slim.txt"
+    SLIM_EXTRA_PIP_ARGS: ""
   rules:
     - *train_skip
     - if: $FORCE_IMAGE_REBUILD == "true"
@@ -2830,6 +3191,69 @@ promote:reranker:
         paths: *reranker_source_changes
 
 # genie-ai-embedding
+
+promote:reranker-slim:
+  <<: *promote_template
+  needs:
+    - job: scan:reranker-slim
+      artifacts: true
+  variables:
+    IMAGE_NAME: "genie-ai-reranker"
+    # The slim variant is promoted under its own tag family: `:main-slim`
+    # (and `:main-slim-<sha>`), and `:latest-slim` for the latest RELEASE
+    # (`:vX.Y.Z-slim` for that release). `latest` stays with the fat image —
+    # every existing deployment pulls that one, and it must not silently
+    # switch to the slim build (the slim dataprep carries no local
+    # converter).
+    PROMOTE_TAG_PREFIX: "slim-"
+    TAG_SUFFIX: "-slim"
+  rules:
+    - *train_skip
+    - if: $FORCE_IMAGE_REBUILD == "true"
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+      when: never
+    - if: $CI_PIPELINE_SOURCE == "web"
+      when: never
+    - if: $CI_COMMIT_TAG
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      changes:
+        paths: *reranker_source_changes
+        compare_to: $CI_MERGE_REQUEST_TARGET_BRANCH_NAME
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+      changes:
+        paths: *reranker_source_changes
+    - if: $CI_COMMIT_BRANCH =~ /^release\//
+      changes:
+        paths: *reranker_source_changes
+
+scan:reranker-slim:
+  <<: *scan_template
+  needs:
+    - job: build:reranker
+  variables:
+    IMAGE_NAME: "genie-ai-reranker"
+    # The slim variant is a DIFFERENT image (different layers, different
+    # digest) in the same repository: it needs its own scan, its own
+    # vulnerability report and its own SBOM.
+    CS_TAG_PREFIX: "slim-"
+  rules:
+    - *train_skip
+    - if: $FORCE_IMAGE_REBUILD == "true"
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+      when: never
+    - if: $CI_PIPELINE_SOURCE == "web"
+      when: never
+    - if: $CI_COMMIT_TAG
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      changes:
+        paths: *reranker_source_changes
+        compare_to: $CI_MERGE_REQUEST_TARGET_BRANCH_NAME
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+      changes:
+        paths: *reranker_source_changes
+    - if: $CI_COMMIT_BRANCH =~ /^release\//
+      changes:
+        paths: *reranker_source_changes
 build:embedding:
   <<: *build_template
   variables:
@@ -4328,6 +4752,46 @@ chart:lint:
       $(cat charts/ci/render-full-flags)
       --set opea.gpu.mode=in-cluster
       > /tmp/rendered-incluster.yaml
+    # The image-tag RULES (issue #2000's naming refactor): one version, one
+    # variant, one pin. Four renders, one assertion set — the version for
+    # every GENIE.AI image, the variant on the three model-serving images
+    # ONLY, a pin naming the EXACT tag (never the composed one), and the pull
+    # policy judging the BASE tag. Nothing else in this job knows those
+    # rules: `helm lint` only knows the template parses, the values gates
+    # only know a value is DECLARED, and the parity gate compares
+    # environment variables, not image tags.
+    - >-
+      helm template test charts/genieai-umbrella -n genieai --kube-version $(cat charts/ci/kube-version) $(cat charts/ci/render-base-flags)
+      --set opea.enabled=true --set okf.enabled=true
+      --set opea.gpu.nodeHost=https://gpu.ci-render.local:444
+      --set imageTag=v2.1.0
+      > /tmp/rendered-tag-global.yaml
+    - >-
+      helm template test charts/genieai-umbrella -n genieai --kube-version $(cat charts/ci/kube-version) $(cat charts/ci/render-base-flags)
+      --set opea.enabled=true --set okf.enabled=true
+      --set opea.gpu.nodeHost=https://gpu.ci-render.local:444
+      --set imageTag=v2.1.0 --set opea.imageTagSuffix=-slim
+      > /tmp/rendered-tag-variant.yaml
+    - >-
+      helm template test charts/genieai-umbrella -n genieai --kube-version $(cat charts/ci/kube-version) $(cat charts/ci/render-base-flags)
+      --set opea.enabled=true --set okf.enabled=true
+      --set opea.gpu.nodeHost=https://gpu.ci-render.local:444
+      --set imageTag=v2.1.0 --set opea.imageTagSuffix=-slim
+      --set services.backend.image.tag=v1.9.8
+      --set opea.chatqna.image.tag=v1.9.9
+      --set opea.embedding.image.tag=v1.9.7
+      --set okf.server.image.tag=v1.9.6
+      --set okf.pii.image.tag=v1.9.5
+      --set okf.ragas.image.tag=v1.9.4
+      --set opea.reranker.image.tag=v1.9.3
+      > /tmp/rendered-tag-pinned.yaml
+    - >-
+      helm template test charts/genieai-umbrella -n genieai --kube-version $(cat charts/ci/kube-version) $(cat charts/ci/render-base-flags)
+      --set opea.enabled=true --set okf.enabled=true
+      --set opea.gpu.nodeHost=https://gpu.ci-render.local:444
+      --set imageTag=main --set opea.imageTagSuffix=-slim
+      > /tmp/rendered-tag-mutable.yaml
+    - python3 scripts/ci/image-tag-check.py /tmp/rendered-tag-global.yaml /tmp/rendered-tag-variant.yaml /tmp/rendered-tag-pinned.yaml /tmp/rendered-tag-mutable.yaml
     - >-
       curl -fsSL
       https://github.com/yannh/kubeconform/releases/download/v0.6.7/kubeconform-linux-amd64.tar.gz
@@ -5190,6 +5654,86 @@ verify:overlay-locks:reranker:
         paths:
           - "genie-ai-overlay/reranker/requirements.*"
           - "genie-ai-overlay/reranker/Dockerfile-*"
+          - ".gitlab-ci.yml"
+
+
+# The SLIM locks (issue #2000) are verified for all three modules in ONE job:
+# each slim lock must resolve without re-resolution (uv pip sync --dry-run),
+# and each slim requirements.in must be covered by its slim lock — the same
+# two checks the fat lock gets, on the slim pair. The dataprep has no fat
+# requirements.in (its fat lock is OPEA v1.5's compiled one), but it has a
+# slim one, so it is covered here.
+verify:overlay-locks-slim:
+  stage: config
+  image: python:3.11-slim
+  interruptible: true
+  dependencies: []
+  variables:
+    UV_VERSION: "0.10.6"
+  before_script:
+    - pip install --no-cache-dir "uv==${UV_VERSION}"
+  script:
+    - |
+      set -e
+      for MOD in reranker retriever dataprep; do
+        cd "${CI_PROJECT_DIR}/genie-ai-overlay/${MOD}"
+        # The slim lock installs torch's CPU build (`torch==2.13.0+cpu`),
+        # which is published only on the PyTorch CPU index — hence the index
+        # arguments. `unsafe-best-match` is REQUIRED: uv's default
+        # `first-index` stops at PyPI, where torch==2.13.0 IS the CUDA build,
+        # and never reaches the CPU index's 2.13.0+cpu.
+        uv pip sync requirements-slim.txt --dry-run --system \
+          --index-url https://download.pytorch.org/whl/cpu \
+          --extra-index-url https://pypi.org/simple \
+          --index-strategy unsafe-best-match
+        while IFS= read -r line; do
+          pkg=$(echo "$line" | sed 's/[<>=!~].*//;s/\[.*//;s/#.*//' | xargs)
+          [ -z "$pkg" ] && continue
+          norm=$(echo "$pkg" | tr '[:upper:]_' '[:lower:]-')
+          if ! grep -q "^${norm}==" requirements-slim.txt; then
+            echo "MISSING from ${MOD} slim lock: $pkg — run 'make lock-${MOD}-slim'"
+            exit 1
+          fi
+        done < requirements-slim.in
+        echo "genie-ai-overlay/${MOD}/requirements-slim.txt in sync"
+      done
+  rules:
+    - *train_skip
+    - if: $FORCE_IMAGE_REBUILD == "true"
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+      when: never
+    - if: $CI_PIPELINE_SOURCE == "web"
+      when: never
+    - if: $CI_COMMIT_TAG
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      changes:
+        paths:
+          - "genie-ai-overlay/reranker/requirements-slim.*"
+          - "genie-ai-overlay/retriever/requirements-slim.*"
+          - "genie-ai-overlay/dataprep/requirements-slim.*"
+          - "genie-ai-overlay/reranker/Dockerfile-*"
+          - "genie-ai-overlay/retriever/Dockerfile-*"
+          - "genie-ai-overlay/dataprep/Dockerfile-*"
+          - ".gitlab-ci.yml"
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+      changes:
+        paths:
+          - "genie-ai-overlay/reranker/requirements-slim.*"
+          - "genie-ai-overlay/retriever/requirements-slim.*"
+          - "genie-ai-overlay/dataprep/requirements-slim.*"
+          - "genie-ai-overlay/reranker/Dockerfile-*"
+          - "genie-ai-overlay/retriever/Dockerfile-*"
+          - "genie-ai-overlay/dataprep/Dockerfile-*"
+          - ".gitlab-ci.yml"
+    - if: $CI_COMMIT_BRANCH =~ /^release\//
+      changes:
+        paths:
+          - "genie-ai-overlay/reranker/requirements-slim.*"
+          - "genie-ai-overlay/retriever/requirements-slim.*"
+          - "genie-ai-overlay/dataprep/requirements-slim.*"
+          - "genie-ai-overlay/reranker/Dockerfile-*"
+          - "genie-ai-overlay/retriever/Dockerfile-*"
+          - "genie-ai-overlay/dataprep/Dockerfile-*"
           - ".gitlab-ci.yml"
 
 

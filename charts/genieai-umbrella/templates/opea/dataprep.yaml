@@ -171,8 +171,20 @@ startupProbe below owns the slow start, and a readiness delay adds a
 second floor on top of it — the pod then stays out of the Service's
 endpoints for that long after every restart, although it is already
 serving. */}}
+{{- /* The image is overridable: `opea.dataprep.image` wins over the
+default repository/tag (merge gives the values precedence), so a deployment
+can pin the slim variant (`:main-slim` — issue #2000: no model stack in the
+image) or a digest. The default is unchanged. */ -}}
+{{- /* Parent-first normalization (the chart's nil-safety convention): a CLEARED
+   `opea` or `opea.dataprep` (null) reads as an empty map at every level, so the image
+   resolution degrades to the default repository/tag instead of crashing the
+   template engine on a nil parent. The clearable-blocks gate sweeps every
+   values block and demands exactly that. */ -}}
+{{- $opeaVals := .Values.opea | default dict -}}
+{{- $svcOvr := $opeaVals.dataprep | default dict -}}
+{{- $img := merge (deepCopy ($svcOvr.image | default dict)) (dict "repository" "genie-ai-dataprep-arango" "tag" (include "genieai-umbrella.opeaImageTag" (dict "root" . "key" "dataprep" "serviceTag" (($svcOvr.image).tag | default "")))) -}}
 {{- $svcVals := dict
-    "image" (dict "repository" "genie-ai-dataprep-arango" "tag" "main")
+    "image" $img
     "port" 5000
     "resources" (dict "requests" (dict "cpu" "200m" "memory" "512Mi") "limits" (dict "cpu" "2" "memory" "4Gi"))
     "env" (include "genieai-umbrella.envRowsDedupe" (concat $arangoEnv $tuningEnv $promptEnv $arangoSecretEnv $kcSecretEnv $gpuSecretEnv $okfEnv $okfSecretEnv $opeaEnvRows | toJson) | fromJsonArray)

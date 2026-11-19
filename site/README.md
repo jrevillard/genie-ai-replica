@@ -73,9 +73,10 @@ for new decks. Commit each generated HTML file under
 copies the file into the built site. Verify both the link and the deck in the
 local preview.
 
-The GENIE.AI Overview is linked from `content/en/docs/get-started/presentation.md`
-and served at `/presentations/genie-ai/`. Its editable sources and build
-commands are in the [overview README](../docs/presentations/genie-ai-overview/README.md).
+The GENIE.AI Overview is introduced from the Get started Welcome page and linked
+from `content/en/docs/get-started/presentation.md`. It is served at
+`/presentations/genie-ai/`. Its editable sources and build commands are in the
+[overview README](../docs/presentations/genie-ai-overview/README.md).
 
 ## i18n
 

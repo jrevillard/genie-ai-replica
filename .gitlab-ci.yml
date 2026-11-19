@@ -167,12 +167,12 @@ workflow:
     # never let it have a pipeline of its own. Its tip MUST carry one: the
     # scan-result policies compare the source pipeline with the TARGET
     # branch's pipeline at the merge base, and with no target to compare
-    # against every license and every vulnerability of the source counts as
-    # newly introduced. The `license_finding` rule (DPG license compliance,
-    # no fallback) then demands a Maintainer approval the umbrella does not
-    # need. This rule therefore sits BEFORE the suppression rule on purpose:
-    # it must apply to pushes on that branch. The security policies
-    # themselves are untouched by it.
+    # against the `license_finding` rule (DPG license compliance) has
+    # nothing to diff against: it declares no `fallback_behavior` — GitLab's
+    # empty default makes it fail closed — and demands a Maintainer
+    # approval the umbrella does not need. This rule therefore sits BEFORE
+    # the suppression rule on purpose: it must apply to pushes on that
+    # branch. The security policies themselves are untouched by it.
     - if: $CI_COMMIT_BRANCH =~ /\/prd$/
     - if: $CI_COMMIT_BRANCH && $CI_OPEN_MERGE_REQUESTS && $CI_PIPELINE_SOURCE == "push"
       when: never
@@ -1183,8 +1183,10 @@ include:
 # the source pipeline with the TARGET branch's. The license rule needs a target
 # pipeline that carries the project's SBOM — the gemnasium dependency-scanning
 # job below uploads it — because without one the comparison is made against an
-# empty target and every license of the source counts as newly introduced. The
-# CVE rule needs the target's scan reports for the same reason.
+# empty target and every license of the source counts as newly introduced. That
+# job is advisory, so a green pipeline can still carry no SBOM; the red job is
+# the signal. The CVE rule needs the target's scan reports to tell a newly
+# detected finding from a pre-existing one.
 .security_run_rules: &security_run_rules
   - if: $CI_PIPELINE_SOURCE == "schedule"
     when: never

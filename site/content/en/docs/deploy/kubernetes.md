@@ -322,6 +322,24 @@ bare hostname (HTTPRoute hostnames, TLS `dnsNames`). `scheme` feeds
 `KC_PUBLIC_ORIGIN` (realm `redirectUris`/`webOrigins`). See
 [Exposure topologies](#exposure-topologies) below for the full matrix.
 
+**`imageTag`** — the version every GENIE.AI image the chart installs
+carries: a release tag `vX.Y.Z`, or a branch tag like `main`. **One line
+to bump the whole stack.** A per-service pin
+(`services.<svc>.image.tag`, `opea.<svc>.image.tag`) wins over it and
+names the EXACT tag of that one image; those values ship empty, so the
+global applies. `global.imageTag` (the Helm `global.*` convention) wins
+over the root key, like `global.imageRegistry` does.
+
+**`opea.imageTagSuffix`** — the variant of the model-serving images (the
+reranker, the retriever, the dataprep): `""` is the default build, the one
+that ships the model stack; `-slim` is the slim build — no PyTorch, no
+CUDA wheels, no local weights — for a node whose model calls all go to an
+external GPU API. The slim dataprep delegates the document conversion to a
+remote docling-serve, so it needs `opea.gpu.paths.docling` set. The set of
+images the suffix applies to is a build fact, not a value: the CI's slim
+lanes exist for exactly those three. See
+[Slim Image Variants](/docs/deploy/slim-images/).
+
 **`opea.enabled`** and **`opea.gpu.mode`** — enable the six OPEA
 orchestrators (chatqna, retriever, dataprep, reranker, embedding,
 translation) and pick the model-source world:

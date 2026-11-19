@@ -544,6 +544,10 @@
           "type": "string",
           "description": "Optional registry prefix that WINS over the top-level imageRegistry when set (the factory and the migrations Job read it first); empty = the top-level imageRegistry applies. Exists for operators following the Helm global.* convention \u2014 the chart's own overlays set the top-level key."
         },
+        "imageTag": {
+          "type": "string",
+          "description": "Optional VERSION tag that WINS over the top-level imageTag when set (the factory, the migrations Job and the OPEA templates read it first); empty = the top-level imageTag applies. Exists for operators following the Helm global.* convention \u2014 the chart's own overlays set the top-level key."
+        },
         "progressDeadlineSeconds": {
           "type": [
             "integer",

@@ -17,6 +17,28 @@ RUN git clone --depth 1 --branch ${OPEA_VERSION} ${OPEA_REPO_URL} .
 # linux-libc-dev kernel-header CVE surface out of the final image.
 FROM python:3.11-slim AS deps_builder
 
+# SLIM VARIANT (issue #2000) — one Dockerfile, two dependency sets.
+#
+#   requirements-cpu.txt  (default) → the FAT lock: `torch==2.13.0` resolves
+#       to the CUDA/cu13 build (15 `nvidia-*` wheels + triton, ~3 GB
+#       compressed). For a deployment that gives this pod a GPU and runs the
+#       embedding model locally (HuggingFaceBgeEmbeddings).
+#   requirements-slim.txt → the SLIM lock: same versions, but torch's CPU
+#       build (`torch==2.13.0+cpu`, from the PyTorch CPU index — PyPI's
+#       2.13.0 IS the CUDA build). For the external-GPU mode, where no pod
+#       has a GPU. The local-model path keeps working, on CPU.
+#
+# The build args are DEFAULTED, so the published `:main` image installs the
+# fat lock exactly as before.
+#
+# EXTRA_PIP_ARGS carries the PyTorch CPU index for the slim variant. It is
+# safe to widen pip's index set here: the lock is installed with
+# --require-hashes, so every artifact is verified against the SHA256 pinned
+# in the committed lock — a mirror cannot substitute a different build.
+ARG REQUIREMENTS_FILE="requirements-cpu.txt"
+ARG EXTRA_PIP_ARGS=""
+
+
 # The install output is kept OUT of the job trace and printed only when the
 # step fails: Cloudflare's WAF is SUSPECTED to refuse the trace upload of any
 # job whose log carries a sensitive path, and the dpkg output of libmariadb3/libmariadb-dev
@@ -43,8 +65,8 @@ RUN apt-get update && \
 # >=1.2.0), so the label filter is real with this pin. See requirements.in for
 # the full >=1.2.0 disposition.
 # The OpenTelemetry deps are likewise pinned in the lock (no unhashed install).
-COPY genie-ai-overlay/retriever/requirements-cpu.txt /app/requirements-cpu.txt
-RUN pip install --no-cache-dir --no-deps --require-hashes -r /app/requirements-cpu.txt
+COPY genie-ai-overlay/retriever/${REQUIREMENTS_FILE} /app/requirements.txt
+RUN pip install --no-cache-dir --no-deps --require-hashes ${EXTRA_PIP_ARGS} -r /app/requirements.txt
 
 # ======== Final Stage: Assembly ========
 # Match OPEA v1.5's base image (python:3.11-slim). Runtime libraries only —

@@ -9,8 +9,13 @@ Compose service carries two tuning knobs and a readiness endpoint. */ -}}
     (dict "name" "PII_REGION_MAX_CHARS" "value" ($okfPii.regionMaxChars | default "50000" | toString))
 -}}
 {{- $opeaEnvRows := include "genieai-umbrella.envMapRows" ($okfPii.env | default dict) | fromJsonArray -}}
+{{- /* The image is overridable: `okf.pii.image` wins over the default
+repository/tag (merge gives the values precedence), so a deployment can pin
+one image — a digest, an air-gapped mirror — without touching the rest of
+the stack. The tag it pins is the EXACT tag: it never receives the variant
+suffix (this image has no slim build). */ -}}
 {{- $svcVals := dict
-    "image" (dict "repository" "genie-ai-pii-service" "tag" "main")
+    "image" (merge (deepCopy ($okfPii.image | default dict)) (dict "repository" "genie-ai-pii-service" "tag" (include "genieai-umbrella.opeaImageTag" (dict "root" . "key" "pii-service" "serviceTag" (($okfPii.image).tag | default "")))))
     "port" 8000
     "resources" (dict "requests" (dict "cpu" "200m" "memory" "512Mi") "limits" (dict "cpu" "1" "memory" "2Gi"))
     "env" (include "genieai-umbrella.envRowsDedupe" (concat $piiTuningEnv $opeaEnvRows | toJson) | fromJsonArray)

@@ -1,0 +1,62 @@
+# GENIE.AI SLIM lock for the reranker microservice (issue #2000).
+#
+# Same source tree, same behaviour — the SLIM variant only changes WHAT THE
+# FINAL IMAGE INSTALLS. The fat lock (requirements-cpu.txt) resolves
+# `torch==2.13.0` to the CUDA/cu13 build (15 `nvidia-*` wheels + triton,
+# ~3.2 GB compressed in the pip layer), because `uv pip compile` resolves the
+# Linux torch wheel from PyPI, where it IS the CUDA build. The reranker never
+# runs a model locally: OPEA v1.5's `comps/rerankings/src/integrations/tei.py`
+# is a pure remote client (`huggingface_hub.AsyncInferenceClient` against
+# `TEI_RERANKING_ENDPOINT`), and the sibling `ovms.py` is remote too. So the
+# CUDA stack is dead weight in EVERY deployment of this image.
+#
+# This lock is the runtime import set of the service, with torch dropped
+# entirely (no sentence-transformers, no transformers, no torch):
+#
+#   comps core            aiohttp, requests, fastapi, pyyaml, numpy, Pillow,
+#                         docarray, shortuuid, opentelemetry-*, prometheus-*
+#   comps TEI client      huggingface-hub
+#   GENIE reranker        kneed
+#
+# DELTAS vs requirements-cpu.txt (each dropped package was reachable only
+# through a top-level dependency that the service never imports):
+#   - sentence_transformers  -> torch -> nvidia-*, triton      (the whole bloat)
+#   - datasets, haystack-ai  -> pyarrow, av, trimesh, jax/jaxlib, pandas
+#   - langchain, langchain-community -> langchain-core, SQLAlchemy, tenacity
+#   - openai, pydub
+#   - docarray[full] -> docarray  (the "full" extra pulls trimesh, av, jax,
+#     pandas, pydub, lz4, protobuf; the vendored
+#     `comps/cores/proto/docarray.py` only needs the BASE package:
+#     `docarray.BaseDoc`, `docarray.documents.AudioDoc`,
+#     `docarray.typing.{AudioUrl,ImageUrl}`)
+#   - Pillow moves from a transitive extra (docarray[full]) to an explicit pin
+#
+# Regenerate with:
+#   uv pip compile --generate-hashes --python-version 3.11 \
+#     --python-platform x86_64-manylinux_2_31 \
+#     requirements-slim.in -o requirements-slim.txt
+
+aiohttp
+docarray==0.41.0
+fastapi==0.116.1
+httpx
+huggingface-hub==0.30.2
+numpy==1.26.4
+opentelemetry-api==1.44.0
+opentelemetry-exporter-otlp==1.44.0
+opentelemetry-sdk==1.44.0
+Pillow==11.3.0
+prometheus-fastapi-instrumentator
+pyyaml
+requests
+shortuuid
+uvicorn
+
+# === Overlay-specific dependencies (genie-ai-overlay/reranker) ===
+kneed
+
+# === OpenTelemetry instrumentation (distributed tracing) ===
+opentelemetry-instrumentation-fastapi>=0.43b0
+opentelemetry-instrumentation-aiohttp-client>=0.43b0
+opentelemetry-instrumentation-requests>=0.43b0
+opentelemetry-exporter-otlp-proto-http>=1.22

@@ -19,12 +19,46 @@ RUN git clone --depth 1 --branch ${OPEA_VERSION} ${OPEA_REPO_URL} .
 # of the final image.
 FROM python:3.11-slim AS deps_builder
 
+# SLIM VARIANT (issue #2000) — one Dockerfile, two dependency sets.
+#
+#   requirements-cpu.txt  (default) → the FAT lock (inherited from OPEA
+#       v1.5's compiled lock): `torch==2.13.0` resolves to the CUDA/cu13
+#       build (15 `nvidia-*` wheels + triton) and brings pyspark,
+#       openai-whisper, graspologic, moviepy, the `llama-index-*` tree and
+#       the `langchain-{milvus,elasticsearch,mariadb,opengauss,pinecone}`
+#       family — none of which this service imports. For a deployment that
+#       gives this pod a GPU and runs the OCR pipeline on it
+#       (`DOCLING_DEVICE=cuda`, the default).
+#   requirements-slim.txt → the SLIM lock: the same versions, minus the
+#       never-imported packages, with torch/torchvision at their CPU build
+#       (`+cpu`, from the PyTorch CPU index — PyPI's 2.13.0 IS the CUDA
+#       build). For the external-GPU mode, where no pod has a GPU: the OCR
+#       pipeline keeps working, on CPU.
+#
+# The build args are DEFAULTED, so the published `:main` image installs the
+# fat lock exactly as before.
+#
+# EXTRA_PIP_ARGS carries the PyTorch CPU index for the slim variant. It is
+# safe to widen pip's index set here: the lock is installed with
+# --require-hashes, so every artifact is verified against the SHA256 pinned
+# in the committed lock — a mirror cannot substitute a different build.
+ARG REQUIREMENTS_FILE="requirements-cpu.txt"
+ARG EXTRA_PIP_ARGS=""
+
+# The smoke test imports the packages THIS variant installs — the fat lock's
+# heavy four (pyspark, unstructured, graspologic, whisper) are not in the
+# slim lock, and the slim lock's heavy ones (torch, torchvision, easyocr,
+# docling) are not in the fat lock's smoke set.
+ARG SMOKE_IMPORTS="import pyspark; import unstructured; import graspologic; import whisper"
+
 WORKDIR /app
 
 # Compile-time only: build-essential (C extensions), libmariadb-dev + libpq-dev
 # (mariadb/psycopg wheel linkage), libgl1 + libglib2.0-0 (opencv import in the
-# smoke test below), default-jre (pyspark import needs a JVM), wget/unzip (the
-# EasyOCR model download).
+# smoke test below), libcairo2 (cairosvg import in the smoke test below),
+# default-jre (the FAT lock's pyspark import needs a JVM —
+# the slim lock carries no pyspark, so its builder stage needs none), and
+# wget/unzip (the EasyOCR model download).
 # The install output is kept OUT of the job trace and printed only when the
 # step fails: Cloudflare's WAF is SUSPECTED to refuse the trace upload of any
 # job whose log carries a sensitive path, and the dpkg output of libmariadb-dev prints one
@@ -35,6 +69,7 @@ RUN apt-get update -y && \
     (apt-get install -y --no-install-recommends --fix-missing \
     build-essential \
     default-jre-headless \
+    libcairo2 \
     libgl1 \
     libglib2.0-0 \
     libmariadb-dev \
@@ -54,8 +89,8 @@ RUN pip install --no-cache-dir --upgrade pip setuptools wheel
 # v1.5's requirements.in. --require-hashes makes the build bit-for-bit
 # reproducible and supply-chain-pinned: every wheel's SHA256 is verified at
 # install time, with no re-resolution against live PyPI.
-COPY genie-ai-overlay/dataprep/requirements-cpu.txt /app/requirements-cpu.txt
-RUN pip install --no-cache-dir --no-deps --require-hashes -r /app/requirements-cpu.txt
+COPY genie-ai-overlay/dataprep/${REQUIREMENTS_FILE} /app/requirements.txt
+RUN pip install --no-cache-dir --no-deps --require-hashes ${EXTRA_PIP_ARGS} -r /app/requirements.txt
 
 # Post-import smoke test for heavy dependencies.
 # Catches import failures (missing shared libs, ABI mismatches, bad wheels) at
@@ -64,16 +99,28 @@ RUN pip install --no-cache-dir --no-deps --require-hashes -r /app/requirements-c
 # unstructured links opencv + tesseract, graspologic pulls networkx + scipy stacks,
 # openai-whisper pulls torch). If any import fails the build stops here —
 # runtime ingest would fail the same way with a far more opaque traceback.
-RUN python -c "import pyspark; import unstructured; import graspologic; import whisper; print('heavy-deps ok')"
+# The import list is a build arg: the slim variant installs a different set
+# (torch/torchvision/easyocr/docling instead of pyspark/graspologic/whisper).
+RUN python -c "${SMOKE_IMPORTS}; print('heavy-deps ok')"
 
 # Pre-download the EasyOCR models (prevents a one-time model download hang on
 # the first runtime request). Copied into the runtime stage below.
-RUN mkdir -p /tmp/easyocr /opt/easyocr/model /opt/easyocr/config && \
-    wget -O /tmp/easyocr/english_g2.zip https://github.com/JaidedAI/EasyOCR/releases/download/v1.3/english_g2.zip && \
-    wget -O /tmp/easyocr/craft_mlt_25k.zip https://github.com/JaidedAI/EasyOCR/releases/download/pre-v1.1.6/craft_mlt_25k.zip && \
-    unzip -o /tmp/easyocr/english_g2.zip -d /opt/easyocr/model && \
-    unzip -o /tmp/easyocr/craft_mlt_25k.zip -d /opt/easyocr/model && \
-    rm -rf /tmp/easyocr
+#
+# The slim variant (issue #2000) has neither easyocr nor a local converter —
+# the document conversion is delegated to a remote docling-serve — so it has
+# no use for the models. The directories are created either way, so the
+# runtime stage's COPY of them resolves to an empty tree in the slim variant
+# (the layer is a few kB).
+ARG INSTALL_EASYOCR_MODELS="true"
+RUN mkdir -p /opt/easyocr/model /opt/easyocr/config && \
+    if [ "$INSTALL_EASYOCR_MODELS" = "true" ]; then \
+      mkdir -p /tmp/easyocr && \
+      wget -O /tmp/easyocr/english_g2.zip https://github.com/JaidedAI/EasyOCR/releases/download/v1.3/english_g2.zip && \
+      wget -O /tmp/easyocr/craft_mlt_25k.zip https://github.com/JaidedAI/EasyOCR/releases/download/pre-v1.1.6/craft_mlt_25k.zip && \
+      unzip -o /tmp/easyocr/english_g2.zip -d /opt/easyocr/model && \
+      unzip -o /tmp/easyocr/craft_mlt_25k.zip -d /opt/easyocr/model && \
+      rm -rf /tmp/easyocr; \
+    fi
 
 # ======== Final Stage: Assembly ========
 # Match OPEA v1.5's dataprep base (python:3.11-slim). No GPU is granted to
@@ -81,6 +128,11 @@ RUN mkdir -p /tmp/easyocr /opt/easyocr/model /opt/easyocr/config && \
 # so the CUDA base is unnecessary; the slim base also retires the Ubuntu
 # update-alternatives python3.10 machinery in one stroke.
 FROM python:3.11-slim
+
+# The smoke test below imports the packages THIS variant installs — the ARG
+# is re-declared because a build arg is scoped to the stage that declares it
+# (see the deps_builder stage for the full rationale).
+ARG SMOKE_IMPORTS="import pyspark; import unstructured; import graspologic; import whisper"
 
 WORKDIR /app
 
@@ -95,7 +147,6 @@ WORKDIR /app
 RUN apt-get update -y && \
     (apt-get install -y --no-install-recommends --fix-missing \
     curl \
-    default-jre-headless \
     ffmpeg \
     libcairo2 \
     libgl1 \
@@ -108,6 +159,20 @@ RUN apt-get update -y && \
     ca-certificates > /tmp/apt.log 2>&1 || { tail -n 50 /tmp/apt.log | sed -E 's#(/[A-Za-z0-9._~/-]{2,})#<path>#g'; exit 1; }) && \
     apt-get clean && \
     rm -rf /var/lib/apt/lists/* && rm -f /tmp/apt.log
+
+# The JVM is pyspark's, and pyspark is only in the FAT lock (OPEA's compiled
+# lock pulls it in; nothing in the dataprep's runtime chain imports it). The
+# slim lock has no pyspark, so it needs no JVM — 194 MB of the image.
+# INSTALL_JRE is a build arg: the fat image (default) keeps the JVM, the
+# slim variant does not. The layer is empty when the arg says so, so the
+# slim image pays nothing for it.
+ARG INSTALL_JRE="true"
+RUN if [ "$INSTALL_JRE" = "true" ]; then \
+      apt-get update -y && \
+      apt-get install -y --no-install-recommends default-jre-headless && \
+      apt-get clean && \
+      rm -rf /var/lib/apt/lists/*; \
+    fi
 
 # Add /app (for 'comps'), the dataprep 'src' (for entrypoint),
 # and 'proto' (for api_protocol) to PYTHONPATH
@@ -176,7 +241,7 @@ COPY --from=deps_builder /opt/easyocr/config /home/user/.EasyOCR/config
 # Runtime smoke test: same heavy imports as the builder, but now against the
 # FINAL environment (copied site-packages + the runtime apt set) so a missing
 # runtime library fails the build instead of the first ingest.
-RUN python -c "import pyspark; import unstructured; import graspologic; import whisper; print('heavy-deps ok (runtime)')"
+RUN python -c "${SMOKE_IMPORTS}; print('heavy-deps ok (runtime)')"
 
 # Copy custom utils to its new correct location (matches your structure)
 COPY genie-ai-overlay/dataprep/genieai_dataprep_utils.py /app/comps/dataprep/src/genieai_dataprep_utils.py

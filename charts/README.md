@@ -103,6 +103,20 @@ job.
 - The pre-upgrade cluster-profile hook and the test-pod init containers download `kubectl` from public release URLs (nothing else — no jq; the pre-install Job downloads nothing). Set `global.kubeletToolsMirror` for air-gapped clusters.
 - NetworkPolicy: every rendered service gets a default-deny + explicit allowlist policy. The OPEA model Deployments get ingress-only policies; orchestrators see per-peer egress rules scoped to the call graph.
 - PodDisruptionBudget: only emitted when `replicas >= 2`.
+- **One image tag for the whole stack.** `imageTag` (root) is the VERSION every GENIE.AI image
+  carries — a release tag `vX.Y.Z` or a branch tag like `main`. The per-service
+  `services.<svc>.image.tag` (and `opea.<svc>.image.tag`, `okf.<svc>.image.tag` for the OKF
+  trio) pin ONE image and win over it; they ship EMPTY, not `main`, so the global can apply.
+  `global.imageTag` (the Helm `global.*` convention) wins over the root key, like
+  `global.imageRegistry` does.
+- **The image variant is a knob, not a tag edit.** `opea.imageTagSuffix` appends a suffix to the
+  tag of the model-serving images — the reranker, the retriever and the dataprep. `""` is the
+  default build (the one that ships the model stack); `-slim` is the slim build (no PyTorch, no
+  CUDA wheels, no local weights — issue #2000), for a node whose model calls all go to an
+  external GPU API. The set of images it applies to is a BUILD fact (the CI's slim lanes exist
+  for exactly those three), so it lives in the template helper, not in the values. A per-service
+  pin names the EXACT tag and never gets the suffix. The pull policy judges the tag's BASE
+  (`main-slim` is mutable like `main`; `v2.1.0-slim` is immutable like `v2.1.0`).
 
 ## Other directories
 

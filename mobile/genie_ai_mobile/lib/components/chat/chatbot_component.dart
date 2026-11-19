@@ -1462,6 +1462,14 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
       final response = jsonDecode(res.body) as Map<String, dynamic>;
       final Map<String, dynamic>? metadata = response['metadata'];
 
+      // The citation rows under ONE resolution: the backend answers carry
+      // them as `source_documents` (chatqna's raw name) — `sources` alone
+      // left the message's list empty while the sidebar resolved the same
+      // rows through the fallback, and the answer's sources bar rendered
+      // nothing (live-found 2026-11-19).
+      final List<dynamic> responseSources =
+          metadata?['sources'] ?? metadata?['source_documents'] ?? [];
+
       // What happened to the language of the answer: chatqna reports whether
       // it translated it. An answer that was not translated is flagged, so
       // the English original is never read as a translation of it.
@@ -1481,15 +1489,14 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
         'role': 'assistant',
         'content': response['response'] ?? tr('chatbot.noResponse'),
         'timestamp': DateTime.now().toIso8601String(),
-        'sources': metadata?['sources'] ?? [],
+        'sources': responseSources,
         'confidence': metadata?['confidence_score'],
         'metadata': metadata,
         'translationFailed': translationFailed,
         'isSaved': false,
       };
 
-      final List<dynamic> newDocs =
-          metadata?['sources'] ?? metadata?['source_documents'] ?? [];
+      final List<dynamic> newDocs = responseSources;
 
       setState(() {
         _messages.add(assistantMessage);

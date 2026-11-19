@@ -9,6 +9,8 @@ test-results/
 .env
 .env.local
 .env.*.local
+# The backup taken when the .env was regenerated from the `env` template
+.env.bak
 
 # SSL certificates and keys (secrets - never commit)
 # The secrets/ directory contains actual certificates - keep structure but not files

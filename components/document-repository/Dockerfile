@@ -80,16 +80,10 @@ ENV MAX_FILES_UPLOAD=10
 # layer's cache key includes its parent), before the writes to package-owned
 # paths (a package that moves would restore its own files over ours), and
 # still root.
-# The upgrade output is kept OUT of the job trace: dpkg prints the path of
-# every conffile it reinstalls, and this image MODIFIES the clamav ones
-# (/etc/clamav/clamd.conf), so a clamav bump prints exactly the kind of path
-# the WAF blocks. The output is printed (sanitized) only when the step
-# fails. The WAF exception is tracked in issue #2001 — this workaround is to
-# be purged once it lands.
 ARG CACHE_BUST=0
 RUN CACHE_BUST=$CACHE_BUST apt-get update -y -o Acquire::Retries=5 && \
-    (CACHE_BUST=$CACHE_BUST apt-get upgrade -y --with-new-pkgs --fix-missing -o Acquire::Retries=5 > /tmp/apt.log 2>&1 || { tail -n 50 /tmp/apt.log | sed -E 's#(/[A-Za-z0-9._~/-]{2,})#<path>#g'; exit 1; }) && \
-    apt-get clean && rm -rf /var/lib/apt/lists/* && rm -f /tmp/apt.log
+    apt-get upgrade -y --with-new-pkgs --fix-missing -o Acquire::Retries=5 && \
+    apt-get clean && rm -rf /var/lib/apt/lists/*
 
 # The clamav directories belong to the clamav package: a package that moves
 # resets their ownership, so the chown comes AFTER the upgrade layer — our

@@ -22,6 +22,7 @@ from metrics import (
     sanitize_attributes,
 )
 
+from core.embedding_backend import resolved_embed_model
 from core.embedding_query_prefix import TEI_EMBED_MODEL, get_query_instruction
 from core.label_contract import build_filter_labels, encode_filter_labels
 from core.model_cache import (
@@ -509,6 +510,14 @@ EMBEDDING_SERVER_ENDPOINT = os.getenv("EMBEDDING_SERVER_ENDPOINT", "/v1/embeddin
 # UNSET = the NVIDIA path, byte-identical: the microservice fronts TEI and
 # the node keeps the base's host/port/endpoint.
 _EMBEDDING_VLLM_ENDPOINT = os.getenv("EMBEDDING_VLLM_ENDPOINT", "")
+# The node's HOST as the framework needs it when the node carries an api_key:
+# MicroService.endpoint_path() builds {host}{endpoint} for an authenticated
+# node and {protocol}://{host}:{port}{endpoint} for an unauthenticated one —
+# so an authenticated node's host must carry the scheme and the port ITSELF.
+# The module-level variables above keep the plain hostname/port/protocol
+# (the model's discovery probe and every other reader expect those).
+_EMBEDDING_NODE_HOST = EMBEDDING_SERVER_HOST_IP
+_EMBEDDING_NODE_API_KEY = None
 if _EMBEDDING_VLLM_ENDPOINT:
     _parsed_embedding = urlparse(_EMBEDDING_VLLM_ENDPOINT)
     EMBEDDING_SERVER_HOST_IP = _parsed_embedding.hostname or EMBEDDING_SERVER_HOST_IP
@@ -521,6 +530,13 @@ if _EMBEDDING_VLLM_ENDPOINT:
     # {base}/v1/embeddings — the OpenAI route, matching the client the
     # retriever and dataprep build from the same base URL.
     EMBEDDING_SERVER_ENDPOINT = f"{_parsed_embedding.path.rstrip('/')}/v1/embeddings"
+    _EMBEDDING_NODE_HOST = f"{EMBEDDING_SERVER_PROTOCOL}://{EMBEDDING_SERVER_HOST_IP}:{EMBEDDING_SERVER_PORT}"
+    # The GPU node's TLS proxy rejects every request without a matching
+    # bearer (`if ($api_key_valid = 0) { return 401; }`), so the query
+    # encoder authenticates when the deployment carries a key. The
+    # in-cluster instance ignores the header (vLLM only enforces one when
+    # it is started with --api-key).
+    _EMBEDDING_NODE_API_KEY = os.getenv("VLLM_API_KEY") or None
 
 
 # Multi-turn vector-space blending (issue #833). When enabled, the query
@@ -565,17 +581,16 @@ if _VLLM_LLM_ENDPOINT:
 else:
     LLM_SERVER_ENDPOINT_PREFIX = ""
 
-# The GPU node's API key. The node's TLS proxy rejects every request without
-# a matching bearer (`if ($api_key_valid = 0) { return 401; }`), and the OPEA
-# framework sends a service's `api_key` as the Authorization header. Our own
-# clients (the retriever's and dataprep's vLLM embeddings, the RAGAS
-# embedder) already carry VLLM_API_KEY; the framework's graph nodes did
-# not — a call to the node's proxy came back 401.
-#
-# Set only when a REMOTE endpoint is configured: the in-cluster path talks to
-# services that ignore the header, and the NVIDIA single-host path configures
-# neither endpoint, so it keeps sending no Authorization header at all.
-_GPU_NODE_API_KEY = os.getenv("VLLM_API_KEY") if (_EMBEDDING_VLLM_ENDPOINT or _VLLM_LLM_ENDPOINT) else None
+# The GPU node's API key is read per node, next to the endpoint that needs
+# it (the embedding node above). The OPEA framework sends a service's
+# `api_key` as the Authorization header, and it builds an authenticated
+# node's URL as {host}{endpoint} — so an authenticated node's host must
+# carry the scheme and the port. The LLM node keeps the framework's plain
+# host/port form: the deployment's GPU-node key authenticates the retriever's
+# and dataprep's OWN clients (and the RAGAS embedder), while the framework's
+# LLM node is unchanged on every path — the NVIDIA remote-GPU topology has
+# always called the node's /llm route without a bearer, and changing that is
+# a separate, cross-cutting fix, not this branch's business.
 
 # Endpoint the model-id and context-window discovery probes: the remote GPU
 # node when configured, otherwise the compose-internal vLLM
@@ -2543,6 +2558,19 @@ def align_inputs(self, inputs, cur_node, runtime_graph, llm_parameters_dict, **k
         _query_instruction = get_query_instruction(TEI_EMBED_MODEL)
         _original_query = inputs["text"]
         inputs["_original_query"] = _original_query
+        if _EMBEDDING_NODE_API_KEY:
+            # An authenticated node's URL is built as {host}{endpoint}, and
+            # the orchestrator reaches that branch through inputs["model"] —
+            # so the embedding request must carry a model key or the
+            # orchestrator raises a KeyError before it calls anything. The
+            # OpenAI embeddings shape wants the model anyway (this is the
+            # same id the query instruction was derived from), and vLLM's
+            # pooling route serves exactly that model. The NVIDIA path
+            # leaves the body untouched.
+            # The SAME resolver the retriever's and the dataprep's clients
+            # use, with its own default: the request must name the model the
+            # corpus was embedded with, not the prefix's source.
+            inputs["model"] = resolved_embed_model()
         if _blend_history_text:
             _texts = [_original_query, _blend_history_text]
             if _query_instruction:
@@ -3956,11 +3984,11 @@ class ChatQnAService:
 
         embedding = MicroService(
             name="embedding",
-            host=EMBEDDING_SERVER_HOST_IP,
+            host=_EMBEDDING_NODE_HOST,
             port=EMBEDDING_SERVER_PORT,
             protocol=EMBEDDING_SERVER_PROTOCOL,
             endpoint=EMBEDDING_SERVER_ENDPOINT,
-            api_key=_GPU_NODE_API_KEY,
+            api_key=_EMBEDDING_NODE_API_KEY,
             use_remote_service=True,
             service_type=ServiceType.EMBEDDING,
         )
@@ -3998,7 +4026,6 @@ class ChatQnAService:
             port=LLM_SERVER_PORT,
             protocol=LLM_SERVER_PROTOCOL,
             endpoint=llm_endpoint,
-            api_key=_GPU_NODE_API_KEY,
             use_remote_service=True,
             service_type=ServiceType.LLM,
         )

@@ -2663,6 +2663,21 @@ services:
       # microservice (which fronts TEI) exactly as before — the NVIDIA path
       # is byte-identical.
       EMBEDDING_VLLM_ENDPOINT: ${EMBEDDING_VLLM_ENDPOINT:-}
+      # The model name the GPU pooling instance SERVES (the compose var that
+      # feeds its --served-model-name). The query request must send the same
+      # name or the instance 404s per request — and the name must match the
+      # one the corpus was embedded with, or the query vector lands in
+      # another space. The same resolver the retriever's and dataprep's
+      # clients use (EMBEDDING_MODEL_ID -> VLLM_EMBEDDING_MODEL_ID ->
+      # default), so all three agree. Unset on the NVIDIA path: the query
+      # goes to the TEI microservice, which needs no model name.
+      VLLM_EMBEDDING_MODEL_ID: ${VLLM_EMBEDDING_MODEL_ID:-}
+      # The embedding request's own timeout — the same knob the retriever's
+      # and the dataprep's clients read (the shared resolver in
+      # core/embedding_backend.py reads it). A knob a service reads must
+      # reach its container, or an operator can move it for one consumer and
+      # not the other.
+      MODEL_EMBEDDING_TIMEOUT_SECONDS: ${MODEL_EMBEDDING_TIMEOUT_SECONDS:-600}
       RETRIEVER_SERVICE_HOST_IP: retriever-arango-service
       RETRIEVER_SERVICE_PORT: 7000
       RERANK_SERVER_HOST_IP: reranker

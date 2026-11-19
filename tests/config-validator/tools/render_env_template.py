@@ -59,7 +59,10 @@ def _base_vars(**extra):
 
 
 def _cases():
-    rocm = yaml.safe_load(ROCM_VARS.read_text()) or {}
+    # The ROCm group_vars exist only on a tree that carries the ROCm path;
+    # the NVIDIA case needs nothing from them, so their absence must not
+    # break the render (the gate is meant to run on any checkout).
+    rocm = yaml.safe_load(ROCM_VARS.read_text()) if ROCM_VARS.exists() else {}
     remote = {key: value for key, value in rocm.items() if key != "rocm_gpu_node_local"}
     return {
         "nvidia": _base_vars(),

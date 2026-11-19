@@ -9,7 +9,7 @@ overlay's two package-bound hooks — the micro-service bootstrap and the
 HTTP-service access-log installer — are intentionally absent: they belong
 to the overlay's own runtime, which this service does not use.
 
-Public API (unchanged from the source module):
+Public API of this port:
 
     setup_tracing(service_name)      initialise the providers + exporters
     get_tracer(name)                  a tracer from the global provider

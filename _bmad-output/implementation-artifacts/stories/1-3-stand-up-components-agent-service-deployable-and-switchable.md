@@ -133,9 +133,24 @@ Every finding is dispositioned below; "fixed" means the correction is in the dif
 | 5 | The `build:agent-service` lane carries no `FORCE_IMAGE_REBUILD` rule and no default-branch rule, so a deployment would resolve an image tag that was never built | false | The premise does not hold: the lane carries the same default-branch and release-branch rules as the `pii-service` precedent, and the monthly rebuild is handled inside the inherited `.build_template` (the `CACHE_BUST` build arg). The promote job of pipeline 18621 published `genie-ai-agent-server:feat-agentic-foundations-1-3-agent-service` and `...-1f9de8b9` to the registry (job trace) |
 | 6 | The CI test lane installs `httpx` and `pytest` outside the audited pin set, so the "every introduced dependency is audited" property did not hold for the test surface | medium | **fixed** — a `requirements-test.txt` (the runtime tree plus the two test pins) is what the lane installs, the evidence file covers both trees, and the config-validator gate checks their union and refuses a lane that names its own versions |
 
-### Quality phase
+### Quality phase (simplify + test-audit, run in the seat; the four cleanup lanes of the first attempt wedged and were stopped)
 
-See the orchestrator's review log (`~/.claude/state/review/issue-1949.jsonl`) for the recorded decisions of the quality pass and the scoped coverage over the corrections above.
+| # | Finding | Verdict | Disposition |
+|---|---|---|---|
+| 7 | The ported tracing module carried two helpers nothing calls — `_PII_KEYS` (a back-compat constant with no consumer) and `sanitize_attributes` (the processor uses `redact_attributes`) | low | **fixed** — both removed; the module keeps the span API, the meter accessor and the redacting processor |
+| 8 | The `[test]` extra in `pyproject.toml` pinned nothing (`pytest>=8.0`, `httpx>=0.28`) and could drift from the audited pins the CI lane installs | medium | **fixed** — the extra carries the audited versions, with the pairing written next to it |
+| 9 | `pytest` was an introduced dependency with no entry in `THIRD_PARTY.md` | medium | **fixed** — disclosed in the Python Libraries section |
+| 10 | Two readiness tests asserted one contract twice (the activation flag, on and off) | low | **fixed** — merged into one test that exercises both states, which also proves the flag is read per request |
+| 11 | The CI-lane assertions matched across the whole file, so another job's `IMAGE_NAME` could have satisfied them | medium | **fixed** — the assertions are scoped to the job's own block |
+| 12 | The reachability criterion had no gate on the gateway half: nothing asserted that the gateway routes nothing to the agent service | medium | **fixed** — a gate reads the gateway's declarative config and its restore script |
+
+### Scoped FIX-REVIEW over the quality corrections (`9f51a18eb..394cc083f`, bounded, no subagent)
+
+| # | Finding | Verdict | Disposition |
+|---|---|---|---|
+| 13 | The tracing module's docstring still claimed "Public API (unchanged from the source module)" after the two helpers were dropped | low | **fixed** — the claim now reads "Public API of this port" |
+
+The decisions of the phase are recorded in the orchestrator's log (`~/.claude/state/review/issue-1949.jsonl`).
 
 ## Design Notes
 

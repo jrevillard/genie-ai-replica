@@ -11,12 +11,30 @@ falls back to tei with a warning (resolve_reranking_strategy style).
 from unittest.mock import patch
 
 import httpx
+import pytest
 
 import core.embedding_backend as eb
 from core.model_http_policy import EMBEDDING_TIMEOUT_SECONDS, http_timeout
 
 _VLLM_ENDPOINT = "http://vllm-embedding:8000"
 _BGE = "BAAI/bge-large-en-v1.5"
+
+
+@pytest.fixture(autouse=True)
+def _reset_warn_once_flags():
+    """The warn-once flags are process globals, not per-call state.
+
+    Another module's import can consume them (the chatqna calls
+    embeddings_backend_active() at import, so a chatqna test that runs
+    first would leave the flag set and this file's warning assertions
+    would fail on the run order). Resetting them per test keeps the
+    assertions about the WARNING itself, not about who warned first.
+    """
+    eb._WARNED_MISSING_ENDPOINT = False
+    eb._WARNED_UNKNOWN_BACKEND = False
+    yield
+    eb._WARNED_MISSING_ENDPOINT = False
+    eb._WARNED_UNKNOWN_BACKEND = False
 
 
 class TestResolveEmbeddingBackend:

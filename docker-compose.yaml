@@ -2663,6 +2663,11 @@ services:
       # microservice (which fronts TEI) exactly as before — the NVIDIA path
       # is byte-identical.
       EMBEDDING_VLLM_ENDPOINT: ${EMBEDDING_VLLM_ENDPOINT:-}
+      # The backend switch, the same knob the retriever's and the dataprep's
+      # clients read: the query encoder moves to the GPU pooling instance
+      # only when this says vllm AND the endpoint above is set — the query
+      # must be encoded by the backend that encoded the corpus.
+      EMBEDDING_BACKEND: ${EMBEDDING_BACKEND:-tei}
       # The model name the GPU pooling instance SERVES (the compose var that
       # feeds its --served-model-name). The query request must send the same
       # name or the instance 404s per request — and the name must match the

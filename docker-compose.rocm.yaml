@@ -360,6 +360,12 @@ services:
   chatqna-xeon-backend-server:
     environment:
       - EMBEDDING_VLLM_ENDPOINT=${EMBEDDING_VLLM_ENDPOINT:-http://vllm-embedding:8000}
+      # The backend switch, the same knob the retriever's and the dataprep's
+      # blocks above carry: chatqna's query encoder moves to the GPU pooling
+      # instance only when this says vllm AND the endpoint above is set — the
+      # query must be encoded by the backend that encoded the corpus, or the
+      # dense leg compares two vector spaces.
+      - EMBEDDING_BACKEND=${EMBEDDING_BACKEND:-tei}
 
   # The otel-collector service is deliberately NOT restated here.
   #

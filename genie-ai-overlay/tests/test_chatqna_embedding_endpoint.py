@@ -48,6 +48,7 @@ def _reload(monkeypatch, **env):
         "EMBEDDING_SERVER_PORT",
         "EMBEDDING_SERVER_ENDPOINT",
         "EMBEDDING_MODEL_ID",
+        "EMBEDDING_BACKEND",
         "VLLM_EMBEDDING_MODEL_ID",
         "VLLM_LLM_ENDPOINT",
         "VLLM_TRANSLATION_ENDPOINT",
@@ -88,7 +89,7 @@ class TestEmbeddingEndpointDerivation:
 
     def test_in_cluster_gpu_instance(self, monkeypatch):
         """The ROCm single-server venue: the compose-internal instance."""
-        mod = _reload(monkeypatch, EMBEDDING_VLLM_ENDPOINT="http://vllm-embedding:8000")
+        mod = _reload(monkeypatch, EMBEDDING_VLLM_ENDPOINT="http://vllm-embedding:8000", EMBEDDING_BACKEND="vllm")
         assert mod.EMBEDDING_SERVER_HOST_IP == "vllm-embedding"
         assert mod.EMBEDDING_SERVER_PORT == 8000
         assert mod.EMBEDDING_SERVER_PROTOCOL == "http"
@@ -98,7 +99,7 @@ class TestEmbeddingEndpointDerivation:
 
     def test_split_venue_tls_proxy(self, monkeypatch):
         """The split venue: the GPU node's TLS proxy, https and a port."""
-        mod = _reload(monkeypatch, EMBEDDING_VLLM_ENDPOINT="https://gpu.example.org:444")
+        mod = _reload(monkeypatch, EMBEDDING_VLLM_ENDPOINT="https://gpu.example.org:444", EMBEDDING_BACKEND="vllm")
         assert mod.EMBEDDING_SERVER_HOST_IP == "gpu.example.org"
         assert mod.EMBEDDING_SERVER_PORT == 444
         assert mod.EMBEDDING_SERVER_PROTOCOL == "https"
@@ -111,15 +112,47 @@ class TestEmbeddingEndpointDerivation:
         the node's endpoint must be the prefix + the route — otherwise the
         two consumers would post to different URLs for the same model.
         """
-        mod = _reload(monkeypatch, EMBEDDING_VLLM_ENDPOINT="https://gpu.example.org:444/embeddings")
+        mod = _reload(
+            monkeypatch, EMBEDDING_VLLM_ENDPOINT="https://gpu.example.org:444/embeddings", EMBEDDING_BACKEND="vllm"
+        )
         assert mod.EMBEDDING_SERVER_ENDPOINT == "/embeddings/v1/embeddings"
 
     def test_scheme_default_port(self, monkeypatch):
         """No explicit port -> 80 for http, 443 for https."""
-        mod = _reload(monkeypatch, EMBEDDING_VLLM_ENDPOINT="http://vllm-embedding")
+        mod = _reload(monkeypatch, EMBEDDING_VLLM_ENDPOINT="http://vllm-embedding", EMBEDDING_BACKEND="vllm")
         assert mod.EMBEDDING_SERVER_PORT == 80
-        mod = _reload(monkeypatch, EMBEDDING_VLLM_ENDPOINT="https://gpu.example.org")
+        mod = _reload(monkeypatch, EMBEDDING_VLLM_ENDPOINT="https://gpu.example.org", EMBEDDING_BACKEND="vllm")
         assert mod.EMBEDDING_SERVER_PORT == 443
+
+    def test_the_endpoint_alone_does_not_move_the_node(self, monkeypatch):
+        """The backend switch gates the move — the corpus/query space rule.
+
+        The retriever's and the dataprep's clients encode with the backend
+        EMBEDDING_BACKEND names; a query encoded by the GPU while the corpus
+        was encoded by TEI compares two vector spaces on the dense leg.
+        So the endpoint alone (without the switch) leaves the node on the
+        TEI microservice.
+        """
+        mod = _reload(
+            monkeypatch,
+            EMBEDDING_SERVER_HOST_IP="embedding",
+            EMBEDDING_SERVER_PORT="6000",
+            EMBEDDING_VLLM_ENDPOINT="http://vllm-embedding:8000",
+        )
+        assert mod._EMBEDDING_BACKEND_ACTIVE is False
+        assert mod.EMBEDDING_SERVER_HOST_IP == "embedding"
+        assert mod.EMBEDDING_SERVER_PORT == 6000
+
+    def test_the_switch_alone_does_not_move_the_node(self, monkeypatch):
+        """A backend switch without an endpoint leaves the path on TEI."""
+        mod = _reload(
+            monkeypatch,
+            EMBEDDING_SERVER_HOST_IP="embedding",
+            EMBEDDING_SERVER_PORT="6000",
+            EMBEDDING_BACKEND="vllm",
+        )
+        assert mod._EMBEDDING_BACKEND_ACTIVE is False
+        assert mod.EMBEDDING_SERVER_HOST_IP == "embedding"
 
 
 class TestGpuNodeBearer:
@@ -141,13 +174,14 @@ class TestGpuNodeBearer:
         mod = _reload(
             monkeypatch,
             EMBEDDING_VLLM_ENDPOINT="https://gpu.example.org:444",
+            EMBEDDING_BACKEND="vllm",
             VLLM_API_KEY="secret-key",
         )
         assert mod._EMBEDDING_NODE_API_KEY == "secret-key"
 
     def test_no_bearer_without_a_key(self, monkeypatch):
         """A configured endpoint but no key -> no header (no crash)."""
-        mod = _reload(monkeypatch, EMBEDDING_VLLM_ENDPOINT="http://vllm-embedding:8000")
+        mod = _reload(monkeypatch, EMBEDDING_VLLM_ENDPOINT="http://vllm-embedding:8000", EMBEDDING_BACKEND="vllm")
         assert mod._EMBEDDING_NODE_API_KEY is None
 
     def test_the_llm_endpoint_alone_does_not_arm_a_bearer(self, monkeypatch):
@@ -204,6 +238,7 @@ class TestGraphNodeWiring:
         node = self._embedding_node(
             monkeypatch,
             EMBEDDING_VLLM_ENDPOINT="https://gpu.example.org:444",
+            EMBEDDING_BACKEND="vllm",
             VLLM_API_KEY="k",
         )
         assert node["port"] == 444
@@ -223,6 +258,7 @@ class TestGraphNodeWiring:
         node = self._embedding_node(
             monkeypatch,
             EMBEDDING_VLLM_ENDPOINT="https://gpu.example.org:444",
+            EMBEDDING_BACKEND="vllm",
             VLLM_API_KEY="k",
         )
         assert node["host"] == "https://gpu.example.org:444"
@@ -263,6 +299,7 @@ class TestEmbeddingRequestCarriesTheModel:
         mod = _reload(
             monkeypatch,
             EMBEDDING_VLLM_ENDPOINT="https://gpu.example.org:444",
+            EMBEDDING_BACKEND="vllm",
             VLLM_API_KEY="k",
             EMBEDDING_MODEL_ID="BAAI/bge-large-en-v1.5",
         )
@@ -279,6 +316,7 @@ class TestEmbeddingRequestCarriesTheModel:
         mod = _reload(
             monkeypatch,
             EMBEDDING_VLLM_ENDPOINT="http://vllm-embedding:8000",
+            EMBEDDING_BACKEND="vllm",
             VLLM_API_KEY="k",
             VLLM_EMBEDDING_MODEL_ID="bge-large-en-v1.5-rocm",
         )

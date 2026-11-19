@@ -22,7 +22,7 @@ from metrics import (
     sanitize_attributes,
 )
 
-from core.embedding_backend import resolved_embed_model
+from core.embedding_backend import embeddings_backend_active, resolved_embed_model
 from core.embedding_query_prefix import TEI_EMBED_MODEL, get_query_instruction
 from core.label_contract import build_filter_labels, encode_filter_labels
 from core.model_cache import (
@@ -510,6 +510,13 @@ EMBEDDING_SERVER_ENDPOINT = os.getenv("EMBEDDING_SERVER_ENDPOINT", "/v1/embeddin
 # UNSET = the NVIDIA path, byte-identical: the microservice fronts TEI and
 # the node keeps the base's host/port/endpoint.
 _EMBEDDING_VLLM_ENDPOINT = os.getenv("EMBEDDING_VLLM_ENDPOINT", "")
+# The GPU branch moves ONLY when the deployment says so: EMBEDDING_BACKEND=vllm
+# AND the endpoint. The same gate the retriever's and the dataprep's clients
+# use (core/embedding_backend.embeddings_backend_active) — the query has to be
+# encoded by the same backend that encoded the corpus, or the dense leg
+# compares two vector spaces. An endpoint without the backend switch (or a
+# backend switch without an endpoint) leaves the whole path on TEI.
+_EMBEDDING_BACKEND_ACTIVE = embeddings_backend_active()
 # The node's HOST as the framework needs it when the node carries an api_key:
 # MicroService.endpoint_path() builds {host}{endpoint} for an authenticated
 # node and {protocol}://{host}:{port}{endpoint} for an unauthenticated one —
@@ -518,7 +525,7 @@ _EMBEDDING_VLLM_ENDPOINT = os.getenv("EMBEDDING_VLLM_ENDPOINT", "")
 # (the model's discovery probe and every other reader expect those).
 _EMBEDDING_NODE_HOST = EMBEDDING_SERVER_HOST_IP
 _EMBEDDING_NODE_API_KEY = None
-if _EMBEDDING_VLLM_ENDPOINT:
+if _EMBEDDING_VLLM_ENDPOINT and _EMBEDDING_BACKEND_ACTIVE:
     _parsed_embedding = urlparse(_EMBEDDING_VLLM_ENDPOINT)
     EMBEDDING_SERVER_HOST_IP = _parsed_embedding.hostname or EMBEDDING_SERVER_HOST_IP
     # Scheme-aware default port (the LLM block above hardcodes 443; this one

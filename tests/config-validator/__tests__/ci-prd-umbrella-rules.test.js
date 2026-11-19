@@ -14,7 +14,7 @@ const CI_FILE = path.join(ROOT, '.gitlab-ci.yml');
 // which declares no `fallback_behavior`, so GitLab's empty default makes it
 // fail closed — demands a Maintainer approval the umbrella does not need.
 //
-// Four properties make that work, and none of them is visible to a "the CI
+// Five properties make that work, and none of them is visible to a "the CI
 // file still parses" check:
 //
 //   1. `workflow:rules` — the `*/prd` entry must not be shadowed by an entry
@@ -26,6 +26,8 @@ const CI_FILE = path.join(ROOT, '.gitlab-ci.yml');
 //   3. the gemnasium dependency-scanning job must run there too — it is what
 //      uploads the SBOM the license rule compares the target pipeline against.
 //   4. both entries must cover the whole `*/prd` family, not one branch of it.
+//   5. both entries must admit a PUSH pipeline on an umbrella branch, without
+//      depending on the merge-request state.
 //
 // The rules are read as STRUCTURE (a YAML parse), not as text: what these
 // checks are about is order, the presence of a `when:` key, and which job
@@ -33,6 +35,13 @@ const CI_FILE = path.join(ROOT, '.gitlab-ci.yml');
 // spelling of one line. The repository root already depends on js-yaml.
 
 const UMBRELLA_BRANCHES = ['feat/agentic-foundations/prd', 'feat/server-side-tools/prd'];
+// A member of the protected `*/prd` family that does not exist today: the
+// rule must cover the family, not the branches it happens to know.
+const PRD_FAMILY_PROBE = 'other/prd';
+// The project's default branch: the CI file compares against it through
+// `$CI_DEFAULT_BRANCH`, and a condition naming it cannot match an umbrella
+// branch nor a story branch.
+const DEFAULT_BRANCH = 'main';
 const SUPPRESSING_WHEN = ['never', 'manual'];
 
 let ci;
@@ -53,23 +62,41 @@ function conditionOf(rule) {
   return rule && typeof rule.if === 'string' ? rule.if : '';
 }
 
-// The branch pattern a condition states, when it states one. GitLab reads the
-// literal between the first `/` after the `=~` operator and the last `/` of
-// the condition, so a condition that carries further conjuncts keeps its
-// pattern — and `\/` (which YAML unescapes to `/` inside a double-quoted
-// scalar) reads as the same pattern.
+// The branch pattern a condition states, when it states one. GitLab ends the
+// literal at the first unescaped `/` after the `=~` operator, so the scan
+// honours the `\/` escape: `/\/prd$/` carries the pattern `\/prd$`.
 function patternOf(condition) {
   const operator = condition.indexOf('=~');
   if (operator === -1) return null;
-  const start = condition.indexOf('/', operator);
-  if (start === -1) return null;
-  const end = condition.lastIndexOf('/');
-  if (end <= start) return null;
+  let index = condition.indexOf('/', operator);
+  if (index === -1) return null;
+  let source = '';
+  for (index += 1; index < condition.length; index += 1) {
+    const character = condition[index];
+    if (character === '\\') {
+      source += character + (condition[index + 1] || '');
+      index += 1;
+      continue;
+    }
+    if (character === '/') break;
+    source += character;
+  }
+  if (!source) return null;
   try {
-    return new RegExp(condition.slice(start + 1, end));
+    return new RegExp(source);
   } catch {
     return null;
   }
+}
+
+// The variable a condition applies its pattern to. The pattern must be
+// applied to the branch variable: applied to anything else, the rule never
+// matches a branch pipeline.
+function operandOf(condition) {
+  const at = condition.indexOf('=~');
+  if (at === -1) return null;
+  const match = /([$A-Za-z_][$A-Za-z0-9_]*)\s*$/.exec(condition.slice(0, at));
+  return match ? match[1] : null;
 }
 
 // A rule that covers every umbrella branch: the pattern is applied to the
@@ -78,10 +105,10 @@ function patternOf(condition) {
 // makes this locator semantic.
 function coversUmbrella(rule) {
   const condition = conditionOf(rule);
-  if (!/\$CI_COMMIT_BRANCH\b/.test(condition)) return false;
+  if (operandOf(condition) !== '$CI_COMMIT_BRANCH') return false;
   const pattern = patternOf(condition);
   if (!pattern) return false;
-  return UMBRELLA_BRANCHES.every((branch) => pattern.test(branch));
+  return UMBRELLA_BRANCHES.every((branch) => pattern.test(branch)) && pattern.test(PRD_FAMILY_PROBE);
 }
 
 function umbrellaEntries(rules) {
@@ -89,57 +116,86 @@ function umbrellaEntries(rules) {
 }
 
 // The branch pattern of a rule, normalized: `\/` and `/` denote the same
-// character (YAML unescapes the first inside a double-quoted scalar), so the
-// two spellings must compare equal.
+// character, so the two spellings must compare equal.
 function normalizedPattern(rule) {
   const pattern = patternOf(conditionOf(rule));
   if (!pattern) return null;
   return pattern.source.replace(/\\\//g, '/').replace(/\s+/g, '');
 }
 
-// Can one conjunct of a condition be true for a PUSH pipeline on an umbrella
-// branch? GitLab evaluates `rules` in order and takes the first match, so a
-// rule that can match such a push decides the outcome.
-function conjunctMatchesPush(conjunct) {
+// The branch a pipeline of the given kind runs on, as far as a condition can
+// name it: the umbrella's own branch for a push, the merge request's source
+// branch for a merge-request pipeline. A story branch is neither an umbrella
+// branch nor the default branch.
+function branchConjunctMatches(text, kind) {
+  let match = /^\$CI_COMMIT_BRANCH\s*==\s*"([^"]*)"$/.exec(text);
+  if (match) {
+    if (kind === 'push') return UMBRELLA_BRANCHES.includes(match[1]);
+    return match[1] !== DEFAULT_BRANCH && !UMBRELLA_BRANCHES.includes(match[1]);
+  }
+  match = /^\$CI_COMMIT_BRANCH\s*!=\s*"([^"]*)"$/.exec(text);
+  if (match) {
+    if (kind === 'push') return !UMBRELLA_BRANCHES.includes(match[1]);
+    return match[1] === DEFAULT_BRANCH || UMBRELLA_BRANCHES.includes(match[1]);
+  }
+  // The default branch is neither an umbrella branch nor a story branch.
+  if (/^\$CI_COMMIT_BRANCH\s*==\s*\$CI_DEFAULT_BRANCH$/.test(text)) return false;
+  if (/^\$CI_COMMIT_BRANCH\s*!=\s*\$CI_DEFAULT_BRANCH$/.test(text)) return true;
+  return null;
+}
+
+// Can one conjunct of a condition be true for a pipeline of the given kind on
+// an umbrella branch? `kind` is the pipeline source GitLab would create:
+// `push` (the umbrella's own branch pipeline) or `merge_request_event` (the
+// story merge requests' pipeline, whose source branch is the story branch).
+// `openMergeRequests` says whether merge requests are open on the umbrella:
+// the pipeline the umbrella needs must not depend on that state, but an entry
+// that suppresses while merge requests ARE open does shadow the push today.
+function conjunctMatches(conjunct, kind, openMergeRequests) {
   const text = conjunct.trim();
   if (!text) return true;
 
   let match = /^\$CI_PIPELINE_SOURCE\s*==\s*"([^"]*)"$/.exec(text);
-  if (match) return match[1] === 'push';
+  if (match) return match[1] === kind;
   match = /^\$CI_PIPELINE_SOURCE\s*!=\s*"([^"]*)"$/.exec(text);
-  if (match) return match[1] !== 'push';
+  if (match) return match[1] !== kind;
 
-  // A tag pipeline is not a branch push; its negation is.
+  // A tag pipeline is neither of the two kinds; its negation is.
   if (text === '$CI_COMMIT_TAG') return false;
   if (text === '!$CI_COMMIT_TAG') return true;
 
-  match = /^\$CI_COMMIT_BRANCH\s*==\s*"([^"]*)"$/.exec(text);
-  if (match) return UMBRELLA_BRANCHES.includes(match[1]);
-  match = /^\$CI_COMMIT_BRANCH\s*!=\s*"([^"]*)"$/.exec(text);
-  if (match) return !UMBRELLA_BRANCHES.includes(match[1]);
+  if (text === '$CI_OPEN_MERGE_REQUESTS') return openMergeRequests;
 
-  // The default branch is not an umbrella branch.
-  if (/^\$CI_COMMIT_BRANCH\s*==\s*\$CI_DEFAULT_BRANCH$/.test(text)) return false;
-  if (/^\$CI_COMMIT_BRANCH\s*!=\s*\$CI_DEFAULT_BRANCH$/.test(text)) return true;
+  const branch = branchConjunctMatches(text, kind);
+  if (branch !== null) return branch;
 
   const pattern = patternOf(text);
-  if (pattern) return UMBRELLA_BRANCHES.some((branch) => pattern.test(branch));
+  if (pattern) {
+    return kind === 'push' ? UMBRELLA_BRANCHES.some((branch) => pattern.test(branch)) : true;
+  }
 
   // An unknown shape is assumed to match: a new form of condition must not
   // pass unnoticed.
   return true;
 }
 
-function canMatchPushOnUmbrella(rule) {
+function canMatchOnUmbrella(rule, kind, openMergeRequests) {
   return conditionOf(rule)
     .split('&&')
-    .every((conjunct) => conjunctMatchesPush(conjunct));
+    .every((conjunct) => conjunctMatches(conjunct, kind, openMergeRequests));
 }
 
-// The entries above `index` that would suppress the pipeline — and so the
-// rules that would follow — if they matched a push on an umbrella branch.
+// The entries above `index` that would suppress a pipeline the umbrella
+// needs — its own push pipeline, or the merge-request pipeline of a story
+// merge request that targets it — if they matched one.
 function shadowingEntries(rules, index) {
-  return rules.slice(0, index).filter((rule) => SUPPRESSING_WHEN.includes(rule.when) && canMatchPushOnUmbrella(rule));
+  return rules
+    .slice(0, index)
+    .filter(
+      (rule) =>
+        SUPPRESSING_WHEN.includes(rule.when) &&
+        (canMatchOnUmbrella(rule, 'push', true) || canMatchOnUmbrella(rule, 'merge_request_event', true))
+    );
 }
 
 describe('ci: the PRD umbrella branch rules (#2010)', () => {
@@ -157,6 +213,16 @@ describe('ci: the PRD umbrella branch rules (#2010)', () => {
     const rules = [...umbrellaEntries(workflowRules), ...umbrellaEntries(securityRules)];
     for (const rule of rules) {
       expect(SUPPRESSING_WHEN).not.toContain(rule.when);
+    }
+  });
+
+  it('grants the umbrella a push pipeline, whatever the merge-request state', () => {
+    // A rule that admits only merge-request pipelines (or only pipelines of
+    // another source) leaves the umbrella with no branch pipeline at all —
+    // and the policies with no target again.
+    const rules = [...umbrellaEntries(workflowRules), ...umbrellaEntries(securityRules)];
+    for (const rule of rules) {
+      expect(canMatchOnUmbrella(rule, 'push', false)).toBe(true);
     }
   });
 

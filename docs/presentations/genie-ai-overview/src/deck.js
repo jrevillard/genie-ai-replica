@@ -172,14 +172,26 @@
   // speaker view - which loads the deck again in a frame - reads the same
   // one. Changing it reloads the page: the speaker view picks the new
   // language up, but its frame has to be rebuilt, so it is reopened.
+  // The speaker view is a window of its own. The deck keeps its handle
+  // so a language change can close it and reopen it in the new language:
+  // the view holds the deck in a frame, and the frame is built once.
+  // The handle is taken as the window opens, whichever way it opens -
+  // the button, or Reveal's own key.
+  let speakerWindow = null;
+  const openWindow = window.open;
+  window.open = function (...args) {
+    const created = openWindow.apply(window, args);
+    if (created && args[1] === "reveal.js - Notes") speakerWindow = created;
+    return created;
+  };
+
   function chooseLanguage(code) {
     if (!bundle.slots[code] || code === language) return;
     // The speaker view holds the deck in a frame, and the frame is built
     // once. It is closed here, and the reload below reopens it: Reveal's
     // own notes plugin opens the speaker view when the URL asks for it.
-    const speaker = window.open("", "reveal.js - Notes");
-    const wasOpen = Boolean(speaker && !speaker.closed);
-    if (wasOpen) speaker.close();
+    const wasOpen = Boolean(speakerWindow && !speakerWindow.closed);
+    if (wasOpen) speakerWindow.close();
     const url = new URL(location.href);
     url.searchParams.set("lang", code);
     if (wasOpen) url.searchParams.set("notes", "");
@@ -283,7 +295,9 @@
     // for it. The ask is not part of the link the reader keeps.
     if (url.has("notes")) {
       url.delete("notes");
-      history.replaceState(null, "", location.pathname + (url.toString() ? "?" + url : ""));
+      const clean = new URL(location.href);
+      clean.search = url.toString();
+      history.replaceState(null, "", clean.toString());
     }
   });
 

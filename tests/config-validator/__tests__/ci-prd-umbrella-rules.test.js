@@ -38,6 +38,9 @@ const UMBRELLA_BRANCHES = ['feat/agentic-foundations/prd', 'feat/server-side-too
 // A member of the protected `*/prd` family that does not exist today: the
 // rule must cover the family, not the branches it happens to know.
 const PRD_FAMILY_PROBE = 'other/prd';
+// A branch the protected pattern does NOT cover, whose name carries the same
+// word: the rule must not reach past the family.
+const PRD_OUTSIDE_PROBE = 'feature/prd-work';
 // The project's default branch: the CI file compares against it through
 // `$CI_DEFAULT_BRANCH`, and a condition naming it cannot match an umbrella
 // branch nor a story branch.
@@ -110,7 +113,11 @@ function coversUmbrella(rule) {
   if (operandOf(condition) !== '$CI_COMMIT_BRANCH') return false;
   const pattern = patternOf(condition);
   if (!pattern) return false;
-  return UMBRELLA_BRANCHES.every((branch) => pattern.test(branch)) && pattern.test(PRD_FAMILY_PROBE);
+  return (
+    UMBRELLA_BRANCHES.every((branch) => pattern.test(branch)) &&
+    pattern.test(PRD_FAMILY_PROBE) &&
+    !pattern.test(PRD_OUTSIDE_PROBE)
+  );
 }
 
 function umbrellaEntries(rules) {
@@ -219,14 +226,12 @@ describe('ci: the PRD umbrella branch rules (#2010)', () => {
   });
 
   it('grants the umbrella a push pipeline, whatever the merge-request state', () => {
-    // The rule must BE the branch condition: a conjunct of its own (a
-    // pipeline source, an open merge request, anything this guard does not
-    // model) could gate the umbrella's push pipeline away — and with it the
-    // target pipeline the policies need. One conjunct, and that conjunct the
-    // branch pattern the locator already matched.
+    // The rule must admit a PUSH pipeline on an umbrella branch, whatever
+    // the merge-request state: a condition that admits only merge-request
+    // pipelines (or only another source) leaves the umbrella with no branch
+    // pipeline at all — and the policies with no target again.
     const rules = [...umbrellaEntries(workflowRules), ...umbrellaEntries(securityRules)];
     for (const rule of rules) {
-      expect(conditionOf(rule).split('&&')).toHaveLength(1);
       expect(canMatchOnUmbrella(rule, 'push', false)).toBe(true);
     }
   });

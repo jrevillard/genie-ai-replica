@@ -70,6 +70,15 @@ OPEA_WORKLOADS = {
     "ragas-service": "ragas-service.yaml",
 }
 
+# The values path each workload's operator env map lives at. The retrieval
+# tier's map is its own chart section's `env`; the OKF tier's map sits under
+# the OKF section, one path per workload.
+WORKLOAD_ENV_MAPS = {
+    "pii-service": "okf.pii.env",
+    "okf-server": "okf.server.env",
+    "ragas-service": "okf.ragas.env",
+}
+
 # The model ids the APPLICATION tier pins. The chart path each one comes
 # from is read from the application's own template - that template's
 # fallback chain is the only place the fallback is written down.
@@ -972,14 +981,19 @@ def attested_chart(storage_namespace, release, revision):
         chart = decode_release_payload(encoded).get("chart") or {}
     except (ValueError, json.JSONDecodeError):
         return None
-    templates = {
-        entry.get("name", ""): base64.b64decode(entry.get("data") or "")
-        for entry in chart.get("templates") or []
-    }
-    files = {
-        entry.get("name", ""): base64.b64decode(entry.get("data") or "")
-        for entry in chart.get("files") or []
-    }
+    try:
+        templates = {
+            entry.get("name", ""): base64.b64decode(entry.get("data") or "")
+            for entry in chart.get("templates") or []
+        }
+        files = {
+            entry.get("name", ""): base64.b64decode(entry.get("data") or "")
+            for entry in chart.get("files") or []
+        }
+    except (binascii.Error, ValueError):
+        # A payload the capture cannot read attests no chart: the identity
+        # stays UNRESOLVED, and the record says so.
+        return None
     return {
         "templates": templates,
         "files": files,
@@ -987,6 +1001,17 @@ def attested_chart(storage_namespace, release, revision):
         "metadata": chart.get("metadata") or {},
         "lock": chart.get("lock") or {},
     }
+
+
+def env_map_path(component, section):
+    """The values path of a workload's operator env map.
+
+    The retrieval tier's map is its own chart section's `env`; the OKF
+    tier's map lives under the OKF section, one path per workload.
+    """
+    if component in WORKLOAD_ENV_MAPS:
+        return WORKLOAD_ENV_MAPS[component]
+    return f"opea.{section}.env" if section else ""
 
 
 def local_chart_files():
@@ -999,7 +1024,13 @@ def local_chart_files():
     """
     files = {}
     for root, dirs, names in os.walk(CHART_DIR):
-        dirs[:] = sorted(name for name in dirs if name != "charts")
+        if os.path.relpath(root, CHART_DIR) == ".":
+            # The vendored dependencies sit in the chart's own `charts`
+            # directory: Helm keeps them in the chart's dependencies, not in
+            # its files. No other directory of that name is excluded.
+            dirs[:] = sorted(name for name in dirs if name != "charts")
+        else:
+            dirs[:] = sorted(dirs)
         for name in sorted(names):
             absolute = os.path.join(root, name)
             relative = os.path.relpath(absolute, CHART_DIR).replace(os.sep, "/")
@@ -1097,10 +1128,11 @@ def leaf_values(values, prefix=""):
     return leaves
 
 
-def dependency_names():
+def dependency_names(lock=None):
     """The names of the chart's dependencies."""
-    with open(os.path.join(CHART_DIR, "Chart.lock"), encoding="utf-8") as handle:
-        lock = yaml.safe_load(handle) or {}
+    if lock is None:
+        with open(os.path.join(CHART_DIR, "Chart.lock"), encoding="utf-8") as handle:
+            lock = yaml.safe_load(handle) or {}
     return {dep.get("name", "") for dep in lock.get("dependencies") or []}
 
 
@@ -1115,7 +1147,11 @@ def values_differences(chart):
         local = yaml.safe_load(handle) or {}
     local_leaves = leaf_values(local)
     attested_leaves = leaf_values(chart.get("values") or {})
-    dependencies = dependency_names()
+    # The dependency's own leaves are coalesced into the chart's values by
+    # helm, under the dependency's name. The names of both locks count: a
+    # dependency the attested chart carries and the source does not is a
+    # difference the lock comparison reports, not a flood of value leaves.
+    dependencies = dependency_names() | dependency_names(chart.get("lock") or {})
     differences = []
     for path, value in sorted(local_leaves.items()):
         if path in attested_leaves:
@@ -1590,7 +1626,7 @@ def resolve_source(
 
     # 1. the section's environment map (the operator's own variables)
     if section:
-        path = f"opea.{section}.env.{env_name}"
+        path = f"{env_map_path(component, section)}.{env_name}"
         if get_path(chart_values, path) is not None or get_path(effective_values, path) is not None:
             default = get_path(chart_values, path)
             effective = get_path(effective_values, path)
@@ -1695,8 +1731,9 @@ def compare_workload(workload, env_maps, chart_values, overlay_values, effective
     # enumerated too, so a knob the chart declares and the deployment does
     # not carry is reported instead of being invisible.
     declared_names = set(template_map.keys())
-    if section:
-        env_map = get_path(effective_values, f"opea.{section}.env") or {}
+    env_map_prefix = env_map_path(component, section)
+    if env_map_prefix:
+        env_map = get_path(effective_values, env_map_prefix) or {}
         declared_names |= set(env_map.keys())
 
     for env_name in sorted(declared_names | set(deployed_env)):

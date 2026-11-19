@@ -1422,3 +1422,34 @@ def test_the_okf_tier_is_compared_like_the_retrieval_tier(
     assert compared, "the tier's chart-declared environment must be compared"
     assert compared[0]["status"] == "MATCH"
     assert compared[0]["source_path"] == "okf.maxConceptDocChars"
+
+
+def test_the_okf_tier_operator_env_map_is_compared(chart_values, env_maps):
+    """The operator's own env map is compared for the OKF tier too."""
+    overlay = {"okf": {"enabled": True, "pii": {"env": {"PII_WEB_CONCURRENCY": "8"}}}}
+    effective = capture.deep_merge(chart_values, overlay)
+    workload = {
+        "name": "genieai-genieai-umbrella-pii-service",
+        "component": "pii-service",
+        "containers": [
+            {"name": "pii-service", "image": "x", "env": {"PII_WEB_CONCURRENCY": "8"}}
+        ],
+    }
+    rows, _ = capture.compare_workload(
+        workload, env_maps, chart_values, overlay, effective
+    )
+    compared = [row for row in rows if row["env"] == "PII_WEB_CONCURRENCY"]
+    assert compared, "the operator's env map must be compared"
+    assert compared[0]["status"] == "MATCH"
+    assert compared[0]["source_path"] == "okf.pii.env.PII_WEB_CONCURRENCY"
+
+
+def test_a_malformed_release_payload_fails_closed(monkeypatch):
+    """A payload the capture cannot read attests no chart."""
+    encoded = base64.b64encode(b"not a helm release").decode("ascii")
+    monkeypatch.setattr(
+        capture, "kubectl_json", lambda *args, **kwargs: {"data": {"release": encoded}}
+    )
+    identity = capture.chart_identity(_release_info())
+    assert identity["status"] == "UNRESOLVED"
+    assert "release secret" in identity["reason"]

@@ -84,6 +84,10 @@ html, body { margin: 0; background: #071330; }
 .source-links a { color: inherit; text-decoration: underline; text-underline-offset: 3px; }
 .slide-numbering { justify-self: end; font-weight: 700; letter-spacing: .06em; white-space: nowrap; }
 .deck-slide.layout-cover[data-slide-theme="night"] .slide-frame { background: linear-gradient(90deg,#040e32c4 0%,#040e32a6 48%,#040e3266 65%,transparent 85%),var(--art-globe) center / cover; padding: 45px 75px 60px; }
+/* The cover darkens the side the title is on. In a right-to-left deck
+   the title is on the other side, so the shade follows it. The globe
+   stays where it is: a picture is not mirrored. */
+[dir="rtl"] .deck-slide.layout-cover[data-slide-theme="night"] .slide-frame { background: linear-gradient(270deg,#040e32c4 0%,#040e32a6 48%,#040e3266 65%,transparent 85%),var(--art-globe) center / cover; }
 .layout-cover .header-rule, .layout-cover .chapter { visibility: hidden; }
 .layout-cover .wordmark { font-size: 34px; }
 .itu { position: absolute; inset-inline-end: 75px; top: 49px; width: 85px; height: 85px; object-fit: contain; }

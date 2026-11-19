@@ -732,8 +732,11 @@ export default {
     stringifyMarkdown(body, frontmatter) {
       // gray-matter round-trip — same serializer the PATCH endpoint parses
       // with (parser-service), so no fidelity loss.
-      const matter = require('gray-matter');
-      return matter.stringify(body || '', frontmatter || {});
+      // The safe wrapper, not gray-matter directly: stringify PARSES a
+      // string content before writing it, so the raw body would be
+      // evaluated (CVE-2026-78847).
+      const { safeStringify } = require('@/services/safeMatter');
+      return safeStringify(body || '', frontmatter || {});
     },
     onEdit(value) {
       this.markdown = value;
@@ -1258,7 +1261,11 @@ export default {
     },
     parseMarkdown(md) {
       try {
-        return require('gray-matter')(md || '');
+        // The safe wrapper, not gray-matter directly: a document whose
+        // front matter declares the JavaScript engine would be eval()'d
+        // (CVE-2026-78847) — in the steward's browser, with the session.
+        const { safeMatter } = require('@/services/safeMatter');
+        return safeMatter(md || '');
       } catch {
         return null; // malformed fm — fall back to the full-markdown PATCH
       }

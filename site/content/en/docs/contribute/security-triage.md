@@ -84,8 +84,10 @@ Never conflate the two.
   runtime subprocess use.
 - **Drop the build toolchain from runtime stages.** `node:22` ships
   build-essential/python3/make — switch the runtime stage to
-  `node:22-slim`. For Python images with compiled wheels, use a
-  multi-stage build.
+  `node:22-slim` (this project uses the trixie variants,
+  `node:22-trixie` / `node:22-trixie-slim`, so the shipped images run the
+  same Debian generation as the OPEA tier). For Python images with compiled
+  wheels, use a multi-stage build.
 - **`apt-get upgrade -y` layers** in every runtime image to pull current
   Debian security updates at build time.
 - **Runtime smoke tests on the PROMOTED images** after each hardening MR:

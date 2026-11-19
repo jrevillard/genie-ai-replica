@@ -326,9 +326,12 @@ keycloak_theme: genie
 #                                         #   usually binds) AND
 #                                         #   (1 + model_llm_max_retries) x
 #                                         #   model_llm_timeout_seconds (540 s).
-#                                         #   Below either, chunks fall back per
-#                                         #   chunk and the document lands as
-#                                         #   'Ingested with Warnings'. That reads
+#                                         #   Below either, the labelling/context
+#                                         #   batches fall back per chunk and the
+#                                         #   document lands as 'Ingested with
+#                                         #   Warnings' (the graph phase has no
+#                                         #   fallback: it fails the ingest
+#                                         #   instead). That reads
 #                                         #   as a labelling-quality regression
 #                                         #   rather than a misconfiguration, so
 #                                         #   dataprep warns at startup naming both.

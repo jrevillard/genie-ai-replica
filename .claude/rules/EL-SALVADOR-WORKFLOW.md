@@ -137,7 +137,7 @@ develop + commit on dev/el-salvador
     │
     ▼
 ansible-playbook -i inventory/test.ini deploy.yml \
-  --extra-vars "repo_branch=dev/el-salvador genie_ai_global_tag=<sha>"
+  --extra-vars "repo_branch=dev/el-salvador genie_ai_image_tag=<sha>"
 # validate on .102 (RAG eval, smoke tests, manual queries, ingestion test)
     │
     ▼
@@ -199,7 +199,7 @@ git push --force-with-lease origin dev/el-salvador
 develop + commit on dev/el-salvador
     │
     ▼
-ansible-playbook ... --extra-vars "repo_branch=dev/el-salvador genie_ai_global_tag=<sha>"
+ansible-playbook ... --extra-vars "repo_branch=dev/el-salvador genie_ai_image_tag=<sha>"
 # validate on .102
     │
     ▼
@@ -276,7 +276,7 @@ the monitor script pattern (see MR !441 cleanup).
 ## Image tags and deploy traceability
 
 Every deploy on `.102` (validation or production) MUST use an explicit
-`genie_ai_global_tag` via `--extra-vars`. This ensures the deployed
+`genie_ai_image_tag` via `--extra-vars`. This ensures the deployed
 artifact can be traced back to a specific commit SHA, regardless of which
 branch was used.
 
@@ -289,14 +289,14 @@ track a feature branch — that breaks the MR-clean principle (per
 
 There are **two scopes** of tag control when deploying via `--extra-vars`.
 
-#### Global tag (`genie_ai_global_tag`)
+#### Global tag (`genie_ai_image_tag`)
 
 All 15 images share this tag. Use when validating a full dev branch
 end-to-end:
 
 ```bash
 ansible-playbook -i inventory/test.ini deploy.yml \
-  --extra-vars "repo_branch=dev/el-salvador genie_ai_global_tag=dev-el-salvador"
+  --extra-vars "repo_branch=dev/el-salvador genie_ai_image_tag=dev-el-salvador"
 ```
 
 #### Per-service tag overrides (`image_tag_overrides`)
@@ -313,7 +313,7 @@ the dev branch build:
 ```bash
 ansible-playbook -i inventory/test.ini deploy.yml \
   --vault-id test@prompt \
-  --extra-vars '{"repo_branch":"release/el-salvador","genie_ai_global_tag":"release-el-salvador","image_tag_overrides":{"genie-ai-reranker":"dev-el-salvador"}}'
+  --extra-vars '{"repo_branch":"release/el-salvador","genie_ai_image_tag":"release-el-salvador","image_tag_overrides":{"genie-ai-reranker":"dev-el-salvador"}}'
 ```
 
 **IMPORTANT**: ansible-core 2.20 silently drops nested dicts in mixed

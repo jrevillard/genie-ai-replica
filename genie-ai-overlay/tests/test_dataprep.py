@@ -308,23 +308,40 @@ class TestLoadAndChunk:
 
         assert result == ["Title Content"]
 
+    @pytest.mark.parametrize(
+        ("filename", "content"),
+        [
+            ("legacy.doc", "Legacy doc content"),
+            ("notes.txt", "Plain text content"),
+        ],
+        ids=["legacy-doc", "txt"],
+    )
     @pytest.mark.asyncio
-    async def test_docling_method_unsupported_extension_routes_to_standard_loader(self):
-        """A .doc under CONTENT_EXTRACTION_METHOD=docling goes to the standard loader.
+    async def test_docling_method_unsupported_extension_routes_to_standard_loader(self, filename, content):
+        """An extension docling cannot read goes to the standard loader.
 
         The caller owns the routing: only the extensions docling_document_loader
-        supports reach it; everything else takes the standard loader, which reads
-        .doc/.ppt. Routing an unsupported extension into the docling loader would
-        drop the document to zero chunks behind a warning (issue #1661).
+        supports reach it; everything else takes the standard loader, which
+        reads .doc/.ppt. Routing an unsupported extension into the docling
+        loader would drop the document to zero chunks behind a warning (issue
+        #1661).
+
+        Two extensions, one behaviour. `.doc` is the legacy binary Word
+        format. `.txt` is plain text: docling has no plain-text format either,
+        so a .txt routed to the docling loader failed with `File format not
+        allowed` on every deployment that keeps the shipped
+        CONTENT_EXTRACTION_METHOD=docling default — a file the repository
+        accepts that no default deployment could ingest (issue #1985). The
+        standard loader reads it, so the ingest WORKS.
         """
         dp = create_dataprep()
 
         doc_path = MagicMock()
-        doc_path.path = "legacy.doc"
+        doc_path.path = filename
         doc_path.chunk_size = 1500
         doc_path.chunk_overlap = 150
 
-        mock_doc = MagicMock(page_content="Legacy doc content")
+        mock_doc = MagicMock(page_content=content)
         splitter = MagicMock()
         splitter.create_documents.return_value = [mock_doc]
 
@@ -335,7 +352,7 @@ class TestLoadAndChunk:
                 dp_module,
                 "document_loader",
                 new_callable=AsyncMock,
-                return_value="Legacy doc content",
+                return_value=content,
             ) as standard_loader,
             patch.object(dp_module, "is_valid_content", return_value=True),
             patch.object(dp_module, "RecursiveCharacterTextSplitter", return_value=splitter),
@@ -343,7 +360,7 @@ class TestLoadAndChunk:
         ):
             result = await dp._load_and_chunk(doc_path)
 
-        assert result == ["Legacy doc content"]
+        assert result == [content]
         docling_loader.assert_not_called()
         standard_loader.assert_awaited_once()
 
@@ -2136,7 +2153,11 @@ class TestIngestFileWithGuardrail:
         ):
             await dp.ingest_file_with_guardrail(inp, lock_file=None)
 
-        mock_retract.assert_called_once_with(file_id="test-file-123", graph_name="GRAPH")
+        # update_status=False: 'Killed' is this path's terminal state, so the
+        # retraction must not flip the document to 'Retracted' on its way
+        # there (#1991/#1992 — the status the operator sees has to name the
+        # outcome, not the cleanup).
+        mock_retract.assert_called_once_with(file_id="test-file-123", graph_name="GRAPH", update_status=False)
         status_calls = [c.args[1] for c in mock_status.call_args_list]
         assert "Killed" in status_calls
 
@@ -2639,6 +2660,42 @@ class TestWriteIngestionLog:
             mock_aiohttp.ClientTimeout.return_value = MagicMock()
             mock_aiohttp.ClientSession.return_value = session
             await dp._write_ingestion_log("file1", "INFO", "System", "test")
+
+    @pytest.mark.asyncio
+    async def test_a_failed_trace_injection_keeps_the_row_and_raises_nothing(self):
+        """The log write never raises, and a failed injection costs the trace context only.
+
+        The late-write purge writes to the document's log from a failure path
+        that must not fail for a bookkeeping reason, and the purge's comment
+        says the write cannot raise. The one call that could — the
+        trace-context injection — has its own guard: a failed injection leaves
+        the row (without its trace context) instead of raising out of the
+        write.
+        """
+        dp = create_dataprep()
+
+        resp_ctx = _mock_aiohttp_response(status=201)
+        session = _mock_aiohttp_session("post", resp_ctx)
+
+        with (
+            patch.object(
+                dp,
+                "_service_headers",
+                new_callable=AsyncMock,
+                return_value={"Authorization": "Bearer t", "Content-Type": "application/json"},
+            ),
+            patch.object(dp_module, "aiohttp") as mock_aiohttp,
+            patch.object(dp_module, "propagate") as mock_propagate,
+        ):
+            mock_aiohttp.ClientTimeout.return_value = MagicMock()
+            mock_aiohttp.ClientSession.return_value = session
+            mock_propagate.inject.side_effect = RuntimeError("no propagator")
+            # No exception must escape: the caller is a failure path.
+            await dp._write_ingestion_log("file1", "INFO", "System", "test")
+
+        # And the row is still written: the trace context is what the failed
+        # injection costs, not the row the operator reads.
+        session.post.assert_called_once()
 
 
 class TestFetchAllLabels:

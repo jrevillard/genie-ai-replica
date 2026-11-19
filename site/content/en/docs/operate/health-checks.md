@@ -256,9 +256,11 @@ gives the Node.js process time to load `AdminDashboardService` and other
 heavy modules on first boot.
 
 > **Backend image note:** the runtime image is
-> `node:22-slim` and ships `wget` (the entrypoint needs it to wait for
-> ArangoDB). If you ever switch to a `node:22-alpine` base, install
-> `wget` before the `HEALTHCHECK` line or the probe will silently fail.
+> `node:22-trixie-slim` and the Dockerfile installs `wget` explicitly (the
+> entrypoint needs it to wait for ArangoDB, and the compose healthcheck
+> probes with it — the slim base ships neither wget nor curl). If you ever
+> switch to a `node:22-alpine` base, keep that install before the
+> `HEALTHCHECK` line or the probe will silently fail.
 
 ### Kubernetes probes
 

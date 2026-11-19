@@ -328,7 +328,7 @@ To deploy a specific version:
 
 ```yaml
 # In group_vars/<environment>/vars.yml
-genie_ai_global_tag: "v2.0.0"
+genie_ai_image_tag: "v2.0.0"
 ```
 
 Or override per-service images as needed.
@@ -376,7 +376,7 @@ pre-releases.
 Never use `latest` for pre-releases. Pin the exact tag:
 
 ```yaml
-genie_ai_global_tag: "v2.0.0-rc.1"
+genie_ai_image_tag: "v2.0.0-rc.1"
 ```
 
 ### Promoting to Stable

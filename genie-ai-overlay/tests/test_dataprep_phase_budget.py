@@ -15,6 +15,7 @@ it reports while it runs, and it degrades rather than raising.
 
 import ast
 import asyncio
+import contextlib
 import gc
 import json
 import sys
@@ -104,6 +105,55 @@ def _stub_dataprep():
 
 def _run(coro):
     return asyncio.run(coro)
+
+
+def _stub_graph_phase_ingest(dp):
+    """The collaborators the graph phase reads, for the graph-phase tests.
+
+    One owner for the ingest scaffold the two graph-phase tests share: the
+    labelling/contextualisation stubs, the taxonomy fetch, the chunking and
+    the vector-index call. The tests add only what they are about — the
+    wedged extraction, the failing batch log, the recording retract.
+    """
+    from unittest.mock import AsyncMock, MagicMock
+
+    dp.db = MagicMock()
+    dp._fetch_all_labels = AsyncMock(return_value=["Tax:IVA"])
+    dp._load_and_chunk = AsyncMock(return_value=["chunk one", "chunk two"])
+    dp._run_guardrail = AsyncMock(return_value={"success": True})
+    dp._update_doc_status = AsyncMock()
+    dp._apply_contextualization = AsyncMock(side_effect=lambda c, i, f: (list(c), []))
+    dp._apply_labels = AsyncMock(
+        return_value=([{"text": "a", "labels": ["Tax:IVA"]}, {"text": "b", "labels": ["Tax:IVA"]}], [])
+    )
+    dp.ensure_vector_index = AsyncMock(return_value=(None, None))
+
+
+def _graph_ingest_input():
+    """The ingest request the graph-phase tests drive."""
+    return MagicMock(file_id="f1", file_path="/tmp/f1.pdf", graph_name="GRAPH", file_labels=[])
+
+
+@contextlib.contextmanager
+def _patched_graph_ingest(graph_cls=None):
+    """The graph phase's construction seams: the graph object and the Document type.
+
+    ``graph_cls`` replaces the ArangoGraph class the ingest body builds its
+    graph from — the seam a test needs when the INSERTION itself is what it
+    exercises (a writer thread that lands late, #1991).
+    """
+    from unittest.mock import MagicMock, patch
+
+    graph_patch = (
+        patch.object(dataprep, "ArangoGraph", graph_cls)
+        if graph_cls is not None
+        else patch.object(dataprep, "ArangoGraph")
+    )
+    with (
+        graph_patch,
+        patch.object(dataprep, "Document", side_effect=lambda **kw: MagicMock(metadata=dict(kw))),
+    ):
+        yield
 
 
 def _AsyncJson(payload):
@@ -882,69 +932,6 @@ class TestFailureSeenDuringAHeartbeatEndsThePhase:
     them, which is the delay this whole mechanism exists to prevent.
     """
 
-    def test_every_batch_settling_at_once_exits_the_heartbeat_cleanly(self, monkeypatch):
-        """The success path must return, not loop into an empty ``asyncio.wait``.
-
-        ``asyncio.wait`` raises ``ValueError: Set of Tasks/Futures is empty``
-        rather than returning, so any loop that re-enters its wait with nothing
-        pending dies with that instead of a result. The four other tests on this
-        helper all end on an exception — a failure or a cancellation — which
-        raises out of the loop before the next iteration, so they cannot see it.
-
-        This one drives the phase to a normal completion, where the last
-        ``asyncio.wait`` drains every task and the loop condition is all that
-        stands between the helper and one more empty wait.
-        """
-        monkeypatch.setattr(dataprep, "DATAPREP_LLM_PHASE_TIMEOUT_SECONDS", 5.0)
-        monkeypatch.setattr(dataprep, "DATAPREP_LLM_PROGRESS_INTERVAL_SECONDS", 60.0)
-
-        async def scenario():
-            async def batch(i):
-                # Same wake-up tick for every task, so the first wait drains all
-                # of them in one go rather than one per iteration.
-                await asyncio.sleep(0.01)
-                return i
-
-            await dataprep._await_with_heartbeat(
-                [asyncio.ensure_future(batch(i)) for i in range(3)],
-                phase="Graph insertion",
-                total=3,
-                file_id="f1",
-                write_ingestion_log=_noop_log,
-            )
-
-        _run(scenario())
-
-    def test_a_lone_failing_batch_surfaces_its_own_error(self, monkeypatch):
-        """One failing task, no siblings: the real error must reach the caller.
-
-        A document with fewer chunks than BATCH_SIZE produces exactly one
-        graph-insertion task, so the failure path runs with ``pending`` empty.
-        The protection is the loop's own ``while pending:`` condition, which
-        exits before the empty-set wait; without it the ingest log and the
-        document status reported "Set of Tasks/Futures is empty" and the
-        ArangoDB error underneath it was never surfaced anywhere.
-        """
-        monkeypatch.setattr(dataprep, "DATAPREP_LLM_PHASE_TIMEOUT_SECONDS", 5.0)
-        monkeypatch.setattr(dataprep, "DATAPREP_LLM_PROGRESS_INTERVAL_SECONDS", 60.0)
-
-        async def scenario():
-            async def only_batch():
-                raise RuntimeError("ArangoDB insert failed")
-
-            # create_task, matching the production call site: the helper reads
-            # .done()/.exception(), so it needs Tasks and not bare coroutines.
-            await dataprep._await_with_heartbeat(
-                [asyncio.ensure_future(only_batch())],
-                phase="Graph insertion",
-                total=1,
-                file_id="f1",
-                write_ingestion_log=_noop_log,
-            )
-
-        with pytest.raises(RuntimeError, match="ArangoDB insert failed"):
-            _run(scenario())
-
     def test_a_failure_during_the_heartbeat_does_not_wait_out_the_interval(self, monkeypatch):
         monkeypatch.setattr(dataprep, "DATAPREP_LLM_PHASE_TIMEOUT_SECONDS", 30.0)
         monkeypatch.setattr(dataprep, "DATAPREP_LLM_PROGRESS_INTERVAL_SECONDS", 0.05)
@@ -1279,7 +1266,7 @@ class TestTheKillRollbackCannotBeCancelled:
             async def _write_ingestion_log(self, file_id, level, component, message):
                 calls.append(("log", level))
 
-            async def retract_file(self, file_id, graph_name):
+            async def retract_file(self, file_id, graph_name, update_status=True):
                 calls.append(("retract", graph_name))
                 raise RuntimeError("AQLQueryExecuteError: collection not found")
 
@@ -1526,60 +1513,252 @@ class TestADegradedPhaseNeverReportsIngested:
         assert statuses[-1] == "Ingested", statuses
 
 
-class TestUnboundedPhaseSurvivesExternalCancellation:
-    """Cancelling the ingest must not leave graph batches running.
+class TestTheGraphPhaseIsCeilinged:
+    """The graph-extraction phase must give the ingest lane back (issue #1726).
 
-    ``asyncio.gather``, which this helper replaced, cancelled its children when
-    the awaiting task was cancelled. A bare drain loop does not, and the queued
-    batches are parked on ``MAX_CONCURRENT_BATCHES`` — so they acquired the
-    semaphore afterwards and wrote the whole document to ArangoDB *after*
-    ``retract_file`` had already deleted it. The admin UI showed Killed while
-    the retriever served the resurrected chunks.
+    dataprep serves ONE ingest at a time (DATAPREP_INGEST_CONCURRENCY=1, a
+    flock slot pool), and the graph phase was the one LLM phase with no
+    deadline: a `convert_to_graph_documents` call parked on a dead socket
+    (observed in the field: the read never returns, vLLM's engine sits idle)
+    held the only lane, and every later ingest was refused with
+    `429 System busy`. The ceiling releases the lane by giving the phase up
+    honestly — the ingest FAILS ('Ingestion Error') and the auto-retract cleans
+    the partial graph; re-ingest is manual for a legacy file. A hung
+    graph phase must never end 'Ingested': that would be a silently partial
+    knowledge graph, the exact outcome the phase's old no-deadline stance
+    existed to prevent.
     """
 
-    def test_cancelling_the_ingest_cancels_every_queued_batch(self, monkeypatch):
+    def test_a_hung_graph_extraction_fails_the_ingest_within_the_budget(self, monkeypatch):
+        from unittest.mock import AsyncMock
+
+        from fastapi import HTTPException
+
+        monkeypatch.setenv("VLLM_API_KEY", "test-key")
+        monkeypatch.setenv("VLLM_ENDPOINT", "http://localhost:8000")
+        monkeypatch.setenv("VLLM_MODEL_ID", "test-model")
+        monkeypatch.setattr(dataprep, "DATAPREP_LLM_PHASE_TIMEOUT_SECONDS", 0.4)
         monkeypatch.setattr(dataprep, "DATAPREP_LLM_PROGRESS_INTERVAL_SECONDS", 60.0)
         monkeypatch.setattr(dataprep, "_PHASE_CANCEL_GRACE_SECONDS", 0.2)
+        monkeypatch.setattr(dataprep, "_GRAPH_WRITER_SETTLE_SECONDS", 0.1)
+        # A fresh gate per run: the module-level semaphore binds to whichever
+        # event loop created it, and this test is the one that drives real
+        # batches through it.
+        monkeypatch.setattr(dataprep, "_global_batch_gate", lambda: asyncio.Semaphore(4))
+
+        def wedged_conversion(_docs):
+            # The parked read: far beyond the 0.4 s budget. Runs in a thread
+            # (asyncio.to_thread), which cancellation does not stop — the
+            # executor join at asyncio.run() shutdown waits out the remaining
+            # sleep, so every assertion below holds while the call is STILL
+            # running. That is the lane-release proof: the ingest ended
+            # before the wedged call did. The sleep stays short (2 s, not 30)
+            # because the executor join pays it on every suite run.
+            time.sleep(2.0)
+            return []
 
         async def scenario():
-            queued = []
-            started = asyncio.Event()
+            dp = _stub_dataprep()
+            _stub_graph_phase_ingest(dp)
+            dp.retract_file = AsyncMock()
+            dp.llm_transformer.convert_to_graph_documents = wedged_conversion
 
-            async def batch():
-                started.set()
-                # Short enough that an uncancelled sibling actually reaches the
-                # write inside the observation window below, rather than merely
-                # being caught by the assertion on its cancelled flag.
-                await asyncio.sleep(0.05)
-                queued.append("wrote")
+            inp = _graph_ingest_input()
+            started = time.monotonic()
+            with _patched_graph_ingest():
+                try:
+                    await dp.ingest_file_with_guardrail(inp, lock_file=None)
+                    raise AssertionError("the ingest reported success over a hung graph phase")
+                except HTTPException as exc:
+                    return dp, exc, time.monotonic() - started
 
-            tasks = [asyncio.ensure_future(batch()) for _ in range(3)]
-            await started.wait()
-            phase = asyncio.ensure_future(
-                dataprep._await_with_heartbeat(
-                    tasks, phase="Graph insertion", total=3, file_id="f1", write_ingestion_log=_noop_log
-                )
-            )
-            await asyncio.sleep(0)
-            phase.cancel()
-            with pytest.raises(asyncio.CancelledError):
-                await phase
+        dp, exc, elapsed = _run(scenario())
+        # The ingest must END while the wedged call (2 s) is still parked.
+        # Generous on purpose — the ceiling path takes ~0.7 s (0.4 s deadline
+        # + 0.2 s settle window + 0.1 s writer settle) and the bound only has
+        # to separate that from the 2 s the un-budgeted phase would wait.
+        assert elapsed < 5.0, f"the ingest held the lane for {elapsed:.1f}s past the 0.4s budget"
+        # Deterministic lower bound: the phase cannot return before its 0.4 s
+        # deadline (the conversion is wedged past it), and the expiry path owes
+        # the 0.1 s writer settle before raising — deleting the settle call
+        # fails this line. The upper bound stays the flake-proof one.
+        assert elapsed >= 0.5, (
+            f"the ingest returned in {elapsed:.2f}s — below the 0.4s ceiling plus the "
+            "writer settle, which means one of the two waits is missing"
+        )
+        assert exc.status_code == 500, exc.status_code
+        assert "budget" in str(exc.detail), exc.detail
+        statuses = [c.args[1] for c in dp._update_doc_status.call_args_list]
+        assert "Ingested" not in statuses, (
+            f"a document whose graph phase was abandoned was reported as ingested: {statuses}"
+        )
+        assert statuses[-1] == "Ingestion Error", statuses
+        error_texts = [c.kwargs.get("error", "") for c in dp._update_doc_status.call_args_list]
+        assert any("budget" in str(e) for e in error_texts), error_texts
+        # The operator remedy must SURVIVE the status-error budget: the file
+        # row carries `str(error)[:500]`, so a longer message silently cuts
+        # the knob the operator has to raise.
+        cause = str(exc.__cause__)
+        assert len(cause) <= 500, (
+            f"the failure message is {len(cause)} chars — the status budget truncates it at "
+            "500, which would cut the remedy the operator needs"
+        )
+        assert "DATAPREP_LLM_PHASE_TIMEOUT_SECONDS" in cause, cause
+        assert any("DATAPREP_LLM_PHASE_TIMEOUT_SECONDS" in str(e) for e in error_texts), error_texts
+        # The auto-retract is what clears the partial graph and the file's
+        # Pending state. Re-ingest is manual for a legacy file; the automatic
+        # re-ingest covers OKF re-indexes only.
+        dp.retract_file.assert_awaited_once()
 
-            # Everything below runs INSIDE the loop. asyncio.run cancels every
-            # remaining task as it shuts down, so an assertion made after
-            # _run() returned would see all three cancelled either way and pass
-            # against a helper that cancels nothing.
-            await asyncio.sleep(0.15)
-            assert queued == [], f"a graph batch kept writing after the ingest was cancelled: {queued}"
-            assert all(t.cancelled() or t.done() for t in tasks), (
-                "batches left pending with no owner; each later raise logs an unretrieved-exception "
-                "traceback into the dataprep log, during exactly the incident this change exists to "
-                "make diagnosable"
-            )
-            for task in tasks:
+    def test_a_raising_graph_batch_settles_the_writers_before_the_retract(self, monkeypatch):
+        """A batch that raises must settle the in-flight writers before the retract.
+
+        The batch-error exit carries the same race as the budget expiry: a
+        sibling batch can be inside ``asyncio.to_thread(add_graph_documents)``
+        — a thread cancellation cannot stop — and its write would land AFTER
+        the auto-retract deleted the document's rows (#1991). The settle is
+        what orders the two, so the ORDERING is the contract under test:
+        deleting the settle call leaves this suite green otherwise.
+        """
+        from fastapi import HTTPException
+
+        monkeypatch.setenv("VLLM_API_KEY", "test-key")
+        monkeypatch.setenv("VLLM_ENDPOINT", "http://localhost:8000")
+        monkeypatch.setenv("VLLM_MODEL_ID", "test-model")
+        monkeypatch.setattr(dataprep, "DATAPREP_LLM_PHASE_TIMEOUT_SECONDS", 5.0)
+        monkeypatch.setattr(dataprep, "DATAPREP_LLM_PROGRESS_INTERVAL_SECONDS", 60.0)
+        monkeypatch.setattr(dataprep, "_PHASE_CANCEL_GRACE_SECONDS", 0.2)
+        monkeypatch.setattr(dataprep, "_global_batch_gate", lambda: asyncio.Semaphore(4))
+
+        order = []
+
+        async def scenario():
+            dp = _stub_dataprep()
+            _stub_graph_phase_ingest(dp)
+
+            async def failing_log(_file_id, _level, stage, _message):
+                # The GRAPH stage only. A batch swallows every exception, so
+                # the one way its failure escapes is a raise INSIDE its error
+                # handler — which is exactly when a sibling may be
+                # mid-insertion. The pipeline's own logs keep working.
+                if stage == "Graph":
+                    raise RuntimeError("ingestion log write failed")
+
+            dp._write_ingestion_log = failing_log
+
+            async def settle():
+                order.append("settle")
+
+            dp._settle_graph_writers = settle
+
+            async def retract(file_id=None, graph_name=None, update_status=True):
+                order.append("retract")
+
+            dp.retract_file = retract
+
+            inp = _graph_ingest_input()
+            with _patched_graph_ingest(), pytest.raises(HTTPException):
+                await dp.ingest_file_with_guardrail(inp, lock_file=None)
+            return dp
+
+        dp = _run(scenario())
+        assert "settle" in order, (
+            f"the writer settle did not run before the failure propagated: {order} — the "
+            "batch-error exit carries the same resurrect-after-retract race as the expiry exit"
+        )
+        assert order.index("settle") < order.index("retract"), (
+            f"the retract ran before the writers settled: {order} — a writer thread that lands "
+            "after the retract resurrects the document's rows (#1991)"
+        )
+        statuses = [c.args[1] for c in dp._update_doc_status.call_args_list]
+        assert statuses[-1] == "Ingestion Error", statuses
+
+    def test_a_kill_inside_the_writer_settle_still_waits_the_window(self, monkeypatch):
+        """A cancellation inside the settle must not truncate the window.
+
+        The settle exists so an in-flight writer lands its write BEFORE the
+        retract. An unshielded wait is cancellable — a kill arriving inside
+        the window truncated it to zero, so the writer landed after the
+        retract and resurrected the document's rows (#1991). The window runs
+        behind the module's own shield, and the absorbed cancellation is
+        re-raised as THAT object, so the kill path still sees its own signal.
+
+        A bare ``asyncio.sleep`` here would fail the timing assertion: the
+        retract would land at once instead of after the window.
+        """
+
+        monkeypatch.setenv("VLLM_API_KEY", "test-key")
+        monkeypatch.setenv("VLLM_ENDPOINT", "http://localhost:8000")
+        monkeypatch.setenv("VLLM_MODEL_ID", "test-model")
+        monkeypatch.setattr(dataprep, "DATAPREP_LLM_PHASE_TIMEOUT_SECONDS", 0.4)
+        monkeypatch.setattr(dataprep, "DATAPREP_LLM_PROGRESS_INTERVAL_SECONDS", 60.0)
+        monkeypatch.setattr(dataprep, "_PHASE_CANCEL_GRACE_SECONDS", 0.2)
+        monkeypatch.setattr(dataprep, "_GRAPH_WRITER_SETTLE_SECONDS", 0.5)
+        monkeypatch.setattr(dataprep, "_global_batch_gate", lambda: asyncio.Semaphore(4))
+
+        async def scenario():
+            dp = _stub_dataprep()
+            _stub_graph_phase_ingest(dp)
+
+            def wedged_conversion(_docs):
+                # Parked past the ceiling, so the phase expires and the settle
+                # starts; the cancel then lands inside that window.
+                time.sleep(2.0)
+                return []
+
+            dp.llm_transformer.convert_to_graph_documents = wedged_conversion
+
+            cancelled_at = []
+            retracted_at = []
+            settle_started = asyncio.Event()
+
+            # Wrap the REAL settle (the shield is what is under test): the
+            # event says when the window opened, so the cancel lands inside
+            # it deterministically. A fixed sleep here would guess at the
+            # window's position and flake on a loaded runner.
+            real_settle = dp._settle_graph_writers
+
+            async def settle():
+                settle_started.set()
+                await real_settle()
+
+            dp._settle_graph_writers = settle
+
+            async def retract(file_id=None, graph_name=None, update_status=True):
+                retracted_at.append(time.monotonic())
+
+            dp.retract_file = retract
+
+            inp = _graph_ingest_input()
+            with _patched_graph_ingest():
+                task = asyncio.ensure_future(dp.ingest_file_with_guardrail(inp, lock_file=None))
+                await asyncio.wait_for(settle_started.wait(), timeout=10)
+                cancelled_at.append(time.monotonic())
                 task.cancel()
+                # The kill's OWN cancellation must reach the caller: the settle
+                # re-raises the absorbed object, so the task ends cancelled and
+                # the document reads 'Killed'. A settle that swallowed it would
+                # leave the ingest reporting a plain ingestion failure.
+                with pytest.raises(asyncio.CancelledError):
+                    await task
+            return dp, cancelled_at[0], retracted_at
 
-        _run(scenario())
+        dp, cancelled_at, retracted_at = _run(scenario())
+        assert retracted_at, "the kill rollback never retracted the document"
+        statuses = [c.args[1] for c in dp._update_doc_status.call_args_list]
+        assert statuses[-1] == "Killed", (
+            f"the kill did not reach the kill path: {statuses} — the kill path did not run, "
+            "or the settle swallowed the cancellation instead of re-raising it"
+        )
+        waited = retracted_at[0] - cancelled_at
+        # The window is 0.5 s and the cancel lands at its opening, so the
+        # retract must not land before the window ends. The bound sits well
+        # below the window (the retract follows the settle plus the kill
+        # rollback) and far above the zero an unshielded wait gives.
+        assert waited >= 0.3, (
+            f"the retract landed {waited:.3f}s after the cancel — the settle window was "
+            "truncated, so a writer thread can land its write after the retract (#1991)"
+        )
 
 
 class TestASecondCancellationCannotSkipTheSettle:
@@ -1589,12 +1768,10 @@ class TestASecondCancellationCannotSkipTheSettle:
     it and cancels the same task again while the first settle is still running.
     Without a shield, that second cancellation propagates straight out of the
     handler and the settle never happens — the batches are abandoned running,
-    which is the exact outcome the grace window exists to prevent, and worse
-    than the ``asyncio.gather`` this replaced: gather had no window to lose.
+    which is the exact outcome the grace window exists to prevent.
     """
 
-    @pytest.mark.parametrize("helper", ["heartbeat", "gather"])
-    def test_a_second_cancel_during_the_settle_still_waits_the_window(self, helper, monkeypatch):
+    def test_a_second_cancel_during_the_settle_still_waits_the_window(self, monkeypatch):
         monkeypatch.setattr(dataprep, "DATAPREP_LLM_PROGRESS_INTERVAL_SECONDS", 60.0)
         monkeypatch.setattr(dataprep, "DATAPREP_LLM_PHASE_TIMEOUT_SECONDS", 5.0)
         monkeypatch.setattr(dataprep, "_PHASE_CANCEL_GRACE_SECONDS", 0.3)
@@ -1617,12 +1794,8 @@ class TestASecondCancellationCannotSkipTheSettle:
             tasks = [asyncio.ensure_future(slow()) for _ in range(3)]
             await started.wait()
 
-            async def run():
-                if helper == "heartbeat":
-                    return await dataprep._await_with_heartbeat(
-                        tasks, phase="Graph insertion", total=3, file_id="f1", write_ingestion_log=_noop_log
-                    )
-                return await dataprep._gather_with_phase_budget(
+            phase = asyncio.ensure_future(
+                dataprep._gather_with_phase_budget(
                     tasks,
                     phase="Labeling",
                     phase_label=dataprep.PHASE_LABEL_LABELING,
@@ -1630,8 +1803,7 @@ class TestASecondCancellationCannotSkipTheSettle:
                     file_id="f1",
                     write_ingestion_log=_noop_log,
                 )
-
-            phase = asyncio.ensure_future(run())
+            )
             await asyncio.sleep(0)
             phase.cancel()
             await asyncio.sleep(0.05)
@@ -1690,11 +1862,11 @@ class TestTheSwallowedCancelDoesNotLeaveADanglingCounter:
         )
 
 
-class TestUnboundedPhaseKeepsItsSiblings:
-    """The graph phase cannot abandon work, and that includes on the error path.
+class TestPhaseCleanupKeepsItsSiblings:
+    """A phase that ends abnormally cannot abandon its batches.
 
-    The caller retracts the document the moment this helper raises, so a batch
-    still running writes into ArangoDB *after* the retraction and resurrects its
+    The caller retracts the document whenever a phase raises, so a batch still
+    running writes into ArangoDB *after* the retraction and resurrects its
     chunks for a document the admin UI shows as failed. Both error exits
     therefore cancel what is pending and give it a bounded window to unwind.
     """
@@ -1765,42 +1937,6 @@ class TestUnboundedPhaseKeepsItsSiblings:
                 [asyncio.ensure_future(boom()), asyncio.ensure_future(self_cancelling())],
                 phase="LLM labeling",
                 phase_label=dataprep.PHASE_LABEL_LABELING,
-                total=2,
-                file_id="f1",
-                write_ingestion_log=_noop_log,
-            )
-
-        with pytest.raises(RuntimeError, match="the real failure"):
-            _run(scenario())
-
-    def test_the_heartbeat_path_does_not_let_a_cancelled_batch_mask_the_failure(self, monkeypatch):
-        """The same hazard on the no-fallback runner, which had no test for it.
-
-        ``_await_with_heartbeat`` drains its own batches, so it needs its own
-        ``cancelled()`` check — and had none covered. Deleting that check makes
-        the graph-insertion phase report CancelledError for a write that failed
-        with a real error, which the kill switch reads as "Killed by an
-        administrator": the operator is told someone pressed stop, and the
-        ArangoDB failure underneath never reaches the ingestion log.
-
-        Proven by mutation, not assumed: with the check removed this test fails
-        with CancelledError instead of RuntimeError.
-        """
-        monkeypatch.setattr(dataprep, "DATAPREP_LLM_PROGRESS_INTERVAL_SECONDS", 60.0)
-        monkeypatch.setattr(dataprep, "_PHASE_CANCEL_GRACE_SECONDS", 0.2)
-
-        async def scenario():
-            async def boom():
-                await asyncio.sleep(0.05)
-                raise RuntimeError("the real failure")
-
-            async def self_cancelling():
-                await asyncio.sleep(0.05)
-                asyncio.current_task().cancel()
-
-            await dataprep._await_with_heartbeat(
-                [asyncio.ensure_future(boom()), asyncio.ensure_future(self_cancelling())],
-                phase="Graph insertion",
                 total=2,
                 file_id="f1",
                 write_ingestion_log=_noop_log,
@@ -1913,69 +2049,14 @@ class TestUnboundedPhaseKeepsItsSiblings:
             "the first holds their semaphore slots for a whole progress interval"
         )
 
-    def test_a_sibling_is_cancelled_rather_than_left_writing(self, monkeypatch):
-        """The failure path takes its in-flight batches with it.
-
-        An earlier version asserted the opposite — that a slow sibling was left
-        to finish — on the reasoning that the grace window was there to let it.
-        That is the behaviour that lets it write after the retraction, and a
-        batch already inside ``asyncio.to_thread`` runs to completion either way,
-        so "not cancelling" bought nothing while "cancelling" stops every batch
-        still queued on the semaphore.
-        """
-        monkeypatch.setattr(dataprep, "DATAPREP_LLM_PROGRESS_INTERVAL_SECONDS", 60.0)
-        monkeypatch.setattr(dataprep, "_PHASE_CANCEL_GRACE_SECONDS", 0.2)
-
-        async def scenario():
-            wrote = []
-            started = asyncio.Event()
-
-            async def boom():
-                await started.wait()
-                raise RuntimeError("ArangoDB insert failed")
-
-            async def slow_sibling():
-                started.set()
-                # Lands inside the observation window below, so an uncancelled
-                # sibling actually performs the write rather than merely
-                # failing a flag check.
-                await asyncio.sleep(0.15)
-                wrote.append("chunk")
-
-            tasks = [asyncio.ensure_future(slow_sibling()), asyncio.ensure_future(boom())]
-            with pytest.raises(RuntimeError, match="ArangoDB insert failed"):
-                await dataprep._await_with_heartbeat(
-                    tasks,
-                    phase="Graph insertion",
-                    total=2,
-                    file_id="f1",
-                    write_ingestion_log=_noop_log,
-                )
-            # Inside the loop: asyncio.run cancels stragglers on shutdown, so an
-            # assertion after _run() returned would pass either way.
-            await asyncio.sleep(0.3)
-            assert wrote == [], f"a graph batch kept writing after the phase failed: {wrote}"
-            # This checks ownership only. Whether a settled task's exception is
-            # RETRIEVED is a separate property, and asserting it in the message
-            # without measuring it is what made this look guarded when it was
-            # not — see test_a_batch_that_raises_inside_the_settle_is_retrieved,
-            # which observes the loop's exception handler directly.
-            assert all(t.cancelled() or t.done() for t in tasks), (
-                "batches left pending with no owner; a pending batch is not cancelled by the "
-                "phase, so it goes on to write after the caller retracts the document"
-            )
-
-        _run(scenario())
-
     def test_a_batch_that_already_finished_keeps_its_outcome(self, monkeypatch):
         """A batch's result survives the phase that abandoned its siblings.
 
         Asserted on the value the phase RETURNS, which is the only place an
-        outcome can survive: ``_await_with_heartbeat`` returns ``None`` by
-        design, so pinning anything there proves nothing about keeping work. The
-        budget helper is the one that hands completed batches back to the caller
-        for a degraded document, and a completed batch it silently drops becomes
-        a chunk that was labelled in time and then thrown away.
+        outcome can survive. The budget helper is the one that hands completed
+        batches back to the caller for a degraded document, and a completed
+        batch it silently drops becomes a chunk that was labelled in time and
+        then thrown away.
         """
         monkeypatch.setattr(dataprep, "DATAPREP_LLM_PHASE_TIMEOUT_SECONDS", 0.4)
         monkeypatch.setattr(dataprep, "DATAPREP_LLM_PROGRESS_INTERVAL_SECONDS", 60.0)
@@ -2809,7 +2890,9 @@ class TestTheDegradedPathIsActuallyGuarded:
         """The batched write is gated on having tasks, and is inside that gate.
 
         `if tasks:` → `if False:` skips the write entirely and every test stays
-        green, so the gate's condition is pinned as well as its presence.
+        green, so the gate's condition is pinned as well as its presence. The
+        awaiter is the BUDGETED helper (issue #1726): the phase must never go
+        back to an unbounded runner by dropping the phase-budget call.
         """
         tree, _ = self._module_tree()
         found = False
@@ -2820,7 +2903,7 @@ class TestTheDegradedPathIsActuallyGuarded:
             if "tasks" not in test_src:
                 continue
             body_src = " ".join(ast.unparse(stmt) for stmt in node.body)
-            if "_await_with_heartbeat" not in body_src or "Graph insertion" not in body_src:
+            if "_gather_with_phase_budget" not in body_src or "Graph insertion" not in body_src:
                 continue
             found = True
             assert test_src.strip() == "tasks", (
@@ -3152,3 +3235,940 @@ class TestAnIncompleteBatchKeepsWhatItAnswered:
         response.choices = [choice]
         response.usage = None
         return response
+
+
+async def _wait_for(predicate, *, timeout: float = 10.0, interval: float = 0.01) -> bool:
+    """Wait for a condition the test controls. False when the bound expires.
+
+    A bounded wait, not a fixed sleep: the event it waits on is produced by
+    the code under test (a thread settling, a purge running), and the caller
+    asserts on the outcome.
+    """
+    deadline = time.monotonic() + timeout
+    while True:
+        if predicate():
+            return True
+        if time.monotonic() >= deadline:
+            return False
+        await asyncio.sleep(interval)
+
+
+class TestTheLateGraphWriteIsPurged:
+    """A graph insertion that lands AFTER the retract must not survive it (#1991).
+
+    The settle window !945 added is a bounded GRACE: it lets the fast writers
+    land inside the retract, and it cannot wait for a wedged one — the ingest
+    lane has to come back fast, which is what the phase budget is for. A
+    writer slower than the grace still lands after the retract, and its rows
+    would then be served for a document the admin UI shows as failed.
+
+    The purge is what closes that: the ROLLBACK registers it, and it runs
+    when the file's writers have settled — after the write, not on a timer.
+    """
+
+    def test_a_purge_that_retries_does_not_delete_a_re_kicks_rows(self, monkeypatch, captured_spans):
+        """A purge that retries must stand down when a re-kick started.
+
+        The purge deletes by document id, so a purge that runs after a new
+        ingest of the same document has begun would delete the NEW attempt's
+        rows — a healthy ingest silently losing its graph while the UI says
+        it succeeded. The retry sleeps before its second attempt, which is
+        exactly the window a re-kick can land in.
+        """
+        import threading
+        from unittest.mock import MagicMock
+
+        self._cool_llm_env(monkeypatch)
+        self._fast_phases(monkeypatch, phase_timeout=30.0)
+
+        order = []
+        started = threading.Event()
+        release = threading.Event()
+
+        async def scenario():
+            dp = _stub_dataprep()
+            _stub_graph_phase_ingest(dp)
+            dp.embeddings = MagicMock()
+
+            calls = {"n": 0}
+
+            def insert(**_kwargs):
+                calls["n"] += 1
+                if calls["n"] == 1:
+                    # The first attempt's writer: it parks until the test
+                    # releases it, so its write lands after the kill's
+                    # retraction.
+                    started.set()
+                    release.wait(timeout=30)
+                    order.append("write")
+                return None
+
+            graph_cls = MagicMock()
+            graph_cls.return_value.add_graph_documents = insert
+
+            async def retract(file_id=None, graph_name=None, update_status=True):
+                order.append("retract")
+                if order.count("retract") == 2:
+                    # The purge's first attempt fails: the retry sleeps, and
+                    # the re-kick lands in that window.
+                    raise RuntimeError("the database is unreachable")
+
+            dp.retract_file = retract
+
+            inp = _graph_ingest_input()
+            with _patched_graph_ingest(graph_cls):
+                task = asyncio.create_task(dp.ingest_file_with_guardrail(inp, lock_file=None))
+                assert await _wait_for(started.is_set), "the writer never reached the insertion"
+                # The kill: the ingest is cancelled while the writer is parked.
+                task.cancel()
+                with pytest.raises(asyncio.CancelledError):
+                    await task
+                # Let the writer land: the purge is scheduled and its first
+                # attempt fails.
+                release.set()
+                assert await _wait_for(lambda: order.count("retract") >= 2), f"the purge never ran: {order}"
+                # The re-kick, in the purge's retry window.
+                result = await dp.ingest_file_with_guardrail(inp, lock_file=None)
+                assert result["status"] == 200, result
+                # Wait for the purge to finish: the retry's sleep is a real
+                # 2 s, and the background task is the observable event. A
+                # fixed sleep longer than the delay would be a race the
+                # suite does not need to take.
+                assert await _wait_for(lambda: not dataprep._BACKGROUND_TASKS), f"the purge never finished: {order}"
+            return dp
+
+        dp = _run(scenario())
+        assert order.count("retract") == 2, (
+            f"the purge deleted the re-kick's rows: {order} — it must stand down when a new "
+            "ingest of the document has started"
+        )
+        # The retry STOOD DOWN: it ran no cascade, so it announced nothing.
+        # Only the first attempt — the one that really ran — announced itself.
+        announcements = [
+            str(call.args[3])
+            for call in dp._write_ingestion_log.call_args_list
+            if "Purging the rows" in str(call.args[3])
+        ]
+        assert len(announcements) == 1, (
+            f"a purge that stood down announced itself: {announcements} — the operator reads a "
+            "cascade that never happened"
+        )
+        assert "(attempt 1/2)" in announcements[0], announcements
+        # And the stand-down itself is written where the operator reads: the
+        # straggler's rows may survive as duplicates, and this document's log
+        # is the only place that says so.
+        standdowns = [
+            str(call.args[3]) for call in dp._write_ingestion_log.call_args_list if "stands down" in str(call.args[3])
+        ]
+        assert len(standdowns) == 1, f"the stand-down was not reported in the document's own log: {standdowns}"
+        # And the span says so too: the stand-down is the outcome, and the
+        # purge that never ran left the straggler's rows behind.
+        spanned = captured_spans("dataprep.late_write_purge")
+        assert spanned, "the purge ran without a span"
+        assert spanned[0].attributes.get("dataprep.purge_result") == "stood_down", spanned[0].attributes
+
+    def test_a_failure_with_no_writer_in_flight_registers_no_purge(self, monkeypatch):
+        """Nothing to purge means nothing registered.
+
+        The tracking state is per file, and a file whose ingest failed
+        WITHOUT an insertion thread in flight has no late write to purge: the
+        retraction already removed everything the run wrote. Registering a
+        purge that can never fire would leave an entry behind for every such
+        failure — and the entry holds the file's pending writers.
+        """
+        from unittest.mock import AsyncMock
+
+        from fastapi import HTTPException
+
+        self._cool_llm_env(monkeypatch)
+
+        async def scenario():
+            dp = _stub_dataprep()
+            _stub_graph_phase_ingest(dp)
+            # No content at all: the failure happens before any insertion.
+            dp._load_and_chunk = AsyncMock(return_value=[])
+
+            async def retract(file_id=None, graph_name=None, update_status=True):
+                order.append("retract")
+
+            order = []
+            dp.retract_file = retract
+
+            inp = _graph_ingest_input()
+            with _patched_graph_ingest(), pytest.raises(HTTPException):
+                await dp.ingest_file_with_guardrail(inp, lock_file=None)
+            return dp, order
+
+        dp, order = _run(scenario())
+        # What the operator sees: the failure retracted the file ONCE. A
+        # purge that fired anyway would delete the file's rows a second
+        # time — a second cascade against a document nothing else is
+        # writing to.
+        assert order.count("retract") == 1, order
+        # And the tracker kept nothing for it: the RAW map, because the
+        # accessor creates the entry it reads, so asking it for a file's
+        # state would bring back the very entry this test claims is gone.
+        states = getattr(dp, "_late_write_states", None) or {}
+        assert "f1" not in states, f"the tracking state was left behind for a file with no writer in flight: {states}"
+
+    def test_a_failing_purge_is_retried_and_reported_to_the_operator(self, monkeypatch, captured_spans):
+        """A purge that fails must not leave the rows behind in silence.
+
+        The purge is what removes the late write's rows; if it fails, the
+        failed document keeps serving them while the UI says it failed. It is
+        retried once, and a second failure is written to the document's own
+        ingestion log — the channel the operator reads for that file.
+        """
+        from unittest.mock import MagicMock
+
+        from fastapi import HTTPException
+
+        self._cool_llm_env(monkeypatch)
+        self._fast_phases(monkeypatch)
+
+        order = []
+
+        async def scenario():
+            dp = _stub_dataprep()
+            _stub_graph_phase_ingest(dp)
+            dp.embeddings = MagicMock()
+
+            def slow_insert(**_kwargs):
+                time.sleep(1.6)
+                order.append("write")
+                return None
+
+            graph_cls = MagicMock()
+            graph_cls.return_value.add_graph_documents = slow_insert
+
+            async def retract(file_id=None, graph_name=None, update_status=True):
+                order.append("retract")
+                raise RuntimeError("the database is unreachable")
+
+            dp.retract_file = retract
+
+            inp = _graph_ingest_input()
+            with _patched_graph_ingest(graph_cls), pytest.raises(HTTPException):
+                await dp.ingest_file_with_guardrail(inp, lock_file=None)
+            # The purge fails twice: two attempts, then the operator is told.
+            reported = await _wait_for(
+                lambda: any(
+                    call.args[1] == "ERROR" and "purge" in str(call.args[3])
+                    for call in dp._write_ingestion_log.call_args_list
+                )
+            )
+            return dp, reported
+
+        dp, reported = _run(scenario())
+        assert reported, (
+            f"the failed purge was not reported to the operator: {order} — the document's rows may "
+            "still be indexed while the UI says the ingest failed"
+        )
+        # The rollback's own retraction is the first attempt; the purge's two
+        # attempts follow it.
+        assert order.count("retract") == 3, (
+            f"the purge was not retried once: {order} — a single failed purge leaves the late "
+            "write's rows indexed for good"
+        )
+        # Each attempt says which it is: two rows reading the same would tell
+        # the operator nothing about which cascade they are reading.
+        announcements = [
+            str(call.args[3])
+            for call in dp._write_ingestion_log.call_args_list
+            if "Purging the rows" in str(call.args[3])
+        ]
+        assert len(announcements) == 2, f"the purge did not announce both attempts: {announcements}"
+        assert "(attempt 1/2)" in announcements[0], announcements
+        assert "(attempt 2/2)" in announcements[1], announcements
+        # The span says the purge FAILED (the retry exhausted its attempts):
+        # a trace must be able to tell a failed purge from a successful one.
+        spanned = captured_spans("dataprep.late_write_purge")
+        assert spanned, "the purge ran without a span"
+        assert spanned[0].attributes.get("dataprep.purge_result") == "failed", spanned[0].attributes
+
+    def test_a_cancelled_purge_records_that_it_was_cancelled(self, monkeypatch, captured_spans):
+        """A purge cancelled before it finishes must say so in the trace.
+
+        The process is going down — the pod is evicted, the loop is closed —
+        and the purge cannot finish: the rows it was written to remove may
+        survive. A trace that cannot tell a cancelled purge from a successful
+        one sends the operator looking in the wrong place, and the whole
+        point of the outcome attribute is that the trace says what happened.
+        """
+        from unittest.mock import MagicMock
+
+        from fastapi import HTTPException
+
+        self._cool_llm_env(monkeypatch)
+        self._fast_phases(monkeypatch)
+
+        order = []
+
+        async def scenario():
+            dp = _stub_dataprep()
+            _stub_graph_phase_ingest(dp)
+            dp.embeddings = MagicMock()
+
+            def slow_insert(**_kwargs):
+                # The writer thread: it sleeps past the phase budget, so the
+                # failure path retracts while the writer is still in flight.
+                time.sleep(1.6)
+                order.append("write")
+                return None
+
+            graph_cls = MagicMock()
+            graph_cls.return_value.add_graph_documents = slow_insert
+
+            async def retract(file_id=None, graph_name=None, update_status=True):
+                order.append(f"retract:{update_status}")
+                if order.count("retract:False") == 2:
+                    # The purge's own cascade — and the process goes down
+                    # while it runs, so it never finishes.
+                    await asyncio.sleep(30)
+
+            dp.retract_file = retract
+
+            inp = _graph_ingest_input()
+            with _patched_graph_ingest(graph_cls), pytest.raises(HTTPException):
+                await dp.ingest_file_with_guardrail(inp, lock_file=None)
+            # The writer is still parked in its thread: let it land, so the
+            # purge is scheduled, and wait for the purge's cascade to start.
+            assert await _wait_for(lambda: order.count("retract:False") >= 2), f"the purge never ran: {order}"
+            # The process goes down: the pending purge task goes with it.
+            for task in list(dataprep._BACKGROUND_TASKS):
+                task.cancel()
+            assert await _wait_for(lambda: not dataprep._BACKGROUND_TASKS), (
+                f"the cancelled purge never finished: {order}"
+            )
+
+        _run(scenario())
+        spanned = captured_spans("dataprep.late_write_purge")
+        assert spanned, "the purge ran without a span"
+        assert spanned[0].attributes.get("dataprep.purge_result") == "cancelled", spanned[0].attributes
+
+    def test_a_failed_purge_keeps_its_outcome_when_its_log_row_is_cancelled(self, monkeypatch, captured_spans):
+        """The FIRST outcome wins.
+
+        A purge that failed and is then cancelled while writing its error row
+        has still failed: the trace must not report "cancelled" for it. The
+        two mean different things to the operator — a cancelled purge never
+        ran its cascade, a failed one ran it twice and lost.
+        """
+        from unittest.mock import AsyncMock, MagicMock
+
+        from fastapi import HTTPException
+
+        self._cool_llm_env(monkeypatch)
+        self._fast_phases(monkeypatch)
+        monkeypatch.setattr(dataprep, "_LATE_WRITE_PURGE_RETRY_SECONDS", 0.05)
+
+        order = []
+
+        async def scenario():
+            dp = _stub_dataprep()
+            _stub_graph_phase_ingest(dp)
+            dp.embeddings = MagicMock()
+
+            def slow_insert(**_kwargs):
+                # The writer thread: it sleeps past the phase budget, so the
+                # failure path retracts while the writer is still in flight.
+                time.sleep(1.6)
+                order.append("write")
+                return None
+
+            graph_cls = MagicMock()
+            graph_cls.return_value.add_graph_documents = slow_insert
+
+            async def retract(file_id=None, graph_name=None, update_status=True):
+                order.append("retract")
+                raise RuntimeError("the database is unreachable")
+
+            dp.retract_file = retract
+
+            # The purge's own error row blocks: the cancellation lands on it.
+            at_error_row = asyncio.Event()
+
+            async def write_log(file_id, level, stage, message):
+                if "retraction failed" in str(message):
+                    at_error_row.set()
+                    await asyncio.sleep(30)
+
+            dp._write_ingestion_log = AsyncMock(side_effect=write_log)
+
+            inp = _graph_ingest_input()
+            with _patched_graph_ingest(graph_cls), pytest.raises(HTTPException):
+                await dp.ingest_file_with_guardrail(inp, lock_file=None)
+            # The writer lands, the purge runs its two attempts, and the error
+            # row it writes for the operator blocks.
+            assert await _wait_for(at_error_row.is_set), f"the purge never reached its error row: {order}"
+            # The process goes down while that row is being written.
+            for task in list(dataprep._BACKGROUND_TASKS):
+                task.cancel()
+            assert await _wait_for(lambda: not dataprep._BACKGROUND_TASKS), (
+                f"the cancelled purge never finished: {order}"
+            )
+            return dp
+
+        _run(scenario())
+        spanned = captured_spans("dataprep.late_write_purge")
+        assert spanned, "the purge ran without a span"
+        assert spanned[0].attributes.get("dataprep.purge_result") == "failed", spanned[0].attributes
+
+    def test_the_rollback_retracts_from_the_graph_the_insertion_wrote_to(self, monkeypatch):
+        """One graph name, resolved once, for the insertion AND the rollbacks.
+
+        The insertion path fell back to ARANGO_GRAPH_NAME while the rollbacks
+        fell back to the literal "GRAPH": a deployment that sets the variable
+        and a request that carries no graph name would retract from a graph
+        nothing was written to — and the late-write purge with it.
+        """
+        from unittest.mock import MagicMock
+
+        from fastapi import HTTPException
+
+        self._cool_llm_env(monkeypatch)
+        monkeypatch.setenv("ARANGO_GRAPH_NAME", "env-graph")
+        self._fast_phases(monkeypatch)
+
+        seen = {}
+
+        async def scenario():
+            dp = _stub_dataprep()
+            _stub_graph_phase_ingest(dp)
+            dp.embeddings = MagicMock()
+
+            def insert(**kwargs):
+                seen["insertion_graph"] = kwargs.get("graph_name")
+                # Park past the phase budget: the ingest then fails and the
+                # rollback retracts.
+                time.sleep(1.6)
+                return None
+
+            graph_cls = MagicMock()
+            graph_cls.return_value.add_graph_documents = insert
+
+            async def retract(file_id=None, graph_name=None, update_status=True):
+                seen["retract_graph"] = graph_name
+
+            dp.retract_file = retract
+
+            # No graph name on the request: the env fallback decides. The
+            # request carries NO repo_id either, so the OKF-hint block runs —
+            # it is the block that used to CLOBBER the resolved graph name
+            # with "" and send the retraction to a graph nothing was written
+            # to.
+            inp = MagicMock(
+                file_id="f1",
+                file_path="/tmp/f1.pdf",
+                graph_name=None,
+                repo_id=None,
+                file_labels=[],
+            )
+            with _patched_graph_ingest(graph_cls), pytest.raises(HTTPException):
+                await dp.ingest_file_with_guardrail(inp, lock_file=None)
+            return dp
+
+        _run(scenario())
+        assert seen.get("insertion_graph") == "env-graph", seen
+        assert seen.get("retract_graph") == "env-graph", (
+            f"the rollback retracted from another graph than the insertion wrote to: {seen} — the "
+            "rows it was meant to remove stay indexed"
+        )
+
+    @staticmethod
+    def _cool_llm_env(monkeypatch):
+        """The LLM environment every ingest in this class runs with.
+
+        ``_LLM_STORM_UNTIL`` is a module-level timestamp the retry ladder
+        pushes into the future after a transient gateway error, and EVERY
+        later LLM call waits for it (20 s by default). An earlier test in the
+        suite that trips the ladder would park this test's batch for the
+        whole cool-down: the phase budget would expire before the batch ever
+        reached the insertion, and the test would measure nothing.
+        """
+        monkeypatch.setenv("VLLM_API_KEY", "test-key")
+        monkeypatch.setenv("VLLM_ENDPOINT", "http://localhost:8000")
+        monkeypatch.setenv("VLLM_MODEL_ID", "test-model")
+        monkeypatch.setattr(dataprep, "_LLM_STORM_UNTIL", 0.0)
+        monkeypatch.setattr(dataprep, "_LLM_STORM_STRIKES", 0)
+
+    @staticmethod
+    def _fast_phases(monkeypatch, *, phase_timeout=0.8):
+        """The phase-budget knobs that make a graph phase fail fast.
+
+        Only the tests that drive the graph phase need them; the ones that
+        fail before it keep the module's own values.
+        """
+        monkeypatch.setattr(dataprep, "DATAPREP_LLM_PHASE_TIMEOUT_SECONDS", phase_timeout)
+        monkeypatch.setattr(dataprep, "DATAPREP_LLM_PROGRESS_INTERVAL_SECONDS", 60.0)
+        monkeypatch.setattr(dataprep, "_PHASE_CANCEL_GRACE_SECONDS", 0.2)
+        monkeypatch.setattr(dataprep, "_GRAPH_WRITER_SETTLE_SECONDS", 0.05)
+        monkeypatch.setattr(dataprep, "_global_batch_gate", lambda: asyncio.Semaphore(4))
+
+    def test_a_write_that_lands_after_the_retract_is_purged(self, monkeypatch):
+        """The rows a late writer wrote are deleted once it settles.
+
+        The ORDER is the contract: retract, then the write, then the purge.
+        A purge that ran before the write would delete nothing and the rows
+        would survive; a purge that never ran leaves them served.
+        """
+        from unittest.mock import MagicMock
+
+        from fastapi import HTTPException
+
+        self._cool_llm_env(monkeypatch)
+        self._fast_phases(monkeypatch)
+
+        order = []
+
+        async def scenario():
+            dp = _stub_dataprep()
+            _stub_graph_phase_ingest(dp)
+            # The insertion passes the embedder through to the graph writer;
+            # the stub instance carries none (the stub bypasses __init__).
+            dp.embeddings = MagicMock()
+
+            def slow_insert(**_kwargs):
+                # The writer thread: it sleeps past the phase budget, so its
+                # write lands AFTER the failure path's retract.
+                time.sleep(1.6)
+                order.append("write")
+                return None
+
+            graph_cls = MagicMock()
+            graph_cls.return_value.add_graph_documents = slow_insert
+
+            async def retract(file_id=None, graph_name=None, update_status=True):
+                order.append(f"retract:{update_status}")
+
+            dp.retract_file = retract
+
+            inp = _graph_ingest_input()
+            with _patched_graph_ingest(graph_cls), pytest.raises(HTTPException):
+                await dp.ingest_file_with_guardrail(inp, lock_file=None)
+            # The writer is still parked: let it land, and let its purge run.
+            # Waited for, not slept for: the writer's thread and the settle
+            # callback are the code under test, and a loaded machine delays
+            # both by an unbounded amount.
+            purged = await _wait_for(lambda: order.count("retract:False") >= 2)
+            return dp, purged
+
+        dp, purged = _run(scenario())
+        assert purged, (
+            f"the purge never ran after the late write: {order} — the rows the writer wrote survive the retract"
+        )
+        assert order[:1] == ["retract:False"], (
+            f"the failure path did not retract before the late write: {order} — the retraction "
+            "is what the late write resurrects"
+        )
+        assert "write" in order, f"the writer thread never landed: {order} — the test proved nothing"
+        assert order.index("write") < len(order) - 1, (
+            f"no purge ran after the late write: {order} — the rows the writer wrote survive the "
+            "retract and are served for a document the UI shows as failed (#1991)"
+        )
+        assert order[-1] == "retract:False", (
+            f"the purge did not run, or it ran with the status flip: {order} — the purge must "
+            "delete the late rows WITHOUT touching the failure status (#1992)"
+        )
+        statuses = [c.args[1] for c in dp._update_doc_status.call_args_list]
+        assert statuses[-1] == "Ingestion Error", statuses
+
+    def test_the_purge_says_so_in_the_documents_ingestion_log(self, monkeypatch):
+        """The operator meets a SECOND cascade in the document's log — say why.
+
+        The purge runs the retraction's cascade, and that cascade writes its
+        own stage rows into the document's ingestion log. Without a row of
+        its own, the operator reads a failed ingest whose log shows two
+        unexplained deletions — and the doc that tells them to reason about
+        the purge standing down never mentions it.
+        """
+        from unittest.mock import MagicMock
+
+        from fastapi import HTTPException
+
+        self._cool_llm_env(monkeypatch)
+        self._fast_phases(monkeypatch)
+
+        order = []
+
+        async def scenario():
+            dp = _stub_dataprep()
+            _stub_graph_phase_ingest(dp)
+            dp.embeddings = MagicMock()
+
+            def slow_insert(**_kwargs):
+                time.sleep(1.6)
+                order.append("write")
+                return None
+
+            graph_cls = MagicMock()
+            graph_cls.return_value.add_graph_documents = slow_insert
+
+            async def retract(file_id=None, graph_name=None, update_status=True):
+                # Was the purge announced before this cascade ran? The row
+                # that explains the deletion has to come first, or the
+                # operator reads the cascade before its explanation.
+                announced = any(
+                    "Purging the rows" in str(call.args[3]) for call in dp._write_ingestion_log.call_args_list
+                )
+                order.append(f"retract announced={announced}")
+
+            dp.retract_file = retract
+
+            inp = _graph_ingest_input()
+            with _patched_graph_ingest(graph_cls), pytest.raises(HTTPException):
+                await dp.ingest_file_with_guardrail(inp, lock_file=None)
+            purged = await _wait_for(lambda: sum(1 for entry in order if entry.startswith("retract")) >= 2)
+            return dp, purged
+
+        dp, purged = _run(scenario())
+        assert purged, f"the purge never ran: {order}"
+        rows = [c.args[3] for c in dp._write_ingestion_log.call_args_list if c.args[1] == "INFO"]
+        assert any("Purging the rows" in message for message in rows), (
+            f"the purge did not announce itself in the document's own log: {rows}"
+        )
+        # The announcement came BEFORE the cascade it announces: the purge's
+        # own retraction is the last one (the rollback's is the first).
+        cascades = [entry for entry in order if entry.startswith("retract")]
+        assert cascades[-1] == "retract announced=True", (
+            f"the cascade ran before the announcement: {order} — the operator reads the deletion "
+            "before the row that explains it"
+        )
+
+    def test_the_purge_runs_inside_its_own_span(self, monkeypatch, captured_spans):
+        """The purge's log lines must be correlatable with the ingest.
+
+        The purge runs after the ingest's span closed — it is a post-request
+        background task — so it opens its own. Without it, its lines (the
+        purge, its failure, its stand-down) are the only ones of the
+        mechanism that cannot be tied back to the ingest that produced them.
+        """
+        from unittest.mock import MagicMock
+
+        from fastapi import HTTPException
+
+        self._cool_llm_env(monkeypatch)
+        self._fast_phases(monkeypatch)
+
+        order = []
+
+        async def scenario():
+            dp = _stub_dataprep()
+            _stub_graph_phase_ingest(dp)
+            dp.embeddings = MagicMock()
+
+            def slow_insert(**_kwargs):
+                time.sleep(1.6)
+                order.append("write")
+                return None
+
+            graph_cls = MagicMock()
+            graph_cls.return_value.add_graph_documents = slow_insert
+
+            async def retract(file_id=None, graph_name=None, update_status=True):
+                order.append("retract")
+
+            dp.retract_file = retract
+
+            inp = _graph_ingest_input()
+            with _patched_graph_ingest(graph_cls), pytest.raises(HTTPException):
+                await dp.ingest_file_with_guardrail(inp, lock_file=None)
+            purged = await _wait_for(lambda: order.count("retract") >= 2)
+            # The span closes when the purge's body ends — after its last
+            # retraction, so wait for it rather than assume it.
+            await _wait_for(lambda: captured_spans("dataprep.late_write_purge"))
+            return dp, purged, captured_spans("dataprep.late_write_purge")
+
+        dp, purged, spanned = _run(scenario())
+        assert purged, f"the purge never ran: {order}"
+        assert spanned, (
+            "the purge ran without a span — its log lines cannot be correlated with the ingest that produced them"
+        )
+        # The span says what the purge DID: a failed purge and a successful
+        # one look the same otherwise (background_span sets no ERROR status,
+        # and the purge swallows the exception it retries).
+        assert spanned[0].attributes.get("dataprep.purge_result") == "purged", spanned[0].attributes
+
+    def test_the_failed_ingest_ends_on_the_failure_status(self, monkeypatch):
+        """A failed ingest ends 'Ingestion Error', not 'Retracted' (#1992).
+
+        The failure handler used to write 'Ingestion Error' and then let the
+        auto-retract flip the row to 'Retracted' — the last write wins, so the
+        operator saw a document that looked deliberately retracted, with the
+        failure only in the ingestion log. The retraction no longer flips the
+        status, so the row ENDS on the state that names what happened.
+
+        The failure status is written BEFORE the retraction, not after it: an
+        await inside the failure path is cancellable, and a second
+        cancellation landing inside the retraction would skip a status write
+        that came after it — leaving the document on 'Ingesting' with the
+        failure only in the ingestion log. The retraction writes no status of
+        its own, so the order does not change which state the row ends on.
+        """
+        from unittest.mock import AsyncMock
+
+        from fastapi import HTTPException
+
+        self._cool_llm_env(monkeypatch)
+
+        order = []
+
+        async def scenario():
+            dp = _stub_dataprep()
+            _stub_graph_phase_ingest(dp)
+            # No content at all: the cheapest failure that reaches the
+            # rollback path.
+            dp._load_and_chunk = AsyncMock(return_value=[])
+
+            async def retract(file_id=None, graph_name=None, update_status=True):
+                order.append("retract")
+                if update_status:
+                    # The real retraction flips the row to 'Retracted' — the
+                    # double reproduces that, or the assertion below would
+                    # pass on a retraction that still hides the failure.
+                    order.append("status:Retracted")
+
+            dp.retract_file = retract
+
+            async def status(file_id, status_value, **kw):
+                order.append(f"status:{status_value}")
+
+            dp._update_doc_status = status
+
+            inp = _graph_ingest_input()
+            with _patched_graph_ingest(), pytest.raises(HTTPException):
+                await dp.ingest_file_with_guardrail(inp, lock_file=None)
+            return dp
+
+        _run(scenario())
+        statuses = [entry for entry in order if entry.startswith("status:")]
+        assert statuses == ["status:Ingesting", "status:Ingestion Error"], (
+            f"the failed ingest did not end on 'Ingestion Error': {order} — the row's terminal "
+            "state has to name the failure, or the operator cannot tell a failed ingest from a "
+            "deliberate retraction (#1992)"
+        )
+        assert "status:Retracted" not in order, (
+            f"the failed ingest ended 'Retracted': {order} — that hides the failure behind a state "
+            "that reads as a deliberate retraction"
+        )
+        assert order.index("status:Ingestion Error") < order.index("retract"), (
+            f"the failure status was written after the retraction: {order} — a cancellation "
+            "landing inside the retraction would skip it and leave the document on 'Ingesting'"
+        )
+
+    def test_a_re_kick_is_not_purged_by_the_previous_attempt(self, monkeypatch):
+        """A purge left over from a failed attempt must not delete the NEW rows.
+
+        The purge deletes by file_id, so a purge still pending when the file is
+        re-kicked would delete the rows the new attempt writes — a healthy
+        ingest losing its graph to the previous attempt's straggler. The new
+        attempt therefore supersedes the pending purge; the straggler's rows
+        may then survive as duplicates of a file that is being ingested
+        anyway, which is the milder of the two failures.
+        """
+        import threading
+        from unittest.mock import MagicMock
+
+        self._cool_llm_env(monkeypatch)
+        self._fast_phases(monkeypatch, phase_timeout=30.0)
+
+        order = []
+        started = threading.Event()
+        release = threading.Event()
+
+        async def scenario():
+            dp = _stub_dataprep()
+            _stub_graph_phase_ingest(dp)
+            dp.embeddings = MagicMock()
+
+            calls = {"n": 0}
+
+            def insert(**_kwargs):
+                calls["n"] += 1
+                if calls["n"] > 1:
+                    # The re-kick's own insertion: it lands immediately.
+                    return None
+                # The first attempt's writer: it parks until the test
+                # releases it, so its write lands after the kill's retract.
+                started.set()
+                release.wait(timeout=30)
+                order.append("write")
+                return None
+
+            graph_cls = MagicMock()
+            graph_cls.return_value.add_graph_documents = insert
+
+            async def retract(file_id=None, graph_name=None, update_status=True):
+                order.append("retract")
+
+            dp.retract_file = retract
+
+            inp = _graph_ingest_input()
+            with _patched_graph_ingest(graph_cls):
+                task = asyncio.create_task(dp.ingest_file_with_guardrail(inp, lock_file=None))
+                assert await _wait_for(started.is_set), "the writer thread never reached the insertion"
+                # The kill: the ingest is cancelled while the writer is parked.
+                task.cancel()
+                with pytest.raises(asyncio.CancelledError):
+                    await task
+                state = dp._late_write_state("f1")
+                assert state["purge"] is not None, "the killed attempt registered no late-write purge"
+                # The re-kick: the operator fixed the cause and re-ingests.
+                result = await dp.ingest_file_with_guardrail(inp, lock_file=None)
+                assert result["status"] == 200, result
+                # The supersede is what protects the re-kick: the pending
+                # purge is dropped, so the straggler that lands now cannot
+                # delete the rows this attempt is writing.
+                assert state["purge"] is None, "the re-kick did not supersede the pending purge"
+                # Now the first attempt's straggler lands.
+                release.set()
+                assert await _wait_for(lambda: "write" in order), "the straggler never landed"
+                # The tracker must not keep a state row for the file once
+                # nothing is pending: the last settle drops the entry.
+                assert await _wait_for(lambda: "f1" not in (getattr(dp, "_late_write_states", None) or {})), (
+                    "the tracker kept a state row for a file with nothing pending"
+                )
+            return dp
+
+        dp = _run(scenario())
+        assert order.count("retract") == 1, (
+            f"the re-kick was purged by the previous attempt's late write: {order} — the purge "
+            "deletes by file_id and would have deleted the new attempt's rows too"
+        )
+        # A purge that stands down did NOT run: it must not announce itself in
+        # the document's log, or the operator reads a cascade that never
+        # happened.
+        announcements = [
+            str(call.args[3])
+            for call in dp._write_ingestion_log.call_args_list
+            if "Purging the rows" in str(call.args[3])
+        ]
+        assert not announcements, f"a purge that stood down announced itself: {announcements}"
+        statuses = [c.args[1] for c in dp._update_doc_status.call_args_list]
+        assert statuses[-1] == "Ingested", statuses
+
+    def test_the_failure_row_carries_the_cause(self, monkeypatch):
+        """The failed row's last_error names what actually went wrong.
+
+        The operator reads the row, not the service log: a generic
+        'Ingestion failed' prefix tells them nothing they can act on, and
+        the cause is what the ingestion log's ERROR entry repeats.
+        """
+        from unittest.mock import AsyncMock
+
+        from fastapi import HTTPException
+
+        self._cool_llm_env(monkeypatch)
+
+        async def scenario():
+            dp = _stub_dataprep()
+            _stub_graph_phase_ingest(dp)
+            dp._load_and_chunk = AsyncMock(side_effect=RuntimeError("the model refused the shape"))
+
+            async def retract(file_id=None, graph_name=None, update_status=True):
+                return None
+
+            dp.retract_file = retract
+
+            inp = _graph_ingest_input()
+            with _patched_graph_ingest(), pytest.raises(HTTPException):
+                await dp.ingest_file_with_guardrail(inp, lock_file=None)
+            return dp
+
+        dp = _run(scenario())
+        failures = [c for c in dp._update_doc_status.call_args_list if c.args[1] == "Ingestion Error"]
+        assert failures, "the failed ingest never wrote the failure status"
+        assert failures[0].kwargs.get("error") == "the model refused the shape", (
+            f"the row does not carry the cause: {failures[0].kwargs.get('error')!r}"
+        )
+
+    def test_a_failed_retraction_is_reported_to_the_operator(self, monkeypatch):
+        """A retraction that fails leaves the document's rows behind — say so.
+
+        The retraction is what removes a failed document's rows. When it
+        fails, the document's chunks may still be indexed while the row
+        says it failed: the operator has to know, and the ingestion log of
+        THAT document is where they read it.
+        """
+        from unittest.mock import AsyncMock
+
+        from fastapi import HTTPException
+
+        self._cool_llm_env(monkeypatch)
+
+        async def scenario():
+            dp = _stub_dataprep()
+            _stub_graph_phase_ingest(dp)
+            dp._load_and_chunk = AsyncMock(return_value=[])
+            dp.retract_file = AsyncMock(side_effect=RuntimeError("the graph is gone"))
+
+            inp = _graph_ingest_input()
+            with _patched_graph_ingest(), pytest.raises(HTTPException):
+                await dp.ingest_file_with_guardrail(inp, lock_file=None)
+            return dp
+
+        dp = _run(scenario())
+        logged = [c.args[3] for c in dp._write_ingestion_log.call_args_list if c.args[1] == "ERROR"]
+        assert any("retraction" in message for message in logged), (
+            f"the retraction failure was not reported to the operator: {logged}"
+        )
+
+    def test_a_failed_re_kick_still_purges_the_previous_attempts_straggler(self, monkeypatch):
+        """A re-kick that fails too must still close the PREVIOUS attempt's leak.
+
+        The first attempt's writer is still in flight when the operator
+        re-kicks the file, and the re-kick fails before it writes anything.
+        If the re-kick drops the tracking of that writer, its own failure
+        registers no purge — and the first attempt's rows stay indexed for
+        good: the exact defect the purge exists to close, surviving the
+        correction.
+        """
+        from unittest.mock import AsyncMock, MagicMock
+
+        from fastapi import HTTPException
+
+        self._cool_llm_env(monkeypatch)
+        self._fast_phases(monkeypatch)
+
+        order = []
+
+        async def scenario():
+            dp = _stub_dataprep()
+            _stub_graph_phase_ingest(dp)
+            dp.embeddings = MagicMock()
+
+            def slow_insert(**_kwargs):
+                # The writer thread: it sleeps past the phase budget, so its
+                # write lands AFTER the failure path's retract.
+                time.sleep(1.6)
+                order.append("write")
+                return None
+
+            graph_cls = MagicMock()
+            graph_cls.return_value.add_graph_documents = slow_insert
+
+            async def retract(file_id=None, graph_name=None, update_status=True):
+                order.append(f"retract:{update_status}")
+
+            dp.retract_file = retract
+
+            inp = _graph_ingest_input()
+            # The first attempt: it fails with its writer still parked.
+            with _patched_graph_ingest(graph_cls), pytest.raises(HTTPException):
+                await dp.ingest_file_with_guardrail(inp, lock_file=None)
+            # The re-kick: it fails too, before any insertion of its own.
+            dp._load_and_chunk = AsyncMock(return_value=[])
+            with _patched_graph_ingest(graph_cls), pytest.raises(HTTPException):
+                await dp.ingest_file_with_guardrail(inp, lock_file=None)
+            # The straggler lands, and its purge must still run.
+            purged = await _wait_for(lambda: order.count("retract:False") >= 3)
+            return dp, purged
+
+        dp, purged = _run(scenario())
+        assert purged, (
+            f"the previous attempt's straggler was never purged: {order} — a re-kick that fails "
+            "must not leave the first attempt's rows indexed (#1991)"
+        )
+        assert "write" in order, f"the writer thread never landed: {order} — the test proved nothing"
+        statuses = [c.args[1] for c in dp._update_doc_status.call_args_list]
+        assert statuses[-1] == "Ingestion Error", statuses

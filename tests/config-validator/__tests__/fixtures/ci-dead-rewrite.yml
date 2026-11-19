@@ -1,0 +1,11 @@
+# A CI job that rewrites a .env variable the env template does not assign.
+#
+# The image-tag rename moved the stack's version from GENIE_AI_GLOBAL_TAG to
+# GENIE_AI_IMAGE_TAG; a job that kept the old name rewrites NOTHING — the
+# .env keeps the template's default and the job runs against the wrong
+# artifact, silently. This fixture is the defect the gate must catch.
+
+e2e:integration:
+  stage: e2e
+  script:
+    - sed -i "s|^GENIE_AI_GLOBAL_TAG=.*|GENIE_AI_GLOBAL_TAG=${E2E_TAG}|" .env

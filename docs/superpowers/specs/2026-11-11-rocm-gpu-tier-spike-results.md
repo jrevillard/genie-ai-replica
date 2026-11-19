@@ -182,7 +182,9 @@ Conclusions carried into the implementation:
    spread) — `RERANKING_THRESHOLD` strategies keep their calibration.
 4. TEI's strict `truncate=False` 422 contract is TEI-only; vLLM truncates
    silently at the model window — recorded via the `reranker.backend` span
-   attribute (vocabulary 112 → 113).
+   attribute (vocabulary 113 → 114; the Task-14 embedding mirror added
+   `embedding.backend` after it at 114 → 115 — the ladder moved when
+   main's dataprep fix added `dataprep.purge_result` at 112 → 113).
 5. Sizing: `VLLM_RERANKER_GPU_UTILIZATION=0.05` + `MAX_MODEL_LEN=8192`
    pinned in env.strixhalo — inside the 27 GB ceiling beside granite
    (0.28) + gemma (0.12); frees the CPU reranker's ~5 GiB post-cap host-RAM

@@ -97,6 +97,11 @@ context:
 | 16 | scoped review of the corrections | Minor | the bullet about the commit read as if the commit carried the WORKING TREE's content; it carries the attested content | **fixed** — the bullet says so |
 | 17 | scoped review of the corrections | Minor | after the fallback reorder, `flux_namespace` shadowed the install namespace, making that fallback unreachable | **fixed** — the candidate namespaces are now tried in order, and each one is reachable |
 | 18 | scoped review of the corrections | Minor | the non-root branch of the local file walk sorted a list that has no effect | **fixed** — the branch is gone |
+| 19 | global code-review round 3 | Important | a release history with no DEPLOYED entry left the chart version empty, so the identity was resolved against a revision that never ran, the record printed empty values and the capture exited 0 | **fixed** — no deployed revision leaves the identity UNRESOLVED; pinned by a test |
+| 20 | global code-review round 3 | Minor | the DIFFERENT verdict and the difference table's headers asserted the chart source was at fault, even when the only row was about the two attestations disagreeing | **fixed** — the verdict names the attestations when that is the cause, and the columns say which is which |
+| 21 | global code-review round 3 | Minor | "Chart files compared" counted the attested files only, undercounting the files the comparison actually read | **fixed** — both counts are reported |
+| 22 | global code-review round 3 | Minor | the new code read the chart source unguarded: a checkout without `Chart.lock` raised out of the identity and killed the capture (exit 3, no record) | **fixed** — an incomplete chart source leaves the identity UNRESOLVED; pinned by a test |
+| 23 | global code-review round 3 | Minor | an untracked file under `charts/genieai-umbrella/` becomes a difference — "a false claim about the repository's chart source" | **not a defect** — helm packages every file of the chart directory, so an untracked file IS part of the chart source and the difference is real; the record already states that the comparison runs against the working tree |
 
 ## Design Notes
 

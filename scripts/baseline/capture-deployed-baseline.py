@@ -916,8 +916,25 @@ def capture_release(flux_namespace, release):
 
 def local_chart_version():
     """The version of the chart source this capture compares against."""
-    with open(os.path.join(CHART_DIR, "Chart.yaml"), encoding="utf-8") as handle:
+    path = os.path.join(CHART_DIR, "Chart.yaml")
+    if not os.path.exists(path):
+        # The chart source is incomplete: the identity is UNRESOLVED, and the
+        # record says so. The capture does not die on it.
+        return ""
+    with open(path, encoding="utf-8") as handle:
         return (yaml.safe_load(handle) or {}).get("version", "")
+
+
+def chart_source_complete():
+    """Whether the chart source carries the files the comparison reads.
+
+    A checkout whose chart source is incomplete cannot be compared with the
+    chart the deployment runs: the identity stays UNRESOLVED.
+    """
+    return all(
+        os.path.exists(os.path.join(CHART_DIR, name))
+        for name in ("Chart.yaml", "Chart.lock")
+    )
 
 
 # --------------------------------------------------------------------------
@@ -1367,12 +1384,27 @@ def chart_identity(release_info):
         "source_namespace": source_ref.get("namespace", ""),
         "commit": "",
         "files": 0,
+        "local_files": 0,
         "differences": [],
     }
     if identity["source_kind"] != "GitRepository":
         identity["reason"] = (
             "the release does not render from a GitRepository source, so no commit "
             "of this repository attests the chart the deployment runs"
+        )
+        return identity
+    if not identity["chart_version"]:
+        # The release history records no DEPLOYED revision: the chart the
+        # deployment runs is not attested by anything.
+        identity["reason"] = (
+            "the release history records no deployed revision, so the chart the "
+            "deployment runs is not attested"
+        )
+        return identity
+    if not chart_source_complete():
+        identity["reason"] = (
+            "the chart source in this repository is incomplete, so the comparison "
+            "cannot be established"
         )
         return identity
     chart = attested_chart(
@@ -1403,6 +1435,7 @@ def chart_identity(release_info):
         return identity
     identity["commit"] = commit
     identity["files"] = len(attested)
+    identity["local_files"] = len(local_chart_files())
     identity["differences"] = chart_differences(chart, attested_ids, release_info)
     identity["status"] = "DIFFERENT" if identity["differences"] else "IDENTICAL"
     return identity
@@ -1968,14 +2001,25 @@ def render_markdown(data):
             "tree; the commit named above is a committed tree that carries "
             "the same ATTESTED content."
         )
-        add(f"- **Chart files compared:** {identity['files']}")
+        add(
+            f"- **Chart files compared:** {identity['files']} attested, "
+            f"{identity.get('local_files', 0)} in the chart source"
+        )
         if identity["status"] == "UNRESOLVED":
             add(f"- **Verdict:** UNRESOLVED - {identity['reason']}.")
         elif identity["status"] == "DIFFERENT":
-            add(
-                "- **Verdict:** DIFFERENT - the chart source in this repository is not "
-                "the chart the deployment runs (see the table below)."
-            )
+            kinds = {difference["kind"] for difference in identity["differences"]}
+            if kinds == {"attestation"}:
+                add(
+                    "- **Verdict:** DIFFERENT - the two objects that attest the "
+                    "chart, the release history and the release secret, disagree "
+                    "(see the table below)."
+                )
+            else:
+                add(
+                    "- **Verdict:** DIFFERENT - the chart source in this repository "
+                    "is not the chart the deployment runs (see the table below)."
+                )
         else:
             add(
                 "- **Verdict:** IDENTICAL - the chart source in this repository is the "
@@ -1983,7 +2027,13 @@ def render_markdown(data):
             )
         add("")
         if identity["differences"]:
-            add("| path | chart source | chart the deployment runs |")
+            add(
+                "The source and attested columns carry the chart source in this "
+                "repository and the chart the deployment runs; a row about the two "
+                "attestations carries the release history and the release secret."
+            )
+            add("")
+            add("| path | source | attested |")
             add("|---|---|---|")
             for difference in identity["differences"]:
                 add(

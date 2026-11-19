@@ -1518,3 +1518,28 @@ def test_a_release_payload_of_the_wrong_shape_fails_closed(monkeypatch):
         )
         identity = capture.chart_identity(_release_info())
         assert identity["status"] == "UNRESOLVED", payload
+
+
+def test_a_release_history_without_a_deployed_revision_fails_closed(monkeypatch):
+    """No deployed revision: the chart the deployment runs is not attested."""
+    monkeypatch.setattr(
+        capture,
+        "kubectl_json",
+        lambda *args, **kwargs: _release_secret(_attested_chart()),
+    )
+    identity = capture.chart_identity(_release_info(chart_version=""))
+    assert identity["status"] == "UNRESOLVED"
+    assert "no deployed revision" in identity["reason"]
+
+
+def test_an_incomplete_chart_source_fails_closed(monkeypatch):
+    """A checkout without the chart's lock cannot be compared."""
+    monkeypatch.setattr(
+        capture,
+        "kubectl_json",
+        lambda *args, **kwargs: _release_secret(_attested_chart()),
+    )
+    monkeypatch.setattr(capture, "chart_source_complete", lambda: False)
+    identity = capture.chart_identity(_release_info())
+    assert identity["status"] == "UNRESOLVED"
+    assert "incomplete" in identity["reason"]

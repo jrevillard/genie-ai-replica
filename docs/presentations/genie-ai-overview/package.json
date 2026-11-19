@@ -2,7 +2,7 @@
   "name": "genie-ai-overview",
   "private": true,
   "scripts": {
-    "build": "python3 src/build_overview.py",
+    "build": "python3 src/build_deck.py",
     "build:diagrams": "node src/render-diagrams.cjs",
     "check": "node tests/verify-deck.cjs"
   },

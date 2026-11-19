@@ -13,6 +13,32 @@ check that the build copies the generated HTML and that the documentation
 page links to it. See the
 [site workflow](../../.claude/rules/SITE-LOCAL-DEV.md#interactive-presentations).
 
+## The multilingual walkthrough
+
+`docs/presentations/genie-ai-overview/` carries six United Nations languages
+in one HTML file: English, French, Spanish, Russian, Arabic and Chinese.
+
+- **Text lives in slots.** `src/slides/<lang>.txt` holds the prose,
+  `src/i18n/<lang>.json` holds the interface strings. The build renders one
+  set of slides and the runtime swaps the text.
+- **The build is the gate.** A language whose structure drifts from English,
+  or that is missing a string, fails the build. Do not work around it by
+  loosening the check — fix the translation.
+- **Check a language alone** with `python3 src/check_language.py <lang>`
+  before rebuilding. It is much faster than a full build.
+- **Read `src/GLOSSARY.md`** before translating or reviewing a translation.
+  Product names stay in Latin script in every language, including Arabic.
+- **Regenerate the fonts** after a translation changes:
+  `PATH=.venv/bin:$PATH python3 src/fetch_fonts.py --code <lang>`. The Arabic
+  and Chinese faces are cut down to the characters the deck prints; without
+  that step those languages render in squares or in a system font.
+- **The layout adapts at runtime.** Titles are measured, not counted, and the
+  blocks of a slide shrink when a translation needs more room. Do not "fix" a
+  long translation by shortening it — the deck handles the length.
+- **The browser check covers every language.** It switches each one and
+  checks that nothing overflows the slide. A change to the CSS or the
+  runtime can break one language without touching the others.
+
 ## Existing Marp decks
 
 Use the following tooling notes when editing an existing Marp deck.

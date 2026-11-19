@@ -5,8 +5,12 @@
   --navy: #071638;
 }
 html, body { margin: 0; background: #071330; }
+/* Carlito carries the Latin and Cyrillic text. The Arabic and Chinese
+   faces are added by the build, each covering only the characters its
+   translation prints; the browser picks whichever face holds the
+   character, so the stack below never has to name them. */
 .reveal { font-family: Carlito, Calibri, Arial, sans-serif; color: var(--ink); }
-.reveal .slides { text-align: left; }
+.reveal .slides { text-align: start; }
 .reveal .slides > section.deck-slide {
   box-sizing: border-box; width: 1280px; height: 720px; padding: 0; overflow: hidden;
   color: var(--ink); background: var(--paper);
@@ -50,9 +54,24 @@ html, body { margin: 0; background: #071330; }
 .heading { margin-top: 32px; }
 .slide-title { margin: 0; max-width: 1120px; font-size: 60px; font-weight: 700; line-height: 1.005; letter-spacing: -.034em; text-wrap: balance; }
 .slide-title.compact { font-size: 55px; }
+/* A translation can need a third of the room the English title took.
+   The smaller steps keep the title on the lines the slide was drawn
+   for, so the content below does not move. */
+.slide-title.tight { font-size: 48px; }
+.slide-title.squeeze { font-size: 42px; }
+.slide-title.minimum { font-size: 37px; }
+/* A title that takes a second line eats the room the content needed.
+   The heading gives some of it back. */
+.heading:has(.slide-title.compact) { margin-top: 18px; }
+.heading:has(.slide-title.tight) { margin-top: 10px; }
+.heading:has(.slide-title.squeeze) { margin-top: 4px; }
 .eyebrow { color: var(--subtle); font-size: 17px; font-weight: 700; letter-spacing: .09em; text-transform: uppercase; line-height: 1.12; margin: 13px 0 0; }
+.heading:has(.slide-title.compact) .eyebrow { margin-top: 8px; }
 .slide-content { display: flex; flex: 1; min-height: 0; flex-direction: column; justify-content: center; gap: 15px; margin-top: 15px; }
 .slide-takeaway { margin: 0; padding: 11px 15px; border-radius: 9px; color: var(--ink); background: #d4f5fa; font-size: 22px; font-weight: 700; line-height: 1.12; }
+/* A translation can run longer than the English it replaces. The takeaway
+   sits above the footer, so a second line would push it over. */
+.slide-takeaway.compact { font-size: 19px; padding: 9px 13px; }
 .deck-slide[data-slide-theme="night"] .slide-takeaway { color: #fff; background: #152f58; border: 1px solid #284880; }
 .slide-footer { position: absolute; display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 16px; inset: auto 67px 18px; color: var(--subtle); font-size: 17px; }
 .chapter-progress { display: flex; gap: 5px; align-items: center; }
@@ -67,7 +86,7 @@ html, body { margin: 0; background: #071330; }
 .deck-slide.layout-cover[data-slide-theme="night"] .slide-frame { background: linear-gradient(90deg,#040e32c4 0%,#040e32a6 48%,#040e3266 65%,transparent 85%),var(--art-globe) center / cover; padding: 45px 75px 60px; }
 .layout-cover .header-rule, .layout-cover .chapter { visibility: hidden; }
 .layout-cover .wordmark { font-size: 34px; }
-.itu { position: absolute; right: 75px; top: 49px; width: 85px; height: 85px; object-fit: contain; }
+.itu { position: absolute; inset-inline-end: 75px; top: 49px; width: 85px; height: 85px; object-fit: contain; }
 .cover-content { margin-top: 108px; max-width: 823px; }
 .title-tag { display: inline-block; padding: 9px 14px; background: #1e3765; color: #fff; border-radius: 6px; }
 .cover-content h1 { max-width: 790px; margin: 22px 0 21px; font-size: 94px; line-height: .94; letter-spacing: -.04em; text-wrap: balance; }
@@ -75,6 +94,18 @@ html, body { margin: 0; background: #071330; }
 .readout h2, .scene h2, .field-grid h2 { margin: 0 0 8px; font-size: 27px; font-weight: 700; line-height: 1.06; letter-spacing: -.01em; }
 .readout p, .scene p, .field-grid p { margin: 0; font-size: 23px; line-height: 1.17; }
 .readout h2 { color: var(--accent-ink); }
+/* A translation can need more room than the English text left. The
+   blocks of a slide shrink a step at a time until they fit the space
+   the footer leaves. */
+.deck-slide.tight .readout h2, .deck-slide.tight .scene h2, .deck-slide.tight .field-grid h2 { font-size: 25px; margin-bottom: 6px; }
+.deck-slide.tight .readout p, .deck-slide.tight .scene p, .deck-slide.tight .field-grid p { font-size: 21px; }
+.deck-slide.squeeze .readout h2, .deck-slide.squeeze .scene h2, .deck-slide.squeeze .field-grid h2 { font-size: 23px; margin-bottom: 5px; }
+.deck-slide.squeeze .readout p, .deck-slide.squeeze .scene p, .deck-slide.squeeze .field-grid p { font-size: 19px; }
+.deck-slide.tight .slide-takeaway { font-size: 20px; padding: 9px 13px; }
+.deck-slide.squeeze .slide-takeaway { font-size: 18px; padding: 8px 12px; }
+/* The space between the blocks gives some of it back too. */
+.deck-slide.tight .slide-content { gap: 11px; margin-top: 10px; }
+.deck-slide.squeeze .slide-content { gap: 8px; margin-top: 6px; }
 .scene { position: relative; min-width: 0; }
 .stage-fragment { position: absolute; width: 1px; height: 1px; pointer-events: none; }
 [data-light] { transition: transform .40s cubic-bezier(.22,.67,.28,1), opacity .28s ease, box-shadow .30s ease, background .28s ease; }
@@ -99,7 +130,7 @@ html, body { margin: 0; background: #071330; }
 .rail .readout h2, .rail .readout p { margin: 0; }
 .split { display: grid; grid-template-columns: 1fr 1fr; gap: 0; border-top: 1px solid var(--rule); border-bottom: 1px solid var(--rule); }
 .split .readout { padding: 27px 35px 24px 0; min-height: 149px; }
-.split .readout + .readout { padding-left: 32px; border-left: 1px solid var(--rule); --accent: var(--violet); --accent-ink: #321957; }
+.split .readout + .readout { padding-inline-start: 32px; border-inline-start: 1px solid var(--rule); --accent: var(--violet); --accent-ink: #321957; }
 .split .readout h2 { font-size: 32px; }
 .split .readout p { max-width: 490px; font-size: 27px; }
 .field-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
@@ -114,7 +145,7 @@ html, body { margin: 0; background: #071330; }
 .mock-window { background: var(--surface); border: 1px solid var(--rule); border-radius: 16px; overflow: hidden; box-shadow: 0 10px 29px #14326213; }
 .mock-bar { height: 34px; display: flex; gap: 5px; align-items: center; padding: 0 13px; border-bottom: 1px solid #d5e3f5; background: #eaf2fa; color: var(--ink); }
 .mock-bar i { width: 7px; height: 7px; border-radius: 50%; background: #91afd7; }
-.mock-bar span { margin-left: 7px; font-size: 16px; font-weight: 700; }
+.mock-bar span { margin-inline-start: 7px; font-size: 16px; font-weight: 700; }
 .conversation-body { display: flex; flex-direction: column; align-items: flex-start; gap: 13px; padding: 15px; }
 .question { align-self: flex-end; background: #deeaff; color: var(--ink); border-radius: 12px 12px 2px 12px; padding: 11px 13px; font-size: 23px; font-weight: 700; }
 .answer { background: #f2f5fb; border-radius: 2px 12px 12px 12px; padding: 12px 14px; border: 1px solid #edf0f7; }
@@ -131,16 +162,16 @@ html, body { margin: 0; background: #071330; }
 .source-pane.is-target { box-shadow: 0 0 0 3px #58b4c9, 0 13px 30px #0d4b611e; }
 .device-scene { display: grid; grid-template-columns: 1.15fr 1fr; gap: 23px; align-items: center; }
 .device-visuals { position: relative; height: 271px; background: #e7effd; border-radius: 16px; }
-.device-browser { position: absolute; left: 20px; top: 28px; width: 385px; height: 211px; background: #fff; border: 1px solid var(--rule); border-radius: 13px; overflow: hidden; box-shadow: 0 10px 25px #203a6433; }
+.device-browser { position: absolute; inset-inline-start: 20px; top: 28px; width: 385px; height: 211px; background: #fff; border: 1px solid var(--rule); border-radius: 13px; overflow: hidden; box-shadow: 0 10px 25px #203a6433; }
 .device-content { padding: 15px; font-size: 20px; }
 .device-content b, .device-phone b { display: block; }
 .device-content span, .device-phone > span:not(.earpiece) { display: inline-block; padding: 6px 9px; margin-top: 9px; border-radius: 8px; background: #dceafe; }
-.device-phone { position: absolute; display: flex; flex-direction: column; right: 25px; top: 10px; width: 155px; height: 239px; box-sizing: border-box; padding: 15px 12px; background: #fff; border: 5px solid #1d3764; border-radius: 24px; box-shadow: 0 7px 22px #1c336846; color: var(--ink); font-size: 17px; }
+.device-phone { position: absolute; display: flex; flex-direction: column; inset-inline-end: 25px; top: 10px; width: 155px; height: 239px; box-sizing: border-box; padding: 15px 12px; background: #fff; border: 5px solid #1d3764; border-radius: 24px; box-shadow: 0 7px 22px #1c336846; color: var(--ink); font-size: 17px; }
 .device-phone .earpiece { align-self: center; width: 43px; height: 6px; background: #203962; border-radius: 5px; margin: 0 0 19px; }
 .device-browser.is-target, .device-phone.is-target { transform: scale(1.05) translateY(-5px); box-shadow: 0 12px 30px #2758a65c; }
 .ghost-lines { height: 42px; max-width: 89%; margin-top: 11px; background: repeating-linear-gradient(to bottom,#dbe7fb 0 5px,#0000 5px 12px); border-radius: 3px; }
 .device-notes { display: grid; gap: 13px; }
-.device-notes .readout { padding-left: 15px; border-left: 3px solid #70a3f9; }
+.device-notes .readout { padding-inline-start: 15px; border-inline-start: 3px solid #70a3f9; }
 .device-notes .readout + .readout { border-color: #a786ed; }
 .document-visual { position: relative; display: grid; grid-template-columns: 1fr .45fr 1fr; gap: 16px; align-items: center; justify-items: center; height: 153px; background: #e8f0fc; border-radius: 13px; margin-bottom: 16px; }
 .doc-stack { width: 208px; position: relative; }
@@ -179,38 +210,86 @@ html, body { margin: 0; background: #071330; }
 .console-row { display: grid; grid-template-columns: auto 1fr auto; gap: 8px; align-items: center; min-height: 63px; padding: 0 12px; border-bottom: 1px solid #dfe9f8; }
 .console-row:last-child { border-bottom: none; }
 .console-row b { font-size: 20px; }
-.console-row > span { font-size: 17px; color: var(--ink); text-align: right; }
+.console-row > span { font-size: 17px; color: var(--ink); text-align: end; }
 .console-row.is-target { background: #e0edff; }
 .status-dot { width: 10px; height: 10px; border-radius: 50%; background: #45a5c2; }
 .console-legend { display: grid; gap: 9px; }
-.console-legend .readout { padding: 5px 0 5px 13px; border-left: 2px solid var(--rule); }
+.console-legend .readout { padding: 5px 0 5px 13px; border-inline-start: 2px solid var(--rule); }
 .console-legend .readout.is-target { border-color: var(--accent); }
 .console-legend h2 { margin-bottom: 4px; font-size: 24px; }
 .console-legend p { font-size: 22px; }
 .trace-visual { position: relative; display: grid; gap: 8px; padding: 12px 17px; margin-bottom: 14px; border-radius: 13px; border: 1px solid #36517c; background: #e8f0fc; color: var(--ink); }
 .trace-row { display: grid; grid-template-columns: 139px 1fr; align-items: center; gap: 13px; min-height: 25px; font-size: 18px; }
 .trace-row i { height: 12px; position: relative; border-radius: 4px; background: repeating-linear-gradient(90deg,#53729d40 0 1px,#0000 1px 10%); }
-.trace-row i::before { content: ""; display: block; position: absolute; left: var(--offset); width: var(--width); height: 100%; border-radius: 4px; background: #106e9c; }
+.trace-row i::before { content: ""; display: block; position: absolute; inset-inline-start: var(--offset); width: var(--width); height: 100%; border-radius: 4px; background: #106e9c; }
 .trace-row:nth-child(2) i::before { background: #6043ad; }
 .trace-row:nth-child(3) i::before { background: #0c776f; }
 .trace-row.is-target i::before { box-shadow: 0 0 0 3px #fff, 0 0 0 5px #2156a1; }
 .resources { display: grid; grid-template-columns: repeat(2,1fr); gap: 12px 15px; }
 .resources a { display: block; padding: 12px 15px; border-radius: 8px; background: #eaf2fe; color: var(--accent-ink); text-decoration: underline; text-underline-offset: 4px; font-size: 23px; font-weight: 700; }
-#deck-ui { position: fixed; z-index: 40; top: 7px; right: 8px; display: flex; gap: 4px; }
+#deck-ui { position: fixed; z-index: 40; top: 7px; inset-inline-end: 8px; display: flex; gap: 4px; }
 #deck-ui button { padding: 6px 9px; border: 0; border-radius: 5px; background: #13224b; color: #fff; font: 700 14px Arial,sans-serif; cursor: pointer; }
 #deck-ui button:hover, #deck-ui button:focus-visible { opacity: 1; outline: 2px solid #7eb2ff; }
+/* The slide number and the source links are Latin whatever the deck
+   reads: in a right-to-left deck the browser would otherwise reverse
+   "05 / 43" and swap the words of a link label. */
+[dir="rtl"] .slide-numbering,
+[dir="rtl"] .source-links,
+[dir="rtl"] .wordmark,
+[dir="rtl"] .chapter-progress {
+  direction: ltr;
+  unicode-bidi: isolate;
+}
+[dir="rtl"] .source-links { text-align: end; }
+/* The language picker is a select, not a button: it takes the button
+   colours and the button shape, but keeps the native list. */
+#deck-ui .deck-language { display: inline-flex; align-items: center; }
+/* The label of the picker names it for a screen reader; the visible
+   control carries the language itself. */
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+#deck-ui select {
+  appearance: none;
+  padding: 6px 24px 6px 9px;
+  border: 0;
+  border-radius: 5px;
+  background: #13224b;
+  color: #fff;
+  font: 700 14px Arial,sans-serif;
+  cursor: pointer;
+  background-image: linear-gradient(45deg, transparent 50%, #fff 50%), linear-gradient(135deg, #fff 50%, transparent 50%);
+  background-position: right 11px center, right 6px center;
+  background-size: 5px 5px, 5px 5px;
+  background-repeat: no-repeat;
+}
+#deck-ui select:hover, #deck-ui select:focus-visible { outline: 2px solid #7eb2ff; }
+#deck-ui select option { background: #13224b; color: #fff; }
+/* In a right-to-left deck the arrow moves to the other side. */
+[dir="rtl"] #deck-ui select {
+  padding: 6px 9px 6px 24px;
+  background-position: left 6px center, left 11px center;
+}
 :fullscreen #deck-ui { opacity: 0; }
 :fullscreen #deck-ui:hover, :fullscreen #deck-ui:focus-within { opacity: 1; }
 .reduced-motion .rank-row { transition: none; }
 .document-packet {
-  pointer-events: none; position: absolute; display: flex; gap: 4px; left: 31%; top: 72%;
-  opacity: 0; transition: left .50s cubic-bezier(.22,.67,.28,1), opacity .23s;
+  pointer-events: none; position: absolute; display: flex; gap: 4px; inset-inline-start: 31%; top: 72%;
+  opacity: 0; transition: inset-inline-start .50s cubic-bezier(.22,.67,.28,1), opacity .23s;
 }
 .document-packet i { width: 15px; height: 6px; border-radius: 4px; background: #5b99f3; }
 .document-packet i:nth-child(2) { background: #9675df; }
 .document-packet i:nth-child(3) { background: #2d9eb2; }
-.document-scene[data-active="1"] .document-packet { left: 50%; opacity: 1; }
-.document-scene[data-active="2"] .document-packet { left: 73%; opacity: 1; }
+.document-scene[data-active="1"] .document-packet { inset-inline-start: 50%; opacity: 1; }
+.document-scene[data-active="2"] .document-packet { inset-inline-start: 73%; opacity: 1; }
 .reduced-motion .document-packet { transition: none; }
 
 /* Editorial panels and Mermaid diagrams use the light artwork from OpenTech Connect. */
@@ -246,7 +325,7 @@ html, body { margin: 0; background: #071330; }
   background: linear-gradient(155deg,#fff 28%,#eef6ff);
   box-shadow: 0 12px 30px #24395f10;
 }
-.split .readout { padding-left: 27px; }
+.split .readout { padding-inline-start: 27px; }
 .split .readout + .readout { background: #f5f0fc; }
 .layout-chat .slide-content { gap: 14px; }
 .conversation { gap: 20px; grid-template-columns: 1.28fr 1fr; }
@@ -260,7 +339,7 @@ html, body { margin: 0; background: #071330; }
 .mermaid-split { display: grid; grid-template-columns: 1.64fr 1fr; gap: 25px; align-items: center; }
 .diagram-paper {
   display: grid; place-items: center;
-  min-width: 0; height: 205px; padding: 12px 15px;
+  min-width: 0; height: var(--diagram-height, 205px); padding: 12px 15px;
   margin: 0; box-sizing: border-box;
   border: 1px solid #b9c9e6; border-radius: 14px;
   background:
@@ -268,8 +347,12 @@ html, body { margin: 0; background: #071330; }
     linear-gradient(115deg,#fff,#f0f6ff);
   box-shadow: 0 15px 32px #233f6317;
 }
-.mermaid-split .diagram-paper { height: 310px; padding: 13px 9px; }
+.mermaid-split .diagram-paper { height: var(--diagram-split-height, 310px); padding: 13px 9px; }
 .diagram-paper svg { display: block; width: 100%; height: 100%; }
+/* The diagram keeps its shape but gives the notes room when a
+   translation needs it. */
+.deck-slide.tight { --diagram-height: 190px; --diagram-split-height: 285px; }
+.deck-slide.squeeze { --diagram-height: 172px; --diagram-split-height: 258px; }
 .diagram-paper svg .node .label { font-weight: 700; }
 .diagram-paper svg .cluster-label { font-weight: 700; }
 .diagram-paper svg .node.is-target {
@@ -286,9 +369,17 @@ html, body { margin: 0; background: #071330; }
 .diagram-notes { padding: 0; min-width: 0; display: grid; gap: 10px; }
 .mermaid-wide .diagram-notes { gap: 15px; grid-template-columns: repeat(3, minmax(0,1fr)); }
 .mermaid-wide .diagram-notes.count-4 { grid-template-columns: repeat(4, minmax(0,1fr)); }
-.diagram-notes .readout { padding: 7px 9px 7px 11px; border-left: 2px solid #9eb4da; background: #fbfdffee; min-width: 0; }
+.diagram-notes .readout { padding: 7px 9px 7px 11px; border-inline-start: 2px solid #9eb4da; background: #fbfdffee; min-width: 0; }
 .diagram-notes .readout h2 { margin: 0 0 4px; font-size: 23px; }
 .diagram-notes .readout p { font-size: 21px; }
+/* The notes under a diagram carry the explanation; they give their room
+   back when a translation needs more than the English text took. */
+.deck-slide.tight .diagram-notes .readout h2 { font-size: 22px; }
+.deck-slide.tight .diagram-notes .readout p { font-size: 19px; }
+.deck-slide.squeeze .diagram-notes .readout { padding: 5px 8px 5px 10px; }
+.deck-slide.squeeze .diagram-notes .readout h2 { font-size: 20px; }
+.deck-slide.squeeze .diagram-notes .readout p { font-size: 17px; }
+.deck-slide.squeeze .diagram-notes { gap: 8px; }
 .diagram-notes .readout.is-target {
   border-color: #2143a2;
   background: #e8f0fe;
@@ -353,7 +444,7 @@ html, body { margin: 0; background: #071330; }
   box-shadow: 0 12px 23px #20375b19;
 }
 .deployment-matrix thead th {
-  background: #1a3972; color: #fff; text-align: left; font-size: 20px;
+  background: #1a3972; color: #fff; text-align: start; font-size: 20px;
   font-weight: 700; padding: 10px 12px;
 }
 .deployment-matrix thead th:first-child { width: 186px; }
@@ -362,7 +453,7 @@ html, body { margin: 0; background: #071330; }
   font-size: 21px; line-height: 1.12;
 }
 .deployment-matrix tbody th { background: #f0f5fd; font-weight: 700; }
-.deployment-matrix tbody td { border-left: 1px solid #e2eaf9; }
+.deployment-matrix tbody td { border-inline-start: 1px solid #e2eaf9; }
 .deployment-matrix tbody td:last-child { background: #e9f8fc; font-weight: 700; }
 .deployment-matrix .brand-strip { margin-bottom: 5px; }
 
@@ -457,8 +548,8 @@ html, body { margin: 0; background: #071330; }
 .chapter-track::before, .chapter-track::after {
   position: absolute;
   content: "";
-  left: 19px;
-  right: calc(33.333% - 27px);
+  inset-inline-start: 19px;
+  inset-inline-end: calc(33.333% - 27px);
   top: 8px;
   height: 3px;
   border-radius: 2px;
@@ -466,7 +557,7 @@ html, body { margin: 0; background: #071330; }
   pointer-events: none;
 }
 .chapter-track::after {
-  transform-origin: left;
+  transform-origin: inline-start;  /* the bar grows from the start of the line */
   background: var(--chapter-accent);
 }
 .chapter-track li {
@@ -487,7 +578,7 @@ html, body { margin: 0; background: #071330; }
   position: absolute;
   box-sizing: border-box;
   top: -22px;
-  left: 12px;
+  inset-inline-start: 12px;
   width: 13px;
   height: 13px;
   border-radius: 50%;
@@ -529,7 +620,7 @@ html, body { margin: 0; background: #071330; }
 .language-turn.is-target { outline: 2px solid #244aab; outline-offset: -2px; }
 .language-notes .readout {
   background: #fbfdffee;
-  border-left: 2px solid #9eb4da;
+  border-inline-start: 2px solid #9eb4da;
   padding: 6px 9px;
 }
 .language-notes .readout-heading { margin: 0 0 3px; }

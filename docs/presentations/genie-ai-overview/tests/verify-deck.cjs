@@ -27,6 +27,9 @@ async function check() {
     const page = await context.newPage();
     const errors = [];
     page.on("pageerror", (error) => errors.push(error.message));
+    // The deck follows the browser's language when the reader has no
+    // choice recorded. The English pass starts from English.
+    await context.addInitScript(() => window.localStorage.setItem("genie-deck-language", "en"));
     await page.goto(url);
     await page.waitForFunction(() => document.querySelector(".reveal.ready") && document.fonts.status === "loaded");
     assert.equal(await page.locator("html").getAttribute("lang"), "en");
@@ -257,7 +260,44 @@ async function check() {
     await page.goto(url + "#/slide-09");
     await page.getByRole("button", {name:"Resume motion",exact:true}).waitFor();
     assert.equal(await ingestion.locator(".diagram-idle").first().evaluate(edge => getComputedStyle(edge).animationName), "none");
-    console.log("Checked all 43 slides, entry and idle motion, pause, notes, offline assets and reduced-motion navigation");
+
+    // Every language the deck carries must switch, set its own direction
+    // and keep its content inside the slide. A translation that runs long
+    // is a defect the English pass cannot see.
+    const languages = await page.locator("#deck-language option").evaluateAll(options =>
+      options.map(option => option.value));
+    assert.ok(languages.length > 1, "the deck offers more than one language");
+    for (const code of languages) {
+      await page.goto(url + "#/slide-01");
+      await page.selectOption("#deck-language", code);
+      await page.waitForFunction(
+        (wanted) => document.documentElement.lang === wanted, code);
+      const expectedDirection = code === "ar" ? "rtl" : "ltr";
+      assert.equal(await page.locator("html").getAttribute("dir"), expectedDirection, code);
+      // The reader's choice survives a reload.
+      await page.goto(url + "#/slide-01");
+      assert.equal(await page.locator("html").getAttribute("lang"), code, code);
+      for (const id of ids) {
+        await page.evaluate((hash) => { location.hash = hash; }, "/" + id);
+        const s = page.locator("section#" + id + ".present");
+        await s.waitFor({state:"visible"});
+        const issues = await s.evaluate((el) => {
+          const border = el.getBoundingClientRect();
+          const footer = el.querySelector(".slide-footer").getBoundingClientRect();
+          const selector = "h1, h2, .slide-content p, .cover-intro, .resources a, .diagram-paper, .field-photo, .deployment-matrix, .stack-grid, .chapter, .chapter-intro p, .chapter-track li";
+          return Array.from(el.querySelectorAll(selector)).flatMap((node) => {
+            const b = node.getBoundingClientRect();
+            return b.bottom > footer.top - 7 || b.right > border.right - 22 || b.left < border.left + 22
+              ? [node.textContent.slice(0,55) + " · " + Math.round(b.bottom - border.top)]
+              : [];
+          });
+        });
+        assert.deepEqual(issues, [], "Content out of bounds on slide " + id + " in " + code);
+      }
+    }
+    assert.deepEqual(errors, []);
+    console.log("Checked all 43 slides, entry and idle motion, pause, notes, offline assets, reduced-motion navigation and "
+      + languages.length + " languages");
   } finally {
     await browser.close();
     server.close();

@@ -17,6 +17,19 @@ source layout, slide design, build and Hugo integration.
 Use the browser checks to verify navigation, notes, diagram readability and
 reduced-motion behaviour before opening a merge request.
 
+## Translations
+
+A deck built on the walkthrough's pattern can carry several languages in one
+file. Each piece of text is a slot, every language holds the same slots, and
+the reader switches at runtime — the layout never moves, so the design is not
+redrawn per language.
+
+The build is the gate: a language whose slide file does not reproduce the
+reference structure exactly, or that is missing a string, is refused. The
+[walkthrough README](genie-ai-overview/README.md#how-the-languages-work)
+describes the pattern, the glossary every translator reads, and the checks a
+translation must pass.
+
 ## Existing Marp decks
 
 The existing decks use the [shared Marp theme](themes/genie-ai.css).

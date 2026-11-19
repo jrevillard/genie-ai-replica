@@ -44,7 +44,13 @@ protobuf==4.25.9
 pydantic==2.14.4
 pydantic-core==2.50.5
 requests==2.34.2
-setuptools==84.2.1
+# setuptools is a RUNTIME dependency here, not a build tool: the
+# opentelemetry-instrumentation 0.48b0 line resolves its entry points through
+# pkg_resources, which setuptools ships. setuptools 82 DROPPED pkg_resources,
+# so the newest release that still carries it is 81.0.0 — with 84.x the
+# instrumentation package fails to import and the request spans silently
+# never appear (verified in a venv built from the exact pins).
+setuptools==81.0.0
 starlette==1.10.0
 typing-extensions==4.16.0
 typing-inspection==0.4.5

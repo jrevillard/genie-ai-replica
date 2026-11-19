@@ -16,7 +16,7 @@ import logging
 import os
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI
+import fastapi
 
 from tracing import setup_tracing
 
@@ -34,7 +34,7 @@ setup_tracing(SERVICE_NAME)
 
 
 @asynccontextmanager
-async def lifespan(app: FastAPI):
+async def lifespan(app: fastapi.FastAPI):
     # The flag is logged, not enforced here: the deployment gate is the
     # Compose `deploy.replicas` value (one flag for the whole stack, as the
     # epic defines it). The service carries no capability surface yet, so
@@ -46,7 +46,11 @@ async def lifespan(app: FastAPI):
     yield
 
 
-app = FastAPI(
+# The app is built from the MODULE attribute, not from a name bound at import
+# time: the OpenTelemetry instrumentation replaces `fastapi.FastAPI` when
+# setup_tracing() runs, so an app built from the pre-instrumentation binding
+# would carry no OTel middleware and would emit no request span at all.
+app = fastapi.FastAPI(
     title="GENIE.AI agent service",
     version="0.1.0",
     lifespan=lifespan,

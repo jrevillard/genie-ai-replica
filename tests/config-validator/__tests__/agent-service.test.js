@@ -20,7 +20,6 @@ const SHARED_FACTS_PATH = path.join(ROOT, 'deploy/ansible/tasks/deploy-shared-fa
 const GROUP_VARS_PATH = path.join(ROOT, 'deploy/ansible/group_vars/all.yml');
 const CI_PATH = path.join(ROOT, '.gitlab-ci.yml');
 const AGENT_DIR = path.join(ROOT, 'components/agent-service');
-const REQUIREMENTS_PATH = path.join(AGENT_DIR, 'requirements.txt');
 const EVIDENCE_PATH = path.join(ROOT, 'docs/dependencies/agent-service-dependency-evidence.json');
 
 // The licence identities that count as NOT verified. NOASSERTION is one of
@@ -163,9 +162,15 @@ describe('the agent service carries no OPEA overlay dependency', () => {
 });
 
 describe('the pre-adoption checklist is satisfied for every pinned dependency', () => {
+  const evidence = JSON.parse(fs.readFileSync(EVIDENCE_PATH, 'utf-8'));
+  // The evidence declares the trees it covers (the runtime tree and the
+  // test tree): the gate checks their union, so a package added to either
+  // one without an audit fails here.
+  const pins = evidence.requirements.flatMap((relative) =>
+    pinnedDependencies(fs.readFileSync(path.join(ROOT, relative), 'utf-8'))
+  );
+
   test('every pin carries a verified licence and a defaults audit', () => {
-    const pins = pinnedDependencies(fs.readFileSync(REQUIREMENTS_PATH, 'utf-8'));
-    const evidence = JSON.parse(fs.readFileSync(EVIDENCE_PATH, 'utf-8'));
     const rows = new Map(evidence.packages.map((entry) => [entry.name, entry]));
 
     expect(pins.length).toBeGreaterThan(0);
@@ -186,10 +191,20 @@ describe('the pre-adoption checklist is satisfied for every pinned dependency', 
   });
 
   test('the evidence carries no row for a package the tree no longer pins', () => {
-    const pins = pinnedDependencies(fs.readFileSync(REQUIREMENTS_PATH, 'utf-8'));
-    const evidence = JSON.parse(fs.readFileSync(EVIDENCE_PATH, 'utf-8'));
     const pinned = new Set(pins.map((pin) => pin.name));
 
     expect(evidence.packages.map((entry) => entry.name).filter((name) => !pinned.has(name))).toEqual([]);
+  });
+
+  test('the CI lanes install the audited trees, not a floating pin list', () => {
+    const ci = fs.readFileSync(CI_PATH, 'utf-8');
+    // The lane block only: the repository's other lanes pin their own test
+    // dependencies, and this gate is about the agent service's own surface.
+    const lane = ci.slice(ci.indexOf('test:agent-service:')).split(/\n(?=\S)/)[0];
+
+    expect(lane).toMatch(/-r components\/agent-service\/requirements-test\.txt/);
+    // No dependency pinned outside the audited tree sneaks back into the lane.
+    expect(lane).not.toMatch(/httpx==/);
+    expect(lane).not.toMatch(/pytest==/);
   });
 });

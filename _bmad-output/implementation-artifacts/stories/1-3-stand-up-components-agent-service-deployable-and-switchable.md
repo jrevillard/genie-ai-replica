@@ -2,7 +2,7 @@
 title: 'Story 1.3 — Stand up components/agent-service, deployable and switchable'
 type: 'feature'
 created: '2026-11-19'
-status: 'in-progress'
+status: 'in-review'
 route: 'dispatch'
 review_loop_iteration: 0
 baseline_commit: '017e9f2a02ab03eed660e4f1f09c46fc883c0529'
@@ -104,7 +104,12 @@ context:
 - **The tracing port.** Ported from `genie-ai-overlay/tracing.py`: the span API, the metrics, the `ENABLE_OBSERVABILITY` gate and the PII redacting processor are kept. Dropped: the overlay's package-bound hooks (the micro-service bootstrap, the HTTP-service access-log installer) and the log-envelope machinery that existed to serve them. The component directory contains NO occurrence of the overlay package name — not even in a comment — so the repository-wide grep of the gate story (1.4) cannot trip on the port's own documentation.
 - **Where the no-overlay-import rule is asserted.** In `tests/config-validator/__tests__/agent-service.test.js` (a static repository check), not inside the component's own suite: the check has to spell the forbidden package name, and the component must not contain it.
 - **Pins.** The tree is pinned in full (35 packages) so the licence audit covers exactly what the image installs. The pins are the ones the repository already ships: `fastapi==0.141.1` (as `pii-service`), `uvicorn==0.52.1` (as the OPEA overlay) and the OpenTelemetry `1.27.0` / `0.48b0` set the overlay ships.
-- **Verification run locally** (never in CI, per the operator ruling on test execution): the component suite (8 tests) under a throwaway venv, ruff check + format, the config-validator suite (567 tests, 14 suites), the chart parity gate against a real render, and the licence gate (`OK 35 pinned package(s)`).
+- **Verification run locally** (never in CI, per the operator ruling on test execution): the component suite (9 tests) under a throwaway venv built from the pinned trees, ruff check + format, the config-validator suite (568 tests, 14 suites), the chart parity gate against a real render, and the licence gate (`OK 37 pinned package(s)`).
+- **The test tree is a pinned file too.** `components/agent-service/requirements-test.txt` carries the runtime tree plus the two test-only pins; the CI lane installs that file, so no dependency enters the lane outside the audited set. The audit covers both trees in one evidence file.
+- **The setuptools pin is load-bearing.** `opentelemetry-instrumentation` 0.48b0 resolves its entry points through `pkg_resources`; setuptools 82 dropped that module, so the pin stops at 81.0.0. With a newer setuptools the instrumentation import fails, the failure is swallowed by the instrumentation's own `except`, and the request spans silently never appear — the defect the global review caught.
+- **The app is built from the module attribute.** `fastapi.FastAPI(...)`, not a name bound at import time: the global instrumentation replaces `fastapi.FastAPI` when `setup_tracing()` runs, and only an app created afterwards carries the OTel middleware.
+- **Nothing is excluded from tracing.** The overlay's port excludes the health endpoints because its services answer real traffic; this service's only traffic IS the health traffic, so excluding them would leave the tracing criterion with no request to trace.
+- **Not exercised locally** (no docker daemon on this host): the image build and the container runtime. The CI `build:agent-service` lane covers the build.
 
 - Service directory `components/agent-service`; image `genie-ai-agent-server` (architecture spine naming); env prefix `AGENT_*`; Compose service name `agent-service`.
 - The service carries NO Compose profile: `AGENT_ENABLED` is the single activation flag (AR-10 — one deployment-level flag), so `deploy.replicas` is the gate and the service joins the always-on no-root set.
@@ -115,6 +120,23 @@ context:
 
 ## Review Triage Log
 
+### Global review (bare `Global code-review` agent, fresh context, 6 findings, verified against the code and a venv built from the exact pins)
+
+Every finding is dispositioned below; "fixed" means the correction is in the diff.
+
+| # | Finding | Verdict | Disposition |
+|---|---|---|---|
+| 1 | `setuptools==84.2.1` ships no `pkg_resources`, so `opentelemetry.instrumentation.fastapi` fails to import (reproduced in a venv built from the exact pins: `ModuleNotFoundError`) and the request spans silently never appear — the failure is swallowed by the instrumentation's own `except` | high | **fixed** — `setuptools==81.0.0`, the last release that still ships `pkg_resources` (82 dropped it; verified against the published wheels). The reason is written in `requirements.txt` and in the evidence row |
+| 2 | `from fastapi import FastAPI` binds the class at import time, BEFORE `setup_tracing()` replaces `fastapi.FastAPI` — the app is built from the stale binding, so it carries no OTel middleware and emits no server span | high | **fixed** — the app is built from the module attribute (`fastapi.FastAPI(...)`), which resolves the instrumented class; the reason is written at the construction site |
+| 3 | `excluded_urls="health,ready,alive"` excludes the only two routes the service serves, so with 1 and 2 fixed no request would still be traced | medium | **fixed** — `excluded_urls=""` (the explicit "exclude nothing" value; `None` would fall back to the `OTEL_PYTHON_FASTAPI_EXCLUDED_URLS` environment). The port's deviation from the overlay's default is written at the call site |
+| 4 | The export test opened a span by hand and never drove a request through the app — the observability gate was vacuous and would have passed with 1, 2 and 3 present | medium | **fixed** — a module-scoped fixture (exporter + provider + an app reloaded AFTER the instrumentation patched `fastapi.FastAPI`) and a test that serves `GET /health` and asserts the server span in the exporter |
+| 5 | The `build:agent-service` lane carries no `FORCE_IMAGE_REBUILD` rule and no default-branch rule, so a deployment would resolve an image tag that was never built | false | The premise does not hold: the lane carries the same default-branch and release-branch rules as the `pii-service` precedent, and the monthly rebuild is handled inside the inherited `.build_template` (the `CACHE_BUST` build arg). The promote job of pipeline 18621 published `genie-ai-agent-server:feat-agentic-foundations-1-3-agent-service` and `...-1f9de8b9` to the registry (job trace) |
+| 6 | The CI test lane installs `httpx` and `pytest` outside the audited pin set, so the "every introduced dependency is audited" property did not hold for the test surface | medium | **fixed** — a `requirements-test.txt` (the runtime tree plus the two test pins) is what the lane installs, the evidence file covers both trees, and the config-validator gate checks their union and refuses a lane that names its own versions |
+
+### Quality phase
+
+See the orchestrator's review log (`~/.claude/state/review/issue-1949.jsonl`) for the recorded decisions of the quality pass and the scoped coverage over the corrections above.
+
 ## Design Notes
 
 - Why the tracing port is a port and not a shared import: the agent path must not depend on the `comps` package (FR-20), and `genie-ai-overlay/tracing.py` imports it in exactly two places (`MicroService` init, `HTTPService` access-log installer). Both hooks are dropped; the exported span API, the PII redaction processor and the `ENABLE_OBSERVABILITY` gate are kept as they are.
@@ -124,5 +146,7 @@ context:
 **Commands:**
 - `cd tests/config-validator && npm test` — expected: the whole suite passes, including the new agent-service coverage.
 - `cd components/agent-service && ruff check app.py tracing.py tests/` — expected: no findings.
-- `cd components/agent-service && python -m pytest tests/ -q` — expected: all tests pass.
-- `python3 scripts/dependencies/verify-dependency-licenses.py --verify components/agent-service/requirements.txt docs/dependencies/agent-service-dependency-evidence.json` — expected: every pinned package verified, no `NOASSERTION`.
+- `cd components/agent-service && ruff format --check app.py tracing.py tests/` — expected: every file already formatted.
+- `cd components/agent-service && python -m pytest tests/ -q` — expected: all tests pass (the venv carries the pinned trees, `requirements.txt` and `requirements-test.txt`).
+- `python3 scripts/dependencies/verify-dependency-licenses.py --verify components/agent-service/requirements.txt components/agent-service/requirements-test.txt --evidence docs/dependencies/agent-service-dependency-evidence.json` — expected: every pinned package verified, no `NOASSERTION`.
+- `python3 scripts/ci/config-parity-check.py /tmp/rendered.yaml --min-compared=327` — expected: every variable Compose sets is configured the same way by the chart.

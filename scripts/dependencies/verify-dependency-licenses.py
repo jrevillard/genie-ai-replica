@@ -4,10 +4,10 @@
 """Pre-adoption licence + defaults audit for a pinned Python dependency tree.
 
 Usage:
-    verify-dependency-licenses.py --fetch  <requirements.txt> --out <evidence.json>
-    verify-dependency-licenses.py --verify <requirements.txt> <evidence.json>
+    verify-dependency-licenses.py --fetch REQ [--fetch REQ ...] --out EVIDENCE
+    verify-dependency-licenses.py --verify REQ [REQ ...] --evidence EVIDENCE
 
---fetch   reads the pinned tree, asks PyPI for the metadata of EXACTLY those
+--fetch   reads the pinned trees, asks PyPI for the metadata of EXACTLY those
           versions and writes the evidence file. A package whose metadata
           carries no SPDX expression is resolved by downloading the artifact
           and reading the licence file it ships - the exact-version proof the
@@ -18,6 +18,10 @@ Usage:
           a licence that is not NOASSERTION/UNKNOWN/NONE, a source for that
           licence, and a defaults-audit verdict (telemetry + cloud export).
           A NOASSERTION licence counts as UNVERIFIED and blocks.
+
+Several requirement files can be audited together (a runtime tree and a test
+tree): the evidence file then covers their union, and a row for a package no
+tree pins anymore is a failure - a stale row hides a bump.
 
 Procedure and the rules it enforces: docs/dependencies/pre-adoption-checklist.md
 """
@@ -73,7 +77,6 @@ CLASSIFIER_LICENCES = {
 }
 
 
-
 def parse_requirements(path):
     """Return the pinned `name==version` pairs of a requirements file."""
     pins = []
@@ -85,6 +88,15 @@ def parse_requirements(path):
             name, version = line.split("==", 1)
             pins.append((name.strip(), version.strip()))
     return sorted(pins)
+
+
+def all_pins(requirement_paths):
+    """Return the union of the pinned pairs of every requirements file."""
+    merged = {}
+    for path in requirement_paths:
+        for name, version in parse_requirements(path):
+            merged[name] = version
+    return sorted(merged.items())
 
 
 def detect_licence(text):
@@ -156,7 +168,6 @@ def artefact_licence(urls):
     return "UNKNOWN", f"no recognisable licence text in the published artifacts ({detail})"
 
 
-
 def resolve(name, version):
     """Return the evidence row of one exact version."""
     url = PYPI.format(name=name, version=version)
@@ -179,7 +190,6 @@ def resolve(name, version):
                 if mapped:
                     licence, source = mapped, f"pypi:classifier '{classifier}' ({url})"
                     break
-
     return {
         "name": name,
         "version": version,
@@ -192,9 +202,9 @@ def resolve(name, version):
     }
 
 
-def verify(requirements_path, evidence_path):
-    """Offline gate: the evidence must cover the pinned tree exactly."""
-    pins = parse_requirements(requirements_path)
+def verify(requirement_paths, evidence_path):
+    """Offline gate: the evidence must cover the pinned trees exactly."""
+    pins = all_pins(requirement_paths)
     with open(evidence_path, encoding="utf-8") as handle:
         evidence = json.load(handle)
     entries = {entry["name"]: entry for entry in evidence.get("packages", [])}
@@ -241,9 +251,9 @@ def verify(requirements_path, evidence_path):
     return 0
 
 
-def fetch(requirements_path, out_path):
+def fetch(requirement_paths, out_path):
     """Resolve the licence of every exact pin and write the evidence file."""
-    pins = parse_requirements(requirements_path)
+    pins = all_pins(requirement_paths)
     packages = []
     for name, version in pins:
         row = resolve(name, version)
@@ -251,7 +261,7 @@ def fetch(requirements_path, out_path):
         print(f"{name}=={version}: {row['license']} ({row['license_source']})")
     evidence = {
         "component": out_path.rsplit("/", 1)[-1].replace(".json", ""),
-        "requirements": requirements_path,
+        "requirements": list(requirement_paths),
         "method": (
             "Exact-version licence verification: the SPDX expression the publisher declares for that exact "
             "version, or - when there is none - the licence file read out of the artifact of that exact "
@@ -268,14 +278,19 @@ def fetch(requirements_path, out_path):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    parser.add_argument("--fetch", metavar="REQUIREMENTS", help="resolve the licences and write the evidence file")
+    parser.add_argument("--fetch", action="append", metavar="REQUIREMENTS", help="resolve the licences of a pinned tree")
     parser.add_argument("--out", metavar="EVIDENCE", help="the evidence file --fetch writes")
-    parser.add_argument("--verify", nargs=2, metavar=("REQUIREMENTS", "EVIDENCE"), help="check the evidence offline")
+    parser.add_argument("--verify", nargs="+", metavar="REQUIREMENTS", help="check the evidence of these trees offline")
+    parser.add_argument("--evidence", metavar="EVIDENCE", help="the evidence file --verify reads")
     args = parser.parse_args()
 
     if args.verify:
-        return verify(args.verify[0], args.verify[1])
-    if args.fetch and args.out:
+        if not args.evidence:
+            parser.error("--verify needs --evidence")
+        return verify(args.verify, args.evidence)
+    if args.fetch:
+        if not args.out:
+            parser.error("--fetch needs --out")
         return fetch(args.fetch, args.out)
     parser.print_help()
     return 2

@@ -2341,7 +2341,10 @@ test:agent-service:
   stage: test
   image: python:3.11-slim
   before_script:
-    - pip install --no-cache-dir -r components/agent-service/requirements.txt "pytest==${PYTEST_VERSION}" "httpx==0.28.1"
+    # The test tree (runtime tree + the test-only pins) is the audited one:
+    # every package the lane installs carries a licence row in
+    # docs/dependencies/agent-service-dependency-evidence.json.
+    - pip install --no-cache-dir -r components/agent-service/requirements-test.txt
   script:
     - cd components/agent-service
     - python -m pytest tests/ -q --junitxml=reports/pytest-report.xml

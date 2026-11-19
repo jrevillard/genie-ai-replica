@@ -216,9 +216,15 @@ def setup_tracing(service_name: str) -> None:
         from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
 
         FastAPIInstrumentor().instrument(
-            # Health endpoints are excluded: the container health check hits
-            # them every 30s and they would drown the trace search.
-            excluded_urls="health,ready,alive",
+            # NOTHING is excluded here. The overlay's port excludes the
+            # health endpoints because its services answer real traffic and
+            # the health probes would drown the trace search; this service
+            # serves nothing else yet, so excluding them would leave the
+            # tracing capability with no request to ever trace. An empty
+            # exclusion list is the explicit "exclude nothing" value - None
+            # would fall back to the OTEL_PYTHON_FASTAPI_EXCLUDED_URLS
+            # environment variable.
+            excluded_urls="",
         )
         logging.getLogger(__name__).debug("FastAPI global auto-instrumentation enabled")
     except Exception as exc:

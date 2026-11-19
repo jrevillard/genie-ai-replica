@@ -51,18 +51,21 @@ package's behaviour.
 
 ```bash
 # 1. Resolve the licences of every exact pin and write the evidence file.
+#    Pass one --fetch per tree: a runtime tree and a test tree are audited
+#    together, and the evidence file then covers their union.
 python3 scripts/dependencies/verify-dependency-licenses.py \
     --fetch <component>/requirements.txt \
+    --fetch <component>/requirements-test.txt \
     --out docs/dependencies/<component>-dependency-evidence.json
 
 # 2. Fill in the human verdicts the fetch leaves empty: "defaults"
 #    (telemetry + cloud export), "status" (the release channel) and
 #    "risk_acceptance" (for anything that is not a stable release).
 
-# 3. Check the evidence against the pin set - offline, no network.
+# 3. Check the evidence against the pin sets - offline, no network.
 python3 scripts/dependencies/verify-dependency-licenses.py \
-    --verify <component>/requirements.txt \
-    docs/dependencies/<component>-dependency-evidence.json
+    --verify <component>/requirements.txt <component>/requirements-test.txt \
+    --evidence docs/dependencies/<component>-dependency-evidence.json
 ```
 
 The verify step fails when a pin has no evidence row, when the evidence
@@ -70,6 +73,11 @@ audits a different version than the one pinned, when the licence is
 unverified, when the licence source is missing, when a defaults verdict is
 missing, when a non-stable release carries no risk acceptance, or when an
 evidence row survives a package the tree no longer pins.
+
+**The CI lanes must install the audited tree, not a floating pin list.** A
+lane that names its own versions (a `pip install` line with a version
+argument) introduces dependencies the evidence does not cover — the gate then
+passes on the runtime tree while the test surface is unaudited.
 
 ## How a story uses it
 

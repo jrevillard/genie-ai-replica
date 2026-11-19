@@ -165,8 +165,25 @@
       node.classList.toggle("compact", Boolean(value) && value.length >= bundle.compactTakeaway);
     });
     language = code;
-    syncNotes();
     window.localStorage.setItem("genie-deck-language", code);
+  }
+
+  // The language is a parameter of the URL, so a link carries it and the
+  // speaker view - which loads the deck again in a frame - reads the same
+  // one. Changing it reloads the page: the speaker view picks the new
+  // language up, but its frame has to be rebuilt, so it is reopened.
+  function chooseLanguage(code) {
+    if (!bundle.slots[code] || code === language) return;
+    // The speaker view holds the deck in a frame, and the frame is built
+    // once. It is closed here, and the reload below reopens it: Reveal's
+    // own notes plugin opens the speaker view when the URL asks for it.
+    const speaker = window.open("", "reveal.js - Notes");
+    const wasOpen = Boolean(speaker && !speaker.closed);
+    if (wasOpen) speaker.close();
+    const url = new URL(location.href);
+    url.searchParams.set("lang", code);
+    if (wasOpen) url.searchParams.set("notes", "");
+    location.href = url.toString();
   }
 
   let motionReduced = matchMedia("(prefers-reduced-motion: reduce)").matches ||
@@ -193,12 +210,10 @@
     autoAnimateDuration: 0.55,
     autoAnimateEasing: "ease-in-out",
     center: false,
-    history: false
+    history: false,
+    plugins: [RevealNotes]
   });
 
-  let notesWindow;
-  let timerStart;
-  let clock;
   function syncFocus() {
     const slide = deck.getCurrentSlide();
     if (!slide) return;
@@ -221,7 +236,6 @@
     slide.classList.toggle("is-entering", !motionReduced && forward);
     fitContent(slide);
     syncFocus();
-    syncNotes();
   }
   function changeStep() {
     deck.getCurrentSlide().classList.remove("is-entering");
@@ -233,65 +247,12 @@
     updateMotionControl();
     deck.configure({transition: motionReduced ? "none" : "fade", autoAnimate: !motionReduced});
   }
-  function syncNotes() {
-    if (!notesWindow || notesWindow.closed) return;
-    const slide = deck.getCurrentSlide();
-    if (!slide) return;
-    const doc = notesWindow.document;
-    const slots = bundle.slots[language];
-    const rtl = (direction[language] || "ltr") === "rtl";
-    doc.documentElement.lang = language;
-    doc.documentElement.dir = direction[language] || "ltr";
-    writeText(doc.querySelector("h1"), slide.querySelector("h1").textContent, rtl);
-    doc.querySelector(".section-info").textContent =
-      `${slide.dataset.position} / ${slide.dataset.total} · ${slide.dataset.chapter} · ${slide.dataset.timing}`;
-    writeText(doc.querySelector(".speaker"), slide.querySelector(".notes").textContent, rtl);
-    doc.querySelector("#back").textContent = slots["chrome.ui.previous"];
-    doc.querySelector("#forward").textContent = slots["chrome.ui.next"];
-    doc.querySelector("#reset").textContent = slots["chrome.ui.resetTimer"];
-    doc.title = slots["chrome.ui.notesTitle"];
-  }
-  function updateClock() {
-    if (!notesWindow || notesWindow.closed) {
-      clearInterval(clock);
-      return;
-    }
-    const seconds = Math.floor((Date.now() - timerStart) / 1000);
-    const minutes = Math.floor(seconds / 60);
-    notesWindow.document.querySelector(".clock").textContent =
-      `${String(minutes).padStart(2, "0")}:${String(seconds % 60).padStart(2, "0")}`;
-  }
-  function openNotes() {
-    if (notesWindow && !notesWindow.closed) {
-      notesWindow.focus();
-      return;
-    }
-    const slots = bundle.slots[language];
-    notesWindow = window.open("", "GenieAiSpeakerNotes", "popup,width=690,height=475");
-    if (!notesWindow) return;
-    const doc = notesWindow.document;
-    doc.open();
-    doc.write(`<!doctype html><html lang="${language}" dir="${direction[language] || "ltr"}"><meta charset="utf-8"><title>${slots["chrome.ui.notesTitle"]}</title><style>body{margin:28px;font:20px/1.4 system-ui;color:#13224b;background:#f7f8fd}h1{font-size:29px;line-height:1.1}.clock{font:700 32px monospace}.section-info{font-size:15px;color:#5a6884}button{font:600 15px system-ui;margin:0 8px 0 0;padding:6px 10px}</style><div class="clock"></div><p class="section-info"></p><h1></h1><p class="speaker"></p><button id="back"></button><button id="forward"></button><button id="reset"></button></html>`);
-    doc.close();
-    timerStart ??= Date.now();
-    doc.querySelector("#back").onclick = () => deck.prev();
-    doc.querySelector("#forward").onclick = () => deck.next();
-    doc.querySelector("#reset").onclick = () => { timerStart = Date.now(); updateClock(); };
-    notesWindow.addEventListener("keydown", (e) => {
-      if (e.key === "ArrowRight") deck.next();
-      if (e.key === "ArrowLeft") deck.prev();
-    });
-    syncNotes();
-    updateClock();
-    clearInterval(clock);
-    clock = setInterval(updateClock, 250);
-  }
   document.querySelector("#go-back").addEventListener("click", () => deck.prev());
   document.querySelector("#go-forward").addEventListener("click", () => deck.next());
-  document.querySelector("#deck-notes").addEventListener("click", openNotes);
+  document.querySelector("#deck-notes").addEventListener("click", () => deck.getPlugin("notes").open());
   motionButton.addEventListener("click", toggleMotion);
   const languageSelect = document.querySelector("#deck-language");
-  languageSelect.addEventListener("change", () => applyLanguage(languageSelect.value));
+  languageSelect.addEventListener("change", () => chooseLanguage(languageSelect.value));
   deck.addKeyBinding({keyCode: 77, key: "M", description: "Pause or resume motion"}, toggleMotion);
   document.querySelector("#go-full").addEventListener("click", (event) => {
     event.currentTarget.blur();
@@ -301,10 +262,15 @@
   ["ready", "slidechanged"].forEach((event) => deck.on(event, enterSlide));
   ["fragmentshown", "fragmenthidden"].forEach((event) => deck.on(event, changeStep));
 
-  // The reader's own choice wins; otherwise the browser's language is used
-  // when the deck carries it.
+  // The language lives in the URL, so a link carries it and the speaker
+  // view - which loads the deck again in a frame - reads the same one.
+  // The reader's own choice wins when the URL names no language.
+  const url = new URLSearchParams(location.search);
+  // The speaker view loads the deck in a frame. The frame is a view of
+  // the slide, so the controls of the deck stay out of the way.
+  if (url.has("receiver")) document.body.classList.add("receiver");
   const stored = window.localStorage.getItem("genie-deck-language");
-  const preferred = stored || navigator.language.split("-")[0];
+  const preferred = url.get("lang") || stored || navigator.language.split("-")[0];
   const initial = bundle.slots[preferred] ? preferred : languages[0].code;
   languageSelect.value = initial;
   applyLanguage(initial);
@@ -313,6 +279,12 @@
     // The slides only have their height once the deck is laid out, so
     // the fit of every slide is measured after that, not before.
     document.querySelectorAll(".slides > section.deck-slide").forEach(fitContent);
+    // The speaker view is opened by the notes plugin when the URL asks
+    // for it. The ask is not part of the link the reader keeps.
+    if (url.has("notes")) {
+      url.delete("notes");
+      history.replaceState(null, "", location.pathname + (url.toString() ? "?" + url : ""));
+    }
   });
 
 })();

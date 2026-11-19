@@ -8,6 +8,9 @@ It speaks six United Nations languages — English, French, Spanish, Russian,
 Arabic and Chinese — from one file. The reader picks a language in the
 top-right corner; the choice is remembered on the next visit.
 
+The speaker view is Reveal's own: the current slide, the next one, the notes
+and the clock. Open it with **Speaker notes** or the **S** key.
+
 ## Sources
 
 | Path | Edit here to change |
@@ -118,6 +121,14 @@ The Mermaid diagrams stay in English in every language. Their labels are part
 of the drawing; the description that names the diagram for a screen reader is
 a slot, and it is translated.
 
+### The language and the URL
+
+The language is a parameter of the URL — `?lang=ar`. A link therefore carries
+it, and the speaker view, which loads the deck again in a frame, reads the
+same one. Choosing a language reloads the deck with the new parameter, and the
+speaker view is reopened so its frame shows the new language too.
+
+
 ## Presenting
 
 The entrance plays when moving forward. Arrows advance any guided stages, and
@@ -131,7 +142,8 @@ those stages unless a node has an explicit `beat` class such as `beat2`.
 The diagram metadata's `idleEdges` list orders the edges for the resting loop.
 
 The speaker-notes window follows the language and the reading direction of the
-slide it shows.
+slide it shows. It is Reveal's own speaker view: the current slide, the next
+one, the notes and a clock. The deck's own controls stay out of it.
 
 ## Build
 

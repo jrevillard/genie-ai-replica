@@ -54,6 +54,9 @@ right-to-left ones. They are never given an Arabic or Chinese translation.
   length roughly — they are read from a separate window.
 - **Numbers, times and chapter markers stay as they are.** `00:00–05:00`,
   `43 slides`, `§2` are not translated.
+- **The status names stay as they are.** `Pending` and `Ingest` are the
+  values the interface stores and shows; a note that names one names it
+  as it is written there.
 - **Punctuation.** Use the punctuation of the target language (a Chinese
   full stop is `。`, an Arabic comma is `،`), except inside code, URLs and
   product names.

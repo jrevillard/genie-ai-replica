@@ -230,6 +230,10 @@ html, body { margin: 0; background: #071330; }
 #deck-ui { position: fixed; z-index: 40; top: 7px; inset-inline-end: 8px; display: flex; gap: 4px; }
 #deck-ui button { padding: 6px 9px; border: 0; border-radius: 5px; background: #13224b; color: #fff; font: 700 14px Arial,sans-serif; cursor: pointer; }
 #deck-ui button:hover, #deck-ui button:focus-visible { opacity: 1; outline: 2px solid #7eb2ff; }
+/* The speaker view shows the deck in a frame. The frame is a view of the
+   slide, not a presentation, so its controls stay out of the way. */
+body.receiver #deck-ui { display: none; }
+
 /* The slide number and the source links are Latin whatever the deck
    reads: in a right-to-left deck the browser would otherwise reverse
    "05 / 43" and swap the words of a link label. */

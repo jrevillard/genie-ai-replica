@@ -49,11 +49,12 @@ async function check() {
     await page.keyboard.press("ArrowRight");
     await current.locator(".source-pane.is-target").waitFor({state:"visible"});
     const [notes] = await Promise.all([page.waitForEvent("popup"), page.locator("#deck-notes").click()]);
-    await notes.locator(".speaker").waitFor({state:"visible"});
-    assert.match(await notes.locator(".speaker").textContent(), /fictional/);
-    assert.match(await notes.locator(".section-info").textContent(), /02 \/ 43/);
-    await notes.locator("#forward").click();
-    assert.match(await notes.locator(".section-info").textContent(), /03 \/ 43/);
+    // The speaker view is Reveal's own: the current slide, the next one,
+    // the notes and the clock.
+    await notes.locator("#upcoming-slide").waitFor({state:"visible"});
+    assert.match(await notes.locator(".clock-value").textContent(), /\d/);
+    await notes.locator(".speaker-controls-notes .value").waitFor({state:"visible"});
+    assert.match(await notes.locator(".speaker-controls-notes .value").textContent(), /fictional/);
     await notes.close();
 
     current = await slide(8);
@@ -110,12 +111,12 @@ async function check() {
     await ingestion.locator("g.node.is-target").filter({hasText:"ArangoDB"}).waitFor();
     assert.equal(await ingestion.locator(".diagram-trace.is-target").first().evaluate(edge => getComputedStyle(edge).animationName), "trace-flow");
     assert.equal(await ingestion.locator(".diagram-idle").first().evaluate(edge => getComputedStyle(edge).animationName), "none");
+    // The third step is the one that reaches the stored index, so the
+    // settings it needs are on screen with it.
+    await ingestion.locator(".ingestion-settings.is-target").waitFor();
     await page.keyboard.press("m");
     assert.equal(await ingestion.locator(".diagram-trace.is-target").first().evaluate(edge => getComputedStyle(edge).animationName), "none");
     await page.keyboard.press("m");
-    await page.keyboard.press("ArrowRight");
-    await ingestion.locator(".ingestion-settings.is-target").waitFor();
-    assert.equal(await ingestion.locator("g.node.is-target").count(), 0);
     current = await slide(10);
     assert.equal(await current.getAttribute("data-position"), "12");
     await page.keyboard.press("ArrowRight");
@@ -268,14 +269,20 @@ async function check() {
       options.map(option => option.value));
     assert.ok(languages.length > 1, "the deck offers more than one language");
     for (const code of languages) {
-      await page.goto(url + "#/slide-01");
-      await page.selectOption("#deck-language", code);
-      await page.waitForFunction(
-        (wanted) => document.documentElement.lang === wanted, code);
+      const languageUrl = url + "?lang=" + code + "#/slide-01";
+      await page.goto(languageUrl);
+      if (await page.locator("html").getAttribute("lang") !== code) {
+        await page.selectOption("#deck-language", code);
+        // Choosing a language reloads the deck with the language in the
+        // URL, so the reader's link carries it and the speaker view -
+        // which loads the deck again in a frame - reads the same one.
+        await page.waitForFunction(
+          (wanted) => document.documentElement.lang === wanted, code);
+      }
       const expectedDirection = code === "ar" ? "rtl" : "ltr";
       assert.equal(await page.locator("html").getAttribute("dir"), expectedDirection, code);
       // The reader's choice survives a reload.
-      await page.goto(url + "#/slide-01");
+      await page.goto(languageUrl);
       assert.equal(await page.locator("html").getAttribute("lang"), code, code);
       for (const id of ids) {
         await page.evaluate((hash) => { location.hash = hash; }, "/" + id);

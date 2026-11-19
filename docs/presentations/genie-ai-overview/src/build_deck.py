@@ -434,8 +434,8 @@ def ingestion(prefix, slide, n):
         f'<p><b{A("chrome.ingestion.chunk2")}>{e(T("chrome.ingestion.chunk2"))}</b>'
         f'<span><mark{A(f"{prefix}.items.1.f2")}>{e(t(f"{prefix}.items.1.f2", example[1]))}</mark>'
         f'<span{A(f"{prefix}.items.1.f3")}>{e(t(f"{prefix}.items.1.f3", example[2]))}</span></span></p></article>'
-        f'<article class="readout ingestion-settings" data-light="3"><h2{A(f"{prefix}.items.2.f0")}>{e(t(f"{prefix}.items.2.f0", settings_title))}</h2>'
-        f'<p{A(f"{prefix}.items.2.f1")}>{e(t(f"{prefix}.items.2.f1", settings_item[1]))}</p></article></div>{stages(4)}</div>'
+        f'<article class="readout ingestion-settings" data-light="2"><h2{A(f"{prefix}.items.2.f0")}>{e(t(f"{prefix}.items.2.f0", settings_title))}</h2>'
+        f'<p{A(f"{prefix}.items.2.f1")}>{e(t(f"{prefix}.items.2.f1", settings_item[1]))}</p></article></div>{stages(3)}</div>'
     )
 
 
@@ -762,6 +762,10 @@ def build():
     deck_css = '\n'.join((WORK / file).read_text(encoding='utf-8') for file in ('deck.css', 'deck-motion.css'))
     css = reveal_css + font + art + deck_css
     js = (REVEAL / 'dist' / 'reveal.js').read_text(encoding='utf-8').split('//# sourceMappingURL=')[0]
+    # The notes plugin is Reveal's own speaker view: the current slide,
+    # the next one, the notes and the clock. It is bundled, so the deck
+    # stays one file.
+    notes_plugin = (REVEAL / 'plugin' / 'notes' / 'notes.js').read_text(encoding='utf-8')
     runtime = (WORK / 'deck.js').read_text(encoding='utf-8')
     licence_paths = [REVEAL / 'LICENSE', ASSETS / 'carlito-LICENSE']
     # The Arabic and Chinese faces travel with the deck, so their
@@ -801,9 +805,10 @@ def build():
         f'<main class="reveal"><div class="slides">\n{content}\n</div></main>'
         f'<!-- Embedded component licences\n{license_notice}\n-->'
         f'<script id="deck-i18n" type="application/json">{dumps(bundle, ensure_ascii=False).replace("<", "\\u003c")}</script>'
-        f'<script>{js}</script><script>{runtime}</script></body></html>'
+        f'<script>{js}</script><script>{notes_plugin}</script><script>{runtime}</script></body></html>'
     )
     assert '</script' not in js.lower() and '</script' not in runtime.lower()
+    assert '</script' not in notes_plugin.lower()
     return html
 
 

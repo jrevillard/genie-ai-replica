@@ -1,11 +1,39 @@
 # GENIE.AI Presentations
 
-Marp-based slide decks for release overviews, architecture deep-dives, and
-sovereign-AI briefings. All decks share the **`genie-ai` theme** defined in
-[`themes/genie-ai.css`](themes/genie-ai.css) — palette, typography, layout
-helpers, and Mermaid styling.
+## Create a new presentation
 
-## Decks in this directory
+Use **Reveal.js and Mermaid** for new GENIE.AI presentations. The
+[GENIE.AI walkthrough](genie-ai-overview/README.md) is the reference for the
+source layout, slide design, build and Hugo integration.
+
+1. Keep the editable slide text, speaker notes, styles, scripts, assets and
+   Mermaid diagrams together in a named directory under `docs/presentations/`.
+2. Build a self-contained HTML deck. Follow the overview README for the build
+   commands and Chromium checks. Give each deck its own output path.
+3. For publication, commit the HTML under `site/static/presentations/` and
+   link to it from the appropriate Hugo documentation page. Follow the
+   [site publishing and preview workflow](../../site/README.md).
+
+Use the browser checks to verify navigation, notes, diagram readability and
+reduced-motion behaviour before opening a merge request.
+
+## Translations
+
+A deck built on the walkthrough's pattern can carry several languages in one
+file. Each piece of text is a slot, every language holds the same slots, and
+the reader switches at runtime — the layout never moves, so the design is not
+redrawn per language.
+
+The build is the gate: a language whose slide file does not reproduce the
+reference structure exactly, or that is missing a string, is refused. The
+[walkthrough README](genie-ai-overview/README.md#how-the-languages-work)
+describes the pattern, the glossary every translator reads, and the checks a
+translation must pass.
+
+## Existing Marp decks
+
+The existing decks use the [shared Marp theme](themes/genie-ai.css).
+Use the commands below when maintaining those decks in their current format.
 
 | File | Purpose | Has Mermaid |
 |------|---------|:-----------:|
@@ -20,7 +48,7 @@ applies a stricter XSS sanitiser that strips some `style="..."`
 attributes. Going through HTML gives a faithful PDF that matches the
 browser preview. Build artifacts are gitignored.
 
-## Build a deck
+### Build a Marp deck
 
 The build runs **two steps** from this directory (`docs/presentations/`):
 
@@ -61,7 +89,7 @@ Chromium/Chrome installed locally (or a Docker image with Chromium).
   (logo, hero band, etc.).
 - `--no-stdin` — required for non-interactive rendering.
 
-## Embed images (self-contained HTML)
+### Embed images (self-contained HTML)
 
 The deck markdown references images via relative paths
 (`assets/genie-*.png`). The generated HTML keeps those relative
@@ -129,13 +157,9 @@ headless print-to-PDF also executes it). If a deck still exceeds the
 upload limit, the dominant cost is usually single-use PNGs — quantizing or
 downscaling those in `assets/` saves far more than deduplication can.
 
-## Authoring a new deck
+### Edit an existing Marp deck
 
-1. Copy an existing deck as a starting point:
-   ```bash
-   cp genie-ai-sovereign-architecture.md <new-deck>.md
-   ```
-2. Update the frontmatter:
+1. Keep the Marp front matter for the deck.
    ```markdown
    ---
    marp: true
@@ -145,15 +169,15 @@ downscaling those in `assets/` saves far more than deduplication can.
    footer: 'GENIE.AI'
    ---
    ```
-3. Use the layout helpers defined in the theme (`.eyebrow`, `.columns`,
+2. Use the layout helpers defined in the theme (`.eyebrow`, `.columns`,
    `.ops-benefit`, `.agenda-item`, `.metric`, `.brand-pill`, `.hero-band`)
    for visual consistency with other GENIE.AI decks.
-4. For title/closing slides, apply `<!-- _class: title -->` or
+3. For title/closing slides, apply `<!-- _class: title -->` or
    `<!-- _class: closing -->` to get the centred gradient layout.
-5. For diagrams, add Mermaid blocks with `:::role` markers and paste the
+4. For diagrams, add Mermaid blocks with `:::role` markers and paste the
    matching `classDef` lines (see theme §9 for the full vocabulary).
 
-## Publish
+### Publish an existing Marp deck
 
 ```bash
 slidesfly publish <deck>.html --title "GENIE.AI — <deck title>"
@@ -167,14 +191,14 @@ Requires Node.js 18+ and a browser (Chrome/Chromium) for PDF output.
 
 ---
 
-## Marp v5 notes
+### Marp v5 notes
 
 The repo currently runs `marp-core@5.0.1` with `marp-cli@4.5.0`. There is
 **no stable marp-cli v5 yet** (latest stable marp-cli = 4.5.0). The mismatch
 means we drive marp-core v5 through marp-cli v4, which is the supported path
 for Mermaid until marp-cli v5 ships.
 
-### Known bug: `Ke is not a function`
+#### Known bug: `Ke is not a function`
 
 `marp-core@5.0.1` has a packaging bug where `lib/marp-CdKqL-3e.mjs` tries to
 import `friendlyAttrValue` from `xss`, but xss v1 only exports `FilterXSS`.
@@ -204,7 +228,7 @@ PYEOF
 If the patch prints `0`, your marp-core is newer than 5.0.1 — the bug is
 already fixed upstream and you don't need the patch.
 
-### Rendering with Mermaid
+#### Rendering with Mermaid
 
 ` ```mermaid ` code fences are processed by the
 `@marp-team/marp-core/plugins/mermaid` plugin (powered by `beautiful-mermaid`).
@@ -212,7 +236,7 @@ Plugins are **only** loaded by the `/full` entrypoint — that's why `--engine
 @marp-team/marp-core/full` is mandatory. Lightweight engine builds ignore
 Mermaid fences and render them as plain code blocks.
 
-### Adding Mermaid to a new slide
+#### Adding Mermaid to a Marp slide
 
 1. Use a fenced code block with the `mermaid` info string:
    ````markdown
@@ -241,7 +265,7 @@ Mermaid fences and render them as plain code blocks.
    ````
 3. Re-render with the `--engine @marp-team/marp-core/full` flag.
 
-## Theme reference
+### Marp theme reference
 
 See [`themes/genie-ai.css`](themes/genie-ai.css) for the full theme source.
 Section map:

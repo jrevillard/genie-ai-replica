@@ -48,6 +48,11 @@ enableGitInfo = true
   url = "/docs/"
 
 [[menus.main]]
+  name = "Walkthrough"
+  weight = 15
+  url = "/presentations/genie-ai/"
+
+[[menus.main]]
   name = "About"
   weight = 20
   url = "/about/"

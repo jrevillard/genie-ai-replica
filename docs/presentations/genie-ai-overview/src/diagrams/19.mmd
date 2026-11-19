@@ -1,0 +1,11 @@
+flowchart LR
+ I["Keycloak<br/>verified token"]:::channel --> P["OKF read<br/>policy"]:::core
+ P --> O["Default open"]:::core
+ P --> C["Closed"]:::option
+ O --> S[("Authorised<br/>serving graphs")]:::data
+ C --> S
+ S --> R["Retrieval"]:::model
+ class I,P step0
+ class O step1
+ class C step2
+ class S,R step3

@@ -1,0 +1,8 @@
+flowchart LR
+ S["Document, crawl<br/>or bundle"]:::channel --> D["OKF draft"]:::core
+ D --> C["Curate and test<br/>draft routing"]:::core
+ C --> P["Approve and<br/>publish version"]:::model
+ P --> T[("Ingested and<br/>serving")]:::data
+ class S,D step0
+ class C step1
+ class P,T step2

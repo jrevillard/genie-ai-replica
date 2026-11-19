@@ -18,17 +18,10 @@ USER root
 # layer's cache key includes its parent), before the writes to package-owned
 # paths (a package that moves would restore its own files over ours), and
 # still root.
-#
-# The upgrade output is kept OUT of the job trace and printed only when the
-# step fails: Cloudflare's WAF is SUSPECTED to refuse the trace upload of any
-# job whose log carries a sensitive path, and dpkg prints one here ("Installing new
-# version of config file /etc/issue", measured on this base image). The WAF
-# exception is tracked in issue #2001 — this workaround is to be purged once
-# it lands.
 ARG CACHE_BUST=0
 RUN CACHE_BUST=$CACHE_BUST apt-get update -y -o Acquire::Retries=5 && \
-    (CACHE_BUST=$CACHE_BUST apt-get upgrade -y --with-new-pkgs --fix-missing -o Acquire::Retries=5 > /tmp/apt.log 2>&1 || { tail -n 50 /tmp/apt.log | sed -E 's#(/[A-Za-z0-9._~/-]{2,})#<path>#g'; exit 1; }) && \
-    apt-get clean && rm -rf /var/lib/apt/lists/* && rm -f /tmp/apt.log
+    apt-get upgrade -y --with-new-pkgs --fix-missing -o Acquire::Retries=5 && \
+    apt-get clean && rm -rf /var/lib/apt/lists/*
 USER 65534
 
 COPY genie-realm.yaml /config/genie-realm.yaml

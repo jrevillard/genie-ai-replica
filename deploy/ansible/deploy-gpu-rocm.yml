@@ -68,7 +68,15 @@
       loop: [render, video]
       register: gpu_groups
       changed_when: false
-      failed_when: gpu_groups.results | selectattr('item', 'equalto', item.item) | map(attribute='rc') | first != 0
+      # NO custom failed_when: inside a loop, `register` binds the PER-ITEM
+      # result to the variable, so `gpu_groups.results` does not exist yet —
+      # the old expression raised "object of type 'dict' has no attribute
+      # 'results'" and failed this task on EVERY host, whatever getent
+      # returned (and `item.item` was invalid for the same reason: `item`
+      # IS the group name). `ansible.builtin.command` already fails the task
+      # on a non-zero rc — getent exits 2 for an unknown group — and the
+      # reporting task below reads `gpu_groups.results` correctly once the
+      # loop has finished.
 
     - name: Report measured GIDs (must match RENDER_GID/VIDEO_GID in the sizing env)
       ansible.builtin.debug:
@@ -87,10 +95,18 @@
         that:
           - hugging_face_hub_token is defined and hugging_face_hub_token | length > 0
           - gpu_api_keys is defined and gpu_api_keys | length > 0
+          # The certificate task renders `-subj "/CN={{ gpu_public_domain }}"`
+          # — an empty value makes openssl exit 1 without writing server.crt
+          # and the SAN render as `DNS:` (empty). Without this assert the
+          # operator gets an opaque openssl error instead of the remedy.
+          - gpu_public_domain is defined and gpu_public_domain | length > 0
         fail_msg: >-
-          Missing required vault variable(s).
-          Edit group_vars/rocm_gpu_api/vault.yml and set:
+          Missing required variable(s).
+          In group_vars/rocm_gpu_nodes/vault.yml set:
           hugging_face_hub_token, gpu_api_keys.
+          In group_vars/rocm_gpu_nodes/vars.yml set gpu_public_domain
+          (the host's public domain — the TLS certificate task writes
+          /CN={{ gpu_public_domain }}).
         quiet: true
 
     - name: Ensure project directories exist

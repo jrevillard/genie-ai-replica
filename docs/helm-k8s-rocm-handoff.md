@@ -29,7 +29,7 @@ changes, no NVIDIA-path edits):
   stack (split topology)
 - `env.strixhalo` — sizing file (values below)
 - `deploy/ansible/deploy-gpu-rocm.yml` +
-  `deploy/ansible/group_vars/rocm_gpu_api/vars.yml` — GPU-node automation
+  `deploy/ansible/group_vars/rocm_gpu_nodes/vars.yml` — GPU-node automation
 - Measurements behind every number:
   `docs/superpowers/specs/2026-11-11-rocm-gpu-tier-spike-results.md`
   (companion design: `2026-11-11-rocm-gpu-tier-design.md`)

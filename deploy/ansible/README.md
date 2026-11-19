@@ -699,15 +699,15 @@ The ROCm path mirrors the NVIDIA one with its own playbook and config:
 # 1. Inventory (dedicated group)
 cp inventory/rocm_gpu.ini.example inventory/rocm_gpu.ini   # fill host + user
 
-# 2. Non-secret config already lives in group_vars/rocm_gpu_api/vars.yml
+# 2. Non-secret config already lives in group_vars/rocm_gpu_nodes/vars.yml
 #    (image pins, GIDs, ports, gpu_rerank_upstream, TEI caps — edit per host)
 
 # 3. Encrypted secrets (ROCm GPU node vault)
-ansible-vault create group_vars/rocm_gpu_api/vault.yml
+ansible-vault create group_vars/rocm_gpu_nodes/vault.yml
 # Required: hugging_face_hub_token, gpu_api_keys (list of {name, key})
 
 # 4. Deploy (same tag structure as deploy-gpu.yml: install / prepare / deploy)
-ansible-playbook -i inventory/rocm_gpu.ini deploy-gpu-rocm.yml --vault-id rocm_gpu_api@prompt
+ansible-playbook -i inventory/rocm_gpu.ini deploy-gpu-rocm.yml --vault-id rocm_gpu_nodes@prompt
 ```
 
 The playbook renders the standalone GPU-node stack from
@@ -718,7 +718,7 @@ reranker via `gpu_rerank_upstream` (default `vllm-reranker:8000`; the TEI
 ROCm image cannot run on gfx1151). The TEI batch caps
 (`tei_embedding_max_batch_tokens`, `tei_reranking_max_batch_tokens`,
 `tei_reranking_max_concurrent_requests`) are mirrored in
-`group_vars/rocm_gpu_api/vars.yml` — CPU TEI inflates candle buffers at
+`group_vars/rocm_gpu_nodes/vars.yml` — CPU TEI inflates candle buffers at
 the GPU-sized defaults (16.3 GiB RSS measured at 8192/32); if you lower
 the caps, also set `tei_reranking_auto_truncate: true` (the template
 defaults it to `false`).

@@ -204,7 +204,7 @@ omitting the var would NOT remove it; `void` claims no GPU and is ignored
 by ROCm containers). Everything else merges from the base files. The TEI
 services need no device access (CPU image). For the Ansible path,
 `deploy/ansible/deploy-gpu-rocm.yml` +
-`group_vars/rocm_gpu_api/vars.yml` drive the same GPU-node stack.
+`group_vars/rocm_gpu_nodes/vars.yml` drive the same GPU-node stack.
 
 #### Why one overlay file per vendor (and not one compose file)
 

@@ -139,9 +139,63 @@ class TestRetrieverLadder:
             await retriever.invoke(_create_mock_input(search_start="chunk"))
 
         # The ladder built the vLLM client with the bge default and handed
-        # THAT object to the vector store.
+        # it to the vector store — WRAPPED, so the query side carries the
+        # contrastive instruction (MR !968 review: the vLLM branch encoded
+        # the query raw, the TEI branch prefixed it).
         mock_build.assert_called_once_with(_BGE)
-        assert mock_vector.call_args.kwargs["embedding"] is mock_vllm_embeddings
+        embedding = mock_vector.call_args.kwargs["embedding"]
+        assert isinstance(embedding, retriever_module.QueryInstructionEmbeddingsWrapper)
+        assert embedding.base is mock_vllm_embeddings
+
+    @pytest.mark.asyncio
+    async def test_vllm_branch_installs_the_query_instruction(self, monkeypatch):
+        """Regression (MR !968 review): bge is CONTRASTIVE — the query side
+        must carry the instruction, the passage side must not.
+
+        The built-in table in core/embedding_query_prefix.py ships a prefix
+        for "BAAI/bge-large-en-v1.5" ("Represent this sentence for searching
+        relevant passages: "), so the vLLM branch must apply it exactly as
+        the TEI branch does. The previous comment there claimed the opposite
+        ("returns None for bge") and the query was encoded raw — the wrong
+        half of the embedding space, silently, on the ROCm venue.
+        """
+        db = _make_happy_path_db()
+        retriever = _create_retriever(db_mock=db)
+        mock_vllm_embeddings = MagicMock()
+        mock_vdb = _make_mock_vector_db(db)
+
+        with (
+            patch(
+                "retriever.genieai_retriever_arangodb.embeddings_backend_active",
+                return_value=True,
+            ),
+            patch(
+                "retriever.genieai_retriever_arangodb.build_vllm_embeddings",
+                return_value=mock_vllm_embeddings,
+            ),
+            patch("retriever.genieai_retriever_arangodb.ArangoVector", return_value=mock_vdb) as mock_vector,
+            patch("retriever.genieai_retriever_arangodb.OPENAI_API_KEY", None),
+            patch("retriever.genieai_retriever_arangodb.TEI_EMBEDDING_ENDPOINT", ""),
+            patch("retriever.genieai_retriever_arangodb.HF_TOKEN", ""),
+            patch("retriever.genieai_retriever_arangodb.HYBRID_RETRIEVAL_ENABLED", False),
+        ):
+            await retriever.invoke(_create_mock_input(search_start="chunk"))
+
+        embedding = mock_vector.call_args.kwargs["embedding"]
+        assert embedding.instruction == "Represent this sentence for searching relevant passages: "
+
+        # The wrapper prefixes the QUERY and passes the PASSAGES through
+        # verbatim — dataprep embeds the passages, and they must stay raw.
+        # Every query this client encodes carries the instruction: the
+        # ladder's own path (the `embedding is None` fallback → embed_query)
+        # AND an explicit call through the wrapper.
+        embedding.embed_query("what is x?")
+        queries = [c.args[0] for c in mock_vllm_embeddings.embed_query.call_args_list]
+        assert queries, "the ladder must encode the query through the client"
+        assert all(q.startswith("Represent this sentence for searching relevant passages: ") for q in queries), queries
+        assert "Represent this sentence for searching relevant passages: what is x?" in queries
+        embedding.embed_documents(["a passage"])
+        mock_vllm_embeddings.embed_documents.assert_called_once_with(["a passage"])
 
     @pytest.mark.asyncio
     async def test_tei_default_never_reaches_the_vllm_branch(self, monkeypatch):
@@ -211,6 +265,27 @@ class TestDataprepSwap:
 
         mock_build.assert_called_once_with(_BGE)
         assert dp.embeddings is sentinel
+
+    def test_active_gate_does_not_install_the_query_instruction(self, monkeypatch):
+        """The mirror of the retriever's rule (MR !968 review): dataprep
+        embeds the PASSAGES, and a contrastive model wants the passage side
+        RAW. The retriever prefixes the query; dataprep must not — so the
+        dataprep client stays the raw builder output, unwrapped."""
+        sentinel = MagicMock(name="vllm-embeddings")
+        with (
+            patch(
+                "dataprep.genieai_dataprep_arangodb.embeddings_backend_active",
+                return_value=True,
+            ),
+            patch(
+                "dataprep.genieai_dataprep_arangodb.build_vllm_embeddings",
+                return_value=sentinel,
+            ),
+        ):
+            dp = GenieArangoDataprep(name="test-dp", description="Test dataprep")
+
+        assert dp.embeddings is sentinel
+        assert not isinstance(dp.embeddings, retriever_module.QueryInstructionEmbeddingsWrapper)
 
     def test_tei_default_keeps_comps_client(self, monkeypatch):
         """Negative case — no gate, no swap: self.embeddings stays whatever

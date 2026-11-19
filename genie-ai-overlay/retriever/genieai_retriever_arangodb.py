@@ -1677,9 +1677,25 @@ class GenieaiArangoRetriever(OpeaComponent):
                 # builds. check_embedding_ctx_length=False is REQUIRED:
                 # bge-large is not tiktoken-tokenizable and langchain's
                 # default tokenization path silently mangles the input.
-                # No query-instruction wrapper: get_query_instruction()
-                # returns None for bge — same as the OpenAI branch below.
+                #
+                # Query instruction (MR !968 review): the previous comment
+                # here claimed get_query_instruction() "returns None for
+                # bge" — it does NOT. The built-in table in
+                # core/embedding_query_prefix.py carries
+                # "BAAI/bge-large-en-v1.5" ->
+                # "Represent this sentence for searching relevant passages: ",
+                # so the query was encoded RAW here while the TEI branch
+                # below installed the prefix. bge is contrastive: the QUERY
+                # side must carry the instruction, the PASSAGE side must not
+                # (dataprep writes the passages raw). A raw query lands in
+                # the wrong half of the embedding space — silent retrieval
+                # quality loss on the ROCm venue, where this branch is the
+                # live one. Mirror the TEI branch: the wrapper prefixes
+                # embed_query and passes embed_documents through verbatim.
                 embeddings = build_vllm_embeddings("BAAI/bge-large-en-v1.5")
+                _query_instruction = get_query_instruction(resolved_embed_model("BAAI/bge-large-en-v1.5"))
+                if _query_instruction:
+                    embeddings = QueryInstructionEmbeddingsWrapper(embeddings, _query_instruction)
                 logger.info(
                     f"[ embed-backend ] retriever embeddings → vLLM "
                     f"({EMBEDDING_VLLM_ENDPOINT}, model {resolved_embed_model('BAAI/bge-large-en-v1.5')})"

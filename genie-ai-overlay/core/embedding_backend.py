@@ -133,7 +133,14 @@ def build_vllm_embeddings(default_model: str = VLLM_EMBED_DEFAULT_MODEL):
       the model's context window; bge-large is not tiktoken-tokenizable and
       the mangling silently corrupts the vectors. The endpoint's own
       ``--max_model_len`` is the real bound (compose sizes it for the chunk
-      size), and vLLM truncates or rejects on its own terms.
+      size), and vLLM truncates or rejects on its own terms. The flag is
+      set BOTH as a constructor kwarg and as a post-construction attribute:
+      the overlay images pin langchain-openai 0.3.x (where the field is
+      real, verified in the retriever image), but langchain-openai 1.x
+      DROPPED the constructor parameter — pydantic then ignores the
+      unknown kwarg silently and the tiktoken path comes back, which is
+      what broke the RAGAS service until it was set as an attribute
+      (see components/ragas-service/ragas_engine.py).
     * The timeout is the shared OpenAI-compatible embedding budget
       (``core/model_http_policy.EMBEDDING_TIMEOUT_SECONDS``, via
       ``http_timeout`` so the 5 s connect ceiling survives — a bare float
@@ -152,10 +159,17 @@ def build_vllm_embeddings(default_model: str = VLLM_EMBED_DEFAULT_MODEL):
     # Same per-call env read as the active-check, so the gate and the builder
     # can never disagree about the endpoint within one process.
     endpoint = (os.getenv("EMBEDDING_VLLM_ENDPOINT") or "").strip().rstrip("/")
-    return OpenAIEmbeddings(
+    client = OpenAIEmbeddings(
         model=resolved_embed_model(default_model),
         base_url=f"{endpoint}/v1",
         api_key=os.getenv("VLLM_API_KEY") or "EMPTY",
         check_embedding_ctx_length=False,
         timeout=http_timeout(EMBEDDING_TIMEOUT_SECONDS),
     )
+    # Same flag as an ATTRIBUTE after construction — the belt to the
+    # constructor kwarg's braces (see the docstring): langchain-openai 1.x
+    # dropped the parameter, pydantic ignores the unknown kwarg SILENTLY,
+    # and the tiktoken tokenization path returns. Assignment works on both
+    # lines (verified against 0.3.35 in the retriever image).
+    client.check_embedding_ctx_length = False
+    return client

@@ -25,31 +25,70 @@ the Helm chart exposes the same thing as the `imageTag` value.
 **Impact:** an UNCHANGED deployment keeps working: the former names are still
 read as a fallback for one release (but the fallback disappears in the next
 one). Renaming the variable IN PLACE, however, breaks the stack **silently**:
-the `.env` template carries a per-service image-tag line for every image,
-and each of those lines reads the global **by name**. Rename the global and
-those lines fall back to `latest` — the whole stack moves to the `latest`
-tag, with no error anywhere.
+the `.env` an existing deployment carries has a per-service image-tag line
+for every image, and each of those lines reads the global **by name**.
+Rename the global and those lines fall back to `latest` — the whole stack
+moves to the `latest` tag, with no error anywhere.
 
-**Migration:** take the new `env` template — the per-service lines changed
-with the global's name — and re-apply your own values to it:
+**Migration — Compose.** The `.env` is a copy of the repo's `env` template
+with your own values in it: take the NEW template and re-apply your values
+to it. Three lines decide whether the deployment ends up right:
+
+| In your `.env` | Must read | Why |
+|---|---|---|
+| the stack's version | `GENIE_AI_IMAGE_TAG=v2.1.0` | the former name is not declared any more |
+| the per-service tags | `GENIE_AI_<NAME>_IMAGE_TAG=${GENIE_AI_IMAGE_TAG:-${GENIE_AI_GLOBAL_TAG:-latest}}` | they read the global **by name** |
+| the three model-serving images | **no per-service tag line at all** | their tag is composed by `docker-compose.yaml` — version plus variant |
 
 ```bash
-# Compose — the .env is a copy of the repo's `env` template: take the new
-# one, then re-apply your own values (the secrets it carries).
-cp env .env        # from the NEW template, then re-apply your values
-# then, in it:
-GENIE_AI_IMAGE_TAG=v2.1.0     # was GENIE_AI_GLOBAL_TAG=v2.1.0
+# 1. take the NEW template
+cp env .env
 
-# Ansible — the playbook invocation (no .env to touch: the playbook
-# generates the node's .env from its own template)
+# 2. re-apply your own values to it — the secrets, the endpoints, and:
+#      GENIE_AI_IMAGE_TAG=v2.1.0              # was GENIE_AI_GLOBAL_TAG=v2.1.0
+#      GENIE_AI_OPEA_IMAGE_TAG_SUFFIX=-slim    # new knob; empty = the default build
+#    Every other variable keeps its name and its value.
+
+# 3. CHECK what the deployment will actually pull — this is the step that
+#    catches both silent failures below:
+docker compose config | grep "image:"
+```
+
+**Failure 1 — the whole stack moves to `latest`.** Rename the global in
+place, or keep the old per-service lines: they read
+`${GENIE_AI_GLOBAL_TAG:-latest}`, a name nothing declares any more, so
+every per-service tag resolves to `latest`. Nothing errors anywhere — the
+stack simply runs unpinned, on whatever the `latest` tag last pointed at.
+The check above shows it: a tag of `latest` where you expected your
+version.
+
+**Failure 2 — the variant knob is ignored.** The compose file composes the
+tag of the three model-serving images itself:
+
+```
+${GENIE_AI_RERANKER_IMAGE_TAG:-${GENIE_AI_IMAGE_TAG:-${GENIE_AI_GLOBAL_TAG:-latest}}${GENIE_AI_OPEA_IMAGE_TAG_SUFFIX:-}}
+```
+
+The per-service value is the **outer** fallback: it wins outright and never
+receives the suffix. So an `.env` that still declares
+`GENIE_AI_RERANKER_IMAGE_TAG=…` (or either of the other two) makes
+`GENIE_AI_OPEA_IMAGE_TAG_SUFFIX=-slim` a no-op — the render still says
+`:main`, and the FAT build (6.8 GB for the reranker) is pulled: the image
+whose disk pressure evicted a pod on a node that has no GPU (#2000). The
+check above shows it: `:main` where you expected `:main-slim`.
+
+A per-image pin for one of the three IS a line you add yourself
+(`GENIE_AI_RERANKER_IMAGE_TAG=v2.1.0`): it names the exact tag, it wins,
+and it takes no suffix — that is the point of a pin.
+
+**Migration — Ansible.** Nothing to migrate in a file: the playbook
+generates the node's `.env` from its own template. Only the invocation
+changes:
+
+```bash
 ansible-playbook -i inventory/test.ini deploy.yml --vault-id test@prompt \
   --extra-vars "repo_branch=main genie_ai_image_tag=v2.1.0"
 ```
-
-An `.env` that still carries the OLD template's lines keeps the OLD
-behaviour — the fat images, and no variant knob: the three model-serving
-images no longer declare a per-service tag line in the template, and a
-`.env` that declares one shadows the version and the variant. Regenerate it.
 
 The variant (the slim build of the three model-serving images) is a SEPARATE
 knob, and it is new: `GENIE_AI_OPEA_IMAGE_TAG_SUFFIX` in Compose,

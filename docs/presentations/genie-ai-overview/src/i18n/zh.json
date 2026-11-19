@@ -99,6 +99,7 @@
   "chrome.ui.notes": "演讲者备注",
   "chrome.ui.pause": "暂停动效",
   "chrome.ui.resume": "继续动效",
+  "chrome.ui.speakerBlocked": "浏览器阻止了演讲者视图。请允许此页面的弹出窗口，然后重新打开。",
   "diagram.07.description": "通过身份验证的政府门户调用助手 API。文档仓库按角色提供文档操作。",
   "diagram.09.description": "管理员从面板上传文件并决定是否摄取。在做出这个选择之前，文件一直保持待处理状态。",
   "diagram.10.description": "Node.js 后端将经过验证的查询交给 OPEA ChatQnA，由它协调检索与生成。",

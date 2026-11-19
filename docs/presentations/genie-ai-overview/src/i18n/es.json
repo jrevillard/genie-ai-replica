@@ -99,6 +99,7 @@
   "chrome.ui.notes": "Notas del presentador",
   "chrome.ui.pause": "Pausar el movimiento",
   "chrome.ui.resume": "Reanudar el movimiento",
+  "chrome.ui.speakerBlocked": "El navegador bloqueó la vista del presentador. Permite las ventanas emergentes para esta página y vuelve a abrirla.",
   "diagram.07.description": "Un portal gubernamental autenticado llama a la API del asistente. El Document Repository expone las operaciones sobre documentos según el rol.",
   "diagram.09.description": "Un administrador carga archivos desde el panel y decide la ingesta. Los archivos quedan en espera hasta que esa elección se toma.",
   "diagram.10.description": "El backend de Node.js envía la consulta autenticada a OPEA ChatQnA, que coordina la recuperación y la generación.",

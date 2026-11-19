@@ -168,10 +168,6 @@
     window.localStorage.setItem("genie-deck-language", code);
   }
 
-  // The language is a parameter of the URL, so a link carries it and the
-  // speaker view - which loads the deck again in a frame - reads the same
-  // one. Changing it reloads the page: the speaker view picks the new
-  // language up, but its frame has to be rebuilt, so it is reopened.
   // The speaker view is a window of its own. The deck keeps its handle
   // so a language change can close it and reopen it in the new language:
   // the view holds the deck in a frame, and the frame is built once.
@@ -181,7 +177,28 @@
   const openWindow = window.open;
   window.open = function (...args) {
     const created = openWindow.apply(window, args);
-    if (created && args[1] === "reveal.js - Notes") speakerWindow = created;
+    if (args[1] === "reveal.js - Notes") {
+      speakerWindow = created;
+      // Reveal's notes plugin writes into the window it opens, and it
+      // does so before it checks the window is there. A browser that
+      // refuses the popup then leaves an empty window behind and the
+      // plugin throws. The window is checked here instead, so the
+      // reader is told what happened rather than shown a blank page.
+      if (!created) {
+        window.alert(bundle.slots[language]["chrome.ui.speakerBlocked"]);
+        return created;
+      }
+      // The same holds for the write itself: a browser that opens the
+      // window but refuses to fill it would leave a blank page.
+      const write = created.document.write.bind(created.document);
+      created.document.write = function (markup) {
+        try {
+          write(markup);
+        } catch (error) {
+          window.alert(bundle.slots[language]["chrome.ui.speakerBlocked"]);
+        }
+      };
+    }
     return created;
   };
 

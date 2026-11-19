@@ -99,6 +99,7 @@
   "chrome.ui.notes": "Speaker notes",
   "chrome.ui.pause": "Pause motion",
   "chrome.ui.resume": "Resume motion",
+  "chrome.ui.speakerBlocked": "The browser blocked the speaker view. Allow pop-ups for this page, then open it again.",
   "diagram.07.description": "An authenticated government portal calls the assistant API. Role-controlled document operations are exposed by the Document Repository.",
   "diagram.09.description": "An administrator uploads files from the dashboard and selects Ingest. Dataprep extracts and chunks the content, an embedding model creates vectors, and ArangoDB stores the searchable index.",
   "diagram.10.description": "The Node.js backend sends the authenticated query to OPEA ChatQnA. Embedding and retrieval can be followed by optional reranking before generation.",

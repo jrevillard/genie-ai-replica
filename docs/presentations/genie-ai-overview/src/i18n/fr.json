@@ -99,6 +99,7 @@
   "chrome.ui.notes": "Notes du présentateur",
   "chrome.ui.pause": "Suspendre l’animation",
   "chrome.ui.resume": "Reprendre l’animation",
+  "chrome.ui.speakerBlocked": "Le navigateur a bloqué la vue présentateur. Autorisez les fenêtres contextuelles pour cette page, puis rouvrez-la.",
   "diagram.07.description": "Un portail gouvernemental authentifié appelle l’API de l’assistant. Le Document Repository expose les opérations sur les documents, contrôlées par les rôles.",
   "diagram.09.description": "Un administrateur téléverse des fichiers depuis le tableau de bord et déclenche l’ingestion. Dataprep extrait et découpe le contenu, un modèle d’embedding produit les vecteurs, et ArangoDB stocke l’index interrogeable.",
   "diagram.10.description": "Le backend Node.js transmet la requête authentifiée à OPEA ChatQnA. L’embedding et la récupération peuvent être suivis d’un réordonnancement facultatif avant la génération.",

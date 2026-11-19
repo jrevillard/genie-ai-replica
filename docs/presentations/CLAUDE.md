@@ -1,11 +1,23 @@
 # Presentations - Agent Context
 
-Operational notes for AI agents working on the Marp-based slide decks in this
-directory. Human-facing docs live in README.md; this file is for tooling
-tips and conventions that an agent needs to know but a human reader does
-not.
+## New presentations
 
-## Build process (current)
+Use Reveal.js and Mermaid for new presentations. Follow the
+[presentation README](README.md) and use the
+[GENIE.AI Overview](genie-ai-overview/README.md) as a working reference.
+
+Keep editable sources under `docs/presentations/`. Rebuild the HTML after
+editing the source, and regenerate the SVGs first if Mermaid diagrams
+changed. Run the deck's browser checks. For a deck published through Hugo,
+check that the build copies the generated HTML and that the documentation
+page links to it. See the
+[site workflow](../../.claude/rules/SITE-LOCAL-DEV.md#interactive-presentations).
+
+## Existing Marp decks
+
+Use the following tooling notes when editing an existing Marp deck.
+
+### Build process
 
 The build runs **two steps** - Marp HTML first (with all internal links
 working), then headless Chromium prints that HTML to PDF:
@@ -31,7 +43,7 @@ NOT in a separate `output/` directory. This is critical: assets referenced
 as `assets/foo.png` must be next to the PDF for it to render. The previous
 `output/` convention broke every internal link.
 
-## Why not just Marp --pdf directly?
+### Why not just Marp --pdf directly?
 
 The Marp **PDF renderer** applies a stricter XSS sanitiser than the HTML
 renderer. Some `style="..."` attributes are silently dropped, which makes
@@ -39,14 +51,14 @@ the direct `.md -> .pdf` path lose inline styles. Printing the HTML with
 Chromium keeps the PDF faithful to the browser preview. Requires
 Chromium/Chrome installed locally (or a Docker image with Chromium).
 
-## Local patch: `Ke is not a function`
+### Local patch: `Ke is not a function`
 
 `marp-core@5.0.1` has a packaging bug that strips `style`/`class`/`href`
 attributes. A local patch in `node_modules/@marp-team/marp-core/lib/marp-CdKqL-3e.mjs`
 restores them. **Re-apply after every `npm install`** until marp-core 5.0.2+
 is available. The patch is documented in `README.md` section "Marp v5 notes".
 
-## Path: post-process HTML for self-contained sharing
+### Path: post-process HTML for self-contained sharing
 
 To share a single self-contained HTML (e.g. via email), inline the
 PNG/JPG assets as `data:` URIs — copy-paste the script from the
@@ -54,7 +66,7 @@ PNG/JPG assets as `data:` URIs — copy-paste the script from the
 every PNG under the directory and rewrites relative references; it is
 meant to be run ad hoc, not committed as a build step.
 
-## Layout class vocabulary (theme `genie-ai.css`)
+### Layout class vocabulary (theme `genie-ai.css`)
 
 Reusable layout helpers - copy/paste from the theme:
 
@@ -73,7 +85,7 @@ Reusable layout helpers - copy/paste from the theme:
 - `section.demo` - vibrant gradient with centered layout for "Live Demo"
   inter-slide (custom class)
 
-## Image sizing & slide-local overrides
+### Image sizing & slide-local overrides
 
 Theme image caps use **`cqh`** (1% of the container's **content-box** height).
 Marpit sets `container-type: size` on every section, and container units
@@ -115,7 +127,7 @@ the theme `max-*` cap — if a slide genuinely needs more, raise the cap in the
 theme (verified against the other slides first), never override per-slide with
 raw `<img>` tags. Prefer the markdown annotation so decks stay readable.
 
-## Slide HTML hygiene
+### Slide HTML hygiene
 
 - Keep `<div>` open/close balanced **per slide** (unbalanced divs can leak
   layout into the next slide). One-liner check:
@@ -125,7 +137,7 @@ raw `<img>` tags. Prefer the markdown annotation so decks stay readable.
 - Use `<style scoped>`, never a bare `<style>` inside a slide (a bare style
   block would apply deck-wide).
 
-## Custom spot directives (slide-level)
+### Custom spot directives (slide-level)
 
 - `<!-- _class: title -->` - cover layout (centred, gradient bg, brand pill)
 - `<!-- _class: closing -->` - thank-you layout (centred, gradient bg)
@@ -134,7 +146,7 @@ raw `<img>` tags. Prefer the markdown annotation so decks stay readable.
 - `<!-- _class: title -->` + `<!-- _paginate: false -->` - disable footer
   on a specific slide
 
-## Output check
+### Output check
 
 After editing a slide, rebuild and inspect:
 

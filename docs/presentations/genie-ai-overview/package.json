@@ -1,9 +1,9 @@
 {
-  "name": "genie-ai-training",
+  "name": "genie-ai-overview",
   "private": true,
   "scripts": {
-    "build": "python3 src/build_training_en.py",
-    "build:diagrams": "node src/render-training-mermaid.cjs",
+    "build": "python3 src/build_overview.py",
+    "build:diagrams": "node src/render-diagrams.cjs",
     "check": "node tests/verify-deck.cjs"
   },
   "devDependencies": {

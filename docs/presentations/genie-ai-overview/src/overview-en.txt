@@ -1,6 +1,6 @@
 # The public-service challenge|00:00–05:00
 @cover|Whose knowledge shapes an AI answer?
-? GENIE.AI · Public-sector briefing · 20 November 2026
+? GENIE.AI Overview · Public-sector briefing
 An open-source framework for public services, from the source document to the system that answers the question.
 ! Open with the question on screen. Ask the audience to picture a common administrative task and the documents needed to answer it. Explain that we will start with an answer, then run the story backwards through the knowledge, the controls and the infrastructure.
 

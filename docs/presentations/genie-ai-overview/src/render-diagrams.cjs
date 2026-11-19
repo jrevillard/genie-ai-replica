@@ -4,7 +4,7 @@ const { join } = require("node:path");
 const { createServer } = require("node:http");
 const { once } = require("node:events");
 
-const specs = JSON.parse(readFileSync(join(__dirname, "training-mermaid.json"), "utf8"));
+const specs = JSON.parse(readFileSync(join(__dirname, "diagrams.json"), "utf8"));
 const bundle = readFileSync(join(__dirname, "..", "node_modules", "mermaid", "dist", "mermaid.min.js"));
 const diagramOutput = join(__dirname, "mermaid-svg");
 mkdirSync(diagramOutput, {recursive:true});
@@ -26,7 +26,7 @@ async function main() {
     res.setHeader("Content-Type","text/html; charset=utf-8");
     res.end('<!doctype html><html lang="en"><meta charset="utf-8"><script src="/mermaid.js"></script><div id="mermaid-out"></div></html>');
   });
-  const browser = await chromium.launch({executablePath:process.env.GENIE_TRAINING_CHROMIUM || undefined});
+  const browser = await chromium.launch({executablePath:process.env.GENIE_OVERVIEW_CHROMIUM || undefined});
   try {
     server.listen(0,"127.0.0.1");
     await once(server,"listening");

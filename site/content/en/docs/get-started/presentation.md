@@ -1,12 +1,12 @@
 ---
-title: "GENIE.AI training presentation"
-linkTitle: "Training presentation"
+title: "GENIE.AI Overview"
+linkTitle: "GENIE.AI Overview"
 description: "An animated English briefing for public-sector teams."
 weight: 45
 ---
 
-The one-hour training covers the public-service use case, the RAG pipeline,
-OKF knowledge governance, observability and deployment.
+This overview introduces GENIE.AI through a public-service example. It covers
+the RAG pipeline, OKF knowledge governance, observability and deployment.
 
 [Open the animated presentation](/presentations/genie-ai/index.html)
 

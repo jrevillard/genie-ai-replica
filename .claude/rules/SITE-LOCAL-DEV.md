@@ -81,6 +81,19 @@ component's `npm ci` is a prerequisite). Run the same check locally with:
 npm run format:site-scripts:check
 ```
 
+## Interactive presentations
+
+For new presentations, follow the [Reveal.js and Mermaid authoring
+workflow](../../docs/presentations/README.md). The editable source lives under
+`docs/presentations/`. Commit the generated standalone deck to
+`site/static/presentations/<deck>/index.html` and link to
+`/presentations/<deck>/index.html` from a page under `site/content/en/docs/`.
+
+Before pushing, run the deck's browser checks and the site's link checker.
+Build Hugo and open both the rendered documentation page and its deck. Hugo
+copies the standalone HTML directly, so the Pages job uses that file as
+committed.
+
 ## Theming
 
 - Design tokens (OKLch, light + dark): `site/assets/scss/_tokens.scss`.

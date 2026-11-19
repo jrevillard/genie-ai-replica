@@ -1,4 +1,4 @@
-# GENIE.AI training presentation
+# GENIE.AI Overview
 
 This 43-slide English briefing uses Reveal.js for presentation controls and
 Mermaid for diagrams. The standalone HTML embeds the presentation code, fonts,
@@ -8,14 +8,14 @@ artwork, logos and rendered diagrams.
 
 | Path | Edit here to change |
 | --- | --- |
-| `src/training-en.txt` | Slide order, titles, copy, chapter timings and speaker notes |
-| `src/training-en.css` | Slide design, chapter openings and animation styles |
-| `src/training-motion.css` | Entry, attention and idle animations |
-| `src/training-en.js` | Navigation, focus during animations, fullscreen and speaker notes |
-| `src/build_training_en.py` | How content and assets are assembled into one HTML file |
+| `src/overview-en.txt` | Slide order, titles, copy, chapter timings and speaker notes |
+| `src/overview.css` | Slide design, chapter openings and animation styles |
+| `src/overview-motion.css` | Entry, attention and idle animations |
+| `src/overview.js` | Navigation, focus during animations, fullscreen and speaker notes |
+| `src/build_overview.py` | How content and assets are assembled into one HTML file |
 | `src/diagrams/*.mmd` | Mermaid diagrams |
-| `src/training-mermaid.json` | Diagram placement, accessible descriptions and animated routes |
-| `src/render-training-mermaid.cjs` | SVG rendering and animated diagram paths |
+| `src/diagrams.json` | Diagram placement, accessible descriptions and animated routes |
+| `src/render-diagrams.cjs` | SVG rendering and animated diagram paths |
 | `src/assets/` | Artwork, images, logos, flags and fonts |
 | `tests/verify-deck.cjs` | Browser checks for slide order, diagrams, logos and playback |
 
@@ -61,13 +61,13 @@ npm run build
 npm run check
 ```
 
-Set `GENIE_TRAINING_CHROMIUM` to an executable path if you use a system
+Set `GENIE_OVERVIEW_CHROMIUM` to an executable path if you use a system
 Chromium. For example, set it to `/usr/bin/chromium` on Linux.
 
 ## Hugo and merge requests
 
 Hugo copies the generated HTML from `site/static/` into the published site.
-The page at `site/content/en/docs/get-started/training.md` links to the deck
+The page at `site/content/en/docs/get-started/presentation.md` links to the deck
 using the repository's root-based `baseURL`.
 
 Include the edited sources, updated SVGs when applicable, and rebuilt HTML in

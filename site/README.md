@@ -64,6 +64,19 @@ The published doc content is curated and committed directly under
 - The repo-root `docs/` directory holds the developer-internal references
   (E2E procedures, release process, triage records). It is not published.
 
+## Interactive presentations
+
+Use the [Reveal.js and Mermaid authoring workflow](../docs/presentations/README.md)
+for new decks. Commit each generated HTML file under
+`static/presentations/<deck>/index.html` and link to
+`/presentations/<deck>/index.html` from the relevant documentation page. Hugo
+copies the file into the built site. Verify both the link and the deck in the
+local preview.
+
+The GENIE.AI Overview is linked from `content/en/docs/get-started/presentation.md`
+and served at `/presentations/genie-ai/`. Its editable sources and build
+commands are in the [overview README](../docs/presentations/genie-ai-overview/README.md).
+
 ## i18n
 
 English only at launch (`defaultContentLanguage = "en"`). To add a language:

@@ -12,11 +12,11 @@ async function check() {
     response.setHeader("Content-Type", "text/html; charset=utf-8");
     response.end(html);
   });
-  const browser = await chromium.launch({executablePath:process.env.GENIE_TRAINING_CHROMIUM || undefined});
+  const browser = await chromium.launch({executablePath:process.env.GENIE_OVERVIEW_CHROMIUM || undefined});
   try {
     server.listen(0, "127.0.0.1");
     await once(server, "listening");
-    const url = `http://127.0.0.1:${server.address().port}/training`;
+    const url = `http://127.0.0.1:${server.address().port}/overview`;
     const context = await browser.newContext({viewport:{width:1280,height:720}});
     const externalRequests = [];
     await context.route("**/*", (route) => {
@@ -31,7 +31,7 @@ async function check() {
     await page.waitForFunction(() => document.querySelector(".reveal.ready") && document.fonts.status === "loaded");
     assert.equal(await page.locator("html").getAttribute("lang"), "en");
     assert.equal(await page.locator(".slides > section.deck-slide").count(), 43);
-    assert.match(await page.title(), /Public-sector briefing/);
+    assert.equal(await page.title(), "GENIE.AI Overview");
     assert.equal(await page.locator(".slides > section.present").getAttribute("id"), "slide-01");
 
     async function slide(n) {

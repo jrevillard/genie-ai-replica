@@ -12,7 +12,7 @@ REVEAL = WORK.parent / 'node_modules' / 'reveal.js'
 DEFAULT_OUTPUT = WORK.parents[3] / 'site/static/presentations/genie-ai/index.html'
 DOC = 'https://genie-ai-7e342b.opensource.unicc.org'
 REPO = 'https://opensource.unicc.org/un/itu/genie-ai'
-DIAGRAMS = loads((WORK / 'training-mermaid.json').read_text(encoding='utf-8'))
+DIAGRAMS = loads((WORK / 'diagrams.json').read_text(encoding='utf-8'))
 PHOTO_CREDITS = (
     ('El Salvador photo · randreu · CC BY 3.0', 'https://commons.wikimedia.org/wiki/File:El_Salvador_-_Corn_Farm_-_panoramio.jpg'),
     ('The Gambia photo · CC0', 'https://commons.wikimedia.org/wiki/File:Village_in_rural_Gambia.jpg'),
@@ -142,7 +142,7 @@ def parse():
     slides = []
     chapter = timing = ''
     chapter_number = 0
-    for line in (WORK / 'training-en.txt').read_text(encoding='utf-8').splitlines():
+    for line in (WORK / 'overview-en.txt').read_text(encoding='utf-8').splitlines():
         if not line:
             continue
         if line.startswith('# '):
@@ -482,10 +482,10 @@ for subset, block in findall(r'/\* (latin(?:-ext)?) \*/\s*(@font-face[^}]+})', (
     weight = findall(r'font-weight: (\d+)', block)[0]
     font += sub(r'url\([^)]+\)', f'url("{asset(f"carlito-{subset}-{weight}.woff2")}")', block)
 reveal_css = (REVEAL / 'dist' / 'reveal.css').read_text(encoding='utf-8').split('@media print{', 1)[0]
-deck_css = '\n'.join((WORK / file).read_text(encoding='utf-8') for file in ('training-en.css', 'training-motion.css'))
+deck_css = '\n'.join((WORK / file).read_text(encoding='utf-8') for file in ('overview.css', 'overview-motion.css'))
 css = reveal_css + font + art + deck_css
 js = (REVEAL / 'dist' / 'reveal.js').read_text(encoding='utf-8').split('//# sourceMappingURL=')[0]
-runtime = (WORK / 'training-en.js').read_text(encoding='utf-8')
+runtime = (WORK / 'overview.js').read_text(encoding='utf-8')
 license_notice = '\n\n'.join(
     path.read_text(encoding='utf-8')
     for path in (REVEAL / 'LICENSE', ASSETS / 'carlito-LICENSE')
@@ -512,7 +512,7 @@ html = (
     '<!doctype html><html lang="en"><head><meta charset="utf-8">'
     '<meta name="viewport" content="width=device-width, initial-scale=1">'
     '<meta name="description" content="GENIE.AI technical briefing for public-sector organisations">'
-    '<title>GENIE.AI · Public-sector briefing</title>'
+    '<title>GENIE.AI Overview</title>'
     f'<style>{css}</style></head><body>{controls}'
     f'<main class="reveal"><div class="slides">\n{content}\n</div></main>'
     f'<!-- Embedded component licences\n{license_notice}\n-->'

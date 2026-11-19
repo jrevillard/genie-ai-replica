@@ -150,6 +150,12 @@ Every finding is dispositioned below; "fixed" means the correction is in the dif
 |---|---|---|---|
 | 13 | The tracing module's docstring still claimed "Public API (unchanged from the source module)" after the two helpers were dropped | low | **fixed** — the claim now reads "Public API of this port" |
 
+### Deferred (pre-existing, outside this story)
+
+| # | Finding | Verdict | Disposition |
+|---|---|---|---|
+| 14 | The OPEA overlay's images install setuptools unpinned, and setuptools 82 dropped `pkg_resources` — which `opentelemetry-instrumentation` 0.48b0 imports at import time — so the tier's FastAPI auto-instrumentation fails silently on any image built with setuptools >= 82, and the OPEA services emit no HTTP server spans | medium | **deferred** — pre-existing and outside this story's acceptance criteria (the overlay's Dockerfile and slim lock are untouched here). Recorded in `deferred-work.md` with the evidence and the remedy (a `setuptools<82` pin in the overlay's Dockerfile) |
+
 The decisions of the phase are recorded in the orchestrator's log (`~/.claude/state/review/issue-1949.jsonl`).
 
 ## Design Notes

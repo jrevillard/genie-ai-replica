@@ -10,6 +10,14 @@ repo's reference machine so a ROCm `values-*.yaml` can be authored without
 re-running the spike. Audience: the engineer who maintains those charts —
 they have NOT seen this repo's spike.
 
+**This work is tracked: issue #2015** ("Kubernetes: the ROCm chart
+profile — four vLLM workloads, the AMD device plugin, and the two GPU
+backend switches"). Everything this note records is the input to that
+issue; the `values-rocm.yaml` step below is work the chart profile must
+produce, not a file that exists today (it is in neither this repo nor
+`genie-ai-deploy`). Filed from the review of !968 — a doc is not a work
+item, so the deferred chart work needed an owner and a status.
+
 ## What landed in this repo
 
 The ROCm GPU tier here is config + image pins only (no service-source
@@ -152,7 +160,9 @@ exactly this work. Suggested sequence:
 3. Probe pod before the charts: run `rocm/rocm-terminal:latest` with the
    GPU resource + render/video groups; `rocminfo` must list `gfx1151`
    (AMD RYZEN AI MAX+ 395 w/ Radeon 8060S).
-4. Deploy the charts with `values-rocm.yaml`; watch the vLLM pod pull and
+4. Deploy the charts with `values-rocm.yaml` — **to be authored under
+   #2015; it does not exist yet** (neither in this repo nor in
+   `genie-ai-deploy`). Watch the vLLM pod pull and
    load granite-3.1-2b-instruct (`/health`, then `/v1/models`). First
    load downloads ~4 GB from Hugging Face (`HUGGING_FACE_HUB_TOKEN`
    required; gemma-3-1b-it is license-gated on the same token).

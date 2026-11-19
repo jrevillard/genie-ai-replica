@@ -1565,6 +1565,44 @@ class TestVllmBackend:
         assert len(result.reranked_docs) == 3
 
     @pytest.mark.asyncio
+    async def test_vllm_backend_carries_the_deployment_bearer(self, monkeypatch):
+        """The GPU node's TLS proxy rejects a request without the bearer.
+
+        The node's /rerank route sits behind `if ($api_key_valid = 0)
+        { return 401; }` — the in-cluster instance ignores the header, so the
+        key rides along only on the vLLM branch and the TEI path stays
+        untouched.
+        """
+        monkeypatch.setenv("RERANKER_BACKEND", "vllm")
+        monkeypatch.setenv("RERANKER_VLLM_ENDPOINT", "https://gpu.example.org:444/rerank")
+        monkeypatch.setenv("RERANKER_VLLM_MODEL", "BAAI/bge-reranker-v2-m3")
+        monkeypatch.setenv("VLLM_API_KEY", "secret-key")
+        reranker = create_reranker()
+        input_doc = create_mock_searched_doc(texts=["a"], reranking_strategy="slice", top_n=1)
+        mock_session = create_mock_aiohttp_session(create_vllm_rerank_response())
+
+        with patch("reranker.genieai_tei_reranker.aiohttp.ClientSession", return_value=mock_session):
+            await reranker.invoke(input_doc)
+
+        headers = mock_session.post.call_args[1]["headers"]
+        assert headers["Authorization"] == "Bearer secret-key"
+
+    @pytest.mark.asyncio
+    async def test_the_tei_path_sends_no_bearer(self, monkeypatch):
+        """The TEI branch is unchanged: no Authorization header is added."""
+        monkeypatch.delenv("RERANKER_BACKEND", raising=False)
+        monkeypatch.setenv("VLLM_API_KEY", "secret-key")
+        reranker = create_reranker(base_url="http://tei-reranker:80")
+        input_doc = create_mock_searched_doc(texts=["a"], reranking_strategy="slice", top_n=1)
+        mock_session = create_mock_aiohttp_session([{"index": 0, "score": 0.5}])
+
+        with patch("reranker.genieai_tei_reranker.aiohttp.ClientSession", return_value=mock_session):
+            await reranker.invoke(input_doc)
+
+        headers = mock_session.post.call_args[1]["headers"]
+        assert "Authorization" not in headers
+
+    @pytest.mark.asyncio
     async def test_vllm_backend_normalizes_cohere_shape(self, monkeypatch):
         monkeypatch.setenv("RERANKER_BACKEND", "vllm")
         monkeypatch.setenv("RERANKER_VLLM_ENDPOINT", "http://vllm-reranker:8000")
@@ -1734,9 +1772,11 @@ class TestVllmBackendLengthContract:
 
         import reranker.genieai_tei_reranker as _mod
 
-        with patch("reranker.genieai_tei_reranker.aiohttp.ClientSession", return_value=mock_session):
-            with pytest.raises(_mod.RerankerInputTooLongError):
-                await reranker.invoke(input_doc)
+        with (
+            patch("reranker.genieai_tei_reranker.aiohttp.ClientSession", return_value=mock_session),
+            pytest.raises(_mod.RerankerInputTooLongError),
+        ):
+            await reranker.invoke(input_doc)
 
         # The call must NOT have gone out: a truncated ranking is exactly
         # what the contract exists to prevent.
@@ -1791,9 +1831,7 @@ class TestVllmBackendLengthContract:
         assert mock_session.post.call_count == 2
         # The module logger is shared across the whole file — count the
         # warnings THIS test produced, not the file's running total.
-        warnings = [
-            c for c in _mod.logger.warning.call_args_list[before:] if "served window is unknown" in str(c)
-        ]
+        warnings = [c for c in _mod.logger.warning.call_args_list[before:] if "served window is unknown" in str(c)]
         assert len(warnings) == 1, f"expected exactly one window-unknown warning, got {len(warnings)}"
 
     def test_pair_estimate_uses_the_longest_pair_not_the_sum(self):

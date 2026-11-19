@@ -146,6 +146,7 @@ def _reranker_vllm_served_window(endpoint: str) -> int | None:
         logger.warning(f"Could not determine the vLLM rerank served window: {exc}")
         return None
 
+
 # Strategies: slice, threshold, slice_threshold, knee_threshold, adaptive
 RERANKING_STRATEGY = os.getenv("RERANKING_STRATEGY", "slice")
 RERANKING_THRESHOLD = float(os.getenv("RERANKING_THRESHOLD", 0.75))
@@ -482,17 +483,14 @@ class GenieTEIReranking(OpeaTEIReranking):
                             # say so on the span, so a reader knows the
                             # number is not a server-side token count.
                             span.set_attribute(ATTRIBUTE_NAMES["reranker_length_contract"], "client-estimate")
-                            span.set_status(
-                                Status(StatusCode.ERROR, "Reranker input exceeds the served window")
-                            )
+                            span.set_status(Status(StatusCode.ERROR, "Reranker input exceeds the served window"))
                             _reranker_input_too_long_total.add(1)
                             logger.warning(
                                 f"Reranker input too long (vLLM backend): ~{_estimated} tokens "
                                 f"(estimated) vs the served window {_window}"
                             )
                             raise RerankerInputTooLongError(
-                                f"Reranker input exceeds the served window: "
-                                f"~{_estimated} estimated tokens > {_window}"
+                                f"Reranker input exceeds the served window: ~{_estimated} estimated tokens > {_window}"
                             )
                     else:
                         global _WARNED_VLLM_WINDOW_UNKNOWN
@@ -516,6 +514,16 @@ class GenieTEIReranking(OpeaTEIReranking):
                 # Propagate trace context to the rerank backend
                 headers = {}
                 propagate.inject(headers)
+                if backend == "vllm":
+                    # The GPU node's TLS proxy rejects every request without a
+                    # matching bearer (`if ($api_key_valid = 0) { return 401; }`),
+                    # and the node's /rerank route is behind it. The in-cluster
+                    # instance ignores the header (vLLM only enforces one when it
+                    # is started with --api-key), so the key rides along only on
+                    # the vLLM branch and the TEI path is untouched.
+                    _rerank_api_key = (os.getenv("VLLM_API_KEY") or "").strip()
+                    if _rerank_api_key:
+                        headers["Authorization"] = f"Bearer {_rerank_api_key}"
 
                 try:
                     async with (

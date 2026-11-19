@@ -1,7 +1,7 @@
 # GENIE.AI Presentations
 
 Marp-based slide decks for release overviews, architecture deep-dives, and
-sovereign-AI briefings. All decks share the **`genie-ai` theme** defined in
+sovereign-AI briefings. The Marp decks share the **`genie-ai` theme** defined in
 [`themes/genie-ai.css`](themes/genie-ai.css) — palette, typography, layout
 helpers, and Mermaid styling.
 
@@ -11,6 +11,9 @@ helpers, and Mermaid styling.
 |------|---------|:-----------:|
 | `v2.0.0-release.md` | v2.0.0 release overview | ❌ |
 | `genie-ai-sovereign-architecture.md` | Sovereign AI architecture & fundamentals briefing (~30 slides) | ✅ |
+
+The [interactive GENIE.AI training presentation](genie-ai-training/README.md)
+uses Reveal.js and is published separately by the Hugo documentation site.
 
 Render output is written **next to the source `.md`** (e.g. `v2.0.0-release.pdf`,
 `genie-ai-sovereign-architecture.html`) so that all internal links and

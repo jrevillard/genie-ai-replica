@@ -1,0 +1,296 @@
+# The public-service challenge|00:00–05:00
+@cover|Whose knowledge shapes an AI answer?
+? GENIE.AI · Public-sector briefing · 20 November 2026
+An open-source framework for public services, from the source document to the system that answers the question.
+! Open with the question on screen. Ask the audience to picture a common administrative task and the documents needed to answer it. Explain that we will start with an answer, then run the story backwards through the knowledge, the controls and the infrastructure.
+
+@chat|One question. An answer you can check.
+? ILLUSTRATIVE SCENARIO · PERMIT RENEWAL
+The question|What should I bring when I renew my permit?
+The answer|Bring your current permit and a recent proof of address. Use the renewal guide to check which documents are accepted and how to submit them.
+The source|Permit Renewal Guide · sections 2 and 3. The fictional guide lists the required evidence and the submission instructions.
+= Follow this answer through the rest of the presentation.
+! Give the audience time to read all three elements. Advance once to highlight the source and walk through what an officer can verify. The procedure and documents in this scenario are fictional.
+
+@spread|Local knowledge changes the service.
+? THE PUBLIC-SERVICE CHALLENGE
+What the model already knows|A general model can explain what permit renewal usually means and help write a clear response.
+What the institution knows|The local authority knows which form applies, which proof it accepts and who publishes a change.
+What the user needs|A reliable answer for this jurisdiction, with enough evidence to check or challenge it.
+! Pause on the difference between a plausible explanation and an answer that applies to a specific office. Point out that a change in policy must be reflected in the institution’s source of record.
+
+# The service people use|05:00–13:00
+@spread|A single framework can support many public services.
+For citizens|Explain a process, point to the appropriate form or direct someone to the office responsible for their request.
+For frontline staff|Find authoritative procedures and exceptions across documents that would otherwise have to be searched separately.
+For service teams|Maintain knowledge once and make it available to more than one channel or application, subject to the relevant access rules.
+! Use permit renewal as the example. A citizen can ask about the procedure. An officer can get the same public guidance and, if authorised, the operational details needed to process a case.
+~ itu|welcome
+
+@surfaces|The same knowledge reaches web and mobile.
+? ILLUSTRATIVE INTERFACE VIEWS
+Web · Vue 3|Stream answers, inspect related documents, submit feedback and keep or export a conversation.
+Mobile · Flutter|Stream answers with related documents on Android and iOS. Revisit sessions and share a conversation as PDF.
+= Language, branding and available actions depend on the service configuration.
+! Move from the Vue web client to the Flutter mobile client. The screens are illustrative. Show how the same question and source information remain useful across devices.
+~ web|mobile
+
+@rail|An institution can shape the assistant around its service.
+Branding and language|Configure web branding and active UI locales. Keycloak’s sign-in page has its own theme.
+Knowledge|Select documents and OKF repositories. Mark sensitive repositories as restricted and grant read scopes where appropriate.
+Model and retrieval|Select compatible models and tune retrieval, reranking and prompts. Validate the effect with representative questions.
+! Walk from visual configuration to access and response behaviour. A new service may reuse the application while requiring different policies, data and validation.
+~ branding|locale|models|authz
+
+@flow|Add the assistant to an existing digital service.
+? AUTHENTICATED APPLICATION AND DOCUMENT APIs
+Service channel|A government portal or staff application can call the GENIE.AI backend using a Keycloak-issued access token.
+Assistant API|The authenticated backend lets an agency application use the assistant and display the answer with related documents.
+Document APIs|A separate repository service exposes role-controlled upload, ingestion, search and access.
+API routing|Compose and Swarm use NGINX and Kong. The Kubernetes chart uses Gateway API with Envoy Gateway by default.
+! Follow a request from the portal to the Node.js backend and to document services. An agency workflow can call these documented interfaces and retains responsibility for its own actions.
+~ api|routes|k8s
+
+@field|The same software can serve very different local needs.
+El Salvador|The ongoing project uses the CENTA knowledge library to develop an assistant for farming communities.
+The Gambia|The ongoing project explores preventive health decision support for health workers and communities.
+= GENIE.AI country projects · Photographs illustrate the local context.
+! Explain what can be reused and what needs local work. Content, languages, validation and integration are specific to each service. The cases illustrate project activity. The photographs show local context.
+~ project
+
+# How the answer is built|13:00–24:00
+@ingestion|A source document has to become searchable.
+? FOLLOW THE PERMIT RENEWAL GUIDE
+Upload formats|Uploaded files stay pending until the administrator starts ingestion.|PDF|DOCX|XLSX|CSV|MD|HTML|TXT
+Example chunks|Bring your current permit and|a recent proof of address|. Submit both with your renewal form.
+Deployment settings|Upload limits and antivirus scanning. Chunk size by file type and overlap. Optional context and the embedding model.
+= The highlighted text appears in both chunks to preserve context across the split.
+! Click through upload and the administrator's Ingest action, parsing and chunking, embedding and indexing, then the deployment settings. The file stays Pending until ingestion is triggered from the dashboard or API. ClamAV scans uploads when enabled. Docling extracts text and structure for supported formats such as PDF and DOCX. The guide and overlapping chunks are illustrative. Explain how smaller chunks can improve precision and how overlap can help retain a requirement cut across two passages. The deployment team sets these options. Re-ingest existing files after changing how they are chunked.
+~ ingest|uploadFormats|ingestPipeline
+
+@flow|Follow a question through the RAG pipeline.
+? RETRIEVAL-AUGMENTED GENERATION
+Ask|The Node.js backend accepts the authenticated question. OPEA ChatQnA coordinates the model and retrieval calls.
+Find|TEI embeds the question in the standard stack. The retriever searches ArangoDB within the account’s available knowledge.
+Rank|The optional reranker re-scores the retrieved passages and can drop weak matches.
+Answer|vLLM serves the language model. The interface can show source documents supplied as response metadata.
+= Retrieval supplies the evidence. Generation turns it into a response.
+! Follow the flow on each click. The dotted path bypasses the optional reranker. Published knowledge is already indexed when the request arrives. POST /api/queries returns JSON, and POST /api/queries/stream sends the answer and metadata as Server-Sent Events. Translation, where used, happens at the request and response edges, as shown on the multilingual slide.
+~ architecture|rag|generation
+
+@stack|What runs inside GENIE.AI?
+? AN ITU-INITIATED FRAMEWORK · APACHE 2.0 CODE LICENCE
+Web & mobile|Vue 3 powers the web client. Flutter powers the Android and iOS clients.
+Application & identity|The Node.js and Express backend brokers requests. Keycloak handles sign-in and identity.
+Knowledge|Docling parses documents. ArangoDB stores indexed knowledge, including vector and graph data.
+AI services|OPEA ChatQnA orchestrates RAG. TEI serves embeddings and reranking. vLLM serves generation.
+Observability|OpenTelemetry collects signals. Victoria stores them. Grafana visualises them when enabled.
+Deployment|The application runs on Docker Compose, Docker Swarm or Kubernetes via Helm.
+! Connect the logos to the upload and the query the audience has just followed. This is the documented reference stack as of 19 November 2026. Explain the distinction between the framework’s Apache 2.0 code licence and the terms for any model or external dataset. The deployment choice changes some supporting infrastructure, explained in the deployment chapter.
+~ architecture|licence
+
+@rail|Hybrid retrieval combines meaning and exact wording.
+BM25 search|Rank lexical matches, such as a form number or a precise procedure name. GENIE.AI fuses the vector and lexical rankings.
+Vector search|Find passages with related meanings, such as “renew my permit” and “extend its validity”.
+Graph expansion|Optional graph traversal adds related chunks. Candidate retrieval remains subject to the account’s available knowledge.
+! Compare semantic and lexical matches with the same question. Explain that ArangoDB combines multiple retrieval signals, and graph traversal is optional.
+~ retrieval|authz
+
+@rank|Optional reranking changes which passages reach the model.
+Renewal requirements|Directly addresses the request and lists the documents required for renewal.
+First-time applications|Mentions the same permit and some of the same evidence, but applies to a different procedure.
+General permit information|Explains the service and provides contact details. It has little direct evidence about renewal requirements.
+= Illustration · The reranker can reorder candidates and drop weak matches.
+! Show the first-pass candidates, then advance to move the renewal requirements to the top. The reranker can be bypassed. This is an illustration of ranking, separate from empirical answer quality.
+~ rag|rerank
+
+@document|The model drafts the answer from selected passages.
+Pack the context|ChatQnA supplies the question, selected passages and the instructions for this assistant.
+Generate and stream|vLLM serves the language model in the reference stack. The backend can stream the response and metadata.
+Verify the references|The interface can show returned source documents. Check that the cited passage supports the specific claim and still applies.
+! Return to the two documents requested in the opening example. A source reference is evidence to check. Review both the generated claim and whether the source reflects current policy.
+~ generation|api|web
+
+@languages|One English core, answers in the user’s language.
+? ILLUSTRATIVE PERMIT RENEWAL · KISWAHILI
+Translate the question|ChatQnA normalises a supported non-English request to English before retrieval.
+Search and generate|Prepare non-English source documents before standard ingestion. The indexed corpus and RAG processing use English.
+Translate the answer|The response is translated at the rendering edge. Test whether requirements, dates and exceptions retain their meaning.
+= Abstention is enabled by default when the pipeline has no usable passages.
+! Walk through the three clicks, from the Kiswahili question to the English retrieval and generation core and back to a Kiswahili answer. The flags identify the example languages. Prepare the corpus in English before chat. The standard document ingestion flow does not translate files automatically. The BFF handles streaming translation at the response edge, and ChatQnA handles the non-streaming path.
+~ multilingual|generation
+
+# How knowledge is governed|24:00–33:00
+@graph|OKF makes curated knowledge versionable.
+? OPEN KNOWLEDGE FORMAT · CONCEPTS, LINKS AND SERVING GRAPHS
+Concepts|Each concept is a Markdown document with YAML frontmatter. It captures a distinct topic such as proof of address.
+Relationships|Typed links connect concepts across the knowledge base. A stewardship team can review the content and its links.
+Serving graph|Enable OKF and select OKF-only or hybrid retrieval to search published, ingested repositories as separate graphs.
+! Follow the concepts into a versioned repository. Distinguish editing from publishing and from serving. OKF can be disabled. Standard legacy retrieval uses the free-form corpus. If OKF is enabled, select OKF-only or hybrid retrieval to use its serving graphs.
+~ okf|authz|okfConfig
+
+@graph|A concept can be linked to several procedures.
+? ONE EXAMPLE FROM THE PERMIT CORPUS
+Renewal procedure|Links to the types of evidence the service accepts and the exceptions staff should know about.
+Proof of address|A reusable concept. The same evidence may also be required in other services.
+Handling notes|An illustrative concept can record general guidance for an unreadable document. The next access example uses a separate restricted internal guide.
+! Trace the relationship from the renewal procedure to the evidence item, then to the exception. Explain that the knowledge team can revise a reusable concept and check which procedures refer to it.
+~ okf
+
+@document|OKF Studio separates review, publication and serving.
+? FROM A SOURCE FILE TO A SERVING REPOSITORY
+Start a draft|Import a document, website crawl or OKF bundle, or build concepts manually in OKF Studio.
+Curate and test|Review concepts, links and flagged personal data. Use the Testing Lab to check how the draft’s routing metadata responds to queries.
+Publish and verify|Publication creates a version and starts ingestion. Verify serving status and probe real corpus retrieval after ingestion.
+! Explain the difference between testing routing before serving and probing the live corpus after ingestion. The dashboard also supports approval, version history, unpublishing and retraction.
+~ docsokf|okf|lab
+
+@flow|Which repositories can the account search?
+? CONFIGURED OKF READ ACCESS
+Identity|Keycloak authenticates the user. GENIE.AI reads the verified token’s roles and OKF scopes.
+Default open mode|Unrestricted serving repositories are available. Restricted repositories need matching grants.
+Closed mode|Regular users can search explicitly scoped repositories. Administrator and wildcard grants have broader access.
+Retrieval|The retriever receives the authorised graph set before it selects evidence for the answer.
+= Verify effective access with representative accounts.
+! The next example assumes the public guide is unrestricted and the internal guide is restricted. With default open mode, the caseworker’s grant adds the internal guide. Closed mode requires explicit scope grants. Read access and edit or publish permissions are separate.
+~ authz|okfConfig|okfResolver
+
+@profiles|The same question can draw on different sources.
+? SIMULATION · RESTRICTED INTERNAL REPOSITORY
+Frontline officer|The unrestricted public guide identifies the required evidence. The officer has no grant for the restricted internal procedure.
+Authorised caseworker|The caseworker can consult both the public guide and the restricted procedure after receiving a matching read grant for the separate internal repository.
+= Question: “Which evidence should I verify to process this renewal?”
+! Advance to highlight each profile in turn. This example has OKF retrieval enabled and default open read mode, with protected knowledge in a separate restricted repository. The difference depends on how repositories and grants are configured.
+~ authz
+
+@rail|Published knowledge needs a place in daily operations.
+Business ownership|Assign responsibility for each official source and define the events that trigger a review.
+Editorial control|Review affected concepts and links when the source changes, publish the updated version and replay reference questions.
+Operational follow-up|Check the serving version and per-concept ingestion log. Use the audit history to review lifecycle changes, grants and imports.
+! Walk through an updated rule that changes one required document. Explain the handoff from the policy owner to the knowledge editor to the team that checks the answer.
+~ okf|ingest
+
+# Running a trustworthy service|33:00–42:00
+@console|The administration dashboard brings routine work together.
+Documents|Upload sources, monitor ingestion and inspect processing outcomes according to the assigned role.
+Users and access|Review users and responsibilities within the administrator’s delegated scope. Keep repository grants separate from dashboard roles.
+Service health|Check service status, operational logs and Query Inspector when investigating a reported answer.
+= Illustrative dashboard layout.
+! Show the daily workflow of an administrator. Query Inspector can expose retrieval details and must be restricted to authorised operators. The screen is illustrative.
+~ admin|authz
+
+@split|Keycloak identifies the user. GENIE.AI applies access rules.
+Authentication|Keycloak issues OIDC tokens and can broker sign-in through an institution’s configured identity provider.
+Authorisation|The backend verifies the token. Application roles control functions, and OKF read scopes govern access to knowledge repositories.
+= Test the sign-in flow and the effective document access separately.
+! Return to the frontline officer and caseworker. Both sign in, but the retrieval service can have different knowledge available for them. An administrator must design those access scopes deliberately.
+~ authz|idp|api
+
+@spread|Where does the service process its data?
+Storage|Document Repository stores files. ArangoDB stores the searchable passages and the vector or graph indexes.
+Model calls|The application sends inputs to the configured model endpoint. A separate GPU API can sit inside the institution’s network or across a managed boundary.
+Operations|Review telemetry, backups, secret handling and retention against the institution’s security requirements.
+= Trace where documents, questions and selected passages are processed.
+! Follow the permit document and the incoming question. An institution can operate the separate GPU tier on its own network. The generation endpoint receives the question and selected context. When slim Dataprep uses remote Docling, document data crosses that service boundary too.
+~ architecture|security|gpu|slim
+
+@console|Validate routing, retrieval and answer quality.
+Before serving|Use the Testing Lab to check which repository a reference query should select or exclude.
+After ingestion|Probe the live corpus to confirm that the expected passage can actually be retrieved.
+Answer quality|Use the RAGAS benchmarks and review citations and abstention with representative questions.
+= Illustrative evaluation workflow.
+! Use one question with a required source and a confusable question. Separate routing before serving, live retrieval after ingestion and answer assessment. Treat benchmark scores as signals and review important answers directly.
+~ lab|generation
+
+@flow|From application telemetry to Grafana.
+? INSTRUMENTATION · COLLECTION · STORAGE · VISUALISATION
+App signals|Instrumented services emit logs, metrics and traces. A trace ID correlates stages of one request.
+OpenTelemetry|The Collector receives telemetry and routes it to the configured stores.
+Victoria stack|VictoriaMetrics stores metrics, VictoriaLogs stores logs and VictoriaTraces stores traces.
+Grafana|Dashboards and trace views visualise the configured data sources. Full telemetry depends on deployment settings.
+= Baseline logging is enabled in the reference setups. Full tracing, metrics and dashboards are configurable.
+! In Compose and Swarm, the Collector and VictoriaLogs are baseline services. The in-app OpenTelemetry SDK, tracing and metrics stores, and Grafana require the appropriate options. Kubernetes enables logs by default in the chart. Metrics, traces and Grafana have distinct opt-in settings and are managed through operators. Never assume a particular deployment is retaining detailed traces.
+~ observe|observeOverview|observeConfig|k8s
+
+@trace|A missing requirement is a problem you can trace.
+Confirm the symptom|Verify the authoritative permit requirement and identify the reported chat request.
+Inspect retrieval|Use Query Inspector to compare the effective graphs, retrieved chunks and selected references.
+Follow the request|When tracing is enabled, follow the trace ID across retrieval and generation. Check where the evidence was lost or unused.
+= Illustrative timeline. The bar lengths represent example durations.
+! Show the stages in sequence. The business owner confirms the source. The operator follows the specific query’s retrieval context, and traces further when that telemetry is enabled. Avoid giving routine users access to sensitive operational details.
+~ admin|observeOverview|tracing
+
+# Deployment and operations|42:00–51:00
+@split|Choose the app platform and the GPU placement separately.
+Application platform|Docker Compose runs the app stack on one host. Docker Swarm can orchestrate it across nodes. Kubernetes uses the GENIE.AI Helm chart.
+Model-serving placement|Model services can run alongside the app environment on suitable GPU hosts or behind a dedicated external GPU API. All three platforms can use that API.
+= Hosting on premises or in the cloud is a separate decision.
+! Explain the two decisions before showing the matrix. An external GPU API means outside the application deployment. It can still run within the institution’s own network.
+~ compose|swarm|k8s|topologies
+
+@matrix|Three app platforms, two ways to place the GPU.
+Docker Compose|Single application host. NGINX and Kong at the edge.|Run GPU services on the same host.|Set GPU_NODE_HOST to the external GPU service.
+Docker Swarm|Single or multiple Swarm nodes. NGINX and Kong at the edge.|Place model services on GPU-labelled Swarm nodes.|Set GPU_NODE_HOST and disable local model replicas.
+Kubernetes & Helm|Helm chart with Gateway API and Envoy Gateway by default.|Select in-cluster GPU mode and meet the chart’s device-plugin requirements.|Select external mode and configure the GPU host and paths.
+= Every row supports a dedicated GPU API.
+! Compose and Swarm share the dual-mode compose file. Both use GPU_NODE_HOST and the GPU API credential. The Helm settings are opea.gpu.mode external, opea.gpu.nodeHost and opea.gpu.paths. In-cluster Kubernetes is documented with the NVIDIA device plugin. The orchestration options and GPU placement are separate.
+~ compose|swarm|k8s
+
+@flow|One GPU API can serve all three platforms.
+? EXAMPLE · DEDICATED GPU NODE
+Application side|Compose, Swarm and Kubernetes can retain the application, identity, knowledge and OPEA orchestration tier.
+GPU API|A reachable HTTPS endpoint routes the configured model-service paths. Plan authentication, network policy and certificates.
+GPU side|A reference GPU node can host generation, translation, embeddings, reranking and document parsing services.
+! Advance from the three app platforms to their shared API, then to the workloads. The reference split can serve vLLM for generation or translation, TEI for embedding or reranking, and Docling for parsing when remote Docling is configured. The endpoint is a managed dependency with its own capacity and uptime.
+~ compose|swarm|k8s|gpu
+
+@rail|Size the inference tier for the service.
+Generation and retrieval|vLLM serves the language model. The reference stack uses TEI endpoints for embedding and reranking.
+GPU options|vLLM supports generation on NVIDIA GPUs with CUDA and AMD GPUs with ROCm.
+Capacity|Test model quality in the service languages. Size compute for context length, concurrent requests and latency targets.
+! Mention both GPU options. Spend the time on model quality, latency and how many simultaneous requests the service needs to handle.
+~ models|vllm
+
+@spread|What can you configure in GENIE.AI?
+Service and access|Set the app’s branding and available UI languages. Manage documents and OKF grants in the admin tools, and configure sign-in and role mapping in Keycloak.
+Retrieval and models|Tune chunk size and overlap, retrieval depth and optional reranking. Select generation and embedding models to suit the service.
+Infrastructure and telemetry|Configure deployment through environment variables or Helm values. Choose where model endpoints run and which telemetry services to enable.
+= Change how documents are chunked, then re-ingest them and test a reference question.
+! Use the permit guide to explain the difference between routine administration and deployment configuration. The content owner updates a guide and an administrator starts ingestion. The deployment team sets chunk size and overlap. Those settings affect the passages stored in the index, so changing them requires re-ingesting the source and checking that the reference question still retrieves the right passage. Compare that change with setting the UI languages or enabling traces.
+~ branding|locale|authz|ingestPipeline|install|k8s
+
+@spread|A public service needs owners at every layer.
+Business team|Owns the official sources and helps decide whether responses meet the service’s needs.
+Application team|Owns configuration, release changes, evaluation and the way the framework integrates with its channels.
+Platform team|Owns identity, runtime services, observability, backup, recovery and availability within the deployed environment.
+! Revisit the updated renewal rule. Follow the responsibility from the source owner through the application team to the team that operates the service.
+~ k8s|observe
+
+@index|The budget follows the service design.
+Prepare|Budget for source preparation, access design, integration, and evaluation on realistic questions.
+Host|Size application services and data stores separately from model serving. Measure GPU capacity at the expected concurrency and context length.
+Operate|Budget for the people who update the corpus, run the platform, investigate issues and repeat evaluations.
+= The framework code is Apache 2.0. Models, data and service operations have their own terms and costs.
+! Reuse the two-axis deployment decision. Explain that shared model capacity can be sized and operated separately. Avoid promising a generic deployment price.
+~ licence|models|topologies
+
+# What the institution can control|51:00–55:00
+@chat|Back to the renewal question.
+? THE SAME CONVERSATION, NOW WITH THE SYSTEM IN VIEW
+The answer|“Bring your current permit and a recent proof of address.” The selected passages support the instruction in this example.
+The source|The reference points to the retrieved guide. The officer checks that the passage supports the instruction and that the guide is current.
+The service|Operators can verify knowledge scope and publication status. When tracing is configured, they can follow the services that handled the request.
+= A verifiable answer connects knowledge, access and infrastructure.
+! Revisit the original question. Recap the selected source, repository access and the deployment that delivered the service. The officer can verify the source and confirm whether it reflects current policy.
+~ authz|api|observeOverview
+
+@finale|One framework. Three layers of institutional control.
+The service|Choose audiences, languages, channels and integrations.
+The knowledge|Curate sources, manage serving versions, set access policy and test the answers.
+The infrastructure|Choose the models and where they run. Inspect metrics or traces when the corresponding services are enabled.
+! Close the loop with the opening question. The institution can decide what knowledge matters, how it is used and where its infrastructure runs.
+~ itu|welcome
+
+@resources|Resources and discussion
+? QUESTIONS
+! Invite questions. Use the architecture, knowledge and deployment references to return to the part of the framework relevant to the discussion.

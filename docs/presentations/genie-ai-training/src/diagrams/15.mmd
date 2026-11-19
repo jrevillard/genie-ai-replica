@@ -1,0 +1,8 @@
+flowchart LR
+ Q["Kiswahili<br/>question"]:::channel --> N["Translate<br/>to English"]:::core
+ N --> R["English RAG<br/>and index"]:::model
+ R --> D["Translate at<br/>response edge"]:::core
+ D --> A["Kiswahili<br/>answer"]:::channel
+ class Q,N step0
+ class R step1
+ class D,A step2

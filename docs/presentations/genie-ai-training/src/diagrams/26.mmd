@@ -1,0 +1,8 @@
+flowchart LR
+ A["Application<br/>signals"]:::channel --> C["OpenTelemetry<br/>Collector"]:::core
+ C --> V[("VictoriaMetrics<br/>VictoriaLogs<br/>VictoriaTraces")]:::data
+ V --> G["Grafana"]:::model
+ class A step0
+ class C step1
+ class V step2
+ class G step3

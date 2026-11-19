@@ -16,8 +16,9 @@ published under **two tags** in the internal registry:
 
 | tag | content | use it when |
 |---|---|---|
-| `:main` (and `:main-<sha>`, `:vX.Y.Z`) | the default image, with PyTorch's **CUDA** build | the node runs a model in-process on a GPU |
+| `:main` (and `:main-<sha>`, `:vX.Y.Z`, `:latest`) | the default image, with PyTorch's **CUDA** build | the node runs a model in-process on a GPU |
 | `:main-slim` (and `:main-slim-<sha>`) | the same service code, with PyTorch's **CPU** build and the packages no service imports left out | every model call goes to an external GPU API |
+| `:latest-slim` (and `:vX.Y.Z-slim`) | the slim build of the latest **release** — the same variant, of the released images rather than of the branch | every model call goes to an external GPU API, and the deployment follows the release rather than the branch |
 
 Both tags carry the **same service code and the same versions of every
 library** — only the installed dependency set differs. The slim variant is

@@ -1509,11 +1509,16 @@ container_scanning:
           echo "Pre-release tag detected — skipping 'latest' Docker tag"
           FINAL_TAGS="$CI_COMMIT_TAG${TAG_SUFFIX:-}"
         else
-          # The slim variant (issue #2000) publishes under its OWN suffix and
-          # must NOT take over "latest": "latest" stays the fat image, the
-          # one every existing deployment pulls.
+          # The slim variant (issue #2000) publishes under its OWN suffix:
+          # "latest" stays the fat image, the one every existing deployment
+          # pulls — a deployment that pins "latest" must not silently switch
+          # to the slim build (the slim dataprep carries no local converter).
+          # The slim build of the SAME release gets its own "latest-slim", so
+          # a deployment that follows the release can take the slim variant
+          # with the suffix knob alone, instead of having to pin a branch
+          # tag (the only slim tag that used to exist was "<branch>-slim").
           if [ -n "${TAG_SUFFIX:-}" ]; then
-            FINAL_TAGS="$CI_COMMIT_TAG${TAG_SUFFIX}"
+            FINAL_TAGS="$CI_COMMIT_TAG${TAG_SUFFIX} latest${TAG_SUFFIX}"
           else
             FINAL_TAGS="$CI_COMMIT_TAG latest"
           fi
@@ -2872,8 +2877,11 @@ promote:dataprep-arango-slim:
   variables:
     IMAGE_NAME: "genie-ai-dataprep-arango"
     # The slim variant is promoted under its own tag family: `:main-slim`
-    # (and `:main-slim-<sha>`). `latest` stays with the fat image — every
-    # existing deployment pulls that one.
+    # (and `:main-slim-<sha>`), and `:latest-slim` for the latest RELEASE
+    # (`:vX.Y.Z-slim` for that release). `latest` stays with the fat image —
+    # every existing deployment pulls that one, and it must not silently
+    # switch to the slim build (the slim dataprep carries no local
+    # converter).
     PROMOTE_TAG_PREFIX: "slim-"
     TAG_SUFFIX: "-slim"
   rules:
@@ -3019,8 +3027,11 @@ promote:retriever-arango-slim:
   variables:
     IMAGE_NAME: "genie-ai-retriever-arango"
     # The slim variant is promoted under its own tag family: `:main-slim`
-    # (and `:main-slim-<sha>`). `latest` stays with the fat image — every
-    # existing deployment pulls that one.
+    # (and `:main-slim-<sha>`), and `:latest-slim` for the latest RELEASE
+    # (`:vX.Y.Z-slim` for that release). `latest` stays with the fat image —
+    # every existing deployment pulls that one, and it must not silently
+    # switch to the slim build (the slim dataprep carries no local
+    # converter).
     PROMOTE_TAG_PREFIX: "slim-"
     TAG_SUFFIX: "-slim"
   rules:
@@ -3162,8 +3173,11 @@ promote:reranker-slim:
   variables:
     IMAGE_NAME: "genie-ai-reranker"
     # The slim variant is promoted under its own tag family: `:main-slim`
-    # (and `:main-slim-<sha>`). `latest` stays with the fat image — every
-    # existing deployment pulls that one.
+    # (and `:main-slim-<sha>`), and `:latest-slim` for the latest RELEASE
+    # (`:vX.Y.Z-slim` for that release). `latest` stays with the fat image —
+    # every existing deployment pulls that one, and it must not silently
+    # switch to the slim build (the slim dataprep carries no local
+    # converter).
     PROMOTE_TAG_PREFIX: "slim-"
     TAG_SUFFIX: "-slim"
   rules:

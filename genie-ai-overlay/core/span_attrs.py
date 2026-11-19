@@ -274,6 +274,14 @@ ATTRIBUTE_NAMES = {
     "dataprep_file_size_bytes": "dataprep.file_size_bytes",
     "dataprep_file_id": "dataprep.file_id",
     "dataprep_kill_result": "dataprep.kill_result",
+    # The late-write purge's outcome (dataprep.late_write_purge): what the
+    # purge did — purged / failed / stood_down / cancelled. Without it a
+    # failed purge and a successful one look the same in the trace:
+    # background_span does not set the ERROR status on its own, and the purge
+    # swallows the exception it retries. What is unique to 'cancelled' is the
+    # silence: no outcome row reaches the document's own ingestion log, so
+    # the operator has to read the trace.
+    "dataprep_purge_result": "dataprep.purge_result",
     # Chunking — dataprep.chunking and the llm.* spans that label the chunks
     "dataprep_chunk_count": "dataprep.chunk_count",
     "dataprep_chunk_index": "dataprep.chunk_index",

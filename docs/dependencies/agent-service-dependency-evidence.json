@@ -1,0 +1,505 @@
+{
+  "component": "agent-service-dependency-evidence",
+  "requirements": [
+    "components/agent-service/requirements.txt",
+    "components/agent-service/requirements-test.txt"
+  ],
+  "method": "Exact-version licence verification: the SPDX expression the publisher declares for that exact version, or - when there is none - the licence file read out of the artifact of that exact version (sha256 recorded). The defaults audit (NFR-2) is a human verdict per package.",
+  "packages": [
+    {
+      "name": "annotated-doc",
+      "version": "0.0.7",
+      "license": "MIT",
+      "license_source": "pypi:license_expression (https://pypi.org/pypi/annotated-doc/0.0.7/json)",
+      "verified": true,
+      "status": "stable",
+      "risk_acceptance": null,
+      "defaults": {
+        "telemetry": "none - the package performs no telemetry of its own",
+        "cloud_export": "none - the package contacts no external service"
+      }
+    },
+    {
+      "name": "annotated-types",
+      "version": "0.8.0",
+      "license": "MIT",
+      "license_source": "pypi:license_expression (https://pypi.org/pypi/annotated-types/0.8.0/json)",
+      "verified": true,
+      "status": "stable",
+      "risk_acceptance": null,
+      "defaults": {
+        "telemetry": "none - the package performs no telemetry of its own",
+        "cloud_export": "none - the package contacts no external service"
+      }
+    },
+    {
+      "name": "anyio",
+      "version": "4.16.0",
+      "license": "MIT",
+      "license_source": "pypi:license_expression (https://pypi.org/pypi/anyio/4.16.0/json)",
+      "verified": true,
+      "status": "stable",
+      "risk_acceptance": null,
+      "defaults": {
+        "telemetry": "none - the package performs no telemetry of its own",
+        "cloud_export": "none - the package contacts no external service"
+      }
+    },
+    {
+      "name": "asgiref",
+      "version": "3.13.0",
+      "license": "BSD-3-Clause",
+      "license_source": "artifact:asgiref-3.13.0.tar.gz#licence:asgiref-3.13.0/LICENSE sha256:b846415d1b514e9c1dff14a22deb906d794bc546ca6129f950a18cd091e2a669",
+      "verified": true,
+      "status": "stable",
+      "risk_acceptance": null,
+      "defaults": {
+        "telemetry": "none - the package performs no telemetry of its own",
+        "cloud_export": "none - the package contacts no external service"
+      }
+    },
+    {
+      "name": "certifi",
+      "version": "2026.10.23",
+      "license": "MPL-2.0",
+      "license_source": "pypi:info.license (https://pypi.org/pypi/certifi/2026.10.23/json)",
+      "verified": true,
+      "status": "stable",
+      "risk_acceptance": null,
+      "defaults": {
+        "telemetry": "none - the package performs no telemetry of its own",
+        "cloud_export": "none - the package contacts no external service"
+      },
+      "note": "Ships the Mozilla CA bundle; the wheel's licence file is the CA-bundle notice, the MPL-2.0 licence text comes from the project metadata of that exact version."
+    },
+    {
+      "name": "charset-normalizer",
+      "version": "3.5.2",
+      "license": "MIT",
+      "license_source": "artifact:charset_normalizer-3.5.2.tar.gz#licence:charset_normalizer-3.5.2/LICENSE sha256:6d0d41bfe170ac6c7dc248c9a63e254d0fb45a60d50a8257d0af92c6e249b887",
+      "verified": true,
+      "status": "stable",
+      "risk_acceptance": null,
+      "defaults": {
+        "telemetry": "none - the package performs no telemetry of its own",
+        "cloud_export": "none - the package contacts no external service"
+      },
+      "note": "Charset detection runs locally; the package contacts nothing."
+    },
+    {
+      "name": "click",
+      "version": "8.5.1",
+      "license": "BSD-3-Clause",
+      "license_source": "pypi:license_expression (https://pypi.org/pypi/click/8.5.1/json)",
+      "verified": true,
+      "status": "stable",
+      "risk_acceptance": null,
+      "defaults": {
+        "telemetry": "none - the package performs no telemetry of its own",
+        "cloud_export": "none - the package contacts no external service"
+      }
+    },
+    {
+      "name": "deprecated",
+      "version": "1.3.1",
+      "license": "MIT",
+      "license_source": "artifact:deprecated-1.3.1.tar.gz#licence:deprecated-1.3.1/LICENSE.rst sha256:1e83edd15be419b5d5bde372e325e527ff4f9915f548e7c75314b41f6699e83c",
+      "verified": true,
+      "status": "stable",
+      "risk_acceptance": null,
+      "defaults": {
+        "telemetry": "none - the package performs no telemetry of its own",
+        "cloud_export": "none - the package contacts no external service"
+      }
+    },
+    {
+      "name": "fastapi",
+      "version": "0.141.1",
+      "license": "MIT",
+      "license_source": "pypi:license_expression (https://pypi.org/pypi/fastapi/0.141.1/json)",
+      "verified": true,
+      "status": "stable",
+      "risk_acceptance": null,
+      "defaults": {
+        "telemetry": "none - the package performs no telemetry of its own",
+        "cloud_export": "none - the package contacts no external service"
+      },
+      "note": "The `fastapi` CLI prints a sponsor banner when it starts a server (a message on stdout, not a network call); the library itself sends nothing."
+    },
+    {
+      "name": "googleapis-common-protos",
+      "version": "1.75.0",
+      "license": "Apache-2.0",
+      "license_source": "artifact:googleapis_common_protos-1.75.0.tar.gz#licence:googleapis_common_protos-1.75.0/LICENSE sha256:cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
+      "verified": true,
+      "status": "stable",
+      "risk_acceptance": null,
+      "defaults": {
+        "telemetry": "none - the package performs no telemetry of its own",
+        "cloud_export": "none - the package contacts no external service"
+      },
+      "note": "Generated protobuf definitions; they open no connection."
+    },
+    {
+      "name": "h11",
+      "version": "0.16.0",
+      "license": "MIT",
+      "license_source": "artifact:h11-0.16.0.tar.gz#licence:h11-0.16.0/LICENSE.txt sha256:37db5bb85926db28a427a25867f10b1232003aea1be69ccb851138adb8e6f361",
+      "verified": true,
+      "status": "stable",
+      "risk_acceptance": null,
+      "defaults": {
+        "telemetry": "none - the package performs no telemetry of its own",
+        "cloud_export": "none - the package contacts no external service"
+      }
+    },
+    {
+      "name": "httpx",
+      "version": "0.28.1",
+      "license": "BSD-3-Clause",
+      "license_source": "artifact:httpx-0.28.1.tar.gz#licence:httpx-0.28.1/LICENSE.md sha256:4ec59d544f12b5f539a3a716fd321ac58ccd8030b465221f2c880200cdf28d8d",
+      "verified": true,
+      "status": "stable",
+      "risk_acceptance": null,
+      "defaults": {
+        "telemetry": "none - the package performs no telemetry of its own",
+        "cloud_export": "none - the package contacts no external service"
+      }
+    },
+    {
+      "name": "idna",
+      "version": "3.20",
+      "license": "BSD-3-Clause",
+      "license_source": "pypi:license_expression (https://pypi.org/pypi/idna/3.20/json)",
+      "verified": true,
+      "status": "stable",
+      "risk_acceptance": null,
+      "defaults": {
+        "telemetry": "none - the package performs no telemetry of its own",
+        "cloud_export": "none - the package contacts no external service"
+      }
+    },
+    {
+      "name": "importlib-metadata",
+      "version": "8.4.0",
+      "license": "Apache-2.0",
+      "license_source": "artifact:importlib_metadata-8.4.0.tar.gz#licence:importlib_metadata-8.4.0/LICENSE sha256:cfc7749b96f63bd31c3c42b5c471bf756814053e847c10f3eb003417bc523d30",
+      "verified": true,
+      "status": "stable",
+      "risk_acceptance": null,
+      "defaults": {
+        "telemetry": "none - the package performs no telemetry of its own",
+        "cloud_export": "none - the package contacts no external service"
+      }
+    },
+    {
+      "name": "opentelemetry-api",
+      "version": "1.27.0",
+      "license": "Apache-2.0",
+      "license_source": "artifact:opentelemetry_api-1.27.0.tar.gz#licence:opentelemetry_api-1.27.0/LICENSE sha256:c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4",
+      "verified": true,
+      "status": "stable",
+      "risk_acceptance": null,
+      "defaults": {
+        "telemetry": "none - the package performs no telemetry of its own",
+        "cloud_export": "none - the package contacts no external service"
+      }
+    },
+    {
+      "name": "opentelemetry-exporter-otlp-proto-common",
+      "version": "1.27.0",
+      "license": "Apache-2.0",
+      "license_source": "artifact:opentelemetry_exporter_otlp_proto_common-1.27.0.tar.gz#licence:opentelemetry_exporter_otlp_proto_common-1.27.0/LICENSE sha256:c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4",
+      "verified": true,
+      "status": "stable",
+      "risk_acceptance": null,
+      "defaults": {
+        "telemetry": "none - the package performs no telemetry of its own",
+        "cloud_export": "none - the package contacts no external service"
+      },
+      "note": "Shared wire format of the OTLP/HTTP exporters; it opens no connection of its own."
+    },
+    {
+      "name": "opentelemetry-exporter-otlp-proto-http",
+      "version": "1.27.0",
+      "license": "Apache-2.0",
+      "license_source": "artifact:opentelemetry_exporter_otlp_proto_http-1.27.0.tar.gz#licence:opentelemetry_exporter_otlp_proto_http-1.27.0/LICENSE sha256:c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4",
+      "verified": true,
+      "status": "stable",
+      "risk_acceptance": null,
+      "defaults": {
+        "telemetry": "none by default - the exporter is inert until a provider and an endpoint are configured",
+        "cloud_export": "only the OTLP endpoint the deployment configures (the in-cluster collector); it never contacts a vendor endpoint"
+      },
+      "note": "The only package in the tree that opens a connection: it exports spans and metrics to the OTLP endpoint the deployment configures."
+    },
+    {
+      "name": "opentelemetry-instrumentation",
+      "version": "0.48b0",
+      "license": "Apache-2.0",
+      "license_source": "artifact:opentelemetry_instrumentation-0.48b0.tar.gz#licence:opentelemetry_instrumentation-0.48b0/LICENSE sha256:c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4",
+      "verified": true,
+      "status": "beta (0.48b0)",
+      "risk_acceptance": "Accepted (2026-11-19, story 1.3): the 0.48b0 line is the exact version the OPEA overlay already ships (opentelemetry-instrumentation-fastapi 0.48b0), so the agent path reuses a tree the platform already builds, scans and runs in production - the risk is the packaging/API stability of a 0.x release, not an unknown code base. The API used here (instrument / instrument_app) has not changed across the 0.4x line. Revisit when the 1.0 line ships.",
+      "defaults": {
+        "telemetry": "none - the package performs no telemetry of its own",
+        "cloud_export": "none - the package contacts no external service"
+      }
+    },
+    {
+      "name": "opentelemetry-instrumentation-asgi",
+      "version": "0.48b0",
+      "license": "Apache-2.0",
+      "license_source": "artifact:opentelemetry_instrumentation_asgi-0.48b0.tar.gz#licence:opentelemetry_instrumentation_asgi-0.48b0/LICENSE sha256:c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4",
+      "verified": true,
+      "status": "beta (0.48b0)",
+      "risk_acceptance": "Accepted (2026-11-19, story 1.3): the 0.48b0 line is the exact version the OPEA overlay already ships (opentelemetry-instrumentation-fastapi 0.48b0), so the agent path reuses a tree the platform already builds, scans and runs in production - the risk is the packaging/API stability of a 0.x release, not an unknown code base. The API used here (instrument / instrument_app) has not changed across the 0.4x line. Revisit when the 1.0 line ships.",
+      "defaults": {
+        "telemetry": "none - the package performs no telemetry of its own",
+        "cloud_export": "none - the package contacts no external service"
+      }
+    },
+    {
+      "name": "opentelemetry-instrumentation-fastapi",
+      "version": "0.48b0",
+      "license": "Apache-2.0",
+      "license_source": "artifact:opentelemetry_instrumentation_fastapi-0.48b0.tar.gz#licence:opentelemetry_instrumentation_fastapi-0.48b0/LICENSE sha256:c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4",
+      "verified": true,
+      "status": "beta (0.48b0)",
+      "risk_acceptance": "Accepted (2026-11-19, story 1.3): the 0.48b0 line is the exact version the OPEA overlay already ships (opentelemetry-instrumentation-fastapi 0.48b0), so the agent path reuses a tree the platform already builds, scans and runs in production - the risk is the packaging/API stability of a 0.x release, not an unknown code base. The API used here (instrument / instrument_app) has not changed across the 0.4x line. Revisit when the 1.0 line ships.",
+      "defaults": {
+        "telemetry": "none - the package performs no telemetry of its own",
+        "cloud_export": "none - the package contacts no external service"
+      }
+    },
+    {
+      "name": "opentelemetry-proto",
+      "version": "1.27.0",
+      "license": "Apache-2.0",
+      "license_source": "artifact:opentelemetry_proto-1.27.0.tar.gz#licence:opentelemetry_proto-1.27.0/LICENSE sha256:c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4",
+      "verified": true,
+      "status": "stable",
+      "risk_acceptance": null,
+      "defaults": {
+        "telemetry": "none - the package performs no telemetry of its own",
+        "cloud_export": "none - the package contacts no external service"
+      }
+    },
+    {
+      "name": "opentelemetry-sdk",
+      "version": "1.27.0",
+      "license": "Apache-2.0",
+      "license_source": "artifact:opentelemetry_sdk-1.27.0.tar.gz#licence:opentelemetry_sdk-1.27.0/LICENSE sha256:c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4",
+      "verified": true,
+      "status": "stable",
+      "risk_acceptance": null,
+      "defaults": {
+        "telemetry": "none - the package performs no telemetry of its own",
+        "cloud_export": "none - the package contacts no external service"
+      },
+      "note": "The SDK does not phone home; the exporter it wraps does what the deployment configures."
+    },
+    {
+      "name": "opentelemetry-semantic-conventions",
+      "version": "0.48b0",
+      "license": "Apache-2.0",
+      "license_source": "artifact:opentelemetry_semantic_conventions-0.48b0.tar.gz#licence:opentelemetry_semantic_conventions-0.48b0/LICENSE sha256:c71d239df91726fc519c6eb72d318ec65820627232b2f796219e87dcf35d0ab4",
+      "verified": true,
+      "status": "beta (0.48b0)",
+      "risk_acceptance": "Accepted (2026-11-19, story 1.3): the 0.48b0 line is the exact version the OPEA overlay already ships (opentelemetry-instrumentation-fastapi 0.48b0), so the agent path reuses a tree the platform already builds, scans and runs in production - the risk is the packaging/API stability of a 0.x release, not an unknown code base. The API used here (instrument / instrument_app) has not changed across the 0.4x line. Revisit when the 1.0 line ships.",
+      "defaults": {
+        "telemetry": "none - the package performs no telemetry of its own",
+        "cloud_export": "none - the package contacts no external service"
+      }
+    },
+    {
+      "name": "opentelemetry-util-http",
+      "version": "0.48b0",
+      "license": "Apache-2.0",
+      "license_source": "pypi:classifier 'License :: OSI Approved :: Apache Software License' (https://pypi.org/pypi/opentelemetry-util-http/0.48b0/json)",
+      "verified": true,
+      "status": "beta (0.48b0)",
+      "risk_acceptance": "Accepted (2026-11-19, story 1.3): the 0.48b0 line is the exact version the OPEA overlay already ships (opentelemetry-instrumentation-fastapi 0.48b0), so the agent path reuses a tree the platform already builds, scans and runs in production - the risk is the packaging/API stability of a 0.x release, not an unknown code base. The API used here (instrument / instrument_app) has not changed across the 0.4x line. Revisit when the 1.0 line ships.",
+      "defaults": {
+        "telemetry": "none - the package performs no telemetry of its own",
+        "cloud_export": "none - the package contacts no external service"
+      }
+    },
+    {
+      "name": "protobuf",
+      "version": "4.25.9",
+      "license": "BSD-2-Clause",
+      "license_source": "artifact:protobuf-4.25.9-py3-none-any.whl#licence:protobuf-4.25.9.dist-info/LICENSE sha256:6e5e117324afd944dcf67f36cf329843bc1a92229a8cd9bb573d7a83130fea7d",
+      "verified": true,
+      "status": "stable",
+      "risk_acceptance": null,
+      "defaults": {
+        "telemetry": "none - the package performs no telemetry of its own",
+        "cloud_export": "none - the package contacts no external service"
+      },
+      "note": "Serialises and deserialises; it opens no connection."
+    },
+    {
+      "name": "pydantic",
+      "version": "2.14.4",
+      "license": "MIT",
+      "license_source": "pypi:license_expression (https://pypi.org/pypi/pydantic/2.14.4/json)",
+      "verified": true,
+      "status": "stable",
+      "risk_acceptance": null,
+      "defaults": {
+        "telemetry": "none - the package performs no telemetry of its own",
+        "cloud_export": "none - the package contacts no external service"
+      }
+    },
+    {
+      "name": "pydantic-core",
+      "version": "2.50.5",
+      "license": "MIT",
+      "license_source": "pypi:license_expression (https://pypi.org/pypi/pydantic-core/2.50.5/json)",
+      "verified": true,
+      "status": "stable",
+      "risk_acceptance": null,
+      "defaults": {
+        "telemetry": "none - the package performs no telemetry of its own",
+        "cloud_export": "none - the package contacts no external service"
+      },
+      "note": "Ships a compiled Rust binary (a manylinux wheel); the licence is MIT and the binary performs no network access."
+    },
+    {
+      "name": "pytest",
+      "version": "9.1.1",
+      "license": "MIT",
+      "license_source": "pypi:license_expression (https://pypi.org/pypi/pytest/9.1.1/json)",
+      "verified": true,
+      "status": "stable",
+      "risk_acceptance": null,
+      "defaults": {
+        "telemetry": "none - the package performs no telemetry of its own",
+        "cloud_export": "none - the package contacts no external service"
+      }
+    },
+    {
+      "name": "requests",
+      "version": "2.34.2",
+      "license": "Apache-2.0",
+      "license_source": "artifact:requests-2.34.2.tar.gz#licence:requests-2.34.2/LICENSE sha256:09e8a9bcec8067104652c168685ab0931e7868f9c8284b66f5ae6edae5f1130b",
+      "verified": true,
+      "status": "stable",
+      "risk_acceptance": null,
+      "defaults": {
+        "telemetry": "none - the package performs no telemetry of its own",
+        "cloud_export": "none - the package contacts no external service"
+      },
+      "note": "Talks to the endpoint the caller names; the agent service makes no outbound call yet."
+    },
+    {
+      "name": "setuptools",
+      "version": "81.0.0",
+      "license": "MIT",
+      "license_source": "pypi:license_expression (https://pypi.org/pypi/setuptools/81.0.0/json)",
+      "verified": true,
+      "status": "stable",
+      "risk_acceptance": null,
+      "defaults": {
+        "telemetry": "none - the package performs no telemetry of its own",
+        "cloud_export": "none - the package contacts no external service"
+      },
+      "note": "A build-time dependency of the resolved tree; the service runtime never imports it."
+    },
+    {
+      "name": "starlette",
+      "version": "1.10.0",
+      "license": "BSD-3-Clause",
+      "license_source": "pypi:license_expression (https://pypi.org/pypi/starlette/1.10.0/json)",
+      "verified": true,
+      "status": "stable",
+      "risk_acceptance": null,
+      "defaults": {
+        "telemetry": "none - the package performs no telemetry of its own",
+        "cloud_export": "none - the package contacts no external service"
+      }
+    },
+    {
+      "name": "typing-extensions",
+      "version": "4.16.0",
+      "license": "PSF-2.0",
+      "license_source": "pypi:license_expression (https://pypi.org/pypi/typing-extensions/4.16.0/json)",
+      "verified": true,
+      "status": "stable",
+      "risk_acceptance": null,
+      "defaults": {
+        "telemetry": "none - the package performs no telemetry of its own",
+        "cloud_export": "none - the package contacts no external service"
+      }
+    },
+    {
+      "name": "typing-inspection",
+      "version": "0.4.5",
+      "license": "MIT",
+      "license_source": "pypi:license_expression (https://pypi.org/pypi/typing-inspection/0.4.5/json)",
+      "verified": true,
+      "status": "stable",
+      "risk_acceptance": null,
+      "defaults": {
+        "telemetry": "none - the package performs no telemetry of its own",
+        "cloud_export": "none - the package contacts no external service"
+      }
+    },
+    {
+      "name": "urllib3",
+      "version": "2.8.0",
+      "license": "MIT",
+      "license_source": "pypi:license_expression (https://pypi.org/pypi/urllib3/2.8.0/json)",
+      "verified": true,
+      "status": "stable",
+      "risk_acceptance": null,
+      "defaults": {
+        "telemetry": "none - the package performs no telemetry of its own",
+        "cloud_export": "none - the package contacts no external service"
+      },
+      "note": "Talks to the endpoint the caller names; the agent service makes no outbound call yet."
+    },
+    {
+      "name": "uvicorn",
+      "version": "0.52.1",
+      "license": "BSD-3-Clause",
+      "license_source": "pypi:license_expression (https://pypi.org/pypi/uvicorn/0.52.1/json)",
+      "verified": true,
+      "status": "stable",
+      "risk_acceptance": null,
+      "defaults": {
+        "telemetry": "none - the package performs no telemetry of its own",
+        "cloud_export": "none - the package contacts no external service"
+      }
+    },
+    {
+      "name": "wrapt",
+      "version": "1.17.3",
+      "license": "BSD-2-Clause",
+      "license_source": "artifact:wrapt-1.17.3.tar.gz#licence:wrapt-1.17.3/LICENSE sha256:5974efbbc8b626b2050810d63c3a907ee21c92bf64b3740fc623ad05eb3448ab",
+      "verified": true,
+      "status": "stable",
+      "risk_acceptance": null,
+      "defaults": {
+        "telemetry": "none - the package performs no telemetry of its own",
+        "cloud_export": "none - the package contacts no external service"
+      }
+    },
+    {
+      "name": "zipp",
+      "version": "4.1.2",
+      "license": "MIT",
+      "license_source": "pypi:license_expression (https://pypi.org/pypi/zipp/4.1.2/json)",
+      "verified": true,
+      "status": "stable",
+      "risk_acceptance": null,
+      "defaults": {
+        "telemetry": "none - the package performs no telemetry of its own",
+        "cloud_export": "none - the package contacts no external service"
+      }
+    }
+  ],
+  "generated": "2026-11-19",
+  "defaults_audit": "NFR-2 defaults audit, per package and for the exact version pinned: does the package send telemetry by default, and does it export data to a cloud service by default. The verdicts are a human reading of the package's own behaviour, not of its documentation."
+}

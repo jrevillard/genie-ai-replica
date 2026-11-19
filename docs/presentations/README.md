@@ -3,7 +3,7 @@
 ## Create a new presentation
 
 Use **Reveal.js and Mermaid** for new GENIE.AI presentations. The
-[GENIE.AI Overview](genie-ai-overview/README.md) is the reference for the
+[GENIE.AI walkthrough](genie-ai-overview/README.md) is the reference for the
 source layout, slide design, build and Hugo integration.
 
 1. Keep the editable slide text, speaker notes, styles, scripts, assets and

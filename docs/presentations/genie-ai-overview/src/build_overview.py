@@ -10,6 +10,7 @@ WORK = Path(__file__).parent
 ASSETS = WORK / 'assets'
 REVEAL = WORK.parent / 'node_modules' / 'reveal.js'
 DEFAULT_OUTPUT = WORK.parents[3] / 'site/static/presentations/genie-ai/index.html'
+DECK_TITLE = 'GENIE.AI walkthrough'
 DOC = 'https://genie-ai-7e342b.opensource.unicc.org'
 REPO = 'https://opensource.unicc.org/un/itu/genie-ai'
 DIAGRAMS = loads((WORK / 'diagrams.json').read_text(encoding='utf-8'))
@@ -512,7 +513,7 @@ html = (
     '<!doctype html><html lang="en"><head><meta charset="utf-8">'
     '<meta name="viewport" content="width=device-width, initial-scale=1">'
     '<meta name="description" content="GENIE.AI technical briefing for public-sector organisations">'
-    '<title>GENIE.AI Overview</title>'
+    '<title>' + DECK_TITLE + '</title>'
     f'<style>{css}</style></head><body>{controls}'
     f'<main class="reveal"><div class="slides">\n{content}\n</div></main>'
     f'<!-- Embedded component licences\n{license_notice}\n-->'

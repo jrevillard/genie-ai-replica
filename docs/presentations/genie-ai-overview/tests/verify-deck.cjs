@@ -31,7 +31,7 @@ async function check() {
     await page.waitForFunction(() => document.querySelector(".reveal.ready") && document.fonts.status === "loaded");
     assert.equal(await page.locator("html").getAttribute("lang"), "en");
     assert.equal(await page.locator(".slides > section.deck-slide").count(), 43);
-    assert.equal(await page.title(), "GENIE.AI Overview");
+    assert.equal(await page.title(), "GENIE.AI walkthrough");
     assert.equal(await page.locator(".slides > section.present").getAttribute("id"), "slide-01");
 
     async function slide(n) {

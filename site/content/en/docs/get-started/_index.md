@@ -34,7 +34,7 @@ ends with a verifiable artifact you can show someone else.
 ## Pages in this section
 
 - [Welcome](/docs/get-started/welcome/) — the one-pager version.
-- [GENIE.AI Overview](/docs/get-started/presentation/) — an animated, one-hour guided overview of the framework.
+- [GENIE.AI walkthrough](/docs/get-started/presentation/) — an animated guided overview of the framework.
 - [Quickstart: User](/docs/get-started/quickstart-user/)
 - [Quickstart: Deployer](/docs/get-started/quickstart-deployer/)
 - [Quickstart: Developer](/docs/get-started/quickstart-developer/)

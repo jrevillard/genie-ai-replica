@@ -4,7 +4,7 @@
 
 Use Reveal.js and Mermaid for new presentations. Follow the
 [presentation README](README.md) and use the
-[GENIE.AI Overview](genie-ai-overview/README.md) as a working reference.
+[GENIE.AI walkthrough](genie-ai-overview/README.md) as a working reference.
 
 Keep editable sources under `docs/presentations/`. Rebuild the HTML after
 editing the source, and regenerate the SVGs first if Mermaid diagrams

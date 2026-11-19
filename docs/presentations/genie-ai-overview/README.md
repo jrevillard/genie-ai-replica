@@ -1,4 +1,4 @@
-# GENIE.AI Overview
+# GENIE.AI walkthrough
 
 This 43-slide English briefing uses Reveal.js for presentation controls and
 Mermaid for diagrams. The standalone HTML embeds the presentation code, fonts,

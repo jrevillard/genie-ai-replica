@@ -1,0 +1,102 @@
+---
+title: 'Story 1.10 — Attest the chart identity of the deployed baseline'
+type: 'feature'
+created: '2026-11-19'
+status: 'in-progress'
+route: 'dispatch'
+review_loop_iteration: 0
+baseline_commit: '017e9f2a0'
+context:
+  - '{project-root}/_bmad-output/implementation-artifacts/epic-1-context.md'
+  - '{project-root}/_bmad-output/implementation-artifacts/stories/1-2-baseline-the-deployed-stack-v03.md'
+---
+
+<frozen-after-approval reason="human-owned intent — do not modify unless human renegotiates">
+
+## Intent
+
+**Problem:** The V03 record reconciles the running deployment against the repository's chart source, but it never says WHICH chart the deployment runs. A reader cannot tell whether the source the record reconciles against is the chart the running release was rendered from, or a later state of it — the defect that let story 1.2's identity gate fail open twice before it was trimmed.
+
+**Approach:** The capture reads the chart identity from the cluster objects that attest it — the chart version the HelmRelease's release history records, and the rendered chart the Helm release secret holds — and compares the local chart tree with it file by file. Every difference is listed with a disposition; a comparison that cannot be established is an unresolved difference that fails the capture, never a silent pass.
+
+## Boundaries & Constraints
+
+**Always:** read-only against the cluster; the identity comes from cluster objects, never from a moving ref; the comparison fails closed; no secret value ever reaches the record; the record names the chart the deployment runs and the commit of this repository that carries it.
+
+**Never:** never compare the local chart tree against the source's current ref — that ref moves and is not the commit the release was rendered from; never read the release secret's rendered manifest or its effective (overlay) values; never widen the environment comparison past the workloads the chart renders — the retrieval tier plus the three non-retrieval tiers this story adds; never let an undispositioned difference pass.
+
+## I/O & Edge-Case Matrix
+
+| Scenario | Input / State | Expected Output / Behavior | Error Handling |
+|---|---|---|---|
+| Release whose chart is in this repository | the deployed revision's release secret holds a chart this checkout carries | the record states the attested version, the source commit, and IDENTICAL | none |
+| Local chart source differs | a template, a value leaf, the lock or the version differs | each difference is a dispositioned row | none |
+| The release does not render from a GitRepository | the sourceRef kind is not GitRepository | UNRESOLVED — no commit attests the chart | capture exits 2 |
+| The attested chart carries no template | the release secret holds a chart with no template | UNRESOLVED — an empty commit attests nothing | capture exits 2 |
+| A commit this checkout does not know | the attested chart matches no commit of this checkout | UNRESOLVED — the chart the deployment runs is unknown here | capture exits 2 |
+| The release secret is missing or unreadable | no release secret for the deployed revision | UNRESOLVED — the chart the deployment runs cannot be read | capture exits 2 |
+
+</frozen-after-approval>
+
+## Code Map
+
+- `scripts/baseline/capture-deployed-baseline.py` — the capture. `OPEA_WORKLOADS` (line 56) maps component → chart template; `capture_release` (line 794) reads the HelmRelease (history, sourceRef, storageNamespace); `local_chart_version` (line 874); `collect_discrepancies` (line 1727) is the exit gate; `capture` (line 1893) assembles the record; `render_markdown` (line 1311) writes it.
+- `scripts/baseline/tests/test_capture_deployed_baseline.py` — the capture's pins; `load_capture` (line 40) imports the script by path.
+- `charts/genieai-umbrella/templates/opea/{pii-service,okf-server,ragas-service}.yaml` — the three non-retrieval tiers; each declares its component label (`pii-service`, `okf-server`, `ragas-service`) and its env rows.
+- `charts/genieai-umbrella/values.yaml` — the chart defaults; the OKF tiers' values live under `okf.*`, not `opea.*`.
+- `charts/genieai-umbrella/Chart.lock` — the chart's dependencies; the release secret carries the same lock.
+- `docs/baselines/v03-deployed-baseline-2026-11-18.md` — the record this story's gate extends.
+
+## Tasks & Acceptance
+
+**Execution:**
+- [x] `scripts/baseline/capture-deployed-baseline.py` — decode the deployed revision's Helm release secret and extract the rendered chart (templates, files, values, metadata, lock); never the manifest or the effective values.
+- [x] `scripts/baseline/capture-deployed-baseline.py` — compare the local chart tree with the attested chart: per-file content (git blob identity), the chart version, the values leaves, and the lock's dependencies.
+- [x] `scripts/baseline/capture-deployed-baseline.py` — resolve the commit of this repository that carries the attested chart; the source's kind, the attested chart's emptiness and the absence of a known commit are the three unresolved cases.
+- [x] `scripts/baseline/capture-deployed-baseline.py` — extend `OPEA_WORKLOADS` with the three non-retrieval tiers (PII sidecar, OKF server, RAGAS judge) and their component labels; the capture's machinery is unchanged.
+- [x] `scripts/baseline/capture-deployed-baseline.py` — render the chart identity in the record (attested version, source, commit, verdict) and feed every difference into the capture's existing exit gate.
+- [x] `scripts/baseline/tests/test_capture_deployed_baseline.py` — pin the three unresolved cases and the identity verdict.
+
+**Acceptance Criteria:**
+- Given a deployed release whose chart this repository carries, when the capture runs, then the record states the attested chart version, the source it was rendered from, the commit of this repository that carries it, and whether the local chart tree is identical to it.
+- Given a local chart source that differs from the attested chart, when the capture runs, then each difference is a row with a disposition.
+- Given a comparison that cannot be established (a source that is not a GitRepository, an attested chart with no template, or a commit this checkout does not know), when the capture runs, then the row is UNRESOLVED and the capture exits 2.
+- Given the three non-retrieval tiers are deployed, when the capture runs, then their environment is compared against the chart source like the retrieval tier's.
+
+## Implementation Notes
+
+- The pre-trim gate (`16ef9dc67`) read the GitRepository's artifact revision and compared the local tree with it. That revision is the source's **current** ref: measured on 2026-11-19, `HelmChart.status.observedSourceArtifactRevision` moved from `efa4db687` to `6bb54ffa` at 13:48 while the packaged artifact stayed at 2026-11-18T20:08:36Z. Flux updates it on every reconcile of the source, whatever the chart's reconcile strategy. It is not the commit the release was rendered from.
+- The cluster object that does attest the rendered-from chart is the Helm **release secret** of the deployed revision (`sh.helm.release.v1.<release>.v<revision>` in `status.storageNamespace`): its `chart` holds the templates, files, values, metadata and lock the release was rendered with. Measured on the shared venue: the decoded chart's 77 template/file blobs are byte-identical to this checkout's `charts/genieai-umbrella` tree.
+- The rendered chart's `values` are Helm's **coalesced** values: the chart's own values plus the dependency charts' defaults under the dependency names. Only the chart's own leaves are comparable; the dependency leaves are attested by the lock.
+- Helm stores a release as base64(gzip(json)); the secret's `data.release` is base64 of that, so decoding is two base64 layers plus a gunzip.
+- The commit this repository carries: the chart's content changes only where a commit touches `charts/genieai-umbrella`, so the candidates are those commits plus HEAD; each is compared with `git ls-tree`.
+- The wave ruling (W-B2) puts #1998 and #1988 in one merge request with two `Closes`. Both are top-level goals of the capture, so they are recorded here as one story's two tasks rather than split; #1988 is a three-entry map extension and the machinery is untouched.
+- The capture is read-only, so the shared venue is only read; the record it writes is a dated file under `docs/baselines/`.
+
+## Spec Change Log
+
+## Review Triage Log
+
+## Design Notes
+
+The identity has three axes and each is read from the object that attests it:
+
+| Axis | Attested by | Read |
+|---|---|---|
+| the chart the deployment runs (version) | the HelmRelease's release history | the deployed revision's `chartVersion` |
+| the chart the deployment runs (content) | the Helm release secret of the deployed revision | the decoded `chart` |
+| the commit of this repository that carries it | this repository | the candidate commit whose tree matches the attested content |
+
+Comparing the local tree with the **source's current ref** is what story 1.2's gate did, and it is the defect this story exists to fix: a moving ref cannot say which chart was rendered.
+
+The comparison is content, not version: the version is a single scalar that a chart bump moves; the content is what the release rendered with. A file that differs is a difference with a disposition, never a failure — the record's job is to state the truth, not to gate a deployment.
+
+## Verification
+
+**Commands:**
+- `uv run --no-cache --with pytest --with pyyaml python -m pytest scripts/baseline/tests -q` -- expected: the capture's suite passes, including the three unresolved cases.
+- `uv run --no-cache --with pyyaml python scripts/baseline/capture-deployed-baseline.py --namespace genieai --date 2026-11-19 --out /tmp/v03-identity.md` -- expected: the record states the attested chart, the source commit and the verdict; exit 0 when the local tree is identical to the attested chart.
+
+**Manual checks (if no CLI):**
+- `kubectl -n flux-system get helmrelease genieai -o yaml` -- the release history's `chartVersion` and the `storageNamespace` the release secret lives in.
+- `kubectl -n flux-system get secret sh.helm.release.v1.genieai.v72 -o jsonpath='{.data.release}'` -- the attested chart the record's identity section is derived from.

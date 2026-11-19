@@ -1189,3 +1189,235 @@ def test_the_record_carries_the_capture_date(tmp_path):
     out_path = tmp_path / "record.md"
     capture.write_record(data, str(out_path))
     assert "2026-11-18" in out_path.read_text(encoding="utf-8").splitlines()[0]
+
+
+# --------------------------------------------------------------------------
+# the chart identity (story 1.10, issue #1998)
+# --------------------------------------------------------------------------
+
+
+def _attested_chart(template_overrides=None, metadata_version=None):
+    """The chart the deployment runs, built from the chart source this
+    checkout carries.
+
+    The content is the chart source's own, so the attested chart is the one
+    a commit of this checkout carries - which is what the identity resolves
+    against.
+    """
+    import yaml
+
+    templates = []
+    files = []
+    for path, content in sorted(capture.local_chart_files().items()):
+        entry = {"name": path, "data": base64.b64encode(content).decode("ascii")}
+        if path.startswith("templates/"):
+            templates.append(entry)
+        else:
+            files.append(entry)
+    for entry in templates:
+        override = (template_overrides or {}).get(entry["name"])
+        if override is not None:
+            entry["data"] = base64.b64encode(override).decode("ascii")
+    chart_dir = os.path.join(capture.REPO_ROOT, "charts", "genieai-umbrella")
+    with open(os.path.join(chart_dir, "values.yaml"), encoding="utf-8") as handle:
+        values = yaml.safe_load(handle)
+    with open(os.path.join(chart_dir, "Chart.lock"), encoding="utf-8") as handle:
+        lock = yaml.safe_load(handle)
+    return {
+        "templates": templates,
+        "files": files,
+        "values": values,
+        "metadata": {
+            "name": "genieai-umbrella",
+            "version": metadata_version or capture.local_chart_version(),
+        },
+        "lock": lock,
+    }
+
+
+def _release_secret(chart):
+    """The release secret, encoded the way helm stores it."""
+    import gzip
+    import json
+
+    payload = base64.b64encode(
+        gzip.compress(json.dumps({"chart": chart}).encode("utf-8"))
+    ).decode("ascii")
+    return {"data": {"release": payload}}
+
+
+def _release_info(**overrides):
+    """The release facts the identity is resolved from."""
+    info = {
+        "chart_name": "genieai-umbrella",
+        "chart_version": "0.2.182",
+        "source_ref": {
+            "kind": "GitRepository",
+            "name": "genie-ai",
+            "namespace": "flux-system",
+        },
+        "storage_namespace": "flux-system",
+        "release": "genieai",
+        "revision": 72,
+    }
+    info.update(overrides)
+    return info
+
+
+def test_the_identity_names_the_chart_the_deployment_runs(monkeypatch):
+    """The chart the deployment runs is read from the cluster objects."""
+    monkeypatch.setattr(
+        capture,
+        "kubectl_json",
+        lambda *args, **kwargs: _release_secret(_attested_chart()),
+    )
+    identity = capture.chart_identity(_release_info())
+    assert identity["status"] == "IDENTICAL"
+    assert identity["chart_version"] == "0.2.182"
+    assert identity["source_kind"] == "GitRepository"
+    assert identity["commit"], (
+        "the identity must name the commit that carries the chart"
+    )
+    assert identity["files"] == len(capture.local_chart_files())
+    assert identity["differences"] == []
+
+
+def test_a_commit_this_checkout_does_not_know_fails_closed(monkeypatch):
+    """A chart no commit of this checkout carries cannot be established."""
+    monkeypatch.setattr(
+        capture,
+        "kubectl_json",
+        lambda *args, **kwargs: _release_secret(
+            _attested_chart(
+                template_overrides={
+                    "templates/opea/chatqna.yaml": b"-- a chart this checkout does not know\n"
+                }
+            )
+        ),
+    )
+    identity = capture.chart_identity(_release_info())
+    assert identity["status"] == "UNRESOLVED"
+    assert identity["commit"] == ""
+    rows = capture.chart_identity_rows(identity)
+    assert len(rows) == 1
+    assert rows[0]["disposition"] == "**UNRESOLVED**"
+
+
+def test_an_empty_chart_fails_closed(monkeypatch):
+    """An attested chart with no template attests nothing."""
+    chart = _attested_chart()
+    chart["templates"] = []
+    monkeypatch.setattr(
+        capture, "kubectl_json", lambda *args, **kwargs: _release_secret(chart)
+    )
+    identity = capture.chart_identity(_release_info())
+    assert identity["status"] == "UNRESOLVED"
+    assert "no template" in identity["reason"]
+
+
+def test_a_source_that_is_not_a_git_repository_fails_closed():
+    """A release that does not render from a git source has no commit."""
+    identity = capture.chart_identity(
+        _release_info(source_ref={"kind": "HelmRepository", "name": "genieai"})
+    )
+    assert identity["status"] == "UNRESOLVED"
+    assert "GitRepository" in identity["reason"]
+
+
+def test_a_missing_release_secret_fails_closed(monkeypatch):
+    """A release secret that cannot be read attests no chart."""
+
+    def boom(*args, **kwargs):
+        raise RuntimeError("command failed (1): kubectl get secret")
+
+    monkeypatch.setattr(capture, "kubectl_json", boom)
+    identity = capture.chart_identity(_release_info())
+    assert identity["status"] == "UNRESOLVED"
+    assert "release secret" in identity["reason"]
+
+
+def test_a_differing_chart_source_is_recorded_with_its_disposition(monkeypatch):
+    """A chart source that is not the deployed chart is a known difference."""
+    attested = _attested_chart()
+    monkeypatch.setattr(
+        capture, "kubectl_json", lambda *args, **kwargs: _release_secret(attested)
+    )
+    files = capture.local_chart_files()
+    files["templates/opea/chatqna.yaml"] = b"-- another revision of the template\n"
+    monkeypatch.setattr(capture, "local_chart_files", lambda: files)
+    identity = capture.chart_identity(_release_info())
+    assert identity["status"] == "DIFFERENT"
+    paths = [difference["path"] for difference in identity["differences"]]
+    assert "templates/opea/chatqna.yaml" in paths
+    rows = capture.chart_identity_rows(identity)
+    assert rows
+    assert all(row["disposition"] != "**UNRESOLVED**" for row in rows)
+
+
+def test_an_unestablishable_identity_fails_the_capture(tmp_path, monkeypatch):
+    """An identity the capture cannot establish fails the capture."""
+    monkeypatch.setattr(
+        capture,
+        "kubectl_json",
+        lambda *args, **kwargs: _release_secret(
+            _attested_chart(
+                template_overrides={
+                    "templates/opea/chatqna.yaml": b"-- a chart this checkout does not know\n"
+                }
+            )
+        ),
+    )
+    identity = capture.chart_identity(_release_info())
+    data = _record_data()
+    data["chart_identity"] = identity
+    data["discrepancies"] = capture.collect_discrepancies([], [], [], identity)
+    out_path = tmp_path / "record.md"
+    unresolved = capture.write_record(data, str(out_path))
+    assert capture.exit_code_for(unresolved) == 2
+
+
+def test_the_record_states_the_chart_the_deployment_runs(tmp_path, monkeypatch):
+    """The record says which chart the deployment runs, and where it came from."""
+    monkeypatch.setattr(
+        capture,
+        "kubectl_json",
+        lambda *args, **kwargs: _release_secret(_attested_chart()),
+    )
+    identity = capture.chart_identity(_release_info())
+    data = _record_data()
+    data["chart_identity"] = identity
+    out_path = tmp_path / "record.md"
+    capture.write_record(data, str(out_path))
+    record = out_path.read_text(encoding="utf-8")
+    assert "## Chart identity" in record
+    assert "0.2.182" in record
+    assert identity["commit"] in record
+
+
+def test_the_okf_tier_is_compared_like_the_retrieval_tier(
+    chart_values, overlay_values, env_maps
+):
+    """The three non-retrieval tiers carry their component label and their
+    chart-declared environment is compared against the chart source."""
+    effective = capture.deep_merge(chart_values, overlay_values)
+    for component in ("pii-service", "okf-server", "ragas-service"):
+        assert component in capture.OPEA_WORKLOADS
+        assert env_maps[component], f"{component} template parsed nothing"
+    workload = {
+        "name": "genieai-genieai-umbrella-okf-server",
+        "component": "okf-server",
+        "containers": [
+            {
+                "name": "okf-server",
+                "image": "x",
+                "env": {"OKF_MAX_CONCEPT_DOC_CHARS": ""},
+            }
+        ],
+    }
+    rows, _ = capture.compare_workload(
+        workload, env_maps, chart_values, overlay_values, effective
+    )
+    compared = [row for row in rows if row["env"] == "OKF_MAX_CONCEPT_DOC_CHARS"]
+    assert compared, "the tier's chart-declared environment must be compared"
+    assert compared[0]["status"] == "MATCH"
+    assert compared[0]["source_path"] == "okf.maxConceptDocChars"

@@ -23,7 +23,10 @@ from __future__ import annotations
 
 import argparse
 import base64
+import binascii
 import datetime as dt
+import gzip
+import hashlib
 import json
 import os
 import re
@@ -51,8 +54,10 @@ USER_AGENT = "genieai-baseline-capture/1.0"
 # The chart section each OPEA workload is rendered from. The component label
 # is what the chart puts on the workload; the file is the template that
 # declares the workload's environment. The scope is the retrieval and
-# ingestion tier the acceptance criteria name: the application tier (backend,
-# frontend, document repository) is compared for its model ids only.
+# ingestion tier the acceptance criteria name, plus the OKF tier the chart
+# renders beside it (the PII sidecar, the OKF server, the RAGAS judge): the
+# application tier (backend, frontend, document repository) is compared for
+# its model ids only.
 OPEA_WORKLOADS = {
     "chatqna": "chatqna.yaml",
     "retriever": "retriever.yaml",
@@ -60,6 +65,9 @@ OPEA_WORKLOADS = {
     "embedding": "embedding.yaml",
     "reranker": "reranker.yaml",
     "translation": "translation.yaml",
+    "pii-service": "pii-service.yaml",
+    "okf-server": "okf-server.yaml",
+    "ragas-service": "ragas-service.yaml",
 }
 
 # The model ids the APPLICATION tier pins. The chart path each one comes
@@ -803,10 +811,15 @@ def capture_release(flux_namespace, release):
     deployed = [entry for entry in history if entry.get("status") == "deployed"]
     if deployed:
         revision = max(int(entry.get("version", 0)) for entry in deployed)
+        revision_entry = next(
+            (entry for entry in deployed if int(entry.get("version", 0)) == revision),
+            {},
+        )
     else:
         revision = max(
             (int(entry.get("version", 0)) for entry in history), default=0
         )
+        revision_entry = {}
     conditions = status.get("conditions") or []
     ready = next(
         (condition for condition in conditions if condition.get("type") == "Ready"),
@@ -860,8 +873,23 @@ def capture_release(flux_namespace, release):
     for target_path, values in targeted:
         overlay = set_path(overlay, target_path, values)
     overlay_name = ", ".join(overlay_names) or "(none)"
+    # Where the release secrets live: helm-controller stores the release in
+    # the storage namespace, which is not the namespace the release is
+    # installed into.
+    storage_namespace = (
+        status.get("storageNamespace")
+        or spec.get("storageNamespace")
+        or spec.get("targetNamespace")
+        or flux_namespace
+    )
+    chart_spec = spec.get("chart", {}).get("spec", {})
     return {
-        "chart": spec.get("chart", {}).get("spec", {}),
+        "chart": chart_spec,
+        "chart_name": revision_entry.get("chartName", ""),
+        "chart_version": revision_entry.get("chartVersion", ""),
+        "source_ref": chart_spec.get("sourceRef", {}),
+        "storage_namespace": storage_namespace,
+        "release": release,
         "revision": revision,
         "overlay": overlay,
         "overlay_name": overlay_name,
@@ -875,6 +903,460 @@ def local_chart_version():
     """The version of the chart source this capture compares against."""
     with open(os.path.join(CHART_DIR, "Chart.yaml"), encoding="utf-8") as handle:
         return (yaml.safe_load(handle) or {}).get("version", "")
+
+
+# --------------------------------------------------------------------------
+# chart identity
+# --------------------------------------------------------------------------
+
+# Helm keeps these four apart from the templates and the chart's own files:
+# they live in the chart's metadata, values, lock and schema, so they are
+# compared apart from the file-by-file content comparison.
+CHART_METADATA_FILES = (
+    "Chart.yaml",
+    "Chart.lock",
+    "values.yaml",
+    "values.schema.json",
+)
+
+# The chart's path inside the repository, as git addresses it.
+CHART_REPO_PATH = "charts/genieai-umbrella"
+
+
+def git_blob_sha(content):
+    """The git blob id of a file's bytes.
+
+    Git hashes a blob as sha1("blob <size>\\0" + content); the chart
+    comparison uses the same identity, so two files match when their blob
+    ids agree.
+    """
+    return hashlib.sha1(b"blob %d\0" % len(content) + content).hexdigest()
+
+
+def decode_release_payload(encoded):
+    """The decoded payload of a Helm release secret.
+
+    Helm stores a release as base64(gzip(json)) and the secret holds that
+    value base64-encoded again, so decoding is two base64 layers and a
+    gunzip.
+    """
+    raw = base64.b64decode(encoded)
+    try:
+        raw = base64.b64decode(raw, validate=True)
+    except (binascii.Error, ValueError):
+        pass
+    try:
+        raw = gzip.decompress(raw)
+    except (OSError, EOFError):
+        pass
+    return json.loads(raw)
+
+
+def attested_chart(storage_namespace, release, revision):
+    """The chart the release was rendered from, as the release secret holds it.
+
+    The secret's `chart` carries the templates, the files, the values, the
+    metadata and the lock the release was rendered with. The rendered
+    manifest and the effective values are NOT read: they carry the
+    deployment's configuration, not the chart's identity.
+    """
+    name = f"sh.helm.release.v1.{release}.v{revision}"
+    try:
+        secret = kubectl_json(storage_namespace, "get", "secret", name)
+    except (RuntimeError, json.JSONDecodeError):
+        return None
+    encoded = (secret.get("data") or {}).get("release")
+    if not encoded:
+        return None
+    try:
+        chart = decode_release_payload(encoded).get("chart") or {}
+    except (ValueError, json.JSONDecodeError):
+        return None
+    templates = {
+        entry.get("name", ""): base64.b64decode(entry.get("data") or "")
+        for entry in chart.get("templates") or []
+    }
+    files = {
+        entry.get("name", ""): base64.b64decode(entry.get("data") or "")
+        for entry in chart.get("files") or []
+    }
+    return {
+        "templates": templates,
+        "files": files,
+        "values": chart.get("values") or {},
+        "metadata": chart.get("metadata") or {},
+        "lock": chart.get("lock") or {},
+    }
+
+
+def local_chart_files():
+    """The chart source's own files, as {path: bytes}.
+
+    The paths are relative to the chart root, like the paths the release
+    secret carries. The four files Helm keeps apart are left out: they are
+    compared apart. The vendored dependencies are left out too: Helm keeps
+    them in the chart's dependencies, not in its files.
+    """
+    files = {}
+    for root, dirs, names in os.walk(CHART_DIR):
+        dirs[:] = sorted(name for name in dirs if name != "charts")
+        for name in sorted(names):
+            absolute = os.path.join(root, name)
+            relative = os.path.relpath(absolute, CHART_DIR).replace(os.sep, "/")
+            if relative in CHART_METADATA_FILES:
+                continue
+            with open(absolute, "rb") as handle:
+                files[relative] = handle.read()
+    return files
+
+
+def chart_commits():
+    """The commits whose chart content can differ from HEAD's.
+
+    The chart's content changes only where a commit touches it, so the
+    candidates are those commits; the commit that carries the attested chart
+    is one of them.
+    """
+    output = run(
+        ["git", "-C", REPO_ROOT, "log", "--format=%H", "--", CHART_REPO_PATH],
+        check=False,
+    )
+    commits = [line.strip() for line in output.splitlines() if line.strip()]
+    head = run(["git", "-C", REPO_ROOT, "rev-parse", "HEAD"], check=False).strip()
+    if head and head not in commits:
+        commits.insert(0, head)
+    return commits
+
+
+def commit_chart_files(commit):
+    """The chart files a commit carries, as {path: git blob id}."""
+    output = run(
+        ["git", "-C", REPO_ROOT, "ls-tree", "-r", commit, "--", CHART_REPO_PATH],
+        check=False,
+    )
+    files = {}
+    for line in output.splitlines():
+        meta, _, path = line.partition("\t")
+        parts = meta.split()
+        if len(parts) < 3 or parts[1] != "blob":
+            continue
+        relative = path[len(CHART_REPO_PATH) + 1 :]
+        if relative in CHART_METADATA_FILES:
+            continue
+        files[relative] = parts[2]
+    return files
+
+
+def source_commit(attested_ids):
+    """The commit of this repository that carries the attested chart.
+
+    The chart the deployment runs is content: the commit that carries the
+    same content is the commit the release was rendered from. A chart no
+    commit of this checkout carries is a commit this checkout does not know.
+    """
+    for commit in chart_commits():
+        if commit_chart_files(commit) == attested_ids:
+            return commit
+    return None
+
+
+def values_identical(left, right):
+    """Two values compared by content.
+
+    The key order of a mapping is not a difference, and a number written
+    `1` against `1.0` is the same value.
+    """
+    if isinstance(left, dict) and isinstance(right, dict):
+        if set(left) != set(right):
+            return False
+        return all(values_identical(left[key], right[key]) for key in left)
+    if isinstance(left, list) and isinstance(right, list):
+        if len(left) != len(right):
+            return False
+        return all(values_identical(item, other) for item, other in zip(left, right))
+    return values_equal(left, right)
+
+
+def display_value(value):
+    """A value as the record shows it: JSON, with the keys ordered."""
+    try:
+        return json.dumps(value, sort_keys=True, default=str)
+    except (TypeError, ValueError):
+        return normalize(value)
+
+
+def leaf_values(values, prefix=""):
+    """The leaves of a values tree, as {path: value}."""
+    leaves = {}
+    if isinstance(values, dict):
+        for key, value in values.items():
+            child = f"{prefix}.{key}" if prefix else str(key)
+            leaves.update(leaf_values(value, child))
+    else:
+        leaves[prefix] = values
+    return leaves
+
+
+def dependency_names():
+    """The names of the chart's dependencies."""
+    with open(os.path.join(CHART_DIR, "Chart.lock"), encoding="utf-8") as handle:
+        lock = yaml.safe_load(handle) or {}
+    return {dep.get("name", "") for dep in lock.get("dependencies") or []}
+
+
+def values_differences(chart):
+    """The differences between the chart source's values and the attested ones.
+
+    Helm coalesces the dependency charts' defaults into the chart's values,
+    under the dependency's name; those leaves belong to the dependency, not
+    to the chart, so they are not compared.
+    """
+    with open(os.path.join(CHART_DIR, "values.yaml"), encoding="utf-8") as handle:
+        local = yaml.safe_load(handle) or {}
+    local_leaves = leaf_values(local)
+    attested_leaves = leaf_values(chart.get("values") or {})
+    dependencies = dependency_names()
+    differences = []
+    for path, value in sorted(local_leaves.items()):
+        if path in attested_leaves:
+            if not values_identical(value, attested_leaves[path]):
+                differences.append(
+                    {
+                        "kind": "values",
+                        "path": f"values.yaml:{path}",
+                        "source": cell(display_value(value)),
+                        "deployed": cell(display_value(attested_leaves[path])),
+                    }
+                )
+        elif path.split(".")[0] not in dependencies:
+            differences.append(
+                {
+                    "kind": "values",
+                    "path": f"values.yaml:{path}",
+                    "source": cell(display_value(value)),
+                    "deployed": "(not in the chart the deployment runs)",
+                }
+            )
+    for path in sorted(attested_leaves):
+        if path in local_leaves or path.split(".")[0] in dependencies:
+            continue
+        differences.append(
+            {
+                "kind": "values",
+                "path": f"values.yaml:{path}",
+                "source": "(not in the chart source)",
+                "deployed": cell(display_value(attested_leaves[path])),
+            }
+        )
+    return differences
+
+
+def lock_differences(chart):
+    """The differences between the chart source's lock and the attested one."""
+    with open(os.path.join(CHART_DIR, "Chart.lock"), encoding="utf-8") as handle:
+        local = yaml.safe_load(handle) or {}
+    attested = chart.get("lock") or {}
+    differences = []
+    if (
+        local.get("digest")
+        and attested.get("digest")
+        and local["digest"] != attested["digest"]
+    ):
+        differences.append(
+            {
+                "kind": "lock",
+                "path": "Chart.lock:digest",
+                "source": cell(local["digest"]),
+                "deployed": cell(attested["digest"]),
+            }
+        )
+    local_dependencies = {
+        dep.get("name"): dep for dep in local.get("dependencies") or []
+    }
+    attested_dependencies = {
+        dep.get("name"): dep for dep in attested.get("dependencies") or []
+    }
+    for name in sorted(set(local_dependencies) | set(attested_dependencies)):
+        left = local_dependencies.get(name) or {}
+        right = attested_dependencies.get(name) or {}
+        if left.get("version") == right.get("version") and left.get(
+            "repository"
+        ) == right.get("repository"):
+            continue
+        differences.append(
+            {
+                "kind": "lock",
+                "path": f"Chart.lock:{name}",
+                "source": cell(
+                    f"{left.get('version', '(none)')} from {left.get('repository', '(none)')}"
+                ),
+                "deployed": cell(
+                    f"{right.get('version', '(none)')} from {right.get('repository', '(none)')}"
+                ),
+            }
+        )
+    return differences
+
+
+def chart_differences(chart, attested_ids):
+    """Every difference between the chart source and the attested chart."""
+    differences = []
+    local = local_chart_files()
+    for path, content in sorted(local.items()):
+        if path not in attested_ids:
+            differences.append(
+                {
+                    "kind": "extra",
+                    "path": path,
+                    "source": f"blob {git_blob_sha(content)[:12]}",
+                    "deployed": "(not in the chart the deployment runs)",
+                }
+            )
+        elif git_blob_sha(content) != attested_ids[path]:
+            differences.append(
+                {
+                    "kind": "content",
+                    "path": path,
+                    "source": f"blob {git_blob_sha(content)[:12]}",
+                    "deployed": f"blob {attested_ids[path][:12]}",
+                }
+            )
+    for path in sorted(attested_ids):
+        if path not in local:
+            differences.append(
+                {
+                    "kind": "missing",
+                    "path": path,
+                    "source": "(not in the chart source)",
+                    "deployed": f"blob {attested_ids[path][:12]}",
+                }
+            )
+    attested_version = (chart.get("metadata") or {}).get("version", "")
+    local_version = local_chart_version()
+    if attested_version and attested_version != local_version:
+        differences.append(
+            {
+                "kind": "version",
+                "path": "Chart.yaml",
+                "source": f"version {local_version}",
+                "deployed": f"version {attested_version}",
+            }
+        )
+    differences.extend(values_differences(chart))
+    differences.extend(lock_differences(chart))
+    return differences
+
+
+def chart_identity(release_info):
+    """The chart the deployment runs, and how the chart source compares.
+
+    The cluster attests the chart in two objects: the release history names
+    the chart version the deployed revision runs, and the release secret of
+    that revision holds the chart it was rendered with. The comparison is
+    content: the chart source in this repository against the attested chart,
+    file by file, plus the version, the values and the lock.
+
+    A comparison that cannot be established is UNRESOLVED: the source is
+    not a GitRepository, the attested chart carries no template, or no
+    commit of this checkout carries the attested chart.
+    """
+    source_ref = release_info.get("source_ref") or {}
+    identity = {
+        "status": "UNRESOLVED",
+        "reason": "",
+        "chart_name": release_info.get("chart_name", ""),
+        "chart_version": release_info.get("chart_version", ""),
+        "local_chart_version": local_chart_version(),
+        "source_kind": source_ref.get("kind", ""),
+        "source_name": source_ref.get("name", ""),
+        "source_namespace": source_ref.get("namespace", ""),
+        "commit": "",
+        "files": 0,
+        "differences": [],
+    }
+    if identity["source_kind"] != "GitRepository":
+        identity["reason"] = (
+            "the release does not render from a GitRepository source, so no commit "
+            "of this repository attests the chart the deployment runs"
+        )
+        return identity
+    chart = attested_chart(
+        release_info.get("storage_namespace", ""),
+        release_info.get("release", ""),
+        release_info.get("revision", 0),
+    )
+    if chart is None:
+        identity["reason"] = (
+            "the release secret of the deployed revision could not be read: the "
+            "chart the deployment runs is not attested"
+        )
+        return identity
+    if not chart["templates"]:
+        identity["reason"] = (
+            "the attested chart carries no template: an empty commit attests nothing"
+        )
+        return identity
+    attested = dict(chart["templates"])
+    attested.update(chart["files"])
+    attested_ids = {path: git_blob_sha(content) for path, content in attested.items()}
+    commit = source_commit(attested_ids)
+    if commit is None:
+        identity["reason"] = (
+            "no commit of this checkout carries the chart the deployment runs: the "
+            "chart identity cannot be established here"
+        )
+        return identity
+    identity["commit"] = commit
+    identity["files"] = len(attested)
+    identity["differences"] = chart_differences(chart, attested_ids)
+    identity["status"] = "DIFFERENT" if identity["differences"] else "IDENTICAL"
+    return identity
+
+
+def chart_disposition(difference):
+    """The disposition a difference between the chart source and the chart the
+    deployment runs carries.
+
+    The difference is explained: it says the repository's chart source is
+    not the chart the running release was rendered from. It is recorded, not
+    a failure - the record's job is to state the truth.
+    """
+    return (
+        "Recorded - the chart source in this repository is not the chart the "
+        "deployment runs at this path. The record reconciles the deployment "
+        "against the chart source, so it describes what the repository would "
+        "deploy, not what runs."
+    )
+
+
+def chart_identity_rows(identity):
+    """The rows the chart identity contributes to the discrepancy table."""
+    if not identity:
+        return []
+    if identity["status"] == "UNRESOLVED":
+        # An unestablishable comparison is an unresolved difference: it
+        # never passes silently.
+        return [
+            {
+                "workload": "chart identity",
+                "env": "chart identity",
+                "source_value": "the chart source in this repository",
+                "source_path": "",
+                "deployed": identity["reason"],
+                "disposition": "**UNRESOLVED**",
+            }
+        ]
+    return [
+        {
+            "workload": "chart identity",
+            "env": difference["path"],
+            "source_value": difference["source"],
+            "source_path": "",
+            "deployed": difference["deployed"],
+            "disposition": chart_disposition(difference),
+        }
+        for difference in identity["differences"]
+    ]
 
 
 # --------------------------------------------------------------------------
@@ -1345,6 +1827,57 @@ def render_markdown(data):
     )
     add("")
 
+    identity = data.get("chart_identity") or {}
+    add("## Chart identity")
+    add("")
+    add(
+        "Which chart the deployment runs, read from the cluster objects that attest "
+        "it: the release history names the chart version the deployed revision runs, "
+        "and the release secret of that revision holds the chart it was rendered with."
+    )
+    add("")
+    if not identity:
+        add("The chart identity was not established.")
+        add("")
+    else:
+        add(
+            f"- **Chart the deployment runs:** `{cell(identity['chart_name'])}` version "
+            f"{cell(identity['chart_version'])} (the release history of revision "
+            f"{capture['release_revision']})"
+        )
+        add(
+            f"- **Rendered from:** the `{cell(identity['source_kind'])}` "
+            f"`{cell(identity['source_name'])}` in namespace "
+            f"`{cell(identity['source_namespace'])}`"
+        )
+        add(
+            f"- **Commit of this repository that carries it:** "
+            f"`{cell(identity['commit'] or '(none)')}`"
+        )
+        add(f"- **Chart files compared:** {identity['files']}")
+        if identity["status"] == "UNRESOLVED":
+            add(f"- **Verdict:** UNRESOLVED - {identity['reason']}.")
+        elif identity["status"] == "DIFFERENT":
+            add(
+                "- **Verdict:** DIFFERENT - the chart source in this repository is not "
+                "the chart the deployment runs (see the table below)."
+            )
+        else:
+            add(
+                "- **Verdict:** IDENTICAL - the chart source in this repository is the "
+                "chart the deployment runs."
+            )
+        add("")
+        if identity["differences"]:
+            add("| path | chart source | chart the deployment runs |")
+            add("|---|---|---|")
+            for difference in identity["differences"]:
+                add(
+                    f"| `{cell(difference['path'])}` | {cell(difference['source'])} | "
+                    f"{cell(difference['deployed'])} |"
+                )
+            add("")
+
     add("## Workloads and image digests")
     add("")
     add(
@@ -1724,7 +2257,7 @@ def image_note(images):
     )
 
 
-def collect_discrepancies(config, models, images):
+def collect_discrepancies(config, models, images, identity=None):
     """Every difference the record reports, each with its disposition.
 
     The capture's own gate lives here: a difference the capture finds and
@@ -1758,6 +2291,9 @@ def collect_discrepancies(config, models, images):
     # and in the exit gate.
     discrepancies.extend(model_discrepancy_rows(models))
     discrepancies.extend(image_discrepancy_rows(images))
+    # The chart identity: a comparison that could not be established carries
+    # no disposition, so it fails the capture.
+    discrepancies.extend(chart_identity_rows(identity))
     return discrepancies
 
 
@@ -1948,9 +2484,13 @@ def capture(namespace, flux_namespace, release, date, out_path):
     served = capture_models(namespace, env_by_component)
     models = build_models(env_by_component, chart_values, effective_values, served)
 
+    # The chart the deployment runs, attested from the cluster objects that
+    # hold it, and how the chart source in this repository compares with it.
+    identity = chart_identity(release_info)
+
     # Every difference the record reports, each with its disposition. The
     # capture's own gate: a difference without one fails the capture.
-    discrepancies = collect_discrepancies(config, models, images)
+    discrepancies = collect_discrepancies(config, models, images, identity)
 
     edge = ", ".join(
         f"{service['name']} ({service['type']} {service['ports']})"
@@ -1993,6 +2533,7 @@ def capture(namespace, flux_namespace, release, date, out_path):
         "images": images,
         "models": models,
         "config": config,
+        "chart_identity": identity,
         "discrepancies": discrepancies,
         "image_disposition_note": image_note(images),
         "topology": {

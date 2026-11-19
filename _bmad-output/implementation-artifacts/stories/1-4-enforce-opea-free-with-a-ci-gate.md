@@ -85,6 +85,17 @@ context:
 - **The gate asserts its own trigger**, on the `stray-copy-artifacts` precedent: the `config:validate` job must list a `**/*` glob for every agent-path package and for the manifest, or the gate fails. Without it, a violation could land in a package whose changes never trigger the job that holds the gate.
 - **The red proof is a local scratch branch**: a deliberate `from comps…` committed on a scratch branch, the suite run against it, the gate observed red — the AC asks for the proof once, and a permanent mutation matrix in the gate keeps it true on every future change.
 - **The workflow checkpoint was not used as a hard stop**: the operator's standing instruction for this dispatch is autonomous execution to a draft merge request, with the merge itself gated by the orchestrator's GO. The decisions a checkpoint would have collected are recorded above and in the Implementation Notes.
+- **The red proof (AC 2)** — verified once, on a scratch branch, with the gate reading the real tracked tree:
+  - `git worktree add /tmp/opea-free-red-proof -b chore/opea-free-gate-red-proof` from this branch's HEAD; `components/agent-service/red_proof.py` (`from comps.chunking import Chunker`) staged, and `FROM opea/embedding:1.5` appended to the package Dockerfile.
+  - `npx jest __tests__/opea-free-gate.test.js` in that worktree → the case "finds no OPEA coupling in the agentic path" goes red with both violations named:
+    ```
+    file: components/agent-service/Dockerfile      rule: opea-build:opea-base-image
+    file: components/agent-service/red_proof.py    rule: comps-import:from-import
+    ```
+  - The other seven cases stay green: only the violation turns the gate red.
+  - The scratch worktree and its branch were removed afterwards (`git worktree list` shows neither, the branch is deleted). Nothing was pushed: the proof is local by design — a pushed red branch would run the whole pipeline on the shared instance for nothing, and the pipeline wiring is what the gate's own trigger assertion covers.
+- **Verified locally**: the config-validator suite (577 tests / 15 suites, green), eslint and prettier on the new files, and the `bash -n` over the pipeline script blocks (the `ci-shell-gates` case of the same suite). The suite's #1716 behavioural probe needed `tests/e2e`'s pinned eslint — installed locally, as CI does.
+- **Not exercised**: the pipeline itself (no local runner); the e2e suite and the venue-capture suite never run in CI (operator ruling), and this story adds no test execution to the pipeline — the gate is a static repository check.
 
 ## Spec Change Log
 

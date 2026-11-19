@@ -1,6 +1,6 @@
 const path = require('path');
-const fs = require('fs');
 const yaml = require('js-yaml');
+const { readFileOrThrow } = require('../validators/parse-env-template');
 
 const ROOT = path.resolve(__dirname, '../../..');
 const CI_FILE = path.join(ROOT, '.gitlab-ci.yml');
@@ -44,9 +44,11 @@ const PRD_FAMILY_PROBE = 'other/prd';
 const DEFAULT_BRANCH = 'main';
 const SUPPRESSING_WHEN = ['never', 'manual'];
 
+const ciFile = readFileOrThrow(CI_FILE, 'GitLab CI file');
+
 let ci;
 try {
-  ci = yaml.load(fs.readFileSync(CI_FILE, 'utf8'));
+  ci = yaml.load(ciFile);
 } catch (error) {
   throw new Error(
     '.gitlab-ci.yml must stay parseable by js-yaml, which rejects duplicate keys and ' +
@@ -217,11 +219,14 @@ describe('ci: the PRD umbrella branch rules (#2010)', () => {
   });
 
   it('grants the umbrella a push pipeline, whatever the merge-request state', () => {
-    // A rule that admits only merge-request pipelines (or only pipelines of
-    // another source) leaves the umbrella with no branch pipeline at all —
-    // and the policies with no target again.
+    // The rule must BE the branch condition: a conjunct of its own (a
+    // pipeline source, an open merge request, anything this guard does not
+    // model) could gate the umbrella's push pipeline away — and with it the
+    // target pipeline the policies need. One conjunct, and that conjunct the
+    // branch pattern the locator already matched.
     const rules = [...umbrellaEntries(workflowRules), ...umbrellaEntries(securityRules)];
     for (const rule of rules) {
+      expect(conditionOf(rule).split('&&')).toHaveLength(1);
       expect(canMatchOnUmbrella(rule, 'push', false)).toBe(true);
     }
   });
@@ -256,10 +261,18 @@ describe('ci: the PRD umbrella branch rules (#2010)', () => {
     expect(umbrellaEntries(job.rules)).toHaveLength(1);
   });
 
-  it('keeps the SBOM uploader on the shared security rules', () => {
-    // The job must consume the shared list itself: an inline copy that
-    // forgets an entry silently drops the SBOM on some branches.
-    expect(ci['gemnasium-dependency_scanning'].rules).toBe(securityRules);
+  it('keeps the security suite on the shared security rules', () => {
+    // Every consumer must consume the shared list itself: an inline copy that
+    // forgets an entry silently drops that job on some branches.
+    for (const job of [
+      'secret_detection',
+      'semgrep-sast',
+      'gemnasium-dependency_scanning',
+      'gemnasium-python-dependency_scanning',
+      'kics-iac-sast'
+    ]) {
+      expect(ci[job].rules).toBe(securityRules);
+    }
   });
 
   it('keeps the shared security list complete', () => {

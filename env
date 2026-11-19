@@ -1694,6 +1694,14 @@ GENIE_AI_TEMPO_PROXY_IMAGE_TAG=${GENIE_AI_IMAGE_TAG:-${GENIE_AI_GLOBAL_TAG:-late
 #   Public domain for the GPU node (used by certbot for TLS certificates).
 #   Typically same as GPU_NODE_HOST. Set on the GPU node in .env.
 #
+# GPU_HTTP_PORT=80
+# GPU_HTTPS_PORT=443
+#   The GPU node's published ports (the nginx-gpu proxy on the node).
+#   Both are overridable so the node's proxy can sit beside a listener the
+#   host already owns — the ROCm profile pins 8181/18443 on the reference
+#   machine. Unset = the historical defaults (80/443), which is what the
+#   NVIDIA GPU-node deployment publishes.
+#
 # VLLM_ENDPOINT=https://${GPU_NODE_HOST}/llm
 # VLLM_TRANSLATION_ENDPOINT=https://${GPU_NODE_HOST}/translation
 # EMBEDDING_SERVICE_URL=https://${GPU_NODE_HOST}/embed

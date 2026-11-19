@@ -490,7 +490,37 @@ TRANSLATION_LLM_URL = f"{_TRANSLATION_DISCOVERY_ENDPOINT}/v1/chat/completions"
 TRANSLATION_COMPLETIONS_URL = f"{_TRANSLATION_DISCOVERY_ENDPOINT}/v1/completions"
 EMBEDDING_SERVER_HOST_IP = os.getenv("EMBEDDING_SERVER_HOST_IP", "0.0.0.0")
 EMBEDDING_SERVER_PORT = int(os.getenv("EMBEDDING_SERVER_PORT", 80))
+EMBEDDING_SERVER_PROTOCOL = "http"
 EMBEDDING_SERVER_ENDPOINT = os.getenv("EMBEDDING_SERVER_ENDPOINT", "/v1/embeddings")
+# The GPU query-encoding path (ROCm). EMBEDDING_VLLM_ENDPOINT names the BASE
+# URL of an OpenAI-compatible embeddings endpoint — the same variable the
+# retriever's and dataprep's vLLM branch read, and the same base URL their
+# client turns into {base}/v1/embeddings.
+#
+# When it is set, the query is encoded by that endpoint instead of by the
+# OPEA `embedding` microservice (which fronts the CPU TEI container). The
+# response shape is identical — {"data": [{"embedding": [...]}]} — because
+# the microservice's own /v1/embeddings route is already OpenAI-shaped and
+# vLLM's pooling route is too, so align_outputs(EMBEDDING) parses both
+# without a branch. The query instruction is applied by align_inputs
+# (TEI_EMBED_MODEL -> get_query_instruction) BEFORE the text leaves this
+# service, so the query still carries the bge prefix on this path.
+#
+# UNSET = the NVIDIA path, byte-identical: the microservice fronts TEI and
+# the node keeps the base's host/port/endpoint.
+_EMBEDDING_VLLM_ENDPOINT = os.getenv("EMBEDDING_VLLM_ENDPOINT", "")
+if _EMBEDDING_VLLM_ENDPOINT:
+    _parsed_embedding = urlparse(_EMBEDDING_VLLM_ENDPOINT)
+    EMBEDDING_SERVER_HOST_IP = _parsed_embedding.hostname or EMBEDDING_SERVER_HOST_IP
+    # Scheme-aware default port (the LLM block above hardcodes 443; this one
+    # does not need to copy that quirk — an endpoint without an explicit port
+    # is https for the GPU node's TLS proxy and http for the in-cluster
+    # instance).
+    EMBEDDING_SERVER_PORT = _parsed_embedding.port or (443 if _parsed_embedding.scheme == "https" else 80)
+    EMBEDDING_SERVER_PROTOCOL = _parsed_embedding.scheme or "http"
+    # {base}/v1/embeddings — the OpenAI route, matching the client the
+    # retriever and dataprep build from the same base URL.
+    EMBEDDING_SERVER_ENDPOINT = f"{_parsed_embedding.path.rstrip('/')}/v1/embeddings"
 
 
 # Multi-turn vector-space blending (issue #833). When enabled, the query
@@ -534,6 +564,18 @@ if _VLLM_LLM_ENDPOINT:
     LLM_SERVER_ENDPOINT_PREFIX = _parsed.path.rstrip("/") or ""
 else:
     LLM_SERVER_ENDPOINT_PREFIX = ""
+
+# The GPU node's API key. The node's TLS proxy rejects every request without
+# a matching bearer (`if ($api_key_valid = 0) { return 401; }`), and the OPEA
+# framework sends a service's `api_key` as the Authorization header. Our own
+# clients (the retriever's and dataprep's vLLM embeddings, the RAGAS
+# embedder) already carry VLLM_API_KEY; the framework's graph nodes did
+# not — a call to the node's proxy came back 401.
+#
+# Set only when a REMOTE endpoint is configured: the in-cluster path talks to
+# services that ignore the header, and the NVIDIA single-host path configures
+# neither endpoint, so it keeps sending no Authorization header at all.
+_GPU_NODE_API_KEY = os.getenv("VLLM_API_KEY") if (_EMBEDDING_VLLM_ENDPOINT or _VLLM_LLM_ENDPOINT) else None
 
 # Endpoint the model-id and context-window discovery probes: the remote GPU
 # node when configured, otherwise the compose-internal vLLM
@@ -3916,7 +3958,9 @@ class ChatQnAService:
             name="embedding",
             host=EMBEDDING_SERVER_HOST_IP,
             port=EMBEDDING_SERVER_PORT,
+            protocol=EMBEDDING_SERVER_PROTOCOL,
             endpoint=EMBEDDING_SERVER_ENDPOINT,
+            api_key=_GPU_NODE_API_KEY,
             use_remote_service=True,
             service_type=ServiceType.EMBEDDING,
         )
@@ -3954,6 +3998,7 @@ class ChatQnAService:
             port=LLM_SERVER_PORT,
             protocol=LLM_SERVER_PROTOCOL,
             endpoint=llm_endpoint,
+            api_key=_GPU_NODE_API_KEY,
             use_remote_service=True,
             service_type=ServiceType.LLM,
         )

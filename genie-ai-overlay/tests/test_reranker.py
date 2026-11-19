@@ -1533,6 +1533,14 @@ class TestVllmBackend:
     to the same [{"index", "score"}] list every strategy already consumes.
     """
 
+    @pytest.fixture(autouse=True)
+    def _no_network_discovery(self, monkeypatch):
+        """The served-window resolution probes /v1/models when the deployment
+        does not pin it. No test may reach the network."""
+        import core.model_cache as _model_cache
+
+        monkeypatch.setattr(_model_cache, "get_max_model_len", lambda *a, **k: None)
+
     @pytest.mark.asyncio
     async def test_vllm_backend_posts_vllm_request_shape(self, monkeypatch):
         monkeypatch.setenv("RERANKER_BACKEND", "vllm")
@@ -1680,3 +1688,124 @@ class TestVllmBackend:
 
         body = mock_session.post.call_args[1]["json"]
         assert body["model"] == "BAAI/bge-reranker-v2-m3"
+
+
+# ---------------------------------------------------------------------------
+# Test: the input-length contract on the vLLM rerank backend (MR !968)
+# ---------------------------------------------------------------------------
+
+
+class TestVllmBackendLengthContract:
+    """vLLM's /v1/rerank truncates an over-long (query, doc) pair instead of
+    refusing it — it answers 200 with a score computed on the TRUNCATED
+    text. TEI refuses with HTTP 422, and chatqna turns that into an
+    abstention with a reason.
+
+    On the vLLM backend the contract was silently absent: the ranking was
+    computed on truncated text and nothing in the trace said so. The client
+    now measures the pair itself and raises the SAME typed error, so the
+    abstention path fires identically on both backends.
+    """
+
+    @pytest.fixture(autouse=True)
+    def _no_network_discovery(self, monkeypatch):
+        """The window resolution probes /v1/models when the deployment does
+        not pin it. No test may reach the network — the probe would cost a
+        10 s timeout per request."""
+        import core.model_cache as _model_cache
+
+        monkeypatch.setattr(_model_cache, "get_max_model_len", lambda *a, **k: None)
+
+    @pytest.mark.asyncio
+    async def test_over_long_pair_raises_the_typed_error_without_calling(self, monkeypatch):
+        monkeypatch.setenv("RERANKER_BACKEND", "vllm")
+        monkeypatch.setenv("RERANKER_VLLM_ENDPOINT", "http://vllm-reranker:8000")
+        monkeypatch.setenv("RERANKER_VLLM_MODEL", "BAAI/bge-reranker-v2-m3")
+        monkeypatch.setenv("RERANKER_VLLM_MAX_MODEL_LEN", "100")
+        import core.model_cache as _model_cache
+
+        # Discovery is not consulted when the deployment pins the window.
+        monkeypatch.setattr(_model_cache, "get_max_model_len", lambda *a, **k: None)
+
+        reranker = create_reranker(base_url="http://tei-reranker:80")
+        long_doc = "x" * 2000
+        input_doc = create_mock_searched_doc(texts=[long_doc], reranking_strategy="slice", top_n=1)
+        mock_session = create_mock_aiohttp_session(create_vllm_rerank_response())
+
+        import reranker.genieai_tei_reranker as _mod
+
+        with patch("reranker.genieai_tei_reranker.aiohttp.ClientSession", return_value=mock_session):
+            with pytest.raises(_mod.RerankerInputTooLongError):
+                await reranker.invoke(input_doc)
+
+        # The call must NOT have gone out: a truncated ranking is exactly
+        # what the contract exists to prevent.
+        mock_session.post.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_pair_within_the_window_is_reranked_normally(self, monkeypatch):
+        monkeypatch.setenv("RERANKER_BACKEND", "vllm")
+        monkeypatch.setenv("RERANKER_VLLM_ENDPOINT", "http://vllm-reranker:8000")
+        monkeypatch.setenv("RERANKER_VLLM_MODEL", "BAAI/bge-reranker-v2-m3")
+        monkeypatch.setenv("RERANKER_VLLM_MAX_MODEL_LEN", "8192")
+        import core.model_cache as _model_cache
+
+        monkeypatch.setattr(_model_cache, "get_max_model_len", lambda *a, **k: None)
+
+        reranker = create_reranker(base_url="http://tei-reranker:80")
+        input_doc = create_mock_searched_doc(texts=["a", "b"], reranking_strategy="slice", top_n=2)
+        mock_session = create_mock_aiohttp_session(create_vllm_rerank_response())
+
+        with patch("reranker.genieai_tei_reranker.aiohttp.ClientSession", return_value=mock_session):
+            result = await reranker.invoke(input_doc)
+
+        assert mock_session.post.call_count == 1
+        assert len(result.reranked_docs) == 2
+
+    @pytest.mark.asyncio
+    async def test_unknown_window_warns_once_and_serves_the_request(self, monkeypatch):
+        """No pinned window and no discovery answer → the contract cannot be
+        enforced. The request still serves (a wrong ranking is better than
+        no ranking for the caller) but the divergence is stated once, not
+        silently."""
+        monkeypatch.setenv("RERANKER_BACKEND", "vllm")
+        monkeypatch.setenv("RERANKER_VLLM_ENDPOINT", "http://vllm-reranker:8000")
+        monkeypatch.setenv("RERANKER_VLLM_MODEL", "BAAI/bge-reranker-v2-m3")
+        monkeypatch.delenv("RERANKER_VLLM_MAX_MODEL_LEN", raising=False)
+        import core.model_cache as _model_cache
+
+        monkeypatch.setattr(_model_cache, "get_max_model_len", lambda *a, **k: None)
+
+        import reranker.genieai_tei_reranker as _mod
+
+        monkeypatch.setattr(_mod, "_WARNED_VLLM_WINDOW_UNKNOWN", False)
+        reranker = create_reranker(base_url="http://tei-reranker:80")
+        input_doc = create_mock_searched_doc(texts=["a", "b"], reranking_strategy="slice", top_n=2)
+        mock_session = create_mock_aiohttp_session(create_vllm_rerank_response())
+
+        before = len(_mod.logger.warning.call_args_list)
+        with patch("reranker.genieai_tei_reranker.aiohttp.ClientSession", return_value=mock_session):
+            await reranker.invoke(input_doc)
+            await reranker.invoke(input_doc)
+
+        assert mock_session.post.call_count == 2
+        # The module logger is shared across the whole file — count the
+        # warnings THIS test produced, not the file's running total.
+        warnings = [
+            c for c in _mod.logger.warning.call_args_list[before:] if "served window is unknown" in str(c)
+        ]
+        assert len(warnings) == 1, f"expected exactly one window-unknown warning, got {len(warnings)}"
+
+    def test_pair_estimate_uses_the_longest_pair_not_the_sum(self):
+        """The cross-encoder scores each (query, doc) pair independently, so
+        the pair that matters is the longest one — NOT the sum over the
+        document list. A document list of many short docs must not be
+        rejected as if it were one long document."""
+        from reranker.genieai_tei_reranker import _max_pair_token_estimate
+
+        # 10 docs of 100 chars each: the longest pair is 100 + query.
+        docs = ["x" * 100] * 10
+        estimate = _max_pair_token_estimate("q", docs)
+        assert estimate == (100 + 1 + 2) // 3  # ceil(101 / 3)
+        # The sum over all docs would be ten times larger.
+        assert estimate < (1000 + 1 + 2) // 3

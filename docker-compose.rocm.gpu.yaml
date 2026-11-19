@@ -129,17 +129,69 @@ services:
     networks:
       - gpu_network
 
+  # vLLM Embedding (pooling) — the GPU's query+corpus embedder on the
+  # SPLIT topology. The single-server profile serves this role with the
+  # overlay's vllm-embedding service; on the split venue the app host is a
+  # different machine, so the GPU node runs its own instance and the app
+  # host reaches it through the node's proxy (the /v1/embeddings route).
+  # The node's tei-embedding (CPU) stays for the TEI-shaped callers — the
+  # route is selectable, mirroring gpu_rerank_upstream.
+  vllm-embedding:
+    image: ${VLLM_ROCM_IMAGE}
+    # Overlay-only service: the entrypoint/command split is restated (no base
+    # counterpart to inherit it from) — same shape as the base vLLM service.
+    entrypoint: ["vllm", "serve"]
+    command: >
+      --model ${VLLM_EMBEDDING_MODEL_ID:-BAAI/bge-large-en-v1.5}
+      --gpu_memory_utilization ${VLLM_EMBEDDING_GPU_UTILIZATION:-0.05}
+      --served-model-name ${VLLM_EMBEDDING_MODEL_ID:-BAAI/bge-large-en-v1.5}
+      --max_model_len ${VLLM_EMBEDDING_MAX_MODEL_LEN:-512}
+      --enforce-eager
+      --port 8000
+    environment:
+      - HUGGING_FACE_HUB_TOKEN=${HUGGING_FACE_HUB_TOKEN}
+      - NVIDIA_VISIBLE_DEVICES=void
+    # Same overlay-only discipline as the sibling vLLM instance above:
+    # cap_drop / security_opt / healthcheck are restated because there is
+    # no base counterpart to merge them from.
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 30s
+    devices:
+      - /dev/kfd:/dev/kfd
+      - /dev/dri:/dev/dri
+    group_add:
+      - "${RENDER_GID:-990}" # render — distro-specific; `getent group render`
+      - "${VIDEO_GID:-44}"   # video
+    volumes:
+      - hf_cache:/root/.cache/huggingface
+    networks:
+      - gpu_network
+
   docling-serve:
     environment:
       - NVIDIA_VISIBLE_DEVICES=void
 
   nginx-gpu:
-    # ports: !override — REPLACE the base file's 80:80 instead of unioning
-    # with it (compose merges ports sequences by union; the un-tagged list
-    # left the hardcoded 80:80 alive and the clash this block exists to
-    # avoid still happened — code review finding 2, verified empirically
-    # 2026-11-18). Plain-expansion fallback (no merge tag) would still
-    # union. env.strixhalo / group_vars pick free ports.
-    ports: !override
+    # The published ports, restated as VALUES (MR !968 review, Jerome).
+    # The base file's rows are now the same two parameterized rows
+    # ("${GPU_HTTPS_PORT:-443}:443" and "${GPU_HTTP_PORT:-80}:80"), so this
+    # list interpolates to exactly what the base renders: compose's union
+    # of two identical entries collapses to those entries — the 80-clash
+    # this block used to avoid cannot happen, because the port is a value
+    # now, not a structure.
+    #
+    # The `ports: !override` this replaces required Compose >= 2.24.4 while
+    # the repo documents 2.20+ as its floor — on a supported host the file
+    # did not parse at all ("unknown tag"). No merge tag is needed anywhere
+    # in the ROCm path now.
+    ports:
       - "${GPU_HTTPS_PORT:-443}:443"
       - "${GPU_HTTP_PORT:-80}:80"

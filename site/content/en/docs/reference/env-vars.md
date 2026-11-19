@@ -198,8 +198,8 @@ group GIDs and shared-host port plan. Values exactly as shipped:
 | `VLLM_RERANKER_MODEL_ID` | `BAAI/bge-reranker-v2-m3` | Same model, the `vllm-reranker` service's own knob |
 | `VLLM_RERANKER_GPU_UTILIZATION` | `0.05` | ~2.3 GiB of GTT (spike measured 1.56 GiB touched) — sits inside the 27 GB ceiling beside granite (0.28) + gemma (0.12) |
 | `VLLM_RERANKER_MAX_MODEL_LEN` | `8192` | Rerank window; vLLM truncates silently at this length (TEI's strict 422 path is backend-specific and stays on `tei`) |
-| `EMBEDDING_BACKEND` | `vllm` | Task-14-mirror embedding backend switch: `tei` (default everywhere; NVIDIA path) or `vllm`. On Strix Halo BOTH embedding consumers (dataprep corpus embeds + retriever query embeds) move to the FOURTH vLLM instance (`vllm-embedding` service, added by the ROCm overlays) — the pair moves together, a split would mix vector spaces in one collection. Unknown values fall back to `tei`; `vllm` with no endpoint fails soft to `tei` with a warning |
-| `EMBEDDING_VLLM_ENDPOINT` | `http://vllm-embedding:8000` | The pooling endpoint answering the OpenAI shape (`POST /v1/embeddings {model, input}` → `data[].embedding`). The client appends `/v1` itself |
+| `EMBEDDING_BACKEND` | `vllm` | Task-14-mirror embedding backend switch: `tei` (default everywhere; NVIDIA path) or `vllm`. On Strix Halo ALL THREE embedding consumers (dataprep corpus embeds, the retriever's query embeds, and chatqna's RAG-graph query encoder) move to the FOURTH vLLM instance (`vllm-embedding` service, added by the ROCm overlays) — they move together, a split would mix vector spaces in one collection. Unknown values fall back to `tei`; `vllm` with no endpoint fails soft to `tei` with a warning |
+| `EMBEDDING_VLLM_ENDPOINT` | `http://vllm-embedding:8000` | The pooling endpoint answering the OpenAI shape (`POST /v1/embeddings {model, input}` → `data[].embedding`). The client appends `/v1` itself. **Read by three consumers**: the retriever's and dataprep's vLLM branch, and chatqna's RAG graph — its `embedding` node derives host/port/protocol/endpoint from this base URL, so the query is encoded by the same model that embedded the corpus (unset = the embedding microservice, i.e. TEI — the NVIDIA path) |
 | `VLLM_EMBEDDING_MODEL_ID` | *(docker-compose.rocm.yaml overlay default)* `BAAI/bge-large-en-v1.5` | The pooling model the instance serves with `--served-model-name`; the embedding clients send the same id (override per consumer with `EMBEDDING_MODEL_ID`). Not set in `env.strixhalo` — the overlay ships the default |
 | `VLLM_EMBEDDING_GPU_UTILIZATION` | *(overlay default)* `0.05` | bge-large bf16 weights are ~0.6 GiB — the smallest slice of the GTT, beside the reranker (0.05) + granite (0.28) + gemma (0.12) |
 | `VLLM_EMBEDDING_MAX_MODEL_LEN` | *(overlay default)* `512` | Embed window; sized for the ~500-char chunk size — the endpoint bounds what langchain is told NOT to pre-chunk (`check_embedding_ctx_length=False`, bge is not tiktoken-tokenizable) |
@@ -254,9 +254,9 @@ backend answered each request.
 
 ### Embedding backend (`EMBEDDING_BACKEND`)
 
-The same mechanism, mirrored for embeddings (Task-14 mirror). The two
-embedding consumers — dataprep (corpus) and the retriever (queries) —
-select their client per deployment:
+The same mechanism, mirrored for embeddings (Task-14 mirror). The three
+embedding consumers — dataprep (corpus), the retriever (queries) and
+chatqna's RAG graph (the query) — select their client per deployment:
 
 | Backend | Serves | Notes |
 |---|---|---|
@@ -265,10 +265,23 @@ select their client per deployment:
 
 The vllm branch activates only when `EMBEDDING_BACKEND=vllm` AND
 `EMBEDDING_VLLM_ENDPOINT` is set — a `vllm` value with an empty endpoint
-fails soft to `tei` with a warning naming the remedy. The two consumers
-move together: dataprep writes the corpus vectors and the retriever
-answers queries in the same vector space, so the compose overlay flips
-both or neither.
+fails soft to `tei` with a warning naming the remedy. The consumers move
+together: dataprep writes the corpus vectors and the retriever answers
+queries in the same vector space, so the compose overlay flips both or
+neither.
+
+**chatqna's query encoder.** chatqna's RAG graph encodes the query
+through its `embedding` node. That node points at the OPEA `embedding`
+microservice — which fronts the CPU TEI container — so on a GPU venue
+the GPU embedder would serve ingestion only and every chat query would
+be encoded by the CPU image. chatqna therefore reads the same
+`EMBEDDING_VLLM_ENDPOINT` base URL and derives the node's host, port,
+protocol and endpoint from it, posting the same OpenAI-shaped body to
+`{base}/v1/embeddings`. The response shape is identical (the
+microservice's own route is OpenAI-shaped too), so the parse path is
+unchanged, and chatqna applies the bge query instruction itself before
+the text leaves the service. **Unset = the NVIDIA path, byte-identical:**
+the node keeps the microservice and sends no Authorization header.
 
 ## Validation
 

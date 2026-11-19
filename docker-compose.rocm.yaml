@@ -31,11 +31,50 @@
 #
 # Later vendor paths (e.g. Apple Metal) follow this same shape: one
 # overlay file + one sizing env file, base untouched. The rationale —
-# including what a parameter cannot express (compose has no conditional
-# structure, and `devices:` cannot be interpolated at all) — is in
+# including what a parameter cannot express — is in
 # site/content/en/docs/deploy/gpu.md § "Why one overlay file per vendor"
 # and docs/superpowers/specs/2026-11-11-rocm-gpu-tier-design.md §
 # "Why the overlay file set is the cleanest shape".
+#
+# WHAT A PARAMETER CAN AND CANNOT EXPRESS (measured, MR !968 review —
+# the earlier wording here overclaimed; the probes below replace it):
+#
+#   - `devices:` — the earlier note said it "cannot be interpolated at
+#     all". MEASURED: interpolating the two scalar PATHS INSIDE the list
+#     parses fine (`devices: ["${KFD_DEV:-/dev/null}:${KFD_DEV:-/dev/null}"]`
+#     → compose renders it as a device entry); the error people hit
+#     ("services.x.devices must be a array") is about interpolating the
+#     LIST as a whole, which is a different thing. And on this Docker
+#     version a device path that does not exist on the host is TOLERATED —
+#     the container starts (probe: `PROBE_DEV=/dev/kfd docker compose up`
+#     → "Container probe-probe-1 Started"). So the vendor axis CAN be
+#     expressed as values in the base file.
+#
+#   - It is still not done there, for two reasons that are about SAFETY,
+#     not capability: (1) the base file is the NVIDIA deployment — putting
+#     `devices: [/dev/null:/dev/null]` and a parameterized image row on its
+#     vLLM service changes the NVIDIA render (new keys on the production
+#     service) for a deployment that never asks for a GPU device; (2) the
+#     vendor-only services (vllm-reranker, vllm-embedding) would have to
+#     live in the base file under a vendor-specific `profiles:` key, which
+#     is the file-count reduction this MR was asked to make — but it moves
+#     ROCm-only services into the file the NVIDIA deployment renders.
+#     The bind-mount alternative (`volumes: - /dev/kfd:/dev/kfd`) is worse:
+#     compose merges volumes by key (so it composes), but a bind mount of
+#     a path that does not exist CREATES a root-owned directory on the host
+#     — inside /dev.
+#
+#   - `ports:` — the base file's rows are now BOTH parameterized
+#     ("${GPU_HTTPS_PORT:-443}:443" and "${GPU_HTTP_PORT:-80}:80"), so an
+#     overlay that restates them interpolates to the SAME entries and
+#     compose's union collapses them. That removed the `ports: !override`
+#     this path used to need — and with it the Compose >= 2.24.4 floor the
+#     merge tag imposed on a repo that documents 2.20+ (MR !968 review).
+#
+# The file count is driven by the BASE files, not by the vendor: main
+# already ships two (the app stack, docker-compose.yaml, and the GPU-node
+# stack, docker-compose.gpu.yaml), and each ROCm overlay sits on one of
+# them. One vendor overlay per base is what that means.
 
 services:
   vllm:
@@ -270,6 +309,12 @@ services:
       # --served-model-name ${VLLM_RERANKER_MODEL_ID:-...}; the client must
       # send the SAME name or vLLM 404s per request. Inherit the pair.
       - RERANKER_VLLM_MODEL=${RERANKER_VLLM_MODEL:-${VLLM_RERANKER_MODEL_ID:-BAAI/bge-reranker-v2-m3}}
+      # The window the instance above is started with (--max_model_len).
+      # The client enforces the input-length contract against it (vLLM
+      # truncates an over-long input instead of refusing it, so the
+      # wrapper measures the pair itself — MR !968 review). Same value,
+      # same source: client and server agree by construction.
+      - RERANKER_VLLM_MAX_MODEL_LEN=${RERANKER_VLLM_MAX_MODEL_LEN:-${VLLM_RERANKER_MAX_MODEL_LEN:-8192}}
 
   # Same switch for the EMBEDDING path (Task-14 mirror): dataprep embeds the
   # corpus and the retriever embeds the query, and both swap their TEI client
@@ -294,15 +339,41 @@ services:
       # Paired model name — same rationale as dataprep's row above (N1).
       - VLLM_EMBEDDING_MODEL_ID=${VLLM_EMBEDDING_MODEL_ID:-}
 
-  # Shared-host accommodation: the Docker daemon's fluentd log driver
-  # sends container stdout to HOST port 24224, and exactly one collector
-  # can bind it. On a host that already runs another GENIE stack, that
-  # port belongs to the first stack's collector — the ROCm venue drops
-  # the host publish with the `!override` tag (ports sequences CONCATENATE
-  # on merge otherwise). The in-app OTLP exporters reach this collector
-  # over the overlay network on 4318, so traces and metrics are
-  # unaffected; only container-stdout log forwarding continues to flow
-  # to the host's 24224 holder. On a dedicated ROCm host, remove this
-  # restatement and the base binding applies.
-  otel-collector:
-    ports: !override []
+  # The QUERY encoder moves too (MR !968 review, Jerome: "only two embedding
+  # consumers move to vLLM — the query encoder stays on the CPU TEI").
+  # chatqna's RAG graph encodes the query through its `embedding` node,
+  # which the base definition points at the OPEA `embedding` microservice —
+  # and THAT service fronts the CPU TEI container. So on this venue the
+  # GPU embedder served ingestion only, while every chat query was encoded
+  # by the CPU image the sizing file caps at 8 TEI workers.
+  #
+  # EMBEDDING_VLLM_ENDPOINT is the same base URL the retriever's and
+  # dataprep's vLLM branch use: chatqna derives the node's host/port/
+  # protocol/endpoint from it (genieai_chatqna.py) and posts the SAME
+  # OpenAI-shaped body to {base}/v1/embeddings that the vLLM pooling
+  # instance serves. The response shape is identical, so the parse path
+  # (align_outputs) is unchanged, and the bge query instruction is applied
+  # by chatqna BEFORE the text leaves the service.
+  #
+  # NVIDIA-inert: the base file never sets this variable, so the NVIDIA
+  # path keeps the microservice (TEI) exactly as before.
+  chatqna-xeon-backend-server:
+    environment:
+      - EMBEDDING_VLLM_ENDPOINT=${EMBEDDING_VLLM_ENDPOINT:-http://vllm-embedding:8000}
+
+  # The otel-collector service is deliberately NOT restated here.
+  #
+  # The base publishes its fluentforward receiver on the HOST
+  # (127.0.0.1:24224, mode: host) — that is where the Docker daemon's
+  # fluentd log driver delivers every container's stdout. An overlay
+  # `ports: !override []` dropped that publish, which left the driver
+  # with no endpoint on a dedicated ROCm host: `docker logs` still works
+  # (dual logging) but every container's stdout is silently dropped
+  # from VictoriaLogs and the admin UI (MR !968 review — the default was
+  # wrong for this file's own primary topology).
+  #
+  # Shared-host note: exactly one collector can hold the host port, so
+  # two GENIE stacks on one host cannot both ship container logs. The
+  # operator stops the other stack's collector (or accepts that both
+  # stacks' stdout flows to whichever collector holds the port) — a
+  # deployment decision, not a default this overlay should make.

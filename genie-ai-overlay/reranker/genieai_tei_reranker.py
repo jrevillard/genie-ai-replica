@@ -58,7 +58,10 @@ class RerankerInputTooLongError(RuntimeError):
 _meter = get_meter()
 _reranker_input_too_long_total = _meter.create_counter(
     "rag.rerank.input_too_long",
-    description="Rerank calls rejected by TEI because input exceeded the per-input token cap",
+    description=(
+        "Rerank calls rejected because the input exceeded the per-input token cap "
+        "(TEI refuses with 422; the vLLM backend enforces it client-side)"
+    ),
 )
 
 
@@ -81,6 +84,67 @@ logflag = os.getenv("LOGFLAG", False)
 # review, 2026-11-18): the rerank path runs per request, so an unguarded
 # warning would fire at request rate.
 _WARNED_VLLM_ENDPOINT_MISSING = False
+
+# Warn-once guard for the vllm-without-a-known-window case: the input-length
+# contract cannot be enforced when the served window is unknown, and that
+# divergence must not be silent (MR !968 review).
+_WARNED_VLLM_WINDOW_UNKNOWN = False
+
+# Characters per token, used ONLY to estimate the length of a (query, doc)
+# pair on the vLLM backend — this container carries no tokenizer for the
+# served cross-encoder. The estimate is deliberately CONSERVATIVE: English
+# text averages ~4 characters per token, so 3 over-estimates the token
+# count and the guard fires early rather than letting an over-long pair
+# through to a silent truncation.
+_CHARS_PER_TOKEN_ESTIMATE = 3
+
+
+def _max_pair_token_estimate(query: str, docs: list) -> int:
+    """Estimated token count of the LONGEST (query, doc) pair.
+
+    The cross-encoder scores each pair independently, so the pair that
+    matters is the longest one — NOT the sum over the document list.
+    """
+    q_chars = len(query or "")
+    longest = 0
+    for doc in docs:
+        chars = q_chars + len(doc or "")
+        longest = max(longest, math.ceil(chars / _CHARS_PER_TOKEN_ESTIMATE))
+    return longest
+
+
+def _reranker_vllm_served_window(endpoint: str) -> int | None:
+    """The context window the vLLM rerank instance serves, or None.
+
+    Resolution order:
+      1. ``RERANKER_VLLM_MAX_MODEL_LEN`` — the deployment pins the same
+         value it starts the instance with (``--max_model_len
+         ${VLLM_RERANKER_MAX_MODEL_LEN:-8192}``), so client and server
+         agree by construction;
+      2. runtime discovery through ``/v1/models`` (the same TTL-cached
+         mechanism chatqna and dataprep use for their served window).
+
+    Returns None when neither yields a value — the caller then says so
+    loudly rather than pretending the contract holds.
+    """
+    pinned = (os.getenv("RERANKER_VLLM_MAX_MODEL_LEN") or "").strip()
+    if pinned:
+        try:
+            value = int(pinned)
+            if value > 0:
+                return value
+        except ValueError:
+            logger.warning(
+                f"RERANKER_VLLM_MAX_MODEL_LEN={pinned[:32]!r} is not an integer — "
+                "falling back to runtime discovery of the served window."
+            )
+    try:
+        from core.model_cache import get_max_model_len
+
+        return get_max_model_len(endpoint)
+    except Exception as exc:  # discovery must never break a rerank call
+        logger.warning(f"Could not determine the vLLM rerank served window: {exc}")
+        return None
 
 # Strategies: slice, threshold, slice_threshold, knee_threshold, adaptive
 RERANKING_STRATEGY = os.getenv("RERANKING_STRATEGY", "slice")
@@ -398,6 +462,49 @@ class GenieTEIReranking(OpeaTEIReranking):
                         )
                     request_url = f"{vllm_endpoint}/v1/rerank"
                     request_payload = {"model": vllm_model, "query": query, "documents": docs}
+                    # The input-length contract, restored for this backend
+                    # (MR !968 review): TEI refuses an over-long (query,
+                    # doc) pair with HTTP 422 and chatqna abstains with a
+                    # reason; vLLM's /v1/rerank has no equivalent — it
+                    # truncates the input to the served window and answers
+                    # 200 with a score computed on the TRUNCATED text, so
+                    # the ranking is wrong and nothing in the trace says
+                    # so. Measure the pair here and raise the SAME typed
+                    # error, so the abstention path fires identically on
+                    # both backends.
+                    _window = _reranker_vllm_served_window(vllm_endpoint)
+                    if _window:
+                        _estimated = _max_pair_token_estimate(query, docs)
+                        if _estimated > _window:
+                            span.set_attribute("reranker.input_too_long", True)
+                            span.set_attribute("reranker.rejected_tokens", _estimated)
+                            # The estimate is a client-side approximation —
+                            # say so on the span, so a reader knows the
+                            # number is not a server-side token count.
+                            span.set_attribute(ATTRIBUTE_NAMES["reranker_length_contract"], "client-estimate")
+                            span.set_status(
+                                Status(StatusCode.ERROR, "Reranker input exceeds the served window")
+                            )
+                            _reranker_input_too_long_total.add(1)
+                            logger.warning(
+                                f"Reranker input too long (vLLM backend): ~{_estimated} tokens "
+                                f"(estimated) vs the served window {_window}"
+                            )
+                            raise RerankerInputTooLongError(
+                                f"Reranker input exceeds the served window: "
+                                f"~{_estimated} estimated tokens > {_window}"
+                            )
+                    else:
+                        global _WARNED_VLLM_WINDOW_UNKNOWN
+                        if not _WARNED_VLLM_WINDOW_UNKNOWN:
+                            logger.warning(
+                                "RERANKER_BACKEND=vllm but the served window is unknown "
+                                "(set RERANKER_VLLM_MAX_MODEL_LEN to the value the instance "
+                                "is started with) — the input-length contract cannot be "
+                                "enforced, and the server truncates an over-long input "
+                                "instead of rejecting it."
+                            )
+                            _WARNED_VLLM_WINDOW_UNKNOWN = True
                 else:
                     request_url = f"{self.base_url}/rerank"
                     # truncate=False forces TEI's strict input check;

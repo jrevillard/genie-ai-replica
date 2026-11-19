@@ -135,6 +135,12 @@ ATTRIBUTE_NAMES = {
     # or "vllm" (the GPU vLLM pooling instance). Fixed enum, never request
     # data. Same shape as reranker.backend above.
     "embedding_backend": "embedding.backend",
+    # The length contract in force for a rerank request: "tei-exact" (TEI
+    # refuses an over-long pair with HTTP 422 — the server measures) or
+    # "client-estimate" (the vLLM backend has no server-side refusal, so
+    # the client measures the pair itself — MR !968 review). Fixed enum,
+    # never request data.
+    "reranker_length_contract": "reranker.length_contract",
     # OKF multi-repo fan-out routing (feat/okf-server line). Values are
     # counts/booleans except leg.graph_name, which carries the Arango graph
     # collection name (identifier-charset, no whitespace).

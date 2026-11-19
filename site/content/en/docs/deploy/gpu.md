@@ -219,9 +219,35 @@ value:
 | What differs | Why no parameter covers it |
 |---|---|
 | `vllm-embedding`, `vllm-reranker` exist only on ROCm | a service either exists or it does not; there is no "define this service only for vendor X" |
-| `devices: /dev/kfd + /dev/dri` | compose rejects an interpolated device list (`devices must be a array`) — and the paths do not exist on an NVIDIA host |
-| `group_add: [render, video]` | same problem, and the GIDs are host-specific |
+| `devices: /dev/kfd + /dev/dri` | the paths do not exist on an NVIDIA host, and the base file is what every deployment renders — see the measured note below |
+| `group_add: [render, video]` | the GIDs are host-specific (measured per host, `getent group render`) |
 | the ROCm image's serving entrypoint | the NVIDIA image's entrypoint is `vllm serve`; the ROCm image has none (its CMD is `/bin/bash`), so the flags need something to attach to |
+
+**Measured, not asserted** (the earlier wording here overclaimed; the
+probes below replace it):
+
+- Interpolating the two scalar device PATHS *inside* the list parses
+  fine — `devices: ["${KFD_DEV:-/dev/null}:${KFD_DEV:-/dev/null}"]`
+  renders as a device entry. The `devices must be a array` error belongs
+  to interpolating the LIST as a whole, which is a different thing. On
+  the tested Docker version a device path that does not exist on the host
+  is tolerated (the container starts).
+- So the vendor axis *can* be expressed as values in the base file. It is
+  not put there for two reasons that are about safety, not capability:
+  the base file is the NVIDIA deployment (a `/dev/null` device row and a
+  parameterized image row would change the NVIDIA render on a service
+  that never asks for a GPU device), and the vendor-only services would
+  have to live in that file under a vendor-specific profile.
+- The bind-mount alternative (`volumes: - /dev/kfd:/dev/kfd`) is worse:
+  compose merges volumes by key, but a bind mount of a path that does not
+  exist CREATES a root-owned directory on the host — inside `/dev`.
+
+**The ports are values now.** The base GPU file's port rows are both
+parameterized (`${GPU_HTTPS_PORT:-443}:443` and `${GPU_HTTP_PORT:-80}:80`),
+so the overlay restates the same values and compose's union collapses
+them. That removed the `ports: !override` this path used to need — and
+with it a Compose **2.24.4** floor that contradicted the repository's
+documented 2.20+. No merge tag is used anywhere in the ROCm path now.
 
 A parameter *can* express a value: every image pin, port, model id,
 sizing knob and GID already flows through the env files. That is why the
@@ -259,12 +285,18 @@ measured trade-offs.
 {{% alert title="`env.strixhalo` is the single-server profile" color="warning" %}}
 Its `RERANKER_BACKEND=vllm` / `EMBEDDING_BACKEND=vllm` flips hard-fail on a
 compose **split** venue: the static gpu-proxy
-(`configs/nginx-gpu/gpu-proxy.conf`) hardcodes the TEI upstreams and the
-split GPU-node stack has no `vllm-embedding` service, so an embedder
-pointed at `vllm-embedding` has nothing to reach. On a split venue unset
-both variables (the compose path keeps TEI), or deploy with the Ansible
-path, where Section 18 / 18B and the node-side `gpu_rerank_upstream` flip
-wire the vLLM reranker through the proxy.
+(`configs/nginx-gpu/gpu-proxy.conf`) hardcodes the TEI upstreams, so an
+embedder or reranker pointed at `vllm-embedding` / `vllm-reranker` has
+nothing to reach. On a compose-managed split venue unset both variables
+(the compose path keeps TEI), or deploy with the Ansible path, where
+Section 18 / 18B and the node-side `gpu_rerank_upstream` /
+`gpu_embedding_upstream` flips wire the vLLM reranker and the vLLM
+embedder through the proxy.
+
+The node's proxy serves the embedding in the OpenAI shape at
+`/v1/embeddings` (the TEI-shaped `/embed/` route stays for the OPEA
+embedding microservice and the okf-server's frontmatter service, which
+speak that shape; vLLM serves no TEI `/embed` route).
 {{% /alert %}}
 
 ### Window / memory sizing
@@ -292,7 +324,7 @@ measure 8.58 GiB).
 | `VLLM_RERANKER_MODEL_ID` / `RERANKER_VLLM_MODEL` | `BAAI/bge-reranker-v2-m3` | the cross-encoder the reranker instance serves (Cohere response shape) |
 | `VLLM_RERANKER_GPU_UTILIZATION` | `0.05` | ~2.3 GiB claim (spike-measured ~1.56 GiB touched) |
 | `VLLM_RERANKER_MAX_MODEL_LEN` | `8192` | |
-| `EMBEDDING_BACKEND` | `vllm` | dataprep + retriever call the `vllm-embedding` pooling instance |
+| `EMBEDDING_BACKEND` | `vllm` | dataprep + retriever call the `vllm-embedding` pooling instance (chatqna's query encoder reaches it through `EMBEDDING_VLLM_ENDPOINT`) |
 | `VLLM_EMBEDDING_MODEL_ID` | `BAAI/bge-large-en-v1.5` | overlay default — the pooling model (OpenAI `/v1/embeddings` shape) |
 | `VLLM_EMBEDDING_GPU_UTILIZATION` | `0.05` | overlay default |
 | `VLLM_EMBEDDING_MAX_MODEL_LEN` | `512` | overlay default |
@@ -315,11 +347,27 @@ embed request, so the two TEI containers start with the **CPU** image
 (the base compose TEI entrypoint flags work unchanged there). On this
 profile they serve nothing: `env.strixhalo` sets `RERANKER_BACKEND=vllm`
 and `EMBEDDING_BACKEND=vllm`, so the reranker wrapper reads
-`vllm-reranker` and both embedding consumers (dataprep embeds the corpus,
-the retriever embeds the queries) read `vllm-embedding`. The two
-consumers must move together — one on TEI and one on vLLM would mix
-vector spaces in one collection. On a compose split venue the node-side
-`/embed` route stays TEI (see the warning below).
+`vllm-reranker` and all three embedding consumers read
+`vllm-embedding`:
+
+| Consumer | What it embeds | How it reaches the GPU |
+|---|---|---|
+| dataprep | the corpus, at ingest | the `EMBEDDING_BACKEND=vllm` branch |
+| the retriever | the query, when its own fallback runs | the same branch |
+| chatqna | the query, in the RAG graph | `EMBEDDING_VLLM_ENDPOINT` — its `embedding` node derives host/port/protocol/endpoint from that base URL |
+
+All three must move together — one on TEI and one on vLLM would mix
+vector spaces in one collection. The query encoder is the third one
+because chatqna's RAG graph encodes the query through its `embedding`
+node, which otherwise points at the OPEA `embedding` microservice (which
+fronts the CPU TEI container): without the switch, the GPU embedder
+served ingestion only and every chat query was encoded by the CPU image
+the profile caps at 8 TEI workers. chatqna applies the bge query
+instruction itself before the text leaves the service, so the encoded
+query carries the same prefix the TEI path applied.
+
+On a compose-managed split venue the node-side `/embed` route stays TEI
+(see the warning above).
 
 ### Verifying the ROCm GPU stack
 

@@ -4680,7 +4680,13 @@ class GenieArangoDataprep(OpeaArangoDataprep):
             with background_span(
                 "dataprep.ingest.background",
                 attributes={
-                    "embedding.backend": (resolve_embedding_backend() if embeddings_backend_active() else "tei")
+                    # Through the vocabulary constant, like the retriever
+                    # (MR !968 review): a rename in core/span_attrs.py would
+                    # otherwise leave this call site on the old key and split
+                    # the dataprep and retriever spans of the same ingest.
+                    ATTRIBUTE_NAMES["embedding_backend"]: (
+                        resolve_embedding_backend() if embeddings_backend_active() else "tei"
+                    )
                 },
             ):
                 # --- START PROTECTED EXECUTION (Spec 5.1) ---

@@ -2153,6 +2153,12 @@ services:
       # service's environment block is a sequence, so the form is KEY=VALUE.
       - MODEL_RERANK_TIMEOUT_SECONDS=${MODEL_RERANK_TIMEOUT_SECONDS:-300}
       - MODEL_CONNECT_TIMEOUT_SECONDS=${MODEL_CONNECT_TIMEOUT_SECONDS:-30}
+      # The window-discovery probe's budget — the reranker reads it
+      # (core/model_cache.py) while discovering the served window, so the
+      # knob has to REACH this container: an operator moving it for the
+      # retriever must move it for the reranker too (the deck-wide claim the
+      # knob makes, denied by the wiring).
+      - MODEL_PROBE_TIMEOUT_SECONDS=${MODEL_PROBE_TIMEOUT_SECONDS:-10}
     # Internal only
     # ports:
     #   - "6100:8000"
@@ -2649,6 +2655,14 @@ services:
       EMBEDDING_SERVER_HOST_IP: embedding
       EMBEDDING_SERVER_PORT: 6000
       EMBEDDING_SERVER_ENDPOINT: ${EMBEDDING_SERVER_ENDPOINT:-/v1/embeddings}
+      # The QUERY encoder's base URL, when the deployment runs the query
+      # encoding on a GPU pooling instance (ROCm). chatqna derives the RAG
+      # graph's embedding node from it — same variable the retriever's and
+      # dataprep's vLLM branch read, and the same {base}/v1/embeddings route.
+      # EMPTY BY DEFAULT: with it unset, chatqna keeps the base's embedding
+      # microservice (which fronts TEI) exactly as before — the NVIDIA path
+      # is byte-identical.
+      EMBEDDING_VLLM_ENDPOINT: ${EMBEDDING_VLLM_ENDPOINT:-}
       RETRIEVER_SERVICE_HOST_IP: retriever-arango-service
       RETRIEVER_SERVICE_PORT: 7000
       RERANK_SERVER_HOST_IP: reranker

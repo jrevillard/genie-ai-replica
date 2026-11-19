@@ -31,10 +31,38 @@ nginx_image: nginx:1.28-alpine
 rocm_render_gid: 990
 rocm_video_gid: 44
 
-# Set true ONLY on a single-server ROCm host that co-locates the app
-# stack with this GPU-node stack (renders SECTION 18B endpoint overrides
-# in the app .env). Undefined/false = no output.
-# rocm_gpu_node_local: true
+# The GPU vendor, as an explicit marker. It is what makes the app-side
+# topology check ROCm-ONLY: an NVIDIA deployment never sets it, so the
+# assert in deploy.yml (which gates on this value) leaves every NVIDIA
+# render untouched. Read it nowhere else — it selects the topology
+# check, not a behaviour.
+gpu_vendor: rocm
+
+# The ROCm GPU node's topology, as seen from the APP stack:
+#
+#   rocm_gpu_node_local: true   — the GPU node IS this host (single-server
+#     ROCm venue: the app stack shares the machine with the GPU-node
+#     stack). Renders SECTION 18B in the app .env: co-located endpoints
+#     (https://<ansible_host>:<port>/...), the forced OPEA_SSL_SKIP_VERIFY=1
+#     (the node cert is self-signed) and the Task-14 reranker trio. The
+#     app host must ALSO be in the swarm_managers group, so this file
+#     applies to it.
+#
+#   rocm_gpu_node_remote: true  — the GPU node is ANOTHER machine. Set it
+#     (with gpu_node_host) in the APP host's group_vars, and set
+#     rocm_gpu_node_local to false here. Renders SECTION 18's remote
+#     sub-block: the endpoint overrides plus the same reranker trio and
+#     the forced TLS skip (same self-signed node).
+#
+# The default below is the co-located topology — the one this group
+# describes (a dedicated ROCm host running both stacks). It was
+# COMMENTED OUT, so as shipped the Ansible ROCm path rendered neither
+# Section 18B nor the remote sub-block: the app stack kept its own
+# GPU-tier replicas (swarm ignores compose `devices:` — the reason the
+# ROCm path exists) and posted the TEI request shape to a /rerank/ route
+# that had been flipped to the vLLM reranker. The mismatch surfaced per
+# call, not at deploy time (MR !968 review).
+rocm_gpu_node_local: true
 
 # Task 14 — GPU reranker: the TEI ROCm image cannot run on gfx1151
 # (Instinct-only kernels; see the spike results), so the /rerank/ proxy
@@ -42,7 +70,22 @@ rocm_video_gid: 44
 # docker-compose.rocm.gpu.yaml overlay. The app side selects the same
 # backend with RERANKER_BACKEND=vllm (rendered in SECTION 18B).
 gpu_rerank_upstream: vllm-reranker:8000
+# Task 14 mirror — the EMBEDDING side. The node's TEI ROCm image cannot run
+# on gfx1151 either, so the node's embedder is a fourth vLLM instance
+# (docker-compose.rocm.gpu.yaml) and the proxy's /v1/embeddings route flips
+# to it. The TEI-shaped route (/embed/) stays on the CPU TEI: the OPEA
+# embedding microservice and the okf-server's frontmatter service speak
+# that shape, and vLLM serves no TEI /embed route.
+gpu_embedding_upstream: vllm-embedding:8000
+vllm_embedding_model_id: BAAI/bge-large-en-v1.5
 vllm_reranker_model_id: BAAI/bge-reranker-v2-m3
+# The window the rerank instance is started with (--max_model_len). The
+# app-side reranker wrapper enforces the input-length contract against
+# it: vLLM truncates an over-long (query, doc) pair instead of refusing
+# it, so without this the client cannot tell a truncated pair from a
+# scored one (MR !968 review). Keep it equal to the instance's
+# --max_model_len.
+vllm_reranker_max_model_len: 8192
 
 # CPU-TEI batch caps (code review finding 3, 2026-11-18): the GPU-node stack
 # runs CPU TEI on this class of hardware (the TEI ROCm image cannot run on

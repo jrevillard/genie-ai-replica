@@ -1,0 +1,11 @@
+pyproject.toml
+capabilities/__init__.py
+capabilities/contract.py
+genie_ai_agent_service.egg-info/PKG-INFO
+genie_ai_agent_service.egg-info/SOURCES.txt
+genie_ai_agent_service.egg-info/dependency_links.txt
+genie_ai_agent_service.egg-info/requires.txt
+genie_ai_agent_service.egg-info/top_level.txt
+tests/test_app.py
+tests/test_contract.py
+tests/test_tracing.py

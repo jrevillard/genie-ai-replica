@@ -394,12 +394,6 @@ def test_an_older_minor_version_is_not_compatible():
     assert is_compatible("1.2", "1.0") is False
 
 
-def test_a_malformed_version_is_never_compatible():
-    assert is_compatible("1", "1.0") is False
-    assert is_compatible("1.0", "one.zero") is False
-    assert is_compatible("1.0", "") is False
-
-
 def test_the_rules_state_that_outcome_codes_are_stable():
     assert contract.COMPATIBILITY.error_codes_stable is True
     assert contract.COMPATIBILITY.unknown_major_incompatible is True
@@ -411,3 +405,111 @@ def test_removing_a_field_or_changing_a_carrier_is_declared_breaking():
 
     assert "removing or renaming a field" in breaking
     assert "carrier" in breaking
+
+
+# --- the invariants the review pinned ---------------------------------------
+
+
+def test_an_authorized_repository_may_not_name_a_graph_outside_the_set():
+    """The mapping resolves inside the authorized set — never past it."""
+    with pytest.raises(ValidationError):
+        CallerContext(
+            user_id="user-1",
+            authorized_graph_names=("GRAPH",),
+            authorized_repos=(AuthorizedRepo(repo_id=OKF_REPO_ID, graph_name="SOME_OTHER_GRAPH"),),
+        )
+
+
+def test_a_repository_id_may_appear_once():
+    with pytest.raises(ValidationError):
+        CallerContext(
+            user_id="user-1",
+            authorized_graph_names=("GRAPH", OKF_GRAPH_NAME),
+            authorized_repos=(
+                AuthorizedRepo(repo_id=OKF_REPO_ID, graph_name=OKF_GRAPH_NAME),
+                AuthorizedRepo(repo_id=OKF_REPO_ID, graph_name="GRAPH"),
+            ),
+        )
+
+
+def test_no_two_vocabularies_share_a_value():
+    """Every enum here is a string enum: a shared value would make a limit
+    breach compare equal to an outcome code."""
+    vocabularies = {
+        "outcome": set(OutcomeCode),
+        "carrier": set(contract.OutcomeCarrier),
+        "fallback": set(contract.FallbackPolicy),
+        "limit scope": set(contract.LimitScope),
+        "limit breach": set(contract.LimitBreach),
+    }
+    seen: dict[str, str] = {}
+    for name, members in vocabularies.items():
+        for member in members:
+            assert member.value not in seen, f"{name}.{member.name} shares its value with {seen.get(member.value)}"
+            seen[member.value] = f"{name}.{member.name}"
+
+
+def test_an_insufficiency_carries_no_hit():
+    with pytest.raises(ValidationError):
+        SearchKnowledgeResult(
+            outcome=OutcomeCode.INSUFFICIENT_EVIDENCE,
+            hits=(a_legacy_hit(),),
+            query_preparation_status=QueryPreparationStatus.TRANSLATED,
+        )
+
+
+def test_an_insufficiency_carries_no_source():
+    with pytest.raises(ValidationError):
+        ReadSourceResult(
+            outcome=OutcomeCode.INSUFFICIENT_EVIDENCE,
+            provenance=OkfConceptProvenance(concept_id=OKF_CONCEPT_ID, repo_id=OKF_REPO_ID, bundle_version=3),
+            content="the concept body",
+        )
+
+
+def test_the_result_reports_a_prepared_status_only():
+    with pytest.raises(ValidationError):
+        SearchKnowledgeResult(
+            outcome=OutcomeCode.INSUFFICIENT_EVIDENCE,
+            query_preparation_status=QueryPreparationStatus.FALLBACK_ERROR,
+        )
+
+
+def test_a_new_outcome_code_is_a_breaking_change():
+    """The result vocabulary is closed, so a new code is not additive."""
+    additive = " ".join(contract.COMPATIBILITY.additive)
+    breaking = " ".join(contract.COMPATIBILITY.breaking)
+
+    assert "outcome code" not in additive
+    assert "outcome code" in breaking
+
+
+def test_each_operation_declares_its_own_limits():
+    search = contract.OPERATION_SPECS[OperationName.SEARCH_KNOWLEDGE]
+    read = contract.OPERATION_SPECS[OperationName.READ_SOURCE]
+
+    assert search.timeout is not read.timeout
+    assert search.result_size is not read.result_size
+    assert search.cancellation is not read.cancellation
+
+
+def test_a_limit_declaration_cannot_be_mutated():
+    declaration = contract.OPERATION_SPECS[OperationName.SEARCH_KNOWLEDGE].timeout
+
+    with pytest.raises(ValidationError):
+        declaration.breach = contract.LimitBreach.CANCELLED
+
+
+def test_an_operation_spec_is_hashable():
+    assert len({contract.OPERATION_SPECS[name] for name in OperationName}) == 2
+
+
+def test_the_error_classes_carry_their_code_on_the_class():
+    assert AuthorizationError.code is OutcomeCode.AUTHORIZATION_FAILURE
+    assert TransientError.code is OutcomeCode.TRANSIENT_FAILURE
+
+
+@pytest.mark.parametrize("version", ["+1.0", " 1.0", "1.-1", "1.0.0", "1", "one.zero", ""])
+def test_a_malformed_version_is_never_compatible(version):
+    assert is_compatible(version, "1.0") is False
+    assert is_compatible("1.0", version) is False

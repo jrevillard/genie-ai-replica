@@ -12,7 +12,8 @@ What the contract fixes, and why:
 * **The caller context is trusted and server-assembled.** It carries the user id,
   the authorized graph set, the authorized repositories and the request's
   narrowing labels. The operation inputs carry none of it, so a model-generated
-  argument can only ever narrow the search further — it can never widen access.
+  argument can neither widen the search nor narrow it: the narrowing belongs
+  to the request, and access belongs to the context.
 * **Authorization precedes resolution.** A target outside the authorized set is
   refused without revealing whether it exists: the refusal must not become an
   existence oracle. The HTTP mapping of that refusal is not the port's business
@@ -36,6 +37,7 @@ target that is outside it, belong to the authorization executor — a contract
 type cannot enforce them, and this module says so rather than pretending.
 """
 
+import re
 from dataclasses import dataclass
 from enum import StrEnum
 from typing import Literal, Protocol
@@ -43,6 +45,8 @@ from typing import Literal, Protocol
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 CONTRACT_VERSION = "1.0"
+
+_VERSION_PATTERN = re.compile(r"\d+\.\d+")
 
 
 class OperationName(StrEnum):
@@ -134,7 +138,7 @@ OUTCOME_POLICIES: dict[OutcomeCode, OutcomePolicy] = {
 class CapabilityError(Exception):
     """Base class for the outcomes that are raised rather than reported."""
 
-    code: OutcomeCode
+    code: OutcomeCode = OutcomeCode.TRANSIENT_FAILURE
 
     def __init__(
         self,
@@ -156,12 +160,16 @@ class AuthorizationError(CapabilityError):
     scope.
     """
 
+    code = OutcomeCode.AUTHORIZATION_FAILURE
+
     def __init__(self, message: str, *, operation: OperationName | None = None) -> None:
         super().__init__(message, code=OutcomeCode.AUTHORIZATION_FAILURE, operation=operation)
 
 
 class TransientError(CapabilityError):
     """A dependency failed transiently; no usable result was produced."""
+
+    code = OutcomeCode.TRANSIENT_FAILURE
 
     def __init__(self, message: str, *, operation: OperationName | None = None) -> None:
         super().__init__(message, code=OutcomeCode.TRANSIENT_FAILURE, operation=operation)
@@ -187,9 +195,11 @@ class CallerContext(BaseModel):
     `authorized_graph_names` is the set the port may query: enforcement by
     construction means the port queries this set and nothing else.
     `authorized_repos` carries the repository-to-graph mapping the port needs
-    to resolve a repository id inside that set.
-    `requested_labels` is the request's own narrowing, so a model argument can
-    only restrict the search further.
+    to resolve a repository id inside that set — every entry must name a graph
+    of that set, so the mapping cannot widen the scope it resolves into.
+    `requested_labels` is the request's own narrowing. It is context-only:
+    a model argument carries no narrowing of its own, so it cannot widen the
+    search either.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -198,6 +208,18 @@ class CallerContext(BaseModel):
     authorized_graph_names: tuple[str, ...]
     authorized_repos: tuple[AuthorizedRepo, ...] = ()
     requested_labels: tuple[str, ...] = ()
+
+    @model_validator(mode="after")
+    def _the_mapping_stays_inside_the_authorized_set(self) -> "CallerContext":
+        repo_ids = [repo.repo_id for repo in self.authorized_repos]
+        if len(set(repo_ids)) != len(repo_ids):
+            raise ValueError("a repository id may appear once in the authorized repositories")
+        outside = sorted(
+            repo.graph_name for repo in self.authorized_repos if repo.graph_name not in self.authorized_graph_names
+        )
+        if outside:
+            raise ValueError(f"an authorized repository may not name a graph outside the authorized set: {outside}")
+        return self
 
 
 class QueryPreparationStatus(StrEnum):
@@ -336,6 +358,11 @@ ResultOutcome = Literal[
     OutcomeCode.DEGRADED_AVAILABILITY,
 ]
 
+PreparedStatus = Literal[
+    QueryPreparationStatus.TRANSLATED,
+    QueryPreparationStatus.PASSTHROUGH_ENGLISH,
+]
+
 
 class SearchKnowledgeResult(BaseModel):
     """The `search_knowledge` result.
@@ -350,12 +377,14 @@ class SearchKnowledgeResult(BaseModel):
     outcome: ResultOutcome
     hits: tuple[SearchHit, ...] = ()
     truncated: bool = False
-    query_preparation_status: QueryPreparationStatus
+    query_preparation_status: PreparedStatus
 
     @model_validator(mode="after")
-    def _success_carries_hits(self) -> "SearchKnowledgeResult":
+    def _the_outcome_matches_the_hits(self) -> "SearchKnowledgeResult":
         if self.outcome == OutcomeCode.SUCCESS and not self.hits:
             raise ValueError("a successful search must carry at least one hit; an empty result is an insufficiency")
+        if self.outcome == OutcomeCode.INSUFFICIENT_EVIDENCE and self.hits:
+            raise ValueError("an insufficiency carries no hit; a partial result is a degradation")
         return self
 
 
@@ -383,20 +412,27 @@ class ReadSourceResult(BaseModel):
     truncated: bool = False
 
     @model_validator(mode="after")
-    def _success_carries_the_source(self) -> "ReadSourceResult":
+    def _the_outcome_matches_the_source(self) -> "ReadSourceResult":
         if self.outcome == OutcomeCode.SUCCESS:
             if self.provenance is None:
                 raise ValueError("a successful read must carry the resolved provenance")
             if self.content is None:
                 raise ValueError("a successful read must carry the content")
+        if self.outcome == OutcomeCode.INSUFFICIENT_EVIDENCE and (self.provenance is not None or self.content):
+            raise ValueError("an insufficiency carries no source; a source that resolved is a success")
         return self
 
 
 class LimitScope(StrEnum):
-    """What a limit covers."""
+    """What a limit covers.
 
-    OPERATION = "operation"
-    RESULT = "result"
+    The values are prefixed so that they cannot collide with another
+    vocabulary's values: every enum here is a string enum, so a shared value
+    would make a limit scope compare equal to an outcome code.
+    """
+
+    OPERATION = "scope_operation"
+    RESULT = "scope_result"
 
 
 class LimitBreach(StrEnum):
@@ -407,15 +443,19 @@ class LimitBreach(StrEnum):
     propagates back to the caller unchanged.
     """
 
-    TRANSIENT_FAILURE = "transient_failure"
-    TRUNCATE_AND_FLAG = "truncate_and_flag"
-    CANCELLED = "cancelled"
+    TRANSIENT_FAILURE = "breach_transient_failure"
+    TRUNCATE_AND_FLAG = "breach_truncate_and_flag"
+    CANCELLED = "breach_cancelled"
 
 
 class LimitDeclaration(BaseModel):
-    """One operation's semantics for one limit."""
+    """One operation's semantics for one limit.
 
-    model_config = ConfigDict(extra="forbid")
+    Frozen: a declaration is a fact about an operation, and two operations
+    must never share a mutable one.
+    """
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
 
     scope: LimitScope
     breach: LimitBreach
@@ -449,10 +489,6 @@ class OperationSpec:
     cancellation: LimitDeclaration
 
 
-_TIMEOUT = LimitDeclaration(scope=LimitScope.OPERATION, breach=LimitBreach.TRANSIENT_FAILURE)
-_RESULT_SIZE = LimitDeclaration(scope=LimitScope.RESULT, breach=LimitBreach.TRUNCATE_AND_FLAG)
-_CANCELLATION = LimitDeclaration(scope=LimitScope.OPERATION, breach=LimitBreach.CANCELLED)
-
 OPERATION_SPECS: dict[OperationName, OperationSpec] = {
     OperationName.SEARCH_KNOWLEDGE: OperationSpec(
         name=OperationName.SEARCH_KNOWLEDGE,
@@ -466,9 +502,9 @@ OPERATION_SPECS: dict[OperationName, OperationSpec] = {
             OutcomeCode.AUTHORIZATION_FAILURE,
             OutcomeCode.TRANSIENT_FAILURE,
         ),
-        timeout=_TIMEOUT,
-        result_size=_RESULT_SIZE,
-        cancellation=_CANCELLATION,
+        timeout=LimitDeclaration(scope=LimitScope.OPERATION, breach=LimitBreach.TRANSIENT_FAILURE),
+        result_size=LimitDeclaration(scope=LimitScope.RESULT, breach=LimitBreach.TRUNCATE_AND_FLAG),
+        cancellation=LimitDeclaration(scope=LimitScope.OPERATION, breach=LimitBreach.CANCELLED),
     ),
     OperationName.READ_SOURCE: OperationSpec(
         name=OperationName.READ_SOURCE,
@@ -482,9 +518,9 @@ OPERATION_SPECS: dict[OperationName, OperationSpec] = {
             OutcomeCode.AUTHORIZATION_FAILURE,
             OutcomeCode.TRANSIENT_FAILURE,
         ),
-        timeout=_TIMEOUT,
-        result_size=_RESULT_SIZE,
-        cancellation=_CANCELLATION,
+        timeout=LimitDeclaration(scope=LimitScope.OPERATION, breach=LimitBreach.TRANSIENT_FAILURE),
+        result_size=LimitDeclaration(scope=LimitScope.RESULT, breach=LimitBreach.TRUNCATE_AND_FLAG),
+        cancellation=LimitDeclaration(scope=LimitScope.OPERATION, breach=LimitBreach.CANCELLED),
     ),
 }
 
@@ -521,12 +557,13 @@ class DocumentCapabilityPort(Protocol):
 class CompatibilityRules:
     """The contract's versioning rules.
 
-    A minor version may only add: a new optional field, a new operation, a new
-    outcome code the caller does not handle yet. Anything that removes a field,
-    changes a meaning, or changes the carrier, retry rule or fallback rule of
-    an outcome code is a major change. Outcome codes are stable identifiers —
-    a code is never reused for a different meaning, so a caller that switches
-    on it stays correct.
+    A minor version may only add: a new optional field, a new operation. The
+    outcome vocabulary is closed — a result names one of the declared codes —
+    so a new outcome code is a major change, not an additive one. Anything
+    that removes a field, changes a meaning, or changes the carrier, retry rule
+    or fallback rule of an outcome code is a major change too. Outcome codes
+    are stable identifiers: a code is never reused for a different meaning, so
+    a caller that switches on it stays correct.
     """
 
     current_version: str
@@ -541,11 +578,11 @@ COMPATIBILITY = CompatibilityRules(
     additive=(
         "a new optional field on an input, a result or the caller context",
         "a new operation",
-        "a new outcome code the caller does not handle yet",
     ),
     breaking=(
         "removing or renaming a field",
         "changing the meaning of an existing field",
+        "adding an outcome code — the result vocabulary is closed",
         "changing the carrier, the retry rule or the fallback rule of an outcome code",
         "changing the carrier or the semantics of a limit declaration",
         "changing the identity a provenance variant carries",
@@ -557,13 +594,10 @@ COMPATIBILITY = CompatibilityRules(
 
 def _parse_version(version: str) -> tuple[int, int] | None:
     """Parse a `major.minor` contract version, or None when it is malformed."""
-    parts = version.split(".")
-    if len(parts) != 2:
+    if not _VERSION_PATTERN.fullmatch(version):
         return None
-    try:
-        return int(parts[0]), int(parts[1])
-    except ValueError:
-        return None
+    major, minor = version.split(".")
+    return int(major), int(minor)
 
 
 def is_compatible(consumer_version: str, provider_version: str) -> bool:

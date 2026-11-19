@@ -105,7 +105,7 @@ context:
 
 ## Implementation Notes
 
-- The contract module is a package (`capabilities/`) with `contract.py` inside it, matching the spine's structural seed. The Dockerfile's `COPY` list is **not** extended: nothing in the service imports the contract yet, and the first importer (story 1.6) is the one that must carry it into the image. The pyproject's package list is extended now so an editable install resolves the package from anywhere, not only from the component directory.
+- The contract module is a package (`capabilities/`) with `contract.py` inside it, matching the spine's structural seed. The Dockerfile's `COPY` list is **not** extended: nothing in the service imports the contract yet, and the first importer (story 1.6) is the one that must carry it into the image. The pyproject's package list stays as it was — the component is not installed as a package (the image copies the sources, the CI lane installs the requirements files), so declaring a package would promise an install path that does not exist. What the pyproject does gain is the pytest `pythonpath`, so the suite resolves the component's modules whether it is started as `pytest tests/` or as `python -m pytest tests/`.
 - The `lint:agent-service` job's ruff path list is the only CI change: `ruff check app.py tracing.py capabilities/ tests/`. The job's `rules.changes` already matches `components/agent-service/**/*.py`, so the new package triggers the lane. No new job, and nothing belonging to story 1.4's OPEA-free gate is touched.
 - `requirements.txt` changes by one comment line only: `pydantic` was already pinned and already audited in the dependency evidence, and it is now imported directly by the contract module.
 - The taxonomy's carrier decides where a code is reported. Two codes are raised (`AuthorizationError`, `TransientError`), two are result fields. The refusal of an input the contract will not validate is deliberately **not** one of the codes — the operation never runs, so there is no outcome to report.
@@ -116,6 +116,24 @@ context:
 ## Spec Change Log
 
 ## Review Triage Log
+
+Global code-review, round 1 (high effort, full diff `513914959..3dc090af`) — 6 important + 6 nit findings, each reproduced by the reviewer against pydantic 2.14.4. Every one was fixed in the same commit; none was extracted, and none was refuted.
+
+| Finding | Verdict | Disposition |
+|---|---|---|
+| `AuthorizedRepo` may name a graph outside `authorized_graph_names`, and a `repo_id` may repeat | high — a widening path the model cannot express as invalid | **Fixed**: a `CallerContext` validator requires every authorized repository to name a graph of the authorized set and every repository id to appear once. |
+| The limit vocabularies share values with the outcome vocabularies | high — `LimitBreach.TRANSIENT_FAILURE == OutcomeCode.TRANSIENT_FAILURE` | **Fixed**: the limit values are prefixed (`breach_…`, `scope_…`), and a test asserts that no two vocabularies share a value. |
+| The result validators enforce only the success direction | high — an insufficiency could carry hits, or a provenance and a body | **Fixed**: an insufficiency carries no hit and no source. |
+| The compatibility rules promise a new outcome code is additive, while the result type is a closed literal | high — a "compatible" provider's payload fails validation | **Fixed**: a new outcome code is declared breaking; the outcome vocabulary is closed. |
+| The limit declarations are shared mutable singletons, and the spec is unhashable | high — one operation's semantics could be changed by editing the other's | **Fixed**: the declarations are frozen and each operation declares its own; the spec is hashable again. |
+| `pyproject.toml` declares a package the editable install cannot import | high — the story's own claim did not hold | **Fixed**: the package declaration is withdrawn (the component is not pip-installed) and the claim is corrected. |
+| `CapabilityError.code` has no class-level value | low — `type(exc).code` raised | **Fixed**: each error class carries its code on the class. |
+| `_parse_version` accepted signs and whitespace | low — `is_compatible('+1.0','1.0')` was true | **Fixed**: the version must match `major.minor` digits. |
+| The result's preparation status accepted statuses the input refuses | low — a result could report a preparation failure that must never have run | **Fixed**: the result's status is a prepared one. |
+| The docstrings promised a narrowing channel the types do not provide | low — an implementer could add a label field the test forbids | **Fixed**: the wording states that the narrowing is context-only. |
+| The V04 record's claim about the file record's owner field was inaccurate | low — the record has a client-controlled `author` string | **Fixed**: the record names the field and states that it is free text, not an identity. |
+| The suite only resolved the package under `python -m pytest` | low — a plain `pytest` failed to collect | **Fixed**: the component's pyproject declares `pythonpath = ["."]`. |
+| **Found while writing this record**: the document repository *does* fence `okf_restricted` files on the four serve paths, and the record said it authorized nothing | high — the record overstated the gap | **Fixed**: §2.3 now separates the two corpora — no per-user ACL on the legacy corpus, a stamped per-repository fence on the OKF-imported files' serve paths, and the metadata read outside that fence. |
 
 ## Design Notes
 
@@ -133,7 +151,7 @@ context:
 
 **Provenance is a union, not a bag of optional fields.** `LegacyFileProvenance` (`file_id`, no source marker) and `OkfConceptProvenance` (`concept_id`, `repo_id`, `bundle_version`, `source: 'okf-concept'`) both forbid extra fields, so a mixed payload validates against neither and a legacy hit can never grow an OKF identity. `bundle_version` is required but nullable: the deployed CAP-1 join tolerates its absence (V02 §4.7), so the producer must state it explicitly — an int when the join resolved it, `null` when it did not — and the port never fabricates one.
 
-**The caller context carries the repo → graph mapping.** V04 found that the only server-side `repo_id` → serving `graph_name` resolution is the per-caller `repos[]` of `GET /api/okf/authz/graphs`; there is no on-demand resolver, and the registry's `OKF_{repo_id}` anchor is not the serving name (`OKF_{slug}_v{n}`). The contract therefore requires the trusted context to carry `authorized_repos` next to `authorized_graph_names`, so that a `repo_id` is resolved **inside the authorized set** and never by an unguarded lookup (AD-3: identifiers are charset-validated or resolved server-side). The context also carries the request's `requested_labels` (the requested narrowing): those are caller-side, so a model argument can only ever narrow further, never widen.
+**The caller context carries the repo → graph mapping.** V04 found that the only server-side `repo_id` → serving `graph_name` resolution is the per-caller `repos[]` of `GET /api/okf/authz/graphs`; there is no on-demand resolver, and the registry's `OKF_{repo_id}` anchor is not the serving name (`OKF_{slug}_v{n}`). The contract therefore requires the trusted context to carry `authorized_repos` next to `authorized_graph_names`, so that a `repo_id` is resolved **inside the authorized set** and never by an unguarded lookup (AD-3: identifiers are charset-validated or resolved server-side). The context also carries the request's `requested_labels` (the requested narrowing): those are caller-side and context-only — a model argument carries no narrowing of its own, so it can neither widen the search nor narrow it. The mapping itself is bounded too: every authorized repository must name a graph of the authorized set, so the resolution cannot widen the scope it resolves into.
 
 **Declared versus enforced.** A contract can *declare* an obligation; only an executor can enforce it. The port's call shape (a `Protocol`) and the budget it runs under are declared here; the re-validation of every target against the authorized set is story 1.7's, and the V04 map says which obligations are enforced today and which are only declared — that difference is the risk register the next two stories inherit.
 

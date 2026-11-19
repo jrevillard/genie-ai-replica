@@ -63,15 +63,25 @@ The agents never see raw AQL: the okf-server exposes parameterized, scope-checke
 
 That last point is the window AD-3 names: a resolver outage does not produce an error, it produces a legacy-corpus answer.
 
-### 2.3 The legacy corpus has no per-user authorization at all
+### 2.3 The legacy corpus: no per-user authorization, and one per-repository fence
 
-This is the most consequential finding of this record.
+This is the most consequential finding of this record, and it has two halves that must not be merged.
 
-- `components/document-repository/src/routes/fileRoutes.js:11` — the router's only global gate is `authenticateToken`. The metadata read `router.get('/:fileId', fileController.getMetadata)` at `:356` carries **no** `authorizeRole`, unlike the neighbouring routes (`:66`, `:119`, `:154`, `:205`, `:383`, `:408`, `:433`, `:460`, `:487`).
+**There is no per-user authorization on the legacy corpus.**
+
+- `components/document-repository/src/routes/fileRoutes.js:11` — the router's only global gate is `authenticateToken`. The metadata read `router.get('/:fileId', fileController.getMetadata)` at `:356` carries **no** `authorizeRole`, unlike the neighbouring routes (`:66`, `:119`, `:154`, `:205`, `:383`, `:408`, `:433`, `:460`, `:487`), and the handler (`components/document-repository/src/controllers/fileController.js:1250`) performs no ownership check.
 - The corpus itself carries no owner: the dataprep and retriever modules contain **zero** occurrences of `user_id` — nothing writes one, so nothing could filter on one.
-- The document repository's file records carry no uploader/owner field the read path could match on.
+- The file record has no field derived from the authenticated caller. It does carry an `author` string (`fileController.js:183`, written from the client's own upload payload at `components/document-repository/src/services/fileService.js:267` and returned by the metadata read at `fileController.js:503`) — but `author` is **free text the client supplies**, not an identity, and it must never be matched as one.
 
-So for a legacy `file_id`, the only thing standing between a caller and another user's document is **the caller's own authorized set** — and today the only enforcement of that is the carrier rules in §2.2. There is no second check inside the document repository, and there is nothing for a per-user ACL to be enforced against.
+**But the files the okf-server imported do carry a fence — on the serve paths.**
+
+- `okf_restricted` is the okf-server's **local snapshot** of the source repository's restriction, stamped onto each imported source file at import time and re-propagated by the Access-panel toggle (`fileController.js:107-117`, `:240-246`).
+- The four serve paths — download, view, viewbrowser, batch-download — refuse a restricted file before any byte moves: `assertServeAllowed` (`fileController.js:145-153`), applied at `:713`, `:765`, `:809`, `:847`. The refusal is `403 OKF_RESTRICTED`, distinct from the delete-protection `403` and from the okf-server's anti-enumeration `404`.
+- `mayServeOkfRestricted` (`fileController.js:118-144`) lets `Admin`, `tools-admin` and `okf-service` through, and otherwise parses the caller's `okf:*` scopes **locally**, with the same grammar as `deriveScopeAuthz` — doc-repo must not need okf-server reachable at download time. It fails closed when the file carries no repository id (`:132`).
+
+So the accurate statement is three-part: **no per-user ACL on the legacy corpus; a per-repository fence on the OKF-imported files' serve paths; and the metadata read outside that fence.** The legacy free-form corpus — the files uploaded through doc-repo's own upload path, never imported from an OKF repository — has no fence at all.
+
+Consequence for the contract: `read_source`'s legacy resolution reads the **metadata**, which the fence does not cover, so the port's executor remains the authority for the identity it resolves. The content read goes through a serve path, where the fence applies as defence in depth for the OKF-imported files. The port must not rely on the fence: it is a stamped snapshot rather than a live consultation, and it does not exist for the free-form corpus.
 
 This is not a defect introduced by the agentic work: it is the state AD-4 already states ("the legacy corpus has no per-user ACL"). It is recorded here because the contract's `read_source` obligation for a legacy target is *the executor's re-validation*, and the document repository will not perform it.
 
@@ -144,7 +154,7 @@ Two consequences:
 | P7 | The legacy fail-open window is not replicated | **Confirmed** | The deployed carrier degrades to the legacy corpus on a resolver failure (`query-service.js:810-822`). The contract forbids it: an authorization failure never falls back, and a failure may only degrade *within* the authorized set. |
 | P8 | The executor enforces the caller's scope over the registered toolset | **Declared, not yet enforced** | The executor is story 1.7's. §6. |
 | P9 | `read_source` re-validates every target against the authorized set | **Declared, not yet enforced** | The executor is story 1.7's. §6. |
-| P10 | The legacy corpus has no per-user ACL | **Confirmed** | §2.3 — zero `user_id` occurrences in the dataprep and retriever; the document repository's metadata read authorizes nothing beyond authentication. |
+| P10 | The legacy corpus has no per-user ACL | **Confirmed** | §2.3 — zero `user_id` occurrences in the dataprep and retriever; the document repository's metadata read authorizes nothing beyond authentication. The per-repository fence on the OKF-imported files' serve paths is a stamped snapshot, not a per-user ACL, and it does not cover the metadata read or the free-form corpus. |
 
 ### 5.2 The verdict
 
@@ -163,10 +173,11 @@ The premise check is discharged with three qualifications, stated here rather th
 | The port queries only the authorized set | yes | yes, for the deployed carrier | §2.2 (`query-service.js:746-784`) |
 | The inputs cannot widen access | yes | yes, structurally | the input types carry no scope field |
 | A `repo_id` resolves inside the authorized set | yes | **no** | story 1.7 (the executor) |
+| A restricted OKF file is refused at the serve path | no — the port does not own it | yes, for the serve paths | the document repository's stamped snapshot (§2.3) |
 | A charset guard on identifiers | yes | **no** | story 1.7 (the executor) |
 | The authorization check precedes resolution | yes | **no** | story 1.7 (the executor) |
 | A failure never falls back to a wider corpus | yes | yes, for the deployed carrier | the carrier's own rules (§2.2) |
-| A legacy target is authorized by the caller's set | yes | **no** | story 1.7 (the executor) — the document repository will not do it (§2.3) |
+| A legacy target is authorized by the caller's set | yes | **no** | story 1.7 (the executor) — the document repository authorizes nothing beyond authentication on the metadata read (§2.3) |
 
 **A contract declares; an executor enforces.** Everything marked *no* above is story 1.7's work. Until it lands, the agentic path is the only place where the legacy corpus is protected — and it is dark, so nothing is exposed. That is the risk this record hands to the next story.
 
@@ -179,6 +190,7 @@ The constraints the contract module encodes, each traceable to a section above:
 3. A failure never falls back to a wider corpus; the legacy fail-open window is not replicated (§2.2, P7).
 4. Provenance is either a legacy `file_id` with no source marker, or an OKF concept identity marked `okf-concept`, with the bundle version stated explicitly — present or knowingly absent (§3.1).
 5. The requested labels are narrowing, and no per-graph label scope is claimed (§2.5).
+6. The document repository's restricted-file fence is defence in depth, not the authority: the port authorizes before it resolves, and it never relies on a stamped snapshot (§2.3).
 
 ## 8. Reconsideration triggers
 

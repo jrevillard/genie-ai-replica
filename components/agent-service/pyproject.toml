@@ -17,7 +17,17 @@ test = [
 ]
 
 [tool.setuptools]
-packages = ["capabilities"]
+# The component is not installed as a package: the image copies the sources
+# (see the Dockerfile) and the CI lane installs requirements-test.txt, which
+# includes the runtime tree. The sources are imported from the component
+# directory, which is what the pytest configuration below makes explicit.
+packages = []
+
+[tool.pytest.ini_options]
+# The component's modules are imported from the component directory, so the
+# suite resolves `capabilities` (and `app`, `tracing`) whether it is started
+# as `pytest tests/` or as `python -m pytest tests/`.
+pythonpath = ["."]
 
 [tool.ruff]
 target-version = "py311"

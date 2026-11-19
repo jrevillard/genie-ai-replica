@@ -12,8 +12,9 @@ What the contract fixes, and why:
 * **The caller context is trusted and server-assembled.** It carries the user id,
   the authorized graph set, the authorized repositories and the request's
   narrowing labels. The operation inputs carry none of it, so a model-generated
-  argument can neither widen the search nor narrow it: the narrowing belongs
-  to the request, and access belongs to the context.
+  argument cannot widen the search and cannot change the request's narrowing:
+  the scope and the narrowing belong to the context, and what the model
+  contributes is the query itself.
 * **Authorization precedes resolution.** A target outside the authorized set is
   refused without revealing whether it exists: the refusal must not become an
   existence oracle. The HTTP mapping of that refusal is not the port's business
@@ -46,7 +47,7 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 CONTRACT_VERSION = "1.0"
 
-_VERSION_PATTERN = re.compile(r"\d+\.\d+")
+_VERSION_PATTERN = re.compile(r"[0-9]+\.[0-9]+")
 
 
 class OperationName(StrEnum):
@@ -242,12 +243,15 @@ class QueryPreparationStatus(StrEnum):
         return self in _PREPARED_STATUSES
 
 
-_PREPARED_STATUSES = frozenset(
-    {
-        QueryPreparationStatus.TRANSLATED,
-        QueryPreparationStatus.PASSTHROUGH_ENGLISH,
-    }
-)
+PreparedStatus = Literal[
+    QueryPreparationStatus.TRANSLATED,
+    QueryPreparationStatus.PASSTHROUGH_ENGLISH,
+]
+"""The preparation statuses that mean the query is ready to retrieve."""
+
+# The prepared statuses are declared once, as the literal the result type
+# uses, and the membership test reads that same declaration.
+_PREPARED_STATUSES = frozenset(PreparedStatus.__args__)
 
 
 class PreparedQuery(BaseModel):
@@ -356,11 +360,6 @@ ResultOutcome = Literal[
     OutcomeCode.SUCCESS,
     OutcomeCode.INSUFFICIENT_EVIDENCE,
     OutcomeCode.DEGRADED_AVAILABILITY,
-]
-
-PreparedStatus = Literal[
-    QueryPreparationStatus.TRANSLATED,
-    QueryPreparationStatus.PASSTHROUGH_ENGLISH,
 ]
 
 
@@ -575,13 +574,11 @@ class CompatibilityRules:
 
 COMPATIBILITY = CompatibilityRules(
     current_version=CONTRACT_VERSION,
-    additive=(
-        "a new optional field on an input, a result or the caller context",
-        "a new operation",
-    ),
+    additive=("a new operation",),
     breaking=(
         "removing or renaming a field",
         "changing the meaning of an existing field",
+        "adding a field — every model refuses the ones it does not know, so a new field is rejected, not ignored",
         "adding an outcome code — the result vocabulary is closed",
         "changing the carrier, the retry rule or the fallback rule of an outcome code",
         "changing the carrier or the semantics of a limit declaration",

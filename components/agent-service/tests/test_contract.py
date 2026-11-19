@@ -513,3 +513,24 @@ def test_the_error_classes_carry_their_code_on_the_class():
 def test_a_malformed_version_is_never_compatible(version):
     assert is_compatible(version, "1.0") is False
     assert is_compatible("1.0", version) is False
+
+
+def test_a_new_field_is_a_breaking_change():
+    """Every model refuses the fields it does not know, so an added field is
+    rejected by an older consumer — not ignored."""
+    additive = " ".join(contract.COMPATIBILITY.additive)
+    breaking = " ".join(contract.COMPATIBILITY.breaking)
+
+    assert "field" not in additive
+    assert "adding a field" in breaking
+
+
+def test_a_unicode_digit_version_is_not_a_version():
+    assert is_compatible("١.٠", "1.0") is False
+    assert is_compatible("1.0", "１.０") is False
+
+
+def test_the_prepared_statuses_are_declared_once():
+    """The literal the result type uses and the membership test the input
+    validator uses are the same declaration."""
+    assert set(contract.PreparedStatus.__args__) == {status for status in QueryPreparationStatus if status.is_prepared}

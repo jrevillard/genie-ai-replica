@@ -88,7 +88,7 @@ context:
 - [x] `components/agent-service/capabilities/__init__.py` -- the public re-export surface of the package
 - [x] `components/agent-service/tests/test_contract.py` -- the acceptance evidence: every matrix row above is covered by a test that asserts the expected behaviour
 - [x] `docs/baselines/v04-authorization-provenance-ownership-map.md` -- the V04 map: effective authorization, provenance and ownership, with the explicit AD-3 / AD-4 premise verdict and the constraints the contract encodes
-- [x] `components/agent-service/pyproject.toml` -- declare the new package so the editable install carries it
+- [x] `components/agent-service/pyproject.toml` -- declare the suite's `pythonpath`, so the component's modules resolve however pytest is started
 - [x] `.gitlab-ci.yml` -- extend the `lint:agent-service` ruff path list to the new package (lint only; no new CI job)
 - [x] `components/agent-service/requirements.txt` -- record `pydantic` as a direct dependency of the contract module (the pin itself is unchanged)
 - [x] `_bmad-output/implementation-artifacts/sprint-status.yaml` -- the story entry to `review`

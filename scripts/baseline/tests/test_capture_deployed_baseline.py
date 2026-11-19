@@ -1256,7 +1256,7 @@ def _release_info(**overrides):
             "name": "genie-ai",
             "namespace": "flux-system",
         },
-        "storage_namespace": "flux-system",
+        "storage_namespaces": ["flux-system"],
         "release": "genieai",
         "revision": 72,
     }
@@ -1478,7 +1478,7 @@ def test_the_two_attestations_of_the_chart_must_agree(monkeypatch):
     identity = capture.chart_identity(_release_info(chart_version="0.2.181"))
     assert identity["status"] == "DIFFERENT"
     paths = [difference["path"] for difference in identity["differences"]]
-    assert "release history" in paths
+    assert "release history: version" in paths
 
 
 def test_a_null_leaf_and_an_empty_one_are_different(monkeypatch):
@@ -1492,3 +1492,29 @@ def test_a_null_leaf_and_an_empty_one_are_different(monkeypatch):
     assert identity["status"] == "DIFFERENT"
     paths = [difference["path"] for difference in identity["differences"]]
     assert "values.yaml:services.backend.replicas" in paths
+
+
+def test_a_release_payload_of_the_wrong_shape_fails_closed(monkeypatch):
+    """A payload that is valid JSON of the wrong shape attests no chart."""
+    import gzip
+    import json as json_module
+
+    for payload in (
+        [1, 2, 3],
+        {"chart": [1, 2]},
+        {"chart": "x"},
+        {"chart": {"templates": "abc"}},
+        {"chart": {"templates": ["abc"]}},
+        {"chart": {"templates": [{"name": "t", "data": 5}]}},
+    ):
+        encoded = base64.b64encode(
+            gzip.compress(json_module.dumps(payload).encode("utf-8"))
+        ).decode("ascii")
+        secret = {"data": {"release": encoded}}
+        monkeypatch.setattr(
+            capture,
+            "kubectl_json",
+            lambda *args, _secret=secret, **kwargs: _secret,
+        )
+        identity = capture.chart_identity(_release_info())
+        assert identity["status"] == "UNRESOLVED", payload

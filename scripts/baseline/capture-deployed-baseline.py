@@ -885,21 +885,25 @@ def capture_release(flux_namespace, release):
     overlay_name = ", ".join(overlay_names) or "(none)"
     # Where the release secrets live: helm-controller stores the release in
     # the storage namespace, which is not the namespace the release is
-    # installed into. Where the release does not name one, the HelmRelease's
-    # own namespace is where helm-controller put it.
-    storage_namespace = (
-        status.get("storageNamespace")
-        or spec.get("storageNamespace")
-        or flux_namespace
-        or spec.get("targetNamespace")
-    )
+    # installed into. The candidates are tried in order - the namespace the
+    # controller reported, the one the release declares, the HelmRelease's
+    # own namespace, the install namespace.
+    storage_namespaces = []
+    for namespace in (
+        status.get("storageNamespace"),
+        spec.get("storageNamespace"),
+        flux_namespace,
+        spec.get("targetNamespace"),
+    ):
+        if namespace and namespace not in storage_namespaces:
+            storage_namespaces.append(namespace)
     chart_spec = spec.get("chart", {}).get("spec", {})
     return {
         "chart": chart_spec,
         "chart_name": revision_entry.get("chartName", ""),
         "chart_version": revision_entry.get("chartVersion", ""),
         "source_ref": chart_spec.get("sourceRef", {}),
-        "storage_namespace": storage_namespace,
+        "storage_namespaces": storage_namespaces,
         "release": release,
         "revision": revision,
         "overlay": overlay,
@@ -965,27 +969,33 @@ def decode_release_payload(encoded):
     return json.loads(raw)
 
 
-def attested_chart(storage_namespace, release, revision):
+def attested_chart(storage_namespaces, release, revision):
     """The chart the release was rendered from, as the release secret holds it.
 
     The secret's `chart` carries the templates, the files, the values, the
     metadata and the lock the release was rendered with. The rendered
     manifest and the effective values are NOT read: they carry the
     deployment's configuration, not the chart's identity.
+
+    The release secret lives in the storage namespace helm-controller chose;
+    the candidate namespaces are tried in order, and a payload the capture
+    cannot read attests no chart at all.
     """
     name = f"sh.helm.release.v1.{release}.v{revision}"
-    try:
-        secret = kubectl_json(storage_namespace, "get", "secret", name)
-    except (RuntimeError, json.JSONDecodeError):
+    secret = None
+    for namespace in storage_namespaces or []:
+        try:
+            secret = kubectl_json(namespace, "get", "secret", name)
+        except (RuntimeError, json.JSONDecodeError):
+            continue
+        break
+    if not secret:
         return None
     encoded = (secret.get("data") or {}).get("release")
     if not encoded:
         return None
     try:
         chart = decode_release_payload(encoded).get("chart") or {}
-    except (ValueError, json.JSONDecodeError):
-        return None
-    try:
         templates = {
             entry.get("name", ""): base64.b64decode(entry.get("data") or "")
             for entry in chart.get("templates") or []
@@ -994,16 +1004,20 @@ def attested_chart(storage_namespace, release, revision):
             entry.get("name", ""): base64.b64decode(entry.get("data") or "")
             for entry in chart.get("files") or []
         }
-    except (binascii.Error, ValueError):
-        # A payload the capture cannot read attests no chart: the identity
-        # stays UNRESOLVED, and the record says so.
+        values = chart.get("values") or {}
+        metadata = chart.get("metadata") or {}
+        lock = chart.get("lock") or {}
+    except (AttributeError, TypeError, ValueError, json.JSONDecodeError):
+        # A payload of a shape the capture cannot read - or one that is not
+        # base64 at all - attests no chart: the identity stays UNRESOLVED,
+        # and the record says so.
         return None
     return {
         "templates": templates,
         "files": files,
-        "values": chart.get("values") or {},
-        "metadata": chart.get("metadata") or {},
-        "lock": chart.get("lock") or {},
+        "values": values,
+        "metadata": metadata,
+        "lock": lock,
     }
 
 
@@ -1033,8 +1047,6 @@ def local_chart_files():
             # directory: Helm keeps them in the chart's dependencies, not in
             # its files. No other directory of that name is excluded.
             dirs[:] = sorted(name for name in dirs if name != "charts")
-        else:
-            dirs[:] = sorted(dirs)
         for name in sorted(names):
             absolute = os.path.join(root, name)
             relative = os.path.relpath(absolute, CHART_DIR).replace(os.sep, "/")
@@ -1308,8 +1320,8 @@ def chart_differences(chart, attested_ids, release_info=None):
     if history_version and attested_version and history_version != attested_version:
         differences.append(
             {
-                "kind": "version",
-                "path": "release history",
+                "kind": "attestation",
+                "path": "release history: version",
                 "source": f"release history: version {history_version}",
                 "deployed": f"release secret: version {attested_version}",
             }
@@ -1319,8 +1331,8 @@ def chart_differences(chart, attested_ids, release_info=None):
     if history_name and attested_name and history_name != attested_name:
         differences.append(
             {
-                "kind": "name",
-                "path": "release history",
+                "kind": "attestation",
+                "path": "release history: name",
                 "source": f"release history: {history_name}",
                 "deployed": f"release secret: {attested_name}",
             }
@@ -1364,7 +1376,7 @@ def chart_identity(release_info):
         )
         return identity
     chart = attested_chart(
-        release_info.get("storage_namespace", ""),
+        release_info.get("storage_namespaces", []),
         release_info.get("release", ""),
         release_info.get("revision", 0),
     )
@@ -1404,6 +1416,14 @@ def chart_disposition(difference):
     not the chart the running release was rendered from. It is recorded, not
     a failure - the record's job is to state the truth.
     """
+    if difference.get("kind") == "attestation":
+        # The two objects that attest the chart disagree with each other:
+        # the repository's chart source is not what is at fault here.
+        return (
+            "Recorded - the release history and the release secret of the "
+            "deployed revision attest different charts. The chart source in "
+            "this repository is not involved in this difference."
+        )
     return (
         "Recorded - the chart source in this repository is not the chart the "
         "deployment runs at this path. The record reconciles the deployment "
@@ -1945,8 +1965,8 @@ def render_markdown(data):
         )
         add(
             "- The comparison is against the chart source in this working "
-            "tree; the commit named above is the committed tree that carries "
-            "the same content."
+            "tree; the commit named above is a committed tree that carries "
+            "the same ATTESTED content."
         )
         add(f"- **Chart files compared:** {identity['files']}")
         if identity["status"] == "UNRESOLVED":

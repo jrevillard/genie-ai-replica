@@ -40,7 +40,7 @@ context:
 
 ## Code Map
 
-- `scripts/baseline/capture-deployed-baseline.py` — the capture. `OPEA_WORKLOADS` (line 62) maps component → chart template and `WORKLOAD_ENV_MAPS` (line 80) maps component → the values path of its operator env map; `capture_release` (line 812) reads the HelmRelease (history, sourceRef, storageNamespace); `local_chart_version` (line 913); the chart identity section — `attested_chart`, `source_commit`, `chart_differences`, `chart_identity` (line 1333) and `chart_identity_rows` (line 1415); `resolve_source` (line 1662) and `compare_workload` (line 1752) are the three-layer comparison; `render_markdown` (line 1877) writes the record; `collect_discrepancies` (line 2354) is the exit gate; `capture` (line 2523) assembles the record.
+- `scripts/baseline/capture-deployed-baseline.py` — the capture. `OPEA_WORKLOADS` (line 62) maps component → chart template and `WORKLOAD_ENV_MAPS` (line 77) maps component → the values path of its operator env map; `capture_release` (line 812) reads the HelmRelease (history, sourceRef, storage namespace); `local_chart_version` (line 917); the chart identity section — `attested_chart`, `source_commit`, `chart_differences`, `chart_identity` (line 1345) and `chart_identity_rows` (line 1435); `resolve_source` (line 1682) and `compare_workload` (line 1772) are the three-layer comparison; `render_markdown` (line 1897) writes the record; `collect_discrepancies` (line 2374) is the exit gate; `capture` (line 2543) assembles the record.
 - `scripts/baseline/tests/test_capture_deployed_baseline.py` — the capture's pins; `load_capture` (line 53) imports the script by path.
 - `charts/genieai-umbrella/templates/opea/{pii-service,okf-server,ragas-service}.yaml` — the three non-retrieval tiers; each declares its component label (`pii-service`, `okf-server`, `ragas-service`) and its env rows.
 - `charts/genieai-umbrella/values.yaml` — the chart defaults; the OKF tiers' values live under `okf.*`, not `opea.*`.
@@ -91,6 +91,12 @@ context:
 | 10 | global code-review round 2 | Minor | `normalize()` maps `None` to `""`, so a null leaf and an empty one compared equal and the difference passed silently | **fixed** — `values_identical` tells null from empty; pinned by a test |
 | 11 | global code-review round 2 | Minor | the file comparison runs against the working tree while the commit resolution runs against committed trees, so the two halves of the identity section could disagree | **fixed** — the record says which is which |
 | 12 | global code-review round 2 | Minor | the Code Map's line references were stale | **fixed** — the Code Map names the current lines |
+| 13 | scoped review of the corrections | Important | the fail-closed guard let a payload of the wrong SHAPE escape (AttributeError/TypeError out of `attested_chart`): the capture died with exit 3 and no record, so a stale record could be read as current | **fixed** — the whole extraction is guarded; pinned by a test over six malformed shapes |
+| 14 | scoped review of the corrections | Minor | the two release-history cross-check rows shared the path `release history`, and their disposition asserted a false cause (the chart source) when the two cluster attestations disagree with each other | **fixed** — distinct paths, and a disposition that names the attestations |
+| 15 | scoped review of the corrections | Minor | the Code Map cited `WORKLOAD_ENV_MAPS` at the wrong line | **fixed** |
+| 16 | scoped review of the corrections | Minor | the bullet about the commit read as if the commit carried the WORKING TREE's content; it carries the attested content | **fixed** — the bullet says so |
+| 17 | scoped review of the corrections | Minor | after the fallback reorder, `flux_namespace` shadowed the install namespace, making that fallback unreachable | **fixed** — the candidate namespaces are now tried in order, and each one is reachable |
+| 18 | scoped review of the corrections | Minor | the non-root branch of the local file walk sorted a list that has no effect | **fixed** — the branch is gone |
 
 ## Design Notes
 

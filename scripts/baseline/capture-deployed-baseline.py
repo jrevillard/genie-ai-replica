@@ -35,6 +35,7 @@ import subprocess
 import sys
 import urllib.error
 import urllib.request
+import zlib
 from functools import cache
 
 try:
@@ -884,12 +885,13 @@ def capture_release(flux_namespace, release):
     overlay_name = ", ".join(overlay_names) or "(none)"
     # Where the release secrets live: helm-controller stores the release in
     # the storage namespace, which is not the namespace the release is
-    # installed into.
+    # installed into. Where the release does not name one, the HelmRelease's
+    # own namespace is where helm-controller put it.
     storage_namespace = (
         status.get("storageNamespace")
         or spec.get("storageNamespace")
-        or spec.get("targetNamespace")
         or flux_namespace
+        or spec.get("targetNamespace")
     )
     chart_spec = spec.get("chart", {}).get("spec", {})
     return {
@@ -956,7 +958,9 @@ def decode_release_payload(encoded):
         pass
     try:
         raw = gzip.decompress(raw)
-    except (OSError, EOFError):
+    except (OSError, EOFError, zlib.error):
+        # A truncated stream raises EOFError, a garbled one zlib.error: a
+        # payload the capture cannot read attests no chart.
         pass
     return json.loads(raw)
 
@@ -1046,16 +1050,27 @@ def chart_commits():
 
     The chart's content changes only where a commit touches it, so the
     candidates are those commits; the commit that carries the attested chart
-    is one of them.
+    is one of them. The history is walked in full: git's default path
+    simplification drops the side-branch commits whose chart content no
+    merge kept, and those are exactly the contents this search looks for.
     """
     output = run(
-        ["git", "-C", REPO_ROOT, "log", "--format=%H", "--", CHART_REPO_PATH],
+        [
+            "git",
+            "-C",
+            REPO_ROOT,
+            "log",
+            "--full-history",
+            "--format=%H",
+            "--",
+            CHART_REPO_PATH,
+        ],
         check=False,
     )
     commits = [line.strip() for line in output.splitlines() if line.strip()]
     head = run(["git", "-C", REPO_ROOT, "rev-parse", "HEAD"], check=False).strip()
     if head and head not in commits:
-        commits.insert(0, head)
+        commits.append(head)
     return commits
 
 
@@ -1081,9 +1096,12 @@ def commit_chart_files(commit):
 def source_commit(attested_ids):
     """The commit of this repository that carries the attested chart.
 
-    The chart the deployment runs is content: the commit that carries the
-    same content is the commit the release was rendered from. A chart no
-    commit of this checkout carries is a commit this checkout does not know.
+    The chart the deployment runs is CONTENT; the commit is the locator of
+    that content in this repository. Several commits can carry the same
+    chart content - a commit that did not touch the chart carries it too -
+    so the commit named is not the commit the release was rendered from and
+    the record does not claim it is. A chart no commit of this checkout
+    carries is a commit this checkout does not know.
     """
     for commit in chart_commits():
         if commit_chart_files(commit) == attested_ids:
@@ -1095,8 +1113,12 @@ def values_identical(left, right):
     """Two values compared by content.
 
     The key order of a mapping is not a difference, and a number written
-    `1` against `1.0` is the same value.
+    `1` against `1.0` is the same value. A null leaf and an empty one are
+    different values: the chart declares `null`, the deployment carries the
+    empty string.
     """
+    if left is None or right is None:
+        return left is None and right is None
     if isinstance(left, dict) and isinstance(right, dict):
         if set(left) != set(right):
             return False
@@ -1234,7 +1256,7 @@ def lock_differences(chart):
     return differences
 
 
-def chart_differences(chart, attested_ids):
+def chart_differences(chart, attested_ids, release_info=None):
     """Every difference between the chart source and the attested chart."""
     differences = []
     local = local_chart_files()
@@ -1276,6 +1298,31 @@ def chart_differences(chart, attested_ids):
                 "path": "Chart.yaml",
                 "source": f"version {local_version}",
                 "deployed": f"version {attested_version}",
+            }
+        )
+    # The two objects that attest the chart must agree with each other: the
+    # release history names the chart the deployed revision runs, and the
+    # release secret holds the chart it was rendered with.
+    history = release_info or {}
+    history_version = history.get("chart_version", "")
+    if history_version and attested_version and history_version != attested_version:
+        differences.append(
+            {
+                "kind": "version",
+                "path": "release history",
+                "source": f"release history: version {history_version}",
+                "deployed": f"release secret: version {attested_version}",
+            }
+        )
+    attested_name = (chart.get("metadata") or {}).get("name", "")
+    history_name = history.get("chart_name", "")
+    if history_name and attested_name and history_name != attested_name:
+        differences.append(
+            {
+                "kind": "name",
+                "path": "release history",
+                "source": f"release history: {history_name}",
+                "deployed": f"release secret: {attested_name}",
             }
         )
     differences.extend(values_differences(chart))
@@ -1344,7 +1391,7 @@ def chart_identity(release_info):
         return identity
     identity["commit"] = commit
     identity["files"] = len(attested)
-    identity["differences"] = chart_differences(chart, attested_ids)
+    identity["differences"] = chart_differences(chart, attested_ids, release_info)
     identity["status"] = "DIFFERENT" if identity["differences"] else "IDENTICAL"
     return identity
 
@@ -1890,6 +1937,16 @@ def render_markdown(data):
         add(
             f"- **Commit of this repository that carries it:** "
             f"`{cell(identity['commit'] or '(none)')}`"
+        )
+        add(
+            "- The commit is a LOCATOR: the content is what the release was "
+            "rendered with, and several commits can carry the same chart "
+            "content - a commit that did not touch the chart carries it too."
+        )
+        add(
+            "- The comparison is against the chart source in this working "
+            "tree; the commit named above is the committed tree that carries "
+            "the same content."
         )
         add(f"- **Chart files compared:** {identity['files']}")
         if identity["status"] == "UNRESOLVED":

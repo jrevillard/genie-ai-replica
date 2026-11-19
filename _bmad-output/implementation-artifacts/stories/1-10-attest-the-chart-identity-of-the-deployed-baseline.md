@@ -40,8 +40,8 @@ context:
 
 ## Code Map
 
-- `scripts/baseline/capture-deployed-baseline.py` — the capture. `OPEA_WORKLOADS` (line 56) maps component → chart template; `capture_release` (line 794) reads the HelmRelease (history, sourceRef, storageNamespace); `local_chart_version` (line 874); `collect_discrepancies` (line 1727) is the exit gate; `capture` (line 1893) assembles the record; `render_markdown` (line 1311) writes it.
-- `scripts/baseline/tests/test_capture_deployed_baseline.py` — the capture's pins; `load_capture` (line 40) imports the script by path.
+- `scripts/baseline/capture-deployed-baseline.py` — the capture. `OPEA_WORKLOADS` (line 62) maps component → chart template and `WORKLOAD_ENV_MAPS` (line 80) maps component → the values path of its operator env map; `capture_release` (line 812) reads the HelmRelease (history, sourceRef, storageNamespace); `local_chart_version` (line 913); the chart identity section — `attested_chart`, `source_commit`, `chart_differences`, `chart_identity` (line 1333) and `chart_identity_rows` (line 1415); `resolve_source` (line 1662) and `compare_workload` (line 1752) are the three-layer comparison; `render_markdown` (line 1877) writes the record; `collect_discrepancies` (line 2354) is the exit gate; `capture` (line 2523) assembles the record.
+- `scripts/baseline/tests/test_capture_deployed_baseline.py` — the capture's pins; `load_capture` (line 53) imports the script by path.
 - `charts/genieai-umbrella/templates/opea/{pii-service,okf-server,ragas-service}.yaml` — the three non-retrieval tiers; each declares its component label (`pii-service`, `okf-server`, `ragas-service`) and its env rows.
 - `charts/genieai-umbrella/values.yaml` — the chart defaults; the OKF tiers' values live under `okf.*`, not `opea.*`.
 - `charts/genieai-umbrella/Chart.lock` — the chart's dependencies; the release secret carries the same lock.
@@ -77,6 +77,21 @@ context:
 
 ## Review Triage Log
 
+| # | source | severity | finding | disposition |
+|---|---|---|---|---|
+| 1 | scoped validation (own turn, over `017e9f2a0..2d3fa2b1d`) | Important | the three OKF tiers' operator env map (`okf.pii.env`, `okf.server.env`, `okf.ragas.env`) was not compared — the comparison looked for the map under the workload's own chart section, so a knob the operator sets in those maps still drifted unnoticed | **fixed** — `WORKLOAD_ENV_MAPS` names the map's path per workload; the six retrieval tiers keep theirs |
+| 2 | scoped validation | Important | an unreadable release payload raised out of the capture: no record was written, so a stale record could be read as current | **fixed** — an unreadable payload leaves the identity UNRESOLVED and the record says so |
+| 3 | scoped validation | Minor | the coalesced dependency leaves were filtered by the source's lock alone — a dependency the attested chart carried and the source did not flooded the difference list | **fixed** — both locks' dependency names count |
+| 4 | scoped validation | Minor | the vendored dependency directory was excluded by NAME at any depth | **fixed** — only the chart's own `charts` directory is excluded |
+| 5 | global code-review round 2 | Important | `gzip.decompress` raises `zlib.error` on a garbled deflate stream — not `OSError`/`EOFError` — so it escaped the identity resolution and killed the capture | **fixed** — `zlib.error` is caught; pinned by a test |
+| 6 | global code-review round 2 | Important | `git log -- <path>`'s default history simplification prunes the side-branch commits whose chart content no merge kept, so the candidate set missed commits this checkout carries | **fixed** — the history is walked with `--full-history` |
+| 7 | global code-review round 2 | Important | the commit named was the checkout's tip whenever the tip carries the same chart content, and the docstring claimed it was the commit the release was rendered from | **fixed** — the commit is a LOCATOR (the wording says so in the code, the record and this spec) and the chart-touching commits are tried first |
+| 8 | global code-review round 2 | Important | the release history's `chartVersion` was printed but never compared with the release secret's `metadata.version` (nor `chartName` with `metadata.name`) — the two attestations could disagree silently | **fixed** — they are compared, and a disagreement is a difference; pinned by a test |
+| 9 | global code-review round 2 | Minor | the storage-namespace fallback ended in the install namespace; the venue's release secrets live in the HelmRelease's own namespace | **fixed** — the HelmRelease's namespace is tried before the install namespace |
+| 10 | global code-review round 2 | Minor | `normalize()` maps `None` to `""`, so a null leaf and an empty one compared equal and the difference passed silently | **fixed** — `values_identical` tells null from empty; pinned by a test |
+| 11 | global code-review round 2 | Minor | the file comparison runs against the working tree while the commit resolution runs against committed trees, so the two halves of the identity section could disagree | **fixed** — the record says which is which |
+| 12 | global code-review round 2 | Minor | the Code Map's line references were stale | **fixed** — the Code Map names the current lines |
+
 ## Design Notes
 
 The identity has three axes and each is read from the object that attests it:
@@ -86,6 +101,10 @@ The identity has three axes and each is read from the object that attests it:
 | the chart the deployment runs (version) | the HelmRelease's release history | the deployed revision's `chartVersion` |
 | the chart the deployment runs (content) | the Helm release secret of the deployed revision | the decoded `chart` |
 | the commit of this repository that carries it | this repository | the candidate commit whose tree matches the attested content |
+
+The two cluster attestations must agree with each other: the release history's `chartVersion`/`chartName` are compared with the release secret's `metadata.version`/`metadata.name`, and a disagreement is a difference like any other.
+
+The commit is a **locator**, not the commit the release was rendered from: the CONTENT is what the release was rendered with, and several commits carry the same chart content — a commit that never touched the chart carries it too. The record says so.
 
 Comparing the local tree with the **source's current ref** is what story 1.2's gate did, and it is the defect this story exists to fix: a moving ref cannot say which chart was rendered.
 

@@ -1453,3 +1453,42 @@ def test_a_malformed_release_payload_fails_closed(monkeypatch):
     identity = capture.chart_identity(_release_info())
     assert identity["status"] == "UNRESOLVED"
     assert "release secret" in identity["reason"]
+
+
+def test_a_garbled_release_payload_fails_closed(monkeypatch):
+    """A payload whose deflate stream is garbled attests no chart."""
+    import gzip
+
+    corrupted = gzip.compress(b"x" * 4000)[:12] + bytes(range(200))
+    encoded = base64.b64encode(corrupted).decode("ascii")
+    monkeypatch.setattr(
+        capture, "kubectl_json", lambda *args, **kwargs: {"data": {"release": encoded}}
+    )
+    identity = capture.chart_identity(_release_info())
+    assert identity["status"] == "UNRESOLVED"
+
+
+def test_the_two_attestations_of_the_chart_must_agree(monkeypatch):
+    """The release history and the release secret must name the same chart."""
+    monkeypatch.setattr(
+        capture,
+        "kubectl_json",
+        lambda *args, **kwargs: _release_secret(_attested_chart()),
+    )
+    identity = capture.chart_identity(_release_info(chart_version="0.2.181"))
+    assert identity["status"] == "DIFFERENT"
+    paths = [difference["path"] for difference in identity["differences"]]
+    assert "release history" in paths
+
+
+def test_a_null_leaf_and_an_empty_one_are_different(monkeypatch):
+    """The chart declares null; the chart the deployment runs carries ""."""
+    attested = _attested_chart()
+    attested["values"]["services"]["backend"]["replicas"] = ""
+    monkeypatch.setattr(
+        capture, "kubectl_json", lambda *args, **kwargs: _release_secret(attested)
+    )
+    identity = capture.chart_identity(_release_info())
+    assert identity["status"] == "DIFFERENT"
+    paths = [difference["path"] for difference in identity["differences"]]
+    assert "values.yaml:services.backend.replicas" in paths

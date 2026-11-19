@@ -1,0 +1,14 @@
+flowchart LR
+ U["Web or<br/>mobile"]:::channel --> B["Node.js<br/>backend"]:::core
+ B --> O["ChatQnA"]:::core
+ O --> E["Embedding"]:::model
+ E --> R["Hybrid<br/>retrieval"]:::core
+ R --> X["Optional<br/>reranker"]:::model
+ X --> V["vLLM"]:::model
+ R -.-> V
+ V --> A["Answer<br/>+ sources"]:::channel
+ D[("ArangoDB")]:::data --> R
+ class U,B,O step0
+ class E,R,D step1
+ class X step2
+ class V,A step3

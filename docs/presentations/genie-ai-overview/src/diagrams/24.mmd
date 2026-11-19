@@ -1,0 +1,14 @@
+---
+config:
+  flowchart:
+    wrappingWidth: 250
+---
+flowchart LR
+ F[("Documents and<br/>ArangoDB")]:::data --> A["GENIE.AI"]:::core
+ U["Question"]:::channel --> A
+ A --> L["Institution-managed<br/>model endpoint"]:::model
+ A -.-> E["Selected external<br/>model provider"]:::option
+ A --> O[("Operational<br/>data")]:::data
+ class F step0
+ class U,A,L,E step1
+ class O step2

@@ -8,6 +8,14 @@ owner: docs-stewards
 last_reviewed: 2026-09-18
 ---
 
+<div class="alert alert-primary d-flex flex-column flex-md-row align-items-md-center justify-content-between gap-3" role="note">
+  <div>
+    <strong>Want a guided introduction?</strong><br>
+    Explore GENIE.AI in an animated walkthrough built around a public-service example.
+  </div>
+  <a class="btn btn-primary text-nowrap" href="/presentations/genie-ai/index.html">Open the presentation</a>
+</div>
+
 ## What GENIE.AI is
 
 GENIE.AI is an **open-source retrieval-augmented-generation framework** built

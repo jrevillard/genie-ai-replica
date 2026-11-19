@@ -1,0 +1,9 @@
+flowchart LR
+ BM["BM25"]:::channel --> F["Rank fusion"]:::core
+ V["Vector search"]:::core --> F
+ V -.-> G["Graph expansion"]:::data
+ F --> R["Candidate<br/>passages"]:::model
+ G -.-> R
+ class BM step0
+ class V,F step1
+ class G step2

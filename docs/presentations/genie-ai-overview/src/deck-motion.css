@@ -1,0 +1,199 @@
+/* Entry motion stays separate from the fragments used to guide the talk. */
+.deck-slide.is-entering {
+  --enter-ease: cubic-bezier(.18,.66,.29,1);
+  --flow-spacing: 185ms;
+  --idle-lead: 2450ms;
+}
+.is-entering :is(.heading, .cover-content h1) {
+  animation: title-arrive 480ms var(--enter-ease) both;
+}
+.is-entering .cover-intro { animation: panel-arrive 620ms 210ms var(--enter-ease) both; }
+.is-entering .cover-content .eyebrow { animation: panel-arrive 450ms 80ms var(--enter-ease) both; }
+.is-entering .slide-takeaway { animation: panel-arrive 450ms 360ms var(--enter-ease) both; }
+
+.is-entering :is(
+  .spread > article, .index > article, .rail > article, .split > article, .stack-grid > article,
+  .field-grid > article, .profile-scene > article, .device-notes > article, .document-notes > article,
+  .rank-list > .rank-row, .diagram-notes > article, .language-turns > article, .language-notes > article,
+  .console-legend > article, .trace-legend > article, .finale-blocks > article, .resources > a,
+  .deployment-matrix tbody tr
+) {
+  animation: panel-arrive 475ms calc(95ms + var(--item, 0) * 83ms) var(--enter-ease) both;
+}
+.is-entering .slide-content :nth-child(2) { --item: 1; }
+.is-entering .slide-content :nth-child(3) { --item: 2; }
+.is-entering .slide-content :nth-child(4) { --item: 3; }
+.is-entering .slide-content :nth-child(5) { --item: 4; }
+.is-entering .slide-content :nth-child(n+6) { --item: 5; }
+
+.is-entering .conversation .question { animation: panel-arrive 430ms 90ms var(--enter-ease) both; }
+.is-entering .conversation .answer { animation: panel-arrive 510ms 340ms var(--enter-ease) both; }
+.is-entering .conversation .source-pane { animation: source-arrive 590ms 660ms var(--enter-ease) both; }
+.is-entering .citation-mark { animation: citation-signal 760ms 660ms ease-out both; }
+.is-entering .device-browser { animation: desktop-arrive 680ms 70ms var(--enter-ease) both; }
+.is-entering .device-phone { animation: source-arrive 680ms 300ms var(--enter-ease) both; }
+.is-entering .field-photo { animation: field-pan 1250ms var(--enter-ease) both; }
+.is-entering .field-grid article + article .field-photo { animation-delay: 180ms; }
+.is-entering .document-packet { animation: evidence-transfer 920ms 250ms ease-in-out both; }
+.is-entering .doc-results i {
+  transform-origin: left;
+  animation: bar-grow 420ms calc(780ms + var(--item, 0) * 60ms) var(--enter-ease) both;
+}
+.is-entering .console-row { animation: console-row-in 440ms calc(35ms + var(--item, 0) * 130ms) ease-out both; }
+.is-entering .trace-row i::before {
+  transform-origin: left;
+  animation: bar-grow 600ms calc(100ms + var(--item, 0) * 150ms) var(--enter-ease) both;
+}
+.is-entering .deployment-matrix tbody td:last-child { animation: shared-endpoint 780ms 540ms ease-out both; }
+
+.is-entering .diagram-paper .diagram-trace {
+  stroke-width: 5;
+  stroke-dasharray: .34 1.05;
+  animation: route-sweep 630ms max(55ms, calc(120ms + (var(--flow-beat) - 1) * var(--flow-spacing))) linear both;
+}
+.is-entering .diagram-paper g.node {
+  animation: node-arrive 680ms calc(100ms + var(--flow-beat) * var(--flow-spacing)) ease-out both;
+}
+html:not(.reduced-motion) .present .diagram-trace.is-target { animation: trace-flow 1450ms linear infinite; }
+.layout-ingestion.is-entering { --flow-spacing: 254ms; --idle-lead: 2800ms; }
+.is-entering .ingestion-formats { animation: panel-arrive 540ms 145ms var(--enter-ease) both; }
+.is-entering .ingestion-example { animation: panel-arrive 520ms 720ms var(--enter-ease) both; }
+.is-entering .ingestion-settings { animation: panel-arrive 510ms 2120ms var(--enter-ease) both; }
+.ingestion-example mark {
+  background: linear-gradient(#ffe298,#ffe298) left / 100% 100% no-repeat;
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
+}
+.is-entering .ingestion-example mark { animation: mark-overlap 520ms 910ms var(--enter-ease) both; }
+.is-entering .ingestion-example p + p mark { animation-delay: 1080ms; }
+html:not(.reduced-motion) .present .ingestion-example.is-target mark {
+  animation: mark-overlap 450ms var(--enter-ease, ease-out) both;
+}
+html:not(.reduced-motion) .present .ingestion-example.is-target p + p mark { animation-delay: 120ms; }
+
+.layout-chapter-divider.is-entering .chapter-intro {
+  animation: chapter-title-in 600ms var(--enter-ease) both;
+}
+.layout-chapter-divider.is-entering .chapter-track::after {
+  animation: chapter-line-in 840ms 160ms var(--enter-ease) both;
+}
+.layout-chapter-divider.is-entering .chapter-track li {
+  animation: chapter-node-in 440ms calc(180ms + var(--beat) * 190ms) var(--enter-ease) both;
+}
+
+/* Idle accents move one path at a time, then wait before the next pass. */
+html:not(.reduced-motion) .present [data-scene]:not(.is-guided) .diagram-idle {
+  stroke: #226aa5;
+  stroke-width: 3.5;
+  stroke-dasharray: .27 1.05;
+  animation: route-idle 6800ms calc(var(--idle-lead, 280ms) + var(--idle-beat) * 610ms) linear infinite;
+}
+html:not(.reduced-motion) .present .conversation:not(.is-guided) .citation-mark::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border: 1px solid #197786;
+  border-radius: inherit;
+  pointer-events: none;
+  animation: citation-idle 8400ms var(--idle-lead, 400ms) ease-out infinite both;
+}
+html:not(.reduced-motion) .present .trace-scene:not(.is-guided) .trace-visual::after,
+html:not(.reduced-motion) .present .chapter-visual::after {
+  content: "";
+  position: absolute;
+  pointer-events: none;
+  animation: timeline-idle 8700ms var(--idle-lead, 360ms) linear infinite both;
+}
+.trace-visual::after {
+  inset: 10px 17px 10px 169px;
+  background: linear-gradient(90deg,transparent,#3e6aa362,transparent) left / 30px 100% no-repeat;
+}
+.chapter-visual::after {
+  inset: 8px calc(33.333% - 27px) auto 19px;
+  height: 3px;
+  background: linear-gradient(90deg,transparent,#fff,transparent) left / 33px 100% no-repeat;
+}
+
+@keyframes title-arrive {
+  from { opacity: .55; translate: 0 12px; }
+  to { opacity: 1; translate: none; }
+}
+@keyframes panel-arrive {
+  from { opacity: .38; translate: 0 15px; }
+  to { opacity: 1; translate: none; }
+}
+@keyframes source-arrive {
+  from { opacity: .25; translate: 28px 0; }
+  to { opacity: 1; translate: none; }
+}
+@keyframes desktop-arrive {
+  from { opacity: .35; translate: -27px 0; }
+  to { opacity: 1; translate: none; }
+}
+@keyframes citation-signal {
+  0%, 100% { box-shadow: 0 0 0 0 #289bb800; }
+  42% { box-shadow: 0 0 0 5px #289bb850; }
+}
+@keyframes field-pan {
+  from { object-position: center 34%; }
+  to { object-position: center 52%; }
+}
+@keyframes evidence-transfer {
+  0% { left: 31%; opacity: 0; }
+  16%, 78% { opacity: 1; }
+  100% { left: 73%; opacity: 0; }
+}
+@keyframes bar-grow {
+  from { transform: scaleX(0); }
+  to { transform: scaleX(1); }
+}
+@keyframes console-row-in {
+  from { background: #dceafd; }
+  to { background: transparent; }
+}
+@keyframes shared-endpoint {
+  0%, 100% { background-color: #e9f8fc; }
+  45% { background-color: #bbebf0; }
+}
+@keyframes route-sweep {
+  0% { stroke-dashoffset: .34; opacity: 0; }
+  13%, 82% { opacity: 1; }
+  100% { stroke-dashoffset: -.98; opacity: 0; }
+}
+@keyframes node-arrive {
+  0% { opacity: .78; filter: none; }
+  33% { opacity: 1; filter: drop-shadow(0 2px 5px #2c58c694); }
+  100% { opacity: 1; filter: none; }
+}
+@keyframes trace-flow { to { stroke-dashoffset: -.26; } }
+@keyframes route-idle {
+  0% { stroke-dashoffset: .27; opacity: 0; }
+  1.4%, 5.7% { opacity: .72; }
+  8%, 100% { stroke-dashoffset: -.95; opacity: 0; }
+}
+@keyframes citation-idle {
+  0% { opacity: 0; scale: 1; }
+  5% { opacity: .6; }
+  15%, 100% { opacity: 0; scale: 1.07 1.23; }
+}
+@keyframes timeline-idle {
+  0% { opacity: 0; background-position: left; }
+  3%, 13% { opacity: .75; }
+  16%, 100% { opacity: 0; background-position: right; }
+}
+@keyframes mark-overlap {
+  from { background-size: 0 100%; }
+  to { background-size: 100% 100%; }
+}
+@keyframes chapter-title-in {
+  from { opacity: .35; translate: 0 18px; }
+  to { opacity: 1; translate: none; }
+}
+@keyframes chapter-line-in {
+  from { transform: scaleX(0); }
+  to { transform: scaleX(1); }
+}
+@keyframes chapter-node-in {
+  from { opacity: .3; translate: 0 12px; }
+  to { opacity: 1; translate: none; }
+}

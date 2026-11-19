@@ -206,6 +206,56 @@ services need no device access (CPU image). For the Ansible path,
 `deploy/ansible/deploy-gpu-rocm.yml` +
 `group_vars/rocm_gpu_api/vars.yml` drive the same GPU-node stack.
 
+#### Why one overlay file per vendor (and not one compose file)
+
+The ROCm path adds two files to a repo that already had two. That is the
+shape, not an accident — and it is the shape that keeps every NVIDIA
+deployment byte-identical.
+
+**What a parameter cannot express.** Compose has no conditional
+structure. Everything a vendor difference needs is *structural*, not a
+value:
+
+| What differs | Why no parameter covers it |
+|---|---|
+| `vllm-embedding`, `vllm-reranker` exist only on ROCm | a service either exists or it does not; there is no "define this service only for vendor X" |
+| `devices: /dev/kfd + /dev/dri` | compose rejects an interpolated device list (`devices must be a array`) — and the paths do not exist on an NVIDIA host |
+| `group_add: [render, video]` | same problem, and the GIDs are host-specific |
+| the ROCm image's serving entrypoint | the NVIDIA image's entrypoint is `vllm serve`; the ROCm image has none (its CMD is `/bin/bash`), so the flags need something to attach to |
+
+A parameter *can* express a value: every image pin, port, model id,
+sizing knob and GID already flows through the env files. That is why the
+ROCm profile is one env file (`env.strixhalo`) plus one overlay per
+topology, and why the overlay restates so little.
+
+**What the overlay actually carries.** For the services that exist in
+both, the overlay states the *vendor* difference and nothing else — the
+base file's flags, hardening, healthcheck, volumes and networks merge in
+unchanged. Concretely, the four vLLM instances in the single-server
+overlay are two lines each (image pin + `NVIDIA_VISIBLE_DEVICES=void`)
+plus the entrypoint restatement; the base's flag block is inherited
+verbatim, so a flag change on the base side reaches ROCm with no second
+edit and no drift.
+
+**Why not fold ROCm into the base file.** The base file is what every
+deployment loads. Adding ROCm-only services and `/dev/kfd` mounts to it
+would put a broken-on-NVIDIA service definition into every NVIDIA
+deployment's config, and make the NVIDIA render — the artifact the
+NVIDIA-safety gates compare — differ on every ROCm change. The overlay
+model is what lets the contract "an NVIDIA deployment cannot observe a
+behavior change without setting a new env var" be *proved* rather than
+argued: the NVIDIA render is byte-identical whether or not the overlay
+exists.
+
+**Why not one file per vendor for everything.** The two ROCm overlays
+exist because they stack on two different base files — the main stack
+(`docker-compose.yaml`) and the standalone GPU-node stack
+(`docker-compose.gpu.yaml`). The GPU-node stack has its own services,
+its own network and its own port plan; a single overlay cannot serve
+both without restating the other topology's services. The consolidation
+question (one file, all topologies) is tracked in issue #2014 with the
+measured trade-offs.
+
 {{% alert title="`env.strixhalo` is the single-server profile" color="warning" %}}
 Its `RERANKER_BACKEND=vllm` / `EMBEDDING_BACKEND=vllm` flips hard-fail on a
 compose **split** venue: the static gpu-proxy

@@ -17,27 +17,38 @@
 # The TEI services run the CPU image (the ROCm TEI build fails on gfx1151;
 # see the spike results) and therefore need NO device access.
 #
+# THE RULE THIS FILE FOLLOWS: restate a key only when the VENDOR changes
+# it. Two merge facts drive that:
+#   - `environment:` merges BY KEY, so restating a key with the same
+#     value is duplication, not override (the base's
+#     HUGGING_FACE_HUB_TOKEN / RUST_BACKTRACE / TEI_*_AUTO_TRUNCATE
+#     already carry exactly these values);
+#   - `entrypoint` and `command` are SEPARATE keys, so the ROCm image's
+#     missing serving entrypoint (`ENTRYPOINT=null, CMD=/bin/bash`) is
+#     fixed by restating the ENTRYPOINT alone — the base file's flag
+#     block then merges in unchanged and stays the single source of
+#     truth for the flags (no drift between the two files).
+#
 # Later vendor paths (e.g. Apple Metal) follow this same shape: one
-# overlay file + one sizing env file, base untouched.
+# overlay file + one sizing env file, base untouched. The rationale —
+# including what a parameter cannot express (compose has no conditional
+# structure, and `devices:` cannot be interpolated at all) — is in
+# site/content/en/docs/deploy/gpu.md § "Why one overlay file per vendor"
+# and docs/superpowers/specs/2026-11-11-rocm-gpu-tier-design.md §
+# "Why the overlay file set is the cleanest shape".
 
 services:
   vllm:
     image: ${VLLM_ROCM_IMAGE}
-    # The ROCm image has no serving entrypoint (default CMD is /bin/bash),
-    # so the base file's `command: > --model ...` form cannot run there.
-    # Restated as an explicit `vllm serve` invocation with IDENTICAL
-    # flags — flag drift is caught by the Task-5 merged-config assertions.
-    command: >
-      vllm serve
-      --model ${VLLM_LLM_MODEL_ID:-meta-llama/Meta-Llama-3.1-8B-Instruct}
-      --gpu_memory_utilization ${VLLM_GPU_UTILIZATION:-0.55}
-      --served-model-name ${VLLM_LLM_MODEL_ID:-meta-llama/Meta-Llama-3.1-8B-Instruct}
-      --max_model_len ${VLLM_MAX_MODEL_LEN:-65536}
-      --max_num_seqs ${VLLM_MAX_NUM_SEQS:-16}
-      --dtype=${VLLM_DTYPE:-half}
-      --enforce-eager
+    # The ROCm image has NO serving entrypoint (its CMD is /bin/bash), while
+    # the NVIDIA image's entrypoint is `vllm serve` — so the base file's
+    # `command: > --model ...` (flags only) has nothing to attach to.
+    # `entrypoint` and `command` are SEPARATE compose keys, so restating
+    # only the entrypoint lets the base file's flag block merge in
+    # unchanged: one source of truth for the flags (no drift), and the
+    # overlay carries nothing but what the vendor actually changes.
+    entrypoint: ["vllm", "serve"]
     environment:
-      - HUGGING_FACE_HUB_TOKEN=${HUGGING_FACE_HUB_TOKEN}
       - NVIDIA_VISIBLE_DEVICES=void
     devices:
       - /dev/kfd:/dev/kfd
@@ -48,19 +59,11 @@ services:
 
   vllm-translation-guardrail:
     image: ${VLLM_ROCM_IMAGE}
-    command: >
-      vllm serve
-      --model ${VLLM_TRANSLATION_MODEL_ID:-google/gemma-3-4b-it}
-      --gpu_memory_utilization ${VLLM_TRANSLATION_GPU_UTILIZATION:-0.3}
-      --served-model-name ${VLLM_TRANSLATION_MODEL_ID:-google/gemma-3-4b-it}
-      --max_model_len ${VLLM_TRANSLATION_MAX_MODEL_LEN:-2048}
-      --dtype=${VLLM_TRANSLATION_DTYPE:-auto}
-      --port ${VLLM_TRANSLATION_SERVICE_PORT:-9031}
-      --no-enable-chunked-prefill
-      --max-num-seqs ${VLLM_TRANSLATION_MAX_NUM_SEQS:-16}
-      --chat-template-content-format openai
+    # Same entrypoint-only restatement as `vllm` above — the base file's
+    # flag block (including its --port and the chat-template format)
+    # merges in unchanged.
+    entrypoint: ["vllm", "serve"]
     environment:
-      - HUGGING_FACE_HUB_TOKEN=${HUGGING_FACE_HUB_TOKEN}
       - NVIDIA_VISIBLE_DEVICES=void
     devices:
       - /dev/kfd:/dev/kfd
@@ -71,17 +74,16 @@ services:
 
   tei:
     image: ${TEI_ROCM_EMBEDDING_IMAGE}
+    # Only what the vendor changes: the image pin and the NVIDIA var
+    # neutralization. The base's HUGGING_FACE_HUB_TOKEN / RUST_BACKTRACE /
+    # TEI_EMBEDDING_AUTO_TRUNCATE merge in unchanged (environment merges
+    # BY KEY, so restating them here would be duplication, not override).
     environment:
-      - HUGGING_FACE_HUB_TOKEN=${HUGGING_FACE_HUB_TOKEN}
-      - RUST_BACKTRACE=${RUST_BACKTRACE:-}
       - NVIDIA_VISIBLE_DEVICES=void
-      - TEI_EMBEDDING_AUTO_TRUNCATE=${TEI_EMBEDDING_AUTO_TRUNCATE:-false}
 
   tei_reranker:
     image: ${TEI_ROCM_RERANKING_IMAGE}
     environment:
-      - HUGGING_FACE_HUB_TOKEN=${HUGGING_FACE_HUB_TOKEN}
-      - RUST_BACKTRACE=${RUST_BACKTRACE:-}
       - NVIDIA_VISIBLE_DEVICES=void
 
   # Task 14 — GPU reranker: the TEI ROCm image cannot run on gfx1151
@@ -107,8 +109,11 @@ services:
     # 2026-11-18 GTT pressure during a heavy drain) leaves the container
     # dead until a human notices (code review finding follow-up).
     restart: unless-stopped
+    # Overlay-ONLY service (no base counterpart to inherit from), so the
+    # entrypoint is restated here — in the SAME shape as the base file:
+    # entrypoint carries the binary, `command` carries only the flags.
+    entrypoint: ["vllm", "serve"]
     command: >
-      vllm serve
       --model ${VLLM_EMBEDDING_MODEL_ID:-BAAI/bge-large-en-v1.5}
       --gpu_memory_utilization ${VLLM_EMBEDDING_GPU_UTILIZATION:-0.05}
       --served-model-name ${VLLM_EMBEDDING_MODEL_ID:-BAAI/bge-large-en-v1.5}
@@ -158,8 +163,11 @@ services:
     profiles: [gpu-models]
     # Same explicit-command pattern as the two vLLM instances above: the
     # ROCm image has no serving entrypoint.
+    # Same shape as the base file: entrypoint carries the binary, `command`
+    # only the flags (overlay-only service — no base counterpart to
+    # inherit the entrypoint from).
+    entrypoint: ["vllm", "serve"]
     command: >
-      vllm serve
       --model ${VLLM_RERANKER_MODEL_ID:-BAAI/bge-reranker-v2-m3}
       --gpu_memory_utilization ${VLLM_RERANKER_GPU_UTILIZATION:-0.05}
       --served-model-name ${VLLM_RERANKER_MODEL_ID:-BAAI/bge-reranker-v2-m3}

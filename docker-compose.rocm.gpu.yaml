@@ -15,24 +15,27 @@
 # see the spike results) and need NO device access. docling-serve stays
 # CPU (the ROCm path has no docling GPU support; DOCLING_DEVICE=cpu in
 # env.strixhalo governs dataprep's callers).
+#
+# THE RULE THIS FILE FOLLOWS: restate a key only when the VENDOR changes
+# it — `environment:` merges BY KEY (a restated identical value is
+# duplication, not override), and `entrypoint` and `command` are SEPARATE
+# keys, so the ROCm image's missing serving entrypoint is fixed by
+# restating the ENTRYPOINT alone and the base file's flag block merges in
+# unchanged. The rationale is in
+# site/content/en/docs/deploy/gpu.md § "Why one overlay file per vendor".
 
 services:
   vllm-llm:
     image: ${VLLM_ROCM_IMAGE}
-    # The ROCm image has no serving entrypoint (default CMD is /bin/bash);
-    # the base file's `command: > --model ...` form cannot run there.
-    # Restated as an explicit `vllm serve` invocation with IDENTICAL flags.
-    command: >
-      vllm serve
-      --model ${VLLM_LLM_MODEL_ID:-ibm-granite/granite-3.1-2b-instruct}
-      --gpu_memory_utilization ${VLLM_GPU_UTILIZATION:-0.55}
-      --served-model-name ${VLLM_LLM_MODEL_ID:-ibm-granite/granite-3.1-2b-instruct}
-      --max_model_len ${VLLM_MAX_MODEL_LEN:-65536}
-      --max_num_seqs ${VLLM_MAX_NUM_SEQS:-16}
-      --dtype=${VLLM_DTYPE:-half}
-      --enforce-eager
+    # The ROCm image has NO serving entrypoint (its CMD is /bin/bash), while
+    # the NVIDIA image's entrypoint is `vllm serve` — so the base file's
+    # `command: > --model ...` (flags only) has nothing to attach to.
+    # `entrypoint` and `command` are SEPARATE compose keys, so restating
+    # only the entrypoint lets the base file's flag block merge in
+    # unchanged: one source of truth for the flags (no drift), and the
+    # overlay carries nothing but what the vendor actually changes.
+    entrypoint: ["vllm", "serve"]
     environment:
-      - HUGGING_FACE_HUB_TOKEN=${HUGGING_FACE_HUB_TOKEN}
       - NVIDIA_VISIBLE_DEVICES=void
     devices:
       - /dev/kfd:/dev/kfd
@@ -43,19 +46,11 @@ services:
 
   vllm-translation:
     image: ${VLLM_ROCM_IMAGE}
-    command: >
-      vllm serve
-      --model ${VLLM_TRANSLATION_MODEL_ID:-google/gemma-3-4b-it}
-      --gpu_memory_utilization ${VLLM_TRANSLATION_GPU_UTILIZATION:-0.3}
-      --served-model-name ${VLLM_TRANSLATION_MODEL_ID:-google/gemma-3-4b-it}
-      --max_model_len ${VLLM_TRANSLATION_MAX_MODEL_LEN:-8192}
-      --dtype=${VLLM_TRANSLATION_DTYPE:-auto}
-      --port 8000
-      --no-enable-chunked-prefill
-      --max-num-seqs ${VLLM_TRANSLATION_MAX_NUM_SEQS:-16}
-      --chat-template-content-format openai
+    # Same entrypoint-only restatement as `vllm-llm` above — the base
+    # file's flag block (including its --port and the chat-template
+    # format) merges in unchanged.
+    entrypoint: ["vllm", "serve"]
     environment:
-      - HUGGING_FACE_HUB_TOKEN=${HUGGING_FACE_HUB_TOKEN}
       - NVIDIA_VISIBLE_DEVICES=void
     devices:
       - /dev/kfd:/dev/kfd
@@ -66,16 +61,16 @@ services:
 
   tei-embedding:
     image: ${TEI_ROCM_EMBEDDING_IMAGE}
+    # Only what the vendor changes: the image pin and the NVIDIA var
+    # neutralization. The base's HUGGING_FACE_HUB_TOKEN / RUST_BACKTRACE
+    # merge in unchanged (environment merges BY KEY, so restating them
+    # here would be duplication, not override).
     environment:
-      - HUGGING_FACE_HUB_TOKEN=${HUGGING_FACE_HUB_TOKEN}
-      - RUST_BACKTRACE=${RUST_BACKTRACE:-}
       - NVIDIA_VISIBLE_DEVICES=void
 
   tei-reranker:
     image: ${TEI_ROCM_RERANKING_IMAGE}
     environment:
-      - HUGGING_FACE_HUB_TOKEN=${HUGGING_FACE_HUB_TOKEN}
-      - RUST_BACKTRACE=${RUST_BACKTRACE:-}
       - NVIDIA_VISIBLE_DEVICES=void
 
   # Task 14 — GPU reranker on the split node, same shape as the
@@ -88,8 +83,11 @@ services:
     # No profiles key — the GPU-node stack's model services (vllm-llm,
     # tei-embedding, …) carry none either; this standalone stack is the
     # GPU tier.
+    # Same shape as the base file: entrypoint carries the binary, `command`
+    # only the flags (overlay-only service — no base counterpart to
+    # inherit the entrypoint from).
+    entrypoint: ["vllm", "serve"]
     command: >
-      vllm serve
       --model ${VLLM_RERANKER_MODEL_ID:-BAAI/bge-reranker-v2-m3}
       --gpu_memory_utilization ${VLLM_RERANKER_GPU_UTILIZATION:-0.05}
       --served-model-name ${VLLM_RERANKER_MODEL_ID:-BAAI/bge-reranker-v2-m3}

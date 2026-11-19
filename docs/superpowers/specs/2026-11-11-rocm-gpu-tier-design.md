@@ -155,6 +155,81 @@ delivers written handoff notes for it, not charts.
    ROCm image-pin vars in a new `group_vars` file. Additive only — the
    NVIDIA rendering path is byte-for-byte unchanged for NVIDIA inputs.
 
+## Why the overlay file set is the cleanest shape (2026-11-19)
+
+The MR adds two compose files to a repo that had two. A reviewer asked
+for a single compose file. The measured answer — why the overlay set is
+the cleanest shape rather than a workaround — is recorded here so the
+next agent does not re-litigate it without new facts.
+
+### What a parameter cannot express
+
+Compose has no conditional structure. Every vendor difference on this
+path is structural:
+
+| Difference | Measured reason a parameter cannot carry it |
+|---|---|
+| `vllm-embedding` / `vllm-reranker` exist only on ROCm | a service either exists or it does not; there is no per-vendor service definition |
+| `devices: /dev/kfd + /dev/dri` | compose REJECTS an interpolated device list: `services.probe.devices must be a array` (probed with `devices: ${DEVICES:-}`). The paths also do not exist on an NVIDIA host |
+| `group_add: [render, video]` | same list-typed problem; the GIDs are host-specific (`getent group render`) |
+| the ROCm image's serving entrypoint | the NVIDIA image's entrypoint is `vllm serve`; the ROCm image has `ENTRYPOINT=null, CMD=["/bin/bash"]` (probed with `docker image inspect`), so the base file's flags-only `command:` has nothing to attach to |
+
+What a parameter CAN carry — and does: every image pin, port, model id,
+sizing knob and GID flows through the env files. Hence the profile is
+one env file (`env.strixhalo`, the fourth member of the existing
+`env` / `env.t4` / `env.rtx6000` family) plus one overlay per topology.
+
+### What the overlay actually carries (measured)
+
+The overlay states the VENDOR difference and nothing else. `entrypoint`
+and `command` are SEPARATE compose keys, so for the four vLLM instances
+the overlay restates only `entrypoint: ["vllm", "serve"]` and the base
+file's flag block merges in unchanged. Proof: the merged render's
+effective argv (entrypoint + command) is **identical before and after**
+that change for all 49 services in both topologies.
+
+Consequences of the entrypoint/command split:
+
+- the base file is the single source of truth for the vLLM flags — a flag
+  change reaches ROCm with no second edit (the previous full-command
+  restatement was a drift hazard the file's own comment named);
+- the overlay shrank by ~50 lines of duplicated flags;
+- `environment:` merges BY KEY, so restating a key with an identical
+  value is duplication, not override — the TEI blocks now restate only
+  `NVIDIA_VISIBLE_DEVICES=void`, the one key that genuinely differs.
+
+### Why not fold ROCm into the base file
+
+The base file is what every deployment loads. Folding ROCm-only services
+and `/dev/kfd` mounts into it puts a broken-on-NVIDIA service definition
+into every NVIDIA deployment's config, and makes the NVIDIA render — the
+artifact the NVIDIA-safety gates compare — differ on every ROCm change.
+The overlay model is what lets the contract *"an NVIDIA deployment
+cannot observe a behavior change without setting a new env var"* be
+PROVED: the NVIDIA render is byte-identical whether or not the overlay
+exists. The branches' NVIDIA-file edits are additive passthroughs with
+inert defaults (`${VAR:-tei}`, `${VAR:-}`, `${VAR:-600}`).
+
+### Why two overlay files and not one
+
+The two overlays stack on two DIFFERENT base files: the main stack
+(`docker-compose.yaml`) and the standalone GPU-node stack
+(`docker-compose.gpu.yaml`). The GPU-node stack has its own services
+(`vllm-llm`, `tei-embedding`, `nginx-gpu`, …), its own `gpu_network` and
+its own port plan. A single overlay cannot serve both without
+restating the other topology's services — measured service-key overlap
+between the two ROCm overlays is exactly ONE key (`vllm-reranker`).
+
+### The consolidation question that remains open
+
+Folding the ROCm content into the base file behind compose `profiles:`
+is feasible (probed: profiles UNION across an overlay — an overlay
+`profiles: [rocm]` on a base service already carrying `[gpu-models]`
+yields BOTH, and an overlay-only service starts only when its profile is
+enabled). It is tracked in issue #2014 with the trade-offs; it belongs on
+`main`, under its own review cycle, because it rewrites the file every
+NVIDIA deployment loads.
+
 ## New artifacts (all additive, nothing existing edited)
 
 | Artifact | Purpose |

@@ -153,7 +153,11 @@
         "VLLM_MODEL_ID": "main's compose moved to runtime model discovery (empty default, the job fails loudly on a cold vLLM) while the chart still pins the model id; the static-env vs runtime-discovery homogenization is tracked in issue #1182 — the chart re-mirrors whichever shape #1182 lands"
       },
       "composeOnly": {
-        "NVIDIA_VISIBLE_DEVICES": "Docker GPU passthrough — Kubernetes expresses the same thing with the device plugin and a node selector, not with this variable"
+        "NVIDIA_VISIBLE_DEVICES": "Docker GPU passthrough — Kubernetes expresses the same thing with the device plugin and a node selector, not with this variable",
+        "EMBEDDING_BACKEND": "the ROCm GPU-tier backend switch: it only points somewhere on a deployment that runs the compose-overlay vLLM pooling instance (docker-compose.rocm.yaml, vllm-embedding); on the chart the TEI service is the serving backend and there is no in-cluster pooling Service to point at. The ROCm k8s profile is deferred by docs/helm-k8s-rocm-handoff.md (§Task-14 addendum), which prescribes landing the four-workload chart shape WITH these switches, not before — a switch wired without its workload would render a value naming a nonexistent Service",
+        "EMBEDDING_VLLM_ENDPOINT": "the address of the compose-overlay vLLM embedding instance; no in-cluster Service of that name exists until the deferred ROCm chart profile lands (docs/helm-k8s-rocm-handoff.md §Task-14 addendum)",
+        "MODEL_EMBEDDING_TIMEOUT_SECONDS": "the shared embedding HTTP budget that ships with the GPU embedding backend: Compose restates the code default (600, core/model_http_policy.py) so an operator tuning the GPU-tier budget can see and move it; the chart omits the row, which resolves through the same code default — identical behavior on both surfaces, documented difference",
+        "VLLM_EMBEDDING_MODEL_ID": "the model name the compose-overlay embedding instance serves (paired with its --served-model-name); meaningless until that instance exists in-cluster — deferred with the ROCm chart profile (docs/helm-k8s-rocm-handoff.md §Task-14 addendum)"
       },
       "codeDefault": {
         "CONTEXTUAL_RETRIEVAL_PROMPT": "empty in Compose; the code falls back to its built-in prompt when the variable is unset, and the chart has its own knob (opea.dataprep.contextualRetrievalPrompt)",
@@ -184,6 +188,11 @@
         "VLLM_API_KEY": "carried by the vllm-api-key Secret the operator provides",
         "VLLM_ENDPOINT": "the chart points at the OPEA tier's endpoint (in-cluster Service or GPU node); Compose at its own vLLM service",
         "VLLM_MODEL_ID": "main's compose moved to runtime model discovery (empty default, the job fails loudly on a cold vLLM) while the chart still pins the model id; the static-env vs runtime-discovery homogenization is tracked in issue #1182 — the chart re-mirrors whichever shape #1182 lands"
+      },
+      "composeOnly": {
+        "EMBEDDING_BACKEND": "the ROCm GPU-tier backend switch (dataprep + retriever move together — a split would mix vector spaces in one collection): it only points somewhere on a deployment that runs the compose-overlay vLLM embedding instance (docker-compose.rocm.yaml, vllm-embedding); on the chart the TEI service is the serving backend. The ROCm k8s profile is deferred by docs/helm-k8s-rocm-handoff.md (§Task-14 addendum)",
+        "EMBEDDING_VLLM_ENDPOINT": "the address of the compose-overlay vLLM embedding instance; no in-cluster Service of that name exists until the deferred ROCm chart profile lands (docs/helm-k8s-rocm-handoff.md §Task-14 addendum)",
+        "VLLM_EMBEDDING_MODEL_ID": "the model name the compose-overlay embedding instance serves (paired with its --served-model-name); meaningless until that instance exists in-cluster — deferred with the ROCm chart profile (docs/helm-k8s-rocm-handoff.md §Task-14 addendum)"
       }
     },
     "reranker": {
@@ -196,6 +205,11 @@
         "OTEL_EXPORTER_OTLP_ENDPOINT": "the collector is an operator-managed instance with its own Service name",
         "TEI_RERANKING_ENDPOINT": "the chart points at the OPEA tier's endpoint (in-cluster Service or GPU node); Compose at its own TEI service",
         "VLLM_API_KEY": "carried by the vllm-api-key Secret the operator provides"
+      },
+      "composeOnly": {
+        "RERANKER_BACKEND": "the ROCm GPU-tier backend switch: it only points somewhere on a deployment that runs the compose-overlay vLLM reranker instance (docker-compose.rocm.yaml, vllm-reranker — the TEI ROCm image cannot run on gfx1151, SPIKE-01); on the chart the TEI service is the serving backend and there is no in-cluster pooling Service to point at. The ROCm k8s profile is deferred by docs/helm-k8s-rocm-handoff.md (§Task-14 addendum), which prescribes landing the four-workload chart shape WITH these switches, not before",
+        "RERANKER_VLLM_ENDPOINT": "the address of the compose-overlay vLLM reranker instance; no in-cluster Service of that name exists until the deferred ROCm chart profile lands (docs/helm-k8s-rocm-handoff.md §Task-14 addendum)",
+        "RERANKER_VLLM_MODEL": "the model name the compose-overlay reranker instance serves (paired with its --served-model-name); meaningless until that instance exists in-cluster — deferred with the ROCm chart profile (docs/helm-k8s-rocm-handoff.md §Task-14 addendum)"
       }
     },
     "embedding": {

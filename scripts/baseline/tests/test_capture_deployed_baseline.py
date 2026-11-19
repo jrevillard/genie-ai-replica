@@ -1543,3 +1543,40 @@ def test_an_incomplete_chart_source_fails_closed(monkeypatch):
     identity = capture.chart_identity(_release_info())
     assert identity["status"] == "UNRESOLVED"
     assert "incomplete" in identity["reason"]
+
+
+def test_a_release_history_without_a_deployed_entry_is_not_attested(monkeypatch):
+    """The production path: a history with no deployed entry attests no chart."""
+    helmrelease = {
+        "spec": {
+            "chart": {
+                "spec": {
+                    "chart": "charts/genieai-umbrella",
+                    "sourceRef": {
+                        "kind": "GitRepository",
+                        "name": "genie-ai",
+                        "namespace": "flux-system",
+                    },
+                }
+            }
+        },
+        "status": {
+            "conditions": [
+                {"type": "Ready", "status": "False", "message": "upgrade failed"}
+            ],
+            "history": [{"version": 72, "chartVersion": "0.2.182", "status": "failed"}],
+            "storageNamespace": "flux-system",
+        },
+    }
+    monkeypatch.setattr(capture, "kubectl_json", lambda namespace, *args: helmrelease)
+    release = capture.capture_release("flux-system", "genieai")
+    assert release["chart_version"] == ""
+    assert release["history_deployed"] is False
+    identity = capture.chart_identity(release)
+    assert identity["status"] == "UNRESOLVED"
+    assert "no deployed revision" in identity["reason"]
+
+
+def test_the_chart_source_of_this_checkout_is_complete():
+    """The predicate the identity leans on is exercised on a real checkout."""
+    assert capture.chart_source_complete() is True

@@ -102,6 +102,12 @@ context:
 | 21 | global code-review round 3 | Minor | "Chart files compared" counted the attested files only, undercounting the files the comparison actually read | **fixed** — both counts are reported |
 | 22 | global code-review round 3 | Minor | the new code read the chart source unguarded: a checkout without `Chart.lock` raised out of the identity and killed the capture (exit 3, no record) | **fixed** — an incomplete chart source leaves the identity UNRESOLVED; pinned by a test |
 | 23 | global code-review round 3 | Minor | an untracked file under `charts/genieai-umbrella/` becomes a difference — "a false claim about the repository's chart source" | **not a defect** — helm packages every file of the chart directory, so an untracked file IS part of the chart source and the difference is real; the record already states that the comparison runs against the working tree |
+| 24 | scoped review f=2 | Important | the chart-source guard read only `Chart.yaml` and `Chart.lock`, but `values.yaml` is read too — and `capture()` opened it BEFORE the identity was resolved, so a checkout without it died with exit 3 and no record | **fixed** — `values.yaml` is part of the guard, and the capture reads it defensively |
+| 25 | scoped review f=2 | Important | the new test injected the SYMPTOM (`chart_version=""`) instead of the CONDITION, so `capture_release`'s wiring was never exercised | **fixed** — the test now runs a HelmRelease whose history has no deployed entry through `capture_release` |
+| 26 | scoped review f=2 | Minor | the test stubbed `chart_source_complete`, pinning its consumption and not the predicate | **fixed** — the predicate is exercised on this checkout |
+| 27 | scoped review f=2 | Minor | "Chart files compared" printed "0 attested, 0 in the chart source" when the identity was UNRESOLVED | **fixed** — the counts are printed only when they are established |
+| 28 | scoped review f=2 | Minor | the record header still printed the never-deployed revision and empty values | **fixed** — the header says the history records no deployed revision, and the identity line says "not established" |
+| 29 | scoped review f=2 | Minor | the DIFFERENT verdict named only the chart source as the cause, even when the attestations also disagreed | **fixed** — the verdict names every cause it found |
 
 ## Design Notes
 

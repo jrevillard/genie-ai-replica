@@ -902,6 +902,7 @@ def capture_release(flux_namespace, release):
         "chart": chart_spec,
         "chart_name": revision_entry.get("chartName", ""),
         "chart_version": revision_entry.get("chartVersion", ""),
+        "history_deployed": bool(deployed),
         "source_ref": chart_spec.get("sourceRef", {}),
         "storage_namespaces": storage_namespaces,
         "release": release,
@@ -933,7 +934,7 @@ def chart_source_complete():
     """
     return all(
         os.path.exists(os.path.join(CHART_DIR, name))
-        for name in ("Chart.yaml", "Chart.lock")
+        for name in ("Chart.yaml", "Chart.lock", "values.yaml")
     )
 
 
@@ -1944,6 +1945,11 @@ def render_markdown(data):
     add(
         f"- **Release:** `{capture['release']}` revision {capture['release_revision']}, "
         f"chart `{capture['chart_name']}`"
+        + (
+            ""
+            if capture.get("release_deployed", True)
+            else " - the release history records NO deployed revision"
+        )
     )
     add(
         f"- **Source compared against:** the chart source in this repository, version "
@@ -1977,20 +1983,24 @@ def render_markdown(data):
         add("The chart identity was not established.")
         add("")
     else:
-        add(
-            f"- **Chart the deployment runs:** `{cell(identity['chart_name'])}` version "
-            f"{cell(identity['chart_version'])} (the release history of revision "
-            f"{capture['release_revision']})"
-        )
+        if identity["status"] == "UNRESOLVED":
+            add("- **Chart the deployment runs:** not established (see the verdict below)")
+        else:
+            add(
+                f"- **Chart the deployment runs:** `{cell(identity['chart_name'])}` version "
+                f"{cell(identity['chart_version'])} (the release history of revision "
+                f"{capture['release_revision']})"
+            )
         add(
             f"- **Rendered from:** the `{cell(identity['source_kind'])}` "
             f"`{cell(identity['source_name'])}` in namespace "
             f"`{cell(identity['source_namespace'])}`"
         )
-        add(
-            f"- **Commit of this repository that carries it:** "
-            f"`{cell(identity['commit'] or '(none)')}`"
-        )
+        if identity["status"] != "UNRESOLVED":
+            add(
+                f"- **Commit of this repository that carries it:** "
+                f"`{cell(identity['commit'] or '(none)')}`"
+            )
         add(
             "- The commit is a LOCATOR: the content is what the release was "
             "rendered with, and several commits can carry the same chart "
@@ -2001,25 +2011,29 @@ def render_markdown(data):
             "tree; the commit named above is a committed tree that carries "
             "the same ATTESTED content."
         )
-        add(
-            f"- **Chart files compared:** {identity['files']} attested, "
-            f"{identity.get('local_files', 0)} in the chart source"
-        )
+        if identity["status"] == "UNRESOLVED":
+            add("- **Chart files compared:** not established")
+        else:
+            add(
+                f"- **Chart files compared:** {identity['files']} attested, "
+                f"{identity.get('local_files', 0)} in the chart source"
+            )
         if identity["status"] == "UNRESOLVED":
             add(f"- **Verdict:** UNRESOLVED - {identity['reason']}.")
         elif identity["status"] == "DIFFERENT":
             kinds = {difference["kind"] for difference in identity["differences"]}
-            if kinds == {"attestation"}:
-                add(
-                    "- **Verdict:** DIFFERENT - the two objects that attest the "
-                    "chart, the release history and the release secret, disagree "
-                    "(see the table below)."
+            causes = []
+            if kinds - {"attestation"}:
+                causes.append(
+                    "the chart source in this repository is not the chart the "
+                    "deployment runs"
                 )
-            else:
-                add(
-                    "- **Verdict:** DIFFERENT - the chart source in this repository "
-                    "is not the chart the deployment runs (see the table below)."
+            if "attestation" in kinds:
+                causes.append(
+                    "the two objects that attest the chart, the release history "
+                    "and the release secret, disagree"
                 )
+            add(f"- **Verdict:** DIFFERENT - {'; '.join(causes)} (see the table below).")
         else:
             add(
                 "- **Verdict:** IDENTICAL - the chart source in this repository is the "
@@ -2596,8 +2610,14 @@ def capture(namespace, flux_namespace, release, date, out_path):
     pods = capture_pods(namespace)
     topology = capture_topology(namespace)
     release_info = capture_release(flux_namespace, release)
-    with open(os.path.join(CHART_DIR, "values.yaml"), encoding="utf-8") as handle:
-        chart_values = yaml.safe_load(handle)
+    # An incomplete chart source is not a crash: the identity is UNRESOLVED
+    # and the record says so. The comparison below then runs against what
+    # the source does carry.
+    chart_values = {}
+    values_path = os.path.join(CHART_DIR, "values.yaml")
+    if os.path.exists(values_path):
+        with open(values_path, encoding="utf-8") as handle:
+            chart_values = yaml.safe_load(handle) or {}
 
     overlay_values = release_info["overlay"]
     effective_values = deep_merge(chart_values, overlay_values)
@@ -2680,6 +2700,7 @@ def capture(namespace, flux_namespace, release, date, out_path):
             "namespace": namespace,
             "release": release,
             "release_revision": release_info["revision"],
+            "release_deployed": release_info.get("history_deployed", True),
             "chart_name": release_info["chart"].get("chart", ""),
             "local_chart_version": local_chart_version(),
             "overlay_name": release_info["overlay_name"],

@@ -376,7 +376,7 @@
       },
       "status": "stable",
       "risk_acceptance": null,
-      "note": "A build-time dependency of the resolved tree; the service runtime never imports it."
+      "note": "A runtime dependency of opentelemetry-instrumentation 0.48b0, which resolves the instrumentation entry points through it (pkg_resources); the service never imports it directly."
     },
     {
       "name": "starlette",

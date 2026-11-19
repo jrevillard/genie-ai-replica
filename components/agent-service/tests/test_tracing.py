@@ -3,7 +3,6 @@
 """The OpenTelemetry wiring: the observability gate, the export and the PII
 redaction that keeps sensitive attributes out of the trace store."""
 
-
 import tracing as tracing_module
 
 

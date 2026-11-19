@@ -1016,6 +1016,8 @@ const Map<String, dynamic> enLocale = {
     },
   },
   "chatbot": {
+    "sourcesBarLabel": "Related sources ({n})",
+    "sourceUnavailable": "This source is not available to view.",
     "placeholder": "Type your query here...",
     "aiGeneratedNoDocs": "AI-generated — not based on library documents",
     "translationUnavailable":

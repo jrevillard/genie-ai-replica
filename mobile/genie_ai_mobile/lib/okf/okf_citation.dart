@@ -1,5 +1,3 @@
-import 'package:flutter/foundation.dart';
-
 // lib/okf/okf_citation.dart — the mobile mirror of the web's citation
 // contract (components/gov-chat-frontend/src/utils/okfCitation.js).
 //
@@ -83,7 +81,6 @@ String? sourceTitle(Map doc) =>
 }
 
 /// The log tag for citation-driven navigation events.
-@visibleForTesting
 String citationLogTag(Map doc) =>
     'okf.citation okf=${isOkfConceptSource(doc)} browsable=${canBrowseSource(doc)} '
     'repo=${citationRepoId(doc)} concept=${citationConceptId(doc)}';

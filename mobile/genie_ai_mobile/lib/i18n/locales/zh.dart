@@ -911,6 +911,8 @@ const Map<String, dynamic> zhLocale = {
     },
   },
   "chatbot": {
+    "sourcesBarLabel": "相关来源 ({n})",
+    "sourceUnavailable": "该来源暂不可查看。",
     "aiGeneratedNoDocs": "AI 生成 — 不基于文库文档",
     "translationUnavailable": "翻译不可用 — 此回复可能包含未翻译的文本。",
     "placeholder": "在此处输入您的问题...",

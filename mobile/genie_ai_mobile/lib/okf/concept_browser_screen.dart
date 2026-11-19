@@ -23,9 +23,19 @@ import 'concept_browser_controller.dart';
 /// extension is never enabled, so raw HTML in a concept body never
 /// executes (the mobile counterpart of the web's DOMPurify pipeline).
 class ConceptBrowserScreen extends ConsumerStatefulWidget {
-  const ConceptBrowserScreen({super.key, required this.repoId});
+  const ConceptBrowserScreen({
+    super.key,
+    required this.repoId,
+    this.initialConceptId,
+  });
 
   final String repoId;
+
+  /// A concept to deep-open (#1938): after the tree's first page loads, the
+  /// browser selects it — a citation tap lands on the cited concept without
+  /// a manual tree walk. The concept fetch is by id, so it need not be on
+  /// the first page.
+  final String? initialConceptId;
 
   @override
   ConsumerState<ConceptBrowserScreen> createState() => _ConceptBrowserScreenState();
@@ -34,6 +44,7 @@ class ConceptBrowserScreen extends ConsumerStatefulWidget {
 class _ConceptBrowserScreenState extends ConsumerState<ConceptBrowserScreen> {
   final Talker _log = Talker();
   String? _openedRepoId;
+  bool _deepOpened = false;
 
   @override
   void initState() {
@@ -52,7 +63,21 @@ class _ConceptBrowserScreenState extends ConsumerState<ConceptBrowserScreen> {
   void _openIfNeeded() {
     if (_openedRepoId == widget.repoId) return;
     _openedRepoId = widget.repoId;
-    _guarded(ref.read(conceptBrowserControllerProvider.notifier).open(widget.repoId));
+    _deepOpened = false;
+    _guarded(_openAndDeepSelect());
+  }
+
+  /// Opens the repo, then deep-selects [ConceptBrowserScreen.initialConceptId]
+  /// once — the fetch is by id so the concept need not sit on page one. A
+  /// failed deep-open (restricted/deleted concept) leaves the tree view; the
+  /// concept-unavailable arm answers a manual retry instead.
+  Future<void> _openAndDeepSelect() async {
+    final controller = ref.read(conceptBrowserControllerProvider.notifier);
+    await controller.open(widget.repoId);
+    final initial = widget.initialConceptId;
+    if (initial == null || _deepOpened) return;
+    _deepOpened = true;
+    await controller.select(initial);
   }
 
   /// The controller rethrows 401 (session dead app-wide) for the app's

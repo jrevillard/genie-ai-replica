@@ -1006,6 +1006,8 @@ const Map<String, dynamic> arLocale = {
     },
   },
   "chatbot": {
+    "sourcesBarLabel": "مصادر ذات صلة ({n})",
+    "sourceUnavailable": "هذا المصدر غير متاح للعرض.",
     "aiGeneratedNoDocs":
         "مُولّد بواسطة الذكاء الاصطناعي — لا يعتمد على وثائق المكتبة",
     "translationUnavailable":

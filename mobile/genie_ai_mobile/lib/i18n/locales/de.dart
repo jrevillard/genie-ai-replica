@@ -1027,6 +1027,8 @@ const Map<String, dynamic> deLocale = {
     },
   },
   "chatbot": {
+    "sourcesBarLabel": "Verwandte Quellen ({n})",
+    "sourceUnavailable": "Diese Quelle kann nicht angezeigt werden.",
     "aiGeneratedNoDocs":
         "KI-generiert — nicht auf Bibliotheksdokumenten basierend",
     "translationUnavailable":

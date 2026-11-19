@@ -1020,6 +1020,8 @@ const Map<String, dynamic> ptLocale = {
     },
   },
   "chatbot": {
+    "sourcesBarLabel": "Fontes relacionadas ({n})",
+    "sourceUnavailable": "Esta fonte não está disponível para visualização.",
     "aiGeneratedNoDocs":
         "Gerado por IA — não baseado nos documentos da biblioteca",
     "translationUnavailable":

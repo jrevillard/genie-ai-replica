@@ -1021,6 +1021,8 @@ const Map<String, dynamic> stLocale = {
     },
   },
   "chatbot": {
+    "sourcesBarLabel": "MeHLAHLOBI e amanang ({n})",
+    "sourceUnavailable": "Mohloli ona ha o fumanehe ho shebella.",
     "aiGeneratedNoDocs": "AI-generated — not based on library documents",
     "translationUnavailable":
         "Translation unavailable — this answer may contain untranslated text.",

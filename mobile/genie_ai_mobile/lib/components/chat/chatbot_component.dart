@@ -7,6 +7,7 @@ import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_svg/flutter_svg.dart';
 import 'package:genie_ai_mobile/components/shared/confirm_dialog.dart';
+import 'package:genie_ai_mobile/components/chat/answer_sources_bar.dart';
 import 'package:genie_ai_mobile/components/chat/chat_response_feedback_dialog.dart';
 import 'package:genie_ai_mobile/design_system/components/ds_button.dart';
 import 'package:genie_ai_mobile/design_system/components/ds_card.dart';
@@ -28,6 +29,8 @@ import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
 import 'package:url_launcher/url_launcher.dart';
 import 'package:genie_ai_mobile/utils/config_resolver.dart';
+import 'package:genie_ai_mobile/okf/okf_citation.dart';
+import 'package:genie_ai_mobile/okf/concept_browser_screen.dart';
 
 import 'quick_help_scope.dart';
 
@@ -2312,6 +2315,45 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
   }
 
   // ===========================================================================
+  // CITATION OPENING (#1937/#1938)
+  // ===========================================================================
+
+  /// Routes a tapped citation row (the web's `openSourceDocument`):
+  /// browsable OKF concept -> the concept browser at that repo (deep-opened
+  /// at the concept when the row carries one); external http(s) URL ->
+  /// the platform launcher; anything else -> an honest unavailable notice,
+  /// never a dead link.
+  void _openCitation(Map<String, dynamic> doc) {
+    if (canBrowseSource(doc)) {
+      final repoId = citationRepoId(doc)!;
+      final conceptId = citationConceptId(doc);
+      debugPrint('chat.citation browse repo=$repoId concept=$conceptId');
+      Navigator.of(context).push(
+        MaterialPageRoute<void>(
+          builder: (_) => ConceptBrowserScreen(
+            repoId: repoId,
+            initialConceptId: conceptId,
+          ),
+        ),
+      );
+      return;
+    }
+    final url = (doc['url'] ?? doc['sourceUrl'] ?? '').toString();
+    final uri = Uri.tryParse(url);
+    if (uri != null &&
+        (uri.scheme == 'http' || uri.scheme == 'https') &&
+        uri.host.isNotEmpty) {
+      debugPrint('chat.citation external url=$url');
+      launchUrl(uri, mode: LaunchMode.externalApplication);
+      return;
+    }
+    debugPrint('chat.citation unavailable ${citationLogTag(doc)}');
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(tr('chatbot.sourceUnavailable'))),
+    );
+  }
+
+  // ===========================================================================
   // UI BUILD
   // ===========================================================================
   @override
@@ -2557,6 +2599,22 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
                                 }
                               },
                             ),
+
+                            // The per-answer related-sources bar (#1937):
+                            // the same citation rows the web chat renders
+                            // under every answer. The bar is navigation-
+                            // agnostic; _openCitation decides what a tap
+                            // means (browse / launch / honest notice).
+                            if (!isUser &&
+                                (msg['sources'] as List?)?.isNotEmpty == true)
+                              AnswerSourcesBar(
+                                sources: msg['sources'] as List,
+                                labelBuilder: (n) =>
+                                    tr('chatbot.sourcesBarLabel', args: {
+                                  'n': n,
+                                }),
+                                onOpen: _openCitation,
+                              ),
 
                             // The backend could not translate the answer into
                             // the requested language: the text above is the

@@ -19,6 +19,7 @@ import 'package:genie_ai_mobile/design_system/components/ds_button.dart';
 import 'package:genie_ai_mobile/design_system/components/ds_input.dart';
 import 'package:genie_ai_mobile/design_system/components/ds_modal.dart';
 import 'package:genie_ai_mobile/okf/concept_browser_screen.dart';
+import 'package:genie_ai_mobile/okf/okf_citation.dart';
 import 'package:genie_ai_mobile/config/keycloak_config.dart';
 import 'package:genie_ai_mobile/providers/api_providers.dart';
 
@@ -316,6 +317,42 @@ class _RightSidebarComponentState extends ConsumerState<RightSidebarComponent> {
 
   // RESTORED: Original File Opening Logic
   Future<void> _openDocument(Map<String, dynamic> doc) async {
+    // CAP-3 (chat-source resolution): an OKF concept has no doc-repository
+    // file — the /api/files family 404s it by construction. A browsable
+    // concept opens in the concept browser, deep-opened at the cited
+    // concept; an OKF row WITHOUT repo identity (persisted pre-CAP-1) or a
+    // restricted one degrades to an honest notice, never a dead link
+    // (the mobile mirror of the web's openSourceDocument).
+    if (isOkfConceptSource(doc)) {
+      if (!canBrowseSource(doc)) {
+        debugPrint('sidebar.citation unavailable ${citationLogTag(doc)}');
+        if (!mounted) return;
+        final tokens = ThemeManager().tokens;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            backgroundColor: tokens.surface,
+            content: Text(
+              tr('chatbot.sourceUnavailable'),
+              style: TextStyle(color: tokens.fg),
+            ),
+          ),
+        );
+        return;
+      }
+      final repoId = citationRepoId(doc)!;
+      final conceptId = citationConceptId(doc);
+      debugPrint('sidebar.citation browse repo=$repoId concept=$conceptId');
+      Navigator.of(context).push(
+        MaterialPageRoute<void>(
+          builder: (_) => ConceptBrowserScreen(
+            repoId: repoId,
+            initialConceptId: conceptId,
+          ),
+        ),
+      );
+      return;
+    }
+
     final String url = _getDocValue(doc, ['url'])?.toString() ?? "";
 
     if (url.startsWith('http') && !url.contains('<HOST>')) {

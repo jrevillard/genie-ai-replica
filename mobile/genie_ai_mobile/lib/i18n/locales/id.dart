@@ -1013,6 +1013,8 @@ const Map<String, dynamic> idLocale = {
     },
   },
   "chatbot": {
+    "sourcesBarLabel": "Sumber terkait ({n})",
+    "sourceUnavailable": "Sumber ini tidak tersedia untuk dilihat.",
     "aiGeneratedNoDocs":
         "Dihasilkan oleh AI — tidak berdasarkan dokumen perpustakaan",
     "translationUnavailable":

@@ -1005,6 +1005,8 @@ const Map<String, dynamic> thLocale = {
     },
   },
   "chatbot": {
+    "sourcesBarLabel": "แหล่งข้อมูลที่เกี่ยวข้อง ({n})",
+    "sourceUnavailable": "แหล่งข้อมูลนี้ไม่สามารถดูได้",
     "aiGeneratedNoDocs": "สร้างโดย AI — ไม่อิงจากเอกสารในคลังเอกสาร",
     "translationUnavailable":
         "ไม่สามารถแปลได้ — คำตอบนี้อาจมีข้อความที่ยังไม่ได้แปล",

@@ -1005,6 +1005,8 @@ const Map<String, dynamic> manLocale = {
     },
   },
   "chatbot": {
+    "sourcesBarLabel": "Hobbe jowtaande ({n})",
+    "sourceUnavailable": "Cha nel y bun shoh ry-akin dy fakin.",
     "aiGeneratedNoDocs": "AI-generated — not based on library documents",
     "translationUnavailable":
         "Translation unavailable — this answer may contain untranslated text.",

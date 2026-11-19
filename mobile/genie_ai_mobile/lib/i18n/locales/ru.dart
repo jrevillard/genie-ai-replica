@@ -1015,6 +1015,8 @@ const Map<String, dynamic> ruLocale = {
     },
   },
   "chatbot": {
+    "sourcesBarLabel": "Связанные источники ({n})",
+    "sourceUnavailable": "Этот источник недоступен для просмотра.",
     "aiGeneratedNoDocs":
         "Сгенерировано ИИ — не основано на документах библиотеки",
     "translationUnavailable":

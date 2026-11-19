@@ -1019,6 +1019,8 @@ const Map<String, dynamic> bnLocale = {
     },
   },
   "chatbot": {
+    "sourcesBarLabel": "সম্পর্কিত উৎসসমূহ ({n})",
+    "sourceUnavailable": "এই উৎসটি দেখার জন্য উপলব্ধ নয়।",
     "aiGeneratedNoDocs":
         "এআই-উৎপাদিত — লাইব্রেরির নথিপত্রের উপর ভিত্তি করে নয়",
     "translationUnavailable":

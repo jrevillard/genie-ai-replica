@@ -1021,6 +1021,8 @@ const Map<String, dynamic> swLocale = {
     },
   },
   "chatbot": {
+    "sourcesBarLabel": "Vyanzo vinavyohusiana ({n})",
+    "sourceUnavailable": "Chanzo hiki hakipatiki kutazamwa.",
     "aiGeneratedNoDocs": "Imezalishwa na AI — haizingatii nyaraka za maktaba",
     "translationUnavailable":
         "Tafsiri hazipatikani — jibu hili linaweza kuwa na maandishi ambayo hayajatafsiriwa.",

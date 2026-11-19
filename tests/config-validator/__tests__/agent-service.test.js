@@ -38,6 +38,12 @@ function serviceBlock(composeText, service) {
   return rest.slice(0, end === -1 ? rest.length : end).join('\n');
 }
 
+function jobBlock(ciText, job) {
+  // The block of ONE job: the file up to the next top-level key. A regex
+  // across the whole file would let another job's line satisfy the assertion.
+  return ciText.slice(ciText.indexOf(`${job}:`)).split(/\n(?=\S)/)[0];
+}
+
 function pinnedDependencies(requirementsText) {
   return requirementsText
     .split('\n')
@@ -128,9 +134,23 @@ describe('the agent service is documented and wired', () => {
     }
     expect(ci).toContain('lint:agent-service:');
     expect(ci).toContain('test:agent-service:');
-    // The lanes build the image the ansible deployment pulls.
-    expect(ci).toMatch(/build:agent-service:[\s\S]*?IMAGE_NAME: "genie-ai-agent-server"/);
-    expect(ci).toMatch(/CONTEXT: "components\/agent-service\/"/);
+    // The lanes build the image the ansible deployment pulls - asserted on
+    // the job's OWN block, so another job's IMAGE_NAME cannot satisfy it.
+    const build = jobBlock(ci, 'build:agent-service');
+    expect(build).toMatch(/IMAGE_NAME: "genie-ai-agent-server"/);
+    expect(build).toMatch(/CONTEXT: "components\/agent-service\/"/);
+  });
+
+  test('the gateway routes nothing to the agent service', () => {
+    // The agentic path is not reachable from the gateway: no route, no
+    // service, no caller. A route added later must arrive with its flag
+    // wiring - this gate is what makes that visible.
+    for (const file of [
+      'api-gateway-solution/new-config/kong_config.json',
+      'api-gateway-solution/new-config/restore-kong-config.sh'
+    ]) {
+      expect(fs.readFileSync(path.join(ROOT, file), 'utf-8')).not.toMatch(/agent-service/);
+    }
   });
 });
 
@@ -200,7 +220,7 @@ describe('the pre-adoption checklist is satisfied for every pinned dependency', 
     const ci = fs.readFileSync(CI_PATH, 'utf-8');
     // The lane block only: the repository's other lanes pin their own test
     // dependencies, and this gate is about the agent service's own surface.
-    const lane = ci.slice(ci.indexOf('test:agent-service:')).split(/\n(?=\S)/)[0];
+    const lane = jobBlock(ci, 'test:agent-service');
 
     expect(lane).toMatch(/-r components\/agent-service\/requirements-test\.txt/);
     // No dependency pinned outside the audited tree sneaks back into the lane.

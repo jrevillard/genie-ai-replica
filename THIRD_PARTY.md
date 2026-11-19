@@ -574,6 +574,18 @@ OPEA provides microservices for:
 
 ---
 
+### pytest
+**Component Type:** Test Framework
+**Version:** 9.1.1
+**Repository:** https://pytest.org/
+**License:** MIT License
+**License URL:** https://github.com/pytest-dev/pytest/blob/main/LICENSE
+
+**Usage:** Test runner of the Python components (the agent service ships it as
+a test-only dependency; it never reaches a runtime image).
+
+---
+
 ### langdetect
 **Component Type:** Language Detection Library
 **Version:** ^0.2.1

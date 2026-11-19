@@ -24,19 +24,21 @@ def test_ready_reports_the_service_can_serve():
 
 
 def test_ready_reflects_the_activation_flag(monkeypatch):
+    """One contract, both states: the readiness answer reports the flag.
+
+    The flag is read per request, not at import time - so the same app
+    instance answers "parked" and "live" depending on the environment.
+    """
     monkeypatch.setenv("AGENT_ENABLED", "1")
     with TestClient(app_module.app) as client:
-        response = client.get("/ready")
+        live = client.get("/ready").json()
 
-    assert response.json()["agent_enabled"] is True
-
-
-def test_ready_reports_the_service_as_parked_when_the_flag_is_off(monkeypatch):
     monkeypatch.setenv("AGENT_ENABLED", "0")
     with TestClient(app_module.app) as client:
-        response = client.get("/ready")
+        parked = client.get("/ready").json()
 
-    assert response.json()["agent_enabled"] is False
+    assert live["agent_enabled"] is True
+    assert parked["agent_enabled"] is False
 
 
 def test_the_service_exposes_no_capability_surface():

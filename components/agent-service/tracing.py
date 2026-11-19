@@ -63,30 +63,10 @@ _PII_KEY_PATTERNS = [
     re.compile(r"private[_-]?key", re.IGNORECASE),
 ]
 
-# Backwards-compat exact-match set — same surface, exact key.
-_PII_KEYS = frozenset(
-    {
-        "user_query",
-        "llm_response",
-        "session_id",
-        "conversation_id",
-        "user_id",
-        "email",
-        "document_text",
-        "password",
-        "token",
-    }
-)
-
 
 def _is_sensitive_key(key: str) -> bool:
     """True if *key* matches any PII key pattern. Mirrors the Node side."""
     return any(p.search(key) for p in _PII_KEY_PATTERNS)
-
-
-def sanitize_attributes(attrs: dict) -> dict:
-    """Return a copy of *attrs* with the PII keys removed."""
-    return {k: v for k, v in attrs.items() if not _is_sensitive_key(k)}
 
 
 def redact_attributes(attrs: dict) -> dict:

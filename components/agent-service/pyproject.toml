@@ -8,9 +8,12 @@ version = "0.1.0"
 requires-python = ">=3.11"
 
 [project.optional-dependencies]
+# The pins match requirements-test.txt - the file the CI lane installs and the
+# one the licence audit covers. Two declarations of the same versions would
+# drift; an unpinned range here would drift from the audited tree silently.
 test = [
-    "pytest>=8.0",
-    "httpx>=0.28",
+    "pytest==9.1.1",
+    "httpx==0.28.1",
 ]
 
 [tool.setuptools]

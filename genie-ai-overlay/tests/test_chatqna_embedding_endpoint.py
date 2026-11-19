@@ -255,9 +255,7 @@ class TestEmbeddingRequestCarriesTheModel:
         """Run align_inputs' EMBEDDING branch against a stub service node."""
         from tests.test_chatqna import FakeServiceType
 
-        fake_self = SimpleNamespace(
-            services={"embedding": SimpleNamespace(service_type=FakeServiceType.EMBEDDING)}
-        )
+        fake_self = SimpleNamespace(services={"embedding": SimpleNamespace(service_type=FakeServiceType.EMBEDDING)})
         with patch("chatqna.genieai_chatqna.ServiceType", FakeServiceType):
             return mod.align_inputs(fake_self, dict(inputs), "embedding", None, {})
 

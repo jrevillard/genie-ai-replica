@@ -574,6 +574,18 @@ OPEA provides microservices for:
 
 ---
 
+### pytest
+**Component Type:** Test Framework
+**Version:** 9.1.1
+**Repository:** https://pytest.org/
+**License:** MIT License
+**License URL:** https://github.com/pytest-dev/pytest/blob/main/LICENSE
+
+**Usage:** Test runner of the Python components (the agent service ships it as
+a test-only dependency; it never reaches a runtime image).
+
+---
+
 ### langdetect
 **Component Type:** Language Detection Library
 **Version:** ^0.2.1
@@ -591,6 +603,50 @@ OPEA provides microservices for:
 **License:** MIT License
 
 **Usage:** BM25 ranking for hybrid search retrieval.
+
+---
+
+### OpenTelemetry Python (agent service)
+**Component Type:** Observability SDK and exporters
+**Version:** api/sdk/exporter/proto 1.27.0; instrumentation packages 0.48b0
+**Repository:** https://github.com/open-telemetry/opentelemetry-python
+**License:** Apache 2.0
+**License URL:** https://github.com/open-telemetry/opentelemetry-python/blob/main/LICENSE
+
+**Usage:** Traces and metrics for `components/agent-service`, exported over
+OTLP/HTTP to the in-cluster collector. The instrumentation packages are a
+pre-1.0 release - the exact versions the OPEA overlay already ships - and
+carry an explicit operational-risk acceptance in
+`docs/dependencies/agent-service-dependency-evidence.json`.
+
+---
+
+### Pydantic / Pydantic Core
+**Component Type:** Data Validation Library
+**Version:** 2.14.4 / 2.50.5
+**Repository:** https://github.com/pydantic/pydantic
+**License:** MIT License
+**License URL:** https://github.com/pydantic/pydantic/blob/main/LICENSE
+
+**Usage:** Request and response models of the FastAPI services. Pydantic Core
+ships a compiled Rust binary; it performs no network access.
+
+---
+
+### Agent service dependency tree
+**Component Type:** Python dependency tree
+**Version:** the exact pins of `components/agent-service/requirements.txt`
+**License:** MIT, Apache 2.0, BSD 2-Clause, BSD 3-Clause, MPL 2.0, ISC and
+  PSF-2.0 - per package, verified for the exact version
+**License URL:** `docs/dependencies/agent-service-dependency-evidence.json`
+
+**Usage:** The full pin set of `components/agent-service` (FastAPI, Uvicorn,
+Starlette, the OpenTelemetry packages, Pydantic and their transitive
+dependencies). The per-package licence, its source, the defaults audit and
+the release channel are recorded in
+[`docs/dependencies/agent-service-dependency-evidence.json`](docs/dependencies/agent-service-dependency-evidence.json);
+the procedure that produced it is
+[`docs/dependencies/pre-adoption-checklist.md`](docs/dependencies/pre-adoption-checklist.md).
 
 ---
 

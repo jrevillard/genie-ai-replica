@@ -55,6 +55,10 @@ class AuthNotifier extends Notifier<AuthState> with WidgetsBindingObserver {
 
   bool _isAuthorizing = false;
   bool _isRefreshing = false;
+
+  /// The in-flight refresh, shared by concurrent callers (#2019). Null when
+  /// no refresh is running.
+  Future<void>? _refreshInFlight;
   _FailedOperation _lastFailedOperation = _FailedOperation.none;
   StreamSubscription<bool>? _connectivitySubscription;
   Timer? _debounceTimer;
@@ -327,6 +331,20 @@ class AuthNotifier extends Notifier<AuthState> with WidgetsBindingObserver {
   }
 
   Future<void> refreshToken() async {
+    // #2019: a concurrent caller SHARES the in-flight refresh instead of
+    // returning silently. The silent return let a 401-ing request read the
+    // stale access token mid-refresh and retry into another 401 — the
+    // cascading INTERCEPTOR_REFRESH_FAILED storm under rapid API calls.
+    if (_refreshInFlight != null) return _refreshInFlight!;
+    _refreshInFlight = _refreshTokenLocked();
+    try {
+      await _refreshInFlight;
+    } finally {
+      _refreshInFlight = null;
+    }
+  }
+
+  Future<void> _refreshTokenLocked() async {
     if (_isRefreshing) return;
     _isRefreshing = true;
     _lastFailedOperation = _FailedOperation.refreshToken;

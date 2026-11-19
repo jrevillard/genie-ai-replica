@@ -322,6 +322,45 @@ void main() {
       expect(state.status, equals(AuthStatus.unauthenticated));
       expect(await tokenStorage.getAccessToken(), isNull);
     });
+
+    test(
+        'a concurrent caller waits for the in-flight refresh (#2019) — it '
+        'must not complete before the token request has resolved', () async {
+      await tokenStorage.saveTokens(
+        accessToken: 'old-at',
+        idToken: 'old-idt',
+        refreshToken: 'old-rt',
+        accessTokenExpiration: DateTime.now().subtract(Duration(hours: 1)),
+      );
+
+      final order = <String>[];
+      mockAppAuth.onTokenAsync = (request) async {
+        await Future.delayed(const Duration(milliseconds: 100));
+        order.add('token');
+        return TokenResponse(
+          'new-at',
+          'new-rt',
+          DateTime.now().add(Duration(hours: 1)),
+          null,
+          'Bearer',
+          null,
+          null,
+        );
+      };
+
+      final notifier = container.read(authProvider.notifier);
+      final first = notifier.refreshToken();
+      final second = notifier.refreshToken();
+      unawaited(second.then((_) => order.add('caller2')));
+      await Future.wait([first, second]);
+      await Future.delayed(Duration.zero);
+
+      // The silent-return guard let the second caller complete BEFORE the
+      // in-flight refresh landed — the caller then read the stale token and
+      // retried into another 401. Sharing the in-flight future is the fix.
+      expect(order, ['token', 'caller2']);
+      expect(await tokenStorage.getAccessToken(), equals('new-at'));
+    });
   });
 
   group('_initializeAuth (via build)', () {

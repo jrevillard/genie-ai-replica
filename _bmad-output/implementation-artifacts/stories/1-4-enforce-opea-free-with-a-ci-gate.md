@@ -2,7 +2,7 @@
 title: 'Story 1.4 — Enforce OPEA-free with a CI gate'
 type: 'feature'
 created: '2026-11-19'
-status: 'in-progress'
+status: 'in-review'
 route: 'dispatch'
 review_loop_iteration: 0
 baseline_commit: '6c72cd95cccf5ded8b51ba94793dd620f60409a3'
@@ -78,7 +78,7 @@ context:
 - **The manifest, not a hardcoded list.** `scripts/ci/agent-path-packages.json` classifies every directory under `components/` into `agentPathPackages` (scanned) or `otherPackages` (not scanned, each with a reason). The gate fails when a new directory appears unclassified: the failure mode of a hand-written candidate list is a gate that stays green because nobody remembered to extend it, and the reason carried by each `otherPackages` entry is what makes the classification a decision rather than an omission.
 - **The BFF is not agent-path yet, and says so.** `components/gov-chat-backend` sits in `otherPackages` with the reason that its agentic routing branch lands in Epic 3 story 3.1 — that story moves it into `agentPathPackages`. Its runtime call graph is invisible to grep in any case (the gate's scope note), so listing it early would buy nothing and cost a false sense of coverage.
 - **What the gate cannot see** (the scope note, kept in the gate's header): the BFF's runtime call graph — grep cannot tell which URL an agentic branch targets at runtime, and that is what Epic 3 story 3.1's routing-helper test covers; the reachability of a `comps` symbol through an alias or a re-export; the OPEA coupling inside the overlay itself, which is out of scope by design.
-- **Import detection is text-level and comment-blind on purpose.** A `comps` reference in a comment fails the gate: the point of AD-1 is that the agent path never names the overlay package, and story 1.3 kept the ported module free of the name "not even in a comment". The dynamic forms (`importlib.import_module("comps…")`, `__import__("comps…")`) are covered too — a static-only check would be a hole a contributor would walk into.
+- **The import check reads code, not prose.** A `comps` import is a coupling; a commented-out import and a docstring that quotes one are not. The gate strips the docstrings and the comment lines before matching, so the check reports an import and not a mention. (The first version matched the raw text and claimed in these notes that a comment reference would fail the gate — it would not; the global review caught the false claim and the behaviour was made explicit instead.) The dynamic forms (`importlib.import_module("comps…")`, `__import__("comps…")`) are covered too — a static-only check would be a hole a contributor would walk into.
 - **The build-time markers are the real forms**, taken from the overlay's own Dockerfiles: an OPEA clone URL (`github.com/opea-project/…`), the clone knobs (`ARG OPEA_REPO_URL`, `ARG OPEA_VERSION`), an `opea/*` base image (including the banned `opea/translation:1.3`), a vendored OPEA stage (`COPY --from=opea_base …`), a `comps` path on `PYTHONPATH`, and a `pip install … comps`.
 - **Build files only for the build markers.** The markers are searched in the package's build inputs (`Dockerfile*`, `requirements*.txt|in`, `pyproject.toml`, `setup.py|cfg`, `Makefile`, `*.sh`, `*.yml|yaml`), never in prose: a README that mentions an OPEA image is documentation, not a dependency.
 - **The enumeration is the tracked tree** (`git ls-files`), exactly what the pipeline checks out. A file that is not staged is not scanned — noted in the gate's scope note so a local run is not mistaken for a pipeline result.
@@ -101,6 +101,21 @@ context:
 
 ## Review Triage Log
 
+Global round 1 (`/code-review`, base `feat/agentic-foundations/prd` @ 6c72cd95c → head d6a1044a1) — 10 findings, all dispositioned:
+
+| # | Finding | Verdict | Disposition |
+|---|---|---|---|
+| 1 | The `opea-requirement` marker is line-anchored, so an indented or quoted dependency entry escapes it; the build-file pattern misses nested requirements directories, `constraints.txt`, `uv.lock` and `Pipfile` | important | **Fixed** — the marker accepts an indented/listed/quoted entry, a second marker (`opea-dependency-entry`) catches a quoted package name in a `pyproject`/`setup.py` array, the build-file pattern covers the four missing file families, and the matrix carries a sample per form |
+| 2 | The CI-trigger assertion probes one nested path per package, so a narrowed glob (`…/tests/**/*`) passes while the root-level files are un-policed | important | **Fixed** — the assertion now requires a glob that matches a root-level file AND a nested file |
+| 3 | Three build markers are keyed on the overlay's exact spellings (a registry-qualified image, a slashless `PYTHONPATH`, a renamed stage all escape) | important | **Fixed** — the image marker is registry-agnostic, the `PYTHONPATH` marker accepts an optional trailing slash, the vendored stage is keyed on a stage name carrying the overlay's name and a second marker on the copied `/comps/` payload, and the clone marker is keyed on the OPEA source-tree names as well as the OPEA organisation |
+| 4 | `gitlab-glob.js` duplicates the fnmatch matcher inlined in `stray-copy-artifacts.test.js` | important | **Fixed** — the stray-copy gate now imports the shared helper and its inline copy is deleted; one dialect, one answer |
+| 5 | The Implementation Notes claim a `comps` reference in a comment fails the gate — it did not (the static forms were line-anchored) | important | **Fixed** — the gate reads code: docstrings and comment lines are stripped before the import forms are matched, and the notes state the real behaviour |
+| 6 | The sprint-status row and the story's front matter were not at `review` / `in-review` while the siblings were | important | **Fixed** — the row moves to `review`, the front matter to `in-review` |
+| 7 | The Verification recipe runs `bash -n .gitlab-ci.yml`, which cannot parse a YAML file | important | **Fixed** — the recipe runs the `ci-shell-gates` case of the same suite, which is the real check |
+| 8 | The scope note claims the enumeration is the tracked tree, but the package directories came from `readdirSync` | nit | **Fixed** — the package enumeration is derived from `git ls-files` too |
+| 9 | The Verification commands run `npx` from the repository root (no `node_modules`, no ESLint config there), and no repository gate formats the manifest | nit | **Fixed** — the commands run from `tests/config-validator`, where the binaries are pinned. The manifest stays outside the repository's format gate on purpose: widening the root glob to JSON would pull `scripts/ci/config-parity-allowlist.json` into a check it never had (recorded in the Verification block) |
+| 10 | `components/okf-server/services/safe-frontmatter.js:19` — the file header contradicts its own docstring about `stringify` parsing | pre-existing | **Already handled** — #2008 (item 12, `status::backlog`) already carries it; the finding is on the umbrella branch, not introduced here, and this diff does not widen to fix it |
+
 ## Design Notes
 
 - The manifest is JSON because it is data consumed by two kinds of checker (the gate and the human who extends it) and it must stay diffable in a review. The house precedent for the same thing is `scripts/ci/config-parity-allowlist.json`.
@@ -110,6 +125,6 @@ context:
 **Commands:**
 - `cd tests/config-validator && npm test` -- expected: the whole suite passes, the new gate included.
 - `cd tests/config-validator && npx jest __tests__/opea-free-gate.test.js` -- expected: the gate suite passes on its own.
-- `npx eslint tests/config-validator/__tests__/opea-free-gate.test.js` -- expected: no lint finding.
-- `npx prettier --check tests/config-validator/__tests__/opea-free-gate.test.js scripts/ci/agent-path-packages.json` -- expected: formatting accepted.
-- `bash -n .gitlab-ci.yml` -- expected: the edited pipeline still parses.
+- `cd tests/config-validator && npx jest __tests__/ci-shell-gates.test.js` -- expected: the edited `.gitlab-ci.yml` script blocks still pass the shell-syntax gate. (The pipeline file is YAML: `bash -n .gitlab-ci.yml` does not parse it — the shell gate of the same suite is the real check.)
+- `cd tests/config-validator && npx eslint __tests__/opea-free-gate.test.js validators/gitlab-glob.js` -- expected: no lint finding. The lint and format binaries are the ones `tests/config-validator` pins — run from there, not from the repository root, which carries no `node_modules` and no ESLint config.
+- `cd tests/config-validator && npx prettier --check __tests__/opea-free-gate.test.js validators/gitlab-glob.js ../../scripts/ci/agent-path-packages.json` -- expected: formatting accepted. No repository gate formats the manifest: the root format script covers `scripts/**/*.{js,cjs}` only, and widening it to JSON would drag `scripts/ci/config-parity-allowlist.json` into a format check it has never had — out of this story's scope.

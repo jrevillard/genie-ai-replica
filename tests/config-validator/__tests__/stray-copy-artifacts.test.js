@@ -26,6 +26,10 @@ const { escapeRegExp } = require('../validators/js-files');
 const path = require('path');
 
 const { parseGitlabCiJobChanges } = require('../validators/parse-compose');
+// The semantics `rules:changes` matches with live in one place — the
+// OPEA-free gate pins the same dialect, and two copies of a dialect-sensitive
+// matcher would drift into two different answers about the same glob.
+const { gitlabGlobMatches } = require('../validators/gitlab-glob');
 
 const ROOT = path.resolve(__dirname, '../../..');
 
@@ -148,30 +152,6 @@ const ignoredByRepoRules = (paths) => {
     })
     .filter((entry) => entry && REPO_GITIGNORE.test(entry.source));
 };
-
-// The semantics `rules:changes` matches with: Ruby's File.fnmatch with
-// FNM_PATHNAME — `*` never crosses a `/`, and a `**` segment (leading or
-// trailing) matches zero or more directory segments.
-const globSegment = (segment) =>
-  new RegExp(
-    `^${segment
-      .split('*')
-      .map((part) => escapeRegExp(part))
-      .join('.*')}$`
-  );
-const matchesSegments = (pattern, pi, parts, pj) => {
-  if (pi >= pattern.length) return pj >= parts.length;
-  if (pattern[pi] === '**') {
-    for (let skip = pj; skip <= parts.length; skip++) {
-      if (matchesSegments(pattern, pi + 1, parts, skip)) return true;
-    }
-    return false;
-  }
-  return (
-    pj < parts.length && globSegment(pattern[pi]).test(parts[pj]) && matchesSegments(pattern, pi + 1, parts, pj + 1)
-  );
-};
-const gitlabGlobMatches = (glob, p) => matchesSegments(glob.split('/'), 0, p.split('/'), 0);
 
 describe('stray copy artifacts (#516)', () => {
   it('tracks no copy artifact', () => {

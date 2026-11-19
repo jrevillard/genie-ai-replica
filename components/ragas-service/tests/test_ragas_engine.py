@@ -2262,9 +2262,7 @@ def test_openai_embedder_disables_tiktoken_ctx_check(mode, monkeypatch, engine_e
     — the same decision dataprep's builder made."""
     pytest.importorskip("langchain_openai", reason="langchain_openai not installed")
     if mode == "override":
-        emb = ragas_engine.build_embeddings(
-            embed={"base_url": "http://localhost:1/v1", "model": "test-embed"}
-        )
+        emb = ragas_engine.build_embeddings(embed={"base_url": "http://localhost:1/v1", "model": "test-embed"})
     else:
         monkeypatch.setenv("RAGAS_EMBED_API", "openai")
         monkeypatch.setenv("RAGAS_EMBED_BASE_URL", "http://localhost:1/v1")

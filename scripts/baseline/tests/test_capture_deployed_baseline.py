@@ -1303,8 +1303,9 @@ def test_a_commit_this_checkout_does_not_know_fails_closed(monkeypatch):
     assert rows[0]["disposition"] == "**UNRESOLVED**"
 
 
-def test_an_empty_chart_fails_closed(monkeypatch):
-    """An attested chart with no template attests nothing."""
+def test_an_empty_commit_fails_closed(monkeypatch):
+    """An attested chart with no template: the commit that would carry it is
+    empty, so it attests nothing."""
     chart = _attested_chart()
     chart["templates"] = []
     monkeypatch.setattr(

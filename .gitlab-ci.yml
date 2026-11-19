@@ -162,6 +162,18 @@ variables:
 # Prevent duplicate branch+MR pipelines — first match wins
 workflow:
   rules:
+    # The PRD umbrella branch (protected pattern `*/prd`) is the target of
+    # every PRD story merge request, so the suppression rule below would
+    # never let it have a pipeline of its own. Its tip MUST carry one: the
+    # scan-result policies compare the source pipeline with the TARGET
+    # branch's pipeline at the merge base, and with no target to compare
+    # against the `license_finding` rule (DPG license compliance) has
+    # nothing to diff against: it declares no `fallback_behavior` — GitLab's
+    # empty default makes it fail closed — and demands a Maintainer
+    # approval the umbrella does not need. This rule therefore sits BEFORE
+    # the suppression rule on purpose: it must apply to pushes on that
+    # branch. The security policies themselves are untouched by it.
+    - if: $CI_COMMIT_BRANCH =~ /\/prd$/
     - if: $CI_COMMIT_BRANCH && $CI_OPEN_MERGE_REQUESTS && $CI_PIPELINE_SOURCE == "push"
       when: never
     - if: $CI_COMMIT_TAG
@@ -1153,12 +1165,27 @@ include:
 # pre-merge coverage. Applied to the jobs active for the GENIE.AI stack
 # (JS/Vue + Python + npm/pip deps + IaC + secrets). Other language-specific
 # SAST jobs keep template defaults (won't activate for absent languages).
+#
+# The `*/prd` umbrella branch is listed for the same reason as the workflow rule
+# above: it is a protected merge target, and the scan-result policies compare
+# the source pipeline with the TARGET branch's. The license rule needs a target
+# pipeline that carries the project's SBOM — the gemnasium dependency-scanning
+# job below uploads it — because without one the comparison is made against an
+# empty target and every license of the source counts as newly introduced. That
+# job is advisory, so a green pipeline can still carry no SBOM: the warning
+# badge on it is the signal. The CVE rule declares `fallback_behavior:
+# {fail: open}`, so a missing target does not block it; it wants the target's
+# scan reports only to tell a newly detected finding from a pre-existing one.
+# The umbrella's pipeline carries dependency-scanning and SAST reports but no
+# container-scanning report (no image is built there), which that rule
+# tolerates.
 .security_run_rules: &security_run_rules
   - if: $CI_PIPELINE_SOURCE == "schedule"
     when: never
   - if: $CI_PIPELINE_SOURCE == "merge_request_event"
   - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
   - if: $CI_COMMIT_BRANCH =~ /^release\//
+  - if: $CI_COMMIT_BRANCH =~ /\/prd$/
 
 secret_detection:
   rules: *security_run_rules

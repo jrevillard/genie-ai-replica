@@ -118,6 +118,21 @@ services:
     environment:
       - HUGGING_FACE_HUB_TOKEN=${HUGGING_FACE_HUB_TOKEN}
       - NVIDIA_VISIBLE_DEVICES=void
+    # Base-file discipline (kics scan wave, 2026-11-19): the base `vllm`
+    # runs cap_drop: ALL + no-new-privileges and a curl /health probe; this
+    # is an OVERLAY-ONLY service (no base counterpart to merge from), so it
+    # restates them here. The ROCm image ships curl (the merged base
+    # healthcheck already passes on the venue's two vLLM instances).
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 30s
     devices:
       - /dev/kfd:/dev/kfd
       - /dev/dri:/dev/dri
@@ -154,6 +169,20 @@ services:
     environment:
       - HUGGING_FACE_HUB_TOKEN=${HUGGING_FACE_HUB_TOKEN}
       - NVIDIA_VISIBLE_DEVICES=void
+    # Base-file discipline (kics scan wave, 2026-11-19): same as the
+    # vllm-embedding block above — overlay-only service, no base
+    # counterpart to merge from, so it restates cap_drop / security_opt /
+    # healthcheck. The ROCm image ships curl.
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 30s
     devices:
       - /dev/kfd:/dev/kfd
       - /dev/dri:/dev/dri

@@ -99,6 +99,22 @@ services:
     environment:
       - HUGGING_FACE_HUB_TOKEN=${HUGGING_FACE_HUB_TOKEN}
       - NVIDIA_VISIBLE_DEVICES=void
+    # Base-file discipline (kics scan wave, 2026-11-19): overlay-only
+    # service (the gpu-node stack has no other vLLM pooling instance to
+    # merge from), so it restates cap_drop / security_opt / healthcheck —
+    # the same values the single-server overlay's vLLM instances carry.
+    # The ROCm image ships curl (the merged base healthcheck passes on the
+    # venue's vLLM containers).
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 30s
     devices:
       - /dev/kfd:/dev/kfd
       - /dev/dri:/dev/dri

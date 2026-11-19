@@ -41,6 +41,7 @@ describe('compose non-root contract (#1227)', () => {
     // checkpoint instead.
     expect([...real.alwaysOn].sort()).toEqual(
       [
+        'agent-service',
         'arango-vector-db',
         'arango-vector-db-init',
         'backend',

@@ -2263,6 +2263,110 @@ test:pii-service:
       changes:
         paths: ["components/pii-service/**/*", ".gitlab-ci.yml"]
 
+# genie-ai-agent-server (Epic 1 — the agent service)
+build:agent-service:
+  <<: *build_template
+  variables:
+    IMAGE_NAME: "genie-ai-agent-server"
+    CONTEXT: "components/agent-service/"
+    DOCKERFILE: "components/agent-service/Dockerfile"
+  rules:
+    - *train_skip
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+      when: never
+    - if: $CI_PIPELINE_SOURCE == "web"
+      when: never
+    - if: $CI_COMMIT_TAG
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      changes:
+        paths: ["components/agent-service/**/*", ".gitlab-ci.yml"]
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+      changes:
+        paths: ["components/agent-service/**/*", ".gitlab-ci.yml"]
+    - if: $CI_COMMIT_BRANCH =~ /^release\//
+      changes:
+        paths: ["components/agent-service/**/*", ".gitlab-ci.yml"]
+
+scan:agent-service:
+  <<: *scan_template
+  needs:
+    - job: build:agent-service
+      artifacts: true
+  variables:
+    IMAGE_NAME: "genie-ai-agent-server"
+  rules:
+    - *train_skip
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+      when: never
+    - if: $CI_PIPELINE_SOURCE == "web"
+      when: never
+    - if: $CI_COMMIT_TAG
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      changes:
+        paths: ["components/agent-service/**/*", ".gitlab-ci.yml"]
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+      changes:
+        paths: ["components/agent-service/**/*", ".gitlab-ci.yml"]
+    - if: $CI_COMMIT_BRANCH =~ /^release\//
+      changes:
+        paths: ["components/agent-service/**/*", ".gitlab-ci.yml"]
+
+promote:agent-service:
+  <<: *promote_template
+  needs:
+    - job: scan:agent-service
+      artifacts: true
+  variables:
+    IMAGE_NAME: "genie-ai-agent-server"
+  rules:
+    - *train_skip
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+      when: never
+    - if: $CI_PIPELINE_SOURCE == "web"
+      when: never
+    - if: $CI_COMMIT_TAG
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      changes:
+        paths: ["components/agent-service/**/*", ".gitlab-ci.yml"]
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+      changes:
+        paths: ["components/agent-service/**/*", ".gitlab-ci.yml"]
+    - if: $CI_COMMIT_BRANCH =~ /^release\//
+      changes:
+        paths: ["components/agent-service/**/*", ".gitlab-ci.yml"]
+
+# genie-ai-agent-server — test lane: the service's own suite (health, the
+# observability gate, the span export and its PII redaction).
+test:agent-service:
+  stage: test
+  image: python:3.11-slim
+  before_script:
+    - pip install --no-cache-dir -r components/agent-service/requirements.txt "pytest==${PYTEST_VERSION}" "httpx==0.28.1"
+  script:
+    - cd components/agent-service
+    - python -m pytest tests/ -q --junitxml=reports/pytest-report.xml
+  artifacts:
+    when: always
+    reports:
+      junit: components/agent-service/reports/pytest-report.xml
+    paths:
+      - components/agent-service/reports/
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "schedule"
+      when: never
+    - if: $CI_PIPELINE_SOURCE == "web"
+      when: never
+    - if: $CI_COMMIT_TAG
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      changes:
+        paths: ["components/agent-service/**/*", ".gitlab-ci.yml"]
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+      changes:
+        paths: ["components/agent-service/**/*", ".gitlab-ci.yml"]
+    - if: $CI_COMMIT_BRANCH =~ /^release\//
+      changes:
+        paths: ["components/agent-service/**/*", ".gitlab-ci.yml"]
+
 # genie-ai-ragas-service (OKF RAGAS benchmark sidecar — Story 8-6, ADR-okf-043)
 build:ragas-service:
   <<: *build_template
@@ -3738,6 +3842,36 @@ lint:okf-server:
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
       changes:
         - "components/okf-server/**/*"
+        - ".gitlab-ci.yml"
+      when: on_success
+    - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH || $CI_COMMIT_BRANCH =~ /^release\/*/'
+      when: on_success
+
+# The agent service is a Python component: its own lint lane runs ruff over
+# the component, with the same rules and the same pin as lint:python — a
+# style drift in the service fails the pipeline instead of surfacing at the
+# next review.
+lint:agent-service:
+  image: python:3.11-slim
+  stage: lint
+  interruptible: true
+  before_script:
+    - pip install --cache-dir .cache/pip "ruff==${RUFF_VERSION}"
+  cache:
+    - key: lint-agent-service-ruff
+      paths:
+        - .cache/pip/
+      fallback_keys:
+        - lint-python-
+  script:
+    - cd components/agent-service
+    - ruff check app.py tracing.py tests/
+    - ruff format --check app.py tracing.py tests/
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+      changes:
+        - "components/agent-service/**/*.py"
+        - "components/agent-service/pyproject.toml"
         - ".gitlab-ci.yml"
       when: on_success
     - if: '$CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH || $CI_COMMIT_BRANCH =~ /^release\/*/'

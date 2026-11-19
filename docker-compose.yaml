@@ -1427,6 +1427,56 @@ services:
         delay: 5s
         max_attempts: 10
 
+  # GENIE.AI agent service (Epic 1) — internal-only FastAPI service. Ships
+  # DARK: AGENT_ENABLED=0 parks it (zero replicas), it declares no host port
+  # and no gateway route, so nothing agentic is reachable until the flag is
+  # on. The capability tools land in the following stories.
+  agent-service:
+    logging: *fluent-logging
+    # least-privilege hardening (same convention as the other Python
+    # sidecars): no capabilities at all — uvicorn binds a high port and
+    # writes nothing outside its own filesystem.
+    cap_drop:
+      - ALL
+    # Harden: no privilege escalation from the container (kics Security Opt
+    # Not Set).
+    security_opt:
+      - no-new-privileges:true
+    restart: unless-stopped
+    environment:
+      # The activation flag, one for the whole agentic stack. The
+      # deployment gate is the deploy.replicas value below; the service
+      # reports the value it sees in its readiness answer.
+      - AGENT_ENABLED=${AGENT_ENABLED:-0}
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+    build:
+      context: components/agent-service/
+      dockerfile: Dockerfile
+    image: ${GENIE_AI_AGENT_SERVER_IMAGE:-${GENIE_AI_REGISTRY:-registry.opensource.unicc.org/un/itu/genie-ai}/genie-ai-agent-server}:${GENIE_AI_AGENT_SERVER_IMAGE_TAG:-${GENIE_AI_IMAGE_TAG:-${GENIE_AI_GLOBAL_TAG:-latest}}}
+    # Non-root (#1227): the image's runtime user is agentsvc (uid 10001) —
+    # the Dockerfile USER is the numeric source of truth.
+    user: "10001:10001"
+    # Internal only — never publicly routed, and NO host port: reachable
+    # container-to-container on genieai_network only.
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8010/ready', timeout=8)"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    networks:
+      - genieai_network
+    deploy:
+      # The activation gate: 0 (the default) parks the service, 1 runs it.
+      replicas: ${AGENT_ENABLED:-0}
+      placement:
+        constraints:
+          - node.labels.genieai == true
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 10
+
   # Chowns the backend's root-era named volumes to uid 1000 (#1227) — same
   # upgrade migration as document-repository-init: deployments that ran the
   # root-era backend hold root-owned files in backend_data and

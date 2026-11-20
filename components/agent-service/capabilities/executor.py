@@ -35,6 +35,8 @@ outcomes, and a cancellation propagates untouched.
 import asyncio
 from collections.abc import Awaitable, Callable
 
+from pydantic import ValidationError
+
 from capabilities.adapters.chunks import LegacyChunkAdapter
 from capabilities.adapters.docrepo import DocRepoAdapter
 from capabilities.adapters.okf import OkfAdapter
@@ -165,15 +167,18 @@ class AuthorizedExecutor:
             # the set includes the legacy graph. Refused before doc-repo.
             raise AuthorizationError("the legacy corpus is not in the authorized set", operation=_AUTHORIZE)
         # Resolution (doc-repo metadata) and content (the graph's chunks) share
-        # no data dependency — one deadline, both round-trips together.
-        metadata, (content, chunk_truncated) = await self._within_deadline(
-            lambda: asyncio.gather(
-                self._docrepo.fetch_metadata(file_id, self._bearer),
-                self._chunks.read_chunks(self._legacy_graph_name, file_id, budget.max_results),
-            ),
-            budget,
-            _AUTHORIZE,
-        )
+        # no data dependency — one deadline, both round-trips together, and a
+        # TaskGroup so a failing leg cancels its sibling instead of orphaning it.
+
+        async def _both() -> tuple[dict | None, tuple[str, bool]]:
+            async with asyncio.TaskGroup() as group:
+                metadata_task = group.create_task(self._docrepo.fetch_metadata(file_id, self._bearer))
+                chunks_task = group.create_task(
+                    self._chunks.read_chunks(self._legacy_graph_name, file_id, budget.max_results)
+                )
+            return metadata_task.result(), chunks_task.result()
+
+        metadata, (content, chunk_truncated) = await self._within_deadline(_both, budget, _AUTHORIZE)
         if metadata is None:
             return self._insufficient_read()
         return self._finalize_read(
@@ -205,12 +210,24 @@ class AuthorizedExecutor:
             or resolved_graph not in self._authorized_graphs
         ):
             raise AuthorizationError("the resolved identity does not match the authorized target", operation=_AUTHORIZE)
-        provenance = OkfConceptProvenance(
-            concept_id=target.concept_id,
-            repo_id=target.repo_id,
-            bundle_version=card.get("bundle_version"),
-        )
-        return self._finalize_read(provenance, str(card.get("body") or ""), False, budget, empty_is_degradation=False)
+        # The card's payload shape is trusted only after it matches the
+        # contract: a drifted field must surface as a transient payload
+        # defect, never as confident content or a raw validation error.
+        body = card.get("body")
+        if body is not None and not isinstance(body, str):
+            raise TransientError("okf-server served a concept card whose body is not a string", operation=_AUTHORIZE)
+        try:
+            provenance = OkfConceptProvenance(
+                concept_id=target.concept_id,
+                repo_id=target.repo_id,
+                bundle_version=card.get("bundle_version"),
+            )
+        except ValidationError as error:
+            raise TransientError(
+                f"okf-server served a concept card that does not match the contract: {error}",
+                operation=_AUTHORIZE,
+            ) from error
+        return self._finalize_read(provenance, body or "", False, budget, empty_is_degradation=False)
 
     # -- deadline and result assembly -------------------------------------------
 
@@ -218,12 +235,27 @@ class AuthorizedExecutor:
         self, make_work: Callable[[], Awaitable], budget: OperationBudget, operation: OperationName
     ):
         """Run one operation under the budget's deadline: the contract's
-        timeout semantics (stop without a partial result) as one owner."""
+        timeout semantics (stop without a partial result) as one owner.
+
+        Bound note: ``asyncio.timeout`` cancels the await, not the worker —
+        the sync drivers run in ``asyncio.to_thread``, whose work is
+        uncancellable and outlives a breached deadline. The real bound on
+        that work is each adapter's own per-call timeout (10 s by default),
+        which is what keeps a burst of deadline breaches from pinning
+        worker threads indefinitely.
+        """
         try:
             async with asyncio.timeout(budget.timeout_ms / 1000):
                 return await make_work()
         except TimeoutError as error:
             raise TransientError(f"{operation.value} exceeded its deadline", operation=operation) from error
+        except ExceptionGroup as group:
+            # The TaskGroup wraps a failing leg's exception; the contract's
+            # carrier is the exception itself. A cancellation never enters
+            # here (it is a BaseException and propagates untouched).
+            if len(group.exceptions) == 1:
+                raise group.exceptions[0] from None
+            raise
 
     def _finalize_read(
         self,

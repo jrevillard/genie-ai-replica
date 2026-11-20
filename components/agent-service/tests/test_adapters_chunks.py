@@ -88,3 +88,16 @@ def test_transport_failure_propagates():
     reader = LegacyChunkAdapter(db_factory=lambda: ExplodingDb())
     with pytest.raises(RuntimeError):
         asyncio.run(reader.read_chunks("GRAPH", "42", max_chunks=10))
+
+
+def test_a_lazy_cursor_is_materialized():
+    """python-arango's Cursor is neither sliceable nor len-able; the adapter
+    consumes it as a sequence, so it must materialize the answer first."""
+
+    class LazyDb:
+        def execute(self, query, bind_vars):
+            return iter([{"text": "a"}, {"text": "b"}])
+
+    reader = LegacyChunkAdapter(db_factory=lambda: LazyDb())
+    content, truncated = asyncio.run(reader.read_chunks("GRAPH", "42", max_chunks=10))
+    assert (content, truncated) == ("a\n\nb", False)

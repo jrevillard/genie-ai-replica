@@ -146,10 +146,13 @@ def test_legacy_read_authorized_succeeds_with_provenance_and_content():
 
 
 def test_legacy_read_unauthorized_refuses_before_any_resolution():
+    """The executor carries the narrow context itself, so the context gate
+    passes and the AD-4 legacy-graph membership check is what refuses —
+    a deleted membership check must turn this test red."""
     docrepo, chunks = FakeDocRepo(), FakeChunks()
     narrow = ctx(graphs=("OKF_a_v1",), repos=(AuthorizedRepo(repo_id="r-1", graph_name="OKF_a_v1"),))
     with pytest.raises(AuthorizationError):
-        asyncio.run(executor(docrepo=docrepo, chunks=chunks).read_source(narrow, legacy_target(), BUDGET))
+        asyncio.run(executor(narrow, docrepo=docrepo, chunks=chunks).read_source(narrow, legacy_target(), BUDGET))
     assert docrepo.calls == [] and chunks.calls == []
 
 
@@ -186,10 +189,12 @@ def test_okf_read_authorized_succeeds_with_the_provenance_trio():
 
 
 def test_okf_read_unauthorized_repo_refuses_before_any_resolution():
+    """The executor carries the other user's context, so the repo-membership
+    check is what refuses — a deleted membership check must turn this red."""
     okf = FakeOkf(okf_card())
     other_user = ctx(graphs=("OKF_b_v1",), repos=(AuthorizedRepo(repo_id="r-9", graph_name="OKF_b_v1"),))
     with pytest.raises(AuthorizationError):
-        asyncio.run(executor(okf=okf).read_source(other_user, okf_target(), BUDGET))
+        asyncio.run(executor(other_user, okf=okf).read_source(other_user, okf_target(), BUDGET))
     assert okf.calls == []
 
 
@@ -248,18 +253,20 @@ def test_charset_violations_refuse_before_any_resolution(target):
 def test_cross_user_and_cross_session_attempts_refuse():
     other = ctx(graphs=("OKF_b_v1",), repos=(AuthorizedRepo(repo_id="r-9", graph_name="OKF_b_v1"),), user="u-2")
     with pytest.raises(AuthorizationError):
-        asyncio.run(executor().read_source(other, okf_target(), BUDGET))
+        asyncio.run(executor(other).read_source(other, okf_target(), BUDGET))
 
 
 def test_permission_change_between_turns_invalidates_retained_evidence():
-    """FR-28: the same target authorized at turn N is refused at turn N+1."""
+    """FR-28: the same target authorized at turn N is refused at turn N+1.
+    Turn N+1's executor carries turn N+1's own (narrower) context, so the
+    membership check — not the context gate — is what refuses the re-read."""
     docrepo = FakeDocRepo()
     turn_one = executor(docrepo=docrepo)
     first = asyncio.run(turn_one.read_source(ctx(), legacy_target(), BUDGET))
     assert first.outcome is OutcomeCode.SUCCESS
     turn_two_ctx = ctx(graphs=("OKF_a_v1",), repos=(AuthorizedRepo(repo_id="r-1", graph_name="OKF_a_v1"),))
     with pytest.raises(AuthorizationError):
-        asyncio.run(executor(docrepo=docrepo).read_source(turn_two_ctx, legacy_target(), BUDGET))
+        asyncio.run(executor(turn_two_ctx, docrepo=docrepo).read_source(turn_two_ctx, legacy_target(), BUDGET))
 
 
 def test_a_swapped_context_is_refused():
@@ -398,3 +405,21 @@ def test_a_bad_legacy_graph_name_is_a_configuration_error_not_a_refusal():
             chunks=FakeChunks(),
             search_port=FakeSearchPort(),
         )
+
+
+def test_okf_card_with_a_non_string_body_is_transient_not_confident_garbage():
+    """A payload drift that arrives as structured JSON must not be str()-ed
+    into confident SUCCESS content."""
+    card = okf_card(body={"en": "structured drift"})
+    with pytest.raises(TransientError):
+        asyncio.run(executor(okf=FakeOkf(card)).read_source(ctx(), okf_target(), BUDGET))
+
+
+def test_okf_card_with_an_uncoercible_bundle_version_is_transient():
+    """A card whose bundle_version cannot carry the identity fails as a
+    transient payload defect — a raw pydantic error would escape the
+    contract's carriers."""
+    card = okf_card()
+    card["bundle_version"] = "not-a-version"
+    with pytest.raises(TransientError):
+        asyncio.run(executor(okf=FakeOkf(card)).read_source(ctx(), okf_target(), BUDGET))

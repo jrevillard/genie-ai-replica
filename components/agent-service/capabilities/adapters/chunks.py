@@ -34,13 +34,17 @@ class LegacyChunkAdapter:
 
         def _run() -> list[dict]:
             db = self._db_factory()
-            return db.execute(
-                _CHUNKS_AQL,
-                {
-                    "@collection": f"{graph_name}_SOURCE",
-                    "file_id": file_id,
-                    "max_chunks": max_chunks + 1,
-                },
+            # Materialize: python-arango answers with a lazy Cursor, which
+            # supports neither slicing nor len.
+            return list(
+                db.execute(
+                    _CHUNKS_AQL,
+                    {
+                        "@collection": f"{graph_name}_SOURCE",
+                        "file_id": file_id,
+                        "max_chunks": max_chunks + 1,
+                    },
+                )
             )
 
         rows = await asyncio.to_thread(_run)

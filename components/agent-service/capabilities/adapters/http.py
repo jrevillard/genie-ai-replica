@@ -26,14 +26,16 @@ class HttpTransport(Protocol):
 class RequestsTransport:
     """The production transport: one GET, bearer forwarded when present.
 
-    One module-level ``Session`` serves every transport instance: pooled
-    connections survive across requests (a fresh TCP+TLS handshake per GET
-    against the same in-cluster service is pure overhead), and the bearer —
-    the only per-request credential — travels per call in the headers, never
-    on the session.
+    The ``Session`` is per transport INSTANCE, not shared: a shared Session
+    would persist one caller's cookies into another caller's GET (ambient
+    credential bleed the per-call bearer design exists to avoid). Pooled
+    connections still save the handshake within one instance's lifetime, and
+    the bearer — the only per-request credential — travels per call in the
+    headers, never on the session.
     """
 
-    _session = requests.Session()
+    def __init__(self) -> None:
+        self._session = requests.Session()
 
     def get_json(self, url: str, bearer: str | None, timeout_s: float) -> tuple[int, Any]:
         headers = {"Accept": "application/json"}

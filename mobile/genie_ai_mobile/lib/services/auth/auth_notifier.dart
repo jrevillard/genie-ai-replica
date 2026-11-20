@@ -356,6 +356,15 @@ class AuthNotifier extends Notifier<AuthState> with WidgetsBindingObserver {
       ),
     };
     if (clearRetry) _lastFailedOperation = _FailedOperation.none;
+    // A retryable refresh arms the connectivity auto-retry RIGHT HERE —
+    // the interceptor path reaches this listener without ever passing
+    // through refreshToken() (whose own flag-set covers only the
+    // notifier-driven path), so the mapping site is the one place both
+    // entry paths agree on. The retry switch re-enters via validateTokens,
+    // which refreshes.
+    if (outcome is RefreshRetryable) {
+      _lastFailedOperation = _FailedOperation.refreshToken;
+    }
     state = next;
   }
 

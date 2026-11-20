@@ -8,6 +8,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:http/http.dart' as http;
 import 'package:genie_ai_mobile/config/keycloak_config.dart';
 import 'package:genie_ai_mobile/providers/api_providers.dart';
+import 'package:genie_ai_mobile/services/auth/token_refresher.dart';
 import 'package:genie_ai_mobile/services/auth/app_auth.dart';
 import 'package:openapi/api.dart';
 import 'package:genie_ai_mobile/services/auth/auth_logger.dart';
@@ -2097,4 +2098,99 @@ void main() {
       c.dispose();
     });
   });
+
+  group(
+    'review findings — the interceptor-shaped refresh path (2026-11-20)',
+    () {
+      test(
+        'a retryable refresh through the LEAF refresher arms the connectivity '
+        'auto-retry — the interceptor path has no notifier to set the flag',
+        () async {
+          final preloadedStorage = InMemoryTokenStorage();
+          await preloadedStorage.saveTokens(
+            accessToken: 'at',
+            idToken: 'idt',
+            refreshToken: 'rt',
+            // Valid at BOOT (so _initializeAuth stays silent and arms
+            // nothing). Expired only LATER, written as a stored FACT after
+            // the retryable failure — never a clock race against the
+            // debounce on a slow runner.
+            accessTokenExpiration: DateTime.now().add(const Duration(hours: 1)),
+          );
+          final checker = FakeConnectivityChecker()..isOnline = false;
+          final c = makeContainer(
+            storage: preloadedStorage,
+            connectivityChecker: checker,
+          );
+          c.read(authProvider.notifier);
+          await Future.delayed(Duration.zero);
+
+          // The INTERCEPTOR path: refresh() straight on the leaf refresher —
+          // no authProvider.notifier in the call chain, so nothing but the
+          // outcome listener itself can arm the retry flag.
+          final outcome = await c.read(tokenRefresherProvider).refresh();
+          expect(outcome, isA<RefreshRetryable>());
+          expect(c.read(authProvider).status, equals(AuthStatus.error));
+          expect(c.read(authProvider).retryable, isTrue);
+
+          // NOW the token expires — a stored fact, not a clock race. The
+          // armed retry re-validates, finds it expired, refreshes, and the
+          // recovery is observable.
+          await preloadedStorage.saveTokens(
+            accessToken: 'at',
+            idToken: 'idt',
+            refreshToken: 'rt',
+            accessTokenExpiration: DateTime.now().subtract(
+              const Duration(seconds: 1),
+            ),
+          );
+
+          // Network returns: the armed retry must fire and recover.
+          checker.setOnline(true);
+          mockAppAuth.onToken = (request) => TokenResponse(
+            'new-at',
+            'new-rt',
+            DateTime.now().add(const Duration(hours: 1)),
+            null,
+            'Bearer',
+            null,
+            null,
+          );
+          await Future.delayed(const Duration(milliseconds: 1500));
+
+          expect(
+            c.read(authProvider).status,
+            equals(AuthStatus.authenticated),
+            reason: 'the interceptor-shaped retry must recover on reconnection',
+          );
+          c.dispose();
+        },
+      );
+
+      test('a storage fault inside the refresher resolves as unauthenticated — '
+          'it never escapes into a fire-and-forget caller', () async {
+        final brokenStorage = _BrokenGetRefreshTokenStorage();
+        final c = makeContainer(storage: brokenStorage);
+        c.read(authProvider.notifier);
+        await Future.delayed(Duration.zero);
+
+        // The old refreshToken caught EVERY exception; the leaf refactor
+        // left the early section (getRefreshToken) outside its arms — a
+        // keystore fault would reject the future the interceptor
+        // fire-and-forgets.
+        final outcome = await c.read(tokenRefresherProvider).refresh();
+        expect(outcome, isA<RefreshUnauthenticated>());
+        expect(c.read(authProvider).status, equals(AuthStatus.unauthenticated));
+        c.dispose();
+      });
+    },
+  );
+}
+
+/// A storage whose credential READ faults — the corrupted-keystore shape.
+class _BrokenGetRefreshTokenStorage extends InMemoryTokenStorage {
+  @override
+  Future<String?> getRefreshToken() async {
+    throw Exception('keystore corrupt');
+  }
 }

@@ -96,4 +96,19 @@ void main() {
     expect(opened['repo_id'], 'ragas-venue-seed');
     expect(opened['concept_id'], 'hadith-nawawi-36');
   });
+
+  testWidgets('two anonymous rows never share a row key', (tester) async {
+    // Rows carrying NEITHER document_id nor id used to interpolate the same
+    // 'answer-source-row-null' key — duplicate keys among siblings throw
+    // during build (2026-11-20 review finding).
+    final anon = <String, dynamic>{'document_name': 'anon doc', 'url': ''};
+    await pumpBar(
+      tester,
+      sources: [anon, Map<String, dynamic>.from(anon)],
+    );
+    await tester.tap(find.text('Related sources (2)'));
+    await tester.pumpAndSettle();
+    expect(tester.takeException(), isNull);
+    expect(find.text('anon doc'), findsNWidgets(2));
+  });
 }

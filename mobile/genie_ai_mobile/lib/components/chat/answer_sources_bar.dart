@@ -95,11 +95,17 @@ class _AnswerSourcesBarState extends State<AnswerSourcesBar> {
             ),
           ),
           if (_open)
-            ...rows.map((doc) {
+            ...rows.asMap().entries.map((entry) {
+              final index = entry.key;
+              final doc = entry.value;
               final badge = sourceBadge(doc);
               return GestureDetector(
                 key: ValueKey(
-                  'answer-source-row-${doc['document_id'] ?? doc['id']}',
+                  // The id when the row carries one; rows without ANY id
+                  // fall back to their POSITION — two anonymous rows must
+                  // never share a ValueKey (duplicate keys among siblings
+                  // break multi-child reconciliation).
+                  'answer-source-row-${doc['document_id'] ?? doc['id'] ?? index}',
                 ),
                 onTap: () {
                   debugPrint('chat.sources_bar open ${citationLogTag(doc)}');

@@ -60,4 +60,35 @@ void main() {
       expect(chunks.join(), body);
     });
   });
+  test(
+    // The 2026-11-20 review finding: inside a fence NO flush path fired —
+    // one giant fenced block (docs with embedded logs) became ONE chunk and
+    // re-wedged the parser the chunker exists to protect against. The hard
+    // cap now applies inside fences: a fence splits at line bounds like a
+    // pathological paragraph, the rejoin stays byte-for-byte.
+    'a giant fenced block splits at the hard cap and rejoins intact',
+    () {
+      final codeLines = List.generate(300, (i) => 'log line $i ${'x' * 36}');
+      final body = '```\n${codeLines.join('\n')}\n```';
+      final chunks = chunkMarkdownBody(body);
+
+      expect(
+        chunks.length,
+        greaterThan(1),
+        reason: 'a 12k fence cannot be one chunk',
+      );
+      for (final c in chunks) {
+        expect(
+          c.length,
+          lessThanOrEqualTo(8000 + 64),
+          reason: 'every piece respects the hard cap (plus one line)',
+        );
+      }
+      expect(
+        chunks.join(),
+        equals(body),
+        reason: 'the rejoin is byte-for-byte',
+      );
+    },
+  );
 }

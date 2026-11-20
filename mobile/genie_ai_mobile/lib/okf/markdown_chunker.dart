@@ -38,7 +38,10 @@ List<String> chunkMarkdownBody(String body, {int targetChunkChars = 4096}) {
     current.write(text);
     currentLen += blockLen;
     blockLen = 0;
-    if (currentLen >= targetChunkChars && !inFence) flush();
+    // The chunk boundary lands wherever the target is reached — inside a
+    // fence too (a split fence renders as code fragments across two
+    // chunks; an unsplit 12k fence wedged the parser — 2026-11-20).
+    if (currentLen >= targetChunkChars) flush();
   }
 
   for (var i = 0; i < lines.length; i++) {
@@ -51,9 +54,12 @@ List<String> chunkMarkdownBody(String body, {int targetChunkChars = 4096}) {
     final blank = l.trim().isEmpty;
     if (blank && !inFence) {
       flushBlock();
-    } else if (!inFence && blockLen >= _hardChunkCap) {
-      // A single paragraph over the hard cap: hard-split at line bounds so
-      // one pathological block cannot wedge the parser again.
+    } else if (blockLen >= _hardChunkCap) {
+      // Over the hard cap — inside a fence OR a single pathological
+      // paragraph: hard-split at line bounds. Inside a fence this breaks
+      // the code block across chunks (each piece renders a code fragment,
+      // not styled as one block) — the acceptable cost: one unbounded
+      // chunk wedged the parser again (the 2026-11-20 review finding).
       flushBlock();
     }
   }

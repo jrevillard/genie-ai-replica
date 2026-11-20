@@ -131,6 +131,29 @@ class TokenRefresher {
         listener(outcome);
       }
       return outcome;
+    } catch (e) {
+      // The MECHANISM itself faulted outside every arm (a storage read
+      // throwing, e.g. a corrupted keystore — the early section of
+      // _doRefresh sits outside its try). The old refreshToken caught
+      // EVERY exception; the leaf refactor must preserve that contract —
+      // a fire-and-forget caller (the interceptor) would otherwise get a
+      // rejected future and an unhandled zone error.
+      _logger?.logAuthFailure(
+        errorCode: 'REFRESH_FAILED',
+        keycloakEndpoint: _keycloakService.keycloakConfig.realmUrl,
+        message: 'Token refresh mechanism fault: $e',
+        source: 'TokenRefresher.refresh',
+      );
+      try {
+        await _tokenStorage.deleteAll();
+      } catch (_) {
+        // Storage is broken; clearing is best-effort — never mask the arm.
+      }
+      const outcome = RefreshUnauthenticated(message: null);
+      for (final listener in _listeners) {
+        listener(outcome);
+      }
+      return outcome;
     } finally {
       _inFlight = null;
     }

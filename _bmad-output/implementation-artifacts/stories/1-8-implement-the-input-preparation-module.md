@@ -148,7 +148,7 @@ Global code-review, round 1 (high effort, full diff `a1f5589a4..95c92034d`) — 
 | `is_translategemma` crashes on a non-string discovered id (AttributeError out of `prepare`) | nit | confirmed (deployed has the same latent crash, but the module's own contract promises degraded inputs never crash the caller) | **Fixed**: `isinstance` guard answers False → generic path degrades; cache-level test pinned with the scalar-id proxy scenario |
 | Dead code: `detection.is_code_shaped` (+ its regex twin) unused; `registry.LANGUAGE_MAP_RETRY_SECONDS`/`NEGATIVE_CACHE_TTL` re-exports unconsumed | nit | confirmed (repo no-dead-code convention) | **Fixed**: all three removed; `__init__` export list updated |
 
-The scoped fix review of the correction diff follows (f=0).
+The scoped fix review of the correction diff `95c92034d..aada77204` (f=0, fresh context) was **CLEAN**: 0 critical, 0 important; every parity claim re-checked against the deployed source (including the finding-5 refutation, confirmed against `genieai_chatqna.py:4174-4229` and its docstring), no regression, 409 green. Three minor notes, dispositioned: (1) a one-line comment at `translate_prompt` naming the inconsistent-caller case the isinstance re-check defends — applied post-verdict, the reviewer's own prescription; (2) the no-probe assertion pinning the one-read property — declined with the reviewer's reason (the regression it guards requires a visible signature/flow change; the parameter enforces the property structurally); (3) this log line itself now records the verdict instead of pre-announcing it.
 
 ## Design Notes
 

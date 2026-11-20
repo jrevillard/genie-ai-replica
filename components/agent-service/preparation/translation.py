@@ -697,6 +697,12 @@ class TranslationClient:
                 empty completion, or answered with a completion it cut off.
             TranslationInputTooLongError: the prompt does not fit the window.
         """
+        # The caller's pair is trusted for every consistent caller; the
+        # isinstance re-check only defends the inconsistent direct call
+        # (translategemma=True, model_id=None) — that call degrades to the
+        # generic path instead of posting a completions payload with a null
+        # model. One source of truth for the flag stays in is_translategemma;
+        # do not "simplify" this line away.
         translategemma_flag = translategemma and isinstance(model_id, str)
         payload, path, count_body = translation_payload(prompt, translategemma_flag, model_id)
         window = await self.translation_window()

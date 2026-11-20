@@ -5980,6 +5980,14 @@ config:validate:
         - "**/*copy)*"
         - "**/Copy of *"
         - ".gitignore"
+        # The OPEA-free gate (tests/config-validator/__tests__/opea-free-gate.test.js)
+        # scans the agent-path packages: an MR that introduces a `comps` import
+        # or an OPEA build-time download in one of them must fail the gate in
+        # its own pipeline, not as a red default-branch pipeline after the
+        # merge. One glob per agent-path package (the manifest's list is
+        # extensible) plus the manifest itself, which is an input to the gate.
+        - "components/agent-service/**/*"
+        - "scripts/ci/agent-path-packages.json"
         # The #1716 lint-home pins read the root Playwright config (the
         # suppression pin) and the root package.json scripts (the gate and
         # hook pins): an MR that silences the gate from either file must

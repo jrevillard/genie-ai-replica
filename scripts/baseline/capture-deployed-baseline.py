@@ -820,11 +820,10 @@ def capture_release(flux_namespace, release):
     history = status.get("history") or []
     deployed = [entry for entry in history if entry.get("status") == "deployed"]
     if deployed:
-        revision = max(int(entry.get("version", 0)) for entry in deployed)
-        revision_entry = next(
-            (entry for entry in deployed if int(entry.get("version", 0)) == revision),
-            {},
-        )
+        # The highest deployed version wins, and its entry is the one the
+        # chart name and the chart version are read from.
+        revision_entry = max(deployed, key=lambda entry: int(entry.get("version", 0)))
+        revision = int(revision_entry.get("version", 0))
     else:
         revision = max(
             (int(entry.get("version", 0)) for entry in history), default=0
@@ -915,15 +914,19 @@ def capture_release(flux_namespace, release):
     }
 
 
+def _chart_yaml(name):
+    """One of the chart source's own YAML files, parsed."""
+    with open(os.path.join(CHART_DIR, name), encoding="utf-8") as handle:
+        return yaml.safe_load(handle) or {}
+
+
 def local_chart_version():
     """The version of the chart source this capture compares against."""
-    path = os.path.join(CHART_DIR, "Chart.yaml")
-    if not os.path.exists(path):
+    if not os.path.exists(os.path.join(CHART_DIR, "Chart.yaml")):
         # The chart source is incomplete: the identity is UNRESOLVED, and the
         # record says so. The capture does not die on it.
         return ""
-    with open(path, encoding="utf-8") as handle:
-        return (yaml.safe_load(handle) or {}).get("version", "")
+    return _chart_yaml("Chart.yaml").get("version", "")
 
 
 def chart_source_files():
@@ -931,15 +934,18 @@ def chart_source_files():
 
     The chart's metadata, its values and every template the comparison
     parses. A file that is missing makes the comparison unestablishable.
+    The template paths come from the constants the capture reads them
+    through, so the guard cannot drift from the templates it guards.
     """
     files = [
         "Chart.yaml",
         "Chart.lock",
         "values.yaml",
-        os.path.join("templates", "services", "backend.yaml"),
+        os.path.relpath(BACKEND_TEMPLATE, CHART_DIR),
     ]
     files.extend(
-        os.path.join("templates", "opea", name) for name in OPEA_WORKLOADS.values()
+        os.path.join(os.path.relpath(CHART_TEMPLATES, CHART_DIR), name)
+        for name in OPEA_WORKLOADS.values()
     )
     return files
 
@@ -1006,6 +1012,14 @@ def decode_release_payload(encoded):
     return json.loads(raw)
 
 
+def _decoded_entries(entries):
+    """The release secret's own entries, decoded: {path: bytes}."""
+    return {
+        entry.get("name", ""): base64.b64decode(entry.get("data") or "")
+        for entry in entries or []
+    }
+
+
 def attested_chart(storage_namespaces, release, revision):
     """The chart the release was rendered from, as the release secret holds it.
 
@@ -1033,14 +1047,8 @@ def attested_chart(storage_namespaces, release, revision):
         return None
     try:
         chart = decode_release_payload(encoded).get("chart") or {}
-        templates = {
-            entry.get("name", ""): base64.b64decode(entry.get("data") or "")
-            for entry in chart.get("templates") or []
-        }
-        files = {
-            entry.get("name", ""): base64.b64decode(entry.get("data") or "")
-            for entry in chart.get("files") or []
-        }
+        templates = _decoded_entries(chart.get("templates"))
+        files = _decoded_entries(chart.get("files"))
         values = chart.get("values") or {}
         metadata = chart.get("metadata") or {}
         lock = chart.get("lock") or {}
@@ -1202,8 +1210,7 @@ def leaf_values(values, prefix=""):
 def dependency_names(lock=None):
     """The names of the chart's dependencies."""
     if lock is None:
-        with open(os.path.join(CHART_DIR, "Chart.lock"), encoding="utf-8") as handle:
-            lock = yaml.safe_load(handle) or {}
+        lock = _chart_yaml("Chart.lock")
     return {dep.get("name", "") for dep in lock.get("dependencies") or []}
 
 
@@ -1214,8 +1221,7 @@ def values_differences(chart):
     under the dependency's name; those leaves belong to the dependency, not
     to the chart, so they are not compared.
     """
-    with open(os.path.join(CHART_DIR, "values.yaml"), encoding="utf-8") as handle:
-        local = yaml.safe_load(handle) or {}
+    local = _chart_yaml("values.yaml")
     local_leaves = leaf_values(local)
     attested_leaves = leaf_values(chart.get("values") or {})
     # The dependency's own leaves are coalesced into the chart's values by
@@ -1260,8 +1266,7 @@ def values_differences(chart):
 
 def lock_differences(chart):
     """The differences between the chart source's lock and the attested one."""
-    with open(os.path.join(CHART_DIR, "Chart.lock"), encoding="utf-8") as handle:
-        local = yaml.safe_load(handle) or {}
+    local = _chart_yaml("Chart.lock")
     attested = chart.get("lock") or {}
     differences = []
     if (
@@ -1305,26 +1310,28 @@ def lock_differences(chart):
     return differences
 
 
-def chart_differences(chart, attested_ids, release_info=None):
+def chart_differences(chart, attested_ids, release_info=None, local=None):
     """Every difference between the chart source and the attested chart."""
     differences = []
-    local = local_chart_files()
+    if local is None:
+        local = local_chart_files()
     for path, content in sorted(local.items()):
+        source_blob = git_blob_sha(content)
         if path not in attested_ids:
             differences.append(
                 {
                     "kind": "extra",
                     "path": path,
-                    "source": f"blob {git_blob_sha(content)[:12]}",
+                    "source": f"blob {source_blob[:12]}",
                     "deployed": "(not in the chart the deployment runs)",
                 }
             )
-        elif git_blob_sha(content) != attested_ids[path]:
+        elif source_blob != attested_ids[path]:
             differences.append(
                 {
                     "kind": "content",
                     "path": path,
-                    "source": f"blob {git_blob_sha(content)[:12]}",
+                    "source": f"blob {source_blob[:12]}",
                     "deployed": f"blob {attested_ids[path][:12]}",
                 }
             )
@@ -1463,8 +1470,13 @@ def chart_identity(release_info):
         return identity
     identity["commit"] = commit
     identity["files"] = len(attested)
-    identity["local_files"] = len(local_chart_files())
-    identity["differences"] = chart_differences(chart, attested_ids, release_info)
+    # The chart source's own files are read ONCE: the count the record shows
+    # and the comparison that produces the differences must be the same set.
+    local = local_chart_files()
+    identity["local_files"] = len(local)
+    identity["differences"] = chart_differences(
+        chart, attested_ids, release_info, local
+    )
     identity["status"] = "DIFFERENT" if identity["differences"] else "IDENTICAL"
     return identity
 
@@ -2654,10 +2666,8 @@ def capture(namespace, flux_namespace, release, date, out_path):
     # skipped - a difference that was never measured is not a difference.
     source_complete = chart_source_complete()
     chart_values = {}
-    values_path = os.path.join(CHART_DIR, "values.yaml")
     if source_complete:
-        with open(values_path, encoding="utf-8") as handle:
-            chart_values = yaml.safe_load(handle) or {}
+        chart_values = _chart_yaml("values.yaml")
 
     overlay_values = release_info["overlay"]
     effective_values = deep_merge(chart_values, overlay_values)

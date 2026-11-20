@@ -1218,10 +1218,9 @@ def _attested_chart(template_overrides=None, metadata_version=None):
         override = (template_overrides or {}).get(entry["name"])
         if override is not None:
             entry["data"] = base64.b64encode(override).decode("ascii")
-    chart_dir = os.path.join(capture.REPO_ROOT, "charts", "genieai-umbrella")
-    with open(os.path.join(chart_dir, "values.yaml"), encoding="utf-8") as handle:
+    with open(os.path.join(capture.CHART_DIR, "values.yaml"), encoding="utf-8") as handle:
         values = yaml.safe_load(handle)
-    with open(os.path.join(chart_dir, "Chart.lock"), encoding="utf-8") as handle:
+    with open(os.path.join(capture.CHART_DIR, "Chart.lock"), encoding="utf-8") as handle:
         lock = yaml.safe_load(handle)
     return {
         "templates": templates,
@@ -1235,6 +1234,23 @@ def _attested_chart(template_overrides=None, metadata_version=None):
     }
 
 
+# The template content no commit of this checkout carries: a chart the
+# repository never saw, so the identity cannot resolve it.
+_UNKNOWN_CHART = {
+    "templates/opea/chatqna.yaml": b"-- a chart this checkout does not know\n"
+}
+
+
+def _encoded_release(payload):
+    """A Helm release payload, the way Helm stores it: base64(gzip(json))."""
+    import gzip
+    import json
+
+    return base64.b64encode(
+        gzip.compress(json.dumps(payload).encode("utf-8"))
+    ).decode("ascii")
+
+
 def _release_secret(chart):
     """The release secret, encoded the way kubectl returns it.
 
@@ -1243,13 +1259,21 @@ def _release_secret(chart):
     capture decodes what kubectl returns, so the fixture carries both
     layers - the shape the production path reads.
     """
-    import gzip
-    import json
-
-    payload = base64.b64encode(
-        gzip.compress(json.dumps({"chart": chart}).encode("utf-8"))
-    ).decode("ascii")
+    payload = _encoded_release({"chart": chart})
     return {"data": {"release": base64.b64encode(payload.encode("ascii")).decode("ascii")}}
+
+
+def _stub_release_secret(monkeypatch, chart=None, template_overrides=None):
+    """The release secret the capture reads for the deployed revision."""
+    monkeypatch.setattr(
+        capture,
+        "kubectl_json",
+        lambda *args, **kwargs: _release_secret(
+            chart
+            if chart is not None
+            else _attested_chart(template_overrides=template_overrides)
+        ),
+    )
 
 
 def _release_info(**overrides):
@@ -1272,11 +1296,7 @@ def _release_info(**overrides):
 
 def test_the_identity_names_the_chart_the_deployment_runs(monkeypatch):
     """The chart the deployment runs is read from the cluster objects."""
-    monkeypatch.setattr(
-        capture,
-        "kubectl_json",
-        lambda *args, **kwargs: _release_secret(_attested_chart()),
-    )
+    _stub_release_secret(monkeypatch)
     identity = capture.chart_identity(_release_info())
     assert identity["status"] == "IDENTICAL"
     assert identity["chart_version"] == "0.2.182"
@@ -1290,17 +1310,7 @@ def test_the_identity_names_the_chart_the_deployment_runs(monkeypatch):
 
 def test_a_commit_this_checkout_does_not_know_fails_closed(monkeypatch):
     """A chart no commit of this checkout carries cannot be established."""
-    monkeypatch.setattr(
-        capture,
-        "kubectl_json",
-        lambda *args, **kwargs: _release_secret(
-            _attested_chart(
-                template_overrides={
-                    "templates/opea/chatqna.yaml": b"-- a chart this checkout does not know\n"
-                }
-            )
-        ),
-    )
+    _stub_release_secret(monkeypatch, template_overrides=_UNKNOWN_CHART)
     identity = capture.chart_identity(_release_info())
     assert identity["status"] == "UNRESOLVED"
     assert identity["commit"] == ""
@@ -1314,9 +1324,7 @@ def test_an_empty_commit_fails_closed(monkeypatch):
     empty, so it attests nothing."""
     chart = _attested_chart()
     chart["templates"] = []
-    monkeypatch.setattr(
-        capture, "kubectl_json", lambda *args, **kwargs: _release_secret(chart)
-    )
+    _stub_release_secret(monkeypatch, chart=chart)
     identity = capture.chart_identity(_release_info())
     assert identity["status"] == "UNRESOLVED"
     assert "no template" in identity["reason"]
@@ -1346,9 +1354,7 @@ def test_a_missing_release_secret_fails_closed(monkeypatch):
 def test_a_differing_chart_source_is_recorded_with_its_disposition(monkeypatch):
     """A chart source that is not the deployed chart is a known difference."""
     attested = _attested_chart()
-    monkeypatch.setattr(
-        capture, "kubectl_json", lambda *args, **kwargs: _release_secret(attested)
-    )
+    _stub_release_secret(monkeypatch, chart=attested)
     files = capture.local_chart_files()
     files["templates/opea/chatqna.yaml"] = b"-- another revision of the template\n"
     monkeypatch.setattr(capture, "local_chart_files", lambda: files)
@@ -1363,17 +1369,7 @@ def test_a_differing_chart_source_is_recorded_with_its_disposition(monkeypatch):
 
 def test_an_unestablishable_identity_fails_the_capture(tmp_path, monkeypatch):
     """An identity the capture cannot establish fails the capture."""
-    monkeypatch.setattr(
-        capture,
-        "kubectl_json",
-        lambda *args, **kwargs: _release_secret(
-            _attested_chart(
-                template_overrides={
-                    "templates/opea/chatqna.yaml": b"-- a chart this checkout does not know\n"
-                }
-            )
-        ),
-    )
+    _stub_release_secret(monkeypatch, template_overrides=_UNKNOWN_CHART)
     identity = capture.chart_identity(_release_info())
     data = _record_data()
     data["chart_identity"] = identity
@@ -1385,11 +1381,7 @@ def test_an_unestablishable_identity_fails_the_capture(tmp_path, monkeypatch):
 
 def test_the_record_states_the_chart_the_deployment_runs(tmp_path, monkeypatch):
     """The record says which chart the deployment runs, and where it came from."""
-    monkeypatch.setattr(
-        capture,
-        "kubectl_json",
-        lambda *args, **kwargs: _release_secret(_attested_chart()),
-    )
+    _stub_release_secret(monkeypatch)
     identity = capture.chart_identity(_release_info())
     data = _record_data()
     data["chart_identity"] = identity
@@ -1476,11 +1468,7 @@ def test_a_garbled_release_payload_fails_closed(monkeypatch):
 
 def test_the_two_attestations_of_the_chart_must_agree(monkeypatch):
     """The release history and the release secret must name the same chart."""
-    monkeypatch.setattr(
-        capture,
-        "kubectl_json",
-        lambda *args, **kwargs: _release_secret(_attested_chart()),
-    )
+    _stub_release_secret(monkeypatch)
     identity = capture.chart_identity(_release_info(chart_version="0.2.181"))
     assert identity["status"] == "DIFFERENT"
     paths = [difference["path"] for difference in identity["differences"]]
@@ -1491,9 +1479,7 @@ def test_a_null_leaf_and_an_empty_one_are_different(monkeypatch):
     """The chart declares null; the chart the deployment runs carries ""."""
     attested = _attested_chart()
     attested["values"]["services"]["backend"]["replicas"] = ""
-    monkeypatch.setattr(
-        capture, "kubectl_json", lambda *args, **kwargs: _release_secret(attested)
-    )
+    _stub_release_secret(monkeypatch, chart=attested)
     identity = capture.chart_identity(_release_info())
     assert identity["status"] == "DIFFERENT"
     paths = [difference["path"] for difference in identity["differences"]]
@@ -1502,9 +1488,6 @@ def test_a_null_leaf_and_an_empty_one_are_different(monkeypatch):
 
 def test_a_release_payload_of_the_wrong_shape_fails_closed(monkeypatch):
     """A payload that is valid JSON of the wrong shape attests no chart."""
-    import gzip
-    import json as json_module
-
     for payload in (
         [1, 2, 3],
         {"chart": [1, 2]},
@@ -1513,10 +1496,7 @@ def test_a_release_payload_of_the_wrong_shape_fails_closed(monkeypatch):
         {"chart": {"templates": ["abc"]}},
         {"chart": {"templates": [{"name": "t", "data": 5}]}},
     ):
-        encoded = base64.b64encode(
-            gzip.compress(json_module.dumps(payload).encode("utf-8"))
-        ).decode("ascii")
-        secret = {"data": {"release": encoded}}
+        secret = {"data": {"release": _encoded_release(payload)}}
         monkeypatch.setattr(
             capture,
             "kubectl_json",
@@ -1528,11 +1508,7 @@ def test_a_release_payload_of_the_wrong_shape_fails_closed(monkeypatch):
 
 def test_a_deployed_revision_without_a_chart_version_fails_closed(monkeypatch):
     """A deployed revision the history names no chart version for: not attested."""
-    monkeypatch.setattr(
-        capture,
-        "kubectl_json",
-        lambda *args, **kwargs: _release_secret(_attested_chart()),
-    )
+    _stub_release_secret(monkeypatch)
     identity = capture.chart_identity(_release_info(chart_version=""))
     assert identity["status"] == "UNRESOLVED"
     assert "no chart version" in identity["reason"]
@@ -1540,11 +1516,7 @@ def test_a_deployed_revision_without_a_chart_version_fails_closed(monkeypatch):
 
 def test_an_incomplete_chart_source_fails_closed(monkeypatch):
     """A checkout without the chart's lock cannot be compared."""
-    monkeypatch.setattr(
-        capture,
-        "kubectl_json",
-        lambda *args, **kwargs: _release_secret(_attested_chart()),
-    )
+    _stub_release_secret(monkeypatch)
     monkeypatch.setattr(capture, "chart_source_complete", lambda: False)
     identity = capture.chart_identity(_release_info())
     assert identity["status"] == "UNRESOLVED"

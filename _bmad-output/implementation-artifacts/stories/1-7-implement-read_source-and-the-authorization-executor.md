@@ -2,9 +2,9 @@
 title: 'Story 1.7 — Implement `read_source` and the authorization executor'
 type: 'feature'
 created: '2026-11-20'
-status: 'in-progress'
+status: 'in-review'
 route: 'dispatch'
-review_loop_iteration: 1
+review_loop_iteration: 2
 baseline_commit: '2cedec978dc0a9c918f0c6b147206d81757e5900'
 context:
   - '{project-root}/_bmad-output/implementation-artifacts/epic-1-context.md'
@@ -122,6 +122,19 @@ Global code-review, round 1 (high effort, full diff `2cedec978..41e15a5a9`) — 
 | The chunk adapter's `self._db` attribute is written by the worker closure and read by nobody | nit | confirmed (test-only reader) | **Fixed**: attribute removed; the test captures the handle through its own factory |
 | `_finalize_read` reported a resolved-but-empty source as `degraded_availability` — an OKF concept's empty body is its true content, not a failed fetch | nit | confirmed | **Fixed**: per-path semantics — legacy zero-chunks stays degraded (corpus text unavailable), OKF empty body is SUCCESS with `content=""`; tests pinned |
 | A 200 with a non-object body raised `TransientError` whose message named the successful status as the failure cause | nit | confirmed | **Fixed**: distinct message naming the non-object payload; test pins the wording |
+
+Global code-review, round 2 (post-quality pass `e517ba336`, high effort, diff `2cedec978..c11b198a0`) — 2 important + 4 nit, every one verified real and fixed in `7a01e963e`:
+
+| Finding | Severity | Verdict | Disposition |
+|---|---|---|---|
+| The unauthorized-read tests built the executor with the WIDE context and called it with a narrow one — the context gate refused first, so the AD-4 legacy membership and OKF repo-membership checks never ran and deleting them left the suite green (the story's mutation-sensitivity claim was false for those checks) | important | confirmed | **Fixed**: five tests now carry the narrow context on both sides; both membership deletions mutation-proven red (4 failures) and green on restore |
+| `RequestsTransport`'s `Session` was a class attribute — one process-wide cookie jar persisted one caller's cookies into another caller's GET (ambient credential bleed) | important | confirmed | **Fixed**: per-instance Session; pinned by `tests/test_adapters_http.py` |
+| The chunk adapter required a materialized sequence; python-arango's lazy Cursor (the pin 1.6 adopts) supports neither slicing nor len — first production wiring would crash | nit | confirmed | **Fixed**: `list(db.execute(...))`; pinned by a lazy-iterator test |
+| `asyncio.gather` orphaned the sibling leg on first failure (a dead ArangoDB query kept running) | nit | confirmed | **Fixed**: `asyncio.TaskGroup` cancels the sibling; single-exception groups unwrap to the contract's carrier; cancellations untouched |
+| Deadline expiry leaves `to_thread` work running past the await | nit | confirmed (inherent to `to_thread`) | **Documented** on `_within_deadline`: the adapter's own per-call timeout is the real bound |
+| The okf card payload was trusted beyond identity: a non-string body became `str()` confident garbage, an uncoercible `bundle_version` escaped as a raw pydantic error outside the carriers | nit | confirmed | **Fixed**: non-string body → TransientError; provenance construction wrapped, ValidationError → TransientError; both pinned |
+
+The scoped fix review of `c11b198a0..7a01e963e` was **clean**: 0 critical, 0 important; the reviewer itself re-ran all six mutations red and 184 green on restore. Three minor pin-strength notes were declined with reasons: the ExceptionGroup handler's two unreachable carrier gaps (the adapters wrap every transport failure in `TransientError`, and a deadline arrives as cancellation, not a leg error — map them when this handler is next touched); the Session-isolation pin being structural rather than behavioral (the structural pin IS the regression mechanism — red under the exact revert); and the sibling-cancellation behavior riding on stdlib TaskGroup semantics with the carrier unwrap already pinned.
 
 ## Design Notes
 

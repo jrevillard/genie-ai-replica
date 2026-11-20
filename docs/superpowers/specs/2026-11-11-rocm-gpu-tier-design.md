@@ -164,6 +164,27 @@ next agent does not re-litigate it without new facts.
 
 ### What a parameter cannot express
 
+> **Corrected 2026-11-20 (MR !968 review).** The table below is the
+> original 2026-11-11 measurement and the *list-interpolation* half of it
+> still holds — `devices: ${DEVICES:-}` (the LIST as a whole) is rejected
+> with `services.probe.devices must be a array`. But the section's
+> conclusion overclaimed: interpolating the two scalar PATHS *inside* the
+> list parses fine (`devices: ["${KFD_DEV:-/dev/null}:${KFD_DEV:-/dev/null}"]`
+> renders as a device entry), so the vendor axis **can** be expressed as
+> values in the base file. A device path that does not exist on the host is
+> a hard error, not a tolerated one — the daemon stat's every path before
+> it creates the container (`docker run --rm --device
+> /dev/does-not-exist:/dev/does-not-exist alpine:3 true` → "error
+> gathering device information while adding custom device"), so a base-file
+> row needs a path that exists everywhere (`/dev/null` qualifies). The
+> vendor axis is nonetheless kept OUT of the base file for SAFETY reasons
+> (a device row and a parameterized image row would change the NVIDIA
+> render on a service that never asks for a GPU device, and the vendor-only
+> services would have to live in that file under a vendor-specific
+> profile). The current, measured wording is in the
+> `docker-compose.rocm.yaml` header and `site/content/en/docs/deploy/gpu.md`
+> § "What a parameter cannot express".
+
 Compose has no conditional structure. Every vendor difference on this
 path is structural:
 

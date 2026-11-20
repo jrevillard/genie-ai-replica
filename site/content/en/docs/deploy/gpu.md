@@ -229,9 +229,20 @@ probes below replace it):
 - Interpolating the two scalar device PATHS *inside* the list parses
   fine — `devices: ["${KFD_DEV:-/dev/null}:${KFD_DEV:-/dev/null}"]`
   renders as a device entry. The `devices must be a array` error belongs
-  to interpolating the LIST as a whole, which is a different thing. On
-  the tested Docker version a device path that does not exist on the host
-  is tolerated (the container starts).
+  to interpolating the LIST as a whole, which is a different thing.
+- A device path that does **not** exist on the host is **not** tolerated.
+  The daemon resolves every path in the list before it creates the
+  container, and an absent path is a hard error:
+
+  ```console
+  $ docker run --rm --device /dev/does-not-exist:/dev/does-not-exist alpine:3 true
+  docker: Error response from daemon: error gathering device information
+  while adding custom device "/dev/does-not-exist": no such file or directory
+  ```
+
+  So a `devices:` row in the base file needs a path that exists on every
+  host it renders for — `/dev/null` qualifies, which is why the
+  value-axis spelling uses `/dev/null` and not the ROCm path.
 - So the vendor axis *can* be expressed as values in the base file. It is
   not put there for two reasons that are about safety, not capability:
   the base file is the NVIDIA deployment (a `/dev/null` device row and a

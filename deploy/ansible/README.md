@@ -704,6 +704,11 @@ cp inventory/rocm_gpu.ini.example inventory/rocm_gpu.ini   # fill host + user
 #    (image pins, GIDs, ports, gpu_rerank_upstream, TEI caps — edit per host)
 
 # 3. Encrypted secrets (ROCm GPU node vault)
+#    NOTE: this group has NO vault.yml in the repository — the other
+#    environments' vaults are committed encrypted, but the ROCm node's
+#    secrets are per-GPU-node, so the file is created here. Ansible
+#    resolves a vault by GROUP name: a vault.yml sitting in any other
+#    group_vars directory is silently ignored.
 ansible-vault create group_vars/rocm_gpu_nodes/vault.yml
 # Required: hugging_face_hub_token, gpu_api_keys (list of {name, key})
 

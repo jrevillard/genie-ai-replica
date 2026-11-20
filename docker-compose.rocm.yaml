@@ -44,11 +44,25 @@
 #     parses fine (`devices: ["${KFD_DEV:-/dev/null}:${KFD_DEV:-/dev/null}"]`
 #     → compose renders it as a device entry); the error people hit
 #     ("services.x.devices must be a array") is about interpolating the
-#     LIST as a whole, which is a different thing. And on this Docker
-#     version a device path that does not exist on the host is TOLERATED —
-#     the container starts (probe: `PROBE_DEV=/dev/kfd docker compose up`
-#     → "Container probe-probe-1 Started"). So the vendor axis CAN be
-#     expressed as values in the base file.
+#     LIST as a whole, which is a different thing. So the vendor axis CAN
+#     be expressed as values in the base file.
+#
+#   - A MISSING device path is NOT tolerated. MEASURED (MR !968 review,
+#     the probe the earlier revision of this header misread): the daemon
+#     resolves every path in the list BEFORE it creates the container, and
+#     a path that is absent on the host is a hard error —
+#       docker run --rm --device /dev/does-not-exist:/dev/does-not-exist \
+#         alpine:3 true
+#       → "error gathering device information while adding custom device
+#         "/dev/does-not-exist": no such file or directory"
+#     (moby daemon/devices.go: the host path is stat'd with Lstat, and a
+#     missing path returns the error above). The earlier claim here — that
+#     "a device path that does not exist on the host is TOLERATED — the
+#     container starts" — was FALSE: that probe ran on a host where the
+#     probed path EXISTED, so it exercised the other branch. A base-file
+#     `devices:` row therefore needs a path that exists on EVERY host it
+#     renders for; `/dev/null` satisfies that, which is why the value-axis
+#     spelling below is `/dev/null` and not the ROCm path.
 #
 #   - It is still not done there, for two reasons that are about SAFETY,
 #     not capability: (1) the base file is the NVIDIA deployment — putting

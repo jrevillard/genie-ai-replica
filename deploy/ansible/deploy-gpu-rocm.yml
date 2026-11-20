@@ -102,8 +102,16 @@
           - gpu_public_domain is defined and gpu_public_domain | length > 0
         fail_msg: >-
           Missing required variable(s).
-          In group_vars/rocm_gpu_nodes/vault.yml set:
-          hugging_face_hub_token, gpu_api_keys.
+          This group has NO vault.yml in the repository — every other
+          environment's vault.yml is committed encrypted, but the ROCm
+          group's secrets are per-GPU-node and were never committed, so
+          the file is created by the operator:
+          ansible-vault create group_vars/rocm_gpu_nodes/vault.yml
+          (if you already created that file under the group's former
+          name, MOVE it into the directory named above — ansible resolves
+          a vault by the GROUP name, so a vault.yml sitting in any other
+          directory is silently ignored.)
+          In it set: hugging_face_hub_token, gpu_api_keys.
           In group_vars/rocm_gpu_nodes/vars.yml set gpu_public_domain
           (the host's public domain — the TLS certificate task writes
           /CN={{ gpu_public_domain }}).

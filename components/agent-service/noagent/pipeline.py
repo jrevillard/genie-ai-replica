@@ -132,8 +132,9 @@ def source_document_envelope(hits, score_calibrator=None) -> list[dict]:
     provenance graph). This pipeline makes no per-answer metadata
     round-trip (the capability's contract result carries identity, not file
     metadata), so EVERY legacy hit is surfaced in the id-derived shape and
-    every legacy score counts. Net: config B shows more sources with less
-    metadata than config A whenever doc-repo metadata resolves or fails.
+    every legacy score counts. Net: when doc-repo metadata resolves, config
+    B shows the same source with less metadata; when it fails, config B
+    shows a source where deployed config A shows none.
     Widening the delta — resolving doc-repo metadata here — is an
     iteration-2 decision, not silently taken. The OKF entries carry the
     deployed OKF-fallback shape MINUS ``graph_name`` (the contract's

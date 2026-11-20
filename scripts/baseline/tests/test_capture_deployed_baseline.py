@@ -1608,7 +1608,12 @@ def test_the_chart_version_is_the_deployed_revision_s(monkeypatch):
     """The version and the name the history records are the deployed
     revision's, not the failed upgrade above it."""
     helmrelease = {
-        "spec": {"chart": {"spec": {"chart": "genieai-umbrella"}}},
+        # The spec carries the chart PATH, the history the chart's name: the
+        # two differ on purpose, so the assertion below pins where the name
+        # comes from. The names of the three entries differ on purpose too -
+        # a real Flux history carries the same chart name in every entry, so
+        # identical names would leave the assertion unable to fail.
+        "spec": {"chart": {"spec": {"chart": "charts/genieai-umbrella"}}},
         "status": {
             "conditions": [{"type": "Ready", "status": "True", "message": "ok"}],
             "history": [

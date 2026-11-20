@@ -926,15 +926,34 @@ def local_chart_version():
         return (yaml.safe_load(handle) or {}).get("version", "")
 
 
+def chart_source_files():
+    """The chart source files the capture reads.
+
+    The chart's metadata, its values and every template the comparison
+    parses. A file that is missing makes the comparison unestablishable.
+    """
+    files = [
+        "Chart.yaml",
+        "Chart.lock",
+        "values.yaml",
+        os.path.join("templates", "services", "backend.yaml"),
+    ]
+    files.extend(
+        os.path.join("templates", "opea", name) for name in OPEA_WORKLOADS.values()
+    )
+    return files
+
+
 def chart_source_complete():
     """Whether the chart source carries the files the comparison reads.
 
     A checkout whose chart source is incomplete cannot be compared with the
-    chart the deployment runs: the identity stays UNRESOLVED.
+    chart the deployment runs: the identity stays UNRESOLVED and the
+    comparisons that read the source are not made.
     """
     return all(
         os.path.exists(os.path.join(CHART_DIR, name))
-        for name in ("Chart.yaml", "Chart.lock", "values.yaml")
+        for name in chart_source_files()
     )
 
 
@@ -2642,7 +2661,10 @@ def capture(namespace, flux_namespace, release, date, out_path):
 
     overlay_values = release_info["overlay"]
     effective_values = deep_merge(chart_values, overlay_values)
-    env_maps = template_env_maps()
+    # The templates the comparison parses are part of the chart source: an
+    # incomplete source means the comparison is not made, not that the
+    # capture dies.
+    env_maps = template_env_maps() if source_complete else {}
 
     images = build_images(workloads, pods)
     resolve_registry_digests(images)

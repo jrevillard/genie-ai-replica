@@ -1582,10 +1582,32 @@ def test_the_chart_source_of_this_checkout_is_complete():
     assert capture.chart_source_complete() is True
 
 
-@pytest.mark.parametrize("missing", ["Chart.yaml", "Chart.lock", "values.yaml"])
-def test_the_chart_source_guard_covers_every_file_the_comparison_reads(
-    missing, monkeypatch
-):
+def test_the_chart_source_guard_covers_every_file_the_comparison_reads():
+    """The guard's list is the files the capture reads - no file left out."""
+    expected = {
+        "Chart.yaml",
+        "Chart.lock",
+        "values.yaml",
+        os.path.join("templates", "services", "backend.yaml"),
+    }
+    expected.update(
+        os.path.join("templates", "opea", name)
+        for name in capture.OPEA_WORKLOADS.values()
+    )
+    assert set(capture.chart_source_files()) == expected
+
+
+@pytest.mark.parametrize(
+    "missing",
+    [
+        "Chart.yaml",
+        "Chart.lock",
+        "values.yaml",
+        os.path.join("templates", "services", "backend.yaml"),
+        os.path.join("templates", "opea", "chatqna.yaml"),
+    ],
+)
+def test_a_missing_chart_source_file_leaves_the_source_incomplete(missing, monkeypatch):
     """Dropping any file from the guard would let an incomplete source through."""
     import os as os_module
 
@@ -1599,3 +1621,4 @@ def test_the_chart_source_guard_covers_every_file_the_comparison_reads(
 
     monkeypatch.setattr(capture.os.path, "exists", without_it)
     assert capture.chart_source_complete() is False
+

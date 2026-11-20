@@ -1727,6 +1727,52 @@ class TestVllmBackend:
         body = mock_session.post.call_args[1]["json"]
         assert body["model"] == "BAAI/bge-reranker-v2-m3"
 
+    @pytest.mark.asyncio
+    async def test_vllm_backend_without_a_model_name_raises(self, monkeypatch):
+        """The model name is required — the instance serves ONE model and a
+        request naming another is rejected per request. Rather than send an
+        empty name and let the instance answer a 404 the caller cannot
+        interpret, the client refuses and names the variable to set.
+        """
+        monkeypatch.setenv("RERANKER_BACKEND", "vllm")
+        monkeypatch.setenv("RERANKER_VLLM_ENDPOINT", "http://vllm-reranker:8000")
+        monkeypatch.delenv("RERANKER_VLLM_MODEL", raising=False)
+        monkeypatch.delenv("VLLM_RERANKER_MODEL_ID", raising=False)
+        monkeypatch.delenv("RERANKER_MODEL_ID", raising=False)
+        reranker = create_reranker(base_url="http://tei-reranker:80")
+        input_doc = create_mock_searched_doc(texts=["a"], reranking_strategy="slice", top_n=1)
+        mock_session = create_mock_aiohttp_session(create_vllm_rerank_response())
+
+        with (
+            patch("reranker.genieai_tei_reranker.aiohttp.ClientSession", return_value=mock_session),
+            pytest.raises(RuntimeError, match="RERANKER_VLLM_MODEL"),
+        ):
+            await reranker.invoke(input_doc)
+
+        mock_session.post.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_vllm_backend_answering_200_without_results_raises(self, monkeypatch):
+        """HTTP 200 is not a rerank. A body that is not the rerank contract
+        (no ``results`` list) means the endpoint answered something else —
+        a proxy error page, an HTML body, a different API version. The
+        client refuses instead of ranking an empty list, and the span is
+        marked as an error so the trace says why.
+        """
+        monkeypatch.setenv("RERANKER_BACKEND", "vllm")
+        monkeypatch.setenv("RERANKER_VLLM_ENDPOINT", "http://vllm-reranker:8000")
+        monkeypatch.setenv("RERANKER_VLLM_MODEL", "BAAI/bge-reranker-v2-m3")
+        reranker = create_reranker(base_url="http://tei-reranker:80")
+        input_doc = create_mock_searched_doc(texts=["a"], reranking_strategy="slice", top_n=1)
+        # 200 with a body that carries no results list.
+        mock_session = create_mock_aiohttp_session({"detail": "not a rerank response"})
+
+        with (
+            patch("reranker.genieai_tei_reranker.aiohttp.ClientSession", return_value=mock_session),
+            pytest.raises(RuntimeError, match="unexpected response type"),
+        ):
+            await reranker.invoke(input_doc)
+
 
 # ---------------------------------------------------------------------------
 # Test: the input-length contract on the vLLM rerank backend (MR !968)
@@ -1833,6 +1879,51 @@ class TestVllmBackendLengthContract:
         # warnings THIS test produced, not the file's running total.
         warnings = [c for c in _mod.logger.warning.call_args_list[before:] if "served window is unknown" in str(c)]
         assert len(warnings) == 1, f"expected exactly one window-unknown warning, got {len(warnings)}"
+
+    def test_a_non_integer_pinned_window_falls_back_to_discovery(self, monkeypatch):
+        """A typo in the pin must not silently disable the length contract.
+
+        ``RERANKER_VLLM_MAX_MODEL_LEN=eighty`` is not a window. The pin is
+        parsed defensively: the bad value is named in a warning and the
+        resolution falls through to runtime discovery, so a misconfigured
+        deployment still gets whatever the instance actually serves.
+        """
+        import core.model_cache as _model_cache
+        from reranker.genieai_tei_reranker import _reranker_vllm_served_window
+
+        monkeypatch.setenv("RERANKER_VLLM_MAX_MODEL_LEN", "eighty")
+        monkeypatch.setattr(_model_cache, "get_max_model_len", lambda *a, **k: 4096)
+
+        import reranker.genieai_tei_reranker as _mod
+
+        before = len(_mod.logger.warning.call_args_list)
+        window = _reranker_vllm_served_window("http://vllm-reranker:8000")
+
+        assert window == 4096, "a bad pin must fall through to discovery, not to None"
+        warnings = [c for c in _mod.logger.warning.call_args_list[before:] if "eighty" in str(c)]
+        assert len(warnings) == 1, f"expected the bad pin to be named once, got {len(warnings)}"
+
+    def test_a_discovery_failure_leaves_the_window_unknown(self, monkeypatch):
+        """Discovery is best-effort: a probe that raises must not break a
+        rerank call. The window stays unknown and the caller says so."""
+        import core.model_cache as _model_cache
+        from reranker.genieai_tei_reranker import _reranker_vllm_served_window
+
+        monkeypatch.delenv("RERANKER_VLLM_MAX_MODEL_LEN", raising=False)
+
+        def _boom(*args, **kwargs):
+            raise RuntimeError("probe failed")
+
+        monkeypatch.setattr(_model_cache, "get_max_model_len", _boom)
+
+        import reranker.genieai_tei_reranker as _mod
+
+        before = len(_mod.logger.warning.call_args_list)
+        window = _reranker_vllm_served_window("http://vllm-reranker:8000")
+
+        assert window is None
+        warnings = [c for c in _mod.logger.warning.call_args_list[before:] if "probe failed" in str(c)]
+        assert len(warnings) == 1, f"expected the discovery failure to be named once, got {len(warnings)}"
 
     def test_pair_estimate_uses_the_longest_pair_not_the_sum(self):
         """The cross-encoder scores each (query, doc) pair independently, so

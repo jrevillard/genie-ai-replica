@@ -4,7 +4,7 @@ type: 'feature'
 created: '2026-11-19'
 status: 'in-review'
 route: 'dispatch'
-review_loop_iteration: 13
+review_loop_iteration: 14
 baseline_commit: '6c72cd95cccf5ded8b51ba94793dd620f60409a3'
 context:
   - '{project-root}/_bmad-output/implementation-artifacts/epic-1-context.md'
@@ -219,7 +219,7 @@ Fix-review round 8 (`FIX-REVIEW`, correction diff `bdb326126` → `364a07e3e`) �
 | # | Finding | Verdict | Disposition |
 |---|---|---|---|
 | M-1 | The new code comment lumped the suffix into the "exactly one sample turns red" clause; a suffix revert turns BOTH samples red | minor | **Fixed** — the comment separates the two cases |
-| M-2 | The appended round-7 table glued the `## Design Notes` heading to its last row, breaking the heading in Markdown | minor | **Fixed** — the newline restored (the round-8 append itself re-glued the heading one row down; the glue is removed in the global-4 correction) |
+| M-2 | The appended round-7 table glued the `## Design Notes` heading to its last row, breaking the heading in Markdown | minor | **Fixed** — the newline restored (the round-8 append itself re-glued the heading one row down; the glue is removed in the round-9 correction below) |
 
 Global round 4 (`/code-review`, span since the last global `53096455e` → `8de388e2d`) — 3 important, 1 pre-existing, 3 nit; every mutation claim re-executed by the reviewer:
 
@@ -239,7 +239,14 @@ Fix-review round 9 (`FIX-REVIEW`, correction diff `8de388e2d` → `80fd3954b`, f
 |---|---|---|---|
 | I-1 | The global-4 append re-glued the `## Design Notes` heading INTO the G4-7 table row (`\|## Design Notes`, no standalone heading line remains) — the same seam that produced G4-3 and the round-8 defect, now inverted | important | **Fixed** — the heading restored as its own line, with the blank line after it; both G4-3's and the round-8 M-2 amendment's claims are true at HEAD now |
 
+Fix-review round 10 (`FIX-REVIEW`, correction diff `80fd3954b` → `3abd2a4c2`, f=1 of the global-4 chain) — 0 critical, 1 important, 1 minor:
+
+| # | Finding | Verdict | Disposition |
+|---|---|---|---|
+| I-1 | The round-8 M-2 row's attribution clause still named the global-4 correction as the remover of the glue, but the global-4 append is what re-glued it; the removal happened in the round-9 correction | important | **Fixed** — the clause names the round-9 correction |
+| M-1 | The `## Design Notes` heading had no blank line before it — the seam that cost four rounds of re-gluing | minor | **Fixed** — the blank line added, ending the recurrence class |
 All seven global-4 findings audited: six FIXED (each mutation-proven by the reviewer), G4-7 FIXED as EXTRACTED.
+
 ## Design Notes
 
 - The manifest is JSON because it is data consumed by two kinds of checker (the gate and the human who extends it) and it must stay diffable in a review. The house precedent for the same thing is `scripts/ci/config-parity-allowlist.json`.

@@ -4,7 +4,7 @@ type: 'feature'
 created: '2026-11-19'
 status: 'in-review'
 route: 'dispatch'
-review_loop_iteration: 15
+review_loop_iteration: 17
 baseline_commit: '6c72cd95cccf5ded8b51ba94793dd620f60409a3'
 context:
   - '{project-root}/_bmad-output/implementation-artifacts/epic-1-context.md'
@@ -239,12 +239,16 @@ Fix-review round 9 (`FIX-REVIEW`, correction diff `8de388e2d` → `80fd3954b`, f
 |---|---|---|---|
 | I-1 | The global-4 append re-glued the `## Design Notes` heading INTO the G4-7 table row (`\|## Design Notes`, no standalone heading line remains) — the same seam that produced G4-3 and the round-8 defect, now inverted | important | **Fixed** — the heading restored as its own line, with the blank line after it; both G4-3's and the round-8 M-2 amendment's claims are true at HEAD now |
 
+All seven global-4 findings audited: six FIXED (each mutation-proven by the reviewer), G4-7 FIXED as EXTRACTED.
+
 Fix-review round 10 (`FIX-REVIEW`, correction diff `80fd3954b` → `3abd2a4c2`, f=1 of the global-4 chain) — 0 critical, 1 important, 1 minor:
 
 | # | Finding | Verdict | Disposition |
 |---|---|---|---|
 | I-1 | The round-8 M-2 row's attribution clause still named the global-4 correction as the remover of the glue, but the global-4 append is what re-glued it; the removal happened in the round-9 correction | important | **Fixed** — the clause names the round-9 correction |
 | M-1 | The `## Design Notes` heading had no blank line before it — the seam that cost four rounds of re-gluing | minor | **Fixed** — the blank line added, ending the recurrence class |
+
+Global round 5 (`/code-review`, span since the last global `8de388e2d` → `d8911e5cd`) — 0 critical, 0 important; 1 pre-existing, 4 nit; the reviewer re-verified every pin and probed detection, false-positive boundaries and ReDoS empirically:
 
 | # | Finding | Verdict | Disposition |
 |---|---|---|---|
@@ -253,9 +257,12 @@ Fix-review round 10 (`FIX-REVIEW`, correction diff `80fd3954b` → `3abd2a4c2`, 
 | G5-3 | The CR-to-LF normalization makes a `#` after a MID-LINE lone CR a comment where a shell would run the text | nit | **Documented** — the scope note states the lone-CR-as-terminator choice and its miss-direction cost |
 | G5-4 | The alias extension added no negative pin: an alias NAMED `comps` (`import os as comps, sys`) must stay green | nit | **Fixed** — the negative sample added |
 | G5-5 | The round-10 summary line glued to its table — the seam class again, one line above the round-10 fix | nit | **Fixed** — the blank line added |
-Global round 5 (`/code-review`, span since the last global `8de388e2d` → `d8911e5cd`) — 0 critical, 0 important; 1 pre-existing, 4 nit; the reviewer re-verified every pin and probed detection, false-positive boundaries and ReDoS empirically:
-All seven global-4 findings audited: six FIXED (each mutation-proven by the reviewer), G4-7 FIXED as EXTRACTED.
 
+Fix-review round 11 (`FIX-REVIEW`, correction diff `d8911e5cd` → `8fd70d738`, f=0 of the global-5 chain) — 0 critical, 0 important, 1 minor. The reviewer re-ran the BOM mutations (each red on exactly its own sample), probed the BOM false-positive surface (mid-line, between statements, in comments — all clean), verified the alias negative's isolation and the Makefile family's per-member behaviour, and ran the full suite (584/584).
+
+| # | Finding | Verdict | Disposition |
+|---|---|---|---|
+| M-1 | The Global-5 block itself recreated the table seam twice (its summary line glued under the G5-5 row, and the round-9 closing sentence stranded below it) and inverted the intro-then-table convention | minor | **Fixed** — the region rebuilt in convention order: intro, blank, table for every round; the round-9 closing back in its own block |
 ## Design Notes
 
 - The manifest is JSON because it is data consumed by two kinds of checker (the gate and the human who extends it) and it must stay diffable in a review. The house precedent for the same thing is `scripts/ci/config-parity-allowlist.json`.

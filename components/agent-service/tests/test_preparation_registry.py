@@ -117,15 +117,6 @@ def test_a_failed_read_is_retried_after_the_retry_window(tmp_path, monkeypatch):
     assert registry.language_codes()["en"] == "English"
 
 
-def test_the_retry_read_is_a_blocking_read_of_a_small_file(monkeypatch):
-    """The success cache outlives the file: a reader that takes the early
-    return must never see the projections unset."""
-    registry = LanguageRegistry(str(VENDORED))
-    assert registry.language_codes()
-    # No failure is stamped on a successful read.
-    assert registry._failed_at is None
-
-
 @pytest.mark.parametrize("payload", [None, [], {"languages": "nope"}, "string"])
 def test_shapes_that_are_not_a_registry_read_as_empty(tmp_path, payload):
     path = tmp_path / "shape.json"

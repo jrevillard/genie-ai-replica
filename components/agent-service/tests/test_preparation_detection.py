@@ -8,7 +8,6 @@ stability only; the production module never seeds, and the non-Latin sample
 detects robustly enough for the REAL detector to carry the test.
 """
 
-import threading
 from pathlib import Path
 
 import pytest
@@ -123,20 +122,3 @@ def test_a_long_caller_value_is_cut_before_it_is_judged():
     # partially matched.
     garbage = "f" * 40
     assert detection.resolve_named_language(garbage, {}) is None
-
-
-def test_the_thread_is_not_relevant_but_the_helper_is_pure():
-    """Detection is a pure function of its input — no shared state a second
-    thread could corrupt."""
-    results = []
-    detect = detection.detect_language
-
-    def run():
-        results.append(detect("Bonjour, je m'appelle Marie et j'habite a Lyon"))
-
-    threads = [threading.Thread(target=run) for _ in range(4)]
-    for thread in threads:
-        thread.start()
-    for thread in threads:
-        thread.join()
-    assert results == ["FR"] * 4

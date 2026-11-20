@@ -49,6 +49,10 @@
 //   comps.core`), several continuations in a row, and CRLF line endings; a
 //   continuation after `import` or `from`, or between the keyword and the
 //   comma, is not covered.
+// - A lone CR is treated as a line terminator (a classic-Mac ending must not
+//   glue a comment to the code that follows). The cost: a `#` that follows a
+//   MID-LINE CR is stripped as a comment where a shell would run the text —
+//   a deliberate miss-direction trade-off, chosen over gluing lines.
 // - Uncommitted files: both the file enumeration and the package enumeration
 //   are the tracked tree (`git ls-files`), exactly what the pipeline checks
 //   out — a local run over an unstaged file, or over a scratch directory
@@ -86,13 +90,13 @@ const CI_JOB = 'config:validate';
 const COMPS_IMPORT_FORMS = [
   {
     id: 'from-import',
-    pattern: /(?:^|[;\n:])[ \t]*from[ \t]+(?<![a-z0-9_.])(?<pkg>comps)(?![a-z0-9_])/dgm,
+    pattern: /(?:^|\uFEFF|[;\n:])[ \t]*from[ \t]+(?<![a-z0-9_.])(?<pkg>comps)(?![a-z0-9_])/dgm,
     at: 'name'
   },
   {
     id: 'import-statement',
     pattern:
-      /(?:^|[;\n:])[ \t]*import[ \t]+(?<![a-z0-9_.])(?:[A-Za-z_][\w.]*(?:[ \t]+as[ \t]+[A-Za-z_]\w*)?[ \t]*,[ \t]*(?:\\\r?\n[ \t]*)*)*(?<pkg>comps)(?![a-z0-9_])/dgm,
+      /(?:^|\uFEFF|[;\n:])[ \t]*import[ \t]+(?<![a-z0-9_.])(?:[A-Za-z_][\w.]*(?:[ \t]+as[ \t]+[A-Za-z_]\w*)?[ \t]*,[ \t]*(?:\\\r?\n[ \t]*)*)*(?<pkg>comps)(?![a-z0-9_])/dgm,
     at: 'name'
   },
   { id: 'importlib-import-module', pattern: /importlib\.import_module\([ \t]*['"]comps\b/g, at: 'call' },
@@ -459,9 +463,9 @@ const BUILD_SAMPLES = [
     rules: ['opea-pip-install']
   },
   { file: 'pkg/GNUmakefile', content: 'install:\n\tpip install opea-comps\n', rules: ['opea-pip-install'] },
-  // Each Makefile spelling carries the same marker: reverting any one
-  // alternative of the family (`GNUmakefile`, a `[Mm]` branch, the suffix
-  // variant) turns exactly its own sample red.
+  // Each Makefile spelling carries the same marker: revert `GNUmakefile` or
+  // one `[Mm]` branch and exactly its own sample turns red; revert the
+  // suffix variant and both suffixed samples do.
   { file: 'pkg/Makefile.linux', content: 'install:\n\tpip install opea-comps\n', rules: ['opea-pip-install'] },
   { file: 'pkg/makefile.linux', content: 'install:\n\tpip install opea-comps\n', rules: ['opea-pip-install'] }
 ];
@@ -525,7 +529,9 @@ const NEGATIVE_SAMPLES = [
   // A relative import of a local module named `comps` is not the overlay.
   { file: 'pkg/relative.py', content: 'from .comps import chunker\n' },
   // A local module whose name merely starts with the package name.
-  { file: 'pkg/helpers.py', content: 'import os, comps_helpers\n' }
+  { file: 'pkg/helpers.py', content: 'import os, comps_helpers\n' },
+  // An alias NAMED comps imports os, not the overlay package.
+  { file: 'pkg/alias.py', content: 'import os as comps, sys\n' }
 ];
 
 // The module lists Python offers: the package name among others, and an
@@ -539,7 +545,9 @@ const IMPORT_VARIANTS = [
   { content: 'import os as o, comps.core\n', rule: 'comps-import:import-statement' },
   { content: 'import os.path as p, comps.core\n', rule: 'comps-import:import-statement' },
   { content: 'import os, \\\r\n    comps.core\n', rule: 'comps-import:import-statement' },
-  { content: 'import os, \\\n\\\n    comps.core\n', rule: 'comps-import:import-statement' }
+  { content: 'import os, \\\n\\\n    comps.core\n', rule: 'comps-import:import-statement' },
+  { content: '\ufeffimport comps.core\n', rule: 'comps-import:import-statement' },
+  { content: '\ufefffrom comps import chunker\n', rule: 'comps-import:from-import' }
 ];
 
 // A stray quote that opens no docstring, followed by a REAL import: the

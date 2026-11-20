@@ -4,7 +4,7 @@ type: 'feature'
 created: '2026-11-19'
 status: 'in-review'
 route: 'dispatch'
-review_loop_iteration: 14
+review_loop_iteration: 15
 baseline_commit: '6c72cd95cccf5ded8b51ba94793dd620f60409a3'
 context:
   - '{project-root}/_bmad-output/implementation-artifacts/epic-1-context.md'
@@ -193,7 +193,7 @@ Global round 3 (`/code-review` over the whole diff at `53096455e`) — 1 importa
 
 | # | Finding | Verdict | Disposition |
 |---|---|---|---|
-| G-1 | The build and dependency classifiers miss real file shapes: a Makefile suffix (`Makefile.linux`), `GNUmakefile`, a lowercase `makefile`, `poetry.lock`, and a requirements directory deeper than one level | important | **Fixed** — the classifiers are shape-aware functions: the Makefile family (`GNUmakefile`, `makefile`, `Makefile.*`), every lock file (whatever the tool calls it), the Pipfile family, and every file under a requirements directory at any depth; the lock family, the requirements depth and the Makefile family each carry marker samples (a capital and a lowercase suffixed Makefile, and a GNUmakefile — each member's sample carries the same marker, so reverting any member of the family turns its own sample red) |
+| G-1 | The build and dependency classifiers miss real file shapes: a Makefile suffix (`Makefile.linux`), `GNUmakefile`, a lowercase `makefile`, `poetry.lock`, and a requirements directory deeper than one level | important | **Fixed** — the classifiers are shape-aware functions: the Makefile family (`GNUmakefile`, `makefile`, `Makefile.*`), every lock file (whatever the tool calls it), the Pipfile family, and every file under a requirements directory at any depth; the lock family, the requirements depth and the Makefile family each carry marker samples (a capital and a lowercase suffixed Makefile, and a GNUmakefile — each member's sample carries the same marker; reverting a family MEMBER turns its own sample red, reverting the SUFFIX variant turns both suffixed samples red) |
 | G-2 | A backslash-continued module-list import (`import os, <newline> comps.core`) is legal Python and escaped the import-statement matcher | nit | **Fixed** — the module-list separator crosses a line continuation; a sample pins it |
 | G-3 | A CRLF-terminated Dockerfile line breaks the end-anchored stage marker | nit | **Refuted** — in JavaScript `$` matches before any line terminator, so the marker already matches a CRLF line (verified in node); the carriage return is still stripped, and the sample documents the case |
 | G-4 | The partial-glob mutation check runs on the live tree and would false-alarm on a future package that happens to carry only the two shapes it names | nit | **Fixed** — the check runs on a synthetic shape list |
@@ -245,6 +245,15 @@ Fix-review round 10 (`FIX-REVIEW`, correction diff `80fd3954b` → `3abd2a4c2`, 
 |---|---|---|---|
 | I-1 | The round-8 M-2 row's attribution clause still named the global-4 correction as the remover of the glue, but the global-4 append is what re-glued it; the removal happened in the round-9 correction | important | **Fixed** — the clause names the round-9 correction |
 | M-1 | The `## Design Notes` heading had no blank line before it — the seam that cost four rounds of re-gluing | minor | **Fixed** — the blank line added, ending the recurrence class |
+
+| # | Finding | Verdict | Disposition |
+|---|---|---|---|
+| G5-1 | A UTF-8 BOM hides a FIRST-statement import (`\uFEFFimport comps.core`): the `^` anchor cannot match after the BOM bytes — the sibling of the CRLF class G4-1 fixed | pre-existing | **Fixed** — both static patterns' leading anchors admit `\uFEFF`; a BOM-first sample pins each form |
+| G5-2 | The rewritten Makefile comment re-lumped the suffix into "exactly its own sample turns red"; a suffix revert turns BOTH suffixed samples red — the same false claim round-8 M-1 had fixed | nit | **Fixed** — the comment and the story's G-1 row separate the two cases again |
+| G5-3 | The CR-to-LF normalization makes a `#` after a MID-LINE lone CR a comment where a shell would run the text | nit | **Documented** — the scope note states the lone-CR-as-terminator choice and its miss-direction cost |
+| G5-4 | The alias extension added no negative pin: an alias NAMED `comps` (`import os as comps, sys`) must stay green | nit | **Fixed** — the negative sample added |
+| G5-5 | The round-10 summary line glued to its table — the seam class again, one line above the round-10 fix | nit | **Fixed** — the blank line added |
+Global round 5 (`/code-review`, span since the last global `8de388e2d` → `d8911e5cd`) — 0 critical, 0 important; 1 pre-existing, 4 nit; the reviewer re-verified every pin and probed detection, false-positive boundaries and ReDoS empirically:
 All seven global-4 findings audited: six FIXED (each mutation-proven by the reviewer), G4-7 FIXED as EXTRACTED.
 
 ## Design Notes

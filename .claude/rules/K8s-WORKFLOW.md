@@ -74,6 +74,9 @@ rtk proxy helm template genieai charts/genieai-umbrella/ \
 #    b) push overlay with new `version:`
 #    c) trigger reconcile
 flux reconcile helmrelease genieai -n flux-system
+# A chart push triggers the CI gates chart:lint (the chart-version-check),
+# chart:contract, chart:parity and chart:crd-validate; chart:install is a
+# MANUAL job — the job definitions and the rationale live in .gitlab-ci.yml.
 
 # 6. Watch rollout
 kubectl -n genieai rollout status deploy/genieai-genieai-umbrella-<service> --timeout=300s

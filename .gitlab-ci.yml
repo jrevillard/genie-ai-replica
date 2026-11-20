@@ -5767,10 +5767,12 @@ config:validate:
     # rocm-env-render.test.js) renders deploy/ansible/templates/env.j2 for
     # the NVIDIA and the two ROCm deployment shapes and asserts what each
     # one gets. The renderer is python (tests/config-validator/tools/
-    # render_env_template.py) and needs jinja2 - without this install the
-    # gate SKIPS when python3 or jinja2 is missing, so it would silently
-    # run zero assertions in CI.
-    - apk add --no-cache python3 py3-jinja2
+    # render_env_template.py) and imports BOTH jinja2 and yaml - without
+    # these the gate SKIPS (it probes the renderer and skips when it cannot
+    # run), so it would silently run zero assertions in CI. py3-yaml is not
+    # implied by py3-jinja2: jinja2 does not depend on it, and the renderer
+    # parses the template's YAML front matter.
+    - apk add --no-cache python3 py3-jinja2 py3-yaml
     - cd tests/config-validator && npm ci
     # The #1716 behavioral probe runs the REAL gate binary (tests/e2e's
     # pinned eslint) against a fixture: without this install the probe

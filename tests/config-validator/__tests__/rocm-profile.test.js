@@ -46,6 +46,7 @@ const { parseComposeEnvVars } = require('../validators/parse-compose');
 const ROOT = path.resolve(__dirname, '../../..');
 const STRIXHALO_FILE = path.join(ROOT, 'env.strixhalo');
 const ROCM_COMPOSE_FILE = path.join(ROOT, 'docker-compose.rocm.yaml');
+const ROCM_GPU_COMPOSE_FILE = path.join(ROOT, 'docker-compose.rocm.gpu.yaml');
 
 const PROFILE_NAME = 'STRIX HALO (iGPU unified memory)';
 
@@ -286,6 +287,40 @@ describe('ROCm (Strix Halo) GPU profile', () => {
       const pinned = profile.variables.find((v) => v.name === name);
       expect(pinned).toBeDefined();
       expect(pinned.value).toBe(expected);
+    });
+  });
+
+  describe('overlay sizing vocabulary', () => {
+    // The profile test above only reaches the knobs env.strixhalo PINS.
+    // The overlays own the rest — and a knob the validator does
+    // not know escapes every range check (the shipped validator reports it
+    // only as a warning). RERANKER_VLLM_MAX_MODEL_LEN lived in exactly that
+    // hole: the overlays read it, the profile does not pin it, and nothing
+    // asserted the two were in step. This closes the class, not the case.
+    const SIZING_KNOB = /(MAX_MODEL_LEN|GPU_UTILIZATION|MAX_BATCH_TOKENS|MAX_CONCURRENT_REQUESTS)/;
+
+    test('every sizing knob the ROCm overlays read has a GPU_RANGES entry', () => {
+      const names = new Set();
+      for (const file of [ROCM_COMPOSE_FILE, ROCM_GPU_COMPOSE_FILE]) {
+        for (const v of parseComposeEnvVars(file)) {
+          if (SIZING_KNOB.test(v.name)) names.add(v.name);
+        }
+      }
+      expect(names.size).toBeGreaterThan(0);
+      const unknown = [...names].filter((n) => !GPU_RANGES[n]).sort();
+      expect(unknown).toEqual([]);
+    });
+
+    test('the client-side rerank window pin is in step with the server knob', () => {
+      // The two must describe the SAME window: the instance is started with
+      // VLLM_RERANKER_MAX_MODEL_LEN, and the wrapper is told the served
+      // window with RERANKER_VLLM_MAX_MODEL_LEN. A client pin that drifts
+      // from the server pin enforces the length contract against the wrong
+      // number.
+      const client = GPU_RANGES.RERANKER_VLLM_MAX_MODEL_LEN;
+      const server = GPU_RANGES.VLLM_RERANKER_MAX_MODEL_LEN;
+      expect(client).toBeDefined();
+      expect(client).toEqual(server);
     });
   });
 

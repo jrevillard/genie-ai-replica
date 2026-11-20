@@ -65,6 +65,13 @@ const GPU_RANGES = {
   VLLM_RERANKER_MODEL_ID: { type: 'string', optional: true },
   VLLM_RERANKER_GPU_UTILIZATION: { min: 0.01, max: 0.95, type: 'float', optional: true },
   VLLM_RERANKER_MAX_MODEL_LEN: { min: 512, max: 131072, type: 'int', optional: true },
+  // The CLIENT-side pin of the rerank window. It must equal
+  // VLLM_RERANKER_MAX_MODEL_LEN (the value the instance is STARTED with):
+  // vLLM truncates an over-long (query, doc) pair at its window, while TEI
+  // refuses it with HTTP 422. The pin lets the wrapper enforce the same
+  // contract and let chatqna abstain with a reason instead of returning a
+  // ranking computed on truncated text. Same range as the server knob.
+  RERANKER_VLLM_MAX_MODEL_LEN: { min: 512, max: 131072, type: 'int', optional: true },
   // Task-14 mirror — vLLM embedding backend (ROCm path). tei stays the
   // default backend everywhere; the Strix Halo profile flips to vllm for the
   // same reason as the reranker (the TEI ROCm image cannot run on gfx1151).

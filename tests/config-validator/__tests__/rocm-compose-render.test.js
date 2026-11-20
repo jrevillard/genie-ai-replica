@@ -204,6 +204,17 @@ const envValues = Object.fromEntries(
 const describeCompose = compose.available ? describe : describe.skip;
 
 if (!compose.available) {
+  // A skip is right on a developer machine without the compose CLI. In CI
+  // it is a lie: the gate reports itself "skipped" and the pipeline reads
+  // green while asserting NOTHING — the ROCm overlays would be rendered by
+  // no gate at all. So in CI, a missing compose binary FAILS the job.
+  if (process.env.CI) {
+    throw new Error(
+      "[rocm-compose-render] no usable 'docker compose' binary in CI " +
+        `(${compose.raw.trim() || 'not found'}). The gate would assert nothing ` +
+        'while the pipeline reads green - install the compose CLI in the CI image.'
+    );
+  }
   console.warn(
     `[rocm-compose-render] skipped: no usable 'docker compose' binary (${compose.raw.trim() || 'not found'})`
   );

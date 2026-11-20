@@ -19,8 +19,8 @@
  *     endpoint (the co-located node's address, the remote node's host),
  *     never at the local vLLM service that does not run there.
  *
- * The gate skips when python3 or jinja2 is missing (a machine without
- * them is not a broken repository). CI installs both.
+ * The gate skips when the renderer cannot run (a machine without python3,
+ * jinja2 or yaml is not a broken repository). CI installs all three.
  */
 
 const { spawnSync } = require('child_process');
@@ -31,7 +31,7 @@ const RENDERER = path.join(REPO_ROOT, 'tests/config-validator/tools/render_env_t
 const RENDER_TIMEOUT_MS = 60000;
 
 /**
- * Can the renderer run? (python3 + jinja2 + the template's variables)
+ * Can the renderer run? (python3 + jinja2 + yaml + the template's variables)
  *
  * @returns {{available: boolean, reason: string}}
  */
@@ -89,6 +89,19 @@ const probe = probeRenderer();
 const describeRender = probe.available ? describe : describe.skip;
 
 if (!probe.available) {
+  // A skip is right on a developer machine that does not have python's
+  // jinja2/yaml. In CI it is a lie: the gate would report itself as
+  // "skipped" and the pipeline would read green while asserting NOTHING.
+  // The renderer gained a yaml import after the CI job installed only
+  // jinja2 — and the gate quietly ran zero assertions because of
+  // it. So in CI, a renderer that cannot run FAILS the job instead.
+  if (process.env.CI) {
+    throw new Error(
+      `[rocm-env-render] the renderer could not run in CI (${probe.reason}). ` +
+        'The gate would assert nothing while the pipeline reads green - install ' +
+        "the renderer's dependencies (python3, jinja2, yaml) in the CI image."
+    );
+  }
   console.warn(`[rocm-env-render] skipped: ${probe.reason}`);
 }
 

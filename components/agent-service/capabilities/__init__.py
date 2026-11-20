@@ -3,7 +3,9 @@
 """The agent service's document capability port.
 
 The public surface of the contract — the types the agent loop and the corpus
-adapters exchange. `contract` holds the semantics and the reasoning.
+adapters exchange — plus its enforcement point. `contract` holds the
+semantics and the reasoning; `executor` enforces the caller context; the
+`adapters` reach the corpus.
 """
 
 from .contract import (
@@ -44,12 +46,14 @@ from .contract import (
     TransientError,
     is_compatible,
 )
+from .executor import AuthorizedExecutor
 
 __all__ = [
     "COMPATIBILITY",
     "CONTRACT_VERSION",
     "OPERATION_SPECS",
     "OUTCOME_POLICIES",
+    "AuthorizedExecutor",
     "AuthorizedRepo",
     "AuthorizationError",
     "CallerContext",

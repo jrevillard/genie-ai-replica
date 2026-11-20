@@ -114,28 +114,12 @@ git tag vX.Y.Z && git push origin vX.Y.Z
 
 A product release (tag, images, changelog) and a **chart release**
 (`charts/genieai-umbrella/Chart.yaml` `version` + the deploy-repo
-overlays) are **independent axes**. The chart version tracks the chart's
-content; the product version tracks the product. A release that also
-changed the chart runs **both** workflows — neither substitutes for the
-other, and running only one leaves the other stale.
-
-| | Chart release | Product release |
-|---|---|---|
-| Bumps when | the chart's content changes | the product ships |
-| Lives in | `charts/genieai-umbrella/Chart.yaml` + every deploy-repo overlay | `CHANGELOG.md`, `release/X.Y`, a `vX.Y.Z` tag |
-| Gate | `chart-version-check.py` (`chart:lint` job) | `config:changelog` + the tag pipeline |
-| Installs into | the cluster | the images |
-
-**Do the chart bump FIRST** (chart repo push → deploy-repo overlay push
-→ reconcile): the overlay's `spec.chart.spec.version` must never name a
-chart version that does not exist yet. The full workflow — when the bump
-is mandatory, the two-repository order, the verification and the
-rollback — is in
-[`.claude/rules/K8s-WORKFLOW.md`](K8s-WORKFLOW.md) § *Chart version bump*.
-
-> The chart's `appVersion` mirrors its `version` **deliberately** — it
-> tracks the chart layout, not the product release. The deployed image
-> tags come from the values, never from `appVersion`.
+overlays) are **independent axes**; a release that also changed the
+chart runs **both** — chart bump FIRST (the overlay must never name a
+chart version that does not exist yet). The comparison table, the
+mandatory-bump rule, the two-repo order, verification and rollback:
+[`.claude/rules/K8s-WORKFLOW.md`](K8s-WORKFLOW.md) § *Chart version
+bump* (which carries `appVersion`'s deliberate mirror of `version`).
 
 ## Key Rules
 

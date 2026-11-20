@@ -7,6 +7,12 @@ docs-site corpus; the seed data is fully data-driven
 (`demo-seed-config.json`), so another install can ship its own
 hierarchy/corpus/buttons without touching the script.
 
+> **Never run against production without an explicit operator GO** —
+> phase 1 deletes the existing hierarchy and phase 5 replaces the
+> frontend runtime config. The intended case: a fresh demo/evaluation
+> instance with an empty ArangoDB whose quick-help buttons point at a
+> hierarchy that does not exist.
+
 ## Files
 
 | File | Role |
@@ -51,6 +57,9 @@ python3 -I genie-demo-seed.py --dry-run
 # given (default /tmp/k3s-config.json does not exist), the script fetches
 # the live config from the frontend pod itself.
 python3 -I genie-demo-seed.py --skip-reset --skip-upload --skip-ingest --apply-config
+
+# keep the existing hierarchy (create-if-absent still runs)
+python3 -I genie-demo-seed.py --skip-reset
 
 # re-ingest only (files already uploaded)
 python3 -I genie-demo-seed.py --ingest-only --poll-minutes 45

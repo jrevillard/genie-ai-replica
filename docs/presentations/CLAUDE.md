@@ -10,8 +10,8 @@ Keep editable sources under `docs/presentations/`. Rebuild the HTML after
 editing the source, and regenerate the SVGs first if Mermaid diagrams
 changed. Run the deck's browser checks. For a deck published through Hugo,
 check that the build copies the generated HTML and that the documentation
-page links to it. See the
-[site workflow](../../.claude/rules/SITE-LOCAL-DEV.md#interactive-presentations).
+page links to it. The site workflow (Hugo build, publish, presentations
+section) lives in `docs/site-local-dev.md`.
 
 ## The multilingual walkthrough
 

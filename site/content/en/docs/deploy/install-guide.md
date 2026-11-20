@@ -34,7 +34,7 @@ GPU profiles (T4 16 GB / RTX 6000 24 GB / A40 48 GB / H100) layer on top of
 any of the above via the `env.t4` / `env.rtx6000` overrides — see
 [GPU Deployment](/docs/deploy/gpu/). An **AMD ROCm** host (Strix Halo /
 gfx1151 iGPU) is covered by the same GPU-tier services through the
-`docker-compose.rocm.yaml` overlay + `env.strixhalo` sizing file — no
+`rocm-models` compose profile + `env.strixhalo` sizing file — no
 NVIDIA Container Toolkit required; see the ROCm section of
 [GPU Deployment](/docs/deploy/gpu/).
 

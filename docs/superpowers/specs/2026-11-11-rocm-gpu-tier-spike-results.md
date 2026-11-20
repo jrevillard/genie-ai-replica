@@ -82,7 +82,10 @@ newest passing tag wins the pin.
 - Candidate 2 (`rocm7.14.1_rdna_..._vllm_0.23.0`) skipped: bracketed by
   two passing points (0.19.1, 0.29.1); no signal it would add.
 
-**Task 5/9/11 pin: `VLLM_ROCM_IMAGE=rocm/vllm:rocm10.1.0_ubuntu24.04_py3.14-pytorch_2.13.0_vllm-0.29.0`**
+**Task 5/9/11 pin: `VLLM_IMAGE=rocm/vllm:rocm10.1.0_ubuntu24.04_py3.14-pytorch_2.13.0_vllm-0.29.0`**
+(the variable was named `VLLM_ROCM_IMAGE` while the vendor axis lived in
+compose overlays — renamed 2026-11-19 when the axis collapsed into the
+base files)
 — verified serving BOTH deployment models with guided JSON on gfx1151
 (see Final sizing below).
 

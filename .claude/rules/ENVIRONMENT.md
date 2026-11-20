@@ -128,7 +128,10 @@ the knobs to lower.
   a provider whose `/v1/models` carries no `max_model_len`.
 - GPU-profile env files: `env.t4` (T4, 2048 window), `env.rtx6000`
   (RTX 6000 ADA, 65536) and `env.strixhalo` (AMD Strix Halo / gfx1151 —
-  used with the `docker-compose.rocm*.yaml` overlays; ships **49152**
+  the vendor axis lives in the BASE compose files as values
+  (`VLLM_IMAGE`, `TEI_EMBEDDING_IMAGE`, device paths, GIDs) gated by the
+  `rocm-models` profile; the Strix Halo file carries those pins; ships
+  **49152**
   on a shared host under the operator's 27 GB ceiling with the 2B-class
   models (granite-3.1-2b @ 0.28, gemma-3-1b-it @ 0.12); the 8B-class
   models need a mostly-dedicated host at 0.55/49152, and 65536 does not
@@ -150,8 +153,9 @@ the knobs to lower.
   (+ `--profile okf` + kong-config re-run + backend AND frontend
   recreate — the parked backend (left at `OKF_ENABLED=0`) short-circuits
   retrieval-config to zero serving graphs); the
-  split-URL Keycloak trio now wired for **okf-server AND
-  document-repository** in `docker-compose.rocm.yaml` (doc-repo's block
+  split-URL Keycloak trio wired for **okf-server AND
+  document-repository** in the base compose (empty defaults — the
+  NVIDIA one-URL shape; doc-repo's block
   is load-bearing: without it OKF publish fails
   `EXPORT_FAILED … doc-repo status 503`); `VLLM_ENDPOINT=http://vllm:8000`
   in `.env` (okf-server's LLM legs are opt-in — unset, LLM-Assisted

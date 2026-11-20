@@ -1,7 +1,11 @@
 ---
 # ROCm GPU node (AMD Strix Halo / gfx1151 class) — non-secret variables.
-# Secrets (hugging_face_hub_token, gpu_api_keys) live in vault.yml
-# (encrypted, never committed) — see deploy/ansible/README.md.
+#
+# These load through `vars_files` in deploy-gpu.yml's ROCm plays (NOT
+# group_vars/: a directory there must match an inventory group name, and
+# a second GPU playbook is exactly the file-set drift the collapse
+# removed). Secrets live in vars/vault-rocm-gpu.yml (operator-created,
+# encrypted, never committed) — see deploy/ansible/README.md.
 #
 # Image pins from the ROCm spike (2026-11-11):
 # docs/superpowers/specs/2026-11-11-rocm-gpu-tier-spike-results.md
@@ -66,16 +70,17 @@ rocm_gpu_node_local: true
 
 # Task 14 — GPU reranker: the TEI ROCm image cannot run on gfx1151
 # (Instinct-only kernels; see the spike results), so the /rerank/ proxy
-# route flips to the third vLLM instance added by the
-# docker-compose.rocm.gpu.yaml overlay. The app side selects the same
-# backend with RERANKER_BACKEND=vllm (rendered in SECTION 18B).
+# route flips to the third vLLM instance rendered by the
+# gpu_vendor == 'rocm' branch of templates/docker-compose.gpu.yaml.j2. The
+# app side selects the same backend with RERANKER_BACKEND=vllm (rendered
+# in env.j2 SECTION 18B).
 gpu_rerank_upstream: vllm-reranker:8000
 # Task 14 mirror — the EMBEDDING side. The node's TEI ROCm image cannot run
-# on gfx1151 either, so the node's embedder is a fourth vLLM instance
-# (docker-compose.rocm.gpu.yaml) and the proxy's /v1/embeddings route flips
-# to it. The TEI-shaped route (/embed/) stays on the CPU TEI: the OPEA
-# embedding microservice and the okf-server's frontmatter service speak
-# that shape, and vLLM serves no TEI /embed route.
+# on gfx1151 either, so the node's embedder is a fourth vLLM instance (the
+# same j2 branch) and the proxy's /v1/embeddings route flips to it. The
+# TEI-shaped route (/embed/) stays on the CPU TEI: the OPEA embedding
+# microservice and the okf-server's frontmatter service speak that shape,
+# and vLLM serves no TEI /embed route.
 gpu_embedding_upstream: vllm-embedding:8000
 vllm_embedding_model_id: BAAI/bge-large-en-v1.5
 vllm_reranker_model_id: BAAI/bge-reranker-v2-m3

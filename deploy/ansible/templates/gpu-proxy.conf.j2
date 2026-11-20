@@ -80,10 +80,10 @@ server {
     # /v1/embeddings too — same default, NVIDIA renders unchanged). The ROCm
     # GPU node flips it to vllm-embedding:8000 via gpu_embedding_upstream:
     # the TEI ROCm image cannot run on gfx1151, so the node's embedder is a
-    # fourth vLLM instance (the docker-compose.rocm.gpu.yaml overlay adds
-    # it), and the app stack's consumers (dataprep's corpus embed, chatqna's
-    # query encode, the RAGAS embedder) post the OpenAI shape to
-    # {base}/v1/embeddings.
+    # fourth vLLM instance (the gpu_vendor == 'rocm' branch of
+    # docker-compose.gpu.yaml.j2 renders it), and the app stack's consumers
+    # (dataprep's corpus embed, chatqna's query encode, the RAGAS embedder)
+    # post the OpenAI shape to {base}/v1/embeddings.
     location /v1/embeddings {
         proxy_pass http://{{ gpu_embedding_upstream | default('tei-embedding:80') }}/v1/embeddings;
         proxy_http_version 1.1;
@@ -96,10 +96,10 @@ server {
 
     # TEI Reranker — upstream selectable per deployment (Task 14): NVIDIA
     # keeps tei-reranker:80 (default; NVIDIA renders byte-identical). The
-    # ROCm GPU node flips it to vllm-reranker:8000 via gpu_rerank_upstream
-    # in group_vars — the TEI ROCm image cannot run on gfx1151, so the
-    # reranker is served by the third vLLM instance there (the
-    # docker-compose.rocm.gpu.yaml overlay adds that service).
+    # ROCm GPU node flips it to vllm-reranker:8000 via gpu_rerank_upstream —
+    # the TEI ROCm image cannot run on gfx1151, so the reranker is served
+    # by the third vLLM instance there (the gpu_vendor == 'rocm' branch of
+    # docker-compose.gpu.yaml.j2 renders that service).
     location /rerank/ {
         proxy_pass http://{{ gpu_rerank_upstream | default('tei-reranker:80') }}/;
         proxy_http_version 1.1;

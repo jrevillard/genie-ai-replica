@@ -21,15 +21,21 @@ item, so the deferred chart work needed an owner and a status.
 ## What landed in this repo
 
 The ROCm GPU tier here is config + image pins only (no service-source
-changes, no NVIDIA-path edits):
+changes, no NVIDIA-path edits). The vendor axis lives in the BASE compose
+files as env values + the `rocm-models` profile (collapsed from the
+original two overlays, 2026-11-19 — one file set, the NVIDIA render
+defaulted back to every-host values):
 
-- `docker-compose.rocm.yaml` — overlay on the main compose stack
-  (single-server)
-- `docker-compose.rocm.gpu.yaml` — overlay on the standalone GPU-node
-  stack (split topology)
-- `env.strixhalo` — sizing file (values below)
-- `deploy/ansible/deploy-gpu-rocm.yml` +
-  `deploy/ansible/group_vars/rocm_gpu_nodes/vars.yml` — GPU-node automation
+- `docker-compose.yaml` — main compose stack (single-server): the
+  `rocm-models` profile carries `vllm-reranker` + `vllm-embedding`; the
+  GPU-tier services' image/device/group/entrypoint rows are
+  vendor-parameterized
+- `docker-compose.gpu.yaml` — standalone GPU-node stack (split
+  topology): same vendor parameterization + the pooling services under
+  the profile
+- `env.strixhalo` — sizing file + the vendor pins (values below)
+- `deploy/ansible/deploy-gpu.yml` (host group `rocm_gpu_nodes`) +
+  `deploy/ansible/vars/rocm_gpu_nodes.yml` — GPU-node automation
 - Measurements behind every number:
   `docs/superpowers/specs/2026-11-11-rocm-gpu-tier-spike-results.md`
   (companion design: `2026-11-11-rocm-gpu-tier-design.md`)

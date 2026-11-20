@@ -113,12 +113,12 @@ vars like `DEPLOY_OPEA` / `ENABLE_OBSERVABILITY` / `CERTBOT_REPLICAS`).
 > Swarm — set the matching env var (`DEPLOY_OPEA=0`,
 > `ENABLE_OBSERVABILITY=0`, `CERTBOT_REPLICAS=0`).
 
-> **AMD ROCm note:** the ROCm GPU tier is not a separate profile — the
-> vendor overlay layers in via `-f docker-compose.rocm.yaml`
-> (single-server, topology B) or `-f docker-compose.rocm.gpu.yaml`
-> (GPU node, topology F), sized by `env.strixhalo`. The single-server
-> overlay ADDS `vllm-reranker` + `vllm-embedding` to the `gpu-models`
-> services, and `RERANKER_BACKEND` / `EMBEDDING_BACKEND` switch the
+> **AMD ROCm note:** the ROCm GPU tier IS a compose profile —
+> `rocm-models`, activated with `--profile rocm-models` (single-server,
+> topology B) or on the GPU node (topology F), sized by `env.strixhalo`.
+> The profile ACTIVATES `vllm-reranker` + `vllm-embedding` beside the
+> `gpu-models` services (absent from the render without it), and
+> `RERANKER_BACKEND` / `EMBEDDING_BACKEND` switch the
 > reranker and embedding consumers to them. See
 > [GPU Deployment → ROCm](/docs/deploy/gpu/).
 >
@@ -174,12 +174,12 @@ flowchart TB
 |---|---|
 | Deploy (T4) | `docker compose --env-file .env --env-file env.t4 --profile opea --profile gpu-models up -d` |
 | Deploy (RTX 6000) | `docker compose --env-file .env --env-file env.rtx6000 --profile opea --profile gpu-models up -d` |
-| Deploy (AMD ROCm) | `docker compose --env-file .env --env-file env.strixhalo -f docker-compose.yaml -f docker-compose.rocm.yaml --profile opea --profile gpu-models up -d` |
+| Deploy (AMD ROCm) | `docker compose --env-file .env --env-file env.strixhalo -f docker-compose.yaml --profile opea --profile gpu-models --profile rocm-models up -d` |
 | Verify vLLM | `docker compose logs vllm \| grep 'Application startup complete'` |
 | Verify RAG | `curl -sk https://localhost/api/health \| jq .status` |
 
 GPU model sizing: [GPU Deployment](/docs/deploy/gpu/). The ROCm variant
-needs no NVIDIA toolkit — the overlay passes `/dev/kfd` + `/dev/dri`
+needs no NVIDIA toolkit — the profile services claim `/dev/kfd` + `/dev/dri`
 directly.
 
 ### Topology C — Single-node Swarm (all labels on one node)
@@ -367,17 +367,17 @@ GPU node: see
 and `deploy/ansible/README.md` for the standalone 5-service AI stack.
 
 On an **AMD ROCm** GPU node (Strix Halo / gfx1151 class), the same
-standalone stack runs with the ROCm overlay and the Strix Halo sizing file
-— no NVIDIA toolkit on the node:
+standalone stack runs with the `rocm-models` profile and the Strix Halo
+sizing file — no NVIDIA toolkit on the node:
 
 ```bash
-docker compose --env-file .env --env-file env.strixhalo \
-  -f docker-compose.gpu.yaml -f docker-compose.rocm.gpu.yaml up -d
+docker compose --env-file env.strixhalo \
+  -f docker-compose.gpu.yaml --profile rocm-models up -d
 ```
 
 Sizing and hardware prerequisites:
 [GPU Deployment → ROCm](/docs/deploy/gpu/). Ansible automation for this
-venue: `deploy/ansible/deploy-gpu-rocm.yml`.
+venue: `deploy/ansible/deploy-gpu.yml` (host group `rocm_gpu_nodes`).
 
 ### Topology G — CPU-only Swarm (DEPLOY_OPEA=0)
 

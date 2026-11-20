@@ -45,8 +45,10 @@ const { parseComposeEnvVars } = require('../validators/parse-compose');
 
 const ROOT = path.resolve(__dirname, '../../..');
 const STRIXHALO_FILE = path.join(ROOT, 'env.strixhalo');
-const ROCM_COMPOSE_FILE = path.join(ROOT, 'docker-compose.rocm.yaml');
-const ROCM_GPU_COMPOSE_FILE = path.join(ROOT, 'docker-compose.rocm.gpu.yaml');
+// The vendor axis lives IN the base files now — their `${VAR:-default}`
+// rows are what the venue resolves when the profile leaves a knob unset.
+const BASE_COMPOSE_FILE = path.join(ROOT, 'docker-compose.yaml');
+const BASE_GPU_COMPOSE_FILE = path.join(ROOT, 'docker-compose.gpu.yaml');
 
 const PROFILE_NAME = 'STRIX HALO (iGPU unified memory)';
 
@@ -93,6 +95,15 @@ const MEASURED_PINS = [
   ['RERANKER_BACKEND', 'vllm'],
   ['EMBEDDING_VLLM_ENDPOINT', 'http://vllm-embedding:8000'],
   ['RERANKER_VLLM_ENDPOINT', 'http://vllm-reranker:8000'],
+  // Vendor image pins (the base files' defaults are the NVIDIA builds;
+  // this profile pins the ROCm/CPU builds — the spike winners).
+  ['VLLM_IMAGE', 'rocm/vllm:rocm10.1.0_ubuntu24.04_py3.14-pytorch_2.13.0_vllm-0.29.0'],
+  ['TEI_EMBEDDING_IMAGE', 'ghcr.io/huggingface/text-embeddings-inference:cpu-1.9.3'],
+  ['TEI_RERANKING_IMAGE', 'ghcr.io/huggingface/text-embeddings-inference:cpu-1.9.3'],
+  // Vendor device passthrough + the neutralized NVIDIA claim.
+  ['GPU_DEVICE_KFD', '/dev/kfd'],
+  ['GPU_DEVICE_DRI', '/dev/dri'],
+  ['NVIDIA_VISIBLE_DEVICES', 'void'],
   // TEI runs the CPU image here - GPU-sized batch knobs inflate candle's
   // buffer pools on CPU (16.3 GiB RSS measured at 8192/32).
   ['TEI_RERANKING_MAX_BATCH_TOKENS', '2048'],
@@ -106,18 +117,20 @@ const MEASURED_PINS = [
   ['VIDEO_GID', '44']
 ];
 
-// The knobs the profile deliberately leaves to the overlay. `env.strixhalo`
-// does not pin them; docker-compose.rocm.yaml ships the default, and that
-// default is what the venue runs.
-const OVERLAY_OWNED = new Map(
-  parseComposeEnvVars(ROCM_COMPOSE_FILE).map((v) => [v.name, v.default === null ? undefined : v.default])
+// The knobs the profile deliberately leaves to the base files. `env.strixhalo`
+// does not pin them; the base compose ships the default, and that default is
+// what the venue runs.
+const BASE_OWNED = new Map(
+  [BASE_COMPOSE_FILE, BASE_GPU_COMPOSE_FILE].flatMap((file) =>
+    parseComposeEnvVars(file).map((v) => [v.name, v.default === null ? undefined : v.default])
+  )
 );
 
 const profile = parseGpuProfile(STRIXHALO_FILE);
 
 /**
  * The value a knob takes on the ROCm venue: the profile's pin when it has
- * one, otherwise the overlay's default - the order compose resolves
+ * one, otherwise the base file's default - the order compose resolves
  * `${VAR:-default}` in.
  *
  * @param {string} name - the variable name
@@ -127,7 +140,7 @@ const profile = parseGpuProfile(STRIXHALO_FILE);
 function effectiveValue(name, variables) {
   const pinned = variables.find((v) => v.name === name);
   if (pinned) return pinned.value;
-  return OVERLAY_OWNED.get(name);
+  return BASE_OWNED.get(name);
 }
 
 /**
@@ -217,7 +230,7 @@ function missingRequiredVariables(variables) {
 function gpuTierBudget(variables) {
   // All four vLLM instances carve the same aperture: the main LLM, the
   // translation LLM, the reranker and the embedder. The embedder's share
-  // comes from the overlay default (the profile does not pin it), which is
+  // comes from the base-file default (the profile does not pin it), which is
   // why the sum resolves it through `effectiveValue`.
   const shares = [
     'VLLM_GPU_UTILIZATION',
@@ -290,18 +303,19 @@ describe('ROCm (Strix Halo) GPU profile', () => {
     });
   });
 
-  describe('overlay sizing vocabulary', () => {
+  describe('base-file sizing vocabulary', () => {
     // The profile test above only reaches the knobs env.strixhalo PINS.
-    // The overlays own the rest — and a knob the validator does
+    // The base files own the rest — and a knob the validator does
     // not know escapes every range check (the shipped validator reports it
     // only as a warning). RERANKER_VLLM_MAX_MODEL_LEN lived in exactly that
-    // hole: the overlays read it, the profile does not pin it, and nothing
-    // asserted the two were in step. This closes the class, not the case.
+    // hole: the base files read it, the profile does not pin it, and
+    // nothing asserted the two were in step. This closes the class, not the
+    // case.
     const SIZING_KNOB = /(MAX_MODEL_LEN|GPU_UTILIZATION|MAX_BATCH_TOKENS|MAX_CONCURRENT_REQUESTS)/;
 
-    test('every sizing knob the ROCm overlays read has a GPU_RANGES entry', () => {
+    test('every sizing knob the base GPU files read has a GPU_RANGES entry', () => {
       const names = new Set();
-      for (const file of [ROCM_COMPOSE_FILE, ROCM_GPU_COMPOSE_FILE]) {
+      for (const file of [BASE_COMPOSE_FILE, BASE_GPU_COMPOSE_FILE]) {
         for (const v of parseComposeEnvVars(file)) {
           if (SIZING_KNOB.test(v.name)) names.add(v.name);
         }
@@ -329,7 +343,7 @@ describe('ROCm (Strix Halo) GPU profile', () => {
       // The ROCm TEI image fails on gfx1151 (Instinct-only kernels), so
       // the spike's decision was the CPU image. A ROCm-flavoured TEI pin
       // here is a service that never becomes healthy on the venue.
-      for (const name of ['TEI_ROCM_EMBEDDING_IMAGE', 'TEI_ROCM_RERANKING_IMAGE']) {
+      for (const name of ['TEI_EMBEDDING_IMAGE', 'TEI_RERANKING_IMAGE']) {
         const image = profile.variables.find((v) => v.name === name).value;
         expect(image).toMatch(/^ghcr\.io\/huggingface\/text-embeddings-inference:cpu-/);
         expect(image).not.toMatch(/rocm/i);
@@ -337,13 +351,13 @@ describe('ROCm (Strix Halo) GPU profile', () => {
     });
 
     test('the vLLM image is the ROCm build', () => {
-      const image = profile.variables.find((v) => v.name === 'VLLM_ROCM_IMAGE').value;
+      const image = profile.variables.find((v) => v.name === 'VLLM_IMAGE').value;
       expect(image).toMatch(/^rocm\/vllm:/);
     });
 
-    test('the vLLM endpoints name the overlay services', () => {
-      // The endpoints address the overlay's own services by compose name;
-      // a renamed service leaves the wrapper resolving nothing at request
+    test('the vLLM endpoints name the pooling services', () => {
+      // The endpoints address the profile's services by compose name; a
+      // renamed service leaves the wrapper resolving nothing at request
       // time, long after the profile parsed fine.
       const endpoint = (name) => new URL(profile.variables.find((v) => v.name === name).value).hostname;
       expect(endpoint('EMBEDDING_VLLM_ENDPOINT')).toBe('vllm-embedding');
@@ -358,9 +372,9 @@ describe('ROCm (Strix Halo) GPU profile', () => {
       expect(budget.claimedGib).toBeLessThanOrEqual(GPU_TIER_CEILING_GIB);
     });
 
-    test('the embedder sizing comes from the overlay default', () => {
-      // env.strixhalo does not pin the embedder's share; the overlay does,
-      // and the overlay's default is what the venue runs.
+    test('the embedder sizing comes from the base-file default', () => {
+      // env.strixhalo does not pin the embedder's share; the base compose
+      // does, and that default is what the venue runs.
       expect(profile.variables.some((v) => v.name === 'VLLM_EMBEDDING_GPU_UTILIZATION')).toBe(false);
       expect(effectiveValue('VLLM_EMBEDDING_GPU_UTILIZATION', profile.variables)).toBe('0.05');
       expect(effectiveValue('VLLM_EMBEDDING_MAX_MODEL_LEN', profile.variables)).toBe('512');

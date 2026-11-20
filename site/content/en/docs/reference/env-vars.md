@@ -152,10 +152,10 @@ to reproduce here — see `docker-compose.yaml` for the canonical values.
 Halo) overlay these on top of `env` to set GPU-memory utilization and
 model-length limits per profile. The NVIDIA profiles are read via
 `docker compose --env-file .env --env-file env.<profile> up -d`;
-`env.strixhalo` is read together with the ROCm overlay
-(`-f docker-compose.yaml -f docker-compose.rocm.yaml`, or
-`-f docker-compose.gpu.yaml -f docker-compose.rocm.gpu.yaml` on a GPU
-node) — see [GPU Deployment → ROCm](/docs/deploy/gpu/).
+`env.strixhalo` is read together with the `rocm-models` compose profile
+(`--profile rocm-models` on `docker-compose.yaml`, or on
+`docker-compose.gpu.yaml` for a GPU node) — see
+[GPU Deployment → ROCm](/docs/deploy/gpu/).
 
 | Variable | env.t4 default | env.rtx6000 default | env.strixhalo default | Notes |
 |---|---|---|---|---|
@@ -171,13 +171,16 @@ node) — see [GPU Deployment → ROCm](/docs/deploy/gpu/).
 ### ROCm-only variables (env.strixhalo)
 
 `env.strixhalo` additionally carries the image pins, model IDs, device
-group GIDs and shared-host port plan. Values exactly as shipped:
+paths, device group GIDs and shared-host port plan. Values exactly as
+shipped:
 
 | Variable | env.strixhalo value | Notes |
 |---|---|---|
-| `VLLM_ROCM_IMAGE` | `rocm/vllm:rocm10.1.0_ubuntu24.04_py3.14-pytorch_2.13.0_vllm-0.29.0` | vLLM ROCm 10.1 build (0.29.x) — the image behind all four vLLM instances of the ROCm profile (llm / translation / reranker / embedding) |
-| `TEI_ROCM_EMBEDDING_IMAGE` | `ghcr.io/huggingface/text-embeddings-inference:cpu-1.9.3` | CPU image — the ROCm TEI build fails on gfx1151 |
-| `TEI_ROCM_RERANKING_IMAGE` | `ghcr.io/huggingface/text-embeddings-inference:cpu-1.9.3` | CPU image (same) — kept for the TEI backend; the reranker wrapper defaults to the GPU vLLM instance on this profile |
+| `VLLM_IMAGE` | `rocm/vllm:rocm10.1.0_ubuntu24.04_py3.14-pytorch_2.13.0_vllm-0.29.0` | vLLM ROCm 10.1 build (0.29.x) — the image behind all four vLLM instances of the ROCm profile (llm / translation / reranker / embedding). Compose default: `vllm/vllm-openai:v0.29.0` (the NVIDIA build) |
+| `TEI_EMBEDDING_IMAGE` | `ghcr.io/huggingface/text-embeddings-inference:cpu-1.9.3` | CPU image — the ROCm TEI build fails on gfx1151. Compose default: the NVIDIA-capable `1.9.3` image |
+| `TEI_RERANKING_IMAGE` | `ghcr.io/huggingface/text-embeddings-inference:cpu-1.9.3` | CPU image (same) — kept for the TEI backend; the reranker wrapper defaults to the GPU vLLM instance on this profile |
+| `GPU_DEVICE_KFD` | `/dev/kfd` | The `devices:` row's host path (compose default `/dev/null` — a path that exists on every host, because a missing device path is a hard create-time error) |
+| `GPU_DEVICE_DRI` | `/dev/dri` | Same story (compose default `/dev/zero`) |
 | `TEI_RERANKING_MAX_BATCH_TOKENS` | `2048` | TEI CPU-footprint caps (the base compose's GPU-side values inflate candle's buffer pools on CPU; the reranker measured 16.3 GiB RSS at 8192/32) |
 | `TEI_RERANKING_MAX_CONCURRENT_REQUESTS` | `8` | paired with the batch-token cap above |
 | `TEI_EMBEDDING_MAX_BATCH_TOKENS` | `2048` | same story, embedding side — cuts the footprint ~3x with no quality effect |
@@ -192,18 +195,18 @@ group GIDs and shared-host port plan. Values exactly as shipped:
 | `GPU_HTTPS_PORT` | `18443` | |
 | `RENDER_GID` | `990` | Distro-specific — `getent group render` |
 | `VIDEO_GID` | `44` | Distro-specific — `getent group video` |
-| `RERANKER_BACKEND` | `vllm` | Task-14 reranker backend switch: `tei` (default everywhere; NVIDIA path) or `vllm`. On Strix Halo the TEI ROCm image cannot run on gfx1151, so the reranker is a THIRD vLLM instance on the GPU (`vllm-reranker` service, added by the ROCm overlays) and the profile flips the switch. Unknown values fall back to `tei` |
+| `RERANKER_BACKEND` | `vllm` | Task-14 reranker backend switch: `tei` (default everywhere; NVIDIA path) or `vllm`. On Strix Halo the TEI ROCm image cannot run on gfx1151, so the reranker is a THIRD vLLM instance on the GPU (`vllm-reranker` service, activated by the `rocm-models` profile) and the profile flips the switch. Unknown values fall back to `tei` |
 | `RERANKER_VLLM_ENDPOINT` | `http://vllm-reranker:8000` | Where the wrapper posts `{model, query, documents}` to `/v1/rerank` (Cohere shape). Split topology: the app-stack value is the nginx-gpu `/rerank` route (`https://<gpu-node>:<port>/rerank`), rendered by SECTION 18B |
 | `RERANKER_VLLM_MODEL` | `BAAI/bge-reranker-v2-m3` | The cross-encoder the vLLM instance serves with `--served-model-name` |
 | `VLLM_RERANKER_MODEL_ID` | `BAAI/bge-reranker-v2-m3` | Same model, the `vllm-reranker` service's own knob |
 | `VLLM_RERANKER_GPU_UTILIZATION` | `0.05` | ~2.3 GiB of GTT (spike measured 1.56 GiB touched) — sits inside the 27 GB ceiling beside granite (0.28) + gemma (0.12) |
 | `VLLM_RERANKER_MAX_MODEL_LEN` | `8192` | Rerank window; vLLM truncates silently at this length (TEI's strict 422 path is backend-specific and stays on `tei`) |
 | `RERANKER_VLLM_MAX_MODEL_LEN` | `8192` | The **client-side** pin of that window — the value the reranker wrapper believes the `vllm-reranker` instance serves. It must equal `VLLM_RERANKER_MAX_MODEL_LEN` (the value the instance is *started* with), because vLLM truncates an over-long `(query, doc)` pair at its window instead of refusing it: with the pin, the wrapper raises the same typed error TEI's HTTP 422 produces and chatqna abstains with a reason; without it the wrapper discovers the served window from `/v1/models`, and when that cannot be answered the contract cannot be enforced — warned once, the request is still served (a wrong ranking beats no ranking). The compose default chains to `VLLM_RERANKER_MAX_MODEL_LEN`; a non-integer value is rejected with a warning and falls through to discovery |
-| `EMBEDDING_BACKEND` | `vllm` | Task-14-mirror embedding backend switch: `tei` (default everywhere; NVIDIA path) or `vllm`. On Strix Halo ALL THREE embedding consumers (dataprep corpus embeds, the retriever's query embeds, and chatqna's RAG-graph query encoder) move to the FOURTH vLLM instance (`vllm-embedding` service, added by the ROCm overlays) — they move together, a split would mix vector spaces in one collection. Unknown values fall back to `tei`; `vllm` with no endpoint fails soft to `tei` with a warning |
+| `EMBEDDING_BACKEND` | `vllm` | Task-14-mirror embedding backend switch: `tei` (default everywhere; NVIDIA path) or `vllm`. On Strix Halo ALL THREE embedding consumers (dataprep corpus embeds, the retriever's query embeds, and chatqna's RAG-graph query encoder) move to the FOURTH vLLM instance (`vllm-embedding` service, activated by the `rocm-models` profile) — they move together, a split would mix vector spaces in one collection. Unknown values fall back to `tei`; `vllm` with no endpoint fails soft to `tei` with a warning |
 | `EMBEDDING_VLLM_ENDPOINT` | `http://vllm-embedding:8000` | The pooling endpoint answering the OpenAI shape (`POST /v1/embeddings {model, input}` → `data[].embedding`). The client appends `/v1` itself. **Read by three consumers**: the retriever's and dataprep's vLLM branch, and chatqna's RAG graph — its `embedding` node derives host/port/protocol/endpoint from this base URL, so the query is encoded by the same model that embedded the corpus (unset = the embedding microservice, i.e. TEI — the NVIDIA path) |
-| `VLLM_EMBEDDING_MODEL_ID` | *(docker-compose.rocm.yaml overlay default)* `BAAI/bge-large-en-v1.5` | The pooling model the instance serves with `--served-model-name`; the embedding clients send the same id (override per consumer with `EMBEDDING_MODEL_ID`). Not set in `env.strixhalo` — the overlay ships the default |
-| `VLLM_EMBEDDING_GPU_UTILIZATION` | *(overlay default)* `0.05` | bge-large bf16 weights are ~0.6 GiB — the smallest slice of the GTT, beside the reranker (0.05) + granite (0.28) + gemma (0.12) |
-| `VLLM_EMBEDDING_MAX_MODEL_LEN` | *(overlay default)* `512` | Embed window; sized for the ~500-char chunk size — the endpoint bounds what langchain is told NOT to pre-chunk (`check_embedding_ctx_length=False`, bge is not tiktoken-tokenizable) |
+| `VLLM_EMBEDDING_MODEL_ID` | *(docker-compose.yaml default)* `BAAI/bge-large-en-v1.5` | The pooling model the instance serves with `--served-model-name`; the embedding clients send the same id (override per consumer with `EMBEDDING_MODEL_ID`). Not set in `env.strixhalo` — the compose file ships the default |
+| `VLLM_EMBEDDING_GPU_UTILIZATION` | *(compose default)* `0.05` | bge-large bf16 weights are ~0.6 GiB — the smallest slice of the GTT, beside the reranker (0.05) + granite (0.28) + gemma (0.12) |
+| `VLLM_EMBEDDING_MAX_MODEL_LEN` | *(compose default)* `512` | Embed window; sized for the ~500-char chunk size — the endpoint bounds what langchain is told NOT to pre-chunk (`check_embedding_ctx_length=False`, bge is not tiktoken-tokenizable) |
 
 ### OKF-stack variables (venue-level, not ROCm-exclusive)
 

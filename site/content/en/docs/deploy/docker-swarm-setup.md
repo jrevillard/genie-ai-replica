@@ -718,7 +718,7 @@ Key points:
   (`services.*.devices.0: must be a string`) — so the swarm-deployed ROCm
   GPU tier cannot get `/dev/kfd` + `/dev/dri` this way. The ROCm GPU tier
   therefore routes via the **standalone GPU-node compose stack on the
-  ROCm node** (`docker-compose.gpu.yaml` + `docker-compose.rocm.gpu.yaml`
+  ROCm node** (`docker-compose.gpu.yaml` + `--profile rocm-models`
   + `env.strixhalo`), wired to the app stack with the
   [Remote GPU Node](#remote-gpu-node) pattern (`GPU_NODE_HOST` +
   override endpoints). Hardware prerequisites, image pins and sizing:

@@ -8,8 +8,8 @@ split-URL auth trio, service-account seeding, the OKF lifecycle, the
 import contract, tuning knobs, and the four failure classes we hit with
 their signatures and fixes.
 
-NVIDIA venues are unaffected by every item here — the ROCm overlay
-(`docker-compose.rocm.yaml`) is only loaded on this path, and the local
+NVIDIA venues are unaffected by every item here — the `rocm-models`
+compose profile is only activated on this path, and the local
 `.env` is per-venue and never committed.
 
 ---
@@ -19,8 +19,8 @@ NVIDIA venues are unaffected by every item here — the ROCm overlay
 ```bash
 docker compose -p genieai-rocm \
   --env-file .env --env-file env.strixhalo \
-  -f docker-compose.yaml -f docker-compose.rocm.yaml \
-  --profile opea --profile gpu-models [--profile okf] \
+  -f docker-compose.yaml \
+  --profile opea --profile gpu-models --profile rocm-models [--profile okf] \
   up -d [<service>...]
 ```
 
@@ -76,12 +76,14 @@ KEYCLOAK_PUBLIC_URL: https://<NGINX_PUBLIC_DOMAIN>:<NGINX_HTTPS_PORT>/auth  # tr
 ```
 
 Now applied to **backend**, **okf-server**, AND **document-repository**
-(all three blocks live in `docker-compose.rocm.yaml`). The doc-repo one
+(all three blocks live in the base compose with empty defaults — the
+NVIDIA one-URL shape; `env.strixhalo` pins the discovery/JWKS legs, the
+browser-edge alias stays in the venue `.env`). The doc-repo one
 is load-bearing for OKF: without it, doc-repo's OIDC discovery times out
 against the self-signed edge and its auth layer answers **503**, which
 surfaces as `EXPORT_FAILED: bundle store failed (doc-repo status 503)`
-when publishing an OKF repo. NVIDIA venues never load the overlay — no
-behavior change there.
+when publishing an OKF repo. NVIDIA venues never activate the profile
+and carry empty defaults — no behavior change there.
 
 > **Remote-ROCm TLS:** Section 18's `rocm_gpu_node_remote` trio does NOT
 > render the TLS skip — a remote node serving its default self-signed cert

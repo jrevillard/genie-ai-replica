@@ -4020,7 +4020,15 @@ docs:validate:
   script:
     - ansible-playbook --syntax-check deploy/ansible/deploy.yml
     - ansible-playbook --syntax-check deploy/ansible/deploy-gpu.yml
-    - ansible-playbook --syntax-check deploy/ansible/deploy-gpu-rocm.yml
+    # The collapsed deploy-gpu.yml carries both vendors' plays. Render the
+    # GPU-node compose template in BOTH shapes to prove the Jinja
+    # conditionals resolve: every row in the template carries an inline
+    # default, so two template-module runs (gpu_vendor set / unset) render
+    # the ROCm and NVIDIA node files without a host connection.
+    - ansible localhost -m ansible.builtin.template -a "src=deploy/ansible/templates/docker-compose.gpu.yaml.j2 dest=/tmp/gpu-rocm.yaml" -c local -e "gpu_vendor=rocm"
+    - ansible localhost -m ansible.builtin.template -a "src=deploy/ansible/templates/docker-compose.gpu.yaml.j2 dest=/tmp/gpu-nvidia.yaml" -c local
+    - grep -q "vllm-reranker" /tmp/gpu-rocm.yaml
+    - '! grep -q "vllm-reranker" /tmp/gpu-nvidia.yaml'
     - yamllint -c deploy/ansible/.yamllint deploy/ansible/
     # Renders the #1227 payload probe/heal command builders through real
     # ansible and executes the tokenized output — the two layers
@@ -5835,14 +5843,15 @@ config:validate:
         - "env.*"
         - "docker-compose.yaml"
         - "docker-compose.gpu.yaml"
-        # The AMD ROCm overlays layer onto the two base compose files and
-        # are rendered by no other check in the pipeline: the config
-        # suite parses docker-compose.yaml and docker-compose.gpu.yaml
-        # only, and scripts/ci/config-parity-check.py reads
-        # docker-compose.yaml only. A change to either overlay must
-        # therefore trigger the stage that renders it.
-        - "docker-compose.rocm.yaml"
-        - "docker-compose.rocm.gpu.yaml"
+        # The AMD ROCm vendor axis lives in the two base compose files (env
+        # values + the rocm-models profile) and in env.strixhalo — rendered
+        # by no other check in the pipeline: the config suite parses
+        # docker-compose.yaml and docker-compose.gpu.yaml only, and
+        # scripts/ci/config-parity-check.py reads docker-compose.yaml only.
+        # A change to the base files, the Strix Halo profile or the
+        # vendor-conditioned ansible path must therefore trigger the stage
+        # that renders it.
+        - "env.strixhalo"
         - "genie-ai-overlay/retriever/**/*"
         - "genie-ai-overlay/chatqna/**/*"
         - "deploy/ansible/**/*"

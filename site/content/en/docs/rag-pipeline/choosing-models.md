@@ -778,10 +778,11 @@ Notes:
   and moves the reranker's ~5 GiB host-RAM footprint (the CPU image's
   buffer pools, already batch-capped) into ~2 GiB of mostly-idle GTT.
   An upstream TEI release with RDNA-capable kernels only needs the two
-  `TEI_ROCM_*` image pins flipped back — the switch is one env var.
+  `TEI_EMBEDDING_IMAGE` / `TEI_RERANKING_IMAGE` pins flipped back — the
+  switch is one env var.
 
 ```bash
-# Strix Halo (values ship in env.strixhalo, used with the ROCm overlays)
+# Strix Halo (values ship in env.strixhalo, used with --profile rocm-models)
 VLLM_LLM_MODEL_ID=ibm-granite/granite-3.1-2b-instruct
 VLLM_GPU_UTILIZATION=0.28
 VLLM_MAX_MODEL_LEN=49152

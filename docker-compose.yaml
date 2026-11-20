@@ -1799,7 +1799,28 @@ services:
     logging: *fluent-logging
     profiles: [gpu-models]
     restart: unless-stopped
-    image: vllm/vllm-openai:v0.29.0
+    # The image and entrypoint are the VENDOR axis, carried as VALUES (no
+    # vendor overlay files): env.strixhalo pins VLLM_IMAGE to the ROCm
+    # build; unset — every NVIDIA deployment — keeps this image. The
+    # entrypoint IS the NVIDIA image's own (the flag `command:` below has
+    # always attached to it), so restating it here is a no-op for NVIDIA
+    # and repairs the ROCm image, which ships ENTRYPOINT=null and
+    # CMD=/bin/bash: one flag block, both vendors, no drift.
+    image: ${VLLM_IMAGE:-vllm/vllm-openai:v0.29.0}
+    entrypoint: ["vllm", "serve"]
+    # Same vendor axis, same value shape: an NVIDIA host never sets the
+    # device/GID vars, so the defaults are paths that exist on EVERY host
+    # (a missing device path is a hard create-time error — moby Lstats the
+    # host path before creating the container) and GIDs nobody/nogroup —
+    # two DISTINCT numbers, because the group_add list rejects duplicates.
+    # env.strixhalo points the devices at /dev/kfd and /dev/dri and the
+    # GIDs at the host's render/video groups.
+    devices:
+      - "${GPU_DEVICE_KFD:-/dev/null}:${GPU_DEVICE_KFD:-/dev/null}"
+      - "${GPU_DEVICE_DRI:-/dev/zero}:${GPU_DEVICE_DRI:-/dev/zero}"
+    group_add:
+      - "${RENDER_GID:-65534}" # nobody — inert for the root containers vLLM ships
+      - "${VIDEO_GID:-65533}" # nogroup
     # Swarm: internal only - access via Kong or docker exec
     # ports:
     #   - "${LLM_SERVER_PORT:-8000}:8000"
@@ -1882,7 +1903,16 @@ services:
     logging: *fluent-logging
     profiles: [gpu-models]
     restart: unless-stopped
-    image: vllm/vllm-openai:v0.29.0
+    # Same vendor axis as `vllm` above: image pin + entrypoint + device
+    # rows, all values an NVIDIA host never sets (identical defaults).
+    image: ${VLLM_IMAGE:-vllm/vllm-openai:v0.29.0}
+    entrypoint: ["vllm", "serve"]
+    devices:
+      - "${GPU_DEVICE_KFD:-/dev/null}:${GPU_DEVICE_KFD:-/dev/null}"
+      - "${GPU_DEVICE_DRI:-/dev/zero}:${GPU_DEVICE_DRI:-/dev/zero}"
+    group_add:
+      - "${RENDER_GID:-65534}" # nobody
+      - "${VIDEO_GID:-65533}" # nogroup
     # Internal only
     # ports:
     #   - "${VLLM_TRANSLATION_SERVICE_PORT:-9031}:${VLLM_TRANSLATION_SERVICE_PORT:-9031}"
@@ -2109,6 +2139,122 @@ services:
         delay: 10s
         max_attempts: 30
 
+  # The two vLLM pooling instances — the ROCm GPU tier's reranker and
+  # embedding models. The TEI ROCm build cannot run on gfx1151
+  # (Instinct-only kernels — spike results), so the vendor's GPU tier
+  # serves both models on vLLM: the reranker wrapper and the three
+  # embedding consumers (dataprep corpus, retriever, chatqna query
+  # encoder) switch to them with RERANKER_BACKEND=vllm /
+  # EMBEDDING_BACKEND=vllm — knobs the base definitions below already
+  # carry, flipped by env.strixhalo and never set on an NVIDIA venue.
+  #
+  # THE PROFILE IS THE NVIDIA FIREWALL: a profile-disabled service does
+  # not render at all — not in `docker compose config` output, not in a
+  # `docker stack deploy` resolved file — so an NVIDIA deployment never
+  # sees, starts or creates these containers. Enabling them by hand on an
+  # NVIDIA host fails loudly at create time (no /dev/kfd there). Their
+  # device rows can therefore stay literal (unlike the interpolated rows
+  # on `vllm` above, which render on every host).
+  vllm-embedding:
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    logging: *fluent-logging
+    profiles: [rocm-models]
+    restart: unless-stopped
+    image: ${VLLM_IMAGE:-vllm/vllm-openai:v0.29.0}
+    # Same shape as `vllm` above: entrypoint carries the binary, `command`
+    # only the flags.
+    entrypoint: ["vllm", "serve"]
+    command: >
+      --model ${VLLM_EMBEDDING_MODEL_ID:-BAAI/bge-large-en-v1.5}
+      --gpu_memory_utilization ${VLLM_EMBEDDING_GPU_UTILIZATION:-0.05}
+      --served-model-name ${VLLM_EMBEDDING_MODEL_ID:-BAAI/bge-large-en-v1.5}
+      --max_model_len ${VLLM_EMBEDDING_MAX_MODEL_LEN:-512}
+      --enforce-eager
+      --port 8000
+    environment:
+      - HUGGING_FACE_HUB_TOKEN=${HUGGING_FACE_HUB_TOKEN}
+      - NVIDIA_VISIBLE_DEVICES=${NVIDIA_VISIBLE_DEVICES:-all}
+    devices:
+      - /dev/kfd:/dev/kfd
+      - /dev/dri:/dev/dri
+    group_add:
+      - "${RENDER_GID:-990}" # render — distro-specific; `getent group render`
+      - "${VIDEO_GID:-44}"   # video
+    volumes:
+      # Same cache as the base vLLM services — without it every recreate
+      # re-downloads the model from HF.
+      - hf_cache:/root/.cache/huggingface
+    networks:
+      - genieai_network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 30s
+    deploy:
+      replicas: ${GPU_MODEL_REPLICAS:-${DEPLOY_OPEA:-1}}
+      placement:
+        constraints:
+          - node.labels.gpu == true
+      restart_policy:
+        condition: on-failure
+        delay: 10s
+        max_attempts: 30
+
+  vllm-reranker:
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    logging: *fluent-logging
+    profiles: [rocm-models]
+    # restart matters here: an OOM kill (exit 137 — live GTT pressure
+    # during a heavy drain) must self-heal, not wait for a human.
+    restart: unless-stopped
+    image: ${VLLM_IMAGE:-vllm/vllm-openai:v0.29.0}
+    entrypoint: ["vllm", "serve"]
+    command: >
+      --model ${VLLM_RERANKER_MODEL_ID:-BAAI/bge-reranker-v2-m3}
+      --gpu_memory_utilization ${VLLM_RERANKER_GPU_UTILIZATION:-0.05}
+      --served-model-name ${VLLM_RERANKER_MODEL_ID:-BAAI/bge-reranker-v2-m3}
+      --max_model_len ${VLLM_RERANKER_MAX_MODEL_LEN:-8192}
+      --enforce-eager
+      --port 8000
+    environment:
+      - HUGGING_FACE_HUB_TOKEN=${HUGGING_FACE_HUB_TOKEN}
+      - NVIDIA_VISIBLE_DEVICES=${NVIDIA_VISIBLE_DEVICES:-all}
+    devices:
+      - /dev/kfd:/dev/kfd
+      - /dev/dri:/dev/dri
+    group_add:
+      - "${RENDER_GID:-990}" # render — distro-specific; `getent group render`
+      - "${VIDEO_GID:-44}"   # video
+    volumes:
+      # Same cache as the base vLLM services — without it every recreate
+      # re-downloads the ~1.2 GB cross-encoder from HF.
+      - hf_cache:/root/.cache/huggingface
+    networks:
+      - genieai_network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 30s
+    deploy:
+      replicas: ${GPU_MODEL_REPLICAS:-${DEPLOY_OPEA:-1}}
+      placement:
+        constraints:
+          - node.labels.gpu == true
+      restart_policy:
+        condition: on-failure
+        delay: 10s
+        max_attempts: 30
+
   reranker:
     # least-privilege hardening (SAST wave-4): no capabilities beyond those listed
     cap_drop:
@@ -2134,6 +2280,13 @@ services:
       - RERANKER_BACKEND=${RERANKER_BACKEND:-tei}
       - RERANKER_VLLM_ENDPOINT=${RERANKER_VLLM_ENDPOINT:-}
       - RERANKER_VLLM_MODEL=${RERANKER_VLLM_MODEL:-${VLLM_RERANKER_MODEL_ID:-}}
+      # The window the vLLM reranker instance is started with
+      # (--max_model_len). The client enforces the input-length contract
+      # against it — vLLM truncates an over-long input instead of refusing
+      # it, so the wrapper measures the pair itself. Same source as the
+      # instance's own flag (vllm-reranker above): client and server agree
+      # by construction. The TEI backend never reads it.
+      - RERANKER_VLLM_MAX_MODEL_LEN=${RERANKER_VLLM_MAX_MODEL_LEN:-${VLLM_RERANKER_MAX_MODEL_LEN:-8192}}
       - HF_TOKEN=${VLLM_API_KEY:-}
       - VLLM_API_KEY=${VLLM_API_KEY:-}
       - OPEA_SSL_SKIP_VERIFY=${OPEA_SSL_SKIP_VERIFY:-0}
@@ -2268,9 +2421,9 @@ services:
       TEI_EMBEDDING_ENDPOINT: ${EMBEDDING_SERVICE_URL:-http://tei:80}
       # Config-gated embedding backend (Task-14 mirror): tei stays the default
       # on every platform — this block alone changes nothing. The vllm branch
-      # activates only when a deployment sets BOTH values (see env.strixhalo
-      # + docker-compose.rocm.yaml, the ROCm venue where the TEI image cannot
-      # run on the GPU); unknown values fall back to tei.
+      # activates only when a deployment sets BOTH values (see env.strixhalo,
+      # the Strix Halo ROCm venue where the TEI image cannot run on the GPU);
+      # unknown values fall back to tei.
       EMBEDDING_BACKEND: ${EMBEDDING_BACKEND:-tei}
       EMBEDDING_VLLM_ENDPOINT: ${EMBEDDING_VLLM_ENDPOINT:-}
       # Paired model name (code review N1): the vLLM instance serves
@@ -2552,9 +2705,9 @@ services:
       OPEA_SSL_SKIP_VERIFY: ${OPEA_SSL_SKIP_VERIFY:-0}
       # Config-gated embedding backend (Task-14 mirror): tei stays the default
       # on every platform — this block alone changes nothing. The vllm branch
-      # activates only when a deployment sets BOTH values (see env.strixhalo
-      # + docker-compose.rocm.yaml, the ROCm venue where the TEI image cannot
-      # run on the GPU); unknown values fall back to tei.
+      # activates only when a deployment sets BOTH values (see env.strixhalo,
+      # the Strix Halo ROCm venue where the TEI image cannot run on the GPU);
+      # unknown values fall back to tei.
       EMBEDDING_BACKEND: ${EMBEDDING_BACKEND:-tei}
       EMBEDDING_VLLM_ENDPOINT: ${EMBEDDING_VLLM_ENDPOINT:-}
       # Paired model name — same rationale as dataprep's row above (N1).

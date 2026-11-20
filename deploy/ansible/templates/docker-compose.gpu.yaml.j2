@@ -19,7 +19,21 @@ services:
 
   vllm-llm:
     restart: unless-stopped
+    # Vendor axis, rendered per-deployment from this ONE template: an
+    # NVIDIA node never loads the ROCm vars, so the image falls back to
+    # the NVIDIA build; the entrypoint is the NVIDIA image's own (the
+    # flag `command:` always attached to it — restating is a no-op there)
+    # and repairs the ROCm image (ENTRYPOINT=null, CMD=/bin/bash).
     image: {{ vllm_llm_image | default('vllm/vllm-openai:v0.29.0') }}
+{% if gpu_vendor is defined and gpu_vendor == 'rocm' %}
+    entrypoint: ["vllm", "serve"]
+    devices:
+      - /dev/kfd:/dev/kfd
+      - /dev/dri:/dev/dri
+    group_add:
+      - "{{ rocm_render_gid | default(990) }}" # render group (getent group render)
+      - "{{ rocm_video_gid | default(44) }}"   # video group
+{% endif %}
     command: >
       --model {{ vllm_llm_model_id | default('ibm-granite/granite-3.3-2b-instruct') }}
       --gpu_memory_utilization {{ vllm_gpu_utilization | default('0.55') }}
@@ -44,7 +58,17 @@ services:
 
   vllm-translation:
     restart: unless-stopped
+    # Same vendor axis as vllm-llm above.
     image: {{ vllm_translation_image | default('vllm/vllm-openai:v0.29.0') }}
+{% if gpu_vendor is defined and gpu_vendor == 'rocm' %}
+    entrypoint: ["vllm", "serve"]
+    devices:
+      - /dev/kfd:/dev/kfd
+      - /dev/dri:/dev/dri
+    group_add:
+      - "{{ rocm_render_gid | default(990) }}" # render group
+      - "{{ rocm_video_gid | default(44) }}"   # video group
+{% endif %}
     command: >
       --model {{ vllm_translation_model_id | default('google/gemma-3-4b-it') }}
       --gpu_memory_utilization {{ vllm_translation_gpu_utilization | default('0.3') }}
@@ -105,6 +129,74 @@ services:
     networks:
       - gpu_network
 
+{% if gpu_vendor is defined and gpu_vendor == 'rocm' %}
+  # The two vLLM pooling instances — ROCm-only (the TEI ROCm image cannot
+  # run on gfx1151), rendered only on a ROCm node. The proxy routes
+  # /rerank and /v1/embeddings to them via gpu_rerank_upstream /
+  # gpu_embedding_upstream (vars/rocm_gpu_nodes.yml).
+  vllm-reranker:
+    restart: unless-stopped
+    image: {{ vllm_llm_image | default('vllm/vllm-openai:v0.29.0') }}
+    entrypoint: ["vllm", "serve"]
+    command: >
+      --model {{ vllm_reranker_model_id | default('BAAI/bge-reranker-v2-m3') }}
+      --gpu_memory_utilization {{ vllm_reranker_gpu_utilization | default('0.05') }}
+      --served-model-name {{ vllm_reranker_model_id | default('BAAI/bge-reranker-v2-m3') }}
+      --max_model_len {{ vllm_reranker_max_model_len | default('8192') }}
+      --enforce-eager
+      --port 8000
+    environment:
+      - HUGGING_FACE_HUB_TOKEN={{ hugging_face_hub_token }}
+      - NVIDIA_VISIBLE_DEVICES={{ nvidia_visible_devices | default('all') }}
+    devices:
+      - /dev/kfd:/dev/kfd
+      - /dev/dri:/dev/dri
+    group_add:
+      - "{{ rocm_render_gid | default(990) }}" # render group
+      - "{{ rocm_video_gid | default(44) }}"   # video group
+    volumes:
+      - hf_cache:/root/.cache/huggingface
+    networks:
+      - gpu_network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 30s
+
+  vllm-embedding:
+    restart: unless-stopped
+    image: {{ vllm_llm_image | default('vllm/vllm-openai:v0.29.0') }}
+    entrypoint: ["vllm", "serve"]
+    command: >
+      --model {{ vllm_embedding_model_id | default('BAAI/bge-large-en-v1.5') }}
+      --gpu_memory_utilization {{ vllm_embedding_gpu_utilization | default('0.05') }}
+      --served-model-name {{ vllm_embedding_model_id | default('BAAI/bge-large-en-v1.5') }}
+      --max_model_len {{ vllm_embedding_max_model_len | default('512') }}
+      --enforce-eager
+      --port 8000
+    environment:
+      - HUGGING_FACE_HUB_TOKEN={{ hugging_face_hub_token }}
+      - NVIDIA_VISIBLE_DEVICES={{ nvidia_visible_devices | default('all') }}
+    devices:
+      - /dev/kfd:/dev/kfd
+      - /dev/dri:/dev/dri
+    group_add:
+      - "{{ rocm_render_gid | default(990) }}" # render group
+      - "{{ rocm_video_gid | default(44) }}"   # video group
+    volumes:
+      - hf_cache:/root/.cache/huggingface
+    networks:
+      - gpu_network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 30s
+
+{% endif %}
   docling-serve:
     restart: unless-stopped
     image: {{ docling_serve_image | default('ghcr.io/docling-project/docling-serve:v1.21.0') }}

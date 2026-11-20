@@ -345,16 +345,15 @@ docker compose --env-file .env --env-file env.rtx6000 \
 
 See [GPU Deployment](/docs/deploy/gpu/) for variable details.
 
-For an **AMD ROCm host** (Strix Halo / gfx1151 iGPU class): layer the ROCm
-overlay with `-f` (the overlay file must come last; the base files are
-never edited) and use `env.strixhalo` for sizing. No NVIDIA toolkit is
-needed — the overlay passes `/dev/kfd` + `/dev/dri` and the host's
-`render`/`video` GIDs directly:
+For an **AMD ROCm host** (Strix Halo / gfx1151 iGPU class): activate the
+`rocm-models` profile and use `env.strixhalo` for sizing. No NVIDIA
+toolkit is needed — the profile's services claim `/dev/kfd` + `/dev/dri`
+and the host's `render`/`video` GIDs (values from `env.strixhalo`):
 
 ```bash
 docker compose --env-file .env --env-file env.strixhalo \
-  -f docker-compose.yaml -f docker-compose.rocm.yaml \
-  --profile opea --profile gpu-models up -d
+  -f docker-compose.yaml \
+  --profile opea --profile gpu-models --profile rocm-models up -d
 ```
 
 Use this when the GPU tier should run on the local AMD iGPU instead of an

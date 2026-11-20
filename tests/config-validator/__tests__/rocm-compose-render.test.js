@@ -1,18 +1,26 @@
 // Copyright (C) 2026 International Telecommunication Union (ITU)
 // SPDX-License-Identifier: Apache-2.0
-// Render gate for the AMD ROCm compose overlays.
+// Render gate for the AMD ROCm GPU tier — ONE file set, vendor as values.
 //
-// The two overlays layer onto the NVIDIA base files and are never rendered by
-// any other check: the config-validator suite parses docker-compose.yaml and
-// docker-compose.gpu.yaml only, and scripts/ci/config-parity-check.py reads
-// docker-compose.yaml only. A typo in an `!override` tag, a bad `environment:`
-// merge or a service that exists in the overlay but not in the render reached
-// the branch unrendered.
+// The vendor axis lives in the BASE compose files: env.strixhalo pins the
+// images (VLLM_IMAGE, TEI_EMBEDDING_IMAGE, TEI_RERANKING_IMAGE), the device
+// paths (GPU_DEVICE_KFD, GPU_DEVICE_DRI) and the device-group GIDs, and the
+// two vLLM pooling services (vllm-embedding, vllm-reranker) sit behind the
+// `rocm-models` profile in the same files. The overlays that used to carry
+// all of this are gone — an unrendered overlay was exactly the hole this
+// gate existed to close: the config-validator suite parses the base files
+// only, and a typo in an overlay's merge tag, environment merge or service
+// name reached the branch unrendered.
 //
-// The gate renders both overlay pairs with the real compose binary and
-// asserts the ROCm-specific facts survive the merge: the GPU device
-// mappings, the NVIDIA env neutralization, the vLLM embedding/reranker
-// backends, the ROCm image pins and the `!override` port replacement.
+// The gate renders BOTH vendor shapes of the SAME files with the real
+// compose binary:
+//
+//   ROCm shape:    base file(s) + env.strixhalo + --profile rocm-models
+//   NVIDIA shape:  base file(s), no Strix Halo env, no rocm-models profile
+//
+// and asserts the ROCm facts (device rows, void env, pooling backends,
+// image pins) AND the NVIDIA inertness (the profile firewall, the
+// every-host device defaults, the entrypoint no-op).
 //
 // `docker compose config` is a CLIENT-SIDE render - it needs no daemon and
 // touches no container - so the gate runs wherever a compose binary exists.
@@ -28,13 +36,6 @@ const { parseEnvTemplate } = require('../validators/parse-env');
 const REPO_ROOT = path.join(__dirname, '..', '..', '..');
 const ENV_FILE = 'env.strixhalo';
 const COMPOSE_TIMEOUT_MS = 120000;
-
-// The `!override` merge tag landed in Compose v2.24.4 (Feb 2024).
-// docker-compose.rocm.gpu.yaml uses it to REPLACE nginx-gpu's port list
-// (a plain list would union with the base file's hardcoded "80:80"). An
-// older binary does not implement the tag, so the floor is checked
-// explicitly to name the remedy instead of letting the render fail with an
-// opaque merge error.
 
 // Secrets the base compose interpolates. They carry no default, so an unset
 // value renders as an empty string plus a warning - harmless for the render,
@@ -61,17 +62,20 @@ const SECRET_PLACEHOLDERS = [
 
 // Knobs the assertions read. They are deleted from the child environment on
 // purpose: compose gives the shell environment precedence over --env-file,
-// so an ambient value would mask a missing pin in env.strixhalo or in the
-// overlay. The env file and the overlay must be the ONLY source.
+// so an ambient value would mask a missing pin in env.strixhalo. The env
+// file must be the ONLY source of these on the ROCm render, and their
+// ABSENCE must be the only source on the NVIDIA render.
 const FILE_OWNED_KNOBS = [
   'EMBEDDING_BACKEND',
   'RERANKER_BACKEND',
   'RERANKER_VLLM_ENDPOINT',
   'EMBEDDING_VLLM_ENDPOINT',
   'NVIDIA_VISIBLE_DEVICES',
-  'VLLM_ROCM_IMAGE',
-  'TEI_ROCM_EMBEDDING_IMAGE',
-  'TEI_ROCM_RERANKING_IMAGE',
+  'VLLM_IMAGE',
+  'TEI_EMBEDDING_IMAGE',
+  'TEI_RERANKING_IMAGE',
+  'GPU_DEVICE_KFD',
+  'GPU_DEVICE_DRI',
   'GPU_HTTPS_PORT',
   'GPU_HTTP_PORT',
   'RENDER_GID',
@@ -121,14 +125,14 @@ function probeCompose() {
  *
  * @param {string[]} files - compose file paths, in merge order
  * @param {string[]} profiles - profile names to enable
- * @param {{ json?: boolean }} options - json=true renders to JSON, otherwise --quiet
+ * @param {{ json?: boolean, envFile?: string|null, env?: Object }} options -
+ *   json=true renders to JSON, otherwise --quiet; envFile=null renders the
+ *   NVIDIA shape (no Strix Halo env — and the ROCm pins pinned empty so a
+ *   machine-local .env cannot change the answer)
  * @returns {{ status: number, stdout: string, stderr: string }}
  */
 function runComposeConfig(files, profiles, options = {}) {
   const args = ['compose'];
-  // The ROCm profile is the default env file for these renders. A render
-  // that must see the NVIDIA defaults passes envFile: null (and pins the
-  // two port vars empty, so a machine-local .env cannot change the answer).
   if (options.envFile !== null) {
     args.push('--env-file', options.envFile || ENV_FILE);
   }
@@ -206,8 +210,8 @@ const describeCompose = compose.available ? describe : describe.skip;
 if (!compose.available) {
   // A skip is right on a developer machine without the compose CLI. In CI
   // it is a lie: the gate reports itself "skipped" and the pipeline reads
-  // green while asserting NOTHING — the ROCm overlays would be rendered by
-  // no gate at all. So in CI, a missing compose binary FAILS the job.
+  // green while asserting NOTHING — the ROCm vendor axis would be rendered
+  // by no gate at all. So in CI, a missing compose binary FAILS the job.
   if (process.env.CI) {
     throw new Error(
       "[rocm-compose-render] no usable 'docker compose' binary in CI " +
@@ -220,75 +224,121 @@ if (!compose.available) {
   );
 }
 
-describeCompose('ROCm compose overlay render gate', () => {
+describeCompose('ROCm compose render gate (single file set, vendor as values)', () => {
   let single;
   let gpu;
-  let base;
+  let singleNvidia;
+  let gpuNvidia;
 
   beforeAll(() => {
-    single = runComposeConfig(['docker-compose.yaml', 'docker-compose.rocm.yaml'], ['opea', 'gpu-models', 'okf'], {
+    // The ROCm shapes: the base files, the Strix Halo env, the rocm-models
+    // profile. Nothing else — there is no overlay to merge anymore.
+    single = runComposeConfig(['docker-compose.yaml'], ['opea', 'gpu-models', 'rocm-models', 'okf'], {
       json: true
     });
-    gpu = runComposeConfig(['docker-compose.gpu.yaml', 'docker-compose.rocm.gpu.yaml'], [], {
-      json: true
+    gpu = runComposeConfig(['docker-compose.gpu.yaml'], ['rocm-models'], { json: true });
+    // The NVIDIA shapes: the SAME files, no Strix Halo env, no rocm-models
+    // profile. These are the renders every existing NVIDIA deployment gets.
+    singleNvidia = runComposeConfig(['docker-compose.yaml'], ['opea', 'gpu-models', 'okf'], {
+      json: true,
+      envFile: null,
+      env: {
+        EMBEDDING_VLLM_ENDPOINT: '',
+        RERANKER_VLLM_ENDPOINT: '',
+        GPU_DEVICE_KFD: '',
+        GPU_DEVICE_DRI: '',
+        RENDER_GID: '',
+        VIDEO_GID: '',
+        TEI_EMBEDDING_IMAGE: '',
+        TEI_RERANKING_IMAGE: '',
+        VLLM_IMAGE: ''
+      }
     });
-    // The base pair alone — the reference the overlay's merge is compared
-    // against (the overlay must not silently change what the base ships).
-    base = runComposeConfig(['docker-compose.yaml'], ['opea', 'gpu-models', 'okf'], { json: true });
+    gpuNvidia = runComposeConfig(['docker-compose.gpu.yaml'], [], {
+      json: true,
+      envFile: null,
+      env: {
+        GPU_DEVICE_KFD: '',
+        GPU_DEVICE_DRI: '',
+        RENDER_GID: '',
+        VIDEO_GID: '',
+        TEI_EMBEDDING_IMAGE: '',
+        TEI_RERANKING_IMAGE: '',
+        VLLM_IMAGE: '',
+        GPU_HTTP_PORT: '',
+        GPU_HTTPS_PORT: ''
+      }
+    });
   });
 
-  test("the ROCm overlays need NO merge tag — the repo's Compose floor holds", () => {
+  describe('vendor files are gone (one file set)', () => {
+    test.each(['docker-compose.rocm.yaml', 'docker-compose.rocm.gpu.yaml'])('%s no longer exists', (file) => {
+      expect({ file, exists: fs.existsSync(path.join(REPO_ROOT, file)) }).toEqual({ file, exists: false });
+    });
+  });
+
+  describe('the Compose floor holds (no merge tags in the base files)', () => {
     // `!override` requires Compose >= 2.24.4, while the repo documents
-    // 2.20+ as its floor (site/content/en/docs/get-started/
-    // quickstart-deployer.md). On a supported host the overlay did not parse
-    // at all ("unknown tag") — the failure surfaced as a YAML error, not as
-    // a readable message (MR !968 review, Jerome).
-    //
-    // The ports are VALUES now (the base file's rows are parameterized), so
-    // no merge tag is needed anywhere in the ROCm path. This test pins that:
-    // a merge tag creeping back in raises the repo's minimum compose
-    // version, and the files that carry them are named here.
-    for (const file of ['docker-compose.rocm.yaml', 'docker-compose.rocm.gpu.yaml']) {
-      const text = fs.readFileSync(path.join(REPO_ROOT, file), 'utf8');
-      const withoutComments = text
-        .split('\n')
-        .filter((line) => !line.trim().startsWith('#'))
-        .join('\n');
-      expect({ file, mergeTag: /!override|!reset|!replace/.test(withoutComments) }).toEqual({
-        file,
-        mergeTag: false
+    // 2.20+ as its floor. The ports are VALUES in the base files now, so
+    // no merge tag is needed anywhere in the GPU path; one creeping back
+    // in silently raises the minimum compose version. The files that carry
+    // them are named here.
+    for (const file of ['docker-compose.yaml', 'docker-compose.gpu.yaml']) {
+      test(`${file} carries no merge tag`, () => {
+        const text = fs.readFileSync(path.join(REPO_ROOT, file), 'utf8');
+        const withoutComments = text
+          .split('\n')
+          .filter((line) => !line.trim().startsWith('#'))
+          .join('\n');
+        expect({ file, mergeTag: /!override|!reset|!replace/.test(withoutComments) }).toEqual({
+          file,
+          mergeTag: false
+        });
       });
     }
   });
 
-  describe('single-server pair (docker-compose.yaml + docker-compose.rocm.yaml)', () => {
+  describe('ROCm single-server render (docker-compose.yaml + env.strixhalo + rocm-models)', () => {
     test('renders without error', () => {
-      const result = runComposeConfig(
-        ['docker-compose.yaml', 'docker-compose.rocm.yaml'],
-        ['opea', 'gpu-models', 'okf']
-      );
-      if (result.status !== 0) {
-        throw new Error(`docker compose config failed (exit ${result.status}):\n${result.stderr}`);
+      if (single.status !== 0) {
+        throw new Error(`docker compose config failed (exit ${single.status}):\n${single.stderr}`);
       }
-      expect(result.status).toBe(0);
+      expect(single.status).toBe(0);
     });
 
-    test('the overlay-only GPU services are in the render', () => {
+    test('the pooling services are in the render under the rocm-models profile', () => {
       const services = JSON.parse(single.stdout).services;
       expect(Object.keys(services)).toEqual(expect.arrayContaining(['vllm-embedding', 'vllm-reranker']));
+      expect(services['vllm-embedding'].profiles).toContain('rocm-models');
+      expect(services['vllm-reranker'].profiles).toContain('rocm-models');
     });
 
-    test('the ROCm image pins from env.strixhalo reach the rendered services', () => {
+    test('the image pins from env.strixhalo reach every GPU-tier service', () => {
       const services = JSON.parse(single.stdout).services;
-      const rocmImage = envValue(envValues, 'VLLM_ROCM_IMAGE');
+      const rocmImage = envValue(envValues, 'VLLM_IMAGE');
       expect(services.vllm.image).toBe(rocmImage);
+      expect(services['vllm-translation-guardrail'].image).toBe(rocmImage);
       expect(services['vllm-embedding'].image).toBe(rocmImage);
       expect(services['vllm-reranker'].image).toBe(rocmImage);
-      expect(services.tei.image).toBe(envValue(envValues, 'TEI_ROCM_EMBEDDING_IMAGE'));
-      expect(services.tei_reranker.image).toBe(envValue(envValues, 'TEI_ROCM_RERANKING_IMAGE'));
+      expect(services.tei.image).toBe(envValue(envValues, 'TEI_EMBEDDING_IMAGE'));
+      expect(services.tei_reranker.image).toBe(envValue(envValues, 'TEI_RERANKING_IMAGE'));
     });
 
-    test('the GPU device mappings survive the merge', () => {
+    test('the vLLM services carry the serve entrypoint (repairs the ROCm image)', () => {
+      // The ROCm image ships ENTRYPOINT=null, CMD=/bin/bash; the NVIDIA
+      // image's own entrypoint IS `vllm serve`. One explicit entrypoint on
+      // the service makes the flag `command:` attach on both vendors from
+      // the same definition.
+      const services = JSON.parse(single.stdout).services;
+      for (const name of ['vllm', 'vllm-translation-guardrail', 'vllm-embedding', 'vllm-reranker']) {
+        expect({ service: name, entrypoint: services[name].entrypoint }).toEqual({
+          service: name,
+          entrypoint: ['vllm', 'serve']
+        });
+      }
+    });
+
+    test('the GPU device mappings come from env.strixhalo', () => {
       const services = JSON.parse(single.stdout).services;
       for (const name of ['vllm', 'vllm-translation-guardrail', 'vllm-embedding', 'vllm-reranker']) {
         expect({ service: name, devices: deviceSources(services[name]) }).toEqual({
@@ -298,7 +348,18 @@ describeCompose('ROCm compose overlay render gate', () => {
       }
     });
 
-    test('the NVIDIA device variable is neutralized on every ROCm service', () => {
+    test('the device-group GIDs come from env.strixhalo', () => {
+      const services = JSON.parse(single.stdout).services;
+      const expected = [envValue(envValues, 'RENDER_GID'), envValue(envValues, 'VIDEO_GID')];
+      for (const name of ['vllm', 'vllm-translation-guardrail', 'vllm-embedding', 'vllm-reranker']) {
+        expect({ service: name, groupAdd: services[name].group_add }).toEqual({
+          service: name,
+          groupAdd: expect.arrayContaining(expected)
+        });
+      }
+    });
+
+    test('the NVIDIA device variable is neutralized on every ROCm GPU-tier service', () => {
       const services = JSON.parse(single.stdout).services;
       for (const name of [
         'vllm',
@@ -326,13 +387,16 @@ describeCompose('ROCm compose overlay render gate', () => {
       expect(services['dataprep-arango-service'].environment.EMBEDDING_BACKEND).toBe('vllm');
       expect(services['retriever-arango-service'].environment.EMBEDDING_BACKEND).toBe('vllm');
       expect(services.reranker.environment.RERANKER_BACKEND).toBe('vllm');
+      expect(services.reranker.environment.RERANKER_VLLM_MAX_MODEL_LEN).toBe(
+        envValue(envValues, 'VLLM_RERANKER_MAX_MODEL_LEN')
+      );
     });
 
     test('the backend endpoints name services that exist in the render', () => {
-      // The endpoints address the overlay's own services by compose name.
-      // A renamed overlay service leaves the wrapper pointing at a name
-      // that resolves to nothing - the container resolves at request time
-      // and fails every call, long after the render succeeded.
+      // The endpoints address the pooling services by compose name. A
+      // renamed service leaves the wrapper pointing at a name that resolves
+      // to nothing - the container resolves at request time and fails every
+      // call, long after the render succeeded.
       const services = JSON.parse(single.stdout).services;
       const hosts = (url) =>
         String(url || '')
@@ -362,62 +426,173 @@ describeCompose('ROCm compose overlay render gate', () => {
       expect(services['chatqna-xeon-backend-server'].environment.EMBEDDING_VLLM_ENDPOINT).toBe(gpuPool);
     });
 
+    test('the split-URL OIDC passthroughs carry the env values', () => {
+      // The trio (backend / okf-server / document-repository) reads
+      // KEYCLOAK_DISCOVERY_URL / KEYCLOAK_JWKS_URL / KEYCLOAK_PUBLIC_URL from
+      // the base compose with EMPTY defaults — the NVIDIA shape. The Strix
+      // Halo env supplies the in-network legs; the venue .env supplies the
+      // browser-edge leg (it needs the venue's domain, so it is not in the
+      // shared profile). Here only the shared profile is in play: the
+      // discovery/JWKS pins must reach the services, and the render must not
+      // depend on a venue .env.
+      const services = JSON.parse(single.stdout).services;
+      const discovery = envValue(envValues, 'KEYCLOAK_DISCOVERY_URL');
+      const jwks = envValue(envValues, 'KEYCLOAK_JWKS_URL');
+      for (const name of ['backend', 'okf-server', 'document-repository']) {
+        expect({ service: name, discovery: services[name].environment.KEYCLOAK_DISCOVERY_URL }).toEqual({
+          service: name,
+          discovery
+        });
+        expect({ service: name, jwks: services[name].environment.KEYCLOAK_JWKS_URL }).toEqual({
+          service: name,
+          jwks
+        });
+      }
+    });
+  });
+
+  describe('NVIDIA single-server render (docker-compose.yaml, no Strix Halo env)', () => {
+    test('renders without error', () => {
+      if (singleNvidia.status !== 0) {
+        throw new Error(`docker compose config failed (exit ${singleNvidia.status}):\n${singleNvidia.stderr}`);
+      }
+      expect(singleNvidia.status).toBe(0);
+    });
+
+    test('the profile firewall: the pooling services do NOT render', () => {
+      // A profile-disabled service is absent from the resolved config —
+      // not stopped, not created, not visible to `docker compose up` or a
+      // `docker stack deploy` resolved file. This is what keeps every
+      // NVIDIA deployment exactly the stack it always was.
+      const services = JSON.parse(singleNvidia.stdout).services;
+      expect(services['vllm-embedding']).toBeUndefined();
+      expect(services['vllm-reranker']).toBeUndefined();
+    });
+
+    test('the vendor-axis deltas are the every-host defaults (inert by construction)', () => {
+      // The one NVIDIA-visible change the collapse makes, pinned so it
+      // cannot silently grow: devices map /dev/null and /dev/zero (paths
+      // that exist on every host — a missing device path is a hard
+      // create-time error), the groups are nobody/nogroup (two DISTINCT
+      // numbers: the group_add list rejects duplicates), and the
+      // entrypoint restates the NVIDIA image's own (`vllm serve` — the
+      // flag `command:` always attached to it), so it is a no-op there.
+      const services = JSON.parse(singleNvidia.stdout).services;
+      for (const name of ['vllm', 'vllm-translation-guardrail']) {
+        expect({ service: name, devices: deviceSources(services[name]) }).toEqual({
+          service: name,
+          devices: ['/dev/null', '/dev/zero']
+        });
+        expect({ service: name, groupAdd: services[name].group_add }).toEqual({
+          service: name,
+          groupAdd: ['65534', '65533']
+        });
+        expect({ service: name, entrypoint: services[name].entrypoint }).toEqual({
+          service: name,
+          entrypoint: ['vllm', 'serve']
+        });
+        expect({ service: name, image: services[name].image }).toEqual({
+          service: name,
+          image: 'vllm/vllm-openai:v0.29.0'
+        });
+        expect({ service: name, nvidia: services[name].environment.NVIDIA_VISIBLE_DEVICES }).toEqual({
+          service: name,
+          nvidia: 'all'
+        });
+      }
+    });
+
+    test('the reranker window pin reaches the wrapper only as the wrapper reads it', () => {
+      // RERANKER_VLLM_MAX_MODEL_LEN is new in the base render (the
+      // `${VAR:-${VLLM_RERANKER_MAX_MODEL_LEN:-8192}}` row). The TEI
+      // backend never reads it — this pins the VALUE the wrapper would see
+      // if a venue flipped RERANKER_BACKEND=vllm without setting anything
+      // else: the same window the pooling instance is started with.
+      const services = JSON.parse(singleNvidia.stdout).services;
+      expect(services.reranker.environment.RERANKER_VLLM_MAX_MODEL_LEN).toBe('8192');
+      expect(services.reranker.environment.RERANKER_BACKEND).toBe('tei');
+    });
+
     test('the NVIDIA base render leaves the query encoder on the microservice', () => {
       // The NVIDIA-inertness proof: with EMBEDDING_VLLM_ENDPOINT unset, the
       // chatqna code keeps the base compose's embedding microservice (TEI)
       // — the row is empty, so the derivation never fires.
-      // The render that shows the NVIDIA deployment: the base file alone,
-      // with the ROCm profile's env out of the way and the switch pinned
-      // empty (compose treats an empty var as unset).
-      const nvidia = runComposeConfig(['docker-compose.yaml'], ['opea', 'gpu-models', 'okf'], {
-        json: true,
-        envFile: null,
-        env: { EMBEDDING_VLLM_ENDPOINT: '' }
-      });
-      const services = JSON.parse(nvidia.stdout).services;
+      const services = JSON.parse(singleNvidia.stdout).services;
       expect(services['chatqna-xeon-backend-server'].environment.EMBEDDING_VLLM_ENDPOINT).toBe('');
       expect(services['chatqna-xeon-backend-server'].environment.EMBEDDING_SERVER_HOST_IP).toBe('embedding');
       expect(String(services['chatqna-xeon-backend-server'].environment.EMBEDDING_SERVER_PORT)).toBe('6000');
     });
 
-    test('the overlay leaves the collector host publish as the base declares it', () => {
+    test('the split-URL OIDC passthroughs stay empty (the NVIDIA shape)', () => {
+      // The trio's defaults are EMPTY in the base compose — the one-URL
+      // shape every NVIDIA deployment runs. The Strix Halo env is what
+      // fills them on the ROCm venue; without it, NVIDIA renders must not
+      // suddenly carry discovery/JWKS pins.
+      const services = JSON.parse(singleNvidia.stdout).services;
+      for (const name of ['backend', 'okf-server', 'document-repository']) {
+        expect({ service: name, discovery: services[name].environment.KEYCLOAK_DISCOVERY_URL }).toEqual({
+          service: name,
+          discovery: ''
+        });
+        expect({ service: name, jwks: services[name].environment.KEYCLOAK_JWKS_URL }).toEqual({
+          service: name,
+          jwks: ''
+        });
+      }
+    });
+
+    test('the collector host publish survives profile activation', () => {
       // The base publishes the fluentforward receiver on 127.0.0.1:24224 —
       // the endpoint the Docker logging driver delivers every container's
-      // stdout to. An overlay `ports: !override []` drops that publish and
-      // the container logs then never reach VictoriaLogs or the admin UI
-      // (docker logs still works: dual logging). The base pair rendered on
-      // its own is the reference for what the overlay must not change.
-      const overlayPorts = JSON.parse(single.stdout).services['otel-collector'].ports ?? null;
-      const basePorts = JSON.parse(base.stdout).services['otel-collector'].ports ?? null;
-      expect({ service: 'otel-collector', overlay: overlayPorts }).toEqual({
+      // stdout to. Activating rocm-models must not change that (the old
+      // overlay once dropped it with a `ports: !override []`).
+      const withProfile = runComposeConfig(['docker-compose.yaml'], ['opea', 'gpu-models', 'rocm-models', 'okf'], {
+        json: true,
+        envFile: null,
+        env: { GPU_DEVICE_KFD: '', GPU_DEVICE_DRI: '', RENDER_GID: '', VIDEO_GID: '' }
+      });
+      const basePorts = JSON.parse(singleNvidia.stdout).services['otel-collector'].ports ?? null;
+      const profiledPorts = JSON.parse(withProfile.stdout).services['otel-collector'].ports ?? null;
+      expect({ service: 'otel-collector', ports: profiledPorts }).toEqual({
         service: 'otel-collector',
-        overlay: basePorts
+        ports: basePorts
       });
       expect(publishedPorts({ ports: basePorts })).toContain('24224');
     });
   });
 
-  describe('GPU-node pair (docker-compose.gpu.yaml + docker-compose.rocm.gpu.yaml)', () => {
+  describe('ROCm GPU-node render (docker-compose.gpu.yaml + env.strixhalo + rocm-models)', () => {
     test('renders without error', () => {
-      const result = runComposeConfig(['docker-compose.gpu.yaml', 'docker-compose.rocm.gpu.yaml'], []);
-      if (result.status !== 0) {
-        throw new Error(`docker compose config failed (exit ${result.status}):\n${result.stderr}`);
+      if (gpu.status !== 0) {
+        throw new Error(`docker compose config failed (exit ${gpu.status}):\n${gpu.stderr}`);
       }
-      expect(result.status).toBe(0);
+      expect(gpu.status).toBe(0);
     });
 
-    test('the overlay-only GPU reranker is in the render', () => {
+    test('the pooling services are in the render under the rocm-models profile', () => {
       const services = JSON.parse(gpu.stdout).services;
-      expect(Object.keys(services)).toEqual(expect.arrayContaining(['vllm-reranker']));
-      expect(services['vllm-reranker'].image).toBe(envValue(envValues, 'VLLM_ROCM_IMAGE'));
+      expect(Object.keys(services)).toEqual(expect.arrayContaining(['vllm-embedding', 'vllm-reranker']));
+      expect(services['vllm-embedding'].profiles).toContain('rocm-models');
+      expect(services['vllm-reranker'].profiles).toContain('rocm-models');
+      expect(services['vllm-reranker'].image).toBe(envValue(envValues, 'VLLM_IMAGE'));
     });
 
-    test('the GPU device mappings survive the merge', () => {
+    test('the GPU device mappings come from env.strixhalo', () => {
       const services = JSON.parse(gpu.stdout).services;
-      for (const name of ['vllm-llm', 'vllm-translation', 'vllm-reranker']) {
+      for (const name of ['vllm-llm', 'vllm-translation', 'vllm-reranker', 'vllm-embedding']) {
         expect({ service: name, devices: deviceSources(services[name]) }).toEqual({
           service: name,
           devices: expect.arrayContaining(['/dev/kfd', '/dev/dri'])
+        });
+      }
+    });
+
+    test('the vLLM services carry the serve entrypoint (repairs the ROCm image)', () => {
+      const services = JSON.parse(gpu.stdout).services;
+      for (const name of ['vllm-llm', 'vllm-translation', 'vllm-reranker', 'vllm-embedding']) {
+        expect({ service: name, entrypoint: services[name].entrypoint }).toEqual({
+          service: name,
+          entrypoint: ['vllm', 'serve']
         });
       }
     });
@@ -432,17 +607,17 @@ describeCompose('ROCm compose overlay render gate', () => {
       }
     });
 
-    test('the published ports are values on BOTH files — no clash, no merge tag', () => {
+    test('the TEI images are the CPU build on this venue', () => {
+      const services = JSON.parse(gpu.stdout).services;
+      expect(services['tei-embedding'].image).toBe(envValue(envValues, 'TEI_EMBEDDING_IMAGE'));
+      expect(services['tei-reranker'].image).toBe(envValue(envValues, 'TEI_RERANKING_IMAGE'));
+    });
+
+    test('the published ports are values on the base file — no clash, no merge tag', () => {
       // The base GPU file publishes "80:80" alongside the configurable HTTPS
-      // port. That hardcoded row is why the overlay once needed a
-      // `ports: !override` to move it (compose unions port sequences, so an
-      // overlay could only ADD to the list, never replace it) — and the
-      // merge tag raised the repo's compose floor to 2.24.4.
-      //
-      // Both rows are parameterized now, so the overlay restates the SAME
-      // values and compose's union collapses them: the published pair is
-      // exactly the two configured ports, and the base's own render keeps
-      // its historical 443/80.
+      // port. The rows are parameterized values now (that is why no merge
+      // tag is needed), so the published pair is exactly the two configured
+      // ports.
       const baseGpu = fs.readFileSync(path.join(REPO_ROOT, 'docker-compose.gpu.yaml'), 'utf8');
       expect(baseGpu).toMatch(/"\$\{GPU_HTTP_PORT:-80\}:80"/);
       expect(baseGpu).toMatch(/"\$\{GPU_HTTPS_PORT:-443\}:443"/);
@@ -454,17 +629,66 @@ describeCompose('ROCm compose overlay render gate', () => {
       );
       expect(published).not.toContain('80');
     });
+  });
 
-    test('the NVIDIA base render keeps its historical published ports', () => {
+  describe('NVIDIA GPU-node render (docker-compose.gpu.yaml, no Strix Halo env)', () => {
+    test('renders without error', () => {
+      if (gpuNvidia.status !== 0) {
+        throw new Error(`docker compose config failed (exit ${gpuNvidia.status}):\n${gpuNvidia.stderr}`);
+      }
+      expect(gpuNvidia.status).toBe(0);
+    });
+
+    test('the profile firewall: the pooling services do NOT render', () => {
+      const services = JSON.parse(gpuNvidia.stdout).services;
+      expect(services['vllm-embedding']).toBeUndefined();
+      expect(services['vllm-reranker']).toBeUndefined();
+    });
+
+    test('the vendor-axis deltas are the every-host defaults (inert by construction)', () => {
+      const services = JSON.parse(gpuNvidia.stdout).services;
+      for (const name of ['vllm-llm', 'vllm-translation']) {
+        expect({ service: name, devices: deviceSources(services[name]) }).toEqual({
+          service: name,
+          devices: ['/dev/null', '/dev/zero']
+        });
+        expect({ service: name, groupAdd: services[name].group_add }).toEqual({
+          service: name,
+          groupAdd: ['65534', '65533']
+        });
+        expect({ service: name, entrypoint: services[name].entrypoint }).toEqual({
+          service: name,
+          entrypoint: ['vllm', 'serve']
+        });
+        expect({ service: name, image: services[name].image }).toEqual({
+          service: name,
+          image: 'vllm/vllm-openai:v0.29.0'
+        });
+        expect({ service: name, nvidia: services[name].environment.NVIDIA_VISIBLE_DEVICES }).toEqual({
+          service: name,
+          nvidia: 'all'
+        });
+      }
+    });
+
+    test('the NVIDIA GPU-node render keeps its historical published ports', () => {
       // The NVIDIA GPU-node stack must publish exactly what it always did:
-      // the parameterized row renders as "80:80" when GPU_HTTP_PORT is unset.
-      const baseGpu = runComposeConfig(['docker-compose.gpu.yaml'], [], {
-        json: true,
-        envFile: null,
-        env: { GPU_HTTP_PORT: '', GPU_HTTPS_PORT: '' }
-      });
-      const services = JSON.parse(baseGpu.stdout).services;
+      // the parameterized rows render as "443"/"80" when the port vars are
+      // unset.
+      const services = JSON.parse(gpuNvidia.stdout).services;
       expect(publishedPorts(services['nginx-gpu']).sort()).toEqual(['443', '80']);
+    });
+
+    test('the NVIDIA GPU-node TEI images fall back to the NVIDIA-capable build', () => {
+      // TEI_EMBEDDING_IMAGE / TEI_RERANKING_IMAGE unset → the compose
+      // defaults: the same image this file always shipped. The CPU build is
+      // a Strix Halo env value, never a file default — otherwise a compose
+      // NVIDIA GPU node would lose GPU embedding.
+      const services = JSON.parse(gpuNvidia.stdout).services;
+      expect(services['tei-embedding'].image).toMatch(/text-embeddings-inference:1\.9\.3$/);
+      expect(services['tei-reranker'].image).toMatch(/text-embeddings-inference:1\.9\.3$/);
+      expect(services['tei-embedding'].image).not.toMatch(/cpu-/);
+      expect(services['tei-reranker'].image).not.toMatch(/cpu-/);
     });
   });
 });

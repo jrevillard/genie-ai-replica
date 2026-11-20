@@ -50,10 +50,23 @@ const GPU_RANGES = {
   TEI_EMBEDDING_MAX_BATCH_TOKENS: { type: 'int', min: 128, max: 131072, optional: true },
   TEI_RERANKING_AUTO_TRUNCATE: { type: 'enum', values: ['true', 'false'], optional: true },
   // Image pins (string-typed: registry refs, range-checked only for presence
-  // by the profile guard — no value validation here)
-  VLLM_ROCM_IMAGE: { type: 'string', optional: true },
-  TEI_ROCM_EMBEDDING_IMAGE: { type: 'string', optional: true },
-  TEI_ROCM_RERANKING_IMAGE: { type: 'string', optional: true },
+  // by the profile guard — no value validation here). The vendor axis lives
+  // in the BASE compose files as values: VLLM_IMAGE names the vLLM build for
+  // every GPU-tier vLLM service (default: the NVIDIA image), and the TEI
+  // rows name the TEI builds (default: the NVIDIA-capable image). The old
+  // VLLM_ROCM_IMAGE / TEI_ROCM_* names were overlay-owned and died with the
+  // overlays (MR review: one file set, no vendor file axis).
+  VLLM_IMAGE: { type: 'string', optional: true },
+  TEI_EMBEDDING_IMAGE: { type: 'string', optional: true },
+  TEI_RERANKING_IMAGE: { type: 'string', optional: true },
+  // Vendor device passthrough values (base compose `devices:` rows are
+  // interpolated from these; unset on every NVIDIA host, so the defaults
+  // there are /dev/null and /dev/zero — paths that exist everywhere).
+  GPU_DEVICE_KFD: { type: 'string', optional: true },
+  GPU_DEVICE_DRI: { type: 'string', optional: true },
+  // The NVIDIA device claim, as a profile value: the Strix Halo profile
+  // pins it to `void` (claim no GPU even on a host that has one).
+  NVIDIA_VISIBLE_DEVICES: { type: 'enum', values: ['all', 'void', '0', '1', '2', '3'], optional: true },
   // Task 14 — vLLM reranker backend (ROCm path). tei stays the default
   // backend everywhere; the Strix Halo profile flips to vllm because the
   // TEI ROCm image cannot run on gfx1151 (spike results). The utilization
@@ -81,7 +94,18 @@ const GPU_RANGES = {
   EMBEDDING_VLLM_ENDPOINT: { type: 'string', optional: true },
   VLLM_EMBEDDING_MODEL_ID: { type: 'string', optional: true },
   VLLM_EMBEDDING_GPU_UTILIZATION: { min: 0.01, max: 0.95, type: 'float', optional: true },
-  VLLM_EMBEDDING_MAX_MODEL_LEN: { min: 512, max: 131072, type: 'int', optional: true }
+  VLLM_EMBEDDING_MAX_MODEL_LEN: { min: 512, max: 131072, type: 'int', optional: true },
+  // Split-URL OIDC legs (backend / okf-server / document-repository). The
+  // Strix Halo profile pins the in-network pair (venue-independent values);
+  // the browser-edge alias needs the venue's domain, so it stays in the
+  // venue .env.
+  KEYCLOAK_DISCOVERY_URL: { type: 'string', optional: true },
+  KEYCLOAK_JWKS_URL: { type: 'string', optional: true },
+  // Base-file sizing knobs the collapsed scan now reaches (they were
+  // invisible while this gate only scanned the ROCm overlays): the dataprep
+  // completion window (0 = unset) and the textgen window override.
+  DATAPREP_MAX_MODEL_LEN: { min: 0, max: 131072, type: 'int', optional: true },
+  MAX_MODEL_LEN_TEXTGEN: { min: 0, max: 131072, type: 'int', optional: true }
 };
 
 /**

@@ -34,7 +34,9 @@ import yaml
 REPO_ROOT = pathlib.Path(__file__).resolve().parents[3]
 TEMPLATE = REPO_ROOT / "deploy/ansible/templates/env.j2"
 ALL_VARS = REPO_ROOT / "deploy/ansible/group_vars/all.yml"
-ROCM_VARS = REPO_ROOT / "deploy/ansible/group_vars/rocm_gpu_nodes/vars.yml"
+# The ROCm node vars load through vars_files in deploy-gpu.yml (not
+# group_vars/: a directory there must match an inventory group name).
+ROCM_VARS = REPO_ROOT / "deploy/ansible/vars/rocm_gpu_nodes.yml"
 
 # The filters env.j2 uses that Jinja does not ship. Ansible provides them.
 ANSIBLE_FILTERS = {

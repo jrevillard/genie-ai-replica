@@ -1,5 +1,0 @@
-# ROCm GPU node inventory (AMD Strix Halo / gfx1151 class)
-# Copy to rocm_gpu.ini and fill in your host.
-
-[rocm_gpu_nodes]
-rocm-gpu ansible_host=<host-or-ip> ansible_user=<user>

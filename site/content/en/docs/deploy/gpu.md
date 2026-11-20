@@ -14,8 +14,8 @@ last_reviewed: 2026-11-17
 This guide covers how to deploy GENIE.AI's AI layer on GPUs: choosing the
 right NVIDIA profile (T4 / RTX 6000 / A40), understanding the variables in
 `env.t4` and `env.rtx6000`, sizing VRAM, verifying the stack after
-deployment — and the AMD ROCm path (Strix Halo iGPU) via compose overlays
-and `env.strixhalo`.
+deployment — and the AMD ROCm path (Strix Halo iGPU) via the `rocm-models`
+compose profile and `env.strixhalo`.
 
 For full end-to-end installation see
 [Install Guide](/docs/deploy/install-guide/) (single-node) or
@@ -144,8 +144,10 @@ This uses the compose defaults (e.g. `VLLM_GPU_UTILIZATION=0.55`,
 
 The AMD path deploys six GPU-tier services — four vLLM instances (`vllm`,
 `vllm-translation-guardrail`, `vllm-reranker`, `vllm-embedding`) and the
-two TEI containers — on an AMD Radeon iGPU through compose **overlay
-files** (the base files and the NVIDIA path are never edited). The
+two TEI containers — on an AMD Radeon iGPU, activating the `rocm-models`
+compose profile in the SAME base files the NVIDIA path uses (the vendor
+axis is env values; see [Invocations](#invocations-one-file-set-vendor-as-values)
+and the rationale below). The
 reranker and embedding consumers run on the GPU too: `env.strixhalo` sets
 `RERANKER_BACKEND=vllm` / `EMBEDDING_BACKEND=vllm`, switching the reranker
 wrapper and both embedding consumers (dataprep + retriever) from TEI to
@@ -158,8 +160,9 @@ Radeon 8060S iGPU, `gfx1151`, 91 GB unified LPDDR5X.
 - **In-tree `amdgpu` kernel driver** with `/dev/kfd` and
   `/dev/dri/renderD128` present. **No host ROCm userland is needed** — the
   containers carry it. **No NVIDIA Container Toolkit either.**
-- **Device group access**: the overlay passes the host's `render` + `video`
-  GIDs into the containers (`RENDER_GID` / `VIDEO_GID` in `env.strixhalo` —
+- **Device group access**: the GPU tier runs with the host's `render` +
+  `video`
+  GIDs (`RENDER_GID` / `VIDEO_GID` in `env.strixhalo` —
   distro-specific; measure with `getent group render video`. 990 / 44 on
   the reference Ubuntu host).
 - Verify the GPU is visible from a container:
@@ -175,53 +178,56 @@ docker run --rm --device=/dev/kfd --device=/dev/dri \
 
 | Variable | Image | Why |
 |---|---|---|
-| `VLLM_ROCM_IMAGE` | `rocm/vllm:rocm10.1.0_ubuntu24.04_py3.14-pytorch_2.13.0_vllm-0.29.0` | ROCm 10.1 build of vLLM 0.29.x — version parity with the NVIDIA pin (`vllm/vllm-openai:v0.29.0`); guided JSON verified (dataprep requirement) |
-| `TEI_ROCM_EMBEDDING_IMAGE` | `ghcr.io/huggingface/text-embeddings-inference:cpu-1.9.3` | TEI CPU fallback — see below |
-| `TEI_ROCM_RERANKING_IMAGE` | `ghcr.io/huggingface/text-embeddings-inference:cpu-1.9.3` | TEI CPU fallback — see below |
+| `VLLM_IMAGE` | `rocm/vllm:rocm10.1.0_ubuntu24.04_py3.14-pytorch_2.13.0_vllm-0.29.0` | ROCm 10.1 build of vLLM 0.29.x behind all four vLLM instances of this profile — version parity with the NVIDIA compose default (`vllm/vllm-openai:v0.29.0`); guided JSON verified (dataprep requirement) |
+| `TEI_EMBEDDING_IMAGE` | `ghcr.io/huggingface/text-embeddings-inference:cpu-1.9.3` | TEI CPU fallback — see below (the compose default is the NVIDIA-capable `1.9.3` image) |
+| `TEI_RERANKING_IMAGE` | `ghcr.io/huggingface/text-embeddings-inference:cpu-1.9.3` | TEI CPU fallback (same) |
 
-### Overlay invocations
+### Invocations (one file set, vendor as values)
 
-The overlays layer on top of the untouched base files with `-f`, and the
-ROCm file must come **last** (verbatim from the overlay headers):
+There is one file set. The ROCm path runs the SAME compose files with
+the Strix Halo env and the `rocm-models` profile:
 
 ```bash
 # Single-server: main stack, GPU tier on the local iGPU
 docker compose --env-file .env --env-file env.strixhalo \
-  -f docker-compose.yaml -f docker-compose.rocm.yaml \
-  --profile opea --profile gpu-models up -d
+  -f docker-compose.yaml \
+  --profile opea --profile gpu-models --profile rocm-models up -d
 
 # Split topology: standalone GPU-node stack on the ROCm node
 docker compose --env-file env.strixhalo \
-  -f docker-compose.gpu.yaml -f docker-compose.rocm.gpu.yaml up -d
+  -f docker-compose.gpu.yaml --profile rocm-models up -d
 ```
 
+An NVIDIA deployment runs the same files with no `env.strixhalo` and no
+`rocm-models` profile — the file defaults are the NVIDIA values (the
+`vllm/vllm-openai` image, `/dev/null` + `/dev/zero` device rows, the
+historical ports) and a profile-disabled service is absent from the
+resolved config, not merely stopped.
 `HUGGING_FACE_HUB_TOKEN` must reach the containers — set it in the
 environment or put `--env-file .env` ahead of `--env-file env.strixhalo`.
-The overlays restate only what a ROCm host needs: the image pins, GPU
-device access (`devices: /dev/kfd + /dev/dri` with `group_add`) and
+What the Strix Halo env pins: the image pins, GPU
+device access (`GPU_DEVICE_KFD` / `GPU_DEVICE_DRI` →
+`devices: /dev/kfd + /dev/dri` with `group_add`) and
 `NVIDIA_VISIBLE_DEVICES=void` (compose merges `environment:` by key, so
 omitting the var would NOT remove it; `void` claims no GPU and is ignored
-by ROCm containers). Everything else merges from the base files. The TEI
-services need no device access (CPU image). For the Ansible path,
-`deploy/ansible/deploy-gpu-rocm.yml` +
-`group_vars/rocm_gpu_nodes/vars.yml` drive the same GPU-node stack.
+by ROCm containers). The TEI services need no device access (CPU image).
+For the Ansible path, `deploy/ansible/deploy-gpu.yml` (host group
+`rocm_gpu_nodes`; vars in `deploy/ansible/vars/rocm_gpu_nodes.yml`)
+drives the same GPU-node stack.
 
-#### Why one overlay file per vendor (and not one compose file)
+#### Why the vendor axis is values in the base file (and not compose files)
 
-The ROCm path adds two files to a repo that already had two. That is the
-shape, not an accident — and it is the shape that keeps every NVIDIA
-deployment byte-identical.
+The ROCm path lives in the SAME files every NVIDIA deployment loads.
+That is deliberate, and it works because every vendor difference is
+expressible as a value or a profile:
 
-**What a parameter cannot express.** Compose has no conditional
-structure. Everything a vendor difference needs is *structural*, not a
-value:
-
-| What differs | Why no parameter covers it |
+| What differs | How the base file expresses it |
 |---|---|
-| `vllm-embedding`, `vllm-reranker` exist only on ROCm | a service either exists or it does not; there is no "define this service only for vendor X" |
-| `devices: /dev/kfd + /dev/dri` | the paths do not exist on an NVIDIA host, and the base file is what every deployment renders — see the measured note below |
-| `group_add: [render, video]` | the GIDs are host-specific (measured per host, `getent group render`) |
-| the ROCm image's serving entrypoint | the NVIDIA image's entrypoint is `vllm serve`; the ROCm image has none (its CMD is `/bin/bash`), so the flags need something to attach to |
+| `vllm-embedding`, `vllm-reranker` exist only on ROCm | compose profiles: the services carry `profiles: [rocm-models]`, so they are **absent** from the resolved config unless `--profile rocm-models` is passed — not stopped, not created |
+| `devices: /dev/kfd + /dev/dri` | interpolated paths with every-host defaults (`${GPU_DEVICE_KFD:-/dev/null}`, `${GPU_DEVICE_DRI:-/dev/zero}`) — see the measured note below |
+| `group_add: [render, video]` | interpolated GIDs with `nobody`/`nogroup` defaults (two DISTINCT numbers — the list rejects duplicates); host-specific values in `env.strixhalo` |
+| the ROCm image's serving entrypoint | one explicit `entrypoint: ["vllm", "serve"]` on the service — a no-op on the NVIDIA image (whose own entrypoint is `vllm serve`; the flag `command:` always attached to it) and the repair the ROCm image needs (its CMD is `/bin/bash`) |
+| image pins | `${VLLM_IMAGE:-vllm/vllm-openai:v0.29.0}` and the two TEI rows — values the env file sets per venue |
 
 **Measured, not asserted** (the earlier wording here overclaimed; the
 probes below replace it):
@@ -243,56 +249,43 @@ probes below replace it):
   So a `devices:` row in the base file needs a path that exists on every
   host it renders for — `/dev/null` qualifies, which is why the
   value-axis spelling uses `/dev/null` and not the ROCm path.
-- So the vendor axis *can* be expressed as values in the base file. It is
-  not put there for two reasons that are about safety, not capability:
-  the base file is the NVIDIA deployment (a `/dev/null` device row and a
-  parameterized image row would change the NVIDIA render on a service
-  that never asks for a GPU device), and the vendor-only services would
-  have to live in that file under a vendor-specific profile.
+- So the vendor axis is expressed as values in the base file, and the
+  NVIDIA-inertness contract holds by construction: on an NVIDIA
+  deployment every interpolated row renders the same values it always
+  had (`/dev/null` + `/dev/zero` device rows — paths that exist on every
+  host, never claimed by any NVIDIA container; the `nobody`/`nogroup`
+  groups — distinct, and never used by any NVIDIA container), the
+  entrypoint restates the image's own, and the profile-disabled
+  pooling services are absent from the render. The
+  `rocm-compose-render.test.js` gate renders BOTH shapes and pins the
+  deltas.
 - The bind-mount alternative (`volumes: - /dev/kfd:/dev/kfd`) is worse:
   compose merges volumes by key, but a bind mount of a path that does not
   exist CREATES a root-owned directory on the host — inside `/dev`.
 
-**The ports are values now.** The base GPU file's port rows are both
+**The ports are values.** The GPU file's port rows are both
 parameterized (`${GPU_HTTPS_PORT:-443}:443` and `${GPU_HTTP_PORT:-80}:80`),
-so the overlay restates the same values and compose's union collapses
-them. That removed the `ports: !override` this path used to need — and
-with it a Compose **2.24.4** floor that contradicted the repository's
-documented 2.20+. No merge tag is used anywhere in the ROCm path now.
+so each venue pins them in its env file. That removed the
+`ports: !override` this path used to need — and with it a Compose
+**2.24.4** floor that contradicted the repository's documented 2.20+. No
+merge tag is used anywhere in the ROCm path.
 
-A parameter *can* express a value: every image pin, port, model id,
-sizing knob and GID already flows through the env files. That is why the
-ROCm profile is one env file (`env.strixhalo`) plus one overlay per
-topology, and why the overlay restates so little.
+**What the profile actually adds.** The `rocm-models` services carry
+their own image pin, device rows, groups and entrypoint inside the same
+service definitions every vendor renders; an NVIDIA deployment just
+never activates them, and the always-on services' vendor rows render as
+the NVIDIA values. One definition per service, no drift between vendors:
+a flag change on the base side reaches ROCm with no second edit.
 
-**What the overlay actually carries.** For the services that exist in
-both, the overlay states the *vendor* difference and nothing else — the
-base file's flags, hardening, healthcheck, volumes and networks merge in
-unchanged. Concretely, the four vLLM instances in the single-server
-overlay are two lines each (image pin + `NVIDIA_VISIBLE_DEVICES=void`)
-plus the entrypoint restatement; the base's flag block is inherited
-verbatim, so a flag change on the base side reaches ROCm with no second
-edit and no drift.
-
-**Why not fold ROCm into the base file.** The base file is what every
-deployment loads. Adding ROCm-only services and `/dev/kfd` mounts to it
-would put a broken-on-NVIDIA service definition into every NVIDIA
-deployment's config, and make the NVIDIA render — the artifact the
-NVIDIA-safety gates compare — differ on every ROCm change. The overlay
-model is what lets the contract "an NVIDIA deployment cannot observe a
-behavior change without setting a new env var" be *proved* rather than
-argued: the NVIDIA render is byte-identical whether or not the overlay
-exists.
-
-**Why not one file per vendor for everything.** The two ROCm overlays
-exist because they stack on two different base files — the main stack
-(`docker-compose.yaml`) and the standalone GPU-node stack
-(`docker-compose.gpu.yaml`). The GPU-node stack has its own services,
-its own network and its own port plan; a single overlay cannot serve
-both without restating the other topology's services. The consolidation
-question (one file, all topologies) is tracked in issue #2014 with the
-measured trade-offs.
-
+**Why the NVIDIA render still proves inert.** The contract "an NVIDIA
+deployment cannot observe a behavior change without setting a new env
+var" is *pinned*, not argued: `rocm-compose-render.test.js` renders both
+shapes of the same files and asserts the NVIDIA deltas one by one — the
+device rows map `/dev/null` + `/dev/zero`, the groups are
+`nobody`/`nogroup` (never used by an NVIDIA container), the entrypoint
+restates the image's own (`vllm serve`), the image pin falls back to
+`vllm/vllm-openai:v0.29.0`, the pooling services are absent, and the
+published ports are the historical 443/80.
 {{% alert title="`env.strixhalo` is the single-server profile" color="warning" %}}
 Its `RERANKER_BACKEND=vllm` / `EMBEDDING_BACKEND=vllm` flips hard-fail on a
 compose **split** venue: the static gpu-proxy
@@ -336,9 +329,9 @@ measure 8.58 GiB).
 | `VLLM_RERANKER_GPU_UTILIZATION` | `0.05` | ~2.3 GiB claim (spike-measured ~1.56 GiB touched) |
 | `VLLM_RERANKER_MAX_MODEL_LEN` | `8192` | |
 | `EMBEDDING_BACKEND` | `vllm` | dataprep + retriever call the `vllm-embedding` pooling instance (chatqna's query encoder reaches it through `EMBEDDING_VLLM_ENDPOINT`) |
-| `VLLM_EMBEDDING_MODEL_ID` | `BAAI/bge-large-en-v1.5` | overlay default — the pooling model (OpenAI `/v1/embeddings` shape) |
-| `VLLM_EMBEDDING_GPU_UTILIZATION` | `0.05` | overlay default |
-| `VLLM_EMBEDDING_MAX_MODEL_LEN` | `512` | overlay default |
+| `VLLM_EMBEDDING_MODEL_ID` | `BAAI/bge-large-en-v1.5` | compose default — the pooling model (OpenAI `/v1/embeddings` shape) |
+| `VLLM_EMBEDDING_GPU_UTILIZATION` | `0.05` | compose default |
+| `VLLM_EMBEDDING_MAX_MODEL_LEN` | `512` | compose default |
 
 Coexistence verified at the 2B sizing: the two main instances healthy
 together, peak GTT **~19.6 GiB** against the 27 GB budget — before the two
@@ -413,17 +406,20 @@ remote-GPU pattern — see
 ### OKF stack on a ROCm venue (live-verified additions)
 
 Running the OKF knowledge-base tier on a ROCm single-server venue needs
-four venue-only settings (all in the local `.env` / the ROCm overlay —
+four venue-only settings (all in the local `.env` / the Strix Halo env —
 no NVIDIA-path file changes):
 
 1. **`OKF_ENABLED=1`** + `--profile okf` + a kong-config re-run — see
    [OKF Deployment & Lifecycle](/docs/knowledge-base/okf-deployment/)
    for the full flag semantics.
-2. **Split-URL auth for okf-server AND document-repository** — the ROCm
-   overlay (`docker-compose.rocm.yaml`) carries the
+2. **Split-URL auth for okf-server AND document-repository** — the base
+   compose carries the
    `KEYCLOAK_DISCOVERY_URL` / `KEYCLOAK_JWKS_URL` /
-   `KEYCLOAK_PUBLIC_URL` trio for three services now: backend,
-   okf-server, document-repository. Document-repository's block is what
+   `KEYCLOAK_PUBLIC_URL` trio for three services (backend,
+   okf-server, document-repository) with EMPTY defaults — the NVIDIA
+   one-URL shape. `env.strixhalo` pins the discovery/JWKS legs (the
+   in-network URLs); the browser-edge alias stays in the venue `.env`
+   (it needs the venue's domain). Document-repository's block is what
    makes OKF publishing work (its OIDC discovery otherwise times out
    against the self-signed edge and bundle storage answers 503 →
    `EXPORT_FAILED` on publish).

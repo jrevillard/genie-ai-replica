@@ -115,6 +115,29 @@ delivers written handoff notes for it, not charts.
   runs; disk is ample (~862 GB free; candidate ROCm vLLM images are
   10–20 GB each, models ~26 GB).
 
+## SUPERSEDED: the vendor axis collapsed into the base files (2026-11-19)
+
+The MR review rejected the two-overlay shape: an overlay is an UNRENDERED
+file (the config-validator suite parses the base files only), so a merge
+tag, an environment merge or a service name in it reached the branch
+unchecked, and the compose-CLI version floor (`!override`, 2.24.4)
+contradicted the documented 2.20+. The vendor axis now lives in the BASE
+compose files as interpolated values — image pins
+(`VLLM_IMAGE` / `TEI_EMBEDDING_IMAGE` / `TEI_RERANKING_IMAGE`), device
+paths (`GPU_DEVICE_KFD` / `GPU_DEVICE_DRI`, defaults `/dev/null` +
+`/dev/zero`, paths that exist on every host), group GIDs
+(`nobody`/`nogroup` defaults), an explicit `entrypoint: ["vllm","serve"]`
+— and the pooling services sit behind the `rocm-models` compose profile
+(absent from the resolved config unless activated). The decisions below
+record the ORIGINAL design; every "overlay" reference in them now means
+the collapsed shape: the values render from `env.strixhalo` +
+`--profile rocm-models`, and the NVIDIA-inertness contract is pinned by
+`tests/config-validator/__tests__/rocm-compose-render.test.js`, which
+renders BOTH shapes of the same files. The ansible path collapsed with
+it: one playbook (`deploy-gpu.yml`, host group `rocm_gpu_nodes`), vars
+via `vars/rocm_gpu_nodes.yml` + `vars_files` (not group_vars/, which
+resolves by inventory group name and had silently mismatched).
+
 ## Decisions (operator, 2026-11-11)
 
 1. **vLLM image sourcing: spike first, then pin.** Phase 0 validates
@@ -155,7 +178,17 @@ delivers written handoff notes for it, not charts.
    ROCm image-pin vars in a new `group_vars` file. Additive only — the
    NVIDIA rendering path is byte-for-byte unchanged for NVIDIA inputs.
 
-## Why the overlay file set is the cleanest shape (2026-11-19)
+## Why the overlay file set is the cleanest shape (2026-11-19; SUPERSEDED 2026-11-19, same day)
+
+> **Superseded.** The MR review rejected the overlay shape — an
+> unrendered file, and a 2.24.4 compose floor against a documented 2.20+
+> — and the vendor axis collapsed into the base files as values + the
+> `rocm-models` profile (see the SUPERSEDED block at the top of this
+> spec). The section below is kept as the decision record: it is the
+> measured reasoning that led to the overlay shape and, via the review's
+> objections, to the collapse. Do not re-litigate either direction
+> without new facts; the collapsed shape's contract is pinned by
+> `rocm-compose-render.test.js`.
 
 The MR adds two compose files to a repo that had two. A reviewer asked
 for a single compose file. The measured answer — why the overlay set is

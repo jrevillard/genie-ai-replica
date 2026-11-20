@@ -43,7 +43,7 @@ services:
       --dtype={{ vllm_dtype | default('half') }}
       --enforce-eager
     environment:
-      - HUGGING_FACE_HUB_TOKEN={{ hugging_face_hub_token }}
+      - HUGGING_FACE_HUB_TOKEN={{ hugging_face_hub_token | default('') }}
       - NVIDIA_VISIBLE_DEVICES={{ nvidia_visible_devices | default('all') }}
     volumes:
       - hf_cache:/root/.cache/huggingface
@@ -80,7 +80,7 @@ services:
       --max-num-seqs {{ vllm_translation_max_num_seqs | default('16') }}
       --chat-template-content-format openai
     environment:
-      - HUGGING_FACE_HUB_TOKEN={{ hugging_face_hub_token }}
+      - HUGGING_FACE_HUB_TOKEN={{ hugging_face_hub_token | default('') }}
       - NVIDIA_VISIBLE_DEVICES={{ nvidia_visible_devices | default('all') }}
     volumes:
       - hf_cache:/root/.cache/huggingface
@@ -100,7 +100,7 @@ services:
     volumes:
       - {{ gpu_data_dir | default('./data') }}/huggingface:/data
     environment:
-      - HUGGING_FACE_HUB_TOKEN={{ hugging_face_hub_token }}
+      - HUGGING_FACE_HUB_TOKEN={{ hugging_face_hub_token | default('') }}
       - RUST_BACKTRACE=
       - NVIDIA_VISIBLE_DEVICES={{ nvidia_visible_devices | default('all') }}
     healthcheck:
@@ -118,7 +118,7 @@ services:
     volumes:
       - {{ gpu_data_dir | default('./data') }}/huggingface:/data
     environment:
-      - HUGGING_FACE_HUB_TOKEN={{ hugging_face_hub_token }}
+      - HUGGING_FACE_HUB_TOKEN={{ hugging_face_hub_token | default('') }}
       - RUST_BACKTRACE=
       - NVIDIA_VISIBLE_DEVICES={{ nvidia_visible_devices | default('all') }}
     healthcheck:
@@ -146,7 +146,7 @@ services:
       --enforce-eager
       --port 8000
     environment:
-      - HUGGING_FACE_HUB_TOKEN={{ hugging_face_hub_token }}
+      - HUGGING_FACE_HUB_TOKEN={{ hugging_face_hub_token | default('') }}
       - NVIDIA_VISIBLE_DEVICES={{ nvidia_visible_devices | default('all') }}
     devices:
       - /dev/kfd:/dev/kfd
@@ -177,7 +177,7 @@ services:
       --enforce-eager
       --port 8000
     environment:
-      - HUGGING_FACE_HUB_TOKEN={{ hugging_face_hub_token }}
+      - HUGGING_FACE_HUB_TOKEN={{ hugging_face_hub_token | default('') }}
       - NVIDIA_VISIBLE_DEVICES={{ nvidia_visible_devices | default('all') }}
     devices:
       - /dev/kfd:/dev/kfd
@@ -218,7 +218,7 @@ services:
       - "{{ gpu_https_port | default('443') }}:443"
       - "80:80"
     volumes:
-      - ./{{ gpu_generated_dir }}:/etc/nginx/conf.d:ro
+      - ./{{ gpu_generated_dir | default('configs/nginx-gpu') }}:/etc/nginx/conf.d:ro
       - ./ssl:/etc/nginx/ssl:ro
       - certbot_webroot_gpu:/var/www/certbot:ro
     depends_on:
@@ -247,9 +247,9 @@ services:
     entrypoint: ["/certbot-entrypoint.sh"]
     environment:
       - CERTBOT_EMAIL={{ certbot_email | default('') }}
-      - NGINX_PUBLIC_DOMAIN={{ gpu_public_domain }}
+      - NGINX_PUBLIC_DOMAIN={{ gpu_public_domain | default('') }}
     volumes:
-      - {{ gpu_deploy_dir }}/api-gateway-solution/certbot/entrypoint.sh:/certbot-entrypoint.sh:ro
+      - {{ gpu_deploy_dir | default('/opt/genieai-gpu') }}/api-gateway-solution/certbot/entrypoint.sh:/certbot-entrypoint.sh:ro
       - certbot_webroot_gpu:/var/www/certbot
       - certbot_etc_gpu:/etc/letsencrypt
       - gpu_ssl:/secrets/ssl

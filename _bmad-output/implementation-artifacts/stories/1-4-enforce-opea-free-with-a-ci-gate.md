@@ -277,6 +277,16 @@ Fix-review round 13 (`FIX-REVIEW`, correction diff `0c72fefe6` → `5181ff3e8`, 
 |---|---|---|---|
 | I-1 | The counter read 16 against a log of 17 round blocks at this head — the correction moved the off-by-one from +1 to −1; the round-12 M-1 disposition asserted "matching the log", false at HEAD | important | **Fixed** — the counter set to the convention value (18 at the round-13 head), the round-12 M-1 row amended to record the full sequence |
 
+Quality pass, step 1 (`/simplify`: reuse, simplification, efficiency, altitude — four parallel reviewers over the story's whole diff). Altitude: clean. Applied:
+
+- The `git ls-files` enumeration extracted to `validators/tracked-files.js` (memoized full tree, filtered per call) — the gate and `stray-copy-artifacts.test.js` consume one helper instead of carrying two copies of a drift-prone incantation, the same treatment the glob matcher got in review round 1.
+- The vacuous pin removed ("every tracked file is scanned" compared a flatMap's length to the sum of the same enumerations — it could not fail and re-ran `git ls-files` to do it); the anti-vacuity floors (`>= 5`, the existence loop) carry the weight.
+- One `readerFor(root)` factory replaces nine inline reader lambdas; `scanFiles` skips the read for a file no branch would scan; the manifest read is memoized.
+- The glob matcher memoizes its brace expansions and segment RegExps (pure functions; the trigger-assertion test calls it hundreds of times over the same small glob list).
+- The manifest `_comment` no longer re-lists the marker inventory (it had drifted once already); it points at the gate's header — one inventory.
+
+Skipped: the per-file `uncoveredFiles` assertion kept beside the one-glob assertion (the pair is deliberate — the per-file form names the uncovered files, the boolean prints only `false`). The scan guard is an efficiency measure with no observable behaviour change, so it carries no sample of its own.
+
 ## Design Notes
 
 - The manifest is JSON because it is data consumed by two kinds of checker (the gate and the human who extends it) and it must stay diffable in a review. The house precedent for the same thing is `scripts/ci/config-parity-allowlist.json`.

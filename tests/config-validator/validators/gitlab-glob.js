@@ -2,6 +2,13 @@
 // SPDX-License-Identifier: Apache-2.0
 const { escapeRegExp } = require('./js-files');
 
+// The match sets are pure functions of their input: the same glob string and
+// the same segment always compile to the same expansion and the same RegExp,
+// so both are memoized. The trigger-assertion tests call the matcher hundreds
+// of times over the same small glob list.
+const expansionCache = new Map();
+const segmentCache = new Map();
+
 /**
  * The semantics `rules:changes` matches with: Ruby's File.fnmatch with
  * FNM_PATHNAME | FNM_DOTMATCH | FNM_EXTGLOB.
@@ -34,6 +41,16 @@ const { escapeRegExp } = require('./js-files');
  * @returns {string[]} The expanded globs
  */
 function expandBraces(pattern) {
+  const cached = expansionCache.get(pattern);
+  if (cached) {
+    return cached;
+  }
+  const expanded = expandBracesUncached(pattern);
+  expansionCache.set(pattern, expanded);
+  return expanded;
+}
+
+function expandBracesUncached(pattern) {
   const match = /\{([^{}]*)\}/.exec(pattern);
   if (!match) {
     return [pattern];
@@ -49,7 +66,7 @@ function expandBraces(pattern) {
  * @param {string} segment - The segment pattern
  * @returns {RegExp} The segment matcher
  */
-function globSegment(segment) {
+function buildSegmentRegExp(segment) {
   let source = '';
   for (const char of segment) {
     if (char === '*') {
@@ -61,6 +78,15 @@ function globSegment(segment) {
     }
   }
   return new RegExp(`^${source}$`);
+}
+
+function globSegment(segment) {
+  let re = segmentCache.get(segment);
+  if (!re) {
+    re = buildSegmentRegExp(segment);
+    segmentCache.set(segment, re);
+  }
+  return re;
 }
 
 const matchesSegments = (pattern, pi, parts, pj) => {

@@ -23,6 +23,7 @@
 
 const { execFileSync } = require('child_process');
 const { escapeRegExp } = require('../validators/js-files');
+const { trackedFiles } = require('../validators/tracked-files');
 const path = require('path');
 
 const { parseGitlabCiJobChanges } = require('../validators/parse-compose');
@@ -107,20 +108,6 @@ const isCopyArtifact = (part) =>
   SHAPES.some((shape) => (shape.prefix ? part.startsWith(shape.marker) : SUFFIX_ARTIFACT.test(part)));
 
 const findStrayCopies = (paths) => paths.filter((p) => p.split('/').some(isCopyArtifact));
-
-let tracked = null;
-const trackedFiles = () => {
-  if (!tracked) {
-    tracked = execFileSync('git', ['ls-files', '-z'], {
-      cwd: ROOT,
-      encoding: 'utf8',
-      maxBuffer: 16 * 1024 * 1024
-    })
-      .split('\0')
-      .filter(Boolean);
-  }
-  return tracked;
-};
 
 // The repository's own .gitignore layers (the root file and the nested ones —
 // they are committed content) must be what matches: only a repo-layer match

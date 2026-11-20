@@ -66,11 +66,11 @@
 
 const fs = require('fs');
 const path = require('path');
-const { execFileSync } = require('child_process');
 
 const { parseGitlabCiJobChanges } = require('../validators/parse-compose');
 const { gitlabGlobMatches } = require('../validators/gitlab-glob');
 const { withTree } = require('../validators/temp-tree');
+const { trackedFiles } = require('../validators/tracked-files');
 
 const ROOT = path.resolve(__dirname, '../../..');
 const MANIFEST_REPO_PATH = 'scripts/ci/agent-path-packages.json';
@@ -289,8 +289,13 @@ function importsInCode(content, mask, form) {
  *
  * @returns {object} The parsed manifest
  */
+let manifest = null;
+
 function readManifest() {
-  return JSON.parse(fs.readFileSync(MANIFEST_PATH, 'utf8'));
+  if (!manifest) {
+    manifest = JSON.parse(fs.readFileSync(MANIFEST_PATH, 'utf8'));
+  }
+  return manifest;
 }
 
 /**
@@ -314,21 +319,6 @@ function otherPackages(manifest) {
 }
 
 /**
- * The tracked files under a directory.
- *
- * @param {string} directory - The repository-relative directory
- * @returns {string[]} The repository-relative tracked file paths
- */
-function trackedFilesUnder(directory) {
-  const out = execFileSync('git', ['ls-files', '-z', '--', directory], {
-    cwd: ROOT,
-    encoding: 'utf8',
-    maxBuffer: 16 * 1024 * 1024
-  });
-  return out.split('\0').filter(Boolean);
-}
-
-/**
  * Every package directory under components/, as repository paths.
  *
  * The enumeration is the tracked tree, so a scratch directory a developer
@@ -339,7 +329,7 @@ function trackedFilesUnder(directory) {
  */
 function componentDirectories() {
   const directories = new Set();
-  for (const file of trackedFilesUnder(COMPONENTS_DIR)) {
+  for (const file of trackedFiles(COMPONENTS_DIR)) {
     const rest = file.slice(`${COMPONENTS_DIR}/`.length);
     const slash = rest.indexOf('/');
     if (slash === -1) {
@@ -366,6 +356,14 @@ function unclassifiedPackages(manifest, directories) {
 }
 
 /**
+ * The reader scanFiles takes: one file of a root, read as UTF-8 text.
+ *
+ * @param {string} root - The directory the file paths are relative to
+ * @returns {(file: string) => string} The reader
+ */
+const readerFor = (root) => (file) => fs.readFileSync(path.join(root, file), 'utf8');
+
+/**
  * Scan files for the two OPEA couplings the gate forbids.
  *
  * @param {string[]} files - The file paths to read
@@ -375,6 +373,9 @@ function unclassifiedPackages(manifest, directories) {
 function scanFiles(files, read) {
   const violations = [];
   for (const file of files) {
+    if (!file.endsWith('.py') && !isBuildFile(file)) {
+      continue;
+    }
     const content = read(file);
     if (file.endsWith('.py')) {
       const mask = pythonCodeMask(content);
@@ -614,7 +615,7 @@ describe('OPEA-free gate (Story 1.4, FR-20, AD-1)', () => {
 
   it('finds no OPEA coupling in the agentic path', () => {
     const manifest = readManifest();
-    const files = agentPathPackages(manifest).flatMap((entry) => trackedFilesUnder(entry.path));
+    const files = agentPathPackages(manifest).flatMap((entry) => trackedFiles(entry.path));
     const violations = scanFiles(files, (file) => fs.readFileSync(path.join(ROOT, file), 'utf8'));
     expect(violations).toEqual([]);
   });
@@ -622,14 +623,8 @@ describe('OPEA-free gate (Story 1.4, FR-20, AD-1)', () => {
   it('scans the agentic path', () => {
     // Anti-vacuity floor: an enumeration that returned nothing would make the
     // gate above pass without ever reading a file.
-    const manifest = readManifest();
-    const packages = agentPathPackages(manifest);
-    const files = packages.flatMap((entry) => trackedFilesUnder(entry.path));
+    const files = agentPathPackages(readManifest()).flatMap((entry) => trackedFiles(entry.path));
     expect(files.length).toBeGreaterThanOrEqual(5);
-    // Every tracked file of every agent-path package is scanned — a gate that
-    // skips a file type would still be green.
-    const trackedTotal = packages.reduce((total, entry) => total + trackedFilesUnder(entry.path).length, 0);
-    expect(files.length).toBe(trackedTotal);
     for (const file of files) {
       expect(fs.existsSync(path.join(ROOT, file))).toBe(true);
     }
@@ -638,7 +633,7 @@ describe('OPEA-free gate (Story 1.4, FR-20, AD-1)', () => {
   it('detects every form of comps import', () => {
     for (const [id, content] of Object.entries(IMPORT_SAMPLES)) {
       const violations = withTree('opea-free-import-', { 'pkg/mod.py': content }, (root) =>
-        scanFiles(['pkg/mod.py'], (file) => fs.readFileSync(path.join(root, file), 'utf8'))
+        scanFiles(['pkg/mod.py'], readerFor(root))
       );
       expect(violations.map((violation) => violation.rule)).toEqual([`comps-import:${id}`]);
     }
@@ -647,7 +642,7 @@ describe('OPEA-free gate (Story 1.4, FR-20, AD-1)', () => {
   it('detects the module lists Python offers', () => {
     for (const variant of IMPORT_VARIANTS) {
       const violations = withTree('opea-free-variant-', { 'pkg/mod.py': variant.content }, (root) =>
-        scanFiles(['pkg/mod.py'], (file) => fs.readFileSync(path.join(root, file), 'utf8'))
+        scanFiles(['pkg/mod.py'], readerFor(root))
       );
       expect(violations.map((violation) => violation.rule)).toEqual([variant.rule]);
     }
@@ -656,7 +651,7 @@ describe('OPEA-free gate (Story 1.4, FR-20, AD-1)', () => {
   it('detects every OPEA build-time marker', () => {
     for (const sample of BUILD_SAMPLES) {
       const violations = withTree('opea-free-build-', { [sample.file]: sample.content }, (root) =>
-        scanFiles([sample.file], (file) => fs.readFileSync(path.join(root, file), 'utf8'))
+        scanFiles([sample.file], readerFor(root))
       );
       expect(violations.map((violation) => violation.rule)).toEqual(sample.rules.map((rule) => `opea-build:${rule}`));
     }
@@ -665,7 +660,7 @@ describe('OPEA-free gate (Story 1.4, FR-20, AD-1)', () => {
   it('detects every way a dependency declaration names the overlay package', () => {
     for (const sample of DEPENDENCY_SAMPLES) {
       const violations = withTree('opea-free-dependency-', { [sample.file]: sample.content }, (root) =>
-        scanFiles([sample.file], (file) => fs.readFileSync(path.join(root, file), 'utf8'))
+        scanFiles([sample.file], readerFor(root))
       );
       expect(violations.map((violation) => violation.rule)).toEqual(sample.rules.map((rule) => `opea-build:${rule}`));
     }
@@ -682,7 +677,7 @@ describe('OPEA-free gate (Story 1.4, FR-20, AD-1)', () => {
       ''
     ].join('\n');
     const violations = withTree('opea-free-overlay-', { 'pkg/Dockerfile': content }, (root) =>
-      scanFiles(['pkg/Dockerfile'], (file) => fs.readFileSync(path.join(root, file), 'utf8'))
+      scanFiles(['pkg/Dockerfile'], readerFor(root))
     );
     expect(violations.map((violation) => violation.rule).sort()).toEqual([
       'opea-build:opea-build-arg',
@@ -697,7 +692,7 @@ describe('OPEA-free gate (Story 1.4, FR-20, AD-1)', () => {
 
   it('leaves a clean package alone', () => {
     const violations = withTree('opea-free-clean-', CLEAN_FILES, (root) =>
-      scanFiles(Object.keys(CLEAN_FILES), (file) => fs.readFileSync(path.join(root, file), 'utf8'))
+      scanFiles(Object.keys(CLEAN_FILES), readerFor(root))
     );
     expect(violations).toEqual([]);
   });
@@ -707,7 +702,7 @@ describe('OPEA-free gate (Story 1.4, FR-20, AD-1)', () => {
     // tools directory and a commented-out import: none of them is a coupling.
     for (const sample of NEGATIVE_SAMPLES) {
       const violations = withTree('opea-free-negative-', { [sample.file]: sample.content }, (root) =>
-        scanFiles([sample.file], (file) => fs.readFileSync(path.join(root, file), 'utf8'))
+        scanFiles([sample.file], readerFor(root))
       );
       expect(violations).toEqual([]);
     }
@@ -717,7 +712,7 @@ describe('OPEA-free gate (Story 1.4, FR-20, AD-1)', () => {
     // A `"""` that opens no docstring must not pair with the next one and
     // swallow the file: the import below it is a coupling.
     const violations = withTree('opea-free-stray-', STRAY_QUOTE_SAMPLES, (root) =>
-      scanFiles(Object.keys(STRAY_QUOTE_SAMPLES), (file) => fs.readFileSync(path.join(root, file), 'utf8'))
+      scanFiles(Object.keys(STRAY_QUOTE_SAMPLES), readerFor(root))
     );
     expect(violations.map((violation) => violation.rule)).toEqual(['comps-import:import-statement']);
   });
@@ -763,7 +758,7 @@ describe('OPEA-free gate (Story 1.4, FR-20, AD-1)', () => {
     const changes = parseGitlabCiJobChanges(path.join(ROOT, '.gitlab-ci.yml'), [CI_JOB]);
     const entries = changes.get(CI_JOB) || [];
     for (const entry of agentPathPackages(readManifest())) {
-      const files = trackedFilesUnder(entry.path);
+      const files = trackedFiles(entry.path);
       expect(uncoveredFiles(entries, files)).toEqual([]);
       // AND one glob of the job must cover the WHOLE package. A set that
       // covers the root files in one glob and the nested files in another

@@ -585,3 +585,31 @@ def test_the_closed_vocabularies_are_the_declared_ones():
         OutcomeCode.TRANSIENT_FAILURE,
     }
     assert set(contract.OUTCOME_POLICIES) == set(OutcomeCode)
+
+
+def test_the_result_vocabulary_names_the_reported_codes():
+    """A result may only carry a code the policy table reports in a result: a
+    raised code in the literal would make the carrier contract unenforceable by
+    the types while the policy table still said otherwise."""
+    reported = {
+        code for code, policy in contract.OUTCOME_POLICIES.items() if policy.carrier is contract.OutcomeCarrier.RESULT
+    }
+
+    assert set(contract.ResultOutcome.__args__) == reported
+    assert set(contract.ResultOutcome.__args__) == {
+        OutcomeCode.SUCCESS,
+        OutcomeCode.INSUFFICIENT_EVIDENCE,
+        OutcomeCode.DEGRADED_AVAILABILITY,
+    }
+
+
+def test_every_closed_vocabulary_is_declared_breaking():
+    """The breaking list is the machine-readable half of the rules: a closed
+    vocabulary missing from it is a silent gap between the prose and the data."""
+    breaking = " ".join(contract.COMPATIBILITY.breaking)
+
+    assert "adding a field" in breaking
+    assert "adding an outcome code" in breaking
+    assert "adding a provenance variant or a source-ref variant" in breaking
+    assert "adding a preparation status" in breaking
+    assert "adding a limit scope or a limit breach" in breaking

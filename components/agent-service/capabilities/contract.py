@@ -555,9 +555,9 @@ class CompatibilityRules:
     Every model refuses the fields it does not know, so a new field is
     rejected by an older consumer rather than ignored: adding a field is a
     major change. The vocabularies are closed for the same reason — the
-    outcome codes, the provenance and source-ref variants, and the preparation
-    statuses — so extending one is a major change too. A minor version may
-    only add a new operation.
+    outcome codes, the provenance and source-ref variants, the preparation
+    statuses and the limit scope and breach vocabulary — so extending one is a
+    major change too. A minor version may only add a new operation.
 
     Anything that removes a field, changes a meaning, or changes the carrier,
     retry rule or fallback rule of an outcome code is a major change as well.

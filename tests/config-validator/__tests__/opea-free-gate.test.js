@@ -44,6 +44,9 @@
 //   seen; and the `;` context is the shell's rule, applied to every build
 //   file — in a YAML file a `#` after a `;` is not a comment, and the text
 //   after it is stripped anyway.
+// - A line continuation is crossed only inside a module list (`import os,
+//   <newline> comps.core`); a continuation after `import` or `from`, or
+//   between the keyword and the comma, is not covered.
 // - Uncommitted files: both the file enumeration and the package enumeration
 //   are the tracked tree (`git ls-files`), exactly what the pipeline checks
 //   out — a local run over an unstaged file, or over a scratch directory
@@ -464,6 +467,7 @@ const DEPENDENCY_SAMPLES = [
   { file: 'pkg/poetry.lock', content: 'name = "opea-comps"\n', rules: ['opea-dependency-entry'] },
   { file: 'pkg/requirements/prod/base.txt', content: 'comps==1.5\n', rules: ['opea-requirement'] },
   { file: 'pkg/GNUmakefile', content: 'install:\n\t@echo build\n', rules: [] },
+  { file: 'pkg/Makefile.linux', content: 'install:\n\tpip install opea-comps\n', rules: ['opea-pip-install'] },
   { file: 'pkg/requirements/base.txt', content: 'comps==1.5\n', rules: ['opea-requirement'] },
   { file: 'pkg/constraints.txt', content: 'comps==1.5\n', rules: ['opea-requirement'] }
 ];

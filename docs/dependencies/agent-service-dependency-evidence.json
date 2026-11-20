@@ -215,6 +215,19 @@
       }
     },
     {
+      "name": "langdetect",
+      "version": "1.0.9",
+      "license": "Apache-2.0",
+      "license_source": "artifact:langdetect-1.0.9.tar.gz#licence:langdetect-1.0.9/LICENSE sha256:9c539fdc47fa4e195b88efaa6495f11463de271f59c8de96feb8bc9c8abab1ab (sdist digest verified against the PyPI sha256). The publisher's PyPI info.license field says MIT but is stale upstream metadata: the classifier on the same page reads 'License :: OSI Approved :: Apache Software License' and the exact-version artifact ships an Apache-2.0 LICENSE (Mimino666) plus an Apache-2.0 NOTICE for the vendored Cybozu Labs language-detection (licence:langdetect-1.0.9/NOTICE). The artifact files are authoritative over the stale field, per this file's stated method.",
+      "verified": true,
+      "status": "stable",
+      "risk_acceptance": null,
+      "defaults": {
+        "telemetry": "none - the package performs no telemetry of its own",
+        "cloud_export": "none - the package contacts no external service - offline detection over bundled local language profiles"
+      }
+    },
+    {
       "name": "numpy",
       "version": "1.26.4",
       "license": "BSD-2-Clause",
@@ -498,6 +511,19 @@
       "defaults": {
         "telemetry": "none - the package performs no telemetry of its own",
         "cloud_export": "none - the package contacts no external service"
+      }
+    },
+    {
+      "name": "six",
+      "version": "1.17.0",
+      "license": "MIT",
+      "license_source": "artifact:six-1.17.0.tar.gz#licence:six-1.17.0/LICENSE sha256:4375ba20e2b9c6c4e7cad2940a628fd90e95cc3d50ee92aae",
+      "verified": true,
+      "status": "stable",
+      "risk_acceptance": null,
+      "defaults": {
+        "telemetry": "none - the package performs no telemetry of its own",
+        "cloud_export": "none - the package contacts no external service - a Python 2/3 compatibility shim with no I/O"
       }
     },
     {

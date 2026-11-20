@@ -44,7 +44,7 @@ development_status:
   1-6-implement-search_knowledge-opea-free-behavior-frozen: done
   1-7-implement-read_source-and-the-authorization-executor: done
   1-8-implement-the-input-preparation-module: done
-  1-9-behavioral-equivalence-suite-e01-runway-and-v05-inventory: review
+  1-9-behavioral-equivalence-suite-e01-runway-and-v05-inventory: done
   1-10-attest-the-chart-identity-of-the-deployed-baseline: done
   epic-1-retrospective: optional
 

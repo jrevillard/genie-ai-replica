@@ -5,8 +5,10 @@
 The chunks of a graph live in ``{graph_name}_SOURCE`` and their text rides
 the ``text`` field (V02 §4). The adapter reads them with one bind-variable
 AQL — the collection name itself is a bind variable, never interpolated —
-and joins the texts into the content a read returns, honouring the caller's
-result budget and reporting ``truncated``.
+bounded by the AQL ``LIMIT`` to the chunk count, and joins the texts into
+the content a read returns. The byte budget is the executor's single
+enforcement point (the contract assigns ``TRUNCATE_AND_FLAG`` to the
+result scope); the adapter only reports whether the chunk cap cut the read.
 """
 
 import asyncio
@@ -27,8 +29,8 @@ class LegacyChunkAdapter:
     def __init__(self, db_factory: Callable[[], object]) -> None:
         self._db_factory = db_factory
 
-    async def read_chunks(self, graph_name: str, file_id: str, max_chunks: int, max_bytes: int) -> tuple[str, bool]:
-        """The chunk texts joined with blank lines, and whether the budget cut them."""
+    async def read_chunks(self, graph_name: str, file_id: str, max_chunks: int) -> tuple[str, bool]:
+        """The chunk texts joined with blank lines, and whether the cap cut them."""
 
         def _run() -> list[dict]:
             db = self._db_factory()
@@ -46,10 +48,4 @@ class LegacyChunkAdapter:
         # field is absent — ``dict.get(key, default)`` would then yield None
         # and crash the join, so coerce explicitly.
         texts = [row.get("text") or "" for row in rows[:max_chunks]]
-        truncated = len(rows) > max_chunks
-        content = "\n\n".join(texts)
-        encoded = content.encode("utf-8")
-        if len(encoded) > max_bytes:
-            content = encoded[:max_bytes].decode("utf-8", "ignore")
-            truncated = True
-        return content, truncated
+        return "\n\n".join(texts), len(rows) > max_chunks

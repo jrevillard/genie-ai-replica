@@ -56,3 +56,18 @@ def validate_concept_id(value: str, *, operation: OperationName) -> str:
 def validate_graph_name(value: str, *, operation: OperationName) -> str:
     """A graph name: the only characters ArangoDB accepts in an identifier."""
     return _guard(_TOKEN_PATTERN, value, _GRAPH_NAME_MAX_LEN, "graph_name", operation=operation)
+
+
+def ensure_graph_name_config(value: str) -> str:
+    """The graph name as a deployment-configuration value (not caller-supplied).
+
+    Same charset, different error channel: a bad ``ARANGO_GRAPH_NAME`` is the
+    operator's configuration defect, and reporting it as a caller
+    authorization failure would send the operator to the wrong layer.
+    """
+    if not isinstance(value, str) or not _TOKEN_PATTERN.fullmatch(value) or len(value) > _GRAPH_NAME_MAX_LEN:
+        raise ValueError(
+            "invalid deployment configuration: graph name "
+            f"{value!r} is not an ArangoDB-safe identifier (expected [A-Za-z0-9_-], max {_GRAPH_NAME_MAX_LEN})"
+        )
+    return value

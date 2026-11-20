@@ -12,15 +12,11 @@ transport failure — is a transient failure, never a silent pass.
 """
 
 import asyncio
-from typing import Any, Protocol
+from typing import Any
 from urllib.parse import quote
 
-from capabilities.adapters.http import RequestsTransport, TransportError
+from capabilities.adapters.http import HttpTransport, RequestsTransport, TransportError
 from capabilities.contract import OperationName, TransientError
-
-
-class Transport(Protocol):
-    def get_json(self, url: str, bearer: str | None, timeout_s: float) -> tuple[int, Any]: ...
 
 
 def _file_of(body: Any) -> dict[str, Any]:
@@ -41,9 +37,9 @@ def _file_of(body: Any) -> dict[str, Any]:
 class DocRepoAdapter:
     """Resolves a legacy file id to its metadata record, or ``None``."""
 
-    def __init__(self, base_url: str, transport: Transport | None = None, timeout_s: float = 10.0) -> None:
+    def __init__(self, base_url: str, transport: HttpTransport | None = None, timeout_s: float = 10.0) -> None:
         self._base_url = base_url.rstrip("/")
-        self._transport: Transport = transport if transport is not None else RequestsTransport()
+        self._transport: HttpTransport = transport if transport is not None else RequestsTransport()
         self._timeout_s = timeout_s
 
     async def fetch_metadata(self, file_id: str, bearer: str | None) -> dict[str, Any] | None:
@@ -56,7 +52,16 @@ class DocRepoAdapter:
                 f"doc-repo metadata read failed: {error}", operation=OperationName.READ_SOURCE
             ) from error
         if status == 200:
-            return _file_of(body)
+            if isinstance(body, dict):
+                return _file_of(body)
+            # A 200 whose payload is not an object (an HTML error page from a
+            # proxy) is a payload defect, named as such — the same diagnostic
+            # principle as the okf adapter: the status succeeded, the payload
+            # is what is wrong.
+            raise TransientError(
+                "doc-repo metadata read served a non-object body on status 200",
+                operation=OperationName.READ_SOURCE,
+            )
         if status == 404:
             return None
         raise TransientError(f"doc-repo metadata read failed with status {status}", operation=OperationName.READ_SOURCE)

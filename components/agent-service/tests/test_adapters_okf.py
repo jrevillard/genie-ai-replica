@@ -16,24 +16,10 @@ import asyncio
 import urllib.parse
 
 import pytest
+from conftest import FakeTransport
 
-from capabilities.adapters.http import TransportError
 from capabilities.adapters.okf import OkfAdapter
 from capabilities.contract import TransientError
-
-
-class FakeTransport:
-    def __init__(self, status=200, body=None, error=None):
-        self.status = status
-        self.body = body if body is not None else {}
-        self.error = error
-        self.calls = []
-
-    def get_json(self, url, bearer, timeout_s):
-        self.calls.append({"url": url, "bearer": bearer, "timeout_s": timeout_s})
-        if self.error is not None:
-            raise TransportError(str(self.error))
-        return self.status, self.body
 
 
 def adapter(transport):

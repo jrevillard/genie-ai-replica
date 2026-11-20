@@ -33,6 +33,7 @@ outcomes, and a cancellation propagates untouched.
 """
 
 import asyncio
+from collections.abc import Awaitable, Callable
 
 from capabilities.adapters.chunks import LegacyChunkAdapter
 from capabilities.adapters.docrepo import DocRepoAdapter
@@ -53,7 +54,12 @@ from capabilities.contract import (
     SearchKnowledgeResult,
     TransientError,
 )
-from capabilities.identifiers import validate_concept_id, validate_file_id, validate_graph_name, validate_repo_id
+from capabilities.identifiers import (
+    ensure_graph_name_config,
+    validate_concept_id,
+    validate_file_id,
+    validate_repo_id,
+)
 
 _AUTHORIZE = OperationName.READ_SOURCE
 _SEARCH = OperationName.SEARCH_KNOWLEDGE
@@ -81,8 +87,12 @@ class AuthorizedExecutor:
     ) -> None:
         self._context = context
         self._bearer = bearer
-        self._legacy_graph_name = validate_graph_name(legacy_graph_name, operation=_AUTHORIZE)
+        # Deployment configuration, not a caller-supplied identifier: a bad
+        # value is the operator's defect and must not surface as a caller
+        # authorization failure.
+        self._legacy_graph_name = ensure_graph_name_config(legacy_graph_name)
         self._authorized_repos = {repo.repo_id for repo in context.authorized_repos}
+        self._authorized_graphs = frozenset(context.authorized_graph_names)
         self._docrepo = docrepo
         self._okf = okf
         self._chunks = chunks
@@ -100,11 +110,9 @@ class AuthorizedExecutor:
             # Fail-closed: nothing is reachable, so nothing is sought. The
             # inner port is not consulted at all.
             return self._insufficient_search(request)
-        try:
-            async with asyncio.timeout(budget.timeout_ms / 1000):
-                inner = await self._search_port.search_knowledge(context, request, budget)
-        except TimeoutError as error:
-            raise TransientError("search_knowledge exceeded its deadline", operation=_SEARCH) from error
+        inner = await self._within_deadline(
+            lambda: self._search_port.search_knowledge(context, request, budget), budget, _SEARCH
+        )
         survivors = tuple(candidate for candidate in inner.hits if self._hit_is_authorized(candidate))
         if inner.outcome is OutcomeCode.INSUFFICIENT_EVIDENCE or not survivors:
             return self._insufficient_search(request)
@@ -141,28 +149,39 @@ class AuthorizedExecutor:
         provenance = candidate.provenance
         if isinstance(provenance, OkfConceptProvenance):
             return provenance.repo_id in self._authorized_repos
-        return self._legacy_graph_name in self._context.authorized_graph_names
+        if isinstance(provenance, LegacyFileProvenance):
+            return self._legacy_graph_name in self._authorized_graphs
+        # Denial by default: a provenance variant the executor does not know
+        # is never granted the legacy corpus's rule. The contract's union is
+        # closed today, but the filter's default direction stays refusal.
+        return False
 
     # -- the two read paths ---------------------------------------------------
 
     async def _read_legacy_file(self, file_id: str, budget: OperationBudget) -> ReadSourceResult:
         validate_file_id(file_id, operation=_AUTHORIZE)
-        if self._legacy_graph_name not in self._context.authorized_graph_names:
+        if self._legacy_graph_name not in self._authorized_graphs:
             # AD-4: the legacy corpus has no per-user ACL — in scope only when
             # the set includes the legacy graph. Refused before doc-repo.
             raise AuthorizationError("the legacy corpus is not in the authorized set", operation=_AUTHORIZE)
-        try:
-            async with asyncio.timeout(budget.timeout_ms / 1000):
-                metadata = await self._docrepo.fetch_metadata(file_id, self._bearer)
-                if metadata is None:
-                    return self._insufficient_read()
-                content, truncated = await self._chunks.read_chunks(
-                    self._legacy_graph_name, file_id, budget.max_results, budget.max_result_bytes
-                )
-        except TimeoutError as error:
-            raise TransientError("read_source exceeded its deadline", operation=_AUTHORIZE) from error
+        # Resolution (doc-repo metadata) and content (the graph's chunks) share
+        # no data dependency — one deadline, both round-trips together.
+        metadata, (content, chunk_truncated) = await self._within_deadline(
+            lambda: asyncio.gather(
+                self._docrepo.fetch_metadata(file_id, self._bearer),
+                self._chunks.read_chunks(self._legacy_graph_name, file_id, budget.max_results),
+            ),
+            budget,
+            _AUTHORIZE,
+        )
+        if metadata is None:
+            return self._insufficient_read()
         return self._finalize_read(
-            LegacyFileProvenance(file_id=file_id), content, truncated, budget, empty_is_degradation=True
+            LegacyFileProvenance(file_id=file_id),
+            content,
+            chunk_truncated,
+            budget,
+            empty_is_degradation=True,
         )
 
     async def _read_okf_concept(self, target: OkfConceptRef, budget: OperationBudget) -> ReadSourceResult:
@@ -170,11 +189,9 @@ class AuthorizedExecutor:
         validate_concept_id(target.concept_id, operation=_AUTHORIZE)
         if target.repo_id not in self._authorized_repos:
             raise AuthorizationError("the requested repository is not in the authorized set", operation=_AUTHORIZE)
-        try:
-            async with asyncio.timeout(budget.timeout_ms / 1000):
-                card = await self._okf.fetch_concept(target.repo_id, target.concept_id, self._bearer)
-        except TimeoutError as error:
-            raise TransientError("read_source exceeded its deadline", operation=_AUTHORIZE) from error
+        card = await self._within_deadline(
+            lambda: self._okf.fetch_concept(target.repo_id, target.concept_id, self._bearer), budget, _AUTHORIZE
+        )
         if card is None:
             return self._insufficient_read()
         # Post-resolution re-validation: what resolved must be what was
@@ -185,7 +202,7 @@ class AuthorizedExecutor:
             card.get("repo_id") != target.repo_id
             or card.get("concept_id") != target.concept_id
             or not isinstance(resolved_graph, str)
-            or resolved_graph not in self._context.authorized_graph_names
+            or resolved_graph not in self._authorized_graphs
         ):
             raise AuthorizationError("the resolved identity does not match the authorized target", operation=_AUTHORIZE)
         provenance = OkfConceptProvenance(
@@ -195,7 +212,18 @@ class AuthorizedExecutor:
         )
         return self._finalize_read(provenance, str(card.get("body") or ""), False, budget, empty_is_degradation=False)
 
-    # -- result assembly --------------------------------------------------------
+    # -- deadline and result assembly -------------------------------------------
+
+    async def _within_deadline(
+        self, make_work: Callable[[], Awaitable], budget: OperationBudget, operation: OperationName
+    ):
+        """Run one operation under the budget's deadline: the contract's
+        timeout semantics (stop without a partial result) as one owner."""
+        try:
+            async with asyncio.timeout(budget.timeout_ms / 1000):
+                return await make_work()
+        except TimeoutError as error:
+            raise TransientError(f"{operation.value} exceeded its deadline", operation=operation) from error
 
     def _finalize_read(
         self,
@@ -214,6 +242,9 @@ class AuthorizedExecutor:
             # the source's true content: the caller below reads it as a
             # successful read of an empty source.
             return ReadSourceResult(outcome=OutcomeCode.DEGRADED_AVAILABILITY, provenance=provenance, content=None)
+        # The single result-size enforcement point (the contract assigns
+        # TRUNCATE_AND_FLAG to the result scope): the chunk adapter bounded
+        # only the chunk count, so the byte cut lives here for both paths.
         encoded = content.encode("utf-8")
         if len(encoded) > budget.max_result_bytes:
             content = encoded[: budget.max_result_bytes].decode("utf-8", "ignore")

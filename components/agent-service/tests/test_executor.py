@@ -82,7 +82,7 @@ class FakeChunks:
         self.truncated = truncated
         self.calls = []
 
-    async def read_chunks(self, graph_name, file_id, max_chunks, max_bytes):
+    async def read_chunks(self, graph_name, file_id, max_chunks):
         self.calls.append({"graph_name": graph_name, "file_id": file_id})
         return self.content, self.truncated
 
@@ -348,7 +348,7 @@ def test_search_hit_cap_truncates():
 
 def test_timeout_breach_is_transient():
     class SlowChunks(FakeChunks):
-        async def read_chunks(self, graph_name, file_id, max_chunks, max_bytes):
+        async def read_chunks(self, graph_name, file_id, max_chunks):
             await asyncio.sleep(1)
             return "x", False
 
@@ -382,3 +382,21 @@ def test_cancellation_propagates_untouched():
 
     with pytest.raises(asyncio.CancelledError):
         asyncio.run(cancelled_read())
+
+
+def test_a_bad_legacy_graph_name_is_a_configuration_error_not_a_refusal():
+    """ARANGO_GRAPH_NAME is deployment configuration: a bad value fails at
+    construction with a ValueError — an operator defect — and never as a
+    caller-facing authorization failure."""
+    import pytest as _pytest
+
+    with _pytest.raises(ValueError):
+        AuthorizedExecutor(
+            ctx(),
+            bearer=None,
+            legacy_graph_name="bad name; DROP",
+            docrepo=FakeDocRepo(),
+            okf=FakeOkf(),
+            chunks=FakeChunks(),
+            search_port=FakeSearchPort(),
+        )

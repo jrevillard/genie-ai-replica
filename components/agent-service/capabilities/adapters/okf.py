@@ -21,16 +21,16 @@ import asyncio
 from typing import Any
 from urllib.parse import quote
 
-from capabilities.adapters.http import RequestsTransport, TransportError
+from capabilities.adapters.http import HttpTransport, RequestsTransport, TransportError
 from capabilities.contract import OperationName, TransientError
 
 
 class OkfAdapter:
     """Reads one concept card, or ``None`` when it does not resolve."""
 
-    def __init__(self, base_url: str, transport=None, timeout_s: float = 10.0) -> None:
+    def __init__(self, base_url: str, transport: HttpTransport | None = None, timeout_s: float = 10.0) -> None:
         self._base_url = base_url.rstrip("/")
-        self._transport = transport if transport is not None else RequestsTransport()
+        self._transport: HttpTransport = transport if transport is not None else RequestsTransport()
         self._timeout_s = timeout_s
 
     async def fetch_concept(self, repo_id: str, concept_id: str, bearer: str | None) -> dict[str, Any] | None:

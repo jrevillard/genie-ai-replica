@@ -39,7 +39,7 @@ def adapter(rows):
 
 def test_reads_the_graphs_source_collection_with_bound_variables():
     reader, seen = adapter([{"text": "alpha"}, {"text": "beta"}])
-    content, truncated = asyncio.run(reader.read_chunks("GRAPH", "42", max_chunks=10, max_bytes=10_000))
+    content, truncated = asyncio.run(reader.read_chunks("GRAPH", "42", max_chunks=10))
     assert (content, truncated) == ("alpha\n\nbeta", False)
     query = seen["db"].queries[0]["query"]
     bind_vars = seen["db"].queries[0]["bind_vars"]
@@ -54,27 +54,28 @@ def test_missing_or_null_text_row_is_tolerated():
     """A row whose text is absent rides the AQL answer as None, not missing:
     ``dict.get(key, default)`` would yield None and crash the join."""
     reader, _ = adapter([{"text": None}, {"text": "real"}])
-    content, truncated = asyncio.run(reader.read_chunks("GRAPH", "42", max_chunks=10, max_bytes=10_000))
+    content, truncated = asyncio.run(reader.read_chunks("GRAPH", "42", max_chunks=10))
     assert (content, truncated) == ("\n\nreal", False)
 
 
 def test_chunk_cap_sets_truncated():
     reader, _ = adapter([{"text": "a"}, {"text": "b"}, {"text": "c"}])
-    content, truncated = asyncio.run(reader.read_chunks("GRAPH", "42", max_chunks=2, max_bytes=10_000))
+    content, truncated = asyncio.run(reader.read_chunks("GRAPH", "42", max_chunks=2))
     assert content == "a\n\nb"
     assert truncated is True
 
 
-def test_byte_budget_truncates():
+def test_byte_budget_is_not_the_adapters_to_enforce():
     reader, _ = adapter([{"text": "abcdefghij"}])
-    content, truncated = asyncio.run(reader.read_chunks("GRAPH", "42", max_chunks=10, max_bytes=4))
-    assert content == "abcd"
-    assert truncated is True
+    content, truncated = asyncio.run(reader.read_chunks("GRAPH", "42", max_chunks=10))
+    # the byte budget is the executor's single enforcement point; the
+    # adapter only bounds the chunk count and reports the cap
+    assert (content, truncated) == ("abcdefghij", False)
 
 
 def test_no_chunks_yields_empty_content():
     reader, _ = adapter([])
-    content, truncated = asyncio.run(reader.read_chunks("GRAPH", "42", max_chunks=10, max_bytes=100))
+    content, truncated = asyncio.run(reader.read_chunks("GRAPH", "42", max_chunks=10))
     assert content == ""
     assert truncated is False
 
@@ -86,4 +87,4 @@ def test_transport_failure_propagates():
 
     reader = LegacyChunkAdapter(db_factory=lambda: ExplodingDb())
     with pytest.raises(RuntimeError):
-        asyncio.run(reader.read_chunks("GRAPH", "42", max_chunks=10, max_bytes=100))
+        asyncio.run(reader.read_chunks("GRAPH", "42", max_chunks=10))

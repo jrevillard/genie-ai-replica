@@ -24,14 +24,23 @@ class HttpTransport(Protocol):
 
 
 class RequestsTransport:
-    """The production transport: one GET, bearer forwarded when present."""
+    """The production transport: one GET, bearer forwarded when present.
+
+    One module-level ``Session`` serves every transport instance: pooled
+    connections survive across requests (a fresh TCP+TLS handshake per GET
+    against the same in-cluster service is pure overhead), and the bearer —
+    the only per-request credential — travels per call in the headers, never
+    on the session.
+    """
+
+    _session = requests.Session()
 
     def get_json(self, url: str, bearer: str | None, timeout_s: float) -> tuple[int, Any]:
         headers = {"Accept": "application/json"}
         if bearer:
             headers["Authorization"] = f"Bearer {bearer}"
         try:
-            response = requests.get(url, headers=headers, timeout=timeout_s)
+            response = self._session.get(url, headers=headers, timeout=timeout_s)
         except requests.RequestException as error:
             raise TransportError(str(error)) from error
         try:

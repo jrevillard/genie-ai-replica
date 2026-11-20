@@ -13,26 +13,10 @@ its callers.
 import asyncio
 
 import pytest
+from conftest import FakeTransport
 
 from capabilities.adapters.docrepo import DocRepoAdapter
-from capabilities.adapters.http import TransportError
 from capabilities.contract import TransientError
-
-
-class FakeTransport:
-    """The whole transport surface the adapters use: one GET, one tuple back."""
-
-    def __init__(self, status=200, body=None, error=None):
-        self.status = status
-        self.body = body if body is not None else {}
-        self.error = error
-        self.calls = []
-
-    def get_json(self, url, bearer, timeout_s):
-        self.calls.append({"url": url, "bearer": bearer, "timeout_s": timeout_s})
-        if self.error is not None:
-            raise TransportError(str(self.error))
-        return self.status, self.body
 
 
 def adapter(transport):
@@ -75,3 +59,13 @@ def test_transport_error_is_transient():
     transport = FakeTransport(error=ConnectionError("dns"))
     with pytest.raises(TransientError):
         asyncio.run(adapter(transport).fetch_metadata("42", bearer=None))
+
+
+def test_non_object_body_on_200_is_transient_and_names_the_shape():
+    """A 200 whose payload is not an object (an HTML error page from a proxy)
+    is a transient failure naming the payload as the defect — folding it into
+    an empty metadata record would report the file as resolved."""
+    transport = FakeTransport(status=200, body="<html>gateway error</html>")
+    with pytest.raises(TransientError) as excinfo:
+        asyncio.run(adapter(transport).fetch_metadata("42", bearer=None))
+    assert "non-object body" in str(excinfo.value)

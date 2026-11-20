@@ -1,0 +1,17 @@
+# Test-only dependencies of the agent service. The runtime tree stays in
+# requirements.txt (the image installs only that one); this file adds the
+# packages the test suite needs.
+#
+# Both pins are audited like every other dependency: exact-version licence
+# verification and the NFR-2 defaults audit, per package, in
+# docs/dependencies/agent-service-dependency-evidence.json (the evidence file
+# covers this tree and the runtime tree together).
+#
+# pytest is pinned to the version the repository's CI lanes install
+# (PYTEST_VERSION in .gitlab-ci.yml); httpx is the test client the FastAPI
+# TestClient drives the app with.
+
+-r requirements.txt
+
+httpx==0.28.1
+pytest==9.1.1

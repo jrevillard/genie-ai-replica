@@ -373,6 +373,7 @@
     }
   },
   "unpaired": {
+    "agent-service": "the chart does not install the agent service yet — its adoption on k3s is operator-owned, with the same flag semantics (AR-10); the Compose service ships dark behind AGENT_ENABLED",
     "arango-vector-db": "the chart's ArangoDB is a kube-arangodb operator custom resource, configured through the CR rather than through an environment; the operator owns the database and its creation",
     "certbot": "the chart terminates TLS with cert-manager; there is no certbot container",
     "chatqna-xeon-nginx-server": "the OPEA demo UI is not deployed by the chart",

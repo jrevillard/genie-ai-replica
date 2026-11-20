@@ -1,0 +1,32 @@
+# pyproject.toml — agent-service
+# Ruff config mirrors the other Python components (target py311, line-length
+# 120, double quotes; E741 ignored for ML-style single-letter names). Declares
+# a [test] extra so `pip install -e ".[test]"` installs the pytest deps.
+[project]
+name = "genie-ai-agent-service"
+version = "0.1.0"
+requires-python = ">=3.11"
+
+[project.optional-dependencies]
+# The pins match requirements-test.txt - the file the CI lane installs and the
+# one the licence audit covers. Two declarations of the same versions would
+# drift; an unpinned range here would drift from the audited tree silently.
+test = [
+    "pytest==9.1.1",
+    "httpx==0.28.1",
+]
+
+[tool.setuptools]
+packages = []
+
+[tool.ruff]
+target-version = "py311"
+line-length = 120
+
+[tool.ruff.lint]
+select = ["E", "W", "F", "I", "UP", "B", "SIM"]
+ignore = ["E402", "E741"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"

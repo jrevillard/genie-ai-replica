@@ -719,4 +719,94 @@ def test_create_wires_the_contract_surface(monkeypatch):
     import inspect
 
     signature = inspect.signature(capability.search_knowledge)
-    assert list(signature.parameters) == ["context", "request", "budget"]
+    parameters = list(signature.parameters)
+    # The protocol call is the first three parameters; the abstention sink
+    # is OPTIONAL (story 1.9) and defaults to None.
+    assert parameters[:3] == ["context", "request", "budget"]
+    assert parameters[3] == "abstention_sink"
+    assert signature.parameters["abstention_sink"].default is None
+
+
+# ---------------------------------------------------------------------
+# The abstention sink (story 1.9): the exact reason at each insufficient site
+# ---------------------------------------------------------------------
+
+
+def _sink_outcome(reason: str):
+    """A capability configured to end in the recorded insufficiency that
+    carries ``reason`` on its log surface."""
+    rows = [{"key": "c1", "text": "alpha", "score": 0.9, "file_id": "f1"}]
+    if reason == "no_documents_retrieved":
+        rows = []
+        reranking = FakeReranking(outcome=RerankOutcome(selection=()))
+    elif reason == "reranker_input_too_long":
+        reranking = FakeReranking(error=RerankerInputTooLongError("TEI rejected input"))
+    elif reason == "result_budget_exhausted":
+        # A selection that yields a hit, then a budget that cuts it away.
+        reranking = FakeReranking(
+            outcome=RerankOutcome(selection=(ScoredCandidate(text="alpha", score=0.7, position=0),))
+        )
+    else:
+        reranking = FakeReranking(outcome=RerankOutcome(selection=()))
+    capability, _e, _r, _f = make_capability(reranking=reranking, rows=rows)
+    return capability
+
+
+def test_sink_receives_the_exact_reason_at_each_insufficient_site():
+    """The optional per-call kwarg hands the recorded reason to the caller —
+    the same string the log surface carries, at all four sites."""
+    for reason in (
+        "no_documents_retrieved",
+        "reranker_input_too_long",
+        "reranker_selected_nothing",
+        "result_budget_exhausted",
+    ):
+        capability = _sink_outcome(reason)
+        received = []
+        budget = (
+            OperationBudget(timeout_ms=5000, max_results=10, max_result_bytes=10)
+            if reason == "result_budget_exhausted"
+            else BUDGET
+        )
+        result = asyncio.run(
+            capability.search_knowledge(context(), prepared(), budget, abstention_sink=received.append)
+        )
+        assert received == [reason], reason
+        assert result.outcome == OutcomeCode.INSUFFICIENT_EVIDENCE
+
+
+def test_sink_default_none_leaves_the_executor_call_unchanged():
+    """The three-argument protocol call still works: the executor passes no
+    sink and the capability neither raises nor calls anything."""
+    capability = _sink_outcome("no_documents_retrieved")
+    result = asyncio.run(capability.search_knowledge(context(), prepared(), BUDGET))
+    assert result.outcome == OutcomeCode.INSUFFICIENT_EVIDENCE
+
+
+def test_sink_is_per_call_never_shared_state():
+    """Two concurrent runs with different sinks each receive only their own
+    reason — the sink travels with the call."""
+    capability = _sink_outcome("reranker_selected_nothing")
+    first, second = [], []
+
+    async def scenario():
+        return await asyncio.gather(
+            capability.search_knowledge(context(), prepared(), BUDGET, abstention_sink=first.append),
+            capability.search_knowledge(context(), prepared(), BUDGET, abstention_sink=second.append),
+        )
+
+    asyncio.run(scenario())
+    assert first == ["reranker_selected_nothing"]
+    assert second == ["reranker_selected_nothing"]
+
+
+def test_a_raising_sink_fails_the_turn_loudly():
+    """A sink that raises is not swallowed: a silently lost reason is the
+    drift the hook exists to prevent."""
+
+    def exploding_sink(reason):
+        raise RuntimeError("sink broke")
+
+    capability = _sink_outcome("no_documents_retrieved")
+    with pytest.raises(RuntimeError, match="sink broke"):
+        asyncio.run(capability.search_knowledge(context(), prepared(), BUDGET, abstention_sink=exploding_sink))

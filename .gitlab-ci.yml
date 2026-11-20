@@ -3868,8 +3868,8 @@ lint:agent-service:
         - lint-python-
   script:
     - cd components/agent-service
-    - ruff check app.py tracing.py capabilities/ preparation/ tests/
-    - ruff format --check app.py tracing.py capabilities/ preparation/ tests/
+    - ruff check app.py tracing.py capabilities/ preparation/ noagent/ tests/
+    - ruff format --check app.py tracing.py capabilities/ preparation/ noagent/ tests/
   rules:
     - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
       changes:

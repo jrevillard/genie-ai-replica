@@ -38,6 +38,7 @@ operation is neither a failure nor an insufficiency).
 
 import asyncio
 import logging
+from collections.abc import Callable
 
 from .adapters.arango_retrieval import ArangoRetrievalAdapter, validate_graph_name
 from .adapters.env_config import ArangoConfig, EmbeddingConfig, HybridConfig, ModelEndpointConfig, RerankingConfig
@@ -144,8 +145,21 @@ class SearchKnowledgeCapability:
         context: CallerContext,
         request: SearchKnowledgeInput,
         budget: OperationBudget,
+        abstention_sink: "Callable[[str], None] | None" = None,
     ) -> SearchKnowledgeResult:
-        """Search the authorized corpus and report what was found."""
+        """Search the authorized corpus and report what was found.
+
+        ``abstention_sink`` is an OPTIONAL per-call hook (default None): when
+        the search ends in one of the recorded insufficiencies, the exact
+        reason string (``no_documents_retrieved``, ``reranker_input_too_long``,
+        ``reranker_selected_nothing``, ``result_budget_exhausted``) is handed
+        to it AFTER the log line, so a caller can surface the reason without
+        scraping logs. It is pipeline-orchestration plumbing, not contract
+        surface — the reason stays off the result type (the contract is
+        accepted at ``1.0``; adding a field there is a major change), and it
+        travels WITH the call, never on shared state, so concurrent runs are
+        safe. The executor's protocol call passes no sink and is unchanged.
+        """
         if not context.authorized_graph_names:
             raise AuthorizationError(
                 "the caller context authorizes no graph: there is nothing to search",
@@ -155,7 +169,7 @@ class SearchKnowledgeCapability:
             validate_graph_name(graph_name)
         try:
             return await asyncio.wait_for(
-                self._run(context, request, budget),
+                self._run(context, request, budget, abstention_sink),
                 timeout=budget.timeout_ms / 1000.0,
             )
         except TimeoutError as e:
@@ -169,6 +183,7 @@ class SearchKnowledgeCapability:
         context: CallerContext,
         request: SearchKnowledgeInput,
         budget: OperationBudget,
+        abstention_sink: "Callable[[str], None] | None" = None,
     ) -> SearchKnowledgeResult:
         labels = list(context.requested_labels)
         try:
@@ -214,7 +229,7 @@ class SearchKnowledgeCapability:
         if not candidates:
             # The recorded distinct abstention: the retriever returned nothing.
             logger.warning("abstained.reason=no_documents_retrieved")
-            return self._insufficient(request)
+            return self._insufficient(request, "no_documents_retrieved", abstention_sink)
 
         texts = [item["doc"].text for item in candidates]
         # The adaptive strategy consumes the chunk embeddings the deployed
@@ -233,7 +248,7 @@ class SearchKnowledgeCapability:
             # The recorded abstention: TEI rejected the input (422 + Validation).
             logger.warning("abstained.reason=reranker_input_too_long")
             logger.info(_RERANKER_INPUT_TOO_LONG_ABSTENTION_TEXT)
-            return self._insufficient(request)
+            return self._insufficient(request, "reranker_input_too_long", abstention_sink)
         except Exception as e:
             # No fallback to the retrieval order: a reranker transport or
             # protocol failure fails the turn (V02 §4.14).
@@ -241,7 +256,7 @@ class SearchKnowledgeCapability:
         if outcome.selected_nothing:
             # The recorded abstention, distinct from empty retrieval.
             logger.warning("abstained.reason=reranker_selected_nothing")
-            return self._insufficient(request)
+            return self._insufficient(request, "reranker_selected_nothing", abstention_sink)
 
         # Map the selected positions back to their enriched candidates. The
         # selection keeps TEI's score-descending order — the hits carry that
@@ -267,7 +282,7 @@ class SearchKnowledgeCapability:
             # insufficiency (the size breach is the reason, not a retrieval
             # failure).
             logger.warning("abstained.reason=result_budget_exhausted")
-            return self._insufficient(request, truncated=True)
+            return self._insufficient(request, "result_budget_exhausted", abstention_sink, truncated=True)
         outcome_code = OutcomeCode.DEGRADED_AVAILABILITY if degraded else OutcomeCode.SUCCESS
         return SearchKnowledgeResult(
             outcome=outcome_code,
@@ -276,11 +291,22 @@ class SearchKnowledgeCapability:
             query_preparation_status=request.query.preparation_status,
         )
 
-    def _insufficient(self, request: SearchKnowledgeInput, truncated: bool = False) -> SearchKnowledgeResult:
+    def _insufficient(
+        self,
+        request: SearchKnowledgeInput,
+        reason: str,
+        abstention_sink: "Callable[[str], None] | None" = None,
+        truncated: bool = False,
+    ) -> SearchKnowledgeResult:
         """One constructor for every insufficiency answer: empty hits, the
         query's preparation status echoed, the truncation flag only when the
         result budget caused it. The recorded reasons stay on the log surface
-        at each call site — never merged here."""
+        at each call site — never merged here. When the caller passed an
+        abstention sink, the exact reason travels to it (after the log line;
+        a sink that raises fails the turn — a silently swallowed reason is
+        the drift this hook exists to prevent)."""
+        if abstention_sink is not None:
+            abstention_sink(reason)
         return SearchKnowledgeResult(
             outcome=OutcomeCode.INSUFFICIENT_EVIDENCE,
             hits=(),

@@ -13,7 +13,7 @@ import asyncio
 import pytest
 from pydantic import ValidationError
 
-from capabilities.adapters.env_config import ArangoConfig, HybridConfig
+from capabilities.adapters.env_config import ArangoConfig, HybridConfig, RerankingConfig
 from capabilities.adapters.tei_embedding import EmbeddedQuery
 from capabilities.adapters.tei_reranking import RerankerInputTooLongError, RerankOutcome, ScoredCandidate
 from capabilities.contract import (
@@ -290,22 +290,100 @@ def test_raw_text_goes_to_the_bm25_side_and_prefixed_to_the_embedder():
 
 
 def test_multi_graph_search_addresses_every_authorized_graph_and_merges_candidates():
-    rows = [
-        {"key": "c1", "text": "alpha", "score": 0.9, "file_id": "f1"},
-        {"key": "c2", "text": "beta", "score": 0.5, "file_id": "f2"},
-    ]
+    """Each leg queries ITS OWN graph: the collection, the BM25 view and the
+    CAP-1 bind derive from the context's graph name, never from the env
+    default — the second graph's corpus is searched and no chunk is
+    duplicated into the union."""
+
+    class GraphRecordingAql:
+        """The dense leg answers only when asked about its own collection."""
+
+        def __init__(self, graph):
+            self._graph = graph
+            GraphRecordingAql.searched.add(graph)
+
+        searched: set = set()
+
+        def execute(self, aql, bind_vars=None, **kwargs):
+            if "@collection" in aql:
+                collection = bind_vars["@collection"]
+                assert collection == f"{self._graph}_SOURCE", (collection, self._graph)
+            if "okf_concepts_meta" in aql:
+                assert bind_vars["graph_name"] == self._graph
+            if "COSINE_SIMILARITY" in aql:
+                rows = [{"key": f"{self._graph}-c1", "text": f"from-{self._graph}", "score": 0.9, "file_id": "f1"}]
+            else:
+                rows = []
+
+            class C:
+                def __iter__(self):
+                    return iter(rows)
+
+            return C()
+
+    class GraphDb:
+        def __init__(self, graph):
+            self.aql = GraphRecordingAql(graph)
+
+        def views(self):
+            return [{"name": "GRAPH_BM25_VIEW"}]
+
     selection = (
-        ScoredCandidate(text="alpha", score=0.7, position=0),
-        ScoredCandidate(text="beta", score=0.6, position=1),
+        ScoredCandidate(text="from-GRAPH", score=0.7, position=0),
+        ScoredCandidate(text="from-OKF_gov_v1", score=0.6, position=1),
     )
     reranking = FakeReranking(outcome=RerankOutcome(selection=selection))
-    capability, _e, _r, db_factory = make_capability(reranking=reranking, rows=rows)
+    capability, _e, _r, db_factory = make_capability(reranking=reranking)
+    capability._db_factory = lambda graph: GraphDb(graph)
     result = asyncio.run(capability.search_knowledge(context(graphs=("GRAPH", "OKF_gov_v1")), prepared(), BUDGET))
-    assert db_factory.graphs == ["GRAPH", "OKF_gov_v1"]  # context order
-    assert len(result.hits) == 2  # one reranking stage over the merged candidates
-    # Graph-major merge: GRAPH's candidates first (context order), then the
-    # next graph's.
-    assert reranking.calls[0][1] == ["alpha", "beta", "alpha", "beta"]
+    assert GraphRecordingAql.searched == {"GRAPH", "OKF_gov_v1"}  # BOTH collections queried
+    assert len(result.hits) == 2  # one hit per graph — no duplicated chunk
+    assert reranking.calls[0][1] == ["from-GRAPH", "from-OKF_gov_v1"]
+
+
+def test_second_authorized_graph_gets_its_own_view_and_join_names():
+    """The BM25 view and the CAP-1 bind of the second leg name the SECOND
+    graph, not the env's ARANGO_GRAPH_NAME."""
+    seen: list[tuple[str, dict]] = []
+
+    class RecordingDb:
+        def __init__(self, graph):
+            self.graph = graph
+
+        def views(self):
+            return [{"name": "GRAPH_BM25_VIEW"}]
+
+        class aql:
+            pass
+
+    def make_db(graph):
+        db = RecordingDb(graph)
+
+        def execute(aql, bind_vars=None, **kwargs):
+            seen.append((aql, dict(bind_vars or {})))
+            rows = []
+            if "COSINE_SIMILARITY" in aql:
+                rows = [{"key": "c1", "text": "t", "score": 0.9, "file_id": "f1"}]
+
+            class C:
+                def __iter__(self):
+                    return iter(rows)
+
+            return C()
+
+        db.aql.execute = execute
+        return db
+
+    selection = (ScoredCandidate(text="t", score=0.7, position=0),)
+    reranking = FakeReranking(outcome=RerankOutcome(selection=selection))
+    capability, _e, _r, _f = make_capability(reranking=reranking, rows=[{"key": "c1", "text": "t", "score": 0.9}])
+    capability._db_factory = make_db
+    asyncio.run(capability.search_knowledge(context(graphs=("GRAPH", "OTHER_g")), prepared(), BUDGET))
+    view_queries = [aql for aql, _ in seen if "BM25_VIEW" in aql]
+    assert len(view_queries) == 2
+    assert "`OTHER_g_BM25_VIEW`" in view_queries[1]  # the second leg's own view
+    identity_binds = [b for aql, b in seen if "okf_concepts_meta" in aql]
+    assert identity_binds[1]["graph_name"] == "OTHER_g"  # the second leg's own join
 
 
 # ---------------------------------------------------------------------
@@ -324,8 +402,8 @@ def _capability_with_degraded_adapter(reranking, monkeypatch):
         "capabilities.adapters.arango_retrieval", fromlist=["ArangoRetrievalAdapter"]
     ).ArangoRetrievalAdapter.__init__
 
-    def init_with_degradation(self, db, arango_config, hybrid_config):
-        original_init(self, db, arango_config, hybrid_config)
+    def init_with_degradation(self, db, arango_config, hybrid_config, **kwargs):
+        original_init(self, db, arango_config, hybrid_config, **kwargs)
         self.cap1_degraded = True
 
     monkeypatch.setattr("capabilities.adapters.arango_retrieval.ArangoRetrievalAdapter.__init__", init_with_degradation)
@@ -349,8 +427,8 @@ def test_bm25_failure_with_hits_is_degraded_availability(monkeypatch):
         "capabilities.adapters.arango_retrieval", fromlist=["ArangoRetrievalAdapter"]
     ).ArangoRetrievalAdapter.__init__
 
-    def init_with_degradation(self, db, arango_config, hybrid_config):
-        original_init(self, db, arango_config, hybrid_config)
+    def init_with_degradation(self, db, arango_config, hybrid_config, **kwargs):
+        original_init(self, db, arango_config, hybrid_config, **kwargs)
         self.bm25_degraded = True
 
     monkeypatch.setattr("capabilities.adapters.arango_retrieval.ArangoRetrievalAdapter.__init__", init_with_degradation)
@@ -473,6 +551,157 @@ def test_cancellation_propagates_unchanged():
 # ---------------------------------------------------------------------
 # Boot assembly
 # ---------------------------------------------------------------------
+
+
+# ---------------------------------------------------------------------
+# Review-round-1 regressions
+# ---------------------------------------------------------------------
+
+
+def test_budget_tighter_than_one_hit_yields_insufficiency_not_a_validation_error():
+    """A max_result_bytes smaller than one hit truncates the result empty —
+    the answer is an insufficiency (truncated=True), never an empty SUCCESS
+    (which the contract validator would reject)."""
+    rows = [{"key": "c1", "text": "x" * 1000, "score": 0.9, "file_id": "f1"}]
+    selection = (ScoredCandidate(text="x" * 1000, score=0.9, position=0),)
+    reranking = FakeReranking(outcome=RerankOutcome(selection=selection))
+    capability, _e, _r, _f = make_capability(reranking=reranking, rows=rows)
+    budget = OperationBudget(timeout_ms=5000, max_results=5, max_result_bytes=10)
+    result = asyncio.run(capability.search_knowledge(context(), prepared(), budget))
+    assert result.outcome == OutcomeCode.INSUFFICIENT_EVIDENCE
+    assert result.hits == ()
+    assert result.truncated is True
+
+
+def test_configured_adaptive_strategy_reranks_with_threaded_embeddings(monkeypatch):
+    """RERANKING_STRATEGY=adaptive works end to end: the dense leg's chunk
+    embeddings and the query embedding are threaded into the reranker."""
+    from capabilities.adapters.tei_reranking import TeiRerankingAdapter
+
+    rows = [
+        {"key": "c1", "text": "alpha", "score": 0.9, "file_id": "f1", "embedding": [1.0, 0.0]},
+        {"key": "c2", "text": "beta", "score": 0.5, "file_id": "f2", "embedding": [0.0, 1.0]},
+    ]
+    seen_kwargs = {}
+
+    class RecordingReranker(TeiRerankingAdapter):
+        def __init__(self):
+            super().__init__(
+                "https://tei.invalid",
+                RerankingConfig(
+                    strategy="slice",
+                    threshold=0.75,
+                    top_n=3,
+                    calibration="none",
+                    temperature=1.0,
+                    rerank_timeout_seconds=300.0,
+                    connect_timeout_seconds=30.0,
+                ),
+            )
+
+        async def rerank(self, query, texts, chunk_embeddings=None, query_embedding=None):
+            seen_kwargs["chunk_embeddings"] = chunk_embeddings
+            seen_kwargs["query_embedding"] = query_embedding
+            from capabilities.adapters.tei_reranking import RerankOutcome, ScoredCandidate
+
+            return RerankOutcome(selection=(ScoredCandidate(text="alpha", score=0.9, position=0),))
+
+    capability, _e, _r, _f = make_capability(reranking=RecordingReranker(), rows=rows)
+    result = asyncio.run(capability.search_knowledge(context(), prepared(), BUDGET))
+    assert result.outcome == OutcomeCode.SUCCESS
+    assert seen_kwargs["query_embedding"] == [0.1, 0.2]
+    assert seen_kwargs["chunk_embeddings"] == [[1.0, 0.0], [0.0, 1.0]]
+
+
+def test_bm25_rescued_candidate_misaligns_adaptive_and_fails_transient():
+    """A fusion-rescued candidate carries no embedding: adaptive's validity
+    check fails and the search fails transiently — the recorded hard-fail."""
+    from capabilities.adapters.tei_reranking import TeiRerankingAdapter
+
+    class AdaptiveReranker(TeiRerankingAdapter):
+        def __init__(self):
+            super().__init__(
+                "https://tei.invalid",
+                RerankingConfig(
+                    strategy="adaptive",
+                    threshold=0.75,
+                    top_n=3,
+                    calibration="none",
+                    temperature=1.0,
+                    rerank_timeout_seconds=300.0,
+                    connect_timeout_seconds=30.0,
+                ),
+            )
+
+        async def rerank(self, query, texts, chunk_embeddings=None, query_embedding=None):
+            # Skip the HTTP hop: run the REAL adaptive selection over a canned
+            # score-descending TEI response — the hard-fail under test is in
+            # the selection logic, not in the transport.
+            decoded = [{"index": i, "score": 0.9} for i in range(len(texts))]
+            selection = self._select(decoded, texts, "adaptive", chunk_embeddings, query_embedding)
+            return RerankOutcome(selection=tuple(selection))
+
+    bm25_only = [{"key": "c9", "text": "rescued", "chunk_labels": None, "score": 5.0, "file_id": None}]
+    capability, _e, _r, _f = make_capability(rows=bm25_only)
+    capability._reranking = AdaptiveReranker()
+    with pytest.raises(TransientError, match="ADAPTIVE"):
+        asyncio.run(capability.search_knowledge(context(), prepared(), BUDGET))
+
+
+def test_bm25_view_cache_spans_requests():
+    """The ensured-view cache lives on the capability: the second request's
+    adapter inherits it and lists views() again but creates nothing new."""
+    created: list[str] = []
+
+    class CacheDb:
+        def __init__(self, known):
+            self.known = known
+
+        def views(self):
+            return [{"name": n} for n in self.known]
+
+        def create_arangosearch_view(self, name, properties):
+            created.append(name)
+            self.known.add(name)
+
+        class aql:
+            @classmethod
+            def execute(cls, aql, bind_vars=None, **kwargs):
+                rows = [{"key": "c1", "text": "t", "score": 0.9, "file_id": "f1"}]
+
+                class C:
+                    def __iter__(self):
+                        return iter(rows)
+
+                return C()
+
+    rows = [{"key": "c1", "text": "t", "score": 0.9}]
+    selection = (ScoredCandidate(text="t", score=0.7, position=0),)
+    reranking = FakeReranking(outcome=RerankOutcome(selection=selection))
+    capability, _e, _r, _f = make_capability(reranking=reranking, rows=rows)
+    known_views = set()
+    capability._db_factory = lambda graph: CacheDb(known_views)
+    asyncio.run(capability.search_knowledge(context(), prepared(), BUDGET))
+    asyncio.run(capability.search_knowledge(context(), prepared(), BUDGET))
+    # The view is created once across the two requests, never twice.
+    assert len(created) == 1
+
+
+def test_embedding_budget_uses_the_embed_knobs_not_the_rerank_ones(monkeypatch):
+    env = {
+        "ARANGO_URL": "http://localhost:8529",
+        "TEI_EMBEDDING_ENDPOINT": "https://tei.invalid/embed",
+        "TEI_RERANKING_ENDPOINT": "https://tei.invalid",
+        "MODEL_HUB_EMBED_TIMEOUT_SECONDS": "123.0",
+        "MODEL_RERANK_TIMEOUT_SECONDS": "77.0",
+    }
+    monkeypatch.setattr(
+        "arango.ArangoClient",
+        lambda hosts: type("C", (), {"db": lambda self, *a, **k: None})(),
+    )
+    capability = SearchKnowledgeCapability.create(env)
+    assert capability._embedding._total_timeout == 123.0
+    assert capability._embedding._connect_timeout == 30.0
 
 
 def test_create_requires_both_model_endpoints():

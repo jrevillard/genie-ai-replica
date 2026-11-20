@@ -40,7 +40,7 @@ import asyncio
 import logging
 
 from .adapters.arango_retrieval import ArangoRetrievalAdapter, validate_graph_name
-from .adapters.env_config import ArangoConfig, HybridConfig, ModelEndpointConfig, RerankingConfig
+from .adapters.env_config import ArangoConfig, EmbeddingConfig, HybridConfig, ModelEndpointConfig, RerankingConfig
 from .adapters.tei_embedding import TeiEmbeddingAdapter
 from .adapters.tei_reranking import RerankerInputTooLongError, TeiRerankingAdapter
 from .contract import (
@@ -96,6 +96,9 @@ class SearchKnowledgeCapability:
         self._db_factory = db_factory
         self._arango_config = arango_config
         self._hybrid_config = hybrid_config
+        # The ensured-BM25-view cache spans the legs of every request: the
+        # adapter instance is per leg, the cache is the capability's.
+        self._ensured_bm25_views: set[str] = set()
 
     @classmethod
     def create(cls, env=None) -> "SearchKnowledgeCapability":
@@ -111,6 +114,7 @@ class SearchKnowledgeCapability:
         arango_config = ArangoConfig.load(env)
         hybrid_config = HybridConfig.load(env)
         reranking_config = RerankingConfig.load(env)
+        embedding_config = EmbeddingConfig.load(env)
         endpoints = ModelEndpointConfig.load(env)
         if not endpoints.tei_embedding_endpoint:
             raise ValueError("TEI_EMBEDDING_ENDPOINT must be set: the port has no default embedding endpoint")
@@ -125,10 +129,12 @@ class SearchKnowledgeCapability:
                 password=arango_config.password,
             )
 
+        # The embedding call carries ITS OWN budget, under the knob names the
+        # deployed embed clients read — not the reranker's.
         embedding = TeiEmbeddingAdapter(
             endpoints.tei_embedding_endpoint,
-            connect_timeout_seconds=reranking_config.connect_timeout_seconds,
-            total_timeout_seconds=reranking_config.rerank_timeout_seconds,
+            connect_timeout_seconds=embedding_config.connect_timeout_seconds,
+            total_timeout_seconds=embedding_config.embed_timeout_seconds,
         )
         reranking = TeiRerankingAdapter(endpoints.tei_reranking_endpoint, reranking_config)
         return cls(embedding, reranking, db_factory, arango_config, hybrid_config)
@@ -178,15 +184,27 @@ class SearchKnowledgeCapability:
         degraded = False
         for graph_name in context.authorized_graph_names:
             db = self._db_factory(graph_name)
-            adapter = ArangoRetrievalAdapter(db, self._arango_config, self._hybrid_config)
+            # The leg's graph drives the whole adapter: collection, BM25 view
+            # and the CAP-1 join's bind all derive from the CONTEXT's graph
+            # name, never from the env default (the env name is only the
+            # single-graph deployment's default).
+            adapter = ArangoRetrievalAdapter(
+                db,
+                self._arango_config,
+                self._hybrid_config,
+                graph_name=graph_name,
+                ensured_bm25_views=self._ensured_bm25_views,
+            )
             try:
                 leg_results = await adapter.fused_candidates(embedded.embedding, embedded.raw_text, labels)
             except asyncio.CancelledError:
                 raise
             except Exception as e:
-                # A leg whose database access fails is a failed dependency —
-                # the recorded retrieval raises out of the leg (the enrichment
-                # AQL runs unguarded in the recorded path).
+                # Only the file_id-enrichment leg raises (its AQL runs
+                # unguarded, as recorded); the dense and BM25 legs swallow
+                # their own errors and return [] — so a full database outage
+                # surfaces as an empty retrieval below, matching the recorded
+                # behavior. The raise here is the enrichment's.
                 raise TransientError(
                     f"the retrieval stage failed on graph {graph_name!r}: {e}",
                     operation=OperationName.SEARCH_KNOWLEDGE,
@@ -208,8 +226,18 @@ class SearchKnowledgeCapability:
             )
 
         texts = [item["doc"].text for item in candidates]
+        # The adaptive strategy consumes the chunk embeddings the deployed
+        # propagation chain delivers; the dense leg carries them, the BM25
+        # view does not — a fusion-rescued candidate misaligns the vectors
+        # and adaptive hard-fails on it, exactly as recorded (V02 §4.13).
+        chunk_embeddings = [item["doc"].embedding for item in candidates]
         try:
-            outcome = await self._reranking.rerank(embedded.raw_text, texts)
+            outcome = await self._reranking.rerank(
+                embedded.raw_text,
+                texts,
+                chunk_embeddings=chunk_embeddings,
+                query_embedding=embedded.embedding,
+            )
         except RerankerInputTooLongError:
             # The recorded abstention: TEI rejected the input (422 + Validation).
             logger.warning("abstained.reason=reranker_input_too_long")
@@ -254,6 +282,18 @@ class SearchKnowledgeCapability:
             hits.append(SearchHit(provenance=provenance, text=doc.text, score=scored.score))
 
         truncated = self._apply_result_budget(hits, budget)
+        if not hits:
+            # A budget tighter than one hit empties the result: an empty
+            # SUCCESS is a contract violation, so the answer is an
+            # insufficiency (the size breach is the reason, not a retrieval
+            # failure).
+            logger.warning("abstained.reason=result_budget_exhausted")
+            return SearchKnowledgeResult(
+                outcome=OutcomeCode.INSUFFICIENT_EVIDENCE,
+                hits=(),
+                truncated=True,
+                query_preparation_status=request.query.preparation_status,
+            )
         outcome_code = OutcomeCode.DEGRADED_AVAILABILITY if degraded else OutcomeCode.SUCCESS
         return SearchKnowledgeResult(
             outcome=outcome_code,

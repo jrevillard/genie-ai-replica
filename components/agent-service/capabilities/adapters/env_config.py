@@ -181,6 +181,24 @@ class RerankingConfig:
 
 
 @dataclass(frozen=True)
+class EmbeddingConfig:
+    """The embedding call's own budget, under the knob names the deployed
+    embed clients read (``core/model_http_policy.py``): 600 s total for the
+    TEI embed calls, the shared 30 s connect timeout."""
+
+    embed_timeout_seconds: float
+    connect_timeout_seconds: float
+
+    @classmethod
+    def load(cls, env=None) -> "EmbeddingConfig":
+        source = os.environ if env is None else env
+        return cls(
+            embed_timeout_seconds=float(source.get("MODEL_HUB_EMBED_TIMEOUT_SECONDS", 600.0)),
+            connect_timeout_seconds=float(source.get("MODEL_CONNECT_TIMEOUT_SECONDS", 30.0)),
+        )
+
+
+@dataclass(frozen=True)
 class ModelEndpointConfig:
     """The model-service endpoints the adapters call directly (V02 §3.3).
 

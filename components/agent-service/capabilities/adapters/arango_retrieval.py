@@ -39,6 +39,7 @@ V02 §4.9–4.11 but are NOT part of this port (story 1.6's frozen enumeration
 stops at the stages above).
 """
 
+import asyncio
 import logging
 import re
 from dataclasses import dataclass, field
@@ -181,16 +182,37 @@ class RetrievedChunk:
     repo_id: str | None = None
     bundle_version: int | None = None
     graph_name: str | None = None
+    # The chunk's stored vector, carried only by the dense leg (the BM25 view
+    # does not return it). Feeds the adaptive selection's validity check
+    # exactly as the deployed propagation chain does.
+    embedding: list | None = None
 
 
 class ArangoRetrievalAdapter:
-    """Runs the recorded retrieval stages against one ArangoDB database."""
+    """Runs the recorded retrieval stages against one ArangoDB database.
 
-    def __init__(self, db, arango_config: ArangoConfig, hybrid_config: HybridConfig):
+    ``graph_name`` selects the leg's graph: the ``<graph>_SOURCE`` collection,
+    the ``<graph>_BM25_VIEW`` view and the CAP-1 join's ``@graph_name`` bind
+    all derive from it — NOT from the env ``ARANGO_GRAPH_NAME``, which is only
+    the default for the single-graph deployment. Every blocking driver call
+    runs via ``asyncio.to_thread`` so the event loop never blocks on ArangoDB.
+    """
+
+    def __init__(
+        self,
+        db,
+        arango_config: ArangoConfig,
+        hybrid_config: HybridConfig,
+        graph_name: str | None = None,
+        ensured_bm25_views: set[str] | None = None,
+    ):
         self._db = db
         self._config = arango_config
         self._hybrid = hybrid_config
-        self._bm25_views_ensured: set[str] = set()
+        self.graph_name = graph_name or arango_config.graph_name
+        # Shared across the legs of a capability so the ensured-view cache
+        # spans requests (the per-leg adapter instance is rebuilt per leg).
+        self._bm25_views_ensured = ensured_bm25_views if ensured_bm25_views is not None else set()
         # The recorded degradations, tracked for the caller's outcome mapping:
         # the BM25 channel failing degrades the leg to dense-only; the CAP-1
         # join failing leaves chunks unattributed. Neither breaks the leg
@@ -201,7 +223,7 @@ class ArangoRetrievalAdapter:
 
     @property
     def collection_name(self) -> str:
-        return f"{self._config.graph_name}_SOURCE"
+        return f"{self.graph_name}_SOURCE"
 
     # ------------------------------------------------------------------
     # Dense leg
@@ -229,6 +251,7 @@ class ArangoRetrievalAdapter:
                 RETURN {{
                     "key": doc._key,
                     "text": doc.{ARANGO_TEXT_FIELD},
+                    "embedding": doc.{ARANGO_EMBEDDING_FIELD},
                     "score": score
                 }}
         """
@@ -238,13 +261,18 @@ class ArangoRetrievalAdapter:
             "k": self._config.k,
         }
         try:
-            rows = list(self._db.aql.execute(aql, bind_vars=bind_vars))
+            rows = list(await asyncio.to_thread(self._db.aql.execute, aql, bind_vars))
         except Exception as e:
             logger.error(f"Error during similarity search: {e}")
             return []
         results = [
             {
-                "doc": RetrievedChunk(key=row["key"], text=row.get("text") or "", score=float(row["score"])),
+                "doc": RetrievedChunk(
+                    key=row["key"],
+                    text=row.get("text") or "",
+                    score=float(row["score"]),
+                    embedding=row.get("embedding"),
+                ),
                 "score": float(row["score"]),
             }
             for row in rows
@@ -266,7 +294,7 @@ class ArangoRetrievalAdapter:
     # BM25 leg
     # ------------------------------------------------------------------
 
-    def _ensure_bm25_view(self, graph_name: str) -> None:
+    async def _ensure_bm25_view(self, graph_name: str) -> None:
         """Idempotently create the ArangoSearch BM25 view over ``<graph>_SOURCE.text``.
 
         Best-effort: never raises. Cached on SUCCESS only, so a transient
@@ -278,7 +306,7 @@ class ArangoRetrievalAdapter:
         view_name = f"{graph_name}_BM25_VIEW"
         collection = f"{graph_name}_SOURCE"
         try:
-            existing_views = {v.get("name") for v in (self._db.views() or [])}
+            existing_views = {v.get("name") for v in (await asyncio.to_thread(self._db.views) or [])}
             if view_name not in existing_views:
                 properties = {
                     "links": {
@@ -293,7 +321,7 @@ class ArangoRetrievalAdapter:
                         }
                     }
                 }
-                self._db.create_arangosearch_view(view_name, properties)
+                await asyncio.to_thread(self._db.create_arangosearch_view, view_name, properties)
                 logger.info(f"Created ArangoSearch BM25 view '{view_name}' on collection '{collection}'.")
             self._bm25_views_ensured.add(graph_name)
         except Exception as e:
@@ -307,7 +335,7 @@ class ArangoRetrievalAdapter:
         injected pre-``LIMIT``, and every returned row is re-checked in
         Python. Never raises — logs and returns ``[]``.
         """
-        self._ensure_bm25_view(graph_name)
+        await self._ensure_bm25_view(graph_name)
         view_name = f"{graph_name}_BM25_VIEW"
         n = max(self._config.k, self._hybrid.bm25_candidates)
         filter_clause = build_aql_filter_clause(labels_to_filter, filter_strategy)
@@ -328,7 +356,7 @@ class ArangoRetrievalAdapter:
         bind_vars = {"query": query, "analyzer": self._hybrid.bm25_analyzer, "n": n}
         results = []
         try:
-            cursor = self._db.aql.execute(aql, bind_vars=bind_vars)
+            cursor = await asyncio.to_thread(self._db.aql.execute, aql, bind_vars)
             for row in cursor:
                 chunk_labels = row.get("chunk_labels")
                 if not chunk_passes_label_filter(chunk_labels, labels_to_filter, filter_strategy):
@@ -364,7 +392,7 @@ class ArangoRetrievalAdapter:
         search_res = dense_res
         if self._hybrid.enabled:
             try:
-                bm25_res = await self.bm25_search(raw_query, self._config.graph_name, labels_to_filter, filter_strategy)
+                bm25_res = await self.bm25_search(raw_query, self.graph_name, labels_to_filter, filter_strategy)
                 bm25_count = len(bm25_res)
                 if bm25_res:
                     fused_all = rrf_fuse(
@@ -377,9 +405,13 @@ class ArangoRetrievalAdapter:
                     search_res = fused_all[: self._config.k]
                     logger.info(f"Hybrid RRF fusion: {len(search_res)} documents after fusing dense + BM25.")
             except Exception as e:
+                # The dense-only fallback is a real degradation of the hybrid
+                # channel, same class as the leg failure above — flagged so the
+                # caller maps the answer onto degraded_availability.
                 logger.error(f"Hybrid BM25+RRF fusion failed, falling back to dense-only: {e}")
+                self.bm25_degraded = True
         logger.info(
-            f"Extraction summary — graph={self._config.graph_name}, dense={dense_count}, "
+            f"Extraction summary — graph={self.graph_name}, dense={dense_count}, "
             f"bm25={bm25_count}, fused={len(search_res)}, labels={labels_to_filter or []}, "
             f"filter_strategy={filter_strategy}"
         )
@@ -415,7 +447,8 @@ class ArangoRetrievalAdapter:
                     RETURN {{key: doc._key, file_id: doc.{ARANGO_FILE_ID_FIELD}}}
             """
             file_id_by_key = {
-                row["key"]: row["file_id"] for row in self._db.aql.execute(aql, bind_vars={"chunk_ids": chunk_ids})
+                row["key"]: row["file_id"]
+                for row in await asyncio.to_thread(self._db.aql.execute, aql, {"chunk_ids": chunk_ids})
             }
             for r in results:
                 fid = file_id_by_key.get(r["doc"].key)
@@ -441,8 +474,10 @@ class ArangoRetrievalAdapter:
             """
             identity_by_key = {
                 row["key"]: row
-                for row in self._db.aql.execute(
-                    identity_aql, bind_vars={"chunk_ids": chunk_ids, "graph_name": self._config.graph_name}
+                for row in await asyncio.to_thread(
+                    self._db.aql.execute,
+                    identity_aql,
+                    {"chunk_ids": chunk_ids, "graph_name": self.graph_name},
                 )
             }
             for r in results:

@@ -1615,7 +1615,7 @@ def test_the_chart_version_is_the_deployed_revision_s(monkeypatch):
                 {
                     "version": 71,
                     "chartVersion": "0.2.181",
-                    "chartName": "genieai-umbrella",
+                    "chartName": "genieai-umbrella-superseded",
                     "status": "superseded",
                 },
                 {
@@ -1627,7 +1627,7 @@ def test_the_chart_version_is_the_deployed_revision_s(monkeypatch):
                 {
                     "version": 73,
                     "chartVersion": "0.2.183",
-                    "chartName": "genieai-umbrella",
+                    "chartName": "genieai-umbrella-failed",
                     "status": "failed",
                 },
             ],

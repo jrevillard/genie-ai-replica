@@ -10,14 +10,14 @@ the degraded classes RETURN unprepared — no single fallback exists.
 """
 
 import asyncio
-from pathlib import Path
+import dataclasses
 
 import pytest
-from langdetect import DetectorFactory
+from conftest import ARABIC_SAMPLE, FRENCH_SAMPLE, VENDORED_REGISTRY_PATH, PreparationFakeTransport
+from conftest import preparation_model_entry as _model_entry
 from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import SimpleSpanProcessor
 from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
-from test_preparation_translation import FakeTransport, _model_entry
 
 import tracing as tracing_module
 from capabilities.contract import PreparedQuery, QueryPreparationStatus
@@ -28,58 +28,25 @@ from preparation.translation import (
     TranslationInputTooLongError,
 )
 
-COMPONENT_ROOT = Path(__file__).resolve().parents[1]
-VENDORED_REGISTRY = str(COMPONENT_ROOT / "preparation" / "language-registry.json")
-
-FRENCH_SAMPLE = (
-    "Bonjour, comment la ville de Geneve gere-t-elle les services de "
-    "transport public pour les habitants et les visiteurs ?"
-)
-ARABIC_SAMPLE = "كيف تدير مدينة دبي خدمات النقل العام للسكان والزوار خلال موسم الصيف؟"
+VENDORED_REGISTRY = VENDORED_REGISTRY_PATH
 
 ENGLISH_HISTORY_BLOB = "Hello, how does the city of Geneva manage public transport for residents and visitors?"
 
 
-@pytest.fixture(autouse=True)
-def _seeded_detector():
-    """Deterministic detection for the suite; production stays unseeded."""
-    DetectorFactory.seed = 0
-    yield
+pytestmark = pytest.mark.usefixtures("seeded_langdetect")
 
 
 def _config(**overrides) -> PreparationConfig:
     base = PreparationConfig.load(
         env={"VLLM_TRANSLATION_ENDPOINT": "http://translation.invalid", "OPENAI_API_KEY": "sk-test"}
     )
-    changes = {
-        "translation_endpoint": base.translation_endpoint,
-        "model_id": base.model_id,
-        "service_timeout_seconds": base.service_timeout_seconds,
-        "max_translation_chars": base.max_translation_chars,
-        "max_translation_chars_cap": base.max_translation_chars_cap,
-        "prompt_overhead_tokens": base.prompt_overhead_tokens,
-        "chars_per_token": base.chars_per_token,
-        "msg_overhead_chars": base.msg_overhead_chars,
-        "completion_safety_tokens": base.completion_safety_tokens,
-        "completion_min_room": base.completion_min_room,
-        "completion_needed_multiplier": base.completion_needed_multiplier,
-        "completion_needed_margin": base.completion_needed_margin,
-        "completion_base_ceiling": base.completion_base_ceiling,
-        "registry_path": base.registry_path,
-        "probe_timeout_seconds": base.probe_timeout_seconds,
-        "detect_ttl_seconds": base.detect_ttl_seconds,
-        "bearer": base.bearer,
-        "probe_bearer": base.probe_bearer,
-        "tls_verify": base.tls_verify,
-    }
-    changes.update(overrides)
-    return PreparationConfig(**changes)
+    return dataclasses.replace(base, **overrides)
 
 
 def _translating_transport(translated=ENGLISH_HISTORY_BLOB, window=8192):
     """A fake translation endpoint: window discovery, an answerable /tokenize,
     and a canned English translation."""
-    return FakeTransport(
+    return PreparationFakeTransport(
         {
             "http://translation.invalid/v1/models": _model_entry(max_model_len=window),
             "http://translation.invalid/tokenize": (200, {"count": 40}),
@@ -243,7 +210,7 @@ def test_a_translation_window_overflow_refuses_either_shape(monkeypatch):
     """The completion cap finds no room in the window → the typed refusal,
     NO untranslated fallback — the list shape refuses at the window too."""
     config = _config()
-    transport = FakeTransport(
+    transport = PreparationFakeTransport(
         {
             "http://translation.invalid/v1/models": _model_entry(max_model_len=8192),
             # 7999 prompt tokens: room = 8192 - 7999 - 128 < 256.
@@ -261,7 +228,7 @@ def test_a_translation_window_overflow_refuses_either_shape(monkeypatch):
 
 def test_a_server_overflow_rejection_refuses_instead_of_falling_back(monkeypatch):
     config = _config()
-    transport = FakeTransport(
+    transport = PreparationFakeTransport(
         {
             "http://translation.invalid/v1/models": _model_entry(),
             "http://translation.invalid/tokenize": (200, {"count": 40}),
@@ -279,7 +246,7 @@ def test_a_timeout_returns_unprepared_with_the_timeout_status():
     import httpx
 
     config = _config()
-    transport = FakeTransport(error=httpx.TimeoutException("read timed out"))
+    transport = PreparationFakeTransport(error=httpx.TimeoutException("read timed out"))
     result = asyncio.run(_preparer(config, transport).prepare(FRENCH_SAMPLE, "fr"))
 
     assert result.status is QueryPreparationStatus.FALLBACK_TIMEOUT
@@ -289,7 +256,7 @@ def test_a_timeout_returns_unprepared_with_the_timeout_status():
 
 def test_a_transport_failure_returns_unprepared_with_the_error_status():
     config = _config()
-    transport = FakeTransport(error=ConnectionError("endpoint down"))
+    transport = PreparationFakeTransport(error=ConnectionError("endpoint down"))
     result = asyncio.run(_preparer(config, transport).prepare(FRENCH_SAMPLE, "fr"))
 
     assert result.status is QueryPreparationStatus.FALLBACK_ERROR
@@ -298,7 +265,7 @@ def test_a_transport_failure_returns_unprepared_with_the_error_status():
 
 def test_a_server_5xx_returns_unprepared_with_the_error_status():
     config = _config()
-    transport = FakeTransport(
+    transport = PreparationFakeTransport(
         {
             "http://translation.invalid/v1/models": _model_entry(),
             "http://translation.invalid/tokenize": (200, {"count": 40}),
@@ -311,7 +278,7 @@ def test_a_server_5xx_returns_unprepared_with_the_error_status():
 
 def test_a_malformed_body_returns_unprepared_with_the_error_status():
     config = _config()
-    transport = FakeTransport(
+    transport = PreparationFakeTransport(
         {
             "http://translation.invalid/v1/models": _model_entry(),
             "http://translation.invalid/tokenize": (200, {"count": 40}),
@@ -326,7 +293,7 @@ def test_the_degraded_classes_carry_the_source_text_under_an_unprepared_status()
     """V02 §5.4 shape carries over as degradation-reported-to-caller; the
     source text is never dressed as prepared."""
     config = _config()
-    transport = FakeTransport(error=ConnectionError("endpoint down"))
+    transport = PreparationFakeTransport(error=ConnectionError("endpoint down"))
     result = asyncio.run(_preparer(config, transport).prepare(FRENCH_SAMPLE, "fr"))
 
     assert result.history_text == FRENCH_SAMPLE
@@ -342,7 +309,7 @@ def test_a_blank_completion_is_a_failure_never_a_silent_success():
 
 def test_a_truncated_completion_is_a_failure():
     config = _config()
-    transport = FakeTransport(
+    transport = PreparationFakeTransport(
         {
             "http://translation.invalid/v1/models": _model_entry(),
             "http://translation.invalid/tokenize": (200, {"count": 40}),
@@ -367,7 +334,7 @@ def test_the_three_failure_classes_stay_distinct():
         asyncio.run(_preparer(small).prepare("x" * 150, "en"))
 
     # 2. translator unavailable → unprepared, timeout status.
-    timeout = _preparer(config, FakeTransport(error=TimeoutError()))
+    timeout = _preparer(config, PreparationFakeTransport(error=TimeoutError()))
     timed_out = asyncio.run(timeout.prepare(FRENCH_SAMPLE, "fr"))
     assert timed_out.status is QueryPreparationStatus.FALLBACK_TIMEOUT
 
@@ -462,7 +429,7 @@ def test_a_cancellation_mid_translation_propagates_untouched():
     """Cancelled while the translation call is in flight: CancelledError
     propagates — never caught, never mapped to any status."""
     config = _config()
-    transport = FakeTransport(error=asyncio.CancelledError())
+    transport = PreparationFakeTransport(error=asyncio.CancelledError())
     registry = LanguageRegistry(config.registry_path)
     preparer = QueryPreparer(config, registry, TranslationClient(config, registry, transport=transport))
 

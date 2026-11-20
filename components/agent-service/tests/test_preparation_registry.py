@@ -13,13 +13,18 @@ import json
 from pathlib import Path
 
 import pytest
+from conftest import VENDORED_REGISTRY_PATH
 
 from preparation.registry import LanguageRegistry
 
-COMPONENT_ROOT = Path(__file__).resolve().parents[1]
-VENDORED = COMPONENT_ROOT / "preparation" / "language-registry.json"
+VENDORED = Path(VENDORED_REGISTRY_PATH)
 BACKEND_SOURCE = (
-    COMPONENT_ROOT.parent / "gov-chat-backend" / "services" / "translation" / "language-maps" / "language-registry.json"
+    Path(__file__).resolve().parents[2]
+    / "gov-chat-backend"
+    / "services"
+    / "translation"
+    / "language-maps"
+    / "language-registry.json"
 )
 
 

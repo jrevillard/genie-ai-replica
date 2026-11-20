@@ -9,6 +9,8 @@ a changed constant or formula turns the suite red instead of silently
 moving the deployment's bounds.
 """
 
+import dataclasses
+
 import pytest
 
 from preparation.bounds import (
@@ -26,30 +28,7 @@ from preparation.translation import TranslationInputTooLongError
 
 
 def _config(**overrides) -> PreparationConfig:
-    base = PreparationConfig.load(env={})
-    changes = {
-        "translation_endpoint": base.translation_endpoint,
-        "model_id": base.model_id,
-        "service_timeout_seconds": base.service_timeout_seconds,
-        "max_translation_chars": base.max_translation_chars,
-        "max_translation_chars_cap": base.max_translation_chars_cap,
-        "prompt_overhead_tokens": base.prompt_overhead_tokens,
-        "chars_per_token": base.chars_per_token,
-        "msg_overhead_chars": base.msg_overhead_chars,
-        "completion_safety_tokens": base.completion_safety_tokens,
-        "completion_min_room": base.completion_min_room,
-        "completion_needed_multiplier": base.completion_needed_multiplier,
-        "completion_needed_margin": base.completion_needed_margin,
-        "completion_base_ceiling": base.completion_base_ceiling,
-        "registry_path": base.registry_path,
-        "probe_timeout_seconds": base.probe_timeout_seconds,
-        "detect_ttl_seconds": base.detect_ttl_seconds,
-        "bearer": base.bearer,
-        "probe_bearer": base.probe_bearer,
-        "tls_verify": base.tls_verify,
-    }
-    changes.update(overrides)
-    return PreparationConfig(**changes)
+    return dataclasses.replace(PreparationConfig.load(env={}), **overrides)
 
 
 class TestBudgetDerivation:

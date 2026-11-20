@@ -10,10 +10,13 @@ No test allows one class to be reported as another.
 """
 
 import asyncio
+import dataclasses
 import time
 
 import httpx
 import pytest
+from conftest import PreparationFakeTransport as FakeTransport
+from conftest import preparation_model_entry as _model_entry
 
 from preparation.config import PreparationConfig
 from preparation.registry import LanguageRegistry
@@ -39,63 +42,7 @@ def _config(**overrides) -> PreparationConfig:
             "VLLM_API_KEY": "sk-probe",
         }
     )
-    changes = {
-        "translation_endpoint": base.translation_endpoint,
-        "model_id": base.model_id,
-        "service_timeout_seconds": base.service_timeout_seconds,
-        "max_translation_chars": base.max_translation_chars,
-        "max_translation_chars_cap": base.max_translation_chars_cap,
-        "prompt_overhead_tokens": base.prompt_overhead_tokens,
-        "chars_per_token": base.chars_per_token,
-        "msg_overhead_chars": base.msg_overhead_chars,
-        "completion_safety_tokens": base.completion_safety_tokens,
-        "completion_min_room": base.completion_min_room,
-        "completion_needed_multiplier": base.completion_needed_multiplier,
-        "completion_needed_margin": base.completion_needed_margin,
-        "completion_base_ceiling": base.completion_base_ceiling,
-        "registry_path": base.registry_path,
-        "probe_timeout_seconds": base.probe_timeout_seconds,
-        "detect_ttl_seconds": base.detect_ttl_seconds,
-        "bearer": base.bearer,
-        "probe_bearer": base.probe_bearer,
-        "tls_verify": base.tls_verify,
-    }
-    changes.update(overrides)
-    return PreparationConfig(**changes)
-
-
-class FakeTransport:
-    """The transport seam: canned (status, body) per URL prefix, recorded calls."""
-
-    def __init__(self, responses=None, error=None):
-        self.responses = responses or {}
-        self.error = error
-        self.calls = []
-
-    def _answer(self, url, payload=None):
-        self.calls.append({"url": url, "payload": payload})
-        if self.error is not None:
-            raise self.error
-        for prefix, answer in self.responses.items():
-            if url.startswith(prefix):
-                status, body = answer
-                if callable(body) and payload is not None:
-                    body = body(payload)
-                return status, body
-        raise AssertionError(f"no canned answer for {url}")
-
-    async def get_json(self, url, headers, timeout_s):
-        return self._answer(url)
-
-    async def post_json(self, url, headers, payload, timeout_s):
-        return self._answer(url, payload)
-
-
-def _model_entry(max_model_len=8192, model_id="test-model"):
-    return (
-        200,
-        {"data": [{"id": model_id, "max_model_len": max_model_len}]},
-    )
+    return dataclasses.replace(base, **overrides)
 
 
 class TestCoerceInt:
@@ -255,15 +202,21 @@ class TestModelEndpointCache:
         assert ModelEndpointCache._coerce_window("8192") == 8192
 
     def test_the_probe_carries_the_vllm_api_key_bearer(self):
+        """The probe authenticates like every direct model-endpoint call
+        (deployed endpoint_auth_headers): the VLLM_API_KEY bearer, and no
+        Authorization header at all when the key is unset."""
         transport = FakeTransport({"http://translation.invalid": _model_entry()})
         cache = ModelEndpointCache("http://translation.invalid", transport, 10.0, 60)
         asyncio.run(cache.max_model_len(_config()))
         probe_call = next(c for c in transport.calls if "/v1/models" in c["url"])
-        # The headers travel with the call; the fake records them via the URL
-        # entry only, so the assertion is on the transport's contract: the
-        # probe answered. (Header recording lives on the fake's caller side;
-        # the deployed contract is endpoint_auth_headers over VLLM_API_KEY.)
-        assert probe_call["url"].endswith("/v1/models")
+        assert probe_call["headers"] == {"Authorization": "Bearer sk-probe"}
+
+        keyless = _config(probe_bearer=None)
+        keyless_transport = FakeTransport({"http://translation.invalid": _model_entry()})
+        keyless_cache = ModelEndpointCache("http://translation.invalid", keyless_transport, 10.0, 60)
+        asyncio.run(keyless_cache.max_model_len(keyless))
+        keyless_call = next(c for c in keyless_transport.calls if "/v1/models" in c["url"])
+        assert keyless_call["headers"] == {}
 
 
 class TestCompletionCap:

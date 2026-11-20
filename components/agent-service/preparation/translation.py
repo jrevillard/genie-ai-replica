@@ -265,8 +265,7 @@ class ModelEndpointCache:
     def _probe_headers(config: PreparationConfig) -> dict:
         # The probe authenticates like every other direct model-endpoint call
         # (deployed endpoint_auth_headers): the VLLM_API_KEY bearer when set.
-        api_key = config.probe_bearer or ""
-        return {"Authorization": f"Bearer {api_key}"} if api_key else {}
+        return _auth_headers(config.probe_bearer)
 
     async def _probe(self, config: PreparationConfig) -> bool:
         """One ``/v1/models`` probe; True when a usable entry came back."""
@@ -385,6 +384,13 @@ def _completion_truncated(choice: dict) -> bool:
     return choice.get("finish_reason") == "length"
 
 
+def _auth_headers(bearer: str | None) -> dict:
+    """The Authorization headers one direct model-endpoint call carries
+    (deployed: same server, same auth — the bearer per call, never on a
+    session). No key, no header."""
+    return {"Authorization": f"Bearer {bearer}"} if bearer else {}
+
+
 def _is_code_shaped(code: str) -> bool:
     """Whether a lower-case code has the shape a prompt may carry."""
     return bool(_LANGUAGE_CODE_PATTERN.match(code))
@@ -435,14 +441,6 @@ class TranslationClient:
         # count with a client-error status. Transient failures do NOT latch.
         self._count_unavailable = False
 
-    @classmethod
-    def create(cls, env=None) -> "TranslationClient":
-        """Assemble the default wiring from the environment."""
-        from .registry import LanguageRegistry
-
-        config = PreparationConfig.load(env)
-        return cls(config, LanguageRegistry(config.registry_path))
-
     # --- discovery ---
 
     async def translation_window(self) -> int | None:
@@ -491,7 +489,7 @@ class TranslationClient:
         if self._count_unavailable:
             return None
         api_key = self._config.bearer or ""
-        headers = {"Authorization": f"Bearer {api_key}"} if api_key else {}
+        headers = _auth_headers(api_key)
         url = f"{self._config.translation_endpoint}/tokenize"
         try:
             status, payload = await self._transport.post_json(
@@ -708,8 +706,7 @@ class TranslationClient:
         window = await self.translation_window()
         payload["max_tokens"] = await self.completion_cap(prompt, count_body, window)
         url = f"{self._config.translation_endpoint}{path}"
-        api_key = self._config.bearer or ""
-        headers = {"Authorization": f"Bearer {api_key}"} if api_key else {}
+        headers = _auth_headers(self._config.bearer)
         try:
             status, body = await self._transport.post_json(url, headers, payload, self._config.service_timeout_seconds)
             if status >= 400:

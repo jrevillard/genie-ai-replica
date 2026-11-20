@@ -12,16 +12,11 @@ import threading
 from pathlib import Path
 
 import pytest
-from langdetect import DetectorFactory
+from conftest import ARABIC_SAMPLE, FRENCH_SAMPLE
 
 from preparation import detection
 
-
-@pytest.fixture(autouse=True)
-def _seeded_detector():
-    """Deterministic detection for the suite; production stays unseeded."""
-    DetectorFactory.seed = 0
-    yield
+pytestmark = pytest.mark.usefixtures("seeded_langdetect")
 
 
 def test_production_detection_is_never_seeded():
@@ -41,17 +36,12 @@ def test_production_detection_is_never_seeded():
 
 def test_the_french_v02_sample_detects_french():
     """V02 §5.6 sample family (shape, not wording)."""
-    detected = detection.detect_language(
-        "Bonjour, comment la ville de Geneve gere-t-elle les services de "
-        "transport public pour les habitants et les visiteurs ?"
-    )
-    assert detected == "FR"
+    assert detection.detect_language(FRENCH_SAMPLE) == "FR"
 
 
 def test_the_arabic_non_latin_sample_detects_arabic():
     """The non-Latin sample of V02 §5.6 — detected with the REAL detector."""
-    detected = detection.detect_language("كيف تدير مدينة دبي خدمات النقل العام للسكان والزوار خلال موسم الصيف؟")
-    assert detected == "AR"
+    assert detection.detect_language(ARABIC_SAMPLE) == "AR"
 
 
 def test_english_detects_english():

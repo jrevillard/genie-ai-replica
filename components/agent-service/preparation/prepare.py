@@ -136,7 +136,9 @@ class QueryPreparer:
         # conversation is actually written in, and the history has to be
         # normalized to English for the English-only embedding space.
         history_language = detected or named
-        budget = await self._char_budget()
+        # The character budget: derived from the discovered window, capped
+        # by an explicit MAX_TRANSLATION_CHARS, or the configured fallback.
+        budget = bounds.derived_char_budget(await self._translator.translation_window(), self._config)
 
         try:
             if history_language and history_language.strip() != "EN":
@@ -163,12 +165,6 @@ class QueryPreparer:
         if status.is_prepared:
             query = PreparedQuery(text=query_text, preparation_status=status)
         return PreparationResult(status=status, query=query, history_text=history_text, language=history_language)
-
-    async def _char_budget(self) -> int:
-        """The character budget: derived from the discovered window, capped
-        by an explicit ``MAX_TRANSLATION_CHARS``, or the configured fallback."""
-        window = await self._translator.translation_window()
-        return bounds.derived_char_budget(window, self._config)
 
     def _passthrough(
         self, history: list | str, english_established: bool, budget: int

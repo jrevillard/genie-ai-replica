@@ -96,7 +96,20 @@ def _rank_weighted_confidence(scores: list[float], decay: float) -> float:
     return sum(w * s for w, s in zip(weights, scores, strict=True)) / sum(weights)
 
 
-def source_document_envelope(hits) -> list[dict]:
+def hit_identity(hit) -> tuple[str, str] | None:
+    """The dedup identity of one hit's source: ``(repo_id, concept_id)`` for
+    an OKF concept, ``(None, file_id)`` for a legacy file — the pair the
+    deployed duplicate-skip keys on (the same document reached through
+    several chunks is surfaced once, its scores still counted)."""
+    provenance = hit.provenance
+    if isinstance(provenance, OkfConceptProvenance):
+        return (provenance.repo_id, provenance.concept_id)
+    if isinstance(provenance, LegacyFileProvenance):
+        return (None, provenance.file_id)
+    return None
+
+
+def source_document_envelope(hits, score_calibrator=None) -> list[dict]:
     """The ``source_documents`` entries of one result, in the deployed shape.
 
     A legacy corpus source carries ``document_id`` (the ``file_id``) and no
@@ -104,11 +117,35 @@ def source_document_envelope(hits) -> list[dict]:
     ``bundle_version`` trio and ``source: 'okf-concept'`` — without the
     marker the frontend takes the legacy branch and builds a doc-repo URL
     for a concept that has none.
+
+    RECORDED DELTA (E01 counts it): the deployed legacy branch resolves
+    ``document_name``/``url``/``categoryLabels`` from doc-repo metadata and
+    falls back to exactly THIS shape — the id-derived name, the empty URL,
+    no labels — only when that resolution fails. This pipeline makes no
+    per-answer metadata round-trip (the capability's contract result carries
+    identity, not file metadata), so every legacy entry rides the fallback
+    shape. The OKF entries are byte-identical to the deployed OKF branch.
+    Widening the delta — resolving doc-repo metadata here — is an
+    iteration-2 decision, not silently taken.
+
+    Duplicates are skipped (deployed M3: the same ``document_id`` is
+    surfaced once, the first occurrence wins), while every hit's score —
+    duplicates included — still feeds the confidence aggregate, which this
+    function does NOT compute (the caller scores the FULL hit list).
+    ``score_calibrator`` is the deployed confidence-time calibration
+    (``RERANKER_SCORE_CALIBRATION``); ``None`` keeps the raw score (the
+    default ``none`` calibration). It is applied at confidence time ONLY —
+    never on the selection comparisons the capability already made.
     """
     envelope: list[dict] = []
+    seen: set[tuple[str, str] | None] = set()
     for hit in hits:
         provenance = hit.provenance
-        score = hit.score
+        identity = hit_identity(hit)
+        if identity in seen:
+            continue
+        seen.add(identity)
+        score = score_calibrator(hit.score) if score_calibrator is not None else hit.score
         if isinstance(provenance, OkfConceptProvenance):
             entry = {
                 "document_id": provenance.concept_id,
@@ -243,6 +280,7 @@ class NoAgentPipeline:
         counter: TokenCounter,
         budget: OperationBudget,
         translator: AnswerTranslator | None = None,
+        score_calibrator=None,
     ):
         self._config = config
         self._preparer = preparer
@@ -252,14 +290,21 @@ class NoAgentPipeline:
         self._counter = counter
         self._budget = budget
         self._translator = translator
+        # The deployed confidence-time calibration (RERANKER_SCORE_CALIBRATION
+        # on the reranking config the capability owns); None keeps the raw
+        # score (the default `none` calibration).
+        self._score_calibrator = score_calibrator
 
     @classmethod
     def create(cls, config: NoAgentConfig, capability, budget: OperationBudget, env=None) -> "NoAgentPipeline":
         """Assemble the default wiring: the preparer over the same env, the
         generation client and counter over the generation endpoint, the lane
-        over the config, and the answer translator when the gate is on. The
-        translator owns its registry instance (the same file, its own
-        read-once cache) — the preparer's is private to the preparer."""
+        over the config, the answer translator when the gate is on, and the
+        score calibrator from the capability's own reranking config (the
+        adapter is the single owner of the calibration knob — no second
+        reader that could drift). The translator owns its registry instance
+        (the same file, its own read-once cache) — the preparer's is private
+        to the preparer."""
         preparer = QueryPreparer.create(env)
         transport = HttpxTransport(config.tls_verify)
         cache = ModelEndpointCache(
@@ -272,7 +317,9 @@ class NoAgentPipeline:
         if config.answer_translation_enabled:
             registry = LanguageRegistry(PreparationConfig.load(env).registry_path)
             translator = AnswerTranslator(config, registry)
-        return cls(config, preparer, capability, lane, generation, counter, budget, translator)
+        reranking = getattr(capability, "reranking", None)
+        score_calibrator = reranking.calibrate if reranking is not None else None
+        return cls(config, preparer, capability, lane, generation, counter, budget, translator, score_calibrator)
 
     async def run(
         self,
@@ -331,28 +378,32 @@ class NoAgentPipeline:
             logger.warning(f"abstained.reason={PREPARATION_DEGRADED} status={preparation.status.value}")
 
         too_long_answer = reason == "reranker_input_too_long"
-        knowledge_section = prompt_module.render_knowledge_section(query_text, documents, instructions)
-        system = prompt_module.system_prompt(self._config, preparation.language)
-        window = await self._generation.window_tokens()
-        answer_tokens = prompt_module.answer_reserve(self._config)
-        truncated_history, _kept, _dropped = await prompt_module.truncate_history(
-            preparation.history_text,
-            system_prompt_text=system,
-            knowledge_base_section=knowledge_section,
-            user_context=user_context,
-            answer_tokens=answer_tokens,
-            window_tokens=window,
-            count_tokens=self._counter.count,
-        )
-        user_content = prompt_module.build_user_content(user_context, truncated_history, knowledge_section)
-
+        translation_status: str | None = None
         if too_long_answer:
-            # The recorded answer: the fixed English text, NO generation call.
+            # The recorded answer: the fixed English text, NO generation call
+            # and NO tokenizer interaction — the deployed path answers it with
+            # zero LLM/tokenizer round-trips, so the truncation guard (whose
+            # counter would hit the same endpoint family) is skipped too, and
+            # the recorded text is never translated (it is the recorded
+            # answer, not generated content).
             answer = prompt_module.RERANKER_INPUT_TOO_LONG_ABSTENTION_TEXT
         else:
+            knowledge_section = prompt_module.render_knowledge_section(query_text, documents, instructions)
+            system = prompt_module.system_prompt(self._config, preparation.language)
+            window = await self._generation.window_tokens()
+            answer_tokens = prompt_module.answer_reserve(self._config)
+            truncated_history, _kept, _dropped = await prompt_module.truncate_history(
+                preparation.history_text,
+                system_prompt_text=system,
+                knowledge_base_section=knowledge_section,
+                user_context=user_context,
+                answer_tokens=answer_tokens,
+                window_tokens=window,
+                count_tokens=self._counter.count,
+            )
+            user_content = prompt_module.build_user_content(user_context, truncated_history, knowledge_section)
             answer = await self._generation.generate(system, user_content)
-
-        answer, translation_status = await self._maybe_translate(answer, target_language)
+            answer, translation_status = await self._maybe_translate(answer, target_language)
         return self._assemble(
             answer=answer,
             search_result=search_result,
@@ -388,8 +439,13 @@ class NoAgentPipeline:
         too_long_answer: bool,
     ) -> NoAgentResult:
         hits = tuple(search_result.hits) if search_result else ()
-        envelope = source_document_envelope(hits)
-        scores = [hit.score for hit in hits]
+        calibrate = self._score_calibrator
+        envelope = source_document_envelope(hits, calibrate)
+        # The confidence aggregate runs over the FULL hit list — duplicates
+        # included (deployed M3: a duplicate's score counts while the entry
+        # itself is not re-surfaced) — at confidence time, calibrated like the
+        # envelope scores.
+        scores = [calibrate(hit.score) if calibrate is not None else hit.score for hit in hits]
         confidence = _rank_weighted_confidence(scores, self._config.confidence_rank_decay)
         is_grounded = bool(hits) and not too_long_answer
         metadata: dict[str, Any] = {

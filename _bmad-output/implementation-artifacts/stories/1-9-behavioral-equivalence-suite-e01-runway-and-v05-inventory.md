@@ -110,9 +110,26 @@ context:
 
 ## Implementation Notes
 
+- **Review-round 1 corrections (commit after `c6a42d9f6`)**: the too-long turn's zero-LLM shape restored (no window probe, no counter, no generation, no translation); source-document dedup (deployed M3) with full-list score aggregation; the confidence-time calibration wired from the capability's `reranking` adapter (new public read-only property); the legacy-envelope metadata delta recorded in `source_document_envelope`'s docstring — our legacy entries always ride the deployed metadata-ABSENT fallback shape (name from id, empty URL, no labels), and E01 counts the delta against config A's metadata-resolved entries; `seeded_langdetect` applied properly; `window_fits` became the one threshold reader; test lanes moved to per-call temp directories. 516 passed.
+
 ## Spec Change Log
 
 ## Review Triage Log
+
+Global code-review, round 1 (high effort, full diff `8e26b87236..c6a42d9f6`) — 5 important + 3 nit. Every claim verified against the code and the deployed source before disposition:
+
+| Finding | Severity | Verdict | Disposition |
+|---|---|---|---|
+| The `reranker_input_too_long` turn still ran the truncation guard before answering: a `/tokenize` outage on exactly such a turn failed a turn whose answer was already fixed (deployed: zero LLM/tokenizer interaction) | important | confirmed (`pipeline.py` — `window_tokens()` + `truncate_history` ran before the `too_long_answer` branch) | **Fixed**: the too-long branch now answers first — no window probe, no counter, no generation; regression test pins the zero-call shape |
+| Legacy `source_documents` entries fabricate the envelope: name derived from `file_id`, `url` always empty, labels always `[]` — deployed resolves real doc-repo metadata and only falls back to this shape when the resolution fails | important | confirmed (`genieai_chatqna.py:3681-3689` — metadata-resolved envelope, fallback shape identical to ours) | **Recorded, not widened**: the delta is now stated in the envelope docstring (deployed fallback shape == our always-shape; E01 counts it) — a per-answer doc-repo metadata integration is an iteration-2 decision, not silently taken |
+| No dedup by document_id: several chunks of one file emitted duplicate envelope entries (deployed skips duplicates, keeps their scores in the aggregate) | important | confirmed (`genieai_chatqna.py:3554` — "Duplicate File ID … Skipping duplicate"; M3 keeps the score) | **Fixed**: envelope dedups on the source identity (first wins) while the confidence aggregate still counts every hit; test pins both halves |
+| Confidence-time calibration unported: `calibrate()` existed with no call site (dead method); deployed applies `_calibrate_reranker_score` to the envelope scores and the confidence aggregate | important | confirmed (`genieai_chatqna.py:1726`, `:3554-3555`, `:3579`; `tei_reranking.py:375` — never called) | **Fixed**: the pipeline takes the calibrator from the capability's own reranking adapter (new public `reranking` property — the adapter stays the knob's single owner), applies it at confidence time to envelope + aggregate; tests pin the sigmoid mapping and the untouched raw hits |
+| `seeded_langdetect` imported but never applied in the equivalence suite — the fr-sample detection test could flake unseeded | important | confirmed (dead `noqa` import; sibling suites apply the fixture) | **Fixed**: the fixture is now a test parameter; dead import removed |
+| The answer translation ran on the too-long fixed text (gate on → the recorded answer got translated) | nit | confirmed (default-off gate limits the blast radius) | **Fixed**: the fixed text is never translated (it is the recorded answer, not generated content); test pinned |
+| `window_fits` was dead code with a false "one place" docstring (`prompt.py` re-implemented the predicate inline) | nit | confirmed | **Fixed**: `truncate_history` now calls `window_fits` — the docstring is true, one threshold reader |
+| The default test lane locked a fixed global `/tmp` path — two concurrent pytest runs would contend on the same slot files | nit | confirmed | **Fixed**: per-call temp-directory lanes with atexit cleanup |
+
+
 
 ## Design Notes
 

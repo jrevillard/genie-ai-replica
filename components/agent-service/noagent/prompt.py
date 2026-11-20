@@ -31,6 +31,7 @@ The assembly, as deployed:
 import logging
 
 from .config import DEFAULT_MAX_ANSWER_TOKENS, WINDOW_BUFFER_TOKENS, NoAgentConfig
+from .generation import window_fits
 
 logger = logging.getLogger(__name__)
 
@@ -160,7 +161,7 @@ async def truncate_history(
     full_prompt_tokens = system_tokens + await count_tokens(
         build_user_content(user_context, history, knowledge_base_section)
     )
-    if full_prompt_tokens + answer_tokens <= window_tokens - WINDOW_BUFFER_TOKENS:
+    if window_fits(full_prompt_tokens, answer_tokens, window_tokens):
         return history, 0, 0
 
     skeleton_tokens = await count_tokens(skeleton)

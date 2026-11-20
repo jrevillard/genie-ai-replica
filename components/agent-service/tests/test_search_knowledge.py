@@ -810,3 +810,12 @@ def test_a_raising_sink_fails_the_turn_loudly():
     capability = _sink_outcome("no_documents_retrieved")
     with pytest.raises(RuntimeError, match="sink broke"):
         asyncio.run(capability.search_knowledge(context(), prepared(), BUDGET, abstention_sink=exploding_sink))
+
+
+def test_reranking_property_exposes_the_owned_adapter():
+    """The pipeline reads the calibration knob from the adapter that owns it
+    (single reader of RERANKER_SCORE_CALIBRATION — no second config that
+    could drift); the property is a read-only view of the constructor wire."""
+    reranking = FakeReranking(outcome=RerankOutcome(selection=()))
+    capability, _e, _r, _f = make_capability(reranking=reranking)
+    assert capability.reranking is reranking

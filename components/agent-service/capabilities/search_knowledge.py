@@ -81,6 +81,15 @@ class SearchKnowledgeCapability:
 
     name = OperationName.SEARCH_KNOWLEDGE
 
+    @property
+    def reranking(self) -> TeiRerankingAdapter:
+        """The reranking adapter this capability was wired with — the single
+        owner of the calibration knob (``RERANKER_SCORE_CALIBRATION``). The
+        no-agent pipeline reads its ``calibrate`` from here at confidence
+        time; the capability itself never calibrates (V02 §4.13: calibration
+        is a confidence-time concern, never a selection one)."""
+        return self._reranking
+
     def __init__(
         self,
         embedding: TeiEmbeddingAdapter,

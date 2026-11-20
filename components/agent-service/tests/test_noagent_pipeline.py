@@ -12,6 +12,10 @@ cancellation propagating with its slot released, and the metadata shape.
 """
 
 import asyncio
+import atexit
+import os
+import shutil
+import tempfile
 
 import pytest
 
@@ -127,6 +131,16 @@ def _search_result(outcome=OutcomeCode.SUCCESS, hits=None):
     )
 
 
+def _default_lane(slots: int = 2) -> AdmissionLane:
+    """A per-call lane in its own temp directory: no fixed global path, so
+    concurrent pytest processes (or a local run beside CI) never contend on
+    the same slot files. The directory is removed at interpreter exit —
+    no /tmp litter, no cross-run lock leakage."""
+    directory = tempfile.mkdtemp(prefix="noagent-test-lane-")
+    atexit.register(shutil.rmtree, directory, True)
+    return AdmissionLane(slots, os.path.join(directory, "lane.lock"))
+
+
 def _pipeline(
     config=None,
     capability=None,
@@ -143,7 +157,7 @@ def _pipeline(
         config,
         preparer or FakePreparer(_prepared()),
         capability or FakeCapability(result=_search_result()),
-        lane or AdmissionLane(2, "/tmp/test-noagent-pipeline-lane.lock"),
+        lane or _default_lane(),
         generation or FakeGeneration(),
         counter,
         budget,
@@ -528,3 +542,92 @@ def test_confidence_is_the_rank_weighted_average_and_zero_when_ungrounded():
     )
     empty_result = asyncio.run(empty.run(["USER: q"], _context()))
     assert empty_result.metadata["retrieval_confidence_score"] == 0.0
+
+
+# ---------------------------------------------------------------------
+# Review-round regressions: the too-long turn's zero-LLM shape, the
+# duplicate-source rule and the confidence-time calibration
+# ---------------------------------------------------------------------
+
+
+def test_too_long_turn_answers_without_any_tokenizer_or_window_call():
+    """The recorded answer with ZERO LLM/tokenizer interaction: the window
+    probe and the truncation guard's counter would hit the same endpoint
+    family the deployed too-long path never touches, so a /tokenize outage
+    must not fail a turn whose answer is already fixed."""
+    counter_calls = []
+
+    class ExplodingCounter(FakeCounter):
+        async def count(self, text):
+            counter_calls.append(text)
+            raise GenerationTransientError("tokenize down")
+
+    class ExplodingWindow(FakeGeneration):
+        async def window_tokens(self):
+            raise GenerationTransientError("probe down")
+
+    pipeline, generation, _cap = _insufficient_pipeline("reranker_input_too_long")
+    pipeline._generation = ExplodingWindow()
+    pipeline._counter = ExplodingCounter()
+    result = asyncio.run(pipeline.run(["USER: q"], _context()))
+    assert result.answer == RERANKER_INPUT_TOO_LONG_ABSTENTION_TEXT
+    assert generation.calls == []
+    assert counter_calls == []
+    assert result.abstention_reason == "reranker_input_too_long"
+
+
+def test_too_long_fixed_text_is_never_translated():
+    """The gate translates GENERATED answers; the too-long case's answer is
+    the recorded fixed English text — it stays English even with the gate
+    on and a target asked."""
+    translator = FakeTranslator(("réponse", "ok"))
+    config = NoAgentConfig.load(env={"AGENT_ANSWER_TRANSLATION_ENABLED": "true"})
+    pipeline, generation, _cap = _insufficient_pipeline("reranker_input_too_long")
+    pipeline._translator = translator
+    pipeline._config = config
+    result = asyncio.run(pipeline.run(["USER: q"], _context(), target_language="fr"))
+    assert result.answer == RERANKER_INPUT_TOO_LONG_ABSTENTION_TEXT
+    assert translator.calls == []
+    assert "translation_status" not in result.metadata
+
+
+def test_duplicate_sources_surface_once_scores_count_all():
+    """Deployed M3: the same document_id is surfaced once (first wins) while
+    EVERY hit's score — duplicates included — feeds the confidence
+    aggregate."""
+    hits = (
+        SearchHit(provenance=LegacyFileProvenance(file_id="f1"), text="chunk a", score=0.9),
+        SearchHit(provenance=LegacyFileProvenance(file_id="f1"), text="chunk b", score=0.5),
+        SearchHit(provenance=LegacyFileProvenance(file_id="f2"), text="chunk c", score=0.7),
+    )
+    pipeline = _pipeline(capability=FakeCapability(result=_search_result(hits=hits)))
+    result = asyncio.run(pipeline.run(["USER: q"], _context()))
+    assert [entry["document_id"] for entry in result.source_documents] == ["f1", "f2"]
+    assert result.source_documents[0]["score"] == 0.9  # the first occurrence wins
+    # (0.9 + 0.5*e^-0.5 + 0.7*e^-1) / (1 + e^-0.5 + e^-1) ≈ 0.7399 — all
+    # three scores, duplicates included.
+    assert result.metadata["retrieval_confidence_score"] == pytest.approx(0.7399, abs=0.01)
+
+
+def test_score_calibrator_applies_at_confidence_time_only():
+    """The deployed calibration rides the envelope scores AND the confidence
+    aggregate; the raw scores the capability returned are not mutated."""
+
+    def sigmoid(score):
+        return 1 / (1 + pow(2.718281828459045, -score))
+
+    hits = (
+        SearchHit(provenance=LegacyFileProvenance(file_id="f1"), text="a", score=0.9),
+        SearchHit(provenance=LegacyFileProvenance(file_id="f2"), text="b", score=0.6),
+    )
+    capability = FakeCapability(result=_search_result(hits=hits))
+    pipeline = _pipeline(capability=capability)
+    pipeline._score_calibrator = sigmoid
+    result = asyncio.run(pipeline.run(["USER: q"], _context()))
+    assert result.source_documents[0]["score"] == pytest.approx(sigmoid(0.9))
+    assert result.source_documents[1]["score"] == pytest.approx(sigmoid(0.6))
+    calibrated = [sigmoid(0.9), sigmoid(0.6)]
+    expected = (calibrated[0] + calibrated[1] * pow(2.718281828459045, -0.5)) / (1 + pow(2.718281828459045, -0.5))
+    assert result.metadata["retrieval_confidence_score"] == pytest.approx(expected, abs=0.01)
+    # The hits themselves were never touched: calibration is confidence-time.
+    assert capability.result.hits[0].score == 0.9

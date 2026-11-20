@@ -551,14 +551,14 @@ def test_preparation_status_vocabulary_is_the_recorded_one():
     assert recorded == {status.value for status in QueryPreparationStatus}
 
 
-def test_preparation_order_detects_and_translates_to_english():
+def test_preparation_order_detects_and_translates_to_english(seeded_langdetect):
     """The recorded order on a recorded locale: the French sample detects FR,
     translates to English, status translated — and the QUERY is the last
-    USER segment of the TRANSLATED history."""
+    USER segment of the TRANSLATED history. The detector is seeded for
+    determinism (the sibling preparation suites' rule; production stays
+    unseeded)."""
     locale = next(l for l in MEASURED["preparation"]["locales"] if l["locale"] == "fr")
     pytest.importorskip("langdetect")
-    from conftest import seeded_langdetect  # noqa: F401 — applied via the fixture below
-
     result = asyncio.run(_preparer().prepare([{"role": "user", "content": locale["sample"]}]))
     assert result.status is QueryPreparationStatus.TRANSLATED
     assert result.language == locale["history_language"]

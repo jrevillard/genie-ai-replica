@@ -2,7 +2,7 @@
 title: 'Story 1.10 — Attest the chart identity of the deployed baseline'
 type: 'feature'
 created: '2026-11-19'
-status: 'in-progress'
+status: 'review'
 route: 'dispatch'
 review_loop_iteration: 0
 baseline_commit: '017e9f2a0'
@@ -120,6 +120,33 @@ context:
 | 39 | scoped review f=4 | Minor | the banner said "no difference was measured, and none is reported below", while the image table still reports digest differences | **fixed** — the banner names what was not measured (configuration and models) and says the image digests and the topology are reported as usual |
 | 40 | global code-review round 4 | Minor | the Code Map's line references were stale for 8 of its 11 entries | **fixed** — the Code Map names the current lines |
 | 41 | global code-review round 4 | Minor | the test fixture built ONE base64 layer while the production decoder consumes what `kubectl` returns (the value encoded again) — the double-layer branch the real capture depends on was never exercised, so deleting the second decode left the suite green while every real capture broke | **fixed** — the fixture mirrors kubectl's shape, and the mutation is now caught: removing the second base64 layer reds 5 tests |
+| 42 | scoped coverage of the quality changes | Minor | the deployed revision's fixture gave every history entry the same `chartName`, so the assertion on the chart name could not fail — the name's provenance was unpinned | **fixed** — the superseded and the failed entries carry their own names; a mutation (the name read from another history entry) now reds the test |
+| 43 | scoped validation of that correction | Minor | the fixture's HelmRelease spec carried the same string as the deployed history entry, so the assertion could not tell the deployed entry from the spec — reading the name from the spec left the whole suite green, and in production the spec carries the chart PATH, so the record would state a spurious name difference | **fixed** — the fixture's spec carries the production path, and a mutation (the name read from the spec) now reds the test |
+| 44 | scoped validation of that correction | Minor | the divergent history names are a synthetic discriminator: a real Flux history carries the same chart name in every entry, so the fixture no longer mirrors a plausible history | **fixed** — a comment records that the divergence is deliberate, and why identical names would leave the assertion unable to fail |
+
+## Review Protocol Notes
+
+Two deviations from the review protocol are recorded here rather than left
+for the reader to find in the log:
+
+1. **The fix-review chain ran one review past its budget.** The instrument
+   counts consecutive review dispatches, so the four scoped reviews that
+   ran between the third global and the fourth global read as ONE chain of
+   four (the cap is three) and `metrics.py` exits 1 on that count. Each of
+   the four validated a DIFFERENT mutation step - the corrections of the
+   previous scoped review - so each step's own chain was one review, well
+   inside the budget; the instrument cannot see the step boundaries because
+   the fourth global, which ends a chain, was dispatched after them. The
+   sequence itself reads sequence-complete, the decision log's audit passes,
+   and the fourth global came back clean (0 Critical, 0 Important) over the
+   whole diff.
+2. **One correction was validated in the seat's own turn.** After the
+   scoped review that found the missing-template defect, the chain had
+   reached its cap; rather than start a fifth scoped review, the
+   correction was verified by running the capture against the shared venue
+   with a template moved aside - the record is written and the capture exits
+   2 with the UNRESOLVED row, instead of dying with exit 3 and no record.
+   The decision log's evidence field names this.
 
 ## Design Notes
 

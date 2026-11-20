@@ -172,6 +172,40 @@ def _overflow_message_from_exc(exc: BaseException) -> str:
     return " ".join(parts).lower()
 
 
+def parse_tokenize_count(payload) -> int:
+    """The token count out of a ``/tokenize`` payload — the ONE parser for
+    every ``/tokenize`` consumer in the component (the translation client's
+    completion cap and the no-agent pipeline's truncation guard).
+
+    vLLM returns both the token list and a precomputed count; prefer the
+    scalar, fall back to the list length. A proxy may serialize the count
+    as a digit string (the same coercion stance as the window value).
+
+    Raises:
+        ValueError: the payload is not a readable count — never a guessed
+        number, never an absurd one.
+    """
+    if not isinstance(payload, dict):
+        raise ValueError(f"/tokenize returned a non-object payload: {payload!r}")
+    raw = payload.get("count")
+    if raw is None:
+        tokens = payload.get("tokens")
+        if not isinstance(tokens, list):
+            raise ValueError(f"/tokenize payload has neither a count nor a token list: {payload!r}")
+        count = len(tokens)
+    else:
+        count = coerce_int(raw)
+        if count is None:
+            raise ValueError(f"/tokenize count is not an integer: {raw!r}")
+    if count < 0:
+        # 0 is an honest count for an empty piece; a negative count is a
+        # lie that would silently defeat the overflow guard.
+        raise ValueError(f"/tokenize count is negative: {raw!r}")
+    if count > MAX_SANE_TOKENS:
+        raise ValueError(f"/tokenize count is absurdly large: {raw!r}")
+    return count
+
+
 def is_input_overflow(exc: BaseException) -> bool:
     """True when ``exc`` represents a vLLM context-length rejection.
 
@@ -521,31 +555,10 @@ class TranslationClient:
 
     @staticmethod
     def _parse_tokenize_count(payload) -> int:
-        """The token count out of a ``/tokenize`` payload.
-
-        vLLM returns both the token list and a precomputed count; prefer the
-        scalar, fall back to the list length. A proxy may serialize the count
-        as a digit string (the same coercion stance as the window value).
-        """
-        if not isinstance(payload, dict):
-            raise ValueError(f"/tokenize returned a non-object payload: {payload!r}")
-        raw = payload.get("count")
-        if raw is None:
-            tokens = payload.get("tokens")
-            if not isinstance(tokens, list):
-                raise ValueError(f"/tokenize payload has neither a count nor a token list: {payload!r}")
-            count = len(tokens)
-        else:
-            count = coerce_int(raw)
-            if count is None:
-                raise ValueError(f"/tokenize count is not an integer: {raw!r}")
-        if count < 0:
-            # 0 is an honest count for an empty piece; a negative count is a
-            # lie that would silently defeat the overflow guard.
-            raise ValueError(f"/tokenize count is negative: {raw!r}")
-        if count > MAX_SANE_TOKENS:
-            raise ValueError(f"/tokenize count is absurdly large: {raw!r}")
-        return count
+        """The token count out of a ``/tokenize`` payload — the module-level
+        :func:`parse_tokenize_count`, kept as a method alias for the
+        translation client's call sites."""
+        return parse_tokenize_count(payload)
 
     async def completion_cap(self, prompt: str, count_body: dict, window: int | None) -> int:
         """The completion cap for one translation request.

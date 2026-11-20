@@ -9,7 +9,7 @@ test that proves nothing, so each one states the behaviour it pins.
 import inspect
 
 import pytest
-from pydantic import ValidationError
+from pydantic import BaseModel, ValidationError
 
 from capabilities import contract
 from capabilities.contract import (
@@ -530,7 +530,29 @@ def test_a_unicode_digit_version_is_not_a_version():
     assert is_compatible("1.0", "１.０") is False
 
 
-def test_the_prepared_statuses_are_declared_once():
-    """The literal the result type uses and the membership test the input
-    validator uses are the same declaration."""
-    assert set(contract.PreparedStatus.__args__) == {status for status in QueryPreparationStatus if status.is_prepared}
+def test_the_prepared_statuses_are_the_recorded_ones():
+    """The prepared vocabulary is the recorded one, and it is declared once.
+
+    The result type's literal is the only declaration: the membership test the
+    input validator uses reads that same literal, so the two cannot drift.
+    """
+    assert set(contract.PreparedStatus.__args__) == {
+        QueryPreparationStatus.TRANSLATED,
+        QueryPreparationStatus.PASSTHROUGH_ENGLISH,
+    }
+    for status in QueryPreparationStatus:
+        assert status.is_prepared is (status in set(contract.PreparedStatus.__args__))
+
+
+def test_every_model_refuses_the_fields_it_does_not_know():
+    """The compatibility rules rest on this: an older consumer rejects a
+    newer provider's extra field rather than ignoring it."""
+    models = [
+        obj
+        for obj in vars(contract).values()
+        if isinstance(obj, type) and issubclass(obj, BaseModel) and obj is not BaseModel
+    ]
+
+    assert models
+    for model in models:
+        assert model.model_config.get("extra") == "forbid", model.__name__

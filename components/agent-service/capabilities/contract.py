@@ -199,8 +199,8 @@ class CallerContext(BaseModel):
     to resolve a repository id inside that set — every entry must name a graph
     of that set, so the mapping cannot widen the scope it resolves into.
     `requested_labels` is the request's own narrowing. It is context-only:
-    a model argument carries no narrowing of its own, so it cannot widen the
-    search either.
+    a model argument contributes the query and nothing else, so it cannot
+    widen the search and cannot change what the request asked for.
     """
 
     model_config = ConfigDict(extra="forbid")
@@ -240,7 +240,7 @@ class QueryPreparationStatus(StrEnum):
     @property
     def is_prepared(self) -> bool:
         """Whether this status means the query is English and ready to retrieve."""
-        return self in _PREPARED_STATUSES
+        return self in PreparedStatus.__args__
 
 
 PreparedStatus = Literal[
@@ -248,10 +248,6 @@ PreparedStatus = Literal[
     QueryPreparationStatus.PASSTHROUGH_ENGLISH,
 ]
 """The preparation statuses that mean the query is ready to retrieve."""
-
-# The prepared statuses are declared once, as the literal the result type
-# uses, and the membership test reads that same declaration.
-_PREPARED_STATUSES = frozenset(PreparedStatus.__args__)
 
 
 class PreparedQuery(BaseModel):
@@ -556,13 +552,17 @@ class DocumentCapabilityPort(Protocol):
 class CompatibilityRules:
     """The contract's versioning rules.
 
-    A minor version may only add: a new optional field, a new operation. The
-    outcome vocabulary is closed — a result names one of the declared codes —
-    so a new outcome code is a major change, not an additive one. Anything
-    that removes a field, changes a meaning, or changes the carrier, retry rule
-    or fallback rule of an outcome code is a major change too. Outcome codes
-    are stable identifiers: a code is never reused for a different meaning, so
-    a caller that switches on it stays correct.
+    Every model refuses the fields it does not know, so a new field is
+    rejected by an older consumer rather than ignored: adding a field is a
+    major change. The vocabularies are closed for the same reason — the
+    outcome codes, the provenance and source-ref variants, and the preparation
+    statuses — so extending one is a major change too. A minor version may
+    only add a new operation.
+
+    Anything that removes a field, changes a meaning, or changes the carrier,
+    retry rule or fallback rule of an outcome code is a major change as well.
+    Outcome codes are stable identifiers: a code is never reused for a
+    different meaning, so a caller that switches on it stays correct.
     """
 
     current_version: str
@@ -580,6 +580,8 @@ COMPATIBILITY = CompatibilityRules(
         "changing the meaning of an existing field",
         "adding a field — every model refuses the ones it does not know, so a new field is rejected, not ignored",
         "adding an outcome code — the result vocabulary is closed",
+        "adding a provenance variant or a source-ref variant — those unions are closed",
+        "adding a preparation status — the input carries the whole enum",
         "changing the carrier, the retry rule or the fallback rule of an outcome code",
         "changing the carrier or the semantics of a limit declaration",
         "changing the identity a provenance variant carries",

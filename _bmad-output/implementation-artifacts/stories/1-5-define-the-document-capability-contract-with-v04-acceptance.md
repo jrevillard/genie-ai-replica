@@ -4,7 +4,7 @@ type: 'feature'
 created: '2026-11-19'
 status: 'in-review'
 route: 'dispatch'
-review_loop_iteration: 0
+review_loop_iteration: 2
 baseline_commit: '5139149593247650c625754feae64a15e20660b6'
 context:
   - '{project-root}/_bmad-output/implementation-artifacts/epic-1-context.md'
@@ -79,7 +79,7 @@ context:
 - `docs/adr/okf-006-403-vs-404-unauthorized.md` — 403 for unauthorized, 404 for absent, collapsed to 404 for high-sensitivity bundles: the port reports codes; the HTTP layer maps them.
 - `docs/adr/okf-011-no-raw-aql-to-agents.md` — agents never get raw AQL; the server exposes parameterized, scope-checked operations.
 - `docs/baselines/v02-opea-query-path-contract.md` + `v03-deployed-baseline-2026-11-18.md` — the record pattern this story's V04 map follows.
-- `.gitlab-ci.yml` — the `lint:agent-service` job runs `ruff check app.py tracing.py tests/`; the `test:agent-service` job runs `python -m pytest tests/ -q` from the component directory.
+- `.gitlab-ci.yml` — the `lint:agent-service` job runs `ruff check app.py tracing.py capabilities/ tests/`; the `test:agent-service` job runs `python -m pytest tests/ -q` from the component directory.
 
 ## Tasks & Acceptance
 
@@ -135,6 +135,8 @@ Global code-review, round 1 (high effort, full diff `513914959..3dc090af`) — 6
 | The suite only resolved the package under `python -m pytest` | low — a plain `pytest` failed to collect | **Fixed**: the component's pyproject declares `pythonpath = ["."]`. |
 | **Found while writing this record**: the document repository *does* fence `okf_restricted` files on the four serve paths, and the record said it authorized nothing | high — the record overstated the gap | **Fixed**: §2.3 now separates the two corpora — no per-user ACL on the legacy corpus, a stamped per-repository fence on the OKF-imported files' serve paths, and the metadata read outside that fence. |
 
+The scoped fix-review of that mutation (`3dc090af..d05a123cd`) was **not clean**: nine items were outstanding, two of them new defects the mutation itself had introduced — the egg-info directory the global review's editable-install experiment left behind, swept into the commit, and the compatibility rules still calling a new optional field *additive* while every model refuses the fields it does not know. Both are fixed, along with the record's still-unqualified verdict sentence, its two off-by-one serve-path citations, its `author` citation pointing at the formatter the metadata read does not use, the story's task list still promising the withdrawn package declaration, the pyproject's stale editable-install claim, the two declarations of the prepared statuses, the Unicode-aware version pattern and the docstring's claim about narrowing. The second fix-review (`d05a123cd..0119e3eb1`) was **not clean** either: the compatibility rules' prose still contradicted their own data, the prepared-status test could not fail for the defect it named, the forbid-extra invariant the breaking clause rests on was unpinned, and the pyproject's header claimed the image copies the sources. All are fixed in the third commit.
+
 ## Design Notes
 
 **The outcome taxonomy (FR-1 + the spine's "errors & insufficiency" convention).** One enum carries the five codes; a policy table gives each one a carrier, a retry flag and a fallback rule.
@@ -151,7 +153,7 @@ Global code-review, round 1 (high effort, full diff `513914959..3dc090af`) — 6
 
 **Provenance is a union, not a bag of optional fields.** `LegacyFileProvenance` (`file_id`, no source marker) and `OkfConceptProvenance` (`concept_id`, `repo_id`, `bundle_version`, `source: 'okf-concept'`) both forbid extra fields, so a mixed payload validates against neither and a legacy hit can never grow an OKF identity. `bundle_version` is required but nullable: the deployed CAP-1 join tolerates its absence (V02 §4.7), so the producer must state it explicitly — an int when the join resolved it, `null` when it did not — and the port never fabricates one.
 
-**The caller context carries the repo → graph mapping.** V04 found that the only server-side `repo_id` → serving `graph_name` resolution is the per-caller `repos[]` of `GET /api/okf/authz/graphs`; there is no on-demand resolver, and the registry's `OKF_{repo_id}` anchor is not the serving name (`OKF_{slug}_v{n}`). The contract therefore requires the trusted context to carry `authorized_repos` next to `authorized_graph_names`, so that a `repo_id` is resolved **inside the authorized set** and never by an unguarded lookup (AD-3: identifiers are charset-validated or resolved server-side). The context also carries the request's `requested_labels` (the requested narrowing): those are caller-side and context-only — a model argument carries no narrowing of its own, so it can neither widen the search nor narrow it. The mapping itself is bounded too: every authorized repository must name a graph of the authorized set, so the resolution cannot widen the scope it resolves into.
+**The caller context carries the repo → graph mapping.** V04 found that the only server-side `repo_id` → serving `graph_name` resolution is the per-caller `repos[]` of `GET /api/okf/authz/graphs`; there is no on-demand resolver, and the registry's `OKF_{repo_id}` anchor is not the serving name (`OKF_{slug}_v{n}`). The contract therefore requires the trusted context to carry `authorized_repos` next to `authorized_graph_names`, so that a `repo_id` is resolved **inside the authorized set** and never by an unguarded lookup (AD-3: identifiers are charset-validated or resolved server-side). The context also carries the request's `requested_labels` (the requested narrowing): those are caller-side and context-only — a model argument contributes the query and nothing else, so it can neither widen the search nor change what the request asked for. The mapping itself is bounded too: every authorized repository must name a graph of the authorized set, so the resolution cannot widen the scope it resolves into.
 
 **Declared versus enforced.** A contract can *declare* an obligation; only an executor can enforce it. The port's call shape (a `Protocol`) and the budget it runs under are declared here; the re-validation of every target against the authorized set is story 1.7's, and the V04 map says which obligations are enforced today and which are only declared — that difference is the risk register the next two stories inherit.
 

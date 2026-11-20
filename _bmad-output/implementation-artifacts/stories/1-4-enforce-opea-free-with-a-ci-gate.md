@@ -4,7 +4,7 @@ type: 'feature'
 created: '2026-11-19'
 status: 'in-review'
 route: 'dispatch'
-review_loop_iteration: 10
+review_loop_iteration: 11
 baseline_commit: '6c72cd95cccf5ded8b51ba94793dd620f60409a3'
 context:
   - '{project-root}/_bmad-output/implementation-artifacts/epic-1-context.md'
@@ -212,7 +212,15 @@ Fix-review round 7 (`FIX-REVIEW`, correction diff `8fd920fab` → `bdb326126`) �
 |---|---|---|---|
 | I-1 | The round-6 row claims the `Makefile.linux` sample "pins the suffix and the case at once"; the reviewer's `[Mm]`→`M` mutation leaves the suite green — the case is unpinned and the row overclaims | important | **Fixed** — a second, lowercase `makefile.linux` sample completes the pin (each alternative of the class is now proven by its own sample going red on revert); the row states exactly what each sample proves |
 | M-1 | The Makefile samples sat in the dependency table under a test named for dependency declarations, though they pin a build marker | minor | **Fixed** — the GNUmakefile control and both Makefile samples moved to the build-marker table |
-| M-2 | The story's pinning-sample inventory was not extended with the Makefile samples | minor | **Fixed** — the inventory lists them |## Design Notes
+| M-2 | The story's pinning-sample inventory was not extended with the Makefile samples | minor | **Fixed** — the inventory lists them |
+
+Fix-review round 8 (`FIX-REVIEW`, correction diff `bdb326126` → `364a07e3e`) — 0 critical, 0 important, 2 minor; READY. The reviewer re-ran the full mutation matrix (baseline green; suffix-drop red; `[Mm]`→`M` red on the lowercase sample; `[Mm]`→`m` red on the capital sample; rule-strip red) and re-verified the round-7 premise at the base commit (the `[Mm]`→`M` mutation was green there, red at HEAD — the fix is genuine). All three round-7 findings audited FIXED.
+
+| # | Finding | Verdict | Disposition |
+|---|---|---|---|
+| M-1 | The new code comment lumped the suffix into the "exactly one sample turns red" clause; a suffix revert turns BOTH samples red | minor | **Fixed** — the comment separates the two cases |
+| M-2 | The appended round-7 table glued the `## Design Notes` heading to its last row, breaking the heading in Markdown | minor | **Fixed** — the newline restored |
+## Design Notes
 
 - The manifest is JSON because it is data consumed by two kinds of checker (the gate and the human who extends it) and it must stay diffable in a review. The house precedent for the same thing is `scripts/ci/config-parity-allowlist.json`.
 

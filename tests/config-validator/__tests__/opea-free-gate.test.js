@@ -451,8 +451,8 @@ const BUILD_SAMPLES = [
   },
   { file: 'pkg/GNUmakefile', content: 'install:\n\t@echo build\n', rules: [] },
   // The two Makefile spellings pin both alternatives of the `[Mm]` class and
-  // the suffix variant: revert one alternative or the suffix and exactly one
-  // of the two samples turns red.
+  // the suffix variant: revert one alternative and exactly one of the two
+  // samples turns red; revert the suffix and both do.
   { file: 'pkg/Makefile.linux', content: 'install:\n\tpip install opea-comps\n', rules: ['opea-pip-install'] },
   { file: 'pkg/makefile.linux', content: 'install:\n\tpip install opea-comps\n', rules: ['opea-pip-install'] }
 ];

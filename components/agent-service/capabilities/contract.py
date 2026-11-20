@@ -582,6 +582,7 @@ COMPATIBILITY = CompatibilityRules(
         "adding an outcome code — the result vocabulary is closed",
         "adding a provenance variant or a source-ref variant — those unions are closed",
         "adding a preparation status — the input carries the whole enum",
+        "adding a limit scope or a limit breach — the limit vocabulary is closed",
         "changing the carrier, the retry rule or the fallback rule of an outcome code",
         "changing the carrier or the semantics of a limit declaration",
         "changing the identity a provenance variant carries",

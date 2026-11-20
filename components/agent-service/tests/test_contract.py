@@ -7,6 +7,7 @@ test that proves nothing, so each one states the behaviour it pins.
 """
 
 import inspect
+import typing
 
 import pytest
 from pydantic import BaseModel, ValidationError
@@ -556,3 +557,31 @@ def test_every_model_refuses_the_fields_it_does_not_know():
     assert models
     for model in models:
         assert model.model_config.get("extra") == "forbid", model.__name__
+
+
+def test_the_closed_vocabularies_are_the_declared_ones():
+    """A closed vocabulary may only grow with a version bump, so its members
+    are pinned: adding one is a deliberate act, not an edit."""
+    assert set(typing.get_args(contract.Provenance)) == {LegacyFileProvenance, OkfConceptProvenance}
+    assert set(typing.get_args(contract.SourceRef)) == {LegacyFileRef, OkfConceptRef}
+    assert set(contract.LimitScope) == {contract.LimitScope.OPERATION, contract.LimitScope.RESULT}
+    assert set(contract.LimitBreach) == {
+        contract.LimitBreach.TRANSIENT_FAILURE,
+        contract.LimitBreach.TRUNCATE_AND_FLAG,
+        contract.LimitBreach.CANCELLED,
+    }
+    assert set(QueryPreparationStatus) == {
+        QueryPreparationStatus.TRANSLATED,
+        QueryPreparationStatus.PASSTHROUGH_ENGLISH,
+        QueryPreparationStatus.PASSTHROUGH_UNKNOWN_LANGUAGE,
+        QueryPreparationStatus.FALLBACK_TIMEOUT,
+        QueryPreparationStatus.FALLBACK_ERROR,
+    }
+    assert set(OutcomeCode) == {
+        OutcomeCode.SUCCESS,
+        OutcomeCode.AUTHORIZATION_FAILURE,
+        OutcomeCode.INSUFFICIENT_EVIDENCE,
+        OutcomeCode.DEGRADED_AVAILABILITY,
+        OutcomeCode.TRANSIENT_FAILURE,
+    }
+    assert set(contract.OUTCOME_POLICIES) == set(OutcomeCode)

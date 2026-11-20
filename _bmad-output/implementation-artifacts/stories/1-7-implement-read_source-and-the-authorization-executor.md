@@ -108,10 +108,20 @@ context:
 - A downstream 403 on an in-set target (a stale-context race) maps to unresolvable, fail-closed — never a permissive retry against a wider scope.
 - **No new dependency this story.** The chunk adapter's `db_factory` is duck-typed (one `.execute(aql, bind_vars)` call), so `python-arango` is not imported anywhere yet: pinning it now would add an unused dependency and V07a rows for nothing. Story 1.6's search adapter — the first direct-ArangoDB consumer — adopts the overlay's `python-arango==8.3.3` pin with its own evidence rows.
 - The guards were proven mutation-sensitive while developing: loosening the file-id charset, allowing dots in concept ids, or disabling the legacy membership check / the search hit filter each turned the suite red; restoring each mutation turned it green.
+- **Empty-content semantics, settled by review round 1.** An OKF concept's empty body is a SUCCESS with `content=""` (the body is the source's true content — a frontmatter-only concept is legitimately empty). A legacy read whose chunk set is empty stays `degraded_availability` (the file resolved but its corpus text is unavailable — retryable). One validator-legal outcome per reality on each path; `_finalize_read`'s `empty_is_degradation` keyword carries the distinction.
 
 ## Spec Change Log
 
 ## Review Triage Log
+
+Global code-review, round 1 (high effort, full diff `2cedec978..41e15a5a9`) — 2 important + 4 nit findings. Two were outside this story's diff (the reviewer read the whole umbrella-vs-main surface): the slim-variant build's missing `CACHE_BUST` + dead `$NOCACHE` expansion (`.gitlab-ci.yml`, extracted to #2025) and the `safe-frontmatter.js` header comment contradicting its own docstring (extracted to #2026). Four were in scope; every one verified real and fixed in `f049b8cf4`:
+
+| Finding | Severity | Verdict | Disposition |
+|---|---|---|---|
+| A chunk row whose `text` is absent rides the AQL answer as None — `row.get("text", "")` yields None and the join crashed with a raw TypeError, escaping the contract's carriers | important | confirmed (reproduced) | **Fixed**: explicit coercion (`row.get("text") or ""`), test pinned |
+| The chunk adapter's `self._db` attribute is written by the worker closure and read by nobody | nit | confirmed (test-only reader) | **Fixed**: attribute removed; the test captures the handle through its own factory |
+| `_finalize_read` reported a resolved-but-empty source as `degraded_availability` — an OKF concept's empty body is its true content, not a failed fetch | nit | confirmed | **Fixed**: per-path semantics — legacy zero-chunks stays degraded (corpus text unavailable), OKF empty body is SUCCESS with `content=""`; tests pinned |
+| A 200 with a non-object body raised `TransientError` whose message named the successful status as the failure cause | nit | confirmed | **Fixed**: distinct message naming the non-object payload; test pins the wording |
 
 ## Design Notes
 

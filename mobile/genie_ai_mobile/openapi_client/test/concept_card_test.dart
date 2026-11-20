@@ -57,8 +57,8 @@ void main() {
       // TODO
     });
 
-    // Outgoing author links, as concept ids.
-    // List<String> links (default value: const [])
+    // Outgoing author links as SERVED — the meta row's field copied verbatim, so rows carry the author-link OBJECT shape ({to_concept_id, label}; legacy rows may carry {target, label} with a .md path). NOT a bare-string array: the 2026-11-19 mobile crash was exactly this lie (the generated Dart client cast the object row to String and threw mid-render).
+    // List<ConceptCardLink> links (default value: const [])
     test('to test the property `links`', () async {
       // TODO
     });

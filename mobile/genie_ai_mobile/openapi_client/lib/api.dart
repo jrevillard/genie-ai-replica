@@ -131,6 +131,7 @@ part 'model/api_weather_post_request.dart';
 part 'model/category_tree.dart';
 part 'model/category_tree_children_inner.dart';
 part 'model/concept_card.dart';
+part 'model/concept_card_link.dart';
 part 'model/concept_card_source.dart';
 part 'model/concept_tree_page.dart';
 part 'model/concept_tree_row.dart';

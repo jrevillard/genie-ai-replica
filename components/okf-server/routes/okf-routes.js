@@ -117,14 +117,35 @@ servingReads.use(requireScope('read', { allowScopelessWhenOpen: true }));
  *           description: The concept document body — markdown, never raw HTML.
  *         links:
  *           type: array
- *           description: Outgoing author links, as concept ids.
+ *           description: >-
+ *             Outgoing author links as SERVED — the meta row's field copied
+ *             verbatim, so rows carry the author-link OBJECT shape
+ *             ({to_concept_id, label}; legacy rows may carry {target, label}
+ *             with a .md path). NOT a bare-string array: the 2026-11-19
+ *             mobile crash was exactly this lie (the generated Dart client
+ *             cast the object row to String and threw mid-render).
  *           items:
- *             type: string
+ *             $ref: '#/components/schemas/ConceptCardLink'
  *         sources:
  *           type: array
  *           description: CAP-4 originating-document identities.
  *           items:
  *             $ref: '#/components/schemas/ConceptCardSource'
+ *     ConceptCardLink:
+ *       type: object
+ *       description: >-
+ *         One outgoing author link on the concept card. to_concept_id is
+ *         the graph edge identity; target is the legacy frontmatter path
+ *         (ends .md) some rows still carry — readers take to_concept_id
+ *         first, then target, and strip a trailing .md / concepts/ prefix
+ *         (the Vue browser's contract). A field the row lacks is absent.
+ *       properties:
+ *         to_concept_id:
+ *           type: string
+ *         target:
+ *           type: string
+ *         label:
+ *           type: string
  *     ConceptCardSource:
  *       type: object
  *       description: >-

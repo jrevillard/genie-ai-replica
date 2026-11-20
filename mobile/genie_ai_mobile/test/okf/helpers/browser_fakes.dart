@@ -23,7 +23,10 @@ class FakeConceptBrowserRepository implements ConceptBrowserRepository {
   }
 
   @override
-  Future<ConceptTreePage> fetchTreePage(String repoId, {required int offset}) async {
+  Future<ConceptTreePage> fetchTreePage(
+    String repoId, {
+    required int offset,
+  }) async {
     treeCalls++;
     final held = heldTrees[repoId];
     if (held != null) return held.future;
@@ -41,16 +44,35 @@ class FakeConceptBrowserRepository implements ConceptBrowserRepository {
   }
 }
 
-ConceptTreePage page(int total, List<ConceptTreeRow> rows) =>
-    ConceptTreePage(total: total, offset: 0, limit: conceptBrowserPageSize, concepts: rows);
+ConceptTreePage page(int total, List<ConceptTreeRow> rows) => ConceptTreePage(
+  total: total,
+  offset: 0,
+  limit: conceptBrowserPageSize,
+  concepts: rows,
+);
 
-ConceptTreeRow row(String id) =>
-    ConceptTreeRow(conceptId: id, title: 'Title $id', isIndex: false, indexStatus: 'indexed');
+ConceptTreeRow row(String id) => ConceptTreeRow(
+  conceptId: id,
+  title: 'Title $id',
+  isIndex: false,
+  indexStatus: 'indexed',
+);
 
-ConceptCard card(String repoId, String id, {String? body, List<String>? links}) => ConceptCard(
-      repoId: repoId,
-      conceptId: id,
-      title: 'Title $id',
-      body: body ?? 'Body of $id',
-      links: links ?? const [],
-    );
+ConceptCard card(
+  String repoId,
+  String id, {
+  String? body,
+  List<String>? links,
+  List<ConceptCardLink> objectLinks = const [],
+}) => ConceptCard(
+  repoId: repoId,
+  conceptId: id,
+  title: 'Title $id',
+  body: body ?? 'Body of $id',
+  // String links keep the string-id shape the tree serves; objectLinks
+  // build the author-link rows the CARD serves ({to_concept_id, label}).
+  links: [
+    ...?links?.map((id) => ConceptCardLink(toConceptId: id)),
+    ...objectLinks,
+  ],
+);

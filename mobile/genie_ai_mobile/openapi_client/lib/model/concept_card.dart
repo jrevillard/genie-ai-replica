@@ -48,8 +48,8 @@ class ConceptCard {
   ///
   String? body;
 
-  /// Outgoing author links, as concept ids.
-  List<String> links;
+  /// Outgoing author links as SERVED — the meta row's field copied verbatim, so rows carry the author-link OBJECT shape ({to_concept_id, label}; legacy rows may carry {target, label} with a .md path). NOT a bare-string array: the 2026-11-19 mobile crash was exactly this lie (the generated Dart client cast the object row to String and threw mid-render).
+  List<ConceptCardLink> links;
 
   /// CAP-4 originating-document identities.
   List<ConceptCardSource> sources;
@@ -146,9 +146,7 @@ class ConceptCard {
             : const [],
         summary: mapValueOfType<String>(json, r'summary'),
         body: mapValueOfType<String>(json, r'body'),
-        links: json[r'links'] is Iterable
-            ? (json[r'links'] as Iterable).cast<String>().toList(growable: false)
-            : const [],
+        links: ConceptCardLink.listFromJson(json[r'links']),
         sources: ConceptCardSource.listFromJson(json[r'sources']),
       );
     }

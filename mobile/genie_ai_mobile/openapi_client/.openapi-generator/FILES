@@ -96,6 +96,7 @@ doc/CategoryTree.md
 doc/CategoryTreeChildrenInner.md
 doc/ChatHistoryApi.md
 doc/ConceptCard.md
+doc/ConceptCardLink.md
 doc/ConceptCardSource.md
 doc/ConceptTreePage.md
 doc/ConceptTreeRow.md
@@ -239,6 +240,7 @@ lib/model/api_weather_post_request.dart
 lib/model/category_tree.dart
 lib/model/category_tree_children_inner.dart
 lib/model/concept_card.dart
+lib/model/concept_card_link.dart
 lib/model/concept_card_source.dart
 lib/model/concept_tree_page.dart
 lib/model/concept_tree_row.dart
@@ -356,6 +358,7 @@ test/authentication_api_test.dart
 test/category_tree_children_inner_test.dart
 test/category_tree_test.dart
 test/chat_history_api_test.dart
+test/concept_card_link_test.dart
 test/concept_card_source_test.dart
 test/concept_card_test.dart
 test/concept_tree_page_test.dart

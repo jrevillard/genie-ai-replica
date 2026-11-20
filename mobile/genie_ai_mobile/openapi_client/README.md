@@ -241,6 +241,7 @@ Class | Method | HTTP request | Description
  - [CategoryTree](doc//CategoryTree.md)
  - [CategoryTreeChildrenInner](doc//CategoryTreeChildrenInner.md)
  - [ConceptCard](doc//ConceptCard.md)
+ - [ConceptCardLink](doc//ConceptCardLink.md)
  - [ConceptCardSource](doc//ConceptCardSource.md)
  - [ConceptTreePage](doc//ConceptTreePage.md)
  - [ConceptTreeRow](doc//ConceptTreeRow.md)

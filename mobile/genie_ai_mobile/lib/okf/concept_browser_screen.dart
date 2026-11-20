@@ -38,7 +38,8 @@ class ConceptBrowserScreen extends ConsumerStatefulWidget {
   final String? initialConceptId;
 
   @override
-  ConsumerState<ConceptBrowserScreen> createState() => _ConceptBrowserScreenState();
+  ConsumerState<ConceptBrowserScreen> createState() =>
+      _ConceptBrowserScreenState();
 }
 
 class _ConceptBrowserScreenState extends ConsumerState<ConceptBrowserScreen> {
@@ -97,7 +98,9 @@ class _ConceptBrowserScreenState extends ConsumerState<ConceptBrowserScreen> {
   }
 
   void _select(String conceptId) {
-    _guarded(ref.read(conceptBrowserControllerProvider.notifier).select(conceptId));
+    _guarded(
+      ref.read(conceptBrowserControllerProvider.notifier).select(conceptId),
+    );
   }
 
   @override
@@ -133,7 +136,9 @@ class _ConceptBrowserScreenState extends ConsumerState<ConceptBrowserScreen> {
     if (state.error != null) {
       return DsStateDisplay(type: DsStateType.error, message: state.error);
     }
-    if (state.selected != null || state.selectedLoading || state.selectedUnavailable) {
+    if (state.selected != null ||
+        state.selectedLoading ||
+        state.selectedUnavailable) {
       return _detailPane(state, tokens);
     }
     return _treeList(state, tokens);
@@ -141,13 +146,21 @@ class _ConceptBrowserScreenState extends ConsumerState<ConceptBrowserScreen> {
 
   Widget _treeList(ConceptBrowserState state, AppTokens tokens) {
     if (state.rows.isEmpty) {
-      return DsStateDisplay(type: DsStateType.empty, message: tr('okfBrowser.selectHint'));
+      return DsStateDisplay(
+        type: DsStateType.empty,
+        message: tr('okfBrowser.selectHint'),
+      );
     }
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Padding(
-          padding: const EdgeInsets.fromLTRB(DsSpacing.md, DsSpacing.sm, DsSpacing.md, 0),
+          padding: const EdgeInsets.fromLTRB(
+            DsSpacing.md,
+            DsSpacing.sm,
+            DsSpacing.md,
+            0,
+          ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
@@ -158,7 +171,10 @@ class _ConceptBrowserScreenState extends ConsumerState<ConceptBrowserScreen> {
               const SizedBox(height: DsSpacing.xs),
               Text(
                 tr('okfBrowser.selectHint'),
-                style: TextStyle(color: tokens.mutedSoft, fontSize: tokens.textXs),
+                style: TextStyle(
+                  color: tokens.mutedSoft,
+                  fontSize: tokens.textXs,
+                ),
               ),
             ],
           ),
@@ -177,7 +193,9 @@ class _ConceptBrowserScreenState extends ConsumerState<ConceptBrowserScreen> {
                     color: tokens.fg,
                     fontSize: tokens.textBase,
                     // Index rows are bold — the tree's root marker.
-                    fontWeight: (row.isIndex ?? false) ? FontWeight.w600 : FontWeight.w400,
+                    fontWeight: (row.isIndex ?? false)
+                        ? FontWeight.w600
+                        : FontWeight.w400,
                   ),
                 ),
                 trailing: row.links.isEmpty
@@ -197,8 +215,9 @@ class _ConceptBrowserScreenState extends ConsumerState<ConceptBrowserScreen> {
                     key: const ValueKey('okf-browser-show-more'),
                     label: tr('okfBrowser.showMore'),
                     variant: DsButtonVariant.secondary,
-                    onPressed: () =>
-                        ref.read(conceptBrowserControllerProvider.notifier).extend(),
+                    onPressed: () => ref
+                        .read(conceptBrowserControllerProvider.notifier)
+                        .extend(),
                   ),
           ),
       ],
@@ -222,13 +241,20 @@ class _ConceptBrowserScreenState extends ConsumerState<ConceptBrowserScreen> {
     final controller = ref.read(conceptBrowserControllerProvider.notifier);
     final card = state.selected;
     final canBack = state.historyIndex > 0;
-    final canForward = state.historyIndex >= 0 && state.historyIndex < state.history.length - 1;
+    final canForward =
+        state.historyIndex >= 0 &&
+        state.historyIndex < state.history.length - 1;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Padding(
-          padding: const EdgeInsets.fromLTRB(DsSpacing.sm, DsSpacing.sm, DsSpacing.sm, 0),
+          padding: const EdgeInsets.fromLTRB(
+            DsSpacing.sm,
+            DsSpacing.sm,
+            DsSpacing.sm,
+            0,
+          ),
           child: Row(
             children: [
               DsButton(
@@ -279,21 +305,35 @@ class _ConceptBrowserScreenState extends ConsumerState<ConceptBrowserScreen> {
     ConceptBrowserController controller,
     AppTokens tokens,
   ) {
-    // Related-concept chips: deduped — a repeated link renders once; the
-    // label falls back to the id when the linked row is not in the loaded
-    // tree.
+    // Related-concept chips: deduped — a repeated link renders once. A
+    // link row carries the author-link OBJECT shape ({to_concept_id,
+    // label}; legacy rows a {target} .md path), read with the Vue
+    // browser's contract: to_concept_id first, then target, stripping a
+    // trailing .md / concepts/ prefix. The label falls back to the id
+    // when the linked row is not in the loaded tree.
     final titles = <String, String>{
       for (final row in state.rows) row.conceptId: (row.title ?? row.conceptId),
     };
+    String linkTarget(ConceptCardLink link) =>
+        (link.toConceptId ?? link.target ?? '')
+            .replaceFirst(RegExp(r'\.md$', caseSensitive: false), '')
+            .replaceFirst(RegExp(r'^concepts/'), '')
+            .trim();
     final seen = <String>{};
     final chips = <Widget>[];
     for (final link in card.links) {
-      if (!seen.add(link)) continue;
+      final target = linkTarget(link);
+      if (target.isEmpty || target == card.conceptId || !seen.add(target)) {
+        continue;
+      }
+      final labelText = (link.label?.trim().isNotEmpty ?? false)
+          ? link.label!.trim()
+          : (titles[target] ?? target);
       chips.add(
         ActionChip(
-          key: ValueKey('okf-browser-chip-$link'),
-          label: Text(titles[link] ?? link),
-          onPressed: () => _select(link),
+          key: ValueKey('okf-browser-chip-$target'),
+          label: Text(labelText),
+          onPressed: () => _select(target),
         ),
       );
     }
@@ -329,7 +369,11 @@ class _ConceptBrowserScreenState extends ConsumerState<ConceptBrowserScreen> {
         MarkdownBody(data: card.body ?? ''),
         if (chips.isNotEmpty) ...[
           const SizedBox(height: DsSpacing.md),
-          Wrap(spacing: DsSpacing.sm, runSpacing: DsSpacing.sm, children: chips),
+          Wrap(
+            spacing: DsSpacing.sm,
+            runSpacing: DsSpacing.sm,
+            children: chips,
+          ),
         ],
       ],
     );
@@ -347,7 +391,9 @@ class _ConceptBrowserScreenState extends ConsumerState<ConceptBrowserScreen> {
       final safeId = card.conceptId.replaceAll(RegExp(r'[^A-Za-z0-9._-]'), '_');
       final file = File('${dir.path}${Platform.pathSeparator}$safeId.md');
       await file.writeAsString(body);
-      _log.info('okf.browser.download concept_id=${card.conceptId} bytes=${body.length}');
+      _log.info(
+        'okf.browser.download concept_id=${card.conceptId} bytes=${body.length}',
+      );
       _toast(file.uri.pathSegments.last);
     } catch (e) {
       _log.error('okf.browser.download_failed error=$e');
@@ -357,6 +403,8 @@ class _ConceptBrowserScreenState extends ConsumerState<ConceptBrowserScreen> {
 
   void _toast(String message) {
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
   }
 }

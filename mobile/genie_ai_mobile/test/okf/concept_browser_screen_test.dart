@@ -64,32 +64,45 @@ void main() {
     await tester.pump(); // the loading state rebuilds
   }
 
-  testWidgets('while the first page is in flight the screen answers the spinner arm', (
+  testWidgets(
+    'while the first page is in flight the screen answers the spinner arm',
+    (tester) async {
+      fake.holdTree('repo-a');
+      await pumpBrowser(tester);
+      expect(find.byType(DsSpinner), findsOneWidget);
+    },
+  );
+
+  testWidgets('a loaded tree with no selection answers the select-hint arm', (
     tester,
   ) async {
-    fake.holdTree('repo-a');
-    await pumpBrowser(tester);
-    expect(find.byType(DsSpinner), findsOneWidget);
-  });
-
-  testWidgets('a loaded tree with no selection answers the select-hint arm', (tester) async {
     fake.pagesByRepo['repo-a'] = page(2, [row('c1'), row('c2')]);
     await pumpBrowser(tester);
     expect(find.text(tr('okfBrowser.selectHint')), findsOneWidget);
   });
 
-  testWidgets('a loaded tree renders its rows and Show-more while the tree is incomplete', (
-    tester,
-  ) async {
-    fake.pagesByRepo['repo-a'] = page(
-      conceptBrowserPageSize + 5,
-      List.generate(conceptBrowserPageSize, (i) => row('c$i')),
-    );
-    await pumpBrowser(tester);
-    expect(find.text('Title c0'), findsOneWidget); // ListView builds lazily: top rows only
-    expect(find.byKey(const ValueKey('okf-browser-show-more')), findsOneWidget);
-    expect(container.read(conceptBrowserControllerProvider).rows.length, conceptBrowserPageSize);
-  });
+  testWidgets(
+    'a loaded tree renders its rows and Show-more while the tree is incomplete',
+    (tester) async {
+      fake.pagesByRepo['repo-a'] = page(
+        conceptBrowserPageSize + 5,
+        List.generate(conceptBrowserPageSize, (i) => row('c$i')),
+      );
+      await pumpBrowser(tester);
+      expect(
+        find.text('Title c0'),
+        findsOneWidget,
+      ); // ListView builds lazily: top rows only
+      expect(
+        find.byKey(const ValueKey('okf-browser-show-more')),
+        findsOneWidget,
+      );
+      expect(
+        container.read(conceptBrowserControllerProvider).rows.length,
+        conceptBrowserPageSize,
+      );
+    },
+  );
 
   testWidgets('a complete tree hides Show-more', (tester) async {
     fake.pagesByRepo['repo-a'] = page(2, [row('c1'), row('c2')]);
@@ -97,7 +110,9 @@ void main() {
     expect(find.byKey(const ValueKey('okf-browser-show-more')), findsNothing);
   });
 
-  testWidgets('tapping a row shows the markdown title and body', (tester) async {
+  testWidgets('tapping a row shows the markdown title and body', (
+    tester,
+  ) async {
     fake.pagesByRepo['repo-a'] = page(1, [row('c1')]);
     fake.cardsByRepo['repo-a'] = {'c1': card('repo-a', 'c1')};
     await pumpBrowser(tester);
@@ -105,7 +120,10 @@ void main() {
     await tester.pump();
     expect(find.text('Title c1'), findsWidgets); // row + pane title
     expect(find.text('Body of c1'), findsOneWidget);
-    expect(find.byKey(const ValueKey('okf-browser-back-to-list')), findsOneWidget);
+    expect(
+      find.byKey(const ValueKey('okf-browser-back-to-list')),
+      findsOneWidget,
+    );
   });
 
   testWidgets('duplicate links dedupe to one chip', (tester) async {
@@ -120,9 +138,82 @@ void main() {
     expect(find.byKey(const ValueKey('okf-browser-chip-c3')), findsOneWidget);
   });
 
-  testWidgets('tapping a chip is a forward visit — history grows', (tester) async {
+  testWidgets(
+    'an author-link object renders its label and taps to its target',
+    (tester) async {
+      fake.pagesByRepo['repo-a'] = page(2, [row('c1'), row('c2')]);
+      fake.cardsByRepo['repo-a'] = {
+        'c1': card(
+          'repo-a',
+          'c1',
+          objectLinks: [
+            ConceptCardLink(
+              toConceptId: 'c2',
+              label: 'Voyager 1 Saturn Encounter',
+            ),
+          ],
+        ),
+        'c2': card('repo-a', 'c2'),
+      };
+      await pumpBrowser(tester);
+      await tester.tap(find.text('Title c1'));
+      await tester.pump();
+      // The chip's TEXT is the link's label, not the tree title, and the key
+      // is the resolved target — the Vue browser's contract.
+      expect(find.text('Voyager 1 Saturn Encounter'), findsOneWidget);
+      expect(find.byKey(const ValueKey('okf-browser-chip-c2')), findsOneWidget);
+      await tester.tap(find.byKey(const ValueKey('okf-browser-chip-c2')));
+      await tester.pump();
+      expect(
+        container.read(conceptBrowserControllerProvider).selected?.conceptId,
+        'c2',
+      );
+    },
+  );
+
+  testWidgets(
+    'a legacy target link strips .md and falls back to the tree title',
+    (tester) async {
+      fake.pagesByRepo['repo-a'] = page(2, [row('c1'), row('c2')]);
+      fake.cardsByRepo['repo-a'] = {
+        'c1': card(
+          'repo-a',
+          'c1',
+          objectLinks: [ConceptCardLink(target: 'c2.md')],
+        ),
+      };
+      await pumpBrowser(tester);
+      await tester.tap(find.text('Title c1'));
+      await tester.pump();
+      expect(find.byKey(const ValueKey('okf-browser-chip-c2')), findsOneWidget);
+      expect(find.text('Title c2'), findsOneWidget); // tree title fallback
+    },
+  );
+
+  testWidgets('a self-link renders no chip', (tester) async {
+    fake.pagesByRepo['repo-a'] = page(1, [row('c1')]);
+    fake.cardsByRepo['repo-a'] = {
+      'c1': card(
+        'repo-a',
+        'c1',
+        objectLinks: [ConceptCardLink(toConceptId: 'c1', label: 'Myself')],
+      ),
+    };
+    await pumpBrowser(tester);
+    await tester.tap(find.text('Title c1'));
+    await tester.pump();
+    expect(find.text('Myself'), findsNothing);
+    expect(find.byType(ActionChip), findsNothing);
+  });
+
+  testWidgets('tapping a chip is a forward visit — history grows', (
+    tester,
+  ) async {
     fake.pagesByRepo['repo-a'] = page(2, [row('c1'), row('c2')]);
-    fake.cardsByRepo['repo-a'] = {'c1': card('repo-a', 'c1', links: ['c2']), 'c2': card('repo-a', 'c2')};
+    fake.cardsByRepo['repo-a'] = {
+      'c1': card('repo-a', 'c1', links: ['c2']),
+      'c2': card('repo-a', 'c2'),
+    };
     await pumpBrowser(tester);
     await tester.tap(find.text('Title c1'));
     await tester.pump();
@@ -136,13 +227,18 @@ void main() {
 
   testWidgets('back and forward enable per history boundaries', (tester) async {
     fake.pagesByRepo['repo-a'] = page(2, [row('c1'), row('c2')]);
-    fake.cardsByRepo['repo-a'] = {'c1': card('repo-a', 'c1', links: ['c2']), 'c2': card('repo-a', 'c2')};
+    fake.cardsByRepo['repo-a'] = {
+      'c1': card('repo-a', 'c1', links: ['c2']),
+      'c2': card('repo-a', 'c2'),
+    };
     await pumpBrowser(tester);
     await tester.tap(find.text('Title c1'));
     await tester.pump();
-    DsButton back() => tester.widget<DsButton>(find.byKey(const ValueKey('okf-browser-back')));
-    DsButton forward() =>
-        tester.widget<DsButton>(find.byKey(const ValueKey('okf-browser-forward')));
+    DsButton back() =>
+        tester.widget<DsButton>(find.byKey(const ValueKey('okf-browser-back')));
+    DsButton forward() => tester.widget<DsButton>(
+      find.byKey(const ValueKey('okf-browser-forward')),
+    );
     expect(back().disabled, isTrue); // first entry: nothing behind
     expect(forward().disabled, isTrue); // also the last entry: nothing ahead
     await tester.tap(find.byKey(const ValueKey('okf-browser-chip-c2')));
@@ -151,21 +247,27 @@ void main() {
     expect(forward().disabled, isTrue);
     await tester.tap(find.byKey(const ValueKey('okf-browser-back')));
     await tester.pump();
-    expect(container.read(conceptBrowserControllerProvider).selected?.conceptId, 'c1');
+    expect(
+      container.read(conceptBrowserControllerProvider).selected?.conceptId,
+      'c1',
+    );
     expect(forward().disabled, isFalse);
     expect(back().disabled, isTrue);
   });
 
-  testWidgets('a fenced or missing repo answers the unavailable arm, never a toast', (
+  testWidgets(
+    'a fenced or missing repo answers the unavailable arm, never a toast',
+    (tester) async {
+      fake.treeThrows['repo-a'] = ApiException(404, 'REPO_NOT_FOUND');
+      await pumpBrowser(tester);
+      expect(find.text(tr('okfBrowser.unavailable')), findsOneWidget);
+      expect(find.byType(SnackBar), findsNothing);
+    },
+  );
+
+  testWidgets('downloading an empty body is an honest no-op with a notice', (
     tester,
   ) async {
-    fake.treeThrows['repo-a'] = ApiException(404, 'REPO_NOT_FOUND');
-    await pumpBrowser(tester);
-    expect(find.text(tr('okfBrowser.unavailable')), findsOneWidget);
-    expect(find.byType(SnackBar), findsNothing);
-  });
-
-  testWidgets('downloading an empty body is an honest no-op with a notice', (tester) async {
     fake.pagesByRepo['repo-a'] = page(1, [row('c1')]);
     fake.cardsByRepo['repo-a'] = {'c1': card('repo-a', 'c1', body: '')};
     await pumpBrowser(tester);
@@ -178,7 +280,9 @@ void main() {
       (f) => f.path.endsWith('.md'),
     );
     expect(markdownFiles, isEmpty); // no zero-byte artifact
-    await tester.pump(const Duration(seconds: 5)); // let the snack dismiss (no pending timer)
+    await tester.pump(
+      const Duration(seconds: 5),
+    ); // let the snack dismiss (no pending timer)
   });
 
   testWidgets('downloading a body lands a local .md file', (tester) async {

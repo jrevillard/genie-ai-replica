@@ -171,3 +171,145 @@ git commit -m "feat(okf): the three citizen routes enter the OpenAPI spec - anno
 - [ ] **Step 4: Coverage + analyze gates** — `flutter test --coverage` (coverage does not decrease vs `origin/main`'s mobile baseline), `flutter analyze` clean, `flutter test` full suite green.
 - [ ] **Step 5: CHANGELOG entry** under `[Unreleased]`/Added — the browser, the fence sentence, the modes sentence.
 - [ ] **Step 6: Commit + push; monitor CI to green** (the drift gate re-verifies the committed client).
+
+---
+
+## Wave 2 — chat citation parity (#1937/#1938, ruled 2026-11-19)
+
+David's live-validation directive: the mobile app must reach functional parity with the
+Vue 3 app on four features — (1) the knowledge hierarchy loads under a valid session;
+(2) query responses surface their related OKF repositories in a bar under the response
+AND in the right sidebar; (3) referenced repositories are browsable like the Vue app;
+(4) a cited concept document opens when clicked. The raw chatqna citation shape is:
+`{document_id, document_name, url, categoryLabels, serviceLabels, score, [concept_id],
+[source: 'okf-concept'], [graph_name], [repo_id], [bundle_version], [text]}` (genieai_chatqna.py
+CAP-1 block). The web contract lives in `components/gov-chat-frontend/src/utils/okfCitation.js`
+(isOkfConceptSource / canBrowseSource / okfConceptBadge — ONE predicate for both surfaces)
+and ChatBotComponent.vue `openSourceDocument` (external URL → open; OKF concept → concept
+markdown; pre-CAP-1/restricted → honest notice, never a dead link).
+
+### Task 7: The citation model + predicates
+
+**Files:**
+- Create: `mobile/genie_ai_mobile/lib/okf/okf_citation.dart`
+- Test: `mobile/genie_ai_mobile/test/okf/okf_citation_test.dart`
+
+**Interfaces:**
+- Produces: `isOkfConceptSource(Map doc)` (source == 'okf-concept' OR conceptId/concept_id
+  present — accepts RAW snake_case and mapped camelCase, same as the web predicate);
+  `canBrowseSource(Map doc)` (okf-concept AND repoId/repo_id AND id/concept_id present);
+  `sourceBadge(Map doc)` ({label, tone}: OKF/accent for concepts, extension-derived for
+  documents); `sourceTitle(Map)` (document_name ?? document_id); `citationRepoId(Map)` /
+  `citationConceptId(Map)` (shape-tolerant getters). ONE definition consumed by BOTH
+  surfaces (chat bar + sidebar) — they must not drift (web r0 rule).
+
+- [ ] Step 1: failing tests — okf marker; concept_id fallback; repo-only row not okf; canBrowse positive/negative (no repo_id, no concept_id); badge OKF vs ".pdf" vs extensionless doc; both shapes.
+- [ ] Step 2: verify FAIL. Step 3: implement. Step 4: verify PASS + analyze clean.
+- [ ] Step 5: Commit `feat(mobile): the okf citation predicates - one definition for both chat surfaces`
+
+### Task 8: The related-sources bar under each assistant response
+
+**Files:**
+- Modify: `mobile/genie_ai_mobile/lib/components/chat/chatbot_component.dart` (render bar per assistant message with non-empty `sources`)
+- Create: `mobile/genie_ai_mobile/lib/components/chat/answer_sources_bar.dart`
+- Modify: `mobile/genie_ai_mobile/lib/i18n/locales/*.dart` (14 locales, chatbot.sourcesBar*)
+- Test: `mobile/genie_ai_mobile/test/okf/answer_sources_bar_test.dart`
+
+**Interfaces:**
+- Consumes: Task 7 predicates; `Navigator.push` to `'/okf/browse'` (Task 5 route) with
+  repoId (+ conceptId argument for deep-open, Task 10); `url_launcher` for external http(s)
+  urls; honest unavailable notice otherwise.
+- Produces: `AnswerSourcesBar(sources, onOpen)` — collapsed by default, toggle label
+  "Related sources (N)", rows: badge + document_name (+size when present), tap → route by
+  predicate. chatbot_component passes `msg['sources']`.
+
+- [ ] Steps: failing widget tests (hidden when no sources; toggle reveals rows; OKF badge; canBrowse row navigates with repoId; external url row calls launcher; neither → notice) → FAIL → implement (+i18n en verbatim, 13 ported) → PASS + analyze → Commit `feat(mobile): the related-sources bar under each answer`
+
+### Task 9: Right sidebar related-sources rows (real entries replace the typed-id placeholder)
+
+**Files:**
+- Modify: `mobile/genie_ai_mobile/lib/components/chat/right_sidebar_component.dart`
+- Modify: `mobile/genie_ai_mobile/lib/i18n/locales/*.dart`
+- Test: `mobile/genie_ai_mobile/test/okf/sidebar_sources_test.dart`
+
+**Interfaces:**
+- Consumes: Task 7 predicates; the active answer's sources (the same accumulatedDocs the
+  chat already builds); ConceptBrowserScreen route.
+- Produces: a "Related sources" section listing rows per canBrowseSource + okf-only rows
+  with repo identity; each row a Browse button (W9 wording) pushing the browser route.
+  The typed-repo-id drawer entry STAYS (fallback), the section is the wired path.
+
+- [ ] Steps: failing tests (rows render from sources; browse pushes repoId; non-browsable rows render plain without a button; empty sources → section absent) → FAIL → implement → PASS → Commit `feat(mobile): the sidebar related-sources rows`
+
+### Task 10: Deep-open a cited concept (initialConceptId)
+
+**Files:**
+- Modify: `mobile/genie_ai_mobile/lib/okf/concept_browser_screen.dart` (optional `initialConceptId`)
+- Modify: `mobile/genie_ai_mobile/lib/okf/concept_browser_controller.dart` (open-with-select)
+- Test: `mobile/genie_ai_mobile/test/okf/concept_browser_deep_open_test.dart`
+
+**Interfaces:**
+- Produces: `ConceptBrowserScreen(repoId, {initialConceptId})` — after the first page
+  loads, if initialConceptId is set, controller.select it once (row may or may not be on
+  page one; select by id works regardless — the concept fetch is by id).
+
+- [ ] Steps: failing controller/screen test (screen opens with initialConceptId → detail pane shows that concept without a manual tap) → FAIL → implement → PASS → Commit `feat(mobile): deep-open a cited concept in the browser`
+
+### Task 11: Wave gates — smoke leg extension, CHANGELOG, coverage, push, MR
+
+- [ ] Extend `data/okf/smoke-test/run-smoke-mobile-contract.js` with the citation contract: seed a repo whose concept carries okf citation fields; assert a chat answer surfaces the okf-concept source row with repo_id + concept_id (assembler contract the mobile bars depend on). Run live: SMOKE OK.
+- [ ] Revert the two SESSION OVERRIDE edits (e2e_config clientId/scheme, build.gradle appAuth scheme) — flagged; cloud clients own those values. Keep the toolchain bumps (needed to build).
+- [ ] `flutter test --coverage` (no decrease), `flutter analyze` clean, full suite green; CHANGELOG Added entry; commit; push; monitor CI; MR.
+
+---
+
+## Wave 2 LIVE STATUS (2026-11-19 22:00)
+
+- Task 7 COMMITTED 6082f8c (15 tests). Tasks 8-10 COMMITTED a2bd1a9 (bar, sidebar CAP-3 routing,
+  deep-open initialConceptId, i18n x14). sources-resolution fix COMMITTED 5bb282b (non-streaming
+  path read metadata.sources only; backend sends source_documents — bar rendered nothing on live
+  queries; ONE resolution feeds bar + sidebar). Race fix COMMITTED de8c0f4 (#2019 shared
+  in-flight future; 77/77 auth suite).
+- LIVE-VERIFIED on the emulator (David's NASA query): bar renders "Related sources (3)" with OKF
+  badges; rows expand; sidebar carries the doc row.
+- BLOCKED UPSTREAM: the emitted okf-concept rows carry graph_name but NO repo_id → canBrowseSource
+  false → deep-open refuses (honest notice) = EXACT web parity (web canBrowseSource needs repo_id
+  too). Root cause filed #2020: CAP-1 enrichment (retriever 1941-1975) does not fire on the hybrid
+  fan-out path; chunk metadata HAS repo_id ([ADAPTIVE] logs), okf_concepts_meta HAS the mapping.
+- PRE-EXISTING test failures (proven: reproduce with my changes reverted — HEAD's own sidebar
+  file fails identically): browse_entry_test (2 tests) + concept_browser_screen_test "tapping a
+  row" — flutter-test ink-sparkle shader decode failure on this machine (framework-level).
+- Two SESSION OVERRIDE edits stay uncommitted (e2e_config clientId/scheme → dev; build.gradle
+  appAuth scheme → dev) — the local realm provisions genie-mobile-dev only; revert at MR time.
+  Toolchain bumps (gradle 8.14.3/AGP 8.11.1/Kotlin 2.2.20, gradle.properties, wrapper, settings)
+  uncommitted — needed to build; ride the MR.
+- NEXT: (a) Task 11 gates — smoke leg, coverage no-decrease, CHANGELOG, flutter clean to retry the
+  two shader-flaky tests, push, MR; (b) #2020 retriever MR (backend, separate worktree off main) —
+  the browse blocker; (c) #2018 profile rebuild storm — needs a live repro with enlarged logcat
+  (logcat -G 4M): irregular rebuild bursts rebuild all 12 sections (~40 TextFields logged per
+  rebuild); zero "Save button pressed" lines captured — repro required.
+
+## Wave 2 LIVE STATUS (2026-11-20 08:20) — David's contradiction resolved
+
+- David's Vue screenshot (23:27, Naugle query, Browse buttons WORKING) disproved the #2020
+  upstream theory. Backend-log comparison (trace ids 0e40…, 3b98…, 05d3…): BOTH runs routed
+  OKF_solar-system_v1; the retriever attached repo_id f9e08ce2 to the Naugle chunks in BOTH
+  (legs=1 mobile w/ sticky carrier, legs=2 Vue w/ kenya+solar). #2020 CORRECTED (note posted) and
+  CLOSED as invalid.
+- TRUE root cause of the 22:41 mobile non-browse: the OLD APK (pre-5bb282b). Tonight's replay on
+  the rebuilt APK: "Related sources (2)", OKF badges, tap → browsable=true repo=f9e08ce2 → browser
+  opens, 144 tree rows load, deep-select fires.
+- NEW defect found + FIXED (spec lie): okf-routes.js declared ConceptCard.links items as strings;
+  the server serves author-link OBJECTS {to_concept_id,label} (legacy {target}) → the generated
+  Dart client threw _Map<String,dynamic>≠String mid-render (the browser error screen). Fix: spec →
+  ConceptCardLink {to_concept_id,target,label}; client regen (jar shim, diff = exactly the field);
+  chips read to_concept_id??target with .md/concepts/ strip + label fallback (web contract).
+  Tests: concept_card_contract_test (3, RED→GREEN), screen chip tests (label/target/self-link).
+- #2019 half two FIXED: the interceptor's swallow-everything catch now logs
+  INTERCEPTOR_REFRESH_THROWN with the cause (the 23:37 dead-session hang had ZERO AuthNotifier
+  logs — the cause vanished). TDD RED→GREEN; auth suite 147/147.
+- #2022 FILED (David's call): retrieval abstains on carrier-less sessions — a fresh-session Naugle
+  query = zero rows, reranker_selected_nothing, fan-out 14 legs of all-graph noise; sticky sessions
+  retrieve fine. Backend retrieval-quality work, later MR.
+- REMAINING for Task 11: smoke leg, coverage, CHANGELOG, flutter clean retry of the 3 shader-flaky
+  tests (browse_entry ×2 + screen "tapping a row"), revert SESSION OVERRIDEs, push, MR.

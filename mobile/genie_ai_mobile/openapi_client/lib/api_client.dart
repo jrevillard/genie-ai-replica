@@ -362,6 +362,8 @@ class ApiClient {
           return CategoryTreeChildrenInner.fromJson(value);
         case 'ConceptCard':
           return ConceptCard.fromJson(value);
+        case 'ConceptCardLink':
+          return ConceptCardLink.fromJson(value);
         case 'ConceptCardSource':
           return ConceptCardSource.fromJson(value);
         case 'ConceptTreePage':

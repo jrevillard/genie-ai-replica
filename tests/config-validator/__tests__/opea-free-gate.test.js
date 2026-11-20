@@ -87,7 +87,7 @@ const COMPS_IMPORT_FORMS = [
   {
     id: 'import-statement',
     pattern:
-      /(?:^|[;\n:])[ \t]*import[ \t]+(?<![a-z0-9_.])(?:[A-Za-z_][\w.]*[ \t]*,[ \t]*)*(?<pkg>comps)(?![a-z0-9_])/dgm,
+      /(?:^|[;\n:])[ \t]*import[ \t]+(?<![a-z0-9_.])(?:[A-Za-z_][\w.]*[ \t]*,[ \t]*(?:\\\n[ \t]*)?)*(?<pkg>comps)(?![a-z0-9_])/dgm,
     at: 'name'
   },
   { id: 'importlib-import-module', pattern: /importlib\.import_module\([ \t]*['"]comps\b/g, at: 'call' },
@@ -95,21 +95,41 @@ const COMPS_IMPORT_FORMS = [
 ];
 
 /**
- * The files whose content is a build input: a Dockerfile, a requirements or
- * constraints file, a lock file, a packaging file, a build script or a
- * pipeline file. The OPEA markers are searched there and nowhere else — a
- * README that mentions an OPEA image is documentation, not a dependency.
+ * A requirements file: the flat form (`requirements.txt`,
+ * `requirements-test.txt`, `constraints.txt`) and every file under a
+ * requirements directory (`requirements/prod/base.txt`).
  */
-const BUILD_FILE_PATTERN =
-  /(^|\/)(Dockerfile[^/]*|requirements[^/]*\.(txt|in)|requirements[^/]*\/[^/]*\.(txt|in)|constraints[^/]*\.txt|uv\.lock|Pipfile[^/]*|pyproject\.toml|setup\.(py|cfg)|Makefile|[^/]+\.sh|[^/]+\.(yml|yaml))$/;
+const REQUIREMENTS_FILE =
+  /(^|\/)requirements[^/]*\.(txt|in)$|(^|\/)requirements[^/]*\/.+\.(txt|in)$|(^|\/)constraints[^/]*\.txt$/;
+
+/** A lock file: whatever the tool calls it (uv.lock, poetry.lock, Pipfile.lock). */
+const LOCK_FILE = /(^|\/)[^/]*\.lock$/;
+
+/** A packaging file: the pyproject and the setuptools forms. */
+const PACKAGING_FILE = /(^|\/)(pyproject\.toml|setup\.(py|cfg))$/;
 
 /**
  * The files that DECLARE dependencies. Only in those does the name of the
  * overlay package on its own mean a dependency — elsewhere it is prose, a
  * YAML key or a Makefile target.
  */
-const DEPENDENCY_FILE_PATTERN =
-  /(^|\/)(requirements[^/]*\.(txt|in)|requirements[^/]*\/[^/]*\.(txt|in)|constraints[^/]*\.txt|uv\.lock|Pipfile[^/]*|pyproject\.toml|setup\.(py|cfg))$/;
+const PIPFILE = /(^|\/)Pipfile[^/]*$/;
+const isDependencyFile = (file) =>
+  REQUIREMENTS_FILE.test(file) || LOCK_FILE.test(file) || PACKAGING_FILE.test(file) || PIPFILE.test(file);
+
+/**
+ * The files whose content is a build input: a Dockerfile, a requirements or
+ * constraints file, a lock file (whatever the tool calls it), a Makefile
+ * family member (GNUmakefile, makefile, Makefile.linux), a packaging file, a
+ * build script or a pipeline file. The OPEA markers are searched there and
+ * nowhere else — a README that mentions an OPEA image is documentation, not a
+ * dependency.
+ */
+const isBuildFile = (file) =>
+  isDependencyFile(file) ||
+  /(^|\/)Dockerfile[^/]*$/.test(file) ||
+  /(^|\/)(GNUmakefile|[Mm]akefile(?:\.[^/]*)?)$/.test(file) ||
+  /(^|\/)[^/]+\.(sh|ya?ml)$/.test(file);
 
 /**
  * The ways an agent-path package can fetch OPEA at build time. The forms are
@@ -214,6 +234,7 @@ function pythonCodeMask(content) {
  * @returns {string} The text with the comments blanked out
  */
 function stripBuildComments(content) {
+  content = content.replace(/\r/g, '');
   let out = '';
   let index = 0;
   while (index < content.length) {
@@ -354,14 +375,14 @@ function scanFiles(files, read) {
         }
       }
     }
-    if (BUILD_FILE_PATTERN.test(file)) {
+    if (isBuildFile(file)) {
       const text = stripBuildComments(content);
       for (const marker of OPEA_BUILD_MARKERS) {
         if (marker.pattern.test(text)) {
           violations.push({ file, rule: `opea-build:${marker.id}` });
         }
       }
-      if (DEPENDENCY_FILE_PATTERN.test(file)) {
+      if (isDependencyFile(file)) {
         for (const marker of OPEA_DEPENDENCY_MARKERS) {
           if (marker.pattern.test(text)) {
             violations.push({ file, rule: `opea-build:${marker.id}` });
@@ -407,6 +428,7 @@ const BUILD_SAMPLES = [
   { file: 'pkg/Dockerfile', content: 'FROM python:3.11-slim AS comps_base_builder\n', rules: ['opea-overlay-stage'] },
   // The comment after the stage name must not break the end-anchored marker.
   { file: 'pkg/Dockerfile', content: 'FROM base AS comps-stage;# build\n', rules: ['opea-overlay-stage'] },
+  { file: 'pkg/Dockerfile', content: 'FROM base AS comps-stage\r\n', rules: ['opea-overlay-stage'] },
   {
     file: 'pkg/Dockerfile',
     content: 'COPY --from=builder /src/comps/ /app/comps/\n',
@@ -439,6 +461,9 @@ const DEPENDENCY_SAMPLES = [
   { file: 'pkg/setup.cfg', content: 'install_requires = opea-comps\n', rules: ['opea-dependency-entry'] },
   { file: 'pkg/setup.cfg', content: 'install_requires = genai-comps\n', rules: ['opea-dependency-entry'] },
   { file: 'pkg/uv.lock', content: 'name = "comps"\n', rules: ['opea-dependency-entry'] },
+  { file: 'pkg/poetry.lock', content: 'name = "opea-comps"\n', rules: ['opea-dependency-entry'] },
+  { file: 'pkg/requirements/prod/base.txt', content: 'comps==1.5\n', rules: ['opea-requirement'] },
+  { file: 'pkg/GNUmakefile', content: 'install:\n\t@echo build\n', rules: [] },
   { file: 'pkg/requirements/base.txt', content: 'comps==1.5\n', rules: ['opea-requirement'] },
   { file: 'pkg/constraints.txt', content: 'comps==1.5\n', rules: ['opea-requirement'] }
 ];
@@ -492,7 +517,8 @@ const IMPORT_VARIANTS = [
   { content: 'import os, comps.core\n', rule: 'comps-import:import-statement' },
   { content: 'import os.path, comps.core as c\n', rule: 'comps-import:import-statement' },
   { content: 'x = 1; import comps.core\n', rule: 'comps-import:import-statement' },
-  { content: 'if TYPE_CHECKING: import comps.core\n', rule: 'comps-import:import-statement' }
+  { content: 'if TYPE_CHECKING: import comps.core\n', rule: 'comps-import:import-statement' },
+  { content: 'import os, \\\n    comps.core\n', rule: 'comps-import:import-statement' }
 ];
 
 // A stray quote that opens no docstring, followed by a REAL import: the
@@ -716,10 +742,13 @@ describe('OPEA-free gate (Story 1.4, FR-20, AD-1)', () => {
       // outside the two directories it happens to cover.
       expect(entries.some((glob) => files.every((file) => gitlabGlobMatches(glob, file)))).toBe(true);
       // A glob set that covers the root files in one and the nested files in
-      // another leaves the rest of the package un-policed.
-      expect(uncoveredFiles([`${entry.path}/*.py`, `${entry.path}/tests/**/*`], files).length).toBeGreaterThan(0);
+      // another leaves the rest of the package un-policed. The shapes are
+      // synthetic: a package that happens to carry only root .py files and a
+      // tests directory would make the partial set complete by accident.
+      const shapes = [`${entry.path}/app.py`, `${entry.path}/Dockerfile`, `${entry.path}/tests/test_app.py`];
+      expect(uncoveredFiles([`${entry.path}/*.py`, `${entry.path}/tests/**/*`], shapes).length).toBeGreaterThan(0);
       // A glob that covers only the root leaves the nested files un-policed.
-      expect(uncoveredFiles([`${entry.path}/*`], files).length).toBeGreaterThan(0);
+      expect(uncoveredFiles([`${entry.path}/*`], shapes).length).toBeGreaterThan(0);
     }
     // The manifest is an input to the gate too: an MR that moves a package
     // onto the agentic path must run the job in its own pipeline.

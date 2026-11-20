@@ -577,9 +577,11 @@ def test_too_long_turn_answers_without_any_tokenizer_or_window_call():
 
 
 def test_too_long_fixed_text_is_never_translated():
-    """The gate translates GENERATED answers; the too-long case's answer is
-    the recorded fixed English text — it stays English even with the gate
-    on and a target asked."""
+    """RECORDED DIVERGENCE (not parity): the deployed non-streamed path
+    translates the too-long abstention text like any answer, while config
+    B's experiment-gated translation deliberately never touches the fixed
+    recorded text — the gate translates GENERATED answers. This test pins
+    the divergence so it can only change as a recorded decision."""
     translator = FakeTranslator(("réponse", "ok"))
     config = NoAgentConfig.load(env={"AGENT_ANSWER_TRANSLATION_ENABLED": "true"})
     pipeline, generation, _cap = _insufficient_pipeline("reranker_input_too_long")

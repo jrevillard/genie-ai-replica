@@ -98,9 +98,13 @@ def _rank_weighted_confidence(scores: list[float], decay: float) -> float:
 
 def hit_identity(hit) -> tuple[str, str] | None:
     """The dedup identity of one hit's source: ``(repo_id, concept_id)`` for
-    an OKF concept, ``(None, file_id)`` for a legacy file — the pair the
-    deployed duplicate-skip keys on (the same document reached through
-    several chunks is surfaced once, its scores still counted)."""
+    an OKF concept, ``(None, file_id)`` for a legacy file. Deployed keys the
+    duplicate-skip on the flat ``file_id`` alone (an OKF chunk's ``file_id``
+    IS its ``concept_id``), so a legacy ``file_id`` colliding with an OKF
+    ``concept_id`` — or one ``concept_id`` in two repositories — dedups in
+    the deployed path but not here; the pair identity is the stricter,
+    namespace-safe variant, and the collision is theoretical (E01's corpus
+    is legacy-only)."""
     provenance = hit.provenance
     if isinstance(provenance, OkfConceptProvenance):
         return (provenance.repo_id, provenance.concept_id)
@@ -118,20 +122,27 @@ def source_document_envelope(hits, score_calibrator=None) -> list[dict]:
     marker the frontend takes the legacy branch and builds a doc-repo URL
     for a concept that has none.
 
-    RECORDED DELTA (E01 counts it): the deployed legacy branch resolves
-    ``document_name``/``url``/``categoryLabels`` from doc-repo metadata and
-    falls back to exactly THIS shape — the id-derived name, the empty URL,
-    no labels — only when that resolution fails. This pipeline makes no
-    per-answer metadata round-trip (the capability's contract result carries
-    identity, not file metadata), so every legacy entry rides the fallback
-    shape. The OKF entries are byte-identical to the deployed OKF branch.
+    RECORDED DELTA (E01 counts it, and it is BIGGER than a field-value
+    difference): the deployed legacy branch resolves
+    ``document_name``/``url``/``categoryLabels`` from doc-repo metadata per
+    answer, and when that resolution FAILS the D1 rule drops the hit
+    entirely — no envelope entry and NO score in the confidence aggregate
+    ("no source surfaced, no confidence poison"). The id-derived-name shape
+    exists only in the deployed OKF fallback (gated on an ``OKF_``-prefixed
+    provenance graph). This pipeline makes no per-answer metadata
+    round-trip (the capability's contract result carries identity, not file
+    metadata), so EVERY legacy hit is surfaced in the id-derived shape and
+    every legacy score counts. Net: config B shows more sources with less
+    metadata than config A whenever doc-repo metadata resolves or fails.
     Widening the delta — resolving doc-repo metadata here — is an
-    iteration-2 decision, not silently taken.
+    iteration-2 decision, not silently taken. The OKF entries carry the
+    deployed OKF-fallback shape MINUS ``graph_name`` (the contract's
+    provenance type does not carry it; the deployed fallback always does).
 
-    Duplicates are skipped (deployed M3: the same ``document_id`` is
-    surfaced once, the first occurrence wins), while every hit's score —
-    duplicates included — still feeds the confidence aggregate, which this
-    function does NOT compute (the caller scores the FULL hit list).
+    Duplicates are skipped (deployed M3: the same source is surfaced once,
+    the first occurrence wins), while every hit's score — duplicates
+    included — still feeds the confidence aggregate, which this function
+    does NOT compute (the caller scores the FULL hit list).
     ``score_calibrator`` is the deployed confidence-time calibration
     (``RERANKER_SCORE_CALIBRATION``); ``None`` keeps the raw score (the
     default ``none`` calibration). It is applied at confidence time ONLY —
@@ -383,9 +394,17 @@ class NoAgentPipeline:
             # The recorded answer: the fixed English text, NO generation call
             # and NO tokenizer interaction — the deployed path answers it with
             # zero LLM/tokenizer round-trips, so the truncation guard (whose
-            # counter would hit the same endpoint family) is skipped too, and
-            # the recorded text is never translated (it is the recorded
-            # answer, not generated content).
+            # counter would hit the same endpoint family) is skipped too.
+            # RECORDED DIVERGENCE (translation): the deployed non-streamed
+            # path DOES translate this abstention text (`_finalize_llm_response`
+            # runs it through the answer translator like any answer), and the
+            # BFF's streaming layer hands it to the backend translation too.
+            # Config B's experiment-gated answer translation deliberately does
+            # NOT touch it — the gate exists to translate GENERATED answers,
+            # and the recorded text is the pipeline's own fixed abstention, so
+            # with the gate on and a non-EN target this turn answers English
+            # where deployed config A answers translated. E01 counts the
+            # delta; changing it is a recorded decision, not a silent one.
             answer = prompt_module.RERANKER_INPUT_TOO_LONG_ABSTENTION_TEXT
         else:
             knowledge_section = prompt_module.render_knowledge_section(query_text, documents, instructions)

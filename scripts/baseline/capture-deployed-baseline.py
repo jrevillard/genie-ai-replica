@@ -1394,12 +1394,20 @@ def chart_identity(release_info):
             "of this repository attests the chart the deployment runs"
         )
         return identity
-    if not identity["chart_version"]:
+    if not release_info.get("history_deployed", True):
         # The release history records no DEPLOYED revision: the chart the
         # deployment runs is not attested by anything.
         identity["reason"] = (
             "the release history records no deployed revision, so the chart the "
             "deployment runs is not attested"
+        )
+        return identity
+    if not identity["chart_version"]:
+        # A deployed revision whose history carries no chart version: the
+        # version the deployment runs is not attested.
+        identity["reason"] = (
+            "the release history records no chart version for the deployed "
+            "revision, so the chart the deployment runs is not attested"
         )
         return identity
     if not chart_source_complete():
@@ -1969,6 +1977,13 @@ def render_markdown(data):
         "writes no secret into the record."
     )
     add("")
+    if capture.get("chart_source_incomplete"):
+        add(
+            "**The chart source in this repository is incomplete**: the comparisons "
+            "against it were NOT made - no difference was measured, and none is "
+            "reported below."
+        )
+        add("")
 
     identity = data.get("chart_identity") or {}
     add("## Chart identity")
@@ -1983,13 +1998,15 @@ def render_markdown(data):
         add("The chart identity was not established.")
         add("")
     else:
-        if identity["status"] == "UNRESOLVED":
-            add("- **Chart the deployment runs:** not established (see the verdict below)")
-        else:
+        if identity["chart_version"]:
             add(
                 f"- **Chart the deployment runs:** `{cell(identity['chart_name'])}` version "
                 f"{cell(identity['chart_version'])} (the release history of revision "
                 f"{capture['release_revision']})"
+            )
+        else:
+            add(
+                "- **Chart the deployment runs:** not established (see the verdict below)"
             )
         add(
             f"- **Rendered from:** the `{cell(identity['source_kind'])}` "
@@ -2001,23 +2018,22 @@ def render_markdown(data):
                 f"- **Commit of this repository that carries it:** "
                 f"`{cell(identity['commit'] or '(none)')}`"
             )
-        add(
-            "- The commit is a LOCATOR: the content is what the release was "
-            "rendered with, and several commits can carry the same chart "
-            "content - a commit that did not touch the chart carries it too."
-        )
-        add(
-            "- The comparison is against the chart source in this working "
-            "tree; the commit named above is a committed tree that carries "
-            "the same ATTESTED content."
-        )
-        if identity["status"] == "UNRESOLVED":
-            add("- **Chart files compared:** not established")
-        else:
+            add(
+                "- The commit is a LOCATOR: the content is what the release was "
+                "rendered with, and several commits can carry the same chart "
+                "content - a commit that did not touch the chart carries it too."
+            )
+            add(
+                "- The comparison is against the chart source in this working "
+                "tree; the commit named above is a committed tree that carries "
+                "the same ATTESTED content."
+            )
             add(
                 f"- **Chart files compared:** {identity['files']} attested, "
                 f"{identity.get('local_files', 0)} in the chart source"
             )
+        else:
+            add("- **Chart files compared:** not established")
         if identity["status"] == "UNRESOLVED":
             add(f"- **Verdict:** UNRESOLVED - {identity['reason']}.")
         elif identity["status"] == "DIFFERENT":
@@ -2611,11 +2627,12 @@ def capture(namespace, flux_namespace, release, date, out_path):
     topology = capture_topology(namespace)
     release_info = capture_release(flux_namespace, release)
     # An incomplete chart source is not a crash: the identity is UNRESOLVED
-    # and the record says so. The comparison below then runs against what
-    # the source does carry.
+    # and the record says so. The comparisons that need the source are
+    # skipped - a difference that was never measured is not a difference.
+    source_complete = chart_source_complete()
     chart_values = {}
     values_path = os.path.join(CHART_DIR, "values.yaml")
-    if os.path.exists(values_path):
+    if source_complete:
         with open(values_path, encoding="utf-8") as handle:
             chart_values = yaml.safe_load(handle) or {}
 
@@ -2650,23 +2667,31 @@ def capture(namespace, flux_namespace, release, date, out_path):
             )
 
     config = []
-    for workload in workloads:
-        rows, undeclared = compare_workload(
-            workload, env_maps, chart_values, overlay_values, effective_values
-        )
-        if rows or undeclared:
-            multi = len(workload["containers"]) > 1
-            config.append(
-                {
-                    "workload": workload["name"],
-                    "rows": rows,
-                    "undeclared": undeclared,
-                    "multi_container": multi,
-                }
+    models = []
+    if source_complete:
+        for workload in workloads:
+            rows, undeclared = compare_workload(
+                workload, env_maps, chart_values, overlay_values, effective_values
             )
-
-    served = capture_models(namespace, env_by_component)
-    models = build_models(env_by_component, chart_values, effective_values, served)
+            if rows or undeclared:
+                multi = len(workload["containers"]) > 1
+                config.append(
+                    {
+                        "workload": workload["name"],
+                        "rows": rows,
+                        "undeclared": undeclared,
+                        "multi_container": multi,
+                    }
+                )
+        served = capture_models(namespace, env_by_component)
+        models = build_models(
+            env_by_component, chart_values, effective_values, served
+        )
+    else:
+        # The chart source is incomplete: every comparison against it would
+        # report a difference that was never measured. The record says so
+        # instead, and the capture fails on the unresolved identity.
+        pass
 
     # The chart the deployment runs, attested from the cluster objects that
     # hold it, and how the chart source in this repository compares with it.
@@ -2701,6 +2726,7 @@ def capture(namespace, flux_namespace, release, date, out_path):
             "release": release,
             "release_revision": release_info["revision"],
             "release_deployed": release_info.get("history_deployed", True),
+            "chart_source_incomplete": not source_complete,
             "chart_name": release_info["chart"].get("chart", ""),
             "local_chart_version": local_chart_version(),
             "overlay_name": release_info["overlay_name"],

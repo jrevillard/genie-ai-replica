@@ -108,6 +108,11 @@ context:
 | 27 | scoped review f=2 | Minor | "Chart files compared" printed "0 attested, 0 in the chart source" when the identity was UNRESOLVED | **fixed** — the counts are printed only when they are established |
 | 28 | scoped review f=2 | Minor | the record header still printed the never-deployed revision and empty values | **fixed** — the header says the history records no deployed revision, and the identity line says "not established" |
 | 29 | scoped review f=2 | Minor | the DIFFERENT verdict named only the chart source as the cause, even when the attestations also disagreed | **fixed** — the verdict names every cause it found |
+| 30 | scoped review f=3 | Important | the incompleteness guard covered only the identity, so a checkout without `values.yaml` produced a record whose configuration and model tables were computed against an EMPTY chart baseline and asserted differences that were never measured | **fixed** — the comparisons that need the chart source are skipped when it is incomplete, and the record says no comparison was made |
+| 31 | scoped review f=3 | Minor | the "no deployed revision" reason was derived from an empty `chart_version` instead of the `history_deployed` flag, so the two signals the record prints could contradict each other | **fixed** — the flag drives the reason, and a deployed revision with no chart version has its own reason |
+| 32 | scoped review f=3 | Minor | the commit LOCATOR prose was printed for an UNRESOLVED identity, referring to a commit line that was not printed | **fixed** — the prose belongs to the commit line |
+| 33 | scoped review f=3 | Minor | "Chart the deployment runs: not established" was applied to every UNRESOLVED cause, discarding a chart version the release history really does establish | **fixed** — the line names the chart whenever the history establishes it |
+| 34 | scoped review f=3 | Minor | the chart-source predicate's test exercised only the happy path, so dropping `values.yaml` from the guard would not redden the suite | **fixed** — the guard's coverage is pinned |
 
 ## Design Notes
 

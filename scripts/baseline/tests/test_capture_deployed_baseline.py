@@ -1529,7 +1529,7 @@ def test_a_release_history_without_a_deployed_revision_fails_closed(monkeypatch)
     )
     identity = capture.chart_identity(_release_info(chart_version=""))
     assert identity["status"] == "UNRESOLVED"
-    assert "no deployed revision" in identity["reason"]
+    assert "no chart version" in identity["reason"]
 
 
 def test_an_incomplete_chart_source_fails_closed(monkeypatch):
@@ -1580,3 +1580,20 @@ def test_a_release_history_without_a_deployed_entry_is_not_attested(monkeypatch)
 def test_the_chart_source_of_this_checkout_is_complete():
     """The predicate the identity leans on is exercised on a real checkout."""
     assert capture.chart_source_complete() is True
+
+
+def test_the_chart_source_guard_covers_every_file_the_comparison_reads(
+    monkeypatch,
+):
+    """Dropping a file from the guard would let an incomplete source through."""
+    import os as os_module
+
+    real_exists = os_module.path.exists
+
+    def without_values(path):
+        if str(path).endswith(os.path.join("genieai-umbrella", "values.yaml")):
+            return False
+        return real_exists(path)
+
+    monkeypatch.setattr(capture.os.path, "exists", without_values)
+    assert capture.chart_source_complete() is False

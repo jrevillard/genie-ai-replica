@@ -16,9 +16,9 @@ tunes the deployed chat path tunes this pipeline identically:
   ``CHATQNA_ABSTENTION_INSTRUCTIONS``, ``CHATQNA_ENFORCE_ABSTENTION``) carry
   the deployed defaults verbatim.
 
-New knobs follow the component's conventions: the model-call budgets read
-the shared ``MODEL_*`` names (``MODEL_LLM_TIMEOUT_SECONDS`` 180 s,
-``MODEL_CONNECT_TIMEOUT_SECONDS`` 30 s), the lane reads ``AGENT_LANE_*``
+New knobs follow the component's conventions: the model-call budget reads
+the shared ``MODEL_LLM_TIMEOUT_SECONDS`` (180 s), the lane reads
+``AGENT_LANE_*``
 and the answer-translation gate reads ``AGENT_ANSWER_TRANSLATION_ENABLED``
 (default OFF — the answer language stays BFF-owned in deployment; the gate
 exists for the evaluation mode to turn on deliberately).

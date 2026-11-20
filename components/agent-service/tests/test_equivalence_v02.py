@@ -224,6 +224,15 @@ def test_preparation_block_is_present_and_populated():
         "oversized_input",
         "translation_returning_blank",
     }
+    # The recorded per-class flags: only oversized_input abstains (422), the
+    # other two degrade and still answer 200. A fixture edit that flips a
+    # flag or a status must redden here, not silently diverge from the
+    # behavior test_preparation_prepare.py pins.
+    assert {c["class"]: (c["http_status"], c["abstains"]) for c in PREPARATION["failure_classes"]} == {
+        "translator_unavailable": (200, False),
+        "oversized_input": (422, True),
+        "translation_returning_blank": (200, False),
+    }
     assert PREPARATION["measured_budget"]["translation_char_budget"] == 11520
     assert PREPARATION["locales_source"] == "measured.preparation.locales"
     assert MEASURED["preparation"]["locales"], "the recorded locale samples are missing"

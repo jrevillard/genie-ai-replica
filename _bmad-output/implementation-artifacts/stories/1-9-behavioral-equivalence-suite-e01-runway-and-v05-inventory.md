@@ -140,6 +140,18 @@ Scoped fix review, round 1 (`c6a42d9f6..e4fdfd467`, f=0, fresh context) — NOT 
 
 Quality phase (simplify 4 angles + test-audit, commit `516b48ddb..quality`). The four-angle simplify review returned 11 applied findings (the duplicated too-long abstention text collapsed onto the capability's public constant; the calibration wiring narrowed to a `score_calibrator` property and read directly in `create()`; the `/tokenize` count parser deduplicated onto preparation's module-level `parse_tokenize_count` — restoring its absurd-count ceiling; the OpenAI response shape read consolidated into `chat_choice`/`chat_choice_content`; `GenerationClient` exposes its transport so the pipeline shares one wiring; the system-prompt token count memoized per instance (deployed `_count_static_tokens` parity) and `truncate_history` takes the precomputed count; the dead `connect_timeout_seconds` knob dropped; dead `fixtures()` helper, the vacuous parametrized deviation test, the fixture-self-read failure-classes test, the tautological double assert, the no-op `replace()` in the frozen test and the duplicated pipeline-side sink-isolation test deleted; the sink closure became `append`; the lane `from_config` test asserts behavior, not privates; the routing deviation test's source-text greps dropped for symbol+config-surface scans) and 4 skipped-with-reason findings (fake-seam hoisting to conftest: merging the pre-existing suites' diverged copies is outside this diff's scope — recorded for a follow-up; the translation-budget quartet left local: the deployed owner of the ANSWER translation budget is the BFF gpu-translate-backend, not preparation's config — wiring them would claim an ownership the stack does not have; `HISTORY_SEPARATOR` single-owner: the bounds-side rewrite touches story 1.8's delivered module — same follow-up; the CI ruff path enumeration kept: the settled repo convention recorded in story 1.5's review). The test-audit found ONE coverage gap: the prompt byte-identity claimed in the story and the S3 checklist existed only as an in-session check — `test_prompt_strings_match_the_deployed_source` now enforces it at the strongest boundary (AST over the deployed module's constant strings, exact equality; the first attempt's whitespace-normalized source grep false-failed on quote tokens and was replaced before landing). 514 passed.
 
+Scoped fix-review of the quality diff (fresh context, the
+`516b48ddb..quality` range only): verdict 2 nits, no critical/important.
+Applied both — the config module docstring still advertised the removed
+`MODEL_CONNECT_TIMEOUT_SECONDS` knob (clause dropped), and the deleted
+failure-classes test had carried more than its class-key set (the per-class
+`http_status`/`abstains` flags now pinned in the structure-integrity test —
+a fixture edit flipping them reddens instead of diverging silently).
+Behavior-preservation traced per call path by the reviewer (truncation math,
+payload shapes, error messages, statuses identical); the deleted tests'
+contracts confirmed owned elsewhere or subsumed; the AST pin mutation-tested
+in memory against the real deployed file. 514 passed.
+
 
 
 ## Design Notes

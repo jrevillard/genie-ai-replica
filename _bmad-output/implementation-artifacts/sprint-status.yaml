@@ -29,7 +29,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 # - Retrospective appends its action items to action_items; the status view surfaces open ones
 generated: 11-17-2026 15:20
-last_updated: 11-20-2026 12:30
+last_updated: 11-20-2026 17:55
 project: genie-ai
 project_key: NOKEY
 tracking_system: file-system
@@ -42,7 +42,7 @@ development_status:
   1-4-enforce-opea-free-with-a-ci-gate: done
   1-5-define-the-document-capability-contract-with-v04-acceptance: done
   1-6-implement-search_knowledge-opea-free-behavior-frozen: review
-  1-7-implement-read_source-and-the-authorization-executor: backlog
+  1-7-implement-read_source-and-the-authorization-executor: review
   1-8-implement-the-input-preparation-module: backlog
   1-9-behavioral-equivalence-suite-e01-runway-and-v05-inventory: backlog
   1-10-attest-the-chart-identity-of-the-deployed-baseline: done

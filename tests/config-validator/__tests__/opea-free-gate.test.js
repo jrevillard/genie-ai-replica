@@ -36,6 +36,9 @@
 //   legitimately lives, so it is out of scope by design.
 // - The dependency graph of a third-party package: only the files of the
 //   agent-path packages are read.
+// - A Python module that installs the overlay package at RUNTIME (a
+//   subprocess pip install) is not covered: the build markers are read in the
+//   build files, and the import forms cover the import statements.
 // - Uncommitted files: both the file enumeration and the package enumeration
 //   are the tracked tree (`git ls-files`), exactly what the pipeline checks
 //   out — a local run over an unstaged file, or over a scratch directory
@@ -120,7 +123,10 @@ const OPEA_BUILD_MARKERS = [
   { id: 'opea-vendored-payload', pattern: /--from=[^\s]+[^\n]*\/comps\// },
   { id: 'opea-copied-payload', pattern: /\b(?:cp|rsync|mv)\b[^\n]*\/comps(?![a-z0-9._-])/ },
   { id: 'opea-pythonpath', pattern: /PYTHONPATH[^\n]*\/comps(?![a-z0-9._-])/ },
-  { id: 'opea-pip-install', pattern: /\bpip3?[ \t]+install\b[^\n]*(?<![a-z0-9._-])comps(?![a-z0-9._-])/ }
+  {
+    id: 'opea-pip-install',
+    pattern: /\bpip3?[ \t]+install\b[^\n]*(?<![a-z0-9._-])(?:opea-|genai-)?comps(?![a-z0-9._-])/
+  }
 ];
 
 /**
@@ -132,17 +138,17 @@ const OPEA_DEPENDENCY_MARKERS = [
   {
     id: 'opea-requirement',
     pattern:
-      /^[ \t]*-?[ \t]*(?:genai-)?comps(?![a-z0-9._-])(?:\[[^\]]*\])?[ \t]*(?:==|>=|<=|~=|!=|<|>|[ \t]*@|[ \t]*=|[ \t]*$)/im
+      /^[ \t]*-?[ \t]*(?:opea-|genai-)?comps(?![a-z0-9._-])(?:\[[^\]]*\])?[ \t]*(?:==|>=|<=|~=|!=|<|>|[ \t]*@|[ \t]*=|[ \t]*$)/im
   },
   {
     id: 'opea-dependency-entry',
     pattern:
-      /["'](?:genai-)?comps(?![a-z0-9._-])(?:\[[^\]]*\])?[ \t]*(?:==|>=|<=|~=|!=|<|>|[ \t]*@|["'][ \t]*(?:,|\]|\))|["'][ \t]*$)|^[ \t]*(?:install_requires|requires)[ \t]*=[ \t]*[^#\n]*?(?<![a-z0-9._-])comps(?![a-z0-9._-])/im
+      /["'](?:opea-|genai-)?comps(?![a-z0-9._-])(?:\[[^\]]*\])?[ \t]*(?:==|>=|<=|~=|!=|<|>|[ \t]*@|["'][ \t]*(?:,|\]|\))|["'][ \t]*$)|^[ \t]*(?:install_requires|requires)[ \t]*=[ \t]*[^#\n]*?(?<![a-z0-9._-])(?:opea-|genai-)?comps(?![a-z0-9._-])/im
   }
 ];
 
 /**
- * Read a file as CODE and as a comment-free text.
+ * Read a PYTHON file as CODE.
  *
  * A regular expression cannot tell code from prose: a `"""` that opens no
  * docstring pairs with the NEXT `"""`, and everything between them — a real
@@ -150,53 +156,73 @@ const OPEA_DEPENDENCY_MARKERS = [
  * state instead, so a stray quote cannot swallow the file.
  *
  * @param {string} content - The file content
- * @returns {{ mask: Uint8Array, commentFree: string }} The code mask (one
- *   flag per character: 1 when the character is code) and the text with the
- *   comments blanked out
+ * @returns {Uint8Array} One flag per character: 1 when the character is code
  */
-function analyse(content) {
+function pythonCodeMask(content) {
   const mask = new Uint8Array(content.length);
-  let commentFree = '';
   let index = 0;
   while (index < content.length) {
     const char = content[index];
     if (char === '#') {
-      // A comment runs to the end of the line: it is neither code nor text.
+      // A comment runs to the end of the line: it is not code.
       while (index < content.length && content[index] !== '\n') {
-        commentFree += ' ';
         index += 1;
       }
       continue;
     }
     if (char === '"' || char === "'") {
-      // A string literal: single-quoted, double-quoted or triple-quoted. Its
-      // text is kept (a dependency URL is a string), but it is not code.
+      // A string literal: single-quoted, double-quoted or triple-quoted.
       const triple = content.startsWith(char.repeat(3), index);
       const quote = triple ? char.repeat(3) : char;
-      let literal = quote;
       index += quote.length;
       while (index < content.length) {
         if (content[index] === '\\') {
-          literal += content.slice(index, index + 2);
           index += 2;
           continue;
         }
         if (content.startsWith(quote, index)) {
-          literal += quote;
           index += quote.length;
           break;
         }
-        literal += content[index];
         index += 1;
       }
-      commentFree += literal;
       continue;
     }
     mask[index] = 1;
-    commentFree += char;
     index += 1;
   }
-  return { mask, commentFree };
+  return mask;
+}
+
+/**
+ * Strip the comments of a BUILD file.
+ *
+ * The comment syntax is not Python's: in a shell script, a Dockerfile or a
+ * YAML file, a `#` starts a comment when it stands at the start of the line
+ * or follows a space — not when it sits inside a word (`${PATH#/opt}` is a
+ * parameter expansion, `https://host/x#frag` is a URL). No quote is tracked
+ * either: an apostrophe in prose is not a string delimiter in those files,
+ * and tracking it would swallow the rest of the file.
+ *
+ * @param {string} content - The file content
+ * @returns {string} The text with the comments blanked out
+ */
+function stripBuildComments(content) {
+  let out = '';
+  let index = 0;
+  while (index < content.length) {
+    const char = content[index];
+    if (char === '#' && (index === 0 || content[index - 1] === '\n' || content[index - 1] === ' ')) {
+      while (index < content.length && content[index] !== '\n') {
+        out += ' ';
+        index += 1;
+      }
+      continue;
+    }
+    out += char;
+    index += 1;
+  }
+  return out;
 }
 
 /**
@@ -314,8 +340,8 @@ function scanFiles(files, read) {
   const violations = [];
   for (const file of files) {
     const content = read(file);
-    const { mask, commentFree } = analyse(content);
     if (file.endsWith('.py')) {
+      const mask = pythonCodeMask(content);
       for (const form of COMPS_IMPORT_FORMS) {
         if (importsInCode(content, mask, form)) {
           violations.push({ file, rule: `comps-import:${form.id}` });
@@ -323,14 +349,15 @@ function scanFiles(files, read) {
       }
     }
     if (BUILD_FILE_PATTERN.test(file)) {
+      const text = stripBuildComments(content);
       for (const marker of OPEA_BUILD_MARKERS) {
-        if (marker.pattern.test(commentFree)) {
+        if (marker.pattern.test(text)) {
           violations.push({ file, rule: `opea-build:${marker.id}` });
         }
       }
       if (DEPENDENCY_FILE_PATTERN.test(file)) {
         for (const marker of OPEA_DEPENDENCY_MARKERS) {
-          if (marker.pattern.test(commentFree)) {
+          if (marker.pattern.test(text)) {
             violations.push({ file, rule: `opea-build:${marker.id}` });
           }
         }
@@ -379,11 +406,20 @@ const BUILD_SAMPLES = [
   },
   { file: 'pkg/Dockerfile', content: 'RUN cp -R /src/comps/. /app/comps/\n', rules: ['opea-copied-payload'] },
   { file: 'pkg/Dockerfile', content: 'ENV PYTHONPATH=/app/comps\n', rules: ['opea-pythonpath'] },
-  { file: 'pkg/Dockerfile', content: 'RUN pip install --no-cache-dir comps\n', rules: ['opea-pip-install'] }
+  { file: 'pkg/Dockerfile', content: 'RUN pip install --no-cache-dir comps\n', rules: ['opea-pip-install'] },
+  { file: 'pkg/Dockerfile', content: 'RUN pip install --no-cache-dir opea-comps==1.5\n', rules: ['opea-pip-install'] },
+  // A `#` inside a word is not a comment: the parameter expansion must not
+  // hide the install that follows it.
+  {
+    file: 'pkg/install.sh',
+    content: 'export PATH=${PATH#/opt} && pip install opea-comps\n',
+    rules: ['opea-pip-install']
+  }
 ];
 
 const DEPENDENCY_SAMPLES = [
   { file: 'pkg/requirements.txt', content: 'comps==1.5\n', rules: ['opea-requirement'] },
+  { file: 'pkg/requirements.txt', content: 'opea-comps==1.5\n', rules: ['opea-requirement'] },
   { file: 'pkg/requirements.txt', content: '  comps==1.5\n', rules: ['opea-requirement'] },
   { file: 'pkg/Pipfile', content: 'comps = "*"\n', rules: ['opea-requirement'] },
   { file: 'pkg/pyproject.toml', content: 'dependencies = ["comps==1.5"]\n', rules: ['opea-dependency-entry'] },
@@ -419,6 +455,9 @@ const NEGATIVE_SAMPLES = [
   { file: 'pkg/Dockerfile', content: 'RUN pip install --no-cache-dir comps-tools\n' },
   { file: 'pkg/setup.cfg', content: 'install_requires = comps-tools\n' },
   { file: 'pkg/requirements.txt', content: "# the 'comps' package is banned here\nfastapi==0.141.1\n" },
+  // An apostrophe in prose is not a string delimiter in a YAML file: it must
+  // not swallow the comment that follows it.
+  { file: 'pkg/config.yaml', content: "description: it's the agent service\n# FROM opea/embedding:1.5\n" },
   { file: 'pkg/app.py', content: '# from comps.chunking import Chunker\n' },
   { file: 'pkg/doc.py', content: '"""Example:\nfrom comps.chunking import Chunker\n"""\n' },
   { file: 'pkg/legacy.py', content: "LEGACY = None  # was importlib.import_module('comps.core')\n" },
@@ -474,6 +513,9 @@ describe('OPEA-free gate (Story 1.4, FR-20, AD-1)', () => {
     for (const entry of entries) {
       expect(typeof entry.why).toBe('string');
       expect(entry.why.trim().length).toBeGreaterThan(0);
+      // The path is repository-relative and carries no trailing slash: a
+      // path the scan cannot resolve would narrow the scan silently.
+      expect(entry.path).toMatch(/^[A-Za-z0-9._-]+(\/[A-Za-z0-9._-]+)*$/);
       expect(fs.existsSync(path.join(ROOT, entry.path))).toBe(true);
     }
     // A package listed twice would be classified by whichever list is read
@@ -615,6 +657,24 @@ describe('OPEA-free gate (Story 1.4, FR-20, AD-1)', () => {
       otherPackages: otherPackages(manifest).filter((entry) => entry.path !== dropped.path)
     };
     expect(unclassifiedPackages(synthetic, directories)).toEqual([dropped.path]);
+  });
+
+  it('matches the glob dialect rules:changes uses', () => {
+    // A trailing `**` is an ordinary star: it matches ONE segment. The form
+    // that covers a whole tree is a `**` component followed by a slash and a
+    // star. Reading `**` as "zero or more segments" would certify a trigger
+    // GitLab does not honour.
+    expect(gitlabGlobMatches('components/agent-service/**', 'components/agent-service/app.py')).toBe(true);
+    expect(gitlabGlobMatches('components/agent-service/**', 'components/agent-service/tests/test_app.py')).toBe(false);
+    expect(gitlabGlobMatches('components/agent-service/**/*', 'components/agent-service/app.py')).toBe(true);
+    expect(gitlabGlobMatches('components/agent-service/**/*', 'components/agent-service/tests/test_app.py')).toBe(true);
+    // `?` is a single character, `{a,b}` expands.
+    expect(gitlabGlobMatches('components/agent-service/??.py', 'components/agent-service/ab.py')).toBe(true);
+    expect(gitlabGlobMatches('components/agent-service/??.py', 'components/agent-service/a.py')).toBe(false);
+    expect(gitlabGlobMatches('components/agent-service/{app,main}.py', 'components/agent-service/main.py')).toBe(true);
+    expect(gitlabGlobMatches('components/agent-service/{app,main}.py', 'components/agent-service/other.py')).toBe(
+      false
+    );
   });
 
   it('runs the gate in the pipeline that can introduce a violation', () => {

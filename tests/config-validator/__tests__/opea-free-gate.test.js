@@ -63,14 +63,26 @@ const CI_JOB = 'config:validate';
 
 /**
  * The ways a Python file can pull the OPEA overlay package in. The static
- * forms are the ones the overlay's own services use; the dynamic ones are
- * the holes a static-only check leaves open.
+ * forms cover the module lists Python offers (`import comps.x`, `import os,
+ * comps.x`), the dynamic ones are the holes a static-only check leaves open.
+ *
+ * `at` says which part of the match must sit in code: the package name for
+ * the static forms (a name in a comment is not a coupling), the call for the
+ * dynamic ones (their package name is inside a string, which is not code).
  */
 const COMPS_IMPORT_FORMS = [
-  { id: 'from-import', pattern: /^[ \t]*from[ \t]+comps\b/gm },
-  { id: 'import-statement', pattern: /^[ \t]*import[ \t]+comps\b/gm },
-  { id: 'importlib-import-module', pattern: /importlib\.import_module\([ \t]*['"]comps\b/g },
-  { id: 'builtins-import', pattern: /(^|[^\w.])__import__\([ \t]*['"]comps\b/g }
+  {
+    id: 'from-import',
+    pattern: /(?:^|[;\n])[ \t]*from[ \t]+(?<![a-z0-9_.])(comps)(?![a-z0-9_])/gm,
+    at: 'name'
+  },
+  {
+    id: 'import-statement',
+    pattern: /(?:^|[;\n])[ \t]*import[ \t]+(?<![a-z0-9_.])(?:[A-Za-z_][\w.]*[ \t]*,[ \t]*)*(comps)(?![a-z0-9_])/gm,
+    at: 'name'
+  },
+  { id: 'importlib-import-module', pattern: /importlib\.import_module\([ \t]*['"]comps\b/g, at: 'call' },
+  { id: 'builtins-import', pattern: /(^|[^\w.])__import__\([ \t]*['"]comps\b/g, at: 'call' }
 ];
 
 /**
@@ -102,8 +114,8 @@ const OPEA_BUILD_MARKERS = [
   { id: 'opea-project-org', pattern: /opea-project[\\/]/i },
   { id: 'opea-build-arg', pattern: /\bOPEA_[A-Z0-9_]*(?:URL|VERSION)\b/ },
   { id: 'opea-base-image', pattern: /(?:^|[^\w.-])opea\/[a-z0-9][a-z0-9._-]*/ },
-  { id: 'opea-vendored-stage', pattern: /--from=[^\s]*(?:comps|opea)[^\s]*/ },
-  { id: 'opea-overlay-stage', pattern: /\bAS[ \t]+\S*(?:comps|opea)\S*[ \t]*$/im },
+  { id: 'opea-vendored-stage', pattern: /--from=[^\s]*(?<![a-z0-9])(?:comps|opea)(?![a-z0-9])[^\s]*/ },
+  { id: 'opea-overlay-stage', pattern: /\bAS[ \t]+\S*(?<![a-z0-9])(?:comps|opea)(?![a-z0-9])\S*[ \t]*$/im },
   { id: 'opea-vendored-payload', pattern: /--from=[^\s]+[^\n]*\/comps\// },
   { id: 'opea-copied-payload', pattern: /\b(?:cp|rsync|mv)\b[^\n]*\/comps(?![a-z0-9._-])/ },
   { id: 'opea-pythonpath', pattern: /PYTHONPATH[^\n]*\/comps(?![a-z0-9._-])/ },
@@ -124,7 +136,7 @@ const OPEA_DEPENDENCY_MARKERS = [
   {
     id: 'opea-dependency-entry',
     pattern:
-      /["'](?:genai-)?comps(?![a-z0-9._-])(?:\[[^\]]*\])?[ \t]*(?:==|>=|<=|~=|!=|<|>|[ \t]*@|["'][ \t]*(?:,|\]|\))|["'][ \t]*$)/im
+      /["'](?:genai-)?comps(?![a-z0-9._-])(?:\[[^\]]*\])?[ \t]*(?:==|>=|<=|~=|!=|<|>|[ \t]*@|["'][ \t]*(?:,|\]|\))|["'][ \t]*$)|^[ \t]*(?:install_requires|requires)[ \t]*=[ \t]*[^#\n]*?(?<![a-z0-9_])comps(?![a-z0-9_])/im
   }
 ];
 
@@ -191,16 +203,18 @@ function analyse(content) {
  *
  * The forms are matched against the raw file — a dynamic import names the
  * package inside a string, which the code mask blanks — so the occurrence
- * is only a coupling when it starts in code.
+ * is only a coupling when the part the form points at sits in code.
  *
  * @param {string} content - The file content
  * @param {Uint8Array} mask - The code mask of that content
- * @param {RegExp} pattern - The import form to look for
+ * @param {object} form - The import form: its pattern and the part that must
+ *   be in code (`name` or `call`)
  * @returns {boolean} True when the form occurs in code
  */
-function importsInCode(content, mask, pattern) {
-  for (const match of content.matchAll(pattern)) {
-    if (mask[match.index]) {
+function importsInCode(content, mask, form) {
+  for (const match of content.matchAll(form.pattern)) {
+    const offset = form.at === 'name' ? match.index + match[0].lastIndexOf(match[1]) : match.index;
+    if (mask[offset]) {
       return true;
     }
   }
@@ -302,7 +316,7 @@ function scanFiles(files, read) {
     const { mask, commentFree } = analyse(content);
     if (file.endsWith('.py')) {
       for (const form of COMPS_IMPORT_FORMS) {
-        if (importsInCode(content, mask, form.pattern)) {
+        if (importsInCode(content, mask, form)) {
           violations.push({ file, rule: `comps-import:${form.id}` });
         }
       }
@@ -354,6 +368,7 @@ const BUILD_SAMPLES = [
   { file: 'pkg/Dockerfile', content: 'ARG OPEA_VERSION=1.5\n', rules: ['opea-build-arg'] },
   { file: 'pkg/Dockerfile', content: 'ARG OPEA_COMPS_VERSION=1.5\n', rules: ['opea-build-arg'] },
   { file: 'pkg/Dockerfile', content: 'FROM registry.example.com/opea/embedding:1.5\n', rules: ['opea-base-image'] },
+  { file: 'pkg/Dockerfile', content: 'ARG UPSTREAM_IMAGE=opea/embedding:1.5\n', rules: ['opea-base-image'] },
   { file: 'pkg/Dockerfile', content: 'COPY --from=comps_builder /src /app\n', rules: ['opea-vendored-stage'] },
   { file: 'pkg/Dockerfile', content: 'FROM python:3.11-slim AS comps_base_builder\n', rules: ['opea-overlay-stage'] },
   {
@@ -371,13 +386,30 @@ const DEPENDENCY_SAMPLES = [
   { file: 'pkg/requirements.txt', content: '  comps==1.5\n', rules: ['opea-requirement'] },
   { file: 'pkg/Pipfile', content: 'comps = "*"\n', rules: ['opea-requirement'] },
   { file: 'pkg/pyproject.toml', content: 'dependencies = ["comps==1.5"]\n', rules: ['opea-dependency-entry'] },
+  { file: 'pkg/setup.cfg', content: 'install_requires = comps\n', rules: ['opea-dependency-entry'] },
   { file: 'pkg/uv.lock', content: 'name = "comps"\n', rules: ['opea-dependency-entry'] },
   { file: 'pkg/requirements/base.txt', content: 'comps==1.5\n', rules: ['opea-requirement'] },
   { file: 'pkg/constraints.txt', content: 'comps==1.5\n', rules: ['opea-requirement'] }
 ];
 
-// Prose that names the overlay package: none of it is a coupling.
+// Prose that names the overlay package: none of it is a coupling. Each
+// sample is able to fail ALONE, so reverting one mechanism — the comment
+// strip, the dependency-file restriction, the version operator, the stage
+// name boundary — turns the suite red.
 const NEGATIVE_SAMPLES = [
+  // Only the comment strip can kill this one: the OPEA image is a build
+  // marker, and it sits in a comment.
+  { file: 'pkg/Dockerfile', content: '# FROM opea/embedding:1.5\n' },
+  // Only the dependency-file restriction can kill this one: the requirement
+  // marker matches the line, and the file is not a dependency file.
+  { file: 'pkg/Dockerfile', content: 'comps==1.5\n' },
+  // Only the version operator can kill this one: the name is at the start of
+  // the line of a dependency file, and it declares nothing.
+  { file: 'pkg/requirements.txt', content: 'comps: see the overlay\n' },
+  // Only the stage-name boundary can kill this one: "european" contains
+  // "opea".
+  { file: 'pkg/Dockerfile', content: 'FROM x AS european_base\n' },
+  { file: 'pkg/Dockerfile', content: 'COPY --from=european_builder /src /app\n' },
   { file: 'pkg/Dockerfile', content: "FROM python:3.11-slim\n# Copy the *contents* of the cloned 'comps' directory\n" },
   { file: 'pkg/config.yaml', content: 'comps:\n  path: /opt/tools\n' },
   { file: 'pkg/Makefile', content: 'comps:\n\t@echo build\n' },
@@ -385,13 +417,25 @@ const NEGATIVE_SAMPLES = [
   { file: 'pkg/requirements.txt', content: "# the 'comps' package is banned here\nfastapi==0.141.1\n" },
   { file: 'pkg/app.py', content: '# from comps.chunking import Chunker\n' },
   { file: 'pkg/doc.py', content: '"""Example:\nfrom comps.chunking import Chunker\n"""\n' },
-  { file: 'pkg/legacy.py', content: "LEGACY = None  # was importlib.import_module('comps.core')\n" }
+  { file: 'pkg/legacy.py', content: "LEGACY = None  # was importlib.import_module('comps.core')\n" },
+  // A relative import of a local module named `comps` is not the overlay.
+  { file: 'pkg/relative.py', content: 'from .comps import chunker\n' },
+  // A local module whose name merely starts with the package name.
+  { file: 'pkg/helpers.py', content: 'import os, comps_helpers\n' }
+];
+
+// The module lists Python offers: the package name among others, and an
+// import that follows another statement on the same line.
+const IMPORT_VARIANTS = [
+  { content: 'import os, comps.core\n', rule: 'comps-import:import-statement' },
+  { content: 'import os.path, comps.core as c\n', rule: 'comps-import:import-statement' },
+  { content: 'x = 1; import comps.core\n', rule: 'comps-import:import-statement' }
 ];
 
 // A stray quote that opens no docstring, followed by a REAL import: the
 // import is a coupling, and the quote must not swallow it.
 const STRAY_QUOTE_SAMPLES = {
-  'pkg/prompt.py': 'PROMPT = \'Say """ loudly\'\nimport comps.core\n'
+  'pkg/prompt.py': 'PROMPT = \'Say """ loudly\'\nimport comps.core\n"""\ndoc\n"""\n'
 };
 
 // A package that carries neither coupling: the control of every matrix.
@@ -476,6 +520,15 @@ describe('OPEA-free gate (Story 1.4, FR-20, AD-1)', () => {
         scanFiles(['pkg/mod.py'], (file) => fs.readFileSync(path.join(root, file), 'utf8'))
       );
       expect(violations.map((violation) => violation.rule)).toEqual([`comps-import:${id}`]);
+    }
+  });
+
+  it('detects the module lists Python offers', () => {
+    for (const variant of IMPORT_VARIANTS) {
+      const violations = withTree('opea-free-variant-', { 'pkg/mod.py': variant.content }, (root) =>
+        scanFiles(['pkg/mod.py'], (file) => fs.readFileSync(path.join(root, file), 'utf8'))
+      );
+      expect(violations.map((violation) => violation.rule)).toEqual([variant.rule]);
     }
   });
 
@@ -578,6 +631,12 @@ describe('OPEA-free gate (Story 1.4, FR-20, AD-1)', () => {
       expect(uncoveredFiles([`${entry.path}/*.py`, `${entry.path}/tests/**/*`], files).length).toBeGreaterThan(0);
       // A glob that covers only the root leaves the nested files un-policed.
       expect(uncoveredFiles([`${entry.path}/*`], files).length).toBeGreaterThan(0);
+      // The check reads the job's REAL globs: narrowing them must leave
+      // files uncovered, so a narrowing of the trigger cannot pass unnoticed.
+      const narrowed = entries.map((glob) =>
+        gitlabGlobMatches(glob, `${entry.path}/Dockerfile`) ? `${entry.path}/*.py` : glob
+      );
+      expect(uncoveredFiles(narrowed, files).length).toBeGreaterThan(0);
     }
     // The manifest is an input to the gate too: an MR that moves a package
     // onto the agentic path must run the job in its own pipeline.

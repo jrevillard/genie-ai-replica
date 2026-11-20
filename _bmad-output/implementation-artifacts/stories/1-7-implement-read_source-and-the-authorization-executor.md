@@ -4,7 +4,7 @@ type: 'feature'
 created: '2026-11-20'
 status: 'in-progress'
 route: 'dispatch'
-review_loop_iteration: 0
+review_loop_iteration: 1
 baseline_commit: '2cedec978dc0a9c918f0c6b147206d81757e5900'
 context:
   - '{project-root}/_bmad-output/implementation-artifacts/epic-1-context.md'
@@ -129,7 +129,7 @@ Global code-review, round 1 (high effort, full diff `2cedec978..41e15a5a9`) — 
 
 **Why the legacy content comes from chunks, not the file bytes.** The agent reasons over the corpus text; the corpus is the chunk collection (`{graph}_SOURCE.text`). doc-repo supplies the resolution (the metadata read is the only legacy surface that exists — V04 §2.3) and the chunks supply the content; the serve paths serve raw bytes to humans, not corpus text to a loop.
 
-**Outcome mapping for a read.** Resolution failed → `insufficient_evidence` (no provenance, no content — the absent provenance is the signal). Resolution succeeded but content unavailable → `degraded_availability` (provenance set — the fact that the source resolved is true — content absent; nothing confident about the content is claimed). Both honor "degraded availability reports insufficiency/degradation — never confident data".
+**Outcome mapping for a read.** Resolution failed → `insufficient_evidence` (no provenance, no content — the absent provenance is the signal). Resolution succeeded but content unavailable → `degraded_availability` (provenance set — the fact that the source resolved is true — content absent; nothing confident about the content is claimed). The carve-out (settled in review round 1): an OKF concept's **empty body is available content** — a SUCCESS with `content=""`, not a degradation; only the legacy path (zero chunks) maps empty to degraded. Both honor "degraded availability reports insufficiency/degradation — never confident data".
 
 **Retained evidence and FR-28.** The executor re-validates every call against the context of THAT request; a turn-N+1 context without the target refuses a re-read of turn-N evidence. The visibility of the earlier answer itself (the persisted conversation text) is the ADR's product decision — it stays visible (existing stores, existing owners), while the citation re-resolution goes through the existing serving reads that refuse revoked/fenced sources at view time.
 

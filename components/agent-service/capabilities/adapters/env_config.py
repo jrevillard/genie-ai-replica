@@ -36,6 +36,8 @@ SEARCH_MODE = "vector"
 SEARCH_START = "chunk"
 DISTANCE_STRATEGIES = ("COSINE",)
 FILTER_STRATEGIES = ("AND", "OR")
+# The reranking strategies the record defines (V02 §4.13 table).
+STRATEGIES = ("slice", "threshold", "slice_threshold", "knee_threshold", "adaptive")
 
 
 @dataclass(frozen=True)
@@ -171,13 +173,12 @@ class RerankingConfig:
         falls back to ``slice`` with a warning — what the span (and here the
         log) reports is what the code below it does.
         """
-        strategies = ("slice", "threshold", "slice_threshold", "knee_threshold", "adaptive")
         resolved_default = self.strategy or "slice"
-        if resolved_default not in strategies:
+        if resolved_default not in STRATEGIES:
             if log is not None:
                 log.warning(f"RERANKING_STRATEGY={resolved_default!r} is not a known strategy. Falling back to slice.")
             resolved_default = "slice"
-        if requested and requested in strategies:
+        if requested and requested in STRATEGIES:
             return requested
         if requested and log is not None:
             log.warning(f"Unknown strategy {requested[:64]!r}. Defaulting to {resolved_default}.")

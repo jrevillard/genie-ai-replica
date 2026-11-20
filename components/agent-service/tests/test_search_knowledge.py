@@ -546,11 +546,6 @@ def test_cancellation_propagates_unchanged():
 
 
 # ---------------------------------------------------------------------
-# Boot assembly
-# ---------------------------------------------------------------------
-
-
-# ---------------------------------------------------------------------
 # Review-round-1 regressions
 # ---------------------------------------------------------------------
 
@@ -701,6 +696,11 @@ def test_embedding_budget_uses_the_embed_knobs_not_the_rerank_ones(monkeypatch):
     assert capability._embedding._connect_timeout == 30.0
 
 
+# ---------------------------------------------------------------------
+# Boot assembly
+# ---------------------------------------------------------------------
+
+
 def test_create_requires_both_model_endpoints():
     from capabilities.search_knowledge import SearchKnowledgeCapability as Cap
 
@@ -732,8 +732,3 @@ def test_create_wires_the_contract_surface(monkeypatch):
 
     signature = inspect.signature(capability.search_knowledge)
     assert list(signature.parameters) == ["context", "request", "budget"]
-
-
-# ---------------------------------------------------------------------
-# Boot assembly
-# ---------------------------------------------------------------------

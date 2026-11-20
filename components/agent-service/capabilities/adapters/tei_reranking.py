@@ -32,8 +32,6 @@ from .env_config import AdaptiveConfig, RerankingConfig
 
 logger = logging.getLogger(__name__)
 
-STRATEGIES = ("slice", "threshold", "slice_threshold", "knee_threshold", "adaptive")
-
 
 class RerankerInputTooLongError(Exception):
     """TEI rejected the input as too long (HTTP 422 + Validation error_type).

@@ -6,6 +6,7 @@ Every assertion here is a contract obligation. A test that cannot fail is a
 test that proves nothing, so each one states the behaviour it pins.
 """
 
+import dataclasses
 import inspect
 import typing
 
@@ -84,6 +85,7 @@ def test_every_operation_declares_its_types_outcomes_and_limits(name):
     spec = contract.OPERATION_SPECS[name]
 
     assert spec.name == name
+    assert spec.version == contract.CONTRACT_VERSION
     assert spec.input_type is not None and spec.result_type is not None
     assert spec.outcome_codes
     assert spec.timeout.scope is contract.LimitScope.OPERATION
@@ -342,6 +344,11 @@ def test_a_successful_read_without_a_source_is_refused():
         ReadSourceResult(outcome=OutcomeCode.SUCCESS, content="the concept body")
 
 
+def test_a_successful_read_without_content_is_refused():
+    with pytest.raises(ValidationError):
+        ReadSourceResult(outcome=OutcomeCode.SUCCESS, provenance=an_okf_provenance())
+
+
 def test_a_read_of_a_target_that_does_not_resolve_is_an_insufficiency_without_provenance():
     result = ReadSourceResult(outcome=OutcomeCode.INSUFFICIENT_EVIDENCE)
 
@@ -505,8 +512,12 @@ def test_a_limit_declaration_cannot_be_mutated():
         declaration.breach = contract.LimitBreach.CANCELLED
 
 
-def test_an_operation_spec_is_hashable():
+def test_an_operation_spec_is_hashable_and_frozen():
     assert len({contract.OPERATION_SPECS[name] for name in OperationName}) == 2
+
+    spec = contract.OPERATION_SPECS[OperationName.SEARCH_KNOWLEDGE]
+    with pytest.raises(dataclasses.FrozenInstanceError):
+        spec.version = "9.9"
 
 
 def test_the_error_classes_carry_their_code_on_the_class():

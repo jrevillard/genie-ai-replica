@@ -44,9 +44,11 @@
 //   seen; and the `;` context is the shell's rule, applied to every build
 //   file — in a YAML file a `#` after a `;` is not a comment, and the text
 //   after it is stripped anyway.
-// - A line continuation is crossed only inside a module list (`import os,
-//   <newline> comps.core`); a continuation after `import` or `from`, or
-//   between the keyword and the comma, is not covered.
+// - A line continuation is crossed inside a module list (`import os,
+//   <newline> comps.core`), including an alias in the list (`import os as o,
+//   comps.core`), several continuations in a row, and CRLF line endings; a
+//   continuation after `import` or `from`, or between the keyword and the
+//   comma, is not covered.
 // - Uncommitted files: both the file enumeration and the package enumeration
 //   are the tracked tree (`git ls-files`), exactly what the pipeline checks
 //   out — a local run over an unstaged file, or over a scratch directory
@@ -90,7 +92,7 @@ const COMPS_IMPORT_FORMS = [
   {
     id: 'import-statement',
     pattern:
-      /(?:^|[;\n:])[ \t]*import[ \t]+(?<![a-z0-9_.])(?:[A-Za-z_][\w.]*[ \t]*,[ \t]*(?:\\\n[ \t]*)?)*(?<pkg>comps)(?![a-z0-9_])/dgm,
+      /(?:^|[;\n:])[ \t]*import[ \t]+(?<![a-z0-9_.])(?:[A-Za-z_][\w.]*(?:[ \t]+as[ \t]+[A-Za-z_]\w*)?[ \t]*,[ \t]*(?:\\\r?\n[ \t]*)*)*(?<pkg>comps)(?![a-z0-9_])/dgm,
     at: 'name'
   },
   { id: 'importlib-import-module', pattern: /importlib\.import_module\([ \t]*['"]comps\b/g, at: 'call' },
@@ -237,7 +239,7 @@ function pythonCodeMask(content) {
  * @returns {string} The text with the comments blanked out
  */
 function stripBuildComments(content) {
-  content = content.replace(/\r/g, '');
+  content = content.replace(/\r/g, '\n');
   let out = '';
   let index = 0;
   while (index < content.length) {
@@ -449,10 +451,17 @@ const BUILD_SAMPLES = [
     content: 'export PATH=${PATH#/opt} && pip install opea-comps\n',
     rules: ['opea-pip-install']
   },
-  { file: 'pkg/GNUmakefile', content: 'install:\n\t@echo build\n', rules: [] },
-  // The two Makefile spellings pin both alternatives of the `[Mm]` class and
-  // the suffix variant: revert one alternative and exactly one of the two
-  // samples turns red; revert the suffix and both do.
+  // A lone CR is a line terminator: without the CR-to-LF normalization the
+  // comment line and the install merge into one line and the marker hides.
+  {
+    file: 'pkg/setup.sh',
+    content: '# note\rRUN pip install opea-comps\n',
+    rules: ['opea-pip-install']
+  },
+  { file: 'pkg/GNUmakefile', content: 'install:\n\tpip install opea-comps\n', rules: ['opea-pip-install'] },
+  // Each Makefile spelling carries the same marker: reverting any one
+  // alternative of the family (`GNUmakefile`, a `[Mm]` branch, the suffix
+  // variant) turns exactly its own sample red.
   { file: 'pkg/Makefile.linux', content: 'install:\n\tpip install opea-comps\n', rules: ['opea-pip-install'] },
   { file: 'pkg/makefile.linux', content: 'install:\n\tpip install opea-comps\n', rules: ['opea-pip-install'] }
 ];
@@ -526,7 +535,11 @@ const IMPORT_VARIANTS = [
   { content: 'import os.path, comps.core as c\n', rule: 'comps-import:import-statement' },
   { content: 'x = 1; import comps.core\n', rule: 'comps-import:import-statement' },
   { content: 'if TYPE_CHECKING: import comps.core\n', rule: 'comps-import:import-statement' },
-  { content: 'import os, \\\n    comps.core\n', rule: 'comps-import:import-statement' }
+  { content: 'import os, \\\n    comps.core\n', rule: 'comps-import:import-statement' },
+  { content: 'import os as o, comps.core\n', rule: 'comps-import:import-statement' },
+  { content: 'import os.path as p, comps.core\n', rule: 'comps-import:import-statement' },
+  { content: 'import os, \\\r\n    comps.core\n', rule: 'comps-import:import-statement' },
+  { content: 'import os, \\\n\\\n    comps.core\n', rule: 'comps-import:import-statement' }
 ];
 
 // A stray quote that opens no docstring, followed by a REAL import: the

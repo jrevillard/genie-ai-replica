@@ -13,6 +13,7 @@
 #   opentelemetry-api/sdk                — the tracing/metrics SDK
 #   opentelemetry-exporter-otlp-proto-http — OTLP/HTTP export to the collector
 #   opentelemetry-instrumentation-fastapi — FastAPI request spans
+#   pydantic                              — the typed document capability contract
 #
 # Licence + defaults audit for every pin: docs/dependencies/agent-service-dependency-evidence.json
 # (procedure: docs/dependencies/pre-adoption-checklist.md).

@@ -448,7 +448,13 @@ const BUILD_SAMPLES = [
     file: 'pkg/install.sh',
     content: 'export PATH=${PATH#/opt} && pip install opea-comps\n',
     rules: ['opea-pip-install']
-  }
+  },
+  { file: 'pkg/GNUmakefile', content: 'install:\n\t@echo build\n', rules: [] },
+  // The two Makefile spellings pin both alternatives of the `[Mm]` class and
+  // the suffix variant: revert one alternative or the suffix and exactly one
+  // of the two samples turns red.
+  { file: 'pkg/Makefile.linux', content: 'install:\n\tpip install opea-comps\n', rules: ['opea-pip-install'] },
+  { file: 'pkg/makefile.linux', content: 'install:\n\tpip install opea-comps\n', rules: ['opea-pip-install'] }
 ];
 
 const DEPENDENCY_SAMPLES = [
@@ -466,8 +472,6 @@ const DEPENDENCY_SAMPLES = [
   { file: 'pkg/uv.lock', content: 'name = "comps"\n', rules: ['opea-dependency-entry'] },
   { file: 'pkg/poetry.lock', content: 'name = "opea-comps"\n', rules: ['opea-dependency-entry'] },
   { file: 'pkg/requirements/prod/base.txt', content: 'comps==1.5\n', rules: ['opea-requirement'] },
-  { file: 'pkg/GNUmakefile', content: 'install:\n\t@echo build\n', rules: [] },
-  { file: 'pkg/Makefile.linux', content: 'install:\n\tpip install opea-comps\n', rules: ['opea-pip-install'] },
   { file: 'pkg/requirements/base.txt', content: 'comps==1.5\n', rules: ['opea-requirement'] },
   { file: 'pkg/constraints.txt', content: 'comps==1.5\n', rules: ['opea-requirement'] }
 ];

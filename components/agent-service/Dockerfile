@@ -26,7 +26,10 @@ RUN CACHE_BUST=$CACHE_BUST apt-get update -y -o Acquire::Retries=5 && \
     CACHE_BUST=$CACHE_BUST apt-get upgrade -y --with-new-pkgs --fix-missing -o Acquire::Retries=5 && \
     apt-get clean && rm -rf /var/lib/apt/lists/*
 
+# The capability layer (story 1.6): the port implementation and its adapters
+# are carried into the image beside the service modules.
 COPY app.py tracing.py ./
+COPY capabilities/ ./capabilities/
 
 USER agentsvc
 EXPOSE 8010

@@ -4,7 +4,7 @@ type: 'feature'
 created: '2026-11-19'
 status: 'in-review'
 route: 'dispatch'
-review_loop_iteration: 16
+review_loop_iteration: 18
 baseline_commit: '6c72cd95cccf5ded8b51ba94793dd620f60409a3'
 context:
   - '{project-root}/_bmad-output/implementation-artifacts/epic-1-context.md'
@@ -269,7 +269,13 @@ Fix-review round 12 (`FIX-REVIEW`, correction diff `8fd70d738` → `0c72fefe6`, 
 | # | Finding | Verdict | Disposition |
 |---|---|---|---|
 | I-1 | The round-11 correction re-glued the seam one block lower: the round-11 table's last row sat flush against `## Design Notes` — round-10 M-1's "ends the recurrence class" was false at HEAD | important | **Fixed** — the blank line before the heading restored (verified byte-exact before commit this time) |
-| M-1 | `review_loop_iteration` read 17 against a log of 16 events (the rebuild bumped the counter twice for one round) | minor | **Fixed** — the counter set to 16, matching the log |
+| M-1 | `review_loop_iteration` read 17 against a log of 16 events (the rebuild bumped the counter twice for one round) | minor | **Fixed** — set to 16 (true at that head), then to 18 after the round-13 append, per the convention the f=2 review proved: the counter equals the total round blocks AFTER the head's own append (a reviewer counting before the append and one counting after will disagree by one — both are right at their own head) |
+
+Fix-review round 13 (`FIX-REVIEW`, correction diff `0c72fefe6` → `5181ff3e8`, f=2 of the global-5 chain) — 0 critical, 1 important, 0 minor. The reviewer byte-verified the seam repair (zero glue lines file-wide), traced the counter across 14 consecutive commits (each set it to the total after its own append) and audited the round-12 rows against the actual diff:
+
+| # | Finding | Verdict | Disposition |
+|---|---|---|---|
+| I-1 | The counter read 16 against a log of 17 round blocks at this head — the correction moved the off-by-one from +1 to −1; the round-12 M-1 disposition asserted "matching the log", false at HEAD | important | **Fixed** — the counter set to the convention value (18 at the round-13 head), the round-12 M-1 row amended to record the full sequence |
 
 ## Design Notes
 

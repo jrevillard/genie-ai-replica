@@ -29,10 +29,12 @@ RUN CACHE_BUST=$CACHE_BUST apt-get update -y -o Acquire::Retries=5 && \
 # The capability layer (story 1.6): the port implementation and its adapters
 # are carried into the image beside the service modules. The preparation
 # module (story 1.8) rides beside them: the loop-side query preparation and
-# its vendored language registry.
+# its vendored language registry. The noagent package (story 1.9) rides
+# beside both: config B, the fixed single-pass pipeline.
 COPY app.py tracing.py ./
 COPY capabilities/ ./capabilities/
 COPY preparation/ ./preparation/
+COPY noagent/ ./noagent/
 
 USER agentsvc
 EXPOSE 8010

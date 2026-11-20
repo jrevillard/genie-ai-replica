@@ -173,7 +173,6 @@ Global round 2 (`/code-review` over the whole diff at `f44ed0435`) — 4 importa
 | G-8 | The recorded test count does not match the shipped tree | nit | **Fixed** — the count is the one the current tree produces |
 | G-9 | The manifest is not covered by any schema gate | nit | **Fixed** — the gate pins the manifest's shape: the partition covers every package, the paths are repository-relative without a trailing slash, every entry carries a reason and every path exists |
 
-
 Fix-review round 4 (`FIX-REVIEW`, correction diff `f44ed0435` → `3d81c5c64`) — 0 critical, 2 important, 3 minor:
 
 | # | Finding | Verdict | Disposition |
@@ -183,7 +182,6 @@ Fix-review round 4 (`FIX-REVIEW`, correction diff `f44ed0435` → `3d81c5c64`) �
 | M-1 | The matcher's doc comment over-claims: the bracket classes and the backslash escapes are not modelled | minor | **Fixed** — the doc says so, and notes that the difference is conservative |
 | M-2 | A `#` inside a quoted string still starts a comment in a build file, so a coupling after it on the same line is not seen | minor | **Stated** — the limitation is in the gate's scope note |
 | M-3 | The Review Triage Log lists the rounds out of chronology | minor | **Fixed** — the rounds are in order |
-
 ## Design Notes
 
 - The manifest is JSON because it is data consumed by two kinds of checker (the gate and the human who extends it) and it must stay diffable in a review. The house precedent for the same thing is `scripts/ci/config-parity-allowlist.json`.

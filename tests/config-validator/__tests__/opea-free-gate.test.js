@@ -39,8 +39,11 @@
 // - A Python module that installs the overlay package at RUNTIME (a
 //   subprocess pip install) is not covered: the build markers are read in the
 //   build files, and the import forms cover the import statements.
-// - A `#` inside a quoted string still starts a comment in a build file, so a
-//   coupling written after it on the same line is not seen.
+// - A `#` preceded by whitespace or `;` starts a comment even inside a
+//   quoted string, so a coupling written after it on the same line is not
+//   seen; and the `;` context is the shell's rule, applied to every build
+//   file — in a YAML file a `#` after a `;` is not a comment, and the text
+//   after it is stripped anyway.
 // - Uncommitted files: both the file enumeration and the package enumeration
 //   are the tracked tree (`git ls-files`), exactly what the pipeline checks
 //   out — a local run over an unstaged file, or over a scratch directory
@@ -201,8 +204,9 @@ function pythonCodeMask(content) {
  *
  * The comment syntax is not Python's: in a shell script, a Dockerfile or a
  * YAML file, a `#` starts a comment when it stands at the start of the line
- * or follows a space — not when it sits inside a word (`${PATH#/opt}` is a
- * parameter expansion, `https://host/x#frag` is a URL). No quote is tracked
+ * or follows a space, a tab or a `;` — not when it sits inside a word
+ * (`${PATH#/opt}` is a parameter expansion, `https://host/x#frag` is a
+ * URL). No quote is tracked
  * either: an apostrophe in prose is not a string delimiter in those files,
  * and tracking it would swallow the rest of the file.
  *
@@ -430,8 +434,10 @@ const DEPENDENCY_SAMPLES = [
   { file: 'pkg/Pipfile', content: 'comps = "*"\n', rules: ['opea-requirement'] },
   { file: 'pkg/pyproject.toml', content: 'dependencies = ["comps==1.5"]\n', rules: ['opea-dependency-entry'] },
   { file: 'pkg/pyproject.toml', content: 'dependencies = ["opea-comps==1.5"]\n', rules: ['opea-dependency-entry'] },
+  { file: 'pkg/pyproject.toml', content: 'dependencies = ["genai-comps==1.5"]\n', rules: ['opea-dependency-entry'] },
   { file: 'pkg/setup.cfg', content: 'install_requires = comps\n', rules: ['opea-dependency-entry'] },
   { file: 'pkg/setup.cfg', content: 'install_requires = opea-comps\n', rules: ['opea-dependency-entry'] },
+  { file: 'pkg/setup.cfg', content: 'install_requires = genai-comps\n', rules: ['opea-dependency-entry'] },
   { file: 'pkg/uv.lock', content: 'name = "comps"\n', rules: ['opea-dependency-entry'] },
   { file: 'pkg/requirements/base.txt', content: 'comps==1.5\n', rules: ['opea-requirement'] },
   { file: 'pkg/constraints.txt', content: 'comps==1.5\n', rules: ['opea-requirement'] }

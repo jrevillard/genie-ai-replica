@@ -613,3 +613,15 @@ def test_every_closed_vocabulary_is_declared_breaking():
     assert "adding a provenance variant or a source-ref variant" in breaking
     assert "adding a preparation status" in breaking
     assert "adding a limit scope or a limit breach" in breaking
+
+
+def test_every_semantic_change_is_declared_breaking():
+    """The non-vocabulary breaking clauses are pinned the same way: a semantic
+    change whose clause went missing would silently demote a major change to
+    an unannounced one."""
+    breaking = " ".join(contract.COMPATIBILITY.breaking)
+
+    assert "changing the meaning of an existing field" in breaking
+    assert "changing the carrier, the retry rule or the fallback rule of an outcome code" in breaking
+    assert "changing the carrier or the semantics of a limit declaration" in breaking
+    assert "changing the identity a provenance variant carries" in breaking

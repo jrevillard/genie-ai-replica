@@ -28,15 +28,21 @@ class FakeDb:
 
 
 def adapter(rows):
-    return LegacyChunkAdapter(db_factory=lambda: FakeDb(rows))
+    seen = {}
+
+    def factory():
+        seen["db"] = FakeDb(rows)
+        return seen["db"]
+
+    return LegacyChunkAdapter(db_factory=factory), seen
 
 
 def test_reads_the_graphs_source_collection_with_bound_variables():
-    reader = adapter([{"text": "alpha"}, {"text": "beta"}])
+    reader, seen = adapter([{"text": "alpha"}, {"text": "beta"}])
     content, truncated = asyncio.run(reader.read_chunks("GRAPH", "42", max_chunks=10, max_bytes=10_000))
     assert (content, truncated) == ("alpha\n\nbeta", False)
-    query = reader._db.queries[0]["query"]  # the fake records what ran
-    bind_vars = reader._db.queries[0]["bind_vars"]
+    query = seen["db"].queries[0]["query"]
+    bind_vars = seen["db"].queries[0]["bind_vars"]
     assert "@collection" in query and "doc.file_id == @file_id" in query
     assert bind_vars["@collection"] == "GRAPH_SOURCE"
     assert bind_vars["file_id"] == "42"
@@ -44,22 +50,30 @@ def test_reads_the_graphs_source_collection_with_bound_variables():
     assert "42" not in query
 
 
+def test_missing_or_null_text_row_is_tolerated():
+    """A row whose text is absent rides the AQL answer as None, not missing:
+    ``dict.get(key, default)`` would yield None and crash the join."""
+    reader, _ = adapter([{"text": None}, {"text": "real"}])
+    content, truncated = asyncio.run(reader.read_chunks("GRAPH", "42", max_chunks=10, max_bytes=10_000))
+    assert (content, truncated) == ("\n\nreal", False)
+
+
 def test_chunk_cap_sets_truncated():
-    reader = adapter([{"text": "a"}, {"text": "b"}, {"text": "c"}])
+    reader, _ = adapter([{"text": "a"}, {"text": "b"}, {"text": "c"}])
     content, truncated = asyncio.run(reader.read_chunks("GRAPH", "42", max_chunks=2, max_bytes=10_000))
     assert content == "a\n\nb"
     assert truncated is True
 
 
 def test_byte_budget_truncates():
-    reader = adapter([{"text": "abcdefghij"}])
+    reader, _ = adapter([{"text": "abcdefghij"}])
     content, truncated = asyncio.run(reader.read_chunks("GRAPH", "42", max_chunks=10, max_bytes=4))
     assert content == "abcd"
     assert truncated is True
 
 
 def test_no_chunks_yields_empty_content():
-    reader = adapter([])
+    reader, _ = adapter([])
     content, truncated = asyncio.run(reader.read_chunks("GRAPH", "42", max_chunks=10, max_bytes=100))
     assert content == ""
     assert truncated is False

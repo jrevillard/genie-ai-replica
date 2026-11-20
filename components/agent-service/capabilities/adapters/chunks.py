@@ -26,14 +26,12 @@ class LegacyChunkAdapter:
 
     def __init__(self, db_factory: Callable[[], object]) -> None:
         self._db_factory = db_factory
-        self._db: object | None = None
 
     async def read_chunks(self, graph_name: str, file_id: str, max_chunks: int, max_bytes: int) -> tuple[str, bool]:
         """The chunk texts joined with blank lines, and whether the budget cut them."""
 
         def _run() -> list[dict]:
             db = self._db_factory()
-            self._db = db
             return db.execute(
                 _CHUNKS_AQL,
                 {
@@ -44,7 +42,10 @@ class LegacyChunkAdapter:
             )
 
         rows = await asyncio.to_thread(_run)
-        texts = [row.get("text", "") for row in rows[:max_chunks]]
+        # The AQL shape ``{text: doc.text}`` emits the key with None when the
+        # field is absent — ``dict.get(key, default)`` would then yield None
+        # and crash the join, so coerce explicitly.
+        texts = [row.get("text") or "" for row in rows[:max_chunks]]
         truncated = len(rows) > max_chunks
         content = "\n\n".join(texts)
         encoded = content.encode("utf-8")

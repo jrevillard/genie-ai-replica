@@ -161,7 +161,9 @@ class AuthorizedExecutor:
                 )
         except TimeoutError as error:
             raise TransientError("read_source exceeded its deadline", operation=_AUTHORIZE) from error
-        return self._finalize_read(LegacyFileProvenance(file_id=file_id), content, truncated, budget)
+        return self._finalize_read(
+            LegacyFileProvenance(file_id=file_id), content, truncated, budget, empty_is_degradation=True
+        )
 
     async def _read_okf_concept(self, target: OkfConceptRef, budget: OperationBudget) -> ReadSourceResult:
         validate_repo_id(target.repo_id, operation=_AUTHORIZE)
@@ -191,7 +193,7 @@ class AuthorizedExecutor:
             repo_id=target.repo_id,
             bundle_version=card.get("bundle_version"),
         )
-        return self._finalize_read(provenance, str(card.get("body") or ""), False, budget)
+        return self._finalize_read(provenance, str(card.get("body") or ""), False, budget, empty_is_degradation=False)
 
     # -- result assembly --------------------------------------------------------
 
@@ -201,10 +203,16 @@ class AuthorizedExecutor:
         content: str,
         truncated: bool,
         budget: OperationBudget,
+        *,
+        empty_is_degradation: bool,
     ) -> ReadSourceResult:
-        if not content:
-            # Resolution succeeded, content did not: degradation is reported
-            # as degradation, never as confident data about the content.
+        if not content and empty_is_degradation:
+            # The legacy path: zero chunks means the corpus text is
+            # unavailable (the file resolved but carries no readable text) —
+            # degradation is reported as degradation, never as confident data
+            # about the content. An OKF concept's empty body, by contrast, IS
+            # the source's true content: the caller below reads it as a
+            # successful read of an empty source.
             return ReadSourceResult(outcome=OutcomeCode.DEGRADED_AVAILABILITY, provenance=provenance, content=None)
         encoded = content.encode("utf-8")
         if len(encoded) > budget.max_result_bytes:

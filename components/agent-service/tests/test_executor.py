@@ -199,10 +199,13 @@ def test_okf_read_unresolvable_is_an_insufficiency():
     assert result.provenance is None and result.content is None
 
 
-def test_okf_read_empty_body_is_degraded():
+def test_okf_read_empty_body_is_a_successful_read_of_an_empty_source():
+    """An empty body is the source's true content — a fact, not a failed
+    fetch. Only the legacy path treats an empty content as degradation
+    (zero chunks means the corpus text is unavailable, not empty)."""
     result = asyncio.run(executor(okf=FakeOkf(okf_card(body=""))).read_source(ctx(), okf_target(), BUDGET))
-    assert result.outcome is OutcomeCode.DEGRADED_AVAILABILITY
-    assert result.provenance is not None and result.content is None
+    assert result.outcome is OutcomeCode.SUCCESS
+    assert result.provenance is not None and result.content == ""
 
 
 def test_okf_read_identity_drift_fails_closed():

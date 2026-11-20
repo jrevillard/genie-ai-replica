@@ -42,8 +42,17 @@ class OkfAdapter:
             raise TransientError(
                 f"okf-server concept read failed: {error}", operation=OperationName.READ_SOURCE
             ) from error
-        if status == 200 and isinstance(body, dict):
-            return body
+        if status == 200:
+            if isinstance(body, dict):
+                return body
+            # A 200 whose payload is not an object (an HTML error page from a
+            # proxy) is a payload defect: name the body, not the status — the
+            # status succeeded, and an operator auditing the wrong layer is
+            # worse than no diagnostic at all.
+            raise TransientError(
+                "okf-server concept read served a non-object body on status 200",
+                operation=OperationName.READ_SOURCE,
+            )
         if status in (403, 404):
             return None
         raise TransientError(

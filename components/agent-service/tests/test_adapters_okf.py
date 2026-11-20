@@ -76,3 +76,13 @@ def test_transport_error_is_transient():
     transport = FakeTransport(error=TimeoutError("upstream"))
     with pytest.raises(TransientError):
         asyncio.run(adapter(transport).fetch_concept("r-1", "c", bearer=None))
+
+
+def test_non_object_body_on_200_is_transient_and_names_the_shape():
+    """A 200 with a non-object body (an HTML error page from a proxy) is a
+    transient failure whose message names the body as the defect — the
+    status succeeded; the payload is what is wrong."""
+    transport = FakeTransport(status=200, body="<html>gateway error</html>")
+    with pytest.raises(TransientError) as excinfo:
+        asyncio.run(adapter(transport).fetch_concept("r-1", "c", bearer=None))
+    assert "non-object body" in str(excinfo.value)

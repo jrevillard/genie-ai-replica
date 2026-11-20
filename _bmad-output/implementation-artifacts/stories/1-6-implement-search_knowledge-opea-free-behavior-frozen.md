@@ -133,8 +133,6 @@ None — the scope questions this story raised are settled by the epic-context f
 
 ## Review Triage Log
 
-## Review Triage Log
-
 **Global code-review, round 1** (high effort, full diff `1301b16c7..6b65daac3`, 4 angles run inline, findings reproduced empirically): 4 important + 4 nit, every one fixed in `8304bb078`; none extracted, none refuted.
 
 | Finding | Severity | Disposition |

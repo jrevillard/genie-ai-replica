@@ -415,22 +415,10 @@ def test_cap1_degradation_with_hits_is_degraded_availability(monkeypatch):
 
 
 def test_bm25_failure_with_hits_is_degraded_availability(monkeypatch):
-    rows = [{"key": "c1", "text": "alpha", "score": 0.9, "file_id": "f1"}]
-    selection = (ScoredCandidate(text="alpha", score=0.7, position=0),)
-    reranking = FakeReranking(outcome=RerankOutcome(selection=selection))
-    capability, _e, _r, _f = make_capability(reranking=reranking, rows=rows)
-
-    original_init = __import__(
-        "capabilities.adapters.arango_retrieval", fromlist=["ArangoRetrievalAdapter"]
-    ).ArangoRetrievalAdapter.__init__
-
-    def init_with_degradation(self, db, arango_config, hybrid_config, **kwargs):
-        original_init(self, db, arango_config, hybrid_config, **kwargs)
-        self.bm25_degraded = True
-
-    monkeypatch.setattr("capabilities.adapters.arango_retrieval.ArangoRetrievalAdapter.__init__", init_with_degradation)
+    capability = _capability_with_degraded_adapter(monkeypatch, "bm25_degraded")
     result = asyncio.run(capability.search_knowledge(context(), prepared(), BUDGET))
     assert result.outcome == OutcomeCode.DEGRADED_AVAILABILITY
+    assert len(result.hits) == 1
 
 
 # ---------------------------------------------------------------------

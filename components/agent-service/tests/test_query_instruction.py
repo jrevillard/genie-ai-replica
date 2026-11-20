@@ -29,8 +29,11 @@ def _expected_instruction() -> str:
     return fixtures["expectations"]["behaviors"]["query_instruction"]["expected_output"]["resolved_instruction"]
 
 
-def test_recorded_default_model_resolves_the_recorded_instruction():
+def test_recorded_default_model_resolves_the_recorded_instruction(monkeypatch):
     """The deployed model (default, no overrides) resolves the recorded instruction."""
+    # The default resolution is env-independent: a host carrying its own
+    # TEI_EMBED_MODEL must not turn this into a spurious failure.
+    monkeypatch.delenv("TEI_EMBED_MODEL", raising=False)
     assert resolve_embed_model() == DEFAULT_EMBED_MODEL == "BAAI/bge-large-en-v1.5"
     assert get_query_instruction(resolve_embed_model(), overrides_raw="") == _expected_instruction()
 

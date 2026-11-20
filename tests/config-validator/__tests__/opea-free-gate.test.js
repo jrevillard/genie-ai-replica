@@ -73,12 +73,13 @@ const CI_JOB = 'config:validate';
 const COMPS_IMPORT_FORMS = [
   {
     id: 'from-import',
-    pattern: /(?:^|[;\n])[ \t]*from[ \t]+(?<![a-z0-9_.])(comps)(?![a-z0-9_])/gm,
+    pattern: /(?:^|[;\n:])[ \t]*from[ \t]+(?<![a-z0-9_.])(?<pkg>comps)(?![a-z0-9_])/dgm,
     at: 'name'
   },
   {
     id: 'import-statement',
-    pattern: /(?:^|[;\n])[ \t]*import[ \t]+(?<![a-z0-9_.])(?:[A-Za-z_][\w.]*[ \t]*,[ \t]*)*(comps)(?![a-z0-9_])/gm,
+    pattern:
+      /(?:^|[;\n:])[ \t]*import[ \t]+(?<![a-z0-9_.])(?:[A-Za-z_][\w.]*[ \t]*,[ \t]*)*(?<pkg>comps)(?![a-z0-9_])/dgm,
     at: 'name'
   },
   { id: 'importlib-import-module', pattern: /importlib\.import_module\([ \t]*['"]comps\b/g, at: 'call' },
@@ -119,7 +120,7 @@ const OPEA_BUILD_MARKERS = [
   { id: 'opea-vendored-payload', pattern: /--from=[^\s]+[^\n]*\/comps\// },
   { id: 'opea-copied-payload', pattern: /\b(?:cp|rsync|mv)\b[^\n]*\/comps(?![a-z0-9._-])/ },
   { id: 'opea-pythonpath', pattern: /PYTHONPATH[^\n]*\/comps(?![a-z0-9._-])/ },
-  { id: 'opea-pip-install', pattern: /\bpip3?[ \t]+install\b[^\n]*\bcomps\b/ }
+  { id: 'opea-pip-install', pattern: /\bpip3?[ \t]+install\b[^\n]*(?<![a-z0-9._-])comps(?![a-z0-9._-])/ }
 ];
 
 /**
@@ -136,7 +137,7 @@ const OPEA_DEPENDENCY_MARKERS = [
   {
     id: 'opea-dependency-entry',
     pattern:
-      /["'](?:genai-)?comps(?![a-z0-9._-])(?:\[[^\]]*\])?[ \t]*(?:==|>=|<=|~=|!=|<|>|[ \t]*@|["'][ \t]*(?:,|\]|\))|["'][ \t]*$)|^[ \t]*(?:install_requires|requires)[ \t]*=[ \t]*[^#\n]*?(?<![a-z0-9_])comps(?![a-z0-9_])/im
+      /["'](?:genai-)?comps(?![a-z0-9._-])(?:\[[^\]]*\])?[ \t]*(?:==|>=|<=|~=|!=|<|>|[ \t]*@|["'][ \t]*(?:,|\]|\))|["'][ \t]*$)|^[ \t]*(?:install_requires|requires)[ \t]*=[ \t]*[^#\n]*?(?<![a-z0-9._-])comps(?![a-z0-9._-])/im
   }
 ];
 
@@ -213,7 +214,7 @@ function analyse(content) {
  */
 function importsInCode(content, mask, form) {
   for (const match of content.matchAll(form.pattern)) {
-    const offset = form.at === 'name' ? match.index + match[0].lastIndexOf(match[1]) : match.index;
+    const offset = form.at === 'name' ? match.indices.groups.pkg[0] : match.index;
     if (mask[offset]) {
       return true;
     }
@@ -414,6 +415,9 @@ const NEGATIVE_SAMPLES = [
   { file: 'pkg/config.yaml', content: 'comps:\n  path: /opt/tools\n' },
   { file: 'pkg/Makefile', content: 'comps:\n\t@echo build\n' },
   { file: 'pkg/install.sh', content: 'export PYTHONPATH=/opt/comps-tools\n' },
+  // A package whose name merely starts with the overlay's name.
+  { file: 'pkg/Dockerfile', content: 'RUN pip install --no-cache-dir comps-tools\n' },
+  { file: 'pkg/setup.cfg', content: 'install_requires = comps-tools\n' },
   { file: 'pkg/requirements.txt', content: "# the 'comps' package is banned here\nfastapi==0.141.1\n" },
   { file: 'pkg/app.py', content: '# from comps.chunking import Chunker\n' },
   { file: 'pkg/doc.py', content: '"""Example:\nfrom comps.chunking import Chunker\n"""\n' },
@@ -429,7 +433,8 @@ const NEGATIVE_SAMPLES = [
 const IMPORT_VARIANTS = [
   { content: 'import os, comps.core\n', rule: 'comps-import:import-statement' },
   { content: 'import os.path, comps.core as c\n', rule: 'comps-import:import-statement' },
-  { content: 'x = 1; import comps.core\n', rule: 'comps-import:import-statement' }
+  { content: 'x = 1; import comps.core\n', rule: 'comps-import:import-statement' },
+  { content: 'if TYPE_CHECKING: import comps.core\n', rule: 'comps-import:import-statement' }
 ];
 
 // A stray quote that opens no docstring, followed by a REAL import: the
@@ -626,20 +631,22 @@ describe('OPEA-free gate (Story 1.4, FR-20, AD-1)', () => {
     for (const entry of agentPathPackages(readManifest())) {
       const files = trackedFilesUnder(entry.path);
       expect(uncoveredFiles(entries, files)).toEqual([]);
+      // AND one glob of the job must cover the WHOLE package. A set that
+      // covers the root files in one glob and the nested files in another
+      // leaves the rest of the package un-policed the day a new file lands
+      // outside the two directories it happens to cover.
+      expect(entries.some((glob) => files.every((file) => gitlabGlobMatches(glob, file)))).toBe(true);
       // A glob set that covers the root files in one and the nested files in
       // another leaves the rest of the package un-policed.
       expect(uncoveredFiles([`${entry.path}/*.py`, `${entry.path}/tests/**/*`], files).length).toBeGreaterThan(0);
       // A glob that covers only the root leaves the nested files un-policed.
       expect(uncoveredFiles([`${entry.path}/*`], files).length).toBeGreaterThan(0);
-      // The check reads the job's REAL globs: narrowing them must leave
-      // files uncovered, so a narrowing of the trigger cannot pass unnoticed.
-      const narrowed = entries.map((glob) =>
-        gitlabGlobMatches(glob, `${entry.path}/Dockerfile`) ? `${entry.path}/*.py` : glob
-      );
-      expect(uncoveredFiles(narrowed, files).length).toBeGreaterThan(0);
     }
     // The manifest is an input to the gate too: an MR that moves a package
     // onto the agentic path must run the job in its own pipeline.
     expect(entries).toContain(MANIFEST_REPO_PATH);
+    // The globs are the JOB'S OWN, parsed from the pipeline file: the job
+    // must run the gate that lives in its own tree.
+    expect(uncoveredFiles(entries, ['tests/config-validator/__tests__/opea-free-gate.test.js'])).toEqual([]);
   });
 });

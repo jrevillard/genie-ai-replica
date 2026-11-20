@@ -1326,7 +1326,7 @@ export default {
     scopeNotNameable:
       'مشكلة في الإعداد: النطاق المحدد لا يحمل اسمًا بالإنجليزية في التسلسل الهرمي للمعرفة، لذلك لا يمكن تحديد نطاق الاستعلام. لم يتم إرسال الاستعلام.',
     placeholder: 'اكتب استفسارك هنا...',
-    composerPlaceholder: 'اطرح سؤالاً...',
+    composerPlaceholder: 'اطرح سؤالاً، استكشف المعرفة...',
     composerAttachTitle: 'المرفقات غير متاحة بعد',
     composerMicTitle: 'الإدخال الصوتي غير متاح بعد',
     composerSendTitle: 'إرسال',

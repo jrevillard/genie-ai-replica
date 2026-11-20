@@ -4,7 +4,7 @@ type: 'feature'
 created: '2026-11-19'
 status: 'in-review'
 route: 'dispatch'
-review_loop_iteration: 6
+review_loop_iteration: 7
 baseline_commit: '6c72cd95cccf5ded8b51ba94793dd620f60409a3'
 context:
   - '{project-root}/_bmad-output/implementation-artifacts/epic-1-context.md'
@@ -182,6 +182,12 @@ Fix-review round 4 (`FIX-REVIEW`, correction diff `f44ed0435` → `3d81c5c64`) �
 | M-1 | The matcher's doc comment over-claims: the bracket classes and the backslash escapes are not modelled | minor | **Fixed** — the doc says so, and notes that the difference is conservative |
 | M-2 | A `#` inside a quoted string still starts a comment in a build file, so a coupling after it on the same line is not seen | minor | **Stated** — the limitation is in the gate's scope note |
 | M-3 | The Review Triage Log lists the rounds out of chronology | minor | **Fixed** — the rounds are in order |
+
+Fix-review round 5 (`FIX-REVIEW`, correction diff `c0d9f4c84` → `919c09b5c`) — 0 critical, 0 important, 1 minor:
+
+| # | Finding | Verdict | Disposition |
+|---|---|---|---|
+| 1 | The log does not record this round, and the loop counter counts one round short | minor | **Fixed** — this table and the counter are the record |
 ## Design Notes
 
 - The manifest is JSON because it is data consumed by two kinds of checker (the gate and the human who extends it) and it must stay diffable in a review. The house precedent for the same thing is `scripts/ci/config-parity-allowlist.json`.

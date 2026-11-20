@@ -137,19 +137,16 @@ OUTCOME_POLICIES: dict[OutcomeCode, OutcomePolicy] = {
 
 
 class CapabilityError(Exception):
-    """Base class for the outcomes that are raised rather than reported."""
+    """Base class for the outcomes that are raised rather than reported.
+
+    Each subclass's `code` is its class attribute: the carrier table
+    (`OUTCOME_POLICIES`) and the raised type agree by construction.
+    """
 
     code: OutcomeCode = OutcomeCode.TRANSIENT_FAILURE
 
-    def __init__(
-        self,
-        message: str,
-        *,
-        code: OutcomeCode,
-        operation: OperationName | None = None,
-    ) -> None:
+    def __init__(self, message: str, *, operation: OperationName | None = None) -> None:
         super().__init__(message)
-        self.code = code
         self.operation = operation
 
 
@@ -163,17 +160,11 @@ class AuthorizationError(CapabilityError):
 
     code = OutcomeCode.AUTHORIZATION_FAILURE
 
-    def __init__(self, message: str, *, operation: OperationName | None = None) -> None:
-        super().__init__(message, code=OutcomeCode.AUTHORIZATION_FAILURE, operation=operation)
-
 
 class TransientError(CapabilityError):
     """A dependency failed transiently; no usable result was produced."""
 
     code = OutcomeCode.TRANSIENT_FAILURE
-
-    def __init__(self, message: str, *, operation: OperationName | None = None) -> None:
-        super().__init__(message, code=OutcomeCode.TRANSIENT_FAILURE, operation=operation)
 
 
 class AuthorizedRepo(BaseModel):
@@ -484,39 +475,32 @@ class OperationSpec:
     cancellation: LimitDeclaration
 
 
+def _spec(name: OperationName, input_type: type[BaseModel], result_type: type[BaseModel]) -> OperationSpec:
+    """Build one operation's spec: every operation declares the same outcome
+    vocabulary and the same limit semantics, and gets its own limit
+    declarations — two operations never share a declaration instance."""
+
+    return OperationSpec(
+        name=name,
+        version=CONTRACT_VERSION,
+        input_type=input_type,
+        result_type=result_type,
+        outcome_codes=(
+            OutcomeCode.SUCCESS,
+            OutcomeCode.INSUFFICIENT_EVIDENCE,
+            OutcomeCode.DEGRADED_AVAILABILITY,
+            OutcomeCode.AUTHORIZATION_FAILURE,
+            OutcomeCode.TRANSIENT_FAILURE,
+        ),
+        timeout=LimitDeclaration(scope=LimitScope.OPERATION, breach=LimitBreach.TRANSIENT_FAILURE),
+        result_size=LimitDeclaration(scope=LimitScope.RESULT, breach=LimitBreach.TRUNCATE_AND_FLAG),
+        cancellation=LimitDeclaration(scope=LimitScope.OPERATION, breach=LimitBreach.CANCELLED),
+    )
+
+
 OPERATION_SPECS: dict[OperationName, OperationSpec] = {
-    OperationName.SEARCH_KNOWLEDGE: OperationSpec(
-        name=OperationName.SEARCH_KNOWLEDGE,
-        version=CONTRACT_VERSION,
-        input_type=SearchKnowledgeInput,
-        result_type=SearchKnowledgeResult,
-        outcome_codes=(
-            OutcomeCode.SUCCESS,
-            OutcomeCode.INSUFFICIENT_EVIDENCE,
-            OutcomeCode.DEGRADED_AVAILABILITY,
-            OutcomeCode.AUTHORIZATION_FAILURE,
-            OutcomeCode.TRANSIENT_FAILURE,
-        ),
-        timeout=LimitDeclaration(scope=LimitScope.OPERATION, breach=LimitBreach.TRANSIENT_FAILURE),
-        result_size=LimitDeclaration(scope=LimitScope.RESULT, breach=LimitBreach.TRUNCATE_AND_FLAG),
-        cancellation=LimitDeclaration(scope=LimitScope.OPERATION, breach=LimitBreach.CANCELLED),
-    ),
-    OperationName.READ_SOURCE: OperationSpec(
-        name=OperationName.READ_SOURCE,
-        version=CONTRACT_VERSION,
-        input_type=ReadSourceInput,
-        result_type=ReadSourceResult,
-        outcome_codes=(
-            OutcomeCode.SUCCESS,
-            OutcomeCode.INSUFFICIENT_EVIDENCE,
-            OutcomeCode.DEGRADED_AVAILABILITY,
-            OutcomeCode.AUTHORIZATION_FAILURE,
-            OutcomeCode.TRANSIENT_FAILURE,
-        ),
-        timeout=LimitDeclaration(scope=LimitScope.OPERATION, breach=LimitBreach.TRANSIENT_FAILURE),
-        result_size=LimitDeclaration(scope=LimitScope.RESULT, breach=LimitBreach.TRUNCATE_AND_FLAG),
-        cancellation=LimitDeclaration(scope=LimitScope.OPERATION, breach=LimitBreach.CANCELLED),
-    ),
+    OperationName.SEARCH_KNOWLEDGE: _spec(OperationName.SEARCH_KNOWLEDGE, SearchKnowledgeInput, SearchKnowledgeResult),
+    OperationName.READ_SOURCE: _spec(OperationName.READ_SOURCE, ReadSourceInput, ReadSourceResult),
 }
 
 

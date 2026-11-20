@@ -1,9 +1,7 @@
 # pyproject.toml — agent-service
 # Ruff config mirrors the other Python components (target py311, line-length
 # 120, double quotes; E741 ignored for ML-style single-letter names). The
-# component is not installed as a package: the image copies the runtime files
-# it needs and the CI lane installs requirements-test.txt, which includes the
-# runtime tree.
+# packaging model is declared once at [tool.setuptools] below.
 [project]
 name = "genie-ai-agent-service"
 version = "0.1.0"
@@ -29,9 +27,9 @@ test = [
 packages = []
 
 [tool.pytest.ini_options]
-# The component's modules are imported from the component directory, so the
-# suite resolves `capabilities` (and `app`, `tracing`) whether it is started
-# as `pytest tests/` or as `python -m pytest tests/`.
+# `pythonpath = ["."]` makes the suite resolve `capabilities` (and `app`,
+# `tracing`) whether it is started as `pytest tests/` or as
+# `python -m pytest tests/`.
 pythonpath = ["."]
 
 [tool.ruff]

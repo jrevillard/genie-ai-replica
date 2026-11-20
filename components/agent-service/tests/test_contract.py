@@ -60,9 +60,13 @@ def a_legacy_hit() -> SearchHit:
     return SearchHit(provenance=LegacyFileProvenance(file_id=LEGACY_FILE_ID), text="a passage", score=0.42)
 
 
+def an_okf_provenance() -> OkfConceptProvenance:
+    return OkfConceptProvenance(concept_id=OKF_CONCEPT_ID, repo_id=OKF_REPO_ID, bundle_version=3)
+
+
 def an_okf_hit() -> SearchHit:
     return SearchHit(
-        provenance=OkfConceptProvenance(concept_id=OKF_CONCEPT_ID, repo_id=OKF_REPO_ID, bundle_version=3),
+        provenance=an_okf_provenance(),
         text="a passage",
         score=0.71,
     )
@@ -166,7 +170,7 @@ def test_a_legacy_source_carries_the_file_id_and_no_source_marker():
 
 
 def test_an_okf_source_carries_the_concept_identity_and_the_source_marker():
-    provenance = OkfConceptProvenance(concept_id=OKF_CONCEPT_ID, repo_id=OKF_REPO_ID, bundle_version=3)
+    provenance = an_okf_provenance()
 
     assert provenance.source == "okf-concept"
     assert provenance.concept_id == OKF_CONCEPT_ID
@@ -325,7 +329,7 @@ def test_the_search_result_reports_the_preparation_status():
 def test_a_successful_read_carries_the_provenance_and_the_content():
     result = ReadSourceResult(
         outcome=OutcomeCode.SUCCESS,
-        provenance=OkfConceptProvenance(concept_id=OKF_CONCEPT_ID, repo_id=OKF_REPO_ID, bundle_version=3),
+        provenance=an_okf_provenance(),
         content="the concept body",
     )
 
@@ -463,7 +467,7 @@ def test_an_insufficiency_carries_no_source():
     with pytest.raises(ValidationError):
         ReadSourceResult(
             outcome=OutcomeCode.INSUFFICIENT_EVIDENCE,
-            provenance=OkfConceptProvenance(concept_id=OKF_CONCEPT_ID, repo_id=OKF_REPO_ID, bundle_version=3),
+            provenance=an_okf_provenance(),
             content="the concept body",
         )
 

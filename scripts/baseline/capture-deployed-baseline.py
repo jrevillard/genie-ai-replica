@@ -1962,6 +1962,9 @@ def render_markdown(data):
     add(
         f"- **Source compared against:** the chart source in this repository, version "
         f"{capture['local_chart_version']}"
+        if not capture.get("chart_source_incomplete")
+        else "- **Source compared against:** not established - the chart source in "
+        "this repository is incomplete"
     )
     add(f"- **Overlay values:** `{capture['overlay_name']}`")
     add(f"- **Release health:** {capture['release_health']}")
@@ -1980,8 +1983,9 @@ def render_markdown(data):
     if capture.get("chart_source_incomplete"):
         add(
             "**The chart source in this repository is incomplete**: the comparisons "
-            "against it were NOT made - no difference was measured, and none is "
-            "reported below."
+            "against it were NOT made - no configuration and no model difference "
+            "was measured, and none is reported below. The image digests and the "
+            "topology do not read the chart source and are reported as usual."
         )
         add("")
 

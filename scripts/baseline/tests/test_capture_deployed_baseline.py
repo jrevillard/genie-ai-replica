@@ -1520,8 +1520,8 @@ def test_a_release_payload_of_the_wrong_shape_fails_closed(monkeypatch):
         assert identity["status"] == "UNRESOLVED", payload
 
 
-def test_a_release_history_without_a_deployed_revision_fails_closed(monkeypatch):
-    """No deployed revision: the chart the deployment runs is not attested."""
+def test_a_deployed_revision_without_a_chart_version_fails_closed(monkeypatch):
+    """A deployed revision the history names no chart version for: not attested."""
     monkeypatch.setattr(
         capture,
         "kubectl_json",
@@ -1582,18 +1582,20 @@ def test_the_chart_source_of_this_checkout_is_complete():
     assert capture.chart_source_complete() is True
 
 
+@pytest.mark.parametrize("missing", ["Chart.yaml", "Chart.lock", "values.yaml"])
 def test_the_chart_source_guard_covers_every_file_the_comparison_reads(
-    monkeypatch,
+    missing, monkeypatch
 ):
-    """Dropping a file from the guard would let an incomplete source through."""
+    """Dropping any file from the guard would let an incomplete source through."""
     import os as os_module
 
     real_exists = os_module.path.exists
+    suffix = os.path.join("genieai-umbrella", missing)
 
-    def without_values(path):
-        if str(path).endswith(os.path.join("genieai-umbrella", "values.yaml")):
+    def without_it(path):
+        if str(path).endswith(suffix):
             return False
         return real_exists(path)
 
-    monkeypatch.setattr(capture.os.path, "exists", without_values)
+    monkeypatch.setattr(capture.os.path, "exists", without_it)
     assert capture.chart_source_complete() is False

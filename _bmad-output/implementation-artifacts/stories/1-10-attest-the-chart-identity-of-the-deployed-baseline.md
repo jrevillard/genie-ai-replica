@@ -113,6 +113,11 @@ context:
 | 32 | scoped review f=3 | Minor | the commit LOCATOR prose was printed for an UNRESOLVED identity, referring to a commit line that was not printed | **fixed** — the prose belongs to the commit line |
 | 33 | scoped review f=3 | Minor | "Chart the deployment runs: not established" was applied to every UNRESOLVED cause, discarding a chart version the release history really does establish | **fixed** — the line names the chart whenever the history establishes it |
 | 34 | scoped review f=3 | Minor | the chart-source predicate's test exercised only the happy path, so dropping `values.yaml` from the guard would not redden the suite | **fixed** — the guard's coverage is pinned |
+| 35 | scoped review f=4 | Important | the chart-source guard's test faked only `values.yaml`, so dropping `Chart.yaml` or `Chart.lock` from the guard left the suite green — the defect class rows 22 and 24 exist to prevent was unpinned | **fixed** — the guard is pinned per file |
+| 36 | scoped review f=4 | Minor | the test named "no deployed revision" exercised the "deployed revision with no chart version" branch | **fixed** — the test is named for the branch it exercises |
+| 37 | scoped review f=4 | Minor | `capture_models()` — the probe of the served model ids — sat inside the chart-source guard although it reads nothing from the source | **not a defect** — the model table compares the served ids with the chart source's defaults, so it IS a comparison against the source; when the source is incomplete the capture fails (exit 2) and the operator re-runs on a complete checkout. Probing without a table to put the answer in would be work the record cannot use |
+| 38 | scoped review f=4 | Minor | the header still said "Source compared against: the chart source in this repository" while the banner said the comparisons were not made | **fixed** — the header says "not established" |
+| 39 | scoped review f=4 | Minor | the banner said "no difference was measured, and none is reported below", while the image table still reports digest differences | **fixed** — the banner names what was not measured (configuration and models) and says the image digests and the topology are reported as usual |
 
 ## Design Notes
 

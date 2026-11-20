@@ -69,8 +69,7 @@
       "defaults": {
         "telemetry": "none - the package performs no telemetry of its own",
         "cloud_export": "none - the package contacts no external service"
-      },
-      "note": "Ships the Mozilla CA bundle; the wheel's licence file is the CA-bundle notice, the MPL-2.0 licence text comes from the project metadata of that exact version."
+      }
     },
     {
       "name": "charset-normalizer",
@@ -83,8 +82,7 @@
       "defaults": {
         "telemetry": "none - the package performs no telemetry of its own",
         "cloud_export": "none - the package contacts no external service"
-      },
-      "note": "Charset detection runs locally; the package contacts nothing."
+      }
     },
     {
       "name": "click",
@@ -123,8 +121,7 @@
       "defaults": {
         "telemetry": "none - the package performs no telemetry of its own",
         "cloud_export": "none - the package contacts no external service"
-      },
-      "note": "The `fastapi` CLI prints a sponsor banner when it starts a server (a message on stdout, not a network call); the library itself sends nothing."
+      }
     },
     {
       "name": "googleapis-common-protos",
@@ -137,8 +134,7 @@
       "defaults": {
         "telemetry": "none - the package performs no telemetry of its own",
         "cloud_export": "none - the package contacts no external service"
-      },
-      "note": "Generated protobuf definitions; they open no connection."
+      }
     },
     {
       "name": "h11",
@@ -151,6 +147,19 @@
       "defaults": {
         "telemetry": "none - the package performs no telemetry of its own",
         "cloud_export": "none - the package contacts no external service"
+      }
+    },
+    {
+      "name": "httpcore",
+      "version": "1.0.9",
+      "license": "BSD-3-Clause",
+      "license_source": "pypi:license_expression (https://pypi.org/pypi/httpcore/1.0.9/json)",
+      "verified": true,
+      "status": "stable",
+      "risk_acceptance": null,
+      "defaults": {
+        "telemetry": "none - the package performs no telemetry of its own",
+        "cloud_export": "none - the package contacts no external service \u2014 it is a pure HTTP/1.1+HTTP/2 transport core; it only talks to the URL the caller hands it"
       }
     },
     {
@@ -193,6 +202,32 @@
       }
     },
     {
+      "name": "kneed",
+      "version": "0.9.0",
+      "license": "BSD-3-Clause",
+      "license_source": "artifact:kneed-0.9.0.tar.gz#licence:kneed-0.9.0/LICENSE sha256:262b008491cfbdd69f323a2d1e712344665c63b741c54f8adc496e01fc502b78",
+      "verified": true,
+      "status": "stable",
+      "risk_acceptance": null,
+      "defaults": {
+        "telemetry": "none - the package performs no telemetry of its own",
+        "cloud_export": "none - the package contacts no external service \u2014 offline knee-point detection over in-memory arrays"
+      }
+    },
+    {
+      "name": "numpy",
+      "version": "1.26.4",
+      "license": "BSD-2-Clause",
+      "license_source": "artifact:numpy-1.26.4.tar.gz#licence:numpy-1.26.4/.spin/LICENSE sha256:990e6a6dbaee82e655163c3d2a51d1002471e5c0964da4881bc193eaa6a8ee3b",
+      "verified": true,
+      "status": "stable",
+      "risk_acceptance": null,
+      "defaults": {
+        "telemetry": "none - the package performs no telemetry of its own",
+        "cloud_export": "none - the package contacts no external service \u2014 offline numeric computing"
+      }
+    },
+    {
       "name": "opentelemetry-api",
       "version": "1.27.0",
       "license": "Apache-2.0",
@@ -216,8 +251,7 @@
       "defaults": {
         "telemetry": "none - the package performs no telemetry of its own",
         "cloud_export": "none - the package contacts no external service"
-      },
-      "note": "Shared wire format of the OTLP/HTTP exporters; it opens no connection of its own."
+      }
     },
     {
       "name": "opentelemetry-exporter-otlp-proto-http",
@@ -230,8 +264,7 @@
       "defaults": {
         "telemetry": "none by default - the exporter is inert until a provider and an endpoint are configured",
         "cloud_export": "only the OTLP endpoint the deployment configures (the in-cluster collector); it never contacts a vendor endpoint"
-      },
-      "note": "The only package in the tree that opens a connection: it exports spans and metrics to the OTLP endpoint the deployment configures."
+      }
     },
     {
       "name": "opentelemetry-instrumentation",
@@ -296,8 +329,7 @@
       "defaults": {
         "telemetry": "none - the package performs no telemetry of its own",
         "cloud_export": "none - the package contacts no external service"
-      },
-      "note": "The SDK does not phone home; the exporter it wraps does what the deployment configures."
+      }
     },
     {
       "name": "opentelemetry-semantic-conventions",
@@ -326,6 +358,19 @@
       }
     },
     {
+      "name": "packaging",
+      "version": "26.3",
+      "license": "Apache-2.0 OR BSD-2-Clause",
+      "license_source": "pypi:license_expression (https://pypi.org/pypi/packaging/26.3/json)",
+      "verified": true,
+      "status": "stable",
+      "risk_acceptance": null,
+      "defaults": {
+        "telemetry": "none - the package performs no telemetry of its own",
+        "cloud_export": "none - the package contacts no external service \u2014 offline version/specifier parsing"
+      }
+    },
+    {
       "name": "protobuf",
       "version": "4.25.9",
       "license": "BSD-2-Clause",
@@ -336,8 +381,7 @@
       "defaults": {
         "telemetry": "none - the package performs no telemetry of its own",
         "cloud_export": "none - the package contacts no external service"
-      },
-      "note": "Serialises and deserialises; it opens no connection."
+      }
     },
     {
       "name": "pydantic",
@@ -363,8 +407,20 @@
       "defaults": {
         "telemetry": "none - the package performs no telemetry of its own",
         "cloud_export": "none - the package contacts no external service"
-      },
-      "note": "Ships a compiled Rust binary (a manylinux wheel); the licence is MIT and the binary performs no network access."
+      }
+    },
+    {
+      "name": "pyjwt",
+      "version": "2.15.1",
+      "license": "MIT",
+      "license_source": "pypi:license_expression (https://pypi.org/pypi/pyjwt/2.15.1/json)",
+      "verified": true,
+      "status": "stable",
+      "risk_acceptance": null,
+      "defaults": {
+        "telemetry": "none - the package performs no telemetry of its own",
+        "cloud_export": "none - the package contacts no external service \u2014 offline JWT encoding/decoding; it contacts no token endpoint"
+      }
     },
     {
       "name": "pytest",
@@ -380,6 +436,19 @@
       }
     },
     {
+      "name": "python-arango",
+      "version": "8.3.7",
+      "license": "MIT",
+      "license_source": "artifact:python_arango-8.3.7.tar.gz#licence:python_arango-8.3.7/LICENSE sha256:7bce9ae249057cc06ea1f7c29f844b990182d8b52a36cefc8b99e912c2756f92",
+      "verified": true,
+      "status": "stable",
+      "risk_acceptance": null,
+      "defaults": {
+        "telemetry": "none - the package performs no telemetry of its own",
+        "cloud_export": "none by default \u2014 it talks only to the ArangoDB server the ARANGO_URL knob names (a deployment-internal address); it contacts no third-party service"
+      }
+    },
+    {
       "name": "requests",
       "version": "2.34.2",
       "license": "Apache-2.0",
@@ -390,8 +459,33 @@
       "defaults": {
         "telemetry": "none - the package performs no telemetry of its own",
         "cloud_export": "none - the package contacts no external service"
-      },
-      "note": "Talks to the endpoint the caller names; the agent service makes no outbound call yet."
+      }
+    },
+    {
+      "name": "requests-toolbelt",
+      "version": "1.0.0",
+      "license": "Apache-2.0",
+      "license_source": "pypi:classifier 'License :: OSI Approved :: Apache Software License' (https://pypi.org/pypi/requests-toolbelt/1.0.0/json)",
+      "verified": true,
+      "status": "stable",
+      "risk_acceptance": null,
+      "defaults": {
+        "telemetry": "none - the package performs no telemetry of its own",
+        "cloud_export": "none - the package contacts no external service \u2014 request-helper utilities over the caller-provided session"
+      }
+    },
+    {
+      "name": "scipy",
+      "version": "1.17.1",
+      "license": "BSD-2-Clause",
+      "license_source": "artifact:scipy-1.17.1.tar.gz#licence:scipy-1.17.1/LICENSE.txt sha256:221e59f5e910fd7f94e44f0dac77436a11338c285c6346232e4a850a50da0e94",
+      "verified": true,
+      "status": "stable",
+      "risk_acceptance": null,
+      "defaults": {
+        "telemetry": "none - the package performs no telemetry of its own",
+        "cloud_export": "none - the package contacts no external service \u2014 offline scientific computing"
+      }
     },
     {
       "name": "setuptools",
@@ -404,8 +498,7 @@
       "defaults": {
         "telemetry": "none - the package performs no telemetry of its own",
         "cloud_export": "none - the package contacts no external service"
-      },
-      "note": "A build-time dependency of the resolved tree; the service runtime never imports it."
+      }
     },
     {
       "name": "starlette",
@@ -457,8 +550,7 @@
       "defaults": {
         "telemetry": "none - the package performs no telemetry of its own",
         "cloud_export": "none - the package contacts no external service"
-      },
-      "note": "Talks to the endpoint the caller names; the agent service makes no outbound call yet."
+      }
     },
     {
       "name": "uvicorn",
@@ -499,7 +591,5 @@
         "cloud_export": "none - the package contacts no external service"
       }
     }
-  ],
-  "generated": "2026-11-19",
-  "defaults_audit": "NFR-2 defaults audit, per package and for the exact version pinned: does the package send telemetry by default, and does it export data to a cloud service by default. The verdicts are a human reading of the package's own behaviour, not of its documentation."
+  ]
 }

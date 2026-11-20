@@ -39,6 +39,8 @@
 // - A Python module that installs the overlay package at RUNTIME (a
 //   subprocess pip install) is not covered: the build markers are read in the
 //   build files, and the import forms cover the import statements.
+// - A `#` inside a quoted string still starts a comment in a build file, so a
+//   coupling written after it on the same line is not seen.
 // - Uncommitted files: both the file enumeration and the package enumeration
 //   are the tracked tree (`git ls-files`), exactly what the pipeline checks
 //   out — a local run over an unstaged file, or over a scratch directory
@@ -212,7 +214,7 @@ function stripBuildComments(content) {
   let index = 0;
   while (index < content.length) {
     const char = content[index];
-    if (char === '#' && (index === 0 || content[index - 1] === '\n' || content[index - 1] === ' ')) {
+    if (char === '#' && (index === 0 || /[\n\t ;]/.test(content[index - 1]))) {
       while (index < content.length && content[index] !== '\n') {
         out += ' ';
         index += 1;
@@ -399,6 +401,8 @@ const BUILD_SAMPLES = [
   { file: 'pkg/Dockerfile', content: 'ARG UPSTREAM_IMAGE=opea/embedding:1.5\n', rules: ['opea-base-image'] },
   { file: 'pkg/Dockerfile', content: 'COPY --from=comps_builder /src /app\n', rules: ['opea-vendored-stage'] },
   { file: 'pkg/Dockerfile', content: 'FROM python:3.11-slim AS comps_base_builder\n', rules: ['opea-overlay-stage'] },
+  // The comment after the stage name must not break the end-anchored marker.
+  { file: 'pkg/Dockerfile', content: 'FROM base AS comps-stage;# build\n', rules: ['opea-overlay-stage'] },
   {
     file: 'pkg/Dockerfile',
     content: 'COPY --from=builder /src/comps/ /app/comps/\n',
@@ -408,6 +412,7 @@ const BUILD_SAMPLES = [
   { file: 'pkg/Dockerfile', content: 'ENV PYTHONPATH=/app/comps\n', rules: ['opea-pythonpath'] },
   { file: 'pkg/Dockerfile', content: 'RUN pip install --no-cache-dir comps\n', rules: ['opea-pip-install'] },
   { file: 'pkg/Dockerfile', content: 'RUN pip install --no-cache-dir opea-comps==1.5\n', rules: ['opea-pip-install'] },
+  { file: 'pkg/Dockerfile', content: 'RUN pip install --no-cache-dir genai-comps==1.5\n', rules: ['opea-pip-install'] },
   // A `#` inside a word is not a comment: the parameter expansion must not
   // hide the install that follows it.
   {
@@ -420,10 +425,13 @@ const BUILD_SAMPLES = [
 const DEPENDENCY_SAMPLES = [
   { file: 'pkg/requirements.txt', content: 'comps==1.5\n', rules: ['opea-requirement'] },
   { file: 'pkg/requirements.txt', content: 'opea-comps==1.5\n', rules: ['opea-requirement'] },
+  { file: 'pkg/requirements.txt', content: 'genai-comps==1.5\n', rules: ['opea-requirement'] },
   { file: 'pkg/requirements.txt', content: '  comps==1.5\n', rules: ['opea-requirement'] },
   { file: 'pkg/Pipfile', content: 'comps = "*"\n', rules: ['opea-requirement'] },
   { file: 'pkg/pyproject.toml', content: 'dependencies = ["comps==1.5"]\n', rules: ['opea-dependency-entry'] },
+  { file: 'pkg/pyproject.toml', content: 'dependencies = ["opea-comps==1.5"]\n', rules: ['opea-dependency-entry'] },
   { file: 'pkg/setup.cfg', content: 'install_requires = comps\n', rules: ['opea-dependency-entry'] },
+  { file: 'pkg/setup.cfg', content: 'install_requires = opea-comps\n', rules: ['opea-dependency-entry'] },
   { file: 'pkg/uv.lock', content: 'name = "comps"\n', rules: ['opea-dependency-entry'] },
   { file: 'pkg/requirements/base.txt', content: 'comps==1.5\n', rules: ['opea-requirement'] },
   { file: 'pkg/constraints.txt', content: 'comps==1.5\n', rules: ['opea-requirement'] }
@@ -440,6 +448,11 @@ const NEGATIVE_SAMPLES = [
   // Only the dependency-file restriction can kill this one: the requirement
   // marker matches the line, and the file is not a dependency file.
   { file: 'pkg/Dockerfile', content: 'comps==1.5\n' },
+  // A tab-indented comment is a comment: the rule must not invent a
+  // violation out of it.
+  { file: 'pkg/install.sh', content: '\t# pip install opea-comps\n' },
+  // A `;` ends a shell command: the comment that follows it is a comment.
+  { file: 'pkg/install.sh', content: 'export PATH=/opt;# pip install opea-comps\n' },
   // Only the version operator can kill this one: the name is at the start of
   // the line of a dependency file, and it declares nothing.
   { file: 'pkg/requirements.txt', content: 'comps: see the overlay\n' },

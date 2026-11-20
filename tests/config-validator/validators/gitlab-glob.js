@@ -18,6 +18,11 @@ const { escapeRegExp } = require('./js-files');
  *   ends with a slash and a star (`**` then `*`).
  * - `{a,b}` expands into alternatives (FNM_EXTGLOB).
  *
+ * The bracket classes (`[...]`) and the backslash escapes are NOT modelled:
+ * no glob in the pipeline uses them, and the difference is conservative —
+ * the matcher matches less, so a gate reports a file as uncovered rather
+ * than certifying a trigger GitLab would not honour.
+ *
  * A gate that pins its own pipeline trigger must know what a glob really
  * matches: a matcher that reads `**` as "zero or more segments" certifies a
  * trigger GitLab will not honour.

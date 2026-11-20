@@ -4,7 +4,7 @@ type: 'feature'
 created: '2026-11-19'
 status: 'in-review'
 route: 'dispatch'
-review_loop_iteration: 5
+review_loop_iteration: 6
 baseline_commit: '6c72cd95cccf5ded8b51ba94793dd620f60409a3'
 context:
   - '{project-root}/_bmad-output/implementation-artifacts/epic-1-context.md'
@@ -82,7 +82,7 @@ context:
 - **The package name has three spellings.** The module is `comps`, the published distribution is `opea-comps` (PyPI, 1.5) and `genai-comps` is the legacy spelling of the same package (404 on PyPI today). The dependency markers accept all three; the import markers only know the module name, because the module name is what Python imports.
 - **The glob matcher speaks the dialect `rules:changes` uses.** GitLab matches with Ruby's `File.fnmatch` under FNM_PATHNAME | FNM_DOTMATCH | FNM_EXTGLOB: a `**` component followed by a slash stands for zero or more directories, a trailing `**` is an ordinary star (ONE segment), `?` is a single character and `{a,b}` expands. Reading `**` as "zero or more segments" would certify a trigger GitLab does not honour — `components/agent-service/**` covers the files directly under the package, not its subdirectories — so the matcher implements the Ruby rules and a case pins each of them.
 - **The build-time markers are the real forms**, taken from the overlay's own Dockerfiles: the OPEA source tree (`GenAIComps`/`GenAIExamples`, from any mirror) and the OPEA organisation (`opea-project/…`), the clone knobs (`ARG OPEA_*_URL`, `ARG OPEA_*_VERSION`), an `opea/*` image under any registry (including the banned `opea/translation:1.3`, and the `ARG UPSTREAM_IMAGE=opea/…` shape the overlay uses), a stage named after the overlay (`AS comps_base_builder` — the name must carry `comps` or `opea` as a word, so `AS european_base` is not one), a vendored stage (`COPY --from=opea_base …`) or payload (`…/comps/`, copied by `COPY` or by `cp`/`rsync`/`mv`), a `comps` path on `PYTHONPATH`, a `pip install … comps`, and a dependency declaration naming it (a requirements, constraints, lock or packaging file: `comps==1.5`, `"comps"` in a dependency array, `install_requires = comps`).
-- **The build files are read with their own comment rule.** A `#` starts a comment in a shell script, a Dockerfile or a YAML file when it stands at the start of a line or after a space — not inside a word (`${PATH#/opt}` is a parameter expansion). No quote is tracked there either: an apostrophe in YAML prose is not a string delimiter, and tracking it would swallow the rest of the file and report a commented-out reference as a live one. Python keeps its own rule: a `#` starts a comment anywhere outside a string, and a string is tracked by its quotes.
+- **The build files are read with their own comment rule.** A `#` starts a comment in a shell script, a Dockerfile or a YAML file when it stands at the start of a line or after a space, a tab or a `;` — not inside a word (`${PATH#/opt}` is a parameter expansion). No quote is tracked there either: an apostrophe in YAML prose is not a string delimiter, and tracking it would swallow the rest of the file and report a commented-out reference as a live one. Python keeps its own rule: a `#` starts a comment anywhere outside a string, and a string is tracked by its quotes.
 - **The build markers are read with their comments stripped, and the dependency markers only in dependency files.** A Dockerfile comment that mentions the overlay, a YAML key named `comps`, a Makefile target and a tools directory called `comps-tools` are not dependencies — the markers would fire on them if the raw text were matched. A dependency declaration is a different matter: the name of the overlay package in a requirements, constraints, lock or packaging file IS a dependency, and it is reported there and nowhere else. The name must carry a version operator (or be the whole entry) to be a declaration: `comps: see the overlay` is a mention.
 - **Build files only for the build markers.** The markers are searched in the package's build inputs (`Dockerfile*`, `requirements*.txt|in` including nested directories, `constraints*.txt`, `uv.lock`, `Pipfile*`, `pyproject.toml`, `setup.py|cfg`, `Makefile`, `*.sh`, `*.yml|yaml`), never in prose: a README that mentions an OPEA image is documentation, not a dependency.
 - **The enumeration is the tracked tree** (`git ls-files`), exactly what the pipeline checks out — for the files AND for the package directories, so a scratch directory a developer left under `components/` is not a package. A file that is not staged is not scanned — noted in the gate's scope note so a local run is not mistaken for a pipeline result.
@@ -148,6 +148,17 @@ Fix-review round 2 (`FIX-REVIEW`, correction diff `9cbdbb07a` → `65a3fccf3`) �
 | m3 | `setup.cfg`'s `install_requires = comps` is not detected | minor | **Fixed** — the dependency-entry marker also accepts an unquoted name in a dependency assignment |
 | m4 | `ARG UPSTREAM_IMAGE=opea/…` — a shape the story names — had no sample | minor | **Fixed** — the sample exists |
 
+Fix-review round 3 (`FIX-REVIEW`, correction diff `65a3fccf3` → `009599e9b`) — 0 critical, 1 important, 5 minor:
+
+| # | Finding | Verdict | Disposition |
+|---|---|---|---|
+| I-3 | The trigger assertion of the previous round cannot fail for the defect it answers: a glob set that covers the root in one glob and the nested files in another passes the check, and a synthetic glob set satisfies it as readily as the job's real one | important | **Fixed** — the job must now have ONE glob that covers every tracked file of the package (the split is red), the check must read the job's real globs (the gate's own file must be covered by them), and the redundant narrowing assertion was dropped |
+| m1 | `opea-pip-install` has no word boundary: `pip install comps-tools` is flagged | minor | **Fixed** — the boundary matches its siblings; a negative sample pins it |
+| m2 | The dependency-assignment form accepts a name that merely contains `comps` (`comps-tools`) | minor | **Fixed** — the boundary matches its siblings; a negative sample pins it |
+| m3 | A colon-introduced statement (`if TYPE_CHECKING: import comps.core`) is not detected | minor | **Fixed** — the statement anchor carries the colon; a sample pins it |
+| m4 | The story's pinning claims are stronger than the code | minor | **Fixed** — the notes now state what is pinned and what cannot be (an assertion cannot pin itself) |
+| m5 | The package-name offset is computed with a search over the match, which a later pattern edit could break silently | minor | **Fixed** — the offset comes from the match indices (`d` flag, named group) |
+
 Global round 2 (`/code-review` over the whole diff at `f44ed0435`) — 4 important, 5 nit:
 
 | # | Finding | Verdict | Disposition |
@@ -162,16 +173,16 @@ Global round 2 (`/code-review` over the whole diff at `f44ed0435`) — 4 importa
 | G-8 | The recorded test count does not match the shipped tree | nit | **Fixed** — the count is the one the current tree produces |
 | G-9 | The manifest is not covered by any schema gate | nit | **Fixed** — the gate pins the manifest's shape: the partition covers every package, the paths are repository-relative without a trailing slash, every entry carries a reason and every path exists |
 
-Fix-review round 3 (`FIX-REVIEW`, correction diff `65a3fccf3` → `009599e9b`) — 0 critical, 1 important, 5 minor:
+
+Fix-review round 4 (`FIX-REVIEW`, correction diff `f44ed0435` → `3d81c5c64`) — 0 critical, 2 important, 3 minor:
 
 | # | Finding | Verdict | Disposition |
 |---|---|---|---|
-| I-3 | The trigger assertion of the previous round cannot fail for the defect it answers: a glob set that covers the root in one glob and the nested files in another passes the check, and a synthetic glob set satisfies it as readily as the job's real one | important | **Fixed** — the job must now have ONE glob that covers every tracked file of the package (the split is red), the check must read the job's real globs (the gate's own file must be covered by them), and the redundant narrowing assertion was dropped |
-| m1 | `opea-pip-install` has no word boundary: `pip install comps-tools` is flagged | minor | **Fixed** — the boundary matches its siblings; a negative sample pins it |
-| m2 | The dependency-assignment form accepts a name that merely contains `comps` (`comps-tools`) | minor | **Fixed** — the boundary matches its siblings; a negative sample pins it |
-| m3 | A colon-introduced statement (`if TYPE_CHECKING: import comps.core`) is not detected | minor | **Fixed** — the statement anchor carries the colon; a sample pins it |
-| m4 | The story's pinning claims are stronger than the code | minor | **Fixed** — the notes now state what is pinned and what cannot be (an assertion cannot pin itself) |
-| m5 | The package-name offset is computed with a search over the match, which a later pattern edit could break silently | minor | **Fixed** — the offset comes from the match indices (`d` flag, named group) |
+| I-1 | The build-comment rule accepts only a space before the `#`: a tab-indented comment is read as text (a false violation out of a comment) and a comment after a stage name breaks the end-anchored marker (a lost match) | important | **Fixed** — a space, a tab and a `;` are comment contexts; a tab-indented comment is a sample |
+| I-2 | Two spellings were not pinned: the dependency-entry marker could lose `opea-` and the pip marker could lose `genai-` with the suite green | important | **Fixed** — a sample per spelling: `opea-comps` in a dependency array, `genai-comps` in a requirements file, `opea-comps` in an `install_requires` assignment, `genai-comps` under `pip install` |
+| M-1 | The matcher's doc comment over-claims: the bracket classes and the backslash escapes are not modelled | minor | **Fixed** — the doc says so, and notes that the difference is conservative |
+| M-2 | A `#` inside a quoted string still starts a comment in a build file, so a coupling after it on the same line is not seen | minor | **Stated** — the limitation is in the gate's scope note |
+| M-3 | The Review Triage Log lists the rounds out of chronology | minor | **Fixed** — the rounds are in order |
 
 ## Design Notes
 

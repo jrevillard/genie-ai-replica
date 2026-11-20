@@ -27,9 +27,12 @@ RUN CACHE_BUST=$CACHE_BUST apt-get update -y -o Acquire::Retries=5 && \
     apt-get clean && rm -rf /var/lib/apt/lists/*
 
 # The capability layer (story 1.6): the port implementation and its adapters
-# are carried into the image beside the service modules.
+# are carried into the image beside the service modules. The preparation
+# module (story 1.8) rides beside them: the loop-side query preparation and
+# its vendored language registry.
 COPY app.py tracing.py ./
 COPY capabilities/ ./capabilities/
+COPY preparation/ ./preparation/
 
 USER agentsvc
 EXPOSE 8010

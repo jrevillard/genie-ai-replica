@@ -19,6 +19,11 @@
 #                                            the test tree (same audited pin, story 1.6)
 #   kneed                                 — the knee_threshold selection strategy; the SAME pin
 #                                            the deployed reranker serves (behavior frozen to V02)
+#   langdetect                            — the language detection of the preparation module
+#                                            (story 1.8); the SAME pin the deployed overlay
+#                                            serves (dataprep requirements-cpu.txt), unseeded in
+#                                            production exactly as deployed
+#   six                                   — langdetect's tree (its only dependency)
 #   numpy / scipy                         — kneed's tree (scipy) + the adaptive selection math;
 #                                            numpy pinned to the deployed reranker's 1.26.4
 #
@@ -41,6 +46,7 @@ httpx==0.28.1
 idna==3.20
 importlib-metadata==8.4.0
 kneed==0.9.0
+langdetect==1.0.9
 numpy==1.26.4
 opentelemetry-api==1.27.0
 opentelemetry-exporter-otlp-proto-common==1.27.0
@@ -68,6 +74,7 @@ scipy==1.17.1
 # instrumentation package fails to import and the request spans silently
 # never appear (verified in a venv built from the exact pins).
 setuptools==81.0.0
+six==1.17.0
 starlette==1.10.0
 typing-extensions==4.16.0
 typing-inspection==0.4.5

@@ -341,10 +341,8 @@ class _RightSidebarComponentState extends ConsumerState<RightSidebarComponent> {
       debugPrint('sidebar.citation browse repo=$repoId concept=$conceptId');
       Navigator.of(context).push(
         MaterialPageRoute<void>(
-          builder: (_) => ConceptBrowserScreen(
-            repoId: repoId,
-            initialConceptId: conceptId,
-          ),
+          builder: (_) =>
+              ConceptBrowserScreen(repoId: repoId, initialConceptId: conceptId),
         ),
       );
       return;
@@ -464,7 +462,6 @@ class _RightSidebarComponentState extends ConsumerState<RightSidebarComponent> {
             // answer's sources bar and the sidebar's citation rows (the Vue
             // citizen surface's own entries; the typed-repo-id prompt that
             // stood in for them is gone with them landed).
-
             Expanded(
               child: SingleChildScrollView(
                 padding: const EdgeInsets.all(DsSpacing.md),
@@ -780,45 +777,45 @@ class _RightSidebarComponentState extends ConsumerState<RightSidebarComponent> {
         child: Material(
           type: MaterialType.transparency,
           child: ExpansionTile(
-          title: MarkdownBody(
-            data: item['question'] ?? '',
-            styleSheet: MarkdownStyleSheet(
-              p: TextStyle(
-                fontSize: tokens.textSm,
-                fontWeight: FontWeight.w600,
-                color: tokens.fg,
-              ),
-            ),
-          ),
-          iconColor: tokens.fg50,
-          collapsedIconColor: tokens.fg50,
-          backgroundColor: isDark ? tokens.fg30 : tokens.muted20,
-          childrenPadding: const EdgeInsets.fromLTRB(
-            DsSpacing.md,
-            0,
-            DsSpacing.md,
-            DsSpacing.md,
-          ),
-          children: [
-            MarkdownBody(
-              data: item['answer'] ?? '',
+            title: MarkdownBody(
+              data: item['question'] ?? '',
               styleSheet: MarkdownStyleSheet(
                 p: TextStyle(
                   fontSize: tokens.textSm,
-                  color: tokens.fg70,
-                  height: 1.4,
+                  fontWeight: FontWeight.w600,
+                  color: tokens.fg,
                 ),
               ),
-              onTapLink: (text, href, title) {
-                if (href != null) {
-                  launchUrl(
-                    Uri.parse(href),
-                    mode: LaunchMode.externalApplication,
-                  );
-                }
-              },
             ),
-          ],
+            iconColor: tokens.fg50,
+            collapsedIconColor: tokens.fg50,
+            backgroundColor: isDark ? tokens.fg30 : tokens.muted20,
+            childrenPadding: const EdgeInsets.fromLTRB(
+              DsSpacing.md,
+              0,
+              DsSpacing.md,
+              DsSpacing.md,
+            ),
+            children: [
+              MarkdownBody(
+                data: item['answer'] ?? '',
+                styleSheet: MarkdownStyleSheet(
+                  p: TextStyle(
+                    fontSize: tokens.textSm,
+                    color: tokens.fg70,
+                    height: 1.4,
+                  ),
+                ),
+                onTapLink: (text, href, title) {
+                  if (href != null) {
+                    launchUrl(
+                      Uri.parse(href),
+                      mode: LaunchMode.externalApplication,
+                    );
+                  }
+                },
+              ),
+            ],
           ),
         ),
       ),

@@ -289,25 +289,19 @@ void main() {
         service.dispose();
       });
 
-      test(
-        'treats as offline when DNS times out',
-        () async {
-          final fakeProvider = FakeConnectivityProvider(
-            ConnectivityResult.none,
-          );
-          final service = ConnectivityService.test(
-            provider: fakeProvider,
-            dnsLookup: dnsTimeout,
-          );
-          service.setUserOfflineMode(false);
+      test('treats as offline when DNS times out', () async {
+        final fakeProvider = FakeConnectivityProvider(ConnectivityResult.none);
+        final service = ConnectivityService.test(
+          provider: fakeProvider,
+          dnsLookup: dnsTimeout,
+        );
+        service.setUserOfflineMode(false);
 
-          await service.recheckConnectivity();
+        await service.recheckConnectivity();
 
-          expect(service.isOnline, isFalse);
-          service.dispose();
-        },
-        timeout: const Timeout(Duration(seconds: 5)),
-      );
+        expect(service.isOnline, isFalse);
+        service.dispose();
+      }, timeout: const Timeout(Duration(seconds: 5)));
     });
 
     group('dispose lifecycle', () {

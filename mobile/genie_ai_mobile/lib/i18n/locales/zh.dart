@@ -1075,5 +1075,5 @@ const Map<String, dynamic> zhLocale = {
     "filesLabel": "文件",
     "filterHint": "筛选文件",
     "indexBadge": "index",
-},
+  },
 };

@@ -1178,7 +1178,8 @@ const Map<String, dynamic> idLocale = {
       'Selamat datang! Bagaimana saya bisa membantu Anda hari ini?',
   "okfBrowser": {
     "title": "Jelajahi repositori",
-    "currentNotice": "Menampilkan yang terindeks saat ini — belum tentu versi yang dikutip.",
+    "currentNotice":
+        "Menampilkan yang terindeks saat ini — belum tentu versi yang dikutip.",
     "selectHint": "Pilih konsep dari pohon untuk membacanya di sini.",
     "showMore": "Tampilkan lebih banyak",
     "back": "Kembali",
@@ -1193,5 +1194,5 @@ const Map<String, dynamic> idLocale = {
     "filesLabel": "Berkas",
     "filterHint": "Saring berkas",
     "indexBadge": "index",
-},
+  },
 };

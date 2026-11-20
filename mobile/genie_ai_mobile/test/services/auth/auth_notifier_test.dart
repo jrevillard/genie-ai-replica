@@ -323,8 +323,7 @@ void main() {
       expect(await tokenStorage.getAccessToken(), isNull);
     });
 
-    test(
-        'a concurrent caller waits for the in-flight refresh (#2019) — it '
+    test('a concurrent caller waits for the in-flight refresh (#2019) — it '
         'must not complete before the token request has resolved', () async {
       await tokenStorage.saveTokens(
         accessToken: 'old-at',
@@ -664,9 +663,7 @@ void main() {
       expect(stateAfter.status, equals(AuthStatus.authenticated));
       // No refresh token call should have been made
       expect(
-        recordingLogger.events.any(
-          (e) => e.contains('TokenRefresher.refresh'),
-        ),
+        recordingLogger.events.any((e) => e.contains('TokenRefresher.refresh')),
         isFalse,
       );
       c.dispose();

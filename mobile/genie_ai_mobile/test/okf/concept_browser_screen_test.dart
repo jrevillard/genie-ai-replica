@@ -391,9 +391,7 @@ void main() {
     'a failed card fetch keeps the tree and the error clears on the next read',
     (tester) async {
       fake.pagesByRepo['repo-a'] = page(2, [row('c1'), row('c2')]);
-      fake.cardsByRepo['repo-a'] = {
-        'c2': card('repo-a', 'c2'),
-      };
+      fake.cardsByRepo['repo-a'] = {'c2': card('repo-a', 'c2')};
       fake.cardThrows['c1'] = Exception('backend 500');
       await pumpBrowser(tester);
       await tester.tap(find.text('Title c1'));
@@ -455,7 +453,10 @@ void main() {
       await pumpBrowser(tester);
       await tester.tap(find.text('Title c1'));
       await tester.pump();
-      expect(find.byKey(const ValueKey('okf-browser-chip-beta')), findsOneWidget);
+      expect(
+        find.byKey(const ValueKey('okf-browser-chip-beta')),
+        findsOneWidget,
+      );
       await tester.tap(find.byKey(const ValueKey('okf-browser-chip-beta')));
       await tester.pump();
       expect(
@@ -493,10 +494,7 @@ void main() {
       // The catch ran in real time; the toast renders on the next frame.
       await tester.pump();
       await tester.pump();
-      expect(
-        find.text(tr('okfBrowser.downloadFailed')),
-        findsOneWidget,
-      );
+      expect(find.text(tr('okfBrowser.downloadFailed')), findsOneWidget);
       await tester.pump(const Duration(seconds: 5));
     },
   );

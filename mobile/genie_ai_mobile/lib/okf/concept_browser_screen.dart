@@ -303,8 +303,7 @@ class _ConceptBrowserScreenState extends ConsumerState<ConceptBrowserScreen> {
     Iterable<ConceptTreeRow> visible = rows;
     if (query.isNotEmpty) {
       visible = rows.where((r) {
-        final hay =
-            '${r.title ?? ''} ${r.conceptId}'.toLowerCase();
+        final hay = '${r.title ?? ''} ${r.conceptId}'.toLowerCase();
         return hay.contains(query);
       });
     }
@@ -322,8 +321,9 @@ class _ConceptBrowserScreenState extends ConsumerState<ConceptBrowserScreen> {
     }
     return [
       _TreeLine(indexRow, depth: 0, isRoot: true),
-      if (_treeExpanded)
-        ...[for (final r in rest) _TreeLine(r, depth: 1, isRoot: false)],
+      if (_treeExpanded) ...[
+        for (final r in rest) _TreeLine(r, depth: 1, isRoot: false),
+      ],
     ];
   }
 
@@ -383,10 +383,7 @@ class _ConceptBrowserScreenState extends ConsumerState<ConceptBrowserScreen> {
               ),
               child: Text(
                 tr('okfBrowser.indexBadge'),
-                style: TextStyle(
-                  color: tokens.accent,
-                  fontSize: tokens.textXs,
-                ),
+                style: TextStyle(color: tokens.accent, fontSize: tokens.textXs),
               ),
             ),
           ],
@@ -414,10 +411,7 @@ class _ConceptBrowserScreenState extends ConsumerState<ConceptBrowserScreen> {
             Expanded(
               child: Text(
                 row.title ?? row.conceptId,
-                style: TextStyle(
-                  color: tokens.fg,
-                  fontSize: tokens.textBase,
-                ),
+                style: TextStyle(color: tokens.fg, fontSize: tokens.textBase),
               ),
             ),
           ],

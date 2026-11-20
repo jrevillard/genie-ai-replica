@@ -1,6 +1,5 @@
 import 'dart:async';
 
-
 import 'package:flutter_appauth/flutter_appauth.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/widgets.dart';
@@ -28,7 +27,8 @@ AuthorizationServiceConfiguration _serviceConfiguration(OidcEndpoints e) =>
 enum _FailedOperation { none, authorize, refreshToken, validateTokens }
 
 class AuthNotifier extends Notifier<AuthState> with WidgetsBindingObserver {
-  static const Duration refreshTokenTimeout = TokenRefresher.refreshTokenTimeout;
+  static const Duration refreshTokenTimeout =
+      TokenRefresher.refreshTokenTimeout;
   static const Duration discoveryTimeout = TokenRefresher.discoveryTimeout;
 
   late final TokenStorage _tokenStorage;

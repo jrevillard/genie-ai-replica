@@ -118,8 +118,7 @@ class _AnswerSourcesBarState extends State<AnswerSourcesBar> {
                           color: badge.tone == 'accent'
                               ? tokens.accentMuted
                               : tokens.mutedSoft,
-                          borderRadius:
-                              BorderRadius.circular(DsRadii.sm),
+                          borderRadius: BorderRadius.circular(DsRadii.sm),
                         ),
                         child: Text(
                           badge.label,
@@ -143,11 +142,7 @@ class _AnswerSourcesBarState extends State<AnswerSourcesBar> {
                           overflow: TextOverflow.ellipsis,
                         ),
                       ),
-                      Icon(
-                        Icons.chevron_right,
-                        size: 16,
-                        color: tokens.muted,
-                      ),
+                      Icon(Icons.chevron_right, size: 16, color: tokens.muted),
                     ],
                   ),
                 ),

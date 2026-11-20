@@ -16,13 +16,16 @@ void main() {
       expect(isOkfConceptSource(doc), isTrue);
     });
 
-    test('raw shape without the marker but with concept_id is an okf source', () {
-      final doc = <String, dynamic>{
-        'document_id': 'doc-x',
-        'concept_id': 'doc-x',
-      };
-      expect(isOkfConceptSource(doc), isTrue);
-    });
+    test(
+      'raw shape without the marker but with concept_id is an okf source',
+      () {
+        final doc = <String, dynamic>{
+          'document_id': 'doc-x',
+          'concept_id': 'doc-x',
+        };
+        expect(isOkfConceptSource(doc), isTrue);
+      },
+    );
 
     test('mapped camelCase shape with conceptId is an okf source', () {
       final doc = <String, dynamic>{
@@ -61,10 +64,7 @@ void main() {
         isTrue,
       );
       expect(
-        canBrowseSource(<String, dynamic>{
-          'conceptId': 'c1',
-          'repoId': 'r1',
-        }),
+        canBrowseSource(<String, dynamic>{'conceptId': 'c1', 'repoId': 'r1'}),
         isTrue,
       );
     });
@@ -101,15 +101,18 @@ void main() {
   });
 
   group('sourceBadge', () {
-    test('an okf concept badges as OKF/accent (never an extension fallback)', () {
-      final badge = sourceBadge(<String, dynamic>{
-        'source': 'okf-concept',
-        'document_name': 'hadith nawawi 36',
-        'concept_id': 'hadith-nawawi-36',
-      });
-      expect(badge.label, 'OKF');
-      expect(badge.tone, 'accent');
-    });
+    test(
+      'an okf concept badges as OKF/accent (never an extension fallback)',
+      () {
+        final badge = sourceBadge(<String, dynamic>{
+          'source': 'okf-concept',
+          'document_name': 'hadith nawawi 36',
+          'concept_id': 'hadith-nawawi-36',
+        });
+        expect(badge.label, 'OKF');
+        expect(badge.tone, 'accent');
+      },
+    );
 
     test('a document with an extension badges by extension', () {
       final badge = sourceBadge(<String, dynamic>{
@@ -131,35 +134,20 @@ void main() {
 
   group('shape-tolerant getters', () {
     test('citationRepoId reads repo_id and repoId', () {
-      expect(
-        citationRepoId(<String, dynamic>{'repo_id': 'r1'}),
-        'r1',
-      );
-      expect(
-        citationRepoId(<String, dynamic>{'repoId': 'r2'}),
-        'r2',
-      );
+      expect(citationRepoId(<String, dynamic>{'repo_id': 'r1'}), 'r1');
+      expect(citationRepoId(<String, dynamic>{'repoId': 'r2'}), 'r2');
       expect(citationRepoId(<String, dynamic>{}), isNull);
     });
 
-    test('citationConceptId reads concept_id, conceptId and id/document_id', () {
-      expect(
-        citationConceptId(<String, dynamic>{'concept_id': 'c1'}),
-        'c1',
-      );
-      expect(
-        citationConceptId(<String, dynamic>{'conceptId': 'c2'}),
-        'c2',
-      );
-      expect(
-        citationConceptId(<String, dynamic>{'id': 'c3'}),
-        'c3',
-      );
-      expect(
-        citationConceptId(<String, dynamic>{'document_id': 'c4'}),
-        'c4',
-      );
-    });
+    test(
+      'citationConceptId reads concept_id, conceptId and id/document_id',
+      () {
+        expect(citationConceptId(<String, dynamic>{'concept_id': 'c1'}), 'c1');
+        expect(citationConceptId(<String, dynamic>{'conceptId': 'c2'}), 'c2');
+        expect(citationConceptId(<String, dynamic>{'id': 'c3'}), 'c3');
+        expect(citationConceptId(<String, dynamic>{'document_id': 'c4'}), 'c4');
+      },
+    );
 
     test('sourceTitle reads document_name then document_id then title', () {
       expect(
@@ -170,10 +158,7 @@ void main() {
         sourceTitle(<String, dynamic>{'document_id': 'nawawi-36'}),
         'nawawi-36',
       );
-      expect(
-        sourceTitle(<String, dynamic>{'title': 'Nawawi'}),
-        'Nawawi',
-      );
+      expect(sourceTitle(<String, dynamic>{'title': 'Nawawi'}), 'Nawawi');
     });
   });
 }

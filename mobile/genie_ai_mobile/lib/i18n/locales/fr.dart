@@ -1194,8 +1194,10 @@ const Map<String, dynamic> frLocale = {
   'welcomeMessage': 'Bienvenue ! Comment puis-je vous aider aujourd\'hui ?',
   "okfBrowser": {
     "title": "Parcourir le dépôt",
-    "currentNotice": "Affiche ce qui est indexé actuellement — pas nécessairement la version citée.",
-    "selectHint": "Sélectionnez un concept dans la vue arborescente pour le lire ici.",
+    "currentNotice":
+        "Affiche ce qui est indexé actuellement — pas nécessairement la version citée.",
+    "selectHint":
+        "Sélectionnez un concept dans la vue arborescente pour le lire ici.",
     "showMore": "Afficher plus",
     "back": "Retour",
     "forward": "Avancer",
@@ -1209,5 +1211,5 @@ const Map<String, dynamic> frLocale = {
     "filesLabel": "Fichiers",
     "filterHint": "Filtrer les fichiers",
     "indexBadge": "index",
-},
+  },
 };

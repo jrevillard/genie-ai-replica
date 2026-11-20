@@ -51,9 +51,9 @@ String? extractSub(String? idToken) {
   try {
     final parts = idToken.split('.');
     if (parts.length != 3) return null;
-    final payload = utf8.decode(base64Url.decode(base64Url.normalize(
-      parts[1],
-    )));
+    final payload = utf8.decode(
+      base64Url.decode(base64Url.normalize(parts[1])),
+    );
     return (jsonDecode(payload) as Map<String, dynamic>)['sub'] as String?;
   } catch (_) {
     return null;

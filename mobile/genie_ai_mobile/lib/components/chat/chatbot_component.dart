@@ -2337,10 +2337,8 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
       debugPrint('chat.citation browse repo=$repoId concept=$conceptId');
       Navigator.of(context).push(
         MaterialPageRoute<void>(
-          builder: (_) => ConceptBrowserScreen(
-            repoId: repoId,
-            initialConceptId: conceptId,
-          ),
+          builder: (_) =>
+              ConceptBrowserScreen(repoId: repoId, initialConceptId: conceptId),
         ),
       );
       return;
@@ -2355,9 +2353,9 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
       return;
     }
     debugPrint('chat.citation unavailable ${citationLogTag(doc)}');
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(tr('chatbot.sourceUnavailable'))),
-    );
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(tr('chatbot.sourceUnavailable'))));
   }
 
   // ===========================================================================
@@ -2616,10 +2614,10 @@ class ChatBotComponentState extends ConsumerState<ChatBotComponent> {
                                 (msg['sources'] as List?)?.isNotEmpty == true)
                               AnswerSourcesBar(
                                 sources: msg['sources'] as List,
-                                labelBuilder: (n) =>
-                                    tr('chatbot.sourcesBarLabel', args: {
-                                  'n': n,
-                                }),
+                                labelBuilder: (n) => tr(
+                                  'chatbot.sourcesBarLabel',
+                                  args: {'n': n},
+                                ),
                                 onOpen: _openCitation,
                               ),
 

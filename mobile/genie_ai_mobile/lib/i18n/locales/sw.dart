@@ -1184,7 +1184,8 @@ const Map<String, dynamic> swLocale = {
   'welcomeMessage': 'Karibu! Ninawezaje kusaidia leo?',
   "okfBrowser": {
     "title": "Vinjari ghala",
-    "currentNotice": "Inaonyesha kilichopangwa kwa faharasa sasa — si lazima liwe toleo lililotajwa.",
+    "currentNotice":
+        "Inaonyesha kilichopangwa kwa faharasa sasa — si lazima liwe toleo lililotajwa.",
     "selectHint": "Chagua dhana kutoka kwenye mti kuisoma hapa.",
     "showMore": "Onyesha zaidi",
     "back": "Nyuma",
@@ -1199,5 +1200,5 @@ const Map<String, dynamic> swLocale = {
     "filesLabel": "Faili",
     "filterHint": "Chuja faili",
     "indexBadge": "index",
-},
+  },
 };

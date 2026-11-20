@@ -1192,7 +1192,8 @@ const Map<String, dynamic> deLocale = {
   'welcomeMessage': 'Willkommen! Wie kann ich Ihnen heute helfen?',
   "okfBrowser": {
     "title": "Repository durchsuchen",
-    "currentNotice": "Zeigt, was aktuell indexiert ist — nicht notwendigerweise die zitierte Version.",
+    "currentNotice":
+        "Zeigt, was aktuell indexiert ist — nicht notwendigerweise die zitierte Version.",
     "selectHint": "Wähle ein Konzept aus dem Baum, um es hier zu lesen.",
     "showMore": "Mehr anzeigen",
     "back": "Zurück",
@@ -1207,5 +1208,5 @@ const Map<String, dynamic> deLocale = {
     "filesLabel": "Dateien",
     "filterHint": "Dateien filtern",
     "indexBadge": "index",
-},
+  },
 };

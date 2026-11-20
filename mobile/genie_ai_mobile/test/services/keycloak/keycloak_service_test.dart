@@ -145,10 +145,14 @@ void main() {
         // succeeded through the configured keycloakUrl origin, so the
         // advertised endpoints are rewritten to THAT origin (paths kept).
         final localhostDoc = {
-          'authorization_endpoint': 'https://localhost/auth/realms/genie/protocol/openid-connect/auth',
-          'token_endpoint': 'https://localhost/auth/realms/genie/protocol/openid-connect/token',
-          'userinfo_endpoint': 'https://localhost/auth/realms/genie/protocol/openid-connect/userinfo',
-          'end_session_endpoint': 'https://localhost/auth/realms/genie/protocol/openid-connect/logout',
+          'authorization_endpoint':
+              'https://localhost/auth/realms/genie/protocol/openid-connect/auth',
+          'token_endpoint':
+              'https://localhost/auth/realms/genie/protocol/openid-connect/token',
+          'userinfo_endpoint':
+              'https://localhost/auth/realms/genie/protocol/openid-connect/userinfo',
+          'end_session_endpoint':
+              'https://localhost/auth/realms/genie/protocol/openid-connect/logout',
         };
         final emulatorConfig = KeycloakConfig(
           keycloakUrl: 'https://10.0.2.2/auth',
@@ -173,38 +177,51 @@ void main() {
           expect(endpoints, isNotNull);
           expect(
             endpoints!.authorizationEndpoint,
-            equals('https://10.0.2.2/auth/realms/genie/protocol/openid-connect/auth'),
+            equals(
+              'https://10.0.2.2/auth/realms/genie/protocol/openid-connect/auth',
+            ),
           );
           expect(
             endpoints.tokenEndpoint,
-            equals('https://10.0.2.2/auth/realms/genie/protocol/openid-connect/token'),
+            equals(
+              'https://10.0.2.2/auth/realms/genie/protocol/openid-connect/token',
+            ),
           );
           expect(
             endpoints.userinfoEndpoint,
-            equals('https://10.0.2.2/auth/realms/genie/protocol/openid-connect/userinfo'),
+            equals(
+              'https://10.0.2.2/auth/realms/genie/protocol/openid-connect/userinfo',
+            ),
           );
           expect(
             endpoints.endSessionEndpoint,
-            equals('https://10.0.2.2/auth/realms/genie/protocol/openid-connect/logout'),
-          );
-        });
-
-        test('without the flag the advertised endpoints pass through verbatim', () async {
-          final service = KeycloakService(
-            keycloakConfig: testConfig,
-            httpClient: MockHttpClient(
-              MockHttpClientConfig(responseBody: jsonEncode(localhostDoc)),
+            equals(
+              'https://10.0.2.2/auth/realms/genie/protocol/openid-connect/logout',
             ),
           );
-
-          final endpoints = await service.discoverEndpoints();
-
-          expect(endpoints, isNotNull);
-          expect(
-            endpoints!.tokenEndpoint,
-            equals('https://localhost/auth/realms/genie/protocol/openid-connect/token'),
-          );
         });
+
+        test(
+          'without the flag the advertised endpoints pass through verbatim',
+          () async {
+            final service = KeycloakService(
+              keycloakConfig: testConfig,
+              httpClient: MockHttpClient(
+                MockHttpClientConfig(responseBody: jsonEncode(localhostDoc)),
+              ),
+            );
+
+            final endpoints = await service.discoverEndpoints();
+
+            expect(endpoints, isNotNull);
+            expect(
+              endpoints!.tokenEndpoint,
+              equals(
+                'https://localhost/auth/realms/genie/protocol/openid-connect/token',
+              ),
+            );
+          },
+        );
       });
 
       test('returns null on SocketException (network error)', () async {

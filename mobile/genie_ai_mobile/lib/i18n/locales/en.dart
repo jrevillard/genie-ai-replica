@@ -1182,7 +1182,8 @@ const Map<String, dynamic> enLocale = {
   'welcomeMessage': 'Welcome! How can I assist you today?',
   "okfBrowser": {
     "title": "Browse repository",
-    "currentNotice": "Showing what is indexed now — not necessarily the version that was cited.",
+    "currentNotice":
+        "Showing what is indexed now — not necessarily the version that was cited.",
     "selectHint": "Select a concept from the tree to read it here.",
     "showMore": "Show more",
     "back": "Back",
@@ -1197,5 +1198,5 @@ const Map<String, dynamic> enLocale = {
     "filesLabel": "Files",
     "filterHint": "Filter files",
     "indexBadge": "index",
-},
+  },
 };

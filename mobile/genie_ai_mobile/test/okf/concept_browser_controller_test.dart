@@ -7,7 +7,8 @@ import 'package:openapi/api.dart';
 import 'helpers/browser_fakes.dart';
 
 // The shared fakes carry the fixtures; the test keeps its local names.
-ConceptTreePage _page(int total, List<ConceptTreeRow> rows) => page(total, rows);
+ConceptTreePage _page(int total, List<ConceptTreeRow> rows) =>
+    page(total, rows);
 
 ConceptTreeRow _row(String id) => row(id);
 
@@ -266,10 +267,7 @@ void main() {
       await c.open('repo-a');
       fake.cardThrows['c1'] = Exception('backend 500');
       await c.select('c1');
-      expect(
-        container.read(conceptBrowserControllerProvider).error,
-        isNotNull,
-      );
+      expect(container.read(conceptBrowserControllerProvider).error, isNotNull);
       // The user taps another row: the error must not survive the success —
       // the pane would show a stale failure over a working card.
       fake.cardThrows.remove('c1');

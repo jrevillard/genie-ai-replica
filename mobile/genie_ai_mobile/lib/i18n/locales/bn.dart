@@ -1184,7 +1184,8 @@ const Map<String, dynamic> bnLocale = {
   'welcomeMessage': 'স্বাগতম! আজ আমি কিভাবে আপনাকে সাহায্য করতে পারি?',
   "okfBrowser": {
     "title": "ভাণ্ডার ব্রাউজ করুন",
-    "currentNotice": "এখন যা সূচিবদ্ধ আছে তা দেখানো হচ্ছে — সেই সংস্করণই নয় যেটি উদ্ধৃত হয়েছিল।",
+    "currentNotice":
+        "এখন যা সূচিবদ্ধ আছে তা দেখানো হচ্ছে — সেই সংস্করণই নয় যেটি উদ্ধৃত হয়েছিল।",
     "selectHint": "এখানে পড়তে ট্রি থেকে একটি কনসেপ্ট নির্বাচন করুন।",
     "showMore": "আরও দেখান",
     "back": "পিছনে",
@@ -1199,5 +1200,5 @@ const Map<String, dynamic> bnLocale = {
     "filesLabel": "ফাইল",
     "filterHint": "ফাইল ফিল্টার করুন",
     "indexBadge": "index",
-},
+  },
 };

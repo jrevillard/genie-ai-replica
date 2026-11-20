@@ -48,9 +48,7 @@ void main() {
     tester,
   ) async {
     await tester.pumpWidget(
-      harness(
-        TextButton(onPressed: () {}, child: const Text('In a row')),
-      ),
+      harness(TextButton(onPressed: () {}, child: const Text('In a row'))),
     );
     await tester.pump();
 
@@ -75,9 +73,7 @@ void main() {
               children: [
                 DsButton(label: 'Save', onPressed: () {}),
                 Row(
-                  children: [
-                    DsButton(label: 'Row button', onPressed: () {}),
-                  ],
+                  children: [DsButton(label: 'Row button', onPressed: () {})],
                 ),
               ],
             ),

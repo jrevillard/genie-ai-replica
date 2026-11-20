@@ -177,63 +177,54 @@ void main() {
   AuthInterceptor interceptorOfContainer() =>
       container.read(authenticatedHttpClientProvider) as AuthInterceptor;
 
-  test(
-    'the interceptor refresh closure never re-enters authProvider '
-    '(#2019 half-two: the live CircularDependencyError)',
-    () async {
-      await seedAuthenticatedSession();
-      final interceptor = interceptorOfContainer();
-      appAuth.onToken = (_) => _freshTokens();
+  test('the interceptor refresh closure never re-enters authProvider '
+      '(#2019 half-two: the live CircularDependencyError)', () async {
+    await seedAuthenticatedSession();
+    final interceptor = interceptorOfContainer();
+    appAuth.onToken = (_) => _freshTokens();
 
-      // The 2026-11-20 live fault: this threw Riverpod's
-      // CircularDependencyError on EVERY invocation, so a 401 could never
-      // recover — the session died at the first access-token expiry.
-      await interceptor.onRefreshToken();
+    // The 2026-11-20 live fault: this threw Riverpod's
+    // CircularDependencyError on EVERY invocation, so a 401 could never
+    // recover — the session died at the first access-token expiry.
+    await interceptor.onRefreshToken();
 
-      expect(await storage.getAccessToken(), equals('fresh-at'));
-      expect(await storage.getRefreshToken(), equals('fresh-rt'));
-    },
-  );
+    expect(await storage.getAccessToken(), equals('fresh-at'));
+    expect(await storage.getRefreshToken(), equals('fresh-rt'));
+  });
 
-  test(
-    'an interceptor-triggered refresh updates the auth state '
-    '— the session-expiry contract the UI observes',
-    () async {
-      await seedAuthenticatedSession();
-      final interceptor = interceptorOfContainer();
-      appAuth.onToken = (_) => _freshTokens();
+  test('an interceptor-triggered refresh updates the auth state '
+      '— the session-expiry contract the UI observes', () async {
+    await seedAuthenticatedSession();
+    final interceptor = interceptorOfContainer();
+    appAuth.onToken = (_) => _freshTokens();
 
-      await interceptor.onRefreshToken();
+    await interceptor.onRefreshToken();
 
-      expect(
-        container.read(authProvider).status,
-        equals(AuthStatus.authenticated),
-      );
-    },
-  );
+    expect(
+      container.read(authProvider).status,
+      equals(AuthStatus.authenticated),
+    );
+  });
 
-  test(
-    'an interceptor-triggered refresh shares the in-flight refresh with the '
-    'notifier (#2019: one token request, never a rotation race)',
-    () async {
-      await seedAuthenticatedSession();
-      final interceptor = interceptorOfContainer();
+  test('an interceptor-triggered refresh shares the in-flight refresh with the '
+      'notifier (#2019: one token request, never a rotation race)', () async {
+    await seedAuthenticatedSession();
+    final interceptor = interceptorOfContainer();
 
-      var tokenRequests = 0;
-      appAuth.onToken = (_) {
-        tokenRequests++;
-        return _freshTokens();
-      };
+    var tokenRequests = 0;
+    appAuth.onToken = (_) {
+      tokenRequests++;
+      return _freshTokens();
+    };
 
-      final viaInterceptor = interceptor.onRefreshToken();
-      final viaNotifier = container.read(authProvider.notifier).refreshToken();
-      await Future.wait([viaInterceptor, viaNotifier]);
+    final viaInterceptor = interceptor.onRefreshToken();
+    final viaNotifier = container.read(authProvider.notifier).refreshToken();
+    await Future.wait([viaInterceptor, viaNotifier]);
 
-      // Keycloak rotates refresh tokens: two concurrent refreshes with the
-      // same token would hand one caller an invalid_grant and kill the
-      // session. The single-flight must span BOTH entry paths.
-      expect(tokenRequests, equals(1));
-      expect(await storage.getAccessToken(), equals('fresh-at'));
-    },
-  );
+    // Keycloak rotates refresh tokens: two concurrent refreshes with the
+    // same token would hand one caller an invalid_grant and kill the
+    // session. The single-flight must span BOTH entry paths.
+    expect(tokenRequests, equals(1));
+    expect(await storage.getAccessToken(), equals('fresh-at'));
+  });
 }

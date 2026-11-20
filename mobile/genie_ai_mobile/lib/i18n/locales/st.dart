@@ -1185,7 +1185,8 @@ const Map<String, dynamic> stLocale = {
   'welcomeMessage': 'Welcome! Ho jo ka u thusa joang kajeno?',
   "okfBrowser": {
     "title": "Sheba polokelo",
-    "currentNotice": "E bontša se ngolotsoeng kaharano hona joale — e se mofuta o ntseng o boleloa.",
+    "currentNotice":
+        "E bontša se ngolotsoeng kaharano hona joale — e se mofuta o ntseng o boleloa.",
     "selectHint": "Khetha kgopolo sehlareng ho e bala mona.",
     "showMore": "Bontša e eng",
     "back": "Morao",
@@ -1200,5 +1201,5 @@ const Map<String, dynamic> stLocale = {
     "filesLabel": "Lifaele",
     "filterHint": "Sesefa lifaele",
     "indexBadge": "index",
-},
+  },
 };

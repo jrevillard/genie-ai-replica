@@ -34,15 +34,17 @@ void main() {
     required List<Map<String, dynamic>> sources,
     Map<String, dynamic>? opened,
   }) async {
-    await tester.pumpWidget(MaterialApp(
-      home: Scaffold(
-        body: AnswerSourcesBar(
-          sources: sources,
-          labelBuilder: label,
-          onOpen: (doc) => opened?.addAll(doc),
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Scaffold(
+          body: AnswerSourcesBar(
+            sources: sources,
+            labelBuilder: label,
+            onOpen: (doc) => opened?.addAll(doc),
+          ),
         ),
       ),
-    ));
+    );
   }
 
   testWidgets('an empty source list renders nothing', (tester) async {
@@ -52,7 +54,9 @@ void main() {
     expect(find.byType(GestureDetector), findsNothing);
   });
 
-  testWidgets('collapsed by default: only the toggle is visible', (tester) async {
+  testWidgets('collapsed by default: only the toggle is visible', (
+    tester,
+  ) async {
     await pumpBar(tester, sources: [okfRow, pdfRow]);
     expect(find.text('Related sources (2)'), findsOneWidget);
     expect(find.text('hadith nawawi 36'), findsNothing);
@@ -80,7 +84,9 @@ void main() {
     expect(find.text('PDF'), findsOneWidget);
   });
 
-  testWidgets('tapping a browsable okf row hands the row to onOpen', (tester) async {
+  testWidgets('tapping a browsable okf row hands the row to onOpen', (
+    tester,
+  ) async {
     final opened = <String, dynamic>{};
     await pumpBar(tester, sources: [okfRow], opened: opened);
     await tester.tap(find.text('Related sources (1)'));

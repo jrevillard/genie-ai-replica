@@ -1185,7 +1185,8 @@ const Map<String, dynamic> ptLocale = {
   'welcomeMessage': 'Bem-vindo! Como posso ajudá-lo hoje?',
   "okfBrowser": {
     "title": "Explorar o repositório",
-    "currentNotice": "Mostra o que está indexado agora — não necessariamente a versão citada.",
+    "currentNotice":
+        "Mostra o que está indexado agora — não necessariamente a versão citada.",
     "selectHint": "Selecione um conceito na árvore para lê-lo aqui.",
     "showMore": "Mostrar mais",
     "back": "Voltar",
@@ -1200,5 +1201,5 @@ const Map<String, dynamic> ptLocale = {
     "filesLabel": "Arquivos",
     "filterHint": "Filtrar arquivos",
     "indexBadge": "index",
-},
+  },
 };

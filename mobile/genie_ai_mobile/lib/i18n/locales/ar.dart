@@ -1169,7 +1169,8 @@ const Map<String, dynamic> arLocale = {
   'welcomeMessage': 'مرحباً! كيف يمكنني مساعدتك اليوم؟',
   "okfBrowser": {
     "title": "استعراض المستودع",
-    "currentNotice": "يعرض ما هو مفهرس الآن — وليس بالضرورة النسخة التي تم الاستشهاد بها.",
+    "currentNotice":
+        "يعرض ما هو مفهرس الآن — وليس بالضرورة النسخة التي تم الاستشهاد بها.",
     "selectHint": "اختر مفهوما من الشجرة لقراءته هنا.",
     "showMore": "عرض المزيد",
     "back": "رجوع",
@@ -1184,5 +1185,5 @@ const Map<String, dynamic> arLocale = {
     "filesLabel": "الملفات",
     "filterHint": "تصفية الملفات",
     "indexBadge": "index",
-},
+  },
 };

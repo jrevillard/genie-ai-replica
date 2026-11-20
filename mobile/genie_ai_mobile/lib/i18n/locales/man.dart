@@ -1165,7 +1165,8 @@ const Map<String, dynamic> manLocale = {
   'welcomeMessage': 'Welcome! How can I assist you today?',
   "okfBrowser": {
     "title": "Browse y repository",
-    "currentNotice": "Ta shoh fockley magh cre ta goll er oltchiaragley nish — cha nee yn wershoon va cit shickyr.",
+    "currentNotice":
+        "Ta shoh fockley magh cre ta goll er oltchiaragley nish — cha nee yn wershoon va cit shickyr.",
     "selectHint": "Tagh concept ass y billey dy lhaih aynshoh.",
     "showMore": "Jeeagh ny smoo",
     "back": "Ass",
@@ -1180,5 +1181,5 @@ const Map<String, dynamic> manLocale = {
     "filesLabel": "Files",
     "filterHint": "Filter files",
     "indexBadge": "index",
-},
+  },
 };

@@ -62,7 +62,9 @@ logger = logging.getLogger(__name__)
 
 # The recorded English abstention text (V02 §4.14) — the too-long case's
 # answer text; who translates it stays with the answer layer, as deployed.
-_RERANKER_INPUT_TOO_LONG_ABSTENTION_TEXT = (
+# PUBLIC single owner: the no-agent pipeline answers with the same constant
+# it imports from here — one edit point moves the log surface and the answer.
+RERANKER_INPUT_TOO_LONG_ABSTENTION_TEXT = (
     "I cannot reliably answer this query because the "
     "retrieved documents exceed the reranker's input "
     "limit. This indicates a data ingestion issue."
@@ -82,13 +84,14 @@ class SearchKnowledgeCapability:
     name = OperationName.SEARCH_KNOWLEDGE
 
     @property
-    def reranking(self) -> TeiRerankingAdapter:
-        """The reranking adapter this capability was wired with — the single
-        owner of the calibration knob (``RERANKER_SCORE_CALIBRATION``). The
-        no-agent pipeline reads its ``calibrate`` from here at confidence
-        time; the capability itself never calibrates (V02 §4.13: calibration
-        is a confidence-time concern, never a selection one)."""
-        return self._reranking
+    def score_calibrator(self):
+        """The confidence-time score calibrator the wired reranking adapter
+        owns — the narrow public surface the no-agent pipeline reads (the
+        adapter itself stays internal: exposing ``rerank`` would invite a
+        caller past the capability's authorized-set check). The capability
+        itself never calibrates (V02 §4.13: calibration is a confidence-time
+        concern, never a selection one)."""
+        return self._reranking.calibrate
 
     def __init__(
         self,
@@ -256,7 +259,7 @@ class SearchKnowledgeCapability:
         except RerankerInputTooLongError:
             # The recorded abstention: TEI rejected the input (422 + Validation).
             logger.warning("abstained.reason=reranker_input_too_long")
-            logger.info(_RERANKER_INPUT_TOO_LONG_ABSTENTION_TEXT)
+            logger.info(RERANKER_INPUT_TOO_LONG_ABSTENTION_TEXT)
             return self._insufficient(request, "reranker_input_too_long", abstention_sink)
         except Exception as e:
             # No fallback to the retrieval order: a reranker transport or

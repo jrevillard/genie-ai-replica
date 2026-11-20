@@ -2,9 +2,10 @@
 # SPDX-License-Identifier: Apache-2.0
 """The ported prompt surface (story 1.9).
 
-The strings are pinned byte-identical to the deployed module (the
-equivalence suite re-derives the identity from the deployed source); these
-tests pin the ASSEMBLY: the EN prefix, the three-section template, the
+The prompt-byte contract is enforced against the DEPLOYED module directly
+(`test_prompt_strings_match_the_deployed_source` — the source-inspection
+guard; the deployed line wrapping may differ, the words may not); the tests
+below pin the ASSEMBLY: the EN prefix, the three-section template, the
 document rendering, the abstention injection, and the truncation guard
 (oldest dropped, a non-fitting segment stops the walk, documents never
 truncated).
@@ -12,6 +13,7 @@ truncated).
 
 import asyncio
 import dataclasses
+from pathlib import Path
 
 from noagent.config import NoAgentConfig
 from noagent.prompt import (
@@ -26,6 +28,8 @@ from noagent.prompt import (
     system_prompt,
     truncate_history,
 )
+
+DEPLOYED_CHATQNA = Path(__file__).resolve().parents[3] / "genie-ai-overlay" / "chatqna" / "genieai_chatqna.py"
 
 
 def _config(**overrides) -> NoAgentConfig:
@@ -50,6 +54,27 @@ def _counting(tokens_per_text: dict[str, int]):
 def test_system_prompt_default_and_override():
     assert system_prompt(_config(), None) == DEFAULT_SYSTEM_PROMPT
     assert system_prompt(_config(system_prompt_override="Custom."), None) == "Custom."
+
+
+def test_prompt_strings_match_the_deployed_source():
+    """The prompt-byte contract, enforced at the strongest boundary: config
+    B is a behavioral-equivalence instrument, so its three deployed strings
+    must EQUAL the deployed chatqna module's own string constants. The
+    deployed module's adjacent literals fold at parse time, so an AST walk
+    over its constant strings yields the real values — exact equality, any
+    word-level edit on either side redds, an identifier refactor does not."""
+    import ast
+
+    tree = ast.parse(DEPLOYED_CHATQNA.read_text())
+    deployed_strings = {
+        node.value for node in ast.walk(tree) if isinstance(node, ast.Constant) and isinstance(node.value, str)
+    }
+    for name, text in (
+        ("DEFAULT_SYSTEM_PROMPT", DEFAULT_SYSTEM_PROMPT),
+        ("DEFAULT_ABSTENTION_INSTRUCTIONS", DEFAULT_ABSTENTION_INSTRUCTIONS),
+        ("EN_ONLY_PREFIX", EN_ONLY_PREFIX),
+    ):
+        assert text in deployed_strings, f"{name} diverges from the deployed chatqna source"
 
 
 def test_english_history_prepends_the_mandatory_english_prefix():
@@ -99,10 +124,20 @@ def test_abstention_instructions_follow_the_enforce_flag_and_overrides():
 # ---------------------------------------------------------------------
 
 
-def _guard(history, knowledge, counter, window=1000, answer=200, system_text=DEFAULT_SYSTEM_PROMPT):
+def _guard(history, knowledge, counter, window=1000, answer=200, system_tokens=None, system_text=DEFAULT_SYSTEM_PROMPT):
+    """The guard takes the system prompt's token count PRECOMPUTED (the
+    deployed `_count_static_tokens` memo — the pipeline pays the count once
+    per system text, not once per turn); the helper derives it from the
+    same counter the segments use unless the test pins a number."""
+    if system_tokens is None:
+
+        async def _count():
+            return await counter(system_text)
+
+        system_tokens = asyncio.run(_count())
     return truncate_history(
         history,
-        system_prompt_text=system_text,
+        system_tokens=system_tokens,
         knowledge_base_section=knowledge,
         user_context="",
         answer_tokens=answer,

@@ -8,6 +8,8 @@ conventions and answer their documented defaults when unset.
 
 import dataclasses
 
+import pytest
+
 from noagent.config import DEFAULT_MAX_ANSWER_TOKENS, NoAgentConfig
 from noagent.prompt import DEFAULT_ABSTENTION_INSTRUCTIONS, DEFAULT_SYSTEM_PROMPT
 
@@ -18,7 +20,6 @@ def test_unset_env_answers_the_documented_defaults():
     assert config.generation_endpoint == "http://0.0.0.0:80"
     assert config.model_id_override == ""
     assert config.llm_timeout_seconds == 180.0  # MODEL_LLM_TIMEOUT_SECONDS
-    assert config.connect_timeout_seconds == 30.0  # MODEL_CONNECT_TIMEOUT_SECONDS
     assert config.system_prompt_override == ""
     assert config.abstention_instructions_override == ""
     assert config.enforce_abstention is True  # CHATQNA_ENFORCE_ABSTENTION default true
@@ -118,12 +119,8 @@ def test_answer_reserve_uses_the_deployed_default():
 
 def test_config_is_frozen():
     config = NoAgentConfig.load(env={})
-    try:
-        dataclasses.replace(config)  # a frozen dataclass rejects mutation
+    with pytest.raises(dataclasses.FrozenInstanceError):
         config.lane_slots = 5  # must raise
-        raise AssertionError("the config mutated")
-    except dataclasses.FrozenInstanceError:
-        pass
 
 
 def test_defaults_carry_the_deployed_prompt_texts():

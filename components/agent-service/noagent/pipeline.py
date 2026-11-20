@@ -64,7 +64,7 @@ from preparation.translation import HttpxTransport, ModelEndpointCache
 
 from . import prompt as prompt_module
 from .config import NoAgentConfig
-from .generation import GenerationClient, TokenCounter
+from .generation import GenerationClient, TokenCounter, chat_choice, chat_choice_content
 from .lane import AdmissionLane
 
 logger = logging.getLogger(__name__)
@@ -267,12 +267,11 @@ class AnswerTranslator:
         if status >= 400:
             logger.warning(f"Answer translation failed: the endpoint answered {status}.")
             return text, "failed"
-        choices = (body if isinstance(body, dict) else {}).get("choices") or []
-        choice = choices[0] if choices and isinstance(choices[0], dict) else {}
-        if choice.get("finish_reason") == "length":
+        choice, finish_reason = chat_choice(body if isinstance(body, dict) else {})
+        if choice is not None and finish_reason == "length":
             logger.warning("Answer translation was cut off at max_tokens; keeping the English answer.")
             return text, "failed"
-        content = (choice.get("message") or {}).get("content")
+        content = chat_choice_content(choice or {})
         if not isinstance(content, str) or not content.strip():
             logger.warning("Answer translation came back empty; keeping the English answer.")
             return text, "failed"
@@ -306,32 +305,42 @@ class NoAgentPipeline:
         # on the reranking config the capability owns); None keeps the raw
         # score (the default `none` calibration).
         self._score_calibrator = score_calibrator
+        # The static-token memo (deployed `_count_static_tokens`): the system
+        # prompt is per-process invariant (override-or-default, at most two
+        # texts), so its /tokenize count is paid once per text, not once per
+        # turn. Writes are event-loop-serialized — no lock.
+        self._static_counts: dict[str, int] = {}
+
+    async def _static_token_count(self, text: str) -> int:
+        """The memoized token count of a per-process-invariant prompt piece."""
+        cached = self._static_counts.get(text)
+        if cached is None:
+            cached = await self._counter.count(text)
+            self._static_counts[text] = cached
+        return cached
 
     @classmethod
     def create(cls, config: NoAgentConfig, capability, budget: OperationBudget, env=None) -> "NoAgentPipeline":
         """Assemble the default wiring: the preparer over the same env, the
-        generation client and counter over the generation endpoint, the lane
-        over the config, the answer translator when the gate is on, and the
-        score calibrator from the capability's own reranking config (the
+        generation client (whose transport the counter shares — one wiring
+        change lands once), the lane over the config, the answer translator
+        when the gate is on, and the score calibrator from the capability's
+        public ``score_calibrator`` surface (the capability's reranking
         adapter is the single owner of the calibration knob — no second
         reader that could drift). The translator owns its registry instance
         (the same file, its own read-once cache) — the preparer's is private
         to the preparer."""
         preparer = QueryPreparer.create(env)
-        transport = HttpxTransport(config.tls_verify)
-        cache = ModelEndpointCache(
-            config.generation_endpoint, transport, config.probe_timeout_seconds, config.detect_ttl_seconds
-        )
-        generation = GenerationClient(config, cache, transport)
-        counter = TokenCounter(config, generation.model_id, transport)
+        generation = GenerationClient.create(config)
+        counter = TokenCounter(config, generation.model_id, generation.transport)
         lane = AdmissionLane.from_config(config)
         translator = None
         if config.answer_translation_enabled:
             registry = LanguageRegistry(PreparationConfig.load(env).registry_path)
             translator = AnswerTranslator(config, registry)
-        reranking = getattr(capability, "reranking", None)
-        score_calibrator = reranking.calibrate if reranking is not None else None
-        return cls(config, preparer, capability, lane, generation, counter, budget, translator, score_calibrator)
+        return cls(
+            config, preparer, capability, lane, generation, counter, budget, translator, capability.score_calibrator
+        )
 
     async def run(
         self,
@@ -363,12 +372,9 @@ class NoAgentPipeline:
             query_text = query.text
             sink_reasons: list[str] = []
 
-            def sink(recorded_reason: str) -> None:
-                sink_reasons.append(recorded_reason)
-
             search_input = SearchKnowledgeInput(query=query)
             search_result = await self._capability.search_knowledge(
-                context, search_input, self._budget, abstention_sink=sink
+                context, search_input, self._budget, abstention_sink=sink_reasons.append
             )
             documents = [hit.text for hit in search_result.hits]
             if search_result.outcome == OutcomeCode.INSUFFICIENT_EVIDENCE:
@@ -414,7 +420,7 @@ class NoAgentPipeline:
             answer_tokens = prompt_module.answer_reserve(self._config)
             truncated_history, _kept, _dropped = await prompt_module.truncate_history(
                 preparation.history_text,
-                system_prompt_text=system,
+                system_tokens=await self._static_token_count(system),
                 knowledge_base_section=knowledge_section,
                 user_context=user_context,
                 answer_tokens=answer_tokens,

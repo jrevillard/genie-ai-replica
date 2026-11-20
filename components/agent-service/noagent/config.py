@@ -56,7 +56,6 @@ class NoAgentConfig:
     generation_endpoint: str
     model_id_override: str
     llm_timeout_seconds: float
-    connect_timeout_seconds: float
     system_prompt_override: str
     abstention_instructions_override: str
     enforce_abstention: bool
@@ -105,7 +104,6 @@ class NoAgentConfig:
             generation_endpoint=generation_endpoint,
             model_id_override=str(source.get("VLLM_LLM_MODEL_ID", "")),
             llm_timeout_seconds=_env_float(source, "MODEL_LLM_TIMEOUT_SECONDS", 180.0),
-            connect_timeout_seconds=_env_float(source, "MODEL_CONNECT_TIMEOUT_SECONDS", 30.0),
             system_prompt_override=str(source.get("CHATQNA_SYSTEM_PROMPT", "")).strip(),
             abstention_instructions_override=str(source.get("CHATQNA_ABSTENTION_INSTRUCTIONS", "")).strip(),
             enforce_abstention=_env_bool(source, "CHATQNA_ENFORCE_ABSTENTION", "true"),

@@ -30,6 +30,10 @@ The assembly, as deployed:
 
 import logging
 
+from capabilities.search_knowledge import (
+    RERANKER_INPUT_TOO_LONG_ABSTENTION_TEXT as RERANKER_INPUT_TOO_LONG_ABSTENTION_TEXT,
+)
+
 from .config import DEFAULT_MAX_ANSWER_TOKENS, WINDOW_BUFFER_TOKENS, NoAgentConfig
 from .generation import window_fits
 
@@ -70,14 +74,6 @@ EN_ONLY_PREFIX = (
 # The history segment separator (deployed: the BFF joins the conversation's
 # turns with it before the history reaches chatqna).
 HISTORY_SEPARATOR = " |<-MSG->| "
-
-# The too-long reranker abstention text (the capability's recorded answer
-# text — the pipeline's answer for that case without a generation call).
-RERANKER_INPUT_TOO_LONG_ABSTENTION_TEXT = (
-    "I cannot reliably answer this query because the "
-    "retrieved documents exceed the reranker's input "
-    "limit. This indicates a data ingestion issue."
-)
 
 
 def system_prompt(config: NoAgentConfig, history_language: str | None) -> str:
@@ -131,7 +127,7 @@ def render_knowledge_section(query: str, documents: list[str], instructions: str
 async def truncate_history(
     history: str,
     *,
-    system_prompt_text: str,
+    system_tokens: int,
     knowledge_base_section: str,
     user_context: str,
     answer_tokens: int,
@@ -151,13 +147,16 @@ async def truncate_history(
 
     The documents and the query ride the knowledge-base section — part of
     the skeleton, never the budgeted part: retrieved documents are never
-    truncated. ``count_tokens`` is an async callable text→int (the
-    generation endpoint's real tokenizer — :class:`noagent.generation.TokenCounter`);
-    the numbers are its business, the drop policy is this function's and is
-    the recorded behavior.
+    truncated. ``system_tokens`` arrives precomputed: the system prompt is
+    per-process invariant (override-or-default, at most two values), and the
+    deployed path memoizes exactly this count (``_count_static_tokens``),
+    so paying a ``/tokenize`` round trip for it every turn would be a
+    regression the deployed code does not have. ``count_tokens`` is an
+    async callable text→int (the generation endpoint's real tokenizer —
+    :class:`noagent.generation.TokenCounter`); the numbers are its business,
+    the drop policy is this function's and is the recorded behavior.
     """
     skeleton = build_user_content(user_context, "", knowledge_base_section)
-    system_tokens = await count_tokens(system_prompt_text)
     full_prompt_tokens = system_tokens + await count_tokens(
         build_user_content(user_context, history, knowledge_base_section)
     )

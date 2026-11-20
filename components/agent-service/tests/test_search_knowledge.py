@@ -77,6 +77,9 @@ class FakeReranking:
             raise self.error
         return self.outcome
 
+    def calibrate(self, score):
+        return score  # the none calibration: the raw score, like the real adapter's default
+
 
 class FakeDbFactory:
     """One adapter per graph; records which graphs were searched."""
@@ -752,27 +755,25 @@ def _sink_outcome(reason: str):
     return capability
 
 
-def test_sink_receives_the_exact_reason_at_each_insufficient_site():
+@pytest.mark.parametrize(
+    ("reason", "budget"),
+    [
+        ("no_documents_retrieved", BUDGET),
+        ("reranker_input_too_long", BUDGET),
+        ("reranker_selected_nothing", BUDGET),
+        # A budget tighter than one hit cuts the selected hit away: the
+        # size breach is the reason, not a retrieval failure.
+        ("result_budget_exhausted", OperationBudget(timeout_ms=5000, max_results=10, max_result_bytes=10)),
+    ],
+)
+def test_sink_receives_the_exact_reason_at_each_insufficient_site(reason, budget):
     """The optional per-call kwarg hands the recorded reason to the caller —
     the same string the log surface carries, at all four sites."""
-    for reason in (
-        "no_documents_retrieved",
-        "reranker_input_too_long",
-        "reranker_selected_nothing",
-        "result_budget_exhausted",
-    ):
-        capability = _sink_outcome(reason)
-        received = []
-        budget = (
-            OperationBudget(timeout_ms=5000, max_results=10, max_result_bytes=10)
-            if reason == "result_budget_exhausted"
-            else BUDGET
-        )
-        result = asyncio.run(
-            capability.search_knowledge(context(), prepared(), budget, abstention_sink=received.append)
-        )
-        assert received == [reason], reason
-        assert result.outcome == OutcomeCode.INSUFFICIENT_EVIDENCE
+    capability = _sink_outcome(reason)
+    received = []
+    result = asyncio.run(capability.search_knowledge(context(), prepared(), budget, abstention_sink=received.append))
+    assert received == [reason]
+    assert result.outcome == OutcomeCode.INSUFFICIENT_EVIDENCE
 
 
 def test_sink_default_none_leaves_the_executor_call_unchanged():
@@ -812,10 +813,13 @@ def test_a_raising_sink_fails_the_turn_loudly():
         asyncio.run(capability.search_knowledge(context(), prepared(), BUDGET, abstention_sink=exploding_sink))
 
 
-def test_reranking_property_exposes_the_owned_adapter():
+def test_score_calibrator_property_exposes_the_owned_adapter_calibrate():
     """The pipeline reads the calibration knob from the adapter that owns it
     (single reader of RERANKER_SCORE_CALIBRATION — no second config that
-    could drift); the property is a read-only view of the constructor wire."""
+    could drift). The property exposes ONLY the calibrate callable — never
+    the adapter, whose ``rerank`` would invite a caller past the capability's
+    authorized-set check."""
     reranking = FakeReranking(outcome=RerankOutcome(selection=()))
     capability, _e, _r, _f = make_capability(reranking=reranking)
-    assert capability.reranking is reranking
+    assert capability.score_calibrator == reranking.calibrate
+    assert not hasattr(capability, "reranking")

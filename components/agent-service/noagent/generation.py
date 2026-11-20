@@ -29,7 +29,12 @@ the tests drive the client without a network — the same seam
 import logging
 import time
 
-from preparation.translation import HttpxTransport, ModelEndpointCache, coerce_int, is_input_overflow
+from preparation.translation import (
+    HttpxTransport,
+    ModelEndpointCache,
+    is_input_overflow,
+    parse_tokenize_count,
+)
 
 from .config import WINDOW_BUFFER_TOKENS, NoAgentConfig
 
@@ -71,6 +76,21 @@ def generation_payload(system_prompt: str, user_content: str, model_id: str | No
     return payload
 
 
+def chat_choice(body: dict) -> tuple[dict | None, str | None]:
+    """The first choice and its finish reason out of an OpenAI-shaped chat
+    response — the ONE shape reader for every chat/completions consumer in
+    the no-agent package (the generation client and the answer translator;
+    each maps the outcome to its own failure style)."""
+    choices = body.get("choices") or []
+    choice = choices[0] if choices and isinstance(choices[0], dict) else None
+    return choice, (choice or {}).get("finish_reason")
+
+
+def chat_choice_content(choice: dict):
+    """The message content of one choice (None when the shape carries none)."""
+    return (choice.get("message") or {}).get("content")
+
+
 class GenerationClient:
     """The one generation call config B makes per turn.
 
@@ -82,6 +102,12 @@ class GenerationClient:
         self._config = config
         self._cache = cache
         self._transport = transport
+
+    @property
+    def transport(self):
+        """The transport this client was wired with — the same seam the
+        token counter reads, so a wiring change lands once."""
+        return self._transport
 
     @classmethod
     def create(cls, config: NoAgentConfig, transport=None) -> "GenerationClient":
@@ -144,16 +170,14 @@ class GenerationClient:
             raise GenerationTransientError(f"the generation endpoint answered {status}: {str(body)[:200]}")
         if not isinstance(body, dict):
             raise GenerationTransientError(f"the generation endpoint answered a {type(body).__name__}, not an object")
-        choices = body.get("choices") or []
-        if not choices or not isinstance(choices[0], dict):
+        choice, finish_reason = chat_choice(body)
+        if choice is None:
             raise GenerationTransientError("the generation response carries no choice")
-        choice = choices[0]
-        if choice.get("finish_reason") == "length":
+        if finish_reason == "length":
             raise GenerationTransientError(
                 "the generation hit its token budget and was cut off; no answer is fabricated"
             )
-        message = choice.get("message") or {}
-        content = message.get("content")
+        content = chat_choice_content(choice)
         if not isinstance(content, str) or not content.strip():
             raise GenerationTransientError("the generation response carried no text content")
         logger.info("generation finished in %.2fs (%d chars)", time.monotonic() - started, len(content))
@@ -197,26 +221,13 @@ class TokenCounter:
             raise GenerationTransientError(f"the token count failed: {type(e).__name__}: {str(e)[:200]}") from e
         if status >= 400:
             raise GenerationTransientError(f"the tokenize endpoint answered {status}: {str(body)[:200]}")
-        return self._parse_count(body)
-
-    @staticmethod
-    def _parse_count(payload) -> int:
-        """The count out of a vLLM ``/tokenize`` payload: prefer the scalar,
-        fall back to the token-list length. Malformed shapes refuse."""
-        if not isinstance(payload, dict):
-            raise GenerationTransientError(f"/tokenize returned a non-object payload: {str(payload)[:120]}")
-        raw = payload.get("count")
-        if raw is None:
-            tokens = payload.get("tokens")
-            if not isinstance(tokens, list):
-                raise GenerationTransientError(
-                    f"/tokenize payload has neither a count nor a token list: {str(payload)[:120]}"
-                )
-            return len(tokens)
-        count = coerce_int(raw)
-        if count is None or count < 0:
-            raise GenerationTransientError(f"/tokenize count is not a usable integer: {raw!r}")
-        return count
+        try:
+            # preparation's ONE tokenize parser (same payload read, the sane
+            # absurd-count ceiling included); its ValueError maps to the
+            # counter's typed failure — never a guessed number.
+            return parse_tokenize_count(body)
+        except ValueError as e:
+            raise GenerationTransientError(str(e)[:200]) from e
 
 
 def window_fits(payload_prompt_tokens: int, answer_tokens: int, window_tokens: int) -> bool:

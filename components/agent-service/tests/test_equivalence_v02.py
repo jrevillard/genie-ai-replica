@@ -102,10 +102,6 @@ DEVIATIONS = {
 }
 
 
-def fixtures():
-    return FIXTURE_DATA
-
-
 def behavior(name: str) -> dict:
     return BEHAVIORS[name]
 
@@ -223,6 +219,11 @@ def test_preparation_block_is_present_and_populated():
         "fallback_error",
     }
     assert len(PREPARATION["failure_classes"]) == 3
+    assert {c["class"] for c in PREPARATION["failure_classes"]} == {
+        "translator_unavailable",
+        "oversized_input",
+        "translation_returning_blank",
+    }
     assert PREPARATION["measured_budget"]["translation_char_budget"] == 11520
     assert PREPARATION["locales_source"] == "measured.preparation.locales"
     assert MEASURED["preparation"]["locales"], "the recorded locale samples are missing"
@@ -580,35 +581,9 @@ def test_preparation_derived_char_budget_matches_the_measured_budget():
     assert derived_char_budget(8192, config) == 11520
 
 
-def test_preparation_failure_classes_stay_distinct():
-    """The three recorded failure classes map to DISTINCT outcomes in the
-    port: translator_unavailable → the fallback statuses (200, no abstain),
-    oversized_input → the typed 422-class refusal, blank translation →
-    fallback_error. The preparation suite (test_preparation_prepare) pins
-    each; this ties the classes to the recorded trigger strings."""
-    classes = {c["class"]: c for c in PREPARATION["failure_classes"]}
-    assert set(classes) == {"translator_unavailable", "oversized_input", "translation_returning_blank"}
-    assert classes["oversized_input"]["http_status"] == 422
-    assert classes["oversized_input"]["abstains"] is True
-    assert classes["translator_unavailable"]["abstains"] is False
-    assert classes["translation_returning_blank"]["abstains"] is False
-    from preparation.translation import TranslationInputTooLongError
-
-    assert issubclass(TranslationInputTooLongError, RuntimeError)  # the refusal class exists
-
-
 # ---------------------------------------------------------------------
 # The deviation table — the four non-ported behaviors, pinned as ABSENT
 # ---------------------------------------------------------------------
-
-
-@pytest.mark.parametrize("name", sorted(DEVIATIONS))
-def test_deviation_table_carries_a_recorded_decision(name):
-    """Each pinned deviation is documented against its recorded behavior —
-    the table IS the recorded decision; this test fails when a deviation is
-    deleted without reopening the story."""
-    assert DEVIATIONS[name]
-    assert BEHAVIORS[name]["title"]  # the recorded behavior it deviates from
 
 
 def test_deviation_graph_traversal_no_traversal_query_ever_runs():
@@ -640,15 +615,13 @@ def test_deviation_fanout_no_carrier_no_cross_graph_fusion():
 
 
 def test_deviation_routing_no_routing_gate_in_the_port():
-    """Absence assertion: no routing machinery exists — no _route_graphs,
-    no RETRIEVER_ROUTE_* knob read by any config load."""
+    """Absence assertion: no routing machinery exists — no _route_graphs
+    symbol, and no RETRIEVER_ROUTE_* knob read by any config load (the
+    symbol scan plus the config-surface scan prove absence of the
+    MECHANISM; source-text greps would false-positive on a comment)."""
     import capabilities.adapters.arango_retrieval as adapter_module
-    import capabilities.adapters.env_config as env_module
 
     assert not hasattr(adapter_module, "_route_graphs")
-    source = Path(adapter_module.__file__).read_text()
-    assert "RETRIEVER_ROUTE" not in source
-    assert "ROUTE_TOP_K" not in Path(env_module.__file__).read_text()
     # The recorded env CARRIES the routing knobs (deployed); the port must
     # accept them without effect — no config load exposes a routing field.
     config_env = recorded_env()

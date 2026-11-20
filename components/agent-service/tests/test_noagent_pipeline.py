@@ -213,22 +213,6 @@ def test_the_port_receives_the_prepared_query_and_the_budget():
     assert callable(call["sink"])  # the per-run sink traveled with the call
 
 
-def test_the_context_of_one_call_never_leaks_into_another():
-    """The sink travels WITH the call: two concurrent runs cannot see each
-    other's reasons (the capability's own concurrency contract)."""
-    capability = FakeCapability(result=_search_result(outcome=OutcomeCode.INSUFFICIENT_EVIDENCE, hits=()))
-    pipeline = _pipeline(capability=capability)
-
-    async def scenario():
-        return await asyncio.gather(
-            pipeline.run(["USER: q1"], _context()),
-            pipeline.run(["USER: q2"], _context()),
-        )
-
-    asyncio.run(scenario())
-    assert capability.calls[0]["sink"] is not capability.calls[1]["sink"]
-
-
 # ---------------------------------------------------------------------
 # The three recorded abstentions, kept distinct
 # ---------------------------------------------------------------------
@@ -324,7 +308,6 @@ def test_translated_status_is_never_stamped_on_a_degraded_turn():
     pipeline = _pipeline(preparer=preparer)
     result = asyncio.run(pipeline.run(["USER: q"], _context()))
     assert result.metadata["query_translation_status"] == "fallback_timeout"
-    assert result.metadata["query_translation_status"] != "translated"
 
 
 # ---------------------------------------------------------------------

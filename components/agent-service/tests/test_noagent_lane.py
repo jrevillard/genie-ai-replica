@@ -180,9 +180,29 @@ def test_lane_rejects_a_zero_slot_configuration():
 
 
 def test_from_config_wires_the_env_values(lane_dir):
+    """BEHAVIOR, not privates: a 4-slot config admits 4 concurrent claims
+    and refuses the fifth, at the configured base path."""
+    import asyncio
+
     from noagent.config import NoAgentConfig
 
     config = NoAgentConfig.load(env={"AGENT_LANE_SLOTS": "4", "AGENT_LANE_LOCK_PATH": lane_dir})
     lane = AdmissionLane.from_config(config)
-    assert lane._slots == 4
-    assert lane._lock_path == lane_dir
+
+    async def scenario():
+        contexts = [lane.acquire() for _ in range(4)]
+        for context in contexts:
+            await context.__aenter__()
+        with pytest.raises(LaneBusyError):
+            async with lane.acquire():
+                pass
+        for context in reversed(contexts):
+            await context.__aexit__(None, None, None)
+
+    asyncio.run(scenario())
+    assert _slot_files(lane_dir) == [
+        "lane.lock",
+        "lane.lock.1",
+        "lane.lock.2",
+        "lane.lock.3",
+    ]

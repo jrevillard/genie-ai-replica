@@ -388,9 +388,7 @@ def test_a_bad_legacy_graph_name_is_a_configuration_error_not_a_refusal():
     """ARANGO_GRAPH_NAME is deployment configuration: a bad value fails at
     construction with a ValueError — an operator defect — and never as a
     caller-facing authorization failure."""
-    import pytest as _pytest
-
-    with _pytest.raises(ValueError):
+    with pytest.raises(ValueError):
         AuthorizedExecutor(
             ctx(),
             bearer=None,

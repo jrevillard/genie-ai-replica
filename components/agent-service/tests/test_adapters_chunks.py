@@ -65,7 +65,7 @@ def test_chunk_cap_sets_truncated():
     assert truncated is True
 
 
-def test_byte_budget_is_not_the_adapters_to_enforce():
+def test_adapter_returns_uncut_content_and_reports_only_the_chunk_cap():
     reader, _ = adapter([{"text": "abcdefghij"}])
     content, truncated = asyncio.run(reader.read_chunks("GRAPH", "42", max_chunks=10))
     # the byte budget is the executor's single enforcement point; the

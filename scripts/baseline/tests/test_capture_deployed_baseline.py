@@ -1236,14 +1236,20 @@ def _attested_chart(template_overrides=None, metadata_version=None):
 
 
 def _release_secret(chart):
-    """The release secret, encoded the way helm stores it."""
+    """The release secret, encoded the way kubectl returns it.
+
+    Helm stores the release as base64(gzip(json)); the secret holds that
+    value, and kubectl returns the secret's data base64-encoded again. The
+    capture decodes what kubectl returns, so the fixture carries both
+    layers - the shape the production path reads.
+    """
     import gzip
     import json
 
     payload = base64.b64encode(
         gzip.compress(json.dumps({"chart": chart}).encode("utf-8"))
     ).decode("ascii")
-    return {"data": {"release": payload}}
+    return {"data": {"release": base64.b64encode(payload.encode("ascii")).decode("ascii")}}
 
 
 def _release_info(**overrides):

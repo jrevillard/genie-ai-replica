@@ -382,6 +382,8 @@ and `chatbot/…` for the specs that did not move).
 
 An earlier run of the same day showed five more failures (`welcome-banner`, `resizable-sidebars`) that were **not** a spec defect: the venue's node rebooted mid-run and the edge refused connections. On the settled stack they pass.
 
+The run of 2026-11-20 (StrixHalo ROCm venue, checkout `301cd9ca3`): **554 tests — 545 passed, 1 failed, 8 skipped** (every skip with its venue profile; the post-run ROPC posture gate OK). The one red, `chatbot/chat-composer` "placeholder fits", was **not a spec defect and not a product defect**: the run's own context block named it — the venue served build `8b7c015` while the checkout was `301cd9ca3`, and the interim single-clause Arabic placeholder baked into the served build no longer matched the checkout's restored two-clause `ar.js`. The spec's placeholder-equality assertion is what caught the drift. The remedy was the stale-venue remedy — rebuild the frontend at the checkout HEAD and redeploy; on the refreshed venue (`301cd9ca3`, served and edge-probed) the spec passes.
+
 A spec that is known-red is named, never silently excluded, and never edited
 to make it pass. These reds are the **proof that the suite runs** — the run
 executed them, in their broken state, on a branch that does not carry the

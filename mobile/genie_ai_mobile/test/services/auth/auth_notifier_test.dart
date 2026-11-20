@@ -665,7 +665,7 @@ void main() {
       // No refresh token call should have been made
       expect(
         recordingLogger.events.any(
-          (e) => e.contains('AuthNotifier.refreshToken'),
+          (e) => e.contains('TokenRefresher.refresh'),
         ),
         isFalse,
       );
@@ -1064,7 +1064,7 @@ void main() {
         expect(
           recordingLogger.failures,
           contains(
-            'AuthNotifier.refreshToken: REFRESH_NETWORK_OFFLINE - No internet connection',
+            'TokenRefresher.refresh: REFRESH_NETWORK_OFFLINE - No internet connection',
           ),
         );
         c.dispose();
@@ -1306,7 +1306,7 @@ void main() {
         expect(
           recordingLogger.failures,
           contains(
-            'AuthNotifier.refreshToken: REFRESH_NETWORK_OFFLINE_MID_OP - Network lost during token refresh',
+            'TokenRefresher.refresh: REFRESH_NETWORK_OFFLINE_MID_OP - Network lost during token refresh',
           ),
         );
       },
@@ -1875,7 +1875,7 @@ void main() {
         expect(
           recordingLogger.failures,
           contains(
-            'AuthNotifier.refreshToken: REFRESH_NETWORK_OFFLINE_MID_OP - Network lost during token refresh',
+            'TokenRefresher.refresh: REFRESH_NETWORK_OFFLINE_MID_OP - Network lost during token refresh',
           ),
         );
         c.dispose();

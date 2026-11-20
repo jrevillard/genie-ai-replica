@@ -1,5 +1,5 @@
 import 'dart:async';
-import 'dart:convert';
+
 
 import 'package:flutter_appauth/flutter_appauth.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -11,6 +11,7 @@ import 'auth_providers.dart';
 import 'auth_state.dart';
 import 'connectivity_checker.dart';
 import 'network_error_classifier.dart';
+import 'token_refresher.dart';
 import 'token_storage.dart';
 import '../../providers/api_providers.dart';
 import '../i18n_service.dart';
@@ -24,25 +25,11 @@ AuthorizationServiceConfiguration _serviceConfiguration(OidcEndpoints e) =>
       endSessionEndpoint: e.endSessionEndpoint,
     );
 
-String? _extractSub(String? idToken) {
-  if (idToken == null || idToken.isEmpty) return null;
-  try {
-    final parts = idToken.split('.');
-    if (parts.length != 3) return null;
-    final payload = utf8.decode(
-      base64Url.decode(base64Url.normalize(parts[1])),
-    );
-    return (jsonDecode(payload) as Map<String, dynamic>)['sub'] as String?;
-  } catch (_) {
-    return null;
-  }
-}
-
 enum _FailedOperation { none, authorize, refreshToken, validateTokens }
 
 class AuthNotifier extends Notifier<AuthState> with WidgetsBindingObserver {
-  static const Duration refreshTokenTimeout = Duration(seconds: 15);
-  static const Duration discoveryTimeout = Duration(seconds: 10);
+  static const Duration refreshTokenTimeout = TokenRefresher.refreshTokenTimeout;
+  static const Duration discoveryTimeout = TokenRefresher.discoveryTimeout;
 
   late final TokenStorage _tokenStorage;
   late final KeycloakService _keycloakService;
@@ -50,15 +37,15 @@ class AuthNotifier extends Notifier<AuthState> with WidgetsBindingObserver {
   late final AuthLogger _authLogger;
   late final AuthenticationApi _authenticationApi;
   late final ConnectivityChecker _connectivityChecker;
+  late final TokenRefresher _tokenRefresher;
   final NetworkErrorClassifier _networkErrorClassifier =
       NetworkErrorClassifier();
 
   bool _isAuthorizing = false;
-  bool _isRefreshing = false;
 
-  /// The in-flight refresh, shared by concurrent callers (#2019). Null when
-  /// no refresh is running.
-  Future<void>? _refreshInFlight;
+  /// The in-flight refresh lives in [TokenRefresher] now (#2019) — the
+  /// single-flight must span the notifier-driven AND interceptor-driven
+  /// entry paths, so it cannot live on either side alone.
   _FailedOperation _lastFailedOperation = _FailedOperation.none;
   StreamSubscription<bool>? _connectivitySubscription;
   Timer? _debounceTimer;
@@ -71,12 +58,15 @@ class AuthNotifier extends Notifier<AuthState> with WidgetsBindingObserver {
     _authLogger = ref.read(authLoggerProvider);
     _authenticationApi = ref.watch(authenticationApiProvider);
     _connectivityChecker = ref.watch(connectivityCheckerProvider);
+    _tokenRefresher = ref.watch(tokenRefresherProvider);
     WidgetsBinding.instance.addObserver(this);
     ref.onDispose(() {
       WidgetsBinding.instance.removeObserver(this);
+      _tokenRefresher.removeListener(_onRefreshOutcome);
       _connectivitySubscription?.cancel();
       _debounceTimer?.cancel();
     });
+    _tokenRefresher.addListener(_onRefreshOutcome);
 
     _connectivitySubscription = _connectivityChecker.onConnectivityChanged
         .listen(
@@ -141,7 +131,7 @@ class AuthNotifier extends Notifier<AuthState> with WidgetsBindingObserver {
 
     if (expiration != null && expiration.isAfter(DateTime.now())) {
       final idToken = await _tokenStorage.getIdToken();
-      final userId = _extractSub(idToken);
+      final userId = extractSub(idToken);
       state = AuthState.authenticated(userId: userId);
       _authLogger.logAuthEvent(
         message: 'Authenticated from stored tokens',
@@ -244,7 +234,7 @@ class AuthNotifier extends Notifier<AuthState> with WidgetsBindingObserver {
         source: 'AuthNotifier.authorize',
       );
       state = AuthState.authenticated(
-        userId: _extractSub(tokenResponse.idToken),
+        userId: extractSub(tokenResponse.idToken),
       );
     } on FlutterAppAuthUserCancelledException {
       if (!ref.mounted) return;
@@ -331,192 +321,42 @@ class AuthNotifier extends Notifier<AuthState> with WidgetsBindingObserver {
   }
 
   Future<void> refreshToken() async {
-    // #2019: a concurrent caller SHARES the in-flight refresh instead of
-    // returning silently. The silent return let a 401-ing request read the
-    // stale access token mid-refresh and retry into another 401 — the
-    // cascading INTERCEPTOR_REFRESH_FAILED storm under rapid API calls.
-    if (_refreshInFlight != null) return _refreshInFlight!;
-    _refreshInFlight = _refreshTokenLocked();
-    try {
-      await _refreshInFlight;
-    } finally {
-      _refreshInFlight = null;
-    }
+    // #2019: concurrent callers share the in-flight refresh inside
+    // TokenRefresher — the same single flight the interceptor-driven path
+    // joins, so Keycloak's rotating refresh token is never spent twice.
+    _lastFailedOperation = _FailedOperation.refreshToken;
+    await _tokenRefresher.refresh();
   }
 
-  Future<void> _refreshTokenLocked() async {
-    if (_isRefreshing) return;
-    _isRefreshing = true;
-    _lastFailedOperation = _FailedOperation.refreshToken;
-    try {
-      _authLogger.logAuthEvent(
-        message: 'Token refresh initiated',
-        source: 'AuthNotifier.refreshToken',
-      );
-
-      // Layer 1: Fast-fail connectivity check
-      if (!_connectivityChecker.isOnline) {
-        _authLogger.logAuthFailure(
-          errorCode: 'REFRESH_NETWORK_OFFLINE',
-          networkReachable: false,
-          message: tr('auth.noInternetConnection'),
-          source: 'AuthNotifier.refreshToken',
-        );
-        state = AuthState.error(
-          message: tr('auth.noInternetConnection'),
-          retryable: true,
-        );
-        return;
-      }
-
-      final currentRefreshToken = await _tokenStorage.getRefreshToken();
-      if (!ref.mounted) return;
-      if (currentRefreshToken == null || currentRefreshToken.isEmpty) {
-        _lastFailedOperation = _FailedOperation.none;
-        _authLogger.logAuthEvent(
-          message: 'No refresh token available — unauthenticated',
-          source: 'AuthNotifier.refreshToken',
-        );
-        state = const AuthState.unauthenticated();
-        return;
-      }
-
-      try {
-        final discoveryEndpoints = await _keycloakService
-            .discoverEndpoints()
-            .timeout(
-              discoveryTimeout,
-              onTimeout: () {
-                throw TimeoutException('Discovery timed out', discoveryTimeout);
-              },
-            );
-        if (!ref.mounted) return;
-        if (discoveryEndpoints == null) {
-          _authLogger.logAuthFailure(
-            errorCode: 'REFRESH_DISCOVERY_FAILED',
-            keycloakEndpoint: _keycloakService.keycloakConfig.realmUrl,
-            message: 'Endpoint discovery failed during token refresh',
-            source: 'AuthNotifier.refreshToken',
-          );
-          state = const AuthState.unauthenticated();
-          return;
-        }
-
-        final tokenResponse = await _appAuth
-            .token(
-              TokenRequest(
-                _keycloakService.keycloakConfig.clientId,
-                '${_keycloakService.keycloakConfig.redirectScheme}://callback',
-                serviceConfiguration: _serviceConfiguration(discoveryEndpoints),
-                grantType: 'refresh_token',
-                refreshToken: currentRefreshToken,
-                scopes: ['openid', 'profile', 'email', 'offline_access'],
-                allowInsecureConnections:
-                    _keycloakService.keycloakConfig.allowInsecureConnections,
+  /// Maps the leaf refresher's outcome to auth state — the single mapping
+  /// site for BOTH the notifier-driven and interceptor-driven refreshes
+  /// (#2019 half-two: an interceptor-triggered refresh must still update
+  /// the state the UI observes, or a dead session would keep the app
+  /// looking signed-in). Arm-for-arm the old `_refreshTokenLocked`
+  /// mappings, log sources unchanged.
+  void _onRefreshOutcome(RefreshOutcome outcome) {
+    if (!ref.mounted) return;
+    final (AuthState next, bool clearRetry) = switch (outcome) {
+      RefreshSuccess(:final userId) => (
+        AuthState.authenticated(userId: userId),
+        true,
+      ),
+      RefreshUnauthenticated(:final message, :final clearsRetry) => (
+        message == null
+            ? const AuthState.unauthenticated()
+            : AuthState(
+                status: AuthStatus.unauthenticated,
+                errorMessage: message,
               ),
-            )
-            .timeout(
-              refreshTokenTimeout,
-              onTimeout: () {
-                throw TimeoutException(
-                  'Token refresh timed out',
-                  refreshTokenTimeout,
-                );
-              },
-            );
-
-        final expiration =
-            tokenResponse.accessTokenExpirationDateTime ??
-            DateTime.now().add(const Duration(seconds: 3600));
-
-        final accessToken = tokenResponse.accessToken;
-        if (accessToken == null) {
-          _lastFailedOperation = _FailedOperation.none;
-          _authLogger.logAuthFailure(
-            errorCode: 'REFRESH_FAILED',
-            keycloakEndpoint: _keycloakService.keycloakConfig.realmUrl,
-            message: 'No access token in refresh response',
-            source: 'AuthNotifier.refreshToken',
-          );
-          state = const AuthState.unauthenticated();
-          return;
-        }
-
-        await _tokenStorage.saveTokens(
-          accessToken: accessToken,
-          idToken: tokenResponse.idToken ?? '',
-          refreshToken: tokenResponse.refreshToken ?? currentRefreshToken,
-          accessTokenExpiration: expiration,
-        );
-        if (!ref.mounted) return;
-
-        _lastFailedOperation = _FailedOperation.none;
-        _authLogger.logAuthEvent(
-          message: 'Token refresh successful',
-          source: 'AuthNotifier.refreshToken',
-        );
-        state = AuthState.authenticated(
-          userId: _extractSub(tokenResponse.idToken),
-        );
-      } on FormatException catch (e) {
-        _authLogger.logAuthFailure(
-          errorCode: 'REFRESH_MALFORMED_RESPONSE',
-          keycloakEndpoint: _keycloakService.keycloakConfig.realmUrl,
-          message: 'Malformed token response: $e',
-          source: 'AuthNotifier.refreshToken',
-        );
-        _lastFailedOperation = _FailedOperation.none;
-        await _tokenStorage.deleteAll();
-        if (!ref.mounted) return;
-        state = AuthState(
-          status: AuthStatus.unauthenticated,
-          errorMessage: tr('auth.sessionExpired'),
-        );
-      } on TimeoutException catch (e) {
-        final isDiscovery =
-            (e.message?.contains('Discovery') ?? false) ||
-            e.duration == discoveryTimeout;
-        _authLogger.logAuthFailure(
-          errorCode: isDiscovery
-              ? 'REFRESH_DISCOVERY_TIMEOUT'
-              : 'REFRESH_TIMEOUT',
-          networkReachable: _connectivityChecker.isOnline,
-          message: tr('auth.timeout'),
-          source: 'AuthNotifier.refreshToken',
-        );
-        state = AuthState.error(message: tr('auth.timeout'), retryable: true);
-      } catch (e) {
-        // Layer 2: Safety net — if network error, preserve tokens
-        if (_networkErrorClassifier.isNetworkError(e)) {
-          _authLogger.logAuthFailure(
-            errorCode: 'REFRESH_NETWORK_OFFLINE_MID_OP',
-            networkReachable: false,
-            message: 'Network lost during token refresh',
-            source: 'AuthNotifier.refreshToken',
-          );
-          state = AuthState.error(
-            message: tr('auth.noInternetConnection'),
-            retryable: true,
-          );
-          return;
-        }
-        _lastFailedOperation = _FailedOperation.none;
-        _authLogger.logAuthFailure(
-          errorCode: 'REFRESH_FAILED',
-          keycloakEndpoint: _keycloakService.keycloakConfig.realmUrl,
-          message: 'Token refresh failed — tokens cleared',
-          source: 'AuthNotifier.refreshToken',
-        );
-        await _tokenStorage.deleteAll();
-        if (!ref.mounted) return;
-        state = AuthState(
-          status: AuthStatus.unauthenticated,
-          errorMessage: tr('auth.sessionExpired'),
-        );
-      }
-    } finally {
-      _isRefreshing = false;
-    }
+        clearsRetry,
+      ),
+      RefreshRetryable(:final message) => (
+        AuthState.error(message: message, retryable: true),
+        false,
+      ),
+    };
+    if (clearRetry) _lastFailedOperation = _FailedOperation.none;
+    state = next;
   }
 
   Future<void> logout() async {

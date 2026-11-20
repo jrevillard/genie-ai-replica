@@ -10,9 +10,25 @@ import 'auth_state.dart';
 import 'connectivity_checker.dart';
 import 'insecure_http_client.dart';
 import 'token_storage.dart';
+import 'token_refresher.dart';
 
 final tokenStorageProvider = Provider<TokenStorage>((ref) {
   return SecureTokenStorage();
+});
+
+/// The refresh MECHANISM as a leaf (#2019 half-two): depends only on the
+/// auth leaf providers, so both `AuthNotifier` and the API interceptor can
+/// depend on it without any path re-entering `authProvider`. Owning the
+/// single-flight future in one instance is what keeps Keycloak's rotating
+/// refresh token from being spent twice concurrently.
+final tokenRefresherProvider = Provider<TokenRefresher>((ref) {
+  return TokenRefresher(
+    keycloakService: ref.watch(keycloakServiceProvider),
+    appAuth: ref.watch(appAuthProvider),
+    tokenStorage: ref.watch(tokenStorageProvider),
+    connectivityChecker: ref.watch(connectivityCheckerProvider),
+    logger: ref.read(authLoggerProvider),
+  );
 });
 
 final authLoggerProvider = Provider<AuthLogger>((ref) {

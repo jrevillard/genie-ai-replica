@@ -78,12 +78,6 @@ class FakeReranking:
         return self.outcome
 
 
-def slice_outcome(indices, texts_scores):
-    return RerankOutcome(
-        selection=tuple(ScoredCandidate(text=t, score=s, position=p) for p, (t, s) in enumerate(texts_scores))
-    )
-
-
 class FakeDbFactory:
     """One adapter per graph; records which graphs were searched."""
 
@@ -391,27 +385,30 @@ def test_second_authorized_graph_gets_its_own_view_and_join_names():
 # ---------------------------------------------------------------------
 
 
-def _capability_with_degraded_adapter(reranking, monkeypatch):
-    """A capability whose retrieval adapter reports the CAP-1 degradation."""
+def _capability_with_degraded_adapter(monkeypatch, flag: str):
+    """A capability whose retrieval adapter reports one recorded degradation.
+
+    The adapter instance is built per leg inside _run; the constructor is
+    patched for the duration of the test (monkeypatch undoes it)."""
     rows = [{"key": "c1", "text": "alpha", "score": 0.9, "file_id": "f1"}]
     selection = (ScoredCandidate(text="alpha", score=0.7, position=0),)
     reranking = FakeReranking(outcome=RerankOutcome(selection=selection))
     capability, _e, _r, _f = make_capability(reranking=reranking, rows=rows)
 
-    original_init = __import__(
-        "capabilities.adapters.arango_retrieval", fromlist=["ArangoRetrievalAdapter"]
-    ).ArangoRetrievalAdapter.__init__
+    import capabilities.adapters.arango_retrieval as module
+
+    original_init = module.ArangoRetrievalAdapter.__init__
 
     def init_with_degradation(self, db, arango_config, hybrid_config, **kwargs):
         original_init(self, db, arango_config, hybrid_config, **kwargs)
-        self.cap1_degraded = True
+        setattr(self, flag, True)
 
-    monkeypatch.setattr("capabilities.adapters.arango_retrieval.ArangoRetrievalAdapter.__init__", init_with_degradation)
+    monkeypatch.setattr(module.ArangoRetrievalAdapter, "__init__", init_with_degradation)
     return capability
 
 
 def test_cap1_degradation_with_hits_is_degraded_availability(monkeypatch):
-    capability = _capability_with_degraded_adapter(None, monkeypatch)
+    capability = _capability_with_degraded_adapter(monkeypatch, "cap1_degraded")
     result = asyncio.run(capability.search_knowledge(context(), prepared(), BUDGET))
     assert result.outcome == OutcomeCode.DEGRADED_AVAILABILITY
     assert len(result.hits) == 1
@@ -735,3 +732,8 @@ def test_create_wires_the_contract_surface(monkeypatch):
 
     signature = inspect.signature(capability.search_knowledge)
     assert list(signature.parameters) == ["context", "request", "budget"]
+
+
+# ---------------------------------------------------------------------
+# Boot assembly
+# ---------------------------------------------------------------------

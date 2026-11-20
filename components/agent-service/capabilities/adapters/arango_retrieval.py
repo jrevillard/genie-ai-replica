@@ -365,7 +365,7 @@ class ArangoRetrievalAdapter:
                     key=row.get("key"),
                     text=row.get("text") or "",
                     score=float(row.get("score") or 0.0),
-                    chunk_labels=chunk_labels if chunk_labels is not None else None,
+                    chunk_labels=chunk_labels,
                 )
                 results.append({"doc": doc, "score": float(row.get("score") or 0.0)})
         except Exception as e:

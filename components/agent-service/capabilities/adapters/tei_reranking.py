@@ -20,19 +20,19 @@ silently saturated score. No ``top_n`` is sent to TEI. A 300 s total and a
 import json
 import logging
 import math
+import re
 import statistics
 from dataclasses import dataclass
 
 import httpx
+import numpy as np
 from kneed import KneeLocator
 
-from .env_config import RerankingConfig
+from .env_config import AdaptiveConfig, RerankingConfig
 
 logger = logging.getLogger(__name__)
 
 STRATEGIES = ("slice", "threshold", "slice_threshold", "knee_threshold", "adaptive")
-# The only two strategies that consult RERANKING_THRESHOLD (V02 §4.13 table).
-THRESHOLD_STRATEGIES = ("threshold", "slice_threshold")
 
 
 class RerankerInputTooLongError(Exception):
@@ -91,7 +91,7 @@ def _safe_get_text(texts: list[str], tei_index: int) -> str | None:
     return texts[tei_index]
 
 
-def adaptive_context_selection(texts, chunk_embeddings, query_embedding, reranker_scores):
+def adaptive_context_selection(texts, chunk_embeddings, query_embedding, reranker_scores, config: AdaptiveConfig):
     """Utility-cost context selection, ported behavior-identically from the record.
 
     Picks candidates whose marginal value (utility minus cost) exceeds
@@ -107,13 +107,6 @@ def adaptive_context_selection(texts, chunk_embeddings, query_embedding, reranke
     Returns ``(selected_positions, breakdown)`` where ``breakdown`` is a
     per-candidate record of every term in the utility-cost calculation.
     """
-    import numpy as np
-
-    novelty_sigmoid_a = float(_env("NOVELTY_SIGMOID_A", 20.0))
-    novelty_sigmoid_b = float(_env("NOVELTY_SIGMOID_B", 0.25))
-    context_decay_factor = float(_env("CONTEXT_DECAY_FACTOR", 0.0025))
-    min_value_threshold = float(_env("MIN_VALUE_THRESHOLD", -1.0))
-
     n = len(texts)
     breakdown: list[dict] = []
     if n == 0:
@@ -136,7 +129,7 @@ def adaptive_context_selection(texts, chunk_embeddings, query_embedding, reranke
         return float(np.dot(vec_a, vec_b) / (norm_a * norm_b))
 
     def novelty_sigmoid(novelty):
-        return 1.0 / (1.0 + math.exp(-novelty_sigmoid_a * (novelty - novelty_sigmoid_b)))
+        return 1.0 / (1.0 + math.exp(-config.novelty_sigmoid_a * (novelty - config.novelty_sigmoid_b)))
 
     for i in range(n):
         score = reranker_scores[i]
@@ -165,7 +158,7 @@ def adaptive_context_selection(texts, chunk_embeddings, query_embedding, reranke
 
         # Token cost — each candidate consumes context-window budget (~4 chars/token)
         token_count = max(1, len(texts[i]) / 4.0)
-        context_decay_cost = context_decay_factor * token_count
+        context_decay_cost = config.context_decay_factor * token_count
 
         # Confusion cost — low-confidence candidates risk degrading the answer
         denominator = max_score - avg_score
@@ -175,7 +168,7 @@ def adaptive_context_selection(texts, chunk_embeddings, query_embedding, reranke
         total_cost = context_decay_cost + confusion_cost
 
         value = utility - total_cost
-        is_selected = value > min_value_threshold
+        is_selected = value > config.min_value_threshold
         logger.info(
             f"[ADAPTIVE] idx={i} score={score:.4f} R={relevance:.4f} "
             f"N={novelty:.4f} U={utility:.4f} C={total_cost:.4f} V={value:.4f}"
@@ -202,19 +195,19 @@ def adaptive_context_selection(texts, chunk_embeddings, query_embedding, reranke
     return selected_indices, breakdown
 
 
-def _env(name: str, default):
-    import os
-
-    raw = os.getenv(name)
-    return default if raw is None or raw == "" else raw
-
-
 class TeiRerankingAdapter:
     """Calls TEI ``/rerank`` and applies the recorded selection strategies."""
 
-    def __init__(self, endpoint: str, config: RerankingConfig, transport: httpx.AsyncBaseTransport | None = None):
+    def __init__(
+        self,
+        endpoint: str,
+        config: RerankingConfig,
+        transport: httpx.AsyncBaseTransport | None = None,
+        adaptive_config: AdaptiveConfig | None = None,
+    ):
         self._endpoint = endpoint.rstrip("/")
         self._config = config
+        self._adaptive = adaptive_config if adaptive_config is not None else AdaptiveConfig.load()
         # Injectable for the tests (httpx.MockTransport); production uses
         # the default connection pool.
         self._transport = transport
@@ -252,8 +245,6 @@ class TeiRerankingAdapter:
             error_message = decoded.get("error", "unknown")
             given_tokens = None
             if error_message:
-                import re
-
                 match = re.search(r"Given:\s*(\d+)", error_message)
                 if match:
                     given_tokens = int(match.group(1))
@@ -371,6 +362,7 @@ class TeiRerankingAdapter:
                 chunk_embeddings=ranked_chunk_embeddings,
                 query_embedding=query_vector,
                 reranker_scores=ranked_scores,
+                config=self._adaptive,
             )
             for position in selected_positions:
                 results.append(
@@ -380,15 +372,6 @@ class TeiRerankingAdapter:
                         position=ranked_positions[position],
                     )
                 )
-        else:
-            # Unreachable: resolve_strategy() guarantees a known strategy.
-            # Kept as a floor — an empty selection would be a silent failure,
-            # a slice selection is not.
-            for entry in decoded[:top_n]:
-                text = _safe_get_text(texts, entry["index"])
-                if text is None:
-                    continue
-                results.append(ScoredCandidate(text=text, score=entry["score"], position=entry["index"]))
         return results
 
     def calibrate(self, score: float) -> float:

@@ -173,8 +173,6 @@ class SearchKnowledgeCapability:
         labels = list(context.requested_labels)
         try:
             embedded = await self._embedding.embed(request.query.text)
-        except asyncio.CancelledError:
-            raise
         except Exception as e:
             # The recorded chat path fails the turn when the embedding stage
             # fails; it never abstains on an embedding error (V02 §4.1).
@@ -197,8 +195,6 @@ class SearchKnowledgeCapability:
             )
             try:
                 leg_results = await adapter.fused_candidates(embedded.embedding, embedded.raw_text, labels)
-            except asyncio.CancelledError:
-                raise
             except Exception as e:
                 # Only the file_id-enrichment leg raises (its AQL runs
                 # unguarded, as recorded); the dense and BM25 legs swallow
@@ -218,12 +214,7 @@ class SearchKnowledgeCapability:
         if not candidates:
             # The recorded distinct abstention: the retriever returned nothing.
             logger.warning("abstained.reason=no_documents_retrieved")
-            return SearchKnowledgeResult(
-                outcome=OutcomeCode.INSUFFICIENT_EVIDENCE,
-                hits=(),
-                truncated=False,
-                query_preparation_status=request.query.preparation_status,
-            )
+            return self._insufficient(request)
 
         texts = [item["doc"].text for item in candidates]
         # The adaptive strategy consumes the chunk embeddings the deployed
@@ -242,14 +233,7 @@ class SearchKnowledgeCapability:
             # The recorded abstention: TEI rejected the input (422 + Validation).
             logger.warning("abstained.reason=reranker_input_too_long")
             logger.info(_RERANKER_INPUT_TOO_LONG_ABSTENTION_TEXT)
-            return SearchKnowledgeResult(
-                outcome=OutcomeCode.INSUFFICIENT_EVIDENCE,
-                hits=(),
-                truncated=False,
-                query_preparation_status=request.query.preparation_status,
-            )
-        except asyncio.CancelledError:
-            raise
+            return self._insufficient(request)
         except Exception as e:
             # No fallback to the retrieval order: a reranker transport or
             # protocol failure fails the turn (V02 §4.14).
@@ -257,12 +241,7 @@ class SearchKnowledgeCapability:
         if outcome.selected_nothing:
             # The recorded abstention, distinct from empty retrieval.
             logger.warning("abstained.reason=reranker_selected_nothing")
-            return SearchKnowledgeResult(
-                outcome=OutcomeCode.INSUFFICIENT_EVIDENCE,
-                hits=(),
-                truncated=False,
-                query_preparation_status=request.query.preparation_status,
-            )
+            return self._insufficient(request)
 
         # Map the selected positions back to their enriched candidates. The
         # selection keeps TEI's score-descending order — the hits carry that
@@ -288,16 +267,23 @@ class SearchKnowledgeCapability:
             # insufficiency (the size breach is the reason, not a retrieval
             # failure).
             logger.warning("abstained.reason=result_budget_exhausted")
-            return SearchKnowledgeResult(
-                outcome=OutcomeCode.INSUFFICIENT_EVIDENCE,
-                hits=(),
-                truncated=True,
-                query_preparation_status=request.query.preparation_status,
-            )
+            return self._insufficient(request, truncated=True)
         outcome_code = OutcomeCode.DEGRADED_AVAILABILITY if degraded else OutcomeCode.SUCCESS
         return SearchKnowledgeResult(
             outcome=outcome_code,
             hits=tuple(hits),
+            truncated=truncated,
+            query_preparation_status=request.query.preparation_status,
+        )
+
+    def _insufficient(self, request: SearchKnowledgeInput, truncated: bool = False) -> SearchKnowledgeResult:
+        """One constructor for every insufficiency answer: empty hits, the
+        query's preparation status echoed, the truncation flag only when the
+        result budget caused it. The recorded reasons stay on the log surface
+        at each call site — never merged here."""
+        return SearchKnowledgeResult(
+            outcome=OutcomeCode.INSUFFICIENT_EVIDENCE,
+            hits=(),
             truncated=truncated,
             query_preparation_status=request.query.preparation_status,
         )

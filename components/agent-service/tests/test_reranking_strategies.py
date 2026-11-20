@@ -12,7 +12,7 @@ import json
 import httpx
 import pytest
 
-from capabilities.adapters.env_config import RerankingConfig
+from capabilities.adapters.env_config import AdaptiveConfig, RerankingConfig
 from capabilities.adapters.tei_reranking import (
     RerankerInputTooLongError,
     TeiRerankingAdapter,
@@ -269,6 +269,7 @@ def test_adaptive_breakdown_records_every_term():
         chunk_embeddings=[[1.0, 0.0], [0.0, 1.0]],
         query_embedding=[1.0, 0.0],
         reranker_scores=[0.9, 0.5],
+        config=AdaptiveConfig.load({}),
     )
     assert len(breakdown) == 2
     for record in breakdown:

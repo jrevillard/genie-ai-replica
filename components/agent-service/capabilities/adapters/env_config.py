@@ -2,9 +2,13 @@
 # SPDX-License-Identifier: Apache-2.0
 """The frozen env-knob surface of the search adapters.
 
-Every knob the V02 record lists (``docs/baselines/v02-opea-query-path-contract.md``
-§3, §6) is read here under the SAME name with the SAME code default, so a
-deployment that tunes the legacy path tunes this port identically. The values
+Every retrieval / reranking / embedding-budget knob the V02 record lists
+(``docs/baselines/v02-opea-query-path-contract.md`` §3, §6) is read here under
+the SAME name with the SAME code default, so a deployment that tunes the
+legacy path tunes this port identically. Two recorded embedding knobs are the
+exception and live in their own ported module:
+``capabilities/adapters/query_instruction.py`` reads ``TEI_EMBED_MODEL`` and
+``EMBEDDING_QUERY_INSTRUCTIONS`` (V02 §4.12's contract surface). The values
 recorded as deployed are the ones the record measured; the values recorded as
 code defaults apply when the env does not set the knob.
 
@@ -178,6 +182,27 @@ class RerankingConfig:
         if requested and log is not None:
             log.warning(f"Unknown strategy {requested[:64]!r}. Defaulting to {resolved_default}.")
         return resolved_default
+
+
+@dataclass(frozen=True)
+class AdaptiveConfig:
+    """The adaptive selection's utility-cost knobs — the recorded code
+    defaults, read once at load (the deployed module reads them at import)."""
+
+    novelty_sigmoid_a: float
+    novelty_sigmoid_b: float
+    context_decay_factor: float
+    min_value_threshold: float
+
+    @classmethod
+    def load(cls, env=None) -> "AdaptiveConfig":
+        source = os.environ if env is None else env
+        return cls(
+            novelty_sigmoid_a=float(source.get("NOVELTY_SIGMOID_A", 20.0)),
+            novelty_sigmoid_b=float(source.get("NOVELTY_SIGMOID_B", 0.25)),
+            context_decay_factor=float(source.get("CONTEXT_DECAY_FACTOR", 0.0025)),
+            min_value_threshold=float(source.get("MIN_VALUE_THRESHOLD", -1.0)),
+        )
 
 
 @dataclass(frozen=True)

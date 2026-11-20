@@ -281,11 +281,11 @@ Quality pass, step 1 (`/simplify`: reuse, simplification, efficiency, altitude �
 
 - The `git ls-files` enumeration extracted to `validators/tracked-files.js` (memoized full tree, filtered per call) — the gate and `stray-copy-artifacts.test.js` consume one helper instead of carrying two copies of a drift-prone incantation, the same treatment the glob matcher got in review round 1.
 - The vacuous pin removed ("every tracked file is scanned" compared a flatMap's length to the sum of the same enumerations — it could not fail and re-ran `git ls-files` to do it); the anti-vacuity floors (`>= 5`, the existence loop) carry the weight.
-- One `readerFor(root)` factory replaces nine inline reader lambdas; `scanFiles` skips the read for a file no branch would scan; the manifest read is memoized.
+- One `readerFor(root)` factory replaces eight inline reader lambdas; `scanFiles` skips the read for a file no branch would scan; the manifest read is memoized.
 - The glob matcher memoizes its brace expansions and segment RegExps (pure functions; the trigger-assertion test calls it hundreds of times over the same small glob list).
 - The manifest `_comment` no longer re-lists the marker inventory (it had drifted once already); it points at the gate's header — one inventory.
 
-Skipped: the per-file `uncoveredFiles` assertion kept beside the one-glob assertion (the pair is deliberate — the per-file form names the uncovered files, the boolean prints only `false`). The scan guard is an efficiency measure with no observable behaviour change, so it carries no sample of its own.
+Skipped: the per-file `uncoveredFiles` assertion kept beside the one-glob assertion (the pair is deliberate — the per-file form names the uncovered files, the boolean prints only `false`). The scan guard and the directory-prefix filter of the shared enumerator are efficiency measures with no observable behaviour change on this tree, so neither carries a sample of its own; gross enumeration breakage trips the floors, a sibling-string-prefix edge (no such path exists today) would not.
 
 ## Design Notes
 

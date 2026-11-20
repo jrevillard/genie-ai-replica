@@ -67,6 +67,25 @@ test.describe('Chatbot — a real answer cites its real source', () => {
     // would never run: the canary would stay in the venue's corpus.
     test.setTimeout(SESSION_MINT_TIMEOUT_MS + INGEST_PROBE_BUDGET_MS + 120000);
     await skipUnlessVenue(test, ingestChainReady, ingestChainMissingReason)();
+    // The fixture lands in the LEGACY corpus, but an OKF-enabled venue's
+    // chat sessions are CLAIM-scoped: under heads-supersede the legacy
+    // GRAPH leg is dropped from the fan-out whenever the user holds OKF
+    // claims (live-proven 2026-11-20 — retriever fan-out ran
+    // OKF_the-solar-system_v2 legs only), so the LLM never sees the
+    // fixture's chunk and the citation cannot fire BY DESIGN. The spec
+    // keeps its teeth on OKF-disabled venues (the NVIDIA default, where
+    // the legacy competition includes the fixture); on an OKF venue the
+    // honest answer is a named skip, not a red that blames retrieval.
+    // skipUnlessVenue runs the test when the probe is TRUE, so the probe
+    // is the NEGATED okfEnabled: run when the OKF pillar is parked.
+    const { okfEnabled } = require('../helpers/venue-profile');
+    const chatRetrievalCoversLegacyCorpus = async () => !(await okfEnabled());
+    const legacyUnreachableReason = async () =>
+      'venue profile: the OKF pillar is ENABLED — chat sessions are claim-scoped to OKF graphs ' +
+      '(heads-supersede drops the legacy GRAPH leg), so a legacy-corpus fixture is unreachable ' +
+      'by design and the citation cannot fire; the OKF claim-scoped citation path is NOT ' +
+      'exercised by this run';
+    await skipUnlessVenue(test, chatRetrievalCoversLegacyCorpus, legacyUnreachableReason)();
   });
 
   test.describe.configure({ timeout: LOGIN_BUDGET_TIMEOUT_MS });

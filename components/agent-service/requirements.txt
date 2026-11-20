@@ -14,6 +14,13 @@
 #   opentelemetry-exporter-otlp-proto-http — OTLP/HTTP export to the collector
 #   opentelemetry-instrumentation-fastapi — FastAPI request spans
 #   pydantic                              — the typed document capability contract
+#   python-arango                         — the ArangoDB driver (search_knowledge adapter, story 1.6)
+#   httpx                                 — the async TEI calls (embed + rerank); promoted from
+#                                            the test tree (same audited pin, story 1.6)
+#   kneed                                 — the knee_threshold selection strategy; the SAME pin
+#                                            the deployed reranker serves (behavior frozen to V02)
+#   numpy / scipy                         — kneed's tree (scipy) + the adaptive selection math;
+#                                            numpy pinned to the deployed reranker's 1.26.4
 #
 # Licence + defaults audit for every pin: docs/dependencies/agent-service-dependency-evidence.json
 # (procedure: docs/dependencies/pre-adoption-checklist.md).
@@ -29,8 +36,12 @@ deprecated==1.3.1
 fastapi==0.141.1
 googleapis-common-protos==1.75.0
 h11==0.16.0
+httpcore==1.0.9
+httpx==0.28.1
 idna==3.20
 importlib-metadata==8.4.0
+kneed==0.9.0
+numpy==1.26.4
 opentelemetry-api==1.27.0
 opentelemetry-exporter-otlp-proto-common==1.27.0
 opentelemetry-exporter-otlp-proto-http==1.27.0
@@ -41,10 +52,15 @@ opentelemetry-proto==1.27.0
 opentelemetry-sdk==1.27.0
 opentelemetry-semantic-conventions==0.48b0
 opentelemetry-util-http==0.48b0
+packaging==26.3
 protobuf==4.25.9
 pydantic==2.14.4
 pydantic-core==2.50.5
+pyjwt==2.15.1
+python-arango==8.3.7
 requests==2.34.2
+requests-toolbelt==1.0.0
+scipy==1.17.1
 # setuptools is a RUNTIME dependency here, not a build tool: the
 # opentelemetry-instrumentation 0.48b0 line resolves its entry points through
 # pkg_resources, which setuptools ships. setuptools 82 DROPPED pkg_resources,

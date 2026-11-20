@@ -41,7 +41,7 @@ development_status:
   1-3-stand-up-components-agent-service-deployable-and-switchable: done
   1-4-enforce-opea-free-with-a-ci-gate: review
   1-5-define-the-document-capability-contract-with-v04-acceptance: done
-  1-6-implement-search_knowledge-opea-free-behavior-frozen: backlog
+  1-6-implement-search_knowledge-opea-free-behavior-frozen: review
   1-7-implement-read_source-and-the-authorization-executor: backlog
   1-8-implement-the-input-preparation-module: backlog
   1-9-behavioral-equivalence-suite-e01-runway-and-v05-inventory: backlog

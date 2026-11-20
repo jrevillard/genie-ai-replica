@@ -146,10 +146,7 @@ void main() {
       // rewritten to the origin discovery itself reached.
       expect(e2eConfig.keycloakUrl, equals('https://10.0.2.2/auth'));
       expect(e2eConfig.realm, equals('genie'));
-      expect(
-        e2eConfig.realmUrl,
-        equals('https://10.0.2.2/auth/realms/genie'),
-      );
+      expect(e2eConfig.realmUrl, equals('https://10.0.2.2/auth/realms/genie'));
       expect(e2eConfig.clientId, equals('genie-mobile-e2e'));
       expect(e2eConfig.redirectScheme, equals('com.itu.genieai.e2e'));
       expect(e2eConfig.backendUrl, equals('https://10.0.2.2'));

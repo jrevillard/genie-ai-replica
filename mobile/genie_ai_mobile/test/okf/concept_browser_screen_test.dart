@@ -7,6 +7,7 @@ import 'package:genie_ai_mobile/design_system/components/ds_button.dart';
 import 'package:genie_ai_mobile/design_system/components/ds_spinner.dart';
 import 'package:genie_ai_mobile/okf/concept_browser_controller.dart';
 import 'package:genie_ai_mobile/okf/concept_browser_repository.dart';
+import 'package:genie_ai_mobile/okf/markdown_chunker.dart';
 import 'package:genie_ai_mobile/okf/concept_browser_screen.dart';
 import 'package:genie_ai_mobile/services/i18n_service.dart';
 import 'package:genie_ai_mobile/utils/theme_manager.dart';
@@ -204,6 +205,76 @@ void main() {
     await tester.pump();
     expect(find.text('Myself'), findsNothing);
     expect(find.byType(ActionChip), findsNothing);
+  });
+
+  testWidgets(
+    // The 2026-11-20 emulator wedge: a serving card carried a 249k-char
+    // body and one whole-document MarkdownBody wedged the raster pipeline
+    // (the card pane painted nothing for minutes). The body now renders
+    // through chunked lazy items — the full content, parsed by the
+    // viewport.
+    'a large body renders as bounded lazy chunks with the chips tail',
+    (tester) async {
+      final body = List.generate(
+        120,
+        (i) => '## Heading $i\n\nParagraph $i ${'z' * 280}.\n\n',
+      ).join(); // ~36k chars -> ~9 chunks at 4000
+      fake.pagesByRepo['repo-a'] = page(1, [row('c1')]);
+      fake.cardsByRepo['repo-a'] = {
+        'c1': card(
+          'repo-a',
+          'c1',
+          body: body,
+          objectLinks: [ConceptCardLink(toConceptId: 'c2', label: 'Related')],
+        ),
+      };
+      await pumpBrowser(tester);
+      await tester.tap(find.text('Title c1'));
+      await tester.pump();
+
+      final chunks = chunkMarkdownBody(body);
+      expect(chunks.length, greaterThan(3));
+      // The first chunk is on screen and keyed; the viewport only ever
+      // parses the visible slice of a 36k body.
+      expect(
+        find.byKey(const ValueKey('okf-browser-md-chunk-0')),
+        findsOneWidget,
+      );
+      expect(find.text('Heading 0', findRichText: true), findsOneWidget);
+      // LAZY: the LAST heading is far off-viewport and not built yet — a
+      // whole-document MarkdownBody would have it in the tree immediately.
+      expect(find.text('Heading 119', findRichText: true), findsNothing);
+      // Scrolling reaches it — the FULL body is in the list, nothing
+      // truncated — and the chips tail follows it.
+      var scrolled = false;
+      for (var drag = 0; drag < 60 && !scrolled; drag++) {
+        await tester.drag(find.byType(ListView).first, const Offset(0, -500));
+        await tester.pump();
+        scrolled = find
+            .text('Related', findRichText: true)
+            .evaluate()
+            .isNotEmpty;
+      }
+      expect(scrolled, isTrue, reason: 'the chips tail follows the full body');
+      expect(find.text('Heading 119', findRichText: true), findsOneWidget);
+    },
+  );
+
+  testWidgets('a single-paragraph body still renders exactly one chunk', (
+    tester,
+  ) async {
+    fake.pagesByRepo['repo-a'] = page(1, [row('c1')]);
+    fake.cardsByRepo['repo-a'] = {
+      'c1': card('repo-a', 'c1', body: 'Body of c1'),
+    };
+    await pumpBrowser(tester);
+    await tester.tap(find.text('Title c1'));
+    await tester.pump();
+    expect(
+      find.byKey(const ValueKey('okf-browser-md-chunk-0')),
+      findsOneWidget,
+    );
+    expect(find.byKey(const ValueKey('okf-browser-md-chunk-1')), findsNothing);
   });
 
   testWidgets('tapping a chip is a forward visit — history grows', (

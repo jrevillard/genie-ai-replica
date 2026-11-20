@@ -15,6 +15,7 @@ import '../design_system/tokens/spacing.dart';
 import '../services/i18n_service.dart';
 import '../utils/theme_manager.dart';
 import 'concept_browser_controller.dart';
+import 'markdown_chunker.dart';
 
 /// The mobile OKF concept-tree browser (#1939 — the W9 browser's mobile
 /// mirror). Citizen-scoped reads only: the tree list, the concept pane,
@@ -338,44 +339,67 @@ class _ConceptBrowserScreenState extends ConsumerState<ConceptBrowserScreen> {
       );
     }
 
-    return ListView(
-      padding: const EdgeInsets.all(DsSpacing.md),
-      children: [
-        Row(
+    // The body renders through chunked lazy items (2026-11-20): a serving
+    // repo's citizen card carried a 249,557-char body and one
+    // whole-document MarkdownBody wedged the render pipeline — the card
+    // pane painted nothing. The chunker cuts at paragraph boundaries and
+    // the ListView builds only the visible slice: a 250k body parses
+    // viewport-sized pieces, the FULL content kept. MarkdownBody DEFAULTS
+    // — no HTML extension. A concept body's raw HTML renders as text; it
+    // never executes.
+    final chunks = chunkMarkdownBody(card.body ?? '');
+    final hasChips = chips.isNotEmpty;
+
+    Widget buildItem(BuildContext context, int index) {
+      if (index == 0) {
+        return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Expanded(
-              child: Text(
-                card.title,
-                style: TextStyle(
-                  color: tokens.fg,
-                  fontSize: tokens.textLg,
-                  fontWeight: FontWeight.w600,
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Expanded(
+                  child: Text(
+                    card.title,
+                    style: TextStyle(
+                      color: tokens.fg,
+                      fontSize: tokens.textLg,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
                 ),
-              ),
+                DsButton(
+                  key: const ValueKey('okf-browser-download'),
+                  icon: Icons.download,
+                  iconOnly: true,
+                  small: true,
+                  onPressed: () => _download(card),
+                ),
+              ],
             ),
-            DsButton(
-              key: const ValueKey('okf-browser-download'),
-              icon: Icons.download,
-              iconOnly: true,
-              small: true,
-              onPressed: () => _download(card),
-            ),
+            const SizedBox(height: DsSpacing.sm),
           ],
-        ),
-        const SizedBox(height: DsSpacing.sm),
-        // MarkdownBody DEFAULTS — no HTML extension. A concept body's raw
-        // HTML renders as text; it never executes.
-        MarkdownBody(data: card.body ?? ''),
-        if (chips.isNotEmpty) ...[
-          const SizedBox(height: DsSpacing.md),
-          Wrap(
-            spacing: DsSpacing.sm,
-            runSpacing: DsSpacing.sm,
-            children: chips,
-          ),
-        ],
-      ],
+        );
+      }
+      final chunkIndex = index - 1;
+      if (chunkIndex < chunks.length) {
+        return Padding(
+          key: ValueKey('okf-browser-md-chunk-$chunkIndex'),
+          padding: const EdgeInsets.only(bottom: DsSpacing.sm),
+          child: MarkdownBody(data: chunks[chunkIndex]),
+        );
+      }
+      return Wrap(
+        spacing: DsSpacing.sm,
+        runSpacing: DsSpacing.sm,
+        children: chips,
+      );
+    }
+
+    return ListView.builder(
+      padding: const EdgeInsets.all(DsSpacing.md),
+      itemCount: 1 + chunks.length + (hasChips ? 1 : 0),
+      itemBuilder: buildItem,
     );
   }
 

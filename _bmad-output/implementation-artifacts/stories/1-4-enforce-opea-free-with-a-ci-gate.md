@@ -4,7 +4,7 @@ type: 'feature'
 created: '2026-11-19'
 status: 'in-review'
 route: 'dispatch'
-review_loop_iteration: 12
+review_loop_iteration: 13
 baseline_commit: '6c72cd95cccf5ded8b51ba94793dd620f60409a3'
 context:
   - '{project-root}/_bmad-output/implementation-artifacts/epic-1-context.md'
@@ -227,11 +227,20 @@ Global round 4 (`/code-review`, span since the last global `53096455e` → `8de3
 |---|---|---|---|
 | G4-1 | A CRLF line continuation (`import os, <CR><LF> comps.core`) escapes the import matcher: the continuation is `\\\n`, not `\\\r?\n` — a Windows-committed file hides the coupling | important | **Fixed** — the continuation crosses `\\\r?\n`; a CRLF sample pins it |
 | G4-2 | The `GNUmakefile` alternative of the Makefile family is unpinned: its sample holds an empty-rules control, so reverting the alternative leaves the suite green — the exact class round-6 I-1 rated important | important | **Fixed** — the GNUmakefile sample carries the marker now; its revert turns it red. The empty-rules control had proven nothing about detection in three rounds |
-| G4-3 | The round-8 M-2 disposition "the newline restored" was false at HEAD: the append had re-glued `## Design Notes` one row down | important | **Fixed** — the glue removed; the round-8 row amended to record it |
+| G4-3 | The round-8 M-2 disposition "the newline restored" was false at HEAD: the append had re-glued `## Design Notes` one row down | important | **Fixed** — the glue removed; the round-8 row amended to record it. (The global-4 append itself re-glued the heading into the G4-7 row — caught by the chain's f=0 review, removed in its correction below.) |
 | G4-4 | An `as` alias on a NON-final module (`import os as o, comps.core`) breaks the module-list walk — legal Python, pre-existing gap on the line this span kept editing | pre-existing | **Fixed** — the prefix items accept an optional alias; two samples pin it |
 | G4-5 | Only ONE continuation is crossed (`?` quantifier); two in a row escape while the scope note claims the shape | nit | **Fixed** — the continuation quantifier is `*`; a two-continuation sample pins it; the scope note restated |
 | G4-6 | `stripBuildComments` deletes every CR, so a lone-CR line ending merges a comment with the code that follows and hides the marker | nit | **Fixed** — CR normalizes to LF; a lone-CR sample pins it |
-| G4-7 | The lock-file widening admits non-Python locks: a yarn.lock entry for a package literally named `comps` (`comps@^1:`) fires the requirement marker — a deliberate widening without a pinned boundary | nit | **EXTRACTED** — issue #2024 (`status::backlog`, never promoted): per-lock-format marker sets, or scoping the `@` alternative inside Python locks only |## Design Notes
+| G4-7 | The lock-file widening admits non-Python locks: a yarn.lock entry for a package literally named `comps` (`comps@^1:`) fires the requirement marker — a deliberate widening without a pinned boundary | nit | **EXTRACTED** — issue #2024 (`status::backlog`, never promoted): per-lock-format marker sets, or scoping the `@` alternative inside Python locks only |
+
+Fix-review round 9 (`FIX-REVIEW`, correction diff `8de388e2d` → `80fd3954b`, f=0 of the global-4 chain) — 0 critical, 1 important, 0 minor. The reviewer re-ran the whole mutation matrix (all five pins RED on exactly their own sample; negative matrix green throughout; full suite 584/584) and audited issue #2024 on GitLab.
+
+| # | Finding | Verdict | Disposition |
+|---|---|---|---|
+| I-1 | The global-4 append re-glued the `## Design Notes` heading INTO the G4-7 table row (`\|## Design Notes`, no standalone heading line remains) — the same seam that produced G4-3 and the round-8 defect, now inverted | important | **Fixed** — the heading restored as its own line, with the blank line after it; both G4-3's and the round-8 M-2 amendment's claims are true at HEAD now |
+
+All seven global-4 findings audited: six FIXED (each mutation-proven by the reviewer), G4-7 FIXED as EXTRACTED.
+## Design Notes
 
 - The manifest is JSON because it is data consumed by two kinds of checker (the gate and the human who extends it) and it must stay diffable in a review. The house precedent for the same thing is `scripts/ci/config-parity-allowlist.json`.
 

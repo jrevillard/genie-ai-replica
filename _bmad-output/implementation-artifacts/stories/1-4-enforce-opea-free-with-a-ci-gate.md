@@ -4,7 +4,7 @@ type: 'feature'
 created: '2026-11-19'
 status: 'in-review'
 route: 'dispatch'
-review_loop_iteration: 17
+review_loop_iteration: 16
 baseline_commit: '6c72cd95cccf5ded8b51ba94793dd620f60409a3'
 context:
   - '{project-root}/_bmad-output/implementation-artifacts/epic-1-context.md'
@@ -263,6 +263,14 @@ Fix-review round 11 (`FIX-REVIEW`, correction diff `d8911e5cd` → `8fd70d738`, 
 | # | Finding | Verdict | Disposition |
 |---|---|---|---|
 | M-1 | The Global-5 block itself recreated the table seam twice (its summary line glued under the G5-5 row, and the round-9 closing sentence stranded below it) and inverted the intro-then-table convention | minor | **Fixed** — the region rebuilt in convention order: intro, blank, table for every round; the round-9 closing back in its own block |
+
+Fix-review round 12 (`FIX-REVIEW`, correction diff `8fd70d738` → `0c72fefe6`, f=1 of the global-5 chain) — 0 critical, 1 important, 1 minor:
+
+| # | Finding | Verdict | Disposition |
+|---|---|---|---|
+| I-1 | The round-11 correction re-glued the seam one block lower: the round-11 table's last row sat flush against `## Design Notes` — round-10 M-1's "ends the recurrence class" was false at HEAD | important | **Fixed** — the blank line before the heading restored (verified byte-exact before commit this time) |
+| M-1 | `review_loop_iteration` read 17 against a log of 16 events (the rebuild bumped the counter twice for one round) | minor | **Fixed** — the counter set to 16, matching the log |
+
 ## Design Notes
 
 - The manifest is JSON because it is data consumed by two kinds of checker (the gate and the human who extends it) and it must stay diffable in a review. The house precedent for the same thing is `scripts/ci/config-parity-allowlist.json`.

@@ -23,7 +23,7 @@ import json
 import logging
 import time
 
-from .config import NEGATIVE_CACHE_SECONDS, REGISTRY_RETRY_SECONDS
+from .config import REGISTRY_RETRY_SECONDS
 
 logger = logging.getLogger(__name__)
 
@@ -123,8 +123,3 @@ class LanguageRegistry:
         """
         self._load()
         return dict(self._scripts)
-
-
-# Re-exported for callers that want the deployed constant name on the surface.
-LANGUAGE_MAP_RETRY_SECONDS = REGISTRY_RETRY_SECONDS
-NEGATIVE_CACHE_TTL = NEGATIVE_CACHE_SECONDS

@@ -21,6 +21,33 @@ import os
 from dataclasses import dataclass
 from pathlib import Path
 
+
+def _env_int(source, name: str, default: int) -> int:
+    """Parse an int env var tolerantly: unset OR set-to-empty (compose's
+    default injection for the semantic knobs) or non-numeric values all
+    fall back to the default instead of crash-looping the service at
+    wiring time (deployed ``_env_int`` — issue #1091 fixed this crash
+    class in the deployed module; the port inherits the tolerance)."""
+    raw = source.get(name)
+    if raw is None or str(raw).strip() == "":
+        return default
+    try:
+        return int(raw)
+    except (TypeError, ValueError):
+        return default
+
+
+def _env_float(source, name: str, default: float) -> float:
+    """The float twin of :func:`_env_int` (deployed ``_env_float``)."""
+    raw = source.get(name)
+    if raw is None or str(raw).strip() == "":
+        return default
+    try:
+        return float(raw)
+    except (TypeError, ValueError):
+        return default
+
+
 # The package-relative default of the vendored language registry — the same
 # resolution rule the deployed module uses (the registry is resolved next to
 # the module, never against the working directory: a service started from
@@ -92,9 +119,12 @@ class PreparationConfig:
         return cls(
             translation_endpoint=endpoint,
             model_id=str(source.get("VLLM_TRANSLATION_MODEL_ID", "")),
-            service_timeout_seconds=int(source.get("TRANSLATION_SERVICE_TIMEOUT", 180)),
-            max_translation_chars=int(source.get("MAX_TRANSLATION_CHARS", 2000)),
-            max_translation_chars_cap=int(source.get("MAX_TRANSLATION_CHARS") or 0),
+            service_timeout_seconds=_env_int(source, "TRANSLATION_SERVICE_TIMEOUT", 180),
+            max_translation_chars=_env_int(source, "MAX_TRANSLATION_CHARS", 2000),
+            # The explicit cap reads the SAME knob with no default: unset or
+            # empty means 0 (no cap on the derived budget), exactly the
+            # deployed two-read semantics.
+            max_translation_chars_cap=_env_int(source, "MAX_TRANSLATION_CHARS", 0),
             # The completion-cap constants are the deployed code constants.
             prompt_overhead_tokens=512,
             chars_per_token=3,
@@ -104,9 +134,12 @@ class PreparationConfig:
             completion_needed_multiplier=4,
             completion_needed_margin=256,
             completion_base_ceiling=4096,
+            # The registry path is a PATH knob, not a semantic knob: deployed
+            # parity keeps the bare getenv default (set-to-empty is honored
+            # as the broken path it is, not silently repaired).
             registry_path=str(source.get("LANGUAGE_REGISTRY_FILEPATH", DEFAULT_REGISTRY_PATH)),
-            probe_timeout_seconds=float(source.get("MODEL_PROBE_TIMEOUT_SECONDS", 10.0)),
-            detect_ttl_seconds=int(source.get("MODEL_DETECT_TTL", 60)),
+            probe_timeout_seconds=_env_float(source, "MODEL_PROBE_TIMEOUT_SECONDS", 10.0),
+            detect_ttl_seconds=_env_int(source, "MODEL_DETECT_TTL", 60),
             bearer=source.get("OPENAI_API_KEY"),
             probe_bearer=source.get("VLLM_API_KEY"),
             tls_verify=str(source.get("OPEA_SSL_SKIP_VERIFY", "")) != "1",

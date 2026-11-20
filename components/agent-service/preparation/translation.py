@@ -465,9 +465,12 @@ class TranslationClient:
 
         Callers pass the id they already resolved, so one read decides the
         payload AND the response parse (a second read would re-probe and
-        could disagree).
+        could disagree). A non-string id (a proxy answering a scalar) is
+        not a TranslateGemma id: the generic path runs, and no AttributeError
+        escapes the preparation — a degraded discovery must degrade, never
+        crash the caller.
         """
-        return bool(model_id) and "translategemma" in model_id.lower()
+        return isinstance(model_id, str) and "translategemma" in model_id.lower()
 
     # --- the budget ---
 
@@ -675,14 +678,18 @@ class TranslationClient:
 
     # --- the seam ---
 
-    async def translate_prompt(self, prompt: str) -> str:
+    async def translate_prompt(self, prompt: str, translategemma: bool, model_id: str | None) -> str:
         """Translate one prompt and return the NON-EMPTY translated text.
 
         The one seam behind both history shapes: the completion budget is
         measured against the window the translation model serves, the request
         goes out with that budget, and an empty or cut-off completion is a
         failure — so the budget, the request and the refusal live in one
-        place.
+        place. ``translategemma`` and ``model_id`` are the resolution the
+        caller ALREADY made for its own prompt choice (deployed order: one
+        read, passed down — a second read would re-probe, cost a failed
+        probe per read on a down endpoint, and could disagree with the
+        prompt the request carries).
 
         Raises:
             TranslationTimeoutError: the service did not answer in time.
@@ -690,9 +697,8 @@ class TranslationClient:
                 empty completion, or answered with a completion it cut off.
             TranslationInputTooLongError: the prompt does not fit the window.
         """
-        model_id = await self.translation_model_id()
-        translategemma = self.is_translategemma(model_id)
-        payload, path, count_body = translation_payload(prompt, translategemma, model_id)
+        translategemma_flag = translategemma and isinstance(model_id, str)
+        payload, path, count_body = translation_payload(prompt, translategemma_flag, model_id)
         window = await self.translation_window()
         payload["max_tokens"] = await self.completion_cap(prompt, count_body, window)
         url = f"{self._config.translation_endpoint}{path}"
@@ -706,7 +712,7 @@ class TranslationClient:
             if not choices:
                 raise ValueError("the translation response carries no choice")
             choice = choices[0]
-            content = _choice_content(choice, translategemma)
+            content = _choice_content(choice, translategemma_flag)
         except Exception as e:
             raise classify_transport_error(e) from e
 

@@ -210,6 +210,20 @@ class TestModelEndpointCache:
         asyncio.run(cache.max_model_len(config))
         assert len([c for c in transport.calls if "/v1/models" in c["url"]]) == 2
 
+    def test_a_non_string_model_id_never_crashes_the_guard(self):
+        """A proxy answering a scalar id (data[0] not a dict, or a non-string
+        id field) must not reach the prompt branch as a crash: the id is
+        cached as-is, and the TranslateGemma guard answers False — the
+        generic path runs, the preparation degrades, nobody raises."""
+        transport = FakeTransport({"http://translation.invalid/v1/models": (200, {"data": [42]})})
+        cache = ModelEndpointCache("http://translation.invalid", transport, 10.0, 60)
+        config = _config()
+
+        assert asyncio.run(cache.model_id(config)) == 42
+        assert TranslationClient.is_translategemma(42) is False
+        assert TranslationClient.is_translategemma(None) is False
+        assert TranslationClient.is_translategemma("google/translategemma") is True
+
     def test_a_failed_probe_is_negatively_cached(self, monkeypatch):
         transport = FakeTransport(error=Exception("unreachable"))
         cache = ModelEndpointCache("http://translation.invalid", transport, 10.0, 60)
@@ -310,7 +324,7 @@ class TestTranslatePrompt:
                 ),
             }
         )
-        translated = asyncio.run(self._client(transport).translate_prompt("Traduis-moi"))
+        translated = asyncio.run(self._client(transport).translate_prompt("Traduis-moi", False, None))
         assert translated == "Hello, how are you?"  # stripped
 
         post = next(c for c in transport.calls if c["url"].endswith("/v1/chat/completions"))
@@ -330,27 +344,28 @@ class TestTranslatePrompt:
                 ),
             }
         )
-        translated = asyncio.run(self._client(transport, config).translate_prompt("PROMPT"))
+        translated = asyncio.run(
+            self._client(transport, config).translate_prompt("PROMPT", True, "google/translategemma")
+        )
         assert translated == "Hello there"
         post = next(c for c in transport.calls if c["url"].endswith("/v1/completions"))
         assert post["payload"]["model"] == "google/translategemma"
 
     def test_an_explicit_model_id_wins_over_discovery(self):
-        """VLLM_TRANSLATION_MODEL_ID set → the env id is the payload's model,
-        even when the endpoint discovery answers with a different one."""
+        """VLLM_TRANSLATION_MODEL_ID set → the resolver returns the env id,
+        even when the endpoint discovery answers with a different one — the
+        resolution the caller passes down as one (translategemma, model_id)
+        pair."""
         config = _config(model_id="google/translategemma")
         transport = FakeTransport(
             {
                 "http://translation.invalid/v1/models": _model_entry(model_id="served-model"),
-                "http://translation.invalid/v1/completions": (
-                    200,
-                    {"choices": [{"text": "Hello", "finish_reason": "stop"}]},
-                ),
             }
         )
-        asyncio.run(self._client(transport, config).translate_prompt("PROMPT"))
-        post = next(c for c in transport.calls if c["url"].endswith("/v1/completions"))
-        assert post["payload"]["model"] == "google/translategemma"
+        client = self._client(transport, config)
+        assert asyncio.run(client.translation_model_id()) == "google/translategemma"
+        assert client.is_translategemma("google/translategemma") is True
+        assert client.is_translategemma("served-model") is False
 
     def test_a_server_overflow_rejection_refuses(self):
         """Server 400 with overflow markers → the typed refusal, NO fallback."""
@@ -364,17 +379,17 @@ class TestTranslatePrompt:
             }
         )
         with pytest.raises(TranslationInputTooLongError):
-            asyncio.run(self._client(transport).translate_prompt("PROMPT"))
+            asyncio.run(self._client(transport).translate_prompt("PROMPT", False, None))
 
     def test_a_timeout_maps_to_the_timeout_class(self):
         transport = FakeTransport(error=httpx.TimeoutException("timed out"))
         with pytest.raises(TranslationTimeoutError):
-            asyncio.run(self._client(transport).translate_prompt("PROMPT"))
+            asyncio.run(self._client(transport).translate_prompt("PROMPT", False, None))
 
     def test_a_server_5xx_maps_to_the_error_class(self):
         transport = FakeTransport(error=Exception("boom"))
         with pytest.raises(TranslationFailedError) as excinfo:
-            asyncio.run(self._client(transport).translate_prompt("PROMPT"))
+            asyncio.run(self._client(transport).translate_prompt("PROMPT", False, None))
         assert not isinstance(excinfo.value, TranslationTimeoutError)
 
     def test_a_truncated_completion_is_a_failure(self):
@@ -388,7 +403,7 @@ class TestTranslatePrompt:
             }
         )
         with pytest.raises(TranslationFailedError):
-            asyncio.run(self._client(transport).translate_prompt("PROMPT"))
+            asyncio.run(self._client(transport).translate_prompt("PROMPT", False, None))
 
     def test_a_blank_completion_is_a_failure(self):
         transport = FakeTransport(
@@ -401,7 +416,7 @@ class TestTranslatePrompt:
             }
         )
         with pytest.raises(TranslationFailedError):
-            asyncio.run(self._client(transport).translate_prompt("PROMPT"))
+            asyncio.run(self._client(transport).translate_prompt("PROMPT", False, None))
 
     def test_a_body_without_choices_is_a_failure(self):
         transport = FakeTransport(
@@ -411,14 +426,14 @@ class TestTranslatePrompt:
             }
         )
         with pytest.raises(TranslationFailedError):
-            asyncio.run(self._client(transport).translate_prompt("PROMPT"))
+            asyncio.run(self._client(transport).translate_prompt("PROMPT", False, None))
 
     def test_a_cancellation_propagates_untouched(self):
         """The task cancelled while the translation call is in flight:
         CancelledError propagates — never caught, never mapped."""
         transport = FakeTransport(error=asyncio.CancelledError())
         with pytest.raises(asyncio.CancelledError):
-            asyncio.run(self._client(transport).translate_prompt("PROMPT"))
+            asyncio.run(self._client(transport).translate_prompt("PROMPT", False, None))
 
 
 class TestPrompts:

@@ -56,7 +56,7 @@ from .bounds import (
 from .config import HISTORY_TRANSLATION_TARGET, PreparationConfig
 from .detection import detect_language, resolve_named_language
 from .prepare import PreparationResult, QueryPreparer
-from .registry import LANGUAGE_MAP_RETRY_SECONDS, LanguageRegistry
+from .registry import LanguageRegistry
 from .translation import (
     TranslationClient,
     TranslationFailedError,
@@ -66,7 +66,6 @@ from .translation import (
 
 __all__ = [
     "HISTORY_TRANSLATION_TARGET",
-    "LANGUAGE_MAP_RETRY_SECONDS",
     "USER_MSG_PATTERN",
     "PreparationConfig",
     "PreparationResult",

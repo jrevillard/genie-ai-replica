@@ -138,6 +138,18 @@ context:
 
 ## Review Triage Log
 
+Global code-review, round 1 (high effort, full diff `a1f5589a4..95c92034d`) — 1 important + 4 nit. Every claim verified against the code and the deployed source before disposition:
+
+| Finding | Severity | Verdict | Disposition |
+|---|---|---|---|
+| Numeric env knobs crash `PreparationConfig.load` on set-to-empty/garbage values where the deployed `_env_int` tolerates both (compose default-injection; issue #1091's crash class) | important | confirmed (deployed `_env_int` docstring is explicit; port used bare `int()`) | **Fixed**: tolerant `_env_int`/`_env_float` parsers, deployed parity for the path/model_id knobs (set-to-empty honored, not repaired); 2 tests pinned |
+| The model id is read twice per request (prepare for the prompt choice, `translate_prompt` for the payload/parse) — the deployed module resolved once and passed it down; a down endpoint pays a failed probe per read and a TTL rotation can mismatch prompt and payload | nit | confirmed | **Fixed**: `translate_prompt(prompt, translategemma, model_id)` now takes the caller's resolution (deployed shape); prepare passes its one read down; test seams updated, env-wins test moved to the resolver seam |
+| The list-shape window-overflow refusal depends on registry health (target name resolved before the completion-cap refusal) | nit | **false** — deployed parity: `_get_translated_history_string` resolves the target name at `:4174-4179` before the translation call in exactly the same order; V02 freezes that behavior, the port reproduces it faithfully | No change — recorded here as the deliberate deployed-parity reading |
+| `is_translategemma` crashes on a non-string discovered id (AttributeError out of `prepare`) | nit | confirmed (deployed has the same latent crash, but the module's own contract promises degraded inputs never crash the caller) | **Fixed**: `isinstance` guard answers False → generic path degrades; cache-level test pinned with the scalar-id proxy scenario |
+| Dead code: `detection.is_code_shaped` (+ its regex twin) unused; `registry.LANGUAGE_MAP_RETRY_SECONDS`/`NEGATIVE_CACHE_TTL` re-exports unconsumed | nit | confirmed (repo no-dead-code convention) | **Fixed**: all three removed; `__init__` export list updated |
+
+The scoped fix review of the correction diff follows (f=0).
+
 ## Design Notes
 
 **Why a `preparation/` package and not part of `capabilities/`.** The epic context assigns preparation to the loop side ("the agent application layer prepares every query … The port requires prepared English queries and never calls vLLM"), and `search_knowledge`'s own docstring repeats it ("preparation is the loop's business (story 1.8)"). The port package imports no vLLM anywhere; putting a vLLM-calling module inside it would blur the boundary the contract draws. A sibling top-level package keeps the dependency arrow one-way: preparation imports the contract's types, the port never imports preparation.

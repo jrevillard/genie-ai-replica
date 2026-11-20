@@ -29,7 +29,6 @@ refusal produces; no separate refused branch is built.
 """
 
 import logging
-import re
 
 from langdetect import detect
 
@@ -38,11 +37,6 @@ logger = logging.getLogger(__name__)
 # The longest a caller-supplied language may be (deployed MAX_LANGUAGE_LENGTH,
 # applied in the same order as the backend: trim, then cut, then lowercase).
 MAX_LANGUAGE_LENGTH = 32
-
-# The shape a language code has to have before it is written into a prompt
-# (deployed _LANGUAGE_CODE_PATTERN). A code that does not look like a code is
-# not one: it is refused rather than carried into a prompt.
-_LANGUAGE_CODE_PATTERN = re.compile(r"^[a-z]{2,3}(-[a-z0-9]{2,8})?$")
 
 
 def last_user_content(history: list | str) -> str:
@@ -99,8 +93,3 @@ def resolve_named_language(raw_language, language_codes: dict) -> str | None:
     if candidate not in language_codes:
         return None
     return candidate.upper()
-
-
-def is_code_shaped(code: str) -> bool:
-    """Whether a lower-case code has the shape a prompt may carry."""
-    return bool(_LANGUAGE_CODE_PATTERN.match(code))

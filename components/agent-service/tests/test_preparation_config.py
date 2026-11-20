@@ -96,6 +96,35 @@ def test_an_unset_max_translation_chars_caps_nothing():
     assert config.max_translation_chars_cap == 0
 
 
+def test_set_to_empty_and_garbage_numeric_envs_fall_back_to_defaults():
+    """Set-to-empty (compose's default injection) and non-numeric values
+    fall back to the code default instead of crash-looping the wiring
+    (deployed _env_int semantics — issue #1091's crash class)."""
+    env = {
+        "TRANSLATION_SERVICE_TIMEOUT": "",
+        "MAX_TRANSLATION_CHARS": "   ",
+        "MODEL_PROBE_TIMEOUT_SECONDS": "abc",
+        "MODEL_DETECT_TTL": "not-a-number",
+    }
+    config = PreparationConfig.load(env=env)
+
+    assert config.service_timeout_seconds == 180
+    assert config.max_translation_chars == 2000
+    # The empty knob is "not set by the deployer": it caps nothing.
+    assert config.max_translation_chars_cap == 0
+    assert config.probe_timeout_seconds == 10.0
+    assert config.detect_ttl_seconds == 60
+
+
+def test_a_set_to_empty_registry_path_is_honored_as_deployed():
+    """The registry path is a PATH knob, not a semantic knob: set-to-empty
+    is honored as the broken path it is (deployed parity) — the reader
+    reports it unreadable instead of silently repairing it to the vendored
+    default."""
+    config = PreparationConfig.load(env={"LANGUAGE_REGISTRY_FILEPATH": ""})
+    assert config.registry_path == ""
+
+
 def test_the_config_is_frozen():
     config = PreparationConfig.load(env={})
     try:

@@ -259,8 +259,12 @@ class QueryPreparer:
             logger.warning("The language map does not know English — refusing to translate the history.")
             return flattened, QueryPreparationStatus.FALLBACK_ERROR
 
-        # One derivation per call: the payload, the log line and the response
-        # parse must branch on the SAME decision (and the same id).
+        # One derivation per call: the prompt choice, the payload, the
+        # endpoint path and the response parse must branch on the SAME
+        # decision (and the same id) — the id is resolved ONCE here and
+        # passed down (deployed order; a second read would re-probe and
+        # could disagree, and a down endpoint would pay one failed probe
+        # per read).
         model_id = await self._translator.translation_model_id()
         translategemma = self._translator.is_translategemma(model_id)
         if translategemma:
@@ -275,7 +279,7 @@ class QueryPreparer:
             prompt = self._translator.build_generic_history_prompt(flattened, target_name)
 
         try:
-            translated = await self._translator.translate_prompt(prompt)
+            translated = await self._translator.translate_prompt(prompt, translategemma, model_id)
         except TranslationTimeoutError as e:
             logger.warning(f"History translation timed out: {e}")
             return flattened, QueryPreparationStatus.FALLBACK_TIMEOUT

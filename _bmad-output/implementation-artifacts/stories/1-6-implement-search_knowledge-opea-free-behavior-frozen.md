@@ -133,6 +133,27 @@ None — the scope questions this story raised are settled by the epic-context f
 
 ## Review Triage Log
 
+## Review Triage Log
+
+**Global code-review, round 1** (high effort, full diff `1301b16c7..6b65daac3`, 4 angles run inline, findings reproduced empirically): 4 important + 4 nit, every one fixed in `8304bb078`; none extracted, none refuted.
+
+| Finding | Severity | Disposition |
+|---|---|---|
+| Multi-graph legs queried the env graph, never the caller's graphs; duplicates in the union | important | **Fixed**: the adapter derives collection / BM25 view / CAP-1 bind from the CONTEXT graph per leg; tests assert per-graph naming. |
+| Budget truncation could empty the hits and build an empty SUCCESS → undeclared ValidationError | important | **Fixed**: empty-after-truncation returns `insufficient_evidence` with `truncated=true`. |
+| Sync python-arango calls blocked the event loop (budget/cancellation unenforceable) | important | **Fixed**: every blocking driver call wrapped in `asyncio.to_thread`. |
+| Adaptive strategy unreachable (no embeddings threaded) | important | **Fixed**: dense leg returns the chunk embedding; embeddings + query embedding thread into `rerank()`; BM25-rescued candidates misalign → recorded hard-fail. |
+| Fusion dense-only fallback set no degradation flag | nit | **Fixed**: `bm25_degraded` set on the fallback. |
+| BM25-view cache lived per leg | nit | **Fixed**: cache owned by the capability, spans requests. |
+| Embedding call inherited the reranker timeouts | nit | **Fixed**: own budget under the deployed embed knobs (MODEL_HUB_EMBED_TIMEOUT_SECONDS). |
+| Misleading except comment on the retrieval stage | nit | **Fixed**: comment states what raises and what reads as empty retrieval. |
+
+**Fix review f=0** over `6b65daac3..8304bb078` (fresh context, findings supplied): **CLEAN** — both key fixes mutation-verified against the parent commit; 4 minors declined with reasons (batch-boundary cursor iteration is single-batch at the port's bounded result sets; test-hygiene churn).
+
+**Quality pass (simplify + test-audit):** four angles (reuse / simplification / efficiency / altitude) over the full diff; applied the accepted findings in `0ba423b6f` (AdaptiveConfig single knob home, docstring truth, dead-code deletions, one STRATEGIES tuple, one `_insufficient` helper, test-hygiene parameterization); declined with reasons the findings that would deviate from recorded call/AQL shapes (persistent client, gather parallelism, merged enrichment AQL, per-strategy embedding gating, adaptive micro-opts, db-handle cache, recorded rrf_fuse item shape). The test-audit sweep found one hygiene item (env-dependent default-model assertion), applied with the f=1 corrections.
+
+**Quality fix chain:** f=0 over `8304bb078..0ba423b6f` → FINDINGS (3 minor); `4938df4c8` fixed 2, missed 1 (the bm25-test conversion's string replacement had not matched — claim outran diff); f=1 over `0ba423b6f..4938df4c8` → FINDINGS (1); `9b38ebe6d` delivers it plus the audit item; **f=2 over `4938df4c8..9b38ebe6d` → CLEAN** (169 tests green, ruff clean, only the two test files touched). Chain closed within the cap of 3.
+
 ## Verification
 
 **Commands:**

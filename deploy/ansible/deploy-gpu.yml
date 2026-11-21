@@ -587,17 +587,24 @@
   vars_files:
     - vars/rocm_gpu_nodes.yml
     - vars/vault-rocm-gpu.yml
+  vars:
+    # The pooling toggle assembles the --profile argument (there is no
+    # COMPOSE_PROFILES shortcut — it is a CLI-level variable that
+    # --env-file does not set). rocm_pooling=true (the default, and the
+    # documented single-server topology) starts the two pooling vLLM
+    # instances (vllm-reranker, vllm-embedding). rocm_pooling=false is
+    # the split venue: the gpu-proxy routes /rerank and /v1/embeddings
+    # to the node-side TEI instances (unset RERANKER_BACKEND /
+    # EMBEDDING_BACKEND in env.strixhalo the same way), so the pooling
+    # services do not render and their ~4.6 GiB of GTT stays unclaimed.
+    rocm_pooling_profile_args: "{{ '--profile rocm-models' if (rocm_pooling | default(true)) else '' }}"
   tasks:
-    # --profile rocm-models enables the two pooling instances (vLLM
-    # reranker + embedding): profile-gated services render only with the
-    # profile, and there is no COMPOSE_PROFILES shortcut — it is a
-    # CLI-level variable that --env-file does not set.
     - name: Validate ROCm GPU compose configuration
       ansible.builtin.shell: >
         docker compose
         --env-file {{ gpu_deploy_dir }}/env.strixhalo
         --env-file {{ gpu_deploy_dir }}/rocm-host.env
-        --profile rocm-models
+        {{ rocm_pooling_profile_args }}
         -f {{ gpu_deploy_dir }}/docker-compose.gpu.yaml
         config --quiet
       args:
@@ -611,7 +618,7 @@
         docker compose
         --env-file {{ gpu_deploy_dir }}/env.strixhalo
         --env-file {{ gpu_deploy_dir }}/rocm-host.env
-        --profile rocm-models
+        {{ rocm_pooling_profile_args }}
         -f {{ gpu_deploy_dir }}/docker-compose.gpu.yaml
         up -d
       args:

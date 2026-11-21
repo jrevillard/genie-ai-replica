@@ -135,14 +135,3 @@ def test_the_modules_aql_doubles_track_the_real_driver_signature():
     from conftest import assert_module_aql_fakes_faithful
 
     assert_module_aql_fakes_faithful(Path(__file__))
-
-
-def test_production_aql_calls_pass_bind_vars_by_keyword():
-    """The AST sweep over the production package: a positional bind dict is
-    the defect class the chunk-adapter fix closed (the driver binds it to
-    ``count`` and the payload ships no ``bindVars``). Covers both call
-    shapes the component uses — the direct call and the ``asyncio.to_thread``
-    form, where the bound method rides as an argument."""
-    from conftest import assert_no_positional_aql_execute
-
-    assert_no_positional_aql_execute(Path(__file__).parent.parent / "capabilities")

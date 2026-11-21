@@ -52,6 +52,7 @@ from .budget import BudgetExhausted, RunBudgetMonitor
 from .cancellation import CancellationToken, run_cancellable
 from .events import EventEmitter, EventKind
 from .registry import ToolRegistry, UnregisteredToolError
+from .verification import VerificationPipeline
 
 logger = logging.getLogger(__name__)
 
@@ -149,6 +150,10 @@ class AgentLoop:
     authorization surface. One instance drives ONE run — the message list
     is per-run state created in :meth:`run`, the usage counters live on
     the monitor.
+
+    ``verifier`` is the run's citation verification pipeline. The
+    governed run surface always builds one; the probe smoke harness runs
+    without one (``None`` — the probe measures the loop, not the verdict).
     """
 
     model: LoopModelClient
@@ -157,6 +162,7 @@ class AgentLoop:
     token: CancellationToken
     emitter: EventEmitter
     system_prompt: str
+    verifier: VerificationPipeline | None = None
 
     async def run(self, question: str) -> RunResult:
         """Drive one run to a terminal outcome; cancellation propagates."""
@@ -201,7 +207,7 @@ class AgentLoop:
                             }
                         )
                     continue
-                return self._finish(turn)
+                return await self._finish(turn)
         except UnregisteredToolError as refused:
             # The registry refused before any resolution; the run ends
             # honestly with the refusal — no tool result is invented.
@@ -214,8 +220,10 @@ class AgentLoop:
 
     # -- the model turn ------------------------------------------------------
 
-    def _finish(self, turn: ModelTurn) -> RunResult:
-        """A final (text) turn: the text-message lifecycle, then the terminal event."""
+    async def _finish(self, turn: ModelTurn) -> RunResult:
+        """A final (text) turn: the text-message lifecycle, the verdict
+        (when the run carries a verification pipeline), then the terminal
+        event."""
         text = turn.content if isinstance(turn.content, str) and turn.content.strip() else None
         if text is None:
             # Neither a tool call nor a final text is a protocol anomaly;
@@ -224,6 +232,17 @@ class AgentLoop:
         self.emitter.emit(EventKind.TEXT_MESSAGE_STARTED, {"role": "assistant"})
         self.emitter.emit(EventKind.TEXT_MESSAGE_CONTENT, {"text": text})
         self.emitter.emit(EventKind.TEXT_MESSAGE_FINISHED, {})
+        if self.verifier is not None:
+            # The verdict is pinned AFTER the last text event and BEFORE the
+            # terminal: the BFF projects the text events onto chunks and the
+            # verdict onto client agent_verdict, so the client sees the
+            # correction event after the last chunk and before metadata. The
+            # finalize is the verification pipeline's own budgeted scope
+            # (mechanical validity first, one judged call) — its failures
+            # degrade to unverified inside it, never into the run's
+            # terminal state.
+            verdict = await self.verifier.finalize(text)
+            self.emitter.emit(EventKind.VERDICT, verdict.payload())
         self.emitter.emit(EventKind.RUN_FINISHED, {"outcome": OUTCOME_ANSWERED})
         return self._terminal(OUTCOME_ANSWERED, final_text=text)
 
@@ -266,6 +285,11 @@ class AgentLoop:
             call_id=request.call_id,
         )
         result_payload = await self._execute(request)
+        if self.verifier is not None:
+            # Every dispatched result reaches the verification ledger —
+            # success shapes contribute their citations, error envelopes
+            # record the attempt (the ledger classifies both itself).
+            self.verifier.record_tool_result(request.name, result_payload)
         self.emitter.emit(EventKind.TOOL_CALL_FINISHED, result_payload, call_id=request.call_id)
         return result_payload
 

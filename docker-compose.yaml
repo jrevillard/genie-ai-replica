@@ -1465,6 +1465,14 @@ services:
       - AGENT_TOOL_TIMEOUT_MS=${AGENT_TOOL_TIMEOUT_MS:-}
       - AGENT_TOOL_MAX_RESULTS=${AGENT_TOOL_MAX_RESULTS:-}
       - AGENT_TOOL_MAX_RESULT_BYTES=${AGENT_TOOL_MAX_RESULT_BYTES:-}
+      # Citation verification: the judge timeout is REQUIRED
+      # (fail-closed, empty default = unset = 503 naming the knob); the
+      # policy defaults to verdict-marked in the service (iteration 1 ships
+      # only that value — any other is refused at the first run request
+      # with the 503 that names the knob; the config is read lazily, so a
+      # mis-set policy still boots green until then).
+      - AGENT_VERDICT_JUDGE_TIMEOUT_MS=${AGENT_VERDICT_JUDGE_TIMEOUT_MS:-}
+      - AGENT_VERDICT_POLICY=${AGENT_VERDICT_POLICY:-}
       # Optional two-tier prompt override (empty = the governed default).
       - AGENT_RUN_SYSTEM_PROMPT=${AGENT_RUN_SYSTEM_PROMPT:-}
       # Port-assembly knobs the run surface reads fail-closed: an unset

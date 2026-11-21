@@ -52,7 +52,6 @@ end-to-end wiring is the integration slice (story 2.5).
 import asyncio
 import json
 import logging
-import re
 from dataclasses import dataclass, field
 
 from .budget import BudgetExhausted, RunBudgetMonitor
@@ -84,8 +83,6 @@ JUDGE_OUTCOME_SKIPPED = "skipped"
 JUDGE_OUTCOME_TIMEOUT = "timeout"
 JUDGE_OUTCOME_BUDGET_EXHAUSTED = "budget_exhausted"
 JUDGE_OUTCOME_ERROR = "error"
-
-_JSON_OBJECT_RE = re.compile(r"\s*\{.*\}\s*", re.DOTALL)
 
 
 def citation_identity(provenance: dict) -> tuple:
@@ -281,9 +278,6 @@ def parse_judge_verdict(content: object) -> str | None:
     """
     if not isinstance(content, str) or not content.strip():
         return None
-    match = _JSON_OBJECT_RE.fullmatch(content.strip())
-    if match is None:
-        return None
     try:
         parsed = json.loads(content)
     except json.JSONDecodeError:
@@ -408,7 +402,8 @@ class VerificationPipeline:
                 judge={"ran": False, "outcome": JUDGE_OUTCOME_SKIPPED, "verdict": None},
             )
         validity = check_reference_validity(self.ledger.entries, self._authorized_repos)
-        if not validity.delivered or validity.invalid:
+        delivered = [dict(entry) for entry in validity.delivered]
+        if not delivered or validity.invalid:
             # Citable evidence existed but none of it survived the mechanical
             # check (or entries were dropped as unauthorized): FR-10 — not
             # grounded, mechanically, before any judge runs.
@@ -416,20 +411,20 @@ class VerificationPipeline:
                 status=VERDICT_UNGROUNDED,
                 policy=self.policy,
                 judge={"ran": False, "outcome": JUDGE_OUTCOME_SKIPPED, "verdict": None},
-                delivered_citations=[dict(entry) for entry in validity.delivered],
+                delivered_citations=delivered,
                 invalid_citations=[dict(entry) for entry in validity.invalid],
             )
-        judge_result = await self._judge.judge(answer_text, [dict(entry) for entry in validity.delivered])
+        judge_result = await self._judge.judge(answer_text, delivered)
         if judge_result["outcome"] != JUDGE_OUTCOME_COMPLETED:
             return Verdict(
                 status=VERDICT_UNVERIFIED,
                 policy=self.policy,
                 judge=judge_result,
-                delivered_citations=[dict(entry) for entry in validity.delivered],
+                delivered_citations=delivered,
             )
         return Verdict(
             status=judge_result["verdict"],
             policy=self.policy,
             judge=judge_result,
-            delivered_citations=[dict(entry) for entry in validity.delivered],
+            delivered_citations=delivered,
         )

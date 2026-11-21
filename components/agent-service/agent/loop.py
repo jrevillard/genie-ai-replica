@@ -151,7 +151,7 @@ class AgentLoop:
     is per-run state created in :meth:`run`, the usage counters live on
     the monitor.
 
-    ``verifier`` is the run's citation verification pipeline (AD-7). The
+    ``verifier`` is the run's citation verification pipeline. The
     governed run surface always builds one; the probe smoke harness runs
     without one (``None`` — the probe measures the loop, not the verdict).
     """
@@ -234,13 +234,13 @@ class AgentLoop:
         self.emitter.emit(EventKind.TEXT_MESSAGE_FINISHED, {})
         if self.verifier is not None:
             # The verdict is pinned AFTER the last text event and BEFORE the
-            # terminal (AD-7/AD-8): the BFF projects the text events onto
-            # chunks and the verdict onto client agent_verdict, so the
-            # client sees the correction event after the last chunk and
-            # before metadata. The finalize is the verification pipeline's
-            # own budgeted scope (mechanical validity first, one judged
-            # call) — its failures degrade to unverified inside it, never
-            # into the run's terminal state.
+            # terminal: the BFF projects the text events onto chunks and the
+            # verdict onto client agent_verdict, so the client sees the
+            # correction event after the last chunk and before metadata. The
+            # finalize is the verification pipeline's own budgeted scope
+            # (mechanical validity first, one judged call) — its failures
+            # degrade to unverified inside it, never into the run's
+            # terminal state.
             verdict = await self.verifier.finalize(text)
             self.emitter.emit(EventKind.VERDICT, verdict.payload())
         self.emitter.emit(EventKind.RUN_FINISHED, {"outcome": OUTCOME_ANSWERED})

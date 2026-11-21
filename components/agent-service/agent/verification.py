@@ -1,7 +1,7 @@
 # Copyright (C) 2026 International Telecommunication Union (ITU)
 # SPDX-License-Identifier: Apache-2.0
 """The citation verification pipeline — mechanical reference validity + judged
-grounding, one tri-state verdict (AD-7).
+grounding, one tri-state verdict.
 
 Two checks, one pipeline, in a fixed order:
 
@@ -28,8 +28,8 @@ result, an empty ledger — the answer claims nothing supported, so it is
 ``unverified`` (the honest neutral, never the ungrounded warning); when
 citable evidence existed but none of it survived the validity check (or
 entries were dropped as unauthorized) the answer is claims without support
-— ``ungrounded`` (FR-10: an unsupported assertion with valid references
-still fails grounding). Otherwise the judge decides.
+— ``ungrounded`` (an unsupported assertion with valid references still
+fails grounding). Otherwise the judge decides.
 
 The verdict is tri-state ``grounded | ungrounded | unverified`` and its
 payload is the projection contract the BFF maps onto the client frames: the
@@ -45,8 +45,8 @@ is surfaced through the metadata tri-state without the correction marking).
 Nothing here writes a client frame: the pipeline emits through the seam
 vocabulary (the ``verdict`` kind), and the BFF owns every client frame —
 the projection (client ``agent_verdict``, position pinned after the last
-chunk and before ``metadata``) is the frame writer's (story 2.4), the
-end-to-end wiring is the integration slice (story 2.5).
+chunk and before ``metadata``) is the frame writer's, the end-to-end
+wiring is the integration slice's.
 """
 
 import asyncio
@@ -63,7 +63,7 @@ VERDICT_UNGROUNDED = "ungrounded"
 VERDICT_UNVERIFIED = "unverified"
 
 POLICY_VERDICT_MARKED = "verdict-marked"
-# Iteration 1 ships verdict-marked only (AD-7). The other enum members
+# Iteration 1 ships verdict-marked only. The other enum members
 # (verdict-silent, hold-until-verified) are named by the architecture but
 # are NOT implemented: a deployment asking for one is refused at the config
 # load, naming the knob — silently degrading to another policy would lie
@@ -157,9 +157,9 @@ class RetrievalLedger:
 
 @dataclass(frozen=True)
 class ReferenceValidity:
-    """The outcome of the mechanical, per-citation reference-validity check
-    (AD-7): the delivered set — the entries that resolve — plus every
-    dropped entry with its reason. No LLM, always on, cannot be disabled by
+    """The outcome of the mechanical, per-citation reference-validity check:
+    the delivered set — the entries that resolve — plus every dropped
+    entry with its reason. No LLM, always on, cannot be disabled by
     policy."""
 
     delivered: tuple[dict, ...]
@@ -190,7 +190,7 @@ def check_reference_validity(entries: list[dict], authorized_repos: frozenset[st
 
 @dataclass
 class GroundingJudge:
-    """One budgeted judged grounding call at finalize (AD-7).
+    """One budgeted judged grounding call at finalize.
 
     The judge reuses the run's model client — the same endpoint, counted by
     the monitor as an AUXILIARY call (the shared fleet model-call budget,
@@ -198,6 +198,10 @@ class GroundingJudge:
     allowance plus a hard timeout. Every failure mode degrades to
     ``unverified``: timeout, budget exhaustion, malformed output, an
     exception — the judge never upgrades its own failure into ``grounded``.
+    A timed-out call's server-side spend is unreportable by nature (the
+    response that carries the usage never arrived), so the run's served
+    totals are a lower bound after one — the same honesty rule the usage
+    gap mechanism applies everywhere else.
     """
 
     model_client: object  # a LoopModelClient — the run's model client
@@ -405,8 +409,8 @@ class VerificationPipeline:
         delivered = [dict(entry) for entry in validity.delivered]
         if not delivered or validity.invalid:
             # Citable evidence existed but none of it survived the mechanical
-            # check (or entries were dropped as unauthorized): FR-10 — not
-            # grounded, mechanically, before any judge runs.
+            # check (or entries were dropped as unauthorized): an unsupported
+            # assertion — not grounded, mechanically, before any judge runs.
             return Verdict(
                 status=VERDICT_UNGROUNDED,
                 policy=self.policy,

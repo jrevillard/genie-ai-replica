@@ -51,7 +51,7 @@ class EventKind(StrEnum):
     result the finished one — dispatch is server-side, so unlike the AG-UI
     wire shape there is no separate args-delta event to model). The
     citation verdict: ``verdict`` — the verification pipeline's tri-state
-    projection (AD-7), emitted on the answered path after
+    projection, emitted on the answered path after
     ``text_message_finished`` and before ``run_finished``; the BFF projects
     it onto the client ``agent_verdict`` frame (which is why the kind
     itself must not carry that name).

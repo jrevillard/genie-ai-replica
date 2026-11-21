@@ -128,6 +128,19 @@ context:
 | Policy error preempts the aggregated missing-knob refusal (one defect at a time) | nit — real | FIXED: the `MissingKnobsError` aggregation runs first; test pins the precedence. |
 | `tei_reranking._tei_scores` calls `json()` before the status check — non-JSON upstream errors lose their status, non-JSON 422 loses the too-long abstention | nit — real, PRE-EXISTING (adapter predates 2.6, untouched by it) | Filed as issue #2056 (`type::bug`, `area::tei`, `status::backlog`) — out of this story's scope. |
 
+### Global review G2 (2026-11-21, whole branch vs origin/main — note: most findings land on pre-existing Epic 1/2.1 code, not this story's diff)
+
+| Finding | Verdict | Disposition |
+|---|---|---|
+| `arango_retrieval.dense_search` raises `TypeError` on a null embedding score OUTSIDE its try — a run errors where the recorded behavior is dense-only degradation | high — real, PRE-EXISTING (Epic 1 adapter, V02-frozen file, untouched by 2.6) | Filed as issue #2057 (`type::bug`, `area::retriever`, `status::backlog`). |
+| `RequestsTransport` docstring claims per-caller cookie isolation; the shipped one-Session-per-process wiring shares cookies across callers | nit — real, PRE-EXISTING | Filed as issue #2058 (`type::bug`, `area::backend`, `status::backlog`). |
+| compose never maps `VLLM_API_KEY`/`OPENAI_API_KEY` — every run fails at model auth with no knob named | nit — real, PRE-EXISTING deployment gap | Filed as issue #2059 (`type::bug`, `area::deploy`, `status::backlog`). |
+| `_env_bool` accepts only `"true"` — the repo's 0/1 convention silently reads false (`AGENT_ANSWER_TRANSLATION_ENABLED`) | nit — real, PRE-EXISTING | Filed as issue #2060 (`type::bug`, `area::backend`, `status::backlog`). |
+| compose/env comments say an invalid `AGENT_VERDICT_POLICY` is "refused at startup"; the config loads lazily (first run request), container boots green | nit — real, on THIS diff's comments | FIXED: wording corrected to "refused at the first run request (503 naming the knob; the config is read lazily)" in both `env` and `docker-compose.yaml`. |
+| `GroundingJudge` timeout under-counts the judge's server-side spend in the usage record | nit — inherent to timeout, not a code defect: a timed-out call's response (the only usage carrier) never arrives; nothing reportable exists | Documented: the judge's docstring now states the lower-bound honesty rule (same mechanism as the usage-gap path). |
+| One malformed model tool call (empty/hallucinated name) is fatal to the run instead of a structured tool result | nit — deliberate 2.1 contract (the registry refusal ends the run honestly; the loop docstring records it) | Already handled — behavior re-declaring is a 2.1-scope change, not this story's. |
+| Story/AD/FR refs in production comments across the new tree | nit — operator convention (comments describe the code, no refs) | FIXED for every comment THIS diff added (verification/loop/events/env/compose); pre-existing files' comments are their stories' output, not this diff's. |
+
 ## Design Notes
 
 **Why the ledger defines citations.** The client citation surface is `metadata.source_documents` (no inline text markers exist anywhere — frontend, mobile, BFF). A citation the user can click must resolve to a source the run actually served; the ledger makes "actually-retrieved" a recorded fact instead of an assumption, and the mechanical check turns that fact into the invariant "every delivered citation resolves".

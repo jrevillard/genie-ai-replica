@@ -180,6 +180,33 @@ context:
   (observed teardown), `model_post_dispatched: true`, 679 tests green.
   The V06 record cites this run as the final one.
 
+### 2026-11-21 — story 2.3 merge + quality round
+
+- The umbrella moved mid-story (story 2.3 landed: budgets extended with
+  `max_total_tokens`/`max_evidence_bytes`, the client protocol grew the
+  required `max_output_tokens` kwarg). Merged keeping both sides; the demo
+  monitor declares the new dimensions (same smoke-bound discipline, no
+  defaults) and its wrapper forwards the kwarg — neither side weakened
+  (749 green post-merge, config-validator 667).
+- Quality round (simplify, 4 angles + dedup): 11 fixes applied — one home
+  per cell identity (`CellRecord.label`), the `SseStream` Protocol now
+  carries `aclose()`/`connection_closed` so the getattr fallback (the
+  inferred-abort the contract refuses) is gone, event-driven demo waits,
+  typed demo state, hoisted type-check table, constant renamed for its
+  purpose, test builders deduplicated, appendix collapse labels use the
+  record's own cell identity. Deliberate skips recorded: ProbeModelClient
+  reuse for discovery, bearer-helper promotion, output-room helper (all
+  outside this diff), `expected_name` kept (future multi-tool symmetry),
+  per-cell client isolation kept, no `error_kind` field, evidence-level
+  `venue` kept (speculative machinery on a pinned record).
+- Test audit: one merge (the isolated identity round-trip test dropped —
+  the full-record integration test owns serialization at the stronger
+  boundary); all other new tests retained with recorded reasons. A
+  session-created `uv.lock` artifact swept by an add -A was removed in a
+  follow-up commit (untracked on the umbrella).
+- Final suite at the review head: 748 passed (749 minus the audited
+  duplicate), ruff clean, config-validator 667 green.
+
 ## Spec Change Log
 
 <!-- Append-only. Populated by step-04 during review loops. -->

@@ -21,10 +21,10 @@ One instance of this class answers one HTTP run request end to end:
   a cancellation leaves the monitor's partial counts readable (the
   ``CancelledError`` is logged with the partial usage record and
   re-raised untouched — a cancelled run has no honest terminal state).
-  The per-request wiring also builds the preparation entry (story 1.8)
-  over the run's monitor — every query the model writes is prepared
-  (detected, translated to English) under the aux model-call budget before
-  it reaches the port.
+  The per-request wiring also builds the preparation entry (the
+  preparation module) over the run's monitor — every query the model
+  writes is prepared (detected, translated to English) under the aux
+  model-call budget before it reaches the port.
 * **the terminal usage record** — the shared counters the BFF's residual
   budget (translation) consumes: outcome, call counts (aux tallied
   separately), evidence bytes, served token usage, wall clock — plus the
@@ -264,10 +264,14 @@ class BudgetedTranslationClient(TranslationClient):
     and the refusal propagates into the loop's honest
     ``budget_exhausted`` terminal). The claim is what makes preparation
     bounded: translation is plumbing, tallied separately from the loop's
-    own calls, and it can never outrun the fleet budget. The served token
-    usage of a translation call is not reportable through this seam (the
-    preparation module returns text only), so the totals are untouched —
-    a lower bound stays a lower bound, nothing is guessed.
+    own calls, and it can never outrun the fleet budget. The claim precedes the
+    dispatch's internal gates, so a too-long refusal also counts one aux
+    call — the conservative direction (the record never undercounts); and
+    a run that a too-long refusal errored records the count without ever
+    being paired with a translation plan. The served token usage of a
+    translation call is not reportable through this seam (the preparation
+    module returns text only), so the totals are untouched — a lower
+    bound stays a lower bound, nothing is guessed.
     """
 
     def __init__(self, config: PreparationConfig, registry, monitor: RunBudgetMonitor, transport=None, cache=None):
@@ -343,10 +347,11 @@ class RequestOrchestrator:
         self._lane = lane
         self._model_client = model_client
         self._port_factory = port_factory
-        # The preparation wiring (story 1.8 consumed per query): a factory
-        # building ONE preparer per run over the run's monitor. ``None``
-        # keeps the probe-shaped toolset (no preparation leg) — the tests'
-        # and the probe's path; the governed surface always wires one.
+        # The preparation wiring (the preparation module, consumed per
+        # query): a factory building ONE preparer per run over the run's
+        # monitor. ``None`` keeps the probe-shaped toolset (no preparation
+        # leg) — the tests' and the probe's path; the governed surface
+        # always wires one.
         self._preparer_factory = preparer_factory
 
     @asynccontextmanager

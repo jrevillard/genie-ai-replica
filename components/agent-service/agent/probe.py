@@ -67,10 +67,9 @@ from .loop import (
     ToolCallRequest,
 )
 
-# The registered toolset left the probe module in story 2.5 (it is a
-# production surface — :mod:`agent.toolset`); the probe RE-IMPORTS the
-# builder, and the name stays importable from here for the probe harness
-# and its suites.
+# The registered toolset is a production surface, not a probe artifact — it
+# lives in :mod:`agent.toolset`; the probe re-imports the builder, and the
+# name stays importable from here for the probe harness and its suites.
 from .toolset import document_toolset
 
 logger = logging.getLogger(__name__)

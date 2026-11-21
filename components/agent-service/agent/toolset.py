@@ -2,10 +2,11 @@
 # SPDX-License-Identifier: Apache-2.0
 """The production toolset builder — the registered tools a governed run serves.
 
-MOVED here from the probe module (story 2.5): the registered toolset is a
-production surface, not a probe artifact. The probe harness re-imports this
-builder and its own flow is untouched; the probe path (``preparer=None``)
-behaves byte-identically to the pre-move builder.
+MOVED here from the probe module: the registered toolset is a production
+surface, not a probe artifact. The probe harness re-imports this builder and
+its own flow is untouched; the probe path (``preparer=None``) keeps the
+pre-move builder's behavior EXCEPT that a missing or blank query is now
+refused before the port (the shared validation both paths run).
 
 The registry is the authorization surface (nothing unregistered is
 callable); the executors adapt the model-generated JSON arguments into the
@@ -14,10 +15,11 @@ travels in the context, never in the arguments, so nothing the model
 contributes can widen the scope; the port stays the only corpus access.
 
 The one production addition over the probe builder is the PREPARATION leg
-(story 1.8 consumed per query): when the caller wires a ``QueryPreparer``,
-every ``search_knowledge`` query the model writes goes through preparation
-before the port — detection decides the query's language, a non-English
-query is translated to English through the budgeted aux call (the claim
+(the preparation module, consumed per query): when the caller wires a
+``QueryPreparer``, every ``search_knowledge`` query the model writes
+through preparation before the port — detection decides the query's
+language, a non-English query is translated to English through the
+budgeted aux call (the claim
 fires inside the budgeted translator wrapper the orchestrator wires), and
 the PREPARED query — never the raw text — reaches the port, which refuses
 everything unprepared. An unprepared preparation (a fallback status) is

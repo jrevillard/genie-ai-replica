@@ -119,8 +119,9 @@ def _build_orchestrator(env=None) -> RequestOrchestrator:
     adapters = build_stateless_adapters(probe_config, env)
     model_client = ProbeModelClient(probe_config)
     lane = AdmissionLane.from_config(noagent)
-    # The preparation wiring (story 1.8): one per-run preparer over the
-    # run's budget monitor; the discovery caches are process-wide.
+    # The preparation wiring (the preparation module): one per-run
+    # preparer over the run's budget monitor; the discovery caches are
+    # process-wide.
     preparer_factory = build_preparer_factory(env)
 
     def port_factory(context: CallerContext, bearer: str | None):

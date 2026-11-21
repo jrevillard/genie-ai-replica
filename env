@@ -1476,10 +1476,10 @@ KC_MOBILE_REDIRECT_SCHEME=com.<institution>.genieai
 # AGENT_AUTHORIZED_GRAPHS=
 # AGENT_AUTHORIZED_REPOS=
 # AGENT_PROBE_BEARER=
-# Query preparation (story 1.8, wired into the run surface): the agent
-# service consumes the SAME preparation knobs the deployed query path reads
-# (documented at their own sections above) — the translation endpoint/model,
-# the char budget, the discovery knobs and the bearers. These are SHARED
+# Query preparation (the preparation module, wired into the run surface): the
+# agent service consumes the SAME preparation knobs the deployed query
+# path reads (documented at their own sections above) — the translation
+# endpoint/model, the char budget, the discovery knobs and the bearers. These are SHARED
 # vars: an override here moves the agent service's preparation AND the
 # chatqna/backend consumers of the same names together — never one world
 # alone. Leave them unset to run on the compose defaults.

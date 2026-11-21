@@ -4,8 +4,9 @@
 
 Mutation-sensitive pins: the registered toolset lives in ``agent.toolset``
 and the probe RE-IMPORTS it (the same function object — a move, not a
-copy); the probe path (``preparer=None``) is byte-identical to the pre-move
-builder (the model's query rides ``passthrough_english``); a wired preparer
+copy); the probe path (``preparer=None``) keeps the pre-move builder's
+behavior except a missing or blank query, now refused before the port (a
+valid query rides ``passthrough_english``); a wired preparer
 feeds the PREPARED query to the port (never the raw text) and reports its
 status; an unprepared preparation answers the contract's insufficiency
 shape with the port UNTOUCHED; a translation overflow raises its typed
@@ -101,8 +102,8 @@ def test_the_probe_path_is_unchanged_passthrough():
     result = asyncio.run(registry.dispatch("search_knowledge", {"query": "the model query"}))
 
     assert result["outcome"] == "success"
-    # The model's query rides the passthrough status — no preparation call,
-    # byte-identical to the pre-move probe builder.
+    # The model's valid query rides the passthrough status — no
+    # preparation call, the pre-move probe builder's behavior.
     [call] = port.search_calls
     assert call["request"].query.text == "the model query"
     assert call["request"].query.preparation_status == QueryPreparationStatus.PASSTHROUGH_ENGLISH

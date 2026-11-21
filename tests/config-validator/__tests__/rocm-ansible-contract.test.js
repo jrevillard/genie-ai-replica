@@ -110,15 +110,19 @@ describe('ROCm ansible contract', () => {
       expect(play).toMatch(/vars\/vault-rocm-gpu\.yml/);
     });
 
-    it('enables the rocm-models profile on the GPU-node deploy', () => {
+    it('enables the rocm-models profile on the GPU-node deploy (assembled from rocm_pooling)', () => {
       // The pooling services (vllm-reranker, vllm-embedding) are
       // profile-gated: without --profile rocm-models the compose up runs
       // green and deploys a node WITHOUT its reranker/embedder — and every
       // smoke test then fails 502. Compose has no env-file equivalent
       // (COMPOSE_PROFILES is CLI-level), so the flag must be in the
-      // command.
+      // command. Since !968#note_131770 the deploy assembles the argument
+      // from rocm_pooling (default true — the single-server topology is
+      // unchanged; a split venue opts out with rocm_pooling: false), so
+      // the block must interpolate the assembled variable.
       const deployBlock = play.split('- name: Deploy ROCm GPU node services')[1] || '';
-      expect(deployBlock).toMatch(/--profile rocm-models/);
+      expect(deployBlock).toMatch(/\{\{ rocm_pooling_profile_args \}\}/);
+      expect(deployBlock).not.toMatch(/--profile rocm-models/);
     });
 
     it('renders ONE compose template (no overlay file is copied)', () => {
@@ -126,6 +130,45 @@ describe('ROCm ansible contract', () => {
       // of a second compose file here would resurrect the file-set drift.
       expect(play).not.toMatch(/docker-compose\.rocm/);
       expect(play).toMatch(/docker-compose\.gpu\.yaml\.j2/);
+    });
+  });
+
+  describe('the pooling toggle (rocm_pooling)', () => {
+    // The deploy and validate commands used to hardcode
+    // `--profile rocm-models`, so the two pooling vLLM instances started
+    // on EVERY ROCm GPU node the playbook deployed — including a split
+    // venue whose env.strixhalo header says to unset
+    // RERANKER_BACKEND / EMBEDDING_BACKEND because the gpu-proxy routes
+    // /rerank and /v1/embeddings to the node-side TEI instances. There
+    // each idle instance claims ~2.3 GiB of GTT and serves nothing
+    // (!968#note_131770). The commands now assemble the argument from
+    // rocm_pooling (default true), so the single-server topology is
+    // unchanged and the split venue opts out with one var.
+    it('the deploy and validate commands assemble the profile, not hardcode it', () => {
+      const code = read(PLAYBOOK)
+        .split('\n')
+        .filter((line) => !line.trim().startsWith('#'))
+        .join('\n');
+      // The command prefix both target commands share (env files first,
+      // then the assembled profile argument, then -f). The playbook has
+      // seven `docker compose` occurrences — the assertion keys on THIS
+      // shape, not on a global count.
+      const assembledShape =
+        'docker compose --env-file {{ gpu_deploy_dir }}/env.strixhalo --env-file {{ gpu_deploy_dir }}/rocm-host.env {{ rocm_pooling_profile_args }}';
+      const normalized = code.replace(/\s+/g, ' ');
+      const shaped = [...normalized.matchAll(new RegExp(assembledShape.replace(/[{}]/g, '\\$&'), 'g'))].length;
+      expect({ assembledCommands: shaped }).toEqual({ assembledCommands: 2 });
+      // …and no literal profile flag survives outside the var definition.
+      const flagUses = [...code.matchAll(/--profile rocm-models/g)].length;
+      expect(flagUses).toBe(1); // inside the Jinja expression only
+      expect(code).toContain("'--profile rocm-models' if (rocm_pooling | default(true)) else ''");
+    });
+
+    it('the toggle defaults to on and documents both states', () => {
+      const vars = read(path.join(ANSIBLE_DIR, 'vars', 'rocm_gpu_nodes.yml'));
+      expect(vars).toMatch(/^rocm_pooling:\s*true$/m);
+      expect(vars).toContain('rocm_pooling: false');
+      expect(vars).toContain('RERANKER_BACKEND');
     });
   });
 

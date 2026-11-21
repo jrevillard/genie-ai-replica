@@ -1021,6 +1021,84 @@ describe('size-adaptive job windows (spec #1020 §5.9 — OKF_JOB_WINDOW_ADAPTIV
     });
   });
 
+  // Issue #2005: claim-staleness is judged PER ROW against that row's OWN
+  // window — the earlier blanket cutoff (windowMaxMs in adaptive mode) left a
+  // lane that died mid-claim stalling its small concept for 6 HOURS (live:
+  // tursgrv2-sec4, 18 chunks, stuck at 143/144 from 13:39:40Z to 19:39Z).
+  describe('per-row claim-staleness cutoff (worker.rowStaleCutoffAql, issue #2005)', () => {
+    const { aql } = require('arangojs/aql');
+    const render = () =>
+      aql`FILTER m.worker_claimed_at == null OR DATE_TIMESTAMP(m.worker_claimed_at) < ${worker.rowStaleCutoffAql('m')}`;
+
+    test('adaptive OFF → the flat JOB_TIMEOUT_MS for every row (unchanged)', () => {
+      process.env.OKF_INGEST_WORKER_JOB_TIMEOUT_MS = '123456';
+      const q = render({ chunk_count: 18, body: '' });
+      expect(q.query).toBe(
+        'FILTER m.worker_claimed_at == null OR DATE_TIMESTAMP(m.worker_claimed_at) < DATE_NOW() - 123456'
+      );
+      expect(q.bindVars).toEqual({});
+    });
+
+    test('adaptive ON, small row (18 chunks) → its OWN 30-min FLOOR, not the 6-h fleet max', () => {
+      process.env.OKF_JOB_WINDOW_ADAPTIVE = 'true';
+      const q = render({ chunk_count: 18, body: '' });
+      // 18 × 5000 × 1.5 = 135 000 < floor → the floor; NOT 21600000.
+      expect(q.query).toContain('MAX([1800000, MIN([21600000,');
+      expect(q.query).toContain('m.chunk_count > 0) ? m.chunk_count : CEIL(LENGTH(m.body) / 500)) * 5000 * 1.5');
+      expect(q.query).not.toContain('DATE_NOW() - 21600000');
+      expect(q.bindVars).toEqual({});
+    });
+
+    test('adaptive ON, monster row → the AQL window matches jobWindowMs (6-h cap IS its own window)', () => {
+      process.env.OKF_JOB_WINDOW_ADAPTIVE = 'true';
+      // The clamp is the window: a max-window row's cutoff equals the old
+      // blanket — that row is still protected. Assert both branches agree.
+      const job = { body: 'x'.repeat(2000000) };
+      expect(worker.jobWindowMs(job)).toBe(21600000);
+      const q = render({ body: 'x'.repeat(2000000) });
+      expect(q.query).toContain('CEIL(LENGTH(m.body) / 500)');
+    });
+
+    test('the adaptive fragment is paren/bracket BALANCED (live-caught: the first cut shipped `)]))` for `)])])` — a parse error the string asserts above cannot see; the worker died on every claim scan)', () => {
+      process.env.OKF_JOB_WINDOW_ADAPTIVE = 'true';
+      const q = render({ chunk_count: 18, body: '' });
+      const fragment = q.query.slice(q.query.indexOf('MAX(['));
+      const depth = { '(': 0, '[': 0 };
+      for (const ch of fragment) {
+        if (ch === '(') depth['('] += 1;
+        else if (ch === ')') depth['('] -= 1;
+        else if (ch === '[') depth['['] += 1;
+        else if (ch === ']') depth['['] -= 1;
+        expect(depth['(']).toBeGreaterThanOrEqual(0);
+        expect(depth['[']).toBeGreaterThanOrEqual(0);
+      }
+      expect(depth['(']).toBe(0);
+      expect(depth['[']).toBe(0);
+    });
+
+    test('adaptive fragment GOLDEN (full string — the exact clamp nesting)', () => {
+      process.env.OKF_JOB_WINDOW_ADAPTIVE = 'true';
+      const q = render({ chunk_count: 18, body: '' });
+      expect(q.query).toBe(
+        'FILTER m.worker_claimed_at == null OR DATE_TIMESTAMP(m.worker_claimed_at) < ' +
+          'DATE_NOW() - MAX([1800000, MIN([21600000, CEIL(((IS_NUMBER(m.chunk_count) AND m.chunk_count > 0) ' +
+          '? m.chunk_count : CEIL(LENGTH(m.body) / 500)) * 5000 * 1.5)])])'
+      );
+    });
+
+    test('a string-typed chunk_count falls to the body estimate, not a scan-killing arithmetic error', () => {
+      // Code review 2026-11-18: AQL type order puts any string above every
+      // number — `"5" > 0` is TRUE in AQL, and `m.chunk_count * 5000` on a
+      // string row would error the ENTIRE claim scan (every lane), not just
+      // the row. The IS_NUMBER gate routes string-typed rows to the body
+      // branch, mirroring jobWindowMs's numeric coercion on the JS side.
+      process.env.OKF_JOB_WINDOW_ADAPTIVE = 'true';
+      const q = render({ chunk_count: '5', body: '' });
+      expect(q.query).toContain('IS_NUMBER(m.chunk_count) AND m.chunk_count > 0');
+      expect(q.query).not.toContain('m.chunk_count != null AND');
+    });
+  });
+
   test('expiry with an ALIVE dataprep task → deferred: parked one window, NO re-kick, NO retract', async () => {
     process.env.OKF_JOB_WINDOW_ADAPTIVE = 'true';
     process.env.OKF_JOB_WINDOW_FLOOR_MS = '60';

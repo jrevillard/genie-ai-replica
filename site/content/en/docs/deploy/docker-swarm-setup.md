@@ -8,7 +8,7 @@ aliases:
 mode: how-to
 persona: deployer
 owner: "docs-stewards"
-last_reviewed: 2026-09-19
+last_reviewed: 2026-11-11
 ---
 
 This guide covers Docker Swarm deployments — single-node and multi-node. For
@@ -27,6 +27,9 @@ root. All services deploy via `docker stack deploy`.
   requires `nvidia-container-runtime` registered as a Docker default runtime
   (or any runtime that supports `NVIDIA_VISIBLE_DEVICES`). Install on each
   GPU node: see <https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/install-guide.html>.
+  An **AMD ROCm** GPU node needs no toolkit — but see the ROCm entry in
+  [Known limitations](#known-limitations): its GPU tier does not run as
+  swarm services.
 - **SSH access** to every node — from the manager you need passwordless SSH
   to every worker (or `docker -H ssh://worker ...`) for cross-node debugging
 - **Network connectivity** between all nodes — Swarm requires
@@ -709,6 +712,18 @@ Key points:
   they use the GPU. VRAM is shared between the 5 device-attached services;
   use `env.t4` / `env.rtx6000` to manage batch size and model length limits.
   24 GB+ VRAM recommended.
+- **AMD ROCm GPU nodes cannot receive devices from a stack deploy:**
+  `docker stack deploy` ignores compose `devices:` — the short form is
+  silently dropped and the long form is rejected
+  (`services.*.devices.0: must be a string`) — so the swarm-deployed ROCm
+  GPU tier cannot get `/dev/kfd` + `/dev/dri` this way. The ROCm GPU tier
+  therefore routes via the **standalone GPU-node compose stack on the
+  ROCm node** (`docker-compose.gpu.yaml` + `--profile rocm-models`
+  + `env.strixhalo`), wired to the app stack with the
+  [Remote GPU Node](#remote-gpu-node) pattern (`GPU_NODE_HOST` +
+  override endpoints). Hardware prerequisites, image pins and sizing:
+  the ROCm section of [GPU Deployment](/docs/deploy/gpu/). Node labeling
+  is unchanged (`gpu=true` is vendor-neutral).
 - **No shared volumes:** If a node goes down, its stack goes down. No data
   migration between nodes.
 - **DNS timing:** Swarm overlay DNS entries may not resolve immediately on

@@ -1,6 +1,6 @@
 ---
 title: "GPU Deployment"
-description: "GPU deployment profiles for GENIE.AI (T4, RTX 6000, A40) with model-memory sizing and verification steps."
+description: "GPU deployment profiles for GENIE.AI (NVIDIA: T4, RTX 6000, A40; AMD ROCm: Strix Halo) with model-memory sizing and verification steps."
 weight: 4
 section: "deploy"
 aliases:
@@ -11,10 +11,11 @@ owner: "docs-stewards"
 last_reviewed: 2026-11-17
 ---
 
-This guide covers how to deploy GENIE.AI's AI layer on NVIDIA GPUs: choosing
-the right profile (T4 / RTX 6000 / A40), understanding the variables in
-`env.t4` and `env.rtx6000`, sizing VRAM, and verifying the stack after
-deployment.
+This guide covers how to deploy GENIE.AI's AI layer on GPUs: choosing the
+right NVIDIA profile (T4 / RTX 6000 / A40), understanding the variables in
+`env.t4` and `env.rtx6000`, sizing VRAM, verifying the stack after
+deployment — and the AMD ROCm path (Strix Halo iGPU) via the `rocm-models`
+compose profile and `env.strixhalo`.
 
 For full end-to-end installation see
 [Install Guide](/docs/deploy/install-guide/) (single-node) or
@@ -138,6 +139,316 @@ docker stack deploy -c docker-compose.resolved.yaml genieai
 
 This uses the compose defaults (e.g. `VLLM_GPU_UTILIZATION=0.55`,
 `VLLM_MAX_MODEL_LEN=65536`, `VLLM_DTYPE=half`).
+
+## ROCm (AMD Strix Halo / gfx1151)
+
+The AMD path deploys six GPU-tier services — four vLLM instances (`vllm`,
+`vllm-translation-guardrail`, `vllm-reranker`, `vllm-embedding`) and the
+two TEI containers — on an AMD Radeon iGPU, activating the `rocm-models`
+compose profile in the SAME base files the NVIDIA path uses (the vendor
+axis is env values; see [Invocations](#invocations-one-file-set-vendor-as-values)
+and the rationale below). The
+reranker and embedding consumers run on the GPU too: `env.strixhalo` sets
+`RERANKER_BACKEND=vllm` / `EMBEDDING_BACKEND=vllm`, switching the reranker
+wrapper and both embedding consumers (dataprep + retriever) from TEI to
+the two extra pooling instances. Values below were
+measured on the reference machine: AMD Ryzen AI MAX+ 395 "Strix Halo",
+Radeon 8060S iGPU, `gfx1151`, 91 GB unified LPDDR5X.
+
+### Host prerequisites
+
+- **In-tree `amdgpu` kernel driver** with `/dev/kfd` and
+  `/dev/dri/renderD128` present. **No host ROCm userland is needed** — the
+  containers carry it. **No NVIDIA Container Toolkit either.**
+- **Device group access**: the GPU tier runs with the host's `render` +
+  `video`
+  GIDs (`RENDER_GID` / `VIDEO_GID` in `env.strixhalo` —
+  distro-specific; measure with `getent group render video`. 990 / 44 on
+  the reference Ubuntu host).
+- Verify the GPU is visible from a container:
+
+```bash
+docker run --rm --device=/dev/kfd --device=/dev/dri \
+  --group-add 990 --group-add 44 \
+  rocm/rocm-terminal:latest rocminfo
+# Look for: gfx1151 (AMD RYZEN AI MAX+ 395 w/ Radeon 8060S)
+```
+
+### Image pins (carried by `env.strixhalo`)
+
+| Variable | Image | Why |
+|---|---|---|
+| `VLLM_IMAGE` | `rocm/vllm:rocm10.1.0_ubuntu24.04_py3.14-pytorch_2.13.0_vllm-0.29.0` | ROCm 10.1 build of vLLM 0.29.x behind all four vLLM instances of this profile — version parity with the NVIDIA compose default (`vllm/vllm-openai:v0.29.0`); guided JSON verified (dataprep requirement) |
+| `TEI_EMBEDDING_IMAGE` | `ghcr.io/huggingface/text-embeddings-inference:cpu-1.9.3` | TEI CPU fallback — see below (the compose default is the NVIDIA-capable `1.9.3` image) |
+| `TEI_RERANKING_IMAGE` | `ghcr.io/huggingface/text-embeddings-inference:cpu-1.9.3` | TEI CPU fallback (same) |
+
+### Invocations (one file set, vendor as values)
+
+There is one file set. The ROCm path runs the SAME compose files with
+the Strix Halo env and the `rocm-models` profile:
+
+```bash
+# Single-server: main stack, GPU tier on the local iGPU
+docker compose --env-file .env --env-file env.strixhalo \
+  -f docker-compose.yaml \
+  --profile opea --profile gpu-models --profile rocm-models up -d
+
+# Split topology: standalone GPU-node stack on the ROCm node
+docker compose --env-file env.strixhalo \
+  -f docker-compose.gpu.yaml --profile rocm-models up -d
+```
+
+An NVIDIA deployment runs the same files with no `env.strixhalo` and no
+`rocm-models` profile — the file defaults are the NVIDIA values (the
+`vllm/vllm-openai` image, `/dev/null` + `/dev/zero` device rows, the
+historical ports) and a profile-disabled service is absent from the
+resolved config, not merely stopped.
+`HUGGING_FACE_HUB_TOKEN` must reach the containers — set it in the
+environment or put `--env-file .env` ahead of `--env-file env.strixhalo`.
+What the Strix Halo env pins: the image pins, GPU
+device access (`GPU_DEVICE_KFD` / `GPU_DEVICE_DRI` →
+`devices: /dev/kfd + /dev/dri` with `group_add`) and
+`NVIDIA_VISIBLE_DEVICES=void` (compose merges `environment:` by key, so
+omitting the var would NOT remove it; `void` claims no GPU and is ignored
+by ROCm containers). The TEI services need no device access (CPU image).
+For the Ansible path, `deploy/ansible/deploy-gpu.yml` (host group
+`rocm_gpu_nodes`; vars in `deploy/ansible/vars/rocm_gpu_nodes.yml`)
+drives the same GPU-node stack.
+
+#### Why the vendor axis is values in the base file (and not compose files)
+
+The ROCm path lives in the SAME files every NVIDIA deployment loads.
+That is deliberate, and it works because every vendor difference is
+expressible as a value or a profile:
+
+| What differs | How the base file expresses it |
+|---|---|
+| `vllm-embedding`, `vllm-reranker` exist only on ROCm | compose profiles: the services carry `profiles: [rocm-models]`, so they are **absent** from the resolved config unless `--profile rocm-models` is passed — not stopped, not created |
+| `devices: /dev/kfd + /dev/dri` | interpolated paths with every-host defaults (`${GPU_DEVICE_KFD:-/dev/null}`, `${GPU_DEVICE_DRI:-/dev/zero}`) — see the measured note below |
+| `group_add: [render, video]` | interpolated GIDs with `nobody`/`nogroup` defaults (two DISTINCT numbers — the list rejects duplicates); host-specific values in `env.strixhalo` |
+| the ROCm image's serving entrypoint | one explicit `entrypoint: ["vllm", "serve"]` on the service — a no-op on the NVIDIA image (whose own entrypoint is `vllm serve`; the flag `command:` always attached to it) and the repair the ROCm image needs (its CMD is `/bin/bash`) |
+| image pins | `${VLLM_IMAGE:-vllm/vllm-openai:v0.29.0}` and the two TEI rows — values the env file sets per venue |
+
+**Measured, not asserted** (the earlier wording here overclaimed; the
+probes below replace it):
+
+- Interpolating the two scalar device PATHS *inside* the list parses
+  fine — `devices: ["${KFD_DEV:-/dev/null}:${KFD_DEV:-/dev/null}"]`
+  renders as a device entry. The `devices must be a array` error belongs
+  to interpolating the LIST as a whole, which is a different thing.
+- A device path that does **not** exist on the host is **not** tolerated.
+  The daemon resolves every path in the list before it creates the
+  container, and an absent path is a hard error:
+
+  ```console
+  $ docker run --rm --device /dev/does-not-exist:/dev/does-not-exist alpine:3 true
+  docker: Error response from daemon: error gathering device information
+  while adding custom device "/dev/does-not-exist": no such file or directory
+  ```
+
+  So a `devices:` row in the base file needs a path that exists on every
+  host it renders for — `/dev/null` qualifies, which is why the
+  value-axis spelling uses `/dev/null` and not the ROCm path.
+- So the vendor axis is expressed as values in the base file, and the
+  NVIDIA-inertness contract holds by construction: on an NVIDIA
+  deployment every interpolated row renders the same values it always
+  had (`/dev/null` + `/dev/zero` device rows — paths that exist on every
+  host, never claimed by any NVIDIA container; the `nobody`/`nogroup`
+  groups — distinct, and never used by any NVIDIA container), the
+  entrypoint restates the image's own, and the profile-disabled
+  pooling services are absent from the render. The
+  `rocm-compose-render.test.js` gate renders BOTH shapes and pins the
+  deltas.
+- The bind-mount alternative (`volumes: - /dev/kfd:/dev/kfd`) is worse:
+  compose merges volumes by key, but a bind mount of a path that does not
+  exist CREATES a root-owned directory on the host — inside `/dev`.
+
+**The ports are values.** The GPU file's port rows are both
+parameterized (`${GPU_HTTPS_PORT:-443}:443` and `${GPU_HTTP_PORT:-80}:80`),
+so each venue pins them in its env file. That removed the
+`ports: !override` this path used to need — and with it a Compose
+**2.24.4** floor that contradicted the repository's documented 2.20+. No
+merge tag is used anywhere in the ROCm path.
+
+**What the profile actually adds.** The `rocm-models` services carry
+their own image pin, device rows, groups and entrypoint inside the same
+service definitions every vendor renders; an NVIDIA deployment just
+never activates them, and the always-on services' vendor rows render as
+the NVIDIA values. One definition per service, no drift between vendors:
+a flag change on the base side reaches ROCm with no second edit.
+
+**Why the NVIDIA render still proves inert.** The contract "an NVIDIA
+deployment cannot observe a behavior change without setting a new env
+var" is *pinned*, not argued: `rocm-compose-render.test.js` renders both
+shapes of the same files and asserts the NVIDIA deltas one by one — the
+device rows map `/dev/null` + `/dev/zero`, the groups are
+`nobody`/`nogroup` (never used by an NVIDIA container), the entrypoint
+restates the image's own (`vllm serve`), the image pin falls back to
+`vllm/vllm-openai:v0.29.0`, the pooling services are absent, and the
+published ports are the historical 443/80.
+{{% alert title="`env.strixhalo` is the single-server profile" color="warning" %}}
+Its `RERANKER_BACKEND=vllm` / `EMBEDDING_BACKEND=vllm` flips hard-fail on a
+compose **split** venue: the static gpu-proxy
+(`configs/nginx-gpu/gpu-proxy.conf`) hardcodes the TEI upstreams, so an
+embedder or reranker pointed at `vllm-embedding` / `vllm-reranker` has
+nothing to reach. On a compose-managed split venue unset both variables
+(the compose path keeps TEI), or deploy with the Ansible path, where
+Section 18 / 18B and the node-side `gpu_rerank_upstream` /
+`gpu_embedding_upstream` flips wire the vLLM reranker and the vLLM
+embedder through the proxy.
+
+The node's proxy serves the embedding in the OpenAI shape at
+`/v1/embeddings` (the TEI-shaped `/embed/` route stays for the OPEA
+embedding microservice and the okf-server's frontmatter service, which
+speak that shape; vLLM serves no TEI `/embed` route).
+{{% /alert %}}
+
+### Window / memory sizing
+
+There is no discrete VRAM: vLLM claims fractions of the **GTT aperture** —
+measured 45.8 GiB (`rocm-smi --showmeminfo gtt`) — which is carved from the
+91 GB system RAM, so GPU-tier claims add to the host's RAM pressure. The
+shipped `env.strixhalo` sizing targets a **shared** host: total GPU-tier
+claims plus the GTT baseline and runtime overhead must stay under the
+operator's ceiling, **27 GB** (decision 2026-11-11; the first sizing round
+proved the 8B-class pair cannot fit — gemma-3-4b-it's weights alone
+measure 8.58 GiB).
+
+| Variable | `env.strixhalo` | Note |
+|---|---|---|
+| `VLLM_GPU_UTILIZATION` | `0.28` | ~12.8 GiB claim (~4.3 GiB weights + ~3.8 GiB KV + runtime overhead) |
+| `VLLM_MAX_MODEL_LEN` | `49152` | the verified window at 0.28 (a 65536 window needs 5.0 GiB KV and does not fit there) |
+| `VLLM_MAX_NUM_SEQS` | `16` | |
+| `VLLM_DTYPE` | `half` | |
+| `VLLM_TRANSLATION_GPU_UTILIZATION` | `0.12` | gemma-3-1b-it (~2 GiB weights + an 8192 KV window, with margin) |
+| `VLLM_TRANSLATION_MAX_MODEL_LEN` | `8192` | |
+| `VLLM_TRANSLATION_MAX_NUM_SEQS` | `16` | |
+| `VLLM_TRANSLATION_DTYPE` | `auto` | |
+| `RERANKER_BACKEND` | `vllm` | reranker wrapper calls the `vllm-reranker` pooling instance, not TEI |
+| `VLLM_RERANKER_MODEL_ID` / `RERANKER_VLLM_MODEL` | `BAAI/bge-reranker-v2-m3` | the cross-encoder the reranker instance serves (Cohere response shape) |
+| `VLLM_RERANKER_GPU_UTILIZATION` | `0.05` | ~2.3 GiB claim (spike-measured ~1.56 GiB touched) |
+| `VLLM_RERANKER_MAX_MODEL_LEN` | `8192` | |
+| `EMBEDDING_BACKEND` | `vllm` | dataprep + retriever call the `vllm-embedding` pooling instance (chatqna's query encoder reaches it through `EMBEDDING_VLLM_ENDPOINT`) |
+| `VLLM_EMBEDDING_MODEL_ID` | `BAAI/bge-large-en-v1.5` | compose default — the pooling model (OpenAI `/v1/embeddings` shape) |
+| `VLLM_EMBEDDING_GPU_UTILIZATION` | `0.05` | compose default |
+| `VLLM_EMBEDDING_MAX_MODEL_LEN` | `512` | compose default |
+
+Coexistence verified at the 2B sizing: the two main instances healthy
+together, peak GTT **~19.6 GiB** against the 27 GB budget — before the two
+extra 0.05 pooling instances (the shipped tier peaks ≤ ~22 GiB). The
+8B-class models
+(granite-4.1-8b + gemma-3-4b-it) need a **mostly-dedicated** host: `0.55`
+/ `49152` fits the 45.8 GiB aperture with neighbors stopped (~39 GB peak;
+~16.5 GiB weights + 8.25 GiB KV). Window sizing here is hardware math,
+not a tuning preference: at 0.55 a 65536 window needs ~10 GiB KV and does
+**not** fit — the engine's own estimate for that split was 54064.
+
+### Why TEI runs on CPU
+
+The official TEI ROCm image (`text-embeddings-inference:rocm-latest`)
+targets Instinct dGPUs (gfx9); on gfx1151 the backend dies on the first
+embed request, so the two TEI containers start with the **CPU** image
+(the base compose TEI entrypoint flags work unchanged there). On this
+profile they serve nothing: `env.strixhalo` sets `RERANKER_BACKEND=vllm`
+and `EMBEDDING_BACKEND=vllm`, so the reranker wrapper reads
+`vllm-reranker` and all three embedding consumers read
+`vllm-embedding`:
+
+| Consumer | What it embeds | How it reaches the GPU |
+|---|---|---|
+| dataprep | the corpus, at ingest | the `EMBEDDING_BACKEND=vllm` branch |
+| the retriever | the query, when its own fallback runs | the same branch |
+| chatqna | the query, in the RAG graph | `EMBEDDING_VLLM_ENDPOINT` — its `embedding` node derives host/port/protocol/endpoint from that base URL |
+
+All three must move together — one on TEI and one on vLLM would mix
+vector spaces in one collection. The query encoder is the third one
+because chatqna's RAG graph encodes the query through its `embedding`
+node, which otherwise points at the OPEA `embedding` microservice (which
+fronts the CPU TEI container): without the switch, the GPU embedder
+served ingestion only and every chat query was encoded by the CPU image
+the profile caps at 8 TEI workers. chatqna applies the bge query
+instruction itself before the text leaves the service, so the encoded
+query carries the same prefix the TEI path applied.
+
+On a compose-managed split venue the node-side `/embed` route stays TEI
+(see the warning above).
+
+### Verifying the ROCm GPU stack
+
+```bash
+# 1. Device visible (see host prerequisites above — rocminfo lists gfx1151)
+
+# 2. Model endpoints (single-server venue)
+docker compose exec vllm curl -s http://localhost:8000/health
+docker compose exec vllm curl -s http://localhost:8000/v1/models
+# → ['ibm-granite/granite-3.1-2b-instruct']
+
+# 3. Guided JSON — a chat completion with
+#    response_format={"type":"json_object"} must return valid JSON
+#    (dataprep chunk labeling depends on it)
+
+# 4. GTT usage
+docker run --rm --device=/dev/kfd --device=/dev/dri \
+  --group-add 990 --group-add 44 \
+  rocm/rocm-terminal:latest rocm-smi --showmeminfo gtt
+```
+
+### Swarm caveat
+
+`docker stack deploy` does **not** pass compose `devices:` — the short form
+is silently dropped and the long form is rejected
+(`services.*.devices.0: must be a string`). The swarm-deployed ROCm GPU
+tier therefore routes via the standalone GPU-node compose stack (second
+invocation above) on the ROCm node, wired to the app stack with the
+remote-GPU pattern — see
+[Docker Swarm Setup](/docs/deploy/docker-swarm-setup/).
+
+### OKF stack on a ROCm venue (live-verified additions)
+
+Running the OKF knowledge-base tier on a ROCm single-server venue needs
+four venue-only settings (all in the local `.env` / the Strix Halo env —
+no NVIDIA-path file changes):
+
+1. **`OKF_ENABLED=1`** + `--profile okf` + a kong-config re-run — see
+   [OKF Deployment & Lifecycle](/docs/knowledge-base/okf-deployment/)
+   for the full flag semantics.
+2. **Split-URL auth for okf-server AND document-repository** — the base
+   compose carries the
+   `KEYCLOAK_DISCOVERY_URL` / `KEYCLOAK_JWKS_URL` /
+   `KEYCLOAK_PUBLIC_URL` trio for three services (backend,
+   okf-server, document-repository) with EMPTY defaults — the NVIDIA
+   one-URL shape. `env.strixhalo` pins the discovery/JWKS legs (the
+   in-network URLs); the browser-edge alias stays in the venue `.env`
+   (it needs the venue's domain). Document-repository's block is what
+   makes OKF publishing work (its OIDC discovery otherwise times out
+   against the self-signed edge and bundle storage answers 503 →
+   `EXPORT_FAILED` on publish).
+3. **`VLLM_ENDPOINT=http://vllm:8000`** — opts okf-server's LLM legs in
+   (LLM-Assisted import curation, topic links, manifest summaries).
+   Unset, those legs refuse ("LLM not configured") and the wizard
+   stalls. Other consumers of the variable already default to the same
+   URL, so the setting moves only okf-server.
+4. **TLS cert SAN** — the nginx dev generator stamps
+   `subjectAltName=IP:<NGINX_PUBLIC_DOMAIN>|DNS:<NGINX_PUBLIC_DOMAIN>,DNS:localhost,IP:127.0.0.1`.
+   Older images (pre-fix) generate a SAN-less cert whose symptoms are
+   browser `ERR_CERT_AUTHORITY_INVALID` on API calls and the frontend
+   falling back to `localhost:3000` — rebuild the nginx image and
+   recreate the container to regenerate with the SAN.
+5. **RAGAS judge + embedder** — the judge defaults work on ROCm as-is
+   (they inherit the deployment's vLLM). The embedder needs a ROCm
+   override in the same `.env`:
+   `RAGAS_EMBED_BASE_URL=http://vllm-embedding:8000/v1` +
+   `RAGAS_EMBED_API=openai` — the vLLM pooling instance serves the OpenAI
+   `/embeddings` shape, not the TEI `/embed` route the compose default
+   names.
+
+Topic-link enrichment on the 2B-class ROCm models: batches of 8 concepts
+sometimes exceed the 60 s per-call budget (measured 7 of 19 batches on a
+144-concept import — fail-soft, the run completes). Tune
+`OKF_TOPIC_LINK_TIMEOUT_MS` / `OKF_TOPIC_LINK_BATCH` and re-run the pass
+to densify links. The full live-venue runbook — Keycloak role seeding,
+the OKF lifecycle via API, and every failure signature — is
+`docs/rocm-venue-okf-runbook.md` in the repository.
 
 ## Verifying the GPU stack
 

@@ -1,0 +1,56 @@
+{
+  "07": {
+    "layout": "wide",
+    "description": "An authenticated government portal calls the assistant API. Role-controlled document operations are exposed by the Document Repository."
+  },
+  "09": {
+    "layout": "wide",
+    "idleEdges": [["U", "F"], ["F", "I"], ["I", "P"], ["P", "E"], ["E", "A"]],
+    "description": "An administrator uploads files from the dashboard and selects Ingest. Dataprep extracts and chunks the content, an embedding model creates vectors, and ArangoDB stores the searchable index."
+  },
+  "10": {
+    "layout": "wide",
+    "idleEdges": [["B", "O"], ["O", "E"], ["E", "R"]],
+    "description": "The Node.js backend sends the authenticated query to OPEA ChatQnA. Embedding and retrieval can be followed by optional reranking before generation."
+  },
+  "12": {
+    "layout": "split",
+    "description": "Vector and BM25 rankings are fused. Optional graph traversal expands the candidate set from vector hits."
+  },
+  "16": {
+    "layout": "split",
+    "description": "OKF combines concept documents and typed relationships into a versioned repository. After publication and ingestion, it can serve as a knowledge graph."
+  },
+  "17": {
+    "layout": "split",
+    "description": "An illustrative OKF concept graph. Two procedures refer to proof of address; the renewal concept links to public handling notes."
+  },
+  "18": {
+    "layout": "wide",
+    "idleEdges": [["D", "C"], ["C", "P"], ["P", "T"]],
+    "description": "A draft is curated in OKF Studio. The head can be tested before publication. Publication creates a version and starts ingestion, after which live corpus retrieval can be tested."
+  },
+  "19": {
+    "layout": "wide",
+    "description": "Keycloak supplies claims. GENIE.AI resolves open or closed OKF policy against the serving set, then sends the authorised graphs to retrieval."
+  },
+  "24": {
+    "layout": "split",
+    "description": "The application uses locally selected file and index stores, then calls configured models. Institution-managed and third-party model endpoints have different data boundaries."
+  },
+  "30": {
+    "layout": "split",
+    "idleEdges": [["K", "G"], ["G", "V"]],
+    "description": "Docker Compose, Docker Swarm and Kubernetes via Helm can all send model operations to a dedicated HTTPS GPU API. The GPU endpoint serves the configured workloads."
+  },
+  "26": {
+    "layout": "wide",
+    "idleEdges": [["A", "C"], ["C", "V"], ["V", "G"]],
+    "description": "Instrumented GENIE.AI services send telemetry to the OpenTelemetry Collector. VictoriaMetrics, VictoriaLogs and VictoriaTraces store the corresponding signals. Grafana visualises configured data sources."
+  },
+  "15": {
+    "layout": "wide",
+    "idleEdges": [["Q", "N"], ["N", "R"], ["R", "D"], ["D", "A"]],
+    "description": "ChatQnA normalises a Kiswahili question to English. Retrieval and generation use the English corpus. The response is translated back to Kiswahili at the edge."
+  }
+}

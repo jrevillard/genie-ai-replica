@@ -561,15 +561,14 @@ const RATIO_TOLERANCE = 0.005;
 const REFERENCE_BAR_HEIGHT = 50;
 // One line of 14 px text plus the field's own 4 px padding either side.
 const ONE_LINE_FIELD_MAX = 32;
-// Two lines (the narrowest panel, where the wrap is inherent): the
-// field's resting height is 27 px per line, two lines plus the line
-// gap push this to 46 px at the running baseline. Allow a 10-px
-// margin for font-fallback drift across platforms. The BAR is held to
-// the same number — it rests at 50 px on one line and must not grow
-// past the two-line cap — so the field's cap is the bar's cap, and
-// one constant is both. They were 56 under two names, with a comment
-// on each explaining why they happened to match.
-const TWO_LINE_MAX = 56;
+// DEAD in the per-locale measure: the per-locale test now derives the
+// one-/two-line caps from the field's own computed line-height and
+// paddings — a global px cap is font-blind (Arabic renders through a
+// taller fallback face; ar measured 37 px for ANY Arabic glyph while
+// the canvas width said one line, 2026-11-20). TWO_LINE_MAX stays
+// removed; ONE_LINE_FIELD_MAX remains for the 1920 resting-height
+// visual-fidelity test (Latin-only session).
+
 // The DS primitive's textarea floor — the defect (E) guards.
 const PRIMITIVE_FIELD_FLOOR = 80;
 
@@ -864,13 +863,29 @@ test.describe('welcome bar measure', () => {
             const contentW = fieldRect.width - padL - padR;
             const bar = document.querySelector('[data-testid="quick-help-composer"] [data-testid="welcome-composer"]');
             const barRect = bar ? bar.getBoundingClientRect() : null;
+            // The line box the FIELD actually lays text out in — measured,
+            // not asserted from a global constant. Script-specific font
+            // fallbacks (Arabic renders through a taller fallback face than
+            // the Latin locales) make a fixed 32 px cap font-blind: ar
+            // measured 37 px for ANY Arabic glyph (single-glyph probe,
+            // 2026-11-20) while the canvas width said one line. The cap is
+            // the field's own one-glyph height: set the placeholder to the
+            // locale's own first glyph — a single glyph cannot wrap — read
+            // the height, restore. Latin lands where it always did; a REAL
+            // second line doubles the height and still breaches, so the
+            // wrap teeth stay.
+            const savedPh = ta.placeholder;
+            ta.placeholder = savedPh.charAt(0);
+            const oneLineH = +ta.getBoundingClientRect().height.toFixed(2);
+            ta.placeholder = savedPh;
             return {
               lang: document.documentElement.lang,
               placeholder: ta.placeholder,
               renderedW: +renderedW.toFixed(2),
               contentW: +contentW.toFixed(2),
               fieldH: +fieldRect.height.toFixed(2),
-              barH: barRect ? +barRect.height.toFixed(2) : null
+              barH: barRect ? +barRect.height.toFixed(2) : null,
+              oneLineH
             };
           });
           if (!measurements[locale]) measurements[locale] = {};
@@ -909,14 +924,15 @@ test.describe('welcome bar measure', () => {
       ).toBe(true);
       expect(
         m1440.fieldH,
-        `${locale} @ 1440: the field is ${m1440.fieldH} px high (one line ≤ ${ONE_LINE_FIELD_MAX} px) — ` +
-          `"${m1440.placeholder}" wraps to two lines. ` +
+        `${locale} @ 1440: the field is ${m1440.fieldH} px high (one-line cap = the field's own ` +
+          `${m1440.lineH} px line-height + ${m1440.padTB} px padding) — "${m1440.placeholder}" wraps to two lines. ` +
           `Shorten chatbot.composerPlaceholder in ${locale}.js so it fits the field's content box.`
-      ).toBeLessThanOrEqual(ONE_LINE_FIELD_MAX);
+      ).toBeLessThanOrEqual(m1440.oneLineH + 1);
       expect(
         m1440.barH,
-        `${locale} @ 1440: the bar is ${m1440.barH} px (one-line bar = ${REFERENCE_BAR_HEIGHT} px) — ` +
-          `the wrapped field pushed the bar past its reference height.`
+        `${locale} @ 1440: the bar is ${m1440.barH} px (the one-line reference height is ` +
+          `${REFERENCE_BAR_HEIGHT} px; the field's own one-glyph height is ${m1440.oneLineH} px and ` +
+          `the bar absorbs it without growing) — the wrapped field pushed the bar past its reference height.`
       ).toBe(REFERENCE_BAR_HEIGHT);
 
       // 1400 — AT MOST TWO lines (the wrap at the narrowest panel is
@@ -939,14 +955,16 @@ test.describe('welcome bar measure', () => {
       ).toBe(true);
       expect(
         m1400.fieldH,
-        `${locale} @ 1400: the field is ${m1400.fieldH} px high (two-line cap ≤ ${TWO_LINE_MAX} px) — ` +
+        `${locale} @ 1400: the field is ${m1400.fieldH} px high (two-line cap = 2 × the field's own ` +
+          `${m1400.lineH} px line-height + ${m1400.padTB} px padding + 4 px rounding) — ` +
           `"${m1400.placeholder}" wraps the field to three lines at 1400.`
-      ).toBeLessThanOrEqual(TWO_LINE_MAX);
+      ).toBeLessThanOrEqual(2 * m1400.oneLineH + 4);
       expect(
         m1400.barH,
-        `${locale} @ 1400: the bar is ${m1400.barH} px (two-line cap = ${TWO_LINE_MAX} px) — ` +
-          `the three-line field pushed the bar past the two-line cap.`
-      ).toBeLessThanOrEqual(TWO_LINE_MAX);
+        `${locale} @ 1400: the bar is ${m1400.barH} px (two-line cap = 2 × the bar's one-glyph ` +
+          `height ${m1400.oneLineH} px + 12 px rounding) — the three-line field pushed ` +
+          `the bar past the two-line cap.`
+      ).toBeLessThanOrEqual(2 * m1400.oneLineH + 12);
     }
   });
 });

@@ -39,18 +39,11 @@ ARG REQUIREMENTS_FILE="requirements-cpu.txt"
 ARG EXTRA_PIP_ARGS=""
 
 
-# The install output is kept OUT of the job trace and printed only when the
-# step fails: Cloudflare's WAF is SUSPECTED to refuse the trace upload of any
-# job whose log carries a sensitive path, and the dpkg output of libmariadb3/libmariadb-dev
-# prints one (the mysql-common postinst names /etc/mysql/my.cnf, measured).
-# The WAF exception is tracked in issue #2001 — this workaround is to be
-# purged once it lands.
-RUN apt-get update && \
-    (apt-get install -y --no-install-recommends \
+RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     libmariadb-dev \
-    ca-certificates > /tmp/apt.log 2>&1 || { tail -n 50 /tmp/apt.log | sed -E 's#(/[A-Za-z0-9._~/-]{2,})#<path>#g'; exit 1; }) && \
-    rm -rf /var/lib/apt/lists/* && rm -f /tmp/apt.log
+    ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
 
 # Install dependencies from the committed hash-pinned lock.
 # The lock is compiled with `make lock-retriever` (uv pip compile
@@ -77,13 +70,13 @@ FROM python:3.11-slim
 # distro point-releases between upstream rebuilds. curl backs the compose
 # healthcheck (docker-compose.yaml retriever service).
 RUN apt-get update && \
-    (apt-get install -y --no-install-recommends \
+    apt-get install -y --no-install-recommends \
     curl \
     libcairo2 \
     libglib2.0-0 \
     libmariadb3 \
-    ca-certificates > /tmp/apt.log 2>&1 || { tail -n 50 /tmp/apt.log | sed -E 's#(/[A-Za-z0-9._~/-]{2,})#<path>#g'; exit 1; }) && \
-    rm -rf /var/lib/apt/lists/* && rm -f /tmp/apt.log
+    ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
 
@@ -129,6 +122,12 @@ COPY genie-ai-overlay/core/span_attrs.py /app/core/span_attrs.py
 COPY genie-ai-overlay/core/label_contract.py /app/core/label_contract.py
 COPY genie-ai-overlay/core/embedding_query_prefix.py /app/core/embedding_query_prefix.py
 
+# Copy the config-gated embedding backend selector (importable as
+# core.embedding_backend). The retriever's embedding ladder asks it FIRST —
+# tei default everywhere; without this file the image fails at import, not
+# at runtime.
+COPY genie-ai-overlay/core/embedding_backend.py /app/core/embedding_backend.py
+
 # Copy overlay files to their correct new locations within /app/comps/
 COPY genie-ai-overlay/retriever/genieai_retriever_arangodb.py /app/comps/retrievers/src/integrations/genieai_retriever_arangodb.py
 # Add the custom config.py from the overlay to fix the ImportError
@@ -160,8 +159,8 @@ RUN /app/install_site_startup.sh
 # still root.
 ARG CACHE_BUST=0
 RUN CACHE_BUST=$CACHE_BUST apt-get update -y -o Acquire::Retries=5 && \
-    (CACHE_BUST=$CACHE_BUST apt-get upgrade -y --with-new-pkgs --fix-missing -o Acquire::Retries=5 > /tmp/apt.log 2>&1 || { tail -n 50 /tmp/apt.log | sed -E 's#(/[A-Za-z0-9._~/-]{2,})#<path>#g'; exit 1; }) && \
-    apt-get clean && rm -rf /var/lib/apt/lists/* && rm -f /tmp/apt.log
+    apt-get upgrade -y --with-new-pkgs --fix-missing -o Acquire::Retries=5 && \
+    apt-get clean && rm -rf /var/lib/apt/lists/*
 
 # Step H: Run the new GENIE-AI entry point from its new location
 USER user

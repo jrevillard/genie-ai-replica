@@ -1,0 +1,9 @@
+flowchart LR
+ P["Government portal"]:::channel --> G["Configured<br/>API edge"]:::core
+ G --> A["Node.js backend<br/>assistant API"]:::core
+ G --> D["Document<br/>Repository"]:::data
+ K["Keycloak"]:::model -.-> P
+ class P,K step0
+ class A step1
+ class D step2
+ class G step3

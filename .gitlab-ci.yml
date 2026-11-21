@@ -4157,6 +4157,15 @@ docs:validate:
   script:
     - ansible-playbook --syntax-check deploy/ansible/deploy.yml
     - ansible-playbook --syntax-check deploy/ansible/deploy-gpu.yml
+    # The collapsed deploy-gpu.yml carries both vendors' plays. Render the
+    # GPU-node compose template in BOTH shapes to prove the Jinja
+    # conditionals resolve: every row in the template carries an inline
+    # default, so two template-module runs (gpu_vendor set / unset) render
+    # the ROCm and NVIDIA node files without a host connection.
+    - ansible localhost -m ansible.builtin.template -a "src=deploy/ansible/templates/docker-compose.gpu.yaml.j2 dest=/tmp/gpu-rocm.yaml" -c local -e "gpu_vendor=rocm"
+    - ansible localhost -m ansible.builtin.template -a "src=deploy/ansible/templates/docker-compose.gpu.yaml.j2 dest=/tmp/gpu-nvidia.yaml" -c local
+    - grep -q "vllm-reranker" /tmp/gpu-rocm.yaml
+    - '! grep -q "vllm-reranker" /tmp/gpu-nvidia.yaml'
     - yamllint -c deploy/ansible/.yamllint deploy/ansible/
     # Renders the #1227 payload probe/heal command builders through real
     # ansible and executes the tokenized output — the two layers
@@ -5890,6 +5899,25 @@ config:validate:
     # the image ships no git either — without it that pin fails with
     # "git: not found" instead of validating.
     - apk add --no-cache bash git
+    # The ROCm compose render gate
+    # (tests/config-validator/__tests__/rocm-compose-render.test.js)
+    # renders the two AMD ROCm overlays with the real compose binary. The
+    # node:22-alpine image ships neither the docker CLI nor the compose
+    # plugin, and the gate SKIPS when no compose binary answers - so
+    # without this install the gate silently runs zero assertions in CI.
+    # `docker compose config` is a client-side render: it needs no daemon
+    # and touches no container, so the plain CLI + plugin are enough.
+    - apk add --no-cache docker-cli docker-cli-compose
+    # The ROCm env.j2 render gate (tests/config-validator/__tests__/
+    # rocm-env-render.test.js) renders deploy/ansible/templates/env.j2 for
+    # the NVIDIA and the two ROCm deployment shapes and asserts what each
+    # one gets. The renderer is python (tests/config-validator/tools/
+    # render_env_template.py) and imports BOTH jinja2 and yaml - without
+    # these the gate SKIPS (it probes the renderer and skips when it cannot
+    # run), so it would silently run zero assertions in CI. py3-yaml is not
+    # implied by py3-jinja2: jinja2 does not depend on it, and the renderer
+    # parses the template's YAML front matter.
+    - apk add --no-cache python3 py3-jinja2 py3-yaml
     - cd tests/config-validator && npm ci
     # The #1716 behavioral probe runs the REAL gate binary (tests/e2e's
     # pinned eslint) against a fixture: without this install the probe
@@ -5952,6 +5980,15 @@ config:validate:
         - "env.*"
         - "docker-compose.yaml"
         - "docker-compose.gpu.yaml"
+        # The AMD ROCm vendor axis lives in the two base compose files (env
+        # values + the rocm-models profile) and in env.strixhalo — rendered
+        # by no other check in the pipeline: the config suite parses
+        # docker-compose.yaml and docker-compose.gpu.yaml only, and
+        # scripts/ci/config-parity-check.py reads docker-compose.yaml only.
+        # A change to the base files, the Strix Halo profile or the
+        # vendor-conditioned ansible path must therefore trigger the stage
+        # that renders it.
+        - "env.strixhalo"
         - "genie-ai-overlay/retriever/**/*"
         - "genie-ai-overlay/chatqna/**/*"
         - "deploy/ansible/**/*"

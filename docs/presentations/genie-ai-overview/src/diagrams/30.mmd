@@ -1,0 +1,10 @@
+flowchart LR
+ C["Docker Compose"]:::channel --> G["Dedicated<br/>GPU API"]:::core
+ S["Docker Swarm"]:::channel --> G
+ K["Kubernetes<br/>and Helm"]:::channel --> G
+ G --> V["vLLM"]:::model
+ G --> T["TEI"]:::model
+ G -.-> D["Docling"]:::option
+ class C,S,K step0
+ class G step1
+ class V,T,D step2

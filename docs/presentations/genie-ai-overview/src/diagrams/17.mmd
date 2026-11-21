@@ -1,0 +1,8 @@
+flowchart LR
+ R["Permit renewal"]:::core --> P["Proof of<br/>address"]:::data
+ B["Address change"]:::channel --> P
+ R --> E["Unreadable<br/>document"]:::option
+ E --> G["Public handling<br/>notes"]:::option
+ class R step0
+ class P,B step1
+ class E,G step2

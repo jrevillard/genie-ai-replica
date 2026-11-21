@@ -1,27 +1,29 @@
 # Copyright (C) 2026 International Telecommunication Union (ITU)
 # SPDX-License-Identifier: Apache-2.0
-"""The bounded smoke probe — the pre-decision evidence producer (story 2.1, AD-5).
+"""The bounded smoke probe — the pre-decision evidence producer.
 
 SMOKE, not production: the provisional custom minimal loop runs on the seam
-with a small toolset (``search_knowledge`` + ``read_source`` over the story
-1.5 port) and ONE multi-hop question, and the run leaves one comparable
-evidence record — runtime id, toolset, question id, outcome, step/model/tool
-call counts, wall clock, token usage as served. Story 2.2 points the other
-D03 candidates at the same probe shape, and V06 compares the records.
+with a small toolset (``search_knowledge`` + ``read_source`` over the
+document capability port) and ONE multi-hop question, and the run leaves one
+comparable evidence record — runtime id, toolset, question id, outcome,
+step/model/tool call counts, wall clock, token usage as served. The other
+runtime candidates run the same probe shape, and the runtime decision
+compares the records.
 
 Every number here is a smoke bound, never a threshold decision: the probe
 budget values exist so a runaway model call cannot burn a GPU node during a
-smoke run. The real budgets are post-baseline (PRD §8) and belong to the
-request orchestrator (story 2.3).
+smoke run. The real budgets are a deployment decision, owned by the
+request orchestrator.
 
 The model client mirrors the component's recorded conventions
 (``noagent.generation``: non-streaming, the fixed sampling params,
 ``/v1/models`` discovery with the ``VLLM_LLM_MODEL_ID`` override) but stays
-probe-local — the production client belongs to the selected runtime's story.
+probe-local — the production client belongs to whichever runtime the
+decision selects.
 
 The probe runs IN-PROCESS; there is no HTTP surface for the agent loop
-(request orchestration/admission is story 2.3, the BFF stream contract is
-story 2.4). Live entry::
+(the request orchestrator and the BFF stream contract own those surfaces).
+Live entry::
 
     python -m agent.probe
 
@@ -73,7 +75,7 @@ from .registry import ToolDefinition, ToolRegistry
 logger = logging.getLogger(__name__)
 
 RUNTIME_ID = "custom-minimal-loop"
-"""The provisional candidate's runtime id — the field V06 compares on."""
+"""The provisional candidate's runtime id — the field the runtime decision compares on."""
 
 QUESTION_ID = "probe-multihop-001"
 TOOLSET = ("search_knowledge", "read_source")
@@ -89,9 +91,10 @@ PROBE_QUESTION = (
     "complaints, and which source document defines that process?"
 )
 
-# The smoke bounds: enough steps for search → read → answer plus model
-# retries, enough wall clock for several 180 s model calls — and nothing
-# more. A probe that hits one of these stops honestly with its evidence.
+# The smoke bounds: enough steps for search → read → answer, enough wall
+# clock for several 180 s model calls — and nothing more. No retry exists:
+# a transient model failure ends the run, which stops honestly with its
+# evidence like any other bound.
 PROBE_RUN_BUDGET = RunBudget(max_steps=8, max_model_calls=8, max_tool_calls=8, wall_clock_seconds=600.0)
 
 # The per-tool-call smoke bound (the port's OperationBudget: the executor
@@ -102,7 +105,7 @@ PROBE_OPERATION_BUDGET = OperationBudget(timeout_ms=120000, max_results=8, max_r
 
 @dataclass(frozen=True)
 class ProbeEvidence:
-    """One probe run's comparable record — the fields V06 compares.
+    """One probe run's comparable record — the fields the runtime decision compares.
 
     A cancelled run still produces its record: the partial counts and the
     wall clock come from the run's budget monitor, and the outcome says
@@ -200,7 +203,7 @@ def document_toolset(
     construction, so no preparation call is needed) and a ``SourceRef`` —
     and carry the fixed ``CallerContext``. The narrowing travels in the
     context, never in the arguments, so nothing the model contributes can
-    widen the scope (AD-4); the port stays the only corpus access. An
+    widen the scope; the port stays the only corpus access. An
     argument the contract refuses (a missing query, a malformed target)
     raises ``ValidationError``, which the loop feeds back as the
     structured tool result.
@@ -307,8 +310,8 @@ class ProbeConfig:
             probe_bearer=source.get("VLLM_API_KEY"),
             tls_verify=str(source.get("OPEA_SSL_SKIP_VERIFY", "")) != "1",
             # The tolerant reads are the component's recorded convention
-            # (_env_float, adopted for issue #1091): a set-to-empty value
-            # falls back to the default instead of crashing the probe.
+            # (_env_float): a set-to-empty value falls back to the default
+            # instead of crashing the probe.
             llm_timeout_seconds=_env_float(source, "MODEL_LLM_TIMEOUT_SECONDS", 180.0),
             probe_timeout_seconds=_env_float(source, "MODEL_PROBE_TIMEOUT_SECONDS", 10.0),
             docrepo_url=str(source.get("AGENT_DOCREPO_URL", "")),

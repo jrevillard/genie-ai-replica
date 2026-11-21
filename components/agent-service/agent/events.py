@@ -1,6 +1,6 @@
 # Copyright (C) 2026 International Telecommunication Union (ITU)
 # SPDX-License-Identifier: Apache-2.0
-"""The seam's event envelope and vocabulary — owned by ``agent/`` (AD-5, story 2.1).
+"""The seam's event envelope and vocabulary — owned by ``agent/``.
 
 The internal envelope is ``{run_id, call_id, seq, kind, payload}`` and the
 kind vocabulary is AG-UI-SHAPED — run lifecycle, text-message lifecycle,
@@ -10,8 +10,8 @@ cheap: a runtime adapts its native events TO this vocabulary; it never
 renames it (a renamed vocabulary would couple every downstream consumer to
 the runtime that happened to run first).
 
-The vocabulary deliberately carries no BFF frame name. The BFF frame writer
-is story 2.4: the BFF parses this seam stream and writes every client frame,
+The vocabulary deliberately carries no BFF frame name. The BFF
+parses this seam stream and writes every client frame,
 so the client SSE dialect (``chunk``/``done``/``error``/``metadata``/
 ``agent_activity``/``agent_verdict``) must not leak into the seam — a name
 shared between the two vocabularies would blur who owns the stream. A
@@ -31,7 +31,7 @@ from typing import Protocol
 from pydantic import BaseModel, ConfigDict
 
 # The client-SSE frame names the BFF writes (the five preserved event types
-# plus the two additive ones — AD-8). The seam vocabulary is checked against
+# plus the additive ones). The seam vocabulary is checked against
 # this set at import: one home for the forbidden list, so the check cannot
 # drift from what the BFF actually writes.
 BFF_FRAME_NAMES = frozenset({"chunk", "done", "error", "metadata", "agent_activity", "agent_verdict"})
@@ -65,7 +65,7 @@ def _vocabulary_never_carries_a_bff_frame_name() -> None:
 
     Raises at import (and is pinned by the events suite, which calls it
     directly): a collision means the seam started speaking the client
-    dialect, which is the leak AD-5 exists to prevent.
+    dialect, which is the leak the seam boundary exists to prevent.
     """
     collisions = sorted(kind.value for kind in EventKind if kind.value in BFF_FRAME_NAMES)
     if collisions:

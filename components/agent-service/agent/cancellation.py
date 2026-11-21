@@ -1,6 +1,6 @@
 # Copyright (C) 2026 International Telecommunication Union (ITU)
 # SPDX-License-Identifier: Apache-2.0
-"""The cancellation hook — the agent-side end of the cancellation chain (AD-6, story 2.1).
+"""The cancellation hook — the agent-side end of the cancellation chain.
 
 Two primitives, one discipline:
 
@@ -28,7 +28,7 @@ T = TypeVar("T")
 class CancellationToken:
     """One run's cancellation signal.
 
-    The token is cooperative: whoever owns the run's lifecycle (story 2.3's
+    The token is cooperative: whoever owns the run's lifecycle (the request
     orchestrator, the probe harness, a test) holds it and fires
     :meth:`cancel`; the loop checks it before every dispatch and races it
     against every in-flight call through :func:`run_cancellable`.

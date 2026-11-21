@@ -1,6 +1,6 @@
 # Copyright (C) 2026 International Telecommunication Union (ITU)
 # SPDX-License-Identifier: Apache-2.0
-"""The agent runtime seam (AD-5) — envelope, vocabulary, registry, hooks, and the loop.
+"""The agent runtime seam — envelope, vocabulary, registry, hooks, and the loop.
 
 ``agent/`` owns the runtime seam: the internal event envelope
 ``{run_id, call_id, seq, kind, payload}`` and its AG-UI-shaped kind

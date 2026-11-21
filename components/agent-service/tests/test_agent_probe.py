@@ -1,11 +1,11 @@
 # Copyright (C) 2026 International Telecommunication Union (ITU)
 # SPDX-License-Identifier: Apache-2.0
-"""The bounded smoke probe — the evidence producer and its pieces (story 2.1).
+"""The bounded smoke probe — the evidence producer and its pieces.
 
 Mutation-sensitive pins: the toolset is exactly search + read over the port
 (the executors adapt arguments into the contract's types — English
 passthrough, closed SourceRef union, extra argument fields refused), the
-probe run produces the V06-comparable evidence record (outcome, counts,
+probe run produces the comparable evidence record (outcome, counts,
 wall clock, usage as served) for every terminal shape — answered, error,
 budget-exhausted, cancelled — and the probe-local model client mirrors the
 recorded generation conventions (fixed params, tools carried, override-first
@@ -146,7 +146,7 @@ def test_the_contract_refuses_malformed_arguments_and_smuggled_target_fields():
 
 
 def test_smuggled_argument_fields_change_nothing_the_port_sees():
-    # The query is the only thing the model contributes (AD-4): a smuggled
+    # The query is the only thing the model contributes: a smuggled
     # scope field in the arguments is dead weight — the narrowing travels
     # in the fixed context, never in the arguments.
     port = _port()
@@ -276,7 +276,7 @@ def test_the_recorded_bearer_wins_when_both_keys_are_set():
 
 @pytest.mark.parametrize("knob,default", [("MODEL_LLM_TIMEOUT_SECONDS", 180.0), ("MODEL_PROBE_TIMEOUT_SECONDS", 10.0)])
 def test_a_set_to_empty_timeout_knob_falls_back_to_its_default(knob, default):
-    # The recorded convention (the _env_float adoption, issue #1091): an
+    # The recorded convention (the tolerant _env_float read): an
     # empty value is unset, never a startup crash.
     config = ProbeConfig.load(env={knob: ""})
     field = "llm_timeout_seconds" if knob == "MODEL_LLM_TIMEOUT_SECONDS" else "probe_timeout_seconds"

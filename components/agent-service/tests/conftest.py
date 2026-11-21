@@ -178,7 +178,7 @@ def assert_no_positional_aql_execute(package_dir: Path) -> None:
 
 
 # -----------------------------------------------------------------------
-# The agent loop / probe doubles (story 2.1): the same one-home rule — a
+# The agent loop / probe doubles: the same one-home rule — a
 # surface change to the scripted model or the fake port lands once for the
 # loop and probe suites together.
 # -----------------------------------------------------------------------

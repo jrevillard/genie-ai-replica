@@ -1,6 +1,6 @@
 # Copyright (C) 2026 International Telecommunication Union (ITU)
 # SPDX-License-Identifier: Apache-2.0
-"""The server-side tool registry — the authorization surface (story 2.1, AD-4/AD-5).
+"""The server-side tool registry — the authorization surface.
 
 Mutation-sensitive pins: an unregistered name is refused BEFORE any
 resolution (the executor never runs — nothing unregistered is callable),

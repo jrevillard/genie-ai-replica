@@ -1,6 +1,6 @@
 # Copyright (C) 2026 International Telecommunication Union (ITU)
 # SPDX-License-Identifier: Apache-2.0
-"""The provisional custom minimal loop behind the seam (story 2.1, AD-5).
+"""The provisional custom minimal loop behind the seam.
 
 Mutation-sensitive pins: the multi-hop probe shape completes search →
 read_source → answer with the exact event sequence on the seam vocabulary
@@ -243,11 +243,12 @@ def test_tool_call_budget_exhaustion_refuses_the_second_dispatch():
     assert result.outcome == OUTCOME_BUDGET_EXHAUSTED
     assert result.final_text is None
     assert monitor.tool_calls == 1  # the refused dispatch never counted
+    # The checks precede the started event: a refused dispatch never
+    # announces a tool call that will not run.
     assert [event.kind.value for event in collector] == [
         "run_started",
         "tool_call_started",
         "tool_call_finished",
-        "tool_call_started",  # the second call is announced, then refused
         "run_error",
     ]
 

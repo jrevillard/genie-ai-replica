@@ -31,7 +31,7 @@ RUN CACHE_BUST=$CACHE_BUST apt-get update -y -o Acquire::Retries=5 && \
 # module (story 1.8) rides beside them: the loop-side query preparation and
 # its vendored language registry. The noagent package (story 1.9) rides
 # beside both: config B, the fixed single-pass pipeline. The agent package
-# (story 2.1) rides beside all of them: the runtime seam and the probe.
+# rides beside all of them: the runtime seam and the probe.
 COPY app.py tracing.py ./
 COPY capabilities/ ./capabilities/
 COPY preparation/ ./preparation/

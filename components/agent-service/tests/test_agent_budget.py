@@ -1,6 +1,6 @@
 # Copyright (C) 2026 International Telecommunication Union (ITU)
 # SPDX-License-Identifier: Apache-2.0
-"""The run budget and its monitor (story 2.1, AD-6).
+"""The run budget and its monitor.
 
 Mutation-sensitive pins: every threshold is REQUIRED (no default to fall
 into — no numeric budget default is final), the check-then-count

@@ -1,6 +1,6 @@
 # Copyright (C) 2026 International Telecommunication Union (ITU)
 # SPDX-License-Identifier: Apache-2.0
-"""The run budget — bounded execution before every dispatch (AD-6, story 2.1).
+"""The run budget — bounded execution before every dispatch.
 
 The budget declares the dimensions a run is bounded on: steps, model calls,
 tool calls and wall clock. The monitor is its live half — the per-run
@@ -11,8 +11,8 @@ never increments anything.
 
 The numbers are NOT owned here. Every field is required — there is no
 default to fall into — because no numeric budget default is final: the
-probe's values are smoke bounds, and the real thresholds are post-baseline
-(PRD §8), owned by the request orchestrator (story 2.3). A run that hits a
+probe's values are smoke bounds, and the real thresholds are a deployment
+decision owned by the request orchestrator. A run that hits a
 budget ends honestly — the loop reports ``budget_exhausted`` and never
 fabricates an answer to fill the hole.
 """

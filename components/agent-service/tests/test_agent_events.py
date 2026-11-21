@@ -1,6 +1,6 @@
 # Copyright (C) 2026 International Telecommunication Union (ITU)
 # SPDX-License-Identifier: Apache-2.0
-"""The seam's envelope and vocabulary ownership (story 2.1, AD-5).
+"""The seam's envelope and vocabulary ownership.
 
 Mutation-sensitive pins: every event carries the exact envelope
 ``{run_id, call_id, seq, kind, payload}`` (no more, no less — ``extra``

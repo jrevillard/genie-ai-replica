@@ -1,6 +1,6 @@
 # Copyright (C) 2026 International Telecommunication Union (ITU)
 # SPDX-License-Identifier: Apache-2.0
-"""The cancellation hook (story 2.1, AD-6).
+"""The cancellation hook.
 
 Mutation-sensitive pins: the pre-dispatch check raises (never maps to a
 result or a typed failure), the in-flight work is CANCELLED — not

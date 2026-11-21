@@ -1,6 +1,6 @@
 # Copyright (C) 2026 International Telecommunication Union (ITU)
 # SPDX-License-Identifier: Apache-2.0
-"""The server-side tool registry — the authorization surface (AD-4/AD-5, story 2.1).
+"""The server-side tool registry — the authorization surface.
 
 The registry is the one place a tool becomes callable: a name it does not
 carry is dispatched by nobody, and :meth:`ToolRegistry.dispatch` refuses an

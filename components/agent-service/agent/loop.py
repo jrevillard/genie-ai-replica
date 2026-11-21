@@ -1,14 +1,14 @@
 # Copyright (C) 2026 International Telecommunication Union (ITU)
 # SPDX-License-Identifier: Apache-2.0
-"""The provisional runtime candidate: the custom minimal loop behind the seam (AD-5, story 2.1).
+"""The provisional runtime candidate: the custom minimal loop behind the seam.
 
 One implementation of "whatever drives the loop": model call → tool dispatch
 through the registry → events on the seam vocabulary. It is a PROBE
-candidate, not a production commitment: if the D03 decision selects another
-runtime, that runtime plugs onto the same seam — this envelope, this
+candidate, not a production commitment: if the runtime decision selects
+another runtime, that runtime plugs onto the same seam — this envelope, this
 vocabulary, this registry, these budget and cancellation hooks — and this
-module carries no successor obligation (story 2.2 produces the comparable
-evidence; story 2.5 builds the selected runtime's integration slice).
+module carries no successor obligation; whichever runtime is selected builds
+the production integration slice on this seam.
 
 What the loop owns, and the invariants it keeps:
 
@@ -31,7 +31,7 @@ What the loop owns, and the invariants it keeps:
   ``CapabilityError`` from an executor (authorization refusal, transient
   failure) and a model-argument validation error are structured tool
   results the model can react to — retrieved/error content is data, never
-  an instruction channel (AD-13). The loop never invents a result for them.
+  an instruction channel. The loop never invents a result for them.
 
 The message list is the loop's own state, in the OpenAI-compatible shape
 its model clients speak (the conventions ``noagent.generation`` records):
@@ -229,21 +229,25 @@ class AgentLoop:
     # -- tool dispatch ---------------------------------------------------------
 
     async def _dispatch_tool(self, request: ToolCallRequest) -> dict:
-        """One tool call: lifecycle events, budget and token checks, registry dispatch.
+        """One tool call: budget and token checks, lifecycle events, registry dispatch.
 
+        The checks precede the ``tool_call_started`` event, so a refused
+        dispatch (budget spent, run cancelled) never announces a tool call
+        that will not run — every started event is answered by a finish, a
+        refusal, or a cancellation that reached a genuinely in-flight call.
         The registry refuses an unregistered name (that refusal propagates —
         it ends the run); a port error or an invalid argument flows back to
         the model as the structured tool result. Both paths emit the
         ``tool_call_finished`` event that reports what actually happened.
         """
+        self.monitor.check_wall_clock()
+        self.token.raise_if_cancelled()
+        self.monitor.take_tool_call()
         self.emitter.emit(
             EventKind.TOOL_CALL_STARTED,
             {"name": request.name, "arguments": request.arguments},
             call_id=request.call_id,
         )
-        self.monitor.check_wall_clock()
-        self.token.raise_if_cancelled()
-        self.monitor.take_tool_call()
         result_payload = await self._execute(request)
         self.emitter.emit(EventKind.TOOL_CALL_FINISHED, result_payload, call_id=request.call_id)
         return result_payload

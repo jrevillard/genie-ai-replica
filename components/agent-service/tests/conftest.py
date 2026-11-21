@@ -18,6 +18,7 @@ import pytest
 from langdetect import DetectorFactory
 
 from capabilities.adapters.http import TransportError
+from capabilities.contract import ReadSourceResult, SearchKnowledgeResult
 
 
 class FakeTransport:
@@ -174,3 +175,57 @@ def assert_no_positional_aql_execute(package_dir: Path) -> None:
         "positional bind dict to aql.execute would bind to the driver's count "
         f"parameter (bind_vars must be passed by keyword): {'; '.join(offenders)}"
     )
+
+
+# -----------------------------------------------------------------------
+# The agent loop / probe doubles (story 2.1): the same one-home rule — a
+# surface change to the scripted model or the fake port lands once for the
+# loop and probe suites together.
+# -----------------------------------------------------------------------
+
+
+class AgentFakePort:
+    """The ``DocumentCapabilityPort`` double: canned results, recorded calls.
+
+    A canned result of ``None`` (or an exception instance) makes the port
+    raise it, so a suite can drive the port's raised carriers too.
+    """
+
+    def __init__(self, search_result: SearchKnowledgeResult | None = None, read_result: ReadSourceResult | None = None):
+        self.search_result = search_result
+        self.read_result = read_result
+        self.search_calls: list[dict] = []
+        self.read_calls: list[dict] = []
+
+    async def search_knowledge(self, context, request, budget) -> SearchKnowledgeResult:
+        self.search_calls.append({"context": context, "request": request, "budget": budget})
+        if isinstance(self.search_result, Exception):
+            raise self.search_result
+        return self.search_result
+
+    async def read_source(self, context, request, budget) -> ReadSourceResult:
+        self.read_calls.append({"context": context, "request": request, "budget": budget})
+        if isinstance(self.read_result, Exception):
+            raise self.read_result
+        return self.read_result
+
+
+class ScriptedLoopModel:
+    """The ``LoopModelClient`` double: canned turns in order, recorded requests.
+
+    Each request is recorded with a copy of the message list, so a suite
+    can assert what the loop fed the model without the live list mutating
+    under it.
+    """
+
+    def __init__(self, turns):
+        self._turns = list(turns)
+        self.requests: list[dict] = []
+
+    async def complete(self, messages, tool_definitions):
+        self.requests.append(
+            {"messages": [dict(message) for message in messages], "tool_definitions": tool_definitions}
+        )
+        if not self._turns:
+            raise AssertionError("the scripted model ran out of turns")
+        return self._turns.pop(0)

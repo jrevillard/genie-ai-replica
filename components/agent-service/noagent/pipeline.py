@@ -380,7 +380,8 @@ class NoAgentPipeline:
             if search_result.outcome == OutcomeCode.INSUFFICIENT_EVIDENCE:
                 # The recorded reasons stay distinct: the sink carries the
                 # exact one (no_documents_retrieved / reranker_input_too_long
-                # / reranker_selected_nothing / result_budget_exhausted).
+                # / reranker_selected_nothing / result_budget_exhausted
+                # / no_resolvable_candidates).
                 abstained = instructions is not None
                 reason = sink_reasons[0] if sink_reasons else None
                 logger.warning(f"abstained.reason={reason}")

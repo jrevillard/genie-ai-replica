@@ -286,14 +286,7 @@ async function raceInit(backend, { budgetMs, signal }) {
     }
   });
   try {
-    // The no-op catch is the dangling-loss case: Promise.race stops caring
-    // about the init promise once the budget timer or the abort has won,
-    // and a probe failing LATER (a socket timeout becoming an init()
-    // rejection ~30s in — exactly the hung-endpoint scenario) would then be
-    // an unhandled rejection crashing the process. The catch stays on the
-    // same promise object, so the race still receives the rejection while
-    // it is pending; it only marks the post-loss lifetime handled.
-    // The no-op catch below is belt-and-braces for the dangling-loss case:
+    // The no-op catch is belt-and-braces for the dangling-loss case:
     // Promise.race itself permanently attaches handlers to every input, so a
     // probe failing long after a lost race is already delivered to them and
     // handled (verified against Node directly). The explicit catch keeps

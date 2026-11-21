@@ -641,7 +641,9 @@ describe('agentic translation leg (story 2.10)', () => {
     it('cuts a hung init at the remaining budget: skipped deadline_spent, no chat call', async () => {
       // The health probe accepts the connection and never answers; its own
       // budget is 30s, the caller's is 60ms. The race must cut at 60ms —
-      // this test would run the full 30s if the race were missing.
+      // without it this test hangs past Jest's own suite timeout (the
+      // mocked request never answers, so the probe's 30s socket budget
+      // never fires either).
       const { calls } = serve({ health: { hang: true }, chat: { json: chatBody('X') } });
       const leg = makeLeg({ runUsage: zeroRun });
       const r = await leg.translateFullAnswer({ text: 'Hello world', remainingMs: 60 });
@@ -652,8 +654,9 @@ describe('agentic translation leg (story 2.10)', () => {
     });
 
     it('cuts a hung init at the abort: cancelled without a chat call, inside the probe budget', async () => {
-      // The abort fires the moment the health request exists; if the race
-      // ignored the signal, the outcome would wait out the probe's 30s.
+      // The abort fires the moment the health request exists; without the
+      // race's signal leg the outcome would hang past Jest's own suite
+      // timeout (the mocked request never answers).
       const controller = new AbortController();
       const { calls } = serve({
         health: {
@@ -672,10 +675,10 @@ describe('agentic translation leg (story 2.10)', () => {
 
     it('keeps the dangling init handled when its failure lands after a lost budget', async () => {
       // The budget timer wins at 50ms; the hung probe's socket error fires
-      // at 200ms — a rejection with no handler attached anymore (the race
-      // stopped caring when it settled). Without the no-op catch on the
-      // init promise, that is an unhandled rejection and this run fails on
-      // it — the suite completing cleanly is the assertion that pins it.
+      // at 200ms — after the race settled. The late failure must land
+      // handled: the suite completing cleanly pins that no unhandled
+      // rejection escapes the run (the race's own subscriptions already
+      // mark it handled; this canary stays green only while that holds).
       serve({ health: { emitErrorAfterMs: 200 }, chat: { json: chatBody('X') } });
       const leg = makeLeg({ runUsage: zeroRun });
       const r = await leg.translateFullAnswer({ text: 'Hello world', remainingMs: 50 });

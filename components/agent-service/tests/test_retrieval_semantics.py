@@ -52,10 +52,10 @@ def make_adapter(rows_per_query=None, views=(), config_env=None):
             return iter(self._rows)
 
     class FakeAql:
-        def execute(self, aql, bind_vars=None, **kwargs):
-            executed.append((aql, bind_vars))
+        def execute(self, query, count=False, batch_size=None, ttl=None, bind_vars=None, **_):
+            executed.append((query, bind_vars))
             for marker, rows in row_map.items():
-                if marker in aql:
+                if marker in query:
                     return FakeCursor(rows)
             return FakeCursor([])
 
@@ -137,7 +137,7 @@ def test_dense_rows_carry_no_chunk_labels_so_a_label_filter_drops_them_all():
 def test_dense_leg_failure_returns_empty_and_never_raises():
     class FakeAql:
         @staticmethod
-        def execute(aql, bind_vars=None, **kwargs):
+        def execute(query, count=False, batch_size=None, ttl=None, bind_vars=None, **_):
             raise RuntimeError("db down")
 
     class FakeDb:
@@ -181,8 +181,8 @@ def test_bm25_label_postfilter_drops_rows_that_fail_the_strategy():
 def test_bm25_leg_failure_returns_empty_and_flags_the_degradation():
     class FakeAql:
         @staticmethod
-        def execute(aql, bind_vars=None, **kwargs):
-            if "BM25_VIEW" in aql:
+        def execute(query, count=False, batch_size=None, ttl=None, bind_vars=None, **_):
+            if "BM25_VIEW" in query:
                 raise RuntimeError("view broken")
 
             class C:
@@ -224,7 +224,7 @@ def test_bm25_view_creation_failure_is_logged_and_never_cached():
 
         class aql:
             @staticmethod
-            def execute(aql, bind_vars=None, **kwargs):
+            def execute(query, count=False, batch_size=None, ttl=None, bind_vars=None, **_):
                 class C:
                     def __iter__(self):
                         return iter([])
@@ -504,3 +504,12 @@ def test_graph_name_charset_guard():
         validate_graph_name("GRAPH}` RETURN malice //")
     with pytest.raises(ValueError):
         validate_graph_name("")
+
+
+def test_the_modules_aql_doubles_track_the_real_driver_signature():
+    """Every ``execute`` double in this module carrying ``bind_vars`` must
+    take it in the real driver's position — a double that takes it second
+    would mask a positional bind-dict regression (see conftest helper)."""
+    from conftest import assert_module_aql_fakes_faithful
+
+    assert_module_aql_fakes_faithful(Path(__file__))

@@ -261,7 +261,7 @@ class ArangoRetrievalAdapter:
             "k": self._config.k,
         }
         try:
-            rows = list(await asyncio.to_thread(self._db.aql.execute, aql, bind_vars))
+            rows = list(await asyncio.to_thread(self._db.aql.execute, aql, bind_vars=bind_vars))
         except Exception as e:
             logger.error(f"Error during similarity search: {e}")
             return []
@@ -356,7 +356,7 @@ class ArangoRetrievalAdapter:
         bind_vars = {"query": query, "analyzer": self._hybrid.bm25_analyzer, "n": n}
         results = []
         try:
-            cursor = await asyncio.to_thread(self._db.aql.execute, aql, bind_vars)
+            cursor = await asyncio.to_thread(self._db.aql.execute, aql, bind_vars=bind_vars)
             for row in cursor:
                 chunk_labels = row.get("chunk_labels")
                 if not chunk_passes_label_filter(chunk_labels, labels_to_filter, filter_strategy):
@@ -448,7 +448,7 @@ class ArangoRetrievalAdapter:
             """
             file_id_by_key = {
                 row["key"]: row["file_id"]
-                for row in await asyncio.to_thread(self._db.aql.execute, aql, {"chunk_ids": chunk_ids})
+                for row in await asyncio.to_thread(self._db.aql.execute, aql, bind_vars={"chunk_ids": chunk_ids})
             }
             for r in results:
                 fid = file_id_by_key.get(r["doc"].key)
@@ -477,7 +477,7 @@ class ArangoRetrievalAdapter:
                 for row in await asyncio.to_thread(
                     self._db.aql.execute,
                     identity_aql,
-                    {"chunk_ids": chunk_ids, "graph_name": self.graph_name},
+                    bind_vars={"chunk_ids": chunk_ids, "graph_name": self.graph_name},
                 )
             }
             for r in results:

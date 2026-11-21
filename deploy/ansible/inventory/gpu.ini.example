@@ -1,7 +1,18 @@
-# GPU Node - Inventory template
-# Usage: copy to gpu.ini and replace with actual GPU node IP/hostname
+# GPU Node - Inventory template (NVIDIA and AMD ROCm vendors)
+# Usage: copy to gpu.ini and replace with actual GPU node IPs/hostnames.
 #
 # ansible-playbook -i inventory/gpu.ini deploy-gpu.yml --vault-id gpu@prompt
+#
+# Both vendor groups may live in the same inventory: each host runs only
+# the plays scoped to its own group (NVIDIA: itu_rtx_gpu_api; ROCm:
+# rocm_gpu_nodes). ROCm node vars come from vars/rocm_gpu_nodes.yml +
+# vars/vault-rocm-gpu.yml — NOT from a group_vars/ directory (see the
+# playbook header for why).
 
-[gpu_nodes]
+[itu_rtx_gpu_api]
 gpu-node-1 ansible_host=10.0.0.200 ansible_user=root
+
+# A second NVIDIA node simply adds another line above. An AMD ROCm node
+# (Strix Halo / gfx1151 class) goes in the group below instead:
+[rocm_gpu_nodes]
+# rocm-gpu-1 ansible_host=10.0.0.210 ansible_user=<sudo-user>

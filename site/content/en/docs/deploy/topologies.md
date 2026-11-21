@@ -102,7 +102,7 @@ vars like `DEPLOY_OPEA` / `ENABLE_OBSERVABILITY` / `CERTBOT_REPLICAS`).
 |---|---|---|---|
 | _(none)_ | `docker compose up -d` | `postgres`, `kong*`, `nginx`, `frontend`, `redis-cache`, `db-migrations`, `backend`, `document-repository`, `clamav`, `arango-vector-db`, `postgres-init`, `keycloak*`, `victorialogs`, `otel-collector`, `otel-collector-init` | All these always start in Swarm (15 named + 3 always-on observability backends) |
 | `opea` | `--profile opea` | `textgen`, `translation`, `guardrail`, `embedding`, `reranker`, `dataprep-arango-service`, `retriever-arango-service`, `chatqna-xeon-backend-server`, `chatqna-xeon-ui-server` (replicas 0), `chatqna-xeon-nginx-server` (replicas 0) | Gated by `DEPLOY_OPEA` (default `1`) |
-| `gpu-models` | `--profile gpu-models` | `vllm`, `vllm-translation-guardrail`, `tei`, `tei_reranker` | Gated by `GPU_MODEL_REPLICAS` (defaults to `DEPLOY_OPEA` — `1` by default; set `0` for remote GPU) |
+| `gpu-models` | `--profile gpu-models` | `vllm`, `vllm-translation-guardrail`, `tei`, `tei_reranker` (the ROCm overlay adds `vllm-reranker` + `vllm-embedding`) | Gated by `GPU_MODEL_REPLICAS` (defaults to `DEPLOY_OPEA` — `1` by default; set `0` for remote GPU) |
 | `observability` | `--profile observability` | `victoriametrics`, `victoriatraces`, `tempo-proxy`, `grafana` | Gated by `ENABLE_OBSERVABILITY` (default `0`). Note: `victorialogs`, `otel-collector`, and `otel-collector-init` start regardless — they have no profile and run in `mode: global` / `replicas: 1` so admin endpoints and log collection stay functional. |
 | `letsencrypt` | `--profile letsencrypt` | `certbot` | Gated by `CERTBOT_REPLICAS` (default `0`) |
 
@@ -112,6 +112,22 @@ vars like `DEPLOY_OPEA` / `ENABLE_OBSERVABILITY` / `CERTBOT_REPLICAS`).
 > profile in Compose does **not** turn off the corresponding service in
 > Swarm — set the matching env var (`DEPLOY_OPEA=0`,
 > `ENABLE_OBSERVABILITY=0`, `CERTBOT_REPLICAS=0`).
+
+> **AMD ROCm note:** the ROCm GPU tier IS a compose profile —
+> `rocm-models`, activated with `--profile rocm-models` (single-server,
+> topology B) or on the GPU node (topology F), sized by `env.strixhalo`.
+> The profile ACTIVATES `vllm-reranker` + `vllm-embedding` beside the
+> `gpu-models` services (absent from the render without it), and
+> `RERANKER_BACKEND` / `EMBEDDING_BACKEND` switch the
+> reranker and embedding consumers to them. See
+> [GPU Deployment → ROCm](/docs/deploy/gpu/).
+>
+> **ROCm swarm caveat:** `docker stack deploy` ignores compose
+> `devices:` (the short form is silently dropped; the long form is
+> rejected — `services.*.devices.0: must be a string`), so topologies
+> C–E cannot host the ROCm GPU tier in-swarm. On a ROCm node the GPU
+> tier runs via the standalone GPU-node compose stack (the topology F
+> pattern) on that node.
 
 ## Topology catalog
 
@@ -144,7 +160,8 @@ Procedure: [Docker Compose Setup → Step 6b](/docs/deploy/docker-compose-setup/
 
 ### Topology B — Single-host (Compose dev, with local GPU)
 
-**Use for:** full local RAG with a developer GPU (T4 / RTX 6000 / A40).
+**Use for:** full local RAG with a developer GPU (NVIDIA: T4 / RTX 6000 /
+A40 — or AMD ROCm: Strix Halo iGPU).
 
 ```mermaid
 flowchart TB
@@ -157,10 +174,13 @@ flowchart TB
 |---|---|
 | Deploy (T4) | `docker compose --env-file .env --env-file env.t4 --profile opea --profile gpu-models up -d` |
 | Deploy (RTX 6000) | `docker compose --env-file .env --env-file env.rtx6000 --profile opea --profile gpu-models up -d` |
+| Deploy (AMD ROCm) | `docker compose --env-file .env --env-file env.strixhalo -f docker-compose.yaml --profile opea --profile gpu-models --profile rocm-models up -d` |
 | Verify vLLM | `docker compose logs vllm \| grep 'Application startup complete'` |
 | Verify RAG | `curl -sk https://localhost/api/health \| jq .status` |
 
-GPU model sizing: [GPU Deployment](/docs/deploy/gpu/).
+GPU model sizing: [GPU Deployment](/docs/deploy/gpu/). The ROCm variant
+needs no NVIDIA toolkit — the profile services claim `/dev/kfd` + `/dev/dri`
+directly.
 
 ### Topology C — Single-node Swarm (all labels on one node)
 
@@ -346,6 +366,19 @@ GPU node: see
 [Docker Swarm Setup → Remote GPU Node](/docs/deploy/docker-swarm-setup/#remote-gpu-node)
 and `deploy/ansible/README.md` for the standalone 5-service AI stack.
 
+On an **AMD ROCm** GPU node (Strix Halo / gfx1151 class), the same
+standalone stack runs with the `rocm-models` profile and the Strix Halo
+sizing file — no NVIDIA toolkit on the node:
+
+```bash
+docker compose --env-file env.strixhalo \
+  -f docker-compose.gpu.yaml --profile rocm-models up -d
+```
+
+Sizing and hardware prerequisites:
+[GPU Deployment → ROCm](/docs/deploy/gpu/). Ansible automation for this
+venue: `deploy/ansible/deploy-gpu.yml` (host group `rocm_gpu_nodes`).
+
 ### Topology G — CPU-only Swarm (DEPLOY_OPEA=0)
 
 **Use for:** stacks that need core services but no RAG pipeline (e.g.
@@ -444,11 +477,16 @@ Swarm).
 | Single host | yes | yes | yes | – | – | – | – | – | – |
 | Multi-node Swarm | – | – | – | 2-node | 3-node | yes (app) | optional | any | any |
 | Local GPU | – | yes | yes | worker | worker | – | – | any | any |
+| Local GPU (AMD ROCm) | – | yes (overlay) | no¹ | no¹ | no¹ | yes (overlay) | – | – | – |
 | Remote GPU | – | – | – | – | – | yes | – | – | – |
 | OPEA pipeline | – | yes | yes | yes | yes | yes | – | any | any |
 | Observability | optional | optional | optional | optional | optional | optional | optional | yes | any |
 | Let's Encrypt | optional | optional | optional | optional | optional | optional | optional | optional | yes |
 | Public FQDN | optional | optional | optional | optional | optional | optional | optional | optional | yes |
+
+¹ `docker stack deploy` cannot pass compose `devices:` to the ROCm node —
+run the GPU tier via the topology-F GPU-node stack on that node instead
+(see the ROCm note under the profile matrix).
 
 ## Kubernetes topologies
 
@@ -602,7 +640,7 @@ Procedures:
 - [Docker Swarm Setup](/docs/deploy/docker-swarm-setup/) — `docker stack
   deploy` reference (covers topologies C, D, E, F)
 - [GPU Deployment](/docs/deploy/gpu/) — `env.t4` / `env.rtx6000`
-  profiles, VRAM sizing
+  profiles, VRAM sizing; ROCm (Strix Halo) overlays + `env.strixhalo`
 - [NVIDIA A40 Install Guide](/docs/deploy/a40-install/) — A40-specific
   driver walkthrough (topology C variant)
 - [Kubernetes Deployment](/docs/deploy/kubernetes/) — the Helm chart path

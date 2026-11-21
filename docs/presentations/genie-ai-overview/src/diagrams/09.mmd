@@ -1,0 +1,16 @@
+flowchart LR
+ U(["Administrator<br/>Admin Dashboard"]):::actor --> F["Upload<br/>Document Repository"]:::channel
+ F --> I["Select Ingest<br/>Start processing"]:::channel
+ I --> P["Docling parses<br/>Dataprep chunks"]:::core
+ P --> E["Embeddings<br/>Create vectors"]:::model
+ E --> A[("ArangoDB<br/>Searchable index")]:::data
+ classDef actor fill:#d8e8ff,stroke:#305bb0,stroke-width:2.5px,color:#0a2452;
+ class U,F,I step0
+ class P step1
+ class E,A step2
+ class U beat0
+ class F beat1
+ class I beat2
+ class P beat3
+ class E beat4
+ class A beat5

@@ -51,11 +51,29 @@ use_volume_certs() {
 # Function to generate self-signed certificate for development
 generate_self_signed_cert() {
     echo "No SSL certificates found - generating self-signed certificate for development..."
+    # SAN: the public access host (an IPv4 address -> IP:, a hostname -> DNS:)
+    # plus localhost/loopback. A SAN-less cert is rejected by browsers for
+    # XHR and subresource fetches (ERR_CERT_AUTHORITY_INVALID) even after a
+    # click-through exception on the page load — /runtime/config.js fails,
+    # window.APP_CONFIG never loads and every API call falls back to the
+    # baked localhost:3000 default, which reads downstream as a "lost
+    # session" (live-diagnosed on the ROCm venue, 2026-11-18).
+    local cert_cn="localhost"
+    local san_host="DNS:localhost"
+    if [ -n "${NGINX_PUBLIC_DOMAIN:-}" ] && [ "${NGINX_PUBLIC_DOMAIN}" != "localhost" ]; then
+        cert_cn="${NGINX_PUBLIC_DOMAIN}"
+        case "${NGINX_PUBLIC_DOMAIN}" in
+            # digits and dots only -> IPv4 literal -> IP: SAN entry
+            *[!0-9.]*) san_host="DNS:${NGINX_PUBLIC_DOMAIN}" ;;
+            *) san_host="IP:${NGINX_PUBLIC_DOMAIN}" ;;
+        esac
+    fi
     openssl req -x509 -nodes -days 365 -newkey rsa:2048 \
         -keyout "${CERT_PATH}/server.key" \
         -out "${CERT_PATH}/server.crt" \
-        -subj "/C=CH/ST=Geneva/L=Geneva/O=ITU/CN=localhost"
-    echo "Self-signed certificate generated"
+        -subj "/C=CH/ST=Geneva/L=Geneva/O=ITU/CN=${cert_cn}" \
+        -addext "subjectAltName=${san_host},DNS:localhost,IP:127.0.0.1"
+    echo "Self-signed certificate generated (SAN: ${san_host},DNS:localhost,IP:127.0.0.1)"
 }
 
 # Main logic

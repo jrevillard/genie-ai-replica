@@ -24,7 +24,88 @@ const GPU_RANGES = {
     type: 'enum',
     values: ['fp8', 'auto', 'fp16', 'bf16'],
     optional: true
-  }
+  },
+  // ROCm (Strix Halo) profile overlay extras
+  DOCLING_DEVICE: {
+    type: 'enum',
+    values: ['cpu', 'cuda'],
+    optional: true
+  },
+  RENDER_GID: { type: 'int', min: 1, max: 65535, optional: true },
+  VIDEO_GID: { type: 'int', min: 1, max: 65535, optional: true },
+  NGINX_HTTP_PORT: { type: 'int', min: 1, max: 65535, optional: true },
+  NGINX_HTTPS_PORT: { type: 'int', min: 1, max: 65535, optional: true },
+  ARANGO_PORT: { type: 'int', min: 1, max: 65535, optional: true },
+  GPU_HTTPS_PORT: { type: 'int', min: 1, max: 65535, optional: true },
+  GPU_HTTP_PORT: { type: 'int', min: 1, max: 65535, optional: true },
+  // Sizing model IDs (the split GPU-node stack defaults to different models;
+  // the Strix Halo profile pins both to the spike-measured pair)
+  VLLM_LLM_MODEL_ID: { type: 'string', optional: true },
+  VLLM_TRANSLATION_MODEL_ID: { type: 'string', optional: true },
+  // TEI CPU-image batch caps (the Strix Halo profile runs TEI on the CPU
+  // image; GPU-sized batch knobs inflate candle's buffer pools on CPU —
+  // the reranker measured 16.3 GiB RSS at 8192/32)
+  TEI_RERANKING_MAX_BATCH_TOKENS: { type: 'int', min: 128, max: 131072, optional: true },
+  TEI_RERANKING_MAX_CONCURRENT_REQUESTS: { type: 'int', min: 1, max: 512, optional: true },
+  TEI_EMBEDDING_MAX_BATCH_TOKENS: { type: 'int', min: 128, max: 131072, optional: true },
+  TEI_RERANKING_AUTO_TRUNCATE: { type: 'enum', values: ['true', 'false'], optional: true },
+  // Image pins (string-typed: registry refs, range-checked only for presence
+  // by the profile guard — no value validation here). The vendor axis lives
+  // in the BASE compose files as values: VLLM_IMAGE names the vLLM build for
+  // every GPU-tier vLLM service (default: the NVIDIA image), and the TEI
+  // rows name the TEI builds (default: the NVIDIA-capable image). The old
+  // VLLM_ROCM_IMAGE / TEI_ROCM_* names were overlay-owned and died with the
+  // overlays (MR review: one file set, no vendor file axis).
+  VLLM_IMAGE: { type: 'string', optional: true },
+  TEI_EMBEDDING_IMAGE: { type: 'string', optional: true },
+  TEI_RERANKING_IMAGE: { type: 'string', optional: true },
+  // Vendor device passthrough values (base compose `devices:` rows are
+  // interpolated from these; unset on every NVIDIA host, so the defaults
+  // there are /dev/null and /dev/zero — paths that exist everywhere).
+  GPU_DEVICE_KFD: { type: 'string', optional: true },
+  GPU_DEVICE_DRI: { type: 'string', optional: true },
+  // The NVIDIA device claim, as a profile value: the Strix Halo profile
+  // pins it to `void` (claim no GPU even on a host that has one).
+  NVIDIA_VISIBLE_DEVICES: { type: 'enum', values: ['all', 'void', '0', '1', '2', '3'], optional: true },
+  // Task 14 — vLLM reranker backend (ROCm path). tei stays the default
+  // backend everywhere; the Strix Halo profile flips to vllm because the
+  // TEI ROCm image cannot run on gfx1151 (spike results). The utilization
+  // floor keeps parity with the other GPU knobs (a rerank instance at 0.05
+  // is deliberate sizing, not an accident).
+  RERANKER_BACKEND: { type: 'enum', values: ['tei', 'vllm'], optional: true },
+  RERANKER_VLLM_ENDPOINT: { type: 'string', optional: true },
+  RERANKER_VLLM_MODEL: { type: 'string', optional: true },
+  VLLM_RERANKER_MODEL_ID: { type: 'string', optional: true },
+  VLLM_RERANKER_GPU_UTILIZATION: { min: 0.01, max: 0.95, type: 'float', optional: true },
+  VLLM_RERANKER_MAX_MODEL_LEN: { min: 512, max: 131072, type: 'int', optional: true },
+  // The CLIENT-side pin of the rerank window. It must equal
+  // VLLM_RERANKER_MAX_MODEL_LEN (the value the instance is STARTED with):
+  // vLLM truncates an over-long (query, doc) pair at its window, while TEI
+  // refuses it with HTTP 422. The pin lets the wrapper enforce the same
+  // contract and let chatqna abstain with a reason instead of returning a
+  // ranking computed on truncated text. Same range as the server knob.
+  RERANKER_VLLM_MAX_MODEL_LEN: { min: 512, max: 131072, type: 'int', optional: true },
+  // Task-14 mirror — vLLM embedding backend (ROCm path). tei stays the
+  // default backend everywhere; the Strix Halo profile flips to vllm for the
+  // same reason as the reranker (the TEI ROCm image cannot run on gfx1151).
+  // Same validation shape as the reranker entries above, same floor on the
+  // utilization knob (a 0.05 embed instance is deliberate sizing).
+  EMBEDDING_BACKEND: { type: 'enum', values: ['tei', 'vllm'], optional: true },
+  EMBEDDING_VLLM_ENDPOINT: { type: 'string', optional: true },
+  VLLM_EMBEDDING_MODEL_ID: { type: 'string', optional: true },
+  VLLM_EMBEDDING_GPU_UTILIZATION: { min: 0.01, max: 0.95, type: 'float', optional: true },
+  VLLM_EMBEDDING_MAX_MODEL_LEN: { min: 512, max: 131072, type: 'int', optional: true },
+  // Split-URL OIDC legs (backend / okf-server / document-repository). The
+  // Strix Halo profile pins the in-network pair (venue-independent values);
+  // the browser-edge alias needs the venue's domain, so it stays in the
+  // venue .env.
+  KEYCLOAK_DISCOVERY_URL: { type: 'string', optional: true },
+  KEYCLOAK_JWKS_URL: { type: 'string', optional: true },
+  // Base-file sizing knobs the collapsed scan now reaches (they were
+  // invisible while this gate only scanned the ROCm overlays): the dataprep
+  // completion window (0 = unset) and the textgen window override.
+  DATAPREP_MAX_MODEL_LEN: { min: 0, max: 131072, type: 'int', optional: true },
+  MAX_MODEL_LEN_TEXTGEN: { min: 0, max: 131072, type: 'int', optional: true }
 };
 
 /**
@@ -47,7 +128,9 @@ function parseGpuProfile(profilePath) {
     ? 'T4 (16GB VRAM)'
     : profilePath.endsWith('env.rtx6000')
       ? 'RTX6000 ADA (24GB VRAM)'
-      : 'Unknown';
+      : profilePath.endsWith('env.strixhalo')
+        ? 'STRIX HALO (iGPU unified memory)'
+        : 'Unknown';
 
   for (const line of lines) {
     const trimmed = line.trim();

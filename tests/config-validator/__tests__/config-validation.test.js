@@ -42,6 +42,7 @@ const COMPOSE_FILE = path.join(ROOT, 'docker-compose.yaml');
 const GPU_COMPOSE_FILE = path.join(ROOT, 'docker-compose.gpu.yaml');
 const T4_FILE = path.join(ROOT, 'env.t4');
 const RTX6000_FILE = path.join(ROOT, 'env.rtx6000');
+const STRIXHALO_FILE = path.join(ROOT, 'env.strixhalo');
 const ANSIBLE_GROUPVARS_FILE = path.join(ROOT, 'deploy/ansible/group_vars/all.yml');
 const ENV_TEMPLATE_FILE = path.join(ROOT, 'deploy/ansible/templates/env.j2');
 const SHARED_FACTS_FILE = path.join(ROOT, 'deploy/ansible/tasks/deploy-shared-facts.yml');
@@ -143,7 +144,14 @@ describe('Configuration Validation Suite', () => {
     'DOCLING_ENDPOINT_TIMEOUT',
     // Per-service image vars — infrastructure (not app config), used by compose only
     'GENIE_AI_REGISTRY',
-    'GENIE_AI_GLOBAL_TAG'
+    // The tag every GENIE.AI image carries. GENIE_AI_GLOBAL_TAG is the
+    // former name, still read as a fallback for one release.
+    'GENIE_AI_IMAGE_TAG',
+    'GENIE_AI_GLOBAL_TAG',
+    // The tag suffix for the OPEA tier's model-serving images (the slim
+    // build — issue #2000). It is read by docker-compose's interpolation
+    // of the three OPEA image lines, not by a container's env.
+    'GENIE_AI_OPEA_IMAGE_TAG_SUFFIX'
   ]);
 
   // !1073 — documented OKF_* knobs that are deliberately NOT wired to a
@@ -319,6 +327,45 @@ describe('Configuration Validation Suite', () => {
 
     test('RTX6000 profile values are within valid ranges', () => {
       const result = validateHardwareProfile(RTX6000_FILE, 'RTX6000 ADA (24GB VRAM)');
+      expect(result.errors).toEqual([]);
+    });
+
+    test('StrixHalo profile resolves its name', () => {
+      expect(parseGpuProfile(STRIXHALO_FILE).profileName).toBe('STRIX HALO (iGPU unified memory)');
+    });
+
+    test('StrixHalo profile values are within valid ranges, no unknown-parameter warnings', () => {
+      const result = validateHardwareProfile(STRIXHALO_FILE, 'STRIX HALO (iGPU unified memory)');
+      expect(result.errors).toEqual([]);
+      expect(result.warnings.filter((w) => w.includes('Unknown GPU parameter'))).toEqual([]);
+    });
+
+    test('StrixHalo pins the vLLM reranker backend with a valid enum value', () => {
+      const parsed = parseGpuProfile(STRIXHALO_FILE);
+      const backend = parsed.variables.find((v) => v.name === 'RERANKER_BACKEND');
+      expect(backend).toBeDefined();
+      expect(backend.value).toBe('vllm');
+      const result = validateHardwareProfile(STRIXHALO_FILE, 'STRIX HALO (iGPU unified memory)');
+      // The six Task-14 variables must be in GPU_RANGES: an unknown-parameter
+      // warning here means the validator vocabulary lags the profile file.
+      expect(result.warnings.filter((w) => w.includes('Unknown GPU parameter'))).toEqual([]);
+      expect(result.errors).toEqual([]);
+    });
+
+    test('StrixHalo pins the vLLM embedding backend with a valid enum value', () => {
+      // Task-14 mirror: same pin as the reranker test above — the profile
+      // flips EMBEDDING_BACKEND to vllm, the endpoint names the pooling
+      // instance, and every new variable must be in GPU_RANGES or the
+      // unknown-parameter warning fires here.
+      const parsed = parseGpuProfile(STRIXHALO_FILE);
+      const backend = parsed.variables.find((v) => v.name === 'EMBEDDING_BACKEND');
+      expect(backend).toBeDefined();
+      expect(backend.value).toBe('vllm');
+      const endpoint = parsed.variables.find((v) => v.name === 'EMBEDDING_VLLM_ENDPOINT');
+      expect(endpoint).toBeDefined();
+      expect(endpoint.value).toBe('http://vllm-embedding:8000');
+      const result = validateHardwareProfile(STRIXHALO_FILE, 'STRIX HALO (iGPU unified memory)');
+      expect(result.warnings.filter((w) => w.includes('Unknown GPU parameter'))).toEqual([]);
       expect(result.errors).toEqual([]);
     });
 
@@ -552,7 +599,9 @@ describe('Configuration Validation Suite', () => {
           (name) =>
             name.startsWith('GENIE_AI_') &&
             name !== 'GENIE_AI_REGISTRY' &&
+            name !== 'GENIE_AI_IMAGE_TAG' &&
             name !== 'GENIE_AI_GLOBAL_TAG' &&
+            name !== 'GENIE_AI_OPEA_IMAGE_TAG_SUFFIX' &&
             !rendered.has(name)
         );
       expect(unrendered).toEqual([]);
@@ -890,7 +939,7 @@ describe('Configuration Validation Suite', () => {
       expect(block).toMatch(/- RAGAS_INTERNAL_SECRET=\$\{RAGAS_INTERNAL_SECRET:-\$\{OKF_INTERNAL_SECRET:-\}\}/);
       // Embedder: EMBEDDING_MODEL_ID is the deployment's actual var (the stack
       // has no EMBED_MODEL_ID); the TEI dialect default hits {base}/embed.
-      expect(block).toMatch(/- RAGAS_EMBED_BASE_URL=\$\{RAGAS_EMBED_BASE_URL:-http:\/\/tei-embedding-server:80\}/);
+      expect(block).toMatch(/- RAGAS_EMBED_BASE_URL=\$\{RAGAS_EMBED_BASE_URL:-http:\/\/tei:80\}/);
       expect(block).toMatch(/- RAGAS_EMBED_MODEL=\$\{RAGAS_EMBED_MODEL:-\$\{EMBEDDING_MODEL_ID:-\}\}/);
       expect(block).toMatch(/- RAGAS_EMBED_API=\$\{RAGAS_EMBED_API:-tei\}/);
     });
@@ -1080,7 +1129,7 @@ describe('Configuration Validation Suite', () => {
         url: vars.RAGAS_EMBED_BASE_URL ? vars.RAGAS_EMBED_BASE_URL.default : null
       }).toEqual({
         found: true,
-        url: 'http://tei-embedding-server:80'
+        url: 'http://tei:80'
       });
       expect({ found: !!vars.RAGAS_EMBED_API, v: vars.RAGAS_EMBED_API ? vars.RAGAS_EMBED_API.default : null }).toEqual({
         found: true,

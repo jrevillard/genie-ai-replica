@@ -16,13 +16,22 @@ published under **two tags** in the internal registry:
 
 | tag | content | use it when |
 |---|---|---|
-| `:main` (and `:main-<sha>`, `:vX.Y.Z`) | the default image, with PyTorch's **CUDA** build | the node runs a model in-process on a GPU |
+| `:main` (and `:main-<sha>`, `:vX.Y.Z`, `:latest`) | the default image, with PyTorch's **CUDA** build | the node runs a model in-process on a GPU |
 | `:main-slim` (and `:main-slim-<sha>`) | the same service code, with PyTorch's **CPU** build and the packages no service imports left out | every model call goes to an external GPU API |
+| `:latest-slim` (and `:vX.Y.Z-slim`) | the slim build of the latest **release** — the same variant, of the released images rather than of the branch | every model call goes to an external GPU API, and the deployment follows the release rather than the branch |
 
 Both tags carry the **same service code and the same versions of every
 library** — only the installed dependency set differs. The slim variant is
 not a different release: it is the same release, built without the weight a
 CPU-only node never reads.
+
+The version and the variant are two independent knobs, one per deployment
+target:
+
+| | Kubernetes | Compose / Swarm |
+|---|---|---|
+| the version (all images) | `imageTag` | `GENIE_AI_IMAGE_TAG` |
+| the variant (the three model-serving images) | `opea.imageTagSuffix` | `GENIE_AI_OPEA_IMAGE_TAG_SUFFIX` |
 
 ## Why the two variants exist
 
@@ -88,33 +97,46 @@ needs `hq` tables or a local OCR pipeline.
 
 The tag is a normal image tag: set it where the deployment names the image.
 
+**Kubernetes** — one line in the overlay:
+
 ```yaml
 # genie-ai-deploy overlay (Helm chart values)
-services:
-  reranker:
-    image:
-      repository: genie-ai-reranker
-      tag: main-slim
-  retrieverArango:
-    image:
-      repository: genie-ai-retriever-arango
-      tag: main-slim
-  dataprepArango:
-    image:
-      repository: genie-ai-dataprep-arango
-      tag: main-slim
+opea:
+  imageTagSuffix: "-slim"
 ```
 
-With Docker Compose, the tag is the image-tag variable of the service:
+**Docker Compose** — one line in the `.env`, wherever you put it:
 
 ```bash
-GENIE_AI_RERANKER_IMAGE_TAG=main-slim
-GENIE_AI_RETRIEVER_ARANGO_IMAGE_TAG=main-slim
-GENIE_AI_DATAPREP_ARANGO_IMAGE_TAG=main-slim
+GENIE_AI_OPEA_IMAGE_TAG_SUFFIX=-slim
 ```
 
-Pinning a **digest** works the same way and is what the Kubernetes overlays
-do — the digest is of the slim image's manifest, not the default one.
+**Docker Swarm (Ansible)** — one `--extra-vars` value, NOT a line in the
+node's `.env`: the playbook regenerates that file on every run, so a line
+written by hand is overwritten at the next deploy (and the fat images come
+back, silently).
+
+```bash
+ansible-playbook -i inventory/itu_rtx_test.ini deploy.yml --vault-id itu_rtx_test@prompt \
+  --extra-vars '{"repo_branch":"main","genie_ai_image_tag":"main","genie_ai_opea_image_tag_suffix":"-slim"}'
+```
+
+It applies to the three model-serving images and to nothing else. A
+per-image pin (`opea.reranker.image.tag` in Kubernetes,
+`GENIE_AI_RERANKER_IMAGE_TAG` in Compose) names the EXACT tag and never
+gets the suffix — in Compose, that pin is a line **you** add to your `.env`
+(the template declares no per-service tag for the three, because such a
+line would shadow the version and the variant).
+
+The knob COMPOSES `<version><suffix>` — the version it is applied to must be
+a tag the CI publishes a slim build of: the branch tag (`main`) or a release
+tag (`v2.1.0`). It does not compose the immutable sha-pinned form
+(`:main-slim-<sha>`), because the CI publishes that one with the suffix
+BEFORE the sha — so pin it by name (`GENIE_AI_RERANKER_IMAGE_TAG=main-slim-<sha>`),
+which the per-image pin does verbatim.
+
+Pinning a **digest** works the same way — the digest is of the slim
+image's manifest, not the default one.
 
 ## Air-gapped deployments
 

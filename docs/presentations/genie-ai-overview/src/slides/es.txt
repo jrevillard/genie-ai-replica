@@ -1,0 +1,296 @@
+# El reto de los servicios públicos|00:00–05:00
+@cover|¿Qué conocimiento da forma a una respuesta de IA?
+? Recorrido de GENIE.AI · Sesión informativa para el sector público
+Una plataforma de software de código abierto para los servicios públicos, desde el documento fuente hasta el sistema que responde a la pregunta.
+! GENIE.AI es una plataforma de software de código abierto para los servicios públicos. Este recorrido sigue una pregunta —qué documentos debe presentar una persona para renovar un permiso— desde la respuesta en pantalla hasta el servicio, las fuentes de conocimiento y la infraestructura que la hicieron posible. Explica tanto el valor de la plataforma para los servicios públicos como su funcionamiento. El permiso, la guía y las instrucciones son ficticios: sirven para explicar la plataforma y no constituyen asesoramiento sobre políticas públicas. La última diapositiva deja tiempo para preguntas.
+
+@chat|Una pregunta. Una respuesta que se puede verificar.
+? ESCENARIO ILUSTRATIVO · RENOVACIÓN DE PERMISOS
+La pregunta|¿Qué documentos tengo que presentar para renovar mi permiso?
+La respuesta|Presente su permiso vigente y un justificante de domicilio reciente. Consulte la guía de renovación para comprobar qué documentos se aceptan y cómo presentarlos.
+La fuente|Guía de renovación del permiso · secciones 2 y 3. Esta guía ficticia enumera los justificantes requeridos y las instrucciones para presentarlos.
+= Siga esta respuesta a lo largo del resto de la presentación.
+! La pregunta, la respuesta y la fuente aparecen juntas en la diapositiva; ese es precisamente el propósito. Una respuesta que muestra sus fuentes se puede verificar. Antes de utilizarla en una oficina real, el funcionario comprueba el fragmento citado en la guía vigente, confirma que se aplica a su jurisdicción y verifica si la norma ha cambiado. El permiso, la guía y las instrucciones son ficticios: sirven para explicar la plataforma, no para asesorar sobre políticas públicas.
+
+@spread|El conocimiento local cambia el servicio.
+? EL RETO DE LOS SERVICIOS PÚBLICOS
+Lo que el modelo ya sabe|Un modelo general puede explicar qué suele significar una renovación de permiso y ayudar a redactar una respuesta clara.
+Lo que sabe la institución|La autoridad local sabe qué formulario corresponde, qué justificantes acepta y quién publica los cambios.
+Lo que necesita el usuario|Una respuesta fiable para su jurisdicción, con información suficiente para verificarla o cuestionarla.
+! Una explicación fluida y convincente no garantiza que la respuesta sea válida hoy en una jurisdicción concreta. Un modelo general ayuda a redactarla, pero los requisitos locales deben proceder de las fuentes que mantiene actualizadas la institución. Cuando cambia una norma, los conocimientos y su proceso de publicación deben reflejar ese cambio en el servicio. De ahí surge la primera pregunta de diseño: ¿quién es responsable de la fuente y cómo se comunica el cambio a los usuarios?
+
+# El servicio que usa la gente|05:00–13:00
+@spread|Una misma plataforma puede apoyar muchos servicios públicos.
+Para la ciudadanía|Explique un trámite, indique el formulario adecuado o dirija a la persona a la oficina responsable de su solicitud.
+Para el personal de atención al público|Encuentre procedimientos oficiales y sus excepciones entre documentos que, de otro modo, habría que consultar por separado.
+Para los equipos de servicio|Mantengan los conocimientos actualizados en un solo lugar y pónganlos a disposición de varios canales o aplicaciones, según las reglas de acceso correspondientes.
+! El ejemplo de la renovación muestra por qué una misma plataforma puede atender a distintos públicos. Una persona puede necesitar orientación en lenguaje claro; un agente de atención al público, el mismo procedimiento oficial y material adicional al que tenga permiso para acceder. El canal y los permisos determinan la experiencia: el ejemplo no implica que todos los usuarios reciban la misma información.
+~ itu|welcome
+
+@surfaces|Los mismos conocimientos están disponibles en la web y en el móvil.
+? VISTAS ILUSTRATIVAS DE LA INTERFAZ
+Web · Vue 3|Consulte las respuestas en tiempo real y los documentos relacionados; envíe comentarios y conserve o exporte la conversación.
+Móvil · Flutter|Consulte las respuestas en tiempo real y los documentos relacionados en Android e iOS. Retome sesiones y comparta conversaciones en PDF.
+= El idioma, la identidad visual y las acciones disponibles dependen de la configuración del servicio.
+! Los clientes web y móvil dan acceso a los mismos conocimientos y ofrecen acciones conocidas: hacer una pregunta, leer la respuesta, consultar los documentos relacionados y volver a una conversación. Las pantallas ilustran una posible experiencia; no prometen que todos los despliegues tengan el mismo diseño o las mismas funciones. Lo importante es que, según la configuración del servicio, se puedan consultar las fuentes desde distintos canales.
+~ web|mobile
+
+@rail|Una institución puede adaptar el asistente a sus servicios.
+Identidad visual e idioma|Personalice la apariencia de la web y seleccione los idiomas activos de la interfaz. La página de inicio de sesión de Keycloak tiene su propio tema.
+Conocimientos|Seleccione documentos y repositorios OKF. Restrinja los repositorios sensibles y conceda los permisos de lectura necesarios.
+Modelo y búsqueda|Seleccione modelos compatibles y ajuste el motor de búsqueda, la reordenación de resultados y las instrucciones del modelo. Valide los resultados con preguntas representativas.
+! Algunas decisiones son visibles y otras se toman entre bastidores. La identidad visual y los idiomas activos definen la experiencia de entrada; los documentos, los modelos y la búsqueda determinan qué puede responder el asistente; las reglas de identidad y acceso determinan qué puede consultar cada persona. Reutilizar la aplicación no elimina las decisiones locales: cada servicio debe seleccionar sus contenidos, definir los permisos, preparar preguntas representativas y validar los resultados.
+~ branding|locale|models|authz
+
+@flow|Añada el asistente a un servicio digital existente.
+? API DE APLICACIÓN AUTENTICADA Y DE DOCUMENTOS
+Canal de servicio|Un portal público o una aplicación para el personal puede llamar al servidor de aplicaciones de GENIE.AI con un token de acceso emitido por Keycloak.
+API del asistente|El servidor autenticado permite que la aplicación de un organismo público use el asistente y muestre la respuesta junto con sus fuentes.
+API de documentos|Un servicio independiente de gestión documental permite cargar, indexar, buscar y consultar documentos según el rol asignado.
+Enrutamiento de API|Docker Compose y Docker Swarm usan NGINX y Kong. Por defecto, el chart de Kubernetes usa Gateway API con Envoy Gateway.
+! La solicitud viaja desde el portal del organismo hasta el servidor autenticado y, de ahí, a los servicios de GENIE.AI que necesita. El diagrama diferencia la API del asistente de las API de gestión documental y muestra que el enrutamiento de entrada depende de la plataforma de despliegue. Un servicio digital existente puede llamar a las interfaces documentadas y mostrar la respuesta dentro de su propio flujo de trabajo. El organismo que realiza la integración sigue siendo responsable de la lógica de su aplicación y de las decisiones que tome a partir de las respuestas.
+~ api|routes|k8s
+
+@field|El mismo software puede atender necesidades locales muy distintas.
+El Salvador|El proyecto en curso utiliza el fondo documental de CENTA para desarrollar un asistente dirigido a las comunidades agrícolas.
+Gambia|El proyecto en curso explora el apoyo a la toma de decisiones sobre salud preventiva para el personal sanitario y las comunidades.
+= Proyectos de GENIE.AI en distintos países · Las fotografías ilustran el contexto local.
+! Estos proyectos muestran la diferencia entre las capacidades reutilizables de la plataforma y la labor que se realiza en cada país. Los temas, los usuarios, las fuentes y los socios son distintos; cada despliegue requiere preparar sus contenidos, decidir los idiomas, integrar el sistema y validar los resultados. No se trata de una única configuración de producto y no se afirma ningún resultado que no se haya mostrado. Las fotografías ilustran el entorno local, no el rendimiento del sistema.
+~ project
+
+# Cómo se construye la respuesta|13:00–24:00
+@ingestion|Un documento fuente debe indexarse para que se pueda consultar.
+? SIGA LA GUÍA DE RENOVACIÓN DE PERMISOS
+Formatos de carga|Los archivos cargados permanecen pendientes hasta que el administrador inicia su indexación.|PDF|DOCX|XLSX|CSV|MD|HTML|TXT
+Fragmentos de ejemplo|Presente su permiso vigente y|un justificante de domicilio reciente|. Adjunte ambos documentos a su solicitud de renovación.
+Ajustes de despliegue|Límites de carga y análisis antivirus. Tamaño y solapamiento de los fragmentos según el tipo de archivo. Contexto opcional y modelo de vectorización.
+= El texto resaltado aparece en los dos fragmentos para conservar el contexto a ambos lados de la división.
+! Antes de poder responder, un documento fuente tiene que estar indexado y disponible para la búsqueda. Un usuario autorizado carga un archivo, que permanece en Pending hasta que un administrador inicia Ingest desde el panel o la API. Según la configuración, el proceso analiza los archivos con ClamAV, extrae el contenido de los formatos admitidos, lo divide en fragmentos, calcula sus representaciones vectoriales y guarda los datos para la búsqueda. En la configuración de referencia, Docling procesa formatos admitidos como PDF y DOCX. El solapamiento resaltado permite que dos fragmentos contiguos compartan parte del contexto. Los fragmentos más pequeños pueden hacer la búsqueda más precisa, pero también separar ideas relacionadas; por eso conviene probar el tamaño y el solapamiento con documentos reales. Son ajustes del despliegue, no decisiones que se tomen para cada pregunta. Si cambia la división del texto o el modelo de vectorización, hay que volver a indexar los archivos afectados y comprobar la búsqueda. La guía y los fragmentos son ficticios.
+~ ingest|uploadFormats|ingestPipeline
+
+@flow|Siga una pregunta por el flujo RAG.
+? GENERACIÓN AUMENTADA MEDIANTE BÚSQUEDA (RAG)
+Pregunta|El servidor de Node.js acepta la pregunta autenticada. OPEA ChatQnA coordina las llamadas al modelo y al motor de búsqueda.
+Búsqueda|En la pila estándar, TEI calcula la representación vectorial de la pregunta. El motor busca en ArangoDB entre los conocimientos a los que tiene acceso la cuenta.
+Ordenación|El módulo opcional de reordenación de resultados vuelve a puntuar los fragmentos encontrados y puede descartar los menos pertinentes.
+Respuesta|vLLM ejecuta el modelo de lenguaje. La interfaz puede mostrar los documentos fuente incluidos en los metadatos de la respuesta.
+= La búsqueda aporta la información de respaldo. El modelo la convierte en una respuesta.
+! El servidor de aplicaciones recibe la solicitud autenticada y ChatQnA coordina la búsqueda y la generación. La pregunta se convierte en un vector, el motor consulta los conocimientos a los que tiene acceso la cuenta y vLLM genera una respuesta a partir de los fragmentos seleccionados. Los conocimientos publicados ya se indexaron: una pregunta del usuario no inicia una nueva indexación. La línea discontinua indica que la reordenación de resultados es opcional. Los puntos de acceso JSON y Server-Sent Events muestran dos formas de responder; la respuesta transmitida en continuo también incluye metadatos. Si está configurada, la traducción se gestiona al recibir la solicitud y al devolver la respuesta. La idea clave es que el modelo recibe fragmentos seleccionados, no una conexión directa a la base de datos.
+~ architecture|rag|generation
+
+@stack|¿Qué se ejecuta dentro de GENIE.AI?
+? PLATAFORMA DE SOFTWARE INICIADA POR LA ITU · CÓDIGO CON LICENCIA APACHE 2.0
+Web y móvil|Vue 3 impulsa el cliente web. Flutter impulsa las aplicaciones para Android e iOS.
+Aplicación e identidad|El servidor de Node.js y Express canaliza las solicitudes. Keycloak gestiona el inicio de sesión y la identidad.
+Conocimiento|Docling analiza los documentos. ArangoDB almacena el conocimiento indexado, incluidos datos vectoriales y de grafo.
+Servicios de IA|OPEA ChatQnA orquesta RAG. TEI calcula vectores y vuelve a clasificar los resultados. vLLM ejecuta el modelo generativo.
+Observabilidad|OpenTelemetry recopila señales. Los componentes de Victoria las almacenan y Grafana las visualiza cuando está habilitado.
+Despliegue|La aplicación se ejecuta en Docker Compose, Docker Swarm o Kubernetes mediante Helm.
+! Cada capa cumple una función. La interfaz conecta con los usuarios; el servidor de Node.js y Express encamina las solicitudes, y Keycloak gestiona el inicio de sesión; Docling procesa los documentos y ArangoDB almacena los conocimientos indexados, incluidos los datos vectoriales y de grafo; OPEA ChatQnA coordina RAG, TEI calcula representaciones vectoriales y vuelve a clasificar los resultados, y vLLM ejecuta el modelo generativo; por último, OpenTelemetry recopila la telemetría, los componentes de Victoria la almacenan y Grafana la muestra cuando se activa. Esta es la pila de referencia documentada; no es obligatorio activar todos los componentes opcionales en cada despliegue. Compose, Swarm y Kubernetes también difieren en los componentes de entrada y operación. La licencia Apache 2.0 se aplica al código de la plataforma; los pesos de modelos, los conjuntos de datos y los servicios de terceros tienen sus propias condiciones, que la institución debe revisar.
+~ architecture|licence
+
+@rail|La búsqueda híbrida combina el significado con los términos exactos.
+Búsqueda BM25|Ordena las coincidencias léxicas, como el número de un formulario o el nombre exacto de un procedimiento. GENIE.AI combina las clasificaciones vectorial y léxica.
+Búsqueda vectorial|Encuentra fragmentos de significado parecido, aunque cambien las palabras: «renovar mi permiso» y «prorrogar su vigencia», por ejemplo.
+Expansión de grafo|El recorrido opcional del grafo añade fragmentos relacionados. La búsqueda queda limitada a los conocimientos accesibles para la cuenta.
+! Para responder a la pregunta sobre la renovación, conviene combinar dos señales. La búsqueda vectorial encuentra fragmentos con un significado parecido, aunque usen otras palabras; BM25 destaca términos exactos, como el nombre de un formulario o el número de un procedimiento. GENIE.AI combina ambos tipos de clasificación y la expansión opcional del grafo añade información relacionada. Ninguna señal garantiza por sí sola una respuesta correcta: los fragmentos encontrados deben responder a la solicitud y estar dentro de los permisos del usuario.
+~ retrieval|authz
+
+@rank|La reordenación de resultados opcional cambia el orden de los fragmentos que recibe el modelo.
+Requisitos de renovación|Responde directamente a la solicitud y enumera los documentos exigidos para la renovación.
+Solicitudes iniciales|Menciona el mismo permiso y algunos de los mismos justificantes, pero se refiere a otro trámite.
+Información general sobre el permiso|Explica el servicio y ofrece datos de contacto, pero aporta poco sobre los requisitos de renovación.
+= Ilustración · La reordenación de resultados puede volver a ordenar los resultados y descartar coincidencias débiles.
+! La reordenación de resultados vuelve a ordenar los resultados de la búsqueda: el fragmento sobre la renovación pasa por delante de los que mencionan el mismo permiso, pero responden a otra pregunta. Solo evalúa un conjunto limitado de resultados; no puede encontrar un fragmento que la búsqueda inicial no haya seleccionado, y se puede desactivar. La ilustración muestra un cambio de orden, no una mejora de calidad medida. Cada despliegue debe comparar los ajustes con preguntas representativas y revisar las fuentes; la animación no demuestra un mejor rendimiento.
+~ rag|rerank
+
+@document|El modelo redacta la respuesta a partir de los fragmentos seleccionados.
+Preparar el contexto|ChatQnA reúne la pregunta, los fragmentos seleccionados y las instrucciones del asistente.
+Generar y transmitir|En la pila de referencia, vLLM ejecuta el modelo de lenguaje. El servidor puede transmitir la respuesta y sus metadatos.
+Verificar las fuentes|La interfaz puede mostrar los documentos fuente devueltos. Compruebe que el fragmento citado respalda la afirmación concreta y sigue vigente.
+! ChatQnA reúne la pregunta, los fragmentos seleccionados y las instrucciones del asistente; el servicio de generación configurado redacta la respuesta. La interfaz puede mostrar los documentos fuente incluidos en los metadatos para que el usuario consulte el fragmento correspondiente. Que aparezca una cita no demuestra por sí solo que la respuesta sea correcta: el texto debe respaldar la afirmación, aplicarse a esa jurisdicción y reflejar la norma vigente. Esa distinción es fundamental en los servicios públicos.
+~ generation|api|web
+
+@languages|Un proceso central en inglés, respuestas en el idioma del usuario.
+? RENOVACIÓN DE PERMISOS ILUSTRATIVA · KISWAHILI
+Traducir la pregunta|Antes de la búsqueda, ChatQnA traduce al inglés las consultas admitidas que se hacen en otros idiomas.
+Buscar y generar|Prepare en inglés los documentos fuente redactados en otros idiomas antes de indexarlos. El corpus indexado y el procesamiento RAG usan inglés.
+Traducir la respuesta|La respuesta se traduce al presentarla. Compruebe que se conserva el sentido de los requisitos, las fechas y las excepciones.
+= La abstención está activada por defecto cuando el proceso no encuentra fragmentos útiles.
+! Una pregunta en kiswahili se traduce al inglés antes de la búsqueda y la respuesta se ofrece en kiswahili. Las banderas identifican los idiomas del ejemplo; no implican que todos estén habilitados por defecto. En la vía documentada, las consultas admitidas se convierten para un flujo de trabajo centrado en inglés. Los documentos fuente redactados en otros idiomas deben prepararse en inglés antes de la indexación estándar: el proceso habitual no traduce automáticamente el corpus. Cuando la respuesta se transmite en continuo, el servidor la traduce al final del recorrido; ChatQnA gestiona la vía sin transmisión en continuo. Pida a personas que dominen el idioma que revisen nombres, fechas, excepciones y términos jurídicos o administrativos.
+~ multilingual|generation
+
+# Cómo se gobierna el conocimiento|24:00–33:00
+@graph|OKF permite estructurar y versionar los conocimientos.
+? OPEN KNOWLEDGE FORMAT · CONCEPTOS, ENLACES Y GRAFOS DE SERVICIO
+Conceptos|Cada concepto es un documento Markdown con encabezado YAML. Describe un tema concreto, como el justificante de domicilio.
+Relaciones|Los enlaces tipados conectan los conceptos de la base de conocimientos. El equipo responsable puede revisar tanto el contenido como sus relaciones.
+Grafo de búsqueda|Active OKF y elija la búsqueda exclusiva de OKF o la híbrida para consultar por separado los repositorios publicados e indexados.
+! OKF organiza los conceptos y sus relaciones tipadas en un repositorio con control de versiones. Conviene distinguir tres pasos: editar un borrador, publicar una versión y, después de indexarla, poner sus conocimientos a disposición de la búsqueda. OKF es configurable y se puede desactivar; el corpus de texto libre existente sigue siendo una vía independiente. Si se activa OKF, el modo de búsqueda determina si las consultas usan solo su grafo o lo combinan con el corpus existente. La ventaja es disponer de una estructura gobernada y un ciclo de vida visible, no obtener exactitud automática.
+~ okf|authz|okfConfig
+
+@graph|Un concepto puede vincularse a varios procedimientos.
+? UN EJEMPLO DEL CORPUS DE PERMISOS
+Procedimiento de renovación|Enlaza con los justificantes aceptados por el servicio y con las excepciones que debe conocer el personal.
+Justificante de domicilio|Un concepto reutilizable: el mismo justificante puede exigirse en otros servicios.
+Notas de tramitación|Un concepto ilustrativo puede incluir indicaciones generales para un documento ilegible. El siguiente ejemplo de acceso usa otra guía interna, con acceso restringido.
+! El procedimiento de renovación remite al justificante de domicilio, que a su vez se relaciona con las notas de tramitación. Un mismo concepto puede reutilizarse en varios procedimientos: el equipo editorial define la relación una sola vez y puede ver dónde se aplica. Esta es una vista simplificada del modelo de conocimientos, no el resultado de una consulta en directo. Si cambia un requisito, el proceso de actualización debe llegar a los conceptos que lo mencionan; ese es precisamente el propósito de OKF Studio.
+~ okf
+
+@document|OKF Studio separa la revisión, la publicación y la puesta en servicio.
+? DE UN ARCHIVO FUENTE A UN REPOSITORIO EN SERVICIO
+Iniciar un borrador|Importe un documento, el contenido de un sitio web o un paquete OKF, o cree los conceptos directamente en OKF Studio.
+Organizar y probar|Revise los conceptos, sus relaciones y los datos personales señalados. Use Testing Lab para comprobar cómo responden a las consultas los metadatos de enrutamiento del borrador.
+Publicar y verificar|La publicación crea una versión e inicia la indexación. Compruebe su estado y pruebe la búsqueda en el corpus en servicio.
+! El recorrido va del borrador a la puesta en servicio: cree o importe las fuentes, organice los conceptos y sus relaciones, revise los datos personales señalados y pruebe el enrutamiento en Testing Lab. Esa prueba comprueba qué repositorio debería seleccionar la consulta antes de publicar; no demuestra que el corpus indexado vaya a devolver el fragmento esperado. La publicación crea una versión e inicia la indexación. Después, el equipo de operaciones comprueba su estado y prueba la búsqueda. La aprobación, el historial de versiones, la retirada de una publicación y la revocación son controles para gestionar los cambios.
+~ docsokf|okf|lab
+
+@flow|¿En qué repositorios puede buscar esta cuenta?
+? ACCESO DE LECTURA OKF CONFIGURADO
+Identidad|Keycloak autentica al usuario. GENIE.AI lee los roles y los permisos OKF del token verificado.
+Modo abierto por defecto|Los repositorios disponibles para el servicio que no tengan restricciones quedan accesibles. Los restringidos requieren el permiso correspondiente.
+Modo cerrado|Los usuarios habituales solo pueden buscar en los repositorios incluidos expresamente en sus permisos. Los permisos de administrador y los permisos generales permiten un acceso más amplio.
+Búsqueda|El motor recibe los grafos autorizados antes de seleccionar los fragmentos que respaldarán la respuesta.
+= Verifique el acceso efectivo con cuentas representativas.
+! Partimos de dos supuestos: la guía pública no tiene restricciones y el procedimiento interno está en otro repositorio restringido. En el modo abierto por defecto, los repositorios sin restricciones están disponibles; un permiso correspondiente puede añadir el repositorio restringido. En el modo cerrado, los usuarios habituales necesitan permisos de lectura explícitos para cada repositorio que consultan. Estos ajustes controlan el acceso a la búsqueda; los permisos de edición y publicación se gestionan por separado. Cada permiso debe tener un responsable y revisarse periódicamente.
+~ authz|okfConfig|okfResolver
+
+@profiles|La misma pregunta puede apoyarse en fuentes distintas.
+? SIMULACIÓN · REPOSITORIO INTERNO RESTRINGIDO
+Personal de atención al público|La guía pública, sin restricciones, indica los justificantes necesarios. Esta persona no tiene permiso para consultar el procedimiento interno restringido.
+Agente autorizado|Puede consultar la guía pública y el procedimiento interno tras recibir el permiso de lectura correspondiente para ese repositorio.
+= Pregunta: «¿Qué justificante debo comprobar para tramitar esta renovación?»
+! La pregunta no cambia, pero el acceso sí depende del perfil. Ambos perfiles pueden consultar la guía pública; solo el agente autorizado puede acceder también al procedimiento interno, tras recibir el permiso de lectura correspondiente. La configuración ilustrada tiene OKF activo, acceso abierto por defecto y la información sensible en un repositorio restringido independiente. Así se ve cómo un permiso puede cambiar los fragmentos disponibles: el cargo de una persona no le da acceso por sí solo.
+~ authz
+
+@rail|Los conocimientos publicados necesitan un lugar en las operaciones diarias.
+Responsabilidad del servicio|Asigne responsables para cada fuente oficial y defina qué cambios deben activar una revisión.
+Revisión editorial|Cuando cambie una fuente, revise los conceptos y las relaciones afectados, publique la versión actualizada y repita las preguntas de referencia.
+Seguimiento operativo|Compruebe la versión en servicio y el historial de indexación de cada concepto. Use el registro de auditoría para revisar cambios, permisos e importaciones.
+! La gestión del conocimiento también forma parte de las operaciones, como muestra cualquier cambio en un requisito. La persona responsable de la política confirma qué ha cambiado y cuál es la fuente oficial; quien edita actualiza los conceptos y las relaciones afectados, revisa y publica los cambios; el equipo de operaciones confirma la indexación y comprueba la respuesta esperada. El registro de auditoría y el historial de indexación permiten verificar qué cambió y si ya está disponible la nueva versión. La institución debe definir el relevo entre responsables; el software no lo decide.
+~ okf|ingest
+
+# Operar un servicio verificable|33:00–42:00
+@console|El panel de administración reúne el trabajo diario.
+Documentos|Cargue fuentes, supervise su indexación y consulte los resultados del procesamiento según el rol asignado.
+Usuarios y acceso|Revise los usuarios y las responsabilidades dentro del alcance delegado del administrador. Mantenga las autorizaciones de repositorio separadas de los roles del panel.
+Estado del servicio|Compruebe el estado del servicio, los registros operativos y el Query Inspector al investigar una respuesta reportada.
+= Distribución ilustrativa del panel de administración.
+! El panel reúne las tareas diarias según los roles: gestionar los documentos y su indexación, revisar los usuarios y sus permisos, comprobar el estado del servicio e investigar las consultas reportadas. Query Inspector puede mostrar los fragmentos encontrados y otros detalles operativos; su acceso debe limitarse al personal autorizado. La pantalla es ilustrativa: las pestañas y acciones disponibles dependen de los roles y de la configuración. La administración de la plataforma es la otra cara de la distinción entre gestionar el contenido y operar el servicio.
+~ admin|authz
+
+@split|Keycloak identifica al usuario. GENIE.AI aplica las reglas de acceso.
+Autenticación|Keycloak emite tokens OIDC y puede intermediar el inicio de sesión a través del proveedor de identidad configurado por la institución.
+Autorización|El servidor verifica el token. Los roles de aplicación controlan las funciones y los permisos de lectura de OKF rigen el acceso a los repositorios de conocimiento.
+= Pruebe el flujo de inicio de sesión y el acceso efectivo a los documentos por separado.
+! Dos perfiles, dos controles. Keycloak verifica la identidad y emite el token OIDC; la aplicación valida ese token y aplica los roles y permisos configurados. Los roles de aplicación determinan las funciones disponibles en GENIE.AI, mientras que los permisos de lectura de OKF determinan qué repositorios se pueden consultar. Están relacionados, pero no son intercambiables. Compruebe el inicio de sesión y la búsqueda efectiva con cuentas representativas antes de poner el servicio en marcha y después de cada cambio de acceso.
+~ authz|idp|api
+
+@spread|¿Dónde procesa el servicio sus datos?
+Almacenamiento|Document Repository conserva los archivos originales. ArangoDB almacena los fragmentos consultables y los índices vectoriales o de grafo.
+Llamadas al modelo|La aplicación envía los datos a la API del modelo configurado. Puede haber una API de GPU independiente dentro de la red de la institución o más allá de un límite de red gestionado.
+Operaciones|Revise la telemetría, las copias de seguridad, la gestión de secretos y la retención frente a los requisitos de seguridad de la institución.
+= Siga dónde se procesan los documentos, las preguntas y los fragmentos seleccionados.
+! Hay dos flujos de datos distintos. Document Repository conserva el archivo cargado; ArangoDB almacena los fragmentos indexados y los datos necesarios para buscarlos. Cuando alguien hace una pregunta, el contexto seleccionado se envía con la solicitud a la API del modelo configurado. Una API de GPU independiente puede estar alojada en la red de la institución, fuera del despliegue de la aplicación. Si Slim Dataprep usa un Docling remoto, el contenido de los documentos también cruza el límite de ese servicio. Acuerde con el equipo de plataforma dónde están estos límites: red, plazo de conservación y permisos de acceso.
+~ architecture|security|gpu|slim
+
+@console|Valide el enrutamiento, la búsqueda y la calidad de las respuestas.
+Antes de poner en servicio|Use Testing Lab para comprobar qué repositorio debería incluir o excluir una consulta de referencia.
+Después de indexar|Pruebe el corpus en servicio para confirmar que se puede encontrar el fragmento esperado.
+Calidad de las respuestas|Use los bancos de pruebas RAGAS y revise las citas y la abstención con preguntas representativas.
+= Flujo de evaluación ilustrativo.
+! Tres comprobaciones: una fuente que debe aparecer y una pregunta parecida que podría confundir la búsqueda. Antes de poner el servicio en marcha, Testing Lab muestra si los metadatos dirigen la consulta al repositorio previsto. Después de indexar, una prueba del corpus confirma que se puede encontrar el fragmento esperado. La evaluación examina la calidad de las respuestas, sus referencias y la abstención con preguntas representativas; el repositorio también incluye un conjunto de pruebas RAGAS para evaluarlas de forma estructurada. Las puntuaciones son indicios que conviene investigar, no sustitutos de la revisión experta de las respuestas importantes.
+~ lab|generation
+
+@flow|De la telemetría de la aplicación a Grafana.
+? INSTRUMENTACIÓN · RECOLECCIÓN · ALMACENAMIENTO · VISUALIZACIÓN
+Señales de la aplicación|Los servicios instrumentados emiten registros, métricas y trazas. Un ID de traza correlaciona las etapas de una misma solicitud.
+OpenTelemetry|El Collector recibe la telemetría y la envía a los almacenes configurados.
+Pila Victoria|VictoriaMetrics almacena métricas, VictoriaLogs almacena registros y VictoriaTraces almacena trazas.
+Grafana|Los paneles y las vistas de trazas muestran las fuentes de datos configuradas. La telemetría disponible depende de los ajustes de despliegue.
+= El registro básico está habilitado en las configuraciones de referencia. Las trazas, las métricas y los paneles completos son configurables.
+! El flujo tiene cuatro capas: los servicios instrumentados generan señales; el Collector las envía a los almacenes; los componentes de Victoria guardan los tipos configurados; Grafana muestra las fuentes seleccionadas. Cada plataforma de despliegue tiene sus particularidades. Compose y Swarm incluyen el Collector y VictoriaLogs; la instrumentación completa de OpenTelemetry en la aplicación, los almacenes de trazas y métricas y Grafana requieren opciones adicionales. En el chart de Kubernetes, los registros están habilitados por defecto; las métricas, las trazas y Grafana tienen sus propios ajustes y componentes gestionados por el operador. La observabilidad es configurable: antes de confiar en trazas detalladas, compruebe qué opciones están activas y durante cuánto tiempo se conservan los datos.
+~ observe|observeOverview|observeConfig|k8s
+
+@trace|Un requisito ausente es un problema que se puede rastrear.
+Confirmar el síntoma|Verifique el requisito oficial del permiso e identifique la solicitud de chat reportada.
+Inspeccionar la búsqueda|Use el Query Inspector para comparar los grafos efectivos, los fragmentos recuperados y las referencias seleccionadas.
+Seguir la solicitud|Con el rastreo habilitado, siga el ID de traza por la búsqueda y la generación. Compruebe dónde se perdió o no se usó la evidencia.
+= Cronología ilustrativa. La longitud de las barras representa duraciones de ejemplo.
+! Es una ruta de investigación, no un diagnóstico automático. Primero, la persona responsable del servicio confirma el requisito en la fuente oficial vigente e identifica la consulta reportada. Después, un operador autorizado revisa los repositorios utilizados, los fragmentos encontrados y las referencias seleccionadas. Si el rastreo está habilitado, sigue la solicitud entre servicios para localizar dónde se perdió o dejó de usarse la información de respaldo. Las trazas operativas y el contenido sensible deben quedar restringidos a los roles pertinentes.
+~ admin|observeOverview|tracing
+
+# Despliegue y operaciones|42:00–51:00
+@split|Elija por separado la plataforma de aplicación y dónde se ejecutan los servicios GPU.
+Plataforma de aplicación|Docker Compose ejecuta la pila en un solo host. Docker Swarm puede orquestarla en varios nodos. Kubernetes usa el chart Helm de GENIE.AI.
+Ubicación de los servicios de modelo|Pueden ejecutarse junto a la aplicación, en hosts con GPU, o detrás de una API GPU externa dedicada. Las tres plataformas admiten esa API.
+= Alojar el servicio en las instalaciones o en la nube es otra decisión.
+! Son dos decisiones que suelen confundirse. La plataforma de aplicación determina cómo se despliegan y operan los servicios principales; la ubicación de los modelos determina dónde se ejecutan los servicios que usan GPU. En la configuración de GPU, «externo» significa fuera del despliegue de la aplicación, no en la internet pública ni necesariamente en un proveedor externo. La API puede seguir dentro de la red institucional. Para elegir, tenga en cuenta las competencias del equipo de plataforma, los límites de los datos y quién gestiona el hardware.
+~ compose|swarm|k8s|topologies
+
+@matrix|Tres plataformas de aplicación y dos opciones para la GPU.
+Docker Compose|Un solo host de aplicación. NGINX y Kong en el punto de entrada.|Ejecute los servicios GPU en el mismo host.|Indique GPU_NODE_HOST para conectarse a un servicio GPU externo.
+Docker Swarm|Uno o varios nodos Swarm. NGINX y Kong en el punto de entrada.|Asigne los servicios de modelo a nodos Swarm etiquetados para GPU.|Configure GPU_NODE_HOST y desactive las réplicas de modelo locales.
+Kubernetes y Helm|Chart Helm con Gateway API y Envoy Gateway por defecto.|Seleccione el modo GPU dentro del clúster y cumpla los requisitos de device plugin del chart.|Seleccione el modo externo y configure el host y las rutas GPU.
+= Todas las filas admiten una API de GPU dedicada.
+! Cada fila combina una plataforma de aplicación con las dos formas de ubicar la GPU. Compose y Swarm utilizan la configuración de doble modo y pueden apuntar a un nodo dedicado con GPU_NODE_HOST y el identificador de API GPU; también pueden ejecutar servicios de modelo localmente si el host y el planificador lo permiten. Kubernetes utiliza el chart Helm: el modo externo usa el host GPU y las rutas de servicio configuradas, mientras que el modo dentro del clúster usa las cargas GPU del chart y requiere el device plugin NVIDIA documentado. Las tres plataformas pueden usar una API GPU externa; elegir esa opción no determina qué plataforma de aplicación utilizar.
+~ compose|swarm|k8s
+
+@flow|Una misma API GPU puede atender a las tres plataformas.
+? EJEMPLO · NODO DE GPU DEDICADO
+Lado de la aplicación|Compose, Swarm y Kubernetes pueden conservar la aplicación, la identidad, el conocimiento y el nivel de orquestación de OPEA.
+API GPU|Una API HTTPS accesible dirige las solicitudes a los servicios de modelo configurados. Planifique la autenticación, las reglas de red y los certificados.
+Lado de la GPU|Un nodo GPU de referencia puede alojar los servicios de generación, traducción, vectorización, reordenación de resultados y análisis documental.
+! Las tres plataformas de aplicación pueden llamar a la misma API; detrás de esa interfaz se encuentran los servicios de modelo y de análisis documental. Así, el entorno de la aplicación puede usar servicios compatibles alojados en un host GPU dedicado: vLLM para generar o traducir, TEI para vectorizar o volver a ordenar los resultados y Docling remoto cuando se configure. Hay que proteger la API, vigilar su capacidad y disponibilidad, gestionar las credenciales y probar las rutas de red. El diagrama muestra una opción de despliegue; no exige ejecutar todos los servicios en una sola máquina física.
+~ compose|swarm|k8s|gpu
+
+@rail|Dimensione la infraestructura de inferencia para el servicio.
+Generación y búsqueda|vLLM ejecuta el modelo de lenguaje. En la pila de referencia, TEI ofrece las API de vectorización y reordenación de resultados.
+Opciones de GPU|vLLM admite generación en GPUs NVIDIA con CUDA y en GPUs AMD con ROCm.
+Capacidad|Pruebe la calidad del modelo en los idiomas del servicio. Dimensione la capacidad de cómputo para la longitud de contexto, las solicitudes concurrentes y los objetivos de latencia.
+! Las opciones de hardware documentadas son claras: vLLM ejecuta modelos en GPU NVIDIA con CUDA y en GPU AMD con ROCm. Son alternativas de hardware y ejecución para el mismo nivel de servicio de modelos, no funciones distintas de GENIE.AI. La institución debe comparar el rendimiento de los modelos en los idiomas del servicio, la calidad de las respuestas, la longitud del contexto, la latencia y la concurrencia prevista con el hardware elegido. Estas mediciones ayudan a dimensionar mejor el servicio que una especificación aislada del acelerador.
+~ models|vllm
+
+@spread|¿Qué se puede configurar en GENIE.AI?
+Servicio y acceso|Defina la apariencia de la aplicación y los idiomas disponibles en la interfaz. Gestione los documentos y los permisos OKF con las herramientas de administración; configure el inicio de sesión y la asignación de roles en Keycloak.
+Búsqueda y modelos|Ajuste el tamaño y el solapamiento de los fragmentos, la profundidad de búsqueda y la reordenación de resultados opcional. Seleccione los modelos de generación y vectorización adecuados para el servicio.
+Infraestructura y telemetría|Configure el despliegue con variables de entorno o valores de Helm. Elija dónde se ejecutan las API de modelo y qué servicios de telemetría se activan.
+= Cambie la división de los documentos, vuelva a indexarlos y pruebe una pregunta de referencia.
+! Hay ajustes en toda la plataforma, como muestra la guía de permisos. La persona responsable del contenido modifica la fuente; un administrador inicia la indexación; el equipo de despliegue configura el tamaño y solapamiento de los fragmentos, las API de modelo, la profundidad de búsqueda, los idiomas, la integración de identidad y la telemetría. Los ajustes que modifican el índice almacenado son distintos de los que cambian el comportamiento durante la ejecución. Si cambia la división del texto, hay que volver a indexar y comprobar la búsqueda; activar otro idioma de interfaz o el rastreo tiene un efecto diferente. En la mayoría de los despliegues se adaptan muchos valores: conviene documentar quién los gestiona, validar cada cambio y poder reproducir la configuración final.
+~ branding|locale|authz|ingestPipeline|install|k8s
+
+@spread|Cada capa de un servicio público necesita responsables claros.
+Equipo de servicio|Es responsable de las fuentes oficiales y ayuda a decidir si las respuestas satisfacen las necesidades del servicio.
+Equipo de aplicación|Gestiona la configuración, las actualizaciones, la evaluación y la integración de la plataforma con los canales.
+Equipo de plataforma|Gestiona la identidad, los servicios de ejecución, la observabilidad, las copias de seguridad, la recuperación ante incidentes y la disponibilidad del entorno.
+! El cambio en la norma de renovación muestra cómo se coordinan los equipos. El equipo de servicio vela por la autoridad de los contenidos; el equipo de aplicación configura, integra y evalúa el asistente; el equipo de plataforma mantiene la identidad, los datos y los servicios en funcionamiento, además de las copias de seguridad y la disponibilidad. Hay que asignar estas responsabilidades incluso si, en una institución pequeña, un mismo equipo cubre varias capas. ¿Qué equipos actuales podrían hacerse cargo de cada parte de un despliegue local?
+~ k8s|observe
+
+@index|El presupuesto sigue al diseño del servicio.
+Preparar|Presupueste la preparación de las fuentes, el diseño de los permisos, la integración y la evaluación con preguntas realistas.
+Alojar|Dimensione por separado los servicios de aplicación, los almacenes de datos y el servicio de modelos. Mida la capacidad GPU según la concurrencia y la longitud de contexto previstas.
+Operar|Presupueste el personal que actualiza los contenidos, administra la plataforma, investiga incidentes y repite las evaluaciones.
+= El código del marco técnico es Apache 2.0. Los modelos, los datos y las operaciones de servicio tienen sus propios términos y costes.
+! El presupuesto depende del diseño del servicio. Incluye la preparación de fuentes, la integración, los permisos, la evaluación, el alojamiento de la plataforma y su operación. El servicio de modelos puede dimensionarse aparte de la aplicación, en especial si la capacidad GPU se comparte o se gestiona de forma centralizada. Incluya también al personal que mantiene los conocimientos y atiende incidentes, no solo el cómputo y el almacenamiento. La plataforma tiene licencia Apache 2.0; los modelos, los datos y los servicios tienen condiciones y costes propios. No existe un precio único.
+~ licence|models|topologies
+
+# Lo que la institución puede controlar|51:00–60:00
+@chat|De vuelta a la pregunta de la renovación.
+? LA MISMA CONVERSACIÓN, AHORA CON EL SISTEMA A LA VISTA
+La respuesta|«Presente su permiso vigente y un justificante de domicilio reciente». En este ejemplo, los fragmentos seleccionados respaldan la indicación.
+La fuente|La referencia apunta a la guía consultada. El funcionario comprueba que el fragmento respalda la indicación y que la guía sigue vigente.
+El servicio|Los operadores pueden verificar los permisos de acceso a los conocimientos y el estado de publicación. Si el rastreo está configurado, pueden seguir los servicios que procesaron la solicitud.
+= Una respuesta verificable conecta conocimiento, acceso e infraestructura.
+! Volvamos a la pregunta inicial, ahora que hemos visto el sistema que hay detrás. Para reconstruir la respuesta, comprobamos tres cosas: qué guía vigente se seleccionó, si el usuario podía acceder al repositorio y qué servicios procesaron la solicitud. El funcionario puede consultar la fuente y compararla con la norma actual; un operador puede investigar la búsqueda o los datos de rastreo, si están habilitados y tiene permiso. En la práctica, una respuesta verificable ofrece un camino visible para revisarla, pero no garantiza que cada frase generada sea correcta.
+~ authz|api|observeOverview
+
+@finale|Una plataforma. Tres niveles de control institucional.
+El servicio|Elija las audiencias, los idiomas, los canales y las integraciones.
+El conocimiento|Seleccione y actualice las fuentes, gestione las versiones publicadas, defina los permisos de acceso y pruebe las respuestas.
+La infraestructura|Elija los modelos y dónde se ejecutan. Consulte métricas o trazas cuando estén habilitados los servicios correspondientes.
+! Tres niveles, en el orden del recorrido: definir los públicos y los canales; gobernar los conocimientos y sus permisos; elegir los modelos y la infraestructura que los ejecutan. La institución mantiene el control cuando hace explícitas estas decisiones y asigna responsables. La pregunta inicial muestra dónde confluyen el diseño del servicio, la gestión del conocimiento y las operaciones en una sola respuesta.
+~ itu|welcome
+
+@resources|Recursos y debate
+? PREGUNTAS
+! Los recursos de este recorrido aparecen en la diapositiva; el tiempo restante se dedica a preguntas y debate. Podemos hablar de la integración del servicio, la responsabilidad sobre los conocimientos, las reglas de acceso, la elección de modelos, el despliegue y las operaciones. Algunas decisiones dependen de la configuración o las normas locales: conviene identificarlas. Para iniciar un debate sobre un piloto, una buena pregunta es qué fuente o servicio existente sería el punto de partida más natural.

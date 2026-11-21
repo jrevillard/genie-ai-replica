@@ -162,6 +162,18 @@ variables:
 # Prevent duplicate branch+MR pipelines — first match wins
 workflow:
   rules:
+    # The PRD umbrella branch (protected pattern `*/prd`) is the target of
+    # every PRD story merge request, so the suppression rule below would
+    # never let it have a pipeline of its own. Its tip MUST carry one: the
+    # scan-result policies compare the source pipeline with the TARGET
+    # branch's pipeline at the merge base, and with no target to compare
+    # against the `license_finding` rule (DPG license compliance) has
+    # nothing to diff against: it declares no `fallback_behavior` — GitLab's
+    # empty default makes it fail closed — and demands a Maintainer
+    # approval the umbrella does not need. This rule therefore sits BEFORE
+    # the suppression rule on purpose: it must apply to pushes on that
+    # branch. The security policies themselves are untouched by it.
+    - if: $CI_COMMIT_BRANCH =~ /\/prd$/
     - if: $CI_COMMIT_BRANCH && $CI_OPEN_MERGE_REQUESTS && $CI_PIPELINE_SOURCE == "push"
       when: never
     - if: $CI_COMMIT_TAG
@@ -301,7 +313,7 @@ workflow:
   variables:
     COMPOSE_PROJECT_NAME: "ci-$CI_PIPELINE_ID"
     # Pull candidate images from the tmp/ quarantine namespace (where build:image
-    # pushes pre-promote candidates). GENIE_AI_GLOBAL_TAG matches the candidate tag.
+    # pushes pre-promote candidates). GENIE_AI_IMAGE_TAG matches the candidate tag.
     GENIE_AI_REGISTRY: "$CI_REGISTRY_IMAGE/tmp"  # e2e pulls candidates from tmp/ namespace
   allow_failure: false
   tags: [docker]
@@ -378,7 +390,13 @@ workflow:
       else
         E2E_TAG="pending-${CI_COMMIT_SHORT_SHA}"
       fi
-      sed -i "s|^GENIE_AI_GLOBAL_TAG=.*|GENIE_AI_GLOBAL_TAG=${E2E_TAG}|" .env
+      # The stack's version lives in GENIE_AI_IMAGE_TAG (GENIE_AI_GLOBAL_TAG
+      # is the former name, still read as a fallback for one release). The
+      # .env is built from the repo's env template, which carries the CURRENT
+      # name — a sed that targets a name the template no longer assigns
+      # matches NOTHING, and the E2E then pulls the template's default
+      # ("main") instead of the candidate it is supposed to test.
+      sed -i "s|^GENIE_AI_IMAGE_TAG=.*|GENIE_AI_IMAGE_TAG=${E2E_TAG}|" .env
       echo "E2E pulling candidate images tagged :${E2E_TAG}"
     # Pull all custom services from the registry. `up --no-build` below fails
     # loudly if a build:image job didn't publish its candidate, surfacing the
@@ -1159,12 +1177,27 @@ include:
 # pre-merge coverage. Applied to the jobs active for the GENIE.AI stack
 # (JS/Vue + Python + npm/pip deps + IaC + secrets). Other language-specific
 # SAST jobs keep template defaults (won't activate for absent languages).
+#
+# The `*/prd` umbrella branch is listed for the same reason as the workflow rule
+# above: it is a protected merge target, and the scan-result policies compare
+# the source pipeline with the TARGET branch's. The license rule needs a target
+# pipeline that carries the project's SBOM — the gemnasium dependency-scanning
+# job below uploads it — because without one the comparison is made against an
+# empty target and every license of the source counts as newly introduced. That
+# job is advisory, so a green pipeline can still carry no SBOM: the warning
+# badge on it is the signal. The CVE rule declares `fallback_behavior:
+# {fail: open}`, so a missing target does not block it; it wants the target's
+# scan reports only to tell a newly detected finding from a pre-existing one.
+# The umbrella's pipeline carries dependency-scanning and SAST reports but no
+# container-scanning report (no image is built there), which that rule
+# tolerates.
 .security_run_rules: &security_run_rules
   - if: $CI_PIPELINE_SOURCE == "schedule"
     when: never
   - if: $CI_PIPELINE_SOURCE == "merge_request_event"
   - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
   - if: $CI_COMMIT_BRANCH =~ /^release\//
+  - if: $CI_COMMIT_BRANCH =~ /\/prd$/
 
 secret_detection:
   rules: *security_run_rules
@@ -1503,11 +1536,16 @@ container_scanning:
           echo "Pre-release tag detected — skipping 'latest' Docker tag"
           FINAL_TAGS="$CI_COMMIT_TAG${TAG_SUFFIX:-}"
         else
-          # The slim variant (issue #2000) publishes under its OWN suffix and
-          # must NOT take over "latest": "latest" stays the fat image, the
-          # one every existing deployment pulls.
+          # The slim variant (issue #2000) publishes under its OWN suffix:
+          # "latest" stays the fat image, the one every existing deployment
+          # pulls — a deployment that pins "latest" must not silently switch
+          # to the slim build (the slim dataprep carries no local converter).
+          # The slim build of the SAME release gets its own "latest-slim", so
+          # a deployment that follows the release can take the slim variant
+          # with the suffix knob alone, instead of having to pin a branch
+          # tag (the only slim tag that used to exist was "<branch>-slim").
           if [ -n "${TAG_SUFFIX:-}" ]; then
-            FINAL_TAGS="$CI_COMMIT_TAG${TAG_SUFFIX}"
+            FINAL_TAGS="$CI_COMMIT_TAG${TAG_SUFFIX} latest${TAG_SUFFIX}"
           else
             FINAL_TAGS="$CI_COMMIT_TAG latest"
           fi
@@ -2866,8 +2904,11 @@ promote:dataprep-arango-slim:
   variables:
     IMAGE_NAME: "genie-ai-dataprep-arango"
     # The slim variant is promoted under its own tag family: `:main-slim`
-    # (and `:main-slim-<sha>`). `latest` stays with the fat image — every
-    # existing deployment pulls that one.
+    # (and `:main-slim-<sha>`), and `:latest-slim` for the latest RELEASE
+    # (`:vX.Y.Z-slim` for that release). `latest` stays with the fat image —
+    # every existing deployment pulls that one, and it must not silently
+    # switch to the slim build (the slim dataprep carries no local
+    # converter).
     PROMOTE_TAG_PREFIX: "slim-"
     TAG_SUFFIX: "-slim"
   rules:
@@ -3013,8 +3054,11 @@ promote:retriever-arango-slim:
   variables:
     IMAGE_NAME: "genie-ai-retriever-arango"
     # The slim variant is promoted under its own tag family: `:main-slim`
-    # (and `:main-slim-<sha>`). `latest` stays with the fat image — every
-    # existing deployment pulls that one.
+    # (and `:main-slim-<sha>`), and `:latest-slim` for the latest RELEASE
+    # (`:vX.Y.Z-slim` for that release). `latest` stays with the fat image —
+    # every existing deployment pulls that one, and it must not silently
+    # switch to the slim build (the slim dataprep carries no local
+    # converter).
     PROMOTE_TAG_PREFIX: "slim-"
     TAG_SUFFIX: "-slim"
   rules:
@@ -3156,8 +3200,11 @@ promote:reranker-slim:
   variables:
     IMAGE_NAME: "genie-ai-reranker"
     # The slim variant is promoted under its own tag family: `:main-slim`
-    # (and `:main-slim-<sha>`). `latest` stays with the fat image — every
-    # existing deployment pulls that one.
+    # (and `:main-slim-<sha>`), and `:latest-slim` for the latest RELEASE
+    # (`:vX.Y.Z-slim` for that release). `latest` stays with the fat image —
+    # every existing deployment pulls that one, and it must not silently
+    # switch to the slim build (the slim dataprep carries no local
+    # converter).
     PROMOTE_TAG_PREFIX: "slim-"
     TAG_SUFFIX: "-slim"
   rules:
@@ -3973,6 +4020,15 @@ docs:validate:
   script:
     - ansible-playbook --syntax-check deploy/ansible/deploy.yml
     - ansible-playbook --syntax-check deploy/ansible/deploy-gpu.yml
+    # The collapsed deploy-gpu.yml carries both vendors' plays. Render the
+    # GPU-node compose template in BOTH shapes to prove the Jinja
+    # conditionals resolve: every row in the template carries an inline
+    # default, so two template-module runs (gpu_vendor set / unset) render
+    # the ROCm and NVIDIA node files without a host connection.
+    - ansible localhost -m ansible.builtin.template -a "src=deploy/ansible/templates/docker-compose.gpu.yaml.j2 dest=/tmp/gpu-rocm.yaml" -c local -e "gpu_vendor=rocm"
+    - ansible localhost -m ansible.builtin.template -a "src=deploy/ansible/templates/docker-compose.gpu.yaml.j2 dest=/tmp/gpu-nvidia.yaml" -c local
+    - grep -q "vllm-reranker" /tmp/gpu-rocm.yaml
+    - '! grep -q "vllm-reranker" /tmp/gpu-nvidia.yaml'
     - yamllint -c deploy/ansible/.yamllint deploy/ansible/
     # Renders the #1227 payload probe/heal command builders through real
     # ansible and executes the tokenized output — the two layers
@@ -4705,6 +4761,46 @@ chart:lint:
       $(cat charts/ci/render-full-flags)
       --set opea.gpu.mode=in-cluster
       > /tmp/rendered-incluster.yaml
+    # The image-tag RULES (issue #2000's naming refactor): one version, one
+    # variant, one pin. Four renders, one assertion set — the version for
+    # every GENIE.AI image, the variant on the three model-serving images
+    # ONLY, a pin naming the EXACT tag (never the composed one), and the pull
+    # policy judging the BASE tag. Nothing else in this job knows those
+    # rules: `helm lint` only knows the template parses, the values gates
+    # only know a value is DECLARED, and the parity gate compares
+    # environment variables, not image tags.
+    - >-
+      helm template test charts/genieai-umbrella -n genieai --kube-version $(cat charts/ci/kube-version) $(cat charts/ci/render-base-flags)
+      --set opea.enabled=true --set okf.enabled=true
+      --set opea.gpu.nodeHost=https://gpu.ci-render.local:444
+      --set imageTag=v2.1.0
+      > /tmp/rendered-tag-global.yaml
+    - >-
+      helm template test charts/genieai-umbrella -n genieai --kube-version $(cat charts/ci/kube-version) $(cat charts/ci/render-base-flags)
+      --set opea.enabled=true --set okf.enabled=true
+      --set opea.gpu.nodeHost=https://gpu.ci-render.local:444
+      --set imageTag=v2.1.0 --set opea.imageTagSuffix=-slim
+      > /tmp/rendered-tag-variant.yaml
+    - >-
+      helm template test charts/genieai-umbrella -n genieai --kube-version $(cat charts/ci/kube-version) $(cat charts/ci/render-base-flags)
+      --set opea.enabled=true --set okf.enabled=true
+      --set opea.gpu.nodeHost=https://gpu.ci-render.local:444
+      --set imageTag=v2.1.0 --set opea.imageTagSuffix=-slim
+      --set services.backend.image.tag=v1.9.8
+      --set opea.chatqna.image.tag=v1.9.9
+      --set opea.embedding.image.tag=v1.9.7
+      --set okf.server.image.tag=v1.9.6
+      --set okf.pii.image.tag=v1.9.5
+      --set okf.ragas.image.tag=v1.9.4
+      --set opea.reranker.image.tag=v1.9.3
+      > /tmp/rendered-tag-pinned.yaml
+    - >-
+      helm template test charts/genieai-umbrella -n genieai --kube-version $(cat charts/ci/kube-version) $(cat charts/ci/render-base-flags)
+      --set opea.enabled=true --set okf.enabled=true
+      --set opea.gpu.nodeHost=https://gpu.ci-render.local:444
+      --set imageTag=main --set opea.imageTagSuffix=-slim
+      > /tmp/rendered-tag-mutable.yaml
+    - python3 scripts/ci/image-tag-check.py /tmp/rendered-tag-global.yaml /tmp/rendered-tag-variant.yaml /tmp/rendered-tag-pinned.yaml /tmp/rendered-tag-mutable.yaml
     - >-
       curl -fsSL
       https://github.com/yannh/kubeconform/releases/download/v0.6.7/kubeconform-linux-amd64.tar.gz
@@ -5666,6 +5762,25 @@ config:validate:
     # the image ships no git either — without it that pin fails with
     # "git: not found" instead of validating.
     - apk add --no-cache bash git
+    # The ROCm compose render gate
+    # (tests/config-validator/__tests__/rocm-compose-render.test.js)
+    # renders the two AMD ROCm overlays with the real compose binary. The
+    # node:22-alpine image ships neither the docker CLI nor the compose
+    # plugin, and the gate SKIPS when no compose binary answers - so
+    # without this install the gate silently runs zero assertions in CI.
+    # `docker compose config` is a client-side render: it needs no daemon
+    # and touches no container, so the plain CLI + plugin are enough.
+    - apk add --no-cache docker-cli docker-cli-compose
+    # The ROCm env.j2 render gate (tests/config-validator/__tests__/
+    # rocm-env-render.test.js) renders deploy/ansible/templates/env.j2 for
+    # the NVIDIA and the two ROCm deployment shapes and asserts what each
+    # one gets. The renderer is python (tests/config-validator/tools/
+    # render_env_template.py) and imports BOTH jinja2 and yaml - without
+    # these the gate SKIPS (it probes the renderer and skips when it cannot
+    # run), so it would silently run zero assertions in CI. py3-yaml is not
+    # implied by py3-jinja2: jinja2 does not depend on it, and the renderer
+    # parses the template's YAML front matter.
+    - apk add --no-cache python3 py3-jinja2 py3-yaml
     - cd tests/config-validator && npm ci
     # The #1716 behavioral probe runs the REAL gate binary (tests/e2e's
     # pinned eslint) against a fixture: without this install the probe
@@ -5728,6 +5843,15 @@ config:validate:
         - "env.*"
         - "docker-compose.yaml"
         - "docker-compose.gpu.yaml"
+        # The AMD ROCm vendor axis lives in the two base compose files (env
+        # values + the rocm-models profile) and in env.strixhalo — rendered
+        # by no other check in the pipeline: the config suite parses
+        # docker-compose.yaml and docker-compose.gpu.yaml only, and
+        # scripts/ci/config-parity-check.py reads docker-compose.yaml only.
+        # A change to the base files, the Strix Halo profile or the
+        # vendor-conditioned ansible path must therefore trigger the stage
+        # that renders it.
+        - "env.strixhalo"
         - "genie-ai-overlay/retriever/**/*"
         - "genie-ai-overlay/chatqna/**/*"
         - "deploy/ansible/**/*"

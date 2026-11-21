@@ -59,14 +59,8 @@ WORKDIR /app
 # default-jre (the FAT lock's pyspark import needs a JVM —
 # the slim lock carries no pyspark, so its builder stage needs none), and
 # wget/unzip (the EasyOCR model download).
-# The install output is kept OUT of the job trace and printed only when the
-# step fails: Cloudflare's WAF is SUSPECTED to refuse the trace upload of any
-# job whose log carries a sensitive path, and the dpkg output of libmariadb-dev prints one
-# (the mysql-common postinst names /etc/mysql/my.cnf, measured). The WAF
-# exception is tracked in issue #2001 — this workaround is to be purged once
-# it lands.
 RUN apt-get update -y && \
-    (apt-get install -y --no-install-recommends --fix-missing \
+    apt-get install -y --no-install-recommends --fix-missing \
     build-essential \
     default-jre-headless \
     libcairo2 \
@@ -76,9 +70,9 @@ RUN apt-get update -y && \
     libpq-dev \
     wget \
     unzip \
-    ca-certificates > /tmp/apt.log 2>&1 || { tail -n 50 /tmp/apt.log | sed -E 's#(/[A-Za-z0-9._~/-]{2,})#<path>#g'; exit 1; }) && \
+    ca-certificates && \
     apt-get clean && \
-    rm -rf /var/lib/apt/lists/* && rm -f /tmp/apt.log
+    rm -rf /var/lib/apt/lists/*
 
 # Upgrade pip/setuptools/wheel BEFORE any install.
 RUN pip install --no-cache-dir --upgrade pip setuptools wheel
@@ -145,7 +139,7 @@ WORKDIR /app
 # debugging recipes; libreoffice + the document-conversion toolchain;
 # opencv's libgl1/libglib2.0-0; tesseract.
 RUN apt-get update -y && \
-    (apt-get install -y --no-install-recommends --fix-missing \
+    apt-get install -y --no-install-recommends --fix-missing \
     curl \
     ffmpeg \
     libcairo2 \
@@ -156,9 +150,9 @@ RUN apt-get update -y && \
     libreoffice \
     poppler-utils \
     tesseract-ocr \
-    ca-certificates > /tmp/apt.log 2>&1 || { tail -n 50 /tmp/apt.log | sed -E 's#(/[A-Za-z0-9._~/-]{2,})#<path>#g'; exit 1; }) && \
+    ca-certificates && \
     apt-get clean && \
-    rm -rf /var/lib/apt/lists/* && rm -f /tmp/apt.log
+    rm -rf /var/lib/apt/lists/*
 
 # The JVM is pyspark's, and pyspark is only in the FAT lock (OPEA's compiled
 # lock pulls it in; nothing in the dataprep's runtime chain imports it). The
@@ -260,6 +254,13 @@ COPY genie-ai-overlay/core/model_cache.py /app/core/model_cache.py
 COPY genie-ai-overlay/core/model_http_policy.py /app/core/model_http_policy.py
 COPY genie-ai-overlay/core/service_endpoints.py /app/core/service_endpoints.py
 
+# Copy the config-gated embedding backend selector (importable as
+# core.embedding_backend). The dataprep subclass __init__ asks it after the
+# parent builds the TEI client — tei default everywhere, the swap is
+# post-construction on our own object; without this file the image fails at
+# import, not at runtime.
+COPY genie-ai-overlay/core/embedding_backend.py /app/core/embedding_backend.py
+
 # Copy the shared span-attribute vocabulary (importable as core.span_attrs).
 # The LLM timeout attributes this overlay added are stamped through it rather
 # than by literal, so a renamed key cannot diverge between the vocabulary and
@@ -323,8 +324,8 @@ RUN useradd -ms /bin/bash user && \
 # still root.
 ARG CACHE_BUST=0
 RUN CACHE_BUST=$CACHE_BUST apt-get update -y -o Acquire::Retries=5 && \
-    (CACHE_BUST=$CACHE_BUST apt-get upgrade -y --with-new-pkgs --fix-missing -o Acquire::Retries=5 > /tmp/apt.log 2>&1 || { tail -n 50 /tmp/apt.log | sed -E 's#(/[A-Za-z0-9._~/-]{2,})#<path>#g'; exit 1; }) && \
-    apt-get clean && rm -rf /var/lib/apt/lists/* && rm -f /tmp/apt.log
+    apt-get upgrade -y --with-new-pkgs --fix-missing -o Acquire::Retries=5 && \
+    apt-get clean && rm -rf /var/lib/apt/lists/*
 
 # Step L: Run the new GENIE-AI entry point from its new location
 USER user

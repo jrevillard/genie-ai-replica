@@ -308,7 +308,7 @@ services:
     build: api-gateway-solution/new-config/
     # Pin the image's own USER (uid 1000) at compose level (#1227).
     user: "1000:1000"
-    image: ${GENIE_AI_KONG_CONFIG_IMAGE:-${GENIE_AI_REGISTRY:-registry.opensource.unicc.org/un/itu/genie-ai}/genie-ai-kong-config}:${GENIE_AI_KONG_CONFIG_IMAGE_TAG:-${GENIE_AI_GLOBAL_TAG:-latest}}
+    image: ${GENIE_AI_KONG_CONFIG_IMAGE:-${GENIE_AI_REGISTRY:-registry.opensource.unicc.org/un/itu/genie-ai}/genie-ai-kong-config}:${GENIE_AI_KONG_CONFIG_IMAGE_TAG:-${GENIE_AI_IMAGE_TAG:-${GENIE_AI_GLOBAL_TAG:-latest}}}
     networks:
       - genieai_network
     environment:
@@ -479,7 +479,7 @@ services:
         condition: service_completed_successfully
     restart: unless-stopped
     build: api-gateway-solution/nginx/
-    image: ${GENIE_AI_NGINX_IMAGE:-${GENIE_AI_REGISTRY:-registry.opensource.unicc.org/un/itu/genie-ai}/genie-ai-nginx}:${GENIE_AI_NGINX_IMAGE_TAG:-${GENIE_AI_GLOBAL_TAG:-latest}}
+    image: ${GENIE_AI_NGINX_IMAGE:-${GENIE_AI_REGISTRY:-registry.opensource.unicc.org/un/itu/genie-ai}/genie-ai-nginx}:${GENIE_AI_NGINX_IMAGE_TAG:-${GENIE_AI_IMAGE_TAG:-${GENIE_AI_GLOBAL_TAG:-latest}}}
     ports:
       - target: 8080
         published: ${NGINX_HTTP_PORT:-80}
@@ -601,7 +601,7 @@ services:
     # Dockerfile chowns the runtime-config dir and renders nginx.conf to /tmp.
     # Pinned by name: the image's USER is the numeric source of truth.
     user: nginx
-    image: ${GENIE_AI_FRONTEND_IMAGE:-${GENIE_AI_REGISTRY:-registry.opensource.unicc.org/un/itu/genie-ai}/genie-ai-frontend}:${GENIE_AI_FRONTEND_IMAGE_TAG:-${GENIE_AI_GLOBAL_TAG:-latest}}
+    image: ${GENIE_AI_FRONTEND_IMAGE:-${GENIE_AI_REGISTRY:-registry.opensource.unicc.org/un/itu/genie-ai}/genie-ai-frontend}:${GENIE_AI_FRONTEND_IMAGE_TAG:-${GENIE_AI_IMAGE_TAG:-${GENIE_AI_GLOBAL_TAG:-latest}}}
     environment:
       - PORT=8090
       - VUE_APP_API_URL=${VUE_APP_API_URL:-/api}
@@ -707,7 +707,7 @@ services:
     # Pin the image's node user (#1227) - Dockerfile.migrations sets USER node.
     # Pinned by name: the image's USER is the numeric source of truth.
     user: node
-    image: ${GENIE_AI_DB_MIGRATIONS_IMAGE:-${GENIE_AI_REGISTRY:-registry.opensource.unicc.org/un/itu/genie-ai}/genie-ai-db-migrations}:${GENIE_AI_DB_MIGRATIONS_IMAGE_TAG:-${GENIE_AI_GLOBAL_TAG:-latest}}
+    image: ${GENIE_AI_DB_MIGRATIONS_IMAGE:-${GENIE_AI_REGISTRY:-registry.opensource.unicc.org/un/itu/genie-ai}/genie-ai-db-migrations}:${GENIE_AI_DB_MIGRATIONS_IMAGE_TAG:-${GENIE_AI_IMAGE_TAG:-${GENIE_AI_GLOBAL_TAG:-latest}}}
     networks:
       - genieai_network
     environment:
@@ -750,7 +750,7 @@ services:
     # Pin the image's node user, uid 1000 (Dockerfile sets USER node) (#1227).
     # Pinned by name: the image's USER is the numeric source of truth.
     user: node
-    image: ${GENIE_AI_BACKEND_IMAGE:-${GENIE_AI_REGISTRY:-registry.opensource.unicc.org/un/itu/genie-ai}/genie-ai-backend}:${GENIE_AI_BACKEND_IMAGE_TAG:-${GENIE_AI_GLOBAL_TAG:-latest}}
+    image: ${GENIE_AI_BACKEND_IMAGE:-${GENIE_AI_REGISTRY:-registry.opensource.unicc.org/un/itu/genie-ai}/genie-ai-backend}:${GENIE_AI_BACKEND_IMAGE_TAG:-${GENIE_AI_IMAGE_TAG:-${GENIE_AI_GLOBAL_TAG:-latest}}}
     # Swarm: internal only - access via Kong proxy
     # ports:
     #   - "${BACKEND_PORT:-3000}:3000"
@@ -945,7 +945,7 @@ services:
     build:
       context: components/
       dockerfile: okf-server/Dockerfile
-    image: ${GENIE_AI_OKF_SERVER_IMAGE:-${GENIE_AI_REGISTRY:-registry.opensource.unicc.org/un/itu/genie-ai}/genie-ai-okf-server}:${GENIE_AI_OKF_SERVER_IMAGE_TAG:-${GENIE_AI_GLOBAL_TAG:-latest}}
+    image: ${GENIE_AI_OKF_SERVER_IMAGE:-${GENIE_AI_REGISTRY:-registry.opensource.unicc.org/un/itu/genie-ai}/genie-ai-okf-server}:${GENIE_AI_OKF_SERVER_IMAGE_TAG:-${GENIE_AI_IMAGE_TAG:-${GENIE_AI_GLOBAL_TAG:-latest}}}
     healthcheck:
       test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3002/health"]
       interval: 10s
@@ -1301,7 +1301,7 @@ services:
     build:
       context: components/pii-service/
       dockerfile: Dockerfile
-    image: ${GENIE_AI_PII_SERVICE_IMAGE:-${GENIE_AI_REGISTRY:-registry.opensource.unicc.org/un/itu/genie-ai}/genie-ai-pii-service}:${GENIE_AI_PII_SERVICE_IMAGE_TAG:-${GENIE_AI_GLOBAL_TAG:-latest}}
+    image: ${GENIE_AI_PII_SERVICE_IMAGE:-${GENIE_AI_REGISTRY:-registry.opensource.unicc.org/un/itu/genie-ai}/genie-ai-pii-service}:${GENIE_AI_PII_SERVICE_IMAGE_TAG:-${GENIE_AI_IMAGE_TAG:-${GENIE_AI_GLOBAL_TAG:-latest}}}
     # Internal only (never publicly routed) — the okf-server calls it
     # container-to-container on genieai_network, same as doc-repo -> dataprep.
     # Healthcheck hits /ready (not /health) so the spaCy model loads at startup,
@@ -1363,7 +1363,7 @@ services:
       # dialect is TEI-native ({base}/embed, the project's TEI-behind-
       # nginx contract); RAGAS_EMBED_API=openai switches to any
       # OpenAI-compatible embeddings endpoint (/embeddings).
-      - RAGAS_EMBED_BASE_URL=${RAGAS_EMBED_BASE_URL:-http://tei-embedding-server:80}
+      - RAGAS_EMBED_BASE_URL=${RAGAS_EMBED_BASE_URL:-http://tei:80}
       - RAGAS_EMBED_MODEL=${RAGAS_EMBED_MODEL:-${EMBEDDING_MODEL_ID:-}}
       - RAGAS_EMBED_API=${RAGAS_EMBED_API:-tei}
       # Disk judge cache (2026-10-18): responses keyed by prompt+params
@@ -1408,7 +1408,7 @@ services:
     build:
       context: components/ragas-service/
       dockerfile: Dockerfile
-    image: ${GENIE_AI_RAGAS_SERVICE_IMAGE:-${GENIE_AI_REGISTRY:-registry.opensource.unicc.org/un/itu/genie-ai}/genie-ai-ragas-service}:${GENIE_AI_RAGAS_SERVICE_IMAGE_TAG:-${GENIE_AI_GLOBAL_TAG:-latest}}
+    image: ${GENIE_AI_RAGAS_SERVICE_IMAGE:-${GENIE_AI_REGISTRY:-registry.opensource.unicc.org/un/itu/genie-ai}/genie-ai-ragas-service}:${GENIE_AI_RAGAS_SERVICE_IMAGE_TAG:-${GENIE_AI_IMAGE_TAG:-${GENIE_AI_GLOBAL_TAG:-latest}}}
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8090/health', timeout=8)"]
       interval: 30s
@@ -1522,7 +1522,7 @@ services:
     # ClamAV signature and socket dirs its entrypoint writes.
     # Pinned by name: the image's USER is the numeric source of truth.
     user: node
-    image: ${GENIE_AI_DOCUMENT_REPOSITORY_IMAGE:-${GENIE_AI_REGISTRY:-registry.opensource.unicc.org/un/itu/genie-ai}/genie-ai-document-repository}:${GENIE_AI_DOCUMENT_REPOSITORY_IMAGE_TAG:-${GENIE_AI_GLOBAL_TAG:-latest}}
+    image: ${GENIE_AI_DOCUMENT_REPOSITORY_IMAGE:-${GENIE_AI_REGISTRY:-registry.opensource.unicc.org/un/itu/genie-ai}/genie-ai-document-repository}:${GENIE_AI_DOCUMENT_REPOSITORY_IMAGE_TAG:-${GENIE_AI_IMAGE_TAG:-${GENIE_AI_GLOBAL_TAG:-latest}}}
     environment:
       # Secrets (required, no defaults in code)
       - ARANGO_PASSWORD=${ARANGO_PASSWORD}
@@ -1799,7 +1799,28 @@ services:
     logging: *fluent-logging
     profiles: [gpu-models]
     restart: unless-stopped
-    image: vllm/vllm-openai:v0.29.0
+    # The image and entrypoint are the VENDOR axis, carried as VALUES (no
+    # vendor overlay files): env.strixhalo pins VLLM_IMAGE to the ROCm
+    # build; unset — every NVIDIA deployment — keeps this image. The
+    # entrypoint IS the NVIDIA image's own (the flag `command:` below has
+    # always attached to it), so restating it here is a no-op for NVIDIA
+    # and repairs the ROCm image, which ships ENTRYPOINT=null and
+    # CMD=/bin/bash: one flag block, both vendors, no drift.
+    image: ${VLLM_IMAGE:-vllm/vllm-openai:v0.29.0}
+    entrypoint: ["vllm", "serve"]
+    # Same vendor axis, same value shape: an NVIDIA host never sets the
+    # device/GID vars, so the defaults are paths that exist on EVERY host
+    # (a missing device path is a hard create-time error — moby Lstats the
+    # host path before creating the container) and GIDs nobody/nogroup —
+    # two DISTINCT numbers, because the group_add list rejects duplicates.
+    # env.strixhalo points the devices at /dev/kfd and /dev/dri and the
+    # GIDs at the host's render/video groups.
+    devices:
+      - "${GPU_DEVICE_KFD:-/dev/null}:${GPU_DEVICE_KFD:-/dev/null}"
+      - "${GPU_DEVICE_DRI:-/dev/zero}:${GPU_DEVICE_DRI:-/dev/zero}"
+    group_add:
+      - "${RENDER_GID:-65534}" # nobody — inert for the root containers vLLM ships
+      - "${VIDEO_GID:-65533}" # nogroup
     # Swarm: internal only - access via Kong or docker exec
     # ports:
     #   - "${LLM_SERVER_PORT:-8000}:8000"
@@ -1846,7 +1867,7 @@ services:
     build:
       context: .
       dockerfile: genie-ai-overlay/textgen/Dockerfile-textgen_genie-ai
-    image: ${GENIE_AI_TEXTGEN_IMAGE:-${GENIE_AI_REGISTRY:-registry.opensource.unicc.org/un/itu/genie-ai}/genie-ai-textgen}:${GENIE_AI_TEXTGEN_IMAGE_TAG:-${GENIE_AI_GLOBAL_TAG:-latest}}
+    image: ${GENIE_AI_TEXTGEN_IMAGE:-${GENIE_AI_REGISTRY:-registry.opensource.unicc.org/un/itu/genie-ai}/genie-ai-textgen}:${GENIE_AI_TEXTGEN_IMAGE_TAG:-${GENIE_AI_IMAGE_TAG:-${GENIE_AI_GLOBAL_TAG:-latest}}}
     environment:
       - LLM_ENDPOINT=${VLLM_ENDPOINT:-http://vllm:8000}
       - LLM_MODEL_ID=${VLLM_LLM_MODEL_ID:-ibm-granite/granite-4.1-8b}
@@ -1882,7 +1903,16 @@ services:
     logging: *fluent-logging
     profiles: [gpu-models]
     restart: unless-stopped
-    image: vllm/vllm-openai:v0.29.0
+    # Same vendor axis as `vllm` above: image pin + entrypoint + device
+    # rows, all values an NVIDIA host never sets (identical defaults).
+    image: ${VLLM_IMAGE:-vllm/vllm-openai:v0.29.0}
+    entrypoint: ["vllm", "serve"]
+    devices:
+      - "${GPU_DEVICE_KFD:-/dev/null}:${GPU_DEVICE_KFD:-/dev/null}"
+      - "${GPU_DEVICE_DRI:-/dev/zero}:${GPU_DEVICE_DRI:-/dev/zero}"
+    group_add:
+      - "${RENDER_GID:-65534}" # nobody
+      - "${VIDEO_GID:-65533}" # nogroup
     # Internal only
     # ports:
     #   - "${VLLM_TRANSLATION_SERVICE_PORT:-9031}:${VLLM_TRANSLATION_SERVICE_PORT:-9031}"
@@ -2042,7 +2072,7 @@ services:
     build:
       context: .
       dockerfile: genie-ai-overlay/embedding/Dockerfile-embedding_genie-ai
-    image: ${GENIE_AI_EMBEDDING_IMAGE:-${GENIE_AI_REGISTRY:-registry.opensource.unicc.org/un/itu/genie-ai}/genie-ai-embedding}:${GENIE_AI_EMBEDDING_IMAGE_TAG:-${GENIE_AI_GLOBAL_TAG:-latest}}
+    image: ${GENIE_AI_EMBEDDING_IMAGE:-${GENIE_AI_REGISTRY:-registry.opensource.unicc.org/un/itu/genie-ai}/genie-ai-embedding}:${GENIE_AI_EMBEDDING_IMAGE_TAG:-${GENIE_AI_IMAGE_TAG:-${GENIE_AI_GLOBAL_TAG:-latest}}}
     environment:
       - EMBEDDING_MODEL_ENDPOINT=${EMBEDDING_SERVICE_URL:-http://tei:80}
       - TEI_EMBEDDING_ENDPOINT=${EMBEDDING_SERVICE_URL:-http://tei:80}
@@ -2109,6 +2139,122 @@ services:
         delay: 10s
         max_attempts: 30
 
+  # The two vLLM pooling instances — the ROCm GPU tier's reranker and
+  # embedding models. The TEI ROCm build cannot run on gfx1151
+  # (Instinct-only kernels — spike results), so the vendor's GPU tier
+  # serves both models on vLLM: the reranker wrapper and the three
+  # embedding consumers (dataprep corpus, retriever, chatqna query
+  # encoder) switch to them with RERANKER_BACKEND=vllm /
+  # EMBEDDING_BACKEND=vllm — knobs the base definitions below already
+  # carry, flipped by env.strixhalo and never set on an NVIDIA venue.
+  #
+  # THE PROFILE IS THE NVIDIA FIREWALL: a profile-disabled service does
+  # not render at all — not in `docker compose config` output, not in a
+  # `docker stack deploy` resolved file — so an NVIDIA deployment never
+  # sees, starts or creates these containers. Enabling them by hand on an
+  # NVIDIA host fails loudly at create time (no /dev/kfd there). Their
+  # device rows can therefore stay literal (unlike the interpolated rows
+  # on `vllm` above, which render on every host).
+  vllm-embedding:
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    logging: *fluent-logging
+    profiles: [rocm-models]
+    restart: unless-stopped
+    image: ${VLLM_IMAGE:-vllm/vllm-openai:v0.29.0}
+    # Same shape as `vllm` above: entrypoint carries the binary, `command`
+    # only the flags.
+    entrypoint: ["vllm", "serve"]
+    command: >
+      --model ${VLLM_EMBEDDING_MODEL_ID:-BAAI/bge-large-en-v1.5}
+      --gpu_memory_utilization ${VLLM_EMBEDDING_GPU_UTILIZATION:-0.05}
+      --served-model-name ${VLLM_EMBEDDING_MODEL_ID:-BAAI/bge-large-en-v1.5}
+      --max_model_len ${VLLM_EMBEDDING_MAX_MODEL_LEN:-512}
+      --enforce-eager
+      --port 8000
+    environment:
+      - HUGGING_FACE_HUB_TOKEN=${HUGGING_FACE_HUB_TOKEN}
+      - NVIDIA_VISIBLE_DEVICES=${NVIDIA_VISIBLE_DEVICES:-all}
+    devices:
+      - /dev/kfd:/dev/kfd
+      - /dev/dri:/dev/dri
+    group_add:
+      - "${RENDER_GID:-990}" # render — distro-specific; `getent group render`
+      - "${VIDEO_GID:-44}"   # video
+    volumes:
+      # Same cache as the base vLLM services — without it every recreate
+      # re-downloads the model from HF.
+      - hf_cache:/root/.cache/huggingface
+    networks:
+      - genieai_network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 30s
+    deploy:
+      replicas: ${GPU_MODEL_REPLICAS:-${DEPLOY_OPEA:-1}}
+      placement:
+        constraints:
+          - node.labels.gpu == true
+      restart_policy:
+        condition: on-failure
+        delay: 10s
+        max_attempts: 30
+
+  vllm-reranker:
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    logging: *fluent-logging
+    profiles: [rocm-models]
+    # restart matters here: an OOM kill (exit 137 — live GTT pressure
+    # during a heavy drain) must self-heal, not wait for a human.
+    restart: unless-stopped
+    image: ${VLLM_IMAGE:-vllm/vllm-openai:v0.29.0}
+    entrypoint: ["vllm", "serve"]
+    command: >
+      --model ${VLLM_RERANKER_MODEL_ID:-BAAI/bge-reranker-v2-m3}
+      --gpu_memory_utilization ${VLLM_RERANKER_GPU_UTILIZATION:-0.05}
+      --served-model-name ${VLLM_RERANKER_MODEL_ID:-BAAI/bge-reranker-v2-m3}
+      --max_model_len ${VLLM_RERANKER_MAX_MODEL_LEN:-8192}
+      --enforce-eager
+      --port 8000
+    environment:
+      - HUGGING_FACE_HUB_TOKEN=${HUGGING_FACE_HUB_TOKEN}
+      - NVIDIA_VISIBLE_DEVICES=${NVIDIA_VISIBLE_DEVICES:-all}
+    devices:
+      - /dev/kfd:/dev/kfd
+      - /dev/dri:/dev/dri
+    group_add:
+      - "${RENDER_GID:-990}" # render — distro-specific; `getent group render`
+      - "${VIDEO_GID:-44}"   # video
+    volumes:
+      # Same cache as the base vLLM services — without it every recreate
+      # re-downloads the ~1.2 GB cross-encoder from HF.
+      - hf_cache:/root/.cache/huggingface
+    networks:
+      - genieai_network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 30s
+    deploy:
+      replicas: ${GPU_MODEL_REPLICAS:-${DEPLOY_OPEA:-1}}
+      placement:
+        constraints:
+          - node.labels.gpu == true
+      restart_policy:
+        condition: on-failure
+        delay: 10s
+        max_attempts: 30
+
   reranker:
     # least-privilege hardening (SAST wave-4): no capabilities beyond those listed
     cap_drop:
@@ -2121,10 +2267,26 @@ services:
     build:
       context: .
       dockerfile: genie-ai-overlay/reranker/Dockerfile-reranker_genie-ai
-    image: ${GENIE_AI_RERANKER_IMAGE:-${GENIE_AI_REGISTRY:-registry.opensource.unicc.org/un/itu/genie-ai}/genie-ai-reranker}:${GENIE_AI_RERANKER_IMAGE_TAG:-${GENIE_AI_GLOBAL_TAG:-latest}}
+    image: ${GENIE_AI_RERANKER_IMAGE:-${GENIE_AI_REGISTRY:-registry.opensource.unicc.org/un/itu/genie-ai}/genie-ai-reranker}:${GENIE_AI_RERANKER_IMAGE_TAG:-${GENIE_AI_IMAGE_TAG:-${GENIE_AI_GLOBAL_TAG:-latest}}${GENIE_AI_OPEA_IMAGE_TAG_SUFFIX:-}}
     environment:
       - TEI_RERANKING_ENDPOINT=${RERANKER_SERVICE_URL:-http://tei_reranker:80}
       - RERANK_COMPONENT_NAME=GENIE_TEI_RERANKING
+      # Rerank backend switch (Task-14 mirror of EMBEDDING_BACKEND): tei is
+      # the default everywhere; an operator flips to vllm + names the vLLM
+      # instance to reroute /v1/rerank. Without these passthroughs the env
+      # vars would never reach this container (compose env files only reach
+      # containers when interpolated into environment:) and setting them
+      # would silently no-op (code review, 2026-11-18).
+      - RERANKER_BACKEND=${RERANKER_BACKEND:-tei}
+      - RERANKER_VLLM_ENDPOINT=${RERANKER_VLLM_ENDPOINT:-}
+      - RERANKER_VLLM_MODEL=${RERANKER_VLLM_MODEL:-${VLLM_RERANKER_MODEL_ID:-}}
+      # The window the vLLM reranker instance is started with
+      # (--max_model_len). The client enforces the input-length contract
+      # against it — vLLM truncates an over-long input instead of refusing
+      # it, so the wrapper measures the pair itself. Same source as the
+      # instance's own flag (vllm-reranker above): client and server agree
+      # by construction. The TEI backend never reads it.
+      - RERANKER_VLLM_MAX_MODEL_LEN=${RERANKER_VLLM_MAX_MODEL_LEN:-${VLLM_RERANKER_MAX_MODEL_LEN:-8192}}
       - HF_TOKEN=${VLLM_API_KEY:-}
       - VLLM_API_KEY=${VLLM_API_KEY:-}
       - OPEA_SSL_SKIP_VERIFY=${OPEA_SSL_SKIP_VERIFY:-0}
@@ -2144,6 +2306,12 @@ services:
       # service's environment block is a sequence, so the form is KEY=VALUE.
       - MODEL_RERANK_TIMEOUT_SECONDS=${MODEL_RERANK_TIMEOUT_SECONDS:-300}
       - MODEL_CONNECT_TIMEOUT_SECONDS=${MODEL_CONNECT_TIMEOUT_SECONDS:-30}
+      # The window-discovery probe's budget — the reranker reads it
+      # (core/model_cache.py) while discovering the served window, so the
+      # knob has to REACH this container: an operator moving it for the
+      # retriever must move it for the reranker too (the deck-wide claim the
+      # knob makes, denied by the wiring).
+      - MODEL_PROBE_TIMEOUT_SECONDS=${MODEL_PROBE_TIMEOUT_SECONDS:-10}
     # Internal only
     # ports:
     #   - "6100:8000"
@@ -2182,7 +2350,7 @@ services:
     build:
       context: .
       dockerfile: genie-ai-overlay/dataprep/Dockerfile-dataprep_genie-ai
-    image: ${GENIE_AI_DATAPREP_ARANGO_IMAGE:-${GENIE_AI_REGISTRY:-registry.opensource.unicc.org/un/itu/genie-ai}/genie-ai-dataprep-arango}:${GENIE_AI_DATAPREP_ARANGO_IMAGE_TAG:-${GENIE_AI_GLOBAL_TAG:-latest}}
+    image: ${GENIE_AI_DATAPREP_ARANGO_IMAGE:-${GENIE_AI_REGISTRY:-registry.opensource.unicc.org/un/itu/genie-ai}/genie-ai-dataprep-arango}:${GENIE_AI_DATAPREP_ARANGO_IMAGE_TAG:-${GENIE_AI_IMAGE_TAG:-${GENIE_AI_GLOBAL_TAG:-latest}}${GENIE_AI_OPEA_IMAGE_TAG_SUFFIX:-}}
     # Internal only
     # ports:
     #   - "5000:5000"
@@ -2245,7 +2413,23 @@ services:
       # bounds a wedged /embed connection that previously waited forever —
       # the live incident held an ingest thread 30+ min with no log line.
       MODEL_HUB_EMBED_TIMEOUT_SECONDS: ${MODEL_HUB_EMBED_TIMEOUT_SECONDS:-600}
+      # The OpenAI-compatible embedding budget, read via core/embedding_backend.py
+      # when EMBEDDING_BACKEND=vllm activates the GPU path (the TEI branch is
+      # bounded at the hub client above, not here). Injected so the operator
+      # knob reaches every container whose code reads it.
+      MODEL_EMBEDDING_TIMEOUT_SECONDS: ${MODEL_EMBEDDING_TIMEOUT_SECONDS:-600}
       TEI_EMBEDDING_ENDPOINT: ${EMBEDDING_SERVICE_URL:-http://tei:80}
+      # Config-gated embedding backend (Task-14 mirror): tei stays the default
+      # on every platform — this block alone changes nothing. The vllm branch
+      # activates only when a deployment sets BOTH values (see env.strixhalo,
+      # the Strix Halo ROCm venue where the TEI image cannot run on the GPU);
+      # unknown values fall back to tei.
+      EMBEDDING_BACKEND: ${EMBEDDING_BACKEND:-tei}
+      EMBEDDING_VLLM_ENDPOINT: ${EMBEDDING_VLLM_ENDPOINT:-}
+      # Paired model name (code review N1): the vLLM instance serves
+      # --served-model-name ${VLLM_EMBEDDING_MODEL_ID}; the client must send
+      # the SAME name or it 404s per request. resolved_embed_model reads this.
+      VLLM_EMBEDDING_MODEL_ID: ${VLLM_EMBEDDING_MODEL_ID:-}
       GUARDRAIL_URL: http://guardrail:9090/v1/guardrails
       ARANGO_URL: http://arango-vector-db:8529
       ARANGO_DB: ${ARANGO_DB:-genie-ai}
@@ -2429,7 +2613,7 @@ services:
     build:
       context: .
       dockerfile: genie-ai-overlay/retriever/Dockerfile-retriever_genie-ai
-    image: ${GENIE_AI_RETRIEVER_ARANGO_IMAGE:-${GENIE_AI_REGISTRY:-registry.opensource.unicc.org/un/itu/genie-ai}/genie-ai-retriever-arango}:${GENIE_AI_RETRIEVER_ARANGO_IMAGE_TAG:-${GENIE_AI_GLOBAL_TAG:-latest}}
+    image: ${GENIE_AI_RETRIEVER_ARANGO_IMAGE:-${GENIE_AI_REGISTRY:-registry.opensource.unicc.org/un/itu/genie-ai}/genie-ai-retriever-arango}:${GENIE_AI_RETRIEVER_ARANGO_IMAGE_TAG:-${GENIE_AI_IMAGE_TAG:-${GENIE_AI_GLOBAL_TAG:-latest}}${GENIE_AI_OPEA_IMAGE_TAG_SUFFIX:-}}
     # Internal only
     # ports:
     #   - "7025:7025"
@@ -2519,6 +2703,15 @@ services:
       HF_TOKEN: ${VLLM_API_KEY:-}
       VLLM_API_KEY: ${VLLM_API_KEY:-}
       OPEA_SSL_SKIP_VERIFY: ${OPEA_SSL_SKIP_VERIFY:-0}
+      # Config-gated embedding backend (Task-14 mirror): tei stays the default
+      # on every platform — this block alone changes nothing. The vllm branch
+      # activates only when a deployment sets BOTH values (see env.strixhalo,
+      # the Strix Halo ROCm venue where the TEI image cannot run on the GPU);
+      # unknown values fall back to tei.
+      EMBEDDING_BACKEND: ${EMBEDDING_BACKEND:-tei}
+      EMBEDDING_VLLM_ENDPOINT: ${EMBEDDING_VLLM_ENDPOINT:-}
+      # Paired model name — same rationale as dataprep's row above (N1).
+      VLLM_EMBEDDING_MODEL_ID: ${VLLM_EMBEDDING_MODEL_ID:-}
       # OpenTelemetry — SDK is no-op when ENABLE_OBSERVABILITY != 1
       ENABLE_OBSERVABILITY: ${ENABLE_OBSERVABILITY:-0}
       OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-http://otel-collector:4318}
@@ -2585,7 +2778,7 @@ services:
     build:
       context: .
       dockerfile: genie-ai-overlay/chatqna/Dockerfile-chatqna_genie-ai
-    image: ${GENIE_AI_CHATQNA_SERVER_IMAGE:-${GENIE_AI_REGISTRY:-registry.opensource.unicc.org/un/itu/genie-ai}/genie-ai-chatqna-server}:${GENIE_AI_CHATQNA_SERVER_IMAGE_TAG:-${GENIE_AI_GLOBAL_TAG:-latest}}
+    image: ${GENIE_AI_CHATQNA_SERVER_IMAGE:-${GENIE_AI_REGISTRY:-registry.opensource.unicc.org/un/itu/genie-ai}/genie-ai-chatqna-server}:${GENIE_AI_CHATQNA_SERVER_IMAGE_TAG:-${GENIE_AI_IMAGE_TAG:-${GENIE_AI_GLOBAL_TAG:-latest}}}
     working_dir: /app/ChatQnA
     # Internal OPEA service - no host port needed
     # ports:
@@ -2615,6 +2808,34 @@ services:
       EMBEDDING_SERVER_HOST_IP: embedding
       EMBEDDING_SERVER_PORT: 6000
       EMBEDDING_SERVER_ENDPOINT: ${EMBEDDING_SERVER_ENDPOINT:-/v1/embeddings}
+      # The QUERY encoder's base URL, when the deployment runs the query
+      # encoding on a GPU pooling instance (ROCm). chatqna derives the RAG
+      # graph's embedding node from it — same variable the retriever's and
+      # dataprep's vLLM branch read, and the same {base}/v1/embeddings route.
+      # EMPTY BY DEFAULT: with it unset, chatqna keeps the base's embedding
+      # microservice (which fronts TEI) exactly as before — the NVIDIA path
+      # is byte-identical.
+      EMBEDDING_VLLM_ENDPOINT: ${EMBEDDING_VLLM_ENDPOINT:-}
+      # The backend switch, the same knob the retriever's and the dataprep's
+      # clients read: the query encoder moves to the GPU pooling instance
+      # only when this says vllm AND the endpoint above is set — the query
+      # must be encoded by the backend that encoded the corpus.
+      EMBEDDING_BACKEND: ${EMBEDDING_BACKEND:-tei}
+      # The model name the GPU pooling instance SERVES (the compose var that
+      # feeds its --served-model-name). The query request must send the same
+      # name or the instance 404s per request — and the name must match the
+      # one the corpus was embedded with, or the query vector lands in
+      # another space. The same resolver the retriever's and dataprep's
+      # clients use (EMBEDDING_MODEL_ID -> VLLM_EMBEDDING_MODEL_ID ->
+      # default), so all three agree. Unset on the NVIDIA path: the query
+      # goes to the TEI microservice, which needs no model name.
+      VLLM_EMBEDDING_MODEL_ID: ${VLLM_EMBEDDING_MODEL_ID:-}
+      # The embedding request's own timeout — the same knob the retriever's
+      # and the dataprep's clients read (the shared resolver in
+      # core/embedding_backend.py reads it). A knob a service reads must
+      # reach its container, or an operator can move it for one consumer and
+      # not the other.
+      MODEL_EMBEDDING_TIMEOUT_SECONDS: ${MODEL_EMBEDDING_TIMEOUT_SECONDS:-600}
       RETRIEVER_SERVICE_HOST_IP: retriever-arango-service
       RETRIEVER_SERVICE_PORT: 7000
       RERANK_SERVER_HOST_IP: reranker
@@ -2805,7 +3026,7 @@ services:
     # uid for its network-client lifetime.
     user: postgres
     build: configs/postgres/
-    image: ${GENIE_AI_POSTGRES_INIT_IMAGE:-${GENIE_AI_REGISTRY:-registry.opensource.unicc.org/un/itu/genie-ai}/genie-ai-postgres-init}:${GENIE_AI_POSTGRES_INIT_IMAGE_TAG:-${GENIE_AI_GLOBAL_TAG:-latest}}
+    image: ${GENIE_AI_POSTGRES_INIT_IMAGE:-${GENIE_AI_REGISTRY:-registry.opensource.unicc.org/un/itu/genie-ai}/genie-ai-postgres-init}:${GENIE_AI_POSTGRES_INIT_IMAGE_TAG:-${GENIE_AI_IMAGE_TAG:-${GENIE_AI_GLOBAL_TAG:-latest}}}
     environment:
       - PGHOST=postgres
       - PGUSER=${POSTGRES_USER:-genieai}
@@ -2863,7 +3084,16 @@ services:
       # proxy-headers: xforwarded, Kong sends X-Forwarded-Prefix: /auth
       # via request-transformer plugin → Keycloak resolves context-path dynamically.
       - KC_PROXY_HEADERS=xforwarded
-      - KC_HOSTNAME=${NGINX_PUBLIC_DOMAIN:-localhost}
+      # KEYCLOAK_HOSTNAME (optional, hostname-v2 absolute URL): pin the FULL
+      # public frontend URL (scheme://host:port/auth) so EVERY token mint —
+      # browser AND in-network client_credentials — carries the public
+      # issuer. Without it an in-network mint self-reports as
+      # http://<domain>:8080/realms/... and every validator that accepts
+      # only the public issuer (chatqna's, #1636) 401s the token (live:
+      # 2026-11-18 — containers cannot hairpin to the host-published edge,
+      # so the service-token mint silently failed over to the internal URL).
+      # Unset = the historical hostname-only behavior; NVIDIA venues unaffected.
+      - KC_HOSTNAME=${KEYCLOAK_HOSTNAME:-${NGINX_PUBLIC_DOMAIN:-localhost}}
       # Enable HTTP — NGINX handles TLS termination, Keycloak only needs HTTP internally
       - KC_HTTP_ENABLED=true
       # SMTP (reuses EMAIL_* from Section 2)
@@ -2932,7 +3162,7 @@ services:
       dockerfile: Dockerfile.config-cli
     # Pin the image's own USER (uid 65534) at compose level (#1227).
     user: "65534:65534"
-    image: ${GENIE_AI_KEYCLOAK_CONFIG_IMAGE:-${GENIE_AI_REGISTRY:-registry.opensource.unicc.org/un/itu/genie-ai}/genie-ai-keycloak-config}:${GENIE_AI_KEYCLOAK_CONFIG_IMAGE_TAG:-${GENIE_AI_GLOBAL_TAG:-latest}}
+    image: ${GENIE_AI_KEYCLOAK_CONFIG_IMAGE:-${GENIE_AI_REGISTRY:-registry.opensource.unicc.org/un/itu/genie-ai}/genie-ai-keycloak-config}:${GENIE_AI_KEYCLOAK_CONFIG_IMAGE_TAG:-${GENIE_AI_IMAGE_TAG:-${GENIE_AI_GLOBAL_TAG:-latest}}}
     environment:
       - KEYCLOAK_URL=http://keycloak:8080
       - KEYCLOAK_USER=admin
@@ -3242,7 +3472,7 @@ services:
     build:
       context: ./tools/tempo-proxy
       dockerfile: Dockerfile
-    image: ${GENIE_AI_TEMPO_PROXY_IMAGE:-${GENIE_AI_REGISTRY:-registry.opensource.unicc.org/un/itu/genie-ai}/genie-ai-tempo-proxy}:${GENIE_AI_TEMPO_PROXY_IMAGE_TAG:-${GENIE_AI_GLOBAL_TAG:-latest}}
+    image: ${GENIE_AI_TEMPO_PROXY_IMAGE:-${GENIE_AI_REGISTRY:-registry.opensource.unicc.org/un/itu/genie-ai}/genie-ai-tempo-proxy}:${GENIE_AI_TEMPO_PROXY_IMAGE_TAG:-${GENIE_AI_IMAGE_TAG:-${GENIE_AI_GLOBAL_TAG:-latest}}}
     environment:
       - VICTORIATRACES_URL=http://victoriatraces:10428
       - PORT=10429

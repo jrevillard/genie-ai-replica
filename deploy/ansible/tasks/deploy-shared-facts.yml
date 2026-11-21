@@ -6,11 +6,34 @@
   ansible.builtin.set_fact:
     swarm_registry_url: "{{ swarm_registry_url | default('registry.opensource.unicc.org/un/itu/genie-ai') }}"
 
-- name: Set global image tag (promoted CI tag, not git SHA)
+- name: Set the image tag and the OPEA variant suffix
   ansible.builtin.set_fact:
-    genie_ai_global_tag: "{{ genie_ai_global_tag | default('main') }}"
+    # The tag every GENIE.AI image carries (the promoted CI tag — a release
+    # tag vX.Y.Z or a branch tag like main; NOT the git SHA). ONE variable
+    # to bump the whole stack.
+    #
+    # `genie_ai_global_tag` is the former name; it is still read as a
+    # fallback for one release, then removed.
+    genie_ai_image_tag: "{{ genie_ai_image_tag | default(genie_ai_global_tag | default('main')) }}"
+    # The tag SUFFIX for the OPEA tier's model-serving images (the
+    # reranker, the retriever, the dataprep):
+    #   ""      = the default build (the one that ships the model stack)
+    #   "-slim" = the slim build — no torch, no CUDA wheels, no local
+    #             weights (issue #2000) — for a node whose model calls all
+    #             go to an external GPU API. The slim dataprep delegates
+    #             the document conversion to a remote docling-serve, so it
+    #             needs DOCLING_ENDPOINT set.
+    # It applies to those THREE images and to nothing else: the CI
+    # publishes a slim build for exactly those three, so there is no slim
+    # variant of the others to select.
+    # The suffix COMPOSES onto the version tag: the version it is applied
+    # to must be a tag the CI publishes a slim build of (the branch tag, a
+    # release tag). It does not compose the immutable sha-pinned form
+    # (:main-slim-<sha>) — the CI publishes that one with the suffix
+    # BEFORE the sha — so pin it by name in the per-image override.
+    genie_ai_opea_image_tag_suffix: "{{ genie_ai_opea_image_tag_suffix | default('') }}"
     # Per-image tag overrides (optional): {genie-ai-frontend: v1.2.3} pins
-    #    one image to a specific version; others use genie_ai_global_tag.
+    #    one image to a specific version; others use genie_ai_image_tag.
     image_tag_overrides: "{{ image_tag_overrides | default({}) }}"
 
 - name: Set genieai_images list (18 custom images — used by env.j2 per-service vars)
@@ -35,7 +58,7 @@
       - { name: "genie-ai-keycloak-config" }
       - { name: "genie-ai-tempo-proxy" }
 
-# Fail loud instead of silently falling back to genie_ai_global_tag when an
+# Fail loud instead of silently falling back to genie_ai_image_tag when an
 # override key is typo'd or a value is empty — env.j2 would just skip it.
 - name: Validate image_tag_overrides keys against known image names
   when: image_tag_overrides | length > 0

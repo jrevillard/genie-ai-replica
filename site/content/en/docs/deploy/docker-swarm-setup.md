@@ -8,7 +8,7 @@ aliases:
 mode: how-to
 persona: deployer
 owner: "docs-stewards"
-last_reviewed: 2026-09-19
+last_reviewed: 2026-11-11
 ---
 
 This guide covers Docker Swarm deployments — single-node and multi-node. For
@@ -27,6 +27,9 @@ root. All services deploy via `docker stack deploy`.
   requires `nvidia-container-runtime` registered as a Docker default runtime
   (or any runtime that supports `NVIDIA_VISIBLE_DEVICES`). Install on each
   GPU node: see <https://docs.nvidia.com/datacenter/cloud-native/container-toolkit/latest/install-guide.html>.
+  An **AMD ROCm** GPU node needs no toolkit — but see the ROCm entry in
+  [Known limitations](#known-limitations): its GPU tier does not run as
+  swarm services.
 - **SSH access** to every node — from the manager you need passwordless SSH
   to every worker (or `docker -H ssh://worker ...`) for cross-node debugging
 - **Network connectivity** between all nodes — Swarm requires
@@ -223,7 +226,7 @@ automatically.
 docker pull registry.opensource.unicc.org/un/itu/genie-ai/genie-ai-frontend:main
 ```
 
-Replace `main` with your target `GENIE_AI_GLOBAL_TAG` value.
+Replace `main` with your target `GENIE_AI_IMAGE_TAG` value.
 
 ### 5b. Per-service image configuration
 
@@ -232,11 +235,16 @@ Image references use a two-variable pattern per service, defined in `env`
 
 ```
 GENIE_AI_<NAME>_IMAGE=registry.opensource.unicc.org/un/itu/genie-ai/genie-ai-<name>
-GENIE_AI_<NAME>_IMAGE_TAG=${GENIE_AI_GLOBAL_TAG:-latest}
+GENIE_AI_<NAME>_IMAGE_TAG=${GENIE_AI_IMAGE_TAG:-${GENIE_AI_GLOBAL_TAG:-latest}}
 ```
 
 Compose resolves
-`${GENIE_AI_<NAME>_IMAGE}:${GENIE_AI_<NAME>_IMAGE_TAG:-${GENIE_AI_GLOBAL_TAG:-latest}}`.
+`${GENIE_AI_<NAME>_IMAGE}:${GENIE_AI_<NAME>_IMAGE_TAG:-${GENIE_AI_IMAGE_TAG:-${GENIE_AI_GLOBAL_TAG:-latest}}}`.
+
+`GENIE_AI_IMAGE_TAG` is the tag every GENIE.AI image carries (a release tag
+`vX.Y.Z`, or a branch tag like `main`): **one line to bump the whole
+stack**. `GENIE_AI_GLOBAL_TAG` is its former name — still read as a
+fallback for one release, then removed.
 
 The default is the GitLab registry with tag `main` — no overrides needed for
 standard deployments.
@@ -250,13 +258,47 @@ To pin one service to a different version:
 GENIE_AI_FRONTEND_IMAGE_TAG=v1.2.3
 ```
 
-All other services continue using `GENIE_AI_GLOBAL_TAG`.
+All other services continue using `GENIE_AI_IMAGE_TAG`. A pin names the
+exact tag: it is never given the variant suffix below.
 
-### 5d. Custom or air-gapped registries
+### 5d. The slim image variant
+
+The model-serving images (the reranker, the retriever and the dataprep) are
+also published under a **slim** tag — the same service code without the
+model stack (no PyTorch, no CUDA wheels, no local weights). A node whose
+model calls all go to an external GPU API should run them: they are ~10×
+smaller, which is what keeps the node's image disk out of the eviction
+range. See [Slim Image Variants](/docs/deploy/slim-images/).
+
+```bash
+# .env — Docker Compose
+GENIE_AI_OPEA_IMAGE_TAG_SUFFIX=-slim
+```
+
+```bash
+# Ansible (Swarm) — the knob is the FACT, not a line in the node's .env:
+# the playbook regenerates that file on every run, so a line written by
+# hand is overwritten at the next deploy and the fat images come back.
+ansible-playbook -i inventory/itu_rtx_test.ini deploy.yml --vault-id itu_rtx_test@prompt \
+  --extra-vars '{"repo_branch":"main","genie_ai_image_tag":"main","genie_ai_opea_image_tag_suffix":"-slim"}'
+```
+
+It applies to those three images and to nothing else: the CI publishes a
+slim build for exactly those three, so there is no slim variant of the
+others to select. The slim dataprep delegates the document conversion to a
+remote docling-serve, so it needs `DOCLING_ENDPOINT` set (see **Section
+14**).
+
+On Compose, a per-image pin for one of the three is a line **you** add to
+your `.env` (`GENIE_AI_RERANKER_IMAGE_TAG=v2.1.0`): the template declares
+no per-service tag for them, because such a line would shadow the version
+and the variant. A pin names the EXACT tag — it never receives the suffix.
+
+### 5e. Custom or air-gapped registries
 
 ```bash
 GENIE_AI_REGISTRY=my-registry.example.com/genieai
-GENIE_AI_GLOBAL_TAG=release-el-salvador
+GENIE_AI_IMAGE_TAG=release-el-salvador
 ```
 
 Then `docker pull` from GitLab, re-tag, and `docker push` to your registry.
@@ -670,6 +712,18 @@ Key points:
   they use the GPU. VRAM is shared between the 5 device-attached services;
   use `env.t4` / `env.rtx6000` to manage batch size and model length limits.
   24 GB+ VRAM recommended.
+- **AMD ROCm GPU nodes cannot receive devices from a stack deploy:**
+  `docker stack deploy` ignores compose `devices:` — the short form is
+  silently dropped and the long form is rejected
+  (`services.*.devices.0: must be a string`) — so the swarm-deployed ROCm
+  GPU tier cannot get `/dev/kfd` + `/dev/dri` this way. The ROCm GPU tier
+  therefore routes via the **standalone GPU-node compose stack on the
+  ROCm node** (`docker-compose.gpu.yaml` + `--profile rocm-models`
+  + `env.strixhalo`), wired to the app stack with the
+  [Remote GPU Node](#remote-gpu-node) pattern (`GPU_NODE_HOST` +
+  override endpoints). Hardware prerequisites, image pins and sizing:
+  the ROCm section of [GPU Deployment](/docs/deploy/gpu/). Node labeling
+  is unchanged (`gpu=true` is vendor-neutral).
 - **No shared volumes:** If a node goes down, its stack goes down. No data
   migration between nodes.
 - **DNS timing:** Swarm overlay DNS entries may not resolve immediately on

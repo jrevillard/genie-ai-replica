@@ -32,6 +32,10 @@ chart values and Secrets — **there is no `.env` file** on that path.
 
 GPU profiles (T4 16 GB / RTX 6000 24 GB / A40 48 GB / H100) layer on top of
 any of the above via the `env.t4` / `env.rtx6000` overrides — see
+[GPU Deployment](/docs/deploy/gpu/). An **AMD ROCm** host (Strix Halo /
+gfx1151 iGPU) is covered by the same GPU-tier services through the
+`rocm-models` compose profile + `env.strixhalo` sizing file — no
+NVIDIA Container Toolkit required; see the ROCm section of
 [GPU Deployment](/docs/deploy/gpu/).
 
 ## Goal
@@ -118,8 +122,15 @@ For the GPU-specific layer, see [GPU Deployment](/docs/deploy/gpu/).
 - **NVIDIA Drivers & CUDA** — required only if using GPU services (vLLM, TEI).
   See [GPU Deployment](/docs/deploy/gpu/) and
   [NVIDIA A40 Install Guide](/docs/deploy/a40-install/).
+- **AMD ROCm hosts** — instead of the NVIDIA stack: the in-tree `amdgpu`
+  kernel driver with `/dev/kfd` + `/dev/dri` present and the operator in
+  the `render` + `video` groups. No host ROCm userland, no NVIDIA
+  Container Toolkit — the ROCm section of
+  [GPU Deployment](/docs/deploy/gpu/) has the full prerequisite list and
+  the overlay invocation.
 - **Node.js 22+** — required for JavaScript tooling. Docker images use
-  `node:22`; CI lint+test jobs run on `node:22-alpine`.
+  `node:22-trixie` / `node:22-trixie-slim`; CI lint+test jobs run on
+  `node:22-alpine`.
 
 ## Step 3: Install Docker on every host
 
@@ -218,6 +229,7 @@ templates ship in the repository:
 | `env` | Default deployment — copy to `.env` first |
 | `env.t4` | NVIDIA T4 GPU overrides — source after `.env` |
 | `env.rtx6000` | RTX 6000 ADA overrides — source after `.env` |
+| `env.strixhalo` | AMD Strix Halo (ROCm) sizing — used together with the ROCm compose overlay, see [GPU Deployment → ROCm](/docs/deploy/gpu/) |
 
 ### 6a. Generate strong passwords
 

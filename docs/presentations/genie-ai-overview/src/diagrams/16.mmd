@@ -1,0 +1,8 @@
+flowchart LR
+ C["Concept<br/>documents"]:::core --> R["Versioned<br/>OKF repository"]:::core
+ T["Typed<br/>relationships"]:::data --> R
+ R --> P[("Ingested<br/>serving graph")]:::data
+ P --> Q["OKF-only or<br/>hybrid RAG"]:::model
+ class C step0
+ class T,R step1
+ class P,Q step2

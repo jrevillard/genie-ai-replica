@@ -182,7 +182,7 @@ image) or a digest. The default is unchanged. */ -}}
    values block and demands exactly that. */ -}}
 {{- $opeaVals := .Values.opea | default dict -}}
 {{- $svcOvr := $opeaVals.dataprep | default dict -}}
-{{- $img := merge (deepCopy ($svcOvr.image | default dict)) (dict "repository" "genie-ai-dataprep-arango" "tag" "main") -}}
+{{- $img := merge (deepCopy ($svcOvr.image | default dict)) (dict "repository" "genie-ai-dataprep-arango" "tag" (include "genieai-umbrella.opeaImageTag" (dict "root" . "key" "dataprep" "serviceTag" (($svcOvr.image).tag | default "")))) -}}
 {{- $svcVals := dict
     "image" $img
     "port" 5000

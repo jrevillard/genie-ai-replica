@@ -19,7 +19,21 @@ services:
 
   vllm-llm:
     restart: unless-stopped
+    # Vendor axis, rendered per-deployment from this ONE template: an
+    # NVIDIA node never loads the ROCm vars, so the image falls back to
+    # the NVIDIA build; the entrypoint is the NVIDIA image's own (the
+    # flag `command:` always attached to it — restating is a no-op there)
+    # and repairs the ROCm image (ENTRYPOINT=null, CMD=/bin/bash).
     image: {{ vllm_llm_image | default('vllm/vllm-openai:v0.29.0') }}
+{% if gpu_vendor is defined and gpu_vendor == 'rocm' %}
+    entrypoint: ["vllm", "serve"]
+    devices:
+      - /dev/kfd:/dev/kfd
+      - /dev/dri:/dev/dri
+    group_add:
+      - "{{ rocm_render_gid | default(990) }}" # render group (getent group render)
+      - "{{ rocm_video_gid | default(44) }}"   # video group
+{% endif %}
     command: >
       --model {{ vllm_llm_model_id | default('ibm-granite/granite-3.3-2b-instruct') }}
       --gpu_memory_utilization {{ vllm_gpu_utilization | default('0.55') }}
@@ -29,7 +43,7 @@ services:
       --dtype={{ vllm_dtype | default('half') }}
       --enforce-eager
     environment:
-      - HUGGING_FACE_HUB_TOKEN={{ hugging_face_hub_token }}
+      - HUGGING_FACE_HUB_TOKEN={{ hugging_face_hub_token | default('') }}
       - NVIDIA_VISIBLE_DEVICES={{ nvidia_visible_devices | default('all') }}
     volumes:
       - hf_cache:/root/.cache/huggingface
@@ -44,7 +58,17 @@ services:
 
   vllm-translation:
     restart: unless-stopped
+    # Same vendor axis as vllm-llm above.
     image: {{ vllm_translation_image | default('vllm/vllm-openai:v0.29.0') }}
+{% if gpu_vendor is defined and gpu_vendor == 'rocm' %}
+    entrypoint: ["vllm", "serve"]
+    devices:
+      - /dev/kfd:/dev/kfd
+      - /dev/dri:/dev/dri
+    group_add:
+      - "{{ rocm_render_gid | default(990) }}" # render group
+      - "{{ rocm_video_gid | default(44) }}"   # video group
+{% endif %}
     command: >
       --model {{ vllm_translation_model_id | default('google/gemma-3-4b-it') }}
       --gpu_memory_utilization {{ vllm_translation_gpu_utilization | default('0.3') }}
@@ -56,7 +80,7 @@ services:
       --max-num-seqs {{ vllm_translation_max_num_seqs | default('16') }}
       --chat-template-content-format openai
     environment:
-      - HUGGING_FACE_HUB_TOKEN={{ hugging_face_hub_token }}
+      - HUGGING_FACE_HUB_TOKEN={{ hugging_face_hub_token | default('') }}
       - NVIDIA_VISIBLE_DEVICES={{ nvidia_visible_devices | default('all') }}
     volumes:
       - hf_cache:/root/.cache/huggingface
@@ -72,11 +96,11 @@ services:
   tei-embedding:
     restart: unless-stopped
     image: {{ tei_embedding_image | default('ghcr.io/huggingface/text-embeddings-inference:1.9.3') }}
-    entrypoint: /bin/sh -c "text-embeddings-router --json-output --model-id {{ embedding_model_id | default('BAAI/bge-large-en-v1.5') }} --auto-truncate {{ tei_embedding_auto_truncate | default('false') | lower }}"
+    entrypoint: /bin/sh -c "text-embeddings-router --json-output --model-id {{ embedding_model_id | default('BAAI/bge-large-en-v1.5') }}{% if tei_embedding_max_batch_tokens is defined %} --max-batch-tokens {{ tei_embedding_max_batch_tokens }}{% endif %} --auto-truncate {{ tei_embedding_auto_truncate | default('false') | lower }}"
     volumes:
       - {{ gpu_data_dir | default('./data') }}/huggingface:/data
     environment:
-      - HUGGING_FACE_HUB_TOKEN={{ hugging_face_hub_token }}
+      - HUGGING_FACE_HUB_TOKEN={{ hugging_face_hub_token | default('') }}
       - RUST_BACKTRACE=
       - NVIDIA_VISIBLE_DEVICES={{ nvidia_visible_devices | default('all') }}
     healthcheck:
@@ -94,7 +118,7 @@ services:
     volumes:
       - {{ gpu_data_dir | default('./data') }}/huggingface:/data
     environment:
-      - HUGGING_FACE_HUB_TOKEN={{ hugging_face_hub_token }}
+      - HUGGING_FACE_HUB_TOKEN={{ hugging_face_hub_token | default('') }}
       - RUST_BACKTRACE=
       - NVIDIA_VISIBLE_DEVICES={{ nvidia_visible_devices | default('all') }}
     healthcheck:
@@ -105,6 +129,74 @@ services:
     networks:
       - gpu_network
 
+{% if gpu_vendor is defined and gpu_vendor == 'rocm' %}
+  # The two vLLM pooling instances — ROCm-only (the TEI ROCm image cannot
+  # run on gfx1151), rendered only on a ROCm node. The proxy routes
+  # /rerank and /v1/embeddings to them via gpu_rerank_upstream /
+  # gpu_embedding_upstream (vars/rocm_gpu_nodes.yml).
+  vllm-reranker:
+    restart: unless-stopped
+    image: {{ vllm_llm_image | default('vllm/vllm-openai:v0.29.0') }}
+    entrypoint: ["vllm", "serve"]
+    command: >
+      --model {{ vllm_reranker_model_id | default('BAAI/bge-reranker-v2-m3') }}
+      --gpu_memory_utilization {{ vllm_reranker_gpu_utilization | default('0.05') }}
+      --served-model-name {{ vllm_reranker_model_id | default('BAAI/bge-reranker-v2-m3') }}
+      --max_model_len {{ vllm_reranker_max_model_len | default('8192') }}
+      --enforce-eager
+      --port 8000
+    environment:
+      - HUGGING_FACE_HUB_TOKEN={{ hugging_face_hub_token | default('') }}
+      - NVIDIA_VISIBLE_DEVICES={{ nvidia_visible_devices | default('all') }}
+    devices:
+      - /dev/kfd:/dev/kfd
+      - /dev/dri:/dev/dri
+    group_add:
+      - "{{ rocm_render_gid | default(990) }}" # render group
+      - "{{ rocm_video_gid | default(44) }}"   # video group
+    volumes:
+      - hf_cache:/root/.cache/huggingface
+    networks:
+      - gpu_network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 30s
+
+  vllm-embedding:
+    restart: unless-stopped
+    image: {{ vllm_llm_image | default('vllm/vllm-openai:v0.29.0') }}
+    entrypoint: ["vllm", "serve"]
+    command: >
+      --model {{ vllm_embedding_model_id | default('BAAI/bge-large-en-v1.5') }}
+      --gpu_memory_utilization {{ vllm_embedding_gpu_utilization | default('0.05') }}
+      --served-model-name {{ vllm_embedding_model_id | default('BAAI/bge-large-en-v1.5') }}
+      --max_model_len {{ vllm_embedding_max_model_len | default('512') }}
+      --enforce-eager
+      --port 8000
+    environment:
+      - HUGGING_FACE_HUB_TOKEN={{ hugging_face_hub_token | default('') }}
+      - NVIDIA_VISIBLE_DEVICES={{ nvidia_visible_devices | default('all') }}
+    devices:
+      - /dev/kfd:/dev/kfd
+      - /dev/dri:/dev/dri
+    group_add:
+      - "{{ rocm_render_gid | default(990) }}" # render group
+      - "{{ rocm_video_gid | default(44) }}"   # video group
+    volumes:
+      - hf_cache:/root/.cache/huggingface
+    networks:
+      - gpu_network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 30s
+
+{% endif %}
   docling-serve:
     restart: unless-stopped
     image: {{ docling_serve_image | default('ghcr.io/docling-project/docling-serve:v1.21.0') }}
@@ -126,7 +218,7 @@ services:
       - "{{ gpu_https_port | default('443') }}:443"
       - "80:80"
     volumes:
-      - ./{{ gpu_generated_dir }}:/etc/nginx/conf.d:ro
+      - ./{{ gpu_generated_dir | default('configs/nginx-gpu') }}:/etc/nginx/conf.d:ro
       - ./ssl:/etc/nginx/ssl:ro
       - certbot_webroot_gpu:/var/www/certbot:ro
     depends_on:
@@ -155,9 +247,9 @@ services:
     entrypoint: ["/certbot-entrypoint.sh"]
     environment:
       - CERTBOT_EMAIL={{ certbot_email | default('') }}
-      - NGINX_PUBLIC_DOMAIN={{ gpu_public_domain }}
+      - NGINX_PUBLIC_DOMAIN={{ gpu_public_domain | default('') }}
     volumes:
-      - {{ gpu_deploy_dir }}/api-gateway-solution/certbot/entrypoint.sh:/certbot-entrypoint.sh:ro
+      - {{ gpu_deploy_dir | default('/opt/genieai-gpu') }}/api-gateway-solution/certbot/entrypoint.sh:/certbot-entrypoint.sh:ro
       - certbot_webroot_gpu:/var/www/certbot
       - certbot_etc_gpu:/etc/letsencrypt
       - gpu_ssl:/secrets/ssl

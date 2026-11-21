@@ -5,7 +5,7 @@ weight: 7
 mode: reference
 persona: developer
 owner: docs-stewards
-last_reviewed: 2026-09-29
+last_reviewed: 2026-11-11
 aliases:
   - /docs/rag/choosing-models/
 ---
@@ -62,7 +62,8 @@ QUERY PIPELINE:
 
 ## The Six Model Roles
 
-GENIE.AI has **six distinct AI model roles**, served by **two vLLM instances** and **two TEI instances**:
+GENIE.AI has **six distinct AI model roles**, served by **two vLLM instances** and **two TEI instances**
+(NVIDIA default; the Strix Halo profile runs four vLLM instances — see Profile E below):
 
 | # | Role | Docker Service | Config Variable | Shared With | License Sensitivity |
 |---|------|---------------|-----------------|-------------|-------------------|
@@ -721,6 +722,91 @@ NVIDIA_VISIBLE_DEVICES=1
 | GPU Server | 48GB+ | Main inference, labeling, graph | Llama 3.1 70B-AWQ or Qwen 2.5 14B |
 | GPU Server | 16GB+ | Translation, embeddings, reranking | TranslateGemma 4B + bge-m3 |
 | App Server | CPU only | Backend, frontend, Kong, ArangoDB | N/A |
+
+### Profile E: AMD Strix Halo iGPU (45.8 GiB GTT, unified memory) — measured
+
+Measured on the reference machine (Ryzen AI MAX+ 395, Radeon 8060S iGPU,
+`gfx1151`, 91 GB unified LPDDR5X; deployment via the ROCm compose overlays
+— see the ROCm section of [GPU Deployment](/docs/deploy/gpu/)). Unified
+memory changes the math: vLLM claims fractions of the **GTT aperture**
+(45.8 GiB, measured via `rocm-smi --showmeminfo gtt`), which is carved
+from the 91 GB system RAM — GPU claims add to host RAM pressure, and the
+TEI services claim nothing at all (CPU).
+
+**What fits on the aperture** (shipped `env.strixhalo` sizing targets a
+**shared** host — GPU-tier claims + the GTT baseline + runtime overhead
+must stay under the operator's 27 GB ceiling, decision 2026-11-11; the
+8B-class pair cannot fit — gemma-3-4b-it's weights alone measure
+8.58 GiB):
+
+| Instance | Model | Claim | Window |
+|---|---|---|---|
+| Main vLLM | `ibm-granite/granite-3.1-2b-instruct` (half) | 0.28 (~12.8 GiB: ~4.3 GiB weights + ~3.8 GiB KV + overhead) | **49152** |
+| Translation vLLM | `google/gemma-3-1b-it` | 0.12 (~5.5 GiB: ~2 GiB weights + an 8192 KV window, with margin) | 8192 |
+| Reranker vLLM (Task 14) | `BAAI/bge-reranker-v2-m3` | 0.05 (~2.3 GiB claimed; spike measured 1.56 GiB touched) | 8192 |
+| Embedding vLLM (Task-14 mirror) | `BAAI/bge-large-en-v1.5` (pooling, `EMBEDDING_BACKEND=vllm`) | 0.05 (overlay default) | 512 |
+
+The two TEI containers still start on the CPU image and claim zero GTT;
+on this profile they serve nothing — with `RERANKER_BACKEND=vllm` and
+`EMBEDDING_BACKEND=vllm` both consumers read the vLLM pooling instances.
+
+Coexistence verified: peak GTT ~19.6 GiB at the 2B sizing with the two
+main LLM instances healthy, before the two extra 0.05 pooling instances
+(the reranker measured ~1.6 GiB touched; the shipped tier peaks ≤ ~22 GiB).
+
+Notes:
+
+- The 8B-class models (granite-4.1-8b + gemma-3-4b-it) need a
+  **mostly-dedicated** host: 0.55 / **49152** fits the 45.8 GiB aperture
+  with neighbors stopped (~39 GB peak). **65536 does NOT fit** even
+  there — it needs ~10 GiB KV at 0.55; the engine's own estimate for
+  that split was max 54064. At 0.28 a 65536 window needs 5.0 GiB KV
+  against ~4.9 available. Window sizing here is hardware math, not a
+  tuning preference.
+- Guided JSON (`response_format={"type":"json_object"}`) verified on the
+  ROCm vLLM image — the labeling role keeps its model requirement.
+- The TEI ROCm image fails on gfx1151 (Instinct-only kernels); the CPU
+  image serves the models fine on 32 cores — but on this profile the
+  embedder is the fourth vLLM instance, not TEI (see the table above).
+- **The reranker is NOT on TEI here.** The reranker wrapper's
+  `RERANKER_BACKEND=vllm` switch points it at a third vLLM instance
+  serving the same `BAAI/bge-reranker-v2-m3` cross-encoder on the GPU
+  (its `/v1/rerank` API is the Cohere shape; the wrapper normalizes it).
+  TEI stays the default backend on every other deployment — the NVIDIA
+  path keeps TEI on GPU, where it is the more efficient server. The
+  vLLM reranker scores a 5-doc batch in ~164 ms warm (spike-measured),
+  and moves the reranker's ~5 GiB host-RAM footprint (the CPU image's
+  buffer pools, already batch-capped) into ~2 GiB of mostly-idle GTT.
+  An upstream TEI release with RDNA-capable kernels only needs the two
+  `TEI_EMBEDDING_IMAGE` / `TEI_RERANKING_IMAGE` pins flipped back — the
+  switch is one env var.
+
+```bash
+# Strix Halo (values ship in env.strixhalo, used with --profile rocm-models)
+VLLM_LLM_MODEL_ID=ibm-granite/granite-3.1-2b-instruct
+VLLM_GPU_UTILIZATION=0.28
+VLLM_MAX_MODEL_LEN=49152
+VLLM_MAX_NUM_SEQS=16
+VLLM_DTYPE=half
+
+VLLM_TRANSLATION_MODEL_ID=google/gemma-3-1b-it
+VLLM_TRANSLATION_GPU_UTILIZATION=0.12
+VLLM_TRANSLATION_MAX_MODEL_LEN=8192
+VLLM_TRANSLATION_MAX_NUM_SEQS=16
+VLLM_TRANSLATION_DTYPE=auto
+
+DOCLING_DEVICE=cpu
+
+# Reranker + embeddings pool on their own vLLM instances (Task 14 + mirror)
+RERANKER_BACKEND=vllm
+RERANKER_VLLM_ENDPOINT=http://vllm-reranker:8000
+RERANKER_VLLM_MODEL=BAAI/bge-reranker-v2-m3
+VLLM_RERANKER_MODEL_ID=BAAI/bge-reranker-v2-m3
+
+EMBEDDING_BACKEND=vllm
+EMBEDDING_VLLM_ENDPOINT=http://vllm-embedding:8000
+VLLM_EMBEDDING_MODEL_ID=BAAI/bge-large-en-v1.5
+```
 
 ### Other Notable Hardware
 

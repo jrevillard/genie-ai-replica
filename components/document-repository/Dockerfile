@@ -27,6 +27,14 @@ FROM node:22-slim
 # clamdscan is a Recommends of clamav-daemon but the app's scanner preference
 # and clamav-node.sh's readiness loop both invoke it explicitly. curl backs the
 # compose healthcheck (docker-compose.yaml doc-repo service).
+#
+# This image stays on the BOOKWORM base on purpose (measured 2026-11-18): the
+# trixie base ships clamav 1.4.3 and trixie-security carries NO clamav at
+# all, while bookworm-security carries the fixed 1.4.6 — so the trixie swap
+# traded the zlib1g finding (1 Critical) for 65 clamav findings (35 HIGH,
+# 30 MEDIUM) on the very image that scans untrusted uploads. The zlib1g
+# bookworm exposure stays accepted-risk here until trixie-security ships
+# clamav 1.4.6; the bustable upgrade layer picks it up the day it does.
 RUN apt-get update && \
     apt-get install -y --no-install-recommends clamav clamav-daemon clamdscan curl && \
     apt-get clean && \
@@ -72,16 +80,10 @@ ENV MAX_FILES_UPLOAD=10
 # layer's cache key includes its parent), before the writes to package-owned
 # paths (a package that moves would restore its own files over ours), and
 # still root.
-# The upgrade output is kept OUT of the job trace: dpkg prints the path of
-# every conffile it reinstalls, and this image MODIFIES the clamav ones
-# (/etc/clamav/clamd.conf), so a clamav bump prints exactly the kind of path
-# the WAF blocks. The output is printed (sanitized) only when the step
-# fails. The WAF exception is tracked in issue #2001 — this workaround is to
-# be purged once it lands.
 ARG CACHE_BUST=0
 RUN CACHE_BUST=$CACHE_BUST apt-get update -y -o Acquire::Retries=5 && \
-    (CACHE_BUST=$CACHE_BUST apt-get upgrade -y --with-new-pkgs --fix-missing -o Acquire::Retries=5 > /tmp/apt.log 2>&1 || { tail -n 50 /tmp/apt.log | sed -E 's#(/[A-Za-z0-9._~/-]{2,})#<path>#g'; exit 1; }) && \
-    apt-get clean && rm -rf /var/lib/apt/lists/* && rm -f /tmp/apt.log
+    apt-get upgrade -y --with-new-pkgs --fix-missing -o Acquire::Retries=5 && \
+    apt-get clean && rm -rf /var/lib/apt/lists/*
 
 # The clamav directories belong to the clamav package: a package that moves
 # resets their ownership, so the chown comes AFTER the upgrade layer — our

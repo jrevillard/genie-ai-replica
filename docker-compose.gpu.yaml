@@ -41,7 +41,25 @@ services:
     security_opt:
       - no-new-privileges:true
     restart: unless-stopped
-    image: vllm/vllm-openai:v0.29.0
+    # Vendor axis as VALUES (the ROCm path lives in this file, not in an
+    # overlay): env.strixhalo pins VLLM_IMAGE + the device paths + the
+    # device-group GIDs; unset — every NVIDIA deployment — renders exactly
+    # what this file always shipped. The device-row defaults are paths that
+    # exist on EVERY host: a missing device path is a hard create-time error
+    # (the daemon resolves every row before creating the container). The
+    # GID defaults are nobody/nogroup, two DISTINCT numbers (the group_add
+    # list rejects duplicates). The entrypoint IS
+    # the NVIDIA image's own (the flag `command:` has always attached to
+    # it), so restating it is a no-op for NVIDIA and repairs the ROCm
+    # image (ENTRYPOINT=null, CMD=/bin/bash). One flag block, both vendors.
+    image: ${VLLM_IMAGE:-vllm/vllm-openai:v0.29.0}
+    entrypoint: ["vllm", "serve"]
+    devices:
+      - "${GPU_DEVICE_KFD:-/dev/null}:${GPU_DEVICE_KFD:-/dev/null}"
+      - "${GPU_DEVICE_DRI:-/dev/zero}:${GPU_DEVICE_DRI:-/dev/zero}"
+    group_add:
+      - "${RENDER_GID:-65534}" # nobody — inert for the root containers vLLM ships
+      - "${VIDEO_GID:-65533}" # nogroup
     command: >
       --model ${VLLM_LLM_MODEL_ID:-ibm-granite/granite-3.3-2b-instruct}
       --gpu_memory_utilization ${VLLM_GPU_UTILIZATION:-0.55}
@@ -70,7 +88,15 @@ services:
     security_opt:
       - no-new-privileges:true
     restart: unless-stopped
-    image: vllm/vllm-openai:v0.29.0
+    # Same vendor axis as vllm-llm above.
+    image: ${VLLM_IMAGE:-vllm/vllm-openai:v0.29.0}
+    entrypoint: ["vllm", "serve"]
+    devices:
+      - "${GPU_DEVICE_KFD:-/dev/null}:${GPU_DEVICE_KFD:-/dev/null}"
+      - "${GPU_DEVICE_DRI:-/dev/zero}:${GPU_DEVICE_DRI:-/dev/zero}"
+    group_add:
+      - "${RENDER_GID:-65534}" # nobody
+      - "${VIDEO_GID:-65533}" # nogroup
     command: >
       --model ${VLLM_TRANSLATION_MODEL_ID:-google/gemma-3-4b-it}
       --gpu_memory_utilization ${VLLM_TRANSLATION_GPU_UTILIZATION:-0.3}
@@ -103,8 +129,26 @@ services:
     security_opt:
       - no-new-privileges:true
     restart: unless-stopped
-    image: ghcr.io/huggingface/text-embeddings-inference:1.9.3
-    entrypoint: /bin/sh -c "text-embeddings-router --json-output --model-id ${EMBEDDING_MODEL_ID:-BAAI/bge-large-en-v1.5} --auto-truncate $(printf '%s' \"${TEI_EMBEDDING_AUTO_TRUNCATE:-false}\" | tr '[:upper:]' '[:lower:]')"
+    image: ${TEI_EMBEDDING_IMAGE:-ghcr.io/huggingface/text-embeddings-inference:1.9.3}
+    entrypoint: /bin/sh -c "text-embeddings-router --json-output --model-id ${EMBEDDING_MODEL_ID:-BAAI/bge-large-en-v1.5} --max-batch-tokens ${TEI_EMBEDDING_MAX_BATCH_TOKENS:-16384} --auto-truncate $(printf '%s' \"${TEI_EMBEDDING_AUTO_TRUNCATE:-false}\" | tr '[:upper:]' '[:lower:]')"
+    # --max-batch-tokens default 16384 = TEI's OWN built-in default (the
+    # upstream CLI reference: "--max-batch-tokens <MAX_BATCH_TOKENS> ...
+    # [default: 16384]"), so passing it explicitly leaves an NVIDIA compose
+    # venue that never sets the var byte-identical to the flag-less
+    # entrypoint it ran before.
+    #
+    # (An earlier revision of this file used 65535 and claimed it was TEI's
+    # default — it is not. That value changed the NVIDIA GPU-node venue
+    # from 16384 to 65535, a 4x larger batch budget on the same box:
+    # MR !968 review.)
+    #
+    # A CPU-TEI host (Strix Halo class) pins 2048 via env.strixhalo — the
+    # cap measured in commit 196bc549 after CPU TEI inflated candle buffers
+    # to 16.3 GiB RSS at the GPU-sized defaults (code review N2: the
+    # ansible split venue was capped, this compose one ran the flag-less
+    # entrypoint at TEI's default). The Ansible-rendered GPU stack emits
+    # the flag only when tei_embedding_max_batch_tokens is defined, so
+    # "unset" means 16384 on both paths.
     volumes:
       - ${DATA_DIR:-./data}/huggingface:/data
     environment:
@@ -127,7 +171,7 @@ services:
     security_opt:
       - no-new-privileges:true
     restart: unless-stopped
-    image: ghcr.io/huggingface/text-embeddings-inference:1.9.3
+    image: ${TEI_RERANKING_IMAGE:-ghcr.io/huggingface/text-embeddings-inference:1.9.3}
     entrypoint: /bin/sh -c "text-embeddings-router --json-output --model-id ${RERANKER_MODEL_ID:-BAAI/bge-reranker-v2-m3} --max-batch-tokens ${TEI_RERANKING_MAX_BATCH_TOKENS:-8192} --max-concurrent-requests ${TEI_RERANKING_MAX_CONCURRENT_REQUESTS:-32} --auto-truncate $(printf '%s' \"${TEI_RERANKING_AUTO_TRUNCATE:-false}\" | tr '[:upper:]' '[:lower:]')"
     volumes:
       - ${DATA_DIR:-./data}/huggingface:/data
@@ -142,6 +186,89 @@ services:
       retries: 48
     networks:
       - gpu_network
+
+  # The two vLLM pooling instances — the ROCm GPU tier's reranker and
+  # embedding models (the TEI ROCm build cannot run on gfx1151 — see the
+  # spike results). THE PROFILE IS THE NVIDIA FIREWALL: profile-disabled
+  # services do not render at all (not in `compose config` output, not in
+  # a stack-deploy resolved file), so the NVIDIA GPU node never sees
+  # them; env.strixhalo users enable them with `--profile rocm-models`.
+  # Their device rows stay literal — they never render on NVIDIA.
+  vllm-reranker:
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    profiles: [rocm-models]
+    restart: unless-stopped
+    image: ${VLLM_IMAGE:-vllm/vllm-openai:v0.29.0}
+    # Same shape as the base vLLM services: entrypoint carries the binary,
+    # `command` only the flags.
+    entrypoint: ["vllm", "serve"]
+    command: >
+      --model ${VLLM_RERANKER_MODEL_ID:-BAAI/bge-reranker-v2-m3}
+      --gpu_memory_utilization ${VLLM_RERANKER_GPU_UTILIZATION:-0.05}
+      --served-model-name ${VLLM_RERANKER_MODEL_ID:-BAAI/bge-reranker-v2-m3}
+      --max_model_len ${VLLM_RERANKER_MAX_MODEL_LEN:-8192}
+      --enforce-eager
+      --port 8000
+    environment:
+      - HUGGING_FACE_HUB_TOKEN=${HUGGING_FACE_HUB_TOKEN}
+      - NVIDIA_VISIBLE_DEVICES=${NVIDIA_VISIBLE_DEVICES:-all}
+    devices:
+      - /dev/kfd:/dev/kfd
+      - /dev/dri:/dev/dri
+    group_add:
+      - "${RENDER_GID:-990}" # render — distro-specific; `getent group render`
+      - "${VIDEO_GID:-44}"   # video
+    volumes:
+      # Same cache as the base vLLM services — without it every recreate
+      # re-downloads the ~1.2 GB cross-encoder from HF.
+      - hf_cache:/root/.cache/huggingface
+    networks:
+      - gpu_network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 30s
+
+  vllm-embedding:
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    profiles: [rocm-models]
+    restart: unless-stopped
+    image: ${VLLM_IMAGE:-vllm/vllm-openai:v0.29.0}
+    entrypoint: ["vllm", "serve"]
+    command: >
+      --model ${VLLM_EMBEDDING_MODEL_ID:-BAAI/bge-large-en-v1.5}
+      --gpu_memory_utilization ${VLLM_EMBEDDING_GPU_UTILIZATION:-0.05}
+      --served-model-name ${VLLM_EMBEDDING_MODEL_ID:-BAAI/bge-large-en-v1.5}
+      --max_model_len ${VLLM_EMBEDDING_MAX_MODEL_LEN:-512}
+      --enforce-eager
+      --port 8000
+    environment:
+      - HUGGING_FACE_HUB_TOKEN=${HUGGING_FACE_HUB_TOKEN}
+      - NVIDIA_VISIBLE_DEVICES=${NVIDIA_VISIBLE_DEVICES:-all}
+    devices:
+      - /dev/kfd:/dev/kfd
+      - /dev/dri:/dev/dri
+    group_add:
+      - "${RENDER_GID:-990}" # render — distro-specific; `getent group render`
+      - "${VIDEO_GID:-44}"   # video
+    volumes:
+      - hf_cache:/root/.cache/huggingface
+    networks:
+      - gpu_network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 30s
 
   docling-serve:
     cap_drop:
@@ -179,7 +306,18 @@ services:
     image: nginx:1.28-alpine
     ports:
       - "${GPU_HTTPS_PORT:-443}:443"
-      - "80:80"
+      # The HTTP row was hardcoded "80:80" — which is why the ROCm overlay
+      # needed a `ports: !override` to move it (compose unions port
+      # sequences, so an overlay could not REPLACE the row, only add to it).
+      # `!override` requires Compose >= 2.24.4 while the repo documents
+      # 2.20+ as its floor, so the overlay's file did not even parse on a
+      # supported host (MR !968 review, Jerome). Parameterizing the row
+      # makes the overlay's list IDENTICAL to this one after interpolation —
+      # the union then collapses to the same two entries — and no merge tag
+      # is needed anywhere.
+      # Unset = "80:80", byte-identical to the previous hardcoded row: the
+      # NVIDIA GPU-node stack publishes the same ports as before.
+      - "${GPU_HTTP_PORT:-80}:80"
     volumes:
       - ./configs/nginx-gpu/gpu-proxy.conf:/etc/nginx/conf.d/default.conf:ro
       - ./configs/nginx-gpu/api_keys.map:/etc/nginx/api_keys.map:ro

@@ -18,7 +18,7 @@ backups before every change and keep the previous-known-good tag for rollback.
 
 - A working deployment (Compose, Swarm, or Kubernetes) with `.env` populated
   (Compose/Swarm) or the deploy-repo overlay in place (Kubernetes).
-- `GENIE_AI_GLOBAL_TAG` rollback target noted before starting (per-service tags like `GENIE_AI_BACKEND_IMAGE_TAG` override just the backend).
+- `GENIE_AI_IMAGE_TAG` rollback target noted before starting (per-service tags like `GENIE_AI_BACKEND_IMAGE_TAG` override just the backend). `GENIE_AI_GLOBAL_TAG` is its former name — still read as a fallback for one release.
 - For model pulls: `HUGGING_FACE_HUB_TOKEN` set in `.env`. Without it, vLLM
   silently stalls while retrying the private-model download with no error in
   the container logs.
@@ -140,7 +140,7 @@ the `env.t4` / `env.rtx6000` files override memory and length limits — see
 When a GENIE.AI component image is rebuilt, CI publishes a new tag to
 `registry.opensource.unicc.org/un/itu/genie-ai/<service>:<branch>-<sha>`
 (the registry and project path are baked into `docker-compose.yaml` via
-`GENIE_AI_REGISTRY`, with `GENIE_AI_GLOBAL_TAG` defaulting to `main`).
+`GENIE_AI_REGISTRY`, with `GENIE_AI_IMAGE_TAG` defaulting to `main`).
 
 ```mermaid
 flowchart LR
@@ -167,7 +167,7 @@ flowchart LR
 
 ```bash
 # <env> is your inventory name (e.g. test, prod)
-sed -i "s|^GENIE_AI_GLOBAL_TAG=.*|GENIE_AI_GLOBAL_TAG=<new-tag>|" .env
+sed -i "s|^GENIE_AI_IMAGE_TAG=.*|GENIE_AI_IMAGE_TAG=<new-tag>|" .env
 
 ansible-playbook -i inventory/<env>.ini deploy.yml \
   --tags deploy --vault-id <env>@prompt
@@ -312,10 +312,10 @@ If the update breaks anything, revert to the previously-working tag:
 
 ```bash
 # 1. Note the current tag (so you can confirm what you're rolling back FROM)
-grep GENIE_AI_GLOBAL_TAG .env
+grep GENIE_AI_IMAGE_TAG .env
 
 # 2. Replace with the previous-known-good tag (commit SHA or release tag)
-sed -i "s|^GENIE_AI_GLOBAL_TAG=.*|GENIE_AI_GLOBAL_TAG=<previous-sha-or-tag>|" .env
+sed -i "s|^GENIE_AI_IMAGE_TAG=.*|GENIE_AI_IMAGE_TAG=<previous-sha-or-tag>|" .env
 
 # 3. Re-deploy (no rebuild — images are already in the registry)
 ansible-playbook -i inventory/<env>.ini deploy.yml \
@@ -328,7 +328,7 @@ docker service update --force genieai_<service>
 ### Compose
 
 ```bash
-sed -i "s|^GENIE_AI_GLOBAL_TAG=.*|GENIE_AI_GLOBAL_TAG=<previous-sha-or-tag>|" .env
+sed -i "s|^GENIE_AI_IMAGE_TAG=.*|GENIE_AI_IMAGE_TAG=<previous-sha-or-tag>|" .env
 docker compose pull <service>
 docker compose up -d <service>
 ```

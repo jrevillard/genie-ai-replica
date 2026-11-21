@@ -2153,7 +2153,11 @@ class TestIngestFileWithGuardrail:
         ):
             await dp.ingest_file_with_guardrail(inp, lock_file=None)
 
-        mock_retract.assert_called_once_with(file_id="test-file-123", graph_name="GRAPH")
+        # update_status=False: 'Killed' is this path's terminal state, so the
+        # retraction must not flip the document to 'Retracted' on its way
+        # there (#1991/#1992 — the status the operator sees has to name the
+        # outcome, not the cleanup).
+        mock_retract.assert_called_once_with(file_id="test-file-123", graph_name="GRAPH", update_status=False)
         status_calls = [c.args[1] for c in mock_status.call_args_list]
         assert "Killed" in status_calls
 
@@ -2656,6 +2660,42 @@ class TestWriteIngestionLog:
             mock_aiohttp.ClientTimeout.return_value = MagicMock()
             mock_aiohttp.ClientSession.return_value = session
             await dp._write_ingestion_log("file1", "INFO", "System", "test")
+
+    @pytest.mark.asyncio
+    async def test_a_failed_trace_injection_keeps_the_row_and_raises_nothing(self):
+        """The log write never raises, and a failed injection costs the trace context only.
+
+        The late-write purge writes to the document's log from a failure path
+        that must not fail for a bookkeeping reason, and the purge's comment
+        says the write cannot raise. The one call that could — the
+        trace-context injection — has its own guard: a failed injection leaves
+        the row (without its trace context) instead of raising out of the
+        write.
+        """
+        dp = create_dataprep()
+
+        resp_ctx = _mock_aiohttp_response(status=201)
+        session = _mock_aiohttp_session("post", resp_ctx)
+
+        with (
+            patch.object(
+                dp,
+                "_service_headers",
+                new_callable=AsyncMock,
+                return_value={"Authorization": "Bearer t", "Content-Type": "application/json"},
+            ),
+            patch.object(dp_module, "aiohttp") as mock_aiohttp,
+            patch.object(dp_module, "propagate") as mock_propagate,
+        ):
+            mock_aiohttp.ClientTimeout.return_value = MagicMock()
+            mock_aiohttp.ClientSession.return_value = session
+            mock_propagate.inject.side_effect = RuntimeError("no propagator")
+            # No exception must escape: the caller is a failure path.
+            await dp._write_ingestion_log("file1", "INFO", "System", "test")
+
+        # And the row is still written: the trace context is what the failed
+        # injection costs, not the row the operator reads.
+        session.post.assert_called_once()
 
 
 class TestFetchAllLabels:
@@ -4556,6 +4596,57 @@ class TestContextualRetrieval:
         # All three chunks have a context — index 1 recovered, not raw.
         assert result == {0: "ctx0", 1: "recovered-1", 2: "ctx2"}
         assert 1 in recovered  # the missing chunk WAS recovered
+
+    def _make_batch_list_response(self, contexts_list: list):
+        """Build a mock chat completion response returning the LIST shape
+        ``{"contexts": [{"index": N, "context": "..."}]}`` — the shape models
+        drift to (live: granite on the ROCm venue 2026-11-18), which the old
+        parser crashed on with AttributeError: 'list' object has no attribute
+        'items', sending every batch to the per-chunk fallback."""
+        return llm_response(json.dumps({"contexts": contexts_list}))
+
+    @pytest.mark.asyncio
+    async def test_batch_accepts_list_shaped_contexts(self):
+        """Model returns the list shape → parsed directly, no AttributeError, no per-chunk fallback."""
+        dp = create_dataprep()
+        mock_client = AsyncMock()
+        mock_client.chat.completions.create = AsyncMock(
+            return_value=self._make_batch_list_response(
+                [{"index": 0, "context": "ctx0"}, {"index": 1, "context": "ctx1"}]
+            )
+        )
+        batch = [(0, "chunk0"), (1, "chunk1")]
+        with (
+            patch.object(dp, "_write_ingestion_log", new_callable=AsyncMock),
+            patch.object(dp, "_context_single_call", new_callable=AsyncMock) as single,
+        ):
+            result = await dp._context_batch_call(mock_client, "m", "sys", batch, "file1")
+        assert result == {0: "ctx0", 1: "ctx1"}
+        single.assert_not_called()
+
+    @pytest.mark.asyncio
+    async def test_batch_list_shape_accepts_text_key_and_skips_garbage(self):
+        """List items carrying 'text' instead of 'context' still parse; non-dict entries are skipped."""
+        dp = create_dataprep()
+        mock_client = AsyncMock()
+        mock_client.chat.completions.create = AsyncMock(
+            return_value=self._make_batch_list_response(
+                [
+                    {"index": 0, "text": "ctx0"},
+                    "garbage-string",
+                    {"index": "not-an-int", "context": "x"},
+                    {"index": 1, "context": "ctx1"},
+                ]
+            )
+        )
+        batch = [(0, "chunk0"), (1, "chunk1")]
+        with (
+            patch.object(dp, "_write_ingestion_log", new_callable=AsyncMock),
+            patch.object(dp, "_context_single_call", new_callable=AsyncMock) as single,
+        ):
+            result = await dp._context_batch_call(mock_client, "m", "sys", batch, "file1")
+        assert result == {0: "ctx0", 1: "ctx1"}
+        single.assert_not_called()
 
     @pytest.mark.asyncio
     async def test_batch_recovers_all_missing_chunks_on_near_empty_response(self):

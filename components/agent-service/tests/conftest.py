@@ -131,3 +131,46 @@ def assert_module_aql_fakes_faithful(module_path: Path) -> None:
     assert not unfaithful, (
         f"fake aql.execute double(s) would mask a positional bind_vars regression: {'; '.join(unfaithful)}"
     )
+
+
+def assert_no_positional_aql_execute(package_dir: Path) -> None:
+    """Every production ``.aql.execute`` call must pass bind vars by keyword.
+
+    python-arango's ``AQL.execute`` binds its second positional parameter to
+    ``count`` (the payload then ships no ``bindVars`` at all), so a
+    positional bind dict is a server-side rejection on the first real read.
+    The sweep covers both call shapes the component uses: the direct
+    ``db.aql.execute(query, bind_vars={...})`` and the ``asyncio.to_thread``
+    form, where the bound method rides as an argument and the query is the
+    next positional.
+    """
+    import ast
+
+    offenders = []
+    for py in sorted(package_dir.rglob("*.py")):
+        tree = ast.parse(py.read_text(encoding="utf-8"))
+        for node in ast.walk(tree):
+            if not isinstance(node, ast.Call):
+                continue
+            func = node.func
+            if (
+                isinstance(func, ast.Attribute)
+                and func.attr == "execute"
+                and isinstance(func.value, ast.Attribute)
+                and func.value.attr == "aql"
+                and len(node.args) >= 2
+            ):
+                offenders.append(f"{py.name}:{node.lineno} (direct call)")
+            for idx, arg in enumerate(node.args):
+                if (
+                    isinstance(arg, ast.Attribute)
+                    and arg.attr == "execute"
+                    and isinstance(arg.value, ast.Attribute)
+                    and arg.value.attr == "aql"
+                    and len(node.args) - (idx + 1) >= 2
+                ):
+                    offenders.append(f"{py.name}:{node.lineno} (to_thread form)")
+    assert not offenders, (
+        "positional bind dict to aql.execute would bind to the driver's count "
+        f"parameter (bind_vars must be passed by keyword): {'; '.join(offenders)}"
+    )

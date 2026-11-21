@@ -1,0 +1,45 @@
+# pyproject.toml — agent-service
+# Ruff config mirrors the other Python components (target py311, line-length
+# 120, double quotes; E741 ignored for ML-style single-letter names). The
+# packaging model is declared once at [tool.setuptools] below.
+[project]
+name = "genie-ai-agent-service"
+version = "0.1.0"
+requires-python = ">=3.11"
+
+[project.optional-dependencies]
+# The pins match requirements-test.txt - the file the CI lane installs and the
+# one the licence audit covers. Two declarations of the same versions would
+# drift; an unpinned range here would drift from the audited tree silently.
+# The extra exists for a local `pip install -e ".[test]"` of the test deps
+# only; it does not carry the runtime tree (requirements.txt does).
+test = [
+    "pytest==9.1.1",
+    "httpx==0.28.1",
+]
+
+[tool.setuptools]
+# The component is not installed as a package: the image copies the runtime
+# files it needs (see the Dockerfile) and the CI lane installs
+# requirements-test.txt, which includes the runtime tree. The modules are
+# imported from the component directory, which is what the pytest
+# configuration below makes explicit.
+packages = []
+
+[tool.pytest.ini_options]
+# `pythonpath = ["."]` makes the suite resolve `capabilities` (and `app`,
+# `tracing`) whether it is started as `pytest tests/` or as
+# `python -m pytest tests/`.
+pythonpath = ["."]
+
+[tool.ruff]
+target-version = "py311"
+line-length = 120
+
+[tool.ruff.lint]
+select = ["E", "W", "F", "I", "UP", "B", "SIM"]
+ignore = ["E402", "E741"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"

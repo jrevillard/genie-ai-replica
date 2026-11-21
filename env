@@ -1412,6 +1412,15 @@ KC_MOBILE_REDIRECT_SCHEME=com.<institution>.genieai
 #   COMPOSE_PROFILES=opea,okf      # in this env file
 # OKF_ENABLED=1
 #
+# --- AGENT feature flag (Epic 1) ------------------------------------------------
+# AGENT_ENABLED parks the agent service (components/agent-service):
+#   0 (default) — the service runs ZERO replicas and declares no host port and
+#                 no gateway route, so nothing agentic is reachable.
+#   1           — the service runs (internal only; the capability tools land
+#                 in the stories that follow).
+# MUST be 0 or 1, not true/false. Ansible: agent_enabled in group_vars.
+# AGENT_ENABLED=1
+#
 # Uncomment to override defaults (all have sensible defaults in docker-compose):
 # ENABLE_OBSERVABILITY=0
 # GRAFANA_ADMIN_USER=admin

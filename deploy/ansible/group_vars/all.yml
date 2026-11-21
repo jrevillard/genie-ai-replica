@@ -77,6 +77,10 @@ enable_observability: "0"
 # route, UI). Deployments running OKF (el-salvador, the local build) override
 # to "1" in their group_vars.
 okf_enabled: "0"
+# Agentic feature flag (Epic 1): 0 parks the agent service (zero replicas, no
+# host port, no gateway route) — the agentic path stays unreachable. A
+# deployment that wants the service running overrides this to "1".
+agent_enabled: "0"
 grafana_admin_user: "admin"
 victoriametrics_retention: "30d"
 victorialogs_retention: "30d"

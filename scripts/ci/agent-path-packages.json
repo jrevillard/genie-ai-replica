@@ -1,0 +1,63 @@
+{
+  "_comment": [
+    "Which packages under components/ are on the agentic path (Story 1.4, FR-20, AD-1).",
+    "",
+    "The OPEA-free gate (tests/config-validator/__tests__/opea-free-gate.test.js) scans every",
+    "package listed in agentPathPackages for an import of the OPEA overlay package (`comps`)",
+    "and for an OPEA build-time source. The marker inventory lives in the gate's own header",
+    "comment — one inventory, not two that drift. A violation fails the pipeline.",
+    "",
+    "otherPackages are NOT on the agentic path and are not scanned. Every entry carries the",
+    "reason it is not: the classification is a decision someone wrote down, not a silent",
+    "omission. The gate fails when a package under components/ is in neither list, so the",
+    "candidate set cannot shrink without an explicit move.",
+    "",
+    "To put a package on the agentic path: move it into agentPathPackages (with its reason),",
+    "and add its path to the `config:validate` job's rules:changes in .gitlab-ci.yml — the",
+    "gate asserts that the job runs when an agent-path package changes."
+  ],
+  "agentPathPackages": [
+    {
+      "path": "components/agent-service",
+      "why": "The agent service is the agentic path's own execution surface (Epic 1, Story 1.3)."
+    }
+  ],
+  "otherPackages": [
+    {
+      "path": "components/arangodb",
+      "why": "Data-tier helper (compose file, dump/restore scripts); no service code on the agentic path."
+    },
+    {
+      "path": "components/document-repository",
+      "why": "Document upload and ingestion service; the agentic path reads documents through okf-server."
+    },
+    {
+      "path": "components/google-translate-example",
+      "why": "Upstream OPEA example scripts kept for reference; built into no image and called by nothing."
+    },
+    {
+      "path": "components/gov-chat-backend",
+      "why": "The BFF. Its agentic routing branch lands in Epic 3 story 3.1, which moves this package into agentPathPackages; until then it still serves the legacy OPEA path."
+    },
+    {
+      "path": "components/gov-chat-frontend",
+      "why": "The web client; it calls the backend over HTTP and imports no server package."
+    },
+    {
+      "path": "components/okf-server",
+      "why": "The knowledge read authority (Story 1.5 onward); unchanged by the OPEA-free constraint."
+    },
+    {
+      "path": "components/pii-service",
+      "why": "The PII sidecar of the legacy ingestion path; it never imports the OPEA overlay."
+    },
+    {
+      "path": "components/ragas-service",
+      "why": "The RAG evaluation harness service; it calls the RAG path, it does not join it."
+    },
+    {
+      "path": "components/shared",
+      "why": "Shared JavaScript libraries for the backend and the frontend."
+    }
+  ]
+}

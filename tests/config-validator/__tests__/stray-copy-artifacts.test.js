@@ -23,9 +23,14 @@
 
 const { execFileSync } = require('child_process');
 const { escapeRegExp } = require('../validators/js-files');
+const { trackedFiles } = require('../validators/tracked-files');
 const path = require('path');
 
 const { parseGitlabCiJobChanges } = require('../validators/parse-compose');
+// The semantics `rules:changes` matches with live in one place — the
+// OPEA-free gate pins the same dialect, and two copies of a dialect-sensitive
+// matcher would drift into two different answers about the same glob.
+const { gitlabGlobMatches } = require('../validators/gitlab-glob');
 
 const ROOT = path.resolve(__dirname, '../../..');
 
@@ -104,20 +109,6 @@ const isCopyArtifact = (part) =>
 
 const findStrayCopies = (paths) => paths.filter((p) => p.split('/').some(isCopyArtifact));
 
-let tracked = null;
-const trackedFiles = () => {
-  if (!tracked) {
-    tracked = execFileSync('git', ['ls-files', '-z'], {
-      cwd: ROOT,
-      encoding: 'utf8',
-      maxBuffer: 16 * 1024 * 1024
-    })
-      .split('\0')
-      .filter(Boolean);
-  }
-  return tracked;
-};
-
 // The repository's own .gitignore layers (the root file and the nested ones —
 // they are committed content) must be what matches: only a repo-layer match
 // counts as the repo's answer, so a machine-local rule (core.excludesFile,
@@ -148,30 +139,6 @@ const ignoredByRepoRules = (paths) => {
     })
     .filter((entry) => entry && REPO_GITIGNORE.test(entry.source));
 };
-
-// The semantics `rules:changes` matches with: Ruby's File.fnmatch with
-// FNM_PATHNAME — `*` never crosses a `/`, and a `**` segment (leading or
-// trailing) matches zero or more directory segments.
-const globSegment = (segment) =>
-  new RegExp(
-    `^${segment
-      .split('*')
-      .map((part) => escapeRegExp(part))
-      .join('.*')}$`
-  );
-const matchesSegments = (pattern, pi, parts, pj) => {
-  if (pi >= pattern.length) return pj >= parts.length;
-  if (pattern[pi] === '**') {
-    for (let skip = pj; skip <= parts.length; skip++) {
-      if (matchesSegments(pattern, pi + 1, parts, skip)) return true;
-    }
-    return false;
-  }
-  return (
-    pj < parts.length && globSegment(pattern[pi]).test(parts[pj]) && matchesSegments(pattern, pi + 1, parts, pj + 1)
-  );
-};
-const gitlabGlobMatches = (glob, p) => matchesSegments(glob.split('/'), 0, p.split('/'), 0);
 
 describe('stray copy artifacts (#516)', () => {
   it('tracks no copy artifact', () => {

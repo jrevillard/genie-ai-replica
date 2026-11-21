@@ -15,8 +15,9 @@ recorded ``translation_mode``, the delivered set, the marking).
 """
 
 import asyncio
-import json
+import time
 
+import pytest
 from conftest import ScriptedLoopModel, run_budget
 
 from agent.budget import RunBudgetMonitor
@@ -366,6 +367,15 @@ def test_the_payload_is_the_projection_contract_verbatim():
         "invalid_citations",
         "marking",
     }
+    # The tri-state vocabulary is CLOSED — exactly these three values, the
+    # only statuses the payload's grounding_status can ever carry.
+    from agent import verification
+
+    assert {verification.VERDICT_GROUNDED, verification.VERDICT_UNGROUNDED, verification.VERDICT_UNVERIFIED} == {
+        "grounded",
+        "ungrounded",
+        "unverified",
+    }
 
 
 def test_the_marking_follows_the_policy_and_the_status():
@@ -378,24 +388,110 @@ def test_the_marking_follows_the_policy_and_the_status():
 
 
 # ---------------------------------------------------------------------
-# Guard pins: the tri-state vocabulary and the strict parser's edges
+# Coverage pins: the wiring the G1/FIX reviews' mutations could hide
 # ---------------------------------------------------------------------
 
 
-def test_the_tri_state_vocabulary_is_exactly_the_three_values():
-    from agent import verification
+def test_the_authorized_repos_normalization_binds_the_caller_context_shape():
+    """The governed wiring hands the pipeline the CallerContext's
+    ``authorized_repos: tuple[AuthorizedRepo, ...]`` — the normalization to
+    repo-id strings is the only line connecting that shape to the mechanical
+    check (an AuthorizedRepo is unhashable, so a frozenset over the raw
+    tuples would crash the check per request)."""
+    from capabilities.contract import AuthorizedRepo
 
-    assert {verification.VERDICT_GROUNDED, verification.VERDICT_UNGROUNDED, verification.VERDICT_UNVERIFIED} == {
-        "grounded",
-        "ungrounded",
-        "unverified",
-    }
+    pipeline, _ = _pipeline(
+        judge_turns=(ModelTurn(content='{"verdict": "grounded"}'),),
+        authorized_repos=(AuthorizedRepo(repo_id="r-1", graph_name="G"),),
+    )
+    pipeline.record_tool_result("search_knowledge", _search_payload([OKF_HIT]))
+    verdict = asyncio.run(pipeline.finalize("the answer"))
+
+    assert verdict.status == VERDICT_GROUNDED
+    assert verdict.payload()["invalid_citations"] == []
+    assert verdict.payload()["citations"][0]["provenance"]["concept_id"] == "c-1"
 
 
-def test_json_content_types_are_tolerated_as_proper_json():
-    # A hit whose score the model_dump carried as a JSON number parses back
-    # through the ledger untouched.
-    ledger = RetrievalLedger()
-    payload = json.loads(json.dumps(_search_payload([LEGACY_HIT])))
-    ledger.record("search_knowledge", payload)
-    assert ledger.entries[0]["score"] == 0.9
+def test_a_mixed_ledger_ungrounds_mechanically_and_keeps_the_valid_entry():
+    """A valid reference alongside one that fails the mechanical check: the
+    answer is ``ungrounded`` BEFORE any judge runs (the invalid half of the
+    decision), the valid entry still rides the delivered set, and the
+    dropped one is recorded."""
+    pipeline, monitor = _pipeline(judge_turns=(ModelTurn(content="never asked"),), authorized_repos=frozenset())
+    pipeline.record_tool_result("search_knowledge", _search_payload([LEGACY_HIT, OKF_HIT]))
+    verdict = asyncio.run(pipeline.finalize("the answer"))
+
+    assert verdict.status == VERDICT_UNGROUNDED
+    payload = verdict.payload()
+    assert payload["judge"]["outcome"] == JUDGE_OUTCOME_SKIPPED
+    assert monitor.aux_model_calls == 0
+    assert payload["citations"] == [{"provenance": {"file_id": "f-1"}, "text": "the grievance passage", "score": 0.9}]
+    assert payload["invalid_citations"] == [{"provenance": OKF_HIT["provenance"], "reason": "unauthorized_repo"}]
+
+
+def test_a_wall_clock_spent_run_refuses_the_judge_before_it_claims_a_slot():
+    """The wall-clock guard runs before the budget claim: a run whose clock
+    is spent refuses the judge with nothing counted — removing the guard
+    would let a judged call run past the deadline within its own timeout
+    and still report a verdict."""
+    monitor = RunBudgetMonitor(run_budget(wall_clock_seconds=0.001))
+    time.sleep(0.01)  # the run's clock is spent before finalize
+    judge_model = ScriptedLoopModel(())
+    judge = GroundingJudge(model_client=judge_model, monitor=monitor, timeout_seconds=5.0)
+    result = asyncio.run(judge.judge("the answer", [LEGACY_HIT]))
+
+    assert result == {"ran": False, "outcome": JUDGE_OUTCOME_BUDGET_EXHAUSTED, "verdict": None}
+    assert (monitor.model_calls, monitor.aux_model_calls) == (0, 0)
+    assert judge_model.requests == []
+
+
+def test_the_pipeline_converts_the_judge_timeout_knob_to_seconds():
+    """``AGENT_VERDICT_JUDGE_TIMEOUT_MS`` is milliseconds: a 1 ms bound
+    returns the timeout outcome near-instantly against a judge that would
+    hang forever. A ms/s unit confusion (the bound read as seconds — an
+    effectively unbounded judge) never answers inside the test's own
+    0.5 s wait_for and reddens the suite."""
+
+    class _HangingJudgeModel:
+        async def complete(self, messages, tool_definitions, *, max_output_tokens):
+            await asyncio.Event().wait()  # forever
+
+    pipeline = VerificationPipeline(
+        policy=POLICY_VERDICT_MARKED,
+        judge_timeout_ms=1,
+        judge_model_client=_HangingJudgeModel(),
+        monitor=RunBudgetMonitor(run_budget()),
+        authorized_repos=(),
+    )
+    pipeline.record_tool_result("search_knowledge", SEARCH_SUCCESS)
+
+    async def scenario():
+        return await asyncio.wait_for(pipeline.finalize("the answer"), timeout=0.5)
+
+    verdict = asyncio.run(scenario())
+
+    assert verdict.status == VERDICT_UNVERIFIED
+    assert verdict.payload()["judge"]["outcome"] == JUDGE_OUTCOME_TIMEOUT
+
+
+def test_a_cancelled_judge_propagates_the_cancellation_never_a_verdict():
+    """The documented contract: a cancelled run has no verdict — the
+    CancelledError out of the judged call propagates untouched through
+    finalize (a defensive catch that swallowed it would emit an unverified
+    verdict AFTER the cancellation, and reddens here)."""
+
+    class _CancellingJudgeModel:
+        async def complete(self, messages, tool_definitions, *, max_output_tokens):
+            raise asyncio.CancelledError
+
+    pipeline = VerificationPipeline(
+        policy=POLICY_VERDICT_MARKED,
+        judge_timeout_ms=5000,
+        judge_model_client=_CancellingJudgeModel(),
+        monitor=RunBudgetMonitor(run_budget()),
+        authorized_repos=(),
+    )
+    pipeline.record_tool_result("search_knowledge", SEARCH_SUCCESS)
+
+    with pytest.raises(asyncio.CancelledError):
+        asyncio.run(pipeline.finalize("the answer"))

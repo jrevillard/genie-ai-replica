@@ -518,10 +518,10 @@ def test_a_second_events_call_is_refused_not_silently_replaced():
 
 
 def _chat_body(tool_calls=None, content="searching", finish_reason="tool_calls"):
-    message = {"content": content}
-    if tool_calls is not None:
-        message["tool_calls"] = tool_calls
-    return {"choices": [{"message": message, "finish_reason": finish_reason}], "usage": {}}
+    return {
+        "choices": [{"message": _message(tool_calls=tool_calls, content=content), "finish_reason": finish_reason}],
+        "usage": {},
+    }
 
 
 def _transport(chat_answer):
@@ -786,14 +786,34 @@ def test_first_call_latency_comes_only_from_error_free_cells_and_names_its_cell(
 
 
 class _FakeSseStream:
-    """A canned stream: scripted events in order."""
+    """A canned stream: scripted events in order, with an owned teardown.
+
+    Matches the ``SseStream`` protocol the consumers rely on: ``aclose``
+    closes the outstanding iterator and sets the flag; ``connection_closed``
+    reports it.
+    """
 
     def __init__(self, events):
         self._events = events
+        self._agen = None
+        self._closed = False
 
-    async def events(self):
+    @property
+    def connection_closed(self):
+        return self._closed
+
+    def events(self):
+        self._agen = self._iter_events()
+        return self._agen
+
+    async def _iter_events(self):
         for event in self._events:
             yield event
+
+    async def aclose(self):
+        if self._agen is not None:
+            await self._agen.aclose()
+        self._closed = True
 
 
 def test_the_streaming_cancel_demo_records_an_aborted_midflight_read():
@@ -984,10 +1004,6 @@ def _passing_evidence() -> VerificationEvidence:
     )
 
 
-def _with_cells(evidence: VerificationEvidence, cells: tuple[CellRecord, ...]) -> VerificationEvidence:
-    return replace(evidence, cells=cells)
-
-
 def _errored_cell() -> CellRecord:
     return CellRecord(
         tool_choice_mode="auto",
@@ -1034,14 +1050,14 @@ def test_an_unresolved_identity_fails_the_verdict():
 
 
 def test_an_errored_cell_fails_the_verdict():
-    evidence = _with_cells(_passing_evidence(), (_errored_cell(),))
+    evidence = replace(_passing_evidence(), cells=(_errored_cell(),))
     verdict = acceptance_verdict(evidence)
     assert verdict.passed is False
     assert any("errored" in reason and "400" in reason for reason in verdict.reasons)
 
 
 def test_an_invalid_cell_fails_the_verdict():
-    evidence = _with_cells(_passing_evidence(), (_invalid_cell(),))
+    evidence = replace(_passing_evidence(), cells=(_invalid_cell(),))
     verdict = acceptance_verdict(evidence)
     assert verdict.passed is False
     assert any("invalid" in reason and "no tool call" in reason for reason in verdict.reasons)

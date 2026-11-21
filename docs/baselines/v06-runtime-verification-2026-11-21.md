@@ -283,8 +283,8 @@ Captured 2026-11-21T15:30:35+00:00 by `python -m agent.verification`
 baseline venue), reached from the forge k3s dev cluster host"`), after the
 review-round harness corrections. Latency values are the live observations;
 errors are the server's own messages (harness-truncated at 300 chars);
-repeated cell-error strings are collapsed to `(as the <class> row)` for
-length — every distinct message appears in full at least once.
+repeated cell-error strings are collapsed to `(as the <mode>/<strictness>/streaming=<bool> row)` — the label is the duplicated row's own
+cell identity — for length; every distinct message appears in full at least once.
 
 ```json
 {
@@ -338,7 +338,7 @@ length — every distinct message appears in full at least once.
       "content_preview": null,
       "tool_calls": [],
       "delta_count": 0,
-      "error": "(as the auto_plain row)"
+      "error": "(as the auto/strict/streaming=False row)"
     },
     {
       "tool_choice_mode": "auto",
@@ -351,7 +351,7 @@ length — every distinct message appears in full at least once.
       "content_preview": null,
       "tool_calls": [],
       "delta_count": 0,
-      "error": "(as the auto_stream row)"
+      "error": "(as the auto/strict/streaming=True row)"
     },
     {
       "tool_choice_mode": "named",
@@ -390,7 +390,7 @@ length — every distinct message appears in full at least once.
       "content_preview": null,
       "tool_calls": [],
       "delta_count": 0,
-      "error": "(as the named_plain row)"
+      "error": "(as the named/strict/streaming=False row)"
     },
     {
       "tool_choice_mode": "named",
@@ -403,7 +403,7 @@ length — every distinct message appears in full at least once.
       "content_preview": null,
       "tool_calls": [],
       "delta_count": 0,
-      "error": "(as the named_stream row)"
+      "error": "(as the named/strict/streaming=True row)"
     },
     {
       "tool_choice_mode": "required",
@@ -442,7 +442,7 @@ length — every distinct message appears in full at least once.
       "content_preview": null,
       "tool_calls": [],
       "delta_count": 0,
-      "error": "(as the required_plain row)"
+      "error": "(as the required/strict/streaming=False row)"
     },
     {
       "tool_choice_mode": "required",
@@ -455,7 +455,7 @@ length — every distinct message appears in full at least once.
       "content_preview": null,
       "tool_calls": [],
       "delta_count": 0,
-      "error": "(as the required_stream row)"
+      "error": "(as the required/strict/streaming=True row)"
     }
   ],
   "first_call_latency_ms": {},

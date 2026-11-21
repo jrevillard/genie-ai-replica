@@ -41,11 +41,12 @@ the matrix is 12 completions; the two demos and the plain control add 3.
 """
 
 import asyncio
+import contextlib
 import json
 import logging
 import os
 import time
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Callable
 from dataclasses import asdict, dataclass, field, replace
 from datetime import UTC, datetime
 from typing import Any, Protocol
@@ -130,7 +131,7 @@ SCHEMAS: dict[str, dict] = {
 MARKUP_LEAK_MARKERS = ("<tool_call>", "</tool_call>", "<|python_tag|>", "<function=", "[TOOL_CALL]")
 
 CONTENT_PREVIEW_CHARS = 200
-_VERSION_PREVIEW_CHARS = 300
+_ERROR_PREVIEW_CHARS = 300
 
 
 class VerificationTransientError(RuntimeError):
@@ -196,6 +197,11 @@ class CellRecord:
     tool_calls: tuple[dict, ...]
     delta_count: int
     error: str | None = None
+
+    @property
+    def label(self) -> str:
+        """The cell's identity — one home for the format every consumer names."""
+        return f"{self.tool_choice_mode}/{self.schema_strictness}/streaming={self.streaming}"
 
 
 @dataclass(frozen=True)
@@ -326,17 +332,19 @@ def validate_arguments(arguments: dict, schema: dict) -> tuple[str, ...]:
     return tuple(issues)
 
 
+_JSON_TYPE_CHECKS: dict[str, Callable[[Any], bool]] = {
+    "string": lambda v: isinstance(v, str),
+    "integer": lambda v: isinstance(v, int) and not isinstance(v, bool),
+    "number": lambda v: isinstance(v, (int, float)) and not isinstance(v, bool),
+    "boolean": lambda v: isinstance(v, bool),
+    "array": lambda v: isinstance(v, list),
+    "object": lambda v: isinstance(v, dict),
+    "null": lambda v: v is None,
+}
+
+
 def _json_type_matches(value: Any, expected: str) -> bool:
-    checks = {
-        "string": lambda v: isinstance(v, str),
-        "integer": lambda v: isinstance(v, int) and not isinstance(v, bool),
-        "number": lambda v: isinstance(v, (int, float)) and not isinstance(v, bool),
-        "boolean": lambda v: isinstance(v, bool),
-        "array": lambda v: isinstance(v, list),
-        "object": lambda v: isinstance(v, dict),
-        "null": lambda v: v is None,
-    }
-    check = checks.get(expected)
+    check = _JSON_TYPE_CHECKS.get(expected)
     return check(value) if check else True
 
 
@@ -530,7 +538,7 @@ def judge_streaming_reassembly(observation: ToolCallObservation, schema: dict) -
     delta count) is what keeps a whole-call blob amid content deltas from
     passing — content deltas say nothing about how the call itself arrived.
     """
-    valid, reasons = judge_cell(observation, schema)
+    _, reasons = judge_cell(observation, schema)
     streaming_reasons: list[str] = list(reasons)
     if observation.tool_delta_count < 2:
         streaming_reasons.append(
@@ -546,9 +554,20 @@ def judge_streaming_reassembly(observation: ToolCallObservation, schema: dict) -
 
 
 class SseStream(Protocol):
-    """One open streaming completion: parsed JSON events until ``[DONE]``."""
+    """One open streaming completion: parsed JSON events until ``[DONE]``.
+
+    The stream owns its teardown: every consumer closes what it consumed
+    through :meth:`aclose`, and :attr:`connection_closed` is the observable
+    flag the cancel demo reports — a close the caller performed, never an
+    inference.
+    """
 
     def events(self) -> AsyncIterator[dict]: ...
+
+    @property
+    def connection_closed(self) -> bool: ...
+
+    async def aclose(self) -> None: ...
 
 
 def parse_sse_payload(data: str) -> dict | None:
@@ -654,7 +673,7 @@ class HttpxSseStream:
             if response.status_code >= 400:
                 body = (await response.aread()).decode("utf-8", errors="replace")
                 raise VerificationTransientError(
-                    f"the streaming endpoint answered {response.status_code}: {body[:_VERSION_PREVIEW_CHARS]}"
+                    f"the streaming endpoint answered {response.status_code}: {body[:_ERROR_PREVIEW_CHARS]}"
                 )
             content_type = response.headers.get("content-type", "")
             if "text/event-stream" not in content_type.lower():
@@ -663,7 +682,7 @@ class HttpxSseStream:
                 body = (await response.aread()).decode("utf-8", errors="replace")
                 raise VerificationTransientError(
                     f"the streaming endpoint answered {response.status_code} with content-type "
-                    f"{content_type!r}, not an event stream: {body[:_VERSION_PREVIEW_CHARS]}"
+                    f"{content_type!r}, not an event stream: {body[:_ERROR_PREVIEW_CHARS]}"
                 )
         except BaseException:
             await response.aclose()
@@ -770,7 +789,7 @@ async def run_cell(
         else:
             observation = await _run_nonstreaming_cell(config, transport, payload)
     except Exception as failed:  # noqa: BLE001 — a failed cell is recorded, never skipped
-        error = f"{type(failed).__name__}: {str(failed)[:_VERSION_PREVIEW_CHARS]}"
+        error = f"{type(failed).__name__}: {str(failed)[:_ERROR_PREVIEW_CHARS]}"
         logger.warning("matrix cell %s/%s/streaming=%s failed: %s", mode, strictness, streaming, error)
     latency_ms = (time.perf_counter() - started) * 1000.0
     return _record_cell(mode, strictness, streaming, observation, latency_ms, error)
@@ -781,7 +800,7 @@ async def _run_nonstreaming_cell(config: ProbeConfig, transport, payload: dict) 
         chat_completion_url(config), _auth_headers(config), payload, config.llm_timeout_seconds
     )
     if status >= 400:
-        raise VerificationTransientError(f"the endpoint answered {status}: {str(body)[:_VERSION_PREVIEW_CHARS]}")
+        raise VerificationTransientError(f"the endpoint answered {status}: {str(body)[:_ERROR_PREVIEW_CHARS]}")
     if not isinstance(body, dict):
         raise VerificationTransientError(f"the endpoint answered a {type(body).__name__}, not an object")
     choice, finish_reason = chat_choice(body)
@@ -789,11 +808,7 @@ async def _run_nonstreaming_cell(config: ProbeConfig, transport, payload: dict) 
         raise VerificationTransientError("the response carries no choice")
     message = choice.get("message") or {}
     observation = parse_nonstreaming_tool_calls(message, TOOL_NAME)
-    return ToolCallObservation(
-        content=observation.content,
-        finish_reason=finish_reason,
-        calls=observation.calls,
-    )
+    return replace(observation, finish_reason=finish_reason)
 
 
 async def _run_streaming_cell(payload: dict, sse_factory) -> ToolCallObservation:
@@ -805,9 +820,7 @@ async def _run_streaming_cell(payload: dict, sse_factory) -> ToolCallObservation
     finally:
         # Every consumed stream is closed by its consumer — a drained
         # stream's client would otherwise leak until GC.
-        aclose = getattr(stream, "aclose", None)
-        if aclose is not None:
-            await aclose()
+        await stream.aclose()
     return reassemble_streaming_tool_calls(events, TOOL_NAME)
 
 
@@ -869,11 +882,11 @@ async def read_endpoint_identity(config: ProbeConfig, transport, venue: str = ""
     try:
         status, body = await transport.get_json(url, _discovery_headers(config), config.probe_timeout_seconds)
         if status < 400:
-            version_raw = json.dumps(body)[:_VERSION_PREVIEW_CHARS]
+            version_raw = json.dumps(body)[:_ERROR_PREVIEW_CHARS]
         else:
             version_note = f"GET /version answered {status}"
     except Exception as failed:  # noqa: BLE001 — an absent version endpoint is recorded, not fatal
-        version_note = f"GET /version failed: {type(failed).__name__}: {str(failed)[:_VERSION_PREVIEW_CHARS]}"
+        version_note = f"GET /version failed: {type(failed).__name__}: {str(failed)[:_ERROR_PREVIEW_CHARS]}"
     model_id, max_model_len = await _discover_model(config, transport)
     return EndpointIdentity(
         generation_endpoint=config.generation_endpoint,
@@ -895,10 +908,10 @@ async def _discover_model(config: ProbeConfig, transport) -> tuple[str | None, i
         status, body = await transport.get_json(url, _discovery_headers(config), config.probe_timeout_seconds)
     except Exception as failed:  # noqa: BLE001
         raise VerificationTransientError(
-            f"the model discovery failed: {type(failed).__name__}: {str(failed)[:_VERSION_PREVIEW_CHARS]}"
+            f"the model discovery failed: {type(failed).__name__}: {str(failed)[:_ERROR_PREVIEW_CHARS]}"
         ) from failed
     if status >= 400:
-        raise VerificationTransientError(f"the model discovery answered {status}: {str(body)[:_VERSION_PREVIEW_CHARS]}")
+        raise VerificationTransientError(f"the model discovery answered {status}: {str(body)[:_ERROR_PREVIEW_CHARS]}")
     data = body.get("data") if isinstance(body, dict) else None
     # A list check before the subscript: a malformed body ({"data": {...}} or
     # {"data": 5}) must become the typed transient naming the shape, not a
@@ -936,7 +949,7 @@ async def run_matrix(
                 )
                 if record.error is None and strictness not in first_call_latency:
                     first_call_latency[strictness] = record.latency_ms
-                    first_call_cell[strictness] = f"{mode}/{strictness}/streaming={streaming}"
+                    first_call_cell[strictness] = record.label
                 cells.append(record)
     return cells, first_call_latency, first_call_cell
 
@@ -946,8 +959,22 @@ async def run_matrix(
 # ---------------------------------------------------------------------------
 
 
+@dataclass
+class _StreamCancelState:
+    """The streaming-cancel demo's live counters, shared with its consumer."""
+
+    events: int = 0
+    completion_seen: bool = False
+    aborted: bool = False
+    error: str | None = None
+
+
 async def _consume_stream_events(
-    stream: SseStream, state: dict, park: asyncio.Event | None = None, park_timeout_seconds: float = 5.0
+    stream: SseStream,
+    state: _StreamCancelState,
+    park: asyncio.Event | None = None,
+    park_timeout_seconds: float = 5.0,
+    first_delta: asyncio.Event | None = None,
 ) -> None:
     """Consume the stream into ``state`` until it ends or the task is cancelled.
 
@@ -955,24 +982,27 @@ async def _consume_stream_events(
     cancel, whether a completion arrived first, and whether the demo
     performed the teardown on the cancelled read (the client-side abort is
     what the runtime-level AC names; a server-side close during the park
-    window is not client-observable). A ``park`` event parks the consumer
-    after its first delta (the demo fires it, then cancels) so the
-    cancellation point is the demo's, not a race against the model's typing
-    speed.
+    window is not client-observable). ``first_delta`` fires when the first
+    counted event arrives — the demo's wake-up signal. A ``park`` event
+    parks the consumer after its first delta (the demo fires it, then
+    cancels) so the cancellation point is the demo's, not a race against
+    the model's typing speed.
     """
     try:
         async for event in stream.events():
             if not isinstance(event, dict):
                 continue  # a non-dict event is not a delta; it never counts
-            state["events"] += 1
+            state.events += 1
+            if first_delta is not None:
+                first_delta.set()
             choices = event.get("choices") or []
             choice = choices[0] if choices and isinstance(choices[0], dict) else {}
             # Only the finish chunk counts as a DELIVERED completion: a
             # mid-stream tool-call delta is work in flight, exactly what the
             # demo cancels.
             if choice.get("finish_reason"):
-                state["completion_seen"] = True
-            if park is not None and state["events"] == 1:
+                state.completion_seen = True
+            if park is not None and state.events == 1:
                 # Park after the first delta: the read stays OPEN (the
                 # server keeps generating into a connection nobody is
                 # draining — the real shape of a slow downstream consumer),
@@ -985,12 +1015,12 @@ async def _consume_stream_events(
                 try:
                     await asyncio.wait_for(asyncio.Event().wait(), timeout=park_timeout_seconds)
                 except TimeoutError:
-                    state["error"] = "the demo did not cancel within the park window; the consumer drained on"
+                    state.error = "the demo did not cancel within the park window; the consumer drained on"
     except asyncio.CancelledError:
-        state["aborted"] = True
+        state.aborted = True
         raise
     except Exception as failed:  # noqa: BLE001 — the demo records the failure shape
-        state["error"] = f"{type(failed).__name__}: {str(failed)[:_VERSION_PREVIEW_CHARS]}"
+        state.error = f"{type(failed).__name__}: {str(failed)[:_ERROR_PREVIEW_CHARS]}"
 
 
 async def demo_streaming_cancel(
@@ -1009,11 +1039,11 @@ async def demo_streaming_cancel(
     venue whose serving config rejects tool calls still demonstrates (or
     fails to demonstrate) the mid-flight abort honestly. The demo asserts
     nothing: it records — deltas received, whether the CancelledError was
-    raised, whether the connection aborted with the cancelled read, and
-    whether a completion was delivered anyway. The record is the acceptance
-    evidence, judged by the reader.
+    raised, whether the demo performed the teardown on the cancelled read,
+    and whether a completion was delivered anyway. The record is the
+    acceptance evidence, judged by the reader.
     """
-    state = {"events": 0, "completion_seen": False, "aborted": False, "error": None}
+    state = _StreamCancelState()
     payload = {
         "model": model_id,
         "messages": [{"role": "user", "content": CANCEL_DEMO_PROMPT}],
@@ -1022,13 +1052,19 @@ async def demo_streaming_cancel(
     }
     stream = (sse_factory or _sse_factory(config))(payload)
     park = asyncio.Event() if park_first_delta else None
-    consumer = asyncio.ensure_future(_consume_stream_events(stream, state, park, park_timeout_seconds))
-    deadline = time.monotonic() + first_event_wait_seconds
-    while state["events"] == 0 and not consumer.done() and time.monotonic() < deadline:
-        await asyncio.sleep(0.05)
-    wait_seconds = first_event_wait_seconds - max(0.0, deadline - time.monotonic())
-    error = state["error"]
-    if state["events"] == 0:
+    first_delta = asyncio.Event()
+    consumer = asyncio.ensure_future(_consume_stream_events(stream, state, park, park_timeout_seconds, first_delta))
+    started = time.monotonic()
+    first_delta_waiter = asyncio.ensure_future(first_delta.wait())
+    await asyncio.wait(
+        {first_delta_waiter, consumer}, timeout=first_event_wait_seconds, return_when=asyncio.FIRST_COMPLETED
+    )
+    wait_seconds = time.monotonic() - started
+    first_delta_waiter.cancel()
+    with contextlib.suppress(asyncio.CancelledError):
+        await first_delta_waiter
+    error = state.error
+    if state.events == 0:
         # No delta ever arrived: the demo could not start. The reason names
         # it — a cancelled read that never saw a byte is not the evidence
         # the AC asks for.
@@ -1040,23 +1076,18 @@ async def demo_streaming_cancel(
     except asyncio.CancelledError:
         cancelled_error_raised = True
     except Exception as failed:  # noqa: BLE001 — recorded like any other observation
-        error = error or f"{type(failed).__name__}: {str(failed)[:_VERSION_PREVIEW_CHARS]}"
+        error = error or f"{type(failed).__name__}: {str(failed)[:_ERROR_PREVIEW_CHARS]}"
     # The teardown the record reports is one the DEMO performed: aclose is
-    # called explicitly (getattr seam for test doubles), then the flag is
-    # read. A bare test double without the seam falls back to the
-    # consumer-level signal. A cancel with no teardown never counts as an
-    # abort, and a stream that drained to completion never counts as
-    # aborted even though its connection closed normally.
-    aclose = getattr(stream, "aclose", None)
-    if aclose is not None:
-        await aclose()
-    teardown_closed = bool(getattr(stream, "connection_closed", state["aborted"]))
-    connection_aborted = cancelled_error_raised and teardown_closed
+    # called explicitly, then the flag is read. A cancel with no teardown
+    # never counts as an abort, and a stream that drained to completion
+    # never counts as aborted even though its connection closed normally.
+    await stream.aclose()
+    connection_aborted = cancelled_error_raised and stream.connection_closed
     return StreamingCancelObservation(
-        deltas_received=state["events"],
+        deltas_received=state.events,
         cancelled_error_raised=cancelled_error_raised,
         connection_aborted=connection_aborted,
-        completion_delivered=state["completion_seen"],
+        completion_delivered=state.completion_seen,
         wait_seconds=wait_seconds,
         error=error,
     )
@@ -1154,7 +1185,7 @@ async def demo_loop_cancel(config: ProbeConfig, transport, model_id: str | None 
     except asyncio.CancelledError:
         cancelled_error_propagated = True
     except Exception as failed:  # noqa: BLE001 — recorded honestly, like any demo observation
-        error = f"{type(failed).__name__}: {str(failed)[:_VERSION_PREVIEW_CHARS]}"
+        error = f"{type(failed).__name__}: {str(failed)[:_ERROR_PREVIEW_CHARS]}"
     monitor = loop.monitor
     terminal = tuple(kind for kind in emitted if kind in (EventKind.RUN_FINISHED.value, EventKind.RUN_ERROR.value))
     if not cancelled_error_propagated and error is None:
@@ -1215,10 +1246,10 @@ async def run_plain_control(config: ProbeConfig, transport, model_id: str) -> Pl
         return PlainControlObservation(
             status_ok=False,
             content_present=False,
-            detail=f"{type(failed).__name__}: {str(failed)[:_VERSION_PREVIEW_CHARS]}",
+            detail=f"{type(failed).__name__}: {str(failed)[:_ERROR_PREVIEW_CHARS]}",
         )
     if status >= 400:
-        return PlainControlObservation(False, False, detail=f"answered {status}: {str(body)[:_VERSION_PREVIEW_CHARS]}")
+        return PlainControlObservation(False, False, detail=f"answered {status}: {str(body)[:_ERROR_PREVIEW_CHARS]}")
     choice, _ = chat_choice(body) if isinstance(body, dict) else (None, None)
     content = chat_choice_content(choice) if choice else None
     return PlainControlObservation(
@@ -1286,7 +1317,7 @@ def acceptance_verdict(evidence: VerificationEvidence) -> AcceptanceVerdict:
     if evidence.identity.model_id is None:
         reasons.append("no model id: the endpoint identity was not resolved")
     for cell in evidence.cells:
-        label = f"{cell.tool_choice_mode}/{cell.schema_strictness}/streaming={cell.streaming}"
+        label = cell.label
         if cell.error is not None:
             reasons.append(f"cell {label} errored: {cell.error}")
         elif cell.valid is not True:
@@ -1322,7 +1353,7 @@ def _failure_record(error: str) -> dict:
         "producer": PRODUCER_ID,
         "status": "failed",
         "captured_at_utc": datetime.now(UTC).isoformat(timespec="seconds"),
-        "error": error[:_VERSION_PREVIEW_CHARS],
+        "error": error[:_ERROR_PREVIEW_CHARS],
     }
 
 

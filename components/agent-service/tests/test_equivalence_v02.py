@@ -91,13 +91,18 @@ DEVIATIONS = {
         "set; no routing probe runs."
     ),
     "provenance_attach": (
-        "Only the RETRIEVER-ENVELOPE layer of provenance_attach is a "
-        "deviation: the deployed ``_attach_provenance`` decorates each "
-        "result dict with graph_name/repo_id/concept_id envelope fields. "
-        "The port carries identity in the CONTRACT's provenance types "
-        "(LegacyFileProvenance without a marker; OkfConceptProvenance with "
-        "the okf-concept marker) — the envelope fields are not replicated, "
-        "and graph attribution rides the leg's own scope."
+        "Two layers deviate. The deployed ``_attach_provenance`` decorates "
+        "each result dict with graph_name/repo_id/concept_id envelope "
+        "fields; the port carries identity in the CONTRACT's provenance "
+        "types (LegacyFileProvenance without a marker; OkfConceptProvenance "
+        "with the okf-concept marker) — the envelope fields are not "
+        "replicated, and graph attribution rides the leg's own scope. And "
+        "the deployed retriever serves a chunk with no derivable file_id "
+        "unattributed while chatqna drops it later, at citation assembly; "
+        "the port drops it EARLIER, at the capability's hit minting "
+        "(issue #2032): the executor and the no-agent citation mapping both "
+        "read the same hits, so an unresolvable identity cannot surface "
+        "anywhere."
     ),
 }
 

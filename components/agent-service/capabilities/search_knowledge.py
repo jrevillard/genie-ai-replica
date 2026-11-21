@@ -164,7 +164,8 @@ class SearchKnowledgeCapability:
         ``abstention_sink`` is an OPTIONAL per-call hook (default None): when
         the search ends in one of the recorded insufficiencies, the exact
         reason string (``no_documents_retrieved``, ``reranker_input_too_long``,
-        ``reranker_selected_nothing``, ``result_budget_exhausted``) is handed
+        ``reranker_selected_nothing``, ``result_budget_exhausted``,
+        ``no_resolvable_candidates``) is handed
         to it AFTER the log line, so a caller can surface the reason without
         scraping logs. It is pipeline-orchestration plumbing, not contract
         surface — the reason stays off the result type (the contract is
@@ -274,18 +275,34 @@ class SearchKnowledgeCapability:
         # selection keeps TEI's score-descending order — the hits carry that
         # order into the result (V02 §4.13: the selected passages keep the
         # reranker's score-descending order all the way through).
+        # A candidate whose enrichment left ``file_ids`` empty is skipped,
+        # never cited with an empty identity: the deployed end-to-end path
+        # drops the unresolvable source at citation assembly (chatqna warns
+        # and skips it), and an empty ``concept_id``/``file_id`` would reach
+        # the BFF's ``source_documents`` unresolvable and collapse the
+        # no-agent dedup (issue #2032).
         hits = []
         for scored in outcome.selection:
             doc = candidates[scored.position]["doc"]
+            if not doc.file_ids:
+                logger.warning(f"skipped candidate with no resolvable file_id: key={doc.key!r} graph={doc.graph_name}")
+                continue
             if doc.repo_id:
                 provenance = OkfConceptProvenance(
-                    concept_id=doc.file_ids[0] if doc.file_ids else "",
+                    concept_id=doc.file_ids[0],
                     repo_id=doc.repo_id,
                     bundle_version=doc.bundle_version,
                 )
             else:
-                provenance = LegacyFileProvenance(file_id=doc.file_ids[0] if doc.file_ids else "")
+                provenance = LegacyFileProvenance(file_id=doc.file_ids[0])
             hits.append(SearchHit(provenance=provenance, text=doc.text, score=scored.score))
+
+        if not hits:
+            # Every selected candidate was unresolvable: nothing citable
+            # survived. Its own reason — the budget cut nothing and the
+            # retrieval was not empty.
+            logger.warning("abstained.reason=no_resolvable_candidates")
+            return self._insufficient(request, "no_resolvable_candidates", abstention_sink)
 
         truncated = self._apply_result_budget(hits, budget)
         if not hits:

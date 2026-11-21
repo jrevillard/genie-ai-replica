@@ -9,7 +9,11 @@
 
 const fs = require('fs');
 const path = require('path');
-const { parseComposeServiceContracts, parseComposeImages } = require('../validators/parse-compose');
+const {
+  parseComposeServiceContracts,
+  parseComposeImages,
+  parseComposeServiceBlock
+} = require('../validators/parse-compose');
 const { parseEnvTemplate } = require('../validators/parse-env');
 
 const ROOT = path.join(__dirname, '..', '..', '..');
@@ -21,17 +25,6 @@ const ENV_PATH = path.join(ROOT, 'env');
 // least reach the container and be documented.
 const KNOBS = ['AGENT_TRANSLATION_MAX_TOKENS', 'AGENT_TRANSLATION_MAX_CALLS'];
 
-function serviceBlock(composeText, service) {
-  const lines = composeText.split('\n');
-  const start = lines.findIndex((line) => line === `  ${service}:`);
-  if (start === -1) {
-    return null;
-  }
-  const rest = lines.slice(start + 1);
-  const end = rest.findIndex((line) => /^ {2}\S/.test(line));
-  return rest.slice(0, end === -1 ? rest.length : end).join('\n');
-}
-
 describe('the agentic translation leg is wired and GPU-only (story 2.10)', () => {
   let composeText;
   let backendBlock;
@@ -40,7 +33,7 @@ describe('the agentic translation leg is wired and GPU-only (story 2.10)', () =>
 
   beforeAll(() => {
     composeText = fs.readFileSync(COMPOSE_PATH, 'utf-8');
-    backendBlock = serviceBlock(composeText, 'backend');
+    backendBlock = parseComposeServiceBlock(composeText, 'backend');
     contracts = parseComposeServiceContracts(COMPOSE_PATH);
     env = parseEnvTemplate(ENV_PATH);
   });

@@ -295,6 +295,19 @@ class GpuTranslateBackend {
   }
 
   /**
+   * The chars/4 token estimate — the deployed constant, one home for the
+   * estimator: the window math below and the usage estimate
+   * (`_estimateUsage`) both call it. Optimistic for CJK (~1 token/char
+   * against ~4 here); the window math's `needed` bound is sized to survive
+   * that miscount — see its doc.
+   * @param {string|Object[]} text - The text (or messages array) to size
+   * @returns {number} The estimated token count
+   */
+  _estimateTokens(text) {
+    return Math.ceil(JSON.stringify(text).length / 4);
+  }
+
+  /**
    * Lower `max_tokens` so the request's INPUT plus its OUTPUT budget fits
    * `maxModelLen`, without asking for output the translation cannot use.
    *
@@ -337,7 +350,7 @@ class GpuTranslateBackend {
     if (!Array.isArray(requestBody.messages)) {
       throw new Error('Cannot size the output budget: request body has no messages array');
     }
-    const inputTokens = Math.ceil(JSON.stringify(requestBody.messages).length / 4);
+    const inputTokens = this._estimateTokens(requestBody.messages);
     const room = this.maxModelLen - inputTokens - 128;
     if (room < MIN_OUTPUT_BUDGET) {
       // A budget this small would earn a reply of a few tokens, which the
@@ -458,16 +471,16 @@ class GpuTranslateBackend {
   }
 
   /**
-   * The chars/4 estimate of a call's token usage — the deployed constant (the
-   * same estimator the window math in `_capMaxTokens` uses). Used ONLY to
-   * account for usage the endpoint discarded, never to bound a call.
+   * The chars/4 estimate of a call's token usage — the deployed constant
+   * (the same estimator `_estimateTokens` uses for the window math). Used
+   * ONLY to account for usage the endpoint discarded, never to bound a call.
    * @param {Object} requestBody - The request as it was sent
    * @param {string} translated - The translation the call produced
    * @returns {{prompt_tokens: number, completion_tokens: number}}
    */
   _estimateUsage(requestBody, translated) {
     return {
-      prompt_tokens: Math.ceil(JSON.stringify(requestBody.messages).length / 4),
+      prompt_tokens: this._estimateTokens(requestBody.messages),
       completion_tokens: Math.ceil((translated || '').length / 4)
     };
   }
@@ -686,8 +699,10 @@ class GpuTranslateBackend {
         const requestBody = this.formatRequest(this.modelId, sourceCode, targetCode, text);
         if (Number.isFinite(maxTokens)) {
           // The residual bound rides the request: the smaller of the window
-          // math's cap and the remaining allowance.
-          requestBody.max_tokens = Math.min(requestBody.max_tokens ?? maxTokens, maxTokens);
+          // math's cap and the remaining allowance. `max_tokens` is always
+          // assigned by `_capMaxTokens` (it throws on the refusal path), so
+          // there is no fallback case.
+          requestBody.max_tokens = Math.min(requestBody.max_tokens, maxTokens);
         }
 
         const { content, usage } = await this._postChatCompletion(requestBody, {
@@ -713,7 +728,7 @@ class GpuTranslateBackend {
       return {
         translations,
         usage: callsMade > 0 ? { prompt_tokens: promptTokens, completion_tokens: completionTokens } : null,
-        estimated: callsMade > 0 ? estimated : false
+        estimated
       };
     } catch (error) {
       logger.error(`[GPU-BACKEND] Translation failed: ${error.message}`, {
@@ -799,6 +814,17 @@ class GpuTranslateBackend {
       initialized: this.initialized,
       healthCheckPassed: this.healthCheckPassed
     };
+  }
+
+  /**
+   * "A GPU API is configured" — the same two independent signals the legacy
+   * service reads: a remote GPU node host, or an explicit translation
+   * endpoint. The in-cluster worker alone is compose's pass-through default,
+   * not a configuration.
+   * @returns {boolean}
+   */
+  isApiConfigured() {
+    return Boolean(process.env.GPU_NODE_HOST) || this.endpointExplicit;
   }
 }
 

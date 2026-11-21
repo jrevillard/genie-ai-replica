@@ -109,25 +109,6 @@ function readKnob(name) {
 }
 
 /**
- * The REQUIRED knobs that are missing or unusable, in a fixed order.
- * @returns {string[]}
- */
-function missingKnobs() {
-  const missing = [];
-  if (!Number.isFinite(readKnob(KNOB_MAX_TOKENS))) missing.push(KNOB_MAX_TOKENS);
-  if (!Number.isFinite(readKnob(KNOB_MAX_CALLS))) missing.push(KNOB_MAX_CALLS);
-  return missing;
-}
-
-/**
- * The deployment's translation-leg allowances, read from the knobs.
- * @returns {{maxTokens: number, maxCalls: number}}
- */
-function allowances() {
-  return { maxTokens: readKnob(KNOB_MAX_TOKENS), maxCalls: readKnob(KNOB_MAX_CALLS) };
-}
-
-/**
  * The accounting block — the shape the story-2.4 caller persists into the
  * `queries` metadata execution record. Unit-pinned by the leg's test suite.
  *
@@ -276,14 +257,13 @@ async function raceInit(backend, { budgetMs, signal }) {
     timer = setTimeout(() => reject(new Error(INIT_BUDGET_SPENT)), budgetMs);
   });
   const abortLoss = new Promise((_, reject) => {
-    if (signal && signal.aborted) {
+    if (!signal) return;
+    if (signal.aborted) {
       reject(new Error(INIT_ABORTED));
       return;
     }
-    if (signal) {
-      onAbort = () => reject(new Error(INIT_ABORTED));
-      signal.addEventListener('abort', onAbort, { once: true });
-    }
+    onAbort = () => reject(new Error(INIT_ABORTED));
+    signal.addEventListener('abort', onAbort, { once: true });
   });
   try {
     // The no-op catch is belt-and-braces for the dangling-loss case:
@@ -297,9 +277,27 @@ async function raceInit(backend, { budgetMs, signal }) {
     return await Promise.race([settled, budgetLoss, abortLoss]);
   } finally {
     clearTimeout(timer);
-    if (onAbort && signal) signal.removeEventListener('abort', onAbort);
+    if (onAbort) signal.removeEventListener('abort', onAbort);
   }
 }
+
+// The markdown tooling — loaded once per process, on the first pass that
+// needs it (the same libraries the legacy translator uses). Lazy: nothing
+// translation-related loads until an agentic pass asks for it. require,
+// not import: the packages are ESM-only, and Node's require(esm) resolves
+// them on the image's Node 22 base while staying mockable under the CJS
+// test suite (the VM's dynamic import needs --experimental-vm-modules).
+let markdownLibs = null;
+const loadMarkdownLibs = () => {
+  if (!markdownLibs) {
+    const { unified } = require('unified');
+    const remarkParse = require('remark-parse').default;
+    const remarkStringify = require('remark-stringify').default;
+    const { visit } = require('unist-util-visit');
+    markdownLibs = { unified, remarkParse, remarkStringify, visit };
+  }
+  return markdownLibs;
+};
 
 /**
  * Create the answer-translation leg for one agentic request.
@@ -342,7 +340,8 @@ function createAgenticTranslationLeg({ routingDecision, runUsage = null, targetL
   // with a missing knob answers skip with the knob named — logged once here
   // at ERROR (the operator's signal), recorded per execution in the
   // accounting.
-  const missing = missingKnobs();
+  const knobs = { [KNOB_MAX_TOKENS]: readKnob(KNOB_MAX_TOKENS), [KNOB_MAX_CALLS]: readKnob(KNOB_MAX_CALLS) };
+  const missing = Object.keys(knobs).filter((name) => !Number.isFinite(knobs[name]));
   for (const knob of missing) {
     logger.error(
       `[AGENTIC-TRANSLATION] Required knob ${knob} is missing or unusable — answer translation cannot be bounded and is skipped (the English answer stays)`
@@ -352,49 +351,30 @@ function createAgenticTranslationLeg({ routingDecision, runUsage = null, targetL
 
   // The leg's own GPU backend — never the legacy singleton, whose `auto`
   // probe may have chosen the CPU model (sharing it would couple the paths).
+  // `backendUnusable` memoizes a request-local failure — a constructor
+  // throw or a failed init probe — so later units of the SAME request skip
+  // with identical accounting and zero re-probes; a NEW request starts fresh.
   let backend = null;
   let backendUnusable = false;
   const ensureBackend = () => {
-    if (backend || backendUnusable) return backend;
-    try {
-      backend = new GpuTranslateBackend();
-    } catch (error) {
-      // A model with no language map cannot translate anything; the leg
-      // records the reason instead of crashing the request.
-      backendUnusable = true;
-      logger.error(`[AGENTIC-TRANSLATION] GPU backend unusable: ${error.message}`);
+    if (backendUnusable) return null;
+    if (!backend) {
+      try {
+        backend = new GpuTranslateBackend();
+      } catch (error) {
+        // A model with no language map cannot translate anything; the leg
+        // records the reason instead of crashing the request.
+        backendUnusable = true;
+        logger.error(`[AGENTIC-TRANSLATION] GPU backend unusable: ${error.message}`);
+      }
     }
     return backend;
   };
-
-  // "A GPU API is configured" — the same two independent signals the legacy
-  // service reads: a remote GPU node host, or an explicit translation
-  // endpoint. The in-cluster worker alone is compose's pass-through default,
-  // not a configuration.
-  const gpuConfigured = (b) => Boolean(process.env.GPU_NODE_HOST) || b.endpointExplicit;
 
   // The leg's own spend within this request: usage returned by the endpoint
   // or estimated where it discarded one. Accumulated across the request's
   // units so each plan bounds the whole request, not just one call.
   const spent = { promptTokens: 0, completionTokens: 0, calls: 0 };
-
-  // The markdown tooling — loaded once per leg, on the first pass that needs
-  // it (the same libraries the legacy translator uses). Lazy: nothing
-  // translation-related loads until an agentic pass asks for it. require,
-  // not import: the packages are ESM-only, and Node's require(esm) resolves
-  // them on the image's Node 22 base while staying mockable under the CJS
-  // test suite (the VM's dynamic import needs --experimental-vm-modules).
-  let markdownLibs = null;
-  const loadMarkdownLibs = () => {
-    if (!markdownLibs) {
-      const { unified } = require('unified');
-      const remarkParse = require('remark-parse').default;
-      const remarkStringify = require('remark-stringify').default;
-      const { visit } = require('unist-util-visit');
-      markdownLibs = { unified, remarkParse, remarkStringify, visit };
-    }
-    return markdownLibs;
-  };
 
   /**
    * Execute one translation pass: plan → bounded, abortable call(s) →
@@ -409,71 +389,57 @@ function createAgenticTranslationLeg({ routingDecision, runUsage = null, targetL
    */
   async function execute({ markdownText, mode, remainingMs, signal }) {
     const aborted = () => Boolean(signal && signal.aborted);
-
-    // The caller is already gone: nothing to translate for anyone.
-    if (aborted()) {
-      return {
-        outcome: 'cancelled',
-        translated: null,
-        accounting: accountingBlock({
-          decision: 'skip',
-          outcome: 'cancelled',
-          queryTranslationStatus: V05_STATUS.FALLBACK_ERROR,
-          mode
-        })
-      };
-    }
-
-    // 1. Fail-closed knobs (named at construction; answered here forever).
-    if (configError) {
-      return { outcome: 'skipped', translated: null, accounting: skipAccounting(mode, { configError }) };
-    }
-
-    // 2. Routing-keyed GPU-only selection.
-    const b = ensureBackend();
-    if (!b) {
-      return {
-        outcome: 'skipped',
-        translated: null,
-        accounting: skipAccounting(mode, { configError: GPU_INIT_FAILED })
-      };
-    }
-    if (!gpuConfigured(b)) {
-      return {
-        outcome: 'skipped',
-        translated: null,
-        accounting: skipAccounting(mode, { configError: GPU_NOT_CONFIGURED })
-      };
-    }
-
-    // 3. Entry guard: a remaining-deadline no clock could have produced is a
-    //    wiring defect — it is recorded, never a raw rejection past the
-    //    accounting contract.
-    if (!Number.isFinite(remainingMs)) {
-      return {
-        outcome: 'skipped',
-        translated: null,
-        accounting: skipAccounting(mode, { configError: INVALID_REMAINING_MS })
-      };
-    }
+    const skip = (opts) => ({ outcome: 'skipped', translated: null, accounting: skipAccounting(mode, opts) });
 
     // The pass's own accounting: everything from the first attempted call on
     // is recorded, whatever the outcome.
     const passUsage = { prompt_tokens: 0, completion_tokens: 0 };
     let passEstimated = false;
     let passCalls = 0;
-    let anythingSpent = false;
+    const passUsageBlock = () =>
+      passCalls > 0
+        ? {
+            prompt_tokens: passUsage.prompt_tokens,
+            completion_tokens: passUsage.completion_tokens,
+            estimated: passEstimated
+          }
+        : null;
+    const cancelled = (decision) => ({
+      outcome: 'cancelled',
+      translated: null,
+      accounting: accountingBlock({
+        decision,
+        outcome: 'cancelled',
+        queryTranslationStatus: V05_STATUS.FALLBACK_ERROR,
+        usage: passUsageBlock(),
+        mode
+      })
+    });
+
+    // The caller is already gone: nothing to translate for anyone.
+    if (aborted()) return cancelled('skip');
+
+    // 1. Fail-closed knobs (named at construction; answered here forever).
+    if (configError) return skip({ configError });
+
+    // 2. Routing-keyed GPU-only selection.
+    const b = ensureBackend();
+    if (!b) return skip({ configError: GPU_INIT_FAILED });
+    if (!b.isApiConfigured()) return skip({ configError: GPU_NOT_CONFIGURED });
+
+    // 3. Entry guard: a remaining-deadline no clock could have produced is a
+    //    wiring defect — it is recorded, never a raw rejection past the
+    //    accounting contract.
+    if (!Number.isFinite(remainingMs)) return skip({ configError: INVALID_REMAINING_MS });
 
     try {
       // 4. The residual plan.
       const plan = planTranslation({
         deadlineRemainingMs: remainingMs,
         usage: mergedPlanUsage(runUsage, spent),
-        allowances: allowances()
+        allowances: { maxTokens: knobs[KNOB_MAX_TOKENS], maxCalls: knobs[KNOB_MAX_CALLS] }
       });
-      if (plan.decision !== 'translate') {
-        return { outcome: 'skipped', translated: null, accounting: skipAccounting(mode, { status: plan.status }) };
-      }
+      if (plan.decision !== 'translate') return skip({ status: plan.status });
 
       // 5. The language pair against the leg's own map — before init, so an
       //    English or unknown-language request never performs the health and
@@ -481,17 +447,11 @@ function createAgenticTranslationLeg({ routingDecision, runUsage = null, targetL
       //    inside this try, so the failure lands in the accounting, never
       //    as a raw rejection.
       const { pair, unknown } = resolveLanguagePair(b, targetLanguage);
-      if (unknown) {
-        return {
-          outcome: 'skipped',
-          translated: null,
-          accounting: skipAccounting(mode, { queryTranslationStatus: V05_STATUS.PASSTHROUGH_UNKNOWN_LANGUAGE })
-        };
-      }
+      if (unknown) return skip({ queryTranslationStatus: V05_STATUS.PASSTHROUGH_UNKNOWN_LANGUAGE });
       if (!pair) {
         // English or auto: nothing to translate (the caller's
         // wantsTranslation discipline decides this before constructing work).
-        return { outcome: 'skipped', translated: null, accounting: skipAccounting(mode) };
+        return skip();
       }
 
       // 6. The health and models probes, raced against this request's two
@@ -499,60 +459,26 @@ function createAgenticTranslationLeg({ routingDecision, runUsage = null, targetL
       //    because the probes run on their own fixed budgets and would
       //    otherwise stall the pass past the deadline or outlive a
       //    disconnected client. A probe FAILURE is still a skip with the
-      //    recorded reason.
+      //    recorded reason. A backend a previous unit already initialized
+      //    skips the ceremony: the probes ran once for this request.
       const initStartedAt = Date.now();
-      try {
-        await raceInit(b, { budgetMs: remainingMs, signal });
-      } catch (error) {
-        if (aborted()) {
-          return {
-            outcome: 'cancelled',
-            translated: null,
-            accounting: accountingBlock({
-              decision: 'translate',
-              outcome: 'cancelled',
-              queryTranslationStatus: V05_STATUS.FALLBACK_ERROR,
-              mode
-            })
-          };
+      if (!b.initialized) {
+        try {
+          await raceInit(b, { budgetMs: remainingMs, signal });
+        } catch (error) {
+          if (aborted()) return cancelled('translate');
+          if (error.message === INIT_BUDGET_SPENT) return skip({ status: SKIP_STATUSES.DEADLINE_SPENT });
+          logger.warn(`[AGENTIC-TRANSLATION] GPU backend failed at request time: ${error.message}`);
+          backendUnusable = true;
+          return skip({ configError: GPU_INIT_FAILED });
         }
-        if (error.message === INIT_BUDGET_SPENT) {
-          return {
-            outcome: 'skipped',
-            translated: null,
-            accounting: skipAccounting(mode, { status: SKIP_STATUSES.DEADLINE_SPENT })
-          };
-        }
-        logger.warn(`[AGENTIC-TRANSLATION] GPU backend failed at request time: ${error.message}`);
-        return {
-          outcome: 'skipped',
-          translated: null,
-          accounting: skipAccounting(mode, { configError: GPU_INIT_FAILED })
-        };
       }
-      // Won race: init finished — its wall time is part of the translation
-      // budget, subtracted below so no call's timeout can exceed the
-      // caller's remaining deadline.
+      // Won race (or already initialized): init's wall time is part of the
+      // translation budget, subtracted below so no call's timeout can exceed
+      // the caller's remaining deadline.
       const remainingAfterInit = remainingMs - (Date.now() - initStartedAt);
-      if (aborted()) {
-        return {
-          outcome: 'cancelled',
-          translated: null,
-          accounting: accountingBlock({
-            decision: 'translate',
-            outcome: 'cancelled',
-            queryTranslationStatus: V05_STATUS.FALLBACK_ERROR,
-            mode
-          })
-        };
-      }
-      if (remainingAfterInit <= 0) {
-        return {
-          outcome: 'skipped',
-          translated: null,
-          accounting: skipAccounting(mode, { status: SKIP_STATUSES.DEADLINE_SPENT })
-        };
-      }
+      if (aborted()) return cancelled('translate');
+      if (remainingAfterInit <= 0) return skip({ status: SKIP_STATUSES.DEADLINE_SPENT });
 
       // 7. The bounded pass. Budget stops mid-pass are timeout-classified:
       //    something was attempted, so the outcome is a failed translation,
@@ -580,7 +506,6 @@ function createAgenticTranslationLeg({ routingDecision, runUsage = null, targetL
             decision: 'translate',
             outcome: 'translated',
             queryTranslationStatus: V05_STATUS.TRANSLATED,
-            usage: null,
             mode
           })
         };
@@ -621,7 +546,6 @@ function createAgenticTranslationLeg({ routingDecision, runUsage = null, targetL
 
         passCalls += 1;
         spent.calls += 1;
-        anythingSpent = true;
         // The usage is always served-or-estimated here: the backend returns
         // the endpoint's counts when the response carries them, its chars/4
         // estimate flagged `estimated` when it does not. The estimate
@@ -663,38 +587,14 @@ function createAgenticTranslationLeg({ routingDecision, runUsage = null, targetL
           decision: 'translate',
           outcome: 'translated',
           queryTranslationStatus: V05_STATUS.TRANSLATED,
-          usage: anythingSpent
-            ? {
-                prompt_tokens: passUsage.prompt_tokens,
-                completion_tokens: passUsage.completion_tokens,
-                estimated: passEstimated
-              }
-            : null,
+          usage: passUsageBlock(),
           mode
         })
       };
     } catch (error) {
       // Cancelled takes precedence over every failure classification: the
       // caller is gone, the in-flight request was destroyed, no retry.
-      if (aborted()) {
-        return {
-          outcome: 'cancelled',
-          translated: null,
-          accounting: accountingBlock({
-            decision: 'translate',
-            outcome: 'cancelled',
-            queryTranslationStatus: V05_STATUS.FALLBACK_ERROR,
-            usage: anythingSpent
-              ? {
-                  prompt_tokens: passUsage.prompt_tokens,
-                  completion_tokens: passUsage.completion_tokens,
-                  estimated: passEstimated
-                }
-              : null,
-            mode
-          })
-        };
-      }
+      if (aborted()) return cancelled('translate');
       logger.warn(`[AGENTIC-TRANSLATION] Translation failed: ${error.message} (mode=${mode})`);
       return {
         outcome: 'failed',
@@ -705,13 +605,7 @@ function createAgenticTranslationLeg({ routingDecision, runUsage = null, targetL
           queryTranslationStatus: /timeout/i.test(error.message)
             ? V05_STATUS.FALLBACK_TIMEOUT
             : V05_STATUS.FALLBACK_ERROR,
-          usage: anythingSpent
-            ? {
-                prompt_tokens: passUsage.prompt_tokens,
-                completion_tokens: passUsage.completion_tokens,
-                estimated: passEstimated
-              }
-            : null,
+          usage: passUsageBlock(),
           mode
         })
       };
@@ -764,4 +658,4 @@ function createAgenticTranslationLeg({ routingDecision, runUsage = null, targetL
   };
 }
 
-module.exports = { createAgenticTranslationLeg };
+module.exports = { createAgenticTranslationLeg, loadMarkdownLibs };

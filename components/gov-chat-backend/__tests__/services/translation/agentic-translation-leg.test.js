@@ -147,13 +147,16 @@ describe('agentic translation leg (story 2.10)', () => {
     ...extra
   });
 
+  // The chat-completions requests among the captured calls — the probes
+  // (/health, /v1/models) ride the same mock.
+  const chatCalls = (calls) => calls.filter((c) => String(c.path).includes('/chat/completions'));
+
   beforeEach(() => {
-    savedEnv = {
-      tokens: process.env.AGENT_TRANSLATION_MAX_TOKENS,
-      calls: process.env.AGENT_TRANSLATION_MAX_CALLS,
-      gpu: process.env.GPU_NODE_HOST,
-      endpoint: process.env.VLLM_TRANSLATION_ENDPOINT
-    };
+    savedEnv = Object.fromEntries(
+      ['AGENT_TRANSLATION_MAX_TOKENS', 'AGENT_TRANSLATION_MAX_CALLS', 'GPU_NODE_HOST', 'VLLM_TRANSLATION_ENDPOINT'].map(
+        (name) => [name, process.env[name]]
+      )
+    );
     process.env.AGENT_TRANSLATION_MAX_TOKENS = '10000';
     process.env.AGENT_TRANSLATION_MAX_CALLS = '10';
     process.env.GPU_NODE_HOST = '10.0.0.9';
@@ -161,13 +164,7 @@ describe('agentic translation leg (story 2.10)', () => {
   });
 
   afterEach(() => {
-    for (const [key, value] of Object.entries(savedEnv)) {
-      const name = {
-        tokens: 'AGENT_TRANSLATION_MAX_TOKENS',
-        calls: 'AGENT_TRANSLATION_MAX_CALLS',
-        gpu: 'GPU_NODE_HOST',
-        endpoint: 'VLLM_TRANSLATION_ENDPOINT'
-      }[key];
+    for (const [name, value] of Object.entries(savedEnv)) {
       if (value === undefined) delete process.env[name];
       else process.env[name] = value;
     }
@@ -223,7 +220,7 @@ describe('agentic translation leg (story 2.10)', () => {
       // The bound rides the request: max_tokens = remaining allowance
       // (10000 - 150), the timeout the remaining deadline at call start.
       expect(chatWrites[0].max_tokens).toBeLessThanOrEqual(9850);
-      const chatCall = calls.find((c) => String(c.path).includes('/chat/completions'));
+      const chatCall = chatCalls(calls)[0];
       expect(chatCall.timeout).toBeLessThanOrEqual(5000);
       expect(chatCall.timeout).toBeGreaterThan(4000);
     });
@@ -240,7 +237,7 @@ describe('agentic translation leg (story 2.10)', () => {
       // The strong wrapper survives; the translated cores sit inside it.
       expect(r.translated).toBe('X **X** X');
       expect(r.accounting.usage).toEqual({ prompt_tokens: 6, completion_tokens: 3, estimated: false });
-      expect(calls.filter((c) => String(c.path).includes('/chat/completions'))).toHaveLength(3);
+      expect(chatCalls(calls)).toHaveLength(3);
     });
 
     it('caps the output budget exactly at the remaining token allowance', async () => {
@@ -315,7 +312,7 @@ describe('agentic translation leg (story 2.10)', () => {
       expect(r.outcome).toBe('skipped');
       expect(r.accounting.configError).toBe('invalid_remaining_ms');
       expect(r.accounting.queryTranslationStatus).toBe('passthrough_english');
-      expect(calls.filter((c) => String(c.path).includes('/chat/completions'))).toHaveLength(0);
+      expect(chatCalls(calls)).toHaveLength(0);
     });
 
     it('treats a malformed call-count record as usage unavailable — never a misbound plan', async () => {
@@ -446,7 +443,7 @@ describe('agentic translation leg (story 2.10)', () => {
       expect(r.accounting.decision).toBe('translate');
       expect(r.accounting.queryTranslationStatus).toBe('fallback_error');
       // One chat request, destroyed — no retry.
-      expect(calls.filter((c) => String(c.path).includes('/chat/completions'))).toHaveLength(1);
+      expect(chatCalls(calls)).toHaveLength(1);
     });
   });
 
@@ -473,7 +470,7 @@ describe('agentic translation leg (story 2.10)', () => {
 
       expect(r.outcome).toBe('skipped');
       expect(r.accounting.queryTranslationStatus).toBe('passthrough_unknown_language');
-      expect(calls.filter((c) => String(c.path).includes('/chat/completions'))).toHaveLength(0);
+      expect(chatCalls(calls)).toHaveLength(0);
     });
 
     it('answers English with passthrough_english and no call', async () => {
@@ -483,7 +480,7 @@ describe('agentic translation leg (story 2.10)', () => {
 
       expect(r.outcome).toBe('skipped');
       expect(r.accounting.queryTranslationStatus).toBe('passthrough_english');
-      expect(calls.filter((c) => String(c.path).includes('/chat/completions'))).toHaveLength(0);
+      expect(chatCalls(calls)).toHaveLength(0);
     });
   });
 
@@ -513,7 +510,7 @@ describe('agentic translation leg (story 2.10)', () => {
       // once, in the plan.
       expect(chatWrites[0].max_tokens).toBe(1000);
       expect(chatWrites[1].max_tokens).toBe(985);
-      expect(calls.filter((c) => String(c.path).includes('/chat/completions'))).toHaveLength(2);
+      expect(chatCalls(calls)).toHaveLength(2);
     });
 
     it('does not double-subtract earlier units: their spend rides inside the plan', async () => {
@@ -536,7 +533,7 @@ describe('agentic translation leg (story 2.10)', () => {
       // Subtracting the leg's accumulated spend AGAIN would have computed
       // -1000 and thrown spuriously.
       expect(chatWrites[1].max_tokens).toBe(2000);
-      expect(calls.filter((c) => String(c.path).includes('/chat/completions'))).toHaveLength(2);
+      expect(chatCalls(calls)).toHaveLength(2);
     });
 
     it('skips a unit whose plan finds the token allowance spent by earlier units', async () => {
@@ -565,7 +562,7 @@ describe('agentic translation leg (story 2.10)', () => {
       expect(t.failed).toBe(true);
       expect(u2.outcome).toBe('skipped');
       expect(u2.accounting.queryTranslationStatus).toBe('passthrough_english');
-      expect(calls.filter((c) => String(c.path).includes('/chat/completions'))).toHaveLength(1);
+      expect(chatCalls(calls)).toHaveLength(1);
     });
 
     it('stops mid-pass when the remaining deadline is spent, as a failed unit', async () => {
@@ -589,7 +586,7 @@ describe('agentic translation leg (story 2.10)', () => {
 
       expect(r.outcome).toBe('failed');
       expect(r.accounting.queryTranslationStatus).toBe('fallback_timeout');
-      expect(calls.filter((c) => String(c.path).includes('/chat/completions'))).toHaveLength(1);
+      expect(chatCalls(calls)).toHaveLength(1);
     });
   });
 
@@ -614,7 +611,7 @@ describe('agentic translation leg (story 2.10)', () => {
       dateSpy.mockRestore();
 
       expect(r.outcome).toBe('translated');
-      const chatCall = calls.find((c) => String(c.path).includes('/chat/completions'));
+      const chatCall = chatCalls(calls)[0];
       // The call's budget is the remainder after init (~1000 of the 5000),
       // never the caller's original 5000. The few-ms band absorbs the real
       // clock's granularity between the mocked reads.
@@ -635,7 +632,7 @@ describe('agentic translation leg (story 2.10)', () => {
 
       expect(r.outcome).toBe('cancelled');
       expect(r.accounting.decision).toBe('translate');
-      expect(calls.filter((c) => String(c.path).includes('/chat/completions'))).toHaveLength(0);
+      expect(chatCalls(calls)).toHaveLength(0);
     });
 
     it('cuts a hung init at the remaining budget: skipped deadline_spent, no chat call', async () => {
@@ -650,7 +647,7 @@ describe('agentic translation leg (story 2.10)', () => {
 
       expect(r.outcome).toBe('skipped');
       expect(r.accounting.status).toBe(SKIP_STATUSES.DEADLINE_SPENT);
-      expect(calls.filter((c) => String(c.path).includes('/chat/completions'))).toHaveLength(0);
+      expect(chatCalls(calls)).toHaveLength(0);
     });
 
     it('cuts a hung init at the abort: cancelled without a chat call, inside the probe budget', async () => {
@@ -672,7 +669,7 @@ describe('agentic translation leg (story 2.10)', () => {
 
       expect(r.outcome).toBe('cancelled');
       expect(r.accounting.decision).toBe('translate');
-      expect(calls.filter((c) => String(c.path).includes('/chat/completions'))).toHaveLength(0);
+      expect(chatCalls(calls)).toHaveLength(0);
     });
 
     it('keeps the dangling init handled when its failure lands after a lost budget', async () => {
@@ -707,13 +704,12 @@ describe('agentic translation leg (story 2.10)', () => {
 
       expect(r.outcome).toBe('skipped');
       expect(r.accounting.status).toBe(SKIP_STATUSES.DEADLINE_SPENT);
-      expect(calls.filter((c) => String(c.path).includes('/chat/completions'))).toHaveLength(0);
+      expect(chatCalls(calls)).toHaveLength(0);
     });
   });
 
   describe('pass-loop branches', () => {
     const zeroRun = { prompt_tokens: 0, completion_tokens: 0, model_calls: 0, aux_model_calls: 0 };
-    const chatCalls = (calls) => calls.filter((c) => String(c.path).includes('/chat/completions'));
 
     it('stops mid-pass when the call allowance is spent, as a failed pass', async () => {
       process.env.AGENT_TRANSLATION_MAX_CALLS = '2';

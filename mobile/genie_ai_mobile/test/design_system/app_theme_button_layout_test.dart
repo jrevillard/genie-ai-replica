@@ -57,4 +57,45 @@ void main() {
     expect(tester.takeException(), isNull);
     expect(find.byType(TextButton), findsOneWidget);
   });
+
+  testWidgets(
+    // The theme's old `Size(double.infinity, 48)` minimum gave every button
+    // in a BOUNDED context (a Column center, a stretch) full width for free
+    // — and crashed Rows. The theme is finite now; the full-width idiom
+    // lives in DsButton itself: fill bounded width, hug in a Row's
+    // unbounded slot. This pins the visible behavior every pre-existing
+    // screen relied on (the login card's Sign in, the settings rows).
+    'DsButton fills its bounded width and hugs in a Row',
+    (tester) async {
+      await tester.pumpWidget(
+        MaterialApp(
+          theme: theme(),
+          home: Scaffold(
+            body: Column(
+              children: [
+                DsButton(label: 'Save', onPressed: () {}),
+                Row(
+                  children: [
+                    DsButton(label: 'Row button', onPressed: () {}),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ),
+      );
+      await tester.pump();
+
+      final buttons = tester.widgetList<ElevatedButton>(
+        find.byType(ElevatedButton),
+      );
+      expect(buttons, hasLength(2));
+      final saveWidth = tester.getSize(find.byType(ElevatedButton).first).width;
+      // Bounded column: full body width (the old theme behavior).
+      expect(saveWidth, 800.0);
+      // Unbounded Row slot: hug the label, no crash.
+      final rowWidth = tester.getSize(find.byType(ElevatedButton).last).width;
+      expect(rowWidth, lessThan(400.0));
+    },
+  );
 }

@@ -1185,8 +1185,6 @@ const Map<String, dynamic> ptLocale = {
   'welcomeMessage': 'Bem-vindo! Como posso ajudá-lo hoje?',
   "okfBrowser": {
     "title": "Explorar o repositório",
-    "drawerEntry": "Explorar o repositório",
-    "drawerPrompt": "Repository id",
     "currentNotice": "Mostra o que está indexado agora — não necessariamente a versão citada.",
     "selectHint": "Selecione um conceito na árvore para lê-lo aqui.",
     "showMore": "Mostrar mais",
@@ -1197,5 +1195,10 @@ const Map<String, dynamic> ptLocale = {
     "unavailable": "Não é possível explorar este repositório neste momento.",
     "download": "Descarregar",
     "downloadEmpty": "This concept has no content to download.",
-  },
+    "downloadFailed": "Falha ao baixar.",
+    "close": "Fechar",
+    "filesLabel": "Arquivos",
+    "filterHint": "Filtrar arquivos",
+    "indexBadge": "index",
+},
 };

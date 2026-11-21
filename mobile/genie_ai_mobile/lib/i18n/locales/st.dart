@@ -1185,8 +1185,6 @@ const Map<String, dynamic> stLocale = {
   'welcomeMessage': 'Welcome! Ho jo ka u thusa joang kajeno?',
   "okfBrowser": {
     "title": "Sheba polokelo",
-    "drawerEntry": "Sheba polokelo",
-    "drawerPrompt": "Repository id",
     "currentNotice": "E bontša se ngolotsoeng kaharano hona joale — e se mofuta o ntseng o boleloa.",
     "selectHint": "Khetha kgopolo sehlareng ho e bala mona.",
     "showMore": "Bontša e eng",
@@ -1197,5 +1195,10 @@ const Map<String, dynamic> stLocale = {
     "unavailable": "Polokelo ena ha e khone ho shejwa ka nako ena.",
     "download": "Jarolla",
     "downloadEmpty": "This concept has no content to download.",
-  },
+    "downloadFailed": "Ho hlolehile ho jarolla.",
+    "close": "Koala",
+    "filesLabel": "Lifaele",
+    "filterHint": "Sesefa lifaele",
+    "indexBadge": "index",
+},
 };

@@ -8,6 +8,7 @@ import 'package:talker/talker.dart';
 import 'package:openapi/api.dart';
 
 import '../design_system/components/ds_button.dart';
+import '../design_system/components/ds_input.dart';
 import '../design_system/components/ds_spinner.dart';
 import '../design_system/components/ds_state_display.dart';
 import '../design_system/tokens/app_tokens.dart';
@@ -48,6 +49,11 @@ class _ConceptBrowserScreenState extends ConsumerState<ConceptBrowserScreen> {
   String? _openedRepoId;
   bool _deepOpened = false;
 
+  // The tree pane's view state (the editor's OkfConceptList carries the same
+  // two: the root twist starts OPEN and the filter starts empty).
+  bool _treeExpanded = true;
+  String _filter = '';
+
   @override
   void initState() {
     super.initState();
@@ -63,6 +69,9 @@ class _ConceptBrowserScreenState extends ConsumerState<ConceptBrowserScreen> {
   }
 
   void _openIfNeeded() {
+    // The post-frame callback can fire after the route was popped in the
+    // same frame — a ref.read on a disposed ConsumerState throws.
+    if (!mounted) return;
     if (_openedRepoId == widget.repoId) return;
     _openedRepoId = widget.repoId;
     _deepOpened = false;
@@ -115,6 +124,17 @@ class _ConceptBrowserScreenState extends ConsumerState<ConceptBrowserScreen> {
         backgroundColor: tokens.navbarBg,
         foregroundColor: tokens.navbarFg,
         title: Text(tr('okfBrowser.title')),
+        // The Vue browser is a DsDialog with an explicit CLOSE action — the
+        // mobile mirror carries the same exit in its app bar (the system back
+        // gesture stays too).
+        actions: [
+          IconButton(
+            key: const ValueKey('okf-browser-close'),
+            icon: const Icon(Icons.close),
+            tooltip: tr('okfBrowser.close'),
+            onPressed: () => Navigator.of(context).maybePop(),
+          ),
+        ],
       ),
       body: _body(state, tokens),
     );
@@ -134,17 +154,39 @@ class _ConceptBrowserScreenState extends ConsumerState<ConceptBrowserScreen> {
     if (state.loading && state.rows.isEmpty) {
       return const DsStateDisplay(type: DsStateType.loading);
     }
-    if (state.error != null) {
+    // The OPEN failure (the tree never loaded) owns the whole screen; a
+    // SELECT failure must not — the Vue browser keeps the tree and shows
+    // the error inside the content pane (the 2026-11-20 review finding:
+    // one failed card fetch bricked the whole browser with no way back).
+    if (state.error != null && state.rows.isEmpty) {
       return DsStateDisplay(type: DsStateType.error, message: state.error);
     }
-    if (state.selected != null ||
-        state.selectedLoading ||
-        state.selectedUnavailable) {
-      return _detailPane(state, tokens);
-    }
-    return _treeList(state, tokens);
+    // The Vue browser's NARROW layout, mirrored: both panes STACKED on one
+    // screen (the tree above, the reading pane below — "stacked with
+    // Back-to-list on narrow viewports", D8 §2). Back-to-list clears the
+    // selection so the pane below answers the select-hint arm again; the
+    // history survives it (issue #1836). Each pane keeps its OWN viewport —
+    // the card's lazy chunks need one to parse only the visible slice.
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Expanded(flex: 5, child: _treeList(state, tokens)),
+        Container(
+          height: 1,
+          color: tokens.border,
+          margin: const EdgeInsets.symmetric(horizontal: DsSpacing.md),
+        ),
+        Expanded(flex: 5, child: _detailPane(state, tokens)),
+      ],
+    );
   }
 
+  /// The tree pane — the mobile mirror of the Vue browser's own tree: the
+  /// editor's OkfConceptList, read-only (2026-11-20, David: "the tree view
+  /// must be the index.md and the concepts of the repository being
+  /// browsed"). index.md is the ROOT row (twist + index badge) and every
+  /// other loaded concept renders as its child; the filter narrows the
+  /// loaded rows view-locally; Show-more pages beneath.
   Widget _treeList(ConceptBrowserState state, AppTokens tokens) {
     if (state.rows.isEmpty) {
       return DsStateDisplay(
@@ -152,6 +194,7 @@ class _ConceptBrowserScreenState extends ConsumerState<ConceptBrowserScreen> {
         message: tr('okfBrowser.selectHint'),
       );
     }
+    final lines = _treeLines(state.rows);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
@@ -169,43 +212,64 @@ class _ConceptBrowserScreenState extends ConsumerState<ConceptBrowserScreen> {
                 tr('okfBrowser.currentNotice'),
                 style: TextStyle(color: tokens.muted, fontSize: tokens.textSm),
               ),
-              const SizedBox(height: DsSpacing.xs),
-              Text(
-                tr('okfBrowser.selectHint'),
-                style: TextStyle(
-                  color: tokens.mutedSoft,
-                  fontSize: tokens.textXs,
-                ),
+              const SizedBox(height: DsSpacing.sm),
+              // The list header + filter: the editor's OkfConceptList chrome,
+              // read-only (Files + count, then the filter input).
+              Row(
+                children: [
+                  Text(
+                    tr('okfBrowser.filesLabel'),
+                    style: TextStyle(
+                      color: tokens.fg,
+                      fontSize: tokens.textSm,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                  const SizedBox(width: DsSpacing.sm),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: DsSpacing.sm,
+                      vertical: 1,
+                    ),
+                    decoration: BoxDecoration(
+                      color: tokens.accentMuted,
+                      borderRadius: BorderRadius.circular(100),
+                    ),
+                    child: Text(
+                      '${lines.length}',
+                      style: TextStyle(
+                        color: tokens.accent,
+                        fontSize: tokens.textXs,
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: DsSpacing.sm),
+              DsInput(
+                key: const ValueKey('okf-browser-filter'),
+                size: DsInputSize.sm,
+                placeholder: tr('okfBrowser.filterHint'),
+                onChanged: (value) => setState(() => _filter = value),
               ),
             ],
           ),
         ),
         Expanded(
-          child: ListView.builder(
-            itemCount: state.rows.length,
-            itemBuilder: (context, i) {
-              final row = state.rows[i];
-              return ListTile(
-                key: ValueKey('okf-browser-row-${row.conceptId}'),
-                leading: _statusDot(row, tokens),
-                title: Text(
-                  row.title ?? row.conceptId,
-                  style: TextStyle(
-                    color: tokens.fg,
-                    fontSize: tokens.textBase,
-                    // Index rows are bold — the tree's root marker.
-                    fontWeight: (row.isIndex ?? false)
-                        ? FontWeight.w600
-                        : FontWeight.w400,
-                  ),
+          child: lines.isEmpty
+              ? DsStateDisplay(
+                  type: DsStateType.empty,
+                  message: tr('okfBrowser.selectHint'),
+                )
+              : ListView.builder(
+                  itemCount: lines.length,
+                  itemBuilder: (context, i) {
+                    final line = lines[i];
+                    return line.isRoot
+                        ? _rootRow(line.row, tokens)
+                        : _childRow(line.row, tokens);
+                  },
                 ),
-                trailing: row.links.isEmpty
-                    ? null
-                    : Icon(Icons.link, size: 16, color: tokens.muted),
-                onTap: () => _select(row.conceptId),
-              );
-            },
-          ),
         ),
         if (!state.treeComplete)
           Padding(
@@ -216,12 +280,149 @@ class _ConceptBrowserScreenState extends ConsumerState<ConceptBrowserScreen> {
                     key: const ValueKey('okf-browser-show-more'),
                     label: tr('okfBrowser.showMore'),
                     variant: DsButtonVariant.secondary,
-                    onPressed: () => ref
-                        .read(conceptBrowserControllerProvider.notifier)
-                        .extend(),
+                    // extend() rethrows 401 (session dead app-wide); the
+                    // fire-and-forget press is guarded like every other
+                    // entry point, or the rejection escapes as an unhandled
+                    // zone error.
+                    onPressed: () => _guarded(
+                      ref
+                          .read(conceptBrowserControllerProvider.notifier)
+                          .extend(),
+                    ),
                   ),
           ),
       ],
+    );
+  }
+
+  /// The flattened tree the list builds from — the Vue `tree()` computed:
+  /// the first `is_index` row is the ROOT, every other row its child, the
+  /// filter narrowed first (title + id, the fields the tree page serves).
+  List<_TreeLine> _treeLines(List<ConceptTreeRow> rows) {
+    final query = _filter.trim().toLowerCase();
+    Iterable<ConceptTreeRow> visible = rows;
+    if (query.isNotEmpty) {
+      visible = rows.where((r) {
+        final hay =
+            '${r.title ?? ''} ${r.conceptId}'.toLowerCase();
+        return hay.contains(query);
+      });
+    }
+    final list = visible.toList();
+    ConceptTreeRow? indexRow;
+    for (final r in list) {
+      if (r.isIndex == true) {
+        indexRow = r;
+        break;
+      }
+    }
+    final rest = list.where((r) => !identical(r, indexRow)).toList();
+    if (indexRow == null) {
+      return [for (final r in rest) _TreeLine(r, depth: 0, isRoot: false)];
+    }
+    return [
+      _TreeLine(indexRow, depth: 0, isRoot: true),
+      if (_treeExpanded)
+        ...[for (final r in rest) _TreeLine(r, depth: 1, isRoot: false)],
+    ];
+  }
+
+  /// The index.md ROOT row: twist (toggles the children), status dot, title,
+  /// and the index badge — the editor's own root chrome, read-only.
+  Widget _rootRow(ConceptTreeRow row, AppTokens tokens) {
+    return InkWell(
+      key: ValueKey('okf-browser-row-${row.conceptId}'),
+      onTap: () => _select(row.conceptId),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(
+          horizontal: DsSpacing.md,
+          vertical: DsSpacing.sm,
+        ),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            GestureDetector(
+              key: const ValueKey('okf-browser-twist'),
+              behavior: HitTestBehavior.opaque,
+              onTap: () => setState(() => _treeExpanded = !_treeExpanded),
+              child: Padding(
+                padding: const EdgeInsets.only(
+                  right: DsSpacing.xs,
+                  top: 2,
+                  bottom: 2,
+                ),
+                child: Icon(
+                  _treeExpanded
+                      ? Icons.keyboard_arrow_down
+                      : Icons.keyboard_arrow_right,
+                  size: 18,
+                  color: tokens.muted,
+                ),
+              ),
+            ),
+            _statusDot(row, tokens),
+            const SizedBox(width: DsSpacing.sm),
+            Expanded(
+              child: Text(
+                row.title ?? row.conceptId,
+                style: TextStyle(
+                  color: tokens.fg,
+                  fontSize: tokens.textBase,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+            Container(
+              padding: const EdgeInsets.symmetric(
+                horizontal: DsSpacing.sm,
+                vertical: 1,
+              ),
+              decoration: BoxDecoration(
+                color: tokens.accentMuted,
+                borderRadius: BorderRadius.circular(100),
+              ),
+              child: Text(
+                tr('okfBrowser.indexBadge'),
+                style: TextStyle(
+                  color: tokens.accent,
+                  fontSize: tokens.textXs,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  /// A concept CHILD row: indented under the index root, status dot + title.
+  Widget _childRow(ConceptTreeRow row, AppTokens tokens) {
+    return InkWell(
+      key: ValueKey('okf-browser-row-${row.conceptId}'),
+      onTap: () => _select(row.conceptId),
+      child: Padding(
+        padding: const EdgeInsets.only(
+          left: DsSpacing.xl,
+          right: DsSpacing.md,
+          top: DsSpacing.sm,
+          bottom: DsSpacing.sm,
+        ),
+        child: Row(
+          children: [
+            _statusDot(row, tokens),
+            const SizedBox(width: DsSpacing.sm),
+            Expanded(
+              child: Text(
+                row.title ?? row.conceptId,
+                style: TextStyle(
+                  color: tokens.fg,
+                  fontSize: tokens.textBase,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 
@@ -288,11 +489,23 @@ class _ConceptBrowserScreenState extends ConsumerState<ConceptBrowserScreen> {
         Expanded(
           child: state.selectedLoading
               ? const DsStateDisplay(type: DsStateType.loading)
-              : state.selectedUnavailable || card == null
+              : state.selectedUnavailable
               ? DsStateDisplay(
                   type: DsStateType.empty,
                   icon: Icons.help_outline,
                   message: tr('okfBrowser.conceptUnavailable'),
+                )
+              // A failed card fetch (500/timeout): the pane carries the
+              // failure — the tree above stays alive, the next row tap is
+              // the retry (the Vue browser's error paragraph, mirrored).
+              : state.error != null
+              ? DsStateDisplay(type: DsStateType.error, message: state.error)
+              : card == null
+              // The Vue browser's EMPTY arm: nothing selected yet — the
+              // tree above is the invitation.
+              ? DsStateDisplay(
+                  type: DsStateType.empty,
+                  message: tr('okfBrowser.selectHint'),
                 )
               : _cardView(state, card, controller, tokens),
         ),
@@ -319,6 +532,9 @@ class _ConceptBrowserScreenState extends ConsumerState<ConceptBrowserScreen> {
         (link.toConceptId ?? link.target ?? '')
             .replaceFirst(RegExp(r'\.md$', caseSensitive: false), '')
             .replaceFirst(RegExp(r'^concepts/'), '')
+            // Legacy relative targets ('./beta.md') strip the './' too —
+            // './beta' is an id nothing holds and the chip would dead-end.
+            .replaceFirst(RegExp(r'^\./'), '')
             .trim();
     final seen = <String>{};
     final chips = <Widget>[];
@@ -397,6 +613,7 @@ class _ConceptBrowserScreenState extends ConsumerState<ConceptBrowserScreen> {
     }
 
     return ListView.builder(
+      key: const ValueKey('okf-browser-card-list'),
       padding: const EdgeInsets.all(DsSpacing.md),
       itemCount: 1 + chunks.length + (hasChips ? 1 : 0),
       itemBuilder: buildItem,
@@ -421,7 +638,9 @@ class _ConceptBrowserScreenState extends ConsumerState<ConceptBrowserScreen> {
       _toast(file.uri.pathSegments.last);
     } catch (e) {
       _log.error('okf.browser.download_failed error=$e');
-      _toast(tr('okfBrowser.downloadEmpty'));
+      // A WRITE failure is not an empty concept — the message names the
+      // failure (the 2026-11-20 review finding).
+      _toast(tr('okfBrowser.downloadFailed'));
     }
   }
 
@@ -431,4 +650,15 @@ class _ConceptBrowserScreenState extends ConsumerState<ConceptBrowserScreen> {
       context,
     ).showSnackBar(SnackBar(content: Text(message)));
   }
+}
+
+/// One rendered line of the tree list: a row plus its depth (the index root
+/// sits at depth 0, its children at 1 — the OkfConceptList tree is exactly
+/// these two levels).
+class _TreeLine {
+  const _TreeLine(this.row, {required this.depth, required this.isRoot});
+
+  final ConceptTreeRow row;
+  final int depth;
+  final bool isRoot;
 }

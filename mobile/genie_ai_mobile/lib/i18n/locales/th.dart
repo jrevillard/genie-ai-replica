@@ -1167,8 +1167,6 @@ const Map<String, dynamic> thLocale = {
   'welcomeMessage': 'ยินดีต้อนรับ! วันนี้ฉันช่วยคุณได้อย่างไร?',
   "okfBrowser": {
     "title": "เรียกดูคลังข้อมูล",
-    "drawerEntry": "เรียกดูคลังข้อมูล",
-    "drawerPrompt": "Repository id",
     "currentNotice": "แสดงสิ่งที่จัดทำดัชนีไว้ในปัจจุบัน — ไม่จำเป็นต้องเป็นเวอร์ชันที่ถูกอ้างถึง",
     "selectHint": "เลือกแนวคิดจากมุมมองต้นไม้เพื่ออ่านที่นี่",
     "showMore": "แสดงเพิ่มเติม",
@@ -1179,5 +1177,10 @@ const Map<String, dynamic> thLocale = {
     "unavailable": "ไม่สามารถเรียกดูคลังข้อมูลนี้ได้ในขณะนี้",
     "download": "ดาวน์โหลด",
     "downloadEmpty": "This concept has no content to download.",
-  },
+    "downloadFailed": "ดาวน์โหลดไม่สำเร็จ",
+    "close": "ปิด",
+    "filesLabel": "ไฟล์",
+    "filterHint": "กรองไฟล์",
+    "indexBadge": "index",
+},
 };

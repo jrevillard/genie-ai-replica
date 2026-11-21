@@ -1184,8 +1184,6 @@ const Map<String, dynamic> bnLocale = {
   'welcomeMessage': 'স্বাগতম! আজ আমি কিভাবে আপনাকে সাহায্য করতে পারি?',
   "okfBrowser": {
     "title": "ভাণ্ডার ব্রাউজ করুন",
-    "drawerEntry": "ভাণ্ডার ব্রাউজ করুন",
-    "drawerPrompt": "Repository id",
     "currentNotice": "এখন যা সূচিবদ্ধ আছে তা দেখানো হচ্ছে — সেই সংস্করণই নয় যেটি উদ্ধৃত হয়েছিল।",
     "selectHint": "এখানে পড়তে ট্রি থেকে একটি কনসেপ্ট নির্বাচন করুন।",
     "showMore": "আরও দেখান",
@@ -1196,5 +1194,10 @@ const Map<String, dynamic> bnLocale = {
     "unavailable": "এই ভাণ্ডারটি এই মুহূর্তে ব্রাউজ করা যাচ্ছে না।",
     "download": "ডাউনলোড",
     "downloadEmpty": "This concept has no content to download.",
-  },
+    "downloadFailed": "ডাউনলোড ব্যর্থ হয়েছে।",
+    "close": "বন্ধ করুন",
+    "filesLabel": "ফাইল",
+    "filterHint": "ফাইল ফিল্টার করুন",
+    "indexBadge": "index",
+},
 };

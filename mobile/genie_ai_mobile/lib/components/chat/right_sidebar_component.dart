@@ -15,9 +15,6 @@ import 'package:genie_ai_mobile/design_system/tokens/app_tokens.dart';
 import 'package:genie_ai_mobile/design_system/tokens/spacing.dart';
 import 'package:genie_ai_mobile/design_system/tokens/radii.dart';
 import 'package:genie_ai_mobile/design_system/components/ds_card.dart';
-import 'package:genie_ai_mobile/design_system/components/ds_button.dart';
-import 'package:genie_ai_mobile/design_system/components/ds_input.dart';
-import 'package:genie_ai_mobile/design_system/components/ds_modal.dart';
 import 'package:genie_ai_mobile/okf/concept_browser_screen.dart';
 import 'package:genie_ai_mobile/okf/okf_citation.dart';
 import 'package:genie_ai_mobile/config/keycloak_config.dart';
@@ -428,67 +425,6 @@ class _RightSidebarComponentState extends ConsumerState<RightSidebarComponent> {
   // ===========================================================================
   // CONTENT BUILDER (Abstracted to support Drawer vs Panel)
   // ===========================================================================
-  /// The typed-repo-id prompt behind the temporary browse entry: a blank id
-  /// cannot confirm (the button stays disabled and the modal stays open);
-  /// a typed id pushes the browser screen. The house has no named-route
-  /// table, so the push is a direct MaterialPageRoute.
-  void _promptForRepoId() {
-    final controller = TextEditingController();
-    var canConfirm = false;
-    showDialog<void>(
-      context: context,
-      builder: (dialogContext) {
-        return StatefulBuilder(
-          builder: (dialogContext, setDialogState) {
-            return DsModal(
-              title: tr('okfBrowser.drawerEntry'),
-              content: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    tr('okfBrowser.drawerPrompt'),
-                    style: TextStyle(color: ThemeManager().tokens.muted),
-                  ),
-                  const SizedBox(height: DsSpacing.sm),
-                  DsInput(
-                    controller: controller,
-                    onChanged: (v) => setDialogState(() => canConfirm = v.trim().isNotEmpty),
-                  ),
-                ],
-              ),
-              actions: [
-                DsButton(
-                  label: MaterialLocalizations.of(
-                    dialogContext,
-                  ).cancelButtonLabel,
-                  variant: DsButtonVariant.ghost,
-                  onPressed: () => Navigator.of(dialogContext).pop(),
-                ),
-                DsButton(
-                  key: const ValueKey('okf-browser-drawer-confirm'),
-                  label: MaterialLocalizations.of(dialogContext).okButtonLabel,
-                  disabled: !canConfirm,
-                  onPressed: canConfirm
-                      ? () {
-                          Navigator.of(dialogContext).pop();
-                          Navigator.of(context).push(
-                            MaterialPageRoute<void>(
-                              builder: (_) => ConceptBrowserScreen(
-                                repoId: controller.text.trim(),
-                              ),
-                            ),
-                          );
-                        }
-                      : null,
-                ),
-              ],
-            );
-          },
-        );
-      },
-    );
-  }
 
   Widget _buildRightSidebarContent(
     BuildContext context,
@@ -524,21 +460,10 @@ class _RightSidebarComponentState extends ConsumerState<RightSidebarComponent> {
               ),
             ),
 
-            // #1939 TEMPORARY ENTRY: the concept-tree browser is reachable
-            // only by a TYPED repository id until #1937/#1938 wire the real
-            // entries (citation Browse buttons, related-sources rows). This
-            // prompt is removed when they land.
-            Padding(
-              padding: const EdgeInsets.fromLTRB(DsSpacing.md, DsSpacing.sm, DsSpacing.md, 0),
-              child: DsButton(
-                key: const ValueKey('okf-browser-drawer-entry'),
-                label: tr('okfBrowser.drawerEntry'),
-                icon: Icons.folder_open,
-                variant: DsButtonVariant.secondary,
-                small: true,
-                onPressed: _promptForRepoId,
-              ),
-            ),
+            // #1939: the browser's entries are the CITATION paths — the
+            // answer's sources bar and the sidebar's citation rows (the Vue
+            // citizen surface's own entries; the typed-repo-id prompt that
+            // stood in for them is gone with them landed).
 
             Expanded(
               child: SingleChildScrollView(
@@ -848,7 +773,13 @@ class _RightSidebarComponentState extends ConsumerState<RightSidebarComponent> {
       ),
       child: Theme(
         data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
-        child: ExpansionTile(
+        // The ExpansionTile paints its ListTiles on the nearest Material —
+        // this Container's colored decoration would hide them (the framework
+        // flags it: "ListTile background color or ink splashes may be
+        // invisible"). Own transparent Material restores the tile chrome.
+        child: Material(
+          type: MaterialType.transparency,
+          child: ExpansionTile(
           title: MarkdownBody(
             data: item['question'] ?? '',
             styleSheet: MarkdownStyleSheet(
@@ -888,6 +819,7 @@ class _RightSidebarComponentState extends ConsumerState<RightSidebarComponent> {
               },
             ),
           ],
+          ),
         ),
       ),
     );

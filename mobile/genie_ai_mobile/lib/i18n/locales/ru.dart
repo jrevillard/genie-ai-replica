@@ -1180,8 +1180,6 @@ const Map<String, dynamic> ruLocale = {
   'welcomeMessage': 'Добро пожаловать! Чем я могу помочь вам сегодня?',
   "okfBrowser": {
     "title": "Обзор репозитория",
-    "drawerEntry": "Обзор репозитория",
-    "drawerPrompt": "Repository id",
     "currentNotice": "Показано то, что проиндексировано сейчас, — не обязательно та версия, на которую была ссылка.",
     "selectHint": "Выберите концепт в дереве, чтобы прочитать его здесь.",
     "showMore": "Показать больше",
@@ -1192,5 +1190,10 @@ const Map<String, dynamic> ruLocale = {
     "unavailable": "Этот репозиторий сейчас нельзя просмотреть.",
     "download": "Скачать",
     "downloadEmpty": "This concept has no content to download.",
-  },
+    "downloadFailed": "Не удалось скачать.",
+    "close": "Закрыть",
+    "filesLabel": "Файлы",
+    "filterHint": "Фильтровать файлы",
+    "indexBadge": "index",
+},
 };

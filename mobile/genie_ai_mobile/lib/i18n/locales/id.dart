@@ -1178,8 +1178,6 @@ const Map<String, dynamic> idLocale = {
       'Selamat datang! Bagaimana saya bisa membantu Anda hari ini?',
   "okfBrowser": {
     "title": "Jelajahi repositori",
-    "drawerEntry": "Jelajahi repositori",
-    "drawerPrompt": "Repository id",
     "currentNotice": "Menampilkan yang terindeks saat ini — belum tentu versi yang dikutip.",
     "selectHint": "Pilih konsep dari pohon untuk membacanya di sini.",
     "showMore": "Tampilkan lebih banyak",
@@ -1190,5 +1188,10 @@ const Map<String, dynamic> idLocale = {
     "unavailable": "Repositori ini tidak dapat dijelajahi saat ini.",
     "download": "Unduh",
     "downloadEmpty": "This concept has no content to download.",
-  },
+    "downloadFailed": "Unduhan gagal.",
+    "close": "Tutup",
+    "filesLabel": "Berkas",
+    "filterHint": "Saring berkas",
+    "indexBadge": "index",
+},
 };

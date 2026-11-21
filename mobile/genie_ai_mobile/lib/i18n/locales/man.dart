@@ -1165,8 +1165,6 @@ const Map<String, dynamic> manLocale = {
   'welcomeMessage': 'Welcome! How can I assist you today?',
   "okfBrowser": {
     "title": "Browse y repository",
-    "drawerEntry": "Browse y repository",
-    "drawerPrompt": "Repository id",
     "currentNotice": "Ta shoh fockley magh cre ta goll er oltchiaragley nish — cha nee yn wershoon va cit shickyr.",
     "selectHint": "Tagh concept ass y billey dy lhaih aynshoh.",
     "showMore": "Jeeagh ny smoo",
@@ -1177,5 +1175,10 @@ const Map<String, dynamic> manLocale = {
     "unavailable": "Cha nel y repository ry-akin dy browse nish.",
     "download": "Download",
     "downloadEmpty": "This concept has no content to download.",
-  },
+    "downloadFailed": "Download failed.",
+    "close": "Close",
+    "filesLabel": "Files",
+    "filterHint": "Filter files",
+    "indexBadge": "index",
+},
 };

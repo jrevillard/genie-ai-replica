@@ -1194,8 +1194,6 @@ const Map<String, dynamic> frLocale = {
   'welcomeMessage': 'Bienvenue ! Comment puis-je vous aider aujourd\'hui ?',
   "okfBrowser": {
     "title": "Parcourir le dépôt",
-    "drawerEntry": "Parcourir le dépôt",
-    "drawerPrompt": "Repository id",
     "currentNotice": "Affiche ce qui est indexé actuellement — pas nécessairement la version citée.",
     "selectHint": "Sélectionnez un concept dans la vue arborescente pour le lire ici.",
     "showMore": "Afficher plus",
@@ -1206,5 +1204,10 @@ const Map<String, dynamic> frLocale = {
     "unavailable": "Ce dépôt ne peut pas être parcouru pour le moment.",
     "download": "Télécharger",
     "downloadEmpty": "This concept has no content to download.",
-  },
+    "downloadFailed": "Échec du téléchargement.",
+    "close": "Fermer",
+    "filesLabel": "Fichiers",
+    "filterHint": "Filtrer les fichiers",
+    "indexBadge": "index",
+},
 };

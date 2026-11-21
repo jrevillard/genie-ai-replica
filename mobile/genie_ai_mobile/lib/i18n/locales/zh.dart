@@ -1060,8 +1060,6 @@ const Map<String, dynamic> zhLocale = {
   'welcomeMessage': '欢迎！今天我能如何帮助您？',
   "okfBrowser": {
     "title": "浏览知识库",
-    "drawerEntry": "浏览知识库",
-    "drawerPrompt": "Repository id",
     "currentNotice": "显示当前已索引的内容，不一定是被引用的版本。",
     "selectHint": "从树中选择一个概念以在此阅读。",
     "showMore": "显示更多",
@@ -1072,5 +1070,10 @@ const Map<String, dynamic> zhLocale = {
     "unavailable": "当前无法浏览该知识库。",
     "download": "下载",
     "downloadEmpty": "This concept has no content to download.",
-  },
+    "downloadFailed": "下载失败。",
+    "close": "关闭",
+    "filesLabel": "文件",
+    "filterHint": "筛选文件",
+    "indexBadge": "index",
+},
 };

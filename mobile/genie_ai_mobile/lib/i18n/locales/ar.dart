@@ -1169,8 +1169,6 @@ const Map<String, dynamic> arLocale = {
   'welcomeMessage': 'مرحباً! كيف يمكنني مساعدتك اليوم؟',
   "okfBrowser": {
     "title": "استعراض المستودع",
-    "drawerEntry": "استعراض المستودع",
-    "drawerPrompt": "Repository id",
     "currentNotice": "يعرض ما هو مفهرس الآن — وليس بالضرورة النسخة التي تم الاستشهاد بها.",
     "selectHint": "اختر مفهوما من الشجرة لقراءته هنا.",
     "showMore": "عرض المزيد",
@@ -1181,5 +1179,10 @@ const Map<String, dynamic> arLocale = {
     "unavailable": "لا يمكن استعراض هذا المستودع في الوقت الحالي.",
     "download": "تنزيل",
     "downloadEmpty": "This concept has no content to download.",
-  },
+    "downloadFailed": "فشل التنزيل.",
+    "close": "إغلاق",
+    "filesLabel": "الملفات",
+    "filterHint": "تصفية الملفات",
+    "indexBadge": "index",
+},
 };

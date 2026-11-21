@@ -11,8 +11,10 @@ class FakeConceptBrowserRepository implements ConceptBrowserRepository {
   final Map<String, ConceptTreePage> pagesByRepo = {};
   final Map<String, Map<String, ConceptCard>> cardsByRepo = {};
   final Map<String, Object> treeThrows = {};
+  final Map<int, Object> treeThrowOnCall = {};
   final Map<String, Object> cardThrows = {};
   final Map<String, Completer<ConceptTreePage>> heldTrees = {};
+  final Map<String, Completer<ConceptCard>> heldCards = {};
   int treeCalls = 0;
   int cardCalls = 0;
 
@@ -22,12 +24,20 @@ class FakeConceptBrowserRepository implements ConceptBrowserRepository {
     return completer;
   }
 
+  Completer<ConceptCard> holdCard(String conceptId) {
+    final completer = Completer<ConceptCard>();
+    heldCards[conceptId] = completer;
+    return completer;
+  }
+
   @override
   Future<ConceptTreePage> fetchTreePage(
     String repoId, {
     required int offset,
   }) async {
     treeCalls++;
+    final callThrowable = treeThrowOnCall[treeCalls];
+    if (callThrowable != null) throw callThrowable;
     final held = heldTrees[repoId];
     if (held != null) return held.future;
     final throwable = treeThrows[repoId];
@@ -38,6 +48,8 @@ class FakeConceptBrowserRepository implements ConceptBrowserRepository {
   @override
   Future<ConceptCard> fetchCard(String repoId, String conceptId) async {
     cardCalls++;
+    final held = heldCards[conceptId];
+    if (held != null) return held.future;
     final throwable = cardThrows[conceptId];
     if (throwable != null) throw throwable;
     return cardsByRepo[repoId]![conceptId]!;
@@ -51,10 +63,10 @@ ConceptTreePage page(int total, List<ConceptTreeRow> rows) => ConceptTreePage(
   concepts: rows,
 );
 
-ConceptTreeRow row(String id) => ConceptTreeRow(
+ConceptTreeRow row(String id, {bool isIndex = false}) => ConceptTreeRow(
   conceptId: id,
   title: 'Title $id',
-  isIndex: false,
+  isIndex: isIndex,
   indexStatus: 'indexed',
 );
 

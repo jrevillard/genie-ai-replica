@@ -227,4 +227,54 @@ void main() {
       },
     );
   });
+  // The 2026-11-20 review findings, pinned at the controller boundary:
+  group('selection races and error recovery', () {
+    test('a slow earlier select never commits over a newer one', () async {
+      fake.pagesByRepo['repo-a'] = _page(2, [_row('c1'), _row('c2')]);
+      fake.cardsByRepo['repo-a'] = {
+        'c1': _card('repo-a', 'c1'),
+        'c2': _card('repo-a', 'c2'),
+      };
+      final c = controller();
+      await c.open('repo-a');
+      // Tap row A (its fetch HANGS on the fake's held completer), then row
+      // B (answers immediately).
+      final holdA = fake.holdCard('c1');
+      final slowA = c.select('c1');
+      await c.select('c2');
+      var s = container.read(conceptBrowserControllerProvider);
+      expect(s.selected?.conceptId, 'c2');
+      expect(s.history.map((h) => h.conceptId), ['c2']);
+      // A's fetch finally lands — it must NOT replace B or rebuild the
+      // history from its stale snapshot (the old code committed history
+      // from the pre-fetch state: B was erased, A took the pane).
+      holdA.complete(_card('repo-a', 'c1'));
+      await slowA;
+      s = container.read(conceptBrowserControllerProvider);
+      expect(s.selected?.conceptId, 'c2');
+      expect(s.history.map((h) => h.conceptId), ['c2']);
+      expect(s.historyIndex, 0);
+    });
+
+    test('a successful select clears a prior select error', () async {
+      fake.pagesByRepo['repo-a'] = _page(2, [_row('c1'), _row('c2')]);
+      fake.cardsByRepo['repo-a'] = {
+        'c1': _card('repo-a', 'c1'),
+        'c2': _card('repo-a', 'c2'),
+      };
+      final c = controller();
+      await c.open('repo-a');
+      fake.cardThrows['c1'] = Exception('backend 500');
+      await c.select('c1');
+      expect(
+        container.read(conceptBrowserControllerProvider).error,
+        isNotNull,
+      );
+      // The user taps another row: the error must not survive the success —
+      // the pane would show a stale failure over a working card.
+      fake.cardThrows.remove('c1');
+      await c.select('c2');
+      expect(container.read(conceptBrowserControllerProvider).error, isNull);
+    });
+  });
 }

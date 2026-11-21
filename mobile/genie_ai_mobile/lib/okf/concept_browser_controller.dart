@@ -109,6 +109,11 @@ class ConceptBrowserController extends Notifier<ConceptBrowserState> {
   /// an older generation never commits over a newer run.
   int _generation = 0;
 
+  /// Bumped on every SELECT; a slow earlier card fetch never commits over
+  /// a newer selection (two quick tree taps race — the loser's commit must
+  /// not rebuild the history from its pre-fetch snapshot).
+  int _selectGeneration = 0;
+
   @override
   ConceptBrowserState build() => const ConceptBrowserState();
 
@@ -228,13 +233,14 @@ class ConceptBrowserController extends Notifier<ConceptBrowserState> {
       _logTransition('select_repeat_noop', {'concept_id': conceptId});
       return;
     }
-    final gen = _generation;
+    final gen = ++_selectGeneration;
+    final repoGen = _generation;
     final repo = ref.read(conceptBrowserRepositoryProvider);
     _logTransition('select', {'repo_id': s.repoId, 'concept_id': conceptId});
     state = s.copyWith(selectedLoading: true, selectedUnavailable: false);
     try {
       final card = await repo.fetchCard(s.repoId!, conceptId);
-      if (gen != _generation) return;
+      if (gen != _selectGeneration || repoGen != _generation) return;
       final atCurrent =
           s.historyIndex >= 0 &&
           s.historyIndex < s.history.length &&
@@ -249,9 +255,12 @@ class ConceptBrowserController extends Notifier<ConceptBrowserState> {
         selectedUnavailable: false,
         history: history,
         historyIndex: index,
+        // A success clears a prior select's error — the pane shows the
+        // card, never a stale failure over a working one.
+        error: null,
       );
     } catch (e) {
-      if (gen != _generation) return;
+      if (gen != _selectGeneration || repoGen != _generation) return;
       if (_isUnavailable(e)) {
         _logTransition('concept_unavailable', {
           'concept_id': conceptId,

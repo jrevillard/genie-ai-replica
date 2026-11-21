@@ -1184,8 +1184,6 @@ const Map<String, dynamic> swLocale = {
   'welcomeMessage': 'Karibu! Ninawezaje kusaidia leo?',
   "okfBrowser": {
     "title": "Vinjari ghala",
-    "drawerEntry": "Vinjari ghala",
-    "drawerPrompt": "Repository id",
     "currentNotice": "Inaonyesha kilichopangwa kwa faharasa sasa — si lazima liwe toleo lililotajwa.",
     "selectHint": "Chagua dhana kutoka kwenye mti kuisoma hapa.",
     "showMore": "Onyesha zaidi",
@@ -1196,5 +1194,10 @@ const Map<String, dynamic> swLocale = {
     "unavailable": "Ghala hili haliwezi kubungwa kwa sasa.",
     "download": "Pakua",
     "downloadEmpty": "This concept has no content to download.",
-  },
+    "downloadFailed": "Upakuaji umeshindikana.",
+    "close": "Funga",
+    "filesLabel": "Faili",
+    "filterHint": "Chuja faili",
+    "indexBadge": "index",
+},
 };

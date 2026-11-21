@@ -1192,8 +1192,6 @@ const Map<String, dynamic> deLocale = {
   'welcomeMessage': 'Willkommen! Wie kann ich Ihnen heute helfen?',
   "okfBrowser": {
     "title": "Repository durchsuchen",
-    "drawerEntry": "Repository durchsuchen",
-    "drawerPrompt": "Repository id",
     "currentNotice": "Zeigt, was aktuell indexiert ist — nicht notwendigerweise die zitierte Version.",
     "selectHint": "Wähle ein Konzept aus dem Baum, um es hier zu lesen.",
     "showMore": "Mehr anzeigen",
@@ -1204,5 +1202,10 @@ const Map<String, dynamic> deLocale = {
     "unavailable": "Dieses Repository kann derzeit nicht durchsucht werden.",
     "download": "Herunterladen",
     "downloadEmpty": "This concept has no content to download.",
-  },
+    "downloadFailed": "Download fehlgeschlagen.",
+    "close": "Schließen",
+    "filesLabel": "Dateien",
+    "filterHint": "Dateien filtern",
+    "indexBadge": "index",
+},
 };

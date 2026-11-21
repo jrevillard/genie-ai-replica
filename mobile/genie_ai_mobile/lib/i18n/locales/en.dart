@@ -1182,8 +1182,6 @@ const Map<String, dynamic> enLocale = {
   'welcomeMessage': 'Welcome! How can I assist you today?',
   "okfBrowser": {
     "title": "Browse repository",
-    "drawerEntry": "Browse repository",
-    "drawerPrompt": "Repository id",
     "currentNotice": "Showing what is indexed now — not necessarily the version that was cited.",
     "selectHint": "Select a concept from the tree to read it here.",
     "showMore": "Show more",
@@ -1194,5 +1192,10 @@ const Map<String, dynamic> enLocale = {
     "unavailable": "This repository cannot be browsed right now.",
     "download": "Download",
     "downloadEmpty": "This concept has no content to download.",
-  },
+    "downloadFailed": "Download failed.",
+    "close": "Close",
+    "filesLabel": "Files",
+    "filterHint": "Filter files",
+    "indexBadge": "index",
+},
 };

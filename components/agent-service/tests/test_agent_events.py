@@ -96,7 +96,6 @@ def test_the_emitter_assigns_a_strictly_monotonic_seq_from_zero():
     third = emitter.emit(EventKind.RUN_FINISHED, {})
     assert (first.seq, second.seq, third.seq) == (0, 1, 2)
     assert third.seq > second.seq > first.seq
-    assert emitter.events_emitted == 3
 
 
 def test_the_emitter_stamps_the_run_id_and_carries_the_call_id():

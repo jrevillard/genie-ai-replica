@@ -16,7 +16,15 @@ import asyncio
 import json
 
 import pytest
-from conftest import AgentFakePort, ScriptedLoopModel
+from conftest import (
+    AgentFakePort,
+    HangingLoopModel,
+    ScriptedLoopModel,
+    cancel_when_started,
+    canned_read_result,
+    canned_search_result,
+    hang_until_cancelled,
+)
 
 from agent.budget import RunBudget, RunBudgetMonitor
 from agent.cancellation import CancellationToken
@@ -33,13 +41,8 @@ from agent.probe import PROBE_OPERATION_BUDGET, document_toolset
 from capabilities.contract import (
     AuthorizationError,
     CallerContext,
-    LegacyFileProvenance,
     OperationName,
     OutcomeCode,
-    QueryPreparationStatus,
-    ReadSourceResult,
-    SearchHit,
-    SearchKnowledgeResult,
 )
 
 PROBE_CONTEXT = CallerContext(user_id="u-1", authorized_graph_names=("GRAPH",))
@@ -47,21 +50,11 @@ DEFAULT_BUDGET = RunBudget(max_steps=6, max_model_calls=6, max_tool_calls=6, wal
 
 
 def _search_result(hits=None, outcome=OutcomeCode.SUCCESS):
-    if hits is None:
-        hits = (
-            SearchHit(provenance=LegacyFileProvenance(file_id="f-1"), text="The grievance process text.", score=0.9),
-        )
-    return SearchKnowledgeResult(
-        outcome=outcome, hits=hits, query_preparation_status=QueryPreparationStatus.PASSTHROUGH_ENGLISH
-    )
+    return canned_search_result(hits=hits, outcome=outcome)
 
 
 def _read_result(content="The grievance process is defined in this document."):
-    return ReadSourceResult(
-        outcome=OutcomeCode.SUCCESS,
-        provenance=LegacyFileProvenance(file_id="f-1"),
-        content=content,
-    )
+    return canned_read_result(content)
 
 
 def _turn(content=None, tool_calls=(), finish_reason="stop", prompt_tokens=None, completion_tokens=None):
@@ -308,23 +301,9 @@ def test_a_cancellation_during_the_in_flight_model_call_propagates_untouched():
     recorder: dict = {}
     token = CancellationToken()
 
-    class HangingModel:
-        async def complete(self, messages, tool_definitions):
-            recorder["started"] = True
-            try:
-                await asyncio.Event().wait()  # forever
-            except asyncio.CancelledError:
-                recorder["cancelled_in_flight"] = True
-                raise
-
     async def run_all():
-        async def fire_when_running():
-            while "started" not in recorder:
-                await asyncio.sleep(0)
-            token.cancel()
-
-        asyncio.get_running_loop().create_task(fire_when_running())
-        loop, collector, monitor = _loop(HangingModel(), token=token)
+        asyncio.get_running_loop().create_task(cancel_when_started(recorder, token))
+        loop, collector, monitor = _loop(HangingLoopModel(recorder), token=token)
         with pytest.raises(asyncio.CancelledError):
             await loop.run("q")
         return collector, monitor
@@ -339,26 +318,17 @@ def test_a_cancellation_during_the_in_flight_tool_call_propagates_untouched():
     recorder: dict = {}
     token = CancellationToken()
 
-    async def hanging_executor(arguments):
-        recorder["started"] = True
-        try:
-            await asyncio.Event().wait()  # forever
-        except asyncio.CancelledError:
-            recorder["cancelled_in_flight"] = True
-            raise
-
     from agent.registry import ToolDefinition, ToolRegistry
 
     registry = ToolRegistry()
+
+    async def hanging_executor(arguments):
+        await hang_until_cancelled(recorder)  # never returns
+
     registry.register(ToolDefinition(name="slow_tool", description="", parameters={"type": "object"}), hanging_executor)
 
     async def run_all():
-        async def fire_when_running():
-            while "started" not in recorder:
-                await asyncio.sleep(0)
-            token.cancel()
-
-        asyncio.get_running_loop().create_task(fire_when_running())
+        asyncio.get_running_loop().create_task(cancel_when_started(recorder, token))
         model = ScriptedLoopModel((_turn(tool_calls=(_tool_call("c-1", "slow_tool", {}),)),))
         loop, collector, monitor = _loop(model, token=token, registry=registry)
         with pytest.raises(asyncio.CancelledError):

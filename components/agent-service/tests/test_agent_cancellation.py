@@ -12,22 +12,9 @@ leaves the in-flight call running.
 import asyncio
 
 import pytest
+from conftest import cancel_when_started, hang_until_cancelled
 
 from agent.cancellation import CancellationToken, run_cancellable
-
-
-def _never_completing(recorder: dict):
-    """Work that hangs until cancelled and records that the cancellation reached it."""
-
-    async def work():
-        recorder["started"] = True
-        try:
-            await asyncio.Event().wait()  # forever
-        except asyncio.CancelledError:
-            recorder["cancelled_in_flight"] = True
-            raise
-
-    return work()
 
 
 def test_the_token_reports_and_raises_once_fired():
@@ -75,13 +62,8 @@ def test_the_token_winning_cancels_the_in_flight_call_and_propagates_untouched()
     token = CancellationToken()
 
     async def scenario():
-        async def fire_when_running():
-            while "started" not in recorder:
-                await asyncio.sleep(0)
-            token.cancel()
-
-        asyncio.get_running_loop().create_task(fire_when_running())
-        await run_cancellable(token, _never_completing(recorder))
+        asyncio.get_running_loop().create_task(cancel_when_started(recorder, token))
+        await run_cancellable(token, hang_until_cancelled(recorder))
 
     with pytest.raises(asyncio.CancelledError):
         asyncio.run(scenario())
@@ -94,7 +76,7 @@ def test_a_pre_cancelled_token_refuses_the_dispatch_before_the_work_starts():
     token = CancellationToken()
     token.cancel()
     with pytest.raises(asyncio.CancelledError):
-        asyncio.run(run_cancellable(token, _never_completing(recorder)))
+        asyncio.run(run_cancellable(token, hang_until_cancelled(recorder)))
     assert recorder == {}  # the work never even started
 
 
@@ -113,7 +95,7 @@ def test_the_caller_being_cancelled_cancels_the_in_flight_call_too():
     token = CancellationToken()
 
     async def scenario():
-        await run_cancellable(token, _never_completing(recorder))
+        await run_cancellable(token, hang_until_cancelled(recorder))
 
     async def outer():
         task = asyncio.get_running_loop().create_task(scenario())

@@ -79,9 +79,6 @@ class ToolRegistry:
             raise ValueError(f"tool {definition.name!r} is already registered")
         self._tools[definition.name] = _RegisteredTool(definition=definition, executor=executor)
 
-    def has(self, name: str) -> bool:
-        return name in self._tools
-
     def names(self) -> tuple[str, ...]:
         return tuple(self._tools)
 

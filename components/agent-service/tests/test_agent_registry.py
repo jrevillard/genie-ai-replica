@@ -97,10 +97,8 @@ def test_a_registration_without_a_name_is_refused():
         ToolRegistry().register(_definition(name=""), _executor)
 
 
-def test_has_and_names_report_the_registered_set():
+def test_names_report_the_registered_set():
     registry, _ = _registry_with_recording_executor()
-    assert registry.has("search_knowledge")
-    assert not registry.has("read_source")
     assert registry.names() == ("search_knowledge",)
 
 

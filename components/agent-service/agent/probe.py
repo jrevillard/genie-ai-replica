@@ -45,8 +45,10 @@ from pydantic import TypeAdapter
 
 from capabilities.adapters.chunks import LegacyChunkAdapter
 from capabilities.adapters.docrepo import DocRepoAdapter
+from capabilities.adapters.env_config import ArangoConfig
 from capabilities.adapters.okf import OkfAdapter
 from capabilities.contract import (
+    AuthorizedRepo,
     CallerContext,
     DocumentCapabilityPort,
     OperationBudget,
@@ -56,7 +58,10 @@ from capabilities.contract import (
     SearchKnowledgeInput,
     SourceRef,
 )
-from preparation.config import _env_float
+from capabilities.executor import AuthorizedExecutor
+from capabilities.search_knowledge import SearchKnowledgeCapability
+from noagent.config import NoAgentConfig
+from noagent.generation import RECORDED_SAMPLING_PARAMS, chat_choice, chat_choice_content
 from preparation.translation import HttpxTransport
 
 from .budget import RunBudget, RunBudgetMonitor
@@ -159,14 +164,40 @@ async def run_probe(
         emitter=emitter,
         system_prompt=PROBE_SYSTEM_PROMPT,
     )
-    try:
-        result = await loop.run(question)
-    except asyncio.CancelledError:
+
+    def _record(
+        outcome: str,
+        *,
+        steps: int,
+        model_calls: int,
+        tool_calls: int,
+        wall_clock_seconds: float,
+        prompt_tokens: int | None,
+        completion_tokens: int | None,
+        error: str | None = None,
+    ) -> ProbeEvidence:
+        """One evidence record: the run identity is the probe's, the counts are the run's."""
         return ProbeEvidence(
             runtime_id=RUNTIME_ID,
             toolset=TOOLSET,
             question_id=question_id,
-            outcome=OUTCOME_CANCELLED,
+            outcome=outcome,
+            steps=steps,
+            model_calls=model_calls,
+            tool_calls=tool_calls,
+            wall_clock_seconds=wall_clock_seconds,
+            prompt_tokens=prompt_tokens,
+            completion_tokens=completion_tokens,
+            error=error,
+        )
+
+    try:
+        result = await loop.run(question)
+    except asyncio.CancelledError:
+        # The loop's RunResult never exists on this path; the monitor's
+        # partial counts are the honest record.
+        return _record(
+            OUTCOME_CANCELLED,
             steps=monitor.steps,
             model_calls=monitor.model_calls,
             tool_calls=monitor.tool_calls,
@@ -174,11 +205,8 @@ async def run_probe(
             prompt_tokens=None,
             completion_tokens=None,
         )
-    return ProbeEvidence(
-        runtime_id=RUNTIME_ID,
-        toolset=TOOLSET,
-        question_id=question_id,
-        outcome=result.outcome,
+    return _record(
+        result.outcome,
         steps=result.steps,
         model_calls=result.model_calls,
         tool_calls=result.tool_calls,
@@ -193,7 +221,6 @@ def document_toolset(
     port: DocumentCapabilityPort,
     context: CallerContext,
     operation_budget: OperationBudget,
-    registry: ToolRegistry | None = None,
 ) -> ToolRegistry:
     """The probe's small toolset: search + read, executors bound to the port.
 
@@ -208,7 +235,7 @@ def document_toolset(
     raises ``ValidationError``, which the loop feeds back as the
     structured tool result.
     """
-    registry = registry if registry is not None else ToolRegistry()
+    registry = ToolRegistry()
     registry.register(
         ToolDefinition(
             name="search_knowledge",
@@ -291,29 +318,26 @@ class ProbeConfig:
 
     @classmethod
     def load(cls, env=None) -> "ProbeConfig":
+        # The model-leg knobs are the deployed generation config's, read
+        # through ITS loader (NoAgentConfig): the endpoint resolution rule,
+        # the model-id override, the discovery bearer and TLS posture, and
+        # the tolerant timeout reads have one home, so the probe measures
+        # the same endpoint and payload rules the deployment serves.
+        noagent = NoAgentConfig.load(env)
         source = os.environ if env is None else env
-        endpoint = str(source.get("VLLM_LLM_ENDPOINT", "") or source.get("VLLM_ENDPOINT", ""))
-        endpoint = endpoint or (
-            f"http://{source.get('LLM_SERVER_HOST_IP', '0.0.0.0')}:{source.get('LLM_SERVER_PORT', '80')}"
-        )
         return cls(
-            generation_endpoint=endpoint,
-            model_id_override=str(source.get("VLLM_LLM_MODEL_ID", "")),
-            # The generation leg authenticates with the recorded bearer
-            # (OPENAI_API_KEY, as noagent.generation and preparation both
-            # read it), falling back to the GPU-node key: the canonical
-            # venue carries only VLLM_API_KEY (the compose blocks map
-            # OPENAI_API_KEY FROM it for the services that need it), and
-            # an in-process probe run inherits the operator's shell, not
-            # a compose mapping.
+            generation_endpoint=noagent.generation_endpoint,
+            model_id_override=noagent.model_id_override,
+            # The generation leg diverges from the recorded bearer on
+            # purpose: NoAgentConfig.bearer is OPENAI_API_KEY only, but an
+            # in-process probe run inherits the operator's shell, not the
+            # compose mapping that fills OPENAI_API_KEY FROM VLLM_API_KEY —
+            # the canonical venue carries only the GPU-node key.
             bearer=source.get("OPENAI_API_KEY") or source.get("VLLM_API_KEY"),
-            probe_bearer=source.get("VLLM_API_KEY"),
-            tls_verify=str(source.get("OPEA_SSL_SKIP_VERIFY", "")) != "1",
-            # The tolerant reads are the component's recorded convention
-            # (_env_float): a set-to-empty value falls back to the default
-            # instead of crashing the probe.
-            llm_timeout_seconds=_env_float(source, "MODEL_LLM_TIMEOUT_SECONDS", 180.0),
-            probe_timeout_seconds=_env_float(source, "MODEL_PROBE_TIMEOUT_SECONDS", 10.0),
+            probe_bearer=noagent.probe_bearer,
+            tls_verify=noagent.tls_verify,
+            llm_timeout_seconds=noagent.llm_timeout_seconds,
+            probe_timeout_seconds=noagent.probe_timeout_seconds,
             docrepo_url=str(source.get("AGENT_DOCREPO_URL", "")),
             okf_url=str(source.get("AGENT_OKF_URL", "")),
             authorized_graphs=str(source.get("AGENT_AUTHORIZED_GRAPHS", "")),
@@ -370,10 +394,7 @@ class ProbeModelClient:
             "messages": messages,
             "tools": list(tool_definitions),
             "tool_choice": "auto",
-            "temperature": 0.01,
-            "top_p": 0.95,
-            "frequency_penalty": 0.0,
-            "stream": False,
+            **RECORDED_SAMPLING_PARAMS,
         }
         url = f"{self._config.generation_endpoint}/v1/chat/completions"
         headers = {"Authorization": f"Bearer {self._config.bearer}"} if self._config.bearer else {}
@@ -385,16 +406,15 @@ class ProbeModelClient:
             raise ProbeTransientError(f"the generation endpoint answered {status}: {str(body)[:200]}")
         if not isinstance(body, dict):
             raise ProbeTransientError(f"the generation endpoint answered a {type(body).__name__}, not an object")
-        choices = body.get("choices") or []
-        choice = choices[0] if choices and isinstance(choices[0], dict) else None
+        choice, finish_reason = chat_choice(body)
         if choice is None:
             raise ProbeTransientError("the generation response carries no choice")
         message = choice.get("message") or {}
-        content = message.get("content")
+        content = chat_choice_content(choice)
         return ModelTurn(
             content=content if isinstance(content, str) else None,
             tool_calls=self._parse_tool_calls(message.get("tool_calls")),
-            finish_reason=choice.get("finish_reason"),
+            finish_reason=finish_reason,
             prompt_tokens=self._usage_field(body, "prompt_tokens"),
             completion_tokens=self._usage_field(body, "completion_tokens"),
         )
@@ -449,10 +469,6 @@ def build_port(config: ProbeConfig, env=None) -> tuple[DocumentCapabilityPort, C
     executor enforces that set — this is the same authorization path a
     request takes, with the probe as the caller.
     """
-    from capabilities.adapters.env_config import ArangoConfig
-    from capabilities.executor import AuthorizedExecutor
-    from capabilities.search_knowledge import SearchKnowledgeCapability
-
     if not config.docrepo_url:
         raise ValueError("AGENT_DOCREPO_URL must be set for a live probe (doc-repo base URL)")
     if not config.okf_url:
@@ -473,8 +489,6 @@ def build_port(config: ProbeConfig, env=None) -> tuple[DocumentCapabilityPort, C
             raise ValueError(f"AGENT_AUTHORIZED_REPOS entries are repo_id:graph_name pairs, got {pair!r}")
         repos.append((repo_id, graph_name))
 
-    from capabilities.contract import AuthorizedRepo
-
     context = CallerContext(
         user_id="probe-smoke",
         authorized_graph_names=graphs,
@@ -483,6 +497,10 @@ def build_port(config: ProbeConfig, env=None) -> tuple[DocumentCapabilityPort, C
     arango_config = ArangoConfig.load(env)
     search = SearchKnowledgeCapability.create(env)
 
+    # The ArangoDB driver stays a call-time import: it is the one heavy
+    # dependency only a live probe needs, and keeping it off the module
+    # import path keeps importing the seam (loop/budget/events consumers)
+    # free of it.
     import arango
 
     client = arango.ArangoClient(hosts=arango_config.url)

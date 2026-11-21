@@ -16,7 +16,17 @@ import asyncio
 import json
 
 import pytest
-from conftest import AgentFakePort, PreparationFakeTransport, ScriptedLoopModel, preparation_model_entry
+from conftest import (
+    AgentFakePort,
+    HangingLoopModel,
+    PreparationFakeTransport,
+    ScriptedLoopModel,
+    cancel_when_started,
+    canned_read_result,
+    canned_search_result,
+    multihop_turns,
+    preparation_model_entry,
+)
 
 from agent.budget import RunBudget
 from agent.cancellation import CancellationToken
@@ -41,55 +51,21 @@ from agent.probe import (
     document_toolset,
     run_probe,
 )
-from capabilities.contract import (
-    CallerContext,
-    LegacyFileProvenance,
-    OkfConceptProvenance,
-    OutcomeCode,
-    QueryPreparationStatus,
-    ReadSourceResult,
-    SearchHit,
-    SearchKnowledgeResult,
-)
+from capabilities.contract import CallerContext, QueryPreparationStatus
 
 PROBE_CONTEXT = CallerContext(user_id="u-1", authorized_graph_names=("GRAPH",))
 
 
 def _search_result(*, concept=False):
-    provenance = (
-        OkfConceptProvenance(concept_id="c-1", repo_id="r-1", bundle_version=3)
-        if concept
-        else LegacyFileProvenance(file_id="f-1")
-    )
-    return SearchKnowledgeResult(
-        outcome=OutcomeCode.SUCCESS,
-        hits=(SearchHit(provenance=provenance, text="the passage", score=0.9),),
-        query_preparation_status=QueryPreparationStatus.PASSTHROUGH_ENGLISH,
-    )
-
-
-def _read_result():
-    return ReadSourceResult(
-        outcome=OutcomeCode.SUCCESS,
-        provenance=LegacyFileProvenance(file_id="f-1"),
-        content="the content",
-    )
+    return canned_search_result(concept=concept)
 
 
 def _port() -> AgentFakePort:
-    return AgentFakePort(search_result=_search_result(), read_result=_read_result())
+    return AgentFakePort(search_result=_search_result(), read_result=canned_read_result())
 
 
 def _turns(content="the answer"):
-    return (
-        ModelTurn(tool_calls=(ToolCallRequest(call_id="call-1", name="search_knowledge", arguments={"query": "q"}),)),
-        ModelTurn(
-            tool_calls=(
-                ToolCallRequest(call_id="call-2", name="read_source", arguments={"target": {"file_id": "f-1"}}),
-            )
-        ),
-        ModelTurn(content=content),
-    )
+    return multihop_turns(answer=content)
 
 
 # ---------------------------------------------------------------------
@@ -205,23 +181,11 @@ def test_a_cancelled_probe_records_outcome_cancelled():
     recorder: dict = {}
     token = CancellationToken()
 
-    class HangingModel:
-        async def complete(self, messages, tool_definitions):
-            recorder["started"] = True
-            try:
-                await asyncio.Event().wait()
-            except asyncio.CancelledError:
-                recorder["cancelled_in_flight"] = True
-                raise
-
     async def scenario():
-        async def fire_when_running():
-            while "started" not in recorder:
-                await asyncio.sleep(0)
-            token.cancel()
-
-        asyncio.get_running_loop().create_task(fire_when_running())
-        return await run_probe(port=_port(), context=PROBE_CONTEXT, model_client=HangingModel(), token=token)
+        asyncio.get_running_loop().create_task(cancel_when_started(recorder, token))
+        return await run_probe(
+            port=_port(), context=PROBE_CONTEXT, model_client=HangingLoopModel(recorder), token=token
+        )
 
     evidence = asyncio.run(scenario())
     assert evidence.outcome == OUTCOME_CANCELLED

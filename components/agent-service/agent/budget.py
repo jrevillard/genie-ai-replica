@@ -77,10 +77,6 @@ class RunBudgetMonitor:
         self._tool_calls = 0
 
     @property
-    def budget(self) -> RunBudget:
-        return self._budget
-
-    @property
     def steps(self) -> int:
         return self._steps
 

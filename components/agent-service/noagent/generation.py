@@ -52,6 +52,12 @@ class GenerationTransientError(RuntimeError):
     """
 
 
+RECORDED_SAMPLING_PARAMS = {"temperature": 0.01, "top_p": 0.95, "frequency_penalty": 0.0, "stream": False}
+"""The recorded request-level sampling params, shared by every chat/completions
+consumer in the component — one home, so a change to the deployed convention
+cannot leave one consumer measuring a different request than the others."""
+
+
 def generation_payload(system_prompt: str, user_content: str, model_id: str | None, answer_tokens: int | None) -> dict:
     """The recorded request body: two chat messages, the fixed params.
 
@@ -66,10 +72,7 @@ def generation_payload(system_prompt: str, user_content: str, model_id: str | No
             {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_content},
         ],
-        "temperature": 0.01,
-        "top_p": 0.95,
-        "frequency_penalty": 0.0,
-        "stream": False,
+        **RECORDED_SAMPLING_PARAMS,
     }
     if answer_tokens:
         payload["max_tokens"] = answer_tokens

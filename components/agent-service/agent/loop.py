@@ -40,7 +40,7 @@ system + user, assistant tool-call turns, role-``tool`` results.
 
 import json
 import logging
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Protocol
 
 from pydantic import ValidationError
@@ -131,7 +131,9 @@ class AgentLoop:
 
     Constructed per run with the run's monitor, token and emitter (the
     probe harness builds them, so a cancelled run still leaves readable
-    counters behind); the registry is the run's authorization surface.
+    counters behind); the registry is the run's authorization surface. One
+    instance drives ONE run — the message list and the usage counters are
+    per-run state created in :meth:`run`.
     """
 
     model: LoopModelClient
@@ -140,9 +142,6 @@ class AgentLoop:
     token: CancellationToken
     emitter: EventEmitter
     system_prompt: str
-    _messages: list[dict] = field(default_factory=list, init=False)
-    _prompt_tokens: int | None = field(default=None, init=False)
-    _completion_tokens: int | None = field(default=None, init=False)
 
     async def run(self, question: str) -> RunResult:
         """Drive one run to a terminal outcome; cancellation propagates."""
@@ -180,9 +179,9 @@ class AgentLoop:
         except UnregisteredToolError as refused:
             # The registry refused before any resolution; the run ends
             # honestly with the refusal — no tool result is invented.
-            return self._fail(OUTCOME_ERROR, refused.args[0])
+            return self._fail(OUTCOME_ERROR, str(refused))
         except BudgetExhausted as exhausted:
-            return self._fail(OUTCOME_BUDGET_EXHAUSTED, exhausted.args[0])
+            return self._fail(OUTCOME_BUDGET_EXHAUSTED, str(exhausted))
         except Exception as failed:  # noqa: BLE001 — a failed run still gets its terminal event
             logger.warning("agent run failed: %s: %s", type(failed).__name__, str(failed)[:_MESSAGE_TRUNCATION])
             return self._fail(OUTCOME_ERROR, f"{type(failed).__name__}: {str(failed)[:_MESSAGE_TRUNCATION]}")
@@ -200,16 +199,7 @@ class AgentLoop:
         self.emitter.emit(EventKind.TEXT_MESSAGE_CONTENT, {"text": text})
         self.emitter.emit(EventKind.TEXT_MESSAGE_FINISHED, {})
         self.emitter.emit(EventKind.RUN_FINISHED, {"outcome": OUTCOME_ANSWERED})
-        return RunResult(
-            outcome=OUTCOME_ANSWERED,
-            final_text=text,
-            steps=self.monitor.steps,
-            model_calls=self.monitor.model_calls,
-            tool_calls=self.monitor.tool_calls,
-            wall_clock_seconds=self.monitor.elapsed_seconds,
-            prompt_tokens=self._prompt_tokens,
-            completion_tokens=self._completion_tokens,
-        )
+        return self._terminal(OUTCOME_ANSWERED, final_text=text)
 
     def _assistant_tool_call_message(self, turn: ModelTurn) -> dict:
         """The assistant message that carries the requested tool calls back on the list."""
@@ -262,13 +252,10 @@ class AgentLoop:
             # the loop never fabricates a successful result for them, and
             # never converts one into an instruction.
             if isinstance(failed, CapabilityError):
-                detail = {
-                    "code": failed.code.value,
-                    "operation": failed.operation.value if failed.operation else None,
-                    "message": str(failed)[:_MESSAGE_TRUNCATION],
-                }
+                code, operation = failed.code.value, failed.operation.value if failed.operation else None
             else:
-                detail = {"code": "invalid_arguments", "operation": None, "message": str(failed)[:_MESSAGE_TRUNCATION]}
+                code, operation = "invalid_arguments", None
+            detail = {"code": code, "operation": operation, "message": str(failed)[:_MESSAGE_TRUNCATION]}
             logger.info(
                 "tool %s reported %s: %s",
                 request.name,
@@ -280,17 +267,22 @@ class AgentLoop:
 
     # -- failure and usage -------------------------------------------------
 
-    def _fail(self, outcome: str, message: str) -> RunResult:
-        """End the run honestly: the terminal ``run_error``, no answer text."""
-        self.emitter.emit(EventKind.RUN_ERROR, {"code": outcome, "message": message[:_MESSAGE_TRUNCATION]})
+    def _terminal(self, outcome: str, *, final_text: str | None = None, error: str | None = None) -> RunResult:
+        """The terminal record every completed run returns: the run's monitor
+        counts, the accumulated usage, and the outcome the caller asked for."""
         return RunResult(
             outcome=outcome,
-            final_text=None,
+            final_text=final_text,
             steps=self.monitor.steps,
             model_calls=self.monitor.model_calls,
             tool_calls=self.monitor.tool_calls,
             wall_clock_seconds=self.monitor.elapsed_seconds,
             prompt_tokens=self._prompt_tokens,
             completion_tokens=self._completion_tokens,
-            error=message[:_MESSAGE_TRUNCATION],
+            error=error,
         )
+
+    def _fail(self, outcome: str, message: str) -> RunResult:
+        """End the run honestly: the terminal ``run_error``, no answer text."""
+        self.emitter.emit(EventKind.RUN_ERROR, {"code": outcome, "message": message[:_MESSAGE_TRUNCATION]})
+        return self._terminal(outcome, error=message[:_MESSAGE_TRUNCATION])

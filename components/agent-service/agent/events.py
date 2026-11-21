@@ -30,10 +30,12 @@ from typing import Protocol
 
 from pydantic import BaseModel, ConfigDict
 
-# The client-SSE frame names the BFF writes (the five preserved event types
-# plus the additive ones). The seam vocabulary is checked against
-# this set at import: one home for the forbidden list, so the check cannot
-# drift from what the BFF actually writes.
+# The client-SSE frame names the BFF writes today (the five preserved event
+# types plus the additive ones) — a snapshot, hand-maintained: the guard
+# below cannot see a frame the BFF adds later, and the closed EventKind
+# vocabulary plus the frozen envelope are what structurally keep the seam
+# from speaking the client dialect. The vocabulary is checked against this
+# set at import.
 BFF_FRAME_NAMES = frozenset({"chunk", "done", "error", "metadata", "agent_activity", "agent_verdict"})
 
 
@@ -112,15 +114,6 @@ class EventEmitter:
         self._run_id = run_id
         self._sink = sink
         self._seq = 0
-
-    @property
-    def run_id(self) -> str:
-        return self._run_id
-
-    @property
-    def events_emitted(self) -> int:
-        """How many events this emitter has stamped so far."""
-        return self._seq
 
     def emit(self, kind: EventKind, payload: dict | None = None, *, call_id: str | None = None) -> AgentEvent:
         """Stamp one event and hand it to the sink."""

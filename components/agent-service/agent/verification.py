@@ -1097,11 +1097,13 @@ class _CancelDuringModelCall:
         self._token = token
         self._recorder = recorder
 
-    async def complete(self, messages: list[dict], tool_definitions: tuple[dict, ...]):
+    async def complete(
+        self, messages: list[dict], tool_definitions: tuple[dict, ...], *, max_output_tokens: int | None
+    ):
         self._recorder["model_call_started"] = True
         self._token.cancel()
         try:
-            return await self._inner.complete(messages, tool_definitions)
+            return await self._inner.complete(messages, tool_definitions, max_output_tokens=max_output_tokens)
         except asyncio.CancelledError:
             self._recorder["in_flight_cancelled"] = True
             raise
@@ -1172,7 +1174,16 @@ async def demo_loop_cancel(config: ProbeConfig, transport, model_id: str | None 
 
 def _demo_monitor() -> RunBudgetMonitor:
     """The demo run's budget monitor: the smoke bounds of the probe, one run."""
-    return RunBudgetMonitor(RunBudget(max_steps=4, max_model_calls=4, max_tool_calls=4, wall_clock_seconds=300.0))
+    return RunBudgetMonitor(
+        RunBudget(
+            max_steps=4,
+            max_model_calls=4,
+            max_tool_calls=4,
+            max_total_tokens=262144,
+            max_evidence_bytes=262144,
+            wall_clock_seconds=300.0,
+        )
+    )
 
 
 async def _read_clock_executor(arguments: dict) -> dict:

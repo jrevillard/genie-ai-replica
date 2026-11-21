@@ -3,6 +3,7 @@
 const { logger } = require('../../shared-lib');
 const { extractCommittableUnit } = require('./stream-boundary');
 const { languageForLog } = require('./language-log');
+const { writeSSEFrame } = require('../sse-frame');
 
 // The streaming-translation unit relay (issue #829), extracted from the
 // query-routes streaming handler (story 2.4). ONE home, consumed by both
@@ -43,12 +44,7 @@ function createStreamUnitRelay({ res, translator, targetLanguage, queryId }) {
 
   const writeChunk = (content) => {
     if (!res.writableEnded) {
-      // An SSE frame, never an HTML document: JSON.stringify escapes
-      // quotes and newlines, so a value cannot terminate the `data:`
-      // frame or inject a second event. The client renders message
-      // content through DOMPurify (ChatBotComponent.vue).
-      // nosemgrep: nodejs_scan.javascript-xss-rule-express_xss
-      res.write(`data: ${JSON.stringify({ type: 'chunk', content })}\n\n`);
+      writeSSEFrame(res, { type: 'chunk', content });
     }
   };
 

@@ -57,4 +57,16 @@ function wantsTranslation(targetLanguage) {
   return Boolean(targetLanguage) && targetLanguage !== 'en' && targetLanguage !== 'auto';
 }
 
-module.exports = { normalizeRequestedLanguage, wantsTranslation };
+/**
+ * Whether unit-by-unit streaming translation is enabled for this deployment
+ * (issue #829, `STREAMING_TRANSLATION_ENABLED`). One home for the flag's
+ * vocabulary: a future value or config-object move updates this parse and
+ * both consuming paths (legacy relay, agentic frame writer) with it.
+ *
+ * @returns {boolean} True when the deployment streams translations.
+ */
+function streamingTranslationEnabled() {
+  return ['1', 'true'].includes((process.env.STREAMING_TRANSLATION_ENABLED || '').toLowerCase());
+}
+
+module.exports = { normalizeRequestedLanguage, wantsTranslation, streamingTranslationEnabled };

@@ -77,9 +77,7 @@ describe('agentServiceUrl', () => {
 
   it('defaults to the compose service name + port when unset', () => {
     delete process.env.AGENT_SERVICE_URL;
-    const { agentServiceUrl, _internals } = requireRouting();
-    expect(agentServiceUrl()).toBe('http://agent-service:8010');
-    expect(agentServiceUrl()).toBe(_internals.DEFAULT_AGENT_SERVICE_URL);
+    expect(requireRouting().agentServiceUrl()).toBe('http://agent-service:8010');
   });
 
   it('honors the AGENT_SERVICE_URL override', () => {

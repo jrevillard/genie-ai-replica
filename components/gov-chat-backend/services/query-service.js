@@ -685,6 +685,10 @@ class QueryService {
    *   legacy default.
    */
   async resolveFanoutPosture(authHeaders, { queryId, sessionId = null, correlationId = null } = {}) {
+    // The legacy graph the GRAPH-injection rule prepends — one computation
+    // for both returns of this resolution (and the one `_fanoutGraphSet`
+    // reads back).
+    const legacyGraph = process.env.ARANGO_GRAPH_NAME || 'GRAPH';
     const bearer = authHeaders?.authorization;
     if (!bearer) {
       return {
@@ -696,7 +700,7 @@ class QueryService {
         authorizedGraphs: [],
         authz: null,
         stickyGraphs: [],
-        legacyGraph: process.env.ARANGO_GRAPH_NAME || 'GRAPH',
+        legacyGraph,
         correlationId
       };
     }
@@ -788,7 +792,7 @@ class QueryService {
       authorizedGraphs,
       authz,
       stickyGraphs,
-      legacyGraph: process.env.ARANGO_GRAPH_NAME || 'GRAPH',
+      legacyGraph,
       correlationId
     };
   }

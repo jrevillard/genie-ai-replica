@@ -148,6 +148,12 @@ beforeAll(() => {
   app = createApp({ services: { queryService } });
 });
 
+afterEach(() => {
+  // The timeout tests set the knob inline; one cleanup owns the removal so a
+  // test that forgets the tail delete cannot leak it into its neighbors.
+  delete process.env.AGENT_UPSTREAM_TIMEOUT_MS;
+});
+
 beforeEach(() => {
   jest.clearAllMocks();
   keycloakAuthMiddleware.authenticate.mockImplementation((req, res, next) => {
@@ -420,7 +426,6 @@ describe('POST /api/queries/stream — the agentic happy path (frame order)', ()
     expect(options.signal).toBeInstanceOf(AbortSignal);
     // The pair-rule inputs are operator-visible knobs.
     expect(options.timeout).toBe(_internals.DEFAULT_UPSTREAM_TIMEOUT_MS);
-    delete process.env.AGENT_UPSTREAM_TIMEOUT_MS;
   });
 
   it('derives a smaller deadline from a configured timeout and forwards the labels narrowing', async () => {
@@ -461,7 +466,6 @@ describe('POST /api/queries/stream — the agentic happy path (frame order)', ()
     expect(body.context.authorized_graph_names).toEqual(['OKF_a_v1']);
     expect(body.context.authorized_repos).toEqual([{ repo_id: 'r-kenya', graph_name: 'OKF_a_v1' }]);
     expect(body.context.requested_labels).toEqual(['taxes']);
-    delete process.env.AGENT_UPSTREAM_TIMEOUT_MS;
   });
 
   it('a timeout above the reserves still derives deadline = timeout − reserves', () => {
@@ -483,7 +487,6 @@ describe('POST /api/queries/stream — the agentic happy path (frame order)', ()
       'AgentFrameWriter.upstream_timeout_below_reserves',
       expect.objectContaining({ knob: 'AGENT_UPSTREAM_TIMEOUT_MS', configured: 20000, applied: 3600000 })
     );
-    delete process.env.AGENT_UPSTREAM_TIMEOUT_MS;
   });
 
   it('an under-sized configured timeout reads the absorbed default on the wire (deadline AND axios timeout)', async () => {
@@ -503,7 +506,6 @@ describe('POST /api/queries/stream — the agentic happy path (frame order)', ()
     // ahead of the run's own honest ending.
     expect(body.deadline_ms).toBe(3600000 - 30000 - 5000);
     expect(options.timeout).toBe(3600000);
-    delete process.env.AGENT_UPSTREAM_TIMEOUT_MS;
   });
 });
 
@@ -808,7 +810,6 @@ describe('POST /api/queries/stream — the error and verdict contracts', () => {
       expect(queryService.finalizeStreamQuery).not.toHaveBeenCalled();
     } finally {
       jest.useRealTimers();
-      delete process.env.AGENT_UPSTREAM_TIMEOUT_MS;
     }
   });
 

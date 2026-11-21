@@ -46,11 +46,4 @@ function agentServiceUrl() {
   return configured || DEFAULT_AGENT_SERVICE_URL;
 }
 
-module.exports = {
-  isAgentPathEnabled,
-  agentServiceUrl,
-  // Exposed for the tests that pin them — production code reads nothing here.
-  _internals: {
-    DEFAULT_AGENT_SERVICE_URL
-  }
-};
+module.exports = { isAgentPathEnabled, agentServiceUrl };

@@ -12,7 +12,12 @@ const { languageForLog } = require('../services/translation/language-log');
 const { isUnsupportedLanguage, unsupportedLanguageBody } = require('../services/translation/unsupported-language');
 const { isAgentPathEnabled } = require('../services/agent-routing');
 const { proxyAgentRun } = require('../services/agent-frame-writer');
-const { normalizeRequestedLanguage, wantsTranslation } = require('../services/translation/language-request');
+const {
+  normalizeRequestedLanguage,
+  wantsTranslation,
+  streamingTranslationEnabled
+} = require('../services/translation/language-request');
+const { writeSSEFrame } = require('../services/sse-frame');
 const { parsePositiveInt } = require('../shared-lib');
 
 /**
@@ -477,12 +482,9 @@ module.exports = (queryService) => {
       // instead of an English stream that flips at the end. The unit machinery
       // (buffer, ordered chain, failure latch) lives in the shared relay module
       // — one home, consumed by this path and by the agentic frame writer.
-      const streamingTranslationEnabled = ['1', 'true'].includes(
-        (process.env.STREAMING_TRANSLATION_ENABLED || '').toLowerCase()
-      );
       // The language was resolved above, before the stream opened: the
       // translator behind it works in the language the caller asked for.
-      const useStreamingTranslation = streamingTranslationEnabled && wantsTranslation(targetLanguage);
+      const useStreamingTranslation = streamingTranslationEnabled() && wantsTranslation(targetLanguage);
       const streamRelay = useStreamingTranslation
         ? createStreamUnitRelay({ res, translator, targetLanguage, queryId })
         : null;
@@ -538,12 +540,7 @@ module.exports = (queryService) => {
               // the failure latch).
               streamRelay.onChunk(parsed.content);
             } else {
-              // An SSE frame, never an HTML document: JSON.stringify escapes
-              // quotes and newlines, so a value cannot terminate the `data:`
-              // frame or inject a second event. The client renders message
-              // content through DOMPurify (ChatBotComponent.vue).
-              // nosemgrep: nodejs_scan.javascript-xss-rule-express_xss
-              res.write(`data: ${JSON.stringify({ type: 'chunk', content: parsed.content })}\n\n`);
+              writeSSEFrame(res, { type: 'chunk', content: parsed.content });
             }
           } else if (parsed.type === 'metadata') {
             // Forward the parser's object whole (minus the event discriminator).

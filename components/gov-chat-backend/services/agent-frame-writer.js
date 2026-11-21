@@ -4,10 +4,11 @@ const axios = require('axios');
 const http = require('http');
 const https = require('https');
 const { trace } = require('@opentelemetry/api');
-const { logger, spanAttrs } = require('../shared-lib');
+const { logger, spanAttrs, parsePositiveInt } = require('../shared-lib');
 const { agentServiceUrl } = require('./agent-routing');
 const { parseAgentSeamLine } = require('./agent-seam-parser');
-const { wantsTranslation } = require('./translation/language-request');
+const { writeSSEFrame } = require('./sse-frame');
+const { wantsTranslation, streamingTranslationEnabled } = require('./translation/language-request');
 const { createStreamUnitRelay } = require('./translation/stream-unit-relay');
 
 // Story 2.4 — the BFF frame writer. The BFF parses the agent-service SEAM
@@ -44,15 +45,6 @@ const FINALIZATION_MARGIN_MS = 5000; // metadata persistence + frame write + SSE
 const DEADLINE_FLOOR_MS = 1000;
 
 /**
- * The BFF's upstream timeout on the agent leg (`AGENT_UPSTREAM_TIMEOUT_MS`).
- * @returns {number} The configured timeout, or the 1 h default.
- */
-function upstreamTimeoutMs() {
-  const parsed = parseInt(process.env.AGENT_UPSTREAM_TIMEOUT_MS, 10);
-  return Number.isFinite(parsed) && parsed > 0 ? parsed : DEFAULT_UPSTREAM_TIMEOUT_MS;
-}
-
-/**
  * The EFFECTIVE upstream timeout — the one value BOTH consumers of the pair
  * read (the deadline derivation and the axios `timeout` option). A configured
  * timeout that cannot cover the reserves plus the floor would break the pair
@@ -63,7 +55,7 @@ function upstreamTimeoutMs() {
  * @returns {number}
  */
 function resolveUpstreamTimeoutMs() {
-  const configured = upstreamTimeoutMs();
+  const configured = parsePositiveInt(process.env.AGENT_UPSTREAM_TIMEOUT_MS, DEFAULT_UPSTREAM_TIMEOUT_MS, { min: 1 });
   if (configured <= TRANSLATION_RESERVE_MS + FINALIZATION_MARGIN_MS + DEADLINE_FLOOR_MS) {
     logger.warn('AgentFrameWriter.upstream_timeout_below_reserves', {
       knob: 'AGENT_UPSTREAM_TIMEOUT_MS',
@@ -116,31 +108,11 @@ function citationToSourceDocument(citation) {
   if (!provenance || typeof provenance !== 'object' || Array.isArray(provenance)) {
     return null;
   }
-  if (provenance.source === 'okf-concept') {
-    const entry = {
-      document_id: provenance.concept_id,
-      document_name: String(provenance.concept_id ?? '')
-        .replace(/_/g, ' ')
-        .trim(),
-      url: '',
-      categoryLabels: [],
-      serviceLabels: [],
-      score: typeof citation.score === 'number' ? citation.score : null,
-      concept_id: provenance.concept_id,
-      source: 'okf-concept'
-    };
-    if (provenance.repo_id) {
-      entry.repo_id = provenance.repo_id;
-    }
-    if (provenance.bundle_version !== undefined && provenance.bundle_version !== null) {
-      entry.bundle_version = provenance.bundle_version;
-    }
-    return entry;
-  }
-  const fileId = provenance.file_id;
-  return {
-    document_id: fileId,
-    document_name: String(fileId ?? '')
+  // The row fields both variants share; the variant adds its identity keys.
+  const identity = provenance.source === 'okf-concept' ? provenance.concept_id : provenance.file_id;
+  const entry = {
+    document_id: identity,
+    document_name: String(identity ?? '')
       .replace(/_/g, ' ')
       .trim(),
     url: '',
@@ -148,6 +120,17 @@ function citationToSourceDocument(citation) {
     serviceLabels: [],
     score: typeof citation.score === 'number' ? citation.score : null
   };
+  if (provenance.source === 'okf-concept') {
+    entry.concept_id = provenance.concept_id;
+    entry.source = 'okf-concept';
+    if (provenance.repo_id) {
+      entry.repo_id = provenance.repo_id;
+    }
+    if (provenance.bundle_version !== undefined && provenance.bundle_version !== null) {
+      entry.bundle_version = provenance.bundle_version;
+    }
+  }
+  return entry;
 }
 
 /**
@@ -185,18 +168,6 @@ function assembleAgentMetadata({ emptyStreamMetadata, verdict, runId, usageRecor
     metadata.agent_run.usage_record = usageRecord;
   }
   return metadata;
-}
-
-/**
- * Write one client SSE frame. JSON.stringify escapes quotes and newlines, so
- * a value cannot terminate the `data:` frame or inject a second event; the
- * client renders message content through DOMPurify (ChatBotComponent.vue).
- * @param {Object} res
- * @param {Object} payload - The frame object (the `type` discriminator inside).
- */
-function writeClientFrame(res, payload) {
-  // nosemgrep: nodejs_scan.javascript-xss-rule-express_xss
-  res.write(`data: ${JSON.stringify(payload)}\n\n`);
 }
 
 /**
@@ -304,10 +275,7 @@ async function proxyAgentRun({
   // (one home, translation behaves as today). No translation-backend
   // selection keyed on routing here — the request-resolved translator is the
   // one both paths use (story 2.10 revisits).
-  const streamingTranslationEnabled = ['1', 'true'].includes(
-    (process.env.STREAMING_TRANSLATION_ENABLED || '').toLowerCase()
-  );
-  const useStreamingTranslation = streamingTranslationEnabled && wantsTranslation(targetLanguage);
+  const useStreamingTranslation = streamingTranslationEnabled() && wantsTranslation(targetLanguage);
   const streamRelay = useStreamingTranslation
     ? createStreamUnitRelay({ res, translator, targetLanguage, queryId })
     : null;
@@ -320,9 +288,9 @@ async function proxyAgentRun({
   let capturedVerdict = null;
   let usageRecord = null;
   // The stream is finished from the BFF's perspective (completed, errored or
-  // disconnected): no further frames, no partial save.
+  // disconnected): no further frames, no partial save. One flag owns the
+  // terminal state — every terminal path sets it, every guard reads it.
   let streamFinished = false;
-  const doneState = { handled: false };
   const callNames = new Map(); // call_id → operation name (the finished event carries no name)
 
   const cleanupKeepalive = () => {
@@ -369,7 +337,6 @@ async function proxyAgentRun({
     clearStreamDeadline();
     if (streamFinished) return;
     streamFinished = true;
-    doneState.handled = true;
     if (!controller.signal.aborted) {
       controller.abort();
       logger.info('QueryService.stream_client_disconnected', { queryId });
@@ -504,7 +471,6 @@ async function proxyAgentRun({
   const finishWithErrorFrame = (message, code) => {
     if (streamFinished || res.writableEnded) return;
     streamFinished = true;
-    doneState.handled = true;
     cleanupKeepalive();
     clearStreamDeadline();
     // The client was told the run failed: the agent leg must not keep making
@@ -512,13 +478,13 @@ async function proxyAgentRun({
     if (!controller.signal.aborted) {
       controller.abort();
     }
-    writeClientFrame(res, { type: 'error', message, code });
+    writeSSEFrame(res, { type: 'error', message, code });
     res.end();
   };
 
   const doAgentTerminal = async () => {
-    if (doneState.handled || res.writableEnded || res.destroyed) return;
-    doneState.handled = true;
+    if (streamFinished || res.writableEnded || res.destroyed) return;
+    streamFinished = true;
     cleanupKeepalive();
     clearStreamDeadline();
     try {
@@ -536,7 +502,7 @@ async function proxyAgentRun({
         const verdictProjection = { ...capturedVerdict };
         delete verdictProjection.type;
         delete verdictProjection.version;
-        writeClientFrame(res, { type: 'agent_verdict', version: 1, ...verdictProjection });
+        writeSSEFrame(res, { type: 'agent_verdict', version: 1, ...verdictProjection });
       }
       const metadata = assembleMetadata();
       await handleStreamDone(queryId, fullResponseText, streamStartTime, res, metadata, {
@@ -575,7 +541,7 @@ async function proxyAgentRun({
         if (streamRelay) {
           streamRelay.onChunk(text);
         } else {
-          writeClientFrame(res, { type: 'chunk', content: text });
+          writeSSEFrame(res, { type: 'chunk', content: text });
         }
         break;
       }
@@ -584,7 +550,7 @@ async function proxyAgentRun({
         if (event.call_id) {
           callNames.set(event.call_id, name);
         }
-        writeClientFrame(res, {
+        writeSSEFrame(res, {
           type: 'agent_activity',
           version: 1,
           status: 'started',
@@ -596,7 +562,7 @@ async function proxyAgentRun({
       case 'tool_call_finished': {
         // Auxiliary model calls (the grounding judge, preparation
         // translation) emit no agent_activity — only tool calls do.
-        writeClientFrame(res, {
+        writeSSEFrame(res, {
           type: 'agent_activity',
           version: 1,
           status: 'completed',
@@ -676,7 +642,6 @@ async function proxyAgentRun({
       handleSeamDataLine(buffer);
       buffer = '';
     }
-    streamFinished = true;
     doAgentTerminal();
   });
 }
@@ -688,11 +653,7 @@ module.exports = {
     DEFAULT_UPSTREAM_TIMEOUT_MS,
     TRANSLATION_RESERVE_MS,
     FINALIZATION_MARGIN_MS,
-    DEADLINE_FLOOR_MS,
     deriveDeadlineMs,
-    upstreamTimeoutMs,
-    resolveUpstreamTimeoutMs,
-    assembleAgentMetadata,
-    citationToSourceDocument
+    resolveUpstreamTimeoutMs
   }
 };

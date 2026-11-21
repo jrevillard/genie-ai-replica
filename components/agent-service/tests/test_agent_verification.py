@@ -241,6 +241,25 @@ def test_a_malformed_tool_call_delta_is_recorded_not_raised():
     assert observation.error == "a streamed tool-call delta is not an object"
 
 
+def test_a_tool_call_delta_without_an_index_is_recorded_not_merged():
+    # Spec-violating venue: a delta with no index must not merge into slot 0
+    # of the legitimate call (names overwritten, fragments concatenated) —
+    # it is its own issue and the judgment fails the cell with it.
+    events = [
+        *_sse_events()[:1],
+        {"choices": [{"delta": {"tool_calls": [{"id": "tc-x", "function": {"name": "other", "arguments": "{}"}}]}}]},
+        *_sse_events()[1:],
+    ]
+    observation = reassemble_streaming_tool_calls(events, TOOL_NAME)
+    assert observation.error == "a streamed tool-call delta carries no index"
+    assert len(observation.calls) == 1  # slot 0 is untouched by the indexless delta
+    assert observation.calls[0].id == "tc-1"
+    assert observation.calls[0].arguments == {"query": "remote work", "max_results": 3}
+    valid, reasons = judge_streaming_reassembly(observation, SCHEMAS["strict"])
+    assert valid is False
+    assert any("carries no index" in reason for reason in reasons)
+
+
 def test_events_without_choices_are_ignored():
     observation = reassemble_streaming_tool_calls([{"choices": []}, "not-a-dict", *_sse_events()], TOOL_NAME)
     assert observation.delta_count == 3
@@ -475,6 +494,24 @@ def test_the_stream_records_its_teardown_when_cancelled_mid_read():
     assert stream.connection_closed is True
 
 
+def test_a_second_events_call_is_refused_not_silently_replaced():
+    # A second iterator would overwrite the stored generator and orphan the
+    # first (its response/client would leak until GC) — refused loudly.
+    stream = HttpxSseStream(
+        f"{ENDPOINT}/v1/chat/completions",
+        {},
+        {},
+        verify=True,
+        timeout_s=5.0,
+        transport=httpx.MockTransport(
+            lambda request: httpx.Response(200, headers={"content-type": "text/event-stream"}, content=_SSE_WIRE)
+        ),
+    )
+    stream.events()
+    with pytest.raises(RuntimeError, match="already called"):
+        stream.events()
+
+
 # ---------------------------------------------------------------------
 # The matrix cell runner on fakes
 # ---------------------------------------------------------------------
@@ -657,6 +694,16 @@ def test_the_model_override_means_no_discovery_call():
 def test_a_failed_discovery_is_the_typed_transient():
     transport = PreparationFakeTransport(error=OSError("down"))
     with pytest.raises(VerificationTransientError, match="discovery failed"):
+        asyncio.run(read_endpoint_identity(_config(VLLM_LLM_MODEL_ID=""), transport))
+
+
+@pytest.mark.parametrize("malformed", [{"id": "x", "max_model_len": 8192}, 5])
+def test_a_malformed_discovery_body_is_the_typed_transient_naming_the_shape(malformed):
+    # {"data": {...}} or {"data": 5}: the malformed body must become the
+    # typed transient naming the shape, never a KeyError/TypeError from an
+    # unguarded subscript.
+    transport = PreparationFakeTransport({f"{ENDPOINT}/v1/models": (200, {"data": malformed})})
+    with pytest.raises(VerificationTransientError, match="no usable model entry.*'data', got"):
         asyncio.run(read_endpoint_identity(_config(VLLM_LLM_MODEL_ID=""), transport))
 
 

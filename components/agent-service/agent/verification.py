@@ -434,7 +434,15 @@ def reassemble_streaming_tool_calls(events: list[dict], expected_name: str) -> T
             if not isinstance(raw, dict):
                 error = error or "a streamed tool-call delta is not an object"
                 continue
-            index = raw.get("index", 0)
+            index = raw.get("index")
+            if index is None:
+                # An absent index is its own issue, not slot 0: defaulting
+                # would merge a spec-violating delta into a legitimate
+                # parallel call (names overwritten, fragments concatenated)
+                # and the record would misattribute the defect. The judgment
+                # fails the cell with this reason.
+                error = error or "a streamed tool-call delta carries no index"
+                continue
             slot = assembled.get(index)
             if slot is None:
                 slot = {"id": None, "name": None, "parts": []}
@@ -599,7 +607,14 @@ class HttpxSseStream:
         return self._closed
 
     def events(self) -> AsyncIterator[dict]:
-        """The parsed-event iterator; stored so :meth:`aclose` can reach it."""
+        """The parsed-event iterator; stored so :meth:`aclose` can reach it.
+
+        One stream, one iterator: a second call would overwrite the stored
+        generator and orphan the first (its response/client would leak until
+        GC) — refused, never silently replaced.
+        """
+        if self._agen is not None:
+            raise RuntimeError("events() was already called on this stream; one stream, one iterator")
         self._agen = self._iter_events()
         return self._agen
 
@@ -885,9 +900,15 @@ async def _discover_model(config: ProbeConfig, transport) -> tuple[str | None, i
     if status >= 400:
         raise VerificationTransientError(f"the model discovery answered {status}: {str(body)[:_VERSION_PREVIEW_CHARS]}")
     data = body.get("data") if isinstance(body, dict) else None
-    entry = data[0] if data and isinstance(data[0], dict) else None
+    # A list check before the subscript: a malformed body ({"data": {...}} or
+    # {"data": 5}) must become the typed transient naming the shape, not a
+    # KeyError/TypeError from an unguarded index.
+    entry = data[0] if isinstance(data, list) and data and isinstance(data[0], dict) else None
     if not entry or not entry.get("id"):
-        raise VerificationTransientError("the model discovery carried no model id")
+        raise VerificationTransientError(
+            "the model discovery carried no usable model entry "
+            f"(expected a non-empty list of objects under 'data', got {type(data).__name__})"
+        )
     window = entry.get("max_model_len")
     # bool is an int in Python; a True window is a malformed answer, not 1.
     return str(entry["id"]), window if isinstance(window, int) and not isinstance(window, bool) else None
@@ -931,11 +952,13 @@ async def _consume_stream_events(
     """Consume the stream into ``state`` until it ends or the task is cancelled.
 
     The state is the demo's evidence: how many events arrived before the
-    cancel, whether a completion arrived first, and whether the cancellation
-    REACHED the read (it aborted the connection, not an already-dead one).
-    A ``park`` event parks the consumer after its first delta (the demo
-    fires it, then cancels) so the cancellation point is the demo's, not a
-    race against the model's typing speed.
+    cancel, whether a completion arrived first, and whether the demo
+    performed the teardown on the cancelled read (the client-side abort is
+    what the runtime-level AC names; a server-side close during the park
+    window is not client-observable). A ``park`` event parks the consumer
+    after its first delta (the demo fires it, then cancels) so the
+    cancellation point is the demo's, not a race against the model's typing
+    speed.
     """
     try:
         async for event in stream.events():
@@ -1263,8 +1286,9 @@ def acceptance_verdict(evidence: VerificationEvidence) -> AcceptanceVerdict:
     if not (streaming.cancelled_error_raised and streaming.connection_aborted and not streaming.completion_delivered):
         reasons.append(
             "the streaming-cancel acceptance shape is not met "
-            f"(cancelled={streaming.cancelled_error_raised}, aborted={streaming.connection_aborted}, "
-            f"delivered={streaming.completion_delivered})"
+            "(a cancelled read whose demo-performed teardown is observed, and no completion delivered): "
+            f"cancelled={streaming.cancelled_error_raised}, aborted={streaming.connection_aborted}, "
+            f"delivered={streaming.completion_delivered}"
         )
     loop = evidence.loop_cancel
     if loop.error is not None:

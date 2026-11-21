@@ -38,10 +38,12 @@ from capabilities.contract import (
     CallerContext,
     DocumentCapabilityPort,
     OperationBudget,
+    OutcomeCode,
     PreparedQuery,
     QueryPreparationStatus,
     ReadSourceInput,
     SearchKnowledgeInput,
+    SearchKnowledgeResult,
     SourceRef,
 )
 
@@ -142,16 +144,23 @@ def _make_search_executor(
                 on_preparation_status(preparation.status.value)
             if not preparation.prepared:
                 # An unprepared preparation is a degradation, never dressed
-                # as a prepared query: report it in the contract's own
-                # insufficiency answer shape (the same three fields the port
-                # reports). The ledger classifies it as citing nothing, and
-                # the model sees an insufficiency it can react to.
-                return {
-                    "outcome": "insufficient_evidence",
-                    "hits": [],
-                    "truncated": False,
-                    "query_preparation_status": preparation.status.value,
-                }
+                # as a prepared query: report it in the contract's OWN
+                # insufficiency answer shape — built through
+                # SearchKnowledgeResult, whose fields this mirrors field for
+                # field, so a contract change cannot leave this shape behind.
+                # model_construct (validation bypassed) is required for one
+                # field only: the contract narrows
+                # ``query_preparation_status`` to the PREPARED statuses (a
+                # SERVED result always had a prepared query), and this
+                # result carries the fallback status that says WHY nothing
+                # was served. The ledger classifies it as citing nothing,
+                # and the model sees an insufficiency it can react to.
+                return SearchKnowledgeResult.model_construct(
+                    outcome=OutcomeCode.INSUFFICIENT_EVIDENCE,
+                    hits=(),
+                    truncated=False,
+                    query_preparation_status=preparation.status,
+                ).model_dump(mode="json")
             prepared = preparation.query
         result = await port.search_knowledge(context, SearchKnowledgeInput(query=prepared), budget)
         return result.model_dump(mode="json")

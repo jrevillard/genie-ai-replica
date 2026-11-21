@@ -24,7 +24,7 @@ infrastructure messaging, not retrieved content.
 
 import re
 
-from .verification import citation_identity
+from .verification import citation_identity, retrieved_texts
 
 # (marker name, pattern) — the curated instruction-pattern list. Case-
 # insensitive; whitespace runs are collapsed by the patterns themselves.
@@ -72,29 +72,16 @@ def scan_tool_result(name: str, payload: dict) -> tuple[dict, ...]:
     """Scan one dispatched tool result's retrieved-text fields; return the
     structured findings (empty when the result is clean or cites no text).
 
-    ``payload`` is the loop's result envelope — ``{"result": {...}}`` on
-    success, ``{"error": {...}}`` when the declared error surface fired
-    (error envelopes carry no retrieved content and are not scanned). Each
-    finding names the tool, the matched markers, the field the text came
-    from and the source's stable identity (``[repo_id, concept_id]`` for an
-    OKF concept, ``[None, file_id]`` for a legacy file) — attribution to the
-    document that carried the attempt, never a copy of its content.
+    The retrieved texts come from the ledger's shared extraction
+    (:func:`agent.verification.retrieved_texts` — one definition of the
+    channel, two readers). Each finding names the tool, the matched
+    markers, the field the text came from and the source's stable identity
+    (``[repo_id, concept_id]`` for an OKF concept, ``[None, file_id]`` for
+    a legacy file) — attribution to the document that carried the attempt,
+    never a copy of its content.
     """
-    result = payload.get("result")
-    if not isinstance(result, dict):
-        return ()
-    texts: list[tuple[str, dict]] = []
-    if name == "search_knowledge":
-        for hit in result.get("hits") or []:
-            provenance = hit.get("provenance") if isinstance(hit, dict) else None
-            if isinstance(provenance, dict) and isinstance(hit.get("text"), str):
-                texts.append((hit["text"], provenance))
-    elif name == "read_source":
-        provenance = result.get("provenance")
-        if isinstance(provenance, dict) and isinstance(result.get("content"), str):
-            texts.append((result["content"], provenance))
     findings: list[dict] = []
-    for text, provenance in texts:
+    for text, provenance, _score in retrieved_texts(name, payload):
         markers = scan_text(text)
         if markers:
             findings.append(

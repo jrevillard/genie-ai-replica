@@ -157,7 +157,7 @@ class RetrievalLedger:
     * ``successful_retrievals`` — the dispatches that actually grew the
       citable entries (a success whose hits were all duplicates, or whose
       content was blank, contributed nothing and counts as none);
-    * ``degradations`` — the dispatches whose result reported
+    * ``degradation_count`` — the dispatches whose result reported
       ``degraded_availability`` (partial availability, a fallback
       strategy): any one of them makes the response an insufficiency
       response, never a confident answer (FR-12), citations notwithstanding;
@@ -169,7 +169,7 @@ class RetrievalLedger:
         self._entries: list[dict] = []
         self._seen: set[tuple] = set()
         self._successful_retrievals = 0
-        self._degradations: list[dict] = []
+        self._degradation_count = 0
         self._findings: list[dict] = []
 
     @property
@@ -184,10 +184,9 @@ class RetrievalLedger:
         return self._successful_retrievals
 
     @property
-    def degradations(self) -> list[dict]:
-        """The degraded retrievals: ``{"operation": str, "code": str}`` per
-        dispatch that reported ``degraded_availability``."""
-        return list(self._degradations)
+    def degradation_count(self) -> int:
+        """How many dispatches reported ``degraded_availability``."""
+        return self._degradation_count
 
     @property
     def findings(self) -> list[dict]:
@@ -199,29 +198,23 @@ class RetrievalLedger:
 
         ``payload`` is the loop's result envelope — ``{"result": {...}}`` on
         success, ``{"error": {...}}`` when the declared error surface fired.
-        Both shapes are recorded; only the success shapes contribute
-        citation candidates. A dispatch counts as a SUCCESSFUL retrieval
-        only when it actually GREW the citable entries: a success that
-        contributed nothing citable (a read whose content is blank, hits
-        that are all duplicates) is retrieval that yielded nothing — the
-        insufficiency decision must not mistake it for served evidence.
-        ``degraded_availability`` records a degradation (the retrieved
-        content still cites — a degraded result may carry hits).
+        Both shapes are recorded; only the retrieved texts contribute
+        citation candidates (blank text cites nothing). A dispatch counts as
+        a SUCCESSFUL retrieval only when it actually GREW the citable
+        entries: a success that contributed nothing citable (a read whose
+        content is blank, hits that are all duplicates) is retrieval that
+        yielded nothing — the insufficiency decision must not mistake it for
+        served evidence. ``degraded_availability`` records a degradation
+        (the retrieved content still cites — a degraded result may carry
+        hits).
         """
         result = payload.get("result")
-        if not isinstance(result, dict):
-            return  # an error envelope: cites nothing
         before = len(self._entries)
-        if name == "search_knowledge":
-            for hit in result.get("hits") or []:
-                self._add_hit(hit)
-        elif name == "read_source":
-            provenance = result.get("provenance")
-            content = result.get("content")
-            if isinstance(provenance, dict) and isinstance(content, str) and content.strip():
-                self._add({"provenance": provenance, "text": content, "score": None})
-        if result.get("outcome") == "degraded_availability":
-            self._degradations.append({"operation": name, "code": "degraded_availability"})
+        for text, provenance, score in retrieved_texts(name, payload):
+            if text.strip():
+                self._add({"provenance": provenance, "text": text, "score": score})
+        if isinstance(result, dict) and result.get("outcome") == "degraded_availability":
+            self._degradation_count += 1
         if len(self._entries) > before:
             self._successful_retrievals += 1
 
@@ -229,20 +222,44 @@ class RetrievalLedger:
         """Record one injection attempt (the taint scan's structured finding)."""
         self._findings.append(dict(finding))
 
-    def _add_hit(self, hit: dict) -> None:
-        provenance = hit.get("provenance")
-        text = hit.get("text")
-        if not isinstance(provenance, dict) or not isinstance(text, str) or not text.strip():
-            return
-        score = hit.get("score") if isinstance(hit.get("score"), (int, float)) else None
-        self._add({"provenance": provenance, "text": text, "score": score})
-
     def _add(self, entry: dict) -> None:
         identity = citation_identity(entry["provenance"])
         if identity in self._seen:
             return
         self._seen.add(identity)
         self._entries.append(entry)
+
+
+def retrieved_texts(name: str, payload: dict) -> list[tuple[str, dict, float | None]]:
+    """The retrieved-content channel of one dispatched tool result: the
+    ``(text, provenance, score)`` triples its served texts carry.
+
+    The ONE extraction both readers share (the ledger's citation
+    candidates, the taint scan's scan surface): the ``search_knowledge``
+    hits' passage texts and the ``read_source`` resolved content. An error
+    envelope, a malformed result, an unregistered tool name, a hit without
+    a provenance dict, or a non-string text contributes nothing — the
+    channel carries only what the capability actually served as text.
+    """
+    result = payload.get("result")
+    if not isinstance(result, dict):
+        return []
+    if name == "search_knowledge":
+        triples = []
+        for hit in result.get("hits") or []:
+            provenance = hit.get("provenance") if isinstance(hit, dict) else None
+            text = hit.get("text") if isinstance(hit, dict) else None
+            if isinstance(provenance, dict) and isinstance(text, str):
+                score = hit.get("score") if isinstance(hit.get("score"), (int, float)) else None
+                triples.append((text, provenance, score))
+        return triples
+    if name == "read_source":
+        provenance = result.get("provenance")
+        content = result.get("content")
+        if isinstance(provenance, dict) and isinstance(content, str):
+            return [(content, provenance, None)]
+        return []
+    return []
 
 
 @dataclass(frozen=True)
@@ -484,6 +501,30 @@ class VerificationPipeline:
         """Record one injection attempt (the loop's taint scan feeds it here)."""
         self.ledger.record_finding(finding)
 
+    def _verdict(self, status: str, judge: dict, delivered=None, invalid=None, insufficient_evidence=None) -> Verdict:
+        """One construction home for every verdict this pipeline emits.
+
+        The policy and the recorded findings are read HERE — a verdict
+        always carries the run's recorded injection attempts and the
+        governing policy; a new additive verdict field is a one-site edit,
+        not a sweep over construction sites. ``insufficient_evidence``
+        carries the mechanical decision when one is live (the early-return
+        insufficiency verdict, the defensive catch); every site past the
+        early-return relies on the not-required default, because past it
+        the decision is always not-required.
+        """
+        return Verdict(
+            status=status,
+            policy=self.policy,
+            judge=judge,
+            delivered_citations=[] if delivered is None else delivered,
+            invalid_citations=[] if invalid is None else invalid,
+            insufficient_evidence={"required": False, "reasons": []}
+            if insufficient_evidence is None
+            else insufficient_evidence,
+            findings=self.ledger.findings,
+        )
+
     def insufficiency_decision(self) -> dict:
         """The mechanical insufficiency decision, read off the ledger.
 
@@ -496,7 +537,7 @@ class VerificationPipeline:
         mechanical facts; they are never the model's words.
         """
         reasons: list[str] = []
-        if self.ledger.degradations:
+        if self.ledger.degradation_count:
             reasons.append(REASON_DEGRADED_RETRIEVAL)
         if self.ledger.successful_retrievals == 0:
             reasons.append(REASON_NO_SUCCESSFUL_RETRIEVAL)
@@ -521,21 +562,20 @@ class VerificationPipeline:
             raise
         except Exception as failed:  # noqa: BLE001 — verification degrades, never fabricates
             logger.warning("verification pipeline failed; verdict unverified: %s: %s", type(failed).__name__, failed)
-            return Verdict(
-                status=VERDICT_UNVERIFIED,
-                policy=self.policy,
-                judge={"ran": False, "outcome": JUDGE_OUTCOME_ERROR, "verdict": None},
+            return self._verdict(
+                VERDICT_UNVERIFIED,
+                {"ran": False, "outcome": JUDGE_OUTCOME_ERROR, "verdict": None},
                 insufficient_evidence=self.insufficiency_decision(),
-                findings=[dict(finding) for finding in self.ledger.findings],
             )
 
     async def _finalize(self, answer_text: str) -> Verdict:
         # The insufficiency decision runs FIRST — before the judge, before
         # the grounded claim is surfaced (FR-12: degraded beats grounded).
         # The judge is skipped on this path: the answer it would evaluate is
-        # not the delivered answer.
+        # not the delivered answer. (An empty ledger necessarily lands here:
+        # entries can only grow through a dispatch that would have counted
+        # as a successful retrieval, so empty entries ⇒ required.)
         insufficiency = self.insufficiency_decision()
-        findings = [dict(finding) for finding in self.ledger.findings]
         if insufficiency["required"]:
             # The delivered citations still ride the payload for diagnostics
             # (a degraded search may have surfaced valid passages), and the
@@ -543,28 +583,12 @@ class VerificationPipeline:
             # verdict is unverified and the loop replaces the drafted text
             # with the standard insufficiency response.
             validity = check_reference_validity(self.ledger.entries, self._authorized_repos)
-            delivered = [dict(entry) for entry in validity.delivered]
-            return Verdict(
-                status=VERDICT_UNVERIFIED,
-                policy=self.policy,
-                judge={"ran": False, "outcome": JUDGE_OUTCOME_SKIPPED, "verdict": None},
-                delivered_citations=delivered,
-                invalid_citations=[dict(entry) for entry in validity.invalid],
+            return self._verdict(
+                VERDICT_UNVERIFIED,
+                {"ran": False, "outcome": JUDGE_OUTCOME_SKIPPED, "verdict": None},
+                delivered=[dict(entry) for entry in validity.delivered],
+                invalid=[dict(entry) for entry in validity.invalid],
                 insufficient_evidence=insufficiency,
-                findings=findings,
-            )
-        if not self.ledger.entries:
-            # No CITABLE evidence reached the model: an answer over an
-            # insufficiency outcome, an error envelope or an empty ledger
-            # claims nothing supported — there is nothing to ground and
-            # nothing to mark. (An attempt that failed to surface anything
-            # citable is verification that could not complete, never a
-            # claim without support.)
-            return Verdict(
-                status=VERDICT_UNVERIFIED,
-                policy=self.policy,
-                judge={"ran": False, "outcome": JUDGE_OUTCOME_SKIPPED, "verdict": None},
-                findings=findings,
             )
         validity = check_reference_validity(self.ledger.entries, self._authorized_repos)
         delivered = [dict(entry) for entry in validity.delivered]
@@ -572,27 +596,13 @@ class VerificationPipeline:
             # Citable evidence existed but none of it survived the mechanical
             # check (or entries were dropped as unauthorized): an unsupported
             # assertion — not grounded, mechanically, before any judge runs.
-            return Verdict(
-                status=VERDICT_UNGROUNDED,
-                policy=self.policy,
-                judge={"ran": False, "outcome": JUDGE_OUTCOME_SKIPPED, "verdict": None},
-                delivered_citations=delivered,
-                invalid_citations=[dict(entry) for entry in validity.invalid],
-                findings=findings,
+            return self._verdict(
+                VERDICT_UNGROUNDED,
+                {"ran": False, "outcome": JUDGE_OUTCOME_SKIPPED, "verdict": None},
+                delivered=delivered,
+                invalid=[dict(entry) for entry in validity.invalid],
             )
         judge_result = await self._judge.judge(answer_text, delivered)
         if judge_result["outcome"] != JUDGE_OUTCOME_COMPLETED:
-            return Verdict(
-                status=VERDICT_UNVERIFIED,
-                policy=self.policy,
-                judge=judge_result,
-                delivered_citations=delivered,
-                findings=findings,
-            )
-        return Verdict(
-            status=judge_result["verdict"],
-            policy=self.policy,
-            judge=judge_result,
-            delivered_citations=delivered,
-            findings=findings,
-        )
+            return self._verdict(VERDICT_UNVERIFIED, judge_result, delivered=delivered)
+        return self._verdict(judge_result["verdict"], judge_result, delivered=delivered)

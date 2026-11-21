@@ -24,6 +24,7 @@ from conftest import (
     AgentFakePort,
     PreparationFakeTransport,
     ScriptedLoopModel,
+    canned_read_result,
     canned_search_result,
     multihop_turns,
     orchestrator_config,
@@ -49,7 +50,7 @@ from noagent.lane import AdmissionLane
 from preparation.config import PreparationConfig
 from preparation.prepare import PreparationResult, QueryPreparer
 from preparation.registry import LanguageRegistry
-from preparation.translation import TranslationInputTooLongError
+from preparation.translation import TranslationClient, TranslationInputTooLongError
 
 CONTEXT = CallerContext(user_id="u-1", authorized_graph_names=("GRAPH",))
 
@@ -207,44 +208,40 @@ def _request(**overrides):
     return AgentRunRequest(**{**values, **overrides})
 
 
+class RecordingTranslator(TranslationClient):
+    """A real TranslationClient whose dispatch is canned and recorded: the
+    observable of the bound default hint — a query the hint routes to
+    translation REACHES translate_prompt (with no hint, detection would
+    pass the English-looking query straight through)."""
+
+    def __init__(self, config, registry):
+        super().__init__(config, registry)
+        self.prompts: list[str] = []
+
+    async def translate_prompt(self, prompt: str, translategemma: bool, model_id: str | None) -> str:
+        self.prompts.append(prompt)
+        return "the english query"
+
+
 def test_the_run_record_carries_language_and_the_first_preparation_status(tmp_path):
-    from conftest import canned_read_result
-
-    statuses = iter([QueryPreparationStatus.TRANSLATED])
-    counter = {"n": 0}
-    seen_hints: list = []
-
-    class RecordingPreparer:
-        """The preparation entry, recording the hint it actually received."""
-
-        async def prepare(self, text, source_language=None):
-            seen_hints.append(source_language)
-            counter["n"] += 1
-            status = next(statuses)
-            return _preparation_result(status, f"prepared query {counter['n']}")
-
-    recording = RecordingPreparer()
-
-    class BoundPreparer:
-        """The shape the real factory returns: a preparer whose
-        ``prepare`` binds the request's locale as the DEFAULT hint."""
-
-        def __init__(self, inner, language):
-            self._inner = inner
-            self._language = language
-
-        async def prepare(self, text, source_language=None):
-            return await self._inner.prepare(text, source_language or self._language)
+    env = {"VLLM_TRANSLATION_ENDPOINT": ENDPOINT, "VLLM_TRANSLATION_MODEL_ID": "test-model"}
+    config = PreparationConfig.load(env=env)
+    registry = LanguageRegistry(config.registry_path)
 
     def factory(monitor, language=None):
-        return BoundPreparer(recording, language)
+        # The REAL factory shape: the shipped QueryPreparer carries the
+        # request's locale as its default source language.
+        return QueryPreparer(config, registry, RecordingTranslator(config, registry), default_source_language=language)
 
+    translator = RecordingTranslator(config, registry)
     port = AgentFakePort(search_result=canned_search_result(), read_result=canned_read_result())
     orchestrator = _orchestrator(
         ScriptedLoopModel((*multihop_turns(answer="the answer"), _judge_turn())),
         port,
         tmp_path,
-        preparer_factory=factory,
+        preparer_factory=lambda monitor, language=None: QueryPreparer(
+            config, registry, translator, default_source_language=language
+        ),
     )
     events: list[AgentEvent] = []
 
@@ -253,39 +250,33 @@ def test_the_run_record_carries_language_and_the_first_preparation_status(tmp_pa
     assert record.outcome == "answered"
     assert record.language == "fr"  # the request's UI locale rides the record
     assert record.preparation_status == "translated"  # the FIRST query's status
-    assert counter["n"] == 1  # the scripted run searched once
-    assert port.search_calls[0]["request"].query.text == "prepared query 1"
-    # The request's locale reached preparation as the run's default hint.
-    assert seen_hints == ["fr"]
+    # The hint reached preparation THROUGH THE SHIPPED CODE: the English-
+    # looking model query was routed to translation (detection bypassed),
+    # and its translated text is what reached the port.
+    assert len(translator.prompts) == 1
+    assert port.search_calls[0]["request"].query.text == "the english query"
+    assert port.search_calls[0]["request"].query.preparation_status == QueryPreparationStatus.TRANSLATED
 
 
-def test_a_factory_without_a_language_passes_no_source_language_hint(tmp_path):
-    from conftest import canned_read_result
+def test_an_explicit_source_language_beats_the_bound_default():
+    """The shipped binding's precedence: an explicit per-call
+    ``source_language`` wins over the constructor's default — the deployed
+    named-language semantics, one assertion at the public entry."""
+    env = {"VLLM_TRANSLATION_ENDPOINT": ENDPOINT, "VLLM_TRANSLATION_MODEL_ID": "test-model"}
+    config = PreparationConfig.load(env=env)
+    registry = LanguageRegistry(config.registry_path)
+    translator = RecordingTranslator(config, registry)
+    preparer = QueryPreparer(config, registry, translator, default_source_language="fr")
 
-    seen_hints: list = []
+    result = asyncio.run(preparer.prepare("bonjour le monde", source_language="en"))
 
-    class ScriptedPreparer:
-        async def prepare(self, text, source_language=None):
-            seen_hints.append(source_language)
-            return _preparation_result(QueryPreparationStatus.PASSTHROUGH_ENGLISH, text)
-
-    port = AgentFakePort(search_result=canned_search_result(), read_result=canned_read_result())
-    orchestrator = _orchestrator(
-        ScriptedLoopModel((*multihop_turns(answer="the answer"), _judge_turn())),
-        port,
-        tmp_path,
-        preparer_factory=lambda monitor, language=None: ScriptedPreparer(),
-    )
-
-    record = asyncio.run(orchestrator.run(_request(language=None)))
-
-    assert record.outcome == "answered"
-    assert seen_hints == [None]  # no locale named: detection decides, no hint
+    # Explicit EN: passthrough, detection skipped, the translator untouched
+    # — the default hint never overruled the caller.
+    assert result.status == QueryPreparationStatus.PASSTHROUGH_ENGLISH
+    assert translator.prompts == []
 
 
 def test_a_run_without_a_preparer_factory_records_no_preparation_status(tmp_path):
-    from conftest import canned_read_result
-
     port = AgentFakePort(search_result=canned_search_result(), read_result=canned_read_result())
     orchestrator = _orchestrator(
         ScriptedLoopModel((*multihop_turns(answer="the answer"), _judge_turn())), port, tmp_path
@@ -299,8 +290,6 @@ def test_a_run_without_a_preparer_factory_records_no_preparation_status(tmp_path
 
 
 def test_an_overflow_run_ends_honestly_never_untranslated(tmp_path):
-    from conftest import canned_read_result
-
     def factory(monitor, language=None):
         return FakePreparer(TranslationInputTooLongError("the query exceeds the translation budget"))
 
@@ -330,8 +319,6 @@ def test_a_spent_fleet_budget_at_preparation_ends_the_run_budget_exhausted(tmp_p
     different path from the loop's own pre-dispatch checks): a preparation
     translator claiming past the spent fleet budget ends the run with the
     honest budget_exhausted terminal — no drafted answer, no verdict."""
-    from conftest import canned_read_result
-
     from agent.budget import BudgetExhausted
 
     def factory(monitor, language=None):
@@ -426,8 +413,6 @@ def test_the_real_factory_counts_the_preparation_translation_on_the_usage_record
     fake transport: the request's language hint sends the query to
     translation, whose dispatch claims one AUXILIARY model call — the run's
     usage record counts it (alongside the judge's), and the status lands."""
-    from conftest import canned_read_result
-
     import agent.orchestrator as orchestrator_module
 
     transport = PreparationFakeTransport(

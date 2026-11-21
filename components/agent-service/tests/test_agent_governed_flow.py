@@ -17,7 +17,9 @@ import asyncio
 
 from conftest import (
     AgentFakePort,
+    HangingLoopModel,
     ScriptedLoopModel,
+    _governed_loop,
     canned_read_result,
     canned_search_result,
     multihop_turns,
@@ -25,11 +27,6 @@ from conftest import (
 )
 
 from agent.budget import RunBudgetMonitor
-from agent.cancellation import CancellationToken
-from agent.events import EventEmitter
-from agent.loop import OUTCOME_ANSWERED, AgentLoop, ModelTurn
-from agent.probe import PROBE_OPERATION_BUDGET
-from agent.toolset import document_toolset
 from agent.verification import (
     INSUFFICIENCY_RESPONSE,
     REASON_DEGRADED_RETRIEVAL,
@@ -40,7 +37,6 @@ from agent.verification import (
 )
 from capabilities.contract import (
     AuthorizedRepo,
-    CallerContext,
     LegacyFileProvenance,
     OkfConceptProvenance,
     OutcomeCode,
@@ -50,37 +46,15 @@ from capabilities.contract import (
     SearchKnowledgeResult,
 )
 
-CONTEXT = CallerContext(user_id="u-1", authorized_graph_names=("GRAPH",))
-
 HOSTILE_DRAFT = "The complaint process definitely takes exactly seven days."
+
+AUTHORIZED_REPOS = (AuthorizedRepo(repo_id="r-1", graph_name="G"),)
 
 
 def _insufficient_read():
     """A read that resolved nothing — the scripted read call answers the
     contract's own insufficiency (no success recorded, nothing cited)."""
     return ReadSourceResult(outcome=OutcomeCode.INSUFFICIENT_EVIDENCE)
-
-
-def _governed_loop(model, port, judge_reply='{"verdict": "grounded"}'):
-    collector: list = []
-    monitor = RunBudgetMonitor(run_budget())
-    verifier = VerificationPipeline(
-        policy="verdict-marked",
-        judge_timeout_ms=5000,
-        judge_model_client=ScriptedLoopModel((ModelTurn(content=judge_reply),)),
-        monitor=monitor,
-        authorized_repos=(AuthorizedRepo(repo_id="r-1", graph_name="G"),),
-    )
-    loop = AgentLoop(
-        model=model,
-        registry=document_toolset(port, CONTEXT, PROBE_OPERATION_BUDGET),
-        monitor=monitor,
-        token=CancellationToken(),
-        emitter=EventEmitter(run_id="run-1", sink=collector.append),
-        system_prompt="the production prompt",
-        verifier=verifier,
-    )
-    return loop, collector, monitor
 
 
 def _script(answer=HOSTILE_DRAFT):
@@ -107,11 +81,11 @@ def test_no_retrieval_run_delivers_the_standard_message_not_the_draft():
         search_result=canned_search_result(outcome=OutcomeCode.INSUFFICIENT_EVIDENCE, hits=()),
         read_result=_insufficient_read(),
     )
-    loop, collector, _ = _governed_loop(_script(), port)
+    loop, collector, _, _ = _governed_loop(_script(), port, authorized_repos=AUTHORIZED_REPOS)
 
     result = asyncio.run(loop.run("How are complaints handled?"))
 
-    assert result.outcome == OUTCOME_ANSWERED
+    assert result.outcome == "answered"
     # The drafted text is discarded: the delivered answer IS the standard
     # explicit insufficiency message.
     assert result.final_text == INSUFFICIENCY_RESPONSE
@@ -134,7 +108,9 @@ def test_every_search_insufficient_and_errors_yields_the_no_retrieval_reason():
         search_result=canned_search_result(outcome=OutcomeCode.INSUFFICIENT_EVIDENCE, hits=()),
         read_result=_insufficient_read(),
     )
-    loop, collector, _ = _governed_loop(_script(answer="I found everything you need."), port)
+    loop, collector, _, _ = _governed_loop(
+        _script(answer="I found everything you need."), port, authorized_repos=AUTHORIZED_REPOS
+    )
 
     result = asyncio.run(loop.run("q"))
 
@@ -157,11 +133,11 @@ def _degraded_search():
 
 def test_a_degraded_run_reports_insufficiency_with_citations_carried_for_diagnostics():
     port = AgentFakePort(search_result=_degraded_search(), read_result=_insufficient_read())
-    loop, collector, _ = _governed_loop(_script(), port)
+    loop, collector, _, _ = _governed_loop(_script(), port, authorized_repos=AUTHORIZED_REPOS)
 
     result = asyncio.run(loop.run("How are complaints handled?"))
 
-    assert result.outcome == OUTCOME_ANSWERED
+    assert result.outcome == "answered"
     # Never a confident answer, citations notwithstanding.
     assert result.final_text == INSUFFICIENCY_RESPONSE
     verdict = _verdict_payload(collector)
@@ -230,7 +206,7 @@ def test_retrieval_that_yielded_no_valid_citation_stays_ungrounded_never_insuffi
         ),
         read_result=_insufficient_read(),
     )
-    loop, collector, _ = _governed_loop(_script(), port)
+    loop, collector, _, _ = _governed_loop(_script(), port, authorized_repos=AUTHORIZED_REPOS)
 
     result = asyncio.run(loop.run("q"))
 
@@ -244,7 +220,9 @@ def test_retrieval_that_yielded_no_valid_citation_stays_ungrounded_never_insuffi
 
 def test_a_successful_run_delivers_the_draft_with_no_insufficiency():
     port = AgentFakePort(search_result=canned_search_result(), read_result=canned_read_result())
-    loop, collector, _ = _governed_loop(_script(answer="The grievance process takes thirty days."), port)
+    loop, collector, _, _ = _governed_loop(
+        _script(answer="The grievance process takes thirty days."), port, authorized_repos=AUTHORIZED_REPOS
+    )
 
     result = asyncio.run(loop.run("How are complaints handled?"))
 
@@ -264,7 +242,7 @@ def test_the_event_order_is_unchanged_on_the_insufficiency_path():
         search_result=canned_search_result(outcome=OutcomeCode.INSUFFICIENT_EVIDENCE, hits=()),
         read_result=_insufficient_read(),
     )
-    loop, collector, _ = _governed_loop(_script(), port)
+    loop, collector, _, _ = _governed_loop(_script(), port, authorized_repos=AUTHORIZED_REPOS)
     asyncio.run(loop.run("q"))
     kinds = _kinds(collector)
     assert kinds == [
@@ -288,32 +266,12 @@ def test_the_insufficiency_decision_never_waits_for_the_judge():
     insufficiency ledger a judge that would hang forever cannot delay the
     first chunk — and the finalize that follows skips the judge anyway (the
     decision it recomputes is required), so the run completes."""
-
-    class HangingJudgeModel:
-        async def complete(self, messages, tool_definitions, *, max_output_tokens):
-            await asyncio.Event().wait()  # forever
-
     port = AgentFakePort(
         search_result=canned_search_result(outcome=OutcomeCode.INSUFFICIENT_EVIDENCE, hits=()),
         read_result=_insufficient_read(),
     )
-    collector: list = []
-    monitor = RunBudgetMonitor(run_budget())
-    verifier = VerificationPipeline(
-        policy="verdict-marked",
-        judge_timeout_ms=5000,
-        judge_model_client=HangingJudgeModel(),
-        monitor=monitor,
-        authorized_repos=(AuthorizedRepo(repo_id="r-1", graph_name="G"),),
-    )
-    loop = AgentLoop(
-        model=_script(),
-        registry=document_toolset(port, CONTEXT, PROBE_OPERATION_BUDGET),
-        monitor=monitor,
-        token=CancellationToken(),
-        emitter=EventEmitter(run_id="run-1", sink=collector.append),
-        system_prompt="the production prompt",
-        verifier=verifier,
+    loop, collector, _, _ = _governed_loop(
+        _script(), port, judge_model=HangingLoopModel({}), authorized_repos=AUTHORIZED_REPOS
     )
 
     result = asyncio.run(asyncio.wait_for(loop.run("q"), timeout=5))

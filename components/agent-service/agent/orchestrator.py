@@ -301,28 +301,14 @@ def build_preparer_factory(env=None):
         config.translation_endpoint, transport, config.probe_timeout_seconds, config.detect_ttl_seconds
     )
 
-    def factory(monitor: RunBudgetMonitor, language: str | None = None):
+    def factory(monitor: RunBudgetMonitor, language: str | None = None) -> QueryPreparer:
         translator = BudgetedTranslationClient(config, registry, monitor, transport=transport, cache=cache)
-        preparer = QueryPreparer(config, registry, translator)
-        if language is None:
-            return preparer
-        return _LanguageBoundPreparer(preparer, language)
+        # The request's locale is the run's DEFAULT hint (the named language
+        # beats detection in the preparation module — the deployed
+        # semantics); an explicit per-call hint still wins.
+        return QueryPreparer(config, registry, translator, default_source_language=language)
 
     return factory
-
-
-class _LanguageBoundPreparer:
-    """The run's preparer view with the request's locale bound as the
-    DEFAULT ``source_language`` hint (the named language beats detection in
-    the preparation module — the deployed semantics). The caller's own
-    hint, when one arrives, still wins."""
-
-    def __init__(self, inner, default_language: str) -> None:
-        self._inner = inner
-        self._default_language = default_language
-
-    async def prepare(self, text, source_language=None):
-        return await self._inner.prepare(text, source_language or self._default_language)
 
 
 class RequestOrchestrator:
@@ -386,6 +372,14 @@ class RequestOrchestrator:
         # The preparation statuses land here, through the toolset's callback:
         # the FIRST one is the initial query's — the record carries it.
         preparation_statuses: list[str] = []
+
+        def record(outcome: str, *, error: str | None) -> RunUsageRecord:
+            """This run's terminal usage record — every exit path below is
+            a one-liner over the same request, monitor and statuses."""
+            return self._record(
+                run_id, outcome, monitor, error=error, request=request, preparation_statuses=preparation_statuses
+            )
+
         try:
             # The per-request assembly is INSIDE the try: a build failure
             # (a port-factory refusal, a registry defect) must reach the
@@ -422,16 +416,7 @@ class RequestOrchestrator:
         except asyncio.CancelledError:
             logger.warning(
                 "agent run cancelled mid-flight; the partial usage record: %s",
-                json.dumps(
-                    self._record(
-                        run_id,
-                        OUTCOME_CANCELLED,
-                        monitor,
-                        error=None,
-                        request=request,
-                        preparation_statuses=preparation_statuses,
-                    ).as_dict()
-                ),
+                json.dumps(record(OUTCOME_CANCELLED, error=None).as_dict()),
             )
             raise
         except Exception as failed:  # noqa: BLE001 — a pre-loop build failure still gets its terminal
@@ -442,22 +427,8 @@ class RequestOrchestrator:
             # run_started — so the failure path announces it here.
             emitter.emit(EventKind.RUN_STARTED, {"question": request.question})
             emitter.emit(EventKind.RUN_ERROR, {"code": OUTCOME_ERROR, "message": message})
-            return self._record(
-                run_id,
-                OUTCOME_ERROR,
-                monitor,
-                error=message,
-                request=request,
-                preparation_statuses=preparation_statuses,
-            )
-        return self._record(
-            run_id,
-            result.outcome,
-            monitor,
-            error=result.error,
-            request=request,
-            preparation_statuses=preparation_statuses,
-        )
+            return record(OUTCOME_ERROR, error=message)
+        return record(result.outcome, error=result.error)
 
     def _record(
         self,

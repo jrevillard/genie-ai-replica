@@ -20,6 +20,7 @@ from langdetect import DetectorFactory
 
 from agent.budget import RunBudget
 from agent.orchestrator import OrchestratorConfig
+from agent.probe import ProbeConfig
 from capabilities.adapters.http import TransportError
 from capabilities.contract import OperationBudget, ReadSourceResult, SearchKnowledgeResult
 
@@ -185,6 +186,18 @@ def assert_no_positional_aql_execute(package_dir: Path) -> None:
 # surface change to the scripted model or the fake port lands once for the
 # loop and probe suites together.
 # -----------------------------------------------------------------------
+
+ENDPOINT = "http://llm.invalid"
+"""The fake model endpoint the model-consuming suites point at."""
+
+
+def verifier_config(**overrides) -> "ProbeConfig":
+    """The probe/verification model config over ``ENDPOINT``: the served
+    model id by default, the caller's env overrides on top. One home for
+    the probe and verification suites (the config builders were verbatim
+    copies before this promotion)."""
+    values = {"VLLM_LLM_ENDPOINT": ENDPOINT, "VLLM_LLM_MODEL_ID": "served-model"}
+    return ProbeConfig.load(env={**values, **overrides})
 
 
 class AgentFakePort:

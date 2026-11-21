@@ -136,6 +136,94 @@ void main() {
         expect(endpoints, isNull);
       });
 
+      group('advertised-origin rewrite', () {
+        // The local build's Keycloak advertises https://localhost/auth/...
+        // Inside an emulator, `localhost` is the DEVICE itself — nothing
+        // listens there, so every advertised endpoint (authorization page,
+        // token POST, end session) dies with ERR_CONNECTION_REFUSED. The
+        // e2e harness flavor sets rewriteAdvertisedOrigins: discovery
+        // succeeded through the configured keycloakUrl origin, so the
+        // advertised endpoints are rewritten to THAT origin (paths kept).
+        final localhostDoc = {
+          'authorization_endpoint':
+              'https://localhost/auth/realms/genie/protocol/openid-connect/auth',
+          'token_endpoint':
+              'https://localhost/auth/realms/genie/protocol/openid-connect/token',
+          'userinfo_endpoint':
+              'https://localhost/auth/realms/genie/protocol/openid-connect/userinfo',
+          'end_session_endpoint':
+              'https://localhost/auth/realms/genie/protocol/openid-connect/logout',
+        };
+        final emulatorConfig = KeycloakConfig(
+          keycloakUrl: 'https://10.0.2.2/auth',
+          realm: 'genie',
+          clientId: 'genie-mobile-dev',
+          redirectScheme: 'com.itu.genieai.dev',
+          backendUrl: 'https://10.0.2.2',
+          allowInsecureConnections: true,
+          rewriteAdvertisedOrigins: true,
+        );
+
+        test('rewrites the advertised endpoints to the discovery origin', () async {
+          final service = KeycloakService(
+            keycloakConfig: emulatorConfig,
+            httpClient: MockHttpClient(
+              MockHttpClientConfig(responseBody: jsonEncode(localhostDoc)),
+            ),
+          );
+
+          final endpoints = await service.discoverEndpoints();
+
+          expect(endpoints, isNotNull);
+          expect(
+            endpoints!.authorizationEndpoint,
+            equals(
+              'https://10.0.2.2/auth/realms/genie/protocol/openid-connect/auth',
+            ),
+          );
+          expect(
+            endpoints.tokenEndpoint,
+            equals(
+              'https://10.0.2.2/auth/realms/genie/protocol/openid-connect/token',
+            ),
+          );
+          expect(
+            endpoints.userinfoEndpoint,
+            equals(
+              'https://10.0.2.2/auth/realms/genie/protocol/openid-connect/userinfo',
+            ),
+          );
+          expect(
+            endpoints.endSessionEndpoint,
+            equals(
+              'https://10.0.2.2/auth/realms/genie/protocol/openid-connect/logout',
+            ),
+          );
+        });
+
+        test(
+          'without the flag the advertised endpoints pass through verbatim',
+          () async {
+            final service = KeycloakService(
+              keycloakConfig: testConfig,
+              httpClient: MockHttpClient(
+                MockHttpClientConfig(responseBody: jsonEncode(localhostDoc)),
+              ),
+            );
+
+            final endpoints = await service.discoverEndpoints();
+
+            expect(endpoints, isNotNull);
+            expect(
+              endpoints!.tokenEndpoint,
+              equals(
+                'https://localhost/auth/realms/genie/protocol/openid-connect/token',
+              ),
+            );
+          },
+        );
+      });
+
       test('returns null on SocketException (network error)', () async {
         final httpClient = MockHttpClient(
           MockHttpClientConfig(

@@ -15,6 +15,8 @@ import 'package:genie_ai_mobile/design_system/tokens/app_tokens.dart';
 import 'package:genie_ai_mobile/design_system/tokens/spacing.dart';
 import 'package:genie_ai_mobile/design_system/tokens/radii.dart';
 import 'package:genie_ai_mobile/design_system/components/ds_card.dart';
+import 'package:genie_ai_mobile/okf/concept_browser_screen.dart';
+import 'package:genie_ai_mobile/okf/okf_citation.dart';
 import 'package:genie_ai_mobile/config/keycloak_config.dart';
 import 'package:genie_ai_mobile/providers/api_providers.dart';
 
@@ -312,6 +314,40 @@ class _RightSidebarComponentState extends ConsumerState<RightSidebarComponent> {
 
   // RESTORED: Original File Opening Logic
   Future<void> _openDocument(Map<String, dynamic> doc) async {
+    // CAP-3 (chat-source resolution): an OKF concept has no doc-repository
+    // file — the /api/files family 404s it by construction. A browsable
+    // concept opens in the concept browser, deep-opened at the cited
+    // concept; an OKF row WITHOUT repo identity (persisted pre-CAP-1) or a
+    // restricted one degrades to an honest notice, never a dead link
+    // (the mobile mirror of the web's openSourceDocument).
+    if (isOkfConceptSource(doc)) {
+      if (!canBrowseSource(doc)) {
+        debugPrint('sidebar.citation unavailable ${citationLogTag(doc)}');
+        if (!mounted) return;
+        final tokens = ThemeManager().tokens;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            backgroundColor: tokens.surface,
+            content: Text(
+              tr('chatbot.sourceUnavailable'),
+              style: TextStyle(color: tokens.fg),
+            ),
+          ),
+        );
+        return;
+      }
+      final repoId = citationRepoId(doc)!;
+      final conceptId = citationConceptId(doc);
+      debugPrint('sidebar.citation browse repo=$repoId concept=$conceptId');
+      Navigator.of(context).push(
+        MaterialPageRoute<void>(
+          builder: (_) =>
+              ConceptBrowserScreen(repoId: repoId, initialConceptId: conceptId),
+        ),
+      );
+      return;
+    }
+
     final String url = _getDocValue(doc, ['url'])?.toString() ?? "";
 
     if (url.startsWith('http') && !url.contains('<HOST>')) {
@@ -387,6 +423,7 @@ class _RightSidebarComponentState extends ConsumerState<RightSidebarComponent> {
   // ===========================================================================
   // CONTENT BUILDER (Abstracted to support Drawer vs Panel)
   // ===========================================================================
+
   Widget _buildRightSidebarContent(
     BuildContext context,
     ThemeData theme,
@@ -421,6 +458,10 @@ class _RightSidebarComponentState extends ConsumerState<RightSidebarComponent> {
               ),
             ),
 
+            // #1939: the browser's entries are the CITATION paths — the
+            // answer's sources bar and the sidebar's citation rows (the Vue
+            // citizen surface's own entries; the typed-repo-id prompt that
+            // stood in for them is gone with them landed).
             Expanded(
               child: SingleChildScrollView(
                 padding: const EdgeInsets.all(DsSpacing.md),
@@ -729,46 +770,53 @@ class _RightSidebarComponentState extends ConsumerState<RightSidebarComponent> {
       ),
       child: Theme(
         data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
-        child: ExpansionTile(
-          title: MarkdownBody(
-            data: item['question'] ?? '',
-            styleSheet: MarkdownStyleSheet(
-              p: TextStyle(
-                fontSize: tokens.textSm,
-                fontWeight: FontWeight.w600,
-                color: tokens.fg,
-              ),
-            ),
-          ),
-          iconColor: tokens.fg50,
-          collapsedIconColor: tokens.fg50,
-          backgroundColor: isDark ? tokens.fg30 : tokens.muted20,
-          childrenPadding: const EdgeInsets.fromLTRB(
-            DsSpacing.md,
-            0,
-            DsSpacing.md,
-            DsSpacing.md,
-          ),
-          children: [
-            MarkdownBody(
-              data: item['answer'] ?? '',
+        // The ExpansionTile paints its ListTiles on the nearest Material —
+        // this Container's colored decoration would hide them (the framework
+        // flags it: "ListTile background color or ink splashes may be
+        // invisible"). Own transparent Material restores the tile chrome.
+        child: Material(
+          type: MaterialType.transparency,
+          child: ExpansionTile(
+            title: MarkdownBody(
+              data: item['question'] ?? '',
               styleSheet: MarkdownStyleSheet(
                 p: TextStyle(
                   fontSize: tokens.textSm,
-                  color: tokens.fg70,
-                  height: 1.4,
+                  fontWeight: FontWeight.w600,
+                  color: tokens.fg,
                 ),
               ),
-              onTapLink: (text, href, title) {
-                if (href != null) {
-                  launchUrl(
-                    Uri.parse(href),
-                    mode: LaunchMode.externalApplication,
-                  );
-                }
-              },
             ),
-          ],
+            iconColor: tokens.fg50,
+            collapsedIconColor: tokens.fg50,
+            backgroundColor: isDark ? tokens.fg30 : tokens.muted20,
+            childrenPadding: const EdgeInsets.fromLTRB(
+              DsSpacing.md,
+              0,
+              DsSpacing.md,
+              DsSpacing.md,
+            ),
+            children: [
+              MarkdownBody(
+                data: item['answer'] ?? '',
+                styleSheet: MarkdownStyleSheet(
+                  p: TextStyle(
+                    fontSize: tokens.textSm,
+                    color: tokens.fg70,
+                    height: 1.4,
+                  ),
+                ),
+                onTapLink: (text, href, title) {
+                  if (href != null) {
+                    launchUrl(
+                      Uri.parse(href),
+                      mode: LaunchMode.externalApplication,
+                    );
+                  }
+                },
+              ),
+            ],
+          ),
         ),
       ),
     );

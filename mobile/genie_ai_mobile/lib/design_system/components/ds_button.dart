@@ -59,26 +59,44 @@ class DsButton extends StatelessWidget {
     return SizedBox(
       key: const ValueKey('ds-button-sizer'),
       height: small ? 36 : 48,
-      child: ElevatedButton(
-        key: const ValueKey('ds-button'),
-        onPressed: disabled ? null : onPressed,
-        style: ElevatedButton.styleFrom(
-          backgroundColor: colors.bg,
-          foregroundColor: colors.fg,
-          disabledBackgroundColor: colors.bg.withValues(alpha: 0.5),
-          elevation: 0,
-          shadowColor: Colors.transparent,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(DsRadii.md),
-            side: colors.border != null
-                ? BorderSide(color: colors.border!)
-                : BorderSide.none,
-          ),
-          padding: EdgeInsets.symmetric(
-            horizontal: small ? DsSpacing.sm : DsSpacing.md,
-          ),
-        ),
-        child: _buildChild(colors),
+      // The full-width idiom lives HERE, bounded-only: the theme's old
+      // `Size(double.infinity, 48)` minimum filled every bounded context
+      // (a Column center, a stretch) for free — and crashed Rows, which
+      // hand their non-flex children UNBOUNDED main-axis width. Bounded →
+      // fill (the visible behavior every screen relied on); unbounded →
+      // hug the label.
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final maxWidth = constraints.maxWidth;
+          final button = ElevatedButton(
+            key: const ValueKey('ds-button'),
+            onPressed: disabled ? null : onPressed,
+            style: ElevatedButton.styleFrom(
+              backgroundColor: colors.bg,
+              foregroundColor: colors.fg,
+              disabledBackgroundColor: colors.bg.withValues(alpha: 0.5),
+              elevation: 0,
+              shadowColor: Colors.transparent,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(DsRadii.md),
+                side: colors.border != null
+                    ? BorderSide(color: colors.border!)
+                    : BorderSide.none,
+              ),
+              padding: EdgeInsets.symmetric(
+                horizontal: small ? DsSpacing.sm : DsSpacing.md,
+              ),
+            ),
+            child: _buildChild(colors),
+          );
+          if (maxWidth.isFinite) {
+            return ConstrainedBox(
+              constraints: BoxConstraints.tightFor(width: maxWidth),
+              child: button,
+            );
+          }
+          return button;
+        },
       ),
     );
   }

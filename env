@@ -1477,6 +1477,25 @@ KC_MOBILE_REDIRECT_SCHEME=com.<institution>.genieai
 # AGENT_AUTHORIZED_REPOS=
 # AGENT_PROBE_BEARER=
 #
+# BFF agent-leg knobs (story 2.4) — read by the backend when it proxies an
+# agentic request (the branch is gated by AGENT_ENABLED through the shared
+# routing helper; with the flag off these are never read. NOTE: AGENT_ENABLED
+# reaches the backend through an explicit compose entry — flipping the flag
+# needs a backend recreate too, the value is read once at start).
+# AGENT_UPSTREAM_TIMEOUT_MS is the BFF's upstream timeout on the agent leg
+# (POST /v1/runs). The run's deadline_ms derives from it minus the named
+# translation/finalization reserves (deadline_ms = timeout − 30000 − 5000),
+# so the pair rule above — timeout >= deadline + reserves — holds whenever
+# the timeout exceeds the reserves; a configured timeout at or below
+# reserves + floor (≤ 36000 ms) is absorbed: one warning names the knob and
+# the default applies. Default 3600000 (1 h; independent of the legacy
+# CHATQNA_STREAM_TIMEOUT, which templates at 300000).
+# docs/agent-budget-deadline-pairs.md.
+# AGENT_UPSTREAM_TIMEOUT_MS=3600000
+# The agent-service internal endpoint the BFF POSTs /v1/runs to (the code
+# default matches the compose service name + port).
+# AGENT_SERVICE_URL=http://agent-service:8010
+#
 # Uncomment to override defaults (all have sensible defaults in docker-compose):
 # ENABLE_OBSERVABILITY=0
 # GRAFANA_ADMIN_USER=admin

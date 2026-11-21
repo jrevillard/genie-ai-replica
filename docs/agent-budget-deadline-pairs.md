@@ -72,6 +72,32 @@ partial usage record intact.
 | `AGENT_VERDICT_JUDGE_TIMEOUT_MS` (story 2.6) | the grounding judge's hard bound — the one finalize-time call that can extend the agent phase past its wall clock, by at most its own timeout |
 | translation-leg allowances (names at 2.10) | `{ maxTokens, maxCalls }` the translation plans against after the run's usage record |
 
+**Landed (story 2.4).** `AGENT_UPSTREAM_TIMEOUT_MS` ships with a `3600000`
+default (1 h; the legacy chatqna stream timeout `CHATQNA_STREAM_TIMEOUT`
+templates at `300000` — 5 min — the two are independent knobs), passed
+through to the backend in `docker-compose.yaml` and documented in the `env`
+template. The BFF derives the run's deadline as
+
+```
+deadline_ms = AGENT_UPSTREAM_TIMEOUT_MS − TRANSLATION_RESERVE_MS − FINALIZATION_MARGIN_MS   (floor 1000 ms)
+```
+
+with the reserves as named module constants beside the derivation in
+`components/gov-chat-backend/services/agent-frame-writer.js`:
+`TRANSLATION_RESERVE_MS = 30000` (the GPU translator's own hard timeout in
+`gpu-translate-backend.js`) and `FINALIZATION_MARGIN_MS = 5000` (metadata
+persistence, frame write, SSE teardown). The pair rule holds whenever the
+timeout exceeds the reserves; a configured timeout at or below the reserves
+plus the floor (≤ 36000 ms on the shipped numbers) cannot — the derivation
+absorbs it (one warning names `AGENT_UPSTREAM_TIMEOUT_MS`, the 3600000
+default applies) instead of shipping a deadline that turns a bounded run
+into a BFF-attributed abort. The judge-overrun ceiling
+(`AGENT_VERDICT_JUDGE_TIMEOUT_MS`) is NOT part of the derivation yet: the
+run surface bounds its own wall clock and answers honestly, so a long run
+surfaces as the agent's own `budget_exhausted`/`run_error`, never as a BFF
+timeout. Story 2.10 revisits the reserves when the translation-leg
+allowances land.
+
 ## The timeout/deadline pair — the V08 derivation
 
 ```

@@ -878,6 +878,22 @@ services:
       # authz-resolver's SERVING_TTL_MS — override only for latency tuning.
       - OKF_RETRIEVAL_CONFIG_TTL_MS=${OKF_RETRIEVAL_CONFIG_TTL_MS:-30000}
       - OKF_RETRIEVAL_CONFIG_TIMEOUT_MS=${OKF_RETRIEVAL_CONFIG_TIMEOUT_MS:-3000}
+      # Story 2.4 — the BFF's agent leg (the branch is gated in code by
+      # AGENT_ENABLED through the shared routing helper; these entries carry
+      # the operator-visible knobs). AGENT_ENABLED must reach the backend
+      # explicitly (same no-passthrough rule as OKF_ENABLED above): flipping
+      # the flag only starts the agent-service; without this entry the BFF
+      # branch stays parked silently. The flag is read once at backend start —
+      # a flip requires a backend recreate, not just an agent-service start.
+      - AGENT_ENABLED=${AGENT_ENABLED:-0}
+      # AGENT_UPSTREAM_TIMEOUT_MS is the
+      # upstream timeout on POST /v1/runs; the run's deadline_ms derives from
+      # it minus the named translation/finalization reserves, so the pair rule
+      # (docs/agent-budget-deadline-pairs.md: timeout >= deadline + reserves)
+      # holds by construction. AGENT_SERVICE_URL is the agent-service internal
+      # endpoint (code default matches).
+      - AGENT_UPSTREAM_TIMEOUT_MS=${AGENT_UPSTREAM_TIMEOUT_MS:-3600000}
+      - AGENT_SERVICE_URL=${AGENT_SERVICE_URL:-http://agent-service:8010}
       # Conversation mode: conversation-with-context-labels (full context) or single-message (legacy)
       - CONTEXT_OPTION=${CONTEXT_OPTION:-conversation-with-context-labels}
       # Logging (error, warn, info, debug)

@@ -554,9 +554,14 @@ class QueryService {
    * Returns early without calling ChatQnA (caller handles the stream).
    * @param {Object} queryData - Query data from the request
    * @param {Object} authHeaders - Auth headers to forward to OPEA
+   * @param {Object} [opts] - `{ skipFanoutCarrier }` (story 2.4): the agentic
+   *   entry passes true — the frame writer resolves the SAME posture once for
+   *   its CallerContext assembly, so the carrier attach (a second upstream
+   *   read of a posture it would not use) is skipped there. The legacy entry
+   *   keeps the attach.
    * @returns {Promise<Object>} { queryId, opeaUrl, opeaPayload, queryData }
    */
-  async initStreamQuery(queryData, authHeaders) {
+  async initStreamQuery(queryData, authHeaders, { skipFanoutCarrier = false } = {}) {
     logger.info('QueryService.init_stream_query_start');
 
     // Validation (reuse same logic as createQuery)
@@ -640,20 +645,234 @@ class QueryService {
     // graph set and attach the fan-out carrier to the payload context.
     // Fail-closed: any resolver problem (except a 401, which propagates — the
     // request itself is invalid) degrades to the legacy carrier, i.e. the
-    // payload stays byte-identical to pre-1.1.
-    await this._attachFanoutCarrier(opeaPayload, authHeaders, queryId, queryData.sessionId);
+    // payload stays byte-identical to pre-1.1. The agentic entry skips it:
+    // the frame writer resolves the same posture once (story 2.4).
+    if (!skipFanoutCarrier) {
+      await this._attachFanoutCarrier(opeaPayload, authHeaders, queryId, queryData.sessionId);
+    }
 
     return { queryId, opeaUrl, opeaPayload, authHeaders, queryData };
+  }
+
+  /**
+   * Story 1.1 (ADR-okf-039) / story 2.4 — resolve the fan-out posture: the
+   * deployment's retrieval mode, the server's `engaged` flag, and (when
+   * engaged) the caller's authorized OKF graph set plus the session's sticky
+   * set. ONE home for the resolution, consumed by BOTH consumers that need
+   * it: `_attachFanoutCarrier` (the chatqna payload) and the agent
+   * `CallerContext` assembly (story 2.4) — one resolution per request, no
+   * double upstream calls, no drift between the two views.
+   *
+   * The okf-server is the source of truth: the `engaged` flag is the
+   * AUTHORITATIVE engagement gate (mode ∈ {okf_only, hybrid} AND ≥1 serving
+   * graph for this caller, computed server-side) and is never re-computed
+   * here.
+   *
+   * Errors propagate: the caller decides the fail-closed direction (the
+   * carrier degrades to the legacy payload; a 401 always propagates — the
+   * request itself is invalid).
+   *
+   * @param {Object} authHeaders - {authorization: 'Bearer ...'} of the caller.
+   * @param {Object} opts - { queryId, sessionId, correlationId } for
+   *   correlation + sticky. A caller that owns the correlation id (the
+   *   carrier generates one before the resolution, so its fail-closed catch
+   *   can still log it) passes it in; absent, one is generated here.
+   * @returns {Promise<Object>} The posture:
+   *   `{ available, mode, engaged, warnings, postureUnknown, authorizedGraphs,
+   *      authz, stickyGraphs, legacyGraph, correlationId }`. `available` is
+   *   false only when no bearer was presented (the authz endpoints are
+   *   unreachable for such a caller) — the resolved fields then carry the
+   *   legacy default.
+   */
+  async resolveFanoutPosture(authHeaders, { queryId, sessionId = null, correlationId = null } = {}) {
+    const bearer = authHeaders?.authorization;
+    if (!bearer) {
+      return {
+        available: false,
+        mode: 'legacy',
+        engaged: false,
+        warnings: [],
+        postureUnknown: false,
+        authorizedGraphs: [],
+        authz: null,
+        stickyGraphs: [],
+        legacyGraph: process.env.ARANGO_GRAPH_NAME || 'GRAPH',
+        correlationId
+      };
+    }
+    // A caller-owned correlation id (the carrier generates one before the
+    // resolution) or a fresh one — from here on it is THE correlation id of
+    // this resolution.
+    correlationId = correlationId || crypto.randomUUID();
+    const config = await retrievalConfigClient.getRetrievalConfig(bearer, { correlationId, queryId });
+    const mode = config?.config?.mode || 'legacy';
+    // The SERVER's engaged flag is the gate — read, never re-derived.
+    const engaged = config?.engaged === true;
+    const warnings = Array.isArray(config?.warnings) ? config.warnings : [];
+    // The single discriminant for "this answer was composed locally because
+    // the deployment's posture could not be read" — read once, used by the
+    // warning below and by the okf_only branch's genuine-zero-serving gate.
+    const postureUnknown = retrievalConfigClient.isPostureUnknown(config);
+    logger.info('QueryService.fanout_config_resolved', {
+      queryId,
+      correlationId,
+      mode,
+      engaged,
+      source: config?.source,
+      serving_graph_count: config?.serving_graph_count,
+      serving_graphs: Array.isArray(config?.serving_graphs) ? config.serving_graphs.length : 0,
+      warnings: warnings.length
+    });
+    if (postureUnknown) {
+      // ONE emission site for the whole "the deployment's posture could not
+      // be read" fact (#1687): an unreachable upstream or a garbled body —
+      // whatever mode the local fallback carries. The warning code is the
+      // same; `source` and `mode` in the payload say which fallback is
+      // being served and why, so a dashboard cannot read the outage as
+      // "the deployment serves zero graphs" or "the deployment runs
+      // legacy/hybrid", and can tell a transport outage from a broken
+      // upstream payload. The by-design defaults (OKF parked, a caller
+      // without okf scopes) never reach this: their legacy answer IS the
+      // correct posture.
+      logger.warn('QueryService.fanout_warning', {
+        queryId,
+        correlationId,
+        fanout: { warning: 'posture_unknown', mode, engaged },
+        source: config?.source,
+        synthesis_reason: config?.synthesis_reason
+      });
+    }
+
+    // Per-call authz — only when the server engaged the fan-out (the carrier
+    // is empty regardless when engaged is false).
+    // Story 1.3 — the sticky lookup (below) needs only engaged+sessionId and
+    // is INDEPENDENT of the authz call, so both start together: one fewer
+    // sequential ArangoDB round-trip per engaged chat query (review
+    // 2026-10-29).
+    let stickyGraphs = [];
+    const stickyPromise =
+      engaged && sessionId
+        ? this._loadStickyGraphs(sessionId, queryId).catch((stickyErr) => {
+            // Sticky is an optimization — a lookup problem must never break the query.
+            logger.warn('QueryService.sticky_load_failed', { queryId, correlationId, error: stickyErr?.message });
+            return [];
+          })
+        : null;
+
+    let authorizedGraphs = [];
+    let authz = null;
+    if (engaged) {
+      authz = await retrievalConfigClient.getAuthorizedGraphs(bearer, { correlationId, queryId });
+      authorizedGraphs = Array.isArray(authz?.graph_names)
+        ? authz.graph_names.filter((g) => typeof g === 'string' && g.trim())
+        : [];
+    }
+
+    // Story 1.3 — sticky conversation-continuity set: the routed graphs that
+    // produced previous answers in THIS conversation. The retriever searches
+    // them unconditionally (they bypass affinity qualification), which keeps
+    // signal-free follow-ups ("why are they missing from the table?") locked
+    // to the conversation's subject. Authorization still wins: the sticky
+    // set is intersected with the carrier's authorized graphs and the legacy
+    // graph is never sticky (the legacy leg is outside routing entirely).
+    if (stickyPromise) {
+      stickyGraphs = await stickyPromise;
+    }
+
+    return {
+      available: true,
+      mode,
+      engaged,
+      warnings,
+      postureUnknown,
+      authorizedGraphs,
+      authz,
+      stickyGraphs,
+      legacyGraph: process.env.ARANGO_GRAPH_NAME || 'GRAPH',
+      correlationId
+    };
+  }
+
+  /**
+   * The authorized graph set a fan-out posture authorizes, by mode (the
+   * GRAPH-injection rule — one home, shared by the payload carrier and the
+   * agent `CallerContext` so the two views cannot drift):
+   *   - hybrid AND engaged → the legacy graph FIRST, then the OKF graphs;
+   *   - okf_only AND engaged → the OKF graphs only — NEVER the legacy graph;
+   *   - engaged false (either mode) → empty (the legacy free-form corpus is
+   *     what still answers a hybrid caller);
+   *   - legacy (or unknown) mode → empty.
+   * @param {Object|null} posture - A resolveFanoutPosture result.
+   * @returns {string[]}
+   */
+  _fanoutGraphSet(posture) {
+    const engaged = posture?.engaged === true;
+    const mode = posture?.mode;
+    const authorized = Array.isArray(posture?.authorizedGraphs) ? posture.authorizedGraphs : [];
+    const legacyGraph = posture?.legacyGraph || process.env.ARANGO_GRAPH_NAME || 'GRAPH';
+    if (mode === 'hybrid') {
+      return engaged ? [...new Set([legacyGraph, ...authorized])] : [];
+    }
+    if (mode === 'okf_only') {
+      return engaged ? [...new Set(authorized)] : [];
+    }
+    return [];
+  }
+
+  /**
+   * Story 2.4 — the agent `CallerContext` the run request carries: the
+   * trusted caller context the agent-service port enforces by construction.
+   * Built from the SHARED posture resolution (no second upstream read), so
+   * the agent's authorized set is exactly the graph set the chatqna carrier
+   * would have carried for the same request:
+   *   - `authorized_graph_names` — the mode-ruled set (`_fanoutGraphSet`);
+   *   - `authorized_repos` — the authz-resolver's repo↔graph rows, kept only
+   *     when the row's graph is IN the authorized set (the contract's
+   *     invariant: the mapping may never widen the scope it resolves into)
+   *     and each repo id appears once;
+   *   - `requested_labels` — the request's own narrowing (serviceLabels);
+   *     context-only, it cannot widen a search.
+   *
+   * A null/unavailable posture (no bearer, or a resolver failure the caller
+   * chose to degrade) yields empty authorization — the same fail-closed
+   * direction the carrier takes.
+   *
+   * @param {Object} queryData - The request (userId + context.serviceLabels).
+   * @param {Object|null} posture - A resolveFanoutPosture result, or null.
+   * @returns {Object} `{ user_id, authorized_graph_names, authorized_repos,
+   *   requested_labels }`.
+   */
+  buildAgentCallerContext(queryData, posture) {
+    const graphSet = posture ? this._fanoutGraphSet(posture) : [];
+    const graphSetMembers = new Set(graphSet);
+    const seenRepoIds = new Set();
+    const authorizedRepos = [];
+    const repos = Array.isArray(posture?.authz?.repos) ? posture.authz.repos : [];
+    for (const repo of repos) {
+      const repoId = repo?.repo_id;
+      const graphName = repo?.graph_name;
+      if (typeof repoId !== 'string' || !repoId || seenRepoIds.has(repoId)) continue;
+      if (typeof graphName !== 'string' || !graphSetMembers.has(graphName)) continue;
+      seenRepoIds.add(repoId);
+      authorizedRepos.push({ repo_id: repoId, graph_name: graphName });
+    }
+    const labels = Array.isArray(queryData?.context?.serviceLabels) ? queryData.context.serviceLabels : [];
+    const requestedLabels = [...new Set(labels.filter((label) => typeof label === 'string' && label.trim()))];
+    return {
+      user_id: queryData?.userId ?? '',
+      authorized_graph_names: graphSet,
+      authorized_repos: authorizedRepos,
+      requested_labels: requestedLabels
+    };
   }
 
   /**
    * Story 1.1 (ADR-okf-039) — attach the multi-graph fan-out carrier to the
    * chatqna payload context.
    *
-   * The okf-server is the source of truth: the client's `engaged` flag is the
-   * AUTHORITATIVE engagement gate (mode ∈ {okf_only, hybrid} AND ≥1 serving
-   * graph for this caller, computed server-side) and is never re-computed
-   * here. Carrier rules:
+   * The posture comes from the shared `resolveFanoutPosture` (story 2.4
+   * extracted it; the payload rules are unchanged and byte-identical). The
+   * carrier rules:
    *   - mode == 'hybrid' AND engaged → `authorized_graph_names` = legacy graph
    *     (process.env.ARANGO_GRAPH_NAME) FIRST, then the authz-resolver's OKF
    *     graphs (the GRAPH-injection rule — legacy first, OKF after).
@@ -686,86 +905,17 @@ class QueryService {
       logger.info('QueryService.fanout_carrier_skipped_no_bearer', { queryId });
       return opeaPayload;
     }
+    // The correlation id is generated BEFORE the resolution: the fail-closed
+    // catch below must still be able to log a real one (the extraction had it
+    // generating inside, so an early failure logged null).
     const correlationId = crypto.randomUUID();
     try {
-      const config = await retrievalConfigClient.getRetrievalConfig(bearer, { correlationId, queryId });
-      const mode = config?.config?.mode || 'legacy';
-      // The SERVER's engaged flag is the gate — read, never re-derived.
-      const engaged = config?.engaged === true;
-      const warnings = Array.isArray(config?.warnings) ? config.warnings : [];
-      // The single discriminant for "this answer was composed locally because
-      // the deployment's posture could not be read" — read once, used by the
-      // warning below and by the okf_only branch's genuine-zero-serving gate.
-      const postureUnknown = retrievalConfigClient.isPostureUnknown(config);
-      logger.info('QueryService.fanout_config_resolved', {
-        queryId,
-        correlationId,
-        mode,
-        engaged,
-        source: config?.source,
-        serving_graph_count: config?.serving_graph_count,
-        serving_graphs: Array.isArray(config?.serving_graphs) ? config.serving_graphs.length : 0,
-        warnings: warnings.length
-      });
-      if (postureUnknown) {
-        // ONE emission site for the whole "the deployment's posture could not
-        // be read" fact (#1687): an unreachable upstream or a garbled body —
-        // whatever mode the local fallback carries. The warning code is the
-        // same; `source` and `mode` in the payload say which fallback is
-        // being served and why, so a dashboard cannot read the outage as
-        // "the deployment serves zero graphs" or "the deployment runs
-        // legacy/hybrid", and can tell a transport outage from a broken
-        // upstream payload. The by-design defaults (OKF parked, a caller
-        // without okf scopes) never reach this: their legacy answer IS the
-        // correct posture.
-        logger.warn('QueryService.fanout_warning', {
-          queryId,
-          correlationId,
-          fanout: { warning: 'posture_unknown', mode, engaged },
-          source: config?.source,
-          synthesis_reason: config?.synthesis_reason
-        });
-      }
-
-      // Per-call authz — only when the server engaged the fan-out (the carrier
-      // is empty regardless when engaged is false).
-      // Story 1.3 — the sticky lookup (below) needs only engaged+sessionId and
-      // is INDEPENDENT of the authz call, so both start together: one fewer
-      // sequential ArangoDB round-trip per engaged chat query (review
-      // 2026-10-29).
-      let stickyGraphs = [];
-      const stickyPromise =
-        engaged && sessionId
-          ? this._loadStickyGraphs(sessionId, queryId).catch((stickyErr) => {
-              // Sticky is an optimization — a lookup problem must never break the query.
-              logger.warn('QueryService.sticky_load_failed', { queryId, correlationId, error: stickyErr?.message });
-              return [];
-            })
-          : null;
-
-      let authorizedGraphs = [];
-      if (engaged) {
-        const authz = await retrievalConfigClient.getAuthorizedGraphs(bearer, { correlationId, queryId });
-        authorizedGraphs = Array.isArray(authz?.graph_names)
-          ? authz.graph_names.filter((g) => typeof g === 'string' && g.trim())
-          : [];
-      }
-
-      // Story 1.3 — sticky conversation-continuity set: the routed graphs that
-      // produced previous answers in THIS conversation. The retriever searches
-      // them unconditionally (they bypass affinity qualification), which keeps
-      // signal-free follow-ups ("why are they missing from the table?") locked
-      // to the conversation's subject. Authorization still wins: the sticky
-      // set is intersected with the carrier's authorized graphs and the legacy
-      // graph is never sticky (the legacy leg is outside routing entirely).
-      const legacyGraph = process.env.ARANGO_GRAPH_NAME || 'GRAPH';
-      if (stickyPromise) {
-        stickyGraphs = await stickyPromise;
-      }
+      const posture = await this.resolveFanoutPosture(authHeaders, { queryId, sessionId, correlationId });
+      const { mode, engaged, warnings, postureUnknown, authorizedGraphs, stickyGraphs, legacyGraph } = posture;
 
       if (mode === 'hybrid') {
         context.mode = mode;
-        context.authorized_graph_names = engaged ? [...new Set([legacyGraph, ...authorizedGraphs])] : [];
+        context.authorized_graph_names = this._fanoutGraphSet(posture);
         const stickyClean = stickyGraphs.filter((g) => authorizedGraphs.includes(g) && g !== legacyGraph);
         if (engaged && stickyClean.length) {
           context.sticky_graph_names = stickyClean;
@@ -780,7 +930,7 @@ class QueryService {
         // NEVER queried, regardless of engaged (resolved Open Question,
         // 2026-10-06). The exclude_legacy signal enforces it retriever-side.
         context.mode = mode;
-        context.authorized_graph_names = engaged ? [...new Set(authorizedGraphs)] : [];
+        context.authorized_graph_names = this._fanoutGraphSet(posture);
         context.exclude_legacy = true;
         const stickyClean = stickyGraphs.filter((g) => authorizedGraphs.includes(g));
         if (engaged && stickyClean.length) {

@@ -48,10 +48,15 @@ from dataclasses import dataclass, field
 from typing import Any
 
 import tracing
+
+# The ``source_documents`` projection lives in capabilities.citations (the
+# shared home both lanes import — the governed path projects its delivered
+# citations onto the SAME envelope). The name is RE-EXPORTED here: the
+# pipeline's own callers and suites import it from this module, and the
+# output is byte-identical to the pre-extraction behavior.
+from capabilities.citations import source_document_envelope
 from capabilities.contract import (
     CallerContext,
-    LegacyFileProvenance,
-    OkfConceptProvenance,
     OperationBudget,
     OutcomeCode,
     PreparedQuery,
@@ -94,97 +99,6 @@ def _rank_weighted_confidence(scores: list[float], decay: float) -> float:
     effective = decay if decay >= 0 else DEFAULT_CONFIDENCE_RANK_DECAY
     weights = [math.exp(-effective * i) for i in range(len(scores))]
     return sum(w * s for w, s in zip(weights, scores, strict=True)) / sum(weights)
-
-
-def hit_identity(hit) -> tuple[str, str] | None:
-    """The dedup identity of one hit's source: ``(repo_id, concept_id)`` for
-    an OKF concept, ``(None, file_id)`` for a legacy file. Deployed keys the
-    duplicate-skip on the flat ``file_id`` alone (an OKF chunk's ``file_id``
-    IS its ``concept_id``), so a legacy ``file_id`` colliding with an OKF
-    ``concept_id`` — or one ``concept_id`` in two repositories — dedups in
-    the deployed path but not here; the pair identity is the stricter,
-    namespace-safe variant, and the collision is theoretical (E01's corpus
-    is legacy-only)."""
-    provenance = hit.provenance
-    if isinstance(provenance, OkfConceptProvenance):
-        return (provenance.repo_id, provenance.concept_id)
-    if isinstance(provenance, LegacyFileProvenance):
-        return (None, provenance.file_id)
-    return None
-
-
-def source_document_envelope(hits, score_calibrator=None) -> list[dict]:
-    """The ``source_documents`` entries of one result, in the deployed shape.
-
-    A legacy corpus source carries ``document_id`` (the ``file_id``) and no
-    source marker; an OKF concept carries the ``concept_id``/``repo_id``/
-    ``bundle_version`` trio and ``source: 'okf-concept'`` — without the
-    marker the frontend takes the legacy branch and builds a doc-repo URL
-    for a concept that has none.
-
-    RECORDED DELTA (E01 counts it, and it is BIGGER than a field-value
-    difference): the deployed legacy branch resolves
-    ``document_name``/``url``/``categoryLabels`` from doc-repo metadata per
-    answer, and when that resolution FAILS the D1 rule drops the hit
-    entirely — no envelope entry and NO score in the confidence aggregate
-    ("no source surfaced, no confidence poison"). The id-derived-name shape
-    exists only in the deployed OKF fallback (gated on an ``OKF_``-prefixed
-    provenance graph). This pipeline makes no per-answer metadata
-    round-trip (the capability's contract result carries identity, not file
-    metadata), so EVERY legacy hit is surfaced in the id-derived shape and
-    every legacy score counts. Net: when doc-repo metadata resolves, config
-    B shows the same source with less metadata; when it fails, config B
-    shows a source where deployed config A shows none.
-    Widening the delta — resolving doc-repo metadata here — is an
-    iteration-2 decision, not silently taken. The OKF entries carry the
-    deployed OKF-fallback shape MINUS ``graph_name`` (the contract's
-    provenance type does not carry it; the deployed fallback always does).
-
-    Duplicates are skipped (deployed M3: the same source is surfaced once,
-    the first occurrence wins), while every hit's score — duplicates
-    included — still feeds the confidence aggregate, which this function
-    does NOT compute (the caller scores the FULL hit list).
-    ``score_calibrator`` is the deployed confidence-time calibration
-    (``RERANKER_SCORE_CALIBRATION``); ``None`` keeps the raw score (the
-    default ``none`` calibration). It is applied at confidence time ONLY —
-    never on the selection comparisons the capability already made.
-    """
-    envelope: list[dict] = []
-    seen: set[tuple[str, str] | None] = set()
-    for hit in hits:
-        provenance = hit.provenance
-        identity = hit_identity(hit)
-        if identity in seen:
-            continue
-        seen.add(identity)
-        score = score_calibrator(hit.score) if score_calibrator is not None else hit.score
-        if isinstance(provenance, OkfConceptProvenance):
-            entry = {
-                "document_id": provenance.concept_id,
-                "document_name": str(provenance.concept_id).replace("_", " ").strip(),
-                "url": "",
-                "categoryLabels": [],
-                "serviceLabels": [],
-                "score": score,
-                "concept_id": provenance.concept_id,
-                "source": "okf-concept",
-            }
-            if provenance.repo_id:
-                entry["repo_id"] = provenance.repo_id
-            if provenance.bundle_version is not None:
-                entry["bundle_version"] = provenance.bundle_version
-        else:
-            legacy: LegacyFileProvenance = provenance
-            entry = {
-                "document_id": legacy.file_id,
-                "document_name": str(legacy.file_id).replace("_", " ").strip(),
-                "url": "",
-                "categoryLabels": [],
-                "serviceLabels": [],
-                "score": score,
-            }
-        envelope.append(entry)
-    return envelope
 
 
 @dataclass(frozen=True)

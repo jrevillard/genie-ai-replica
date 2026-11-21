@@ -1496,6 +1496,25 @@ services:
       - AGENT_AUTHORIZED_GRAPHS=${AGENT_AUTHORIZED_GRAPHS:-}
       - AGENT_AUTHORIZED_REPOS=${AGENT_AUTHORIZED_REPOS:-}
       - AGENT_PROBE_BEARER=${AGENT_PROBE_BEARER:-}
+      # Query preparation (story 1.8, wired into the run surface by the
+      # integration story): the same knobs the deployed query path reads,
+      # so one .env line tunes both worlds. Tolerant reads in the service —
+      # an unset endpoint falls back to the compose-internal translation
+      # service below, and a degraded translation falls back to a
+      # fallback_* status the run reports (never an untranslated query).
+      # The shared vars' defaults match the chatqna block exactly; an
+      # override in .env moves BOTH worlds (chatqna reads them too).
+      - TRANSLATION_SERVICE_HOST_IP=${TRANSLATION_SERVICE_HOST_IP:-vllm-translation-guardrail}
+      - TRANSLATION_SERVICE_PORT=${TRANSLATION_SERVICE_PORT:-9031}
+      - VLLM_TRANSLATION_ENDPOINT=${VLLM_TRANSLATION_ENDPOINT:-http://vllm-translation-guardrail:9031}
+      - VLLM_TRANSLATION_MODEL_ID=${VLLM_TRANSLATION_MODEL_ID:-google/gemma-3-4b-it}
+      - TRANSLATION_SERVICE_TIMEOUT=${TRANSLATION_SERVICE_TIMEOUT:-180}
+      - MAX_TRANSLATION_CHARS=${MAX_TRANSLATION_CHARS:-}
+      - MODEL_DETECT_TTL=${MODEL_DETECT_TTL:-60}
+      - MODEL_PROBE_TIMEOUT_SECONDS=${MODEL_PROBE_TIMEOUT_SECONDS:-10}
+      - OPENAI_API_KEY=${VLLM_API_KEY:-}
+      - VLLM_API_KEY=${VLLM_API_KEY:-}
+      - OPEA_SSL_SKIP_VERIFY=${OPEA_SSL_SKIP_VERIFY:-}
     build:
       context: components/agent-service/
       dockerfile: Dockerfile

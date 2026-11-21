@@ -82,10 +82,9 @@ class RunBudgetMonitor:
     loop bury it in a result that a cancellation never produces. It is the
     run's SHARED counting surface: the loop counts its model calls and tool
     results here, and the auxiliary callers (the grounding judge,
-    classification, agent-path preparation translation — future stories'
-    wiring) claim the same model-call budget through
-    :meth:`take_aux_model_call`, tallied separately so the record shows
-    plumbing vs. work.
+    classification, the agent-path preparation translation) claim the same
+    model-call budget through :meth:`take_aux_model_call`, tallied
+    separately so the record shows plumbing vs. work.
     """
 
     def __init__(self, budget: RunBudget) -> None:
@@ -96,6 +95,7 @@ class RunBudgetMonitor:
         self._aux_model_calls = 0
         self._tool_calls = 0
         self._evidence_bytes = 0
+        self._injection_findings = 0
         self._prompt_tokens: int | None = None
         self._completion_tokens: int | None = None
         # Set the first time a usage record arrives incomplete: from then on
@@ -123,6 +123,12 @@ class RunBudgetMonitor:
     @property
     def evidence_bytes(self) -> int:
         return self._evidence_bytes
+
+    @property
+    def injection_findings(self) -> int:
+        """How many injection attempts the run's taint scan recorded (AD-13
+        — everything counted, findings included)."""
+        return self._injection_findings
 
     @property
     def prompt_tokens(self) -> int | None:
@@ -240,6 +246,10 @@ class RunBudgetMonitor:
     def record_evidence(self, result_bytes: int) -> None:
         """Add one executed tool result's size to the run's evidence volume."""
         self._evidence_bytes += result_bytes
+
+    def record_injection_findings(self, count: int) -> None:
+        """Add the taint scan's finding count for one dispatched tool result."""
+        self._injection_findings += count
 
     def remaining_output_tokens(self) -> int | None:
         """The output allowance the next model call may carry as ``max_tokens``.

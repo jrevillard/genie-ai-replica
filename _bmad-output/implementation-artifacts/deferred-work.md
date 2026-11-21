@@ -3110,3 +3110,10 @@ status: open
 - source_spec: `_bmad-output/implementation-artifacts/stories/2-10-answer-translation-on-the-agentic-path.md`
   summary: Add AGENT_TRANSLATION_MAX_TOKENS/MAX_CALLS sizing guidance to .claude/rules/ENVIRONMENT.md with a worked example against AGENT_UPSTREAM_TIMEOUT_MS.
   evidence: The knobs' pair rule lives in docs/agent-budget-deadline-pairs.md, but the repo's env-variable reference (agent-context file — defer-by-rule edit) carries neither the new knobs nor a sizing example.
+
+- source_spec: `_bmad-output/implementation-artifacts/stories/2-5-the-governed-answer-path-integration-slice.md`
+  summary: The BFF pairing test pins the run usage-record contract against a hand-copied fixture; the producer↔consumer contract can drift with both suites green.
+  evidence: verification-gap V2 — renaming `aux_model_calls` or `prompt_tokens` in `RunUsageRecord` reds nothing on either side while production silently under-bounds or skips translation; the natural home is a shared committed snapshot of the Python `as_dict` the JS test reads, when story 2.4 wires the real record through.
+- source_spec: `_bmad-output/implementation-artifacts/stories/2-5-the-governed-answer-path-integration-slice.md`
+  summary: Tool-name coupling duplicated — `taint.scan_tool_result` and `RetrievalLedger.record` each hardcode `search_knowledge`/`read_source` separately, no shared guard.
+  evidence: blind B11 — a third retrieval-shaped tool registered later is silently unscanned and unledgered; no third tool exists today, so the shared guard (registry-derived names or a shared constant) is machinery without a current consumer.

@@ -99,6 +99,36 @@ def test_the_ledger_ignores_unregistered_tool_names_and_malformed_hits():
     assert ledger.entries == []
 
 
+def test_a_success_that_contributed_no_citable_entry_is_not_a_successful_retrieval():
+    """The insufficiency decision reads what the ledger HOLDS, not what the
+    outcome string claimed: a read whose content is empty/whitespace cites
+    nothing, so counting it as served evidence would let the drafted text
+    ship instead of the insufficiency response."""
+    ledger = RetrievalLedger()
+    ledger.record("read_source", {"result": {"outcome": "success", "provenance": {"file_id": "f-1"}, "content": "   "}})
+    ledger.record("read_source", {"result": {"outcome": "success", "provenance": {"file_id": "f-1"}, "content": None}})
+
+    assert ledger.entries == []
+    assert ledger.successful_retrievals == 0
+
+    pipeline, _ = _pipeline(judge_turns=(ModelTurn(content="never asked"),))
+    pipeline.record_tool_result(
+        "read_source", {"result": {"outcome": "success", "provenance": {"file_id": "f-1"}, "content": "   "}}
+    )
+    verdict = asyncio.run(pipeline.finalize("a drafted confident answer"))
+
+    assert verdict.insufficient_required is True
+    assert verdict.insufficient_evidence["reasons"] == ["no_successful_retrieval"]
+
+
+def test_all_duplicate_hits_do_not_count_as_a_successful_retrieval():
+    ledger = RetrievalLedger()
+    ledger.record("search_knowledge", _search_payload([LEGACY_HIT]))
+    ledger.record("search_knowledge", _search_payload([dict(LEGACY_HIT, text="duplicate of the first")]))
+
+    assert ledger.successful_retrievals == 1  # only the dispatch that grew the ledger
+
+
 def test_the_ledger_dedups_by_the_stable_identity():
     ledger = RetrievalLedger()
     ledger.record("search_knowledge", _search_payload([OKF_HIT, dict(OKF_HIT, text="the same concept again")]))
@@ -365,8 +395,26 @@ def test_the_payload_is_the_projection_contract_verbatim():
         "judge",
         "citations",
         "invalid_citations",
+        "insufficient_evidence",
+        "findings",
+        "source_documents",
         "marking",
     }
+    # Story 2.5's additive fields: the insufficiency decision is explicit
+    # (required false on a normal run, empty findings, and the delivered
+    # citations projected onto the frontend envelope).
+    assert payload["insufficient_evidence"] == {"required": False, "reasons": []}
+    assert payload["findings"] == []
+    assert payload["source_documents"] == [
+        {
+            "document_id": "f-1",
+            "document_name": "f-1",
+            "url": "",
+            "categoryLabels": [],
+            "serviceLabels": [],
+            "score": 0.9,
+        }
+    ]
     # The tri-state vocabulary is CLOSED — exactly these three values, the
     # only statuses the payload's grounding_status can ever carry.
     from agent import verification
@@ -495,3 +543,43 @@ def test_a_cancelled_judge_propagates_the_cancellation_never_a_verdict():
 
     with pytest.raises(asyncio.CancelledError):
         asyncio.run(pipeline.finalize("the answer"))
+
+
+def test_a_pipeline_defect_keeps_the_mechanical_decision_and_the_findings(monkeypatch):
+    """The defensive catch must not bury the ledger's mechanical facts: over
+    a degraded ledger with a recorded finding, an internal defect still
+    yields the insufficiency decision and the finding — never a bare
+    unverified verdict that would let a drafted answer ship unaudited."""
+    from agent import verification as verification_module
+
+    pipeline, _ = _pipeline(judge_turns=(ModelTurn(content="never asked"),))
+    pipeline.record_tool_result(
+        "search_knowledge",
+        {"result": {"outcome": "degraded_availability", "hits": [dict(LEGACY_HIT, text="t")], "truncated": False}},
+    )
+    pipeline.record_finding(
+        {
+            "tool": "search_knowledge",
+            "markers": ["role_reassignment"],
+            "source": "search_hit",
+            "identity": [None, "f-1"],
+        }
+    )
+
+    def _defect(entries, authorized_repos):
+        raise RuntimeError("the validity check exploded")
+
+    monkeypatch.setattr(verification_module, "check_reference_validity", _defect)
+    verdict = asyncio.run(pipeline.finalize("the answer"))
+
+    assert verdict.status == VERDICT_UNVERIFIED  # degrades, never fabricates grounded
+    assert verdict.insufficient_required is True
+    assert verdict.insufficient_evidence["reasons"] == ["degraded_availability"]
+    assert verdict.payload()["findings"] == [
+        {
+            "tool": "search_knowledge",
+            "markers": ["role_reassignment"],
+            "source": "search_hit",
+            "identity": [None, "f-1"],
+        }
+    ]

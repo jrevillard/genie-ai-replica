@@ -70,25 +70,22 @@ def test_the_ledger_cites_success_results_only():
     ledger.record("search_knowledge", _search_payload([LEGACY_HIT]))
     ledger.record("read_source", READ_SUCCESS)
 
-    assert ledger.retrieval_attempted is True
     assert ledger.entries == [
         {"provenance": {"file_id": "f-1"}, "text": "the grievance passage", "score": 0.9}
     ]  # the read dedups to the same identity — first served wins
 
 
-def test_the_ledger_records_an_error_envelope_as_an_attempt_without_citations():
+def test_the_ledger_records_an_error_envelope_as_citing_nothing():
     ledger = RetrievalLedger()
     ledger.record("search_knowledge", SEARCH_ERROR)
 
-    assert ledger.retrieval_attempted is True
     assert ledger.entries == []
 
 
-def test_an_insufficiency_result_is_an_attempt_without_citations():
+def test_an_insufficiency_result_cites_nothing():
     ledger = RetrievalLedger()
     ledger.record("search_knowledge", SEARCH_INSUFFICIENT)
 
-    assert ledger.retrieval_attempted is True
     assert ledger.entries == []
 
 
@@ -98,7 +95,6 @@ def test_the_ledger_ignores_unregistered_tool_names_and_malformed_hits():
     ledger.record("search_knowledge", _search_payload([{"provenance": {"file_id": "f-1"}}]))  # no text
     ledger.record("search_knowledge", _search_payload([{"text": "no identity"}]))
 
-    assert ledger.retrieval_attempted is True
     assert ledger.entries == []
 
 
@@ -113,7 +109,6 @@ def test_a_read_without_resolved_provenance_cites_nothing():
     ledger = RetrievalLedger()
     ledger.record("read_source", {"result": {"outcome": "success", "provenance": None, "content": None}})
 
-    assert ledger.retrieval_attempted is True
     assert ledger.entries == []
 
 
@@ -183,6 +178,20 @@ def test_a_spent_model_call_budget_skips_the_judge_as_budget_exhausted():
     assert judge_model.requests == []  # no call left the budget
 
 
+def test_a_spent_token_budget_refuses_the_judge_before_it_claims_a_model_call():
+    """No room for one more call: the judge is refused BEFORE the aux slot
+    is consumed — the usage record never counts a call that never happened."""
+    monitor = RunBudgetMonitor(run_budget(max_total_tokens=100))
+    monitor.record_usage(60, 40)  # the token budget is spent exactly
+    judge_model = ScriptedLoopModel(())
+    judge = GroundingJudge(model_client=judge_model, monitor=monitor, timeout_seconds=5.0)
+    result = asyncio.run(judge.judge("the answer", [LEGACY_HIT]))
+
+    assert result == {"ran": False, "outcome": JUDGE_OUTCOME_BUDGET_EXHAUSTED, "verdict": None}
+    assert (monitor.model_calls, monitor.aux_model_calls) == (0, 0)  # nothing was claimed
+    assert judge_model.requests == []
+
+
 def test_a_judge_timeout_yields_timeout_never_a_verdict():
     class HangingJudgeModel:
         async def complete(self, messages, tool_definitions, *, max_output_tokens):
@@ -220,6 +229,33 @@ def test_no_retrieval_at_all_verifies_unverified_with_the_judge_skipped():
     assert verdict.status == VERDICT_UNVERIFIED
     assert verdict.payload()["judge"] == {"ran": False, "outcome": JUDGE_OUTCOME_SKIPPED, "verdict": None}
     assert monitor.aux_model_calls == 0  # the judge never consumed the fleet budget
+    assert verdict.payload()["marking"] == {"required": False, "reason": None}
+
+
+def test_an_insufficiency_outcome_verifies_unverified_never_marked_ungrounded():
+    """The recorded distinct abstention (every search returned
+    insufficiency): the answer claims nothing, so it is ``unverified`` with
+    no marking — never the ungrounded correction."""
+    pipeline, monitor = _pipeline(judge_turns=(ModelTurn(content="never asked"),))
+    pipeline.record_tool_result("search_knowledge", SEARCH_INSUFFICIENT)
+    verdict = asyncio.run(pipeline.finalize("the corpus does not contain this"))
+
+    assert verdict.status == VERDICT_UNVERIFIED
+    payload = verdict.payload()
+    assert payload["judge"]["outcome"] == JUDGE_OUTCOME_SKIPPED
+    assert payload["marking"] == {"required": False, "reason": None}
+    assert monitor.aux_model_calls == 0
+
+
+def test_an_error_envelope_verifies_unverified_never_marked_ungrounded():
+    """A retrieval attempt that failed (here: authorization refused) surfaced
+    nothing citable — the honest answer over it is ``unverified``, not an
+    ungrounded marking on a claim that was never made."""
+    pipeline, _ = _pipeline(judge_turns=(ModelTurn(content="never asked"),))
+    pipeline.record_tool_result("search_knowledge", SEARCH_ERROR)
+    verdict = asyncio.run(pipeline.finalize("I could not retrieve the documents"))
+
+    assert verdict.status == VERDICT_UNVERIFIED
     assert verdict.payload()["marking"] == {"required": False, "reason": None}
 
 

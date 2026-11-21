@@ -101,23 +101,18 @@ class RetrievalLedger:
     The loop feeds every dispatched tool result here, success and error
     envelope alike. A successful ``search_knowledge`` contributes its hits
     (provenance + passage text); a successful ``read_source`` contributes
-    the resolved source with its served content; an insufficiency outcome or
-    an error envelope contributes NO citation — only the fact that
-    retrieval was attempted. Dedup keeps the FIRST occurrence of an
-    identity (the same convention the no-agent mapping uses).
+    the resolved source with its served content; an insufficiency outcome,
+    an error envelope or a malformed result contributes NO citation — the
+    ledger's ``entries`` stay empty, which is what makes the answer an
+    insufficiency statement to the pipeline (nothing citable was served,
+    so nothing was claimed and nothing can be marked). Dedup keeps the
+    FIRST occurrence of an identity (the same convention the no-agent
+    mapping uses).
     """
 
     def __init__(self) -> None:
         self._entries: list[dict] = []
         self._seen: set[tuple] = set()
-        self._retrieval_attempted = False
-
-    @property
-    def retrieval_attempted(self) -> bool:
-        """True when any search or read reached a result — success,
-        insufficiency or error. An answer produced with no retrieval at all
-        is an insufficiency statement, not an unsupported claim."""
-        return self._retrieval_attempted
 
     @property
     def entries(self) -> list[dict]:
@@ -133,11 +128,9 @@ class RetrievalLedger:
         Both shapes are recorded; only the success shapes contribute
         citation candidates.
         """
-        if name in ("search_knowledge", "read_source"):
-            self._retrieval_attempted = True
         result = payload.get("result")
         if not isinstance(result, dict):
-            return  # an error envelope: attempted, cites nothing
+            return  # an error envelope: cites nothing
         if name == "search_knowledge":
             for hit in result.get("hits") or []:
                 self._add_hit(hit)
@@ -214,15 +207,26 @@ class GroundingJudge:
 
     async def judge(self, answer_text: str, citations: list[dict]) -> dict:
         """Run the judged check; return the judge's payload fragment
-        ``{"ran": bool, "outcome": str, "verdict": str | None}``."""
+        ``{"ran": bool, "outcome": str, "verdict": str | None}``.
+
+        The budget is claimed only when the call will actually dispatch:
+        the remaining output allowance is read first — a spent token budget
+        (no room for one more call) refuses the judge BEFORE it consumes a
+        model-call slot, so the usage record never counts a call that never
+        happened.
+        """
         try:
             self.monitor.check_wall_clock()
-            self.monitor.take_aux_model_call()
         except BudgetExhausted as spent:
             logger.info("grounding judge skipped: %s", spent)
             return {"ran": False, "outcome": JUDGE_OUTCOME_BUDGET_EXHAUSTED, "verdict": None}
         bound = self.monitor.remaining_output_tokens()
         if bound is not None and bound <= 0:
+            return {"ran": False, "outcome": JUDGE_OUTCOME_BUDGET_EXHAUSTED, "verdict": None}
+        try:
+            self.monitor.take_aux_model_call()
+        except BudgetExhausted as spent:
+            logger.info("grounding judge skipped: %s", spent)
             return {"ran": False, "outcome": JUDGE_OUTCOME_BUDGET_EXHAUSTED, "verdict": None}
         messages = judge_messages(answer_text, citations)
         try:
@@ -388,10 +392,13 @@ class VerificationPipeline:
             )
 
     async def _finalize(self, answer_text: str) -> Verdict:
-        if not self.ledger.retrieval_attempted:
-            # An answer produced with no retrieval at all is an
-            # insufficiency statement: it claims nothing, so there is
-            # nothing to ground and nothing to mark.
+        if not self.ledger.entries:
+            # No CITABLE evidence reached the model: an answer over an
+            # insufficiency outcome, an error envelope or an empty ledger
+            # claims nothing supported — there is nothing to ground and
+            # nothing to mark. (An attempt that failed to surface anything
+            # citable is verification that could not complete, never a
+            # claim without support.)
             return Verdict(
                 status=VERDICT_UNVERIFIED,
                 policy=self.policy,
@@ -399,9 +406,9 @@ class VerificationPipeline:
             )
         validity = check_reference_validity(self.ledger.entries, self._authorized_repos)
         if not validity.delivered or validity.invalid:
-            # Claims without support (nothing citable survived) or an
-            # emitted citation that failed the mechanical check: FR-10 —
-            # not grounded, mechanically, before any judge runs.
+            # Citable evidence existed but none of it survived the mechanical
+            # check (or entries were dropped as unauthorized): FR-10 — not
+            # grounded, mechanically, before any judge runs.
             return Verdict(
                 status=VERDICT_UNGROUNDED,
                 policy=self.policy,

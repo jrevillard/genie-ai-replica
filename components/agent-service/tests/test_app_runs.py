@@ -261,6 +261,12 @@ def test_a_disconnected_client_cancels_the_run_and_releases_the_slot(tmp_path, m
         task.cancel()
         with pytest.raises(asyncio.CancelledError):
             await task
+        # The disconnect closed the generator mid-stream: the cancellations
+        # settle, then NOTHING stays pending on the loop — the re-armed
+        # queue getter must not outlive the stream as a leaked waiter.
+        await asyncio.sleep(0.05)
+        leaked = [t for t in asyncio.all_tasks() if t is not asyncio.current_task() and not t.done()]
+        assert leaked == []
         # The released slot admits the successor immediately.
         async with orchestrator.admit():
             pass

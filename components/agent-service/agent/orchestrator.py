@@ -138,6 +138,11 @@ class OrchestratorConfig:
         tool_max_results = required_positive_int(source, "AGENT_TOOL_MAX_RESULTS", failed)
         tool_max_result_bytes = required_positive_int(source, "AGENT_TOOL_MAX_RESULT_BYTES", failed)
         judge_timeout_ms = required_positive_int(source, JUDGE_TIMEOUT_KNOB, failed)
+        if failed:
+            # The knob refusal aggregates FIRST: a deployment with several
+            # defects sees every missing knob named in one 503, not one at
+            # a time.
+            raise MissingKnobsError(tuple(failed))
         verdict_policy = str(source.get(VERDICT_POLICY_KNOB, "")).strip() or POLICY_VERDICT_MARKED
         if verdict_policy not in IMPLEMENTED_POLICIES:
             raise ValueError(
@@ -145,8 +150,6 @@ class OrchestratorConfig:
                 f"(implemented: {', '.join(sorted(IMPLEMENTED_POLICIES))}) — verification runs on every "
                 "governed run; no policy value disables it"
             )
-        if failed:
-            raise MissingKnobsError(tuple(failed))
         return cls(
             max_steps=max_steps,
             max_model_calls=max_model_calls,

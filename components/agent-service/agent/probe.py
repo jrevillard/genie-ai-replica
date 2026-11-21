@@ -460,10 +460,16 @@ class ProbeModelClient:
         payload = {
             "model": model_id,
             "messages": messages,
-            "tools": list(tool_definitions),
-            "tool_choice": "auto",
             **RECORDED_SAMPLING_PARAMS,
         }
+        if tool_definitions:
+            # Tool-shaped only when there are tools to declare: an empty
+            # `tools: []` is not portable across OpenAI-compatible
+            # endpoints (several validators reject it with 400), and the
+            # aux callers (the grounding judge) legitimately speak without
+            # a toolset.
+            payload["tools"] = list(tool_definitions)
+            payload["tool_choice"] = "auto"
         if max_output_tokens is not None:
             window = await self._window_tokens()
             input_tokens = math.ceil(

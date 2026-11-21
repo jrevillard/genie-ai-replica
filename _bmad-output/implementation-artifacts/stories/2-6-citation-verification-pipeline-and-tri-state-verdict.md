@@ -116,6 +116,18 @@ context:
 
 <!-- Append-only. Populated by step-04 on every review pass. -->
 
+### Global review G1 (2026-11-21, xhigh effort, whole branch)
+
+| Finding | Verdict | Disposition |
+|---|---|---|
+| Insufficiency answers marked `ungrounded` + marking (ledger keyed `unverified` on `retrieval_attempted`, which any dispatched search/read sets) | high — real, contradicts this spec's own I/O matrix and the story mapping table | FIXED: the `unverified` branch now keys on the ledger's `entries` (citability), the flag is deleted; insufficiency outcomes, error envelopes and malformed results cite nothing → `unverified`, no marking. Finalize-level tests added for both. |
+| `_run_stream` leaks a pending `events.get()` task on client disconnect (finally cancels only `run_task`) | high — real | FIXED: `getter.cancel()` in the `finally` (no-op on the done getter); the disconnect test now asserts the loop holds no pending task after the cancellations settle. |
+| `ProbeModelClient.complete` sends `tools: []` + `tool_choice` unconditionally — strict endpoints answer 400, every judge verdict degrading to `unverified` | high — real portability defect | FIXED: `tools`/`tool_choice` omitted when the definition tuple is empty (the judge's no-toolset case); test pins the omission. |
+| `POST /v1/runs` takes `CallerContext` from the body — no caller auth | nit — real but owned elsewhere | Already handled by the slice contract: the trusted-caller-context rule assigns server-side assembly to the BFF (story 2.4); the surface is internal-only, declares no gateway route and ships dark (`AGENT_ENABLED=0`) — the spine's deployment shape documents it. No change in 2.6. |
+| Judge claims the aux slot before reading the output bound — usage record counts a call that never happened | nit — real ordering wart | FIXED: the remaining allowance is read first; a spent token budget refuses before `take_aux_model_call`. Test pins the zero-claim. |
+| Policy error preempts the aggregated missing-knob refusal (one defect at a time) | nit — real | FIXED: the `MissingKnobsError` aggregation runs first; test pins the precedence. |
+| `tei_reranking._tei_scores` calls `json()` before the status check — non-JSON upstream errors lose their status, non-JSON 422 loses the too-long abstention | nit — real, PRE-EXISTING (adapter predates 2.6, untouched by it) | Filed as issue #2056 (`type::bug`, `area::tei`, `status::backlog`) — out of this story's scope. |
+
 ## Design Notes
 
 **Why the ledger defines citations.** The client citation surface is `metadata.source_documents` (no inline text markers exist anywhere — frontend, mobile, BFF). A citation the user can click must resolve to a source the run actually served; the ledger makes "actually-retrieved" a recorded fact instead of an assumption, and the mechanical check turns that fact into the invariant "every delivered citation resolves".

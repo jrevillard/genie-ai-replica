@@ -164,6 +164,15 @@ def test_an_unimplemented_policy_refuses_the_config_load_naming_the_knob(policy)
         OrchestratorConfig.load(env=_full_env(**{VERDICT_POLICY_KNOB: policy}))
 
 
+def test_the_knob_refusal_aggregates_before_the_policy_is_judged():
+    """A deployment with BOTH defects sees every missing knob named in one
+    503 — the policy error surfaces after the knobs are fixed, never
+    instead of them."""
+    with pytest.raises(MissingKnobsError) as missing:
+        OrchestratorConfig.load(env=_full_env(AGENT_RUN_MAX_STEPS="", **{VERDICT_POLICY_KNOB: "verdict-silent"}))
+    assert missing.value.knobs == ("AGENT_RUN_MAX_STEPS",)
+
+
 # ---------------------------------------------------------------------
 # The request: the communicated deadline, the trusted context
 # ---------------------------------------------------------------------

@@ -534,3 +534,204 @@ describe('GpuTranslateBackend endpoint addressing', () => {
     });
   });
 });
+
+describe('GpuTranslateBackend usage-returning entry point and per-call options (story 2.10)', () => {
+  // The agentic leg's surface: usage returned-or-estimated, the private 30s
+  // timeout overridable, the request abortable. The legacy `translate` and
+  // the option-less `callVllmService` keep their deployed behavior.
+  let backend;
+  let writtenBodies;
+  let capturedOpts;
+
+  const serveChat = (json, { emitError = null } = {}) => {
+    const res = new EventEmitter();
+    res.statusCode = 200;
+    res.setEncoding = () => {};
+    http.request.mockImplementation((opts, cb) => {
+      capturedOpts.push(opts);
+      const req = new EventEmitter();
+      req.write = jest.fn((d) => writtenBodies.push(JSON.parse(d)));
+      req.end = () => {};
+      req.setTimeout = () => {};
+      req.destroy = jest.fn((err) => {
+        if (err) req.emit('error', err);
+      });
+      process.nextTick(() => {
+        if (emitError) {
+          req.emit('error', new Error(emitError));
+          return;
+        }
+        cb(res);
+        res.emit('data', JSON.stringify(json));
+        res.emit('end');
+      });
+      return req;
+    });
+  };
+
+  beforeAll(() => {
+    backend = new GpuTranslateBackend();
+    backend.initialized = true;
+  });
+  beforeEach(() => {
+    writtenBodies = [];
+    capturedOpts = [];
+  });
+  afterEach(() => jest.clearAllMocks());
+
+  it('returns the endpoint-served usage verbatim', async () => {
+    serveChat({
+      choices: [{ finish_reason: 'stop', message: { content: 'Hola' } }],
+      usage: { prompt_tokens: 7, completion_tokens: 3, total_tokens: 10 }
+    });
+    const r = await backend.translateWithUsage(['Hello'], 'en', 'es');
+    expect(r.translations).toEqual(['Hola']);
+    expect(r.usage).toEqual({ prompt_tokens: 7, completion_tokens: 3 });
+    expect(r.estimated).toBe(false);
+  });
+
+  it('estimates chars/4, flagged estimated, when the response carries no usage', async () => {
+    serveChat({ choices: [{ finish_reason: 'stop', message: { content: 'Hola' } }] });
+    const r = await backend.translateWithUsage(['Hello'], 'en', 'es');
+    expect(r.estimated).toBe(true);
+    expect(r.usage).toEqual({
+      prompt_tokens: Math.ceil(JSON.stringify(writtenBodies[0].messages).length / 4),
+      completion_tokens: Math.ceil('Hola'.length / 4)
+    });
+  });
+
+  it('caps the output budget at options.maxTokens on top of the window math', async () => {
+    serveChat({ choices: [{ finish_reason: 'stop', message: { content: 'Hola' } }] });
+    await backend.translateWithUsage(['Hello world'], 'en', 'es', { maxTokens: 40 });
+    // A request the window math would have budgeted far above 40 comes out
+    // capped at the caller's bound.
+    expect(writtenBodies[0].max_tokens).toBe(40);
+  });
+
+  it('overrides the request timeout with options.timeoutMs', async () => {
+    serveChat({ choices: [{ finish_reason: 'stop', message: { content: 'Hola' } }] });
+    await backend.translateWithUsage(['Hello'], 'en', 'es', { timeoutMs: 4321 });
+    expect(capturedOpts[0].timeout).toBe(4321);
+  });
+
+  it('shrinks the timeout across texts so a later one cannot start past the deadline', async () => {
+    serveChat({ choices: [{ finish_reason: 'stop', message: { content: 'Hola' } }] });
+    // A 50ms budget with two texts: after the first call the elapsed time is
+    // subtracted before the second request is built. Both requests carry a
+    // positive, non-increasing timeout bounded by the caller's value.
+    await backend.translateWithUsage(['Hello', 'world'], 'en', 'es', { timeoutMs: 50 });
+    expect(capturedOpts).toHaveLength(2);
+    expect(capturedOpts[0].timeout).toBeLessThanOrEqual(50);
+    expect(capturedOpts[1].timeout).toBeLessThanOrEqual(capturedOpts[0].timeout);
+    expect(capturedOpts[1].timeout).toBeGreaterThan(0);
+  });
+
+  it('refuses to start a call past the deadline the caller set', async () => {
+    const realNow = Date.now.bind(Date);
+    const dateSpy = jest.spyOn(Date, 'now').mockReturnValueOnce(realNow()).mockReturnValueOnce(realNow());
+    // Third read (the per-text deadline check) jumps far ahead: the second
+    // text never starts.
+    dateSpy.mockReturnValue(realNow() + 60000);
+    serveChat({ choices: [{ finish_reason: 'stop', message: { content: 'Hola' } }] });
+    await expect(backend.translateWithUsage(['Hello', 'world'], 'en', 'es', { timeoutMs: 50 })).rejects.toThrow(
+      /request timeout/
+    );
+    dateSpy.mockRestore();
+  });
+
+  it('destroys the in-flight request when the caller aborts mid-call', async () => {
+    const controller = new AbortController();
+    const res = new EventEmitter();
+    res.statusCode = 200;
+    res.setEncoding = () => {};
+    let capturedReq = null;
+    http.request.mockImplementation((opts, cb) => {
+      const req = new EventEmitter();
+      capturedReq = req;
+      req.write = () => {};
+      req.end = () => process.nextTick(() => controller.abort());
+      req.setTimeout = () => {};
+      req.destroy = jest.fn((err) => {
+        if (err) req.emit('error', err);
+      });
+      process.nextTick(() => {
+        cb(res);
+        // The response never completes: the abort destroys the socket first.
+      });
+      return req;
+    });
+    await expect(backend.translateWithUsage(['Hello'], 'en', 'es', { signal: controller.signal })).rejects.toThrow(
+      /aborted|failed/
+    );
+    expect(capturedReq.destroy).toHaveBeenCalled();
+  });
+
+  it('rejects immediately, without a request, on an already-aborted signal', async () => {
+    const controller = new AbortController();
+    controller.abort();
+    serveChat({ choices: [{ finish_reason: 'stop', message: { content: 'Hola' } }] });
+    await expect(backend.translateWithUsage(['Hello'], 'en', 'es', { signal: controller.signal })).rejects.toThrow(
+      /aborted/
+    );
+    expect(capturedOpts).toHaveLength(0);
+  });
+
+  it('skips empty texts without a call, like translate', async () => {
+    serveChat({ choices: [{ finish_reason: 'stop', message: { content: 'Hola' } }] });
+    const r = await backend.translateWithUsage(['', 'Hello', '   '], 'en', 'es');
+    expect(r.translations).toEqual(['', 'Hola', '']);
+    expect(writtenBodies).toHaveLength(1);
+  });
+
+  it('answers an empty array with no usage and no estimate', async () => {
+    const r = await backend.translateWithUsage([], 'en', 'es');
+    expect(r).toEqual({ translations: [], usage: null, estimated: false });
+    expect(capturedOpts).toHaveLength(0);
+  });
+
+  it('answers an input of only empty texts with usage null — no-call is not zero-usage', async () => {
+    serveChat({ choices: [{ finish_reason: 'stop', message: { content: 'Hola' } }] });
+    const r = await backend.translateWithUsage(['', '   '], 'en', 'es');
+    expect(r.translations).toEqual(['', '']);
+    expect(r.usage).toBeNull();
+    expect(r.estimated).toBe(false);
+    expect(capturedOpts).toHaveLength(0);
+  });
+
+  it('treats a non-finite timeoutMs as not provided (the 30s default)', async () => {
+    serveChat({ choices: [{ finish_reason: 'stop', message: { content: 'Hola' } }] });
+    await backend.translateWithUsage(['Hello'], 'en', 'es', { timeoutMs: NaN });
+    expect(capturedOpts[0].timeout).toBe(30000);
+
+    await backend.translateWithUsage(['Hello'], 'en', 'es', { timeoutMs: Infinity });
+    expect(capturedOpts[1].timeout).toBe(30000);
+  });
+
+  it('accepts options: null on both entry points (no TypeError)', async () => {
+    serveChat({ choices: [{ finish_reason: 'stop', message: { content: 'Hola' } }] });
+    await expect(
+      backend.callVllmService({ model: 'm', messages: [{ role: 'user', content: 'hi' }], max_tokens: 10 }, null)
+    ).resolves.toBe('Hola');
+    await expect(backend.translateWithUsage(['Hello'], 'en', 'es', null)).resolves.toMatchObject({
+      translations: ['Hola']
+    });
+    expect(capturedOpts[0].timeout).toBe(30000);
+  });
+
+  describe('legacy behavior pins', () => {
+    it('callVllmService keeps the deployed 30s timeout when called without options', async () => {
+      serveChat({ choices: [{ finish_reason: 'stop', message: { content: 'Hola' } }] });
+      await backend.callVllmService({ model: 'm', messages: [{ role: 'user', content: 'hi' }] });
+      expect(capturedOpts[0].timeout).toBe(30000);
+    });
+
+    it('translate still resolves plain strings and ignores any usage in the response', async () => {
+      serveChat({
+        choices: [{ finish_reason: 'stop', message: { content: 'Hola' } }],
+        usage: { prompt_tokens: 7, completion_tokens: 3 }
+      });
+      const out = await backend.translate(['Hello'], 'en', 'es');
+      expect(out).toEqual(['Hola']);
+    });
+  });
+});

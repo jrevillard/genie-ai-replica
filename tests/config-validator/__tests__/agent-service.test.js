@@ -8,7 +8,7 @@
 
 const fs = require('fs');
 const path = require('path');
-const { parseComposeServiceContracts } = require('../validators/parse-compose');
+const { parseComposeServiceContracts, parseComposeServiceBlock } = require('../validators/parse-compose');
 const { parseEnvTemplate } = require('../validators/parse-env');
 const { parseGenieAiImageNames, parseEnvTemplateImageVars } = require('../validators/parse-env-template');
 
@@ -26,17 +26,6 @@ const EVIDENCE_PATH = path.join(ROOT, 'docs/dependencies/agent-service-dependenc
 // them: the checklist counts an unidentified licence as unverified, and an
 // unverified licence blocks the adoption.
 const UNVERIFIED_LICENCES = ['', 'NOASSERTION', 'UNKNOWN', 'NONE', 'N/A'];
-
-function serviceBlock(composeText, service) {
-  const lines = composeText.split('\n');
-  const start = lines.findIndex((line) => line === `  ${service}:`);
-  if (start === -1) {
-    return null;
-  }
-  const rest = lines.slice(start + 1);
-  const end = rest.findIndex((line) => /^ {2}\S/.test(line));
-  return rest.slice(0, end === -1 ? rest.length : end).join('\n');
-}
 
 function jobBlock(ciText, job) {
   // The block of ONE job: the file up to the next top-level key. A regex
@@ -61,7 +50,7 @@ describe('agent service (story 1.3)', () => {
 
   beforeAll(() => {
     composeText = fs.readFileSync(COMPOSE_PATH, 'utf-8');
-    block = serviceBlock(composeText, 'agent-service');
+    block = parseComposeServiceBlock(composeText, 'agent-service');
   });
 
   test('the compose block exists and carries the deployment contract', () => {

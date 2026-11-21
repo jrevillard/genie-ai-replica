@@ -353,8 +353,33 @@ module.exports = {
   parseAnsibleImages,
   parseGitlabCiImages,
   parseGitlabCiJobChanges,
-  parseComposeServiceContracts
+  parseComposeServiceContracts,
+  parseComposeServiceBlock
 };
+
+/**
+ * Extract ONE service's raw block from docker-compose.yaml.
+ *
+ * The block of the named service: the file from its `  <service>:` line up
+ * to (not including) the next 2-space-indented top-level key. Raw text, for
+ * regex assertions on a service's own lines — the same caveat as everywhere
+ * in this file: compose ${} substitution is not valid YAML, so the scan is
+ * line-based over the raw file.
+ *
+ * @param {string} composeText - The raw docker-compose.yaml content
+ * @param {string} service - The service name
+ * @returns {string|null} The service's block, or null when absent
+ */
+function parseComposeServiceBlock(composeText, service) {
+  const lines = composeText.split('\n');
+  const start = lines.findIndex((line) => line === `  ${service}:`);
+  if (start === -1) {
+    return null;
+  }
+  const rest = lines.slice(start + 1);
+  const end = rest.findIndex((line) => /^ {2}\S/.test(line));
+  return rest.slice(0, end === -1 ? rest.length : end).join('\n');
+}
 
 /**
  * Extract per-service structural contracts (profiles + deploy.replicas) from

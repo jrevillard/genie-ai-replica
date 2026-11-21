@@ -187,8 +187,9 @@ def assert_no_positional_aql_execute(package_dir: Path) -> None:
 class AgentFakePort:
     """The ``DocumentCapabilityPort`` double: canned results, recorded calls.
 
-    A canned result of ``None`` (or an exception instance) makes the port
-    raise it, so a suite can drive the port's raised carriers too.
+    An exception instance as a canned result makes the port raise it, so a
+    suite can drive the port's raised carriers; any other value (``None``
+    included) is returned as-is.
     """
 
     def __init__(self, search_result: SearchKnowledgeResult | None = None, read_result: ReadSourceResult | None = None):

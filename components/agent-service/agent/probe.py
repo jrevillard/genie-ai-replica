@@ -54,6 +54,7 @@ from capabilities.contract import (
     SearchKnowledgeInput,
     SourceRef,
 )
+from preparation.config import _env_float
 from preparation.translation import HttpxTransport
 
 from .budget import RunBudget, RunBudgetMonitor
@@ -295,11 +296,21 @@ class ProbeConfig:
         return cls(
             generation_endpoint=endpoint,
             model_id_override=str(source.get("VLLM_LLM_MODEL_ID", "")),
-            bearer=source.get("OPENAI_API_KEY"),
+            # The generation leg authenticates with the recorded bearer
+            # (OPENAI_API_KEY, as noagent.generation and preparation both
+            # read it), falling back to the GPU-node key: the canonical
+            # venue carries only VLLM_API_KEY (the compose blocks map
+            # OPENAI_API_KEY FROM it for the services that need it), and
+            # an in-process probe run inherits the operator's shell, not
+            # a compose mapping.
+            bearer=source.get("OPENAI_API_KEY") or source.get("VLLM_API_KEY"),
             probe_bearer=source.get("VLLM_API_KEY"),
             tls_verify=str(source.get("OPEA_SSL_SKIP_VERIFY", "")) != "1",
-            llm_timeout_seconds=float(source.get("MODEL_LLM_TIMEOUT_SECONDS", 180.0)),
-            probe_timeout_seconds=float(source.get("MODEL_PROBE_TIMEOUT_SECONDS", 10.0)),
+            # The tolerant reads are the component's recorded convention
+            # (_env_float, adopted for issue #1091): a set-to-empty value
+            # falls back to the default instead of crashing the probe.
+            llm_timeout_seconds=_env_float(source, "MODEL_LLM_TIMEOUT_SECONDS", 180.0),
+            probe_timeout_seconds=_env_float(source, "MODEL_PROBE_TIMEOUT_SECONDS", 10.0),
             docrepo_url=str(source.get("AGENT_DOCREPO_URL", "")),
             okf_url=str(source.get("AGENT_OKF_URL", "")),
             authorized_graphs=str(source.get("AGENT_AUTHORIZED_GRAPHS", "")),
@@ -402,9 +413,16 @@ class ProbeModelClient:
                 raise ProbeTransientError(f"the tool-call arguments are not valid JSON: {error}") from error
             if not isinstance(arguments, dict):
                 raise ProbeTransientError("the tool-call arguments are not a JSON object")
+            # An absent id is a response-shape defect, not a tolerable one:
+            # the loop echoes the id back as tool_call_id on the follow-up
+            # request, and a strict OpenAI-compatible server (vLLM validates
+            # tool-call ids) would reject the shared-empty-id turn. Failing
+            # the probe here names the defect instead of disguising it.
+            if not entry.get("id"):
+                raise ProbeTransientError("a tool call carries no id; the endpoint's response shape is malformed")
             requests.append(
                 ToolCallRequest(
-                    call_id=str(entry.get("id") or ""),
+                    call_id=str(entry["id"]),
                     name=str(function.get("name") or ""),
                     arguments=arguments,
                 )

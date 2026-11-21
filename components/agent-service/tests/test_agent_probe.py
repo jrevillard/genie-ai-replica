@@ -255,6 +255,34 @@ def _probe_config(**overrides) -> ProbeConfig:
     return ProbeConfig.load(env={**values, **overrides})
 
 
+# ---------------------------------------------------------------------
+# The config: the recorded bearer convention and tolerant timeout reads
+# ---------------------------------------------------------------------
+
+
+def test_the_generation_bearer_falls_back_to_the_gpu_node_key():
+    # The canonical venue carries only VLLM_API_KEY (the GPU key): the
+    # in-process probe inherits the operator's shell, not a compose
+    # mapping, so without the fallback the first generation call 401s.
+    config = ProbeConfig.load(env={"VLLM_API_KEY": "gpu-key"})
+    assert config.bearer == "gpu-key"
+
+
+def test_the_recorded_bearer_wins_when_both_keys_are_set():
+    config = ProbeConfig.load(env={"OPENAI_API_KEY": "recorded", "VLLM_API_KEY": "gpu"})
+    assert config.bearer == "recorded"
+    assert config.probe_bearer == "gpu"
+
+
+@pytest.mark.parametrize("knob,default", [("MODEL_LLM_TIMEOUT_SECONDS", 180.0), ("MODEL_PROBE_TIMEOUT_SECONDS", 10.0)])
+def test_a_set_to_empty_timeout_knob_falls_back_to_its_default(knob, default):
+    # The recorded convention (the _env_float adoption, issue #1091): an
+    # empty value is unset, never a startup crash.
+    config = ProbeConfig.load(env={knob: ""})
+    field = "llm_timeout_seconds" if knob == "MODEL_LLM_TIMEOUT_SECONDS" else "probe_timeout_seconds"
+    assert getattr(config, field) == default
+
+
 def _chat_body(content=None, tool_calls=None, finish_reason="stop", usage=None):
     message = {}
     if content is not None:
@@ -370,6 +398,23 @@ def test_a_non_object_tool_arguments_payload_is_refused():
         )
     )
     with pytest.raises(ProbeTransientError, match="not a JSON object"):
+        asyncio.run(ProbeModelClient(_probe_config(), transport=transport).complete([], ()))
+
+
+def test_a_tool_call_without_an_id_is_a_response_shape_defect():
+    # The loop echoes the id back as tool_call_id on the follow-up request;
+    # an empty shared id would be rejected by a strict OpenAI-compatible
+    # server on the NEXT call, disguising a response-shape defect as a
+    # transient failure. The probe names it here instead.
+    transport = _transport(
+        (
+            200,
+            _chat_body(
+                tool_calls=[{"type": "function", "function": {"name": "t", "arguments": "{}"}}],
+            ),
+        )
+    )
+    with pytest.raises(ProbeTransientError, match="carries no id"):
         asyncio.run(ProbeModelClient(_probe_config(), transport=transport).complete([], ()))
 
 

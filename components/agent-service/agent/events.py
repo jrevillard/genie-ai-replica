@@ -36,7 +36,7 @@ from pydantic import BaseModel, ConfigDict
 # vocabulary plus the frozen envelope are what structurally keep the seam
 # from speaking the client dialect. The vocabulary is checked against this
 # set at import.
-BFF_FRAME_NAMES = frozenset({"chunk", "done", "error", "metadata", "agent_activity", "agent_verdict"})
+BFF_FRAME_NAMES = frozenset({"chunk", "done", "error", "metadata", "translation", "agent_activity", "agent_verdict"})
 
 
 class EventKind(StrEnum):

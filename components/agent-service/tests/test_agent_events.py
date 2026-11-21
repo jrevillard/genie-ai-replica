@@ -42,6 +42,23 @@ def test_the_vocabulary_covers_the_three_lifecycles():
     assert {kind.value for kind in EventKind} == EXPECTED_KINDS
 
 
+def test_the_bff_frame_snapshot_is_exactly_the_v05_inventory():
+    # The snapshot is hand-maintained against the V05 client-contract
+    # inventory: the five preserved frame types plus the two additive ones.
+    # A frame missing from this set is a collision the import guard cannot
+    # see — this pin is what keeps the snapshot from rotting with a green
+    # suite.
+    assert {
+        "chunk",
+        "done",
+        "error",
+        "metadata",
+        "translation",
+        "agent_activity",
+        "agent_verdict",
+    } == BFF_FRAME_NAMES
+
+
 def test_no_kind_value_is_a_bff_frame_name():
     for kind in EventKind:
         assert kind.value not in BFF_FRAME_NAMES

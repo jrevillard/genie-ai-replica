@@ -29,7 +29,7 @@
 # - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
 # - Retrospective appends its action items to action_items; the status view surfaces open ones
 generated: 11-17-2026 15:20
-last_updated: 11-21-2026 15:53
+last_updated: 11-21-2026 19:11
 project: genie-ai
 project_key: NOKEY
 tracking_system: file-system
@@ -50,7 +50,7 @@ development_status:
 
   epic-2: in-progress
   2-1-runtime-seam-and-bounded-decision-probe: done
-  2-2-v06-runtime-verification-and-d03-closure: review
+  2-2-v06-runtime-verification-and-d03-closure: done
   2-3-request-orchestrator-budgets-admission-cancellation: done
   2-4-bff-frame-writer-and-disconnect-detection: backlog
   2-4b-non-streaming-integration-json-path: backlog

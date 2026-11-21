@@ -56,11 +56,11 @@ import httpx
 from noagent.generation import RECORDED_SAMPLING_PARAMS, chat_choice, chat_choice_content
 from preparation.translation import HttpxTransport
 
-from .budget import RunBudget, RunBudgetMonitor
+from .budget import RunBudgetMonitor
 from .cancellation import CancellationToken
 from .events import EventEmitter, EventKind
 from .loop import AgentLoop
-from .probe import ProbeConfig, ProbeModelClient
+from .probe import PROBE_RUN_BUDGET, ProbeConfig, ProbeModelClient
 from .registry import ToolDefinition, ToolRegistry
 
 logger = logging.getLogger(__name__)
@@ -131,7 +131,14 @@ SCHEMAS: dict[str, dict] = {
 MARKUP_LEAK_MARKERS = ("<tool_call>", "</tool_call>", "<|python_tag|>", "<function=", "[TOOL_CALL]")
 
 CONTENT_PREVIEW_CHARS = 200
+# Deliberately wider than loop.py's MESSAGE_TRUNCATION (200): this bounds
+# evidence-record error text, and the V06 record cites the 300-char cap.
 _ERROR_PREVIEW_CHARS = 300
+
+
+def _error_preview(failed: BaseException) -> str:
+    """One home for the error-shaping expression every failure site pastes."""
+    return f"{type(failed).__name__}: {str(failed)[:_ERROR_PREVIEW_CHARS]}"
 
 
 class VerificationTransientError(RuntimeError):
@@ -182,6 +189,13 @@ class ToolCallObservation:
     error: str | None = None
 
 
+def cell_label(mode: str, strictness: str, streaming: bool) -> str:
+    """The cell identity format — one home; the record property and the
+    failure log both name cells through it (the log fires before any
+    record exists, so the property alone cannot serve both)."""
+    return f"{mode}/{strictness}/streaming={streaming}"
+
+
 @dataclass(frozen=True)
 class CellRecord:
     """One matrix cell's verdict with the observation it was judged on."""
@@ -200,8 +214,7 @@ class CellRecord:
 
     @property
     def label(self) -> str:
-        """The cell's identity — one home for the format every consumer names."""
-        return f"{self.tool_choice_mode}/{self.schema_strictness}/streaming={self.streaming}"
+        return cell_label(self.tool_choice_mode, self.schema_strictness, self.streaming)
 
 
 @dataclass(frozen=True)
@@ -304,11 +317,13 @@ class AcceptanceVerdict:
 # ---------------------------------------------------------------------------
 
 
-def validate_arguments(arguments: dict, schema: dict) -> tuple[str, ...]:
+def validate_arguments(arguments: Any, schema: dict) -> tuple[str, ...]:
     """The JSON-schema subset the matrix registers, checked mechanically.
 
-    Object properties, ``required``, ``additionalProperties`` and the scalar
-    types the schemas use — the registered contract, nothing more. A fuller
+    ``arguments`` is deliberately ``Any``: the contract explicitly accepts
+    and judges non-dict input (a model can put anything there). Object
+    properties, ``required``, ``additionalProperties`` and the scalar types
+    the schemas use — the registered contract, nothing more. A fuller
     validator would judge a contract the matrix never registered.
     """
     issues: list[str] = []
@@ -323,8 +338,6 @@ def validate_arguments(arguments: dict, schema: dict) -> tuple[str, ...]:
         for name in arguments:
             if name not in allowed:
                 issues.append(f"additional property {name!r} refused by the schema")
-    else:
-        allowed = allowed | set(arguments)
     for name, value in arguments.items():
         expected = (properties.get(name) or {}).get("type")
         if expected and not _json_type_matches(value, expected):
@@ -378,6 +391,19 @@ def parse_nonstreaming_tool_calls(message: dict, expected_name: str) -> ToolCall
     return ToolCallObservation(content=content, finish_reason=None, calls=tuple(calls))
 
 
+def _parse_arguments(raw: str | None, issue_prefix: str) -> tuple[dict | None, tuple[str, ...]]:
+    """The lenient arguments read both call shapes share: JSON-parse the raw
+    string, accept only an object, and turn every failure into an issue
+    carrying the caller's wording — never an exception."""
+    try:
+        parsed = json.loads(raw) if raw else {}
+        if isinstance(parsed, dict):
+            return parsed, ()
+        return None, (f"{issue_prefix} are not a JSON object",)
+    except (TypeError, ValueError) as error:
+        return None, (f"{issue_prefix} are not valid JSON: {error}",)
+
+
 def _parse_one_raw_call(entry: Any, expected_name: str) -> RawToolCall:
     issues: list[str] = []
     if not isinstance(entry, dict) or not isinstance(entry.get("function"), dict):
@@ -391,15 +417,8 @@ def _parse_one_raw_call(entry: Any, expected_name: str) -> RawToolCall:
     if name != expected_name:
         issues.append(f"the tool call names {name!r}, expected {expected_name!r}")
     raw_arguments = entry["function"].get("arguments")
-    arguments: dict | None = None
-    try:
-        parsed = json.loads(raw_arguments) if raw_arguments is not None else {}
-        if isinstance(parsed, dict):
-            arguments = parsed
-        else:
-            issues.append("the tool-call arguments are not a JSON object")
-    except (TypeError, ValueError) as error:
-        issues.append(f"the tool-call arguments are not valid JSON: {error}")
+    arguments, argument_issues = _parse_arguments(raw_arguments, "the tool-call arguments")
+    issues.extend(argument_issues)
     return RawToolCall(
         id=str(call_id) if call_id else None,
         name=str(name) if name else None,
@@ -482,15 +501,8 @@ def _finish_assembled_call(slot: dict, expected_name: str) -> RawToolCall:
     if slot["name"] != expected_name:
         issues.append(f"the streamed call names {slot['name']!r}, expected {expected_name!r}")
     raw_arguments = "".join(slot["parts"])
-    arguments: dict | None = None
-    try:
-        parsed = json.loads(raw_arguments) if raw_arguments else {}
-        if isinstance(parsed, dict):
-            arguments = parsed
-        else:
-            issues.append("the reassembled arguments are not a JSON object")
-    except (TypeError, ValueError) as error:
-        issues.append(f"the reassembled arguments are not valid JSON: {error}")
+    arguments, argument_issues = _parse_arguments(raw_arguments, "the reassembled arguments")
+    issues.extend(argument_issues)
     return RawToolCall(
         id=slot["id"],
         name=slot["name"],
@@ -789,8 +801,8 @@ async def run_cell(
         else:
             observation = await _run_nonstreaming_cell(config, transport, payload)
     except Exception as failed:  # noqa: BLE001 — a failed cell is recorded, never skipped
-        error = f"{type(failed).__name__}: {str(failed)[:_ERROR_PREVIEW_CHARS]}"
-        logger.warning("matrix cell %s/%s/streaming=%s failed: %s", mode, strictness, streaming, error)
+        error = _error_preview(failed)
+        logger.warning("matrix cell %s failed: %s", cell_label(mode, strictness, streaming), error)
     latency_ms = (time.perf_counter() - started) * 1000.0
     return _record_cell(mode, strictness, streaming, observation, latency_ms, error)
 
@@ -886,7 +898,7 @@ async def read_endpoint_identity(config: ProbeConfig, transport, venue: str = ""
         else:
             version_note = f"GET /version answered {status}"
     except Exception as failed:  # noqa: BLE001 — an absent version endpoint is recorded, not fatal
-        version_note = f"GET /version failed: {type(failed).__name__}: {str(failed)[:_ERROR_PREVIEW_CHARS]}"
+        version_note = f"GET /version failed: {_error_preview(failed)}"
     model_id, max_model_len = await _discover_model(config, transport)
     return EndpointIdentity(
         generation_endpoint=config.generation_endpoint,
@@ -907,9 +919,7 @@ async def _discover_model(config: ProbeConfig, transport) -> tuple[str | None, i
     try:
         status, body = await transport.get_json(url, _discovery_headers(config), config.probe_timeout_seconds)
     except Exception as failed:  # noqa: BLE001
-        raise VerificationTransientError(
-            f"the model discovery failed: {type(failed).__name__}: {str(failed)[:_ERROR_PREVIEW_CHARS]}"
-        ) from failed
+        raise VerificationTransientError(f"the model discovery failed: {_error_preview(failed)}") from failed
     if status >= 400:
         raise VerificationTransientError(f"the model discovery answered {status}: {str(body)[:_ERROR_PREVIEW_CHARS]}")
     data = body.get("data") if isinstance(body, dict) else None
@@ -1012,15 +1022,16 @@ async def _consume_stream_events(
                 # "completion delivered" — about the HARNESS's lateness,
                 # not the venue's behavior.
                 park.set()
-                try:
-                    await asyncio.wait_for(asyncio.Event().wait(), timeout=park_timeout_seconds)
-                except TimeoutError:
-                    state.error = "the demo did not cancel within the park window; the consumer drained on"
+                # A timed sleep, not a wait on a phantom partner: the demo
+                # is expected to cancel within this window (the park exists
+                # to hand it the cancellation point), so there is nothing
+                # to wait FOR — only a bounded pause on an open read.
+                await asyncio.sleep(park_timeout_seconds)
     except asyncio.CancelledError:
         state.aborted = True
         raise
     except Exception as failed:  # noqa: BLE001 — the demo records the failure shape
-        state.error = f"{type(failed).__name__}: {str(failed)[:_ERROR_PREVIEW_CHARS]}"
+        state.error = _error_preview(failed)
 
 
 async def demo_streaming_cancel(
@@ -1076,7 +1087,7 @@ async def demo_streaming_cancel(
     except asyncio.CancelledError:
         cancelled_error_raised = True
     except Exception as failed:  # noqa: BLE001 — recorded like any other observation
-        error = error or f"{type(failed).__name__}: {str(failed)[:_ERROR_PREVIEW_CHARS]}"
+        error = error or _error_preview(failed)
     # The teardown the record reports is one the DEMO performed: aclose is
     # called explicitly, then the flag is read. A cancel with no teardown
     # never counts as an abort, and a stream that drained to completion
@@ -1185,7 +1196,7 @@ async def demo_loop_cancel(config: ProbeConfig, transport, model_id: str | None 
     except asyncio.CancelledError:
         cancelled_error_propagated = True
     except Exception as failed:  # noqa: BLE001 — recorded honestly, like any demo observation
-        error = f"{type(failed).__name__}: {str(failed)[:_ERROR_PREVIEW_CHARS]}"
+        error = _error_preview(failed)
     monitor = loop.monitor
     terminal = tuple(kind for kind in emitted if kind in (EventKind.RUN_FINISHED.value, EventKind.RUN_ERROR.value))
     if not cancelled_error_propagated and error is None:
@@ -1204,14 +1215,15 @@ async def demo_loop_cancel(config: ProbeConfig, transport, model_id: str | None 
 
 
 def _demo_monitor() -> RunBudgetMonitor:
-    """The demo run's budget monitor: the smoke bounds of the probe, one run."""
+    """The demo run's budget monitor: HALF the probe's smoke bounds, one
+    run — the halves are the demo's declared bounds, derived from (not
+    re-declared beside) the one smoke-bound home."""
     return RunBudgetMonitor(
-        RunBudget(
+        replace(
+            PROBE_RUN_BUDGET,
             max_steps=4,
             max_model_calls=4,
             max_tool_calls=4,
-            max_total_tokens=262144,
-            max_evidence_bytes=262144,
             wall_clock_seconds=300.0,
         )
     )
@@ -1246,7 +1258,7 @@ async def run_plain_control(config: ProbeConfig, transport, model_id: str) -> Pl
         return PlainControlObservation(
             status_ok=False,
             content_present=False,
-            detail=f"{type(failed).__name__}: {str(failed)[:_ERROR_PREVIEW_CHARS]}",
+            detail=_error_preview(failed),
         )
     if status >= 400:
         return PlainControlObservation(False, False, detail=f"answered {status}: {str(body)[:_ERROR_PREVIEW_CHARS]}")
@@ -1373,7 +1385,7 @@ def _main() -> int:
         print(json.dumps(_failure_record(str(failed)), indent=2))
         return 1
     except Exception as failed:  # noqa: BLE001 — a failed run still leaves its record
-        print(json.dumps(_failure_record(f"{type(failed).__name__}: {str(failed)}"), indent=2))
+        print(json.dumps(_failure_record(_error_preview(failed)), indent=2))
         return 1
     verdict = acceptance_verdict(evidence)
     record = evidence.as_dict()

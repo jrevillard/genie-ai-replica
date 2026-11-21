@@ -17,9 +17,8 @@ from dataclasses import replace
 
 import httpx
 import pytest
-from conftest import PreparationFakeTransport
+from conftest import ENDPOINT, PreparationFakeTransport, hang_until_cancelled, verifier_config
 
-from agent.probe import ProbeConfig
 from agent.verification import (
     SCHEMA_STRICTNESS,
     SCHEMAS,
@@ -52,15 +51,8 @@ from agent.verification import (
     validate_arguments,
 )
 
-ENDPOINT = "http://llm.invalid"
-
 STRICT = SCHEMAS["strict"]
 PERMISSIVE = SCHEMAS["permissive"]
-
-
-def _config(**overrides) -> ProbeConfig:
-    values = {"VLLM_LLM_ENDPOINT": ENDPOINT, "VLLM_LLM_MODEL_ID": "served-model"}
-    return ProbeConfig.load(env={**values, **overrides})
 
 
 # ---------------------------------------------------------------------
@@ -90,7 +82,7 @@ def test_the_permissive_schema_tolerates_extra_properties():
 
 
 def test_a_non_object_arguments_payload_is_refused():
-    assert validate_arguments("not-an-object", STRICT) == ("the tool-call arguments are not a JSON object",)  # type: ignore[arg-type]
+    assert validate_arguments("not-an-object", STRICT) == ("the tool-call arguments are not a JSON object",)
 
 
 # ---------------------------------------------------------------------
@@ -552,7 +544,7 @@ def _valid_call_body():
 )
 def test_a_nonstreaming_cell_sends_the_recorded_payload_conventions(mode, wire):
     transport = _transport((200, _valid_call_body()))
-    record = asyncio.run(run_cell(_config(), transport, "served-model", mode, "strict", streaming=False))
+    record = asyncio.run(run_cell(verifier_config(), transport, "served-model", mode, "strict", streaming=False))
 
     payload = transport.calls[-1]["payload"]
     assert payload["model"] == "served-model"
@@ -575,7 +567,7 @@ def test_a_streaming_cell_judges_the_reassembled_call():
     events = _sse_events()
     record = asyncio.run(
         run_cell(
-            _config(),
+            verifier_config(),
             _transport((200, _valid_call_body())),  # unused on the streaming leg
             "served-model",
             "auto",
@@ -600,7 +592,7 @@ def test_a_streaming_cell_payload_carries_stream_true():
 
     record = asyncio.run(
         run_cell(
-            _config(),
+            verifier_config(),
             _transport((200, _valid_call_body())),
             "served-model",
             "auto",
@@ -620,7 +612,7 @@ def test_a_streaming_cell_payload_carries_stream_true():
 
 def test_a_transport_failure_is_a_failed_cell_never_a_skip():
     record = asyncio.run(
-        run_cell(_config(), _transport((500, "boom")), "served-model", "auto", "strict", streaming=False)
+        run_cell(verifier_config(), _transport((500, "boom")), "served-model", "auto", "strict", streaming=False)
     )
     assert record.valid is None
     assert record.error is not None
@@ -629,7 +621,7 @@ def test_a_transport_failure_is_a_failed_cell_never_a_skip():
 
 def test_an_invalid_response_shape_is_a_failed_cell():
     transport = _transport((200, {"choices": []}))
-    record = asyncio.run(run_cell(_config(), transport, "served-model", "named", "permissive", streaming=False))
+    record = asyncio.run(run_cell(verifier_config(), transport, "served-model", "named", "permissive", streaming=False))
     assert record.valid is None
     assert "no choice" in (record.error or "")
 
@@ -641,7 +633,7 @@ def test_an_unknown_tool_choice_mode_is_refused_before_any_call():
 
 def test_the_plain_control_records_the_wire_answer():
     transport = _transport((200, _chat_body(content="ready", finish_reason="stop")))
-    control = asyncio.run(run_plain_control(_config(), transport, "served-model"))
+    control = asyncio.run(run_plain_control(verifier_config(), transport, "served-model"))
     assert control.status_ok is True
     assert control.content_present is True
     assert control.detail is None
@@ -652,7 +644,7 @@ def test_the_plain_control_records_the_wire_answer():
 
 
 def test_the_plain_control_records_a_failure_like_a_cell():
-    control = asyncio.run(run_plain_control(_config(), _transport((500, "boom")), "served-model"))
+    control = asyncio.run(run_plain_control(verifier_config(), _transport((500, "boom")), "served-model"))
     assert control.status_ok is False
     assert control.content_present is False
     assert "answered 500" in (control.detail or "")
@@ -666,7 +658,9 @@ def test_the_plain_control_records_a_failure_like_a_cell():
 def test_the_identity_carries_the_version_and_model_verbatim():
     # No model-id override: the discovery probes /v1/models, and the served
     # window rides the identity with the model id.
-    identity = asyncio.run(read_endpoint_identity(_config(VLLM_LLM_MODEL_ID=""), _transport((200, _valid_call_body()))))
+    identity = asyncio.run(
+        read_endpoint_identity(verifier_config(VLLM_LLM_MODEL_ID=""), _transport((200, _valid_call_body())))
+    )
     assert identity.generation_endpoint == ENDPOINT
     assert identity.version_raw == json.dumps({"version": "v0.29.0"})
     assert identity.model_id == "served-model"
@@ -680,21 +674,21 @@ def test_an_absent_version_endpoint_is_recorded_not_fatal():
             f"{ENDPOINT}/v1/models": (200, {"data": [{"id": "served-model"}]}),
         }
     )
-    identity = asyncio.run(read_endpoint_identity(_config(), transport))
+    identity = asyncio.run(read_endpoint_identity(verifier_config(), transport))
     assert identity.version_raw is None
     assert identity.version_note is not None
 
 
 def test_the_model_override_means_no_discovery_call():
     transport = _transport((200, _valid_call_body()))
-    asyncio.run(read_endpoint_identity(_config(), transport))
+    asyncio.run(read_endpoint_identity(verifier_config(), transport))
     assert [call["url"] for call in transport.calls] == [f"{ENDPOINT}/version"]
 
 
 def test_a_failed_discovery_is_the_typed_transient():
     transport = PreparationFakeTransport(error=OSError("down"))
     with pytest.raises(VerificationTransientError, match="discovery failed"):
-        asyncio.run(read_endpoint_identity(_config(VLLM_LLM_MODEL_ID=""), transport))
+        asyncio.run(read_endpoint_identity(verifier_config(VLLM_LLM_MODEL_ID=""), transport))
 
 
 @pytest.mark.parametrize("malformed", [{"id": "x", "max_model_len": 8192}, 5])
@@ -704,7 +698,7 @@ def test_a_malformed_discovery_body_is_the_typed_transient_naming_the_shape(malf
     # unguarded subscript.
     transport = PreparationFakeTransport({f"{ENDPOINT}/v1/models": (200, {"data": malformed})})
     with pytest.raises(VerificationTransientError, match="no usable model entry.*'data', got"):
-        asyncio.run(read_endpoint_identity(_config(VLLM_LLM_MODEL_ID=""), transport))
+        asyncio.run(read_endpoint_identity(verifier_config(VLLM_LLM_MODEL_ID=""), transport))
 
 
 # ---------------------------------------------------------------------
@@ -715,7 +709,9 @@ def test_a_malformed_discovery_body_is_the_typed_transient_naming_the_shape(malf
 def test_the_matrix_runs_every_cell_and_names_first_call_latency_per_schema():
     transport = _transport((200, _valid_call_body()))
     cells, first_call_latency, first_call_cell = asyncio.run(
-        run_matrix(_config(), transport, "served-model", sse_factory=lambda payload: _FakeSseStream(_sse_events()))
+        run_matrix(
+            verifier_config(), transport, "served-model", sse_factory=lambda payload: _FakeSseStream(_sse_events())
+        )
     )
     assert len(cells) == 12
     assert [(cell.tool_choice_mode, cell.schema_strictness, cell.streaming) for cell in cells] == [
@@ -757,7 +753,9 @@ def test_first_call_latency_comes_only_from_error_free_cells_and_names_its_cell(
     # record names it.
     transport = _SequencedChatTransport([(500, "boom")])
     cells, first_call_latency, first_call_cell = asyncio.run(
-        run_matrix(_config(), transport, "served-model", sse_factory=lambda payload: _FakeSseStream(_sse_events()))
+        run_matrix(
+            verifier_config(), transport, "served-model", sse_factory=lambda payload: _FakeSseStream(_sse_events())
+        )
     )
     assert cells[0].error is not None  # auto/strict/off errored
     assert cells[0].valid is None
@@ -809,7 +807,7 @@ def test_the_streaming_cancel_demo_records_an_aborted_midflight_read():
     # with the completion never delivered.
     async def scenario():
         return await demo_streaming_cancel(
-            _config(),
+            verifier_config(),
             "served-model",
             sse_factory=lambda payload: _FakeSseStream(_sse_events()),
             first_event_wait_seconds=5.0,
@@ -829,7 +827,7 @@ def test_the_streaming_cancel_demo_records_a_completion_delivered_before_the_can
     # abort.
     async def scenario():
         return await demo_streaming_cancel(
-            _config(),
+            verifier_config(),
             "served-model",
             sse_factory=lambda payload: _FakeSseStream(_sse_events()),
             first_event_wait_seconds=5.0,
@@ -845,7 +843,7 @@ def test_the_streaming_cancel_demo_records_a_completion_delivered_before_the_can
 def test_a_stream_that_never_starts_is_recorded_as_a_failed_demo():
     async def scenario():
         return await demo_streaming_cancel(
-            _config(),
+            verifier_config(),
             "served-model",
             sse_factory=lambda payload: _FakeSseStream([]),
             first_event_wait_seconds=0.2,
@@ -861,15 +859,17 @@ class _HangingChatTransport:
     """``post_json`` proves dispatch, then hangs until cancelled.
 
     The dispatch flag flips at POST ENTRY, before the hang — so a cancel
-    that reaches the recorded ``cancelled_in_post`` necessarily landed ON
-    the dispatched POST, never before it. The dispatch-then-cancel ordering
-    is the transport's own record, not the demo's claim.
+    that reaches the conftest hang shape's ``cancelled_in_flight`` record
+    necessarily landed ON the dispatched POST, never before it. The
+    dispatch-then-cancel ordering is the transport's own record, not the
+    demo's claim. The hang shape is conftest's ``hang_until_cancelled`` —
+    this suite is its fourth consumer.
     """
 
     def __init__(self):
         self.calls = []
         self.post_dispatched = False
-        self.cancelled_in_post = False
+        self.recorder: dict = {}
 
     async def get_json(self, url, headers, timeout_s):
         self.calls.append({"url": url})
@@ -878,23 +878,19 @@ class _HangingChatTransport:
     async def post_json(self, url, headers, payload, timeout_s):
         self.calls.append({"url": url})
         self.post_dispatched = True
-        try:
-            await asyncio.Event().wait()  # forever; the cancellation must reach HERE
-        except asyncio.CancelledError:
-            self.cancelled_in_post = True
-            raise
+        await hang_until_cancelled(self.recorder)  # forever; the cancellation must reach HERE
 
 
 def test_the_loop_cancel_demo_records_the_propagation_and_no_terminal_event():
     transport = _HangingChatTransport()
-    observation = asyncio.run(demo_loop_cancel(_config(), transport, model_id="served-model"))
+    observation = asyncio.run(demo_loop_cancel(verifier_config(), transport, model_id="served-model"))
     assert isinstance(observation, LoopCancelObservation)
     # The dispatch-then-cancel ordering: the POST was entered (dispatch
     # recorded by the demo's recording transport AND the test transport),
     # and the cancellation landed inside that POST.
     assert observation.model_post_dispatched is True
     assert transport.post_dispatched is True
-    assert transport.cancelled_in_post is True
+    assert transport.recorder["cancelled_in_flight"] is True
     assert observation.cancelled_error_propagated is True
     assert observation.in_flight_model_call_cancelled is True
     assert observation.terminal_events_emitted == ()
@@ -912,7 +908,7 @@ def test_the_loop_cancel_demo_without_dispatch_never_claims_an_in_flight_cancel(
         async def post_json(self, url, headers, payload, timeout_s):
             raise AssertionError("no POST may be dispatched when discovery fails")
 
-    observation = asyncio.run(demo_loop_cancel(_config(VLLM_LLM_MODEL_ID=""), _FailingDiscoveryTransport()))
+    observation = asyncio.run(demo_loop_cancel(verifier_config(VLLM_LLM_MODEL_ID=""), _FailingDiscoveryTransport()))
     assert observation.model_post_dispatched is False
     assert observation.in_flight_model_call_cancelled is False
     assert observation.cancelled_error_propagated is False
@@ -927,7 +923,7 @@ def test_the_full_record_assembles_and_round_trips_json():
     transport = _transport((200, _valid_call_body()))
     evidence = asyncio.run(
         run_verification(
-            _config(),
+            verifier_config(),
             transport=transport,
             sse_factory=lambda payload: _FakeSseStream(_sse_events()),
             venue="unit-test",
@@ -1147,7 +1143,7 @@ def test_parser_flag_rejections_are_summarized_in_the_notes():
     )
     evidence = asyncio.run(
         run_verification(
-            _config(),
+            verifier_config(),
             transport=transport,
             sse_factory=lambda payload: _FakeSseStream(_sse_events()),
             venue="unit-test",

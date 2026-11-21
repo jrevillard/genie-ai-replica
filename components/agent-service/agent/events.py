@@ -12,12 +12,11 @@ the runtime that happened to run first).
 
 The vocabulary deliberately carries no BFF frame name. The BFF
 parses this seam stream and writes every client frame,
-so the client SSE dialect (``chunk``/``done``/``error``/``metadata``/
-``agent_activity``/``agent_verdict``) must not leak into the seam — a name
-shared between the two vocabularies would blur who owns the stream. A
-module-level guard fails the import the day a kind value collides, and the
-events suite pins the guard independently, so the collision fails in the
-suite and at import instead of in the client stream.
+so the client SSE dialect named by ``BFF_FRAME_NAMES`` below must not leak
+into the seam — a name shared between the two vocabularies would blur who
+owns the stream. A module-level guard fails the import the day a kind value
+collides, and the events suite pins the guard independently, so the
+collision fails in the suite and at import instead of in the client stream.
 
 The emitter assigns the monotonic ``seq``. Nothing downstream may derive
 ordering from arrival order: the emitter stamps it, and the envelope
@@ -36,7 +35,7 @@ from pydantic import BaseModel, ConfigDict
 # vocabulary plus the frozen envelope are what structurally keep the seam
 # from speaking the client dialect. The vocabulary is checked against this
 # set at import.
-BFF_FRAME_NAMES = frozenset({"chunk", "done", "error", "metadata", "agent_activity", "agent_verdict"})
+BFF_FRAME_NAMES = frozenset({"chunk", "done", "error", "metadata", "translation", "agent_activity", "agent_verdict"})
 
 
 class EventKind(StrEnum):

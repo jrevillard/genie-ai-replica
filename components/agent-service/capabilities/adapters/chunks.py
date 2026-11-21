@@ -37,9 +37,9 @@ class LegacyChunkAdapter:
             # Materialize: python-arango answers with a lazy Cursor, which
             # supports neither slicing nor len.
             return list(
-                db.execute(
+                db.aql.execute(
                     _CHUNKS_AQL,
-                    {
+                    bind_vars={
                         "@collection": f"{graph_name}_SOURCE",
                         "file_id": file_id,
                         "max_chunks": max_chunks + 1,

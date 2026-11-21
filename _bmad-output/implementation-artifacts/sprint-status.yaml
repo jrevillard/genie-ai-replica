@@ -59,7 +59,7 @@ development_status:
   2-7-activity-line-web: backlog
   2-8-activity-line-mobile: backlog
   2-9-sse-contract-regression-coverage: backlog
-  2-10-answer-translation-on-the-agentic-path: review
+  2-10-answer-translation-on-the-agentic-path: done
   2-11-execution-attribution-and-observability: backlog
   epic-2-retrospective: optional
 

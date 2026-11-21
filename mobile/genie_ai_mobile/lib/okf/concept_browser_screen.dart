@@ -4,7 +4,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:path_provider/path_provider.dart';
-import 'package:talker/talker.dart';
 import 'package:openapi/api.dart';
 
 import '../design_system/components/ds_button.dart';
@@ -17,6 +16,14 @@ import '../services/i18n_service.dart';
 import '../utils/theme_manager.dart';
 import 'concept_browser_controller.dart';
 import 'markdown_chunker.dart';
+import 'okf_browser_log.dart';
+
+// The link-target normalizer's patterns, compiled ONCE (the /simplify
+// review: three RegExp constructions per link per rebuild).
+final RegExp _mdSuffixRe = RegExp(r'\.md$', caseSensitive: false);
+final RegExp _conceptsPrefixRe = RegExp(r'^concepts/');
+final RegExp _dotSlashPrefixRe = RegExp(r'^\./');
+final RegExp _unsafeIdCharsRe = RegExp(r'[^A-Za-z0-9._-]');
 
 /// The mobile OKF concept-tree browser (#1939 — the W9 browser's mobile
 /// mirror). Citizen-scoped reads only: the tree list, the concept pane,
@@ -45,7 +52,7 @@ class ConceptBrowserScreen extends ConsumerStatefulWidget {
 }
 
 class _ConceptBrowserScreenState extends ConsumerState<ConceptBrowserScreen> {
-  final Talker _log = Talker();
+  final _log = okfBrowserLog;
   String? _openedRepoId;
   bool _deepOpened = false;
 
@@ -53,6 +60,13 @@ class _ConceptBrowserScreenState extends ConsumerState<ConceptBrowserScreen> {
   // two: the root twist starts OPEN and the filter starts empty).
   bool _treeExpanded = true;
   String _filter = '';
+
+  // The card's lazy chunks, memoized per concept id — chunkMarkdownBody is
+  // a pure function of the body, and _cardView runs on every rebuild (the
+  // /simplify review: re-walking a 250k body per filter keystroke wasted
+  // the exact UI thread the chunking exists to protect).
+  String? _chunksFor;
+  List<String> _chunks = const [''];
 
   @override
   void initState() {
@@ -308,22 +322,15 @@ class _ConceptBrowserScreenState extends ConsumerState<ConceptBrowserScreen> {
       });
     }
     final list = visible.toList();
-    ConceptTreeRow? indexRow;
-    for (final r in list) {
-      if (r.isIndex == true) {
-        indexRow = r;
-        break;
-      }
+    final indexAt = list.indexWhere((r) => r.isIndex == true);
+    if (indexAt < 0) {
+      return [for (final r in list) _TreeLine(r, isRoot: false)];
     }
-    final rest = list.where((r) => !identical(r, indexRow)).toList();
-    if (indexRow == null) {
-      return [for (final r in rest) _TreeLine(r, depth: 0, isRoot: false)];
-    }
+    final indexRow = list[indexAt];
+    final rest = [...list.sublist(0, indexAt), ...list.sublist(indexAt + 1)];
     return [
-      _TreeLine(indexRow, depth: 0, isRoot: true),
-      if (_treeExpanded) ...[
-        for (final r in rest) _TreeLine(r, depth: 1, isRoot: false),
-      ],
+      _TreeLine(indexRow, isRoot: true),
+      if (_treeExpanded) ...[for (final r in rest) _TreeLine(r, isRoot: false)],
     ];
   }
 
@@ -524,11 +531,11 @@ class _ConceptBrowserScreenState extends ConsumerState<ConceptBrowserScreen> {
     };
     String linkTarget(ConceptCardLink link) =>
         (link.toConceptId ?? link.target ?? '')
-            .replaceFirst(RegExp(r'\.md$', caseSensitive: false), '')
-            .replaceFirst(RegExp(r'^concepts/'), '')
+            .replaceFirst(_mdSuffixRe, '')
+            .replaceFirst(_conceptsPrefixRe, '')
             // Legacy relative targets ('./beta.md') strip the './' too —
             // './beta' is an id nothing holds and the chip would dead-end.
-            .replaceFirst(RegExp(r'^\./'), '')
+            .replaceFirst(_dotSlashPrefixRe, '')
             .trim();
     final seen = <String>{};
     final chips = <Widget>[];
@@ -556,8 +563,15 @@ class _ConceptBrowserScreenState extends ConsumerState<ConceptBrowserScreen> {
     // the ListView builds only the visible slice: a 250k body parses
     // viewport-sized pieces, the FULL content kept. MarkdownBody DEFAULTS
     // — no HTML extension. A concept body's raw HTML renders as text; it
-    // never executes.
-    final chunks = chunkMarkdownBody(card.body ?? '');
+    // never executes. The chunk list is memoized per concept id (the
+    // /simplify review: _cardView runs on every rebuild — a 250k re-walk
+    // per filter keystroke was the exact UI-thread work the chunking
+    // exists to protect).
+    if (_chunksFor != card.conceptId) {
+      _chunksFor = card.conceptId;
+      _chunks = chunkMarkdownBody(card.body ?? '');
+    }
+    final chunks = _chunks;
     final hasChips = chips.isNotEmpty;
 
     Widget buildItem(BuildContext context, int index) {
@@ -623,7 +637,7 @@ class _ConceptBrowserScreenState extends ConsumerState<ConceptBrowserScreen> {
     }
     try {
       final dir = await getApplicationDocumentsDirectory();
-      final safeId = card.conceptId.replaceAll(RegExp(r'[^A-Za-z0-9._-]'), '_');
+      final safeId = card.conceptId.replaceAll(_unsafeIdCharsRe, '_');
       final file = File('${dir.path}${Platform.pathSeparator}$safeId.md');
       await file.writeAsString(body);
       _log.info(
@@ -646,13 +660,12 @@ class _ConceptBrowserScreenState extends ConsumerState<ConceptBrowserScreen> {
   }
 }
 
-/// One rendered line of the tree list: a row plus its depth (the index root
-/// sits at depth 0, its children at 1 — the OkfConceptList tree is exactly
-/// these two levels).
+/// One rendered line of the tree list: the index root or one of its
+/// children (the OkfConceptList tree is exactly these two levels — the
+/// /simplify review dropped the never-read depth field).
 class _TreeLine {
-  const _TreeLine(this.row, {required this.depth, required this.isRoot});
+  const _TreeLine(this.row, {required this.isRoot});
 
   final ConceptTreeRow row;
-  final int depth;
   final bool isRoot;
 }
